@@ -20,6 +20,12 @@ fi
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
 command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
+# O groovymame escolhe sozinho entre o KMS e o X (config/fliperos-groovymame):
+# as linhas de frontend gravadas com "fliperos-x11-run groovymame" vao para
+# ele, que volta para ca (com FLIPEROS_GROOVYMAME_X11) so quando fica no X.
+if [[ $name == groovymame && -z $mode && -z ${FLIPEROS_GROOVYMAME_X11:-} ]]; then
+  exec "$@"
+fi
 # O jogo da linha de comando no marquee do Pixelcade (config/fliperos-pixelcade;
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}

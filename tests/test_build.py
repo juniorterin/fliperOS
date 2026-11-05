@@ -1596,20 +1596,33 @@ class GroovyMameTests(unittest.TestCase):
         self.assertIn('config/fliperos-groovymame-quiet" "$root/usr/local/libexec/groovymame"', ROOTFS)
         self.assertIn('config/fliperos-groovymame-quiet', (ROOT / 'fliperos-mkiso.sh').read_text())
 
-    def run_wrapper(self, *args, display=':0'):
-        # O GroovyMAME e o fliperos-x11-run falsos so imprimem os argumentos.
+    def run_wrapper(self, *args, display=':0', kms_sdl=False, conf='', env_extra=None, show_env=False):
+        # O GroovyMAME, o fliperos-x11-run e o fliperos-kms-run falsos so
+        # imprimem os argumentos (show_env: antes, o ambiente do SDL).
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'ini').mkdir()
             fake = tmp / 'groovymame'
-            fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            fake.write_text('#!/bin/sh\n' + ('echo "ld=$LD_LIBRARY_PATH master=${SDL_KMSDRM_REQUIRE_DRM_MASTER-unset}"\n'
+                                             if show_env else '') + 'printf "%s\\n" "$@"\n')
             fake.chmod(0o755)
             x11run = tmp / 'fliperos-x11-run'
             x11run.write_text('#!/bin/sh\necho x11-run ${FLIPEROS_SWITCHRES_OPTS:-}\nprintf "%s\\n" "$@"\n')
             x11run.chmod(0o755)
+            kmsrun = tmp / 'fliperos-kms-run'
+            kmsrun.write_text('#!/bin/sh\necho kms-run\nprintf "%s\\n" "$@"\n')
+            kmsrun.chmod(0o755)
+            sdl = tmp / 'sdl2-kms'
+            sdl.mkdir()
+            if kms_sdl:
+                (sdl / 'libSDL2-2.0.so.0').write_text('')
+            (tmp / 'fliperos.conf').write_text(conf)
             env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR=str(tmp / 'ini'),
-                       FLIPEROS_X11_RUN=str(x11run))
-            env.pop('DISPLAY', None)
+                       FLIPEROS_X11_RUN=str(x11run), FLIPEROS_KMS_RUN_BIN=str(kmsrun), FLIPEROS_SDL2_KMS=str(sdl),
+                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'))
+            for key in ('DISPLAY', 'FLIPEROS_KMS_RUN', 'FLIPEROS_GROOVYMAME_X11', 'LD_LIBRARY_PATH'):
+                env.pop(key, None)
+            env.update(env_extra or {})
             if display:
                 env['DISPLAY'] = display
             out = subprocess.run(['bash', str(ROOT / 'config/fliperos-groovymame'), *args], env=env,
@@ -1682,10 +1695,62 @@ class GroovyMameTests(unittest.TestCase):
                             '  /usr/local/lib/fliperos/libfliperos-sdl-audio.so')):
             self.assertIn(text, path.read_text())
 
+    def test_wrapper_opens_in_kms_with_the_patched_sdl(self):
+        # Com o SDL do fliperos-sdl2-kms, no console o GroovyMAME vai pelo
+        # fliperos-kms-run; ja dentro dele (a sessao, um frontend), abre direto
+        # com aquele SDL e sem o REQUIRE_DRM_MASTER=0 (que fazia o Switchres
+        # trocar o modo sozinho e o SDL desfazer).
+        wrapper = str(ROOT / 'config/fliperos-groovymame')
+        self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True)[0], ['kms-run', wrapper, 'mvsc'])
+        out, ini = self.run_wrapper('mvsc', display=None, kms_sdl=True, show_env=True,
+                                    env_extra={'FLIPEROS_KMS_RUN': '1', 'SDL_KMSDRM_REQUIRE_DRM_MASTER': '0',
+                                               'LD_LIBRARY_PATH': '/x'})
+        self.assertRegex(out[0], r'^ld=/.*/sdl2-kms:/x master=unset$')
+        self.assertEqual(out[1:], ['-inipath', ini, 'mvsc'])
+        # A interface do MAME no KMS: as mesmas opcoes de antes, sem o X.
+        out, ini = self.run_wrapper(display=None, kms_sdl=True, env_extra={'FLIPEROS_KMS_RUN': '1'})
+        self.assertEqual(out, ['-inipath', ini, '-noautosync', '-waitvsync', '-nointerlace'])
+        # Fica no X: forcado no fliperos.conf, ou jogos de varias telas em
+        # mais de um monitor (no KMS so o principal fica ligado).
+        for conf in ('groovymame_video=x11\n', 'screens=VGA-1,HDMI-A-1\n'):
+            self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True, conf=conf)[0][0], 'x11-run', conf)
+        self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True,
+                                          conf='screens=VGA-1,HDMI-A-1\nmultiscreen=off\n')[0][0], 'kms-run')
+        # Vindo do X que ele mesmo escolheu, nao volta para o KMS.
+        self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True,
+                                          env_extra={'FLIPEROS_GROOVYMAME_X11': '1'})[0][0], 'x11-run')
+        for path, text in ((ROOT / 'fliperos-mkiso.sh', 'fliperos-attractplus fliperos-sdl2-kms'),
+                           (ROOT / 'tools/cabinet-update.sh', 'packages+=(fliperos-sdl2-kms)'),
+                           (ROOT / 'config/fliperos-kms-run', 'export FLIPEROS_KMS_RUN=1'),
+                           (ROOT / 'config/fliperos-launch', 'run=(/opt/fliperos/bin/fliperos-kms-run groovymame)')):
+            self.assertIn(text, path.read_text(), path)
+        recipes = subprocess.run(['bash', str(ROOT / 'packaging/build-deb.sh'), '--list-iso'],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        self.assertIn('fliperos-sdl2-kms', recipes)
+        self.assertEqual(sorted(p.name for p in (ROOT / 'packaging/patches/sdl2').glob('*.patch')),
+                         ['0001-force-modes-refresh.patch', '0002-restore-crtc-at-destroy-window.patch'])
+
+    def test_x11_run_hands_groovymame_back(self):
+        # As linhas de frontend gravadas com "fliperos-x11-run groovymame" vao
+        # para o groovymame, que escolhe entre o KMS e o X.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fake = tmp / 'groovymame'
+            fake.write_text('#!/bin/sh\necho handed "$@"\n')
+            fake.chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (tmp, os.environ['PATH']),
+                       FLIPEROS_PIXELCADE=str(tmp / 'none'), FLIPEROS_OUTPUTS=str(tmp / 'none'))
+            for key in ('DISPLAY', 'FLIPEROS_GROOVYMAME_X11'):
+                env.pop(key, None)
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-x11-run'), 'groovymame', 'sf2'], env=env,
+                                 capture_output=True, text=True, timeout=60)
+            self.assertEqual(out.stdout, 'handed sf2\n', out.stderr)
+
     def test_wrapper_opens_in_its_own_x(self):
-        # No console, o GroovyMAME se abre num Xorg so para ele, onde o
-        # Switchres troca o modo pelo XRandR (no KMS o SDL ficava no tamanho do
-        # modo do boot). Comandos sem tela rodam direto, sem subir o X.
+        # Sem o SDL do fliperos-sdl2-kms (uma instalacao so atualizada pela
+        # rede), no console o GroovyMAME se abre num Xorg so para ele, onde o
+        # Switchres troca o modo pelo XRandR. Comandos sem tela rodam direto,
+        # sem subir o X.
         wrapper = str(ROOT / 'config/fliperos-groovymame')
         self.assertEqual(self.run_wrapper('mvsc', display=None)[0], ['x11-run', wrapper, 'mvsc'])
         # A interface: o X ja no modo dela, sem entrelacar.
@@ -1698,7 +1763,10 @@ class GroovyMameTests(unittest.TestCase):
     def test_groovymame_switches_modes_in_x(self):
         # modesetting 1: o Switchres troca o modo de cada jogo (no X, pelo
         # XRandR; no gabinete, SR-1_384x224@59.64 no MvC). Chamado de dentro do
-        # fliperos-kms-run, o X nao herda o kmsdrm do SDL.
+        # fliperos-kms-run, o X nao herda o kmsdrm do SDL. No KMS o mesmo
+        # mame.ini serve, e o REQUIRE_DRM_MASTER=0 nao pode voltar ao
+        # fliperos-kms-run: com ele o Switchres troca o modo sozinho e o SDL
+        # desfaz.
         self.assertIn('\nmodesetting 1\n', (ROOT / 'config/mame.ini').read_text())
         self.assertNotIn('SDL_KMSDRM_REQUIRE_DRM_MASTER', (ROOT / 'config/fliperos-kms-run').read_text())
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
@@ -1707,8 +1775,6 @@ class GroovyMameTests(unittest.TestCase):
         # O Qt (PCSX2) aberto pelo frontend nao fica no eglfs do console.
         self.assertIn('\nexport QT_QPA_PLATFORM=xcb\n', x11)
         self.assertLess(x11.index('QT_QPA_PLATFORM=xcb'), x11.index('exec xinit'))
-        launcher = (ROOT / 'config/fliperos-launch').read_text()
-        self.assertIn('groovymame) label=GroovyMAME run=("$x11" groovymame) ;;', launcher)
 
     def test_wrapper_inipath(self):
         # O mame.ini do sistema (o padrao do release, ".;ini", depende da pasta
@@ -12651,8 +12717,8 @@ class OnDemandFrontendTests(unittest.TestCase):
         return run.stdout.split()
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
-        self.assertEqual(self.list_recipes('--list-iso'), ['fliperos-attractplus'])
-        self.assertEqual(sorted(self.list_recipes('--list')), sorted(('fliperos-attractplus',) + self.ON_DEMAND))
+        self.assertEqual(self.list_recipes('--list-iso'), ['fliperos-attractplus', 'fliperos-sdl2-kms'])
+        self.assertEqual(sorted(self.list_recipes('--list')), sorted(('fliperos-attractplus', 'fliperos-sdl2-kms') + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
 
     def test_the_session_table_fetches_them_instead_of_installing_a_package(self):

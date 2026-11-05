@@ -150,8 +150,10 @@ export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-eglfs}"
 export QT_QPA_EGLFS_INTEGRATION="${QT_QPA_EGLFS_INTEGRATION:-eglfs_kms}"
 export QT_QPA_EGLFS_HIDECURSOR=1
-# O GroovyMAME nao roda aqui: o comando groovymame se abre num Xorg proprio
-# (config/fliperos-groovymame), onde o Switchres troca o modo pelo XRandR.
+# Quem roda abaixo daqui (um frontend e os jogos que ele abre) ja tem este
+# ambiente: o groovymame (config/fliperos-groovymame) abre direto no KMS, sem
+# passar por aqui de novo.
+export FLIPEROS_KMS_RUN=1
 # O ES-DE num modo de pixel largo (640x240 num tubo 4:3): desenha em 4:3
 # (320x240) e estica na horizontal (packaging/patches/emulationstation), como
 # o Arcadeflow (fliperos-arcadeflow screen). O fator e quantas vezes a tela e

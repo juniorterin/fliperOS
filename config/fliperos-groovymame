@@ -2,12 +2,19 @@
 # O comando groovymame do FliperOS (fliperos-launch, frontends, terminal). O
 # binario e o release do GroovyMAME, em /usr/local/libexec/groovymame.
 #
-#  - Roda no X, como o GroovyArcade no modo X: chamado no console, abre-se
-#    num Xorg so para ele (fliperos-x11-run), e o Switchres do GroovyMAME
-#    cria e troca o modo de cada jogo pelo XRandR (modesetting 1 no
-#    mame.ini). No KMS desta instalacao o Switchres calculava o modo mas o
-#    SDL continuava desenhando no tamanho do modo do boot: jogo esticado,
-#    espremido ou no centro com barras pretas, conforme a resolucao do Setup.
+#  - Chamado no console, roda no KMS (fliperos-kms-run), como o GroovyArcade:
+#    o Switchres pendura o modo de cada jogo no conector (o ATTACHMODE do
+#    patch 06 do kernel) e o SDL troca para ele. Precisa do SDL2 do pacote
+#    fliperos-sdl2-kms (packaging/packages), que le de novo os modos do
+#    conector: com o SDL do Ubuntu o jogo ficava no modo do boot. E sem o
+#    SDL_KMSDRM_REQUIRE_DRM_MASTER=0, que faz o Switchres trocar o modo por
+#    conta propria, e o SDL desfazia a troca.
+#  - No X, num Xorg so para ele (fliperos-x11-run), onde o Switchres troca o
+#    modo pelo XRandR: sem aquele SDL (uma instalacao so atualizada pela
+#    rede), com os jogos de varias telas em mais de um monitor (no KMS so o
+#    principal fica ligado) ou com groovymame_video=x11 no fliperos.conf. O
+#    fliperos-x11-run devolve o groovymame para ca, entao as linhas de
+#    frontend gravadas com ele tambem seguem esta escolha.
 #    Comandos sem tela (-listxml, -showconfig, -verifyroms...) rodam direto.
 #  - -inipath /etc/fliperos/mame: o mame.ini do sistema, que o Setup grava.
 #    O padrao do release e ".;ini", relativo a pasta de onde se abre. Um
@@ -19,6 +26,8 @@
 real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
 inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
 x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
+kmsrun=${FLIPEROS_KMS_RUN_BIN:-/opt/fliperos/bin/fliperos-kms-run}
+kmssdl=${FLIPEROS_SDL2_KMS:-/usr/local/lib/fliperos/sdl2-kms}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 screens_gen=${FLIPEROS_MAME_SCREENS:-/opt/fliperos/bin/fliperos-mame-screens}
 multiscreen=${FLIPEROS_MULTISCREEN:-/opt/fliperos/bin/fliperos-multiscreen}
@@ -35,6 +44,25 @@ opens_video() {
   return 0
 }
 
+# use_kms: abre no KMS (o cabecalho diz quando fica no X).
+use_kms() {
+  [[ -f $kmssdl/libSDL2-2.0.so.0 ]] || return 1
+  grep -q '^groovymame_video=x11' "$conf" 2> /dev/null && return 1
+  if grep -q '^screens=.*,' "$conf" 2> /dev/null && ! grep -q '^multiscreen=off' "$conf" 2> /dev/null; then
+    return 1
+  fi
+  return 0
+}
+
+if [[ -z ${DISPLAY:-} && -z ${FLIPEROS_GROOVYMAME_X11:-} ]] && opens_video "$@" && use_kms; then
+  # Pelo fliperos-kms-run (o log, o marquee, as saidas, o filtro), se quem
+  # chamou ja nao passou por ele (a sessao, um frontend).
+  [[ -n ${FLIPEROS_KMS_RUN:-} ]] || exec "$kmsrun" "$0" "$@"
+  export LD_LIBRARY_PATH="$kmssdl${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  unset SDL_KMSDRM_REQUIRE_DRM_MASTER
+  export FLIPEROS_GROOVYMAME_NO_X=1
+fi
+
 # A interface do MAME (aberto sem jogo) tem 640x480 a 30 Hz: num CRT de
 # 15 kHz o Switchres a poria em 480 linhas entrelacadas. Ela vai sem
 # entrelacar (-nointerlace; no gabinete, 640x248 a 60 Hz) e o X ja abre no
@@ -44,6 +72,7 @@ opens_video() {
 # escolhido na interface tambem fica sem entrelacar; aberto com o jogo
 # (frontends) nao muda nada.
 if [[ -z ${DISPLAY:-} && -z ${FLIPEROS_GROOVYMAME_NO_X:-} ]] && opens_video "$@"; then
+  export FLIPEROS_GROOVYMAME_X11=1
   (($# == 0)) && export FLIPEROS_SWITCHRES_OPTS="--interlace 0" && exec "$x11run" --mode 640x480@30 "$0"
   exec "$x11run" "$0" "$@"
 fi

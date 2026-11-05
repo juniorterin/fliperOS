@@ -529,7 +529,8 @@ install_debs_chroot() {
 # Os .deb do packaging/ (build-deb.sh + make-repo.sh) vao para
 # /opt/fliperos/repo, uma fonte do apt dentro da propria imagem: o Setup > Games >
 # Frontend instala dali sem rede. O Attract-Mode Plus ja vem instalado (as
-# dependencias dele vem do Ubuntu, e o gabinete pode nao ter rede).
+# dependencias dele vem do Ubuntu, e o gabinete pode nao ter rede), e o SDL2
+# com que o GroovyMAME roda no KMS (config/fliperos-groovymame).
 install_local_repo_chroot() {
   if [[ -z $FLIPEROS_REPO ]] || ! compgen -G "$FLIPEROS_REPO/*.deb" > /dev/null; then
     warn "No frontends repository: build it with packaging/build-deb.sh and packaging/make-repo.sh"
@@ -544,9 +545,9 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus' >> "$LOG_FILE" 2>&1 \
-    || err "Installing Attract-Mode Plus from the local repository failed (see $LOG_FILE)"
-  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus installed"
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms' >> "$LOG_FILE" 2>&1 \
+    || err "Installing Attract-Mode Plus and GroovyMAME's SDL2 from the local repository failed (see $LOG_FILE)"
+  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus and GroovyMAME's KMS SDL2 installed"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────

@@ -27,17 +27,27 @@ From there also come input and joypad in `linuxraw` (the kernel's `/dev/input/js
 
 On cards with only OpenGL 2.x (Radeon X300 to X1950, Intel up to 1st-generation Core, GeForce FX/6/7) `glcore` doesn't open: `fliperos-kms-run` asks Mesa (`eglinfo`) and, on those, passes `gl` instead.
 
-**GroovyMAME at native resolution.** GroovyMAME runs in X, like GroovyArcade's X mode: called from the console (by `fliperos-launch`, by the boot session, by a frontend or in the terminal), the `groovymame` command opens in an Xorg of its own (`fliperos-x11-run`) and, with `modesetting 1` in `mame.ini`, GroovyMAME's Switchres creates and switches each game's mode through XRandR — on the cabinet, MvC at `SR-1_384x224@59.64`, full screen.
+**GroovyMAME at native resolution.** GroovyMAME runs in KMS, without Xorg, like GroovyArcade. Called from the console (by `fliperos-launch`, by the boot session, by a frontend or in the terminal), the `groovymame` command opens through `fliperos-kms-run`.
 
-Commands without a screen (`-listxml`, `-listclones`, `-verifyroms`, `-showconfig`, `-createconfig`, `-version`...) run directly, without starting X. As in GroovyArcade's `galauncher.xinitrc`, `fliperos-x11-client` starts **openbox** before the program (`config/openbox-x11-run.xml`: no borders, no shortcuts): it is what fits the full-screen window to the new screen on each mode switch through XRandR; without it the window kept the size of the mode it opened in (the UI in a quarter of the 640x480 screen, the game out of place).
+Switchres attaches each game's mode to the connector (the `ATTACHMODE` of kernel patch 06), and SDL switches to it. On the cabinet: Street Fighter II at `SR-1_384x224@59.64` (99.9% speed), The King of Fighters '98 at `SR-1_320x224@59.19`.
 
-Opened without a game (the UI), `groovymame` passes `-noautosync -waitvsync`: the game chosen in the UI runs in the same process, and GroovyMAME's emusync in X (`emusync_linux.cpp` from gm0289sr222f) uses the `/dev/dri/card0` that it closed when leaving the UI (`osd_deinit` closes the fd and doesn't reset it; "drmCrtcGetSequence(-1)") — with `autosync`, `syncrefresh` removed the throttle and the game ran too fast.
+This needs the SDL2 of the `fliperos-sdl2-kms` package (`packaging/packages`), installed in `/usr/local/lib/fliperos/sdl2-kms` and loaded only by GroovyMAME. It is Ubuntu's SDL2 with GroovyArcade's two KMS patches (`packaging/patches/sdl2`): SDL re-reads the connector's modes on every query, and puts the original mode back when the window closes.
 
-Opened directly with the game (frontends, command line), vblank works and `autosync` stays.
+Ubuntu's SDL2 reads the mode list once, when it opens, and picked the closest of the old modes: the game stayed in the boot mode.
 
-In KMS this didn't work on this installation: with `modesetting 0` and `SDL_KMSDRM_REQUIRE_DRM_MASTER=0` Switchres applied the game's mode, but SDL kept drawing at the size of the boot mode (in radeon's debugfs `framebuffer`, GroovyMAME's frames at 320x240 with the screen at 384x224) — the game came out stretched, squashed or in the middle with black bars, depending on the resolution chosen in the Setup; with `modesetting 1` the mode wasn't even applied ("No way to get master rights") or the screen went black ("Could not queue pageflip: -13").
+`SDL_KMSDRM_REQUIRE_DRM_MASTER=0` must not be set: with it, Switchres's SDL2 backend switches the mode by itself (`kms_modesetting`), and SDL undoes the switch on its next frame.
 
-RetroArch, in KMS, creates its frames already at the game's size (384x224) and switches correctly. On an earlier installation, `fliperos-rootfs.sh` replaces the old `modesetting 0` with 1.
+Commands without a screen (`-listxml`, `-listclones`, `-verifyroms`, `-showconfig`, `-createconfig`, `-version`...) run directly.
+
+**GroovyMAME in X.** The `groovymame` command opens in an Xorg of its own (`fliperos-x11-run`) when the package's SDL is missing (an installation updated only over the network, before an ISO that brings it), when multi-screen games are on with more than one monitor (in KMS only the main monitor stays on), or with `groovymame_video=x11` in `/etc/fliperos/fliperos.conf`.
+
+There Switchres switches each game's mode through XRandR. Frontend lines saved as `fliperos-x11-run groovymame` follow the same choice: `fliperos-x11-run` hands `groovymame` back to the command.
+
+As in GroovyArcade's `galauncher.xinitrc`, `fliperos-x11-client` starts **openbox** before the program (`config/openbox-x11-run.xml`: no borders, no shortcuts): it is what fits the full-screen window to the new screen on each mode switch through XRandR; without it the window kept the size of the mode it opened in (the UI in a quarter of the 640x480 screen, the game out of place).
+
+Opened without a game (the UI), `groovymame` passes `-noautosync -waitvsync`: the game chosen in the UI runs in the same process, and GroovyMAME's emusync in X (`emusync_linux.cpp` from gm0289sr222f) uses the `/dev/dri/card0` that it closed when leaving the UI (`osd_deinit` closes the fd and doesn't reset it; "drmCrtcGetSequence(-1)") — with `autosync`, `syncrefresh` removed the throttle and the game ran too fast. The same options stay in KMS.
+
+Opened directly with the game (frontends, command line), vblank works and `autosync` stays. On an earlier installation, `fliperos-rootfs.sh` replaces the old `modesetting 0` with 1.
 
 The other reason for the doubled width is the screen's aspect: with `aspect auto` GroovyMAME takes the aspect from the current mode, and booting at 640x240 gives 8:3 — twice 4:3, so Switchres doubled the width of every game ("SR(0): 768x224").
 
@@ -59,7 +69,7 @@ The release only ships the binary; like GroovyArcade's package, the build puts i
 
 The GroovyArcade options (gasetup's `-createconfig`): `plugin hiscore`, `skip_gameinfo 1`, `video opengl`, `switchres_ini 1`, `sound sdl`, `aspect 4:3` — plus the Setup's latency (`lowlatency`, `autoframedelay`, `framedelay`); the UI font stays MAME's own (`uifont default`), because GroovyArcade's pixel font (`uismall.bdf`) was too small on the cabinet.
 
-`modesetting 1` is also GroovyArcade's, with GroovyMAME in X (the "GroovyMAME at native resolution" paragraph).
+`modesetting 1` is also GroovyArcade's, and serves both KMS and X (the "GroovyMAME at native resolution" paragraph).
 
 What GroovyMAME writes goes to `~/.mame` (cfg, hiscore records), `~/nvram/mame` (nvram) and `~/save/mame` (savestates); `ui.ini` gets GroovyArcade's `infos_text_size 1.00` and `font_rows 20`, together with the Dracula colors — GroovyArcade uses 19, but MAME only accepts 20 to 40 and replaces 19 with the default 30, which at 224 lines leaves the font 7 pixels tall and unreadable; with 20 it is 11.
 

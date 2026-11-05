@@ -739,7 +739,8 @@ highscores() {
 # game SISTEMA ROM [TITULO]: o jogo aberto. Primeiro rola uma vez os recordes
 # do jogo, ou "Now Playing" e o nome dele; depois fica o marquee do jogo, ate
 # o proximo evento. O mesmo jogo de segundos antes e a mesma abertura (o
-# groovymame do fliperos-kms-run ainda passa pelo fliperos-x11-run): status 1.
+# groovymame do fliperos-kms-run que fica no X ainda passa pelo
+# fliperos-x11-run): status 1.
 game() {
   local title intro
   [[ -n ${1:-} && -n ${2:-} ]] || return 1

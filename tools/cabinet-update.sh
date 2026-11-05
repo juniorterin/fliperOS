@@ -121,6 +121,9 @@ packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev libx11-dev l
 # E o compositor que leva o filtro ao desktop LXDE (config/fliperos-desktop-deflicker).
 packages+=(picom)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
+# O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
+# repositorio local o tem (o das imagens anteriores nao tem: fica no X).
+grep -qx 'Package: fliperos-sdl2-kms' /opt/fliperos/repo/Packages 2> /dev/null && packages+=(fliperos-sdl2-kms)
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
 # Wine em si nao vem mais na imagem (Setup > Games > Extras, config/fliperos-extras).
 dpkg -s wine32:i386 > /dev/null 2>&1 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)
