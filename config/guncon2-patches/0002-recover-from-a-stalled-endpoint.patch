@@ -1,0 +1,133 @@
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Thu, 5 Nov 2026 01:30:00 -0300
+Subject: [PATCH] Recover from a stalled endpoint; a silent gun no longer holds
+ the open for 100 s
+
+When the interrupt endpoint stalls (seen on a flaky hub port), the irq
+returned without resubmitting the URB, so the gun sent nothing more until
+every reader closed the device, which the desktop, the key daemons and the
+frontend never do: the gun went silent with nothing in the log. The stall
+is now cleared out of interrupt context and the reports start again, with a
+warning in the log.
+
+The mode request at open waited up to 100 s for a gun that does not
+answer, holding the mutex; it now waits 1 s. A failed allocation at open
+no longer returns with the mutex held, and close and disconnect cancel a
+pending clear.
+---
+diff --git a/guncon2.c b/guncon2.c
+index b750141..a6858ad 100644
+--- a/guncon2.c
++++ b/guncon2.c
+@@ -69,6 +69,7 @@ struct guncon2 {
+     bool is_open;
+     char phys[64];
+     unsigned long seen; /* jiffies of the last report that saw the screen */
++    struct work_struct clear_halt; /* a stalled endpoint, cleared out of the irq */
+ };
+ 
+ /* Inside the calibrated range, with an eighth of it to spare for overscan. */
+@@ -108,10 +109,20 @@ static void guncon2_usb_irq(struct urb *urb) {
+                     "%s - urb timed out - was the device unplugged?\n",
+                     __func__);
+             return;
++        case -EPIPE:
++            /*
++             * The interrupt endpoint stalled (a flaky hub port does it).
++             * Returning here stopped every report until each reader closed
++             * the device, which a desktop or a key daemon never does: the
++             * gun went silent with nothing in the log. Clear the halt and
++             * fetch reports again, out of interrupt context.
++             */
++            dev_warn_ratelimited(&guncon2->intf->dev, "endpoint stalled, clearing it\n");
++            schedule_work(&guncon2->clear_halt);
++            return;
+         case -ECONNRESET:
+         case -ENOENT:
+         case -ESHUTDOWN:
+-        case -EPIPE:
+             /* this urb is terminated, clean up */
+             dev_dbg(&guncon2->intf->dev, "%s - urb shutting down with status: %d\n",
+                     __func__, urb->status);
+@@ -181,21 +192,41 @@ exit:
+                 __func__, error);
+ }
+ 
++static void guncon2_clear_halt(struct work_struct *work) {
++    struct guncon2 *guncon2 = container_of(work, struct guncon2, clear_halt);
++    struct usb_device *usb_dev = interface_to_usbdev(guncon2->intf);
++    int error;
++
++    mutex_lock(&guncon2->pm_mutex);
++    if (guncon2->is_open) {
++        error = usb_clear_halt(usb_dev, guncon2->urb->pipe);
++        if (error)
++            dev_warn(&guncon2->intf->dev, "could not clear the stall: %d\n", error);
++        error = usb_submit_urb(guncon2->urb, GFP_KERNEL);
++        if (error)
++            dev_err(&guncon2->intf->dev, "%s - usb_submit_urb failed: %d\n", __func__, error);
++    }
++    mutex_unlock(&guncon2->pm_mutex);
++}
++
+ static int guncon2_open(struct input_dev *input) {
+     unsigned char *gmode;
+     struct guncon2 *guncon2 = input_get_drvdata(input);
+     struct usb_device *usb_dev = interface_to_usbdev(guncon2->intf);
+     int retval;
+-    mutex_lock(&guncon2->pm_mutex);
+ 
+     gmode = kzalloc(6, GFP_KERNEL);
+     if (!gmode)
+         return -ENOMEM;
++    mutex_lock(&guncon2->pm_mutex);
+ 
+-    /* set the mode to normal 50Hz mode */
++    /*
++     * set the mode to normal 50Hz mode; a gun that does not answer must not
++     * hold the open (and the mutex) for 100 s, as the old timeout did
++     */
+     gmode[5] = 1;
+     usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
+-                    0x09, 0x21, 0x200, 0, gmode, 6, 100000);
++                    0x09, 0x21, 0x200, 0, gmode, 6, 1000);
+ 
+     kfree(gmode);
+ 
+@@ -218,9 +249,11 @@ out:
+ static void guncon2_close(struct input_dev *input) {
+     struct guncon2 *guncon2 = input_get_drvdata(input);
+     mutex_lock(&guncon2->pm_mutex);
+-    usb_kill_urb(guncon2->urb);
+     guncon2->is_open = false;
++    usb_kill_urb(guncon2->urb);
+     mutex_unlock(&guncon2->pm_mutex);
++    /* outside the mutex: the work takes it */
++    cancel_work_sync(&guncon2->clear_halt);
+ }
+ 
+ static void guncon2_free_urb(void *context) {
+@@ -255,6 +288,7 @@ static int guncon2_probe(struct usb_interface *intf,
+         return -ENOMEM;
+ 
+     mutex_init(&guncon2->pm_mutex);
++    INIT_WORK(&guncon2->clear_halt, guncon2_clear_halt);
+     guncon2->intf = intf;
+     guncon2->seen = jiffies - msecs_to_jiffies(hold_ms) - 1;
+ 
+@@ -328,7 +362,14 @@ static int guncon2_probe(struct usb_interface *intf,
+ }
+ 
+ static void guncon2_disconnect(struct usb_interface *intf) {
+-    /* All driver resources are devm-managed. */
++    struct guncon2 *guncon2 = usb_get_intfdata(intf);
++
++    /*
++     * The other resources are devm-managed; a stall cleared after this would
++     * touch a device that is gone.
++     */
++    usb_kill_urb(guncon2->urb);
++    cancel_work_sync(&guncon2->clear_halt);
+ }
+ 
+ static int guncon2_suspend(struct usb_interface *intf, pm_message_t message) {
