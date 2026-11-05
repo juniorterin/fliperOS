@@ -65,7 +65,7 @@ emulators_latest() {
 # Dolphin ao Vulkan; o PCSX2 e o DuckStation ficam no automatico, que ja
 # escolhe o Vulkan onde ha. O RetroArch nao passa por aqui: o
 # fliperos-kms-run o abre em Vulkan no amdgpu a cada abertura (so com o
-# patch do khr_display, config/retroarch-patches, que troca o modo do CRT).
+# patch do khr_display, packaging/patches/retroarch, que troca o modo do CRT).
 EMULATORS_HOME=${EMULATORS_HOME:-/home/$FLIPEROS_USER}
 EMULATORS_INI_SET=${EMULATORS_INI_SET:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-ini-set}
 

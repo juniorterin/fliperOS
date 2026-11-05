@@ -60,8 +60,12 @@ emulator_installed() {
 # A versao instalada sai de arquivos, sem abrir o emulador: o que o build da
 # imagem gravou (emulator-versions, nome=versao), o metainfo dos AppImages, o
 # VERSION.txt do Fightcade, o commit do codigo do SM2-Emu e, numa imagem
-# antiga sem o arquivo, o texto de versao do binario do GroovyMAME.
+# antiga sem o arquivo, o texto de versao do binario do GroovyMAME. Um
+# emulador que vem num pacote do FliperOS (o RetroArch) grava a sua em
+# emulator-versions.d/NOME, que vale antes: o pacote atualizado pela rede
+# troca a versao sem mexer no arquivo da imagem.
 versions_file=${FLIPEROS_EMULATOR_VERSIONS:-$root/usr/local/share/fliperos/emulator-versions}
+versions_dir=${FLIPEROS_EMULATOR_VERSIONS_DIR:-$root/usr/local/share/fliperos/emulator-versions.d}
 # O que a proxima imagem do FliperOS traz (as versoes fixadas no build).
 mkiso_url=${FLIPEROS_MKISO_URL:-https://raw.githubusercontent.com/juniorterin/fliperOS/main/fliperos-mkiso.sh}
 net_timeout=${FLIPEROS_VERSION_TIMEOUT:-8}
@@ -71,8 +75,9 @@ metainfo_version() {
 }
 
 emulator_version() {
-  local name=$1 v
-  v=$(awk -F= -v n="$name" '$1 == n { sub(/^[^=]*=/, ""); print; exit }' "$versions_file" 2> /dev/null)
+  local name=$1 v=""
+  [[ -f $versions_dir/$name ]] && v=$(head -n 1 "$versions_dir/$name")
+  [[ -n $v ]] || v=$(awk -F= -v n="$name" '$1 == n { sub(/^[^=]*=/, ""); print; exit }' "$versions_file" 2> /dev/null)
   if [[ -z $v ]]; then
     case $name in
       pcsx2) v=$(metainfo_version "$root/opt/pcsx2") ;;
@@ -94,9 +99,10 @@ remote_head() {
   timeout "$net_timeout" git ls-remote "$1" "${2:-HEAD}" 2> /dev/null | awk 'NR == 1 { print substr($1, 1, 7) }'
 }
 
-# pinned VARIAVEL: o valor fixado no fliperos-mkiso.sh do repositorio.
+# pinned VARIAVEL [URL]: o valor fixado no fliperos-mkiso.sh do repositorio
+# (ou na receita do pacote em URL).
 pinned() {
-  timeout "$net_timeout" curl -fsL "$mkiso_url" 2> /dev/null |
+  timeout "$net_timeout" curl -fsL "${2:-$mkiso_url}" 2> /dev/null |
     sed -n "s/^$1=\"\\([^\"]*\\)\".*/\\1/p" | head -n 1
 }
 
@@ -115,7 +121,11 @@ emulator_latest() {
       v=$(pinned OPENBOR_COMMIT)
       [[ -n $v ]] && echo "${v:0:7}"
       ;;
-    retroarch) remote_head https://github.com/libretro/RetroArch ;;
+    retroarch)
+      # O commit da receita do pacote, o que o proximo update leva.
+      v=$(pinned RA_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-retroarch.sh")
+      [[ -n $v ]] && echo "${v:0:7}"
+      ;;
     flycast) remote_head https://github.com/flyinghead/flycast ;;
     supermodel) remote_head https://github.com/trzy/Supermodel ;;
     model2) remote_head "${FLIPEROS_SM2_REPO:-https://github.com/dmanlfc/sm2-emu.git}" ;;

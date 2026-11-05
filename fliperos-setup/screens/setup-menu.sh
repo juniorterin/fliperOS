@@ -741,7 +741,12 @@ screen_emulators() {
     fi
     case $kind in
       image)
-        if ((inst)); then
+        if ((inst)) && dpkg-query -W "fliperos-$choice" > /dev/null 2>&1; then
+          # Num pacote do FliperOS (o RetroArch): o update o troca pela rede.
+          ui_msg "$title" "$label comes with FliperOS and is installed." "" \
+            "$(emulators_update_line "$choice" "$label")" "" \
+            "The FliperOS updates offered at boot bring its new versions."
+        elif ((inst)); then
           ui_msg "$title" "$label comes with FliperOS and is installed." "" \
             "$(emulators_update_line "$choice" "$label")" "" \
             "It changes version with each new FliperOS image (the updates offered at boot keep it)."

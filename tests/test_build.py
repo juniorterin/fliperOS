@@ -1730,7 +1730,7 @@ class GroovyMameTests(unittest.TestCase):
         # Vindo do X que ele mesmo escolheu, nao volta para o KMS.
         self.assertEqual(self.run_wrapper('mvsc', display=None, kms_sdl=True,
                                           env_extra={'FLIPEROS_GROOVYMAME_X11': '1'})[0][0], 'x11-run')
-        for path, text in ((ROOT / 'fliperos-mkiso.sh', 'fliperos-attractplus fliperos-sdl2-kms'),
+        for path, text in ((ROOT / 'fliperos-mkiso.sh', 'fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch'),
                            (ROOT / 'tools/cabinet-update.sh', 'packages+=(fliperos-sdl2-kms)'),
                            (ROOT / 'config/fliperos-kms-run', 'export FLIPEROS_KMS_RUN=1'),
                            (ROOT / 'config/fliperos-launch', 'run=(/opt/fliperos/bin/fliperos-kms-run groovymame)')):
@@ -9699,7 +9699,8 @@ class EmulatorMenuTests(unittest.TestCase):
             self.assertTrue(name in own or ('pixmaps/' + name) in MKISO or name == 'com.libretro.RetroArch.svg' or
                             ('pixmaps/' + name) in duckstation,
                             name)
-        self.assertIn('rm -f /usr/local/share/applications/com.libretro.RetroArch.desktop', MKISO)
+        self.assertIn('rm -f "$STAGING/usr/local/share/applications/com.libretro.RetroArch.desktop"',
+                      (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text())
 
     def test_session_only_runs_known_requests(self):
         session = (ROOT / 'config/fliperos-session').read_text()
@@ -12921,8 +12922,9 @@ class OnDemandFrontendTests(unittest.TestCase):
         return run.stdout.split()
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
-        self.assertEqual(self.list_recipes('--list-iso'), ['fliperos-attractplus', 'fliperos-sdl2-kms'])
-        self.assertEqual(sorted(self.list_recipes('--list')), sorted(('fliperos-attractplus', 'fliperos-sdl2-kms') + self.ON_DEMAND))
+        iso = ('fliperos-attractplus', 'fliperos-retroarch', 'fliperos-sdl2-kms')
+        self.assertEqual(self.list_recipes('--list-iso'), list(iso))
+        self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
 
     def test_the_session_table_fetches_them_instead_of_installing_a_package(self):
@@ -13855,13 +13857,14 @@ class RetroArchConfigTests(unittest.TestCase):
         body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
         # Os perfis de fabrica dos dois drivers.
         self.assertIn('cp -a /tmp/ra-autoconfig/udev /tmp/ra-autoconfig/linuxraw "$RA_DIR/autoconfig/"', body)
-        self.assertIn('libsdl2-dev', body)
-        self.assertIn('--enable-sdl2', body)
-        self.assertNotIn('--disable-sdl2', body)
+        recipe = (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text()
+        self.assertIn('libsdl2-dev', recipe)
+        self.assertIn('--enable-sdl2', recipe)
+        self.assertNotIn('--disable-sdl2', recipe)
 
     def test_emulators_built_with_vulkan(self):
         # Para o driver amdgpu (Setup > Video Setup > Video driver).
-        ra = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
+        ra = (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text()
         self.assertIn('libvulkan-dev', ra)
         self.assertIn('--enable-vulkan', ra)
         fc = MKISO.split("<< 'FCSCRIPT'")[1].split('\nFCSCRIPT\n')[0]
@@ -13955,12 +13958,13 @@ class RetroArchConfigTests(unittest.TestCase):
         # O khr_display do patch troca o modo do CRT: no amdgpu o RetroArch
         # abre em Vulkan. Em outro driver, outra placa ou sem o patch (sem a
         # marca do build), o glcore. Nada fica gravado: vale a placa de agora.
-        body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
-        self.assertIn('[[ ${patch##*/} != 0001-* ]] || touch /usr/local/share/fliperos/retroarch-vulkan-crt', body)
-        self.assertLess(body.index('git apply "$patch"'), body.index('./configure'))
-        self.assertIn('cp "$(dirname "$(realpath "$0")")"/config/retroarch-patches/*.patch "$CHROOT_DIR/tmp/retroarch-patches/"',
-                      MKISO)
-        self.assertTrue((ROOT / 'config/retroarch-patches/0001-khr-display-crt-modeswitch.patch').is_file())
+        # O RetroArch e o pacote fliperos-retroarch: o patch entra sempre (o
+        # commit e fixo) e a marca vem no pacote.
+        recipe = (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text()
+        self.assertIn('touch "$STAGING/usr/local/share/fliperos/retroarch-vulkan-crt"', recipe)
+        self.assertLess(recipe.index('git -C "$dir" apply "$patch" || return 1'), recipe.index('./configure'))
+        self.assertTrue((ROOT / 'packaging/patches/retroarch/0001-khr-display-crt-modeswitch.patch').is_file())
+        self.assertFalse((ROOT / 'config/retroarch-patches').exists())
         self.assertIn('install -Dm644 "$src/config/retroarch-vulkan.cfg" "$root/etc/fliperos/retroarch/retroarch-vulkan.cfg"',
                       (ROOT / 'fliperos-rootfs.sh').read_text())
         vulkan = ROOT / 'config/retroarch-vulkan.cfg'
@@ -14160,7 +14164,13 @@ class EmulatorsMenuTests(unittest.TestCase):
                 (root / path).chmod(0o755)
             share = root / 'usr/local/share/fliperos'
             share.mkdir(parents=True)
-            (share / 'emulator-versions').write_text('retroarch=2026-10-12 55c2026\n')
+            (share / 'emulator-versions').write_text('retroarch=2026-10-12 55c2026\nflycast=2026-10-01 1111111\n')
+            # O RetroArch do pacote grava a sua, que vale antes da do arquivo da imagem.
+            (share / 'emulator-versions.d').mkdir()
+            (share / 'emulator-versions.d/retroarch').write_text('2026-11-05 7d2e953\n')
+            (tmp / 'packaging/packages').mkdir(parents=True)
+            (tmp / 'packaging/packages/fliperos-retroarch.sh').write_text(
+                'RA_COMMIT="8e3f00aa8e3f00aa8e3f00aa8e3f00aa8e3f00aa"\n')
             (root / 'usr/local/libexec').mkdir(parents=True)
             (root / 'usr/local/libexec/groovymame').write_bytes(b'\0x 0.976 (\0Lua 5.4\0' b'0.289 (unknown)\0')
             for app, version in (('pcsx2', 'v2.8.2'), ('duckstation', '0.1-12083-g00e299795')):
@@ -14186,7 +14196,7 @@ class EmulatorsMenuTests(unittest.TestCase):
             env = {'FLIPEROS_EMULATORS_ROOT': str(root), 'FLIPEROS_HOME': str(home),
                    'FLIPEROS_MKISO_URL': mkiso.as_uri(), 'FLIPEROS_SM2_REPO': str(repo)}
             got = dict(r.split('|') for r in self.run_cmd('fliperos-emulators', 'versions', env=env).stdout.splitlines())
-            self.assertEqual(got['retroarch'], '2026-10-12 55c2026')
+            self.assertEqual(got['retroarch'], '2026-11-05 7d2e953')
             self.assertEqual(got['groovymame'], '0.289')
             self.assertEqual(got['pcsx2'], '2.8.2')
             self.assertEqual(got['duckstation'], '0.1-12083-g00e299795')
@@ -14198,6 +14208,8 @@ class EmulatorsMenuTests(unittest.TestCase):
             def latest(name):
                 return self.run_cmd('fliperos-emulators', 'latest', name, env=env).stdout.strip()
             self.assertEqual(latest('pcsx2'), '2.8.2|2.8.2|same')
+            # O commit fixado na receita do pacote: o que o proximo update leva.
+            self.assertEqual(latest('retroarch'), '2026-11-05 7d2e953|8e3f00a|new')
             self.assertEqual(latest('groovymame'), '0.289|0.290|new')
             self.assertEqual(latest('model2'), '%s|%s|new' % (got['model2'], new))
             # Sem como saber a nova (o Fightcade nao diz a versao antes de baixar).
@@ -14206,9 +14218,11 @@ class EmulatorsMenuTests(unittest.TestCase):
         mk = (ROOT / 'fliperos-mkiso.sh').read_text()
         for name in ('groovymame', 'pcsx2', 'openbor', 'dolphin'):
             self.assertIn('  record_version %s "' % name, mk)
-        for name in ('retroarch', 'flycast', 'supermodel'):
+        for name in ('flycast', 'supermodel'):
             self.assertIn('echo "%s=$(git log -1 --format=\'%%cs %%h\')" >> /usr/local/share/fliperos/emulator-versions'
                           % name, mk)
+        self.assertIn("git -C \"$dir\" log -1 --format='%cs %h' > \"$STAGING/usr/local/share/fliperos/emulator-versions.d/retroarch\"",
+                      (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text())
 
     def test_install_calls_the_installer_of_each_kind(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -545,9 +545,9 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms' >> "$LOG_FILE" 2>&1 \
-    || err "Installing Attract-Mode Plus and GroovyMAME's SDL2 from the local repository failed (see $LOG_FILE)"
-  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus and GroovyMAME's KMS SDL2 installed"
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch' >> "$LOG_FILE" 2>&1 \
+    || err "Installing Attract-Mode Plus, GroovyMAME's SDL2 and RetroArch from the local repository failed (see $LOG_FILE)"
+  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME's KMS SDL2 and RetroArch installed"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
@@ -998,9 +998,13 @@ install_mame2010_xml() {
 # Com Vulkan (--enable-vulkan, o configure so o acha com o libvulkan-dev),
 # para o driver amdgpu (Setup > Video Setup > Video driver). Sem X11 o
 # contexto dele e o khr_display, que de fabrica nao troca o modo do CRT; o
-# patch config/retroarch-patches/0001 o faz trocar, e com ele o
+# patch packaging/patches/retroarch/0001 o faz trocar, e com ele o
 # fliperos-kms-run abre o RetroArch em Vulkan no amdgpu.
 # SDL 1.x fica fora.
+# O binario vem do pacote fliperos-retroarch (packaging/packages, instalado
+# por install_local_repo_chroot), o mesmo que os updates levam a quem so
+# atualiza pela rede (updates/packages.list). Aqui ficam os cores, os .info e
+# os perfis de controle.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
     warn "RetroArch skipped (--skip-retroarch)"
@@ -1014,36 +1018,12 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
   libegl1-mesa-dev libgles2-mesa-dev libudev-dev libsdl2-dev libvulkan-dev
 
-git clone --depth=1 https://github.com/libretro/RetroArch /tmp/retroarch
-cd /tmp/retroarch
-# A versao (o commit de hoje do master) para o Setup > Emulators & Games.
-mkdir -p /usr/local/share/fliperos
-echo "retroarch=$(git log -1 --format='%cs %h')" >> /usr/local/share/fliperos/emulator-versions
-# Os patches do FliperOS (config/retroarch-patches): o khr_display (Vulkan
-# sem X) passa a trocar o modo do CRT. O que nao encaixa mais no master fica
-# de fora com um aviso; sem o 0001 nao ha a marca, e o fliperos-kms-run deixa
-# o RetroArch no glcore tambem no amdgpu.
-rm -f /usr/local/share/fliperos/retroarch-vulkan-crt
-for patch in /tmp/retroarch-patches/*.patch; do
-  [[ -f $patch ]] || continue
-  if git apply --check "$patch" 2> /dev/null; then
-    git apply "$patch" && echo "RetroArch patch: ${patch##*/}"
-    [[ ${patch##*/} != 0001-* ]] || touch /usr/local/share/fliperos/retroarch-vulkan-crt
-  else
-    echo "WARNING: RetroArch patch ${patch##*/} does not apply to this RetroArch; left out"
-  fi
-done
-rm -rf /tmp/retroarch-patches
-./configure --enable-kms --enable-egl --disable-x11 --disable-wayland \
-  --disable-sdl --enable-sdl2 --enable-vulkan
-make -j"$(nproc)"
-make install
-# O atalho do proprio RetroArch abriria o binario dentro do X do desktop,
-# onde este build (so KMS) nao roda; o do FliperOS passa pelo
-# fliperos-launch. O icone (share/pixmaps) fica.
-rm -f /usr/local/share/applications/com.libretro.RetroArch.desktop
-cd /
-rm -rf /tmp/retroarch
+# O RetroArch em si e o pacote fliperos-retroarch, ja instalado do
+# repositorio local.
+if ! dpkg -s fliperos-retroarch > /dev/null 2>&1; then
+  echo "fliperos-retroarch is not installed (local repository)" >&2
+  exit 1
+fi
 
 # Cores, informacoes dos cores e perfis de controle ficam em /opt/fliperos,
 # do usuario fliperos: o Online Updater do RetroArch baixa outros cores do
@@ -1131,10 +1111,8 @@ RASCRIPT
   sed -i -e "s|__RA_AUTOCONFIG_COMMIT__|${RA_AUTOCONFIG_COMMIT}|g" \
          -e "s|__RA_CORE_INFO_COMMIT__|${RA_CORE_INFO_COMMIT}|g" "$CHROOT_DIR/tmp/build-retroarch.sh"
   chmod +x "$CHROOT_DIR/tmp/build-retroarch.sh"
-  mkdir -p "$CHROOT_DIR/tmp/retroarch-patches"
-  cp "$(dirname "$(realpath "$0")")"/config/retroarch-patches/*.patch "$CHROOT_DIR/tmp/retroarch-patches/"
   chroot "$CHROOT_DIR" /tmp/build-retroarch.sh >> "$LOG_FILE" 2>&1 \
-    && ok "RetroArch compiled (KMS/DRM) with cores and joypad autoconfig" \
+    && ok "RetroArch (fliperos-retroarch) with cores and joypad autoconfig" \
     || err "RetroArch failed; use --skip-retroarch explicitly for an ISO without it"
 }
 
