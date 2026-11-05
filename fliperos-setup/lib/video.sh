@@ -804,6 +804,8 @@ video_set_resolution() {
   conf_set kernel_video "$params"
   conf_set boot_resolution "$mode"
   log_info "resolucao de boot: $mode ($params)"
+  video_custom_active && custom_boot_refresh
+  return 0
 }
 
 # video_set_custom_edid EDID [MODO] troca o modo de boot por um EDID proprio
@@ -889,6 +891,84 @@ geometry_aborted() {
   grep -q '^Aborted!' <<< "$1"
 }
 
+# ── O modo de boot do monitor custom ─────────────────────────────
+# O Switchres (jogos, RetroArch) calcula o modo com o crt_range0; o modo de
+# boot (console, Setup, frontend, desktop) vem da tabela fixa do kernel, com
+# outros porches e sync: com o custom ativo, o frontend e o desktop ficavam
+# deslocados em relacao aos jogos. O Xorg e o kernel (por um EDID) passam a
+# usar a modeline que o Switchres calcula para o mesmo modo.
+CUSTOM_EDID=${CUSTOM_EDID:-fliperos-custom.bin}
+
+# custom_modeline MODO imprime a modeline (formato do Xorg) que o Switchres
+# calcula para o modo de boot da tabela (640x480iS...) com o switchres.ini de
+# agora. Status 1 sem Switchres ou se ele devolve outro tamanho ou outro
+# entrelacamento: o modo da tabela fica.
+custom_modeline() {
+  local mode=$1 table name w h r line want_i=0
+  have switchres || return 1
+  table=$(mode_modeline "$mode") || return 1
+  [[ $table == *Interlace* ]] && want_i=1
+  name=${table#\"}
+  name=${name%%\"*}
+  read -r w h r <<< "$(mode_whr "$mode")"
+  line=$(switchres "$w" "$h" "$r" --ini "$SWITCHRES_INI" --calc 2>&1 | grep -m1 'Modeline "') || return 1
+  awk -v name="$name" -v w="$w" -v h="$h" -v want_i="$want_i" '{
+    if ($2 != w || $6 != h) exit 1
+    i = 0; hs = "-HSync"; vs = "-VSync"
+    for (n = 10; n <= NF; n++) {
+      f = tolower($n)
+      if (f == "interlace") i = 1
+      else if (f == "+hsync") hs = "+HSync"
+      else if (f == "-hsync") hs = "-HSync"
+      else if (f == "+vsync") vs = "+VSync"
+      else if (f == "-vsync") vs = "-VSync"
+    }
+    if (i != want_i) exit 1
+    printf "\"%s\" %s %s %s %s %s %s %s %s %s%s %s %s\n", name, $1, $2, $3, $4, $5, $6, $7, $8, $9, (i ? " Interlace" : ""), hs, vs
+  }' <<< "${line##*\" }"
+}
+
+# custom_edid grava o EDID com a modeline do Switchres para o modo de boot
+# (entra no initramfs pelo fliperos-edid-hook; boot_apply o refaz). Sem o
+# monitor custom, ou sem uma modeline, apaga o arquivo e devolve status 1.
+custom_edid() {
+  local mode modeline
+  rm -f "$EDID_DIR/$CUSTOM_EDID"
+  video_custom_active || return 1
+  mode=$(conf_get boot_resolution 2> /dev/null) || return 1
+  modeline=$(custom_modeline "$mode") || return 1
+  mkdir -p "$EDID_DIR"
+  printf '%s\n' "$modeline" | "$EDID_MODES" "$EDID_DIR/$CUSTOM_EDID" 2>> "$FLIPEROS_LOG"
+}
+
+# custom_edid_cmdline LINHA CONECTOR: com o EDID do custom gravado, o video=
+# da saida analogica fica so com as opcoes (o "e" e o panel_orientation) e o
+# drm.edid_firmware aponta para ele: o modo preferido passa a ser o do
+# Switchres, nao o da tabela do kernel. Uma linha que ja traz um EDID (boot
+# por EDID, 240p da Intel, console em pe) fica como esta.
+custom_edid_cmdline() {
+  local line=$1 conn=$2 spec opts=""
+  if [[ -z $conn || ! -f $EDID_DIR/$CUSTOM_EDID ]] || ! drm_is_analog "$conn" || ! video_custom_active ||
+    cmdline_get "$line" drm.edid_firmware > /dev/null ||
+    ! spec=$(cmdline_video_spec "$line" "$conn"); then
+    printf '%s\n' "$line"
+    return
+  fi
+  [[ $spec == *,* ]] && opts=,${spec#*,}
+  line=$(cmdline_set_video "$line" "$conn" "e$opts")
+  cmdline_set "$line" drm.edid_firmware "$conn:edid/$CUSTOM_EDID"
+}
+
+# custom_boot_refresh refaz o que depende do crt_range0: o EDID do kernel e
+# o Modeline do Xorg (o desktop). Vale no proximo boot.
+custom_boot_refresh() {
+  custom_edid || true
+  if [[ -f ${XORG_CONF:-/nonexistent} ]]; then
+    xorg_generate || true
+  fi
+  return 0
+}
+
 geometry_apply() {
   local range=$1
   [[ -n $range ]] || return 1
@@ -898,6 +978,7 @@ geometry_apply() {
   # duplicar o crt_range no mame.ini.
   [[ -f $MAME_INI ]] && ini_set "$MAME_INI" switchres_ini 1
   conf_set geometry "$range"
+  custom_boot_refresh
   log_info "geometria: $range"
 }
 
@@ -912,6 +993,7 @@ geometry_reset() {
   conf_unset geometry
   geometry_res_clear
   video_apply_monitor "$monitor"
+  custom_boot_refresh
   log_info "geometria: padrao do monitor $monitor"
 }
 
@@ -964,6 +1046,7 @@ video_custom_drop() {
   video_custom_active || return 0
   ini_set "$SWITCHRES_INI" crt_range0 auto
   conf_unset geometry
+  custom_boot_refresh
   log_info "monitor custom desfeito"
 }
 
@@ -1000,6 +1083,7 @@ geometry_cli() {
     reset)
       if conf_get geometry > /dev/null 2>&1; then
         geometry_reset
+        geometry_boot_apply
       else
         geometry_res_clear
       fi
@@ -1018,10 +1102,17 @@ geometry_cli() {
       rfreq=$(crt_range_frequency "$range") || return 2
       bfreq=$(monitor_frequency "$base") || return 2
       [[ $rfreq == "$bfreq" ]] || return 3
-      geometry_apply "$range"
+      geometry_apply "$range" && geometry_boot_apply
       ;;
     *) return 2 ;;
   esac
+}
+
+# geometry_boot_apply: sem a tela do Video Setup (o painel web), grava logo a
+# linha do kernel e o initramfs com o EDID do custom, no sistema instalado.
+geometry_boot_apply() {
+  is_installed && ! is_live || return 0
+  boot_apply
 }
 
 # crt_range_valid RANGE: os 16 valores de um crt_range do Switchres,

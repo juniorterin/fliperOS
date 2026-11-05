@@ -425,7 +425,9 @@ boot_compose() {
   done < <(mm_extras | sed 's/^[^:]*://' | sort -u)
   line=$(orientation_cmdline "$line" "$conn" "$orientation")
   # Em pe, o console em 640x480i com o EDID dos dois modos (lib/video.sh).
-  vertical_console_cmdline "$line" "$conn" "$orientation"
+  line=$(vertical_console_cmdline "$line" "$conn" "$orientation")
+  # Com o monitor custom, o modo do Switchres (lib/video.sh).
+  custom_edid_cmdline "$line" "$conn"
 }
 
 # Placa-mae sem a porta do mouse PS/2 (AUX): o kernel espera por ela uns 2 s
@@ -539,6 +541,8 @@ boot_menu_timeout() {
 # Limine.
 boot_apply() {
   local line
+  # O EDID do monitor custom segue a resolucao e o crt_range de agora.
+  video_custom_active && { custom_edid || true; }
   line=$(boot_read_cmdline) || line=$BOOT_BASE_CMDLINE
   line=$(boot_compose "$line")
   boot_write_cmdline "$line" || return 1
@@ -547,7 +551,7 @@ boot_apply() {
   # trocado so valem se estiverem no initramfs; o hook do initramfs tambem
   # chama o fliperos-limine-update.
   if [[ $(conf_get boot_resolution 2> /dev/null) == custom || $(conf_get boot_resolution 2> /dev/null) == "$SUPER240_MODE" ]] ||
-    ((${BOOT_INITRAMFS:-0})); then
+    [[ -f $EDID_DIR/$CUSTOM_EDID ]] || ((${BOOT_INITRAMFS:-0})); then
     run_logged update-initramfs -u -k all
   else
     run_logged "$LIMINE_UPDATE"

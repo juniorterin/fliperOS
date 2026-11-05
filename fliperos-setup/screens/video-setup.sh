@@ -35,6 +35,7 @@ screen_monitor_type() {
     # O mesmo preset de base: so volta a ele (o Reset Geometry).
     if [[ $monitor == "$current" ]]; then
       geometry_reset
+      VIDEO_CHANGED=1
       return 0
     fi
   fi
@@ -93,6 +94,7 @@ screen_crt_range_input() {
     return 0
   fi
   geometry_apply "$range"
+  VIDEO_CHANGED=1
   ui_msg "Custom monitor" "Saved: the monitor is now $(video_monitor_label)." "" "$range"
 }
 
@@ -260,6 +262,8 @@ screen_geometry() {
     return 0
   fi
   geometry_apply "$range"
+  # O modo de boot (frontend, desktop) segue o crt_range: o boot e refeito.
+  VIDEO_CHANGED=1
   ui_msg "Geometry" "Saved: the monitor is now $(video_monitor_label)." "" "$range"
 }
 
@@ -274,6 +278,7 @@ screen_geometry_reset() {
   ui_yesno "Reset Geometry" "Discard the saved geometry and go back to the default of the monitor ($monitor)?" no ||
     return 0
   geometry_reset
+  VIDEO_CHANGED=1
   ui_msg "Reset Geometry" "Geometry reset: games and RetroArch use the default of the monitor ($monitor)."
 }
 

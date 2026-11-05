@@ -54,6 +54,8 @@ xorg_generate() {
   done < <(mm_screens 2> /dev/null)
   ((others)) && busid=$(xorg_busid "$(conf_get card 2> /dev/null)")
   if [[ -n $freq && -n $conn ]] && modeline=$(mode_modeline "$mode"); then
+    # Monitor custom: a modeline do Switchres, a mesma dos jogos.
+    video_custom_active && modeline=$(custom_modeline "$mode" 2> /dev/null || echo "$modeline")
     name=${modeline#\"}
     name=${name%%\"*}
     hsync=$(mode_hsync_range "$freq")

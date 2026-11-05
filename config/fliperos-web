@@ -3064,11 +3064,11 @@ class Handler(BaseHTTPRequestHandler):
             # crt_range digitado (o Custom monitor); o grid fica no Setup.
             data = self.body()
             if data.get("action") == "reset":
-                return self.setup_call(["--geometry", "reset"])
+                return self.setup_call(["--geometry", "reset"], timeout=240)
             value = re.sub(r"\s+", "", str(data.get("range", "")))
             if data.get("action") != "set" or not re.fullmatch(r"[0-9.,-]{20,200}", value):
                 return self.send(400, {"error": "not a crt_range"})
-            done = subprocess.run([SETUP, "--geometry", "set", value], capture_output=True, text=True, timeout=60)
+            done = subprocess.run([SETUP, "--geometry", "set", value], capture_output=True, text=True, timeout=240)
             if done.returncode == 3:
                 return self.send(409, {"error": "this crt_range is for another frequency than the monitor"})
             if done.returncode:

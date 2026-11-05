@@ -108,7 +108,7 @@ install_configure_video() {
   # update-initramfs do disco novo o poe no initramfs).
   # O mesmo para o 240p da Intel (Video Setup > Resolution ou a entrada
   # "Intel 15 kHz 240p" do boot): o EDID da imagem live e o do disco novo.
-  for file in custom_resolution.bin "$SUPER240_EDID"; do
+  for file in custom_resolution.bin "$SUPER240_EDID" "$CUSTOM_EDID"; do
     if [[ -f $EDID_DIR/$file ]]; then
       install -D -m 644 "$EDID_DIR/$file" "$target$EDID_DIR/$file"
     fi

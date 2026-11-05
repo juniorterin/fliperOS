@@ -24,7 +24,7 @@ def parse(text):
     clock = float(m.group(1))
     h = [int(m.group(i)) for i in range(2, 6)]
     v = [int(m.group(i)) for i in range(6, 10)]
-    rest = m.group(10)
+    rest = m.group(10).lower()
     return clock, h, v, "interlace" in rest, "+hsync" in rest, "+vsync" in rest
 
 

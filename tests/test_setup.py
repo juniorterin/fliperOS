@@ -3821,6 +3821,70 @@ class CustomMonitorTests(Base):
                                    'echo "Switchres: Monitor range 1-2"' % self.RANGE)
         self.assertEqual(self.env.out("video_preset_range arcade_15").strip(), self.RANGE)
 
+    # A modeline do Switchres para o crt_range custom de um usuario (porches
+    # diferentes dos da tabela do kernel: 683 744 830 em vez de 666 727 831).
+    CALC = ('echo \'Switchres: Modeline "640x480_60i 15.690000KHz 60.000000Hz" 13.022700 640 683 744 830 '
+            '480 483 489 523 interlace  -hsync -vsync\'')
+
+    def custom_boot(self):
+        (self.env.etc / "fliperos.conf").write_text(
+            "connector=VGA-1\nmonitor=generic_15\nboot_resolution=640x480iS\n"
+            "kernel_video=video=VGA-1:640x480iSe\n")
+        self.env.stub("switchres", self.CALC)
+        edid_dir = self.env.dir / "edid"
+        return edid_dir, {"EDID_DIR": str(edid_dir), "EDID_MODES": str(SETUP.parent / "config" / "fliperos-edid-modes")}
+
+    def test_custom_modeline_replaces_the_kernel_table_mode(self):
+        edid_dir, env = self.custom_boot()
+        self.assertEqual(self.env.run("custom_modeline 640x480iS", env).returncode, 0)
+        out = self.env.out("custom_modeline 640x480iS", env).strip()
+        self.assertEqual(out, '"640x480i" 13.022700 640 683 744 830 480 483 489 523 Interlace -HSync -VSync')
+        # Um tamanho ou entrelacamento diferente do pedido: fica o da tabela.
+        self.assertNotEqual(self.env.run("custom_modeline 640x240S", env).returncode, 0)
+
+    def test_xorg_follows_the_custom_range(self):
+        edid_dir, env = self.custom_boot()
+        self.env.out("xorg_generate", env)
+        self.assertIn('Modeline "640x480i" 13.038 640 666 727 831', (self.env.etc / "xorg.conf").read_text())
+        self.env.out("geometry_apply '%s'" % self.RANGE, env)
+        text = (self.env.etc / "xorg.conf").read_text()
+        self.assertIn('Modeline "640x480i" 13.022700 640 683 744 830 480 483 489 523 Interlace', text)
+        self.assertIn('Option "PreferredMode" "640x480i"', text)
+        self.env.out("geometry_reset", env)
+        self.assertIn('Modeline "640x480i" 13.038 640 666 727 831', (self.env.etc / "xorg.conf").read_text())
+
+    def test_kernel_gets_an_edid_with_the_switchres_mode(self):
+        edid_dir, env = self.custom_boot()
+        self.env.out("geometry_apply '%s'" % self.RANGE, env)
+        data = (edid_dir / "fliperos-custom.bin").read_bytes()
+        self.assertEqual(len(data), 128)
+        self.assertEqual(sum(data) % 256, 0)
+        # O primeiro modo: 13,02 MHz, 640 colunas, campo de 240 linhas, entrelacado.
+        self.assertEqual(data[54] | data[55] << 8, 1302)
+        self.assertEqual((data[56], data[59], data[71] & 0x80), (0x80, 0xF0, 0x80))
+        line = self.env.out("boot_compose 'quiet'", env).strip()
+        self.assertIn("video=VGA-1:e", line.split())
+        self.assertIn("drm.edid_firmware=VGA-1:edid/fliperos-custom.bin", line.split())
+        self.assertNotIn("video=VGA-1:640x480iSe", line.split())
+        # Voltar ao preset tira o EDID e devolve o modo da tabela do kernel.
+        self.env.out("geometry_reset", env)
+        self.assertFalse((edid_dir / "fliperos-custom.bin").exists())
+        line = self.env.out("boot_compose 'quiet'", env).strip()
+        self.assertIn("video=VGA-1:640x480iSe", line.split())
+        self.assertNotIn("drm.edid_firmware", line)
+
+    def test_custom_edid_keeps_the_options_and_other_edids(self):
+        edid_dir, env = self.custom_boot()
+        self.env.out("geometry_apply '%s'" % self.RANGE, env)
+        out = self.env.out("custom_edid_cmdline 'quiet video=VGA-1:640x480iSe,panel_orientation=right_side_up' VGA-1", env)
+        self.assertEqual(out.strip(), "quiet video=VGA-1:e,panel_orientation=right_side_up "
+                                      "drm.edid_firmware=VGA-1:edid/fliperos-custom.bin")
+        own = "video=VGA-1:e drm.edid_firmware=VGA-1:edid/ntsc.bin"
+        self.assertEqual(self.env.out("custom_edid_cmdline '%s' VGA-1" % own, env).strip(), own)
+        # Saida digital (conversor ativo): fica como esta.
+        hdmi = "video=HDMI-A-1:1280x480iSe"
+        self.assertEqual(self.env.out("custom_edid_cmdline '%s' HDMI-A-1" % hdmi, env).strip(), hdmi)
+
     def test_grid_uses_the_chosen_resolution(self):
         # No gabinete o grid saia sempre em 648x480, qualquer que fosse a
         # resolucao escolhida no Video Setup.
