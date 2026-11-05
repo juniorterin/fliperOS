@@ -42,3 +42,25 @@ sessões do Claude dividem este Docker.
    "destravar" o Docker: isso deixa outra VM com memória presa. Se ele não
    responde com memória sobrando, uma sessão só faz Quit pela bandeja e
    abre de novo, uma vez; se não voltar, pergunte ao usuário.
+
+# Releases e updates
+
+Uma ISO nova (tag X.Y) e o System Update têm de terminar no mesmo ponto: quem
+instala a ISO e quem só aplica os updates precisam ficar com o mesmo sistema.
+Em 2026-11-05 o 0.20 saiu 3 commits depois do update 39 (GroovyMAME em KMS,
+RetroArch em Vulkan no amdgpu, R9 380): as máquinas no nível 39 ficaram sem
+eles até existir o update 40.
+
+8. Antes de marcar uma versão, publique o update que cobre tudo o que mudou no
+   sistema desde o último (`updates/notes/NNNN.md` + `updates/index`, com o
+   `tools/make-update.sh`) e marque a tag nesse mesmo commit, ou no seguinte
+   sem nada que mexa em `fliperos-setup`, `config`, `packaging`, `patches` ou
+   nos scripts de build.
+9. Confira antes da tag: `git log --oneline ULTIMO_UPDATE..HEAD -- fliperos-setup
+   config packaging patches fliperos-rootfs.sh fliperos-mkiso.sh` (ULTIMO_UPDATE
+   é o commit da última linha de `updates/index`) tem de sair vazio. Se não
+   sair, publique o update primeiro.
+10. Uma mudança que só vale depois de gerar um arquivo (um EDID, o initramfs,
+    um modprobe.d) precisa de um passo no update que o gere nas máquinas que já
+    têm a configuração (como o `boot_apply` do `tools/cabinet-update.sh`):
+    instalar os arquivos novos não basta.
