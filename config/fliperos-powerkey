@@ -25,7 +25,12 @@ Sem a variavel (o menu do Setup, o desktop, o RetroArch e o GroovyMAME como
 launcher) nao ha jogo a fechar: desliga.
 
 O jogo recebe o SIGTERM, para sair gravando o que tem a gravar. Se ele
-seguir aberto, o proximo aperto manda o SIGKILL. Por uns segundos depois de
+seguir aberto, o proximo aperto manda o SIGKILL, e sem aperto nenhum ele vai
+sozinho depois de KILL_AFTER segundos: no KMS nao ha Xorg para matar junto, e
+o GroovyMAME ficou aberto minutos depois do SIGTERM (no X ele caia com o
+Xorg). Quem espera e um processo a parte: os apertos repetidos que o
+triggerhappy enfileira chegariam com o jogo ja fechado e desligariam a
+maquina. Por uns segundos depois de
 um aperto os outros nao contam: um aperto, uma acao (e ha placa que manda o
 mesmo aperto por dois dispositivos).
 """
@@ -40,6 +45,7 @@ import time
 GRACE = float(os.environ.get('FLIPEROS_POWERKEY_GRACE', '3'))
 STATE = os.environ.get('FLIPEROS_POWERKEY_STATE', '/run/fliperos-powerkey')
 OFF = shlex.split(os.environ.get('FLIPEROS_POWERKEY_OFF', 'systemctl poweroff'))
+KILL_AFTER = float(os.environ.get('FLIPEROS_POWERKEY_KILL_AFTER', '5'))
 
 
 def alive(pid):
@@ -160,6 +166,40 @@ def main():
         state.flush()
         if not pids:
             subprocess.call(OFF)
+            return
+    kill_later([(pid, started(pid)) for pid in pids])
+
+
+def started(pid):
+    """O instante em que o processo comecou (campo 22 do stat): um PID
+    reaproveitado depois nao e o jogo."""
+    try:
+        with open('/proc/%d/stat' % pid) as f:
+            return f.read().rsplit(')', 1)[1].split()[19]
+    except (OSError, IndexError):
+        return None
+
+
+def kill_later(procs):
+    """Num processo a parte, depois de KILL_AFTER: SIGKILL no que do jogo
+    seguir aberto."""
+    if KILL_AFTER <= 0 or not procs or os.fork():
+        return
+    os.setsid()
+    if os.fork():
+        os._exit(0)
+    # Sem as saidas de quem chamou: o triggerhappy nao fica esperando.
+    null = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(null, fd)
+    time.sleep(KILL_AFTER)
+    for pid, start in procs:
+        if start is not None and alive(pid) and started(pid) == start:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+    os._exit(0)
 
 
 if __name__ == '__main__':

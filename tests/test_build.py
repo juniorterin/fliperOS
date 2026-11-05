@@ -8198,9 +8198,9 @@ class PowerKeyTests(unittest.TestCase):
             time.sleep(0.1)
         return False
 
-    def press(self, tmp, grace='1'):
+    def press(self, tmp, grace='1', kill_after='0'):
         env = dict(os.environ, FLIPEROS_POWERKEY_STATE=str(tmp / 'state'), FLIPEROS_POWERKEY_GRACE=grace,
-                   FLIPEROS_POWERKEY_OFF='touch %s' % (tmp / 'off'))
+                   FLIPEROS_POWERKEY_OFF='touch %s' % (tmp / 'off'), FLIPEROS_POWERKEY_KILL_AFTER=kill_after)
         run = subprocess.run([sys.executable, str(ROOT / 'config/fliperos-powerkey')], env=env,
                              capture_output=True, text=True, timeout=30)
         self.assertEqual(run.returncode, 0, run.stderr)
@@ -8223,6 +8223,20 @@ class PowerKeyTests(unittest.TestCase):
             self.press(tmp)
             self.assertTrue((tmp / 'off').exists())
             self.assertTrue(Path('/proc/%d' % frontend).exists())
+
+    def test_a_game_that_ignores_sigterm_goes_after_a_while(self):
+        # O GroovyMAME no KMS ficou minutos aberto depois do SIGTERM (no X ele
+        # caia com o Xorg). Sem outro aperto, o SIGKILL vai sozinho; os
+        # apertos repetidos logo depois nao desligam a maquina.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.start(tmp, 'FLIPEROS_POWERKEY=game bash -c \'trap "" TERM INT; echo $$ > game.pid; '
+                            'while :; do sleep 0.1; done\' &\nwait\nsleep 300 &\nwait\n')
+            game = self.pid(tmp, 'game.pid')
+            self.press(tmp, grace='3', kill_after='0.5')
+            self.press(tmp, grace='3', kill_after='0.5')
+            self.assertTrue(self.gone(game))
+            self.assertFalse((tmp / 'off').exists())
 
     def test_emulator_opened_from_the_desktop_closes(self):
         with tempfile.TemporaryDirectory() as tmp:
