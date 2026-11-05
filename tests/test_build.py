@@ -13325,6 +13325,45 @@ class TelegramTests(unittest.TestCase):
         with self.assertRaises(self.post.PostError):
             self.post.parse('  \n---\n')
 
+    def test_a_640x240_capture_is_posted_in_4_3_never_stretched(self):
+        # As capturas de 15 kHz tem metade das linhas do que o tubo mostra.
+        size = self.post.tube_size
+        self.assertEqual(size(640, 240), (640, 480))
+        self.assertEqual(size(2560, 240), (640, 480))
+        self.assertEqual(size(1280, 240), (640, 480))
+        self.assertEqual(size(240, 640), (480, 640))
+        for kept in ((320, 240), (640, 480), (240, 320), (960, 720), (1280, 800), (640, 998), (1920, 1080)):
+            self.assertEqual(size(*kept), kept)
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest('Pillow is not installed')
+        folder = Path(tempfile.mkdtemp())
+        try:
+            # Linhas alternadas: dobrar sem suavizar mantem cada linha inteira.
+            shot = Image.new('RGB', (640, 240))
+            for y in range(0, 240, 2):
+                shot.paste((255, 255, 255), (0, y, 640, y + 1))
+            shot.save(folder / 'shot.webp', lossless=True)
+            (folder / 'out').mkdir()
+            kind, path = self.post.prepare(folder / 'shot.webp', folder / 'out')
+            with Image.open(path) as posted:
+                self.assertEqual((kind, posted.size), ('photo', (640, 480)))
+                self.assertEqual([posted.getpixel((5, y)) for y in range(4)],
+                                 [(255, 255, 255)] * 2 + [(0, 0, 0)] * 2)
+            frames = [Image.new('RGB', (640, 240), c) for c in ((255, 0, 0), (0, 0, 255))]
+            frames[0].save(folder / 'anim.webp', save_all=True, append_images=frames[1:], duration=100, lossless=True)
+            saved = self.post.video
+            self.post.video = lambda gif, width: None
+            try:
+                kind, path = self.post.prepare(folder / 'anim.webp', folder / 'out')
+            finally:
+                self.post.video = saved
+            with Image.open(path) as posted:
+                self.assertEqual((kind, posted.size, posted.n_frames), ('animation', (640, 480), 2))
+        finally:
+            shutil.rmtree(folder)
+
     def test_caption_goes_with_the_photo_and_a_long_one_goes_before_it(self):
         sent = []
         saved = (self.post.call, self.post.prepare, self.post.PAUSE)

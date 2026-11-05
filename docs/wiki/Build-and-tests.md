@@ -88,6 +88,8 @@ Each release is also posted in the group [t.me/fliperos15khz](https://t.me/flipe
 
 The file is a list of messages separated by a line with only `---`. In each one, a line made of `!`, `[]` and a path in parentheses, such as `(website/public/screenshots/gui/video.webp)`, puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with `**bold**`, `` `code` ``, `[links](https://...)` and `- ` lists. With a picture, the text is its caption (up to 1024 characters; longer, it goes before the picture as a message); without one, it is a message of up to 4096.
 
+A picture never goes out stretched. A 15 kHz capture with more than twice as many dots per line as lines (640x240, 2560x240, or 240x640 turned on its side) is a 4:3 picture of wide dots, so the script posts it with the lines doubled at 4:3 (3:4 when vertical), and the dry run prints the size that will be posted.
+
 Every message is in Portuguese and English: its text has a part starting with a `🇧🇷` line and another starting with a `🇺🇸` line, and the script refuses the file without both. The network updates follow the same rule: next to `updates/notes/NNNN.md` (English, shown on the cabinet), `updates/notes/pt-BR/NNNN.md` has the same notes in Portuguese, and `tools/make-update.sh` refuses an update without it (unless `docs/telegram/update-NNNN.md` exists).
 
 ```sh

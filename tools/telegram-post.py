@@ -26,7 +26,8 @@ duas, o arquivo e recusado antes de postar.
 Precisa de TELEGRAM_BOT_TOKEN (o bot do @BotFather, administrador do grupo) no
 ambiente; o destino e TELEGRAM_CHAT_ID, e na falta dele, @fliperos15khz.
 As imagens passam pelo Pillow (python3 -m pip install pillow): a parada vira
-PNG, a animada vira GIF e, com o ffmpeg, MP4.
+PNG, a animada vira GIF e, com o ffmpeg, MP4. Uma captura 640x240 (ou 2560x240)
+nunca sai esticada: vai em 4:3, com as linhas dobradas (tube_size).
 """
 import argparse
 import html
@@ -117,6 +118,18 @@ def parse(source):
     return messages
 
 
+def tube_size(width, height):
+    """O tamanho em que a captura aparece no tubo. A de 15 kHz que tem mais
+    do que o dobro de pontos por linha do que linhas (640x240, 2560x240, ou
+    240x640 deitada) e um quadro 4:3 de pontos esticados: vai com as linhas
+    dobradas e a largura de 4:3 (3:4 na vertical). As outras ficam como estao."""
+    short, long_ = sorted((width, height))
+    if short > 300 or long_ <= 2 * short:
+        return width, height
+    short, long_ = 2 * short, round(2 * short * 4 / 3)
+    return (long_, short) if width > height else (short, long_)
+
+
 def video(gif, width):
     """O GIF como MP4 sem som, ampliado sem suavizar (as capturas sao de 320x240):
     o Telegram toca como animacao e fica uma fracao do tamanho. Sem ffmpeg, None."""
@@ -132,21 +145,28 @@ def video(gif, width):
 
 
 def prepare(path, folder):
-    """A imagem como o Telegram aceita: foto PNG, ou GIF se for animada."""
+    """A imagem como o Telegram aceita: foto PNG, ou GIF se for animada, na
+    proporcao do tubo (tube_size; o BOX dobra as linhas sem suavizar)."""
     from PIL import Image, ImageSequence
     with Image.open(path) as image:
+        size = tube_size(*image.size)
+
+        def shown(frame):
+            frame = frame.convert('RGB')
+            return frame if frame.size == size else frame.resize(size, Image.BOX)
+
         if getattr(image, 'n_frames', 1) > 1:
             frames, durations = [], []
             for frame in ImageSequence.Iterator(image):
                 durations.append(frame.info.get('duration', 80) or 80)
-                frames.append(frame.convert('RGB'))
+                frames.append(shown(frame))
             target = folder / (path.stem + '.gif')
             frames[0].save(target, save_all=True, append_images=frames[1:], duration=durations, loop=0)
-            target = video(target, image.width) or target
+            target = video(target, size[0]) or target
             kind = 'animation'
         else:
             target = folder / (path.stem + '.png')
-            image.convert('RGB').save(target)
+            shown(image).save(target)
             kind = 'photo'
     limit = 50 if kind == 'animation' else 10
     if target.stat().st_size > limit * 1024 * 1024:
@@ -314,12 +334,18 @@ def main():
             parser.error('a version, --update or --backfill')
         with tempfile.TemporaryDirectory() as folder:
             if args.dry_run:
+                from PIL import Image
+
+                def posted(source):
+                    kind, path = prepare(source, Path(folder))
+                    with Image.open(source) as image:
+                        return '%s %s %dx%d (%d KB)' % (kind, path.name, *tube_size(*image.size),
+                                                        path.stat().st_size // 1024)
+
                 for number, message in enumerate(messages, 1):
-                    pictures = [prepare(p, Path(folder)) for p in message['images']]
                     print('%2d. %4d characters, %s' % (
                         number, visible(message['text']),
-                        ', '.join('%s %s (%d KB)' % (kind, path.name, path.stat().st_size // 1024)
-                                  for kind, path in pictures) or 'text only'))
+                        ', '.join(posted(p) for p in message['images']) or 'text only'))
                 print('%d messages ok' % len(messages))
                 return 0
             token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
