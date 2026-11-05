@@ -15,6 +15,13 @@ Feito e testado só no Docker ou sem olhar a tela; falta ver no CRT:
 - **Video Setup > Scanlines (2026-11-03, bf511c6):** só aparecem com monitor de 31 kHz; testadas no Docker (OpenGL e Vulkan, o preview pela camada). Falta ver num tubo de 31 kHz: o escuro e o brilho num jogo de 240 linhas em 480p, e o preview abrindo no modo do monitor.
 - **Monitor vertical (2026-10-24):** o frontend e o Setup em 240x320 girados, o Plymouth já girado e o console em 480i pelo EDID próprio de dois modos. Nunca visto num tubo vertical.
 
+## GroovyMAME no KMS
+
+É o padrão desde 2026-11-05 (144835f), com o SDL2 do pacote `fliperos-sdl2-kms`; no gabinete, sf2 e kof98 abriram no modo de cada jogo. Falta:
+- **Vários monitores com os jogos de várias telas:** hoje esse caso fica no X (`config/fliperos-groovymame`, `use_kms`). Para ir ao KMS: o `fliperos-kms-run` não desligar os monitores extras para o GroovyMAME (ele chama `fliperos-setup --outputs main`), o `-screenN` de cada tela vir dos conectores do DRM em vez da ordem do `xrandr`, e conferir se o Switchres troca o modo no conector certo de cada tela (o comentário do `custom_video_drmkms.cpp` diz que ele pode voltar ao primeiro conector). Precisa de um gabinete com dois monitores ligados.
+- **Conferir no KMS:** um jogo escolhido na interface do MAME (no X era aí o bug da velocidade, do emusync), um jogo de 480i, um jogo que troca de resolução no meio, a pistola de luz e as placas Intel e NVIDIA. Se algum falhar, `groovymame_video=x11` no `fliperos.conf` volta ao X.
+- **Instalações só atualizadas pela rede** ficam no X: o pacote vem no repositório da ISO, que a atualização não traz.
+
 ## Placas de vídeo
 
 - **Driver da NVIDIA:** o que se mediu numa GTX 980 Ti com o driver 580 (2026-10-26) ainda não entrou no Setup:
