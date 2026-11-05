@@ -113,6 +113,8 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 # A interface grafica do Setup (fliperos-setup/gui) e a area de transferencia
 # do navegador do Downloader (config/fliperos-browser).
 packages+=(python3-pygame xclip)
+# Os videos do frontend (ffmpeg) e a tela ao vivo nas AMD (VA-API).
+packages+=(ffmpeg mesa-va-drivers)
 # O compressor do Volume leveler (Setup > Audio Setup, lib/audio.sh).
 packages+=(swh-plugins)
 # Para compilar o filtro de flicker do entrelacado e a calibracao de cor
@@ -124,6 +126,13 @@ packages+=(picom)
 # O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
 # repositorio local o tem (o das imagens anteriores nao tem: fica no X).
 grep -qx 'Package: fliperos-sdl2-kms' /opt/fliperos/repo/Packages 2> /dev/null && packages+=(fliperos-sdl2-kms)
+# Os .deb do FliperOS que a ISO traz (o SDL do KMS, o Attract-Mode Plus...):
+# quem foi instalado de uma ISO mais velha e so atualiza pela rede os recebe
+# do release "packages" do GitHub (updates/packages-sync.sh), na versao da
+# updates/packages.list.
+while IFS= read -r deb; do
+  packages+=("$deb")
+done < <(bash "$src/updates/packages-sync.sh" "$src/updates/packages.list")
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
 # Wine em si nao vem mais na imagem (Setup > Games > Extras, config/fliperos-extras).
 dpkg -s wine32:i386 > /dev/null 2>&1 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)

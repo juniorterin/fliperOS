@@ -8168,6 +8168,87 @@ class ArcadeflowTests(unittest.TestCase):
         self.assertIn('/opt/fliperos/bin/fliperos-arcadeflow fetch', (ROOT / 'tools/cabinet-update.sh').read_text())
 
 
+class PackagesSyncTests(unittest.TestCase):
+    """updates/packages-sync.sh: os .deb da ISO para quem so atualiza pela rede,
+    do release "packages", na versao e com o sha256 da updates/packages.list."""
+
+    SCRIPT = ROOT / 'updates/packages-sync.sh'
+
+    def run_sync(self, tmp, rows, installed):
+        site, cache, bin_dir = tmp / 'site', tmp / 'cache', tmp / 'bin'
+        for d in (site, bin_dir):
+            d.mkdir(exist_ok=True)
+        # O dpkg-query daqui responde pelo dicionario; o dpkg (compare-versions) e o de verdade.
+        table = ''.join('  %s) echo -n %s ;;\n' % (n, v) for n, v in installed.items())
+        (bin_dir / 'dpkg-query').write_text('#!/bin/bash\ncase ${@: -1} in\n%s  *) exit 1 ;;\nesac\n' % table)
+        (bin_dir / 'dpkg-query').chmod(0o755)
+        (tmp / 'list').write_text('# comentario\n' + ''.join('\t'.join(r) + '\n' for r in rows))
+        env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
+                   FLIPEROS_PACKAGES_URL='file://%s' % site, FLIPEROS_PACKAGES_CACHE=str(cache))
+        run = subprocess.run(['bash', str(self.SCRIPT), str(tmp / 'list')], env=env,
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        return [Path(line).name for line in run.stdout.split()], run.stderr
+
+    def deb(self, tmp, name, version, data=b'deb'):
+        (tmp / 'site').mkdir(exist_ok=True)
+        (tmp / 'site' / ('%s_%s_amd64.deb' % (name, version))).write_bytes(data)
+        return hashlib.sha256(data).hexdigest()
+
+    def test_missing_or_older_packages_come_from_the_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            a = self.deb(tmp, 'fliperos-sdl2-kms', '2.30.0-1fliperos1', b'sdl')
+            b = self.deb(tmp, 'fliperos-attractplus', '3.2.3-1fliperos4', b'am')
+            c = self.deb(tmp, 'fliperos-pegasus', '1.0-1fliperos1', b'pg')
+            rows = [('fliperos-sdl2-kms', '2.30.0-1fliperos1', a, 'always'),
+                    ('fliperos-attractplus', '3.2.3-1fliperos4', b, 'always'),
+                    ('fliperos-pegasus', '1.0-1fliperos1', c, 'installed')]
+            # Faltando (always) e mais velho vem; o "installed" que nao esta, nao.
+            out, _ = self.run_sync(tmp, rows, {'fliperos-attractplus': '3.2.3-1fliperos1'})
+            self.assertEqual(out, ['fliperos-sdl2-kms_2.30.0-1fliperos1_amd64.deb',
+                                   'fliperos-attractplus_3.2.3-1fliperos4_amd64.deb'])
+            # Na mesma versao ou mais nova: nada.
+            out, _ = self.run_sync(tmp, rows, {'fliperos-sdl2-kms': '2.30.0-1fliperos1',
+                                               'fliperos-attractplus': '3.2.3-1fliperos5'})
+            self.assertEqual(out, [])
+            # Ja baixado e conferido: sai do cache, sem a rede.
+            shutil.rmtree(tmp / 'site')
+            out, _ = self.run_sync(tmp, rows[:1], {})
+            self.assertEqual(out, ['fliperos-sdl2-kms_2.30.0-1fliperos1_amd64.deb'])
+
+    def test_a_package_that_does_not_match_its_sha256_stays_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.deb(tmp, 'fliperos-sdl2-kms', '2.30.0-1fliperos1', b'trocado')
+            rows = [('fliperos-sdl2-kms', '2.30.0-1fliperos1', '0' * 64, 'always'),
+                    ('fliperos-attractplus', '3.2.3-1fliperos4', '1' * 64, 'always')]
+            out, err = self.run_sync(tmp, rows, {})
+            self.assertEqual(out, [])
+            self.assertIn('fliperos-sdl2-kms 2.30.0-1fliperos1 does not match its sha256', err)
+            self.assertIn('fliperos-attractplus 3.2.3-1fliperos4 could not be downloaded', err)
+            self.assertEqual(list((tmp / 'cache').iterdir()), [])
+
+    def test_the_list_follows_the_iso_recipes_and_the_update_uses_it(self):
+        recipes = subprocess.run(['bash', str(ROOT / 'packaging/build-deb.sh'), '--list-iso'],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        rows = [line.split('\t') for line in (ROOT / 'updates/packages.list').read_text().splitlines()
+                if line and not line.startswith('#')]
+        self.assertEqual(sorted(r[0] for r in rows), sorted(recipes))
+        for name, version, sum_, when in rows:
+            text = (ROOT / ('packaging/packages/%s.sh' % name)).read_text()
+            want = '%s-%s' % (re.search(r'^PKG_VERSION="(.+)"', text, re.M).group(1),
+                              re.search(r'^PKG_REVISION="(.+)"', text, re.M).group(1))
+            self.assertEqual(version, want, name)
+            self.assertRegex(sum_, r'^[0-9a-f]{64}$')
+            self.assertIn(when, ('always', 'installed'))
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('done < <(bash "$src/updates/packages-sync.sh" "$src/updates/packages.list")', update)
+        self.assertIn('packages+=(ffmpeg mesa-va-drivers)', update)
+        # O update baixa a pasta updates inteira (o treehash cobre a lista).
+        self.assertIn("'updates')", (ROOT / 'config/fliperos-update').read_text())
+
+
 class PowerKeyTests(unittest.TestCase):
     """config/fliperos-powerkey: o botao de desligar fecha o jogo aberto e,
     sem jogo, desliga. A sessao aqui e um script chamado fliperos-session."""

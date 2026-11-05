@@ -18,6 +18,11 @@
                                            frontends e desktop no disco do
                                            modo install (console 640x480) e
                                            o instalador da midia live
+    python3 tools/vm-test.py updates ISO   instala uma ISO velha, aplica pela
+                                           rede todos os updates e faz o
+                                           relatorio (report-updated.txt)
+    python3 tools/vm-test.py baseline ISO  instala a ISO de agora e faz o
+                                           mesmo relatorio (report-baseline.txt)
 
 Tudo acontece em /audit (um volume do Docker, nunca uma pasta do Windows):
 disco qcow2, logs e as fotos em PNG.
@@ -494,8 +499,85 @@ def site(iso):
         scratch.unlink(missing_ok=True)
 
 
+# O que a ISO traz fora dos arquivos do update (pacotes, programas compilados,
+# kernel), uma linha "chave=valor" cada: o mesmo relatorio no disco de uma ISO
+# velha depois de todos os updates e no da ISO de agora mostra o que o update
+# nao entrega.
+REPORT = r'''
+echo "level=$(/opt/fliperos/bin/fliperos-update level 2>/dev/null)"
+echo "setup=$(fliperos-setup --version 2>/dev/null | head -1)"
+echo "kernel=$(uname -r)"
+for p in fliperos-sdl2-kms fliperos-attractplus ffmpeg mesa-va-drivers python3-pygame; do
+  echo "pkg.$p=$(dpkg-query -W -f='${Version}' $p 2>/dev/null || echo none)"
+done
+echo "sdl2_kms_lib=$(test -f /usr/local/lib/fliperos/sdl2-kms/libSDL2-2.0.so.0 && echo yes || echo no)"
+echo "retroarch_vulkan_crt=$(test -f /usr/local/share/fliperos/retroarch-vulkan-crt && echo yes || echo no)"
+d=$(command -v dolphin-emu-nogui dolphin-emu 2>/dev/null | head -1)
+echo "dolphin_netplay=$( [ -n "$d" ] && grep -aqc -- '--netplay' "$d" && echo yes || echo no)"
+echo "gum=$(gum --version 2>/dev/null | head -1)"
+echo "groovymame=$(/usr/local/libexec/groovymame -version 2>/dev/null </dev/null | head -1)"
+echo "boot=$(grep -o 'video=[^ ]*' /proc/cmdline | head -1)"
+'''
+
+
+def report(guest, name):
+    out = BASE / ('report-%s.txt' % name)
+    script = base64.b64encode(REPORT.encode()).decode()
+    guest.run('echo %s | base64 -d > /tmp/report.sh; bash /tmp/report.sh > /tmp/report.txt 2>&1' % script)
+    guest.send('cat /tmp/report.txt; echo REPORT_END')
+    text = guest.wait(r'([\s\S]*?)REPORT_END').group(1).decode(errors='replace')
+    guest.wait('VMROOT> ')
+    out.write_text(text)
+    print(text, flush=True)
+    print('  relatorio:', out, flush=True)
+
+
+def updates(iso):
+    """A ISO velha (a primeira com updates, 0.8.1) instalada e levada pela rede
+    por todos os updates do updates/index, em ordem, como num gabinete; depois
+    o boot do disco e o relatorio, para comparar com o "baseline" da ISO
+    de agora."""
+    install(iso)
+    print('UPDATES: boot do disco instalado, todos os updates pela rede', flush=True)
+    guest = Guest('updates', disk(False))
+    try:
+        guest.root_shell()
+        report(guest, 'before')
+        guest.run('/opt/fliperos/bin/fliperos-update check')
+        rc = guest.run('set -o pipefail; /opt/fliperos/bin/fliperos-update apply 2>&1 | tail -40', timeout=8 * 3600)
+        guest.run('tail -60 /var/log/fliperos-update.log')
+        assert rc == 0, 'fliperos-update apply falhou'
+        guest.send('poweroff')
+        guest.wait('Power down', timeout=300)
+    finally:
+        guest.close()
+    print('UPDATES: boot depois dos updates', flush=True)
+    guest = Guest('updated', disk(False))
+    try:
+        guest.root_shell()
+        report(guest, 'updated')
+        guest.send('poweroff')
+        guest.wait('Power down', timeout=300)
+    finally:
+        guest.close()
+
+
+def baseline(iso):
+    """A ISO de agora instalada, so o relatorio (o alvo do modo updates)."""
+    install(iso)
+    guest = Guest('baseline', disk(False))
+    try:
+        guest.root_shell()
+        report(guest, 'baseline')
+        guest.send('poweroff')
+        guest.wait('Power down', timeout=300)
+    finally:
+        guest.close()
+
+
 if __name__ == '__main__':
-    modes = {'install': install, 'screens': screens, 'desktop': desktop, 'dev': dev, 'site': site}
+    modes = {'install': install, 'screens': screens, 'desktop': desktop, 'dev': dev, 'site': site,
+             'updates': updates, 'baseline': baseline}
     if len(sys.argv) != 3 or sys.argv[1] not in modes:
         print(__doc__)
         sys.exit(2)
