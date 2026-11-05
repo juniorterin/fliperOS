@@ -1,8 +1,8 @@
 // Bot tradutor do grupo do Telegram (t.me/fliperos15khz), Cloudflare Worker.
 // O Telegram chama este worker por webhook a cada mensagem do grupo; o worker
-// traduz com o Google Cloud Translation e responde na mensagem original:
+// traduz com o Workers AI (m2m100, gratis no plano free) e responde na mensagem:
 //   ingles ou espanhol -> portugues;  portugues -> ingles e espanhol.
-// Segredos: TELEGRAM_BOT_TOKEN, GOOGLE_API_KEY, WEBHOOK_SECRET.
+// Segredos: TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET. Binding AI no wrangler.toml.
 // Variavel opcional: ALLOWED_CHAT (id numerico do grupo; sem ela, qualquer chat).
 // Deploy e webhook: tools/telegram-translate/README.md.
 
@@ -17,17 +17,32 @@ function clean(text) {
     .trim();
 }
 
-async function translate(env, text, target) {
-  const r = await fetch(
-    'https://translation.googleapis.com/language/translate/v2?key=' + env.GOOGLE_API_KEY,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ q: text, target, format: 'text' }),
-    });
-  if (!r.ok) throw new Error('translate ' + r.status + ' ' + await r.text());
-  const t = (await r.json()).data.translations[0];
-  return { text: t.translatedText, source: (t.detectedSourceLanguage || '').split('-')[0] };
+const NAMES = { pt: 'portuguese', en: 'english', es: 'spanish' };
+
+// Palavras que distinguem os tres idiomas; o idioma com mais acertos ganha.
+const WORDS = {
+  pt: 'não nao você voce está esta estou uma com para por que isso também tambem muito obrigado olá ola são sao tem então entao dos das nos mas pra né ne bom vai fazer',
+  en: 'the and you are is with for that this have not what how can will just from your they but was it its do does there hello thanks please',
+  es: 'el los las una con para pero que está esta estoy muy gracias hola también tambien porque cómo como qué por favor tengo tiene hay y es son del al más mas',
+};
+const SETS = Object.fromEntries(Object.entries(WORDS).map(([k, v]) => [k, new Set(v.split(' '))]));
+
+function detect(text) {
+  const words = clean(text).toLowerCase().split(' ');
+  const score = {};
+  for (const k in SETS) score[k] = words.filter(w => SETS[k].has(w)).length;
+  // acento exclusivo: ã/õ/ç -> pt, ñ/¿/¡ -> es
+  if (/[ãõç]/i.test(text)) score.pt += 2;
+  if (/[ñ¿¡]/.test(text)) score.es += 2;
+  const [best, second] = Object.entries(score).sort((a, b) => b[1] - a[1]);
+  return best[1] > 0 && best[1] > second[1] ? best[0] : '';
+}
+
+async function translate(env, text, source, target) {
+  const r = await env.AI.run('@cf/meta/m2m100-1.2b', {
+    text, source_lang: NAMES[source], target_lang: NAMES[target],
+  });
+  return r.translated_text;
 }
 
 async function handle(env, msg) {
@@ -36,13 +51,13 @@ async function handle(env, msg) {
   if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return;
   if (clean(text).length < MIN_LETTERS) return;
 
-  const pt = await translate(env, text, 'pt');
+  const src = detect(text);
   const parts = [];
-  if (pt.source === 'pt') {
-    const [en, es] = await Promise.all([translate(env, text, 'en'), translate(env, text, 'es')]);
-    parts.push('🇺🇸 ' + en.text, '🇪🇸 ' + es.text);
-  } else if (pt.source === 'en' || pt.source === 'es') {
-    parts.push('🇧🇷 ' + pt.text);
+  if (src === 'pt') {
+    const [en, es] = await Promise.all([translate(env, text, 'pt', 'en'), translate(env, text, 'pt', 'es')]);
+    parts.push('🇺🇸 ' + en, '🇪🇸 ' + es);
+  } else if (src) {
+    parts.push('🇧🇷 ' + await translate(env, text, src, 'pt'));
   }
   if (!parts.length) return;
 
