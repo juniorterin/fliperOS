@@ -1,7 +1,8 @@
 # Bot tradutor do grupo do Telegram
 
-Responde a cada mensagem do grupo com a tradução: inglês ou espanhol viram
-português; português vira inglês e espanhol. Mensagens curtas, só links,
+Responde a cada mensagem do grupo com a tradução para os outros dois idiomas:
+português vira inglês e espanhol, inglês vira português e espanhol, espanhol
+vira português e inglês. Mensagens curtas, só links,
 comandos e mensagens de bots são ignoradas. Roda como Cloudflare Worker
 (grátis, sempre ligado) e traduz com o Workers AI.
 

@@ -1,7 +1,7 @@
 // Bot tradutor do grupo do Telegram (t.me/fliperos15khz), Cloudflare Worker.
 // O Telegram chama este worker por webhook a cada mensagem do grupo; o worker
 // traduz com o Workers AI (m2m100, gratis no plano free) e responde na mensagem:
-//   ingles ou espanhol -> portugues;  portugues -> ingles e espanhol.
+//   cada mensagem vai para os outros dois idiomas (pt, en, es).
 // Segredos: TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET. Binding AI no wrangler.toml.
 // Variavel opcional: ALLOWED_CHAT (id numerico do grupo; sem ela, qualquer chat).
 // Deploy e webhook: tools/telegram-translate/README.md.
@@ -18,6 +18,7 @@ function clean(text) {
 }
 
 const NAMES = { pt: 'portuguese', en: 'english', es: 'spanish' };
+const FLAGS = { pt: '🇧🇷', en: '🇺🇸', es: '🇪🇸' };
 
 // Palavras que distinguem os tres idiomas; o idioma com mais acertos ganha.
 const WORDS = {
@@ -52,14 +53,10 @@ async function handle(env, msg) {
   if (clean(text).length < MIN_LETTERS) return;
 
   const src = detect(text);
-  const parts = [];
-  if (src === 'pt') {
-    const [en, es] = await Promise.all([translate(env, text, 'pt', 'en'), translate(env, text, 'pt', 'es')]);
-    parts.push('🇺🇸 ' + en, '🇪🇸 ' + es);
-  } else if (src) {
-    parts.push('🇧🇷 ' + await translate(env, text, src, 'pt'));
-  }
-  if (!parts.length) return;
+  if (!src) return;
+  const targets = Object.keys(NAMES).filter(l => l !== src);
+  const done = await Promise.all(targets.map(l => translate(env, text, src, l)));
+  const parts = targets.map((l, i) => FLAGS[l] + ' ' + done[i]);
 
   const body = {
     chat_id: msg.chat.id,
