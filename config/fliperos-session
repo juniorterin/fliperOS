@@ -148,8 +148,16 @@ case $backend in
       # O jogo que ele abre fica no arquivo do FLIPEROS_POWERKEY: o botao de
       # desligar fecha o jogo e, sem jogo, desliga (os outros filhos dele, o
       # video e o scrape, nao contam como jogo).
+      # Com o SDL do KMS (fliperos-sdl2-kms), o pygame dele devolve o modo ao
+      # fechar a tela antes do jogo (restore_crtc_at_DestroyWindow): com o SDL
+      # do Ubuntu o CRTC ficava apagado, o Switchres nao achava a tela e o
+      # GroovyMAME caia no Xorg. Os jogos abrem sem ele (game_env).
       fliperos)
-        FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-frontend.game" \
+        sdl=()
+        kms_sdl=${FLIPEROS_SDL2_KMS:-/usr/local/lib/fliperos/sdl2-kms}
+        [[ -f $kms_sdl/libSDL2-2.0.so.0 ]] &&
+          sdl=("FLIPEROS_FRONTEND_SDL=$kms_sdl" "LD_LIBRARY_PATH=$kms_sdl${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
+        env "${sdl[@]}" FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-frontend.game" \
           "$BIN/fliperos-kms-run" "${program[@]}"
         rc=$?
         ;;

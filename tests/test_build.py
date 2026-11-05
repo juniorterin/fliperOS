@@ -5342,9 +5342,35 @@ class FrontendDataTests(unittest.TestCase):
         frontends = (ROOT / 'fliperos-setup/lib/frontends.sh').read_text()
         self.assertIn('&& ((!${FRONTENDS_RESYNC_FULL:-0}))', frontends)
         session = (ROOT / 'config/fliperos-session').read_text()
-        self.assertIn('fliperos)\n        FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-frontend.game" \\\n'
+        self.assertIn('env "${sdl[@]}" FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-frontend.game" \\\n'
                       '          "$BIN/fliperos-kms-run" "${program[@]}"', session)
         self.assertIn('"fliperos-frontend"', (ROOT / 'config/fliperos-web').read_text())
+
+    def test_frontend_keeps_the_screen_lit_for_groovymame_in_kms(self):
+        # Com o SDL do KMS (restore_crtc_at_DestroyWindow) o frontend devolve o
+        # modo ao fechar a tela antes do jogo: com o do Ubuntu o CRTC ficava
+        # apagado e o GroovyMAME aberto por ele caia no Xorg. So o frontend o
+        # carrega; os jogos abrem sem ele (o GroovyMAME o poe sozinho).
+        import ast
+        from unittest import mock
+        session = (ROOT / 'config/fliperos-session').read_text()
+        self.assertIn('kms_sdl=${FLIPEROS_SDL2_KMS:-/usr/local/lib/fliperos/sdl2-kms}', session)
+        self.assertIn('sdl=("FLIPEROS_FRONTEND_SDL=$kms_sdl" "LD_LIBRARY_PATH=$kms_sdl'
+                      '${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")', session)
+        source = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('proc = subprocess.Popen(argv, env=game_env())', source)
+        func = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == 'game_env')
+        scope = {'os': os}
+        exec(compile(ast.Module(body=[func], type_ignores=[]), 'game_env', 'exec'), scope)
+        kms = '/usr/local/lib/fliperos/sdl2-kms'
+        cases = (({'FLIPEROS_FRONTEND_SDL': kms, 'LD_LIBRARY_PATH': kms}, None),
+                 ({'FLIPEROS_FRONTEND_SDL': kms, 'LD_LIBRARY_PATH': kms + ':/opt/x'}, '/opt/x'),
+                 ({'LD_LIBRARY_PATH': '/opt/x'}, '/opt/x'))
+        for env, want in cases:
+            with mock.patch.dict(os.environ, env, clear=True):
+                got = scope['game_env']()
+            self.assertNotIn('FLIPEROS_FRONTEND_SDL', got)
+            self.assertEqual(got.get('LD_LIBRARY_PATH'), want, env)
 
 
 class SessionTableTests(unittest.TestCase):

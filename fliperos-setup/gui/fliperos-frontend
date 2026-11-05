@@ -123,6 +123,21 @@ def combo_names(combo):
     return [c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in combo]
 
 
+def game_env():
+    """O ambiente do jogo: sem o SDL do KMS que a sessao deu ao frontend
+    (FLIPEROS_FRONTEND_SDL, config/fliperos-session). Os emuladores abrem com o
+    SDL de sempre; o GroovyMAME poe o do KMS ele mesmo."""
+    env = dict(os.environ)
+    sdl = env.pop("FLIPEROS_FRONTEND_SDL", "")
+    if sdl:
+        rest = [p for p in env.get("LD_LIBRARY_PATH", "").split(":") if p and p != sdl]
+        if rest:
+            env["LD_LIBRARY_PATH"] = ":".join(rest)
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
+
+
 def tree(pid):
     """O processo e os que estao abaixo dele (o jogo e o X, o emulador...)."""
     import glob
@@ -1470,7 +1485,7 @@ class Frontend:
         games:ARQ, do config/fliperos-session) com o PID do jogo, ou "hold"
         com o botao desligado nos jogos. Devolve o aviso para a volta."""
         try:
-            proc = subprocess.Popen(argv)
+            proc = subprocess.Popen(argv, env=game_env())
         except OSError:
             return None
         role = os.environ.get("FLIPEROS_POWERKEY", "")
