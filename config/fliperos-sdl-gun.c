@@ -14,8 +14,10 @@
  * devolve e o servidor. Dai em diante os eventos chegam sem janela
  * (windowID 0), e o MAME (sdl_lightgun_device) deixa a mira em 0 (visto no
  * gabinete com o Area 51 em 2026-11-05). Aqui o evento sem janela ganha a
- * janela do jogo, a posicao fica dentro dela (fora da tela, na borda, como o
- * ponteiro do X) e o LEAVE dessa janela some.
+ * janela do jogo e o LEAVE dessa janela some. A posicao fica como o SDL a
+ * calculou, fora da janela quando a pistola mira fora da tela: o MAME a le
+ * assim e o jogo recarrega. Presa na borda (como o ponteiro do X), o Area 51
+ * as vezes lia o tiro como dentro da tela e nao recarregava.
  *
  * Compilada pelo config/fliperos-deflicker-build (libfliperos-sdl-gun.so). */
 #define _GNU_SOURCE
@@ -42,50 +44,32 @@ typedef union {
     uint8_t padding[56];
 } event_t;
 
-static int clamp(int v, int max)
-{
-    return v < 0 ? 0 : v > max ? max : v;
-}
-
 /* fix: 0 para tirar o evento da fila (o LEAVE), 1 para entregar. */
 static int fix(event_t *e)
 {
     static void *(*keyboard_focus)(void);
     static uint32_t (*window_id)(void *);
-    static void (*window_size)(void *, int *, int *);
-    static void *(*window_from_id)(uint32_t);
     uint32_t *window;
-    int32_t *x, *y;
     void *win;
-    int w = 0, h = 0;
 
     if (!keyboard_focus) {
         keyboard_focus = (void *(*)(void))dlsym(RTLD_DEFAULT, "SDL_GetKeyboardFocus");
         window_id = (uint32_t (*)(void *))dlsym(RTLD_DEFAULT, "SDL_GetWindowID");
-        window_size = (void (*)(void *, int *, int *))dlsym(RTLD_DEFAULT, "SDL_GetWindowSize");
-        window_from_id = (void *(*)(uint32_t))dlsym(RTLD_DEFAULT, "SDL_GetWindowFromID");
-        if (!keyboard_focus || !window_id || !window_size || !window_from_id)
+        if (!keyboard_focus || !window_id)
             return 1;
     }
     if (e->type == MOUSEMOTION) {
-        window = &e->motion.window, x = &e->motion.x, y = &e->motion.y;
+        window = &e->motion.window;
     } else if (e->type == MOUSEBUTTONDOWN || e->type == MOUSEBUTTONUP) {
-        window = &e->button.window, x = &e->button.x, y = &e->button.y;
+        window = &e->button.window;
     } else if (e->type == WINDOWEVENT && e->window.event == WINDOWEVENT_LEAVE) {
         win = keyboard_focus();
         return !(win && window_id(win) == e->window.window);
     } else {
         return 1;
     }
-    win = *window ? window_from_id(*window) : keyboard_focus();
-    if (!win)
-        return 1;
-    *window = window_id(win);
-    window_size(win, &w, &h);
-    if (w > 0 && h > 0) {
-        *x = clamp(*x, w - 1);
-        *y = clamp(*y, h - 1);
-    }
+    if (*window == 0 && (win = keyboard_focus()))
+        *window = window_id(win);
     return 1;
 }
 

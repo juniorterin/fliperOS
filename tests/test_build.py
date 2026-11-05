@@ -9124,8 +9124,9 @@ class LightGunTests(unittest.TestCase):
     def test_sdl_gun_keeps_the_aim_in_the_window_on_kms(self):
         # No KMS o SDL tira o mouse da janela quando a pistola mira fora da
         # tela e nao o devolve: os eventos chegavam sem janela (windowID 0) e
-        # a mira do MAME ficava em 0. A biblioteca da a janela do jogo, poe a
-        # posicao dentro dela (na borda, como o ponteiro do X) e tira o LEAVE.
+        # a mira do MAME ficava em 0. A biblioteca da a janela do jogo e tira o
+        # LEAVE; a posicao fica fora da janela, para o jogo ler o tiro fora da
+        # tela (presa na borda, o Area 51 as vezes nao recarregava).
         fake_sdl = r'''
 #include <stdint.h>
 #include <string.h>
@@ -9190,7 +9191,7 @@ int main(void) {
             subprocess.run(['gcc', '-o', str(tmp / 'main'), str(tmp / 'main.c'), '-Wl,--no-as-needed', str(gun),
                             str(tmp / 'libfakesdl.so'), '-Wl,-rpath,' + str(tmp)], check=True)
             out = subprocess.run([str(tmp / 'main')], capture_output=True, text=True, check=True).stdout
-        self.assertEqual(out.splitlines(), ['motion 1 0 0', 'button 1 319 239', 'motion 1 100 50'])
+        self.assertEqual(out.splitlines(), ['motion 1 -66 -9', 'button 1 500 300', 'motion 1 100 50'])
 
     def test_guncon2_driver_patches_reach_the_iso_and_the_update(self):
         patches = sorted((ROOT / 'config/guncon2-patches').glob('*.patch'))
