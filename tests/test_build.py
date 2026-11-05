@@ -14569,9 +14569,9 @@ class ButtonMappingTests(unittest.TestCase):
             ports = {p.get('type'): p.find('newseq').text
                      for p in ET.fromstring(text).iter('port')}
             self.assertEqual(ports['P1_JOYSTICK_UP'], 'JOYCODE_1_YAXIS_UP_SWITCH OR KEYCODE_UP')
-            self.assertEqual(ports['P1_BUTTON1'], 'JOYCODE_1_BUTTON1 OR KEYCODE_LCONTROL')
+            self.assertEqual(ports['P1_BUTTON1'], 'JOYCODE_1_BUTTON1 OR KEYCODE_LCONTROL OR GUNCODE_1_BUTTON1')
             self.assertEqual(ports['COIN1'], 'JOYCODE_1_BUTTON8 OR KEYCODE_5')
-            self.assertEqual(ports['P2_BUTTON1'], 'JOYCODE_2_BUTTON1 OR KEYCODE_A')
+            self.assertEqual(ports['P2_BUTTON1'], 'JOYCODE_2_BUTTON1 OR KEYCODE_A OR GUNCODE_2_BUTTON1')
             self.assertEqual(ports['START2'], 'JOYCODE_2_BUTTON7 OR KEYCODE_2')
             self.assertIn('<system name="default">', text)
             # Flycast por nome de aparelho, e o mapa guardado para a atualizacao.
@@ -14626,20 +14626,21 @@ class ButtonMappingTests(unittest.TestCase):
                 return {p.get('type'): p.find('newseq').text
                         for s in ctrlr.iter('system') if s.get('name') == name for p in s.iter('port')}
             ports = system('default')
-            self.assertEqual(ports['P1_BUTTON1'], 'KEYCODE_LCONTROL')
+            # O gatilho da pistola junto, tambem com teclado.
+            self.assertEqual(ports['P1_BUTTON1'], 'KEYCODE_LCONTROL OR GUNCODE_1_BUTTON1')
             self.assertEqual(ports['P2_BUTTON5'], 'KEYCODE_E')
             self.assertEqual(ports['P4_JOYSTICK_LEFT'], 'KEYCODE_4_PAD')
             self.assertEqual(ports['COIN3'], 'KEYCODE_7')
             # No jogo com layout, so a tecla da posicao: sem a padrao do botao
             # junto (com ela o Ctrl esquerdo apertava dois botoes).
             sf2 = system('sf2')
-            self.assertEqual(sf2['P1_BUTTON1'], 'KEYCODE_X')
-            self.assertEqual(sf2['P1_BUTTON2'], 'KEYCODE_LCONTROL')
+            self.assertEqual(sf2['P1_BUTTON1'], 'KEYCODE_X OR GUNCODE_1_BUTTON1')
+            self.assertEqual(sf2['P1_BUTTON2'], 'KEYCODE_LCONTROL OR GUNCODE_1_BUTTON2')
             # O jogador 2 nao tem tecla na posicao 6: o botao 1 fica sem nada,
             # e nao no A padrao, que no jogo e o botao 2 dele.
             self.assertEqual(sf2['P2_BUTTON1'], 'NONE')
-            self.assertEqual(sf2['P2_BUTTON2'], 'KEYCODE_A')
-            self.assertNotIn(' OR ', (tmp / 'ctrlr' / 'fliperos.cfg').read_text())
+            self.assertEqual(sf2['P2_BUTTON2'], 'KEYCODE_A OR GUNCODE_2_BUTTON2')
+            self.assertNotIn(' OR KEYCODE', (tmp / 'ctrlr' / 'fliperos.cfg').read_text())
             sm = (tmp / 'supermodel' / 'Config' / 'Supermodel.ini').read_text()
             # So a tecla do mapa: o A padrao do Supermodel e o botao 1 do jogador 2.
             for line in ('InputPunch = "KEY_LEFTCTRL"', 'InputPunch2 = "KEY_A"', 'InputCoin1 = "KEY_5"',
@@ -14948,8 +14949,8 @@ class ButtonMappingTests(unittest.TestCase):
         systems = [s.get('name') for s in root.iter('system')]
         self.assertEqual(systems, ['default', 'mslug', 'mslug6', 'pang4', 'sf2four'])
         ports = {p.get('type'): p.find('newseq').text for p in root.find("system[@name='mslug']").iter('port')}
-        self.assertEqual(ports, {'P1_BUTTON1': 'JOYCODE_1_BUTTON1 OR KEYCODE_LCONTROL',
-                                 'P1_BUTTON2': 'JOYCODE_1_BUTTON4 OR KEYCODE_LALT',
+        self.assertEqual(ports, {'P1_BUTTON1': 'JOYCODE_1_BUTTON1 OR KEYCODE_LCONTROL OR GUNCODE_1_BUTTON1',
+                                 'P1_BUTTON2': 'JOYCODE_1_BUTTON4 OR KEYCODE_LALT OR GUNCODE_1_BUTTON2',
                                  'P1_BUTTON3': 'JOYCODE_1_BUTTON2 OR KEYCODE_SPACE',
                                  'P1_BUTTON4': 'JOYCODE_1_BUTTON5 OR KEYCODE_LSHIFT'})
         # Sem layout, o ctrlr de sempre.

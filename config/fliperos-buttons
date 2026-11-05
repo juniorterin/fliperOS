@@ -423,6 +423,12 @@ def mame_port(player, control, bind):
     # do jogo no X: o Ctrl esquerdo apertaria dois).
     if key and not is_key(bind[1]):
         seq += ' OR KEYCODE_%s' % key
+    # O gatilho e o botao de recarregar da pistola do jogador (lightgun do
+    # MAME), como no padrao do MAME (inpttype.ipp): sem eles o gatilho so
+    # funcionava quando a GunCon caia na lista como o controle daquele jogador
+    # (um JOYCODE), e um reboot que trocava a ordem o deixava sem nada.
+    if control in ('b1', 'b2') and player in MAME_KEYS:
+        seq += ' OR GUNCODE_%d_BUTTON%s' % (player, control[1])
     return ('            <port type="%s">\n                <newseq type="standard">%s</newseq>\n'
             '            </port>\n' % (MAME_PORTS[control] % player, seq))
 
