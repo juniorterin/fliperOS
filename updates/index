@@ -39,3 +39,4 @@
 36	43e76925d6d838b02e07701fc0f7601eb53b3be0	25f7dadb666d5715d10004558bf3608d3508eac29d2ac969056afbab7c552e5a	yes	Converters from the menu to the game, on-screen menu, animated marquee
 37	229492886e0d22d376039eaab353b298d75f925e	ba326b7aeb8b401419bce1c90436d3ff4976a7b2bc972db3199c2328ff7c7b8e	no	Link play and net play, players follow the controllers, geometry per resolution
 38	5d5809b5a8dc1e7cb986eff7be8639b0aeb4bc8a	c714d1a10fafff1c4fe2d11cd0d4dfdece2a25469e099205b647c36289a1ff6e	no	Scanlines for 31 kHz, light guns in every emulator, net play in more systems
+39	6acae9e88c19cd58001ab79c5395d88baa5711b6	a6d36f516359e551b971e66ee1d6acfe24446505a7a662588accdb982d78d499	no	Desktop and emulators open again on fresh 0.18/0.19 installs
