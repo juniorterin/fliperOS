@@ -74,6 +74,12 @@ for mode in "link compat" "link core" egl; do
   # shellcheck disable=SC2086 # o modo e o contexto, uma palavra cada
   run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=/dev/null FLIPEROS_GUN_DEVICES=$b/gun $b/deflicker_test $mode
 done
+# O gatilho cru do driver do GunCon 2 (MSC_RAW=1, que vem antes do BTN_LEFT
+# quando a pistola nao ve luz) tambem pisca: rows 255.
+python3 -c "
+import struct
+open('$b/gunraw', 'wb').write(struct.pack('llHHi', 0, 0, 4, 3, 1) + struct.pack('llHHi', 0, 0, 0, 0, 0))"
+run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=/dev/null FLIPEROS_GUN_DEVICES=$b/gunraw $b/deflicker_test link
 printf 'gun_flash=off\n' > $b/gunconf
 run LD_PRELOAD=$b/libfliperos-deflicker.so FLIPEROS_CONF=$b/gunconf FLIPEROS_GUN_DEVICES=$b/gun $b/deflicker_test link
 printf 'gun_flash_level=50\n' > $b/gunconf

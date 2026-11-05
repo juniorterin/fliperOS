@@ -1,16 +1,62 @@
 #!/usr/bin/env bash
-# Reaplica a calibracao do GunCon 2 num dispositivo de evento.
+# Reaplica a calibracao do GunCon 2 num dispositivo de evento, e os ajustes do
+# driver (Setup > Joysticks > GunCon 2).
 #
 # O driver entrega ABS_X/ABS_Y crus do canhao, e a faixa util depende do
 # monitor. Pior: a calibracao NAO persiste — se perde a cada reconexao do USB,
 # por isso existe a regra de udev que chama este script.
 #
+# Os ajustes do driver (config/guncon2-patches) vem do fliperos.conf, cada um
+# so com a linha; sem ela fica o padrao do driver:
+#   gun_flash=off        flash_ms 0: sem o flash da tela, o tiro sai como vem;
+#                        pulse ou hold, flash_ms = gun_flash_ms (100): o tiro
+#                        dado sem luz espera a leitura que o flash ilumina
+#   gun_hold_ms=         hold_ms: a mira parada quando a pistola perde a luz
+#   gun_edge_pct=        edge_pct: a faixa da borda que conta como sair da tela
+#   gun_offscreen_reload=on|off  offscreen_reload: fora da tela o gatilho
+#                        tambem aperta o botao de recarga
+#
 # Uso: fliperos-guncon2-calibrate /dev/input/eventN
+#      fliperos-guncon2-calibrate --params    so os ajustes do driver (o Setup)
 set -uo pipefail
 
 CONF=/etc/fliperos/guncon2.conf
+SETTINGS=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+PARAMS=${GUNCON2_PARAMS:-/sys/module/guncon2/parameters}
 device=${1:-}
-[[ -n "$device" ]] || { echo "Uso: $0 /dev/input/eventN" >&2; exit 2; }
+[[ -n "$device" ]] || { echo "Uso: $0 /dev/input/eventN | --params" >&2; exit 2; }
+
+# setting CHAVE: o valor da ultima linha CHAVE= do fliperos.conf.
+setting() {
+  sed -n "s/^$1=//p" "$SETTINGS" 2> /dev/null | tail -n 1
+}
+
+# param NOME VALOR: no driver, se ele tem o parametro.
+param() {
+  [[ -w $PARAMS/$1 ]] && echo "$2" > "$PARAMS/$1"
+  return 0
+}
+
+apply_params() {
+  local value
+  value=$(setting gun_flash_ms)
+  [[ $value =~ ^[0-9]+$ ]] || value=100
+  [[ $(setting gun_flash) == off ]] && value=0
+  param flash_ms "$value"
+  value=$(setting gun_hold_ms)
+  [[ $value =~ ^[0-9]+$ ]] && param hold_ms "$value"
+  value=$(setting gun_edge_pct)
+  [[ $value =~ ^[0-9]+$ ]] && param edge_pct "$value"
+  case $(setting gun_offscreen_reload) in
+    off) param offscreen_reload N ;;
+    on) param offscreen_reload Y ;;
+  esac
+}
+
+if [[ $device == --params ]]; then
+  apply_params
+  exit 0
+fi
 
 # Valores do exemplo do upstream (beardypig/guncon2). NAO sao universais: cada
 # tubo e cada posicao de canhao pedem a sua faixa. Ajuste em $CONF.
@@ -28,13 +74,5 @@ command -v evdev-joystick >/dev/null \
 evdev-joystick --e "$device" -m "$X_MIN" -M "$X_MAX" -a 0 >/dev/null 2>&1
 evdev-joystick --e "$device" -m "$Y_MIN" -M "$Y_MAX" -a 1 >/dev/null 2>&1
 
-# O flash da tela no tiro (Setup > Joysticks > Light gun flash; gun_flash= no
-# fliperos.conf, pulse sem a linha): o driver espera a leitura que o flash
-# ilumina antes de soltar um tiro dado sem luz (flash_ms,
-# config/guncon2-patches/0005). Desligado, o tiro sai como vem.
-flash=$(sed -n 's/^gun_flash=//p' "${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}" 2> /dev/null | tail -n 1)
-param=${GUNCON2_FLASH_PARAM:-/sys/module/guncon2/parameters/flash_ms}
-if [[ -w $param ]]; then
-  [[ $flash == off ]] && echo 0 > "$param" || echo 100 > "$param"
-fi
+apply_params
 exit 0

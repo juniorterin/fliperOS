@@ -1,0 +1,51 @@
+From: Ademir Terin Junior <juniorterin@gmail.com>
+Date: Thu, 5 Nov 2026 06:10:00 -0300
+Subject: [PATCH] The raw trigger at once, for the screen flash
+
+The screen flash was drawn on BTN_LEFT, and a trigger pulled without light
+holds BTN_LEFT back until a report sees the flash (patch 0005): the flash
+came only after flash_ms ran out, 8 to 9 reports after the trigger in a
+usbmon capture of Area 51 on the cabinet, and every shot at a dark part
+reloaded. The trigger now also goes out at once as a MSC_RAW event (1
+pressed, 0 released), which the emulators ignore and the GL and Vulkan
+layers of FliperOS flash on.
+---
+diff --git a/guncon2.c b/guncon2.c
+index 225cbb0..1c28f6a 100644
+--- a/guncon2.c
++++ b/guncon2.c
+@@ -96,6 +96,7 @@ struct guncon2 {
+     unsigned long seen; /* jiffies of the last report that saw the screen */
+     int seen_x, seen_y; /* and where it was */
+     bool shot_waiting, shot; /* a trigger waiting for the flash; the trigger sent */
++    bool trigger_raw; /* the trigger as the gun sends it */
+     unsigned long shot_since; /* jiffies of the trigger that waits */
+     struct work_struct clear_halt; /* a stalled endpoint, cleared out of the irq */
+ };
+@@ -213,6 +214,17 @@ static void guncon2_usb_irq(struct urb *urb) {
+          * (flash_ms). A trigger released before the wait ends still goes out,
+          * and is released on the next report. */
+         trigger = buttons & GUNCON2_TRIGGER;
++        /*
++         * The trigger as it comes, at once, for whoever draws the flash: the
++         * flash waited for BTN_LEFT, which waits for the flash, so it came
++         * only after flash_ms ran out (8 to 9 reports after the trigger,
++         * measured with usbmon) and every dark shot reloaded. A MSC_RAW event,
++         * which the emulators ignore: 1 pressed, 0 released.
++         */
++        if (trigger != guncon2->trigger_raw) {
++            input_event(guncon2->input_device, EV_MSC, MSC_RAW, trigger ? 1 : 0);
++            guncon2->trigger_raw = trigger;
++        }
+         if (!flash_ms) {
+             guncon2->shot = trigger;
+             guncon2->shot_waiting = false;
+@@ -435,6 +447,8 @@ static int guncon2_probe(struct usb_interface *intf,
+     input_set_capability(guncon2->input_device, EV_KEY, BTN_C);
+     input_set_capability(guncon2->input_device, EV_KEY, BTN_START);
+     input_set_capability(guncon2->input_device, EV_KEY, BTN_SELECT);
++    /* the raw trigger, for the screen flash */
++    input_set_capability(guncon2->input_device, EV_MSC, MSC_RAW);
+ 
+     // D-Pad
+     input_set_capability(guncon2->input_device, EV_ABS, ABS_HAT0X);

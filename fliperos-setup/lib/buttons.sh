@@ -174,16 +174,61 @@ buttons_layout_apply() {
     "$BUTTONS" save "$BUTTONS_MAP" >> "$FLIPEROS_LOG" 2>&1
 }
 
-# O flash da tela no tiro da pistola de luz (Setup > Joysticks > Light gun
-# flash), como o GCON2 FLASH do RePlayOS: uma pistola de CRT so acha a mira
-# onde a tela tem luz, e numa parte escura o tiro saia na mira guardada ou
-# fora da tela. As camadas OpenGL e Vulkan dos emuladores
-# (config/fliperos-deflicker.c, config/fliperos-vkfps.c) leem o gun_flash= do
-# fliperos.conf: pulse (o padrao, dois quadros claros no tiro), hold (claro
-# com o gatilho apertado) ou off. O driver do GunCon 2 espera a leitura do
-# flash antes de soltar um tiro sem luz (flash_ms): ajustado aqui na hora, e
-# pelo fliperos-guncon2-calibrate quando a pistola chega.
-GUNFLASH_PARAM=${GUNFLASH_PARAM:-/sys/module/guncon2/parameters/flash_ms}
+# A GunCon 2 (Setup > Joysticks > GunCon 2), tudo no fliperos.conf:
+# - gun_flash: o flash da tela no tiro, como o GCON2 FLASH do RePlayOS. Uma
+#   pistola de CRT so acha a mira onde a tela tem luz; numa parte escura o
+#   tiro saia na mira guardada ou fora da tela. As camadas OpenGL e Vulkan dos
+#   emuladores (config/fliperos-deflicker.c, config/fliperos-vkfps.c) o leem:
+#   pulse (o padrao, dois quadros claros no tiro), hold (claro com o gatilho
+#   apertado) ou off;
+# - gun_flash_level e os ajustes do driver da tabela (gun_table), e
+#   gun_offscreen_reload.
+# O fliperos-guncon2-calibrate poe os do driver quando a pistola chega, e aqui
+# na hora (--params).
+GUNCON2_CALIBRATE=${GUNCON2_CALIBRATE:-/usr/local/bin/fliperos-guncon2-calibrate}
+
+# gun_table: chave|rotulo|minimo|maximo|padrao|passo|ajuda. O padrao de cada um
+# do driver e o do driver (config/guncon2-patches).
+gun_table() {
+  cat << 'TABLE'
+flash_level|Flash brightness (%)|10|100|100|10|Lower is calmer; too low and the gun misses it.
+flash_ms|Flash wait (ms)|30|300|100|10|How long a dark shot waits for the flash.
+hold_ms|Dark hold (ms)|0|1000|150|50|How long the aim stays put without light.
+edge_pct|Edge band (%)|0|30|12|1|Losing light this near an edge is off screen.
+TABLE
+}
+
+gun_field() {
+  gun_table | awk -F'|' -v k="$1" -v n="$2" '$1 == k { print $n; exit }'
+}
+
+# gun_get CHAVE: o valor gravado, ou o padrao.
+gun_get() {
+  local value
+  value=$(conf_get "gun_$1" 2> /dev/null) || value=""
+  [[ $value =~ ^[0-9]+$ ]] || value=$(gun_field "$1" 5)
+  printf '%s\n' "$value"
+}
+
+# gun_apply: os ajustes do driver na hora.
+gun_apply() {
+  [[ -x $GUNCON2_CALIBRATE ]] && "$GUNCON2_CALIBRATE" --params >> "$FLIPEROS_LOG" 2>&1
+  return 0
+}
+
+# gun_set CHAVE VALOR: grava dentro da faixa e aplica. Status 1 = chave ou
+# valor invalido.
+gun_set() {
+  local key=$1 value=$2 min max
+  min=$(gun_field "$key" 3)
+  max=$(gun_field "$key" 4)
+  [[ -n $min && $value =~ ^[0-9]+$ ]] || return 1
+  ((value < min)) && value=$min
+  ((value > max)) && value=$max
+  conf_set "gun_$key" "$value"
+  gun_apply
+  log_info "GunCon 2: $key=$value"
+}
 
 gunflash_mode() {
   local mode
@@ -194,8 +239,34 @@ gunflash_mode() {
 gunflash_set() {
   [[ $1 =~ ^(off|pulse|hold)$ ]] || return 2
   conf_set gun_flash "$1"
-  if [[ -w $GUNFLASH_PARAM ]]; then
-    if [[ $1 == off ]]; then echo 0 > "$GUNFLASH_PARAM"; else echo 100 > "$GUNFLASH_PARAM"; fi
-  fi
-  log_info "flash da pistola: $1"
+  gun_apply
+  log_info "GunCon 2: flash $1"
+}
+
+gun_reload_on() {
+  [[ $(conf_get gun_offscreen_reload 2> /dev/null) != off ]]
+}
+
+gun_reload_set() {
+  [[ $1 == on || $1 == off ]] || return 2
+  conf_set gun_offscreen_reload "$1"
+  gun_apply
+}
+
+# gun_reset: tudo de volta ao padrao (a calibracao fica).
+gun_reset() {
+  local key
+  for key in flash flash_level flash_ms hold_ms edge_pct offscreen_reload; do
+    conf_unset "gun_$key"
+  done
+  # O driver nao tem "sem linha": os padroes dele de novo.
+  conf_set gun_hold_ms "$(gun_field hold_ms 5)"
+  conf_set gun_edge_pct "$(gun_field edge_pct 5)"
+  conf_set gun_offscreen_reload on
+  gun_apply
+}
+
+# gun_connected: a GunCon 2 ligada agora (o calibrador acha o evento dela).
+gun_connected() {
+  [[ -x $CALIBRATE ]] && [[ -n $("$CALIBRATE" list gun 2> /dev/null) ]]
 }

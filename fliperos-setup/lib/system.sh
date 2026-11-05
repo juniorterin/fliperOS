@@ -93,8 +93,15 @@ settings_list() {
   fi
   printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote.\n' \
     "$([[ $(conf_get osd 2> /dev/null) == off ]] && echo off || echo on)"
-  printf 'gun_flash|Joysticks|Light gun flash|choice|%s|pulse=Pulse (two light frames on each shot);hold=Hold (light while the trigger is held);off=Off|A CRT gun only finds its aim where the screen is lit: the flash lights it on a shot, so dark parts hit and off screen reloads. Counts at once, even in a game that is open.\n' \
+  # A GunCon 2 (Setup > Joysticks > GunCon 2), menos a calibracao (os alvos na tela).
+  printf 'gun_flash|GunCon 2|Screen flash|choice|%s|pulse=Pulse (two light frames on each shot);hold=Hold (light while the trigger is held);off=Off|A CRT gun only finds its aim where the screen is lit: the flash lights it on a shot, so dark parts hit and off screen reloads. Counts at once, even in a game that is open.\n' \
     "$(gunflash_mode)"
+  while IFS='|' read -r key label min max _ step help; do
+    printf 'gun.%s|GunCon 2|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(gun_get "$key")" "$min" "$max" "$step" "$help"
+  done < <(gun_table)
+  printf 'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|%s|on=On;off=Off|Off the screen the trigger also presses the reload button of Flycast, RetroArch and SM2-Emu.\n' \
+    "$(gun_reload_on && echo on || echo off)"
+  printf 'gun.reset|GunCon 2|Back to the defaults|action|||Flash, numbers and the reload button back to the defaults. The calibration stays.\n'
   # Audio Setup (o volume fica no Frontend, no gabinete desenhado).
   opts=""
   while IFS='|' read -r name desc; do
@@ -256,6 +263,16 @@ settings_set() {
       ;;
     gun_flash)
       gunflash_set "$value" || return 2
+      ;;
+    gun_offscreen_reload)
+      gun_reload_set "$value" || return 2
+      ;;
+    gun.reset)
+      gun_reset
+      ;;
+    gun.*)
+      [[ -n $(gun_field "${key#gun.}" 3) ]] || return 2
+      gun_set "${key#gun.}" "$value" || return 2
       ;;
     audio.test)
       audio_test

@@ -12,8 +12,7 @@ screen_joysticks() {
     choice=$(ui_menu_hints "Joysticks" "$(buttons_players_line)" "$last" \
       "buttons|Button mapping (all emulators)|Teach FliperOS the panel: press each control when asked." \
       "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
-      "guncon|Calibrate GunCon 2 (light gun)|Shoot the targets so the gun hits where it points." \
-      "gunflash|Light gun flash: $(gunflash_mode)|The screen lights up on a shot, so the gun sees dark parts too." \
+      "guncon|GunCon 2 (light gun)|Calibration, screen flash and how the gun reads dark parts." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
       "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
       "return|Return|Back to Setup.") || return 0
@@ -21,8 +20,7 @@ screen_joysticks() {
     case $choice in
       buttons) screen_buttons ;;
       layout) screen_buttons_layout ;;
-      guncon) screen_calibrate guncon ;;
-      gunflash) screen_gunflash ;;
+      guncon) screen_guncon ;;
       axes) screen_calibrate axes ;;
       lpt) screen_lpt ;;
       return) return 0 ;;
@@ -30,17 +28,77 @@ screen_joysticks() {
   done
 }
 
-# screen_gunflash: o flash da tela no tiro da pistola de luz (lib/buttons.sh).
+# screen_guncon: tudo da GunCon 2 num menu (lib/buttons.sh): a calibracao, o
+# flash da tela no tiro, os ajustes do driver em numeros e a recarga fora da
+# tela.
+screen_guncon() {
+  local title="GunCon 2" choice last="" key reload summary
+  local -a fields
+  while true; do
+    reload=On
+    gun_reload_on || reload=Off
+    fields=("Gun|$(gun_connected && echo connected || echo "not connected")" "Screen flash|$(gunflash_mode)")
+    while IFS='|' read -r key _; do
+      fields+=("$(gun_field "$key" 2)|$(gun_get "$key")")
+    done < <(gun_table)
+    fields+=("Off-screen reload button|$reload")
+    summary=$(ui_fields "${fields[@]}")
+    choice=$(ui_menu_hints "$title" "$summary" "$last" \
+      "calibrate|Calibrate|Shoot the targets so the gun hits where it points." \
+      "flash|Screen flash: $(gunflash_mode)|The screen lights up on a shot, so the gun sees dark parts too." \
+      "values|Settings in numbers|Flash brightness and wait, dark hold, edge band." \
+      "reload|Off-screen reload button: $reload|Off screen the trigger also reloads (Flycast, RetroArch)." \
+      "reset|Back to the defaults|Flash, numbers and reload; the calibration stays." \
+      "return|Return|Back to Joysticks.") || return 0
+    last=$choice
+    case $choice in
+      calibrate) screen_calibrate guncon ;;
+      flash) screen_gunflash ;;
+      values) screen_gun_values ;;
+      reload)
+        if [[ $reload == On ]]; then gun_reload_set off; else gun_reload_set on; fi
+        ;;
+      reset)
+        ui_yesno "$title" "Flash, numbers and the reload button back to the defaults? The calibration stays." no || continue
+        gun_reset
+        ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_gunflash: o flash da tela no tiro.
 screen_gunflash() {
   local choice
-  choice=$(ui_menu_hints "Light gun flash" \
+  choice=$(ui_menu_hints "Screen flash" \
     "A CRT gun only finds its aim where the screen is lit. The flash lights it on a shot." "$(gunflash_mode)" \
     "pulse|Pulse (recommended)|Two light frames per shot: dark parts hit, off screen reloads." \
     "hold|Hold|The screen stays light while the trigger is held." \
-    "off|Off|No flash: a shot on a dark part can miss or reload." \
-    "return|Return|Back to Joysticks.") || return 0
+    "off|Off|No flash: a dark shot can miss or reload." \
+    "return|Return|Back to GunCon 2.") || return 0
   [[ $choice == return ]] && return 0
   gunflash_set "$choice"
+}
+
+# screen_gun_values: cada ajuste pelo numero (gun_table).
+screen_gun_values() {
+  local key label min max help choice value last=""
+  local -a entries
+  while true; do
+    entries=()
+    while IFS='|' read -r key label min max _ _ help; do
+      entries+=("$key|$label: $(gun_get "$key")|$help ($min to $max)")
+    done < <(gun_table)
+    entries+=("return|Return|Back to GunCon 2.")
+    choice=$(ui_menu_hints "GunCon 2 settings" "Changes count right away, even in a game that is open." "$last" "${entries[@]}") ||
+      return 0
+    last=$choice
+    [[ $choice == return ]] && return 0
+    value=$(ui_input "$(gun_field "$choice" 2)" \
+      "$(gun_field "$choice" 7) From $(gun_field "$choice" 3) to $(gun_field "$choice" 4)." \
+      "$(gun_get "$choice")") || continue
+    gun_set "$choice" "$value" || ui_msg "GunCon 2 settings" "Not a number: $value"
+  done
 }
 
 # screen_buttons: quantos jogadores e, de cada um, os comandos na ordem do

@@ -1463,26 +1463,41 @@ class SettingsCliTests(Base):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())
 
-    def test_light_gun_flash(self):
-        # O flash da tela no tiro (Setup > Joysticks > Light gun flash): pulse
-        # sem a linha; mudar grava o fliperos.conf (as camadas GL e Vulkan o
-        # leem) e o flash_ms do driver do GunCon 2 na hora.
-        param = self.env.dir / "flash_ms"
-        param.write_text("0\n")
-        env = {"COLOR_BIN": str(self.env.dir / "none"), "GUNFLASH_PARAM": str(param)}
+    def test_guncon2_settings(self):
+        # A GunCon 2 (Setup > Joysticks > GunCon 2): o flash da tela (pulse sem
+        # a linha), os numeros da tabela e a recarga, no fliperos.conf (as
+        # camadas GL e Vulkan leem o flash) e no driver na hora, pelo mesmo
+        # fliperos-guncon2-calibrate que os poe quando a pistola chega.
+        params = self.env.dir / "params"
+        params.mkdir()
+        for name, value in (("flash_ms", "0"), ("hold_ms", "150"), ("edge_pct", "12"), ("offscreen_reload", "Y")):
+            (params / name).write_text(value + "\n")
+        env = {"COLOR_BIN": str(self.env.dir / "none"), "GUNCON2_PARAMS": str(params),
+               "GUNCON2_CALIBRATE": str(ROOT / "config/fliperos-guncon2-calibrate"),
+               "FLIPEROS_CONF": str(self.env.etc / "fliperos.conf")}
+        param = lambda name: (params / name).read_text().strip()
         rows = {r.split("|")[0]: r.split("|") for r in self.env.out("settings_list", env).splitlines()}
-        self.assertEqual(rows["gun_flash"][1:5], ["Joysticks", "Light gun flash", "choice", "pulse"])
+        self.assertEqual(rows["gun_flash"][1:5], ["GunCon 2", "Screen flash", "choice", "pulse"])
         self.assertEqual([o.split("=")[0] for o in rows["gun_flash"][5].split(";")], ["pulse", "hold", "off"])
+        self.assertEqual(rows["gun.flash_ms"][1:6], ["GunCon 2", "Flash wait (ms)", "number", "100", "30..300:10"])
+        self.assertEqual(rows["gun.hold_ms"][4], "150")
+        self.assertEqual(rows["gun_offscreen_reload"][4], "on")
         self.env.out("settings_set gun_flash off", env)
         self.assertIn("gun_flash=off\n", (self.env.etc / "fliperos.conf").read_text())
-        self.assertEqual(param.read_text().strip(), "0")
-        self.env.out("settings_set gun_flash hold", env)
-        self.assertEqual(param.read_text().strip(), "100")
+        self.assertEqual(param("flash_ms"), "0")
+        # Com o flash de novo, a espera da tabela; fora da faixa, o limite.
+        self.env.out("settings_set gun_flash hold; settings_set gun.flash_ms 900; settings_set gun.hold_ms 300", env)
+        self.assertEqual((param("flash_ms"), param("hold_ms")), ("300", "300"))
         self.assertEqual(self.env.out("gunflash_mode", env).strip(), "hold")
-        self.assertEqual(self.env.run("settings_set gun_flash blink", env).returncode, 2)
-        # Quando a pistola chega, o calibrador poe o mesmo flash_ms.
-        calibrate = (ROOT / "config/fliperos-guncon2-calibrate").read_text()
-        self.assertIn('[[ $flash == off ]] && echo 0 > "$param" || echo 100 > "$param"', calibrate)
+        self.env.out("settings_set gun.edge_pct 6; settings_set gun_offscreen_reload off", env)
+        self.assertEqual((param("edge_pct"), param("offscreen_reload")), ("6", "N"))
+        for bad in ("gun_flash blink", "gun.flash_ms abc", "gun.nope 3", "gun_offscreen_reload maybe"):
+            self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
+        # De volta ao padrao: o do driver, tambem na hora.
+        self.env.out("settings_set gun.reset 1", env)
+        self.assertEqual([param(n) for n in ("flash_ms", "hold_ms", "edge_pct", "offscreen_reload")],
+                         ["100", "150", "12", "Y"])
+        self.assertNotIn("gun_flash=", (self.env.etc / "fliperos.conf").read_text())
 
     def test_volume_keys_tell_the_osd(self):
         fifo = self.env.dir / "osd-control"

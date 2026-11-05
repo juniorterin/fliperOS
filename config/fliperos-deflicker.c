@@ -533,7 +533,10 @@ static void gun_scan(void)
 
 /* gun_flash: o brilho do flash neste quadro (0: sem flash). Sem pistola
  * aberta, procura uma a cada 120 quadros; a que sai (ENODEV) e procurada de
- * novo. */
+ * novo. O gatilho e o MSC_RAW do driver do GunCon 2, que vem na hora: o
+ * BTN_LEFT dele espera o flash quando a pistola nao ve luz (flash_ms), e o
+ * flash por ele so vinha depois da espera. O BTN_LEFT vale para as outras
+ * pistolas. */
 static float gun_flash(void)
 {
     static int frames;
@@ -545,9 +548,10 @@ static float gun_flash(void)
     for (int i = 0; i < gun_count; i++) {
         ssize_t n;
         while ((n = read(gun_fd[i], &ev, sizeof(ev))) == (ssize_t)sizeof(ev)) {
-            if (ev.type == EV_KEY && ev.code == BTN_LEFT && ev.value == 1)
+            int trigger = (ev.type == EV_KEY && ev.code == BTN_LEFT) || (ev.type == EV_MSC && ev.code == MSC_RAW);
+            if (trigger && ev.value == 1)
                 gun_held = 1, gun_frames = GUN_FLASH_FRAMES;
-            else if (ev.type == EV_KEY && ev.code == BTN_LEFT && ev.value == 0)
+            else if (trigger && ev.value == 0)
                 gun_held = 0;
         }
         if (n < 0 && errno == ENODEV) {

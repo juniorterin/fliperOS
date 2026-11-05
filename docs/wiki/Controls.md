@@ -5,7 +5,7 @@ Controllers on FliperOS: what the Setup offers in **Joysticks** and in **System 
 FliperOS plays light gun games on the tube with Namco's **GunCon 2** (the PlayStation 2 gun, USB `0b9a:016a`), with nothing to install. The gun reads the beam of the CRT, which is exactly the screen FliperOS is made for; on an LCD it doesn't aim. What ships with the system:
 
 - **The driver.** GunCon 2 has no driver in the mainline kernel. The build compiles [beardypig/guncon2](https://github.com/beardypig/guncon2) through DKMS for the system's kernel and loads it at boot (`/etc/modules-load.d/fliperos-guncon2.conf`): plug the gun into USB and it shows up as an input device.
-- **The calibration.** The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. **Setup > Joysticks > Calibrate GunCon 2** measures it on your monitor once (below), and the udev rule `99-fliperos-input.rules` reapplies it (`fliperos-guncon2-calibrate`) every time the gun is plugged in.
+- **The calibration.** The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. **Setup > Joysticks > GunCon 2 > Calibrate** measures it on your monitor once (below), and the udev rule `99-fliperos-input.rules` reapplies it (`fliperos-guncon2-calibrate`) every time the gun is plugged in.
 - **Marked as a gun.** The same rule tags the GunCon 2 `ID_INPUT_GUN=1`, so the Model 2 emulator (SM2-Emu) reads the gun itself instead of the mouse pointer. A CRT gun misses the beam for a frame every now and then (a GunCon 2 then reports x 0, y 5); through the pointer that frame jumped the aim to the corner and a shot in the middle of the screen became a reload. SM2-Emu keeps the last position that saw the screen for up to 150 ms (FliperOS patch `config/sm2-emu-patches/0002`).
 - **The driver's FliperOS patches** (`config/guncon2-patches`). The gun sends the same report for a dark part of the picture and for an aim off the screen (x 0 or 1, y 5; its sixth byte is always 0, checked with usbmon), so the driver tells them apart by context:
   - a miss keeps the last aim that saw the screen for up to `hold_ms` (150);
@@ -72,23 +72,36 @@ SM2-Emu reads game buttons 1 to 4 from A B X Y and always takes RB as button 4, 
 
 The other emulators keep the Button mapping order: FBNeo arranges the buttons of each game by itself, and the others have one mapping for all games.
 
-### Calibrate GunCon 2
+### GunCon 2 (light gun)
 
-The screen turns white (the gun needs light where it aims) with a target in each corner; three shots at each (the median counts; a shot off the screen is rejected), and the calibrator computes the gun's real range on the tube — GunCon 2 is linear, so two known points give the edges.
+Everything about the gun in one menu (`screen_guncon`), with the gun's state and the current values on top. All of it but the calibration is also in the web panel's **GunCon 2** group, and counts at once, even in an open game.
+
+**Calibrate.** The screen turns white (the gun needs light where it aims) with a target in each corner; three shots at each (the median counts; a shot off the screen is rejected), and the calibrator computes the gun's real range on the tube — GunCon 2 is linear, so two known points give the edges.
 
 A shot at the center checks the result before saving `/etc/fliperos/guncon2.conf`, which the udev rule reapplies on every connection (evdev forgets the calibration).
 
-### Light gun flash
-
-A CRT gun only finds its aim where the screen is lit. Over a dark part of the picture it sees nothing, and the shot went out on the last aim or, past the hold, off the screen: Area 51 reloaded while shooting at its dark floor. Like RePlayOS's `GCON2 FLASH`, the screen lights up on a shot:
+**Screen flash.** A CRT gun only finds its aim where the screen is lit. Over a dark part of the picture it sees nothing, and the shot went out on the last aim or, past the hold, off the screen: Area 51 reloaded while shooting at its dark floor. Like RePlayOS's `GCON2 FLASH`, the screen lights up on a shot:
 
 - **Pulse** (the default): two light frames on each shot.
 - **Hold**: light while the trigger is held.
 - **Off**: no flash.
 
-The OpenGL and Vulkan layers of the emulators (`config/fliperos-deflicker.c`, `config/fliperos-vkfps.c`) read the triggers of the devices tagged `ID_INPUT_GUN` without grabbing them, and paint the whole frame with `gun_flash_level` (10 to 100, 100 by default) in `fliperos.conf`. The GunCon 2 driver then waits up to `flash_ms` (100 with the flash on) for a report that sees the lit screen before it sends a trigger pulled without light: the shot goes out at the real aim, or off the screen if not even the flash lit it.
+The OpenGL and Vulkan layers of the emulators (`config/fliperos-deflicker.c`, `config/fliperos-vkfps.c`) read the triggers of the devices tagged `ID_INPUT_GUN` without grabbing them, and paint the whole frame. From the GunCon 2 they flash on the raw trigger, which the driver sends at once as a `MSC_RAW` event (patch 0006; the emulators ignore it): its `BTN_LEFT` is held back while the gun sees nothing, and a flash drawn on it came only after the wait, too late. The GunCon 2 driver then waits up to the flash wait for a report that sees the lit screen before it sends a trigger pulled without light: the shot goes out at the real aim, or off the screen if not even the flash lit it.
 
-It is in `gun_flash=` of `fliperos.conf`, also in the web panel (Joysticks), and counts at once, even in an open game.
+**Settings in numbers:**
+
+| Setting | Default | `fliperos.conf` | What it does |
+|---|---|---|---|
+| Flash brightness (%) | 100 | `gun_flash_level` | How light the flash is (10 to 100). Too low and the gun misses it |
+| Flash wait (ms) | 100 | `gun_flash_ms` | How long a shot without light waits for the flash (driver `flash_ms`) |
+| Dark hold (ms) | 150 | `gun_hold_ms` | How long the aim stays put when the gun stops seeing light (`hold_ms`) |
+| Edge band (%) | 12 | `gun_edge_pct` | Losing light this close to an edge is off the screen at once (`edge_pct`) |
+
+**Off-screen reload button** (on): off the screen the trigger also presses the right button, the reload of Flycast, RetroArch and SM2-Emu (`gun_offscreen_reload`, driver `offscreen_reload`).
+
+**Back to the defaults** puts all of these back; the calibration stays.
+
+The driver's values are written by `fliperos-guncon2-calibrate`: when the gun arrives (udev) and, with `--params`, by the Setup and the web panel the moment they change.
 
 ### Calibrate wheel, pedals or analog stick
 
