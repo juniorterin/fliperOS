@@ -606,39 +606,45 @@ def players_icon(fe, color, h=None):
     return fe.media[key]
 
 
-# A pistola (o Arcadeflow nao tem icone de lightgun), no jeito do boneco
-# dos jogadores: um bitmap de pixels cheios.
-LIGHTGUN_ICON = (
-    "......................",
-    ".###################..",
-    ".####################.",
-    ".####################.",
-    ".###################..",
-    ".######...............",
-    ".######.###...........",
-    ".######...#...........",
-    ".######.###...........",
-    ".######...............",
-    "..#####...............",
-    "..#####...............",
-    "..#####...............",
-    "...####...............",
-    "...####...............",
-    "......................",
-)
+def lightgun_art(k):
+    """A pistola (o Arcadeflow nao tem icone de lightgun) virada para a
+    direita, numa grade de 64x40 com k pixels cada, em branco: o cano com a
+    mira, o cabo inclinado e o guarda-mato vazado com o gatilho. Mais escura
+    embaixo, como os icones do Arcadeflow (a luz vem de cima)."""
+    img = pygame.Surface((64 * k, 40 * k), pygame.SRCALPHA)
+    white, clear = (255, 255, 255, 255), (0, 0, 0, 0)
+
+    def rect(x, y, w, h, r=0, c=white):
+        pygame.draw.rect(img, c, (x * k, y * k, w * k, h * k), 0, round(r * k))
+
+    def poly(points):
+        pygame.draw.polygon(img, white, [(x * k, y * k) for x, y in points])
+
+    rect(22, 8, 20, 22, 8)
+    rect(27, 13, 10, 12, 4, clear)
+    poly([(8, 12), (27, 12), (20, 36), (3, 36)])
+    rect(2.5, 32, 17.5, 7, 3)
+    rect(5, 3, 56, 13, 4)
+    rect(52, 0.5, 4, 4, 1)
+    poly([(30, 15), (33, 15), (32, 22), (30, 22)])
+    shade = pygame.Surface(img.get_size(), pygame.SRCALPHA)
+    for y in range(shade.get_height()):
+        v = round(255 - 85 * y / shade.get_height())
+        shade.fill((v, v, v, 255), (0, y, shade.get_width(), 1))
+    img.blit(shade, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    return img
 
 
 def lightgun_icon(fe, h, color):
+    """A pistola com h pixels de altura: desenhada grande e reduzida com
+    suavizacao, como os icones de controle do Arcadeflow ao lado dela."""
     key = ("lightgun", h, color)
     if key not in fe.media:
-        img = pygame.Surface((len(LIGHTGUN_ICON[0]), len(LIGHTGUN_ICON)), pygame.SRCALPHA)
-        for y, row in enumerate(LIGHTGUN_ICON):
-            for x, ch in enumerate(row):
-                if ch == "#":
-                    img.set_at((x, y), color + (255,))
+        img = lightgun_art(8)
         img = img.subsurface(img.get_bounding_rect()).copy()
-        if img.get_height() > h:
-            img = pygame.transform.smoothscale(img, (max(1, round(img.get_width() * h / img.get_height())), h))
+        w = max(1, round(img.get_width() * h / img.get_height()))
+        img = pygame.transform.smoothscale(img, (w, h))
+        img.fill(color + (255,), special_flags=pygame.BLEND_RGBA_MULT)
         fe.media[key] = img
     return fe.media[key]
 
