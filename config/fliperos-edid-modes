@@ -32,11 +32,10 @@ def dtd(mode, size=(485, 364)):
     clock, (ha, hss, hse, ht), (va, vss, vse, vt), interlace, hpos, vpos = mode
     pc = round(clock * 100)
     hb, hso, hsw = ht - ha, hss - ha, hse - hss
-    if interlace:
-        # Os valores de um campo: o kernel dobra e soma 1 ao total.
-        va, vb, vso, vsw = va // 2, (vt - va) // 2, (vss - va) // 2, (vse - vss) // 2
-    else:
-        vb, vso, vsw = vt - va, vss - va, vse - vss
+    # As linhas do quadro inteiro, tambem no entrelacado (480, total 523), como
+    # nos EDIDs do Switchres: o kernel nao dobra os valores de um campo, e um
+    # 640x480i com 240 linhas virava um "640x240i" sem sincronismo.
+    vb, vso, vsw = vt - va, vss - va, vse - vss
     w, h = size
     flags = 0x18 | (0x80 if interlace else 0) | (0x02 if hpos else 0) | (0x04 if vpos else 0)
     return bytes([

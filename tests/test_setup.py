@@ -1184,9 +1184,10 @@ class OrientationTests(Base):
         self.assertEqual(len(data), 128)
         self.assertEqual(sum(data) % 256, 0)
         self.assertEqual(data[:8], b"\x00\xff\xff\xff\xff\xff\xff\x00")
-        # Os dois modos: 640x240 progressivo e 640x480i (campo de 240 linhas).
+        # Os dois modos: 640x240 progressivo e 640x480i (as 480 linhas do quadro,
+        # como no EDID do Switchres: o kernel nao dobra o campo).
         self.assertEqual((data[56], data[59], data[71] & 0x80), (0x80, 0xF0, 0))
-        self.assertEqual((data[74], data[77], data[89] & 0x80), (0x80, 0xF0, 0x80))
+        self.assertEqual((data[74], data[77] | (data[79] >> 4) << 8, data[89] & 0x80), (0x80, 480, 0x80))
         line = "quiet video=VGA-1:640x240Se,panel_orientation=right_side_up fbcon=rotate:1"
         out = self.env.out("vertical_console_cmdline '%s' VGA-1 vertical-cw" % line, env).strip()
         self.assertEqual(out, "quiet video=VGA-1:640x480iSe,panel_orientation=right_side_up fbcon=rotate:1 "
@@ -3859,9 +3860,13 @@ class CustomMonitorTests(Base):
         data = (edid_dir / "fliperos-custom.bin").read_bytes()
         self.assertEqual(len(data), 128)
         self.assertEqual(sum(data) % 256, 0)
-        # O primeiro modo: 13,02 MHz, 640 colunas, campo de 240 linhas, entrelacado.
+        # O primeiro modo: 13,02 MHz, 640 colunas, 480 linhas (o quadro, vtotal
+        # 523: o kernel lia 240 e listava "640x240i"), entrelacado.
         self.assertEqual(data[54] | data[55] << 8, 1302)
-        self.assertEqual((data[56], data[59], data[71] & 0x80), (0x80, 0xF0, 0x80))
+        self.assertEqual(data[56] | (data[58] >> 4) << 8, 640)
+        self.assertEqual(data[59] | (data[61] >> 4) << 8, 480)
+        self.assertEqual(data[60] | (data[61] & 15) << 8, 43)
+        self.assertEqual(data[71] & 0x80, 0x80)
         line = self.env.out("boot_compose 'quiet'", env).strip()
         self.assertIn("video=VGA-1:e", line.split())
         self.assertIn("drm.edid_firmware=VGA-1:edid/fliperos-custom.bin", line.split())
