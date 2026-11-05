@@ -11,7 +11,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
   <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art of a white arcade cabinet in a purple-lit room, a fighting game on its CRT and the PC beside it"></a>
 </p>
 
-<h1 align="center">FliperOS 0.19</h1>
+<h1 align="center">FliperOS 0.20</h1>
 
 <p align="center">
   <b>Arcade Linux. Built for CRT.</b><br>
@@ -52,7 +52,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </p>
 
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.19 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
+<p>In development: 0.20 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
 <table>
   <tr>
     <td align="center" width="33%"><img src="website/public/screenshots/frontend/full.webp" width="240" alt="FliperOS frontend in full screen: Aggressors of Dark Kombat with its video behind and its name, year and controls in front"><br><sub><b>Full screen</b>: the game's video behind, its name and info in front</sub></td>
@@ -128,8 +128,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.19.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.19.iso</code> on Linux, <code>Get-FileHash fliperos-0.19.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.20.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.20.iso</code> on Linux, <code>Get-FileHash fliperos-0.20.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -139,7 +139,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.19.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.20.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -423,7 +423,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.19.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.20.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -516,13 +516,15 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover <code>radeon</code> and <code>amdgpu</code> (DCE and DCN 1 to 3): native boot at <code>640x480iS</code> and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.</p>
 <p>Good, cheap choices: <strong>HD 5450, HD 6450, HD 7750, R7 240, R7 250</strong>.</p>
 <p>SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks <code>radeon</code> by default and offers <code>amdgpu</code> (with Vulkan) in <em>Video Setup &gt; Video driver</em>.</p>
-<p>The emulators follow the driver the card runs on, checked at every session start: on <code>amdgpu</code>, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on <code>radeon</code> (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. RetroArch stays on <code>glcore</code> on both: its Vulkan output can't switch the CRT's modes. A choice made in an emulator is kept until the driver changes again.</p>
+<p>The emulators follow the driver the card runs on, checked at every session start: on <code>amdgpu</code>, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on <code>radeon</code> (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. A choice made in an emulator is kept until the driver changes again.</p>
+<p>RetroArch is decided at every launch, with nothing saved: on <code>amdgpu</code> it opens in Vulkan, on any other driver or card in <code>glcore</code> (<code>fliperos-kms-run</code> looks at the driver of the card whose connector is plugged in). Its Vulkan output switches the CRT's mode for each game like <code>glcore</code> does, through a FliperOS patch to its <code>khr_display</code> context; a RetroArch built without that patch stays on <code>glcore</code> on amdgpu too.</p>
 <p>Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an <strong>active converter</strong>: see <a href="#converters">Converters</a>.</p>
 <p><strong>GCN 2 and 3 cards with DVI-I.</strong> Not every card after GCN 1.0 lost its analog output: GroovyArcade reports the R7 260X on DVI-I and the R9 380 on DVI-I. None of them has been tried on FliperOS.</p>
 <ul>
-<li><strong>R9 380 and 380X (GCN 3)</strong> only run on <code>amdgpu</code>, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need <code>amdgpu.dc=0</code> on the kernel line (the R9 285 too, same chip). The installed system adds it by itself when it finds one of these cards, and after a card swap it reboots once with it before looking for the CRT output. The installation media doesn't have it: to see the install on the DVI-I, add it by hand (see <a href="#Black-screen">Black screen</a>), or install through the HDMI.</li>
-<li><strong>GCN 2, also called 1.1, on <code>amdgpu</code>:</strong> GroovyArcade's table says these cards (HD 7790, R7 260, R7 360) don't do interlaced modes on that driver. It wasn't checked with the <code>amdgpu.dc=0</code> FliperOS uses. If the picture is lost after switching to <code>amdgpu</code>, the <a href="#Installed-system">trial</a> goes back to <code>radeon</code> by itself.</li>
+<li><strong>R9 380 and 380X (GCN 3)</strong> only run on <code>amdgpu</code>, and on kernel 6.18 its new display code has no analog output (that came in 6.19). They need <code>amdgpu.dc=0</code> on the kernel line (the R9 285 too, same chip). FliperOS loads <code>amdgpu</code> with it by itself when it finds one of these cards, from the installation media on, and the installed system also writes it on the kernel line.</li>
 </ul>
+<p>ISOs up to 0.19 don't do that on the installation media. With one of them, add it by hand to see the install on the DVI-I (see <a href="#Black-screen">Black screen</a>), or install through the HDMI.
+- <strong>GCN 2, also called 1.1, on <code>amdgpu</code>:</strong> GroovyArcade's table says these cards (HD 7790, R7 260, R7 360) don't do interlaced modes on that driver. It wasn't checked with the <code>amdgpu.dc=0</code> FliperOS uses. If the picture is lost after switching to <code>amdgpu</code>, the <a href="#Installed-system">trial</a> goes back to <code>radeon</code> by itself.</p>
 <p><strong>APUs.</strong> GroovyArcade reports Wrestler, Kabini, Kaveri and Mullins working out of the box, and Wani with <code>amdgpu.dc=0</code> or an EDID. On any APU the Setup sets <code>interlace_force_even</code> in Switchres, which AMD APUs need.</p>
 <p><strong>A VGA connector isn't always analog.</strong> On some APUs and motherboards the VGA port is a DisplayPort to VGA bridge chip. It may not switch modes quickly, make low clocks or do interlaced modes, so results vary by motherboard. GroovyArcade found the ASRock DeskMini A300's to be the best so far.</p>
 <p><strong>ArcadeVGA cards.</strong> GroovyArcade's wiki says they "are not supported and won't work", without saying why, and other reports disagree. One forum thread has an ArcadeVGA 5000 running GroovyArcade at half speed; the documentation of another 15 kHz package says they seem to be supported.</p>
@@ -658,7 +660,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <td>R9 285, 380, 380X</td>
 <td><code>amdgpu</code></td>
 <td>DVI-I</td>
-<td>Needs <code>amdgpu.dc=0</code> (the installed system adds it); to be confirmed since Linux 6.19</td>
+<td>Needs <code>amdgpu.dc=0</code> (FliperOS adds it; on the installation media only in ISOs newer than 0.19); to be confirmed since Linux 6.19</td>
 </tr>
 </tbody>
 </table>
@@ -1138,7 +1140,7 @@ sudo reboot
 </tr>
 <tr>
 <td>AMD with DVI-I that has no <code>radeon</code> driver (R9 285, 380, 380X)</td>
-<td>The line needs <code>amdgpu.dc=0</code>: on kernel 6.18 amdgpu's new display code has no analog output. The installed system adds it by itself, so reboot once; at the installation, add it by hand. See <a href="#Video-cards">Video cards</a></td>
+<td>The line needs <code>amdgpu.dc=0</code>: on kernel 6.18 amdgpu's new display code has no analog output. FliperOS adds it by itself; an ISO up to 0.19 doesn't at the installation, so add it by hand there. See <a href="#Video-cards">Video cards</a></td>
 </tr>
 <tr>
 <td>Ryzen 2200GE with random black screens</td>
@@ -1180,7 +1182,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.19.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.20.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -1486,7 +1488,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>Also <strong>Interlaced hacks</strong>: a table of every program (emulators, RetroArch cores, Fightcade, the desktop) where each one gets 640x240, interlaced with the flicker filter at its own level (with a preview on the tube), or pure interlaced (<a href="#Emulators">Emulators</a>).</p>
 <p>Changes in that table are saved as they are made; there is no Save step. Also <strong>Colour calibration</strong> (below). Also <a href="#scanlines"><strong>Scanlines</strong></a>, with a 31 kHz monitor. Also <strong>Card firmware</strong>, with an AMD card: <a href="#Video-cards">ATOM-15 in the card's BIOS</a>, at your own risk. Also <strong>Video driver</strong>, only with an AMD card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240).</p>
 <p>The card name comes from <code>lspci</code>, and whether both drivers take it comes from the modules' own PCI ID tables (<code>modprobe -R</code> on the card's modalias). <strong>radeon</strong> is the recommended choice and the default, as on GroovyArcade: 15 kHz was validated on it; OpenGL only.</p>
-<p><strong>amdgpu</strong> adds Vulkan (PCSX2, Dolphin, Flycast, DuckStation); it was seen working at 15 kHz on the cabinet's R7 240 (2026-10-16), not yet on other cards. RetroArch is built with Vulkan as well, but stays on <code>glcore</code>: without X its Vulkan context is <code>khr_display</code>, which does not switch the CRT's mode.</p>
+<p><strong>amdgpu</strong> adds Vulkan (PCSX2, Dolphin, Flycast, DuckStation); it was seen working at 15 kHz on the cabinet's R7 240 (2026-10-16), not yet on other cards. RetroArch opens in Vulkan on amdgpu too: without X its Vulkan context is <code>khr_display</code>, which FliperOS patches so that it switches the CRT's mode for each game (<code>config/retroarch-patches</code>).</p>
 <p>It goes in with <code>amdgpu.dc=0</code>, because the 6.18 kernel has no analog output (VGA, DVI-I) in amdgpu's new display code for these cards (that came in 6.19). Only the kernel line chooses (<code>amd_driver=</code> in <code>fliperos.conf</code>, <code>AMD_DRIVER_KEYS</code> in <code>lib/bootloader.sh</code>).</p>
 <p>With amdgpu set, the boot menu (a key while the system boots) gets a <strong>FliperOS - radeon driver</strong> entry, the way back if there is no picture.</p>
 <p><strong>Every switch is on trial</strong>, like a resolution change on Windows: the next boot, before the frontend or the menu, asks to confirm the picture with Enter (or button 1) within 15 s, and with no answer it goes back to the driver the card was running and restarts (<code>screen_amd_driver_confirm</code>; state in <code>amd_driver_trial=</code>, <code>amd_driver_previous=</code>).</p>
@@ -28362,12 +28364,17 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>RetroArch's video is the <code>glcore</code> driver (OpenGL 3.2 core) and its audio is <code>sdl2</code>, which goes straight into ALSA; both come from the system <code>retroarch.cfg</code> (<code>/etc/fliperos/retroarch</code>), which is applied on top of the user's on each launch.</p>
 <p>From there also come input and joypad in <code>linuxraw</code> (the kernel's <code>/dev/input/js*</code>; <code>fliperos-controllers</code> generates the automatic controller profiles for <code>udev</code> and <code>linuxraw</code>), RetroArch without on-screen notifications and a single Esc to close the game (<code>confirm_quit</code> off; the default asks for a second Esc, with a notice that would not show).</p>
 <p>On cards with only OpenGL 2.x (Radeon X300 to X1950, Intel up to 1st-generation Core, GeForce FX/6/7) <code>glcore</code> doesn't open: <code>fliperos-kms-run</code> asks Mesa (<code>eglinfo</code>) and, on those, passes <code>gl</code> instead.</p>
-<p><strong>GroovyMAME at native resolution.</strong> GroovyMAME runs in X, like GroovyArcade's X mode: called from the console (by <code>fliperos-launch</code>, by the boot session, by a frontend or in the terminal), the <code>groovymame</code> command opens in an Xorg of its own (<code>fliperos-x11-run</code>) and, with <code>modesetting 1</code> in <code>mame.ini</code>, GroovyMAME's Switchres creates and switches each game's mode through XRandR — on the cabinet, MvC at <code>SR-1_384x224@59.64</code>, full screen.</p>
-<p>Commands without a screen (<code>-listxml</code>, <code>-listclones</code>, <code>-verifyroms</code>, <code>-showconfig</code>, <code>-createconfig</code>, <code>-version</code>...) run directly, without starting X. As in GroovyArcade's <code>galauncher.xinitrc</code>, <code>fliperos-x11-client</code> starts <strong>openbox</strong> before the program (<code>config/openbox-x11-run.xml</code>: no borders, no shortcuts): it is what fits the full-screen window to the new screen on each mode switch through XRandR; without it the window kept the size of the mode it opened in (the UI in a quarter of the 640x480 screen, the game out of place).</p>
-<p>Opened without a game (the UI), <code>groovymame</code> passes <code>-noautosync -waitvsync</code>: the game chosen in the UI runs in the same process, and GroovyMAME's emusync in X (<code>emusync_linux.cpp</code> from gm0289sr222f) uses the <code>/dev/dri/card0</code> that it closed when leaving the UI (<code>osd_deinit</code> closes the fd and doesn't reset it; "drmCrtcGetSequence(-1)") — with <code>autosync</code>, <code>syncrefresh</code> removed the throttle and the game ran too fast.</p>
-<p>Opened directly with the game (frontends, command line), vblank works and <code>autosync</code> stays.</p>
-<p>In KMS this didn't work on this installation: with <code>modesetting 0</code> and <code>SDL_KMSDRM_REQUIRE_DRM_MASTER=0</code> Switchres applied the game's mode, but SDL kept drawing at the size of the boot mode (in radeon's debugfs <code>framebuffer</code>, GroovyMAME's frames at 320x240 with the screen at 384x224) — the game came out stretched, squashed or in the middle with black bars, depending on the resolution chosen in the Setup; with <code>modesetting 1</code> the mode wasn't even applied ("No way to get master rights") or the screen went black ("Could not queue pageflip: -13").</p>
-<p>RetroArch, in KMS, creates its frames already at the game's size (384x224) and switches correctly. On an earlier installation, <code>fliperos-rootfs.sh</code> replaces the old <code>modesetting 0</code> with 1.</p>
+<p><strong>GroovyMAME at native resolution.</strong> GroovyMAME runs in KMS, without Xorg, like GroovyArcade. Called from the console (by <code>fliperos-launch</code>, by the boot session, by a frontend or in the terminal), the <code>groovymame</code> command opens through <code>fliperos-kms-run</code>.</p>
+<p>Switchres attaches each game's mode to the connector (the <code>ATTACHMODE</code> of kernel patch 06), and SDL switches to it. On the cabinet: Street Fighter II at <code>SR-1_384x224@59.64</code> (99.9% speed), The King of Fighters '98 at <code>SR-1_320x224@59.19</code>.</p>
+<p>This needs the SDL2 of the <code>fliperos-sdl2-kms</code> package (<code>packaging/packages</code>), installed in <code>/usr/local/lib/fliperos/sdl2-kms</code> and loaded only by GroovyMAME. It is Ubuntu's SDL2 with GroovyArcade's two KMS patches (<code>packaging/patches/sdl2</code>): SDL re-reads the connector's modes on every query, and puts the original mode back when the window closes.</p>
+<p>Ubuntu's SDL2 reads the mode list once, when it opens, and picked the closest of the old modes: the game stayed in the boot mode.</p>
+<p><code>SDL_KMSDRM_REQUIRE_DRM_MASTER=0</code> must not be set: with it, Switchres's SDL2 backend switches the mode by itself (<code>kms_modesetting</code>), and SDL undoes the switch on its next frame.</p>
+<p>Commands without a screen (<code>-listxml</code>, <code>-listclones</code>, <code>-verifyroms</code>, <code>-showconfig</code>, <code>-createconfig</code>, <code>-version</code>...) run directly.</p>
+<p><strong>GroovyMAME in X.</strong> The <code>groovymame</code> command opens in an Xorg of its own (<code>fliperos-x11-run</code>) when the package's SDL is missing (an installation updated only over the network, before an ISO that brings it), when multi-screen games are on with more than one monitor (in KMS only the main monitor stays on), or with <code>groovymame_video=x11</code> in <code>/etc/fliperos/fliperos.conf</code>.</p>
+<p>There Switchres switches each game's mode through XRandR. Frontend lines saved as <code>fliperos-x11-run groovymame</code> follow the same choice: <code>fliperos-x11-run</code> hands <code>groovymame</code> back to the command.</p>
+<p>As in GroovyArcade's <code>galauncher.xinitrc</code>, <code>fliperos-x11-client</code> starts <strong>openbox</strong> before the program (<code>config/openbox-x11-run.xml</code>: no borders, no shortcuts): it is what fits the full-screen window to the new screen on each mode switch through XRandR; without it the window kept the size of the mode it opened in (the UI in a quarter of the 640x480 screen, the game out of place).</p>
+<p>Opened without a game (the UI), <code>groovymame</code> passes <code>-noautosync -waitvsync</code>: the game chosen in the UI runs in the same process, and GroovyMAME's emusync in X (<code>emusync_linux.cpp</code> from gm0289sr222f) uses the <code>/dev/dri/card0</code> that it closed when leaving the UI (<code>osd_deinit</code> closes the fd and doesn't reset it; "drmCrtcGetSequence(-1)") — with <code>autosync</code>, <code>syncrefresh</code> removed the throttle and the game ran too fast. The same options stay in KMS.</p>
+<p>Opened directly with the game (frontends, command line), vblank works and <code>autosync</code> stays. On an earlier installation, <code>fliperos-rootfs.sh</code> replaces the old <code>modesetting 0</code> with 1.</p>
 <p>The other reason for the doubled width is the screen's aspect: with <code>aspect auto</code> GroovyMAME takes the aspect from the current mode, and booting at 640x240 gives 8:3 — twice 4:3, so Switchres doubled the width of every game ("SR(0): 768x224").</p>
 <p><code>mame.ini</code> ships with <code>aspect 4:3</code>, like GroovyArcade (<code>-aspect "4:3"</code>); the Setup only goes back to <code>auto</code> when the chosen monitor is an LCD.</p>
 <p><strong>GroovyMAME: the release and the <code>groovymame</code> command.</strong> The build no longer compiles GroovyMAME (it took over an hour): it uses the official Linux release (<code>gm0289sr222f</code>, MAME 0.289 with Switchres 2.22f, verified by sha256), in <code>/usr/local/libexec/groovymame</code>, with the libraries it needs (Qt6 is the debugger's).</p>
@@ -28378,7 +28385,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>The release only ships the binary; like GroovyArcade's package, the build puts in <code>/usr/local/share/groovymame</code> the source files of the same tag (commit <code>953db38</code>): <code>plugins</code> (<code>hiscore</code>), the <code>uismall.bdf</code> font, <code>bgfx</code>, <code>artwork</code>, <code>language</code>, <code>ctrlr</code>, <code>keymaps</code> and <code>hash</code>.</p>
 <p><code>mame.ini</code> is made like GroovyArcade's: GroovyMAME's own <code>-createconfig</code> (every option of the version, at its default), with those of <code>config/mame.ini</code> on top, each on its own line (<code>config/fliperos-mame-ini</code>, at build time).</p>
 <p>The GroovyArcade options (gasetup's <code>-createconfig</code>): <code>plugin hiscore</code>, <code>skip_gameinfo 1</code>, <code>video opengl</code>, <code>switchres_ini 1</code>, <code>sound sdl</code>, <code>aspect 4:3</code> — plus the Setup's latency (<code>lowlatency</code>, <code>autoframedelay</code>, <code>framedelay</code>); the UI font stays MAME's own (<code>uifont default</code>), because GroovyArcade's pixel font (<code>uismall.bdf</code>) was too small on the cabinet.</p>
-<p><code>modesetting 1</code> is also GroovyArcade's, with GroovyMAME in X (the "GroovyMAME at native resolution" paragraph).</p>
+<p><code>modesetting 1</code> is also GroovyArcade's, and serves both KMS and X (the "GroovyMAME at native resolution" paragraph).</p>
 <p>What GroovyMAME writes goes to <code>~/.mame</code> (cfg, hiscore records), <code>~/nvram/mame</code> (nvram) and <code>~/save/mame</code> (savestates); <code>ui.ini</code> gets GroovyArcade's <code>infos_text_size 1.00</code> and <code>font_rows 20</code>, together with the Dracula colors — GroovyArcade uses 19, but MAME only accepts 20 to 40 and replaces 19 with the default 30, which at 224 lines leaves the font 7 pixels tall and unreadable; with 20 it is 11.</p>
 <p>On an earlier installation, <code>fliperos-rootfs.sh</code> only adds to <code>mame.ini</code> and <code>ui.ini</code> the keys they don't have yet (what was already saved stays, theme included); among the paths, the relative ones (the <code>.</code>, <code>cfg</code>, <code>snap</code> of a plain <code>-createconfig</code>: relative to the folder GroovyMAME is opened from, they filled the home folder with <code>cfg</code> and <code>nvram</code>) are removed, and with no absolute one left, the one from <code>config/</code> applies.</p>
 <p>The <code>cfg</code>/<code>nvram</code> left in the home folder moves to <code>~/.mame</code>; when both exist, each file keeps its newest version. On a system installed earlier, <code>fliperos-rootfs.sh</code> moves the compiled binary to <code>/usr/local/libexec</code> and puts the shortcut in its place.</p>
@@ -30375,7 +30382,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.19.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.20.iso
 </code></pre>
 <table>
 <thead>
@@ -30422,7 +30429,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.19.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.20.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -30433,16 +30440,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.19
-   git push origin 0.19</code></p>
+   git tag 0.20
+   git push origin 0.20</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.19</code>, <code>git push -f origin 0.19</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.20</code>, <code>git push -f origin 0.20</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.19.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.20.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -30457,14 +30464,14 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.19.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.19.sha256</code> (the whole ISO and each part) and <code>fliperos-0.19-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.20.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.20.sha256</code> (the whole ISO and each part) and <code>fliperos-0.20-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h3 id="telegram-group">Telegram group</h3>
 <p>Each release is also posted in the group <a href="https://t.me/fliperos15khz">t.me/fliperos15khz</a>, with pictures and an explanation of how each new feature works. <code>CHANGELOG.md</code> is the technical list of the GitHub release; the group reads <code>docs/telegram/VERSION.md</code>.</p>
 <p>The file is a list of messages separated by a line with only <code>---</code>. In each one, a line made of <code>!</code>, <code>[]</code> and a path in parentheses, such as <code>(website/public/screenshots/gui/video.webp)</code>, puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters; longer, it goes before the picture as a message); without one, it is a message of up to 4096.</p>
 <p>Every message is in Portuguese and English: its text has a part starting with a <code>🇧🇷</code> line and another starting with a <code>🇺🇸</code> line, and the script refuses the file without both. The network updates follow the same rule: next to <code>updates/notes/NNNN.md</code> (English, shown on the cabinet), <code>updates/notes/pt-BR/NNNN.md</code> has the same notes in Portuguese, and <code>tools/make-update.sh</code> refuses an update without it (unless <code>docs/telegram/update-NNNN.md</code> exists).</p>
-<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.19   # checks the file and the images, sends nothing (needs python3-pil)
+<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.20   # checks the file and the images, sends nothing (needs python3-pil)
 </code></pre>
 <p>That file is optional: without it, the group gets the version's section of <code>CHANGELOG.md</code> as it is (technical, no pictures), cut into messages of up to 4096 characters. The <strong>Release</strong> workflow checks the text with the dry run before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). With the version <code>all</code> it posts every version of the changelog, oldest first (<code>--backfill</code>), which is how the group gets the history. It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
 <h2 id="tests">Tests</h2>

@@ -4,9 +4,43 @@ What changed in each ISO published in [Releases](https://github.com/juniorterin/
 
 ## 0.20
 
+The Radeon R9 285, 380 and 380X get a picture on the DVI-I from the installation on, and a fresh install opens the desktop and the emulators again. Also in this ISO: RetroArch in Vulkan on amdgpu, GroovyMAME on the console without Xorg again, scanlines for a 31 kHz monitor, the light gun in every emulator, and net play in more systems.
+
 **System changes:**
 
 - RetroArch runs in **Vulkan** when the CRT's card is on the amdgpu driver (Setup > Video Setup > Video driver), and back in glcore on any other driver or card; it is decided at every launch, so changing the driver or the card needs nothing else. Its Vulkan output now switches the CRT's mode for each game like glcore does (a patch to RetroArch's `khr_display`, `config/retroarch-patches`). Seen on the cabinet's R7 240: Street Fighter II (384x224, 15.68 kHz) and Tekken Tag Tournament, with all seven of its mode changes, put the same timing on the card in Vulkan as in glcore. The picture itself was not looked at on the tube
+- **GroovyMAME opens on the console without Xorg again** (KMS), with each game's own mode: on the cabinet sf2 ran at 384x224 59.64 Hz and kof98 at 320x224 59.19 Hz. It needs the new `fliperos-sdl2-kms` package that comes in this ISO; without it (a cabinet updated only over the network), with games on more than one monitor or with `groovymame_video=x11` in `fliperos.conf`, it stays in its own Xorg
+- **Radeon R9 285, 380 and 380X** (Tonga): the installation media had no picture on these cards. On kernel 6.18, amdgpu's new display code has no analog output, so the DVI-I showed up as DVI-D and stayed dark. FliperOS now loads amdgpu with `dc=0` when it finds one of these cards, from the installation media on, and the installed system also writes `amdgpu.dc=0` on the kernel line. Other cards load amdgpu as before
+- A fresh installation from the 0.18 or 0.19 ISO went back to the menu when opening the desktop, GroovyMAME, Flycast and the other emulators that open their own screen: some folders in the home (`~/.local`, `~/nvram`, `~/save`) came from the image owned by root, so the X server could not write its log. The image now gives the whole home to the user, and update 39 fixes the cabinets already installed
+- **Scanlines for a 31 kHz monitor**: Setup > Video Setup > Scanlines (only with a 31 kHz Monitor Type). A 240-line game doubled to 480 gets the dark gap between lines of a 15 kHz tube. Darkness, thickness, line height and a brightness boost, set on the screen with a test picture or in numbers, and in the web panel's Scanlines group. They work in OpenGL and Vulkan, and change live with a game open. Not yet seen on a 31 kHz tube
+- "480i hacks" is now "Interlaced hacks": the filter and the per-program choice cover every interlaced mode (448i, 576i, 1280x480i...). Saved choices stay
+- **Light gun (GunCon 2) in every emulator**: SM2-Emu reads the gun directly, and in Virtua Cop and The House of the Dead a shot no longer turns into a reload when the gun misses the beam for a moment. MAME 2010 gun games in RetroArch aim with the gun, GroovyMAME's aim no longer sticks at the bottom, no crosshair is drawn when a gun is connected, and two guns are two players. Start and Select work as the player's keys in games, and the gun moves through the Setup menu and the frontend (d-pad, trigger = Enter, B/Select = back)
+- **Net play in every RetroArch core that supports it**, and Flycast GGPO for NAOMI and Atomiswave (two cabinets). Down on the NET PLAY tile picks how many players this cabinet gives. FBNeo net play now marks only the games of the FBNeo folder
+- **GameCube and Wii net play** from the frontend: the Dolphin in this ISO carries FliperOS's net play patch (`--netplay host|join`), and the official Dolphin for Windows joins it. Played between a cabinet and a PC; a game started from a savestate goes out of sync
+- Frontend: attract mode, after a minute without a button the cursor jumps to a random game and plays its video, a new one every 30 seconds; the first press only wakes it. Button 5's menu gains a CONTROL filter (joystick types, trackball, spinner, light gun...), and lists only filters that leave games
+- Supermodel: Model 3 games fill the screen in the interlaced mode instead of a box in the middle, and polygons come out clean on Radeon cards (no spikes or see-through textures, and faster)
+- Sound: a package that brings PulseAudio or PipeWire (the desktop's Bluetooth manager does) no longer takes over the sound and leaves the frontend and the emulators silent
+- ROM filter: Screen starts with the monitor's orientation only
+- Desktop: when it doesn't open, the error screen shows why this attempt failed (what X and xinit said), instead of harmless lines from an old log
+
+**Package changes:**
+
+- New `fliperos-sdl2-kms`: Ubuntu's SDL2 with GroovyArcade's `force_modes_refresh` and `restore_crtc_at_DestroyWindow` patches, in `/usr/local/lib/fliperos/sdl2-kms`, loaded only by GroovyMAME
+- RetroArch with FliperOS's `khr_display` patch (`config/retroarch-patches/0001`): the Vulkan output applies the CRT modes Switchres makes
+
+- Dolphin built with FliperOS's net play patch (`config/dolphin-patches`), with the EGL/GL headers it needs fetched by the build itself
+- The GunCon 2 DKMS driver with FliperOS's patch (`config/guncon2-patches/0001`): it holds the aim while the gun misses the beam and reloads only off screen. It comes only with the ISO, not with the updates
+
+**fliperos-setup changes:**
+
+- `config/fliperos-amdgpu-load` and `/etc/modprobe.d/fliperos-amdgpu.conf`: the `install amdgpu` rule that adds `dc=0` on Tonga cards (falls back to a plain load when the script is missing or fails); `lib/bootloader.sh` reads the loaded `dc` parameter, so a card already on `dc=0` doesn't reboot again
+- Video Setup > Scanlines (`frequency=31k` only), with the GL and Vulkan layers and the web panel group
+- `gui/felink.py`: net play profiles for the RetroArch cores, Flycast GGPO and Dolphin, and the players this cabinet gives
+
+**Tool changes:**
+
+- `tools/fe-emulator/run.sh`: the real frontend in Docker, seen in the browser through noVNC
+- `tools/verify-iso.sh` checks that the amdgpu rule and its script are in the initramfs
 
 ## 0.19
 
