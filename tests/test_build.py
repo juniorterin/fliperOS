@@ -1049,7 +1049,9 @@ class CalibrateTests(unittest.TestCase):
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
         self.assertIn('"joysticks|Joysticks|', menu)
         screens = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        for item in ('guncon|Calibrate GunCon 2', 'axes|Calibrate wheel', 'lpt|LPT joysticks'):
+        # A GunCon 2 tem um menu proprio (screen_guncon), com a calibracao nele.
+        for item in ('guncon|GunCon 2 (light gun)', 'axes|Calibrate wheel', 'lpt|LPT joysticks',
+                     '"calibrate|Calibrate|', 'calibrate) screen_calibrate guncon ;;'):
             self.assertIn(item, screens)
         # Os quirks valem para qualquer USB (discos tambem): em System.
         self.assertIn('"quirks|Quirks (USB device fixes)|', menu)
