@@ -18,6 +18,19 @@ gl_core_ok() {
   [[ $out =~ OpenGL\ core\ profile\ version:\ ([0-9]+)\.([0-9]+) ]] || return 1
   ((BASH_REMATCH[1] > 3 || (BASH_REMATCH[1] == 3 && BASH_REMATCH[2] >= 2)))
 }
+# O driver do kernel da placa do CRT: a do primeiro conector ligado (vazio se
+# nenhum responde).
+crt_card_driver() {
+  local sysfs=${FLIPEROS_DRM_SYSFS:-/sys/class/drm} status card link
+  for status in "$sysfs"/card[0-9]*-*/status; do
+    [[ $(cat "$status" 2> /dev/null) == connected ]] || continue
+    card=${status%/status}
+    card=${card##*/}
+    link=$(readlink -f "$sysfs/${card%%-*}/device/driver" 2> /dev/null) || return 0
+    printf '%s\n' "${link##*/}"
+    return 0
+  done
+}
 # O jogo da linha de comando no marquee do Pixelcade (config/fliperos-pixelcade;
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
@@ -38,6 +51,16 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   gl=${FLIPEROS_RA_GL:-/etc/fliperos/retroarch/retroarch-gl.cfg}
   if [[ -f $gl ]] && grep -q '^video_driver = "glcore"' "$appendconfig" 2> /dev/null && ! gl_core_ok; then
     appendconfig+="|$gl"
+  fi
+  # No amdgpu, o Vulkan. So com o RetroArch do patch do khr_display
+  # (config/retroarch-patches, a marca vem do build): sem ele o Vulkan nao
+  # troca o modo do CRT e todo jogo ficaria no modo do boot. Em outro driver
+  # ou outra placa, o glcore; e decidido a cada abertura, nada fica gravado.
+  vulkan=${FLIPEROS_RA_VULKAN:-/etc/fliperos/retroarch/retroarch-vulkan.cfg}
+  vulkan_crt=${FLIPEROS_RA_VULKAN_CRT:-/usr/local/share/fliperos/retroarch-vulkan-crt}
+  if [[ -f $vulkan && -f $vulkan_crt ]] && grep -q '^video_driver = "glcore"' "${appendconfig%%|*}" 2> /dev/null &&
+    [[ $(crt_card_driver) == amdgpu ]]; then
+    appendconfig+="|$vulkan"
   fi
   # Os botoes de cada jogador do Setup > Joysticks > Button mapping
   # (config/fliperos-buttons), por cima do perfil automatico do controle.

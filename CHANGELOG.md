@@ -2,6 +2,12 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.20
+
+**System changes:**
+
+- RetroArch runs in **Vulkan** when the CRT's card is on the amdgpu driver (Setup > Video Setup > Video driver), and back in glcore on any other driver or card; it is decided at every launch, so changing the driver or the card needs nothing else. Its Vulkan output now switches the CRT's mode for each game like glcore does (a patch to RetroArch's `khr_display`, `config/retroarch-patches`). Seen on the cabinet's R7 240: Street Fighter II (384x224, 15.68 kHz) and Tekken Tag Tournament, with all seven of its mode changes, put the same timing on the card in Vulkan as in glcore. The picture itself was not looked at on the tube
+
 ## 0.19
 
 Cabinets on the same wired network can start the games that link machines from the frontend, and play together the games that have more players than one cabinet has controls (net play). The number of players follows the connected controllers, and each resolution keeps its own geometry.

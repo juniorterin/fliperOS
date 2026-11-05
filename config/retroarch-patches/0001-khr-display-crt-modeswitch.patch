@@ -1,0 +1,219 @@
+diff --git a/Makefile.common b/Makefile.common
+index f0c2f4a..40cc50c 100644
+--- a/Makefile.common
++++ b/Makefile.common
+@@ -1871,6 +1871,13 @@ ifeq ($(HAVE_VULKAN), 1)
+ 
+    ifeq ($(HAVE_VULKAN_DISPLAY), 1)
+       OBJ += gfx/drivers_context/khr_display_ctx.o
++      ifeq ($(HAVE_KMS), 1)
++         # khr_display_ctx.c stands in for these two for Mesa's display
++         # WSI, which finds them only ahead of libdrm's in the dynamic
++         # symbol table
++         LDFLAGS += -Wl,--export-dynamic-symbol=drmModeGetConnector \
++                    -Wl,--export-dynamic-symbol=drmModeGetConnectorCurrent
++      endif
+    endif
+    ifeq ($(HAVE_OPENXR), 1)
+       OBJ += gfx/common/vulkan_openxr.o
+diff --git a/gfx/common/vulkan_common.c b/gfx/common/vulkan_common.c
+index c4de1c8..41fadf6 100644
+--- a/gfx/common/vulkan_common.c
++++ b/gfx/common/vulkan_common.c
+@@ -2460,7 +2460,15 @@ static bool vulkan_update_display_mode(
+    int want_w     = (int)VIDEO_SCALE_W(info->dims);
+    int want_h     = (int)VIDEO_SCALE_H(info->dims);
+ 
+-   if (!want_w || !want_h)
++   if (info->crt_mode)
++   {
++      if (     (int)vis_w != want_w
++            || (int)vis_h != want_h
++            || abs((int)info->refresh_rate_x1000
++               - (int)mode->parameters.refreshRate) > 1)
++         return false;
++   }
++   else if (!want_w || !want_h)
+    {
+       /* Strategy here is to pick something which is largest resolution. */
+       if (vis_w * vis_h <= VIDEO_SCALE_W(*dims) * VIDEO_SCALE_H(*dims))
+diff --git a/gfx/common/vulkan_common.h b/gfx/common/vulkan_common.h
+index 6cb2115..dce7f4a 100644
+--- a/gfx/common/vulkan_common.h
++++ b/gfx/common/vulkan_common.h
+@@ -589,6 +589,9 @@ struct vulkan_display_surface_info
+    unsigned dims;                /* VIDEO_SCALE_PACK; 0 for the largest mode */
+    unsigned monitor_index;
+    unsigned refresh_rate_x1000;
++   /* A CRT SwitchRes timing: this size and this refresh exactly, and of
++    * equal ones the last listed, where the context put it */
++   bool crt_mode;
+ };
+ 
+ struct vk_buffer
+diff --git a/gfx/drivers_context/khr_display_ctx.c b/gfx/drivers_context/khr_display_ctx.c
+index 3978e65..fafd57e 100644
+--- a/gfx/drivers_context/khr_display_ctx.c
++++ b/gfx/drivers_context/khr_display_ctx.c
+@@ -26,6 +26,12 @@
+ #include "../../verbosity.h"
+ #include "../../configuration.h"
+ 
++#if defined(HAVE_KMS) && defined(HAVE_MODELINE)
++#include <dlfcn.h>
++#include "../common/drm_common.h"
++#define HAVE_KHR_CRT_MODE
++#endif
++
+ typedef struct
+ {
+    gfx_ctx_vulkan_data_t vk;
+@@ -34,6 +40,53 @@ typedef struct
+    unsigned refresh_rate_x1000;
+ } khr_display_ctx_data_t;
+ 
++#ifdef HAVE_KHR_CRT_MODE
++/* The CRT SwitchRes timing on the display. VK_KHR_display offers only
++ * the modes the kernel lists for the connector, and Mesa's
++ * vkCreateDisplayModeKHR makes none of its own, while the kernel takes
++ * any timing on the CRTC (the KMS context sets them that way). So the
++ * timing goes onto the connector's list where Mesa reads it: these two
++ * stand in for libdrm's (Makefile.common exports them), and Mesa then
++ * sets exactly this mode. */
++static drmModeModeInfo khr_crt_mode;
++static bool khr_crt_mode_valid;
++
++typedef drmModeConnectorPtr (*khr_get_connector_t)(int, uint32_t);
++
++static drmModeConnectorPtr khr_crt_add_mode(drmModeConnectorPtr conn)
++{
++   drmModeModeInfo *modes;
++
++   if (     !conn
++         || !khr_crt_mode_valid
++         || conn->connection != DRM_MODE_CONNECTED)
++      return conn;
++   /* libdrm frees the list with free() */
++   if (!(modes = (drmModeModeInfo*)realloc(conn->modes,
++               (conn->count_modes + 1) * sizeof(*modes))))
++      return conn;
++   modes[conn->count_modes++] = khr_crt_mode;
++   conn->modes                = modes;
++   return conn;
++}
++
++drmModeConnectorPtr drmModeGetConnector(int fd, uint32_t connector_id)
++{
++   static khr_get_connector_t real;
++   if (!real)
++      real = (khr_get_connector_t)dlsym(RTLD_NEXT, "drmModeGetConnector");
++   return real ? khr_crt_add_mode(real(fd, connector_id)) : NULL;
++}
++
++drmModeConnectorPtr drmModeGetConnectorCurrent(int fd, uint32_t connector_id)
++{
++   static khr_get_connector_t real;
++   if (!real)
++      real = (khr_get_connector_t)dlsym(RTLD_NEXT, "drmModeGetConnectorCurrent");
++   return real ? khr_crt_add_mode(real(fd, connector_id)) : NULL;
++}
++#endif
++
+ static void gfx_ctx_khr_display_destroy(void *data)
+ {
+    khr_display_ctx_data_t *khr = (khr_display_ctx_data_t*)data;
+@@ -82,6 +135,11 @@ static void *gfx_ctx_khr_display_init(void *video_driver)
+ 
+    frontend_driver_install_signal_handler();
+ 
++#ifdef HAVE_KHR_CRT_MODE
++   /* The KMS display server hands CRT SwitchRes its modes */
++   video_driver_display_type_set(RARCH_DISPLAY_KMS);
++#endif
++
+    return khr;
+ 
+ error:
+@@ -135,19 +193,64 @@ static bool gfx_ctx_khr_display_set_video_mode(void *data,
+    settings_t *settings           = config_get_ptr();
+    unsigned video_monitor_index   = settings->uints.video_monitor_index;
+    unsigned refresh_rate_x1000    = settings->floats.video_refresh_rate * 1000;
++   bool replace                   = khr->vk.vk_surface != VK_NULL_HANDLE;
+ 
+    /* Windowed asks for no particular mode: the largest one. */
+    info.dims                      = fullscreen ? dims : 0;
+    info.monitor_index             = video_monitor_index;
+    info.refresh_rate_x1000        = refresh_rate_x1000;
++   info.crt_mode                  = false;
++
++#ifdef HAVE_KHR_CRT_MODE
++   {
++      drmModeModeInfo mode;
++      if (     drm_mode_from_crt_switch(&mode)
++            && mode.htotal && mode.vtotal)
++      {
++         khr_crt_mode            = mode;
++         khr_crt_mode_valid      = true;
++         info.dims               = VIDEO_SCALE_PACK(mode.hdisplay, mode.vdisplay);
++         /* As Mesa reports it: frames, not fields, for interlace */
++         info.refresh_rate_x1000 = (unsigned)(mode.clock * 1000.0 * 1000.0
++               / ((double)mode.htotal * mode.vtotal
++                  * (mode.vscan > 1 ? mode.vscan : 1)) + 0.5);
++         info.crt_mode           = true;
++         RARCH_LOG("[Vulkan] CRT mode %s.\n", mode.name);
++      }
++   }
++#endif
++
++   /* A new mode on a running context: the surface is made again, as on
++    * Android, and the device stays */
++   if (replace)
++      vulkan_surface_destroy(&khr->vk);
+ 
+    if (!vulkan_surface_create(&khr->vk, VULKAN_WSI_DISPLAY, &info, NULL,
+             0, khr->swap_interval))
+    {
++#ifdef HAVE_KHR_CRT_MODE
++      if (info.crt_mode)
++      {
++         RARCH_WARN("[Vulkan] The display refused the CRT mode; keeping the requested size.\n");
++         khr_crt_mode_valid      = false;
++         info.crt_mode           = false;
++         info.dims               = fullscreen ? dims : 0;
++         info.refresh_rate_x1000 = refresh_rate_x1000;
++         if (vulkan_surface_create(&khr->vk, VULKAN_WSI_DISPLAY, &info,
++                  NULL, 0, khr->swap_interval))
++            goto created;
++      }
++#endif
+       RARCH_ERR("[Vulkan] Failed to create KHR_display surface.\n");
+-      gfx_ctx_khr_display_destroy(data);
++      if (!replace)
++         gfx_ctx_khr_display_destroy(data);
+       return false;
+    }
++#ifdef HAVE_KHR_CRT_MODE
++created:
++#endif
++   if (replace)
++      khr->vk.context.flags     |= VK_CTX_FLAG_INVALID_SWAPCHAIN;
+ 
+    khr->dims                      = khr->vk.context.swapchain_dims;
+    khr->refresh_rate_x1000        = info.refresh_rate_x1000;
+diff --git a/gfx/video_crt_switch.c b/gfx/video_crt_switch.c
+index e329fa0..3b75208 100644
+--- a/gfx/video_crt_switch.c
++++ b/gfx/video_crt_switch.c
+@@ -274,9 +274,9 @@ static void crt_bind_display_server(videocrt_switch_t *p_switch)
+    memset(&p_switch->ops, 0, sizeof(p_switch->ops));
+    p_switch->ops_valid = false;
+    p_switch->ops_lost  = false;
+-   if (p_switch->khr_ctx)
+-      RARCH_WARN("[CRT] Vulkan direct-to-display cannot modeswitch; modes are generated but not applied.\n");
+-   else if (video_display_server_get_modeline_ops(&p_switch->ops))
++   /* Vulkan direct-to-display applies the mode too: its context puts
++    * the timing on the connector's mode list (khr_display_ctx.c) */
++   if (video_display_server_get_modeline_ops(&p_switch->ops))
+    {
+       if (p_switch->ops.open && !p_switch->ops.open(p_switch->ops.data, &gen->disp))
+       {

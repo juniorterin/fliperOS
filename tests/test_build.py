@@ -13489,7 +13489,8 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertEqual(self.values()['crt_switch_resolution'], '4')
 
     def test_video_driver_can_modeswitch_in_kms(self):
-        # glcore e gl usam o contexto KMS; o vulkan (khr_display) nao troca.
+        # glcore e gl usam o contexto KMS; o vulkan (khr_display) so troca
+        # com o patch, e entra por cima no amdgpu (teste do Vulkan abaixo).
         self.assertEqual(self.values()['video_driver'], 'glcore')
         gl = [line for line in (ROOT / 'config/retroarch-gl.cfg').read_text().splitlines()
               if line and not line.startswith('#')]
@@ -13559,7 +13560,8 @@ class RetroArchConfigTests(unittest.TestCase):
         self.assertNotIn('USE_VULKAN=OFF', fc)
         dol = MKISO.split("<< 'DOLSCRIPT'")[1].split('\nDOLSCRIPT\n')[0]
         self.assertIn('-DENABLE_VULKAN=ON', dol)
-        # O padrao do RetroArch segue o glcore: o khr_display nao troca o modo.
+        # O padrao do arquivo segue o glcore; o Vulkan entra por cima so no
+        # amdgpu, pelo fliperos-kms-run.
         self.assertEqual(self.values()['video_driver'], 'glcore')
 
     def test_no_onscreen_notifications(self):
@@ -13639,6 +13641,69 @@ class RetroArchConfigTests(unittest.TestCase):
             self.assertEqual(appended('glcore', None), [])
             # Quem trocou o driver no arquivo do sistema fica com o dele.
             self.assertEqual(appended('vulkan', head), [])
+
+    def test_vulkan_on_amdgpu_with_the_khr_display_patch(self):
+        # O khr_display do patch troca o modo do CRT: no amdgpu o RetroArch
+        # abre em Vulkan. Em outro driver, outra placa ou sem o patch (sem a
+        # marca do build), o glcore. Nada fica gravado: vale a placa de agora.
+        body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
+        self.assertIn('[[ ${patch##*/} != 0001-* ]] || touch /usr/local/share/fliperos/retroarch-vulkan-crt', body)
+        self.assertLess(body.index('git apply "$patch"'), body.index('./configure'))
+        self.assertIn('cp "$(dirname "$(realpath "$0")")"/config/retroarch-patches/*.patch "$CHROOT_DIR/tmp/retroarch-patches/"',
+                      MKISO)
+        self.assertTrue((ROOT / 'config/retroarch-patches/0001-khr-display-crt-modeswitch.patch').is_file())
+        self.assertIn('install -Dm644 "$src/config/retroarch-vulkan.cfg" "$root/etc/fliperos/retroarch/retroarch-vulkan.cfg"',
+                      (ROOT / 'fliperos-rootfs.sh').read_text())
+        vulkan = ROOT / 'config/retroarch-vulkan.cfg'
+        self.assertEqual([line for line in vulkan.read_text().splitlines() if line and not line.startswith('#')],
+                         ['video_driver = "vulkan"'])
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            prog = tmp / 'retroarch'
+            prog.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            prog.chmod(0o755)
+            # eglinfo que responde OpenGL 4.6: o "gl" nao entra.
+            (tmp / 'eglinfo').write_text('#!/bin/sh\nprintf "EGL client APIs: OpenGL\\n'
+                                         'OpenGL core profile version: 4.6\\n"\n')
+            (tmp / 'eglinfo').chmod(0o755)
+            sysfs = tmp / 'drm'
+            marker = tmp / 'retroarch-vulkan-crt'
+            (tmp / 'debug').write_text('')
+            env = dict(os.environ, FLIPEROS_RA_CFG=str(ROOT / 'config/retroarch.cfg'),
+                       FLIPEROS_RA_VULKAN=str(vulkan), FLIPEROS_RA_VULKAN_CRT=str(marker),
+                       FLIPEROS_DRM_SYSFS=str(sysfs), FLIPEROS_RA_BUTTONS=str(tmp / 'buttons.cfg'),
+                       FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'), PATH='%s:%s' % (tmp, os.environ['PATH']))
+            env.pop('DISPLAY', None)
+
+            def cards(*outputs):
+                # (placa, driver, conector, status)
+                shutil.rmtree(sysfs, ignore_errors=True)
+                for card, driver, connector, status in outputs:
+                    (tmp / 'drivers' / driver).mkdir(parents=True, exist_ok=True)
+                    (sysfs / card / 'device').mkdir(parents=True, exist_ok=True)
+                    link = sysfs / card / 'device/driver'
+                    if not link.is_symlink():
+                        link.symlink_to(tmp / 'drivers' / driver)
+                    (sysfs / ('%s-%s' % (card, connector))).mkdir()
+                    (sysfs / ('%s-%s' % (card, connector)) / 'status').write_text(status + '\n')
+
+            def appended():
+                out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L', 'x'],
+                                     capture_output=True, text=True, env=env).stdout.split('\n')
+                self.assertEqual(out[0], '--appendconfig')
+                return out[1].split('|')[1:]
+
+            cards(('card0', 'amdgpu', 'VGA-1', 'connected'))
+            self.assertEqual(appended(), [])  # RetroArch sem o patch
+            marker.write_text('')
+            self.assertEqual(appended(), [str(vulkan)])
+            cards(('card0', 'radeon', 'VGA-1', 'connected'))
+            self.assertEqual(appended(), [])
+            # Outra placa: vale a do conector ligado.
+            cards(('card0', 'i915', 'HDMI-A-1', 'disconnected'), ('card1', 'amdgpu', 'DVI-I-1', 'connected'))
+            self.assertEqual(appended(), [str(vulkan)])
+            cards(('card0', 'i915', 'VGA-1', 'connected'), ('card1', 'amdgpu', 'DVI-I-1', 'disconnected'))
+            self.assertEqual(appended(), [])
 
 
 class RetroArchMameRemapTests(unittest.TestCase):

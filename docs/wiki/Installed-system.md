@@ -141,7 +141,7 @@ To drive it without a controller, write `open`, `close`, `up`, `down`, `left`, `
 
     The card name comes from `lspci`, and whether both drivers take it comes from the modules' own PCI ID tables (`modprobe -R` on the card's modalias). **radeon** is the recommended choice and the default, as on GroovyArcade: 15 kHz was validated on it; OpenGL only.
 
-    **amdgpu** adds Vulkan (PCSX2, Dolphin, Flycast, DuckStation); it was seen working at 15 kHz on the cabinet's R7 240 (2026-10-16), not yet on other cards. RetroArch is built with Vulkan as well, but stays on `glcore`: without X its Vulkan context is `khr_display`, which does not switch the CRT's mode.
+    **amdgpu** adds Vulkan (PCSX2, Dolphin, Flycast, DuckStation); it was seen working at 15 kHz on the cabinet's R7 240 (2026-10-16), not yet on other cards. RetroArch opens in Vulkan on amdgpu too: without X its Vulkan context is `khr_display`, which FliperOS patches so that it switches the CRT's mode for each game (`config/retroarch-patches`).
 
     It goes in with `amdgpu.dc=0`, because the 6.18 kernel has no analog output (VGA, DVI-I) in amdgpu's new display code for these cards (that came in 6.19). Only the kernel line chooses (`amd_driver=` in `fliperos.conf`, `AMD_DRIVER_KEYS` in `lib/bootloader.sh`).
 

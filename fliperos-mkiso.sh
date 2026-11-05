@@ -996,8 +996,9 @@ install_mame2010_xml() {
 # fixos no retroarch.cfg.
 # Com Vulkan (--enable-vulkan, o configure so o acha com o libvulkan-dev),
 # para o driver amdgpu (Setup > Video Setup > Video driver). Sem X11 o
-# contexto dele e o khr_display, que nao troca o modo do CRT: o padrao segue
-# o glcore.
+# contexto dele e o khr_display, que de fabrica nao troca o modo do CRT; o
+# patch config/retroarch-patches/0001 o faz trocar, e com ele o
+# fliperos-kms-run abre o RetroArch em Vulkan no amdgpu.
 # SDL 1.x fica fora.
 build_retroarch_chroot() {
   if $SKIP_RETROARCH; then
@@ -1017,6 +1018,21 @@ cd /tmp/retroarch
 # A versao (o commit de hoje do master) para o Setup > Emulators & Games.
 mkdir -p /usr/local/share/fliperos
 echo "retroarch=$(git log -1 --format='%cs %h')" >> /usr/local/share/fliperos/emulator-versions
+# Os patches do FliperOS (config/retroarch-patches): o khr_display (Vulkan
+# sem X) passa a trocar o modo do CRT. O que nao encaixa mais no master fica
+# de fora com um aviso; sem o 0001 nao ha a marca, e o fliperos-kms-run deixa
+# o RetroArch no glcore tambem no amdgpu.
+rm -f /usr/local/share/fliperos/retroarch-vulkan-crt
+for patch in /tmp/retroarch-patches/*.patch; do
+  [[ -f $patch ]] || continue
+  if git apply --check "$patch" 2> /dev/null; then
+    git apply "$patch" && echo "RetroArch patch: ${patch##*/}"
+    [[ ${patch##*/} != 0001-* ]] || touch /usr/local/share/fliperos/retroarch-vulkan-crt
+  else
+    echo "WARNING: RetroArch patch ${patch##*/} does not apply to this RetroArch; left out"
+  fi
+done
+rm -rf /tmp/retroarch-patches
 ./configure --enable-kms --enable-egl --disable-x11 --disable-wayland \
   --disable-sdl --enable-sdl2 --enable-vulkan
 make -j"$(nproc)"
@@ -1114,6 +1130,8 @@ RASCRIPT
   sed -i -e "s|__RA_AUTOCONFIG_COMMIT__|${RA_AUTOCONFIG_COMMIT}|g" \
          -e "s|__RA_CORE_INFO_COMMIT__|${RA_CORE_INFO_COMMIT}|g" "$CHROOT_DIR/tmp/build-retroarch.sh"
   chmod +x "$CHROOT_DIR/tmp/build-retroarch.sh"
+  mkdir -p "$CHROOT_DIR/tmp/retroarch-patches"
+  cp "$(dirname "$(realpath "$0")")"/config/retroarch-patches/*.patch "$CHROOT_DIR/tmp/retroarch-patches/"
   chroot "$CHROOT_DIR" /tmp/build-retroarch.sh >> "$LOG_FILE" 2>&1 \
     && ok "RetroArch compiled (KMS/DRM) with cores and joypad autoconfig" \
     || err "RetroArch failed; use --skip-retroarch explicitly for an ISO without it"

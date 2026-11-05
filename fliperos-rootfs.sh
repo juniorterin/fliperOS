@@ -399,6 +399,7 @@ sed -i -E 's/^(sound[[:space:]]+)portaudio[[:space:]]*$/\1sdl/' "$root/etc/flipe
 chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
 install -Dm644 "$src/config/retroarch-gl.cfg" "$root/etc/fliperos/retroarch/retroarch-gl.cfg"
+install -Dm644 "$src/config/retroarch-vulkan.cfg" "$root/etc/fliperos/retroarch/retroarch-vulkan.cfg"
 # PCSX2.ini de partida: o fliperos-x11-run o copia para o usuario na
 # primeira abertura (sem o assistente, Big Picture, BIOS e jogos em ~).
 install -Dm644 "$src/config/pcsx2.ini" "$root/etc/fliperos/pcsx2.ini"

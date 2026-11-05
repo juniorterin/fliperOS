@@ -63,8 +63,9 @@ emulators_latest() {
 # quando ele muda (a troca, a volta do teste da troca, a instalacao).
 # O Flycast vai do OpenGL ao Vulkan equivalente (pvr.rend 0 e 3, 4 e 5) e o
 # Dolphin ao Vulkan; o PCSX2 e o DuckStation ficam no automatico, que ja
-# escolhe o Vulkan onde ha. O RetroArch segue no glcore: o Vulkan dele
-# (khr_display) nao troca o modo do CRT.
+# escolhe o Vulkan onde ha. O RetroArch nao passa por aqui: o
+# fliperos-kms-run o abre em Vulkan no amdgpu a cada abertura (so com o
+# patch do khr_display, config/retroarch-patches, que troca o modo do CRT).
 EMULATORS_HOME=${EMULATORS_HOME:-/home/$FLIPEROS_USER}
 EMULATORS_INI_SET=${EMULATORS_INI_SET:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-ini-set}
 

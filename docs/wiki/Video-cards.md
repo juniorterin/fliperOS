@@ -27,7 +27,9 @@ Good, cheap choices: **HD 5450, HD 6450, HD 7750, R7 240, R7 250**.
 
 SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks `radeon` by default and offers `amdgpu` (with Vulkan) in *Video Setup > Video driver*.
 
-The emulators follow the driver the card runs on, checked at every session start: on `amdgpu`, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on `radeon` (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. RetroArch stays on `glcore` on both: its Vulkan output can't switch the CRT's modes. A choice made in an emulator is kept until the driver changes again.
+The emulators follow the driver the card runs on, checked at every session start: on `amdgpu`, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on `radeon` (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. A choice made in an emulator is kept until the driver changes again.
+
+RetroArch is decided at every launch, with nothing saved: on `amdgpu` it opens in Vulkan, on any other driver or card in `glcore` (`fliperos-kms-run` looks at the driver of the card whose connector is plugged in). Its Vulkan output switches the CRT's mode for each game like `glcore` does, through a FliperOS patch to its `khr_display` context; a RetroArch built without that patch stays on `glcore` on amdgpu too.
 
 Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **active converter**: see [Converters](#converters).
 
