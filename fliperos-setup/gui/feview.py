@@ -2373,7 +2373,7 @@ def system_icon(cat):
     if cat.get("key") == "@arcade":
         return "frontend"         # (o joystick do FliperOS, nao o logo de um frontend)
     exe = (cat.get("exe", "") + " " + cat.get("args", "")).lower()
-    for name in ("groovymame", "flycast", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
+    for name in ("groovymame", "flycast", "pcsx2x6", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
         if name in exe:
             return name
     if "sm2" in exe:

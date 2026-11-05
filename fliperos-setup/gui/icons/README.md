@@ -19,7 +19,7 @@ QMamehook has no icon of its own and keeps its initial.
 The emulators and frontends use the icons of the website
 (`website/public/icons`, which lists their sources), scaled down the same
 way: `attractplus`, `emulationstation`, `pegasus`, `retroarch`, `groovymame`
-(also MAME 2010), `fightcade`, `flycast`, `pcsx2`, `dolphin`, `openbor` and
+(also MAME 2010), `fightcade`, `flycast`, `pcsx2`, `pcsx2x6`, `dolphin`, `openbor` and
 `model2`.
 
 `metapics/` holds the Arcadeflow theme's metapics (genre, controller and
