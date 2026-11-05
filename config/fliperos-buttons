@@ -426,9 +426,14 @@ def mame_port(player, control, bind):
     # O gatilho e o botao de recarregar da pistola do jogador (lightgun do
     # MAME), como no padrao do MAME (inpttype.ipp): sem eles o gatilho so
     # funcionava quando a GunCon caia na lista como o controle daquele jogador
-    # (um JOYCODE), e um reboot que trocava a ordem o deixava sem nada.
-    if control in ('b1', 'b2') and player in MAME_KEYS:
-        seq += ' OR GUNCODE_%d_BUTTON%s' % (player, control[1])
+    # (um JOYCODE), e um reboot que trocava a ordem o deixava sem nada. No
+    # botao 2 tambem o botao 3 da pistola: no SDL o direito e o 3 (o 2 e o do
+    # meio), e e o direito que o driver da GunCon aperta no A, no C e no tiro
+    # fora da tela, a recarga dos jogos que a tem no botao 2 (Zombie Raid).
+    if control == 'b1' and player in MAME_KEYS:
+        seq += ' OR GUNCODE_%d_BUTTON1' % player
+    elif control == 'b2' and player in MAME_KEYS:
+        seq += ' OR GUNCODE_%d_BUTTON2 OR GUNCODE_%d_BUTTON3' % (player, player)
     return ('            <port type="%s">\n                <newseq type="standard">%s</newseq>\n'
             '            </port>\n' % (MAME_PORTS[control] % player, seq))
 

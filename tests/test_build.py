@@ -14675,11 +14675,11 @@ class ButtonMappingTests(unittest.TestCase):
             # junto (com ela o Ctrl esquerdo apertava dois botoes).
             sf2 = system('sf2')
             self.assertEqual(sf2['P1_BUTTON1'], 'KEYCODE_X OR GUNCODE_1_BUTTON1')
-            self.assertEqual(sf2['P1_BUTTON2'], 'KEYCODE_LCONTROL OR GUNCODE_1_BUTTON2')
+            self.assertEqual(sf2['P1_BUTTON2'], 'KEYCODE_LCONTROL OR GUNCODE_1_BUTTON2 OR GUNCODE_1_BUTTON3')
             # O jogador 2 nao tem tecla na posicao 6: o botao 1 fica sem nada,
             # e nao no A padrao, que no jogo e o botao 2 dele.
             self.assertEqual(sf2['P2_BUTTON1'], 'NONE')
-            self.assertEqual(sf2['P2_BUTTON2'], 'KEYCODE_A OR GUNCODE_2_BUTTON2')
+            self.assertEqual(sf2['P2_BUTTON2'], 'KEYCODE_A OR GUNCODE_2_BUTTON2 OR GUNCODE_2_BUTTON3')
             self.assertNotIn(' OR KEYCODE', (tmp / 'ctrlr' / 'fliperos.cfg').read_text())
             sm = (tmp / 'supermodel' / 'Config' / 'Supermodel.ini').read_text()
             # So a tecla do mapa: o A padrao do Supermodel e o botao 1 do jogador 2.
@@ -14990,7 +14990,7 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(systems, ['default', 'mslug', 'mslug6', 'pang4', 'sf2four'])
         ports = {p.get('type'): p.find('newseq').text for p in root.find("system[@name='mslug']").iter('port')}
         self.assertEqual(ports, {'P1_BUTTON1': 'JOYCODE_1_BUTTON1 OR KEYCODE_LCONTROL OR GUNCODE_1_BUTTON1',
-                                 'P1_BUTTON2': 'JOYCODE_1_BUTTON4 OR KEYCODE_LALT OR GUNCODE_1_BUTTON2',
+                                 'P1_BUTTON2': 'JOYCODE_1_BUTTON4 OR KEYCODE_LALT OR GUNCODE_1_BUTTON2 OR GUNCODE_1_BUTTON3',
                                  'P1_BUTTON3': 'JOYCODE_1_BUTTON2 OR KEYCODE_SPACE',
                                  'P1_BUTTON4': 'JOYCODE_1_BUTTON5 OR KEYCODE_LSHIFT'})
         # Sem layout, o ctrlr de sempre.
