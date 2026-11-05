@@ -9112,6 +9112,77 @@ class LightGunTests(unittest.TestCase):
         kms = (ROOT / 'config/fliperos-kms-run').read_text()
         self.assertIn('"$lightgun" retroarch-mame2010', kms)
 
+    def test_sdl_gun_keeps_the_aim_in_the_window_on_kms(self):
+        # No KMS o SDL tira o mouse da janela quando a pistola mira fora da
+        # tela e nao o devolve: os eventos chegavam sem janela (windowID 0) e
+        # a mira do MAME ficava em 0. A biblioteca da a janela do jogo, poe a
+        # posicao dentro dela (na borda, como o ponteiro do X) e tira o LEAVE.
+        fake_sdl = r'''
+#include <stdint.h>
+#include <string.h>
+typedef union { uint32_t type; uint8_t pad[56]; } ev;
+static uint32_t q[][7] = {
+    {0x400, 0, 0, 13, 0, (uint32_t)-66, (uint32_t)-9},  /* motion sem janela, fora da tela */
+    {0x200, 0, 1, 11, 0, 0, 0},                          /* LEAVE da janela 1 */
+    {0x401, 0, 0, 13, 1, 500, 300},                      /* gatilho sem janela, alem da borda */
+    {0x400, 0, 1, 13, 0, 100, 50},                       /* motion normal */
+};
+static int next;
+static void put(ev *e, int i) {
+    memset(e, 0, sizeof *e);
+    uint32_t *w = (uint32_t *)e;
+    w[0] = q[i][0]; w[1] = q[i][1]; w[2] = q[i][2];
+    if (q[i][0] == 0x400) { w[3] = q[i][3]; w[5] = q[i][5]; w[6] = q[i][6]; }
+    else if (q[i][0] == 0x401) { w[3] = q[i][3]; ((uint8_t *)e)[16] = (uint8_t)q[i][4]; w[5] = q[i][5]; w[6] = q[i][6]; }
+    else ((uint8_t *)e)[12] = (uint8_t)q[i][3];
+}
+int SDL_PollEvent(ev *e) { if (next >= 2) return 0; put(e, next++); return 1; }
+int SDL_PeepEvents(ev *e, int n, int a, uint32_t lo, uint32_t hi) { int k = 0; while (next < 4 && k < n) put(&e[k++], next++); return k; }
+static int window = 1;
+void *SDL_GetKeyboardFocus(void) { return &window; }
+void *SDL_GetWindowFromID(uint32_t id) { return id == 1 ? &window : 0; }
+uint32_t SDL_GetWindowID(void *w) { return w == &window ? 1 : 0; }
+void SDL_GetWindowSize(void *w, int *x, int *y) { *x = 320; *y = 240; }
+'''
+        main = r'''
+#include <stdint.h>
+#include <stdio.h>
+typedef union { uint32_t type; uint8_t pad[56]; } ev;
+int SDL_PollEvent(ev *e);
+int SDL_PeepEvents(ev *e, int n, int a, uint32_t lo, uint32_t hi);
+static void show(ev *e) {
+    int32_t *w = (int32_t *)e;
+    if (e->type == 0x400) printf("motion %d %d %d\n", w[2], w[5], w[6]);
+    else if (e->type == 0x401) printf("button %d %d %d\n", w[2], w[5], w[6]);
+    else printf("other %x\n", e->type);
+}
+int main(void) {
+    ev e[4];
+    int n;
+    while (SDL_PollEvent(&e[0])) show(&e[0]);
+    n = SDL_PeepEvents(e, 4, 2, 0, 0xffffffff);
+    for (int i = 0; i < n; i++) show(&e[i]);
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            gun = tmp / 'libgun.so'
+            build = subprocess.run(['bash', str(ROOT / 'config/fliperos-deflicker-build'),
+                                    str(ROOT / 'config/fliperos-sdl-gun.c'), str(gun)], capture_output=True, text=True)
+            if build.returncode != 0 and 'pkg-config' in build.stderr + build.stdout:
+                self.skipTest('no pkg-config/libdrm in this image')
+            self.assertEqual(build.returncode, 0, build.stderr)
+            (tmp / 'fakesdl.c').write_text(fake_sdl)
+            (tmp / 'main.c').write_text(main)
+            subprocess.run(['gcc', '-shared', '-fPIC', '-o', str(tmp / 'libfakesdl.so'), str(tmp / 'fakesdl.c')], check=True)
+            # --no-as-needed: o main nao chama o SDL falso direto, e sem ele o
+            # RTLD_NEXT da biblioteca nao acha nada.
+            subprocess.run(['gcc', '-o', str(tmp / 'main'), str(tmp / 'main.c'), '-Wl,--no-as-needed', str(gun),
+                            str(tmp / 'libfakesdl.so'), '-Wl,-rpath,' + str(tmp)], check=True)
+            out = subprocess.run([str(tmp / 'main')], capture_output=True, text=True, check=True).stdout
+        self.assertEqual(out.splitlines(), ['motion 1 0 0', 'button 1 319 239', 'motion 1 100 50'])
+
     def test_guncon2_driver_patches_reach_the_iso_and_the_update(self):
         patches = sorted((ROOT / 'config/guncon2-patches').glob('*.patch'))
         self.assertTrue(patches)
