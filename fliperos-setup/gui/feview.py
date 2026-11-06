@@ -1000,7 +1000,8 @@ def list_info_vertical(fe, ui, game, box, now):
             cabinet_row(ui, x + 22, y + 2, party["used"], party["max"] or 1, w=5, h=8, gap=1)
         y += 14
     if fe.commercial:
-        coin_box(fe, ui, x, min(y + 2, bottom - COIN_H), now)
+        # No meio do espaco que sobra embaixo dos icones.
+        coin_box(fe, ui, x + (w - COIN_W) // 2, y + max(0, (bottom - y - COIN_H) // 2), now)
     else:
         draw_synopsis(fe, ui, game, (x, y, w, bottom - y), now)
 
