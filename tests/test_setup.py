@@ -3193,6 +3193,17 @@ class NamcoPackTests(unittest.TestCase):
         bad.write_bytes(bytes(raw))
         self.assertTrue(self.fn.damaged_dump(str(bad)))
 
+    def test_every_gui_program_is_valid_python(self):
+        # Um "\n" que virou quebra de linha de verdade deixou o frontend sem subir (so
+        # apareceu no reinicio do gabinete: o processo antigo seguia na memoria).
+        import ast
+        for path in sorted((SETUP / "gui").iterdir()):
+            if path.is_dir() or path.name.endswith((".pyc", ".png", ".svg", ".json")):
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if path.suffix == ".py" or text.startswith("#!/usr/bin/env python") or text.startswith("#!/usr/bin/python"):
+                ast.parse(text, filename=str(path))
+
     def test_proverb_offline_is_an_error_not_a_half_game(self):
         self.fn.PROVERB = (self.tmp / "missing.zip").as_uri()
         with self.assertRaises(OSError):

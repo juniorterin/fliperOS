@@ -1515,9 +1515,7 @@ class Frontend:
                     path = os.path.join(os.path.expanduser("~"), ".cache", "fliperos", "namco-unpack.log")
                     os.makedirs(os.path.dirname(path), exist_ok=True)
                     with open(path, "a", encoding="utf-8") as log:
-                        log.write("%s %s
-%s
-" % (time.strftime("%Y-%m-%d %H:%M:%S"), name, traceback.format_exc()))
+                        log.write("%s %s\n%s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), name, traceback.format_exc()))
                 except OSError:
                     pass
         threading.Thread(target=work, daemon=True).start()
