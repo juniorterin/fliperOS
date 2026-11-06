@@ -290,6 +290,20 @@ bios_tool() {
   FLIPEROS_BIOS_STATE=$BIOS_STATE FLIPEROS_BIOS_PACK=$BIOS_PACK "$BIOS_TOOL" "$@"
 }
 
+# bios_running PORCENTAGEM TEXTO / bios_running_clear: o andamento que o
+# frontend mostra no menu do Tab (gui/febios.py) na parte que e do Setup, a de
+# olhar as pastas (o fliperos-bios escreve o resto no mesmo arquivo). So
+# apaga o que e dele; um que sobrar de uma checagem morta o frontend ignora.
+bios_running() {
+  mkdir -p "$BIOS_STATE" 2> /dev/null || return 0
+  printf '%s\t%s\t%s\n' "$$" "$1" "$2" > "$BIOS_STATE/running" 2> /dev/null || true
+  chmod 644 "$BIOS_STATE/running" 2> /dev/null || true
+}
+bios_running_clear() {
+  [[ $(cut -f1 "$BIOS_STATE/running" 2> /dev/null) == "$$" ]] && rm -f "$BIOS_STATE/running"
+  return 0
+}
+
 # bios_core_firmware CORE imprime os firmwares que o .info do core lista
 # (o caminho dentro da pasta system do RetroArch, que e a ~/bios), um por
 # linha. Os opcionais tambem: sem eles o core usa uma BIOS imitada (HLE),
@@ -307,6 +321,27 @@ bios_standalone() {
     ps2) echo "ps2 scph39001.bin SCPH30004R.bin" ;;
     # Flycast (Dreamcast.BiosPath).
     dreamcast) echo "dc dc/dc_boot.bin dc_flash.bin" ;;
+    # DuckStation: as BIOS soltas em ~/bios (BIOS > SearchDirectory); uma das
+    # tres basta, e as que ja estao la nao sao baixadas de novo.
+    duckstation) echo ". scph5500.bin scph5501.bin scph5502.bin" ;;
+    # PCSX2x6: a BIOS da placa de arcade (o fork a acha pelo conteudo, de
+    # qualquer nome), uma pasta por placa como em ~/roms.
+    namco246) echo "namco246 COH-H31000.BIN" ;;
+    namco256) echo "namco256 256.BIN" ;;
+  esac
+  return 0
+}
+
+# bios_standalone_extra CHAVE imprime "NOME DESTINO" dos arquivos que vem com
+# a BIOS da pasta e que o emulador acha pelo nome dela, com outra extensao:
+# no PCSX2x6, o <nome da BIOS>.nvm e o .mec da mesma placa (sem eles ele usa
+# os de fabrica; a extensao em minusculas e a que ele procura).
+bios_standalone_extra() {
+  case $1 in
+    namco246) printf '%s %s\n' COH-H31000.NVM "$BIOS_ROOT/namco246/COH-H31000.nvm" \
+      COH-H31000.MEC "$BIOS_ROOT/namco246/COH-H31000.mec" ;;
+    namco256) printf '%s %s\n' 256.NVM "$BIOS_ROOT/namco256/256.nvm" \
+      256.MEC "$BIOS_ROOT/namco256/256.mec" ;;
   esac
   return 0
 }
@@ -357,6 +392,9 @@ bios_plan() {
       for file in $files; do
         printf 'fw\t%s\t%s\t%s\n' "$key" "$file" "$BIOS_ROOT/$sub/${file##*/}"
       done >> "$out"
+      while read -r file dest; do
+        [[ -n $file ]] && printf 'fw\t%s\t%s\t%s\n' "$key" "$file" "$dest"
+      done < <(bios_standalone_extra "$key") >> "$out"
     fi
     dest=$(bios_arcade_dest "$key" "$dir")
     [[ -n $dest ]] || continue
@@ -399,6 +437,7 @@ bios_check() {
     ev_fail "No space for the list of BIOS"
     return 1
   }
+  bios_running 0 "Looking at the game folders"
   bios_plan "$wants"
   log_info "Download BIOS: $(grep -c '' "$wants") BIOS pedidas pelas pastas"
   # O andamento do fliperos-bios vai de 30 a 100% (antes, as pastas).
@@ -412,6 +451,7 @@ bios_check() {
     done
   rc=${PIPESTATUS[0]}
   rm -f "$wants"
+  bios_running_clear
   return "$rc"
 }
 
@@ -478,10 +518,12 @@ bios_auto() {
   [[ -f $BIOS_STATE/stamp && $(< "$BIOS_STATE/stamp") == "$(bios_stamp)" ]] && return 0
   [[ -n $(find "$BIOS_STATE/failed" -mmin -10 2> /dev/null) ]] && return 0
   wants=$(mktemp) || return 1
+  bios_running 0 "Looking at the game folders"
   bios_plan "$wants" > /dev/null
   out=$(bios_tool check --wants "$wants" --owner "$BIOS_ROOT" --no-wait 2>> "$FLIPEROS_LOG")
   rc=$?
   rm -f "$wants"
+  bios_running_clear
   if ((rc == 0)) && [[ $(romclean_value "$out" failed) == 0 || -n $(romclean_value "$out" busy) ]]; then
     rm -f "$BIOS_STATE/failed"
     # A marca de depois: as BIOS que chegaram mudaram a data da ~/bios.

@@ -27,6 +27,7 @@ const ICONS: Record<string, string[]> = {
   supermodel: ['px:model3'],
   model2: ['/icons/model2.png'],
   pcsx2: ['/icons/pcsx2.png'],
+  pcsx2x6: ['/icons/pcsx2x6.png'],
   dolphin: ['/icons/dolphin.svg'],
   duckstation: ['/icons/duckstation.png'],
   hypseus: ['px:laserdisc'],

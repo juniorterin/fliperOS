@@ -1185,6 +1185,7 @@ mode480_table() {
   cat << 'TABLE'
 flycast|Flycast|flycast|240p,filter,pure|240p|x11|Dreamcast, Naomi, Atomiswave.
 pcsx2|PCSX2|pcsx2|240p,filter,pure|240p|x11|PlayStation 2.
+pcsx2x6|PCSX2x6|pcsx2x6|240p,filter,pure|240p|x11|Namco System 246/256 arcade games.
 duckstation|DuckStation|duckstation|240p,filter,pure|240p|x11|PlayStation (the few interlaced games, like Tekken 3 menus or Tobal 2).
 dolphin|Dolphin|dolphin-emu|240p,filter,pure|240p|x11|GameCube and Wii.
 laserdisc|Hypseus Singe|hypseus singe|240p,filter,pure|240p|x11|Laserdisc games.

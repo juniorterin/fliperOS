@@ -191,6 +191,7 @@ class Frontend:
         self.vertical = theme.VERTICAL is not None
         import background
         import feinput
+        import febios
         import feharvest
         import fevideo
         import feview
@@ -313,7 +314,12 @@ class Frontend:
         self.dirty = set()         # (pasta, jogo)
         self.harvest = feharvest.Harvester(self)
         self.followed_at = 0.0
+        # O baixador de BIOS (febios.py): o andamento dele no menu do Tab, como o
+        # do scrape. A checagem automatica sai daqui tambem (o frontend abre
+        # antes do menu do Setup); so olha de novo se as pastas mudaram.
+        self.bios = febios.BiosStatus()
         if not self.shot:
+            febios.start_check()
             self.harvest.external = self.harvest.follow()
             self.harvest.start()
         self.generation = self.lib.generation
@@ -1689,6 +1695,7 @@ class Frontend:
                     self.say("UPDATING THE LISTS...", 3)
                     self.lib.refresh()
             self.auto_scrape(now)
+            self.bios.refresh(now)
             # O servico do scrape automatico (fliperos-scrape --daemon): o
             # andamento dele e a midia nova; sem ele, o laco e o daqui.
             if now - self.followed_at > 3:

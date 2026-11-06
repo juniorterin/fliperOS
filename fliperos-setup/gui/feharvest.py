@@ -92,6 +92,14 @@ class Harvester:
         threading.Thread(target=self.run, daemon=True).start()
         threading.Thread(target=self.watch, daemon=True).start()
 
+    def visible(self):
+        """O quadro do menu fica enquanto ha o que fazer: contando os jogos,
+        jogos sem os dados, ou pacotes de logos e videos baixando. Com tudo
+        pronto ele sai do menu."""
+        if not self.scanned:
+            return True
+        return bool(self.left or self.pack_line() or self.current is not None)
+
     # ── O estado ──
     def load(self):
         try:

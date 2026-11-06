@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """BIOS automaticas do FliperOS (Setup > Games > Downloader > Download BIOS).
 
-O pacote de referencia e um torrent do archive.org com as BIOS de todos os
-sistemas (config/fliperos-bios-pack: o "full pack" do Batocera, um .zip de
-1 GB). O torrent inteiro nunca e baixado: dele sai o item do archive.org e
-o nome do .zip, e o archive.org lista o que ha dentro do .zip e entrega cada
-arquivo sozinho (https://archive.org/download/ITEM/ZIP/CAMINHO). Assim so
-chegam ao disco as BIOS que faltam para os jogos que estao nas pastas.
+A fonte principal e o RetroBIOS (github.com/Abdess/retrobios): o banco dele
+(database.json) e o platforms/retroarch.yml dizem onde cada BIOS esta no
+repositorio e o SHA1 dela; cada uma vem sozinha do GitHub e so fica no disco
+se o SHA1 conferir. De reserva, para o que o RetroBIOS nao tiver, o pacote de
+referencia: um torrent do archive.org (config/fliperos-bios-pack: o "full
+pack" do Batocera, um .zip de 1 GB) que nunca e baixado inteiro: dele sai o
+item do archive.org e o nome do .zip, e o archive.org lista o que ha dentro
+do .zip e entrega cada arquivo sozinho
+(https://archive.org/download/ITEM/ZIP/CAMINHO). Assim so chegam ao disco as
+BIOS que faltam para os jogos que estao nas pastas.
 
 Quem diz o que falta e o Setup (lib/downloader.sh, bios_plan): um arquivo
 "wants", uma linha por BIOS, com campos separados por TAB:
@@ -25,13 +29,14 @@ OUTRO_LUGAR nunca e baixada de novo.
                       [--no-wait] [--refresh] [--owner PASTA]
   fliperos-bios index [--refresh]
 
-O estado fica em STATE: index.json (a lista do pacote, refeita a cada 30
-dias ou quando o link muda), last.kv (o resumo da ultima checagem) e
+O estado fica em STATE: retrobios.json (a lista do RetroBIOS) e index.json (a
+do pacote de reserva), refeitas a cada 30 dias ou quando a fonte muda, last.kv (o resumo da ultima checagem) e
 last.tsv ("estado<TAB>pasta<TAB>destino<TAB>nome" de cada BIOS: present,
 downloaded, missing = nao esta no pacote, big = grande demais, failed).
 """
 import argparse
 import fcntl
+import hashlib
 import html
 import json
 import os
@@ -41,10 +46,20 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 
 STATE = os.environ.get('FLIPEROS_BIOS_STATE', '/var/lib/fliperos/bios')
 PACK = os.environ.get('FLIPEROS_BIOS_PACK', '/usr/local/share/fliperos/bios-pack')
 AGENT = 'fliperos-bios (+https://github.com/juniorterin/fliperOS)'
+# A fonte principal: o RetroBIOS (github.com/Abdess/retrobios). O banco dele
+# (database.json, 26 MB; 7 MB comprimido) diz o caminho e o SHA1 de cada arquivo
+# do repositorio, e o platforms/retroarch.yml o destino que cada core do
+# RetroArch espera. Cada arquivo vem sozinho do raw.githubusercontent.com e so
+# fica no disco com o SHA1 do banco. O pacote do Batocera (config/fliperos-bios-pack)
+# ficou de reserva, para o que o RetroBIOS nao tiver.
+RETROBIOS = os.environ.get('FLIPEROS_RETROBIOS', 'https://raw.githubusercontent.com/Abdess/retrobios/main')
+RB_DATABASE_MAX = 96 << 20
+RB_PLATFORM = 'platforms/retroarch.yml'
 # Um .torrent nao passa disto; a pagina com a lista do .zip do Batocera
 # tem 1,2 MB.
 TORRENT_MAX = 32 << 20
@@ -58,9 +73,31 @@ ITEM = re.compile(r'^https?://(?:www\.)?archive\.org/download/([^/]+)/[^?#]+\.to
 ROW = re.compile(r'<a href="([^"]+)">([^<]+)</a>.*?id="size">(\d+)<')
 
 
+STEP = re.compile(r'^@step (\d+) (.*)$')
+
+
 def say(progress, line):
+    # O andamento tambem vai para o STATE/running ("pid<TAB>%<TAB>texto"): o
+    # frontend o mostra no menu (gui/febios.py), com ou sem --progress.
+    m = STEP.match(line)
+    if m:
+        try:
+            write_state('running', '%d\t%s\t%s\n' % (os.getpid(), m.group(1), m.group(2)))
+        except OSError:
+            pass
     if progress:
         print(line, flush=True)
+
+
+def clear_running():
+    """Tira o running, se e meu (outra checagem pode estar rodando)."""
+    try:
+        with open(state('running'), encoding='utf-8') as f:
+            mine = f.readline().split('\t', 1)[0] == str(os.getpid())
+        if mine:
+            os.remove(state('running'))
+    except OSError:
+        pass
 
 
 def human(n):
@@ -109,11 +146,21 @@ def pack_link():
 
 
 def fetch(url, limit, timeout=60):
-    req = urllib.request.Request(url, headers={'User-Agent': AGENT})
+    req = urllib.request.Request(url, headers={'User-Agent': AGENT, 'Accept-Encoding': 'gzip'})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = resp.read(limit + 1)
+        gzipped = resp.headers.get('Content-Encoding') == 'gzip'
     if len(data) > limit:
         raise OSError('%s is too big' % url)
+    if gzipped:
+        # O limite vale para o texto, nao so para o que veio comprimido.
+        unzip = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        try:
+            data = unzip.decompress(data, limit + 1)
+        except zlib.error as e:
+            raise OSError('%s: bad gzip data (%s)' % (url, e))
+        if len(data) > limit or unzip.unconsumed_tail:
+            raise OSError('%s is too big' % url)
     return data
 
 
@@ -252,6 +299,111 @@ def find(members, kind, name):
     return None
 
 
+# ── O RetroBIOS ───────────────────────────────────────────────────
+
+def yaml_value(text):
+    text = text.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in '"\'':
+        text = text[1:-1]
+    return text
+
+
+def parse_platform(text):
+    """{destino em minusculas: sha1} do platforms/retroarch.yml do RetroBIOS:
+    cada arquivo e um item "- name:" com "destination:" (o caminho dentro da
+    pasta system, o mesmo do .info do core) e "sha1:"."""
+    out, cur = {}, {}
+
+    def commit():
+        dest = cur.get('destination') or cur.get('name')
+        if dest and cur.get('sha1'):
+            out.setdefault(dest.lower(), cur['sha1'].lower())
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith('- name:'):
+            commit()
+            cur = {'name': yaml_value(s[len('- name:'):])}
+        elif cur and ':' in s:
+            key, _, value = s.partition(':')
+            if key in ('destination', 'sha1'):
+                cur[key] = yaml_value(value)
+    commit()
+    return out
+
+
+def arcade_rank(path):
+    """Qual copia de um set do MAME usar quando ha mais de uma: a da pasta do
+    MAME, depois a da pasta Arcade, depois qualquer outra de Arcade."""
+    for n, prefix in enumerate(('bios/Arcade/MAME/', 'bios/Arcade/Arcade/')):
+        if path.startswith(prefix):
+            return (n, path)
+    return (2, path)
+
+
+def build_retro_index(progress):
+    say(progress, '@step 5 Reading the RetroBIOS list')
+    db = json.loads(fetch(RETROBIOS + '/database.json', RB_DATABASE_MAX, timeout=180))
+    if not isinstance(db, dict) or db.get('schema_version') != 1 or not isinstance(db.get('files'), dict):
+        raise OSError('the RetroBIOS database has a format this version does not know')
+    base = db.get('bios_dir') or 'bios'
+    files, by_name, sets = {}, {}, {}
+    for sha1, f in db['files'].items():
+        path, size, name = f.get('path'), f.get('size'), f.get('name')
+        # As variantes (.variants/) sao copias com outro hash do mesmo nome.
+        if not (path and name and size and path.startswith(base + '/')) or '/.variants/' in path:
+            continue
+        sha1 = sha1.lower()
+        files[sha1] = [size, path]
+        by_name.setdefault(name.lower(), []).append(sha1)
+        if path.startswith(base + '/Arcade/') and name.lower().endswith('.zip'):
+            sets.setdefault(name.lower()[:-4], []).append(sha1)
+    # Pelo nome so quando ele nao e ambiguo (bios.bin tem dezenas); o destino
+    # do platforms/retroarch.yml resolve o resto.
+    names = {n: l[0] for n, l in by_name.items() if len(l) == 1}
+    sets = {n: min(l, key=lambda s: arcade_rank(files[s][1])) for n, l in sets.items()}
+    try:
+        dest = parse_platform(fetch(RETROBIOS + '/' + RB_PLATFORM, 8 << 20, timeout=120).decode('utf-8', 'replace'))
+    except (OSError, urllib.error.URLError) as e:
+        print('fliperos-bios: no RetroBIOS destinations (%s)' % e, file=sys.stderr)
+        dest = {}
+    index = {'ref': RETROBIOS, 'when': int(time.time()), 'files': files, 'name': names, 'sets': sets, 'dest': dest}
+    write_state('retrobios.json', json.dumps(index, separators=(',', ':')))
+    return index
+
+
+def load_retro_index(refresh, progress):
+    old = None
+    try:
+        with open(state('retrobios.json'), encoding='utf-8') as f:
+            old = json.load(f)
+    except (OSError, ValueError):
+        pass
+    fresh = old and old.get('ref') == RETROBIOS and time.time() - old.get('when', 0) < INDEX_DAYS * 86400
+    if fresh and not refresh:
+        return old
+    try:
+        return build_retro_index(progress)
+    except (OSError, ValueError, urllib.error.URLError) as e:
+        if old and old.get('ref') == RETROBIOS:
+            print('fliperos-bios: %s (using the RetroBIOS list from before)' % e, file=sys.stderr)
+            return old
+        raise
+
+
+def retro_find(index, kind, name):
+    """[caminho, bytes, endereco, sha1] da BIOS no RetroBIOS, ou None."""
+    low = name.lower()
+    tail = low.rsplit('/', 1)[-1]
+    if kind == 'fw':
+        sha1 = index['dest'].get(low) or index['dest'].get(tail) or index['name'].get(tail)
+    else:
+        sha1 = index['sets'].get(low)
+    entry = index['files'].get(sha1) if sha1 else None
+    if not entry:
+        return None
+    return [entry[1], entry[0], RETROBIOS + '/' + urllib.parse.quote(entry[1]), sha1]
+
+
 # ── Gravar ────────────────────────────────────────────────────────
 
 def owner_of(like):
@@ -284,7 +436,7 @@ def makedirs(path, owner):
         chown(p, owner)
 
 
-def download(url, size, dest, owner):
+def download(url, size, dest, owner, sha1=None):
     makedirs(os.path.dirname(dest), owner)
     tmp = os.path.join(os.path.dirname(dest), '.%s.part' % os.path.basename(dest))
     error = None
@@ -292,6 +444,7 @@ def download(url, size, dest, owner):
         try:
             req = urllib.request.Request(url, headers={'User-Agent': AGENT})
             got = 0
+            digest = hashlib.sha1()
             with urllib.request.urlopen(req, timeout=120) as resp, open(tmp, 'wb') as out:
                 while True:
                     chunk = resp.read(1 << 16)
@@ -300,9 +453,14 @@ def download(url, size, dest, owner):
                     got += len(chunk)
                     if got > size:
                         break
+                    digest.update(chunk)
                     out.write(chunk)
             if got != size:
                 raise OSError('got %d of %d bytes' % (got, size))
+            # O RetroBIOS diz o SHA1 de cada arquivo: um que nao confere (link
+            # trocado, arquivo cortado) nunca fica no lugar da BIOS.
+            if sha1 and digest.hexdigest() != sha1:
+                raise OSError('the checksum of %s does not match' % os.path.basename(dest))
             chown(tmp, owner)
             os.replace(tmp, dest)
             return
@@ -336,6 +494,13 @@ def read_wants(path):
 
 
 def cmd_check(args):
+    try:
+        check(args)
+    finally:
+        clear_running()
+
+
+def check(args):
     stats = {'wanted': 0, 'present': 0, 'downloaded': 0, 'missing': 0, 'big': 0, 'failed': 0, 'bytes': 0}
     held = lock(not args.no_wait)
     if held is None:
@@ -355,31 +520,47 @@ def cmd_check(args):
             rows.append(('present', folder, dest, name))
     error = None
     if todo:
+        retro, members, problems = None, None, []
         try:
-            members = load_index(args.refresh, args.progress)['members']
-        except (OSError, urllib.error.URLError) as e:
-            error = 'could not read the BIOS pack: %s' % e
-            members = None
-        if members is not None:
-            plan = []
-            for kind, folder, name, dest in todo:
-                hit = find(members, kind, name)
+            retro = load_retro_index(args.refresh, args.progress)
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            problems.append('RetroBIOS: %s' % e)
+        plan, left = [], []
+        for kind, folder, name, dest in todo:
+            hit = retro_find(retro, kind, name) if retro else None
+            if hit is None:
+                left.append((kind, folder, name, dest))
+            elif hit[1] > FILE_MAX:
+                rows.append(('big', folder, dest, name))
+            else:
+                plan.append((folder, name, dest, hit))
+        # O que o RetroBIOS nao tem, o pacote do Batocera ainda pode ter.
+        if left:
+            try:
+                members = load_index(args.refresh, args.progress)['members']
+            except (OSError, urllib.error.URLError) as e:
+                problems.append('BIOS pack: %s' % e)
+        if retro is None and members is None:
+            error = 'could not read the BIOS lists (%s)' % '; '.join(problems)
+        else:
+            for kind, folder, name, dest in left:
+                hit = find(members, kind, name) if members is not None else None
                 if hit is None:
-                    # O set que nao esta no pacote e o pai ou um dispositivo
-                    # sem BIOS: nao entra no relatorio.
+                    # O set que nao esta em nenhuma fonte e o pai ou um
+                    # dispositivo sem BIOS: nao entra no relatorio.
                     if kind == 'fw':
                         rows.append(('missing', folder, dest, name))
                 elif hit[1] > FILE_MAX:
                     rows.append(('big', folder, dest, name))
                 else:
-                    plan.append((folder, name, dest, hit))
+                    plan.append((folder, name, dest, hit + [None]))
             total = sum(hit[1] for _, _, _, hit in plan) or 1
             done = 0
-            for folder, name, dest, (_, size, url) in plan:
+            for folder, name, dest, (_, size, url, sha1) in plan:
                 say(args.progress, '@step %d Downloading %s (%s)'
                     % (30 + 70 * done // total, os.path.basename(dest), human(size)))
                 try:
-                    download(url, size, dest, owner)
+                    download(url, size, dest, owner, sha1)
                     rows.append(('downloaded', folder, dest, name))
                     stats['bytes'] += size
                 except OSError as e:
@@ -409,6 +590,12 @@ def cmd_check(args):
 
 
 def cmd_index(args):
+    try:
+        retro = load_retro_index(args.refresh, False)
+        print('retrobios_files=%d\nretrobios_when=%s' % (
+            len(retro['files']), time.strftime('%Y-%m-%d %H:%M', time.localtime(retro['when']))))
+    except (OSError, ValueError, urllib.error.URLError) as e:
+        print('retrobios_error=%s' % e)
     index = load_index(args.refresh, False)
     print('item=%s\nfiles=%d\nwhen=%s' % (index['item'], len(index['members']),
                                           time.strftime('%Y-%m-%d %H:%M', time.localtime(index['when']))))

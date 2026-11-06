@@ -138,14 +138,48 @@ case $name in
     # Sem os avisos do emulador na tela ao abrir o jogo.
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False 2> /dev/null || true
     ;;
-  pcsx2)
+  pcsx2 | pcsx2x6)
+    # O pcsx2x6 e o fork dos arcades Namco System 246/256 (~/roms/namco246 e
+    # namco256): o mesmo PCSX2, com a pasta de dados propria dele
+    # (~/.config/PCSX2x6, a que o fork usa sozinho), a BIOS e os cartoes por
+    # placa; as configuracoes do PCSX2 oficial nao se misturam com as dele.
+    datadir="$HOME/.config/PCSX2" biosdir="$HOME/bios/ps2" gamesdir=/home/fliperos/roms/ps2
+    if [[ $1 == pcsx2x6 ]]; then
+      # Uma pasta de BIOS por placa, como em ~/roms: a do jogo que abre (sem
+      # jogo, a da 246).
+      datadir="$HOME/.config/PCSX2x6" biosdir="$HOME/bios/namco246" gamesdir=/home/fliperos/roms/namco246
+      savedir="$HOME/save/namco246"
+      if [[ " ${*:2} " == */namco256/* ]]; then
+        biosdir="$HOME/bios/namco256" savedir="$HOME/save/namco256"
+      fi
+      # A memoria do jogo (32 KB) o fork grava em sram.bin dentro da pasta do
+      # jogo (linha sram= do .acgame): ela vai para ~/nvram/<placa>/<gameid>.bin
+      # e o sram.bin vira link para la. Um sram.bin que ja existe de verdade
+      # vai para la antes (sem sobrescrever).
+      if [[ ${2:-} == *.acgame && -f $2 ]]; then
+        acval() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$2" | head -n 1 | tr -d '\r'; }
+        gid=$(acval gameid "$2") sub=$(acval subdir "$2") sram=$(acval sram "$2")
+        if [[ -n $gid ]]; then
+          nvdir="${FLIPEROS_NVRAM:-$HOME/nvram}/${savedir##*/}"
+          sramfile="$(dirname -- "$2")/${sub:-$gid}/${sram:-sram.bin}"
+          if [[ -d ${sramfile%/*} && ! -L $sramfile ]] && mkdir -p "$nvdir" 2> /dev/null; then
+            [[ ! -f $sramfile || -e $nvdir/$gid.bin ]] || mv -n "$sramfile" "$nvdir/$gid.bin" 2> /dev/null || true
+            [[ -e $sramfile ]] || ln -s "$nvdir/$gid.bin" "$sramfile" 2> /dev/null || true
+          fi
+        fi
+      fi
+    fi
     # Sem PCSX2.ini, o de partida do FliperOS (/etc/fliperos/pcsx2.ini): com
     # o SettingsVersion dele o PCSX2 o aceita e completa o resto. Em todo
     # caso, a cada abertura: sem o assistente, tela cheia no Big Picture,
     # sem o ponteiro do mouse, a BIOS em ~/bios/ps2 e a imagem esticada.
-    ini="$HOME/.config/PCSX2/inis/PCSX2.ini"
+    ini="$datadir/inis/PCSX2.ini"
     iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
-    [[ -f $ini ]] || install -Dm600 "${FLIPEROS_PCSX2_INI:-/etc/fliperos/pcsx2.ini}" "$ini" 2> /dev/null || true
+    if [[ ! -f $ini ]]; then
+      install -Dm600 "${FLIPEROS_PCSX2_INI:-/etc/fliperos/pcsx2.ini}" "$ini" 2> /dev/null || true
+      # O de partida lista ~/roms/ps2: o fork lista as pastas Namco.
+      [[ $1 != pcsx2x6 ]] || sed -i '/^RecursivePaths = /d' "$ini" 2> /dev/null || true
+    fi
     if [[ -f $ini ]]; then
       "$iniset" "$ini" EmuCore/GS AspectRatio Stretch
       "$iniset" "$ini" UI SetupWizardIncomplete false
@@ -160,10 +194,28 @@ case $name in
       "$iniset" "$ini" UI HideMouseCursor true
       # Sem os avisos na tela ao abrir o jogo (0 = None no OsdOverlayPos).
       "$iniset" "$ini" EmuCore/GS OsdMessagesPos 0
-      "$iniset" "$ini" Folders Bios "$HOME/bios/ps2"
-      # Lista de jogos em ~/roms/ps2, se a pessoa ainda nao escolheu pastas.
-      grep -q '^RecursivePaths' "$ini" ||
-        "$iniset" "$ini" GameList RecursivePaths /home/fliperos/roms/ps2
+      "$iniset" "$ini" Folders Bios "$biosdir"
+      [[ $1 != pcsx2x6 ]] || "$iniset" "$ini" Folders MemoryCards "$savedir"
+      # Os botoes dos jogos de arcade vem da secao [JVS], nao do [Pad1]: sem
+      # binding la o jogo nao recebe nada. Cada botao no papel do SDL que o
+      # Button mapping do Setup ja entrega (config/pcsx2x6-jvs-bindings, de
+      # tools/pcsx2x6-jvs-bindings.py), jogador 1 no SDL-0 e 2 no SDL-1; a ficha
+      # e o Back. So enquanto nada estiver no SDL: o que a pessoa mudar no
+      # proprio PCSX2x6 fica.
+      jvs_bindings=${FLIPEROS_PCSX2X6_BINDINGS:-/etc/fliperos/pcsx2x6-jvs-bindings}
+      if [[ $1 == pcsx2x6 && -f $jvs_bindings ]] &&
+        ! awk '/^\[JVS\]/ { p = 1; next } /^\[/ { p = 0 } p' "$ini" | grep -q 'SDL-[0-9]/'; then
+        while IFS=$'\t' read -r key player role; do
+          [[ -z $key || $key == \#* ]] && continue
+          "$iniset" "$ini" JVS "$key" "SDL-$((player - 1))/$role"
+        done < "$jvs_bindings"
+      fi
+      # Lista de jogos em ~/roms/ps2 (no fork, as duas pastas Namco), se a
+      # pessoa ainda nao escolheu pastas.
+      if ! grep -q '^RecursivePaths' "$ini"; then
+        "$iniset" "$ini" GameList RecursivePaths "$gamesdir"
+        [[ $1 != pcsx2x6 ]] || sed -i "/^RecursivePaths = /a RecursivePaths = /home/fliperos/roms/namco256" "$ini" 2> /dev/null || true
+      fi
       # Os controles pelo SDL, Pad1 e Pad2 nos dois primeiros: o painel ja
       # chega como fight stick (o mapeamento do Setup > Joysticks > Button
       # mapping no gamecontrollerdb), entao X Y RB / A B RT = Quadrado

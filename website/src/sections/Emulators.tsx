@@ -21,6 +21,7 @@ const ICON: Record<string, string> = {
   retroarch: '/icons/retroarch.svg',
   flycast: '/icons/flycast.png',
   pcsx2: '/icons/pcsx2.png',
+  pcsx2x6: '/icons/pcsx2x6.png',
   dolphin: '/icons/dolphin.svg',
   model2: '/icons/model2.png',
   openbor: '/icons/openbor.png',

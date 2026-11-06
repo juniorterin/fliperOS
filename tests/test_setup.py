@@ -1058,7 +1058,7 @@ class GpuCapabilityTests(Base):
         self.assertIn('"mode480|$mode480_label|', video)
         self.assertIn('gpu_unsupported_ok "Interlaced hacks" "Interlaced hacks" "$mode480_why"', video)
         menu = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_emulators() {")[1].split("\n}\n")[0]
-        self.assertIn('pcsx2 | dolphin | duckstation)', menu)
+        self.assertIn('pcsx2 | pcsx2x6 | dolphin | duckstation)', menu)
         self.assertIn('gpu_needs 3.3 "or Vulkan"', menu)
         self.assertIn('suffix=" ($why) (not supported)"', menu)
         self.assertIn('gpu_unsupported_ok "$title" "$label" "${unsupported[$choice]}" || continue', menu)
@@ -1238,7 +1238,7 @@ class DeflickerTests(Base):
         # GroovyMAME (interlace 1) e os cores (sem switchres.ini) em 480i, o
         # MAME 2010 (interlace 0) em 240p.
         self.assertEqual(states, {
-            "flycast": "240p", "pcsx2": "240p", "duckstation": "240p", "dolphin": "240p", "laserdisc": "240p",
+            "flycast": "240p", "pcsx2": "240p", "pcsx2x6": "240p", "duckstation": "240p", "dolphin": "240p", "laserdisc": "240p",
             "model3": "240p", "model2": "240p", "groovymame": "filter", "psx": "filter", "mame2010": "240p", "snes": "filter",
             "megadrive": "filter", "fbneo": "filter", "fightcade": "240p", "desktop": "filter",
             "other": "filter"})
@@ -2820,6 +2820,99 @@ class BootGameTests(Base):
         session = (ROOT / "config" / "fliperos-session").read_text()
         self.assertIn('game)\n        FLIPEROS_POWERKEY=game "${program[@]}"', session)
         self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
+
+
+class BiosBoxTests(unittest.TestCase):
+    """O quadro "BIOS DOWNLOAD" do menu do Tab (gui/febios.py): mostra o
+    andamento ou o que nao deu certo, e sai quando esta tudo certo."""
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("febios", SETUP / "gui/febios.py")
+        self.fb = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.fb)
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.st = self.fb.BiosStatus(str(self.tmp))
+
+    def box(self):
+        self.st.read()
+        return self.st.box()
+
+    def test_nothing_to_show_before_any_check_or_when_all_is_well(self):
+        self.assertIsNone(self.box())
+        (self.tmp / "last.kv").write_text("wanted=12\npresent=7\ndownloaded=5\nmissing=0\nfailed=0\nbig=0\n")
+        self.assertIsNone(self.box())
+
+    def test_running_shows_the_progress_while_the_checker_lives(self):
+        (self.tmp / "running").write_text("%d\t37\tDownloading scph5501.bin (512.0 KB)\n" % os.getpid())
+        self.assertEqual(self.box(), ("37%", "cyan", 37, "Downloading scph5501.bin (512.0 KB)"))
+        # Quem escrevia morreu (ou ficou tempo demais sem dar sinal): ignora.
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        (self.tmp / "running").write_text("%d\t37\tx\n" % dead.pid)
+        self.assertIsNone(self.box())
+        (self.tmp / "running").write_text("%d\t37\tx\n" % os.getpid())
+        old = os.stat(self.tmp / "running").st_mtime - 3600
+        os.utime(self.tmp / "running", (old, old))
+        self.assertIsNone(self.box())
+        (self.tmp / "running").write_text("lixo")
+        self.assertIsNone(self.box())
+
+    def test_problems_stay_until_the_next_check_fixes_them(self):
+        (self.tmp / "last.kv").write_text("downloaded=1\nmissing=0\nfailed=2\n")
+        self.assertEqual(self.box()[:2], ("2 FAILED", "pink"))
+        (self.tmp / "last.kv").write_text("missing=3\nfailed=0\n")
+        self.assertEqual(self.box()[:2], ("3 MISSING", "yellow"))
+        (self.tmp / "last.kv").write_text("error=could not read the BIOS lists\n")
+        self.assertEqual(self.box()[:2], ("COULD NOT CHECK", "pink"))
+        (self.tmp / "last.kv").write_text("missing=0\nfailed=0\n")
+        (self.tmp / "failed").write_text("")
+        self.assertEqual(self.box()[:2], ("COULD NOT CHECK", "pink"))
+        (self.tmp / "failed").unlink()
+        self.assertIsNone(self.box())
+
+    def test_refresh_reads_at_most_every_few_seconds(self):
+        self.st.refresh(100.0)
+        (self.tmp / "last.kv").write_text("missing=1\n")
+        self.st.refresh(101.0)
+        self.assertIsNone(self.st.box())
+        self.st.refresh(104.0)
+        self.assertEqual(self.st.box()[:2], ("1 MISSING", "yellow"))
+
+    def test_the_auto_scrape_box_leaves_when_everything_is_done(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("feharvest", SETUP / "gui/feharvest.py")
+        fh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fh)
+        h = fh.Harvester.__new__(fh.Harvester)
+        h.scanned, h.left, h.current, h.packs, h.torrent = False, 0, None, {}, None
+        h.pack_line = lambda: ""
+        self.assertTrue(h.visible())            # contando os jogos
+        h.scanned, h.left = True, 4
+        self.assertTrue(h.visible())            # jogos por fazer
+        h.left, h.current = 0, {"Name": "sf2"}
+        self.assertTrue(h.visible())            # o ultimo ainda em curso
+        h.current = None
+        h.pack_line = lambda: "MAME VIDEOS 40%"
+        self.assertTrue(h.visible())            # pacotes baixando
+        h.pack_line = lambda: ""
+        self.assertFalse(h.visible())           # acabou: sai do menu
+
+    def test_the_frontend_draws_both_boxes_and_starts_the_check(self):
+        view = (SETUP / "gui/feview.py").read_text()
+        body = view.split("def draw_options(")[1].split("\ndef chip(")[0]
+        self.assertIn("fe.harvest.visible()", body)
+        self.assertIn("draw_bios(ui, px + 8, by, pw - 16, bios)", body)
+        self.assertIn("if harvest:", body)
+        frontend = (SETUP / "gui/fliperos-frontend").read_text()
+        self.assertIn("febios.start_check()", frontend)
+        self.assertIn("self.bios.refresh(now)", frontend)
+        # O frontend abre a checagem como o menu do Setup: sudo -n no que o
+        # sudoers ja libera, solta e com nice.
+        febios = (SETUP / "gui/febios.py").read_text()
+        self.assertIn('"sudo", "-n", SETUP, "--bios-check"', febios)
+        self.assertIn("NOPASSWD: /usr/local/bin/fliperos-setup", (ROOT / "fliperos-rootfs.sh").read_text())
 
 
 class HarvestPackLineTests(unittest.TestCase):
@@ -4594,6 +4687,45 @@ class ScraperTests(Base):
         out = self.env.out('bios_check() { echo "@step 10 x $2"; echo downloaded=4 > "$1"; }; bios_cli check --refresh', env)
         self.assertEqual(out, "@step 10 x --refresh\ndownloaded=4\n")
 
+    def test_bios_plan_asks_the_standalone_emulators_bios(self):
+        # Os emuladores fora do RetroArch: a BIOS de arcade do PCSX2x6 (uma
+        # pasta por placa, com o .nvm e o .mec minusculos que ele procura) e as
+        # do DuckStation soltas em ~/bios.
+        roms, bios = self.env.dir / "roms", self.env.dir / "bios"
+        for d in ("namco246", "namco256", "duckstation", "ps2"):
+            (roms / d).mkdir(parents=True)
+            (roms / d / "game").write_text("g")
+        env = {"ROMS_ROOT": str(roms), "BIOS_ROOT": str(bios), "BIOS_STATE": str(self.env.dir / "bs")}
+        out = self.env.out('w=$(mktemp); bios_plan "$w" > /dev/null; cat "$w"', env)
+        wants = {(r[1], r[2]): os.path.normpath(r[3]) for r in (l.split("\t") for l in out.splitlines())}
+        for key, name, dest in (
+                ("namco246", "COH-H31000.BIN", "namco246/COH-H31000.BIN"),
+                ("namco246", "COH-H31000.NVM", "namco246/COH-H31000.nvm"),
+                ("namco246", "COH-H31000.MEC", "namco246/COH-H31000.mec"),
+                ("namco256", "256.BIN", "namco256/256.BIN"),
+                ("namco256", "256.NVM", "namco256/256.nvm"),
+                ("namco256", "256.MEC", "namco256/256.mec"),
+                ("duckstation", "scph5501.bin", "scph5501.bin"),
+                ("duckstation", "scph5500.bin", "scph5500.bin"),
+                ("ps2", "scph39001.bin", "ps2/scph39001.bin")):
+            self.assertEqual(wants.get((key, name)), str(bios / dest), (key, name))
+
+    def test_bios_running_state_is_the_frontends_progress(self):
+        state = self.env.dir / "bs"
+        env = {"BIOS_STATE": str(state)}
+        out = self.env.out('bios_running 7 "Looking at the game folders"; cat "$BIOS_STATE/running"', env)
+        self.assertRegex(out, r"^\d+\t7\tLooking at the game folders\n$")
+        # So apaga o que e dele: o de outra checagem fica.
+        (state / "running").write_text("1\t50\toutra\n")
+        self.env.out("bios_running_clear", env)
+        self.assertTrue((state / "running").exists())
+        self.env.out("bios_running 1 x; bios_running_clear", env)
+        self.assertFalse((state / "running").exists())
+        # O automatico e o da tela limpam o andamento no fim.
+        body = (SETUP / "lib/downloader.sh").read_text()
+        self.assertEqual(body.count("bios_running_clear\n"), 2)
+        self.assertEqual(body.count('bios_running 0 "Looking at the game folders"'), 2)
+
     def test_fliperos_scraper_from_the_setup(self):
         # scraper_fliperos: os torrents (como root) e o fliperos-scrape como o
         # usuario, nas pastas pedidas, com a barra (os @step dele).
@@ -5202,6 +5334,8 @@ class SplashTests(Base):
         # O orientation_boot refaz o initramfs uma vez (o splash e o EDID).
         out = self.env.out("orientation_boot horizontal", self.vars)
         self.assertEqual(self.calls.read_text().count("update-initramfs -u"), 1)
+        # A tela de progresso so da por feito o que termina em 100%.
+        self.assertIn("@step 100 ", out)
         # O tema do repositorio tem a linha e as imagens giradas.
         theme = SETUP.parent / "config" / "splashscreen" / "fliperos"
         self.assertIn('orientation = "horizontal";\n', (theme / "fliperos.script").read_text())
@@ -5334,8 +5468,6 @@ class RomCleanerTests(Base):
            '<machine name="mvsc2" romof="naomi"><description>Marvel Vs. Capcom 2</description><year>2000</year>'
            '<input players="2" coins="1"><control type="joy" buttons="6"/></input>'
            '<driver status="preliminary"/></machine>'
-        # A tela de progresso so da por feito o que termina em 100%.
-        self.assertIn("@step 100 ", out)
            '<machine name="awbios" isbios="yes"><description>Atomiswave BIOS</description></machine>'
            '<machine name="kofxi" romof="awbios"><description>The King of Fighters XI</description>'
            '<year>2005</year><input players="2" coins="1"><control type="joy" buttons="5"/></input>'

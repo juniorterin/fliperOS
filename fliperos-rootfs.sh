@@ -403,6 +403,9 @@ install -Dm644 "$src/config/retroarch-vulkan.cfg" "$root/etc/fliperos/retroarch/
 # PCSX2.ini de partida: o fliperos-x11-run o copia para o usuario na
 # primeira abertura (sem o assistente, Big Picture, BIOS e jogos em ~).
 install -Dm644 "$src/config/pcsx2.ini" "$root/etc/fliperos/pcsx2.ini"
+# Os botoes do PCSX2x6 (arcade Namco 246/256) na secao [JVS] do ini dele: um
+# por papel do SDL do Button mapping (tools/pcsx2x6-jvs-bindings.py).
+install -Dm644 "$src/config/pcsx2x6-jvs-bindings" "$root/etc/fliperos/pcsx2x6-jvs-bindings"
 
 # Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
 # compilado; os icones dos projetos vem do build de cada um. Os que nao

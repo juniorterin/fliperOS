@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PCSX2x6
+GenericName=Namco System 246/256 emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch pcsx2x6
+TryExec=/usr/local/bin/pcsx2x6
+Icon=/usr/local/share/pixmaps/pcsx2x6.png
+Terminal=false
+Categories=Game;Emulator;

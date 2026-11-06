@@ -95,9 +95,11 @@ RA_AUTOCONFIG_COMMIT="3579625fa24e61c86c48d03de9d5f9fd7b323a16"
 HYPSEUS_TAG="v2.12.1"
 # OpenBOR: as tags antigas nao tem o CMake; o commit e o do master.
 OPENBOR_COMMIT="787b6770409935137579715febf80cf7a529b748"
-# Dolphin (GameCube/Wii): a versao estavel.
-DOLPHIN_TAG="2609"
 PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
+# PCSX2x6: o fork do PCSX2 que roda os arcades Namco System 246/256, ao lado
+# do oficial (so as pastas ~/roms/namco246 e namco256 abrem nele).
+PCSX2X6_VERSION="0.2.22"
+PCSX2X6_SHA256="a28e9354046804e9f3d658b63856f7b2d3d53aefd9f141f053ac9926c08c255d"
 # GroovyMAME: o release oficial para Linux (MAME 0.289, Switchres 2.22f).
 GROOVYMAME_TAG="gm0289sr222f"
 GROOVYMAME_FILE="groovymame_0289.222f_linux.tar.bz2"
@@ -545,9 +547,9 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch' >> "$LOG_FILE" 2>&1 \
-    || err "Installing Attract-Mode Plus, GroovyMAME's SDL2 and RetroArch from the local repository failed (see $LOG_FILE)"
-  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME's KMS SDL2 and RetroArch installed"
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin' >> "$LOG_FILE" 2>&1 \
+    || err "Installing Attract-Mode Plus, GroovyMAME's SDL2, RetroArch and Dolphin from the local repository failed (see $LOG_FILE)"
+  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME's KMS SDL2, RetroArch and Dolphin installed"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
@@ -1253,6 +1255,39 @@ build_pcsx2_chroot() {
   record_version pcsx2 "$PCSX2_VERSION"
 }
 
+# ── PCSX2x6 (Namco System 246/256), X11 ───────────────────────
+# O AppImage do fork (PS2Homebrew-arcade/pcsx2x6), extraido em /opt/pcsx2x6 e
+# separado do PCSX2 oficial: ele grava em ~/.config/PCSX2x6 (a pasta propria
+# dele), entao as configuracoes dos dois nao se misturam; a BIOS e os cartoes
+# por placa o fliperos-x11-run escolhe (~/bios/namco246|256, ~/save/...).
+# Nos gabinetes ja instalados o updates/0044.sh faz o mesmo passo.
+build_pcsx2x6_chroot() {
+  if $SKIP_PCSX2; then
+    warn "PCSX2x6 skipped (--skip-pcsx2)"
+    return
+  fi
+  step "PCSX2x6 ${PCSX2X6_VERSION} (Namco System 246/256 AppImage, X11)"
+  local image="$WORK_DIR/pcsx2x6.AppImage"
+  curl -sSfL --retry 3 --max-time 900 -o "$image" \
+    "https://github.com/PS2Homebrew-arcade/pcsx2x6/releases/download/v${PCSX2X6_VERSION}/pcsx2x6-v${PCSX2X6_VERSION}-linux-appimage-x64-Qt.AppImage" \
+    >> "$LOG_FILE" 2>&1 || err "PCSX2x6 download failed"
+  echo "$PCSX2X6_SHA256  $image" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
+    || err "PCSX2x6: hash differs from the pinned one"
+  chmod +x "$image"
+  (cd "$WORK_DIR" && rm -rf squashfs-root && "$image" --appimage-extract > /dev/null) \
+    || err "PCSX2x6: the AppImage did not extract"
+  rm -rf "$CHROOT_DIR/opt/pcsx2x6"
+  mv "$WORK_DIR/squashfs-root" "$CHROOT_DIR/opt/pcsx2x6"
+  chmod -R a+rX "$CHROOT_DIR/opt/pcsx2x6"
+  printf '#!/bin/sh\nexec /opt/pcsx2x6/AppRun "$@"\n' > "$CHROOT_DIR/usr/local/bin/pcsx2x6"
+  chmod 755 "$CHROOT_DIR/usr/local/bin/pcsx2x6"
+  # Icone do menu do LXDE (config/applications/fliperos-pcsx2x6.desktop).
+  install -Dm644 "$CHROOT_DIR/opt/pcsx2x6/PCSX2x6.png" "$CHROOT_DIR/usr/local/share/pixmaps/pcsx2x6.png"
+  rm -f "$image"
+  ok "PCSX2x6 ${PCSX2X6_VERSION} in /opt/pcsx2x6"
+  record_version pcsx2x6 "$PCSX2X6_VERSION"
+}
+
 # ── Compilar Supermodel (Sega Model 3), X11 ───────────────────
 # SDL2+OpenGL, sem caminho KMS/DRM documentado pelo projeto — fica em
 # X11 via fliperos-x11-run.
@@ -1381,59 +1416,19 @@ OBSCRIPT
 }
 
 # ── Dolphin (GameCube/Wii), X11 ───────────────────────────────
-# Compilado da versao estavel: a distribuicao oficial para Linux e o
-# Flatpak, que traria o runtime do KDE (~1 GB). Sem atualizacao automatica
-# nem estatisticas. O atalho do proprio Dolphin sai (ele abriria o emulador
-# dentro do X do desktop); o do FliperOS passa pelo fliperos-launch.
+# O pacote fliperos-dolphin (packaging/packages, instalado por
+# install_local_repo_chroot): a versao estavel com o net play pela linha de
+# comando, o mesmo .deb que os updates levam a quem so atualiza pela rede.
+# Aqui so a conferencia; --skip-dolphin o tira da imagem.
 build_dolphin_chroot() {
   if $SKIP_DOLPHIN; then
+    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-dolphin' >> "$LOG_FILE" 2>&1 || true
     warn "Dolphin skipped (--skip-dolphin)"
     return
   fi
-  step "Compiling Dolphin ($DOLPHIN_TAG) in the chroot"
-  cat > "$CHROOT_DIR/tmp/build-dolphin.sh" << 'DOLSCRIPT'
-#!/bin/bash
-set -e
-apt-get install -y --no-install-recommends \
-  qt6-base-dev qt6-base-private-dev libqt6svg6-dev pkg-config \
-  libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
-  libxi-dev libxrandr-dev libudev-dev libevdev-dev libsfml-dev libminiupnpc-dev \
-  libmbedtls-dev libcurl4-openssl-dev libhidapi-dev libsystemd-dev libbluetooth-dev \
-  libasound2-dev libpulse-dev libpugixml-dev libbz2-dev libzstd-dev liblzo2-dev \
-  libpng-dev libusb-1.0-0-dev gettext \
-  libegl-dev libgl-dev libgles-dev libwayland-dev
-# Sem os -dev do EGL/GL o cmake so avisa e o Dolphin sai sem o video OpenGL
-# ("Failed to initialize video backend!" no gabinete, 4 de novembro de 2026):
-# o chroot os tinha de outros passos, um container limpo nao.
-git clone --depth=1 --branch __DOLPHIN_TAG__ https://github.com/dolphin-emu/dolphin /tmp/dolphin
-cd /tmp/dolphin
-git submodule update --init --recursive --depth 1
-# Os patches do FliperOS (config/dolphin-patches): o net play aberto pela
-# linha de comando (--netplay host|join), que o frontend usa. A versao e
-# fixa, entao o patch tem de encaixar.
-for patch in /tmp/dolphin-patches/*.patch; do
-  [[ -f $patch ]] || continue
-  git apply "$patch"
-  echo "Dolphin patch: ${patch##*/}"
-done
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
-  -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF -DENABLE_TESTS=OFF -DENABLE_VULKAN=ON
-cmake --build build -j"$(nproc)"
-cmake --install build
-rm -f /usr/local/share/applications/dolphin-emu.desktop
-install -Dm644 Data/dolphin-emu.png /usr/local/share/pixmaps/dolphin-emu.png
-cd /
-rm -rf /tmp/dolphin /tmp/dolphin-patches
-echo "Dolphin OK"
-DOLSCRIPT
-  sed -i "s|__DOLPHIN_TAG__|${DOLPHIN_TAG}|g" "$CHROOT_DIR/tmp/build-dolphin.sh"
-  chmod +x "$CHROOT_DIR/tmp/build-dolphin.sh"
-  mkdir -p "$CHROOT_DIR/tmp/dolphin-patches"
-  cp "$(dirname "$(realpath "$0")")"/config/dolphin-patches/*.patch "$CHROOT_DIR/tmp/dolphin-patches/"
-  chroot "$CHROOT_DIR" /tmp/build-dolphin.sh >> "$LOG_FILE" 2>&1 \
-    && ok "Dolphin compilado" \
-    || err "Dolphin failed; use --skip-dolphin for an ISO without it"
-  record_version dolphin "$DOLPHIN_TAG"
+  chroot "$CHROOT_DIR" dpkg -s fliperos-dolphin > /dev/null 2>&1 ||
+    err "fliperos-dolphin is not installed (local repository); use --skip-dolphin for an ISO without it"
+  ok "Dolphin (fliperos-dolphin)"
 }
 
 # ── Wine, Steam e Heroic: sob demanda (Setup > Games > Extras) ────────
@@ -1720,6 +1715,7 @@ build_retroarch_chroot
 build_flycast_chroot
 build_deflicker_chroot
 build_pcsx2_chroot
+build_pcsx2x6_chroot
 build_supermodel_chroot
 build_hypseus_chroot
 build_openbor_chroot

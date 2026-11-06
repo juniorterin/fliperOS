@@ -185,7 +185,7 @@ MEDIA_CACHE = "private, no-cache"
 # fonte de pixel dela (/gui/icons/NOME.png, /gui/fonts/NOME.ttf).
 GUI = ENV("FLIPEROS_WEB_GUI", "/usr/local/lib/fliperos-setup/gui")
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
-EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "duckstation", "duckstation-qt",
+EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "pcsx2x6", "duckstation", "duckstation-qt",
              "dolphin-emu", "supermodel", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
 FRONTENDS = ("attractplus", "attract", "emulationstation", "es-de", "pegasus-fe", "fliperos-gui",
              "fliperos-frontend")
@@ -1036,7 +1036,7 @@ def system_icon(system):
     """O icone do programa da pasta (gui/icons/NOME.png), a mesma regra do
     system_icon() do frontend (gui/feview.py); None: so o nome."""
     exe = (system.get("exe", "") + " " + system.get("args", "")).lower()
-    for name in ("groovymame", "flycast", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
+    for name in ("groovymame", "flycast", "pcsx2x6", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
         if name in exe:
             return name
     if "sm2" in exe:

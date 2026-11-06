@@ -707,7 +707,7 @@ screen_emulators() {
       # de 1a geracao.
       suffix=""
       case $name in
-        pcsx2 | dolphin | duckstation)
+        pcsx2 | pcsx2x6 | dolphin | duckstation)
           if why=$(gpu_needs 3.3 "or Vulkan"); then
             unsupported[$name]=$why
             suffix=" ($why) (not supported)"

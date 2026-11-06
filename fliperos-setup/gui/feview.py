@@ -2506,10 +2506,18 @@ def draw_options(fe, ui, now):
         lines.append((y, 17, opt))
         y += 17
     total = y
-    # A janela: do alto do cartao ate o quadro do scrape automatico.
-    vx, vy, vw = px + 8, py + 8, pw - 16
+    # Os quadros de baixo: o do scrape automatico (onde sempre ficou) e, acima
+    # dele, o do baixador de BIOS. Um que acabou sai do menu, e a lista ganha
+    # o lugar dele.
+    harvest = fe.harvest.visible()
+    bios = getattr(fe, "bios", None)
+    bios = bios.box() if bios else None
     hy = py + ph - 44
-    vh = hy - 4 - vy
+    by = hy - 34 if harvest else hy
+    top = by if bios else hy if harvest else py + ph - 4
+    # A janela: do alto do cartao ate o primeiro quadro.
+    vx, vy, vw = px + 8, py + 8, pw - 16
+    vh = top - 4 - vy
     # A escolhida sempre inteira a vista; a primeira de cada parte leva o
     # titulo junto.
     scroll = fe.ov.get("scroll", 0)
@@ -2547,7 +2555,10 @@ def draw_options(fe, ui, now):
     ui.set_clip(None)
     if total > vh:
         W.scrollbar(ui, px + pw - 7, vy, vh, scroll, vh, total)
-    draw_harvest(fe, ui, px + 8, hy, pw - 16)
+    if harvest:
+        draw_harvest(fe, ui, px + 8, hy, pw - 16)
+    if bios:
+        draw_bios(ui, px + 8, by, pw - 16, bios)
 
 
 def chip(ui, right, y, text, lit, on):
@@ -2734,6 +2745,22 @@ def draw_controls(fe, ui, now):
     y = y0 + (reset_row + 1) * rh
     tiny.centered(ui, tips[0], T.YELLOW if wait else T.COMMENT, WW // 2, y + 3)
     tiny.centered(ui, tips[1], T.COMMENT, WW // 2, y + 10)
+
+
+def draw_bios(ui, x, y, w, box):
+    """O baixador de BIOS (febios.py): o que esta baixando e a barra, ou o que
+    nao deu certo. Do mesmo tamanho e jeito do quadro do scrape."""
+    right, color, pct, info = box
+    pygame.draw.rect(ui, T.LINE, (x, y, w, 31), 1)
+    W.text(ui, "BIOS DOWNLOAD", T.COMMENT, x + 8, y + 3)
+    tiny.text(ui, right, getattr(T, color.upper()), x + w - 8, y + 5, right=True)
+    bx, by, bw = x + 8, y + 13, w - 16
+    if pct is not None:
+        W.block(ui, (bx, by, bw, 6), T.BG_DEEP, None)
+        if pct:
+            ui.fill(T.PINK, (bx, by, round(bw * pct / 100), 6))
+        pygame.draw.rect(ui, T.LINE, (bx, by, bw, 6), 1)
+    tiny.text(ui, tiny.fit(info.upper(), bw), T.COMMENT, bx, y + 22)
 
 
 def draw_harvest(fe, ui, x, y, w):

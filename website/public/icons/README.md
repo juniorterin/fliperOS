@@ -10,6 +10,7 @@ The PNGs are scaled down to 128 px. Programs with no icon of their own
 | `retroarch.svg` | RetroArch, `media/ico_src/icon.svg` |
 | `flycast.png` | Flycast, `shell/linux/flycast.png` |
 | `pcsx2.png` | PCSX2, `bin/resources/icons/AppIconLarge.png` |
+| `pcsx2x6.png` | PCSX2x6, `PCSX2x6.png` (512 px) inside its AppImage (icon by Berion, credited in its README) |
 | `dolphin.svg` | Dolphin, `Data/dolphin-emu.svg` |
 | `model2.png` | SM2-Emu, `data/icons/sm2-emu-256.png` |
 | `openbor.png` | OpenBOR, `engine/resources/OpenBOR_Icon_128x128.png` |

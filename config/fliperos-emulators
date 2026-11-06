@@ -36,6 +36,7 @@ retroarch|image|$root/usr/local/bin/retroarch|RetroArch (consoles and arcade cor
 groovymame|image|$root/usr/local/bin/groovymame|GroovyMAME (arcade)
 flycast|image|$root/usr/local/bin/flycast|Flycast (Dreamcast, Naomi, Atomiswave)
 pcsx2|image|$root/usr/local/bin/pcsx2|PCSX2 (PlayStation 2)
+pcsx2x6|image|$root/usr/local/bin/pcsx2x6|PCSX2x6 (Namco System 246/256)
 dolphin|image|$root/usr/local/bin/dolphin-emu|Dolphin (GameCube, Wii, Triforce)
 supermodel|image|$root/usr/local/bin/supermodel|Supermodel (Sega Model 3)
 openbor|image|$root/usr/local/bin/openbor|OpenBOR (beat 'em ups)
@@ -112,7 +113,9 @@ emulator_latest() {
   local v
   case $1 in
     pcsx2) pinned PCSX2_VERSION ;;
-    dolphin) pinned DOLPHIN_TAG ;;
+    pcsx2x6) pinned PCSX2X6_VERSION ;;
+    # A versao da receita do pacote, a que o proximo update leva.
+    dolphin) pinned PKG_VERSION "${mkiso_url%/*}/packaging/packages/fliperos-dolphin.sh" ;;
     groovymame)
       v=$(pinned GROOVYMAME_TAG)
       [[ $v =~ ^gm0([0-9]{3}) ]] && echo "0.${BASH_REMATCH[1]}"

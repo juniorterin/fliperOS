@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Gera config/pcsx2x6-jvs-bindings: os botoes do arcade do PCSX2x6.
+
+O fork nao espelha o [Pad1]: os botoes dos jogos System 246/256 vem da secao
+[JVS] do PCSX2.ini, uma chave por botao (P1_Up, Tekken_LeftPunch_P1...), e sem
+ela o jogo nao recebe nada. O fliperos-x11-run grava essas chaves quando o ini
+nasce, cada uma no papel do SDL que o Setup > Joysticks > Button mapping ja
+entrega (X Y RB / A B RT em fight stick), do mesmo jeito que faz com o [Pad1]
+do PCSX2 oficial.
+
+A lista sai do pcsx2/DEV9/ACJV_Inputs.h do fork, pelo botao do PS2 que cada
+layout usa por padrao (GenericInputBinding):
+
+  python3 tools/pcsx2x6-jvs-bindings.py ACJV_Inputs.h config/pcsx2x6-jvs-bindings
+
+Fica de fora o que um painel de botoes nao tem: volante (analogico), tambor,
+alavancas do Zoids, o Service e o P*_Button* genericos (o fork ignora os
+genericos 2 a 6 e o 1 e o ENTER do teste).
+"""
+import re
+import sys
+
+# O botao do PS2 -> o papel do SDL (os mesmos nomes que o x11-run poe no [Pad1]).
+ROLE = {
+    'Square': 'FaceWest', 'Triangle': 'FaceNorth', 'Cross': 'FaceSouth', 'Circle': 'FaceEast',
+    'L1': 'LeftShoulder', 'R1': 'RightShoulder', 'L2': '+LeftTrigger', 'R2': '+RightTrigger',
+    'Start': 'Start', 'Select': 'Back',
+    'DPadUp': 'DPadUp', 'DPadDown': 'DPadDown', 'DPadLeft': 'DPadLeft', 'DPadRight': 'DPadRight',
+}
+ENTRY = re.compile(r'\{\s*"([A-Za-z0-9_]+)"\s*,\s*TRANSLATE_NOOP\([^)]*\)\s*,\s*[^,]+,\s*'
+                   r'InputBindingInfo::Type::(\w+)\s*,\s*([^,]+),\s*GenericInputBinding::(\w+)')
+GROUP = re.compile(r'\s*static constexpr[^=]*?\b(s_[A-Za-z0-9_]+)\s*(?:\[\])?\s*=')
+
+
+def groups(text):
+    out, name = {}, None
+    for line in text.splitlines():
+        m = GROUP.match(line)
+        if m:
+            name = m.group(1)
+            out.setdefault(name, [])
+            continue
+        m = ENTRY.search(line)
+        if m and name:
+            out[name].append((m.group(1), m.group(4)))
+    return out
+
+
+def rows(text):
+    g = groups(text)
+    out = []
+    # Direcional e Start de cada jogador (as chaves sao as proprias, sem sufixo).
+    for player, group in ((1, 's_jvs_p1_button_bindings'), (2, 's_jvs_p2_button_bindings')):
+        for name, generic in g[group]:
+            if name.split('_', 1)[1] in ('Up', 'Down', 'Left', 'Right', 'Start'):
+                out.append((name, player, ROLE[generic]))
+    # Os botoes de cada jogo: {nome}_P1 e {nome}_P2 (corrida, so o P1).
+    for group, entries in g.items():
+        if not group.startswith(('s_fight_', 's_standard_', 's_race_')):
+            continue
+        for name, generic in entries:
+            if generic not in ROLE:
+                continue
+            out.append((name + '_P1', 1, ROLE[generic]))
+            if not group.startswith('s_race_'):
+                out.append((name + '_P2', 2, ROLE[generic]))
+    # A ficha e o Back (Start e Back = ficha, no Button mapping do Setup).
+    out.append(('Coin1', 1, 'Back'))
+    out.append(('Coin2', 2, 'Back'))
+    return out
+
+
+def main():
+    if len(sys.argv) != 3:
+        sys.exit(__doc__)
+    with open(sys.argv[1], encoding='utf-8') as f:
+        table = rows(f.read())
+    with open(sys.argv[2], 'w', encoding='utf-8', newline='\n') as f:
+        f.write('# Gerado por tools/pcsx2x6-jvs-bindings.py (do ACJV_Inputs.h do PCSX2x6): nao editar.\n'
+                '# chave da secao [JVS]<TAB>jogador (1 = SDL-0, 2 = SDL-1)<TAB>papel do SDL\n')
+        for key, player, role in table:
+            f.write('%s\t%d\t%s\n' % (key, player, role))
+    print('%d bindings' % len(table))
+
+
+if __name__ == '__main__':
+    main()

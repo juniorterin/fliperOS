@@ -361,6 +361,19 @@ class PinnedDownloadTests(unittest.TestCase):
         self.assertIn('exec /opt/pcsx2/AppRun', body)
         self.assertNotIn('git clone', body)
 
+    def test_pcsx2x6_is_the_pinned_fork_next_to_the_official(self):
+        # O fork dos arcades Namco 246/256 e outro AppImage, em /opt/pcsx2x6.
+        self.assertRegex(MKISO, r'PCSX2X6_VERSION="[0-9.]+"')
+        self.assertRegex(MKISO, r'PCSX2X6_SHA256="[0-9a-f]{64}"')
+        body = MKISO.split('build_pcsx2x6_chroot() {')[1].split('\n}\n')[0]
+        self.assertIn('echo "$PCSX2X6_SHA256  $image" | sha256sum -c', body)
+        self.assertIn('--appimage-extract', body)
+        self.assertIn('exec /opt/pcsx2x6/AppRun', body)
+        self.assertIn('/usr/local/bin/pcsx2x6', body)
+        self.assertNotIn('/opt/pcsx2/', body)
+        self.assertNotIn('git clone', body)
+        self.assertIn('\nbuild_pcsx2x6_chroot\n', MKISO)
+
     def test_sources_are_pinned(self):
         self.assertRegex(MKISO, r'SWITCHRES_TAG="v[0-9.]+"')
         self.assertRegex(MKISO, r'SKYSCRAPER_COMMIT="[0-9a-f]{40}"')
@@ -1075,7 +1088,7 @@ class RomFoldersTests(unittest.TestCase):
             for _ in range(2):  # a segunda rodada nao muda nada
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             roms = tmp / 'roms'
-            for emu in ('mame', 'ps2', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
+            for emu in ('mame', 'ps2', 'namco246', 'namco256', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
                         'openbor/Paks', 'hypseus', 'fightcade', 'fightcade/fbneo', 'fightcade/flycast',
                         'fightcade/snes9x', 'fightcade/fc1'):
                 self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
@@ -1336,7 +1349,7 @@ class RomFoldersTests(unittest.TestCase):
             for kind in ('snap', 'preview', 'logo', 'box', 'marquee', 'dmd', 'texto'):
                 names = sorted(p.name for p in (tmp / 'media' / kind).iterdir())
                 self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'mame', 'model2', 'model3',
-                                         'naomi', 'naomi2', 'ps2', 'retroarch'], kind)
+                                         'namco246', 'namco256', 'naomi', 'naomi2', 'ps2', 'retroarch'], kind)
                 self.assertEqual([p.name for p in (tmp / 'media' / kind / 'retroarch').iterdir()], ['mame2010'], kind)
             self.assertTrue((tmp / 'media/preview/model2').is_symlink())
             self.assertEqual(list((tmp / 'disk').iterdir()), [])
@@ -4010,9 +4023,19 @@ class BiosPackTests(unittest.TestCase):
         self.bios.STATE = str(self.tmp / 'state')
         self.bios.PACK = str(self.tmp / 'pack')
         files = self.FILES
+        # O RetroBIOS falso: os arquivos (por caminho no repositorio) saem do
+        # mesmo servidor local, em /rb/.
+        self.rb_files = {}
+        rb_files = self.rb_files
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
+                if self.path.startswith('/rb/'):
+                    body = rb_files.get(urllib_unquote(self.path[len('/rb/'):]))
+                    self.send_response(200 if body is not None else 404)
+                    self.end_headers()
+                    self.wfile.write(body or b'')
+                    return
                 name = urllib_unquote(self.path.split('/pack.zip/', 1)[-1])
                 body = files.get(name)
                 self.send_response(200 if body is not None else 404)
@@ -4036,9 +4059,17 @@ class BiosPackTests(unittest.TestCase):
         torrent = (b'd4:infod5:filesld6:lengthi1000e4:pathl8:pack.zipeed6:lengthi5e4:pathl13:item_meta.xmlee'
                    b'e4:name9:full-packee')
         self.fetched = []
+        self.bios.RETROBIOS = 'http://127.0.0.1:%d/rb' % server.server_port
+        # Sem o RetroBIOS (offline) ate um teste ligar o banco falso.
+        self.rb_pages = {}
 
         def fetch(url, limit, timeout=60):
             self.fetched.append(url)
+            if url.startswith(self.bios.RETROBIOS):
+                page = self.rb_pages.get(url[len(self.bios.RETROBIOS) + 1:])
+                if page is None:
+                    raise OSError('RetroBIOS is offline')
+                return page
             if url.endswith('.torrent'):
                 return torrent
             self.assertEqual(url, 'https://archive.org/download/full-pack/pack.zip/')
@@ -4111,6 +4142,134 @@ class BiosPackTests(unittest.TestCase):
         stats = self.check([('fw', 'ps', 'scph5501.bin', str(self.home / 'bios/scph5501.bin'))])
         self.assertEqual(stats['failed'], '1')
         self.assertEqual(list((self.home / 'bios').iterdir()), [])
+
+    def retrobios(self):
+        """Liga o RetroBIOS falso: o database.json, o platforms/retroarch.yml e
+        os arquivos (self.rb_files, por caminho no repositorio)."""
+        import hashlib
+        self.rb_files.update({
+            'bios/Sony/PlayStation/scph5501.bin': b'R' * 300,
+            'bios/Sega/Dreamcast/dc_boot.bin': b'C' * 120,
+            'bios/Arcade/Arcade/neogeo.zip': b'G' * 90,
+            'bios/Arcade/MAME/neogeo.zip': b'M' * 91,
+            'bios/Arcade/MAME/.variants/neogeo.zip.abc': b'V' * 5,
+            'bios/Arcade/Namco System 246/COH-H31000.BIN': b'N' * 400,
+            'bios/Arcade/Namco System 246/256.BIN': b'S' * 410,
+            'bios/Misc/Dup A/bios.bin': b'1' * 10,
+            'bios/Misc/Dup B/bios.bin': b'2' * 11,
+        })
+        sums = {path: hashlib.sha1(body).hexdigest() for path, body in self.rb_files.items()}
+        db = {'schema_version': 1, 'bios_dir': 'bios', 'files': {
+            sums[path]: {'path': path, 'name': path.rsplit('/', 1)[-1], 'size': len(body), 'sha1': sums[path]}
+            for path, body in self.rb_files.items()}}
+        platform = ('platform: RetroArch\nsystems:\n  psx:\n    files:\n    - name: scph5501.bin\n'
+                    '      destination: scph5501.bin\n      required: true\n      sha1: %s\n'
+                    '  dc:\n    files:\n    - name: dc_boot.bin\n      destination: "dc/dc_boot.bin"\n'
+                    '      sha1: %s\n' % (sums['bios/Sony/PlayStation/scph5501.bin'],
+                                          sums['bios/Sega/Dreamcast/dc_boot.bin']))
+        self.rb_pages['database.json'] = json.dumps(db).encode()
+        self.rb_pages['platforms/retroarch.yml'] = platform.encode()
+        return sums
+
+    def test_retrobios_is_the_first_source_and_the_pack_the_reserve(self):
+        h = self.home
+        self.retrobios()
+        stats = self.check([
+            ('fw', 'retroarch/pcsx_rearmed', 'scph5501.bin', str(h / 'bios/scph5501.bin')),
+            ('fw', 'retroarch/flycast', 'dc/dc_boot.bin', str(h / 'bios/dc/dc_boot.bin')),
+            # Dois sets com o nome: a copia da pasta do MAME, nunca a variante.
+            ('set', 'mame', 'neogeo', str(h / 'bios/mame/neogeo.zip')),
+            # Um emulador fora do RetroArch, pelo nome (a pasta de cada placa).
+            ('fw', 'namco246', 'COH-H31000.BIN', str(h / 'bios/namco246/COH-H31000.BIN')),
+            ('fw', 'namco256', '256.BIN', str(h / 'bios/namco256/256.BIN')),
+            # Nao esta no RetroBIOS: vem do pacote do Batocera (a raiz dele).
+            ('fw', 'retroarch/fbneo', 'fbneo/neogeo.zip', str(h / 'bios/fbneo/neogeo.zip')),
+            # Nome ambiguo no RetroBIOS (dois bios.bin) e fora do pacote: falta.
+            ('fw', 'x', 'bios.bin', str(h / 'bios/bios.bin')),
+            ('fw', 'retroarch/pcsx_rearmed', 'scph5502.bin', str(h / 'bios/scph5502.bin')),
+        ])
+        self.assertEqual((stats['downloaded'], stats['missing'], stats['failed']), ('6', '2', '0'))
+        self.assertEqual((h / 'bios/scph5501.bin').read_bytes(), b'R' * 300)
+        self.assertEqual((h / 'bios/dc/dc_boot.bin').read_bytes(), b'C' * 120)
+        self.assertEqual((h / 'bios/mame/neogeo.zip').read_bytes(), b'M' * 91)
+        self.assertEqual((h / 'bios/namco246/COH-H31000.BIN').read_bytes(), b'N' * 400)
+        self.assertEqual((h / 'bios/namco256/256.BIN').read_bytes(), b'S' * 410)
+        self.assertEqual((h / 'bios/fbneo/neogeo.zip').read_bytes(), self.FILES['bios/neogeo.zip'])
+        self.assertFalse((h / 'bios/bios.bin').exists())
+        report = (self.tmp / 'state/last.tsv').read_text()
+        self.assertIn('missing\tx\t%s\tbios.bin' % (h / 'bios/bios.bin'), report)
+        # A lista do RetroBIOS fica em cache, sem as variantes.
+        index = json.loads((self.tmp / 'state/retrobios.json').read_text())
+        self.assertNotIn('/.variants/', json.dumps(index['files']))
+        self.assertEqual(index['dest']['dc/dc_boot.bin'], hashlib.sha1(b'C' * 120).hexdigest())
+        # Com tudo no RetroBIOS o pacote do archive.org nem e lido.
+        self.fetched.clear()
+        stats = self.check([('fw', 'p', 'scph5501.bin', str(h / 'bios/other/scph5501.bin')),
+                            ('fw', 'namco246', 'COH-H31000.BIN', str(h / 'bios/other/COH-H31000.BIN'))])
+        self.assertEqual(stats['downloaded'], '2')
+        self.assertFalse([u for u in self.fetched if 'archive.org' in u])
+
+    def test_a_retrobios_file_with_the_wrong_checksum_is_not_kept(self):
+        self.retrobios()
+        self.bios.load_retro_index(False, False)
+        # O arquivo que o GitHub entrega mudou (mesmo tamanho, outro conteudo).
+        self.rb_files['bios/Sony/PlayStation/scph5501.bin'] = b'X' * 300
+        self.addCleanup(setattr, time, 'sleep', time.sleep)
+        time.sleep = lambda s: None
+        stats = self.check([('fw', 'ps', 'scph5501.bin', str(self.home / 'bios/scph5501.bin'))])
+        self.assertEqual((stats['failed'], stats['downloaded']), ('1', '0'))
+        self.assertEqual(list((self.home / 'bios').iterdir()), [])
+
+    def test_the_pack_alone_still_works_without_retrobios(self):
+        # RetroBIOS fora do ar: o pacote de antes serve, sem erro.
+        stats = self.check([('fw', 'ps', 'scph5501.bin', str(self.home / 'bios/scph5501.bin'))])
+        self.assertEqual((stats['downloaded'], stats.get('error')), ('1', None))
+        # Os dois fora do ar e sem lista de antes: o erro diz as duas fontes.
+        (self.tmp / 'state/index.json').unlink()
+        self.bios.fetch = lambda url, limit, timeout=60: (_ for _ in ()).throw(OSError('no network'))
+        with self.assertRaises(SystemExit) as raised:
+            self.check([('fw', 'ps', 'scph5500.bin', str(self.home / 'bios/scph5500.bin'))])
+        self.assertIn('RetroBIOS', str(raised.exception))
+        self.assertIn('BIOS pack', str(raised.exception))
+
+    def test_retroarch_platform_and_database_formats(self):
+        b = self.bios
+        text = ('systems:\n  3do:\n    files:\n    - name: a.bin\n      destination: a.bin\n      sha1: AA11\n'
+                '    - name: "b.bin"\n      destination: "sub/B.bin"\n      sha1: bb22\n'
+                '    - name: c.bin\n      required: true\n    - name: d.bin\n      sha1: dd44\n')
+        # Sem sha1 fica de fora; sem destination vale o name; maiusculas caem.
+        self.assertEqual(b.parse_platform(text), {'a.bin': 'aa11', 'sub/b.bin': 'bb22', 'd.bin': 'dd44'})
+        self.assertLess(b.arcade_rank('bios/Arcade/MAME/x.zip'), b.arcade_rank('bios/Arcade/Arcade/x.zip'))
+        self.assertLess(b.arcade_rank('bios/Arcade/Arcade/x.zip'), b.arcade_rank('bios/Arcade/Other/x.zip'))
+        self.retrobios()
+        self.rb_pages['database.json'] = b'{"schema_version": 2, "files": {}}'
+        with self.assertRaises(OSError):
+            b.build_retro_index(False)
+
+    def test_fetch_reads_gzip_within_the_limit(self):
+        import gzip
+        import http.server
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = gzip.compress(b'x' * 5000)
+                self.send_response(200)
+                self.send_header('Content-Encoding', 'gzip')
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+        server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        real = load_script('fliperos_bios_real', 'config/fliperos-bios')
+        url = 'http://127.0.0.1:%d/db.json' % server.server_port
+        self.assertEqual(real.fetch(url, 10000), b'x' * 5000)
+        # O limite vale para o texto: um gzip pequeno que incha demais e recusado.
+        with self.assertRaises(OSError):
+            real.fetch(url, 1000)
 
     def test_bencode_and_links(self):
         b = self.bios
@@ -9674,7 +9833,7 @@ class EmulatorMenuTests(unittest.TestCase):
 
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
-        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'supermodel',
+        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'pcsx2x6', 'supermodel',
                                  'dolphin', 'openbor', 'model2', 'fightcade', 'duckstation', 'kof'})
 
     def test_entries_go_through_the_launcher(self):
@@ -9693,11 +9852,13 @@ class EmulatorMenuTests(unittest.TestCase):
             icon = self.entry(path)['Icon']
             self.assertTrue(icon.startswith('/usr/local/share/pixmaps/'), icon)
             name = icon.rsplit('/', 1)[1]
-            # Os proprios (config/icons), os que o build copia de cada projeto ou o
-            # que o config/fliperos-duckstation tira do AppImage dele.
+            # Os proprios (config/icons), os que o build ou um pacote do FliperOS
+            # copia de cada projeto ou o que o config/fliperos-duckstation tira
+            # do AppImage dele.
             duckstation = (ROOT / 'config/fliperos-duckstation').read_text()
+            recipes = ''.join(p.read_text() for p in (ROOT / 'packaging/packages').glob('*.sh'))
             self.assertTrue(name in own or ('pixmaps/' + name) in MKISO or name == 'com.libretro.RetroArch.svg' or
-                            ('pixmaps/' + name) in duckstation,
+                            ('pixmaps/' + name) in duckstation or ('pixmaps/' + name) in recipes,
                             name)
         self.assertIn('rm -f "$STAGING/usr/local/share/applications/com.libretro.RetroArch.desktop"',
                       (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text())
@@ -9725,7 +9886,7 @@ class EmulatorModeTests(unittest.TestCase):
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
                                            'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n'
                                            'echo "PRELOAD=${LD_PRELOAD:-}"\n')
-            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'myprog', 'supermodel', 'hypseus',
+            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'pcsx2x6', 'myprog', 'supermodel', 'hypseus',
                          'fightcade', 'sm2-emu', 'duckstation'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
@@ -10058,6 +10219,88 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('"$root/usr/share/themes/FliperOS-Black/openbox-3/themerc"', ROOTFS)
         self.assertIn('install -Dm644 "$src/config/openbox-x11-run.xml" "$root/etc/fliperos/openbox-x11-run.xml"',
                       ROOTFS)
+
+    def test_pcsx2x6_has_its_own_data_bios_and_cards(self):
+        # O fork dos arcades Namco nao divide configuracao com o PCSX2 oficial.
+        roms = (ROOT / 'config/fliperos-roms').read_text()
+        for line in ('folder "$roms/namco246"', 'folder "$roms/namco256"', 'folder "$bios/namco246"', 'folder "$bios/namco256"',
+                     'folder "$save/namco246"', 'folder "$save/namco256"',
+                     'folder "$nvram/namco246"', 'folder "$nvram/namco256"','cfglink pcsx2x6 "$HOME/.config/PCSX2x6"'):
+            self.assertIn(line, roms, line)
+        with tempfile.TemporaryDirectory() as home:
+            extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
+                     'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
+            out = self.run_x11(['pcsx2x6', 'game.iso'], home=home, extra=extra).stdout
+            self.assertIn('pcsx2x6 -fullscreen -nogui game.iso', out)
+            ini = (Path(home) / '.config/PCSX2x6/inis/PCSX2.ini').read_text()
+            self.assertIn('Bios = %s/bios/namco246\n' % home, ini)
+            self.assertIn('MemoryCards = %s/save/namco246\n' % home, ini)
+            # Um jogo da 256 abre com a BIOS e os cartoes da pasta da 256.
+            self.run_x11(['pcsx2x6', '/roms/namco256/tekken5.iso'], home=home, extra=extra)
+            ini = (Path(home) / '.config/PCSX2x6/inis/PCSX2.ini').read_text()
+            self.assertIn('Bios = %s/bios/namco256\n' % home, ini)
+            self.assertIn('MemoryCards = %s/save/namco256\n' % home, ini)
+            self.run_x11(['pcsx2x6', '/roms/namco246/tekken4.iso'], home=home, extra=extra)
+            ini = (Path(home) / '.config/PCSX2x6/inis/PCSX2.ini').read_text()
+            self.assertIn('Bios = %s/bios/namco246\n' % home, ini)
+            self.assertIn('RecursivePaths = /home/fliperos/roms/namco246\n', ini)
+            self.assertIn('RecursivePaths = /home/fliperos/roms/namco256\n', ini)
+            self.assertFalse((Path(home) / '.config/PCSX2').exists())
+
+    def test_pcsx2x6_arcade_buttons_follow_the_setup_mapping(self):
+        # O fork nao espelha o [Pad1]: os botoes do arcade vem da secao [JVS], no
+        # papel do SDL do Button mapping do Setup (X Y RB / A B RT).
+        bindings = (ROOT / 'config/pcsx2x6-jvs-bindings').read_text()
+        self.assertIn('install -Dm644 "$src/config/pcsx2x6-jvs-bindings"', ROOTFS)
+        self.assertIn('Tekken_LeftPunch_P1\t1\tFaceWest\n', bindings)
+        self.assertIn('Coin2\t2\tBack\n', bindings)
+        extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
+                 'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set'),
+                 'FLIPEROS_PCSX2X6_BINDINGS': str(ROOT / 'config/pcsx2x6-jvs-bindings')}
+        with tempfile.TemporaryDirectory() as home:
+            self.run_x11(['pcsx2x6', '/roms/namco256/game.acgame'], home=home, extra=extra)
+            ini_path = Path(home) / '.config/PCSX2x6/inis/PCSX2.ini'
+            jvs = ini_path.read_text().split('[JVS]')[1].split('\n[')[0]
+            for line in ('Tekken_LeftPunch_P1 = SDL-0/FaceWest', 'Tekken_LeftPunch_P2 = SDL-1/FaceWest',
+                         'Tekken_RightKick_P1 = SDL-0/FaceEast', 'Tekken_LeftKick_P2 = SDL-1/FaceSouth',
+                         'SixButton_HeavyPunch_P1 = SDL-0/LeftShoulder', 'P1_Up = SDL-0/DPadUp',
+                         'P2_Start = SDL-1/Start', 'Coin1 = SDL-0/Back', 'Coin2 = SDL-1/Back'):
+                self.assertIn(line + '\n', jvs + '\n', line)
+            # O que a pessoa muda no proprio PCSX2x6 fica (nada e regravado).
+            ini_path.write_text(ini_path.read_text().replace('Tekken_LeftPunch_P1 = SDL-0/FaceWest',
+                                                             'Tekken_LeftPunch_P1 = Keyboard/J'))
+            self.run_x11(['pcsx2x6', '/roms/namco256/game.acgame'], home=home, extra=extra)
+            self.assertIn('Tekken_LeftPunch_P1 = Keyboard/J\n', ini_path.read_text())
+        # O PCSX2 oficial nao ganha a secao [JVS].
+        with tempfile.TemporaryDirectory() as home:
+            self.run_x11(['pcsx2', 'game.iso'], home=home, extra=extra)
+            self.assertNotIn('[JVS]', (Path(home) / '.config/PCSX2/inis/PCSX2.ini').read_text())
+
+    def test_pcsx2x6_game_memory_lives_in_nvram(self):
+        # O fork grava a memoria do jogo em sram.bin dentro da pasta do jogo:
+        # ela vai para ~/nvram/<placa>/<gameid>.bin e o sram.bin vira link.
+        extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
+                 'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
+        with tempfile.TemporaryDirectory() as home:
+            home = Path(home)
+            for board, gid, extra_keys in (('namco246', 'NM00004', ''), ('namco256', 'NM00011', 'subdir=game\r\n')):
+                folder = home / 'roms' / board
+                (folder / ('game' if extra_keys else gid)).mkdir(parents=True)
+                (folder / (gid + '.acgame')).write_text('[game]\r\ngameid=%s\r\n[data]\r\n%s' % (gid, extra_keys))
+                self.run_x11(['pcsx2x6', str(folder / (gid + '.acgame'))], home=str(home), extra=extra)
+                sram = folder / ('game' if extra_keys else gid) / 'sram.bin'
+                self.assertTrue(sram.is_symlink(), board)
+                self.assertEqual(sram.readlink(), home / 'nvram' / board / (gid + '.bin'), board)
+            # Um sram.bin de verdade (de antes) vai para a nvram, sem perder o que tem.
+            folder = home / 'roms/namco246/NM00004'
+            (folder / 'sram.bin').unlink()
+            (folder / 'sram.bin').write_bytes(b'\x01' * 16)
+            self.run_x11(['pcsx2x6', str(home / 'roms/namco246/NM00004.acgame')], home=str(home), extra=extra)
+            self.assertEqual((home / 'nvram/namco246/NM00004.bin').read_bytes(), b'\x01' * 16)
+            self.assertTrue((folder / 'sram.bin').is_symlink())
+            # Sem .acgame (o PCSX2 oficial, uma imagem solta) nada disso e criado.
+            self.run_x11(['pcsx2', 'game.iso'], home=str(home), extra=extra)
+            self.assertEqual(sorted(p.name for p in (home / 'nvram').iterdir()), ['namco246', 'namco256'])
 
     def test_pcsx2_starts_from_the_fliperos_ini(self):
         # Sem o assistente, no Big Picture, sem o mouse, BIOS e jogos em ~.
@@ -10429,7 +10672,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
     def test_pinned_versions(self):
         self.assertRegex(MKISO, r'HYPSEUS_TAG="v2\.[0-9.]+"')   # a serie 3 exige SDL3
         self.assertRegex(MKISO, r'OPENBOR_COMMIT="[0-9a-f]{40}"')
-        self.assertRegex(MKISO, r'DOLPHIN_TAG="[0-9]{4}[a-z]?"')
+        self.assertRegex((ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text(), r'PKG_VERSION="[0-9]{4}[a-z]?"')
         self.assertRegex(EXTRAS, r'HEROIC_SHA256="[0-9a-f]{64}"')
 
     def test_every_one_can_be_skipped_and_runs_in_order(self):
@@ -12922,7 +13165,7 @@ class OnDemandFrontendTests(unittest.TestCase):
         return run.stdout.split()
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
-        iso = ('fliperos-attractplus', 'fliperos-retroarch', 'fliperos-sdl2-kms')
+        iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-retroarch', 'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
         self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
@@ -13080,10 +13323,16 @@ class PackagingTests(unittest.TestCase):
             declared = re.search(r'^PKG_NAME="([^"]+)"', recipe.read_text(), flags=re.M).group(1)
             self.assertEqual(declared, recipe.stem)
 
-    def test_every_recipe_is_a_launcher_package(self):
+    def test_every_recipe_is_a_launcher_an_emulator_or_its_library(self):
+        # Os frontends, os emuladores que vinham compilados na ISO (os updates
+        # os levam como pacote) e o SDL do GroovyMAME.
         table = (ROOT / 'config/fliperos-sessions.conf').read_text()
+        emulators = {line.split('|')[0] for line in
+                     (ROOT / 'config/fliperos-emulators').read_text().split('table() {')[1].split('\nEOF')[0].splitlines()
+                     if '|' in line}
         for recipe in self.recipe_files():
-            self.assertIn(recipe.stem, table)
+            name = recipe.stem[len('fliperos-'):]
+            self.assertTrue(recipe.stem in table or name in emulators or recipe.stem == 'fliperos-sdl2-kms', recipe.stem)
 
     def test_attractplus_patches_apply_on_linux_and_keep_the_kernel_joystick_order(self):
         # patch -p1 no container: um patch em CRLF nao se aplica.
@@ -13870,7 +14119,7 @@ class RetroArchConfigTests(unittest.TestCase):
         fc = MKISO.split("<< 'FCSCRIPT'")[1].split('\nFCSCRIPT\n')[0]
         self.assertIn('-DUSE_VULKAN=ON', fc)
         self.assertNotIn('USE_VULKAN=OFF', fc)
-        dol = MKISO.split("<< 'DOLSCRIPT'")[1].split('\nDOLSCRIPT\n')[0]
+        dol = (ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text()
         self.assertIn('-DENABLE_VULKAN=ON', dol)
         # O padrao do arquivo segue o glcore; o Vulkan entra por cima so no
         # amdgpu, pelo fliperos-kms-run.
@@ -14131,9 +14380,9 @@ class EmulatorsMenuTests(unittest.TestCase):
                 (tmp / path).chmod(0o755)
             rows = [r.split('|') for r in self.run_cmd('fliperos-emulators', 'list', env=env).stdout.splitlines()]
             # Os do menu do desktop (config/applications), na ordem dele, e o KOF.
-            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin',
-                                                    'supermodel', 'openbor', 'model2', 'fightcade', 'duckstation',
-                                                    'kof'])
+            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'flycast', 'pcsx2', 'pcsx2x6',
+                                                    'dolphin', 'supermodel', 'openbor', 'model2', 'fightcade',
+                                                    'duckstation', 'kof'])
             state = {r[0]: (r[1], r[2]) for r in rows}
             self.assertEqual(state['retroarch'], ('1', 'image'))
             self.assertEqual(state['flycast'], ('0', 'image'))
@@ -14216,8 +14465,10 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertEqual(latest('fightcade'), '2.1.45||unknown')
         # O build da imagem grava a versao de cada emulador dela.
         mk = (ROOT / 'fliperos-mkiso.sh').read_text()
-        for name in ('groovymame', 'pcsx2', 'openbor', 'dolphin'):
+        for name in ('groovymame', 'pcsx2', 'openbor'):
             self.assertIn('  record_version %s "' % name, mk)
+        self.assertIn('echo "$PKG_VERSION" > "$STAGING/usr/local/share/fliperos/emulator-versions.d/dolphin"',
+                      (ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text())
         for name in ('flycast', 'supermodel'):
             self.assertIn('echo "%s=$(git log -1 --format=\'%%cs %%h\')" >> /usr/local/share/fliperos/emulator-versions'
                           % name, mk)
