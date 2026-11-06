@@ -814,7 +814,7 @@ def list_geom():
     Deitado, a lista a esquerda e a imagem a direita; em pe, a imagem em
     cima, larga, e a lista embaixo."""
     if T.VERTICAL:
-        return (SX, SW - 8, 200, 6), (SX, 34, SW, 112)
+        return (SX, SW - 8, 156, 10), (SX + SW - 87, 34, 87, 116)
     px = SX + LIST_W + 14
     return (SX, LIST_W, 36, 13), (px, 36, SX + SW - px, LIST_SH)
 
@@ -897,7 +897,12 @@ def draw_list(fe, ui, now):
             W.text(ui, fit(label, room), color, x, y + 2)
     if len(fe.rows) > rows:
         W.scrollbar(ui, lx + lw + 4, y0, rows * 14 - 2 + (14 if sep else 0), fe.top, rows, len(fe.rows))
-    W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
+    count = "%d/%d" % (fe.cursor + 1, len(fe.rows))
+    if T.VERTICAL:
+        # Em pe a lista vai quase ate o fim da tela: o contador na letra pequena.
+        tiny.text(ui, count, T.LINE, lx + lw - tiny.width(count), y0 + rows * 14 + 2)
+    else:
+        W.text(ui, count, T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
     # A imagem, o logo e as informacoes (a direita, ou em cima em pe).
     game = fe.game()
     y0 = py
@@ -913,6 +918,12 @@ def draw_list(fe, ui, now):
         tiny.centered(ui, "LOOKING FOR ART...", T.CYAN, px + pw // 2, y0 + sh // 2 - 2)
     pygame.draw.rect(ui, T.PINK, (px, y0, pw, sh), 2)
     logo = image(fe, media(fe, game, "logo"), min(pw - 8, 200), 28)
+    if T.VERTICAL:
+        if logo:
+            # Dentro da imagem: o logo nao passa da borda e nao cobre a lista.
+            blit_center(ui, logo, px, y0 + sh - 32, pw, 28)
+        list_info_vertical(fe, ui, game, (SX, y0, px - SX - 6, sh), now, title=not logo)
+        return
     y = y0 + sh + 6
     if logo:
         blit_center(ui, logo, px, y0 + sh - 14, pw, 28)
@@ -936,11 +947,6 @@ def draw_list(fe, ui, now):
         if party:
             cabinet_row(ui, px + 22, y + 3, party["used"], party["max"] or 1, w=5, h=8, gap=1)
         y += 18
-    if T.VERTICAL:
-        # Em pe, o indicador do modo comercial embaixo, a esquerda.
-        if fe.commercial:
-            coin_box(fe, ui, SX, HH - COIN_H - 4, now)
-        return
     played = game.get("PlayedCount")
     chips = []
     if game.get("Favourite") == "1":
@@ -962,6 +968,45 @@ def draw_list(fe, ui, now):
         coin_box(fe, ui, px, min(y + 2, HH - COIN_H - 6), now)
     else:
         draw_synopsis(fe, ui, game, (px, y, pw, HH - 6 - y), now)
+
+
+def list_info_vertical(fe, ui, game, box, now, title=False):
+    """O modo lista em pe: a coluna a esquerda da imagem (que e em pe, 3:4,
+    no canto de cima a direita). De cima para baixo: o nome (so sem logo), o
+    ano e o fabricante (o que nao cabe corre em circulo), os icones dois por
+    linha e, no resto, a sinopse rolando; no modo comercial, no lugar da
+    sinopse, o indicador de ficha."""
+    x, y, w, h = box
+    bottom = y + h
+    if title:
+        ticker(ui, text_img(fe.fd.short_title(game).upper(), T.YELLOW), x, y, w, now)
+        y += 14
+    ticker(ui, text_img(facts_line(game).upper(), T.YELLOW), x, y + 1, w, now)
+    y += 14
+    # Os icones, dois por linha.
+    cell = (w - 6) // 2
+    rows = icon_rows(fe, game, 12)
+    for i, (img, text, color) in enumerate(rows):
+        cx = x + (i % 2) * (cell + 6)
+        if img:
+            ui.blit(img, (cx, y + 14 * (i // 2)))
+        off = img.get_width() + 3 if img else 0
+        tiny.text(ui, tiny.fit(text.upper(), cell - off), T.FG, cx + off, y + 14 * (i // 2) + 3)
+    y += 14 * ((len(rows) + 1) // 2)
+    if link_mark(fe, game) is not None:
+        # Um jogo de link: o globo (aceso se alguem joga) e os gabinetes dessa festa.
+        party = link_party(fe, game)
+        if link_kind(fe, game) == "net":
+            pads_icon(ui, x + 7, y + 6, party is not None)
+        else:
+            globe_icon(ui, x + 7, y + 6, 7, party is not None)
+        if party:
+            cabinet_row(ui, x + 22, y + 2, party["used"], party["max"] or 1, w=5, h=8, gap=1)
+        y += 14
+    if fe.commercial:
+        coin_box(fe, ui, x, min(y + 2, bottom - COIN_H), now)
+    else:
+        draw_synopsis(fe, ui, game, (x, y, w, bottom - y), now)
 
 
 def icon_strip(fe, ui, game, x, y, right):
@@ -1424,22 +1469,33 @@ def draw_flow(fe, ui, now):
     y = HH - 52 if commercial else HH - 46
     clone = is_clone(fe, g)
     # Em pe nao ha largura para o logo, os icones e o indicador: o nome.
-    narrow = commercial and getattr(fe, "vertical", False)
+    vertical = getattr(fe, "vertical", False)
+    narrow = commercial and vertical
     logo = None if clone or narrow else image(fe, media(fe, g, "logo"), 110, 30)
+    # Em pe, uma margem a direita (o texto nao encosta na borda da tela) e o
+    # que nao cabe corre em circulo.
+    right = SX + SW - (8 if vertical else 0)
     tx = SX
     if logo:
         blit_center(ui, logo, SX, y, 110, 30)
         tx = SX + 118
+    elif vertical:
+        title = (g.get("Title") or g["Name"]) if clone else fe.fd.short_title(g)
+        ticker(ui, text_img(title.upper(), T.YELLOW), SX, y + 2, 92, now)
     elif clone:
         # O clone: o nome completo, correndo (o logo seria o do pai).
         ticker(ui, text_img((g.get("Title") or g["Name"]).upper(), T.YELLOW), SX, y + 2, 150, now)
     else:
         W.text(ui, fit(fe.fd.short_title(g), 150), T.YELLOW, SX, y + 2)
     if logo:
-        W.text(ui, fit(facts_line(g), SX + SW - tx), T.CYAN, tx, y + 2)
+        facts_x, facts_w = tx, right - tx
     else:
-        W.text(ui, fit(facts_line(g), 150), T.CYAN, SX + 154, y + 2)
+        facts_x, facts_w = (SX + 100, right - SX - 100) if vertical else (SX + 154, 150)
         tx = SX
+    if vertical:
+        ticker(ui, text_img(facts_line(g).upper(), T.CYAN), facts_x, y + 2, facts_w, now)
+    else:
+        W.text(ui, fit(facts_line(g), facts_w), T.CYAN, facts_x, y + 2)
     if commercial:
         bx, by = SX + SW - COIN_W, HH - COIN_H - 8
         rows = icon_rows(fe, g, 12)
@@ -1447,7 +1503,7 @@ def draw_flow(fe, ui, now):
         icon_line(fe, ui, g, tx, y + 26, bx - 4, 12, rows[2:])
         coin_box(fe, ui, bx, by, now)
     else:
-        icon_line(fe, ui, g, tx, y + 14, SX + SW, 12)
+        icon_line(fe, ui, g, tx, y + 14, right, 12)
 
 
 def bottom_tab(ui, label, side, x0, width, y):
