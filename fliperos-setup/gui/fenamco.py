@@ -2,7 +2,7 @@
 
 Uma pasta como a do archive.org "Namco System 2X6" (NM00019 Tekken 5/ com
 "NM00019 TE51 DVD0 (DVD-ROM).iso.gz" e "NM00019 TE51, Ver.B4 a026051314505a.bin.gz"),
-posta em ~/roms/namco246 ou ~/roms/namco256 com qualquer nome, vira no frontend
+posta em ~/roms/namco2x6 com qualquer nome, vira no frontend
 um jogo pai (o da versao mais nova) e as outras versoes como clones. Uma versao
 e um disco e um dongle do mesmo codigo (TE51 com TE51); ao escolher uma, o
 frontend extrai o que ela precisa (ver unpack) e abre o PCSX2x6.
@@ -13,6 +13,7 @@ dongle os reaproveita, sem os .gz que foram apagados) e as versoes montadas.
 """
 import gzip
 import json
+import zlib
 import os
 import re
 import shutil
@@ -20,7 +21,7 @@ import threading
 import urllib.request
 import zipfile
 
-KEYS = ("namco246", "namco256")
+KEYS = ("namco2x6",)
 GAME_INDEX = os.environ.get("FLIPEROS_PCSX2X6_GAMEINDEX", "/opt/pcsx2x6/usr/bin/resources/GameIndex.yaml")
 PROVERB = os.environ.get("FLIPEROS_PROVERB_URL",
                          "https://github.com/PS2Homebrew-arcade/proverb/releases/download/nightly/proverb.zip")
@@ -34,6 +35,10 @@ DONGLE_TAIL = re.compile(r"^(?P<code>[\w-]+), (?P<ver>Ver\.\S+)(?: (?P<serial>a\
                          r"\.bin(?P<gz>\.gz)?$", re.I)
 # Discos que sao ferramenta, nao jogo.
 TOOL_TAGS = ("firmware updater",)
+
+
+class PackError(OSError):
+    """Um arquivo do pacote que nao da para extrair (cortado, corrompido)."""
 
 
 def home():
@@ -110,9 +115,6 @@ def platform_of(region):
     return "246" if "246" in region else "256"
 
 
-def board(region):
-    """A placa (~/save/PLACA, ~/bios/PLACA) que a regiao do GameIndex diz."""
-    return "namco246" if platform_of(region) == "246" else "namco256"
 
 
 def registry_path(folder):
@@ -141,9 +143,8 @@ def write_registry(folder, data):
 
 
 def roots(system):
-    """As duas pastas Namco de ~/roms, pela pasta do sistema."""
-    base = os.path.dirname(os.path.normpath(system["folder"]))
-    return {k: os.path.join(base, k) for k in KEYS}
+    """A pasta Namco de ~/roms (a unica: namco2x6)."""
+    return {system["key"]: os.path.normpath(system["folder"])}
 
 
 def parts_in(folder, depth=2):
@@ -299,6 +300,14 @@ def _gunzip(src, dst, progress, cancel, base, total):
                 progress(base + raw.tell(), total, os.path.basename(src))
             out.truncate(out.tell())
         os.replace(tmp, dst)
+    except (EOFError, gzip.BadGzipFile, zlib.error) as e:
+        # Um .gz cortado (a copia para o gabinete parou antes do fim) so da erro
+        # quando a leitura chega nele.
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise PackError("incomplete or corrupt file: %s (%s)" % (os.path.basename(src), e)) from e
     except BaseException:
         try:
             os.remove(tmp)
@@ -348,6 +357,28 @@ def find_version(system, name, index=None):
     return None
 
 
+def damaged_dump(path):
+    """O que o emulador recusa ao abrir um disco (ACATA_IO.cpp): imagem de CD
+    em que cada setor de 2336 bytes foi cortado em 2048, com o subcabecalho de
+    8 bytes na frente e os 8 do fim perdidos. O disco ISO9660 certo comeca em
+    0x8000, o de 2336/2064 e o cru de CD tem a deles; so o do 0x8008 e perda."""
+    def pvd(f, pos):
+        f.seek(pos)
+        return f.read(6) == b"\x01CD001"
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            if f.read(12) == b"\x00" + b"\xff" * 10 + b"\x00" or pvd(f, 16 * 2048):
+                return False
+            if size % 2336 == 0 and pvd(f, 16 * 2336 + 8):
+                return False
+            if size % 2064 == 0 and pvd(f, 16 * 2064 + 12):
+                return False
+            return pvd(f, 16 * 2048 + 8)
+    except OSError:
+        return False
+
+
 def unpack(system, name, progress, cancel=None, index=None):
     """Extrai a versao NAME para a pasta da placa dela: o .acgame, a pasta com
     o boot.elf e o disco, e o dongle em ~/save/PLACA. Quando tudo deu certo, os
@@ -361,9 +392,8 @@ def unpack(system, name, progress, cancel=None, index=None):
         raise OSError("the files of this game are gone")
     gid, disc, dongle = found
     meta = index.get(gid) or {}
-    plat = board(meta.get("region"))
     folder = os.path.normpath(system["folder"])      # onde a pessoa pos o pacote
-    save = os.path.join(home(), "save", plat)
+    save = os.path.join(home(), "save", system["key"])      # os dongles (e os cartoes): uma pasta so
     reg = read_registry(folder)
     title = title_of(gid, index)
     vdir = os.path.join(folder, name)
@@ -385,6 +415,9 @@ def unpack(system, name, progress, cancel=None, index=None):
         iso = os.path.join(vdir, name + "." + disc["ext"])
         if disc["gz"]:
             done += _gunzip(disc["path"], iso, progress, cancel, done, total)
+            if disc["ext"] == "iso" and (meta.get("media") or "DVD") != "HDD" and damaged_dump(iso):
+                # Nada e apagado: o .gz fica, a pasta pela metade sai.
+                raise PackError("damaged dump: %s lost bytes in every sector" % os.path.basename(disc["path"]))
             reg["discs"][disc["file"]] = {"path": iso}
             used.append(disc["path"])
         elif shared_disc:

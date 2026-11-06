@@ -1101,7 +1101,7 @@ class RomFoldersTests(unittest.TestCase):
             for _ in range(2):  # a segunda rodada nao muda nada
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             roms = tmp / 'roms'
-            for emu in ('mame', 'ps2', 'namco246', 'namco256', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
+            for emu in ('mame', 'ps2', 'namco2x6', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
                         'openbor/Paks', 'hypseus', 'fightcade', 'fightcade/fbneo', 'fightcade/flycast',
                         'fightcade/snes9x', 'fightcade/fc1'):
                 self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
@@ -1390,7 +1390,7 @@ class RomFoldersTests(unittest.TestCase):
             for kind in ('snap', 'preview', 'logo', 'box', 'marquee', 'dmd', 'texto'):
                 names = sorted(p.name for p in (tmp / 'media' / kind).iterdir())
                 self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'mame', 'model2', 'model3',
-                                         'namco246', 'namco256', 'naomi', 'naomi2', 'ps2', 'retroarch'], kind)
+                                         'namco2x6', 'naomi', 'naomi2', 'ps2', 'retroarch'], kind)
                 self.assertEqual([p.name for p in (tmp / 'media' / kind / 'retroarch').iterdir()], ['mame2010'], kind)
             self.assertTrue((tmp / 'media/preview/model2').is_symlink())
             self.assertEqual(list((tmp / 'disk').iterdir()), [])
@@ -10297,30 +10297,57 @@ class EmulatorModeTests(unittest.TestCase):
                       ROOTFS)
 
     def test_pcsx2x6_has_its_own_data_bios_and_cards(self):
-        # O fork dos arcades Namco nao divide configuracao com o PCSX2 oficial.
+        # O fork dos arcades Namco nao divide configuracao com o PCSX2 oficial; uma
+        # pasta so de jogos, BIOS, dongles e memoria (namco2x6).
         roms = (ROOT / 'config/fliperos-roms').read_text()
-        for line in ('folder "$roms/namco246"', 'folder "$roms/namco256"', 'folder "$bios/namco246"', 'folder "$bios/namco256"',
-                     'folder "$save/namco246"', 'folder "$save/namco256"',
-                     'folder "$nvram/namco246"', 'folder "$nvram/namco256"','cfglink pcsx2x6 "$HOME/.config/PCSX2x6"'):
+        for line in ('folder "$roms/namco2x6"', 'folder "$bios/namco2x6"', 'folder "$save/namco2x6"',
+                     'folder "$nvram/namco2x6"', 'cfglink pcsx2x6 "$HOME/.config/PCSX2x6"'):
             self.assertIn(line, roms, line)
         with tempfile.TemporaryDirectory() as home:
             extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
                      'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
+            bios = Path(home) / 'bios/namco2x6'
+            bios.mkdir(parents=True)
+            for name in ('COH-H31000.BIN', '256.BIN'):
+                (bios / name).write_bytes(b'')
             out = self.run_x11(['pcsx2x6', 'game.iso'], home=home, extra=extra).stdout
             self.assertIn('pcsx2x6 -fullscreen -nogui game.iso', out)
-            ini = (Path(home) / '.config/PCSX2x6/inis/PCSX2.ini').read_text()
-            self.assertIn('Bios = %s/bios/namco246\n' % home, ini)
-            self.assertIn('MemoryCards = %s/save/namco246\n' % home, ini)
-            # Um jogo da 256 abre com a BIOS e os cartoes da pasta da 256.
-            self.run_x11(['pcsx2x6', '/roms/namco256/tekken5.iso'], home=home, extra=extra)
-            ini = (Path(home) / '.config/PCSX2x6/inis/PCSX2.ini').read_text()
-            self.assertIn('Bios = %s/bios/namco256\n' % home, ini)
-            self.assertIn('MemoryCards = %s/save/namco256\n' % home, ini)
-            self.run_x11(['pcsx2x6', '/roms/namco246/tekken4.iso'], home=home, extra=extra)
-            ini = (Path(home) / '.config/PCSX2x6/inis/PCSX2.ini').read_text()
-            self.assertIn('Bios = %s/bios/namco246\n' % home, ini)
-            self.assertIn('RecursivePaths = /home/fliperos/roms/namco246\n', ini)
-            self.assertIn('RecursivePaths = /home/fliperos/roms/namco256\n', ini)
+            ini_path = Path(home) / '.config/PCSX2x6/inis/PCSX2.ini'
+            ini = ini_path.read_text()
+            self.assertIn('Bios = %s/bios/namco2x6\n' % home, ini)
+            self.assertIn('MemoryCards = %s/save/namco2x6\n' % home, ini)
+            self.assertIn('RecursivePaths = /home/fliperos/roms/namco2x6\n', ini)
+            # Os contadores de teste (FPS, CPU...) que o emulador gravou ao fechar saem.
+            ini_path.write_text(ini.replace('[EmuCore/GS]\n', '[EmuCore/GS]\nOsdShowFPS = true\nOsdShowGPU = true\n'))
+            self.run_x11(['pcsx2x6', 'game.iso'], home=home, extra=extra)
+            ini = ini_path.read_text()
+            self.assertNotIn('OsdShowFPS = true', ini)
+            self.assertNotIn('OsdShowGPU = true', ini)
+            self.assertIn('OsdShowFPS = false\n', ini)
+            # A 256.BIN serve as duas placas: a COH-H31000.BIN da 246 derrubou o
+            # Soul Calibur II ("Jump to unaligned address"), so entra sem ela.
+            self.assertIn('BIOS = 256.BIN\n', ini)
+            roms_dir = Path(home) / 'roms/namco2x6'
+            roms_dir.mkdir(parents=True)
+            for gid, platform in (('NM00019', '256'), ('NM00007', '246'), ('NM00032', 'super256')):
+                (roms_dir / (gid + '.acgame')).write_text('[game]\ngameid=%s\nplatform=%s\n' % (gid, platform))
+                self.run_x11(['pcsx2x6', str(roms_dir / (gid + '.acgame'))], home=home, extra=extra)
+                ini = ini_path.read_text()
+                self.assertIn('BIOS = 256.BIN\n', ini, platform)
+                self.assertIn('Bios = %s/bios/namco2x6\n' % home, ini)
+            # So com a da 246, ela abre.
+            (bios / '256.BIN').unlink()
+            self.run_x11(['pcsx2x6', str(roms_dir / 'NM00007.acgame')], home=home, extra=extra)
+            self.assertIn('BIOS = COH-H31000.BIN\n', ini_path.read_text())
+            (bios / '256.BIN').write_bytes(b'')
+            # Um ini de antes, com as pastas por placa: viram a unica, sem repetir.
+            ini_path.write_text(ini_path.read_text().replace('RecursivePaths = /home/fliperos/roms/namco2x6\n',
+                                                              'RecursivePaths = /home/fliperos/roms/namco246\n'
+                                                              'RecursivePaths = /home/fliperos/roms/namco256\n'))
+            self.run_x11(['pcsx2x6', 'game.iso'], home=home, extra=extra)
+            ini = ini_path.read_text()
+            self.assertEqual(ini.count('RecursivePaths = /home/fliperos/roms/namco2x6\n'), 1)
+            self.assertNotIn('roms/namco246', ini)
             self.assertFalse((Path(home) / '.config/PCSX2').exists())
 
     def test_pcsx2x6_arcade_buttons_follow_the_setup_mapping(self):
@@ -10336,7 +10363,7 @@ class EmulatorModeTests(unittest.TestCase):
                  'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set'),
                  'FLIPEROS_PCSX2X6_BINDINGS': str(ROOT / 'config/pcsx2x6-jvs-bindings')}
         with tempfile.TemporaryDirectory() as home:
-            self.run_x11(['pcsx2x6', '/roms/namco256/game.acgame'], home=home, extra=extra)
+            self.run_x11(['pcsx2x6', '/roms/namco2x6/game.acgame'], home=home, extra=extra)
             ini_path = Path(home) / '.config/PCSX2x6/inis/PCSX2.ini'
             jvs = ini_path.read_text().split('[JVS]')[1].split('\n[')[0]
             # Sem o fliperos-buttons (aqui), o botao N do jogo na posicao N do
@@ -10350,7 +10377,7 @@ class EmulatorModeTests(unittest.TestCase):
             # O que a pessoa muda no proprio PCSX2x6 fica (nada e regravado).
             ini_path.write_text(ini_path.read_text().replace('Tekken_LeftPunch_P1 = SDL-0/FaceWest',
                                                              'Tekken_LeftPunch_P1 = Keyboard/J'))
-            self.run_x11(['pcsx2x6', '/roms/namco256/game.acgame'], home=home, extra=extra)
+            self.run_x11(['pcsx2x6', '/roms/namco2x6/game.acgame'], home=home, extra=extra)
             self.assertIn('Tekken_LeftPunch_P1 = Keyboard/J\n', ini_path.read_text())
         # O PCSX2 oficial nao ganha a secao [JVS].
         with tempfile.TemporaryDirectory() as home:
@@ -10359,29 +10386,80 @@ class EmulatorModeTests(unittest.TestCase):
 
     def test_pcsx2x6_game_memory_lives_in_nvram(self):
         # O fork grava a memoria do jogo em sram.bin dentro da pasta do jogo:
-        # ela vai para ~/nvram/<placa>/<gameid>.bin e o sram.bin vira link.
+        # ela vai para ~/nvram/namco2x6/<gameid>.bin e o sram.bin vira link.
         extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
                  'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
         with tempfile.TemporaryDirectory() as home:
             home = Path(home)
-            for board, gid, extra_keys in (('namco246', 'NM00004', ''), ('namco256', 'NM00011', 'subdir=game\r\n')):
-                folder = home / 'roms' / board
+            folder = home / 'roms/namco2x6'
+            for gid, extra_keys in (('NM00004', ''), ('NM00011', 'subdir=game\r\n')):
                 (folder / ('game' if extra_keys else gid)).mkdir(parents=True)
                 (folder / (gid + '.acgame')).write_text('[game]\r\ngameid=%s\r\n[data]\r\n%s' % (gid, extra_keys))
                 self.run_x11(['pcsx2x6', str(folder / (gid + '.acgame'))], home=str(home), extra=extra)
                 sram = folder / ('game' if extra_keys else gid) / 'sram.bin'
-                self.assertTrue(sram.is_symlink(), board)
-                self.assertEqual(sram.readlink(), home / 'nvram' / board / (gid + '.bin'), board)
+                self.assertTrue(sram.is_symlink(), gid)
+                self.assertEqual(sram.readlink(), home / 'nvram/namco2x6' / (gid + '.bin'), gid)
             # Um sram.bin de verdade (de antes) vai para a nvram, sem perder o que tem.
-            folder = home / 'roms/namco246/NM00004'
-            (folder / 'sram.bin').unlink()
-            (folder / 'sram.bin').write_bytes(b'\x01' * 16)
-            self.run_x11(['pcsx2x6', str(home / 'roms/namco246/NM00004.acgame')], home=str(home), extra=extra)
-            self.assertEqual((home / 'nvram/namco246/NM00004.bin').read_bytes(), b'\x01' * 16)
-            self.assertTrue((folder / 'sram.bin').is_symlink())
+            game = folder / 'NM00004'
+            (game / 'sram.bin').unlink()
+            (game / 'sram.bin').write_bytes(b'\x01' * 16)
+            self.run_x11(['pcsx2x6', str(folder / 'NM00004.acgame')], home=str(home), extra=extra)
+            self.assertEqual((home / 'nvram/namco2x6/NM00004.bin').read_bytes(), b'\x01' * 16)
+            self.assertTrue((game / 'sram.bin').is_symlink())
+            # Um link que ficou sem destino (a pasta da memoria mudou de nome) e refeito.
+            (game / 'sram.bin').unlink()
+            (game / 'sram.bin').symlink_to(home / 'nvram/namco256/NM00004.bin')
+            self.run_x11(['pcsx2x6', str(folder / 'NM00004.acgame')], home=str(home), extra=extra)
+            self.assertEqual((game / 'sram.bin').readlink(), home / 'nvram/namco2x6/NM00004.bin')
             # Sem .acgame (o PCSX2 oficial, uma imagem solta) nada disso e criado.
             self.run_x11(['pcsx2', 'game.iso'], home=str(home), extra=extra)
-            self.assertEqual(sorted(p.name for p in (home / 'nvram').iterdir()), ['namco246', 'namco256'])
+            self.assertEqual(sorted(p.name for p in (home / 'nvram').iterdir()), ['namco2x6'])
+
+    def test_the_two_namco_folders_become_one(self):
+        # As pastas por placa de antes (namco246, namco256) entram na namco2x6, em
+        # ~/roms, ~/bios, ~/save, ~/nvram e ~/media, sem sobrescrever nada.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            roms, bios, save, nvram, media = (tmp / n for n in ('roms', 'bios', 'save', 'nvram', 'media'))
+            (roms / 'namco256/pack').mkdir(parents=True)
+            (roms / 'namco256/pack/NM00019 TE51 DVD0 (DVD-ROM).iso.gz').write_bytes(b'x')
+            (roms / 'namco256/NM00019.acgame').write_text('[game]\n')
+            (roms / 'namco246').mkdir()
+            (roms / 'namco246/NM00004.acgame').write_text('[game]\n')
+            (roms / 'namco256/.fliperos-namco.json').write_text(
+                '{"discs": {"a": {"path": "%s/namco256/NM00019/NM00019.iso"}}, "dongles": {"b": {"path": "%s/namco256/x.ps2"}}}'
+                % (roms, save))
+            (bios / 'namco256').mkdir(parents=True)
+            (bios / 'namco256/256.BIN').write_bytes(b'b')
+            (save / 'namco256').mkdir(parents=True)
+            (save / 'namco256/NM00019.ps2').write_bytes(b'd')
+            (nvram / 'namco256').mkdir(parents=True)
+            (nvram / 'namco256/NM00019.bin').write_bytes(b'n')
+            (media / 'snap/namco256').mkdir(parents=True)
+            (media / 'snap/namco256/NM00019.png').write_bytes(b'p')
+            info = tmp / 'info'
+            info.mkdir()
+            env = dict(os.environ, FLIPEROS_ROMS=str(roms), FLIPEROS_BIOS=str(bios), FLIPEROS_MEDIA=str(media),
+                       FLIPEROS_NVRAM=str(nvram), FLIPEROS_SAVE=str(save), FLIPEROS_CORE_INFO=str(info),
+                       HOME=str(tmp), FLIPEROS_CONFIG_LINKS=str(tmp / 'config'), FLIPEROS_ETC=str(tmp / 'etc'))
+            for _ in range(2):      # a segunda rodada nao muda nada
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertTrue((roms / 'namco2x6/pack/NM00019 TE51 DVD0 (DVD-ROM).iso.gz').is_file())
+            self.assertTrue((roms / 'namco2x6/NM00019.acgame').is_file())
+            self.assertTrue((roms / 'namco2x6/NM00004.acgame').is_file())
+            self.assertTrue((bios / 'namco2x6/256.BIN').is_file())
+            self.assertTrue((save / 'namco2x6/NM00019.ps2').is_file())
+            self.assertTrue((nvram / 'namco2x6/NM00019.bin').is_file())
+            self.assertTrue((media / 'snap/namco2x6/NM00019.png').is_file())
+            for old in (roms, bios, save, nvram):
+                self.assertFalse((old / 'namco246').exists(), old)
+                self.assertFalse((old / 'namco256').exists(), old)
+            self.assertFalse((media / 'snap/namco256').exists())
+            # O registro dos pacotes acompanha a pasta nova.
+            reg = (roms / 'namco2x6/.fliperos-namco.json').read_text()
+            self.assertIn('%s/namco2x6/NM00019/NM00019.iso' % roms, reg)
+            self.assertIn('%s/namco2x6/x.ps2' % save, reg)
+            self.assertNotIn('namco256', reg)
 
     def test_pcsx2_starts_from_the_fliperos_ini(self):
         # Sem o assistente, no Big Picture, sem o mouse, BIOS e jogos em ~.

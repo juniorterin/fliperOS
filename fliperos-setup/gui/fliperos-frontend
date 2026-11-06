@@ -1509,6 +1509,17 @@ class Frontend:
             except Exception as e:      # o disco cheio, o proverb fora do ar, um .gz truncado...
                 ov["error"] = str(e)
                 ov["result"] = False
+                # O motivo fica num log (o aviso da tela e curto).
+                try:
+                    import traceback
+                    path = os.path.join(os.path.expanduser("~"), ".cache", "fliperos", "namco-unpack.log")
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, "a", encoding="utf-8") as log:
+                        log.write("%s %s
+%s
+" % (time.strftime("%Y-%m-%d %H:%M:%S"), name, traceback.format_exc()))
+                except OSError:
+                    pass
         threading.Thread(target=work, daemon=True).start()
 
     def unpack_tick(self):
@@ -1529,21 +1540,33 @@ class Frontend:
         elif result == "cancel":
             self.say("EXTRACTION CANCELLED", 3)
         else:
-            self.say(("NOT ENOUGH SPACE" if "space" in error else "COULD NOT EXTRACT THE GAME"), 4)
+            if "damaged dump" in error:
+                self.say("DISC DUMP IS DAMAGED: GET ANOTHER COPY", 6)
+            elif "incomplete" in error:
+                self.say("FILE INCOMPLETE: COPY IT AGAIN", 5)
+            elif "space" in error:
+                self.say("NOT ENOUGH SPACE", 4)
+            elif "boot.elf" in error or "urlopen" in error or "URLError" in error:
+                self.say("NO NETWORK FOR THE BOOT FILE", 4)
+            else:
+                self.say("COULD NOT EXTRACT THE GAME", 4)
 
     def launch(self, argv=None, game=None):
         g = game or self.game()
+        if g and g.get("Packed") and argv is None:
+            # Um jogo Namco ainda em .gz nao tem comando: extrai (com a barra no
+            # centro) e so entao abre (unpack_tick). Vem antes do "sem comando".
+            if self.locked():
+                self.nag()
+                return
+            self.unpack_start(g)
+            return
         argv = argv or (self.lib.command(g) if g else None)
         if not argv:
             self.say("CANNOT OPEN THIS GAME")
             return
         if self.locked():
             self.nag()
-            return
-        if g and g.get("Packed") and argv is None:
-            # Um jogo Namco ainda em .gz: extrai (com a barra no centro) e so
-            # entao abre (unpack_tick).
-            self.unpack_start(g)
             return
         self.remember()
         pg = self.pg

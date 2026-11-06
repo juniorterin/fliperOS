@@ -324,10 +324,9 @@ bios_standalone() {
     # DuckStation: as BIOS soltas em ~/bios (BIOS > SearchDirectory); uma das
     # tres basta, e as que ja estao la nao sao baixadas de novo.
     ps1) echo ". scph5500.bin scph5501.bin scph5502.bin" ;;
-    # PCSX2x6: a BIOS da placa de arcade (o fork a acha pelo conteudo, de
-    # qualquer nome), uma pasta por placa como em ~/roms.
-    namco246) echo "namco246 COH-H31000.BIN" ;;
-    namco256) echo "namco256 256.BIN" ;;
+    # PCSX2x6: a 256.BIN serve a 246 e a 256 (o fork a acha pelo conteudo); a
+    # COH-H31000.BIN, a de 2000, travou o Soul Calibur II, entao nao e baixada.
+    namco2x6) echo "namco2x6 256.BIN" ;;
   esac
   return 0
 }
@@ -338,10 +337,7 @@ bios_standalone() {
 # os de fabrica; a extensao em minusculas e a que ele procura).
 bios_standalone_extra() {
   case $1 in
-    namco246) printf '%s %s\n' COH-H31000.NVM "$BIOS_ROOT/namco246/COH-H31000.nvm" \
-      COH-H31000.MEC "$BIOS_ROOT/namco246/COH-H31000.mec" ;;
-    namco256) printf '%s %s\n' 256.NVM "$BIOS_ROOT/namco256/256.nvm" \
-      256.MEC "$BIOS_ROOT/namco256/256.mec" ;;
+    namco2x6) printf '%s %s\n' 256.NVM "$BIOS_ROOT/namco2x6/256.nvm" 256.MEC "$BIOS_ROOT/namco2x6/256.mec" ;;
   esac
   return 0
 }

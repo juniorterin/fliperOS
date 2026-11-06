@@ -68,6 +68,13 @@ moveto() {
   rmdir "$1" 2> /dev/null
   return 0
 }
+# merge_old ANTIGA NOVA: o que tem numa pasta de antes (so os arquivos: o
+# _info.txt e nosso) vai para a nova, sem sobrescrever nada.
+merge_old() {
+  [[ -d $1 && ! -L $1 ]] || return 0
+  rm -f "$1/_info.txt"
+  moveto "$1" "$2"
+}
 renameto() {
   if [[ -L $1 ]]; then
     [[ -e $2 || -L $2 ]] && return 0
@@ -94,10 +101,15 @@ if [[ -e $roms/duckstation || -L $roms/duckstation ]]; then
 fi
 [[ ! -x ${FLIPEROS_DUCKSTATION_BIN:-/usr/local/bin/duckstation} ]] ||
   folder "$roms/ps1" "DuckStation (PlayStation): .cue/.bin .chd .pbp .m3u .iso. It also lists the games in ~/roms/retroarch/pcsx_rearmed. The BIOS (scph5501.bin...) goes in ~/bios."
-# PCSX2x6, o fork do PCSX2 dos arcades Namco: uma pasta por placa, e so elas
-# abrem nele (o PCSX2 oficial fica com a ~/roms/ps2).
-folder "$roms/namco246" "PCSX2x6: Namco System 246 (Tekken 4, Soul Calibur II, Time Crisis 3...). Each game is a NM00000.acgame file (a text file: name, gameid, platform, dongle...) plus a folder with the same name holding its boot.elf and its image (.chd). The game's dongle (NM00000.ps2) goes in ~/save/namco246 and the arcade BIOS in ~/bios/namco246."
-folder "$roms/namco256" "PCSX2x6: Namco System 256 (Tekken 5, Soul Calibur III...). Each game is a NM00000.acgame file (a text file: name, gameid, platform, dongle...) plus a folder with the same name holding its boot.elf and its image (.chd). The game's dongle (NM00000.ps2) goes in ~/save/namco256 and the arcade BIOS in ~/bios/namco256."
+# PCSX2x6, o fork do PCSX2 dos arcades Namco System 246, 256 e Super 256: uma
+# pasta so, e so ela abre nele (o PCSX2 oficial fica com a ~/roms/ps2). As
+# pastas por placa de antes (namco246, namco256) entram nela, sem sobrescrever
+# nada, e os caminhos do registro dos pacotes acompanham.
+merge_old "$roms/namco246" "$roms/namco2x6"
+merge_old "$roms/namco256" "$roms/namco2x6"
+[[ ! -f $roms/namco2x6/.fliperos-namco.json ]] ||
+  sed -i -E 's#/(roms|save)/namco2(46|56)/#/\1/namco2x6/#g' "$roms/namco2x6/.fliperos-namco.json" 2> /dev/null
+folder "$roms/namco2x6" "PCSX2x6: Namco System 246, 256 and Super 256 (Tekken 4 and 5, Soul Calibur II and III, Time Crisis 3 and 4...). Each game is a NM00000.acgame file (a text file: name, gameid, platform, dongle...) plus a folder with the same name holding its boot.elf and its image (.chd, .iso or the hard disk .img); or just drop a folder of the archive.org \"Namco System 2X6\" .gz files here and choose the game in the frontend: it extracts what it needs. The game's dongle (NM00000.ps2) goes in ~/save/namco2x6 and the arcade BIOS in ~/bios/namco2x6."
 folder "$roms/dreamcast" "Flycast: Dreamcast (.gdi .cdi .chd). BIOS in ~/bios/dc."
 folder "$roms/naomi" "Flycast: Sega Naomi (MAME .zip sets; a GD-ROM game also needs its CHD folder). BIOS (naomi.zip) in ~/bios/dc."
 folder "$roms/naomi2" "Flycast: Sega Naomi 2 (MAME .zip sets). BIOS (naomi2.zip) in ~/bios/dc."
@@ -163,8 +175,9 @@ done < <(awk -F' = ' '
 folder "$bios" "BIOS. RetroArch reads the files placed right here (its system folder) and the subfolders its cores use; the other emulators read their own subfolder."
 folder "$bios/dc" "Flycast and the RetroArch Flycast core: dc_boot.bin, dc_flash.bin, naomi.zip, naomi2.zip, awbios.zip..."
 folder "$bios/ps2" "PCSX2: the PlayStation 2 BIOS (.bin)."
-folder "$bios/namco246" "PCSX2x6: the Namco System 246 arcade BIOS (for the games in ~/roms/namco246)."
-folder "$bios/namco256" "PCSX2x6: the Namco System 256 arcade BIOS (for the games in ~/roms/namco256)."
+merge_old "$bios/namco246" "$bios/namco2x6"
+merge_old "$bios/namco256" "$bios/namco2x6"
+folder "$bios/namco2x6" "PCSX2x6: the Namco System 246, 256 and Super 256 arcade BIOS: 256.BIN, with its .nvm and .mec, serves all three boards."
 folder "$bios/mame" "GroovyMAME: BIOS and device sets (neogeo.zip, qsound.zip...). They also work from ~/roms/mame."
 
 # link_dir LINK PASTA faz de LINK um link para PASTA. Se LINK era uma pasta,
@@ -205,6 +218,10 @@ folder "$media/texto" "Game descriptions (.txt), the same folders as ~/roms: tex
 # cada emulador e a de cada core): a arte de uma pasta de jogos fica na de
 # mesmo nome, e cada uma aceita a custom folder dela (Setup > Games > Folders).
 for type in snap preview logo box marquee dmd texto; do
+  merge_old "$media/$type/namco246" "$media/$type/namco2x6"
+  merge_old "$media/$type/namco256" "$media/$type/namco2x6"
+done
+for type in snap preview logo box marquee dmd texto; do
   [[ -d $media/$type ]] || continue
   for dir in "$roms"/*/ "$roms"/retroarch/*/; do
     [[ -d $dir ]] || continue
@@ -238,7 +255,7 @@ if [[ -d $nvram && ! -e $nvram/mame ]]; then
   rm -f "$nvram/_info.txt"
   mkdir -p "$nvram/mame" 2> /dev/null &&
     find "$nvram/" -mindepth 1 -maxdepth 1 -type d ! -name mame ! -name flycast ! -name model2 ! -name model3 \
-      ! -name hypseus ! -name retroarch ! -name fightcade ! -name '.*' ! -name 'old-*' ! -name 'old[0-9]*-*' \
+      ! -name hypseus ! -name retroarch ! -name fightcade ! -name 'namco2*' ! -name '.*' ! -name 'old-*' ! -name 'old[0-9]*-*' \
       -exec mv -n -t "$nvram/mame" {} + 2> /dev/null
 fi
 [[ -L $mame_home/nvram && $(readlink -- "$mame_home/nvram") == "$nvram" ]] && rm -f -- "$mame_home/nvram"
@@ -246,8 +263,9 @@ folder "$nvram" "Arcade memory kept without power (dip settings, credits, scores
 folder "$nvram/mame" "GroovyMAME: one folder per game set. To start a game from zero, delete its folder."
 folder "$nvram/flycast" "Flycast: Naomi and Atomiswave memory (<set>.zip.nvmem, .nvmem2, .eeprom) and the Dreamcast memory cards (vmu_save_*.bin)."
 folder "$nvram/model2" "SM2-Emu (Sega Model 2): the NVRAM and EEPROM of each game, and its save states in states/."
-folder "$nvram/namco246" "PCSX2x6, Namco System 246: the memory of each game (32 KB, NM00000.bin: settings, credits, scores). To start a game from zero, delete its file."
-folder "$nvram/namco256" "PCSX2x6, Namco System 256: the memory of each game (32 KB, NM00000.bin: settings, credits, scores). To start a game from zero, delete its file."
+merge_old "$nvram/namco246" "$nvram/namco2x6"
+merge_old "$nvram/namco256" "$nvram/namco2x6"
+folder "$nvram/namco2x6" "PCSX2x6, Namco System 246/256: the memory of each game (32 KB, NM00000.bin: settings, credits, scores). To start a game from zero, delete its file."
 folder "$nvram/model3" "Supermodel (Sega Model 3): one <set>.nv per game."
 folder "$nvram/hypseus" "Hypseus Singe (laserdisc): the memory of each game."
 folder "$nvram/fightcade" "Fightcade 2: one folder per emulator that keeps arcade memory here."
@@ -259,8 +277,9 @@ folder "$save" "What you save while you play, one folder per emulator: RetroArch
 folder "$save/retroarch" "RetroArch: the game saves (.srm) and the save states (.state), also the MAME 2010 settings."
 folder "$save/mame" "GroovyMAME: the save states (F7 saves, F8 loads), one folder per game set."
 folder "$save/ps2" "PCSX2: the memory cards (.ps2) and their folders."
-folder "$save/namco246" "PCSX2x6, Namco System 246: the dongle of each game (NM00000.ps2, a memory card image; the game rewrites it, so keep an original copy elsewhere) and the save cards some games use (card= in the .acgame)."
-folder "$save/namco256" "PCSX2x6, Namco System 256: the dongle of each game (NM00000.ps2, a memory card image; the game rewrites it, so keep an original copy elsewhere) and the save cards some games use (card= in the .acgame)."
+merge_old "$save/namco246" "$save/namco2x6"
+merge_old "$save/namco256" "$save/namco2x6"
+folder "$save/namco2x6" "PCSX2x6, Namco System 246/256: the dongle of each game (NM00000.ps2, a memory card image; the game rewrites it, so keep an original copy: the frontend leaves one in originals/) and the save cards some games use (card= in the .acgame)."
 link_dir "$mame_home/nvram" "$nvram/mame"
 link_dir "$mame_home/sta" "$save/mame"
 [[ -d $saves_old/retroarch ]] && link_dir "$saves_old/retroarch" "$save/retroarch"

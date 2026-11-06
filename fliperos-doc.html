@@ -28609,7 +28609,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>Both open <strong>inside the LXDE desktop</strong> (they are X programs), from the <strong>Games</strong> menu. Their UIs were made for larger screens: on a 15 kHz CRT at 640x480 they are cramped — on a 31 kHz monitor or an LCD they are much better.</p>
 <h2 id="namco-system-246-and-256-pcsx2x6">Namco System 246 and 256 (PCSX2x6)</h2>
 <p>PCSX2x6 is PS2Homebrew-arcade's fork of PCSX2 for the Namco arcade boards (Tekken 4 and 5, Soul Calibur II and III, Time Crisis 3 and 4...). It is an emulator of its own, next to PCSX2, which keeps <code>~/roms/ps2</code>; the image carries v0.2.22, checked by sha256 (<code>/opt/pcsx2x6</code>), and update 44 brings it to cabinets already installed. Its settings are in <code>~/.config/PCSX2x6</code>, apart from PCSX2's.</p>
-<p>Each game is a <code>NM00000.acgame</code> file (a text file with the game's name, its <code>gameid</code>, the <code>platform</code>, the dongle and the image) plus a folder of the same name with the game's <code>boot.elf</code> (from the fork's proverb project) and its image (<code>.chd</code> or <code>.iso</code>), in <code>~/roms/namco246</code> or <code>~/roms/namco256</code>. Per board, like <code>~/roms</code>:</p>
+<p>Each game is a <code>NM00000.acgame</code> file (a text file with the game's name, its <code>gameid</code>, the <code>platform</code>, the dongle and the image) plus a folder of the same name with the game's <code>boot.elf</code> (from the fork's proverb project) and its image (<code>.chd</code> or <code>.iso</code>), in <code>~/roms/namco2x6</code> (one folder for the 246, the 256 and the Super 256; the older <code>namco246</code> and <code>namco256</code> folders are moved into it at the next login). One folder in each place, like <code>~/roms</code>:</p>
 <table>
 <thead>
 <tr>
@@ -28619,22 +28619,22 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 </thead>
 <tbody>
 <tr>
-<td>The arcade BIOS (<code>COH-H31000.BIN</code> for the 246, <code>256.BIN</code> for the 256, with their <code>.nvm</code> and <code>.mec</code>)</td>
-<td><code>~/bios/namco246</code>, <code>~/bios/namco256</code></td>
+<td>The arcade BIOS: <code>256.BIN</code> with its <code>.nvm</code> and <code>.mec</code>, for the 246, the 256 and the Super 256 (the 246 board's own <code>COH-H31000.BIN</code> made Soul Calibur II stop with "Jump to unaligned address", so it is only used when <code>256.BIN</code> is missing)</td>
+<td><code>~/bios/namco2x6</code></td>
 </tr>
 <tr>
 <td>The game's dongle (<code>NM00000.ps2</code>, a memory card image the game rewrites: keep a copy) and its save cards</td>
-<td><code>~/save/namco246</code>, <code>~/save/namco256</code></td>
+<td><code>~/save/namco2x6</code></td>
 </tr>
 <tr>
 <td>The game's memory (<code>sram.bin</code>, 32 KB; delete it to start from zero)</td>
-<td><code>~/nvram/namco246</code>, <code>~/nvram/namco256</code></td>
+<td><code>~/nvram/namco2x6</code></td>
 </tr>
 </tbody>
 </table>
 <p>Setup &gt; Games &gt; Downloader &gt; Download BIOS fetches the BIOS from RetroBIOS. The games and dongles are not downloaded: bring your own. The panel's buttons follow Setup &gt; Joysticks &gt; Button mapping: the arcade buttons are the <code>[JVS]</code> section of the emulator's <code>PCSX2.ini</code> (<code>config/pcsx2x6-jvs-bindings</code>). Button N of a game goes to the panel position that Setup &gt; Joysticks &gt; Buttons layout gives it (position N without a layout), on the controller of each player. The section is written on the first launch and again by every Button mapping save and system update; a change made inside PCSX2x6 stays until then.</p>
 <p>Seen on a cabinet (i7 870, R7 240): Tekken 5 opens and plays, with dips to 56-57 FPS in fights. The emulated console's processor (the EE thread) is at 100%, the video card at 5-35%; the sound, the card's clock, the EE cycle rate and the blending fixes did not change it. Inside the arcade the processor reached 94-98 C with thermal throttling, and out of it it stays at 62-67 C.</p>
-<p><strong>Packed games (the archive.org "Namco System 2X6" folders).</strong> Drop a folder with the <code>.gz</code> files (<code>NM00019 TE51 DVD0 (DVD-ROM).iso.gz</code>, <code>NM00019 TE51, Ver.B4 a026051314505a.bin.gz</code>...) in <code>~/roms/namco246</code> or <code>~/roms/namco256</code>, with any name. The frontend lists the game (Tekken 5) with its versions as clones (a version is a disc and a dongle of the same code; the newest is the parent, and a disc or dongle with no pair is left out). Choosing one extracts what it needs with a progress bar in the middle of the screen (B cancels): the disc and the <code>boot.elf</code> (from the proverb project, downloaded once and kept) into a folder of the game, the dongle into <code>~/save/namco246|256</code> (a copy as it came stays in <code>originals</code>), and a <code>.acgame</code> ready to run. Then the <code>.gz</code> files used are deleted and the game opens; a disc or dongle that other versions use stays extracted for them. It needs free space for the whole disc (about twice the <code>.gz</code>).</p>
+<p><strong>Packed games (the archive.org "Namco System 2X6" folders).</strong> Drop a folder with the <code>.gz</code> files (<code>NM00019 TE51 DVD0 (DVD-ROM).iso.gz</code>, <code>NM00019 TE51, Ver.B4 a026051314505a.bin.gz</code>...) in <code>~/roms/namco2x6</code>, with any name. The frontend lists the game (Tekken 5) with its versions as clones (a version is a disc and a dongle of the same code; the newest is the parent, and a disc or dongle with no pair is left out). Choosing one extracts what it needs with a progress bar in the middle of the screen (B cancels): the disc and the <code>boot.elf</code> (from the proverb project, downloaded once and kept) into a folder of the game, the dongle into <code>~/save/namco2x6</code> (a copy as it came stays in <code>originals</code>), and a <code>.acgame</code> ready to run. Then the <code>.gz</code> files used are deleted and the game opens; a disc or dongle that other versions use stays extracted for them. It needs free space for the whole disc (about twice the <code>.gz</code>).</p>
 <p>The hard disk games (media HDD: Battle Gear 3, Zoids Infinity, Cobra, Time Crisis 4, Taiko 12 to 14...) come in the same folders: the archive.org item has their <code>(HDD).img.gz</code> image next to the dongles, so a version is a dongle and that image (a game with a single disc or image pairs every dongle with it; otherwise a dongle takes the disc whose code matches, ignoring hyphens, <code>DVD0</code> and <code>HDD0</code>). The image is written sparse, so the zeros do not take the disk. A disc or tool disc with no pair, and the games whose names give no hint (Dragon Chronicle Online), are left out. The hard disk games have not been run in PCSX2x6 here.</p>
 <h1 id="Fightcade-2">Fightcade 2</h1>
 <p>Fightcade 2 (online arcade and console matches, with rollback) is closed-source freeware with no clear permission to redistribute — <strong>it isn't in the image or in the repository</strong>.</p>

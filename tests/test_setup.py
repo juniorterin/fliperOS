@@ -2937,9 +2937,8 @@ class NamcoPackTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.home = self.tmp / "home"
         self.roms = self.home / "roms"
-        self.pack = self.roms / "namco256" / "tekken"
+        self.pack = self.roms / "namco2x6" / "tekken"
         self.pack.mkdir(parents=True)
-        (self.roms / "namco246").mkdir()
         for name in self.DISCS:
             (self.pack / name).write_bytes(gzip.compress(os.urandom(1 << 20) + bytes(3 << 20)))
         for name in self.DONGLES:
@@ -2957,7 +2956,7 @@ class NamcoPackTests(unittest.TestCase):
         self.fn.PROVERB = proverb.as_uri()
         os.environ["FLIPEROS_HOME"] = str(self.home)
         self.addCleanup(os.environ.pop, "FLIPEROS_HOME", None)
-        self.system = {"key": "namco256", "folder": str(self.roms / "namco256")}
+        self.system = {"key": "namco2x6", "folder": str(self.roms / "namco2x6")}
 
     def rows(self, installed=()):
         base = [{"Name": n, "Title": n, "file": n + ".acgame"} for n in installed]
@@ -2978,14 +2977,13 @@ class NamcoPackTests(unittest.TestCase):
         self.assertEqual(rows["NM00019_TE51_DVD0_Ver_B4"]["Title"], "Tekken 5 (TE51 DVD0, Ver.B4)")
         # O disco de outra placa e o de mais de um jogo de HD nao entram aqui.
         self.assertFalse([n for n in rows if not n.startswith("NM00019")])
-        self.assertEqual(self.fn.merge({"key": "namco246", "folder": str(self.roms / "namco246")}, []), [])
         self.assertEqual(self.fn.merge({"key": "mame", "folder": "/x"}, [{"Name": "a"}]), [{"Name": "a"}])
 
     def test_unpack_builds_what_the_game_needs_and_removes_the_gz(self):
         name = "NM00019_TE52_DVD0B_Ver_5_1_Ver_B2"
         seen = []
         path = self.fn.unpack(self.system, name, lambda d, t, f: seen.append((d, t, f)))
-        folder = self.roms / "namco256"
+        folder = self.roms / "namco2x6"
         self.assertEqual(path, str(folder / (name + ".acgame")))
         acgame = (folder / (name + ".acgame")).read_text()
         for line in ("name=Tekken 5", "gameid=NM00019", "platform=256", "subdir=" + name, "elf=boot.elf",
@@ -2995,8 +2993,8 @@ class NamcoPackTests(unittest.TestCase):
         self.assertIn("dongle=%s\n" % dongle, acgame)
         self.assertEqual((folder / name / "boot.elf").read_bytes(), b"ELF" * 100)
         self.assertEqual((folder / name / (name + ".iso")).stat().st_size, 4 << 20)
-        self.assertTrue((self.home / "save/namco256" / dongle).is_file())
-        self.assertTrue((self.home / "save/namco256/originals" / dongle).is_file())
+        self.assertTrue((self.home / "save/namco2x6" / dongle).is_file())
+        self.assertTrue((self.home / "save/namco2x6/originals" / dongle).is_file())
         # So o que foi usado sai; as outras versoes seguem nos .gz delas.
         self.assertFalse((self.pack / "NM00019 TE52 DVD0B [Ver.5.1] (DVD-ROM).iso.gz").exists())
         self.assertFalse((self.pack / "NM00019 TE52, Ver.B2 a026051309726a.bin.gz").exists())
@@ -3022,7 +3020,7 @@ class NamcoPackTests(unittest.TestCase):
         rows = {r["Name"]: r for r in self.rows([first])}
         self.assertIn(second, rows)         # sem o .gz do disco, pelo que o registro guardou
         self.fn.unpack(self.system, second, lambda *a: None)
-        folder = self.roms / "namco256"
+        folder = self.roms / "namco2x6"
         iso = folder / second / (second + ".iso")
         self.assertTrue(iso.is_symlink() or iso.exists())
         self.assertEqual(iso.stat().st_size, 4 << 20)
@@ -3034,7 +3032,7 @@ class NamcoPackTests(unittest.TestCase):
         self.assertEqual(rows[b]["Packed"], "1")
         self.fn.unpack(self.system, b, lambda *a_: None)
         self.assertIn("dongle=NM00019_TE51_Ver_B4_a026051314505a.ps2\n", (folder / (b + ".acgame")).read_text())
-        self.assertEqual(len(list((self.home / "save/namco256").glob("*.ps2"))), 3)
+        self.assertEqual(len(list((self.home / "save/namco2x6").glob("*.ps2"))), 3)
 
     def test_cancel_and_no_space_leave_everything_as_it_was(self):
         import threading
@@ -3043,7 +3041,7 @@ class NamcoPackTests(unittest.TestCase):
         cancel.set()
         with self.assertRaises(InterruptedError):
             self.fn.unpack(self.system, name, lambda *a: None, cancel)
-        folder = self.roms / "namco256"
+        folder = self.roms / "namco2x6"
         self.assertFalse((folder / (name + ".acgame")).exists())
         self.assertFalse((folder / name).exists())
         self.assertTrue((self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz").exists())
@@ -3059,7 +3057,7 @@ class NamcoPackTests(unittest.TestCase):
     def pack_of(self, folder, names):
         """Uma pasta de pacote com arquivos .gz vazios de nome real."""
         import gzip
-        base = self.roms / "namco256" / folder
+        base = self.roms / "namco2x6" / folder
         base.mkdir(parents=True, exist_ok=True)
         for n in names:
             (base / n).write_bytes(gzip.compress(bytes(2 << 20) + b"x" * 100))
@@ -3083,7 +3081,7 @@ class NamcoPackTests(unittest.TestCase):
                          "NM00044:\n  name: Taiko Drum Master 11\n  region: System256\n  media: DVD\n")
         self.assertEqual(len(self.versions("NM00033")), 1)
         self.assertEqual(len(self.versions("NM00044")), 0)
-        # O Ridge Racer V e da placa 246, mas aparece onde a pessoa o pos (namco256).
+        # O Ridge Racer V e da placa 246: aparece na pasta unica.
         rrv = {r["Name"]: r for r in self.fn.merge(self.system, [])
                if r.get("GameId") == "NM00001"}
         self.assertEqual(len(rrv), 2)
@@ -3096,7 +3094,7 @@ class NamcoPackTests(unittest.TestCase):
                              "NM00010 B3900065A, Ver.2.08J.bin.gz"])
         index = self.tmp / "GameIndex.yaml"
         index.write_text(index.read_text() + "NM00010:\n  name: Battle Gear 3\n  region: System246\n  media: HDD\n")
-        s246 = self.system      # a pasta namco256: o jogo e listado onde a pessoa o pos, mesmo sendo da placa 246
+        s246 = self.system      # uma pasta so: a placa 246 e a 256 ficam juntas
         rows = {r["Name"]: r for r in self.fn.merge(s246, []) if r.get("GameId") == "NM00010"}
         self.assertEqual(len(rows), 2)
         name = sorted(rows)[-1]
@@ -3114,14 +3112,14 @@ class NamcoPackTests(unittest.TestCase):
         other = [n for n in rows if n != name][0]
         path2 = self.fn.unpack(s246, other, lambda *a: None)
         self.assertEqual((Path(path2).with_suffix("") / (other + ".img")).stat().st_size, (2 << 20) + 100)
-        self.assertEqual(len(list((self.home / "save/namco246").glob("NM00010_*.ps2"))), 2)
+        self.assertEqual(len(list((self.home / "save/namco2x6").glob("NM00010_*.ps2"))), 2)
 
     def pack_dir(self, folder):
-        return self.roms / "namco256" / folder
+        return self.roms / "namco2x6" / folder
 
     def test_a_246_game_in_the_256_folder_is_listed_there_and_keeps_its_board(self):
-        # O Soul Calibur II (System 246) numa pasta namco256: lista nela (o sistema
-        # namco246 vazio nao aparece no frontend); a BIOS e o dongle sao da 246.
+        # O Soul Calibur II (System 246) na pasta namco2x6: lista nela, extrai nela;
+        # a BIOS e o dongle sao da 246 (platform=246).
         self.pack_of("sc2", ["NM00007 SC21 DVD0 (DVD-ROM).iso.gz", "NM00007 SC21, Ver.A10 a025781148773a.bin.gz"])
         index = self.tmp / "GameIndex.yaml"
         index.write_text(index.read_text() + "NM00007:\n  name: Soul Calibur II\n  region: System246\n  media: DVD\n")
@@ -3131,23 +3129,72 @@ class NamcoPackTests(unittest.TestCase):
             z.writestr("bin/NM00007/boot.elf", b"SC2" * 100)
         rows = self.versions("NM00007")
         self.assertEqual(len(rows), 1)
-        self.assertEqual(self.fn.merge({"key": "namco246", "folder": str(self.roms / "namco246")}, []), [])
         name = next(iter(rows))
         path = self.fn.unpack(self.system, name, lambda *a: None)
-        self.assertEqual(os.path.dirname(path), str(self.roms / "namco256"))
+        self.assertEqual(os.path.dirname(path), str(self.roms / "namco2x6"))
         self.assertIn("platform=246\n", Path(path).read_text())
-        self.assertTrue(list((self.home / "save/namco246").glob("NM00007_*.ps2")))
-        self.assertFalse((self.home / "save/namco256").exists())
-        # A BIOS e os cartoes o fliperos-x11-run escolhe pela linha platform=.
+        self.assertTrue(list((self.home / "save/namco2x6").glob("NM00007_*.ps2")))
+        # Uma pasta so de BIOS: a 256.BIN serve a 246 tambem (a da 246 travou o jogo).
         launcher = (ROOT / "config/fliperos-x11-run").read_text()
-        self.assertIn('case $(acval platform "$2") in', launcher)
-        self.assertIn('biosdir="$HOME/bios/$board" savedir="$HOME/save/$board"', launcher)
+        self.assertIn("biosfile=256.BIN", launcher)
+        self.assertIn('biosdir="$HOME/bios/namco2x6" savedir="$HOME/save/namco2x6"', launcher)
+
+    def test_a_truncated_gz_says_so_and_loses_nothing(self):
+        # A copia para o gabinete parou antes do fim: o .gz so da erro no final da leitura.
+        name = "NM00019_TE51_DVD0_Ver_B4"
+        disc = self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz"
+        data = disc.read_bytes()
+        disc.write_bytes(data[:len(data) - 4096])
+        with self.assertRaises(self.fn.PackError) as raised:
+            self.fn.unpack(self.system, name, lambda *a: None)
+        self.assertIn("incomplete", str(raised.exception))
+        self.assertIn("NM00019 TE51 DVD0", str(raised.exception))
+        folder = self.roms / "namco2x6"
+        self.assertTrue(disc.exists())
+        self.assertTrue((self.pack / "NM00019 TE51, Ver.B4 a026051314505a.bin.gz").exists())
+        self.assertFalse((folder / name).exists())
+        self.assertFalse((folder / (name + ".acgame")).exists())
+        self.assertEqual(list(folder.rglob("*.part")), [])
+        # O frontend diz o motivo e o grava num log.
+        frontend = (SETUP / "gui/fliperos-frontend").read_text()
+        self.assertIn('self.say("FILE INCOMPLETE: COPY IT AGAIN", 5)', frontend)
+        self.assertIn("namco-unpack.log", frontend)
+
+    def test_a_damaged_cd_dump_is_refused_and_keeps_the_files(self):
+        # Bloody Roar 3 do archive.org: setores de 2048 com o subcabecalho de 8 bytes
+        # na frente (o de 2336 cortado); o emulador recusa. Avisa na extracao.
+        import gzip
+        name = "NM00019_TE51_DVD0_Ver_B4"
+        disc = self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz"
+        raw = bytearray(40 * 2048)
+        raw[16 * 2048 + 8:16 * 2048 + 14] = b"\x01CD001"
+        disc.write_bytes(gzip.compress(bytes(raw)))
+        with self.assertRaises(self.fn.PackError) as raised:
+            self.fn.unpack(self.system, name, lambda *a: None)
+        self.assertIn("damaged dump", str(raised.exception))
+        folder = self.roms / "namco2x6"
+        self.assertTrue(disc.exists())
+        self.assertTrue((self.pack / "NM00019 TE51, Ver.B4 a026051314505a.bin.gz").exists())
+        self.assertFalse((folder / name).exists())
+        self.assertFalse((folder / (name + ".acgame")).exists())
+        # Um disco inteiro (PVD em 0x8000), o de 2336 e o cru de CD passam.
+        for label, data in (("plain", b"\0" * 0x8000 + b"\x01CD001" + b"\0" * 4096),
+                            ("2336", b"\0" * (16 * 2336 + 8) + b"\x01CD001" + b"\0" * (2336 * 20 - 16 * 2336 - 14)),
+                            ("raw", b"\x00" + b"\xff" * 10 + b"\x00" + b"\0" * 4000)):
+            path = self.tmp / ("dump-" + label)
+            path.write_bytes(data)
+            self.assertFalse(self.fn.damaged_dump(str(path)), label)
+        bad = self.tmp / "dump-bad"
+        bad.write_bytes(bytes(raw))
+        self.assertTrue(self.fn.damaged_dump(str(bad)))
+        frontend = (SETUP / "gui/fliperos-frontend").read_text()
+        self.assertIn("DISC DUMP IS DAMAGED", frontend)
 
     def test_proverb_offline_is_an_error_not_a_half_game(self):
         self.fn.PROVERB = (self.tmp / "missing.zip").as_uri()
         with self.assertRaises(OSError):
             self.fn.unpack(self.system, "NM00019_TE51_DVD0_Ver_B4", lambda *a: None)
-        self.assertFalse((self.roms / "namco256/NM00019_TE51_DVD0_Ver_B4").exists())
+        self.assertFalse((self.roms / "namco2x6/NM00019_TE51_DVD0_Ver_B4").exists())
         self.assertTrue((self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz").exists())
 
     def test_the_frontend_extracts_before_it_opens_the_game(self):
@@ -3155,6 +3202,10 @@ class NamcoPackTests(unittest.TestCase):
         launch = frontend.split("    def launch(self, argv=None, game=None):")[1].split("    def play(")[0]
         self.assertIn('g.get("Packed") and argv is None', launch)
         self.assertIn("self.unpack_start(g)", launch)
+        # A ordem importa: um jogo empacotado nao tem comando, entao a checagem vem antes
+        # do "CANNOT OPEN THIS GAME" (foi o que impedia de abrir o primeiro pacote).
+        self.assertLess(launch.index('g.get("Packed")'), launch.index("self.lib.command(g)"))
+        self.assertLess(launch.index('g.get("Packed")'), launch.index('"CANNOT OPEN THIS GAME"'))
         self.assertIn("self.unpack_tick()", frontend)
         self.assertIn('if o == "unpack":', frontend)
         data = (SETUP / "gui/fedata.py").read_text()
@@ -4993,19 +5044,16 @@ class ScraperTests(Base):
         # pasta por placa, com o .nvm e o .mec minusculos que ele procura) e as
         # do DuckStation soltas em ~/bios.
         roms, bios = self.env.dir / "roms", self.env.dir / "bios"
-        for d in ("namco246", "namco256", "ps1", "ps2"):
+        for d in ("namco2x6", "ps1", "ps2"):
             (roms / d).mkdir(parents=True)
             (roms / d / "game").write_text("g")
         env = {"ROMS_ROOT": str(roms), "BIOS_ROOT": str(bios), "BIOS_STATE": str(self.env.dir / "bs")}
         out = self.env.out('w=$(mktemp); bios_plan "$w" > /dev/null; cat "$w"', env)
         wants = {(r[1], r[2]): os.path.normpath(r[3]) for r in (l.split("\t") for l in out.splitlines())}
         for key, name, dest in (
-                ("namco246", "COH-H31000.BIN", "namco246/COH-H31000.BIN"),
-                ("namco246", "COH-H31000.NVM", "namco246/COH-H31000.nvm"),
-                ("namco246", "COH-H31000.MEC", "namco246/COH-H31000.mec"),
-                ("namco256", "256.BIN", "namco256/256.BIN"),
-                ("namco256", "256.NVM", "namco256/256.nvm"),
-                ("namco256", "256.MEC", "namco256/256.mec"),
+                ("namco2x6", "256.BIN", "namco2x6/256.BIN"),
+                ("namco2x6", "256.NVM", "namco2x6/256.nvm"),
+                ("namco2x6", "256.MEC", "namco2x6/256.mec"),
                 ("ps1", "scph5501.bin", "scph5501.bin"),
                 ("ps1", "scph5500.bin", "scph5500.bin"),
                 ("ps2", "scph39001.bin", "ps2/scph39001.bin")):

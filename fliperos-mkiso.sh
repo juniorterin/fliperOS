@@ -97,7 +97,7 @@ HYPSEUS_TAG="v2.12.1"
 OPENBOR_COMMIT="787b6770409935137579715febf80cf7a529b748"
 PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 # PCSX2x6: o fork do PCSX2 que roda os arcades Namco System 246/256, ao lado
-# do oficial (so as pastas ~/roms/namco246 e namco256 abrem nele).
+# do oficial (so a pasta ~/roms/namco2x6 abre nele).
 PCSX2X6_VERSION="0.2.22"
 PCSX2X6_SHA256="a28e9354046804e9f3d658b63856f7b2d3d53aefd9f141f053ac9926c08c255d"
 # GroovyMAME: o release oficial para Linux (MAME 0.289, Switchres 2.22f).
@@ -1259,7 +1259,7 @@ build_pcsx2_chroot() {
 # O AppImage do fork (PS2Homebrew-arcade/pcsx2x6), extraido em /opt/pcsx2x6 e
 # separado do PCSX2 oficial: ele grava em ~/.config/PCSX2x6 (a pasta propria
 # dele), entao as configuracoes dos dois nao se misturam; a BIOS e os cartoes
-# por placa o fliperos-x11-run escolhe (~/bios/namco246|256, ~/save/...).
+# por placa o fliperos-x11-run escolhe a BIOS (~/bios/namco2x6, ~/save/namco2x6).
 # Nos gabinetes ja instalados o updates/0044.sh faz o mesmo passo.
 build_pcsx2x6_chroot() {
   if $SKIP_PCSX2; then

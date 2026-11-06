@@ -139,29 +139,22 @@ case $name in
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False 2> /dev/null || true
     ;;
   pcsx2 | pcsx2x6)
-    # O pcsx2x6 e o fork dos arcades Namco System 246/256 (~/roms/namco246 e
-    # namco256): o mesmo PCSX2, com a pasta de dados propria dele
+    # O pcsx2x6 e o fork dos arcades Namco System 246/256 (~/roms/namco2x6): o
+    # mesmo PCSX2, com a pasta de dados propria dele
     # (~/.config/PCSX2x6, a que o fork usa sozinho), a BIOS e os cartoes por
     # placa; as configuracoes do PCSX2 oficial nao se misturam com as dele.
     datadir="$HOME/.config/PCSX2" biosdir="$HOME/bios/ps2" gamesdir=/home/fliperos/roms/ps2
     if [[ $1 == pcsx2x6 ]]; then
-      # Uma pasta de BIOS por placa, como em ~/roms: a do jogo que abre (sem
-      # jogo, a da 246).
-      datadir="$HOME/.config/PCSX2x6" gamesdir=/home/fliperos/roms/namco246
+      # Uma pasta so de jogos, de BIOS e de dongles (namco2x6). A 256.BIN serve
+      # as duas placas (o projeto diz que um jogo 246 roda com ela); a
+      # COH-H31000.BIN, a da 246 de 2000, derrubou o Soul Calibur II com
+      # "Jump to unaligned address", entao so entra se nao houver a 256.BIN.
+      datadir="$HOME/.config/PCSX2x6" gamesdir=/home/fliperos/roms/namco2x6
+      biosdir="$HOME/bios/namco2x6" savedir="$HOME/save/namco2x6"
       # A linha de um .acgame (gameid, subdir, platform...).
       acval() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$2" | head -n 1 | tr -d '\r'; }
-      # A placa e a que o .acgame diz (platform=), nao a pasta onde ele esta:
-      # o jogo de um pacote fica na pasta onde a pessoa o pos. Sem a linha,
-      # a pasta (namco256) ou, sem jogo, a 246.
-      board=namco246
-      [[ " ${*:2} " == */namco256/* ]] && board=namco256
-      if [[ ${2:-} == *.acgame && -f $2 ]]; then
-        case $(acval platform "$2") in
-          256 | super256) board=namco256 ;;
-          246) board=namco246 ;;
-        esac
-      fi
-      biosdir="$HOME/bios/$board" savedir="$HOME/save/$board"
+      biosfile=256.BIN
+      [[ -f $biosdir/$biosfile ]] || biosfile=COH-H31000.BIN
       # A memoria do jogo (32 KB) o fork grava em sram.bin dentro da pasta do
       # jogo (linha sram= do .acgame): ela vai para ~/nvram/<placa>/<gameid>.bin
       # e o sram.bin vira link para la. Um sram.bin que ja existe de verdade
@@ -169,8 +162,10 @@ case $name in
       if [[ ${2:-} == *.acgame && -f $2 ]]; then
         gid=$(acval gameid "$2") sub=$(acval subdir "$2") sram=$(acval sram "$2")
         if [[ -n $gid ]]; then
-          nvdir="${FLIPEROS_NVRAM:-$HOME/nvram}/${savedir##*/}"
+          nvdir="${FLIPEROS_NVRAM:-$HOME/nvram}/namco2x6"
           sramfile="$(dirname -- "$2")/${sub:-$gid}/${sram:-sram.bin}"
+          # Um link que ficou sem destino (a pasta da memoria mudou de nome) e refeito.
+          [[ ! -L $sramfile || -e $sramfile ]] || rm -f "$sramfile"
           if [[ -d ${sramfile%/*} && ! -L $sramfile ]] && mkdir -p "$nvdir" 2> /dev/null; then
             [[ ! -f $sramfile || -e $nvdir/$gid.bin ]] || mv -n "$sramfile" "$nvdir/$gid.bin" 2> /dev/null || true
             [[ -e $sramfile ]] || ln -s "$nvdir/$gid.bin" "$sramfile" 2> /dev/null || true
@@ -186,7 +181,7 @@ case $name in
     iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
     if [[ ! -f $ini ]]; then
       install -Dm600 "${FLIPEROS_PCSX2_INI:-/etc/fliperos/pcsx2.ini}" "$ini" 2> /dev/null || true
-      # O de partida lista ~/roms/ps2: o fork lista as pastas Namco.
+      # O de partida lista ~/roms/ps2: o fork lista a pasta Namco.
       [[ $1 != pcsx2x6 ]] || sed -i '/^RecursivePaths = /d' "$ini" 2> /dev/null || true
     fi
     if [[ -f $ini ]]; then
@@ -203,8 +198,23 @@ case $name in
       "$iniset" "$ini" UI HideMouseCursor true
       # Sem os avisos na tela ao abrir o jogo (0 = None no OsdOverlayPos).
       "$iniset" "$ini" EmuCore/GS OsdMessagesPos 0
+      # Nem os contadores (velocidade, FPS, CPU, GPU, resolucao): o emulador
+      # grava o que estava ligado ao fechar, e um teste de desempenho ficava.
+      for osd in Speed FPS CPU GPU Resolution; do
+        "$iniset" "$ini" EmuCore/GS "OsdShow$osd" false
+      done
       "$iniset" "$ini" Folders Bios "$biosdir"
-      [[ $1 != pcsx2x6 ]] || "$iniset" "$ini" Folders MemoryCards "$savedir"
+      if [[ $1 == pcsx2x6 ]]; then
+        "$iniset" "$ini" Folders MemoryCards "$savedir"
+        # A BIOS da placa do jogo: as duas estao na mesma pasta.
+        [[ ! -f $biosdir/$biosfile ]] || "$iniset" "$ini" Filenames BIOS "$biosfile"
+        # As pastas por placa de antes (namco246, namco256) viram a unica.
+        if grep -qE 'roms/namco2(46|56)' "$ini"; then
+          sed -i -E 's#roms/namco2(46|56)#roms/namco2x6#' "$ini"
+          awk '!(/^RecursivePaths = / && seen[$0]++)' "$ini" > "$ini.new" && cat "$ini.new" > "$ini"
+          rm -f "$ini.new"
+        fi
+      fi
       # Os botoes dos jogos de arcade vem da secao [JVS], nao do [Pad1]: sem
       # binding la o jogo nao recebe nada. Cada botao do jogo na posicao do
       # painel do Setup > Joysticks > Button mapping (e do Buttons layout): o
@@ -233,7 +243,6 @@ case $name in
       # pessoa ainda nao escolheu pastas.
       if ! grep -q '^RecursivePaths' "$ini"; then
         "$iniset" "$ini" GameList RecursivePaths "$gamesdir"
-        [[ $1 != pcsx2x6 ]] || sed -i "/^RecursivePaths = /a RecursivePaths = /home/fliperos/roms/namco256" "$ini" 2> /dev/null || true
       fi
       # Os controles pelo SDL, Pad1 e Pad2 nos dois primeiros: o painel ja
       # chega como fight stick (o mapeamento do Setup > Joysticks > Button

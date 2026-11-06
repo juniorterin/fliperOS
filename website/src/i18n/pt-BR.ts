@@ -612,7 +612,7 @@ const ptBR: Messages = {
       { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010 (MAME 3D: arcade baseado no PlayStation)', note: 'KMS, CRT SwitchRes, 6 cores inclusos' },
       { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressivo em 15 kHz, F355 Challenge em 3 monitores' },
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'AppImage oficial' },
-      { id: 'pcsx2x6', name: 'PCSX2x6 (Namco System 246, System 256)', systems: 'Placas de arcade da Namco', note: 'Fork do PCSX2 como emulador à parte: só abre os jogos das pastas namco246 e namco256' },
+      { id: 'pcsx2x6', name: 'PCSX2x6 (Namco System 246, System 256)', systems: 'Placas de arcade da Namco', note: 'Fork do PCSX2 como emulador à parte: só abre os jogos da pasta namco2x6' },
       { id: 'duckstation', name: 'DuckStation', systems: 'PlayStation', note: 'Instalado pelo Setup (a licença dele o deixa fora da imagem)' },
       { id: 'dolphin', name: 'Dolphin (GameCube, Wii, Triforce)', systems: 'Consoles da Nintendo e arcade da Sega', note: 'Compilado da versão estável' },
       { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 a 57,524 Hz em 15 kHz' },
