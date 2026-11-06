@@ -19,7 +19,8 @@
 #     mouse nenhum: so nesse jogo entram o driver udev e cada pistola como o
 #     mouse de um jogador. Os jogos de pistola: no MAME 2010 e no FBNeo, os
 #     que tem uma no -listxml do MAME 2010 ou no controls.xml; no PCSX-ReARMed,
-#     no Snes9x, no Genesis Plus GX e no FCEUmm, os da lightgun-games.tsv. A
+#     no Snes9x, no Genesis Plus GX, no FCEUmm, no Nestopia e no Mesen, os da
+#     lightgun-games.tsv. A
 #     porta do jogador vira a pistola daquele console (GunCon, Super Scope,
 #     Menacer, Zapper...), e os botoes da pistola sao os mesmos em todos:
 #     gatilho, A (e C) o aux A, B o aux B, Start e Select os do fliperos-gunkeys.
@@ -145,7 +146,7 @@ retroarch_mame2010() {
 # retroarch_core CORE JOGO: as portas da pistola no core (o numero do
 # aparelho do libretro em cada uma, na ordem das pistolas) e a config.
 retroarch_core() {
-  local core=${1##*/} game=$2 base cfg j p ports=() ids=() sys
+  local core=${1##*/} game=$2 base cfg j p ports=() ids=() sys also=""
   core=${core%_libretro.so}
   base=${game##*/}
   base=${base%.*}
@@ -156,7 +157,8 @@ retroarch_core() {
   mapfile -t mice < <(gun_mice)
   ((${#mice[@]})) || return 0
   # Os numeros sao RETRO_DEVICE_SUBCLASS(base, n) = (n + 1) << 8 | base, com
-  # o RETRO_DEVICE_LIGHTGUN (4) ou, no Zapper do FCEUmm, o MOUSE (2).
+  # o RETRO_DEVICE_LIGHTGUN (4) ou, nos Zappers, o MOUSE (2, FCEUmm) e o
+  # POINTER (6, Nestopia e Mesen).
   case $core in
     fbneo)
       # A porta de cada jogador vira "Lightgun"; a mira do core ja some com
@@ -202,6 +204,22 @@ retroarch_core() {
         game_opt FCEUmm "$base" fceumm_show_crosshair disabled
       fi
       ;;
+    nestopia)
+      # Zapper so na porta 2 (o subtipo do POINTER, 6), lido como lightgun
+      # pelo jogador 2.
+      if [[ $(console_gun nes "$game") == zapper ]]; then
+        ports=(2) ids=(262)
+        game_opt Nestopia "$base" nestopia_zapper_device lightgun
+        game_opt Nestopia "$base" nestopia_show_crosshair disabled
+      fi
+      ;;
+    mesen)
+      # Zapper na porta 2, mas a mira e o gatilho o Mesen le do mouse e do
+      # ponteiro do jogador 1, qualquer que seja a porta.
+      if [[ $(console_gun nes "$game") == zapper ]]; then
+        ports=(2) ids=(262) also=1
+      fi
+      ;;
   esac
   ((${#ports[@]})) || return 0
   cfg=$RUNTIME/fliperos-retroarch-lightgun.cfg
@@ -223,6 +241,7 @@ retroarch_core() {
       echo "input_player${p}_gun_start = \"num$((j + 1))\""
       echo "input_player${p}_gun_select = \"num$((j + 5))\""
     done
+    [[ -z $also ]] || echo "input_player${also}_mouse_index = \"${mice[0]}\""
   } > "$cfg"
   echo "$cfg"
 }

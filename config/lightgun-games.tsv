@@ -1,5 +1,6 @@
 # Jogos de console que usam pistola de luz, para o fliperos-lightgun ligar a
-# pistola no core do RetroArch (PCSX-ReARMed, Snes9x, Genesis Plus GX, FCEUmm).
+# pistola no core do RetroArch (PCSX-ReARMed, Snes9x, Genesis Plus GX, FCEUmm,
+# Nestopia, Mesen).
 # Os arcades nao estao aqui: o MAME 2010 e o FBNeo usam o -listxml do MAME
 # 2010 e o controls.xml do ROM cleaner.
 #

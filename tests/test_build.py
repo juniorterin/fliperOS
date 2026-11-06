@@ -9762,6 +9762,17 @@ class LightGunTests(unittest.TestCase):
             # NES: Zapper na porta 2, sem mira.
             self.assertIn('input_libretro_device_p2 = "258"', gun('fceumm', '/r/Duck Hunt (World).nes'))
             self.assertIn('fceumm_show_crosshair = "disabled"', (tmp / 'ra/FCEUmm/Duck Hunt (World).opt').read_text())
+            # Nestopia: Zapper (subtipo do POINTER) na porta 2, como lightgun.
+            nes = gun('nestopia', '/r/nestopia/Duck Hunt (World).nes')
+            self.assertIn('input_libretro_device_p2 = "262"\ninput_player2_mouse_index = "1"\n', nes)
+            opt = (tmp / 'ra/Nestopia/Duck Hunt (World).opt').read_text()
+            self.assertIn('nestopia_zapper_device = "lightgun"', opt)
+            self.assertIn('nestopia_show_crosshair = "disabled"', opt)
+            # Mesen: porta 2, mas a mira vem do mouse do jogador 1.
+            mesen = gun('mesen', '/r/mesen/Duck Hunt (World).nes')
+            self.assertIn('input_libretro_device_p2 = "262"', mesen)
+            self.assertIn('input_player1_mouse_index = "1"\n', mesen)
+            self.assertEqual(gun('nestopia', '/r/nestopia/Super Mario Bros. 3 (USA).nes'), '')
             # FBNeo: pelo MAME 2010 ou pelo controls.xml.
             self.assertIn('input_libretro_device_p1 = "4"', gun('fbneo', '/r/arcade/opwolf.zip'))
             self.assertIn('input_libretro_device_p1 = "4"', gun('fbneo', '/r/arcade/bbusters.zip'))
