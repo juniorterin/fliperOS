@@ -100,12 +100,6 @@ PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 # do oficial (so a pasta ~/roms/namco2x6 abre nele).
 PCSX2X6_VERSION="0.2.22"
 PCSX2X6_SHA256="a28e9354046804e9f3d658b63856f7b2d3d53aefd9f141f053ac9926c08c255d"
-# GroovyMAME: o release oficial para Linux (MAME 0.289, Switchres 2.22f).
-GROOVYMAME_TAG="gm0289sr222f"
-GROOVYMAME_FILE="groovymame_0289.222f_linux.tar.bz2"
-GROOVYMAME_SHA256="d5bd539776ace64db42301252d80be2af60b2f89862b0d4391c646083f323f62"
-# O commit da tag: plugins, fonte e o resto que o release nao traz.
-GROOVYMAME_COMMIT="953db38f4aaab1d75faa4ac79e1b45686214f987"
 
 # ── Args ─────────────────────────────────────────────────────
 usage() {
@@ -547,9 +541,9 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast' >> "$LOG_FILE" 2>&1 \
-    || err "Installing Attract-Mode Plus, GroovyMAME's SDL2, RetroArch, Dolphin and Flycast from the local repository failed (see $LOG_FILE)"
-  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME's KMS SDL2, RetroArch, Dolphin and Flycast installed"
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast fliperos-groovymame' >> "$LOG_FILE" 2>&1 \
+    || err "Installing Attract-Mode Plus, GroovyMAME, its SDL2, RetroArch, Dolphin and Flycast from the local repository failed (see $LOG_FILE)"
+  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME and its KMS SDL2, RetroArch, Dolphin and Flycast installed"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
@@ -913,63 +907,33 @@ SPLASHSCRIPT
 }
 
 # ── GroovyMAME (release oficial) ──────────────────────────────
-# O binario do release do projeto, em vez de compilar (mais de uma hora do
-# build). Vai para /usr/local/libexec/groovymame; o comando groovymame e o
-# config/fliperos-groovymame (fliperos-rootfs.sh), que passa o mame.ini do
-# sistema (o padrao do release e ".;ini", relativo a pasta de onde se abre).
+# O pacote fliperos-groovymame (packaging/packages, instalado por
+# install_local_repo_chroot): o binario do release do projeto em
+# /usr/local/libexec/groovymame e os arquivos da mesma tag em
+# /usr/local/share/groovymame, o mesmo .deb que os updates levam a quem so
+# atualiza pela rede. O comando groovymame e o config/fliperos-groovymame
+# (fliperos-rootfs.sh), que passa o mame.ini do sistema.
 install_groovymame_chroot() {
   if $SKIP_GROOVYMAME; then
+    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-groovymame' >> "$LOG_FILE" 2>&1 || true
     warn "GroovyMAME skipped (--skip-groovymame)"
     return
   fi
-  step "GroovyMAME ${GROOVYMAME_TAG} (official release)"
-  local tarball="$WORK_DIR/$GROOVYMAME_FILE"
-  curl -sSfL --retry 3 --max-time 900 -o "$tarball" \
-    "https://github.com/antonioginer/GroovyMAME/releases/download/${GROOVYMAME_TAG}/${GROOVYMAME_FILE}" \
-    >> "$LOG_FILE" 2>&1 || err "GroovyMAME download failed"
-  echo "$GROOVYMAME_SHA256  $tarball" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: hash differs from the pinned one"
-  # O container do build nao tem bzip2; o tarfile do Python le .tar.bz2.
-  python3 -c 'import sys, tarfile; tarfile.open(sys.argv[1]).extract("groovymame", sys.argv[2])' \
-    "$tarball" "$WORK_DIR" || err "GroovyMAME: the package did not extract"
-  install -Dm755 "$WORK_DIR/groovymame" "$CHROOT_DIR/usr/local/libexec/groovymame"
-  rm -f "$tarball" "$WORK_DIR/groovymame"
+  step "GroovyMAME (fliperos-groovymame)"
+  chroot "$CHROOT_DIR" dpkg -s fliperos-groovymame > /dev/null 2>&1 ||
+    err "fliperos-groovymame is not installed (local repository); use --skip-groovymame for an ISO without it"
   # Sem o "Initializing..." ao abrir o jogo (o fliperos-rootfs.sh roda antes
   # deste binario chegar; nos updates, ele mesmo o faz).
   python3 "$(dirname "$(realpath "$0")")/config/fliperos-groovymame-quiet" \
     "$CHROOT_DIR/usr/local/libexec/groovymame" >> "$LOG_FILE" 2>&1 \
     || warn "GroovyMAME: the Initializing text stays"
-  # O release so traz o binario. Como o pacote do GroovyArcade, os arquivos
-  # do codigo da mesma tag: plugins (hiscore), a fonte uismall.bdf da
-  # interface, bgfx, artwork, language, ctrlr, keymaps e hash (listas de
-  # software), em /usr/local/share/groovymame (as pastas do config/mame.ini).
-  local gm_src="$WORK_DIR/groovymame-src" gm_share="$CHROOT_DIR/usr/local/share/groovymame"
-  git clone -q --depth 1 --branch "$GROOVYMAME_TAG" --filter=blob:none --sparse \
-    https://github.com/antonioginer/GroovyMAME "$gm_src" >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: the tag's source did not download"
-  [[ $(git -C "$gm_src" rev-parse HEAD) == "$GROOVYMAME_COMMIT" ]] \
-    || err "GroovyMAME: tag ${GROOVYMAME_TAG} is no longer the pinned commit"
-  git -C "$gm_src" sparse-checkout set artwork bgfx plugins language ctrlr keymaps hash >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: the source files did not download"
-  rm -rf "$gm_share"
-  mkdir -p "$gm_share/fonts"
-  cp -r "$gm_src"/{artwork,bgfx,plugins,language,ctrlr,keymaps,hash} "$gm_share/"
-  install -m644 "$gm_src/uismall.bdf" "$gm_share/fonts/uismall.bdf"
-  chmod -R a+rX "$gm_share"
-  rm -rf "$gm_src"
-  # O que o binario pede (objdump -p); o Qt6 e o do depurador.
-  chroot "$CHROOT_DIR" apt-get install -y --no-install-recommends \
-    libsdl2-2.0-0 libsdl2-ttf-2.0-0 libqt6core6t64 libqt6gui6t64 libqt6widgets6t64 \
-    libpulse0 libasound2t64 libfontconfig1 libxi6 libgl1 libdrm2 >> "$LOG_FILE" 2>&1 \
-    || err "GroovyMAME: the libraries did not install"
   chroot "$CHROOT_DIR" /usr/local/libexec/groovymame -version >> "$LOG_FILE" 2>&1 \
     || err "GroovyMAME: the binary does not start (missing library?)"
   # O mame.ini completo, como o GroovyArcade: o -createconfig desta versao
   # com as opcoes do config/mame.ini por cima (config/fliperos-mame-ini).
   chroot "$CHROOT_DIR" /opt/fliperos/bin/fliperos-mame-ini /etc/fliperos/mame/mame.ini /etc/fliperos/mame/mame.ini \
     >> "$LOG_FILE" 2>&1 || err "GroovyMAME: mame.ini was not generated"
-  ok "GroovyMAME ${GROOVYMAME_TAG} in /usr/local/libexec/groovymame"
-  record_version groovymame "0.${GROOVYMAME_TAG:3:3}"
+  ok "GroovyMAME in /usr/local/libexec/groovymame"
 }
 
 # ── XML do MAME 2010 (ROM cleaner) ────────────────────────────

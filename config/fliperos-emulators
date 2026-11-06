@@ -121,7 +121,7 @@ emulator_latest() {
     # A versao da receita do pacote, a que o proximo update leva.
     dolphin) pinned PKG_VERSION "${mkiso_url%/*}/packaging/packages/fliperos-dolphin.sh" ;;
     groovymame)
-      v=$(pinned GROOVYMAME_TAG)
+      v=$(pinned GROOVYMAME_TAG "${mkiso_url%/*}/packaging/packages/fliperos-groovymame.sh")
       [[ $v =~ ^gm0([0-9]{3}) ]] && echo "0.${BASH_REMATCH[1]}"
       ;;
     openbor)
@@ -274,7 +274,10 @@ edge_build() {
     rm -rf "${edge_work:?}/$name"
     SRC=$edge_work/$name/src STAGING=$edge_work/$name/staging
     mkdir -p "$SRC" "$STAGING"
-    export SRC STAGING
+    # FLIPEROS_EDGE: a receita sabe que o commit nao e o fixado nela (o
+    # GroovyMAME nao confere o sha256 do release novo).
+    FLIPEROS_EDGE=1
+    export SRC STAGING FLIPEROS_EDGE
     say 30 "Building $label ${head:0:7} with the FliperOS patches (several minutes)"
     log=$edge_work/$name/build.log
     if ! pkg_build > "$log" 2>&1; then

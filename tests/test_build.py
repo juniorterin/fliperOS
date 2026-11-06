@@ -2015,13 +2015,19 @@ class GroovyMameTests(unittest.TestCase):
             self.assertEqual((root / 'etc/fliperos/fliperos.conf').read_text(), 'monitor=arcade_15\n')
 
     def test_release_is_pinned_and_installed_behind_the_wrapper(self):
+        # O release vem no pacote fliperos-groovymame (o mesmo que os updates
+        # levam); a ISO o instala do repositorio local e confere o binario.
+        recipe = (ROOT / 'packaging/packages/fliperos-groovymame.sh').read_text()
+        self.assertRegex(recipe, r'GROOVYMAME_SHA256="[0-9a-f]{64}"')
+        self.assertIn('"$PKG_UPSTREAM/releases/download/$GROOVYMAME_TAG/$file"', recipe)
+        self.assertIn('sha256sum -c', recipe)
+        self.assertIn('"$STAGING/usr/local/libexec/groovymame"', recipe)
+        self.assertIn('libqt6widgets6t64', recipe)
+        self.assertNotIn('make ', recipe)
         body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
-        self.assertRegex(MKISO, r'GROOVYMAME_SHA256="[0-9a-f]{64}"')
-        self.assertIn('releases/download/${GROOVYMAME_TAG}/${GROOVYMAME_FILE}', body)
-        self.assertIn('sha256sum -c', body)
-        self.assertIn('/usr/local/libexec/groovymame', body)
-        self.assertIn('libqt6widgets6t64', body)
-        self.assertNotIn('make ', body)
+        self.assertIn('dpkg -s fliperos-groovymame', body)
+        self.assertIn('/usr/local/libexec/groovymame -version', body)
+        self.assertNotIn('GROOVYMAME_TAG', MKISO)
         self.assertRegex(MKISO, r'(?m)^install_groovymame_chroot$')
 
     def ini(self, name):
@@ -2056,15 +2062,15 @@ class GroovyMameTests(unittest.TestCase):
 
     def test_support_files_come_from_the_tag(self):
         # As pastas do mame.ini existem na imagem: o codigo da mesma tag.
-        body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
-        self.assertRegex(MKISO, r'GROOVYMAME_COMMIT="[0-9a-f]{40}"')
-        self.assertIn('rev-parse HEAD) == "$GROOVYMAME_COMMIT"', body)
-        self.assertIn('"$gm_src/uismall.bdf" "$gm_share/fonts/uismall.bdf"', body)
+        recipe = (ROOT / 'packaging/packages/fliperos-groovymame.sh').read_text()
+        self.assertRegex(recipe, r'GROOVYMAME_COMMIT="[0-9a-f]{40}"')
+        self.assertIn('rev-parse HEAD) != "$GROOVYMAME_COMMIT"', recipe)
+        self.assertIn('"$src/uismall.bdf" "$share/fonts/uismall.bdf"', recipe)
         ini = self.ini('mame.ini')
         for key in ('pluginspath', 'fontpath', 'bgfx_path', 'hashpath', 'languagepath', 'artpath', 'ctrlrpath'):
             shared = [p for p in ini[key].split(';') if p.startswith('/usr/local/share/groovymame/')]
             self.assertEqual(len(shared), 1, key)
-            self.assertIn(shared[0].rsplit('/', 1)[1], body, key)
+            self.assertIn(shared[0].rsplit('/', 1)[1], recipe, key)
 
     def test_rootfs_merges_new_keys_into_an_older_mame_ini(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -12599,9 +12605,11 @@ class VersusTests(unittest.TestCase):
                            ('versus-games.conf', 'etc/fliperos/versus-games.conf'),
                            ('retroarch-versus.cfg', 'etc/fliperos/retroarch/versus.cfg')):
             self.assertIn('"$src/config/%s" "$root/%s"' % (path, dest), ROOTFS)
-        # O plugin fica fora da pasta que o build do GroovyMAME recria.
+        # O plugin fica fora da pasta do pacote do GroovyMAME, que cada versao
+        # troca inteira.
         self.assertIn('"$root/usr/local/share/fliperos/mame-plugins/fliperos-versus/$file"', ROOTFS)
-        self.assertIn('rm -rf "$gm_share"', MKISO)
+        self.assertIn('share=$STAGING/usr/local/share/groovymame',
+                      (ROOT / 'packaging/packages/fliperos-groovymame.sh').read_text())
         plugin = (ROOT / 'config/mame-plugins/fliperos-versus/init.lua').read_text()
         for line in ("line(string.format('fliperos_%s = %d', name, value))", "feed = io.open(FEED, 'w')",
                      'versus.on_stop = emu.add_machine_stop_notifier(stop)',
@@ -13325,7 +13333,8 @@ class OnDemandFrontendTests(unittest.TestCase):
         return run.stdout.split()
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
-        iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-flycast', 'fliperos-retroarch', 'fliperos-sdl2-kms')
+        iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-flycast', 'fliperos-groovymame', 'fliperos-retroarch',
+               'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
         self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
@@ -13341,7 +13350,7 @@ class OnDemandFrontendTests(unittest.TestCase):
             self.assertIn('"$root/opt/fliperos/bin/%s"' % name, rootfs)
             self.assertIn(name, rootfs)
         self.assertIn('config/fliperos-frontend-build', rootfs)
-        self.assertIn('packaging/patches/emulationstation/*.patch', rootfs)
+        self.assertIn('packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch', rootfs)
         self.assertIn('COPY packaging/', (ROOT / 'Dockerfile.fliperos').read_text())
         self.assertIn('config packaging', (ROOT / 'tools/cabinet-push.sh').read_text())
 
@@ -14608,7 +14617,7 @@ class EmulatorsMenuTests(unittest.TestCase):
     def test_the_cabinet_gets_the_flycast_recipe_and_patches(self):
         rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
         self.assertIn('for recipe in fliperos-emulationstation fliperos-pegasus fliperos-retroarch fliperos-dolphin '
-                      'fliperos-flycast; do', rootfs)
+                      'fliperos-flycast \\\n  fliperos-groovymame; do', rootfs)
         self.assertIn('"$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch', rootfs)
         for name, upstream, var in (('flycast', 'https://github.com/flyinghead/flycast', 'FLYCAST_COMMIT'),
                                     ('retroarch', 'https://github.com/libretro/RetroArch', 'RA_COMMIT'),
@@ -14706,7 +14715,9 @@ class EmulatorsMenuTests(unittest.TestCase):
             new = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--short=7', 'HEAD'], capture_output=True,
                                  text=True).stdout.strip()
             mkiso = tmp / 'fliperos-mkiso.sh'
-            mkiso.write_text('PCSX2_VERSION="2.8.2"\nGROOVYMAME_TAG="gm0290sr222g"\n')
+            mkiso.write_text('PCSX2_VERSION="2.8.2"\n')
+            # O GroovyMAME que o update traz: a tag da receita do pacote.
+            (tmp / 'packaging/packages/fliperos-groovymame.sh').write_text('GROOVYMAME_TAG="gm0290sr222g"\n')
             env = {'FLIPEROS_EMULATORS_ROOT': str(root), 'FLIPEROS_HOME': str(home),
                    'FLIPEROS_MKISO_URL': mkiso.as_uri(), 'FLIPEROS_SM2_REPO': str(repo)}
             got = dict(r.split('|') for r in self.run_cmd('fliperos-emulators', 'versions', env=env).stdout.splitlines())
@@ -14730,10 +14741,12 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertEqual(latest('fightcade'), '2.1.45||unknown')
         # O build da imagem grava a versao de cada emulador dela.
         mk = (ROOT / 'fliperos-mkiso.sh').read_text()
-        for name in ('groovymame', 'pcsx2', 'openbor'):
+        for name in ('pcsx2', 'openbor'):
             self.assertIn('  record_version %s "' % name, mk)
         self.assertIn('echo "$PKG_VERSION" > "$STAGING/usr/local/share/fliperos/emulator-versions.d/dolphin"',
                       (ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text())
+        self.assertIn('echo "0.${GROOVYMAME_TAG:3:3}" > "$STAGING/usr/local/share/fliperos/emulator-versions.d/groovymame"',
+                      (ROOT / 'packaging/packages/fliperos-groovymame.sh').read_text())
         for name in ('supermodel',):
             self.assertIn('echo "%s=$(git log -1 --format=\'%%cs %%h\')" >> /usr/local/share/fliperos/emulator-versions'
                           % name, mk)

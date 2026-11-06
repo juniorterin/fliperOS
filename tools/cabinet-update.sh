@@ -164,6 +164,12 @@ if ((${#missing[@]})) || [[ $repo_before != "$repo_after" ]]; then
 else
   echo "all installed and the local repository did not change: apt was not used"
 fi
+# O pacote do GroovyMAME traz o binario do release como ele e: o quiet do
+# fliperos-rootfs.sh rodou antes dele chegar (config/fliperos-groovymame-quiet).
+if [[ -f /usr/local/libexec/groovymame ]]; then
+  python3 "$src/config/fliperos-groovymame-quiet" /usr/local/libexec/groovymame > /dev/null ||
+    echo "warning: GroovyMAME keeps the Initializing text"
+fi
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo ||
   echo "warning: Flathub was not added"
 # O filtro de flicker do entrelacado e a calibracao de cor: compilados aqui, como no
