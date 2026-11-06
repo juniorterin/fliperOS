@@ -201,6 +201,10 @@ const enUS = {
       title: 'Four linked cabinets',
       caption: 'Super Street Fighter II: The Tournament Battle: four cabinets join the party, open the game down the chain, and each machine shows its own bracket. Four real MAME machines linked.',
     },
+    'anim/daytona-{lang}': {
+      title: 'Four linked racing cabinets',
+      caption: 'Daytona USA on four cabinets: each opens the game with its own car number, the ring finds all four, the circuit select counts down together and the race runs on every screen, each from its own car. Real frontend screens and four real MAME machines linked.',
+    },
     'anim/web-library': { title: 'Web panel: play a game', caption: 'Search for Street Fighter II, open its sheet and press Play: it opens on the cabinet.' },
     'anim/web-frontend': { title: 'Web panel: the cabinet', caption: 'The game on the tube, live, with the stick and buttons lighting up as they are pressed.' },
     'anim/web-live': { title: 'Web panel: Live', caption: 'Street Fighter II streamed from the tube, with the fight going on.' },
@@ -486,7 +490,7 @@ const enUS = {
       rows: [
         { shot: 'anim/netplay-{lang}', title: 'Net play: more players than controls', text: 'Escape Kids has four players and a cabinet has two controls. Cabinet 1 opens NET PLAY and waits. The game shows up at the top of cabinet 2’s list, JOIN PARTY copies it over the cable, and both play: players 1 and 2 on one cabinet, 3 and 4 on the other.', points: ['FBNeo and other RetroArch cores', 'Flycast GGPO', 'A player per control'] },
         { shot: 'anim/ssf2tb-{lang}', title: 'The four-cabinet tournament', text: 'Super Street Fighter II: The Tournament Battle needs four linked boards. Each cabinet joins the party, the frontend opens the game on each one down the chain, and the tournament shows a bracket of its own on every machine: four fights at once, eight fighters.', points: ['4 cabinets', 'GroovyMAME', 'Chain link'] },
-        { shot: '', title: 'Six link games in the frontend', text: 'Daytona USA, Scud Race and Daytona USA 2 with up to eight cabinets, Dirt Devils and Club Kart: European Session with two, and the Tournament Battle with four. A green globe marks them in the list, and the waiting room starts the machines in the right order, each with the NVRAM of its cabinet number.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
+        { shot: 'anim/daytona-{lang}', title: 'Six link games in the frontend', text: 'Daytona USA, Scud Race and Daytona USA 2 with up to eight cabinets, Dirt Devils and Club Kart: European Session with two, and the Tournament Battle with four. A green globe marks them in the list, and the waiting room starts the machines in the right order, each with the NVRAM of its cabinet number.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
         { shot: '', title: 'The game comes over the cable', text: 'A cabinet that joins without the game copies it from the cabinet that opened the party: only the files it lacks, with a progress bar.', points: ['Only what is missing'] },
         { shot: '', title: 'Network cable only', text: 'The cabinets find each other on the wired network, with no internet, server or account. Wi-Fi is never used: a link wants every frame on time.', points: ['No internet', 'No Wi-Fi'] },
         { shot: '', title: 'As fast as playing alone', text: 'Your own controls get no delay. In a link game each cabinet runs its own board and sees the others a frame or two late, as in the arcade. In net play, rollback fixes the other players’ moves within a frame.', points: ['No input delay', 'Rollback in net play'] },

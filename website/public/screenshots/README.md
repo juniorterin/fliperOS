@@ -23,7 +23,10 @@ Linked cabinets page: Japanese candy cabinets in pixel art (as in the isometric 
 home) joined by network cables on the floor, 1200x900, with the
 real frontend screens and the real game on their tubes (Escape Kids net play on two
 cabinets; the four-cabinet Super Street Fighter II: The Tournament Battle, recorded from
-four linked MAME). Made by `tools/link-tests/netplay-anim.py` and `ssf2tb-anim.py`; the
+four linked MAME). `anim/daytona-{en,pt}.webp` is the same for racing: the Formula 1
+cabinets of the home's RACE LINK room in a ring, with Daytona USA recorded from four
+MAME linked in a ring (`m2comm`), frame by frame together. Made by
+`tools/link-tests/netplay-anim.py`, `ssf2tb-anim.py` and `daytona-anim.py`; the
 steps are in `tools/link-tests/README.md`.
 
 `frontend/` holds the FliperOS frontend in its three views, each with what

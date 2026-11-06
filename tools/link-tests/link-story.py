@@ -8,9 +8,10 @@ no loopback.
     docker run --rm -v "$PWD:/w:ro" -v OUT:/out -v ARTE:/art:ro -w /w fliperos-guitest \\
         python3 tools/link-tests/link-story.py CENA /out /art
 
-CENA: netplay (Escape Kids, 2 gabinetes de 2 controles) ou ssf2tb (Super Street
-Fighter II: The Tournament Battle, 4 gabinetes). ARTE: a ~/media do gabinete
-(snap/mame/<set>.png, logo, box, marquee) dos jogos da cena. Saida, na
+CENA: netplay (Escape Kids, 2 gabinetes de 2 controles), ssf2tb (Super Street
+Fighter II: The Tournament Battle, 4 gabinetes) ou daytona (Daytona USA, 4
+gabinetes de um jogador). ARTE: a ~/media do gabinete (snap/mame/<set>.png,
+logo, box, marquee; snap/model2/... no daytona) dos jogos da cena. Saida, na
 resolucao do frontend, um prefixo por gabinete (a, b, c, d):
   a-list-N, a-popup-0/1, a-wait-0     o 1 escolhe e abre a festa
   X-list-0/1/2, X-popup-0/1, X-copy-N  cada um dos outros ve o jogo e entra
@@ -77,6 +78,26 @@ SCENES = {
             ("xmcota", "X-Men: Children of the Atom", "1994", "Capcom", "Fighter / Versus", "2", "6"),
             ("xmvsf", "X-Men vs. Street Fighter", "1996", "Capcom", "Fighter / Versus", "2", "6"),
         ]},
+    "daytona": {
+        "game": "daytona", "cabinets": 4, "players": 1, "key": "model2", "system_name": "Model 2", "art": "model2",
+        "countdown": 48, "path": ["manxtt", "indy500", "desert"], "guest_row": ["srallyc", "stcc", "sgt24h"],
+        "games": [
+            ("daytona", "Daytona USA", "1994", "Sega", "Driving / Race", "1", "4"),
+            ("desert", "Desert Tank", "1995", "Sega", "Shooter / Driving", "1", "2"),
+            ("indy500", "INDY 500 Twin", "1995", "Sega", "Driving / Race", "1", "4"),
+            ("manxtt", "Manx TT Superbike", "1995", "Sega", "Driving / Motorbike", "1", "4"),
+            ("motoraid", "Motor Raid", "1997", "Sega", "Driving / Motorbike", "1", "3"),
+            ("overrev", "Over Rev", "1997", "Jaleco", "Driving / Race", "1", "4"),
+            ("rchase2", "Rail Chase 2", "1994", "Sega", "Shooter / Gallery", "2", "1"),
+            ("segawski", "Sega Water Ski", "1997", "Sega", "Sports / Water", "1", "1"),
+            ("sgt24h", "Super GT 24h", "1996", "Jaleco", "Driving / Race", "1", "4"),
+            ("skisuprg", "Sega Ski Super G", "1996", "Sega", "Sports / Skiing", "1", "1"),
+            ("srallyc", "Sega Rally Championship", "1995", "Sega", "Driving / Race", "1", "4"),
+            ("stcc", "Sega Touring Car Championship", "1996", "Sega", "Driving / Race", "1", "4"),
+            ("topskatr", "Top Skater", "1997", "Sega", "Sports / Skateboarding", "1", "2"),
+            ("von", "Cyber Troopers Virtual-On", "1995", "Sega", "Fighter / Versus", "2", "4"),
+            ("waverunr", "Wave Runner", "1996", "Sega", "Driving / Boat", "1", "2"),
+        ]},
 }
 S = SCENES[SCENE]
 GAME, N, KEY = S["game"], S["cabinets"], S["key"]
@@ -90,7 +111,7 @@ def make_home(home):
         with open(os.path.join(folder, name + ".zip"), "wb") as f:
             f.write(b"x" * 4096)
         for kind in ("snap", "logo", "box", "marquee"):
-            src = os.path.join(ART, kind, "mame", name + ".png")
+            src = os.path.join(ART, kind, S.get("art", "mame"), name + ".png")
             if ART and os.path.isfile(src):
                 dst = os.path.join(home, "media", kind, *KEY.split("/"))
                 os.makedirs(dst, exist_ok=True)

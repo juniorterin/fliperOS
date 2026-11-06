@@ -95,7 +95,9 @@ class Cab:
         return (self.x1 - 8 if toward > 0 else self.x0 + 8), self.floor + 1
 
 
-def background(lw, lh, cabs, lit=None, globes=()):
+def background(lw, lh, cabs, lit=None, globes=(), draw=None):
+    """A sala: a parede, o lambri, o piso e os gabinetes (draw = a funcao que
+    desenha um; cabinet, o candy, se nada for dito)."""
     floor = cabs[0].floor
     im = Image.new("RGB", (lw, lh), C["wall"])
     d = ImageDraw.Draw(im)
@@ -120,7 +122,7 @@ def background(lw, lh, cabs, lit=None, globes=()):
     for gx, gy in globes:
         globe(d, gx, gy)
     for cab in cabs:
-        cabinet(d, cab)
+        (draw or cabinet)(d, cab)
     return im
 
 
@@ -249,6 +251,165 @@ def controls(d, cab, press, balls=None):
             rect(d, (x, cy, x + 3, cy + 1), C["fg"] if on else col)
             d.point((x, cy), fill=C["panel"])        # os cantos de cima, para o botao ficar redondo
             d.point((x + 3, cy), fill=C["panel"])
+
+
+RACE = {k: hexc(v) for k, v in {
+    "red": "#e03a44", "redhi": "#ff6670", "redlo": "#a8222c", "dome": "#b22a35", "domehi": "#cf3b46",
+    "domelo": "#7e1a24", "blk": "#23242f", "blkhi": "#3a3c4c", "tire": "#1d1e27", "tirehi": "#34364a",
+    "lit": "#ffb347", "lithi": "#ffd28a", "litlo": "#d98a2b"}.items()}
+
+
+class RaceCab:
+    """Um gabinete de corrida em forma de Formula 1, como os da sala RACE LINK
+    da home: a cupula vermelha do monitor com o letreiro aceso em cima (a
+    bandeira quadriculada e o numero do carro) e o carro na frente dela, visto
+    de tras e um pouco de cima, como a camera de um jogo de corrida: a asa de
+    tras e os pneus grandes embaixo, o cockpit com o volante e o bico subindo
+    ate a tela. Em pixels da arte: o centro, a meia largura, o topo, o chao, a
+    tela (largura, altura) e o numero do carro."""
+
+    def __init__(self, cx, half, top, floor, scr, n):
+        self.cx, self.half, self.top, self.floor, self.scr, self.n = cx, half, top, floor, scr, n
+        self.x0, self.x1 = cx - half, cx + half - 1
+        self.dome = top + 14                       # a cupula comeca embaixo do letreiro
+        self.scr_y = self.dome + 6
+        self.dash = self.scr_y + scr[1] + 2        # o painel embaixo da tela
+        self.car = self.dash + 11                  # a asa da frente
+        self.label_y = floor - 16
+
+    def screen_box(self, px):
+        return (self.cx - self.scr[0] // 2) * px, self.scr_y * px
+
+    def plug(self, toward):
+        return (self.x1 - 6 if toward > 0 else self.x0 + 6), self.floor + 1
+
+
+def racer(d, cab):
+    """O gabinete de corrida parado (o fundo de cada quadro): a cupula, a tela
+    apagada, o painel e o carro. O letreiro, os botoes, o volante, os pneus
+    rodando e a luz de tras sao de race_live, a cada quadro."""
+    cx, x0, x1, floor = cab.cx, cab.x0, cab.x1, cab.floor
+    sw, sh = cab.scr
+    ink, blk = C["ink"], RACE["blk"]
+    red, redhi, redlo = RACE["red"], RACE["redhi"], RACE["redlo"]
+    rect(d, (x0 - 1, floor, x1 + 1, floor + 1), ink)                     # a sombra no chao
+    # a cupula do monitor, de cantos redondos, com a pala por cima; embaixo do
+    # painel ela fica na sombra do carro
+    d.rounded_rectangle((x0, cab.dome, x1, floor - 6), radius=6, fill=RACE["dome"], outline=ink,
+                        corners=(True, True, False, False))
+    d.line([(x0 + 4, cab.dome + 1), (x1 - 4, cab.dome + 1)], fill=RACE["domehi"])
+    d.line([(x0 + 1, cab.dome + 5), (x0 + 1, cab.dash)], fill=RACE["domehi"])
+    d.line([(x1 - 1, cab.dome + 5), (x1 - 1, cab.dash)], fill=RACE["domelo"])
+    d.line([(x0 + 1, cab.dome + 3), (x1 - 1, cab.dome + 3)], fill=RACE["domelo"])
+    rect(d, (x0 + 1, cab.dash + 5, x1 - 1, floor - 7), RACE["domelo"])
+    for x in (x0 + 5, x1 - 5):                                           # as juntas da frente
+        d.line([(x, cab.dash + 7), (x, floor - 8)], fill=RACE["dome"])
+    # o vidro preto em volta da tela
+    sx0, sx1 = cx - sw // 2, cx + sw // 2 - 1
+    rect(d, (sx0 - 2, cab.scr_y - 2, sx1 + 2, cab.scr_y + sh + 1), blk, ink)
+    rect(d, (sx0 - 1, cab.scr_y - 1, sx1 + 1, cab.scr_y + sh), C["tube"])
+    # o painel embaixo da tela: as faixas branca e amarela (os botoes VR sao de race_live)
+    dash = cab.dash
+    for k, col in enumerate((C["fg"], C["fg"], C["yellow"], ink)):
+        d.line([(x0 + 1, dash + 1 + k), (x1 - 1, dash + 1 + k)], fill=col)
+    # o carro, de longe para perto: a asa da frente, os pneus da frente e o bico
+    y = cab.car
+    rect(d, (cx - 21, y, cx + 20, y + 2), red, ink)
+    d.line([(cx - 20, y), (cx + 19, y)], fill=C["fg"])
+    for a in (cx - 23, cx + 21):
+        rect(d, (a, y - 1, a + 2, y + 3), blk, ink)
+    for a in (cx - 19, cx + 12):
+        d.rounded_rectangle((a, y + 2, a + 7, y + 11), radius=1, fill=RACE["tire"], outline=ink)
+        d.line([(a + 2, y + 3), (a + 5, y + 3)], fill=RACE["tirehi"])
+    d.polygon([(cx - 2, y - 1), (cx + 1, y - 1), (cx + 3, y + 8), (cx - 4, y + 8)], fill=red, outline=ink)
+    # os sidepods, dos lados do cockpit
+    for a, b in ((cx - 18, cx - 7), (cx + 6, cx + 17)):
+        d.rounded_rectangle((a, y + 12, b, y + 30), radius=2, fill=red, outline=ink)
+        d.line([(a + 1, y + 13), (b - 1, y + 13)], fill=C["fg"])
+        d.line([(a + 1, y + 14), (b - 1, y + 14)], fill=redhi)
+        rect(d, (a + 2, y + 16, b - 2, y + 17), ink)                      # a boca do sidepod
+    # o monocoque com o cockpit aberto: o volante (race_live) e o banco azul
+    d.polygon([(cx - 4, y + 8), (cx + 3, y + 8), (cx + 6, y + 26), (cx - 7, y + 26)], fill=red, outline=ink)
+    d.line([(cx - 3, y + 9), (cx - 5, y + 25)], fill=redhi)
+    rect(d, (cx - 4, y + 9, cx + 3, y + 17), blk)
+    rect(d, (cx - 3, y + 15, cx + 2, y + 17), C["comment"])
+    d.line([(cx - 3, y + 15), (cx + 2, y + 15)], fill=C["purple"])
+    # a tomada de ar atras da cabeca
+    rect(d, (cx - 3, y + 17, cx + 2, y + 25), red, ink)
+    rect(d, (cx - 2, y + 18, cx + 1, y + 19), blk)
+    d.line([(cx - 2, y + 20), (cx - 2, y + 24)], fill=redhi)
+    # a asa de tras, larga, com as placas nas pontas e o pilar
+    yw = y + 24
+    rect(d, (cx - 1, yw + 7, cx, yw + 10), blk)
+    rect(d, (cx - 21, yw, cx + 20, yw + 2), red, ink)                    # a aba de cima
+    d.line([(cx - 20, yw), (cx + 19, yw)], fill=C["fg"])
+    rect(d, (cx - 21, yw + 4, cx + 20, yw + 7), red, ink)                # o plano principal
+    d.line([(cx - 20, yw + 5), (cx + 19, yw + 5)], fill=redhi)
+    for a in (cx - 24, cx + 21):
+        rect(d, (a, yw - 3, a + 3, yw + 11), redlo, ink)
+        d.line([(a + 1, yw - 2), (a + 1, yw + 10)], fill=red)
+    # o difusor entre os pneus de tras (a luz de chuva e de race_live)
+    rect(d, (cx - 20, yw + 11, cx + 19, floor - 7), blk, ink)
+    for x in range(cx - 16, cx + 17, 4):
+        if abs(x - cx) > 8:
+            d.line([(x, yw + 13), (x, floor - 8)], fill=RACE["blkhi"])
+    # a base preta do gabinete, no chao
+    rect(d, (x0 + 1, floor - 6, x1 - 1, floor - 1), blk, ink)
+    d.line([(x0 + 2, floor - 5), (x1 - 2, floor - 5)], fill=RACE["blkhi"])
+    race_live(d, cab)
+
+
+def race_live(d, cab, playing=False, text=None, f8=None, press=None, roll=0, light=False):
+    """O que muda no gabinete de corrida: o letreiro aceso (a bandeira
+    quadriculada dos dois lados, o numero no meio, ou o meio escuro para o logo
+    do jogo: devolve a caixa dele), um botao VR aceso a cada aperto, o volante
+    (vira num aperto para o lado), os pneus de tras rodando (roll) e a luz de
+    chuva acesa (light)."""
+    cx, x0, x1, top = cab.cx, cab.x0, cab.x1, cab.top
+    ink = C["ink"]
+    box = (x0 + 3, top, x1 - 3, top + 13)
+    d.rounded_rectangle(box, radius=2, fill=RACE["lit"], outline=ink)
+    d.line([(box[0] + 2, top + 1), (box[2] - 2, top + 1)], fill=RACE["lithi"])
+    d.line([(box[0] + 2, top + 12), (box[2] - 2, top + 12)], fill=RACE["litlo"])
+    for fx in (box[0] + 2, box[2] - 11):                                 # as bandeiras quadriculadas
+        for i in range(5):
+            for j in range(5):
+                rect(d, (fx + i * 2, top + 2 + j * 2, fx + i * 2 + 1, top + 3 + j * 2),
+                     C["fg"] if (i + j) % 2 else ink)
+    mid = (box[0] + 13, top + 2, box[2] - 13, top + 11)
+    if playing:
+        rect(d, mid, C["mqp1"])
+        d.line([(mid[0], mid[1]), (mid[2], mid[1])], fill=C["mqp2"])
+    elif text and f8:
+        tw = int(d.textlength(text, font=f8))
+        d.text((cx - tw // 2 + 1, top + 4), text, font=f8, fill=RACE["litlo"])
+        d.text((cx - tw // 2, top + 3), text, font=f8, fill=RACE["redlo"])
+    # os botoes VR no painel: vermelho, azul, amarelo, verde
+    vr = {"a": 0, "down": 1, "up": 2, "right": 3, "left": 3}.get(press)
+    for i, col in enumerate((C["red"], C["cyan"], C["yellow"], C["green"])):
+        x = cx - 13 + i * 7
+        on = i == vr
+        rect(d, (x, cab.dash + 6, x + 4, cab.dash + 8), ink)
+        rect(d, (x + 1, cab.dash + 6 + (1 if on else 0), x + 3, cab.dash + 7), C["fg"] if on else col)
+    # o volante no cockpit, de tras: o aro e o braco, girando num aperto
+    y = cab.car + 9
+    turn = {"left": -1, "right": 1}.get(press, 0)
+    rect(d, (cx - 4, y, cx + 3, y + 5), RACE["blk"])
+    d.ellipse((cx - 3, y, cx + 2, y + 5), outline=C["steel"])
+    d.line([(cx - 2, y + 3 + turn), (cx + 1, y + 3 - turn)], fill=C["steel"])
+    # os pneus de tras: pretos, com os sulcos descendo quando o carro anda
+    yt, yb = cab.car + 27, cab.floor - 3
+    for a in (cx - 35, cx + 22):
+        d.rounded_rectangle((a, yt, a + 12, yb), radius=3, fill=RACE["tire"], outline=ink)
+        d.line([(a + 3, yt + 1), (a + 9, yt + 1)], fill=C["bodylo"])
+        d.line([(a + 1, yt + 3), (a + 1, yb - 3)], fill=RACE["tirehi"])
+        for k in range(yt + 3 + roll % 4, yb - 2, 4):
+            d.line([(a + 3, k), (a + 9, k)], fill=RACE["tirehi"])
+    yl = cab.car + 37
+    rect(d, (cx - 2, yl, cx + 1, yl + 2), C["red"] if light else RACE["redlo"])
+    if light:
+        d.point((cx - 1, yl), fill=C["ballhi"])
+    return mid
 
 
 def bezier(a, b, sag):

@@ -230,9 +230,10 @@ const ROW_ONLY_SHOTS = [
   'frontend/options',
   'web/obs-{lang}',
   // As animações do link: gabinetes em pixel art com as telas reais
-  // (tools/link-tests/netplay-anim.py e ssf2tb-anim.py), uma por idioma.
+  // (tools/link-tests/netplay-anim.py, ssf2tb-anim.py e daytona-anim.py), uma por idioma.
   'anim/netplay-{lang}',
   'anim/ssf2tb-{lang}',
+  'anim/daytona-{lang}',
 ];
 
 const withLang = (id: string) => (id.includes('{lang}') ? ['en', 'pt'].map((l) => id.replace('{lang}', l)) : [id]);

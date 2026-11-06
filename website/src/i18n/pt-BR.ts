@@ -203,6 +203,10 @@ const ptBR: Messages = {
       title: 'Quatro gabinetes em link',
       caption: 'Super Street Fighter II: The Tournament Battle: quatro gabinetes entram na festa, abrem o jogo em corrente e cada máquina mostra a sua chave. Quatro MAME de verdade ligados.',
     },
+    'anim/daytona-{lang}': {
+      title: 'Quatro gabinetes de corrida em link',
+      caption: 'Daytona USA em quatro gabinetes: cada um abre o jogo com o número do seu carro, o anel acha os quatro, a escolha de pista conta junto e a corrida roda em todas as telas, cada uma do seu carro. Telas reais do frontend e quatro MAME de verdade ligados.',
+    },
     'anim/web-library': { title: 'Painel web: jogar um jogo', caption: 'Busque Street Fighter II, abra a ficha e aperte Jogar: ele abre no gabinete.' },
     'anim/web-frontend': { title: 'Painel web: o gabinete', caption: 'O jogo no tubo, ao vivo, com o direcional e os botões acendendo quando apertados.' },
     'anim/web-live': { title: 'Painel web: Ao vivo', caption: 'Street Fighter II transmitido do tubo, com a luta acontecendo.' },
@@ -487,7 +491,7 @@ const ptBR: Messages = {
       rows: [
         { shot: 'anim/netplay-{lang}', title: 'Net play: mais jogadores do que controles', text: 'Escape Kids tem quatro jogadores e um gabinete tem dois controles. O gabinete 1 abre o NET PLAY e espera. O jogo aparece no alto da lista do gabinete 2, o JOIN PARTY copia o jogo pelo cabo, e os dois jogam: jogadores 1 e 2 num gabinete, 3 e 4 no outro.', points: ['FBNeo e outros cores do RetroArch', 'GGPO do Flycast', 'Um jogador por controle'] },
         { shot: 'anim/ssf2tb-{lang}', title: 'O torneio de quatro gabinetes', text: 'Super Street Fighter II: The Tournament Battle precisa de quatro placas ligadas. Cada gabinete entra na festa, o frontend abre o jogo em cada um, em corrente, e o torneio mostra uma chave própria em cada máquina: quatro lutas ao mesmo tempo, oito lutadores.', points: ['4 gabinetes', 'GroovyMAME', 'Link em corrente'] },
-        { shot: '', title: 'Seis jogos de link no frontend', text: 'Daytona USA, Scud Race e Daytona USA 2 com até oito gabinetes, Dirt Devils e Club Kart: European Session com dois, e o Tournament Battle com quatro. Um globo verde marca cada um na lista, e a sala de espera abre as máquinas na ordem certa, cada uma com a NVRAM do seu número de gabinete.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
+        { shot: 'anim/daytona-{lang}', title: 'Seis jogos de link no frontend', text: 'Daytona USA, Scud Race e Daytona USA 2 com até oito gabinetes, Dirt Devils e Club Kart: European Session com dois, e o Tournament Battle com quatro. Um globo verde marca cada um na lista, e a sala de espera abre as máquinas na ordem certa, cada uma com a NVRAM do seu número de gabinete.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
         { shot: '', title: 'O jogo vem pelo cabo', text: 'Um gabinete que entra sem o jogo copia do gabinete que abriu a festa: só os arquivos que faltam, com uma barra de progresso.', points: ['Só o que falta'] },
         { shot: '', title: 'Só pelo cabo de rede', text: 'Os gabinetes se acham na rede cabeada, sem internet, servidor ou conta. O Wi-Fi nunca é usado: um link quer cada quadro na hora.', points: ['Sem internet', 'Sem Wi-Fi'] },
         { shot: '', title: 'Rápido como jogar sozinho', text: 'Os seus controles não ganham atraso. Num jogo de link cada gabinete roda a sua placa e vê os outros um ou dois quadros depois, como no fliperama. No net play, o rollback acerta os movimentos dos outros jogadores em menos de um quadro.', points: ['Sem atraso nos controles', 'Rollback no net play'] },
