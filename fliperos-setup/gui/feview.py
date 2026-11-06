@@ -814,7 +814,7 @@ def list_geom():
     Deitado, a lista a esquerda e a imagem a direita; em pe, a imagem em
     cima, larga, e a lista embaixo."""
     if T.VERTICAL:
-        return (SX, SW - 8, 156, 10), (SX + SW - 87, 34, 87, 116)
+        return (SX, SW - 8, 164, 10), (SX + SW - 87, 34, 87, 116)
     px = SX + LIST_W + 14
     return (SX, LIST_W, 36, 13), (px, 36, SX + SW - px, LIST_SH)
 
@@ -920,9 +920,8 @@ def draw_list(fe, ui, now):
     logo = image(fe, media(fe, game, "logo"), min(pw - 8, 200), 28)
     if T.VERTICAL:
         if logo:
-            # Dentro da imagem: o logo nao passa da borda e nao cobre a lista.
-            blit_center(ui, logo, px, y0 + sh - 32, pw, 28)
-        list_info_vertical(fe, ui, game, (SX, y0, px - SX - 6, sh), now, title=not logo)
+            blit_center(ui, logo, px, y0 + sh - 14, pw, 28)
+        list_info_vertical(fe, ui, game, (SX, y0, px - SX - 6, sh), now)
         return
     y = y0 + sh + 6
     if logo:
@@ -970,17 +969,14 @@ def draw_list(fe, ui, now):
         draw_synopsis(fe, ui, game, (px, y, pw, HH - 6 - y), now)
 
 
-def list_info_vertical(fe, ui, game, box, now, title=False):
+def list_info_vertical(fe, ui, game, box, now):
     """O modo lista em pe: a coluna a esquerda da imagem (que e em pe, 3:4,
-    no canto de cima a direita). De cima para baixo: o nome (so sem logo), o
-    ano e o fabricante (o que nao cabe corre em circulo), os icones dois por
-    linha e, no resto, a sinopse rolando; no modo comercial, no lugar da
-    sinopse, o indicador de ficha."""
+    no canto de cima a direita). De cima para baixo: o ano e o fabricante (o
+    que nao cabe corre em circulo), os icones dois por linha e, no resto, a
+    sinopse rolando; no modo comercial, no lugar da sinopse, o indicador de
+    ficha. O nome do jogo ja esta na lista."""
     x, y, w, h = box
     bottom = y + h
-    if title:
-        ticker(ui, text_img(fe.fd.short_title(game).upper(), T.YELLOW), x, y, w, now)
-        y += 14
     ticker(ui, text_img(facts_line(game).upper(), T.YELLOW), x, y + 1, w, now)
     y += 14
     # Os icones, dois por linha.
