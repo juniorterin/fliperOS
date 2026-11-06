@@ -127,6 +127,23 @@ def ease(fe, name, target, now, speed=16.0, reach=6):
     return v
 
 
+def spring(fe, name, target, now, omega=16.0):
+    """Como ease, mas com velocidade: uma mola sem balanco (a solucao exata,
+    igual em qualquer taxa de quadros). Sai devagar, acelera e para devagar
+    no destino, sem passar dele, tambem quando o destino muda no meio."""
+    x, v, last = fe.anim.get(name, (target, 0.0, now))
+    if fe.shot:
+        x, v = target, 0.0
+    t = min(0.1, max(0.0, now - last))
+    e = x - target
+    k = math.exp(-omega * t)
+    e, v = (e + (v + omega * e) * t) * k, (v - omega * (v + omega * e) * t) * k
+    if abs(e) < 0.002 and abs(v) < 0.02:
+        e, v = 0.0, 0.0
+    fe.anim[name] = (target + e, v, now)
+    return target + e
+
+
 def video_frame(fe, game, w, h):
     """O quadro de agora do video do jogo em w x h (fevideo.py), ou None:
     sem video, sem o ffmpeg, ou enquanto o primeiro quadro nao chega (a
@@ -2361,7 +2378,7 @@ def draw_ribbon(fe, ui, now):
     # sem dar a volta), e cada quadrado cresce ao passar pelo meio. No meio
     # fica o sistema escolhido na tira (pick passos alem do da lista).
     pick = getattr(fe, "pick", 0)
-    pos = ease(fe, "ribbon", getattr(fe, "cat_pos", fe.cat), fe.abs_now, speed=12.0, reach=3)
+    pos = spring(fe, "ribbon", getattr(fe, "cat_pos", fe.cat), fe.abs_now)
     base = math.floor(pos)
     tiles = []
     for k in range(-3, 5):
@@ -2372,28 +2389,36 @@ def draw_ribbon(fe, ui, now):
     badges = []
     for dist, d, idx in sorted(tiles, reverse=True):
         c = fe.cats[idx]
-        size = round(56 - 16 * dist if dist <= 1 else max(32, 40 - 8 * (dist - 1)))
+        # O tamanho segue uma curva lisa da distancia ao meio (56 no meio, 40 a
+        # um passo, ~35 a dois), sem quina: o azulejo cresce aos poucos.
+        sf = 32 + 24 / (1 + 2 * dist * dist)
         on = dist < 0.5
         # Os azulejos com logotipo sao fluidos: a largura acompanha a proporcao
         # do logotipo (de 1 a RIBBON_WIDE vezes a altura), que ocupa 80% dele.
         src = logo_source(c["name"])
-        w = size
+        wf = sf
         if src is not None:
-            w = round(max(size, min(RIBBON_WIDE * size, 0.45 * size * src.get_width() / src.get_height() / 0.8)))
-        cx = round(WW / 2 + d * RIBBON_STEP)
-        x, y = cx - w // 2, band_y + 20 + (56 - size) // 2
+            wf = max(sf, min(RIBBON_WIDE * sf, 0.45 * sf * src.get_width() / src.get_height() / 0.8))
+        # As bordas saem do centro em ponto flutuante, cada uma arredondada:
+        # o azulejo cresce igual para os dois lados, sem tremer um pixel.
+        cx, cy = WW / 2 + d * RIBBON_STEP, band_y + 48
+        x, y = round(cx - wf / 2), round(cy - sf / 2)
+        w, size = round(cx + wf / 2) - x, round(cy + sf / 2) - y
         tile_frame(ui, (x, y, w, size), on, now)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, y, w, size), 2 if on else 1)
+        # A borda vai do cinza ao rosa conforme chega ao meio.
+        lit = max(0.0, 1.0 - dist)
+        edge = tuple(round(a + (b - a) * lit) for a, b in zip(T.LINE[:3], T.PINK[:3]))
+        pygame.draw.rect(ui, edge, (x, y, w, size), 2 if on else 1)
         name = system_icon(c)
         alpha = round(255 - 145 * min(1.0, dist)) if dist > 0.05 else None
-        logo = system_logo(c["name"], round(w * 0.8), round(size * 0.8)) if src is not None else None
+        logo = system_logo(c["name"], round(wf * 0.8), round(sf * 0.8)) if src is not None else None
         if logo is not None:
             # O logotipo escrito do sistema no meio, e o icone do emulador em
             # cima da borda, no canto de baixo a direita, quase vazando.
             if alpha is not None:
                 logo = logo.copy()
                 logo.set_alpha(alpha)
-            ui.blit(logo, (x + (w - logo.get_width()) // 2, y + (size - logo.get_height()) // 2))
+            ui.blit(logo, (round(cx - logo.get_width() / 2), round(cy - logo.get_height() / 2)))
             badge = T.icon(name, 1) if name else None
             if badge is not None:
                 # Por cima de todos os azulejos (um vizinho nao o cobre).
@@ -2403,13 +2428,11 @@ def draw_ribbon(fe, ui, now):
                 badges.append((badge, (x + w - round(badge.get_width() * 0.65),
                                        y + size - round(badge.get_height() * 0.65))))
             continue
-        icon = T.icon(name, 2 if size >= 44 else 1) if name else None
-        if icon is None:
-            icon = W.big(c["name"][:1].upper(), 3 if size >= 44 else 2, W.MARQUEE)
+        icon = ribbon_icon(c, name, sf)
         if alpha is not None:
             icon = icon.copy()
             icon.set_alpha(alpha)
-        blit_center(ui, icon, x, y, size, size)
+        ui.blit(icon, (round(cx - icon.get_width() / 2), round(cy - icon.get_height() / 2)))
     for badge, at in badges:
         ui.blit(badge, at)
     # O nome do sistema ja esta no logotipo do azulejo; so sem logotipo ele vem escrito.
@@ -2473,6 +2496,25 @@ def system_logo(name, w, h):
         _fitted[key] = pygame.transform.smoothscale(got.convert_alpha() if pygame.display.get_surface() else got, size)
         if len(_fitted) > 400:
             _fitted.clear()
+    return _fitted[key]
+
+
+def ribbon_icon(cat, name, size):
+    """O icone do azulejo sem logotipo para um azulejo de size pixels: o do
+    meio (56) no tamanho certo do desenho, e os outros reduzidos suave, pixel a
+    pixel, sem o salto de uma escala para a outra."""
+    px = min(56, round(size))
+    key = ("icon", name or cat["name"][:1].upper(), px)
+    if key not in _fitted:
+        img = (T.icon(name, 2) if name else None) or W.big(cat["name"][:1].upper(), 3, W.MARQUEE)
+        if px < 56:
+            k = px / 56
+            img = pygame.transform.smoothscale(img.convert_alpha() if pygame.display.get_surface() else img,
+                                               (max(1, round(img.get_width() * k)), max(1, round(img.get_height() * k))))
+        _fitted[key] = img
+        if len(_fitted) > 400:
+            _fitted.clear()
+            _fitted[key] = img
     return _fitted[key]
 
 

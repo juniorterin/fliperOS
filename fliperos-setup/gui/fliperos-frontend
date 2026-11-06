@@ -604,7 +604,7 @@ class Frontend:
         # A tira das romlists anda de onde estava (cat_pos nao da a volta).
         now = time.monotonic()
         old = getattr(self, "cat_pos", self.cat)
-        self.anim.setdefault("ribbon", (old, now))
+        self.anim.setdefault("ribbon", (old, 0.0, now))     # (posicao, velocidade, quando): feview.spring
         self.cat_pos = old + step
         self.pick += step
         self.pick_at = now
