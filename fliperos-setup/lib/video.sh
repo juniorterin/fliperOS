@@ -716,9 +716,12 @@ orientation_boot() {
   fi
   ev_step 30 "The boot screen"
   splash_orientation "$o" && changed=1
-  ((changed)) || return 0
-  ev_step 50 "Rebuilding the initramfs"
-  run_logged "$UPDATE_INITRAMFS" -u
+  if ((changed)); then
+    ev_step 50 "Rebuilding the initramfs"
+    ev_run "$UPDATE_INITRAMFS" -u || return 1
+  fi
+  # A tela de progresso so da a operacao por feita com o 100%.
+  ev_step 100 "The boot is ready"
 }
 
 # orientation_cmdline LINHA CONECTOR ORIENTACAO acerta fbcon=rotate e o

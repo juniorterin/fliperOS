@@ -5200,7 +5200,7 @@ class SplashTests(Base):
         self.assertEqual(self.env.run("splash_orientation vertical-ccw", self.vars).returncode, 0)
         self.assertIn('orientation = "vertical-ccw";', (self.themes / "fliperos" / "fliperos.script").read_text())
         # O orientation_boot refaz o initramfs uma vez (o splash e o EDID).
-        self.env.out("orientation_boot horizontal", self.vars)
+        out = self.env.out("orientation_boot horizontal", self.vars)
         self.assertEqual(self.calls.read_text().count("update-initramfs -u"), 1)
         # O tema do repositorio tem a linha e as imagens giradas.
         theme = SETUP.parent / "config" / "splashscreen" / "fliperos"
@@ -5334,6 +5334,8 @@ class RomCleanerTests(Base):
            '<machine name="mvsc2" romof="naomi"><description>Marvel Vs. Capcom 2</description><year>2000</year>'
            '<input players="2" coins="1"><control type="joy" buttons="6"/></input>'
            '<driver status="preliminary"/></machine>'
+        # A tela de progresso so da por feito o que termina em 100%.
+        self.assertIn("@step 100 ", out)
            '<machine name="awbios" isbios="yes"><description>Atomiswave BIOS</description></machine>'
            '<machine name="kofxi" romof="awbios"><description>The King of Fighters XI</description>'
            '<year>2005</year><input players="2" coins="1"><control type="joy" buttons="5"/></input>'
