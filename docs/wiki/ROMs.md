@@ -156,7 +156,8 @@ Setup > Games > Downloader > **Download BIOS** brings the BIOS that the games in
 
 - **RetroArch cores** (`~/roms/retroarch/<core>`): the firmware listed in the core's own `.info` file (PCSX ReARMed asks for `scph5501.bin`, Flycast for `dc/dc_boot.bin`, FBNeo for `fbneo/neogeo.zip`), into `~/bios` at the path the core asks for. The optional ones come too: without them a core falls back to an imitation BIOS (HLE) or doesn't open part of its games (Sega CD, Famicom Disk System);
 - **MAME sets** (`~/roms/mame`, `naomi`, `naomi2`, `atomiswave`, and the arcade cores): the BIOS and devices those sets use, from the MAME XML (`fliperos-romclean uses`): `neogeo.zip`, `qsound.zip`… go to `~/bios/mame`, the Naomi and Atomiswave ones to `~/bios/dc`, FBNeo's to `~/bios/fbneo`, and those of the other MAME cores next to their games;
-- **PCSX2** (`~/roms/ps2`) and **Flycast** (`~/roms/dreamcast`): their BIOS in `~/bios/ps2` and `~/bios/dc`.
+- **PCSX2** (`~/roms/ps2`): its BIOS in `~/bios/ps2`;
+- **Flycast** (`~/roms/dreamcast`, `naomi`, `naomi2`, `atomiswave` and the RetroArch Flycast core): any game of it brings every BIOS Flycast knows into `~/bios/dc` (`dc_boot.bin`, `dc_flash.bin`, `naomi.zip`, `naomi2.zip`, `naomigd.zip`, `awbios.zip`, `segasp.zip` and the game boards `airlbios`, `f355bios`, `f355dlx`, `hod2bios`), even for a set the MAME list doesn't know.
 
 The files come from a reference BIOS pack, the [Batocera v36 full BIOS pack](https://archive.org/details/full-pack-bios-batocera-v-36) on the Internet Archive (`/usr/local/share/fliperos/bios-pack`).
 

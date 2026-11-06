@@ -357,6 +357,45 @@ bios_arcade_dest() {
   return 0
 }
 
+# As BIOS do Flycast (as do BIOS[] do naomi_roms.cpp dele que sao sets do
+# MAME, e as do Dreamcast), em ~/bios/dc: com qualquer jogo dele vem todas.
+# Pelos sets de cada jogo (a lista do MAME), um jogo que o GroovyMAME nao
+# conhece, ou sem o GroovyMAME, deixava a Naomi sem a naomi.zip.
+FLYCAST_BIOS_SETS="naomi naomi2 naomigd awbios segasp airlbios f355bios f355dlx hod2bios"
+FLYCAST_BIOS_FILES="dc/dc_boot.bin dc_flash.bin"
+
+# bios_flycast_folder CHAVE: verdadeiro numa pasta de jogos do Flycast (o
+# emulador ou o core do RetroArch).
+bios_flycast_folder() {
+  [[ $1 == dreamcast || $1 == naomi || $1 == naomi2 || $1 == atomiswave || $1 == retroarch/flycast* ]]
+}
+
+# bios_flycast_wants ARQUIVO CHAVE PASTA... acrescenta ao "wants" as BIOS do
+# Flycast que ele ainda nao pede. CHAVE vai para o relatorio; as PASTA (as
+# raizes de jogos do Flycast, onde ele tambem as procura) valem como outro lugar.
+bios_flycast_wants() {
+  local out=$1 key=$2 file name dest dir
+  shift 2
+  local -a other=()
+  for dir in "$@"; do
+    [[ $dir == "$ROMS_ROOT"/retroarch/* ]] || other+=("$dir")
+  done
+  for file in $FLYCAST_BIOS_FILES; do
+    dest=$BIOS_ROOT/dc/${file##*/}
+    awk -F'\t' -v d="$dest" '$4 == d { f = 1 } END { exit !f }' "$out" ||
+      printf 'fw\t%s\t%s\t%s\n' "$key" "$file" "$dest" >> "$out"
+  done
+  for name in $FLYCAST_BIOS_SETS; do
+    dest=$BIOS_ROOT/dc/$name.zip
+    awk -F'\t' -v d="$dest" '$4 == d { f = 1 } END { exit !f }' "$out" && continue
+    printf 'set\t%s\t%s\t%s\t%s' "$key" "$name" "$dest" "$BIOS_ROOT/dc/$name.7z"
+    for dir in "${other[@]}"; do
+      printf '\t%s\t%s' "$dir/$name.zip" "$dir/$name.7z"
+    done
+    printf '\n'
+  done >> "$out"
+}
+
 # bios_folders imprime "chave|pasta" de cada pasta de ~/roms com jogos.
 bios_folders() {
   local dir key
@@ -374,11 +413,12 @@ bios_folders() {
 # jogos pede, config/fliperos-bios). Eventos de progresso.
 bios_plan() {
   local out=$1 key dir path sub files file dest name xml_key
-  local -a source folder_args
+  local -a source folder_args flycast=()
   local -A arcade=() by_xml=()
   : > "$out"
   ev_step 0 "Looking at the game folders"
   while IFS='|' read -r key dir; do
+    bios_flycast_folder "$key" && flycast+=("$key|$dir")
     if [[ $key == retroarch/* ]]; then
       while IFS= read -r path; do
         printf 'fw\t%s\t%s\t%s\n' "$key" "$path" "$BIOS_ROOT/$path"
@@ -421,6 +461,7 @@ bios_plan() {
         "$dir/$name.zip" "$dir/$name.7z"
     done < <(nice -n 10 "$ROMCLEAN" uses "${source[@]}" "${folder_args[@]}" --by-folder 2>> "$FLIPEROS_LOG") >> "$out"
   done
+  ((${#flycast[@]})) && bios_flycast_wants "$out" "${flycast[0]%%|*}" "${flycast[@]#*|}"
   return 0
 }
 

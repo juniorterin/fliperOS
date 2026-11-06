@@ -5073,6 +5073,36 @@ class ScraperTests(Base):
                 ("ps2", "scph39001.bin", "ps2/scph39001.bin")):
             self.assertEqual(wants.get((key, name)), str(bios / dest), (key, name))
 
+    def test_bios_plan_asks_every_flycast_bios_for_any_flycast_game(self):
+        # Um jogo de Naomi que a lista do MAME nao conhece (aqui nem ha
+        # GroovyMAME) ja pede todas as BIOS do Flycast em ~/bios/dc, uma vez
+        # cada; a que esta na raiz da pasta de jogos (onde o Flycast tambem
+        # procura) vale.
+        roms, bios = self.env.dir / "roms", self.env.dir / "bios"
+        for d in ("naomi", "retroarch/flycast"):
+            (roms / d).mkdir(parents=True)
+            (roms / d / "jogo.zip").write_text("g")
+        env = {"ROMS_ROOT": str(roms), "BIOS_ROOT": str(bios), "BIOS_STATE": str(self.env.dir / "bs"),
+               "GROOVYMAME": "nao-ha-groovymame"}
+        out = self.env.out('w=$(mktemp); bios_plan "$w" > /dev/null; cat "$w"', env)
+        rows = [l.split("\t") for l in out.splitlines()]
+        dests = [os.path.normpath(r[3]) for r in rows]
+        self.assertEqual(len(dests), len(set(dests)), out)
+        for name in ("naomi.zip", "naomi2.zip", "naomigd.zip", "awbios.zip", "segasp.zip", "airlbios.zip",
+                     "f355bios.zip", "f355dlx.zip", "hod2bios.zip", "dc_boot.bin", "dc_flash.bin"):
+            self.assertIn(str(bios / "dc" / name), dests, name)
+        naomi = next(r for r in rows if r[2] == "naomi")
+        self.assertEqual(naomi[0], "set")
+        self.assertIn(str(roms / "naomi" / "naomi.zip"), [os.path.normpath(p) for p in naomi[4:]])
+        self.assertNotIn(str(roms / "retroarch" / "flycast" / "naomi.zip"), [os.path.normpath(p) for p in naomi[4:]])
+        # Sem jogo do Flycast, nenhuma.
+        for d in ("naomi", "retroarch/flycast"):
+            (roms / d / "jogo.zip").unlink()
+        (roms / "ps1").mkdir()
+        (roms / "ps1" / "game").write_text("g")
+        out = self.env.out('w=$(mktemp); bios_plan "$w" > /dev/null; cat "$w"', env)
+        self.assertNotIn("/dc/", out)
+
     def test_bios_running_state_is_the_frontends_progress(self):
         state = self.env.dir / "bs"
         env = {"BIOS_STATE": str(state)}
