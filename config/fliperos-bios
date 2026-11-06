@@ -395,13 +395,19 @@ def retro_find(index, kind, name):
     low = name.lower()
     tail = low.rsplit('/', 1)[-1]
     if kind == 'fw':
-        sha1 = index['dest'].get(low) or index['dest'].get(tail) or index['name'].get(tail)
+        # O SHA1 do retroarch.yml pode ser de outra copia do arquivo que o
+        # repositorio nao tem (o fbneo/decocass.zip, o fbneo/spec128.zip):
+        # entao o nome, e um .zip de arcade e tambem um set.
+        sums = [index['dest'].get(low), index['dest'].get(tail), index['name'].get(tail)]
+        if tail.endswith('.zip'):
+            sums.append(index['sets'].get(tail[:-4]))
     else:
-        sha1 = index['sets'].get(low)
-    entry = index['files'].get(sha1) if sha1 else None
-    if not entry:
-        return None
-    return [entry[1], entry[0], RETROBIOS + '/' + urllib.parse.quote(entry[1]), sha1]
+        sums = [index['sets'].get(low)]
+    for sha1 in sums:
+        entry = index['files'].get(sha1) if sha1 else None
+        if entry:
+            return [entry[1], entry[0], RETROBIOS + '/' + urllib.parse.quote(entry[1]), sha1]
+    return None
 
 
 # ── Gravar ────────────────────────────────────────────────────────

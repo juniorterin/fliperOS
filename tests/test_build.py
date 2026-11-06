@@ -4252,8 +4252,8 @@ class BiosPackTests(unittest.TestCase):
             # Um emulador fora do RetroArch, pelo nome (a pasta de cada placa).
             ('fw', 'namco246', 'COH-H31000.BIN', str(h / 'bios/namco246/COH-H31000.BIN')),
             ('fw', 'namco256', '256.BIN', str(h / 'bios/namco256/256.BIN')),
-            # Nao esta no RetroBIOS: vem do pacote do Batocera (a raiz dele).
-            ('fw', 'retroarch/fbneo', 'fbneo/neogeo.zip', str(h / 'bios/fbneo/neogeo.zip')),
+            # Nao esta no RetroBIOS: vem do pacote do Batocera (dc/naomi.zip).
+            ('set', 'naomi', 'naomi', str(h / 'bios/dc/naomi.zip')),
             # Nome ambiguo no RetroBIOS (dois bios.bin) e fora do pacote: falta.
             ('fw', 'x', 'bios.bin', str(h / 'bios/bios.bin')),
             ('fw', 'retroarch/pcsx_rearmed', 'scph5502.bin', str(h / 'bios/scph5502.bin')),
@@ -4264,7 +4264,7 @@ class BiosPackTests(unittest.TestCase):
         self.assertEqual((h / 'bios/mame/neogeo.zip').read_bytes(), b'M' * 91)
         self.assertEqual((h / 'bios/namco246/COH-H31000.BIN').read_bytes(), b'N' * 400)
         self.assertEqual((h / 'bios/namco256/256.BIN').read_bytes(), b'S' * 410)
-        self.assertEqual((h / 'bios/fbneo/neogeo.zip').read_bytes(), self.FILES['bios/neogeo.zip'])
+        self.assertEqual((h / 'bios/dc/naomi.zip').read_bytes(), self.FILES['bios/dc/naomi.zip'])
         self.assertFalse((h / 'bios/bios.bin').exists())
         report = (self.tmp / 'state/last.tsv').read_text()
         self.assertIn('missing\tx\t%s\tbios.bin' % (h / 'bios/bios.bin'), report)
@@ -4278,6 +4278,28 @@ class BiosPackTests(unittest.TestCase):
                             ('fw', 'namco246', 'COH-H31000.BIN', str(h / 'bios/other/COH-H31000.BIN'))])
         self.assertEqual(stats['downloaded'], '2')
         self.assertFalse([u for u in self.fetched if 'archive.org' in u])
+
+    def test_a_destination_checksum_the_repository_lacks_falls_back_to_the_name(self):
+        # O retroarch.yml pede outra copia do .zip (outro SHA1) que o
+        # repositorio nao tem: vem a que ele tem, pelo nome ou pelo set.
+        h = self.home
+        self.rb_files.update({'bios/Arcade/Arcade/fdsbios.zip': b'F' * 30,
+                              'bios/Arcade/Arcade/decocass.zip': b'D' * 40,
+                              'bios/Arcade/MAME/decocass.zip': b'E' * 41})
+        self.retrobios()
+        self.rb_pages['platforms/retroarch.yml'] = (
+            'systems:\n  fbneo:\n    files:\n'
+            '    - name: fdsbios.zip\n      destination: fbneo/fdsbios.zip\n      sha1: %s\n'
+            '    - name: decocass.zip\n      destination: fbneo/decocass.zip\n      sha1: %s\n'
+            % ('1' * 40, '2' * 40)).encode()
+        stats = self.check([
+            ('fw', 'retroarch/fbneo', 'fbneo/fdsbios.zip', str(h / 'bios/fbneo/fdsbios.zip')),
+            # Dois decocass.zip (o nome e ambiguo): o set, da pasta do MAME.
+            ('fw', 'retroarch/fbneo', 'fbneo/decocass.zip', str(h / 'bios/fbneo/decocass.zip')),
+        ])
+        self.assertEqual((stats['downloaded'], stats['missing']), ('2', '0'))
+        self.assertEqual((h / 'bios/fbneo/fdsbios.zip').read_bytes(), b'F' * 30)
+        self.assertEqual((h / 'bios/fbneo/decocass.zip').read_bytes(), b'E' * 41)
 
     def test_a_retrobios_file_with_the_wrong_checksum_is_not_kept(self):
         self.retrobios()
