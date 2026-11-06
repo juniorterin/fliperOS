@@ -28633,9 +28633,182 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 </tbody>
 </table>
 <p>Setup &gt; Games &gt; Downloader &gt; Download BIOS fetches the BIOS from RetroBIOS. The games and dongles are not downloaded: bring your own. The panel's buttons follow Setup &gt; Joysticks &gt; Button mapping: the arcade buttons are the <code>[JVS]</code> section of the emulator's <code>PCSX2.ini</code> (<code>config/pcsx2x6-jvs-bindings</code>). Button N of a game goes to the panel position that Setup &gt; Joysticks &gt; Buttons layout gives it (position N without a layout), on the controller of each player. The section is written on the first launch and again by every Button mapping save and system update; a change made inside PCSX2x6 stays until then.</p>
-<p>Seen on a cabinet (i7 870, R7 240): Tekken 5 opens and plays, with dips to 56-57 FPS in fights. The emulated console's processor (the EE thread) is at 100%, the video card at 5-35%; the sound, the card's clock, the EE cycle rate and the blending fixes did not change it. Inside the arcade the processor reached 94-98 C with thermal throttling, and out of it it stays at 62-67 C.</p>
-<p><strong>Packed games (the archive.org "Namco System 2X6" folders).</strong> Drop a folder with the <code>.gz</code> files (<code>NM00019 TE51 DVD0 (DVD-ROM).iso.gz</code>, <code>NM00019 TE51, Ver.B4 a026051314505a.bin.gz</code>...) in <code>~/roms/namco2x6</code>, with any name. The frontend lists the game (Tekken 5) with its versions as clones (a version is a disc and a dongle of the same code; the newest is the parent, and a disc or dongle with no pair is left out). Choosing one extracts what it needs with a progress bar in the middle of the screen (B cancels): the disc and the <code>boot.elf</code> (from the proverb project, downloaded once and kept) into a folder of the game, the dongle into <code>~/save/namco2x6</code> (a copy as it came stays in <code>originals</code>), and a <code>.acgame</code> ready to run. Then the <code>.gz</code> files used are deleted and the game opens; a disc or dongle that other versions use stays extracted for them. It needs free space for the whole disc (about twice the <code>.gz</code>).</p>
+<h3 id="the-files-of-a-game">The files of a game</h3>
+<p>A game ready to run is three things: a <code>.acgame</code> file and a folder in <code>~/roms/namco2x6</code>, and the dongle in <code>~/save/namco2x6</code>. For Tekken 5 from the MAME CHD:</p>
+<pre><code>~/roms/namco2x6/NM00019.acgame
+~/roms/namco2x6/NM00019/boot.elf
+~/roms/namco2x6/NM00019/te51-dvd0.chd
+~/save/namco2x6/NM00019.ps2
+</code></pre>
+<pre><code class="language-ini">[game]
+name=Tekken 5
+gameid=NM00019
+platform=256
+
+[data]
+subdir=NM00019
+elf=boot.elf
+dongle=NM00019.ps2
+mediasrc=te51-dvd0.chd
+media=DVD
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Line</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gameid</code></td>
+<td>The game's code, <code>NM</code> and five digits (NM00019 is Tekken 5). The only line that is required</td>
+</tr>
+<tr>
+<td><code>platform</code></td>
+<td><code>246</code>, <code>256</code> or <code>super256</code>. It sets the emulated clock, and a 256 game refuses to boot as <code>246</code>. Without it, the fork's game list decides</td>
+</tr>
+<tr>
+<td><code>subdir</code></td>
+<td>The game's folder, next to the <code>.acgame</code>. Without it, the <code>gameid</code></td>
+</tr>
+<tr>
+<td><code>elf</code></td>
+<td>The boot program inside that folder, <code>boot.elf</code> by default. It comes from the fork's proverb project (<code>bin/NM00019/boot.elf</code> in its nightly zip); the frontend downloads it when it extracts a packed game</td>
+</tr>
+<tr>
+<td><code>mediasrc</code></td>
+<td>The image inside that folder, <code>NM00019.chd</code> by default</td>
+</tr>
+<tr>
+<td><code>media</code></td>
+<td><code>CD</code>, <code>DVD</code> or <code>HDD</code>. Without it, the fork's game list decides</td>
+</tr>
+<tr>
+<td><code>dongle</code></td>
+<td>The dongle's file in <code>~/save/namco2x6</code>, <code>NM00019.ps2</code> by default</td>
+</tr>
+<tr>
+<td><code>card</code></td>
+<td>A second memory card, only for Soul Calibur II's Conquest mode</td>
+</tr>
+</tbody>
+</table>
+<p>The image can be:
+- A <strong><code>.chd</code></strong>. A MAME CHD of the game works as it is (<code>bldyr3b.chd</code>, <code>te51-dvd0.chd</code>, <code>ted1dvd0b.chd</code>), and it is the best choice for the CD games.
+- A <strong><code>.iso</code></strong> of 2048-byte sectors. The DVD images of the archive.org item are fine. Its CD images are not: see Bloody Roar 3 below.
+- A hard disk <strong><code>.img</code></strong> for the HDD games.</p>
+<p>The dongle is a memory card image of 8,650,752 bytes, with the extension <code>.ps2</code>. The dongle <code>.bin</code> files of the archive.org item (once gunzipped) and of the MAME sets (<code>br3-dongle.bin</code>) are the same data: rename them to <code>.ps2</code>. The game writes to it, so keep a copy as it came.</p>
+<p>A packed game is the archive.org folder as it comes, with its <code>.iso.gz</code>, <code>.bin.gz</code> and <code>(HDD).img.gz</code> files dropped in <code>~/roms/namco2x6</code>: the frontend writes all of the above when you choose it (see Packed games below). The BIOS is <code>256.BIN</code> in <code>~/bios/namco2x6</code>.</p>
+<h3 id="packed-games-the-archiveorg-folders">Packed games (the archive.org folders)</h3>
+<p>Drop a folder with the <code>.gz</code> files (<code>NM00019 TE51 DVD0 (DVD-ROM).iso.gz</code>, <code>NM00019 TE51, Ver.B4 a026051314505a.bin.gz</code>...) in <code>~/roms/namco2x6</code>, with any name. The frontend lists the game (Tekken 5) with its versions as clones (a version is a disc and a dongle of the same code; the newest is the parent, and a disc or dongle with no pair is left out). Choosing one extracts what it needs with a progress bar in the middle of the screen (B cancels): the disc and the <code>boot.elf</code> (from the proverb project, downloaded once and kept) into a folder of the game, the dongle into <code>~/save/namco2x6</code> (a copy as it came stays in <code>originals</code>), and a <code>.acgame</code> ready to run. Then the <code>.gz</code> files used are deleted and the game opens; a disc or dongle that other versions use stays extracted for them. It needs free space for the whole disc (about twice the <code>.gz</code>). A copy that stopped short is not extracted (FILE INCOMPLETE: COPY IT AGAIN) and loses nothing. A CD image whose sectors carry the 8-byte CD subheader in front, which the fork refuses, is put back in place while extracting; the bytes missing from such an image stay missing, so for a CD game the MAME CHD is the better copy.</p>
 <p>The hard disk games (media HDD: Battle Gear 3, Zoids Infinity, Cobra, Time Crisis 4, Taiko 12 to 14...) come in the same folders: the archive.org item has their <code>(HDD).img.gz</code> image next to the dongles, so a version is a dongle and that image (a game with a single disc or image pairs every dongle with it; otherwise a dongle takes the disc whose code matches, ignoring hyphens, <code>DVD0</code> and <code>HDD0</code>). The image is written sparse, so the zeros do not take the disk. A disc or tool disc with no pair, and the games whose names give no hint (Dragon Chronicle Online), are left out. The hard disk games have not been run in PCSX2x6 here.</p>
+<h3 id="what-was-tested-and-what-went-wrong">What was tested, and what went wrong</h3>
+<p>Tested on a cabinet on 2026-11-05 and 06: i7 870 (2.93 GHz, turbo off in the firmware), R7 240 (RADV, Vulkan), 6 GB DDR3 in two unmatched sticks (2 GB DDR3-1066 and 4 GB DDR3-1333).</p>
+<table>
+<thead>
+<tr>
+<th>Game</th>
+<th>Board</th>
+<th>Image</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tekken 5 (NM00019)</td>
+<td>256</td>
+<td><code>.iso</code>, then MAME CHD <code>te51-dvd0.chd</code></td>
+<td>Plays; FPS dips in fights</td>
+</tr>
+<tr>
+<td>Tekken 5 Dark Resurrection (NM00026)</td>
+<td>256</td>
+<td>archive.org <code>.iso</code>, then MAME CHD <code>ted1dvd0b.chd</code></td>
+<td>Plays; the same dips with either image</td>
+</tr>
+<tr>
+<td>Soul Calibur II (NM00007)</td>
+<td>246</td>
+<td>archive.org <code>.iso</code> (DVD0D and DVD0B)</td>
+<td>Plays, with <code>256.BIN</code></td>
+</tr>
+<tr>
+<td>Bloody Roar 3 (NM00002)</td>
+<td>246</td>
+<td>MAME CHD <code>bldyr3b.chd</code></td>
+<td>Plays at a steady 60 FPS</td>
+</tr>
+<tr>
+<td>Capcom Fighting Jam (NM00018)</td>
+<td>246</td>
+<td>archive.org <code>.iso</code></td>
+<td>Extracted, not run</td>
+</tr>
+<tr>
+<td>Hard disk games</td>
+<td></td>
+<td></td>
+<td>Not run</td>
+</tr>
+</tbody>
+</table>
+<p>The problems met on the way, in the order they came:</p>
+<table>
+<thead>
+<tr>
+<th>What was seen</th>
+<th>Cause</th>
+<th>What was done</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The setup wizard on every launch</td>
+<td>Passing <code>-datapath X</code> makes the fork use <code>X/PCSX2x6</code>, a new empty folder</td>
+<td>No <code>-datapath</code>: the fork uses <code>~/.config/PCSX2x6</code> by itself</td>
+</tr>
+<tr>
+<td>Black screen, the EE at 100%, "ROM directory not found" in the log</td>
+<td>The retail PS2 BIOS (<code>scph39001.bin</code>)</td>
+<td>The arcade BIOS, <code>256.BIN</code> from RetroBIOS</td>
+</tr>
+<tr>
+<td>No input in the game</td>
+<td>The fork ignores <code>[Pad1]</code>; arcade inputs come only from the <code>[JVS]</code> section</td>
+<td><code>[JVS]</code> written from Setup &gt; Joysticks &gt; Button mapping</td>
+</tr>
+<tr>
+<td>Soul Calibur II stops with "Jump to unaligned address" right after <code>boot.elf</code>, on both discs</td>
+<td>The 246 board's BIOS <code>COH-H31000.BIN</code> (board A-000-010, from 2000)</td>
+<td><code>256.BIN</code> for every board, as the fork's guide allows; Download BIOS fetches only <code>256.BIN</code></td>
+</tr>
+<tr>
+<td>The FPS, CPU and GPU counters come back on screen</td>
+<td>The emulator saves to <code>PCSX2.ini</code> the counters it had on when it closes</td>
+<td><code>fliperos-x11-run</code> turns them off on every launch</td>
+</tr>
+<tr>
+<td>One Tekken 5 stage comes out blocky</td>
+<td>Texture filtering Nearest (<code>filter = 0</code>, from the official PCSX2 file); the fork warns it "will break rendering in some games"</td>
+<td>The fork's own video defaults with VSync on fixed it, in Vulkan. That change was reverted on request, so <code>PCSX2.ini</code> still has Nearest: set Texture Filtering to Bilinear (PS2) inside PCSX2x6 for a game that draws like that</td>
+</tr>
+<tr>
+<td>An extraction fails at the end</td>
+<td>The copy to the cabinet had stopped 59 MB short (<code>gzip -t</code>: "unexpected end of file")</td>
+<td>The frontend says FILE INCOMPLETE: COPY IT AGAIN, deletes nothing and logs the cause in <code>~/.cache/fliperos/namco-unpack.log</code></td>
+</tr>
+<tr>
+<td>Bloody Roar 3: "corrupted dump (truncated sectors)"</td>
+<td>The archive.org CD image keeps the 8-byte CD subheader at the start of each 2048-byte sector, and has lost the last 8 bytes of each</td>
+<td>The extraction moves the data back into place (the fork then opens it), but the game hung at the versus screen. The clean MAME CHD fixed it, and the small glitches went away</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why the 256 games dip.</strong> The fork emulates each board's clock from <code>platform=</code> in the <code>.acgame</code>: the 246 runs the emulated processor at 294.9 MHz, like a PS2; the 256 at 393.2 MHz (33% more, with a faster IOP too); the Super 256 at 442.4 MHz. In a Tekken 5 fight the emulated processor's thread used 99.9% of one core, the vector unit's thread 84-89%, the drawing thread about 39%, and the video card 5-35%, with the processor at its full 2926 MHz. So the cabinet's processor is the limit. Inside the arcade it also reached 94-98 C and throttled to 1.2 GHz, which made it worse; out of the arcade it stays at 62-67 C and FPS went up a little.</p>
+<p>These did not change the dips: the sound off, the card's clock, the EE cycle rate (the fork does not allow lowering it), the blending fixes, a CHD instead of the <code>.iso</code>, and the fork's video defaults. A 256 game with <code>platform=246</code> stops at boot with "System 256 modeset error": the game checks the board.</p>
+<p>On a desktop with an i7-7700 and a GTX 1080 Ti (Windows, Direct3D 12 and Vulkan) Tekken 5 Dark Resurrection ran much better, with a few small dips. Those were not measured; the shader cache being filled on the first run is the likely cause.</p>
+<p>Still open: a hand-made <code>.acgame</code> shows in the frontend under its file name (<code>NM00019</code>), because the list does not read its <code>name=</code> line.</p>
 <h1 id="Fightcade-2">Fightcade 2</h1>
 <p>Fightcade 2 (online arcade and console matches, with rollback) is closed-source freeware with no clear permission to redistribute — <strong>it isn't in the image or in the repository</strong>.</p>
 <p>In <strong>Setup &gt; Games &gt; Frontend</strong> it shows as <em>Fightcade 2 (not installed)</em>: when chosen, the Setup <strong>downloads the official Linux package from its website</strong> (about 160 MB, <code>https://www.fightcade.com/download/linux</code>), with a progress bar, to <code>/opt/fliperos/fightcade</code> — a user-owned folder, because Fightcade updates itself by writing there.</p>
