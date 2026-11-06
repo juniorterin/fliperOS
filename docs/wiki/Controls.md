@@ -80,6 +80,8 @@ Everything about the gun in one menu (`screen_guncon`), with the gun's state and
 
 A shot at the center checks the result before saving `/etc/fliperos/guncon2.conf`, which the udev rule reapplies on every connection (evdev forgets the calibration).
 
+**Two or more guns.** With more than one GunCon 2 connected, Calibrate asks how many players have a gun and goes through them one at a time: for each player you pull the trigger of the gun that is theirs (the first to shoot is taken), then the targets appear. Two GunCon 2 look the same to the system, so each range is saved by the gun's USB port (`/etc/fliperos/guncon2-<port>.conf`), and the udev rule reapplies the one that belongs to the gun that arrived; a gun that was never calibrated uses the general `guncon2.conf` (the last one calibrated).
+
 **Screen flash.** A CRT gun only finds its aim where the screen is lit. Over a dark part of the picture it sees nothing, and the shot went out on the last aim or, past the hold, off the screen: Area 51 reloaded while shooting at its dark floor. Like RePlayOS's `GCON2 FLASH`, the screen lights up on a shot:
 
 - **Pulse** (the default): two light frames on each shot.

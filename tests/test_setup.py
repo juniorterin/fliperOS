@@ -3620,6 +3620,55 @@ class ButtonPlayersTests(Base):
         self.assertIn("menu [3]", calls)
 
 
+class GunCalibrationTests(Base):
+    """Setup > Joysticks > GunCon 2 > Calibrate: quantos jogadores, uma pistola por vez."""
+
+    def run_screen(self, guns, answer, shot_order):
+        d = self.env.dir
+        (d / "calls").write_text("")
+        (d / "shots").write_text("\n".join(shot_order) + "\n")
+        lines = "\n".join("/dev/input/event%d|Namco GunCon 2|gun" % n for n in guns)
+        (d / "calibrate").write_text(
+            '#!/bin/bash\n'
+            'case $1 in\n'
+            '  list) printf "%%s\\n" "%s" ;;\n'
+            '  trigger) out=$2; shift 2; first=$(head -n 1 %s); sed -i 1d %s; echo "trigger $FLIPEROS_GUN_LABEL $*" >> %s; echo "$first" > "$out" ;;\n'
+            '  guncon2) echo "guncon2 $2 [$3]" >> %s ;;\n'
+            'esac\n' % (lines, d / "shots", d / "shots", d / "calls", d / "calls"))
+        (d / "calibrate").chmod(0o755)
+        out = self.env.out("""
+            source %s/screens/joysticks.sh
+            ui_menu() { echo "menu [$2] [$3]" >> %s; echo %s; }
+            ui_yesno() { return 0; }
+            ui_clear() { :; }; ui_palette() { :; }; ui_flush_input() { :; }
+            ui_text() { "$@"; }
+            ui_msg() { echo "msg $*" >> %s; }
+            screen_calibrate_guns
+        """ % (SETUP, d / "calls", answer, d / "calls"), {"CALIBRATE": str(d / "calibrate"), "GUN_TTY": "/dev/null"})
+        return (d / "calls").read_text()
+
+    def test_one_gun_asks_nothing_and_calibrates_it(self):
+        calls = self.run_screen([6], 1, [])
+        self.assertIn("guncon2 /dev/input/event6 []", calls)
+        self.assertNotIn("menu", calls)
+        self.assertIn("msg GunCon 2 Calibration saved (1 gun).", calls)
+
+    def test_two_guns_two_players_each_one_by_trigger(self):
+        # O jogador 1 e a pistola que atirou primeiro (a do event9).
+        calls = self.run_screen([6, 9], 2, ["/dev/input/event9", "/dev/input/event6"])
+        self.assertIn("menu [2 guns are connected. How many players?", calls)
+        self.assertIn("[2]", calls)
+        self.assertIn("trigger Player 1 /dev/input/event6 /dev/input/event9", calls)
+        self.assertIn("guncon2 /dev/input/event9 [Player 1]", calls)
+        self.assertIn("guncon2 /dev/input/event6 [Player 2]", calls)
+        self.assertIn("Calibration saved (2 guns)", calls)
+
+    def test_one_player_of_two_guns_calibrates_the_one_that_shoots(self):
+        calls = self.run_screen([6, 9], 1, ["/dev/input/event9"])
+        self.assertIn("guncon2 /dev/input/event9 []", calls)
+        self.assertNotIn("event6 [", calls)
+
+
 class ButtonsLayoutTests(Base):
     """Setup > Joysticks > Buttons layout: onde ficam no painel os botoes dos jogos de 1 a 5 botoes."""
 

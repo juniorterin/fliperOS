@@ -68,6 +68,15 @@ Y_MAX=240
 # shellcheck source=/dev/null
 [[ -r "$CONF" ]] && source "$CONF"
 
+# A faixa desta pistola, se ela foi calibrada (guncon2-<porta USB>.conf, a chave
+# e a mesma do fliperos-calibrate): com duas GunCon 2 cada uma tem a sua.
+phys=$(cat "/sys/class/input/${device##*/}/device/phys" 2> /dev/null || true)
+key=$(printf '%s' "$phys" | tr -c '[:alnum:]' '_' | sed 's/^_*//;s/_*$//')
+if [[ -n $key ]]; then
+  # shellcheck source=/dev/null
+  [[ -r "${CONF%.conf}-$key.conf" ]] && source "${CONF%.conf}-$key.conf"
+fi
+
 command -v evdev-joystick >/dev/null \
   || { echo "evdev-joystick ausente (pacote joystick)" >&2; exit 1; }
 

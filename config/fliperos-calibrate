@@ -3,7 +3,11 @@
 analogico), pelo Setup > Joysticks do fliperos-setup ou na mao:
 
     fliperos-calibrate list               controles que dao para calibrar
-    fliperos-calibrate guncon2 EVENTO     alvos na tela; grava guncon2.conf
+    fliperos-calibrate guncon2 EVENTO [ROTULO]
+                                          alvos na tela; grava guncon2.conf (e o
+                                          da porta USB da pistola, para varias)
+    fliperos-calibrate trigger ARQUIVO EVENTO...
+                                          escreve no ARQUIVO a pistola que atirou
     fliperos-calibrate axes EVENTO        volante, pedais, analogico
     fliperos-calibrate apply EVENTO       reaplica o que foi salvo (udev)
 
@@ -48,6 +52,7 @@ def _ioc(direction, nr, size):
 
 EVIOCGID = _ioc(2, 0x02, 8)
 EVIOCGNAME = _ioc(2, 0x06, 256)
+EVIOCGPHYS = _ioc(2, 0x07, 256)
 
 
 def eviocgbit(ev, length):
@@ -129,6 +134,17 @@ def write_axes_conf(path, ident, name, axes):
     os.replace(path + '.new', path)
 
 
+def gun_conf_path(base, phys):
+    """O guncon2.conf de UMA pistola: guncon2-<porta USB>.conf ao lado do geral.
+    Duas GunCon 2 sao iguais no vendor/produto; o que as separa e a porta em que
+    estao (o phys do evdev), que vale a cada reconexao. Sem porta, o geral."""
+    key = ''.join(c if c.isalnum() else '_' for c in phys).strip('_')
+    if not key:
+        return base
+    stem, ext = os.path.splitext(base)
+    return '%s-%s%s' % (stem, key, ext)
+
+
 def write_guncon_conf(path, x, y):
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     with open(path + '.new', 'w') as f:
@@ -149,6 +165,12 @@ class Device:
         buf = bytearray(256)
         fcntl.ioctl(self.fd, EVIOCGNAME, buf)
         self.name = bytes(buf).split(b'\0')[0]
+        buf = bytearray(256)
+        try:
+            fcntl.ioctl(self.fd, EVIOCGPHYS, buf)
+        except OSError:
+            buf = bytearray(256)
+        self.phys = bytes(buf).split(b'\0')[0].decode(errors='replace')
         ident = bytearray(8)
         fcntl.ioctl(self.fd, EVIOCGID, ident)
         _bus, vid, pid, _ver = struct.unpack('4H', ident)
@@ -304,16 +326,17 @@ def shoot(screen, gun, need):
     return shots
 
 
-def calibrate_guncon(path):
+def calibrate_guncon(path, label=''):
     gun = Device(path)
     screen = make_screen()
+    title = 'GunCon 2 calibration' + (' (%s)' % label if label else '')
     try:
         # Alvos a 15% e 85% da tela, longe da borda, onde o tubo distorce.
         t1 = (max(3, round(screen.rows * 0.15)), max(5, round(screen.cols * 0.15)))
         t2 = (min(screen.rows - 2, round(screen.rows * 0.85)), min(screen.cols - 4, round(screen.cols * 0.85)))
         points = []
-        for target, label in ((t1, 'top left'), (t2, 'bottom right')):
-            white(screen, 'GunCon 2 calibration: aim at the + of the %s target' % label,
+        for target, where in ((t1, 'top left'), (t2, 'bottom right')):
+            white(screen, '%s: aim at the + of the %s target' % (title, where),
                   'and pull the trigger 3 times. B or Esc cancels.')
             draw_target(screen, *target)
             shots = shoot(screen, gun, 3)
@@ -342,6 +365,9 @@ def calibrate_guncon(path):
             screen.show_result(hit, want)
         if not confirm(screen, gun):
             return 1
+        # A faixa desta pistola (pela porta USB) e a geral, que vale para as que
+        # ainda nao foram calibradas (o mesmo tubo, em geral a mesma faixa).
+        write_guncon_conf(gun_conf_path(GUNCON_CONF, gun.phys), xr, yr)
         write_guncon_conf(GUNCON_CONF, xr, yr)
         apply_guncon(path, xr, yr)
         return 0
@@ -481,7 +507,41 @@ def apply(path):
     return 0
 
 
+def pick_trigger(out_path, paths, timeout=60):
+    """Qual destas pistolas deu o tiro? Escreve o caminho dela em out_path
+    (o Setup roda isto com o video solto, sem como ler a saida). Esc cancela."""
+    guns = []
+    for path in paths:
+        try:
+            guns.append(Device(path))
+        except OSError:
+            continue
+    screen = Screen()
+    try:
+        screen.write('\033[0m\033[2J\033[H')
+        screen.at(2, 2, 'Pull the trigger of the gun for %s. Esc cancels.' % (os.environ.get('FLIPEROS_GUN_LABEL') or 'this player'))
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            if screen.key() == '\033':
+                return 1
+            ready = select.select([g.fd for g in guns], [], [], 0.05)[0]
+            for gun in guns:
+                if gun.fd not in ready:
+                    continue
+                if any(t == EV_KEY and v == 1 and c == BTN_LEFT for t, c, v in gun.events()):
+                    with open(out_path, 'w') as f:
+                        f.write(gun.path + '\n')
+                    return 0
+        return 1
+    finally:
+        screen.restore()
+        for gun in guns:
+            gun.close()
+
+
 def main(argv):
+    if len(argv) >= 4 and argv[1] == 'trigger':
+        return pick_trigger(argv[2], argv[3:])
     if len(argv) >= 2 and argv[1] == 'list':
         for dev in devices():
             kind = 'gun' if dev.is_gun() else 'axes' if dev.has_axes() else ''
@@ -489,8 +549,8 @@ def main(argv):
                 print('%s|%s|%s' % (dev.path, dev.name.decode(errors='replace'), kind))
             dev.close()
         return 0
-    if len(argv) == 3 and argv[1] == 'guncon2':
-        return calibrate_guncon(argv[2])
+    if len(argv) in (3, 4) and argv[1] == 'guncon2':
+        return calibrate_guncon(argv[2], argv[3] if len(argv) == 4 else '')
     if len(argv) == 3 and argv[1] == 'axes':
         return calibrate_axes(argv[2])
     if len(argv) == 3 and argv[1] == 'apply':

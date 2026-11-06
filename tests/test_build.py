@@ -1028,6 +1028,19 @@ class CalibrateTests(unittest.TestCase):
         self.assertAlmostEqual(hi, 720, delta=1)
         self.assertEqual(self.C.median([300, 900, 310]), 310)
 
+    def test_each_gun_has_its_own_conf_by_usb_port(self):
+        # Duas GunCon 2 sao iguais no vendor/produto: a porta USB as separa.
+        base = '/etc/fliperos/guncon2.conf'
+        a = self.C.gun_conf_path(base, 'usb-0000:00:1a.7-2.1/input0')
+        b = self.C.gun_conf_path(base, 'usb-0000:00:1a.7-2.2/input0')
+        self.assertEqual(a, '/etc/fliperos/guncon2-usb_0000_00_1a_7_2_1_input0.conf')
+        self.assertNotEqual(a, b)
+        self.assertEqual(self.C.gun_conf_path(base, ''), base)
+        # A mesma chave no script do udev (tr + sed), para ele achar o arquivo.
+        script = (ROOT / 'config/fliperos-guncon2-calibrate').read_text()
+        self.assertIn("tr -c '[:alnum:]' '_'", script)
+        self.assertIn('${CONF%.conf}-$key.conf', script)
+
     def test_centered_axis_is_symmetric_around_rest(self):
         # Volante: repouso fora do meio do curso; os dois lados chegam ao fim.
         self.assertEqual(self.C.axis_calibration(100, 900, 520, 0, 1023), (140, 900, 8))
@@ -1064,7 +1077,7 @@ class CalibrateTests(unittest.TestCase):
         screens = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
         # A GunCon 2 tem um menu proprio (screen_guncon), com a calibracao nele.
         for item in ('guncon|GunCon 2 (light gun)', 'axes|Calibrate wheel', 'lpt|LPT joysticks',
-                     '"calibrate|Calibrate|', 'calibrate) screen_calibrate guncon ;;'):
+                     '"calibrate|Calibrate|', 'calibrate) screen_calibrate_guns ;;'):
             self.assertIn(item, screens)
         # Os quirks valem para qualquer USB (discos tambem): em System.
         self.assertIn('"quirks|Quirks (USB device fixes)|', menu)

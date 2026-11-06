@@ -52,7 +52,7 @@ screen_guncon() {
       "return|Return|Back to Joysticks.") || return 0
     last=$choice
     case $choice in
-      calibrate) screen_calibrate guncon ;;
+      calibrate) screen_calibrate_guns ;;
       flash) screen_gunflash ;;
       values) screen_gun_values ;;
       reload)
@@ -265,18 +265,83 @@ screen_buttons_layout_edit() {
   fi
 }
 
-# screen_calibrate guncon|axes escolhe o controle e roda o calibrador, que
-# desenha a propria tela (a pistola precisa da tela branca).
-screen_calibrate() {
-  local kind=$1 found=() entries=() line path name dev title
-  [[ $kind == guncon ]] && title="GunCon 2" || title="Calibration"
-  mapfile -t found < <("$CALIBRATE" list "${kind/guncon/gun}" 2> /dev/null)
+# screen_calibrate_guns: a calibracao das GunCon 2. Pergunta quantos jogadores
+# tem pistola (de 1 ao numero de pistolas ligadas) e calibra uma por uma: com
+# mais de uma ligada, quem atira primeiro diz qual e a do jogador. A faixa de
+# cada pistola vale pela porta USB dela (fliperos-calibrate).
+screen_calibrate_guns() {
+  local tty=${GUN_TTY:-/dev/tty}
+  local title="GunCon 2" found=() paths=() remaining=() entries=() line path players p i dev tmp label saved=0 gui=0
+  mapfile -t found < <("$CALIBRATE" list gun 2> /dev/null)
   if ((${#found[@]} == 0)); then
-    if [[ $kind == guncon ]]; then
-      ui_msg "$title" "No GunCon 2 was found." "" "Connect it to a USB port and try again."
+    ui_msg "$title" "No GunCon 2 was found." "" "Connect it to a USB port and try again."
+    return 0
+  fi
+  for line in "${found[@]}"; do
+    paths+=("${line%%|*}")
+  done
+  players=1
+  if ((${#paths[@]} > 1)); then
+    for ((i = 1; i <= ${#paths[@]}; i++)); do
+      entries+=("$i|$i player$(((i > 1)) && echo s)")
+    done
+    players=$(ui_menu "$title" "${#paths[@]} guns are connected. How many players? Each one is calibrated in turn." \
+      "${#paths[@]}" "${entries[@]}" "return|Return") || return 0
+    [[ $players == return ]] && return 0
+  fi
+  ui_yesno "$title" "The screen turns white with a target in each corner. Aim at the + in the middle of each target and pull the trigger 3 times; then one shot in the center checks the result." \
+    || return 0
+  ui_gui_alive && gui=1
+  remaining=("${paths[@]}")
+  for ((p = 1; p <= players; p++)); do
+    label=""
+    ((players > 1)) && label="Player $p"
+    if ((${#remaining[@]} == 1)); then
+      dev=${remaining[0]}
     else
-      ui_msg "$title" "No wheel, pedals or analog stick was found." "" "Connect it and try again."
+      tmp=$(mktemp)
+      ui_clear
+      if ! ui_text env FLIPEROS_GUN_LABEL="$label" "$CALIBRATE" trigger "$tmp" "${remaining[@]}" < "$tty" > "$tty" 2>&1; then
+        rm -f "$tmp"
+        ui_palette > "$tty"
+        break
+      fi
+      dev=$(< "$tmp")
+      rm -f "$tmp"
     fi
+    ui_clear
+    if FLIPEROS_CALIBRATE_GUI=$gui FLIPEROS_GUI_DIR=$SETUP_DIR/gui \
+      ui_text "$CALIBRATE" guncon2 "$dev" ${label:+"$label"} < "$tty" > "$tty" 2>&1; then
+      saved=$((saved + 1))
+      log_info "calibracao guncon salva: $dev ${label:+($label)}"
+    else
+      ui_palette > "$tty"
+      break
+    fi
+    for i in "${!remaining[@]}"; do
+      [[ ${remaining[i]} == "$dev" ]] && unset 'remaining[i]'
+    done
+    remaining=("${remaining[@]}")
+  done
+  ui_palette > "$tty"
+  if ((saved == players)); then
+    ui_msg "$title" "Calibration saved ($saved gun$(((saved > 1)) && echo s)). It is applied again every time a gun is connected."
+  elif ((saved > 0)); then
+    ui_msg "$title" "Saved for $saved of $players guns. Run it again for the rest."
+  else
+    ui_msg "$title" "Nothing was saved."
+  fi
+  ui_flush_input
+}
+
+# screen_calibrate axes escolhe o volante, pedal ou analogico e roda o
+# calibrador, que desenha a propria tela. A pistola tem a sua
+# (screen_calibrate_guns).
+screen_calibrate() {
+  local found=() entries=() line path name dev title="Calibration"
+  mapfile -t found < <("$CALIBRATE" list axes 2> /dev/null)
+  if ((${#found[@]} == 0)); then
+    ui_msg "$title" "No wheel, pedals or analog stick was found." "" "Connect it and try again."
     return 0
   fi
   for line in "${found[@]}"; do
@@ -288,22 +353,12 @@ screen_calibrate() {
   else
     dev=$(ui_menu "$title" "Which one?" "" "${entries[@]}") || return 0
   fi
-  if [[ $kind == guncon ]]; then
-    ui_yesno "$title" "The screen turns white with a target in each corner. Aim at the + in the middle of each target and pull the trigger 3 times; then one shot in the center checks the result." \
-      || return 0
-  else
-    ui_yesno "$title" "Move every axis to its limits (wheel to both sides, each pedal all the way), then leave everything at rest. The values show live on the screen." \
-      || return 0
-  fi
+  ui_yesno "$title" "Move every axis to its limits (wheel to both sides, each pedal all the way), then leave everything at rest. The values show live on the screen." \
+    || return 0
   ui_clear
-  # Na interface grafica, a calibracao da pistola tambem e desenhada nela
-  # (gui/gunscreen.py); a interface solta o video para o calibrador (ui_text).
-  local gui=0
-  ui_gui_alive && gui=1
-  if FLIPEROS_CALIBRATE_GUI=$gui FLIPEROS_GUI_DIR=$SETUP_DIR/gui \
-    ui_text "$CALIBRATE" "${kind/guncon/guncon2}" "$dev" < /dev/tty > /dev/tty 2>&1; then
+  if ui_text "$CALIBRATE" axes "$dev" < /dev/tty > /dev/tty 2>&1; then
     ui_palette > /dev/tty
-    log_info "calibracao $kind salva: $dev"
+    log_info "calibracao axes salva: $dev"
     ui_msg "$title" "Calibration saved. It is applied again every time the controller is connected."
   else
     ui_palette > /dev/tty
