@@ -5263,6 +5263,61 @@ class FrontendDataTests(unittest.TestCase):
         fe.act('b1')
         self.assertEqual((fe.cat, loads), (2, [3, 2]))
 
+    def test_ribbon_moves_on_a_spring_and_tiles_grow_evenly(self):
+        # A tira anda numa mola sem balanco: sai devagar, acelera, nao passa
+        # do destino e para nele, tambem com o destino mudando no meio; o
+        # azulejo cresce igual para os dois lados, aos poucos.
+        import types
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        fe = types.SimpleNamespace(anim={'ribbon': (0, 0.0, 0.0)}, shot=None)
+        xs = [feview.spring(fe, 'ribbon', 1, i / 60) for i in range(1, 61)]
+        steps = [b - a for a, b in zip([0] + xs, xs)]
+        self.assertLess(steps[0], steps[2])
+        self.assertTrue(all(s >= 0 for s in steps))
+        self.assertLessEqual(max(xs), 1)
+        self.assertEqual(xs[-1], 1)
+        # Um toque a mais no meio do caminho: segue sem volta, e a velocidade
+        # muda pouco de um quadro para o outro (o ease antigo saltava 0,2).
+        fe.anim['ribbon'] = (0, 0.0, 0.0)
+        xs = [feview.spring(fe, 'ribbon', 1 if i < 6 else 2, i / 60) for i in range(1, 90)]
+        steps = [b - a for a, b in zip([0] + xs, xs)]
+        self.assertTrue(all(s >= 0 for s in steps))
+        self.assertLess(max(abs(b - a) for a, b in zip(steps, steps[1:])), 0.05)
+        self.assertEqual(xs[-1], 2)
+        # Desenhada passo a passo, a tira: o azulejo do meio cresce de um a
+        # dois pixels por quadro, com o centro parado.
+        cats = [{'key': k, 'name': k, 'exe': ''} for k in ('x1', 'x2', 'x3')]
+        fe = types.SimpleNamespace(cats=cats, cat=0, cat_pos=1, pick=1, anim={'ribbon': (0, 0.0, 0.0)}, shot=None,
+                                   abs_now=0.0, rows=[], fd=None)
+        old = feview.logo_source
+        feview.logo_source = lambda name: None
+        frames = []
+        real = feview.tile_frame
+        feview.tile_frame = lambda surf, rect, on, now: frames[-1].append(rect)
+        try:
+            for i in range(1, 40):
+                fe.abs_now = i / 60
+                frames.append([])
+                feview.draw_ribbon(fe, pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA), 0)
+        finally:
+            feview.logo_source, feview.tile_frame = old, real
+        # O que chega ao meio (o ultimo desenhado, por cima dos outros).
+        mid = [rects[-1] for rects in frames]
+        widths = [r[2] for r in mid]
+        self.assertEqual(widths[-1], 56)
+        self.assertLessEqual(max(abs(b - a) for a, b in zip(widths, widths[1:])), 3)
+        self.assertEqual(mid[-1][0] * 2 + 56, feview.WW)
+
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
         # (fliperos-syslogo png NOME ARQUIVO 48 f8f8f2) e feito uma vez e fica em
@@ -5299,7 +5354,7 @@ class FrontendDataTests(unittest.TestCase):
         src = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
         # O logotipo ocupa 80% do azulejo fluido, o icone fica na borda do canto
         # e o nome escrito so aparece sem logotipo.
-        self.assertIn('system_logo(c["name"], round(w * 0.8), round(size * 0.8))', src)
+        self.assertIn('system_logo(c["name"], round(wf * 0.8), round(sf * 0.8))', src)
         self.assertIn('x + w - round(badge.get_width() * 0.65)', src)
         self.assertIn('if logo_source(c["name"]) is None:', src)
         # E no topo, ao lado do nome da romlist.
