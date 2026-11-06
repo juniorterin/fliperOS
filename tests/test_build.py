@@ -10300,7 +10300,9 @@ class EmulatorModeTests(unittest.TestCase):
         # papel do SDL do Button mapping do Setup (X Y RB / A B RT).
         bindings = (ROOT / 'config/pcsx2x6-jvs-bindings').read_text()
         self.assertIn('install -Dm644 "$src/config/pcsx2x6-jvs-bindings"', ROOTFS)
-        self.assertIn('Tekken_LeftPunch_P1\t1\tFaceWest\n', bindings)
+        self.assertIn('Tekken_LeftPunch_P1\t1\tbutton:4:1\n', bindings)
+        self.assertIn('SixButton_HeavyKick_P2\t2\tbutton:6:6\n', bindings)
+        self.assertIn('P1_Up\t1\tDPadUp\n', bindings)
         self.assertIn('Coin2\t2\tBack\n', bindings)
         extra = {'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini'),
                  'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set'),
@@ -10309,10 +10311,13 @@ class EmulatorModeTests(unittest.TestCase):
             self.run_x11(['pcsx2x6', '/roms/namco256/game.acgame'], home=home, extra=extra)
             ini_path = Path(home) / '.config/PCSX2x6/inis/PCSX2.ini'
             jvs = ini_path.read_text().split('[JVS]')[1].split('\n[')[0]
+            # Sem o fliperos-buttons (aqui), o botao N do jogo na posicao N do
+            # painel: X Y RB / A B RT.
             for line in ('Tekken_LeftPunch_P1 = SDL-0/FaceWest', 'Tekken_LeftPunch_P2 = SDL-1/FaceWest',
-                         'Tekken_RightKick_P1 = SDL-0/FaceEast', 'Tekken_LeftKick_P2 = SDL-1/FaceSouth',
-                         'SixButton_HeavyPunch_P1 = SDL-0/LeftShoulder', 'P1_Up = SDL-0/DPadUp',
-                         'P2_Start = SDL-1/Start', 'Coin1 = SDL-0/Back', 'Coin2 = SDL-1/Back'):
+                         'Tekken_LeftKick_P1 = SDL-0/RightShoulder', 'Tekken_RightKick_P2 = SDL-1/FaceSouth',
+                         'SixButton_HeavyPunch_P1 = SDL-0/RightShoulder', 'SixButton_HeavyKick_P1 = SDL-0/+RightTrigger',
+                         'P1_Up = SDL-0/DPadUp', 'P2_Start = SDL-1/Start', 'Coin1 = SDL-0/Back',
+                         'Coin2 = SDL-1/Back'):
                 self.assertIn(line + '\n', jvs + '\n', line)
             # O que a pessoa muda no proprio PCSX2x6 fica (nada e regravado).
             ini_path.write_text(ini_path.read_text().replace('Tekken_LeftPunch_P1 = SDL-0/FaceWest',
@@ -15248,6 +15253,58 @@ class ButtonMappingTests(unittest.TestCase):
             core = (tmp / 'Dolphin.ini').read_text()
             # O adaptador de GameCube (12) na porta 1 fica.
             self.assertEqual(core, '[Core]\nSIDevice0 = 12\nCPUThread = True\nSIDevice1 = 6\n\n[Display]\nX = 1\n')
+
+    def test_pcsx2x6_arcade_buttons_follow_panel_positions_and_layout(self):
+        # O botao N de um jogo de C botoes cai na posicao do painel do Buttons
+        # layout (sem layout, a posicao N), no papel do layout de fight stick
+        # (X Y RB / A B RT); o aparelho de cada jogador e o do Button mapping.
+        rc = self.rc
+        table = rc.pcsx2x6_table(str(ROOT / 'config/pcsx2x6-jvs-bindings'))
+        self.assertIn(('Tekken_LeftPunch_P1', 1, 'button:4:1'), table)
+        devices = {0: ('g', 'P', 8, 2), 3: ('g', 'P', 8, 2)}
+        p2 = {c: (3, e) for c, (_, e) in self.PANEL.items()}
+        players = {1: self.PANEL, 2: p2}
+
+        def values(layouts, players=players):
+            return dict(rc.pcsx2x6_values(players, devices, layouts, table))
+        base = values({})
+        self.assertEqual([base['Tekken_%s_P1' % b] for b in ('LeftPunch', 'RightPunch', 'LeftKick', 'RightKick')],
+                         ['SDL-0/FaceWest', 'SDL-0/FaceNorth', 'SDL-0/RightShoulder', 'SDL-0/FaceSouth'])
+        # Seis botoes: cada um na sua posicao, ate o RT.
+        self.assertEqual([base['SixButton_%s_P1' % b] for b in ('HeavyPunch', 'LightKick', 'HeavyKick')],
+                         ['SDL-0/RightShoulder', 'SDL-0/FaceSouth', 'SDL-0/+RightTrigger'])
+        # O jogador 2 e o aparelho dele (indice 3 do SDL), direcional, Start e ficha pelo papel.
+        self.assertEqual((base['Tekken_LeftPunch_P2'], base['P2_Start'], base['Coin2'], base['P1_Left']),
+                         ('SDL-3/FaceWest', 'SDL-3/Start', 'SDL-3/Back', 'SDL-0/DPadLeft'))
+        # O Buttons layout dos jogos de 4 botoes: 1 2 em cima, 4 5 embaixo.
+        layout = values({4: [1, 2, 4, 5]})
+        self.assertEqual([layout['Tekken_%s_P1' % b] for b in ('LeftPunch', 'RightPunch', 'LeftKick', 'RightKick')],
+                         ['SDL-0/FaceWest', 'SDL-0/FaceNorth', 'SDL-0/FaceSouth', 'SDL-0/FaceEast'])
+        self.assertEqual(layout['SixButton_HeavyPunch_P1'], 'SDL-0/RightShoulder')   # 6 botoes: sem layout
+        # Um painel sem o botao 6 nao ganha o que cairia nele.
+        short = {c: v for c, v in self.PANEL.items() if c != 'b6'}
+        self.assertNotIn('SixButton_HeavyKick_P1', values({}, {1: short}))
+        self.assertNotIn('Tekken_LeftPunch_P2', values({}, {1: short}))   # sem jogador 2
+        # No PCSX2.ini do fork: so a secao [JVS], o resto fica; sem o ini nada se cria.
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / 'PCSX2x6/inis/PCSX2.ini'
+            rc.PCSX2X6_INI = str(ini)
+            rc.PCSX2X6_BINDINGS = str(ROOT / 'config/pcsx2x6-jvs-bindings')
+            rc.USER_ID = os.getuid()
+            self.assertEqual(rc.pcsx2x6_save(players, devices, {}), [])
+            self.assertFalse(ini.exists())
+            ini.parent.mkdir(parents=True)
+            ini.write_text('[UI]\nStartFullscreen = true\n[JVS]\nTekken_LeftPunch_P1 = Keyboard/J\n'
+                           'Wheel = SDL-0/LeftX+\n[Folders]\nBios = /b\n')
+            self.assertEqual(rc.pcsx2x6_save(players, devices, {}), [str(ini)])
+            text = ini.read_text()
+            self.assertIn('[UI]\nStartFullscreen = true\n', text)
+            self.assertIn('[Folders]\nBios = /b\n', text)
+            jvs = text.split('[JVS]\n')[1].split('\n[')[0]
+            self.assertIn('Tekken_LeftPunch_P1 = SDL-0/FaceWest\n', jvs + '\n')
+            self.assertIn('Wheel = SDL-0/LeftX+\n', jvs + '\n')
+            self.assertNotIn('Keyboard/J', text)
+            self.assertEqual(oct(ini.stat().st_mode)[-3:], '600')
 
     def test_hypseus_joystick_codes(self):
         # 100 * controle + botao + 1; eixo com sinal; hat pelo KEY_UP.

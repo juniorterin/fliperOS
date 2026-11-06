@@ -79,6 +79,12 @@ Dolphin: GCPad1 a GCPad4 no GCPadNew.ini pelo SDL (o layout de fight stick
 acima vira A B X Y Z R do GameCube, a ficha a Coin do Triforce) e a porta
 de cada jogador ligada no Dolphin.ini.
 
+PCSX2x6 (Namco System 246/256): a secao [JVS] do ~/.config/PCSX2x6/inis/PCSX2.ini,
+uma chave por botao do arcade, no aparelho de cada jogador (SDL-N). O botao
+N de um jogo de C botoes vai para a posicao do painel que o Buttons layout
+dita (sem layout, a posicao N), no papel do layout de fight stick acima;
+direcional, Start e ficha pelo papel (config/pcsx2x6-jvs-bindings).
+
 Hypseus Singe: o [KEYBOARD] do ~/.hypseus/hypinput.ini, com o joystick de
 cada comando (Start e ficha tambem do jogador 2) junto das teclas padrao.
 
@@ -1185,6 +1191,71 @@ def dolphin_save(players, devices):
     return [gcpad, main]
 
 
+# ── PCSX2x6 (Namco System 246/256) ──────────────────────────────
+
+# O fork nao espelha o [Pad1]: os botoes dos jogos de arcade vem da secao
+# [JVS] do PCSX2.ini, uma chave por botao, e sem ela o jogo nao recebe nada.
+# O pcsx2x6-jvs-bindings (tools/pcsx2x6-jvs-bindings.py) diz o que cada chave
+# e: um papel do SDL (direcional, Start, ficha) ou "button:C:N", o botao N de
+# um jogo de C botoes. Esse cai na posicao do painel que o Buttons layout dita
+# (sem layout, a posicao N), e a posicao no papel do layout de fight stick do
+# SDL_SLOTS (X Y RB em cima, A B RT embaixo) como o PCSX2 oficial o ve.
+PCSX2X6_INI = os.environ.get('FLIPEROS_PCSX2X6_INI', '/home/fliperos/.config/PCSX2x6/inis/PCSX2.ini')
+PCSX2X6_BINDINGS = os.environ.get('FLIPEROS_PCSX2X6_BINDINGS', '/etc/fliperos/pcsx2x6-jvs-bindings')
+PCSX2X6_PANEL = {1: 'FaceWest', 2: 'FaceNorth', 3: 'RightShoulder', 4: 'FaceSouth', 5: 'FaceEast',
+                 6: '+RightTrigger'}
+PCSX2X6_CONTROLS = {'DPadUp': 'up', 'DPadDown': 'down', 'DPadLeft': 'left', 'DPadRight': 'right',
+                    'Start': 'start', 'Back': 'coin'}
+
+
+def pcsx2x6_table(path=None):
+    """[(chave, jogador, papel ou button:C:N)] do pcsx2x6-jvs-bindings."""
+    rows = []
+    for line in read_text(path or PCSX2X6_BINDINGS).splitlines():
+        parts = line.split('\t')
+        if len(parts) == 3 and not line.startswith('#') and parts[1].isdigit():
+            rows.append((parts[0], int(parts[1]), parts[2]))
+    return rows
+
+
+def pcsx2x6_values(players, devices, layouts, table):
+    """[(chave, "SDL-N/Papel")] do [JVS]: o aparelho de cada jogador no
+    Button mapping (o indice do SDL), e so o que o painel dele tem."""
+    values = []
+    for key, player, kind in table:
+        binds = players.get(player)
+        if not binds:
+            continue
+        index = next(iter(binds.values()))[0]
+        if index not in devices:
+            continue
+        if kind.startswith('button:'):
+            count, n = (int(v) for v in kind.split(':')[1:])
+            position = layout_order(layouts, count)[n - 1] if n <= PANEL_BUTTONS else 0
+            if position not in PCSX2X6_PANEL or 'b%d' % position not in binds:
+                continue
+            role = PCSX2X6_PANEL[position]
+        elif PCSX2X6_CONTROLS.get(kind) in binds:
+            role = kind
+        else:
+            continue
+        values.append((key, 'SDL-%d/%s' % (index, role)))
+    return values
+
+
+def pcsx2x6_save(players, devices, layouts):
+    """A secao [JVS] do PCSX2.ini do PCSX2x6, se ele ja abriu uma vez (sem o
+    ini, o fliperos-x11-run o cria e grava a secao). Os outros ajustes do ini
+    ficam; o que a pessoa mudou nas chaves de [JVS] volta ao Button mapping."""
+    text = read_text(PCSX2X6_INI)
+    values = pcsx2x6_values(players, devices, layouts, pcsx2x6_table()) if text else []
+    if not values:
+        return []
+    write(PCSX2X6_INI, ini_section(text, 'JVS', values), USER_ID)
+    os.chmod(PCSX2X6_INI, 0o600)
+    return [PCSX2X6_INI]
+
+
 # ── Hypseus Singe ───────────────────────────────────────────────
 
 # [KEYBOARD] do hypinput.ini: nome, tecla 1, tecla 2 (as do exemplo do
@@ -1388,7 +1459,8 @@ def cmd_save(args):
         lines = sdl_user_db(players, devices)
         write(SDL_USER_DB, ''.join(line + '\n' for line in lines.values()))
         print(SDL_USER_DB)
-        for path in dolphin_save(players, devices) + model2_save(players, devices, layouts):
+        for path in (dolphin_save(players, devices) + model2_save(players, devices, layouts)
+                     + pcsx2x6_save(players, devices, layouts)):
             print(path)
         # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo.
         if os.access(CONTROLLERS, os.X_OK):
@@ -1401,6 +1473,21 @@ def cmd_save(args):
     elif os.path.abspath(args.map) != os.path.abspath(keep):
         with open(args.map, encoding='utf-8') as f:
             write(keep, f.read())
+
+
+def cmd_pcsx2x6(args):
+    """So a secao [JVS] do PCSX2.ini do PCSX2x6 (o fliperos-x11-run a chama na
+    primeira abertura, quando o ini acabou de nascer). Sai 1 sem o que gravar."""
+    global PCSX2X6_INI
+    PCSX2X6_INI = args.ini
+    try:
+        players, _ = read_map(args.map)
+    except OSError:
+        sys.exit(1)
+    done = pcsx2x6_save(players, sdl_devices(), read_layouts(BUTTONS_LAYOUT)) if players else []
+    for path in done:
+        print(path)
+    sys.exit(0 if done else 1)
 
 
 def keyboard_map(players):
@@ -1769,6 +1856,10 @@ def main():
     p = sub.add_parser('save')
     p.add_argument('map')
     p.set_defaults(func=cmd_save)
+    p = sub.add_parser('pcsx2x6')
+    p.add_argument('ini', nargs='?', default=PCSX2X6_INI)
+    p.add_argument('--map', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_pcsx2x6)
     p = sub.add_parser('keyboard')
     p.add_argument('--players', type=int, choices=range(1, 5), default=2)
     p.set_defaults(func=cmd_keyboard)

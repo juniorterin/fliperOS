@@ -3,13 +3,16 @@
 
 O fork nao espelha o [Pad1]: os botoes dos jogos System 246/256 vem da secao
 [JVS] do PCSX2.ini, uma chave por botao (P1_Up, Tekken_LeftPunch_P1...), e sem
-ela o jogo nao recebe nada. O fliperos-x11-run grava essas chaves quando o ini
-nasce, cada uma no papel do SDL que o Setup > Joysticks > Button mapping ja
-entrega (X Y RB / A B RT em fight stick), do mesmo jeito que faz com o [Pad1]
-do PCSX2 oficial.
+ela o jogo nao recebe nada. O direcional, o Start e a ficha de cada jogador
+vao no papel do SDL (DPadUp, Start, Back); cada botao do jogo e "button:C:N",
+o botao N de um jogo de C botoes, que cai na posicao do painel do Setup >
+Joysticks > Button mapping (e do Buttons layout, onde ha): o fliperos-buttons
+save grava a secao no PCSX2.ini, e o fliperos-x11-run so a primeira vez, com o
+botao N na posicao N.
 
-A lista sai do pcsx2/DEV9/ACJV_Inputs.h do fork, pelo botao do PS2 que cada
-layout usa por padrao (GenericInputBinding):
+A lista sai do pcsx2/DEV9/ACJV_Inputs.h do fork; a ordem dos botoes de cada
+jogo e a do grupo (o PS2 que o layout padrao usa, GenericInputBinding, so
+separa o direcional e o Start dos botoes):
 
   python3 tools/pcsx2x6-jvs-bindings.py ACJV_Inputs.h config/pcsx2x6-jvs-bindings
 
@@ -54,16 +57,19 @@ def rows(text):
         for name, generic in g[group]:
             if name.split('_', 1)[1] in ('Up', 'Down', 'Left', 'Right', 'Start'):
                 out.append((name, player, ROLE[generic]))
-    # Os botoes de cada jogo: {nome}_P1 e {nome}_P2 (corrida, so o P1).
+    # Os botoes de cada jogo: {nome}_P1 e {nome}_P2 (corrida, so o P1). Cada
+    # um e o botao N do jogo de C botoes (a ordem do grupo no header): a
+    # posicao dele no painel vem do Buttons layout do Setup, como nos outros
+    # emuladores (fliperos-buttons, pcsx2x6_save).
     for group, entries in g.items():
         if not group.startswith(('s_fight_', 's_standard_', 's_race_')):
             continue
-        for name, generic in entries:
-            if generic not in ROLE:
-                continue
-            out.append((name + '_P1', 1, ROLE[generic]))
+        mapped = [name for name, generic in entries if generic in ROLE]
+        for n, name in enumerate(mapped, 1):
+            kind = 'button:%d:%d' % (len(mapped), n)
+            out.append((name + '_P1', 1, kind))
             if not group.startswith('s_race_'):
-                out.append((name + '_P2', 2, ROLE[generic]))
+                out.append((name + '_P2', 2, kind))
     # A ficha e o Back (Start e Back = ficha, no Button mapping do Setup).
     out.append(('Coin1', 1, 'Back'))
     out.append(('Coin2', 2, 'Back'))
@@ -77,7 +83,8 @@ def main():
         table = rows(f.read())
     with open(sys.argv[2], 'w', encoding='utf-8', newline='\n') as f:
         f.write('# Gerado por tools/pcsx2x6-jvs-bindings.py (do ACJV_Inputs.h do PCSX2x6): nao editar.\n'
-                '# chave da secao [JVS]<TAB>jogador (1 = SDL-0, 2 = SDL-1)<TAB>papel do SDL\n')
+                '# chave da secao [JVS]<TAB>jogador<TAB>papel do SDL, ou button:C:N (o botao N do jogo\n'
+                '# de C botoes, na posicao do painel que o Buttons layout do Setup dita)\n')
         for key, player, role in table:
             f.write('%s\t%d\t%s\n' % (key, player, role))
     print('%d bindings' % len(table))

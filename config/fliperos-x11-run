@@ -197,18 +197,28 @@ case $name in
       "$iniset" "$ini" Folders Bios "$biosdir"
       [[ $1 != pcsx2x6 ]] || "$iniset" "$ini" Folders MemoryCards "$savedir"
       # Os botoes dos jogos de arcade vem da secao [JVS], nao do [Pad1]: sem
-      # binding la o jogo nao recebe nada. Cada botao no papel do SDL que o
-      # Button mapping do Setup ja entrega (config/pcsx2x6-jvs-bindings, de
-      # tools/pcsx2x6-jvs-bindings.py), jogador 1 no SDL-0 e 2 no SDL-1; a ficha
-      # e o Back. So enquanto nada estiver no SDL: o que a pessoa mudar no
-      # proprio PCSX2x6 fica.
+      # binding la o jogo nao recebe nada. Cada botao do jogo na posicao do
+      # painel do Setup > Joysticks > Button mapping (e do Buttons layout): o
+      # fliperos-buttons pcsx2x6 grava a secao (e o save do Button mapping a
+      # regrava a cada mudanca). Sem ele (ou sem controle ligado), a tabela
+      # config/pcsx2x6-jvs-bindings direto, o botao N do jogo na posicao N do
+      # fight stick (X Y RB / A B RT), jogador 1 no SDL-0 e 2 no SDL-1. So
+      # enquanto nada estiver no SDL: depois disso e o save que manda.
       jvs_bindings=${FLIPEROS_PCSX2X6_BINDINGS:-/etc/fliperos/pcsx2x6-jvs-bindings}
-      if [[ $1 == pcsx2x6 && -f $jvs_bindings ]] &&
-        ! awk '/^\[JVS\]/ { p = 1; next } /^\[/ { p = 0 } p' "$ini" | grep -q 'SDL-[0-9]/'; then
-        while IFS=$'\t' read -r key player role; do
-          [[ -z $key || $key == \#* ]] && continue
-          "$iniset" "$ini" JVS "$key" "SDL-$((player - 1))/$role"
-        done < "$jvs_bindings"
+      jvs_has_sdl() { awk '/^\[JVS\]/ { p = 1; next } /^\[/ { p = 0 } p' "$ini" | grep -q 'SDL-[0-9]/'; }
+      if [[ $1 == pcsx2x6 && -f $jvs_bindings ]] && ! jvs_has_sdl; then
+        "${FLIPEROS_BUTTONS:-/opt/fliperos/bin/fliperos-buttons}" pcsx2x6 "$ini" > /dev/null 2>&1 || true
+        if ! jvs_has_sdl; then
+          panel=("" FaceWest FaceNorth RightShoulder FaceSouth FaceEast +RightTrigger)
+          while IFS=$'\t' read -r key player role; do
+            [[ -z $key || $key == \#* ]] && continue
+            if [[ $role == button:* ]]; then
+              role=${panel[${role##*:}]:-}
+              [[ -n $role ]] || continue
+            fi
+            "$iniset" "$ini" JVS "$key" "SDL-$((player - 1))/$role"
+          done < "$jvs_bindings"
+        fi
       fi
       # Lista de jogos em ~/roms/ps2 (no fork, as duas pastas Namco), se a
       # pessoa ainda nao escolheu pastas.
