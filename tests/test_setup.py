@@ -2887,17 +2887,20 @@ class BiosBoxTests(unittest.TestCase):
         spec.loader.exec_module(fh)
         h = fh.Harvester.__new__(fh.Harvester)
         h.scanned, h.left, h.current, h.packs, h.torrent = False, 0, None, {}, None
-        h.pack_line = lambda: ""
         self.assertTrue(h.visible())            # contando os jogos
         h.scanned, h.left = True, 4
         self.assertTrue(h.visible())            # jogos por fazer
         h.left, h.current = 0, {"Name": "sf2"}
         self.assertTrue(h.visible())            # o ultimo ainda em curso
         h.current = None
-        h.pack_line = lambda: "MAME VIDEOS 40%"
+        h.packs = {"mame-videos-snaps": ("downloading", 40), "arcade-wheels": ("done", 100)}
         self.assertTrue(h.visible())            # pacotes baixando
-        h.pack_line = lambda: ""
-        self.assertFalse(h.visible())           # acabou: sai do menu
+        h.packs["mame-videos-snaps"] = ("stopped", 40)
+        self.assertTrue(h.visible())            # um parado (o Setup o retoma)
+        h.packs["mame-videos-snaps"] = ("done", 100)
+        self.assertFalse(h.visible())           # acabou, pacotes "done" inclusive: sai do menu
+        h.packs = {}
+        self.assertFalse(h.visible())
 
     def test_the_frontend_draws_both_boxes_and_starts_the_check(self):
         view = (SETUP / "gui/feview.py").read_text()

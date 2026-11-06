@@ -95,10 +95,13 @@ class Harvester:
     def visible(self):
         """O quadro do menu fica enquanto ha o que fazer: contando os jogos,
         jogos sem os dados, ou pacotes de logos e videos baixando. Com tudo
-        pronto ele sai do menu."""
+        pronto ele sai do menu: um pacote "done" fica na linha dos pacotes
+        enquanto ha outra coisa a mostrar, mas sozinho nao segura o quadro;
+        os de .zip de letra vem com os jogos que faltam (left)."""
         if not self.scanned:
             return True
-        return bool(self.left or self.pack_line() or self.current is not None)
+        packs = any(state != "done" for state, _ in self.packs.values())
+        return bool(self.left or packs or self.current is not None)
 
     # ── O estado ──
     def load(self):
