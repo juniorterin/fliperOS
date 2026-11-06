@@ -11,7 +11,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
   <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art of a white arcade cabinet in a purple-lit room, a fighting game on its CRT and the PC beside it"></a>
 </p>
 
-<h1 align="center">FliperOS 0.20</h1>
+<h1 align="center">FliperOS 0.21</h1>
 
 <p align="center">
   <b>Arcade Linux. Built for CRT.</b><br>
@@ -52,7 +52,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </p>
 
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.20 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
+<p>In development: 0.21 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
 <table>
   <tr>
     <td align="center" width="33%"><img src="website/public/screenshots/frontend/full.webp" width="240" alt="FliperOS frontend in full screen: Aggressors of Dark Kombat with its video behind and its name, year and controls in front"><br><sub><b>Full screen</b>: the game's video behind, its name and info in front</sub></td>
@@ -128,8 +128,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.20.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.20.iso</code> on Linux, <code>Get-FileHash fliperos-0.20.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.21.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.21.iso</code> on Linux, <code>Get-FileHash fliperos-0.21.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -139,7 +139,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.20.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.21.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -423,7 +423,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.20.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.21.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -1182,7 +1182,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.20.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.21.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -1954,9 +1954,9 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 - the game filters the Setup writes into every Attract-Mode display (<code>fliperos-setup --filters</code>), plus Favourites;
 - FliperOS's own favourites (<code>~/.config/fliperos/favourites</code>) and the game information saved in <code>~/media/info</code>.</p>
 <p><strong>The lists follow the folders.</strong> When the frontend opens, and whenever a games folder changes (games copied over the network or from a USB disk), it asks the Setup to redo the lists in the background (<code>fliperos-setup --romlists</code>). New arcade sets get their MAME names right away: when MAME's list is not cached yet, GroovyMAME's <code>-listxml</code> is read once (about a minute).</p>
-<p><strong>Vertical monitor.</strong> With Video Setup &gt; Monitor orientation on a vertical setting, the frontend is laid out standing up (240x320) and turned to the monitor's side when shown, the same side GroovyMAME turns the games to (<code>ror</code> for clockwise, <code>rol</code> for counter-clockwise). In the list the picture goes on top and the games below; the grid has three rows of 3:4 thumbnails; the controls guide stacks the stick above the buttons.</p>
+<p><strong>Vertical monitor.</strong> With Video Setup &gt; Monitor orientation on a vertical setting, the frontend is laid out standing up (240x320) and turned to the monitor's side when shown, the same side GroovyMAME turns the games to (<code>ror</code> for clockwise, <code>rol</code> for counter-clockwise). In the list the 3:4 picture goes at the top right with the game's logo over its bottom edge, the year and maker (rolling when they do not fit), the icons two to a line, the PLAYED and FAV tags and the synopsis (rolling) go in the column on its left, and the games below, ten rows; in commercial mode the INSERT COIN box takes the synopsis' place, centred in the free space. The grid has three rows of 3:4 thumbnails, and the title, year and maker roll when they do not fit; the controls guide stacks the stick above the buttons.</p>
 <p><strong>Three views</strong> (Start switches them):
-- <strong>List</strong>: the games on the left, the picture, logo and information on the right. A game with clones has a "+" on its left: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg).
+- <strong>List</strong>: the games on the left, the picture, logo and information on the right. A game with clones has a "+" on its left: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg). At the very start of the list there are two groups that open and close the same way: <strong>RECENT</strong> (with the "+"; the last 10 games played, by the date of each game's play-count file, <code>~/.local/share/fliperos/stats</code>) and <strong>FAVOURITES</strong> (with a star; all of them), each with its number of games on the right. They follow the romlist and its filter, and a group with no games does not show. Button 1 on a group opens it, button 2 on a game inside it closes it; marking a favourite or playing a game updates them. The grid and full screen do not have them.
 - <strong>Full screen</strong>: the game's video or picture behind (it slides to the next game with the cursor; the videos of the 3 games before and after are opened ahead, held on their first frame), the name and information in front, and on the right the list as four stacked thumbnails, with arrows above and below while there are more games that way; the column slides to its new place. The pictures of the games around the cursor are read ahead, so changing game is instant. The clones come right after their parent: each clone thumbnail carries a <strong>CLONE</strong> badge with an up arrow in its top-right corner, the title shows what differs in its name after the title, and button 2 goes back to the parent.
 - <strong>Grid</strong>: three thumbnails a row, two rows, all the same size: 4:3 with the game's screenshot (or its cover), 3:4 when Video Setup has the monitor vertical. The chosen one has a pink frame that slides to it, and the rows slide too. Every visible game plays its video at once, silent except the chosen one; the videos of the 3 rows above and below are opened and held on their first frame, so a new row starts playing at once. A scrollbar in the corner, with a small arrow above and below it while there are more rows that way. The clones come right after their parent, with the same <strong>CLONE</strong> badge as in full screen; button 2 on a clone goes back to the parent.</p>
 <p><strong>The game's video.</strong> In the three views, the game's video (<code>~/media/preview/&lt;folder&gt;/&lt;set&gt;.mp4</code>) plays with its sound, half a second after the cursor stops on it; without a video, its picture shows. In any view, a game missing some of its art (screenshot, cover, marquee, logo or video) gets the missing pieces scraped by itself when the cursor stays on it for 2 seconds, once per game; they land in the same <code>~/media</code> folders the scraper uses. The logo comes from the Arcade Database too (its "decals"); what it lacks comes one file at a time from the archive.org packs of Setup &gt; Games &gt; Scraper &gt; Art packs by torrent, without downloading the pack.</p>
@@ -28314,8 +28314,14 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <td>same</td>
 </tr>
 <tr>
+<td>PCSX2x6 (PCSX2 fork)</td>
+<td>Namco System 246 and 256 arcade games</td>
+<td>its own Xorg</td>
+<td>same</td>
+</tr>
+<tr>
 <td>Dolphin</td>
-<td>GameCube, Wii</td>
+<td>GameCube, Wii, Triforce</td>
 <td>its own Xorg</td>
 <td>same</td>
 </tr>
@@ -28601,6 +28607,33 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>Neither ships in the image (they would take over 500 MB, and are useless without network): <strong>Setup &gt; Games &gt; Extras</strong> installs them. <strong>Steam</strong>: Ubuntu's <code>steam-installer</code>; on first launch Valve downloads the client (hundreds of MB, needs network).</p>
 <p><strong>GOG</strong>: there is no official Linux client; the Setup installs <strong>Heroic Games Launcher</strong> (official <code>.deb</code>, with a pinned hash) (GOG, Epic and Amazon; the same as on the Steam Deck), which runs Windows games with the Wine/Proton it downloads itself.</p>
 <p>Both open <strong>inside the LXDE desktop</strong> (they are X programs), from the <strong>Games</strong> menu. Their UIs were made for larger screens: on a 15 kHz CRT at 640x480 they are cramped — on a 31 kHz monitor or an LCD they are much better.</p>
+<h2 id="namco-system-246-and-256-pcsx2x6">Namco System 246 and 256 (PCSX2x6)</h2>
+<p>PCSX2x6 is PS2Homebrew-arcade's fork of PCSX2 for the Namco arcade boards (Tekken 4 and 5, Soul Calibur II and III, Time Crisis 3 and 4...). It is an emulator of its own, next to PCSX2, which keeps <code>~/roms/ps2</code>; the image carries v0.2.22, checked by sha256 (<code>/opt/pcsx2x6</code>), and update 44 brings it to cabinets already installed. Its settings are in <code>~/.config/PCSX2x6</code>, apart from PCSX2's.</p>
+<p>Each game is a <code>NM00000.acgame</code> file (a text file with the game's name, its <code>gameid</code>, the <code>platform</code>, the dongle and the image) plus a folder of the same name with the game's <code>boot.elf</code> (from the fork's proverb project) and its image (<code>.chd</code> or <code>.iso</code>), in <code>~/roms/namco246</code> or <code>~/roms/namco256</code>. Per board, like <code>~/roms</code>:</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The arcade BIOS (<code>COH-H31000.BIN</code> for the 246, <code>256.BIN</code> for the 256, with their <code>.nvm</code> and <code>.mec</code>)</td>
+<td><code>~/bios/namco246</code>, <code>~/bios/namco256</code></td>
+</tr>
+<tr>
+<td>The game's dongle (<code>NM00000.ps2</code>, a memory card image the game rewrites: keep a copy) and its save cards</td>
+<td><code>~/save/namco246</code>, <code>~/save/namco256</code></td>
+</tr>
+<tr>
+<td>The game's memory (<code>sram.bin</code>, 32 KB; delete it to start from zero)</td>
+<td><code>~/nvram/namco246</code>, <code>~/nvram/namco256</code></td>
+</tr>
+</tbody>
+</table>
+<p>Setup &gt; Games &gt; Downloader &gt; Download BIOS fetches the BIOS from RetroBIOS. The games and dongles are not downloaded: bring your own. The panel's buttons follow Setup &gt; Joysticks &gt; Button mapping: the arcade buttons are the <code>[JVS]</code> section of the emulator's <code>PCSX2.ini</code> (<code>config/pcsx2x6-jvs-bindings</code>). Button N of a game goes to the panel position that Setup &gt; Joysticks &gt; Buttons layout gives it (position N without a layout), on the controller of each player. The section is written on the first launch and again by every Button mapping save and system update; a change made inside PCSX2x6 stays until then.</p>
+<p>Seen on a cabinet (i7 870, R7 240): Tekken 5 opens and plays, with dips to 56-57 FPS in fights. The emulated console's processor (the EE thread) is at 100%, the video card at 5-35%; the sound, the card's clock, the EE cycle rate and the blending fixes did not change it. Inside the arcade the processor reached 94-98 C with thermal throttling, and out of it it stays at 62-67 C.</p>
 <h1 id="Fightcade-2">Fightcade 2</h1>
 <p>Fightcade 2 (online arcade and console matches, with rollback) is closed-source freeware with no clear permission to redistribute — <strong>it isn't in the image or in the repository</strong>.</p>
 <p>In <strong>Setup &gt; Games &gt; Frontend</strong> it shows as <em>Fightcade 2 (not installed)</em>: when chosen, the Setup <strong>downloads the official Linux package from its website</strong> (about 160 MB, <code>https://www.fightcade.com/download/linux</code>), with a progress bar, to <code>/opt/fliperos/fightcade</code> — a user-owned folder, because Fightcade updates itself by writing there.</p>
@@ -29147,11 +29180,19 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>FliperOS plays light gun games on the tube with Namco's <strong>GunCon 2</strong> (the PlayStation 2 gun, USB <code>0b9a:016a</code>), with nothing to install. The gun reads the beam of the CRT, which is exactly the screen FliperOS is made for; on an LCD it doesn't aim. What ships with the system:</p>
 <ul>
 <li><strong>The driver.</strong> GunCon 2 has no driver in the mainline kernel. The build compiles <a href="https://github.com/beardypig/guncon2">beardypig/guncon2</a> through DKMS for the system's kernel and loads it at boot (<code>/etc/modules-load.d/fliperos-guncon2.conf</code>): plug the gun into USB and it shows up as an input device.</li>
-<li><strong>The calibration.</strong> The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. <strong>Setup &gt; Joysticks &gt; Calibrate GunCon 2</strong> measures it on your monitor once (below), and the udev rule <code>99-fliperos-input.rules</code> reapplies it (<code>fliperos-guncon2-calibrate</code>) every time the gun is plugged in.</li>
+<li><strong>The calibration.</strong> The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. <strong>Setup &gt; Joysticks &gt; GunCon 2 &gt; Calibrate</strong> measures it on your monitor once (below), and the udev rule <code>99-fliperos-input.rules</code> reapplies it (<code>fliperos-guncon2-calibrate</code>) every time the gun is plugged in.</li>
 <li><strong>Marked as a gun.</strong> The same rule tags the GunCon 2 <code>ID_INPUT_GUN=1</code>, so the Model 2 emulator (SM2-Emu) reads the gun itself instead of the mouse pointer. A CRT gun misses the beam for a frame every now and then (a GunCon 2 then reports x 0, y 5); through the pointer that frame jumped the aim to the corner and a shot in the middle of the screen became a reload. SM2-Emu keeps the last position that saw the screen for up to 150 ms (FliperOS patch <code>config/sm2-emu-patches/0002</code>).</li>
-<li><strong>The menus.</strong> The controller-as-keyboard of the Setup menus leaves light guns out, so aiming doesn't move through the menu.</li>
-<li><strong>The games.</strong> In the <a href="#ROMs">MAME ROM Cleaner</a>, tell it the cabinet has a <strong>Light gun</strong> among its controls, and the gun games of the romset are kept along with the others.</li>
+<li><strong>The driver's FliperOS patches</strong> (<code>config/guncon2-patches</code>). The gun sends the same report for a dark part of the picture and for an aim off the screen (x 0 or 1, y 5; its sixth byte is always 0, checked with usbmon), so the driver tells them apart by context:</li>
+<li>a miss keeps the last aim that saw the screen for up to <code>hold_ms</code> (150);</li>
+<li>a miss right after an aim within <code>edge_pct</code> (12%) of an edge is off the screen at once, since the gun crosses the edge to leave;</li>
+<li>off the screen, both axes go out of the calibrated range, so MAME (which clamps the aim to the range) and every other emulator read it as off the screen;</li>
+<li>off the screen, the trigger also presses the right button, the reload of Flycast, RetroArch and SM2-Emu (<code>offscreen_reload</code>);</li>
+<li>a stalled USB endpoint (seen on a flaky hub port) is cleared, where the original driver stopped reading the gun for good without a word in the log.</li>
 </ul>
+<p>The parameters change live in <code>/sys/module/guncon2/parameters/</code>.
+- <strong>The screen flash</strong> (below): with it, a shot over a dark part hits where the gun points, and only a shot off the screen reloads.
+- <strong>The menus.</strong> The controller-as-keyboard of the Setup menus leaves light guns out, so aiming doesn't move through the menu.
+- <strong>The games.</strong> In the <a href="#ROMs">MAME ROM Cleaner</a>, tell it the cabinet has a <strong>Light gun</strong> among its controls, and the gun games of the romset are kept along with the others.</p>
 <h2 id="setup-joysticks">Setup &gt; Joysticks</h2>
 <p>Calibrators and the parallel port (<code>config/fliperos-calibrate</code>, <code>screens/joysticks.sh</code>):</p>
 <h3 id="button-mapping-all-emulators">Button mapping (all emulators)</h3>
@@ -29179,9 +29220,58 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>It applies where the panel's button N is the game's button N: in <strong>GroovyMAME</strong>, a <code>&lt;system&gt;</code> per game in the ctrlr <code>fliperos.cfg</code> (a clone follows its parent's); in RetroArch's <strong>MAME</strong> and <strong>MAME 2010</strong> cores, a <code>buttons-N.cfg</code> next to <code>buttons.cfg</code>, which <code>fliperos-kms-run</code> adds to the config of a game with N buttons; in <strong>Supermodel</strong> (Model 3), the buttons of the game in its own section of <code>Supermodel.ini</code> (<code>[ vf3 ]</code>), which Supermodel adds to <code>[ Global ]</code> when the game opens — the fighting games (Punch, Kick, Guard, Escape), the Virtua Striker series (Short Pass, Long Pass, Shoot) and Spikeout (Shift, Beat, Charge, Jump), by the input type of each game in <code>Games.xml</code>; other settings you keep in that section stay; in <strong>SM2-Emu</strong> (Model 2), a game controller mapping of its own, <code>/var/lib/fliperos/gamecontrollerdb-model2.txt</code> and a <code>gamecontrollerdb-model2-N.txt</code> per layout, which <code>fliperos-x11-run</code> puts on top of the system's <code>gamecontrollerdb.txt</code> for that launch.</p>
 <p>SM2-Emu reads game buttons 1 to 4 from A B X Y and always takes RB as button 4, so the fight stick mapping of the other emulators put button 1 on the bottom row; its own mapping puts the panel's button N on the game's button N, layout or not. The Model 2 mapping is written with the panel connected (it goes by the device's GUID).</p>
 <p>The other emulators keep the Button mapping order: FBNeo arranges the buttons of each game by itself, and the others have one mapping for all games.</p>
-<h3 id="calibrate-guncon-2">Calibrate GunCon 2</h3>
-<p>The screen turns white (the gun needs light where it aims) with a target in each corner; three shots at each (the median counts; a shot off the screen is rejected), and the calibrator computes the gun's real range on the tube — GunCon 2 is linear, so two known points give the edges.</p>
+<h3 id="guncon-2-light-gun">GunCon 2 (light gun)</h3>
+<p>Everything about the gun in one menu (<code>screen_guncon</code>), with the gun's state and the current values on top. All of it but the calibration is also in the web panel's <strong>GunCon 2</strong> group, and counts at once, even in an open game.</p>
+<p><strong>Calibrate.</strong> The screen turns white (the gun needs light where it aims) with a target in each corner; three shots at each (the median counts; a shot off the screen is rejected), and the calibrator computes the gun's real range on the tube — GunCon 2 is linear, so two known points give the edges.</p>
 <p>A shot at the center checks the result before saving <code>/etc/fliperos/guncon2.conf</code>, which the udev rule reapplies on every connection (evdev forgets the calibration).</p>
+<p><strong>Two or more guns.</strong> With more than one GunCon 2 connected, Calibrate asks how many players have a gun and goes through them one at a time: for each player you pull the trigger of the gun that is theirs (the first to shoot is taken), then the targets appear. Two GunCon 2 look the same to the system, so each range is saved by the gun's USB port (<code>/etc/fliperos/guncon2-&lt;port&gt;.conf</code>), and the udev rule reapplies the one that belongs to the gun that arrived; a gun that was never calibrated uses the general <code>guncon2.conf</code> (the last one calibrated).</p>
+<p><strong>Screen flash.</strong> A CRT gun only finds its aim where the screen is lit. Over a dark part of the picture it sees nothing, and the shot went out on the last aim or, past the hold, off the screen: Area 51 reloaded while shooting at its dark floor. Like RePlayOS's <code>GCON2 FLASH</code>, the screen lights up on a shot:</p>
+<ul>
+<li><strong>Pulse</strong> (the default): two light frames on each shot.</li>
+<li><strong>Hold</strong>: light while the trigger is held.</li>
+<li><strong>Off</strong>: no flash.</li>
+</ul>
+<p>The OpenGL and Vulkan layers of the emulators (<code>config/fliperos-deflicker.c</code>, <code>config/fliperos-vkfps.c</code>) read the triggers of the devices tagged <code>ID_INPUT_GUN</code> without grabbing them, and paint the whole frame. From the GunCon 2 they flash on the raw trigger, which the driver sends at once as a <code>MSC_RAW</code> event (patch 0006; the emulators ignore it): its <code>BTN_LEFT</code> is held back while the gun sees nothing, and a flash drawn on it came only after the wait, too late. The GunCon 2 driver then waits up to the flash wait for a report that sees the lit screen before it sends a trigger pulled without light: the shot goes out at the real aim, or off the screen if not even the flash lit it.</p>
+<p><strong>Settings in numbers:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th><code>fliperos.conf</code></th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Flash brightness (%)</td>
+<td>100</td>
+<td><code>gun_flash_level</code></td>
+<td>How light the flash is (10 to 100). Too low and the gun misses it</td>
+</tr>
+<tr>
+<td>Flash wait (ms)</td>
+<td>100</td>
+<td><code>gun_flash_ms</code></td>
+<td>How long a shot without light waits for the flash (driver <code>flash_ms</code>)</td>
+</tr>
+<tr>
+<td>Dark hold (ms)</td>
+<td>150</td>
+<td><code>gun_hold_ms</code></td>
+<td>How long the aim stays put when the gun stops seeing light (<code>hold_ms</code>)</td>
+</tr>
+<tr>
+<td>Edge band (%)</td>
+<td>12</td>
+<td><code>gun_edge_pct</code></td>
+<td>Losing light this close to an edge is off the screen at once (<code>edge_pct</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Off-screen reload button</strong> (on): off the screen the trigger also presses the right button, the reload of Flycast, RetroArch and SM2-Emu (<code>gun_offscreen_reload</code>, driver <code>offscreen_reload</code>).</p>
+<p><strong>Back to the defaults</strong> puts all of these back; the calibration stays.</p>
+<p>The driver's values are written by <code>fliperos-guncon2-calibrate</code>: when the gun arrives (udev) and, with <code>--params</code>, by the Setup and the web panel the moment they change.</p>
 <h3 id="calibrate-wheel-pedals-or-analog-stick">Calibrate wheel, pedals or analog stick</h3>
 <p>The axes show live; turn the wheel from end to end and press each pedal all the way, then leave everything at rest. An axis that rests in the middle (wheel, analog stick) gets a symmetric range around the rest position — the center gives 0 and both sides reach the end — and a 1% dead zone; a pedal keeps the range seen.</p>
 <p>It goes to <code>/etc/fliperos/calibration.conf</code> (one line per axis) and udev reapplies it on every connection.</p>
@@ -30382,7 +30472,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.20.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.21.iso
 </code></pre>
 <table>
 <thead>
@@ -30429,7 +30519,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.20.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.21.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -30440,16 +30530,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.20
-   git push origin 0.20</code></p>
+   git tag 0.21
+   git push origin 0.21</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.20</code>, <code>git push -f origin 0.20</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.21</code>, <code>git push -f origin 0.21</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.20.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.21.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -30464,14 +30554,15 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.20.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.20.sha256</code> (the whole ISO and each part) and <code>fliperos-0.20-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.21.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.21.sha256</code> (the whole ISO and each part) and <code>fliperos-0.21-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h3 id="telegram-group">Telegram group</h3>
 <p>Each release is also posted in the group <a href="https://t.me/fliperos15khz">t.me/fliperos15khz</a>, with pictures and an explanation of how each new feature works. <code>CHANGELOG.md</code> is the technical list of the GitHub release; the group reads <code>docs/telegram/VERSION.md</code>.</p>
 <p>The file is a list of messages separated by a line with only <code>---</code>. In each one, a line made of <code>!</code>, <code>[]</code> and a path in parentheses, such as <code>(website/public/screenshots/gui/video.webp)</code>, puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters; longer, it goes before the picture as a message); without one, it is a message of up to 4096.</p>
+<p>A picture never goes out stretched. A 15 kHz capture with more than twice as many dots per line as lines (640x240, 2560x240, or 240x640 turned on its side) is a 4:3 picture of wide dots, so the script posts it with the lines doubled at 4:3 (3:4 when vertical), and the dry run prints the size that will be posted.</p>
 <p>Every message is in Portuguese and English: its text has a part starting with a <code>🇧🇷</code> line and another starting with a <code>🇺🇸</code> line, and the script refuses the file without both. The network updates follow the same rule: next to <code>updates/notes/NNNN.md</code> (English, shown on the cabinet), <code>updates/notes/pt-BR/NNNN.md</code> has the same notes in Portuguese, and <code>tools/make-update.sh</code> refuses an update without it (unless <code>docs/telegram/update-NNNN.md</code> exists).</p>
-<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.20   # checks the file and the images, sends nothing (needs python3-pil)
+<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.21   # checks the file and the images, sends nothing (needs python3-pil)
 </code></pre>
 <p>That file is optional: without it, the group gets the version's section of <code>CHANGELOG.md</code> as it is (technical, no pictures), cut into messages of up to 4096 characters. The <strong>Release</strong> workflow checks the text with the dry run before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). With the version <code>all</code> it posts every version of the changelog, oldest first (<code>--backfill</code>), which is how the group gets the history. It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
 <h2 id="tests">Tests</h2>

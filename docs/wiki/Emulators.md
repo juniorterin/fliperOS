@@ -5,7 +5,8 @@
 | Flycast | Dreamcast, Naomi, Atomiswave | its own Xorg (`fliperos-x11-run`) | 640x240 at 15 kHz, 640x480 on the others |
 | PCSX2 (official AppImage) | PS2 | its own Xorg | same |
 | DuckStation (downloaded through the Setup) | PlayStation | its own Xorg | same |
-| Dolphin | GameCube, Wii | its own Xorg | same |
+| PCSX2x6 (PCSX2 fork) | Namco System 246 and 256 arcade games | its own Xorg | same |
+| Dolphin | GameCube, Wii, Triforce | its own Xorg | same |
 | Hypseus Singe | laserdisc (Dragon's Lair, Space Ace...) | its own Xorg | same |
 | OpenBOR | beat 'em ups | its own Xorg | 320x240 |
 | Supermodel | Sega Model 3 | its own Xorg | 640x240@57.524 at 15 kHz, 496x384 on the others |
@@ -341,3 +342,19 @@ Neither ships in the image (they would take over 500 MB, and are useless without
 **GOG**: there is no official Linux client; the Setup installs **Heroic Games Launcher** (official `.deb`, with a pinned hash) (GOG, Epic and Amazon; the same as on the Steam Deck), which runs Windows games with the Wine/Proton it downloads itself.
 
 Both open **inside the LXDE desktop** (they are X programs), from the **Games** menu. Their UIs were made for larger screens: on a 15 kHz CRT at 640x480 they are cramped — on a 31 kHz monitor or an LCD they are much better.
+
+## Namco System 246 and 256 (PCSX2x6)
+
+PCSX2x6 is PS2Homebrew-arcade's fork of PCSX2 for the Namco arcade boards (Tekken 4 and 5, Soul Calibur II and III, Time Crisis 3 and 4...). It is an emulator of its own, next to PCSX2, which keeps `~/roms/ps2`; the image carries v0.2.22, checked by sha256 (`/opt/pcsx2x6`), and update 44 brings it to cabinets already installed. Its settings are in `~/.config/PCSX2x6`, apart from PCSX2's.
+
+Each game is a `NM00000.acgame` file (a text file with the game's name, its `gameid`, the `platform`, the dongle and the image) plus a folder of the same name with the game's `boot.elf` (from the fork's proverb project) and its image (`.chd` or `.iso`), in `~/roms/namco246` or `~/roms/namco256`. Per board, like `~/roms`:
+
+| What | Where |
+| --- | --- |
+| The arcade BIOS (`COH-H31000.BIN` for the 246, `256.BIN` for the 256, with their `.nvm` and `.mec`) | `~/bios/namco246`, `~/bios/namco256` |
+| The game's dongle (`NM00000.ps2`, a memory card image the game rewrites: keep a copy) and its save cards | `~/save/namco246`, `~/save/namco256` |
+| The game's memory (`sram.bin`, 32 KB; delete it to start from zero) | `~/nvram/namco246`, `~/nvram/namco256` |
+
+Setup > Games > Downloader > Download BIOS fetches the BIOS from RetroBIOS. The games and dongles are not downloaded: bring your own. The panel's buttons follow Setup > Joysticks > Button mapping: the arcade buttons are the `[JVS]` section of the emulator's `PCSX2.ini` (`config/pcsx2x6-jvs-bindings`). Button N of a game goes to the panel position that Setup > Joysticks > Buttons layout gives it (position N without a layout), on the controller of each player. The section is written on the first launch and again by every Button mapping save and system update; a change made inside PCSX2x6 stays until then.
+
+Seen on a cabinet (i7 870, R7 240): Tekken 5 opens and plays, with dips to 56-57 FPS in fights. The emulated console's processor (the EE thread) is at 100%, the video card at 5-35%; the sound, the card's clock, the EE cycle rate and the blending fixes did not change it. Inside the arcade the processor reached 94-98 C with thermal throttling, and out of it it stays at 62-67 C.

@@ -2,6 +2,37 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.21
+
+Namco System 246 and 256 arcade games (Tekken 4 and 5, Soul Calibur II and III, Time Crisis 3 and 4...) now have their own emulator, **PCSX2x6**, next to PCSX2. The BIOS download now comes from RetroBIOS, and Dolphin is a package updated over the network. Also in this ISO, everything the updates 40 to 46 brought since 0.20: GroovyMAME in KMS from the frontend, the same packages as the ISO over the network, the Custom monitor in the menus. Cabinets already installed get all of this from the Setup's own update (updates 40 to 46).
+
+**System changes:**
+
+- **Namco System 246/256 in PCSX2x6** (PS2Homebrew-arcade's fork of PCSX2, v0.2.22, checked by sha256): it opens in Vulkan at 640x240 like the other emulators and keeps its own settings in `~/.config/PCSX2x6`, apart from PCSX2's. Each game is a `NM00000.acgame` file plus a folder with its `boot.elf` and image, in `~/roms/namco246` or `~/roms/namco256`; the dongle (`NM00000.ps2`) goes in `~/save/namco246|256`, the arcade BIOS in `~/bios/namco246|256`, and the game memory (`sram.bin`, 32 KB) is linked into `~/nvram/namco246|256`. The panel's buttons follow Setup > Joysticks > Button mapping (the arcade buttons come from the emulator's `[JVS]` section, not from the pad). The games, BIOS and dongles are not in the ISO. Seen on a cabinet: Tekken 5 boots and plays with the arcade BIOS, and dips to 56-57 FPS in fights on an i7 870 (EE thread at 100%, the card at 5-35%); the dips are not the sound, the card or the blending, and the cabinet inside the arcade overheated (94-98 C, thermal throttling), which a better cooling fixes
+- **BIOS download from RetroBIOS**: Setup > Games > Downloader > Download BIOS takes each file from RetroBIOS with its SHA1 checked, and the Batocera pack only as a reserve. It also asks for the Namco arcade BIOS (with its `.nvm` and `.mec`) and the DuckStation BIOS
+- The frontend's Tab menu shows a **BIOS DOWNLOAD** box (the file being downloaded and a bar, or what failed or is missing) next to AUTO SCRAPE; both leave the menu when everything is done
+- **Dolphin comes as the `fliperos-dolphin` package**, with the net play patch, so the updates bring it to cabinets that never reinstalled
+- From updates 40 to 43: the Custom monitor's menus use the games' video mode; light gun screen flash and the GunCon 2 menu; GroovyMAME opened from the frontend runs in KMS; a cabinet gets the ISO's packages over the network (Attract-Mode Plus fliperos4, GroovyMAME's KMS SDL, RetroArch with the Vulkan patch)
+
+**Package changes:**
+
+- New `fliperos-dolphin` (2609-1fliperos1): Dolphin from the stable release with FliperOS's net play patch, in `/usr/local`
+- PCSX2x6 v0.2.22 AppImage extracted in `/opt/pcsx2x6`, with the `pcsx2x6` command and its icon; `updates/0044.sh` installs it on cabinets already installed
+- `fliperos-retroarch` and `fliperos-sdl2-kms` as in the updates 42 and 43
+
+**fliperos-setup changes:**
+
+- `config/fliperos-bios`: RetroBIOS first (`database.json` and `platforms/retroarch.yml`), SHA1 per file, gzip answers read within a size limit, the pack as reserve; the progress is written to `/var/lib/fliperos/bios/running`
+- `lib/downloader.sh`: Namco 246/256 and DuckStation BIOS; the progress of the folder check
+- `gui/febios.py` and the BIOS DOWNLOAD box in `gui/feview.py`; `Harvester.visible()` hides the AUTO SCRAPE box when it is done
+- `config/fliperos-x11-run`: `pcsx2x6` next to `pcsx2` (BIOS, memory cards and games per board, `sram.bin` linked into `~/nvram`, the `[JVS]` buttons from `config/pcsx2x6-jvs-bindings`); `config/fliperos-roms` makes the per-board folders in `~/roms`, `~/bios`, `~/save`, `~/nvram` and `~/media`
+- Namco folders in the frontends (`.acgame`), the video table, Setup > Emulators & Games and the web panel
+
+**Tool changes:**
+
+- `tools/pcsx2x6-jvs-bindings.py` writes `config/pcsx2x6-jvs-bindings` from the fork's `ACJV_Inputs.h`: direcional, Start and coin by SDL role, every game button as `button:C:N` (button N of a game with C buttons)
+- `config/fliperos-buttons`: `pcsx2x6_save` (in `save`, and `fliperos-buttons pcsx2x6 INI` for the first launch) writes the `[JVS]` section of the PCSX2x6 `PCSX2.ini` on the panel position that Buttons layout gives each game button, on the controller of each player (it used the PS2 default layout, so SixButton's heavy punch went to a shoulder the panel does not have)
+
 ## 0.20
 
 The Radeon R9 285, 380 and 380X get a picture on the DVI-I from the installation on, and a fresh install opens the desktop and the emulators again. Also in this ISO: RetroArch in Vulkan on amdgpu, GroovyMAME on the console without Xorg again, scanlines for a 31 kHz monitor, the light gun in every emulator, and net play in more systems.
