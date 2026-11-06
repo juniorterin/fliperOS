@@ -337,6 +337,15 @@ INI
       "$iniset" "$ini" Main StartFullscreen true
       "$iniset" "$ini" Main HideCursorInFullscreen true
       "$iniset" "$ini" Main ConfirmPowerOff false
+      # Com -nogui a janela do jogo nasce no tamanho guardado da janela
+      # principal ([UI] MainWindow*) e so depois vai para a tela cheia: os
+      # 800x655 da janela principal num modo de 640x288 esticavam a imagem na
+      # vertical. O tamanho do modo, no canto, nao maximizada.
+      "$iniset" "$ini" UI MainWindowX 0
+      "$iniset" "$ini" UI MainWindowY 0
+      "$iniset" "$ini" UI MainWindowWidth "$FLIPEROS_RES_W"
+      "$iniset" "$ini" UI MainWindowHeight "$FLIPEROS_RES_H"
+      "$iniset" "$ini" UI MainWindowMaximized false
       "$iniset" "$ini" BIOS SearchDirectory "$HOME/bios"
       # O log dele na saida, que vai para o duckstation.log (o painel web o
       # mostra): sem BIOS ele so fecha, e ali fica onde a procurou.

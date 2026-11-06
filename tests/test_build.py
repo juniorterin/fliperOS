@@ -10631,6 +10631,9 @@ class EmulatorModeTests(unittest.TestCase):
             # Um jogo PAL abre a 50 Hz no tubo de 15 kHz; um NTSC, a 60.
             out = self.run_x11(['duckstation', '/r/ps1/Silent Iron (Europe).chd'], home=home, extra=extra).stdout
             self.assertIn('MODE=640 288 50', out)
+            # A janela do jogo nasce do tamanho do modo (a da janela principal).
+            for line in ('MainWindowWidth = 640', 'MainWindowHeight = 288', 'MainWindowMaximized = false'):
+                self.assertRegex(ini_path.read_text(), r'\[UI\][^\[]*\n%s\n' % line, line)
             out = self.run_x11(['duckstation', '/r/ps1/Tekken 3 (USA).chd'], home=home, extra=extra).stdout
             self.assertIn('MODE=640 240 60', out)
             # O desentrelacamento que pisca volta ao Progressive num modo
