@@ -122,6 +122,9 @@ packages+=(swh-plugins)
 packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev libx11-dev libxrandr-dev)
 # E o compositor que leva o filtro ao desktop LXDE (config/fliperos-desktop-deflicker).
 packages+=(picom)
+# O widelinks.so do "wide links = yes" (config/smb.conf): sem ele o Samba
+# recusa todo compartilhamento (vfs_init failed, 0x800704b3 no Windows).
+packages+=(samba-vfs-modules)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
 # repositorio local o tem (o das imagens anteriores nao tem: fica no X).

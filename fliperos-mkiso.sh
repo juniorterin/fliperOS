@@ -289,6 +289,8 @@ apt-get update -qq
 # p7zip-full: o fullset do progetto-SNAPS traz as capturas num 7z
 # (config/fliperos-snaps), mesmo numa imagem sem Skyscraper.
 # transmission-daemon: o Setup > Games > Downloader (config/fliperos-downloader).
+# samba-vfs-modules: o widelinks.so do "wide links = yes" (config/smb.conf); o
+# samba so o recomenda, e sem ele todo compartilhamento falha (vfs_init failed).
 # picom: o filtro de flicker do entrelacado no desktop (config/fliperos-desktop-deflicker).
 # mesa-va-drivers: a tela ao vivo (config/fliperos-stream) le a tela das AMD
 # pelo VA-API (sem ele o hwdownload da EPERM); na imagem, a tela ao vivo do
@@ -310,7 +312,7 @@ apt-get install -y --no-install-recommends \
   systemd-timesyncd p7zip-full \
   gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk transmission-daemon \
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils \
-  samba samba-common-bin cifs-utils smbclient avahi-daemon avahi-utils udisks2 gvfs wireless-regdb \
+  samba samba-common-bin samba-vfs-modules cifs-utils smbclient avahi-daemon avahi-utils udisks2 gvfs wireless-regdb \
   plymouth plymouth-label fonts-dejavu-core \
   lxde-core lxsession openbox-lxde-session lxpolkit lxappearance lxappearance-obconf lxde-icon-theme \
   lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \

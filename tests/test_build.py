@@ -1477,6 +1477,9 @@ class RomFoldersTests(unittest.TestCase):
             self.assertIn('[%s]\n' % share, smb)
             self.assertIn('path = /home/fliperos/%s\n' % share, smb)
         self.assertIn('wide links = yes', smb)
+        # O widelinks.so do wide links vem no samba-vfs-modules, que o samba so recomenda.
+        self.assertIn(' samba-vfs-modules ', (ROOT / 'fliperos-mkiso.sh').read_text())
+        self.assertIn('packages+=(samba-vfs-modules)', (ROOT / 'tools/cabinet-update.sh').read_text())
 
     def test_flycast_player_2_has_a_controller(self):
         cfg = (ROOT / 'config/flycast-emu.cfg').read_text()
