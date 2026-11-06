@@ -51,3 +51,4 @@
 48	9c9f9d8a602a69fd8242ffa5e863044c4e80768f	bb0126cda7ae3acbe759d9fad57b11c957c74f0e2b392d86e5222999144a5a9c	no	Windows shared folders open again, newest emulators from the Setup
 49	b31e713ddb6b7367ee9b4d0d7abae9dec78ee09c	994de007f25d2649cb9a54730397e893785bf2c3c11deae0b18f935954bcf350	no	Download BIOS brings every Flycast BIOS (Naomi, Atomiswave, Dreamcast)
 50	4d45609eb13b81eef4ed38a463bbda7a8278c97f	bf4507c471533fce74930b114c2a2073449feeb2a285e92f10fcabd6a29e1e59	no	OpenBOR logs in the web panel, newest Supermodel, OpenBOR and PCSX2 from the Setup
+51	4dcda1dc9671594c725306ba3d9bfefa20087231	1fe975b93cdbc392c7ea8d502d77db3f1dab81a9b63ba6c75e2d3924c4b7012a	no	DuckStation opens PS1 games again, its log in the web panel
