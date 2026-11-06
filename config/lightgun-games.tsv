@@ -1,0 +1,109 @@
+# Jogos de console que usam pistola de luz, para o fliperos-lightgun ligar a
+# pistola no core do RetroArch (PCSX-ReARMed, Snes9x, Genesis Plus GX, FCEUmm).
+# Os arcades nao estao aqui: o MAME 2010 e o FBNeo usam o -listxml do MAME
+# 2010 e o controls.xml do ROM cleaner.
+#
+# sistema<TAB>pistola<TAB>nome do jogo. O nome e comparado sem as marcas do
+# arquivo ("(USA)", "[!]"), sem pontuacao, sem "the" e sem maiusculas: "Time
+# Crisis (USA) (Disc 1).chd" e "Time Crisis". Fontes: as paginas da Wikipedia
+# de cada pistola (GunCon, Konami Justifier, Super Scope, Menacer, Light
+# Phaser, NES Zapper). Um jogo que aceita duas pistolas fica com a primeira.
+#
+# psx: guncon ou justifier (porta 1; com duas pistolas, portas 1 e 2)
+psx	guncon	Die Hard Trilogy 2 - Viva Las Vegas
+psx	guncon	Elemental Gearbolt
+psx	guncon	Extreme Ghostbusters - The Ultimate Invasion
+psx	guncon	Ghoul Panic
+psx	guncon	Oh! Bakyuuun
+psx	guncon	Gunbare! Game Tengoku 2
+psx	guncon	Simple 1500 Series Vol. 24 - The Gun Shooting
+psx	guncon	Simple 1500 Series Vol. 63 - The Gun Shooting 2
+psx	guncon	Gunfighter - The Legend of Jesse James
+psx	guncon	Guntu - Western Front June, 1944 - Tetsu no Kioku
+psx	guncon	Judge Dredd
+psx	guncon	Maximum Force
+psx	guncon	Mighty Hits Special
+psx	guncon	Moorhuhn 2 - Die Jagd Geht Weiter
+psx	guncon	Moorhuhn 3 - ...Es Gibt Huhn!
+psx	guncon	Moorhen 3 - ...Chicken Chase
+psx	guncon	Moorhuhn X
+psx	guncon	Point Blank
+psx	guncon	Point Blank 2
+psx	guncon	Point Blank 3
+psx	guncon	Gun Bullet
+psx	guncon	Puffy - P.S. I Love You
+psx	guncon	Rescue Shot
+psx	guncon	Resident Evil Survivor
+psx	guncon	Biohazard - Gun Survivor
+psx	guncon	Time Crisis
+psx	guncon	Time Crisis - Project Titan
+psx	justifier	Area 51
+psx	justifier	Crypt Killer
+psx	justifier	Die Hard Trilogy
+psx	justifier	Lethal Enforcers I & II
+psx	justifier	Project Horned Owl
+# snes: superscope ou justifier (porta 2; o Justifier do jogador 2 na porta 3)
+snes	superscope	Battle Clash
+snes	superscope	Bazooka Blitzkrieg
+snes	superscope	Space Bazooka
+snes	superscope	The Hunt for Red October
+snes	superscope	Lamborghini American Challenge
+snes	superscope	Lemmings 2 - The Tribes
+snes	superscope	Metal Combat - Falcon's Revenge
+snes	superscope	Operation Thunderbolt
+snes	superscope	Super Scope 6
+snes	superscope	Nintendo Scope 6
+snes	superscope	T2 - The Arcade Game
+snes	superscope	Tin Star
+snes	superscope	X-Zone
+snes	superscope	Yoshi's Safari
+snes	superscope	Yoshi no Road Hunting
+snes	justifier	Lethal Enforcers
+# md: Mega Drive e Mega-CD, menacer ou justifier (porta 2)
+md	menacer	Menacer 6-Game Cartridge
+md	menacer	T2 - The Arcade Game
+md	menacer	Body Count
+md	menacer	Mad Dog McCree
+md	menacer	Mad Dog II - The Lost Gold
+md	menacer	Who Shot Johnny Rock?
+md	menacer	Corpse Killer
+md	menacer	Crime Patrol
+md	justifier	Lethal Enforcers
+md	justifier	Lethal Enforcers II - Gun Fighters
+md	justifier	Snatcher
+# sms: Master System, phaser (porta 1)
+sms	phaser	Assault City
+sms	phaser	Gangster Town
+sms	phaser	Laser Ghost
+sms	phaser	Marksman Shooting & Trap Shooting
+sms	phaser	Marksman Shooting & Trap Shooting & Safari Hunt
+sms	phaser	Hang-On & Safari Hunt
+sms	phaser	Safari Hunt
+sms	phaser	Missile Defense 3-D
+sms	phaser	Operation Wolf
+sms	phaser	Rambo III
+sms	phaser	Rescue Mission
+sms	phaser	Shooting Gallery
+sms	phaser	Space Gun
+sms	phaser	Wanted
+# nes: zapper (porta 2)
+nes	zapper	The Adventures of Bayou Billy
+nes	zapper	Barker Bill's Trick Shooting
+nes	zapper	Day Dreamin' Davey
+nes	zapper	Duck Hunt
+nes	zapper	Super Mario Bros. + Duck Hunt
+nes	zapper	Super Mario Bros. + Duck Hunt + World Class Track Meet
+nes	zapper	Freedom Force
+nes	zapper	Gotcha! - The Sport!
+nes	zapper	Gumshoe
+nes	zapper	Hogan's Alley
+nes	zapper	Laser Invasion
+nes	zapper	The Lone Ranger
+nes	zapper	Mechanized Attack
+nes	zapper	Operation Wolf
+nes	zapper	Shooting Range
+nes	zapper	To the Earth
+nes	zapper	Track & Field II
+nes	zapper	Wild Gunman
+nes	zapper	Baby Boomer
+nes	zapper	Chiller

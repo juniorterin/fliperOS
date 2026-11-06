@@ -12,14 +12,22 @@
 #     o indice de mouse de cada pistola (no maximo duas), na ordem em que o
 #     driver udev do RetroArch acha os mouses: a do caminho no /sys, contando
 #     mouses e touchpads.
+#   fliperos-lightgun retroarch CORE JOGO
+#     num jogo de pistola do core (o .so do -L) com uma pistola ligada,
+#     escreve a config que o fliperos-kms-run soma (--appendconfig) e diz o
+#     caminho dela; senao nao diz nada. O linuxraw do retroarch.cfg nao le
+#     mouse nenhum: so nesse jogo entram o driver udev e cada pistola como o
+#     mouse de um jogador. Os jogos de pistola: no MAME 2010 e no FBNeo, os
+#     que tem uma no -listxml do MAME 2010 ou no controls.xml; no PCSX-ReARMed,
+#     no Snes9x, no Genesis Plus GX e no FCEUmm, os da lightgun-games.tsv. A
+#     porta do jogador vira a pistola daquele console (GunCon, Super Scope,
+#     Menacer, Zapper...), e os botoes da pistola sao os mesmos em todos:
+#     gatilho, A (e C) o aux A, B o aux B, Start e Select os do fliperos-gunkeys.
 #   fliperos-lightgun retroarch-mame2010 SET
-#     num jogo de pistola do MAME 2010 com uma pistola ligada, escreve a
-#     config que o fliperos-kms-run soma (--appendconfig) e diz o caminho
-#     dela; senao nao diz nada. O linuxraw do retroarch.cfg nao le mouse
-#     nenhum: so nesse jogo entram o driver udev e cada pistola como o mouse
-#     de um jogador. O core vai para o modo lightgun nas opcoes do jogo (o
-#     padrao, mouse, e o dos jogos de trackball), e a mira dele some (as
-#     cross1-8.png transparentes na pasta crosshairs; sem pistola elas saem).
+#     o mesmo, no MAME 2010 (o nome do set). O core vai para o modo lightgun
+#     nas opcoes do jogo (o padrao, mouse, e o dos jogos de trackball), e a
+#     mira dele some (as cross1-8.png transparentes na pasta crosshairs; sem
+#     pistola elas saem).
 #   fliperos-lightgun udev-x SYSPATH
 #     para a regra do udev (IMPORT): LIBINPUT_IGNORE_DEVICE=1 numa pistola
 #     que nao e a primeira. O X junta todos os mouses num ponteiro so, e o
@@ -30,6 +38,8 @@
 set -uo pipefail
 INPUT_CLASS=${FLIPEROS_INPUT_CLASS:-/sys/class/input}
 MAME2010_XML=${FLIPEROS_MAME2010_XML:-/usr/local/share/fliperos/mame2010.xml.xz}
+CONTROLS_XML=${FLIPEROS_CONTROLS_XML:-/usr/local/share/fliperos/romclean/controls.xml}
+GAMES=${FLIPEROS_LIGHTGUN_GAMES:-/usr/local/share/fliperos/lightgun-games.tsv}
 RA_CONFIG=${FLIPEROS_RA_CONFIG_DIR:-${HOME:-}/.config/retroarch/config}
 MAME2010_CROSSHAIRS=${FLIPEROS_MAME2010_CROSSHAIRS:-${HOME:-}/bios/mame2010/crosshairs}
 BLANK_CROSSHAIRS=${FLIPEROS_BLANK_CROSSHAIRS:-/usr/local/share/fliperos/crosshair}
@@ -71,6 +81,152 @@ lightgun_set() {
   return "${PIPESTATUS[1]}"
 }
 
+# arcade_gun SET: status 0 se o arcade tem pistola no MAME 2010 ou no
+# controls.xml (o FBNeo usa os nomes de set do MAME).
+arcade_gun() {
+  lightgun_set "$MAME2010_XML" "$1" && return 0
+  [[ -f $CONTROLS_XML ]] || return 1
+  awk -v set="$1" '
+    /<game / { name = ""; if (match($0, /romname="[^"]*"/)) name = substr($0, RSTART + 9, RLENGTH - 10) }
+    name == set && /name="lightgun"/ { found = 1; exit }
+    END { exit !found }' "$CONTROLS_XML"
+}
+
+# title_key: cada nome (um por linha) sem as marcas do arquivo ("(USA)",
+# "[!]"), sem pontuacao, sem "the" e sem maiusculas.
+title_key() {
+  sed -E 's/\([^)]*\)|\[[^]]*\]//g' | tr '[:upper:]' '[:lower:]' |
+    sed -E "s/&/ and /g; s/'//g; s/[^a-z0-9]+/ /g; s/(^| )the( |\$)/ /g; s/ +/ /g; s/^ //; s/ \$//"
+}
+
+# console_gun SISTEMA JOGO: a pistola do jogo na lightgun-games.tsv.
+console_gun() {
+  local name=${2##*/} key
+  [[ -f $GAMES ]] || return 1
+  key=$(printf '%s\n' "${name%.*}" | title_key)
+  [[ -n $key ]] || return 1
+  paste <(cut -f1,2 "$GAMES") <(cut -f3 "$GAMES" | title_key) |
+    awk -F'\t' -v s="$1" -v k="$key" '$1 == s && $3 == k { print $2; found = 1; exit } END { exit !found }'
+}
+
+# game_opt CORE JOGO CHAVE VALOR: a opcao nas opcoes do jogo, que comecam
+# como as do core (as do usuario).
+game_opt() {
+  local dir="$RA_CONFIG/$1" opt
+  mkdir -p "$dir" || return 1
+  opt="$dir/$2.opt"
+  [[ -f $opt ]] || cp "$dir/$1.opt" "$opt" 2> /dev/null || : > "$opt"
+  if grep -q "^$3 = " "$opt"; then
+    sed -i "s/^$3 = .*/$3 = \"$4\"/" "$opt"
+  else
+    echo "$3 = \"$4\"" >> "$opt"
+  fi
+}
+
+retroarch_mame2010() {
+  local set=$1 cfg i
+  mapfile -t mice < <(gun_mice)
+  if ((${#mice[@]} == 0)) || ! lightgun_set "$MAME2010_XML" "$set"; then
+    blank_crosshairs off
+    return 0
+  fi
+  blank_crosshairs on
+  cfg=$RUNTIME/fliperos-retroarch-lightgun.cfg
+  {
+    echo 'input_driver = "udev"'
+    for i in "${!mice[@]}"; do
+      echo "input_player$((i + 1))_mouse_index = \"${mice[i]}\""
+    done
+  } > "$cfg"
+  game_opt "MAME 2010" "$set" mame_current_xy_type lightgun
+  echo "$cfg"
+}
+
+# retroarch_core CORE JOGO: as portas da pistola no core (o numero do
+# aparelho do libretro em cada uma, na ordem das pistolas) e a config.
+retroarch_core() {
+  local core=${1##*/} game=$2 base cfg j p ports=() ids=() sys
+  core=${core%_libretro.so}
+  base=${game##*/}
+  base=${base%.*}
+  if [[ $core == mame2010 ]]; then
+    retroarch_mame2010 "$base"
+    return
+  fi
+  mapfile -t mice < <(gun_mice)
+  ((${#mice[@]})) || return 0
+  # Os numeros sao RETRO_DEVICE_SUBCLASS(base, n) = (n + 1) << 8 | base, com
+  # o RETRO_DEVICE_LIGHTGUN (4) ou, no Zapper do FCEUmm, o MOUSE (2).
+  case $core in
+    fbneo)
+      # A porta de cada jogador vira "Lightgun"; a mira do core ja some com
+      # ela (o padrao "hide with lightgun device").
+      if arcade_gun "$base"; then
+        ports=(1 2) ids=(4 4)
+      fi
+      ;;
+    pcsx_rearmed)
+      # GunCon ou Konami Justifier na porta de cada jogador; a mira do core
+      # vem desligada.
+      case $(console_gun psx "$game") in
+        guncon) ports=(1 2) ids=(260 260) ;;
+        justifier) ports=(1 2) ids=(516 516) ;;
+      esac
+      ;;
+    snes9x)
+      # So a porta 2 aceita pistola; o Justifier do jogador 2 vai na 3.
+      case $(console_gun snes "$game") in
+        superscope) ports=(2) ids=(260) ;;
+        justifier) ports=(2 3) ids=(516 772) ;;
+      esac
+      if ((${#ports[@]})); then
+        for p in superscope justifier1 justifier2; do game_opt Snes9x "$base" "snes9x_${p}_crosshair" 0; done
+      fi
+      ;;
+    genesis_plus_gx)
+      # Menacer e Justifier na porta 2 (Mega Drive e Mega-CD); a Light
+      # Phaser do Master System na 1. A mira do core vem desligada.
+      case ${game##*.} in
+        sms | SMS) sys=sms ;;
+        *) sys=md ;;
+      esac
+      case $(console_gun "$sys" "$game") in
+        phaser) ports=(1) ids=(260) ;;
+        menacer) ports=(2) ids=(516) ;;
+        justifier) ports=(2) ids=(772) ;;
+      esac
+      ;;
+    fceumm)
+      if [[ $(console_gun nes "$game") == zapper ]]; then
+        ports=(2) ids=(258)
+        game_opt FCEUmm "$base" fceumm_show_crosshair disabled
+      fi
+      ;;
+  esac
+  ((${#ports[@]})) || return 0
+  cfg=$RUNTIME/fliperos-retroarch-lightgun.cfg
+  {
+    echo 'input_driver = "udev"'
+    for j in "${!ports[@]}"; do
+      ((j < ${#mice[@]})) || break
+      p=${ports[j]}
+      echo "input_libretro_device_p$p = \"${ids[j]}\""
+      echo "input_player${p}_mouse_index = \"${mice[j]}\""
+      # Os botoes do GunCon 2 (config/fliperos-gunkeys): gatilho o esquerdo, A
+      # e C o direito, B o do meio; o Start e o Select viram as teclas 1 e 5
+      # (pistola 2: 2 e 6). Recarregar e atirar fora da tela: o padrao do
+      # RetroArch poe ali o botao direito, que aqui e o A dos jogos.
+      echo "input_player${p}_gun_trigger_mbtn = \"1\""
+      echo "input_player${p}_gun_offscreen_shot_mbtn = \"nul\""
+      echo "input_player${p}_gun_aux_a_mbtn = \"2\""
+      echo "input_player${p}_gun_aux_b_mbtn = \"3\""
+      echo "input_player${p}_gun_start = \"num$((j + 1))\""
+      echo "input_player${p}_gun_select = \"num$((j + 5))\""
+    done
+  } > "$cfg"
+  echo "$cfg"
+}
+
 # blank_crosshairs on|off: as cross1-8.png transparentes (links) na pasta de
 # miras do MAME 2010, ou fora dela. Uma mira do usuario (arquivo) fica.
 blank_crosshairs() {
@@ -103,32 +259,11 @@ case ${1:-} in
   mice)
     gun_mice
     ;;
+  retroarch)
+    retroarch_core "${2:?Usage: fliperos-lightgun retroarch CORE GAME}" "${3:?Usage: fliperos-lightgun retroarch CORE GAME}"
+    ;;
   retroarch-mame2010)
-    set=${2:?Usage: fliperos-lightgun retroarch-mame2010 SET}
-    mapfile -t mice < <(gun_mice)
-    if ((${#mice[@]} == 0)) || ! lightgun_set "$MAME2010_XML" "$set"; then
-      blank_crosshairs off
-      exit 0
-    fi
-    blank_crosshairs on
-    cfg=$RUNTIME/fliperos-retroarch-lightgun.cfg
-    {
-      echo 'input_driver = "udev"'
-      for i in "${!mice[@]}"; do
-        echo "input_player$((i + 1))_mouse_index = \"${mice[i]}\""
-      done
-    } > "$cfg"
-    # As opcoes do jogo: as do core (as do usuario) com o modo lightgun.
-    dir="$RA_CONFIG/MAME 2010"
-    mkdir -p "$dir"
-    opt="$dir/$set.opt"
-    [[ -f $opt ]] || cp "$dir/MAME 2010.opt" "$opt" 2> /dev/null || : > "$opt"
-    if grep -q '^mame_current_xy_type = ' "$opt"; then
-      sed -i 's/^mame_current_xy_type = .*/mame_current_xy_type = "lightgun"/' "$opt"
-    else
-      echo 'mame_current_xy_type = "lightgun"' >> "$opt"
-    fi
-    echo "$cfg"
+    retroarch_mame2010 "${2:?Usage: fliperos-lightgun retroarch-mame2010 SET}"
     ;;
   udev-x)
     self=${2:?Usage: fliperos-lightgun udev-x SYSPATH}
@@ -147,7 +282,7 @@ case ${1:-} in
     exit 0
     ;;
   *)
-    echo "Usage: fliperos-lightgun guns | guncon | mice | retroarch-mame2010 SET | udev-x SYSPATH | udev-retrigger SYSPATH" >&2
+    echo "Usage: fliperos-lightgun guns | guncon | mice | retroarch CORE GAME | retroarch-mame2010 SET | udev-x SYSPATH | udev-retrigger SYSPATH" >&2
     exit 2
     ;;
 esac

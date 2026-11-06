@@ -267,8 +267,10 @@ install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-
 # O sistema de cada set do FBNeo: o fliperos-kms-run abre os de console que
 # estao soltos na pasta dos arcades.
 install -Dm755 "$src/config/fliperos-fbneo" "$root/opt/fliperos/bin/fliperos-fbneo"
-# A pistola de luz como mouse num jogo de pistola do RetroArch (fliperos-kms-run).
+# A pistola de luz como mouse num jogo de pistola do RetroArch (fliperos-kms-run),
+# e os jogos de pistola dos consoles.
 install -Dm755 "$src/config/fliperos-lightgun" "$root/opt/fliperos/bin/fliperos-lightgun"
+install -Dm644 "$src/config/lightgun-games.tsv" "$root/usr/local/share/fliperos/lightgun-games.tsv"
 # Setup > Games > Downloader > Free games: homebrew de codigo aberto para as pastas de ~/roms.
 install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"
 # Setup > Games > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.

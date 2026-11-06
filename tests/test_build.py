@@ -5263,6 +5263,61 @@ class FrontendDataTests(unittest.TestCase):
         fe.act('b1')
         self.assertEqual((fe.cat, loads), (2, [3, 2]))
 
+    def test_ribbon_moves_on_a_spring_and_tiles_grow_evenly(self):
+        # A tira anda numa mola sem balanco: sai devagar, acelera, nao passa
+        # do destino e para nele, tambem com o destino mudando no meio; o
+        # azulejo cresce igual para os dois lados, aos poucos.
+        import types
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        fe = types.SimpleNamespace(anim={'ribbon': (0, 0.0, 0.0)}, shot=None)
+        xs = [feview.spring(fe, 'ribbon', 1, i / 60) for i in range(1, 61)]
+        steps = [b - a for a, b in zip([0] + xs, xs)]
+        self.assertLess(steps[0], steps[2])
+        self.assertTrue(all(s >= 0 for s in steps))
+        self.assertLessEqual(max(xs), 1)
+        self.assertEqual(xs[-1], 1)
+        # Um toque a mais no meio do caminho: segue sem volta, e a velocidade
+        # muda pouco de um quadro para o outro (o ease antigo saltava 0,2).
+        fe.anim['ribbon'] = (0, 0.0, 0.0)
+        xs = [feview.spring(fe, 'ribbon', 1 if i < 6 else 2, i / 60) for i in range(1, 90)]
+        steps = [b - a for a, b in zip([0] + xs, xs)]
+        self.assertTrue(all(s >= 0 for s in steps))
+        self.assertLess(max(abs(b - a) for a, b in zip(steps, steps[1:])), 0.05)
+        self.assertEqual(xs[-1], 2)
+        # Desenhada passo a passo, a tira: o azulejo do meio cresce de um a
+        # dois pixels por quadro, com o centro parado.
+        cats = [{'key': k, 'name': k, 'exe': ''} for k in ('x1', 'x2', 'x3')]
+        fe = types.SimpleNamespace(cats=cats, cat=0, cat_pos=1, pick=1, anim={'ribbon': (0, 0.0, 0.0)}, shot=None,
+                                   abs_now=0.0, rows=[], fd=None)
+        old = feview.logo_source
+        feview.logo_source = lambda name: None
+        frames = []
+        real = feview.tile_frame
+        feview.tile_frame = lambda surf, rect, on, now: frames[-1].append(rect)
+        try:
+            for i in range(1, 40):
+                fe.abs_now = i / 60
+                frames.append([])
+                feview.draw_ribbon(fe, pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA), 0)
+        finally:
+            feview.logo_source, feview.tile_frame = old, real
+        # O que chega ao meio (o ultimo desenhado, por cima dos outros).
+        mid = [rects[-1] for rects in frames]
+        widths = [r[2] for r in mid]
+        self.assertEqual(widths[-1], 56)
+        self.assertLessEqual(max(abs(b - a) for a, b in zip(widths, widths[1:])), 3)
+        self.assertEqual(mid[-1][0] * 2 + 56, feview.WW)
+
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
         # (fliperos-syslogo png NOME ARQUIVO 48 f8f8f2) e feito uma vez e fica em
@@ -5299,7 +5354,7 @@ class FrontendDataTests(unittest.TestCase):
         src = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
         # O logotipo ocupa 80% do azulejo fluido, o icone fica na borda do canto
         # e o nome escrito so aparece sem logotipo.
-        self.assertIn('system_logo(c["name"], round(w * 0.8), round(size * 0.8))', src)
+        self.assertIn('system_logo(c["name"], round(wf * 0.8), round(sf * 0.8))', src)
         self.assertIn('x + w - round(badge.get_width() * 0.65)', src)
         self.assertIn('if logo_source(c["name"]) is None:', src)
         # E no topo, ao lado do nome da romlist.
@@ -9565,7 +9620,76 @@ class LightGunTests(unittest.TestCase):
         self.assertIn('IMPORT{program}="/opt/fliperos/bin/fliperos-lightgun udev-x %S%p"', rules)
         self.assertIn('fliperos-sdl-gun.c', MKISO)
         kms = (ROOT / 'config/fliperos-kms-run').read_text()
-        self.assertIn('"$lightgun" retroarch-mame2010', kms)
+        self.assertIn('"$lightgun" retroarch "$core" "${*: -1}"', kms)
+        self.assertIn('config/lightgun-games.tsv" "$root/usr/local/share/fliperos/lightgun-games.tsv"', ROOTFS)
+
+    def test_console_and_fbneo_gun_games_get_the_gun_on_the_right_port(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            gun = ['ID_INPUT_MOUSE=1', 'ID_INPUT_GUN=1']
+            env = self.sysfs(tmp, [('event6', 'usb2/2-4', gun, ('0b9a', '016a')),
+                                   ('event5', 'usb1/1-1', ['ID_INPUT_MOUSE=1'], None)])
+            env['FLIPEROS_LIGHTGUN_GAMES'] = str(ROOT / 'config/lightgun-games.tsv')
+            xml = tmp / 'mame2010.xml'
+            xml.write_text('<mame>\n<game name="opwolf">\n<input players="1">\n'
+                           '<control type="lightgun"/>\n</input>\n</game>\n</mame>\n')
+            subprocess.run(['xz', '-k', str(xml)], check=True)
+            env['FLIPEROS_MAME2010_XML'] = str(xml) + '.xz'
+            controls = tmp / 'controls.xml'
+            controls.write_text('<dat>\n\t<game romname="bbusters" gamename="Beast Busters">\n'
+                                '\t\t<control name="lightgun">\n\t</game>\n'
+                                '\t<game romname="sf2" gamename="Street Fighter II">\n'
+                                '\t\t<control name="joy8way">\n\t</game>\n</dat>\n')
+            env['FLIPEROS_CONTROLS_XML'] = str(controls)
+
+            def gun(core, game):
+                out = self.run_gun(env, 'retroarch', '/opt/cores/%s_libretro.so' % core, game).stdout.strip()
+                return Path(out).read_text() if out else ''
+
+            # A pistola e o mouse 1 (o do painel, usb1, e o 0).
+            ps1 = gun('pcsx_rearmed', '/r/ps1/Time Crisis (USA) (Disc 1).chd')
+            for line in ('input_driver = "udev"', 'input_libretro_device_p1 = "260"',
+                         'input_player1_mouse_index = "1"', 'input_player1_gun_trigger_mbtn = "1"',
+                         'input_player1_gun_offscreen_shot_mbtn = "nul"', 'input_player1_gun_aux_a_mbtn = "2"',
+                         'input_player1_gun_aux_b_mbtn = "3"', 'input_player1_gun_start = "num1"',
+                         'input_player1_gun_select = "num5"'):
+                self.assertIn(line + '\n', ps1)
+            self.assertNotIn('_p2', ps1)  # uma pistola, uma porta
+            self.assertIn('input_libretro_device_p1 = "516"', gun('pcsx_rearmed', '/r/Lethal Enforcers I & II (USA).cue'))
+            self.assertEqual(gun('pcsx_rearmed', '/r/ps1/Silent Iron (Europe).chd'), '')
+            # SNES: porta 2, sem a mira do core nas opcoes do jogo.
+            snes = gun('snes9x', "/r/snes/Yoshi's Safari (USA).sfc")
+            self.assertIn('input_libretro_device_p2 = "260"\ninput_player2_mouse_index = "1"\n', snes)
+            self.assertIn('input_player2_gun_start = "num1"', snes)
+            self.assertIn('snes9x_superscope_crosshair = "0"', (tmp / 'ra/Snes9x/Yoshi\'s Safari (USA).opt').read_text())
+            self.assertIn('input_libretro_device_p2 = "260"', gun('snes9x', '/r/Hunt for Red October, The (USA).zip'))
+            self.assertEqual(gun('snes9x', '/r/Super Mario World (USA).sfc'), '')
+            # Mega Drive, Mega-CD e Master System no Genesis Plus GX.
+            self.assertIn('input_libretro_device_p2 = "516"', gun('genesis_plus_gx', '/r/T2 - The Arcade Game (USA, Europe).md'))
+            self.assertIn('input_libretro_device_p2 = "772"', gun('genesis_plus_gx', '/r/Lethal Enforcers (USA).chd'))
+            self.assertIn('input_libretro_device_p1 = "260"', gun('genesis_plus_gx', '/r/Operation Wolf (Europe).sms'))
+            self.assertEqual(gun('genesis_plus_gx', '/r/Operation Wolf (Europe).md'), '')
+            # NES: Zapper na porta 2, sem mira.
+            self.assertIn('input_libretro_device_p2 = "258"', gun('fceumm', '/r/Duck Hunt (World).nes'))
+            self.assertIn('fceumm_show_crosshair = "disabled"', (tmp / 'ra/FCEUmm/Duck Hunt (World).opt').read_text())
+            # FBNeo: pelo MAME 2010 ou pelo controls.xml.
+            self.assertIn('input_libretro_device_p1 = "4"', gun('fbneo', '/r/arcade/opwolf.zip'))
+            self.assertIn('input_libretro_device_p1 = "4"', gun('fbneo', '/r/arcade/bbusters.zip'))
+            self.assertEqual(gun('fbneo', '/r/arcade/sf2.zip'), '')
+            # Outro core, ou sem pistola ligada: nada.
+            self.assertEqual(gun('mgba', '/r/gba/Duck Hunt.gba'), '')
+            (tmp / 'class' / 'event6').unlink()
+            self.assertEqual(gun('pcsx_rearmed', '/r/ps1/Time Crisis (USA).chd'), '')
+
+    def test_lightgun_games_list_is_well_formed(self):
+        kinds = {'psx': {'guncon', 'justifier'}, 'snes': {'superscope', 'justifier'},
+                 'md': {'menacer', 'justifier'}, 'sms': {'phaser'}, 'nes': {'zapper'}}
+        rows = [line.split('\t') for line in (ROOT / 'config/lightgun-games.tsv').read_text().splitlines()
+                if line and not line.startswith('#')]
+        for row in rows:
+            self.assertEqual(len(row), 3, row)
+            self.assertIn(row[1], kinds.get(row[0], ()), row)
+        self.assertGreater(len(rows), 80)
 
     def test_sdl_gun_keeps_the_aim_in_the_window_on_kms(self):
         # No KMS o SDL tira o mouse da janela quando a pistola mira fora da
