@@ -48,3 +48,4 @@
 45	334988e12f6fcb3991586d5408e91615fd449203	b232590f141b89f1b8ddb7487edb46937fcaac91156ef2938e316792f030c2b9	no	Vertical monitor: frontend list with a portrait picture, rolling text in the grid
 46	9f430b2642ba447c8ccf5821f29f6f4d08dd8514	4af9df4508bb32fa54ea290872d52f16a7b0ed7b028dbee9ab736b1f2fc43df0	no	Frontend list with RECENT and FAVOURITES, PCSX2x6 buttons from the Button mapping, GunCon 2 calibration per gun
 47	5a186cf0fb7593f972c09313804a56af0b679fe1	facb23a61636d222e0efe1b9eedb031329732d4ce48238c37cdd465031b1eafe	no	Flycast updated over the network, straight from the frontend to the game
+48	9c9f9d8a602a69fd8242ffa5e863044c4e80768f	bb0126cda7ae3acbe759d9fad57b11c957c74f0e2b392d86e5222999144a5a9c	no	Windows shared folders open again, newest emulators from the Setup
