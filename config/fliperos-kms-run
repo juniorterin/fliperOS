@@ -113,6 +113,38 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
     gun_cfg=$("$lightgun" retroarch-mame2010 "${game%.*}" 2> /dev/null) || gun_cfg=""
     [[ -n $gun_cfg && -f $gun_cfg ]] && appendconfig+="|$gun_cfg"
   fi
+  # O linuxraw conta os controles pelo /dev/input/jsN, e a pistola de luz
+  # (GunCon 2, que tambem e mouse) tem um jsN; o Button mapping guarda o
+  # indice do SDL, que nao a conta. Com a pistola no js0, o jogador 1 caia
+  # nela e o controle 1 do painel virava o jogador 2. Aqui o indice de cada
+  # jogador (o do buttons.cfg, ou o padrao: jogador N, controle N-1) vira o
+  # jsN desse controle; um controle que nao esta ligado, um jsN que nao existe.
+  mapfile -t js < <(awk '/^H: Handlers=/ && /[= ]js[0-9]+/ && !/[= ]mouse[0-9]+/ {
+    match($0, /[= ]js[0-9]+/); print substr($0, RSTART + 3, RLENGTH - 3) }' \
+    "${FLIPEROS_INPUT_DEVICES:-/proc/bus/input/devices}" 2> /dev/null)
+  shifted=0
+  for i in "${!js[@]}"; do [[ ${js[i]} == "$i" ]] || shifted=1; done
+  if ((shifted)); then
+    joypads=${XDG_RUNTIME_DIR:-/tmp}/fliperos-retroarch-joypads.cfg
+    last=$(printf '%s\n' "${js[@]}" | sort -n | tail -1)
+    # Os arquivos da lista que existem; o ultimo vale, como no RetroArch.
+    cfgs=()
+    IFS='|' read -r -a listed <<< "$appendconfig"
+    for f in "${listed[@]}"; do [[ -f $f ]] && cfgs+=("$f"); done
+    {
+      echo "# fliperos-kms-run: os jogadores nos /dev/input/js dos controles (sem a pistola)."
+      for player in 1 2 3 4 5 6 7 8; do
+        index=$(awk -v k="input_player${player}_joypad_index" -F' = ' \
+          '$1 == k { gsub(/"/, "", $2); v = $2 } END { print v }' "${cfgs[@]}" /dev/null)
+        index=${index:-$((player - 1))}
+        if ((index < ${#js[@]})); then
+          echo "input_player${player}_joypad_index = \"${js[index]}\""
+        else
+          echo "input_player${player}_joypad_index = \"$((last + 1 + index - ${#js[@]}))\""
+        fi
+      done
+    } > "$joypads" 2> /dev/null && appendconfig+="|$joypads"
+  fi
   if [[ -f $versus_cfg && -x $versus && -x $pixelcade ]] && "$pixelcade" panel &&
     "$versus" has retroarch "${game%.*}" "$core"; then
     appendconfig+="|$versus_cfg"

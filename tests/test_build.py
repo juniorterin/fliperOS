@@ -14440,6 +14440,27 @@ class RetroArchConfigTests(unittest.TestCase):
             self.assertEqual(run()[:3], ['--appendconfig', '/etc/fliperos/retroarch/retroarch.cfg', '-L'])
             buttons.write_text('')
             self.assertEqual(run()[:2], ['--appendconfig', '/etc/fliperos/retroarch/retroarch.cfg|%s' % buttons])
+            # Uma pistola de luz (GunCon 2, tambem mouse) no js0: o linuxraw conta
+            # os jsN, o Button mapping o indice do SDL (sem a pistola). Cada
+            # jogador vai para o jsN do seu controle.
+            devices = tmp / 'devices'
+            env.update(FLIPEROS_INPUT_DEVICES=str(devices), XDG_RUNTIME_DIR=str(tmp))
+            dev = 'N: Name="%s"\nH: Handlers=%s \n\n'
+            devices.write_text(dev % ('Pad', 'event3 js0') + dev % ('Pad', 'event4 js1'))
+            self.assertEqual(run()[1].split('|')[-1], str(buttons))  # sem pistola, nada muda
+            devices.write_text(dev % ('Namco GunCon 2', 'mouse1 event6 js0') + dev % ('Pad', 'event14 js1')
+                               + dev % ('Pad', 'event15 js2'))
+            buttons.write_text('input_player1_joypad_index = "0"\ninput_player2_joypad_index = "1"\n')
+            out = run()[1].split('|')
+            self.assertEqual(out[-2:], [str(buttons), str(tmp / 'fliperos-retroarch-joypads.cfg')])
+            lines = Path(out[-1]).read_text()
+            for player, js in ((1, 1), (2, 2), (3, 3), (4, 4), (8, 8)):
+                self.assertIn('input_player%d_joypad_index = "%d"\n' % (player, js), lines)
+            # Jogadores trocados no Button mapping continuam trocados.
+            buttons.write_text('input_player1_joypad_index = "1"\ninput_player2_joypad_index = "0"\n')
+            lines = Path(run()[1].split('|')[-1]).read_text()
+            self.assertIn('input_player1_joypad_index = "2"\n', lines)
+            self.assertIn('input_player2_joypad_index = "1"\n', lines)
 
     def test_glcore_falls_back_to_gl_without_opengl_3_2_core(self):
         # O glcore nao abre em placa que so tem OpenGL 2.x: o fliperos-kms-run
