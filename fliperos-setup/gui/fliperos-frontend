@@ -797,6 +797,10 @@ class Frontend:
             return self.controls_act(a)
         if o in ("lobby", "transfer"):
             return self.link_act(a)
+        if o == "unpack":
+            if a == "b2":
+                self.ov["cancel"].set()
+            return None
         if a == "b2" and o not in ("rename", "exitkey", "exitpad"):
             self.overlay = {"more": "popup", "classify": "options"}.get(o)
             if self.overlay == "popup":
@@ -1486,6 +1490,47 @@ class Frontend:
         self.last_input = time.monotonic()
         self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
 
+    def unpack_start(self, g):
+        """Extrai o jogo Namco empacotado (gui/fenamco.py): o disco, o dongle e
+        o boot.elf vao para a estrutura do PCSX2x6, e os .gz usados saem. A
+        barra fica no centro da tela; B cancela."""
+        ov = {"game": g, "progress": (0, 0, ""), "result": None, "cancel": threading.Event(), "error": ""}
+        self.overlay, self.ov = "unpack", ov
+        system, name, fenamco = g["_system"], g["Name"], self.fd.fenamco
+
+        def work():
+            def progress(done, total, file):
+                ov["progress"] = (done, total, file)
+            try:
+                fenamco.unpack(system, name, progress, ov["cancel"])
+                ov["result"] = True
+            except InterruptedError:
+                ov["result"] = "cancel"
+            except Exception as e:      # o disco cheio, o proverb fora do ar, um .gz truncado...
+                ov["error"] = str(e)
+                ov["result"] = False
+        threading.Thread(target=work, daemon=True).start()
+
+    def unpack_tick(self):
+        """A extracao acabou: com sucesso o jogo (agora um .acgame da pasta)
+        abre; senao o aviso."""
+        if self.overlay != "unpack" or self.ov.get("result") is None:
+            return
+        result, error, g = self.ov["result"], self.ov.get("error", ""), self.ov["game"]
+        self.overlay = None
+        if result is True:
+            self.lib.forget()
+            self.rebuild(keep=g["Name"])
+            now = self.game()
+            if now and now["Name"] == g["Name"] and not now.get("Packed"):
+                self.launch(None, now)
+            else:
+                self.say("GAME READY", 3)
+        elif result == "cancel":
+            self.say("EXTRACTION CANCELLED", 3)
+        else:
+            self.say(("NOT ENOUGH SPACE" if "space" in error else "COULD NOT EXTRACT THE GAME"), 4)
+
     def launch(self, argv=None, game=None):
         g = game or self.game()
         argv = argv or (self.lib.command(g) if g else None)
@@ -1494,6 +1539,11 @@ class Frontend:
             return
         if self.locked():
             self.nag()
+            return
+        if g and g.get("Packed") and argv is None:
+            # Um jogo Namco ainda em .gz: extrai (com a barra no centro) e so
+            # entao abre (unpack_tick).
+            self.unpack_start(g)
             return
         self.remember()
         pg = self.pg
@@ -1734,6 +1784,7 @@ class Frontend:
                     self.lib.refresh()
             self.auto_scrape(now)
             self.bios.refresh(now)
+            self.unpack_tick()
             # O servico do scrape automatico (fliperos-scrape --daemon): o
             # andamento dele e a midia nova; sem ele, o laco e o daqui.
             if now - self.followed_at > 3:

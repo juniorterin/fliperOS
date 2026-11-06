@@ -30,6 +30,21 @@ from importlib.machinery import SourceFileLoader
 import importlib.util
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_namco():
+    """O gui/fenamco.py: os jogos Namco System 246/256 empacotados (.gz)."""
+    try:
+        import fenamco as module
+        return module
+    except ImportError:
+        spec = importlib.util.spec_from_file_location("fenamco", os.path.join(HERE, "fenamco.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+
+fenamco = _load_namco()
 SETUP = os.environ.get("FLIPEROS_SETUP", "/usr/local/bin/fliperos-setup")
 WEB = os.environ.get("FLIPEROS_WEB_MODULE", "/opt/fliperos/bin/fliperos-web")
 MEDIA_TYPES = ("snap", "box", "logo", "marquee")
@@ -322,6 +337,13 @@ class Library:
                 rows = web.games(system, favs)
             except OSError:
                 rows = []
+            # Namco 246/256: as pastas com os .gz do archive.org viram o jogo
+            # (a versao mais nova) e as outras versoes, extraidas ao escolher.
+            if system.get("key") in fenamco.KEYS:
+                try:
+                    rows = fenamco.merge(system, rows)
+                except OSError:
+                    pass
             for g in rows:
                 g["_system"] = system
                 edits = self.edits(system, g["Name"])

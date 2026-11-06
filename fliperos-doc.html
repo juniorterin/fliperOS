@@ -28560,7 +28560,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>When a system update brings other FliperOS patches for it (<code>config/sm2-emu-patches</code>), the update rebuilds it by itself (<code>fliperos-sm2emu --outdated</code>, log in <code>/opt/fliperos/logs/sm2-emu-build.log</code>; if the build fails the previous one stays), so it also reaches whoever only plays from a frontend.
 - <strong>Fightcade 2</strong>: downloaded from its site, with Wine (<a href="#Fightcade-2">Fightcade 2</a>).
 - <strong>DuckStation</strong> (PlayStation): its license (CC BY-NC-ND 4.0) doesn't allow it in the image, so the official AppImage is downloaded from its GitHub (the <code>latest</code> release) and unpacked in <code>/opt/duckstation</code> (<code>config/fliperos-duckstation</code>). Chosen again when installed, it updates.</p>
-<p>Its games go in <code>~/roms/duckstation</code> (created once it is installed; a <code>~/roms/psx</code> from before is moved there), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>; the BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</p>
+<p>Its games go in <code>~/roms/ps1</code> (created once it is installed; a <code>~/roms/duckstation</code> or <code>~/roms/psx</code> from before is moved there, with its art in <code>~/media</code>), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>; the BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</p>
 <p>Each launch (<code>fliperos-x11-run</code>) sets full screen, <code>AspectRatio = Stretch To Fill</code> and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2).</p>
 <p>Its renderer stays on Automatic, which picks <strong>Vulkan</strong> where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); the <a href="#interlaced-flicker-filter">interlaced flicker filter</a> works on either.</p>
 <p>A renderer chosen in DuckStation itself stays. Esc or Select+Start opens its menu. Opened from a frontend it closes with the game (<code>-batch</code>); from the desktop menu it opens in Big Picture. Not seen on the CRT yet.
@@ -28634,6 +28634,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 </table>
 <p>Setup &gt; Games &gt; Downloader &gt; Download BIOS fetches the BIOS from RetroBIOS. The games and dongles are not downloaded: bring your own. The panel's buttons follow Setup &gt; Joysticks &gt; Button mapping: the arcade buttons are the <code>[JVS]</code> section of the emulator's <code>PCSX2.ini</code> (<code>config/pcsx2x6-jvs-bindings</code>). Button N of a game goes to the panel position that Setup &gt; Joysticks &gt; Buttons layout gives it (position N without a layout), on the controller of each player. The section is written on the first launch and again by every Button mapping save and system update; a change made inside PCSX2x6 stays until then.</p>
 <p>Seen on a cabinet (i7 870, R7 240): Tekken 5 opens and plays, with dips to 56-57 FPS in fights. The emulated console's processor (the EE thread) is at 100%, the video card at 5-35%; the sound, the card's clock, the EE cycle rate and the blending fixes did not change it. Inside the arcade the processor reached 94-98 C with thermal throttling, and out of it it stays at 62-67 C.</p>
+<p><strong>Packed games (the archive.org "Namco System 2X6" folders).</strong> Drop a folder with the <code>.gz</code> files (<code>NM00019 TE51 DVD0 (DVD-ROM).iso.gz</code>, <code>NM00019 TE51, Ver.B4 a026051314505a.bin.gz</code>...) in <code>~/roms/namco246</code> or <code>~/roms/namco256</code>, with any name. The frontend lists the game (Tekken 5) with its versions as clones (a version is a disc and a dongle of the same code; the newest is the parent, and a disc or dongle with no pair is left out). Choosing one extracts what it needs with a progress bar in the middle of the screen (B cancels): the disc and the <code>boot.elf</code> (from the proverb project, downloaded once and kept) into a folder of the game, the dongle into <code>~/save/namco246|256</code> (a copy as it came stays in <code>originals</code>), and a <code>.acgame</code> ready to run. Then the <code>.gz</code> files used are deleted and the game opens; a disc or dongle that other versions use stays extracted for them. It needs free space for the whole disc (about twice the <code>.gz</code>).</p>
 <h1 id="Fightcade-2">Fightcade 2</h1>
 <p>Fightcade 2 (online arcade and console matches, with rollback) is closed-source freeware with no clear permission to redistribute — <strong>it isn't in the image or in the repository</strong>.</p>
 <p>In <strong>Setup &gt; Games &gt; Frontend</strong> it shows as <em>Fightcade 2 (not installed)</em>: when chosen, the Setup <strong>downloads the official Linux package from its website</strong> (about 160 MB, <code>https://www.fightcade.com/download/linux</code>), with a progress bar, to <code>/opt/fliperos/fightcade</code> — a user-owned folder, because Fightcade updates itself by writing there.</p>
@@ -28879,6 +28880,11 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <td><code>dreamcast</code></td>
 <td><code>.gdi</code>, <code>.cdi</code>, <code>.chd</code></td>
 <td>Flycast</td>
+</tr>
+<tr>
+<td><code>ps1</code></td>
+<td><code>.cue</code>, <code>.chd</code>, <code>.pbp</code>, <code>.m3u</code> (the folder exists once DuckStation is installed)</td>
+<td>DuckStation</td>
 </tr>
 <tr>
 <td><code>ps2</code></td>

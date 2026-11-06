@@ -2915,6 +2915,170 @@ class BiosBoxTests(unittest.TestCase):
         self.assertIn("NOPASSWD: /usr/local/bin/fliperos-setup", (ROOT / "fliperos-rootfs.sh").read_text())
 
 
+class NamcoPackTests(unittest.TestCase):
+    """gui/fenamco.py: a pasta do archive.org "Namco System 2X6" (.gz de disco e
+    de dongle) vira o jogo pai e as versoes no frontend; ao escolher uma, o que
+    ela precisa e extraido para a estrutura do PCSX2x6 e os .gz usados saem."""
+
+    DISCS = ("NM00019 TE51 DVD0 (DVD-ROM).iso.gz", "NM00019 TE51 DVD0B [Ver.5.1] (DVD-ROM).iso.gz",
+             "NM00019 TE52 DVD0B [Ver.5.1] (DVD-ROM).iso.gz")
+    DONGLES = ("NM00019 TE51, Ver.B4 a026051314505a.bin.gz", "NM00019 TE52, Ver.A19 a026051309270a.bin.gz",
+               "NM00019 TE52, Ver.B2 a026051309726a.bin.gz", "NM00019 TE53, Ver.B2 a026051307467a.bin.gz",
+               "NM00019 TE5L, Ver.B4 a026051313630a [Live Monitor].bin.gz")
+
+    def setUp(self):
+        import gzip
+        import importlib.util
+        import zipfile
+        spec = importlib.util.spec_from_file_location("fenamco", SETUP / "gui/fenamco.py")
+        self.fn = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.fn)
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home = self.tmp / "home"
+        self.roms = self.home / "roms"
+        self.pack = self.roms / "namco256" / "tekken"
+        self.pack.mkdir(parents=True)
+        (self.roms / "namco246").mkdir()
+        for name in self.DISCS:
+            (self.pack / name).write_bytes(gzip.compress(os.urandom(1 << 20) + bytes(3 << 20)))
+        for name in self.DONGLES:
+            (self.pack / name).write_bytes(gzip.compress(bytes([len(name)]) * 8192))
+        index = self.tmp / "GameIndex.yaml"
+        index.write_text("NM00019:\n  name: Tekken 5\n  region: System256\n  bootprog: TK5LOAD\n  media: DVD\n"
+                         "  input: button\nNM00004:\n  name: Tekken 4\n  region: System246\n  media: DVD\n"
+                         "NM00050:\n  name: A hard disk game\n  region: System256\n  media: HDD\n")
+        proverb = self.tmp / "proverb.zip"
+        with zipfile.ZipFile(proverb, "w") as z:
+            z.writestr("bin/NM00019/boot.elf", b"ELF" * 100)
+            z.writestr("bin/NM00019/title.txt", "Tekken 5")
+        self.fn.GAME_INDEX = str(index)
+        self.fn.PROVERB = proverb.as_uri()
+        os.environ["FLIPEROS_HOME"] = str(self.home)
+        self.addCleanup(os.environ.pop, "FLIPEROS_HOME", None)
+        self.system = {"key": "namco256", "folder": str(self.roms / "namco256")}
+
+    def rows(self, installed=()):
+        base = [{"Name": n, "Title": n, "file": n + ".acgame"} for n in installed]
+        return self.fn.merge(self.system, base)
+
+    def test_the_folder_becomes_a_parent_and_its_versions(self):
+        rows = {r["Name"]: r for r in self.rows()}
+        # TE51 (2 discos) e TE52 (1 disco, 2 dongles); o TE53 e o Live Monitor nao tem disco.
+        self.assertEqual(len(rows), 4)
+        parent = "NM00019_TE52_DVD0B_Ver_5_1_Ver_B2"
+        self.assertEqual(rows[parent]["Title"], "Tekken 5")
+        self.assertNotIn("CloneOf", rows[parent])
+        for name, row in rows.items():
+            self.assertEqual(row["Packed"], "1")
+            if name != parent:
+                self.assertEqual(row["CloneOf"], parent, name)
+                self.assertTrue(row["Title"].startswith("Tekken 5 ("), row["Title"])
+        self.assertEqual(rows["NM00019_TE51_DVD0_Ver_B4"]["Title"], "Tekken 5 (TE51 DVD0, Ver.B4)")
+        # O disco de outra placa e o de mais de um jogo de HD nao entram aqui.
+        self.assertFalse([n for n in rows if not n.startswith("NM00019")])
+        self.assertEqual(self.fn.merge({"key": "namco246", "folder": str(self.roms / "namco246")}, []), [])
+        self.assertEqual(self.fn.merge({"key": "mame", "folder": "/x"}, [{"Name": "a"}]), [{"Name": "a"}])
+
+    def test_unpack_builds_what_the_game_needs_and_removes_the_gz(self):
+        name = "NM00019_TE52_DVD0B_Ver_5_1_Ver_B2"
+        seen = []
+        path = self.fn.unpack(self.system, name, lambda d, t, f: seen.append((d, t, f)))
+        folder = self.roms / "namco256"
+        self.assertEqual(path, str(folder / (name + ".acgame")))
+        acgame = (folder / (name + ".acgame")).read_text()
+        for line in ("name=Tekken 5", "gameid=NM00019", "platform=256", "subdir=" + name, "elf=boot.elf",
+                     "mediasrc=%s.iso" % name, "media=DVD"):
+            self.assertIn(line + "\n", acgame, line)
+        dongle = "NM00019_TE52_Ver_B2_a026051309726a.ps2"
+        self.assertIn("dongle=%s\n" % dongle, acgame)
+        self.assertEqual((folder / name / "boot.elf").read_bytes(), b"ELF" * 100)
+        self.assertEqual((folder / name / (name + ".iso")).stat().st_size, 4 << 20)
+        self.assertTrue((self.home / "save/namco256" / dongle).is_file())
+        self.assertTrue((self.home / "save/namco256/originals" / dongle).is_file())
+        # So o que foi usado sai; as outras versoes seguem nos .gz delas.
+        self.assertFalse((self.pack / "NM00019 TE52 DVD0B [Ver.5.1] (DVD-ROM).iso.gz").exists())
+        self.assertFalse((self.pack / "NM00019 TE52, Ver.B2 a026051309726a.bin.gz").exists())
+        self.assertTrue((self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz").exists())
+        self.assertTrue((self.pack / "NM00019 TE52, Ver.A19 a026051309270a.bin.gz").exists())
+        # O andamento: sobe ate o total, no centro da barra.
+        self.assertEqual(seen[-1][0], seen[-1][1])
+        self.assertEqual([s[0] for s in seen], sorted(s[0] for s in seen))
+        self.assertTrue(any(s[2].endswith(".iso.gz") for s in seen))
+        # Instalada, a versao fica no grupo (o pai) e as outras seguem empacotadas.
+        rows = {r["Name"]: r for r in self.rows([name])}
+        self.assertEqual(len(rows), 4)
+        self.assertNotIn("Packed", rows[name])
+        self.assertEqual(rows[name]["Title"], "Tekken 5")
+        self.assertEqual(rows["NM00019_TE51_DVD0_Ver_B4"]["CloneOf"], name)
+        self.assertEqual(rows["NM00019_TE52_DVD0B_Ver_5_1_Ver_A19"]["Packed"], "1")
+
+    def test_a_disc_or_dongle_used_by_two_versions_is_not_lost(self):
+        # O disco TE52 serve ao dongle A19 e ao B2; o dongle TE51 B4 serve a dois discos.
+        first = "NM00019_TE52_DVD0B_Ver_5_1_Ver_B2"
+        second = "NM00019_TE52_DVD0B_Ver_5_1_Ver_A19"
+        self.fn.unpack(self.system, first, lambda *a: None)
+        rows = {r["Name"]: r for r in self.rows([first])}
+        self.assertIn(second, rows)         # sem o .gz do disco, pelo que o registro guardou
+        self.fn.unpack(self.system, second, lambda *a: None)
+        folder = self.roms / "namco256"
+        iso = folder / second / (second + ".iso")
+        self.assertTrue(iso.is_symlink() or iso.exists())
+        self.assertEqual(iso.stat().st_size, 4 << 20)
+        self.assertIn("dongle=NM00019_TE52_Ver_A19_a026051309270a.ps2\n", (folder / (second + ".acgame")).read_text())
+        a, b = "NM00019_TE51_DVD0_Ver_B4", "NM00019_TE51_DVD0B_Ver_5_1_Ver_B4"
+        self.fn.unpack(self.system, a, lambda *a_: None)
+        self.assertFalse((self.pack / "NM00019 TE51, Ver.B4 a026051314505a.bin.gz").exists())
+        rows = {r["Name"]: r for r in self.rows([first, second, a])}
+        self.assertEqual(rows[b]["Packed"], "1")
+        self.fn.unpack(self.system, b, lambda *a_: None)
+        self.assertIn("dongle=NM00019_TE51_Ver_B4_a026051314505a.ps2\n", (folder / (b + ".acgame")).read_text())
+        self.assertEqual(len(list((self.home / "save/namco256").glob("*.ps2"))), 3)
+
+    def test_cancel_and_no_space_leave_everything_as_it_was(self):
+        import threading
+        name = "NM00019_TE51_DVD0_Ver_B4"
+        cancel = threading.Event()
+        cancel.set()
+        with self.assertRaises(InterruptedError):
+            self.fn.unpack(self.system, name, lambda *a: None, cancel)
+        folder = self.roms / "namco256"
+        self.assertFalse((folder / (name + ".acgame")).exists())
+        self.assertFalse((folder / name).exists())
+        self.assertTrue((self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz").exists())
+        self.assertEqual(list(folder.glob("*.part")), [])
+        real = shutil.disk_usage
+        self.addCleanup(setattr, shutil, "disk_usage", real)
+        shutil.disk_usage = lambda p: type("U", (), {"free": 1 << 20})()
+        with self.assertRaises(OSError) as raised:
+            self.fn.unpack(self.system, name, lambda *a: None)
+        self.assertIn("space", str(raised.exception))
+        self.assertFalse((folder / name).exists())
+
+    def test_proverb_offline_is_an_error_not_a_half_game(self):
+        self.fn.PROVERB = (self.tmp / "missing.zip").as_uri()
+        with self.assertRaises(OSError):
+            self.fn.unpack(self.system, "NM00019_TE51_DVD0_Ver_B4", lambda *a: None)
+        self.assertFalse((self.roms / "namco256/NM00019_TE51_DVD0_Ver_B4").exists())
+        self.assertTrue((self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz").exists())
+
+    def test_the_frontend_extracts_before_it_opens_the_game(self):
+        frontend = (SETUP / "gui/fliperos-frontend").read_text()
+        launch = frontend.split("    def launch(self, argv=None, game=None):")[1].split("    def play(")[0]
+        self.assertIn('g.get("Packed") and argv is None', launch)
+        self.assertIn("self.unpack_start(g)", launch)
+        self.assertIn("self.unpack_tick()", frontend)
+        self.assertIn('if o == "unpack":', frontend)
+        data = (SETUP / "gui/fedata.py").read_text()
+        self.assertIn("fenamco.merge(system, rows)", data)
+        view = (SETUP / "gui/feview.py").read_text()
+        self.assertIn("draw_unpack(fe, top, t)", view)
+        body = view.split("def draw_unpack(")[1].split("\n\n\n")[0]
+        # No centro da tela, na altura.
+        self.assertIn("(HH - ph) // 2", body)
+        self.assertIn('"EXTRACTING"', body)
+
+
 class HarvestPackLineTests(unittest.TestCase):
     """O quadro do Auto scrape diz de que sistema e cada pacote: os videos e
     os logos de arcade sao so do MAME (e dos cores de arcade)."""

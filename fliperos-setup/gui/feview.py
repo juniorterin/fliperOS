@@ -2050,6 +2050,28 @@ def draw_transfer(fe, ui, now):
     button_hint(ui, px + 8, py + ph - 20, [("b2", "CANCEL")])
 
 
+def draw_unpack(fe, ui, now):
+    """A extracao de um jogo Namco empacotado (gui/fenamco.py): o jogo e a
+    barra de andamento no centro da tela, com o arquivo que esta saindo do .gz."""
+    g = fe.ov.get("game")
+    pw, ph = WW - 16, 96
+    px, py = 8, (HH - ph) // 2
+    card(ui, (px, py, pw, ph))
+    ui.blit(W.big("EXTRACTING", 1, W.LABEL), (px + 10, py + 8))
+    if g:
+        tiny.text(ui, tiny.fit(fe.fd.short_title(g).upper(), pw - 20), T.COMMENT, px + 10, py + 20)
+    done, total, name = fe.ov.get("progress", (0, 0, ""))
+    bar = (px + 12, py + 36, pw - 24, 12)
+    pygame.draw.rect(ui, T.LINE, bar, 1)
+    pct = min(1.0, done / total) if total else 0.0
+    ui.fill(T.GREEN, (bar[0] + 2, bar[1] + 2, round((bar[2] - 4) * pct), bar[3] - 4))
+    label = "%d%%" % round(pct * 100)
+    W.text(ui, label, T.FG, px + (pw - W.width(label)) // 2, py + 52)
+    if name:
+        tiny.text(ui, tiny.fit(os.path.basename(name).upper(), pw - 20), T.COMMENT, px + 10, py + 66)
+    button_hint(ui, px + 8, py + ph - 16, [("b2", "CANCEL")])
+
+
 # O letreiro de um texto que nao cabe: parado com "..." por MARQUEE_HOLD
 # segundos, rola ate o fim a MARQUEE_SPEED pixels por segundo, para no fim
 # e volta ao comeco.
@@ -3066,6 +3088,8 @@ def draw(fe, now):
             draw_lobby(fe, top, t)
         elif o == "transfer":
             draw_transfer(fe, top, t)
+        elif o == "unpack":
+            draw_unpack(fe, top, t)
         elif o == "options":
             draw_options(fe, top, t)
         elif o == "hidden":
