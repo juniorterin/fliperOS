@@ -3160,24 +3160,29 @@ class NamcoPackTests(unittest.TestCase):
         self.assertIn('self.say("FILE INCOMPLETE: COPY IT AGAIN", 5)', frontend)
         self.assertIn("namco-unpack.log", frontend)
 
-    def test_a_damaged_cd_dump_is_refused_and_keeps_the_files(self):
+    def test_a_cd_dump_with_the_subheader_in_front_is_realigned(self):
         # Bloody Roar 3 do archive.org: setores de 2048 com o subcabecalho de 8 bytes
-        # na frente (o de 2336 cortado); o emulador recusa. Avisa na extracao.
+        # na frente; o emulador recusa. A extracao refaz os setores (abriu no gabinete).
         import gzip
         name = "NM00019_TE51_DVD0_Ver_B4"
         disc = self.pack / "NM00019 TE51 DVD0 (DVD-ROM).iso.gz"
         raw = bytearray(40 * 2048)
+        for sector in range(40):
+            raw[sector * 2048 + 8:sector * 2048 + 12] = b"%04d" % sector
         raw[16 * 2048 + 8:16 * 2048 + 14] = b"\x01CD001"
         disc.write_bytes(gzip.compress(bytes(raw)))
-        with self.assertRaises(self.fn.PackError) as raised:
-            self.fn.unpack(self.system, name, lambda *a: None)
-        self.assertIn("damaged dump", str(raised.exception))
-        folder = self.roms / "namco2x6"
-        self.assertTrue(disc.exists())
-        self.assertTrue((self.pack / "NM00019 TE51, Ver.B4 a026051314505a.bin.gz").exists())
-        self.assertFalse((folder / name).exists())
-        self.assertFalse((folder / (name + ".acgame")).exists())
-        # Um disco inteiro (PVD em 0x8000), o de 2336 e o cru de CD passam.
+        path = self.fn.unpack(self.system, name, lambda *a: None)
+        iso = self.roms / "namco2x6" / name / (name + ".iso")
+        out = iso.read_bytes()
+        self.assertEqual(len(out), len(raw))
+        self.assertEqual(out[16 * 2048:16 * 2048 + 6], b"\x01CD001")
+        self.assertEqual(out[5 * 2048:5 * 2048 + 4], b"0005")
+        self.assertEqual(out[5 * 2048 + 2040:6 * 2048], bytes(8))
+        self.assertFalse(self.fn.damaged_dump(str(iso)))
+        self.assertEqual(list(iso.parent.glob("*.fix")), [])
+        self.assertFalse(disc.exists())
+        self.assertTrue(Path(path).is_file())
+        # Um disco inteiro (PVD em 0x8000), o de 2336 e o cru de CD ficam como estao.
         for label, data in (("plain", b"\0" * 0x8000 + b"\x01CD001" + b"\0" * 4096),
                             ("2336", b"\0" * (16 * 2336 + 8) + b"\x01CD001" + b"\0" * (2336 * 20 - 16 * 2336 - 14)),
                             ("raw", b"\x00" + b"\xff" * 10 + b"\x00" + b"\0" * 4000)):
@@ -3187,8 +3192,6 @@ class NamcoPackTests(unittest.TestCase):
         bad = self.tmp / "dump-bad"
         bad.write_bytes(bytes(raw))
         self.assertTrue(self.fn.damaged_dump(str(bad)))
-        frontend = (SETUP / "gui/fliperos-frontend").read_text()
-        self.assertIn("DISC DUMP IS DAMAGED", frontend)
 
     def test_proverb_offline_is_an_error_not_a_half_game(self):
         self.fn.PROVERB = (self.tmp / "missing.zip").as_uri()

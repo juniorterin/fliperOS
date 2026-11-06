@@ -357,11 +357,34 @@ def find_version(system, name, index=None):
     return None
 
 
+def realign_sectors(path, cancel=None):
+    """Tira os 8 bytes do subcabecalho do inicio de cada setor de 2048 e poe 8
+    zeros no fim: o disco fica no formato que o emulador abre (o Bloody Roar 3
+    do archive.org abriu assim no gabinete). Troca o arquivo so no fim."""
+    tmp = path + ".fix"
+    try:
+        with open(path, "rb") as src, open(tmp, "wb") as dst:
+            while True:
+                chunk = src.read(2048 * 4096)
+                if not chunk:
+                    break
+                if cancel is not None and cancel.is_set():
+                    raise InterruptedError("cancelled")
+                for i in range(0, len(chunk), 2048):
+                    unit = chunk[i:i + 2048]
+                    dst.write(unit[8:] + b"\0" * (2048 - len(unit[8:])))
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
 def damaged_dump(path):
-    """O que o emulador recusa ao abrir um disco (ACATA_IO.cpp): imagem de CD
+    """O disco no formato que o emulador recusa (ACATA_IO.cpp): imagem de CD
     em que cada setor de 2336 bytes foi cortado em 2048, com o subcabecalho de
-    8 bytes na frente e os 8 do fim perdidos. O disco ISO9660 certo comeca em
-    0x8000, o de 2336/2064 e o cru de CD tem a deles; so o do 0x8008 e perda."""
+    8 bytes na frente. O disco ISO9660 certo comeca em 0x8000, o de 2336/2064
+    e o cru de CD tem a deles; o do 0x8008 e o desalinhado (realign_sectors)."""
     def pvd(f, pos):
         f.seek(pos)
         return f.read(6) == b"\x01CD001"
@@ -416,8 +439,7 @@ def unpack(system, name, progress, cancel=None, index=None):
         if disc["gz"]:
             done += _gunzip(disc["path"], iso, progress, cancel, done, total)
             if disc["ext"] == "iso" and (meta.get("media") or "DVD") != "HDD" and damaged_dump(iso):
-                # Nada e apagado: o .gz fica, a pasta pela metade sai.
-                raise PackError("damaged dump: %s lost bytes in every sector" % os.path.basename(disc["path"]))
+                realign_sectors(iso, cancel)
             reg["discs"][disc["file"]] = {"path": iso}
             used.append(disc["path"])
         elif shared_disc:

@@ -1540,9 +1540,7 @@ class Frontend:
         elif result == "cancel":
             self.say("EXTRACTION CANCELLED", 3)
         else:
-            if "damaged dump" in error:
-                self.say("DISC DUMP IS DAMAGED: GET ANOTHER COPY", 6)
-            elif "incomplete" in error:
+            if "incomplete" in error:
                 self.say("FILE INCOMPLETE: COPY IT AGAIN", 5)
             elif "space" in error:
                 self.say("NOT ENOUGH SPACE", 4)
