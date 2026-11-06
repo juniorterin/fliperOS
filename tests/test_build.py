@@ -6636,6 +6636,19 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(text.splitlines(), ['line %d' % i for i in range(480, 500)])
         for name in ('../secret.log', '/etc/passwd', 'secret.log'):
             self.assertEqual(self.request('GET', '/api/log?name=' + name, cookie=cookie)[0], 404, name)
+        # O OpenBOR escreve o log na pasta dele (o 4 e o 3.0, cada um na sua).
+        openbor = Path(self.tmp.name) / 'roms/openbor'
+        own = [openbor / 'Logs/OpenBorLog.txt', openbor / 'v3/Logs/OpenBorLog.txt']
+        try:
+            for path in own:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('Game Selected: ./Paks/udd.pak\nAn Error Occurred\n')
+            logs = json.loads(self.request('GET', '/api/logs', cookie=cookie)[2])['logs']
+            self.assertEqual(logs, ['openbor-3.0-OpenBorLog.txt', 'openbor-OpenBorLog.txt', 'retroarch.log'])
+            text = json.loads(self.request('GET', '/api/log?name=openbor-OpenBorLog.txt', cookie=cookie)[2])['text']
+            self.assertIn('An Error Occurred', text)
+        finally:
+            shutil.rmtree(openbor, ignore_errors=True)
 
     def test_volume_goes_through_the_setup(self):
         cookie = self.login()

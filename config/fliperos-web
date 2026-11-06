@@ -1485,11 +1485,26 @@ def volume():
         return {"percent": None, "muted": False}
 
 
+# Os logs que o programa grava na pasta dele, e nao na saida (que o
+# fliperos-x11-run poe em LOGS): o OpenBOR escreve tudo no Logs/OpenBorLog.txt
+# da pasta em que roda, o 4 em ~/roms/openbor e o 3.0 em ~/roms/openbor/v3
+# (/usr/local/bin/openbor). NOME: o prefixo do nome no painel.
+OWN_LOGS = (("openbor-", "roms/openbor/Logs"), ("openbor-3.0-", "roms/openbor/v3/Logs"))
+
+
 def log_names():
     names = {}
     for path in sorted(glob.glob(os.path.join(LOGS, "*.log"))) + SYSTEM_LOGS:
         if os.path.isfile(path):
             names[os.path.basename(path)] = path
+    try:
+        home = ENV("FLIPEROS_HOME") or pwd.getpwnam(PLAYER).pw_dir
+    except KeyError:
+        return names
+    for prefix, folder in OWN_LOGS:
+        for path in sorted(glob.glob(os.path.join(home, folder, "*.txt"))):
+            if os.path.isfile(path):
+                names[prefix + os.path.basename(path)] = path
     return names
 
 
