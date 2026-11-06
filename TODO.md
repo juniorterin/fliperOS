@@ -22,6 +22,16 @@ Feito e testado só no Docker ou sem olhar a tela; falta ver no CRT:
 - **Conferir no KMS:** um jogo escolhido na interface do MAME (no X era aí o bug da velocidade, do emusync), um jogo de 480i, um jogo que troca de resolução no meio, a pistola de luz e as placas Intel e NVIDIA. Se algum falhar, `groovymame_video=x11` no `fliperos.conf` volta ao X.
 - **Instalações só atualizadas pela rede** ficam no X: o pacote vem no repositório da ISO, que a atualização não traz.
 
+## Todos os emuladores atualizáveis
+
+Pedido de 2026-11-06: cada emulador que vem na imagem chega pelos updates (um pacote do FliperOS, release `packages` + `updates/packages.list`) e tem, no Setup > Emulators & Games, a opção do mais novo do projeto com os nossos patches e a volta ao pacote (`fliperos-emulators edge`, 9b3bdeb).
+- **Flycast:** pacote (update 47) e a opção feita; falta rodar o build do mais novo no gabinete.
+- **RetroArch e Dolphin:** já são pacotes; falta ligar a opção (o Dolphin pela tag estável mais nova, não o master).
+- **GroovyMAME:** virar pacote (o release oficial reempacotado) e a opção de baixar o release mais novo, avisando que o romset muda com a versão.
+- **Supermodel e OpenBOR:** virar pacotes (hoje compilados no chroot da ISO) e a opção de compilar o master.
+- **PCSX2 e PCSX2x6:** virar pacotes (hoje o AppImage fixo na ISO) e a opção de baixar o AppImage mais novo. O PCSX2x6 depois que o trabalho dele assentar.
+- **Gum e kernel:** ainda só chegam com a ISO (o kernel do 0.20 tem o patch 10 com a mesma versão do 0.8.1: precisa de revisão nova).
+
 ## Placas de vídeo
 
 - **Driver da NVIDIA:** o que se mediu numa GTX 980 Ti com o driver 580 (2026-10-26) ainda não entrou no Setup:
