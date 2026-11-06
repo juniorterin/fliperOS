@@ -5218,6 +5218,51 @@ class FrontendDataTests(unittest.TestCase):
         back = src.split('if r == "launch":')[1].split('self.tick(now)')[0]
         self.assertIn('self.marquee_logo((self.category() or {}).get("name", ""), "", 1)', back)
 
+    def test_left_right_moves_only_the_ribbon_until_a_system_is_picked(self):
+        # Esquerda e direita so andam na tira de romlists (na grade tambem): a
+        # lista troca uma vez, parado PICK_WAIT segundos ou com o botao 1, e o
+        # botao 2 volta ao sistema de antes sem ler nada.
+        import types
+        fm = self.frontend_module()
+        loads, moved = [], []
+        fe = types.SimpleNamespace(cats=[{'key': k, 'name': k} for k in 'abcde'], cat=0, pick=0, pick_at=0.0,
+                                   anim={}, ribbon_until=0, overlay=None, letter_mode=None, mode='list',
+                                   cursor=0, rows=[], opened=set(), positions={}, last_ui='old', slide=None,
+                                   commercial=False, repeat={}, input=types.SimpleNamespace(held=lambda a: None))
+        fe.category = lambda: fe.cats[fe.cat]
+        fe.keep_position = fe.load_filter = fe.remember = lambda: None
+        fe.marquee_logo = lambda *a: None
+        fe.rebuild = lambda keep=None: loads.append(fe.cat)
+        fe.move = moved.append
+        for name in ('switch_category', 'cancel_pick', 'pick_category', 'act', 'tick'):
+            setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
+        fe.act('right')
+        fe.mode = 'flow'
+        fe.act('right')
+        fe.act('right')
+        self.assertEqual((fe.cat, fe.pick, fe.cat_pos, loads, fe.slide, moved), (0, 3, 3, [], None, []))
+        self.assertEqual(fe.ribbon_until, float('inf'))
+        fe.mode = 'list'
+        fe.tick(fe.pick_at + fm.PICK_WAIT / 2)
+        self.assertEqual(loads, [])
+        fe.tick(fe.pick_at + fm.PICK_WAIT + 0.01)
+        self.assertEqual((fe.cat, fe.pick, loads, fe.slide[:2]), (3, 0, [3], ('old', 1)))
+        self.assertLess(fe.ribbon_until, float('inf'))
+        # O botao 1 escolhe na hora; para a esquerda, a tela sai pelo outro lado.
+        fe.act('left')
+        fe.act('b1')
+        self.assertEqual((fe.cat, fe.pick, loads, fe.slide[1]), (2, 0, [3, 2], -1))
+        # O botao 2 volta: a tira para no sistema da lista, nada e lido.
+        fe.act('right')
+        fe.act('right')
+        fe.act('b2')
+        self.assertEqual((fe.cat, fe.pick, fe.cat_pos, loads), (2, 0, 2, [3, 2]))
+        # Uma volta inteira na tira: o mesmo sistema, a lista fica.
+        for _ in range(5):
+            fe.act('right')
+        fe.act('b1')
+        self.assertEqual((fe.cat, loads), (2, [3, 2]))
+
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
         # (fliperos-syslogo png NOME ARQUIVO 48 f8f8f2) e feito uma vez e fica em

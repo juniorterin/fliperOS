@@ -2358,7 +2358,9 @@ def draw_ribbon(fe, ui, now):
     tiny.centered(ui, "GAME LIST", T.COMMENT, WW // 2, band_y + 7)
     n = len(fe.cats)
     # A tira desliza ate a romlist nova: pos corre ate fe.cat_pos (o indice
-    # sem dar a volta), e cada quadrado cresce ao passar pelo meio.
+    # sem dar a volta), e cada quadrado cresce ao passar pelo meio. No meio
+    # fica o sistema escolhido na tira (pick passos alem do da lista).
+    pick = getattr(fe, "pick", 0)
     pos = ease(fe, "ribbon", getattr(fe, "cat_pos", fe.cat), fe.abs_now, speed=12.0, reach=3)
     base = math.floor(pos)
     tiles = []
@@ -2366,7 +2368,7 @@ def draw_ribbon(fe, ui, now):
         d = base + k - pos
         if abs(d) > 2.6 or (n < 2 and abs(d) > 0.5):
             continue
-        tiles.append((abs(d), d, (fe.cat + round(base + k - getattr(fe, "cat_pos", fe.cat))) % n))
+        tiles.append((abs(d), d, (fe.cat + pick + round(base + k - getattr(fe, "cat_pos", fe.cat))) % n))
     badges = []
     for dist, d, idx in sorted(tiles, reverse=True):
         c = fe.cats[idx]
@@ -2411,14 +2413,16 @@ def draw_ribbon(fe, ui, now):
     for badge, at in badges:
         ui.blit(badge, at)
     # O nome do sistema ja esta no logotipo do azulejo; so sem logotipo ele vem escrito.
-    c = fe.cats[fe.cat % n]
+    c = fe.cats[(fe.cat + pick) % n]
     count_y = band_y + 84
     if logo_source(c["name"]) is None:
         label = fit(c["name"], WW - 20)
         ui.blit(W.big(label, 1, W.LABEL), ((WW - W.width(label)) // 2, band_y + 80))
         count_y = band_y + 93
-    shown = sum(1 for g, _, extra in fe.rows if g is not None and not fe.fd.group_item(extra))
-    tiny.centered(ui, "%d GAMES" % shown, T.CYAN, WW // 2, count_y)
+    # Os jogos so do sistema ja na lista (o da tira ainda nao foi lido).
+    if not pick:
+        shown = sum(1 for g, _, extra in fe.rows if g is not None and not fe.fd.group_item(extra))
+        tiny.centered(ui, "%d GAMES" % shown, T.CYAN, WW // 2, count_y)
 
 
 # O logotipo escrito de cada sistema (o do Arcadeflow, config/fliperos-syslogo)

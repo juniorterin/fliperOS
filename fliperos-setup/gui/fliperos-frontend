@@ -56,6 +56,9 @@ LRATE0, LRATE1, LSPEEDUP = 3.0, 10.0, 0.8
 # No modo letra cada toque passa uma letra; LETTER_IDLE segundos sem mexer e
 # a lista volta ao normal.
 LETTER_IDLE = 2.0
+# Esquerda e direita so andam na tira de romlists; parado PICK_WAIT segundos
+# num sistema (ou com o botao 1), a lista troca, com a animacao.
+PICK_WAIT = 0.6
 # Um jogo sem video e sem imagem, com o cursor parado nele por este tempo,
 # ganha o scrape sozinho (as informacoes, as imagens e o video, nas pastas de
 # ~/media).
@@ -277,7 +280,9 @@ class Frontend:
         if not self.controls_seen:
             self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}
         self.ribbon_until = 0
-        self.letter = None         # (letra, ate quando aparece)
+        self.pick = 0              # os passos andados na tira, a lista ainda nao trocou
+        self.pick_at = 0.0
+        self.letter = None        # (letra, ate quando aparece)
         self.letter_mode = None
         self.toast = None
         self.repeat = {}           # acao -> proxima repeticao
@@ -592,12 +597,31 @@ class Frontend:
             self.cursor = random.choice(picks)
 
     def switch_category(self, step):
+        """Um sistema para o lado na tira: so os azulejos andam. A lista troca
+        em pick_category (PICK_WAIT segundos parado, ou o botao 1)."""
         if len(self.cats) < 2:
             return
         # A tira das romlists anda de onde estava (cat_pos nao da a volta).
+        now = time.monotonic()
         old = getattr(self, "cat_pos", self.cat)
-        self.anim.setdefault("ribbon", (old, time.monotonic()))
+        self.anim.setdefault("ribbon", (old, now))
         self.cat_pos = old + step
+        self.pick += step
+        self.pick_at = now
+        self.ribbon_until = float("inf")
+
+    def cancel_pick(self):
+        """O botao 2 com a tira andando: ela volta ao sistema da lista."""
+        self.cat_pos = getattr(self, "cat_pos", self.cat) - self.pick
+        self.pick = 0
+        self.ribbon_until = time.monotonic() + 0.4
+
+    def pick_category(self):
+        """O sistema da tira escolhido: a lista troca, com a animacao."""
+        step, self.pick = self.pick, 0
+        self.ribbon_until = time.monotonic() + 0.8
+        if not step % len(self.cats):
+            return                # deu a volta e parou no mesmo
         self.keep_position()
         before = (self.category() or {}).get("name", "")
         self.cat = (self.cat + step) % len(self.cats)
@@ -611,7 +635,6 @@ class Frontend:
         # O jogo onde o cursor parou nesta game list da ultima vez.
         self.rebuild(keep=self.positions.get((self.category() or {}).get("key")))
         self.remember()
-        self.ribbon_until = time.monotonic() + 1.4
 
     def letter_jump(self, step, wrap=True):
         """O cursor no primeiro jogo da letra seguinte (ou anterior)."""
@@ -655,6 +678,19 @@ class Frontend:
             return None
         if self.overlay:
             return self.overlay_act(a)
+        if self.pick:
+            # A tira andando: esquerda e direita seguem nela (tambem na grade),
+            # o botao 1 escolhe o sistema e o 2 volta ao de antes; outro botao
+            # escolhe e faz o que ele faz.
+            if a in ("left", "right"):
+                self.switch_category(1 if a == "right" else -1)
+                return None
+            if a == "b2":
+                self.cancel_pick()
+                return None
+            self.pick_category()
+            if a == "b1":
+                return None
         if self.letter_mode and a in ("up", "down"):
             # No modo letra, cada toque passa uma letra; segurando, repete
             # (tick). Dois segundos sem mexer, volta a lista normal.
@@ -1679,6 +1715,8 @@ class Frontend:
         """As repeticoes segurando, a aceleracao e o modo letra."""
         dt = min(0.1, now - getattr(self, "last_tick", now))
         self.last_tick = now
+        if self.pick and now - self.pick_at >= PICK_WAIT:
+            self.pick_category()
         if self.overlay and self.overlay not in ("filter", "classify", "rename", "more"):
             return
         # O modo letra acaba com LETTER_IDLE segundos sem mexer.
@@ -1788,6 +1826,8 @@ class Frontend:
                 self.generation = self.lib.generation
                 g = self.game()
                 key = (self.category() or {}).get("key")
+                if self.pick:
+                    self.cancel_pick()    # a tira apontaria para outro sistema
                 self.cats = self.lib.categories()
                 self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == key), 0)
                 self.load_filter()
