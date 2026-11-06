@@ -206,12 +206,6 @@ case $name in
       "$iniset" "$ini" Folders Bios "$biosdir"
       if [[ $1 == pcsx2x6 ]]; then
         "$iniset" "$ini" Folders MemoryCards "$savedir"
-        # Video e desempenho de fabrica do fork, com o vsync ligado: o filtro de
-        # textura sem suavizar (filter = 0, do PCSX2 comum) deixava cenarios do
-        # Tekken 5 quadriculados e o proprio emulador avisa que quebra jogos.
-        # So saem os valores que o FliperOS pos; uma escolha da pessoa fica.
-        sed -i -E '/^(filter = 0|linear_present_mode = 0|extrathreads = 3|UseVSyncForTiming = true)$/d' "$ini" 2> /dev/null || true
-        "$iniset" "$ini" EmuCore/GS VsyncEnable true
         # A BIOS da placa do jogo: as duas estao na mesma pasta.
         [[ ! -f $biosdir/$biosfile ]] || "$iniset" "$ini" Filenames BIOS "$biosfile"
         # As pastas por placa de antes (namco246, namco256) viram a unica.

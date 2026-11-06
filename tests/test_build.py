@@ -10317,15 +10317,6 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('Bios = %s/bios/namco2x6\n' % home, ini)
             self.assertIn('MemoryCards = %s/save/namco2x6\n' % home, ini)
             self.assertIn('RecursivePaths = /home/fliperos/roms/namco2x6\n', ini)
-            # Video e desempenho de fabrica do fork (o filtro sem suavizar quebrava
-            # cenarios), com o vsync ligado; uma escolha da pessoa (filter = 2) fica.
-            for gone in ('filter = 0', 'linear_present_mode = 0', 'extrathreads = 3', 'UseVSyncForTiming'):
-                self.assertNotIn(gone, ini, gone)
-            self.assertIn('VsyncEnable = true\n', ini)
-            ini_path.write_text(ini.replace('[EmuCore/GS]\n', '[EmuCore/GS]\nfilter = 2\n'))
-            self.run_x11(['pcsx2x6', 'game.iso'], home=home, extra=extra)
-            self.assertIn('filter = 2\n', ini_path.read_text())
-            ini = ini_path.read_text()
             # Os contadores de teste (FPS, CPU...) que o emulador gravou ao fechar saem.
             ini_path.write_text(ini.replace('[EmuCore/GS]\n', '[EmuCore/GS]\nOsdShowFPS = true\nOsdShowGPU = true\n'))
             self.run_x11(['pcsx2x6', 'game.iso'], home=home, extra=extra)
