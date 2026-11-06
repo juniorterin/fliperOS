@@ -26,8 +26,14 @@ PROVERB = os.environ.get("FLIPEROS_PROVERB_URL",
                          "https://github.com/PS2Homebrew-arcade/proverb/releases/download/nightly/proverb.zip")
 REGISTRY = ".fliperos-namco.json"
 CHUNK = 1 << 20
-DISC = re.compile(r"^(NM\d{5}) (.+?) \((?:DVD|CD)-ROM\)\.(iso|chd)(\.gz)?$", re.I)
-DONGLE = re.compile(r"^(NM\d{5}) ([\w-]+), (Ver\.\S+) (a\d+a)(?: \[(.+?)\])?\.bin(\.gz)?$", re.I)
+NAME = re.compile(r"^(NM\d{5}) (.+)$")
+# "TE51 DVD0B [Ver.5.1] (DVD-ROM).iso.gz", "RRV1-A (CD-ROM).iso.gz", "CBR1-HA (HDD).img.gz"
+DISC_TAIL = re.compile(r"^(?P<label>.+?) \((?P<kind>DVD-ROM|CD-ROM|HDD)\)\.(?P<ext>iso|chd|img)(?P<gz>\.gz)?$", re.I)
+# "TE51, Ver.B4 a026051314505a.bin.gz", "B3900065A, Ver.2.07J.bin.gz", "IDMT1, Ver.D a0260... [Tower].bin.gz"
+DONGLE_TAIL = re.compile(r"^(?P<code>[\w-]+), (?P<ver>Ver\.\S+)(?: (?P<serial>a\d+a))?(?P<tags>(?: \[[^\]]+\])*)"
+                         r"\.bin(?P<gz>\.gz)?$", re.I)
+# Discos que sao ferramenta, nao jogo.
+TOOL_TAGS = ("firmware updater",)
 
 
 def home():
@@ -39,10 +45,40 @@ def slug(text):
 
 
 def disc_code(label):
-    """O codigo que casa o disco com o dongle: a primeira palavra do nome
-    (TE51 de "TE51 DVD0B [Ver.5.1]"); no Soul Calibur III o disco
-    SC31001-NA-DVD0-A casa com o dongle SC31001-NA-A (sem o "-DVD0")."""
-    return re.sub(r"-(?:DVD|CD)\d*[A-Z]?(?=-|$)", "", label.split()[0].upper())
+    """O codigo do disco que casa com o do dongle: a primeira palavra do nome
+    (TE51 de "TE51 DVD0B [Ver.5.1]") sem o "-DVD0"/"-HDD0" (o disco
+    SC31001-NA-DVD0-A e o dongle SC31001-NA-A)."""
+    return re.sub(r"-(?:DVD|CD|HDD)\d*[A-Z]?(?=-|$)", "", label.split()[0].upper())
+
+
+def norm(code):
+    """So letras e numeros: TK8100-1-NA-A (disco) e TK81001-NA-A (dongle) viram o mesmo."""
+    return re.sub(r"[^A-Z0-9]", "", code.upper())
+
+
+def parse_part(file):
+    """(gid, "disc"|"dongle", info) de um nome de arquivo do pacote, ou None
+    (o que nao e disco nem dongle, e os discos de ferramenta)."""
+    m = NAME.match(file)
+    if not m:
+        return None
+    gid, rest = m.group(1).upper(), m.group(2)
+    d = DISC_TAIL.match(rest)
+    if d:
+        label = d.group("label")
+        tags = re.findall(r"\[([^\]]+)\]", label)
+        if any(t.lower() in TOOL_TAGS for t in tags):
+            return None
+        code = disc_code(label)
+        return gid, "disc", {"file": file, "label": label, "code": code, "norm": norm(code), "kind": d.group("kind").upper(),
+                             "gz": bool(d.group("gz")), "ext": d.group("ext").lower()}
+    d = DONGLE_TAIL.match(rest)
+    if d:
+        tags = re.findall(r"\[([^\]]+)\]", d.group("tags") or "")
+        code = d.group("code").upper()
+        return gid, "dongle", {"file": file, "code": code, "norm": norm(code), "ver": d.group("ver"),
+                               "serial": d.group("serial") or "", "tag": ", ".join(tags) or None, "gz": bool(d.group("gz"))}
+    return None
 
 
 def game_index(path=None):
@@ -104,7 +140,7 @@ def roots(system):
 
 def parts_in(folder, depth=2):
     """Os arquivos de disco e de dongle de uma pasta Namco, nela e nas
-    subpastas (ate depth): (caminho, regex-match, e_disco)."""
+    subpastas (ate depth): (caminho, gid, "disc"|"dongle", info)."""
     found = []
     base = os.path.normpath(folder)
     for top, dirs, files in os.walk(base):
@@ -112,13 +148,9 @@ def parts_in(folder, depth=2):
         if top[len(base):].count(os.sep) >= depth:
             dirs[:] = []
         for name in files:
-            m = DISC.match(name)
-            if m:
-                found.append((os.path.join(top, name), m, True))
-                continue
-            m = DONGLE.match(name)
-            if m:
-                found.append((os.path.join(top, name), m, False))
+            part = parse_part(name)
+            if part:
+                found.append((os.path.join(top, name),) + part)
     return found
 
 
@@ -126,35 +158,23 @@ def collect(system):
     """{gid: {"discs": [...], "dongles": [...]}} do que as pastas Namco tem
     (os .gz e os arquivos soltos) e do que o registro diz que ja foi extraido."""
     games = {}
-    for key, folder in roots(system).items():
-        for path, m, is_disc in parts_in(folder):
-            gid = m.group(1).upper()
-            info = games.setdefault(gid, {"discs": [], "dongles": []})
-            name = os.path.basename(path)
-            if is_disc:
-                info["discs"].append({"path": path, "file": name, "label": m.group(2), "code": disc_code(m.group(2)),
-                                      "gz": bool(m.group(4)), "ext": m.group(3).lower()})
-            else:
-                tag = m.group(5)
-                info["dongles"].append({"path": path, "file": name, "code": m.group(2).upper(), "ver": m.group(3),
-                                        "serial": m.group(4), "tag": tag, "gz": bool(m.group(6))})
+
+    def add(gid, kind, info):
+        entry = games.setdefault(gid, {"discs": [], "dongles": []})
+        entry["discs" if kind == "disc" else "dongles"].append(info)
+
+    for folder in roots(system).values():
+        for path, gid, kind, info in parts_in(folder):
+            add(gid, kind, dict(info, path=path))
         reg = read_registry(folder)
-        for file, entry in reg["discs"].items():
-            if os.path.exists(entry["path"]):
-                m = DISC.match(file)
-                if m:
-                    info = games.setdefault(m.group(1).upper(), {"discs": [], "dongles": []})
-                    if not any(d["file"] == file for d in info["discs"]):
-                        info["discs"].append({"path": entry["path"], "file": file, "label": m.group(2),
-                                              "code": disc_code(m.group(2)), "gz": False, "ext": m.group(3).lower()})
-        for file, entry in reg["dongles"].items():
-            if os.path.exists(entry["path"]):
-                m = DONGLE.match(file)
-                if m:
-                    info = games.setdefault(m.group(1).upper(), {"discs": [], "dongles": []})
-                    if not any(d["file"] == file for d in info["dongles"]):
-                        info["dongles"].append({"path": entry["path"], "file": file, "code": m.group(2).upper(),
-                                                "ver": m.group(3), "serial": m.group(4), "tag": m.group(5), "gz": False})
+        for section, want in (("discs", "disc"), ("dongles", "dongle")):
+            for file, entry in reg[section].items():
+                part = parse_part(file)
+                if part and part[1] == want and os.path.exists(entry["path"]):
+                    gid, kind, info = part
+                    have = games.get(gid, {}).get(section, [])
+                    if not any(x["file"] == file for x in have):
+                        add(gid, kind, dict(info, path=entry["path"], gz=False))
     return games
 
 
@@ -164,15 +184,26 @@ def version_name(gid, disc, dongle):
 
 def sort_key(disc, dongle):
     """A versao mais nova primeiro; as de ferramenta ([Live Monitor], [Rebuilt]) por ultimo."""
-    return (0 if dongle["tag"] else 1, disc["code"], disc["label"], dongle["ver"])
+    return (0 if dongle["tag"] else 1, disc["norm"], disc["label"], dongle["ver"])
+
+
+def related(a, b):
+    """Um codigo e o comeco ou o fim do outro (RRV1 e RRV1-A, IN2 e HM-IN2), ou
+    os dois comecam igual por 7 ou mais caracteres (ZNT1001STA e ZNT1001NAA)."""
+    return len(a) >= 3 and len(b) >= 3 and (a.startswith(b) or b.startswith(a) or a.endswith(b) or b.endswith(a)
+                                            or len(os.path.commonprefix([a, b])) >= 7)
 
 
 def combos(info):
-    out = []
-    for disc in info["discs"]:
-        for dongle in info["dongles"]:
-            if disc["code"] == dongle["code"]:
-                out.append((disc, dongle))
+    """As versoes: cada dongle com o disco (ou a imagem de HD) dele. O de
+    mesmo codigo; senao o de codigo parecido; senao, se o jogo so tem um
+    disco, esse. Um dongle sem par fica de fora."""
+    discs, out = info["discs"], []
+    for dongle in info["dongles"]:
+        exact = [d for d in discs if d["norm"] == dongle["norm"]]
+        near = exact or [d for d in discs if related(d["norm"], dongle["norm"])]
+        for disc in near or (discs if len(discs) == 1 else []):
+            out.append((disc, dongle))
     return out
 
 
@@ -202,7 +233,7 @@ def merge(system, rows, index=None):
             cands.setdefault(entry["gid"], []).append((tuple(entry["sort"]), name, None))
     for gid, info in collect(system).items():
         meta = index.get(gid) or {}
-        if meta.get("media") not in (None, "CD", "DVD") or board(meta.get("region")) != system["key"]:
+        if board(meta.get("region")) != system["key"]:
             continue
         for disc, dongle in combos(info):
             name = version_name(gid, disc, dongle)
@@ -258,8 +289,14 @@ def _gunzip(src, dst, progress, cancel, base, total):
                 chunk = gz.read(CHUNK)
                 if not chunk:
                     break
-                out.write(chunk)
+                # Um pedaco todo de zeros nao e gravado (o arquivo fica esparso): as
+                # imagens de HD sao quase todas vazias e nao ocupam o disco inteiro.
+                if chunk.count(0) == len(chunk):
+                    out.seek(len(chunk), os.SEEK_CUR)
+                else:
+                    out.write(chunk)
                 progress(base + raw.tell(), total, os.path.basename(src))
+            out.truncate(out.tell())
         os.replace(tmp, dst)
     except BaseException:
         try:

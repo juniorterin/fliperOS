@@ -2952,6 +2952,7 @@ class NamcoPackTests(unittest.TestCase):
         with zipfile.ZipFile(proverb, "w") as z:
             z.writestr("bin/NM00019/boot.elf", b"ELF" * 100)
             z.writestr("bin/NM00019/title.txt", "Tekken 5")
+            z.writestr("bin/NM00010/boot.elf", b"BG3" * 100)
         self.fn.GAME_INDEX = str(index)
         self.fn.PROVERB = proverb.as_uri()
         os.environ["FLIPEROS_HOME"] = str(self.home)
@@ -3054,6 +3055,69 @@ class NamcoPackTests(unittest.TestCase):
             self.fn.unpack(self.system, name, lambda *a: None)
         self.assertIn("space", str(raised.exception))
         self.assertFalse((folder / name).exists())
+
+    def pack_of(self, folder, names):
+        """Uma pasta de pacote com arquivos .gz vazios de nome real."""
+        import gzip
+        base = self.roms / "namco256" / folder
+        base.mkdir(parents=True, exist_ok=True)
+        for n in names:
+            (base / n).write_bytes(gzip.compress(bytes(2 << 20) + b"x" * 100))
+
+    def versions(self, gid):
+        return {r["Name"]: r for r in self.fn.merge(self.system, []) if r.get("GameId") == gid}
+
+    def test_the_names_of_other_games_pair_a_disc_with_its_dongle(self):
+        # Os padroes do item: nomes de codigo diferentes entre disco e dongle.
+        self.pack_of("others", [
+            # CD: RRV1-A com o dongle RRV1 (comeco do codigo).
+            "NM00001 RRV1-A (CD-ROM).iso.gz", "NM00001 RRV1, Ver.A a025539109879a.bin.gz",
+            "NM00001 RRV1, Ver.B a025531215948a.bin.gz",
+            # Hifens em outro lugar: TK8100-1-NA-DVD0-A e TK81001-NA-A.
+            "NM00033 TK8100-1-NA-DVD0-A (DVD-ROM).iso.gz", "NM00033 TK81001-NA-A, Ver.A10 a026191334761a.bin.gz",
+            # Um disco de ferramenta nao e jogo.
+            "NM00044 T111ACD01 [Firmware Updater] (CD-ROM).iso.gz"])
+        index = self.tmp / "GameIndex.yaml"
+        index.write_text(index.read_text() + "NM00001:\n  name: Ridge Racer V\n  region: System246\n  media: CD\n"
+                         "NM00033:\n  name: Taiko Drum Master 8\n  region: System256\n  media: DVD\n"
+                         "NM00044:\n  name: Taiko Drum Master 11\n  region: System256\n  media: DVD\n")
+        self.assertEqual(len(self.versions("NM00033")), 1)
+        self.assertEqual(len(self.versions("NM00044")), 0)
+        # O Ridge Racer V e da placa 246: aparece na pasta dela.
+        rrv = {r["Name"]: r for r in self.fn.merge({"key": "namco246", "folder": str(self.roms / "namco246")}, [])
+               if r.get("GameId") == "NM00001"}
+        self.assertEqual(len(rrv), 2)
+        self.assertEqual(sorted("CloneOf" in r for r in rrv.values()), [False, True])
+
+    def test_hdd_games_come_with_the_hard_disk_image(self):
+        import gzip
+        # O HD: a imagem (HDD).img.gz e os dongles, mesmo sem serial no nome e sem codigo parecido.
+        self.pack_of("hdd", ["NM00010 M9005793A, Ver.2.04J (HDD).img.gz", "NM00010 B3900065A, Ver.2.07J.bin.gz",
+                             "NM00010 B3900065A, Ver.2.08J.bin.gz"])
+        index = self.tmp / "GameIndex.yaml"
+        index.write_text(index.read_text() + "NM00010:\n  name: Battle Gear 3\n  region: System246\n  media: HDD\n")
+        s246 = {"key": "namco246", "folder": str(self.roms / "namco246")}
+        rows = {r["Name"]: r for r in self.fn.merge(s246, []) if r.get("GameId") == "NM00010"}
+        self.assertEqual(len(rows), 2)
+        name = sorted(rows)[-1]
+        # A imagem e quase toda zeros: o arquivo fica esparso, com o tamanho de verdade.
+        path = self.fn.unpack(s246, name, lambda *a: None)
+        acgame = Path(path).read_text()
+        self.assertIn("media=HDD\n", acgame)
+        self.assertIn("mediasrc=%s.img\n" % name, acgame)
+        self.assertIn("platform=246\n", acgame)
+        img = Path(path).with_suffix("") / (name + ".img")
+        self.assertEqual(img.stat().st_size, (2 << 20) + 100)
+        self.assertEqual(img.read_bytes()[-100:], b"x" * 100)
+        self.assertFalse((self.pack_dir("hdd") / "NM00010 M9005793A, Ver.2.04J (HDD).img.gz").exists())
+        # A imagem e a outra versao: o mesmo HD, ja extraido, por um link.
+        other = [n for n in rows if n != name][0]
+        path2 = self.fn.unpack(s246, other, lambda *a: None)
+        self.assertEqual((Path(path2).with_suffix("") / (other + ".img")).stat().st_size, (2 << 20) + 100)
+        self.assertEqual(len(list((self.home / "save/namco246").glob("NM00010_*.ps2"))), 2)
+
+    def pack_dir(self, folder):
+        return self.roms / "namco256" / folder
 
     def test_proverb_offline_is_an_error_not_a_half_game(self):
         self.fn.PROVERB = (self.tmp / "missing.zip").as_uri()
