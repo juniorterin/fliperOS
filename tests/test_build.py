@@ -5020,7 +5020,8 @@ class FrontendDataTests(unittest.TestCase):
         frontend = types.ModuleType(loader.name)
         frontend.__file__ = loader.path
         loader.exec_module(frontend)
-        fe = types.SimpleNamespace(fd=fd, show_clones=True, opened=set(), cursor=0, mode='flow',
+        fe = types.SimpleNamespace(fd=fd, show_clones=True, opened=set(), cursor=0, mode='flow', rows=[],
+                                   groups_open=set(), lib=types.SimpleNamespace(recent=lambda games: []),
                                    filtered=lambda: games)
         rebuild = frontend.Frontend.rebuild
         fe.rebuild = lambda keep=None: rebuild(fe, keep)
@@ -5035,6 +5036,40 @@ class FrontendDataTests(unittest.TestCase):
         rebuild(fe, keep='sengoku2')
         self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'sengoku2')
         self.assertEqual([fd.first_letter(g) for g in games[:1] + [{'Name': '1944', 'Title': '1944'}]], ['S', '#'])
+
+    def test_recent_and_favourites_groups_on_top_of_the_list(self):
+        # No alto da lista, RECENT e FAVOURITES: um cabecalho (sem jogo) que
+        # abre e fecha, e so aparece quando tem jogos.
+        import types
+        fm = self.frontend_module()
+        games = [{'Name': n, 'Title': n.upper(), '_system': {'key': 'mame'}} for n in ('aa', 'bb', 'cc')]
+        games[2]['Favourite'] = '1'
+        recent = [games[1], games[0]]
+        fe = types.SimpleNamespace(fd=self.fd, show_clones=True, opened=set(), cursor=0, mode='list', rows=[],
+                                   groups_open=set(), lib=types.SimpleNamespace(recent=lambda g: recent),
+                                   filtered=lambda: games)
+        rebuild = fm.Frontend.rebuild
+        rebuild(fe)
+        heads = [(g, extra) for g, _, extra in fe.rows if g is None]
+        self.assertEqual(heads, [(None, ('group', 'recent', 2)), (None, ('group', 'fav', 1))])
+        self.assertEqual(len(fe.rows), 2 + 3)
+        fe.groups_open = {'recent'}
+        rebuild(fe)
+        self.assertEqual([g['Name'] if g else '-' for g, _, _ in fe.rows], ['-', 'bb', 'aa', '-', 'aa', 'bb', 'cc'])
+        self.assertTrue(self.fd.group_item(fe.rows[1][2]))
+        # O cursor num jogo do grupo volta a ele, nao a linha dele na lista.
+        fe.cursor = 2
+        rebuild(fe, keep='aa')
+        self.assertEqual(fe.cursor, 2)
+        # Sem recentes nem favoritos, nenhum cabecalho; na grade tambem nao.
+        recent.clear()
+        games[2].pop('Favourite')
+        rebuild(fe)
+        self.assertEqual([g['Name'] for g, _, _ in fe.rows], ['aa', 'bb', 'cc'])
+        games[2]['Favourite'] = '1'
+        fe.mode = 'flow'
+        rebuild(fe)
+        self.assertEqual([g['Name'] for g, _, _ in fe.rows], ['aa', 'bb', 'cc'])
 
     @staticmethod
     def frontend_module():

@@ -250,6 +250,7 @@ class Frontend:
         self.ctrl_by = dict(cfg.get("control_filters") or {})
         self.load_filter()
         self.opened = set()        # os jogos pai com os clones abertos (na lista)
+        self.groups_open = set()   # RECENT / FAVOURITES abertos no alto da lista
         # Tab > Frontend options > Show clones (gravado no frontend.json).
         self.show_clones = cfg.get("clones", True) is not False
         # Tab > Frontend options: o atalho que fecha o jogo (a tecla, como
@@ -436,6 +437,9 @@ class Frontend:
         debaixo do pai (abertos ou nao); na tela cheia e na grade, sempre logo
         depois dele (com o selo CLONE)."""
         games = self.filtered()
+        # A linha onde o cursor esta agora: se for um jogo dentro de um grupo,
+        # o cursor volta a ele la (e nao a linha dele na lista).
+        old = self.rows[self.cursor][2] if self.rows and self.cursor < len(self.rows) else None
         rows = []
         for game, clones in self.fd.tree(games):
             if not self.show_clones:
@@ -450,6 +454,18 @@ class Frontend:
             else:
                 rows.append((game, 0, clones))
                 rows.extend((c, 1, game) for c in clones or ())
+        # Na lista, no alto, os grupos RECENT (os ultimos jogados) e FAVOURITES:
+        # um cabecalho que abre e fecha, e os jogos dele quando aberto.
+        if self.mode == "list":
+            head = []
+            for key, _ in self.fd.GROUPS:
+                items = (self.lib.recent(games) if key == "recent"
+                         else [g for g in games if g.get("Favourite") == "1"])
+                if items:
+                    head.append((None, 0, ("group", key, len(items))))
+                    if key in self.groups_open:
+                        head.extend((g, 0, ("in", key)) for g in items)
+            rows = head + rows
         # Na lista, no alto, os jogos que outros gabinetes jogam agora (o link):
         # uma linha por jogo, a que abre o menu com o JOIN.
         link = getattr(self, "link", None)
@@ -467,9 +483,10 @@ class Frontend:
             # posicao dos clones): a linha dele mesmo, nao a "MAIN SET" nem a
             # que repete o jogo no alto.
             found = [i for i, (g, _, extra) in enumerate(rows)
-                     if g["Name"] == keep and extra != "main" and extra != "elsewhere"]
+                     if g is not None and g["Name"] == keep and extra != "main" and extra != "elsewhere"
+                     and (not self.fd.group_item(extra) or extra == old)]
             if found:
-                self.cursor = min(found, key=lambda i: (abs(i - self.cursor) if rows[i][1] else -1))
+                self.cursor = min(found, key=lambda i: (rows[i][2] != old, abs(i - self.cursor) if rows[i][1] else -1))
             else:
                 # Um clone com o pai fechado na lista: o pai abre e ele aparece.
                 g = next((g for g in games if g["Name"] == keep), None)
@@ -568,7 +585,8 @@ class Frontend:
         if self.attract_next is not None and now < self.attract_next:
             return
         self.attract_next = now + ATTRACT_STEP
-        picks = [i for i, (_, level, _) in enumerate(self.rows) if not level and i != self.cursor]
+        picks = [i for i, (g, level, extra) in enumerate(self.rows)
+                 if not level and g is not None and not self.fd.group_item(extra) and i != self.cursor]
         if picks:
             self.overlay = None
             self.cursor = random.choice(picks)
@@ -600,13 +618,16 @@ class Frontend:
         if not self.rows:
             return
         letters = []
-        for i, (g, level, _) in enumerate(self.rows):
-            if level:
+        for i, (g, level, extra) in enumerate(self.rows):
+            if level or g is None or self.fd.group_item(extra):
                 continue
             c = self.fd.first_letter(g)
             if not letters or letters[-1][0] != c:
                 letters.append((c, i))
-        here = self.fd.first_letter(self.rows[self.cursor][0])
+        if not letters:
+            return
+        here = self.rows[self.cursor][0]
+        here = self.fd.first_letter(here) if here is not None else None
         idx = next((k for k, (c, _) in enumerate(letters) if c == here), 0)
         # Do Z volta ao comeco (segurando, para nele).
         idx = (idx + step) % len(letters) if wrap else max(0, min(len(letters) - 1, idx + step))
@@ -668,6 +689,13 @@ class Frontend:
         elif a == "b1":
             g, level, clones = self.rows[self.cursor] if self.rows else (None, 0, None)
             if g is None:
+                if self.fd.group_head(clones):
+                    # Um cabecalho (RECENT, FAVOURITES): abre ou fecha o grupo.
+                    key = clones[1]
+                    self.groups_open ^= {key}
+                    self.rebuild()
+                    if key in self.groups_open:
+                        self.cursor += 1
                 return None
             if self.mode == "list" and level == 0 and isinstance(clones, list) and clones:
                 if g["Name"] in self.opened:
@@ -687,7 +715,14 @@ class Frontend:
             # senao, pergunta se sai. No modo comercial (quiosque) o cliente
             # nao fecha o frontend: so o Tab > Frontend options o desliga.
             g, level, parent = self.rows[self.cursor] if self.rows else (None, 0, None)
-            if level:
+            if self.fd.group_item(parent):
+                # Num jogo de RECENT ou FAVOURITES: fecha o grupo e volta ao cabecalho.
+                self.groups_open.discard(parent[1])
+                self.rebuild()
+                self.cursor = next((i for i, (g0, _, e) in enumerate(self.rows)
+                                    if g0 is None and e[1] == parent[1]), 0)
+                self.closed_group = time.monotonic()
+            elif level:
                 owner = g if parent == "main" else parent
                 self.opened.discard(owner["Name"])
                 self.rebuild(keep=owner["Name"])
@@ -722,6 +757,8 @@ class Frontend:
         if g:
             on = self.lib.set_favourite(g, g.get("Favourite") != "1")
             self.say("ADDED TO FAVOURITES" if on else "REMOVED FROM FAVOURITES")
+            if self.mode == "list":
+                self.rebuild(keep=g["Name"])      # o grupo FAVOURITES acompanha
 
     def say(self, text, seconds=1.6):
         self.toast = (text, time.monotonic() + seconds)
@@ -1475,6 +1512,7 @@ class Frontend:
         played = time.monotonic() - started
         if played > 10:
             self.lib.played(g, played)
+            self.rebuild(keep=g["Name"])          # o grupo RECENT acompanha
         self.harvest.paused = False
         self.open()
         self.input.open()
@@ -1750,6 +1788,8 @@ class Frontend:
         for k in order:
             i = self.cursor + k
             if 0 <= i < len(self.rows):
+                if self.rows[i][0] is None:
+                    continue
                 for key in feview.wanted(self, self.rows[i][0]):
                     if key not in self.media and key not in self.ready and key not in keys:
                         keys.append(key)

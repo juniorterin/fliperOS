@@ -836,6 +836,9 @@ def draw_list(fe, ui, now):
         game, level, extra = fe.rows[i]
         y = y0 + (i - fe.top) * 14 + (sep if shown and extra != "elsewhere" else 0)
         on = i == fe.cursor
+        if game is None:
+            group_header(fe, ui, (lx, y, lw, 12), extra, on, now)
+            continue
         # Os clones do jogo pai; "elsewhere" (um jogo que outro gabinete joga
         # agora, no alto da lista) nao e uma lista deles.
         clones = extra if isinstance(extra, list) else None
@@ -854,17 +857,14 @@ def draw_list(fe, ui, now):
             room = None
             lmark = link_mark(fe, game)
             x = lx + 14 if clones else lx
+            if fe.fd.group_item(extra):
+                # Um jogo dentro de RECENT ou FAVOURITES: recuado, com um trilho
+                # na cor do grupo.
+                x = lx + 12
+                pygame.draw.line(ui, T.LINE, (lx + 4, y - 1), (lx + 4, y + 13))
             if clones:
                 # O [+] do jogo pai, um pouco transparente (aberto, menos).
-                opened = game["Name"] in fe.opened
-                mark = pygame.Surface((10, 10), pygame.SRCALPHA)
-                mark.fill(T.BG_DEEP)
-                pygame.draw.rect(mark, T.PINK if opened else T.COMMENT, (0, 0, 10, 10), 1)
-                mark.fill(T.PINK if opened else T.COMMENT, (2, 4, 6, 2))
-                if not opened:
-                    mark.fill(T.COMMENT, (4, 2, 2, 6))
-                mark.set_alpha(190 if opened else 120)
-                ui.blit(mark, (lx, y + 1))
+                expand_mark(ui, lx, y + 1, game["Name"] in fe.opened)
             if lmark is not None:
                 # O link: o globo (ou, no net play, os dois controles) ao lado
                 # do titulo, apagado ou aceso.
@@ -874,7 +874,7 @@ def draw_list(fe, ui, now):
                     globe_icon(ui, x + 5, y + 6, 5, lmark)
                 x += 14
             label = fe.fd.short_title(game)
-            color = T.FG if game["Name"] in fe.opened else T.COMMENT
+            color = T.FG if game["Name"] in fe.opened or fe.fd.group_item(extra) else T.COMMENT
         else:
             room = None
             x = lx + 26
@@ -907,6 +907,15 @@ def draw_list(fe, ui, now):
     game = fe.game()
     y0 = py
     W.block(ui, (px, y0, pw, sh), T.BG_DEEP, T.PURPLE)
+    if game is None:
+        # Num cabecalho de grupo: so a moldura e o que abrir faz.
+        pygame.draw.rect(ui, T.PINK, (px, y0, pw, sh), 2)
+        head = fe.rows[fe.cursor][2] if fe.rows else None
+        if fe.fd.group_head(head):
+            opened = head[1] in fe.groups_open
+            tiny.centered(ui, "%d GAMES" % head[2], T.FG, px + pw // 2, y0 + sh // 2 - 8)
+            tiny.centered(ui, "1: CLOSE" if opened else "1: OPEN", T.COMMENT, px + pw // 2, y0 + sh // 2 + 4)
+        return
     shot = picture(fe, game, pw - 4, sh - 4)
     if shot:
         blit_center(ui, shot, px + 2, y0 + 2, pw - 4, sh - 4)
@@ -946,27 +955,65 @@ def draw_list(fe, ui, now):
         if party:
             cabinet_row(ui, px + 22, y + 3, party["used"], party["max"] or 1, w=5, h=8, gap=1)
         y += 18
-    played = game.get("PlayedCount")
-    chips = []
-    if game.get("Favourite") == "1":
-        chips.append(("* FAV", T.YELLOW))
-    if played:
-        chips.append(("PLAYED %sX" % played, T.COMMENT))
-    x = px
-    for text, color in chips:
-        w = tiny.width(text) + 8
-        W.block(ui, (x, y, w, 10), T.BG_DEEP, None)
-        pygame.draw.rect(ui, T.LINE, (x, y, w, 10), 1)
-        tiny.text(ui, text, color, x + 4, y + 3)
-        x += w + 4
-    if chips:
-        y += 14
+    y += play_chips(ui, game, px, y)
     # O modo comercial: o indicador debaixo dos icones dos comandos; fora
     # dele, a sinopse do jogo rolando.
     if fe.commercial:
         coin_box(fe, ui, px, min(y + 2, HH - COIN_H - 6), now)
     else:
         draw_synopsis(fe, ui, game, (px, y, pw, HH - 6 - y), now)
+
+
+def expand_mark(ui, x, y, opened):
+    """O [+] (aberto, o [-]) do jogo pai com clones e do grupo RECENT: um
+    pouco transparente (aberto, menos)."""
+    mark = pygame.Surface((10, 10), pygame.SRCALPHA)
+    mark.fill(T.BG_DEEP)
+    pygame.draw.rect(mark, T.PINK if opened else T.COMMENT, (0, 0, 10, 10), 1)
+    mark.fill(T.PINK if opened else T.COMMENT, (2, 4, 6, 2))
+    if not opened:
+        mark.fill(T.COMMENT, (4, 2, 2, 6))
+    mark.set_alpha(190 if opened else 120)
+    ui.blit(mark, (x, y))
+
+
+def group_header(fe, ui, rect, head, on, now):
+    """O cabecalho de RECENT (com o [+] de sempre) ou FAVOURITES (com a
+    estrela) no alto da lista, como a linha de um jogo pai: o nome, e quantos
+    jogos tem na ponta direita."""
+    lx, y, lw, _ = rect
+    key, count = head[1], head[2]
+    opened = key in fe.groups_open
+    x = lx + 14
+    color = T.FG if opened else T.COMMENT
+    if on:
+        tile_frame(ui, (x - 4, y, lx + lw - x + 4, 12), True, now)
+        pygame.draw.rect(ui, T.PINK, (x - 4, y, lx + lw - x + 4, 12), 1)
+        color = T.FG
+    if key == "fav":
+        star(ui, lx + 5, y + 6, T.PINK if opened else T.COMMENT, 4)
+    else:
+        expand_mark(ui, lx, y + 1, opened)
+    W.text(ui, dict(fe.fd.GROUPS)[key], color, x, y + 2)
+    W.text(ui, str(count), color, lx + lw - 6, y + 2, right=True)
+
+
+def play_chips(ui, game, x, y):
+    """Os selinhos do jogo: * FAV e o contador de partidas (PLAYED nX, do
+    NOME.stat). Devolve a altura que usou (0 sem nenhum)."""
+    played = game.get("PlayedCount")
+    chips = []
+    if game.get("Favourite") == "1":
+        chips.append(("* FAV", T.YELLOW))
+    if played:
+        chips.append(("PLAYED %sX" % played, T.COMMENT))
+    for text, color in chips:
+        w = tiny.width(text) + 8
+        W.block(ui, (x, y, w, 10), T.BG_DEEP, None)
+        pygame.draw.rect(ui, T.LINE, (x, y, w, 10), 1)
+        tiny.text(ui, text, color, x + 4, y + 3)
+        x += w + 4
+    return 14 if chips else 0
 
 
 def list_info_vertical(fe, ui, game, box, now):
@@ -999,10 +1046,13 @@ def list_info_vertical(fe, ui, game, box, now):
         if party:
             cabinet_row(ui, x + 22, y + 2, party["used"], party["max"] or 1, w=5, h=8, gap=1)
         y += 14
+    y += play_chips(ui, game, x, y + 2)
     if fe.commercial:
         # No meio do espaco que sobra embaixo dos icones.
         coin_box(fe, ui, x + (w - COIN_W) // 2, y + max(0, (bottom - y - COIN_H) // 2), now)
     else:
+        # A sinopse comeca com uma folga debaixo dos icones.
+        y += 6
         draw_synopsis(fe, ui, game, (x, y, w, bottom - y), now)
 
 
@@ -2345,7 +2395,8 @@ def draw_ribbon(fe, ui, now):
         label = fit(c["name"], WW - 20)
         ui.blit(W.big(label, 1, W.LABEL), ((WW - W.width(label)) // 2, band_y + 80))
         count_y = band_y + 93
-    tiny.centered(ui, "%d GAMES" % len(fe.rows), T.CYAN, WW // 2, count_y)
+    shown = sum(1 for g, _, extra in fe.rows if g is not None and not fe.fd.group_item(extra))
+    tiny.centered(ui, "%d GAMES" % shown, T.CYAN, WW // 2, count_y)
 
 
 # O logotipo escrito de cada sistema (o do Arcadeflow, config/fliperos-syslogo)

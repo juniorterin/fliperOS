@@ -244,6 +244,21 @@ def apply_control(games, kind):
 FAVOURITES = {"name": "Favourites", "rules": [{"field": "Favourite", "op": "equals", "what": "1"}],
               "sort_by": "", "reverse": False, "limit": 0}
 
+# Os grupos do inicio da lista (modo lista): cabecalhos que abrem e fecham,
+# RECENT (os ultimos jogados) e FAVOURITES. Na lista de linhas (jogo, nivel,
+# extra), o cabecalho e (None, 0, ("group", chave, quantos)) e cada jogo dentro
+# de um grupo aberto e (jogo, 0, ("in", chave)).
+GROUPS = (("recent", "RECENT"), ("fav", "FAVOURITES"))
+RECENT_COUNT = 10
+
+
+def group_head(extra):
+    return isinstance(extra, tuple) and extra[:1] == ("group",)
+
+
+def group_item(extra):
+    return isinstance(extra, tuple) and extra[:1] == ("in",)
+
 
 # ── A biblioteca ───────────────────────────────────────────────────
 
@@ -276,6 +291,23 @@ class Library:
             return web.favourite_set(self.systems)
         except OSError:
             return set()
+
+    def recent(self, games, count=RECENT_COUNT):
+        """Os count jogos de games jogados por ultimo, do mais novo: o NOME.stat
+        de cada um (stats_folder) e regravado a cada partida, e a data dele diz
+        quando foi."""
+        stamps = {}
+        for system in {s["key"]: s for s in (g["_system"] for g in games)}.values():
+            try:
+                with os.scandir(web.stats_folder(system)) as entries:
+                    for e in entries:
+                        if e.name.endswith(".stat"):
+                            stamps[(system["key"], e.name[:-5])] = e.stat().st_mtime
+            except OSError:
+                continue
+        seen = [g for g in games if (g["_system"]["key"], g["Name"]) in stamps]
+        seen.sort(key=lambda g: -stamps[(g["_system"]["key"], g["Name"])])
+        return seen[:count]
 
     def games(self, category):
         """Os jogos da categoria, com o que a pessoa mudou e a pasta de cada um."""
