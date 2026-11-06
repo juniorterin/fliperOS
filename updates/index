@@ -44,3 +44,4 @@
 41	00c4d3b0feb416b4e0828d67aa960c19124ecbb1	4f4bc2afe083f59d740c3f2c424c9bc5163d1d959e132049bba9be7f703eeb01	no	GroovyMAME in KMS when opened from the frontend
 42	c0d446ded5b512709132da4e672a45cf24759364	bf8716a10dc17456b75dc4affd3e308135f513545c03cebf1c0c316eff43af56	no	Packages from the latest ISO over the network: Attract-Mode Plus fliperos4, GroovyMAME KMS SDL
 43	61b7f8a78913836f7194320434f97e81cc1f0ff2	2cd86c5545805d54beca752d39443ac70694f93b50054a9579e68290d07dc8fc	no	RetroArch updated over the network, Vulkan with CRT mode switching on amdgpu
+44	b2eda52a6670d2a1f0fc2a64b1ecae073bb69a0b	403c916bbdfeb90d03aca0aac358988f205d7071f6556f16e2fa0ea1fb549af0	no	Namco System 246/256 games (PCSX2x6), BIOS download from RetroBIOS, Dolphin as a package
