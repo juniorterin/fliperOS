@@ -3083,8 +3083,8 @@ class NamcoPackTests(unittest.TestCase):
                          "NM00044:\n  name: Taiko Drum Master 11\n  region: System256\n  media: DVD\n")
         self.assertEqual(len(self.versions("NM00033")), 1)
         self.assertEqual(len(self.versions("NM00044")), 0)
-        # O Ridge Racer V e da placa 246: aparece na pasta dela.
-        rrv = {r["Name"]: r for r in self.fn.merge({"key": "namco246", "folder": str(self.roms / "namco246")}, [])
+        # O Ridge Racer V e da placa 246, mas aparece onde a pessoa o pos (namco256).
+        rrv = {r["Name"]: r for r in self.fn.merge(self.system, [])
                if r.get("GameId") == "NM00001"}
         self.assertEqual(len(rrv), 2)
         self.assertEqual(sorted("CloneOf" in r for r in rrv.values()), [False, True])
@@ -3096,7 +3096,7 @@ class NamcoPackTests(unittest.TestCase):
                              "NM00010 B3900065A, Ver.2.08J.bin.gz"])
         index = self.tmp / "GameIndex.yaml"
         index.write_text(index.read_text() + "NM00010:\n  name: Battle Gear 3\n  region: System246\n  media: HDD\n")
-        s246 = {"key": "namco246", "folder": str(self.roms / "namco246")}
+        s246 = self.system      # a pasta namco256: o jogo e listado onde a pessoa o pos, mesmo sendo da placa 246
         rows = {r["Name"]: r for r in self.fn.merge(s246, []) if r.get("GameId") == "NM00010"}
         self.assertEqual(len(rows), 2)
         name = sorted(rows)[-1]
@@ -3118,6 +3118,30 @@ class NamcoPackTests(unittest.TestCase):
 
     def pack_dir(self, folder):
         return self.roms / "namco256" / folder
+
+    def test_a_246_game_in_the_256_folder_is_listed_there_and_keeps_its_board(self):
+        # O Soul Calibur II (System 246) numa pasta namco256: lista nela (o sistema
+        # namco246 vazio nao aparece no frontend); a BIOS e o dongle sao da 246.
+        self.pack_of("sc2", ["NM00007 SC21 DVD0 (DVD-ROM).iso.gz", "NM00007 SC21, Ver.A10 a025781148773a.bin.gz"])
+        index = self.tmp / "GameIndex.yaml"
+        index.write_text(index.read_text() + "NM00007:\n  name: Soul Calibur II\n  region: System246\n  media: DVD\n")
+        proverb = self.tmp / "proverb.zip"
+        import zipfile
+        with zipfile.ZipFile(proverb, "a") as z:
+            z.writestr("bin/NM00007/boot.elf", b"SC2" * 100)
+        rows = self.versions("NM00007")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(self.fn.merge({"key": "namco246", "folder": str(self.roms / "namco246")}, []), [])
+        name = next(iter(rows))
+        path = self.fn.unpack(self.system, name, lambda *a: None)
+        self.assertEqual(os.path.dirname(path), str(self.roms / "namco256"))
+        self.assertIn("platform=246\n", Path(path).read_text())
+        self.assertTrue(list((self.home / "save/namco246").glob("NM00007_*.ps2")))
+        self.assertFalse((self.home / "save/namco256").exists())
+        # A BIOS e os cartoes o fliperos-x11-run escolhe pela linha platform=.
+        launcher = (ROOT / "config/fliperos-x11-run").read_text()
+        self.assertIn('case $(acval platform "$2") in', launcher)
+        self.assertIn('biosdir="$HOME/bios/$board" savedir="$HOME/save/$board"', launcher)
 
     def test_proverb_offline_is_an_error_not_a_half_game(self):
         self.fn.PROVERB = (self.tmp / "missing.zip").as_uri()

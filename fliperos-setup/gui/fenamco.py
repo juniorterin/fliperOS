@@ -102,9 +102,17 @@ def game_index(path=None):
     return out
 
 
+def platform_of(region):
+    """A linha platform= do .acgame pela regiao do GameIndex: 246, 256 ou super256."""
+    region = (region or "").upper()
+    if "SUPER256" in region:
+        return "super256"
+    return "246" if "246" in region else "256"
+
+
 def board(region):
-    """O sistema (pasta de ~/roms) da placa que a regiao do GameIndex diz."""
-    return "namco246" if (region or "").strip() == "System246" else "namco256"
+    """A placa (~/save/PLACA, ~/bios/PLACA) que a regiao do GameIndex diz."""
+    return "namco246" if platform_of(region) == "246" else "namco256"
 
 
 def registry_path(folder):
@@ -163,7 +171,9 @@ def collect(system):
         entry = games.setdefault(gid, {"discs": [], "dongles": []})
         entry["discs" if kind == "disc" else "dongles"].append(info)
 
-    for folder in roots(system).values():
+    # So a pasta deste sistema: o jogo de um pacote e listado onde a pessoa o
+    # pos, seja qual for a placa dele.
+    for folder in (system["folder"],):
         for path, gid, kind, info in parts_in(folder):
             add(gid, kind, dict(info, path=path))
         reg = read_registry(folder)
@@ -219,22 +229,13 @@ def merge(system, rows, index=None):
     if system.get("key") not in KEYS:
         return rows
     index = index if index is not None else game_index()
-    mine = roots(system)
-    mine_folder = os.path.normpath(system["folder"])
-    registries = {k: read_registry(f) for k, f in mine.items()}
-    installed = {}
-    for key, reg in registries.items():
-        for name, entry in reg["games"].items():
-            installed[name] = dict(entry, board=key)
+    installed = dict(read_registry(system["folder"])["games"])
     by_name = {r["Name"]: r for r in rows}
     cands = {}      # gid -> [(sortkey, Name, packed-info or None)]
     for name, entry in installed.items():
-        if entry["board"] == system["key"] and name in by_name:
+        if name in by_name:
             cands.setdefault(entry["gid"], []).append((tuple(entry["sort"]), name, None))
     for gid, info in collect(system).items():
-        meta = index.get(gid) or {}
-        if board(meta.get("region")) != system["key"]:
-            continue
         for disc, dongle in combos(info):
             name = version_name(gid, disc, dongle)
             if name in installed and name in by_name:
@@ -361,7 +362,7 @@ def unpack(system, name, progress, cancel=None, index=None):
     gid, disc, dongle = found
     meta = index.get(gid) or {}
     plat = board(meta.get("region"))
-    folder = roots(system)[plat]
+    folder = os.path.normpath(system["folder"])      # onde a pessoa pos o pacote
     save = os.path.join(home(), "save", plat)
     reg = read_registry(folder)
     title = title_of(gid, index)
@@ -412,7 +413,7 @@ def unpack(system, name, progress, cancel=None, index=None):
         label = "%s, %s%s" % (disc["label"], dongle["ver"], " [%s]" % dongle["tag"] if dongle["tag"] else "")
         with open(acgame + ".part", "w", encoding="utf-8", newline="\n") as f:
             f.write("[game]\nname=%s\ngameid=%s\nplatform=%s\n\n[data]\nsubdir=%s\nelf=boot.elf\ndongle=%s\n"
-                    "mediasrc=%s\nmedia=%s\n" % (title, gid, "256" if plat == "namco256" else "246", name,
+                    "mediasrc=%s\nmedia=%s\n" % (title, gid, platform_of(meta.get("region")), name,
                                                    os.path.basename(ps2), os.path.basename(iso), meta.get("media") or "DVD"))
         os.replace(acgame + ".part", acgame)
         reg["games"][name] = {"gid": gid, "label": label, "sort": list(sort_key(disc, dongle))}

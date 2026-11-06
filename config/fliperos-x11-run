@@ -147,17 +147,26 @@ case $name in
     if [[ $1 == pcsx2x6 ]]; then
       # Uma pasta de BIOS por placa, como em ~/roms: a do jogo que abre (sem
       # jogo, a da 246).
-      datadir="$HOME/.config/PCSX2x6" biosdir="$HOME/bios/namco246" gamesdir=/home/fliperos/roms/namco246
-      savedir="$HOME/save/namco246"
-      if [[ " ${*:2} " == */namco256/* ]]; then
-        biosdir="$HOME/bios/namco256" savedir="$HOME/save/namco256"
+      datadir="$HOME/.config/PCSX2x6" gamesdir=/home/fliperos/roms/namco246
+      # A linha de um .acgame (gameid, subdir, platform...).
+      acval() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$2" | head -n 1 | tr -d '\r'; }
+      # A placa e a que o .acgame diz (platform=), nao a pasta onde ele esta:
+      # o jogo de um pacote fica na pasta onde a pessoa o pos. Sem a linha,
+      # a pasta (namco256) ou, sem jogo, a 246.
+      board=namco246
+      [[ " ${*:2} " == */namco256/* ]] && board=namco256
+      if [[ ${2:-} == *.acgame && -f $2 ]]; then
+        case $(acval platform "$2") in
+          256 | super256) board=namco256 ;;
+          246) board=namco246 ;;
+        esac
       fi
+      biosdir="$HOME/bios/$board" savedir="$HOME/save/$board"
       # A memoria do jogo (32 KB) o fork grava em sram.bin dentro da pasta do
       # jogo (linha sram= do .acgame): ela vai para ~/nvram/<placa>/<gameid>.bin
       # e o sram.bin vira link para la. Um sram.bin que ja existe de verdade
       # vai para la antes (sem sobrescrever).
       if [[ ${2:-} == *.acgame && -f $2 ]]; then
-        acval() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$2" | head -n 1 | tr -d '\r'; }
         gid=$(acval gameid "$2") sub=$(acval subdir "$2") sram=$(acval sram "$2")
         if [[ -n $gid ]]; then
           nvdir="${FLIPEROS_NVRAM:-$HOME/nvram}/${savedir##*/}"
