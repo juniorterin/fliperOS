@@ -14530,6 +14530,89 @@ class EmulatorsMenuTests(unittest.TestCase):
         return subprocess.run(['bash', str(ROOT / 'config' / script), *args], capture_output=True, text=True,
                               env=dict(os.environ, **(env or {})), timeout=120)
 
+    def edge_rig(self, tmp, patch_fits=True):
+        """Um Flycast de pacote num root falso, a receita com PKG_UPSTREAM num
+        repositorio local, e o dpkg-divert/dpkg-query/apt-get de mentira (o
+        divert move os arquivos dentro do root falso)."""
+        root, recipes, bin_dir = tmp / 'root', tmp / 'recipes', tmp / 'bin'
+        for d in (root / 'usr/local/bin', recipes, bin_dir):
+            d.mkdir(parents=True)
+        (root / 'usr/local/bin/flycast').write_text('package\n')
+        upstream = tmp / 'upstream'
+        git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@t']
+        subprocess.run([*git, 'init', '-q', str(upstream)], check=True)
+        subprocess.run([*git, '-C', str(upstream), 'commit', '-q', '--allow-empty', '-m', 'a'], check=True)
+        head = subprocess.run(['git', '-C', str(upstream), 'rev-parse', 'HEAD'], capture_output=True,
+                              text=True).stdout.strip()
+        body = ('echo "error: patch failed: core/x.cpp:1" >&2; return 1' if not patch_fits else
+                'mkdir -p "$STAGING/usr/local/bin" && echo "edge $FLYCAST_COMMIT" > "$STAGING/usr/local/bin/flycast"'
+                ' && chmod 755 "$STAGING/usr/local/bin/flycast"')
+        (recipes / 'fliperos-flycast.sh').write_text(
+            'PKG_UPSTREAM="%s"\nPKG_COMMIT_VAR="FLYCAST_COMMIT"\nFLYCAST_COMMIT="0"\nPKG_BUILD_DEPS="cmake"\n'
+            'pkg_build() {\n  %s\n}\n' % (upstream, body))
+        (recipes / 'fliperos-retroarch.sh').write_text('PKG_NAME="fliperos-retroarch"\n')
+        divert = tmp / 'diverts'
+        stubs = {
+            'apt-get': 'exit 0',
+            'dpkg-query': '[ "$1" = -S ] && [ "$2" = /usr/local/bin/flycast ] && exit 0; exit 1',
+            'dpkg-divert': (
+                'R=%s; D=%s; touch "$D"\n'
+                'case " $* " in\n'
+                '  *" --list "*) grep -x -- "${@: -1}" "$D" ;;\n'
+                '  *" --add "*) p=${@: -1}; mv "$R$p" "$R$p.fliperos-package"; echo "$p" >> "$D" ;;\n'
+                '  *" --remove "*) p=${@: -1}; mv "$R$p.fliperos-package" "$R$p"; grep -vx -- "$p" "$D" > "$D.n"; mv "$D.n" "$D" ;;\n'
+                'esac\nexit 0\n') % (root, divert),
+        }
+        for name, text in stubs.items():
+            (bin_dir / name).write_text('#!/bin/bash\n' + text + '\n')
+            (bin_dir / name).chmod(0o755)
+        env = {'FLIPEROS_EMULATORS_ROOT': str(root), 'FLIPEROS_HOME': str(tmp / 'home'),
+               'FLIPEROS_RECIPES': str(recipes), 'FLIPEROS_EDGE_STATE': str(tmp / 'state'),
+               'FLIPEROS_EDGE_WORK': str(tmp / 'work'), 'PATH': '%s:%s' % (bin_dir, os.environ['PATH'])}
+        return root, env, head
+
+    def test_the_newest_flycast_is_built_over_the_package_and_goes_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            root, env, head = self.edge_rig(tmp)
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'edge-available', 'flycast', env=env).returncode, 0)
+            # Sem PKG_UPSTREAM na receita (o RetroArch), so o pacote.
+            self.assertNotEqual(self.run_cmd('fliperos-emulators', 'edge-available', 'retroarch', env=env).returncode, 0)
+            run = self.run_cmd('fliperos-emulators', 'edge', 'flycast', '--progress', env=env)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn('@step 100 Flycast (Dreamcast, Naomi, Atomiswave) %s installed' % head[:7], run.stdout)
+            # O build no lugar; o binario do pacote guardado ao lado.
+            self.assertEqual((root / 'usr/local/bin/flycast').read_text(), 'edge %s\n' % head)
+            self.assertEqual((root / 'usr/local/bin/flycast.fliperos-package').read_text(), 'package\n')
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'edge-status', 'flycast', env=env).stdout.strip(), head)
+            # Compilar de novo nao perde o do pacote.
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'edge', 'flycast', env=env).returncode, 0)
+            self.assertEqual((root / 'usr/local/bin/flycast.fliperos-package').read_text(), 'package\n')
+            # De volta ao pacote.
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'edge-off', 'flycast', env=env).returncode, 0)
+            self.assertEqual((root / 'usr/local/bin/flycast').read_text(), 'package\n')
+            self.assertFalse((root / 'usr/local/bin/flycast.fliperos-package').exists())
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'edge-status', 'flycast', env=env).stdout.strip(), '')
+
+    def test_a_patch_that_does_not_fit_keeps_the_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            root, env, head = self.edge_rig(tmp, patch_fits=False)
+            run = self.run_cmd('fliperos-emulators', 'edge', 'flycast', '--progress', env=env)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn('the FliperOS patch does not fit Flycast (Dreamcast, Naomi, Atomiswave) %s; the package stays'
+                          % head[:7], run.stdout)
+            self.assertEqual((root / 'usr/local/bin/flycast').read_text(), 'package\n')
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'edge-status', 'flycast', env=env).stdout.strip(), '')
+
+    def test_the_cabinet_gets_the_flycast_recipe_and_patches(self):
+        rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
+        self.assertIn('for recipe in fliperos-emulationstation fliperos-pegasus fliperos-flycast; do', rootfs)
+        self.assertIn('"$src"/packaging/patches/{emulationstation,flycast}/*.patch', rootfs)
+        recipe = (ROOT / 'packaging/packages/fliperos-flycast.sh').read_text()
+        self.assertIn('PKG_UPSTREAM="https://github.com/flyinghead/flycast"', recipe)
+        self.assertIn('PKG_COMMIT_VAR="FLYCAST_COMMIT"', recipe)
+
     def test_list_marks_what_is_installed(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)

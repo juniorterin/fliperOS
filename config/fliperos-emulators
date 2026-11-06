@@ -7,6 +7,10 @@
 #   fliperos-emulators versions                nome|versao instalada
 #   fliperos-emulators latest NOME             instalada|a do update|same, new ou unknown
 #   fliperos-emulators install NOME [--progress] [--source PASTA]   (como root)
+#   fliperos-emulators edge-available NOME     status 0 se compila o mais novo
+#   fliperos-emulators edge NOME [--progress]  compila o mais novo (como root)
+#   fliperos-emulators edge-off NOME           volta ao pacote (como root)
+#   fliperos-emulators edge-status NOME        o commit do mais novo instalado
 #
 # tipo: image (compilado na imagem: nao se instala depois), build (o SM2-Emu,
 # clonado e compilado na maquina: config/fliperos-sm2emu), fetch (baixado do
@@ -196,7 +200,105 @@ emulator_install() {
   esac
 }
 
+# ── O mais novo do projeto (edge) ────────────────────────────────
+# Um emulador num pacote do FliperOS (o Flycast) cuja receita sabe de onde vem
+# o codigo (PKG_UPSTREAM): a mesma receita compila aqui o ultimo commit do
+# projeto, com os patches do FliperOS. Os arquivos do pacote ficam guardados
+# (dpkg-divert, com .fliperos-package no fim): os updates continuam trocando o
+# pacote sem apagar este build, e edge-off volta ao pacote. Um patch que nao
+# encaixa mais no codigo novo para tudo: o pacote fica.
+recipes=${FLIPEROS_RECIPES:-$root/usr/local/share/fliperos/packaging/packages}
+edge_state=${FLIPEROS_EDGE_STATE:-$root/var/lib/fliperos/edge}
+edge_work=${FLIPEROS_EDGE_WORK:-/var/cache/fliperos/edge}
+
+# edge_recipe NOME imprime a receita do pacote, se ela compila o mais novo.
+edge_recipe() {
+  local recipe=$recipes/fliperos-$1.sh
+  [[ -f $recipe ]] && grep -q '^PKG_UPSTREAM=' "$recipe" && printf '%s\n' "$recipe"
+}
+
+# edge_remove NOME: o build sai e os arquivos do pacote voltam.
+edge_remove() {
+  local name=$1 rel list=$edge_state/$1.files
+  [[ -f $list ]] || return 0
+  while IFS= read -r rel; do
+    [[ -n $rel ]] || continue
+    rm -f "$root$rel"
+    if [[ -n $(dpkg-divert --list "$rel" 2> /dev/null) ]]; then
+      dpkg-divert --local --rename --remove "$rel" >&2 || return 1
+    fi
+  done < "$list"
+  rm -f "$list" "$edge_state/$name.commit"
+}
+
+# edge_install NOME STAGING COMMIT: os arquivos do build no lugar dos do
+# pacote, que vao para o lado.
+edge_install() {
+  local name=$1 staging=$2 commit=$3 path rel list=$edge_state/$1.files
+  mkdir -p "$edge_state"
+  edge_remove "$name" || return 1
+  : > "$list"
+  while IFS= read -r -d '' path; do
+    rel=${path#"$staging"}
+    if dpkg-query -S "$rel" > /dev/null 2>&1 && [[ -z $(dpkg-divert --list "$rel" 2> /dev/null) ]]; then
+      dpkg-divert --local --rename --divert "$rel.fliperos-package" --add "$rel" >&2 || return 1
+    fi
+    printf '%s\n' "$rel" >> "$list"
+    install -D -m "$(stat -c %a "$path")" "$path" "$root$rel" || return 1
+  done < <(find "$staging" -type f -print0)
+  printf '%s\n' "$commit" > "$edge_state/$name.commit"
+}
+
+edge_build() {
+  local name=$1 recipe
+  label=$(field "$name" 4)
+  recipe=$(edge_recipe "$name") || fail "$label can't be built here"
+  (
+    # shellcheck source=/dev/null
+    . "$recipe"
+    say 5 "Asking for the newest $label"
+    head=$(timeout "$net_timeout" git ls-remote "$PKG_UPSTREAM" HEAD 2> /dev/null | awk 'NR == 1 { print $1 }')
+    [[ $head =~ ^[0-9a-f]{40}$ ]] || fail "could not reach $PKG_UPSTREAM (no network?)"
+    printf -v "$PKG_COMMIT_VAR" '%s' "$head"
+    say 10 "Installing the build tools"
+    # shellcheck disable=SC2086 # um pacote por palavra
+    { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+      $PKG_BUILD_DEPS; } >&2 || fail "could not install the build tools (no network?)"
+    rm -rf "${edge_work:?}/$name"
+    SRC=$edge_work/$name/src STAGING=$edge_work/$name/staging
+    mkdir -p "$SRC" "$STAGING"
+    export SRC STAGING
+    say 30 "Building $label ${head:0:7} with the FliperOS patches (several minutes)"
+    log=$edge_work/$name/build.log
+    if ! pkg_build > "$log" 2>&1; then
+      cat "$log" >&2
+      grep -q 'patch failed\|does not apply' "$log" &&
+        fail "the FliperOS patch does not fit $label ${head:0:7}; the package stays"
+      fail "the build failed (details in the log); the package stays"
+    fi
+    say 90 "Installing it over the package (the package stays saved)"
+    edge_install "$name" "$STAGING" "$head" || fail "could not install the build; the package stays"
+    rm -rf "${edge_work:?}/$name"
+    say 100 "$label ${head:0:7} installed"
+  ) || exit 1
+}
+
 case ${1:-} in
+  edge-available) edge_recipe "${2:?name}" > /dev/null ;;
+  edge-status)
+    # O commit do build mais novo instalado (vazio: o do pacote).
+    cat "$edge_state/${2:?name}.commit" 2> /dev/null
+    true
+    ;;
+  edge)
+    name=${2:?name}
+    [[ ${3:-} == --progress ]] && progress=1
+    edge_build "$name"
+    ;;
+  edge-off)
+    label=$(field "${2:?name}" 4)
+    edge_remove "$2" || fail "could not bring the package back"
+    ;;
   list)
     while IFS='|' read -r name kind file desc; do
       if [[ -x $file ]]; then inst=1; else inst=0; fi

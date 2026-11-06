@@ -1256,6 +1256,8 @@ for _alias, _name in {
     # uma pasta) e o Scraper com um site.
     "lowdot": "outputs", "range": "colour", "compare": "romlist", "download": "install", "folder": "dest",
     "site": "scraper",
+    # Emulators & Games: compilar o mais novo do projeto e voltar ao pacote.
+    "edge": "install", "package": "reset",
 }.items():
     ICONS[_alias] = ICONS[_name]
 # As pastas de Setup > Games > Folders (e o link do romset no Downloader).

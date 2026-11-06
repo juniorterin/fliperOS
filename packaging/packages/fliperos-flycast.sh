@@ -9,6 +9,10 @@
 
 PKG_NAME="fliperos-flycast"
 FLYCAST_COMMIT="7adbf3caef251b153e348df3f469a0f35878339d"
+# O Setup > Emulators & Games compila o Flycast mais novo no gabinete com esta
+# mesma receita, no ultimo commit do projeto (config/fliperos-emulators edge).
+PKG_UPSTREAM="https://github.com/flyinghead/flycast"
+PKG_COMMIT_VAR="FLYCAST_COMMIT"
 PKG_VERSION="2.7.20261031"
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"

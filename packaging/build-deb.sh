@@ -89,6 +89,7 @@ build_one() {
   PKG_NAME=""; PKG_VERSION=""; PKG_REVISION="1"; PKG_SUMMARY=""
   PKG_DESCRIPTION=""; PKG_SECTION="games"; PKG_HOMEPAGE=""
   PKG_BUILD_DEPS=""; PKG_RUNTIME_EXTRA=""; PKG_SHLIB_TARGETS=""; PKG_ON_DEMAND=""
+  PKG_UPSTREAM=""; PKG_COMMIT_VAR=""
   unset -f pkg_build 2>/dev/null || true
   # shellcheck disable=SC1090
   source "$recipe"

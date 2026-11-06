@@ -742,10 +742,7 @@ screen_emulators() {
     case $kind in
       image)
         if ((inst)) && dpkg-query -W "fliperos-$choice" > /dev/null 2>&1; then
-          # Num pacote do FliperOS (o RetroArch): o update o troca pela rede.
-          ui_msg "$title" "$label comes with FliperOS and is installed." "" \
-            "$(emulators_update_line "$choice" "$label")" "" \
-            "The FliperOS updates offered at boot bring its new versions."
+          screen_emulator_package "$choice" "$label"
         elif ((inst)); then
           ui_msg "$title" "$label comes with FliperOS and is installed." "" \
             "$(emulators_update_line "$choice" "$label")" "" \
@@ -782,6 +779,46 @@ emulators_update_line() {
     same) echo "$have Up to date ($want)." ;;
     new) echo "$have Update: $want." ;;
     *) echo "$have The newest version could not be checked (no network?)." ;;
+  esac
+}
+
+# screen_emulator_package NOME ROTULO: um emulador num pacote do FliperOS (o
+# RetroArch, o Dolphin, o Flycast). O update o troca pela rede; o que tem
+# receita para isso (o Flycast) tambem compila aqui o mais novo do projeto,
+# com os patches do FliperOS, e volta ao pacote quando a pessoa quiser.
+screen_emulator_package() {
+  local name=$1 label=$2 line edge choice entries=()
+  line=$(emulators_update_line "$name" "$label")
+  if ! emulators_edge_available "$name"; then
+    ui_msg "$label" "$label comes with FliperOS and is installed." "" "$line" "" \
+      "The FliperOS updates offered at boot bring its new versions."
+    return 0
+  fi
+  edge=$(emulators_edge_status "$name")
+  if [[ -n $edge ]]; then
+    line="Newest build installed: ${edge:0:7} (untested). The FliperOS package is saved."
+    entries+=("package|Back to the FliperOS package|The tested version, kept by the updates.")
+  else
+    line+=" The updates offered at boot bring its new versions."
+  fi
+  entries+=("edge|Build the newest $label|Its latest code with the FliperOS patches.")
+  choice=$(ui_menu_hints "$label" "$line" "" "${entries[@]}" \
+    "return|Return|Back to Emulators & Games.") || return 0
+  case $choice in
+    edge)
+      ui_yesno "$label" "Download and build the newest $label with the FliperOS patches? It is untested, needs the network and takes several minutes. The FliperOS package stays saved." no ||
+        return 0
+      if run_online "Building $label" "" emulators_edge "$name"; then
+        ui_msg "$label" "The newest $label is installed." "" "Back to the FliperOS package from this same screen."
+      fi
+      ;;
+    package)
+      if emulators_edge_off "$name"; then
+        ui_msg "$label" "Back to the FliperOS package of $label."
+      else
+        ui_msg "$label" "$(ui_bad "Could not bring the package back.")" "Details in $FLIPEROS_LOG."
+      fi
+      ;;
   esac
 }
 

@@ -41,6 +41,33 @@ emulators_install() {
   "$EMULATORS_CMD" install "$1" --progress "${args[@]}" 2>> "$FLIPEROS_LOG"
 }
 
+# O mais novo do projeto (config/fliperos-emulators edge): um emulador num
+# pacote do FliperOS compilado aqui do ultimo commit, com os patches do
+# FliperOS; o pacote fica guardado e volta com emulators_edge_off.
+emulators_edge_available() {
+  [[ -x $EMULATORS_CMD ]] && "$EMULATORS_CMD" edge-available "$1"
+}
+
+# emulators_edge_status NOME imprime o commit do build instalado (vazio: o
+# do pacote).
+emulators_edge_status() {
+  [[ -x $EMULATORS_CMD ]] && "$EMULATORS_CMD" edge-status "$1"
+}
+
+emulators_edge() {
+  ev_step 0 "Starting"
+  if [[ ! -x $EMULATORS_CMD ]]; then
+    ev_fail "the installer of the emulators ($EMULATORS_CMD) is missing"
+    return 1
+  fi
+  log_line cmd "\$ $EMULATORS_CMD edge $1 --progress"
+  "$EMULATORS_CMD" edge "$1" --progress 2>> "$FLIPEROS_LOG"
+}
+
+emulators_edge_off() {
+  [[ -x $EMULATORS_CMD ]] && "$EMULATORS_CMD" edge-off "$1" >> "$FLIPEROS_LOG" 2>&1
+}
+
 # emulators_versions imprime "nome|versao instalada" (vazia: nao instalado
 # ou sem como saber). Le arquivos, nao abre os emuladores.
 emulators_versions() {
