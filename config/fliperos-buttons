@@ -201,12 +201,15 @@ INPUT_DEVICES = os.environ.get('FLIPEROS_INPUT_DEVICES', '/proc/bus/input/device
 
 def connected_joysticks(path=None):
     """Quantos joysticks estao ligados agora: os aparelhos do /proc/bus/input/devices
-    que tem um js (o SDL conta os controles na mesma ordem em que aparecem)."""
+    que tem um js (o SDL conta os controles na mesma ordem em que aparecem). Os que
+    tambem sao mouse (a pistola de luz, como a GunCon 2) ficam de fora: o SDL nao
+    os conta como controle, e eles nao sao um jogador."""
     count = 0
     try:
         with open(path or INPUT_DEVICES, encoding='utf-8', errors='replace') as f:
             for line in f:
-                if line.startswith('H: Handlers=') and re.search(r'\bjs\d+\b', line):
+                if (line.startswith('H: Handlers=') and re.search(r'\bjs\d+\b', line)
+                        and not re.search(r'\bmouse\d+\b', line)):
                     count += 1
     except OSError:
         return 0

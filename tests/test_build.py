@@ -14853,6 +14853,10 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertEqual(rc.connected_joysticks(devices(0)), 0)
             self.assertEqual(rc.connected_joysticks(devices(2)), 2)
             self.assertEqual(rc.connected_joysticks(str(tmp / 'nenhum')), 0)
+            # A pistola de luz (GunCon 2: mouse + js) nao e um controle de jogador.
+            (tmp / 'gun').write_text(Path(devices(2)).read_text()
+                                     + 'N: Name="Namco GunCon 2"\nH: Handlers=mouse1 event6 js2\n\n')
+            self.assertEqual(rc.connected_joysticks(str(tmp / 'gun')), 2)
             players, _ = rc.read_map(str(mapa))
             self.assertEqual(rc.active_players(players, 2), {1: True, 2: True})
             self.assertEqual(rc.active_players(players, 1), {1: True, 2: False})

@@ -22,6 +22,7 @@ import hashlib
 import json
 import lzma
 import os
+import re
 import socket
 import struct
 import threading
@@ -635,12 +636,14 @@ INPUT_DEVICES = os.environ.get("FLIPEROS_INPUT_DEVICES", "/proc/bus/input/device
 
 def connected_joysticks(path=None):
     """Quantos joysticks estao ligados agora (os aparelhos com js do
-    /proc/bus/input/devices; a mesma conta do fliperos-buttons players)."""
+    /proc/bus/input/devices; a mesma conta do fliperos-buttons players, sem as
+    pistolas de luz: o aparelho que tambem e mouse nao e um jogador)."""
     count = 0
     try:
         with open(path or INPUT_DEVICES, encoding="utf-8", errors="replace") as f:
             for line in f:
-                if line.startswith("H: Handlers=") and any(w.startswith("js") and w[2:].isdigit() for w in line.split()):
+                if (line.startswith("H: Handlers=") and re.search(r"\bjs\d+\b", line)
+                        and not re.search(r"\bmouse\d+\b", line)):
                     count += 1
     except OSError:
         return None

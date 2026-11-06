@@ -802,6 +802,10 @@ class SlotsTests(unittest.TestCase):
         path = os.path.join(self.tmp.name, "buttons.map")
         Path(path).write_text("1 up 0 h0.1 Pad\n1 b1 0 b0 Pad\n2 up 1 h0.1 Pad\n3 coin 2 b9 Pad\n")
         self.assertEqual(felink.connected_joysticks(self.devices(2)), 2)
+        # A pistola de luz (GunCon 2: mouse + js) nao e um jogador.
+        gun = os.path.join(self.tmp.name, "devices-gun")
+        Path(gun).write_text(Path(self.devices(2)).read_text() + 'N: Name="Namco GunCon 2"\nH: Handlers=mouse1 event6 js2\n\n')
+        self.assertEqual(felink.connected_joysticks(gun), 2)
         self.assertEqual(felink.local_players(path, self.devices(3)), 3)
         # Soltar o controle de um jogador tira o jogador; ligar de volta o devolve.
         self.assertEqual(felink.local_players(path, self.devices(2)), 2)
