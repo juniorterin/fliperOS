@@ -229,10 +229,14 @@ case $name in
         "${FLIPEROS_BUTTONS:-/opt/fliperos/bin/fliperos-buttons}" pcsx2x6 "$ini" > /dev/null 2>&1 || true
         if ! jvs_has_sdl; then
           panel=("" FaceWest FaceNorth RightShoulder FaceSouth FaceEast +RightTrigger)
+          # Os jogos de 4 botoes 2x2, como nos gabinetes da Namco: 1 2 em cima, 3 4 embaixo.
+          four=("" 1 2 4 5)
           while IFS=$'\t' read -r key player role; do
             [[ -z $key || $key == \#* ]] && continue
             if [[ $role == button:* ]]; then
-              role=${panel[${role##*:}]:-}
+              n=${role##*:}
+              [[ $role != button:4:* ]] || n=${four[n]}
+              role=${panel[n]:-}
               [[ -n $role ]] || continue
             fi
             "$iniset" "$ini" JVS "$key" "SDL-$((player - 1))/$role"

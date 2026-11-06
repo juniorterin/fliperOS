@@ -82,7 +82,8 @@ de cada jogador ligada no Dolphin.ini.
 PCSX2x6 (Namco System 246/256): a secao [JVS] do ~/.config/PCSX2x6/inis/PCSX2.ini,
 uma chave por botao do arcade, no aparelho de cada jogador (SDL-N). O botao
 N de um jogo de C botoes vai para a posicao do painel que o Buttons layout
-dita (sem layout, a posicao N), no papel do layout de fight stick acima;
+dita (sem layout, a posicao N; nos de 4 botoes, 1 2 em cima e 3 4 embaixo,
+como nos gabinetes da Namco), no papel do layout de fight stick acima;
 direcional, Start e ficha pelo papel (config/pcsx2x6-jvs-bindings).
 
 Hypseus Singe: o [KEYBOARD] do ~/.hypseus/hypinput.ini, com o joystick de
@@ -1206,6 +1207,10 @@ PCSX2X6_PANEL = {1: 'FaceWest', 2: 'FaceNorth', 3: 'RightShoulder', 4: 'FaceSout
                  6: '+RightTrigger'}
 PCSX2X6_CONTROLS = {'DPadUp': 'up', 'DPadDown': 'down', 'DPadLeft': 'left', 'DPadRight': 'right',
                     'Start': 'start', 'Back': 'coin'}
+# Os jogos de 4 botoes da Namco (Tekken, Soul Calibur, Bloody Roar...) sao 2x2
+# no gabinete: 1 2 em cima, 3 4 embaixo. Vale so no PCSX2x6 e so sem uma linha
+# de 4 botoes no Buttons layout (essa e a escolha da pessoa para todos).
+PCSX2X6_LAYOUTS = {4: [1, 2, 4, 5]}
 
 
 def pcsx2x6_table(path=None):
@@ -1231,7 +1236,7 @@ def pcsx2x6_values(players, devices, layouts, table):
             continue
         if kind.startswith('button:'):
             count, n = (int(v) for v in kind.split(':')[1:])
-            position = layout_order(layouts, count)[n - 1] if n <= PANEL_BUTTONS else 0
+            position = layout_order({**PCSX2X6_LAYOUTS, **layouts}, count)[n - 1] if n <= PANEL_BUTTONS else 0
             if position not in PCSX2X6_PANEL or 'b%d' % position not in binds:
                 continue
             role = PCSX2X6_PANEL[position]

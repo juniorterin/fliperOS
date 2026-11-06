@@ -10367,9 +10367,10 @@ class EmulatorModeTests(unittest.TestCase):
             ini_path = Path(home) / '.config/PCSX2x6/inis/PCSX2.ini'
             jvs = ini_path.read_text().split('[JVS]')[1].split('\n[')[0]
             # Sem o fliperos-buttons (aqui), o botao N do jogo na posicao N do
-            # painel: X Y RB / A B RT.
+            # painel: X Y RB / A B RT; os de 4 botoes 2x2, 1 2 em cima e 3 4 embaixo.
             for line in ('Tekken_LeftPunch_P1 = SDL-0/FaceWest', 'Tekken_LeftPunch_P2 = SDL-1/FaceWest',
-                         'Tekken_LeftKick_P1 = SDL-0/RightShoulder', 'Tekken_RightKick_P2 = SDL-1/FaceSouth',
+                         'Tekken_RightPunch_P1 = SDL-0/FaceNorth', 'Tekken_LeftKick_P1 = SDL-0/FaceSouth',
+                         'Tekken_RightKick_P2 = SDL-1/FaceEast', 'SoulCal_Guard_P1 = SDL-0/FaceEast',
                          'SixButton_HeavyPunch_P1 = SDL-0/RightShoulder', 'SixButton_HeavyKick_P1 = SDL-0/+RightTrigger',
                          'P1_Up = SDL-0/DPadUp', 'P2_Start = SDL-1/Start', 'Coin1 = SDL-0/Back',
                          'Coin2 = SDL-1/Back'):
@@ -15374,8 +15375,16 @@ class ButtonMappingTests(unittest.TestCase):
         def values(layouts, players=players):
             return dict(rc.pcsx2x6_values(players, devices, layouts, table))
         base = values({})
+        # Sem Buttons layout, os jogos de 4 botoes ficam 2x2 como nos gabinetes da
+        # Namco: socos em cima (X Y), chutes embaixo (A B).
         self.assertEqual([base['Tekken_%s_P1' % b] for b in ('LeftPunch', 'RightPunch', 'LeftKick', 'RightKick')],
-                         ['SDL-0/FaceWest', 'SDL-0/FaceNorth', 'SDL-0/RightShoulder', 'SDL-0/FaceSouth'])
+                         ['SDL-0/FaceWest', 'SDL-0/FaceNorth', 'SDL-0/FaceSouth', 'SDL-0/FaceEast'])
+        # Uma linha de 4 botoes no Buttons layout e a escolha da pessoa: vale aqui tambem.
+        straight = values({4: [1, 2, 3, 4]})
+        self.assertEqual([straight['Tekken_%s_P1' % b] for b in ('LeftKick', 'RightKick')],
+                         ['SDL-0/RightShoulder', 'SDL-0/FaceSouth'])
+        # So no PCSX2x6: o layout dos outros emuladores continua o botao N na posicao N.
+        self.assertEqual(rc.layout_order({}, 4)[:4], [1, 2, 3, 4])
         # Seis botoes: cada um na sua posicao, ate o RT.
         self.assertEqual([base['SixButton_%s_P1' % b] for b in ('HeavyPunch', 'LightKick', 'HeavyKick')],
                          ['SDL-0/RightShoulder', 'SDL-0/FaceSouth', 'SDL-0/+RightTrigger'])
