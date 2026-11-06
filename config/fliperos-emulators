@@ -228,14 +228,16 @@ edge_remove() {
     [[ -n $rel ]] || continue
     rm -f "$root$rel"
     if [[ -n $(dpkg-divert --list "$rel" 2> /dev/null) ]]; then
-      dpkg-divert --local --rename --remove "$rel" >&2 || return 1
+      dpkg-divert --quiet --local --rename --remove "$rel" >&2 || return 1
     fi
   done < "$list"
   rm -f "$list" "$edge_state/$name.commit"
 }
 
 # edge_install NOME STAGING COMMIT: os arquivos do build no lugar dos do
-# pacote, que vao para o lado.
+# pacote, que vao para o lado. Um arquivo igual ao do pacote fica como esta:
+# o GroovyMAME traz milhares (listas de software, shaders), e desviar cada um
+# levava minutos para ir e para voltar.
 edge_install() {
   local name=$1 staging=$2 commit=$3 path rel list=$edge_state/$1.files
   mkdir -p "$edge_state"
@@ -243,8 +245,9 @@ edge_install() {
   : > "$list"
   while IFS= read -r -d '' path; do
     rel=${path#"$staging"}
+    cmp -s "$path" "$root$rel" && continue
     if dpkg-query -S "$rel" > /dev/null 2>&1 && [[ -z $(dpkg-divert --list "$rel" 2> /dev/null) ]]; then
-      dpkg-divert --local --rename --divert "$rel.fliperos-package" --add "$rel" >&2 || return 1
+      dpkg-divert --quiet --local --rename --divert "$rel.fliperos-package" --add "$rel" >&2 || return 1
     fi
     printf '%s\n' "$rel" >> "$list"
     install -D -m "$(stat -c %a "$path")" "$path" "$root$rel" || return 1
@@ -276,6 +279,9 @@ edge_build() {
       [[ $head =~ ^[0-9a-f]{40}$ ]] || fail "could not reach $PKG_UPSTREAM (no network?)"
     fi
     printf -v "$PKG_COMMIT_VAR" '%s' "$head"
+    # Um commit aparece curto; uma tag (2612, gm0289sr222f), inteira.
+    shown=$head
+    [[ $head =~ ^[0-9a-f]{40}$ ]] && shown=${head:0:7}
     say 10 "Installing the build tools"
     # shellcheck disable=SC2086 # um pacote por palavra
     { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
@@ -287,18 +293,18 @@ edge_build() {
     # GroovyMAME nao confere o sha256 do release novo).
     FLIPEROS_EDGE=1
     export SRC STAGING FLIPEROS_EDGE
-    say 30 "Building $label ${head:0:7} with the FliperOS patches (several minutes)"
+    say 30 "Preparing $label $shown (several minutes)"
     log=$edge_work/$name/build.log
     if ! pkg_build > "$log" 2>&1; then
       cat "$log" >&2
       grep -q 'patch failed\|does not apply' "$log" &&
-        fail "the FliperOS patch does not fit $label ${head:0:7}; the package stays"
+        fail "the FliperOS patch does not fit $label $shown; the package stays"
       fail "the build failed (details in the log); the package stays"
     fi
     say 90 "Installing it over the package (the package stays saved)"
     edge_install "$name" "$STAGING" "$head" || fail "could not install the build; the package stays"
     rm -rf "${edge_work:?}/$name"
-    say 100 "$label ${head:0:7} installed"
+    say 100 "$label $shown installed"
   ) || exit 1
 }
 
