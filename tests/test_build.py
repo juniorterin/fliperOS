@@ -10609,7 +10609,6 @@ class EmulatorModeTests(unittest.TestCase):
                                   ('Main', 'ConfirmPowerOff = false'), ('BIOS', 'SearchDirectory = %s/bios' % home),
                                   ('Logging', 'LogToConsole = true'),
                                   ('Display', 'AspectRatio = Stretch To Fill'), ('Display', 'Scaling = Nearest'),
-                                  ('Display', 'CropMode = Borders'),
                                   ('GameList', 'RecursivePaths = %s/roms/ps1' % home),
                                   ('GameList', 'Paths = %s/roms/retroarch/pcsx_rearmed' % home),
                                   ('Hotkeys', 'OpenPauseMenu = Keyboard/Escape'),
@@ -10618,16 +10617,16 @@ class EmulatorModeTests(unittest.TestCase):
                                   ('Pad1', 'R2 = SDL-0/+RightTrigger'), ('Pad2', 'Square = SDL-1/X')):
                 self.assertRegex(ini, r'\[%s\][^\[]*\n%s\n' % (section, re.escape(line)), line)
             self.assertNotIn('Renderer', ini)
+            # O corte fica o padrao (Overscan): uma linha do jogo por linha do tubo.
+            self.assertNotIn('CropMode', ini)
             # Sem jogo, o Big Picture; um controle mudado no DuckStation fica,
             # as opcoes de abertura voltam.
             ini_path.write_text(ini.replace('Cross = SDL-0/A', 'Cross = SDL-0/B')
-                                .replace('StartFullscreen = true', 'StartFullscreen = false')
-                                .replace('CropMode = Borders', 'CropMode = Overscan'))
+                                .replace('StartFullscreen = true', 'StartFullscreen = false'))
             out = self.run_x11(['duckstation'], home=home, extra=extra).stdout
             self.assertIn('duckstation -fullscreen -bigpicture', out)
             ini = ini_path.read_text()
             self.assertIn('Cross = SDL-0/B\n', ini)
-            self.assertIn('CropMode = Overscan\n', ini)
             # Um jogo PAL abre a 50 Hz no tubo de 15 kHz; um NTSC, a 60.
             out = self.run_x11(['duckstation', '/r/ps1/Silent Iron (Europe).chd'], home=home, extra=extra).stdout
             self.assertIn('MODE=640 288 50', out)
