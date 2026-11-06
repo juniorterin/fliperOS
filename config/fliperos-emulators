@@ -129,7 +129,10 @@ emulator_latest() {
       v=$(pinned RA_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-retroarch.sh")
       [[ -n $v ]] && echo "${v:0:7}"
       ;;
-    flycast) remote_head https://github.com/flyinghead/flycast ;;
+    flycast)
+      v=$(pinned FLYCAST_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-flycast.sh")
+      [[ -n $v ]] && echo "${v:0:7}"
+      ;;
     supermodel) remote_head https://github.com/trzy/Supermodel ;;
     model2) remote_head "${FLIPEROS_SM2_REPO:-https://github.com/dmanlfc/sm2-emu.git}" ;;
     duckstation) remote_head https://github.com/stenzek/duckstation refs/tags/latest ;;

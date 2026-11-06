@@ -547,9 +547,9 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin' >> "$LOG_FILE" 2>&1 \
-    || err "Installing Attract-Mode Plus, GroovyMAME's SDL2, RetroArch and Dolphin from the local repository failed (see $LOG_FILE)"
-  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME's KMS SDL2, RetroArch and Dolphin installed"
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast' >> "$LOG_FILE" 2>&1 \
+    || err "Installing Attract-Mode Plus, GroovyMAME's SDL2, RetroArch, Dolphin and Flycast from the local repository failed (see $LOG_FILE)"
+  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME's KMS SDL2, RetroArch, Dolphin and Flycast installed"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
@@ -1178,48 +1178,18 @@ DFSCRIPT
     || warn "The interlaced flicker filter did not compile: the image goes without it"
 }
 
+# O pacote fliperos-flycast (packaging/packages, instalado por
+# install_local_repo_chroot): o mesmo .deb que os updates levam a quem so
+# atualiza pela rede. Aqui so a conferencia; --skip-flycast o tira da imagem.
 build_flycast_chroot() {
   if $SKIP_FLYCAST; then
+    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-flycast' >> "$LOG_FILE" 2>&1 || true
     warn "Flycast skipped (--skip-flycast)"
     return
   fi
-  step "Compiling Flycast (Dreamcast/Naomi, X11) in the chroot"
-  cat > "$CHROOT_DIR/tmp/build-flycast.sh" << 'FCSCRIPT'
-#!/bin/bash
-set -e
-apt-get install -y --no-install-recommends \
-  libcurl4-openssl-dev libminiupnpc-dev libzip-dev libao-dev libpng-dev
-git clone --depth=1 https://github.com/flyinghead/flycast /tmp/flycast
-cd /tmp/flycast
-# A versao (o commit de hoje do master) para o Setup > Emulators & Games.
-mkdir -p /usr/local/share/fliperos
-echo "flycast=$(git log -1 --format='%cs %h')" >> /usr/local/share/fliperos/emulator-versions
-git submodule update --init --recursive
-# Os patches do FliperOS (config/flycast-patches): o que nao encaixa mais
-# no master do Flycast fica de fora com um aviso, e o Flycast segue na ISO.
-for patch in /tmp/flycast-patches/*.patch; do
-  [[ -f $patch ]] || continue
-  if git apply --check "$patch" 2> /dev/null; then
-    git apply "$patch" && echo "Flycast patch: ${patch##*/}"
-  else
-    echo "WARNING: Flycast patch ${patch##*/} does not apply to this Flycast; left out"
-  fi
-done
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_VULKAN=ON
-cmake --build build -j"$(nproc)"
-install -m755 build/flycast /usr/local/bin/flycast
-# Icone do menu do LXDE (config/applications/fliperos-flycast.desktop).
-install -Dm644 shell/linux/flycast.png /usr/local/share/pixmaps/flycast.png
-cd /
-rm -rf /tmp/flycast /tmp/flycast-patches
-echo "Flycast OK"
-FCSCRIPT
-  chmod +x "$CHROOT_DIR/tmp/build-flycast.sh"
-  mkdir -p "$CHROOT_DIR/tmp/flycast-patches"
-  cp "$(dirname "$(realpath "$0")")"/config/flycast-patches/*.patch "$CHROOT_DIR/tmp/flycast-patches/" 2> /dev/null || true
-  chroot "$CHROOT_DIR" /tmp/build-flycast.sh >> "$LOG_FILE" 2>&1 \
-    && ok "Flycast compilado" \
-    || err "Flycast failed; use --skip-flycast explicitly for an ISO without it"
+  chroot "$CHROOT_DIR" dpkg -s fliperos-flycast > /dev/null 2>&1 ||
+    err "fliperos-flycast is not installed (local repository); use --skip-flycast for an ISO without it"
+  ok "Flycast (fliperos-flycast)"
 }
 
 # ── PCSX2 (PS2), X11 ──────────────────────────────────────────

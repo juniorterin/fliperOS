@@ -13325,7 +13325,7 @@ class OnDemandFrontendTests(unittest.TestCase):
         return run.stdout.split()
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
-        iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-retroarch', 'fliperos-sdl2-kms')
+        iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-flycast', 'fliperos-retroarch', 'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
         self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
@@ -14276,7 +14276,7 @@ class RetroArchConfigTests(unittest.TestCase):
         ra = (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text()
         self.assertIn('libvulkan-dev', ra)
         self.assertIn('--enable-vulkan', ra)
-        fc = MKISO.split("<< 'FCSCRIPT'")[1].split('\nFCSCRIPT\n')[0]
+        fc = (ROOT / 'packaging/packages/fliperos-flycast.sh').read_text()
         self.assertIn('-DUSE_VULKAN=ON', fc)
         self.assertNotIn('USE_VULKAN=OFF', fc)
         dol = (ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text()
@@ -14629,11 +14629,14 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertIn('  record_version %s "' % name, mk)
         self.assertIn('echo "$PKG_VERSION" > "$STAGING/usr/local/share/fliperos/emulator-versions.d/dolphin"',
                       (ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text())
-        for name in ('flycast', 'supermodel'):
+        for name in ('supermodel',):
             self.assertIn('echo "%s=$(git log -1 --format=\'%%cs %%h\')" >> /usr/local/share/fliperos/emulator-versions'
                           % name, mk)
-        self.assertIn("git -C \"$dir\" log -1 --format='%cs %h' > \"$STAGING/usr/local/share/fliperos/emulator-versions.d/retroarch\"",
-                      (ROOT / 'packaging/packages/fliperos-retroarch.sh').read_text())
+        # Os que vem em pacote gravam a versao em emulator-versions.d.
+        for name in ('retroarch', 'flycast'):
+            self.assertIn("git -C \"$dir\" log -1 --format='%%cs %%h' > "
+                          "\"$STAGING/usr/local/share/fliperos/emulator-versions.d/%s\"" % name,
+                          (ROOT / ('packaging/packages/fliperos-%s.sh' % name)).read_text())
 
     def test_install_calls_the_installer_of_each_kind(self):
         with tempfile.TemporaryDirectory() as tmp:
