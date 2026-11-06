@@ -26,10 +26,9 @@ Feito e testado só no Docker ou sem olhar a tela; falta ver no CRT:
 
 Pedido de 2026-11-06: cada emulador que vem na imagem chega pelos updates (um pacote do FliperOS, release `packages` + `updates/packages.list`) e tem, no Setup > Emulators & Games, a opção do mais novo do projeto com os nossos patches e a volta ao pacote (`fliperos-emulators edge`, 9b3bdeb).
 - **Flycast, RetroArch, Dolphin:** pacotes (updates 43, 47 e o 0.21) com a opção do mais novo (9b3bdeb, 04aacb0; o Dolphin pela tag estável). Falta rodar a opção num gabinete.
-- **GroovyMAME:** pacote feito e publicado (b926e6e), com a opção de baixar o release mais novo. Falta testar num gabinete; até lá ele está como `installed` na `updates/packages.list` (25add28), para nenhum update o levar a todos: depois do teste, `always` e um update.
-- **Supermodel e OpenBOR:** virar pacotes (hoje compilados no chroot da ISO) e a opção de compilar o master.
-- **PCSX2 e PCSX2x6:** virar pacotes (hoje o AppImage fixo na ISO) e a opção de baixar o AppImage mais novo. O PCSX2x6 depois que o trabalho dele assentar.
-- **Gum e kernel:** ainda só chegam com a ISO (o kernel do 0.20 tem o patch 10 com a mesma versão do 0.8.1: precisa de revisão nova).
+- **GroovyMAME, Supermodel, OpenBOR, PCSX2 e Gum:** pacotes feitos e publicados (b926e6e, 97519cf), os quatro emuladores com a opção do mais novo. Estão como `installed` na `updates/packages.list` (um pacote novo entra assim: nenhum gabinete o ganha). Falta testar cada um num gabinete; depois, `always` e um update.
+- **PCSX2x6:** virar pacote depois que o trabalho dele assentar.
+- **Kernel:** `KERNEL_BUILD=2` (97519cf): vira `6.18.54-15khz.2`, um pacote novo ao lado do antigo (o Limine guarda o anterior). Falta compilar, publicar (`tools/publish-packages.sh` pega o `output/kernel`) e testar o boot num gabinete antes de `always`.
 
 ## Placas de vídeo
 
