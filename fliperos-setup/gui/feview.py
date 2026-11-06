@@ -791,7 +791,7 @@ def info_rows(game):
 # as miniaturas, a imagem ou o video, o logo do jogo, os icones e o texto.
 # Cada pedaco e desenhado numa camada so dele enquanto entra.
 
-TRANSITIONS = {"list": "cascade", "full": "tv", "flow": "flip"}
+TRANSITIONS = {"list": "doors", "full": "mosaic", "flow": "pop"}
 # As cinco de cada modo (a primeira, a tela inteira deslizando, e a de antes).
 TRANSITION_CHOICES = {"list": ("slide", "cascade", "drum", "blinds", "doors"),
                       "full": ("slide", "tv", "zoom", "mosaic", "curtain"),
@@ -812,9 +812,11 @@ INTRO_STEP = {"row": 0.022, "thumb": 0.045}
 
 
 def transition(fe):
-    """A animacao da troca de romlist no modo de agora ("slide": a tela
-    inteira desliza, a de antes)."""
-    return TRANSITIONS.get(fe.mode, "slide")
+    """A animacao da troca de romlist no modo de agora: a escolhida no Tab >
+    Transition (fe.transitions) ou a de TRANSITIONS ("slide": a tela inteira
+    desliza, a de antes)."""
+    picked = (getattr(fe, "transitions", None) or {}).get(fe.mode)
+    return picked if picked in TRANSITION_CHOICES.get(fe.mode, ()) else TRANSITIONS.get(fe.mode, "slide")
 
 
 def intro_now(fe):
@@ -3046,7 +3048,7 @@ def chip(ui, right, y, text, lit, on):
 # As linhas das opcoes do frontend, da 5 em diante (os OPT_* do
 # fliperos-frontend, na mesma ordem); os minutos por ficha so com o modo
 # comercial ligado.
-FE_OPTIONS = [("mode", "VIEW"), ("clones", "SHOW CLONES"), ("hidden", "HIDDEN GAMES"),
+FE_OPTIONS = [("mode", "VIEW"), ("transition", "TRANSITION"), ("clones", "SHOW CLONES"), ("hidden", "HIDDEN GAMES"),
               ("controls", "FRONTEND CONTROLS"), ("power", "POWER CLOSES GAME"),
               ("commercial", "COMMERCIAL MODE"), ("coin", "MINUTES PER COIN")]
 
@@ -3062,6 +3064,13 @@ def draw_option(fe, ui, opt, rect, on, right, now):
         cx = right
         for mode, label in reversed((("list", "LIST"), ("full", "FULL SCREEN"), ("flow", "GRID"))):
             cx = chip(ui, cx, y, label, fe.mode == mode, on) - 3
+    elif what == "transition":
+        # A animacao da troca de romlist no modo de agora, entre setas.
+        name = TRANSITION_NAMES[transition(fe)]
+        cx = chip(ui, right - 10, y, name, True, on)
+        if on:
+            arrow(ui, cx - 5, y + 8, (-1, 0), T.PINK, 3)
+            arrow(ui, right - 4, y + 8, (1, 0), T.PINK, 3)
     elif what == "clones":
         chip(ui, right, y, "ON" if fe.show_clones else "OFF", fe.show_clones, on)
     elif what == "hidden":

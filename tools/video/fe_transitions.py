@@ -102,7 +102,7 @@ for mode, styles in feview.TRANSITION_CHOICES.items():
     for n, style in enumerate(styles, 1):
         name = feview.TRANSITION_NAMES[style]
         card(name, "%s - OPTION %d OF %d" % (MODE_NAMES[mode], n, len(styles)), 1.2, [everything])
-        feview.TRANSITIONS[mode] = style
+        fe.transitions[mode] = style
         fe.overlay = None
         if fe.mode != mode:
             fe.mode = mode

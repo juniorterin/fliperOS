@@ -5424,7 +5424,19 @@ class FrontendDataTests(unittest.TestCase):
             import feview
         finally:
             sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
-        self.assertEqual(feview.TRANSITIONS, {'list': 'cascade', 'full': 'tv', 'flow': 'flip'})
+        # As escolhidas pelo usuario: a porta dupla, o mosaico e o pop; o Tab >
+        # Transition troca a do modo (uma das cinco dele; outra, a padrao).
+        self.assertEqual(feview.TRANSITIONS, {'list': 'doors', 'full': 'mosaic', 'flow': 'pop'})
+        for mode, styles in feview.TRANSITION_CHOICES.items():
+            self.assertEqual((len(styles), styles[0]), (5, 'slide'))
+            self.assertTrue(all(s in feview.TRANSITION_NAMES for s in styles))
+        pick = types.SimpleNamespace(mode='full', transitions={'full': 'zoom', 'list': 'pop'})
+        self.assertEqual(feview.transition(pick), 'zoom')
+        pick.mode = 'list'
+        self.assertEqual(feview.transition(pick), 'doors')
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('"transitions": self.transitions', src)
+        self.assertEqual([k for k, _ in feview.FE_OPTIONS][:2], ['mode', 'transition'])
         start = feview.INTRO_EXIT * 0.6
 
         def drawn(style, name, order, t):

@@ -70,7 +70,8 @@ COLS = 3                     # as colunas da grade (o GRID_COLS do feview.py)
 
 # As linhas do Tab: 0 a 4 do jogo, e as do frontend (os minutos por ficha so
 # com o modo comercial ligado). A ordem e a do feview.FE_OPTIONS.
-OPT_MODE, OPT_CLONES, OPT_HIDDEN, OPT_CONTROLS, OPT_POWER, OPT_COMMERCIAL, OPT_COIN = range(5, 12)
+(OPT_MODE, OPT_TRANSITION, OPT_CLONES, OPT_HIDDEN, OPT_CONTROLS, OPT_POWER, OPT_COMMERCIAL,
+ OPT_COIN) = range(5, 13)
 
 # O atalho que fecha o jogo e as fichas do modo comercial, lidos junto com o
 # jogo (config/fliperos-buttons hotkey).
@@ -222,6 +223,9 @@ class Frontend:
         self.input = feinput.Input(pygame, feinput.load_binds(pygame, cfg.get("controls")))
         # O formato do painel, para o guia (feview.PANEL_LAYOUTS).
         self.panel_layout = cfg.get("panel_layout") if cfg.get("panel_layout") in feview.PANEL_COUNT else "6"
+        # A animacao da troca de romlist de cada modo (Tab > Transition;
+        # feview.transition confere o nome).
+        self.transitions = cfg.get("transitions") if isinstance(cfg.get("transitions"), dict) else {}
         self.keytable = evdev_keys(pygame)
         self.nag_at = 0.0
         self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
@@ -525,7 +529,7 @@ class Frontend:
                      "power_exit": self.power_exit, "commercial": self.commercial,
                      "coin_minutes": self.coin_minutes, "credit_until": self.credit_until,
                      "controls": self.input.binds, "panel_layout": self.panel_layout,
-                     "controls_seen": self.controls_seen})
+                     "controls_seen": self.controls_seen, "transitions": self.transitions})
 
     def keep_position(self):
         """O jogo onde o cursor esta, anotado para a game list de agora: ao
@@ -940,7 +944,8 @@ class Frontend:
             return None
         if o == "options":
             # 0 a 4: as opcoes do jogo (3: esconder, 4: apagar); depois as do
-            # frontend: o modo, os clones, a lista dos escondidos, os
+            # frontend: o modo, a animacao da troca de romlist dele, os
+            # clones, a lista dos escondidos, os
             # controles (as funcoes e o atalho que fecha o jogo), o botao de
             # desligar no jogo, o modo comercial e os minutos de cada ficha.
             sel = self.ov["sel"]
@@ -968,6 +973,12 @@ class Frontend:
                 self.remember()
             elif sel == OPT_MODE and a in ("left", "right", "b1"):
                 self.set_mode(-1 if a == "left" else 1)
+            elif sel == OPT_TRANSITION and a in ("left", "right", "b1"):
+                # A proxima (ou a anterior) das cinco do modo de agora.
+                names = self.view.TRANSITION_CHOICES[self.mode]
+                i = names.index(self.view.transition(self)) + (-1 if a == "left" else 1)
+                self.transitions[self.mode] = names[i % len(names)]
+                self.remember()
             elif sel == OPT_CLONES and a in ("left", "right", "b1"):
                 g = self.game()
                 self.show_clones = not self.show_clones
