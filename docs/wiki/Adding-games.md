@@ -11,6 +11,7 @@ Each emulator has its folder in `~/roms` (`/home/fliperos/roms`; over the networ
 | `model3` | MAME sets of Model 3 | Supermodel |
 | `model2` | MAME sets of Model 2 | SM2-Emu |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
+| `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u` (the folder exists once DuckStation is installed) | DuckStation |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
 | `retroarch/<core>` | Whatever that core opens (the `_info.txt` in each folder lists the extensions) | RetroArch |

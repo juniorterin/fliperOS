@@ -338,7 +338,7 @@ scraper_platform() {
     # Os arcades Namco rodam no fork do PCSX2: o Skyscraper nao tem a placa,
     # entao a arte vem pela do PS2 (os mesmos jogos nos consoles).
     namco246 | namco256) echo ps2 ;;
-    duckstation) echo psx ;;
+    ps1) echo psx ;;
     dolphin) echo gc ;;
     *) return 1 ;;
   esac
@@ -522,7 +522,7 @@ scraper_attract_emulator() {
       echo "Namco System 246|$FLIPEROS_BIN/fliperos-x11-run|pcsx2x6 \"[romfilename]\"|.acgame" ;;
     namco256)
       echo "Namco System 256|$FLIPEROS_BIN/fliperos-x11-run|pcsx2x6 \"[romfilename]\"|.acgame" ;;
-    duckstation)
+    ps1)
       # Sem .bin: o jogo e o .cue que aponta para ele (um .bin sozinho
       # apareceria em dobro na lista).
       echo "DuckStation|$FLIPEROS_BIN/fliperos-x11-run|duckstation \"[romfilename]\"|.cue;.chd;.pbp;.m3u;.iso;.img;.ecm;.mds;.exe;.psexe" ;;

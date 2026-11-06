@@ -4741,7 +4741,7 @@ class ScraperTests(Base):
         # pasta por placa, com o .nvm e o .mec minusculos que ele procura) e as
         # do DuckStation soltas em ~/bios.
         roms, bios = self.env.dir / "roms", self.env.dir / "bios"
-        for d in ("namco246", "namco256", "duckstation", "ps2"):
+        for d in ("namco246", "namco256", "ps1", "ps2"):
             (roms / d).mkdir(parents=True)
             (roms / d / "game").write_text("g")
         env = {"ROMS_ROOT": str(roms), "BIOS_ROOT": str(bios), "BIOS_STATE": str(self.env.dir / "bs")}
@@ -4754,8 +4754,8 @@ class ScraperTests(Base):
                 ("namco256", "256.BIN", "namco256/256.BIN"),
                 ("namco256", "256.NVM", "namco256/256.nvm"),
                 ("namco256", "256.MEC", "namco256/256.mec"),
-                ("duckstation", "scph5501.bin", "scph5501.bin"),
-                ("duckstation", "scph5500.bin", "scph5500.bin"),
+                ("ps1", "scph5501.bin", "scph5501.bin"),
+                ("ps1", "scph5500.bin", "scph5500.bin"),
                 ("ps2", "scph39001.bin", "ps2/scph39001.bin")):
             self.assertEqual(wants.get((key, name)), str(bios / dest), (key, name))
 
@@ -6731,8 +6731,8 @@ class RomCleanerTests(Base):
         self.env.out("scraper_attract_display Atomiswave; scraper_attract_display Naomi", env)
         self.assertEqual(path.read_text(encoding="utf-8"), displays)
 
-    def test_duckstation_folder_opens_in_duckstation(self):
-        self.assertEqual(self.env.out("scraper_platform duckstation; scraper_attract_emulator duckstation").splitlines(),
+    def test_ps1_folder_opens_in_duckstation(self):
+        self.assertEqual(self.env.out("scraper_platform ps1; scraper_attract_emulator ps1").splitlines(),
                          ["psx", "DuckStation|/opt/fliperos/bin/fliperos-x11-run|duckstation \"[romfilename]\"|"
                                  ".cue;.chd;.pbp;.m3u;.iso;.img;.ecm;.mds;.exe;.psexe"])
 

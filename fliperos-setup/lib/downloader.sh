@@ -323,7 +323,7 @@ bios_standalone() {
     dreamcast) echo "dc dc/dc_boot.bin dc_flash.bin" ;;
     # DuckStation: as BIOS soltas em ~/bios (BIOS > SearchDirectory); uma das
     # tres basta, e as que ja estao la nao sao baixadas de novo.
-    duckstation) echo ". scph5500.bin scph5501.bin scph5502.bin" ;;
+    ps1) echo ". scph5500.bin scph5501.bin scph5502.bin" ;;
     # PCSX2x6: a BIOS da placa de arcade (o fork a acha pelo conteudo, de
     # qualquer nome), uma pasta por placa como em ~/roms.
     namco246) echo "namco246 COH-H31000.BIN" ;;
