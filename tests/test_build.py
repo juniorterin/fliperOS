@@ -10628,6 +10628,18 @@ class EmulatorModeTests(unittest.TestCase):
             ini = ini_path.read_text()
             self.assertIn('Cross = SDL-0/B\n', ini)
             self.assertIn('CropMode = Overscan\n', ini)
+            # Um jogo PAL abre a 50 Hz no tubo de 15 kHz; um NTSC, a 60.
+            out = self.run_x11(['duckstation', '/r/ps1/Silent Iron (Europe).chd'], home=home, extra=extra).stdout
+            self.assertIn('MODE=640 288 50', out)
+            out = self.run_x11(['duckstation', '/r/ps1/Tekken 3 (USA).chd'], home=home, extra=extra).stdout
+            self.assertIn('MODE=640 240 60', out)
+            # O desentrelacamento que pisca volta ao Progressive num modo
+            # progressivo; no 480i fica.
+            ini_path.write_text(ini_path.read_text() + '\n[GPU]\nDeinterlacingMode = Disabled\n')
+            self.run_x11(['--mode', '640x480@59.94', 'duckstation'], home=home, extra=extra)
+            self.assertIn('DeinterlacingMode = Disabled\n', ini_path.read_text())
+            self.run_x11(['duckstation', 'game.cue'], home=home, extra=extra)
+            self.assertIn('DeinterlacingMode = Progressive\n', ini_path.read_text())
             self.assertIn('StartFullscreen = true\n', ini)
             self.assertIn('-nocursor', out)
             # 480i com o filtro: o renderizador fica (a camada do Vulkan filtra).

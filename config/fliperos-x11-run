@@ -54,6 +54,14 @@ if [[ -z $mode ]]; then
     esac
   fi
   mode=$(awk -v p="$name" -v c="$column" '!/^[[:space:]]*#/ && $1 == p { print $c; exit }' "$MODES" 2> /dev/null)
+  # Um jogo PAL do DuckStation (pelo nome: "(Europe)", "(Germany)"...) no
+  # tubo de 15 kHz abre a 50 Hz, como na TV PAL: os 50 quadros num modo de
+  # 60 Hz repetiam um a cada cinco, e o que pisca a cada quadro (sombras,
+  # transparencias) piscava fora de ritmo. As 288 linhas sao as do PAL.
+  pal='\((Europe|Australia|Germany|France|Spain|Italy|UK|Netherlands|Sweden|Scandinavia|Austria|Switzerland|Denmark|Finland|Norway|Portugal|Belgium|Greece|Poland|E)[,)]'
+  if [[ $name == duckstation && $column == 2 && $# -gt 1 && $(basename -- "${*: -1}") =~ $pal ]]; then
+    mode=640x288@50
+  fi
 fi
 [[ -n $mode ]] || mode=320x240@60
 if [[ ! $mode =~ ^([0-9]+)x([0-9]+)@([0-9.]+)$ ]]; then
@@ -340,6 +348,13 @@ INI
       # desenha, e o esticado o leva a tela toda. Um corte escolhido no
       # DuckStation fica.
       grep -q '^CropMode' "$ini" || "$iniset" "$ini" Display CropMode Borders
+      # Num modo progressivo (240 ou 288 linhas) um jogo de 480i com o
+      # desentrelacamento Disabled ou Weave mostra um campo por quadro e
+      # pisca; o Progressive desenha o quadro inteiro, que o modo reduz sem
+      # piscar. No 480i do tubo a escolha fica.
+      if ((FLIPEROS_RES_H <= 288)) && grep -q -E '^DeinterlacingMode = (Disabled|Weave)$' "$ini"; then
+        "$iniset" "$ini" GPU DeinterlacingMode Progressive
+      fi
       # O filtro de flicker do entrelacado pedia o OpenGL ate a camada do Vulkan
       # filtrar tambem (config/fliperos-vkfps.c): quem ficou nele por isso volta
       # ao automatico. O renderizador escolhido no proprio DuckStation fica.
