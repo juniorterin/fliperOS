@@ -334,6 +334,12 @@ INI
       # mostra): sem BIOS ele so fecha, e ali fica onde a procurou.
       "$iniset" "$ini" Logging LogToConsole true
       "$iniset" "$ini" Display AspectRatio "Stretch To Fill"
+      # O corte padrao (Overscan) mostra a area toda do NTSC/PAL: um jogo que
+      # usa menos linhas (Silent Iron, PAL) ficava com faixas pretas em cima e
+      # embaixo. Borders corta ate o que o jogo
+      # desenha, e o esticado o leva a tela toda. Um corte escolhido no
+      # DuckStation fica.
+      grep -q '^CropMode' "$ini" || "$iniset" "$ini" Display CropMode Borders
       # O filtro de flicker do entrelacado pedia o OpenGL ate a camada do Vulkan
       # filtrar tambem (config/fliperos-vkfps.c): quem ficou nele por isso volta
       # ao automatico. O renderizador escolhido no proprio DuckStation fica.
@@ -364,13 +370,15 @@ INI
         done
       fi
     fi
-    # Com um jogo (um frontend), -batch: fechar o jogo fecha o DuckStation e
-    # volta ao frontend. Sem jogo, o Big Picture, que se usa pelo controle.
+    # Com um jogo (um frontend), -nogui: sem a janela principal (a lista de
+    # jogos, com menu e barra de status) antes do jogo, e fechar o jogo fecha
+    # o DuckStation e volta ao frontend (o -nogui ja e o -batch). Sem jogo, o
+    # Big Picture, que se usa pelo controle.
     # Sem o "--" antes do jogo (o DuckStation o aceita, mas nao precisa: o
     # caminho do frontend e absoluto): o xinit separa o programa do servidor
     # no primeiro "--", e o .cue virava o servidor X.
     if (($# > 1)); then
-      set -- "$1" -fullscreen -batch "${@:2}"
+      set -- "$1" -fullscreen -nogui "${@:2}"
     else
       set -- "$1" -fullscreen -bigpicture
     fi

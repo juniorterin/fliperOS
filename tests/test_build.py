@@ -10549,9 +10549,10 @@ class EmulatorModeTests(unittest.TestCase):
             extra = {'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set'), 'XDG_CONFIG_HOME': ''}
             out = self.run_x11(['duckstation', 'game.cue'], home=home, extra=extra).stdout
             self.assertIn('MODE=640 240 60', out)
-            # Com jogo (um frontend): fechar o jogo fecha o emulador.
-            # Sem "--" antes do jogo: o xinit faria do jogo o servidor X.
-            self.assertIn('duckstation -fullscreen -batch game.cue -- :0', out)
+            # Com jogo (um frontend): sem a janela principal, e fechar o jogo
+            # fecha o emulador. Sem "--" antes do jogo: o xinit faria do jogo
+            # o servidor X.
+            self.assertIn('duckstation -fullscreen -nogui game.cue -- :0', out)
             # Um "--" no comando de qualquer programa para antes do xinit.
             r = self.run_x11(['myprog', '--', 'game.cue'], home=home, extra=extra)
             self.assertEqual(r.returncode, 2)
@@ -10563,6 +10564,7 @@ class EmulatorModeTests(unittest.TestCase):
                                   ('Main', 'ConfirmPowerOff = false'), ('BIOS', 'SearchDirectory = %s/bios' % home),
                                   ('Logging', 'LogToConsole = true'),
                                   ('Display', 'AspectRatio = Stretch To Fill'), ('Display', 'Scaling = Nearest'),
+                                  ('Display', 'CropMode = Borders'),
                                   ('GameList', 'RecursivePaths = %s/roms/ps1' % home),
                                   ('GameList', 'Paths = %s/roms/retroarch/pcsx_rearmed' % home),
                                   ('Hotkeys', 'OpenPauseMenu = Keyboard/Escape'),
@@ -10574,11 +10576,13 @@ class EmulatorModeTests(unittest.TestCase):
             # Sem jogo, o Big Picture; um controle mudado no DuckStation fica,
             # as opcoes de abertura voltam.
             ini_path.write_text(ini.replace('Cross = SDL-0/A', 'Cross = SDL-0/B')
-                                .replace('StartFullscreen = true', 'StartFullscreen = false'))
+                                .replace('StartFullscreen = true', 'StartFullscreen = false')
+                                .replace('CropMode = Borders', 'CropMode = Overscan'))
             out = self.run_x11(['duckstation'], home=home, extra=extra).stdout
             self.assertIn('duckstation -fullscreen -bigpicture', out)
             ini = ini_path.read_text()
             self.assertIn('Cross = SDL-0/B\n', ini)
+            self.assertIn('CropMode = Overscan\n', ini)
             self.assertIn('StartFullscreen = true\n', ini)
             self.assertIn('-nocursor', out)
             # 480i com o filtro: o renderizador fica (a camada do Vulkan filtra).
