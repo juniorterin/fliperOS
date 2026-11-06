@@ -157,14 +157,14 @@ install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-f
 install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fliperos-emulationstation"
 install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fliperos-pegasus"
 install -Dm755 "$src/packaging/build-deb.sh" "$root/usr/local/share/fliperos/packaging/build-deb.sh"
-# O Flycast vem num pacote; a receita dele e os patches tambem vem para o
-# Setup > Emulators & Games compilar o mais novo do projeto com eles
-# (config/fliperos-emulators edge).
-for recipe in fliperos-emulationstation fliperos-pegasus fliperos-flycast; do
+# Os emuladores em pacote (RetroArch, Dolphin, Flycast): a receita e os
+# patches tambem vem para o Setup > Emulators & Games compilar o mais novo do
+# projeto com eles (config/fliperos-emulators edge).
+for recipe in fliperos-emulationstation fliperos-pegasus fliperos-retroarch fliperos-dolphin fliperos-flycast; do
   install -Dm644 "$src/packaging/packages/$recipe.sh" "$root/usr/local/share/fliperos/packaging/packages/$recipe.sh"
 done
 rm -rf "$root/usr/local/share/fliperos/packaging/patches"
-for patch in "$src"/packaging/patches/{emulationstation,flycast}/*.patch; do
+for patch in "$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch; do
   install -Dm644 "$patch" "$root/usr/local/share/fliperos/packaging/patches/$(basename "$(dirname "$patch")")/${patch##*/}"
 done
 # Arcadeflow, o tema padrao do Attract-Mode Plus (Setup > Games > Frontend): o que o

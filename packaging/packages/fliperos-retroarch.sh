@@ -13,6 +13,10 @@
 
 PKG_NAME="fliperos-retroarch"
 RA_COMMIT="7d2e95318b380d7c39ef8025aedd9eace9b64446"
+# O Setup > Emulators & Games compila o RetroArch mais novo no gabinete com
+# esta mesma receita, no ultimo commit do projeto (config/fliperos-emulators edge).
+PKG_UPSTREAM="https://github.com/libretro/RetroArch"
+PKG_COMMIT_VAR="RA_COMMIT"
 PKG_VERSION="1.22.2.20261105"
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"

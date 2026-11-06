@@ -257,8 +257,15 @@ edge_build() {
     # shellcheck source=/dev/null
     . "$recipe"
     say 5 "Asking for the newest $label"
-    head=$(timeout "$net_timeout" git ls-remote "$PKG_UPSTREAM" HEAD 2> /dev/null | awk 'NR == 1 { print $1 }')
-    [[ $head =~ ^[0-9a-f]{40}$ ]] || fail "could not reach $PKG_UPSTREAM (no network?)"
+    if [[ -n ${PKG_EDGE_TAGS:-} ]]; then
+      # A tag estavel mais recente (o Dolphin), nao o master.
+      head=$(timeout "$net_timeout" git ls-remote --tags --refs "$PKG_UPSTREAM" 2> /dev/null |
+        sed 's|.*refs/tags/||' | grep -E "$PKG_EDGE_TAGS" | sort -V | tail -n 1)
+      [[ -n $head ]] || fail "could not reach $PKG_UPSTREAM (no network?)"
+    else
+      head=$(timeout "$net_timeout" git ls-remote "$PKG_UPSTREAM" HEAD 2> /dev/null | awk 'NR == 1 { print $1 }')
+      [[ $head =~ ^[0-9a-f]{40}$ ]] || fail "could not reach $PKG_UPSTREAM (no network?)"
+    fi
     printf -v "$PKG_COMMIT_VAR" '%s' "$head"
     say 10 "Installing the build tools"
     # shellcheck disable=SC2086 # um pacote por palavra

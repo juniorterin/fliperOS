@@ -10,6 +10,12 @@
 
 PKG_NAME="fliperos-dolphin"
 PKG_VERSION="2609"
+# O Setup > Emulators & Games compila o Dolphin mais novo no gabinete com esta
+# mesma receita: a tag estavel mais recente do projeto, nao o master
+# (config/fliperos-emulators edge).
+PKG_UPSTREAM="https://github.com/dolphin-emu/dolphin"
+PKG_COMMIT_VAR="PKG_VERSION"
+PKG_EDGE_TAGS='^[0-9]{4}[a-z]?$'
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://dolphin-emu.org"

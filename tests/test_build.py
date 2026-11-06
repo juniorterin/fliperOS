@@ -14607,11 +14607,33 @@ class EmulatorsMenuTests(unittest.TestCase):
 
     def test_the_cabinet_gets_the_flycast_recipe_and_patches(self):
         rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
-        self.assertIn('for recipe in fliperos-emulationstation fliperos-pegasus fliperos-flycast; do', rootfs)
-        self.assertIn('"$src"/packaging/patches/{emulationstation,flycast}/*.patch', rootfs)
-        recipe = (ROOT / 'packaging/packages/fliperos-flycast.sh').read_text()
-        self.assertIn('PKG_UPSTREAM="https://github.com/flyinghead/flycast"', recipe)
-        self.assertIn('PKG_COMMIT_VAR="FLYCAST_COMMIT"', recipe)
+        self.assertIn('for recipe in fliperos-emulationstation fliperos-pegasus fliperos-retroarch fliperos-dolphin '
+                      'fliperos-flycast; do', rootfs)
+        self.assertIn('"$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch', rootfs)
+        for name, upstream, var in (('flycast', 'https://github.com/flyinghead/flycast', 'FLYCAST_COMMIT'),
+                                    ('retroarch', 'https://github.com/libretro/RetroArch', 'RA_COMMIT'),
+                                    ('dolphin', 'https://github.com/dolphin-emu/dolphin', 'PKG_VERSION')):
+            recipe = (ROOT / ('packaging/packages/fliperos-%s.sh' % name)).read_text()
+            self.assertIn('PKG_UPSTREAM="%s"' % upstream, recipe)
+            self.assertIn('PKG_COMMIT_VAR="%s"' % var, recipe)
+        # O Dolphin pela tag estavel, nao o master.
+        self.assertIn("PKG_EDGE_TAGS='^[0-9]{4}[a-z]?$'", (ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text())
+
+    def test_dolphin_takes_the_newest_stable_tag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            root, env, head = self.edge_rig(tmp)
+            upstream = tmp / 'upstream'
+            for tag in ('2603', '2609', '2612', '2612-dev', 'beta-5'):
+                subprocess.run(['git', '-C', str(upstream), 'tag', tag], check=True)
+            recipe = tmp / 'recipes/fliperos-flycast.sh'
+            recipe.write_text(recipe.read_text().replace('PKG_COMMIT_VAR="FLYCAST_COMMIT"', 'PKG_COMMIT_VAR="PKG_VERSION"')
+                              .replace('edge $FLYCAST_COMMIT', 'edge $PKG_VERSION')
+                              + "PKG_EDGE_TAGS='^[0-9]{4}[a-z]?$'\n")
+            run = self.run_cmd('fliperos-emulators', 'edge', 'flycast', env=env)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertEqual((root / 'usr/local/bin/flycast').read_text(), 'edge 2612\n')
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'edge-status', 'flycast', env=env).stdout.strip(), '2612')
 
     def test_list_marks_what_is_installed(self):
         with tempfile.TemporaryDirectory() as tmp:
