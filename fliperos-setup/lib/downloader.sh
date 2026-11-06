@@ -418,7 +418,7 @@ bios_plan() {
   : > "$out"
   ev_step 0 "Looking at the game folders"
   while IFS='|' read -r key dir; do
-    bios_flycast_folder "$key" && flycast+=("$key|$dir")
+    bios_flycast_folder "$key" && flycast+=("$dir")
     if [[ $key == retroarch/* ]]; then
       while IFS= read -r path; do
         printf 'fw\t%s\t%s\t%s\n' "$key" "$path" "$BIOS_ROOT/$path"
@@ -461,7 +461,7 @@ bios_plan() {
         "$dir/$name.zip" "$dir/$name.7z"
     done < <(nice -n 10 "$ROMCLEAN" uses "${source[@]}" "${folder_args[@]}" --by-folder 2>> "$FLIPEROS_LOG") >> "$out"
   done
-  ((${#flycast[@]})) && bios_flycast_wants "$out" "${flycast[0]%%|*}" "${flycast[@]#*|}"
+  ((${#flycast[@]})) && bios_flycast_wants "$out" flycast "${flycast[@]}"
   return 0
 }
 

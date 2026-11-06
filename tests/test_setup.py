@@ -5092,7 +5092,7 @@ class ScraperTests(Base):
                      "f355bios.zip", "f355dlx.zip", "hod2bios.zip", "dc_boot.bin", "dc_flash.bin"):
             self.assertIn(str(bios / "dc" / name), dests, name)
         naomi = next(r for r in rows if r[2] == "naomi")
-        self.assertEqual(naomi[0], "set")
+        self.assertEqual(naomi[:2], ["set", "flycast"])
         self.assertIn(str(roms / "naomi" / "naomi.zip"), [os.path.normpath(p) for p in naomi[4:]])
         self.assertNotIn(str(roms / "retroarch" / "flycast" / "naomi.zip"), [os.path.normpath(p) for p in naomi[4:]])
         # Sem jogo do Flycast, nenhuma.
