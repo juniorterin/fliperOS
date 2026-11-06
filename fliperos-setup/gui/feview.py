@@ -2068,13 +2068,15 @@ def draw_transfer(fe, ui, now):
 
 
 def draw_unpack(fe, ui, now):
-    """A extracao de um jogo Namco empacotado (gui/fenamco.py): o jogo e a
-    barra de andamento no centro da tela, com o arquivo que esta saindo do .gz."""
+    """A extracao de um jogo Namco empacotado (gui/fenamco.py), ou o download
+    do core do RetroArch que falta (o titulo vem no ov): o jogo e a barra de
+    andamento no centro da tela, com o arquivo que esta saindo do .gz (ou o
+    que o download diz)."""
     g = fe.ov.get("game")
     pw, ph = WW - 16, 96
     px, py = 8, (HH - ph) // 2
     card(ui, (px, py, pw, ph))
-    ui.blit(W.big("EXTRACTING", 1, W.LABEL), (px + 10, py + 8))
+    ui.blit(W.big(fe.ov.get("title", "EXTRACTING"), 1, W.LABEL), (px + 10, py + 8))
     if g:
         tiny.text(ui, tiny.fit(fe.fd.short_title(g).upper(), pw - 20), T.COMMENT, px + 10, py + 20)
     done, total, name = fe.ov.get("progress", (0, 0, ""))

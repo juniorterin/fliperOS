@@ -5150,6 +5150,96 @@ class FrontendDataTests(unittest.TestCase):
         loader.exec_module(module)
         return module
 
+    def test_missing_retroarch_core_is_downloaded_with_the_bar_before_the_game(self):
+        # O core da pasta ~/roms/retroarch/<core> que nao esta instalado: o
+        # frontend o baixa (fliperos-core fetch --progress) com a barra da
+        # extracao e so entao abre o jogo; o fliperos-kms-run baixa sem barra.
+        import types
+        fm = self.frontend_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            have = tmp / 'cores' / 'fceumm_libretro.so'
+            have.parent.mkdir()
+            have.write_text('')
+            kms = '/opt/fliperos/bin/fliperos-kms-run'
+            self.assertIsNone(fm.missing_core([kms, 'retroarch', '-L', str(have), '/r/a.nes']))
+            want = str(tmp / 'cores' / 'nestopia_libretro.so')
+            self.assertEqual(fm.missing_core([kms, 'retroarch', '-L', want, '/r/a.nes']), want)
+            self.assertIsNone(fm.missing_core([kms, 'groovymame', 'sf2']))
+            # O download falso: o andamento e o core no lugar.
+            tool = tmp / 'fliperos-core'
+            tool.write_text('#!/bin/sh\necho "@step 40 Downloading $2"\necho "@step 100 done"\n'
+                            ': > "$FLIPEROS_RA_CORES/$2_libretro.so"\n')
+            tool.chmod(0o755)
+            fm.CORE_TOOL = str(tool)
+            opened = []
+            fe = types.SimpleNamespace(overlay=None, ov={}, said=[])
+            fe.say = lambda text, *a: fe.said.append(text)
+            fe.launch = lambda argv, g: opened.append(argv)
+            for name in ('core_start', 'unpack_tick'):
+                setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
+            argv = [kms, 'retroarch', '-L', want, '/r/Duck Hunt (World).nes']
+            fe.core_start({'Name': 'Duck Hunt'}, argv, want)
+            self.assertEqual((fe.overlay, fe.ov['title']), ('unpack', 'DOWNLOADING'))
+            deadline = time.monotonic() + 10
+            while fe.ov.get('result') is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(fe.ov['progress'], (100, 100, 'done'))
+            fe.unpack_tick()
+            self.assertEqual((fe.overlay, opened), (None, [argv]))
+            # Um core que o buildbot nao tem.
+            tool.write_text('#!/bin/sh\necho "@fail $2|core not available"\nexit 1\n')
+            fe.core_start({'Name': 'x'}, argv, str(tmp / 'cores' / 'nada_libretro.so'))
+            while fe.ov.get('result') is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            fe.unpack_tick()
+            self.assertEqual(fe.said, ['CORE NOT AVAILABLE'])
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        launch = frontend.split('    def launch(self, argv=None, game=None):')[1].split('    def play(')[0]
+        self.assertLess(launch.index('missing_core(argv)'), launch.index('self.remember()'))
+        self.assertIn('fe.ov.get("title", "EXTRACTING")', (ROOT / 'fliperos-setup/gui/feview.py').read_text())
+
+    def test_core_fetch_installs_from_the_buildbot_zip(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            site, cores = tmp / 'site', tmp / 'cores'
+            site.mkdir()
+            with zipfile.ZipFile(site / 'nestopia_libretro.so.zip', 'w') as z:
+                z.writestr('nestopia_libretro.so', b'ELF core')
+            env = dict(os.environ, FLIPEROS_RA_CORES=str(cores), FLIPEROS_CORE_URL=site.as_uri())
+            run = lambda *a: subprocess.run(['bash', str(ROOT / 'config/fliperos-core'), 'fetch'] + list(a),
+                                            capture_output=True, text=True, env=env)
+            r = run('nestopia', '--progress')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn('@step 100 nestopia installed', r.stdout)
+            self.assertEqual((cores / 'nestopia_libretro.so').read_bytes(), b'ELF core')
+            self.assertTrue(os.access(cores / 'nestopia_libretro.so', os.X_OK))
+            self.assertEqual(os.listdir(cores), ['nestopia_libretro.so'])
+            self.assertEqual(run('nestopia', '--progress').stdout, '')    # ja instalado
+            self.assertIn('@fail', run('mesen', '--progress').stdout)     # nao baixou
+            self.assertFalse((cores / 'mesen_libretro.so').exists())
+            self.assertEqual(run('../x').returncode, 1)
+            # O fliperos-kms-run baixa o core que falta antes de abrir o RetroArch.
+            prog = tmp / 'retroarch'
+            prog.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            prog.chmod(0o755)
+            fake = tmp / 'fetch'
+            fake.write_text('#!/bin/sh\necho "$FLIPEROS_RA_CORES $*" > "%s/fetched"\n' % tmp)
+            fake.chmod(0o755)
+            (tmp / 'debug').write_text('')
+            env = dict(os.environ, FLIPEROS_CORE_FETCH=str(fake), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'),
+                       FLIPEROS_RA_BUTTONS=str(tmp / 'none.cfg'), PATH='%s:%s' % (tmp, os.environ['PATH']))
+            env.pop('DISPLAY', None)
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L',
+                            str(cores / 'mesen_libretro.so'), '/r/a.nes'], capture_output=True, env=env)
+            self.assertEqual((tmp / 'fetched').read_text(), '%s fetch mesen\n' % cores)
+            (tmp / 'fetched').unlink()
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L',
+                            str(cores / 'nestopia_libretro.so'), '/r/a.nes'], capture_output=True, env=env)
+            self.assertFalse((tmp / 'fetched').exists())
+        self.assertIn('config/fliperos-core" "$root/opt/fliperos/bin/fliperos-core"', ROOTFS)
+
     def test_game_open_power_mark_hotkey_and_time(self):
         # O jogo aberto pelo frontend: o arquivo do botao de desligar tem o PID
         # (ou "hold"), o atalho do fliperos-buttons hotkey o fecha, e no modo

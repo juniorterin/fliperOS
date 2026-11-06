@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Um core do RetroArch que falta, baixado do buildbot da libretro (o mesmo do
+# Online Updater > Core Downloader) para a pasta dos cores, que e do usuario
+# fliperos (config/retroarch.cfg): um jogo de ~/roms/retroarch/<core> abre
+# mesmo sem o core instalado. O frontend do FliperOS mostra a barra (o
+# --progress); o fliperos-kms-run baixa sem ela para os outros frontends.
+#
+#   fliperos-core fetch NOME [--progress]   NOME sem o _libretro.so (nestopia)
+set -uo pipefail
+cores=${FLIPEROS_RA_CORES:-/opt/fliperos/retroarch/cores}
+base=${FLIPEROS_CORE_URL:-https://buildbot.libretro.com/nightly/linux/x86_64/latest}
+
+progress=0
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "${name:-core}" "$1"; else printf 'fliperos-core: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+fetch() {
+  name=${1:-}
+  [[ ${2:-} == --progress ]] && progress=1
+  # So o nome de um core: nada de caminho.
+  [[ $name =~ ^[A-Za-z0-9_+.-]+$ ]] || fail "invalid core name"
+  [[ -f $cores/${name}_libretro.so ]] && return 0
+  mkdir -p "$cores" 2> /dev/null && [[ -w $cores ]] || fail "cannot write to $cores"
+  # O download (o zip do buildbot) e a extracao, para um .part na pasta: o
+  # .so aparece inteiro ou nao aparece.
+  python3 - "$base/${name}_libretro.so.zip" "$cores" "${name}_libretro.so" "$progress" << 'PY' || exit 1
+import io
+import os
+import sys
+import urllib.error
+import urllib.request
+import zipfile
+
+url, cores, so, progress = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == '1'
+name = so[:-len('_libretro.so')]
+
+
+def fail(why):
+    if progress:
+        print('@fail %s|%s' % (name, why), flush=True)
+    else:
+        print('fliperos-core: %s' % why, file=sys.stderr)
+    sys.exit(1)
+
+
+data = None
+last = -1
+for attempt in range(3):
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'fliperos-core'})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            total = int(resp.headers.get('Content-Length') or 0)
+            buf = io.BytesIO()
+            while True:
+                chunk = resp.read(1 << 16)
+                if not chunk:
+                    break
+                buf.write(chunk)
+                pct = buf.tell() * 95 // total if total else 0
+                if progress and pct != last:
+                    last = pct
+                    print('@step %d Downloading %s (%.1f of %.1f MB)' % (pct, name, buf.tell() / 1048576.0,
+                                                                         total / 1048576.0), flush=True)
+            if total and buf.tell() != total:
+                raise OSError('incomplete download')
+            data = buf.getvalue()
+        break
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            fail('core not available')
+        print('fliperos-core: %s' % e, file=sys.stderr)
+    except OSError as e:
+        print('fliperos-core: %s' % e, file=sys.stderr)
+if data is None:
+    fail('no network')
+if progress:
+    print('@step 97 Installing %s' % name, flush=True)
+try:
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        body = z.read(so)
+except (zipfile.BadZipFile, KeyError):
+    fail('the download is not the core')
+part = os.path.join(cores, so + '.part')
+try:
+    with open(part, 'wb') as f:
+        f.write(body)
+    os.chmod(part, 0o755)
+    os.replace(part, os.path.join(cores, so))
+except OSError as e:
+    try:
+        os.unlink(part)
+    except OSError:
+        pass
+    fail('no space' if e.errno == 28 else 'cannot write the core')
+if progress:
+    print('@step 100 %s installed' % name, flush=True)
+PY
+}
+
+case ${1:-} in
+  fetch)
+    shift
+    fetch "$@"
+    ;;
+  *)
+    echo "Usage: fliperos-core fetch NAME [--progress]" >&2
+    exit 2
+    ;;
+esac

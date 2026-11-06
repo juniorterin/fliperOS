@@ -75,6 +75,8 @@ OPT_MODE, OPT_CLONES, OPT_HIDDEN, OPT_CONTROLS, OPT_POWER, OPT_COMMERCIAL, OPT_C
 # O atalho que fecha o jogo e as fichas do modo comercial, lidos junto com o
 # jogo (config/fliperos-buttons hotkey).
 BUTTONS_TOOL = os.environ.get("FLIPEROS_BUTTONS_TOOL", "/opt/fliperos/bin/fliperos-buttons")
+# O core do RetroArch que falta para o jogo, baixado antes de abrir (config/fliperos-core).
+CORE_TOOL = os.environ.get("FLIPEROS_CORE_TOOL", "/opt/fliperos/bin/fliperos-core")
 # O marquee (Pixelcade, ZeDMD): o logotipo do sistema ao trocar de romlist.
 PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
 # O protetor de tela do marquee: IDLE_SECONDS sem apertar nenhum botao e o ZeDMD
@@ -139,6 +141,15 @@ def game_env():
         else:
             env.pop("LD_LIBRARY_PATH", None)
     return env
+
+
+def missing_core(argv):
+    """O core do RetroArch do comando (-L /.../NOME_libretro.so) quando ele
+    ainda nao esta instalado; senao None."""
+    for flag, core in zip(argv, argv[1:]):
+        if flag in ("-L", "--libretro") and core.endswith("_libretro.so") and "/" in core:
+            return None if os.path.exists(core) else core
+    return None
 
 
 def tree(pid):
@@ -1556,13 +1567,70 @@ class Frontend:
                     pass
         threading.Thread(target=work, daemon=True).start()
 
+    def core_start(self, g, argv, core):
+        """O core do RetroArch do jogo nao esta instalado: baixado do buildbot
+        (config/fliperos-core fetch --progress) com a barra no centro, como a
+        extracao; B cancela. Depois o jogo abre (unpack_tick)."""
+        name = os.path.basename(core)[:-len("_libretro.so")]
+        ov = {"game": g, "argv": argv, "kind": "core", "title": "DOWNLOADING",
+              "progress": (0, 100, name), "result": None, "cancel": threading.Event(), "error": ""}
+        self.overlay, self.ov = "unpack", ov
+
+        def work():
+            try:
+                proc = subprocess.Popen([CORE_TOOL, "fetch", name, "--progress"], stdout=subprocess.PIPE,
+                                        stderr=subprocess.DEVNULL, text=True, start_new_session=True,
+                                        env=dict(os.environ, FLIPEROS_RA_CORES=os.path.dirname(core)))
+            except OSError:
+                ov["error"], ov["result"] = "no tool", False
+                return
+
+            def cancel():
+                # O script e o python do download, que segura a saida.
+                ov["cancel"].wait()
+                if proc.poll() is None:
+                    try:
+                        os.killpg(proc.pid, signal.SIGTERM)
+                    except OSError:
+                        pass
+            threading.Thread(target=cancel, daemon=True).start()
+            for line in proc.stdout:
+                if line.startswith("@step "):
+                    pct, _, text = line[6:].strip().partition(" ")
+                    if pct.isdigit():
+                        ov["progress"] = (int(pct), 100, text)
+                elif line.startswith("@fail "):
+                    ov["error"] = line.strip().partition("|")[2]
+            proc.stdout.close()
+            proc.wait()
+            if ov["cancel"].is_set():
+                ov["result"] = "cancel"
+            else:
+                ov["result"] = proc.returncode == 0 and os.path.isfile(core)
+            ov["cancel"].set()       # a thread do cancelamento sai
+        threading.Thread(target=work, daemon=True).start()
+
     def unpack_tick(self):
-        """A extracao acabou: com sucesso o jogo (agora um .acgame da pasta)
-        abre; senao o aviso."""
+        """A extracao (ou o download do core) acabou: com sucesso o jogo (agora
+        um .acgame da pasta) abre; senao o aviso."""
         if self.overlay != "unpack" or self.ov.get("result") is None:
             return
         result, error, g = self.ov["result"], self.ov.get("error", ""), self.ov["game"]
         self.overlay = None
+        if self.ov.get("kind") == "core":
+            if result is True:
+                self.launch(self.ov["argv"], g)
+            elif result == "cancel":
+                self.say("DOWNLOAD CANCELLED", 3)
+            elif "not available" in error:
+                self.say("CORE NOT AVAILABLE", 4)
+            elif "network" in error:
+                self.say("NO NETWORK FOR THE CORE", 4)
+            elif "space" in error:
+                self.say("NOT ENOUGH SPACE", 4)
+            else:
+                self.say("COULD NOT DOWNLOAD THE CORE", 4)
+            return
         if result is True:
             self.lib.forget()
             self.rebuild(keep=g["Name"])
@@ -1599,6 +1667,10 @@ class Frontend:
             return
         if self.locked():
             self.nag()
+            return
+        core = missing_core(argv)
+        if core:
+            self.core_start(g, argv, core)
             return
         self.remember()
         pg = self.pg

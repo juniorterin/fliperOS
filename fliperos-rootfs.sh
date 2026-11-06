@@ -190,6 +190,9 @@ install -Dm755 "$src/config/fliperos-kof" "$root/usr/local/bin/fliperos-kof"
 # O DuckStation (PlayStation) tambem e de la: a licenca dele nao deixa
 # redistribuir, e o config/fliperos-duckstation baixa o AppImage oficial.
 install -Dm755 "$src/config/fliperos-duckstation" "$root/opt/fliperos/bin/fliperos-duckstation"
+# O core do RetroArch que falta para um jogo de ~/roms/retroarch/<core>, baixado
+# antes de o jogo abrir (o frontend do FliperOS e o fliperos-kms-run).
+install -Dm755 "$src/config/fliperos-core" "$root/opt/fliperos/bin/fliperos-core"
 # Pixelcade (marquee de LED/LCD): o pixelweb e a arte sao baixados pelo
 # Setup > Games > Extras para ~/pixelcade (codigo fechado). Daqui vem o que liga os
 # frontends e os lancadores a ele, o servico (so sobe com o pixelweb

@@ -82,6 +82,14 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   for ((i = 2; i < $#; i++)); do
     if [[ ${!i} == -L || ${!i} == --libretro ]]; then next=$((i + 1)) core=${!next}; fi
   done
+  # O core da pasta (~/roms/retroarch/<core>) ainda nao instalado: baixado do
+  # buildbot antes de abrir (config/fliperos-core). O frontend do FliperOS ja
+  # o baixa com a barra; aqui e para os outros frontends.
+  fetch_core=${FLIPEROS_CORE_FETCH:-/opt/fliperos/bin/fliperos-core}
+  if [[ $core == */*_libretro.so && ! -f $core && -x $fetch_core ]]; then
+    core_name=${core##*/}
+    FLIPEROS_RA_CORES=${core%/*} "$fetch_core" fetch "${core_name%_libretro.so}" || true
+  fi
   # Setup > Joysticks > Buttons layout: nos cores MAME (o botao N do painel e
   # o botao N do jogo, config/retroarch-remaps), os binds do numero de botoes
   # deste jogo, por cima do buttons.cfg. O mame2010 (MAME 0.139) numera os
