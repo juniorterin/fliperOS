@@ -59,6 +59,8 @@ LETTER_IDLE = 2.0
 # Esquerda e direita so andam na tira de romlists; parado PICK_WAIT segundos
 # num sistema (ou com o botao 1), a lista troca, com a animacao.
 PICK_WAIT = 0.6
+# Quanto tempo fica o aviso de que outro gabinete abriu uma party ou um link.
+NOTICE = 6.0
 # Um jogo sem video e sem imagem, com o cursor parado nele por este tempo,
 # ganha o scrape sozinho (as informacoes, as imagens e o video, nas pastas de
 # ~/media).
@@ -352,6 +354,11 @@ class Frontend:
         self.link = felink.Link(fedata.web.player_home(), wire=None if self.shot else False)
         self.link_game = None      # o jogo da festa (a sala e a copia dos arquivos)
         self.link_sig = ()         # o que a rede mostra, para refazer a lista quando muda
+        # O aviso embaixo, com o sininho, quando outro gabinete abre uma party
+        # ou um link: (nome do gabinete, jogo, ate quando). parties_seen: as que
+        # ja avisaram.
+        self.notice = None
+        self.parties_seen = set()
         self.players_seen = None   # os jogadores de agora, para avisar quando um controle sai ou volta
         # FLIPEROS_LINK_FAKE: a rede de mentira (os testes de tela e o
         # emulador do frontend, tools/fe-emulator, que so olha a rede).
@@ -1409,19 +1416,20 @@ class Frontend:
         prof = self.link_profile(g)
         if prof:
             net = bool(prof.get("netplay"))
-            word = ("PARTY", "NET PLAY") if net else ("LINK", "LINK PLAY")
+            # "Party", e nao "net play": e so na rede local, nada de Internet.
+            word = ("PARTY", "PARTY PLAY") if net else ("LINK", "LINK PLAY")
             parties = self.link.parties_for(g["_system"]["key"], g["Name"])
             # Os jogadores que este gabinete fornece: ate um por controle (most);
             # o escolhido na linha de baixo (ov["take"]) vale para todos os azulejos.
             local = self.link.max_take(prof)
             pick = (self.ov or {}).get("take") if self.overlay == "popup" else None
             for p in parties:
-                if p["state"] == "lobby" and p["used"] < (p["max"] or 0):
+                if self.felink.joinable(p):
                     most = max(1, min(local, (p["max"] or 0) - p["used"]))
                     tiles.append({"kind": "join", "label": "JOIN " + word[0], "party": p, "lit": True, "net": net,
                                   "most": most, "take": min(pick or most, most)})
             for p in parties:
-                if not (p["state"] == "lobby" and p["used"] < (p["max"] or 0)):
+                if not self.felink.joinable(p):
                     tiles.append({"kind": "closed", "label": "STARTED" if p["state"] == "playing" else "FULL",
                                   "party": p, "lit": True, "net": net})
             tiles.append({"kind": "new" if parties else "link", "label": "NEW " + word[0] if parties else word[1],
@@ -1507,6 +1515,7 @@ class Frontend:
                 self.overlay = None
                 self.say("NO NETWORK CABLE", 3)
             return
+        self.notify_parties(link.parties())
         sig = tuple((p["system"], p["game"], p["used"], p["state"]) for p in link.parties())
         if sig != self.link_sig:
             self.link_sig = sig
@@ -1532,6 +1541,27 @@ class Frontend:
             link.leave()
             self.overlay = None
             self.say("THE PARTY CLOSED", 3)
+
+    def notify_parties(self, parties):
+        """Uma party ou um link novo de outro gabinete: o aviso "NOME IS
+        PLAYING" embaixo, com o sininho, por NOTICE segundos (com o jogo, se
+        esta na lista aberta). A deste gabinete (anfitriao ou convidado) nao
+        avisa."""
+        link = self.link
+        mine = link.ident if link.role == "host" else ((link.guest.party or {}).get("party") if link.guest else None)
+        ids = set()
+        for p in parties:
+            if not p.get("host"):
+                continue
+            ids.add(p["party"])
+            if p["party"] in self.parties_seen or p["party"] == mine:
+                continue
+            g = next((g for g in self.filtered() if (g["_system"]["key"], g["Name"]) == (p["system"], p["game"])), None)
+            title = self.fd.short_title(g) if g else ""
+            name = self.felink.clean_name(p["host"]) or "A CABINET"
+            self.notice = (name, title, time.monotonic() + NOTICE)
+        # As que acabaram saem: a mesma maquina abrindo outra avisa de novo.
+        self.parties_seen = ids
 
     def launch_link(self):
         """A festa chegou na hora: o jogo abre com o comando, a NVRAM e o ini

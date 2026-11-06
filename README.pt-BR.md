@@ -73,7 +73,7 @@ Em desenvolvimento: a 0.21 é testada no QEMU e num gabinete com CRT de 15 kHz. 
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="website/public/art/arcade-link-4.png" width="288" alt="Pixel art de quatro gabinetes de Super Street Fighter II ligados por cabos de rede"><br><b>Gabinetes em link</b><br><sub>Um cabo de rede entre gabinetes: o torneio de Street Fighter de quatro gabinetes, corridas de até oito e net play.</sub></td>
+    <td align="center" width="33%"><img src="website/public/art/arcade-link-4.png" width="288" alt="Pixel art de quatro gabinetes de Super Street Fighter II ligados por cabos de rede"><br><b>Gabinetes em link</b><br><sub>Um cabo de rede entre gabinetes: o torneio de Street Fighter de quatro gabinetes, corridas de até oito e party na rede local.</sub></td>
     <td align="center" width="33%"><img src="website/public/art/arcade-3-screens.png" width="208" alt="Pixel art de um gabinete de corrida sentado com três CRTs lado a lado"><br><b>Duas ou três telas</b><br><sub>Darius, Punch-Out!! e F355 Challenge, cada tela no seu próprio CRT.</sub></td>
     <td align="center" width="33%"><img src="website/public/screenshots/anim/setup-guncon.webp" width="240" alt="Animação: a calibração da GunCon 2, tiros nos cantos e um no centro"><br><b>Pistola no tubo</b><br><sub>GunCon 2 com o driver já incluso e uma calibração feita para o CRT.</sub></td>
   </tr>

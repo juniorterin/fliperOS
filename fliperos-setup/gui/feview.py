@@ -2218,21 +2218,29 @@ def draw_guide(fe, ui):
     ui.blit(W.big(msg, 1, W.LABEL), (px + (pw - W.width(msg)) // 2, py + ph - 16))
 
 
+HINT_H = 22                 # a altura do botao de uma dica (button_hint)
+
+
 def button_hint(ui, x, y, items):
     """As dicas de uma janela com os botoes do guia: para cada (funcao, nome),
-    o botao pequeno na cor da funcao, com o desenho dela no topo, e o nome ao
-    lado. (x, y) e o canto de cima a esquerda da linha."""
-    r = 9
+    um botao com a borda na cor da funcao e, dentro dele, o botao pequeno do
+    painel (com o desenho da funcao no topo) e o nome. (x, y) e o canto de
+    cima a esquerda da linha; cada botao tem HINT_H de altura."""
+    r = 7
     for f, label in items:
         color, draw_icon = FUNCTION_STYLE[f]
-        cx, cy = x + r + 1, y + 3
+        w = 2 * r + 16 + W.width(label) + 8
+        W.block(ui, (x, y, w, HINT_H), T.BG_DEEP, None)
+        ui.fill(shade(color, 0.25), (x + 1, y + 1, w - 2, HINT_H - 2))
+        pygame.draw.rect(ui, color, (x, y, w, HINT_H), 1)
+        cx, cy = x + r + 7, y + 8
         button3d(ui, cx, cy, r, color)
         icon = pygame.Surface((24, 24), pygame.SRCALPHA)
         draw_icon(icon, 12, 12, shade(color, 0.3))
-        icon = pygame.transform.smoothscale(icon, (18, round(18 * FLAT)))
-        ui.blit(icon, (cx - 9, cy - icon.get_height() // 2))
-        W.text(ui, label, T.COMMENT, cx + r + 4, y)
-        x = cx + r + 4 + W.width(label) + 10
+        icon = pygame.transform.smoothscale(icon, (14, round(14 * FLAT)))
+        ui.blit(icon, (cx - 7, cy - icon.get_height() // 2))
+        W.text(ui, label, T.FG, cx + r + 7, y + 7)
+        x += w + 6
 
 
 LINK_KINDS = ("link", "join", "new", "closed")
@@ -2280,7 +2288,8 @@ def draw_popup(fe, ui, now):
     pick = tiles[sel].get("net") and (tiles[sel].get("most") or 1) > 1 and kind != "closed"
     row = pick and fe.ov.get("row")
     drop = 8 if pick else 0
-    ph = 28 + size + 28 + drop + (22 if kind in LINK_KINDS else 0)
+    host = (tiles[sel].get("party") or {}).get("host")
+    ph = 28 + size + 28 + drop + (22 if kind in LINK_KINDS else 0) + (4 if host else 0)
     px, py = (WW - pw) // 2, (HH - ph) // 2 - 4
     card(ui, (px, py, pw, ph))
     W.text(ui, fit(fe.fd.short_title(g), pw - 16), T.YELLOW, px + 8, py + 8)
@@ -2322,12 +2331,16 @@ def draw_popup(fe, ui, now):
         else:
             width = total * 11 - 3
             cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3)
+        if host:
+            # De quem e a party ou o link (o nome do gabinete que abriu).
+            tiny.centered(ui, tiny.fit("HOST " + host, pw - 16), T.COMMENT, px + pw // 2, ty + size + 43 + drop)
 
 
 def draw_lobby(fe, ui, now):
-    """A sala de espera do link: os gabinetes da festa acendem conforme chegam
-    (o aro rosa e este), o contador do comeco e uma palavra de estado. So os
-    icones, o titulo e os numeros: nada de frase."""
+    """A sala de espera do link: os gabinetes da festa acendem conforme chegam,
+    cada um com o nome dele (o aro rosa e este), o contador do comeco e uma
+    palavra de estado. So os icones, o titulo, os nomes e os numeros: nada de
+    frase."""
     lob = fe.link.lobby()
     g = fe.link_game
     if not lob or not g:
@@ -2345,7 +2358,8 @@ def draw_lobby(fe, ui, now):
     # No net play so os gabinetes que ja entraram (cada um com os seus jogadores)
     # e, embaixo, os jogadores do jogo.
     total = max(1, members) if net else lob["max"]
-    cols = 4
+    # Em pe (240 de largura), tres por linha: o nome de 12 letras cabe na caixa.
+    cols = 4 if WW >= 300 else 3
     cw = (pw - 16) // cols
     rows = (total + cols - 1) // cols
     ch = 52
@@ -2362,6 +2376,10 @@ def draw_lobby(fe, ui, now):
             m = lob["members"][i]
             label = "P%d" % m["first"] if m["take"] == 1 else "P%d-%d" % (m["first"], m["first"] + m["take"] - 1)
         W.text(ui, label, T.GREEN if lit else T.LINE, cx + (cw - 6 - W.width(label)) // 2, cy + 33)
+        if lit:
+            # O nome do gabinete (o apelido do Setup, ou a fruta ou o bicho dele).
+            name = tiny.fit(lob["members"][i].get("name") or "", cw - 10)
+            tiny.text(ui, name, T.FG if you else T.COMMENT, cx + (cw - 6 - tiny.width(name)) // 2, cy + 44)
         if you:
             pygame.draw.rect(ui, T.PINK, (cx - 2, cy - 2, cw - 2, ch + 4), 1)
     y = y0 + rows * (ch + 4) + 4
@@ -2385,7 +2403,7 @@ def draw_lobby(fe, ui, now):
     hint = [("b2", "LEAVE")]
     if lob["role"] == "host" and not lob["fixed"] and lob["ready"] and left is None:
         hint = [("b1", "START")] + hint
-    button_hint(ui, px + 8, py + ph - 20, hint)
+    button_hint(ui, px + 8, py + ph - HINT_H - 6, hint)
 
 
 def draw_transfer(fe, ui, now):
@@ -2412,7 +2430,7 @@ def draw_transfer(fe, ui, now):
     W.text(ui, "%d%%" % round(pct * 100), T.FG, px + (pw - W.width("%d%%" % round(pct * 100))) // 2, py + 82)
     if name:
         W.text(ui, fit(os.path.basename(name), pw - 16), T.COMMENT, px + 8, py + 96)
-    button_hint(ui, px + 8, py + ph - 20, [("b2", "CANCEL")])
+    button_hint(ui, px + 8, py + ph - HINT_H - 6, [("b2", "CANCEL")])
 
 
 def draw_unpack(fe, ui, now):
@@ -2421,7 +2439,7 @@ def draw_unpack(fe, ui, now):
     andamento no centro da tela, com o arquivo que esta saindo do .gz (ou o
     que o download diz)."""
     g = fe.ov.get("game")
-    pw, ph = WW - 16, 96
+    pw, ph = WW - 16, 104
     px, py = 8, (HH - ph) // 2
     card(ui, (px, py, pw, ph))
     ui.blit(W.big(fe.ov.get("title", "EXTRACTING"), 1, W.LABEL), (px + 10, py + 8))
@@ -2436,7 +2454,7 @@ def draw_unpack(fe, ui, now):
     W.text(ui, label, T.FG, px + (pw - W.width(label)) // 2, py + 52)
     if name:
         tiny.text(ui, tiny.fit(os.path.basename(name).upper(), pw - 20), T.COMMENT, px + 10, py + 66)
-    button_hint(ui, px + 8, py + ph - 16, [("b2", "CANCEL")])
+    button_hint(ui, px + 8, py + ph - HINT_H - 6, [("b2", "CANCEL")])
 
 
 # O letreiro de um texto que nao cabe: parado com "..." por MARQUEE_HOLD
@@ -3432,6 +3450,33 @@ def draw_toast(ui, text):
     W.text(ui, text, T.FG, x + 8, y + 4)
 
 
+def bell_icon(ui, cx, cy, c):
+    """O sininho de 12x12 com o centro em (cx, cy)."""
+    pygame.draw.rect(ui, c, (cx - 1, cy - 6, 2, 2))
+    pygame.draw.polygon(ui, c, [(cx - 3, cy - 4), (cx + 2, cy - 4), (cx + 4, cy + 1), (cx + 5, cy + 3),
+                                (cx - 6, cy + 3), (cx - 5, cy + 1)])
+    pygame.draw.rect(ui, c, (cx - 2, cy + 4, 3, 2))
+    pygame.draw.line(ui, T.BG_DEEP, (cx - 2, cy - 3), (cx - 3, cy + 1))
+
+
+def draw_notice(ui, name, title, now):
+    """O aviso embaixo de que outro gabinete abriu uma party ou um link: o
+    sininho (balancando) a esquerda, "NOME IS PLAYING" e, se o jogo esta na
+    lista, o nome dele em letra pequena. O nome do gabinete tem ate 12 letras
+    (felink.NAME_MAX): cabe em pe, com 240 de largura."""
+    line = "%s IS PLAYING" % name
+    w = max(W.width(line), tiny.width(tiny.fit(title, WW - 44)) if title else 0) + 32
+    h = 26 if title else 18
+    x, y = (WW - w) // 2, HH - h - 22
+    W.block(ui, (x, y, w, h), T.BG_DEEP, T.PURPLE)
+    pygame.draw.rect(ui, T.YELLOW, (x, y, w, h), 1)
+    swing = (0, 1, 0, -1)[int(now * 6) % 4]
+    bell_icon(ui, x + 12 + swing, y + 9, T.YELLOW)
+    W.text(ui, line, T.FG, x + 24, y + 5)
+    if title:
+        tiny.text(ui, tiny.fit(title, WW - 44), T.COMMENT, x + 24, y + 16)
+
+
 def draw(fe, now):
     """Um quadro em fe.back."""
     back = fe.back
@@ -3536,4 +3581,9 @@ def draw(fe, now):
     if fe.toast and now < fe.toast[1]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_toast(top, fe.toast[0])
+        back.blit(top, (0, 0))
+    notice = getattr(fe, "notice", None)
+    if notice and now < notice[2]:
+        top = pygame.Surface((WW, HH), pygame.SRCALPHA)
+        draw_notice(top, notice[0], notice[1], now)
         back.blit(top, (0, 0))

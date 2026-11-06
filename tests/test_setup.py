@@ -2772,6 +2772,30 @@ class PasswordTests(Base):
         self.assertEqual(self.env.run("password_set longenough").returncode, 1)
 
 
+class CabinetNameTests(Base):
+    """Setup > System > Cabinet name: o apelido que os outros gabinetes veem
+    na party e no link (o gui/felink.py le e limpa)."""
+
+    def name(self, cmd):
+        return self.env.out("SETUP_DIR=%s %s" % (SETUP, cmd)).strip()
+
+    def test_the_name_is_cleaned_saved_and_an_empty_one_goes_back_to_the_fruit(self):
+        self.name("cabinet_name_set 'Sala do João'")
+        self.assertEqual(self.env.out("conf_get cabinet_name").strip(), "SALA DO JOAO")
+        self.assertEqual(self.name("cabinet_name_py current"), "SALA DO JOAO")
+        self.name("cabinet_name_set ''")
+        self.assertEqual(self.env.run("conf_get cabinet_name").returncode, 1)
+        fruit = self.name("cabinet_name_py current")
+        self.assertEqual(fruit, self.name("cabinet_name_py default"))
+        self.assertRegex(fruit, r"^[A-Z]{3,12}$")
+
+    def test_the_install_asks_for_it_before_the_disk(self):
+        install = (SETUP / "screens" / "install-progress.sh").read_text()
+        self.assertLess(install.index("screen_cabinet_name install"), install.index("screen_disk_selection"))
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn("local network", menu.split("screen_cabinet_name() {")[1].split("\n}\n")[0])
+
+
 class BootGameTests(Base):
     """Setup > Games > Frontend: um jogo direto no boot."""
 
@@ -7173,7 +7197,7 @@ class SetupGroupsTests(Base):
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
-        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "update",
+        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update",
                                                         "whatsnew", "debug", "lab", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)

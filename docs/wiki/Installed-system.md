@@ -200,6 +200,7 @@ To drive it without a controller, write `open`, `close`, `up`, `down`, `left`, `
       The choice is kept in `/etc/fliperos/services.conf`; the Pixelcade and the ZeDMD are not in it, udev starts them when the device shows up;
     - **Quirks** — kernel fixes for USB devices that arrive wrong: controllers, guns, keyboards and disks. See [Controls](Controls.md#setup--system--quirks);
     - **Password** — the password of the `fliperos` user: the login, `sudo`, SSH and the network share (Samba keeps a password of its own, and both change together);
+    - **Cabinet name** — optional: the name the other cabinets on the local network see in party and link play ("APPLE IS PLAYING"), up to 12 letters, numbers, spaces and hyphens, kept as `cabinet_name=` in `fliperos.conf`. Empty, the cabinet uses a fruit or an animal of its own (see [Linked cabinets](Linked-cabinets.md));
     - **System Update** — `apt-get update` and `upgrade`, with apt's real progress;
     - **What's new** — the updates installed on this machine (newest first) and the changelog of every FliperOS version, with scrolling (see [What's new](#whats-new));
     - **Debug mode** — off (the default), the boot goes straight to Plymouth and the output of frontends and emulators (X, Switchres, the program itself) goes to `/opt/fliperos/logs/<program>.log`, rewritten on each launch: only the picture is on screen.

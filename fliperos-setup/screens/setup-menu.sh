@@ -74,6 +74,7 @@ screen_setup_system() {
       "services|Services|SSH, network share, Wi-Fi: at boot, after boot or off." \
       "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
       "password|Password|The password of the fliperos user: login, SSH and network share." \
+      "cabinetname|Cabinet name|The name the other cabinets see in party and link play." \
       "update|System Update|Download and install the updates of all packages." \
       "whatsnew|What's new|The changelog of each FliperOS version and the updates installed." \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))|Show boot and emulator messages on screen to find a problem." \
@@ -86,6 +87,7 @@ screen_setup_system() {
       services) screen_services ;;
       quirks) screen_quirks ;;
       password) screen_password ;;
+      cabinetname) screen_cabinet_name ;;
       update) screen_need_internet "System Update" && screen_update ;;
       whatsnew) screen_whatsnew ;;
       debug) screen_debug ;;
@@ -1387,6 +1389,28 @@ screen_password() {
       "Details in /var/log/fliperos-setup.log." ;;
     *) ui_msg "$title" "$(ui_bad "The password was not changed.")" "" "Details in /var/log/fliperos-setup.log." ;;
   esac
+}
+
+# screen_cabinet_name [install] (Setup > System > Cabinet name, e na
+# instalacao): o apelido opcional do gabinete, o nome que os outros gabinetes
+# da rede local veem na party e no link (lib/system.sh). Na instalacao a
+# maquina ainda nao tem o machine-id dela: o nome de fabrica nao aparece.
+screen_cabinet_name() {
+  local title="Cabinet name" install=${1:-} value fallback="a fruit or animal name picked for this cabinet"
+  [[ -n $install ]] || fallback=$(cabinet_name_py default) || fallback=""
+  value=$(conf_get cabinet_name 2> /dev/null) || value=""
+  while true; do
+    value=$(ui_input "$title" "Optional. Used for party and link play between the cabinets on your local network: the others see \"NAME IS PLAYING\" when this one opens a game. Up to $CABINET_NAME_MAX letters and numbers; empty: ${fallback:-a fruit or animal name}." \
+      "$value") || return 0
+    value=$(printf '%s' "$value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    ((${#value} <= CABINET_NAME_MAX)) && break
+    ui_msg "$title" "The name has ${#value} characters: use up to $CABINET_NAME_MAX, so it fits on the screen of the other cabinets."
+    value=${value:0:$CABINET_NAME_MAX}
+  done
+  cabinet_name_set "$value"
+  [[ -n $install ]] && return 0
+  ui_msg "$title" "Other cabinets on the network now see this one as $(cabinet_name_py current)." "" \
+    "The frontend shows the new name the next time it opens."
 }
 
 # ── Atualizacao ──────────────────────────────────────────────────

@@ -92,12 +92,13 @@ The media's menu (gasetup's `isomainmenu`): **Install to HD/SSD**, **Recovery Mo
 
      Downwards the image only moves while there are blank lines below it (Switchres doesn't go past the *front porch*); when it stops, the adjustment is the monitor's **V-POS**;
    - **Multiple Monitors**: a second arcade monitor on another analog output (VGA, DVI-I) of the same card, and a third, or one on a second video card or on a digital output through an active VGA converter, as an experimental option, for games with 2 or 3 screens (Darius, The Ninja Warriors and Punch-Out!! in GroovyMAME, F355 Challenge in Flycast), with a switch to turn the multi-screen mode off. See [Multiple monitors](Multiple-Monitors.md).
-2. **Automatically Partition** — lists the disks by **model, size, path and bus** (USB/NVMe/SATA). Not listed: the installation media itself, disks under 16 GiB, mounted or in swap, with RAID/LVM/encryption or active dependents — each one with the reason, above the list.
+2. **Cabinet name** (optional; empty or Esc skips it): the name the other cabinets on your local network see in party and link play, up to 12 letters. With no name the cabinet gets a fruit or an animal. It can be changed later in Setup > System > Cabinet name. See [Linked cabinets](Linked-cabinets.md).
+3. **Automatically Partition** — lists the disks by **model, size, path and bus** (USB/NVMe/SATA). Not listed: the installation media itself, disks under 16 GiB, mounted or in swap, with RAID/LVM/encryption or active dependents — each one with the reason, above the list.
 
    **My drive is not listed (details)** shows everything Linux sees (`lsblk`, the controllers and the kernel messages): an HD/SSD that doesn't even show there is hidden before Linux, almost always by the BIOS SATA mode set to RAID/Intel RST (switch to AHCI) or by Intel VMD.
-3. **WARNING** — model, path and size of the disk that will be erased; *No* goes back to the disk choice. If the disk already has FliperOS, the warning suggests Recovery Mode.
-4. **Installing FliperOS** — a single screen, with the target disk, a **real** progress bar (the system copy comes from the `unsquashfs` percentage, like gasetup's `dialog --gauge`), the step and short messages. Command output goes to `/var/log/fliperos-setup.log`. On error: step, error, **View log / Retry / Return**.
-5. **Installation completed successfully. Remove the installation CD/DVD/USB.** — and **Reboot now?**
+4. **WARNING** — model, path and size of the disk that will be erased; *No* goes back to the disk choice. If the disk already has FliperOS, the warning suggests Recovery Mode.
+5. **Installing FliperOS** — a single screen, with the target disk, a **real** progress bar (the system copy comes from the `unsquashfs` percentage, like gasetup's `dialog --gauge`), the step and short messages. Command output goes to `/var/log/fliperos-setup.log`. On error: step, error, **View log / Retry / Return**.
+6. **Installation completed successfully. Remove the installation CD/DVD/USB.** — and **Reboot now?**
 
 Partitioning: GPT, a 1 MiB BIOS boot partition, a 1 GiB FAT32 ESP, the rest in ext4. The new partitions have their old signatures wiped and the BIOS boot one is zeroed (a leftover file system from the previous disk there made `limine bios-install` refuse; it also runs with `--force`).
 

@@ -42,6 +42,7 @@ Pedido de 2026-11-06: cada emulador que vem na imagem chega pelos updates (um pa
 O link e o net play pelo frontend entraram na 0.19; depois, o net play ganhou todo core do RetroArch marcado "deterministic", o GGPO do Flycast e o Dolphin (com o patch próprio). Falta:
 - **Duas pessoas jogando de verdade:** uma corrida inteira em link e um crédito inteiro em net play. Até aqui, as telas e as entradas de cada lado foram conferidas com teclas por script e controles virtuais.
 - **Net play com outro core além do FBNeo:** os outros aparecem no frontend, mas nenhum foi jogado entre duas máquinas.
+- **Party do RetroArch sem espera:** quem abre já entra no jogo e os outros entram com ele rodando (o aviso "NOME IS PLAYING", com o sininho). Testado só no loopback e nas telas desenhadas; falta entre dois gabinetes, vendo o RetroArch do anfitrião aceitar quem chega com o jogo andando.
 - **GGPO do Flycast:** nenhuma partida foi aberta pelo frontend ainda. Entre o gabinete e um PC com Windows, o lado do cliente não foi provado (dois Flycast do gabinete ligaram, numa rede de teste dentro da mesma máquina).
 - **Initial D Ver. 3 e F355 Challenge:** o link entre dois Flycast começou numa máquina só, mas as telas não foram vistas, e os dois não estão na lista do frontend.
 - **Dirt Devils em quatro** não ligou nos testes; o perfil dele diz dois.

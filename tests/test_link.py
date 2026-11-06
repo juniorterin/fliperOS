@@ -664,8 +664,9 @@ class FrontendLinkTests(unittest.TestCase):
         games = [{"Name": n, "Title": n, "_system": {"key": k}, "Players": pl}
                  for k, n, pl in (("mame", "sf2", "2"), ("model3", "scud", "1"), ("model3", "daytona2", "1"))]
         games.append({"Name": "xmen", "Title": "xmen", "_system": {"key": "retroarch/fbneo"}, "Players": "4"})
-        fe = types.SimpleNamespace(link=link, games=games, mode="list", show_clones=True, opened=set(), cursor=0, overlay=None, ov={},
-                                   fd=types.SimpleNamespace(tree=lambda gs: [(g, []) for g in gs]), filtered=lambda: games,
+        fe = types.SimpleNamespace(link=link, felink=felink, games=games, mode="list", show_clones=True, opened=set(), cursor=0, overlay=None, ov={},
+                                   fd=types.SimpleNamespace(tree=lambda gs: [(g, []) for g in gs], GROUPS=(),
+                                                            group_item=lambda extra: None), filtered=lambda: games,
                                    rows=[], game=lambda: fe.rows[fe.cursor][0])
         fe.rebuild = lambda keep=None: self.fm.Frontend.rebuild(fe, keep)
         for name in ("popup_tiles", "link_profile", "overlay_act", "link_host", "link_join"):
@@ -698,7 +699,7 @@ class FrontendLinkTests(unittest.TestCase):
         fe = self.stub()
         self.assertEqual(self.kinds(fe, "xmen"), ["play", "link", "fav", "more"])
         tile = fe.popup_tiles()[1]
-        self.assertEqual((tile["label"], tile["net"]), ("NET PLAY", True))
+        self.assertEqual((tile["label"], tile["net"]), ("PARTY PLAY", True))
         party = dict(self.party(), game="xmen", system="retroarch/fbneo", max=4)
         fe2 = self.stub([party])
         self.assertEqual(self.kinds(fe2, "xmen"), ["play", "join", "new", "fav", "more"])
@@ -752,6 +753,29 @@ class FrontendLinkTests(unittest.TestCase):
         fe.mode = "flow"
         fe.rebuild()
         self.assertEqual(len(fe.rows), 4)
+
+    def test_a_running_party_that_still_takes_cabinets_offers_join(self):
+        party = dict(self.party("playing"), game="xmen", system="retroarch/fbneo", max=4, open=True)
+        fe = self.stub([party])
+        self.assertEqual(self.kinds(fe, "xmen"), ["play", "join", "new", "fav", "more"])
+
+    def test_a_new_party_elsewhere_rings_the_bell_once_with_the_cabinet_name(self):
+        fe = self.stub()
+        fe.fd.short_title = lambda g: g["Title"].upper()
+        fe.link.role, fe.link.guest, fe.link.ident = None, None, "me"
+        notify = lambda parties: self.fm.Frontend.notify_parties(fe, parties)
+        fe.notice, fe.parties_seen = None, set()
+        notify([dict(self.party(), host="mango")])
+        self.assertEqual(fe.notice[:2], ("MANGO", "SCUD"))
+        fe.notice = None
+        notify([dict(self.party(), host="mango")])          # a mesma: nao avisa de novo
+        self.assertIsNone(fe.notice)
+        fe.link.role = "host"
+        notify([dict(self.party(), party="me", host="mango")])   # a deste gabinete: nao avisa
+        self.assertIsNone(fe.notice)
+        fe.link.role = None
+        notify([dict(self.party(), party="q", game="outro", host="Panda bear of the north")])
+        self.assertEqual(fe.notice[:2], ("PANDA BEAR O", ""))
 
     def test_a_party_of_a_game_this_cabinet_does_not_have_adds_no_row(self):
         party = dict(self.party(), game="outrogame")
@@ -955,15 +979,128 @@ class SlotsTests(unittest.TestCase):
         os.makedirs(a.home)
         self.assertTrue(a.start())
         self.addCleanup(a.stop)
-        prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 2, frozenset({"xmen"}))
+        # Uma party que espera na sala (a do Dolphin; a do RetroArch comeca logo).
+        prof = dict(felink.netplay_profile("retroarch/fbneo", "xmen", "4", 2, frozenset({"xmen"})), late=False)
         a.host_game(prof, "retroarch/fbneo", "xmen", [], "/r/xmen.zip")
         self.assertEqual(a.take, 3)
         self.assertIsNone(a.tick())
+        self.assertIsNone(a.plan)
         g, ok = self.guest("g", 3)
         self.assertTrue(ok)
         self.assertEqual(felink.Link.mine(g.party, g.number)["take"], 1)     # sobrou 1 de 4
         self.assertIsNone(a.tick())                                          # o tick que comeca devolve None
         self.assertIsNotNone(a.plan)
+
+    def test_a_retroarch_party_starts_alone_and_takes_cabinets_while_it_plays(self):
+        now = [10.0]
+        a = felink.Link(self.tmp.name + "/a", wire=LOOP, ident="aaa", name="A", ports={"presence": free_port(), "party": self.port,
+                                                                                    "files": free_port()}, local_players=1,
+                        clock=lambda: now[0])
+        b = felink.Link(self.tmp.name + "/b", wire=LOOP, ident="bbb", name="B", ports=a.ports, local_players=2,
+                        clock=lambda: now[0])
+        for link in (a, b):
+            os.makedirs(link.home)
+            self.assertTrue(link.start())
+            self.addCleanup(link.stop)
+        prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 1, frozenset({"xmen"}))
+        self.assertTrue(prof["late"])
+        a.host_game(prof, "retroarch/fbneo", "xmen", [], "/r/xmen.zip")
+        self.assertIsNone(a.tick())                       # comeca sozinho: so a contagem
+        self.assertEqual(a.plan["n"], 1)
+        now[0] += felink.COUNTDOWN
+        self.assertEqual(a.tick(), "launch")
+        self.assertTrue(" ".join(a.command(["ignored"])).endswith("--host /r/xmen.zip"))
+        # Os outros veem a party andando e aberta: JOIN.
+        self.assertTrue(wait(lambda: b.parties_for("retroarch/fbneo", "xmen")))
+        party = b.parties_for("retroarch/fbneo", "xmen")[0]
+        self.assertEqual((party["state"], party["open"], party["host"]), ("playing", True, "A"))
+        self.assertTrue(felink.joinable(party))
+        self.assertTrue(b.join_party(party, prof, "retroarch/fbneo", "xmen", "/r/xmen.zip"))
+        self.assertTrue(wait(lambda: b.guest.plan is not None))
+        b.tick()
+        self.assertEqual((b.lobby()["first"], b.take, b.lobby()["left"]), (2, 2, felink.COUNTDOWN))   # sem atraso
+        argv = b.command(["ignored"])
+        self.assertEqual(argv[-3:], ["--connect", "127.0.0.1", "/r/xmen.zip"])
+        text = Path(b.home, ".config", "fliperos", "netplay.cfg").read_text()
+        self.assertIn('netplay_request_device_p2 = "true"', text)
+        self.assertIn('netplay_request_device_p3 = "true"', text)
+
+    def test_a_cabinet_that_leaves_a_running_party_frees_its_players(self):
+        prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 1, frozenset({"xmen"}))
+        host = felink.PartyHost(LOOP, prof, "xmen", "h", "H", port=self.port, take=1)
+        host.open()
+        self.addCleanup(host.close)
+        self.assertTrue(host.ready())
+        self.assertIsNotNone(host.start())
+        g2, ok2 = self.guest("g2", 1)
+        g3, ok3 = self.guest("g3", 2)
+        self.assertTrue(ok2 and ok3)
+        self.assertTrue(wait(lambda: g2.plan is not None and g3.plan is not None))
+        self.assertEqual((g2.plan["delays"], g3.number), ({"2": 0}, 3))
+        self.assertEqual([(m["first"], m["take"]) for m in host.snapshot()["members"]], [(1, 1), (2, 1), (3, 2)])
+        self.assertTrue(host.full())
+        g4, ok4 = self.guest("g4", 1)
+        self.assertEqual((ok4, g4.refused), (False, "full"))
+        g2.leave()                                          # fechou o jogo: o jogador 2 fica livre
+        self.assertTrue(wait(lambda: not host.full()))
+        g5, ok5 = self.guest("g5", 2)                       # so ha um lugar: entra com um
+        self.assertTrue(ok5)
+        self.assertTrue(wait(lambda: g5.plan is not None))
+        me = felink.Link.mine(g5.plan, g5.number)
+        self.assertEqual((me["first"], me["take"]), (2, 1))
+        self.assertEqual([(m["first"], m["take"]) for m in host.snapshot()["members"]], [(1, 1), (3, 2), (2, 1)])
+
+    def test_ggpo_and_dolphin_parties_still_wait_in_the_room(self):
+        for prof in (felink.netplay_profile("naomi", "mvsc2", "2", 2), felink.netplay_profile("dolphin", "mkdd", "4", 2)):
+            self.assertFalse(prof.get("late"))
+            host = felink.PartyHost(LOOP, prof, "g", "h", "H", port=free_port())
+            self.assertFalse(host.ready())
+            self.assertFalse(felink.joinable({"state": "playing", "open": False, "used": 1, "max": 2}))
+
+
+class CabinetNameTests(unittest.TestCase):
+    """O apelido do gabinete (Setup > System > Cabinet name) e, sem ele, a
+    fruta ou o bicho da maquina."""
+
+    def test_a_hundred_fruits_and_animals_that_fit_the_notice(self):
+        self.assertEqual(len(felink.NAMES), 100)
+        self.assertEqual(len(set(felink.NAMES)), 100)
+        for name in felink.NAMES:
+            self.assertEqual(felink.clean_name(name), name)
+            self.assertLessEqual(len(name), felink.NAME_MAX)
+
+    def test_the_default_is_the_same_for_the_same_machine(self):
+        self.assertEqual(felink.default_name("abc123"), felink.default_name("abc123"))
+        self.assertIn(felink.default_name("abc123"), felink.NAMES)
+        self.assertGreater(len({felink.default_name("m%d" % i) for i in range(200)}), 50)
+
+    def test_the_name_is_cleaned_and_cut(self):
+        self.assertEqual(felink.clean_name("  Fliperama   do João! "), "FLIPERAMA DO")
+        self.assertEqual(felink.clean_name("sala-2"), "SALA-2")
+        self.assertEqual(felink.clean_name("çãé"), "CAE")
+        self.assertEqual(felink.clean_name("!!!"), "")
+
+    def test_the_conf_name_wins_and_an_empty_one_falls_back(self):
+        with tempfile.TemporaryDirectory() as d:
+            conf = os.path.join(d, "fliperos.conf")
+            Path(conf).write_text("monitor=generic_15\ncabinet_name=Sala 2\n")
+            self.assertEqual(felink.cabinet_name("abc", conf), "SALA 2")
+            Path(conf).write_text("cabinet_name=\n")
+            self.assertEqual(felink.cabinet_name("abc", conf), felink.default_name("abc"))
+            self.assertEqual(felink.cabinet_name("abc", os.path.join(d, "none")), felink.default_name("abc"))
+            with mock.patch.object(felink, "CONF", conf):
+                Path(conf).write_text("cabinet_name=Mango\n")
+                self.assertEqual(felink.Link(d, wire=None, ident="abc").name, "MANGO")
+
+    def test_a_guest_name_is_cleaned_by_the_host(self):
+        port = free_port()
+        host = felink.PartyHost(LOOP, felink.Profiles().get("scud"), "scud", "h", "H", port=port)
+        host.open()
+        self.addCleanup(host.close)
+        g = felink.PartyGuest(LOOP, "g", "a very long cabinet name", port=port)
+        self.addCleanup(g.leave)
+        self.assertTrue(g.join("127.0.0.1", "scud"))
+        self.assertEqual(host.snapshot()["members"][1]["name"], "A VERY LONG")
 
 
 class NetplayTests(unittest.TestCase):

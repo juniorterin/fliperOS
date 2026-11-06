@@ -6,7 +6,9 @@ This page lists those games, how the link works in each emulator FliperOS ships,
 
 **The FliperOS frontend does link play for six games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
 
-Games of a RetroArch core that does net play, with more players than a cabinet has controls, and the NAOMI and Atomiswave games of Flycast (GGPO, one player on each of two cabinets) get **net play** in the same menu: see Net play below.
+Games of a RetroArch core that does net play, with more players than a cabinet has controls, and the NAOMI and Atomiswave games of Flycast (GGPO, one player on each of two cabinets) get **party play** in the same menu: see Party play below. The frontend calls it a party, not net play, because it only runs on your local network, never over the internet.
+
+**Each cabinet has a name** that the others see: in the waiting room, on the JOIN tile ("HOST APPLE") and in a notice with a bell at the bottom of the screen, "APPLE IS PLAYING", when it opens a party or a link game. Set it in **Setup > System > Cabinet name** or during the installation (up to 12 letters, numbers, spaces and hyphens). With no name, each cabinet gets a fruit or an animal out of a list of 100, always the same for that machine (picked from its `/etc/machine-id`). It is kept as `cabinet_name=` in `/etc/fliperos/fliperos.conf`, and the frontend reads it when it opens.
 
 For every other game, and to know what the frontend does underneath, everything on this page is set by hand in the emulator: a command line, an ini file, or the game's own test menu.
 
@@ -234,9 +236,9 @@ Virtua Racing, Rad Rally, OutRunners and Stadium Cross were started in MAME 0.28
 
 The Derby Owners Club, World Club Champion Football and Mushiking sets are online and card games, and were not tried.
 
-## Net play: more players than controls
+## Party play: more players than controls
 
-Some games have more players than a cabinet has controls: X-Men has four players, and FBNeo runs it. For these, RetroArch's net play lets cabinets share one game. There is no emulator link and no NVRAM per cabinet: every machine runs the same game, and the inputs travel over the network.
+Some games have more players than a cabinet has controls: X-Men has four players, and FBNeo runs it. For these, a party lets cabinets on the local network share one game, through RetroArch's net play. There is no emulator link and no NVRAM per cabinet: every machine runs the same game, and the inputs travel over the network.
 
 **Which games get it:**
 
@@ -247,9 +249,11 @@ Some games have more players than a cabinet has controls: X-Men has four players
 
 Every cabinet of the party needs the same game file.
 
-In the frontend such a game has a **NET PLAY** tile in its menu, with a row of player icons. The lit ones are the players this cabinet takes. The other cabinets see **JOIN PARTY**.
+In the frontend such a game has a **PARTY PLAY** tile in its menu, with a row of player icons. The lit ones are the players this cabinet takes. The other cabinets see **JOIN PARTY**, with the name of the cabinet that opened it.
 
-**Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. To give fewer (two controls, but only one person playing), press down on the NET PLAY or JOIN PARTY tile: blinking arrows appear beside the player icons, and left or right picks how many this cabinet gives. Up goes back to the tiles. The party starts by itself when every player has an owner.
+**Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. To give fewer (two controls, but only one person playing), press down on the PARTY PLAY or JOIN PARTY tile: blinking arrows appear beside the player icons, and left or right picks how many this cabinet gives. Up goes back to the tiles.
+
+**In a RetroArch party nobody waits.** The cabinet that opens it goes into the game after the three-second count, alone, and the others join the game while it runs: JOIN PARTY copies the game if it is missing and opens it at once, connected to the first cabinet, on the first free players. A cabinet that closes its game frees its players for the next one. The party ends when the first cabinet closes the game. Flycast's GGPO and Dolphin need every cabinet at the start, so their parties still wait in the room: GGPO starts when the second cabinet joins, Dolphin when every player has an owner or the first cabinet presses START.
 
 Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so are the UPnP of Flycast and Dolphin and Dolphin's traversal server. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713, Dolphin's net play on TCP 2626.
 
@@ -267,7 +271,7 @@ Dolphin opens net play only from its windows, so FliperOS builds it with a patch
 
 The address, port and nickname go in with `-C Dolphin.NetPlay.*`: direct connection (no traversal server), no UPnP, TCP port 2626, buffer 2. Dolphin is opened with `-b`, so it closes when the game ends or the connection drops, and the frontend comes back.
 
-Each cabinet plays with its controller 1, in the order the cabinets joined: the host is player 1. The frontend offers it only when the installed Dolphin has the patch (the ISO build applies it); an older Dolphin gets no NET PLAY tile.
+Each cabinet plays with its controller 1, in the order the cabinets joined: the host is player 1. The frontend offers it only when the installed Dolphin has the patch (the ISO build applies it); an older Dolphin gets no PARTY PLAY tile.
 
 ### Latency of net play
 

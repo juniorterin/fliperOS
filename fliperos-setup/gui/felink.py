@@ -11,6 +11,8 @@
 #   numero e todos veem a sala. No fim, a festa fixa quantos sao e o numero de
 #   cada um, e manda a cada gabinete o seu atraso (a ordem de subida muda de
 #   emulador para emulador: link-profiles.json).
+#   Na party do RetroArch (perfil "late") quem abre ja entra no jogo, e os
+#   outros entram depois, com o jogo andando.
 # - Perfis: um por familia de jogo, com o que os testes mostraram
 #   (docs/research/linked-cabinets.md). Jogo fora dos perfis nao tem link.
 # - NVRAM: um arquivo por numero de gabinete (config/link-nvram), posto onde
@@ -27,6 +29,7 @@ import socket
 import struct
 import threading
 import time
+import unicodedata
 from collections import namedtuple
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote
@@ -70,6 +73,56 @@ SOLO = ".solo"
 VIRTUAL = ("lo", "docker", "veth", "br-", "virbr", "tun", "tap", "wg", "vmnet", "vboxnet", "zt")
 
 Wire = namedtuple("Wire", "name ip mask broadcast")
+
+# O apelido do gabinete (Setup > System > Cabinet name, e na instalacao): o
+# nome que os outros gabinetes veem na party e no aviso "NOME IS PLAYING".
+# NAME_MAX letras cabem no aviso na tela em pe (240 de largura, fonte de 8).
+CONF = os.environ.get("FLIPEROS_CONF", "/etc/fliperos/fliperos.conf")
+NAME_MAX = 12
+# Sem apelido, uma fruta ou um bicho, sempre o mesmo para a mesma maquina
+# (pelo machine-id). Nenhum e nome de emulador (nada de DOLPHIN).
+NAMES = (
+    "ACAI", "ACEROLA", "APPLE", "APRICOT", "AVOCADO", "BANANA", "BLACKBERRY", "BLUEBERRY", "CASHEW",
+    "CHERRY", "CLEMENTINE", "COCONUT", "CRANBERRY", "CUPUACU", "DRAGONFRUIT", "DURIAN", "ELDERBERRY",
+    "FIG", "GOOSEBERRY", "GRAPE", "GRAPEFRUIT", "GUAVA", "JABUTICABA", "JACKFRUIT", "KIWI", "KUMQUAT",
+    "LEMON", "LIME", "LYCHEE", "MANGO", "MELON", "MULBERRY", "NECTARINE", "ORANGE", "PAPAYA",
+    "PASSIONFRUIT", "PEACH", "PEAR", "PERSIMMON", "PINEAPPLE", "PITAYA", "PLUM", "POMEGRANATE", "QUINCE",
+    "RAMBUTAN", "RASPBERRY", "STARFRUIT", "STRAWBERRY", "TAMARIND", "TANGERINE",
+    "ALPACA", "ANTEATER", "ARMADILLO", "BADGER", "BEAVER", "BISON", "CAMEL", "CAPYBARA", "CHAMELEON",
+    "CHEETAH", "EAGLE", "FALCON", "FLAMINGO", "FOX", "FROG", "GECKO", "GIRAFFE", "HAMSTER", "HEDGEHOG",
+    "HIPPO", "IGUANA", "JAGUAR", "KOALA", "LEOPARD", "LION", "LLAMA", "LYNX", "MEERKAT", "MOOSE",
+    "OCTOPUS", "OTTER", "OWL", "PANDA", "PANTHER", "PARROT", "PELICAN", "PENGUIN", "PUFFIN", "RABBIT",
+    "RACCOON", "RHINO", "SEAL", "SHARK", "SLOTH", "SQUIRREL", "TAPIR", "TIGER", "TOUCAN", "TURTLE",
+    "WALRUS",
+)
+
+
+def clean_name(text):
+    """O apelido como a tela o mostra: maiusculas sem acento, so letras,
+    algarismos, espaco e hifen (o que as duas fontes do frontend tem), ate
+    NAME_MAX. Vazio se nao sobra nada."""
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(c for c in text if not unicodedata.combining(c)).upper()
+    text = re.sub(r"[^A-Z0-9 -]+", "", text)
+    return " ".join(text.split())[:NAME_MAX].strip()
+
+
+def default_name(ident):
+    """A fruta ou o bicho deste gabinete (o mesmo a cada boot)."""
+    return NAMES[int(hashlib.sha1((ident or "").encode()).hexdigest(), 16) % len(NAMES)]
+
+
+def cabinet_name(ident, conf=None):
+    """O apelido do fliperos.conf (cabinet_name=) ou, sem ele, default_name."""
+    try:
+        with open(conf or CONF, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                key, _, value = line.rstrip("\n").partition("=")
+                if key == "cabinet_name" and clean_name(value):
+                    return clean_name(value)
+    except OSError:
+        pass
+    return default_name(ident)
 
 
 # ── A interface cabeada ────────────────────────────────────────────
@@ -276,7 +329,8 @@ class Presence:
 def parties(table):
     """As festas que a tabela mostra: uma por festa (o id do anfitriao), com
     o jogo, o perfil, quantos ja entraram, o maximo e o estado (lobby: aberta;
-    playing: fechada, ja comecou). Os que nao estao numa festa ficam de fora."""
+    playing: ja comecou, e so aceita gente com open, a party do RetroArch). Os
+    que nao estao numa festa ficam de fora."""
     out = {}
     for rec in table:
         pid = rec.get("party")
@@ -284,10 +338,10 @@ def parties(table):
             continue
         p = out.setdefault(pid, {"party": pid, "game": rec.get("game"), "system": rec.get("system"),
                                  "link": rec.get("link"), "max": rec.get("max"), "state": rec.get("state"),
-                                 "host_ip": None, "host": None, "numbers": [], "slots": 0})
+                                 "host_ip": None, "host": None, "open": False, "numbers": [], "slots": 0})
         if rec.get("slot") == 1:
             p["host_ip"], p["host"] = rec.get("ip"), rec.get("name")
-            p["max"], p["state"] = rec.get("max"), rec.get("state")
+            p["max"], p["state"], p["open"] = rec.get("max"), rec.get("state"), bool(rec.get("open"))
         if rec.get("slot"):
             p["numbers"].append(rec["slot"])
             p["slots"] += rec.get("take") or 1
@@ -295,6 +349,12 @@ def parties(table):
         p["numbers"].sort()
         p["used"] = p.pop("slots")
     return sorted(out.values(), key=lambda p: (p["state"] != "playing", p["game"] or ""))
+
+
+def joinable(party):
+    """Da para entrar: a sala esta aberta (ou a party ja anda e aceita quem
+    chega) e ha vaga."""
+    return (party["state"] == "lobby" or party.get("open")) and party["used"] < (party["max"] or 0)
 
 
 # ── A festa ────────────────────────────────────────────────────────
@@ -367,12 +427,32 @@ class PartyHost:
     def numbered(self):
         """Os gabinetes da festa em ordem, cada um com o numero, quantos
         jogadores ocupa (take) e o primeiro deles (first). Num jogo de link cada
-        gabinete e um; no net play, tantos quantos os controles dele."""
+        gabinete e um; no net play, tantos quantos os controles dele. Depois do
+        comeco o first de cada um fica fixo (o jogo ja os tem nesses lugares)."""
         out, first = [], 1
         for i, m in enumerate(self.members):
+            first = m.get("first") or first
             out.append({"number": i + 1, "name": m["name"], "ip": m["ip"], "take": m["take"], "first": first})
             first += m["take"]
         return out
+
+    def late_open(self):
+        """A party que ja comecou e ainda aceita quem chega (a do RetroArch)."""
+        return bool(self.profile.get("late")) and self.state == "playing"
+
+    def free_place(self, want):
+        """(first, take) de quem chega com o jogo andando: os primeiros lugares
+        livres em sequencia, com ate want jogadores (menos, se nao ha tantos
+        juntos). None se nao ha lugar."""
+        busy = set()
+        for m in self.members:
+            busy.update(range(m["first"], m["first"] + m["take"]))
+        cap = self.capacity()
+        for take in range(max(1, want), 0, -1):
+            for first in range(1, cap - take + 2):
+                if not busy.intersection(range(first, first + take)):
+                    return first, take
+        return None
 
     def snapshot(self):
         with self.lock:
@@ -394,8 +474,11 @@ class PartyHost:
         return self.used() >= self.capacity()
 
     def ready(self):
-        """Pode comecar: o minimo chegou (os de tamanho fixo, so com todos)."""
+        """Pode comecar: o minimo chegou (os de tamanho fixo, so com todos). A
+        party do RetroArch comeca so com quem abriu."""
         n = self.count()
+        if self.profile.get("late"):
+            return True
         return n >= self.profile["min"] and (not self.profile["fixed"] or n == self.profile["max"])
 
     def accept(self):
@@ -416,32 +499,45 @@ class PartyHost:
         for msg in read_lines(conn):
             if msg.get("op") == "join" and member is None:
                 why = None
+                late = False
                 with self.lock:
-                    if self.state != "lobby":
+                    late = self.late_open()
+                    place = None
+                    take = 1
+                    if self.profile.get("netplay"):
+                        # Um gabinete ocupa um jogador por controle que tem,
+                        # ate onde ha vagas.
+                        try:
+                            want = int(msg.get("want") or 1)
+                        except (TypeError, ValueError):
+                            want = 1
+                        take = max(1, min(want, self.capacity() - self.used()))
+                        if late:
+                            place = self.free_place(take)
+                    if self.state != "lobby" and not late:
                         why = "closed"
-                    elif self.full():
+                    elif self.full() or (late and not place):
                         why = "full"
                     elif msg.get("game") != self.game:
                         why = "game"
                     else:
-                        take = 1
-                        if self.profile.get("netplay"):
-                            # Um gabinete ocupa um jogador por controle que tem,
-                            # ate onde ha vagas.
-                            try:
-                                want = int(msg.get("want") or 1)
-                            except (TypeError, ValueError):
-                                want = 1
-                            take = max(1, min(want, self.capacity() - self.used()))
-                        member = {"id": msg.get("id"), "name": str(msg.get("name") or src)[:24], "ip": src, "conn": conn,
-                                  "take": take}
+                        member = {"id": msg.get("id"), "name": clean_name(str(msg.get("name") or "")) or src, "ip": src,
+                                  "conn": conn, "take": take}
+                        if place:
+                            member["first"], member["take"] = place
                         self.members.append(member)
                 if why:
                     send_line(conn, {"op": "refused", "why": why})
                     break
                 with self.lock:
                     number = self.members.index(member) + 1
-                send_line(conn, {"op": "joined", "party": self.snapshot(), "number": number})
+                snap = self.snapshot()
+                send_line(conn, {"op": "joined", "party": snap, "number": number})
+                if late:
+                    # O jogo ja anda: quem chega comeca na hora, com o seu lugar.
+                    plan = make_plan(self.profile, snap["members"])
+                    plan["delays"] = {str(number): 0}
+                    send_line(conn, {"op": "start", "number": number, "plan": plan})
                 self.share()
             elif msg.get("op") == "leave":
                 break
@@ -453,8 +549,10 @@ class PartyHost:
             pass
 
     def drop(self, member):
+        """Quem sai da sala (ou, na party que aceita gente com o jogo
+        andando, quem fecha o jogo) libera o lugar."""
         with self.lock:
-            if member in self.members and self.state == "lobby":
+            if member in self.members and (self.state == "lobby" or self.late_open()):
                 self.members.remove(member)
         self.share()
 
@@ -476,6 +574,8 @@ class PartyHost:
                 return None
             self.state = "playing"
             members = self.numbered()
+            for m, n in zip(self.members, members):
+                m["first"] = n["first"]
         self.plan = make_plan(self.profile, members)
         for i, m in enumerate(self.members[1:], 2):
             send_line(m["conn"], {"op": "start", "number": i, "plan": self.plan})
@@ -757,7 +857,10 @@ def netplay_profile(system_key, name, players, local, sets=None):
     gabinete entra com os jogadores dos seus controles. No Naomi e no
     Atomiswave, o GGPO do Flycast: um jogo de dois ou mais jogadores, dois
     gabinetes com um jogador cada. No Dolphin, de dois a quatro gabinetes,
-    um jogador cada. Quem abre e o primeiro."""
+    um jogador cada. Quem abre e o primeiro. No RetroArch (late) quem abre
+    nao espera ninguem: o jogo abre na hora e os outros entram com ele
+    andando, como o net play do RetroArch deixa; o GGPO e o Dolphin precisam
+    de todos no comeco."""
     try:
         n = int(players)
     except (TypeError, ValueError):
@@ -781,7 +884,7 @@ def netplay_profile(system_key, name, players, local, sets=None):
         return None
     return {"id": "netplay", "title": name, "emulator": "retroarch", "systems": [system_key], "sets": [name],
             "min": 2, "max": n, "players": n, "fixed": False, "order": "master-first", "step": 6,
-            "port": PORT_NETPLAY, "netplay": True, "core": core}
+            "port": PORT_NETPLAY, "netplay": True, "late": True, "core": core}
 
 
 NETPLAY_CFG = """# O net play do FliperOS: so a rede local, so pelo cabo. Nada de servidor
@@ -1092,7 +1195,7 @@ class Link:
         self.profiles = profiles or Profiles()
         self.wire = wired() if wire is False else wire
         self.ident = ident or machine_id()
-        self.name = name or "CABINET-%s" % self.ident[:4].upper()
+        self.name = name or cabinet_name(self.ident)
         self.ports = ports or {}
         self.clock = clock
         self.presence = None
@@ -1203,10 +1306,12 @@ class Link:
             return
         state = "playing" if self.plan else "lobby"
         host = self.party
+        # open: a party ja comecou e ainda aceita quem chega (so o anfitriao diz).
+        late = bool(host and host.late_open() and not host.full())
         self.presence.say(game=self.game, system=self.system, link=self.profile["id"],
                           party=host.ident if host else self.guest.party["party"], slot=self.number or 1,
                           take=self.take, max=self.profile["players"] if self.profile.get("netplay") else self.profile["max"],
-                          state=state)
+                          state=state, open=1 if late else None)
 
     def max_take(self, profile):
         """Quantos jogadores este gabinete pode ocupar: no net play, um por
@@ -1323,9 +1428,9 @@ class Link:
         if self.role == "host":
             # Com todas as vagas cheias, ou de tamanho fixo com todos, a festa
             # comeca sozinha; a de tamanho flexivel o anfitriao comeca antes,
-            # com o botao.
+            # com o botao. A party do RetroArch comeca logo (late).
             if not self.plan and self.party.state == "lobby" and (
-                    self.party.full() or (self.profile["fixed"] and self.party.ready())):
+                    self.party.full() or self.profile.get("late") or (self.profile["fixed"] and self.party.ready())):
                 self.start_now()
         else:
             if self.guest.plan and not self.plan:

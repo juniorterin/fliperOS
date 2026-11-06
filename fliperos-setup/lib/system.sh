@@ -27,6 +27,43 @@ password_set() {
   return 0
 }
 
+# ── O apelido do gabinete ────────────────────────────────────────
+# Setup > System > Cabinet name (e na instalacao): o nome que os outros
+# gabinetes da rede local veem na party e no link (cabinet_name= no
+# fliperos.conf, que o gui/felink.py le). Sem apelido, uma fruta ou um bicho,
+# sempre o mesmo para a maquina. A limpeza e o nome de fabrica sao os do
+# felink: o mesmo codigo que mostra o nome.
+CABINET_NAME_MAX=12
+
+# cabinet_name_py FUNCAO [TEXTO] chama felink.FUNCAO: clean (o TEXTO limpo),
+# default (a fruta ou o bicho desta maquina) ou current (o que os outros veem).
+cabinet_name_py() {
+  python3 - "$SETUP_DIR/gui" "$FLIPEROS_CONF" "$@" << 'PY' 2>> "$FLIPEROS_LOG"
+import sys
+sys.path.insert(0, sys.argv[1])
+import felink
+conf, what = sys.argv[2], sys.argv[3]
+ident = felink.machine_id()
+if what == "clean":
+    print(felink.clean_name(sys.argv[4]))
+elif what == "default":
+    print(felink.default_name(ident))
+else:
+    print(felink.cabinet_name(ident, conf))
+PY
+}
+
+# cabinet_name_set TEXTO grava o apelido (limpo); vazio volta ao de fabrica.
+cabinet_name_set() {
+  local name
+  name=$(cabinet_name_py clean "$1") || return 1
+  if [[ -n $name ]]; then
+    conf_set cabinet_name "$name"
+  else
+    conf_unset cabinet_name
+  fi
+}
+
 # ── As configuracoes sem tela (o painel web) ─────────────────────
 # fliperos-setup --settings imprime os ajustes que o painel web
 # (config/fliperos-web) mostra, um por linha:
