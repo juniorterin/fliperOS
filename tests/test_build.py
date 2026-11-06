@@ -5408,6 +5408,60 @@ class FrontendDataTests(unittest.TestCase):
         self.assertLessEqual(max(abs(b - a) for a, b in zip(widths, widths[1:])), 3)
         self.assertEqual(mid[-1][0] * 2 + 56, feview.WW)
 
+    def test_romlist_switch_brings_the_screen_in_piece_by_piece(self):
+        # A troca de romlist: a tela de antes sai e cada pedaco da nova (o
+        # titulo, as linhas, a imagem, o logo, os icones, o texto) entra numa
+        # camada so dele, um depois do outro; acabada a troca, tudo direto no ui.
+        import types
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        self.assertEqual(feview.TRANSITIONS, {'list': 'cascade', 'full': 'tv', 'flow': 'flip'})
+        start = feview.INTRO_EXIT * 0.6
+
+        def drawn(style, name, order, t):
+            fe = types.SimpleNamespace(intro={'style': style, 'side': 1, 'start': 0.0}, shot=None, abs_now=t)
+            ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+            with feview.part(fe, ui, name, order) as s:
+                direct = s is ui
+                s.fill((255, 255, 255, 255), (100, 100, 40, 20))
+            return direct, ui.get_bounding_rect()
+
+        # cascade: a linha chega da direita (o lado da romlist nova), e a de
+        # baixo sai depois da de cima.
+        direct, rect = drawn('cascade', 'row', 0, start + feview.INTRO_DELAY['row'] + 0.1)
+        self.assertFalse(direct)
+        self.assertGreater(rect.x, 100)
+        self.assertEqual(drawn('cascade', 'row', 5, start + feview.INTRO_DELAY['row'] + 0.05)[1].w, 0)
+        self.assertEqual(drawn('cascade', 'row', 0, feview.INTRO), (True, pygame.Rect(100, 100, 40, 20)))
+        # tv: a imagem comeca numa linha fina; flip: a carta comeca estreita.
+        rect = drawn('tv', 'picture', 0, start + feview.INTRO_DELAY['picture'] + 0.05)[1]
+        self.assertLessEqual(rect.h, 2)
+        rect = drawn('flip', 'thumb', 0, start + feview.INTRO_DELAY['thumb'] + 0.05)[1]
+        self.assertLess(rect.w, 40)
+        self.assertEqual(rect.h, 20)
+        # A tela de antes saindo, em cada estilo, sem erro e so no comeco.
+        old = pygame.Surface((feview.WW, feview.HH))
+        old.fill((200, 0, 0))
+        for style in ('cascade', 'tv', 'flip'):
+            for t in (0.0, feview.INTRO_EXIT * 0.5, feview.INTRO_EXIT * 0.9):
+                back = pygame.Surface((feview.WW, feview.HH))
+                fe = types.SimpleNamespace(intro={'style': style, 'side': -1, 'start': 0.0, 'old': old},
+                                           shot=None, abs_now=t)
+                feview.leave(back, fe)
+                self.assertTrue(back.get_bounding_rect().w, (style, t))
+        # O --shot (os prints) nao anima.
+        fe = types.SimpleNamespace(intro={'style': 'cascade', 'side': 1, 'start': 0.0}, shot='x', abs_now=0.1)
+        self.assertIsNone(feview.intro_progress(fe, 'row', 0))
+
     def test_full_logo_cache_still_returns_the_new_logo(self):
         # O cache dos logotipos e icones da tira cheio: o novo e devolvido (ele
         # se esvaziava depois de guardar o novo, e o KeyError fechava o
@@ -5776,9 +5830,9 @@ class FrontendDataTests(unittest.TestCase):
         # sinopse rolando (o que o scrape salvou em ~/media/info, sem rede).
         view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
         draw = view.split('def draw_list(')[1].split('\ndef ')[0]
-        self.assertIn('strip = icon_strip(fe, ui, game, px, y, SX + SW)', draw)
-        self.assertIn('draw_synopsis(fe, ui, game, (px, y, pw, HH - 6 - y), now)', draw)
-        self.assertLess(draw.index('if fe.commercial:\n        coin_box'), draw.index('draw_synopsis('))
+        self.assertIn('strip = icon_strip(fe, s, game, px, y, SX + SW)', draw)
+        self.assertIn('draw_synopsis(fe, s, game, (px, y, pw, HH - 6 - y), now)', draw)
+        self.assertLess(draw.index('if fe.commercial:\n            coin_box'), draw.index('draw_synopsis('))
         src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         self.assertIn('self.media.pop(("desc", folder, name), None)', src)
         try:

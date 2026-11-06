@@ -630,7 +630,7 @@ class Frontend:
     def pick_category(self):
         """O sistema da tira escolhido: a lista troca, com a animacao."""
         step, self.pick = self.pick, 0
-        self.ribbon_until = time.monotonic() + 0.8
+        self.ribbon_until = time.monotonic() + 0.25       # some aos poucos (feview.RIBBON_FADE)
         if not step % len(self.cats):
             return                # deu a volta e parou no mesmo
         self.keep_position()
@@ -638,9 +638,12 @@ class Frontend:
         self.cat = (self.cat + step) % len(self.cats)
         self.marquee_logo((self.category() or {}).get("name", ""), before, step)
         self.load_filter()
-        # A tela de antes desliza para fora (feview.draw).
+        # A tela de antes sai e a nova entra, pedaco por pedaco (feview.draw:
+        # o slide da tela inteira, ou a animacao do modo, feview.TRANSITIONS).
         if getattr(self, "last_ui", None) is not None:
             self.slide = (self.last_ui, 1 if step > 0 else -1, time.monotonic())
+            self.intro = {"side": 1 if step > 0 else -1, "start": time.monotonic(),
+                          "old": getattr(self, "last_screen", None)}
         self.cursor = 0
         self.opened.clear()
         # O jogo onde o cursor parou nesta game list da ultima vez.

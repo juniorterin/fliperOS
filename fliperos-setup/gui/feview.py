@@ -4,6 +4,7 @@
 # do Tab, o Classify, o Rename e a pergunta de sair). draw(fe, agora) desenha
 # em fe.back, a tela logica de 320x240.
 
+import contextlib
 import math
 import os
 import re
@@ -783,6 +784,307 @@ def info_rows(game):
     return rows
 
 
+# ── A entrada da lista nova (a troca de romlist) ───────────────────
+#
+# Escolhido o sistema na tira, a tela de antes sai (leave) e a nova entra
+# pedaco por pedaco (part): o titulo da romlist, a lista (linha por linha) ou
+# as miniaturas, a imagem ou o video, o logo do jogo, os icones e o texto.
+# Cada pedaco e desenhado numa camada so dele enquanto entra.
+
+TRANSITIONS = {"list": "cascade", "full": "tv", "flow": "flip"}
+# As cinco de cada modo (a primeira, a tela inteira deslizando, e a de antes).
+TRANSITION_CHOICES = {"list": ("slide", "cascade", "drum", "blinds", "doors"),
+                      "full": ("slide", "tv", "zoom", "mosaic", "curtain"),
+                      "flow": ("slide", "flip", "fall", "explode", "pop")}
+TRANSITION_NAMES = {"slide": "SLIDE", "cascade": "CASCADE", "drum": "SLOT DRUM", "blinds": "BLINDS",
+                    "doors": "DOUBLE DOOR", "tv": "TV", "zoom": "ZOOM", "mosaic": "MOSAIC",
+                    "curtain": "CURTAIN", "flip": "CARD FLIP", "fall": "FALLING CARDS",
+                    "explode": "EXPLOSION", "pop": "POP"}
+INTRO = 0.85               # segundos de toda a troca
+INTRO_EXIT = 0.25          # a tela de antes saindo
+INTRO_PART = 0.35          # cada pedaco entrando
+RIBBON_FADE = 0.25         # a tira some nos ultimos segundos dela
+# Quando cada pedaco comeca a entrar (as linhas e as miniaturas, uma depois
+# da outra), contado do fim da saida da tela de antes.
+INTRO_DELAY = {"title": 0.0, "chrome": 0.05, "row": 0.06, "thumb": 0.06, "picture": 0.1,
+               "logo": 0.2, "icons": 0.26, "text": 0.3}
+INTRO_STEP = {"row": 0.022, "thumb": 0.045}
+
+
+def transition(fe):
+    """A animacao da troca de romlist no modo de agora ("slide": a tela
+    inteira desliza, a de antes)."""
+    return TRANSITIONS.get(fe.mode, "slide")
+
+
+def intro_now(fe):
+    """A troca em andamento: (o estilo, o lado, os segundos desde o comeco),
+    ou None."""
+    intro = getattr(fe, "intro", None)
+    if not intro or fe.shot or intro.get("style") == "slide":
+        return None
+    t = fe.abs_now - intro["start"]
+    return (intro["style"], intro["side"], t) if t < INTRO else None
+
+
+def intro_progress(fe, name, order):
+    """Quanto o pedaco ja entrou: None (no lugar; desenhado direto no ui), ou
+    de 0 (ainda escondido) a 1."""
+    state = intro_now(fe)
+    if state is None:
+        return None
+    if state[0] == "curtain":
+        # A cortina: tudo aparece de uma vez, atras dela (curtain_open).
+        return 0.0 if state[2] < INTRO_EXIT else None
+    t = state[2] - INTRO_EXIT * 0.6 - INTRO_DELAY[name] - INTRO_STEP.get(name, 0) * order
+    p = t / INTRO_PART
+    return None if p >= 1 else max(0.0, p)
+
+
+@contextlib.contextmanager
+def part(fe, ui, name, order=0):
+    """Desenha um pedaco da tela: fora da troca, direto no ui; durante ela,
+    numa camada que entra no ui com a animacao do pedaco."""
+    p = intro_progress(fe, name, order)
+    if p is None:
+        yield ui
+        return
+    layer = pygame.Surface(ui.get_size(), pygame.SRCALPHA)
+    layer.set_clip(ui.get_clip())
+    yield layer
+    if p > 0:
+        place(ui, layer, lambda rect: enter(fe.intro["style"], fe.intro["side"], name, p, rect))
+
+
+def ribbon_center():
+    """O meio do azulejo do sistema escolhido na tira (o do zoom)."""
+    return WW / 2, 118
+
+
+def bounce(p):
+    """De 0 a 1 quicando no fim, como uma carta que cai na mesa."""
+    if p < 1 / 2.75:
+        return 7.5625 * p * p
+    if p < 2 / 2.75:
+        p -= 1.5 / 2.75
+        return 7.5625 * p * p + 0.75
+    if p < 2.5 / 2.75:
+        p -= 2.25 / 2.75
+        return 7.5625 * p * p + 0.9375
+    p -= 2.625 / 2.75
+    return 7.5625 * p * p + 0.984375
+
+
+def enter(style, side, name, p, rect):
+    """Como o pedaco (em rect) esta, com p de 0 a 1: deslocado (dx, dy),
+    esticado (sx, sy, em volta do centro dele), transparente (alpha), aceso
+    (glow), em blocos (pixel) ou so a faixa do meio a vista (reveal)."""
+    e = 1 - (1 - p) ** 3
+    # O titulo, os icones e o texto, nos estilos das miniaturas e da TV:
+    # aparecem subindo (o titulo descendo) um pouco.
+    plain = {"dy": (1 - e) * (-10 if name == "title" else 10), "alpha": e}
+    if style == "cascade":
+        # LIST: cada pedaco chega do lado da romlist nova, um depois do outro;
+        # o titulo desce de cima.
+        if name == "title":
+            return {"dy": -(1 - e) * 24, "alpha": e}
+        return {"dx": side * (1 - e) * WW * 0.55, "alpha": min(1.0, e * 1.6)}
+    if style == "drum":
+        # LIST: o tambor do caca-niquel: as linhas sobem de baixo, girando, e
+        # param no lugar; o resto vem junto, mais devagar.
+        if name == "title":
+            return {"dy": -(1 - e) * 24, "alpha": e}
+        if name == "row":
+            return {"dy": (1 - e) * HH * 0.7, "sy": 0.55 + 0.45 * e, "alpha": min(1.0, e * 2)}
+        return {"dy": (1 - e) * 70, "alpha": e}
+    if style == "blinds":
+        # LIST: a persiana abrindo: cada pedaco cresce da linha do meio dele.
+        return {"sy": max(0.02, e), "alpha": min(1.0, e * 2)}
+    if style == "doors":
+        # LIST: a porta dupla fechando: a lista vem da esquerda, a imagem e as
+        # informacoes da direita, o titulo de cima.
+        if name == "title":
+            return {"dy": -(1 - e) * 24, "alpha": e}
+        left = name in ("row", "chrome")
+        return {"dx": (-1 if left else 1) * (1 - e) * WW * 0.6}
+    if style == "tv":
+        # FULL SCREEN: a imagem acende como a TV de tubo: uma linha clara que
+        # se abre na largura e depois na altura; o resto aparece por cima.
+        if name == "picture":
+            if p < 0.35:
+                return {"sx": max(0.02, p / 0.35), "sy": 0.012, "glow": True}
+            q = (p - 0.35) / 0.65
+            return {"sy": max(0.012, 1 - (1 - q) ** 3), "glow": q < 0.3}
+        return plain
+    if style == "zoom":
+        # FULL SCREEN: cada pedaco sai do azulejo escolhido na tira e cresce
+        # ate o lugar dele.
+        cx, cy = ribbon_center()
+        return {"dx": (cx - rect.centerx) * (1 - e), "dy": (cy - rect.centery) * (1 - e),
+                "sx": max(0.02, e), "sy": max(0.02, e), "alpha": min(1.0, e * 2)}
+    if style == "mosaic":
+        # FULL SCREEN: comeca em blocos grandes, que se desfazem.
+        return {"pixel": 1 + round((1 - e) * 14), "alpha": min(1.0, e * 1.8)}
+    if style == "flip":
+        # GRID: cada miniatura vira como uma carta, na diagonal.
+        if name == "thumb":
+            return {"sx": max(0.02, e), "alpha": min(1.0, e * 3)}
+        return plain
+    if style == "fall":
+        # GRID: as cartas caem de cima, na diagonal, e quicam no lugar.
+        if name == "thumb":
+            return {"dy": -(1 - bounce(p)) * (rect.bottom + 8)}
+        return plain
+    if style == "explode":
+        # GRID: as miniaturas voam do meio da tela para o lugar.
+        if name == "thumb":
+            return {"dx": (WW / 2 - rect.centerx) * (1 - e), "dy": (HH / 2 - rect.centery) * (1 - e),
+                    "sx": 0.3 + 0.7 * e, "sy": 0.3 + 0.7 * e, "alpha": min(1.0, e * 2)}
+        return plain
+    if style == "pop":
+        # GRID: cada miniatura nasce do meio dela, passa um pouco do tamanho e
+        # volta (um pulinho).
+        if name == "thumb":
+            s = 1 + 2.7 * (p - 1) ** 3 + 1.7 * (p - 1) ** 2
+            return {"sx": max(0.02, s), "sy": max(0.02, s), "alpha": min(1.0, p * 3)}
+        return plain
+    return {}
+
+
+def place(ui, layer, move):
+    """Poe no ui o que foi desenhado na camada, com o movimento que
+    move(rect do desenho) devolve."""
+    rect = layer.get_bounding_rect()
+    if not rect.w or not rect.h:
+        return
+    m = move(rect)
+    piece = layer.subsurface(rect)
+    reveal = m.get("reveal")
+    if reveal is not None:
+        # So a faixa do meio, reveal da largura, a vista.
+        w = max(1, round(rect.w * reveal))
+        cut = pygame.Rect(rect.x + (rect.w - w) // 2, rect.y, w, rect.h)
+        ui.blit(layer.subsurface(cut), cut.topleft)
+        return
+    w = max(1, round(rect.w * m.get("sx", 1)))
+    h = max(1, round(rect.h * m.get("sy", 1)))
+    piece = pygame.transform.smoothscale(piece, (w, h)) if (w, h) != rect.size else piece.copy()
+    block = m.get("pixel", 1)
+    if block > 1:
+        small = pygame.transform.scale(piece, (max(1, w // block), max(1, h // block)))
+        piece = pygame.transform.scale(small, (w, h))
+    if m.get("glow"):
+        piece.fill((90, 90, 90, 0), special_flags=pygame.BLEND_RGBA_ADD)
+    alpha = m.get("alpha", 1.0)
+    if alpha < 1:
+        piece.set_alpha(round(255 * max(0.0, alpha)))
+    ui.blit(piece, (round(rect.centerx - w / 2 + m.get("dx", 0)), round(rect.centery - h / 2 + m.get("dy", 0))))
+
+
+def scaled(img, k, center):
+    """img em k do tamanho, com o meio em center."""
+    w, h = max(1, round(WW * k)), max(1, round(HH * k))
+    return pygame.transform.smoothscale(img, (w, h)), (round(center[0] - w / 2), round(center[1] - h / 2))
+
+
+def curtain_panels(back, k):
+    """As duas metades da cortina, fechadas k (0: abertas, 1: encostadas no meio)."""
+    w = round(WW / 2 * k)
+    if w <= 2:
+        return                # aberta (sem sobrar a borda rosa no canto)
+    for x in (0, WW - w):
+        back.fill(T.BG_DEEP, (x, 0, w, HH))
+        for i in range(x + 6, x + w, 12):
+            back.fill(T.SPACE, (i, 0, 2, HH))
+    pygame.draw.line(back, T.PINK, (w - 1, 0), (w - 1, HH - 1), 2)
+    pygame.draw.line(back, T.PINK, (WW - w, 0), (WW - w, HH - 1), 2)
+
+
+def curtain_open(back, fe):
+    """A cortina abrindo por cima da tela nova (depois da saida)."""
+    state = intro_now(fe)
+    if state is None or state[0] != "curtain" or state[2] < INTRO_EXIT:
+        return
+    q = (state[2] - INTRO_EXIT) / (INTRO - INTRO_EXIT)
+    curtain_panels(back, (1 - q) ** 2)
+
+
+def leave(back, fe):
+    """A tela de antes saindo, por baixo do que entra."""
+    state = intro_now(fe)
+    old = fe.intro.get("old") if state else None
+    if old is None or state[2] >= INTRO_EXIT:
+        return
+    style, side, t = state
+    e = t / INTRO_EXIT
+    k = e * e
+    if style == "drum":
+        img = old.copy()
+        img.set_alpha(round(255 * (1 - e)))
+        back.blit(img, (0, round(-k * HH * 0.7)))
+        return
+    if style == "blinds":
+        # A persiana fechando: tiras da altura de uma linha da lista.
+        for y in range(0, HH, 14):
+            h = round(14 * (1 - k))
+            if h > 0:
+                back.blit(old, (0, y + (14 - h) // 2), (0, y + (14 - h) // 2, WW, h))
+        return
+    if style == "doors":
+        # A porta abrindo: a lista vai para a esquerda, a imagem para a direita.
+        cut = list_geom()[1][0] - 7 if fe.mode == "list" and not T.VERTICAL else WW // 2
+        back.blit(old, (round(-k * cut), 0), (0, 0, cut, HH))
+        back.blit(old, (cut + round(k * (WW - cut)), 0), (cut, 0, WW - cut, HH))
+        return
+    if style == "zoom":
+        cx, cy = ribbon_center()
+        img, at = scaled(old, max(0.02, 1 - k), (WW / 2 + (cx - WW / 2) * k, HH / 2 + (cy - HH / 2) * k))
+        back.blit(img, at)
+        return
+    if style == "mosaic":
+        block = 1 + round(e * 14)
+        img = pygame.transform.scale(pygame.transform.scale(old, (WW // block, HH // block)), (WW, HH))
+        img.set_alpha(round(255 * min(1.0, 2 * (1 - e))))
+        back.blit(img, (0, 0))
+        return
+    if style == "curtain":
+        back.blit(old, (0, 0))
+        curtain_panels(back, 1 - (1 - e) ** 2)
+        return
+    if style == "fall":
+        back.blit(old, (0, round(k * HH)))
+        return
+    if style == "explode":
+        img, at = scaled(old, 1 + 0.6 * e, (WW / 2, HH / 2))
+        img.set_alpha(round(255 * (1 - e)))
+        back.blit(img, at)
+        return
+    if style == "pop":
+        img, at = scaled(old, max(0.02, 1 - k), (WW / 2, HH / 2))
+        back.blit(img, at)
+        return
+    if style == "tv":
+        # A TV desligando: a tela achata numa linha clara, e a linha num ponto.
+        if e < 0.6:
+            h = max(2, round(HH * (1 - e / 0.6)))
+            img = pygame.transform.smoothscale(old, (WW, h))
+            img.fill((round(140 * e), round(140 * e), round(140 * e)), special_flags=pygame.BLEND_RGB_ADD)
+            back.blit(img, (0, (HH - h) // 2))
+        else:
+            w = max(2, round(WW * (1 - (e - 0.6) / 0.4)))
+            back.fill((230, 230, 240), ((WW - w) // 2, HH // 2 - 1, w, 2))
+        return
+    if style == "flip":
+        # A carta da tela inteira virando: estreita ate a linha do meio.
+        w = max(1, round(WW * (1 - k)))
+        back.blit(pygame.transform.smoothscale(old, (w, HH)), ((WW - w) // 2, 0))
+        return
+    # cascade: sai para o lado contrario e some.
+    img = old.copy()
+    img.set_alpha(round(255 * (1 - e)))
+    back.blit(img, (round(-side * k * WW * 0.6), 0))
+
+
 # ── Os modos ───────────────────────────────────────────────────────
 
 def frame(fe, ui):
@@ -837,7 +1139,8 @@ def list_geom():
 
 
 def draw_list(fe, ui, now):
-    frame(fe, ui)
+    with part(fe, ui, "title") as s:
+        frame(fe, s)
     (lx, lw, y0, rows), (px, py, pw, sh) = list_geom()
     # Os jogos que outros gabinetes jogam (no alto) e o resto: um vao de sep
     # pixels com a linha no meio; uma linha a menos na lista para caber.
@@ -850,135 +1153,150 @@ def draw_list(fe, ui, now):
     fe.top = max(0, min(fe.top, max(0, len(fe.rows) - rows)))
     shown = sep and fe.rows[fe.top][2] == "elsewhere"
     for i in range(fe.top, min(len(fe.rows), fe.top + rows)):
-        game, level, extra = fe.rows[i]
-        y = y0 + (i - fe.top) * 14 + (sep if shown and extra != "elsewhere" else 0)
-        on = i == fe.cursor
-        if game is None:
-            group_header(fe, ui, (lx, y, lw, 12), extra, on, now)
-            continue
-        # Os clones do jogo pai; "elsewhere" (um jogo que outro gabinete joga
-        # agora, no alto da lista) nao e uma lista deles.
-        clones = extra if isinstance(extra, list) else None
-        party = link_party(fe, game) if extra == "elsewhere" else None
-        if party:
-            globe_icon(ui, lx + 5, y + 6, 5, True)
-            x = lx + 14
-            label, color = fe.fd.short_title(game), T.YELLOW
-            total = party["max"] or 1
-            sw = total * 6 - 1
-            cabinet_row(ui, lx + lw - 14 - sw, y + 2, party["used"], total, w=5, h=8, gap=1)
-            room = lx + lw - x - 12 - sw - 6
-            if i + 1 < len(fe.rows) and fe.rows[i + 1][2] != "elsewhere":
-                pygame.draw.line(ui, T.LINE, (lx, y + 13 + sep // 2), (lx + lw - 2, y + 13 + sep // 2))
-        elif level == 0:
-            room = None
-            lmark = link_mark(fe, game)
-            x = lx + 14 if clones else lx
-            if fe.fd.group_item(extra):
-                # Um jogo dentro de RECENT ou FAVOURITES: recuado, com um trilho
-                # na cor do grupo.
-                x = lx + 12
-                pygame.draw.line(ui, T.LINE, (lx + 4, y - 1), (lx + 4, y + 13))
-            if clones:
-                # O [+] do jogo pai, um pouco transparente (aberto, menos).
-                expand_mark(ui, lx, y + 1, game["Name"] in fe.opened)
-            if lmark is not None:
-                # O link: o globo (ou, no net play, os dois controles) ao lado
-                # do titulo, apagado ou aceso.
-                if link_kind(fe, game) == "net":
-                    pads_icon(ui, x + 5, y + 6, lmark, small=True)
-                else:
-                    globe_icon(ui, x + 5, y + 6, 5, lmark)
-                x += 14
-            label = fe.fd.short_title(game)
-            color = T.FG if game["Name"] in fe.opened or fe.fd.group_item(extra) else T.COMMENT
+        y = y0 + (i - fe.top) * 14 + (sep if shown and fe.rows[i][2] != "elsewhere" else 0)
+        with part(fe, ui, "row", i - fe.top) as s:
+            list_row(fe, s, i, lx, lw, y, sep, now)
+    with part(fe, ui, "chrome") as s:
+        if len(fe.rows) > rows:
+            W.scrollbar(s, lx + lw + 4, y0, rows * 14 - 2 + (14 if sep else 0), fe.top, rows, len(fe.rows))
+        count = "%d/%d" % (fe.cursor + 1, len(fe.rows))
+        if T.VERTICAL:
+            # Em pe a lista vai quase ate o fim da tela: o contador na letra pequena.
+            tiny.text(s, count, T.LINE, lx + lw - tiny.width(count), y0 + rows * 14 + 2)
         else:
-            room = None
-            x = lx + 26
-            last = i + 1 >= len(fe.rows) or fe.rows[i + 1][1] == 0
-            pygame.draw.line(ui, T.LINE, (lx + 5, y - 3), (lx + 5, y + (5 if last else 14)))
-            pygame.draw.line(ui, T.LINE, (lx + 5, y + 5), (lx + 20, y + 5))
-            label = "MAIN SET" if extra == "main" else fe.fd.variant(game, extra)
-            color = T.CYAN
-        if on:
-            tile_frame(ui, (x - 4, y, lx + lw - x + 4, 12), True, now)
-            pygame.draw.rect(ui, T.PINK, (x - 4, y, lx + lw - x + 4, 12), 1)
-            color = T.FG
-        if game.get("Favourite") == "1" and level == 0:
-            star(ui, lx + lw - 6, y + 6, T.YELLOW, 4)
-        room = lx + lw - x - 12 if room is None else room
-        if on:
-            # O escolhido inteiro: o que nao cabe corre em circulo.
-            ticker(ui, text_img(label.upper(), color), x, y + 2, room, now)
-        else:
-            W.text(ui, fit(label, room), color, x, y + 2)
-    if len(fe.rows) > rows:
-        W.scrollbar(ui, lx + lw + 4, y0, rows * 14 - 2 + (14 if sep else 0), fe.top, rows, len(fe.rows))
-    count = "%d/%d" % (fe.cursor + 1, len(fe.rows))
-    if T.VERTICAL:
-        # Em pe a lista vai quase ate o fim da tela: o contador na letra pequena.
-        tiny.text(ui, count, T.LINE, lx + lw - tiny.width(count), y0 + rows * 14 + 2)
-    else:
-        W.text(ui, count, T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
+            W.text(s, count, T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
     # A imagem, o logo e as informacoes (a direita, ou em cima em pe).
     game = fe.game()
     y0 = py
-    W.block(ui, (px, y0, pw, sh), T.BG_DEEP, T.PURPLE)
+    with part(fe, ui, "picture") as s:
+        W.block(s, (px, y0, pw, sh), T.BG_DEEP, T.PURPLE)
+        if game is None:
+            # Num cabecalho de grupo: so a moldura e o que abrir faz.
+            pygame.draw.rect(s, T.PINK, (px, y0, pw, sh), 2)
+            head = fe.rows[fe.cursor][2] if fe.rows else None
+            if fe.fd.group_head(head):
+                opened = head[1] in fe.groups_open
+                tiny.centered(s, "%d GAMES" % head[2], T.FG, px + pw // 2, y0 + sh // 2 - 8)
+                tiny.centered(s, "1: CLOSE" if opened else "1: OPEN", T.COMMENT, px + pw // 2, y0 + sh // 2 + 4)
+        else:
+            shot = picture(fe, game, pw - 4, sh - 4)
+            if shot:
+                blit_center(s, shot, px + 2, y0 + 2, pw - 4, sh - 4)
+                if fe.scraping is game:
+                    looking(s, px + 4, y0 + sh - 14, pw - 8)
+            elif fe.scraping is game:
+                # Sem nada ainda: o scrape sozinho esta buscando.
+                W.glow(s, (px + 2, y0 + 2, pw - 4, sh - 4), {"now": now})
+                tiny.centered(s, "LOOKING FOR ART...", T.CYAN, px + pw // 2, y0 + sh // 2 - 2)
+            pygame.draw.rect(s, T.PINK, (px, y0, pw, sh), 2)
     if game is None:
-        # Num cabecalho de grupo: so a moldura e o que abrir faz.
-        pygame.draw.rect(ui, T.PINK, (px, y0, pw, sh), 2)
-        head = fe.rows[fe.cursor][2] if fe.rows else None
-        if fe.fd.group_head(head):
-            opened = head[1] in fe.groups_open
-            tiny.centered(ui, "%d GAMES" % head[2], T.FG, px + pw // 2, y0 + sh // 2 - 8)
-            tiny.centered(ui, "1: CLOSE" if opened else "1: OPEN", T.COMMENT, px + pw // 2, y0 + sh // 2 + 4)
         return
-    shot = picture(fe, game, pw - 4, sh - 4)
-    if shot:
-        blit_center(ui, shot, px + 2, y0 + 2, pw - 4, sh - 4)
-        if fe.scraping is game:
-            looking(ui, px + 4, y0 + sh - 14, pw - 8)
-    elif fe.scraping is game:
-        # Sem nada ainda: o scrape sozinho esta buscando.
-        W.glow(ui, (px + 2, y0 + 2, pw - 4, sh - 4), {"now": now})
-        tiny.centered(ui, "LOOKING FOR ART...", T.CYAN, px + pw // 2, y0 + sh // 2 - 2)
-    pygame.draw.rect(ui, T.PINK, (px, y0, pw, sh), 2)
     logo = image(fe, media(fe, game, "logo"), min(pw - 8, 200), 28)
+    if logo:
+        with part(fe, ui, "logo") as s:
+            blit_center(s, logo, px, y0 + sh - 14, pw, 28)
     if T.VERTICAL:
-        if logo:
-            blit_center(ui, logo, px, y0 + sh - 14, pw, 28)
-        list_info_vertical(fe, ui, game, (SX, y0, px - SX - 6, sh), now)
+        with part(fe, ui, "text") as s:
+            list_info_vertical(fe, s, game, (SX, y0, px - SX - 6, sh), now)
         return
     y = y0 + sh + 6
-    if logo:
-        blit_center(ui, logo, px, y0 + sh - 14, pw, 28)
-        y = y0 + sh + 18
-    else:
-        # Sem logo, o titulo numa linha: o que nao cabe corre em circulo.
-        ticker(ui, text_img(fe.fd.short_title(game).upper(), T.YELLOW), px, y, pw, now)
-        y += 12
-    W.text(ui, fit(facts_line(game), pw), T.YELLOW, px, y)
-    y += 12
-    # Os icones numa fileira so: o genero, os jogadores, o controle e os botoes.
-    strip = icon_strip(fe, ui, game, px, y, SX + SW)
-    y += strip + 4 if strip else 0
-    if link_mark(fe, game) is not None:
-        # Um jogo de link: o globo (aceso se alguem joga) e os gabinetes dessa festa.
-        party = link_party(fe, game)
-        if link_kind(fe, game) == "net":
-            pads_icon(ui, px + 7, y + 7, party is not None)
+    with part(fe, ui, "text") as s:
+        if logo:
+            y = y0 + sh + 18
         else:
-            globe_icon(ui, px + 7, y + 7, 7, party is not None)
-        if party:
-            cabinet_row(ui, px + 22, y + 3, party["used"], party["max"] or 1, w=5, h=8, gap=1)
-        y += 18
-    y += play_chips(ui, game, px, y)
+            # Sem logo, o titulo numa linha: o que nao cabe corre em circulo.
+            ticker(s, text_img(fe.fd.short_title(game).upper(), T.YELLOW), px, y, pw, now)
+            y += 12
+        W.text(s, fit(facts_line(game), pw), T.YELLOW, px, y)
+        y += 12
+    with part(fe, ui, "icons") as s:
+        # Os icones numa fileira so: o genero, os jogadores, o controle e os botoes.
+        strip = icon_strip(fe, s, game, px, y, SX + SW)
+        y += strip + 4 if strip else 0
+        if link_mark(fe, game) is not None:
+            # Um jogo de link: o globo (aceso se alguem joga) e os gabinetes dessa festa.
+            party = link_party(fe, game)
+            if link_kind(fe, game) == "net":
+                pads_icon(s, px + 7, y + 7, party is not None)
+            else:
+                globe_icon(s, px + 7, y + 7, 7, party is not None)
+            if party:
+                cabinet_row(s, px + 22, y + 3, party["used"], party["max"] or 1, w=5, h=8, gap=1)
+            y += 18
+        y += play_chips(s, game, px, y)
     # O modo comercial: o indicador debaixo dos icones dos comandos; fora
     # dele, a sinopse do jogo rolando.
-    if fe.commercial:
-        coin_box(fe, ui, px, min(y + 2, HH - COIN_H - 6), now)
+    with part(fe, ui, "text", 1) as s:
+        if fe.commercial:
+            coin_box(fe, s, px, min(y + 2, HH - COIN_H - 6), now)
+        else:
+            draw_synopsis(fe, s, game, (px, y, pw, HH - 6 - y), now)
+
+
+def list_row(fe, ui, i, lx, lw, y, sep, now):
+    """A linha i da lista: o jogo (o pai com o [+], o clone com o trilho, o
+    de outro gabinete com o globo) ou o cabecalho de um grupo."""
+    game, level, extra = fe.rows[i]
+    on = i == fe.cursor
+    if game is None:
+        group_header(fe, ui, (lx, y, lw, 12), extra, on, now)
+        return
+    # Os clones do jogo pai; "elsewhere" (um jogo que outro gabinete joga
+    # agora, no alto da lista) nao e uma lista deles.
+    clones = extra if isinstance(extra, list) else None
+    party = link_party(fe, game) if extra == "elsewhere" else None
+    if party:
+        globe_icon(ui, lx + 5, y + 6, 5, True)
+        x = lx + 14
+        label, color = fe.fd.short_title(game), T.YELLOW
+        total = party["max"] or 1
+        sw = total * 6 - 1
+        cabinet_row(ui, lx + lw - 14 - sw, y + 2, party["used"], total, w=5, h=8, gap=1)
+        room = lx + lw - x - 12 - sw - 6
+        if i + 1 < len(fe.rows) and fe.rows[i + 1][2] != "elsewhere":
+            pygame.draw.line(ui, T.LINE, (lx, y + 13 + sep // 2), (lx + lw - 2, y + 13 + sep // 2))
+    elif level == 0:
+        room = None
+        lmark = link_mark(fe, game)
+        x = lx + 14 if clones else lx
+        if fe.fd.group_item(extra):
+            # Um jogo dentro de RECENT ou FAVOURITES: recuado, com um trilho
+            # na cor do grupo.
+            x = lx + 12
+            pygame.draw.line(ui, T.LINE, (lx + 4, y - 1), (lx + 4, y + 13))
+        if clones:
+            # O [+] do jogo pai, um pouco transparente (aberto, menos).
+            expand_mark(ui, lx, y + 1, game["Name"] in fe.opened)
+        if lmark is not None:
+            # O link: o globo (ou, no net play, os dois controles) ao lado
+            # do titulo, apagado ou aceso.
+            if link_kind(fe, game) == "net":
+                pads_icon(ui, x + 5, y + 6, lmark, small=True)
+            else:
+                globe_icon(ui, x + 5, y + 6, 5, lmark)
+            x += 14
+        label = fe.fd.short_title(game)
+        color = T.FG if game["Name"] in fe.opened or fe.fd.group_item(extra) else T.COMMENT
     else:
-        draw_synopsis(fe, ui, game, (px, y, pw, HH - 6 - y), now)
+        room = None
+        x = lx + 26
+        last = i + 1 >= len(fe.rows) or fe.rows[i + 1][1] == 0
+        pygame.draw.line(ui, T.LINE, (lx + 5, y - 3), (lx + 5, y + (5 if last else 14)))
+        pygame.draw.line(ui, T.LINE, (lx + 5, y + 5), (lx + 20, y + 5))
+        label = "MAIN SET" if extra == "main" else fe.fd.variant(game, extra)
+        color = T.CYAN
+    if on:
+        tile_frame(ui, (x - 4, y, lx + lw - x + 4, 12), True, now)
+        pygame.draw.rect(ui, T.PINK, (x - 4, y, lx + lw - x + 4, 12), 1)
+        color = T.FG
+    if game.get("Favourite") == "1" and level == 0:
+        star(ui, lx + lw - 6, y + 6, T.YELLOW, 4)
+    room = lx + lw - x - 12 if room is None else room
+    if on:
+        # O escolhido inteiro: o que nao cabe corre em circulo.
+        ticker(ui, text_img(label.upper(), color), x, y + 2, room, now)
+    else:
+        W.text(ui, fit(label, room), color, x, y + 2)
 
 
 def expand_mark(ui, x, y, opened):
@@ -1317,17 +1635,20 @@ def clone_badge(ui, right, y):
 
 def draw_full(fe, ui, back, now):
     game = fe.game()
-    full_background(fe, back)
+    with part(fe, back, "picture") as s:
+        full_background(fe, s)
     cat = fe.category()
-    W.text(ui, (cat or {}).get("name", "").upper()[:24], T.RED, SX, 12)
-    W.text(ui, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
-    for i, c in enumerate(W.RAINBOW):
-        pygame.draw.rect(ui, c, (SX, 24 + i, 40, 1))
-    # O modo comercial: o indicador no canto de cima, a esquerda.
-    if fe.commercial:
-        coin_box(fe, ui, SX, 34, now)
-    if fe.scraping is game:
-        looking(ui, SX, 38 + COIN_H if fe.commercial else 36)
+    with part(fe, ui, "title") as s:
+        W.text(s, (cat or {}).get("name", "").upper()[:24], T.RED, SX, 12)
+        for i, c in enumerate(W.RAINBOW):
+            pygame.draw.rect(s, c, (SX, 24 + i, 40, 1))
+    with part(fe, ui, "chrome") as s:
+        W.text(s, "%d/%d" % (fe.cursor + 1, len(fe.rows)), T.FG, SX + SW, 12, right=True)
+        # O modo comercial: o indicador no canto de cima, a esquerda.
+        if fe.commercial:
+            coin_box(fe, s, SX, 34, now)
+        if fe.scraping is game:
+            looking(s, SX, 38 + COIN_H if fe.commercial else 36)
     # A lista na direita: quatro miniaturas empilhadas, a do jogo escolhido
     # acesa, com uma seta em cima e embaixo enquanto ha mais jogos para
     # aquele lado. A coluna e a moldura rosa deslizam ate o lugar novo.
@@ -1339,57 +1660,69 @@ def draw_full(fe, ui, back, now):
     now = fe.abs_now
     ftop = ease(fe, "full_top", top, now)
     fsel = ease(fe, "full_sel", fe.cursor, now)
-    arrow(ui, tx + tw // 2, ty - 7, (0, -1), T.PINK if top > 0 else T.LINE, 5)
+    with part(fe, ui, "chrome") as s:
+        arrow(s, tx + tw // 2, ty - 7, (0, -1), T.PINK if top > 0 else T.LINE, 5)
     ui.set_clip((tx - 2, ty - 1, tw + 6, n * step - gap + 4))
     first = int(math.floor(ftop))
     for i in range(max(0, first), min(len(fe.rows), first + n + 1)):
-        g = fe.rows[i][0]
         y = round(ty + (i - ftop) * step)
-        on = i == fe.cursor
-        W.block(ui, (tx, y, tw, th), T.BG_DEEP, T.LINE)
-        thumb = image(fe, media(fe, g, "snap") or media(fe, g, "box"), tw - 2, th - 2, "cover")
-        if thumb:
-            ui.blit(thumb, (tx + 1, y + 1))
-            if not on:
-                ui.blit(thumb_dim(fe), (tx + 1, y + 1))
-        else:
-            # No clone, o texto comeca embaixo do selo.
-            top = 11 if fe.rows[i][1] else 5
-            for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4 if top == 5 else 3]):
-                tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + top + j * 8)
-        pygame.draw.rect(ui, T.LINE, (tx, y, tw, th), 1)
-        clone = fe.rows[i][1]
-        if clone:
-            clone_badge(ui, tx + tw - 1, y + 1)
-        if g.get("Favourite") == "1":
-            # No clone a estrela vai para a esquerda: a direita e do selo.
-            star(ui, tx + 6 if clone else tx + tw - 6, y + 6, T.YELLOW, 4)
-        link_badge(fe, ui, g, tx + 1, y + 1, tw - 2, th - 2)
-    y = round(ty + (fsel - ftop) * step)
-    pygame.draw.rect(ui, T.PINK, (tx, y, tw, th), 2)
+        with part(fe, ui, "thumb", i - first) as s:
+            full_thumb(fe, s, i, tx, y, tw, th)
+    with part(fe, ui, "chrome") as s:
+        y = round(ty + (fsel - ftop) * step)
+        pygame.draw.rect(s, T.PINK, (tx, y, tw, th), 2)
     ui.set_clip(None)
     more = top + n < len(fe.rows)
-    arrow(ui, tx + tw // 2, ty + n * step + 3, (0, 1), T.PINK if more else T.LINE, 5)
+    with part(fe, ui, "chrome") as s:
+        arrow(s, tx + tw // 2, ty + n * step + 3, (0, 1), T.PINK if more else T.LINE, 5)
     # O jogo escolhido, embaixo a esquerda (fora da coluna).
     right = tx - 8
     clone = is_clone(fe, game)
     logo = None if clone else image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
     if logo:
-        ui.blit(logo, (SX, HH - 62 - logo.get_height()))
+        with part(fe, ui, "logo") as s:
+            s.blit(logo, (SX, HH - 62 - logo.get_height()))
     y = HH - 56
-    if clone:
-        # O clone: o logo seria o do pai; o nome completo dele, correndo.
-        ticker(ui, text_img((game.get("Title") or game["Name"]).upper(), T.YELLOW, big=True),
-               SX, y, right - SX, now)
+    with part(fe, ui, "text") as s:
+        if clone:
+            # O clone: o logo seria o do pai; o nome completo dele, correndo.
+            ticker(s, text_img((game.get("Title") or game["Name"]).upper(), T.YELLOW, big=True),
+                   SX, y, right - SX, now)
+        else:
+            s.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
+        W.text(s, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
+    with part(fe, ui, "icons") as s:
+        icon_line(fe, s, game, SX, y + 24, right, 12)
+        lit = link_mark(fe, game)
+        if lit is not None:
+            # O link, no fim da linha dos icones (os gabinetes da festa ficam nas
+            # miniaturas): o globo, aceso se alguem joga.
+            globe_icon(s, right - 8, y + 30, 6, lit)
+
+
+def full_thumb(fe, ui, i, tx, y, tw, th):
+    """A miniatura do jogo da linha i na coluna da tela cheia."""
+    g = fe.rows[i][0]
+    on = i == fe.cursor
+    W.block(ui, (tx, y, tw, th), T.BG_DEEP, T.LINE)
+    thumb = image(fe, media(fe, g, "snap") or media(fe, g, "box"), tw - 2, th - 2, "cover")
+    if thumb:
+        ui.blit(thumb, (tx + 1, y + 1))
+        if not on:
+            ui.blit(thumb_dim(fe), (tx + 1, y + 1))
     else:
-        ui.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
-    W.text(ui, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
-    icon_line(fe, ui, game, SX, y + 24, right, 12)
-    lit = link_mark(fe, game)
-    if lit is not None:
-        # O link, no fim da linha dos icones (os gabinetes da festa ficam nas
-        # miniaturas): o globo, aceso se alguem joga.
-        globe_icon(ui, right - 8, y + 30, 6, lit)
+        # No clone, o texto comeca embaixo do selo.
+        top = 11 if fe.rows[i][1] else 5
+        for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4 if top == 5 else 3]):
+            tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + top + j * 8)
+    pygame.draw.rect(ui, T.LINE, (tx, y, tw, th), 1)
+    clone = fe.rows[i][1]
+    if clone:
+        clone_badge(ui, tx + tw - 1, y + 1)
+    if g.get("Favourite") == "1":
+        # No clone a estrela vai para a esquerda: a direita e do selo.
+        star(ui, tx + 6 if clone else tx + tw - 6, y + 6, T.YELLOW, 4)
+    link_badge(fe, ui, g, tx + 1, y + 1, tw - 2, th - 2)
 
 
 def grid_image(fe, g, w, h):
@@ -1455,7 +1788,8 @@ def grid_videos(fe, top_row, rows_shown, w, h):
 
 
 def draw_flow(fe, ui, now):
-    frame(fe, ui)
+    with part(fe, ui, "title") as s:
+        frame(fe, s)
     # A grade: tres por fileira, miniaturas 4:3 (3:4 no monitor em pe) com a
     # tela do jogo (sem ela, a capa inteira); a esquerda as setas de quando
     # ha mais fileiras, no canto direito a barra de rolagem.
@@ -1484,47 +1818,31 @@ def draw_flow(fe, ui, now):
     for i in range(first_row * cols, min(len(fe.rows), (first_row + rows_shown + 1) * cols)):
         r, c = divmod(i, cols)
         x, y = x0 + c * (tw + gap), round(y0 + (r - ftop) * step_y)
-        g = fe.rows[i][0]
         if i == fe.cursor:
-            sel = g
-        pygame.draw.rect(ui, T.BG_DEEP, (x, y, tw, th))
-        img = grid_picture(fe, g, tw - 2, th - 2, i)
-        if img:
-            blit_center(ui, img, x, y, tw, th)
-        else:
-            # No clone, o texto comeca embaixo do selo.
-            top = 10 if fe.rows[i][1] else 4
-            for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
-                tiny.text(ui, tiny.fit(line, tw - 6), T.FG if i == fe.cursor else T.COMMENT,
-                          x + 3, y + top + k * 8)
-        pygame.draw.rect(ui, T.LINE, (x, y, tw, th), 1)
-        clone = fe.rows[i][1]
-        if clone:
-            clone_badge(ui, x + tw - 1, y + 1)
-        if g.get("Favourite") == "1":
-            # No clone a estrela vai para a esquerda: a direita e do selo.
-            star(ui, x + 6 if clone else x + tw - 6, y + 6, T.YELLOW, 4)
-        link_badge(fe, ui, g, x + 1, y + 1, tw - 2, th - 2)
-        if fe.scraping is g:
-            looking(ui, x + 2, y + th - 12, tw - 4)
+            sel = fe.rows[i][0]
+        # As cartas viram na diagonal, do canto de cima a esquerda.
+        with part(fe, ui, "thumb", r - first_row + c) as s:
+            flow_thumb(fe, s, i, x, y, tw, th)
     grid_videos(fe, top_row, rows_shown, tw - 2, th - 2)
-    fx = round(x0 + fcol * (tw + gap))
-    fy = round(y0 + (frow - ftop) * step_y)
-    pygame.draw.rect(ui, T.PINK, (fx - 2, fy - 2, tw + 4, th + 4), 2)
+    with part(fe, ui, "chrome") as s:
+        fx = round(x0 + fcol * (tw + gap))
+        fy = round(y0 + (frow - ftop) * step_y)
+        pygame.draw.rect(s, T.PINK, (fx - 2, fy - 2, tw + 4, th + 4), 2)
     ui.set_clip(None)
-    # No canto, a barra de rolagem com uma seta pequena em cima e embaixo.
-    bx_, by_, bh_ = SX + SW - 2, y0 + 7, rows_shown * step_y - 22
-    W.scrollbar(ui, bx_, by_, bh_, top_row, rows_shown, max(rows_shown, total_rows))
-    arrow(ui, bx_ + 2, by_ - 4, (0, -1), T.PINK if top_row > 0 else T.LINE, 3)
-    arrow(ui, bx_ + 2, by_ + bh_ + 4, (0, 1), T.PINK if top_row + rows_shown < total_rows else T.LINE, 3)
-    if sel:
-        # A aba debaixo das miniaturas, do lado do jogo escolhido: mais um
-        # toque para aquele lado troca a romlist.
-        col = fe.cursor % cols
-        if len(fe.cats) > 1 and (col == cols - 1 or fe.cursor == len(fe.rows) - 1 or col == 0):
-            side = 1 if (col == cols - 1 or fe.cursor == len(fe.rows) - 1) else -1
-            nxt = fe.cats[(fe.cat + side) % len(fe.cats)]["name"].upper()
-            bottom_tab(ui, nxt, side, x0, gw, y0 + rows_shown * step_y - 4)
+    with part(fe, ui, "chrome") as s:
+        # No canto, a barra de rolagem com uma seta pequena em cima e embaixo.
+        bx_, by_, bh_ = SX + SW - 2, y0 + 7, rows_shown * step_y - 22
+        W.scrollbar(s, bx_, by_, bh_, top_row, rows_shown, max(rows_shown, total_rows))
+        arrow(s, bx_ + 2, by_ - 4, (0, -1), T.PINK if top_row > 0 else T.LINE, 3)
+        arrow(s, bx_ + 2, by_ + bh_ + 4, (0, 1), T.PINK if top_row + rows_shown < total_rows else T.LINE, 3)
+        if sel:
+            # A aba debaixo das miniaturas, do lado do jogo escolhido: mais um
+            # toque para aquele lado troca a romlist.
+            col = fe.cursor % cols
+            if len(fe.cats) > 1 and (col == cols - 1 or fe.cursor == len(fe.rows) - 1 or col == 0):
+                side = 1 if (col == cols - 1 or fe.cursor == len(fe.rows) - 1) else -1
+                nxt = fe.cats[(fe.cat + side) % len(fe.cats)]["name"].upper()
+                bottom_tab(s, nxt, side, x0, gw, y0 + rows_shown * step_y - 4)
     g = fe.game()
     # No modo comercial o logo, os textos e os icones sobem um pouco, os
     # icones vao em duas linhas, e o indicador fica no canto de baixo a
@@ -1541,33 +1859,61 @@ def draw_flow(fe, ui, now):
     right = SX + SW - (8 if vertical else 0)
     tx = SX
     if logo:
-        blit_center(ui, logo, SX, y, 110, 30)
+        with part(fe, ui, "logo") as s:
+            blit_center(s, logo, SX, y, 110, 30)
         tx = SX + 118
-    elif vertical:
-        title = (g.get("Title") or g["Name"]) if clone else fe.fd.short_title(g)
-        ticker(ui, text_img(title.upper(), T.YELLOW), SX, y + 2, 92, now)
-    elif clone:
-        # O clone: o nome completo, correndo (o logo seria o do pai).
-        ticker(ui, text_img((g.get("Title") or g["Name"]).upper(), T.YELLOW), SX, y + 2, 150, now)
+    with part(fe, ui, "text") as s:
+        if logo:
+            facts_x, facts_w = tx, right - tx
+        else:
+            if vertical:
+                title = (g.get("Title") or g["Name"]) if clone else fe.fd.short_title(g)
+                ticker(s, text_img(title.upper(), T.YELLOW), SX, y + 2, 92, now)
+            elif clone:
+                # O clone: o nome completo, correndo (o logo seria o do pai).
+                ticker(s, text_img((g.get("Title") or g["Name"]).upper(), T.YELLOW), SX, y + 2, 150, now)
+            else:
+                W.text(s, fit(fe.fd.short_title(g), 150), T.YELLOW, SX, y + 2)
+            facts_x, facts_w = (SX + 100, right - SX - 100) if vertical else (SX + 154, 150)
+            tx = SX
+        if vertical:
+            ticker(s, text_img(facts_line(g).upper(), T.CYAN), facts_x, y + 2, facts_w, now)
+        else:
+            W.text(s, fit(facts_line(g), facts_w), T.CYAN, facts_x, y + 2)
+    with part(fe, ui, "icons") as s:
+        if commercial:
+            bx, by = SX + SW - COIN_W, HH - COIN_H - 8
+            rows = icon_rows(fe, g, 12)
+            icon_line(fe, s, g, tx, y + 13, bx - 4, 12, rows[:2])
+            icon_line(fe, s, g, tx, y + 26, bx - 4, 12, rows[2:])
+            coin_box(fe, s, bx, by, now)
+        else:
+            icon_line(fe, s, g, tx, y + 14, right, 12)
+
+
+def flow_thumb(fe, ui, i, x, y, tw, th):
+    """A miniatura do jogo da linha i na grade."""
+    g = fe.rows[i][0]
+    pygame.draw.rect(ui, T.BG_DEEP, (x, y, tw, th))
+    img = grid_picture(fe, g, tw - 2, th - 2, i)
+    if img:
+        blit_center(ui, img, x, y, tw, th)
     else:
-        W.text(ui, fit(fe.fd.short_title(g), 150), T.YELLOW, SX, y + 2)
-    if logo:
-        facts_x, facts_w = tx, right - tx
-    else:
-        facts_x, facts_w = (SX + 100, right - SX - 100) if vertical else (SX + 154, 150)
-        tx = SX
-    if vertical:
-        ticker(ui, text_img(facts_line(g).upper(), T.CYAN), facts_x, y + 2, facts_w, now)
-    else:
-        W.text(ui, fit(facts_line(g), facts_w), T.CYAN, facts_x, y + 2)
-    if commercial:
-        bx, by = SX + SW - COIN_W, HH - COIN_H - 8
-        rows = icon_rows(fe, g, 12)
-        icon_line(fe, ui, g, tx, y + 13, bx - 4, 12, rows[:2])
-        icon_line(fe, ui, g, tx, y + 26, bx - 4, 12, rows[2:])
-        coin_box(fe, ui, bx, by, now)
-    else:
-        icon_line(fe, ui, g, tx, y + 14, right, 12)
+        # No clone, o texto comeca embaixo do selo.
+        top = 10 if fe.rows[i][1] else 4
+        for k, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4]):
+            tiny.text(ui, tiny.fit(line, tw - 6), T.FG if i == fe.cursor else T.COMMENT,
+                      x + 3, y + top + k * 8)
+    pygame.draw.rect(ui, T.LINE, (x, y, tw, th), 1)
+    clone = fe.rows[i][1]
+    if clone:
+        clone_badge(ui, x + tw - 1, y + 1)
+    if g.get("Favourite") == "1":
+        # No clone a estrela vai para a esquerda: a direita e do selo.
+        star(ui, x + 6 if clone else x + tw - 6, y + 6, T.YELLOW, 4)
+    link_badge(fe, ui, g, x + 1, y + 1, tw - 2, th - 2)
+    if fe.scraping is g:
+        looking(ui, x + 2, y + th - 12, tw - 4)
 
 
 def bottom_tab(ui, label, side, x0, width, y):
@@ -3086,6 +3432,15 @@ def draw(fe, now):
     # O video nos tres modos, e nao com uma tela inteira por cima (a pagina
     # "+", o Classify, o Rename). Na lista, os da grade e da tela cheia param.
     fe.abs_now = now
+    # A troca de romlist: a tela de antes sai por baixo do que entra.
+    intro = getattr(fe, "intro", None)
+    if intro is not None:
+        intro.setdefault("style", transition(fe))
+        if intro["style"] == "slide" or now - intro["start"] >= INTRO:
+            fe.intro = None
+        else:
+            fe.slide = None
+            leave(back, fe)
     fe.video_used = False
     fe.video_ok = fe.overlay not in ("more", "classify", "rename", "controls")
     if (fe.mode == "list" or not fe.video_ok) and getattr(fe, "grid", None) is not None and fe.grid.videos:
@@ -3112,16 +3467,25 @@ def draw(fe, now):
     else:
         fe.slide = None
         back.blit(ui, (0, 0))
+        curtain_open(back, fe)
     fe.last_ui = ui
+    # A tela como estava, para sair na proxima troca de romlist (sem a tira
+    # nem os menus por cima).
+    fe.last_screen = back.copy()
     if fe.letter and now < fe.letter[1] and fe.letter[0]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_letter(top, fe.letter[0])
         back.blit(top, (0, 0))
     o = fe.overlay
     if not o and now < fe.ribbon_until and fe.cats:
-        dim(back, 120)
+        # Escolhido o sistema, a tira some aos poucos (RIBBON_FADE) e a lista
+        # nova entra.
+        k = min(1.0, (fe.ribbon_until - now) / RIBBON_FADE)
+        dim(back, round(120 * k))
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_ribbon(fe, top, t)
+        if k < 1:
+            top.set_alpha(round(255 * k))
         back.blit(top, (0, 0))
     if o:
         if o in ("more", "classify", "rename", "controls"):

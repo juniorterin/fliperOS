@@ -8,6 +8,7 @@
 #   sh tools/video/render.sh web IP              o painel no tablet e o tubo (abre o SF2!)
 #   sh tools/video/render.sh gifs [CENA]         as animacoes do site que nao sao o painel
 #   sh tools/video/render.sh gifs-live IP        as animacoes do painel com o SF2 (abre o SF2!)
+#   sh tools/video/render.sh transitions         a troca de romlist em cada animacao, a 60 qps
 #   sh tools/video/render.sh compose [TRECHO]    o video final (ou so um trecho)
 #   sh tools/video/render.sh all IP              tudo, em ordem
 #
@@ -125,6 +126,15 @@ gifs_live() {
   run fliperos-video python3 /t/web_gifs_cut.py /v/webgifs /v/gifs
 }
 
+# A troca de romlist em cada animacao de cada modo, a 60 quadros por segundo:
+# .shots/video/transitions (um MP4 por animacao e o all.mp4 com todas).
+transitions() {
+  [ -f "$work/demo.tar" ] || { echo "No $work/demo.tar: run 'render.sh library IP' first." >&2; exit 1; }
+  rm -rf "$work/transitions"
+  run fliperos-video bash /t/rig.sh /t/fe_transitions.py /v/transitions
+  ls -la "$work/transitions"
+}
+
 compose() {
   run -e ONLY="$arg" fliperos-video python3 /t/compose.py
   [ -n "$arg" ] || ls -la "$work/out/"fliperos-apresentacao*
@@ -137,6 +147,7 @@ case $step in
   web) web ;;
   gifs) gifs ;;
   gifs-live) gifs_live ;;
+  transitions) transitions ;;
   compose) compose ;;
   all)
     need_cabinet
@@ -149,5 +160,5 @@ case $step in
     arg=""
     compose
     ;;
-  *) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
