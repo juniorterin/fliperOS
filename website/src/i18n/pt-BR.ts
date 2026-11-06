@@ -196,8 +196,8 @@ const ptBR: Messages = {
     'frontend/options': { title: 'Opções do frontend', caption: 'Tecla de saída, botões de saída, botão de desligar e modo comercial, numa lista só.' },
     'web/obs-{lang}': { title: 'Controle para o OBS', caption: 'O direcional e os botões de cada jogador acendendo na transmissão.' },
     'anim/netplay-{lang}': {
-      title: 'Net play entre dois gabinetes',
-      caption: 'Escape Kids, quatro jogadores: o gabinete 1 abre o NET PLAY, o gabinete 2 acha o jogo no alto da lista, copia pelo cabo e entra. Telas reais do frontend e o jogo de verdade.',
+      title: 'Party entre dois gabinetes',
+      caption: 'Escape Kids, quatro jogadores: o gabinete 1 abre uma party na rede local, o gabinete 2 acha o jogo no alto da lista, copia pelo cabo e entra. Telas reais do frontend e o jogo de verdade.',
     },
     'anim/ssf2tb-{lang}': {
       title: 'Quatro gabinetes em link',
@@ -241,7 +241,7 @@ const ptBR: Messages = {
       { id: 'es-de', label: 'ES-DE' },
       { id: 'fightcade', label: 'Fightcade 2' },
       { id: 'link', label: 'Gabinetes em link' },
-      { id: 'netplay', label: 'Net play' },
+      { id: 'netplay', label: 'Party (rede local)' },
       { id: 'web', label: 'Painel web' },
       { id: 'obs', label: 'Ao vivo + OBS' },
       { id: 'osd', label: 'Menu na tela' },
@@ -293,7 +293,7 @@ const ptBR: Messages = {
       coin: { title: 'Modo comercial', text: 'Cobre por tempo jogado: cada ficha soma minutos, e o jogo fecha quando eles acabam.' },
       link: {
         title: 'Gabinetes em link',
-        text: 'Ligue gabinetes com um cabo de rede: o torneio de Street Fighter de quatro gabinetes, corridas de até oito e net play.',
+        text: 'Ligue gabinetes com um cabo de rede: o torneio de Street Fighter de quatro gabinetes, corridas de até oito e party na rede local.',
         fourAlt: 'Pixel art de quatro gabinetes Capcom de Super Street Fighter II: The Tournament Battle num canto de sala com piso azulejado, dois em cada parede e um banco comprido de dois lugares na frente de cada um, manches vermelhos de bola e três botões por jogador, cada tela na sua seleção de lutadores com os seus dois lugares acesos, ligados por cabos de rede no chão.',
         raceAlt: 'Pixel art de quatro gabinetes de corrida em forma de carro de Fórmula 1, carros 1 a 4 nos letreiros, cada tela mostrando um ponto diferente da mesma corrida com o carro do jogador na cor dele, ligados por cabos de rede.',
       },
@@ -482,19 +482,19 @@ const ptBR: Messages = {
     },
     link: {
       meta: {
-        title: 'Gabinetes em link e net play no FliperOS: jogos de arcade em link pelo cabo de rede',
-        description: 'Ligue gabinetes FliperOS com um cabo de rede: link para Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart e o Super Street Fighter II Tournament Battle de quatro gabinetes, e net play local para jogos com mais jogadores do que controles.',
+        title: 'Gabinetes em link e party no FliperOS: jogos de arcade em link pelo cabo de rede',
+        description: 'Ligue gabinetes FliperOS com um cabo de rede: link para Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart e o Super Street Fighter II Tournament Battle de quatro gabinetes, e party na rede local para jogos com mais jogadores do que controles.',
       },
       kicker: 'Gabinetes em link',
       title: 'Dois gabinetes, um jogo. Ou quatro.',
-      intro: 'Passe um cabo de rede entre gabinetes FliperOS e joguem juntos: os jogos de corrida e de luta que foram feitos para ligar, e net play para jogos com mais jogadores do que um gabinete tem controles.',
+      intro: 'Passe um cabo de rede entre gabinetes FliperOS e joguem juntos: os jogos de corrida e de luta que foram feitos para ligar, e a party para jogos com mais jogadores do que um gabinete tem controles. A party é na sua rede local, nunca pela internet.',
       rows: [
-        { shot: 'anim/netplay-{lang}', title: 'Net play: mais jogadores do que controles', text: 'Escape Kids tem quatro jogadores e um gabinete tem dois controles. O gabinete 1 abre o NET PLAY e espera. O jogo aparece no alto da lista do gabinete 2, o JOIN PARTY copia o jogo pelo cabo, e os dois jogam: jogadores 1 e 2 num gabinete, 3 e 4 no outro.', points: ['FBNeo e outros cores do RetroArch', 'GGPO do Flycast', 'Um jogador por controle'] },
+        { shot: 'anim/netplay-{lang}', title: 'Party: mais jogadores do que controles', text: 'Escape Kids tem quatro jogadores e um gabinete tem dois controles. O gabinete 1 abre uma party e já entra no jogo; os outros veem “APPLE IS PLAYING” com um sininho, com o nome daquele gabinete. O jogo aparece no alto da lista do gabinete 2, o JOIN PARTY copia o jogo pelo cabo, e ele entra no jogo que já está rodando: jogadores 1 e 2 num gabinete, 3 e 4 no outro.', points: ['FBNeo e outros cores do RetroArch', 'GGPO do Flycast', 'Um jogador por controle', 'Entra com o jogo rodando'] },
         { shot: 'anim/ssf2tb-{lang}', title: 'O torneio de quatro gabinetes', text: 'Super Street Fighter II: The Tournament Battle precisa de quatro placas ligadas. Cada gabinete entra na festa, o frontend abre o jogo em cada um, em corrente, e o torneio mostra uma chave própria em cada máquina: quatro lutas ao mesmo tempo, oito lutadores.', points: ['4 gabinetes', 'GroovyMAME', 'Link em corrente'] },
         { shot: 'anim/daytona-{lang}', title: 'Seis jogos de link no frontend', text: 'Daytona USA, Scud Race e Daytona USA 2 com até oito gabinetes, Dirt Devils e Club Kart: European Session com dois, e o Tournament Battle com quatro. Um globo verde marca cada um na lista, e a sala de espera abre as máquinas na ordem certa, cada uma com a NVRAM do seu número de gabinete.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
         { shot: '', title: 'O jogo vem pelo cabo', text: 'Um gabinete que entra sem o jogo copia do gabinete que abriu a festa: só os arquivos que faltam, com uma barra de progresso.', points: ['Só o que falta'] },
         { shot: '', title: 'Só pelo cabo de rede', text: 'Os gabinetes se acham na rede cabeada, sem internet, servidor ou conta. O Wi-Fi nunca é usado: um link quer cada quadro na hora.', points: ['Sem internet', 'Sem Wi-Fi'] },
-        { shot: '', title: 'Rápido como jogar sozinho', text: 'Os seus controles não ganham atraso. Num jogo de link cada gabinete roda a sua placa e vê os outros um ou dois quadros depois, como no fliperama. No net play, o rollback acerta os movimentos dos outros jogadores em menos de um quadro.', points: ['Sem atraso nos controles', 'Rollback no net play'] },
+        { shot: '', title: 'Rápido como jogar sozinho', text: 'Os seus controles não ganham atraso. Num jogo de link cada gabinete roda a sua placa e vê os outros um ou dois quadros depois, como no fliperama. Na party, o rollback acerta os movimentos dos outros jogadores em menos de um quadro.', points: ['Sem atraso nos controles', 'Rollback na party'] },
       ],
     },
     hardware: {
@@ -642,10 +642,24 @@ const ptBR: Messages = {
       { id: 'steam', name: 'Steam', text: 'Jogos de PC dentro do desktop' },
       { id: 'heroic', name: 'Heroic', text: 'GOG, Epic e Amazon' },
     ],
-    netplayTitle: 'Net play entre gabinetes',
+    gamesTitle: 'Jogos da comunidade',
+    games: [
+      {
+        id: 'kof-final-attack',
+        name: 'The King of Fighters: Final Attack',
+        by: 'Um fan game da United By Games e do Bigruss91, com a equipe de programadores, artistas e colaboradores deles',
+        text: 'Setup > Games > Emulators & Games baixa o jogo de graça da página do próprio projeto e o roda no Ikemen GO em 4:3 a 320x240, com o patch 4:3. O jogo e todo o crédito são dos autores: baixe, acompanhe e agradeça a eles por lá.',
+        url: 'https://united-by-games.itch.io/the-king-of-fighters-final-attack',
+        cta: 'O projeto no itch.io',
+        site: 'https://www.unitedbygames.com/',
+        siteCta: 'United By Games',
+        logoAlt: 'Logotipo de The King of Fighters: Final Attack',
+      },
+    ],
+    netplayTitle: 'Party entre gabinetes',
     netplayIntro:
-      'Pelo cabo de rede, os gabinetes dividem um jogo: cada um fica com tantos jogadores quantos controles tem. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), e com o GGPO do Flycast para um versus entre dois gabinetes.',
-    netplayHead: { name: 'Core ou emulador', systems: 'Sistemas', status: 'Net play' },
+      'A party é um jogo dividido na sua rede local, nunca pela internet: pelo cabo de rede, os gabinetes dividem um jogo e cada um fica com tantos jogadores quantos controles tem. Cada gabinete aparece pelo nome dele, definido em Setup > System > Cabinet name. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), e com o GGPO do Flycast para um versus entre dois gabinetes.',
+    netplayHead: { name: 'Core ou emulador', systems: 'Sistemas', status: 'Party' },
     netplayLevels: { frontend: 'No frontend', hand: 'À mão', partial: 'Limitado', no: 'Não' },
     netplay: [
       { id: 'fbneo', name: 'FBNeo', systems: 'Arcade (o romset dele)', level: 'frontend', note: 'Testado em duas máquinas' },
@@ -660,7 +674,7 @@ const ptBR: Messages = {
       { id: 'boards', name: 'GroovyMAME, Supermodel, SM2-Emu', systems: 'Arcade, Model 3, Model 2', level: 'no', note: 'Em vez disso ligam as placas, nos jogos de link' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },
     ],
-    netplayCta: 'Gabinetes ligados e net play: o guia completo',
+    netplayCta: 'Gabinetes ligados e party: o guia completo',
   },
   crt: {
     kicker: 'CRT / 15 kHz',

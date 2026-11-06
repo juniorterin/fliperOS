@@ -194,8 +194,8 @@ const enUS = {
     'frontend/options': { title: 'Frontend options', caption: 'Exit key, exit buttons, power button and commercial mode, in one list.' },
     'web/obs-{lang}': { title: 'Controller for OBS', caption: 'The stick and buttons of each player lighting up on the stream.' },
     'anim/netplay-{lang}': {
-      title: 'Net play between two cabinets',
-      caption: 'Escape Kids, four players: cabinet 1 opens NET PLAY, cabinet 2 finds the game at the top of its list, copies it over the cable and joins. Real frontend screens and the real game.',
+      title: 'Party play between two cabinets',
+      caption: 'Escape Kids, four players: cabinet 1 opens a party on the local network, cabinet 2 finds the game at the top of its list, copies it over the cable and joins. Real frontend screens and the real game.',
     },
     'anim/ssf2tb-{lang}': {
       title: 'Four linked cabinets',
@@ -240,7 +240,7 @@ const enUS = {
       { id: 'es-de', label: 'ES-DE' },
       { id: 'fightcade', label: 'Fightcade 2' },
       { id: 'link', label: 'Linked cabinets' },
-      { id: 'netplay', label: 'Net play' },
+      { id: 'netplay', label: 'Party play (LAN)' },
       { id: 'web', label: 'Web panel' },
       { id: 'obs', label: 'Live + OBS' },
       { id: 'osd', label: 'On-screen menu' },
@@ -292,7 +292,7 @@ const enUS = {
       coin: { title: 'Commercial mode', text: 'Charge by time played: each coin adds minutes, and the game closes when they end.' },
       link: {
         title: 'Linked cabinets',
-        text: 'Join cabinets with a network cable: the four-cabinet Street Fighter tournament, races of up to eight, and net play.',
+        text: 'Join cabinets with a network cable: the four-cabinet Street Fighter tournament, races of up to eight, and party play on the local network.',
         fourAlt: 'Pixel art of four Capcom cabinets of Super Street Fighter II: The Tournament Battle in a blue-tiled corner room, two on each wall with a long two-seat bench in front of each, red ball-top joysticks and three buttons per player, every screen on its own fighter select with its two player slots lit, joined by network cables on the floor.',
         raceAlt: 'Pixel art of four racing cabinets shaped like Formula 1 cars, cars 1 to 4 on their marquees, each screen showing a different spot of the same race with that player\'s car in its own colour, joined by network cables.',
       },
@@ -481,19 +481,19 @@ const enUS = {
     },
     link: {
       meta: {
-        title: 'Linked cabinets and net play on FliperOS: arcade link games over a network cable',
-        description: 'Join FliperOS cabinets with a network cable: link play for Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart and the four-cabinet Super Street Fighter II Tournament Battle, and local net play for games with more players than controls.',
+        title: 'Linked cabinets and party play on FliperOS: arcade link games over a network cable',
+        description: 'Join FliperOS cabinets with a network cable: link play for Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart and the four-cabinet Super Street Fighter II Tournament Battle, and party play on the local network for games with more players than controls.',
       },
       kicker: 'Linked cabinets',
       title: 'Two cabinets, one game. Or four.',
-      intro: 'Put a network cable between FliperOS cabinets and play together: the racing and fighting games that were made to link, and net play for games with more players than one cabinet has controls.',
+      intro: 'Put a network cable between FliperOS cabinets and play together: the racing and fighting games that were made to link, and party play for games with more players than one cabinet has controls. It is a party on your local network, never over the internet.',
       rows: [
-        { shot: 'anim/netplay-{lang}', title: 'Net play: more players than controls', text: 'Escape Kids has four players and a cabinet has two controls. Cabinet 1 opens NET PLAY and waits. The game shows up at the top of cabinet 2’s list, JOIN PARTY copies it over the cable, and both play: players 1 and 2 on one cabinet, 3 and 4 on the other.', points: ['FBNeo and other RetroArch cores', 'Flycast GGPO', 'A player per control'] },
+        { shot: 'anim/netplay-{lang}', title: 'Party play: more players than controls', text: 'Escape Kids has four players and a cabinet has two controls. Cabinet 1 opens a party and goes straight into the game; the others see “APPLE IS PLAYING” with a bell, with the name of that cabinet. The game shows up at the top of cabinet 2’s list, JOIN PARTY copies it over the cable, and it joins the game already running: players 1 and 2 on one cabinet, 3 and 4 on the other.', points: ['FBNeo and other RetroArch cores', 'Flycast GGPO', 'A player per control', 'Join a game in progress'] },
         { shot: 'anim/ssf2tb-{lang}', title: 'The four-cabinet tournament', text: 'Super Street Fighter II: The Tournament Battle needs four linked boards. Each cabinet joins the party, the frontend opens the game on each one down the chain, and the tournament shows a bracket of its own on every machine: four fights at once, eight fighters.', points: ['4 cabinets', 'GroovyMAME', 'Chain link'] },
         { shot: 'anim/daytona-{lang}', title: 'Six link games in the frontend', text: 'Daytona USA, Scud Race and Daytona USA 2 with up to eight cabinets, Dirt Devils and Club Kart: European Session with two, and the Tournament Battle with four. A green globe marks them in the list, and the waiting room starts the machines in the right order, each with the NVRAM of its cabinet number.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
         { shot: '', title: 'The game comes over the cable', text: 'A cabinet that joins without the game copies it from the cabinet that opened the party: only the files it lacks, with a progress bar.', points: ['Only what is missing'] },
         { shot: '', title: 'Network cable only', text: 'The cabinets find each other on the wired network, with no internet, server or account. Wi-Fi is never used: a link wants every frame on time.', points: ['No internet', 'No Wi-Fi'] },
-        { shot: '', title: 'As fast as playing alone', text: 'Your own controls get no delay. In a link game each cabinet runs its own board and sees the others a frame or two late, as in the arcade. In net play, rollback fixes the other players’ moves within a frame.', points: ['No input delay', 'Rollback in net play'] },
+        { shot: '', title: 'As fast as playing alone', text: 'Your own controls get no delay. In a link game each cabinet runs its own board and sees the others a frame or two late, as in the arcade. In party play, rollback fixes the other players’ moves within a frame.', points: ['No input delay', 'Rollback in party play'] },
       ],
     },
     hardware: {
@@ -641,10 +641,24 @@ const enUS = {
       { id: 'steam', name: 'Steam', text: 'PC games inside the desktop' },
       { id: 'heroic', name: 'Heroic', text: 'GOG, Epic and Amazon' },
     ],
-    netplayTitle: 'Net play between cabinets',
+    gamesTitle: 'Games by the community',
+    games: [
+      {
+        id: 'kof-final-attack',
+        name: 'The King of Fighters: Final Attack',
+        by: 'A fan game by United By Games and Bigruss91, with its team of coders, artists and helpers',
+        text: 'Setup > Games > Emulators & Games downloads it free from the project’s own page and runs it on Ikemen GO in 4:3 at 320x240, with the 4:3 patch. The game and all of its credit belong to its authors: get it, follow it and thank them there.',
+        url: 'https://united-by-games.itch.io/the-king-of-fighters-final-attack',
+        cta: 'The project on itch.io',
+        site: 'https://www.unitedbygames.com/',
+        siteCta: 'United By Games',
+        logoAlt: 'The King of Fighters: Final Attack logo',
+      },
+    ],
+    netplayTitle: 'Party play between cabinets',
     netplayIntro:
-      'Over the network cable, cabinets share one game: each one takes as many players as it has controls. Your own controls stay as fast as playing alone (rollback, no input delay). The frontend does it with every RetroArch core that supports it (FBNeo with its own romset only), and with Flycast’s GGPO for a versus between two cabinets.',
-    netplayHead: { name: 'Core or emulator', systems: 'Systems', status: 'Net play' },
+      'A party is a game shared on your local network, never over the internet: over the network cable, cabinets share one game and each one takes as many players as it has controls. Each cabinet shows up by its name, set in Setup > System > Cabinet name. Your own controls stay as fast as playing alone (rollback, no input delay). The frontend does it with every RetroArch core that supports it (FBNeo with its own romset only), and with Flycast’s GGPO for a versus between two cabinets.',
+    netplayHead: { name: 'Core or emulator', systems: 'Systems', status: 'Party play' },
     netplayLevels: { frontend: 'In the frontend', hand: 'By hand', partial: 'Limited', no: 'No' },
     netplay: [
       { id: 'fbneo', name: 'FBNeo', systems: 'Arcade (its own romset)', level: 'frontend', note: 'Tested on two machines' },
@@ -659,7 +673,7 @@ const enUS = {
       { id: 'boards', name: 'GroovyMAME, Supermodel, SM2-Emu', systems: 'Arcade, Model 3, Model 2', level: 'no', note: 'They link boards instead, for the link games' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },
     ],
-    netplayCta: 'Linked cabinets and net play: the full guide',
+    netplayCta: 'Linked cabinets and party play: the full guide',
   },
   crt: {
     kicker: 'CRT / 15 kHz',

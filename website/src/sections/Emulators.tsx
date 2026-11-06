@@ -119,6 +119,58 @@ export function Emulators() {
           ))}
         </ul>
 
+        <h3 className="mt-14 flex items-center gap-3 font-mono text-sm tracking-widest text-comment uppercase">
+          {e.gamesTitle}
+          <span aria-hidden="true" className="h-px flex-1 bg-line" />
+        </h3>
+        <ul className="mt-6 grid gap-4">
+          {e.games.map((game) => (
+            <Reveal as="li" key={game.id}>
+              <article className="card flex flex-col gap-5 rounded-2xl p-5 sm:flex-row sm:items-center sm:p-6">
+                {/* O logotipo do projeto (public/icons/README.md diz de onde veio). */}
+                <a href={game.url} target="_blank" rel="noopener noreferrer" className="shrink-0 self-center">
+                  <Image
+                    src={`/icons/${game.id}.png`}
+                    alt={game.logoAlt}
+                    width={240}
+                    height={97}
+                    unoptimized
+                    className="h-auto w-60 rounded-lg"
+                  />
+                  <span className="sr-only">{t.a11y.external}</span>
+                </a>
+                <div className="min-w-0">
+                  <h4 className="text-lg font-semibold text-fg">{game.name}</h4>
+                  <p className="mt-0.5 text-sm text-cyan">{game.by}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">{game.text}</p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <a
+                      href={game.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg border border-orange/60 bg-orange/10 px-4 py-2 text-sm font-medium text-fg transition hover:border-orange hover:bg-orange/20"
+                    >
+                      {game.cta}
+                      <ArrowUpRight className="size-4" aria-hidden="true" />
+                      <span className="sr-only">{t.a11y.external}</span>
+                    </a>
+                    <a
+                      href={game.site}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg transition hover:border-purple/60 hover:text-purple"
+                    >
+                      {game.siteCta}
+                      <ArrowUpRight className="size-4" aria-hidden="true" />
+                      <span className="sr-only">{t.a11y.external}</span>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            </Reveal>
+          ))}
+        </ul>
+
         <Reveal className="mt-16 rounded-2xl border border-line p-6 sm:p-8">
           <h3 className="flex items-center gap-2.5 text-2xl font-semibold text-fg">
             <Network className="size-6 text-green" aria-hidden="true" />

@@ -20,6 +20,7 @@ The PNGs are scaled down to 128 px. Programs with no icon of their own
 | `fightcade.png` | Fightcade, `fightcade.com/favicon.ico` (128 px frame) |
 | `duckstation.png` | DuckStation, `data/resources/images/duck.png` |
 | `limine.png` | Limine, `logo.png` of its repository |
+| `kof-final-attack.png` | The King of Fighters: Final Attack (United By Games, Bigruss91), the header image of its [itch.io page](https://united-by-games.itch.io/the-king-of-fighters-final-attack), cropped to the logo and scaled to 480 px |
 | `hotr.png`, `pixelcade.png` | The Setup's copies (`fliperos-setup/gui/icons`, sources in its README) |
 | `ubuntu.svg`, `linux.svg`, `obs.svg`, `nvidia.svg` | [Simple Icons](https://simpleicons.org) (`ubuntu`, `linux`, `obsstudio`, `nvidia`), filled with the brand colour (white for Tux and OBS, on the dark site) |
 | `amd.svg` | Simple Icons `amd`, cut down to the arrow, in white |
