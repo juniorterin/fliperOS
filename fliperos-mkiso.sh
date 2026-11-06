@@ -68,12 +68,8 @@ EVANGELION_PLING_ID="2354544"
 # Gum: as telas do fliperos-setup.
 GUM_VERSION="2.0.2"
 GUM_SHA256="9aad8600d9d280d91544439f35db4c9583cc0201bb718ac6afcc0f4989ea945b"
-# O binario do gum e o do codigo da mesma versao com patches/gum (setas em
-# vez dos pontos na paginacao dos menus e os sons do menu), compilado com o
-# Go que ela pede.
-GUM_COMMIT="879f048103adf0214b85943b52d8d65b08d772c5"
-GO_VERSION="1.26.7"
-GO_SHA256="ffb5f8de10c62550dfddab66b36b57030721e0a44a3218e9e1181d7b59f121ca"
+# O gum com os patches do FliperOS (setas na paginacao, sons do menu, o
+# espaco e os baloes) e o pacote fliperos-gum, em /usr/local/bin.
 # AntiMicroX (joystick -> teclado/mouse), como no GroovyArcade. O noble so
 # tem o qjoypad; o antimicrox vem do .deb oficial do projeto.
 ANTIMICROX_VERSION="3.6.1"
@@ -84,18 +80,12 @@ SWITCHRES_TAG="v2.2.1"
 # GroovyArcade. O commit confere que a tag nao foi movida.
 SKYSCRAPER_TAG="3.21.0"
 SKYSCRAPER_COMMIT="8a95bb924f094e0f111fc188e66022903ea9f7d4"
-# PCSX2: o AppImage oficial (o codigo atual nao compila com as bibliotecas
-# do Ubuntu 24.04; ver build_pcsx2_chroot).
-PCSX2_VERSION="2.8.2"
 # RetroArch: informacoes dos cores e perfis de controle de fabrica (o
 # Online Updater atualiza os dois depois, na pasta do usuario).
 RA_CORE_INFO_COMMIT="5a74858ab2f7a50cebb5a6330895bc38899531c0"
 RA_AUTOCONFIG_COMMIT="3579625fa24e61c86c48d03de9d5f9fd7b323a16"
 # Hypseus Singe (laserdisc): a serie 3 exige SDL3, que o noble nao tem.
 HYPSEUS_TAG="v2.12.1"
-# OpenBOR: as tags antigas nao tem o CMake; o commit e o do master.
-OPENBOR_COMMIT="787b6770409935137579715febf80cf7a529b748"
-PCSX2_SHA256="0c46bb6a88aa2782b10853a7b07cf3387ba99cbef2b966372cd2315b8571abea"
 # PCSX2x6: o fork do PCSX2 que roda os arcades Namco System 246/256, ao lado
 # do oficial (so a pasta ~/roms/namco2x6 abre nele).
 PCSX2X6_VERSION="0.2.22"
@@ -474,32 +464,6 @@ fetch_debs() {
     "$ANTIMICROX_SHA256" antimicrox.deb
 }
 
-# build_gum compila o gum com patches/gum no container do build (binario
-# estatico, sem nada do chroot); install_debs_chroot o poe no lugar do
-# /usr/bin/gum do .deb, que fica com as paginas de manual e o completion.
-build_gum() {
-  step "Gum ${GUM_VERSION} with pagination arrows and menu sounds (patches/gum)"
-  local here gsrc="$WORK_DIR/gum-src" go="$WORK_DIR/go"
-  here=$(dirname "$(realpath "$0")")
-  curl -sSfL --retry 3 --max-time 600 -o "$WORK_DIR/go.tgz" \
-    "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" >> "$LOG_FILE" 2>&1 || err "Go download failed"
-  echo "$GO_SHA256  $WORK_DIR/go.tgz" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
-    || err "Go: hash differs from the pinned one"
-  rm -rf "$go" "$gsrc"
-  mkdir -p "$go"
-  tar xzf "$WORK_DIR/go.tgz" -C "$go" --strip-components=1 || err "Go: the package did not extract"
-  git clone -q --depth 1 --branch "v${GUM_VERSION}" https://github.com/charmbracelet/gum "$gsrc" >> "$LOG_FILE" 2>&1 \
-    || err "Gum: the source did not download"
-  [[ $(git -C "$gsrc" rev-parse HEAD) == "$GUM_COMMIT" ]] || err "Gum: tag v${GUM_VERSION} is no longer the pinned commit"
-  git -C "$gsrc" apply "$here"/patches/gum/*.patch >> "$LOG_FILE" 2>&1 || err "Gum: the patch did not apply"
-  (cd "$gsrc" && CGO_ENABLED=0 GOPATH="$WORK_DIR/gopath" GOCACHE="$WORK_DIR/gocache" \
-    "$go/bin/go" build -trimpath -ldflags "-s -w -X main.Version=${GUM_VERSION}-fliperos" -o "$WORK_DIR/gum" .) \
-    >> "$LOG_FILE" 2>&1 || err "Gum: the build failed"
-  chmod -R u+w "$WORK_DIR/gopath" 2> /dev/null || true
-  rm -rf "$gsrc" "$go" "$WORK_DIR/go.tgz" "$WORK_DIR/gocache" "$WORK_DIR/gopath"
-  ok "gum $("$WORK_DIR/gum" --version | awk '{print $3}')"
-}
-
 fetch_deb() {
   local url=$1 sha=$2 name=$3
   curl -sSfL --retry 3 --max-time 600 -o "$DEBS_DIR/$name" "$url" >> "$LOG_FILE" 2>&1 \
@@ -516,11 +480,7 @@ install_debs_chroot() {
     apt-get install -y --no-install-recommends /tmp/gum.deb /tmp/antimicrox.deb' >> "$LOG_FILE" 2>&1 \
     || err "gum/antimicrox installation failed (see $LOG_FILE)"
   rm -f "$CHROOT_DIR"/tmp/*.deb
-  # O gum com patches/gum (build_gum) no lugar do binario do .deb.
-  chroot "$CHROOT_DIR" dpkg-divert --local --rename --add /usr/bin/gum >> "$LOG_FILE" 2>&1 \
-    || err "Gum: dpkg-divert falhou"
-  install -m755 "$WORK_DIR/gum" "$CHROOT_DIR/usr/bin/gum"
-  ok "gum $(chroot "$CHROOT_DIR" gum --version | awk '{print $3}'), antimicrox $ANTIMICROX_VERSION"
+  ok "gum (the .deb; FliperOS's comes with fliperos-gum), antimicrox $ANTIMICROX_VERSION"
 }
 
 # ── Repositorio local do FliperOS (frontends) ─────────────────
@@ -543,9 +503,9 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast fliperos-groovymame' >> "$LOG_FILE" 2>&1 \
-    || err "Installing Attract-Mode Plus, GroovyMAME, its SDL2, RetroArch, Dolphin and Flycast from the local repository failed (see $LOG_FILE)"
-  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME and its KMS SDL2, RetroArch, Dolphin and Flycast installed"
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2 fliperos-gum' >> "$LOG_FILE" 2>&1 \
+    || err "Installing Attract-Mode Plus, GroovyMAME, its SDL2 and the emulators from the local repository failed (see $LOG_FILE)"
+  ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME and its KMS SDL2 and the emulators installed"
 }
 
 # ── Kernel 15 kHz ─────────────────────────────────────────────
@@ -1159,36 +1119,20 @@ build_flycast_chroot() {
 }
 
 # ── PCSX2 (PS2), X11 ──────────────────────────────────────────
-# O AppImage oficial, fixado por versao e hash: o PCSX2 atual exige SDL3,
-# Qt 6.10, plutosvg, ryml e Shaderc, que o Ubuntu 24.04 nao tem (o Qt dele
-# e o 6.4). O AppImage traz as bibliotecas dele e e extraido em /opt/pcsx2,
-# sem precisar de FUSE. Qt nao tem backend KMS suportado: fica em X11 via
-# fliperos-x11-run.
+# O pacote fliperos-pcsx2 (packaging/packages, instalado por
+# install_local_repo_chroot): o AppImage oficial extraido em /opt/pcsx2, o
+# mesmo .deb que os updates levam a quem so atualiza pela rede. O PCSX2 atual
+# nao compila com as bibliotecas do Ubuntu 24.04 (SDL3, Qt 6.10); Qt nao tem
+# backend KMS suportado: fica em X11 via fliperos-x11-run.
 build_pcsx2_chroot() {
   if $SKIP_PCSX2; then
+    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-pcsx2' >> "$LOG_FILE" 2>&1 || true
     warn "PCSX2 skipped (--skip-pcsx2)"
     return
   fi
-  step "PCSX2 ${PCSX2_VERSION} (official AppImage, X11)"
-  local image="$WORK_DIR/pcsx2.AppImage"
-  curl -sSfL --retry 3 --max-time 900 -o "$image" \
-    "https://github.com/PCSX2/pcsx2/releases/download/v${PCSX2_VERSION}/pcsx2-v${PCSX2_VERSION}-linux-appimage-x64-Qt.AppImage" \
-    >> "$LOG_FILE" 2>&1 || err "PCSX2 download failed"
-  echo "$PCSX2_SHA256  $image" | sha256sum -c --quiet - >> "$LOG_FILE" 2>&1 \
-    || err "PCSX2: hash differs from the pinned one"
-  chmod +x "$image"
-  (cd "$WORK_DIR" && rm -rf squashfs-root && "$image" --appimage-extract > /dev/null) \
-    || err "PCSX2: the AppImage did not extract"
-  rm -rf "$CHROOT_DIR/opt/pcsx2"
-  mv "$WORK_DIR/squashfs-root" "$CHROOT_DIR/opt/pcsx2"
-  chmod -R a+rX "$CHROOT_DIR/opt/pcsx2"
-  printf '#!/bin/sh\nexec /opt/pcsx2/AppRun "$@"\n' > "$CHROOT_DIR/usr/local/bin/pcsx2"
-  chmod 755 "$CHROOT_DIR/usr/local/bin/pcsx2"
-  # Icone do menu do LXDE (config/applications/fliperos-pcsx2.desktop).
-  install -Dm644 "$CHROOT_DIR/opt/pcsx2/PCSX2.png" "$CHROOT_DIR/usr/local/share/pixmaps/pcsx2.png"
-  rm -f "$image"
-  ok "PCSX2 ${PCSX2_VERSION} in /opt/pcsx2"
-  record_version pcsx2 "$PCSX2_VERSION"
+  chroot "$CHROOT_DIR" dpkg -s fliperos-pcsx2 > /dev/null 2>&1 ||
+    err "fliperos-pcsx2 is not installed (local repository); use --skip-pcsx2 for an ISO without it"
+  ok "PCSX2 (fliperos-pcsx2) in /opt/pcsx2"
 }
 
 # ── PCSX2x6 (Namco System 246/256), X11 ───────────────────────
@@ -1224,38 +1168,20 @@ build_pcsx2x6_chroot() {
   record_version pcsx2x6 "$PCSX2X6_VERSION"
 }
 
-# ── Compilar Supermodel (Sega Model 3), X11 ───────────────────
-# SDL2+OpenGL, sem caminho KMS/DRM documentado pelo projeto — fica em
-# X11 via fliperos-x11-run.
+# ── Supermodel (Sega Model 3), X11 ────────────────────────────
+# O pacote fliperos-supermodel (packaging/packages, instalado por
+# install_local_repo_chroot): o mesmo .deb que os updates levam a quem so
+# atualiza pela rede. SDL2+OpenGL, sem caminho KMS/DRM documentado pelo
+# projeto: fica em X11 via fliperos-x11-run.
 build_supermodel_chroot() {
   if $SKIP_SUPERMODEL; then
+    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-supermodel' >> "$LOG_FILE" 2>&1 || true
     warn "Supermodel skipped (--skip-supermodel)"
     return
   fi
-  step "Compiling Supermodel (Model 3, X11) in the chroot"
-  cat > "$CHROOT_DIR/tmp/build-supermodel.sh" << 'SMSCRIPT'
-#!/bin/bash
-set -e
-apt-get install -y --no-install-recommends libsdl2-dev libsdl2-net-dev libglu1-mesa-dev zlib1g-dev
-git clone --depth=1 https://github.com/trzy/Supermodel /tmp/supermodel
-cd /tmp/supermodel
-# A versao (o commit de hoje do master) para o Setup > Emulators & Games.
-mkdir -p /usr/local/share/fliperos
-echo "supermodel=$(git log -1 --format='%cs %h')" >> /usr/local/share/fliperos/emulator-versions
-# Makefile proprio (sem CMake), como o README do projeto manda no Linux.
-make -f Makefiles/Makefile.UNIX -j"$(nproc)"
-install -m755 bin/supermodel /usr/local/bin/supermodel
-# Games.xml (a lista de jogos que ele reconhece) e a configuracao padrao.
-mkdir -p /usr/local/share/supermodel
-cp -r Config Assets /usr/local/share/supermodel/
-cd /
-rm -rf /tmp/supermodel
-echo "Supermodel OK"
-SMSCRIPT
-  chmod +x "$CHROOT_DIR/tmp/build-supermodel.sh"
-  chroot "$CHROOT_DIR" /tmp/build-supermodel.sh >> "$LOG_FILE" 2>&1 \
-    && ok "Supermodel compilado" \
-    || err "Supermodel failed; use --skip-supermodel explicitly for an ISO without it"
+  chroot "$CHROOT_DIR" dpkg -s fliperos-supermodel > /dev/null 2>&1 ||
+    err "fliperos-supermodel is not installed (local repository); use --skip-supermodel for an ISO without it"
+  ok "Supermodel (fliperos-supermodel)"
 }
 
 # ── Hypseus Singe (laserdisc: Dragon's Lair, Space Ace...), X11 ──
@@ -1299,49 +1225,26 @@ HSSCRIPT
 }
 
 # ── OpenBOR (beat 'em ups), X11 ───────────────────────────────
-# O OpenBOR procura Paks/, Saves/ e Logs/ na pasta em que roda: o comando
-# openbor entra em /opt/fliperos/roms/openbor (o acervo do Samba) antes.
+# O pacote fliperos-openbor (packaging/packages, instalado por
+# install_local_repo_chroot), tela cheia de fabrica: o mesmo .deb que os
+# updates levam a quem so atualiza pela rede. O OpenBOR procura Paks/, Saves/
+# e Logs/ na pasta em que roda: o comando openbor entra em
+# /opt/fliperos/roms/openbor (o acervo do Samba) antes.
 build_openbor_chroot() {
   if $SKIP_OPENBOR; then
+    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-openbor' >> "$LOG_FILE" 2>&1 || true
     warn "OpenBOR skipped (--skip-openbor)"
     return
   fi
-  step "Compiling OpenBOR (${OPENBOR_COMMIT:0:7}) in the chroot"
-  cat > "$CHROOT_DIR/tmp/build-openbor.sh" << 'OBSCRIPT'
-#!/bin/bash
-set -e
-apt-get install -y --no-install-recommends ninja-build libsdl2-dev libvorbis-dev libpng-dev libvpx-dev \
-  libsdl2-gfx-1.0-0
-git init -q /tmp/openbor
-git -C /tmp/openbor fetch -q --depth 1 https://github.com/DCurrent/openbor __OPENBOR_COMMIT__
-git -C /tmp/openbor -c advice.detachedHead=false checkout -q FETCH_HEAD
-cd /tmp/openbor
-# Tela cheia de fabrica, no seletor de paks (engine/sdl/menu.c, isFull) e
-# no jogo (sem o Saves/default.cfg): em janela o OpenBOR abre em 2x de
-# tamanho fixo (640x480 num modo de 320x240, so o meio aparece, visto no
-# gabinete); em tela cheia (SDL_WINDOW_FULLSCREEN_DESKTOP) escala para o
-# modo. O menu de video dele ainda troca.
-sed -i 's/^static int isFull = 0;/static int isFull = 1;/' engine/sdl/menu.c
-sed -i 's/^\([[:space:]]*savedata\.fullscreen = \)0;/\11;/' engine/openbor.c
-grep -q '^static int isFull = 1;' engine/sdl/menu.c
-grep -q 'savedata.fullscreen = 1;' engine/openbor.c
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_LINUX=ON -DTARGET_ARCH=AMD64
-cmake --build build --parallel
-install -Dm755 engine/releases/LINUX/OpenBOR /usr/local/lib/openbor/OpenBOR
-install -Dm644 engine/resources/OpenBOR_Icon_128x128.png /usr/local/share/pixmaps/openbor.png
-games=/opt/fliperos/roms/openbor
-mkdir -p "$games/Paks" "$games/Saves" "$games/Logs" "$games/ScreenShots"
-chown -R fliperos:fliperos "$games"
-cd /
-rm -rf /tmp/openbor
-echo "OpenBOR OK"
-OBSCRIPT
-  sed -i "s|__OPENBOR_COMMIT__|${OPENBOR_COMMIT}|g" "$CHROOT_DIR/tmp/build-openbor.sh"
-  chmod +x "$CHROOT_DIR/tmp/build-openbor.sh"
-  chroot "$CHROOT_DIR" /tmp/build-openbor.sh >> "$LOG_FILE" 2>&1 \
-    && ok "OpenBOR compilado" \
-    || err "OpenBOR failed; use --skip-openbor for an ISO without it"
-  record_version openbor "${OPENBOR_COMMIT:0:7}"
+  chroot "$CHROOT_DIR" dpkg -s fliperos-openbor > /dev/null 2>&1 ||
+    err "fliperos-openbor is not installed (local repository); use --skip-openbor for an ISO without it"
+  # O 3.0 dos paks antigos (config/openbor-legacy) usa o SDL2_gfx.
+  chroot "$CHROOT_DIR" apt-get install -y --no-install-recommends libsdl2-gfx-1.0-0 >> "$LOG_FILE" 2>&1 ||
+    err "OpenBOR: libsdl2-gfx-1.0-0 did not install"
+  local games=$CHROOT_DIR/opt/fliperos/roms/openbor
+  mkdir -p "$games/Paks" "$games/Saves" "$games/Logs" "$games/ScreenShots"
+  chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/roms/openbor
+  ok "OpenBOR (fliperos-openbor)"
   # O comando openbor (Paks em /opt/fliperos/roms/openbor/Paks) e o 3.0 dos
   # paks antigos: os mesmos do fliperos-rootfs.sh, que os atualiza depois.
   local src
@@ -1625,7 +1528,6 @@ mkdir -p "$ISO_DIR"
 check_host_deps
 fetch_limine
 fetch_debs
-build_gum
 build_rootfs
 configure_chroot
 install_limine_rootfs

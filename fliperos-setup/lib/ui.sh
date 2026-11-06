@@ -431,7 +431,7 @@ ui_screen() {
 ui_list_height() {
   local items=$1 free
   # Sobra para a ajuda do gum (2 linhas) e, se a lista rolar, para as setas
-  # da paginacao (patches/gum: uma linha antes da lista, outra depois).
+  # da paginacao (packaging/patches/gum: uma linha antes da lista, outra depois).
   free=$((UI_ROWS - UI_USED_ROWS - 5))
   ((free < 3)) && free=3
   ((items < free)) && free=$items
@@ -440,7 +440,7 @@ ui_list_height() {
 
 # Os baloes de informacao: UI_HINTS tem o texto de cada item do proximo
 # ui_menu, na ordem (ui_menu_hints o preenche). O gum do FliperOS
-# (patches/gum/0004-choose-balao.patch) mostra embaixo da lista o do item
+# (packaging/patches/gum/0004-choose-balao.patch) mostra embaixo da lista o do item
 # sob o cursor; o gum sem o patch ignora as variaveis e nao mostra nada.
 UI_HINTS=()
 # Linhas de texto do balao numa tela baixa (320x240: 15 linhas), onde ele

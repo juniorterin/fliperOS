@@ -7,7 +7,9 @@
 #
 #   tools/publish-packages.sh [PASTA]     (padrao: output/packages)
 #
-# Um .deb ja publicado com o mesmo nome nao e trocado: uma versao nova pede
+# Um pacote novo entra na lista como "installed" (so atualiza quem ja o tem):
+# depois do teste num gabinete, ele vira "always" a mao. Um .deb ja publicado
+# com o mesmo nome nao e trocado: uma versao nova pede
 # uma revisao nova na receita (PKG_REVISION). Depois, commit da lista e um
 # update (tools/make-update.sh).
 set -euo pipefail
@@ -29,12 +31,11 @@ fi
 published=$(gh release view "$tag" -R "$repo" --json assets --jq '.assets[].name')
 
 rows=()
-for recipe in $(bash packaging/build-deb.sh --list-iso); do
-  # shellcheck source=/dev/null
-  version=$(PKG_VERSION="" PKG_REVISION="" && . "packaging/packages/$recipe.sh" && echo "$PKG_VERSION-$PKG_REVISION")
-  file=${recipe}_${version}_amd64.deb
-  deb=$dir/$file
-  [[ -f $deb ]] || die "$deb is missing: build it first (bash packaging/build-deb.sh $recipe)"
+# publish NOME VERSAO DEB: envia o .deb (se ainda nao esta la) e guarda a
+# linha da lista.
+publish() {
+  local name=$1 version=$2 deb=$3 file sum tmp published_sum when
+  file=${deb##*/}
   [[ $file != *[+:]* ]] || die "$file: GitHub renames + and : in asset names"
   sum=$(sha256sum "$deb" | cut -d' ' -f1)
   if grep -qx "$file" <<< "$published"; then
@@ -50,7 +51,35 @@ for recipe in $(bash packaging/build-deb.sh --list-iso); do
     gh release upload "$tag" -R "$repo" "$deb" || die "could not upload $file"
     echo "$file: published"
   fi
-  rows+=("$(printf '%s\t%s\t%s\t%s' "$recipe" "$version" "$sum" always)")
+  # O QUANDO de quem ja esta na lista fica; um pacote novo entra como
+  # "installed" (nenhum gabinete o ganha ainda): ele vira "always" a mao, no
+  # commit de depois do teste num gabinete.
+  when=$(awk -F'\t' -v n="$name" '$1 == n { print $4; exit }' "$list" 2> /dev/null)
+  rows+=("$(printf '%s\t%s\t%s\t%s' "$name" "$version" "$sum" "${when:-installed}")")
+}
+
+for recipe in $(bash packaging/build-deb.sh --list-iso); do
+  # shellcheck source=/dev/null
+  version=$(PKG_VERSION="" PKG_REVISION="" && . "packaging/packages/$recipe.sh" && echo "$PKG_VERSION-$PKG_REVISION")
+  deb=$dir/${recipe}_${version}_amd64.deb
+  [[ -f $deb ]] || die "$deb is missing: build it first (bash packaging/build-deb.sh $recipe)"
+  publish "$recipe" "$version" "$deb"
+done
+
+# O kernel 15 kHz (fliperos-kernel.sh build output/kernel): a imagem e os
+# headers do build de agora, se ja compilados. Cada build e um pacote novo
+# (linux-image-6.18.54-15khz.N), instalado ao lado do anterior.
+kernel_dir=${FLIPEROS_KERNEL_DIR:-output/kernel}
+kernel_build=$(sed -n 's/^KERNEL_BUILD="\(.*\)"/\1/p' fliperos-kernel.sh)
+for deb in "$kernel_dir"/linux-image-*.deb "$kernel_dir"/linux-headers-*.deb; do
+  [[ -f $deb ]] || continue
+  file=${deb##*/}
+  name=${file%%_*}
+  version=${file#*_}
+  version=${version%_*}
+  # So o build de agora: um .deb esquecido de um build antigo nao vai junto.
+  [[ $version == *-"${kernel_build}"fliperos ]] || continue
+  publish "$name" "$version" "$deb"
 done
 
 {

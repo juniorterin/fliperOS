@@ -13,7 +13,17 @@ set -euo pipefail
 
 KERNEL_VERSION="6.18.54"
 KERNEL_SERIES="${KERNEL_VERSION%.*}"
+# O build: sobe a cada patch novo ou mudado, e o kernel vira 6.18.54-15khz.N,
+# um pacote novo (linux-image-6.18.54-15khz.N) instalado ao lado do anterior,
+# que o Limine guarda como "previous kernel". Com o mesmo nome o pacote seria
+# trocado no lugar, sem kernel para voltar; e com a mesma versao os gabinetes
+# nem viam a troca (o patch 10 chegou na 0.20 com a versao da 0.8.1). O
+# KERNEL_PATCHES_SHA256 e o dos patches deste build: o teste falha se eles
+# mudam sem o KERNEL_BUILD subir (tests/test_build.py).
+KERNEL_BUILD="2"
+KERNEL_PATCHES_SHA256="82262372e1e29199f2b4e3fc0dc8c1e764388c8884d88ebad40d89ab78024dba"
 LOCALVERSION="-15khz"
+((KERNEL_BUILD > 1)) && LOCALVERSION="-15khz.$KERNEL_BUILD"
 src=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 patches="$src/patches/kernel-15khz/$KERNEL_SERIES"
 
@@ -25,6 +35,12 @@ key() {
 
 build() {
   local out=$1 work seed pkg
+  # Patch novo ou mudado sem um KERNEL_BUILD novo: os gabinetes nao veriam o
+  # kernel (a mesma versao de antes).
+  if [[ $(cat "$patches"/*.patch | sha256sum | cut -d' ' -f1) != "$KERNEL_PATCHES_SHA256" ]]; then
+    echo "The kernel patches changed: raise KERNEL_BUILD and update KERNEL_PATCHES_SHA256" >&2
+    exit 1
+  fi
   mkdir -p "$out"
   work=$(mktemp -d /tmp/fliperos-kernel.XXXXXX)
   export DEBIAN_FRONTEND=noninteractive
@@ -87,7 +103,7 @@ build() {
   done
   ! grep -q '^CONFIG_DYNAMIC_FTRACE=y' .config || { echo "CONFIG_DYNAMIC_FTRACE ended up enabled" >&2; exit 1; }
 
-  make -j"$(nproc)" bindeb-pkg KDEB_PKGVERSION="$KERNEL_VERSION-1fliperos" KDEB_CHANGELOG_DIST=noble \
+  make -j"$(nproc)" bindeb-pkg KDEB_PKGVERSION="$KERNEL_VERSION-${KERNEL_BUILD}fliperos" KDEB_CHANGELOG_DIST=noble \
     > "$work/make.log" 2>&1 || {
     tail -40 "$work/make.log" >&2
     exit 1

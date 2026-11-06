@@ -336,6 +336,20 @@ class KernelTests(unittest.TestCase):
             self.assertIn(option, self.SCRIPT)
         self.assertIn('--disable MODULE_SIG', self.SCRIPT)
 
+    def test_a_patch_change_needs_a_new_kernel_build(self):
+        # Os gabinetes so veem um kernel novo com outra versao: o patch 10
+        # chegou na 0.20 com a versao da 0.8.1 e nenhum update o levou. Patch
+        # novo ou mudado: sobe o KERNEL_BUILD e grava o sha256 dos patches.
+        version = re.search(r'KERNEL_VERSION="([0-9.]+)"', self.SCRIPT).group(1)
+        series = '.'.join(version.split('.')[:2])
+        data = b''.join(p.read_bytes() for p in sorted((ROOT / 'patches/kernel-15khz' / series).glob('*.patch')))
+        pinned = re.search(r'KERNEL_PATCHES_SHA256="([0-9a-f]{64})"', self.SCRIPT).group(1)
+        self.assertEqual(hashlib.sha256(data).hexdigest(), pinned,
+                         'the kernel patches changed: raise KERNEL_BUILD and update KERNEL_PATCHES_SHA256')
+        # Um build novo e outro kernel (linux-image-6.18.54-15khz.N), ao lado do anterior.
+        self.assertIn('((KERNEL_BUILD > 1)) && LOCALVERSION="-15khz.$KERNEL_BUILD"', self.SCRIPT)
+        self.assertIn('KDEB_PKGVERSION="$KERNEL_VERSION-${KERNEL_BUILD}fliperos"', self.SCRIPT)
+
     def test_build_always_installs_the_15khz_kernel(self):
         self.assertIn('install_15khz_kernel', MKISO)
         self.assertNotIn('linux-image-generic linux-headers-generic', MKISO)
@@ -353,13 +367,18 @@ class PinnedDownloadTests(unittest.TestCase):
 
     def test_pcsx2_is_the_pinned_appimage(self):
         # O PCSX2 atual nao compila com as bibliotecas do noble (SDL3, Qt 6.10).
-        self.assertRegex(MKISO, r'PCSX2_VERSION="[0-9.]+"')
-        self.assertRegex(MKISO, r'PCSX2_SHA256="[0-9a-f]{64}"')
-        body = MKISO.split('build_pcsx2_chroot() {')[1].split('\n}\n')[0]
+        # O pacote fliperos-pcsx2 o traz; a ISO o instala do repositorio local.
+        body = (ROOT / 'packaging/packages/fliperos-pcsx2.sh').read_text()
+        self.assertRegex(body, r'PCSX2_TAG="v[0-9.]+"')
+        self.assertRegex(body, r'PCSX2_SHA256="[0-9a-f]{64}"')
         self.assertIn('echo "$PCSX2_SHA256  $image" | sha256sum -c', body)
         self.assertIn('--appimage-extract', body)
         self.assertIn('exec /opt/pcsx2/AppRun', body)
         self.assertNotIn('git clone', body)
+        # O mais novo: o ultimo release estavel, nao a tag mais nova (que marca os noturnos).
+        self.assertIn('PKG_EDGE_RELEASE=1', body)
+        self.assertNotIn('PCSX2_VERSION', MKISO)
+        self.assertIn('dpkg -s fliperos-pcsx2', MKISO.split('build_pcsx2_chroot() {')[1].split('\n}\n')[0])
 
     def test_pcsx2x6_is_the_pinned_fork_next_to_the_official(self):
         # O fork dos arcades Namco 246/256 e outro AppImage, em /opt/pcsx2x6.
@@ -396,25 +415,26 @@ class ImageTests(unittest.TestCase):
         self.assertIn('/tmp/gum.deb /tmp/antimicrox.deb', MKISO)
 
     def test_gum_menus_page_with_arrows(self):
-        # Setas em vez dos pontos da paginacao: o gum do .deb e trocado pelo
-        # do codigo da mesma versao com patches/gum, com o Go fixado.
-        patch = (ROOT / 'patches/gum/0001-choose-setas.patch').read_text()
+        # Setas em vez dos pontos da paginacao: o gum do pacote fliperos-gum,
+        # o codigo da mesma versao com packaging/patches/gum, com o Go fixado,
+        # em /usr/local/bin na frente do /usr/bin/gum do .deb.
+        patch = (ROOT / 'packaging/patches/gum/0001-choose-setas.patch').read_text()
         self.assertIn('+			up = "▲"', patch)
         self.assertIn('+			down = "▼"', patch)
         self.assertIn('-		s.WriteString("  " + m.paginator.View())', patch)
-        body = MKISO.split('build_gum() {')[1].split('\n}\n')[0]
+        recipe = (ROOT / 'packaging/packages/fliperos-gum.sh').read_text()
         for name in ('GUM_COMMIT', 'GO_SHA256'):
-            self.assertRegex(MKISO, name + r'="[0-9a-f]{40,64}"')
-        self.assertIn('rev-parse HEAD) == "$GUM_COMMIT"', body)
-        self.assertIn('git -C "$gsrc" apply "$here"/patches/gum/*.patch', body)
-        self.assertIn('dpkg-divert --local --rename --add /usr/bin/gum', MKISO)
-        self.assertRegex(MKISO, r'(?m)^fetch_debs\nbuild_gum$')
-        self.assertIn('patches/', (ROOT / 'Dockerfile.fliperos').read_text())
+            self.assertRegex(recipe, name + r'="[0-9a-f]{40,64}"')
+        self.assertIn('rev-parse HEAD) != "$GUM_COMMIT"', recipe)
+        self.assertIn('for patch in "$here"/../patches/gum/*.patch; do', recipe)
+        self.assertIn('install -Dm755 "$SRC/gum-bin" "$STAGING/usr/local/bin/gum"', recipe)
+        self.assertNotIn('build_gum', MKISO)
+        self.assertIn('fliperos-pcsx2 fliperos-gum', MKISO)
 
     def test_gum_menu_balloon(self):
         # O balao de informacao: o texto do item sob o cursor, embaixo da
         # lista, das variaveis GUM_CHOOSE_HINT*. Sem elas o gum fica igual.
-        patch = (ROOT / 'patches/gum/0004-choose-balao.patch').read_bytes()
+        patch = (ROOT / 'packaging/patches/gum/0004-choose-balao.patch').read_bytes()
         self.assertNotIn(b'\r', patch)
         text = patch.decode()
         self.assertIn('+\t\tparts = append(parts, hint.Render(m.index))\n', text)
@@ -430,7 +450,7 @@ class ImageTests(unittest.TestCase):
         # O cursor que anda e o Enter tocam os WAV de GUM_SOUND_MOVE e
         # GUM_SOUND_SELECT (aplay), no choose e no confirm. Sem CR: o git
         # apply do build recusaria.
-        patch = (ROOT / 'patches/gum/0002-sons-do-menu.patch').read_bytes()
+        patch = (ROOT / 'packaging/patches/gum/0002-sons-do-menu.patch').read_bytes()
         self.assertNotIn(b'\r', patch)
         text = patch.decode()
         self.assertIn('+func Move() { play("GUM_SOUND_MOVE") }', text)
@@ -10840,7 +10860,9 @@ class NewEmulatorBuildTests(unittest.TestCase):
 
     def test_pinned_versions(self):
         self.assertRegex(MKISO, r'HYPSEUS_TAG="v2\.[0-9.]+"')   # a serie 3 exige SDL3
-        self.assertRegex(MKISO, r'OPENBOR_COMMIT="[0-9a-f]{40}"')
+        self.assertRegex((ROOT / 'packaging/packages/fliperos-openbor.sh').read_text(), r'OPENBOR_COMMIT="[0-9a-f]{40}"')
+        self.assertRegex((ROOT / 'packaging/packages/fliperos-supermodel.sh').read_text(),
+                         r'SUPERMODEL_COMMIT="[0-9a-f]{40}"')
         self.assertRegex((ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text(), r'PKG_VERSION="[0-9]{4}[a-z]?"')
         self.assertRegex(EXTRAS, r'HEROIC_SHA256="[0-9a-f]{64}"')
 
@@ -10970,10 +10992,12 @@ class NewEmulatorBuildTests(unittest.TestCase):
     def test_openbor_starts_fullscreen(self):
         # Em janela ele abria em 2x de tamanho fixo (640x480 num modo de
         # 320x240, so o meio aparecia): tela cheia no seletor de paks e no jogo.
-        body = MKISO.split('build_openbor_chroot() {')[1].split('\n}\n')[0]
-        self.assertIn("sed -i 's/^static int isFull = 0;/static int isFull = 1;/' engine/sdl/menu.c", body)
-        self.assertIn("sed -i 's/^\\([[:space:]]*savedata\\.fullscreen = \\)0;/\\11;/' engine/openbor.c", body)
-        self.assertLess(body.index("grep -q 'savedata.fullscreen = 1;'"), body.index('cmake -S . -B build'))
+        body = (ROOT / 'packaging/packages/fliperos-openbor.sh').read_text()
+        self.assertIn("sed -i 's/^static int isFull = 0;/static int isFull = 1;/' \"$dir/engine/sdl/menu.c\"", body)
+        self.assertIn("sed -i 's/^\\([[:space:]]*savedata\\.fullscreen = \\)0;/\\11;/' \"$dir/engine/openbor.c\"", body)
+        self.assertLess(body.index("grep -q 'savedata.fullscreen = 1;'"), body.index('cmake -S "$dir"'))
+        # Se o codigo mudou e a troca nao pega, o build para (o "mais novo" do Setup avisa).
+        self.assertIn('error: patch failed: the full screen default no longer fits OpenBOR', body)
 
     def test_openbor_3_for_the_old_paks(self):
         # O 4 recusa os paks feitos para o 3.0 (sprites em GIF): o 3.0 build
@@ -10991,7 +11015,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-openbor" "$CHROOT_DIR/usr/local/bin/openbor"', body)
         self.assertIn('"$CHROOT_DIR/usr/local/lib/openbor/OpenBOR-3.0"', body)
         self.assertNotIn('cat > /usr/local/bin/openbor', body)
-        self.assertIn('libsdl2-gfx-1.0-0', body)
+        self.assertIn('apt-get install -y --no-install-recommends libsdl2-gfx-1.0-0', body)
         self.assertIn('install -Dm755 "$src/config/openbor-legacy/OpenBOR-3.0" "$root/usr/local/lib/openbor/OpenBOR-3.0"',
                       ROOTFS)
         self.assertIn('libsdl2-gfx-1.0-0', (ROOT / 'tools/cabinet-update.sh').read_text())
@@ -13336,8 +13360,8 @@ class OnDemandFrontendTests(unittest.TestCase):
         return run.stdout.split()
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
-        iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-flycast', 'fliperos-groovymame', 'fliperos-retroarch',
-               'fliperos-sdl2-kms')
+        iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-flycast', 'fliperos-groovymame', 'fliperos-gum',
+               'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-retroarch', 'fliperos-sdl2-kms', 'fliperos-supermodel')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
         self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
@@ -13497,14 +13521,15 @@ class PackagingTests(unittest.TestCase):
 
     def test_every_recipe_is_a_launcher_an_emulator_or_its_library(self):
         # Os frontends, os emuladores que vinham compilados na ISO (os updates
-        # os levam como pacote) e o SDL do GroovyMAME.
+        # os levam como pacote), o SDL do GroovyMAME e o gum do Setup.
         table = (ROOT / 'config/fliperos-sessions.conf').read_text()
         emulators = {line.split('|')[0] for line in
                      (ROOT / 'config/fliperos-emulators').read_text().split('table() {')[1].split('\nEOF')[0].splitlines()
                      if '|' in line}
         for recipe in self.recipe_files():
             name = recipe.stem[len('fliperos-'):]
-            self.assertTrue(recipe.stem in table or name in emulators or recipe.stem == 'fliperos-sdl2-kms', recipe.stem)
+            self.assertTrue(recipe.stem in table or name in emulators or recipe.stem in ('fliperos-sdl2-kms', 'fliperos-gum'),
+                            recipe.stem)
 
     def test_attractplus_patches_apply_on_linux_and_keep_the_kernel_joystick_order(self):
         # patch -p1 no container: um patch em CRLF nao se aplica.
@@ -14620,7 +14645,7 @@ class EmulatorsMenuTests(unittest.TestCase):
     def test_the_cabinet_gets_the_flycast_recipe_and_patches(self):
         rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
         self.assertIn('for recipe in fliperos-emulationstation fliperos-pegasus fliperos-retroarch fliperos-dolphin '
-                      'fliperos-flycast \\\n  fliperos-groovymame; do', rootfs)
+                      'fliperos-flycast \\\n  fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2; do', rootfs)
         self.assertIn('"$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch', rootfs)
         for name, upstream, var in (('flycast', 'https://github.com/flyinghead/flycast', 'FLYCAST_COMMIT'),
                                     ('retroarch', 'https://github.com/libretro/RetroArch', 'RA_COMMIT'),
@@ -14718,7 +14743,8 @@ class EmulatorsMenuTests(unittest.TestCase):
             new = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--short=7', 'HEAD'], capture_output=True,
                                  text=True).stdout.strip()
             mkiso = tmp / 'fliperos-mkiso.sh'
-            mkiso.write_text('PCSX2_VERSION="2.8.2"\n')
+            mkiso.write_text('')
+            (tmp / 'packaging/packages/fliperos-pcsx2.sh').write_text('PKG_VERSION="2.8.2"\n')
             # O GroovyMAME que o update traz: a tag da receita do pacote.
             (tmp / 'packaging/packages/fliperos-groovymame.sh').write_text('GROOVYMAME_TAG="gm0290sr222g"\n')
             env = {'FLIPEROS_EMULATORS_ROOT': str(root), 'FLIPEROS_HOME': str(home),
@@ -14744,17 +14770,16 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertEqual(latest('fightcade'), '2.1.45||unknown')
         # O build da imagem grava a versao de cada emulador dela.
         mk = (ROOT / 'fliperos-mkiso.sh').read_text()
-        for name in ('pcsx2', 'openbor'):
-            self.assertIn('  record_version %s "' % name, mk)
+        self.assertIn('echo "${PCSX2_TAG#v}" > "$STAGING/usr/local/share/fliperos/emulator-versions.d/pcsx2"',
+                      (ROOT / 'packaging/packages/fliperos-pcsx2.sh').read_text())
         self.assertIn('echo "$PKG_VERSION" > "$STAGING/usr/local/share/fliperos/emulator-versions.d/dolphin"',
                       (ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text())
         self.assertIn('echo "0.${GROOVYMAME_TAG:3:3}" > "$STAGING/usr/local/share/fliperos/emulator-versions.d/groovymame"',
                       (ROOT / 'packaging/packages/fliperos-groovymame.sh').read_text())
-        for name in ('supermodel',):
-            self.assertIn('echo "%s=$(git log -1 --format=\'%%cs %%h\')" >> /usr/local/share/fliperos/emulator-versions'
-                          % name, mk)
+        self.assertIn("git -C \"$dir\" log -1 --format='%h' > \"$STAGING/usr/local/share/fliperos/emulator-versions.d/openbor\"",
+                      (ROOT / 'packaging/packages/fliperos-openbor.sh').read_text())
         # Os que vem em pacote gravam a versao em emulator-versions.d.
-        for name in ('retroarch', 'flycast'):
+        for name in ('retroarch', 'flycast', 'supermodel'):
             self.assertIn("git -C \"$dir\" log -1 --format='%%cs %%h' > "
                           "\"$STAGING/usr/local/share/fliperos/emulator-versions.d/%s\"" % name,
                           (ROOT / ('packaging/packages/fliperos-%s.sh' % name)).read_text())

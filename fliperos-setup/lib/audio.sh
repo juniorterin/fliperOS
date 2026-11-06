@@ -395,7 +395,7 @@ audio_test() {
 }
 
 # ── Sons do menu ─────────────────────────────────────────────────
-# O gum do FliperOS (patches/gum/0002-sons-do-menu.patch) toca
+# O gum do FliperOS (packaging/patches/gum/0002-sons-do-menu.patch) toca
 # GUM_SOUND_MOVE quando o cursor anda e GUM_SOUND_SELECT no Enter. Os sons
 # sao da pessoa (o FliperOS nao traz sons de jogo): move.wav e select.wav
 # nesta pasta, que na rede e o compartilhamento FliperOS, sounds/menu.

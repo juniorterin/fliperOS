@@ -311,10 +311,11 @@ for path in usr/sbin/mount.cifs usr/bin/smbclient usr/local/lib/fliperos-setup/l
   var/cache/fliperos opt/fliperos/bin/fliperos-freeroms; do
   has "$path"
 done
-# O gum e o compilado com patches/gum (o Espaco marcando nas listas de
-# marcar e o 0003; o build falha se um patch nao aplica), nao o do .deb.
-unsquashfs -cat "$work/filesystem.squashfs" usr/bin/gum > "$work/f" || fail "ausente: /usr/bin/gum"
-grep -qa -- '-fliperos' "$work/f" || fail "/usr/bin/gum is the .deb one, without the FliperOS patches"
+# O gum e o do pacote fliperos-gum, compilado com packaging/patches/gum (o
+# Espaco marcando nas listas de marcar e o 0003; o build falha se um patch
+# nao aplica), em /usr/local/bin, na frente do /usr/bin/gum do .deb.
+unsquashfs -cat "$work/filesystem.squashfs" usr/local/bin/gum > "$work/f" || fail "ausente: /usr/local/bin/gum"
+grep -qa -- '-fliperos' "$work/f" || fail "/usr/local/bin/gum is not the FliperOS gum"
 echo "ROM cleaner: fliperos-romclean, the MAME 2010 XML (0.139), catver.ini, nplayers.ini, controls.xml and the network folder (mount.cifs, smbclient)"
 
 # ── Downloader: o programa, o servico e o transmission-daemon ─

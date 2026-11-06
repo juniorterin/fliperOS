@@ -157,12 +157,12 @@ install -Dm644 "$src/config/openbox-fightcade.xml" "$root/etc/fliperos/openbox-f
 install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fliperos-emulationstation"
 install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fliperos-pegasus"
 install -Dm755 "$src/packaging/build-deb.sh" "$root/usr/local/share/fliperos/packaging/build-deb.sh"
-# Os emuladores em pacote (RetroArch, Dolphin, Flycast, GroovyMAME): a
-# receita e os patches tambem vem para o Setup > Emulators & Games compilar
-# (ou baixar, o GroovyMAME) o mais novo do projeto com eles
-# (config/fliperos-emulators edge).
+# Os emuladores em pacote (RetroArch, Dolphin, Flycast, GroovyMAME,
+# Supermodel, OpenBOR, PCSX2): a receita e os patches tambem vem para o Setup >
+# Emulators & Games compilar (ou baixar, o GroovyMAME) o mais novo do projeto
+# com eles (config/fliperos-emulators edge).
 for recipe in fliperos-emulationstation fliperos-pegasus fliperos-retroarch fliperos-dolphin fliperos-flycast \
-  fliperos-groovymame; do
+  fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2; do
   install -Dm644 "$src/packaging/packages/$recipe.sh" "$root/usr/local/share/fliperos/packaging/packages/$recipe.sh"
 done
 rm -rf "$root/usr/local/share/fliperos/packaging/patches"
