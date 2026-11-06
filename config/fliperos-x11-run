@@ -330,6 +330,9 @@ INI
       "$iniset" "$ini" Main HideCursorInFullscreen true
       "$iniset" "$ini" Main ConfirmPowerOff false
       "$iniset" "$ini" BIOS SearchDirectory "$HOME/bios"
+      # O log dele na saida, que vai para o duckstation.log (o painel web o
+      # mostra): sem BIOS ele so fecha, e ali fica onde a procurou.
+      "$iniset" "$ini" Logging LogToConsole true
       "$iniset" "$ini" Display AspectRatio "Stretch To Fill"
       # O filtro de flicker do entrelacado pedia o OpenGL ate a camada do Vulkan
       # filtrar tambem (config/fliperos-vkfps.c): quem ficou nele por isso volta
@@ -363,8 +366,11 @@ INI
     fi
     # Com um jogo (um frontend), -batch: fechar o jogo fecha o DuckStation e
     # volta ao frontend. Sem jogo, o Big Picture, que se usa pelo controle.
+    # Sem o "--" antes do jogo (o DuckStation o aceita, mas nao precisa: o
+    # caminho do frontend e absoluto): o xinit separa o programa do servidor
+    # no primeiro "--", e o .cue virava o servidor X.
     if (($# > 1)); then
-      set -- "$1" -fullscreen -batch -- "${@:2}"
+      set -- "$1" -fullscreen -batch "${@:2}"
     else
       set -- "$1" -fullscreen -bigpicture
     fi
@@ -583,6 +589,16 @@ log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$name.log"
 # o fim do arquivo) veria o pipe fechar ja na troca para o log e retomaria a
 # tela com o jogo aberto. Uma copia do pipe fica com o programa ate ele sair.
 [[ ! -p /dev/stdout ]] || exec 9>&1
+# O xinit separa o programa do servidor no primeiro "--": um "--" no comando
+# do programa faria do resto o servidor X (o jogo executado como script, e o X
+# nao sobe). Para aqui, com o motivo no log.
+for arg in "$@"; do
+  if [[ $arg == -- ]]; then
+    echo "fliperos-x11-run: '--' in the command of $name: xinit would take what follows as the X server" |
+      { tee -a "$log" 2> /dev/null || cat; } >&2
+    exit 2
+  fi
+done
 if [[ ! -f ${FLIPEROS_DEBUG_FLAG:-/etc/fliperos/debug} ]] && { : > "$log"; } 2> /dev/null; then
   exec xinit /opt/fliperos/bin/fliperos-x11-client "$@" -- :0 -nolisten tcp "${cursor[@]}" "vt$vt" -keeptty \
     >> "$log" 2>&1

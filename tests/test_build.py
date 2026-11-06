@@ -6642,11 +6642,12 @@ class WebPanelTests(unittest.TestCase):
         try:
             for path in own:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text('Game Selected: ./Paks/udd.pak\nAn Error Occurred\n')
+                path.write_text('Game Selected: ./Paks/udd.pak\n\x1b[33m\x1b[1mAn Error Occurred\x1b[0m\n')
             logs = json.loads(self.request('GET', '/api/logs', cookie=cookie)[2])['logs']
             self.assertEqual(logs, ['openbor-3.0-OpenBorLog.txt', 'openbor-OpenBorLog.txt', 'retroarch.log'])
             text = json.loads(self.request('GET', '/api/log?name=openbor-OpenBorLog.txt', cookie=cookie)[2])['text']
-            self.assertIn('An Error Occurred', text)
+            # Sem as cores do terminal.
+            self.assertIn('\nAn Error Occurred\n', text + '\n')
         finally:
             shutil.rmtree(openbor, ignore_errors=True)
 
@@ -10549,11 +10550,18 @@ class EmulatorModeTests(unittest.TestCase):
             out = self.run_x11(['duckstation', 'game.cue'], home=home, extra=extra).stdout
             self.assertIn('MODE=640 240 60', out)
             # Com jogo (um frontend): fechar o jogo fecha o emulador.
-            self.assertIn('duckstation -fullscreen -batch -- game.cue', out)
+            # Sem "--" antes do jogo: o xinit faria do jogo o servidor X.
+            self.assertIn('duckstation -fullscreen -batch game.cue -- :0', out)
+            # Um "--" no comando de qualquer programa para antes do xinit.
+            r = self.run_x11(['myprog', '--', 'game.cue'], home=home, extra=extra)
+            self.assertEqual(r.returncode, 2)
+            self.assertIn("'--' in the command of myprog", r.stderr)
+            self.assertNotIn('ARGS=', r.stdout)
             ini_path = Path(home) / '.local/share/duckstation/settings.ini'
             ini = ini_path.read_text()
             for section, line in (('Main', 'SetupWizardIncomplete = false'), ('Main', 'StartFullscreen = true'),
                                   ('Main', 'ConfirmPowerOff = false'), ('BIOS', 'SearchDirectory = %s/bios' % home),
+                                  ('Logging', 'LogToConsole = true'),
                                   ('Display', 'AspectRatio = Stretch To Fill'), ('Display', 'Scaling = Nearest'),
                                   ('GameList', 'RecursivePaths = %s/roms/ps1' % home),
                                   ('GameList', 'Paths = %s/roms/retroarch/pcsx_rearmed' % home),

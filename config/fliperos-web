@@ -1514,6 +1514,8 @@ def tail(path, lines):
         size = f.tell()
         f.seek(max(0, size - 256 * 1024))
         text = f.read().decode(errors="replace")
+    # Sem as cores do terminal (o DuckStation as poe no log).
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
     return "\n".join(text.splitlines()[-lines:])
 
 
