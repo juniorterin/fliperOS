@@ -5408,6 +5408,34 @@ class FrontendDataTests(unittest.TestCase):
         self.assertLessEqual(max(abs(b - a) for a, b in zip(widths, widths[1:])), 3)
         self.assertEqual(mid[-1][0] * 2 + 56, feview.WW)
 
+    def test_full_logo_cache_still_returns_the_new_logo(self):
+        # O cache dos logotipos e icones da tira cheio: o novo e devolvido (ele
+        # se esvaziava depois de guardar o novo, e o KeyError fechava o
+        # frontend depois de algumas trocas de sistema com o zoom da tira).
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        old = feview.logo_source
+        feview.logo_source = lambda name: pygame.Surface((120, 48), pygame.SRCALPHA)
+        try:
+            for call in (lambda: feview.system_logo('Naomi', 90, 40),
+                         lambda: feview.ribbon_icon({'name': 'Naomi'}, None, 41)):
+                feview._fitted.clear()
+                feview._fitted.update({('x', n, n): None for n in range(feview.FITTED_MAX)})
+                self.assertIsInstance(call(), pygame.Surface)
+                self.assertLessEqual(len(feview._fitted), feview.FITTED_MAX)
+        finally:
+            feview.logo_source = old
+            feview._fitted.clear()
+
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
         # (fliperos-syslogo png NOME ARQUIVO 48 f8f8f2) e feito uma vez e fica em

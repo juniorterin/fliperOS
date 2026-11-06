@@ -2459,6 +2459,7 @@ SYSLOGO_CACHE = os.path.join(os.path.expanduser("~"), ".cache", "fliperos", "sys
 SYSLOGO_HEIGHT = 48
 _logos = {}          # nome -> surface, None (sem logotipo) ou "..." (sendo feito)
 _fitted = {}         # (nome, largura, altura) -> surface no tamanho do azulejo
+FITTED_MAX = 400
 
 
 def logo_file(name):
@@ -2495,10 +2496,17 @@ def system_logo(name, w, h):
     if key not in _fitted:
         k = min(w / got.get_width(), h / got.get_height())
         size = (max(1, round(got.get_width() * k)), max(1, round(got.get_height() * k)))
-        _fitted[key] = pygame.transform.smoothscale(got.convert_alpha() if pygame.display.get_surface() else got, size)
-        if len(_fitted) > 400:
-            _fitted.clear()
+        fit_keep(key, pygame.transform.smoothscale(got.convert_alpha() if pygame.display.get_surface() else got, size))
     return _fitted[key]
+
+
+def fit_keep(key, img):
+    """Guarda img em _fitted. Cheio, ele se esvazia antes, e nao depois: o novo
+    fica (o zoom da tira passa por dezenas de tamanhos de cada sistema; esvaziar
+    depois apagava o que ia ser devolvido, e o KeyError fechava o frontend)."""
+    if len(_fitted) >= FITTED_MAX:
+        _fitted.clear()
+    _fitted[key] = img
 
 
 def ribbon_icon(cat, name, size):
@@ -2513,10 +2521,7 @@ def ribbon_icon(cat, name, size):
             k = px / 56
             img = pygame.transform.smoothscale(img.convert_alpha() if pygame.display.get_surface() else img,
                                                (max(1, round(img.get_width() * k)), max(1, round(img.get_height() * k))))
-        _fitted[key] = img
-        if len(_fitted) > 400:
-            _fitted.clear()
-            _fitted[key] = img
+        fit_keep(key, img)
     return _fitted[key]
 
 
