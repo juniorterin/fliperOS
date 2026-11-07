@@ -1330,8 +1330,9 @@ def list_row(fe, ui, i, lx, lw, y, sep, now):
         star(ui, lx + lw - 6, y + 6, T.YELLOW, 4)
     room = lx + lw - x - 12 if room is None else room
     if on:
-        # O escolhido inteiro: o que nao cabe corre em circulo.
-        ticker(ui, text_img(label.upper(), color), x, y + 2, room, now)
+        # O escolhido inteiro: o que nao cabe corre em circulo; o nome do
+        # gabinete de uma party corre sempre.
+        ticker(ui, text_img(label.upper(), color), x, y + 2, room, now, always=in_party)
     else:
         W.text(ui, fit(label, room), color, x, y + 2)
 
@@ -2399,24 +2400,30 @@ def draw_lobby(fe, ui, now):
     cols = 4 if WW >= 300 else 3
     cw = (pw - 16) // cols
     rows = (total + cols - 1) // cols
-    ch = 52
     y0 = py + 28
+    # Embaixo dos gabinetes vem os jogadores, a palavra de estado e os botoes.
+    # Com muitos gabinetes (a party do MAME vai ate 10) a caixa encolhe e
+    # perde o desenho do gabinete: ficam os jogadores e o nome.
+    ch = min(52, (py + ph - y0 - 64) // rows - 4)
+    full = ch >= 52
     for i in range(total):
         cx, cy = px + 8 + (i % cols) * cw, y0 + (i // cols) * (ch + 4)
         lit = i < members
         you = i + 1 == lob["number"]
         W.block(ui, (cx, cy, cw - 6, ch), T.BG_DEEP, None)
         pygame.draw.rect(ui, T.GREEN if lit else T.LINE, (cx, cy, cw - 6, ch), 1)
-        cabinet_icon(ui, cx + (cw - 6) // 2 - 7, cy + 5, 14, 22, lit)
+        if full:
+            cabinet_icon(ui, cx + (cw - 6) // 2 - 7, cy + 5, 14, 22, lit)
         label = "#%d" % (i + 1)
         if net and i < members:
             m = lob["members"][i]
             label = "P%d" % m["first"] if m["take"] == 1 else "P%d-%d" % (m["first"], m["first"] + m["take"] - 1)
-        W.text(ui, label, T.GREEN if lit else T.LINE, cx + (cw - 6 - W.width(label)) // 2, cy + 33)
+        W.text(ui, label, T.GREEN if lit else T.LINE, cx + (cw - 6 - W.width(label)) // 2, cy + (33 if full else 3))
         if lit:
             # O nome do gabinete (o apelido do Setup, ou a fruta ou o bicho dele).
             name = tiny.fit(lob["members"][i].get("name") or "", cw - 10)
-            tiny.text(ui, name, T.FG if you else T.COMMENT, cx + (cw - 6 - tiny.width(name)) // 2, cy + 44)
+            tiny.text(ui, name, T.FG if you else T.COMMENT, cx + (cw - 6 - tiny.width(name)) // 2,
+                      cy + (44 if full else ch - 9))
         if you:
             pygame.draw.rect(ui, T.PINK, (cx - 2, cy - 2, cw - 2, ch + 4), 1)
     y = y0 + rows * (ch + 4) + 4
@@ -2528,13 +2535,14 @@ def text_img(s, color, big=False):
     return surf
 
 
-def ticker(ui, img, x, y, w, now):
+def ticker(ui, img, x, y, w, now, always=False):
     """Um texto que nao cabe em w corre em circulo: sai pela esquerda e
-    volta pela direita, depois de um espaco."""
-    if img.get_width() <= w:
+    volta pela direita, depois de um espaco. always: corre mesmo cabendo
+    (volta pela beirada direita de w)."""
+    if img.get_width() <= w and not always:
         ui.blit(img, (x, y))
         return
-    period = img.get_width() + 40
+    period = max(img.get_width() + 40, w)
     off = int(now * MARQUEE_SPEED) % period
     old = ui.get_clip()
     ui.set_clip(pygame.Rect(x, y - 2, w, img.get_height() + 4).clip(old))
