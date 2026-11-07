@@ -26,6 +26,22 @@ HEROIC_URL="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/release
 # e sem ele o FBNeo do Fightcade para em "Couldn't initialise DirectX9
 # Alternate video output".
 WINE_PACKAGES="wine wine64 wine32:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386"
+# O Wine Staging: o Wine mais novo da WineHQ (a versao de desenvolvimento, nova
+# a cada duas semanas) com os patches que ainda nao entraram no Wine. O pacote
+# dela troca o Wine do Ubuntu (Conflicts/Replaces: wine) e poe o /usr/bin/wine,
+# entao o Fightcade e os jogos custom passam a usa-lo sem mudar nada. Os
+# recomendados vao junto, como a WineHQ manda (FreeType, SDL2, GnuTLS...).
+WINEHQ_KEY=${FLIPEROS_WINEHQ_KEY:-/usr/local/share/fliperos/winehq-archive.asc}
+WINEHQ_URL="https://dl.winehq.org/wine-builds/ubuntu"
+WINE_STAGING_PACKAGES="winehq-staging libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386"
+wine_staging_bin=${FLIPEROS_WINE_STAGING:-/opt/wine-staging/bin/wine}
+# As camadas do filtro de flicker e da OSD em 32 bits, as dos jogos do Wine
+# (config/fliperos-deflicker.c no OpenGL, config/fliperos-vkfps.c no Vulkan,
+# o DXVK), compiladas com qualquer um dos dois: o fonte vem na imagem.
+LAYER_SRC=${FLIPEROS_LAYER_SRC:-/usr/local/lib/fliperos/src}
+LAYER32=${FLIPEROS_DEFLICKER_LIB32:-/usr/local/lib/fliperos/i386/libfliperos-deflicker.so}
+VKLAYER32=${FLIPEROS_VKFPS_LIB32:-/usr/local/lib/fliperos/i386/libfliperos-vkfps.so}
+LAYER32_PACKAGES="gcc gcc-multilib libc6-dev pkg-config libdrm-dev libdrm-dev:i386 libgl-dev libegl-dev"
 # O steam-libs:i386 recomenda "xterm | x-terminal-emulator", e o Alacritty
 # (amd64) nao vale para um pacote i386: sem as duas arquiteturas do xterm de
 # fora, o apt o trazia de volta.
@@ -71,6 +87,7 @@ fail() {
 extras_label() {
   case $1 in
     wine) echo "Wine" ;;
+    wine-staging) echo "Wine Staging" ;;
     steam) echo "Steam" ;;
     heroic) echo "Heroic" ;;
     pixelcade) echo "Pixelcade" ;;
@@ -86,6 +103,7 @@ extras_label() {
 extras_installed() {
   case $1 in
     wine) [[ -x $wine_bin ]] ;;
+    wine-staging) [[ -x $wine_staging_bin ]] ;;
     steam) [[ -x $steam_bin ]] ;;
     heroic) [[ -x $heroic_bin ]] ;;
     pixelcade) [[ -x $pixelcade ]] && "$pixelcade" installed ;;
@@ -103,6 +121,7 @@ extras_list() {
     if extras_installed "$name"; then echo "$name|1|$desc"; else echo "$name|0|$desc"; fi
   done << 'LIST'
 wine|Wine (Fightcade 2 emulators)
+wine-staging|Wine Staging (newest Wine, with game fixes not in Wine yet)
 steam|Steam
 heroic|Heroic (GOG, Epic, Amazon)
 pixelcade|Pixelcade (LED/LCD marquee)
@@ -149,6 +168,24 @@ apt_install() {
   ((rc == 0)) || fail "apt-get install exited with status $rc (details in the log)"
 }
 
+# build_layer32: as camadas do filtro de flicker e da OSD em 32 bits: a do
+# OpenGL, que o fliperos-x11-client poe nos programas do Wine, e a do Vulkan,
+# que o carregador de 32 bits acha pelo manifesto dela. Sem elas o jogo roda,
+# sem o filtro e sem a OSD: so avisa.
+build_layer32() {
+  local source out
+  say 99 "Building the flicker filter for 32-bit Wine games"
+  for source in fliperos-deflicker.c fliperos-vkfps.c; do
+    out=$LAYER32
+    [[ $source == fliperos-vkfps.c ]] && out=$VKLAYER32
+    if bash "$LAYER_SRC/fliperos-deflicker-build" "$LAYER_SRC/$source" "$out" i386 >&2; then
+      sha256sum "$LAYER_SRC/$source" | cut -d' ' -f1 > "$out.source-sha256"
+    else
+      echo "fliperos-extras: $source did not build in 32 bits (Wine games run without its filter)" >&2
+    fi
+  done
+}
+
 install_heroic() {
   local deb
   deb=$(mktemp /tmp/heroic.XXXXXX.deb) || fail "no space in /tmp"
@@ -167,14 +204,32 @@ install_heroic() {
 }
 
 extras_install() {
-  local name=$1
+  local name=$1 pkgs
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook, ledspicer or stream)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, wine-staging, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook, ledspicer or stream)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > Games > Extras)"
   case $name in
     wine)
-      # shellcheck disable=SC2086 # um pacote por palavra
-      apt_install --no-install-recommends $WINE_PACKAGES
+      # Com o Wine Staging no lugar, o /usr/bin/wine ja e ele: o do Ubuntu
+      # nao volta (o apt o recusaria), so a camada de 32 bits.
+      if [[ -x $wine_staging_bin ]]; then
+        # shellcheck disable=SC2086
+        apt_install --no-install-recommends $LAYER32_PACKAGES
+      else
+        # shellcheck disable=SC2086 # um pacote por palavra
+        apt_install --no-install-recommends $WINE_PACKAGES $LAYER32_PACKAGES
+      fi
+      build_layer32
+      ;;
+    wine-staging)
+      [[ -f $WINEHQ_KEY ]] || fail "$WINEHQ_KEY is missing"
+      install -Dm644 "$WINEHQ_KEY" /etc/apt/keyrings/winehq-archive.asc &&
+        printf 'Types: deb\nURIs: %s\nSuites: %s\nComponents: main\nArchitectures: amd64 i386\nSigned-By: /etc/apt/keyrings/winehq-archive.asc\n' \
+          "$WINEHQ_URL" "$(. /etc/os-release && echo "$VERSION_CODENAME")" > /etc/apt/sources.list.d/winehq.sources ||
+        fail "could not add the WineHQ repository"
+      # shellcheck disable=SC2086
+      apt_install --install-recommends $WINE_STAGING_PACKAGES $LAYER32_PACKAGES
+      build_layer32
       ;;
     steam)
       # shellcheck disable=SC2086
@@ -213,8 +268,11 @@ extras_install() {
       [[ -x $outputs ]] || fail "$outputs is missing"
       if [[ ! -x $wine_bin ]] || ! command -v xvfb-run > /dev/null; then
         apt_end=55
+        # Com o Wine Staging, o wine do Ubuntu nao entra (o apt tiraria o Staging).
+        pkgs=$HOTR_PACKAGES
+        [[ -x $wine_staging_bin ]] && pkgs="xvfb xauth"
         # shellcheck disable=SC2086
-        apt_install --no-install-recommends $HOTR_PACKAGES
+        apt_install --no-install-recommends $pkgs
       fi
       printf '%s\n' '# FliperOS: Hook Of The Reaper (Setup > Games > Extras) fala com as pistolas e placas' \
         '# USB HID por aqui.' 'KERNEL=="hidraw*", SUBSYSTEM=="hidraw", GROUP="input", MODE="0660"' \

@@ -2,21 +2,23 @@
 # Abre um programa num Xorg so para ele, num modo de video criado pelo
 # Switchres (fliperos-x11-client) no monitor escolhido no Setup:
 #
-#   fliperos-x11-run [--mode LARGURAxALTURA@HZ] programa [argumentos]
+#   fliperos-x11-run [--mode LARGURAxALTURA@HZ] [--app NOME] programa [argumentos]
 #
 # Sem --mode, o modo vem de /etc/fliperos/emulator-modes.conf (um para
 # monitor de 15 kHz, outro para 25/31 kHz e LCD) ou, fora da tabela,
 # 320x240@60. docs/wiki/Emulators.md, "Running a program at 640x240".
+# --app: o nome do programa para o filtro de flicker (deflicker_NOME=) e a
+# OSD, no lugar do nome do comando (um jogo custom abre pelo bash).
 set -euo pipefail
 MODES=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
 CONF=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 
-mode=""
-if [[ ${1:-} == --mode ]]; then
-  mode=${2:-}
+mode="" app=""
+while [[ ${1:-} == --mode || ${1:-} == --app ]]; do
+  [[ $1 == --mode ]] && mode=${2:-} || app=${2:-}
   shift 2 || true
-fi
-[[ $# -gt 0 ]] || { echo "Usage: fliperos-x11-run [--mode 640x240@60] program [arguments]" >&2; exit 2; }
+done
+[[ $# -gt 0 ]] || { echo "Usage: fliperos-x11-run [--mode 640x240@60] [--app NAME] program [arguments]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
 command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
@@ -100,8 +102,8 @@ stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
 # O filtro de flicker do entrelacado (config/fliperos-deflicker.c, que o
 # fliperos-x11-client poe no LD_PRELOAD) acha o nivel do programa pelo nome
 # da tabela (deflicker_NOME= no fliperos.conf), mesmo quando o comando e um
-# script que abre outro binario.
-export FLIPEROS_DEFLICKER_APP=$name
+# script que abre outro binario; com --app, por ele.
+export FLIPEROS_DEFLICKER_APP=${app:-$name}
 
 case $name in
   flycast)

@@ -241,9 +241,21 @@ Each entry has a **group**, a **name**, the **command** (as you would type it in
 
 The frontends show each group as a system and each entry as a game in it, and the entry can also be the game that opens at boot (Setup > Games > Frontend).
 
+Saving a new entry also makes a **sample picture, video, text and logo** for it, with its name and random colours, so the game already shows up with art in the frontends (`gui/custom-media.py`). The picture, the video and the text say which file to replace, in `~/media` (the network share `\\fliperos\media`), named like the entry: `snap/custom/<group>/<name>.png` (picture), `preview/custom/<group>/<name>.mp4` (video, 4 seconds), `texto/custom/<group>/<name>.txt` (the description) and `logo/custom/<group>/<name>.png` (the name with an outline on a transparent background). `box/` and `marquee/` work the same way. JPG and WebP work too, and the video can also be MKV or WebM. A file that already exists is never replaced, and the last message of the Setup lists the paths. The FliperOS frontend shows the `.txt` as the game's description, as it does for any game without an arcade history.
+
 Behind it, a group is the folder `~/roms/custom/<group>` and each entry a script `<name>.sh` in it, which opens the command in its own Xorg in that mode (`fliperos-x11-run --mode`). The mode and the command are also in the script's first lines, which is what the Setup reads to edit it.
 
 A `.sh` you put in one of those folders by hand shows up in the frontends too (with the mode and the command empty in the Setup). The Scraper skips these folders: there is no art to look up for a script.
+
+Each entry also has its own row in **Video Setup > Interlaced hacks**, with only the flicker filter (the mode is the entry's). The script passes the entry's own name to the filter and the on-screen menu (`--app custom_<group>_<name>`), so the level you pick in the menu during the game stays with that game. Without a level of its own it follows the Other programs row. Entries saved before update 56 get the name when the update runs.
+
+A PC game in Wine gets the filter and the on-screen menu like the emulators, also when it is a 32-bit Windows program (most are). Installing Wine from the Extras also builds a 32-bit copy of the filter library, and `fliperos-x11-client` loads both when the command runs `wine` or a `.exe`; each process takes the one of its own kind.
+
+### Packing a game folder (squashfs)
+
+A PC game can have thousands of small files. **Custom games > Pack a game folder** turns its folder into one compressed file (`<folder>.squashfs`, zstd) and mounts that file back in the same place, so the game's command doesn't change. A writable layer on top keeps what the game writes in its own folder (saves, settings), in `.<folder>.squashfs-data` next to it. The loose files are only removed after the packed copy has the same files and bytes, and after a trial mount of the writable layer worked.
+
+The same menu lists the packed folders, and choosing one unpacks it back to a normal folder, with what the game saved. Packing and mounting need root, so the Setup does them through `fliperos-squashgames`, and a service (`fliperos-squashgames.service`) mounts the folders at boot, before the frontend and the network share. The list is `/etc/fliperos/squashgames.list`. Only folders inside the player's home can be packed.
 
 ## Adding a new emulator
 

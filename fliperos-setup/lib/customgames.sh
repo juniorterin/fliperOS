@@ -50,6 +50,58 @@ customgames_file() {
   printf '%s/%s/%s.sh\n' "$CUSTOM_GAMES_DIR" "$1" "$2"
 }
 
+# As midias que os frontends mostram de um jogo personalizado: em
+# ~/media/TIPO/custom/GRUPO/NOME.ext, como as dos outros sistemas (a chave do
+# sistema e custom/GRUPO). preview e o video, texto a descricao.
+CUSTOM_GAMES_MEDIA=${CUSTOM_GAMES_MEDIA:-$(dirname "$ROMS_DIR")/media}
+CUSTOM_GAMES_MEDIA_TYPES="snap box logo marquee preview texto"
+
+# customgames_media_path TIPO GRUPO NOME: o arquivo da midia de exemplo
+# (snap .png, preview .mp4, texto .txt).
+customgames_media_path() {
+  local ext=png
+  [[ $1 == preview ]] && ext=mp4
+  [[ $1 == texto ]] && ext=txt
+  printf '%s/%s/custom/%s/%s.%s\n' "$CUSTOM_GAMES_MEDIA" "$1" "$2" "$3" "$ext"
+}
+
+# customgames_media GRUPO NOME: as pastas das midias do grupo e, do jogo, uma
+# imagem, um video e um texto de exemplo com o nome dele e o caminho de cada
+# arquivo, e o logotipo (gui/custom-media.py): o jogo ja aparece com arte nos
+# frontends, e a pessoa ve qual arquivo trocar. O que ja existe nao e tocado.
+customgames_media() {
+  customgames_media_dirs "$1"
+  python3 "${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/custom-media.py" --name "$2" --group "$1" --home "$(dirname "$CUSTOM_GAMES_MEDIA")" \
+    --snap "$(customgames_media_path snap "$1" "$2")" --video "$(customgames_media_path preview "$1" "$2")" \
+    --text "$(customgames_media_path texto "$1" "$2")" --logo "$(customgames_media_path logo "$1" "$2")" \
+    >> "${FLIPEROS_LOG:-/dev/null}" 2>&1 ||
+    log_warn "midias de exemplo de $1 / $2 nao criadas"
+  return 0
+}
+
+# customgames_media_dirs GRUPO cria as pastas das midias do grupo (do
+# jogador: aparecem no compartilhamento \\fliperos\media).
+customgames_media_dirs() {
+  local kind
+  for kind in $CUSTOM_GAMES_MEDIA_TYPES; do
+    mkdir -p "$CUSTOM_GAMES_MEDIA/$kind/custom/$1" 2> /dev/null &&
+      chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_MEDIA/$kind" "$CUSTOM_GAMES_MEDIA/$kind/custom" \
+        "$CUSTOM_GAMES_MEDIA/$kind/custom/$1" 2> /dev/null
+  done
+  return 0
+}
+
+# customgames_app GRUPO NOME: o nome da entrada para o filtro de flicker e a
+# OSD (deflicker_NOME= no fliperos.conf, a linha dela em Interlaced hacks):
+# custom_ e o grupo e o nome em minusculas, o resto vira _ (PC games / Pang:
+# custom_pc_games_pang). O fliperos-x11-run o recebe por --app; sem ele, o
+# programa seria o bash e todas as entradas dividiriam o mesmo nivel.
+customgames_app() {
+  local slug
+  slug=$(printf '%s_%s' "$1" "$2" | LC_ALL=C tr 'A-Z' 'a-z' | LC_ALL=C sed 's/[^a-z0-9]\{1,\}/_/g; s/^_//; s/_$//')
+  printf 'custom_%s\n' "$slug"
+}
+
 # customgames_field ARQUIVO mode|command le o cabecalho de uma entrada.
 customgames_field() {
   sed -n "s/^# $2: //p" "$1" 2> /dev/null | head -n 1
@@ -70,7 +122,7 @@ customgames_save() {
     echo '# FliperOS custom game (Setup > Games > Custom games). Edited there, or here.'
     echo "# mode: $mode"
     echo "# command: $cmd"
-    printf 'exec %q --mode %q bash -c %q\n' "$CUSTOM_GAMES_RUN" "$mode" "$cmd"
+    printf 'exec %q --mode %q --app %q bash -c %q\n' "$CUSTOM_GAMES_RUN" "$mode" "$(customgames_app "$group" "$name")" "$cmd"
   } > "$file.new" || return 1
   chmod 755 "$file.new"
   mv -f "$file.new" "$file" || return 1
@@ -110,5 +162,40 @@ customgames_list() {
     name=${name%.sh}
     printf '%s|%s|%s|%s\n' "$group" "$name" "$(customgames_field "$file" mode)" "$(customgames_field "$file" command)"
   done
+  return 0
+}
+
+# ── Pastas de jogo em squashfs ──
+# config/fliperos-squashgames (o ajudante root): a pasta vira PASTA.squashfs,
+# montada no mesmo lugar com uma camada gravavel por cima. O Setup roda como
+# root e chama o ajudante direto.
+SQUASHGAMES_CMD=${SQUASHGAMES_CMD:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-squashgames}
+
+# squashgames_list imprime "pasta|montada (0 ou 1)|tamanho do arquivo".
+squashgames_list() {
+  [[ -x $SQUASHGAMES_CMD ]] || return 0
+  "$SQUASHGAMES_CMD" list
+}
+
+# squashgames_run pack|unpack PASTA: com os eventos da tela de progresso.
+squashgames_run() {
+  ev_step 0 "Starting"
+  if [[ ! -x $SQUASHGAMES_CMD ]]; then
+    ev_fail "the squashfs helper ($SQUASHGAMES_CMD) is missing"
+    return 1
+  fi
+  log_line cmd "\$ $SQUASHGAMES_CMD $1 $2 --progress"
+  "$SQUASHGAMES_CMD" "$1" "$2" --progress 2>> "$FLIPEROS_LOG"
+}
+
+# customgames_refresh regrava o script de cada entrada com o cabecalho (o
+# System Update, tools/cabinet-update.sh): as gravadas antes do --app abriam
+# como o programa "bash". As postas a mao, sem o cabecalho, ficam.
+customgames_refresh() {
+  local group name mode cmd
+  while IFS='|' read -r group name mode cmd; do
+    [[ -n $mode && -n $cmd ]] || continue
+    customgames_save "$group" "$name" "$mode" "$cmd" > /dev/null || log_warn "jogo personalizado nao regravado: $group / $name"
+  done < <(customgames_list)
   return 0
 }

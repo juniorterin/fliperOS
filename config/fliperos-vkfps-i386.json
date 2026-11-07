@@ -1,0 +1,22 @@
+{
+    "file_format_version": "1.2.1",
+    "layer": {
+        "name": "VK_LAYER_FLIPEROS_fps_i386",
+        "type": "GLOBAL",
+        "library_path": "/usr/local/lib/fliperos/i386/libfliperos-vkfps.so",
+        "library_arch": "32",
+        "api_version": "1.3.0",
+        "implementation_version": "1",
+        "description": "FliperOS: the Vulkan layer of config/fliperos-vkfps.c for 32-bit programs (Wine games in DXVK), built with Wine from Setup > Games > Extras",
+        "functions": {
+            "vkGetInstanceProcAddr": "fliperos_vkfps_GetInstanceProcAddr",
+            "vkGetDeviceProcAddr": "fliperos_vkfps_GetDeviceProcAddr"
+        },
+        "enable_environment": {
+            "FLIPEROS_VK_FPS": "1"
+        },
+        "disable_environment": {
+            "DISABLE_FLIPEROS_VK_FPS": "1"
+        }
+    }
+}

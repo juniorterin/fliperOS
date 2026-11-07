@@ -481,13 +481,14 @@ screen_custom_games() {
     while IFS='|' read -r group name mode _; do
       entries+=("$group/$name|$group: $name ($(customgames_mode_label "${mode:-?}"))")
     done < <(customgames_list)
-    entries+=("+add|Add a game or program" "return|Return")
+    entries+=("+add|Add a game or program" "+squash|Pack a game folder (squashfs)" "return|Return")
     choice=$(UI_STYLE=list ui_menu "$title" \
       "Games and programs that are not a ROM (a PC game, your own emulator, a script), in groups the frontends show as systems." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
       +add) screen_custom_game_edit ;;
+      +squash) screen_squash_games ;;
       return) return 0 ;;
       *)
         choice=$(ui_menu "$title" "${choice//\// / }" edit "edit|Edit" "delete|Delete" "return|Return") || continue
@@ -501,6 +502,53 @@ screen_custom_games() {
             last=+add
             ;;
         esac
+        ;;
+    esac
+  done
+}
+
+# screen_squash_games: as pastas de jogo guardadas em squashfs
+# (lib/customgames.sh, squashgames_*): empacotar uma pasta, ou voltar uma
+# empacotada a pasta comum. A pasta fica no mesmo lugar: os comandos dos
+# jogos nao mudam.
+screen_squash_games() {
+  local title="Packed game folders" choice last="" folder mounted size start
+  local -a entries
+  while true; do
+    entries=()
+    while IFS='|' read -r folder mounted size; do
+      if ((mounted)); then
+        entries+=("$folder|${folder#"$(dirname "$ROMS_DIR")/"} ($size)")
+      else
+        entries+=("$folder|${folder#"$(dirname "$ROMS_DIR")/"} ($size, not mounted)")
+      fi
+    done < <(squashgames_list)
+    entries+=("+pack|Pack a game folder" "return|Return")
+    choice=$(UI_STYLE=list ui_menu "$title" \
+      "A game folder with thousands of files (a PC game in Wine) packed into one compressed file, mounted in the same place: the game runs as before and can still write in its folder." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      return) return 0 ;;
+      +pack)
+        start=$(dirname "$ROMS_DIR")
+        [[ -d $start/games ]] && start=$start/games
+        folder=$(ui_browse "$title" "Open the game folder, then Use this folder." "$start" dir) || continue
+        ui_yesno "$title" "Pack $folder into $(basename "$folder").squashfs? The loose files are removed after the packed copy is checked. Close the game first." yes ||
+          continue
+        if run_with_progress "Packing $(basename "$folder")" "" squashgames_run pack "$folder"; then
+          ui_msg "$title" "$(basename "$folder") is packed. The folder stays where it was."
+          last=$folder
+        fi
+        ;;
+      *)
+        folder=$choice
+        ui_yesno "$title" "Unpack $folder back into a normal folder, with what the game saved in it? Close the game first." no ||
+          continue
+        if run_with_progress "Unpacking $(basename "$folder")" "" squashgames_run unpack "$folder"; then
+          ui_msg "$title" "$(basename "$folder") is a normal folder again."
+          last=+pack
+        fi
         ;;
     esac
   done
@@ -566,8 +614,19 @@ screen_custom_game_edit() {
     ui_msg "$title" "$(ui_bad "Could not save $name.")" "" "Details in /var/log/fliperos-setup.log."
     return 0
   fi
+  ui_info "$title" "Making a picture, a video, a text and a logo for $name..."
+  customgames_media "$group" "$name"
   screen_custom_games_refresh
-  ui_msg "$title" "$name is in the group $group." "" "The frontend shows it in the system $group."
+  # A imagem, o video, o texto e o logotipo de exemplo: onde estao, para
+  # trocar pelos de verdade (os frontends os procuram pelo nome).
+  ui_msg "$title" "$name is in the group $group." "" "The frontend shows it in the system $group," \
+    "with a sample picture, video, text and logo. Replace them with the real ones, same name, in ~/media" \
+    "(the network share \\\\fliperos\\media):" \
+    "  snap/custom/$group/$name.png (picture)" \
+    "  preview/custom/$group/$name.mp4 (video)" \
+    "  texto/custom/$group/$name.txt (text)" \
+    "  logo/custom/$group/$name.png (logo)" \
+    "box and marquee go the same way. Also .jpg or .webp; the video also .mkv or .webm."
 }
 
 # screen_custom_games_refresh: os grupos nos frontends (como a pasta nova de
@@ -663,10 +722,11 @@ screen_extras() {
   while true; do
     entries=()
     while IFS='|' read -r name inst desc; do
-      if ((inst)); then entries+=("$name|$desc (installed)"); else entries+=("$name|$desc"); fi
+      # A dica do item (o que ele traz: o Wine Staging diz o ganho sobre o Wine).
+      if ((inst)); then entries+=("$name|$desc (installed)|$(extras_hint "$name")"); else entries+=("$name|$desc|$(extras_hint "$name")"); fi
     done < <(extras_list)
-    entries+=("return|Return")
-    choice=$(ui_menu "Extras" "Programs that don't come with FliperOS, to keep the download small. Installing one needs the network." \
+    entries+=("return|Return|")
+    choice=$(ui_menu_hints "Extras" "Programs that don't come with FliperOS, to keep the download small. Installing one needs the network." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     [[ $choice == return ]] && return 0

@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# Os jogos guardados num arquivo squashfs (Setup > Games > Custom games >
+# Pack a game folder). Um jogo do Wine com milhares de arquivos vira um
+# arquivo so (para copiar, para o compartilhamento de rede, para o disco), e a
+# pasta continua no mesmo lugar: o arquivo e montado nela, so de leitura, com
+# uma camada gravavel por cima (overlayfs) para o que o jogo escreve na propria
+# pasta (saves, configuracoes). Os comandos dos jogos nao mudam.
+#
+#   fliperos-squashgames pack PASTA [--progress]    PASTA.squashfs, montado na PASTA
+#   fliperos-squashgames unpack PASTA [--progress]  de volta a pasta comum, com o que o jogo gravou
+#   fliperos-squashgames mount-all | umount-all     as da lista (fliperos-squashgames.service)
+#   fliperos-squashgames list                       PASTA|montada (0 ou 1)|tamanho do arquivo
+#
+# Como root (montar pede root): o Setup e o servico do boot. So pastas dentro
+# da home do jogador (FLIPEROS_USER), sem atalhos no caminho. A lista e
+# /etc/fliperos/squashgames.list, uma pasta por linha. O squashfs e montado em
+# /run/fliperos/squashgames/ID; a camada gravavel fica ao lado da pasta, em
+# .NOME.squashfs-data (upper e work), no mesmo disco.
+#
+# Com --progress, as etapas saem no formato da tela de progresso do Setup
+# (lib/progress.sh); o detalhe vai para o stderr (o log do Setup).
+set -uo pipefail
+user=${FLIPEROS_USER:-fliperos}
+home=${FLIPEROS_SQUASH_HOME:-$(getent passwd "$user" | cut -d: -f6)}
+LIST=${FLIPEROS_SQUASH_LIST:-/etc/fliperos/squashgames.list}
+RUN=${FLIPEROS_SQUASH_RUN:-/run/fliperos/squashgames}
+# zstd: descomprime rapido (o jogo abre como da pasta); blocos de 1 MiB. O
+# kernel do FliperOS tem o zstd no squashfs; o do WSL2 (os testes no Docker),
+# nao: FLIPEROS_SQUASH_COMP troca.
+comp=${FLIPEROS_SQUASH_COMP:-zstd}
+MKSQUASHFS_OPTS=(-comp "$comp" -b 1M -noappend)
+[[ $comp == zstd ]] && MKSQUASHFS_OPTS+=(-Xcompression-level 15)
+
+progress=0 step=""
+say() {
+  step=$2
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "$step" "$1"; else printf 'fliperos-squashgames: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+# folder_ok PASTA imprime a pasta normalizada: dentro da home do jogador, sem
+# atalho (link) no caminho. Status 1 fora disso.
+folder_ok() {
+  local plain real
+  [[ -n $home && -n $1 ]] || return 1
+  plain=$(realpath -m -s -- "$1") || return 1
+  real=$(realpath -m -- "$1") || return 1
+  [[ $plain == "$real" && $plain == "$home"/* && $plain != */.* ]] || return 1
+  printf '%s\n' "$plain"
+}
+
+image_of() { printf '%s.squashfs\n' "$1"; }
+data_of() { printf '%s/.%s.squashfs-data\n' "$(dirname -- "$1")" "$(basename -- "$1")"; }
+lower_of() { printf '%s/%s\n' "$RUN" "$(printf '%s' "$1" | sha1sum | cut -c1-16)"; }
+
+listed() { grep -qxF -- "$1" "$LIST" 2> /dev/null; }
+
+list_add() {
+  mkdir -p "$(dirname -- "$LIST")" && { listed "$1" || printf '%s\n' "$1" >> "$LIST"; }
+}
+
+list_remove() {
+  [[ -f $LIST ]] || return 0
+  grep -vxF -- "$1" "$LIST" > "$LIST.new"
+  mv -f "$LIST.new" "$LIST"
+}
+
+# do_mount PASTA: o squashfs so de leitura e, na PASTA, ele com a camada
+# gravavel por cima.
+do_mount() {
+  local folder=$1 image lower data
+  image=$(image_of "$folder") lower=$(lower_of "$folder") data=$(data_of "$folder")
+  [[ -f $image && ! -L $image ]] || { echo "no image: $image" >&2; return 1; }
+  mountpoint -q -- "$folder" && return 0
+  mkdir -p -- "$lower" || return 1
+  if ! mountpoint -q -- "$lower"; then
+    mount -t squashfs -o loop,ro,nodev,nosuid -- "$image" "$lower" >&2 || return 1
+  fi
+  mkdir -p -- "$data/upper" "$data/work" "$folder" || return 1
+  # A raiz da pasta montada tem o dono da camada de cima: o jogador escreve nela.
+  chown "$user:" -- "$data" "$data/upper" "$folder" 2> /dev/null
+  chmod 755 -- "$data/upper"
+  if ! mount -t overlay overlay -o "lowerdir=$lower,upperdir=$data/upper,workdir=$data/work,nodev,nosuid" -- "$folder" >&2; then
+    umount -- "$lower" 2> /dev/null
+    return 1
+  fi
+}
+
+# do_umount PASTA: a pasta e o squashfs de baixo (um jogo aberto segura a
+# pasta: desmonta quando ele fechar).
+do_umount() {
+  local folder=$1 lower
+  lower=$(lower_of "$folder")
+  if mountpoint -q -- "$folder"; then
+    umount -- "$folder" 2> /dev/null || umount -l -- "$folder" || return 1
+  fi
+  if mountpoint -q -- "$lower"; then
+    umount -- "$lower" 2> /dev/null || umount -l -- "$lower" || return 1
+  fi
+  rmdir -- "$lower" 2> /dev/null
+  return 0
+}
+
+# tree_sum PASTA: "arquivos bytes" (os links e as pastas vazias tambem
+# contam no primeiro), para conferir a copia.
+tree_sum() {
+  find "$1" -mindepth 1 -printf '%y %s\n' 2> /dev/null | awk '{ n++; if ($1 == "f") b += $2 } END { printf "%d %d\n", n, b }'
+}
+
+free_kib() { df -Pk -- "$1" | awk 'NR == 2 { print $4 }'; }
+
+cmd_pack() {
+  local folder image lower data before after need tmp rc
+  folder=$(folder_ok "${1:-}") || fail "only a folder inside $home can be packed (no links in the path): ${1:-}"
+  image=$(image_of "$folder") lower=$(lower_of "$folder") data=$(data_of "$folder")
+  say 2 "Checking $(basename -- "$folder")"
+  [[ -d $folder ]] || fail "not a folder: $folder"
+  listed "$folder" || mountpoint -q -- "$folder" && fail "$folder is already packed"
+  [[ -e $image ]] && fail "$image already exists"
+  [[ -n $(find "$folder" -mindepth 1 -print -quit) ]] || fail "$folder is empty"
+  command -v mksquashfs > /dev/null || fail "mksquashfs is missing (squashfs-tools)"
+  # O pior caso: o arquivo do tamanho da pasta, ao lado dela.
+  need=$(du -sk -- "$folder" | cut -f1)
+  (($(free_kib "$(dirname -- "$folder")") > need + 65536)) ||
+    fail "not enough free space: packing needs about $((need / 1024)) MB free next to the folder"
+  before=$(tree_sum "$folder")
+  say 5 "Packing $(basename -- "$folder")"
+  tmp=$image.new
+  if ((progress)); then
+    # O -percentage do mksquashfs: uma porcentagem por linha, de 5% a 85%.
+    mksquashfs "$folder" "$tmp" "${MKSQUASHFS_OPTS[@]}" -percentage 2>&1 |
+      awk '/^[0-9]+$/ { p = int(5 + $1 * 0.8); if (p != last) { print "@pct " p; fflush(); last = p } next } { print > "/dev/stderr" }'
+    rc=${PIPESTATUS[0]}
+  else
+    mksquashfs "$folder" "$tmp" "${MKSQUASHFS_OPTS[@]}" -no-progress >&2
+    rc=$?
+  fi
+  ((rc == 0)) || { rm -f -- "$tmp"; fail "mksquashfs failed (details in the log)"; }
+  # Confere antes de apagar a pasta: o arquivo montado tem o mesmo numero de
+  # arquivos e os mesmos bytes.
+  say 86 "Checking the packed copy"
+  mkdir -p -- "$lower"
+  mount -t squashfs -o loop,ro,nodev,nosuid -- "$tmp" "$lower" >&2 || { rm -f -- "$tmp"; fail "the packed file does not mount"; }
+  after=$(tree_sum "$lower")
+  # E a camada gravavel por cima dele, numa pasta de ensaio: so com as duas
+  # montagens dando certo a pasta de verdade e apagada.
+  mkdir -p -- "$data/upper" "$data/work" "$data/trial"
+  if mount -t overlay overlay -o "lowerdir=$lower,upperdir=$data/upper,workdir=$data/work" -- "$data/trial" >&2; then
+    umount -- "$data/trial"
+  else
+    after="overlay failed"
+  fi
+  umount -- "$lower"
+  rm -rf -- "$data"
+  if [[ $before != "$after" ]]; then
+    rm -f -- "$tmp"
+    fail "the packed copy did not check out ($before / $after); the folder was kept"
+  fi
+  mv -f -- "$tmp" "$image" || fail "could not name $image"
+  chown "$user:" -- "$image" 2> /dev/null
+  chmod 644 -- "$image"
+  say 90 "Removing the loose files"
+  rm -rf -- "$data"
+  rm -rf -- "$folder" || fail "could not remove the folder (the packed file is $image)"
+  list_add "$folder" || fail "could not write $LIST"
+  say 96 "Mounting it in its folder"
+  do_mount "$folder" || fail "could not mount $image on $folder"
+  say 100 "$(basename -- "$folder") packed"
+}
+
+cmd_unpack() {
+  local folder image data tmp need
+  folder=$(folder_ok "${1:-}") || fail "not a folder inside $home: ${1:-}"
+  image=$(image_of "$folder") data=$(data_of "$folder")
+  say 2 "Checking $(basename -- "$folder")"
+  listed "$folder" || fail "$folder is not packed"
+  do_mount "$folder" || fail "could not mount $image"
+  need=$(du -sk -- "$folder" | cut -f1)
+  (($(free_kib "$(dirname -- "$folder")") > need + 65536)) ||
+    fail "not enough free space: unpacking needs about $((need / 1024)) MB free next to the folder"
+  tmp=$folder.unpacking
+  rm -rf -- "$tmp"
+  say 5 "Copying the files out"
+  cp -a -- "$folder" "$tmp" >&2 || { rm -rf -- "$tmp"; fail "the copy failed (details in the log)"; }
+  if [[ $(tree_sum "$folder") != "$(tree_sum "$tmp")" ]]; then
+    rm -rf -- "$tmp"
+    fail "the copy differs from the packed folder; it stays packed"
+  fi
+  say 85 "Unmounting"
+  do_umount "$folder" || { rm -rf -- "$tmp"; fail "the folder is in use (close the game and try again)"; }
+  list_remove "$folder"
+  rmdir -- "$folder" 2> /dev/null
+  mv -- "$tmp" "$folder" || fail "could not name the folder $folder (the files are in $tmp)"
+  chown "$user:" -- "$folder" 2> /dev/null
+  rm -rf -- "$data"
+  rm -f -- "$image"
+  say 100 "$(basename -- "$folder") unpacked"
+}
+
+cmd_list() {
+  local folder size
+  [[ -f $LIST ]] || return 0
+  while IFS= read -r folder; do
+    [[ -n $folder ]] || continue
+    size=$(du -h -- "$(image_of "$folder")" 2> /dev/null | cut -f1)
+    if mountpoint -q -- "$folder"; then echo "$folder|1|${size:-?}"; else echo "$folder|0|${size:-?}"; fi
+  done < "$LIST"
+}
+
+cmd_mount_all() {
+  local folder rc=0
+  [[ -f $LIST ]] || return 0
+  while IFS= read -r folder; do
+    [[ -n $folder ]] || continue
+    if ! folder_ok "$folder" > /dev/null || ! do_mount "$folder"; then
+      echo "fliperos-squashgames: could not mount $folder" >&2
+      rc=1
+    fi
+  done < "$LIST"
+  return "$rc"
+}
+
+cmd_umount_all() {
+  local folder
+  [[ -f $LIST ]] || return 0
+  while IFS= read -r folder; do
+    [[ -n $folder ]] && do_umount "$folder"
+  done < "$LIST"
+  return 0
+}
+
+[[ ${3:-} == --progress ]] && progress=1
+case ${1:-} in
+  pack | unpack | mount-all | umount-all)
+    ((EUID == 0)) || fail "${1} needs root (Setup > Games > Custom games)"
+    ;;&
+  pack) cmd_pack "${2:-}" ;;
+  unpack) cmd_unpack "${2:-}" ;;
+  mount-all) cmd_mount_all ;;
+  umount-all) cmd_umount_all ;;
+  list) cmd_list ;;
+  *)
+    sed -n '9,12p' "$0" | sed 's/^# *//' >&2
+    exit 1
+    ;;
+esac

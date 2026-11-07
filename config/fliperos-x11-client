@@ -36,20 +36,41 @@ args=()
 args+=(${FLIPEROS_SWITCHRES_OPTS:-})
 emulator_command=$(printf '%q ' "$@")
 # O filtro de flicker do entrelacado (config/fliperos-deflicker.c): so no emulador,
-# nao no Xorg nem no Switchres. Os do Wine (Fightcade) sao de 32 bits e nao
-# carregam a camada de 64, e o Electron da sala do Fightcade nao a aceita:
-# neles o filtro e o do picom, o mesmo do desktop, por cima da tela toda
-# deste X (fliperos-desktop-deflicker, que acompanha o modo de cada jogo).
+# nao no Xorg nem no Switchres. Os programas do Wine sao quase sempre de 32
+# bits: a camada de 32 bits (compilada quando o Wine e instalado, Setup >
+# Games > Extras) vai junto da de 64 no LD_PRELOAD, e o carregador do Linux
+# pula a que nao e da arquitetura do processo. Com ela, um jogo do Wine tem o
+# filtro e a OSD como os emuladores; no Vulkan (DXVK), a camada do Vulkan de
+# 32 bits, pelo manifesto dela (config/fliperos-vkfps-i386.json) e pelo
+# FLIPEROS_VK_FPS=1 de baixo. O Electron da sala do Fightcade nao
+# aceita a camada, e o Wine sem a de 32 bits nao a carrega: neles o filtro e
+# o do picom, o mesmo do desktop, por cima da tela toda deste X
+# (fliperos-desktop-deflicker, que acompanha o modo de cada jogo), sem a OSD.
 deflicker=${FLIPEROS_DEFLICKER_LIB:-/usr/local/lib/fliperos/libfliperos-deflicker.so}
+deflicker32=${FLIPEROS_DEFLICKER_LIB32:-/usr/local/lib/fliperos/i386/libfliperos-deflicker.so}
+# O Wine no comando: o programa (wine, um .exe) ou dentro de um bash -c (um
+# jogo custom: "wine ~/games/pang/pang.exe"). So nele vai a camada de 32
+# bits: nos outros, cada processo de 64 bits deixaria um aviso no log.
+wine_re='(^|[[:space:]/;&(])wine(64)?([[:space:]]|$)|\.[eE][xX][eE]([[:space:]"]|$)'
+uses_wine=0
+[[ $* =~ $wine_re ]] && uses_wine=1
+picom=0
 case $(basename -- "$1") in
-  fightcade* | wine* | *.exe)
+  fightcade*) picom=1 ;;
+  wine* | *.exe) [[ -f $deflicker32 ]] || picom=1 ;;
+esac
+case $picom in
+  1)
     compositor=${FLIPEROS_DESKTOP_DEFLICKER:-/opt/fliperos/bin/fliperos-desktop-deflicker}
     [[ ! -x $compositor ]] ||
       "$compositor" --app "${FLIPEROS_DEFLICKER_APP:-$(basename -- "$1")}" --watch < /dev/null > /dev/null 2>&1 &
     ;;
   *)
-    [[ -f $deflicker ]] &&
-      emulator_command="env LD_PRELOAD=$(printf '%q' "$deflicker${LD_PRELOAD:+:$LD_PRELOAD}") $emulator_command"
+    layers=""
+    [[ -f $deflicker ]] && layers=$deflicker
+    ((uses_wine)) && [[ -f $deflicker32 ]] && layers+=${layers:+:}$deflicker32
+    [[ -n $layers ]] &&
+      emulator_command="env LD_PRELOAD=$(printf '%q' "$layers${LD_PRELOAD:+:$LD_PRELOAD}") $emulator_command"
     # Um emulador em Vulkan: a camada do Vulkan (config/fliperos-vkfps.c, o
     # FPS do painel web e o filtro de flicker) so entra com esta variavel.
     emulator_command="env FLIPEROS_VK_FPS=1 $emulator_command"

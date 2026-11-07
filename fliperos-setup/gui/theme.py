@@ -1265,6 +1265,8 @@ for _alias, _name in {
     # Os itens que acrescentam ou editam (Custom games, Frontend) e o
     # leveler do Audio Setup.
     "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games", "leveler": "audio",
+    # As pastas de jogo em squashfs (Custom games): comprimidas, como os CHDs.
+    "+squash": "chds", "+pack": "chds",
     # Colour calibration: na tela (as barras de cor) ou pelos numeros.
     "calibrate": "colour", "values": "romlist",
     # Scanlines: ligar e desligar, e o ajuste na tela.
@@ -1293,8 +1295,8 @@ _icons = {}
 # Os icones que sao imagens: o icone oficial de cada programa do Extras, em
 # gui/icons/VALOR.png (as fontes estao no README de la).
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
-# Os valores que usam a imagem de outro: o MAME 2010 e MAME.
-IMAGES = {"mame2010": "groovymame", "mame": "groovymame"}
+# Os valores que usam a imagem de outro: o MAME 2010 e MAME; o Wine Staging e Wine.
+IMAGES = {"mame2010": "groovymame", "mame": "groovymame", "wine-staging": "wine"}
 
 
 def guess(title, value, label):

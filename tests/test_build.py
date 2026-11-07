@@ -6404,14 +6404,13 @@ class DeflickerTests(unittest.TestCase):
     def test_preloaded_in_the_emulators_only(self):
         kms = (ROOT / 'config/fliperos-kms-run').read_text()
         self.assertIn('export LD_PRELOAD="$deflicker${LD_PRELOAD:+:$LD_PRELOAD}"', kms)
-        # No Xorg, so no comando do emulador (nao no Xorg nem no Switchres), e
-        # nunca no Wine (o OpenGL de 32 bits nao carrega a biblioteca de 64).
+        # No Xorg, so no comando do emulador (nao no Xorg nem no Switchres). O
+        # Fightcade e o Wine sem a camada de 32 bits: o picom do desktop por
+        # cima do X todo, no nivel do programa (client_launch, abaixo).
         client = (ROOT / 'config/fliperos-x11-client').read_text()
         self.assertIn('emulator_command="env LD_PRELOAD=', client)
-        self.assertRegex(client, r'fightcade\*[^)]*wine\*[^)]*\*\.exe\)')
-        # Neles, o picom do desktop por cima do X todo, no nivel do programa.
-        wine = client.split('*.exe)')[1].split(';;')[0]
-        self.assertIn('"$compositor" --app "${FLIPEROS_DEFLICKER_APP:-$(basename -- "$1")}" --watch', wine)
+        picom = client.split('case $picom in\n  1)')[1].split(';;')[0]
+        self.assertIn('"$compositor" --app "${FLIPEROS_DEFLICKER_APP:-$(basename -- "$1")}" --watch', picom)
         # A camada herdada de um frontend (fliperos-kms-run) sai do Xorg.
         with tempfile.TemporaryDirectory() as home:
             run = EmulatorModeTests.run_x11(
@@ -6419,6 +6418,128 @@ class DeflickerTests(unittest.TestCase):
                 extra={'LD_PRELOAD': '/a/x.so:/usr/local/lib/fliperos/libfliperos-deflicker.so'})
         self.assertIn('PRELOAD=/a/x.so\n', run.stdout)
         self.assertNotIn('libfliperos-deflicker', run.stdout)
+
+    def client_launch(self, args, lib32=True):
+        """O comando que o fliperos-x11-client passa ao Switchres (--launch),
+        com as camadas e o picom de mentira."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'l64.so').write_text('')
+            if lib32:
+                (tmp / 'l32.so').write_text('')
+            (tmp / 'switchres').write_text('#!/bin/bash\nwhile [[ $# -gt 0 ]]; do [[ $1 == --launch ]] && echo "LAUNCH=$2"; shift; done\n')
+            (tmp / 'picom').write_text('#!/bin/sh\necho picom >> %s/log\n' % tmp)
+            for p in ('switchres', 'picom'):
+                (tmp / p).chmod(0o755)
+            (tmp / 'fliperos.conf').write_text('frequency=15k\n')
+            client = (ROOT / 'config/fliperos-x11-client').read_text().replace('/usr/local/bin/switchres', str(tmp / 'switchres'))
+            client = client.replace('/etc/fliperos/fliperos.conf', str(tmp / 'fliperos.conf'))
+            (tmp / 'client').write_text(client)
+            # Sem openbox, xsetroot nem xprop no PATH: so o que o script usa.
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            for tool in ('bash', 'sed', 'basename', 'cat', 'grep', 'seq', 'sleep'):
+                if shutil.which(tool):
+                    (bin_dir / tool).symlink_to(shutil.which(tool))
+            env = dict(os.environ, FLIPEROS_DEFLICKER_LIB=str(tmp / 'l64.so'), FLIPEROS_DEFLICKER_LIB32=str(tmp / 'l32.so'),
+                       FLIPEROS_DESKTOP_DEFLICKER=str(tmp / 'picom'), FLIPEROS_COLOR='/nonexistent', PATH=str(bin_dir),
+                       FLIPEROS_RES_W='640', FLIPEROS_RES_H='480', FLIPEROS_RES_HZ='60')
+            out = subprocess.run(['bash', str(tmp / 'client'), *args], capture_output=True, text=True, env=env).stdout
+            time.sleep(0.2)
+            launch = out.split('LAUNCH=', 1)[1].strip() if 'LAUNCH=' in out else ''
+            return launch.replace(str(tmp) + '/', ''), (tmp / 'log').exists()
+
+    def test_wine_games_get_the_32_bit_layer(self):
+        # Um jogo custom do Wine (bash -c "wine ..."): as duas camadas, o
+        # Linux carrega a do processo (o Wine de 32 bits, a de 32), e a OSD
+        # abre nele. Um emulador comum, so a de 64 (sem aviso no log).
+        launch, picom = self.client_launch(['bash', '-c', 'wine ~/games/pang/pang.exe'])
+        self.assertIn('LD_PRELOAD=l64.so:l32.so ', launch)
+        self.assertFalse(picom)
+        self.assertIn('LD_PRELOAD=l64.so:l32.so ', self.client_launch(['wine', 'pang.exe'])[0])
+        self.assertIn('LD_PRELOAD=l64.so:l32.so ', self.client_launch(['bash', '-c', 'cd x && wine64 g.exe'])[0])
+        self.assertIn('LD_PRELOAD=l64.so ', self.client_launch(['flycast', 'game.zip'])[0])
+        self.assertNotIn('l32.so', self.client_launch(['bash', '-c', 'winecfg-like-tool'])[0])
+        # Sem a de 32 bits (o Wine instalado antes desta versao), o Wine direto
+        # fica no picom; o Fightcade, sempre (o Electron da sala nao a aceita).
+        launch, picom = self.client_launch(['wine', 'pang.exe'], lib32=False)
+        self.assertNotIn('LD_PRELOAD', launch)
+        self.assertTrue(picom)
+        launch, picom = self.client_launch(['fightcade'])
+        self.assertNotIn('LD_PRELOAD', launch)
+        self.assertTrue(picom)
+
+    def test_the_32_bit_layer_is_built_where_wine_is(self):
+        build = (ROOT / 'config/fliperos-deflicker-build').read_text()
+        self.assertIn('gcc -m32 -O2 -Wall -shared -fPIC', build)
+        self.assertIn('PKG_CONFIG_LIBDIR=$pc pkg-config --cflags --libs libdrm', build)
+        # O fonte vem na imagem: o Extras compila ao instalar o Wine.
+        for path in ('src/config/fliperos-deflicker.c" "$root/usr/local/lib/fliperos/src/fliperos-deflicker.c"',
+                     'src/config/fliperos-deflicker-build" "$root/usr/local/lib/fliperos/src/fliperos-deflicker-build"'):
+            self.assertIn(path, ROOTFS)
+        for name in ('wine)', 'wine-staging)'):
+            branch = EXTRAS.split('\n    %s\n' % name)[1].split(';;')[0]
+            self.assertIn('build_layer32', branch, name)
+            self.assertIn('$LAYER32_PACKAGES', branch, name)
+        self.assertIn('libdrm-dev:i386', EXTRAS)
+        # E o update recompila quando o fonte muda, so onde ha Wine.
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('dpkg -s wine-staging-i386:i386', update)
+        self.assertIn('((wine32)) && packages+=(gcc-multilib libdrm-dev:i386)', update)
+        self.assertIn('/usr/local/lib/fliperos/i386/libfliperos-deflicker.so i386', update)
+        self.assertLess(update.index('packages+=(gcc-multilib'), update.index('build_native "Flicker filter and OSD of 32-bit'))
+        # A do Vulkan (o DXVK no Wine): compilada junto, achada pelo carregador
+        # de 32 bits pelo manifesto dela (library_arch 32, outro nome).
+        self.assertIn('for source in fliperos-deflicker.c fliperos-vkfps.c; do', EXTRAS)
+        self.assertIn('/usr/local/lib/fliperos/i386/libfliperos-vkfps.so i386', update)
+        self.assertIn('src/config/fliperos-vkfps.c" "$root/usr/local/lib/fliperos/src/fliperos-vkfps.c"', ROOTFS)
+        self.assertIn('"$root/usr/share/vulkan/implicit_layer.d/fliperos-vkfps-i386.json"', ROOTFS)
+        main = json.loads((ROOT / 'config/fliperos-vkfps.json').read_text())['layer']
+        i386 = json.loads((ROOT / 'config/fliperos-vkfps-i386.json').read_text())['layer']
+        self.assertEqual((i386['library_arch'], i386['library_path']), ('32', '/usr/local/lib/fliperos/i386/libfliperos-vkfps.so'))
+        self.assertNotEqual(i386['name'], main['name'])
+        for key in ('functions', 'enable_environment', 'disable_environment'):
+            self.assertEqual(i386[key], main[key], key)
+        self.assertIn('ARCH=i386', (ROOT / 'tools/vkfps-test.sh').read_text())
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_custom_game_sample_media(self):
+        # A imagem e o texto de exemplo de um jogo personalizado (o video so
+        # com o ffmpeg); o que ja existe nunca e trocado.
+        with tempfile.TemporaryDirectory() as tmp:
+            snap = Path(tmp) / 'media/snap/custom/PC games/Pang.png'
+            text = Path(tmp) / 'media/texto/custom/PC games/Pang.txt'
+            logo = Path(tmp) / 'media/logo/custom/PC games/Pang.png'
+            run = lambda name: subprocess.run(
+                [sys.executable, str(ROOT / 'fliperos-setup/gui/custom-media.py'), '--name', name, '--group', 'PC games',
+                 '--home', tmp, '--snap', str(snap), '--text', str(text), '--logo', str(logo)],
+                capture_output=True, text=True)
+            self.assertEqual(run('Pang').returncode, 0)
+            self.assertEqual(snap.read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
+            # O logotipo: fundo transparente (o canto) e o nome no meio.
+            import pygame
+            img = pygame.image.load(str(logo))
+            self.assertEqual(img.get_at((0, 0)).a, 0)
+            self.assertGreater(img.get_width(), img.get_height())
+            self.assertIn("Replace this text with the game's description: ~/media/texto/custom/PC games/Pang.txt",
+                          text.read_text())
+            text.write_text('my own\n')
+            self.assertEqual(run('Other').stdout, '')
+            self.assertEqual(text.read_text(), 'my own\n')
+        # O frontend mostra o texto de ~/media/texto quando nao ha historia de arcade.
+        desc = (ROOT / 'fliperos-setup/gui/feview.py').read_text().split('def game_description(')[1].split('\n\n\n')[0]
+        self.assertIn('"texto", (".txt",)', desc)
+
+    def test_x11_run_app_names_the_program_for_the_filter(self):
+        # Um jogo custom abre pelo bash: o --app da o nome dele a camada e a OSD.
+        out = EmulatorModeTests.run_x11(EmulatorModeTests(), ['--mode', '640x480@60', '--app', 'custom_pc_games_pang',
+                                                              'myprog']).stdout
+        self.assertIn('MODE=640 480 60', out)
+        self.assertIn('APP=custom_pc_games_pang', out)
+        out = EmulatorModeTests.run_x11(EmulatorModeTests(), ['--app', 'x', '--mode', '320x240@60', 'myprog']).stdout
+        self.assertIn('MODE=320 240 60', out)
+        self.assertIn('APP=x', out)
+        self.assertIn('APP=myprog', EmulatorModeTests.run_x11(EmulatorModeTests(), ['myprog']).stdout)
 
     def run_x11(self, args, conf, lib=True, flycast_rend=None):
         with tempfile.TemporaryDirectory() as tmp:
@@ -11379,13 +11500,17 @@ class NewEmulatorBuildTests(unittest.TestCase):
             wine.chmod(0o755)
             env = dict(os.environ, FLIPEROS_WINE=str(wine), FLIPEROS_STEAM=tmp + '/none',
                        FLIPEROS_HEROIC=tmp + '/none', FLIPEROS_PIXELCADE=tmp + '/none',
-                       FLIPEROS_OUTPUTS=tmp + '/none')
+                       FLIPEROS_OUTPUTS=tmp + '/none', FLIPEROS_WINE_STAGING=tmp + '/none')
             run = lambda *a: subprocess.run(['bash', str(ROOT / 'config/fliperos-extras'), *a], env=env,
                                             capture_output=True, text=True)
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
             self.assertEqual([(r[0], r[1]) for r in rows],
-                             [('wine', '1'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'), ('zedmd', '0'),
-                              ('doflinx', '0'), ('hotr', '0'), ('qmamehook', '0'), ('ledspicer', '0'), ('stream', '0')])
+                             [('wine', '1'), ('wine-staging', '0'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'),
+                              ('zedmd', '0'), ('doflinx', '0'), ('hotr', '0'), ('qmamehook', '0'), ('ledspicer', '0'),
+                              ('stream', '0')])
+            # O Wine Staging diz o que traz a mais que o Wine.
+            self.assertEqual(rows[1][2], 'Wine Staging (newest Wine, with game fixes not in Wine yet)')
+            self.assertNotEqual(run('installed', 'wine-staging').returncode, 0)
             self.assertEqual(run('installed', 'wine').returncode, 0)
             self.assertNotEqual(run('installed', 'steam').returncode, 0)
             if os.geteuid() != 0:
@@ -11395,6 +11520,73 @@ class NewEmulatorBuildTests(unittest.TestCase):
             out = run('install', 'nada', '--progress')
             self.assertNotEqual(out.returncode, 0)
             self.assertIn('unknown extra', out.stdout)
+
+    def test_wine_staging_from_winehq_in_place_of_wine(self):
+        branch = EXTRAS.split('\n    wine-staging)\n')[1].split(';;')[0]
+        # A chave da WineHQ fixada (a impressao digital D43F...672F), o
+        # repositorio nas duas arquiteturas e os recomendados, como ela manda.
+        self.assertIn('install -Dm644 "$WINEHQ_KEY" /etc/apt/keyrings/winehq-archive.asc', branch)
+        self.assertIn('Architectures: amd64 i386', branch)
+        self.assertIn('Signed-By: /etc/apt/keyrings/winehq-archive.asc', branch)
+        self.assertIn('apt_install --install-recommends $WINE_STAGING_PACKAGES', branch)
+        self.assertIn('WINE_STAGING_PACKAGES="winehq-staging ', EXTRAS)
+        self.assertIn('WINEHQ_URL="https://dl.winehq.org/wine-builds/ubuntu"', EXTRAS)
+        self.assertIn('install -Dm644 "$src/config/winehq-archive.asc" "$root/usr/local/share/fliperos/winehq-archive.asc"', ROOTFS)
+        self.assertIn(b'BEGIN PGP PUBLIC KEY BLOCK', (ROOT / 'config/winehq-archive.asc').read_bytes())
+        # Com ele no lugar, nem o Wine nem o Hook Of The Reaper trazem o wine do
+        # Ubuntu de volta (o apt tiraria o Staging).
+        wine = EXTRAS.split('\n    wine)\n')[1].split(';;')[0]
+        self.assertLess(wine.index('if [[ -x $wine_staging_bin ]]'), wine.index('$WINE_PACKAGES'))
+        self.assertIn('[[ -x $wine_staging_bin ]] && pkgs="xvfb xauth"', EXTRAS)
+        # O ganho na lista (a dica) e antes de instalar.
+        extras = (ROOT / 'fliperos-setup/lib/extras.sh').read_text()
+        self.assertIn('wine-staging) echo "Newer Wine with fixes for more Windows games. Replaces Wine."', extras)
+        self.assertIn('wine-staging) echo "Wine Staging is the newest Wine from WineHQ', extras)
+        self.assertIn('ui_menu_hints "Extras"', (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text())
+
+    def squash(self, *args, env=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'home/games/pang').mkdir(parents=True)
+            (tmp / 'list').write_text('%s/home/games/pang\n' % tmp)
+            run = subprocess.run(['bash', str(ROOT / 'config/fliperos-squashgames'), *[a.replace('TMP', str(tmp)) for a in args]],
+                                 capture_output=True, text=True,
+                                 env=dict(os.environ, FLIPEROS_SQUASH_HOME=str(tmp / 'home'),
+                                          FLIPEROS_SQUASH_LIST=str(tmp / 'list'), FLIPEROS_SQUASH_RUN=str(tmp / 'run'),
+                                          **(env or {})))
+            return run.returncode, run.stdout.replace(str(tmp), 'TMP'), run.stderr.replace(str(tmp), 'TMP')
+
+    def test_squashgames_helper(self):
+        # A lista (montada ou nao, o tamanho do arquivo); montar e com root.
+        self.assertEqual(self.squash('list')[:2], (0, 'TMP/home/games/pang|0|?\n'))
+        rc, out, err = self.squash('pack', '/etc', '--progress')
+        self.assertNotEqual(rc, 0)
+        if os.geteuid() == 0:
+            self.assertIn('@fail |only a folder inside TMP/home can be packed', out)
+            # Atalho no caminho, pasta escondida: recusadas antes de mexer.
+            for bad in ('TMP/home/games/../../etc', 'TMP/home/.wine/x'):
+                self.assertNotEqual(self.squash('pack', bad)[0], 0, bad)
+            self.assertIn('is already packed', self.squash('pack', 'TMP/home/games/pang')[2])
+            self.assertIn('is not packed', self.squash('unpack', 'TMP/home/games/other')[2])
+        else:
+            self.assertIn('needs root', out)
+        helper = (ROOT / 'config/fliperos-squashgames').read_text()
+        # So apaga a pasta depois de conferir a copia e de montar a camada
+        # gravavel num ensaio.
+        pack = helper.split('cmd_pack() {')[1].split('\n}\n')[0]
+        self.assertLess(pack.index('after=$(tree_sum "$lower")'), pack.index('rm -rf -- "$folder"'))
+        self.assertLess(pack.index('mount -t overlay overlay'), pack.index('rm -rf -- "$folder"'))
+        self.assertIn('-comp "$comp"', helper)
+        self.assertIn('comp=${FLIPEROS_SQUASH_COMP:-zstd}', helper)
+        # O servico monta no boot, antes do tty1 (o frontend) e do Samba.
+        service = (ROOT / 'config/fliperos-squashgames.service').read_text()
+        self.assertIn('ExecStart=/opt/fliperos/bin/fliperos-squashgames mount-all', service)
+        self.assertIn('Before=getty@tty1.service smbd.service', service)
+        self.assertIn('install -Dm755 "$src/config/fliperos-squashgames" "$root/opt/fliperos/bin/fliperos-squashgames"', ROOTFS)
+        self.assertIn('multi-user.target.wants/fliperos-squashgames.service"', ROOTFS)
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('"+squash|Pack a game folder (squashfs)"', menu)
+        self.assertIn('run_with_progress "Packing $(basename "$folder")" "" squashgames_run pack "$folder"', menu)
 
     def test_image_is_slimmed_before_the_squashfs(self):
         main = MKISO.split('# ── Main')[1]

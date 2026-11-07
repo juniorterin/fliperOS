@@ -6,18 +6,36 @@
 #
 #   docker run --rm -v "$PWD:/w:ro" -w /w ubuntu:24.04 sh tools/vkfps-test.sh
 #
+# Com ARCH=i386, tudo em 32 bits (a camada dos jogos do Wine em DXVK): o
+# programa de teste, o lavapipe e as camadas de validacao de 32 bits, e a
+# camada pelo manifesto dela (config/fliperos-vkfps-i386.json).
+#
 # Grava a biblioteca em /out se a pasta existir (para levar ao gabinete).
 set -eu
 export DEBIAN_FRONTEND=noninteractive
+arch=${ARCH:-}
+q=""
+m=""
+if [ "$arch" = i386 ]; then
+  dpkg --add-architecture i386
+  q=:i386
+  m=-m32
+fi
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends gcc libc6-dev pkg-config libdrm-dev libvulkan-dev libx11-dev \
   mesa-vulkan-drivers vulkan-validationlayers glslang-tools xvfb python3 > /dev/null
+if [ "$arch" = i386 ]; then
+  # As camadas de validacao nao tem i386 no Ubuntu: em 32 bits, so as listras.
+  apt-get install -y -qq --no-install-recommends gcc-multilib libdrm-dev:i386 libvulkan-dev:i386 libx11-dev:i386 \
+    mesa-vulkan-drivers:i386 > /dev/null
+  export PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig
+fi
 b=/tmp/vkfps
 mkdir -p $b
 
-echo "== os tipos contra vulkan_core.h"
+echo "== os tipos contra vulkan_core.h ${arch:-x86_64}"
 # shellcheck disable=SC2046 # as opcoes do pkg-config, uma por palavra
-gcc -O0 -Wall -fsyntax-only -DFLIPEROS_VK_CHECK $(pkg-config --cflags libdrm) config/fliperos-vkfps.c
+gcc $m -O0 -Wall -fsyntax-only -DFLIPEROS_VK_CHECK $(pkg-config --cflags libdrm) config/fliperos-vkfps.c
 
 echo "== os shaders contra a fonte"
 python3 - config/fliperos-vkfps.c $b <<'PY'
@@ -41,13 +59,21 @@ for name, stage, src in (('vert', 'vert', glsl[0]), ('frag', 'frag', glsl[1]), (
     print(name, len(mine), 'words ok')
 PY
 
-bash config/fliperos-deflicker-build config/fliperos-vkfps.c $b/libfliperos-vkfps.so
+# shellcheck disable=SC2086 # sem ARCH, nenhum argumento
+bash config/fliperos-deflicker-build config/fliperos-vkfps.c $b/libfliperos-vkfps.so $arch
 [ -d /out ] && cp $b/libfliperos-vkfps.so /out/
-gcc -O2 -Wall -o $b/vkfps_test tests/vkfps_test.c -lvulkan -lX11
+# shellcheck disable=SC2086
+gcc $m -O2 -Wall -o $b/vkfps_test tests/vkfps_test.c -lvulkan -lX11
 
-# A camada instalada como na imagem.
-install -D $b/libfliperos-vkfps.so /usr/local/lib/fliperos/libfliperos-vkfps.so
+# A camada instalada como na imagem (as duas manifestas: cada carregador pega a
+# da sua arquitetura).
+if [ "$arch" = i386 ]; then
+  install -D $b/libfliperos-vkfps.so /usr/local/lib/fliperos/i386/libfliperos-vkfps.so
+else
+  install -D $b/libfliperos-vkfps.so /usr/local/lib/fliperos/libfliperos-vkfps.so
+fi
 install -Dm644 config/fliperos-vkfps.json /usr/share/vulkan/implicit_layer.d/fliperos-vkfps.json
+install -Dm644 config/fliperos-vkfps-i386.json /usr/share/vulkan/implicit_layer.d/fliperos-vkfps-i386.json
 
 Xvfb :9 -screen 0 640x480x24 > /dev/null 2>&1 &
 sleep 2
@@ -58,7 +84,9 @@ run() {
   name=$1 light=$2 dark=$3
   shift 3
   log=$b/$name.log
-  if env "$@" VK_LOADER_LAYERS_DISABLE= VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation $b/vkfps_test "$light" "$dark" > "$log" 2>&1; then
+  validation=VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation
+  [ "$arch" = i386 ] && validation=VK_INSTANCE_LAYERS=
+  if env "$@" VK_LOADER_LAYERS_DISABLE= $validation $b/vkfps_test "$light" "$dark" > "$log" 2>&1; then
     status=ok
   else
     status=FAIL
@@ -120,9 +148,12 @@ run osd-fechada 255 0 FLIPEROS_VK_FPS=1 FLIPEROS_OSD_FILE=$b/osd
 # O flash da pistola de luz: o gatilho apertado (BTN_LEFT=1 num arquivo no lugar
 # da pistola) com gun_flash=hold deixa toda linha clara ate o ultimo quadro; com
 # off, as listras como estavam (o pulse dura dois quadros, o teste olha o 45o).
+# O input_event de 32 bits tem o tempo em dois campos de 4 bytes.
+ev=llHHi
+[ "$arch" = i386 ] && ev==iiHHi
 python3 -c "
 import struct
-open('$b/gun', 'wb').write(struct.pack('llHHi', 0, 0, 1, 0x110, 1) + struct.pack('llHHi', 0, 0, 0, 0, 0))"
+open('$b/gun', 'wb').write(struct.pack('$ev', 0, 0, 1, 0x110, 1) + struct.pack('$ev', 0, 0, 0, 0, 0))"
 printf 'gun_flash=hold\n' > $b/conf
 run flash 255 255 FLIPEROS_VK_FPS=1 FLIPEROS_CONF=$b/conf FLIPEROS_GUN_DEVICES=$b/gun
 printf 'gun_flash=off\n' > $b/conf

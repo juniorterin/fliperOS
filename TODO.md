@@ -50,21 +50,12 @@ O link e o net play pelo frontend entraram na 0.19; depois, o net play ganhou to
 - **Mais jogos em link**, cada um depois de testado em pares: os outros do Model 2 (o papel de cada máquina fica no menu de teste de cada jogo), Gunbuster, Model 1 e System 32.
 - **Perguntas em aberto** do plano ([link-frontend-plan](docs/research/link-frontend-plan.md)): começar com menos máquinas que o máximo, duas festas do mesmo jogo, mandar as ROMs sem perguntar ao dono do outro gabinete, recusar sets de regiões diferentes.
 
-## Wine e jogos custom
+## Wine e jogos custom: conferir no gabinete
 
-Pedidos de 2026-11-07:
-- **Filtro de flicker num jogo custom do Wine em 640x480 (não aparece na OSD):** hoje não há onde ligar isso no Setup. Em Setup > Games > Custom games só se escolhem o grupo, o nome, o comando e o modo. Duas causas no código:
-  - o jogo roda como `fliperos-x11-run --mode M bash -c "wine ..."`. O `fliperos-x11-client` decide pelo primeiro nome (`fightcade* | wine* | *.exe`) e aqui vê `bash`: põe a camada OpenGL de 64 bits, que o Wine de 32 bits não carrega, em vez do filtro do picom (`fliperos-desktop-deflicker`), que é o dos programas do Wine. O nome do programa também sai `bash` (`deflicker_bash=`);
-  - a OSD só mostra "Interlaced filter" quando acha o programa na tela pelo arquivo de FPS que a camada GL ou Vulkan grava (`on_screen()` em `config/fliperos-osd`). O picom não grava esse arquivo, então nem o Fightcade nem um jogo do Wine têm a linha.
-
-  Falta: o jogo custom com um nome próprio para o filtro (`FLIPEROS_DEFLICKER_APP`, por exemplo `custom_<grupo>_<nome>`) e o Wine reconhecido dentro do comando (ou uma pergunta "PC game (Wine)?" no editor). Depois, a OSD também precisa achar e mudar o nível de quem usa o picom, além de uma linha por jogo custom na tabela de 480i do Video Setup.
-- **Jogos do Wine num arquivo squashfs:** dá para fazer. O kernel tem squashfs, e o `mksquashfs` (`squashfs-tools`) já vem na imagem. O jogo vira um `~/games/NOME.squashfs` só de leitura. Ao abrir, ele é montado e, por cima, entra um overlayfs com uma pasta gravável (os saves e configs que o jogo escreve na própria pasta), desmontado ao fechar. Montar pede root ou FUSE (`squashfuse` e `fuse-overlayfs` não vêm na imagem; o overlay do kernel funciona sem root dentro de um user namespace). Falta escolher entre um ajudante root e o FUSE, e criar o "Pack as squashfs" no Setup. Ganho: um arquivo só no lugar de milhares, para copiar, para o compartilhamento SMB e para o scraper.
-- **Wine staging no lugar do Wine do Ubuntu?** Hoje o Extras instala o Wine do noble (9.0, `wine wine64 wine32:i386`). O staging vem do repositório da WineHQ (`winehq-staging`, em `/opt/wine-staging`). Ele traz mais patches, que ajudam alguns jogos, mas é a linha de desenvolvimento e muda a cada duas semanas. Não é o ideal como padrão. Melhor como opção no Extras para quem precisa, depois de testar o Fightcade com ele. Pontos de atrito com o Fightcade:
-  - os pacotes da WineHQ provavelmente não convivem com o `wine` do Ubuntu, então a troca teria de tirar um para pôr o outro;
-  - o `fliperos-extras` testa `/usr/bin/wine`;
-  - o prefixo do Fightcade (`~/.local/share/fliperos/wine-fightcade`) é atualizado na primeira vez que um Wine mais novo o abre, e não volta.
-
-  Os emuladores do Fightcade (FBNeo, SNES9x, FBA, de 32 bits) devem rodar em qualquer um, mas falta conferir.
+Feito em 2026-11-07 e testado só no Docker:
+- **Filtro de flicker e OSD nos jogos do Wine:** a camada de 32 bits (compilada pelo Extras junto com o Wine) e o nome próprio de cada jogo custom (`--app custom_<grupo>_<nome>`, com linha em Interlaced hacks). A camada compila em 32 bits, e o carregador pula a da outra arquitetura (Docker noble), mas nenhum jogo do Wine rodou com ela. A camada do Vulkan de 32 bits (DXVK) passou no teste com o lavapipe de 32 bits (`ARCH=i386 tools/vkfps-test.sh`). Falta abrir no gabinete um jogo de 32 bits do Wine em 640x480i, um em OpenGL e um em DXVK, e ver a OSD com a linha do filtro.
+- **Pastas de jogo em squashfs** (Custom games > Pack a game folder): empacotar, montar, gravar por cima, desmontar e desempacotar foram testados num container com a home em tmpfs, com lz4 (o kernel do WSL não tem o zstd do squashfs; o do FliperOS tem). Falta num gabinete: um jogo do Wine empacotado abrindo, o serviço montando no boot e o compartilhamento de rede com a pasta montada.
+- **Wine Staging** (Extras): o repositório e os pacotes foram conferidos (`winehq-staging` 11.21 para o noble, chave D43F...672F), mas a instalação nunca rodou. Falta instalar num gabinete que já tem o Wine do Ubuntu (a troca pelo apt) e abrir o Fightcade (FBNeo, SNES9x, FBA) com ele.
 
 ## Painel web e API REST (fase 5)
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=FliperOS: games packed as squashfs, mounted in their folders
+After=local-fs.target
+Before=getty@tty1.service smbd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/fliperos/bin/fliperos-squashgames mount-all
+ExecStop=/opt/fliperos/bin/fliperos-squashgames umount-all
+
+[Install]
+WantedBy=multi-user.target

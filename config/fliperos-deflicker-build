@@ -6,15 +6,26 @@
 # ao abrir a placa) e a fliperos-vkfps.c (a camada do Vulkan) em bibliotecas. Usado pelo fliperos-mkiso.sh (no chroot da imagem), pelo
 # tools/cabinet-update.sh e pelo tools/deflicker-test.sh.
 #
-#   fliperos-deflicker-build FONTE SAIDA
+#   fliperos-deflicker-build FONTE SAIDA [i386]
 #
 # Precisa de gcc e dos cabecalhos (libdrm-dev, libgl-dev, libegl-dev; a
 # calibracao tambem libx11-dev e libxrandr-dev). A biblioteca nao liga na
 # libGL nem na libEGL (as funcoes vem do programa que a carrega).
+# i386: a biblioteca de 32 bits, a dos programas do Wine (gcc-multilib e
+# libdrm-dev:i386, que o Setup > Games > Extras instala com o Wine).
 set -euo pipefail
 src=${1:?fonte}
 out=${2:?saida}
+arch=${3:-}
 mkdir -p "$(dirname "$out")"
+if [[ $arch == i386 ]]; then
+  pc=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig
+  # shellcheck disable=SC2046
+  gcc -m32 -O2 -Wall -shared -fPIC -o "$out.new" "$src" $(PKG_CONFIG_LIBDIR=$pc pkg-config --cflags --libs libdrm) -ldl -lm
+  chmod 755 "$out.new"
+  mv -f "$out.new" "$out"
+  exit 0
+fi
 case $(basename "$src") in
   fliperos-color.c)
     # shellcheck disable=SC2046 # as opcoes do pkg-config, uma por palavra

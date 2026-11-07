@@ -27,7 +27,16 @@ extras_label() {
 # (docs/wiki/Frontends.md, ZeDMD firmware version).
 extras_note() {
   case $1 in
+    wine-staging) echo "Wine Staging is the newest Wine from WineHQ, with fixes that are not in Wine yet: more Windows games run, and some run better (graphics, controllers, sound). It is a test version, updated every two weeks, so a game can also break. It takes the place of Wine: Fightcade and your custom games use it from now on." ;;
     zedmd) echo "ZeDMD needs firmware 5.1.0 or newer. Older ones (3.x, 4.x, 5.0, which work on Batocera 41) don't connect. The display shows its version on its logo at power on. How to update: FliperOS wiki, Frontends page." ;;
+  esac
+}
+
+# extras_hint NOME: a dica do item na lista (cabe em 2 linhas de 34).
+extras_hint() {
+  case $1 in
+    wine) echo "Runs Windows programs: Fightcade 2 emulators and PC games." ;;
+    wine-staging) echo "Newer Wine with fixes for more Windows games. Replaces Wine." ;;
   esac
 }
 

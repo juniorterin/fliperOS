@@ -235,7 +235,9 @@ The layer was tested on Mesa's software driver (lavapipe) with the Khronos valid
 
 The LXDE desktop draws without OpenGL, so it gets the same filter through **picom** with a window shader (`config/fliperos-desktop-deflicker --watch`, started by `fliperos-lxde`, at the Desktop row's level `deflicker_desktop=`). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Screen Resolution counts at once. Ubuntu's own picom autostart (`/etc/xdg/autostart/picom.desktop`, without the shader) would take the screen first, since only one compositor runs at a time: `fliperos-lxde` puts `/etc/fliperos/xdg` first in `XDG_CONFIG_DIRS`, where a `picom.desktop` with `Hidden=true` hides it.
 
-The programs that cannot take the library get the same picom over their whole Xorg: `fliperos-x11-client` starts it for Fightcade (its lobby is Electron, and FBNeo, SNES9x and FBA are 32-bit Wine programs) and for any `wine` or `.exe` command. The Fightcade lobby (512x448, interlaced on a 15 kHz tube) uses the Other programs level; while a Flycast match is open, `fliperos-fightcade` switches it to the Fightcade Flycast row's level (`deflicker_fightcade-flycast=`). The Wine matches run at 240 lines, so there picom has nothing to filter and stays off.
+Programs in **Wine** are mostly 32-bit, and a 32-bit process can't load the 64-bit library. When Wine is installed from the Extras (the Ubuntu Wine or Wine Staging), the Setup also builds the library for 32 bits (`/usr/local/lib/fliperos/i386/libfliperos-deflicker.so`, with `gcc-multilib` and `libdrm-dev:i386`), and the update rebuilds it when the source changes. When the command runs `wine` or a `.exe`, including a custom game's `bash -c "wine ..."`, `fliperos-x11-client` puts both in `LD_PRELOAD`. The Linux loader skips the one that isn't of the process's kind, and the Wine game gets the filter and the on-screen menu. Games that draw in **Vulkan through DXVK** get the Vulkan layer built for 32 bits as well (`/usr/local/lib/fliperos/i386/libfliperos-vkfps.so`). Its manifest (`config/fliperos-vkfps-i386.json`, a layer of its own name with `library_arch` 32) is only taken by the 32-bit Vulkan loader. `tools/vkfps-test.sh` runs the whole layer test in 32 bits with `ARCH=i386` (lavapipe; Ubuntu has no 32-bit validation layers): the three levels, the on-screen menu, the FPS, the scanlines and the gun flash gave the same values as in 64 bits.
+
+The programs that still cannot take the library get the same picom over their whole Xorg, without the on-screen menu: `fliperos-x11-client` starts it for Fightcade (its lobby is Electron) and for a `wine` or `.exe` command when the 32-bit library is missing. The Fightcade lobby (512x448, interlaced on a 15 kHz tube) uses the Other programs level; while a Flycast match is open, `fliperos-fightcade` switches it to the Fightcade Flycast row's level (`deflicker_fightcade-flycast=`). The Wine matches run at 240 lines, so there picom has nothing to filter and stays off.
 
 For testing:
 - `FLIPEROS_DEFLICKER=off|light|medium|strong` overrides the level.
@@ -342,6 +344,12 @@ Neither ships in the image (they would take over 500 MB, and are useless without
 **GOG**: there is no official Linux client; the Setup installs **Heroic Games Launcher** (official `.deb`, with a pinned hash) (GOG, Epic and Amazon; the same as on the Steam Deck), which runs Windows games with the Wine/Proton it downloads itself.
 
 Both open **inside the LXDE desktop** (they are X programs), from the **Games** menu. Their UIs were made for larger screens: on a 15 kHz CRT at 640x480 they are cramped — on a 31 kHz monitor or an LCD they are much better.
+
+## Wine and Wine Staging
+
+**Setup > Games > Extras** has two Wines. **Wine** is Ubuntu's (9.0 on noble), the stable one, and what Fightcade installs by itself. **Wine Staging** is the newest Wine from WineHQ (`winehq-staging`, from WineHQ's repository, with its key pinned in `config/winehq-archive.asc`). It has the patches that are not in Wine yet, so more Windows games run, and some run better. It is the development line, a new version every two weeks, so a game can also break with it.
+
+Wine Staging takes the place of Ubuntu's Wine: its package replaces `wine` and provides `/usr/bin/wine`, so Fightcade, Hook Of The Reaper and the custom games use it without any change. With it installed, choosing Wine or Hook Of The Reaper in the Extras doesn't bring Ubuntu's Wine back. A Wine prefix opened by a newer Wine is upgraded once and doesn't go back to the older one (Fightcade's is `~/.local/share/fliperos/wine-fightcade`). Not tested yet on a cabinet: the install itself, and Fightcade's emulators on Wine Staging.
 
 ## Namco System 246 and 256 (PCSX2x6)
 

@@ -3486,8 +3486,72 @@ class CustomGamesTests(Base):
         text = text.replace("/opt/fliperos/bin/fliperos-x11-run", str(fake))
         script.write_text(text)
         out = subprocess.run(["sh", str(script)], capture_output=True, text=True).stdout.splitlines()
-        self.assertEqual(out[:4], ["--mode", "640x240@60", "bash", "-c"])
-        self.assertEqual(out[4], "wine ~/games/Pang $ Deluxe/pang.exe --full 'x y'")
+        # --app: o nome dele para o filtro de flicker e a OSD (sem ele, "bash").
+        self.assertEqual(out[:6], ["--mode", "640x240@60", "--app", "custom_pc_games_pang", "bash", "-c"])
+        self.assertEqual(out[6], "wine ~/games/Pang $ Deluxe/pang.exe --full 'x y'")
+
+    def test_each_entry_has_its_own_flicker_filter_row(self):
+        self.assertEqual(self.env.out("customgames_app 'PC games' 'Pang Deluxe!'", self.e).strip(),
+                         "custom_pc_games_pang_deluxe")
+        self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'", self.e)
+        rows = {r.split("|")[0]: r.split("|") for r in self.env.out("mode480_rows", self.e).splitlines()}
+        row = rows["custom_pc_games_pang"]
+        # So o filtro: o modo e o da entrada. Antes da "other".
+        self.assertEqual((row[1], row[2], row[4]), ("Pang", "filter", "filter,pure"))
+        self.assertEqual(list(rows)[-2:], ["custom_pc_games_pang", "other"])
+        # Sem nivel proprio, o da "other" (o deflicker= que a camada usaria).
+        self.env.out("deflicker_set strong", self.e)
+        self.assertEqual(self.env.out("mode480_level custom_pc_games_pang", self.e).strip(), "strong")
+        self.env.out("mode480_set custom_pc_games_pang pure", self.e)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("deflicker_custom_pc_games_pang=off\n", conf)
+        self.assertNotIn("mode480_custom", conf)
+        self.assertEqual(self.env.out("mode480_state custom_pc_games_pang", self.e).strip(), "pure")
+        self.assertNotEqual(self.env.run("mode480_set custom_pc_games_pang 240p", self.e).returncode, 0)
+        # A OSD muda o nivel pelo nome que a camada conhece (--setting level.NOME).
+        self.assertEqual(self.env.out("mode480_key_of custom_pc_games_pang", self.e).strip(), "custom_pc_games_pang")
+        self.env.out("mode480_set custom_pc_games_pang filter light", self.e)
+        self.assertIn("deflicker_custom_pc_games_pang=light\n", (self.env.etc / "fliperos.conf").read_text())
+
+    def test_a_new_entry_gets_a_sample_picture_video_and_text(self):
+        # Uma imagem, um video e um texto de exemplo (gui/custom-media.py)
+        # onde os frontends os procuram, e a mensagem do fim diz onde trocar.
+        media = self.env.dir / "media"
+        e = dict(self.e, CUSTOM_GAMES_MEDIA=str(media))
+        for kind, path in (("snap", "snap/custom/PC games/Pang.png"), ("preview", "preview/custom/PC games/Pang.mp4"),
+                           ("texto", "texto/custom/PC games/Pang.txt")):
+            self.assertEqual(self.env.out("customgames_media_path %s 'PC games' Pang" % kind, e).strip(), str(media / path))
+        self.env.out("customgames_media_dirs 'PC games'", e)
+        for kind in ("snap", "box", "logo", "marquee", "preview", "texto"):
+            self.assertTrue((media / kind / "custom" / "PC games").is_dir(), kind)
+        lib = (SETUP / "lib" / "customgames.sh").read_text().split("customgames_media() {")[1].split("\n}\n")[0]
+        self.assertLess(lib.index('customgames_media_dirs "$1"'), lib.index("custom-media.py"))
+        edit = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_custom_game_edit() {")[1].split("\n}\n")[0]
+        self.assertLess(edit.index('customgames_media "$group" "$name"'), edit.index("ui_msg \"$title\" \"$name is in the group"))
+        for line in ('"  snap/custom/$group/$name.png (picture)"', '"  preview/custom/$group/$name.mp4 (video)"',
+                     '"  texto/custom/$group/$name.txt (text)"', '"  logo/custom/$group/$name.png (logo)"'):
+            self.assertIn(line, edit)
+        self.assertIn('--logo "$(customgames_media_path logo "$1" "$2")"', lib)
+        # O mesmo lugar em que o frontend procura (a chave do sistema e custom/GRUPO).
+        web = (ROOT / "config" / "fliperos-web").read_text()
+        self.assertIn('return os.path.join(player_home(), "media", kind, *parts)', web)
+
+    def test_refresh_gives_old_entries_their_own_name(self):
+        # As gravadas antes do --app (o System Update chama o refresh); um
+        # script posto a mao, sem o cabecalho, fica como esta.
+        group = self.roms / "custom" / "PC games"
+        group.mkdir(parents=True)
+        old = group / "Pang.sh"
+        old.write_text("#!/bin/sh\n# FliperOS custom game (Setup > Games > Custom games). Edited there, or here.\n"
+                       "# mode: 640x480@60\n# command: wine pang.exe\n"
+                       "exec /opt/fliperos/bin/fliperos-x11-run --mode 640x480@60 bash -c wine\\ pang.exe\n")
+        hand = group / "Mine.sh"
+        hand.write_text("#!/bin/sh\necho mine\n")
+        self.env.out("customgames_refresh", self.e)
+        self.assertIn("--mode 640x480@60 --app custom_pc_games_pang bash -c wine\\ pang.exe\n", old.read_text())
+        self.assertEqual(hand.read_text(), "#!/bin/sh\necho mine\n")
+        update = (ROOT / "tools" / "cabinet-update.sh").read_text()
+        self.assertIn("customgames_refresh", update.split('echo "== Kernel line')[1].split('\n)\n')[0])
 
     def test_modes_names_and_listing(self):
         self.assertEqual(self.env.out("customgames_mode 480i", self.e).strip(), "640x480@60")

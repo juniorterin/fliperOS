@@ -1167,8 +1167,10 @@ video_preset_range() {
 # fliperos-desktop-deflicker leem, e deflicker_PROGRAMA=nivel|off, que a
 # camada le (PROGRAMA e o nome do comando na tabela do fliperos-x11-run, ou
 # o core do RetroArch sem o _libretro.so). deflicker_level_PROGRAMA guarda o
-# ultimo nivel escolhido. A linha "other" e o deflicker= de todo o resto
-# (jogos personalizados, programas fora da tabela).
+# ultimo nivel escolhido. Cada jogo personalizado (lib/customgames.sh) tem
+# a sua linha, so com o filtro (o modo e o da entrada): deflicker_custom_...,
+# que vale ao abrir pelo --app do fliperos-x11-run. A linha "other" e o
+# deflicker= de todo o resto (programas fora da tabela).
 DEFLICKER_LEVELS="off light medium strong"
 MODE480_VALUES="240p filter pure"
 RA_CORES=${RA_CORES:-/opt/fliperos/retroarch/cores}
@@ -1180,8 +1182,23 @@ DEFLICKER_X11_RUN=${DEFLICKER_X11_RUN:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliper
 # mode480_table: chave|rotulo|programas|permitidas|padrao|tipo|ajuda.
 # tipo: x11 (fliperos-x11-run), mame (o interlace do mame.ini), core:NOME
 # (o switchres.ini do core no RetroArch, NOME = o do core nas pastas de
-# config), fightcade, desktop, other. O padrao e o que cada um ja fazia.
+# config), fightcade, desktop, custom (um jogo personalizado), other. O
+# padrao e o que cada um ja fazia.
 mode480_table() {
+  mode480_fixed_table
+  # Os jogos personalizados, antes da "other".
+  local group name app
+  if declare -F customgames_list > /dev/null; then
+    while IFS='|' read -r group name _; do
+      app=$(customgames_app "$group" "$name")
+      printf '%s|%s|%s|filter,pure|filter|custom|Custom game in %s. Its video mode is the one in Games > Custom games.\n' \
+        "$app" "$name" "$app" "$group"
+    done < <(customgames_list)
+  fi
+  echo "other|Other programs|other|filter,pure|filter|other|Any other program in an interlaced mode."
+}
+
+mode480_fixed_table() {
   cat << 'TABLE'
 flycast|Flycast|flycast|240p,filter,pure|240p|x11|Dreamcast, Naomi, Atomiswave.
 pcsx2|PCSX2|pcsx2|240p,filter,pure|240p|x11|PlayStation 2.
@@ -1199,7 +1216,6 @@ megadrive|RA Mega Drive|genesis_plus_gx|240p,filter,pure|filter|core:Genesis Plu
 fbneo|RetroArch FBNeo|fbneo|240p,filter,pure|filter|core:FinalBurn Neo|Arcade games with more than 240 lines in the FBNeo core.
 fightcade|Fightcade Flycast|fightcade-flycast|240p,filter,pure|240p|fightcade|Flycast matches in Fightcade 2.
 desktop|Desktop|desktop|filter,pure|filter|desktop|The LXDE desktop, when Screen Resolution puts it in an interlaced mode.
-other|Other programs|other|filter,pure|filter|other|Custom games and any other program in an interlaced mode.
 TABLE
 }
 
@@ -1224,7 +1240,7 @@ mode480_installed() {
     core:*) [[ -f $RA_CORES/$(mode480_field "$1" 3)_libretro.so ]] ;;
     fightcade) [[ -x $FIGHTCADE_DIR/fightcade ]] ;;
     desktop) [[ -x ${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-lxde ]] ;;
-    other) return 0 ;;
+    other | custom) return 0 ;;
     *)
       for prog in $(mode480_field "$1" 3); do
         if have "$prog" || [[ -x ${FLIPEROS_BIN:-/opt/fliperos/bin}/$prog ]]; then
@@ -1244,6 +1260,13 @@ mode480_state() {
     [[ $(deflicker_level) == off ]] && echo pure || echo filter
     return 0
   fi
+  if [[ $(mode480_field "$1" 6) == custom ]]; then
+    # Um jogo personalizado sem nivel proprio segue a "other" (a camada cai
+    # no deflicker= de todos).
+    state=$(conf_get "deflicker_$prog" 2> /dev/null) || { mode480_state other; return 0; }
+    [[ $state == off ]] && echo pure || echo filter
+    return 0
+  fi
   state=$(conf_get "mode480_$prog" 2> /dev/null) || state=""
   [[ -n $state && " $MODE480_VALUES " == *" $state "* ]] || state=$(mode480_field "$1" 5)
   printf '%s\n' "$state"
@@ -1256,6 +1279,8 @@ mode480_level() {
   read -r prog _ <<< "$(mode480_field "$1" 3)"
   if [[ $prog == other ]]; then
     level=$(conf_get deflicker_level 2> /dev/null) || level=$(conf_get deflicker 2> /dev/null) || level=""
+  elif [[ $(mode480_field "$1" 6) == custom ]]; then
+    level=$(conf_get "deflicker_level_$prog" 2> /dev/null) || level=$(mode480_level other)
   else
     level=$(conf_get "deflicker_level_$prog" 2> /dev/null) || level=""
   fi
@@ -1292,6 +1317,10 @@ mode480_set() {
     if [[ $kind == other ]]; then
       conf_set deflicker "$value"
       conf_set deflicker_level "$level"
+    elif [[ $kind == custom ]]; then
+      # O modo e o da entrada (Games > Custom games): so o filtro.
+      conf_set "deflicker_$prog" "$value"
+      conf_set "deflicker_level_$prog" "$level"
     else
       conf_set "mode480_$prog" "$state"
       conf_set "deflicker_$prog" "$value"

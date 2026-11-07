@@ -139,6 +139,12 @@ done < <(bash "$src/updates/packages-sync.sh" "$src/updates/packages.list")
 # O OpenGL de 32 bits do Wine (os emuladores do Fightcade), onde ha Wine. O
 # Wine em si nao vem mais na imagem (Setup > Games > Extras, config/fliperos-extras).
 dpkg -s wine32:i386 > /dev/null 2>&1 && packages+=(libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386)
+# Com o Wine (o do Ubuntu ou o Staging), a camada do filtro de flicker e da OSD
+# em 32 bits, a dos jogos do Wine (config/fliperos-x11-client): o compilador
+# de 32 bits e a libdrm de 32 bits para compila-la (build_native abaixo).
+wine32=0
+{ dpkg -s wine32:i386 || dpkg -s wine-staging-i386:i386; } > /dev/null 2>&1 && wine32=1
+((wine32)) && packages+=(gcc-multilib libdrm-dev:i386)
 # So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
 # apt-get segura a trava dos pacotes, e quem estivesse instalando um
 # frontend pelo Setup naquela hora recebia "Impossivel criar acesso
@@ -181,11 +187,12 @@ flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.f
 # de quem enviou, e uma biblioteca compilada depois, de um fonte mais velho,
 # parecia em dia (o FPS do painel web nao chegava ao gabinete).
 build_native() {
-  local name=$1 source=$2 out=$3 sum
+  local name=$1 source=$2 out=$3 arch=${4:-} sum
   sum=$(sha256sum "$source" | cut -d' ' -f1)
   [[ -f $out && $(cat "$out.source-sha256" 2> /dev/null) == "$sum" ]] && return 0
   echo "== $name"
-  if bash "$src/config/fliperos-deflicker-build" "$source" "$out"; then
+  # shellcheck disable=SC2086 # sem arquitetura, nenhum argumento
+  if bash "$src/config/fliperos-deflicker-build" "$source" "$out" $arch; then
     printf '%s\n' "$sum" > "$out.source-sha256"
   else
     echo "warning: $name did not compile"
@@ -202,6 +209,10 @@ build_native "Light gun in the GroovyMAME lightgun (fliperos-sdl-gun)" "$src/con
   /usr/local/lib/fliperos/libfliperos-sdl-gun.so
 build_native "FPS and flicker filter of Vulkan programs (fliperos-vkfps)" "$src/config/fliperos-vkfps.c" \
   /usr/local/lib/fliperos/libfliperos-vkfps.so
+((wine32)) && build_native "Flicker filter and OSD of 32-bit Wine games (fliperos-deflicker i386)" \
+  "$src/config/fliperos-deflicker.c" /usr/local/lib/fliperos/i386/libfliperos-deflicker.so i386
+((wine32)) && build_native "Flicker filter and OSD of 32-bit Wine games in Vulkan (fliperos-vkfps i386)" \
+  "$src/config/fliperos-vkfps.c" /usr/local/lib/fliperos/i386/libfliperos-vkfps.so i386
 # O driver do GunCon 2 com os patches do FliperOS (config/guncon2-patches):
 # refeito quando eles mudam, para cada kernel instalado, e recarregado.
 gc2=/usr/src/guncon2-1.0
@@ -288,6 +299,9 @@ echo "== Kernel line (boot straight to Plymouth)"
   video_mame_aspect
   video_mame_monitor
   latency_emulators "$(latency_mode)"
+  # Os scripts dos jogos personalizados com o nome proprio do filtro de
+  # flicker (o --app do fliperos-x11-run): os de antes abriam como "bash".
+  customgames_refresh
   grep -E '^(aspect|monitor) ' "$MAME_INI"
   grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )

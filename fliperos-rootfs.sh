@@ -183,8 +183,24 @@ install -Dm755 "$src/config/fliperos-arcadeflow-art" "$root/opt/fliperos/bin/fli
 install -Dm755 "$src/config/fliperos-outputs" "$root/opt/fliperos/bin/fliperos-outputs"
 install -Dm644 "$src/config/ledspicer-ppa.asc" "$root/usr/local/share/fliperos/ledspicer-ppa.asc"
 # Wine, Steam, Heroic e o Pixelcade nao vem na imagem: o Setup > Games > Extras os
-# instala.
+# instala. O Wine Staging vem do repositorio da WineHQ, com a chave dela
+# (fixada). Com qualquer Wine, o Extras compila a camada do filtro de flicker
+# e da OSD em 32 bits (a dos jogos do Wine): o fonte e o script vao junto.
 install -Dm755 "$src/config/fliperos-extras" "$root/opt/fliperos/bin/fliperos-extras"
+install -Dm644 "$src/config/winehq-archive.asc" "$root/usr/local/share/fliperos/winehq-archive.asc"
+install -Dm644 "$src/config/fliperos-deflicker.c" "$root/usr/local/lib/fliperos/src/fliperos-deflicker.c"
+install -Dm644 "$src/config/fliperos-vkfps.c" "$root/usr/local/lib/fliperos/src/fliperos-vkfps.c"
+install -Dm755 "$src/config/fliperos-deflicker-build" "$root/usr/local/lib/fliperos/src/fliperos-deflicker-build"
+# E a camada do Vulkan de 32 bits (os jogos do Wine em DXVK): o manifesto dela,
+# com library_arch 32, so o carregador de 32 bits pega; sem a biblioteca
+# (sem Wine), nenhum carregador a abre.
+install -Dm644 "$src/config/fliperos-vkfps-i386.json" "$root/usr/share/vulkan/implicit_layer.d/fliperos-vkfps-i386.json"
+# Os jogos guardados em squashfs (Setup > Games > Custom games > Pack a game
+# folder): o ajudante root, que as monta no boot pelo servico.
+install -Dm755 "$src/config/fliperos-squashgames" "$root/opt/fliperos/bin/fliperos-squashgames"
+install -Dm644 "$src/config/fliperos-squashgames.service" "$root/etc/systemd/system/fliperos-squashgames.service"
+ln -sfn /etc/systemd/system/fliperos-squashgames.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-squashgames.service"
 # Setup > Games > Emulators & Games: o estado de cada emulador e a instalacao dos que
 # nao vem na imagem; o KOF Final Attack no Ikemen GO (config/fliperos-kof).
 install -Dm755 "$src/config/fliperos-emulators" "$root/opt/fliperos/bin/fliperos-emulators"

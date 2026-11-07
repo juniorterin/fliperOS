@@ -1479,7 +1479,9 @@ SYNOPSIS_FADE, SYNOPSIS_SPEED, SYNOPSIS_WAIT = 10, 6.0, 2.0  # pixels, pixels po
 def game_description(fe, game):
     """A sinopse do jogo: o comeco da historia do arcade-history, do que o
     scrape ja salvou em ~/media/info (sem rede); o clone sem a sua usa a do
-    pai. Os jogos de console nao tem: vazia."""
+    pai. Sem ela, a descricao em ~/media/texto/PASTA/NOME.txt (a do scraper
+    para o Attract-Mode, a de exemplo de um jogo personalizado). Sem nenhuma,
+    vazia."""
     system = game["_system"]
     key = ("desc", system["key"], game["Name"])
     if key not in fe.media:
@@ -1491,6 +1493,14 @@ def game_description(fe, game):
                 text = fe.fd.web.history_parts(info.get("history"))[0]
                 if text:
                     break
+        if not text:
+            try:
+                path = fe.fd.web.media_file(system["key"], (game["Name"], game.get("CloneOf")), "texto", (".txt",))
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    text = " ".join(f.read(4000).split())
+            except (OSError, TypeError, KeyError):
+                # Sem o arquivo (TypeError: nenhum) ou sem o usuario do jogador.
+                text = ""
         return remember(fe, key, text)
     return fe.media[key]
 
