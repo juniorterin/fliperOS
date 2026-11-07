@@ -1391,6 +1391,10 @@ class Link:
     def table(self):
         return self.presence.table() if self.presence else []
 
+    def others(self):
+        """Ha outro gabinete na rede cabeada (um que disse de si ha menos de EXPIRE s)."""
+        return bool(self.table())
+
     def parties(self):
         return parties(self.table())
 

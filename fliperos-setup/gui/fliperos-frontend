@@ -1425,8 +1425,10 @@ class Frontend:
         return None if not prof else ("net" if prof.get("netplay") else "link")
 
     def link_mark(self, g):
-        """None: o jogo nao tem link nem net play. False: tem, e ninguem joga. True: alguem joga."""
-        if not self.link_profile(g):
+        """None: o jogo nao tem link nem net play, ou nao ha outro gabinete na
+        rede (sem ninguem com quem jogar, o globo nao aparece na lista). False:
+        tem, e ninguem joga. True: alguem joga."""
+        if not self.link_profile(g) or not self.link.others():
             return None
         return bool(self.link.parties_for(g["_system"]["key"], g["Name"]))
 
