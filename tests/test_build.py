@@ -2037,16 +2037,32 @@ class GroovyMameTests(unittest.TestCase):
             self.assertFalse((root / 'opt/fliperos/bin/fliperos-mame-aspect').exists())
             self.assertEqual((root / 'etc/fliperos/fliperos.conf').read_text(), 'monitor=arcade_15\n')
 
-    def test_release_is_pinned_and_installed_behind_the_wrapper(self):
-        # O release vem no pacote fliperos-groovymame (o mesmo que os updates
-        # levam); a ISO o instala do repositorio local e confere o binario.
+    def test_built_from_the_tag_with_the_patches_and_installed_behind_the_wrapper(self):
+        # O pacote fliperos-groovymame (o mesmo que os updates levam) compila
+        # o codigo da tag com o lockstep patch; a ISO o instala do repositorio
+        # local e confere o binario. O mais novo do Setup compila a tag nova com
+        # os mesmos patches (a party continua), no gabinete: horas.
         recipe = (ROOT / 'packaging/packages/fliperos-groovymame.sh').read_text()
-        self.assertRegex(recipe, r'GROOVYMAME_SHA256="[0-9a-f]{64}"')
-        self.assertIn('"$PKG_UPSTREAM/releases/download/$GROOVYMAME_TAG/$file"', recipe)
-        self.assertIn('sha256sum -c', recipe)
-        self.assertIn('"$STAGING/usr/local/libexec/groovymame"', recipe)
-        self.assertIn('libqt6widgets6t64', recipe)
-        self.assertNotIn('make ', recipe)
+        self.assertIn('for patch in "$here"/../patches/groovymame/*.patch; do', recipe)
+        self.assertIn('make -C "$src" -j"$jobs" NOWERROR=1 USE_QTDEBUG=0 TOOLS=0', recipe)
+        self.assertIn("jobs=$(awk '/^MemAvailable:/ { print int($2 / 1572864) }' /proc/meminfo)", recipe)
+        self.assertIn('if ((free < GROOVYMAME_BUILD_GB)); then', recipe)
+        self.assertIn('install -Dm755 "$src/mame" "$bin"', recipe)
+        self.assertIn('bin=$STAGING/usr/local/libexec/groovymame', recipe)
+        self.assertIn('[[ -x $quiet ]] && python3 "$quiet" "$bin"', recipe)
+        self.assertIn('if [[ -z ${FLIPEROS_EDGE:-} && $(git -C "$src" rev-parse HEAD) != "$GROOVYMAME_COMMIT" ]]', recipe)
+        self.assertNotIn('releases/download', recipe)
+        self.assertIn('PKG_EDGE_WAIT="hours', recipe)
+        self.assertIn('(${PKG_EDGE_WAIT:-several minutes})', (ROOT / 'config/fliperos-emulators').read_text())
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('FliperOS compiles the whole MAME here to put its patches in (party play), so it takes a long time',
+                      menu)
+        patches = sorted((ROOT / 'packaging/patches/groovymame').glob('*.patch'))
+        self.assertEqual([p.name for p in patches], ['0001-lockstep-patch.patch'])
+        text = patches[0].read_text()
+        self.assertIn('+++ b/src/emu/lockstep.cpp', text)
+        self.assertIn('m_lockstep->frame_update();', text)
+        self.assertIn('fliperos-lockstep.ini', text)
         body = MKISO.split('install_groovymame_chroot() {')[1].split('\n}\n')[0]
         self.assertIn('dpkg -s fliperos-groovymame', body)
         self.assertIn('/usr/local/libexec/groovymame -version', body)
@@ -13983,6 +13999,34 @@ class PackagingTests(unittest.TestCase):
             for field in ('PKG_NAME=', 'PKG_VERSION=', 'PKG_SUMMARY=',
                           'PKG_BUILD_DEPS=', 'PKG_SHLIB_TARGETS=', 'pkg_build()'):
                 self.assertIn(field, text, '%s sem %s' % (recipe.name, field))
+
+    def test_the_iso_takes_the_published_debs_and_builds_only_what_is_missing(self):
+        # Os .deb do release "packages" (os da updates/packages.list, pelo
+        # sha256) entram na ISO prontos: o GroovyMAME levaria horas na CI, e a
+        # ISO fica com os mesmos binarios dos updates.
+        release = (ROOT / '.github/workflows/release.yml').read_text()
+        step = release.split('- name: Repositorio dos frontends')[1].split('- name: ISO')[0]
+        self.assertIn('GH_TOKEN: ${{ github.token }}', step)
+        self.assertIn("grep -v '^#' updates/packages.list | while read -r name version sum when; do", step)
+        self.assertIn('gh release download packages -R "$GITHUB_REPOSITORY" -p "$deb"', step)
+        self.assertIn('sha256sum -c --quiet - || rm -f "$OUT/packages/$deb"', step)
+        self.assertIn('bash packaging/build-deb.sh --skip-existing $recipes', step)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp, 'out')
+            out.mkdir()
+            recipes = Path(tmp, 'packaging/packages')
+            recipes.mkdir(parents=True)
+            shutil.copy(ROOT / 'packaging/build-deb.sh', Path(tmp, 'packaging/build-deb.sh'))
+            (recipes / 'fliperos-x.sh').write_text('PKG_NAME="fliperos-x"\nPKG_VERSION="1.0"\nPKG_REVISION="1fliperos3"\n'
+                                                   'pkg_build() { touch "$SRC/built"; return 1; }\n')
+            Path(out, 'fliperos-x_1.0-1fliperos3_amd64.deb').write_bytes(b'published')
+            if os.geteuid():
+                self.skipTest('build-deb.sh runs as root (the test container)')
+            run = subprocess.run(['bash', str(Path(tmp, 'packaging/build-deb.sh')), '--output', str(out),
+                                  '--skip-existing', 'fliperos-x'], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn('already built', run.stdout)
+            self.assertEqual(Path(out, 'fliperos-x_1.0-1fliperos3_amd64.deb').read_bytes(), b'published')
 
     def test_recipe_filename_matches_package_name(self):
         for recipe in self.recipe_files():

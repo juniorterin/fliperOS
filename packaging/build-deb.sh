@@ -6,9 +6,12 @@
 #  pelo wizard, a partir de um repositorio APT proprio. Este script produz os
 #  pacotes desse repositorio.
 #
-#  Uso: bash packaging/build-deb.sh [--output DIR] <pacote>...
+#  Uso: bash packaging/build-deb.sh [--output DIR] [--skip-existing] <pacote>...
 #       bash packaging/build-deb.sh --list       todas as receitas
 #       bash packaging/build-deb.sh --list-iso   as que vao no repositorio da ISO
+#
+#  --skip-existing: um pacote cujo .deb (nome, versao e revisao) ja esta no
+#  OUTPUT fica como esta (a CI poe la os ja publicados no release "packages").
 #
 #  Uma receita com PKG_ON_DEMAND=1 nao vai para a ISO: o Setup a compila no
 #  gabinete quando a pessoa escolhe o programa (config/fliperos-frontend-build).
@@ -32,6 +35,7 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 RECIPES="$ROOT/packaging/packages"
 OUTPUT="$ROOT/output/packages"
 WORK=""
+SKIP_EXISTING=""
 
 # O return 0 e necessario: o ultimo comando do trap EXIT define o status de
 # saida do script, e um teste falso no fim faria um build bem-sucedido sair 1.
@@ -63,6 +67,7 @@ TARGETS=()
 while [[ $# -gt 0 ]]; do
   case $1 in
     --output) [[ $# -ge 2 ]] || err "--output requer diretorio"; OUTPUT="$2"; shift 2 ;;
+    --skip-existing) SKIP_EXISTING=1; shift ;;
     --list)   list_recipes; exit 0 ;;
     --list-iso) list_iso; exit 0 ;;
     -*)       err "Opcao desconhecida: $1" ;;
@@ -96,6 +101,11 @@ build_one() {
 
   [[ -n "$PKG_NAME" && -n "$PKG_VERSION" ]] || err "$name: recipe without PKG_NAME/PKG_VERSION"
   declare -F pkg_build >/dev/null || err "$name: recipe without pkg_build()"
+
+  if [[ -n "$SKIP_EXISTING" && -f "$OUTPUT/${PKG_NAME}_${PKG_VERSION}-${PKG_REVISION}_amd64.deb" ]]; then
+    ok "$PKG_NAME $PKG_VERSION-$PKG_REVISION already built"
+    return 0
+  fi
 
   step "Packaging $PKG_NAME $PKG_VERSION-$PKG_REVISION"
 

@@ -9,7 +9,7 @@ docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/outpu
 
 | Option | Effect |
 | --- | --- |
-| `--skip-groovymame`, `--skip-retroarch`, `--skip-flycast`, `--skip-pcsx2`, `--skip-supermodel` | Leaves the emulator out of the image (the compiled ones take minutes to hours; GroovyMAME and PCSX2 are the official releases) |
+| `--skip-groovymame`, `--skip-retroarch`, `--skip-flycast`, `--skip-pcsx2`, `--skip-supermodel` | Leaves the emulator out of the image (the compiled ones take minutes to hours; PCSX2 is the official release; GroovyMAME is a package compiled once) |
 | `--skip-skyscraper` | Without the Setup's Scraper |
 | `--skip-switchres` | Without Switchres: no per-monitor EDIDs, geometry or EDID boot entries |
 | `--skip-input-drivers`, `--skip-wheel-drivers` | Without the input drivers (GunCon 2 and wheels), or only without the wheel ones. By default `guncon2`, `hid-tmff2` (Thrustmaster T150/T300/TX/T248...) and `new-lg4ff` (Logitech with full force feedback, replacing `hid-logitech`) ship, through DKMS — validated on the cabinet's 6.18 |

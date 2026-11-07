@@ -1,0 +1,600 @@
+diff --git a/scripts/src/emu.lua b/scripts/src/emu.lua
+index ced6642c..bff1b023 100644
+--- a/scripts/src/emu.lua
++++ b/scripts/src/emu.lua
+@@ -167,6 +167,8 @@ files {
+ 	MAME_DIR .. "src/emu/inputdev.h",
+ 	MAME_DIR .. "src/emu/ioport.cpp",
+ 	MAME_DIR .. "src/emu/ioport.h",
++	MAME_DIR .. "src/emu/lockstep.cpp",
++	MAME_DIR .. "src/emu/lockstep.h",
+ 	MAME_DIR .. "src/emu/inpttype.ipp",
+ 	MAME_DIR .. "src/emu/inpttype.h",
+ 	MAME_DIR .. "src/emu/logmacro.h",
+diff --git a/src/emu/ioport.cpp b/src/emu/ioport.cpp
+index 68248081..0aaaffe3 100644
+--- a/src/emu/ioport.cpp
++++ b/src/emu/ioport.cpp
+@@ -15,6 +15,7 @@
+ #include "fileio.h"
+ #include "input.h"
+ #include "inputdev.h"
++#include "lockstep.h"
+ #include "main.h"
+ #include "natkeyboard.h"
+ #include "profiler.h"
+@@ -1981,6 +1982,7 @@ void ioport_manager::exit()
+ 	// close any playback or recording files
+ 	playback_end();
+ 	record_end();
++	m_lockstep.reset();
+ }
+ 
+ 
+@@ -2188,7 +2190,19 @@ void ioport_manager::frame_update()
+ 		// handle playback/record
+ 		playback_port(*port.second.get());
+ 		record_port(*port.second.get());
++	}
++
++	// FliperOS: a party in lockstep puts every machine's players in the ports
++	if (!m_lockstep_checked)
++	{
++		m_lockstep_checked = true;
++		m_lockstep = lockstep_manager::create(machine());
++	}
++	if (m_lockstep)
++		m_lockstep->frame_update();
+ 
++	for (auto &port : m_portlist)
++	{
+ 		// call device line write handlers
+ 		ioport_value newvalue = port.second->read();
+ 		for (dynamic_field &dynfield : port.second->live().writelist)
+diff --git a/src/emu/ioport.h b/src/emu/ioport.h
+index 735d4b01..cf0e07e4 100644
+--- a/src/emu/ioport.h
++++ b/src/emu/ioport.h
+@@ -929,6 +929,8 @@ struct ioport_port_live
+ // ======================> ioport_manager
+ 
+ // private input port state
++class lockstep_manager;
++
+ class ioport_manager
+ {
+ 	DISABLE_COPYING(ioport_manager);
+@@ -1017,6 +1019,8 @@ private:
+ 	attoseconds_t           m_last_delta_nsec;      // nanoseconds that passed since the previous callback
+ 
+ 	// playback/record information
++	std::unique_ptr<lockstep_manager> m_lockstep;  // FliperOS: the party in lockstep
++	bool m_lockstep_checked = false;
+ 	std::unique_ptr<emu_file> m_record_file;        // recording file (nullptr if not recording)
+ 	std::unique_ptr<emu_file> m_playback_file;      // playback file (nullptr if not recording)
+ 	util::write_stream::ptr m_record_stream;        // recording stream (nullptr if not recording)
+diff --git a/src/emu/lockstep.cpp b/src/emu/lockstep.cpp
+new file mode 100755
+index 00000000..7c783687
+--- /dev/null
++++ b/src/emu/lockstep.cpp
+@@ -0,0 +1,482 @@
++// license:BSD-3-Clause
++// copyright-holders:FliperOS
++/***************************************************************************
++
++    lockstep.cpp
++
++    FliperOS: a party in lockstep between machines on a wired LAN, as on an
++    arcade link board.
++
++    Every machine of the party runs the same game from the same start (the
++    random seed is fixed, the NVRAM is the same), and every emulated frame,
++    right after the input ports are read:
++
++      1. sends the bits of this machine's players (by UDP, with the last
++         frames again, so a lost packet is covered by the next one);
++      2. waits for every other machine's bits of DELAY frames before (the
++         faster machine waits, as a link board waits for the ring);
++      3. puts every player's bits of that frame in the ports, the same on
++         every machine. Bits of no player (service, tilt) stay released.
++
++    Settings: fliperos-lockstep.ini in the cfg directory, "key=value" lines,
++    the same file as the Lua plugin (fliperos-lockstep), with
++    transport=native:
++      me=1, peers=10.0.0.5,10.0.0.6, players=1, delay=1, port=55440, log=FILE
++
++***************************************************************************/
++
++#include "emu.h"
++#include "lockstep.h"
++
++#include "emuopts.h"
++
++#include <atomic>
++#include <cstdarg>
++#include <chrono>
++#include <condition_variable>
++#include <cstdio>
++#include <cstring>
++#include <fstream>
++#include <map>
++#include <mutex>
++#include <set>
++#include <sstream>
++#include <thread>
++#include <vector>
++
++#ifdef _WIN32
++#include <winsock2.h>
++#include <ws2tcpip.h>
++typedef int socklen_t;
++typedef SOCKET sock_t;
++#undef interface      // objbase.h: "#define interface struct"
++#else
++#include <arpa/inet.h>
++#include <netdb.h>
++#include <netinet/in.h>
++#include <sys/socket.h>
++#include <unistd.h>
++#define closesocket close
++typedef int sock_t;
++#endif
++
++
++namespace {
++
++constexpr int HISTORY = 8;               // frames in every packet
++constexpr double RESEND_MS = 15.0;       // while waiting, send again
++constexpr double TIMEOUT_MS = 10000.0;   // no frame from a peer: the party is over
++constexpr double START_TIMEOUT_MS = 60000.0;
++
++double now_ms()
++{
++	return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
++}
++
++// owner: the player of a field's token (P2_BUTTON1, START2, COIN2 -> 2), or 0
++int owner(std::string const &token)
++{
++	int p = 0;
++	if (std::sscanf(token.c_str(), "P%d_", &p) == 1)
++		return p;
++	char rest[8];
++	if (std::sscanf(token.c_str(), "START%d%7s", &p, rest) == 1)
++		return p;
++	if (std::sscanf(token.c_str(), "COIN%d%7s", &p, rest) == 1)
++		return p;
++	return 0;
++}
++
++
++class lockstep_impl : public lockstep_manager
++{
++public:
++	lockstep_impl(running_machine &machine, std::map<std::string, std::string> &conf) : m_machine(machine)
++	{
++		m_me = std::stoi(conf.count("me") ? conf["me"] : "1");
++		m_delay = std::stoi(conf.count("delay") ? conf["delay"] : "1");
++		m_port = std::stoi(conf.count("port") ? conf["port"] : "55440");
++		std::set<int> mine;
++		std::istringstream players(conf.count("players") ? conf["players"] : std::to_string(m_me));
++		for (std::string p; std::getline(players, p, ','); )
++			mine.insert(std::stoi(p));
++		if (conf.count("log") && !conf["log"].empty())
++			m_log = std::fopen(conf["log"].c_str(), "w");
++
++		// the ports and which bits belong to this machine's players
++		for (auto &port : machine.ioport().ports())
++		{
++			u32 mask_mine = 0, mask_all = 0;
++			for (ioport_field &field : port.second->fields())
++			{
++				if (field.is_analog())
++					continue;
++				int p = owner(machine.ioport().input_type_to_token(field.type(), field.player()));
++				if (!p)
++					continue;
++				mask_all |= field.mask();
++				if (mine.count(p))
++					mask_mine |= field.mask();
++			}
++			m_ports.push_back(port.second.get());
++			m_mine.push_back(mask_mine);
++			m_all.push_back(mask_all);
++		}
++
++		// the network: UDP on port + this machine's number
++#ifdef _WIN32
++		WSADATA wsa;
++		WSAStartup(MAKEWORD(2, 2), &wsa);
++#endif
++		m_sock = socket(AF_INET, SOCK_DGRAM, 0);
++		int yes = 1;
++		setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char const *>(&yes), sizeof(yes));
++#ifdef _WIN32
++		DWORD tv = 100;
++		setsockopt(m_sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char const *>(&tv), sizeof(tv));
++#else
++		timeval tv = { 0, 100000 };
++		setsockopt(m_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
++#endif
++		sockaddr_in local;
++		std::memset(&local, 0, sizeof(local));
++		local.sin_family = AF_INET;
++		local.sin_addr.s_addr = htonl(INADDR_ANY);
++		local.sin_port = htons(m_port + m_me);
++		if (bind(m_sock, reinterpret_cast<sockaddr *>(&local), sizeof(local)) != 0)
++			say("cannot bind UDP port %d", m_port + m_me);
++
++		int n = 0;
++		std::istringstream peers(conf.count("peers") ? conf["peers"] : "");
++		for (std::string host; std::getline(peers, host, ','); )
++		{
++			n++;
++			if (n == m_me)
++				continue;
++			peer pe;
++			pe.num = n;
++			addrinfo hints, *res = nullptr;
++			std::memset(&hints, 0, sizeof(hints));
++			hints.ai_family = AF_INET;
++			hints.ai_socktype = SOCK_DGRAM;
++			if (getaddrinfo(host.c_str(), std::to_string(m_port + n).c_str(), &hints, &res) == 0 && res)
++			{
++				std::memcpy(&pe.addr, res->ai_addr, sizeof(pe.addr));
++				freeaddrinfo(res);
++			}
++			pe.heard = now_ms();
++			m_peers.push_back(pe);
++		}
++		say("native lockstep: game %s, cabinet %d of %d, players %s, delay %d, %d ports",
++				machine.system().name, m_me, n, conf.count("players") ? conf["players"].c_str() : "-", m_delay, int(m_ports.size()));
++		for (size_t i = 0; i < m_ports.size(); i++)
++			say("port %s: all %08x mine %08x", m_ports[i]->tag(), m_all[i], m_mine[i]);
++
++		m_thread = std::thread([this] () { listen(); });
++		m_t_prev = now_ms();
++	}
++
++	virtual ~lockstep_impl()
++	{
++		send_text(util::string_format("BYE %d", m_me));
++		m_stop = true;
++		if (m_thread.joinable())
++			m_thread.join();
++		closesocket(m_sock);
++		say("end: %d frames, %d waited over 1 ms, %.0f ms waiting in all, worst %.1f ms, %d resends",
++				m_frames, m_waits, m_waited, m_worst, m_resends);
++		if (m_log)
++			std::fclose(m_log);
++	}
++
++	virtual void frame_update() override
++	{
++		if (m_over || m_machine.paused())
++			return;
++		attotime const t = m_machine.time();
++		if (m_frame >= 0 && t == m_last_time)
++			return;       // no emulated time went by: not a new frame
++		m_last_time = t;
++		int const f = ++m_frame;
++		double const tn = now_ms();
++		double const dt = tn - m_t_prev;
++		m_t_prev = tn;
++
++		// 1. this machine's players, to every peer
++		std::vector<u32> bits(m_ports.size());
++		for (size_t i = 0; i < m_ports.size(); i++)
++			bits[i] = m_ports[i]->live().digital & m_mine[i];
++		m_own[f] = bits;
++		while (!m_own.empty() && m_own.begin()->first < f - HISTORY - m_delay)
++			m_own.erase(m_own.begin());
++		send_frames(f);
++
++		// 2. every peer's frame f - delay
++		int const need = f - m_delay;
++		std::vector<u32> all(m_ports.size(), 0);
++		double waited = 0;
++		int lead = 0;
++		double rtt = -1;
++		if (need >= 0)
++		{
++			double const t0 = now_ms();
++			double last_send = t0;
++			double const limit = need == 0 ? START_TIMEOUT_MS : TIMEOUT_MS;
++			std::unique_lock<std::mutex> lock(m_lock);
++			while (true)
++			{
++				bool missing = false, gone = false;
++				for (peer &pe : m_peers)
++					if (!m_inbox.count(std::make_pair(pe.num, need)))
++					{
++						missing = true;
++						gone = gone || pe.bye;
++					}
++				if (!missing)
++					break;
++				if (gone || now_ms() - t0 > limit)
++				{
++					lock.unlock();
++					finish(gone ? "the other cabinet left" : "no answer from the other cabinet");
++					return;
++				}
++				m_cv.wait_for(lock, std::chrono::microseconds(500));
++				if (now_ms() - last_send > RESEND_MS)
++				{
++					lock.unlock();
++					send_frames(f);
++					m_resends++;
++					lock.lock();
++					last_send = now_ms();
++				}
++			}
++			waited = now_ms() - t0;
++
++			// 3. every player's bits of that frame
++			std::vector<u32> const &own = m_own[need];
++			for (size_t i = 0; i < all.size(); i++)
++				all[i] = own[i];
++			for (peer &pe : m_peers)
++			{
++				auto const key = std::make_pair(pe.num, need);
++				std::vector<u32> const &theirs = m_inbox[key];
++				for (size_t i = 0; i < all.size() && i < theirs.size(); i++)
++					all[i] |= theirs[i] & m_all[i] & ~m_mine[i];
++				m_inbox.erase(key);
++				lead = pe.newest - f;
++				rtt = pe.rtt;
++			}
++		}
++		for (size_t i = 0; i < m_ports.size(); i++)
++			m_ports[i]->live().digital = all[i] & m_all[i];
++
++		// the measures, as the Lua plugin writes them
++		m_frames++;
++		if (waited > 1)
++			m_waits++;
++		m_waited += waited;
++		m_worst = std::max(m_worst, waited);
++		if (m_log)
++		{
++			std::fprintf(m_log, "f %d %.2f %.2f %d %.2f\n", f, dt, waited, lead, rtt);
++			if (f % 60 == 0)
++			{
++				double const c0 = now_ms();
++				u64 const sum = checksum();
++				say("frame %d sum %016llx (%.1f ms)", f, static_cast<unsigned long long>(sum), now_ms() - c0);
++				std::fflush(m_log);
++			}
++		}
++	}
++
++private:
++	struct peer
++	{
++		int num = 0;
++		sockaddr_in addr;
++		double heard = 0;
++		bool bye = false;
++		int newest = -1;
++		double echo = -1, echo_at = 0, rtt = -1;
++	};
++
++	void say(char const *fmt, ...) ATTR_PRINTF(2, 3)
++	{
++		if (!m_log)
++			return;
++		va_list ap;
++		va_start(ap, fmt);
++		std::fprintf(m_log, "%.1f ", now_ms());
++		std::vfprintf(m_log, fmt, ap);
++		std::fputc('\n', m_log);
++		va_end(ap);
++	}
++
++	void finish(char const *why)
++	{
++		say("the party ended at frame %d: %s", m_frame.load(), why);
++		m_over = true;
++		m_machine.schedule_exit();
++	}
++
++	void send_text(std::string const &text)
++	{
++		std::lock_guard<std::mutex> guard(m_send_lock);
++		for (peer &pe : m_peers)
++			sendto(m_sock, text.data(), int(text.size()), 0, reinterpret_cast<sockaddr *>(&pe.addr), sizeof(pe.addr));
++	}
++
++	// "LS me sent|f v,v,v|f v,v,v ..." with an echo for the round trip:
++	// "LS me sent echo hold|..." per peer
++	void send_frames(int f)
++	{
++		std::string frames;
++		for (auto it = m_own.lower_bound(f - HISTORY + 1); it != m_own.end(); ++it)
++		{
++			frames += util::string_format("|%d", it->first);
++			for (size_t i = 0; i < it->second.size(); i++)
++				frames += util::string_format("%c%x", i ? ',' : ' ', it->second[i]);
++		}
++		double const t = now_ms();
++		std::lock_guard<std::mutex> guard(m_send_lock);
++		for (peer &pe : m_peers)
++		{
++			double echo, hold;
++			{
++				std::lock_guard<std::mutex> lock(m_lock);
++				echo = pe.echo;
++				hold = pe.echo < 0 ? 0 : std::max(0.0, t - pe.echo_at);
++			}
++			std::string const text = util::string_format("LS %d %.3f %.3f %.3f", m_me, t, echo, hold) + frames;
++			sendto(m_sock, text.data(), int(text.size()), 0, reinterpret_cast<sockaddr *>(&pe.addr), sizeof(pe.addr));
++		}
++	}
++
++	void listen()
++	{
++		char buf[2048];
++		while (!m_stop)
++		{
++			sockaddr_in from;
++			socklen_t len = sizeof(from);
++			int const got = recvfrom(m_sock, buf, sizeof(buf) - 1, 0, reinterpret_cast<sockaddr *>(&from), &len);
++			if (got <= 0)
++				continue;
++			buf[got] = 0;
++			double const t = now_ms();
++			int who = 0;
++			std::lock_guard<std::mutex> lock(m_lock);
++			if (std::sscanf(buf, "BYE %d", &who) == 1)
++			{
++				for (peer &pe : m_peers)
++					if (pe.num == who)
++						pe.bye = true;
++				m_cv.notify_all();
++				continue;
++			}
++			double sent, echo, hold;
++			if (std::sscanf(buf, "LS %d %lf %lf %lf", &who, &sent, &echo, &hold) != 4)
++				continue;
++			peer *pe = nullptr;
++			for (peer &p : m_peers)
++				if (p.num == who)
++					pe = &p;
++			if (!pe)
++				continue;
++			pe->addr = from;         // answer where it comes from (NAT)
++			pe->heard = t;
++			pe->echo = sent;
++			pe->echo_at = t;
++			if (echo >= 0)
++				pe->rtt = t - echo - hold;
++			for (char *chunk = std::strchr(buf, '|'); chunk; chunk = std::strchr(chunk + 1, '|'))
++			{
++				int frame;
++				if (std::sscanf(chunk + 1, "%d", &frame) != 1)
++					continue;
++				auto const key = std::make_pair(who, frame);
++				if (frame <= m_frame - m_delay - HISTORY || m_inbox.count(key))
++					continue;
++				std::vector<u32> values;
++				char const *s = std::strchr(chunk + 1, ' ');
++				while (s && *s && *s != '|')
++				{
++					values.push_back(u32(std::strtoul(s + 1, nullptr, 16)));
++					s = std::strpbrk(s + 1, ",|");
++					if (s && *s == '|')
++						break;
++				}
++				m_inbox[key] = std::move(values);
++				pe->newest = std::max(pe->newest, frame);
++			}
++			m_cv.notify_all();
++		}
++	}
++
++	// a checksum of the main CPU's RAM, to compare machines
++	u64 checksum()
++	{
++		u64 h = 1469598103934665603ULL;
++		device_t *cpu = m_machine.root_device().subdevice("maincpu");
++		device_memory_interface *mem;
++		if (!cpu || !cpu->interface(mem) || !mem->has_space(AS_PROGRAM))
++			return 0;
++		address_space &space = mem->space(AS_PROGRAM);
++		for (address_map_entry &entry : space.map()->m_entrylist)
++		{
++			if (entry.m_read.m_type != AMH_RAM || entry.m_addrend - entry.m_addrstart >= 0x100000)
++				continue;
++			for (offs_t a = entry.m_addrstart; a <= entry.m_addrend; a++)
++				h = (h ^ space.read_byte(a)) * 1099511628211ULL;
++		}
++		return h;
++	}
++
++	running_machine &m_machine;
++	int m_me = 1, m_delay = 1, m_port = 55440;
++	std::vector<ioport_port *> m_ports;
++	std::vector<u32> m_mine, m_all;
++	std::vector<peer> m_peers;
++	std::map<int, std::vector<u32>> m_own;
++	std::map<std::pair<int, int>, std::vector<u32>> m_inbox;
++	std::mutex m_lock, m_send_lock;
++	std::condition_variable m_cv;
++	std::thread m_thread;
++	std::atomic<bool> m_stop { false };
++	sock_t m_sock;
++	std::atomic<int> m_frame { -1 };
++	attotime m_last_time;
++	bool m_over = false;
++	FILE *m_log = nullptr;
++	double m_t_prev = 0;
++	int m_frames = 0, m_waits = 0, m_resends = 0;
++	double m_waited = 0, m_worst = 0;
++};
++
++} // anonymous namespace
++
++
++std::unique_ptr<lockstep_manager> lockstep_manager::create(running_machine &machine)
++{
++	std::string dir = machine.options().cfg_directory();
++	dir = dir.substr(0, dir.find(';'));
++	std::ifstream in(dir + PATH_SEPARATOR "fliperos-lockstep.ini");
++	if (!in)
++		return nullptr;
++	std::map<std::string, std::string> conf;
++	for (std::string line; std::getline(in, line); )
++	{
++		auto const eq = line.find('=');
++		if (eq == std::string::npos)
++			continue;
++		auto trim = [] (std::string s) {
++			s.erase(0, s.find_first_not_of(" \t\r"));
++			s.erase(s.find_last_not_of(" \t\r") + 1);
++			return s;
++		};
++		conf[trim(line.substr(0, eq))] = trim(line.substr(eq + 1));
++	}
++	if (conf["transport"] != "native")
++		return nullptr;
++	return std::make_unique<lockstep_impl>(machine, conf);
++}
+diff --git a/src/emu/lockstep.h b/src/emu/lockstep.h
+new file mode 100755
+index 00000000..6b86b5c1
+--- /dev/null
++++ b/src/emu/lockstep.h
+@@ -0,0 +1,31 @@
++// license:BSD-3-Clause
++// copyright-holders:FliperOS
++/***************************************************************************
++
++    lockstep.h
++
++    FliperOS: a party in lockstep between machines on a wired LAN, as on an
++    arcade link board.
++
++***************************************************************************/
++#ifndef MAME_EMU_LOCKSTEP_H
++#define MAME_EMU_LOCKSTEP_H
++
++#pragma once
++
++#include <memory>
++
++class lockstep_manager
++{
++public:
++	// the party of this machine, from fliperos-lockstep.ini in the cfg
++	// directory with transport=native; nullptr when there is none
++	static std::unique_ptr<lockstep_manager> create(running_machine &machine);
++	virtual ~lockstep_manager() = default;
++
++	// called once per video frame, after the ports are updated and before
++	// their values go anywhere: every player's bits of frame - delay
++	virtual void frame_update() = 0;
++};
++
++#endif // MAME_EMU_LOCKSTEP_H

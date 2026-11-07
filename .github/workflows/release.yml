@@ -83,13 +83,30 @@ jobs:
           path: /mnt/output/packages
           key: packages-${{ hashFiles('packaging/**', 'Dockerfile.packages') }}
 
+      # Os .deb ja publicados no release "packages" (os mesmos que os updates
+      # levam: updates/packages.list, conferidos pelo sha256) entram prontos, e
+      # so se compila a receita que ainda nao tem o seu (o GroovyMAME levaria
+      # horas). Quem instala a ISO e quem so aplica os updates ficam com o
+      # mesmo binario.
       - name: Repositorio dos frontends
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           docker build -f Dockerfile.packages -t fliperos-packages .
           recipes=$(bash packaging/build-deb.sh --list-iso | tr '\n' ' ')
+          if [ '${{ steps.packages.outputs.cache-hit }}' != true ]; then
+            mkdir -p "$OUT/packages"
+            grep -v '^#' updates/packages.list | while read -r name version sum when; do
+              [ -n "$name" ] || continue
+              deb="${name}_${version}_amd64.deb"
+              if gh release download packages -R "$GITHUB_REPOSITORY" -p "$deb" -D "$OUT/packages" --skip-existing; then
+                echo "$sum  $OUT/packages/$deb" | sha256sum -c --quiet - || rm -f "$OUT/packages/$deb"
+              fi
+            done
+          fi
           docker run --rm -v "$OUT:/pkg/output" fliperos-packages bash -c "
             set -e
-            if [ '${{ steps.packages.outputs.cache-hit }}' != true ]; then bash packaging/build-deb.sh $recipes; fi
+            if [ '${{ steps.packages.outputs.cache-hit }}' != true ]; then bash packaging/build-deb.sh --skip-existing $recipes; fi
             bash packaging/make-repo.sh"
 
       - name: ISO

@@ -179,7 +179,7 @@ The clock comes from the network (`systemd-timesyncd`). On the first test on the
 | `fliperos-setup/lib/multimonitor.sh`, `config/fliperos-mame-screens`, `config/fliperos-multiscreen` | [Multiple monitors](Multiple-Monitors.md): the extra monitors in the Setup, the `numscreens` of GroovyMAME's multi-screen games, and Flycast's NAOMI multi-board games across 3 monitors |
 | `config/fliperos-model2`, `config/fliperos-sm2emu`, `config/sm2-emu-patches`, `config/fliperos-ini-set` | Model 2 is SM2-Emu (clone, apply the FliperOS patches if there are any, build with LTO, game list; the binary is not in the image); per-section ini tweaks (PCSX2) |
 | `config/fliperos-fightcade`, `config/openbox-fightcade.xml` | Fightcade 2: downloads it from its website (`fetch`) and opens it in an Xorg of its own; its window shortcuts |
-| `config/fliperos-groovymame` | The `groovymame` command: the release in `/usr/local/libexec` with the system `mame.ini` |
+| `config/fliperos-groovymame` | The `groovymame` command: the package's binary in `/usr/local/libexec` with the system `mame.ini` |
 | `config/retroarch.cfg`, `config/mame.ini` | System configuration for RetroArch and GroovyMAME (Standard mode values) |
 | `patches/kernel-15khz/6.18/` | D0023R patches |
 | `packaging/` | Frontend `.deb`s and the APT repository |

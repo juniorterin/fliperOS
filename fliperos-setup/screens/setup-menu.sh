@@ -789,13 +789,14 @@ emulators_update_line() {
 # receita para isso (o Flycast) tambem compila aqui o mais novo do projeto,
 # com os patches do FliperOS, e volta ao pacote quando a pessoa quiser.
 screen_emulator_package() {
-  local name=$1 label=$2 line edge choice entries=() verb=Build doing=Building ask
-  # O GroovyMAME e o release oficial: baixa, nao compila. Cada versao do MAME
-  # muda o romset.
+  local name=$1 label=$2 line edge choice entries=() verb=Build doing=Building ask hint
   ask="Download and build the newest $label with the FliperOS patches? It is untested, needs the network and takes several minutes. The FliperOS package stays saved."
+  hint="Its latest version, untested by FliperOS."
+  # O GroovyMAME: o MAME inteiro compilado aqui, com os patches do FliperOS
+  # (a party): horas, e espaco. Cada versao do MAME muda o romset.
   if [[ $name == groovymame ]]; then
-    verb=Download doing=Downloading
-    ask="Download the newest $label release? Each MAME version changes the romset: some games may need updated ROMs. The FliperOS package stays saved."
+    ask="Build the newest $label? FliperOS compiles the whole MAME here to put its patches in (party play), so it takes a long time: many hours, often a whole night, with 20 GB free on the disk and the cabinet left on. Each MAME version changes the romset: some games may need updated ROMs. The FliperOS package stays saved."
+    hint="Compiled here with our patches: takes hours."
   fi
   line=$(emulators_update_line "$name" "$label")
   if ! emulators_edge_available "$name"; then
@@ -810,7 +811,7 @@ screen_emulator_package() {
   else
     line+=" The updates offered at boot bring its new versions."
   fi
-  entries+=("edge|$verb the newest $label|Its latest version, untested by FliperOS.")
+  entries+=("edge|$verb the newest $label|$hint")
   choice=$(ui_menu_hints "$label" "$line" "" "${entries[@]}" \
     "return|Return|Back to Emulators & Games.") || return 0
   case $choice in

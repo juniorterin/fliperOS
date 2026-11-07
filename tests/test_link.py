@@ -64,6 +64,9 @@ def setUpModule():
     # O Dolphin com o patch do --netplay (a opcao no meio do binario).
     felink.DOLPHIN = os.path.join(_ra.name, "dolphin-emu")
     Path(felink.DOLPHIN).write_bytes(b"\0" * (1 << 20) + b"--netplay_players" + b"\0" * 64)
+    # O GroovyMAME do release, sem o lockstep patch (os testes da party o trocam).
+    felink.GROOVYMAME = os.path.join(_ra.name, "groovymame")
+    Path(felink.GROOVYMAME).write_bytes(b"\0" * 4096)
 
 
 def tearDownModule():
@@ -1287,6 +1290,65 @@ class NetplayTests(unittest.TestCase):
         self.assertIn("+#define GAMEINPUT_MAX_PLAYERS    4", patch)
         self.assertIn("verif.protocol = partyMode ? 3 : 2;", patch)  # sem o patch, o outro recusa
         self.assertTrue(felink.flycast_party(str(path)))             # o que o felink procura no binario
+
+    def patched_groovymame(self):
+        """Um GroovyMAME com o lockstep patch (o texto do log dele no binario)."""
+        path = os.path.join(_ra.name, "groovymame-lockstep")
+        # The log's text: the ini's name is built in pieces by the compiler.
+        Path(path).write_bytes(b"\0" * 4096 + b"native lockstep: game %s" + b"\0" * 64)
+        self.addCleanup(setattr, felink, "GROOVYMAME", felink.GROOVYMAME)
+        felink.GROOVYMAME = path
+
+    def test_mame_games_get_a_lockstep_party_with_the_patched_groovymame(self):
+        self.assertIsNone(felink.netplay_profile("mame", "ssf2t", "2", 2))          # sem o patch (o release): nada
+        self.patched_groovymame()
+        prof = felink.netplay_profile("mame", "ssf2t", "2", 2)
+        self.assertEqual((prof["emulator"], prof["min"], prof["max"], prof["players"], prof["fixed"], prof["port"]),
+                         ("groovymame", 2, 2, 2, False, 55440))
+        self.assertTrue(prof["netplay"] and prof["lockstep"] and not prof.get("late"))
+        self.assertEqual(felink.netplay_profile("mame", "xmen", "4", 2)["max"], 4)   # cabe nos controles: party mesmo assim
+        self.assertEqual(felink.netplay_profile("mame", "xmen6p", "6", 2)["players"], 4)
+        self.assertIsNone(felink.netplay_profile("mame", "pacman", "1", 2))
+        self.assertIsNone(felink.netplay_profile("mame", "ssf2t", "", 2))
+        self.assertIsNone(felink.netplay_profile("model2", "ssf2t", "2", 2))
+        self.assertTrue(felink.mame_lockstep(str(ROOT / "packaging/patches/groovymame/0001-lockstep-patch.patch")))
+
+    def test_the_mame_party_runs_from_its_own_folder_on_the_same_clock(self):
+        self.patched_groovymame()
+        with tempfile.TemporaryDirectory() as home:
+            prof = felink.netplay_profile("mame", "xmen", "4", 2)
+            link = felink.Link(home, wire=LOOP, ident="aaa")
+            link.profile, link.game, link.number = prof, "xmen", 2
+            link.plan = felink.make_plan(prof, [{"number": 1, "name": "A", "ip": "10.0.0.1", "take": 1, "first": 1},
+                                                {"number": 2, "name": "B", "ip": "10.0.0.2", "take": 2, "first": 2},
+                                                {"number": 3, "name": "C", "ip": "10.0.0.3", "take": 1, "first": 4}])
+            self.assertRegex(link.plan["rtc"], r"^\d{14}$")
+            base = Path(home, ".cache", "fliperos", "party-mame")
+            base.mkdir(parents=True)
+            Path(base, "old").write_text("x")                                # o resto da party de antes sai
+            argv = link.command(["/opt/fliperos/bin/fliperos-kms-run", "groovymame", "xmen"])
+            self.assertEqual(argv[:2], ["/opt/fliperos/bin/fliperos-kms-run", "groovymame"])
+            self.assertEqual(argv[-1], "xmen")                               # o jogo por ultimo
+            middle = [a for a in argv[2:-1] if a != "-noautosave"]
+            opts = dict(zip(middle[::2], middle[1::2]))
+            self.assertEqual(opts["-cfg_directory"], str(base / "cfg"))
+            self.assertEqual(opts["-nvram_directory"], str(base / "nvram"))
+            self.assertEqual(opts["-noplugin"], "hiscore")                  # o hiscore escreve na memoria do jogo
+            self.assertEqual(opts["-rtc"], link.plan["rtc"])
+            self.assertIn("-noautosave", argv)
+            self.assertEqual(os.listdir(base / "nvram"), [])                 # a memoria de fabrica
+            self.assertFalse(Path(base, "old").exists())
+            ini = Path(base, "cfg", "fliperos-lockstep.ini").read_text().splitlines()
+            for line in ("transport=native", "me=2", "peers=10.0.0.1,10.0.0.2,10.0.0.3", "players=2,3", "delay=0",
+                         "port=55440", "log=%s" % (base / "lockstep.log")):
+                self.assertIn(line, ini)
+
+    def test_the_groovymame_patch_reads_what_felink_writes(self):
+        patch = (ROOT / "packaging/patches/groovymame/0001-lockstep-patch.patch").read_text()
+        for key in ("transport", "me", "peers", "players", "delay", "port", "log"):
+            self.assertIn('conf.count("%s")' % key if key not in ("transport",) else 'conf["transport"]', patch)
+        self.assertIn('conf["transport"] != "native"', patch)
+        self.assertIn("local.sin_port = htons(m_port + m_me);", patch)
 
     def test_dolphin_games_get_net_play_one_player_per_cabinet_up_to_four(self):
         prof = felink.netplay_profile("dolphin", "Mario Kart Double Dash", "4", 2)

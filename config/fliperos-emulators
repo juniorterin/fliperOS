@@ -293,7 +293,9 @@ edge_build() {
     # GroovyMAME nao confere o sha256 do release novo).
     FLIPEROS_EDGE=1
     export SRC STAGING FLIPEROS_EDGE
-    say 30 "Preparing $label $shown (several minutes)"
+    # PKG_EDGE_WAIT: quanto demora, quando nao sao minutos (o GroovyMAME
+    # compila o MAME inteiro com os patches: horas).
+    say 30 "Preparing $label $shown (${PKG_EDGE_WAIT:-several minutes})"
     log=$edge_work/$name/build.log
     if ! pkg_build > "$log" 2>&1; then
       cat "$log" >&2

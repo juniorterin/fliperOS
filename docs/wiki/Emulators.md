@@ -54,7 +54,7 @@ The other reason for the doubled width is the screen's aspect: with `aspect auto
 
 `mame.ini` ships with `aspect 4:3`, like GroovyArcade (`-aspect "4:3"`); the Setup only goes back to `auto` when the chosen monitor is an LCD.
 
-**GroovyMAME: the release and the `groovymame` command.** The build no longer compiles GroovyMAME (it took over an hour): it uses the official Linux release (`gm0289sr222f`, MAME 0.289 with Switchres 2.22f, verified by sha256), in `/usr/local/libexec/groovymame`, with the libraries it needs (Qt6 is the debugger's).
+**GroovyMAME: the package and the `groovymame` command.** The `fliperos-groovymame` package compiles GroovyMAME from the source of the release's tag (`gm0289sr222f`, MAME 0.289 with Switchres 2.22f, commit `953db38`) with FliperOS's lockstep patch, the party of MAME games between cabinets (see [Linked cabinets](Linked-cabinets.md)). The build takes hours, so it happens once, when the package is made: the image and the updates install the same `.deb`. The binary goes to `/usr/local/libexec/groovymame`, without the Qt debugger and without the tools. Setup > Emulators & Games can also build the newest GroovyMAME right on the cabinet, from the newest tag with the same patches (the party keeps working). That compiles the whole MAME: hours, with 20 GB free on the disk (one compiler process per 1.5 GB of free memory). If a patch no longer fits the new code, the package stays.
 
 The `groovymame` command — the one `fliperos-launch`, the frontends and the terminal call — is `config/fliperos-groovymame`, which passes `-inipath /etc/fliperos/mame`: the release's default is `.;ini`, relative to the folder it is opened from, so a `~/.mame/mame.ini` doesn't apply; what applies is `/etc/fliperos/mame/mame.ini` (owned by the `fliperos` user), which the Setup writes.
 
@@ -64,7 +64,7 @@ SDL 2.30's ALSA backend cannot name a default and lists only the `hw:` devices, 
 
 On the first game with it, the command also removes the old `sound_map` entries from `~/.mame/cfg` once (marker `.fliperos-sound-default`). MAME's `portaudio` module is no fix: it never lists `default` either, and opens the card's `hw:` device, silent while another program holds the card.
 
-The release only ships the binary; like GroovyArcade's package, the build puts in `/usr/local/share/groovymame` the source files of the same tag (commit `953db38`): `plugins` (`hiscore`), the `uismall.bdf` font, `bgfx`, `artwork`, `language`, `ctrlr`, `keymaps` and `hash`.
+Like GroovyArcade's package, the package also puts in `/usr/local/share/groovymame` the source files of the same tag (commit `953db38`): `plugins` (`hiscore`), the `uismall.bdf` font, `bgfx`, `artwork`, `language`, `ctrlr`, `keymaps` and `hash`.
 
 `mame.ini` is made like GroovyArcade's: GroovyMAME's own `-createconfig` (every option of the version, at its default), with those of `config/mame.ini` on top, each on its own line (`config/fliperos-mame-ini`, at build time).
 

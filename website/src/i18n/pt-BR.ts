@@ -489,12 +489,12 @@ const ptBR: Messages = {
       title: 'Dois gabinetes, um jogo. Ou quatro.',
       intro: 'Passe um cabo de rede entre gabinetes FliperOS e joguem juntos: os jogos de corrida e de luta que foram feitos para ligar, e a party para jogos com mais jogadores do que um gabinete tem controles. A party é na sua rede local, nunca pela internet.',
       rows: [
-        { shot: 'anim/netplay-{lang}', title: 'Party: mais jogadores do que controles', text: 'Escape Kids tem quatro jogadores e um gabinete tem dois controles. O gabinete 1 abre uma party e já entra no jogo; os outros veem “APPLE IS PLAYING” com um sininho, com o nome daquele gabinete. O jogo aparece no alto da lista do gabinete 2, o JOIN PARTY copia o jogo pelo cabo, e ele entra no jogo que já está rodando: jogadores 1 e 2 num gabinete, 3 e 4 no outro.', points: ['FBNeo e outros cores do RetroArch', 'GGPO do Flycast', 'Um jogador por controle', 'Entra com o jogo rodando'] },
+        { shot: 'anim/netplay-{lang}', title: 'Party: mais jogadores do que controles', text: 'Escape Kids tem quatro jogadores e um gabinete tem dois controles. O gabinete 1 abre uma party e já entra no jogo; os outros veem “APPLE IS PLAYING” com um sininho, com o nome daquele gabinete. O jogo aparece no alto da lista do gabinete 2, o JOIN PARTY copia o jogo pelo cabo, e ele entra no jogo que já está rodando: jogadores 1 e 2 num gabinete, 3 e 4 no outro.', points: ['FBNeo e outros cores do RetroArch', 'GGPO do Flycast', 'Lockstep do GroovyMAME', 'Um jogador por controle', 'Entra com o jogo rodando'] },
         { shot: 'anim/ssf2tb-{lang}', title: 'O torneio de quatro gabinetes', text: 'Super Street Fighter II: The Tournament Battle precisa de quatro placas ligadas. Cada gabinete entra na festa, o frontend abre o jogo em cada um, em corrente, e o torneio mostra uma chave própria em cada máquina: quatro lutas ao mesmo tempo, oito lutadores.', points: ['4 gabinetes', 'GroovyMAME', 'Link em corrente'] },
         { shot: 'anim/daytona-{lang}', title: 'Seis jogos de link no frontend', text: 'Daytona USA, Scud Race e Daytona USA 2 com até oito gabinetes, Dirt Devils e Club Kart: European Session com dois, e o Tournament Battle com quatro. Um globo verde marca cada um na lista, e a sala de espera abre as máquinas na ordem certa, cada uma com a NVRAM do seu número de gabinete.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
         { shot: '', title: 'O jogo vem pelo cabo', text: 'Um gabinete que entra sem o jogo copia do gabinete que abriu a festa: só os arquivos que faltam, com uma barra de progresso.', points: ['Só o que falta'] },
         { shot: '', title: 'Só pelo cabo de rede', text: 'Os gabinetes se acham na rede cabeada, sem internet, servidor ou conta. O Wi-Fi nunca é usado: um link quer cada quadro na hora.', points: ['Sem internet', 'Sem Wi-Fi'] },
-        { shot: '', title: 'Rápido como jogar sozinho', text: 'Os seus controles não ganham atraso. Num jogo de link cada gabinete roda a sua placa e vê os outros um ou dois quadros depois, como no fliperama. Na party, o rollback acerta os movimentos dos outros jogadores em menos de um quadro.', points: ['Sem atraso nos controles', 'Rollback na party'] },
+        { shot: '', title: 'Rápido como jogar sozinho', text: 'Os seus controles não ganham atraso. Num jogo de link cada gabinete roda a sua placa e vê os outros um ou dois quadros depois, como no fliperama. Na party, os movimentos dos outros jogadores chegam em menos de um quadro: rollback no RetroArch e no Flycast, lockstep no GroovyMAME.', points: ['Sem atraso nos controles', 'Rollback ou lockstep na party'] },
       ],
     },
     hardware: {
@@ -612,7 +612,7 @@ const ptBR: Messages = {
       'Emuladores que abrem no modo de vídeo certo para o monitor escolhido, e frontends com temas pensados para 240 linhas.',
     emulatorsTitle: 'Emuladores',
     items: [
-      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Release oficial, Switchres por jogo, jogos de 2 e 3 telas' },
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Compilado com um patch de lockstep do FliperOS, Switchres por jogo, jogos de 2 e 3 telas' },
       { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010 (MAME 3D: arcade baseado no PlayStation)', note: 'KMS, CRT SwitchRes, 6 cores inclusos' },
       { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressivo em 15 kHz, F355 Challenge em 3 monitores' },
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'AppImage oficial' },
@@ -658,7 +658,7 @@ const ptBR: Messages = {
     ],
     netplayTitle: 'Party entre gabinetes',
     netplayIntro:
-      'A party é um jogo dividido na sua rede local, nunca pela internet: pelo cabo de rede, os gabinetes dividem um jogo e cada um fica com tantos jogadores quantos controles tem. Cada gabinete aparece pelo nome dele, definido em Setup > System > Cabinet name. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), e com o GGPO do Flycast no Naomi e no Atomiswave, até quatro jogadores em dois a quatro gabinetes.',
+      'A party é um jogo dividido na sua rede local, nunca pela internet: pelo cabo de rede, os gabinetes dividem um jogo e cada um fica com tantos jogadores quantos controles tem. Cada gabinete aparece pelo nome dele, definido em Setup > System > Cabinet name. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), com o GGPO do Flycast no Naomi e no Atomiswave, e com o GroovyMAME nos jogos do MAME, no mesmo quadro como um link de fliperama (lockstep, sem atraso de entrada), até quatro jogadores em dois a quatro gabinetes.',
     netplayHead: { name: 'Core ou emulador', systems: 'Sistemas', status: 'Party' },
     netplayLevels: { frontend: 'No frontend', hand: 'À mão', partial: 'Limitado', no: 'Não' },
     netplay: [
@@ -671,7 +671,8 @@ const ptBR: Messages = {
       { id: 'flycast', name: 'Flycast', systems: 'Naomi, Naomi 2, Atomiswave', level: 'frontend', note: 'GGPO com um patch do FliperOS: até 4 jogadores em 2 a 4 gabinetes, cada um com os seus controles' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'frontend', note: 'Net play próprio, por um patch do FliperOS: até 4 gabinetes, um jogador em cada; atraso de entrada, sem rollback' },
       { id: 'mame2010', name: 'MAME 2010', systems: 'Arcade', level: 'no', note: '' },
-      { id: 'boards', name: 'GroovyMAME, Supermodel, SM2-Emu', systems: 'Arcade, Model 3, Model 2', level: 'no', note: 'Em vez disso ligam as placas, nos jogos de link' },
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade (MAME 0.289)', level: 'frontend', note: 'Lockstep com um patch do FliperOS: até 4 jogadores em 2 a 4 gabinetes no mesmo quadro, sem atraso de entrada. Testado em duas máquinas' },
+      { id: 'boards', name: 'Supermodel, SM2-Emu', systems: 'Model 3, Model 2', level: 'no', note: 'Em vez disso ligam as placas, nos jogos de link' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },
     ],
     netplayCta: 'Gabinetes ligados e party: o guia completo',

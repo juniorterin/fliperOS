@@ -64,6 +64,13 @@ FLYCAST = os.environ.get("FLIPEROS_FLYCAST", "/usr/local/bin/flycast")
 PORT_DOLPHIN = 2626
 DOLPHIN_SYSTEMS = ("dolphin",)
 DOLPHIN = os.environ.get("FLIPEROS_DOLPHIN", "/usr/local/bin/dolphin-emu")
+# O GroovyMAME com o lockstep patch do FliperOS (packaging/patches/groovymame):
+# a party de um jogo de dois ou mais jogadores da pasta do MAME, de dois a
+# quatro gabinetes, cada um com os seus controles, travados no mesmo quadro
+# como uma placa de link de arcade (UDP, PORT_MAME + o numero do gabinete).
+PORT_MAME = 55440
+MAME_SYSTEMS = ("mame",)
+GROOVYMAME = os.environ.get("FLIPEROS_GROOVYMAME_BIN", "/usr/local/libexec/groovymame")
 BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
 RA_CORES = os.environ.get("FLIPEROS_RA_CORES", "/opt/fliperos/retroarch/cores")
@@ -364,7 +371,8 @@ def joinable(party):
 
 def make_plan(profile, members):
     """O que a festa manda no comeco: quantos sao, o numero e o IP de cada
-    um e o atraso de cada um (a ordem de subida do perfil)."""
+    um e o atraso de cada um (a ordem de subida do perfil). rtc: a hora do
+    anfitriao, a mesma em todos (o relogio dos jogos do MAME no lockstep)."""
     n = len(members)
     numbers = [m["number"] for m in members]
     if profile["order"] == "slaves-first" and n > 2:
@@ -375,7 +383,8 @@ def make_plan(profile, members):
     return {"profile": profile["id"], "n": n, "order": order, "step": step,
             "members": [{"number": m["number"], "name": m["name"], "ip": m["ip"], "take": m.get("take", 1),
                          "first": m.get("first", m["number"])} for m in members],
-            "delays": {str(num): order.index(num) * step for num in numbers}}
+            "delays": {str(num): order.index(num) * step for num in numbers},
+            "rtc": time.strftime("%Y%m%d%H%M%S")}
 
 
 def send_line(conn, obj):
@@ -727,6 +736,35 @@ def link_args(profile, plan, number):
     return []
 
 
+MAME_PARTY_DELAY = 0
+
+
+def mame_lockstep_args(profile, plan, number, home):
+    """A party do GroovyMAME com o lockstep patch: uma pasta so dela
+    (~/.cache/fliperos/party-mame) com o fliperos-lockstep.ini no cfg (o que o
+    patch le: este gabinete, todos na ordem, os jogadores daqui) e a NVRAM
+    vazia. Todos partem do mesmo: a memoria de fabrica, os ajustes de fabrica
+    do jogo (sem o cfg de cada um; o mapeamento do painel e o ctrlr, que
+    fica), a mesma hora (-rtc), sem o hiscore (que escreve na memoria do jogo)
+    e sem o autosave. Sem atraso de entrada: no cabo o controle dos outros
+    chega no mesmo quadro."""
+    import shutil
+    base = os.path.join(home, ".cache", "fliperos", "party-mame")
+    shutil.rmtree(base, ignore_errors=True)
+    cfg, nvram = os.path.join(base, "cfg"), os.path.join(base, "nvram")
+    os.makedirs(cfg)
+    os.makedirs(nvram)
+    members = sorted(plan["members"], key=lambda m: m["number"])
+    me = next((m for m in members if m["number"] == number), {"first": number, "take": 1})
+    first, take = me.get("first", number), me.get("take", 1)
+    with open(os.path.join(cfg, "fliperos-lockstep.ini"), "w") as f:
+        f.write("transport=native\nme=%d\npeers=%s\nplayers=%s\ndelay=%d\nport=%d\nlog=%s\n" % (
+            number, ",".join(m["ip"] for m in members), ",".join(str(p) for p in range(first, first + take)),
+            MAME_PARTY_DELAY, profile["port"], os.path.join(base, "lockstep.log")))
+    return ["-cfg_directory", cfg, "-nvram_directory", nvram, "-noplugin", "hiscore", "-noautosave",
+            "-rtc", plan.get("rtc") or time.strftime("%Y%m%d%H%M%S")]
+
+
 def sm2_keys(profile, plan, number, ip):
     """As chaves de [network] do ini do SM2-Emu (o parser as le em qualquer
     lugar do arquivo): o anel de UDP."""
@@ -885,6 +923,12 @@ def flycast_lockstep(path=None):
     return binary_has(path or FLYCAST, b"GGPOMaxPrediction")
 
 
+def mame_lockstep(path=None):
+    """O GroovyMAME instalado tem o lockstep patch (o do pacote; o release que
+    o mais novo do Setup baixa nao tem)?"""
+    return binary_has(path or GROOVYMAME, b"native lockstep: game")
+
+
 def netplay_profile(system_key, name, players, local, sets=None):
     """O perfil de net play de um jogo, ou None. Numa pasta de core do
     RetroArch que faz net play (netplay_core; na do FBNeo, so um set que o
@@ -892,7 +936,9 @@ def netplay_profile(system_key, name, players, local, sets=None):
     gabinete entra com os jogadores dos seus controles. No Naomi e no
     Atomiswave, o GGPO do Flycast: um jogo de dois ou mais jogadores, dois
     gabinetes com um jogador cada. No Dolphin, de dois a quatro gabinetes,
-    um jogador cada. Quem abre e o primeiro. No RetroArch (late) quem abre
+    um jogador cada. Na pasta do MAME, com o lockstep patch do GroovyMAME,
+    como no Flycast: de dois a quatro gabinetes, cada um com os seus
+    controles. Quem abre e o primeiro. No RetroArch (late) quem abre
     nao espera ninguem: o jogo abre na hora e os outros entram com ele
     andando, como o net play do RetroArch deixa; o GGPO e o Dolphin precisam
     de todos no comeco."""
@@ -913,6 +959,13 @@ def netplay_profile(system_key, name, players, local, sets=None):
         return {"id": "netplay", "title": name, "emulator": "flycast", "systems": [system_key], "sets": [name],
                 "min": 2, "max": 2, "players": 2, "take": 1, "fixed": True, "order": "master-first", "step": 6,
                 "port": PORT_GGPO, "netplay": True, "ggpo": True}
+    if (system_key or "").split("/")[0] in MAME_SYSTEMS:
+        if n < 2 or not mame_lockstep():
+            return None
+        m = min(n, 4)
+        return {"id": "netplay", "title": name, "emulator": "groovymame", "systems": [system_key], "sets": [name],
+                "min": 2, "max": m, "players": m, "fixed": False, "order": "master-first", "step": 3,
+                "port": PORT_MAME, "netplay": True, "lockstep": True}
     if (system_key or "").split("/")[0] in DOLPHIN_SYSTEMS:
         if n < 2 or not dolphin_netplay():
             return None
@@ -1520,6 +1573,10 @@ class Link:
             # O net play do Dolphin: o comando do jogo com as opcoes dele, sem
             # NVRAM por numero.
             return command(prof, base, plan, number, self.game)
+        if prof.get("lockstep"):
+            # O GroovyMAME do lockstep patch: as opcoes antes do nome do jogo.
+            argv = list(base)
+            return argv[:-1] + mame_lockstep_args(prof, plan, number, self.home) + argv[-1:]
         if prof.get("netplay"):
             # O net play nao tem NVRAM por numero: o RetroArch com o que a festa pede.
             cfg = os.path.join(self.home, ".config", "fliperos", "netplay.cfg")

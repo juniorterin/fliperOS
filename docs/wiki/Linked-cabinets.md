@@ -6,7 +6,7 @@ This page lists those games, how the link works in each emulator FliperOS ships,
 
 **The FliperOS frontend does link play for six games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
 
-Games of a RetroArch core that does net play, with more players than a cabinet has controls, and the NAOMI and Atomiswave games of Flycast (GGPO, up to four players on two to four cabinets) get **party play** in the same menu: see Party play below. The frontend calls it a party, not net play, because it only runs on your local network, never over the internet.
+Games of a RetroArch core that does net play, with more players than a cabinet has controls, the NAOMI and Atomiswave games of Flycast (GGPO, up to four players on two to four cabinets) and the MAME games of GroovyMAME (lockstep, up to four players) get **party play** in the same menu: see Party play below. The frontend calls it a party, not net play, because it only runs on your local network, never over the internet.
 
 **Each cabinet has a name** that the others see: in the waiting room, on the JOIN tile ("HOST APPLE") and in a notice with a bell at the bottom of the screen, "APPLE IS PLAYING", when it opens a party or a link game. Set it in **Setup > System > Cabinet name** or during the installation (up to 12 letters, numbers, spaces and hyphens). With no name, each cabinet gets a fruit or an animal out of a list of 100, always the same for that machine (picked from its `/etc/machine-id`). It is kept as `cabinet_name=` in `/etc/fliperos/fliperos.conf`, and the frontend reads it when it opens.
 
@@ -246,6 +246,7 @@ Some games have more players than a cabinet has controls: X-Men has four players
 - **FBNeo uses its own folder only**: `~/roms/retroarch/fbneo`, with FBNeo's own romset, and only the sets FBNeo knows. The MAME romset in `~/roms/mame` is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take.
 - **NAOMI, NAOMI 2 and Atomiswave games in Flycast**, through Flycast's GGPO, for any game of two or more players: up to four players (the four controller ports) on two to four cabinets, each cabinet with as many players as it has controls. Guilty Gear Isuka's four players can be 2+2, 2+1+1 or 1+1+1+1. See Flycast GGPO below.
 - **GameCube and Wii games in Dolphin** (`~/roms/dolphin`), for any game of two or more players: two to four cabinets, one player each. See Dolphin net play below.
+- **MAME games in GroovyMAME** (`~/roms/mame`), for any game of two or more players: up to four players on two to four cabinets, each cabinet with as many players as it has controls, all of them on the same frame like an arcade link. Super Street Fighter II Turbo is one player on each of two cabinets. See GroovyMAME lockstep below.
 
 Every cabinet of the party needs the same game file.
 
@@ -253,9 +254,9 @@ In the frontend such a game has a **PARTY PLAY** tile in its menu, with a row of
 
 **Each cabinet takes as many players as it has controls configured** (see [Controls](Controls.md)), so two cabinets with two controls fill the four players of X-Men. To give fewer (two controls, but only one person playing), press down on the PARTY PLAY or JOIN PARTY tile: blinking arrows appear beside the player icons, and left or right picks how many this cabinet gives. Up goes back to the tiles.
 
-**In a RetroArch party nobody waits.** The cabinet that opens it goes into the game after the three-second count, alone, and the others join the game while it runs: JOIN PARTY copies the game if it is missing and opens it at once, connected to the first cabinet, on the first free players. A cabinet that closes its game frees its players for the next one. The party ends when the first cabinet closes the game. Flycast's GGPO and Dolphin need every cabinet at the start, so their parties still wait in the room: GGPO starts when the second cabinet joins, Dolphin when every player has an owner or the first cabinet presses START.
+**In a RetroArch party nobody waits.** The cabinet that opens it goes into the game after the three-second count, alone, and the others join the game while it runs: JOIN PARTY copies the game if it is missing and opens it at once, connected to the first cabinet, on the first free players. A cabinet that closes its game frees its players for the next one. The party ends when the first cabinet closes the game. Flycast's GGPO, GroovyMAME and Dolphin need every cabinet at the start, so their parties still wait in the room: GGPO and GroovyMAME start when every player has an owner or the first cabinet presses START, Dolphin the same way.
 
-Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so are the UPnP of Flycast and Dolphin and Dolphin's traversal server. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713, Dolphin's net play on TCP 2626.
+Only the network cable is used. The public lobby, the relay and the NAT traversal of RetroArch are off, and so are the UPnP of Flycast and Dolphin and Dolphin's traversal server. The party's own ports are UDP 55436 (who plays what), TCP 55437 (the party) and TCP 55438 (the game's files). RetroArch's net play is on TCP 55435, Flycast's GGPO on UDP 19713, Dolphin's net play on TCP 2626, GroovyMAME's lockstep on UDP 55441 to 55444 (55440 plus the cabinet's number).
 
 **Run the same release on every cabinet.** RetroArch warns when two machines run different versions. When the builds of the core differ, it turns the desync check off, so a real desync would not be reported.
 
@@ -299,6 +300,20 @@ Tested on 7 November 2026 with three patched Flycast on one PC, each one a cabin
 
 Then, on 6 November 2026, between the owner's cabinet and a PC: the cabinet's frontend hosted the party and the PC joined it with the frontend's own protocol, running the patched Flycast in Docker (software video, through a UDP bridge on Windows so the cabinet always saw the PC's port 19713). The session ran for minutes on both, with about 60 packets a second each way and no disconnection. In one party the cabinet gave 2 players and in the other 1, and the PC's scripted coins, starts and moves landed on ports 3-4 and then 2-3, as each plan said; the person at the cabinet played player 1 against them. The cabinet showed short, light stutters. The likely cause is the PC side, not the patch: a Flycast drawing on the CPU in Docker, behind a bridge in PowerShell, with a ping of 19 to 41 ms, makes GGPO roll back several frames and slow the faster machine down to wait for it. Not tried yet between two cabinets on the cable.
 
+### GroovyMAME lockstep
+
+MAME has no net play of its own. FliperOS builds GroovyMAME from the source of the release's tag with its **lockstep patch** (`packaging/patches/groovymame/0001-lockstep-patch.patch`), so any MAME game of two or more players can be a party, the way a link board keeps arcade machines together:
+
+- Every cabinet runs the same game from the same start: MAME's random seed is fixed, the party has an empty NVRAM folder (the game's factory memory) and a cfg folder of its own (the game's factory settings), the hiscore plugin and the autosave are off, and the clock of the game (`-rtc`) is the first cabinet's time on all of them. The mapping of the panel stays: it is the ctrlr file, not the cfg.
+- Every emulated frame, right after MAME reads the controls, each cabinet sends its players' bits (UDP, with the last 8 frames again in every packet) and waits for the other cabinets' bits of that frame. Then every cabinet puts every player's bits in the input ports, on the same frame. The faster machine waits, without spinning the CPU; nothing is predicted and nothing is redone.
+- No input delay: on the cable the other cabinets' controls arrive within the same frame, so the game answers as fast as when it is played alone.
+
+The frontend writes `fliperos-lockstep.ini` in the party's cfg folder (`~/.cache/fliperos/party-mame`): this cabinet's number, every cabinet's IP in order, its players, the delay and a log. A cabinet that leaves tells the others, and their games close too; a cabinet that goes quiet for 10 seconds ends the party.
+
+Setup > Emulators & Games can build the newest GroovyMAME on the cabinet with the same patches, so the party keeps working with it; it compiles the whole MAME and takes hours. A GroovyMAME without the patch (one put there by hand) gets no party: the frontend looks for the patch in the binary.
+
+Tested on 7 November 2026 with Super Street Fighter II Turbo between the owner's cabinet and a Windows PC on the cable, with a script on each machine that coined, started, picked a character and fought with random moves (each machine knew the other's moves only from the network). In 9 runs of 2 to 8 minutes, a checksum of the game's main RAM every second was the same on both machines every time (more than 1,700 compared), and screenshots taken on the same frames were identical byte for byte. The round trip on the cable was 0.46 ms. On the cabinet, with no input delay, 0.01% of the frames took more than 20 ms (the worst 28 ms) with the patched build running natively on the PC. A plugin in Lua (MAME's own TCP sockets) kept the sync too, but stuttered more on the cabinet (0.35% of the frames), because Lua cannot sleep while it waits. The logs are in the owner's PC folder `Downloads\gm-lockstep\run`.
+
 ### Dolphin net play
 
 Dolphin opens net play only from its windows, so FliperOS builds it with a patch (`config/dolphin-patches`) that adds two command-line options: `--netplay host` or `--netplay join`, and `--netplay_players N`. The cabinet that opened the party hosts and starts the game by itself when the N cabinets of the party have it. The others connect to it, and retry for 20 seconds while it opens.
@@ -321,7 +336,7 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 
 ### Cores and emulators with net play
 
-**The frontend offers net play with every RetroArch core marked "deterministic", with Flycast's GGPO and with Dolphin.** A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync. Only FBNeo has been played between two machines so far: the others are in the frontend but not yet tested on FliperOS.
+**The frontend offers net play with every RetroArch core marked "deterministic", with Flycast's GGPO, with Dolphin and with GroovyMAME's lockstep.** A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync. FBNeo and GroovyMAME have been played between two machines so far; the others are in the frontend but not yet tested on FliperOS.
 
 | Core or emulator | Systems | Net play | Checked |
 | --- | --- | --- | --- |
@@ -335,7 +350,8 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 | MAME, current core (RetroArch) | Arcade (MAME 0.289) | Yes, but many drivers do not save their state well. Not in the image (415 MB) | Connected once (X-Men) |
 | Flycast | NAOMI, NAOMI 2, Atomiswave | **Yes, in the frontend**: GGPO rollback, up to four players on two to four cabinets (FliperOS patch) | Two Flycast linked on the cabinet by hand, game screen not seen |
 | Dolphin | GameCube, Wii | **Yes, in the frontend** (FliperOS patch): two to four cabinets, one player each; input delay, no rollback | Patched build compiled; not played between two machines |
-| GroovyMAME, Supermodel, SM2-Emu | Arcade, Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
+| GroovyMAME | Arcade (MAME 0.289) | **Yes, in the frontend**: lockstep, up to four players on two to four cabinets, no input delay (FliperOS patch) | **Tested**: SSF2 Turbo, cabinet and PC, in sync |
+| Supermodel, SM2-Emu | Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
 | PCSX2, DuckStation, Hypseus Singe, OpenBOR | PS2, PS1, Laserdisc, beat 'em ups | **No** | Source |
 
 Fightcade 2 has its own rollback (FBNeo, Flycast and others), but over the Internet with its own matchmaking: it is not part of the cabinets' link or net play.
