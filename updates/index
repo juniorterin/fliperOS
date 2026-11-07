@@ -57,3 +57,4 @@
 54	f2826cec854f7a4275b6dd2d64aad152ff736fb6	c5c4de991fcdf4e0864f808fe504c0433e38ae21acfdf1fd462b9ca6ee246e1d	no	Party for MAME games in lockstep, GroovyMAME built with the FliperOS patches
 55	277b1e2721c07cc837c7ffe385ff3dc1335b40c3	cb509f12eae048a5759201763198046be463b35f4adbc97153d9feb758f9bd9f	no	Party of MAME games with every player of the game, up to 10
 56	5d62c22bc029be14497c5285d2c1bc5ab773347e	0738c3b6d72c6f84fe15a2f603bd0e24a0b8c2910d487e285c0599f93ebd4b37	no	Wine games with the flicker filter, art for custom games, squashfs folders, Wine Staging
+57	412eb49f3b659a6a919bb3a2acf9ede2e6f7419f	5ab232cdf0885b0eab80a9d62f7ffd7022ee6149ddb4f6b6805394f2ee3337fc	no	The 0.22 image's level (ISO build fix only)
