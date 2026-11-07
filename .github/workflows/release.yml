@@ -52,6 +52,8 @@ jobs:
             || { echo "::error::CHANGELOG.md sem a secao \"## $version\""; exit 1; }
           # O texto do grupo do Telegram (docs/telegram/VERSAO.md com fotos, ou a
           # secao do CHANGELOG) tem de estar bem formado antes de gastar horas de build.
+          # O indice do runner pode estar velho (404 no .deb): update antes.
+          sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends python3-pil > /dev/null
           python3 tools/telegram-post.py --dry-run "$version" > /dev/null \
             || { echo "::error::texto do Telegram invalido (tools/telegram-post.py --dry-run $version)"; exit 1; }
