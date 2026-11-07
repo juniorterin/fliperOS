@@ -659,7 +659,7 @@ const ptBR: Messages = {
     ],
     netplayTitle: 'Party entre gabinetes',
     netplayIntro:
-      'A party é um jogo dividido na sua rede local, nunca pela internet: pelo cabo de rede, os gabinetes dividem um jogo e cada um fica com tantos jogadores quantos controles tem. Cada gabinete aparece pelo nome dele, definido em Setup > System > Cabinet name. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), com o GGPO do Flycast no Naomi e no Atomiswave, e com o GroovyMAME nos jogos do MAME, no mesmo quadro como um link de fliperama (lockstep, sem atraso de entrada), até quatro jogadores em dois a quatro gabinetes.',
+      'A party é um jogo dividido na sua rede local, nunca pela internet: pelo cabo de rede, os gabinetes dividem um jogo e cada um fica com tantos jogadores quantos controles tem. Cada gabinete aparece pelo nome dele, definido em Setup > System > Cabinet name. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), com o GGPO do Flycast no Naomi e no Atomiswave, até quatro jogadores em dois a quatro gabinetes, e com o GroovyMAME nos jogos do MAME, no mesmo quadro como um link de fliperama (lockstep, sem atraso de entrada), com todos os jogadores do jogo.',
     netplayHead: { name: 'Core ou emulador', systems: 'Sistemas', status: 'Party' },
     netplayLevels: { frontend: 'No frontend', hand: 'À mão', partial: 'Limitado', no: 'Não' },
     netplay: [
@@ -672,7 +672,7 @@ const ptBR: Messages = {
       { id: 'flycast', name: 'Flycast', systems: 'Naomi, Naomi 2, Atomiswave', level: 'frontend', note: 'GGPO com um patch do FliperOS: até 4 jogadores em 2 a 4 gabinetes, cada um com os seus controles' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'frontend', note: 'Net play próprio, por um patch do FliperOS: até 4 gabinetes, um jogador em cada; atraso de entrada, sem rollback' },
       { id: 'mame2010', name: 'MAME 2010', systems: 'Arcade', level: 'no', note: '' },
-      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade (MAME 0.289)', level: 'frontend', note: 'Lockstep com um patch do FliperOS: até 4 jogadores em 2 a 4 gabinetes no mesmo quadro, sem atraso de entrada. Testado em duas máquinas' },
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade (MAME 0.289)', level: 'frontend', note: 'Lockstep com um patch do FliperOS: todos os jogadores do jogo (até 10) em quantos gabinetes forem, no mesmo quadro, sem atraso de entrada. Testado em duas máquinas' },
       { id: 'boards', name: 'Supermodel, SM2-Emu', systems: 'Model 3, Model 2', level: 'no', note: 'Em vez disso ligam as placas, nos jogos de link' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },
     ],

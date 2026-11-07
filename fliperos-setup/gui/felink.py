@@ -65,11 +65,13 @@ PORT_DOLPHIN = 2626
 DOLPHIN_SYSTEMS = ("dolphin",)
 DOLPHIN = os.environ.get("FLIPEROS_DOLPHIN", "/usr/local/bin/dolphin-emu")
 # O GroovyMAME com o lockstep patch do FliperOS (packaging/patches/groovymame):
-# a party de um jogo de dois ou mais jogadores da pasta do MAME, de dois a
-# quatro gabinetes, cada um com os seus controles, travados no mesmo quadro
-# como uma placa de link de arcade (UDP, PORT_MAME + o numero do gabinete).
+# a party de um jogo de dois ou mais jogadores da pasta do MAME, com todos os
+# jogadores do jogo (ate os 10 do MAME) e de dois gabinetes a um por jogador,
+# cada um com os seus controles, travados no mesmo quadro como uma placa de
+# link de arcade (UDP, PORT_MAME + o numero do gabinete).
 PORT_MAME = 55440
 MAME_SYSTEMS = ("mame",)
+MAME_MAX_PLAYERS = 10
 GROOVYMAME = os.environ.get("FLIPEROS_GROOVYMAME_BIN", "/usr/local/libexec/groovymame")
 BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
@@ -937,8 +939,8 @@ def netplay_profile(system_key, name, players, local, sets=None):
     Atomiswave, o GGPO do Flycast: um jogo de dois ou mais jogadores, dois
     gabinetes com um jogador cada. No Dolphin, de dois a quatro gabinetes,
     um jogador cada. Na pasta do MAME, com o lockstep patch do GroovyMAME,
-    como no Flycast: de dois a quatro gabinetes, cada um com os seus
-    controles. Quem abre e o primeiro. No RetroArch (late) quem abre
+    todos os jogadores do jogo (ate 10), de dois gabinetes a um por jogador,
+    cada um com os seus controles. Quem abre e o primeiro. No RetroArch (late) quem abre
     nao espera ninguem: o jogo abre na hora e os outros entram com ele
     andando, como o net play do RetroArch deixa; o GGPO e o Dolphin precisam
     de todos no comeco."""
@@ -962,7 +964,10 @@ def netplay_profile(system_key, name, players, local, sets=None):
     if (system_key or "").split("/")[0] in MAME_SYSTEMS:
         if n < 2 or not mame_lockstep():
             return None
-        m = min(n, 4)
+        # Todos os jogadores do jogo (o lockstep patch nao tem limite: cada
+        # gabinete manda so os bits dos seus), ate as portas de jogador do
+        # MAME, e ate um gabinete por jogador.
+        m = min(n, MAME_MAX_PLAYERS)
         return {"id": "netplay", "title": name, "emulator": "groovymame", "systems": [system_key], "sets": [name],
                 "min": 2, "max": m, "players": m, "fixed": False, "order": "master-first", "step": 3,
                 "port": PORT_MAME, "netplay": True, "lockstep": True}

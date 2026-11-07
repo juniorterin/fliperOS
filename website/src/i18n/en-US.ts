@@ -658,7 +658,7 @@ const enUS = {
     ],
     netplayTitle: 'Party play between cabinets',
     netplayIntro:
-      'A party is a game shared on your local network, never over the internet: over the network cable, cabinets share one game and each one takes as many players as it has controls. Each cabinet shows up by its name, set in Setup > System > Cabinet name. Your own controls stay as fast as playing alone (rollback, no input delay). The frontend does it with every RetroArch core that supports it (FBNeo with its own romset only), with Flycast’s GGPO for Naomi and Atomiswave, and with GroovyMAME for MAME games, kept on the same frame like an arcade link (lockstep, no input delay), up to four players on two to four cabinets.',
+      'A party is a game shared on your local network, never over the internet: over the network cable, cabinets share one game and each one takes as many players as it has controls. Each cabinet shows up by its name, set in Setup > System > Cabinet name. Your own controls stay as fast as playing alone (rollback, no input delay). The frontend does it with every RetroArch core that supports it (FBNeo with its own romset only), with Flycast’s GGPO for Naomi and Atomiswave, up to four players on two to four cabinets, and with GroovyMAME for MAME games, kept on the same frame like an arcade link (lockstep, no input delay), with every player of the game.',
     netplayHead: { name: 'Core or emulator', systems: 'Systems', status: 'Party play' },
     netplayLevels: { frontend: 'In the frontend', hand: 'By hand', partial: 'Limited', no: 'No' },
     netplay: [
@@ -671,7 +671,7 @@ const enUS = {
       { id: 'flycast', name: 'Flycast', systems: 'Naomi, Naomi 2, Atomiswave', level: 'frontend', note: 'GGPO with a FliperOS patch: up to 4 players on 2 to 4 cabinets, each with its own controls' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'frontend', note: 'Its own net play through a FliperOS patch: up to 4 cabinets, one player each; input delay, no rollback' },
       { id: 'mame2010', name: 'MAME 2010', systems: 'Arcade', level: 'no', note: '' },
-      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade (MAME 0.289)', level: 'frontend', note: 'Lockstep with a FliperOS patch: up to 4 players on 2 to 4 cabinets on the same frame, no input delay. Tested on two machines' },
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade (MAME 0.289)', level: 'frontend', note: 'Lockstep with a FliperOS patch: every player of the game (up to 10) on as many cabinets, on the same frame, no input delay. Tested on two machines' },
       { id: 'boards', name: 'Supermodel, SM2-Emu', systems: 'Model 3, Model 2', level: 'no', note: 'They link boards instead, for the link games' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },
     ],

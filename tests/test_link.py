@@ -1307,7 +1307,22 @@ class NetplayTests(unittest.TestCase):
                          ("groovymame", 2, 2, 2, False, 55440))
         self.assertTrue(prof["netplay"] and prof["lockstep"] and not prof.get("late"))
         self.assertEqual(felink.netplay_profile("mame", "xmen", "4", 2)["max"], 4)   # cabe nos controles: party mesmo assim
-        self.assertEqual(felink.netplay_profile("mame", "xmen6p", "6", 2)["players"], 4)
+        # Every player of the game, up to MAME's 10, and up to a cabinet per player.
+        six = felink.netplay_profile("mame", "xmen6p", "6", 2)
+        self.assertEqual((six["players"], six["max"]), (6, 6))
+        eight = felink.netplay_profile("mame", "hotshots8", "8", 2)
+        self.assertEqual((eight["players"], eight["max"]), (8, 8))
+        self.assertEqual(felink.netplay_profile("mame", "many", "12", 2)["players"], 10)
+        link = felink.Link(tempfile.mkdtemp(), wire=None, ident="a", local_players=4)
+        self.assertEqual(link.max_take(eight), 4)                       # this cabinet's four controls
+        self.assertEqual(link.max_take(six), 4)                         # one left for the other cabinet... and more
+        prof = felink.netplay_profile("mame", "hotshots8", "8", 2)
+        plan = felink.make_plan(prof, [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i, "take": 1, "first": i}
+                                       for i in range(1, 9)])
+        with tempfile.TemporaryDirectory() as home:
+            felink.mame_lockstep_args(prof, plan, 8, home)
+            ini = Path(home, ".cache", "fliperos", "party-mame", "cfg", "fliperos-lockstep.ini").read_text()
+            self.assertIn("me=8\npeers=%s\nplayers=8\n" % ",".join("10.0.0.%d" % i for i in range(1, 9)), ini)
         self.assertIsNone(felink.netplay_profile("mame", "pacman", "1", 2))
         self.assertIsNone(felink.netplay_profile("mame", "ssf2t", "", 2))
         self.assertIsNone(felink.netplay_profile("model2", "ssf2t", "2", 2))
