@@ -832,10 +832,11 @@ class FrontendLinkTests(unittest.TestCase):
         mark = lambda name: self.fm.Frontend.link_mark(fe, next(g for g in fe.games if g["Name"] == name))
         fe.link.others.return_value = True
         self.assertEqual((mark("scud"), mark("xmen"), mark("sf2")), (False, False, None))
-        # Sozinho na rede: nem o globo nem os dois controles; o menu ainda abre a festa.
+        # Sozinho na rede: nem o globo nem os dois controles, e o menu sem o LINK PLAY.
         fe.link.others.return_value = False
         self.assertEqual((mark("scud"), mark("xmen")), (None, None))
-        self.assertEqual(self.kinds(fe, "scud"), ["play", "link", "fav", "more"])
+        self.assertEqual(self.kinds(fe, "scud"), ["play", "fav", "more"])
+        self.assertEqual(self.kinds(fe, "xmen"), ["play", "fav", "more"])
 
     def test_the_link_sees_others_only_while_they_announce(self):
         link = felink.Link(tempfile.mkdtemp(), wire=None, ident="a")

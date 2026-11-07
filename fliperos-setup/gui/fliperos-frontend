@@ -1455,11 +1455,11 @@ class Frontend:
         """Os azulejos do menu do jogo. Num jogo de link, depois do PLAY: JOIN
         de cada festa aberta, as que nao aceitam mais gente (apagadas, so o
         estado) e NEW LINK; sem festa nenhuma, o LINK PLAY (este gabinete e o
-        primeiro)."""
+        primeiro). Sem outro gabinete na rede, nada de link: so o PLAY."""
         g = self.game()
         tiles = [{"kind": "play", "label": "PLAY"}]
         prof = self.link_profile(g)
-        if prof:
+        if prof and self.link.others():
             net = bool(prof.get("netplay"))
             # "Party", e nao "net play": e so na rede local, nada de Internet.
             word = ("PARTY", "PARTY PLAY") if net else ("LINK", "LINK PLAY")
