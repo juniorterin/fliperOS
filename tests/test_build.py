@@ -5875,6 +5875,10 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('strip = icon_strip(fe, s, game, px, y, SX + SW)', draw)
         self.assertIn('draw_synopsis(fe, s, game, (px, y, pw, HH - 6 - y), now)', draw)
         self.assertLess(draw.index('if fe.commercial:\n            coin_box'), draw.index('draw_synopsis('))
+        # O contador desce com o vao dos jogos de outro gabinete (no alto): sem
+        # ele, ficava em cima da ultima linha.
+        self.assertIn('y0 + rows * 14 + 1 + sep, right=True', draw)
+        self.assertIn('y0 + rows * 14 + 2 + sep)', draw)
         src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         self.assertIn('self.media.pop(("desc", folder, name), None)', src)
         try:

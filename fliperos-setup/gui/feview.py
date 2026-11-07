@@ -1160,13 +1160,15 @@ def draw_list(fe, ui, now):
             list_row(fe, s, i, lx, lw, y, sep, now)
     with part(fe, ui, "chrome") as s:
         if len(fe.rows) > rows:
-            W.scrollbar(s, lx + lw + 4, y0, rows * 14 - 2 + (14 if sep else 0), fe.top, rows, len(fe.rows))
+            W.scrollbar(s, lx + lw + 4, y0, rows * 14 - 2 + sep, fe.top, rows, len(fe.rows))
+        # O contador debaixo da ultima linha, tambem com o vao dos jogos de
+        # outro gabinete (que empurra a lista para baixo).
         count = "%d/%d" % (fe.cursor + 1, len(fe.rows))
         if T.VERTICAL:
             # Em pe a lista vai quase ate o fim da tela: o contador na letra pequena.
-            tiny.text(s, count, T.LINE, lx + lw - tiny.width(count), y0 + rows * 14 + 2)
+            tiny.text(s, count, T.LINE, lx + lw - tiny.width(count), y0 + rows * 14 + 2 + sep)
         else:
-            W.text(s, count, T.LINE, lx + lw, y0 + rows * 14 + 1, right=True)
+            W.text(s, count, T.LINE, lx + lw, y0 + rows * 14 + 1 + sep, right=True)
     # A imagem, o logo e as informacoes (a direita, ou em cima em pe).
     game = fe.game()
     y0 = py
