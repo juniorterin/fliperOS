@@ -1264,10 +1264,11 @@ def list_row(fe, ui, i, lx, lw, y, sep, now):
     if party and i + 1 < len(fe.rows) and not fe.fd.elsewhere(fe.rows[i + 1][2]):
         pygame.draw.line(ui, T.LINE, (lx, y + 13 + sep // 2), (lx + lw - 2, y + 13 + sep // 2))
     if party and extra == "elsewhere" and len(parties) > 1:
-        # Varias parties no jogo: o [+] meio verde e, na ponta, quantas sao.
-        expand_mark(ui, lx, y + 1, (game["_system"]["key"], game["Name"]) in fe.parties_open, T.GREEN)
-        globe_icon(ui, lx + 19, y + 6, 5, True)
-        x = lx + 28
+        # Varias parties no jogo: o globo, o [+] meio verde depois dele e, na
+        # ponta, quantas sao.
+        globe_icon(ui, lx + 5, y + 6, 5, True)
+        expand_mark(ui, lx + 12, y + 1, (game["_system"]["key"], game["Name"]) in fe.parties_open, T.GREEN)
+        x = lx + 26
         label, color = fe.fd.short_title(game), T.YELLOW
         count = str(len(parties))
         tail = lambda: W.text(ui, count, T.GREEN, lx + lw - 14, y + 2, right=True)
@@ -1277,11 +1278,12 @@ def list_row(fe, ui, i, lx, lw, y, sep, now):
         sw = total * 6 - 1
         tail = lambda: cabinet_row(ui, lx + lw - 14 - sw, y + 2, party["used"], total, w=5, h=8, gap=1)
         if in_party:
-            # Uma party do jogo: o trilho, como o de um clone, e o gabinete dela.
-            x = lx + 26
+            # Uma party do jogo: o trilho, como o de um clone (descendo do
+            # [+], depois do globo), e o gabinete dela.
+            x = lx + 36
             last = i + 1 >= len(fe.rows) or not isinstance(fe.rows[i + 1][2], tuple) or fe.rows[i + 1][2][:1] != ("party",)
-            pygame.draw.line(ui, T.LINE, (lx + 5, y - 3), (lx + 5, y + (5 if last else 14)))
-            pygame.draw.line(ui, T.LINE, (lx + 5, y + 5), (lx + 20, y + 5))
+            pygame.draw.line(ui, T.LINE, (lx + 17, y - 3), (lx + 17, y + (5 if last else 14)))
+            pygame.draw.line(ui, T.LINE, (lx + 17, y + 5), (lx + 30, y + 5))
             label, color = fe.felink.clean_name(party["host"]) or "A CABINET", T.GREEN
         else:
             globe_icon(ui, lx + 5, y + 6, 5, True)
