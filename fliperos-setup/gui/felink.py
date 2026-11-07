@@ -987,11 +987,12 @@ def nvram_files(profile, number, home, src=None):
 
 
 def place_files(home, items):
-    """Poe cada (destino, origem) no lugar: origem e o caminho de um arquivo ou
-    os bytes do que se grava. O arquivo que la havia vai para NOME.solo (so o
-    primeiro: um .solo que ja existe e o da pessoa) e volta no restore(). A
-    lista do que foi mexido fica em ~/nvram/.link-active, para um frontend que
-    reabre depois de uma queda desfazer (recover)."""
+    """Poe cada (destino, origem) no lugar: origem e o caminho de um arquivo,
+    os bytes do que se grava ou None (nada: o emulador comeca da memoria de
+    fabrica). O arquivo que la havia vai para NOME.solo (so o primeiro: um
+    .solo que ja existe e o da pessoa) e volta no restore(). A lista do que
+    foi mexido fica em ~/nvram/.link-active, para um frontend que reabre
+    depois de uma queda desfazer (recover)."""
     import shutil
     marker = os.path.join(home, "nvram", ".link-active")
     done = []
@@ -1007,7 +1008,7 @@ def place_files(home, items):
         if isinstance(origin, bytes):
             with open(dest, "wb") as f:
                 f.write(origin)
-        else:
+        elif origin is not None:
             shutil.copyfile(origin, dest)
         if dest not in done:
             done.append(dest)
@@ -1016,6 +1017,18 @@ def place_files(home, items):
         with open(marker, "w") as f:
             json.dump(done, f)
     return lambda: recover(home)
+
+
+FLYCAST_DATA = os.environ.get("FLIPEROS_FLYCAST_DATA")
+FLYCAST_SAVES = (".nvmem", ".nvmem2", ".eeprom")
+
+
+def flycast_saves(home, rom):
+    """A memoria salva de um jogo no Flycast (a pasta de dados dele, que no
+    FliperOS e ~/nvram/flycast): NOME_DO_ARQUIVO.nvmem, .nvmem2 e .eeprom."""
+    data = FLYCAST_DATA or os.path.join(home, ".local", "share", "flycast")
+    name = os.path.basename(rom.rstrip("/"))
+    return [os.path.join(data, name + ext) for ext in FLYCAST_SAVES]
 
 
 def install_nvram(profile, number, home, src=None):
@@ -1481,9 +1494,17 @@ class Link:
         """O comando do jogo em link (o base e o do frontend), com a NVRAM, o
         cfg e o ini deste numero no lugar; leave() desfaz tudo."""
         prof, plan, number = self.profile, self.plan, self.number
-        if prof.get("ggpo") or prof.get("dolphin"):
-            # O GGPO do Flycast e o net play do Dolphin: o comando do jogo com as opcoes
-            # deles, sem NVRAM por numero.
+        if prof.get("ggpo"):
+            # O GGPO confere que todos partem da mesma memoria salva do jogo
+            # (recordes, contadores, ajustes): de gabinete para gabinete ela
+            # difere, e a sessao nao comecava ("Peer verification failed").
+            # Na party, todos comecam da memoria de fabrica; a de cada um vai
+            # para .solo e volta no fim (leave, ou recover depois de uma queda).
+            self.undo.append(place_files(self.home, [(p, None) for p in flycast_saves(self.home, base[-1])]))
+            return command(prof, base, plan, number, self.game)
+        if prof.get("dolphin"):
+            # O net play do Dolphin: o comando do jogo com as opcoes dele, sem
+            # NVRAM por numero.
             return command(prof, base, plan, number, self.game)
         if prof.get("netplay"):
             # O net play nao tem NVRAM por numero: o RetroArch com o que a festa pede.

@@ -1192,6 +1192,31 @@ class NetplayTests(unittest.TestCase):
         old = felink.netplay_profile("atomiswave", "kofnw", "2", 2)
         self.assertNotIn("GGPOPeers", felink.command(old, base, felink.make_plan(old, plan["members"][:2]), 2, "kofnw")[-2])
 
+    def test_a_ggpo_party_starts_from_the_factory_memory_and_gives_each_one_back(self):
+        # GGPO refuses a session when the saved memory of the game differs
+        # ("Peer verification failed"): in the party it is put aside on every
+        # cabinet and comes back at the end.
+        with tempfile.TemporaryDirectory() as home:
+            data = Path(home, ".local", "share", "flycast")
+            data.mkdir(parents=True)
+            Path(data, "ggisuka.zip.nvmem").write_bytes(b"mine")
+            Path(data, "ggisuka.zip.eeprom").write_bytes(b"eep")
+            prof = felink.netplay_profile("atomiswave", "ggisuka", "4", 2)
+            link = felink.Link(home, wire=LOOP, ident="aaa")
+            link.profile, link.game, link.number = prof, "ggisuka", 1
+            link.plan = felink.make_plan(prof, [{"number": 1, "name": "A", "ip": "10.0.0.1"},
+                                                {"number": 2, "name": "B", "ip": "10.0.0.2"}])
+            argv = link.command(["/opt/fliperos/bin/fliperos-x11-run", "flycast", "/r/ggisuka.zip"])
+            self.assertEqual(argv[-1], "/r/ggisuka.zip")
+            self.assertEqual(sorted(p.name for p in data.iterdir()), ["ggisuka.zip.eeprom.solo", "ggisuka.zip.nvmem.solo"])
+            Path(data, "ggisuka.zip.nvmem").write_bytes(b"party")      # what the party's Flycast saved
+            Path(data, "ggisuka.zip.nvmem2").write_bytes(b"party2")
+            link.leave()
+            self.assertEqual(Path(data, "ggisuka.zip.nvmem").read_bytes(), b"mine")
+            self.assertEqual(Path(data, "ggisuka.zip.eeprom").read_bytes(), b"eep")
+            self.assertFalse(Path(data, "ggisuka.zip.nvmem2").exists())   # this cabinet had none
+            self.assertEqual(sorted(p.name for p in data.iterdir()), ["ggisuka.zip.eeprom", "ggisuka.zip.nvmem"])
+
     def test_the_flycast_patch_has_the_options_felink_passes(self):
         path = ROOT / "packaging/patches/flycast/0002-ggpo-party-of-up-to-four.patch"
         patch = path.read_text()
