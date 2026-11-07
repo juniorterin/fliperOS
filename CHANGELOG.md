@@ -2,6 +2,37 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.22
+
+**Party play for MAME games**: two to four cabinets on the wired local network play the same GroovyMAME game, each with its own controllers, on the same frame like an arcade link board and with no input delay. Flycast's party (Naomi and Atomiswave) also runs in lockstep now, for up to four players. Also in this ISO, everything the updates 47 to 54 brought since 0.21: cabinet names, Flycast as a package updated over the network, the newest emulators from the Setup, light gun in every RetroArch core, every Flycast BIOS in Download BIOS, Windows shared folders working again. Cabinets already installed get all of this from the Setup's own update (updates 47 to 54).
+
+**System changes:**
+
+- **GroovyMAME party (lockstep)**: every MAME game of two or more players has PARTY PLAY in the frontend, for up to four players on two to four cabinets. Every emulated frame each cabinet sends its players' controls (UDP, ports 55441 to 55444) and waits for the others' of the same frame, so every machine runs the same game on the same frame, as a link board does; on the cable a round trip takes under 1 ms, so there is no input delay. Every cabinet starts from the game's factory memory and settings (a folder of the party's own in `~/.cache/fliperos/party-mame`), on the first cabinet's clock (`-rtc`), without the hiscore plugin and the autosave; each cabinet's own saves stay untouched. Tested with Super Street Fighter II Turbo between a cabinet and a PC: in 9 runs the game's RAM was the same on both machines every second, and screenshots of the same frames were identical byte for byte
+- **Flycast party in lockstep** (update 52): up to four players on two to four cabinets, each with its own controllers, one frame of input delay, the faster machine waiting a few ms for the others each frame; the party starts from the factory saved memory and gives each cabinet its own back
+- **Cabinet names** (update 52): Setup > System > Cabinet name, also asked during the installation, or a fruit or an animal of its own; shown in the party room and in the "NAME IS PLAYING" notice with a bell. "Net play" is called party: it only runs on the local network
+- Light gun in every RetroArch core that has one (FBNeo, PlayStation, SNES, Mega Drive, Master System, NES); a RetroArch game downloads its folder's core when it is missing; DuckStation plays PAL games at 50 Hz and opens PS1 games from the frontend again
+- Setup > Emulators & Games can build or take the newest Flycast, RetroArch, Dolphin, GroovyMAME, Supermodel, OpenBOR and PCSX2 right on the cabinet, and go back to the package. The newest GroovyMAME is compiled with the FliperOS patches, so the party keeps working with it: the whole MAME, hours, with 20 GB free on the disk (the Setup warns before it starts)
+- The D-pad of a controller set in Button mapping works in RetroArch even without a ready RetroArch profile for it (update 53)
+- Download BIOS brings every BIOS Flycast uses; Samba shares open again from Windows (`samba-vfs-modules`); OpenBOR's and DuckStation's own logs in the web panel
+
+**Package changes:**
+
+- `fliperos-groovymame` 0.289.222f-1fliperos2: built from the source of the release's tag (`gm0289sr222f`, commit `953db38`) with the lockstep patch (`packaging/patches/groovymame/0001-lockstep-patch.patch`), without the Qt debugger and the tools; it was the release's binary
+- `fliperos-flycast` 2.7.20261031-1fliperos2: patches 0001 to 0005 (no loading screen, party of up to four, network every millisecond, machines within a frame, the lockstep patch)
+- `samba-vfs-modules` in the image
+
+**fliperos-setup changes:**
+
+- `gui/felink.py`: the GroovyMAME party (`mame_lockstep`, `mame_lockstep_args`, the plan's `rtc`), the Flycast party and its lockstep options, cabinet names, the RetroArch party that starts at once
+- `gui/feview.py` and `gui/fliperos-frontend`: the bell notice, the names in the room, the buttons with the panel button inside
+- `lib/system.sh` and `screens/setup-menu.sh`: Cabinet name; `screens/install-progress.sh` asks it
+- `config/fliperos-emulators`: the newest version of each packaged emulator (`edge`); a recipe says how long it takes (`PKG_EDGE_WAIT`); `screens/setup-menu.sh` warns that the newest GroovyMAME takes hours
+
+**Tool changes:**
+
+- `packaging/build-deb.sh --skip-existing`; the Release workflow takes the `.deb` already published in the `packages` release (checked against `updates/packages.list`) and builds only the recipes that have none, so the image and the updates install the same packages
+
 ## 0.21
 
 Namco System 246 and 256 arcade games (Tekken 4 and 5, Soul Calibur II and III, Time Crisis 3 and 4...) now have their own emulator, **PCSX2x6**, next to PCSX2. The BIOS download now comes from RetroBIOS, and Dolphin is a package updated over the network. Also in this ISO, everything the updates 40 to 46 brought since 0.20: GroovyMAME in KMS from the frontend, the same packages as the ISO over the network, the Custom monitor in the menus. Cabinets already installed get all of this from the Setup's own update (updates 40 to 46).
