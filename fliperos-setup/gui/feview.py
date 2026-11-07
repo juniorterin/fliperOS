@@ -1267,8 +1267,8 @@ def list_row(fe, ui, i, lx, lw, y, sep, now):
         # Varias parties no jogo: o globo, o [+] meio verde depois dele e, na
         # ponta, quantas sao.
         globe_icon(ui, lx + 5, y + 6, 5, True)
-        expand_mark(ui, lx + 12, y + 1, (game["_system"]["key"], game["Name"]) in fe.parties_open, T.GREEN)
-        x = lx + 26
+        expand_mark(ui, lx + 15, y + 1, (game["_system"]["key"], game["Name"]) in fe.parties_open, T.GREEN)
+        x = lx + 29
         label, color = fe.fd.short_title(game), T.YELLOW
         count = str(len(parties))
         tail = lambda: W.text(ui, count, T.GREEN, lx + lw - 14, y + 2, right=True)
@@ -1280,10 +1280,10 @@ def list_row(fe, ui, i, lx, lw, y, sep, now):
         if in_party:
             # Uma party do jogo: o trilho, como o de um clone (descendo do
             # [+], depois do globo), e o gabinete dela.
-            x = lx + 36
+            x = lx + 34
             last = i + 1 >= len(fe.rows) or not isinstance(fe.rows[i + 1][2], tuple) or fe.rows[i + 1][2][:1] != ("party",)
-            pygame.draw.line(ui, T.LINE, (lx + 17, y - 3), (lx + 17, y + (5 if last else 14)))
-            pygame.draw.line(ui, T.LINE, (lx + 17, y + 5), (lx + 30, y + 5))
+            pygame.draw.line(ui, T.LINE, (lx + 20, y - 3), (lx + 20, y + (5 if last else 14)))
+            pygame.draw.line(ui, T.LINE, (lx + 20, y + 5), (lx + 29, y + 5))
             label, color = fe.felink.clean_name(party["host"]) or "A CABINET", T.GREEN
         else:
             globe_icon(ui, lx + 5, y + 6, 5, True)
