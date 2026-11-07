@@ -652,6 +652,7 @@ class FrontendLinkTests(unittest.TestCase):
 
     def stub(self, parties=(), profiled=("model3", "scud")):
         import types
+        import fedata
         link = mock.Mock()
         link.available.return_value = True
         link.local_players = 2
@@ -666,10 +667,12 @@ class FrontendLinkTests(unittest.TestCase):
         games.append({"Name": "xmen", "Title": "xmen", "_system": {"key": "retroarch/fbneo"}, "Players": "4"})
         fe = types.SimpleNamespace(link=link, felink=felink, games=games, mode="list", show_clones=True, opened=set(), cursor=0, overlay=None, ov={},
                                    fd=types.SimpleNamespace(tree=lambda gs: [(g, []) for g in gs], GROUPS=(),
-                                                            group_item=lambda extra: None), filtered=lambda: games,
-                                   rows=[], game=lambda: fe.rows[fe.cursor][0])
+                                                            group_item=lambda extra: None, group_head=lambda extra: False,
+                                                            elsewhere=fedata.elsewhere), filtered=lambda: games,
+                                   rows=[], game=lambda: fe.rows[fe.cursor][0], parties_open=set(),
+                                   party_order=self.fm.Frontend.party_order)
         fe.rebuild = lambda keep=None: self.fm.Frontend.rebuild(fe, keep)
-        for name in ("popup_tiles", "link_profile", "overlay_act", "link_host", "link_join"):
+        for name in ("popup_tiles", "link_profile", "overlay_act", "link_host", "link_join", "link_parties", "act"):
             setattr(fe, name, lambda *a, name=name: getattr(self.fm.Frontend, name)(fe, *a))
         return fe
 
@@ -753,6 +756,44 @@ class FrontendLinkTests(unittest.TestCase):
         fe.mode = "flow"
         fe.rebuild()
         self.assertEqual(len(fe.rows), 4)
+
+    def test_separate_parties_in_one_game_open_under_its_row_with_the_cabinet_names(self):
+        a = dict(self.party(), party="pa", host="PANDA", state="playing")
+        b = dict(self.party(), party="pb", host="MANGO")
+        fe = self.stub([a, b])
+        fe.picking = fe.letter_mode = fe.commercial = False
+        fe.locked = lambda: False
+        fe.rebuild()
+        # Fechado: so a linha do jogo no alto (com o [+] verde no desenho).
+        self.assertEqual([r[2] for r in fe.rows[:2]], ["elsewhere", []])
+        fe.act("b1")
+        self.assertIsNone(fe.overlay)
+        self.assertEqual(fe.parties_open, {("model3", "scud")})
+        # Aberto: uma linha por party, a que aceita gente primeiro, e o cursor na primeira.
+        self.assertEqual([r[2] for r in fe.rows[:4]], ["elsewhere", ("party", "pb"), ("party", "pa"), []])
+        self.assertEqual(fe.cursor, 1)
+        # Na linha de uma party, o menu abre no azulejo dela.
+        fe.cursor = 2
+        fe.act("b1")
+        self.assertEqual(fe.overlay, "popup")
+        self.assertEqual(fe.popup_tiles()[fe.ov["sel"]]["party"]["party"], "pa")
+        # O 2 fecha as parties e volta a linha do jogo.
+        fe.overlay = None
+        fe.act("b2")
+        self.assertEqual((fe.parties_open, fe.cursor, fe.rows[1][2]), (set(), 0, []))
+        # Uma party acaba: o [+] aberto fecha sozinho.
+        fe.act("b1")
+        fe.link.parties.return_value = [b]
+        fe.rebuild()
+        self.assertEqual((fe.parties_open, [r[2] for r in fe.rows[:2]]), (set(), ["elsewhere", []]))
+
+    def test_a_single_party_row_opens_the_menu(self):
+        fe = self.stub([self.party()])
+        fe.picking = fe.letter_mode = fe.commercial = False
+        fe.locked = lambda: False
+        fe.rebuild()
+        fe.act("b1")
+        self.assertEqual((fe.overlay, fe.ov["sel"], fe.parties_open), ("popup", 0, set()))
 
     def test_a_running_party_that_still_takes_cabinets_offers_join(self):
         party = dict(self.party("playing"), game="xmen", system="retroarch/fbneo", max=4, open=True)

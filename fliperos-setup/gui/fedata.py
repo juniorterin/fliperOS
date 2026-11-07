@@ -275,6 +275,13 @@ def group_item(extra):
     return isinstance(extra, tuple) and extra[:1] == ("in",)
 
 
+def elsewhere(extra):
+    """Uma linha do alto da lista, a dos jogos que outros gabinetes jogam: a
+    do jogo ("elsewhere") ou, com o [+] dele aberto, a de uma das parties
+    (("party", id))."""
+    return extra == "elsewhere" or (isinstance(extra, tuple) and extra[:1] == ("party",))
+
+
 # ── A biblioteca ───────────────────────────────────────────────────
 
 class Library:

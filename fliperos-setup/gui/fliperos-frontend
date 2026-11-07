@@ -271,6 +271,7 @@ class Frontend:
         self.load_filter()
         self.opened = set()        # os jogos pai com os clones abertos (na lista)
         self.groups_open = set()   # RECENT / FAVOURITES abertos no alto da lista
+        self.parties_open = set()  # (sistema, jogo) do alto com as parties abertas
         # Tab > Frontend options > Show clones (gravado no frontend.json).
         self.show_clones = cfg.get("clones", True) is not False
         # Tab > Frontend options: o atalho que fecha o jogo (a tecla, como
@@ -497,15 +498,24 @@ class Frontend:
                         head.extend((g, 0, ("in", key)) for g in items)
             rows = head + rows
         # Na lista, no alto, os jogos que outros gabinetes jogam agora (o link):
-        # uma linha por jogo, a que abre o menu com o JOIN.
+        # uma linha por jogo, a que abre o menu com o JOIN. Com mais de uma
+        # party no mesmo jogo, a linha tem o [+]: aberto, uma linha por party
+        # (o nome do gabinete que a abriu).
         link = getattr(self, "link", None)
         if self.mode == "list" and link and link.available():
             here = {(g["_system"]["key"], g["Name"]): g for g in games}
-            top = []
+            by_game = {}
             for p in link.parties():
                 g = here.get((p["system"], p["game"]))
-                if g is not None and not any(r[0] is g for r in top):
-                    top.append((g, 0, "elsewhere"))
+                if g is not None:
+                    by_game.setdefault((p["system"], p["game"]), (g, []))[1].append(p)
+            # O [+] aberto de um jogo que voltou a ter uma party so fecha.
+            self.parties_open &= {k for k, (_, parties) in by_game.items() if len(parties) > 1}
+            top = []
+            for key, (g, parties) in by_game.items():
+                top.append((g, 0, "elsewhere"))
+                if len(parties) > 1 and key in self.parties_open:
+                    top.extend((g, 0, ("party", p["party"])) for p in self.party_order(parties))
             rows = top + rows
         self.rows = rows
         if keep:
@@ -513,7 +523,7 @@ class Frontend:
             # posicao dos clones): a linha dele mesmo, nao a "MAIN SET" nem a
             # que repete o jogo no alto.
             found = [i for i, (g, _, extra) in enumerate(rows)
-                     if g is not None and g["Name"] == keep and extra != "main" and extra != "elsewhere"
+                     if g is not None and g["Name"] == keep and extra != "main" and not self.fd.elsewhere(extra)
                      and (not self.fd.group_item(extra) or extra == old)]
             if found:
                 self.cursor = min(found, key=lambda i: (rows[i][2] != old, abs(i - self.cursor) if rows[i][1] else -1))
@@ -772,11 +782,23 @@ class Frontend:
                 self.rebuild()
                 if g["Name"] in self.opened:
                     self.cursor += 1
+            elif clones == "elsewhere" and len(self.link_parties(g)) > 1:
+                # Outros gabinetes em parties separadas no mesmo jogo: o [+]
+                # abre (ou fecha) uma linha por party, com o nome do gabinete.
+                key = (g["_system"]["key"], g["Name"])
+                self.parties_open ^= {key}
+                self.rebuild()
+                if key in self.parties_open:
+                    self.cursor += 1
             elif self.locked():
                 # O modo comercial sem tempo: escolher um jogo, so com ficha.
                 self.nag()
             else:
-                self.overlay, self.ov = "popup", {"sel": 0}
+                # Na linha de uma party, o menu ja no azulejo dela (JOIN ou o estado).
+                pid = clones[1] if self.fd.elsewhere(clones) and clones != "elsewhere" else None
+                tiles = self.popup_tiles() if pid else []
+                sel = next((k for k, t in enumerate(tiles) if (t.get("party") or {}).get("party") == pid), 0)
+                self.overlay, self.ov = "popup", {"sel": sel}
         elif a == "b2":
             # Num clone aberto, fecha o grupo (na tela cheia e na grade, volta ao pai);
             # senao, pergunta se sai. No modo comercial (quiosque) o cliente
@@ -793,6 +815,13 @@ class Frontend:
                 owner = g if parent == "main" else parent
                 self.opened.discard(owner["Name"])
                 self.rebuild(keep=owner["Name"])
+                self.closed_group = time.monotonic()
+            elif self.fd.elsewhere(parent) and parent != "elsewhere":
+                # Na linha de uma party: fecha as parties e volta a linha do jogo.
+                self.parties_open.discard((g["_system"]["key"], g["Name"]))
+                self.rebuild()
+                self.cursor = next((i for i, (g0, _, e) in enumerate(self.rows)
+                                    if e == "elsewhere" and g0 is g), 0)
                 self.closed_group = time.monotonic()
             elif not self.commercial:
                 self.overlay, self.ov = "exit", {"sel": 1}
@@ -1406,10 +1435,18 @@ class Frontend:
         files = self.lib.rom_files(g)
         return files[0] if files else None
 
+    @staticmethod
+    def party_order(parties):
+        """As que ainda aceitam gente primeiro, depois pelo nome do gabinete."""
+        return sorted(parties, key=lambda p: (p["state"] != "lobby", p["host"] or ""))
+
+    def link_parties(self, g):
+        """As festas de outros gabinetes nesse jogo (party_order)."""
+        return self.party_order(self.link.parties_for(g["_system"]["key"], g["Name"])) if g else []
+
     def link_party(self, g):
         """A festa de outro gabinete nesse jogo (a que ainda aceita gente primeiro)."""
-        parties = self.link.parties_for(g["_system"]["key"], g["Name"]) if g else []
-        parties.sort(key=lambda p: (p["state"] != "lobby", p["host"] or ""))
+        parties = self.link_parties(g)
         return parties[0] if parties else None
 
     def popup_tiles(self):
@@ -1527,7 +1564,16 @@ class Frontend:
             self.link_sig = sig
             if not self.overlay or self.overlay == "popup":
                 g = self.game()
+                extra = self.rows[self.cursor][2] if self.rows else None
                 self.rebuild(keep=g["Name"] if g else None)
+                if g is not None and self.fd.elsewhere(extra):
+                    # O cursor numa linha do alto (o jogo ou uma party dele)
+                    # fica nela; a party que acabou volta a linha do jogo.
+                    same = [i for i, (g0, _, e) in enumerate(self.rows)
+                            if g0 is not None and g0["Name"] == g["Name"] and e in (extra, "elsewhere")
+                            and g0["_system"]["key"] == g["_system"]["key"]]
+                    if same:
+                        self.cursor = min(same, key=lambda i: self.rows[i][2] != extra)
         if self.overlay == "transfer" and self.ov.get("result") not in (None, "cancel"):
             ok = self.ov["result"]
             party = self.ov["party"]

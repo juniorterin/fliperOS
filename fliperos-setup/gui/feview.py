@@ -291,6 +291,11 @@ def link_party(fe, g):
     return f(g) if f and g else None
 
 
+def link_parties(fe, g):
+    f = getattr(fe, "link_parties", None)
+    return f(g) if f and g else []
+
+
 def link_badge(fe, ui, g, x, y, w, h):
     """A marca do link no canto da miniatura (a grade e a tela cheia): o globo
     e, se alguem joga o jogo, os gabinetes da festa na beirada de baixo."""
@@ -1153,9 +1158,9 @@ def draw_list(fe, ui, now):
     if fe.cursor >= fe.top + rows:
         fe.top = fe.cursor - rows + 1
     fe.top = max(0, min(fe.top, max(0, len(fe.rows) - rows)))
-    shown = sep and fe.rows[fe.top][2] == "elsewhere"
+    shown = sep and fe.fd.elsewhere(fe.rows[fe.top][2])
     for i in range(fe.top, min(len(fe.rows), fe.top + rows)):
-        y = y0 + (i - fe.top) * 14 + (sep if shown and fe.rows[i][2] != "elsewhere" else 0)
+        y = y0 + (i - fe.top) * 14 + (sep if shown and not fe.fd.elsewhere(fe.rows[i][2]) else 0)
         with part(fe, ui, "row", i - fe.top) as s:
             list_row(fe, s, i, lx, lw, y, sep, now)
     with part(fe, ui, "chrome") as s:
@@ -1239,26 +1244,50 @@ def draw_list(fe, ui, now):
 
 def list_row(fe, ui, i, lx, lw, y, sep, now):
     """A linha i da lista: o jogo (o pai com o [+], o clone com o trilho, o
-    de outro gabinete com o globo) ou o cabecalho de um grupo."""
+    de outro gabinete com o globo, e o [+] verde com mais de uma party nele;
+    aberto, cada party com o trilho e o nome do gabinete) ou o cabecalho de
+    um grupo."""
     game, level, extra = fe.rows[i]
     on = i == fe.cursor
     if game is None:
         group_header(fe, ui, (lx, y, lw, 12), extra, on, now)
         return
     # Os clones do jogo pai; "elsewhere" (um jogo que outro gabinete joga
-    # agora, no alto da lista) nao e uma lista deles.
+    # agora, no alto da lista) e ("party", id) (uma das parties dele, com o
+    # [+] aberto) nao sao uma lista deles.
     clones = extra if isinstance(extra, list) else None
-    party = link_party(fe, game) if extra == "elsewhere" else None
-    if party:
-        globe_icon(ui, lx + 5, y + 6, 5, True)
-        x = lx + 14
+    parties = link_parties(fe, game) if fe.fd.elsewhere(extra) else []
+    party = next((p for p in parties if extra == "elsewhere" or p["party"] == extra[1]), None)
+    in_party = party is not None and extra != "elsewhere"
+    # A ponta direita (os gabinetes, quantas parties): por cima da moldura do escolhido.
+    tail = None
+    if party and i + 1 < len(fe.rows) and not fe.fd.elsewhere(fe.rows[i + 1][2]):
+        pygame.draw.line(ui, T.LINE, (lx, y + 13 + sep // 2), (lx + lw - 2, y + 13 + sep // 2))
+    if party and extra == "elsewhere" and len(parties) > 1:
+        # Varias parties no jogo: o [+] meio verde e, na ponta, quantas sao.
+        expand_mark(ui, lx, y + 1, (game["_system"]["key"], game["Name"]) in fe.parties_open, T.GREEN)
+        globe_icon(ui, lx + 19, y + 6, 5, True)
+        x = lx + 28
         label, color = fe.fd.short_title(game), T.YELLOW
+        count = str(len(parties))
+        tail = lambda: W.text(ui, count, T.GREEN, lx + lw - 14, y + 2, right=True)
+        room = lx + lw - x - 12 - W.width(count) - 6
+    elif party:
         total = party["max"] or 1
         sw = total * 6 - 1
-        cabinet_row(ui, lx + lw - 14 - sw, y + 2, party["used"], total, w=5, h=8, gap=1)
+        tail = lambda: cabinet_row(ui, lx + lw - 14 - sw, y + 2, party["used"], total, w=5, h=8, gap=1)
+        if in_party:
+            # Uma party do jogo: o trilho, como o de um clone, e o gabinete dela.
+            x = lx + 26
+            last = i + 1 >= len(fe.rows) or not isinstance(fe.rows[i + 1][2], tuple) or fe.rows[i + 1][2][:1] != ("party",)
+            pygame.draw.line(ui, T.LINE, (lx + 5, y - 3), (lx + 5, y + (5 if last else 14)))
+            pygame.draw.line(ui, T.LINE, (lx + 5, y + 5), (lx + 20, y + 5))
+            label, color = fe.felink.clean_name(party["host"]) or "A CABINET", T.GREEN
+        else:
+            globe_icon(ui, lx + 5, y + 6, 5, True)
+            x = lx + 14
+            label, color = fe.fd.short_title(game), T.YELLOW
         room = lx + lw - x - 12 - sw - 6
-        if i + 1 < len(fe.rows) and fe.rows[i + 1][2] != "elsewhere":
-            pygame.draw.line(ui, T.LINE, (lx, y + 13 + sep // 2), (lx + lw - 2, y + 13 + sep // 2))
     elif level == 0:
         room = None
         lmark = link_mark(fe, game)
@@ -1293,7 +1322,9 @@ def list_row(fe, ui, i, lx, lw, y, sep, now):
         tile_frame(ui, (x - 4, y, lx + lw - x + 4, 12), True, now)
         pygame.draw.rect(ui, T.PINK, (x - 4, y, lx + lw - x + 4, 12), 1)
         color = T.FG
-    if game.get("Favourite") == "1" and level == 0:
+    if tail:
+        tail()
+    if game.get("Favourite") == "1" and level == 0 and not in_party:
         star(ui, lx + lw - 6, y + 6, T.YELLOW, 4)
     room = lx + lw - x - 12 if room is None else room
     if on:
@@ -1303,15 +1334,17 @@ def list_row(fe, ui, i, lx, lw, y, sep, now):
         W.text(ui, fit(label, room), color, x, y + 2)
 
 
-def expand_mark(ui, x, y, opened):
+def expand_mark(ui, x, y, opened, color=None):
     """O [+] (aberto, o [-]) do jogo pai com clones e do grupo RECENT: um
-    pouco transparente (aberto, menos)."""
+    pouco transparente (aberto, menos). color: a cor nos dois estados (o
+    verde do jogo com varias parties de outros gabinetes)."""
+    c = color or (T.PINK if opened else T.COMMENT)
     mark = pygame.Surface((10, 10), pygame.SRCALPHA)
     mark.fill(T.BG_DEEP)
-    pygame.draw.rect(mark, T.PINK if opened else T.COMMENT, (0, 0, 10, 10), 1)
-    mark.fill(T.PINK if opened else T.COMMENT, (2, 4, 6, 2))
+    pygame.draw.rect(mark, c, (0, 0, 10, 10), 1)
+    mark.fill(c, (2, 4, 6, 2))
     if not opened:
-        mark.fill(T.COMMENT, (4, 2, 2, 6))
+        mark.fill(c, (4, 2, 2, 6))
     mark.set_alpha(190 if opened else 120)
     ui.blit(mark, (x, y))
 

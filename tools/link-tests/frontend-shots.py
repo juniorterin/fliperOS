@@ -180,6 +180,16 @@ def main():
     shots("popup-started", ["b1", "right"], setup=on_row("ssf2tb"))
     shots("popup-net", ["b1", "right"], setup=on_row("xmen"))
     shots("list-net", [], setup=on_row("xmen"))
+    # Duas parties separadas no Daytona (CABINET-G abriu outra): o [+] verde na
+    # linha do alto e, aberto, os gabinetes de cada uma.
+    two = {"table": net["table"] + [
+        {"v": 1, "id": "g1", "name": "CABINET-G", "ip": "10.9.9.8", "game": "daytona", "system": "model2", "link": "daytona",
+         "party": "g1", "slot": 1, "max": 8, "state": "playing"}]}
+    with open(os.path.join(HOME, "net-two.json"), "w") as f:
+        json.dump(two, f)
+    os.environ["FLIPEROS_LINK_FAKE"] = os.path.join(HOME, "net-two.json")
+    shots("list-parties", ["b1", "down"], setup=on_row("daytona", elsewhere=True))
+    os.environ["FLIPEROS_LINK_FAKE"] = path
     # A sala: este gabinete abre a festa de verdade, no loopback, e dois outros entram.
     link = felink.Link(HOME, wire=felink.Wire("lo", "127.0.0.1", "255.0.0.0", "127.255.255.255"), ident="me0", name="THIS",
                        ports={"presence": 55501, "party": 55502, "files": 55503})
