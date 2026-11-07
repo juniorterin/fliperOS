@@ -15737,6 +15737,35 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertEqual(lines(1, 'left', 'h0.8'), ['input_player1_left_btn = "h0left"',
                                                     'input_player1_left_axis = "nul"'])
 
+    def test_retroarch_hat_on_linuxraw(self):
+        # 8BitDo Ultimate no xpad (2026-11-07): ABS X Y Z RX RY RZ e o hat 0
+        # nos eixos 6 e 7 do /dev/input/js. Sem perfil linuxraw para ele, o
+        # "h0up" sozinho deixava o RetroArch sem direcional.
+        js = self.rc.js_axes([0, 1, 2, 3, 4, 5, 0x10, 0x11])
+        self.assertEqual(js, ({i: i for i in range(6)}, {0: (6, 7)}))
+        lines = self.rc.retroarch_lines
+        self.assertEqual(lines(1, 'up', 'h0.1', js), ['input_player1_up_btn = "h0up"', 'input_player1_up_axis = "-7"'])
+        self.assertEqual(lines(1, 'down', 'h0.4', js)[1], 'input_player1_down_axis = "+7"')
+        self.assertEqual(lines(1, 'left', 'h0.8', js)[1], 'input_player1_left_axis = "-6"')
+        self.assertEqual(lines(1, 'right', 'h0.2', js)[1], 'input_player1_right_axis = "+6"')
+        # Hat antes de um eixo (ABS_THROTTLE depois do HAT0): o eixo 2 do SDL
+        # e o 4 do joystick do kernel.
+        js = self.rc.js_axes([0, 1, 0x10, 0x11, 0x1a])
+        self.assertEqual(lines(1, 'b5', '+a2', js), ['input_player1_a_axis = "+4"', 'input_player1_a_btn = "99"'])
+        self.assertEqual(lines(1, 'up', '-a1', js)[0], 'input_player1_up_axis = "-1"')
+        # Na config inteira, pelos codigos do aparelho ligado.
+        pad = {'up': (0, 'h0.1'), 'b1': (0, 'b1')}
+        devices = {0: ('guid', 'Pad', 11, 6, (), [0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5, 0x10, 0x11])}
+        cfg = self.rc.retroarch_cfg({1: pad}, {0: 'Pad'}, devices).split('\n')
+        self.assertIn('input_player1_up_axis = "-7"', cfg)
+        # Desligado no save (a atualizacao regrava o mapa): o eixo de antes fica.
+        old = {'input_player1_up_btn': 'h0up', 'input_player1_up_axis': '-7'}
+        cfg = self.rc.retroarch_cfg({1: pad}, {0: 'Pad'}, {}, old).split('\n')
+        self.assertIn('input_player1_up_axis = "-7"', cfg)
+        old['input_player1_up_btn'] = 'h0down'
+        cfg = self.rc.retroarch_cfg({1: pad}, {0: 'Pad'}, {}, old).split('\n')
+        self.assertIn('input_player1_up_axis = "nul"', cfg)
+
     def test_retroarch_profile_does_not_add_a_second_button(self):
         # Painel que se diz Xbox 360 (o do gabinete em 2026-10-25): botao 2 no
         # B e os 5 e 6 nos gatilhos. Com "nul" no lado sem uso, o RetroArch

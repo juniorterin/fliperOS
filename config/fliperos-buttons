@@ -32,7 +32,9 @@ baixo, esquerda). INDICE e a ordem do controle no SDL. MAPA: linhas
 RetroArch: binds por jogador num arquivo que o fliperos-kms-run soma a
 config (--appendconfig), por cima do perfil automatico do controle; os
 botoes do painel no layout dos cores de arcade (FBNeo, MAME), como o
-fliperos-controllers: Y X L / B A R, Start e Select (ficha).
+fliperos-controllers: Y X L / B A R, Start e Select (ficha). O direcional
+de hat leva tambem o eixo do /dev/input/js (o driver linuxraw), e os eixos
+vao na numeracao dele, que conta os hats.
 
 GroovyMAME: um ctrlr (~/.mame/ctrlr/fliperos.cfg) com os JOYCODE de cada
 jogador, e no mame.ini "ctrlr fliperos" e "joystickprovider sdljoy" (o
@@ -260,15 +262,37 @@ def mame_code(index, element):
 # ele usa o do perfil automatico do controle. No Xbox 360 o B (botao 2 de um
 # painel assim) e o A do RetroPad, e o botao 2 apertava junto o 5 no MAME
 # 2010. Um indice que nao existe nunca e apertado.
-# Nas direcoes o "nul" fica: o perfil ali so traz a mesma direcao, e e por
-# ele que o direcional anda no driver linuxraw do RetroArch (o /dev/input/js,
-# onde o hat do Xbox 360 chega como eixo e o "h0up" nunca e apertado).
+# Nas direcoes o "nul" fica: o perfil ali so traz a mesma direcao.
+# O hat vai nos dois lados: "h0up" no botao (driver udev) e o eixo do
+# /dev/input/js no eixo (driver linuxraw, o do FliperOS: ali o hat chega como
+# eixo e o "h0up" nunca e apertado). So com o perfil o direcional de hat
+# andava, e um controle sem perfil linuxraw (o 8BitDo Ultimate, por exemplo)
+# ficava sem direcional.
 RA_NONE_BTN, RA_NONE_AXIS = '99', '+99'
 DIRECTIONS = ('up', 'down', 'left', 'right')
+JS_HAT = {'1': ('-', 1), '4': ('+', 1), '8': ('-', 0), '2': ('+', 0)}
 
 
-def retroarch_lines(player, control, element):
-    """Os binds do RetroArch (driver udev) de um controle de um jogador."""
+def js_axes(codes):
+    """({eixo do SDL: eixo do /dev/input/js}, {hat: (eixo x, eixo y)}) pelos
+    codigos ABS do controle: o joydev (o linuxraw do RetroArch) numera todos
+    os eixos em ordem, hats junto; o SDL pula os hats. None sem os codigos."""
+    if codes is None:
+        return None
+    axes, hats, sdl_index = {}, {}, 0
+    for js_index, code in enumerate(codes):
+        if 0x10 <= code <= 0x17:
+            hats.setdefault((code - 0x10) // 2, [None, None])[(code - 0x10) % 2] = js_index
+        else:
+            axes[sdl_index] = js_index
+            sdl_index += 1
+    return axes, {h: tuple(v) for h, v in hats.items() if None not in v}
+
+
+def retroarch_lines(player, control, element, js=None):
+    """Os binds do RetroArch de um controle de um jogador: o botao e o hat na
+    numeracao do SDL (a do udev); o eixo na do /dev/input/js com `js`
+    (js_axes do aparelho), que so difere da do SDL quando ha hat antes dele."""
     key = 'input_player%d_%s' % (player, RA_KEYS[control])
     if control in DIRECTIONS:
         none_btn = none_axis = 'nul'
@@ -281,8 +305,39 @@ def retroarch_lines(player, control, element):
         return ['%s_btn = "%s"' % (key, element[1:]), '%s_axis = "%s"' % (key, none_axis)]
     if element.startswith('h'):
         hat, direction = element[1:].split('.')
-        return ['%s_btn = "h%s%s"' % (key, hat, RA_HAT[direction]), '%s_axis = "%s"' % (key, none_axis)]
-    return ['%s_axis = "%s%s"' % (key, element[0], element[2:]), '%s_btn = "%s"' % (key, none_btn)]
+        axis = none_axis
+        if js and int(hat) in js[1] and direction in JS_HAT:
+            sign, xy = JS_HAT[direction]
+            axis = sign + str(js[1][int(hat)][xy])
+        return ['%s_btn = "h%s%s"' % (key, hat, RA_HAT[direction]), '%s_axis = "%s"' % (key, axis)]
+    index = int(element[2:])
+    if js:
+        index = js[0].get(index, index)
+    return ['%s_axis = "%s%d"' % (key, element[0], index), '%s_btn = "%s"' % (key, none_btn)]
+
+
+def keep_hat_axes(lines, old):
+    """Com o controle desligado no save (a atualizacao do sistema grava o mapa
+    de novo), o eixo do hat que o save anterior achou fica: o mesmo "hNdir"
+    no botao e o eixo "nul" agora."""
+    out = []
+    for line in lines:
+        m = re.fullmatch(r'(input_player\d+_\w+)_axis = "nul"', line)
+        btn = old.get(m.group(1) + '_btn', '') if m else ''
+        axis = old.get(m.group(1) + '_axis', 'nul') if m else 'nul'
+        if m and btn.startswith('h') and '%s_btn = "%s"' % (m.group(1), btn) in lines and axis != 'nul':
+            line = '%s_axis = "%s"' % (m.group(1), axis)
+        out.append(line)
+    return out
+
+
+def read_cfg(path):
+    """{chave: valor} de uma config do RetroArch; vazio sem o arquivo."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            return dict(re.findall(r'^(\w+) = "([^"\n]*)"', f.read(), re.M))
+    except OSError:
+        return {}
 
 
 def retroarch_triggers(player, binds):
@@ -340,7 +395,14 @@ def fix_triggers(players, devices):
     return fixed
 
 
-def retroarch_cfg(players, names):
+def device_js(devices, index):
+    """O js_axes do controle INDICE, se ligado (sdl_devices)."""
+    return js_axes(devices[index][6]) if devices and index in devices else None
+
+
+def retroarch_cfg(players, names, devices=None, old=None):
+    """O buttons.cfg; `devices` (sdl_devices) da os eixos do /dev/input/js,
+    `old` (read_cfg do anterior) o eixo do hat de quem esta desligado."""
     lines = ['# Gerado pelo Setup > Joysticks > Button mapping (fliperos-buttons): os botoes',
              '# de cada jogador, por cima do perfil automatico do controle. O fliperos-kms-run',
              '# soma este arquivo a config (--appendconfig).']
@@ -350,9 +412,12 @@ def retroarch_cfg(players, names):
         lines += ['', '# Jogador %d: %s' % (player, names.get(index, ''))]
         if index >= 0:
             lines.append('input_player%d_joypad_index = "%d"' % (player, index))
+        js = device_js(devices, index)
+        mine = []
         for control in CONTROLS:
             if control in binds:
-                lines += retroarch_lines(player, control, binds[control][1])
+                mine += retroarch_lines(player, control, binds[control][1], js)
+        lines += mine if js or not old else keep_hat_axes(mine, old)
         lines += retroarch_triggers(player, binds)
     # As teclas de atalho do RetroArch que caem nas teclas do mapa.
     used = {KEYS[e[2:]][0] for binds in players.values() for _, e in binds.values() if is_key(e)}
@@ -478,7 +543,7 @@ def mame_cfg(players, names, layouts=None, games=None):
             + ''.join(ports) + '        </input>\n    </system>\n' + ''.join(systems) + '</mameconfig>\n')
 
 
-def retroarch_layout_cfg(players, count, order):
+def retroarch_layout_cfg(players, count, order, devices=None):
     """O buttons-BOTOES.cfg: os binds dos 6 botoes de cada jogador com o
     botao N do jogo na posicao do painel escolhida, por cima do buttons.cfg."""
     lines = ['# Gerado pelo Setup > Joysticks > Buttons layout (fliperos-buttons): os jogos de',
@@ -489,7 +554,8 @@ def retroarch_layout_cfg(players, count, order):
         lines.append('')
         for n, position in enumerate(order, 1):
             if 'b%d' % position in binds:
-                lines += retroarch_lines(player, 'b%d' % n, binds['b%d' % position][1])
+                index, element = binds['b%d' % position]
+                lines += retroarch_lines(player, 'b%d' % n, element, device_js(devices, index))
             else:
                 key = 'input_player%d_%s' % (player, RA_KEYS['b%d' % n])
                 lines += ['%s_btn = "%s"' % (key, RA_NONE_BTN), '%s_axis = "%s"' % (key, RA_NONE_AXIS)]
@@ -679,6 +745,13 @@ AM_KEYS_SHORTCUTS = [('configure', 'Tab'), ('prev_letter', 'Up+LControl'), ('nex
 def abs_codes(lib, index):
     """Os codigos ABS_* dos eixos do controle INDICE, na ordem do SDL; None
     sem o caminho dele (SDL antes do 2.24)."""
+    codes = abs_all(lib, index)
+    return None if codes is None else [c for c in codes if c < 0x3f and not 0x10 <= c <= 0x17]
+
+
+def abs_all(lib, index):
+    """Todos os codigos ABS_* do controle INDICE, hats junto, em ordem (a do
+    /dev/input/js); None sem o caminho dele."""
     try:
         path_for = lib.SDL_JoystickPathForIndex
     except AttributeError:
@@ -694,7 +767,7 @@ def abs_codes(lib, index):
     bits = 0
     for word in words:
         bits = (bits << 64) | int(word, 16)
-    return [c for c in range(0x3f) if bits >> c & 1 and not 0x10 <= c <= 0x17]
+    return [c for c in range(0x40) if bits >> c & 1]
 
 
 def attract_code(index, element, codes):
@@ -1377,7 +1450,8 @@ def cmd_fbneo(args):
 
 def sdl_devices():
     """{indice: (guid, nome, botoes, eixos, repouso dos eixos, codigos ABS
-    dos eixos ou None)} dos controles ligados; vazio sem o SDL."""
+    dos eixos ou None, todos os codigos ABS ou None)} dos controles ligados;
+    vazio sem o SDL."""
     try:
         lib = sdl()
     except OSError:
@@ -1404,7 +1478,7 @@ def sdl_devices():
             lib.SDL_JoystickGetGUIDString(lib.SDL_JoystickGetDeviceGUID(i), buf, 33)
             out[i] = (buf.value.decode(), (lib.SDL_JoystickNameForIndex(i) or b'').decode(errors='replace'),
                       lib.SDL_JoystickNumButtons(js), lib.SDL_JoystickNumAxes(js), state(lib, js)[1],
-                      abs_codes(lib, i))
+                      abs_codes(lib, i), abs_all(lib, i))
     finally:
         lib.SDL_Quit()
     return out
@@ -1417,11 +1491,11 @@ def cmd_save(args):
     devices = sdl_devices()
     fixed = fix_triggers(players, devices)
     layouts = read_layouts(BUTTONS_LAYOUT)
-    write(RA_BUTTONS, retroarch_cfg(players, names))
+    write(RA_BUTTONS, retroarch_cfg(players, names, devices, read_cfg(RA_BUTTONS)))
     for count in LAYOUT_COUNTS:
         path = '%s-%d.cfg' % (os.path.splitext(RA_BUTTONS)[0], count)
         if count in layouts:
-            write(path, retroarch_layout_cfg(players, count, layout_order(layouts, count)))
+            write(path, retroarch_layout_cfg(players, count, layout_order(layouts, count), devices))
             print(path)
         elif os.path.isfile(path):
             os.remove(path)
