@@ -65,17 +65,118 @@ customgames_media_path() {
   printf '%s/%s/custom/%s/%s.%s\n' "$CUSTOM_GAMES_MEDIA" "$1" "$2" "$3" "$ext"
 }
 
+# As extensoes que os frontends aceitam de cada tipo (as do fedata.py).
+customgames_media_exts() {
+  case $1 in
+    preview) echo "mp4 mkv webm avi mov flv" ;;
+    texto) echo "txt" ;;
+    *) echo "png jpg jpeg webp gif" ;;
+  esac
+}
+
+# customgames_media_files GRUPO NOME: os arquivos de midia do jogo que
+# existem, de todos os tipos e extensoes.
+customgames_media_files() {
+  local kind ext
+  for kind in $CUSTOM_GAMES_MEDIA_TYPES; do
+    for ext in $(customgames_media_exts "$kind"); do
+      [[ -f $CUSTOM_GAMES_MEDIA/$kind/custom/$1/$2.$ext ]] && printf '%s\n' "$CUSTOM_GAMES_MEDIA/$kind/custom/$1/$2.$ext"
+    done
+  done
+  return 0
+}
+
+# customgames_media_has TIPO GRUPO NOME: o jogo ja tem esse tipo (em
+# qualquer extensao: uma .jpg da pessoa vale, a .png de exemplo a esconderia).
+customgames_media_has() {
+  local ext
+  for ext in $(customgames_media_exts "$1"); do
+    [[ -f $CUSTOM_GAMES_MEDIA/$1/custom/$2/$3.$ext ]] && return 0
+  done
+  return 1
+}
+
+# As de exemplo que o Setup fez ficam anotadas, com o sha256 (a linha do
+# sha256sum): renomear o jogo refaz as de exemplo e leva as de verdade junto,
+# e apaga-lo leva so as de exemplo. Uma de exemplo trocada pela pessoa (outro
+# sha256) passa a ser de verdade.
+CUSTOM_GAMES_SAMPLES=${CUSTOM_GAMES_SAMPLES:-$CUSTOM_GAMES_MEDIA/.custom-samples}
+CUSTOM_GAMES_MEDIA_TOOL=${CUSTOM_GAMES_MEDIA_TOOL:-${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/custom-media.py}
+
+customgames_media_sample() {
+  [[ -f $1 && -f $CUSTOM_GAMES_SAMPLES ]] && grep -qxF "$(sha256sum "$1" | cut -d' ' -f1)  $1" "$CUSTOM_GAMES_SAMPLES"
+}
+
+customgames_media_unmark() {
+  [[ -f $CUSTOM_GAMES_SAMPLES ]] || return 0
+  awk -v p="$1" 'substr($0, 67) != p' "$CUSTOM_GAMES_SAMPLES" > "$CUSTOM_GAMES_SAMPLES.new" &&
+    mv -f "$CUSTOM_GAMES_SAMPLES.new" "$CUSTOM_GAMES_SAMPLES"
+}
+
 # customgames_media GRUPO NOME: as pastas das midias do grupo e, do jogo, uma
 # imagem, um video e um texto de exemplo com o nome dele e o caminho de cada
 # arquivo, e o logotipo (gui/custom-media.py): o jogo ja aparece com arte nos
-# frontends, e a pessoa ve qual arquivo trocar. O que ja existe nao e tocado.
+# frontends, e a pessoa ve qual arquivo trocar. So os tipos que faltam.
 customgames_media() {
+  local -a args=()
+  local kind opt path
   customgames_media_dirs "$1"
-  python3 "${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/custom-media.py" --name "$2" --group "$1" --home "$(dirname "$CUSTOM_GAMES_MEDIA")" \
-    --snap "$(customgames_media_path snap "$1" "$2")" --video "$(customgames_media_path preview "$1" "$2")" \
-    --text "$(customgames_media_path texto "$1" "$2")" --logo "$(customgames_media_path logo "$1" "$2")" \
-    >> "${FLIPEROS_LOG:-/dev/null}" 2>&1 ||
-    log_warn "midias de exemplo de $1 / $2 nao criadas"
+  for kind in snap preview texto logo; do
+    customgames_media_has "$kind" "$1" "$2" && continue
+    case $kind in snap) opt=--snap ;; preview) opt=--video ;; texto) opt=--text ;; logo) opt=--logo ;; esac
+    args+=("$opt" "$(customgames_media_path "$kind" "$1" "$2")")
+  done
+  ((${#args[@]})) || return 0
+  while IFS= read -r path; do
+    [[ -f $path ]] && sha256sum "$path" >> "$CUSTOM_GAMES_SAMPLES"
+  done < <(python3 "$CUSTOM_GAMES_MEDIA_TOOL" --name "$2" --group "$1" --home "$(dirname "$CUSTOM_GAMES_MEDIA")" "${args[@]}" \
+    2>> "${FLIPEROS_LOG:-/dev/null}")
+  chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_SAMPLES" 2> /dev/null
+  return 0
+}
+
+# customgames_media_all: as de exemplo de cada jogo que ainda nao tem (o
+# System Update: os jogos postos antes delas existirem).
+customgames_media_all() {
+  local group name
+  while IFS='|' read -r group name _; do
+    customgames_media "$group" "$name"
+  done < <(customgames_list)
+  return 0
+}
+
+# customgames_media_rename GRUPO NOME GRUPO_NOVO NOME_NOVO: as midias de
+# verdade vao para o nome novo (as que ja existem la ficam); as de exemplo,
+# com o nome antigo escrito nelas, saem (customgames_media faz as novas).
+customgames_media_rename() {
+  local file kind ext target
+  while IFS= read -r file; do
+    if customgames_media_sample "$file"; then
+      rm -f "$file"
+      customgames_media_unmark "$file"
+      continue
+    fi
+    # Uma de exemplo que a pessoa trocou: a anotacao velha sai.
+    customgames_media_unmark "$file"
+    kind=${file#"$CUSTOM_GAMES_MEDIA"/}
+    kind=${kind%%/*}
+    ext=${file##*.}
+    target=$CUSTOM_GAMES_MEDIA/$kind/custom/$3/$4.$ext
+    [[ -e $target ]] && continue
+    mkdir -p "${target%/*}" && mv "$file" "$target" && chown "$FLIPEROS_USER:" "${target%/*}" "$target" 2> /dev/null
+  done < <(customgames_media_files "$1" "$2")
+  return 0
+}
+
+# customgames_media_drop GRUPO NOME: apaga as de exemplo do jogo (as de
+# verdade ficam, a pessoa pode querer de volta).
+customgames_media_drop() {
+  local file
+  while IFS= read -r file; do
+    customgames_media_sample "$file" || continue
+    rm -f "$file"
+    customgames_media_unmark "$file"
+  done < <(customgames_media_files "$1" "$2")
   return 0
 }
 
@@ -128,14 +229,18 @@ customgames_save() {
   mv -f "$file.new" "$file" || return 1
   chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_DIR" "$dir" "$file" 2> /dev/null
   if [[ -n $old_name && ($old_group != "$group" || $old_name != "$name") ]]; then
+    # As midias vao junto (as de exemplo sao refeitas com o nome novo).
+    customgames_media_rename "$old_group" "$old_name" "$group" "$name"
     customgames_delete "$old_group" "$old_name"
   fi
   log_info "jogo personalizado: $group / $name ($mode): $cmd"
 }
 
-# customgames_delete GRUPO NOME apaga a entrada (e o grupo, se ficou vazio).
+# customgames_delete GRUPO NOME apaga a entrada (e o grupo, se ficou vazio)
+# e as midias de exemplo dela.
 customgames_delete() {
   rm -f "$(customgames_file "$1" "$2")" || return 1
+  customgames_media_drop "$1" "$2"
   rmdir "$CUSTOM_GAMES_DIR/$1" 2> /dev/null
   log_info "jogo personalizado apagado: $1 / $2"
   return 0

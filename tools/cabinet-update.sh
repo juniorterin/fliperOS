@@ -302,6 +302,9 @@ echo "== Kernel line (boot straight to Plymouth)"
   # Os scripts dos jogos personalizados com o nome proprio do filtro de
   # flicker (o --app do fliperos-x11-run): os de antes abriam como "bash".
   customgames_refresh
+  # E a imagem, o video, o texto e o logotipo de exemplo dos que ainda nao
+  # tem (os postos antes delas; so os tipos que faltam).
+  customgames_media_all
   grep -E '^(aspect|monitor) ' "$MAME_INI"
   grep -E '^crt_switch_resolution_super' "$RETROARCH_CFG"
 )

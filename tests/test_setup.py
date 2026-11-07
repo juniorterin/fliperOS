@@ -3525,16 +3525,71 @@ class CustomGamesTests(Base):
         for kind in ("snap", "box", "logo", "marquee", "preview", "texto"):
             self.assertTrue((media / kind / "custom" / "PC games").is_dir(), kind)
         lib = (SETUP / "lib" / "customgames.sh").read_text().split("customgames_media() {")[1].split("\n}\n")[0]
-        self.assertLess(lib.index('customgames_media_dirs "$1"'), lib.index("custom-media.py"))
+        self.assertLess(lib.index('customgames_media_dirs "$1"'), lib.index('python3 "$CUSTOM_GAMES_MEDIA_TOOL"'))
+        self.assertIn("/gui/custom-media.py}", (SETUP / "lib" / "customgames.sh").read_text())
         edit = (SETUP / "screens" / "setup-menu.sh").read_text().split("screen_custom_game_edit() {")[1].split("\n}\n")[0]
         self.assertLess(edit.index('customgames_media "$group" "$name"'), edit.index("ui_msg \"$title\" \"$name is in the group"))
         for line in ('"  snap/custom/$group/$name.png (picture)"', '"  preview/custom/$group/$name.mp4 (video)"',
                      '"  texto/custom/$group/$name.txt (text)"', '"  logo/custom/$group/$name.png (logo)"'):
             self.assertIn(line, edit)
-        self.assertIn('--logo "$(customgames_media_path logo "$1" "$2")"', lib)
+        self.assertIn("case $kind in snap) opt=--snap ;; preview) opt=--video ;; texto) opt=--text ;; logo) opt=--logo ;; esac", lib)
         # O mesmo lugar em que o frontend procura (a chave do sistema e custom/GRUPO).
         web = (ROOT / "config" / "fliperos-web").read_text()
         self.assertIn('return os.path.join(player_home(), "media", kind, *parts)', web)
+
+    def media_env(self):
+        # O gerador de mentira: cria os arquivos pedidos e os imprime, como o
+        # gui/custom-media.py (sem o pygame na imagem de teste).
+        tool = self.env.dir / "fake-media.py"
+        tool.write_text("import sys, os\nargs = sys.argv[1:]\nname = args[args.index('--name') + 1]\n"
+                        "for opt in ('--snap', '--video', '--text', '--logo'):\n"
+                        "    if opt in args:\n"
+                        "        p = args[args.index(opt) + 1]\n"
+                        "        os.makedirs(os.path.dirname(p), exist_ok=True)\n"
+                        "        open(p, 'w').write('sample of ' + name + opt)\n"
+                        "        print(p)\n"
+                        "open(os.path.join(os.path.dirname(sys.argv[0]), 'calls'), 'a').write(' '.join(args) + '\\n')\n")
+        media = self.env.dir / "media"
+        return media, dict(self.e, CUSTOM_GAMES_MEDIA=str(media), CUSTOM_GAMES_MEDIA_TOOL=str(tool))
+
+    def test_samples_only_where_media_is_missing(self):
+        media, e = self.media_env()
+        # A pessoa ja tem a imagem em .jpg: a .png de exemplo a esconderia.
+        (media / "snap/custom/PC games").mkdir(parents=True)
+        (media / "snap/custom/PC games/Pang.jpg").write_text("mine")
+        self.env.out("customgames_save 'PC games' Pang 240p 'wine pang.exe'; customgames_media 'PC games' Pang", e)
+        self.assertFalse((media / "snap/custom/PC games/Pang.png").exists())
+        for path in ("preview/custom/PC games/Pang.mp4", "texto/custom/PC games/Pang.txt", "logo/custom/PC games/Pang.png"):
+            self.assertTrue((media / path).is_file(), path)
+        self.assertEqual(len((media / ".custom-samples").read_text().splitlines()), 3)
+        # De novo: nada falta, o gerador nem e chamado.
+        self.env.out("customgames_media 'PC games' Pang", e)
+        self.assertEqual(len((self.env.dir / "calls").read_text().splitlines()), 1)
+        # O update: os jogos que ainda nao tem (o de antes das midias de exemplo).
+        self.env.out("customgames_save 'PC games' Old 240p 'echo old'; customgames_media_all", e)
+        self.assertTrue((media / "logo/custom/PC games/Old.png").is_file())
+        update = (ROOT / "tools" / "cabinet-update.sh").read_text().split('echo "== Kernel line')[1].split('\n)\n')[0]
+        self.assertLess(update.index("customgames_refresh"), update.index("customgames_media_all"))
+
+    def test_rename_takes_the_media_along_and_delete_only_the_samples(self):
+        media, e = self.media_env()
+        self.env.out("customgames_save 'PC games' Pang 240p 'wine pang.exe'; customgames_media 'PC games' Pang", e)
+        # A pessoa trocou o video pelo de verdade.
+        (media / "preview/custom/PC games/Pang.mp4").write_text("my video")
+        self.env.out("customgames_save Shooters 'Pang 2' 240p 'wine pang.exe' 'PC games' Pang", e)
+        # O de verdade foi junto; as de exemplo (com o nome antigo) sairam.
+        self.assertEqual((media / "preview/custom/Shooters/Pang 2.mp4").read_text(), "my video")
+        for path in ("preview/custom/PC games/Pang.mp4", "snap/custom/PC games/Pang.png", "snap/custom/Shooters/Pang 2.png"):
+            self.assertFalse((media / path).exists(), path)
+        self.assertNotIn("PC games/Pang", (media / ".custom-samples").read_text())
+        # A tela faz as novas, so as que faltam (o video de verdade fica).
+        self.env.out("customgames_media Shooters 'Pang 2'", e)
+        self.assertEqual((media / "snap/custom/Shooters/Pang 2.png").read_text(), "sample of Pang 2--snap")
+        self.assertEqual((media / "preview/custom/Shooters/Pang 2.mp4").read_text(), "my video")
+        # Apagar: as de exemplo saem, a de verdade fica.
+        self.env.out("customgames_delete Shooters 'Pang 2'", e)
+        self.assertFalse((media / "snap/custom/Shooters/Pang 2.png").exists())
+        self.assertTrue((media / "preview/custom/Shooters/Pang 2.mp4").exists())
 
     def test_refresh_gives_old_entries_their_own_name(self):
         # As gravadas antes do --app (o System Update chama o refresh); um
