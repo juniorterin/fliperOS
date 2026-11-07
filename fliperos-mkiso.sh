@@ -1241,9 +1241,12 @@ build_openbor_chroot() {
   # O 3.0 dos paks antigos (config/openbor-legacy) usa o SDL2_gfx.
   chroot "$CHROOT_DIR" apt-get install -y --no-install-recommends libsdl2-gfx-1.0-0 >> "$LOG_FILE" 2>&1 ||
     err "OpenBOR: libsdl2-gfx-1.0-0 did not install"
-  local games=$CHROOT_DIR/opt/fliperos/roms/openbor
-  mkdir -p "$games/Paks" "$games/Saves" "$games/Logs" "$games/ScreenShots"
-  chroot "$CHROOT_DIR" chown -R fliperos:fliperos /opt/fliperos/roms/openbor
+  # Dentro do chroot: /opt/fliperos/roms e um link absoluto para
+  # /home/fliperos/roms, que visto de fora aponta para o nada (o mkdir -p
+  # daqui de fora parava em "File exists").
+  chroot "$CHROOT_DIR" bash -c 'mkdir -p /opt/fliperos/roms/openbor/{Paks,Saves,Logs,ScreenShots} &&
+    chown -R fliperos:fliperos /opt/fliperos/roms/openbor' >> "$LOG_FILE" 2>&1 ||
+    err "OpenBOR: could not make its folders in /opt/fliperos/roms/openbor"
   ok "OpenBOR (fliperos-openbor)"
   # O comando openbor (Paks em /opt/fliperos/roms/openbor/Paks) e o 3.0 dos
   # paks antigos: os mesmos do fliperos-rootfs.sh, que os atualiza depois.

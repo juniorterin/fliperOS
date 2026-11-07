@@ -11694,6 +11694,10 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('"$CHROOT_DIR/usr/local/lib/openbor/OpenBOR-3.0"', body)
         self.assertNotIn('cat > /usr/local/bin/openbor', body)
         self.assertIn('apt-get install -y --no-install-recommends libsdl2-gfx-1.0-0', body)
+        # The folders are made inside the chroot: /opt/fliperos/roms is an absolute link to
+        # /home/fliperos/roms, dangling from outside (the 0.22 build stopped on "File exists").
+        self.assertIn("chroot \"$CHROOT_DIR\" bash -c 'mkdir -p /opt/fliperos/roms/openbor/{Paks,Saves,Logs,ScreenShots}", body)
+        self.assertNotRegex(MKISO, r'mkdir -p "?\$CHROOT_DIR/opt/fliperos/roms')
         self.assertIn('install -Dm755 "$src/config/openbor-legacy/OpenBOR-3.0" "$root/usr/local/lib/openbor/OpenBOR-3.0"',
                       ROOTFS)
         self.assertIn('libsdl2-gfx-1.0-0', (ROOT / 'tools/cabinet-update.sh').read_text())

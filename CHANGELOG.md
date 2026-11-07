@@ -4,17 +4,20 @@ What changed in each ISO published in [Releases](https://github.com/juniorterin/
 
 ## 0.22
 
-**Party play for MAME games**: two to four cabinets on the wired local network play the same GroovyMAME game, each with its own controllers, on the same frame like an arcade link board and with no input delay. Flycast's party (Naomi and Atomiswave) also runs in lockstep now, for up to four players. Also in this ISO, everything the updates 47 to 54 brought since 0.21: cabinet names, Flycast as a package updated over the network, the newest emulators from the Setup, light gun in every RetroArch core, every Flycast BIOS in Download BIOS, Windows shared folders working again. Cabinets already installed get all of this from the Setup's own update (updates 47 to 54).
+**Party play for MAME games**: cabinets on the wired local network play the same GroovyMAME game with every player it has (up to 10), each cabinet with its own controllers, on the same frame like an arcade link board and with no input delay. Flycast's party (Naomi and Atomiswave) also runs in lockstep now, for up to four players. Also in this ISO, everything the updates 47 to 57 brought since 0.21: cabinet names, Flycast as a package updated over the network, the newest emulators from the Setup, light gun in every RetroArch core, the flicker filter in Wine games, art for custom games and Wine Staging. Cabinets already installed get all of this from the Setup's own update (updates 47 to 57).
 
 **System changes:**
 
-- **GroovyMAME party (lockstep)**: every MAME game of two or more players has PARTY PLAY in the frontend, for up to four players on two to four cabinets. Every emulated frame each cabinet sends its players' controls (UDP, ports 55441 to 55444) and waits for the others' of the same frame, so every machine runs the same game on the same frame, as a link board does; on the cable a round trip takes under 1 ms, so there is no input delay. Every cabinet starts from the game's factory memory and settings (a folder of the party's own in `~/.cache/fliperos/party-mame`), on the first cabinet's clock (`-rtc`), without the hiscore plugin and the autosave; each cabinet's own saves stay untouched. Tested with Super Street Fighter II Turbo between a cabinet and a PC: in 9 runs the game's RAM was the same on both machines every second, and screenshots of the same frames were identical byte for byte
+- **GroovyMAME party (lockstep)**: every MAME game of two or more players has PARTY PLAY in the frontend, with every player of the game (up to MAME's 10, update 55), from two cabinets up to one per player. Every emulated frame each cabinet sends its players' controls (UDP, port 55440 plus the cabinet's number) and waits for the others' of the same frame, so every machine runs the same game on the same frame, as a link board does; on the cable a round trip takes under 1 ms, so there is no input delay. Every cabinet starts from the game's factory memory and settings (a folder of the party's own in `~/.cache/fliperos/party-mame`), on the first cabinet's clock (`-rtc`), without the hiscore plugin and the autosave; each cabinet's own saves stay untouched. Tested with Super Street Fighter II Turbo between a cabinet and a PC: in 9 runs the game's RAM was the same on both machines every second, and screenshots of the same frames were identical byte for byte
 - **Flycast party in lockstep** (update 52): up to four players on two to four cabinets, each with its own controllers, one frame of input delay, the faster machine waiting a few ms for the others each frame; the party starts from the factory saved memory and gives each cabinet its own back
 - **Cabinet names** (update 52): Setup > System > Cabinet name, also asked during the installation, or a fruit or an animal of its own; shown in the party room and in the "NAME IS PLAYING" notice with a bell. "Net play" is called party: it only runs on the local network
 - Light gun in every RetroArch core that has one (FBNeo, PlayStation, SNES, Mega Drive, Master System, NES); a RetroArch game downloads its folder's core when it is missing; DuckStation plays PAL games at 50 Hz and opens PS1 games from the frontend again
 - Setup > Emulators & Games can build or take the newest Flycast, RetroArch, Dolphin, GroovyMAME, Supermodel, OpenBOR and PCSX2 right on the cabinet, and go back to the package. The newest GroovyMAME is compiled with the FliperOS patches, so the party keeps working with it: the whole MAME, hours, with 20 GB free on the disk (the Setup warns before it starts)
 - The D-pad of a controller set in Button mapping works in RetroArch even without a ready RetroArch profile for it (update 53)
 - Download BIOS brings every BIOS Flycast uses; Samba shares open again from Windows (`samba-vfs-modules`); OpenBOR's and DuckStation's own logs in the web panel
+- **Wine games** get the interlaced flicker filter and the on-screen menu, 32-bit and Vulkan (DXVK) games too; Setup > Games > Extras > **Wine Staging** (update 56)
+- **Custom games**: a flicker filter level for each one, sample picture, video, text and logo so a new one shows up with art, the media follow a rename, and Pack a game folder turns a PC game of thousands of files into one squashfs file mounted in the same place (update 56)
+- The frontend list shows a green [+] when other cabinets play the same game in separate parties, one row per party (updates 54 and 55); the frontend shows the description in `~/media/texto` for games without an arcade history (update 56)
 
 **Package changes:**
 
@@ -31,6 +34,7 @@ What changed in each ISO published in [Releases](https://github.com/juniorterin/
 
 **Tool changes:**
 
+- `fliperos-mkiso.sh`: OpenBOR's folders are made inside the chroot (`/opt/fliperos/roms` is an absolute link to `/home/fliperos/roms`, dangling from outside, and the build stopped there since OpenBOR became a package)
 - `packaging/build-deb.sh --skip-existing`; the Release workflow takes the `.deb` already published in the `packages` release (checked against `updates/packages.list`) and builds only the recipes that have none, so the image and the updates install the same packages
 
 ## 0.21
