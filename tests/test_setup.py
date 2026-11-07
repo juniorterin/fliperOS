@@ -712,6 +712,37 @@ class NouveauLowDotclockTests(Base):
                       (ROOT / "fliperos-setup/screens/video-setup.sh").read_text())
 
 
+class GuiCrashKeyboardTests(Base):
+    """A interface grafica cala o teclado do console; se ela cai (abort do
+    pygame), o Setup segue no texto com o teclado de volta, e nao travado."""
+
+    def test_dead_gui_gives_the_keyboard_back(self):
+        self.env.stub("kbd_mode", 'echo "kbd_mode $*" >> "%s"' % self.env.writes)
+        out = self.env.out("""
+            source %s/lib/ui.sh
+            unset DISPLAY
+            UI_GUI_CONSOLE=/dev/null
+            sh -c 'exit 134' & UI_GUI_PID=$!; wait $UI_GUI_PID
+            UI_GUI=1
+            ui_gui_alive && echo alive
+            echo "UI_GUI=$UI_GUI"
+            ui_gui_alive || echo text
+        """ % SETUP)
+        self.assertEqual(out.split(), ["UI_GUI=0", "text"])
+        self.assertEqual(self.env.writes.read_text(), "kbd_mode -u -C /dev/null\n")
+
+    def test_living_gui_keeps_the_keyboard(self):
+        self.env.stub("kbd_mode", 'echo "kbd_mode $*" >> "%s"' % self.env.writes)
+        out = self.env.out("""
+            source %s/lib/ui.sh
+            UI_GUI_CONSOLE=/dev/null
+            UI_GUI=1 UI_GUI_PID=$$
+            ui_gui_alive && echo alive
+        """ % SETUP)
+        self.assertEqual(out.split(), ["alive"])
+        self.assertEqual(self.env.writes.read_text(), "")
+
+
 class DiskMenuLabelTests(Base):
     """A escolha do disco na instalacao: lista vertical em texto, com o
     /dev, o tamanho e o tipo antes do modelo na interface grafica."""

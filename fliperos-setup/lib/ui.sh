@@ -102,9 +102,22 @@ ui_gui_wanted() {
   ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} && -e $UI_DRI ]]
 }
 
-# ui_gui_alive: a interface grafica esta no ar?
+# ui_gui_alive: a interface grafica esta no ar? Se ela caiu (um abort do
+# pygame nao passa pelo close dela), o teclado do console volta: o Setup segue
+# no texto e precisa dele.
 ui_gui_alive() {
-  ((UI_GUI)) && kill -0 "$UI_GUI_PID" 2> /dev/null
+  ((UI_GUI)) || return 1
+  kill -0 "$UI_GUI_PID" 2> /dev/null && return 0
+  ui_console_keyboard
+  UI_GUI=0
+  return 1
+}
+
+# ui_console_keyboard devolve o teclado do console que a interface grafica
+# cala (mute_console em gui/fliperos-gui).
+ui_console_keyboard() {
+  [[ -z ${DISPLAY:-} && -c $UI_GUI_CONSOLE ]] && kbd_mode -u -C "$UI_GUI_CONSOLE" 2> /dev/null
+  return 0
 }
 
 # ui_gui_start abre o servidor e espera ele avisar que o video abriu (o
@@ -149,6 +162,8 @@ ui_gui_start() {
   log_info "a interface grafica nao abriu: o Setup segue em texto"
   kill "$UI_GUI_PID" 2> /dev/null
   UI_GUI_PID=""
+  # Ela pode ter calado o teclado antes de cair.
+  ui_console_keyboard
   return 1
 }
 
@@ -237,7 +252,7 @@ ui_done() {
     kill "$UI_GUI_PID" 2> /dev/null
   fi
   # O teclado do console de volta mesmo se a interface caiu sem devolve-lo.
-  [[ -z ${DISPLAY:-} && -c $UI_GUI_CONSOLE ]] && kbd_mode -u -C "$UI_GUI_CONSOLE" 2> /dev/null
+  ui_console_keyboard
   UI_GUI=0
   rm -rf "$UI_GUI_DIR"
   return 0
