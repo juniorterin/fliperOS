@@ -5337,7 +5337,7 @@ class FrontendDataTests(unittest.TestCase):
         import types
         fm = self.frontend_module()
         loads, moved = [], []
-        fe = types.SimpleNamespace(cats=[{'key': k, 'name': k} for k in 'abcde'], cat=0, pick=0, pick_at=0.0,
+        fe = types.SimpleNamespace(cats=[{'key': k, 'name': k} for k in 'abcde'], cat=0, pick=0, pick_at=0.0, picking=False,
                                    anim={}, ribbon_until=0, overlay=None, letter_mode=None, mode='list',
                                    cursor=0, rows=[], opened=set(), positions={}, last_ui='old', slide=None,
                                    commercial=False, repeat={}, input=types.SimpleNamespace(held=lambda a: None))
@@ -5374,6 +5374,14 @@ class FrontendDataTests(unittest.TestCase):
             fe.act('right')
         fe.act('b1')
         self.assertEqual((fe.cat, loads), (2, [3, 2]))
+        # Foi e voltou ao sistema da lista (pick 0): parada, a tira fecha
+        # sozinha do mesmo jeito, sem ler nada.
+        fe.act('right')
+        fe.act('left')
+        self.assertEqual((fe.pick, fe.picking, fe.ribbon_until), (0, True, float('inf')))
+        fe.tick(fe.pick_at + fm.PICK_WAIT + 0.01)
+        self.assertEqual((fe.cat, fe.picking, loads), (2, False, [3, 2]))
+        self.assertLess(fe.ribbon_until, float('inf'))
 
     def test_ribbon_moves_on_a_spring_and_tiles_grow_evenly(self):
         # A tira anda numa mola sem balanco: sai devagar, acelera, nao passa
