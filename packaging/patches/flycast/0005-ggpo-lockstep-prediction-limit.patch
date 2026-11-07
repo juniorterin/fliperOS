@@ -1,0 +1,160 @@
+From: FliperOS <fliperos@localhost>
+Subject: [PATCH] ggpo: lockstep like an arcade link: a limit on predictions (FliperOS)
+
+network:GGPOMaxPrediction (ggpo_set_max_prediction) sets how many frames a
+machine may run past the last frame it has every machine's input for (GGPO
+had a fixed 8). At the limit the faster machine waits for the others' input,
+now in 1 ms steps (it was 5), as an arcade link board waits for the ring
+(MAME m2comm, Supermodel's net board, Flycast's own Naomi link all block
+each frame). With the limit set, GGPO's time sync sleep (a whole frame) is
+skipped: the barrier already holds the faster machine back each frame.
+
+The limit must be above the input delay, or both machines refuse their own
+input until they have the other's and nothing is ever sent: FliperOS uses
+GGPODelay 1 and GGPOMaxPrediction 2. Between the cabinet and a PC with
+scripted players this kept them 1 frame apart (p95 1-2, was 3-5), the PC
+predicting at most 1 frame (was 4) and redoing 3 times fewer frames, the
+cabinet none, with no one-frame waits and the fewest long frames of six
+configurations tried.
+---
+diff --git a/core/cfg/option.cpp b/core/cfg/option.cpp
+index b86ff7d..6574b7e 100644
+--- a/core/cfg/option.cpp
++++ b/core/cfg/option.cpp
+@@ -186,6 +186,7 @@ Option<int> GGPOChatTimeout("GGPOChatTimeout", 10, "network");
+ OptionString GGPOPeers("GGPOPeers", "", "network");
+ Option<int> GGPOPlayerNum("GGPOPlayerNum", 0, "network");
+ OptionString GGPOSlots("GGPOSlots", "", "network");
++Option<int> GGPOMaxPrediction("GGPOMaxPrediction", 0, "network");
+ Option<bool> NetworkOutput("NetworkOutput", false, "network");
+ Option<int> MultiboardSlaves("MultiboardSlaves", 1, "network");
+ Option<bool> BattleCableEnable("BattleCable", false, "network");
+diff --git a/core/cfg/option.h b/core/cfg/option.h
+index 05a4a92..34c8b49 100644
+--- a/core/cfg/option.h
++++ b/core/cfg/option.h
+@@ -541,6 +541,7 @@ extern Option<int> GGPOChatTimeout;
+ extern OptionString GGPOPeers;
+ extern Option<int> GGPOPlayerNum;
+ extern OptionString GGPOSlots;
++extern Option<int> GGPOMaxPrediction;
+ extern Option<bool> NetworkOutput;
+ extern Option<int> MultiboardSlaves;
+ extern Option<bool> BattleCableEnable;
+diff --git a/core/deps/ggpo/include/ggponet.h b/core/deps/ggpo/include/ggponet.h
+index 453f128..def73fa 100644
+--- a/core/deps/ggpo/include/ggponet.h
++++ b/core/deps/ggpo/include/ggponet.h
+@@ -490,6 +490,16 @@ GGPO_API GGPOErrorCode __cdecl ggpo_idle(GGPOSession *,
+  */
+ GGPO_API GGPOErrorCode __cdecl ggpo_poll_network(GGPOSession *);
+ 
++/*
++ * ggpo_set_max_prediction --
++ * FliperOS: how many frames a machine may run past the last frame it has
++ * every machine's input for (1 to GGPO_MAX_PREDICTION_FRAMES, which is also
++ * the default). At the limit ggpo_add_local_input answers
++ * GGPO_ERRORCODE_PREDICTION_THRESHOLD and the game waits for the others,
++ * as on an arcade link: the faster machine never gets far ahead.
++ */
++GGPO_API GGPOErrorCode __cdecl ggpo_set_max_prediction(GGPOSession *, int frames);
++
+ /*
+  * ggpo_add_local_input --
+  *
+diff --git a/core/deps/ggpo/lib/ggpo/backends/backend.h b/core/deps/ggpo/lib/ggpo/backends/backend.h
+index fd38662..eeb3586 100644
+--- a/core/deps/ggpo/lib/ggpo/backends/backend.h
++++ b/core/deps/ggpo/lib/ggpo/backends/backend.h
+@@ -15,6 +15,7 @@ struct GGPOSession {
+    virtual ~GGPOSession() { }
+    virtual GGPOErrorCode DoPoll(int timeout) { return GGPO_OK; }
+    virtual GGPOErrorCode PollNetwork() { return GGPO_OK; }
++   virtual GGPOErrorCode SetMaxPrediction(int frames) { return GGPO_ERRORCODE_UNSUPPORTED; }
+    virtual GGPOErrorCode AddPlayer(GGPOPlayer *player, GGPOPlayerHandle *handle) = 0;
+    virtual GGPOErrorCode AddLocalInput(GGPOPlayerHandle player, void *values, int size) = 0;
+    virtual GGPOErrorCode SyncInput(void *values, int size, int *disconnect_flags) = 0;
+diff --git a/core/deps/ggpo/lib/ggpo/backends/p2p.h b/core/deps/ggpo/lib/ggpo/backends/p2p.h
+index 1a7f60e..2f994b6 100644
+--- a/core/deps/ggpo/lib/ggpo/backends/p2p.h
++++ b/core/deps/ggpo/lib/ggpo/backends/p2p.h
+@@ -25,6 +25,7 @@ public:
+ public:
+    GGPOErrorCode DoPoll(int timeout) override;
+    GGPOErrorCode PollNetwork() override;
++   GGPOErrorCode SetMaxPrediction(int frames) override { _sync.SetMaxPrediction(frames); return GGPO_OK; }
+    GGPOErrorCode AddPlayer(GGPOPlayer *player, GGPOPlayerHandle *handle) override;
+    GGPOErrorCode AddLocalInput(GGPOPlayerHandle player, void *values, int size) override;
+    GGPOErrorCode SyncInput(void *values, int size, int *disconnect_flags) override;
+diff --git a/core/deps/ggpo/lib/ggpo/main.cpp b/core/deps/ggpo/lib/ggpo/main.cpp
+index ea13e2b..428a9c2 100644
+--- a/core/deps/ggpo/lib/ggpo/main.cpp
++++ b/core/deps/ggpo/lib/ggpo/main.cpp
+@@ -123,6 +123,14 @@ ggpo_poll_network(GGPOSession *ggpo)
+    }
+ }
+ 
++GGPOErrorCode
++ggpo_set_max_prediction(GGPOSession *ggpo, int frames)
++{
++   if (!ggpo)
++      return GGPO_ERRORCODE_INVALID_SESSION;
++   return ggpo->SetMaxPrediction(frames);
++}
++
+ GGPOErrorCode
+ ggpo_add_local_input(GGPOSession *ggpo,
+                      GGPOPlayerHandle player,
+diff --git a/core/deps/ggpo/lib/ggpo/sync.h b/core/deps/ggpo/lib/ggpo/sync.h
+index f9523cb..d986968 100644
+--- a/core/deps/ggpo/lib/ggpo/sync.h
++++ b/core/deps/ggpo/lib/ggpo/sync.h
+@@ -94,6 +94,9 @@ protected:
+    int            _last_confirmed_frame;
+    int            _framecount;
+    int            _max_prediction_frames;
++public:
++   void SetMaxPrediction(int frames) { _max_prediction_frames = MAX(1, MIN(frames, MAX_PREDICTION_FRAMES)); }
++protected:
+ 
+    InputQueue     *_input_queues;
+ 
+diff --git a/core/network/ggpo.cpp b/core/network/ggpo.cpp
+index 0894934..5cbcbfb 100644
+--- a/core/network/ggpo.cpp
++++ b/core/network/ggpo.cpp
+@@ -262,6 +262,11 @@ static bool on_event(GGPOEvent *info)
+ 		break;
+ 	case GGPO_EVENTCODE_TIMESYNC:
+ 		INFO_LOG(NETWORK, "Timesync: %d frames ahead", info->u.timesync.frames_ahead);
++		// With a prediction limit (FliperOS) the faster machine already waits a
++		// few ms each frame at the barrier: a whole frame of sleep on top only
++		// shows as a hitch.
++		if (config::GGPOMaxPrediction > 0)
++			break;
+ 		timesyncOccurred += 5;
+ 		std::this_thread::sleep_for(std::chrono::milliseconds(1000 / (msPerFrameAvg >= 25 ? 30 : 60)));
+ 		break;
+@@ -744,6 +749,12 @@ void startSession(int localPort, int localPlayerNum)
+ 		throw FlycastException("GGPO cannot add local player");
+ 	}
+ 	ggpo_set_frame_delay(ggpoSession, localPlayer, config::GGPODelay.get());
++	// How far this machine may run on predictions (FliperOS): with 1, the
++	// faster machine waits a few ms for the others' input each frame, as on
++	// an arcade link, instead of getting frames ahead and waiting a whole
++	// frame at once now and then.
++	if (config::GGPOMaxPrediction > 0)
++		ggpo_set_max_prediction(ggpoSession, config::GGPOMaxPrediction);
+ 
+ 	if (partyMode)
+ 	{
+@@ -960,7 +971,8 @@ bool nextFrame()
+ 			throw FlycastException("GGPO error");
+ 		}
+ 		DEBUG_LOG(NETWORK, "ggpo_add_local_input prediction barrier reached");
+-		std::this_thread::sleep_for(std::chrono::milliseconds(5));
++		// 1 ms: the input it waits for arrives within a few ms on a cable.
++		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+ 		error = ggpo_idle(ggpoSession, 0);
+ 		if (error != GGPO_OK)
+ 		{

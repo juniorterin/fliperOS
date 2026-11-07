@@ -8,30 +8,32 @@ sets how far ahead each side runs, so the faster machine ran 3 to 7 frames
 ahead, predicted that many frames of the other's input (near GGPO's limit
 of 8, where it stalls) and waited a frame every few seconds.
 
-ggpo_poll_network() does only the network half of ggpo_idle (read what
-arrived, send what waits; no rollback), and a GGPO-net thread calls it
+ggpo_poll_network() does only the socket half of ggpo_idle (read what
+arrived, send what waits; the received inputs wait in their queue for the
+next ggpo_idle, which rolls back: given to the sync layer between ggpo_idle
+and ggpo_synchronize_input they tripped GGPO's assertion), and a GGPO-net thread calls it
 every millisecond with try_lock on the GGPO mutex, so it never holds up a
-frame or stopSession. A disconnection seen there ends the session at the
-next frame. On Windows the timer goes to 1 ms while the session runs.
+frame or stopSession. On Windows the timer goes to 1 ms while the session runs.
 Tested with two Flycast on one PC: ping 1 to 3 ms instead of 4 to 51.
 ---
 diff --git a/core/deps/ggpo/include/ggponet.h b/core/deps/ggpo/include/ggponet.h
-index 9bf8552..0fa136e 100644
+index 9bf8552..453f128 100644
 --- a/core/deps/ggpo/include/ggponet.h
 +++ b/core/deps/ggpo/include/ggponet.h
-@@ -477,6 +477,18 @@ GGPO_API GGPOErrorCode __cdecl ggpo_set_frame_delay(GGPOSession *,
+@@ -477,6 +477,19 @@ GGPO_API GGPOErrorCode __cdecl ggpo_set_frame_delay(GGPOSession *,
  GGPO_API GGPOErrorCode __cdecl ggpo_idle(GGPOSession *,
                                           int timeout);
  
 +/*
 + * ggpo_poll_network --
 + * FliperOS: reads the packets that arrived and sends the ones waiting, and
-+ * nothing else: no rollback, no game callback but the network events
-+ * (connected, synchronized, interrupted, disconnected). Meant for a thread
-+ * that calls it every millisecond, so that inputs and acknowledgements do
-+ * not wait for the next ggpo_idle (one frame on each side) and the ping is
-+ * the network's. Never during a rollback; the caller serializes it with the
-+ * other GGPO calls.
++ * nothing else. Received inputs and events wait in each connection's queue
++ * for the next ggpo_idle, which gives them to the sync layer and rolls back:
++ * an input reaching the sync layer between ggpo_idle and
++ * ggpo_synchronize_input would leave a wrong prediction unrolled. Meant for
++ * a thread that calls it every millisecond, so that inputs, acks and
++ * quality replies leave at once and the ping is the network's. Never during
++ * a rollback; the caller serializes it with the other GGPO calls.
 + */
 +GGPO_API GGPOErrorCode __cdecl ggpo_poll_network(GGPOSession *);
 +
@@ -51,22 +53,21 @@ index b8b0a34..fd38662 100644
     virtual GGPOErrorCode AddLocalInput(GGPOPlayerHandle player, void *values, int size) = 0;
     virtual GGPOErrorCode SyncInput(void *values, int size, int *disconnect_flags) = 0;
 diff --git a/core/deps/ggpo/lib/ggpo/backends/p2p.cpp b/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
-index b47b131..2283533 100644
+index b47b131..b4be3e9 100644
 --- a/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
 +++ b/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
-@@ -174,6 +174,18 @@ Peer2PeerBackend::DoPoll(int timeout)
+@@ -174,6 +174,17 @@ Peer2PeerBackend::DoPoll(int timeout)
     return GGPO_OK;
  }
  
 +GGPOErrorCode
 +Peer2PeerBackend::PollNetwork()
 +{
-+   // The network half of DoPoll: what arrived is read (inputs go to the
-+   // sync layer, a rollback they need waits for DoPoll) and what waits is sent.
-+   if (!_sync.InRollback()) {
++   // The socket half of DoPoll: what arrived is read (and acked, and quality
++   // reports answered) and what waits is sent. The events it queues, inputs
++   // among them, are handled by DoPoll (PollUdpProtocolEvents), in the frame.
++   if (!_sync.InRollback())
 +      _poll.Pump(0);
-+      PollUdpProtocolEvents();
-+   }
 +   return GGPO_OK;
 +}
 +

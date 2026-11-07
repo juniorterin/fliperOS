@@ -683,8 +683,16 @@ def link_args(profile, plan, number):
         # 127.0.0.1) e o servidor e o jogador 1. Sem atraso de entrada: no cabo o
         # rollback e raro. O UPnP fica desligado.
         other = next(m["ip"] for m in plan["members"] if m["number"] != number)
-        opts = ("network:GGPO=yes,network:ActAsServer=%s,network:server=%s,network:GGPODelay=0,"
-                "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other))
+        # Com o 0005 (network:GGPOMaxPrediction), a party anda travada como um
+        # link de arcade: um quadro de atraso de entrada e no maximo dois de
+        # previsao, e o gabinete mais rapido espera alguns ms a cada quadro pelo
+        # controle dos outros (no cabo, sem nada a refazer). O limite tem de
+        # passar do atraso, senao ninguem manda o proprio controle.
+        lockstep = profile.get("party") and flycast_lockstep()
+        opts = ("network:GGPO=yes,network:ActAsServer=%s,network:server=%s,network:GGPODelay=%d,"
+                "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other, 1 if lockstep else 0))
+        if lockstep:
+            opts += ",network:GGPOMaxPrediction=2"
         if profile.get("party"):
             # O patch: todos os gabinetes na ordem da festa, o lugar deste e os
             # controles de cada um (as portas vao nessa ordem). ";" porque a
@@ -869,6 +877,12 @@ def flycast_party(path=None):
     """O Flycast instalado tem o GGPO de varios gabinetes do patch do FliperOS
     (network:GGPOPeers)? Sem ele, o GGPO e de dois, um jogador em cada."""
     return binary_has(path or FLYCAST, b"GGPOPeers")
+
+
+def flycast_lockstep(path=None):
+    """O Flycast instalado tem o limite de previsao do patch 0005
+    (network:GGPOMaxPrediction), o da party travada como um link de arcade?"""
+    return binary_has(path or FLYCAST, b"GGPOMaxPrediction")
 
 
 def netplay_profile(system_key, name, players, local, sets=None):

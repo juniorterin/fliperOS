@@ -277,7 +277,21 @@ The controller ports go to the cabinets in that order: with `2;1;1`, ports 1 and
 
 **Within a frame of each other.** With the right ping the cabinet still ran 4 to 5 frames ahead of the PC: its clock (the CRT mode Switchres makes, a little over 60 Hz) runs faster than the PC monitor's, and GGPO only corrected a gap of 3 frames or more, checking every 4 seconds, with Flycast waiting one frame per correction. So the cabinet saw the PC player's moves about 80 ms late. The fourth patch (`0004-ggpo-keep-machines-within-a-frame.patch`) corrects from one frame and checks every second: the machines stay 0 to 1 frame apart. Each correction is still a one-frame wait on the machine ahead, and there are as many as before (that is the real difference of the two clocks); between two cabinets in the same CRT mode they are rare.
 
-There is no faster network protocol to switch to: GGPO already sends each input in one UDP packet, and on the cable a round trip takes under 1 ms. What made the party slow was inside the emulator (the network read once a frame, the drift corrected late), not the cable. For a party with no prediction at all, `network:GGPODelay=1` delays every player's input by one frame (about 17 ms) and leaves nothing to roll back on a cable; FliperOS keeps 0, so your own controls answer at once.
+**Lockstep, like an arcade link.** Real link boards never let a machine run ahead. On Daytona's Model 2 link (MAME `m2comm`) the master sends its data and a VSYNC token around a ring every frame, and every board waits for that token. Supermodel's net board and Flycast's own Naomi link do the same: each machine sends once a frame and blocks until the others' data arrives. Flycast Dojo's delay mode works this way too, with one frame of delay on a LAN by its own formula. GGPO does the opposite: it lets the faster machine predict up to 8 frames and pulls it back now and then. The fifth patch (`0005-ggpo-lockstep-prediction-limit.patch`) adds `network:GGPOMaxPrediction`. At that limit the faster machine waits, in 1 ms steps, for the others' input, and GGPO's whole-frame wait is skipped. The party uses one frame of input delay and a limit of two. The limit has to be above the delay: with 1 and 1 both machines refused their own input until they had the other's, and nothing was ever sent.
+
+Six automatic sessions of 3 minutes, cabinet and PC, on 7 November 2026, with scripted players on both coining, starting, picking characters and fighting (numbers after the BIOS boot; PC / cabinet):
+
+| | Rollback, delay 0 | Delay 1 | Delay 1, prediction ≤ 2 (lockstep) |
+|---|---|---|---|
+| Frames apart, p95 | 3 / 3 | 4 / 4 | **1 / 2** |
+| Frames predicted, p95 | 4 / 3 | 4 / 0 | **1 / 0** |
+| Frames redone | 1797 / 290 | 1976 / 1 | **658 / 0**, one frame each |
+| One-frame waits | 107 / 11 | 129 / 0 | **0 / 0** |
+| Seconds with a frame of 50 ms or more | 26 / 10 | 43 / 8 | **19 / 7** |
+
+Vsync off on both, so both ran by the audio clock as Flycast Dojo does, changed little. Writing the statistics every 10 s instead of every second changed nothing either. Both sides still have one frame of 34 ms or more in most seconds, in every configuration: it comes from how Flycast's emulation loop runs its frames, not from the network. The session logs and the scripts that ran them are in the owner's PC folder `Downloads\flycast-fliperos-party\testes`.
+
+There is no faster network protocol to switch to: GGPO already sends each input in one UDP packet, and on the cable a round trip takes under 1 ms. What made the party slow was inside the emulator (the network read once a frame, the drift corrected late), not the cable. The price of lockstep is one frame (about 17 ms) of input delay for every player, as on a real link board.
 
 Like the rest of the party, it is for a wired local network: no relay, no UPnP. The patch makes the GGPO input bigger (32 bytes per player instead of 9) and the input packets bigger (up to 1 KB, under the network cable's MTU).
 
