@@ -2,7 +2,8 @@
 # (packaging/patches/flycast): sem a tela de loading entre o frontend e o jogo,
 # e o GGPO de dois a quatro gabinetes na rede local (network:GGPOPeers, que o
 # gui/felink.py passa na party), cada um com os seus controles, com a rede do
-# GGPO atendida a cada 1 ms (0003), e nao uma vez por quadro.
+# GGPO atendida a cada 1 ms (0003), e nao uma vez por quadro, e as maquinas a
+# ate um quadro uma da outra (0004).
 #
 # Era compilado no chroot da ISO, do master do dia: um gabinete atualizado so
 # pela rede ficava com o Flycast da ISO que instalou. Como pacote, ele chega

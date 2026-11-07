@@ -1,0 +1,43 @@
+From: FliperOS <fliperos@localhost>
+Subject: [PATCH] ggpo: keep the machines within a frame of each other (FliperOS)
+
+GGPO corrected the drift between two machines only when one was 3 frames
+or more ahead, and checked every 240 frames, and Flycast waits one frame
+for each correction. Machines whose clocks differ a little (the cabinet's
+CRT mode and a PC monitor) settled 4 to 5 frames apart: the one ahead
+predicted that many frames of the other's input and saw it about 80 ms
+late. Correcting from one frame and checking every 60 frames keeps them 0
+to 1 frame apart; the number of one-frame waits is the same (it is the real
+difference of the clocks), they just come before the gap grows.
+---
+diff --git a/core/deps/ggpo/lib/ggpo/backends/p2p.cpp b/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
+index 2283533..59ca55c 100644
+--- a/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
++++ b/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
+@@ -9,7 +9,9 @@
+ #include <chrono>
+ #include <thread>
+ 
+-static const int RECOMMENDATION_INTERVAL           = 240;
++// FliperOS: once a second (GGPO had every 4 s), so a drift of a frame is
++// caught before it grows; each catch is still one frame of wait.
++static const int RECOMMENDATION_INTERVAL           = 60;
+ static const int DEFAULT_DISCONNECT_TIMEOUT        = 5000;
+ static const int DEFAULT_DISCONNECT_NOTIFY_START   = 750;
+ 
+diff --git a/core/deps/ggpo/lib/ggpo/timesync.h b/core/deps/ggpo/lib/ggpo/timesync.h
+index 83b66d7..7f9217d 100644
+--- a/core/deps/ggpo/lib/ggpo/timesync.h
++++ b/core/deps/ggpo/lib/ggpo/timesync.h
+@@ -13,7 +13,10 @@
+ 
+ #define FRAME_WINDOW_SIZE           40
+ #define MIN_UNIQUE_FRAMES           10
+-#define MIN_FRAME_ADVANTAGE          3
++// FliperOS: from one frame (GGPO had 3). Machines whose clocks differ a
++// little (a CRT mode and a PC monitor) stayed 3 to 5 frames apart, and the
++// one ahead predicted that many frames of the other's input.
++#define MIN_FRAME_ADVANTAGE          1
+ #define MAX_FRAME_ADVANTAGE          9
+ 
+ class TimeSync {

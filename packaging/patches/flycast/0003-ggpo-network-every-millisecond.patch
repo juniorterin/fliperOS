@@ -15,12 +15,6 @@ frame or stopSession. A disconnection seen there ends the session at the
 next frame. On Windows the timer goes to 1 ms while the session runs.
 Tested with two Flycast on one PC: ping 1 to 3 ms instead of 4 to 51.
 ---
-diff --git a/core/deps/Spout b/core/deps/Spout
---- a/core/deps/Spout
-+++ b/core/deps/Spout
-@@ -1 +1 @@
--Subproject commit 2110a918e720688f3cb2118302fd153db8745ace
-+Subproject commit 2110a918e720688f3cb2118302fd153db8745ace-dirty
 diff --git a/core/deps/ggpo/include/ggponet.h b/core/deps/ggpo/include/ggponet.h
 index 9bf8552..0fa136e 100644
 --- a/core/deps/ggpo/include/ggponet.h
