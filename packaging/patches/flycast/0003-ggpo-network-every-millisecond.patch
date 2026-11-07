@@ -1,0 +1,252 @@
+From: FliperOS <fliperos@localhost>
+Subject: [PATCH] ggpo: the network every millisecond, apart from the frames (FliperOS)
+
+Flycast gave GGPO the network only in ggpo_idle, once a frame, and added
+the local input after it, so the input left a frame later: on a cable with
+less than 1 ms of round trip GGPO measured 20 to 110 ms of ping. That ping
+sets how far ahead each side runs, so the faster machine ran 3 to 7 frames
+ahead, predicted that many frames of the other's input (near GGPO's limit
+of 8, where it stalls) and waited a frame every few seconds.
+
+ggpo_poll_network() does only the network half of ggpo_idle (read what
+arrived, send what waits; no rollback), and a GGPO-net thread calls it
+every millisecond with try_lock on the GGPO mutex, so it never holds up a
+frame or stopSession. A disconnection seen there ends the session at the
+next frame. On Windows the timer goes to 1 ms while the session runs.
+Tested with two Flycast on one PC: ping 1 to 3 ms instead of 4 to 51.
+---
+diff --git a/core/deps/Spout b/core/deps/Spout
+--- a/core/deps/Spout
++++ b/core/deps/Spout
+@@ -1 +1 @@
+-Subproject commit 2110a918e720688f3cb2118302fd153db8745ace
++Subproject commit 2110a918e720688f3cb2118302fd153db8745ace-dirty
+diff --git a/core/deps/ggpo/include/ggponet.h b/core/deps/ggpo/include/ggponet.h
+index 9bf8552..0fa136e 100644
+--- a/core/deps/ggpo/include/ggponet.h
++++ b/core/deps/ggpo/include/ggponet.h
+@@ -477,6 +477,18 @@ GGPO_API GGPOErrorCode __cdecl ggpo_set_frame_delay(GGPOSession *,
+ GGPO_API GGPOErrorCode __cdecl ggpo_idle(GGPOSession *,
+                                          int timeout);
+ 
++/*
++ * ggpo_poll_network --
++ * FliperOS: reads the packets that arrived and sends the ones waiting, and
++ * nothing else: no rollback, no game callback but the network events
++ * (connected, synchronized, interrupted, disconnected). Meant for a thread
++ * that calls it every millisecond, so that inputs and acknowledgements do
++ * not wait for the next ggpo_idle (one frame on each side) and the ping is
++ * the network's. Never during a rollback; the caller serializes it with the
++ * other GGPO calls.
++ */
++GGPO_API GGPOErrorCode __cdecl ggpo_poll_network(GGPOSession *);
++
+ /*
+  * ggpo_add_local_input --
+  *
+diff --git a/core/deps/ggpo/lib/ggpo/backends/backend.h b/core/deps/ggpo/lib/ggpo/backends/backend.h
+index b8b0a34..fd38662 100644
+--- a/core/deps/ggpo/lib/ggpo/backends/backend.h
++++ b/core/deps/ggpo/lib/ggpo/backends/backend.h
+@@ -14,6 +14,7 @@
+ struct GGPOSession {
+    virtual ~GGPOSession() { }
+    virtual GGPOErrorCode DoPoll(int timeout) { return GGPO_OK; }
++   virtual GGPOErrorCode PollNetwork() { return GGPO_OK; }
+    virtual GGPOErrorCode AddPlayer(GGPOPlayer *player, GGPOPlayerHandle *handle) = 0;
+    virtual GGPOErrorCode AddLocalInput(GGPOPlayerHandle player, void *values, int size) = 0;
+    virtual GGPOErrorCode SyncInput(void *values, int size, int *disconnect_flags) = 0;
+diff --git a/core/deps/ggpo/lib/ggpo/backends/p2p.cpp b/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
+index b47b131..2283533 100644
+--- a/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
++++ b/core/deps/ggpo/lib/ggpo/backends/p2p.cpp
+@@ -174,6 +174,18 @@ Peer2PeerBackend::DoPoll(int timeout)
+    return GGPO_OK;
+ }
+ 
++GGPOErrorCode
++Peer2PeerBackend::PollNetwork()
++{
++   // The network half of DoPoll: what arrived is read (inputs go to the
++   // sync layer, a rollback they need waits for DoPoll) and what waits is sent.
++   if (!_sync.InRollback()) {
++      _poll.Pump(0);
++      PollUdpProtocolEvents();
++   }
++   return GGPO_OK;
++}
++
+ int Peer2PeerBackend::Poll2Players(int current_frame)
+ {
+    int i;
+diff --git a/core/deps/ggpo/lib/ggpo/backends/p2p.h b/core/deps/ggpo/lib/ggpo/backends/p2p.h
+index 7f51265..1a7f60e 100644
+--- a/core/deps/ggpo/lib/ggpo/backends/p2p.h
++++ b/core/deps/ggpo/lib/ggpo/backends/p2p.h
+@@ -24,6 +24,7 @@ public:
+ 
+ public:
+    GGPOErrorCode DoPoll(int timeout) override;
++   GGPOErrorCode PollNetwork() override;
+    GGPOErrorCode AddPlayer(GGPOPlayer *player, GGPOPlayerHandle *handle) override;
+    GGPOErrorCode AddLocalInput(GGPOPlayerHandle player, void *values, int size) override;
+    GGPOErrorCode SyncInput(void *values, int size, int *disconnect_flags) override;
+diff --git a/core/deps/ggpo/lib/ggpo/main.cpp b/core/deps/ggpo/lib/ggpo/main.cpp
+index 258f5f5..ea13e2b 100644
+--- a/core/deps/ggpo/lib/ggpo/main.cpp
++++ b/core/deps/ggpo/lib/ggpo/main.cpp
+@@ -110,6 +110,19 @@ ggpo_idle(GGPOSession *ggpo, int timeout)
+    }
+ }
+ 
++GGPOErrorCode
++ggpo_poll_network(GGPOSession *ggpo)
++{
++   if (!ggpo)
++      return GGPO_ERRORCODE_INVALID_SESSION;
++   try {
++	   return ggpo->PollNetwork();
++   } catch (const GGPOException& e) {
++	   ERROR_LOG(NETWORK, "GGPOException in ggpo_poll_network: %s", e.what());
++	   return e.ggpoError;
++   }
++}
++
+ GGPOErrorCode
+ ggpo_add_local_input(GGPOSession *ggpo,
+                      GGPOPlayerHandle player,
+diff --git a/core/network/ggpo.cpp b/core/network/ggpo.cpp
+index ee12478..0894934 100644
+--- a/core/network/ggpo.cpp
++++ b/core/network/ggpo.cpp
+@@ -83,6 +83,11 @@ static void getLocalInput(MapleInputState inputState[4])
+ #include <mutex>
+ #include <unordered_map>
+ #include <numeric>
++#include <atomic>
++#ifdef _WIN32
++#include <windows.h>
++#include <mmsystem.h>
++#endif
+ #include "imgui.h"
+ #include "miniupnp.h"
+ #include "hw/naomi/naomi_cart.h"
+@@ -132,6 +137,11 @@ static bool absPointerPos;
+ static bool keyboardGame;
+ static bool mouseGame;
+ static int inputSize;
++// The network thread (networkLoop) and what stopped it, for the next frame.
++static std::thread netThread;
++static std::atomic<bool> netRunning;
++static std::mutex netErrorMutex;
++static std::string netError;
+ // The party: the machines of the session, how many controllers each one plays
+ // and the first port of each (the ports go to the machines in order).
+ static bool partyMode;
+@@ -587,6 +597,49 @@ static void setupPlayers(int& localPlayerNum, int& localPort)
+ }
+ #endif
+ 
++// The network of the session every millisecond, apart from the frames
++// (FliperOS): what arrived is read and what waits is sent at once, so an
++// input or an acknowledgement never waits for the next frame, about 16 ms
++// on each side, and the ping GGPO measures (which sets how far ahead a side
++// may run, and so how much it predicts and rolls back) is the cable's.
++// Rollbacks stay in the frame (ggpo_idle in nextFrame). try_lock: it never
++// holds up a frame or a stopSession waiting for it.
++static void networkLoop()
++{
++	ThreadName _("GGPO-net");
++#ifdef _WIN32
++	timeBeginPeriod(1);
++#endif
++	while (netRunning)
++	{
++		{
++			std::unique_lock<std::recursive_mutex> lock(ggpoMutex, std::try_to_lock);
++			if (lock.owns_lock() && ggpoSession != nullptr && !inRollback)
++			{
++				try {
++					ggpo_poll_network(ggpoSession);
++				} catch (const std::exception& e) {
++					// A disconnection (on_event throws): the next frame ends the session.
++					std::lock_guard<std::mutex> _(netErrorMutex);
++					netError = e.what();
++					netRunning = false;
++				}
++			}
++		}
++		std::this_thread::sleep_for(std::chrono::milliseconds(1));
++	}
++#ifdef _WIN32
++	timeEndPeriod(1);
++#endif
++}
++
++static void stopNetworkThread()
++{
++	netRunning = false;
++	if (netThread.joinable() && netThread.get_id() != std::this_thread::get_id())
++		netThread.join();
++}
++
+ void startSession(int localPort, int localPlayerNum)
+ {
+ 	GGPOSessionCallbacks cb{};
+@@ -718,12 +771,20 @@ void startSession(int localPort, int localPlayerNum)
+ 		}
+ 		remotePlayer = addRemotePlayer(1 - localPlayerNum, peerIp, peerPort);
+ 	}
++	stopNetworkThread();
++	{
++		std::lock_guard<std::mutex> _(netErrorMutex);
++		netError.clear();
++	}
++	netRunning = true;
++	netThread = std::thread(networkLoop);
+ 	DEBUG_LOG(NETWORK, "GGPO session started");
+ #endif
+ }
+ 
+ void stopSession()
+ {
++	stopNetworkThread();
+ 	std::lock_guard<std::recursive_mutex> lock(ggpoMutex);
+ 	if (ggpoSession == nullptr)
+ 		return;
+@@ -815,6 +876,17 @@ bool nextFrame()
+ 	std::lock_guard<std::recursive_mutex> lock(ggpoMutex);
+ 	if (ggpoSession == nullptr)
+ 		return false;
++	{
++		std::unique_lock<std::mutex> errLock(netErrorMutex);
++		if (!netError.empty())
++		{
++			std::string what = netError;
++			netError.clear();
++			errLock.unlock();
++			stopSession();
++			throw FlycastException(what);
++		}
++	}
+ 	// will call save_game_state
+ 	GGPOErrorCode error = ggpo_advance_frame(ggpoSession);
+ 
+@@ -974,7 +1046,8 @@ std::future<bool> startNetwork()
+ 		{
+ 			// Send the local P1 card
+ 			const u8 *cardData = getRfidCardData(0);
+-			if (cardData != nullptr)
++			std::lock_guard<std::recursive_mutex> lock(ggpoMutex);
++			if (cardData != nullptr && ggpoSession != nullptr)
+ 			{
+ 				GameEvent event;
+ 				event.type = GameEvent::VF4Card;
+@@ -1056,6 +1129,7 @@ void endOfFrame()
+ }
+ 
+ void sendChatMessage(int playerNum, const std::string& msg) {
++	std::lock_guard<std::recursive_mutex> lock(ggpoMutex);
+ 	if (!active())
+ 		return;
+ 	GameEvent event;
