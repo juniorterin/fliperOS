@@ -52,6 +52,10 @@ const enUS = {
         a: 'Yes. The web panel at http://fliperos.local opens in any browser on the same network: pick a game and it starts on the tube, watch the cabinet live, change colour and other settings while you play, copy games, filter a MAME romset and check the system status.',
       },
       {
+        q: 'Can I play party games with GroovyMAME and Flycast?',
+        a: 'Yes. FliperOS’s GroovyMAME comes with a lockstep patch: two or more cabinets joined by a network cable share any MAME game, with every player of the game (up to 10), each cabinet on its own controls and with no input delay. Flycast plays Naomi, Naomi 2 and Atomiswave games in parties through GGPO, up to four players on two to four cabinets. Party play also works with RetroArch cores that have net play and with Dolphin, always on the local network, never over the internet.',
+      },
+      {
         q: 'Is FliperOS free?',
         a: 'Yes. FliperOS is free and open source, on GitHub, and the ISO is downloaded from the GitHub releases. It ships no games and no BIOS; the Setup downloads the BIOS your games need.',
       },
@@ -292,7 +296,7 @@ const enUS = {
       coin: { title: 'Commercial mode', text: 'Charge by time played: each coin adds minutes, and the game closes when they end.' },
       link: {
         title: 'Linked cabinets',
-        text: 'Join cabinets with a network cable: the four-cabinet Street Fighter tournament, races of up to eight, and party play on the local network.',
+        text: 'Join cabinets with a network cable: the four-cabinet Street Fighter tournament, races of up to eight, and party play on the local network, GroovyMAME and Flycast games included.',
         fourAlt: 'Pixel art of four Capcom cabinets of Super Street Fighter II: The Tournament Battle in a blue-tiled corner room, two on each wall with a long two-seat bench in front of each, red ball-top joysticks and three buttons per player, every screen on its own fighter select with its two player slots lit, joined by network cables on the floor.',
         raceAlt: 'Pixel art of four racing cabinets shaped like Formula 1 cars, cars 1 to 4 on their marquees, each screen showing a different spot of the same race with that player\'s car in its own colour, joined by network cables.',
       },
@@ -490,6 +494,8 @@ const enUS = {
       intro: 'Put a network cable between FliperOS cabinets and play together: the racing and fighting games that were made to link, and party play for games with more players than one cabinet has controls. It is a party on your local network, never over the internet.',
       rows: [
         { shot: 'anim/netplay-{lang}', title: 'Party play: more players than controls', text: 'Escape Kids has four players and a cabinet has two controls. Cabinet 1 opens a party and goes straight into the game; the others see “APPLE IS PLAYING” with a bell, with the name of that cabinet. The game shows up at the top of cabinet 2’s list, JOIN PARTY copies it over the cable, and it joins the game already running: players 1 and 2 on one cabinet, 3 and 4 on the other.', points: ['FBNeo and other RetroArch cores', 'Flycast GGPO', 'GroovyMAME lockstep', 'A player per control', 'Join a game in progress'] },
+        { shot: '', title: 'GroovyMAME plays in parties too', text: 'MAME has no net play, and FliperOS’s GroovyMAME does: it is built with a FliperOS lockstep patch. Any MAME game can become a party from the frontend, with every player of the game (up to 10) shared between the cabinets, each on its own controls. The machines run the same frame at the same time, like an arcade link, with no input delay, and Switchres sets the game’s native mode on every tube.', points: ['Every MAME game', 'Up to 10 players', 'Lockstep, no delay', 'Switchres on every tube'] },
+        { shot: '', title: 'Flycast parties: Naomi and Atomiswave', text: 'FliperOS’s Flycast has GGPO with a FliperOS patch: Naomi, Naomi 2 and Atomiswave games become a party from the frontend, with up to four players on two to four cabinets, each cabinet on its own controls. GGPO’s rollback keeps your own controls as fast as playing alone.', points: ['Naomi, Naomi 2, Atomiswave', 'Up to 4 players', 'Rollback (GGPO)'] },
         { shot: 'anim/ssf2tb-{lang}', title: 'The four-cabinet tournament', text: 'Super Street Fighter II: The Tournament Battle needs four linked boards. Each cabinet joins the party, the frontend opens the game on each one down the chain, and the tournament shows a bracket of its own on every machine: four fights at once, eight fighters.', points: ['4 cabinets', 'GroovyMAME', 'Chain link'] },
         { shot: 'anim/daytona-{lang}', title: 'Six link games in the frontend', text: 'Daytona USA, Scud Race and Daytona USA 2 with up to eight cabinets, Dirt Devils and Club Kart: European Session with two, and the Tournament Battle with four. A green globe marks them in the list, and the waiting room starts the machines in the right order, each with the NVRAM of its cabinet number.', points: ['SM2-Emu', 'Supermodel', 'Flycast', 'GroovyMAME'] },
         { shot: '', title: 'The game comes over the cable', text: 'A cabinet that joins without the game copies it from the cabinet that opened the party: only the files it lacks, with a progress bar.', points: ['Only what is missing'] },
@@ -612,9 +618,9 @@ const enUS = {
       'Emulators that open in the right video mode for the monitor you chose, and frontends with themes designed for 240 lines.',
     emulatorsTitle: 'Emulators',
     items: [
-      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Built with a FliperOS lockstep patch, Switchres per game, 2 and 3 screen games' },
+      { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade', note: 'Party play between cabinets in every MAME game (FliperOS lockstep patch), Switchres per game, 2 and 3 screen games' },
       { id: 'retroarch', name: 'RetroArch', systems: 'NES, SNES, Mega Drive, GBA, PS1, MAME 2010 (MAME 3D: PlayStation-based arcade)', note: 'KMS, CRT SwitchRes, 6 cores built in' },
-      { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressive at 15 kHz, F355 Challenge on 3 monitors' },
+      { id: 'flycast', name: 'Flycast', systems: 'Dreamcast, Naomi, Atomiswave', note: '640x240 progressive at 15 kHz, F355 Challenge on 3 monitors, party play for up to 4 players on Naomi and Atomiswave (GGPO)' },
       { id: 'pcsx2', name: 'PCSX2', systems: 'PlayStation 2', note: 'Official AppImage' },
       { id: 'pcsx2x6', name: 'PCSX2x6 (Namco System 246, System 256)', systems: 'Namco arcade boards', note: 'Fork of PCSX2 as its own emulator: it only opens the games in the namco2x6 folder' },
       { id: 'duckstation', name: 'DuckStation', systems: 'PlayStation', note: 'Installed from the Setup (its license keeps it out of the image)' },
