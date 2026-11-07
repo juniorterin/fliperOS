@@ -8430,6 +8430,39 @@ class ArcadeflowTests(unittest.TestCase):
             apply()
             self.assertEqual(layout.read_text(), '// outro\n')
 
+    def test_prefs_put_the_fliperos_splash_logo(self):
+        # O logotipo do FliperOS na abertura do tema, com o titulo depois do
+        # valor (sem ele o tema le a opcao de texto como vazia); sem o arquivo,
+        # o do tema. O que a pessoa puser depois fica.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            theme = tmp / 'attract/layouts/Arcadeflow'
+            theme.mkdir(parents=True)
+            (theme / 'layout.nut').write_text('// Arcadeflow\n')
+            prefs = theme / 'pref_layoutoptions.txt'
+            prefs.write_text('9.9\n\n')
+            (tmp / 'bin').mkdir()
+            (tmp / 'bin/pgrep').write_text('#!/bin/sh\nexit 1\n')
+            (tmp / 'bin/pgrep').chmod(0o755)
+            logo = tmp / 'arcadeflow-splash.png'
+            env = dict(os.environ, ATTRACT_DIR=str(tmp / 'attract'), FLIPEROS_USER='root', ARCADEFLOW_VERSION='9.9',
+                       ARCADEFLOW_SPLASH=str(logo), PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']))
+
+            def apply():
+                run = subprocess.run(['bash', str(self.SCRIPT), 'prefs'], capture_output=True, text=True, env=env,
+                                     timeout=60)
+                self.assertEqual(run.returncode, 0, run.stderr)
+            apply()
+            self.assertNotIn('SPLASHLOGOFILE', prefs.read_text())
+            logo.write_bytes(b'png')
+            line = '|SPLASHLOGOFILE|%s| SPLASHLOGOFILE : %s\n' % (logo, logo)
+            apply()
+            self.assertTrue(prefs.read_text().endswith(line), prefs.read_text())
+            self.assertIn('SPLASHLOGOFILE=%s\n' % logo, (theme / 'pref_fliperos.txt').read_text())
+            prefs.write_text('9.9\n\n|SPLASHLOGOFILE|| Custom splash logo : \n')
+            apply()
+            self.assertEqual(prefs.read_text(), '9.9\n\n|SPLASHLOGOFILE|| Custom splash logo : \n')
+
     def test_fetch_refuses_what_is_not_the_theme(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)

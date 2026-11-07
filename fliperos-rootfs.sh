@@ -172,6 +172,8 @@ done
 # Arcadeflow, o tema padrao do Attract-Mode Plus (Setup > Games > Frontend): o que o
 # baixa do GitHub dele. O tema em si nao vem na imagem (sem licenca).
 install -Dm755 "$src/config/fliperos-arcadeflow" "$root/opt/fliperos/bin/fliperos-arcadeflow"
+# O logotipo do FliperOS na abertura dele (o "Custom splash logo" do tema).
+install -Dm644 "$src/config/arcadeflow-splash.png" "$root/usr/local/share/fliperos/arcadeflow-splash.png"
 # A arte das telas com nome proprio no menu dele (MAME 2010: a do MAME do tema
 # com "2010" por cima), feita na maquina a partir da arte do tema.
 install -Dm755 "$src/config/fliperos-arcadeflow-art" "$root/opt/fliperos/bin/fliperos-arcadeflow-art"

@@ -54,10 +54,29 @@ fail() {
 # O video do jogo sob o seletor no menor tempo do tema ("Video delay
 # multiplier" em 0.25x): ele espera 60 quadros (1 s) parado no jogo antes de
 # carregar o video, e mais uns 35 ate comecar a mostra-lo.
+# O logotipo do FliperOS na abertura do tema ("Custom splash logo"), no lugar
+# do dele; sem o arquivo (uma imagem antiga), o do tema.
 fliperos_prefs=(UPDATECHECK 1 OVERMENUBUTTON 1 REDCROSS 1 THUMBVIDELAY 0)
+splash=${ARCADEFLOW_SPLASH:-/usr/local/share/fliperos/arcadeflow-splash.png}
+[[ -f $splash ]] && fliperos_prefs+=(SPLASHLOGOFILE "$splash")
+
+# pref_line OPCAO VALOR: a linha da opcao no pref_layoutoptions.txt. Uma de
+# texto (um arquivo) leva o titulo e o valor depois, como o tema grava: sem
+# eles o tema le a opcao como vazia.
+pref_line() {
+  if [[ $2 =~ ^[0-9]+$ ]]; then
+    printf '|%s|%s|\n' "$1" "$2"
+  else
+    printf '|%s|%s| %s : %s\n' "$1" "$2" "$1" "$2"
+  fi
+}
+
 prefs() {
+  local i
   printf '%s\n\n' "$version"
-  printf '|%s|%s|\n' "${fliperos_prefs[@]}"
+  for ((i = 0; i < ${#fliperos_prefs[@]}; i += 2)); do
+    pref_line "${fliperos_prefs[i]}" "${fliperos_prefs[i + 1]}"
+  done
 }
 
 # prefs_marks: as opcoes acima, "OPCAO=indice" por linha: o que vai em
@@ -102,7 +121,7 @@ prefs_apply() {
     name=${fliperos_prefs[i]} value=${fliperos_prefs[i + 1]}
     grep -qxF "$name=$value" "$mark" 2> /dev/null && continue
     sed -i "/^|$name|/d" "$file"
-    printf '|%s|%s|\n' "$name" "$value" >> "$file"
+    pref_line "$name" "$value" >> "$file"
     printf '%s=%s\n' "$name" "$value" >> "$mark"
   done
 }
