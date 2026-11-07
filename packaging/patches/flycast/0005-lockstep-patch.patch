@@ -1,5 +1,5 @@
 From: FliperOS <fliperos@localhost>
-Subject: [PATCH] ggpo: lockstep like an arcade link: a limit on predictions (FliperOS)
+Subject: [PATCH] lockstep patch: GGPO in lockstep like an arcade link (FliperOS)
 
 network:GGPOMaxPrediction (ggpo_set_max_prediction) sets how many frames a
 machine may run past the last frame it has every machine's input for (GGPO

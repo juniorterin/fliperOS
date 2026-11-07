@@ -1218,7 +1218,7 @@ class NetplayTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in data.iterdir()), ["ggisuka.zip.eeprom", "ggisuka.zip.nvmem"])
 
     def test_with_the_prediction_limit_the_party_runs_in_lockstep(self):
-        # 0005: one frame of input delay and at most two of prediction (the
+        # The lockstep patch (0005): one frame of input delay and at most two of prediction (the
         # limit must be above the delay, or nobody sends their own input).
         path = os.path.join(_ra.name, "flycast-lockstep")
         Path(path).write_bytes(b"\0" * 4096 + b"GGPOPeers\0GGPOMaxPrediction" + b"\0" * 64)
@@ -1235,7 +1235,7 @@ class NetplayTests(unittest.TestCase):
                               ["x11-run", "flycast", "/r/ggisuka.zip"], plan, 2, "ggisuka")[-2]
         self.assertIn("network:GGPODelay=0", opts)
         self.assertNotIn("GGPOMaxPrediction", opts)
-        lock = ROOT / "packaging/patches/flycast/0005-ggpo-lockstep-prediction-limit.patch"
+        lock = ROOT / "packaging/patches/flycast/0005-lockstep-patch.patch"
         self.assertTrue(felink.flycast_lockstep(str(lock)))
 
     def test_the_flycast_patch_has_the_options_felink_passes(self):

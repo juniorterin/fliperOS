@@ -4,7 +4,7 @@
 # gui/felink.py passa na party), cada um com os seus controles, com a rede do
 # GGPO atendida a cada 1 ms (0003), e nao uma vez por quadro, as maquinas a
 # ate um quadro uma da outra (0004) e a party travada como um link de arcade,
-# com um limite de previsao (0005, network:GGPOMaxPrediction).
+# com um limite de previsao (o lockstep patch, 0005, network:GGPOMaxPrediction).
 #
 # Era compilado no chroot da ISO, do master do dia: um gabinete atualizado so
 # pela rede ficava com o Flycast da ISO que instalou. Como pacote, ele chega
