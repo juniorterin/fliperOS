@@ -253,9 +253,43 @@ A PC game in Wine gets the filter and the on-screen menu like the emulators, als
 
 ### Packing a game folder (squashfs)
 
-A PC game can have thousands of small files. **Custom games > Pack a game folder** turns its folder into one compressed file (`<folder>.squashfs`, zstd) and mounts that file back in the same place, so the game's command doesn't change. A writable layer on top keeps what the game writes in its own folder (saves, settings), in `.<folder>.squashfs-data` next to it. The loose files are only removed after the packed copy has the same files and bytes, and after a trial mount of the writable layer worked.
+A PC game can have thousands of small files. **Setup > Games > Custom games > Pack a game folder (squashfs)** turns its folder into one compressed file. That makes the game easier on the disk, the network share and anything that copies or lists files.
 
-The same menu lists the packed folders, and choosing one unpacks it back to a normal folder, with what the game saved. Packing and mounting need root, so the Setup does them through `fliperos-squashgames`, and a service (`fliperos-squashgames.service`) mounts the folders at boot, before the frontend and the network share. The list is `/etc/fliperos/squashgames.list`. Only folders inside the player's home can be packed.
+It is only the folder, compressed. The packed file doesn't know which `.exe` starts the game, and doesn't need to.
+
+#### Why the game still opens
+
+The compressed file is mounted back in the same place as the folder. What to run is still decided by the custom game's command, for example `wine ~/games/pang/pang.exe`.
+
+When the game opens, Wine finds `~/games/pang/pang.exe` as before, only now it comes from inside the compressed file. The command doesn't change, and neither does any frontend.
+
+#### How the folder is packed
+
+1. You open the folder in the Setup's folder picker (for example `~/games/pang`) and choose *Use this folder*.
+2. `mksquashfs` writes `~/games/pang.squashfs` with everything inside the folder, compressed with zstd.
+3. The helper checks the copy, which must have the same number of files and the same bytes. It also tries a mount of the copy with its writable layer. Nothing is deleted before both checks pass; if one fails, the folder stays as it was.
+4. Only then are the loose files removed, and the `.squashfs` is mounted on `~/games/pang`.
+5. On top of it goes a writable layer, `~/games/.pang.squashfs-data`. The saves and settings the game writes in its own folder go there, and a file the game deletes stays deleted.
+
+At boot a service (`fliperos-squashgames.service`) mounts every packed folder again, before the frontend opens and before the network share starts.
+
+#### Packing and adding the game are separate
+
+The custom game keeps the command; packing only swaps thousands of files for one file on the disk. You can pack a folder before or after adding the game: the folder stays visible, and you can browse it at the same path.
+
+#### Unpacking
+
+The same menu lists the packed folders, with the size of each file. Choosing one unpacks it back into a normal folder, with what the game saved, and removes the `.squashfs` and the writable layer.
+
+To copy a packed game to another computer, unpack it first: the `.squashfs` alone doesn't carry the saves, which are in the writable layer.
+
+#### Details
+
+- Close the game before packing or unpacking it.
+- Packing needs free space next to the folder about the size of the folder, and so does unpacking.
+- Only folders inside the player's home can be packed, not hidden folders (like `~/.wine`) and not a path through a link.
+- Packing and mounting need root, so the Setup does them through `fliperos-squashgames` (`pack`, `unpack`, `list`; the service uses `mount-all`).
+- The list of packed folders is `/etc/fliperos/squashgames.list`, one folder per line. The `.squashfs` itself is mounted read-only under `/run/fliperos/squashgames`.
 
 ## Adding a new emulator
 
