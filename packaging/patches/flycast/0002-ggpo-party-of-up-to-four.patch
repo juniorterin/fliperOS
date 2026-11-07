@@ -1,0 +1,496 @@
+From: FliperOS <fliperos@localhost>
+Subject: [PATCH] ggpo: a party of two to four machines on the local network (FliperOS)
+
+network:GGPOPeers lists the machines of the session in order (ip or
+ip:port, separated by ';'), network:GGPOPlayerNum is this one's place
+(from 1) and network:GGPOSlots how many controllers each one plays. Each
+machine is one GGPO player and sends all its controllers in one input;
+the ports go to the machines in order (2;1;1: ports 1-2, 3 and 4).
+GGPO allows one local player per machine, so the controllers of a
+machine travel together. The GGPO input grows to 32 bytes per player and
+4 players; a party verifies as protocol 3, so a Flycast without this
+patch refuses it instead of desyncing. Without GGPOPeers, Flycast's own
+two-player session is unchanged (and still talks to an official Flycast).
+
+Meant for a wired local network: no relay, no UPnP (FliperOS turns it off).
+---
+diff --git a/core/cfg/option.cpp b/core/cfg/option.cpp
+index 575622c..b86ff7d 100644
+--- a/core/cfg/option.cpp
++++ b/core/cfg/option.cpp
+@@ -182,6 +182,10 @@ Option<int> GGPOAnalogAxes("GGPOAnalogAxes", 0, "network");
+ Option<bool> GGPOChat("GGPOChat", true, "network");
+ Option<bool> GGPOChatTimeoutToggle("GGPOChatTimeoutToggle", true, "network");
+ Option<int> GGPOChatTimeout("GGPOChatTimeout", 10, "network");
++// FliperOS: GGPO between more than two machines (core/network/ggpo.cpp).
++OptionString GGPOPeers("GGPOPeers", "", "network");
++Option<int> GGPOPlayerNum("GGPOPlayerNum", 0, "network");
++OptionString GGPOSlots("GGPOSlots", "", "network");
+ Option<bool> NetworkOutput("NetworkOutput", false, "network");
+ Option<int> MultiboardSlaves("MultiboardSlaves", 1, "network");
+ Option<bool> BattleCableEnable("BattleCable", false, "network");
+diff --git a/core/cfg/option.h b/core/cfg/option.h
+index 05f9489..05a4a92 100644
+--- a/core/cfg/option.h
++++ b/core/cfg/option.h
+@@ -538,6 +538,9 @@ extern Option<int> GGPOAnalogAxes;
+ extern Option<bool> GGPOChat;
+ extern Option<bool> GGPOChatTimeoutToggle;
+ extern Option<int> GGPOChatTimeout;
++extern OptionString GGPOPeers;
++extern Option<int> GGPOPlayerNum;
++extern OptionString GGPOSlots;
+ extern Option<bool> NetworkOutput;
+ extern Option<int> MultiboardSlaves;
+ extern Option<bool> BattleCableEnable;
+diff --git a/core/deps/ggpo/lib/ggpo/game_input.h b/core/deps/ggpo/lib/ggpo/game_input.h
+index bd3910c..6a786e4 100644
+--- a/core/deps/ggpo/lib/ggpo/game_input.h
++++ b/core/deps/ggpo/lib/ggpo/game_input.h
+@@ -11,11 +11,13 @@
+ #include <stdio.h>
+ #include <memory.h>
+ 
+-// GAMEINPUT_MAX_BYTES * GAMEINPUT_MAX_PLAYERS * 8 must be less than
+-// 2^BITVECTOR_NIBBLE_SIZE (see bitvector.h)
++// GAMEINPUT_MAX_BYTES * 8 must not be more than 2^BITVECTOR_NIBBLE_SIZE
++// (see bitvector.h): the input of one player is sent bit by bit.
++// FliperOS: 32 bytes per player (a cabinet sends up to 3 controllers in one
++// input) and 4 players (one per cabinet).
+ 
+-#define GAMEINPUT_MAX_BYTES      9
+-#define GAMEINPUT_MAX_PLAYERS    2
++#define GAMEINPUT_MAX_BYTES      32
++#define GAMEINPUT_MAX_PLAYERS    4
+ 
+ struct GameInput {
+    enum Constants {
+diff --git a/core/deps/ggpo/lib/ggpo/network/udp_msg.h b/core/deps/ggpo/lib/ggpo/network/udp_msg.h
+index e113a37..76f0fb7 100644
+--- a/core/deps/ggpo/lib/ggpo/network/udp_msg.h
++++ b/core/deps/ggpo/lib/ggpo/network/udp_msg.h
+@@ -8,7 +8,7 @@
+ #ifndef _UDP_MSG_H
+ #define _UDP_MSG_H
+ 
+-#define MAX_COMPRESSED_BITS       4096
++#define MAX_COMPRESSED_BITS       8192
+ #define UDP_MSG_MAX_PLAYERS          4
+ #define MAX_VERIFICATION_SIZE      256
+ #define MAX_APPDATA_SIZE           512
+diff --git a/core/deps/ggpo/lib/ggpo/network/udp_proto.cpp b/core/deps/ggpo/lib/ggpo/network/udp_proto.cpp
+index 08ce22b..416f1cd 100644
+--- a/core/deps/ggpo/lib/ggpo/network/udp_proto.cpp
++++ b/core/deps/ggpo/lib/ggpo/network/udp_proto.cpp
+@@ -138,8 +138,12 @@ UdpProtocol::SendPendingOutput()
+       ASSERT(last.frame == -1 || last.frame + 1 == (int)msg->u.input.start_frame);
+       for (j = 0; j < _pending_output.size(); j++) {
+          GameInput &current = _pending_output.item(j);
++         // A frame where every bit changes takes 2 + nibble bits per bit:
++         // the frames that would not fit go in the next packet.
++         if (j > 0 && offset + current.size * 8 * (2 + BITVECTOR_NIBBLE_SIZE) + 1 >= MAX_COMPRESSED_BITS)
++            break;
+          if (memcmp(current.bits, last.bits, current.size) != 0) {
+-            ASSERT((GAMEINPUT_MAX_BYTES * GAMEINPUT_MAX_PLAYERS * 8) < (1 << BITVECTOR_NIBBLE_SIZE));
++            ASSERT(current.size * 8 <= (1 << BITVECTOR_NIBBLE_SIZE));
+             for (i = 0; i < current.size * 8; i++) {
+                ASSERT(i < (1 << BITVECTOR_NIBBLE_SIZE));
+                if (current.value(i) != last.value(i)) {
+diff --git a/core/network/ggpo.cpp b/core/network/ggpo.cpp
+index cc99e42..ee12478 100644
+--- a/core/network/ggpo.cpp
++++ b/core/network/ggpo.cpp
+@@ -97,7 +97,10 @@ namespace ggpo
+ {
+ using namespace std::chrono;
+ 
+-constexpr int MAX_PLAYERS = 2;
++// GGPO players: two in Flycast's own session (network:server). In a party
++// (network:GGPOPeers, FliperOS) one per machine, up to the four controller
++// ports, and each machine sends all the controllers it plays in one input.
++constexpr int MAX_PLAYERS = 4;
+ constexpr int SERVER_PORT = 19713;
+ 
+ constexpr u32 BTN_TRIGGER_LEFT	= DC_BTN_BITMAPPED_LAST << 1;
+@@ -106,7 +109,7 @@ constexpr u32 BTN_TRIGGER_RIGHT	= DC_BTN_BITMAPPED_LAST << 2;
+ #pragma pack(push, 1)
+ struct VerificationData
+ {
+-	const int protocol = 2;
++	int protocol = 2;	// 3 in a party: a peer without it fails the verification
+ 	u8 gameMD5[16] { };
+ 	u8 stateMD5[16] { };
+ } ;
+@@ -129,6 +132,15 @@ static bool absPointerPos;
+ static bool keyboardGame;
+ static bool mouseGame;
+ static int inputSize;
++// The party: the machines of the session, how many controllers each one plays
++// and the first port of each (the ports go to the machines in order).
++static bool partyMode;
++static int numPlayers = 2;
++static int portSize;
++static int portCount[MAX_PLAYERS] { 1, 1 };
++static int firstPort[MAX_PLAYERS] { 0, 1 };
++static std::string partyAddress[MAX_PLAYERS];
++static int partyPort[MAX_PLAYERS];
+ static void (*chatCallback)(int playerNum, const std::string& msg);
+ 
+ struct MemPages
+@@ -478,6 +490,103 @@ static void on_message(u8 *msg, int len)
+ 	}
+ }
+ 
++#ifndef SYNC_TEST
++static GGPOPlayerHandle addRemotePlayer(int playerIndex, std::string peerIp, u32 peerPort)
++{
++	GGPOPlayer player{ sizeof(GGPOPlayer), GGPO_PLAYERTYPE_REMOTE, playerIndex + 1 };
++	// GGPO only takes a dotted IPv4 address: resolve host names here
++	in_addr peerAddr;
++	if (inet_pton(AF_INET, peerIp.c_str(), &peerAddr) != 1)
++	{
++		addrinfo hints {};
++		hints.ai_family = AF_INET;
++		hints.ai_socktype = SOCK_DGRAM;
++		addrinfo *result = nullptr;
++		if (getaddrinfo(peerIp.c_str(), nullptr, &hints, &result) != 0 || result == nullptr)
++		{
++			stopSession();
++			throw FlycastException(strprintf(i18n::T("GGPO: unknown peer address %s"), peerIp.c_str()));
++		}
++		char address[INET_ADDRSTRLEN];
++		inet_ntop(AF_INET, &((sockaddr_in *)result->ai_addr)->sin_addr, address, sizeof(address));
++		freeaddrinfo(result);
++		NOTICE_LOG(NETWORK, "GGPO: peer %s resolved to %s", peerIp.c_str(), address);
++		peerIp = address;
++	}
++	strcpy(player.u.remote.ip_address, peerIp.c_str());
++	player.u.remote.port = peerPort;
++	GGPOPlayerHandle handle;
++	GGPOErrorCode result = ggpo_add_player(ggpoSession, &player, &handle);
++	if (result != GGPO_OK)
++	{
++		WARN_LOG(NETWORK, "GGPO cannot add remote player %d: %d", playerIndex + 1, result);
++		stopSession();
++		throw FlycastException("GGPO cannot add remote player");
++	}
++	return handle;
++}
++
++static std::vector<std::string> splitList(const std::string& s)
++{
++	std::vector<std::string> out;
++	std::string item;
++	for (char c : s + ";")
++	{
++		if (c == ';' || c == ',' || c == ' ')
++		{
++			if (!item.empty())
++				out.push_back(item);
++			item.clear();
++		}
++		else
++			item += c;
++	}
++	return out;
++}
++
++// The party (FliperOS): network:GGPOPeers has the machines of the session in
++// order ("ip" or "ip:port", separated by ';'), network:GGPOPlayerNum this
++// one's place in it (from 1) and network:GGPOSlots how many controllers each
++// one plays (same order, 1 when missing). The ports go to the machines in
++// order: 2;1;1 gives ports 1 and 2 to the first one, 3 to the second and 4 to
++// the third. Without GGPOPeers, Flycast's own session of two (network:server).
++static void setupPlayers(int& localPlayerNum, int& localPort)
++{
++	std::vector<std::string> peers = splitList(config::GGPOPeers.get());
++	partyMode = !peers.empty();
++	if (!partyMode)
++	{
++		numPlayers = 2;
++		portCount[0] = portCount[1] = 1;
++		firstPort[0] = 0;
++		firstPort[1] = 1;
++		return;
++	}
++	numPlayers = (int)peers.size();
++	if (numPlayers < 2 || numPlayers > MAX_PLAYERS)
++		throw FlycastException(strprintf("GGPO: %d machines in GGPOPeers, 2 to %d expected", numPlayers, MAX_PLAYERS));
++	localPlayerNum = config::GGPOPlayerNum.get() - 1;
++	if (localPlayerNum < 0 || localPlayerNum >= numPlayers)
++		throw FlycastException("GGPO: GGPOPlayerNum is not a place in GGPOPeers");
++	std::vector<std::string> slots = splitList(config::GGPOSlots.get());
++	int port = 0;
++	for (int i = 0; i < numPlayers; i++)
++	{
++		int n = i < (int)slots.size() ? atoi(slots[i].c_str()) : 1;
++		// Every machine after this one still needs a port.
++		portCount[i] = std::max(1, std::min(n, 4 - port - (numPlayers - 1 - i)));
++		firstPort[i] = port;
++		port += portCount[i];
++		size_t colon = peers[i].find(':');
++		partyAddress[i] = peers[i].substr(0, colon);
++		partyPort[i] = colon == std::string::npos ? SERVER_PORT : atoi(peers[i].substr(colon + 1).c_str());
++		NOTICE_LOG(NETWORK, "GGPO party: machine %d %s:%d, ports %d to %d%s", i + 1, partyAddress[i].c_str(), partyPort[i],
++				firstPort[i] + 1, firstPort[i] + portCount[i], i == localPlayerNum ? " (this one)" : "");
++	}
++	localPort = partyPort[localPlayerNum];
++}
++#endif
++
+ void startSession(int localPort, int localPlayerNum)
+ {
+ 	GGPOSessionCallbacks cb{};
+@@ -491,7 +600,7 @@ void startSession(int localPort, int localPlayerNum)
+ 	cb.on_message      = on_message;
+ 
+ #ifdef SYNC_TEST
+-	GGPOErrorCode result = ggpo_start_synctest(&ggpoSession, &cb, settings.content.gameId.c_str(), MAX_PLAYERS, sizeof(kcode[0]), 1);
++	GGPOErrorCode result = ggpo_start_synctest(&ggpoSession, &cb, settings.content.gameId.c_str(), 2, sizeof(kcode[0]), 1);
+ 	if (result != GGPO_OK)
+ 	{
+ 		WARN_LOG(NETWORK, "GGPO start sync session failed: %d", result);
+@@ -534,10 +643,14 @@ void startSession(int localPort, int localPlayerNum)
+ 		}
+ 		NOTICE_LOG(NETWORK, "GGPO: Using %d full analog axes", analogAxes);
+ 	}
+-	inputSize = sizeof(kcode[0]) + analogAxes + (int)absPointerPos * sizeof(Inputs::u.absPos)
++	portSize = sizeof(kcode[0]) + analogAxes + (int)absPointerPos * sizeof(Inputs::u.absPos)
+ 		+ (int)keyboardGame * sizeof(Inputs::u.keys) + (int)mouseGame * sizeof(Inputs::u.relPos);
++	inputSize = portSize * *std::max_element(portCount, portCount + numPlayers);
++	if (inputSize > 32)
++		throw FlycastException("GGPO: too many controllers on one machine for this game");
+ 
+ 	VerificationData verif;
++	verif.protocol = partyMode ? 3 : 2;
+ 	MD5Sum().add(settings.network.md5.bios)
+ 			.add(settings.network.md5.game)
+ 			.getDigest(verif.gameMD5);
+@@ -553,7 +666,7 @@ void startSession(int localPort, int localPlayerNum)
+ 				.getDigest(verif.stateMD5);
+ 	}
+ 
+-	GGPOErrorCode result = ggpo_start_session(&ggpoSession, &cb, settings.content.gameId.c_str(), MAX_PLAYERS, inputSize, localPort,
++	GGPOErrorCode result = ggpo_start_session(&ggpoSession, &cb, settings.content.gameId.c_str(), numPlayers, inputSize, localPort,
+ 			&verif, sizeof(verif));
+ 	if (result != GGPO_OK)
+ 	{
+@@ -579,51 +692,31 @@ void startSession(int localPort, int localPlayerNum)
+ 	}
+ 	ggpo_set_frame_delay(ggpoSession, localPlayer, config::GGPODelay.get());
+ 
+-	size_t colon = config::NetworkServer.get().find(':');
+-	std::string peerIp = config::NetworkServer.get().substr(0, colon);
+-	if (peerIp.empty())
+-		peerIp = "127.0.0.1";
+-	u32 peerPort;
+-	if (colon == std::string::npos)
++	if (partyMode)
+ 	{
+-		if (peerIp == "127.0.0.1")
+-			peerPort = localPort ^ 1;
+-		else
+-			peerPort = SERVER_PORT;
++		for (int i = numPlayers - 1; i >= 0; i--)
++			if (i != localPlayerNum)
++				remotePlayer = addRemotePlayer(i, partyAddress[i], partyPort[i]);
+ 	}
+ 	else
+ 	{
+-		peerPort = atoi(config::NetworkServer.get().substr(colon + 1).c_str());
+-	}
+-	player.type = GGPO_PLAYERTYPE_REMOTE;
+-	// GGPO only takes a dotted IPv4 address: resolve host names here
+-	in_addr peerAddr;
+-	if (inet_pton(AF_INET, peerIp.c_str(), &peerAddr) != 1)
+-	{
+-		addrinfo hints {};
+-		hints.ai_family = AF_INET;
+-		hints.ai_socktype = SOCK_DGRAM;
+-		addrinfo *result = nullptr;
+-		if (getaddrinfo(peerIp.c_str(), nullptr, &hints, &result) != 0 || result == nullptr)
++		size_t colon = config::NetworkServer.get().find(':');
++		std::string peerIp = config::NetworkServer.get().substr(0, colon);
++		if (peerIp.empty())
++			peerIp = "127.0.0.1";
++		u32 peerPort;
++		if (colon == std::string::npos)
+ 		{
+-			stopSession();
+-			throw FlycastException(strprintf(i18n::T("GGPO: unknown peer address %s"), peerIp.c_str()));
++			if (peerIp == "127.0.0.1")
++				peerPort = localPort ^ 1;
++			else
++				peerPort = SERVER_PORT;
+ 		}
+-		char address[INET_ADDRSTRLEN];
+-		inet_ntop(AF_INET, &((sockaddr_in *)result->ai_addr)->sin_addr, address, sizeof(address));
+-		freeaddrinfo(result);
+-		NOTICE_LOG(NETWORK, "GGPO: peer %s resolved to %s", peerIp.c_str(), address);
+-		peerIp = address;
+-	}
+-	strcpy(player.u.remote.ip_address, peerIp.c_str());
+-	player.u.remote.port = peerPort;
+-	player.player_num = (1 - localPlayerNum) + 1;
+-	result = ggpo_add_player(ggpoSession, &player, &remotePlayer);
+-	if (result != GGPO_OK)
+-	{
+-		WARN_LOG(NETWORK, "GGPO cannot add remote player: %d", result);
+-		stopSession();
+-		throw FlycastException("GGPO cannot add remote player");
++		else
++		{
++			peerPort = atoi(config::NetworkServer.get().substr(colon + 1).c_str());
++		}
++		remotePlayer = addRemotePlayer(1 - localPlayerNum, peerIp, peerPort);
+ 	}
+ 	DEBUG_LOG(NETWORK, "GGPO session started");
+ #endif
+@@ -653,19 +746,26 @@ void getInput(MapleInputState inputState[4])
+ 	for (int player = 0; player < 4; player++)
+ 		inputState[player] = {};
+ 
+-	std::vector<u8> inputData(inputSize * MAX_PLAYERS);
++	// (room for a whole Inputs after the last one, which may be shorter)
++	std::vector<u8> inputData(inputSize * numPlayers + sizeof(Inputs));
+ 	// should not call any callback
+-	GGPOErrorCode error = ggpo_synchronize_input(ggpoSession, (void *)&inputData[0], inputData.size(), nullptr);
++	GGPOErrorCode error = ggpo_synchronize_input(ggpoSession, (void *)&inputData[0], inputSize * numPlayers, nullptr);
+ 	if (error != GGPO_OK)
+ 	{
+ 		stopSession();
+ 		throw FlycastException("GGPO error");
+ 	}
+ 
+-	for (int player = 0; player < MAX_PLAYERS; player++)
++	for (int slot = 0; slot < numPlayers * 4; slot++)
+ 	{
++		int machine = slot / 4, port = slot % 4;
++		if (port >= portCount[machine])
++			continue;
++		int player = firstPort[machine] + port;
++		if (player >= 4)
++			continue;
+ 		MapleInputState& state = inputState[player];
+-		const Inputs *inputs = (Inputs *)&inputData[player * inputSize];
++		const Inputs *inputs = (Inputs *)&inputData[machine * inputSize + port * portSize];
+ 		state.kcode = ~inputs->kcode;
+ 		if (analogAxes > 0)
+ 		{
+@@ -734,46 +834,51 @@ bool nextFrame()
+ 	do {
+ 		if (!config::ThreadedRendering)
+ 			os_UpdateInputState();
+-		Inputs inputs;
+-		inputs.kcode = ~kcode[0];
+-		if (rt[0] >= 0x4000)
+-			inputs.kcode |= BTN_TRIGGER_RIGHT;
+-		else
+-			inputs.kcode &= ~BTN_TRIGGER_RIGHT;
+-		if (lt[0] >= 0x4000)
+-			inputs.kcode |= BTN_TRIGGER_LEFT;
+-		else
+-			inputs.kcode &= ~BTN_TRIGGER_LEFT;
+-		inputs.mouseButtons = 0;
+-		inputs.kbModifiers = 0;
+-		if (analogAxes > 0)
+-		{
+-			inputs.u.analog.x = joyx[0] >> 8;
+-			if (analogAxes >= 2)
+-				inputs.u.analog.y = joyy[0] >> 8;
+-		}
+-		else if (absPointerPos)
+-		{
+-			inputs.u.absPos.x = mo_x_abs[0];
+-			inputs.u.absPos.y = mo_y_abs[0];
+-		}
+-		else if (keyboardGame)
+-		{
+-			inputs.kbModifiers = kb_shift[0];
+-			memcpy(inputs.u.keys, kb_key[0], sizeof(kb_key[0]));
+-		}
+-		else if (mouseGame)
++		std::vector<u8> localData(inputSize, 0);
++		for (int port = 0; port < portCount[localPlayerNum] && port < 4; port++)
+ 		{
+-			std::lock_guard<std::mutex> lock(relPosMutex);
+-			inputs.mouseButtons = ~mo_buttons[0];
+-			inputs.u.relPos.x = std::round(mo_x_delta[0]);
+-			inputs.u.relPos.y = std::round(mo_y_delta[0]);
+-			inputs.u.relPos.wheel = std::round(mo_wheel_delta[0]);
+-			mo_x_delta[0] -= inputs.u.relPos.x;
+-			mo_y_delta[0] -= inputs.u.relPos.y;
+-			mo_wheel_delta[0] -= inputs.u.relPos.wheel;
++			Inputs inputs {};
++			inputs.kcode = ~kcode[port];
++			if (rt[port] >= 0x4000)
++				inputs.kcode |= BTN_TRIGGER_RIGHT;
++			else
++				inputs.kcode &= ~BTN_TRIGGER_RIGHT;
++			if (lt[port] >= 0x4000)
++				inputs.kcode |= BTN_TRIGGER_LEFT;
++			else
++				inputs.kcode &= ~BTN_TRIGGER_LEFT;
++			inputs.mouseButtons = 0;
++			inputs.kbModifiers = 0;
++			if (analogAxes > 0)
++			{
++				inputs.u.analog.x = joyx[port] >> 8;
++				if (analogAxes >= 2)
++					inputs.u.analog.y = joyy[port] >> 8;
++			}
++			else if (absPointerPos)
++			{
++				inputs.u.absPos.x = mo_x_abs[port];
++				inputs.u.absPos.y = mo_y_abs[port];
++			}
++			else if (keyboardGame)
++			{
++				inputs.kbModifiers = kb_shift[port];
++				memcpy(inputs.u.keys, kb_key[port], sizeof(kb_key[port]));
++			}
++			else if (mouseGame)
++			{
++				std::lock_guard<std::mutex> lock(relPosMutex);
++				inputs.mouseButtons = ~mo_buttons[port];
++				inputs.u.relPos.x = std::round(mo_x_delta[port]);
++				inputs.u.relPos.y = std::round(mo_y_delta[port]);
++				inputs.u.relPos.wheel = std::round(mo_wheel_delta[port]);
++				mo_x_delta[port] -= inputs.u.relPos.x;
++				mo_y_delta[port] -= inputs.u.relPos.y;
++				mo_wheel_delta[port] -= inputs.u.relPos.wheel;
++			}
++			memcpy(&localData[port * portSize], &inputs, portSize);
+ 		}
+-		error = ggpo_add_local_input(ggpoSession, localPlayer, &inputs, inputSize);
++		error = ggpo_add_local_input(ggpoSession, localPlayer, &localData[0], inputSize);
+ 		if (error == GGPO_OK)
+ 			break;
+ 		if (error != GGPO_ERRORCODE_PREDICTION_THRESHOLD)
+@@ -826,11 +931,12 @@ std::future<bool> startNetwork()
+ 			}
+ 
+ 			try {
+-				if (config::ActAsServer)
+-					startSession(SERVER_PORT, 0);
+-				else
+-					// Use SERVER_PORT-1 as local port if connecting to ourselves
+-					startSession(config::NetworkServer.get().empty() || config::NetworkServer.get() == "127.0.0.1" ? SERVER_PORT - 1 : SERVER_PORT, 1);
++				int localPlayerNum = config::ActAsServer ? 0 : 1;
++				// Use SERVER_PORT-1 as local port if connecting to ourselves
++				int localPort = config::ActAsServer || !(config::NetworkServer.get().empty() || config::NetworkServer.get() == "127.0.0.1")
++						? SERVER_PORT : SERVER_PORT - 1;
++				setupPlayers(localPlayerNum, localPort);
++				startSession(localPort, localPlayerNum);
+ 			} catch (...) {
+ 				miniupnp.Term();
+ 				throw;
+@@ -872,7 +978,7 @@ std::future<bool> startNetwork()
+ 			{
+ 				GameEvent event;
+ 				event.type = GameEvent::VF4Card;
+-				event.u.card.playerNum = config::ActAsServer ? 0 : 1;
++				event.u.card.playerNum = firstPort[localPlayerNum];
+ 				memcpy(event.u.card.data, cardData, sizeof(event.u.card.data));
+ 				ggpo_send_message(ggpoSession, &event, sizeof(event.type) + sizeof(event.u.card), true);
+ 			}

@@ -658,7 +658,7 @@ const ptBR: Messages = {
     ],
     netplayTitle: 'Party entre gabinetes',
     netplayIntro:
-      'A party é um jogo dividido na sua rede local, nunca pela internet: pelo cabo de rede, os gabinetes dividem um jogo e cada um fica com tantos jogadores quantos controles tem. Cada gabinete aparece pelo nome dele, definido em Setup > System > Cabinet name. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), e com o GGPO do Flycast para um versus entre dois gabinetes.',
+      'A party é um jogo dividido na sua rede local, nunca pela internet: pelo cabo de rede, os gabinetes dividem um jogo e cada um fica com tantos jogadores quantos controles tem. Cada gabinete aparece pelo nome dele, definido em Setup > System > Cabinet name. Os seus controles continuam tão rápidos quanto jogando sozinho (rollback, sem atraso de entrada). O frontend faz isso com todo core do RetroArch que tem net play (o FBNeo só com o romset dele), e com o GGPO do Flycast no Naomi e no Atomiswave, até quatro jogadores em dois a quatro gabinetes.',
     netplayHead: { name: 'Core ou emulador', systems: 'Sistemas', status: 'Party' },
     netplayLevels: { frontend: 'No frontend', hand: 'À mão', partial: 'Limitado', no: 'Não' },
     netplay: [
@@ -668,7 +668,7 @@ const ptBR: Messages = {
       { id: 'fceumm', name: 'FCEUmm', systems: 'NES', level: 'frontend', note: '' },
       { id: 'mgba', name: 'mGBA', systems: 'Game Boy Advance', level: 'frontend', note: '' },
       { id: 'pcsx', name: 'PCSX ReARMed', systems: 'PlayStation', level: 'frontend', note: 'Mais pesado, perde a sincronia com mais facilidade' },
-      { id: 'flycast', name: 'Flycast', systems: 'Naomi, Naomi 2, Atomiswave', level: 'frontend', note: 'GGPO: dois gabinetes, um jogador em cada' },
+      { id: 'flycast', name: 'Flycast', systems: 'Naomi, Naomi 2, Atomiswave', level: 'frontend', note: 'GGPO com um patch do FliperOS: até 4 jogadores em 2 a 4 gabinetes, cada um com os seus controles' },
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'frontend', note: 'Net play próprio, por um patch do FliperOS: até 4 gabinetes, um jogador em cada; atraso de entrada, sem rollback' },
       { id: 'mame2010', name: 'MAME 2010', systems: 'Arcade', level: 'no', note: '' },
       { id: 'boards', name: 'GroovyMAME, Supermodel, SM2-Emu', systems: 'Arcade, Model 3, Model 2', level: 'no', note: 'Em vez disso ligam as placas, nos jogos de link' },

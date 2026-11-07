@@ -1,5 +1,7 @@
 # Flycast (Dreamcast, Naomi, Naomi 2, Atomiswave) com os patches do FliperOS
-# (packaging/patches/flycast): sem a tela de loading entre o frontend e o jogo.
+# (packaging/patches/flycast): sem a tela de loading entre o frontend e o jogo,
+# e o GGPO de dois a quatro gabinetes na rede local (network:GGPOPeers, que o
+# gui/felink.py passa na party), cada um com os seus controles.
 #
 # Era compilado no chroot da ISO, do master do dia: um gabinete atualizado so
 # pela rede ficava com o Flycast da ISO que instalou. Como pacote, ele chega
@@ -19,8 +21,10 @@ PKG_SECTION="games"
 PKG_HOMEPAGE="https://github.com/flyinghead/flycast"
 PKG_SUMMARY="Flycast (Dreamcast, Naomi, Atomiswave) with Vulkan"
 PKG_DESCRIPTION="Flycast, the Dreamcast, Naomi, Naomi 2 and Atomiswave emulator, with
-Vulkan and OpenGL video and FliperOS's patch that skips the loading
-screen between the frontend and the game.
+Vulkan and OpenGL video and FliperOS's patches: no loading screen between
+the frontend and the game, and GGPO rollback between two to four machines
+on the local network, each one with its own controllers (up to four
+players).
 
 Installed in /usr/local, where the FliperOS image always had it."
 

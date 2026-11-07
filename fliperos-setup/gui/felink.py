@@ -52,9 +52,12 @@ PORT_PRESENCE, PORT_PARTY, PORT_FILES = 55436, 55437, 55438
 # (config/fliperos-fbneo).
 PORT_NETPLAY = 55435
 # O Flycast tem o net play dele, o GGPO (rollback, UDP 19713), nos jogos de
-# Naomi e Atomiswave: dois jogadores, um em cada gabinete.
+# Naomi e Atomiswave: dois jogadores, um em cada gabinete. Com o patch do
+# FliperOS (packaging/patches/flycast, network:GGPOPeers), de dois a quatro
+# gabinetes e ate quatro jogadores, cada gabinete com os seus controles.
 PORT_GGPO = 19713
 GGPO_SYSTEMS = ("naomi", "naomi2", "atomiswave")
+FLYCAST = os.environ.get("FLIPEROS_FLYCAST", "/usr/local/bin/flycast")
 # O Dolphin (GameCube e Wii, ~/roms/dolphin) com o patch do FliperOS
 # (config/dolphin-patches: --netplay host|join): ate quatro gabinetes, um
 # jogador em cada (o controle 1 de cada um), na porta TCP dele.
@@ -680,8 +683,16 @@ def link_args(profile, plan, number):
         # 127.0.0.1) e o servidor e o jogador 1. Sem atraso de entrada: no cabo o
         # rollback e raro. O UPnP fica desligado.
         other = next(m["ip"] for m in plan["members"] if m["number"] != number)
-        return ["-config", "network:GGPO=yes,network:ActAsServer=%s,network:server=%s,network:GGPODelay=0,"
-                "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other)]
+        opts = ("network:GGPO=yes,network:ActAsServer=%s,network:server=%s,network:GGPODelay=0,"
+                "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other))
+        if profile.get("party"):
+            # O patch: todos os gabinetes na ordem da festa, o lugar deste e os
+            # controles de cada um (as portas vao nessa ordem). ";" porque a
+            # virgula separa as opcoes do -config.
+            members = sorted(plan["members"], key=lambda m: m["number"])
+            opts += ",network:GGPOPeers=%s,network:GGPOPlayerNum=%d,network:GGPOSlots=%s" % (
+                ";".join(m["ip"] for m in members), number, ";".join(str(m.get("take", 1)) for m in members))
+        return ["-config", opts]
     if emu == "dolphin":
         # O net play do Dolphin pela linha de comando (o patch): o numero 1 abre a
         # sessao e comeca quando os gabinetes da festa chegam; os outros se
@@ -827,27 +838,37 @@ def netplay_core(system_key):
     return so if _states[info] == "deterministic" and os.path.isfile(so) else None
 
 
-_dolphin = {}
+_patched = {}
 
 
-def dolphin_netplay(path=None):
-    """O Dolphin instalado tem o --netplay do patch do FliperOS? (procura a
-    opcao no binario, uma vez por arquivo e data)."""
-    path = path or DOLPHIN
+def binary_has(path, needle):
+    """O binario tem o texto (a opcao de um patch do FliperOS)? Lido uma vez
+    por arquivo e data."""
     try:
-        key = (path, os.stat(path).st_mtime)
+        key = (path, os.stat(path).st_mtime, needle)
     except OSError:
         return False
-    if key not in _dolphin:
+    if key not in _patched:
         found, tail = False, b""
         with open(path, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
-                if b"netplay_players" in tail + chunk:
+                if needle in tail + chunk:
                     found = True
                     break
                 tail = chunk[-32:]
-        _dolphin[key] = found
-    return _dolphin[key]
+        _patched[key] = found
+    return _patched[key]
+
+
+def dolphin_netplay(path=None):
+    """O Dolphin instalado tem o --netplay do patch do FliperOS?"""
+    return binary_has(path or DOLPHIN, b"netplay_players")
+
+
+def flycast_party(path=None):
+    """O Flycast instalado tem o GGPO de varios gabinetes do patch do FliperOS
+    (network:GGPOPeers)? Sem ele, o GGPO e de dois, um jogador em cada."""
+    return binary_has(path or FLYCAST, b"GGPOPeers")
 
 
 def netplay_profile(system_key, name, players, local, sets=None):
@@ -868,6 +889,13 @@ def netplay_profile(system_key, name, players, local, sets=None):
     if (system_key or "").split("/")[0] in GGPO_SYSTEMS:
         if n < 2:
             return None
+        if flycast_party():
+            # O patch: os jogadores do jogo (ate as quatro portas), de dois a
+            # quatro gabinetes, cada um com os seus controles. Comeca com todos.
+            m = min(n, 4)
+            return {"id": "netplay", "title": name, "emulator": "flycast", "systems": [system_key], "sets": [name],
+                    "min": 2, "max": m, "players": m, "fixed": False, "order": "master-first", "step": 3,
+                    "port": PORT_GGPO, "netplay": True, "ggpo": True, "party": True}
         return {"id": "netplay", "title": name, "emulator": "flycast", "systems": [system_key], "sets": [name],
                 "min": 2, "max": 2, "players": 2, "take": 1, "fixed": True, "order": "master-first", "step": 6,
                 "port": PORT_GGPO, "netplay": True, "ggpo": True}
@@ -1315,10 +1343,12 @@ class Link:
 
     def max_take(self, profile):
         """Quantos jogadores este gabinete pode ocupar: no net play, um por
-        controle daqui (no GGPO, um so); num jogo de link, um."""
+        controle daqui (no GGPO sem o patch, um so), deixando um jogador a cada
+        gabinete que ainda falta para o minimo; num jogo de link, um."""
         if not (profile or {}).get("netplay"):
             return 1
-        return max(1, min(self.local_players, profile.get("take") or profile["players"]))
+        room = profile["players"] - (profile.get("min", 2) - 1)
+        return max(1, min(self.local_players, profile.get("take") or profile["players"], room))
 
     def host_game(self, profile, system_key, name, files, rom=None, take=None):
         """Abre a festa deste gabinete (o numero 1) e serve os arquivos do jogo.

@@ -6,7 +6,7 @@ This page lists those games, how the link works in each emulator FliperOS ships,
 
 **The FliperOS frontend does link play for six games on its own**: Daytona USA, Scud Race, Daytona USA 2, Dirt Devils, Club Kart: European Session and the Super Street Fighter II Tournament Battle. A green globe marks them in the list, the game menu offers LINK PLAY or JOIN LINK, and a waiting room starts the machines in the right order with the right NVRAM. It uses the **network cable only** (never Wi-Fi) and needs the cabinets on the same network.
 
-Games of a RetroArch core that does net play, with more players than a cabinet has controls, and the NAOMI and Atomiswave games of Flycast (GGPO, one player on each of two cabinets) get **party play** in the same menu: see Party play below. The frontend calls it a party, not net play, because it only runs on your local network, never over the internet.
+Games of a RetroArch core that does net play, with more players than a cabinet has controls, and the NAOMI and Atomiswave games of Flycast (GGPO, up to four players on two to four cabinets) get **party play** in the same menu: see Party play below. The frontend calls it a party, not net play, because it only runs on your local network, never over the internet.
 
 **Each cabinet has a name** that the others see: in the waiting room, on the JOIN tile ("HOST APPLE") and in a notice with a bell at the bottom of the screen, "APPLE IS PLAYING", when it opens a party or a link game. Set it in **Setup > System > Cabinet name** or during the installation (up to 12 letters, numbers, spaces and hyphens). With no name, each cabinet gets a fruit or an animal out of a list of 100, always the same for that machine (picked from its `/etc/machine-id`). It is kept as `cabinet_name=` in `/etc/fliperos/fliperos.conf`, and the frontend reads it when it opens.
 
@@ -244,7 +244,7 @@ Some games have more players than a cabinet has controls: X-Men has four players
 
 - **Every RetroArch core that does net play**, in its own folder (`~/roms/retroarch/<core>`), for a game with more players than this cabinet has controls. A core does net play when its `.info` file says `savestate_features = "deterministic"`, which is what RetroArch itself asks for: in the image that is FBNeo, Snes9x, Genesis Plus GX, FCEUmm, mGBA and PCSX ReARMed. A core installed later counts too. The game needs its number of players in the list (the MAME ones come with it; a console game gets it from the scraper, or from Classify in the frontend).
 - **FBNeo uses its own folder only**: `~/roms/retroarch/fbneo`, with FBNeo's own romset, and only the sets FBNeo knows. The MAME romset in `~/roms/mame` is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take.
-- **NAOMI, NAOMI 2 and Atomiswave games in Flycast**, through Flycast's GGPO, for any game of two or more players. GGPO has two players, so it is two cabinets with one player each: a versus between two cabinets. See Flycast GGPO below.
+- **NAOMI, NAOMI 2 and Atomiswave games in Flycast**, through Flycast's GGPO, for any game of two or more players: up to four players (the four controller ports) on two to four cabinets, each cabinet with as many players as it has controls. Guilty Gear Isuka's four players can be 2+2, 2+1+1 or 1+1+1+1. See Flycast GGPO below.
 - **GameCube and Wii games in Dolphin** (`~/roms/dolphin`), for any game of two or more players: two to four cabinets, one player each. See Dolphin net play below.
 
 Every cabinet of the party needs the same game file.
@@ -264,6 +264,18 @@ Tested on 1 November 2026: the frontend of the cabinet hosted X-Men with players
 ### Flycast GGPO
 
 The frontend opens Flycast with `network:GGPO=yes`, `network:GGPODelay=0` and `network:EnableUPnP=no`. The cabinet that opened the party has `network:ActAsServer=yes` and is player 1. **Both have `network:server` set to the other cabinet's IP**: Flycast sends only to that address and takes packets only from it, so an empty one (the loopback) never links. Two Flycast of the cabinet's own build linked this way (see the Flycast section). A party started from the frontend has not been tried yet.
+
+**More than two players.** Flycast's own GGPO has two players, one on each machine, and reads only the first controller of each. The GGPO library under it takes up to four players but only one local player per machine. So FliperOS patches Flycast (`packaging/patches/flycast/0002-ggpo-party-of-up-to-four.patch`) to make **each cabinet one GGPO player that sends all its controllers in one input**. The frontend adds three options:
+
+- `network:GGPOPeers`: the IPs of the cabinets of the party, in order, separated by `;`;
+- `network:GGPOPlayerNum`: this cabinet's place in that list;
+- `network:GGPOSlots`: how many controllers each cabinet plays, in the same order.
+
+The controller ports go to the cabinets in that order: with `2;1;1`, ports 1 and 2 are the first cabinet's two controllers, port 3 the second cabinet's and port 4 the third's. Each cabinet's own controllers stay its controllers 1, 2... A party says it is protocol 3 in GGPO's check, so a Flycast without the patch refuses it instead of losing the sync. Without `GGPOPeers` Flycast runs its own two-player session, unchanged. The frontend offers the bigger party only when the installed Flycast has the patch (it looks for `GGPOPeers` in the binary); an older one gets the party of two, one player each.
+
+Like the rest of the party, it is for a wired local network: no relay, no UPnP. The patch makes the GGPO input bigger (32 bytes per player instead of 9) and the input packets bigger (up to 1 KB, under the network cable's MTU).
+
+Tested on 7 November 2026 with three patched Flycast on one PC, each one a cabinet on its own port of the loopback, playing Guilty Gear Isuka (Atomiswave) in a 2+1+1 party: all three ran the game in one GGPO session. A Lua script coined on each one's own controllers (the first cabinet on its second controller, the second once, the third twice), and all three screens showed the credits 0, 1, 1 and 2: each controller reached its port on every machine. Not tried yet between real cabinets, nor with people playing a match.
 
 ### Dolphin net play
 
@@ -299,7 +311,7 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 | PCSX ReARMed (RetroArch) | PlayStation | **Yes, in the frontend**, but heavier and loses the sync more easily | Its .info; not tested |
 | MAME 2010 (RetroArch) | Arcade (MAME 0.139) | **No**: "Core does not support netplay" | **Tested** |
 | MAME, current core (RetroArch) | Arcade (MAME 0.289) | Yes, but many drivers do not save their state well. Not in the image (415 MB) | Connected once (X-Men) |
-| Flycast | NAOMI, NAOMI 2, Atomiswave | **Yes, in the frontend**: GGPO rollback, two cabinets, one player each | Two Flycast linked on the cabinet by hand, game screen not seen |
+| Flycast | NAOMI, NAOMI 2, Atomiswave | **Yes, in the frontend**: GGPO rollback, up to four players on two to four cabinets (FliperOS patch) | Two Flycast linked on the cabinet by hand, game screen not seen |
 | Dolphin | GameCube, Wii | **Yes, in the frontend** (FliperOS patch): two to four cabinets, one player each; input delay, no rollback | Patched build compiled; not played between two machines |
 | GroovyMAME, Supermodel, SM2-Emu | Arcade, Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
 | PCSX2, DuckStation, Hypseus Singe, OpenBOR | PS2, PS1, Laserdisc, beat 'em ups | **No** | Source |

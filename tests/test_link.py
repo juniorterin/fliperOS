@@ -1153,6 +1153,54 @@ class NetplayTests(unittest.TestCase):
         self.assertIn("network:ActAsServer=no,network:server=10.0.0.1", guest[-2])
         self.assertIn("network:EnableUPnP=no", guest[-2])
 
+    def patched_flycast(self):
+        """Um Flycast com o GGPO de varios gabinetes (a opcao no binario)."""
+        path = os.path.join(_ra.name, "flycast-party")
+        Path(path).write_bytes(b"\0" * 4096 + b"GGPOPeers" + b"\0" * 64)
+        self.addCleanup(setattr, felink, "FLYCAST", felink.FLYCAST)
+        felink.FLYCAST = path
+
+    def test_the_patched_flycast_takes_up_to_four_players_on_two_to_four_cabinets(self):
+        self.assertNotIn("party", felink.netplay_profile("atomiswave", "ggisuka", "4", 2))   # sem o patch: dois
+        self.patched_flycast()
+        prof = felink.netplay_profile("atomiswave", "ggisuka", "4", 2)
+        self.assertEqual((prof["min"], prof["max"], prof["players"], prof["fixed"], prof.get("take")), (2, 4, 4, False, None))
+        self.assertTrue(prof["party"] and prof["ggpo"] and not prof.get("late"))
+        self.assertEqual(felink.netplay_profile("naomi", "mvsc2", "2", 2)["players"], 2)
+        self.assertEqual(felink.netplay_profile("naomi", "dyna", "8", 2)["players"], 4)    # as quatro portas
+        link = felink.Link(tempfile.mkdtemp(), wire=None, ident="a", local_players=2)
+        self.assertEqual(link.max_take(prof), 2)
+        link.local_players = 4
+        self.assertEqual(link.max_take(prof), 3)                                # sobra um para o outro gabinete
+        self.assertEqual(link.max_take(felink.netplay_profile("naomi", "mvsc2", "2", 2)), 1)
+
+    def test_the_patched_flycast_gets_every_cabinet_its_place_and_its_controllers(self):
+        self.patched_flycast()
+        prof = felink.netplay_profile("atomiswave", "ggisuka", "4", 2)
+        plan = felink.make_plan(prof, [{"number": 1, "name": "A", "ip": "10.0.0.1", "take": 2, "first": 1},
+                                       {"number": 2, "name": "B", "ip": "10.0.0.2", "take": 1, "first": 3},
+                                       {"number": 3, "name": "C", "ip": "10.0.0.3", "take": 1, "first": 4}])
+        base = ["/opt/fliperos/bin/fliperos-x11-run", "flycast", "/r/ggisuka.zip"]
+        guest = felink.command(prof, base, plan, 2, "ggisuka")
+        self.assertEqual(guest[-1], "/r/ggisuka.zip")
+        opts = guest[-2]
+        self.assertIn("network:GGPO=yes", opts)
+        self.assertIn("network:EnableUPnP=no", opts)
+        self.assertIn("network:GGPOPeers=10.0.0.1;10.0.0.2;10.0.0.3,network:GGPOPlayerNum=2,network:GGPOSlots=2;1;1", opts)
+        # Sem o patch, o GGPO de dois de sempre.
+        felink.FLYCAST = os.path.join(_ra.name, "missing")
+        old = felink.netplay_profile("atomiswave", "kofnw", "2", 2)
+        self.assertNotIn("GGPOPeers", felink.command(old, base, felink.make_plan(old, plan["members"][:2]), 2, "kofnw")[-2])
+
+    def test_the_flycast_patch_has_the_options_felink_passes(self):
+        path = ROOT / "packaging/patches/flycast/0002-ggpo-party-of-up-to-four.patch"
+        patch = path.read_text()
+        for option in ("GGPOPeers", "GGPOPlayerNum", "GGPOSlots"):
+            self.assertIn('("%s", ' % option, patch)               # o nome no Option do Flycast
+        self.assertIn("+#define GAMEINPUT_MAX_PLAYERS    4", patch)
+        self.assertIn("verif.protocol = partyMode ? 3 : 2;", patch)  # sem o patch, o outro recusa
+        self.assertTrue(felink.flycast_party(str(path)))             # o que o felink procura no binario
+
     def test_dolphin_games_get_net_play_one_player_per_cabinet_up_to_four(self):
         prof = felink.netplay_profile("dolphin", "Mario Kart Double Dash", "4", 2)
         self.assertEqual((prof["emulator"], prof["min"], prof["max"], prof["take"], prof["port"], prof["fixed"]),
