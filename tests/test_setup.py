@@ -485,20 +485,89 @@ class OutputTestTests(Base):
         self.assertIn("video=HDMI-A-1:e drm.edid_firmware=HDMI-A-1:", conf)
         self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+25\.0$")
 
-    def test_displayport_keeps_the_low_dotclock(self):
+    def test_crt_on_displayport_gets_super_resolution(self):
+        # A DisplayPort chega ao CRT por um conversor, com piso proprio: num
+        # DP para VGA (Radeon Pro WX 4100, monitor trisync) so os modos de
+        # 25 MHz para cima deram imagem, com o kernel aceitando todos.
         conf, ini = self.saved("card0-DP-1", "sr", "generic_15")
-        self.assertIn("detection=sr\n", conf)
-        self.assertIn("kernel_video=video=DP-1:640x480iS\n", conf)
-        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
+        self.assertIn("detection=r\n", conf)
+        self.assertIn("kernel_video=video=DP-1:1280x480iS\n", conf)
+        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+25\.0$")
 
     def test_displayport_converter_with_its_own_edid_boots_in_super_resolution(self):
-        # DisplayPort para VGA com EDID de fabrica numa placa de dotclock baixo
-        # (Ryzen 5600GT): o EDID do conversor e trocado por um de 15 kHz, e os
-        # jogos seguem nativos.
+        # DisplayPort para VGA com EDID de fabrica numa placa de dotclock baixo:
+        # o EDID do conversor e trocado por um de 15 kHz em super resolucao, e
+        # os jogos tambem ficam nela.
         conf, ini = self.saved("card0-DP-1", "sl", "generic_15")
-        self.assertIn("detection=sl\n", conf)
+        self.assertIn("detection=l\n", conf)
         self.assertIn("kernel_video=video=DP-1:e drm.edid_firmware=DP-1:edid/generic_15_super_resp.bin\n", conf)
+        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+25\.0$")
+
+    def test_lcd_on_displayport_is_not_touched(self):
+        conf, ini = self.saved("card0-DP-1", "sl", "lcd")
+        self.assertIn("detection=sl\n", conf)
+        self.assertNotIn("kernel_video=video=", conf)
         self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
+
+    def link_edids(self):
+        # Os EDIDs dos presets so com o pixel clock do primeiro modo (bytes 54
+        # e 55, em 10 kHz): o arcade_25 a 15,97 MHz e o arcade_31 a 25,45 MHz.
+        edid_dir = self.env.dir / "edid"
+        edid_dir.mkdir(exist_ok=True)
+        for name, clock in (("arcade_25", 1597), ("arcade_31", 2545)):
+            data = bytearray(128)
+            data[54], data[55] = clock & 0xFF, clock >> 8
+            (edid_dir / ("%s.bin" % name)).write_bytes(bytes(data))
+        self.env.stub("switchres", 'echo "$*" >> "%s/switchres.args"\n'
+                      "echo 'Switchres: Modeline \"1024x384_60 24.95KHz 59.98Hz\" 31.940000 1024 1050 1178 1280 "
+                      "384 391 396 416   -hsync -vsync'" % self.env.dir)
+        return edid_dir, {"EDID_DIR": str(edid_dir), "EDID_MODES": str(SETUP.parent / "config" / "fliperos-edid-modes")}
+
+    def test_converter_output_gets_a_super_resolution_edid_below_25_mhz(self):
+        # O EDID do arcade_25 (512x384 a 16 MHz) nao passa por um conversor: a
+        # saida ganha o mesmo modo do Switchres com dotclock_min 25.
+        edid_dir, env = self.link_edids()
+        out = self.env.out("video_kernel_params DP-1 l arcade_25", env).strip()
+        self.assertEqual(out, "video=DP-1:e drm.edid_firmware=DP-1:edid/fliperos-link.bin")
+        self.assertIn("512 384 60 --monitor arcade_25 --dotclock_min 25 --calc",
+                      (self.env.dir / "switchres.args").read_text())
+        data = (edid_dir / "fliperos-link.bin").read_bytes()
+        self.assertEqual((len(data), sum(data) % 256), (128, 0))
+        self.assertEqual(data[54] | data[55] << 8, 3194)
+        # Um preset que ja passa dos 25 MHz fica com o EDID dele.
+        out = self.env.out("video_kernel_params HDMI-A-1 l arcade_31", env).strip()
+        self.assertEqual(out, "video=HDMI-A-1:e drm.edid_firmware=HDMI-A-1:edid/arcade_31.bin")
+        # Sem Switchres, fica o do preset.
+        (self.env.bin / "switchres").unlink()
+        out = self.env.out("PATH=%s:/usr/bin:/bin; video_kernel_params DP-1 l arcade_25" % self.env.bin, env).strip()
+        self.assertEqual(out, "video=DP-1:e drm.edid_firmware=DP-1:edid/arcade_25.bin")
+        self.assertFalse((edid_dir / "fliperos-link.bin").exists())
+
+    def test_link_refresh_redoes_a_displayport_crt_saved_native(self):
+        # Um gabinete instalado com a regra de antes (DP com "s" e dotclock_min
+        # 0): o update refaz o resultado; depois nao ha o que refazer.
+        self.env.connector("card0-DP-1", "connected")
+        (self.env.etc / "switchres.ini").write_text("\tdotclock_min              0\n")
+        (self.env.etc / "fliperos.conf").write_text(
+            "card=card1\nconnector=DP-1\ndetection=sl\nmonitor=generic_15\n"
+            "kernel_video=video=DP-1:e drm.edid_firmware=DP-1:edid/generic_15_super_resp.bin\n")
+        self.assertEqual(self.env.run("video_link_refresh").returncode, 0)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("detection=l\n", conf)
+        self.assertIn("card=card0\n", conf)
+        self.assertRegex((self.env.etc / "switchres.ini").read_text(), r"(?m)^\s*dotclock_min\s+25\.0$")
+        self.assertNotEqual(self.env.run("video_link_refresh").returncode, 0)
+        # VGA, ou um LCD na DisplayPort: nada muda.
+        self.env.out("conf_set monitor lcd; conf_set detection sl")
+        self.assertNotEqual(self.env.run("video_link_refresh").returncode, 0)
+        self.env.out("conf_set monitor generic_15; conf_set connector VGA-1")
+        self.assertNotEqual(self.env.run("video_link_refresh").returncode, 0)
+
+    def test_update_redoes_converter_outputs_before_boot_apply(self):
+        update = (ROOT / "tools/cabinet-update.sh").read_text()
+        self.assertLess(update.index("if video_link_refresh; then"), update.index("  boot_apply ||"))
+        self.assertIn('[[ -f $EDID_DIR/$CUSTOM_EDID || $line == *"edid/$LINK_EDID"* ]]',
+                      (SETUP / "lib/bootloader.sh").read_text())
 
     def test_boot_mode_missing_on_a_cabinet_saved_before_the_rule(self):
         # O fliperos.conf de um conversor com EDID proprio, gravado sem modo de
@@ -530,11 +599,12 @@ class OutputTestTests(Base):
     def test_resolution_choices_follow_the_output(self):
         self.env.out("conf_set card card0; conf_set monitor generic_15; conf_set connector VGA-1")
         self.assertIn("320x240S|", self.env.out("video_resolution_choices"))
-        self.env.out("conf_set connector DP-1")
-        self.assertIn("320x240S|", self.env.out("video_resolution_choices"))
-        self.env.out("conf_set connector HDMI-A-1")
-        modes = [l.split("|")[0] for l in self.env.out("video_resolution_choices").splitlines()]
-        self.assertEqual(modes, ["1280x480iS"])
+        # HDMI, DVI-D e DisplayPort chegam ao CRT por um conversor: so a super
+        # resolucao.
+        for conn in ("DP-1", "HDMI-A-1", "DVI-D-1"):
+            self.env.out("conf_set connector %s" % conn)
+            modes = [l.split("|")[0] for l in self.env.out("video_resolution_choices").splitlines()]
+            self.assertEqual(modes, ["1280x480iS"], conn)
 
     def test_monitor_without_a_table_lists_the_modes_the_output_reports(self):
         # Um LCD nao tem tabela: a lista e a que a saida mostra (o EDID dele),
@@ -2231,6 +2301,18 @@ class RecoveryTests(Base):
         self.env.out("install_configure_video '%s'" % target, {"EDID_DIR": str(edid)})
         self.assertEqual((Path(str(target) + str(edid)) / "fliperos-1280x240.bin").read_bytes(), b"x" * 128)
         self.assertFalse((Path(str(target) + str(edid)) / "custom_resolution.bin").exists())
+
+    def test_the_converter_edid_goes_to_the_installed_disk(self):
+        # O EDID de super resolucao de uma saida com conversor (video_link_edid).
+        (self.env.etc / "fliperos.conf").write_text(
+            "connector=DP-1\nkernel_video=video=DP-1:e drm.edid_firmware=DP-1:edid/fliperos-link.bin\n")
+        edid = self.env.dir / "edid"
+        edid.mkdir()
+        (edid / "fliperos-link.bin").write_bytes(b"y" * 128)
+        target = self.env.dir / "target"
+        self.target_conf(target)
+        self.env.out("install_configure_video '%s'" % target, {"EDID_DIR": str(edid)})
+        self.assertEqual((Path(str(target) + str(edid)) / "fliperos-link.bin").read_bytes(), b"y" * 128)
 
     def test_new_install_copies_the_whole_session(self):
         (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nalsa=1,0\n")

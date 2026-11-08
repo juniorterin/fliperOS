@@ -290,6 +290,13 @@ echo "== Kernel line (boot straight to Plymouth)"
     [[ $word == splash ]] && new+=($BOOT_SILENT)
   done
   boot_write_cmdline "${new[*]}"
+  # Um CRT numa DisplayPort (por um conversor) gravado com dotclock baixo, ou
+  # um preset de 25 kHz numa saida com conversor com o EDID de 16 MHz: o
+  # resultado do teste refeito com a super resolucao (video_link_refresh).
+  if video_link_refresh; then
+    xorg_generate || echo "warning: xorg_generate failed"
+    echo "converter output: $(conf_get detection) $(conf_get kernel_video)"
+  fi
   boot_apply || { echo "boot_apply failed (see /var/log/fliperos-setup.log)"; exit 1; }
   # O fliperos-rootfs.sh reinstalou o retroarch.cfg da imagem: o que o setup
   # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).

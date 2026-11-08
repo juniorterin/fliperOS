@@ -167,6 +167,20 @@ class BootMenuTests(unittest.TestCase):
             else:
                 self.assertFalse([p for p in params if p.startswith(('video=', 'drm.edid'))], title)
 
+    def test_digital_outputs_get_super_resolution_in_the_15_and_25_khz_entries(self):
+        # DisplayPort, HDMI e DVI-D so chegam a um CRT por um conversor, sem
+        # imagem abaixo de uns 25 MHz: o 640x480i (13 MHz) ficou preto num
+        # conversor DP para VGA, o 1280x480i (26 MHz) apareceu.
+        entries = dict(boot_entries())
+        for title, mode in (('15 kHz', '1280x480iS'), ('25 kHz', '800x600iS')):
+            params = cmdline(entries[title])
+            for conn in ('DP-1', 'DP-2', 'DP-3', 'DP-4', 'DP-5', 'DP-6', 'HDMI-A-1', 'HDMI-A-2', 'HDMI-A-3',
+                         'DVI-D-1', 'DVI-D-2'):
+                self.assertIn('video=%s:%s' % (conn, mode), params, title)
+            # O VGA e o DVI-I (o video= sem conector) continuam no modo nativo.
+            self.assertEqual([p for p in params if p.startswith('video=') and ':' not in p],
+                             [dict((t, v) for t, _, v in self.EXPECTED)[title]])
+
     def test_thirty_second_timer_defaults_to_15khz(self):
         text = (ROOT / 'config/limine.conf').read_text()
         self.assertRegex(text, r'(?m)^timeout: 10$')

@@ -153,11 +153,18 @@ drm_card_low_dotclock() {
   return 1
 }
 
-# drm_is_tmds NOME: HDMI e DVI-D, cujo link nao desce abaixo de 25 MHz, seja
-# qual for a placa. A DisplayPort nao tem esse piso.
-drm_is_tmds() {
+# drm_is_converter_link NOME: HDMI, DVI-D e DisplayPort, que so chegam a um
+# CRT por um conversor ativo. O link TMDS (HDMI, DVI-D) nao desce abaixo de
+# 25 MHz; a DisplayPort desce, mas o conversor tem o seu piso: num conversor
+# DP para VGA (Radeon Pro WX 4100, Sony com BKM-201SC) so os modos de 25 MHz
+# para cima deram imagem, a 15, 25 e 31 kHz, e os de 16 MHz para baixo nao,
+# com o kernel aceitando todos. 320x480 a 12,6 MHz e 640x480 a 25,2 MHz dao
+# o mesmo sinal analogico (mesmos tempos em microssegundos): so o conversor,
+# que recebe o clock digital, ve a diferenca. Outro (o do Ryzen 5600GT) nao
+# tinha imagem entre 13,1 e 14,4 MHz. O eDP e o painel do notebook: nao entra.
+drm_is_converter_link() {
   case $1 in
-    HDMI-* | DVI-D-*) return 0 ;;
+    HDMI-* | DVI-D-* | DP-*) return 0 ;;
   esac
   return 1
 }
@@ -165,7 +172,7 @@ drm_is_tmds() {
 # drm_output_low_dotclock CARD NOME: a placa gera dotclock baixo e a saida o
 # deixa passar.
 drm_output_low_dotclock() {
-  ! drm_is_tmds "$2" && drm_card_low_dotclock "$1"
+  ! drm_is_converter_link "$2" && drm_card_low_dotclock "$1"
 }
 
 # drm_card_low_dotclock_testable CARD: placa em que o grid de dotclock baixo

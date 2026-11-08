@@ -135,8 +135,9 @@ video_reconfigure_monitor() {
   video_apply_monitor "$monitor"
   conn=$(conf_get connector 2> /dev/null) || return 0
   flags=$(conf_get detection 2> /dev/null) || return 0
-  # Em HDMI ou DVI-D, LCD e CRT pedem resultados diferentes (video_output_flags).
-  if drm_is_tmds "$conn" && card=$(conf_get card 2> /dev/null); then
+  # Em HDMI, DVI-D ou DisplayPort, LCD e CRT pedem resultados diferentes
+  # (video_output_flags).
+  if drm_is_converter_link "$conn" && card=$(conf_get card 2> /dev/null); then
     video_save_result "$card-$conn" "$flags" "$monitor"
     return
   fi
@@ -193,7 +194,8 @@ video_suggested_monitor() {
 #     saida seria tomada por LCD. Um modo "video=" nao basta: o SDL (o
 #     frontend, o Setup) abre o primeiro modo da lista, o de 48 kHz do EDID, e
 #     o Switchres devolve a tela a ele quando um jogo fecha. Troca-se o EDID
-#     por um de 15 kHz do Switchres, como a entrada "EDID progressive" do boot.
+#     por um do Switchres de 25 MHz para cima (video_link_edid), como a
+#     entrada "EDID progressive" do boot.
 video_kernel_params() {
   local conn=$1 flags=$2 monitor=$3 base enabled="" res="" fw
   base=${flags%a}
@@ -217,15 +219,102 @@ video_kernel_params() {
   elif cmdline_get "$(< "$PROC_CMDLINE")" drm.edid_firmware > /dev/null; then
     echo "video=$conn:e drm.edid_firmware=$conn:edid/$monitor.bin"
   elif [[ $base =~ ^s?l$ ]]; then
-    fw=$monitor.bin
-    [[ $MONITORS_15K == *" $monitor "* ]] && fw=generic_15_super_resp.bin
-    echo "video=$conn:e drm.edid_firmware=$conn:edid/$fw"
+    echo "video=$conn:e drm.edid_firmware=$conn:edid/$(video_link_edid "$monitor")"
   elif [[ -n $res ]]; then
     echo "video=$conn:$res$enabled"
   elif [[ -n $enabled ]]; then
     echo "video=$conn:e"
   fi
   return 0
+}
+
+# ── EDID numa saida com conversor ────────────────────────────────
+# O conversor de uma saida HDMI, DVI-D ou DisplayPort nao da imagem abaixo de
+# uns 25 MHz (drm_is_converter_link). O EDID de um preset traz o modo dele em
+# dotclock baixo (512x384 a 16 MHz no arcade_25): nesses o EDID da saida e
+# outro, com o mesmo modo em super resolucao, que o Switchres calcula com
+# dotclock_min 25. Os de 15 kHz usam o da entrada "EDID progressive" do boot.
+LINK_EDID=${LINK_EDID:-fliperos-link.bin}
+LINK_DOTCLOCK_MIN=25
+
+# edid_clock_khz ARQUIVO imprime o pixel clock (kHz) do primeiro modo do EDID.
+edid_clock_khz() {
+  local lo hi
+  read -r lo hi < <(od -An -tu1 -j54 -N2 "$1" 2> /dev/null) || return 1
+  [[ $lo =~ ^[0-9]+$ && $hi =~ ^[0-9]+$ ]] || return 1
+  echo $(((lo + hi * 256) * 10))
+}
+
+# monitor_edid_mode MONITOR imprime "LARGURA ALTURA HZ" do modo do EDID do
+# preset, os mesmos do fliperos-rebuild-edids.
+monitor_edid_mode() {
+  case $1 in
+    arcade_25 | arcade_15_25) echo "512 384 60" ;;
+    pal) echo "768 576 50" ;;
+    ntsc) echo "720 480 60" ;;
+    *) echo "640 480 60" ;;
+  esac
+}
+
+# link_edid MONITOR grava o LINK_EDID: o modo do EDID do preset com o
+# dotclock minimo do conversor. Status 1 (e sem o arquivo) sem Switchres ou
+# sem uma modeline.
+link_edid() {
+  local monitor=$1 w h r line
+  rm -f "$EDID_DIR/$LINK_EDID"
+  have switchres || return 1
+  read -r w h r <<< "$(monitor_edid_mode "$monitor")"
+  line=$(switchres "$w" "$h" "$r" --monitor "$monitor" --dotclock_min "$LINK_DOTCLOCK_MIN" --calc 2>&1 |
+    grep -m1 'Modeline "') || return 1
+  mkdir -p "$EDID_DIR"
+  printf '%s\n' "${line#*Modeline }" | "$EDID_MODES" "$EDID_DIR/$LINK_EDID" 2>> "$FLIPEROS_LOG" || {
+    rm -f "$EDID_DIR/$LINK_EDID"
+    return 1
+  }
+}
+
+# video_link_edid MONITOR imprime o EDID (em edid/) do monitor numa saida com
+# conversor: o super res de 15 kHz, o do preset se ele ja passa do piso, ou o
+# LINK_EDID, gravado aqui. Sem como gravar, fica o do preset.
+video_link_edid() {
+  local monitor=$1 khz
+  if [[ $MONITORS_15K == *" $monitor "* ]]; then
+    echo generic_15_super_resp.bin
+    return 0
+  fi
+  if khz=$(edid_clock_khz "$EDID_DIR/$monitor.bin") && ((khz < LINK_DOTCLOCK_MIN * 1000)) &&
+    link_edid "$monitor"; then
+    echo "$LINK_EDID"
+    return 0
+  fi
+  echo "$monitor.bin"
+}
+
+# video_link_refresh: o resultado do teste gravado com as regras de antes (o
+# "s" de uma placa AMD numa DisplayPort com CRT, o EDID de 16 MHz de um preset
+# de 25 kHz) refeito com as de agora. Para o update; o boot_apply segue.
+# Status 0 quando regravou.
+video_link_refresh() {
+  local card="" conn flags monitor params c
+  conn=$(conf_get connector 2> /dev/null) || return 1
+  flags=$(conf_get detection 2> /dev/null) || return 1
+  monitor=$(conf_get monitor 2> /dev/null) || return 1
+  drm_is_converter_link "$conn" || return 1
+  [[ $monitor != lcd ]] || return 1
+  # A placa de agora, nao a do fliperos.conf: a midia de instalacao pode ter
+  # numerado as placas de outro jeito (card1 la, card0 no disco).
+  for c in $(drm_connectors); do
+    [[ $(drm_name "$c") == "$conn" ]] && card=$(drm_card "$c")
+  done
+  [[ -n $card ]] || return 1
+  params=$(video_kernel_params "$conn" "$(video_output_flags "$card" "$conn" "$flags" "$monitor")" "$monitor") ||
+    return 1
+  if [[ $(video_output_flags "$card" "$conn" "$flags" "$monitor") == "$flags" &&
+    $params == "$(conf_get kernel_video 2> /dev/null)" ]]; then
+    return 1
+  fi
+  log_info "conversor: $conn com $monitor refeito (flags $flags)"
+  video_save_result "$card-$conn" "$flags" "$monitor"
 }
 
 # video_boot_mode_missing: o fliperos.conf gravado antes de o "l" ganhar um
@@ -422,12 +511,13 @@ video_low_dotclock_apply() {
 }
 
 # video_output_flags CARD NOME FLAGS MONITOR: o resultado do teste para esta
-# saida. Um CRT em HDMI ou DVI-D (por um conversor ativo) nao recebe dotclock
-# baixo, mesmo de uma placa que o gera: sem o "s", ele fica na super resolucao.
-# Num LCD o modo vem do EDID dele, e o "s" fica como a placa manda.
+# saida. Um CRT em HDMI, DVI-D ou DisplayPort (por um conversor ativo) nao
+# recebe dotclock baixo, mesmo de uma placa que o gera: sem o "s", ele fica
+# na super resolucao (drm_is_converter_link). Num LCD o modo vem do EDID
+# dele, e o "s" fica como a placa manda.
 video_output_flags() {
   local card=$1 name=$2 flags=$3 monitor=$4
-  if drm_is_tmds "$name"; then
+  if drm_is_converter_link "$name"; then
     flags=${flags#s}
     [[ $monitor == lcd ]] && drm_card_low_dotclock "$card" && flags=s$flags
   fi

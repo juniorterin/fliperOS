@@ -145,9 +145,14 @@ screen_testing_results() {
     freq="$(printf '%.2f' "$khz") kHz"
   fi
 
-  if drm_is_tmds "$name" && [[ $base != *l ]]; then
+  if drm_is_converter_link "$name" && [[ $base != *l ]]; then
     lowres=$(ui_no "NO (super resolutions)")
-    notes+=("HDMI and DVI-D don't go below 25 MHz: on a CRT, super resolutions will be used, with the same picture.")
+    notes+=("HDMI, DVI-D and DisplayPort reach a CRT through a converter, which doesn't go below about 25 MHz: super resolutions will be used, with the same picture.")
+  elif drm_is_converter_link "$name"; then
+    # EDID de fabrica: um LCD, ou o conversor de um CRT. O monitor escolhido
+    # a seguir decide.
+    lowres=$(ui_no "NO on a CRT (super resolutions)")
+    notes+=("On a CRT, this output goes through a converter, which doesn't go below about 25 MHz: super resolutions will be used, with the same picture.")
   elif [[ $flags == s* && $(video_low_dotclock_min "$card") != 0 ]]; then
     lowres=$(ui_yes "YES (from $(video_low_dotclock_min "$card") MHz)")
     notes+=("Native 15 kHz resolutions will be used from $(video_low_dotclock_min "$card") MHz. Narrower games are shown at double width, with the same picture on a CRT.")

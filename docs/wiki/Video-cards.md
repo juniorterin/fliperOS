@@ -77,7 +77,9 @@ The CableDeconn has also been reported working on a FliperOS cabinet, without a 
 
 **In the Setup:** the output test skips a digital output that reports nothing connected.
 
-On HDMI or DVI-D with a CRT preset, the Setup uses super resolutions by itself, even on an AMD card: `1280x480iS` at boot and `dotclock_min 25.0`. An LCD on those outputs isn't affected. On DisplayPort an AMD card stays native.
+On HDMI, DVI-D or DisplayPort with a CRT preset, the Setup uses super resolutions by itself, even on an AMD card: `1280x480iS` at boot (or the converter's EDID swapped for a super resolution one) and `dotclock_min 25.0`. An LCD on those outputs isn't affected. The **15 kHz** and **25 kHz** entries of the boot menu do the same on those outputs (`1280x480iS`, `800x600iS`); VGA and DVI-I stay native.
+
+**Why DisplayPort too.** A converter has a floor of its own. On one DisplayPort-to-VGA converter (Radeon Pro WX 4100, Sony monitor with a BKM-201SC), numbered test cards showed every mode from 25 MHz up, at 15, 25 and 31 kHz, interlaced or not, either sync polarity, and nothing at 16 MHz or below, though the kernel had set them all. 320x480 at 12.6 MHz and 640x480 at 25.2 MHz make the same analog signal, so only the converter, which gets the digital clock, can tell them apart. On a CRT, super resolutions give the same picture.
 
 **A converter with its own EDID.** Most converters report an EDID of their own, with 31 kHz modes, so the output test takes them for an LCD ("Found a monitor that could be a LCD panel"). When you then choose a CRT monitor, the Setup replaces the converter's EDID with a 15 kHz one (`generic_15_super_resp.bin`, as in the *EDID progressive* boot entry). Without it the menu came up at 1024x768 and 48 kHz and the tube stayed black, and so did the screen after leaving a game, although the games, which set their own modes, were fine. A `video=1280x480iS` line alone didn't fix it: the console used it, but the frontend opens the first mode of the list, the converter's. Games stay native on a card with low dotclocks.
 

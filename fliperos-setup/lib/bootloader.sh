@@ -547,11 +547,11 @@ boot_apply() {
   line=$(boot_compose "$line")
   boot_write_cmdline "$line" || return 1
   log_info "linha do kernel: $line"
-  # Um EDID novo (resolucao personalizada) e o modprobe.d de um driver AMD
-  # trocado so valem se estiverem no initramfs; o hook do initramfs tambem
-  # chama o fliperos-limine-update.
+  # Um EDID novo (resolucao personalizada, o da saida com conversor) e o
+  # modprobe.d de um driver AMD trocado so valem se estiverem no initramfs; o
+  # hook do initramfs tambem chama o fliperos-limine-update.
   if [[ $(conf_get boot_resolution 2> /dev/null) == custom || $(conf_get boot_resolution 2> /dev/null) == "$SUPER240_MODE" ]] ||
-    [[ -f $EDID_DIR/$CUSTOM_EDID ]] || ((${BOOT_INITRAMFS:-0})); then
+    [[ -f $EDID_DIR/$CUSTOM_EDID || $line == *"edid/$LINK_EDID"* ]] || ((${BOOT_INITRAMFS:-0})); then
     run_logged update-initramfs -u -k all
   else
     run_logged "$LIMINE_UPDATE"
