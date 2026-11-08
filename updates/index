@@ -60,3 +60,4 @@
 57	412eb49f3b659a6a919bb3a2acf9ede2e6f7419f	5ab232cdf0885b0eab80a9d62f7ffd7022ee6149ddb4f6b6805394f2ee3337fc	no	The 0.22 image's level (ISO build fix only)
 58	0201b791cacf2b0a440bd1071ba96cce61900ece	af51f88de1d1b2bd940d9e7c3ea38aeb88d2c97d6a4275f077e775f27f6644f0	no	Keyboard back when the Setup menu crashes; link marks only with another cabinet
 59	e21547f6e527f67bb6b76555cdf9d6539c118a60	397169bee3ed8437baece25638b8446ed75eaba95dfacc7e0b06dc20bfb80f28	no	Volume leveler removed; keyboard and controller back when the Setup menu crashes
+60	b7499ad1bfd49167e465185b61ee0f3e0bb0d785	0b6bcb18a96594dfac0177ba08bf9a97ac5de5c3289023656fdc38c01ece9600	yes	CRT on DisplayPort in super resolution; web panel monitor settings; first boot updates
