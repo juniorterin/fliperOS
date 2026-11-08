@@ -1,0 +1,341 @@
+From 7b08a1cee807160380b86acc8143eb21393470b3 Mon Sep 17 00:00:00 2001
+From: FliperOS <noreply@fliperos>
+Date: Sun, 8 Nov 2026 16:58:14 -0300
+Subject: [PATCH] FliperOS: dumps over USB (SCAN, INFO, DUMP, GET, BAUD)
+
+---
+ Cart_Reader/Cart_Reader.ino |  15 +++
+ Cart_Reader/FLIPEROS.ino    | 236 ++++++++++++++++++++++++++++++++++++
+ Cart_Reader/OSCR.cpp        |   2 +
+ Cart_Reader/OSCR.h          |   5 +
+ 4 files changed, 258 insertions(+)
+ create mode 100644 Cart_Reader/FLIPEROS.ino
+
+diff --git a/Cart_Reader/Cart_Reader.ino b/Cart_Reader/Cart_Reader.ino
+index 619126e..ef8d0f4 100644
+--- a/Cart_Reader/Cart_Reader.ino
++++ b/Cart_Reader/Cart_Reader.ino
+@@ -678,6 +678,8 @@ void createFolder(const char* system, const char* subfolder, const char* gameNam
+   }
+   sd.mkdir(folder, true);
+   sd.chdir(folder);
++  // FliperOS: the host GETs the files of its DUMP
++  fliperosRecord(folder, fileName);
+ }
+ 
+ void printAndIncrementFolder(bool displayClear = false) {
+@@ -2445,6 +2447,13 @@ void print_Error(int errorMessage) {
+ }
+ 
+ void _print_FatalError(void) {
++#if !defined(ENABLE_SERIAL) && defined(ENABLE_UPDATER)
++  // FliperOS: the host learns the command stopped (the OSCR restarts)
++  if (fliperosHost) {
++    ClockedSerial.println(F("ERROR"));
++    ClockedSerial.flush();
++  }
++#endif
+   println_Msg(FS(FSTRING_EMPTY));
+   print_STR(press_button_STR, 1);
+   display_Update();
+@@ -2463,6 +2472,8 @@ void print_FatalError(byte errorMessage) {
+ }
+ 
+ void wait() {
++  // FliperOS: a command from the host does not wait for the button
++  if (fliperosHost) return;
+   // Switch status LED off
+   statusLED(false);
+ #if defined(ENABLE_LCD)
+@@ -2859,6 +2870,8 @@ void statusLED(boolean on __attribute__((unused))) {
+   Menu system
+ *****************************************/
+ unsigned char question_box(const __FlashStringHelper* question, char answers[7][20], uint8_t num_answers, uint8_t default_choice) {
++  // FliperOS: a command from the host takes the default answer
++  if (fliperosHost) return default_choice;
+ #if (defined(ENABLE_LCD) || defined(ENABLE_OLED))
+   return questionBox_Display(question, answers, num_answers, default_choice);
+ #endif
+@@ -3113,6 +3126,8 @@ void checkUpdater() {
+ #else  /* !ENABLE_RTC */
+       ClockedSerial.println(FS(FSTRING_MODULE_NOT_ENABLED));
+ #endif /* ENABLE_RTC */
++    } else if (fliperosCommand(cmd)) {
++      // FliperOS: SCAN, INFO, DUMP, GET, BAUD (FLIPEROS.ino)
+     } else {
+       ClockedSerial.print(FS(FSTRING_OSCR));
+       ClockedSerial.println(F(": Unknown Command"));
+diff --git a/Cart_Reader/FLIPEROS.ino b/Cart_Reader/FLIPEROS.ino
+new file mode 100644
+index 0000000..94f543b
+--- /dev/null
++++ b/Cart_Reader/FLIPEROS.ino
+@@ -0,0 +1,236 @@
++/******************************************
++  FliperOS: dumps over USB
++ ******************************************
++  FliperOS (github.com/juniorterin/fliperOS, gui/femedia.py) reads the cart
++  through the USB cable, without taking out the SD card. The commands come in
++  on the updater's serial line (checkUpdater), one per line, and so do the
++  answers:
++
++    FLIPEROS       -> FLIPEROS 1 <systems>
++    SCAN           -> CART <system>|<name>|<rom bytes>|<save bytes> for each
++                      cart found, then END. SCAN never raises the voltage to
++                      5V (fliperosProbe): a 3.3V cart in an adapter is never
++                      powered at 5V, and a 5V cart that does not answer at
++                      3.3V is left out (the host asks for its system).
++    INFO <system>  -> CART ... or NONE
++    DUMP <system>  -> FILE <path> for each file written to the SD card, then
++                      END (ERROR if the firmware stopped on an error)
++    BAUD <rate>    -> OK, and the line switches to that rate
++    GET <path>     -> SIZE <bytes>, the bytes, then CRC <crc32 in hex>; NONE
++                      if the file is not there
++
++  While a command runs (fliperosHost), wait() and the menus do not wait for
++  the button: a menu takes its default answer.
++ *****************************************/
++
++#if !defined(ENABLE_SERIAL) && defined(ENABLE_UPDATER)
++
++bool fliperosHost = false;
++bool fliperosProbe = false;
++
++// The files the running command wrote (createFolder), for the host to GET.
++#define FLIPEROS_FILES 3
++char fliperosFiles[FLIPEROS_FILES][80];
++byte fliperosFileCount = 0;
++
++void fliperosRecord(const char* dir, const char* name) {
++  if (!fliperosHost || fliperosFileCount >= FLIPEROS_FILES) return;
++  snprintf(fliperosFiles[fliperosFileCount++], sizeof(fliperosFiles[0]), "/%s/%s", dir, name);
++}
++
++// Reads the header of the cart of that system; true when it looks like one.
++bool fliperosInfo(const String& sys, unsigned long* rom, unsigned long* save) {
++  errorLvl = 0;
++  romName[0] = 0;
++  sramSize = 0;
++  *rom = *save = 0;
++  sd.chdir("/");
++#ifdef ENABLE_SNES
++  if (sys == "SNES") {
++    setup_Snes();
++    getCartInfo_SNES();
++    *rom = (unsigned long)romSize * 131072UL;  // Mbit
++    *save = sramSize * 128UL;                   // kbit
++  } else
++#endif
++#ifdef ENABLE_MD
++  if (sys == "MD") {
++    setup_MD();
++    getCartInfo_MD();
++    *rom = cartSize;
++    *save = sramSize;
++  } else
++#endif
++#ifdef ENABLE_N64
++  if (sys == "N64") {
++    setup_N64_Cart();
++    getCartInfo_N64();
++    *rom = cartSize * 1048576UL;  // MB
++  } else
++#endif
++#ifdef ENABLE_GBX
++  if (sys == "GB") {
++    setup_GB();
++    getCartInfo_GB();
++  } else if (sys == "GBA") {
++    setup_GBA();
++    getCartInfo_GBA();
++  } else
++#endif
++  {
++    return false;
++  }
++  return !errorLvl && romName[0] > ' ' && romName[0] < 0x7f;
++}
++
++void fliperosCart(const String& sys, unsigned long rom, unsigned long save) {
++  ClockedSerial.print(F("CART "));
++  ClockedSerial.print(sys);
++  ClockedSerial.print('|');
++  ClockedSerial.print(romName);
++  ClockedSerial.print('|');
++  ClockedSerial.print(rom);
++  ClockedSerial.print('|');
++  ClockedSerial.println(save);
++}
++
++// The ROM and the save (when the cart has one) on the SD card, as the menus
++// of each system write them.
++void fliperosDump(const String& sys) {
++  sd.chdir("/");
++#ifdef ENABLE_SNES
++  if (sys == "SNES") {
++    readROM_SNES();
++    if (sramSize > 0) {
++      sd.chdir("/");
++      readSRAM();
++    }
++  }
++#endif
++#ifdef ENABLE_MD
++  if (sys == "MD") {
++    readROM_MD();
++    if (sramSize > 0) {
++      sd.chdir("/");
++      readSram_MD();
++    }
++  }
++#endif
++#ifdef ENABLE_N64
++  if (sys == "N64") readRom_N64();
++#endif
++#ifdef ENABLE_GBX
++  if (sys == "GB") {
++    readROM_GB();
++    if (sramSize > 0) {
++      sd.chdir("/");
++      readSRAM_GB();
++    }
++  }
++  if (sys == "GBA") readROM_GBA();
++#endif
++}
++
++void fliperosGet(const String& path) {
++  FsFile file;
++  if (!file.open(path.c_str(), O_READ)) {
++    ClockedSerial.println(F("NONE"));
++    return;
++  }
++  ClockedSerial.print(F("SIZE "));
++  ClockedSerial.println((unsigned long)file.fileSize());
++  uint32_t crc = 0xFFFFFFFF;
++  int n;
++  while ((n = file.read(sdBuffer, 512)) > 0) {
++    ClockedSerial.write(sdBuffer, n);
++    crc = updateCRC(sdBuffer, n, crc);
++  }
++  file.close();
++  ClockedSerial.print(F("CRC "));
++  ClockedSerial.println(~crc, HEX);
++}
++
++// One command line from checkUpdater; false when it is not one of these.
++bool fliperosCommand(const String& cmd) {
++  unsigned long rom, save;
++  String arg = cmd.indexOf(' ') > 0 ? cmd.substring(cmd.indexOf(' ') + 1) : String();
++  arg.trim();
++  if (cmd == "FLIPEROS") {
++    ClockedSerial.print(F("FLIPEROS 1"));
++#ifdef ENABLE_SNES
++    ClockedSerial.print(F(" SNES"));
++#endif
++#ifdef ENABLE_MD
++    ClockedSerial.print(F(" MD"));
++#endif
++#ifdef ENABLE_N64
++    ClockedSerial.print(F(" N64"));
++#endif
++#ifdef ENABLE_GBX
++    ClockedSerial.print(F(" GB GBA"));
++#endif
++    ClockedSerial.println();
++    return true;
++  }
++  if (cmd.startsWith("BAUD ")) {
++    long rate = arg.toInt();
++    if (rate != 9600 && rate != 115200 && rate != 250000 && rate != 500000 && rate != 1000000) {
++      ClockedSerial.println(F("NONE"));
++      return true;
++    }
++    ClockedSerial.println(F("OK"));
++    ClockedSerial.flush();
++    delay(20);
++    ClockedSerial.begin(rate);
++    return true;
++  }
++  if (cmd.startsWith("GET ")) {
++    fliperosGet(arg);
++    return true;
++  }
++  if (cmd != "SCAN" && !cmd.startsWith("INFO ") && !cmd.startsWith("DUMP ")) return false;
++  fliperosHost = true;
++  if (cmd == "SCAN") {
++    // At 3.3V only: a cart that needs 5V and does not answer is left out.
++    static const char* const systems[] = { "N64", "GBA", "GB", "SNES", "MD" };
++    fliperosProbe = true;
++    for (byte i = 0; i < sizeof(systems) / sizeof(systems[0]); i++) {
++      String sys(systems[i]);
++      if (fliperosInfo(sys, &rom, &save)) fliperosCart(sys, rom, save);
++    }
++    fliperosProbe = false;
++    setVoltage(VOLTS_SET_3V3);
++    ClockedSerial.println(F("END"));
++  } else if (cmd.startsWith("INFO ")) {
++    if (fliperosInfo(arg, &rom, &save)) {
++      fliperosCart(arg, rom, save);
++    } else {
++      ClockedSerial.println(F("NONE"));
++    }
++  } else {
++    fliperosFileCount = 0;
++    if (fliperosInfo(arg, &rom, &save)) {
++      fliperosDump(arg);
++      for (byte i = 0; i < fliperosFileCount; i++) {
++        ClockedSerial.print(F("FILE "));
++        ClockedSerial.println(fliperosFiles[i]);
++      }
++      ClockedSerial.println(F("END"));
++    } else {
++      ClockedSerial.println(F("NONE"));
++    }
++  }
++  fliperosHost = false;
++  errorLvl = 0;
++  display_Clear();
++  display_Update();
++  return true;
++}
++
++#else /* ENABLE_SERIAL or no updater: no serial line for the host */
++
++bool fliperosHost = false;
++bool fliperosProbe = false;
++void fliperosRecord(const char* dir __attribute__((unused)), const char* name __attribute__((unused))) {}
++
++#endif
+diff --git a/Cart_Reader/OSCR.cpp b/Cart_Reader/OSCR.cpp
+index f9b4936..1df432b 100644
+--- a/Cart_Reader/OSCR.cpp
++++ b/Cart_Reader/OSCR.cpp
+@@ -248,6 +248,8 @@ VOLTS setVoltage(VOLTS newVoltage) {
+   switch(newVoltage) {
+     /* 5V */
+     case VOLTS_SET_5V:
++      // FliperOS SCAN: never 5V while probing for carts (FLIPEROS.ino)
++      if (fliperosProbe) return VOLTS_SUCCESS;
+       if (
+   #if defined(ENABLE_3V3FIX)
+         clock == CS_16MHZ
+diff --git a/Cart_Reader/OSCR.h b/Cart_Reader/OSCR.h
+index 7e6b87a..7b133f5 100644
+--- a/Cart_Reader/OSCR.h
++++ b/Cart_Reader/OSCR.h
+@@ -496,6 +496,11 @@ extern void setClockScale(VOLTS __x);
+ extern void setClockScale(CLKSCALE __x);
+ extern VOLTS setVoltage(VOLTS volts);
+ 
++// FliperOS (FLIPEROS.ino): a command from the host is running (no waiting
++// for the button), and SCAN keeps the voltage at 3.3V.
++extern bool fliperosHost;
++extern bool fliperosProbe;
++
+ # if defined(ENABLE_CONFIG)
+ extern void configInit();
+ extern uint8_t configFindKey(const __FlashStringHelper* key, char* value);
+-- 
+2.20.1.windows.1
+

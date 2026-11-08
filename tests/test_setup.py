@@ -3129,7 +3129,8 @@ class BootMediaTests(Base):
     def test_drives_are_listed_and_the_choice_is_the_launcher(self):
         env = self.drives()
         self.assertEqual(self.env.out("bootmedia_drives", env).splitlines(),
-                         ["sr0|Drive 1 - HL-DT-ST DVDRAM GH24NSD1 (sr0)", "sr1|Drive 2 - ASUS BW-16D1HT (sr1)"])
+                         ["sr0|Drive 1 - HL-DT-ST DVDRAM GH24NSD1 (sr0)", "sr1|Drive 2 - ASUS BW-16D1HT (sr1)",
+                          "oscr|Cartridge reader (OSCR)"])
         self.assertEqual(self.env.out("bootmedia_label", env).strip(), "")
         self.env.out("bootmedia_set sr1", env)
         self.assertIn("boot_media=sr1\n", (self.env.etc / "fliperos.conf").read_text())
@@ -3144,6 +3145,9 @@ class BootMediaTests(Base):
         self.env.out("bootmedia_set off", env)
         self.assertEqual(self.env.out("launcher_current", env).strip(), "fliperos")
         self.assertEqual(self.env.run("bootmedia_set /dev/sda", env).returncode, 1)
+        # O leitor de cartuchos.
+        self.env.out("bootmedia_set oscr", env)
+        self.assertEqual(self.env.out("bootmedia_label", env).strip(), "Cartridge reader")
 
     def test_session_row_opens_the_frontend_with_media(self):
         table = (ROOT / "config" / "fliperos-sessions.conf").read_text()

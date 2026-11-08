@@ -7,6 +7,9 @@
 #   femedia.py list                     os drives e o estado de cada um
 #   femedia.py identify /dev/sr0        o console, o serial e o titulo do disco
 #   femedia.py rip /dev/sr0 PASTA NOME  rippa, com as linhas @step/@done/@fail
+#   femedia.py oscr-scan /dev/ttyUSB0   os cartuchos no OSCR (JSON)
+#   femedia.py oscr-info /dev/ttyUSB0 SNES          o cartucho de um sistema
+#   femedia.py oscr-rip /dev/ttyUSB0 SNES PASTA NOME  o dump, como o rip
 #
 # O RetroArch le o drive pelo "cdrom://driveN.cue", e N e o /dev/sgN do drive
 # (libretro-common, vfs_implementation_cdrom.c); so os cores compilados com o
@@ -18,12 +21,15 @@ import fcntl
 import json
 import os
 import re
+import select
 import shutil
 import signal
 import struct
 import subprocess
 import sys
+import termios
 import time
+import zlib
 
 SYS_BLOCK = os.environ.get("FLIPEROS_SYS_BLOCK", "/sys/block")
 DEV_DIR = os.environ.get("FLIPEROS_DEV_DIR", "/dev")
@@ -57,11 +63,19 @@ CONSOLES = {
     "pcfx": {"name": "PC-FX", "standalone": [], "cores": ("mednafen_pcfx",)},
     "3do": {"name": "3DO", "standalone": [], "cores": ("opera",)},
     "neocd": {"name": "Neo Geo CD", "standalone": [], "cores": ("neocd",)},
+    # Os cartuchos do OSCR: o jogo abre do arquivo do dump (CARTS).
+    "snes": {"name": "Super Nintendo", "standalone": [], "cores": ("snes9x", "bsnes", "mesen-s")},
+    "md": {"name": "Mega Drive", "standalone": [], "cores": ("genesis_plus_gx", "picodrive")},
+    "n64": {"name": "Nintendo 64", "standalone": [], "cores": ("mupen64plus_next", "parallel_n64")},
+    "gb": {"name": "Game Boy", "standalone": [], "cores": ("gambatte", "sameboy", "mgba")},
+    "gba": {"name": "Game Boy Advance", "standalone": [], "cores": ("mgba", "vba_next")},
 }
 CORE_LABELS = {"mednafen_psx_hw": "BEETLE PSX HW", "mednafen_psx": "BEETLE PSX", "pcsx_rearmed": "PCSX REARMED",
                "mednafen_saturn": "BEETLE SATURN", "genesis_plus_gx": "GENESIS PLUS GX",
                "mednafen_pce_fast": "BEETLE PCE FAST", "mednafen_pce": "BEETLE PCE", "mednafen_pcfx": "BEETLE PC-FX",
-               "opera": "OPERA", "neocd": "NEOCD"}
+               "opera": "OPERA", "neocd": "NEOCD", "snes9x": "SNES9X", "bsnes": "BSNES", "mesen-s": "MESEN-S",
+               "picodrive": "PICODRIVE", "mupen64plus_next": "MUPEN64PLUS-NEXT", "parallel_n64": "PARALLEL N64",
+               "gambatte": "GAMBATTE", "sameboy": "SAMEBOY", "mgba": "MGBA", "vba_next": "VBA NEXT"}
 
 
 def read_text(path):
@@ -112,12 +126,13 @@ def drive_state(dev):
 
 
 def scan():
-    """Os drives com o estado de cada um (o que a fileira mostra)."""
+    """Os drives com o estado de cada um e, depois deles, os OSCR ligados (o
+    que a fileira mostra). O OSCR nao e aberto aqui: abrir a porta o reinicia."""
     out = drives()
     for d in out:
         d["state"] = drive_state(d["dev"])
         d["label"] = LABELS[d["state"]]
-    return out
+    return out + oscr_ports()
 
 
 # ── O que tem no disco ─────────────────────────────────────────────
@@ -308,9 +323,12 @@ def pick(console, saved=None):
     return options[0] if options else None
 
 
-def command(console, option, drive):
+def command(console, option, drive, path=None):
     """A linha de comando que abre o disco do drive com option; None quando o
-    drive nao serve (o RetroArch so le de /dev/sg0 a /dev/sg9)."""
+    drive nao serve (o RetroArch so le de /dev/sg0 a /dev/sg9). path: o
+    arquivo do dump de um cartucho, que o core abre no lugar do drive."""
+    if option["core"] and path:
+        return [os.path.join(BIN, "fliperos-kms-run"), "retroarch", "-L", core_path(option["core"]), path]
     if option["core"]:
         sg = drive.get("sg") or ""
         if not re.fullmatch(r"sg\d", sg):
@@ -435,6 +453,7 @@ def cancel(*_):
 
 def rip(dev, folder, name):
     signal.signal(signal.SIGTERM, cancel)
+    PARTIAL[:] = []
     info = identify(dev)
     if info.get("error"):
         say("@fail " + info["error"])
@@ -471,6 +490,247 @@ def rip(dev, folder, name):
     return 0
 
 
+# ── O leitor de cartuchos (OSCR) ───────────────────────────────────
+# O Open Source Cartridge Reader com o firmware do FliperOS (patches/oscr,
+# tools/oscr-firmware.sh) responde pela serial da USB: FLIPEROS, SCAN, INFO,
+# DUMP, GET e BAUD, uma linha cada (FLIPEROS.ino). O dump vai primeiro para o
+# cartao SD do OSCR (como no menu dele) e de la vem pela USB, a 1 Mbaud, com
+# o CRC32 conferido. Abrir a porta reinicia o Mega (o DTR): a conversa espera
+# o OSCR ligar. O SCAN so le a 3,3 V: um cartucho de 5 V que nao responde
+# assim fica de fora, e o frontend pergunta o sistema dele.
+
+SYS_TTY = os.environ.get("FLIPEROS_SYS_TTY", "/sys/class/tty")
+# O conversor USB-serial do HW5 (CH340) e os do Arduino Mega.
+OSCR_USB = {("1a86", "7523"), ("2341", "0042"), ("2341", "0010"), ("2a03", "0042")}
+# Os sistemas do firmware: o console (CONSOLES) e o nome da tela.
+CARTS = {"SNES": "snes", "MD": "md", "N64": "n64", "GB": "gb", "GBA": "gba"}
+OSCR_FAST = 1000000
+
+
+class OscrError(Exception):
+    """firmware (o OSCR sem o firmware do FliperOS), noanswer, error (o
+    firmware parou num erro), crc (o arquivo chegou estragado)."""
+
+
+def oscr_ports():
+    """Os OSCR ligados: as portas ttyUSB/ttyACM de um conversor que o OSCR usa."""
+    try:
+        names = sorted(n for n in os.listdir(SYS_TTY) if re.fullmatch(r"tty(USB|ACM)\d+", n))
+    except OSError:
+        return []
+    out = []
+    for name in names:
+        node = os.path.realpath(os.path.join(SYS_TTY, name, "device"))
+        ids = None
+        for _ in range(5):
+            vid, pid = read_text(os.path.join(node, "idVendor")), read_text(os.path.join(node, "idProduct"))
+            if vid:
+                ids = (vid.lower(), pid.lower())
+                break
+            node = os.path.dirname(node)
+        if ids in OSCR_USB:
+            n = len(out)
+            out.append({"key": "oscr%d" % n if n else "oscr", "kind": "oscr", "name": "OSCR" if not n else "OSCR %d" % (n + 1),
+                        "model": "CART READER", "dev": os.path.join(DEV_DIR, name), "state": "ready",
+                        "label": "READY"})
+    return out
+
+
+class Oscr:
+    """A conversa com o OSCR pela porta serial."""
+
+    def __init__(self, dev, wait=10.0):
+        self.fd = os.open(dev, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        self.buf = b""
+        self.speed(9600)
+        self.systems = self.hello(wait)
+
+    def speed(self, baud):
+        attrs = termios.tcgetattr(self.fd)
+        attrs[0] = attrs[1] = attrs[3] = 0
+        attrs[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
+        attrs[4] = attrs[5] = getattr(termios, "B%d" % baud)
+        attrs[6][termios.VMIN], attrs[6][termios.VTIME] = 0, 0
+        termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
+
+    def send(self, text):
+        os.write(self.fd, (text + "\n").encode())
+
+    def fill(self, deadline):
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return False
+        if select.select([self.fd], [], [], left)[0]:
+            try:
+                chunk = os.read(self.fd, 65536)
+            except BlockingIOError:
+                chunk = b""
+            self.buf += chunk
+            return True
+        return False
+
+    def line(self, timeout):
+        """A proxima linha, ou None passado timeout."""
+        deadline = time.monotonic() + timeout
+        while b"\n" not in self.buf:
+            if not self.fill(deadline):
+                return None
+        raw, _, self.buf = self.buf.partition(b"\n")
+        return raw.decode("latin-1").strip()
+
+    def read(self, size, timeout, progress=None):
+        """size bytes crus (o GET), chamando progress(feito)."""
+        deadline = time.monotonic() + timeout
+        while len(self.buf) < size:
+            if not self.fill(deadline):
+                raise OscrError("noanswer")
+            if progress:
+                progress(min(size, len(self.buf)))
+            deadline = time.monotonic() + timeout
+        data, self.buf = self.buf[:size], self.buf[size:]
+        return data
+
+    def hello(self, wait):
+        """Espera o OSCR ligar e confere o firmware: devolve os sistemas dele."""
+        deadline = time.monotonic() + wait
+        asked = 0.0
+        while time.monotonic() < deadline:
+            if time.monotonic() - asked > 1.0:
+                self.send("FLIPEROS")
+                asked = time.monotonic()
+            got = self.line(0.3)
+            if got and got.startswith("FLIPEROS 1"):
+                return got.split()[2:]
+            if got and "Unknown Command" in got:
+                raise OscrError("firmware")
+        raise OscrError("noanswer")
+
+    def answer(self, timeout):
+        """As linhas de um comando, ate o END, o NONE ou o ERROR."""
+        lines = []
+        while True:
+            got = self.line(timeout)
+            if got is None:
+                raise OscrError("noanswer")
+            if got == "ERROR":
+                raise OscrError("error")
+            if got in ("END", "NONE"):
+                return lines, got
+            if got.split(" ", 1)[0] in ("CART", "FILE"):
+                lines.append(got)
+
+    @staticmethod
+    def cart(line):
+        system, title, rom, save = (line[5:].split("|") + ["", "", "0", "0"])[:4]
+        return {"system": system, "console": CARTS.get(system), "title": title.strip(),
+                "rom": int(rom) if rom.isdigit() else 0, "save": int(save) if save.isdigit() else 0}
+
+    def scan(self):
+        self.send("SCAN")
+        lines, _ = self.answer(120)
+        return [self.cart(line) for line in lines]
+
+    def info(self, system):
+        self.send("INFO " + system)
+        lines, _ = self.answer(60)
+        return self.cart(lines[0]) if lines else None
+
+    def dump(self, system):
+        """O dump no cartao SD do OSCR; devolve os arquivos que ele gravou."""
+        self.send("DUMP " + system)
+        lines, end = self.answer(1800)
+        if end == "NONE":
+            raise OscrError("nocart")
+        return [line[5:] for line in lines]
+
+    def get(self, path, progress=None):
+        """O arquivo do cartao SD do OSCR, pela USB a OSCR_FAST, conferido."""
+        if not getattr(self, "fast", False):
+            self.send("BAUD %d" % OSCR_FAST)
+            if self.line(5) != "OK":
+                raise OscrError("noanswer")
+            time.sleep(0.05)
+            self.speed(OSCR_FAST)
+            self.buf = b""
+            self.fast = True
+        self.send("GET " + path)
+        head = self.line(10)
+        if not head or not head.startswith("SIZE "):
+            raise OscrError("noanswer")
+        size = int(head[5:])
+        data = self.read(size, 10, progress and (lambda done: progress(done, size)))
+        crc = self.line(10) or ""
+        if not crc.startswith("CRC ") or int(crc[4:], 16) != zlib.crc32(data):
+            raise OscrError("crc")
+        return data
+
+    def close(self):
+        os.close(self.fd)
+
+
+def oscr_rip(dev, system, folder, name):
+    """O dump do cartucho para a pasta: a ROM com o nome NOME e o save ao lado,
+    com as linhas @step/@done/@fail do rip."""
+    signal.signal(signal.SIGTERM, cancel)
+    PARTIAL[:] = []
+    try:
+        os.makedirs(folder, exist_ok=True)
+        say("@step 2 STARTING THE OSCR")
+        oscr = Oscr(dev)
+        say("@step 5 READING THE CARTRIDGE")
+        files = oscr.dump(system)
+        rom = next((f for f in files if "/ROM/" in f.upper()), files[0] if files else None)
+        if not rom:
+            raise OscrError("nocart")
+        base = unique(folder, name, (os.path.splitext(rom)[1].lower(),))
+        out = None
+        for i, remote in enumerate([rom] + [f for f in files if f != rom]):
+            ext = os.path.splitext(remote)[1].lower()
+            # A ROM com o nome do jogo; o save com o mesmo nome (o .srm do RetroArch).
+            path = os.path.join(folder, base + (ext if i == 0 else (".srm" if ext in (".srm", ".sav") else ext)))
+            PARTIAL.append(path)
+
+            def step(done, total, first=(i == 0)):
+                # A ROM de 10 a 98%; o save, pequeno, no fim.
+                pct = 10 + done * 88 // max(1, total) if first else 99
+                say("@step %d COPYING %d OF %d KB" % (pct, done >> 10, total >> 10))
+            data = oscr.get(remote, step)
+            with open(path, "wb") as f:
+                f.write(data)
+            out = out or path
+        oscr.close()
+    except (OSError, OscrError) as e:
+        for p in PARTIAL:
+            if isinstance(p, str):
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+        say("@fail %s" % (e.args[0] if isinstance(e, OscrError) else e))
+        return 1
+    say("@step 100 DONE")
+    say("@done " + out)
+    return 0
+
+
+def oscr_call(dev, what, system=None):
+    """SCAN ou INFO, para o frontend (numa thread): {"carts", "systems"} ou
+    {"error"}."""
+    try:
+        oscr = Oscr(dev)
+        try:
+            if what == "scan":
+                return {"carts": oscr.scan(), "systems": oscr.systems}
+            cart = oscr.info(system)
+            return {"carts": [cart] if cart else [], "systems": oscr.systems}
+        finally:
+            oscr.close()
+    except OscrError as e:
+        return {"error": e.args[0]}
+    except OSError as e:
+        return {"error": "noaccess" if isinstance(e, PermissionError) else str(e)}
+
+
 def main(argv):
     if argv[:1] == ["list"]:
         print(json.dumps(scan(), indent=1))
@@ -480,7 +740,16 @@ def main(argv):
         return 0
     if len(argv) == 4 and argv[0] == "rip":
         return rip(*argv[1:])
-    print("usage: femedia.py list | identify DEV | rip DEV FOLDER NAME", file=sys.stderr)
+    if len(argv) == 2 and argv[0] == "oscr-scan":
+        print(json.dumps(oscr_call(argv[1], "scan"), indent=1))
+        return 0
+    if len(argv) == 3 and argv[0] == "oscr-info":
+        print(json.dumps(oscr_call(argv[1], "info", argv[2]), indent=1))
+        return 0
+    if len(argv) == 5 and argv[0] == "oscr-rip":
+        return oscr_rip(*argv[1:])
+    print("usage: femedia.py list | identify DEV | rip DEV FOLDER NAME | oscr-scan DEV | oscr-info DEV SYSTEM"
+          " | oscr-rip DEV SYSTEM FOLDER NAME", file=sys.stderr)
     return 2
 
 

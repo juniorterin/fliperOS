@@ -3772,6 +3772,36 @@ def draw_media_list(fe, ui, now):
         tiny.centered(ui, ov["note"], T.COMMENT, px + pw // 2, py + ph - 12)
 
 
+CART_COLORS = {"SNES": T.PURPLE, "MD": T.RED, "N64": T.GREEN, "GB": T.YELLOW, "GBA": T.CYAN}
+
+
+def draw_media_carts(fe, ui, now):
+    """Mais de um cartucho no OSCR: um azulejo por cartucho (o slot e o
+    sistema), e o nome do escolhido embaixo."""
+    ov = fe.ov
+    carts = ov["carts"]
+    n = len(carts)
+    pw, ph = min(WW - 8, 40 + n * 118), 132
+    px, py = (WW - pw) // 2, (HH - ph) // 2 - 4
+    card(ui, (px, py, pw, ph))
+    ui.blit(W.big("CARTRIDGE READER", 1, W.LABEL), (px + 8, py + 8))
+    tiny.text(ui, "%d CARTRIDGES FOUND - PICK ONE" % n, T.COMMENT, px + 8, py + 20)
+    gap = 10
+    tw = min(116, (pw - 16 - gap * (n - 1)) // n)
+    tx0 = px + (pw - (n * tw + (n - 1) * gap)) // 2
+    sel = ov["sel"] % n
+    for i, c in enumerate(carts):
+        x, y, on = tx0 + i * (tw + gap), py + 30, i == sel
+        tile_frame(ui, (x, y, tw, 70), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, y, tw, 70), 2 if on else 1)
+        cart(ui, x + tw // 2, y + 24, 40, CART_COLORS.get(c["system"], T.PURPLE) if on else T.COMMENT,
+             T.FG if on else T.LINE)
+        tiny.centered(ui, c["system"] + " SLOT", T.CYAN if on else T.LINE, x + tw // 2, y + 50)
+        name = (fe.fm.CONSOLES.get(c["console"]) or {}).get("name", c["system"]) if hasattr(fe, "fm") else c["system"]
+        tiny.centered(ui, tiny.fit(name, tw - 8), T.FG if on else T.COMMENT, x + tw // 2, y + 58)
+    marquee(ui, carts[sel].get("title") or "?", T.YELLOW, px + 8, py + ph - 18, pw - 16, now)
+
+
 def draw_media_rip(fe, ui, now):
     """O rip (ou o dump do cartucho): a barra, o que esta sendo feito e o
     arquivo que fica na pasta; B cancela."""
@@ -3828,6 +3858,10 @@ def draw_media_none(fe, back, now):
     fe.bg.draw(back, now - fe.start)
     ui = pygame.Surface((WW, HH), pygame.SRCALPHA)
     W.frame(ui, {}, "FliperOS", [])
+    if ov.get("cart"):
+        draw_cart_none(ui, ov, now)
+        back.blit(ui, (0, 0))
+        return
     cx, dw, dh = WW // 2, 132, 28
     body = pygame.Rect(cx - dw // 2, 62, dw, dh)
     slot = body.y + 18
@@ -3862,6 +3896,50 @@ def draw_media_none(fe, back, now):
         else:
             W.centered(ui, "READING THE DISC", T.GREEN, 172)
     back.blit(ui, (0, 0))
+
+
+def cart_outline(ui, cx, top, w, h, color):
+    """O cartucho em traco: o corpo com os cantos de cima cortados e a etiqueta."""
+    x = round(cx - w / 2)
+    pts = [(x, top + 4), (x + 4, top), (x + w - 4, top), (x + w, top + 4), (x + w, top + h), (x, top + h)]
+    pygame.draw.polygon(ui, T.BG_DEEP, pts)
+    pygame.draw.polygon(ui, color, pts, 2)
+    pygame.draw.rect(ui, shade(color, 0.55), (x + 6, top + 6, w - 12, h // 2 - 2), 1)
+
+
+def draw_cart_none(ui, ov, now):
+    """O boot pelo OSCR sem cartucho: o contorno do leitor com a fenda em cima
+    e o cartucho flutuando sobre ela; o botao 1 o poe, e ele desce e some na
+    fenda, que acende."""
+    cx, cw, ch = WW // 2, 48, 40
+    body = pygame.Rect(cx - 66, 116, 132, 26)
+    slot = body.y + 8
+    inserted = ov.get("inserted")
+    e = now - inserted if inserted is not None else 0.0
+    done = inserted is not None and e >= INSERT_TIME
+    pygame.draw.rect(ui, T.COMMENT, body, 1, border_radius=3)
+    pygame.draw.line(ui, T.GREEN if inserted is not None else T.FG, (cx - 30, slot), (cx + 30, slot), 2)
+    led = T.GREEN if done and int(now * 6) % 2 else (T.LINE if done else T.COMMENT)
+    ui.fill(led, (body.right - 12, body.bottom - 8, 4, 2))
+    rest = slot - ch - 22
+    if inserted is None:
+        k = 0.5 - 0.5 * math.cos((now - ov.get("since", 0.0)) / FLOAT_PERIOD * 2 * math.pi)
+        c = tuple(round(a + (b - a) * k) for a, b in zip(T.LINE, T.PINK))
+        pygame.draw.lines(ui, c, False, [(cx - 6, slot - 14), (cx, slot - 8), (cx + 6, slot - 14)], 2)
+        cart_outline(ui, cx, round(rest + 8 * k), cw, ch, T.CYAN)
+        msg = ov.get("msg", "NO CARTRIDGE")
+        ui.blit(W.big(msg, 2, W.MARQUEE), ((WW - W.width(msg) * 2) // 2, 172))
+        tiny.centered(ui, tiny.fit(ov.get("sub", ""), WW - 16), T.FG, WW // 2, 194)
+        button_hint(ui, (WW - 110) // 2, 206, [("b2", "GAME LIST")])
+    elif not done:
+        # Desce e entra: o que passa da fenda fica escondido dentro do leitor.
+        y = rest + (slot + 2 - rest) * ease_io(e / INSERT_TIME)
+        clip = ui.get_clip()
+        ui.set_clip(pygame.Rect(0, 0, WW, slot))
+        cart_outline(ui, cx, round(y), cw, ch, T.CYAN)
+        ui.set_clip(clip)
+    else:
+        W.centered(ui, "READING THE CARTRIDGE", T.GREEN, 172)
 
 
 def draw(fe, now):
@@ -3956,6 +4034,8 @@ def draw(fe, now):
             draw_media_list(fe, top, t)
         elif o == "mediarip":
             draw_media_rip(fe, top, t)
+        elif o == "mediacarts":
+            draw_media_carts(fe, top, t)
         elif o == "popup" and fe.rows:
             draw_popup(fe, top, t)
         elif o == "more":

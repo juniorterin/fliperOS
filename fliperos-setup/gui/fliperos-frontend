@@ -31,7 +31,8 @@
 # vai a fileira PHYSICAL MEDIA, um azulejo por drive de CD/DVD. O botao 1 le o
 # disco, reconhece o console e abre o cartao dele: jogar direto do drive,
 # trocar o emulador (o standalone ou um core do RetroArch que le o drive) e
-# rippar para a pasta do sistema.
+# rippar para a pasta do sistema. O leitor de cartuchos OSCR (com o firmware
+# do patches/oscr) entra na mesma fileira: o cartucho e lido pela USB.
 #
 #   fliperos-frontend [--shot PREFIXO] [--keys "b1 down ..."] [--media]
 #
@@ -45,6 +46,7 @@ import atexit
 import json
 import os
 import random
+import shutil
 import signal
 import subprocess
 import sys
@@ -1838,9 +1840,22 @@ class Frontend:
             self.media_open(self.devices[self.strip])
         return None
 
-    def media_open(self, d):
+    def media_open(self, d, system=None):
         """O botao 1 num drive: sem disco, o aviso; com disco, o READING
-        enquanto o console e reconhecido (femedia.identify, numa thread)."""
+        enquanto o console e reconhecido (femedia.identify, numa thread). No
+        OSCR: os cartuchos dos slots (SCAN) ou, com system, o daquele sistema
+        (INFO), pela USB."""
+        if d["kind"] == "oscr":
+            name = self.fm.CONSOLES[self.fm.CARTS[system]]["name"].upper() if system else ""
+            ov = {"dev": d, "oscr": True, "system": system, "result": None, "since": time.monotonic(),
+                  "where": "OSCR - CART READER (%s)" % os.path.basename(d["dev"]).upper(),
+                  "step": "READING THE %s CART" % name if system else "LOOKING AT EACH SLOT"}
+            self.overlay, self.ov = "mediaload", ov
+
+            def scan():
+                ov["result"] = self.fm.oscr_call(d["dev"], "info" if system else "scan", system)
+            threading.Thread(target=scan, daemon=True).start()
+            return
         state = d.get("state")
         if state in ("empty", "open", "unknown"):
             self.say("NO DISC IN " + d["name"], 2)
@@ -1871,9 +1886,45 @@ class Frontend:
         serial = info.get("serial") or ""
         sub = " - ".join(p for p in (info["name"], serial, d["name"]) if p)
         self.overlay, self.ov = "mediacard", {"dev": d, "info": info, "sel": 0, "option": option,
-                                              "title": info.get("title") or info["name"], "sub": sub}
+                                              "title": info.get("title") or info["name"], "sub": sub,
+                                              "oscr": bool(info.get("oscr"))}
         self.media_labels()
         return True
+
+    def cart_info(self, cart):
+        """O cartucho do OSCR como um disco reconhecido: o console, o nome do
+        jogo (o do cabecalho) e o tamanho da ROM no lugar do serial."""
+        size = cart.get("rom") or 0
+        label = ("%d MBIT" % (size // 131072) if size >= 131072 else "%d KB" % (size // 1024)) if size else ""
+        name = self.fm.CONSOLES[cart["console"]]["name"]
+        return {"console": cart["console"], "name": name, "title": cart.get("title") or name, "serial": label,
+                "oscr": True, "system": cart["system"]}
+
+    def oscr_result(self, d, result, system):
+        """O que o OSCR respondeu: um cartucho vai ao cartao; mais de um, a
+        escolha; nenhum (a 3,3 V do SCAN), a lista dos sistemas, e o OSCR
+        poe a tensao do escolhido, como no menu dele."""
+        err = result.get("error")
+        if err:
+            self.say({"firmware": "THE OSCR NEEDS THE FLIPEROS FIRMWARE",
+                      "noaccess": "NO ACCESS TO THE OSCR"}.get(err, "THE OSCR DID NOT ANSWER"), 3.5)
+            if self.boot:
+                self.overlay, self.ov = "medianone", self.none_ov()
+            return
+        carts = [c for c in result.get("carts", []) if c.get("console")]
+        if len(carts) == 1 and self.media_card(d, self.cart_info(carts[0])):
+            return
+        if carts:
+            self.overlay, self.ov = "mediacarts", {"dev": d, "carts": carts, "sel": 0}
+            return
+        if system:
+            self.say("NO %s CARTRIDGE" % self.fm.CONSOLES[self.fm.CARTS[system]]["name"].upper(), 3)
+        rows = [{"label": self.fm.CONSOLES[self.fm.CARTS[s]]["name"].upper(), "icon": s.lower(), "system": s}
+                for s in result.get("systems") or [] if s in self.fm.CARTS]
+        self.overlay, self.ov = "medialist", {"dev": d, "level": "system", "rows": rows,
+                                              "sel": next((i for i, r in enumerate(rows) if r["system"] == system), 0),
+                                              "head": "WHICH SYSTEM?", "title": "NO CARTRIDGE ANSWERED AT 3.3V",
+                                              "note": "THE OSCR SETS THE VOLTAGE OF THE SYSTEM"}
 
     def media_labels(self):
         """O que o cartao escreve do emulador de agora: o nome, o icone e a
@@ -1926,6 +1977,32 @@ class Frontend:
         if o == "medianone":
             if a == "b2":
                 self.boot_leave()
+            elif a == "b1" and self.boot.startswith("oscr") and self.device(self.boot) and not ov["inserted"]:
+                # O OSCR nao sente o cartucho entrar: o botao 1 diz que ja esta la.
+                ov["inserted"] = time.monotonic()
+            return None
+        if o == "mediacarts":
+            if a in ("left", "right"):
+                ov["sel"] = (ov["sel"] + (1 if a == "right" else -1)) % len(ov["carts"])
+            elif a == "b1":
+                self.media_card(ov["dev"], self.cart_info(ov["carts"][ov["sel"]]))
+            elif a == "b2":
+                if self.boot:
+                    self.boot_leave()
+                else:
+                    self.overlay = None
+            return None
+        if o == "medialist" and ov["level"] == "system":
+            rows = ov["rows"]
+            if a in ("up", "down") and rows:
+                ov["sel"] = (ov["sel"] + (1 if a == "down" else -1)) % len(rows)
+            elif a == "b1" and rows:
+                self.media_open(ov["dev"], rows[ov["sel"]]["system"])
+            elif a == "b2":
+                if self.boot:
+                    self.overlay, self.ov = "medianone", self.none_ov()
+                else:
+                    self.overlay = None
             return None
         if o == "mediaload":
             if a == "b2":
@@ -1984,8 +2061,12 @@ class Frontend:
 
     def media_play(self):
         """Joga o disco direto do drive com o emulador do cartao; o jogo
-        fechado, o cartao volta."""
+        fechado, o cartao volta. O cartucho do OSCR e lido antes para uma
+        copia temporaria (o OSCR nao serve o jogo ao vivo)."""
         ov = self.ov
+        if ov.get("oscr"):
+            self.media_rip(play=True)
+            return
         argv = self.fm.command(ov["info"]["console"], ov["option"], ov["dev"])
         if not argv:
             self.say("RETROARCH CANNOT READ THIS DRIVE", 3)
@@ -1993,21 +2074,35 @@ class Frontend:
         self.launch(argv, media=True)
         self.last_input = time.monotonic()
 
-    def media_rip(self):
-        """O rip do disco para a pasta do emulador do cartao (femedia.py rip,
-        um processo so dele): a barra, e B cancela."""
+    def media_rip(self, play=False):
+        """O rip do disco (ou o dump do cartucho) para a pasta do emulador do
+        cartao (femedia.py rip / oscr-rip, um processo so dele): a barra, e B
+        cancela. play: o cartucho para uma copia temporaria, e o jogo abre
+        dela (media_tick)."""
         card = self.ov
-        folder = os.path.join(self.fd.web.player_home(), "roms", card["option"]["folder"])
-        name = self.fm.file_name(card["info"])
+        oscr = card.get("oscr")
+        # O disco: o titulo e o serial; o cartucho: o nome do cabecalho.
+        name = self.fm.file_name({"title": card["title"]} if oscr else card["info"])
+        if play:
+            folder = os.path.join(self.fd.web.player_home(), ".cache", "fliperos", "oscr")
+            shutil.rmtree(folder, ignore_errors=True)
+        else:
+            folder = os.path.join(self.fd.web.player_home(), "roms", card["option"]["folder"])
+        if oscr:
+            argv = ["oscr-rip", card["dev"]["dev"], card["info"]["system"], folder, name]
+        else:
+            argv = ["rip", card["dev"]["dev"], folder, name]
         try:
-            proc = subprocess.Popen([sys.executable, self.fm.__file__, "rip", card["dev"]["dev"], folder, name],
+            proc = subprocess.Popen([sys.executable, self.fm.__file__] + argv,
                                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                     text=True, start_new_session=True)
         except OSError:
             self.say("COULD NOT START THE RIP", 3)
             return
-        ov = {"card": card, "proc": proc, "head": "RIPPING", "title": card["title"], "result": None, "error": "",
-              "progress": (0, 100, "STARTING"), "dest": "%s/%s" % (card["dest"], name.upper())}
+        head = "READING THE CARTRIDGE" if play else ("DUMPING" if oscr else "RIPPING")
+        dest = "TEMPORARY COPY - NOTHING IS KEPT" if play else "%s/%s" % (card["dest"], name.upper())
+        ov = {"card": card, "proc": proc, "head": head, "title": card["title"], "result": None, "error": "",
+              "progress": (0, 100, "STARTING"), "dest": dest, "oscr": oscr, "play": play}
         self.overlay, self.ov = "mediarip", ov
 
         def read():
@@ -2025,11 +2120,15 @@ class Frontend:
             ov["result"] = "ok" if proc.returncode == 0 and ov.get("path") else "fail"
         threading.Thread(target=read, daemon=True).start()
 
-    def none_ov(self, msg="NO DISC", bad=False):
-        """O estado da tela do boot pela midia sem disco."""
+    def none_ov(self, msg=None, bad=False):
+        """O estado da tela do boot pela midia sem disco (ou sem cartucho: o
+        OSCR nao sente o cartucho entrar, e o botao 1 o le)."""
         d = self.device(self.boot) if self.boot else None
+        if (self.boot or "").startswith("oscr"):
+            return {"since": time.monotonic(), "inserted": None, "msg": msg or "NO CARTRIDGE", "bad": bad,
+                    "cart": True, "sub": "PUT A CARTRIDGE IN THE OSCR AND PRESS 1"}
         name = d["name"] if d else "THE DRIVE"
-        return {"since": time.monotonic(), "inserted": None, "msg": msg, "bad": bad,
+        return {"since": time.monotonic(), "inserted": None, "msg": msg or "NO DISC", "bad": bad,
                 "sub": "PUT A DISC IN %s TO CONTINUE" % name}
 
     def boot_leave(self):
@@ -2044,6 +2143,9 @@ class Frontend:
         if o == "mediaload" and ov.get("result") is not None and now - ov["since"] >= MEDIA_MIN_LOAD:
             info = ov["result"]
             self.overlay = None
+            if ov.get("oscr") and not info.get("cancel"):
+                self.oscr_result(ov["dev"], info, ov.get("system"))
+                return
             if info.get("cancel"):
                 pass
             elif info.get("console") and self.media_card(ov["dev"], info):
@@ -2061,17 +2163,28 @@ class Frontend:
         if o == "mediarip" and ov.get("result"):
             card = ov["card"]
             self.overlay, self.ov = "mediacard", card
-            if ov["result"] == "ok":
+            if ov["result"] == "ok" and ov.get("play"):
+                # O cartucho lido: o jogo abre da copia, e o cartao volta depois.
+                self.launch(self.fm.command(card["info"]["console"], card["option"], card["dev"], ov["path"]),
+                            media=True)
+                self.last_input = time.monotonic()
+            elif ov["result"] == "ok":
                 self.say("SAVED IN " + card["dest"], 3)
                 self.lib.forget()
                 self.lib.refresh()
             else:
                 err = ov.get("error", "")
-                self.say({"cancelled": "RIP CANCELLED", "not enough space": "NOT ENOUGH SPACE",
-                          "cdrdao is not installed": "THE RIP TOOL IS MISSING"}.get(err, "COULD NOT RIP THE DISC"), 3)
+                fallback = "COULD NOT READ THE CARTRIDGE" if ov.get("oscr") else "COULD NOT RIP THE DISC"
+                self.say({"cancelled": "CANCELLED", "not enough space": "NOT ENOUGH SPACE",
+                          "cdrdao is not installed": "THE RIP TOOL IS MISSING",
+                          "firmware": "THE OSCR NEEDS THE FLIPEROS FIRMWARE", "nocart": "NO CARTRIDGE FOUND",
+                          "crc": "THE COPY CAME DAMAGED: TRY AGAIN", "noanswer": "THE OSCR DID NOT ANSWER",
+                          "error": "THE OSCR STOPPED ON AN ERROR"}.get(err, fallback), 3)
             return
         if o in ("mediacard", "medialist"):
-            card = ov if o == "mediacard" else ov["card"]
+            card = ov if o == "mediacard" else ov.get("card")
+            if not card:
+                return
             d = self.device(card["dev"]["key"])
             if d and d.get("state") in ("empty", "open"):
                 # O disco saiu: no boot, de volta a tela que pede outro.
@@ -2080,6 +2193,13 @@ class Frontend:
                 else:
                     self.overlay = None
                     self.say("DISC REMOVED", 2)
+            return
+        if o == "medianone" and ov.get("cart"):
+            # O OSCR: o botao 1 (media_act) poe o cartucho; depois da animacao, o SCAN.
+            d = self.device(self.boot)
+            ov["sub"] = "PUT A CARTRIDGE IN THE OSCR AND PRESS 1" if d else "THE OSCR IS NOT CONNECTED"
+            if d and ov["inserted"] is not None and now - ov["inserted"] >= self.view.INSERT_TIME + 0.3:
+                self.media_open(d)
             return
         if o == "medianone":
             d = self.device(self.boot)

@@ -17757,6 +17757,199 @@ class PhysicalMediaTests(unittest.TestCase):
         frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         self.assertIn('if self.picking and self.strip is None and now - self.pick_at >= PICK_WAIT:', frontend)
 
+    def fake_oscr(self, carts, files, firmware=True, bad_crc=False):
+        """Um OSCR de mentira num pseudo-terminal, que responde como o firmware
+        com o patch do FliperOS (patches/oscr, FLIPEROS.ino): devolve o
+        caminho da porta e a lista dos comandos que recebeu."""
+        import zlib
+        master, slave = os.openpty()
+        seen = []
+
+        def serve():
+            buf = b''
+            while True:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError:
+                    return
+                if not chunk:
+                    return
+                buf += chunk
+                while b'\n' in buf:
+                    raw, _, buf = buf.partition(b'\n')
+                    cmd = raw.decode().strip()
+                    seen.append(cmd)
+                    out = b''
+                    if not firmware:
+                        out = b'OSCR: Unknown Command\n'
+                    elif cmd == 'FLIPEROS':
+                        out = b'FLIPEROS 1 SNES MD N64 GB GBA\n'
+                    elif cmd == 'SCAN':
+                        out = b''.join(('CART %s|%s|%d|%d\n' % c).encode() for c in carts) + b'END\n'
+                    elif cmd.startswith('INFO '):
+                        got = [c for c in carts if c[0] == cmd[5:]]
+                        out = ('CART %s|%s|%d|%d\n' % got[0]).encode() if got else b'NONE\n'
+                    elif cmd.startswith('DUMP '):
+                        out = b''.join(b'FILE %s\n' % p.encode() for p in files) + b'END\n'
+                    elif cmd.startswith('BAUD '):
+                        out = b'OK\n'
+                    elif cmd.startswith('GET '):
+                        data = files[cmd[4:]]
+                        crc = zlib.crc32(data) ^ (1 if bad_crc else 0)
+                        out = b'SIZE %d\n' % len(data) + data + b'CRC %X\n' % crc
+                    os.write(master, out)
+        threading.Thread(target=serve, daemon=True).start()
+        self.addCleanup(os.close, slave)
+        return os.ttyname(slave), seen
+
+    def test_oscr_ports_scan_and_dump_over_usb(self):
+        fm = self.fm
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # A porta do CH340 (1a86:7523) e outra de outro aparelho.
+            for name, ids in (('ttyUSB0', ('1a86', '7523')), ('ttyUSB1', ('0403', '6001'))):
+                usb = tmp / 'usb' / name / '1-1'
+                (usb / '1-1:1.0' / name).mkdir(parents=True)
+                (usb / 'idVendor').write_text(ids[0] + '\n')
+                (usb / 'idProduct').write_text(ids[1] + '\n')
+                (tmp / 'tty' / name).mkdir(parents=True)
+                os.symlink(usb / '1-1:1.0' / name, tmp / 'tty' / name / 'device')
+            (tmp / 'tty' / 'ttyS0').mkdir()
+            saved = (fm.SYS_TTY, fm.DEV_DIR)
+            fm.SYS_TTY, fm.DEV_DIR = str(tmp / 'tty'), '/dev'
+            try:
+                self.assertEqual([(d['key'], d['name'], d['dev'], d['label']) for d in fm.oscr_ports()],
+                                 [('oscr', 'OSCR', '/dev/ttyUSB0', 'READY')])
+            finally:
+                fm.SYS_TTY, fm.DEV_DIR = saved
+            rom, srm = bytes(range(256)) * 2048, b'\x5a' * 2048
+            files = {'/SNES/ROM/SUPER MARIO WORLD/3/SUPER MARIO WORLD.sfc': rom,
+                     '/SNES/SAVE/SUPER MARIO WORLD/4/SUPER MARIO WORLD.srm': srm}
+            carts = [('SNES', 'SUPER MARIO WORLD', 524288, 2048), ('MD', 'SONIC THE HEDGEHOG 2', 1048576, 0)]
+            port, seen = self.fake_oscr(carts, files)
+            got = fm.oscr_call(port, 'scan')
+            self.assertEqual(got['systems'], ['SNES', 'MD', 'N64', 'GB', 'GBA'])
+            self.assertEqual([(c['system'], c['console'], c['title'], c['rom']) for c in got['carts']],
+                             [('SNES', 'snes', 'SUPER MARIO WORLD', 524288), ('MD', 'md', 'SONIC THE HEDGEHOG 2', 1048576)])
+            self.assertEqual(fm.oscr_call(port, 'info', 'N64'), {'carts': [], 'systems': got['systems']})
+            # O dump: a ROM com o nome do jogo e o save ao lado (.srm), a 1 Mbaud.
+            out = io.StringIO()
+            saved_stdout, sys.stdout = sys.stdout, out
+            try:
+                self.assertEqual(fm.oscr_rip(port, 'SNES', str(tmp / 'snes9x'), 'Super Mario World'), 0)
+            finally:
+                sys.stdout = saved_stdout
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            self.assertEqual((tmp / 'snes9x' / 'Super Mario World.sfc').read_bytes(), rom)
+            self.assertEqual((tmp / 'snes9x' / 'Super Mario World.srm').read_bytes(), srm)
+            self.assertEqual(out.getvalue().splitlines()[-1], '@done %s' % (tmp / 'snes9x' / 'Super Mario World.sfc'))
+            self.assertIn('BAUD 1000000', seen)
+            self.assertIn('DUMP SNES', seen)
+            # O arquivo estragado no caminho nao fica; o OSCR sem o firmware do FliperOS e dito.
+            port, _ = self.fake_oscr(carts, files, bad_crc=True)
+            out = io.StringIO()
+            saved_stdout, sys.stdout = sys.stdout, out
+            try:
+                self.assertEqual(fm.oscr_rip(port, 'SNES', str(tmp / 'bad'), 'Super Mario World'), 1)
+            finally:
+                sys.stdout = saved_stdout
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            self.assertEqual(out.getvalue().splitlines()[-1], '@fail crc')
+            self.assertEqual(list((tmp / 'bad').iterdir()), [])
+            port, _ = self.fake_oscr(carts, files, firmware=False)
+            self.assertEqual(fm.oscr_call(port, 'scan'), {'error': 'firmware'})
+
+    def test_oscr_carts_systems_play_and_boot(self):
+        import types
+        loader = SourceFileLoader('fliperos_frontend_oscr', str(ROOT / 'fliperos-setup/gui/fliperos-frontend'))
+        fmod = types.ModuleType(loader.name)
+        fmod.__file__ = loader.path
+        loader.exec_module(fmod)
+        real = self.fm
+        answers = []
+        fake = types.SimpleNamespace(
+            CONSOLES=real.CONSOLES, CARTS=real.CARTS, file_name=real.file_name, command=real.command,
+            oscr_call=lambda dev, what, system=None: answers.pop(0),
+            emulators=lambda c: [{'id': 'retroarch:snes9x', 'label': 'SNES9X', 'icon': 'retroarch',
+                                  'folder': 'retroarch/snes9x', 'core': 'snes9x', 'missing': False}],
+            pick=lambda c, saved=None: {'id': 'retroarch:snes9x', 'label': 'SNES9X', 'icon': 'retroarch',
+                                        'folder': 'retroarch/snes9x', 'core': 'snes9x', 'missing': False})
+        oscr = {'key': 'oscr', 'kind': 'oscr', 'name': 'OSCR', 'model': 'CART READER', 'dev': '/dev/ttyUSB0',
+                'state': 'ready', 'label': 'READY'}
+        fe = types.SimpleNamespace(fm=fake, devices=[oscr], strip=0, picking=True, overlay=None, ov={},
+                                   commercial=False, boot=None, media_emus={}, said=[], launched=[], ripped=[],
+                                   view=types.SimpleNamespace(INSERT_TIME=0.8), letter_mode=None)
+        fe.say = lambda text, *a: fe.said.append(text)
+        fe.remember = lambda: None
+        fe.cancel_pick = lambda: None
+        fe.launch = lambda argv, media=False: fe.launched.append(argv)
+        fe.media_rip = lambda play=False: fe.ripped.append(play)
+        for name in ('act', 'overlay_act', 'strip_act', 'device', 'media_open', 'media_card', 'media_labels',
+                     'cart_info', 'oscr_result', 'media_act', 'media_play', 'media_tick', 'none_ov', 'boot_leave'):
+            setattr(fe, name, types.MethodType(getattr(fmod.Frontend, name), fe))
+
+        def settle():
+            deadline = time.monotonic() + 5
+            while fe.ov.get('result') is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            fe.media_tick(time.monotonic() + 1)
+
+        systems = ['SNES', 'MD', 'N64', 'GB', 'GBA']
+        smw = {'system': 'SNES', 'console': 'snes', 'title': 'SUPER MARIO WORLD', 'rom': 524288, 'save': 2048}
+        sonic = {'system': 'MD', 'console': 'md', 'title': 'SONIC THE HEDGEHOG 2', 'rom': 1048576, 'save': 0}
+        # Dois cartuchos: a escolha, e o cartao do escolhido.
+        answers.append({'carts': [smw, sonic], 'systems': systems})
+        fe.act('b1')
+        self.assertEqual((fe.overlay, fe.ov['step']), ('mediaload', 'LOOKING AT EACH SLOT'))
+        settle()
+        self.assertEqual((fe.overlay, len(fe.ov['carts'])), ('mediacarts', 2))
+        fe.act('b1')
+        self.assertEqual((fe.overlay, fe.ov['title'], fe.ov['sub'], fe.ov['dest'], fe.ov['oscr']),
+                         ('mediacard', 'SUPER MARIO WORLD', 'Super Nintendo - 4 MBIT - OSCR', 'ROMS/RETROARCH/SNES9X',
+                          True))
+        # PLAY le o cartucho antes; a copia lida abre no core.
+        fe.act('b1')
+        self.assertEqual(fe.ripped, [True])
+        fe.overlay, fe.ov = 'mediarip', {'card': fe.ov, 'result': 'ok', 'play': True, 'path': '/c/smw.sfc'}
+        fe.media_tick(time.monotonic())
+        self.assertEqual((fe.overlay, fe.launched[-1][-1]), ('mediacard', '/c/smw.sfc'))
+        self.assertEqual(fe.launched[-1][1:3], ['retroarch', '-L'])
+        fe.act('b2')
+        # Nenhum respondeu a 3,3 V: a lista dos sistemas, e o INFO do escolhido.
+        answers.extend([{'carts': [], 'systems': systems}, {'carts': [sonic], 'systems': systems}])
+        fe.act('b1')
+        settle()
+        self.assertEqual((fe.overlay, fe.ov['level'], [r['system'] for r in fe.ov['rows']]),
+                         ('medialist', 'system', systems))
+        fe.act('down')
+        fe.act('b1')
+        self.assertEqual(fe.ov['step'], 'READING THE MEGA DRIVE CART')
+        settle()
+        self.assertEqual((fe.overlay, fe.ov['title']), ('mediacard', 'SONIC THE HEDGEHOG 2'))
+        fe.act('b2')
+        # O OSCR sem o firmware do FliperOS.
+        answers.append({'error': 'firmware'})
+        fe.act('b1')
+        settle()
+        self.assertEqual((fe.overlay, fe.said[-1]), (None, 'THE OSCR NEEDS THE FLIPEROS FIRMWARE'))
+        # O boot pelo OSCR: a tela pede o cartucho; o botao 1 o poe e ele e lido.
+        fe.boot = 'oscr'
+        fe.overlay, fe.ov = 'medianone', fe.none_ov()
+        self.assertEqual((fe.ov['msg'], fe.ov['cart']), ('NO CARTRIDGE', True))
+        t = time.monotonic()
+        fe.media_tick(t)
+        self.assertEqual(fe.ov['sub'], 'PUT A CARTRIDGE IN THE OSCR AND PRESS 1')
+        fe.act('b1')
+        answers.append({'carts': [smw], 'systems': systems})
+        fe.media_tick(fe.ov['inserted'] + 1.2)
+        self.assertEqual(fe.overlay, 'mediaload')
+        settle()
+        self.assertEqual((fe.overlay, fe.ov['title']), ('mediacard', 'SUPER MARIO WORLD'))
+        fe.devices = []
+        fe.overlay, fe.ov = 'medianone', fe.none_ov()
+        fe.media_tick(time.monotonic())
+        self.assertEqual(fe.ov['sub'], 'THE OSCR IS NOT CONNECTED')
+
     def test_media_screens_draw(self):
         import types
         try:
@@ -17789,8 +17982,13 @@ class PhysicalMediaTests(unittest.TestCase):
         feview.draw_media_rip(fe, ui, 0.5)
         back = pygame.Surface((feview.WW, feview.HH))
         for inserted in (None, 0.2, 0.0):
-            fe.ov = {'since': 0.0, 'inserted': inserted, 'msg': 'NO DISC', 'sub': 'PUT A DISC IN DRIVE 1'}
-            feview.draw_media_none(fe, back, 0.5)
+            for cart in (False, True):
+                fe.ov = {'since': 0.0, 'inserted': inserted, 'msg': 'NO DISC', 'sub': 'PUT A DISC IN DRIVE 1',
+                         'cart': cart}
+                feview.draw_media_none(fe, back, 0.5)
+        fe.ov = {'sel': 1, 'carts': [{'system': 'SNES', 'console': 'snes', 'title': 'SUPER MARIO WORLD'},
+                                     {'system': 'MD', 'console': 'md', 'title': 'SONIC THE HEDGEHOG 2'}]}
+        feview.draw_media_carts(fe, ui, 0.5)
 
 
 if __name__ == '__main__':

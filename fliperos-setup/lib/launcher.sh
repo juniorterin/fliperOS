@@ -167,7 +167,9 @@ bootgame_label() {
 # nome que o frontend da (Drive 1, Drive 2...: gui/femedia.py).
 MEDIA_SYS_BLOCK=${MEDIA_SYS_BLOCK:-/sys/block}
 
-# bootmedia_drives imprime "srN|Drive N - MODELO (srN)" de cada drive.
+# bootmedia_drives imprime "srN|Drive N - MODELO (srN)" de cada drive e, por
+# ultimo, o leitor de cartuchos (o OSCR com o firmware do FliperOS: sem disco
+# para sentir, a tela pede o cartucho e o botao 1 o le).
 bootmedia_drives() {
   local dev name n=0 model
   while IFS= read -r name; do
@@ -176,27 +178,29 @@ bootmedia_drives() {
     model=$(cat "$dev/vendor" "$dev/model" 2> /dev/null | tr -s ' \n' ' ' | sed 's/^ //; s/ $//')
     printf '%s|Drive %d - %s (%s)\n' "$name" "$n" "${model:-CD/DVD}" "$name"
   done < <(find "$MEDIA_SYS_BLOCK" -maxdepth 1 -name 'sr[0-9]*' -printf '%f\n' 2> /dev/null | sort -V)
+  printf '%s\n' "oscr|Cartridge reader (OSCR)"
 }
 
-# bootmedia_label imprime o drive do boot pela midia (Drive 1...), vazio se
-# o launcher nao e o physical.
+# bootmedia_label imprime o drive do boot pela midia (Drive 1... ou Cartridge
+# reader), vazio se o launcher nao e o physical.
 bootmedia_label() {
   local key line
   [[ $(launcher_current) == physical ]] || return 0
   key=$(conf_get boot_media) || key=sr0
   line=$(bootmedia_drives | grep "^$key|")
   line=${line#*|}
-  printf '%s\n' "${line%% - *}"
+  line=${line%% - *}
+  printf '%s\n' "${line% (OSCR)}"
 }
 
-# bootmedia_set CHAVE: o boot pela midia no drive (srN), ou off: de volta ao
-# frontend do FliperOS se o boot era pela midia.
+# bootmedia_set CHAVE: o boot pela midia no drive (srN) ou no OSCR (oscr), ou
+# off: de volta ao frontend do FliperOS se o boot era pela midia.
 bootmedia_set() {
   if [[ $1 == off ]]; then
     [[ $(launcher_current) == physical ]] && launcher_set fliperos
     return 0
   fi
-  [[ $1 =~ ^sr[0-9]+$ ]] || return 1
+  [[ $1 =~ ^(sr[0-9]+|oscr)$ ]] || return 1
   conf_set boot_media "$1"
   log_info "boot pela midia: $1"
   launcher_set physical

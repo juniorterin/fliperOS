@@ -101,6 +101,27 @@ The disc's card always has three tiles:
 
 The drives belong to the `cdrom` group, which the cabinet's user is in (the ISO creates it there; the update adds it).
 
+### Physical media: the cartridge reader (OSCR)
+
+The [Open Source Cartridge Reader](https://github.com/sanni/cartreader) HW5 (sanni's) shows up in the same row as **OSCR**, as soon as its USB cable is in (the CH340 converter of the HW5, or an Arduino Mega). The stock OSCR writes its dumps to its own SD card, and its USB only serves the firmware tool. So FliperOS needs the OSCR to run **its patched firmware** (`patches/oscr`), which adds commands on that same USB line:
+- `SCAN` reads the header of the cart in each slot;
+- `INFO` reads the cart of one system;
+- `DUMP` writes the ROM and the save to the SD card, as the OSCR's own menu does;
+- `GET` sends a file at 1 Mbaud with a CRC32 that FliperOS checks.
+
+While a command runs, the OSCR's menus don't wait for its button.
+
+Button 1 on the OSCR tile: LOOKING AT EACH SLOT. One cart goes straight to its card; two or more show a choice, one tile per slot with the system and the game's name. `SCAN` never raises the voltage to 5V, so a 3.3V cart in an adapter is never put at risk; a 5V cart that doesn't answer at 3.3V is left out. When no cart answers, the screen asks **WHICH SYSTEM?** (Super Nintendo, Mega Drive, Nintendo 64, Game Boy, Game Boy Advance), and the OSCR then sets that system's voltage, as its own menu does.
+
+The cart's card works like a disc's:
+- **PLAY** reads the cart first into a temporary copy (`~/.cache/fliperos/oscr`, with the bar) and opens it in the RetroArch core. The OSCR can't serve the game live.
+- **EMULATOR** lists the console's cores: Snes9x, bsnes and Mesen-S; Genesis Plus GX and PicoDrive; Mupen64Plus-Next and ParaLLEl N64; Gambatte, SameBoy and mGBA; mGBA and VBA Next.
+- **RIP TO FOLDER** saves the ROM in the core's folder with the game's name, and the save next to it as `.srm`.
+
+With **Boot from media** set to the cartridge reader, the screen shows the reader's outline with a cartridge floating over the slot and NO CARTRIDGE. The OSCR can't tell when a cart goes in, so button 1 says it is there: the cartridge slides into the slot and is read.
+
+The firmware is built by `tools/oscr-firmware.sh` (arduino-cli in Docker, sanni/cartreader at `060d8ae`): `output/oscr/OSCR-HW5-fliperos.hex` and `OSCR-HW5-VSELECT-fliperos.hex` (with the VSELECT module). It is flashed over the same USB cable, with the voltage switch at 5V: `avrdude -p atmega2560 -c wiring -P /dev/ttyUSB0 -b 115200 -D -U flash:w:OSCR-HW5-fliperos.hex:i`.
+
 **Boot from media** (Setup > Games > Frontend > Boot from media, the `physical` launcher) starts the frontend with `--media` on the disc of the chosen drive (`boot_media` in `fliperos.conf`).
 
 With no disc, the screen shows the drive's outline and a disc floating below the slot, with NO DISC. When a disc goes in, it slides into the slot, the slot turns green and the disc is read. The card then waits for PLAY; there is no countdown. Button 2 leaves for the game list, also from the card. A disc that can't be played (unknown, Dreamcast) shows UNKNOWN DISC until it comes out.

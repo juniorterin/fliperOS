@@ -460,19 +460,16 @@ screen_bootgame() {
   ui_msg "$title" "${lines[@]}"
 }
 
-# screen_bootmedia: o boot pela midia (lib/launcher.sh). O drive do boot ou
-# Off; sem disco, a tela do frontend pede um, e o botao 2 vai para a lista.
+# screen_bootmedia: o boot pela midia (lib/launcher.sh). Um drive, o leitor
+# de cartuchos (OSCR) ou Off; sem disco ou cartucho, a tela do frontend pede
+# um, e o botao 2 vai para a lista.
 screen_bootmedia() {
   local title="Boot from media" current choice
   local -a drives
   mapfile -t drives < <(bootmedia_drives)
-  if ((${#drives[@]} == 0)); then
-    ui_msg "$title" "No CD or DVD drive was found." "" "Connect one (USB drives work too) and come back."
-    return 0
-  fi
   current=off
   [[ $(launcher_current) == physical ]] && { current=$(conf_get boot_media) || current=sr0; }
-  choice=$(ui_radio "$title" "The FliperOS frontend opens on the disc of this drive. With no disc, the screen asks for one; Button 2 goes to the game list." \
+  choice=$(ui_radio "$title" "The FliperOS frontend opens on the disc in this drive, or the cartridge in the OSCR. With none, the screen asks for one; Button 2 goes to the game list." \
     "$current" "off|Off" "${drives[@]}") || return 0
   if ! bootmedia_set "$choice"; then
     ui_msg "$title" "$(ui_bad "Could not set it.")" "" "Details in /var/log/fliperos-setup.log."
