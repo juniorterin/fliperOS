@@ -209,6 +209,10 @@ settings_list() {
     name=$(bootgame_label)
     opts+=";game=A game: ${name//[;=|]/ }"
   fi
+  # O boot pela midia, quando um drive ja foi escolhido (Setup > Games > Frontend).
+  if conf_get boot_media > /dev/null; then
+    opts+=";physical=Boot from media"
+  fi
   printf 'launcher|System|What starts when the cabinet turns on|choice|%s|%s|The default launcher (Setup > Games > Frontend). To open one game, use Open at power on on its page in Frontend. Counts from the next boot.\n' \
     "$(launcher_current)" "$opts"
   opts=$(splash_list | settings_opts)
@@ -251,6 +255,10 @@ settings_set() {
     launcher)
       if [[ $value == game && -s $BOOTGAME_FILE ]]; then
         launcher_set game
+        return 0
+      fi
+      if [[ $value == physical ]] && conf_get boot_media > /dev/null; then
+        launcher_set physical
         return 0
       fi
       while IFS='|' read -r name _; do

@@ -3046,6 +3046,50 @@ class BootGameTests(Base):
         self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
 
 
+class BootMediaTests(Base):
+    """Setup > Games > Frontend > Boot from media: o frontend do FliperOS na
+    tela que pede o disco de um drive (o launcher physical)."""
+
+    def drives(self):
+        block = self.env.dir / "block"
+        for name, vendor, model in (("sr1", "ASUS", "BW-16D1HT"), ("sr0", "HL-DT-ST", "DVDRAM GH24NSD1")):
+            (block / name / "device").mkdir(parents=True)
+            (block / name / "device" / "vendor").write_text(vendor + "  \n")
+            (block / name / "device" / "model").write_text(model + "\n")
+        (block / "sda").mkdir()
+        return {"MEDIA_SYS_BLOCK": str(block), "COLOR_BIN": str(self.env.dir / "none")}
+
+    def test_drives_are_listed_and_the_choice_is_the_launcher(self):
+        env = self.drives()
+        self.assertEqual(self.env.out("bootmedia_drives", env).splitlines(),
+                         ["sr0|Drive 1 - HL-DT-ST DVDRAM GH24NSD1 (sr0)", "sr1|Drive 2 - ASUS BW-16D1HT (sr1)"])
+        self.assertEqual(self.env.out("bootmedia_label", env).strip(), "")
+        self.env.out("bootmedia_set sr1", env)
+        self.assertIn("boot_media=sr1\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(self.env.out("launcher_current", env).strip(), "physical")
+        self.assertEqual(self.env.out("bootmedia_label", env).strip(), "Drive 2")
+        # O painel web (Settings): a opcao aparece e vale.
+        launcher = next(line.split("|") for line in self.env.out("settings_list", env).splitlines()
+                        if line.startswith("launcher|"))
+        self.assertIn("physical=Boot from media", launcher[5])
+        self.assertEqual(self.env.run("settings_set launcher physical", env).returncode, 0)
+        # Off: de volta ao frontend do FliperOS; outro valor nao vale.
+        self.env.out("bootmedia_set off", env)
+        self.assertEqual(self.env.out("launcher_current", env).strip(), "fliperos")
+        self.assertEqual(self.env.run("bootmedia_set /dev/sda", env).returncode, 1)
+
+    def test_session_row_opens_the_frontend_with_media(self):
+        table = (ROOT / "config" / "fliperos-sessions.conf").read_text()
+        self.assertIn("\nphysical|kms|/usr/local/lib/fliperos-setup/gui/fliperos-frontend||Boot from media\n", table)
+        session = (ROOT / "config" / "fliperos-session").read_text()
+        self.assertIn("      fliperos | physical)\n        [[ $_name == physical ]] && program+=(--media)", session)
+        # No primeiro boot ainda nao ha drive escolhido: fica de fora.
+        (self.env.etc / "sessions.conf").write_text("setup|none|||Menu\nphysical|kms|/bin/true||Boot from media\n")
+        self.assertEqual(self.env.out("launcher_available").splitlines(), ["setup|Menu"])
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn("    physical)\n      screen_bootmedia\n", menu)
+
+
 class BiosBoxTests(unittest.TestCase):
     """O quadro "BIOS DOWNLOAD" do menu do Tab (gui/febios.py): mostra o
     andamento ou o que nao deu certo, e sai quando esta tudo certo."""
@@ -3440,7 +3484,7 @@ class NamcoPackTests(unittest.TestCase):
 
     def test_the_frontend_extracts_before_it_opens_the_game(self):
         frontend = (SETUP / "gui/fliperos-frontend").read_text()
-        launch = frontend.split("    def launch(self, argv=None, game=None):")[1].split("    def play(")[0]
+        launch = frontend.split("    def launch(self, argv=None, game=None, media=False):")[1].split("    def play(")[0]
         self.assertIn('g.get("Packed") and argv is None', launch)
         self.assertIn("self.unpack_start(g)", launch)
         # A ordem importa: um jogo empacotado nao tem comando, entao a checagem vem antes

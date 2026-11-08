@@ -3532,6 +3532,338 @@ def draw_notice(ui, name, title, now):
         tiny.text(ui, tiny.fit(title, WW - 44), T.COMMENT, x + 24, y + 16)
 
 
+# ── A midia fisica (gui/femedia.py) ────────────────────────────────
+# A fileira PHYSICAL MEDIA debaixo da tira de romlists (um azulejo por
+# drive de CD/DVD e o OSCR), o aviso enquanto o disco e lido, o cartao do
+# disco (PLAY, EMULATOR, RIP TO FOLDER), a lista do emulador e dos cores, a
+# barra do rip e a tela do boot pela midia sem disco.
+
+SILVER = (0xC8, 0xCC, 0xD8)
+DISC_TILT = 0.36           # a altura do disco deitado, em fracao da largura
+STRIP_Y, STRIP_H = 176, 62  # a fileira, logo abaixo da tira (70 + 104 + 2)
+
+
+def disc(ui, cx, cy, r, on=True, spin=0.0):
+    """O disco visto de frente: prata, o brilho de arco-iris (que gira) e o furo."""
+    pygame.draw.circle(ui, SILVER if on else T.COMMENT, (cx, cy), r)
+    if r >= 6:
+        rect = pygame.Rect(cx - r + 2, cy - r + 2, 2 * r - 4, 2 * r - 4)
+        for k, color in enumerate((T.PURPLE, T.CYAN, T.PINK, T.YELLOW)):
+            a = spin + k * math.pi / 2
+            pygame.draw.arc(ui, color if on else T.LINE, rect, a, a + 0.55, max(1, r // 4))
+    pygame.draw.circle(ui, T.LINE, (cx, cy), max(2, round(r * 0.36)))
+    pygame.draw.circle(ui, T.BG_DEEP, (cx, cy), max(1, round(r * 0.18)))
+    pygame.draw.circle(ui, T.LINE, (cx, cy), r, 1)
+
+
+def drive_icon(ui, cx, cy, s, on, has_disc, spin=0.0):
+    """O drive do azulejo: a frente com a gaveta e o disco aparecendo por cima."""
+    w, h = round(s * 0.95), round(s * 0.3)
+    r = round(s * 0.36)
+    if has_disc:
+        disc(ui, cx, cy - round(s * 0.08), r, on, spin)
+    else:
+        pygame.draw.circle(ui, T.LINE, (cx, cy - round(s * 0.08)), r, 1)
+    body = pygame.Rect(cx - w // 2, cy + round(s * 0.18), w, h)
+    W.block(ui, body, T.BG, None)
+    pygame.draw.rect(ui, T.FG if on else T.COMMENT, body, 1)
+    pygame.draw.line(ui, T.COMMENT, (body.x + 3, body.y + h // 2), (body.right - 9, body.y + h // 2))
+    led = T.GREEN if has_disc else T.ORANGE
+    ui.fill(led if on else T.LINE, (body.right - 6, body.y + h // 2 - 1, 3, 2))
+
+
+def cart(ui, cx, cy, s, color, label=None):
+    """Um cartucho: o corpo, a etiqueta e os frisos embaixo."""
+    w, h = round(s * 0.7), round(s * 0.8)
+    x, y = cx - w // 2, cy - h // 2
+    pygame.draw.polygon(ui, color, [(x, y + 3), (x + 3, y), (x + w - 3, y), (x + w, y + 3), (x + w, y + h),
+                                    (x, y + h)])
+    pygame.draw.rect(ui, T.BG_DEEP, (x, y, w, h), 1)
+    ui.fill(label or T.FG, (x + 3, y + 4, w - 6, round(h * 0.45)))
+    for i in range(3):
+        pygame.draw.line(ui, shade(color, 0.6), (x + 3, y + h - 4 - i * 3), (x + w - 4, y + h - 4 - i * 3))
+
+
+def oscr_icon(ui, cx, cy, s, on, now=0.0):
+    """O OSCR: a placa com a telinha e o botao, e um cartucho espetado nela."""
+    cart(ui, cx, cy - round(s * 0.2), round(s * 0.55), T.PURPLE if on else T.COMMENT, T.FG if on else T.LINE)
+    w, h = round(s * 0.95), round(s * 0.32)
+    body = pygame.Rect(cx - w // 2, cy + round(s * 0.12), w, h)
+    W.block(ui, body, (0x1F, 0x5F, 0x3F) if on else T.BG, None)
+    pygame.draw.rect(ui, T.FG if on else T.COMMENT, body, 1)
+    ui.fill(T.CYAN if on else T.LINE, (body.x + 3, body.y + 3, round(w * 0.4), h - 6))
+    pygame.draw.circle(ui, T.FG if on else T.COMMENT, (body.right - 7, body.centery), max(2, h // 3))
+    if on and int(now * 3) % 2:
+        ui.fill(T.RED, (body.right - 14, body.y + 2, 2, 2))
+
+
+def rip_icon(ui, cx, cy, on, oscr=False):
+    """Rippar: o disco (ou o cartucho) caindo na pasta."""
+    c = T.ORANGE if on else T.COMMENT
+    pygame.draw.polygon(ui, c, [(cx - 13, cy + 2), (cx - 5, cy + 2), (cx - 2, cy + 5), (cx + 13, cy + 5),
+                                (cx + 13, cy + 15), (cx - 13, cy + 15)])
+    if oscr:
+        cart(ui, cx, cy - 9, 16, T.PURPLE if on else T.COMMENT, T.FG if on else T.LINE)
+    else:
+        disc(ui, cx, cy - 9, 7, on)
+    arrow(ui, cx, cy + 3, (0, 1), T.GREEN if on else T.LINE, 4)
+
+
+def emu_icon(ui, cx, cy, icon, on=True, scale=1):
+    """O icone do emulador (os de gui/icons) ou, sem icone, a inicial."""
+    img = T.icon(icon, scale) if icon else None
+    if img is None:
+        img = W.big((icon or "?")[:1].upper(), scale, W.MARQUEE if on else [T.COMMENT])
+    elif not on:
+        img = img.copy()
+        img.set_alpha(110)
+    ui.blit(img, (cx - img.get_width() // 2, cy - img.get_height() // 2))
+
+
+def swap_icon(ui, cx, cy, on, icon):
+    """Trocar de emulador: o icone do de agora e as duas setas."""
+    emu_icon(ui, cx, cy - 2, icon, on, 2)
+    c = T.PINK if on else T.COMMENT
+    pygame.draw.line(ui, c, (cx - 10, cy + 16), (cx + 8, cy + 16))
+    arrow(ui, cx + 10, cy + 16, (1, 0), c, 3)
+    pygame.draw.line(ui, c, (cx - 8, cy + 20), (cx + 10, cy + 20))
+    arrow(ui, cx - 10, cy + 20, (-1, 0), c, 3)
+
+
+def draw_media_strip(fe, ui, now):
+    """A fileira PHYSICAL MEDIA embaixo da tira de romlists, com a seta que
+    pisca na tira (para baixo) ou na fileira (para cima, de volta). Cada
+    azulejo diz se tem disco ou cartucho."""
+    devices = getattr(fe, "devices", None) or []
+    if not devices:
+        return
+    band_y, band_h = 70, 104
+    focus = getattr(fe, "strip", None)
+    media = focus is not None
+    if media:
+        # A tira dos sistemas apaga: o foco esta embaixo.
+        shadow = pygame.Surface((WW, band_h - 2), pygame.SRCALPHA)
+        shadow.fill(T.SPACE + (130,))
+        ui.blit(shadow, (0, band_y + 1))
+    blink = int(now * 2.5) % 2 == 0
+    if not media and blink:
+        arrow(ui, WW // 2, band_y + band_h - 7, (0, 1), T.PINK, 4)
+    y0, h = STRIP_Y, STRIP_H
+    W.block(ui, (0, y0, WW, h), T.BG_DEEP, None)
+    edge = T.PINK if media else T.LINE
+    pygame.draw.line(ui, edge, (0, y0), (WW, y0))
+    pygame.draw.line(ui, edge, (0, y0 + h - 1), (WW, y0 + h - 1))
+    tiny.centered(ui, "PHYSICAL MEDIA", T.CYAN if media else T.COMMENT, WW // 2, y0 + 3)
+    if media and blink:
+        arrow(ui, WW // 2, y0 - 1, (0, -1), T.PINK, 3)
+    n, size = len(devices), 30
+    gap = max(6, min(34, (WW - 16 - n * size) // max(1, n - 1)))
+    x0 = (WW - (n * size + (n - 1) * gap)) // 2
+    for i, d in enumerate(devices):
+        x, y = x0 + i * (size + gap), y0 + 11
+        on = media and i == focus
+        if on:
+            tile_frame(ui, (x, y, size, size), True, now)
+            pygame.draw.rect(ui, T.PINK, (x, y, size, size), 2)
+        else:
+            W.block(ui, (x, y, size, size), T.BG, None)
+            pygame.draw.rect(ui, T.LINE, (x, y, size, size), 1)
+        lit = on or not media
+        if d["kind"] == "oscr":
+            oscr_icon(ui, x + size // 2, y + size // 2 + 2, size - 6, lit, now)
+        else:
+            drive_icon(ui, x + size // 2, y + size // 2, size - 6, lit, d.get("state") == "disc")
+        tiny.centered(ui, d["name"], T.FG if on else T.COMMENT, x + size // 2, y + size + 3)
+        state = d.get("label") or ""
+        good = d.get("state") in ("disc", "carts")
+        tiny.centered(ui, state, (T.GREEN if good else T.ORANGE) if lit else T.LINE, x + size // 2, y + size + 9)
+
+
+def draw_media_load(fe, ui, now):
+    """O disco (ou o OSCR) sendo lido: o disco girando, READING..., o drive e
+    o passo; a barrinha corre (nao se sabe quanto falta)."""
+    ov = fe.ov
+    pw, ph = min(228, WW - 8), 82
+    px, py = (WW - pw) // 2, (HH - ph) // 2
+    card(ui, (px, py, pw, ph))
+    if ov.get("oscr"):
+        oscr_icon(ui, px + 32, py + 42, 40, True, now)
+    else:
+        disc(ui, px + 32, py + 40, 20, True, spin=now * 7)
+    W.text(ui, "READING" + "." * (int(now * 3) % 4), T.FG, px + 62, py + 18)
+    tiny.text(ui, tiny.fit(ov.get("where", ""), pw - 70), T.COMMENT, px + 62, py + 32)
+    tiny.text(ui, tiny.fit(ov.get("step", "WHICH CONSOLE IS IT?"), pw - 70), T.CYAN, px + 62, py + 44)
+    bx, bw, seg = px + 62, pw - 74, 28
+    pygame.draw.rect(ui, T.LINE, (bx, py + 58, bw, 6), 1)
+    k = (now * 0.9) % 1.0
+    sx = bx + 1 + round((bw - seg - 2) * (0.5 - 0.5 * math.cos(k * 2 * math.pi)))
+    ui.fill(T.GREEN, (sx, py + 60, seg, 2))
+
+
+MEDIA_TILES = (("play", "PLAY"), ("emu", "EMULATOR"), ("rip", "RIP TO FOLDER"))
+
+
+def draw_media_card(fe, ui, now):
+    """O cartao do disco ou do cartucho: o titulo, o console e o serial, e os
+    tres azulejos (jogar com o emulador de agora, trocar o emulador, rippar
+    para a pasta); embaixo, o nome do escolhido e o detalhe dele."""
+    ov = fe.ov
+    pw, ph = min(252, WW - 8), 120
+    px, py = (WW - pw) // 2, (HH - ph) // 2 - 4
+    card(ui, (px, py, pw, ph))
+    marquee(ui, ov.get("title", ""), T.YELLOW, px + 8, py + 8, pw - 16, now)
+    tiny.text(ui, tiny.fit(ov.get("sub", ""), pw - 16), T.COMMENT, px + 8, py + 20)
+    n, size, gap = len(MEDIA_TILES), 48, 16
+    tx0 = px + (pw - (n * size + (n - 1) * gap)) // 2
+    ty = py + 30
+    sel = ov.get("sel", 0) % n
+    for i, (kind, _) in enumerate(MEDIA_TILES):
+        x = tx0 + i * (size + gap)
+        on = i == sel
+        tile_frame(ui, (x, ty, size, size), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, ty, size, size), 2 if on else 1)
+        cx, cy = x + size // 2, ty + size // 2
+        if kind == "play":
+            play_icon(ui, cx - 2, cy - 2, T.GREEN if on else T.COMMENT)
+            emu_icon(ui, x + size - 7, ty + size - 7, ov.get("icon"), on, 1)
+        elif kind == "emu":
+            swap_icon(ui, cx, cy - 6, on, ov.get("icon"))
+        else:
+            rip_icon(ui, cx, cy, on, ov.get("oscr", False))
+    kind, label = MEDIA_TILES[sel]
+    ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10))
+    detail = ov.get("dest", "") if kind == "rip" else ov.get("emu", "")
+    tiny.centered(ui, tiny.fit(detail, pw - 16), T.CYAN, px + pw // 2, ty + size + 23)
+
+
+def draw_media_list(fe, ui, now):
+    """A escolha do emulador (ou do core do RetroArch): uma linha por opcao,
+    com o icone, o nome e, a direita, STANDALONE, a seta (abre os cores) ou
+    DOWNLOAD (o core ainda nao esta instalado); o visto no de agora."""
+    ov = fe.ov
+    rows = ov["rows"]
+    pw = min(236, WW - 8)
+    shown = min(len(rows), 6)
+    ph = 38 + shown * 22 + (14 if ov.get("note") else 0)
+    px, py = (WW - pw) // 2, (HH - ph) // 2 - 4
+    card(ui, (px, py, pw, ph))
+    ui.blit(W.big(ov["head"], 1, W.LABEL), (px + 8, py + 8))
+    tiny.text(ui, tiny.fit(ov.get("title", ""), pw - 16), T.COMMENT, px + 8, py + 20)
+    top = max(0, min(ov["sel"] - shown + 1, len(rows) - shown))
+    for i in range(top, top + shown):
+        row = rows[i]
+        y = py + 30 + (i - top) * 22
+        on = i == ov["sel"]
+        if on:
+            tile_frame(ui, (px + 6, y, pw - 12, 20), True, now)
+            pygame.draw.rect(ui, T.PINK, (px + 6, y, pw - 12, 20), 1)
+        emu_icon(ui, px + 18, y + 10, row["icon"], True, 1)
+        W.text(ui, fit(row["label"], pw - 100), T.FG if on else T.COMMENT, px + 30, y + 6)
+        if row.get("more"):
+            arrow(ui, px + pw - 16, y + 10, (1, 0), T.PINK if on else T.LINE, 4)
+        elif row.get("tag"):
+            tiny.text(ui, row["tag"], T.CYAN if on else T.LINE, px + pw - 12, y + 8, right=True)
+        if row.get("current"):
+            pygame.draw.lines(ui, T.GREEN, False, [(px + pw - 62, y + 9), (px + pw - 59, y + 12),
+                                                   (px + pw - 54, y + 6)], 2)
+    if len(rows) > shown:
+        W.scrollbar(ui, px + pw - 4, py + 30, shown * 22, top, shown, len(rows))
+    if ov.get("note"):
+        tiny.centered(ui, ov["note"], T.COMMENT, px + pw // 2, py + ph - 12)
+
+
+def draw_media_rip(fe, ui, now):
+    """O rip (ou o dump do cartucho): a barra, o que esta sendo feito e o
+    arquivo que fica na pasta; B cancela."""
+    ov = fe.ov
+    pw, ph = WW - 16, 112
+    px, py = 8, (HH - ph) // 2
+    card(ui, (px, py, pw, ph))
+    ui.blit(W.big(ov.get("head", "RIPPING"), 1, W.LABEL), (px + 10, py + 8))
+    tiny.text(ui, tiny.fit(ov.get("title", ""), pw - 60), T.COMMENT, px + 10, py + 20)
+    if ov.get("oscr"):
+        oscr_icon(ui, px + pw - 24, py + 18, 26, True, now)
+    else:
+        disc(ui, px + pw - 22, py + 16, 10, True, spin=now * 9)
+    done, total, text = ov.get("progress", (0, 100, ""))
+    p = min(1.0, done / total) if total else 0.0
+    bar = (px + 12, py + 34, pw - 24, 12)
+    pygame.draw.rect(ui, T.LINE, bar, 1)
+    ui.fill(T.GREEN, (bar[0] + 2, bar[1] + 2, round((bar[2] - 4) * p), bar[3] - 4))
+    label = "%d%%" % round(p * 100)
+    W.text(ui, label, T.FG, px + (pw - W.width(label)) // 2, py + 50)
+    tiny.text(ui, tiny.fit(text, pw - 20), T.COMMENT, px + 10, py + 64)
+    tiny.text(ui, tiny.fit(ov.get("dest", ""), pw - 20), T.CYAN, px + 10, py + 72)
+    button_hint(ui, px + 8, py + ph - HINT_H - 6, [("b2", "CANCEL")])
+
+
+# O boot pela midia sem disco, em traco fino: o contorno do drive com a
+# fenda e o disco deitado (uma elipse) flutuando devagar embaixo dela, com o
+# chevron pulsando entre os dois. Posto o disco, ele sobe e some na fenda,
+# que acende em verde.
+FLOAT_PERIOD = 1.8         # uma subida e descida do disco
+INSERT_TIME = 0.8          # o disco subindo ate sumir na fenda
+
+
+def ease_io(p):
+    p = max(0.0, min(1.0, p))
+    return p * p * (3 - 2 * p)
+
+
+def disc_outline(ui, cx, cy, w, color):
+    """O disco deitado em traco: a elipse, o anel do meio e o furo."""
+    h = max(4, round(w * DISC_TILT))
+    rect = pygame.Rect(round(cx - w / 2), round(cy - h / 2), round(w), h)
+    pygame.draw.ellipse(ui, T.BG_DEEP, rect)
+    pygame.draw.ellipse(ui, color, rect, 2)
+    hole = pygame.Rect(0, 0, round(w * 0.3), max(2, round(h * 0.3)))
+    hole.center = rect.center
+    pygame.draw.ellipse(ui, shade(color, 0.55), hole, 1)
+
+
+def draw_media_none(fe, back, now):
+    """A tela do boot pela midia sem disco (ou sem cartucho): o drive, o
+    disco pedindo para entrar, NO DISC e o botao 2 que vai para a lista."""
+    ov = fe.ov
+    fe.bg.draw(back, now - fe.start)
+    ui = pygame.Surface((WW, HH), pygame.SRCALPHA)
+    W.frame(ui, {}, "FliperOS", [])
+    cx, dw, dh = WW // 2, 132, 28
+    body = pygame.Rect(cx - dw // 2, 62, dw, dh)
+    slot = body.y + 18
+    inserted = ov.get("inserted")
+    e = now - inserted if inserted is not None else 0.0
+    done = inserted is not None and e >= INSERT_TIME
+    pygame.draw.rect(ui, T.COMMENT, body, 1, border_radius=3)
+    lit = T.GREEN if inserted is not None else T.FG
+    pygame.draw.line(ui, lit, (cx - 44, slot), (cx + 44, slot), 2)
+    led = T.GREEN if done and int(now * 6) % 2 else (T.LINE if done else T.COMMENT)
+    ui.fill(led, (body.right - 12, body.y + 6, 4, 2))
+    rest, w = 140, 76
+    if inserted is None:
+        k = 0.5 - 0.5 * math.cos((now - ov.get("since", 0.0)) / FLOAT_PERIOD * 2 * math.pi)
+        y = rest - 10 * k
+        # O chevron entre o disco e a fenda, mais forte quando o disco sobe.
+        c = tuple(round(a + (b - a) * k) for a, b in zip(T.LINE, T.PINK))
+        pygame.draw.lines(ui, c, False, [(cx - 6, slot + 24), (cx, slot + 18), (cx + 6, slot + 24)], 2)
+        disc_outline(ui, cx, y, w, T.CYAN)
+        msg = ov.get("msg", "NO DISC")
+        ui.blit(W.big(msg, 2, W.MARQUEE), ((WW - W.width(msg) * 2) // 2, 172))
+        tiny.centered(ui, tiny.fit(ov.get("sub", ""), WW - 16), T.FG, WW // 2, 194)
+        button_hint(ui, (WW - 110) // 2, 206, [("b2", "GAME LIST")])
+    else:
+        if not done:
+            # Sobe e entra: o que passa da fenda fica escondido atras dela.
+            y = rest + (slot - 2 - rest - w * DISC_TILT / 2) * ease_io(e / INSERT_TIME)
+            clip = ui.get_clip()
+            ui.set_clip(pygame.Rect(0, slot + 1, WW, HH - slot - 1))
+            disc_outline(ui, cx, y, w, T.CYAN)
+            ui.set_clip(clip)
+        else:
+            W.centered(ui, "READING THE DISC", T.GREEN, 172)
+    back.blit(ui, (0, 0))
+
+
 def draw(fe, now):
     """Um quadro em fe.back."""
     back = fe.back
@@ -3593,17 +3925,37 @@ def draw(fe, now):
         dim(back, round(120 * k))
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_ribbon(fe, top, t)
+        draw_media_strip(fe, top, t)
         if k < 1:
             top.set_alpha(round(255 * k))
         back.blit(top, (0, 0))
-    if o:
+    if o == "medianone":
+        # O boot pela midia sem disco: a tela inteira (o relogio de verdade,
+        # o do ov).
+        draw_media_none(fe, back, now)
+    elif o:
         if o in ("more", "classify", "rename", "controls"):
             fe.bg.draw(back, t)
         else:
             dim(back, 160 if o != "guide" else 175)
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
+        if o.startswith("media") and getattr(fe, "strip", None) is not None:
+            # O cartao por cima da fileira de onde veio (a tira apagada atras).
+            draw_ribbon(fe, top, t)
+            draw_media_strip(fe, top, t)
+            back.blit(top, (0, 0))
+            dim(back, 120)
+            top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         if o == "guide":
             draw_guide(fe, top)
+        elif o == "mediaload":
+            draw_media_load(fe, top, t)
+        elif o == "mediacard":
+            draw_media_card(fe, top, t)
+        elif o == "medialist":
+            draw_media_list(fe, top, t)
+        elif o == "mediarip":
+            draw_media_rip(fe, top, t)
         elif o == "popup" and fe.rows:
             draw_popup(fe, top, t)
         elif o == "more":

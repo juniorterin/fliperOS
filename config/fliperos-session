@@ -152,7 +152,10 @@ case $backend in
       # fechar a tela antes do jogo (restore_crtc_at_DestroyWindow): com o SDL
       # do Ubuntu o CRTC ficava apagado, o Switchres nao achava a tela e o
       # GroovyMAME caia no Xorg. Os jogos abrem sem ele (game_env).
-      fliperos)
+      # O boot pela midia (physical) e o mesmo frontend, na tela que pede o
+      # disco (--media).
+      fliperos | physical)
+        [[ $_name == physical ]] && program+=(--media)
         sdl=()
         kms_sdl=${FLIPEROS_SDL2_KMS:-/usr/local/lib/fliperos/sdl2-kms}
         [[ -f $kms_sdl/libSDL2-2.0.so.0 ]] &&

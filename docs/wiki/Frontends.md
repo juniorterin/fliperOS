@@ -83,6 +83,28 @@ The buttons are the panel's own, from Setup > Joysticks > Button mapping (`/etc/
 
 A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).
 
+### Physical media: CDs and DVDs
+
+With a CD or DVD drive connected (USB drives too), the system strip shows a pink arrow pointing down. Down goes to the **PHYSICAL MEDIA** row under the strip: one tile per drive, saying whether it has a disc (DISC, EMPTY, OPEN). Left and right move between drives, up goes back to the systems and button 2 closes the strip.
+
+Button 1 on a drive reads the disc. READING stays on screen while the disc spins and `gui/femedia.py` finds the console from the disc itself:
+- PlayStation and PlayStation 2: the `SYSTEM.CNF` (`BOOT` or `BOOT2`) and the game's serial;
+- Saturn, Sega CD, PC-FX and 3DO: their headers in the first sector;
+- PC Engine CD: the second sector of the data track. Neo Geo CD: `IPL.TXT`.
+
+Dreamcast and GameCube discs are left out: a PC drive can't read a GD-ROM or a GameCube disc.
+
+The disc's card always has three tiles:
+- **PLAY** opens the game straight from the drive with the console's emulator. DuckStation opens `/dev/srN` and PCSX2 `-disc /dev/srN`. RetroArch opens `cdrom://driveN.cue`, where N is the drive's `/dev/sgN`, and only cores built with physical CD support can do it: Beetle PSX HW, Beetle PSX, PCSX ReARMed, Beetle Saturn, Genesis Plus GX, Beetle PCE Fast, Beetle PCE, Beetle PC-FX, Opera and NeoCD. A core that isn't installed yet is downloaded first, with the bar. When the game closes, the card comes back.
+- **EMULATOR** lists the standalone emulators that are installed and RETROARCH, which opens the list of the console's cores that read a disc. With only one such core (Sega CD: Genesis Plus GX), RETROARCH goes straight to it. The choice is kept for each console (`media_emulators` in `~/.config/fliperos/frontend.json`).
+- **RIP TO FOLDER** copies the disc into the folder of the chosen emulator (`~/roms/ps1`, or `~/roms/retroarch/<core>`), so the game shows up in its list. A CD is read raw by `cdrdao` (audio tracks too) and joined into one `.chd` by `chdman`; without `chdman` the `.bin`/`.cue` stay. A DVD becomes an `.iso`. The name is the game's title and serial. Button 2 cancels and removes the partial files. The log is `~/.cache/fliperos/rip.log`.
+
+The drives belong to the `cdrom` group, which the cabinet's user is in (the ISO creates it there; the update adds it).
+
+**Boot from media** (Setup > Games > Frontend > Boot from media, the `physical` launcher) starts the frontend with `--media` on the disc of the chosen drive (`boot_media` in `fliperos.conf`).
+
+With no disc, the screen shows the drive's outline and a disc floating below the slot, with NO DISC. When a disc goes in, it slides into the slot, the slot turns green and the disc is read. The card then waits for PLAY; there is no countdown. Button 2 leaves for the game list, also from the card. A disc that can't be played (unknown, Dreamcast) shows UNKNOWN DISC until it comes out.
+
 ## Setup > Games > Frontend
 
 The default launcher, the one that opens when the computer starts; one that isn't installed can be installed from the FliperOS repository, which ships inside the image (`/opt/fliperos/repo`, below). Whatever doesn't have a package yet shows as *not available yet*.

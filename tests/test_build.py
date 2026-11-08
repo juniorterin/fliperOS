@@ -5247,7 +5247,7 @@ class FrontendDataTests(unittest.TestCase):
             fe.unpack_tick()
             self.assertEqual(fe.said, ['CORE NOT AVAILABLE'])
         frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
-        launch = frontend.split('    def launch(self, argv=None, game=None):')[1].split('    def play(')[0]
+        launch = frontend.split('    def launch(self, argv=None, game=None, media=False):')[1].split('    def play(')[0]
         self.assertLess(launch.index('missing_core(argv)'), launch.index('self.remember()'))
         self.assertIn('fe.ov.get("title", "EXTRACTING")', (ROOT / 'fliperos-setup/gui/feview.py').read_text())
 
@@ -5370,7 +5370,8 @@ class FrontendDataTests(unittest.TestCase):
         fe = types.SimpleNamespace(cats=[{'key': k, 'name': k} for k in 'abcde'], cat=0, pick=0, pick_at=0.0, picking=False,
                                    anim={}, ribbon_until=0, overlay=None, letter_mode=None, mode='list',
                                    cursor=0, rows=[], opened=set(), positions={}, last_ui='old', slide=None,
-                                   commercial=False, repeat={}, input=types.SimpleNamespace(held=lambda a: None))
+                                   commercial=False, repeat={}, input=types.SimpleNamespace(held=lambda a: None),
+                                   strip=None, devices=[])
         fe.category = lambda: fe.cats[fe.cat]
         fe.keep_position = fe.load_filter = fe.remember = lambda: None
         fe.marquee_logo = lambda *a: None
@@ -17445,6 +17446,351 @@ class MkisoFunctionsTests(unittest.TestCase):
     def test_a_function_inside_a_heredoc_is_caught(self):
         script = "build_x() {\n  cat > /tmp/x.sh << 'EOF'\nhelper_y() {\n  :\n}\nEOF\n}\nbuild_x\nhelper_y\n"
         self.assertEqual(self.undefined_calls(script), ['helper_y'])
+
+
+class PhysicalMediaTests(unittest.TestCase):
+    """A midia fisica do frontend (gui/femedia.py): o console de cada disco,
+    lido do proprio disco; os comandos que abrem o drive; o rip; e o caminho
+    na tela, da fileira PHYSICAL MEDIA ao cartao, a lista dos cores e o boot
+    pela midia."""
+
+    @classmethod
+    def setUpClass(cls):
+        gui = str(ROOT / 'fliperos-setup/gui')
+        sys.path.insert(0, gui)
+        sys.dont_write_bytecode = True
+        import femedia
+        cls.fm = femedia
+
+    @staticmethod
+    def image(path, sectors):
+        """Uma imagem de setores de 2048 bytes ({lba: bytes})."""
+        data = bytearray((max(sectors) + 1) * 2048)
+        for lba, raw in sectors.items():
+            data[lba * 2048:lba * 2048 + len(raw)] = raw
+        Path(path).write_bytes(bytes(data))
+        return str(path)
+
+    @staticmethod
+    def iso(files, system=b'PLAYSTATION', volume=b''):
+        """Os setores de um ISO9660: o PVD no 16, a raiz no 18 e cada arquivo
+        num setor a partir do 20."""
+        pvd = bytearray(2048)
+        pvd[0], pvd[1:6] = 1, b'CD001'
+        pvd[8:40], pvd[40:72] = system.ljust(32), volume.ljust(32)
+        struct.pack_into('<I', pvd, 158, 18)
+        struct.pack_into('<I', pvd, 166, 2048)
+        root, sectors, p = bytearray(2048), {16: bytes(pvd)}, 0
+        for i, (name, content) in enumerate([(b'\0', b''), (b'\1', b'')] + list(files.items())):
+            if name not in (b'\0', b'\1'):
+                name += b';1'
+                sectors[20 + i] = content
+            size = 34 + len(name) - (1 if len(name) % 2 else 0)
+            rec = bytearray(size)
+            rec[0] = size
+            struct.pack_into('<I', rec, 2, 20 + i)
+            struct.pack_into('<I', rec, 10, len(content))
+            rec[32] = len(name)
+            rec[33:33 + len(name)] = name
+            root[p:p + size] = rec
+            p += size
+        sectors[18] = bytes(root)
+        return sectors
+
+    def test_each_console_is_read_from_the_disc(self):
+        fm = self.fm
+        saturn = bytearray(b'SEGA SEGASATURN '.ljust(0x100))
+        saturn[0x20:0x2A], saturn[0x60:0x70] = b'MK-81009  ', b'NIGHTS INTO DREA'
+        segacd = bytearray(b'SEGADISCSYSTEM  '.ljust(0x200))
+        segacd[0x150:0x158], segacd[0x180:0x18E] = b'SONIC CD', b'GM MK-4407 -00'
+        cases = {
+            'ps1': (self.iso({b'SYSTEM.CNF': b'BOOT = cdrom:\\SLUS_000.67;1\r\nTCB = 4\r\n'}, volume=b'SLUS_000.67'),
+                    {'console': 'psx', 'serial': 'SLUS-00067', 'title': ''}),
+            'ps1-old': (self.iso({b'PSX.EXE': b'x'}, volume=b'RIDGE_RACER'),
+                        {'console': 'psx', 'title': 'RIDGE RACER'}),
+            'ps2': (self.iso({b'SYSTEM.CNF': b'BOOT2 = cdrom0:\\SCUS_973.28;1\nVER = 1.00\n'}, volume=b'GT4'),
+                    {'console': 'ps2', 'serial': 'SCUS-97328', 'title': 'GT4'}),
+            'saturn': ({0: bytes(saturn)}, {'console': 'saturn', 'serial': 'MK-81009', 'title': 'NIGHTS INTO DREA'}),
+            'segacd': ({0: bytes(segacd)}, {'console': 'segacd', 'serial': 'MK-4407', 'title': 'SONIC CD'}),
+            '3do': ({0: b'\x01' + b'\x5a' * 5 + b'\x01\x00'}, {'console': '3do'}),
+            'pce': ({1: b'\0' * 0x20 + b'PC Engine CD-ROM SYSTEM'}, {'console': 'pce'}),
+            'pcfx': ({0: b'PC-FX:Hu_CD-ROM '}, {'console': 'pcfx'}),
+            'neocd': (self.iso({b'IPL.TXT': b'x'}, system=b'', volume=b'KOF96'), {'console': 'neocd'}),
+            'dreamcast': ({0: b'SEGA SEGAKATANA SEGA ENTERPRISES'}, {'console': None, 'unsupported': 'DREAMCAST'}),
+            'gamecube': ({0: b'\0' * 0x1C + b'\xc2\x33\x9f\x3d'}, {'console': None, 'unsupported': 'GAMECUBE'}),
+            'pc': (self.iso({b'SETUP.EXE': b'x'}, system=b'WIN32', volume=b'DATA'), {'console': None}),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, (sectors, want) in cases.items():
+                sectors.setdefault(17, b'')
+                info = fm.identify(self.image(Path(tmp) / name, sectors))
+                self.assertEqual({k: info.get(k) for k in want}, want, name)
+                self.assertFalse(info['dvd'], name)
+            self.assertEqual(fm.identify(str(Path(tmp) / 'ps1'))['name'], 'Sony PlayStation')
+            self.assertEqual(fm.identify(str(Path(tmp) / 'nothing'))['console'], None)
+        self.assertEqual(fm.file_name({'title': 'Castlevania: SOTN', 'serial': 'SLUS-00067', 'name': 'x'}),
+                         'Castlevania SOTN (SLUS-00067)')
+        self.assertEqual(fm.file_name({'title': '', 'serial': 'SLUS-00067', 'name': 'Sony PlayStation'}),
+                         'Sony PlayStation (SLUS-00067)')
+
+    def test_drives_and_the_command_of_each_emulator(self):
+        fm = self.fm
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            block = tmp / 'block'
+            for name, sg in (('sr0', 'sg1'), ('sr1', None)):
+                dev = block / name / 'device'
+                (dev / ('scsi_generic/' + sg if sg else '')).mkdir(parents=True)
+                (dev / 'vendor').write_text('ASUS\n')
+                (dev / 'model').write_text('BW-16D1HT\n')
+            (block / 'sda').mkdir()
+            (tmp / 'dev').mkdir()
+            (tmp / 'dev' / 'sr0').write_text('')
+            bins = tmp / 'bin'
+            bins.mkdir()
+            for exe in ('duckstation', 'retroarch'):
+                (bins / exe).write_text('#!/bin/sh\n')
+                (bins / exe).chmod(0o755)
+            cores = tmp / 'cores'
+            cores.mkdir()
+            (cores / 'mednafen_psx_libretro.so').write_text('')
+            saved = (fm.SYS_BLOCK, fm.DEV_DIR, fm.RA_CORES, os.environ['PATH'])
+            fm.SYS_BLOCK, fm.DEV_DIR, fm.RA_CORES = str(block), str(tmp / 'dev'), str(cores)
+            os.environ['PATH'] = str(bins)
+            try:
+                drives = fm.scan()
+                self.assertEqual([(d['key'], d['name'], d['model'], d['sg']) for d in drives],
+                                 [('sr0', 'DRIVE 1', 'ASUS BW-16D1HT', 'sg1'), ('sr1', 'DRIVE 2', 'ASUS BW-16D1HT', None)])
+                # Um arquivo comum nao responde ao ioctl do drive; o que nao existe tambem nao.
+                self.assertEqual([d['state'] for d in drives], ['unknown', 'unknown'])
+                options = fm.emulators('psx')
+                self.assertEqual([(o['id'], o['folder'], o.get('missing')) for o in options],
+                                 [('duckstation', 'ps1', None),
+                                  ('retroarch:mednafen_psx_hw', 'retroarch/mednafen_psx_hw', True),
+                                  ('retroarch:mednafen_psx', 'retroarch/mednafen_psx', False),
+                                  ('retroarch:pcsx_rearmed', 'retroarch/pcsx_rearmed', True)])
+                self.assertEqual(fm.pick('psx')['id'], 'duckstation')
+                self.assertEqual(fm.pick('psx', 'retroarch:pcsx_rearmed')['id'], 'retroarch:pcsx_rearmed')
+                self.assertEqual(fm.pick('psx', 'retroarch:sumiu')['id'], 'duckstation')
+                # O Sega CD so tem o RetroArch; o PS2 so o PCSX2 (que nao esta aqui).
+                self.assertEqual([o['id'] for o in fm.emulators('segacd')], ['retroarch:genesis_plus_gx'])
+                self.assertIsNone(fm.pick('ps2'))
+                kms, x11 = fm.BIN + '/fliperos-kms-run', fm.BIN + '/fliperos-x11-run'
+                self.assertEqual(fm.command('psx', options[2], drives[0]),
+                                 [kms, 'retroarch', '-L', str(cores / 'mednafen_psx_libretro.so'), 'cdrom://drive1.cue'])
+                self.assertIsNone(fm.command('psx', options[2], drives[1]))
+                self.assertEqual(fm.command('psx', options[0], drives[0]), [x11, 'duckstation', str(tmp / 'dev/sr0')])
+                pcsx2 = {'id': 'pcsx2', 'core': None}
+                self.assertEqual(fm.command('ps2', pcsx2, drives[0]), [x11, 'pcsx2', '-disc', str(tmp / 'dev/sr0')])
+            finally:
+                fm.SYS_BLOCK, fm.DEV_DIR, fm.RA_CORES, os.environ['PATH'] = saved
+
+    def rip(self, image, folder, tools):
+        """Roda o rip num processo (ele troca o SIGTERM) com as ferramentas
+        falsas de tools no PATH; devolve as linhas que ele imprime."""
+        code = ('import sys; sys.path.insert(0, %r); import femedia; femedia.DVD_BYTES = int(sys.argv[4]); '
+                'sys.exit(femedia.rip(*sys.argv[1:4]))' % str(ROOT / 'fliperos-setup/gui'))
+        env = dict(os.environ, PATH='%s:/usr/bin:/bin' % tools, HOME=str(Path(folder).parent))
+        return subprocess.run([sys.executable, '-c', code, image, folder, 'Game (SLUS-00067)',
+                               str(self.dvd)], capture_output=True, text=True, env=env, timeout=60).stdout
+
+    def test_rip_makes_one_chd_or_keeps_the_cue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            image = self.image(tmp / 'disc', self.iso({b'SYSTEM.CNF': b'BOOT = cdrom:\\SLUS_000.67;1\n'}))
+            tools = tmp / 'tools'
+            tools.mkdir()
+            scripts = {
+                'cdrdao': '#!/bin/sh\nwhile [ $# -gt 1 ]; do [ "$1" = --datafile ] && data=$2; shift; done\n'
+                          'printf bin > "$data"; printf toc > "$1"\n',
+                'toc2cue': '#!/bin/sh\nprintf cue > "$2"\n',
+                'chdman': '#!/bin/sh\nprintf chd > "$5"\n'}
+            for name, text in scripts.items():
+                (tools / name).write_text(text)
+                (tools / name).chmod(0o755)
+            self.dvd = 1 << 40
+            out = tmp / 'roms' / 'ps1'
+            lines = self.rip(image, str(out), tools).splitlines()
+            self.assertEqual(lines[-1], '@done %s' % (out / 'Game (SLUS-00067).chd'))
+            self.assertEqual(sorted(p.name for p in out.iterdir()), ['Game (SLUS-00067).chd'])
+            self.assertTrue(any(line.startswith('@step 85 COMPRESSING') for line in lines))
+            # O mesmo nome de novo ganha um (2); sem o chdman, ficam o .cue e o .bin.
+            (tools / 'chdman').unlink()
+            lines = self.rip(image, str(out), tools).splitlines()
+            self.assertEqual(lines[-1], '@done %s' % (out / 'Game (SLUS-00067) (2).cue'))
+            self.assertEqual(sorted(p.name for p in out.iterdir()),
+                             ['Game (SLUS-00067) (2).bin', 'Game (SLUS-00067) (2).cue', 'Game (SLUS-00067).chd'])
+            # O cdrdao que falha nao deixa nada para tras.
+            (tools / 'cdrdao').write_text('#!/bin/sh\nexit 1\n')
+            fresh = tmp / 'roms' / 'other'
+            self.assertEqual(self.rip(image, str(fresh), tools).splitlines()[-1], '@fail could not read the disc')
+            self.assertEqual(list(fresh.iterdir()), [])
+            # Um DVD vira a imagem .iso, byte a byte.
+            self.dvd = 0
+            lines = self.rip(image, str(tmp / 'roms' / 'ps2'), tools).splitlines()
+            iso = tmp / 'roms' / 'ps2' / 'Game (SLUS-00067).iso'
+            self.assertEqual(lines[-1], '@done %s' % iso)
+            self.assertEqual(iso.read_bytes(), Path(image).read_bytes())
+
+    def test_strip_card_lists_and_boot_from_media(self):
+        import types
+        loader = SourceFileLoader('fliperos_frontend_media', str(ROOT / 'fliperos-setup/gui/fliperos-frontend'))
+        fmod = types.ModuleType(loader.name)
+        fmod.__file__ = loader.path
+        loader.exec_module(fmod)
+        real = self.fm
+        options = {
+            'psx': [{'id': 'duckstation', 'label': 'DUCKSTATION', 'icon': 'duckstation', 'folder': 'ps1', 'core': None},
+                    {'id': 'retroarch:mednafen_psx_hw', 'label': 'BEETLE PSX HW', 'icon': 'retroarch',
+                     'folder': 'retroarch/mednafen_psx_hw', 'core': 'mednafen_psx_hw', 'missing': True},
+                    {'id': 'retroarch:mednafen_psx', 'label': 'BEETLE PSX', 'icon': 'retroarch',
+                     'folder': 'retroarch/mednafen_psx', 'core': 'mednafen_psx', 'missing': False}],
+            'segacd': [{'id': 'retroarch:genesis_plus_gx', 'label': 'GENESIS PLUS GX', 'icon': 'retroarch',
+                        'folder': 'retroarch/genesis_plus_gx', 'core': 'genesis_plus_gx', 'missing': False}]}
+        discs = {'psx': {'console': 'psx', 'name': 'Sony PlayStation', 'title': '', 'serial': 'SLUS-00067'},
+                 'segacd': {'console': 'segacd', 'name': 'Sega CD', 'title': 'SONIC CD', 'serial': 'MK-4407'},
+                 'bad': {'console': None, 'unsupported': 'DREAMCAST'}}
+        now_disc = ['psx']
+        fake = types.SimpleNamespace(
+            identify=lambda dev: discs[now_disc[0]], emulators=lambda c: options[c],
+            pick=lambda c, saved=None: next((o for o in options[c] if o['id'] == saved), options[c][0]),
+            command=real.command, file_name=real.file_name)
+        drive = {'key': 'sr0', 'kind': 'cd', 'name': 'DRIVE 1', 'model': 'ASUS', 'dev': '/dev/sr0', 'sg': 'sg1',
+                 'state': 'disc', 'label': 'DISC'}
+        fe = types.SimpleNamespace(fm=fake, devices=[drive], strip=None, picking=True, overlay=None, ov={},
+                                   commercial=False, boot=None, media_emus={}, said=[], launched=[],
+                                   view=types.SimpleNamespace(INSERT_TIME=0.8), letter_mode=None)
+        fe.say = lambda text, *a: fe.said.append(text)
+        fe.remember = lambda: None
+        fe.cancel_pick = lambda: setattr(fe, 'picking', False)
+        fe.launch = lambda argv, media=False: fe.launched.append((argv, media))
+        for name in ('act', 'overlay_act', 'strip_act', 'device', 'media_open', 'media_card', 'media_labels',
+                     'media_choose', 'media_list', 'media_act', 'media_play', 'media_tick', 'none_ov', 'boot_leave'):
+            setattr(fe, name, types.MethodType(getattr(fmod.Frontend, name), fe))
+
+        def read(disc):
+            # O botao 1 no drive: READING, e depois o cartao (ou o aviso).
+            now_disc[0] = disc
+            fe.act('b1')
+            self.assertEqual(fe.overlay, 'mediaload')
+            deadline = time.monotonic() + 5
+            while fe.ov.get('result') is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            fe.media_tick(time.monotonic() + 1)
+
+        # Na tira, para baixo vai a fileira; o 2 fecha tudo.
+        fe.act('down')
+        self.assertEqual(fe.strip, 0)
+        read('psx')
+        self.assertEqual(fe.overlay, 'mediacard')
+        self.assertEqual((fe.ov['title'], fe.ov['sub'], fe.ov['emu'], fe.ov['dest']),
+                         ('Sony PlayStation', 'Sony PlayStation - SLUS-00067 - DRIVE 1', 'DUCKSTATION', 'ROMS/PS1'))
+        # EMULATOR > RETROARCH > a lista dos cores > o segundo.
+        fe.act('right')
+        fe.act('b1')
+        self.assertEqual([r['label'] for r in fe.ov['rows']], ['DUCKSTATION', 'RETROARCH'])
+        self.assertTrue(fe.ov['rows'][0]['current'])
+        fe.act('down')
+        fe.act('b1')
+        self.assertEqual((fe.ov['level'], [(r['label'], r['tag']) for r in fe.ov['rows']]),
+                         ('cores', [('BEETLE PSX HW', 'DOWNLOAD'), ('BEETLE PSX', '')]))
+        fe.act('down')
+        fe.act('b1')
+        self.assertEqual((fe.overlay, fe.ov['emu'], fe.media_emus), ('mediacard', 'RETROARCH - BEETLE PSX',
+                                                                     {'psx': 'retroarch:mednafen_psx'}))
+        # PLAY: direto do drive, pelo /dev/sg1.
+        fe.act('left')
+        fe.act('b1')
+        self.assertEqual(fe.launched[-1][0][-1], 'cdrom://drive1.cue')
+        self.assertTrue(fe.launched[-1][1])
+        # O disco saiu com o cartao aberto: volta a fileira.
+        drive['state'] = 'empty'
+        fe.media_tick(time.monotonic())
+        self.assertEqual((fe.overlay, fe.said[-1]), (None, 'DISC REMOVED'))
+        fe.act('b1')
+        self.assertEqual((fe.overlay, fe.said[-1]), (None, 'NO DISC IN DRIVE 1'))
+        # Um core so: o RETROARCH vai direto nele.
+        drive['state'] = 'disc'
+        read('segacd')
+        fe.act('right')
+        fe.act('b1')
+        self.assertEqual([r['label'] for r in fe.ov['rows']], ['RETROARCH'])
+        fe.act('b1')
+        self.assertEqual((fe.overlay, fe.said[-1]), ('mediacard', 'ONE CORE: GENESIS PLUS GX'))
+        fe.act('b2')
+        self.assertEqual(fe.overlay, None)
+        read('bad')
+        self.assertEqual((fe.overlay, fe.said[-1]), (None, 'DREAMCAST DISCS ARE NOT SUPPORTED'))
+        # O 2 na fileira fecha a tira.
+        fe.act('b2')
+        self.assertEqual((fe.strip, fe.picking), (None, False))
+
+        # O boot pela midia: sem disco, a tela pede; posto, a gaveta e o READING.
+        fe.boot, drive['state'] = 'sr0', 'empty'
+        fe.overlay, fe.ov = 'medianone', fe.none_ov()
+        self.assertEqual(fe.ov['sub'], 'PUT A DISC IN DRIVE 1 TO CONTINUE')
+        t = time.monotonic()
+        fe.media_tick(t)
+        self.assertEqual((fe.overlay, fe.ov['inserted']), ('medianone', None))
+        drive['state'] = 'disc'
+        now_disc[0] = 'bad'
+        fe.media_tick(t)
+        self.assertEqual(fe.ov['inserted'], t)
+        fe.media_tick(t + 0.5)
+        self.assertEqual(fe.overlay, 'medianone')
+        fe.media_tick(t + 1.2)
+        self.assertEqual(fe.overlay, 'mediaload')
+        deadline = time.monotonic() + 5
+        while fe.ov.get('result') is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        fe.media_tick(time.monotonic() + 1)
+        # O disco que nao abre: a tela pede outro e nao o le de novo.
+        self.assertEqual((fe.overlay, fe.ov['msg'], fe.ov['bad']), ('medianone', 'UNKNOWN DISC', True))
+        fe.media_tick(time.monotonic() + 5)
+        self.assertEqual(fe.overlay, 'medianone')
+        drive['state'] = 'empty'
+        fe.media_tick(time.monotonic())
+        self.assertEqual((fe.ov['msg'], fe.ov['bad']), ('NO DISC', False))
+        # O 2 sai para a lista.
+        fe.act('b2')
+        self.assertEqual((fe.overlay, fe.boot), (None, None))
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('if self.picking and self.strip is None and now - self.pick_at >= PICK_WAIT:', frontend)
+
+    def test_media_screens_draw(self):
+        import types
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import background
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        devices = [{'key': 'sr0', 'kind': 'cd', 'name': 'DRIVE 1', 'state': 'disc', 'label': 'DISC'},
+                   {'key': 'sr1', 'kind': 'cd', 'name': 'DRIVE 2', 'state': 'empty', 'label': 'EMPTY'}]
+        fe = types.SimpleNamespace(devices=devices, strip=1, start=0.0, bg=background.pick('stars', seed=1))
+        ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.draw_media_strip(fe, ui, 0.5)
+        fe.ov = {'where': 'DRIVE 1 - ASUS (sr0)'}
+        feview.draw_media_load(fe, ui, 0.5)
+        for sel in range(3):
+            fe.ov = {'title': 'A VERY LONG GAME TITLE THAT DOES NOT FIT', 'sub': 'SONY PLAYSTATION', 'sel': sel,
+                     'icon': 'retroarch', 'emu': 'RETROARCH - BEETLE PSX', 'dest': 'ROMS/PS1'}
+            feview.draw_media_card(fe, ui, 0.5)
+        fe.ov = {'head': 'RETROARCH CORE', 'title': 'x', 'sel': 7, 'note': 'ONLY CORES THAT READ A REAL DISC',
+                 'rows': [{'label': 'CORE %d' % i, 'icon': 'retroarch', 'tag': 'DOWNLOAD'} for i in range(9)]}
+        feview.draw_media_list(fe, ui, 0.5)
+        fe.ov = {'title': 'x', 'progress': (40, 100, 'READING 10 OF 600 MB'), 'dest': 'ROMS/PS1/X.CHD'}
+        feview.draw_media_rip(fe, ui, 0.5)
+        back = pygame.Surface((feview.WW, feview.HH))
+        for inserted in (None, 0.2, 0.0):
+            fe.ov = {'since': 0.0, 'inserted': inserted, 'msg': 'NO DISC', 'sub': 'PUT A DISC IN DRIVE 1'}
+            feview.draw_media_none(fe, back, 0.5)
 
 
 if __name__ == '__main__':

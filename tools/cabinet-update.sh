@@ -68,6 +68,12 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin fliperos --skip-login --noissue %I $TERM
 UNIT
 
+echo "== CD/DVD drives for the frontend (group cdrom)"
+# A midia fisica do frontend (gui/femedia.py) le o /dev/srN e o RetroArch o
+# /dev/sgN, que sao do grupo cdrom; a ISO ja cria o usuario nele. Vale no
+# proximo login (o proximo boot).
+usermod -aG cdrom fliperos && id -nG fliperos
+
 echo "== Language: English (the keyboard stays as it is)"
 # Como a ISO (fliperos-mkiso.sh): o desktop, o Falkon e o sistema em ingles,
 # como o Setup. Vale a partir do proximo login (o tty1 reiniciado abaixo).
@@ -123,6 +129,9 @@ packages+=(picom)
 # O widelinks.so do "wide links = yes" (config/smb.conf): sem ele o Samba
 # recusa todo compartilhamento (vfs_init failed, 0x800704b3 no Windows).
 packages+=(samba-vfs-modules)
+# O rip dos discos no frontend (gui/femedia.py): o cdrdao le o CD em bruto e
+# o chdman (mame-tools) o junta num .chd.
+packages+=(cdrdao mame-tools)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
 # repositorio local o tem (o das imagens anteriores nao tem: fica no X).
@@ -297,6 +306,9 @@ echo "== Kernel line (boot straight to Plymouth)"
     xorg_generate || echo "warning: xorg_generate failed"
     echo "converter output: $(conf_get detection) $(conf_get kernel_video)"
   fi
+  # E o conversor que pode mostrar os modos nativos: o grid perguntado uma
+  # vez no proximo boot (screen_converter_lowdot_ask).
+  video_lowdot_ask_mark && echo "converter output: the low resolution test is asked at the next boot"
   boot_apply || { echo "boot_apply failed (see /var/log/fliperos-setup.log)"; exit 1; }
   # O fliperos-rootfs.sh reinstalou o retroarch.cfg da imagem: o que o setup
   # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).

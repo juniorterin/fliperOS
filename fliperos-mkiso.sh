@@ -299,7 +299,7 @@ apt-get install -y --no-install-recommends \
   kbd console-setup \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
   openssh-server network-manager wpasupplicant iw python3 python3-pygame ffmpeg xclip pciutils usbutils libdrm-tests edid-decode squashfs-tools \
-  systemd-timesyncd p7zip-full \
+  systemd-timesyncd p7zip-full cdrdao mame-tools \
   gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk transmission-daemon \
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils \
   samba samba-common-bin samba-vfs-modules cifs-utils smbclient avahi-daemon avahi-utils udisks2 gvfs wireless-regdb \
@@ -388,8 +388,9 @@ ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
 dpkg-reconfigure -f noninteractive tzdata
 
 # render: acesso a /dev/dri/renderD* (KMS sem X). netdev: NetworkManager sem root.
-# plugdev: montar pendrive via udisks2. tty: console.
-useradd -m -s /bin/bash -G video,render,audio,input,dialout,tty,plugdev,netdev,games,sudo fliperos
+# plugdev: montar pendrive via udisks2. tty: console. cdrom: os drives de
+# CD/DVD do frontend (/dev/srN e o /dev/sgN do RetroArch).
+useradd -m -s /bin/bash -G video,render,audio,input,dialout,tty,plugdev,netdev,games,sudo,cdrom fliperos
 echo "fliperos:fliperos" | chpasswd
 printf 'fliperos\nfliperos\n' | smbpasswd -s -a fliperos
 cat > /etc/sudoers.d/fliperos << SUDOERS

@@ -160,13 +160,55 @@ bootgame_label() {
   head -n 1 "$BOOTGAME_FILE" 2> /dev/null
 }
 
+# ── O boot pela midia ────────────────────────────────────────────
+# O launcher "physical" e o frontend do FliperOS com --media: abre na tela que
+# pede o disco do drive do boot_media (fliperos.conf), e o cartao do disco
+# espera o PLAY. Os drives sao os /sys/block/srN, na ordem do kernel, com o
+# nome que o frontend da (Drive 1, Drive 2...: gui/femedia.py).
+MEDIA_SYS_BLOCK=${MEDIA_SYS_BLOCK:-/sys/block}
+
+# bootmedia_drives imprime "srN|Drive N - MODELO (srN)" de cada drive.
+bootmedia_drives() {
+  local dev name n=0 model
+  while IFS= read -r name; do
+    n=$((n + 1))
+    dev=$MEDIA_SYS_BLOCK/$name/device
+    model=$(cat "$dev/vendor" "$dev/model" 2> /dev/null | tr -s ' \n' ' ' | sed 's/^ //; s/ $//')
+    printf '%s|Drive %d - %s (%s)\n' "$name" "$n" "${model:-CD/DVD}" "$name"
+  done < <(find "$MEDIA_SYS_BLOCK" -maxdepth 1 -name 'sr[0-9]*' -printf '%f\n' 2> /dev/null | sort -V)
+}
+
+# bootmedia_label imprime o drive do boot pela midia (Drive 1...), vazio se
+# o launcher nao e o physical.
+bootmedia_label() {
+  local key line
+  [[ $(launcher_current) == physical ]] || return 0
+  key=$(conf_get boot_media) || key=sr0
+  line=$(bootmedia_drives | grep "^$key|")
+  line=${line#*|}
+  printf '%s\n' "${line%% - *}"
+}
+
+# bootmedia_set CHAVE: o boot pela midia no drive (srN), ou off: de volta ao
+# frontend do FliperOS se o boot era pela midia.
+bootmedia_set() {
+  if [[ $1 == off ]]; then
+    [[ $(launcher_current) == physical ]] && launcher_set fliperos
+    return 0
+  fi
+  [[ $1 =~ ^sr[0-9]+$ ]] || return 1
+  conf_set boot_media "$1"
+  log_info "boot pela midia: $1"
+  launcher_set physical
+}
+
 # launcher_available imprime "nome|descricao" dos launchers instalados, na
 # ordem da tabela: a lista do primeiro boot e gerada do que existe de fato.
 # O jogo no boot fica de fora: no primeiro boot ainda nao ha jogos.
 launcher_available() {
   local name desc
   while IFS='|' read -r name _ _ _ desc; do
-    [[ $name == game ]] && continue
+    [[ $name == game || $name == physical ]] && continue
     launcher_installed "$name" && printf '%s|%s\n' "$name" "$desc"
   done < <(launcher_rows)
   # Sem isto, o status era o da ultima linha da tabela (1, se nao instalado).

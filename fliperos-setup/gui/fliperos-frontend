@@ -27,10 +27,18 @@
 # os minutos escolhidos, o tempo que acaba fecha o jogo, e o controle nao
 # fecha o frontend (quiosque).
 #
-#   fliperos-frontend [--shot PREFIXO] [--keys "b1 down ..."]
+# A midia fisica (gui/femedia.py): com a tira de romlists aberta, para baixo
+# vai a fileira PHYSICAL MEDIA, um azulejo por drive de CD/DVD. O botao 1 le o
+# disco, reconhece o console e abre o cartao dele: jogar direto do drive,
+# trocar o emulador (o standalone ou um core do RetroArch que le o drive) e
+# rippar para a pasta do sistema.
+#
+#   fliperos-frontend [--shot PREFIXO] [--keys "b1 down ..."] [--media]
 #
 # --shot grava a tela em PREFIXO-<n>.png depois de cada tecla de --keys, sem
-# video (os testes e os prints da documentacao).
+# video (os testes e os prints da documentacao). --media: o boot pela midia
+# (Setup > Games > Frontend > Boot from media, o launcher "physical"), na tela
+# que pede o disco do drive do boot_media do fliperos.conf.
 
 import argparse
 import atexit
@@ -98,6 +106,9 @@ EXIT_HOLD, CAPTURE_WAIT = 1.0, 8.0
 COMBO_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
 # Os minutos de cada ficha (Frontend options > Minutes per coin).
 COIN_MINUTES = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60)
+# A midia fisica: o estado dos drives e lido a cada MEDIA_POLL segundos; o
+# READING fica ao menos MEDIA_MIN_LOAD na tela (um disco ja lido nao pisca).
+MEDIA_POLL, MEDIA_MIN_LOAD = 2.0, 0.6
 
 
 def evdev_keys(pg):
@@ -210,12 +221,14 @@ class Frontend:
         import feinput
         import febios
         import feharvest
+        import femedia
         import fevideo
         import feview
         import tiny
         import widgets
         self.view = feview
         self.T, self.W, self.tiny, self.fd = theme, widgets, tiny, fedata
+        self.fm = femedia
         self.shot = args.shot
         self.window = None
         self.open()
@@ -297,6 +310,29 @@ class Frontend:
         self.controls_seen = cfg.get("controls_seen") is True
         if not self.controls_seen:
             self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}
+        # A midia fisica: os drives (femedia.scan, lidos numa thread), o azulejo
+        # escolhido na fileira (None: o foco na tira dos sistemas) e o
+        # emulador escolhido para cada console (frontend.json media_emulators).
+        self.devices = []
+        self.strip = None
+        emus = cfg.get("media_emulators")
+        self.media_emus = dict(emus) if isinstance(emus, dict) else {}
+        # O boot pela midia (--media): a tela que pede o disco do drive do
+        # boot_media, no lugar do guia; o botao 2 sai dela para a lista.
+        self.boot = None
+        if not self.shot:
+            try:
+                self.devices = femedia.scan()
+            except Exception:  # sem /sys/block (um container): nenhum drive
+                self.devices = []
+        if getattr(args, "media", False):
+            try:
+                self.boot = fedata.web.conf_values().get("boot_media") or "sr0"
+            except OSError:
+                self.boot = "sr0"
+            self.overlay, self.ov = "medianone", self.none_ov()
+        if not self.shot:
+            threading.Thread(target=self.media_watch, daemon=True).start()
         self.ribbon_until = 0
         self.pick = 0              # os passos andados na tira, a lista ainda nao trocou
         self.pick_at = 0.0
@@ -549,7 +585,8 @@ class Frontend:
                      "power_exit": self.power_exit, "commercial": self.commercial,
                      "coin_minutes": self.coin_minutes, "credit_until": self.credit_until,
                      "controls": self.input.binds, "panel_layout": self.panel_layout,
-                     "controls_seen": self.controls_seen, "transitions": self.transitions})
+                     "controls_seen": self.controls_seen, "transitions": self.transitions,
+                     "media_emulators": self.media_emus})
 
     def keep_position(self):
         """O jogo onde o cursor esta, anotado para a game list de agora: ao
@@ -722,7 +759,13 @@ class Frontend:
         if self.picking:
             # A tira andando: esquerda e direita seguem nela (tambem na grade),
             # o botao 1 escolhe o sistema e o 2 volta ao de antes; outro botao
-            # escolhe e faz o que ele faz.
+            # escolhe e faz o que ele faz. Para baixo, com algum drive, vai a
+            # fileira da midia fisica (strip_act).
+            if self.strip is not None:
+                return self.strip_act(a)
+            if a == "down" and self.devices:
+                self.strip = 0
+                return None
             if a in ("left", "right"):
                 self.switch_category(1 if a == "right" else -1)
                 return None
@@ -893,6 +936,8 @@ class Frontend:
             return self.controls_act(a)
         if o in ("lobby", "transfer"):
             return self.link_act(a)
+        if o.startswith("media"):
+            return self.media_act(a)
         if o == "unpack":
             if a == "b2":
                 self.ov["cancel"].set()
@@ -1665,13 +1710,16 @@ class Frontend:
                     pass
         threading.Thread(target=work, daemon=True).start()
 
-    def core_start(self, g, argv, core):
+    def core_start(self, g, argv, core, media=False):
         """O core do RetroArch do jogo nao esta instalado: baixado do buildbot
         (config/fliperos-core fetch --progress) com a barra no centro, como a
-        extracao; B cancela. Depois o jogo abre (unpack_tick)."""
+        extracao; B cancela. Depois o jogo abre (unpack_tick). media: o jogo e
+        o disco do drive, e o cartao dele volta depois."""
         name = os.path.basename(core)[:-len("_libretro.so")]
         ov = {"game": g, "argv": argv, "kind": "core", "title": "DOWNLOADING",
               "progress": (0, 100, name), "result": None, "cancel": threading.Event(), "error": ""}
+        if media:
+            ov["back"] = (self.overlay, self.ov)
         self.overlay, self.ov = "unpack", ov
 
         def work():
@@ -1716,8 +1764,14 @@ class Frontend:
         result, error, g = self.ov["result"], self.ov.get("error", ""), self.ov["game"]
         self.overlay = None
         if self.ov.get("kind") == "core":
-            if result is True:
-                self.launch(self.ov["argv"], g)
+            back, argv = self.ov.get("back"), self.ov["argv"]
+            if back:
+                # O disco do drive: de volta ao cartao dele (e o jogo abre dali).
+                self.overlay, self.ov = back
+            if result is True and back:
+                self.launch(argv, media=True)
+            elif result is True:
+                self.launch(argv, g)
             elif result == "cancel":
                 self.say("DOWNLOAD CANCELLED", 3)
             elif "not available" in error:
@@ -1749,8 +1803,307 @@ class Frontend:
             else:
                 self.say("COULD NOT EXTRACT THE GAME", 4)
 
-    def launch(self, argv=None, game=None):
-        g = game or self.game()
+    # ── A midia fisica (gui/femedia.py) ──
+    def media_watch(self):
+        """Os drives e o estado de cada um, a cada MEDIA_POLL segundos; parado
+        com o jogo aberto (o emulador le o drive)."""
+        while True:
+            if self.window is not None:
+                try:
+                    self.devices = self.fm.scan()
+                except Exception:  # um drive sumindo no meio da leitura
+                    pass
+            time.sleep(MEDIA_POLL)
+
+    def device(self, key):
+        return next((d for d in self.devices if d["key"] == key), None)
+
+    def strip_act(self, a):
+        """A fileira PHYSICAL MEDIA: esquerda e direita andam nos drives, para
+        cima volta a tira dos sistemas, o 1 le o disco e o 2 fecha tudo."""
+        n = len(self.devices)
+        if not n:
+            self.strip = None
+            return None
+        self.strip %= n
+        if a in ("left", "right"):
+            self.strip = (self.strip + (1 if a == "right" else -1)) % n
+        elif a == "up":
+            self.strip = None
+            self.pick_at = time.monotonic()
+        elif a == "b2":
+            self.strip = None
+            self.cancel_pick()
+        elif a == "b1":
+            self.media_open(self.devices[self.strip])
+        return None
+
+    def media_open(self, d):
+        """O botao 1 num drive: sem disco, o aviso; com disco, o READING
+        enquanto o console e reconhecido (femedia.identify, numa thread)."""
+        state = d.get("state")
+        if state in ("empty", "open", "unknown"):
+            self.say("NO DISC IN " + d["name"], 2)
+            return
+        if state == "noaccess":
+            self.say("NO ACCESS TO " + d["name"], 2.4)
+            return
+        ov = {"dev": d, "where": "%s - %s (%s)" % (d["name"], d["model"], d["key"]),
+              "step": "WHICH CONSOLE IS IT?", "result": None, "since": time.monotonic()}
+        self.overlay, self.ov = "mediaload", ov
+
+        def work():
+            try:
+                info = self.fm.identify(d["dev"])
+            except Exception as e:  # o disco saiu no meio da leitura
+                info = {"console": None, "error": str(e)}
+            ov["result"] = info
+        threading.Thread(target=work, daemon=True).start()
+
+    def media_card(self, d, info):
+        """O cartao do disco reconhecido, com o emulador da ultima vez (ou o
+        primeiro: o standalone, se instalado)."""
+        console = info["console"]
+        option = self.fm.pick(console, self.media_emus.get(console))
+        if option is None:
+            self.say("NO EMULATOR FOR " + info["name"].upper(), 3)
+            return False
+        serial = info.get("serial") or ""
+        sub = " - ".join(p for p in (info["name"], serial, d["name"]) if p)
+        self.overlay, self.ov = "mediacard", {"dev": d, "info": info, "sel": 0, "option": option,
+                                              "title": info.get("title") or info["name"], "sub": sub}
+        self.media_labels()
+        return True
+
+    def media_labels(self):
+        """O que o cartao escreve do emulador de agora: o nome, o icone e a
+        pasta do rip."""
+        ov, option = self.ov, self.ov["option"]
+        name = option["label"] if not option["core"] else "RETROARCH - " + option["label"]
+        if option.get("missing"):
+            name += " (DOWNLOAD)"
+        ov["emu"], ov["icon"] = name, option["icon"]
+        ov["dest"] = "ROMS/" + option["folder"].upper()
+
+    def media_choose(self, option):
+        """O emulador escolhido para o console, ja gravado; de volta ao cartao."""
+        card = self.ov["card"]
+        card["option"] = option
+        self.media_emus[card["info"]["console"]] = option["id"]
+        self.remember()
+        self.overlay, self.ov = "mediacard", card
+        self.media_labels()
+
+    def media_list(self, card, level):
+        """A lista do EMULATOR: os standalones e o RETROARCH (que abre os
+        cores); level "cores": so os cores do RetroArch que leem o drive."""
+        console = card["info"]["console"]
+        options = self.fm.emulators(console)
+        now = card["option"]["id"]
+        rows = []
+        if level == "emu":
+            for o in options:
+                if not o["core"]:
+                    rows.append({"label": o["label"], "icon": o["icon"], "tag": "STANDALONE", "opt": o,
+                                 "current": o["id"] == now})
+            if any(o["core"] for o in options):
+                rows.append({"label": "RETROARCH", "icon": "retroarch", "more": True,
+                             "current": now.startswith("retroarch:")})
+            head = "EMULATOR"
+        else:
+            for o in options:
+                if o["core"]:
+                    rows.append({"label": o["label"], "icon": "retroarch", "opt": o, "current": o["id"] == now,
+                                 "tag": "DOWNLOAD" if o.get("missing") else ""})
+            head = "RETROARCH CORE"
+        sel = next((i for i, r in enumerate(rows) if r["current"]), 0)
+        self.overlay, self.ov = "medialist", {"card": card, "level": level, "rows": rows, "sel": sel, "head": head,
+                                              "title": card["info"]["name"],
+                                              "note": "ONLY CORES THAT READ A REAL DISC" if level == "cores" else ""}
+
+    def media_act(self, a):
+        o, ov = self.overlay, self.ov
+        if o == "medianone":
+            if a == "b2":
+                self.boot_leave()
+            return None
+        if o == "mediaload":
+            if a == "b2":
+                ov["result"] = ov.get("result") or {"console": None, "cancel": True}
+                if self.boot:
+                    self.boot_leave()
+                else:
+                    self.overlay = None
+            return None
+        if o == "mediarip":
+            if a == "b2" and ov.get("proc") and ov["proc"].poll() is None:
+                try:
+                    os.killpg(ov["proc"].pid, signal.SIGTERM)
+                except OSError:
+                    pass
+            return None
+        if o == "mediacard":
+            if a in ("left", "right"):
+                ov["sel"] = (ov["sel"] + (1 if a == "right" else -1)) % 3
+            elif a == "b2":
+                if self.boot:
+                    self.boot_leave()
+                else:
+                    self.overlay = None
+            elif a == "b1" and ov["sel"] == 0:
+                self.media_play()
+            elif a == "b1" and ov["sel"] == 1:
+                self.media_list(ov, "emu")
+            elif a == "b1":
+                self.media_rip()
+            return None
+        if o == "medialist":
+            rows = ov["rows"]
+            if a in ("up", "down") and rows:
+                ov["sel"] = (ov["sel"] + (1 if a == "down" else -1)) % len(rows)
+            elif a == "b2":
+                if ov["level"] == "cores":
+                    self.media_list(ov["card"], "emu")
+                else:
+                    self.overlay, self.ov = "mediacard", ov["card"]
+            elif a == "b1" and rows:
+                row = rows[ov["sel"]]
+                if not row.get("more"):
+                    self.media_choose(row["opt"])
+                    self.say(self.ov["emu"], 2)
+                    return None
+                cores = [x for x in self.fm.emulators(ov["card"]["info"]["console"]) if x["core"]]
+                if len(cores) == 1:
+                    # Um core so: direto nele, sem a lista.
+                    self.media_choose(cores[0])
+                    self.say("ONE CORE: " + cores[0]["label"], 2.4)
+                else:
+                    self.media_list(ov["card"], "cores")
+            return None
+        return None
+
+    def media_play(self):
+        """Joga o disco direto do drive com o emulador do cartao; o jogo
+        fechado, o cartao volta."""
+        ov = self.ov
+        argv = self.fm.command(ov["info"]["console"], ov["option"], ov["dev"])
+        if not argv:
+            self.say("RETROARCH CANNOT READ THIS DRIVE", 3)
+            return
+        self.launch(argv, media=True)
+        self.last_input = time.monotonic()
+
+    def media_rip(self):
+        """O rip do disco para a pasta do emulador do cartao (femedia.py rip,
+        um processo so dele): a barra, e B cancela."""
+        card = self.ov
+        folder = os.path.join(self.fd.web.player_home(), "roms", card["option"]["folder"])
+        name = self.fm.file_name(card["info"])
+        try:
+            proc = subprocess.Popen([sys.executable, self.fm.__file__, "rip", card["dev"]["dev"], folder, name],
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                    text=True, start_new_session=True)
+        except OSError:
+            self.say("COULD NOT START THE RIP", 3)
+            return
+        ov = {"card": card, "proc": proc, "head": "RIPPING", "title": card["title"], "result": None, "error": "",
+              "progress": (0, 100, "STARTING"), "dest": "%s/%s" % (card["dest"], name.upper())}
+        self.overlay, self.ov = "mediarip", ov
+
+        def read():
+            for line in proc.stdout:
+                kind, _, rest = line.strip().partition(" ")
+                if kind == "@step":
+                    pct, _, text = rest.partition(" ")
+                    if pct.isdigit():
+                        ov["progress"] = (int(pct), 100, text)
+                elif kind == "@done":
+                    ov["path"] = rest
+                elif kind == "@fail":
+                    ov["error"] = rest
+            proc.wait()
+            ov["result"] = "ok" if proc.returncode == 0 and ov.get("path") else "fail"
+        threading.Thread(target=read, daemon=True).start()
+
+    def none_ov(self, msg="NO DISC", bad=False):
+        """O estado da tela do boot pela midia sem disco."""
+        d = self.device(self.boot) if self.boot else None
+        name = d["name"] if d else "THE DRIVE"
+        return {"since": time.monotonic(), "inserted": None, "msg": msg, "bad": bad,
+                "sub": "PUT A DISC IN %s TO CONTINUE" % name}
+
+    def boot_leave(self):
+        """O botao 2 no boot pela midia: a lista de jogos, como num boot comum."""
+        self.boot = None
+        self.overlay, self.ov = None, {}
+
+    def media_tick(self, now):
+        """O disco lido (o cartao ou o aviso), o rip que acabou, o disco que
+        saiu com o cartao aberto e, no boot pela midia, o disco que chegou."""
+        o, ov = self.overlay, self.ov
+        if o == "mediaload" and ov.get("result") is not None and now - ov["since"] >= MEDIA_MIN_LOAD:
+            info = ov["result"]
+            self.overlay = None
+            if info.get("cancel"):
+                pass
+            elif info.get("console") and self.media_card(ov["dev"], info):
+                return
+            elif info.get("unsupported"):
+                self.say("%s DISCS ARE NOT SUPPORTED" % info["unsupported"], 3)
+            elif info.get("audio_only"):
+                self.say("AUDIO CD: NO GAME ON IT", 3)
+            elif not info.get("console") and not info.get("cancel"):
+                self.say("UNKNOWN DISC", 3)
+            if self.boot:
+                # O disco nao abre: a tela pede outro (este nao e lido de novo).
+                self.overlay, self.ov = "medianone", self.none_ov("UNKNOWN DISC", bad=True)
+            return
+        if o == "mediarip" and ov.get("result"):
+            card = ov["card"]
+            self.overlay, self.ov = "mediacard", card
+            if ov["result"] == "ok":
+                self.say("SAVED IN " + card["dest"], 3)
+                self.lib.forget()
+                self.lib.refresh()
+            else:
+                err = ov.get("error", "")
+                self.say({"cancelled": "RIP CANCELLED", "not enough space": "NOT ENOUGH SPACE",
+                          "cdrdao is not installed": "THE RIP TOOL IS MISSING"}.get(err, "COULD NOT RIP THE DISC"), 3)
+            return
+        if o in ("mediacard", "medialist"):
+            card = ov if o == "mediacard" else ov["card"]
+            d = self.device(card["dev"]["key"])
+            if d and d.get("state") in ("empty", "open"):
+                # O disco saiu: no boot, de volta a tela que pede outro.
+                if self.boot:
+                    self.overlay, self.ov = "medianone", self.none_ov()
+                else:
+                    self.overlay = None
+                    self.say("DISC REMOVED", 2)
+            return
+        if o == "medianone":
+            d = self.device(self.boot)
+            state = d.get("state") if d else None
+            if ov.get("bad"):
+                if state != "disc":
+                    self.ov = self.none_ov()
+                return
+            if d is None:
+                ov["sub"] = "THE DRIVE IS NOT CONNECTED"
+            elif state == "noaccess":
+                ov["sub"] = "NO ACCESS TO THE DRIVE"
+            elif state in ("disc", "busy") and ov["inserted"] is None:
+                ov["inserted"] = now
+            elif state in ("empty", "open") and ov["inserted"] is not None:
+                self.ov = self.none_ov()
+            if (state == "disc" and ov["inserted"] is not None
+                    and now - ov["inserted"] >= self.view.INSERT_TIME + 0.3):
+                self.media_open(d)
+
+    def launch(self, argv=None, game=None, media=False):
+        # media: o disco do drive (argv pronto), sem jogo da lista para contar
+        # a partida.
+        g = None if media else (game or self.game())
         if g and g.get("Packed") and argv is None:
             # Um jogo Namco ainda em .gz nao tem comando: extrai (com a barra no
             # centro) e so entao abre (unpack_tick). Vem antes do "sem comando".
@@ -1768,7 +2121,7 @@ class Frontend:
             return
         core = missing_core(argv)
         if core:
-            self.core_start(g, argv, core)
+            self.core_start(g, argv, core, media)
             return
         self.remember()
         pg = self.pg
@@ -1785,7 +2138,7 @@ class Frontend:
         started = time.monotonic()
         ended = self.play(argv)
         played = time.monotonic() - started
-        if played > 10:
+        if played > 10 and g:
             self.lib.played(g, played)
             self.rebuild(keep=g["Name"])          # o grupo RECENT acompanha
         self.harvest.paused = False
@@ -1885,7 +2238,7 @@ class Frontend:
         """As repeticoes segurando, a aceleracao e o modo letra."""
         dt = min(0.1, now - getattr(self, "last_tick", now))
         self.last_tick = now
-        if self.picking and now - self.pick_at >= PICK_WAIT:
+        if self.picking and self.strip is None and now - self.pick_at >= PICK_WAIT:
             self.pick_category()
         if self.overlay and self.overlay not in ("filter", "classify", "rename", "more"):
             return
@@ -2014,6 +2367,7 @@ class Frontend:
             self.auto_scrape(now)
             self.bios.refresh(now)
             self.unpack_tick()
+            self.media_tick(now)
             # O servico do scrape automatico (fliperos-scrape --daemon): o
             # andamento dele e a midia nova; sem ele, o laco e o daqui.
             if now - self.followed_at > 3:
@@ -2115,6 +2469,8 @@ def main():
     parser = argparse.ArgumentParser(description="FliperOS frontend")
     parser.add_argument("--shot", help="no video: write PREFIX-N.png after each key of --keys")
     parser.add_argument("--keys", default="", help="actions to run first, e.g. 'b1 right b1'")
+    parser.add_argument("--media", action="store_true",
+                        help="boot from media: ask for the disc of the drive set in Setup > Frontend")
     args = parser.parse_args()
     fe = Frontend(args)
     return fe.run(args.keys.split())

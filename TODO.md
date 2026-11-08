@@ -6,6 +6,14 @@ O que já foi pedido e ainda não foi feito. Quando um item fica pronto, ele sai
 
 É o padrão desde 2026-10-23 (c5bc185), e o que foi decidido no desenho está na wiki ([Frontends](docs/wiki/Frontends.md)). Falta conferir com o painel de verdade, segurando o direcional, a rolagem que acelera aos poucos e o modo letra.
 
+## Mídia física: CD, DVD e o leitor de cartuchos
+
+Pedido de 2026-11-07. Os discos (a fileira PHYSICAL MEDIA, o cartão com PLAY / EMULATOR / RIP TO FOLDER e o Boot from media) estão feitos e testados só com imagens de disco e drives de mentira; nunca rodou um drive de verdade. Falta num gabinete com um drive:
+- **Jogar do drive:** o DuckStation com `/dev/srN`, o PCSX2 com `-disc` e um core do RetroArch com `cdrom://driveN.cue` (o RetroArch do pacote tem de ter vindo com o `HAVE_CDROM`; o usuário precisa do grupo `cdrom`, que vale depois de reiniciar).
+- **O rip:** um CD de PlayStation com o `cdrdao` e o `chdman`, um com faixas de áudio (PC Engine CD ou Sega CD), e um DVD de PS2.
+- **O reconhecimento** em discos de verdade de cada console (Saturn, Sega CD, PC Engine CD, 3DO, Neo Geo CD, PC-FX).
+- **OSCR (Open Source Cartridge Reader):** a etapa 2, o patch do firmware para mandar o dump pela USB e a parte dele no frontend (a fileira, a escolha do cartucho e o Boot from media). Ainda não começou.
+
 ## Vídeo: conferir no tubo
 
 Feito e testado só no Docker ou sem olhar a tela; falta ver no CRT:
