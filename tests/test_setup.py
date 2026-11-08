@@ -563,6 +563,72 @@ class OutputTestTests(Base):
         self.env.out("conf_set monitor generic_15; conf_set connector VGA-1")
         self.assertNotEqual(self.env.run("video_link_refresh").returncode, 0)
 
+    def test_displayport_converter_that_passed_the_grid_stays_native(self):
+        # O conversor que mostrou o grid nativo (converter_low_dotclock=) fica
+        # como era antes do update 60: modos nativos, com o degrau visto.
+        (self.env.etc / "fliperos.conf").write_text("converter_low_dotclock=DP-1\nconverter_low_dotclock_min=0\n")
+        conf, ini = self.saved("card0-DP-1", "sr", "generic_15")
+        self.assertIn("detection=sr\n", conf)
+        self.assertIn("kernel_video=video=DP-1:640x480iS\n", conf)
+        self.assertRegex(ini, r"(?m)^\s*dotclock_min\s+0$")
+        self.env.out("conf_set converter_low_dotclock_min 7.7")
+        conf, ini = self.saved("card0-DP-2", "sr", "generic_15")
+        # Outra DisplayPort: o conversor dela nao passou.
+        self.assertIn("detection=r\n", conf)
+        self.env.out("video_save_result card0-DP-1 sl generic_15")
+        self.assertIn("detection=sl\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertRegex((self.env.etc / "switchres.ini").read_text(), r"(?m)^\s*dotclock_min\s+7\.7$")
+        # HDMI nunca: o link TMDS nao desce de 25 MHz.
+        self.env.out("conf_set converter_low_dotclock HDMI-A-1")
+        conf, _ = self.saved("card0-HDMI-A-1", "sr", "generic_15")
+        self.assertIn("detection=r\n", conf)
+
+    def test_grid_result_on_displayport_belongs_to_the_converter(self):
+        self.env.out("video_low_dotclock_set card0 1 10.3 DP-1")
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("converter_low_dotclock=DP-1\nconverter_low_dotclock_min=10.3\n", conf)
+        self.assertNotIn("low_dotclock_pci", conf)
+        self.assertEqual(self.env.out("video_low_dotclock_min card0 DP-1").strip(), "10.3")
+        self.assertEqual(self.env.out("video_low_dotclock_min card0 VGA-1").strip(), "0")
+        self.env.out("conf_set card card0; conf_set monitor generic_15; conf_set connector DP-1")
+        # Os modos nativos a partir do degrau (10,3 MHz: 640 de largura sim, 384 nao).
+        self.assertIn("640x240S|", self.env.out("video_resolution_choices"))
+        self.assertNotIn("384x288S|", self.env.out("video_resolution_choices"))
+        self.env.out("video_low_dotclock_set card0 0 '' DP-1")
+        self.assertNotIn("converter_low_dotclock", (self.env.etc / "fliperos.conf").read_text())
+        # Onde o grid decide: a DisplayPort de uma placa de dotclock baixo, a
+        # analogica de uma NVIDIA; nao o HDMI, nem a Intel.
+        for card, conn, rc in (("card0", "DP-1", 0), ("card0", "HDMI-A-1", 1), ("card0", "VGA-1", 1), ("card1", "DP-1", 1)):
+            self.assertEqual(self.env.run("drm_output_low_dotclock_testable %s %s" % (card, conn)).returncode, rc,
+                             (card, conn))
+
+    def test_converter_grid_is_asked_once_after_the_update(self):
+        self.env.connector("card0-DP-1", "connected")
+        (self.env.etc / "fliperos.conf").write_text("connector=DP-1\nmonitor=generic_15\n")
+        self.assertEqual(self.env.run("video_lowdot_ask_mark").returncode, 0)
+        self.assertIn("lowdot_ask=1\n", (self.env.etc / "fliperos.conf").read_text())
+        script = ("source %s/screens/output-test.sh; ui_yesno() { echo \"ask $2\"; return 0; }; speak() { :; }; "
+                  "boot_apply() { echo boot_apply; }; "
+                  "screen_low_dotclock_retest() { echo retest; VIDEO_CHANGED=1; }; screen_converter_lowdot_ask") % SETUP
+        out = self.env.out(script)
+        self.assertIn("ask This CRT is on a DisplayPort output", out)
+        self.assertIn("retest\nboot_apply", out)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertNotIn("lowdot_ask=", conf)
+        self.assertIn("lowdot_asked=1\n", conf)
+        # Uma vez so; e nunca sem DisplayPort, num monitor de 31 kHz ou com o
+        # conversor ja testado.
+        self.assertNotEqual(self.env.run("video_lowdot_ask_mark").returncode, 0)
+        self.assertNotIn("ask", self.env.out(script))
+        for conf in ("connector=VGA-1\nmonitor=generic_15\n", "connector=DP-1\nmonitor=arcade_31\n",
+                     "connector=DP-1\nmonitor=generic_15\nconverter_low_dotclock=DP-1\n"):
+            (self.env.etc / "fliperos.conf").write_text(conf)
+            self.assertNotEqual(self.env.run("video_lowdot_ask_mark").returncode, 0, conf)
+        tty1 = (ROOT / "config/fliperos-tty1").read_text()
+        self.assertIn("'^(hw_changed|hw_retest|lowdot_ask)='", tty1)
+        self.assertIn("video_lowdot_ask_mark &&", (ROOT / "tools/cabinet-update.sh").read_text())
+        self.assertIn("  screen_converter_lowdot_ask\n", (SETUP / "screens/output-test.sh").read_text())
+
     def test_update_redoes_converter_outputs_before_boot_apply(self):
         update = (ROOT / "tools/cabinet-update.sh").read_text()
         self.assertLess(update.index("if video_link_refresh; then"), update.index("  boot_apply ||"))
@@ -775,7 +841,8 @@ class NouveauLowDotclockTests(Base):
 
     def test_grid_is_wired_to_the_output_test_and_video_setup(self):
         test = (ROOT / "fliperos-setup/screens/output-test.sh").read_text()
-        self.assertIn('drm_card_low_dotclock_testable "$card"', test)
+        self.assertIn('if drm_output_low_dotclock_testable "$card" "$name"; then', test)
+        self.assertIn('screen_low_dotclock_test "$card" "$(video_suggested_monitor)" "$name"', test)
         self.assertIn("switchres \"${2:-320}\" 240 60 -s -m \"$1\" --dotclock_min 0 -l grid",
                       (ROOT / "fliperos-setup/lib/video.sh").read_text())
         self.assertIn("lowdot) screen_low_dotclock_retest ;;",

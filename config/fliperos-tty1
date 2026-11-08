@@ -182,7 +182,8 @@ if [[ ${1:-} != --menu ]]; then
     # Placa de video trocada (o boot gravou um modo seguro) ou o teste pedido no
     # Video Setup: o teste de saidas antes de tudo, tambem no modo jogo (com o
     # video errado o jogo nao adianta). Sem nada a fazer, sai em silencio.
-    if grep -q -E '^(hw_changed|hw_retest)=' "$ETC/fliperos.conf" 2> /dev/null || hw_maybe_changed; then
+    # lowdot_ask: o grid do conversor de uma DisplayPort, perguntado uma vez.
+    if grep -q -E '^(hw_changed|hw_retest|lowdot_ask)=' "$ETC/fliperos.conf" 2> /dev/null || hw_maybe_changed; then
       splash_off
       sudo /usr/local/bin/fliperos-setup --hw-check
     fi

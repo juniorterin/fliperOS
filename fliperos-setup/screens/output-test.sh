@@ -54,8 +54,10 @@ screen_output_test() {
         OT_FORCED=$VT_FORCED
         OT_EDID_SIZE=$VT_EDID_SIZE
         speak_stop
-        if drm_is_analog "$name" && drm_card_low_dotclock_testable "$card"; then
-          screen_low_dotclock_test "$card" "$(video_suggested_monitor)"
+        # O grid nativo: na analogica de uma NVIDIA (o PLL dela) e na
+        # DisplayPort (o conversor tem o seu piso).
+        if drm_output_low_dotclock_testable "$card" "$name"; then
+          screen_low_dotclock_test "$card" "$(video_suggested_monitor)" "$name"
         fi
         OT_FLAGS=$(video_classify "$c")
         log_info "teste de saidas: $name confirmada (flags $OT_FLAGS)"
@@ -74,18 +76,20 @@ screen_output_test() {
   return 1
 }
 
-# screen_low_dotclock_test CARD MONITOR: uma NVIDIA (nouveau) com saida
-# analogica pode gerar os dotclocks de 15 kHz com o patch 10 do kernel, mas
-# cada PLL tem o seu piso. O grid sobe pelos degraus do LOWDOT_STEPS (320x240
-# a 6,5 MHz, depois 384, 512 e 640 de largura): o primeiro visto fica com as
-# resolucoes nativas a partir dele; quem nao viu nenhum (ou nao respondeu),
-# com a super resolucao. So num monitor de 15 kHz: e o unico que recebe esses
-# modos. Status 0 = a placa passou.
+# screen_low_dotclock_test CARD MONITOR [SAIDA]: uma NVIDIA (nouveau) com
+# saida analogica pode gerar os dotclocks de 15 kHz com o patch 10 do kernel,
+# mas cada PLL tem o seu piso; numa DisplayPort quem tem o piso e o conversor.
+# O grid sobe pelos degraus do LOWDOT_STEPS (320x240 a 6,5 MHz, depois 384,
+# 512 e 640 de largura): o primeiro visto fica com as resolucoes nativas a
+# partir dele; quem nao viu nenhum (ou nao respondeu), com a super resolucao.
+# So num monitor de 15 kHz: e o unico que recebe esses modos. Status 0 = a
+# placa (ou o conversor) passou.
 screen_low_dotclock_test() {
-  local card=$1 monitor=$2 title="Low resolution test" gpu step width min mhz first=1
+  local card=$1 monitor=$2 conn=${3:-} title="Low resolution test" gpu step width min mhz first=1
   [[ $(monitor_frequency "$monitor" 2> /dev/null) == 15k ]] || return 1
   have switchres || return 1
   gpu=$(drm_card_name "$card")
+  [[ $conn == DP-* ]] && gpu="The converter on $conn"
   speak "Testing native low resolutions. A grid will be shown for ${LOWDOT_TEST_SECONDS:-20} seconds. Press Enter if you can see it, or wait."
   ui_timed_confirm "$title" 8 "Start now" \
     "$gpu may be able to show native 15 kHz resolutions (320x240)." "" \
@@ -112,12 +116,31 @@ screen_low_dotclock_test() {
     ui_flush_input
     speak "Did you see the grid?"
     if ui_yesno "$title" "Did you see the ${width}x240 test grid ($mhz MHz) clearly?" no; then
-      video_low_dotclock_set "$card" 1 "$min"
+      video_low_dotclock_set "$card" 1 "$min" "$conn"
       return 0
     fi
   done
-  video_low_dotclock_set "$card" 0
+  video_low_dotclock_set "$card" 0 "" "$conn"
   return 1
+}
+
+# screen_converter_lowdot_ask (no --hw-check do boot, com lowdot_ask= marcado
+# por video_lowdot_ask_mark): um CRT de 15 kHz numa DisplayPort passou para a
+# super resolucao no update 60; um conversor que mostra os modos nativos
+# volta a eles pelo grid. Pergunta uma vez.
+screen_converter_lowdot_ask() {
+  conf_get lowdot_ask > /dev/null 2>&1 || return 0
+  conf_unset lowdot_ask
+  conf_set lowdot_asked 1
+  speak "Test native low resolutions on this converter?"
+  ui_yesno "Low resolution test" \
+    "This CRT is on a DisplayPort output, through a converter. FliperOS now uses super resolutions there: they work with every converter, with the same picture. Some converters also show native 15 kHz modes. Test this one now? It takes about a minute." \
+    yes || return 0
+  VIDEO_CHANGED=0
+  screen_low_dotclock_retest
+  # O dotclock_min vale no proximo jogo; o modo de boot, depois de reiniciar.
+  ((VIDEO_CHANGED)) && boot_apply
+  return 0
 }
 
 # screen_testing_results mostra o que o teste achou, como o "Testing
@@ -145,17 +168,17 @@ screen_testing_results() {
     freq="$(printf '%.2f' "$khz") kHz"
   fi
 
-  if drm_is_converter_link "$name" && [[ $base != *l ]]; then
+  if drm_is_converter_link "$name" && ! drm_output_low_dotclock "$card" "$name" && [[ $base != *l ]]; then
     lowres=$(ui_no "NO (super resolutions)")
-    notes+=("HDMI, DVI-D and DisplayPort reach a CRT through a converter, which doesn't go below about 25 MHz: super resolutions will be used, with the same picture.")
-  elif drm_is_converter_link "$name"; then
+    notes+=("HDMI, DVI-D and DisplayPort reach a CRT through a converter, and most converters don't go below about 25 MHz: super resolutions will be used, with the same picture.")
+  elif drm_is_converter_link "$name" && ! drm_output_low_dotclock "$card" "$name"; then
     # EDID de fabrica: um LCD, ou o conversor de um CRT. O monitor escolhido
     # a seguir decide.
     lowres=$(ui_no "NO on a CRT (super resolutions)")
-    notes+=("On a CRT, this output goes through a converter, which doesn't go below about 25 MHz: super resolutions will be used, with the same picture.")
-  elif [[ $flags == s* && $(video_low_dotclock_min "$card") != 0 ]]; then
-    lowres=$(ui_yes "YES (from $(video_low_dotclock_min "$card") MHz)")
-    notes+=("Native 15 kHz resolutions will be used from $(video_low_dotclock_min "$card") MHz. Narrower games are shown at double width, with the same picture on a CRT.")
+    notes+=("On a CRT, this output goes through a converter, and most converters don't go below about 25 MHz: super resolutions will be used, with the same picture.")
+  elif [[ $flags == s* && $(video_low_dotclock_min "$card" "$name") != 0 ]]; then
+    lowres=$(ui_yes "YES (from $(video_low_dotclock_min "$card" "$name") MHz)")
+    notes+=("Native 15 kHz resolutions will be used from $(video_low_dotclock_min "$card" "$name") MHz. Narrower games are shown at double width, with the same picture on a CRT.")
   elif [[ $flags == s* ]]; then
     lowres=$(ui_yes YES)
     notes+=("Your video card supports low dotclocks: native 15 kHz resolutions will be used.")
@@ -290,6 +313,8 @@ screen_hw_retest_apply() {
 screen_hw_change_check() {
   local change="" old new asked text key id
   is_installed && ! is_live || return 0
+  # O conversor de uma DisplayPort ainda sem o grid (video_lowdot_ask_mark).
+  screen_converter_lowdot_ask
   if conf_get hw_retest > /dev/null 2>&1; then
     text="You asked to test the video outputs again. Run the test now? It takes about a minute."
   else

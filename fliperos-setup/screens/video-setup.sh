@@ -159,32 +159,34 @@ screen_resolution() {
   VIDEO_CHANGED=1
 }
 
-# screen_low_dotclock_retest repete o grid de dotclock baixo da NVIDIA (o
-# teste de saidas o faz uma vez) e, se o resultado mudou, refaz o modo de
-# boot, o Switchres, o MAME e o RetroArch com ele.
+# screen_low_dotclock_retest repete o grid de dotclock baixo da NVIDIA ou do
+# conversor de uma DisplayPort (o teste de saidas o faz uma vez) e, se o
+# resultado mudou, refaz o modo de boot, o Switchres, o MAME e o RetroArch
+# com ele.
 screen_low_dotclock_retest() {
-  local title="Low resolution test" card conn monitor before=0 after=0
-  card=$(conf_get card 2> /dev/null) || return 0
+  local title="Low resolution test" card conn monitor before=0 after=0 what="card"
+  card=$(video_conf_card) || return 0
   conn=$(conf_get connector 2> /dev/null) || return 0
   monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
+  [[ $conn == DP-* ]] && what="converter"
   if ((SETUP_REMOTE == 1)) || [[ -n ${DISPLAY:-} ]]; then
     ui_msg "$title" "The grid opens on the cabinet screen, from the FliperOS menu (not over SSH or inside the desktop)."
     return 0
   fi
-  if ! drm_is_analog "$conn" || [[ $(monitor_frequency "$monitor" 2> /dev/null) != 15k ]]; then
-    ui_msg "$title" "The test needs an analog output (VGA, DVI-I) and a 15 kHz monitor." "" \
+  if ! drm_output_low_dotclock_testable "$card" "$conn" || [[ $(monitor_frequency "$monitor" 2> /dev/null) != 15k ]]; then
+    ui_msg "$title" "The test needs a 15 kHz monitor on an analog output (VGA, DVI-I) of an NVIDIA card, or on a DisplayPort output." "" \
       "This output ($conn, $(monitor_label "$monitor")) keeps the super resolutions."
     return 0
   fi
-  drm_card_low_dotclock "$card" && before=1:$(video_low_dotclock_min "$card")
-  screen_low_dotclock_test "$card" "$monitor" && after=1:$(video_low_dotclock_min "$card")
+  drm_output_low_dotclock "$card" "$conn" && before=1:$(video_low_dotclock_min "$card" "$conn")
+  screen_low_dotclock_test "$card" "$monitor" "$conn" && after=1:$(video_low_dotclock_min "$card" "$conn")
   if [[ $after == 1:0 ]]; then
-    ui_msg "$title" "$(ui_yes "Native low resolutions will be used on this card.")"
+    ui_msg "$title" "$(ui_yes "Native low resolutions will be used on this $what.")"
   elif [[ $after == 1:* ]]; then
     ui_msg "$title" "$(ui_yes "Native low resolutions will be used from ${after#1:} MHz.")" "" \
       "Narrower games are shown at double width, with the same picture on a CRT."
   else
-    ui_msg "$title" "Super resolutions will be used on this card."
+    ui_msg "$title" "Super resolutions will be used on this $what."
   fi
   [[ $before == "$after" ]] && return 0
   if ! video_low_dotclock_apply; then
@@ -735,10 +737,15 @@ screen_video_setup() {
   elif nvidia_card > /dev/null; then
     driver=("driver|Video driver|nouveau or NVIDIA's own driver (native 15 kHz, 3D speed).")
   fi
-  # O grid de dotclock baixo so com uma NVIDIA (nouveau) na saida principal.
-  local lowdot=()
-  drm_card_low_dotclock_testable "$(conf_get card 2> /dev/null)" 2> /dev/null &&
+  # O grid de dotclock baixo com uma NVIDIA (nouveau) na saida principal, ou
+  # numa DisplayPort (o conversor decide).
+  local lowdot=() lowconn
+  lowconn=$(conf_get connector 2> /dev/null) || lowconn=""
+  if [[ $lowconn == DP-* ]] && drm_output_low_dotclock_testable "$(video_conf_card)" "$lowconn" 2> /dev/null; then
+    lowdot=("lowdot|Low resolutions|Test if the DisplayPort converter shows native 15 kHz modes.")
+  elif drm_card_low_dotclock_testable "$(conf_get card 2> /dev/null)" 2> /dev/null; then
     lowdot=("lowdot|Low resolutions|NVIDIA: test if this card shows native 15 kHz modes.")
+  fi
   # O ATOM-15 so numa placa AMD, e so no sistema instalado.
   local firmware=()
   is_installed && ! is_live && atom15_card > /dev/null 2>&1 &&

@@ -170,9 +170,16 @@ drm_is_converter_link() {
 }
 
 # drm_output_low_dotclock CARD NOME: a placa gera dotclock baixo e a saida o
-# deixa passar.
+# deixa passar. Numa DisplayPort, so com o conversor que mostrou o grid
+# nativo (converter_low_dotclock= no fliperos.conf, gravado pelo teste de
+# saidas ou pelo Video Setup): ha conversor que mostra tudo de 4,5 MHz para
+# cima. HDMI e DVI-D nunca.
 drm_output_low_dotclock() {
-  ! drm_is_converter_link "$2" && drm_card_low_dotclock "$1"
+  if drm_is_converter_link "$2"; then
+    [[ $2 == DP-* && $(conf_get converter_low_dotclock 2> /dev/null) == "$2" ]] && drm_card_low_dotclock "$1"
+    return
+  fi
+  drm_card_low_dotclock "$1"
 }
 
 # drm_card_low_dotclock_testable CARD: placa em que o grid de dotclock baixo
@@ -182,6 +189,17 @@ drm_output_low_dotclock() {
 # sao os do Xorg.
 drm_card_low_dotclock_testable() {
   [[ $(drm_card_driver "$1") == nouveau ]]
+}
+
+# drm_output_low_dotclock_testable CARD NOME: saida em que o grid decide o
+# dotclock baixo: a analogica de uma NVIDIA (nouveau) e a DisplayPort de uma
+# placa que o gera (o conversor decide).
+drm_output_low_dotclock_testable() {
+  if [[ $2 == DP-* ]]; then
+    drm_card_low_dotclock "$1"
+  else
+    drm_is_analog "$2" && drm_card_low_dotclock_testable "$1"
+  fi
 }
 
 # drm_card_is_apu CARD usa o mesmo sinal do gatools: o lspci -v mostra

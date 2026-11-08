@@ -295,18 +295,13 @@ video_link_edid() {
 # de 25 kHz) refeito com as de agora. Para o update; o boot_apply segue.
 # Status 0 quando regravou.
 video_link_refresh() {
-  local card="" conn flags monitor params c
+  local card conn flags monitor params
   conn=$(conf_get connector 2> /dev/null) || return 1
   flags=$(conf_get detection 2> /dev/null) || return 1
   monitor=$(conf_get monitor 2> /dev/null) || return 1
   drm_is_converter_link "$conn" || return 1
   [[ $monitor != lcd ]] || return 1
-  # A placa de agora, nao a do fliperos.conf: a midia de instalacao pode ter
-  # numerado as placas de outro jeito (card1 la, card0 no disco).
-  for c in $(drm_connectors); do
-    [[ $(drm_name "$c") == "$conn" ]] && card=$(drm_card "$c")
-  done
-  [[ -n $card ]] || return 1
+  card=$(video_conf_card) || return 1
   params=$(video_kernel_params "$conn" "$(video_output_flags "$card" "$conn" "$flags" "$monitor")" "$monitor") ||
     return 1
   if [[ $(video_output_flags "$card" "$conn" "$flags" "$monitor") == "$flags" &&
@@ -315,6 +310,24 @@ video_link_refresh() {
   fi
   log_info "conversor: $conn com $monitor refeito (flags $flags)"
   video_save_result "$card-$conn" "$flags" "$monitor"
+}
+
+# video_lowdot_ask_mark: um CRT de 15 kHz numa DisplayPort de uma placa de
+# dotclock baixo, com o conversor ainda sem teste, ganha a pergunta do grid
+# no proximo boot (lowdot_ask=, screen_converter_lowdot_ask): ate o update 60
+# ela ficava nos modos nativos, e ha conversor que os mostra. Uma vez so
+# (lowdot_asked=). Status 0 quando marcou.
+video_lowdot_ask_mark() {
+  local conn monitor card
+  conn=$(conf_get connector 2> /dev/null) || return 1
+  monitor=$(conf_get monitor 2> /dev/null) || return 1
+  [[ $conn == DP-* && $(monitor_frequency "$monitor" 2> /dev/null) == 15k ]] || return 1
+  conf_get lowdot_asked > /dev/null 2>&1 && return 1
+  conf_get lowdot_ask > /dev/null 2>&1 && return 1
+  [[ -z $(conf_get converter_low_dotclock 2> /dev/null) ]] || return 1
+  card=$(video_conf_card) || return 1
+  drm_card_low_dotclock "$card" || return 1
+  conf_set lowdot_ask 1
 }
 
 # video_boot_mode_missing: o fliperos.conf gravado antes de o "l" ganhar um
@@ -395,7 +408,8 @@ video_mame_monitor() {
 # Chaves do fliperos.conf que dependem da placa e da saida: e o que o
 # Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
 # e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.
-VIDEO_CONF_KEYS="gpu gpu_id driver card connector detection forced low_dotclock_pci low_dotclock_min kernel_video boot_resolution fb_map
+VIDEO_CONF_KEYS="gpu gpu_id driver card connector detection forced low_dotclock_pci low_dotclock_min
+  converter_low_dotclock converter_low_dotclock_min kernel_video boot_resolution fb_map
   monitor frequency geometry custom_width custom_height custom_refresh screens"
 VIDEO_CONF_KEEP="orientation"
 
@@ -453,11 +467,23 @@ video_low_dotclock_kernel_log() {
   return 0
 }
 
-# video_low_dotclock_set CARD 1|0 [MINIMO] grava a placa que passou no grid
-# e o dotclock_min do degrau visto (0: o 320x240 nativo), ou a esquece (a
-# outra placa que estava gravada tambem: so vale uma).
+# video_low_dotclock_set CARD 1|0 [MINIMO] [SAIDA] grava a placa que passou
+# no grid e o dotclock_min do degrau visto (0: o 320x240 nativo), ou a
+# esquece (a outra placa que estava gravada tambem: so vale uma). Numa
+# DisplayPort quem passa e o conversor da saida (converter_low_dotclock=).
 video_low_dotclock_set() {
   local pci
+  if [[ ${4:-} == DP-* ]]; then
+    if [[ $2 == 1 ]]; then
+      conf_set converter_low_dotclock "$4"
+      conf_set converter_low_dotclock_min "${3:-0}"
+    else
+      conf_unset converter_low_dotclock
+      conf_unset converter_low_dotclock_min
+    fi
+    log_info "dotclock baixo: conversor em $4 -> $2${3:+ (dotclock_min $3)}"
+    return 0
+  fi
   if [[ $2 == 1 ]]; then
     pci=$(drm_card_pci "$1") || return 1
     conf_set low_dotclock_pci "$pci"
@@ -469,11 +495,17 @@ video_low_dotclock_set() {
   log_info "dotclock baixo: $1 -> $2${3:+ (dotclock_min $3)}"
 }
 
-# video_low_dotclock_min CARD: o dotclock_min que a placa precisa (MHz). 0
-# nas que geram tudo (radeon, amdgpu, a NVIDIA que mostrou o 320x240); o
-# degrau do teste numa NVIDIA que so mostrou um modo mais largo.
+# video_low_dotclock_min CARD [SAIDA]: o dotclock_min que a placa precisa
+# (MHz). 0 nas que geram tudo (radeon, amdgpu, a NVIDIA que mostrou o
+# 320x240); o degrau do teste numa NVIDIA, ou no conversor de uma
+# DisplayPort, que so mostrou um modo mais largo.
 video_low_dotclock_min() {
   local min=0
+  if [[ ${2:-} == DP-* ]] && drm_output_low_dotclock "$1" "$2"; then
+    min=$(conf_get converter_low_dotclock_min 2> /dev/null) || min=0
+    printf '%s\n' "${min:-0}"
+    return 0
+  fi
   case $(drm_card_driver "$1" 2> /dev/null) in
     nouveau | nvidia)
       if drm_card_low_dotclock "$1"; then
@@ -501,7 +533,7 @@ video_dotclock_min_ours() {
 # dotclock_min do Switchres e do MAME e a largura do RetroArch.
 video_low_dotclock_apply() {
   local card conn flags monitor
-  card=$(conf_get card 2> /dev/null) || return 1
+  card=$(video_conf_card) || return 1
   conn=$(conf_get connector 2> /dev/null) || return 1
   flags=$(conf_get detection 2> /dev/null) || return 1
   monitor=$(conf_get monitor 2> /dev/null) || monitor=generic_15
@@ -513,15 +545,32 @@ video_low_dotclock_apply() {
 # video_output_flags CARD NOME FLAGS MONITOR: o resultado do teste para esta
 # saida. Um CRT em HDMI, DVI-D ou DisplayPort (por um conversor ativo) nao
 # recebe dotclock baixo, mesmo de uma placa que o gera: sem o "s", ele fica
-# na super resolucao (drm_is_converter_link). Num LCD o modo vem do EDID
-# dele, e o "s" fica como a placa manda.
+# na super resolucao (drm_is_converter_link). O conversor de uma DisplayPort
+# que mostrou o grid nativo fica com ele (drm_output_low_dotclock). Num LCD o
+# modo vem do EDID dele, e o "s" fica como a placa manda.
 video_output_flags() {
   local card=$1 name=$2 flags=$3 monitor=$4
   if drm_is_converter_link "$name"; then
     flags=${flags#s}
-    [[ $monitor == lcd ]] && drm_card_low_dotclock "$card" && flags=s$flags
+    if [[ $monitor == lcd ]]; then
+      drm_card_low_dotclock "$card" && flags=s$flags
+    else
+      drm_output_low_dotclock "$card" "$name" && flags=s$flags
+    fi
   fi
   printf '%s\n' "$flags"
+}
+
+# video_conf_card imprime a placa da saida gravada como ela esta agora: a
+# midia de instalacao pode ter numerado as placas de outro jeito (card1 la,
+# card0 no disco). Sem a saida no sysfs, a do fliperos.conf.
+video_conf_card() {
+  local conn c
+  conn=$(conf_get connector 2> /dev/null) || conn=""
+  for c in $(drm_connectors); do
+    [[ -n $conn && $(drm_name "$c") == "$conn" ]] && { drm_card "$c"; return 0; }
+  done
+  conf_get card 2> /dev/null
 }
 
 # video_save_result CONECTOR FLAGS MONITOR grava o resultado validado do
@@ -566,7 +615,7 @@ video_save_result() {
     # O minimo da placa: 0, ou o degrau do grid numa NVIDIA. Troca o que o
     # Setup gravou antes (o 25.0 de um teste sem o grid, outro degrau); um
     # valor proprio da pessoa fica.
-    min=$(video_low_dotclock_min "$card")
+    min=$(video_low_dotclock_min "$card" "$name")
     video_dotclock_min_ours "$(ini_get "$SWITCHRES_INI" dotclock_min 2> /dev/null)" &&
       ini_set "$SWITCHRES_INI" dotclock_min "$min"
     [[ -f $MAME_INI ]] && video_dotclock_min_ours "$(ini_get "$MAME_INI" dotclock_min 2> /dev/null)" &&
@@ -672,10 +721,13 @@ video_hw_boot_check() {
   [[ $monitor == lcd ]] && return 0
   flags=e
   drm_card_low_dotclock "$card" && flags=se
-  # O que era da placa antiga: os monitores extras e o degrau do grid da NVIDIA.
+  # O que era da placa antiga: os monitores extras e o degrau do grid da
+  # NVIDIA ou do conversor.
   conf_unset screens
   conf_unset low_dotclock_pci
   conf_unset low_dotclock_min
+  conf_unset converter_low_dotclock
+  conf_unset converter_low_dotclock_min
   video_save_result "$conn" "$flags" "$monitor" || return 1
   xorg_generate
   boot_apply || return 1
@@ -845,7 +897,7 @@ video_resolution_choices() {
   card=$(conf_get card) || card=""
   if [[ -n $card ]]; then
     drm_output_low_dotclock "$card" "$(conf_get connector 2> /dev/null)" || low=0
-    min=$(video_low_dotclock_min "$card")
+    min=$(video_low_dotclock_min "$card" "$(conf_get connector 2> /dev/null)")
     # O i915 nao tem o 240p progressivo largo na tabela do kernel: ele vem de
     # um EDID do FliperOS (super240_edid).
     [[ $freq == 15k && $(drm_card_driver "$card") == i915 ]] && edid240=1
