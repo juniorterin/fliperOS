@@ -1460,6 +1460,106 @@ class ScanlineTests(Base):
                 self.assertIn(key, source, layer)
 
 
+class WebVideoSettingsTests(Base):
+    """O monitor e a resolucao de boot pelo painel web: com outro monitor o
+    tubo fica sem imagem, e o painel e o caminho de volta (lib/system.sh,
+    video_previous_restore em lib/video.sh)."""
+
+    def setUp(self):
+        super().setUp()
+        self.env.card("card0", "radeon")
+        (self.env.etc / "fliperos.conf").write_text(
+            "connector=VGA-1\ncard=card0\nmonitor=generic_15\nforced=1\ndetection=se\n"
+            "kernel_video=video=VGA-1:640x480iSe\nboot_resolution=640x480iS\n")
+        self.envs = {"COLOR_BIN": str(self.env.dir / "none"), "EDID_DIR": str(self.env.dir / "edid"),
+                     "SETUP_DIR": str(SETUP)}
+
+    def rows(self):
+        out = self.env.out("settings_list", self.envs)
+        return {r.split("|")[0]: r.split("|") for r in out.splitlines()}
+
+    def conf(self):
+        return (self.env.etc / "fliperos.conf").read_text()
+
+    def test_monitor_change_and_back(self):
+        rows = self.rows()
+        self.assertEqual(rows["monitor"][1:5], ["Video", "Monitor type", "choice", "generic_15"])
+        self.assertIn("d9200=Wells Gardner D9200", rows["monitor"][5].split(";"))
+        self.assertEqual(rows["resolution"][1:5], ["Video", "Boot resolution", "choice", "640x480iS"])
+        self.assertIn("720x480iS", [o.split("=")[0] for o in rows["resolution"][5].split(";")])
+        self.assertNotIn("video.previous", rows)
+        # Um monitor de 31 kHz: o modo de boot dele, e o de antes guardado.
+        self.env.out("settings_set monitor arcade_31", self.envs)
+        conf = self.conf()
+        for line in ("monitor=arcade_31", "frequency=31k", "kernel_video=video=VGA-1:640x480Se", "boot_resolution=640x480S"):
+            self.assertIn(line + "\n", conf)
+        self.assertIn("monitor=generic_15\n", (self.env.etc / "video-previous.conf").read_text())
+        rows = self.rows()
+        self.assertEqual([o.split("=")[0] for o in rows["resolution"][5].split(";")], ["640x480S"])
+        self.assertEqual(rows["video.previous"][1:4], ["Video", "Back to the previous monitor", "action"])
+        self.assertIn("Back to Generic 15.7 kHz, 640x480i:", rows["video.previous"][6])
+        # A volta: o monitor, o modo de boot e o Switchres de antes; desfazer de
+        # novo volta ao de 31 kHz.
+        self.env.out("settings_set video.previous 1", self.envs)
+        conf = self.conf()
+        for line in ("monitor=generic_15", "frequency=15k", "kernel_video=video=VGA-1:640x480iSe", "boot_resolution=640x480iS"):
+            self.assertIn(line + "\n", conf)
+        self.assertEqual(self.env.out('ini_get "$SWITCHRES_INI" monitor').strip(), "generic_15")
+        self.assertIn("monitor=arcade_31\n", (self.env.etc / "video-previous.conf").read_text())
+        # A resolucao: so um modo da lista do monitor de agora.
+        self.env.out("settings_set resolution 720x480iS", self.envs)
+        self.assertIn("kernel_video=video=VGA-1:720x480iSe\n", self.conf())
+        self.assertIn("boot_resolution=640x480iS\n", (self.env.etc / "video-previous.conf").read_text())
+        for bad in ("monitor nope", "monitor custom", "resolution 640x480S", "resolution 1x1", "video.nope 1"):
+            self.assertEqual(self.env.run("settings_set " + bad, self.envs).returncode, 2, bad)
+
+    def test_custom_monitor_and_unchanged_choice(self):
+        # O mesmo monitor de novo nao mexe em nada nem guarda um "antes".
+        self.env.out("settings_set monitor generic_15; settings_set resolution 640x480iS", self.envs)
+        self.assertFalse((self.env.etc / "video-previous.conf").exists())
+        # Com o custom do Geometry: ele e o valor; o preset de base o desfaz, e
+        # a volta traz o crt_range de novo.
+        rng = "15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576"
+        self.env.out("geometry_apply %s" % rng, self.envs)
+        rows = self.rows()
+        self.assertEqual(rows["monitor"][4], "custom")
+        self.assertTrue(rows["monitor"][5].startswith("custom=Custom crt_range (on Generic 15.7 kHz);"))
+        self.env.out("settings_set monitor custom; settings_set monitor generic_15", self.envs)
+        self.assertNotIn("geometry=", self.conf())
+        self.env.out("settings_set video.previous 1", self.envs)
+        self.assertIn("geometry=%s\n" % rng, self.conf())
+        self.assertEqual(self.env.out('ini_get "$SWITCHRES_INI" monitor').strip(), "custom")
+        self.assertEqual(self.env.out('ini_get "$SWITCHRES_INI" crt_range0').strip(), rng)
+
+    def test_video_setup_keeps_the_previous_video(self):
+        # Uma troca no tubo que deixa o gabinete sem imagem tambem se desfaz
+        # pelo painel.
+        screen = (SETUP / "screens" / "video-setup.sh").read_text()
+        self.assertIn("before=$(video_snapshot)", screen)
+        self.assertLess(screen.index('video_snapshot_keep "$before"'), screen.index("    xorg_generate\n    if ! boot_apply"))
+        web = (ROOT / "config" / "fliperos-web").read_text()
+        self.assertIn('SLOW_SETTINGS = ("orientation", "splash", "mm_games", "monitor", "resolution", "video.previous")', web)
+
+    def test_cabinet_name(self):
+        self.assertEqual(self.rows()["cabinet_name"][1:4], ["System", "Cabinet name", "text"])
+        self.env.out("settings_set cabinet_name ' Sala 2 '", self.envs)
+        self.assertIn("cabinet_name=SALA 2\n", self.conf())
+        self.assertEqual(self.rows()["cabinet_name"][4], "SALA 2")
+        self.assertEqual(self.env.run("settings_set cabinet_name 'NOME LONGO DEMAIS'", self.envs).returncode, 2)
+        self.env.out("settings_set cabinet_name ''", self.envs)
+        self.assertNotIn("cabinet_name=", self.conf())
+
+    def test_groups_follow_the_setup(self):
+        out = self.env.out("settings_list", self.envs)
+        groups = list(dict.fromkeys(r.split("|")[1] for r in out.splitlines()))
+        self.assertEqual(groups[0], "Video")
+        self.assertEqual(groups[-1], "Power")
+        self.assertLess(groups.index("Audio"), groups.index("System"))
+        rows = {r.split("|")[0]: r.split("|")[1] for r in out.splitlines()}
+        self.assertEqual((rows["menu_sounds"], rows["splash"] if "splash" in rows else "System", rows["marquee_overlay"]),
+                         ("Audio", "System", "Live screen"))
+
+
 class SettingsCliTests(Base):
     """fliperos-setup --settings / --setting (lib/system.sh): os ajustes que
     o painel web muda."""
@@ -1472,8 +1572,8 @@ class SettingsCliTests(Base):
         for key in ("launcher", "latency", "debug", "menu_sounds", "mode480.flycast", "deflicker.flycast",
                     "color.gamma", "color.hue"):
             self.assertIn(key, keys)
-        # Nada que possa deixar o gabinete sem imagem.
-        self.assertFalse([k for k in keys if k in ("monitor", "resolution", "amd_driver")])
+        # O driver de video fica no Setup (a troca pede confirmacao na tela).
+        self.assertNotIn("amd_driver", keys)
         gamma = rows[keys.index("color.gamma")]
         # O passo vai junto (o slider do painel anda de 5 em 5 no gama).
         self.assertEqual((gamma[1], gamma[3], gamma[5]), ("Colour", "number", "50..200:5"))
@@ -1492,7 +1592,7 @@ class SettingsCliTests(Base):
         self.env.out("color_range_set limited; settings_set color.reset 1", env)
         self.assertNotIn("color_gamma", (self.env.etc / "fliperos.conf").read_text())
         self.assertNotIn("color_range", (self.env.etc / "fliperos.conf").read_text())
-        for bad in ("monitor arcade_15", "latency fast", "mode480.desktop 240p", "deflicker.flycast blur",
+        for bad in ("monitor nope", "latency fast", "mode480.desktop 240p", "deflicker.flycast blur",
                     "service.nope boot", "color.gamma abc", "launcher nothere"):
             self.assertEqual(self.env.run("settings_set " + bad, env).returncode, 2, bad)
         self.assertIn('settings_set "${2:-}" "${3:-}"', (SETUP / "fliperos-setup").read_text())

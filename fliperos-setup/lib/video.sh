@@ -1064,6 +1064,84 @@ video_monitor_label() {
   fi
 }
 
+# ── O video de antes ─────────────────────────────────────────────
+# Trocar o monitor ou a resolucao (no Video Setup ou no painel web) guarda o
+# video de antes em video-previous.conf, ao lado do fliperos.conf. Se o
+# gabinete fica sem imagem (um monitor trocado, um preset errado), o painel
+# web, que nao precisa da tela, volta a ele (video_previous_restore).
+VIDEO_PREVIOUS=${VIDEO_PREVIOUS:-${FLIPEROS_CONF%/*}/video-previous.conf}
+VIDEO_KEYS="monitor frequency kernel_video boot_resolution geometry custom_width custom_height custom_refresh"
+
+# video_snapshot imprime as chaves de video de agora (CHAVE=VALOR), com as
+# geometrias por resolucao.
+video_snapshot() {
+  local key value
+  for key in $VIDEO_KEYS; do
+    value=$(conf_get "$key" 2> /dev/null) && printf '%s=%s\n' "$key" "$value"
+  done
+  geometry_res_list | sed 's/^/geometry_/'
+}
+
+# video_snapshot_keep TEXTO guarda o video de antes de uma troca (o que
+# video_snapshot imprimiu), quando ele tem um monitor e a troca mudou algo.
+video_snapshot_keep() {
+  grep -q '^monitor=' <<< "$1" || return 0
+  [[ $1 == "$(video_snapshot)" ]] && return 0
+  mkdir -p "${VIDEO_PREVIOUS%/*}"
+  printf '%s\n' "$1" > "$VIDEO_PREVIOUS"
+}
+
+# video_previous_label imprime o video guardado ("Wells Gardner D9200,
+# 640x480"); status 1 sem nada guardado.
+video_previous_label() {
+  local monitor res label
+  [[ -s $VIDEO_PREVIOUS ]] || return 1
+  monitor=$(conf_get monitor "$VIDEO_PREVIOUS") || return 1
+  label=$(monitor_label "$monitor")
+  conf_get geometry "$VIDEO_PREVIOUS" > /dev/null 2>&1 && label="Custom (on $label)"
+  res=$(conf_get boot_resolution "$VIDEO_PREVIOUS" 2> /dev/null) || res=""
+  printf '%s%s\n' "$label" "${res:+, $(mode_pretty "$res")}"
+}
+
+# video_previous_restore volta ao video guardado (o fliperos.conf, o Switchres
+# e o mame.ini) e guarda o de agora no lugar: desfazer de novo volta ao monitor
+# novo. O boot (o Xorg, a linha do kernel) fica com quem chama.
+video_previous_restore() {
+  local now key line monitor range
+  [[ -s $VIDEO_PREVIOUS ]] || return 1
+  monitor=$(conf_get monitor "$VIDEO_PREVIOUS") && monitor_known "$monitor" || return 1
+  now=$(video_snapshot)
+  for key in $VIDEO_KEYS; do
+    conf_unset "$key"
+  done
+  geometry_res_clear
+  while IFS= read -r line; do
+    key=${line%%=*}
+    [[ $line == *=* ]] && [[ " $VIDEO_KEYS " == *" $key "* || $key =~ ^geometry_[0-9]+x[0-9]+[pi]$ ]] || continue
+    conf_set "$key" "${line#*=}"
+  done < "$VIDEO_PREVIOUS"
+  conf_get frequency > /dev/null 2>&1 || conf_set frequency "$(monitor_frequency "$monitor" || echo lcd)"
+  if range=$(conf_get geometry 2> /dev/null); then
+    ini_set "$SWITCHRES_INI" monitor custom
+    ini_set "$SWITCHRES_INI" crt_range0 "$range"
+    [[ -f $MAME_INI ]] && ini_set "$MAME_INI" switchres_ini 1
+  else
+    ini_set "$SWITCHRES_INI" monitor "$monitor"
+    ini_set "$SWITCHRES_INI" crt_range0 auto
+  fi
+  [[ -f $MAME_INI ]] && ini_set "$MAME_INI" monitor "$monitor"
+  video_mame_aspect
+  custom_boot_refresh
+  printf '%s\n' "$now" > "$VIDEO_PREVIOUS"
+  log_info "video de volta ao anterior: $monitor"
+}
+
+# video_resolution_rows imprime "modo|descricao" da Resolution do Video Setup:
+# a tabela do monitor, ou os modos que a saida lista (LCD, VESA).
+video_resolution_rows() {
+  video_resolution_choices 2> /dev/null | grep . || video_connector_modes 2> /dev/null
+}
+
 # geometry_cli status|reset|set RANGE|set-res RES AJUSTES|reset-res RES: a
 # geometria pelo painel web e pela OSD, pelas mesmas funcoes das telas. status
 # imprime monitor=, label=, range= (o crt_range salvo; vazio, o do preset

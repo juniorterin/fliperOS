@@ -285,17 +285,27 @@ $("log-refresh").addEventListener("click", showLog);
 // Os ajustes do Setup que podem mudar daqui (fliperos-setup --settings):
 // cada mudanca grava na hora. Os grupos abertos ficam abertos.
 
-const openGroups = new Set(["System"]);
+const openGroups = new Set(["Video"]);
 // Os icones do Setup em cada grupo e em cada ajuste (os do carrossel no tubo).
 const GROUP_ICONS = { System: "px-system", Video: "px-video", Audio: "px-audio", Power: "px-power", Services: "px-services",
-  "Interlaced hacks": "px-mode480", Colour: "px-colour", Scanlines: "px-scanlines", "GunCon 2": "px-guncon" };
-const SETTING_ICONS = [["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"],
+  "Interlaced hacks": "px-mode480", Colour: "px-colour", Scanlines: "px-scanlines", "GunCon 2": "px-guncon",
+  "Live screen": "px-outputs" };
+const SETTING_ICONS = [["monitor", "px-video"], ["resolution", "px-resolution"], ["video.previous", "px-reset"],
+  ["cabinet_name", "px-cabinetname"], ["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"],
   ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
-  ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["audio_card", "px-audio"],
-  ["mame_latency", "px-latency"], ["audio.", "px-mixer"], ["power.", "px-power"],
+  ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["osd", "px-layout"],
+  ["audio_card", "px-audio"], ["mame_latency", "px-latency"], ["audio.", "px-mixer"], ["power.", "px-power"],
   ["service.", "px-services"], ["mode480.", "px-mode480"], ["color.", "px-colour"], ["scanlines", "px-scanlines"],
   ["scanline.", "px-scanlines"], ["gun_flash", "px-guncon"], ["gun_offscreen_reload", "px-guncon"], ["gun.", "px-guncon"]];
 const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWith(".") && key.startsWith(k))) || [0, "px-setup"])[1];
+
+// A ordem dos grupos, a do Setup no tubo: o video e as telas dele, o som, os
+// controles, a rede, a tela ao vivo, o sistema e, por ultimo, desligar. Os
+// grupos que nao vem do --settings (Geometria, Rede, Senha, Novidades) entram
+// no lugar deles; um grupo novo do Setup que nao esteja aqui vai para o fim,
+// antes de Power.
+const SETTINGS_ORDER = ["Video", "Geometry", "Colour", "Scanlines", "Interlaced hacks", "Audio", "GunCon 2",
+  "Network", "Live screen", "System", "Password", "Services", "Whatsnew", "Power"];
 
 async function loadSettings() {
   const res = await api("/api/settings");
@@ -305,19 +315,27 @@ async function loadSettings() {
     if (!groups.has(row.group)) groups.set(row.group, []);
     groups.get(row.group).push(row);
   }
-  const boxes = [];
+  const boxes = new Map();
   for (const [group, items] of groups) {
-    const details = el("details", {}, el("summary", {}, icon(GROUP_ICONS[group] || "px-setup"), t("group_" + group)));
+    const details = el("details", { class: "box-" + group.toLowerCase().replace(/[^a-z0-9]+/g, "-") },
+      el("summary", {}, icon(GROUP_ICONS[group] || "px-setup"), t("group_" + group)));
     if (openGroups.has(group)) details.open = true;
     details.addEventListener("toggle", () => {
       details.open ? openGroups.add(group) : openGroups.delete(group);
     });
     if (group === "Interlaced hacks") details.append(...mode480Rows(items));
     else for (const row of items) details.append(settingRow(row));
-    boxes.push(details);
+    boxes.set(group, details);
   }
-  boxes.push(await geometryBox().catch(() => ""), await wifiBox().catch(() => ""), passwordBox(), whatsnewBox());
-  $("settings").replaceChildren(...boxes);
+  const [geometry, network] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null)]);
+  if (geometry) boxes.set("Geometry", geometry);
+  if (network) boxes.set("Network", network);
+  boxes.set("Password", passwordBox());
+  boxes.set("Whatsnew", whatsnewBox());
+  const known = SETTINGS_ORDER.filter((name) => boxes.has(name));
+  const extra = [...boxes.keys()].filter((name) => !SETTINGS_ORDER.includes(name));
+  const order = [...known.filter((name) => name !== "Power"), ...extra, ...known.filter((name) => name === "Power")];
+  $("settings").replaceChildren(...order.map((name) => boxes.get(name)));
 }
 
 // settingsBox: um grupo dos que nao vem do --settings (Geometria, Rede...),
@@ -467,9 +485,29 @@ async function settingPost(row, value) {
   if (res.ok && data.task) {
     toast(t("set_task").replace("%s", row.label));
     taskNext = 0;
+    if (row.restart) restartWhenDone(data.task.id, row.label).catch(() => {});
   }
   return { res, data };
 }
+
+// restartWhenDone: o monitor, a resolucao, a orientacao so valem no proximo
+// boot. Quando a tarefa termina bem, a pagina oferece reiniciar ja.
+async function restartWhenDone(id, label) {
+  let task = { running: true };
+  while (task.running) {
+    await new Promise((done) => setTimeout(done, 1500));
+    const r = await api("/api/task?id=" + id);
+    if (!r.ok) return;
+    task = await r.json();
+  }
+  if (task.rc !== 0) return;
+  if (!(await ask({ title: label, text: t("set_restart"), yes: t("set_restart_now"), no: t("set_later") }))) return;
+  const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "power.reboot", value: "1" }) });
+  toast(r.ok ? t("set_restarting") : r.statusText, r.ok ? "ok" : "bad");
+}
+
+// Os ajustes que podem deixar o tubo sem imagem pedem confirmacao antes.
+const CONFIRM_SETTINGS = ["monitor", "resolution"];
 
 function settingRow(row) {
   const id = "set-" + row.key.replace(/[^a-z0-9]/gi, "-");
@@ -491,6 +529,31 @@ function settingRow(row) {
       }
     });
     return el("div", { class: "setting" }, button, el("div", { class: "dim" }, row.help));
+  }
+  if (row.type === "text") {
+    // Um texto (o nome do gabinete): grava no Gravar ou no Enter.
+    const input = el("input", { id, type: "text", value: row.value, maxlength: String(row.max || 64),
+      autocomplete: "off", spellcheck: "false" });
+    const button = el("button", { type: "submit", class: "btn ghost" }, icon("px-save"), t("geo_save"));
+    const about = el("div", { class: "dim" }, row.help);
+    const form = el("form", { class: "text-setting" }, input, button);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      try {
+        const { res, data } = await settingPost(row, input.value.trim());
+        if (res.ok && data.setting) {
+          input.value = row.value = data.setting.value;
+          about.textContent = data.setting.help;
+          toast(t("saved").replace("%s", row.label), "ok");
+        } else {
+          toast(data.error || res.statusText, "bad");
+        }
+      } finally {
+        button.disabled = false;
+      }
+    });
+    return el("div", { class: "setting" }, el("label", { for: id }, icon(settingIcon(row.key)), row.label), form, about);
   }
   if (row.type === "choice") {
     control = el("select", { id }, ...row.options.map((o) => el("option", { value: o.value }, o.label)));
@@ -518,6 +581,13 @@ function settingRow(row) {
   control.addEventListener("change", () => { clearTimeout(timer); save(false); });
   async function save(dragging) {
     const number = row.type === "number";
+    if (CONFIRM_SETTINGS.includes(row.key)) {
+      const label = (row.options.find((o) => o.value === control.value) || {}).label || control.value;
+      if (!(await ask({ title: row.label, text: t("set_video_ask").replace("%s", label), yes: t("set_go") }))) {
+        control.value = row.value;
+        return;
+      }
+    }
     if (!number) control.disabled = true;
     busy = true;
     try {

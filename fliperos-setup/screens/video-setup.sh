@@ -722,8 +722,11 @@ screen_video_retest_request() {
 }
 
 screen_video_setup() {
-  local choice last="" summary monitors=() mode480_label mode480_why="" scanlines=() scanlines_label
+  local choice last="" summary monitors=() mode480_label mode480_why="" scanlines=() scanlines_label before
   VIDEO_CHANGED=0
+  # O video de agora: se o monitor ou a resolucao mudam e o gabinete fica sem
+  # imagem, o painel web volta a ele (video_previous_restore).
+  before=$(video_snapshot)
   # Video driver so aparece com uma placa que tem escolha: AMD que aceita os
   # dois drivers, ou NVIDIA (nouveau ou o driver dela).
   local driver=()
@@ -807,6 +810,7 @@ screen_video_setup() {
     esac
   done
   ((VIDEO_CHANGED)) || return 0
+  video_snapshot_keep "$before"
   if is_installed && ! is_live; then
     ui_info "Video Setup" "Saving the boot settings..."
     xorg_generate

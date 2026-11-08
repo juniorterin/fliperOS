@@ -1629,15 +1629,22 @@ def settings():
             low, high = span.split("..", 1)
             number = lambda text: float(text) if "." in text else int(text)
             row["min"], row["max"], row["step"] = number(low), number(high), number(step or "1")
+        elif kind == "text" and options.isdigit():
+            row["max"] = int(options)
         if key in SLOW_SETTINGS:
             row["task"] = True
+        if key in RESTART_SETTINGS:
+            row["restart"] = True
         rows.append(row)
     return rows
 
 
 # Os ajustes que refazem a imagem do boot (o initramfs, cerca de um minuto):
 # viram tarefas, com o andamento na gaveta.
-SLOW_SETTINGS = ("orientation", "splash", "mm_games")
+SLOW_SETTINGS = ("orientation", "splash", "mm_games", "monitor", "resolution", "video.previous")
+# Os que so valem no proximo boot (o modo de video): no fim, a pagina oferece
+# reiniciar.
+RESTART_SETTINGS = ("orientation", "mm_games", "monitor", "resolution", "video.previous")
 
 
 def wifi_rows(args, fields):
@@ -3166,7 +3173,7 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/settings":
             data = self.body()
             key, value = str(data.get("key", "")), str(data.get("value", ""))
-            if not re.fullmatch(r"[a-z0-9_.-]{1,64}", key) or not re.fullmatch(r"[A-Za-z0-9_.-]{0,64}", value):
+            if not re.fullmatch(r"[a-z0-9_.-]{1,64}", key) or not re.fullmatch(r"[A-Za-z0-9_. -]{0,64}", value):
                 return self.send(400, {"error": "bad key or value"})
             if key in SLOW_SETTINGS:
                 task = self.panel.tasks.start("Setup: %s" % key, [SETUP, "--setting", key, value], "settings")

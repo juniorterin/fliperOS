@@ -68,11 +68,17 @@ cabinet_name_set() {
 # fliperos-setup --settings imprime os ajustes que o painel web
 # (config/fliperos-web) mostra, um por linha:
 #   chave|grupo|rotulo|tipo|valor|opcoes|ajuda
-# tipo choice (opcoes "valor=Rotulo;..."), number (opcoes "min..max:passo")
-# ou action (um botao, sem valor nem opcoes: o --setting recebe 1).
+# tipo choice (opcoes "valor=Rotulo;..."), number (opcoes "min..max:passo"),
+# text (opcoes: o tamanho maximo) ou action (um botao, sem valor nem opcoes:
+# o --setting recebe 1).
 # fliperos-setup --setting CHAVE VALOR muda um deles pelas mesmas funcoes das
-# telas do Setup. Ficam de fora o que pode deixar o gabinete sem imagem
-# (monitor, resolucao, driver de video): esses so pelo Setup, na tela.
+# telas do Setup. Os grupos saem na ordem do Setup: Video (e as telas dele),
+# Audio, GunCon 2, a tela ao vivo, System, Services e Power.
+#
+# O monitor e a resolucao de boot tambem estao aqui: com outro monitor (ou um
+# preset errado) o gabinete fica sem imagem, e o painel, que nao precisa da
+# tela, e o caminho de volta. O driver de video fica so no Setup: a troca
+# pede uma confirmacao na tela (amd_driver_trial).
 
 # marquee_overlay_enabled: o marquee do jogo para o OBS (config/fliperos-pixelcade
 # grava o estado, o painel web mostra a pagina).
@@ -80,79 +86,79 @@ marquee_overlay_enabled() {
   [[ $(conf_get marquee_overlay 2> /dev/null) == on ]]
 }
 
-settings_list() {
-  local name desc key label state allowed help opts min max step
-  opts=""
+# settings_opts: as linhas "nome|descricao" da entrada como as opcoes
+# "nome=descricao;..." de um ajuste de escolha.
+settings_opts() {
+  local name desc opts=""
   while IFS='|' read -r name desc; do
-    opts+="${opts:+;}$name=${desc//[;=|]/ }"
-  done < <(launcher_available)
-  # O jogo direto no boot, quando um ja foi escolhido (no Setup ou na pagina do
-  # jogo no painel web).
-  if [[ -s $BOOTGAME_FILE ]]; then
-    name=$(bootgame_label)
-    opts+=";game=A game: ${name//[;=|]/ }"
+    [[ -n $name ]] && opts+="${opts:+;}$name=${desc//[;=|]/ }"
+  done
+  printf '%s\n' "$opts"
+}
+
+settings_list() {
+  local name desc key label state allowed help opts min max step entry monitor res
+  # ── Video (Setup > Video Setup) ──
+  # O monitor: o preset ou, com o custom do Geometry ativo, o custom (escolher
+  # um preset o desfaz, como no Monitor Type).
+  monitor=$(conf_get monitor 2> /dev/null) || monitor=""
+  opts=$(for entry in "${MONITOR_PRESETS[@]}"; do printf '%s\n' "$entry"; done | settings_opts)
+  if [[ -n $monitor ]] && video_custom_active; then
+    label=$(monitor_label "$monitor")
+    opts="custom=Custom crt_range (on ${label//[;=|]/ });$opts"
+    monitor=custom
   fi
-  printf 'launcher|System|What starts when the cabinet turns on|choice|%s|%s|The default launcher (Setup > Games > Frontend). To open one game, use Open at power on on its page in Frontend. Counts from the next boot.\n' \
-    "$(launcher_current)" "$opts"
-  printf 'latency|System|Latency mode|choice|%s|standard=Standard;low=Low latency|The emulator settings apply now; the kernel settings after a restart.\n' \
-    "$(latency_mode)"
-  printf 'debug|System|Debug mode|choice|%s|off=Off;on=On (show all text)|Frontends and emulators follow it now; the boot, after a restart.\n' \
-    "$(debug_enabled && echo on || echo off)"
-  printf 'menu_sounds|System|Menu sounds|choice|%s|on=On;off=Off|The WAV files in sounds/menu, when there are any.\n' \
-    "$(menu_sounds_state | sed 's/missing/off/')"
-  # A tela ao vivo (config/fliperos-stream): o som, so depois de instalada.
-  if [[ -x $STREAM_GO2RTC ]]; then
-    printf 'stream_audio|System|Live screen sound|choice|%s|off=Off;on=On|A copy of the sound for the live screen (an ALSA loopback on the card clock). Games opened after the change get it.\n' \
-      "$(audio_stream_enabled && echo on || echo off)"
-    printf 'stream_quality|System|Live screen quality|choice|%s|light=Light (weak Wi-Fi);normal=Normal;high=High;max=Maximum (network cable)|The picture of the live screen: more quality takes more network and CPU. It counts from the next connection.\n' \
-      "$(conf_get stream_quality 2> /dev/null | grep -xE 'light|high|max' || echo normal)"
+  printf 'monitor|Video|Monitor type|choice|%s|%s|The monitor model or its frequencies (15, 25 or 31 kHz): Switchres, MAME and RetroArch follow it, and it picks the boot resolution. It counts after a restart.\n' \
+    "$monitor" "$opts"
+  # A resolucao de boot (o modo do console, do Setup, do frontend e do
+  # desktop), so depois do teste de saidas, que escolheu a saida.
+  if conf_get connector > /dev/null 2>&1; then
+    res=$(conf_get boot_resolution 2> /dev/null) || res=""
+    opts=$(video_resolution_rows | settings_opts)
+    if [[ $res == custom ]]; then
+      opts="custom=Custom $(conf_get custom_width 2> /dev/null)x$(conf_get custom_height 2> /dev/null) $(conf_get custom_refresh 2> /dev/null) Hz (made on the cabinet)${opts:+;$opts}"
+    elif [[ -n $res && ";$opts" != *";$res="* ]]; then
+      opts="$res=$(mode_pretty "$res")${opts:+;$opts}"
+    elif [[ -z $res && -n $opts ]]; then
+      opts="=From the monitor (EDID);$opts"
+    fi
+    [[ -n $opts ]] &&
+      printf 'resolution|Video|Boot resolution|choice|%s|%s|The video mode of the boot, the menus, the frontend and the desktop (the games pick their own). It counts after a restart.\n' \
+        "$res" "$opts"
   fi
-  printf 'marquee_overlay|System|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Live page of the panel).\n' \
-    "$(marquee_overlay_enabled && echo on || echo off)"
-  # Video Setup: o que nao deixa o gabinete sem imagem.
+  # O video de antes da ultima troca (aqui ou no Video Setup): a volta quando
+  # o monitor novo fica sem imagem.
+  if label=$(video_previous_label); then
+    printf 'video.previous|Video|Back to the previous monitor|action|||Back to %s: the monitor and resolution before the last change. Use it when the picture did not come back. It counts after a restart.\n' \
+      "${label//|/ }"
+  fi
   printf 'orientation|Video|Monitor orientation|choice|%s|horizontal=Horizontal;vertical-cw=Vertical clockwise (rotated right);vertical-ccw=Vertical counter-clockwise (rotated left)|How the monitor is mounted in the cabinet. The boot is prepared again (about a minute); everything follows it after a restart.\n' \
     "$(conf_get orientation 2> /dev/null || echo horizontal)"
-  opts=""
-  while IFS='|' read -r name desc; do
-    opts+="${opts:+;}$name=${desc//[;=|]/ }"
-  done < <(splash_list)
-  if [[ -n $opts ]]; then
-    printf 'splash|Video|Boot splash|choice|%s|%s|The picture while the cabinet boots (Setup > Splash screen, where the preview is). The boot image is rebuilt: about a minute.\n' \
-      "$(splash_current 2> /dev/null)" "$opts"
-  fi
   if (($(mm_count) > 1)); then
     printf 'mm_games|Video|Multi-screen games|choice|%s|on=One screen on each monitor;off=Everything on monitor 1|Games with 2 or 3 screens. Counts after a restart.\n' \
       "$(mm_games_on && echo on || echo off)"
   fi
   printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote.\n' \
     "$([[ $(conf_get osd 2> /dev/null) == off ]] && echo off || echo on)"
-  # A GunCon 2 (Setup > Joysticks > GunCon 2), menos a calibracao (os alvos na tela).
-  printf 'gun_flash|GunCon 2|Screen flash|choice|%s|pulse=Pulse (two light frames on each shot);hold=Hold (light while the trigger is held);off=Off|A CRT gun only finds its aim where the screen is lit: the flash lights it on a shot, so dark parts hit and off screen reloads. Counts at once, even in a game that is open.\n' \
-    "$(gunflash_mode)"
+  # Video Setup > Colour calibration.
   while IFS='|' read -r key label min max _ step help; do
-    printf 'gun.%s|GunCon 2|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(gun_get "$key")" "$min" "$max" "$step" "$help"
-  done < <(gun_table)
-  printf 'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|%s|on=On;off=Off|Off the screen the trigger also presses the reload button of Flycast, RetroArch and SM2-Emu.\n' \
-    "$(gun_reload_on && echo on || echo off)"
-  printf 'gun.reset|GunCon 2|Back to the defaults|action|||Flash, numbers and the reload button back to the defaults. The calibration stays.\n'
-  # Audio Setup (o volume fica no Frontend, no gabinete desenhado).
-  opts=""
-  while IFS='|' read -r name desc; do
-    opts+="${opts:+;}${name/,/_}=${desc//[;=|]/ }"
-  done < <(audio_devices)
-  if [[ -n $opts ]]; then
-    name=$(audio_current)
-    printf 'audio_card|Audio|Sound card|choice|%s|%s|The card used by the system and the emulators. Games opened after the change use it.\n' \
-      "${name/,/_}" "$opts"
+    printf 'color.%s|Colour|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(color_get "$key")" "$min" "$max" "$step" "$help"
+  done < <(color_table)
+  if [[ $(color_caps | sed -n 's/^range //p') != none ]]; then
+    printf 'color.range|Colour|RGB range|choice|%s|default=Card default;full=Full (0-255);limited=Limited (16-235)|Full for a PC monitor or CRT, limited for a TV that expects 16-235.\n' \
+      "$(r=$(color_range); echo "${r:-default}")"
   fi
-  printf 'mame_latency|Audio|MAME audio latency|number|%s|0..50:0.5|GroovyMAME audio latency (0 = default). Lower responds faster; raise it if the sound crackles.\n' \
-    "$(audio_mame_latency)"
-  printf 'audio.test|Audio|Test sound|action|||A voice on the cabinet speakers: if it is heard, the sound card is the right one.\n'
-  printf 'power.reboot|Power|Restart the cabinet|action|||The game on screen closes and the cabinet restarts. The panel comes back in about a minute.\n'
-  printf 'power.poweroff|Power|Turn off the cabinet|action|||The game on screen closes and the cabinet turns off. It is turned on again at the cabinet.\n'
-  while IFS='|' read -r key label state help; do
-    printf 'service.%s|Services|%s|choice|%s|boot=Boot;after=After boot;off=Off|%s\n' "$key" "$label" "$state" "$help"
-  done < <(services_rows)
+  printf 'color.reset|Colour|Back to the defaults|action|||Every colour setting back to the default: the picture exactly as the card sends it.\n'
+  # Video Setup > Scanlines, so com um monitor de 31 kHz.
+  if scanlines_available; then
+    printf 'scanlines|Scanlines|Scanlines|choice|%s|off=Off;on=On|Dark gaps between the game lines, as on a 15 kHz tube. Counts at once, even in a game that is open.\n' \
+      "$(scanlines_on && echo on || echo off)"
+    while IFS='|' read -r key label min max _ step help; do
+      printf 'scanline.%s|Scanlines|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(scanline_get "$key")" "$min" "$max" "$step" "$help"
+    done < <(scanline_table)
+    printf 'scanline.reset|Scanlines|Back to the defaults|action|||Darkness, thickness, line height and boost back to the default.\n'
+  fi
+  # Video Setup > Interlaced hacks.
   while IFS='|' read -r key label state help allowed; do
     opts=""
     [[ ,$allowed, == *,240p,* ]] && opts+="240p=640x240;"
@@ -162,23 +168,65 @@ settings_list() {
     printf 'deflicker.%s|Interlaced hacks|%s: filter level|choice|%s|light=Light;medium=Medium;strong=Strong|The flicker filter level when Interlaced filter is marked.\n' \
       "$key" "$label" "$(mode480_level "$key")"
   done < <(mode480_rows)
+  # ── Audio (Setup > Audio Setup; o volume fica no Frontend) ──
+  opts=$(audio_devices | while IFS='|' read -r name desc; do printf '%s|%s\n' "${name/,/_}" "$desc"; done | settings_opts)
+  if [[ -n $opts ]]; then
+    name=$(audio_current)
+    printf 'audio_card|Audio|Sound card|choice|%s|%s|The card used by the system and the emulators. Games opened after the change use it.\n' \
+      "${name/,/_}" "$opts"
+  fi
+  printf 'mame_latency|Audio|MAME audio latency|number|%s|0..50:0.5|GroovyMAME audio latency (0 = default). Lower responds faster; raise it if the sound crackles.\n' \
+    "$(audio_mame_latency)"
+  printf 'menu_sounds|Audio|Menu sounds|choice|%s|on=On;off=Off|The WAV files in sounds/menu, when there are any.\n' \
+    "$(menu_sounds_state | sed 's/missing/off/')"
+  printf 'audio.test|Audio|Test sound|action|||A voice on the cabinet speakers: if it is heard, the sound card is the right one.\n'
+  # ── GunCon 2 (Setup > Joysticks > GunCon 2), menos a calibracao (os alvos na tela) ──
+  printf 'gun_flash|GunCon 2|Screen flash|choice|%s|pulse=Pulse (two light frames on each shot);hold=Hold (light while the trigger is held);off=Off|A CRT gun only finds its aim where the screen is lit: the flash lights it on a shot, so dark parts hit and off screen reloads. Counts at once, even in a game that is open.\n' \
+    "$(gunflash_mode)"
   while IFS='|' read -r key label min max _ step help; do
-    printf 'color.%s|Colour|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(color_get "$key")" "$min" "$max" "$step" "$help"
-  done < <(color_table)
-  if [[ $(color_caps | sed -n 's/^range //p') != none ]]; then
-    printf 'color.range|Colour|RGB range|choice|%s|default=Card default;full=Full (0-255);limited=Limited (16-235)|Full for a PC monitor or CRT, limited for a TV that expects 16-235.\n' \
-      "$(r=$(color_range); echo "${r:-default}")"
+    printf 'gun.%s|GunCon 2|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(gun_get "$key")" "$min" "$max" "$step" "$help"
+  done < <(gun_table)
+  printf 'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|%s|on=On;off=Off|Off the screen the trigger also presses the reload button of Flycast, RetroArch and SM2-Emu.\n' \
+    "$(gun_reload_on && echo on || echo off)"
+  printf 'gun.reset|GunCon 2|Back to the defaults|action|||Flash, numbers and the reload button back to the defaults. The calibration stays.\n'
+  # ── A tela ao vivo (config/fliperos-stream) e o marquee para o OBS ──
+  if [[ -x $STREAM_GO2RTC ]]; then
+    printf 'stream_audio|Live screen|Live screen sound|choice|%s|off=Off;on=On|A copy of the sound for the live screen (an ALSA loopback on the card clock). Games opened after the change get it.\n' \
+      "$(audio_stream_enabled && echo on || echo off)"
+    printf 'stream_quality|Live screen|Live screen quality|choice|%s|light=Light (weak Wi-Fi);normal=Normal;high=High;max=Maximum (network cable)|The picture of the live screen: more quality takes more network and CPU. It counts from the next connection.\n' \
+      "$(conf_get stream_quality 2> /dev/null | grep -xE 'light|high|max' || echo normal)"
   fi
-  printf 'color.reset|Colour|Back to the defaults|action|||Every colour setting back to the default: the picture exactly as the card sends it.\n'
-  # As scanlines, so com um monitor de 31 kHz (como no Video Setup).
-  if scanlines_available; then
-    printf 'scanlines|Scanlines|Scanlines|choice|%s|off=Off;on=On|Dark gaps between the game lines, as on a 15 kHz tube. Counts at once, even in a game that is open.\n' \
-      "$(scanlines_on && echo on || echo off)"
-    while IFS='|' read -r key label min max _ step help; do
-      printf 'scanline.%s|Scanlines|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(scanline_get "$key")" "$min" "$max" "$step" "$help"
-    done < <(scanline_table)
-    printf 'scanline.reset|Scanlines|Back to the defaults|action|||Darkness, thickness, line height and boost back to the default.\n'
+  printf 'marquee_overlay|Live screen|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Live page of the panel).\n' \
+    "$(marquee_overlay_enabled && echo on || echo off)"
+  # ── System (Setup > System, e o Frontend de Setup > Games) ──
+  name=$(cabinet_name_py default 2> /dev/null) || name=""
+  printf 'cabinet_name|System|Cabinet name|text|%s|%s|The name the other cabinets on the network see in party and link play. Up to %s letters and numbers; empty: %s.\n' \
+    "$(conf_get cabinet_name 2> /dev/null)" "$CABINET_NAME_MAX" "$CABINET_NAME_MAX" "${name:-a fruit or animal name}"
+  opts=$(launcher_available | settings_opts)
+  # O jogo direto no boot, quando um ja foi escolhido (no Setup ou na pagina do
+  # jogo no painel web).
+  if [[ -s $BOOTGAME_FILE ]]; then
+    name=$(bootgame_label)
+    opts+=";game=A game: ${name//[;=|]/ }"
   fi
+  printf 'launcher|System|What starts when the cabinet turns on|choice|%s|%s|The default launcher (Setup > Games > Frontend). To open one game, use Open at power on on its page in Frontend. Counts from the next boot.\n' \
+    "$(launcher_current)" "$opts"
+  opts=$(splash_list | settings_opts)
+  if [[ -n $opts ]]; then
+    printf 'splash|System|Boot splash|choice|%s|%s|The picture while the cabinet boots (Setup > Splash screen, where the preview is). The boot image is rebuilt: about a minute.\n' \
+      "$(splash_current 2> /dev/null)" "$opts"
+  fi
+  printf 'latency|System|Latency mode|choice|%s|standard=Standard;low=Low latency|The emulator settings apply now; the kernel settings after a restart.\n' \
+    "$(latency_mode)"
+  printf 'debug|System|Debug mode|choice|%s|off=Off;on=On (show all text)|Frontends and emulators follow it now; the boot, after a restart.\n' \
+    "$(debug_enabled && echo on || echo off)"
+  # ── Services (Setup > System > Services) ──
+  while IFS='|' read -r key label state help; do
+    printf 'service.%s|Services|%s|choice|%s|boot=Boot;after=After boot;off=Off|%s\n' "$key" "$label" "$state" "$help"
+  done < <(services_rows)
+  # ── Power, por ultimo ──
+  printf 'power.reboot|Power|Restart the cabinet|action|||The game on screen closes and the cabinet restarts. The panel comes back in about a minute.\n'
+  printf 'power.poweroff|Power|Turn off the cabinet|action|||The game on screen closes and the cabinet turns off. It is turned on again at the cabinet.\n'
 }
 
 # settings_boot: a linha do kernel de novo (o debug, a latencia), como as
@@ -198,7 +246,7 @@ settings_video() {
 
 # settings_set CHAVE VALOR. Status 2: chave ou valor que nao existe.
 settings_set() {
-  local key=$1 value=$2 name
+  local key=$1 value=$2 name before
   case $key in
     launcher)
       if [[ $value == game && -s $BOOTGAME_FILE ]]; then
@@ -259,6 +307,48 @@ settings_set() {
           disown
         }
       fi
+      ;;
+    monitor)
+      # Como o Video Setup > Monitor Type: o mesmo preset com o custom ativo
+      # volta a ele (o Reset Geometry); outro preset refaz o modo de boot.
+      # "custom" so e valor enquanto ja esta em uso (o crt_range e feito no tubo
+      # ou digitado na Geometria).
+      if [[ $value == custom ]]; then
+        video_custom_active && return 0
+        return 2
+      fi
+      monitor_known "$value" || return 2
+      name=$(conf_get monitor 2> /dev/null) || name=""
+      [[ $value == "$name" ]] && ! video_custom_active && ! video_boot_mode_missing && return 0
+      before=$(video_snapshot)
+      if [[ $value == "$name" ]]; then
+        geometry_reset
+      else
+        video_reconfigure_monitor "$value" || return 1
+      fi
+      video_snapshot_keep "$before"
+      settings_video
+      ;;
+    resolution)
+      # Como o Video Setup > Resolution, sem a personalizada (ela testa o modo
+      # na grade, no tubo): um modo da lista, que o monitor de agora aceita.
+      conf_get connector > /dev/null 2>&1 || return 2
+      name=$(conf_get boot_resolution 2> /dev/null) || name=""
+      [[ $value == "$name" ]] && return 0
+      [[ -n $value ]] && video_resolution_rows | cut -d"|" -f1 | grep -qxF -- "$value" || return 2
+      before=$(video_snapshot)
+      video_set_resolution "$value" || return 1
+      video_snapshot_keep "$before"
+      settings_video
+      ;;
+    video.previous)
+      video_previous_restore || return 2
+      settings_video
+      ;;
+    cabinet_name)
+      value=$(printf '%s' "$value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+      ((${#value} <= CABINET_NAME_MAX)) || return 2
+      cabinet_name_set "$value"
       ;;
     orientation)
       [[ $value =~ ^(horizontal|vertical-cw|vertical-ccw)$ ]] || return 2

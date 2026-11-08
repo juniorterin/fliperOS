@@ -794,6 +794,8 @@ img.fade.in { opacity: 1; transform: none; }
 .wifi-net b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .wifi-net:hover { border-color: var(--purple); }
 #settings .pw input { width: 100%; max-width: 360px; }
+#settings .text-setting { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#settings .text-setting input { flex: 1 1 180px; min-width: 0; max-width: 360px; }
 pre.whatsnew { max-height: 420px; overflow: auto; white-space: pre-wrap; }
 .geo input.mono { width: 100%; font: 13px ui-monospace, "JetBrains Mono", monospace; color: var(--cyan); }
 .boot-btn { margin-top: 14px; }
