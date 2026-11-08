@@ -154,7 +154,7 @@ To drive it without a controller, write `open`, `close`, `up`, `down`, `left`, `
     In the installation the item only saves the choice, and when the card has the choice and it was not made in Video Setup, the installation asks it before the disk.
 
     Once, the first time the main menu opens, the Setup checks the card: if it runs on the driver that is not the recommended one (and nobody chose it in the Setup or the installation), a popup offers the switch (`screen_amd_driver_check`, `amd_driver_checked=` in `fliperos.conf`);
-  - **Audio Setup** — default card (`/etc/asound.conf`), volume, AlsaMixer, **MAME audio latency** (`audio_latency` in `mame.ini`, 0.0 to 50.0, 0 = default; GA's "Audio Latency MAME") and a sound test, and the **Volume leveler**, off by default: on, every system goes through a compressor (SC4 from `swh-plugins`, a LADSPA plugin in the ALSA `default`, `/etc/asound.conf`) that brings loud and quiet systems closer to the same volume, with no lookahead and so no added delay; on an image without `swh-plugins` the Setup offers to install it.
+  - **Audio Setup** — default card (`/etc/asound.conf`), volume, AlsaMixer, **MAME audio latency** (`audio_latency` in `mame.ini`, 0.0 to 50.0, 0 = default; GA's "Audio Latency MAME") and a sound test. The Volume leveler that it had up to update 58 is gone: it did not level as it should, and together with the live screen sound it made ALSA abort every program that opens the sound (the graphical menu too); update 59 takes it out of `/etc/asound.conf` where it was on.
 
     As in GA, the volume moves `Master`/`Front`/`Speaker`/`Headphone` and leaves `PCM` at maximum (a card with only `PCM` uses `PCM`).
 

@@ -24,35 +24,19 @@ audio_set_default() {
   log_info "audio: placa padrao $1"
 }
 
-# ── Nivelador de volume ──────────────────────────────────────────
-# Setup > Audio Setup > Volume leveler, desligado de fabrica: um compressor
-# (o SC4 do swh-plugins, LADSPA) no "default" do ALSA, por onde passam todos
-# os emuladores. Aproxima o volume de um sistema do de outro: o que bate em
-# 0 dB sai em -9, o que fica em -30 sai em -24. Sem lookahead: nao atrasa o
-# som. Controles do SC4, na ordem: RMS/pico, ataque (ms), release (ms),
-# limiar (dB), razao, joelho (dB), ganho de compensacao (dB).
-AUDIO_LEVELER_PLUGIN=${AUDIO_LEVELER_PLUGIN:-/usr/lib/ladspa/sc4_1882.so}
-AUDIO_LEVELER_CONTROLS="0 20 400 -20 4 6 6"
-
-# audio_leveler_enabled: o nivelador esta ligado (e o plugin existe).
-audio_leveler_enabled() {
-  [[ $(conf_get audio_leveler 2> /dev/null) == on && -f $AUDIO_LEVELER_PLUGIN ]]
-}
-
-# audio_leveler_available: o swh-plugins esta instalado.
-audio_leveler_available() {
-  [[ -f $AUDIO_LEVELER_PLUGIN ]]
-}
-
-# audio_leveler_set on|off liga ou desliga e regrava o asound.conf. Status 1:
-# o plugin nao esta instalado (nada muda).
-audio_leveler_set() {
-  if [[ $1 == on ]] && ! audio_leveler_available; then
-    return 1
-  fi
-  conf_set audio_leveler "$1"
+# ── Sem nivelador de volume ──────────────────────────────────────
+# Ate o update 58 havia um Volume leveler (o compressor SC4 do swh-plugins,
+# LADSPA, no "default"). Ele nao nivelava como devia, e junto do som da tela
+# ao vivo o ladspa sobre o fliperos_tee fazia o ALSA abortar (Assertion
+# !snd_interval_empty em snd_pcm_hw_param_get_min) todo programa que abre o
+# som: o menu grafico caia e o gabinete ficava no menu em texto (visto num
+# gabinete em 2026-11-08). Saiu; audio_leveler_drop tira o que sobrou dele
+# numa maquina que o tinha ligado.
+audio_leveler_drop() {
+  conf_unset audio_leveler 2> /dev/null
+  grep -q fliperos_leveler "$ASOUND_CONF" 2> /dev/null || return 0
   audio_write_conf
-  log_info "audio: nivelador de volume $1"
+  log_info "audio: o nivelador de volume saiu do asound.conf"
 }
 
 # ── O som da tela ao vivo ────────────────────────────────────────
@@ -150,20 +134,17 @@ audio_stream_check() {
   audio_write_conf
 }
 
-# audio_write_conf grava o /etc/asound.conf: a placa padrao e, com o
-# nivelador ligado, o "default" passando pelo compressor antes do dmix da
-# placa (o plug converte o formato dos dois lados). O plug do lado da placa
-# vai em bloco: escrito "plug:dmix:0,0", o ALSA le o ",0" como um segundo
-# argumento do plug, nada abre o default e tudo fica mudo. Com o som da tela
-# ao vivo, a saida e o fliperos_tee: o mesmo som no dmix da placa e no do
-# loopback (o route copia os 2 canais para os 4 do multi).
+# audio_write_conf grava o /etc/asound.conf: a placa padrao e, com o som da
+# tela ao vivo, a saida e o fliperos_tee: o mesmo som no dmix da placa e no do
+# loopback (o route copia os 2 canais para os 4 do multi). Um plug escrito
+# numa string ("plug:dmix:0,0") nao abre: o ALSA le o ",0" como um segundo
+# argumento do plug; por isso os plugs daqui vao em bloco.
 audio_write_conf() {
-  local current card dev out tee=0 cardpcm
+  local current card dev tee=0 cardpcm
   current=$(audio_current)
   card=${current%,*} dev=${current#*,}
-  out="dmix:$card,$dev"
   if audio_stream_enabled && audio_loop_ready; then
-    tee=1 out=fliperos_tee
+    tee=1
   fi
   # O lado da placa da copia: o default dela (o mesmo dmix dos jogos); num
   # dispositivo que nao e o 0 (uma HDMI), o dmix dele.
@@ -227,29 +208,7 @@ pcm.fliperos_tee {
     ttable.1.3 1
 }
 EOF
-      audio_leveler_enabled || printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_tee"' '}'
-    fi
-    if audio_leveler_enabled; then
-      cat << EOF
-
-# Volume leveler: o compressor SC4 (swh-plugins) no som de tudo.
-pcm.!default {
-    type plug
-    slave.pcm "fliperos_leveler"
-}
-pcm.fliperos_leveler {
-    type ladspa
-    slave.pcm {
-        type plug
-        slave.pcm "$out"
-    }
-    path "${AUDIO_LEVELER_PLUGIN%/*}"
-    plugins [ {
-        label sc4
-        input { controls [ ${AUDIO_LEVELER_CONTROLS} ] }
-    } ]
-}
-EOF
+      printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_tee"' '}'
     fi
   } > "$ASOUND_CONF"
 }

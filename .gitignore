@@ -27,3 +27,4 @@ desktop.ini
 
 __pycache__/
 *.pyc
+tools/labsh.cookie

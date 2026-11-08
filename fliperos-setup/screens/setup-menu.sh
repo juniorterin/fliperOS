@@ -140,7 +140,6 @@ screen_audio() {
       "latency|MAME audio latency|Lower responds faster; raise it if the sound crackles." \
       "test|Test sound|Play a sound to check the speakers." \
       "sounds|Menu sounds ($(menu_sounds_label))|A sound when the cursor moves and on Enter (your own WAVs)." \
-      "leveler|Volume leveler ($(audio_leveler_enabled && echo on || echo off))|Brings loud and quiet systems closer to the same volume." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
@@ -188,25 +187,6 @@ screen_audio() {
           off) menu_sounds_set on ;;
         esac
         ui_sounds
-        ;;
-      leveler)
-        if audio_leveler_enabled; then
-          audio_leveler_set off
-          continue
-        fi
-        # Uma imagem anterior a ele nao tem o compressor: vem do apt.
-        if ! audio_leveler_available; then
-          ui_yesno "Volume leveler" "The leveler needs the swh-plugins package (a few MB). Install it now? It needs the network." yes ||
-            continue
-          run_online "Installing swh-plugins" "" update_install_package swh-plugins || continue
-        fi
-        if ! audio_leveler_set on; then
-          ui_msg "Volume leveler" "$(ui_bad "The compressor was not found after installing swh-plugins.")" "" \
-            "Details in /var/log/fliperos-setup.log."
-        else
-          ui_msg "Volume leveler" "On. Every system goes through a compressor: loud games get softer," \
-            "quiet ones louder. Games already open hear it from the next one."
-        fi
         ;;
       return) return 0 ;;
     esac

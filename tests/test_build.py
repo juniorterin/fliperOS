@@ -6398,7 +6398,10 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('$(cat "$out.source-sha256" 2> /dev/null) == "$sum"', update)
         for pkg in ('libdrm-dev', 'libgl-dev', 'libegl-dev', 'picom'):
             self.assertRegex(update, r'packages\+=\([^)]*\b%s\b' % pkg)
-        self.assertRegex(MKISO, r'swh-plugins picom\n')
+        self.assertRegex(MKISO, r'zsh picom\n')
+        # O Volume leveler saiu (o ladspa derrubava o ALSA com o som da tela
+        # ao vivo): nem o compressor na imagem nem no update.
+        self.assertNotIn('swh-plugins', MKISO + update)
         self.assertRegex(ROOTFS, r' fliperos-desktop-deflicker[ \w\\\n-]*; do')
 
     def test_preloaded_in_the_emulators_only(self):

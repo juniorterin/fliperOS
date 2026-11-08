@@ -289,7 +289,7 @@ const openGroups = new Set(["System"]);
 // Os icones do Setup em cada grupo e em cada ajuste (os do carrossel no tubo).
 const GROUP_ICONS = { System: "px-system", Video: "px-video", Audio: "px-audio", Power: "px-power", Services: "px-services",
   "Interlaced hacks": "px-mode480", Colour: "px-colour", Scanlines: "px-scanlines", "GunCon 2": "px-guncon" };
-const SETTING_ICONS = [["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"], ["leveler", "px-audio"],
+const SETTING_ICONS = [["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"],
   ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
   ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["audio_card", "px-audio"],
   ["mame_latency", "px-latency"], ["audio.", "px-mixer"], ["power.", "px-power"],

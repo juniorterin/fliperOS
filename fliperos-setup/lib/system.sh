@@ -98,10 +98,6 @@ settings_list() {
     "$(latency_mode)"
   printf 'debug|System|Debug mode|choice|%s|off=Off;on=On (show all text)|Frontends and emulators follow it now; the boot, after a restart.\n' \
     "$(debug_enabled && echo on || echo off)"
-  if audio_leveler_available; then
-    printf 'leveler|System|Volume leveler|choice|%s|off=Off;on=On|Brings loud and quiet systems closer to the same volume.\n' \
-      "$(audio_leveler_enabled && echo on || echo off)"
-  fi
   printf 'menu_sounds|System|Menu sounds|choice|%s|on=On;off=Off|The WAV files in sounds/menu, when there are any.\n' \
     "$(menu_sounds_state | sed 's/missing/off/')"
   # A tela ao vivo (config/fliperos-stream): o som, so depois de instalada.
@@ -225,10 +221,6 @@ settings_set() {
       [[ $value == on || $value == off ]] || return 2
       debug_set "$value"
       settings_boot
-      ;;
-    leveler)
-      [[ $value == on || $value == off ]] || return 2
-      audio_leveler_set "$value"
       ;;
     menu_sounds)
       [[ $value == on || $value == off ]] || return 2

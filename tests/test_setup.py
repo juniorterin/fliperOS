@@ -729,7 +729,9 @@ class GuiCrashKeyboardTests(Base):
             ui_gui_alive || echo text
         """ % SETUP)
         self.assertEqual(out.split(), ["UI_GUI=0", "text"])
-        self.assertEqual(self.env.writes.read_text(), "kbd_mode -u -C /dev/null\n")
+        # Com -f: em K_OFF ("unknown mode") o kbd_mode recusa a troca sem ele,
+        # e o teclado ficava calado (visto num gabinete com o update 58).
+        self.assertEqual(self.env.writes.read_text(), "kbd_mode -f -u -C /dev/null\n")
 
     def test_living_gui_keeps_the_keyboard(self):
         self.env.stub("kbd_mode", 'echo "kbd_mode $*" >> "%s"' % self.env.writes)
@@ -2281,39 +2283,30 @@ class AudioTests(Base):
         self.assertIn("defaults.pcm.card 1\n", conf.read_text())
         self.assertIn("defaults.pcm.device 3\n", conf.read_text())
 
-    def test_volume_leveler_is_optional_and_off_by_default(self):
+    def test_volume_leveler_is_gone_and_dropped_where_it_was_on(self):
+        # O Volume leveler saiu: com o som da tela ao vivo, o ladspa sobre o
+        # fliperos_tee fazia o ALSA abortar todo programa que abre o som (o
+        # menu grafico caia; visto num gabinete). Numa maquina que o tinha
+        # ligado, o update regrava o asound.conf sem ele.
         conf = self.env.dir / "asound.conf"
-        plugin = self.env.dir / "ladspa" / "sc4_1882.so"
-        env = {"ASOUND_CONF": str(conf), "AUDIO_LEVELER_PLUGIN": str(plugin)}
-        self.env.out("audio_set_default 1,3", env)
-        self.assertNotIn("pcm.!default", conf.read_text())
-        self.assertEqual(self.env.run("audio_leveler_enabled", env).returncode, 1)
-        # Sem o swh-plugins: nao liga e o som fica como esta.
-        self.assertEqual(self.env.run("audio_leveler_set on", env).returncode, 1)
-        self.assertNotIn("pcm.!default", conf.read_text())
-        plugin.parent.mkdir()
-        plugin.write_text("")
-        self.env.out("audio_leveler_set on", env)
+        env = {"ASOUND_CONF": str(conf)}
+        audio = (SETUP / "lib/audio.sh").read_text()
+        for gone in ("type ladspa", "sc4", "audio_leveler_set", "audio_leveler_enabled"):
+            self.assertNotIn(gone, audio)
+        conf.write_text('defaults.pcm.card 0\npcm.!default {\n    type plug\n    slave.pcm "fliperos_leveler"\n}\n'
+                        'pcm.fliperos_leveler {\n    type ladspa\n}\n')
+        self.env.out("conf_set alsa 1,3; conf_set audio_leveler on; audio_leveler_drop", env)
         text = conf.read_text()
+        self.assertNotIn("fliperos_leveler", text)
+        self.assertNotIn("pcm.!default", text)
         self.assertIn("defaults.pcm.card 1\n", text)
-        self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_leveler"\n}', text)
-        # O plug em bloco: "plug:dmix:1,3" numa string nao abre (o ALSA le o
-        # ",3" como argumento do plug) e deixava tudo mudo.
-        self.assertIn('slave.pcm {\n        type plug\n        slave.pcm "dmix:1,3"\n    }', text)
-        self.assertNotIn("plug:dmix", text)
-        self.assertIn('path "%s"' % plugin.parent, text)
-        self.assertIn("label sc4\n        input { controls [ 0 20 400 -20 4 6 6 ] }", text)
-        # Trocar a placa mantem o nivelador, na placa nova.
-        self.env.out("audio_set_default 0,0", env)
-        self.assertIn('slave.pcm "dmix:0,0"', conf.read_text())
-        # Sem o plugin (apagado depois), o asound.conf volta ao simples.
-        plugin.unlink()
-        self.env.out("audio_write_conf", env)
-        self.assertNotIn("ladspa", conf.read_text())
-        plugin.write_text("")
-        self.env.out("audio_leveler_set off", env)
-        self.assertNotIn("ladspa", conf.read_text())
-        self.assertIn("audio_leveler=off\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertNotIn("audio_leveler", (self.env.etc / "fliperos.conf").read_text())
+        # Sem ele no asound.conf, nada e regravado.
+        conf.write_text("# da pessoa\n")
+        self.env.out("audio_leveler_drop", env)
+        self.assertEqual(conf.read_text(), "# da pessoa\n")
+        update = (ROOT / "tools/cabinet-update.sh").read_text()
+        self.assertIn("audio_leveler_drop", update)
 
     def test_live_screen_sound_copies_the_output_only_with_the_loopback(self):
         # Live screen sound: o mesmo som no dmix da placa e no do loopback
@@ -2322,8 +2315,7 @@ class AudioTests(Base):
         conf = self.env.dir / "asound.conf"
         cards = self.env.dir / "cards"
         cards.write_text(" 0 [PCH            ]: HDA-Intel - HDA Intel PCH\n")
-        plugin = self.env.dir / "sc4.so"
-        env = {"ASOUND_CONF": str(conf), "AUDIO_PROC_CARDS": str(cards), "AUDIO_LEVELER_PLUGIN": str(plugin)}
+        env = {"ASOUND_CONF": str(conf), "AUDIO_PROC_CARDS": str(cards)}
         self.env.out("conf_set alsa 0,0; conf_set stream_audio on; audio_write_conf", env)
         self.assertNotIn("fliperos_tee", conf.read_text())
         self.assertEqual(self.env.out("audio_card_id 0", env).strip(), "PCH")
@@ -2345,12 +2337,7 @@ class AudioTests(Base):
         self.env.out("conf_set alsa 0,0; audio_write_conf", env)
         text = conf.read_text()
         self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_tee"\n}', text)
-        # Com o nivelador, o compressor sai no tee (um default so).
-        plugin.write_text("")
-        self.env.out("conf_set audio_leveler on; audio_write_conf", env)
-        text = conf.read_text()
         self.assertEqual(text.count("pcm.!default"), 1)
-        self.assertIn('slave.pcm {\n        type plug\n        slave.pcm "fliperos_tee"\n    }', text)
         # O modulo no timer padrao (o timer_source na placa o deixava ocupado).
         modprobe = self.env.dir / "aloop.conf"
         load = self.env.dir / "aloop.load"
@@ -4383,13 +4370,12 @@ class ToggleBadgeTests(Base):
         widgets = (SETUP / "gui" / "widgets.py").read_text()
         pattern = re.search(r'TOGGLE = re\.compile\(r"(.+)"\)', widgets).group(1)
         toggle = re.compile(pattern)
-        for label in ("Volume leveler (on)", "Debug mode (off)", "Menu sounds (on)"):
+        for label in ("Live screen sound (on)", "Debug mode (off)", "Menu sounds (on)"):
             self.assertTrue(toggle.match(label), label)
         for label in ("Menu sounds (no sound files)", "Monitor 3: off", "Turn on (Wi-Fi)"):
             self.assertIsNone(toggle.match(label), label)
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         for item in ('"debug|Debug mode ($(debug_enabled && echo on || echo off))|',
-                     '"leveler|Volume leveler ($(audio_leveler_enabled && echo on || echo off))|',
                      '"sounds|Menu sounds ($(menu_sounds_label))|'):
             self.assertIn(item, menu)
         self.assertIn("badge(surf, left, top, size, state)", widgets)

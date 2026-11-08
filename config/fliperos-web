@@ -3181,7 +3181,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, {"error": "no such setting or value"})
             if done.returncode != 0:
                 return self.send(500, {"error": (done.stderr or done.stdout).strip()[-300:] or "failed"})
-            # O que depende disso (o volume do nivelador, o estado do que esta na tela).
+            # O que depende disso (o volume, o estado do que esta na tela).
             self.panel.volume.when = None
             row = next((s for s in settings() if s["key"] == key), None)
             return self.send(200, {"setting": row})

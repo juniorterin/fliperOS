@@ -308,7 +308,7 @@ apt-get install -y --no-install-recommends \
   lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \
   gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
-  espeak-ng triggerhappy zsh swh-plugins picom
+  espeak-ng triggerhappy zsh picom
 
 # O transmission-daemon e o do Setup > Games > Downloader (fliperos-transmission, do
 # usuario fliperos); o servico do pacote, do usuario debian-transmission, nao.

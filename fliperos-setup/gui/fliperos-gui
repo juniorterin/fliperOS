@@ -136,7 +136,10 @@ class App:
                 if self.kbmode != k_off:
                     fcntl.ioctl(fd, kdskbmode, k_off)
             else:
-                fcntl.ioctl(fd, kdskbmode, getattr(self, "kbmode", k_unicode) or k_unicode)
+                # Um K_OFF guardado e o de uma interface que caiu antes sem
+                # devolver o teclado: volta o Unicode, nao o calado.
+                mode = getattr(self, "kbmode", k_unicode)
+                fcntl.ioctl(fd, kdskbmode, k_unicode if mode in (0, k_off) else mode)
                 termios.tcflush(fd, termios.TCIFLUSH)
         except OSError:
             pass
@@ -146,6 +149,9 @@ class App:
     def load_sounds(self):
         """Os sons do menu, os mesmos do gum (GUM_SOUND_MOVE/SELECT). Sem
         audio livre, fica sem som."""
+        if not self.audio_opens():
+            self.sounds = {}
+            return
         try:
             self.pygame.mixer.init()
             for name in ("move", "select"):
@@ -154,6 +160,39 @@ class App:
                     self.sounds[name] = self.pygame.mixer.Sound(path)
         except Exception:
             self.sounds = {}
+
+    def audio_opens(self):
+        """O som abre num processo filho antes de abrir aqui. Um asound.conf
+        quebrado faz o ALSA abortar (um assert, nao uma excecao) quem abre o
+        "default": sem este teste o menu grafico caia junto e o gabinete
+        ficava no menu em texto (visto com o Volume leveler e o som da tela
+        ao vivo ligados, 2026-11-08). Assim o menu fica, so sem som."""
+        try:
+            pid = os.fork()
+        except OSError:
+            return True
+        if pid == 0:
+            code = 1
+            try:
+                self.pygame.mixer.init()
+                self.pygame.mixer.quit()
+                code = 0
+            finally:
+                os._exit(code)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            done, status = os.waitpid(pid, os.WNOHANG)
+            if done:
+                ok = os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+                if not ok:
+                    print("fliperos-gui: o som nao abriu (status %d): o menu fica sem som" % status,
+                          file=sys.stderr)
+                return ok
+            time.sleep(0.02)
+        os.kill(pid, 9)
+        os.waitpid(pid, 0)
+        print("fliperos-gui: o som nao respondeu: o menu fica sem som", file=sys.stderr)
+        return False
 
     def beep(self, key):
         name = "select" if key == "enter" else "move" if key in ("up", "down", "left", "right") else ""

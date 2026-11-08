@@ -114,9 +114,10 @@ ui_gui_alive() {
 }
 
 # ui_console_keyboard devolve o teclado do console que a interface grafica
-# cala (mute_console em gui/fliperos-gui).
+# cala (mute_console em gui/fliperos-gui). O -f e preciso: em K_OFF o
+# kbd_mode diz "unknown mode" e recusa a troca sem ele.
 ui_console_keyboard() {
-  [[ -z ${DISPLAY:-} && -c $UI_GUI_CONSOLE ]] && kbd_mode -u -C "$UI_GUI_CONSOLE" 2> /dev/null
+  [[ -z ${DISPLAY:-} && -c $UI_GUI_CONSOLE ]] && kbd_mode -f -u -C "$UI_GUI_CONSOLE" 2> /dev/null
   return 0
 }
 

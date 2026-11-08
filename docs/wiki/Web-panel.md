@@ -106,7 +106,7 @@ The browser never keeps the panel: its pages, code, icons and fonts are sent wit
     Chrome delays the picture to match the sound, so both settle on about the same value, roughly 300 ms on the cabinet over Wi-Fi. The stream starts with sound on; if the browser refuses, it starts muted and the button shows it.
   - **Live screen sound** (Settings and the Setup, off by default) is **experimental, and on the cabinet it doesn't work yet**: the live screen goes without sound. The idea is a copy of everything that plays on an ALSA loopback.
     - `snd-aloop` loads as the card `FliperOSLoop`, on the kernel's default timer.
-    - `asound.conf` gets `fliperos_tee`, a route over a multi that feeds a `dmix` on the card and one on the loopback, both with the same format and timing. The volume leveler goes in front when it is on.
+    - `asound.conf` gets `fliperos_tee`, a route over a multi that feeds a `dmix` on the card and one on the loopback, both with the same format and timing.
     - ffmpeg records the loopback's capture side in Opus.
     - Turning it on tests the `default` with a tenth of a second of silence. If it doesn't play, the setting goes back off by itself, and the game sound stays as it was. On the cabinet's HDA card it doesn't play while another program holds the card through the system's `dmix`.
     - The copy only goes into `asound.conf` with the loopback really there. Each session start also checks this: without the loopback the `default` would not open and everything would be silent.
@@ -127,7 +127,7 @@ The browser never keeps the panel: its pages, code, icons and fonts are sent wit
   - The classes: `.pad` (`.p1`, `.p2`, `.active` while something is pressed), `.label`, `.stick` (`.up` `.down` `.left` `.right`, and `data-dir` such as `up-left`) with `.gate` and `.ball`, and `.button` (`.b1` to `.b6`, `.start`, `.coin`; `.on` while pressed). The sizes use `--u`: one panel is 200 × 100 `--u`.
   - How it works: while at least one controller page is open, the panel runs one `fliperos-buttons watch` at low priority. It sends the panel a line each time the pressed controls change, and the panel passes it to the pages as Server-Sent Events. It stops when the last page closes.
 - **Settings:** the Setup settings that are safe to change over the network, grouped as System, Services, Interlaced hacks and Colour.
-  - System: the default launcher, latency mode, debug mode, the volume leveler and menu sounds.
+  - System: the default launcher, latency mode, debug mode and menu sounds.
   - Services: the whole services table.
   - Interlaced hacks: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, Interlaced with filter, Interlaced pure), and the filter strength (light, medium, strong) shows only when the filter is on.
   - Colour: every colour calibration value and **Back to the defaults**. A slider saves while it moves, so the game on screen changes with it; the **−** and **+** on its sides move it one step per tap (a run of taps saves once, just after the last).

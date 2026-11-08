@@ -1262,9 +1262,8 @@ for _alias, _name in {
     "duckstation": "emulators",
     # Button mapping (controle ou teclado) e o jogo direto no boot.
     "panel": "joysticks", "game": "games",
-    # Os itens que acrescentam ou editam (Custom games, Frontend) e o
-    # leveler do Audio Setup.
-    "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games", "leveler": "audio",
+    # Os itens que acrescentam ou editam (Custom games, Frontend).
+    "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games",
     # As pastas de jogo em squashfs (Custom games): comprimidas, como os CHDs.
     "+squash": "chds", "+pack": "chds",
     # Colour calibration: na tela (as barras de cor) ou pelos numeros.

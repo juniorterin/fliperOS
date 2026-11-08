@@ -111,12 +111,12 @@ def block(surf, rect, color, shadow=T.LINE):
 
 
 # Um item de liga/desliga: o Setup poe o estado no fim do rotulo,
-# "Volume leveler (on)" ou "Debug mode (off)".
+# "Menu sounds (on)" ou "Debug mode (off)".
 TOGGLE = re.compile(r"^(.*\S) \((on|off)\)$")
 
 
 def toggle(label):
-    """("Volume leveler", True) de "Volume leveler (on)"; (rotulo, None) sem
+    """("Menu sounds", True) de "Menu sounds (on)"; (rotulo, None) sem
     estado."""
     found = TOGGLE.match(label)
     return (found.group(1), found.group(2) == "on") if found else (label, None)

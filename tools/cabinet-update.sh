@@ -115,8 +115,6 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 packages+=(python3-pygame xclip)
 # Os videos do frontend (ffmpeg) e a tela ao vivo nas AMD (VA-API).
 packages+=(ffmpeg mesa-va-drivers)
-# O compressor do Volume leveler (Setup > Audio Setup, lib/audio.sh).
-packages+=(swh-plugins)
 # Para compilar o filtro de flicker do entrelacado e a calibracao de cor
 # (config/fliperos-deflicker-build).
 packages+=(gcc libc6-dev pkg-config libdrm-dev libgl-dev libegl-dev libx11-dev libxrandr-dev)
@@ -318,6 +316,24 @@ if [[ -d /sys/module/snd_hda_intel/parameters ]]; then
   echo N > /sys/module/snd_hda_intel/parameters/power_save_controller
   echo "power_save=$(cat /sys/module/snd_hda_intel/parameters/power_save)"
 fi
+
+echo "== Sound without the Volume leveler"
+# Ele saiu do Setup (lib/audio.sh): numa maquina que o tinha ligado, o
+# asound.conf e regravado sem o compressor (com o som da tela ao vivo, ele
+# derrubava todo programa que abre o som, inclusive o menu grafico).
+(
+  set +eu
+  for f in "$lib"/*.sh; do
+    # shellcheck source=/dev/null
+    . "$f"
+  done
+  if grep -q fliperos_leveler "$ASOUND_CONF" 2> /dev/null; then
+    audio_leveler_drop && echo "removed from $ASOUND_CONF"
+  else
+    audio_leveler_drop
+    echo "was not on"
+  fi
+)
 
 echo "== Setup > Joysticks > Button mapping buttons in every emulator"
 if [[ -f /etc/fliperos/buttons.map ]]; then
