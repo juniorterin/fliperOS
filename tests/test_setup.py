@@ -3578,6 +3578,95 @@ class FirstBootWizardTests(Base):
         self.assertEqual(out[1:], ["buttons"])
 
 
+class FirstBootUpdateTests(Base):
+    """O primeiro boot aplica os updates publicados depois da ISO, com a
+    internet ja ligada e antes dos controles, e reabre o Setup novo."""
+
+    def run_update(self, pending="60\tno\tNew panel", reboot="no", online=True, applied=True, env=None):
+        d = self.env.dir
+        (d / "setup").mkdir(exist_ok=True)
+        (d / "setup" / "fliperos-setup").write_text(
+            '#!/bin/bash\necho "reexec $* updated=$FLIPEROS_FIRSTBOOT_UPDATED"\n')
+        (d / "setup" / "fliperos-setup").chmod(0o755)
+        script = r"""
+            source %s/screens/first-boot.sh
+            net_online() { return %d; }
+            patch_pending() { printf '%%b\n' '%s'; }
+            patch_apply() { echo "apply" >&2; printf 'applied\t60\t%s\t/b\tNew panel\n' > "$1"; return %d; }
+            run_with_progress() { echo "progress $1"; shift 2; "$@"; }
+            ui_info() { echo "info $*"; }
+            ui_msg() { echo "msg $*"; }
+            sleep() { :; }
+            restore_terminal() { echo "restore"; }
+            screen_power_now() { echo "power $1"; exit 0; }
+            SETUP_DIR=%s
+            SETUP_ARGS=(--first-boot)
+            screen_first_boot_update
+            echo "continued"
+        """ % (SETUP, 0 if online else 1, pending.replace("\t", "\\t"), reboot, 0 if applied else 1, d / "setup")
+        return self.env.out(script, env or {})
+
+    def test_pending_updates_are_applied_and_the_setup_reopens(self):
+        out = self.run_update()
+        self.assertIn("progress Updating FliperOS", out)
+        self.assertIn("info Welcome to FliperOS FliperOS is up to date (update 60).", out)
+        self.assertIn("reexec --first-boot updated=1", out)
+        self.assertNotIn("continued", out)
+
+    def test_an_update_that_needs_a_restart_reboots(self):
+        out = self.run_update(reboot="yes")
+        self.assertIn("power reboot", out)
+        self.assertNotIn("reexec", out)
+
+    def test_nothing_pending_offline_or_already_updated_goes_on(self):
+        for kwargs in ({"pending": ""}, {"online": False}, {"env": {"FLIPEROS_FIRSTBOOT_UPDATED": "1"}}):
+            out = self.run_update(**kwargs)
+            self.assertNotIn("progress", out, kwargs)
+            self.assertIn("continued", out, kwargs)
+
+    def test_a_failed_update_says_so_and_the_wizard_goes_on(self):
+        out = self.run_update(applied=False)
+        self.assertIn("It is offered again at the next boot.", out)
+        self.assertIn("continued", out)
+        self.assertNotIn("reexec", out)
+
+    def test_runs_after_the_wifi_and_before_the_controls(self):
+        body = (SETUP / "screens/first-boot.sh").read_text().split("screen_first_boot() {")[1].split("\n}\n")[0]
+        self.assertLess(body.index("screen_first_boot_wifi"), body.index("screen_first_boot_update"))
+        self.assertLess(body.index("screen_first_boot_update"), body.index("screen_first_boot_controls"))
+
+
+class ButtonMappingTextPanelTests(Base):
+    """Button mapping no texto (gum): o painel desenhado, com o X piscando no
+    comando da vez enquanto a captura espera."""
+
+    def test_the_capture_keeps_its_output_and_status(self):
+        out = self.env.out("""
+            source %s/lib/ui.sh
+            UI_BLINK_ROW=0
+            got=$(ui_capture_wait bash -c 'echo "0 b3 Pad"'); echo "got=[$got] rc=$?"
+            got=$(ui_capture_wait false); echo "rc=$?"
+        """ % SETUP)
+        self.assertIn("got=[0 b3 Pad] rc=0", out)
+        self.assertIn("rc=1", out)
+
+    def test_every_control_has_a_cell_and_the_cells_fit_40_columns(self):
+        out = self.env.out('source %s/lib/ui.sh; for c in "${UI_PANEL_CELLS[@]}"; do echo "$c"; done; '
+                           'echo "W=$UI_PANEL_W"' % SETUP).splitlines()
+        width = int(out.pop().split("=")[1])
+        self.assertLessEqual(width, 40)
+        names = [line.split()[0] for line in out]
+        self.assertEqual(names, "up down left right b1 b2 b3 b4 b5 b6 coin start".split())
+        for line in out:
+            _, _, col, label, _, lcol = line.split()
+            self.assertLessEqual(int(col) + 3, width)
+            self.assertLessEqual(int(lcol) + len(label), width)
+
+    def test_the_mapper_waits_through_the_blink(self):
+        body = (SETUP / "screens/joysticks.sh").read_text().split("screen_buttons() {")[1].split("\n}\n")[0]
+        self.assertIn("got=$(ui_capture_wait buttons_capture 8)", body)
+
+
 class CustomGamesTests(Base):
     """Setup > Games > Custom games: programas que nao sao ROM, em grupos que
     os frontends mostram como sistemas."""
@@ -4022,12 +4111,13 @@ class UiParityTests(unittest.TestCase):
     e cada pedido do lib/ui.sh tem a sua tela no gui/serve.py."""
 
     # O que desenha no terminal de proposito (alsamixer, o grid do Switchres:
-    # ui_text solta o video) e os ajudantes que nao sao tela.
+    # ui_text solta o video) e os ajudantes que nao sao tela (ui_capture_wait
+    # so espera; o painel e o ui_capture).
     NOT_SCREENS = {"ui_c", "ui_dim", "ui_bad", "ui_yes", "ui_no", "ui_clear", "ui_fields", "ui_flush_input",
                    "ui_text", "ui_done", "ui_init", "ui_status_short", "ui_size", "ui_box_width", "ui_palette",
                    "ui_screen", "ui_topbar", "ui_list_height", "ui_hint_small", "ui_hint_lines", "ui_hint_env",
                    "ui_sounds", "ui_orientation", "ui_gui_alive", "ui_gui_wanted", "ui_gui_start", "ui_gui_call",
-                   "ui_gui_menu"}
+                   "ui_gui_menu", "ui_capture_wait"}
 
     def functions(self):
         text = (SETUP / "lib" / "ui.sh").read_text()
@@ -4144,6 +4234,7 @@ class ButtonMappingNoRepeatTests(Base):
             ui_menu_hints() { echo panel; }
             ui_menu() { echo 1; }
             ui_capture() { return 1; }
+            ui_capture_wait() { "$@"; }
             ui_info() { echo "info $*"; }
             ui_msg() { echo "msg $*"; }
             ui_yesno() { return 0; }

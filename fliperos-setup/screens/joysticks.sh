@@ -131,11 +131,12 @@ screen_buttons() {
     for control in "${BUTTON_CONTROLS[@]}"; do
       n=$((n + 1))
       for ((tries = 0; tries < 3; tries++)); do
-        # Na interface grafica, o painel desenhado com o comando da vez aceso.
+        # O painel desenhado com o comando da vez: aceso na interface
+        # grafica, com um X piscando no texto (o gum do primeiro boot).
         ui_capture "$title" "$p" "$control" "$n" "${#BUTTON_CONTROLS[@]}" 8 "${pressed[@]}" ||
           ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press ${BUTTON_LABELS[$control]}")" "" \
             "$n of ${#BUTTON_CONTROLS[@]}. Wait 8 seconds to skip it."
-        got=$(buttons_capture 8) || break
+        got=$(ui_capture_wait buttons_capture 8) || break
         read -r index element name <<< "$got"
         # Um botao so faz uma coisa: o que ja foi dado a outro comando (deste
         # jogador ou de outro, no mesmo controle) nao vale.
