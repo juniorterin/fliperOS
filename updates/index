@@ -59,3 +59,4 @@
 56	5d62c22bc029be14497c5285d2c1bc5ab773347e	0738c3b6d72c6f84fe15a2f603bd0e24a0b8c2910d487e285c0599f93ebd4b37	no	Wine games with the flicker filter, art for custom games, squashfs folders, Wine Staging
 57	412eb49f3b659a6a919bb3a2acf9ede2e6f7419f	5ab232cdf0885b0eab80a9d62f7ffd7022ee6149ddb4f6b6805394f2ee3337fc	no	The 0.22 image's level (ISO build fix only)
 58	0201b791cacf2b0a440bd1071ba96cce61900ece	af51f88de1d1b2bd940d9e7c3ea38aeb88d2c97d6a4275f077e775f27f6644f0	no	Keyboard back when the Setup menu crashes; link marks only with another cabinet
+59	e21547f6e527f67bb6b76555cdf9d6539c118a60	397169bee3ed8437baece25638b8446ed75eaba95dfacc7e0b06dc20bfb80f28	no	Volume leveler removed; keyboard and controller back when the Setup menu crashes
