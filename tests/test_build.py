@@ -11531,8 +11531,12 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('install -Dm644 "$WINEHQ_KEY" /etc/apt/keyrings/winehq-archive.asc', branch)
         self.assertIn('Architectures: amd64 i386', branch)
         self.assertIn('Signed-By: /etc/apt/keyrings/winehq-archive.asc', branch)
-        self.assertIn('apt_install --install-recommends $WINE_STAGING_PACKAGES', branch)
+        self.assertIn('pkgs=$WINE_STAGING_PACKAGES', branch)
+        self.assertIn('apt_install --install-recommends $pkgs $LAYER32_PACKAGES', branch)
         self.assertIn('WINE_STAGING_PACKAGES="winehq-staging ', EXTRAS)
+        # A imagem traz o libjack0 (JACK 1): sem o i386 dele, o apt queria o
+        # libjack-jackd2-0:i386 e parava em "held broken packages".
+        self.assertIn("libjack0:amd64 2> /dev/null) == *\" installed\" ]] && pkgs+=\" libjack0:i386\"", branch)
         self.assertIn('WINEHQ_URL="https://dl.winehq.org/wine-builds/ubuntu"', EXTRAS)
         self.assertIn('install -Dm644 "$src/config/winehq-archive.asc" "$root/usr/local/share/fliperos/winehq-archive.asc"', ROOTFS)
         self.assertIn(b'BEGIN PGP PUBLIC KEY BLOCK', (ROOT / 'config/winehq-archive.asc').read_bytes())

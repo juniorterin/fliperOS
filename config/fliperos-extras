@@ -227,8 +227,14 @@ extras_install() {
         printf 'Types: deb\nURIs: %s\nSuites: %s\nComponents: main\nArchitectures: amd64 i386\nSigned-By: /etc/apt/keyrings/winehq-archive.asc\n' \
           "$WINEHQ_URL" "$(. /etc/os-release && echo "$VERSION_CODENAME")" > /etc/apt/sources.list.d/winehq.sources ||
         fail "could not add the WineHQ repository"
+      # O JACK de 32 bits tem de ser o mesmo da imagem: ela traz o libjack0
+      # (JACK 1), e as libs i386 da WineHQ puxam o libjack-jackd2-0:i386, que
+      # nao convive com ele. O apt nao achava a troca sozinho e parava em
+      # "winehq-staging : Depends: wine-staging", "held broken packages".
+      pkgs=$WINE_STAGING_PACKAGES
+      [[ $(dpkg-query -W -f='${Status}' libjack0:amd64 2> /dev/null) == *" installed" ]] && pkgs+=" libjack0:i386"
       # shellcheck disable=SC2086
-      apt_install --install-recommends $WINE_STAGING_PACKAGES $LAYER32_PACKAGES
+      apt_install --install-recommends $pkgs $LAYER32_PACKAGES
       build_layer32
       ;;
     steam)
