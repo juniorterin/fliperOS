@@ -99,7 +99,7 @@ Open **http://fliperos.local** on a phone or PC on the same network (user `flipe
   <img src="website/public/screenshots/web/phone-en.webp" width="173" alt="Web panel on a phone: now playing at 59.6 FPS and the game list with search">
 </p>
 
-At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](docs/wiki/Installed-system.md#on-screen-menu): volume, Interlaced filter, geometry and colour, over the running game.
+At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](docs/wiki/Installed-system.md#on-screen-menu): volume, Interlaced filter, scanlines, geometry and colour, over the running game.
 
 Every page in detail: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 

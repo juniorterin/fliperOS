@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""A OSD do FliperOS: volume, filtro de flicker, geometria e cores por cima do
-jogo ou do frontend, sem sair deles.
+"""A OSD do FliperOS: volume, filtro de flicker, scanlines (monitor de 31 kHz),
+geometria e cores por cima do jogo ou do frontend, sem sair deles.
 
     fliperos-osd                    o servico
     fliperos-osd --shot PAGINA ARQ  a imagem de uma pagina em PNG (os testes)
@@ -594,7 +594,14 @@ class Menu:
             program, core = self.screen.get("program", ""), self.screen.get("core", "")
             rows.append(Row("choice", "Interlaced filter", filter_level(conf, program, core),
                             options=[(v, LABELS[v]) for v in FILTER_LEVELS], change=self.set_filter))
-        if read_conf().get("monitor", "") != "lcd" and self.mode:
+        # As scanlines de um monitor de 31 kHz (Setup > Video Setup > Scanlines,
+        # scanlines_available em lib/video.sh): as camadas releem o fliperos.conf
+        # e a troca vale com o jogo aberto, para todos os jogos.
+        conf = read_conf()
+        if conf.get("frequency", "") == "31k":
+            rows.append(Row("choice", "Scanlines", "on" if conf.get("scanlines", "") == "on" else "off",
+                            options=[("off", "Off"), ("on", "On")], change=self.setter("scanlines")))
+        if conf.get("monitor", "") != "lcd" and self.mode:
             rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry")))
         rows.append(Row("page", "Colour", action=self.open_colour))
         rows.append(Row("action", "Close", action=self.close))

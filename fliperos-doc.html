@@ -104,7 +104,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
   <img src="website/public/screenshots/web/phone-en.webp" width="173" alt="Web panel on a phone: now playing at 59.6 FPS and the game list with search">
 </p>
 
-<p>At the cabinet, hold <strong>Start and Down</strong> for a second in any game to open the <a href="docs/wiki/Installed-system.md#on-screen-menu">on-screen menu</a>: volume, Interlaced filter, geometry and colour, over the running game.</p>
+<p>At the cabinet, hold <strong>Start and Down</strong> for a second in any game to open the <a href="docs/wiki/Installed-system.md#on-screen-menu">on-screen menu</a>: volume, Interlaced filter, scanlines, geometry and colour, over the running game.</p>
 <p>Every page in detail: <a href="#Web-panel">Web panel</a>.</p>
 <h3 id="new-your-controller-on-the-stream">New: your controller on the stream</h3>
 <p>The stick and the buttons light up on your live stream while you press them on the cabinet, like the input displays of fighting game streams. It's a page for an OBS Browser Source, with a transparent background: copy its address from <strong>Live &gt; Controller for OBS</strong> and paste it in OBS.</p>
@@ -1411,7 +1411,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 - red, green, blue and grey ramps;
 - the 24 ColorChecker patches.</p>
 <p>Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. <strong>Settings in numbers</strong> changes each setting by its number (it also works over SSH), and <strong>Back to the defaults</strong> clears them all, the RGB range included (it goes back to the card's own default).</p>
-<p><a id="scanlines"></a><strong>Scanlines</strong> (Setup &gt; Video Setup, only with a 31 kHz monitor). A 31 kHz tube shows a 240-line game with every line doubled, so it has no dark gaps between lines like a 15 kHz tube. Turned on, the last screen line of each game line gets darker in every OpenGL and Vulkan game, through the same layers as the flicker filter. A change counts at once, even with a game open.</p>
+<p><a id="scanlines"></a><strong>Scanlines</strong> (Setup &gt; Video Setup, only with a 31 kHz monitor). A 31 kHz tube shows a 240-line game with every line doubled, so it has no dark gaps between lines like a 15 kHz tube. Turned on, the last screen line of each game line gets darker in every OpenGL and Vulkan game, through the same layers as the flicker filter. A change counts at once, even with a game open. The <a href="#on-screen-menu">on-screen menu</a> also turns them on and off over a game.</p>
 <p>The settings are saved in <code>fliperos.conf</code> as <code>scanlines=on</code> and <code>scanlines_NAME=</code>:</p>
 <table>
 <thead>
@@ -1465,6 +1465,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <ul>
 <li><strong>Volume</strong>. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.</li>
 <li><strong>Interlaced filter</strong>: off, light, medium or strong for the program on screen. It only shows in an interlaced mode (any size: 480i, 448i, 576i...), and the change counts on the next frame.</li>
+<li><strong>Scanlines</strong>: on or off, only with a 31 kHz monitor. The same switch as <a href="#scanlines">Video Setup &gt; Scanlines</a>, for every game; it counts with the game open.</li>
 <li><strong>Geometry</strong>: horizontal size and position, and vertical position, with a frame and a cross over the picture. The title says which resolution is being adjusted (<code>GEOMETRY 640x480i</code>, <code>GEOMETRY 320x240p</code>), because each resolution has its own geometry. Each change is on the tube at once. <strong>Save</strong> keeps it for that resolution only, in every game that uses it; <strong>Use the default</strong> takes the resolution back to the geometry of all the others (the <code>crt_range</code> of Video Setup &gt; Geometry, or the monitor's preset). Leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit. When a game opens, or changes resolution, in a mode with a saved geometry, the service puts that geometry on the tube within a second.</li>
 <li><strong>Colour</strong>: every setting of the colour calibration, and back to the defaults.</li>
 </ul>
@@ -31191,7 +31192,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td><code>config/fliperos-osd</code>, <code>config/fliperos-osd.service</code></td>
-<td>The on-screen menu over games and frontends: volume, Interlaced filter, geometry and colour</td>
+<td>The on-screen menu over games and frontends: volume, Interlaced filter, scanlines, geometry and colour</td>
 </tr>
 <tr>
 <td><code>config/fliperos-calibrate</code></td>

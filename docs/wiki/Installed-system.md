@@ -69,7 +69,7 @@ An install older than this system gets it with `curl -fsSL https://raw.githubuse
 
 Up and down pick a setting and left and right change it while you look at the tube. Space hides the bar, Enter keeps the settings and Esc goes back to the previous ones. **Settings in numbers** changes each setting by its number (it also works over SSH), and **Back to the defaults** clears them all, the RGB range included (it goes back to the card's own default).
 
-<a id="scanlines"></a>**Scanlines** (Setup > Video Setup, only with a 31 kHz monitor). A 31 kHz tube shows a 240-line game with every line doubled, so it has no dark gaps between lines like a 15 kHz tube. Turned on, the last screen line of each game line gets darker in every OpenGL and Vulkan game, through the same layers as the flicker filter. A change counts at once, even with a game open.
+<a id="scanlines"></a>**Scanlines** (Setup > Video Setup, only with a 31 kHz monitor). A 31 kHz tube shows a 240-line game with every line doubled, so it has no dark gaps between lines like a 15 kHz tube. Turned on, the last screen line of each game line gets darker in every OpenGL and Vulkan game, through the same layers as the flicker filter. A change counts at once, even with a game open. The [on-screen menu](#on-screen-menu) also turns them on and off over a game.
 
 The settings are saved in `fliperos.conf` as `scanlines=on` and `scanlines_NAME=`:
 
@@ -108,6 +108,7 @@ Hold **Start and Down** for a second, or press **Pause** on a keyboard or **Play
 
 - **Volume**. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.
 - **Interlaced filter**: off, light, medium or strong for the program on screen. It only shows in an interlaced mode (any size: 480i, 448i, 576i...), and the change counts on the next frame.
+- **Scanlines**: on or off, only with a 31 kHz monitor. The same switch as [Video Setup > Scanlines](#scanlines), for every game; it counts with the game open.
 - **Geometry**: horizontal size and position, and vertical position, with a frame and a cross over the picture. The title says which resolution is being adjusted (`GEOMETRY 640x480i`, `GEOMETRY 320x240p`), because each resolution has its own geometry. Each change is on the tube at once. **Save** keeps it for that resolution only, in every game that uses it; **Use the default** takes the resolution back to the geometry of all the others (the `crt_range` of Video Setup > Geometry, or the monitor's preset). Leaving without saving puts the mode back. Switchres stops at what the monitor accepts, and the value on screen goes back to that limit. When a game opens, or changes resolution, in a mode with a saved geometry, the service puts that geometry on the tube within a second.
 - **Colour**: every setting of the colour calibration, and back to the defaults.
 

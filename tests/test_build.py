@@ -16865,6 +16865,24 @@ class OsdTests(unittest.TestCase):
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
         self.assertEqual(self.labels(menu), ['Volume', 'Colour', 'Close'])
 
+    def test_scanlines_switch_on_a_31_khz_monitor(self):
+        # So com frequency=31k, como no Video Setup; vai pelo --setting do
+        # Setup, e as camadas releem o fliperos.conf com o jogo aberto.
+        self.conf.write_text('monitor=arcade_15_25_31\nfrequency=31k\nscanlines=on\n')
+        menu, worker = self.menu(mode=dict(self.MODE, interlace=False))
+        self.assertEqual(self.labels(menu), ['Volume', 'Scanlines', 'Geometry', 'Colour', 'Close'])
+        self.assertEqual(menu.page['rows'][1].text(), 'On')
+        menu.key(self.osd.KEY_DOWN)
+        menu.key(self.osd.KEY_LEFT)
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--setting', 'scanlines', 'off'], self.calls)
+        self.conf.write_text('monitor=arcade_15_25_31\nfrequency=31k\n')
+        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
+        self.assertEqual(menu.page['rows'][1].text(), 'Off')
+        self.conf.write_text('monitor=generic_15\nfrequency=15k\nscanlines=on\n')
+        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
+        self.assertNotIn('Scanlines', self.labels(menu))
+
     def test_settings_go_through_the_setup_with_the_program_or_the_core(self):
         menu, worker = self.menu()
         keys = self.osd
