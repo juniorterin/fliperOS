@@ -38,7 +38,7 @@ jobs:
     env:
       OUT: /mnt/output
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Versao, tag e changelog
         id: version
@@ -73,14 +73,14 @@ jobs:
           df -h / /mnt
 
       - name: Cache do kernel 15 kHz
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /mnt/output/kernel-cache
           key: kernel-${{ steps.version.outputs.kernel }}
 
       - name: Cache dos frontends (.deb)
         id: packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /mnt/output/packages
           key: packages-${{ hashFiles('packaging/**', 'Dockerfile.packages') }}
@@ -123,7 +123,7 @@ jobs:
 
       - name: Log do build
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fliperos-mkiso-log
           path: /mnt/output/fliperos-mkiso.log
@@ -149,7 +149,7 @@ jobs:
 
       - name: ISO como artifact
         if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fliperos-${{ steps.version.outputs.version }}
           path: /mnt/output/fliperos-${{ steps.version.outputs.version }}.iso
