@@ -63,3 +63,4 @@
 60	b7499ad1bfd49167e465185b61ee0f3e0bb0d785	0b6bcb18a96594dfac0177ba08bf9a97ac5de5c3289023656fdc38c01ece9600	yes	CRT on DisplayPort in super resolution; web panel monitor settings; first boot updates
 61	36940c0d2b74dd5fc39058979605d4f1914b7ebd	d6dbfcc8c2282d8c26b8b7eaecd3bcb685d39d2752f9cf9be4f8fde368b00260	no	Scanlines on and off from the on-screen menu
 62	9dffa370e4d4028f96741f48d472bfca6f27a0b7	4ee4323a330b140013f93d843d44b00297807731e0130a20b01a954e608b0837	no	DisplayPort converters can keep native modes; CDs and DVDs in the frontend
+63	ea14f5413270acdbb8c105ab02f49dd7db6f5714	45295980e3c88b26a9a4ec153d5346d955a9f29ee0764f53c9d6e2eadc4f5078	no	Cartridges from the Open Source Cartridge Reader, its firmware from the Setup; the 0.23 level
