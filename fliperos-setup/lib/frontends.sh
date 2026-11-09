@@ -16,6 +16,23 @@ frontends_systems() {
     IFS='|' read -r name exe args exts <<< "$(scraper_attract_emulator "$key")"
     [[ -n $name ]] && printf '%s|%s|%s|%s|%s|%s|%s\n' "$key" "$dir" "$platform" "$name" "$exe" "$args" "$exts"
   done < <(scraper_detect)
+  frontends_openbor
+  return 0
+}
+
+# frontends_openbor: a pasta dos paks do OpenBOR (~/roms/openbor/Paks), se
+# tiver algum .pak (a extensao em qualquer caixa: HFFgp32.PAK). Fica fora do
+# scraper_detect: a pasta de cima tem Saves, Logs e o v3 do 3.0, que nao sao
+# jogos, e o Skyscraper nao tem a plataforma (o Scraper nao a busca).
+# Plataforma "openbor", a do ES-DE.
+frontends_openbor() {
+  local dir=$ROMS_DIR/openbor/Paks f name exe args exts
+  for f in "$dir"/*; do
+    [[ -f $f && ${f,,} == *.pak ]] || continue
+    IFS='|' read -r name exe args exts <<< "$(scraper_attract_emulator openbor)"
+    printf 'openbor|%s|openbor|%s|%s|%s|%s\n' "$dir" "$name" "$exe" "$args" "$exts"
+    return 0
+  done
   return 0
 }
 

@@ -526,6 +526,10 @@ scraper_attract_emulator() {
       echo "DuckStation|$FLIPEROS_BIN/fliperos-x11-run|duckstation \"[romfilename]\"|.cue;.chd;.pbp;.m3u;.iso;.img;.ecm;.mds;.exe;.psexe" ;;
     dolphin)
       echo "Dolphin|$FLIPEROS_BIN/fliperos-x11-run|dolphin-emu -e \"[romfilename]\"|.iso;.gcm;.rvz;.wbfs;.ciso;.gcz;.wad" ;;
+    # Os paks de ~/roms/openbor/Paks (frontends_openbor): o comando openbor
+    # (config/fliperos-openbor) abre o pak direto, no 4 ou no 3.0.
+    openbor)
+      echo "OpenBOR|$FLIPEROS_BIN/fliperos-x11-run|openbor \"[romfilename]\"|.pak" ;;
     retroarch/*)
       core=${key#retroarch/}
       name=$(scraper_core_info "$core" systemname)

@@ -311,6 +311,16 @@ in the console or as a frontend command. Hypseus has no menu of its own (it need
 
 The games (`.pak`) go in `/opt/fliperos/roms/openbor/Paks` (over the network: `\\fliperos\FliperOS\roms\openbor\Paks`). The **Games > OpenBOR** menu opens OpenBOR's own menu, which lists the paks.
 
+**In the frontends.** The paks are also a system of their own, **OpenBOR**, in the FliperOS frontend (and in Attract-Mode Plus, ES-DE and Pegasus), one game per `.pak` (any case: `HFFgp32.PAK` counts). Picking one opens that pak straight away, without OpenBOR's menu. The system shows up once `Paks` has a pak; `Saves`, `Logs` and `v3` next to it are not games and stay out. The Scraper doesn't search OpenBOR (Skyscraper has no such platform); art can go in `~/media/<type>/openbor/<pak name>.png` by hand.
+
+**Running a pak from the command line.** The `openbor` command takes the pak as its only argument: the full path, or only the file name of a pak that is in `Paks`. In the console (Setup > Exit to shell, on the cabinet), the same line the frontends run:
+
+```sh
+/opt/fliperos/bin/fliperos-x11-run openbor "/home/fliperos/roms/openbor/Paks/My Game.pak"
+```
+
+`fliperos-x11-run` opens an Xorg in OpenBOR's mode (320x240 on a 15 kHz monitor, from `emulator-modes.conf`); the short form `fliperos-x11-run openbor "My Game.pak"` finds the pak in `Paks`. Without an argument, `openbor` opens the menu, as before. OpenBOR 4 reads the pak from its first argument (`OpenBOR /path/game.pak`); 3.0 doesn't take arguments, so for a pak listed in `v3/paks.txt` the command links `v3/Paks` to `v3/OnePak`, a folder with only that pak, and 3.0 opens it without the menu (it skips the menu when there is one pak).
+
 **Old paks.** OpenBOR is version 4. Many mods were made for 3.0 (build 6391) and stop as soon as they load in 4 (the log in `Logs/OpenBorLog.txt` says *An Error Occurred*, e.g. *Unable to load image file '...gif'*: 4 no longer takes GIF sprites).
 
 FliperOS also ships 3.0 build 6391: when 4 refuses a pak, the `openbor` command (`config/fliperos-openbor`) opens 3.0 right away and writes the pak in `openbor/v3/paks.txt`; when every pak is on that list, 3.0 opens directly. 3.0 runs in `openbor/v3`, with its own `Saves` and `Logs` (the `.cfg` files of one version don't work in the other) and the same `Paks` and `ScreenShots`; the controls of the Setup go to both.

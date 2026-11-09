@@ -12,12 +12,31 @@
 # O Esc fecha (config/fliperos-escquit), como nos outros emuladores: o
 # OpenBOR so sai pelo Esc na tela de titulo; no jogo o Esc nao faz nada e o
 # Start so pausa.
+#
+# openbor PAK abre um jogo sem o menu (o frontend do FliperOS e os outros,
+# pela pasta openbor de lib/frontends.sh): o caminho do pak, ou so o nome de
+# um que esta em Paks/. O 4 le o pak de argv[1] (engine/sdl/sdlport.c, so com
+# um argumento). O 3.0 nao le argumento, mas pula o menu quando ha um pak so
+# no Paks dele: roda com o v3/Paks ligado a v3/OnePak, uma pasta so com
+# aquele pak.
 games=${FLIPEROS_OPENBOR_DIR:-/opt/fliperos/roms/openbor}
 v4=${FLIPEROS_OPENBOR4:-/usr/local/lib/openbor/OpenBOR}
 v3=${FLIPEROS_OPENBOR3:-/usr/local/lib/openbor/OpenBOR-3.0}
 escquit=${FLIPEROS_ESCQUIT:-/opt/fliperos/bin/fliperos-escquit}
 legacy=$games/v3
 list=$legacy/paks.txt
+
+# O pak pedido, com o caminho inteiro (antes do cd; o 4 copia o argumento
+# por cima do nome padrao, e um caminho curto deixaria sobra dele).
+pak_path="" pak_name=""
+if (($# == 1)) && [[ ${1,,} == *.pak ]]; then
+  if [[ -f $1 ]]; then
+    pak_path=$(realpath -- "$1")
+  elif [[ -f $games/Paks/$1 ]]; then
+    pak_path=$(realpath -- "$games/Paks/$1")
+  fi
+  pak_name=${pak_path##*/}
+fi
 
 # esc_quit PID: o SIGTERM vira o SDL_QUIT, e o OpenBOR sai como pelo menu
 # (grava o .cfg). --ignore-children: depois do exec do 3.0 o proprio vigia e
@@ -28,7 +47,13 @@ esc_quit() {
 
 run_v3() {
   mkdir -p "$legacy/Saves" "$legacy/Logs"
-  ln -sfn ../Paks "$legacy/Paks"
+  if [[ -n $pak_path ]]; then
+    rm -rf "$legacy/OnePak"
+    mkdir -p "$legacy/OnePak" && ln -s "$pak_path" "$legacy/OnePak/$pak_name"
+    ln -sfn OnePak "$legacy/Paks"
+  else
+    ln -sfn ../Paks "$legacy/Paks"
+  fi
   ln -sfn ../ScreenShots "$legacy/ScreenShots"
   cd "$legacy" || exit 1
   esc_quit $$
@@ -36,6 +61,10 @@ run_v3() {
 }
 
 cd "$games" || exit 1
+# Um pak que ja se sabe que so abre no 3.0 vai direto para ele.
+if [[ -n $pak_path && -x $v3 ]] && grep -qxF -- "$pak_name" "$list" 2> /dev/null; then
+  run_v3
+fi
 paks=()
 for pak in Paks/*; do
   [[ -f $pak && ${pak,,} == *.pak ]] && paks+=("${pak#Paks/}")
@@ -49,7 +78,9 @@ if [[ -x $v3 && -s $list && $# -eq 0 ]] && ((${#paks[@]})); then
 fi
 
 start=$(date +%s)
-"$v4" "$@" <&0 &
+args=("$@")
+[[ -n $pak_path ]] && args=("$pak_path")
+"$v4" "${args[@]}" <&0 &
 pid=$!
 esc_quit "$pid"
 wait "$pid"
@@ -58,8 +89,12 @@ status=$?
 log=$games/Logs/OpenBorLog.txt
 [[ -x $v3 && -f $log ]] && (($(stat -c %Y "$log") >= start)) && grep -q 'An Error Occurred' "$log" ||
   exit "$status"
-pak=$(sed -n 's|^Game Selected: \./Paks/||p' "$log" | tail -1)
-pak=${pak%$'\r'}
+if [[ -n $pak_path ]]; then
+  pak=$pak_name
+else
+  pak=$(sed -n 's|^Game Selected: \./Paks/||p' "$log" | tail -1)
+  pak=${pak%$'\r'}
+fi
 [[ -n $pak ]] || exit "$status"
 mkdir -p "$legacy"
 grep -qxF -- "$pak" "$list" 2> /dev/null || printf '%s\n' "$pak" >> "$list"

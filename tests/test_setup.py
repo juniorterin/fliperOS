@@ -5542,6 +5542,20 @@ class ScraperTests(Base):
         self.assertEqual(self.env.out("scraper_attract_emulator model3", env).strip(),
                          'Supermodel|/opt/fliperos/bin/fliperos-x11-run|supermodel "[romfilename]"|.zip')
 
+    def test_openbor_paks_are_a_frontend_system(self):
+        # ~/roms/openbor/Paks: um sistema nos frontends (o do FliperOS le o
+        # --systems), so com um .pak, fora do Scraper; Saves e Logs nao contam.
+        env, roms, _ = self.scraper_env()
+        paks = roms / "openbor" / "Paks"
+        paks.mkdir(parents=True)
+        (roms / "openbor" / "Saves").mkdir()
+        (roms / "openbor" / "Saves" / "default.cfg").write_text("cfg")
+        self.assertNotIn("openbor", self.env.out("frontends_systems", env))
+        (paks / "HFFgp32.PAK").write_text("pak")
+        line = '|OpenBOR|/opt/fliperos/bin/fliperos-x11-run|openbor "[romfilename]"|.pak'
+        self.assertIn("openbor|%s|openbor%s" % (paks, line), self.env.out("frontends_systems", env).splitlines())
+        self.assertNotIn("openbor", self.env.out("scraper_detect", env))
+
     def test_attract_mode_gets_emulator_and_display_once(self):
         env, roms, attract = self.scraper_env()
         for _ in range(2):

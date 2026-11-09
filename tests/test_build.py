@@ -12186,6 +12186,53 @@ class NewEmulatorBuildTests(unittest.TestCase):
             run('Game Selected: ./Paks/New.pak\n')
             self.assertEqual(calls.read_text(), 'v4\n')
 
+    def test_openbor_opens_one_pak_without_the_menu(self):
+        # openbor PAK (os frontends): o 4 recebe o caminho inteiro; o 3.0, que
+        # nao le argumento, roda com o v3/Paks numa pasta so com aquele pak.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            games = tmp / 'openbor'
+            for d in ('Paks', 'Logs', 'ScreenShots'):
+                (games / d).mkdir(parents=True)
+            for name in ('Old.PAK', 'New.pak', 'Other.pak'):
+                (games / 'Paks' / name).write_bytes(b'')
+            calls = tmp / 'calls'
+            v4, v3 = tmp / 'v4', tmp / 'v3'
+            v4.write_text('#!/bin/sh\necho "v4 $*" >> %s\nprintf "%%s" "$V4_LOG" > Logs/OpenBorLog.txt\n' % calls)
+            v3.write_text('#!/bin/sh\necho "v3 $(pwd) $(ls Paks/)" >> %s\n' % calls)
+            v4.chmod(0o755)
+            v3.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_OPENBOR_DIR=str(games), FLIPEROS_OPENBOR4=str(v4),
+                       FLIPEROS_OPENBOR3=str(v3))
+            run = lambda pak, log='': subprocess.run(['bash', str(ROOT / 'config/fliperos-openbor'), pak],
+                                                     timeout=30, env=dict(env, V4_LOG=log), check=True)
+            new = games / 'Paks' / 'New.pak'
+            run(str(new))
+            self.assertEqual(calls.read_text(), 'v4 %s\n' % new)
+            # So o nome: o pak de Paks/.
+            calls.write_text('')
+            run('New.pak')
+            self.assertEqual(calls.read_text(), 'v4 %s\n' % new)
+            # O 4 recusa: o 3.0 com so este pak, e ele vai para o paks.txt.
+            calls.write_text('')
+            run('Old.PAK', 'Game Selected: %s\n\n********** An Error Occurred **********\n' % (games / 'Paks/Old.PAK'))
+            self.assertEqual(calls.read_text(), 'v4 %s\nv3 %s Old.PAK\n' % (games / 'Paks/Old.PAK', games / 'v3'))
+            self.assertEqual((games / 'v3' / 'paks.txt').read_text(), 'Old.PAK\n')
+            self.assertEqual(os.readlink(games / 'v3' / 'Paks'), 'OnePak')
+            # Da proxima vez, direto no 3.0.
+            calls.write_text('')
+            run('Old.PAK')
+            self.assertEqual(calls.read_text(), 'v3 %s Old.PAK\n' % (games / 'v3'))
+            # Sem argumento, o menu: o Paks de cima de novo.
+            calls.write_text('')
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-openbor')], timeout=30,
+                           env=dict(env, V4_LOG=''), check=True)
+            self.assertEqual(calls.read_text(), 'v4 \n')
+            (games / 'v3' / 'paks.txt').write_text('Old.PAK\nNew.pak\nOther.pak\n')
+            calls.write_text('')
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-openbor')], timeout=30, env=env, check=True)
+            self.assertEqual(os.readlink(games / 'v3' / 'Paks'), '../Paks')
+
     def test_openbor_closes_on_esc(self):
         # No jogo o Esc do OpenBOR nao faz nada: o fliperos-escquit vigia o
         # processo dele, o 4 e o 3.0 (depois do exec, o PID do script).
