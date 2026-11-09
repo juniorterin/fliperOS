@@ -44,7 +44,7 @@ export const CONTRIBUTORS = [
   { name: 'theblackk62', url: 'https://github.com/theblackk62' },
 ] as const;
 
-export const FLIPEROS_VERSION = '0.23';
+export const FLIPEROS_VERSION = '0.24';
 
 // A ISO se chama fliperos-VERSAO.iso. Este endereco baixa o arquivo direto
 // no release mais recente; se o nome mudar, a API (github.ts) manda o certo.
@@ -150,6 +150,7 @@ export const HOME_STRIP = [
 // textos de cada uma estão em whatsNew.notes; um release novo entra aqui e lá,
 // junto com FLIPEROS_VERSION.
 export const RELEASES = [
+  { version: '0.24', date: '2026-11-09' },
   { version: '0.23', date: '2026-11-08' },
   { version: '0.22', date: '2026-11-07' },
   { version: '0.21', date: '2026-11-05' },

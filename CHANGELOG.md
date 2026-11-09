@@ -2,6 +2,42 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.24
+
+**Bluetooth controllers, and a Button mapping for joypads too**: Setup > Joysticks > Bluetooth pairs, connects and forgets controllers, and Button mapping now starts from the connected controllers, asks the player, and maps an arcade panel or JAMMA board (1 to 8 buttons) or a joypad (recognised like in Batocera), then the buttons that accept and go back in the menus. The frontend's controls get a JOYPAD column and a guide drawn with the buttons of ten consoles. Also in this ISO, everything the updates 64 to 66 brought since 0.23: the FliperOS version chooser (go back to an earlier update or forward to a newer one), Midway 2D games in 320x240 at 59 Hz, the power button closing GroovyMAME at once, RetroAchievements for every emulator, cloud backup of scores and saves, the cabinet choice in the web panel, and updates that no longer stop on a repository added by hand. Cabinets already installed get all of this from the Setup's own update (updates 64 to 66).
+
+**System changes:**
+
+- **Bluetooth** (update 65): `config/fliperos-bluetooth` drives `bluetoothctl` (power, scan, pair, automatic pairing for 30 s, connect, disconnect, remove) with JustWorks repairing and fast connect; Setup > Joysticks > Bluetooth is its screen. Wired controllers always take the first players, by USB port; Bluetooth ones take the players left in the order they connect (profiles by GUID in `/etc/fliperos/buttons-bt.map`), and the players are worked out again when a controller connects or goes away. SDL's HIDAPI is off, so the Setup (root) and the emulators see the controllers in the same order
+- **Button mapping** (update 65): the list of connected controllers (wired or wireless icon, refreshed when one is turned on), the player (P1 to Pn), arcade/JAMMA with 1 to 8 buttons and a new panel drawing, or a joypad mapped like Batocera's (the controller type comes from its SDL mapping, hold a button to skip one), and the menu buttons (accept and go back, used by the Setup's controller keys and the frontend). Esc cancels; buttons 7 and 8 reach RetroArch, MAME, FBNeo, Flycast and SDL
+- **Frontend controls** (update 65): GUIDE (arcade panel or joypad) and JOYPAD LAYOUT (PlayStation, Xbox, GameCube, Super Nintendo, NES, Dreamcast, Saturn, Mega Drive, Neo Geo CD, Nintendo 64, measured from the real controllers) come first, then each function with its panel control, joypad button and key
+- **FliperOS version** (update 65): Setup > System > FliperOS version and the web panel list the updates from the image's own to the newest; an earlier one goes back (the files it replaces are copied first) and holds the cabinet there until a newer update comes out
+- Midway 2D games (Y, T, W and X-unit) run in 320x240p at 59 Hz in GroovyMAME, no longer stretched on the tube (update 65)
+- The power button closes a GroovyMAME game at once, saving like Esc; a keyboard, panel or controller plugged in after boot works with the power and volume keys (update 65)
+- The cartridge in the OSCR stops with its label outside the reader (update 64)
+- **RetroAchievements** (update 66): RetroAchievements in the Setup's main menu (after Start desktop) and the web panel's Settings sign in to a retroachievements.org account once (only the token is kept, never the password), turn achievements on or off and switch hardcore mode, for RetroArch (an `appendconfig`), DuckStation, PCSX2, Dolphin and Flycast (`config/fliperos-cheevos`)
+- **Cloud backup** (update 66): the web panel's Settings > Cloud backup syncs high scores (MAME hiscore and NVRAM), saves and the player's settings with Google Drive, Dropbox, WebDAV/Nextcloud, SFTP or MEGA through rclone (`config/fliperos-cloud`; rclone is installed by the card the first time): both sides keep the newest file and nothing is deleted, with Sync now, Send, Receive and an automatic sync after each game (the settings once a day)
+- With more than one FliperOS on the network, `fliperos.local` lists the cabinets and lets you pick one: each web panel announces itself over Avahi as `_fliperos-web._tcp` (update 66)
+- Screen Resolution is now Desktop Resolution, with an icon on the desktop (update 66)
+- The Setup opens its graphical menu with any `/dev/dri/cardN` (with the card as card1, after the firmware framebuffer was released, it stayed in the text menu), and the colour calibration uses the first card with outputs (update 66)
+- **Updates and apt sources** (update 66): the same repository in two apt sources with different keys (WineHQ added by hand next to the Setup's Wine Staging) made apt refuse every source and stopped the update at 100; `fliperos-update apt-heal` keeps one (the FliperOS one) and turns the others off, before each update, in the System Update and in the Extras. The update's dry run gets a tmpfs of its own (the small `/run` filled up and every file showed as changed here)
+
+**Package changes:**
+
+- `bluez` in the image and on cabinets updated to 65
+
+**fliperos-setup changes:**
+
+- `lib/bluetooth.sh` and `screens/bluetooth.sh`: the Bluetooth manager
+- `screens/joysticks.sh` and `lib/buttons.sh`: the new Button mapping flow; `gui/widgets.py` and `gui/serve.py`: the controller list, the panel tiles, the joypad capture and the menu buttons screen
+- `gui/fepads.py`, `gui/feinput.py`, `gui/feview.py` and `gui/fliperos-frontend`: the JOYPAD column and the console guides
+- `lib/update.sh`: the apt sources checked before the System Update
+- `lib/cheevos.sh` and RetroAchievements in the main menu
+
+**Tool changes:**
+
+- `tools/cabinet-update.sh` checks the apt sources first and installs `bluez`
+
 ## 0.23
 
 **Your original games, from the disc or the cartridge**: the frontend plays CDs and DVDs from a drive connected to the cabinet, and cartridges from the Open Source Cartridge Reader (OSCR). It finds the console from the disc or the cart itself, lets you pick the emulator or the RetroArch core that reads it, and plays it straight away or rips it to the right folder; the cabinet can even boot straight from the disc. Setup > System installs the FliperOS firmware on the OSCR. Also in this ISO, everything the updates 55 to 63 brought since 0.22: MAME parties with every player of the game, Wine games with the flicker filter, packed game folders, super resolutions for a CRT on DisplayPort, the scanline switch in the on-screen menu and a Setup that keeps the keyboard when its graphical menu crashes. Cabinets already installed get all of this from the Setup's own update (updates 55 to 63). Discs and the cartridge reader have not been tried on real hardware yet.

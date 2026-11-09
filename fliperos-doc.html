@@ -11,7 +11,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
   <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art of a white arcade cabinet in a purple-lit room, a fighting game on its CRT and the PC beside it"></a>
 </p>
 
-<h1 align="center">FliperOS 0.23</h1>
+<h1 align="center">FliperOS 0.24</h1>
 
 <p align="center">
   <b>Arcade Linux. Built for CRT.</b><br>
@@ -52,7 +52,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </p>
 
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.23 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
+<p>In development: 0.24 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
 <table>
   <tr>
     <td align="center" width="33%"><img src="website/public/screenshots/frontend/full.webp" width="240" alt="FliperOS frontend in full screen: Aggressors of Dark Kombat with its video behind and its name, year and controls in front"><br><sub><b>Full screen</b>: the game's video behind, its name and info in front</sub></td>
@@ -128,8 +128,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.23.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.23.iso</code> on Linux, <code>Get-FileHash fliperos-0.23.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.24.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.24.iso</code> on Linux, <code>Get-FileHash fliperos-0.24.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -139,7 +139,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.23.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.24.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -423,7 +423,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.23.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.24.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -1184,7 +1184,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.23.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.24.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -1636,6 +1636,13 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </ul>
 <h2 id="page-by-page">Page by page</h2>
 <p>The cabinet's state in a browser on the same network (a phone too): <strong>http://fliperos.local</strong>, or the cabinet's IP. Port 80 only forwards to the panel's own port, 8081, so <code>http://fliperos.local:8081</code> works too.</p>
+<p><strong>More than one cabinet on the network:</strong> every FliperOS is called <code>fliperos</code>, so only one answers to <code>fliperos.local</code> (Avahi renames the others <code>fliperos-2.local</code> and so on). Each panel announces itself over mDNS as <code>_fliperos-web._tcp</code>, with the cabinet's nickname (the link name, <code>cabinet_name=</code> in <code>fliperos.conf</code>). With two or more on the network, <code>http://fliperos.local</code> first shows the list of cabinets, and the panel has a <strong>Cabinet</strong> selector on the sign-in screen, in the sidebar and in the phone menu. Picking one opens its panel by IP (each cabinet has its own sign-in). The announcement is <code>/etc/avahi/services/fliperos-web.service</code>, written by the panel and removed when it stops; it needs the <code>avahi</code> service (Setup &gt; System &gt; Services).</p>
+<p><strong>Cloud backup (Settings):</strong> the high scores (<code>~/.mame/hiscore</code>, <code>~/nvram</code>), the saves (<code>~/save</code>) and the player's settings (<code>~/.mame/cfg</code>, <code>~/.config/fliperos</code>, play stats, RetroArch remaps and overrides) in a cloud through <strong>rclone</strong> (<code>config/fliperos-cloud</code>, run as the <code>fliperos</code> user, remote <code>fliperos</code> in <code>~/.config/rclone/rclone.conf</code>). rclone is installed from the box the first time (<code>apt install rclone</code>).</p>
+<ul>
+<li><strong>Google Drive and Dropbox:</strong> <em>Sign in at the site</em> opens the provider's page. The panel starts <code>rclone authorize</code> on the cabinet and takes the sign-in address from its local <code>/auth</code>. At the end the site sends the browser to <code>127.0.0.1:53682</code>, which doesn't open on a phone; paste that address in the panel and it hands the code to rclone inside the cabinet, which returns the token. A token from <code>rclone authorize</code> run on another computer can be pasted instead.</li>
+<li><strong>WebDAV (Nextcloud, ownCloud), SFTP and MEGA:</strong> user and password. The password reaches rclone on standard input and is saved obscured (<code>rclone obscure -</code>).</li>
+</ul>
+<p>Everything goes to <code>FliperOS/</code> in the cloud (<code>hiscores/</code>, <code>saves/</code>, <code>config/</code>), the same for all of a person's cabinets, so a record made on one shows on the others. Nothing is ever deleted: each side gets <code>rclone copy --update</code> (never <code>sync</code>), so a file is only replaced by a newer one. <strong>Sync now</strong>, <strong>Send</strong> and <strong>Get</strong> run as tasks. With <em>Sync by itself after each game</em> on, <code>fliperos-kms-run</code> and <code>fliperos-x11-run</code> start <code>fliperos-cloud watch PID</code>: when the game closes it syncs the high scores and saves, and the settings once a day. The log is <code>cloud</code> in System &gt; Logs.</p>
 <p>You sign in with the same user and password as SSH and the network share (<code>fliperos</code>, changed in <strong>Setup &gt; System &gt; Password</strong>). Until 2026-10-22 the panel was on port 8080, which Pixelcade's own settings page also uses; with both installed one of them didn't open.</p>
 <p>The panel has ten pages, tabs at the top, each with its own address (<code>#frontend</code>, <code>#live</code>, <code>#romfilter</code>, <code>#downloads</code>, <code>#scraper</code>, <code>#install</code>, <code>#files</code>, <code>#settings</code>, <code>#status</code>, <code>#terminal</code>); the browser remembers the last one:
 - <strong>Frontend:</strong> now playing with the FPS, the marquee preview beside it, games, volume and screen;
@@ -28547,7 +28554,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 </tr>
 <tr>
 <td>Desktop</td>
-<td>none (the resolution comes from Screen Resolution)</td>
+<td>none (the resolution comes from Desktop Resolution)</td>
 <td>picom with or without the filter</td>
 <td>Interlaced filter</td>
 </tr>
@@ -28583,7 +28590,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode of every card (<code>/dev/dri/card0</code> to <code>card7</code>, since the monitor's card is not always <code>card0</code>) through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.</p>
 <p>Programs in <strong>Vulkan</strong> (PCSX2, Dolphin, DuckStation and Flycast on <code>amdgpu</code>) get the same filter from the implicit Vulkan layer <code>config/fliperos-vkfps.c</code>, on with <code>FLIPEROS_VK_FPS=1</code>. Before each present, in an interlaced mode, it copies the image and draws it back with the same weights and the same level. They stay on Vulkan: the layer asks the swapchain for what it needs and allocates nothing until the first filtered frame.</p>
 <p>The layer was tested on Mesa's software driver (lavapipe) with the Khronos validation layers on (<code>tools/vkfps-test.sh</code>), and on the cabinet's R7 240 (RADV on <code>amdgpu</code>) in a real interlaced Xorg. There, one-line stripes gave the expected values at each level, and Flycast and PCSX2 ran in Vulkan with it, at the same speed with and without the filter and with no GPU errors. The level changes from the web panel with the game open. Dolphin and DuckStation have not run with it yet. The software saturation and hue of the colour calibration go through it too, for cards without a colour matrix.</p>
-<p>The LXDE desktop draws without OpenGL, so it gets the same filter through <strong>picom</strong> with a window shader (<code>config/fliperos-desktop-deflicker --watch</code>, started by <code>fliperos-lxde</code>, at the Desktop row's level <code>deflicker_desktop=</code>). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Screen Resolution counts at once. Ubuntu's own picom autostart (<code>/etc/xdg/autostart/picom.desktop</code>, without the shader) would take the screen first, since only one compositor runs at a time: <code>fliperos-lxde</code> puts <code>/etc/fliperos/xdg</code> first in <code>XDG_CONFIG_DIRS</code>, where a <code>picom.desktop</code> with <code>Hidden=true</code> hides it.</p>
+<p>The LXDE desktop draws without OpenGL, so it gets the same filter through <strong>picom</strong> with a window shader (<code>config/fliperos-desktop-deflicker --watch</code>, started by <code>fliperos-lxde</code>, at the Desktop row's level <code>deflicker_desktop=</code>). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Desktop Resolution counts at once. Ubuntu's own picom autostart (<code>/etc/xdg/autostart/picom.desktop</code>, without the shader) would take the screen first, since only one compositor runs at a time: <code>fliperos-lxde</code> puts <code>/etc/fliperos/xdg</code> first in <code>XDG_CONFIG_DIRS</code>, where a <code>picom.desktop</code> with <code>Hidden=true</code> hides it.</p>
 <p>Programs in <strong>Wine</strong> are mostly 32-bit, and a 32-bit process can't load the 64-bit library. When Wine is installed from the Extras (the Ubuntu Wine or Wine Staging), the Setup also builds the library for 32 bits (<code>/usr/local/lib/fliperos/i386/libfliperos-deflicker.so</code>, with <code>gcc-multilib</code> and <code>libdrm-dev:i386</code>), and the update rebuilds it when the source changes. When the command runs <code>wine</code> or a <code>.exe</code>, including a custom game's <code>bash -c "wine ..."</code>, <code>fliperos-x11-client</code> puts both in <code>LD_PRELOAD</code>. The Linux loader skips the one that isn't of the process's kind, and the Wine game gets the filter and the on-screen menu. Games that draw in <strong>Vulkan through DXVK</strong> get the Vulkan layer built for 32 bits as well (<code>/usr/local/lib/fliperos/i386/libfliperos-vkfps.so</code>). Its manifest (<code>config/fliperos-vkfps-i386.json</code>, a layer of its own name with <code>library_arch</code> 32) is only taken by the 32-bit Vulkan loader. <code>tools/vkfps-test.sh</code> runs the whole layer test in 32 bits with <code>ARCH=i386</code> (lavapipe; Ubuntu has no 32-bit validation layers): the three levels, the on-screen menu, the FPS, the scanlines and the gun flash gave the same values as in 64 bits.</p>
 <p>The programs that still cannot take the library get the same picom over their whole Xorg, without the on-screen menu: <code>fliperos-x11-client</code> starts it for Fightcade (its lobby is Electron) and for a <code>wine</code> or <code>.exe</code> command when the 32-bit library is missing. The Fightcade lobby (512x448, interlaced on a 15 kHz tube) uses the Other programs level; while a Flycast match is open, <code>fliperos-fightcade</code> switches it to the Fightcade Flycast row's level (<code>deflicker_fightcade-flycast=</code>). The Wine matches run at 240 lines, so there picom has nothing to filter and stays off.</p>
 <p>For testing:
@@ -28617,6 +28624,15 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>The installer (<code>config/fliperos-kof</code>) downloads the patch, which downloads Ikemen GO and a portable PowerShell (the conversion scripts are PowerShell), and makes the converted copy in <code>~/roms/ikemen/kof-final-attack</code> (about 2 GB; 3 GB free are asked for).</p>
 <p>The original folder is not changed: the patch works from a <code>Patch 4x3</code> folder inside it, removed at the end, and a folder that can't be written to (a read-only disk) is copied to the disk first. Installing again replaces the copy only after the new one is ready.</p>
 <p>It opens from the desktop menu (<strong>Games &gt; KOF Final Attack</strong>) or with <code>fliperos-kof</code> on a terminal, in its own Xorg at 320x240@60 (<code>fliperos-kof</code> in <code>emulator-modes.conf</code>). It is not in the frontends' game lists.</p>
+<h2 id="retroachievements">RetroAchievements</h2>
+<p><strong>RetroAchievements</strong> in the main menu, right after Start desktop (and the RetroAchievements box in the web panel's Settings) signs in to a free <a href="https://retroachievements.org">retroachievements.org</a> account once, for every emulator that has achievements: RetroArch, DuckStation, PCSX2, Dolphin and Flycast. It also turns the achievements on or off and switches <strong>hardcore mode</strong> (no save states, rewind or cheats).</p>
+<p>The login trades the user and password for the account's token through the site's API (<code>dorequest.php?r=login2</code>, the same call the emulators make). The password goes to <code>curl</code> on standard input, never on a command line or in a log, and is not saved; only the token is, in <code>/etc/fliperos/cheevos</code> (mode 640, the user's group can read it).</p>
+<ul>
+<li><strong>RetroArch</strong> reads <code>/etc/fliperos/retroarch/cheevos.cfg</code>, which <code>fliperos-kms-run</code> adds to <code>--appendconfig</code>, above <code>retroarch.cfg</code> (an update rewrites that one).</li>
+<li><strong>DuckStation, PCSX2, Dolphin and Flycast</strong> keep the account in their own ini. <code>config/fliperos-cheevos</code> writes it at each launch from <code>fliperos-x11-run</code> (<code>[Cheevos]</code> in DuckStation's <code>settings.ini</code>, <code>[Achievements]</code> in <code>PCSX2.ini</code> and Dolphin's <code>RetroAchievements.ini</code>, <code>[achievements]</code> in Flycast's <code>emu.cfg</code>), and the Setup writes it right away into the ones that already exist.</li>
+<li>Without <code>/etc/fliperos/cheevos</code> nothing changes: an account made inside an emulator's own menu keeps working. Signing out clears the user and token everywhere.</li>
+</ul>
+<p>The Pixelcade/ZeDMD marquee shows each unlocked achievement in RetroArch (<a href="#Frontends">Frontends</a>).</p>
 <h2 id="laserdisc-hypseus-singe">Laserdisc (Hypseus Singe)</h2>
 <p>Laserdisc games live in <code>/opt/fliperos/roms/hypseus</code>, which is <code>~/.hypseus</code> (over the network: <code>\\fliperos\FliperOS\roms\hypseus</code>): the ROM in <code>roms/&lt;game&gt;.zip</code>, the laserdisc video in <code>vldp/&lt;game&gt;/</code> with the framefile <code>&lt;game&gt;.txt</code>, and Singe games in <code>singe/&lt;game&gt;/</code>. To open on the CRT (640x240 at 15 kHz, full screen):</p>
 <pre><code class="language-sh">/opt/fliperos/bin/fliperos-x11-run hypseus lair     # Dragon's Lair
@@ -29578,7 +29594,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>None of them runs inside the desktop's X — RetroArch and GroovyMAME use KMS, the others start an Xorg of their own in the mode from the modes table (<a href="#Emulators">Emulators</a>) —, so the shortcut (<code>fliperos-launch</code>) saves the request and closes the desktop (with a confirmation if there are open windows), <code>fliperos-session</code> opens the emulator on the CRT and, when it closes, <strong>the desktop comes back</strong>.</p>
 <p>An emulator that wasn't built (<code>--skip-*</code>) doesn't show in the menu. Model 2 always does: it is not compiled into the image, and the first click clones and builds it (<a href="#Emulators">Emulators</a>). Steam and Heroic (GOG), once installed through Setup &gt; Games &gt; Extras, also live in Games, but open inside the desktop itself.</p>
 <p>GroovyArcade's tools also ship: <strong>AntiMicroX</strong> and <strong>QJoyPad</strong> (controller as keyboard/mouse), <code>xterm</code>, <code>htop</code>, <code>evtest</code>, <code>joy2key</code>, <code>hwinfo</code>, <code>lshw</code>, <code>read-edid</code>, <code>i2c-tools</code>. <strong>FliperOS Setup</strong> lives in <strong>System Tools</strong> (and on the panel), like <code>gasetup.desktop</code>. The terminal uses the Dracula colors. Leaving the desktop goes back to the menu.</p>
-<p><strong>Screen Resolution (Preferences):</strong> changes the desktop resolution <strong>on the fly</strong>. The list is the resolutions of the monitor chosen in Video Setup, plus <em>Other resolution...</em> (any <code>WIDTHxHEIGHT@HZ</code>).</p>
+<p><strong>Desktop Resolution (Preferences, and an icon on the desktop):</strong> changes the desktop resolution <strong>on the fly</strong>. The list is the resolutions of the monitor chosen in Video Setup, plus <em>Other resolution...</em> (any <code>WIDTHxHEIGHT@HZ</code>).</p>
 <p>Switchres computes the mode within the ranges of <code>/etc/switchres.ini</code> (<code>switchres --calc</code>, the same calculation the emulators use) and <code>xrandr</code> applies it, adjusting the screen size; the window opens maximized and follows the change. Without confirmation within 15 seconds, the previous resolution comes back.</p>
 <p><em>Use every time the desktop starts</em> saves the mode in <code>~/.config/fliperos/desktop-mode</code>, which <code>fliperos-lxde</code> applies when the desktop opens; choosing the boot resolution forgets the saved one. Only the desktop changes: the console, the setup and the frontends keep the Video Setup resolution. With an LCD monitor, the list is the modes from its EDID.</p>
 <h2 id="dracula-theme">Dracula theme</h2>
@@ -30813,7 +30829,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.23.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.24.iso
 </code></pre>
 <table>
 <thead>
@@ -30860,7 +30876,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.23.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.24.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -30871,16 +30887,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.23
-   git push origin 0.23</code></p>
+   git tag 0.24
+   git push origin 0.24</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.23</code>, <code>git push -f origin 0.23</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.24</code>, <code>git push -f origin 0.24</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.23.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.24.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -30895,15 +30911,15 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.23.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.23.sha256</code> (the whole ISO and each part) and <code>fliperos-0.23-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.24.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.24.sha256</code> (the whole ISO and each part) and <code>fliperos-0.24-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h3 id="telegram-group">Telegram group</h3>
 <p>Each release is also posted in the group <a href="https://t.me/fliperos15khz">t.me/fliperos15khz</a>, with pictures and an explanation of how each new feature works. <code>CHANGELOG.md</code> is the technical list of the GitHub release; the group reads <code>docs/telegram/VERSION.md</code>.</p>
 <p>The file is a list of messages separated by a line with only <code>---</code>. In each one, a line made of <code>!</code>, <code>[]</code> and a path in parentheses, such as <code>(website/public/screenshots/gui/video.webp)</code>, puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters; longer, it goes before the picture as a message); without one, it is a message of up to 4096.</p>
 <p>A picture never goes out stretched. A 15 kHz capture with more than twice as many dots per line as lines (640x240, 2560x240, or 240x640 turned on its side) is a 4:3 picture of wide dots, so the script posts it with the lines doubled at 4:3 (3:4 when vertical), and the dry run prints the size that will be posted.</p>
 <p>Every message is in Portuguese and English: its text has a part starting with a <code>🇧🇷</code> line and another starting with a <code>🇺🇸</code> line, and the script refuses the file without both. The network updates follow the same rule: next to <code>updates/notes/NNNN.md</code> (English, shown on the cabinet), <code>updates/notes/pt-BR/NNNN.md</code> has the same notes in Portuguese, and <code>tools/make-update.sh</code> refuses an update without it (unless <code>docs/telegram/update-NNNN.md</code> exists).</p>
-<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.23   # checks the file and the images, sends nothing (needs python3-pil)
+<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.24   # checks the file and the images, sends nothing (needs python3-pil)
 </code></pre>
 <p>That file is optional: without it, the group gets the version's section of <code>CHANGELOG.md</code> as it is (technical, no pictures), cut into messages of up to 4096 characters. The <strong>Release</strong> workflow checks the text with the dry run before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). With the version <code>all</code> it posts every version of the changelog, oldest first (<code>--backfill</code>), which is how the group gets the history. It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
 <h2 id="tests">Tests</h2>
@@ -31259,7 +31275,15 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td><code>config/fliperos-resolution</code>, <code>config/applications/fliperos-resolution.desktop</code></td>
-<td>Screen Resolution: the desktop resolution on the fly</td>
+<td>Desktop Resolution: the desktop resolution on the fly</td>
+</tr>
+<tr>
+<td><code>config/fliperos-cloud</code></td>
+<td>Cloud backup: high scores, saves and settings through rclone (web panel)</td>
+</tr>
+<tr>
+<td><code>fliperos-setup/lib/cheevos.sh</code>, <code>config/fliperos-cheevos</code></td>
+<td>RetroAchievements: the login (token only) and the account in each emulator's config</td>
 </tr>
 <tr>
 <td><code>config/mame-ui.ini</code></td>

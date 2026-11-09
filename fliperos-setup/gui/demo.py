@@ -14,7 +14,7 @@ def confirm():
 def confirm2():
     return ConfirmCapture("Button mapping", 3, "cancel", 10)
 
-CONTEXT = {"version": "0.23", "status": "192.168.1.155 - 42%"}
+CONTEXT = {"version": "0.24", "status": "192.168.1.155 - 42%"}
 
 
 def main():
