@@ -869,6 +869,23 @@ const enUS = {
     ],
     disclaimer: 'Each project belongs to its own authors. FliperOS only installs or talks to them; the links go to each project’s page.',
     cta: 'Read the DIY hardware guide',
+    guncon: {
+      title: 'GunCon 2: the gun that reads the tube',
+      text: 'Namco’s PlayStation 2 light gun, over USB. It aims by the CRT’s beam, the screen FliperOS is made for; on an LCD it doesn’t hit. Its driver ships with the system, with nothing to install.',
+      note: 'Calibrate it once in Setup > Joysticks > GunCon 2, with a few shots at the corners of your monitor. The calibration comes back every time the gun is plugged in.',
+      alt: 'A black GunCon 2 held in a hand, seen from behind, with the white d-pad on its back and its box in the background.',
+      credit: 'Photo: Chinpokomon5, CC BY-SA 3.0, Wikimedia Commons',
+      docs: 'GunCon 2 in the docs',
+    },
+    oscr: {
+      title: 'Open Source Cartridge Reader HW5',
+      text: 'sanni’s open cartridge reader dumps Super Nintendo, Mega Drive, Nintendo 64, Game Boy, Game Boy Advance and other cartridges. Build your own from the project’s files or buy one ready-made.',
+      note: 'Setup > System > Cartridge reader flashes it with FliperOS’s patched firmware. From then on the frontend reads the cartridge over USB and plays the game or saves it to the right folder.',
+      alt: 'An Open Source Cartridge Reader HW5 built in a red frame, its green screen lit with the list of systems and its rotary knob glowing blue.',
+      credit: 'Photo: Open Source Cartridge Reader wiki (CC0)',
+      cta: 'See it on AliExpress',
+      docs: 'Cartridge reader in the docs',
+    },
   },
   setup: {
     kicker: 'FliperOS Setup',

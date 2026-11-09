@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { ArrowUpRight, Crosshair, Gamepad2, Lightbulb, MemoryStick, MonitorDot, Zap, type LucideIcon } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
@@ -29,6 +30,13 @@ const PROJECT_URL: Record<string, string> = {
   LEDSpicer: 'https://github.com/meduzapat/LEDSpicer',
   'Open Source Cartridge Reader': 'https://github.com/sanni/cartreader',
 };
+
+// Os dois aparelhos com foto: a GunCon 2 (Wikimedia Commons, CC BY-SA 3.0) e o
+// OSCR HW5 (wiki do projeto, CC0). O crédito de cada foto vai na legenda.
+const PHOTO_CARDS = [
+  { id: 'guncon', src: '/art/guncon-2.webp', width: 800, height: 648, docs: 'Controls#light-gun-guncon-2', shop: undefined },
+  { id: 'oscr', src: '/art/oscr-hw5.webp', width: 640, height: 565, docs: 'DIY-hardware#cartridge-reader-open-source-cartridge-reader', shop: LINKS.oscr },
+] as const;
 
 export function OpenHardware() {
   const { t } = useI18n();
@@ -77,6 +85,53 @@ export function OpenHardware() {
             );
           })}
         </ul>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          {PHOTO_CARDS.map((card, i) => {
+            const c = o[card.id];
+            const links = [
+              ...(card.shop ? [{ href: card.shop, label: o.oscr.cta }] : []),
+              { href: `${LINKS.docs}/${card.docs}`, label: c.docs },
+            ];
+            return (
+              <Reveal key={card.id} delay={i * 80}>
+                <article className="card flex h-full flex-col gap-5 rounded-2xl p-5 sm:flex-row sm:p-6 lg:flex-col">
+                  <figure className="shrink-0 sm:w-56 lg:w-full">
+                    <Image
+                      src={card.src}
+                      alt={c.alt}
+                      width={card.width}
+                      height={card.height}
+                      unoptimized
+                      className="aspect-[4/3] h-auto w-full rounded-xl object-cover"
+                    />
+                    <figcaption className="mt-2 text-[11px] leading-snug text-comment">{c.credit}</figcaption>
+                  </figure>
+                  <div>
+                    <h3 className="font-semibold text-fg">{c.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted">{c.text}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-muted">{c.note}</p>
+                    <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                      {links.map((link) => (
+                        <a
+                          key={link.href}
+                          href={link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"
+                        >
+                          {link.label}
+                          <ArrowUpRight className="size-4" aria-hidden="true" />
+                          <span className="sr-only">{t.a11y.external}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              </Reveal>
+            );
+          })}
+        </div>
 
         <Reveal className="mt-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <p className="max-w-2xl text-xs leading-relaxed text-comment">{o.disclaimer}</p>

@@ -870,6 +870,23 @@ const ptBR: Messages = {
     ],
     disclaimer: 'Cada projeto é dos seus próprios autores. O FliperOS só os instala ou conversa com eles; os links levam à página de cada projeto.',
     cta: 'Leia o guia de hardware DIY',
+    guncon: {
+      title: 'GunCon 2: a pistola que lê o tubo',
+      text: 'A pistola da Namco para o PlayStation 2, na USB. Ela mira pelo feixe do CRT, a tela para a qual o FliperOS é feito; num LCD ela não acerta. O driver vem no sistema e não há nada para instalar.',
+      note: 'Calibre uma vez no Setup > Joysticks > GunCon 2, com alguns tiros nos cantos do seu monitor. A calibração volta sozinha toda vez que a pistola é ligada.',
+      alt: 'Uma GunCon 2 preta segurada na mão, vista de trás, com o direcional branco na traseira e a caixa dela ao fundo.',
+      credit: 'Foto: Chinpokomon5, CC BY-SA 3.0, Wikimedia Commons',
+      docs: 'GunCon 2, na documentação',
+    },
+    oscr: {
+      title: 'Open Source Cartridge Reader HW5',
+      text: 'O leitor de cartuchos aberto do sanni faz o dump de cartuchos de Super Nintendo, Mega Drive, Nintendo 64, Game Boy, Game Boy Advance e outros. Dá para montar o seu pelos arquivos do projeto ou comprar um pronto.',
+      note: 'O Setup > System > Cartridge reader grava nele o firmware com o patch do FliperOS. Depois disso o frontend lê o cartucho pela USB e joga ou guarda o jogo na pasta certa.',
+      alt: 'Um Open Source Cartridge Reader HW5 montado numa moldura vermelha, com a tela verde acesa mostrando a lista de sistemas e o botão giratório iluminado de azul.',
+      credit: 'Foto: wiki do Open Source Cartridge Reader (CC0)',
+      cta: 'Ver no AliExpress',
+      docs: 'Leitor de cartuchos, na documentação',
+    },
   },
   setup: {
     kicker: 'FliperOS Setup',

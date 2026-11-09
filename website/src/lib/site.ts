@@ -15,6 +15,7 @@ export const LINKS = {
   dpVgaAdapter: 'https://a.aliexpress.com/_mPCmfYb',
   jammaBoard: 'https://pt.aliexpress.com/item/1005010778265464.html',
   soyoR7240: 'https://pt.aliexpress.com/item/1005012468296916.html',
+  oscr: 'https://pt.aliexpress.com/item/1005010307901792.html',
   artRepairTelegram: 'https://t.me/+1XiiRQtrBVFkNGEx',
 } as const;
 
