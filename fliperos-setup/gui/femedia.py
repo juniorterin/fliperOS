@@ -7,6 +7,7 @@
 #   femedia.py list                     os drives e o estado de cada um
 #   femedia.py identify /dev/sr0        o console, o serial e o titulo do disco
 #   femedia.py rip /dev/sr0 PASTA NOME  rippa, com as linhas @step/@done/@fail
+#   femedia.py oscr-hello /dev/ttyUSB0  o firmware do FliperOS responde?
 #   femedia.py oscr-scan /dev/ttyUSB0   os cartuchos no OSCR (JSON)
 #   femedia.py oscr-info /dev/ttyUSB0 SNES          o cartucho de um sistema
 #   femedia.py oscr-rip /dev/ttyUSB0 SNES PASTA NOME  o dump, como o rip
@@ -740,6 +741,16 @@ def main(argv):
         return 0
     if len(argv) == 4 and argv[0] == "rip":
         return rip(*argv[1:])
+    if len(argv) == 2 and argv[0] == "oscr-hello":
+        # O firmware do FliperOS responde? (Setup > System > Cartridge reader)
+        try:
+            oscr = Oscr(argv[1])
+        except (OSError, OscrError) as e:
+            print("the OSCR did not answer as FliperOS firmware: %s" % (e.args[0] if e.args else e))
+            return 1
+        print("FLIPEROS 1 " + " ".join(oscr.systems))
+        oscr.close()
+        return 0
     if len(argv) == 2 and argv[0] == "oscr-scan":
         print(json.dumps(oscr_call(argv[1], "scan"), indent=1))
         return 0

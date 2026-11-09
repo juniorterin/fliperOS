@@ -65,6 +65,8 @@ source "$SETUP_DIR/lib/xorg.sh"
 source "$SETUP_DIR/lib/bootloader.sh"
 # shellcheck source=lib/atom15.sh
 source "$SETUP_DIR/lib/atom15.sh"
+# shellcheck source=lib/oscr.sh
+source "$SETUP_DIR/lib/oscr.sh"
 # shellcheck source=lib/disk.sh
 source "$SETUP_DIR/lib/disk.sh"
 # shellcheck source=lib/install.sh

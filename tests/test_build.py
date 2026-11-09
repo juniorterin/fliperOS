@@ -17858,6 +17858,16 @@ class PhysicalMediaTests(unittest.TestCase):
             self.assertEqual(list((tmp / 'bad').iterdir()), [])
             port, _ = self.fake_oscr(carts, files, firmware=False)
             self.assertEqual(fm.oscr_call(port, 'scan'), {'error': 'firmware'})
+            # A conferencia do Setup depois de gravar (lib/oscr.sh, oscr_check).
+            out = io.StringIO()
+            saved_stdout, sys.stdout = sys.stdout, out
+            try:
+                self.assertEqual(fm.main(['oscr-hello', port]), 1)
+                self.assertEqual(fm.main(['oscr-hello', self.fake_oscr(carts, files)[0]]), 0)
+            finally:
+                sys.stdout = saved_stdout
+            self.assertEqual(out.getvalue().splitlines(),
+                             ['the OSCR did not answer as FliperOS firmware: firmware', 'FLIPEROS 1 SNES MD N64 GB GBA'])
 
     def test_oscr_carts_systems_play_and_boot(self):
         import types

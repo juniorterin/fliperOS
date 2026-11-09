@@ -132,6 +132,8 @@ packages+=(samba-vfs-modules)
 # O rip dos discos no frontend (gui/femedia.py): o cdrdao le o CD em bruto e
 # o chdman (mame-tools) o junta num .chd.
 packages+=(cdrdao mame-tools)
+# O avrdude grava o firmware do leitor de cartuchos (lib/oscr.sh).
+packages+=(avrdude)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
 # repositorio local o tem (o das imagens anteriores nao tem: fica no X).

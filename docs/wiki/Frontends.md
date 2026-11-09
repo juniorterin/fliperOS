@@ -120,7 +120,14 @@ The cart's card works like a disc's:
 
 With **Boot from media** set to the cartridge reader, the screen shows the reader's outline with a cartridge floating over the slot and NO CARTRIDGE. The OSCR can't tell when a cart goes in, so button 1 says it is there: the cartridge slides into the slot and is read.
 
-The firmware is built by `tools/oscr-firmware.sh` (arduino-cli in Docker, sanni/cartreader at `060d8ae`): `output/oscr/OSCR-HW5-fliperos.hex` and `OSCR-HW5-VSELECT-fliperos.hex` (with the VSELECT module). It is flashed over the same USB cable, with the voltage switch at 5V: `avrdude -p atmega2560 -c wiring -P /dev/ttyUSB0 -b 115200 -D -U flash:w:OSCR-HW5-fliperos.hex:i`.
+**Installing the firmware: Setup > System > Cartridge reader (OSCR).**
+1. With the reader plugged in, **Install the FliperOS firmware** asks which board it is: HW5 with the 3.3V/5V switch, or HW5 with the VSELECT module.
+2. It asks you to remove any cartridge, set the switch to 5V (as the OSCR Tool does) and keep the cable in.
+3. It reads the firmware the reader has into `~/oscr/oscr-backup-DATE.hex`, writes the FliperOS one over the USB cable (`avrdude` through the Mega's bootloader) and checks that the reader answers.
+
+**Restore the backup** writes the old firmware back.
+
+The two `.hex` files come with the image and the updates (`config/oscr`, installed in `/usr/local/share/fliperos/oscr`). They are built by `tools/oscr-firmware.sh` (arduino-cli in Docker, sanni/cartreader at `060d8ae` plus `patches/oscr`).
 
 **Boot from media** (Setup > Games > Frontend > Boot from media, the `physical` launcher) starts the frontend with `--media` on the disc of the chosen drive (`boot_media` in `fliperos.conf`).
 

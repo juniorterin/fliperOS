@@ -19,6 +19,6 @@ All of it lives in `Cart_Reader/FLIPEROS.ino`; the rest of the firmware gets sma
 - a fatal error tells the host with `ERROR`;
 - `setVoltage()` never goes to 5V during `SCAN`, so a 3.3V cart is never powered at 5V while probing.
 
-Build both HW5 variants (without and with VSELECT) with `bash tools/oscr-firmware.sh`; it prints the flash and RAM use (about 73% and 67%).
+Build both HW5 variants (without and with VSELECT) with `bash tools/oscr-firmware.sh`; it prints the flash and RAM use (about 73% and 67%). The built files go to `config/oscr`, which the image and the updates carry, and Setup > System > Cartridge reader writes them to the reader (`fliperos-setup/lib/oscr.sh`), saving the old firmware first.
 
 Not tested on a real OSCR yet.

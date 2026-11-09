@@ -79,6 +79,7 @@ screen_setup_system() {
       "whatsnew|What's new|The changelog of each FliperOS version and the updates installed." \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))|Show boot and emulator messages on screen to find a problem." \
       "lab|Lab mode ($(lab_enabled && echo on || echo off))|Remote help: a temporary internet address to this cabinet." \
+      "oscr|Cartridge reader (OSCR)|The firmware that lets the frontend read cartridges over USB." \
       "splash|Splash screen|The boot screen theme, with a preview." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
@@ -92,8 +93,60 @@ screen_setup_system() {
       whatsnew) screen_whatsnew ;;
       debug) screen_debug ;;
       lab) screen_lab ;;
+      oscr) screen_oscr_firmware ;;
       splash) screen_splash ;;
       return) return 0 ;;
+    esac
+  done
+}
+
+# screen_oscr_firmware (Setup > System > Cartridge reader): grava no Open
+# Source Cartridge Reader o firmware com o patch do FliperOS (lib/oscr.sh),
+# que deixa o frontend ler cartuchos pela USB, depois de salvar o que ele
+# tinha; o Restore grava o de antes de volta.
+screen_oscr_firmware() {
+  local title="Cartridge reader" port variant backup choice
+  local -a ports entries
+  mapfile -t ports < <(oscr_ports)
+  if ((${#ports[@]} == 0)); then
+    ui_msg "$title" "No Open Source Cartridge Reader was found." "" \
+      "Plug in its USB cable, switch it on and come back."
+    return 0
+  fi
+  port=${ports[0]}
+  if ((${#ports[@]} > 1)); then
+    entries=()
+    for port in "${ports[@]}"; do
+      entries+=("$port|$port")
+    done
+    port=$(UI_STYLE=list ui_menu "$title" "More than one reader is plugged in. Which port?" "${ports[0]}" \
+      "${entries[@]}") || return 0
+  fi
+  while true; do
+    entries=("install|Install the FliperOS firmware|Saves the firmware it has, then writes the FliperOS one.")
+    backup=$(oscr_backup_file) &&
+      entries+=("restore|Restore the backup|Writes back the firmware saved before the install.")
+    entries+=("return|Return|Back.")
+    choice=$(ui_menu_hints "$title" "Port: $port. With the FliperOS firmware, the frontend reads cartridges over USB, without taking out the SD card." \
+      install "${entries[@]}") || return 0
+    case $choice in
+      install)
+        variant=$(ui_radio "$title" "Which board? The VSELECT module sets the voltage by itself; without it, the board has a 3.3V/5V switch." \
+          hw5 "hw5|HW5 with the voltage switch" "hw5-vselect|HW5 with the VSELECT module") || continue
+        ui_yesno "$title" "Remove any cartridge, set the voltage switch to 5V (as the OSCR Tool asks) and keep the cable in until it ends. The firmware it has now is saved first. Install?" no || continue
+        run_with_progress "Writing the OSCR firmware" "" oscr_flash "$port" "$variant" || continue
+        ui_msg "$title" "$(ui_yes "The FliperOS firmware is on the reader.")" "" \
+          "Its old firmware is saved in ~/oscr: Restore the backup puts it back." "" \
+          "In the frontend, the OSCR tile under the systems reads cartridges now."
+        ;;
+      restore)
+        ui_yesno "$title" "Write back the firmware saved on $(date -r "$backup" '+%Y-%m-%d %H:%M' 2> /dev/null)? Keep the cable in until it ends." no ||
+          continue
+        run_with_progress "Restoring the OSCR firmware" "" oscr_restore "$port" || continue
+        ui_msg "$title" "$(ui_yes "The old firmware is back on the reader.")" "" \
+          "The frontend can only read cartridges with the FliperOS one."
+        ;;
+      *) return 0 ;;
     esac
   done
 }

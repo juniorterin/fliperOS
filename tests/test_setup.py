@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system", "customgames", "whatsnew"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -3111,6 +3111,74 @@ class BootGameTests(Base):
         session = (ROOT / "config" / "fliperos-session").read_text()
         self.assertIn('game)\n        FLIPEROS_POWERKEY=game "${program[@]}"', session)
         self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
+
+
+class OscrFirmwareTests(Base):
+    """Setup > System > Cartridge reader: grava no OSCR o firmware com o patch
+    do FliperOS (lib/oscr.sh), depois de salvar o que ele tinha."""
+
+    def rig(self, check_ok=True):
+        d = self.env.dir
+        tty = d / "tty"
+        for name, ids in (("ttyUSB0", ("1A86", "7523")), ("ttyUSB1", ("0403", "6001"))):
+            usb = d / "usb" / name / "1-1"
+            (usb / "1-1:1.0" / name).mkdir(parents=True)
+            (usb / "idVendor").write_text(ids[0] + "\n")
+            (usb / "idProduct").write_text(ids[1] + "\n")
+            (tty / name).mkdir(parents=True)
+            (tty / name / "device").symlink_to(usb / "1-1:1.0" / name)
+        firmware = d / "oscr-firmware"
+        firmware.mkdir()
+        (firmware / "OSCR-HW5-fliperos.hex").write_text(":00000001FF\n")
+        log = d / "avrdude.log"
+        avrdude = d / "avrdude"
+        # O avrdude de mentira: anota os argumentos e, na leitura, grava o arquivo.
+        avrdude.write_text('#!/bin/bash\necho "$*" >> "%s"\nfor a in "$@"; do\n'
+                           '  [[ $a == flash:r:* ]] && { f=${a#flash:r:}; echo ":10000000" > "${f%%:i}"; }\n'
+                           'done\nexit 0\n' % log)
+        avrdude.chmod(0o755)
+        hello = d / "hello.py"
+        hello.write_text("import sys\nprint('FLIPEROS 1 SNES')\nsys.exit(%d)\n" % (0 if check_ok else 1))
+        return log, {"OSCR_SYS_TTY": str(tty), "OSCR_AVRDUDE": str(avrdude), "OSCR_MEDIA": str(hello),
+                     "OSCR_FIRMWARE_DIR": str(firmware), "OSCR_BACKUP_DIR": str(d / "home-oscr")}
+
+    def test_ports_backup_flash_check_and_restore(self):
+        log, env = self.rig()
+        self.assertEqual(self.env.out("oscr_ports", env).splitlines(), ["/dev/ttyUSB0"])
+        out = self.env.out("oscr_flash /dev/ttyUSB0 hw5", env)
+        self.assertIn("@step 100 Done", out)
+        backup = self.env.out("oscr_backup_file", env).strip()
+        self.assertTrue(backup.startswith(env["OSCR_BACKUP_DIR"] + "/oscr-backup-") and backup.endswith(".hex"))
+        self.assertIn("oscr_backup=%s\n" % backup, (self.env.etc / "fliperos.conf").read_text())
+        calls = log.read_text().splitlines()
+        base = "-p atmega2560 -c wiring -P /dev/ttyUSB0 -b 115200 -D -U "
+        self.assertEqual(calls, [base + "flash:r:%s:i" % backup,
+                                 base + "flash:w:%s/OSCR-HW5-fliperos.hex:i" % env["OSCR_FIRMWARE_DIR"]])
+        # O Restore grava o backup de volta.
+        self.assertIn("@step 100 Done", self.env.out("oscr_restore /dev/ttyUSB0", env))
+        self.assertEqual(log.read_text().splitlines()[-1], base + "flash:w:%s:i" % backup)
+        # Sem o arquivo da variante, nada e gravado.
+        before = len(log.read_text().splitlines())
+        out = self.env.run("oscr_flash /dev/ttyUSB0 hw5-vselect", env)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("@fail", out.stdout)
+        self.assertEqual(len(log.read_text().splitlines()), before)
+
+    def test_a_reader_that_does_not_answer_after_the_flash_fails(self):
+        _, env = self.rig(check_ok=False)
+        out = self.env.run("oscr_flash /dev/ttyUSB0 hw5", env)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("@fail Checking that the OSCR answers|", out.stdout)
+
+    def test_the_firmware_ships_with_the_image(self):
+        for name in ("OSCR-HW5-fliperos.hex", "OSCR-HW5-VSELECT-fliperos.hex"):
+            hexfile = (ROOT / "config" / "oscr" / name).read_text()
+            self.assertTrue(hexfile.startswith(":") and hexfile.rstrip().endswith(":00000001FF"), name)
+        self.assertIn('install -m644 "$src"/config/oscr/*.hex', (ROOT / "fliperos-rootfs.sh").read_text())
+        self.assertIn(" avrdude \\", (ROOT / "fliperos-mkiso.sh").read_text())
+        self.assertIn("packages+=(avrdude)", (ROOT / "tools" / "cabinet-update.sh").read_text())
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        self.assertIn("      oscr) screen_oscr_firmware ;;", menu)
 
 
 class BootMediaTests(Base):
@@ -7722,7 +7790,7 @@ class SetupGroupsTests(Base):
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
         self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update",
-                                                        "whatsnew", "debug", "lab", "splash", "return"])
+                                                        "whatsnew", "debug", "lab", "oscr", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)
 

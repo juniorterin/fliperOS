@@ -145,6 +145,12 @@ install -d "$root/usr/local/share/fliperos/sm2-emu-patches"
 for patch in "$src"/config/sm2-emu-patches/*.patch; do
   [[ ! -f $patch ]] || install -m644 "$patch" "$root/usr/local/share/fliperos/sm2-emu-patches/"
 done
+# O firmware do leitor de cartuchos (Setup > System > Cartridge reader,
+# lib/oscr.sh): o OSCR com o patch do FliperOS (patches/oscr), feito pelo
+# tools/oscr-firmware.sh. Vem no config/ para os updates o levarem.
+rm -rf "$root/usr/local/share/fliperos/oscr"
+install -d "$root/usr/local/share/fliperos/oscr"
+install -m644 "$src"/config/oscr/*.hex "$src/config/oscr/README.md" "$root/usr/local/share/fliperos/oscr/"
 # Fightcade 2 (Setup > Games > Frontend): o que o baixa do site dele e o abre, e o
 # openbox dele (Alt+Tab entre a sala de jogos e o emulador). O programa em si
 # nao vem na imagem (codigo fechado).
