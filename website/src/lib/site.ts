@@ -67,7 +67,7 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fliperos.j
 
 // As páginas de detalhe, na ordem do menu e do "Próxima"; o slug é o mesmo
 // nos dois idiomas (/en/frontend, /pt/frontend).
-export const PAGE_SLUGS = ['frontend', 'setup', 'games', 'video', 'web-panel', 'emulators', 'link', 'hardware', 'install', 'controls', 'cards'] as const;
+export const PAGE_SLUGS = ['frontend', 'setup', 'games', 'media', 'video', 'web-panel', 'emulators', 'link', 'hardware', 'install', 'controls', 'cards'] as const;
 export type PageSlug = (typeof PAGE_SLUGS)[number];
 
 export function isPageSlug(value: string): value is PageSlug {
@@ -79,6 +79,7 @@ export const PAGE_WIKI: Record<PageSlug, string> = {
   frontend: 'Frontends',
   setup: 'Installed-system',
   games: 'ROMs',
+  media: 'Frontends',
   video: 'Kernel-15-kHz',
   'web-panel': 'Web-panel',
   emulators: 'Emulators',
@@ -194,6 +195,7 @@ export const PAGE_SHOTS: Record<PageSlug, string[]> = {
     'gui/downloader-magnet-browser',
     'gui/downloader-progress',
   ],
+  media: [],
   video: [],
   'web-panel': [],
   emulators: [],
@@ -235,6 +237,15 @@ const ROW_ONLY_SHOTS = [
   'anim/netplay-{lang}',
   'anim/ssf2tb-{lang}',
   'anim/daytona-{lang}',
+  // A midia fisica: o frontend de verdade com drives, discos e OSCR de
+  // mentira (tools/video/fe_media.py, render.sh media).
+  'anim/media-disc',
+  'anim/media-onecore',
+  'anim/media-rip',
+  'anim/media-oscr',
+  'anim/media-boot-disc',
+  'anim/media-boot-cart',
+  'anim/media-setup',
 ];
 
 const withLang = (id: string) => (id.includes('{lang}') ? ['en', 'pt'].map((l) => id.replace('{lang}', l)) : [id]);

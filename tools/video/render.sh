@@ -9,6 +9,7 @@
 #   sh tools/video/render.sh gifs [CENA]         as animacoes do site que nao sao o painel
 #   sh tools/video/render.sh gifs-live IP        as animacoes do painel com o SF2 (abre o SF2!)
 #   sh tools/video/render.sh transitions         a troca de romlist em cada animacao, a 60 qps
+#   sh tools/video/render.sh media               a midia fisica (discos e OSCR) para a pagina do site
 #   sh tools/video/render.sh compose [TRECHO]    o video final (ou so um trecho)
 #   sh tools/video/render.sh all IP              tudo, em ordem
 #
@@ -135,6 +136,16 @@ transitions() {
   ls -la "$work/transitions"
 }
 
+# A midia fisica do frontend (fe_media.py: drives, discos e OSCR de mentira):
+# um WebP animado por cena em website/public/screenshots/anim/media-*.webp.
+media() {
+  [ -f "$work/demo.tar" ] || { echo "No $work/demo.tar: run 'render.sh library IP' first." >&2; exit 1; }
+  rm -rf "$work/media-anim"
+  run fliperos-video bash /t/rig.sh /t/fe_media.py /v/media-anim
+  cp "$work"/media-anim/media-*.webp website/public/screenshots/anim/
+  ls -la website/public/screenshots/anim/media-*.webp
+}
+
 compose() {
   run -e ONLY="$arg" fliperos-video python3 /t/compose.py
   [ -n "$arg" ] || ls -la "$work/out/"fliperos-apresentacao*
@@ -148,6 +159,7 @@ case $step in
   gifs) gifs ;;
   gifs-live) gifs_live ;;
   transitions) transitions ;;
+  media) media ;;
   compose) compose ;;
   all)
     need_cabinet

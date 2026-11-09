@@ -34,6 +34,7 @@ const SECTIONS: Record<PageSlug, ReactNode> = {
   frontend: null,
   setup: <Setup />,
   games: null,
+  media: null,
   video: (
     <>
       <Crt />
