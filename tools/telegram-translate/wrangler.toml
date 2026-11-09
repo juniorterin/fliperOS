@@ -10,4 +10,4 @@ binding = "AI"
 ALLOWED_CHAT = ""
 # topicos sem traducao (ex.: Files/Arquivos): o numero no fim do link do
 # topico (t.me/fliperos15khz/NUMERO), separados por virgula
-SKIP_TOPICS = ""
+SKIP_TOPICS = "578"
