@@ -28,7 +28,7 @@
  *                              pixels nao muda, entao o jogo nem percebe
  *
  * --conf ARQUIVO (ou FLIPEROS_CONF) troca o fliperos.conf. FLIPEROS_DRM_CARD
- * troca o /dev/dri/card0.
+ * troca a placa (a primeira /dev/dri/cardN com saidas).
  */
 #define _GNU_SOURCE
 #include <dirent.h>
@@ -197,10 +197,29 @@ static int matrix_identity(const struct params *p)
 
 /* ── KMS ────────────────────────────────────────────────────────── */
 
+/* open_card: a placa do $FLIPEROS_DRM_CARD ou a primeira /dev/dri/cardN com
+ * saidas de video. Nem sempre e a card0: com o framebuffer do firmware
+ * (simpledrm) liberado no boot, a placa de verdade fica com a card1. */
 static int open_card(void)
 {
     const char *card = getenv("FLIPEROS_DRM_CARD");
-    return open(card ? card : "/dev/dri/card0", O_RDWR | O_CLOEXEC);
+    char path[32];
+    if (card)
+        return open(card, O_RDWR | O_CLOEXEC);
+    for (int i = 0; i < 16; i++) {
+        snprintf(path, sizeof path, "/dev/dri/card%d", i);
+        int fd = open(path, O_RDWR | O_CLOEXEC);
+        if (fd < 0)
+            continue;
+        drmModeRes *res = drmModeGetResources(fd);
+        int outputs = res && res->count_connectors > 0;
+        if (res)
+            drmModeFreeResources(res);
+        if (outputs)
+            return fd;
+        close(fd);
+    }
+    return -1;
 }
 
 /* find_prop: o id da propriedade NOME do objeto (0 se nao tem); em
@@ -347,7 +366,7 @@ static int apply_kms(const struct params *p)
 {
     int fd = open_card(), fails = 0, owner;
     if (fd < 0) {
-        perror("fliperos-color: /dev/dri/card0");
+        perror("fliperos-color: /dev/dri/card*");
         return 1;
     }
     if ((owner = master_fd(fd)) >= 0) {
@@ -454,7 +473,7 @@ static int mode_timing(int argc, char **argv)
     }
     int fd = open_card(), owner, status = 1;
     if (fd < 0) {
-        perror("fliperos-color: /dev/dri/card0");
+        perror("fliperos-color: /dev/dri/card*");
         return 1;
     }
     if ((owner = master_fd(fd)) >= 0) {

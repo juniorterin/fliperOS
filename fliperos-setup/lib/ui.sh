@@ -90,7 +90,9 @@ UI_GUI_REPLY=""
 UI_STYLE=""
 UI_GUI_DIR=${UI_GUI_DIR:-/run/fliperos/gui}
 UI_GUI_BIN=${UI_GUI_BIN:-${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/fliperos-gui}
-UI_DRI=${UI_DRI:-/dev/dri/card0}
+# As placas de video (/dev/dri/cardN): nem sempre ha a card0 (com o
+# framebuffer do firmware liberado no boot, a placa fica com a card1).
+UI_DRI=${UI_DRI:-/dev/dri/card}
 # O VT que esta na tela: o teclado dele fica calado com a interface no ar.
 UI_GUI_CONSOLE=${UI_GUI_CONSOLE:-/dev/tty0}
 
@@ -101,7 +103,7 @@ ui_gui_wanted() {
   esac
   # Pelo desktop (o atalho FliperOS Setup do LXDE, --desktop): numa janela.
   ((${SETUP_DESKTOP:-0} == 1)) && [[ -n ${DISPLAY:-} ]] && return 0
-  ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} && -e $UI_DRI ]]
+  ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} ]] && compgen -G "${UI_DRI}[0-9]*" > /dev/null
 }
 
 # ui_gui_alive: a interface grafica esta no ar? Se ela caiu (um abort do

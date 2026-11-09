@@ -4232,16 +4232,24 @@ class RemoteMenuTests(Base):
         dri = self.env.dir / "card0"
         dri.write_text("")
         self.env.cmdline.write_text("quiet splash\n")   # o disco instalado, nao a midia
-        env = {"UI_DRI": str(dri), "SETUP_MENU_LOOP": "1"}
+        env = {"UI_DRI": str(self.env.dir / "card"), "SETUP_MENU_LOOP": "1"}
         self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 0)
         env["FLIPEROS_UI"] = "text"
         self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 1)
+
+    def test_gui_opens_when_the_card_is_not_card0(self):
+        # Com o framebuffer do firmware liberado no boot, a AMD ficou na
+        # card1 (R9 380 de um usuario): sem card0 o Setup ficava sempre em texto.
+        env = {"UI_DRI": str(self.env.dir / "card"), "SETUP_MENU_LOOP": "1"}
+        self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 1)
+        (self.env.dir / "card1").write_text("")
+        self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 0)
 
     def test_install_media_opens_the_gui_after_the_output_test(self):
         dri = self.env.dir / "card0"
         dri.write_text("")
         self.env.cmdline.write_text("boot=live quiet\n")
-        env = {"UI_DRI": str(dri), "SETUP_MENU_LOOP": "1"}
+        env = {"UI_DRI": str(self.env.dir / "card"), "SETUP_MENU_LOOP": "1"}
         self.assertEqual(self.env.run("source %s/lib/ui.sh; ui_gui_wanted" % SETUP, env).returncode, 0)
         ui = (SETUP / "lib" / "ui.sh").read_text()
         self.assertIn("if ! is_live || conf_get output_test > /dev/null 2>&1; then\n    ui_gui_start", ui)
