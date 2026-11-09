@@ -4,6 +4,8 @@
 //   cada mensagem vai para os outros dois idiomas (pt, en, es).
 // Segredos: TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET. Binding AI no wrangler.toml.
 // Variavel opcional: ALLOWED_CHAT (id numerico do grupo; sem ela, qualquer chat).
+// SKIP_TOPICS: topicos sem traducao (o numero no fim do link do topico,
+// t.me/fliperos15khz/NUMERO), separados por virgula.
 // Deploy e webhook: tools/telegram-translate/README.md.
 
 const MIN_LETTERS = 4;
@@ -50,6 +52,8 @@ async function handle(env, msg) {
   const text = msg.text || msg.caption || '';
   if (!text || text.startsWith('/') || (msg.from && msg.from.is_bot)) return;
   if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return;
+  const skip = String(env.SKIP_TOPICS || '').split(',').map(x => x.trim()).filter(Boolean);
+  if (msg.is_topic_message && skip.includes(String(msg.message_thread_id))) return;
   if (clean(text).length < MIN_LETTERS) return;
 
   const src = detect(text);

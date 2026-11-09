@@ -31,5 +31,9 @@ comandos e mensagens de bots são ignoradas. Roda como Cloudflare Worker
 5. Opcional: ponha o id do grupo em `ALLOWED_CHAT` no wrangler.toml e rode
    `npx wrangler deploy` de novo.
 
+Para um tópico ficar sem tradução (como Files/Arquivos), ponha o número do
+fim do link dele (`t.me/fliperos15khz/NUMERO`) em `SKIP_TOPICS` no
+wrangler.toml, separado por vírgula, e rode `npx wrangler deploy`.
+
 Para desligar: `deleteWebhook`. Os posts de versões e updates
 (`tools/telegram-post.py`) só usam `sendMessage` e não dependem do webhook.
