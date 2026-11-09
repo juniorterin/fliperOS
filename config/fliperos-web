@@ -620,12 +620,6 @@ def program_name(args):
     name = os.path.basename(args[0])
     if name == "AppRun":
         name = os.path.basename(os.path.dirname(args[0])) or name
-    # O OpenBOR 4 e o 3.0 (/usr/local/lib/openbor/OpenBOR e OpenBOR-3.0): o
-    # comando openbor (config/fliperos-openbor) abre o 3.0 com exec, e o
-    # script some. Sem isso o painel nao achava o jogo aberto, e o fechar nao
-    # fechava um pak do 3.0 (visto no gabinete).
-    if name in ("OpenBOR", "OpenBOR-3.0"):
-        return "openbor"
     return name
 
 

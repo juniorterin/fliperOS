@@ -16,23 +16,23 @@ frontends_systems() {
     IFS='|' read -r name exe args exts <<< "$(scraper_attract_emulator "$key")"
     [[ -n $name ]] && printf '%s|%s|%s|%s|%s|%s|%s\n' "$key" "$dir" "$platform" "$name" "$exe" "$args" "$exts"
   done < <(scraper_detect)
+  frontends_openbor
   return 0
 }
 
-# frontends_openbor_meta: os metadados dos paks do OpenBOR
-# (config/fliperos-openbor-meta scan): a tela de titulo em ~/media/snap, e os
-# jogadores, a resolucao, os modos e o que o Scraper trouxe (titulo, ano,
-# fabricante, genero, descricao) na lista OpenBOR.txt do FliperOS. Como o
-# usuario: os arquivos sao dele.
-OPENBOR_META=${OPENBOR_META:-$FLIPEROS_BIN/fliperos-openbor-meta}
-frontends_openbor_meta() {
-  [[ -x $OPENBOR_META && -d $ROMS_DIR/openbor/Paks ]] || return 0
-  local run=("$OPENBOR_META" scan --paks "$ROMS_DIR/openbor/Paks" --media "$MEDIA_DIR" --lists "$FLIPEROS_LISTS")
-  if ((EUID == 0)) && [[ -n ${FLIPEROS_USER:-} ]] && id "$FLIPEROS_USER" > /dev/null 2>&1; then
-    runuser -u "$FLIPEROS_USER" -- "${run[@]}" >> "$FLIPEROS_LOG" 2>&1
-  else
-    "${run[@]}" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1
-  fi
+# frontends_openbor: a pasta dos paks do OpenBOR (~/roms/openbor/Paks), se
+# tiver algum .pak (a extensao em qualquer caixa: HFFgp32.PAK). Fica fora do
+# scraper_detect: a pasta de cima tem Saves, Logs e o v3 do 3.0, que nao sao
+# jogos, e o Skyscraper nao tem a plataforma (o Scraper nao a busca).
+# Plataforma "openbor", a do ES-DE.
+frontends_openbor() {
+  local dir=$ROMS_DIR/openbor/Paks f name exe args exts
+  for f in "$dir"/*; do
+    [[ -f $f && ${f,,} == *.pak ]] || continue
+    IFS='|' read -r name exe args exts <<< "$(scraper_attract_emulator openbor)"
+    printf 'openbor|%s|openbor|%s|%s|%s|%s\n' "$dir" "$name" "$exe" "$args" "$exts"
+    return 0
+  done
   return 0
 }
 
@@ -609,7 +609,6 @@ frontends_attract_lists() {
 # Attract-Mode Plus, as telas e as romlists dele (fliperos-setup --romlists).
 frontends_lists() {
   frontends_arcade_resync
-  frontends_openbor_meta
   if frontends_attract_wanted; then
     frontends_attract > /dev/null
     chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null

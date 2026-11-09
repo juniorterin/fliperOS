@@ -8603,10 +8603,6 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual((found['game']['program'], found['game']['file']), ('pcsx2', 'Need for Speed.ISO'))
         self.assertEqual(found['frontend']['program'], 'attractplus')
         self.assertEqual(web.program_name(['/opt/duckstation/AppRun']), 'duckstation')
-        # O 3.0 entra com exec no lugar do script openbor: tambem e o jogo.
-        for binary in ('/usr/local/lib/openbor/OpenBOR-3.0', '/usr/local/lib/openbor/OpenBOR'):
-            self.assertEqual(web.program_name([binary, 'Batman SD.pak']), 'openbor')
-            self.assertIn(web.program_name([binary]), web.EMULATORS)
         self.assertEqual(web.game_file('groovymame', ['groovymame', 'sf2']), 'sf2')
         self.assertEqual(web.game_file('groovymame', ['groovymame', '-inipath', '/etc/mame', 'sf2']), 'sf2')
         self.assertIsNone(web.game_file('groovymame', ['groovymame']))
@@ -11022,7 +11018,7 @@ class EmulatorModeTests(unittest.TestCase):
                                            'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n'
                                            'echo "PRELOAD=${LD_PRELOAD:-}"\n')
             for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'pcsx2x6', 'myprog', 'supermodel', 'hypseus',
-                         'fightcade', 'sm2-emu', 'duckstation', 'openbor'):
+                         'fightcade', 'sm2-emu', 'duckstation'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
@@ -11043,25 +11039,6 @@ class EmulatorModeTests(unittest.TestCase):
         out = self.run_x11(['dolphin-emu']).stdout
         self.assertIn('MODE=640 240 60', out)
         self.assertIn('-C Dolphin.Display.Fullscreen=True -C GFX.Settings.AspectRatio=3', out)
-
-    def test_openbor_pak_opens_in_its_own_mode(self):
-        # openbor PAK: o modo do fliperos-openbor-meta (o do pak, pelo monitor);
-        # sem pak (o menu) ou sem a resposta, o da tabela.
-        with tempfile.TemporaryDirectory() as tmp:
-            meta = Path(tmp) / 'meta'
-            meta.write_text('#!/bin/sh\n[ "$1" = mode ] || exit 2\n'
-                            'case "$2" in *Gunman*) [ "$3" = 15k ] && echo 400x240@60 || echo 400x300@60 ;; '
-                            '*) exit 1 ;; esac\n')
-            meta.chmod(0o755)
-            extra = {'FLIPEROS_OPENBOR_META': str(meta)}
-            self.assertIn('MODE=400 240 60', self.run_x11(['openbor', '/r/Paks/Gunman.pak'], extra=extra).stdout)
-            self.assertIn('MODE=400 300 60', self.run_x11(['openbor', '/r/Paks/Gunman.pak'], frequency='31k',
-                                                          extra=extra).stdout)
-            self.assertIn('MODE=320 240 60', self.run_x11(['openbor', '/r/Paks/Other.pak'], extra=extra).stdout)
-            self.assertIn('MODE=320 240 60', self.run_x11(['openbor'], extra=extra).stdout)
-            # O --mode da linha de comando vence.
-            self.assertIn('MODE=640 240 60', self.run_x11(['--mode', '640x240@60', 'openbor', '/r/Paks/Gunman.pak'],
-                                                          extra=extra).stdout)
 
     def test_launch_survives_a_failed_colour_calibration(self):
         # Outro programa dono da tela recusa a tabela de gama: o fliperos-color
@@ -12255,145 +12232,6 @@ class NewEmulatorBuildTests(unittest.TestCase):
             calls.write_text('')
             subprocess.run(['bash', str(ROOT / 'config/fliperos-openbor')], timeout=30, env=env, check=True)
             self.assertEqual(os.readlink(games / 'v3' / 'Paks'), '../Paks')
-
-    @staticmethod
-    def make_pak(files, fmt=0):
-        """Um pak do OpenBOR (packfile.c): PACK, o formato (0 = PAK32, 1 =
-        PAK64), os arquivos, a tabela e, no fim, onde ela comeca."""
-        body, table = b'PACK' + struct.pack('<I', fmt), b''
-        for name, data in files.items():
-            start = len(body)
-            body += data
-            raw = name.encode() + b'\0'
-            head = struct.pack('<III', 12 + len(raw), start, len(data)) if fmt == 0 else \
-                struct.pack('<IQQ', 20 + len(raw), start, len(data))
-            table += head + raw
-        return body + table + struct.pack('<I' if fmt == 0 else '<Q', len(body))
-
-    def test_openbor_meta_reads_the_pak(self):
-        # A resolucao (videopc.txt antes do video.txt, a ultima linha video, os
-        # modos 0 a 6), os jogadores (o maior maxplayers dos sets, padrao 2,
-        # "single" = 1) e os modos, nos dois formatos de pak.
-        meta = load_script('openbor_meta', 'config/fliperos-openbor-meta')
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            cases = (
-                ({'DATA/VIDEO.TXT': b'video 0\nvideo\t400x300 # custom\n',
-                  'DATA/LEVELS.TXT': b'maxplayers 1\nset Story\nfile data/levels/a.txt\n'}, 0, (400, 300), 1, ['Story']),
-                ({'data\\video.txt': b'video 2\n', 'data/videopc.txt': b'video 5\n',
-                  'data/levels.txt': b'set Arcade\nmaxplayers 4\nset Boss Rush\nsingle\n'}, 1, (800, 600), 4,
-                 ['Arcade', 'Boss Rush']),
-                ({'data/levels.txt': b'# nada\nset Main\n'}, 0, (320, 240), 2, ['Main']),
-                ({'data/video.txt': b'video 1\nlevels mylevels.txt\n', 'data/mylevels.txt': b'set A\nmaxplayers 3\n'},
-                 0, (480, 272), 3, ['A']),
-            )
-            for i, (files, fmt, size, players, modes) in enumerate(cases):
-                pak = tmp / ('g%d.pak' % i)
-                pak.write_bytes(self.make_pak(files, fmt))
-                got = meta.info(str(pak))
-                self.assertEqual(((got['width'], got['height']), got['players'], got['modes']), (size, players, modes))
-            bad = tmp / 'bad.pak'
-            bad.write_bytes(b'not a pak at all')
-            with self.assertRaises(ValueError):
-                meta.Pak(str(bad))
-
-    def test_openbor_meta_mode_fits_the_monitor(self):
-        meta = load_script('openbor_meta', 'config/fliperos-openbor-meta')
-        for (w, h), crt, other in (((320, 240), '320x240@60', '320x240@60'), ((480, 272), '480x272@50', '480x272@60'),
-                                   ((400, 300), '400x240@60', '400x300@60'), ((640, 480), '640x240@60', '640x480@60'),
-                                   ((960, 540), '960x270@50', '960x540@60'), ((800, 600), '800x240@60', '800x600@60')):
-            self.assertEqual(meta.mode_for(w, h, '15k'), crt, (w, h))
-            self.assertEqual(meta.mode_for(w, h, '31k'), other, (w, h))
-        with tempfile.TemporaryDirectory() as tmp:
-            paks = Path(tmp) / 'Paks'
-            paks.mkdir()
-            (paks / 'Big.PAK').write_bytes(self.make_pak({'data/video.txt': b'video 640x480\n'}))
-            env = dict(os.environ, FLIPEROS_OPENBOR_PAKS=str(paks))
-            run = lambda *a: subprocess.run(['python3', str(ROOT / 'config/fliperos-openbor-meta'), *a], env=env,
-                                            capture_output=True, text=True, timeout=60)
-            self.assertEqual(run('mode', str(paks / 'Big.PAK'), '15k').stdout, '640x240@60\n')
-            # So o nome: o pak de Paks/, como o comando openbor.
-            self.assertEqual(run('mode', 'Big.PAK', '31k').stdout, '640x480@60\n')
-            self.assertEqual(run('mode', 'Nope.pak', '15k').returncode, 1)
-
-    def test_openbor_meta_scan_writes_the_list_art_and_scraper_data(self):
-        meta = 'config/fliperos-openbor-meta'
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            paks, media, lists, sky = tmp / 'Paks', tmp / 'media', tmp / 'lists', tmp / 'sky'
-            paks.mkdir()
-            title = os.urandom(6000)           # uma "imagem" grande: sem o pygame, vale pelo tamanho
-            (paks / 'Batman SD.pak').write_bytes(self.make_pak({
-                'DATA/bgs/title.gif': title, 'DATA/bgs/select.gif': b'x' * 100,
-                'DATA/video.txt': b'video 0\n', 'DATA/levels.txt': b'set Main_Game\nset Cat_Mode\n'}))
-            (paks / 'Gunman.PAK').write_bytes(self.make_pak({
-                'DATA/BGS/TITLE.PNG': b'tiny', 'DATA/VIDEO.TXT': b'video 400x300\n',
-                'DATA/LEVELS.TXT': b'maxplayers 1\nset Story\n'}))
-            (paks / '_info.txt').write_text('OpenBOR: .pak games.\n')
-            # O Gunman ja tem imagem (do Scraper): fica.
-            (media / 'snap/openbor').mkdir(parents=True)
-            (media / 'snap/openbor/Gunman.png').write_bytes(b'scraped')
-            # O cache do Skyscraper com o Batman SD (ScreenScraper vence a outra fonte).
-            cache = sky / 'cache/openbor'
-            cache.mkdir(parents=True)
-            (cache / 'quickid.xml').write_text(
-                '<?xml version="1.0"?>\n<quickids>\n  <quickid filepath="/home/fliperos/roms/openbor/Paks/Batman SD.pak"'
-                ' timestamp="1" id="ABC"/>\n</quickids>\n')
-            (cache / 'db.xml').write_text(
-                '<?xml version="1.0"?>\n<resources>\n'
-                '  <resource id="ABC" type="title" source="thegamesdb" timestamp="1">Wrong</resource>\n'
-                '  <resource id="ABC" type="title" source="screenscraper" timestamp="1">Batman: Savage Dawn</resource>\n'
-                '  <resource id="ABC" type="releasedate" source="screenscraper" timestamp="1">2019-05-03</resource>\n'
-                '  <resource id="ABC" type="developer" source="screenscraper" timestamp="1">Machok</resource>\n'
-                '  <resource id="ABC" type="tags" source="screenscraper" timestamp="1">Beat\'em up, Action</resource>\n'
-                '  <resource id="ABC" type="players" source="screenscraper" timestamp="1">1-3</resource>\n'
-                '  <resource id="ABC" type="description" source="screenscraper" timestamp="1">Gotham; at night.</resource>\n'
-                '</resources>\n')
-            run = lambda: subprocess.run(['python3', str(ROOT / meta), 'scan', '--paks', str(paks), '--media', str(media),
-                                          '--lists', str(lists), '--skyscraper', str(sky)],
-                                         capture_output=True, text=True, timeout=60)
-            out = run()
-            self.assertEqual(out.returncode, 0, out.stderr)
-            self.assertIn('paks=2 art=1 texts=1 scraped=1', out.stdout)
-            self.assertEqual((media / 'snap/openbor/Batman SD.gif').read_bytes(), title)
-            self.assertEqual((media / 'snap/openbor/Gunman.png').read_bytes(), b'scraped')
-            self.assertFalse((media / 'box/openbor').exists())
-            self.assertEqual((media / 'texto/openbor/Batman SD.txt').read_text(), 'Gotham; at night.\n')
-            rows = (lists / 'OpenBOR.txt').read_text().splitlines()
-            web = load_script('fliperos_web_meta', 'config/fliperos-web')
-            self.assertEqual(rows[0], '#' + ';'.join(web.ROMLIST_FIELDS))
-            fields = [dict(zip(web.ROMLIST_FIELDS, r.split(';'))) for r in rows[1:]]
-            self.assertEqual([f['Name'] for f in fields], ['Batman SD', 'Gunman'])
-            batman, gunman = fields
-            self.assertEqual((batman['Title'], batman['Year'], batman['Manufacturer'], batman['Category'],
-                              batman['Players'], batman['Extra'], batman['Series']),
-                             ('Batman: Savage Dawn', '2019', 'Machok', "Beat'em up", '3', '320x240', 'Main_Game, Cat_Mode'))
-            self.assertEqual((gunman['Title'], gunman['Emulator'], gunman['Category'], gunman['Players'], gunman['Extra']),
-                             ('Gunman', 'OpenBOR', "Beat 'em Up", '1', '400x300'))
-            # De novo: nada novo, a lista igual.
-            stamp = (lists / 'OpenBOR.txt').stat().st_mtime_ns
-            self.assertIn('art=0 texts=0', run().stdout)
-            self.assertEqual((lists / 'OpenBOR.txt').stat().st_mtime_ns, stamp)
-            # Sem paks, sem lista.
-            for p in paks.glob('*.*'):
-                p.unlink()
-            run()
-            self.assertFalse((lists / 'OpenBOR.txt').exists())
-
-    def test_openbor_meta_installed_and_called(self):
-        self.assertRegex(ROOTFS, r' fliperos-openbor-meta[ \w\\\n-]*; do')
-        frontends = (ROOT / 'fliperos-setup/lib/frontends.sh').read_text()
-        lists = frontends.split('frontends_lists() {')[1].split('\n}\n')[0]
-        self.assertIn('frontends_openbor_meta', lists)
-        self.assertIn('runuser -u "$FLIPEROS_USER" -- "${run[@]}"', frontends)
-        scraper = (ROOT / 'fliperos-setup/lib/scraper.sh').read_text()
-        self.assertIn('[[ $key == openbor ]] && frontends_openbor_meta',
-                      scraper.split('scraper_run() {')[1].split('\n}\n')[0])
-        # A arte que o --romlists grava aparece sem reabrir o frontend: as
-        # listas novas (generation) limpam o cache das imagens.
-        fe = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
-        block = fe.split('if self.lib.generation != self.generation:')[1].split('if now - self.last_check')[0]
-        self.assertIn('self.flush = True', block)
 
     def test_openbor_closes_on_esc(self):
         # No jogo o Esc do OpenBOR nao faz nada: o fliperos-escquit vigia o

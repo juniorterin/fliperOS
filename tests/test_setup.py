@@ -5542,39 +5542,19 @@ class ScraperTests(Base):
         self.assertEqual(self.env.out("scraper_attract_emulator model3", env).strip(),
                          'Supermodel|/opt/fliperos/bin/fliperos-x11-run|supermodel "[romfilename]"|.zip')
 
-    def test_openbor_paks_are_a_system(self):
+    def test_openbor_paks_are_a_frontend_system(self):
         # ~/roms/openbor/Paks: um sistema nos frontends (o do FliperOS le o
-        # --systems) e no Scraper (plataforma openbor do Skyscraper), so com
-        # um .pak; Saves, Logs e o _info.txt nao contam.
+        # --systems), so com um .pak, fora do Scraper; Saves e Logs nao contam.
         env, roms, _ = self.scraper_env()
         paks = roms / "openbor" / "Paks"
         paks.mkdir(parents=True)
         (roms / "openbor" / "Saves").mkdir()
         (roms / "openbor" / "Saves" / "default.cfg").write_text("cfg")
-        (paks / "_info.txt").write_text("OpenBOR: .pak games.\n")
         self.assertNotIn("openbor", self.env.out("frontends_systems", env))
         (paks / "HFFgp32.PAK").write_text("pak")
-        (paks / "Gunman.pak").write_text("pak")
         line = '|OpenBOR|/opt/fliperos/bin/fliperos-x11-run|openbor "[romfilename]"|.pak'
         self.assertIn("openbor|%s|openbor%s" % (paks, line), self.env.out("frontends_systems", env).splitlines())
-        self.assertIn("openbor|%s|openbor|2" % paks, self.env.out("scraper_detect", env).splitlines())
-
-    def test_openbor_meta_runs_with_the_lists(self):
-        # fliperos-setup --romlists (frontends_lists): o fliperos-openbor-meta
-        # com as pastas do FliperOS; sem a pasta dos paks, nada.
-        env, roms, _ = self.scraper_env()
-        calls = self.env.dir / "meta-calls"
-        meta = self.env.dir / "meta"
-        meta.write_text('#!/bin/sh\necho "$*" >> %s\n' % calls)
-        meta.chmod(0o755)
-        env = dict(env, OPENBOR_META=str(meta), FLIPEROS_LISTS=str(self.env.dir / "lists"),
-                   FLIPEROS_LOG=str(self.env.dir / "log"))
-        self.env.out("frontends_openbor_meta", env)
-        self.assertFalse(calls.exists())
-        (roms / "openbor" / "Paks").mkdir(parents=True)
-        self.env.out("frontends_openbor_meta", env)
-        self.assertEqual(calls.read_text(), "scan --paks %s/openbor/Paks --media %s --lists %s\n"
-                         % (roms, env["MEDIA_DIR"], env["FLIPEROS_LISTS"]))
+        self.assertNotIn("openbor", self.env.out("scraper_detect", env))
 
     def test_attract_mode_gets_emulator_and_display_once(self):
         env, roms, attract = self.scraper_env()
