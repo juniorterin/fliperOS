@@ -2,7 +2,7 @@
   <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art of a white arcade cabinet in a purple-lit room, a fighting game on its CRT and the PC beside it"></a>
 </p>
 
-<h1 align="center">FliperOS 0.22</h1>
+<h1 align="center">FliperOS 0.23</h1>
 
 <p align="center">
   <b>Arcade Linux. Built for CRT.</b><br>
@@ -44,7 +44,7 @@
 
 Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a **15 kHz kernel**, Switchres, emulators and frontends ready to play, and a setup menu (`fliperos-setup`) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.
 
-In development: 0.22 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the **[wiki](https://github.com/juniorterin/fliperOS/wiki)**. Website: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (source in [`website/`](website)). The **[Telegram group](https://t.me/fliperos15khz)** has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.
+In development: 0.23 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the **[wiki](https://github.com/juniorterin/fliperOS/wiki)**. Website: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (source in [`website/`](website)). The **[Telegram group](https://t.me/fliperos15khz)** has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.
 
 <table>
   <tr>
@@ -130,8 +130,8 @@ This guide goes from an empty cabinet to a game on screen. Each step says what y
 
 ### 2. Download the ISO
 
-1. Open [Releases](https://github.com/juniorterin/fliperOS/releases) and download `fliperos-0.22.iso` from the latest version (what changed is in [CHANGELOG.md](CHANGELOG.md)).
-2. If the release lists a SHA-256, compare it: `sha256sum fliperos-0.22.iso` on Linux, `Get-FileHash fliperos-0.22.iso` in Windows PowerShell.
+1. Open [Releases](https://github.com/juniorterin/fliperOS/releases) and download `fliperos-0.23.iso` from the latest version (what changed is in [CHANGELOG.md](CHANGELOG.md)).
+2. If the release lists a SHA-256, compare it: `sha256sum fliperos-0.23.iso` on Linux, `Get-FileHash fliperos-0.23.iso` in Windows PowerShell.
 
 ### 3. Write the USB stick
 
@@ -142,7 +142,7 @@ The ISO must be written **byte for byte**. Programs that rebuild the stick's boo
 - **Linux**: find the stick with `lsblk` (here `/dev/sdX`; the wrong device erases the wrong disk) and run:
 
   ```bash
-  sudo dd if=fliperos-0.22.iso of=/dev/sdX bs=4M status=progress conv=fsync
+  sudo dd if=fliperos-0.23.iso of=/dev/sdX bs=4M status=progress conv=fsync
   ```
 
 ### 4. Prepare the cabinet's BIOS
@@ -406,7 +406,7 @@ Always in Docker ([`CLAUDE.md`](CLAUDE.md) explains why).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.22.iso
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.23.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_setup.py

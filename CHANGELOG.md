@@ -2,6 +2,40 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.23
+
+**Your original games, from the disc or the cartridge**: the frontend plays CDs and DVDs from a drive connected to the cabinet, and cartridges from the Open Source Cartridge Reader (OSCR). It finds the console from the disc or the cart itself, lets you pick the emulator or the RetroArch core that reads it, and plays it straight away or rips it to the right folder; the cabinet can even boot straight from the disc. Setup > System installs the FliperOS firmware on the OSCR. Also in this ISO, everything the updates 55 to 63 brought since 0.22: MAME parties with every player of the game, Wine games with the flicker filter, packed game folders, super resolutions for a CRT on DisplayPort, the scanline switch in the on-screen menu and a Setup that keeps the keyboard when its graphical menu crashes. Cabinets already installed get all of this from the Setup's own update (updates 55 to 63). Discs and the cartridge reader have not been tried on real hardware yet.
+
+**System changes:**
+
+- **Physical media** (updates 62 and 63): with a CD or DVD drive connected (USB too), the system strip shows a down arrow to the PHYSICAL MEDIA row, one tile per drive and one for the OSCR. The console is read from the disc: the `SYSTEM.CNF` of PlayStation and PS2 discs, the headers of Saturn, Sega CD, PC-FX and 3DO, the PC Engine CD and Neo Geo CD marks; Dreamcast and GameCube discs are refused, since a PC drive can't read them. The disc's card has PLAY (DuckStation `/dev/srN`, PCSX2 `-disc`, or a RetroArch core with physical CD support through `cdrom://driveN.cue`), EMULATOR (the standalone and RETROARCH, which lists only the cores that read a real disc; one core goes straight to it) and RIP TO FOLDER (`cdrdao` + `chdman` make one `.chd`, a DVD an `.iso`, in the chosen emulator's folder)
+- **Cartridge reader**: the OSCR HW5 with the FliperOS firmware (`patches/oscr`) answers over USB: the frontend reads each slot at 3.3V (a 3.3V cart is never put at 5V; a cart that doesn't answer is picked by system), plays the cart from a temporary copy and rips the ROM and its `.srm`. Setup > System > Cartridge reader (OSCR) saves the reader's firmware to `~/oscr`, writes the FliperOS one with `avrdude` and checks it; Restore the backup puts the old one back
+- **Boot from media**: Setup > Games > Frontend > Boot from media (the `physical` launcher) opens the frontend on a drive or the cartridge reader; with nothing in it, a minimal screen asks for a disc or a cartridge, the card waits for PLAY, and button 2 goes to the game list
+- MAME parties take every player of the game, up to MAME's 10, from two cabinets to one per player (update 55)
+- Wine games get the interlaced flicker filter and the on-screen menu, 32-bit and DXVK games too; custom games get their own flicker level, sample art and Pack a game folder (squashfs); Setup > Games > Extras > Wine Staging (update 56, and update 60 for the JACK conflict)
+- A CRT on DisplayPort gets super resolutions like HDMI and DVI-D, and a converter that shows native 15 kHz modes keeps them after a one-time test grid (updates 60 and 62); the web panel has Monitor type, Boot resolution and "Back to the previous monitor"
+- The on-screen menu turns the scanlines on and off over a game, with a 31 kHz monitor (update 61)
+- The Setup keeps the keyboard and the controller in its text menu when the graphical menu crashes, and opens without menu sounds when the sound card doesn't (updates 58 and 59); the Volume leveler is gone (update 59)
+- The first boot applies the updates published after the ISO as soon as there is internet, and its text button mapping draws the panel (update 60)
+- The link and party marks show only when another cabinet is on the wired network (update 58)
+
+**Package changes:**
+
+- `cdrdao` and `mame-tools` (the disc rip) and `avrdude` (the OSCR firmware) in the image
+- The cabinet's user is in the `cdrom` group (the drives and RetroArch's `/dev/sgN`)
+
+**fliperos-setup changes:**
+
+- `gui/femedia.py`: the drives and their state, the console read from the disc, the command of each emulator, the rip, and the OSCR client (`SCAN`, `INFO`, `DUMP`, `GET` at 1 Mbaud with a CRC32)
+- `gui/fliperos-frontend` and `gui/feview.py`: the PHYSICAL MEDIA row, the disc and cartridge cards, the core list, the cartridge choice, the rip bar and the boot-from-media screens; `--media`
+- `lib/launcher.sh` and `screens/setup-menu.sh`: Boot from media (`bootmedia_*`, `boot_media` in `fliperos.conf`); `lib/oscr.sh` and Setup > System > Cartridge reader
+- `config/fliperos-session` and `config/fliperos-sessions.conf`: the `physical` launcher
+
+**Tool changes:**
+
+- `patches/oscr` and `tools/oscr-firmware.sh`: the OSCR firmware patch (on sanni/cartreader `060d8ae`) and its build with arduino-cli, for the HW5 with and without VSELECT; the built `.hex` files ship in `config/oscr`
+- `tools/video/fe_media.py` (`render.sh media`): the site's physical media animations, recorded from the real frontend with fake drives and reader
+
 ## 0.22
 
 **Party play for MAME games**: cabinets on the wired local network play the same GroovyMAME game with every player it has (up to 10), each cabinet with its own controllers, on the same frame like an arcade link board and with no input delay. Flycast's party (Naomi and Atomiswave) also runs in lockstep now, for up to four players. Also in this ISO, everything the updates 47 to 57 brought since 0.21: cabinet names, Flycast as a package updated over the network, the newest emulators from the Setup, light gun in every RetroArch core, the flicker filter in Wine games, art for custom games and Wine Staging. Cabinets already installed get all of this from the Setup's own update (updates 47 to 57).

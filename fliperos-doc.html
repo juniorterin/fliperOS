@@ -11,7 +11,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
   <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art of a white arcade cabinet in a purple-lit room, a fighting game on its CRT and the PC beside it"></a>
 </p>
 
-<h1 align="center">FliperOS 0.22</h1>
+<h1 align="center">FliperOS 0.23</h1>
 
 <p align="center">
   <b>Arcade Linux. Built for CRT.</b><br>
@@ -52,7 +52,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </p>
 
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.22 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
+<p>In development: 0.23 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
 <table>
   <tr>
     <td align="center" width="33%"><img src="website/public/screenshots/frontend/full.webp" width="240" alt="FliperOS frontend in full screen: Aggressors of Dark Kombat with its video behind and its name, year and controls in front"><br><sub><b>Full screen</b>: the game's video behind, its name and info in front</sub></td>
@@ -128,8 +128,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.22.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.22.iso</code> on Linux, <code>Get-FileHash fliperos-0.22.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.23.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.23.iso</code> on Linux, <code>Get-FileHash fliperos-0.23.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -139,7 +139,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.22.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.23.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -423,7 +423,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.22.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.23.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -1184,7 +1184,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <h2 id="writing-the-media">Writing the media</h2>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.22.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.23.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="boot-menu">Boot menu</h2>
@@ -1735,13 +1735,15 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
   - The card has a CSS editor with syntax colours. The preview follows each key you type, and <em>Demo in the preview</em> presses the buttons by itself, so the look can be tried with nobody at the cabinet. <em>Format</em> lays the CSS out with one property per line (Ctrl+Z undoes it). <em>Save</em> writes it to <code>/etc/fliperos/input-overlay.css</code>, and the pages open in OBS take it at once, with no need to refresh the source; <em>Factory CSS</em> goes back to <code>input.css</code>.
   - The classes: <code>.pad</code> (<code>.p1</code>, <code>.p2</code>, <code>.active</code> while something is pressed), <code>.label</code>, <code>.stick</code> (<code>.up</code> <code>.down</code> <code>.left</code> <code>.right</code>, and <code>data-dir</code> such as <code>up-left</code>) with <code>.gate</code> and <code>.ball</code>, and <code>.button</code> (<code>.b1</code> to <code>.b6</code>, <code>.start</code>, <code>.coin</code>; <code>.on</code> while pressed). The sizes use <code>--u</code>: one panel is 200 × 100 <code>--u</code>.
   - How it works: while at least one controller page is open, the panel runs one <code>fliperos-buttons watch</code> at low priority. It sends the panel a line each time the pressed controls change, and the panel passes it to the pages as Server-Sent Events. It stops when the last page closes.
-- <strong>Settings:</strong> the Setup settings that are safe to change over the network, grouped as System, Services, Interlaced hacks and Colour.
-  - System: the default launcher, latency mode, debug mode and menu sounds.
+- <strong>Settings:</strong> the Setup settings, in the same order as the Setup on the cabinet: Video, Geometry, Colour, Scanlines, Interlaced hacks, Audio, GunCon 2, Network, Live screen, System, Password, Services, What's new and, last, Power.
+  - Video: <strong>Monitor type</strong>, <strong>Boot resolution</strong> (the boot modeline), monitor orientation, multi-screen games and the on-screen menu. A new monitor or resolution counts after a restart, and the page offers to restart when it is saved.
+  - <a id="monitor-without-a-picture"></a><strong>No picture after a monitor change?</strong> The panel doesn't need the tube. Open Settings &gt; Video from a phone and pick the right monitor (or resolution), or press <strong>Back to the previous monitor</strong>: it brings back the monitor and resolution from before the last change, made here or in <strong>Setup &gt; Video Setup</strong>. Pressed again, it goes back to the new one. A custom resolution and the Geometry grid stay on the cabinet screen, since they need to see the picture.
+  - System: the cabinet name, what starts at power on, the boot splash, latency mode and debug mode.
   - Services: the whole services table.
   - Interlaced hacks: a card per program, with an explanation of each method at the top. The method is a row of buttons (640x240, Interlaced with filter, Interlaced pure), and the filter strength (light, medium, strong) shows only when the filter is on.
   - Colour: every colour calibration value and <strong>Back to the defaults</strong>. A slider saves while it moves, so the game on screen changes with it; the <strong>−</strong> and <strong>+</strong> on its sides move it one step per tap (a run of taps saves once, just after the last).
   - Each change is saved and applied at once, through the same functions as the Setup screens (<code>fliperos-setup --settings</code> and <code>--setting KEY VALUE</code>, <code>lib/system.sh</code>). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart.
-  - Monitor, resolution and video driver are not here, since a wrong choice can leave the cabinet without a picture. They stay in the Setup, on the cabinet screen.
+  - The video driver is not here: changing it asks for a confirmation on the cabinet screen, so it stays in the Setup.
 - <a id="lab-mode"></a><strong>Lab mode</strong> (on the Settings page, and in <strong>Setup &gt; System &gt; Lab mode</strong>): a temporary internet address to this panel, so someone far away can help you (a FliperOS developer looking at a problem).
   - <em>Turn on lab mode</em> gives an address like <code>https://some-random-words.trycloudflare.com/lab?key=…</code>. <em>Copy</em> puts it on the clipboard, to send by chat or email. In the Setup it shows on the screen.
   - Whoever opens it gets into the panel without your password: status, logs, files, screenshots, and a <strong>root</strong> terminal (<code>su - fliperos</code> there gives the normal user). Send it only to someone you trust.
@@ -2018,6 +2020,39 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p><strong>The power button.</strong> With no game open, the cabinet's power button powers off; with a game open it closes the game (Tab &gt; Frontend options &gt; Power closes game). The frontend tells <code>fliperos-powerkey</code> which process is the game through the file named in <code>FLIPEROS_POWERKEY=games:FILE</code> (<code>$XDG_RUNTIME_DIR/fliperos-frontend.game</code>): its other children, the video player and the scraper, are not a game. Before this, the button killed the video and never powered off.</p>
 <p>The buttons are the panel's own, from Setup &gt; Joysticks &gt; Button mapping (<code>/etc/fliperos/buttons.map</code>). Without a mapping, a common pad works, and so does a keyboard encoder in MAME's layout.</p>
 <p>A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).</p>
+<h3 id="physical-media-cds-and-dvds">Physical media: CDs and DVDs</h3>
+<p>With a CD or DVD drive connected (USB drives too), the system strip shows a pink arrow pointing down. Down goes to the <strong>PHYSICAL MEDIA</strong> row under the strip: one tile per drive, saying whether it has a disc (DISC, EMPTY, OPEN). Left and right move between drives, up goes back to the systems and button 2 closes the strip.</p>
+<p>Button 1 on a drive reads the disc. READING stays on screen while the disc spins and <code>gui/femedia.py</code> finds the console from the disc itself:
+- PlayStation and PlayStation 2: the <code>SYSTEM.CNF</code> (<code>BOOT</code> or <code>BOOT2</code>) and the game's serial;
+- Saturn, Sega CD, PC-FX and 3DO: their headers in the first sector;
+- PC Engine CD: the second sector of the data track. Neo Geo CD: <code>IPL.TXT</code>.</p>
+<p>Dreamcast and GameCube discs are left out: a PC drive can't read a GD-ROM or a GameCube disc.</p>
+<p>The disc's card always has three tiles:
+- <strong>PLAY</strong> opens the game straight from the drive with the console's emulator. DuckStation opens <code>/dev/srN</code> and PCSX2 <code>-disc /dev/srN</code>. RetroArch opens <code>cdrom://driveN.cue</code>, where N is the drive's <code>/dev/sgN</code>, and only cores built with physical CD support can do it: Beetle PSX HW, Beetle PSX, PCSX ReARMed, Beetle Saturn, Genesis Plus GX, Beetle PCE Fast, Beetle PCE, Beetle PC-FX, Opera and NeoCD. A core that isn't installed yet is downloaded first, with the bar. When the game closes, the card comes back.
+- <strong>EMULATOR</strong> lists the standalone emulators that are installed and RETROARCH, which opens the list of the console's cores that read a disc. With only one such core (Sega CD: Genesis Plus GX), RETROARCH goes straight to it. The choice is kept for each console (<code>media_emulators</code> in <code>~/.config/fliperos/frontend.json</code>).
+- <strong>RIP TO FOLDER</strong> copies the disc into the folder of the chosen emulator (<code>~/roms/ps1</code>, or <code>~/roms/retroarch/&lt;core&gt;</code>), so the game shows up in its list. A CD is read raw by <code>cdrdao</code> (audio tracks too) and joined into one <code>.chd</code> by <code>chdman</code>; without <code>chdman</code> the <code>.bin</code>/<code>.cue</code> stay. A DVD becomes an <code>.iso</code>. The name is the game's title and serial. Button 2 cancels and removes the partial files. The log is <code>~/.cache/fliperos/rip.log</code>.</p>
+<p>The drives belong to the <code>cdrom</code> group, which the cabinet's user is in (the ISO creates it there; the update adds it).</p>
+<h3 id="physical-media-the-cartridge-reader-oscr">Physical media: the cartridge reader (OSCR)</h3>
+<p>The <a href="https://github.com/sanni/cartreader">Open Source Cartridge Reader</a> HW5 (sanni's) shows up in the same row as <strong>OSCR</strong>, as soon as its USB cable is in (the CH340 converter of the HW5, or an Arduino Mega). The stock OSCR writes its dumps to its own SD card, and its USB only serves the firmware tool. So FliperOS needs the OSCR to run <strong>its patched firmware</strong> (<code>patches/oscr</code>), which adds commands on that same USB line:
+- <code>SCAN</code> reads the header of the cart in each slot;
+- <code>INFO</code> reads the cart of one system;
+- <code>DUMP</code> writes the ROM and the save to the SD card, as the OSCR's own menu does;
+- <code>GET</code> sends a file at 1 Mbaud with a CRC32 that FliperOS checks.</p>
+<p>While a command runs, the OSCR's menus don't wait for its button.</p>
+<p>Button 1 on the OSCR tile: LOOKING AT EACH SLOT. One cart goes straight to its card; two or more show a choice, one tile per slot with the system and the game's name. <code>SCAN</code> never raises the voltage to 5V, so a 3.3V cart in an adapter is never put at risk; a 5V cart that doesn't answer at 3.3V is left out. When no cart answers, the screen asks <strong>WHICH SYSTEM?</strong> (Super Nintendo, Mega Drive, Nintendo 64, Game Boy, Game Boy Advance), and the OSCR then sets that system's voltage, as its own menu does.</p>
+<p>The cart's card works like a disc's:
+- <strong>PLAY</strong> reads the cart first into a temporary copy (<code>~/.cache/fliperos/oscr</code>, with the bar) and opens it in the RetroArch core. The OSCR can't serve the game live.
+- <strong>EMULATOR</strong> lists the console's cores: Snes9x, bsnes and Mesen-S; Genesis Plus GX and PicoDrive; Mupen64Plus-Next and ParaLLEl N64; Gambatte, SameBoy and mGBA; mGBA and VBA Next.
+- <strong>RIP TO FOLDER</strong> saves the ROM in the core's folder with the game's name, and the save next to it as <code>.srm</code>.</p>
+<p>With <strong>Boot from media</strong> set to the cartridge reader, the screen shows the reader's outline with a cartridge floating over the slot and NO CARTRIDGE. The OSCR can't tell when a cart goes in, so button 1 says it is there: the cartridge slides into the slot and is read.</p>
+<p><strong>Installing the firmware: Setup &gt; System &gt; Cartridge reader (OSCR).</strong>
+1. With the reader plugged in, <strong>Install the FliperOS firmware</strong> asks which board it is: HW5 with the 3.3V/5V switch, or HW5 with the VSELECT module.
+2. It asks you to remove any cartridge, set the switch to 5V (as the OSCR Tool does) and keep the cable in.
+3. It reads the firmware the reader has into <code>~/oscr/oscr-backup-DATE.hex</code>, writes the FliperOS one over the USB cable (<code>avrdude</code> through the Mega's bootloader) and checks that the reader answers.</p>
+<p><strong>Restore the backup</strong> writes the old firmware back.</p>
+<p>The two <code>.hex</code> files come with the image and the updates (<code>config/oscr</code>, installed in <code>/usr/local/share/fliperos/oscr</code>). They are built by <code>tools/oscr-firmware.sh</code> (arduino-cli in Docker, sanni/cartreader at <code>060d8ae</code> plus <code>patches/oscr</code>).</p>
+<p><strong>Boot from media</strong> (Setup &gt; Games &gt; Frontend &gt; Boot from media, the <code>physical</code> launcher) starts the frontend with <code>--media</code> on the disc of the chosen drive (<code>boot_media</code> in <code>fliperos.conf</code>).</p>
+<p>With no disc, the screen shows the drive's outline and a disc floating below the slot, with NO DISC. When a disc goes in, it slides into the slot, the slot turns green and the disc is read. The card then waits for PLAY; there is no countdown. Button 2 leaves for the game list, also from the card. A disc that can't be played (unknown, Dreamcast) shows UNKNOWN DISC until it comes out.</p>
 <h2 id="setup-games-frontend">Setup &gt; Games &gt; Frontend</h2>
 <p>The default launcher, the one that opens when the computer starts; one that isn't installed can be installed from the FliperOS repository, which ships inside the image (<code>/opt/fliperos/repo</code>, below). Whatever doesn't have a package yet shows as <em>not available yet</em>.</p>
 <p><strong>Fightcade 2</strong> doesn't come from a package: it is downloaded on the spot from its website (<a href="#Fightcade-2">Fightcade 2</a>). <strong>At 240p</strong>: on a 15 kHz monitor the frontends run at 320x240, and each one's default is designed for 720 lines or more — the text ends up 4 to 8 pixels tall.</p>
@@ -30761,6 +30796,13 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <li><strong>When it runs</strong>: it opens with each game of GroovyMAME, Flycast, Supermodel and SM2-Emu and closes with it. What it says (the guns it found, the file it loaded) is in <code>/opt/fliperos/logs/qmamehook.log</code>.</li>
 <li><strong>With Hook Of The Reaper also installed</strong>, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless <code>/etc/fliperos/fliperos.conf</code> has the line <code>outputs_reader=qmamehook</code>.</li>
 </ul>
+<h2 id="cartridge-reader-open-source-cartridge-reader">Cartridge reader (Open Source Cartridge Reader)</h2>
+<p>sanni's <a href="https://github.com/sanni/cartreader">Open Source Cartridge Reader</a> HW5 dumps Super Nintendo, Mega Drive, Nintendo 64, Game Boy and Game Boy Advance cartridges. On its own, it writes each dump to its SD card. With the FliperOS firmware patch (<code>patches/oscr</code>), the frontend reads the cartridge over the USB cable and plays it or saves it to the core's folder (<a href="#Frontends">Frontends</a>, "the cartridge reader").</p>
+<ul>
+<li><strong>Installing the firmware</strong>: Setup &gt; System &gt; Cartridge reader (OSCR). It asks whether the board has the 3.3V/5V switch or the VSELECT module, saves the firmware the reader has to <code>~/oscr</code>, writes the FliperOS one through the USB cable with <code>avrdude</code> and checks that the reader answers. <strong>Restore the backup</strong> puts the old one back.</li>
+<li><strong>Safe probing</strong>: while the frontend looks at the slots, the reader stays at 3.3V. A cartridge that only answers at 5V is picked by system on the screen, and the reader then sets that voltage, as its own menu does.</li>
+<li><strong>Not tested on a real reader yet</strong>: if you have one, open an issue with what worked and what didn't.</li>
+</ul>
 <h2 id="adding-a-project-to-this-page">Adding a project to this page</h2>
 <p>A project fits here if its firmware or software is open source and it works on Linux without a closed driver.</p>
 <p>If you use one of these on your cabinet, or another one, open an issue in the <a href="https://github.com/juniorterin/fliperOS/issues">repository</a> saying which board, what the Setup showed in <strong>Setup &gt; System &gt; Quirks &gt; USB devices connected now</strong>, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".</p>
@@ -30771,7 +30813,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <h2 id="build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.22.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.23.iso
 </code></pre>
 <table>
 <thead>
@@ -30818,7 +30860,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.22.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.23.iso
 </code></pre>
 <h2 id="release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -30829,16 +30871,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.22
-   git push origin 0.22</code></p>
+   git tag 0.23
+   git push origin 0.23</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.22</code>, <code>git push -f origin 0.22</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.23</code>, <code>git push -f origin 0.23</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.22.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.23.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -30853,15 +30895,15 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.22.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.22.sha256</code> (the whole ISO and each part) and <code>fliperos-0.22-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.23.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.23.sha256</code> (the whole ISO and each part) and <code>fliperos-0.23-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h3 id="telegram-group">Telegram group</h3>
 <p>Each release is also posted in the group <a href="https://t.me/fliperos15khz">t.me/fliperos15khz</a>, with pictures and an explanation of how each new feature works. <code>CHANGELOG.md</code> is the technical list of the GitHub release; the group reads <code>docs/telegram/VERSION.md</code>.</p>
 <p>The file is a list of messages separated by a line with only <code>---</code>. In each one, a line made of <code>!</code>, <code>[]</code> and a path in parentheses, such as <code>(website/public/screenshots/gui/video.webp)</code>, puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters; longer, it goes before the picture as a message); without one, it is a message of up to 4096.</p>
 <p>A picture never goes out stretched. A 15 kHz capture with more than twice as many dots per line as lines (640x240, 2560x240, or 240x640 turned on its side) is a 4:3 picture of wide dots, so the script posts it with the lines doubled at 4:3 (3:4 when vertical), and the dry run prints the size that will be posted.</p>
 <p>Every message is in Portuguese and English: its text has a part starting with a <code>🇧🇷</code> line and another starting with a <code>🇺🇸</code> line, and the script refuses the file without both. The network updates follow the same rule: next to <code>updates/notes/NNNN.md</code> (English, shown on the cabinet), <code>updates/notes/pt-BR/NNNN.md</code> has the same notes in Portuguese, and <code>tools/make-update.sh</code> refuses an update without it (unless <code>docs/telegram/update-NNNN.md</code> exists).</p>
-<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.22   # checks the file and the images, sends nothing (needs python3-pil)
+<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.23   # checks the file and the images, sends nothing (needs python3-pil)
 </code></pre>
 <p>That file is optional: without it, the group gets the version's section of <code>CHANGELOG.md</code> as it is (technical, no pictures), cut into messages of up to 4096 characters. The <strong>Release</strong> workflow checks the text with the dry run before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). With the version <code>all</code> it posts every version of the changelog, oldest first (<code>--backfill</code>), which is how the group gets the history. It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
 <h2 id="tests">Tests</h2>

@@ -97,7 +97,7 @@ const enUS = {
     telegram: 'Join the Telegram group',
   },
   hero: {
-    eyebrow: 'fliperos 0.22 · in development',
+    eyebrow: 'fliperos 0.23 · in development',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Built for CRT.',
     description:
@@ -320,6 +320,7 @@ const enUS = {
     current: 'Current',
     all: 'All releases on GitHub',
     notes: {
+      '0.23': ['CDs and DVDs from a drive, played or ripped', 'Cartridges from the Open Source Cartridge Reader', 'Boot straight from the disc'],
       '0.22': ['Party play for MAME games, in lockstep', 'Flycast party in lockstep for up to 4 players', 'A name for each cabinet'],
       '0.21': ['Namco System 246/256 games in PCSX2x6', 'BIOS download from RetroBIOS', 'Dolphin and RetroArch updated over the network'],
       '0.20': ['A picture on the R9 380 DVI-I from the installation on', 'Scanlines for a 31 kHz monitor', 'Light gun and net play in more emulators'],
@@ -381,7 +382,7 @@ const enUS = {
       { id: 'pc', title: 'An ordinary 64-bit PC', text: '2 cores and 4 GB of RAM play up to PlayStation 1; 4 cores and 16 GB play everything in the image.' },
       { id: 'network', title: 'Open over the network', text: 'Copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot.' },
       { id: 'updates', title: 'Updates at boot', text: 'Updates come over the network and show what they change before asking. No new ISO needed.' },
-      { id: 'status', title: 'Still in development', text: 'Version 0.22. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
+      { id: 'status', title: 'Still in development', text: 'Version 0.23. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
     ],
     cta: 'Full requirements',
   },
