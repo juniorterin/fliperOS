@@ -28641,11 +28641,73 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>in the console or as a frontend command. Hypseus has no menu of its own (it needs the game name), which is why it has no shortcut in Games. It is Hypseus Singe v2.12.1 (the 3.x series requires SDL3, which Ubuntu 24.04 doesn't have), installed as the project's README says (<code>hypseus</code>/<code>singe</code> are its scripts, <code>hypseus.bin</code> the program).</p>
 <h2 id="openbor">OpenBOR</h2>
 <p>The games (<code>.pak</code>) go in <code>/opt/fliperos/roms/openbor/Paks</code> (over the network: <code>\\fliperos\FliperOS\roms\openbor\Paks</code>). The <strong>Games &gt; OpenBOR</strong> menu opens OpenBOR's own menu, which lists the paks.</p>
-<p><strong>In the frontends.</strong> The paks are also a system of their own, <strong>OpenBOR</strong>, in the FliperOS frontend (and in Attract-Mode Plus, ES-DE and Pegasus), one game per <code>.pak</code> (any case: <code>HFFgp32.PAK</code> counts). Picking one opens that pak straight away, without OpenBOR's menu. The system shows up once <code>Paks</code> has a pak; <code>Saves</code>, <code>Logs</code> and <code>v3</code> next to it are not games and stay out. The Scraper doesn't search OpenBOR (Skyscraper has no such platform); art can go in <code>~/media/&lt;type&gt;/openbor/&lt;pak name&gt;.png</code> by hand.</p>
+<p><strong>In the frontends.</strong> The paks are also a system of their own, <strong>OpenBOR</strong>, in the FliperOS frontend (and in the web panel, Attract-Mode Plus, ES-DE and Pegasus), one game per <code>.pak</code> (any case: <code>HFFgp32.PAK</code> counts). Picking one opens that pak straight away, without OpenBOR's menu, in the pak's own video mode (below). The system shows up once <code>Paks</code> has a pak; <code>Saves</code>, <code>Logs</code> and <code>v3</code> next to it are not games and stay out.</p>
+<p><strong>Game information.</strong> A pak has no record of its name, author or year: it is a package of the game's files. <code>fliperos-openbor-meta</code> (<code>config/fliperos-openbor-meta</code>) reads what is inside each pak (the file table at the end, PAK32 or PAK64) and the frontend shows it:</p>
+<table>
+<thead>
+<tr>
+<th>From the pak</th>
+<th>Where it goes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The title screen (<code>data/bgs/title.*</code>, then <code>titleb</code>, <code>logo</code>, <code>select</code>)</td>
+<td>The game's picture, <code>~/media/snap/openbor/&lt;pak&gt;.png</code> or <code>.gif</code></td>
+</tr>
+<tr>
+<td>Players: the highest <code>maxplayers</code> of the modes in <code>levels.txt</code> (OpenBOR assumes 2; <code>single</code> is 1)</td>
+<td><strong>Players</strong> (the frontend's player filter)</td>
+</tr>
+<tr>
+<td>The modes (<code>set</code> lines of <code>levels.txt</code>: Story, Arcade, Boss Rush...)</td>
+<td><strong>Series</strong></td>
+</tr>
+<tr>
+<td>The resolution (<code>data/videopc.txt</code> or <code>data/video.txt</code>: <code>video 400x300</code>, or modes 0 to 6, 320x240 to 960x540)</td>
+<td><strong>Extra</strong>, and the video mode the game opens in</td>
+</tr>
+</tbody>
+</table>
+<p>An image with almost no colours (the flat backgrounds many paks leave in place of a title) is skipped. The select screen is only a background with "Player Select", so it is not used as a cover. Art already in <code>~/media</code> (from the Scraper, or put there by hand) is never replaced.</p>
+<p>The rest (the real title, year, developer, genre, description, cover and logo) comes from <strong>ScreenScraper</strong> through the Scraper: <strong>Setup &gt; Games &gt; Scraper</strong> (or the web panel's Scraper page) lists OpenBOR with the other folders (Skyscraper's <code>openbor</code> platform, ScreenScraper system 214). After the Scraper runs for OpenBOR, <code>fliperos-openbor-meta</code> takes the title, year, developer, genre, players and description from Skyscraper's cache (<code>~/.skyscraper/cache/openbor</code>) and puts them over what came from the pak. Everything goes in the FliperOS list <code>~/.local/share/fliperos/lists/OpenBOR.txt</code> (the frontend and the web panel read it; Attract-Mode Plus gets a copy) and the description in <code>~/media/texto/openbor/&lt;pak&gt;.txt</code>. The list is rewritten when the frontend opens and when the <code>Paks</code> folder changes (<code>fliperos-setup --romlists</code>). The FliperOS frontend's automatic scrape (Arcade Database, libretro-thumbnails) has no OpenBOR games; ScreenScraper only comes through the Scraper. To see what a pak has: <code>fliperos-openbor-meta info "My Game.pak"</code>.</p>
+<p><strong>Video mode.</strong> Each pak opens in its own resolution, adjusted to the monitor (<code>fliperos-openbor-meta mode</code>, called by <code>fliperos-x11-run</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Pak</th>
+<th>15 kHz monitor</th>
+<th>25/31 kHz and LCD</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Up to 240 lines (320x240)</td>
+<td>as is, 60 Hz</td>
+<td>as is, 60 Hz</td>
+</tr>
+<tr>
+<td>241 to 288 lines (480x272)</td>
+<td>as is, 50 Hz (like PAL)</td>
+<td>as is, 60 Hz</td>
+</tr>
+<tr>
+<td>289 to 447 lines (400x300)</td>
+<td>240 lines, 60 Hz (OpenBOR scales the game down)</td>
+<td>as is, 60 Hz</td>
+</tr>
+<tr>
+<td>448 lines or more (640x480, 800x600, 960x540)</td>
+<td>half the lines, like FliperOS runs 480-line consoles: 640x240 at 60 Hz, 960x270 at 50 Hz; 800x600 (300 lines halved) goes to 800x240</td>
+<td>as is, 60 Hz</td>
+</tr>
+</tbody>
+</table>
+<p>With <strong>Setup &gt; Video Setup &gt; Interlaced hacks</strong> on for OpenBOR, a 15 kHz monitor gets the other column (480 lines, interlaced). Without a pak (the menu, <strong>Games &gt; OpenBOR</strong>), the mode stays the one in <code>emulator-modes.conf</code> (320x240).</p>
 <p><strong>Running a pak from the command line.</strong> The <code>openbor</code> command takes the pak as its only argument: the full path, or only the file name of a pak that is in <code>Paks</code>. In the console (Setup &gt; Exit to shell, on the cabinet), the same line the frontends run:</p>
 <pre><code class="language-sh">/opt/fliperos/bin/fliperos-x11-run openbor &quot;/home/fliperos/roms/openbor/Paks/My Game.pak&quot;
 </code></pre>
-<p><code>fliperos-x11-run</code> opens an Xorg in OpenBOR's mode (320x240 on a 15 kHz monitor, from <code>emulator-modes.conf</code>); the short form <code>fliperos-x11-run openbor "My Game.pak"</code> finds the pak in <code>Paks</code>. Without an argument, <code>openbor</code> opens the menu, as before. OpenBOR 4 reads the pak from its first argument (<code>OpenBOR /path/game.pak</code>); 3.0 doesn't take arguments, so for a pak listed in <code>v3/paks.txt</code> the command links <code>v3/Paks</code> to <code>v3/OnePak</code>, a folder with only that pak, and 3.0 opens it without the menu (it skips the menu when there is one pak).</p>
+<p><code>fliperos-x11-run</code> opens an Xorg in the pak's video mode (above); the short form <code>fliperos-x11-run openbor "My Game.pak"</code> finds the pak in <code>Paks</code>. Without an argument, <code>openbor</code> opens the menu, as before. OpenBOR 4 reads the pak from its first argument (<code>OpenBOR /path/game.pak</code>); 3.0 doesn't take arguments, so for a pak listed in <code>v3/paks.txt</code> the command links <code>v3/Paks</code> to <code>v3/OnePak</code>, a folder with only that pak, and 3.0 opens it without the menu (it skips the menu when there is one pak).</p>
 <p><strong>Old paks.</strong> OpenBOR is version 4. Many mods were made for 3.0 (build 6391) and stop as soon as they load in 4 (the log in <code>Logs/OpenBorLog.txt</code> says <em>An Error Occurred</em>, e.g. <em>Unable to load image file '...gif'</em>: 4 no longer takes GIF sprites).</p>
 <p>FliperOS also ships 3.0 build 6391: when 4 refuses a pak, the <code>openbor</code> command (<code>config/fliperos-openbor</code>) opens 3.0 right away and writes the pak in <code>openbor/v3/paks.txt</code>; when every pak is on that list, 3.0 opens directly. 3.0 runs in <code>openbor/v3</code>, with its own <code>Saves</code> and <code>Logs</code> (the <code>.cfg</code> files of one version don't work in the other) and the same <code>Paks</code> and <code>ScreenShots</code>; the controls of the Setup go to both.</p>
 <p>To try a pak in 4 again, remove its line from <code>paks.txt</code>. The 3.0 binary is in the repository (<code>config/openbor-legacy</code>, rebuilt by <code>tools/build-openbor-legacy.sh</code>), so updates bring it too.</p>
