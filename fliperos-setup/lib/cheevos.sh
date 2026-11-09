@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# RetroAchievements (Setup > Games > RetroAchievements e o painel web): o
+# RetroAchievements (menu principal > RetroAchievements e o painel web): o
 # login na conta do site, as conquistas ligadas ou nao e o modo hardcore,
 # para todos os emuladores que tem conquistas (RetroArch, DuckStation, PCSX2,
 # Dolphin, Flycast).
@@ -69,7 +69,7 @@ cheevos_apply() {
   mkdir -p "$(dirname "$CHEEVOS_RA_CFG")"
   tmp=$(umask 077 && mktemp "$CHEEVOS_RA_CFG.XXXXXX") || return 1
   {
-    echo "# Setup > Games > RetroAchievements (lib/cheevos.sh): por cima do retroarch.cfg."
+    echo "# Menu principal > RetroAchievements (lib/cheevos.sh): por cima do retroarch.cfg."
     printf 'cheevos_enable = "%s"\ncheevos_hardcore_mode_enable = "%s"\n' "$on" "$hard"
     printf 'cheevos_username = "%s"\ncheevos_token = "%s"\ncheevos_password = ""\n' "$user" "$token"
   } > "$tmp"

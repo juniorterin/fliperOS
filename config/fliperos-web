@@ -41,6 +41,9 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/password {"current", "password"}: a senha do gabinete (--password)
     GET  /api/whatsnew  o texto do What's new (--whatsnew)
     GET  /api/cheevos   a conta do RetroAchievements (--cheevos status, sem o token)
+    GET  /api/cloud     o backup na nuvem (config/fliperos-cloud status)
+    POST /api/cloud {"action": "install" | "remote" (kind, fields) | "authorize" (kind) | "authorized"
+                      (answer) | "forget" | "auto" (on) | "what" (lista) | "sync" (direction)}
     POST /api/cheevos {"action": "login", "user", "password"} | "logout" | "enable"/"hardcore" + "on": bool
     GET  /api/versions  a versao (Setup > System > FliperOS version): level,
                       base, latest, hold, reboot e os updates que se pode
@@ -2229,6 +2232,123 @@ def setup_out(*args, timeout=60):
 # (config/fliperos-extras). O que leva minutos e uma tarefa.
 EMULATORS_TOOL = ENV("FLIPEROS_EMULATORS", BIN + "/fliperos-emulators")
 UPDATE_TOOL = ENV("FLIPEROS_UPDATE_TOOL", BIN + "/fliperos-update")
+# Settings > Cloud backup: os hi-scores, saves e configuracoes numa nuvem
+# pelo rclone (config/fliperos-cloud, que roda como o jogador).
+CLOUD = ENV("FLIPEROS_CLOUD", BIN + "/fliperos-cloud")
+RCLONE = ENV("FLIPEROS_RCLONE", "rclone")
+CLOUD_KINDS = {"webdav": ("url", "user", "pass"), "sftp": ("host", "port", "user", "pass"), "mega": ("user", "pass")}
+CLOUD_OAUTH = ("drive", "dropbox")
+
+
+def as_player(*argv):
+    """Um comando como o jogador, com a home e o /run/user dele (o painel e
+    root; nos testes, que nao sao, direto)."""
+    user = pwd.getpwnam(PLAYER)
+    env = ["env", "HOME=" + (ENV("FLIPEROS_HOME") or user.pw_dir), "XDG_RUNTIME_DIR=%s/%d" % (RUN_USER, user.pw_uid)]
+    if os.geteuid() == 0 and user.pw_uid != 0:
+        return ["runuser", "-u", PLAYER, "--", *env, *argv]
+    return [*env, *argv]
+
+
+def cloud_status():
+    info = key_values(subprocess.run(as_player(CLOUD, "status"), capture_output=True, text=True, timeout=30).stdout)
+    what = [w for w in (info.get("what") or "hiscores,saves,config").split(",") if w in ("hiscores", "saves", "config")]
+    last = info.get("last") or ""
+    return {"installed": info.get("installed") == "1", "remote": info.get("remote", ""),
+            "auto": info.get("auto") == "on", "what": what, "last": int(last) if last.isdigit() else None,
+            "result": info.get("result", "")}
+
+
+class CloudAuth:
+    """O login OAuth (Google Drive, Dropbox) sem navegador no gabinete: o
+    rclone authorize espera o codigo em 127.0.0.1:53682, que o celular nao
+    alcanca. O painel pega dele o endereco do site (o redirecionamento do
+    /auth), a pessoa entra la e, quando o site a manda para 127.0.0.1 (a
+    pagina que nao abre), cola esse endereco no painel, que o entrega ao
+    rclone aqui dentro; o rclone devolve o token. Tambem aceita o token
+    colado de um "rclone authorize" feito noutro computador."""
+    PORT = int(ENV("FLIPEROS_RCLONE_AUTH_PORT", "53682"))
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.proc, self.kind, self.out = None, None, []
+
+    def stop(self):
+        if self.proc and self.proc.poll() is None:
+            try:
+                os.killpg(self.proc.pid, signal.SIGTERM)
+            except OSError:
+                pass
+        self.proc = None
+
+    def read(self, proc):
+        for line in proc.stdout:
+            self.out.append(line.rstrip("\n"))
+
+    def wait_for(self, pattern, seconds):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            text = "\n".join(self.out)
+            m = re.search(pattern, text, re.S)
+            if m:
+                return m
+            if self.proc is None or self.proc.poll() is not None:
+                time.sleep(0.2)
+                return re.search(pattern, "\n".join(self.out), re.S)
+            time.sleep(0.1)
+        return None
+
+    def start(self, kind):
+        """O endereco do site para a pessoa entrar."""
+        with self.lock:
+            self.stop()
+            self.kind, self.out = kind, []
+            self.proc = subprocess.Popen(as_player(RCLONE, "authorize", kind, "--auth-no-open-browser"),
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                         text=True, errors="replace", start_new_session=True)
+            threading.Thread(target=self.read, args=(self.proc,), daemon=True).start()
+            m = self.wait_for(r"(http://(?:127\.0\.0\.1|localhost):%d/auth\?state=[\w-]+)" % self.PORT, 20)
+            if not m:
+                self.stop()
+                raise RuntimeError("rclone authorize did not start: " + " ".join(self.out)[-200:])
+            path = m.group(1).split(":%d" % self.PORT, 1)[1]
+            import http.client
+            conn = http.client.HTTPConnection("127.0.0.1", self.PORT, timeout=10)
+            conn.request("GET", path)
+            res = conn.getresponse()
+            location = res.getheader("Location")
+            conn.close()
+            if res.status not in (301, 302, 303, 307) or not location or not location.startswith("https://"):
+                self.stop()
+                raise RuntimeError("rclone gave no sign-in address")
+            return location
+
+    def finish(self, answer):
+        """O token: do endereco colado (o 127.0.0.1:53682/?state=...&code=...)
+        entregue ao rclone, ou o JSON colado direto."""
+        answer = answer.strip()
+        if answer.startswith("{"):
+            with self.lock:
+                kind = self.kind
+                self.stop()
+            return kind, answer
+        m = re.match(r"https?://(?:127\.0\.0\.1|localhost):%d/?\?(\S*\bcode=\S+)$" % self.PORT, answer)
+        if not m:
+            raise ValueError("paste the whole address of the page that did not open")
+        with self.lock:
+            if not self.proc or self.proc.poll() is not None:
+                raise ValueError("start again: the sign-in expired")
+            import http.client
+            conn = http.client.HTTPConnection("127.0.0.1", self.PORT, timeout=30)
+            conn.request("GET", "/?" + m.group(1))
+            conn.getresponse().read()
+            conn.close()
+            got = self.wait_for(r"--->\s*(\{.*?\})\s*<---", 40)
+            kind = self.kind
+            self.stop()
+        if not got:
+            raise RuntimeError("rclone did not get the token")
+        return kind, got.group(1)
 
 
 def versions():
@@ -2592,6 +2712,7 @@ class Panel:
         self.input = InputWatch()
         self.mouse = VirtualMouse()
         self.tasks = Tasks()
+        self.cloud_auth = CloudAuth()
         self.downloader = Cached(3, downloader_status)
         self.launch_lock = threading.Lock()
         # O que volta depois de um jogo aberto daqui, para o proximo pedido
@@ -2973,8 +3094,13 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
             return self.send(200, data)
+        if url.path == "/api/cloud":
+            try:
+                return self.send(200, cloud_status())
+            except (OSError, subprocess.SubprocessError, KeyError) as exc:
+                return self.send(500, {"error": str(exc)})
         if url.path == "/api/cheevos":
-            # Setup > Games > RetroAchievements: a conta (sem o token).
+            # menu principal > RetroAchievements: a conta (sem o token).
             try:
                 info = key_values(setup_out("--cheevos", "status"))
             except (OSError, subprocess.SubprocessError) as exc:
@@ -3126,6 +3252,8 @@ class Handler(BaseHTTPRequestHandler):
                                    password + "\n", timeout=90)
         if url.path == "/api/cheevos":
             return self.cheevos_action(self.body(), user)
+        if url.path == "/api/cloud":
+            return self.cloud_action(self.body(), user)
         if url.path == "/api/password":
             # Setup > System > Password: com a senha de agora. O modo lab nao
             # troca a senha de ninguem.
@@ -3387,8 +3515,86 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(500, {"error": (done.stderr or done.stdout).strip()[-300:] or "failed"})
         return self.send(200, {})
 
+    def cloud_run(self, args, stdin=None):
+        """fliperos-cloud como o jogador: 200, 400 (status 2) ou 500 com o motivo."""
+        try:
+            done = subprocess.run(as_player(CLOUD, *args), input=stdin, capture_output=True, text=True, timeout=90)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return self.send(500, {"error": str(exc)})
+        if done.returncode == 2:
+            return self.send(400, {"error": "bad request"})
+        if done.returncode != 0:
+            return self.send(500, {"error": (done.stdout or done.stderr).strip()[-300:] or "failed"})
+        return self.send(200, cloud_status())
+
+    def cloud_action(self, data, user):
+        """Settings > Cloud backup: instalar o rclone, a conta (usuario e
+        senha pela entrada padrao; o OAuth pelo CloudAuth), o automatico, o
+        que sincronizar e sincronizar agora (tarefa)."""
+        action = data.get("action")
+        if user == LAB_USER and action in ("remote", "authorize", "authorized", "forget"):
+            return self.send(403, {"error": "not in the lab mode"})
+        if action == "install":
+            task = self.panel.tasks.start("Install rclone (cloud backup)",
+                                          ["env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "-y", "-q",
+                                           "-o", "DPkg::Lock::Timeout=120", "install", "rclone"], "cloud-install")
+            if not task:
+                return self.send(409, {"error": "already installing"})
+            return self.send(200, task.info())
+        if action == "remote":
+            kind, fields = data.get("kind"), data.get("fields")
+            if kind not in CLOUD_KINDS or not isinstance(fields, dict):
+                return self.send(400, {"error": "bad account"})
+            lines = []
+            for key in CLOUD_KINDS[kind]:
+                value = str(fields.get(key) or "")
+                if "\n" in value or "\r" in value:
+                    return self.send(400, {"error": "bad " + key})
+                if value:
+                    lines.append("%s=%s" % (key, value))
+            return self.cloud_run(["remote", kind], "\n".join(lines) + "\n")
+        if action == "authorize":
+            if data.get("kind") not in CLOUD_OAUTH:
+                return self.send(400, {"error": "bad provider"})
+            try:
+                return self.send(200, {"url": self.panel.cloud_auth.start(data["kind"])})
+            except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+        if action == "authorized":
+            try:
+                kind, token = self.panel.cloud_auth.finish(str(data.get("answer") or ""))
+            except ValueError as exc:
+                return self.send(400, {"error": str(exc)})
+            except (OSError, RuntimeError) as exc:
+                return self.send(500, {"error": str(exc)})
+            # A nuvem escolhida na tela vale (um token colado de outro computador).
+            if data.get("kind") in CLOUD_OAUTH:
+                kind = data["kind"]
+            if kind not in CLOUD_OAUTH or "\n" in token:
+                return self.send(400, {"error": "choose Google Drive or Dropbox first"})
+            return self.cloud_run(["remote", kind], "token=%s\n" % token)
+        if action == "forget":
+            return self.cloud_run(["forget"])
+        if action == "auto" and isinstance(data.get("on"), bool):
+            return self.cloud_run(["auto", "on" if data["on"] else "off"])
+        if action == "what":
+            what = data.get("what")
+            if not isinstance(what, list) or not all(w in ("hiscores", "saves", "config") for w in what):
+                return self.send(400, {"error": "bad list"})
+            return self.cloud_run(["what", ",".join(what)])
+        if action == "sync":
+            direction = data.get("direction", "both")
+            if direction not in ("both", "push", "pull"):
+                return self.send(400, {"error": "bad direction"})
+            names = {"both": "Cloud backup: sync", "push": "Cloud backup: send", "pull": "Cloud backup: get"}
+            task = self.panel.tasks.start(names[direction], as_player(CLOUD, "sync", direction), "cloud")
+            if not task:
+                return self.send(409, {"error": "a sync is running"})
+            return self.send(200, task.info())
+        return self.send(400, {"error": "bad action"})
+
     def cheevos_action(self, data, user):
-        """Setup > Games > RetroAchievements: entrar (a senha vai pela entrada
+        """menu principal > RetroAchievements: entrar (a senha vai pela entrada
         padrao do Setup, nunca na linha de comando nem gravada), sair, ligar e
         o hardcore. O motivo de um login recusado volta ao painel."""
         action = data.get("action")

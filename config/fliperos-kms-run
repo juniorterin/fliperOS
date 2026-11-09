@@ -35,6 +35,11 @@ crt_card_driver() {
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 [[ -x $pixelcade ]] && { "$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 & }
+# O backup na nuvem (config/fliperos-cloud, painel web): com o automatico
+# ligado, os recordes e saves sobem quando este jogo fechar (o exec abaixo
+# mantem o PID). Sem conta, sai na hora.
+cloud=${FLIPEROS_CLOUD:-/opt/fliperos/bin/fliperos-cloud}
+[[ -x $cloud ]] && { "$cloud" watch $$ < /dev/null > /dev/null 2>&1 & }
 # As saidas do jogo para placas e LEDs (config/fliperos-outputs; sem o
 # Hook Of The Reaper e o LEDSpicer instalados, nada).
 outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
@@ -68,7 +73,7 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   [[ -f $buttons ]] && appendconfig+="|$buttons"
   # O DOFLinx (Setup > Games > Extras) le o jogo aberto pelo Network Command
   # Interface: o arquivo so existe com ele instalado.
-  # A conta do RetroAchievements do Setup > Games > RetroAchievements
+  # A conta do RetroAchievements do menu principal > RetroAchievements
   # (lib/cheevos.sh): so existe depois de feita por la.
   cheevos_cfg=${FLIPEROS_RA_CHEEVOS:-/etc/fliperos/retroarch/cheevos.cfg}
   [[ -r $cheevos_cfg ]] && appendconfig+="|$cheevos_cfg"

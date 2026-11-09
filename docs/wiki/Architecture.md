@@ -173,6 +173,7 @@ The clock comes from the network (`systemd-timesyncd`). On the first test on the
 | `config/lxde/alacritty/alacritty.toml`, `config/fliperos-software.gschema.override`, `config/applications/org.gnome.Software.desktop` | The desktop's terminal (Alacritty) and App Store |
 | `fliperos-setup/lib/debug.sh` | Debug mode: boot and programs with or without text |
 | `config/fliperos-resolution`, `config/applications/fliperos-resolution.desktop` | Desktop Resolution: the desktop resolution on the fly |
+| `config/fliperos-cloud` | Cloud backup: high scores, saves and settings through rclone (web panel) |
 | `fliperos-setup/lib/cheevos.sh`, `config/fliperos-cheevos` | RetroAchievements: the login (token only) and the account in each emulator's config |
 | `config/mame-ui.ini` | Dracula colors for GroovyMAME's UI |
 | `config/applications/`, `config/icons/`, `config/fliperos-launch` | Emulators in the LXDE menu and leaving the desktop to open them |

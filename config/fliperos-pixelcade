@@ -864,7 +864,7 @@ versus_score() {
 # --verbose: so assim a conquista aparece no log.
 cheevos() {
   installed || zedmd_installed || overlay_on || return 1
-  # A conta do Setup > Games > RetroAchievements (cheevos.cfg, por cima do
+  # A conta do menu principal > RetroAchievements (cheevos.cfg, por cima do
   # retroarch.cfg) vale antes da feita no menu do RetroArch.
   local setup_cfg=${RA_CHEEVOS_CFG:-/etc/fliperos/retroarch/cheevos.cfg}
   if [[ -r $setup_cfg ]]; then

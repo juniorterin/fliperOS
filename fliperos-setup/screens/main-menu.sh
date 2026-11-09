@@ -73,6 +73,7 @@ screen_main_menu() {
       "$start" \
       "setup|Setup|Video, audio, network, controls, games and system." \
       "desktop|Start desktop|The LXDE desktop, for a mouse and a keyboard." \
+      "achievements|RetroAchievements|Sign in to earn achievements in RetroArch and other emulators." \
       "shell|Exit to shell|The command line. Type fliperos-menu to come back." \
       "power|Shutdown / Reboot|Power off or restart the computer.") || continue
     last=$choice
@@ -81,6 +82,7 @@ screen_main_menu() {
       frontend) screen_start_frontend && return "$SETUP_EXIT_LAUNCH" ;;
       setup) screen_setup_menu ;;
       desktop) screen_start_desktop && return "$SETUP_EXIT_LAUNCH" ;;
+      achievements) screen_cheevos ;;
       shell) screen_terminal && return "$SETUP_EXIT_SHELL" ;;
       power) screen_power ;;
     esac

@@ -7159,6 +7159,43 @@ class WebPanelTests(unittest.TestCase):
                          "echo '=;eth0;IPv4;FliperOS BANANA;_fliperos-web._tcp;local;fliperos-2.local;192.168.1.20;8081;"
                          "\"id=other1\" \"name=BANANA\"'\n" % tmp)
         avahi.chmod(0o755)
+        # O fliperos-cloud falso: o status, a conta pela entrada (no log
+        # secreto) e o sync com eventos de progresso.
+        cloud = tmp / 'fake-cloud'
+        cloud.write_text('#!/bin/sh\necho "$*" >> %s/cloud.log\n'
+                         'case "$1" in\n'
+                         '  status) printf "installed=1\\nremote=webdav\\nauto=on\\nwhat=hiscores,config\\n'
+                         'last=1700000000\\nresult=ok\\n" ;;\n'
+                         '  remote) cat >> %s/secret.log; [ "$2" = mega ] && { echo "The cloud did not accept the account: 401"; exit 1; } ;;\n'
+                         '  what|auto) [ -n "$2" ] || exit 2 ;;\n'
+                         '  sync) echo "@step 0 Syncing with the cloud"; echo "@msg hiscores" ;;\n'
+                         'esac\nexit 0\n' % (tmp, tmp))
+        cloud.chmod(0o755)
+        # O "rclone authorize" falso: um servidor em 127.0.0.1 que manda o
+        # /auth para o site e, com o codigo, imprime o token.
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            cls.auth_port = s.getsockname()[1]
+        rclone = tmp / 'fake-rclone'
+        rclone.write_text(
+            '#!/usr/bin/env python3\nimport sys, http.server\n'
+            'port = %d\n'
+            'print("If your browser doesn\'t open automatically go to the following link: '
+            'http://127.0.0.1:%%d/auth?state=abc" %% port, flush=True)\n'
+            'class H(http.server.BaseHTTPRequestHandler):\n'
+            '    def log_message(self, *a): pass\n'
+            '    def do_GET(self):\n'
+            '        if self.path.startswith("/auth"):\n'
+            '            self.send_response(302); self.send_header("Location", "https://accounts.example/o?x=1"); self.end_headers(); return\n'
+            '        self.send_response(200); self.end_headers(); self.wfile.write(b"ok")\n'
+            '        if "code=good" in self.path:\n'
+            '            print("Paste the following into your remote machine --->", flush=True)\n'
+            '            print(\'{"access_token":"ya29","expiry":"x"}\', flush=True)\n'
+            '            print("<---End paste", flush=True)\n'
+            '            raise SystemExit\n'
+            'srv = http.server.HTTPServer(("127.0.0.1", port), H)\n'
+            'try:\n    srv.serve_forever()\nexcept SystemExit:\n    pass\n' % cls.auth_port)
+        rclone.chmod(0o755)
         (tmp / 'avahi').mkdir()
         (tmp / 'lab').mkdir()
         (tmp / 'run/1000').mkdir(parents=True, exist_ok=True)
@@ -7187,6 +7224,8 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
                    FLIPEROS_WEB_GUI=str(ROOT / 'fliperos-setup/gui'),
                    FLIPEROS_AVAHI_BROWSE=str(avahi),
+                   FLIPEROS_CLOUD=str(cloud), FLIPEROS_RCLONE=str(rclone),
+                   FLIPEROS_RCLONE_AUTH_PORT=str(cls.auth_port),
                    FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi/fliperos-web.service'))
         (tmp / 'mnt/USB/romset').mkdir(parents=True)
         (tmp / 'mnt/USB/.hidden').mkdir()
@@ -7320,6 +7359,56 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('--cheevos logout', log)
         self.assertNotIn('s3cret', log)
         self.assertEqual(self.request('GET', '/api/cheevos')[0], 401)
+
+    def test_cloud_backup(self):
+        # Settings > Cloud backup: o status, a conta (a senha so pela entrada
+        # padrao), o OAuth pelo endereco colado e o sync como tarefa.
+        cookie = self.login()
+        tmp = Path(self.tmp.name)
+        status, _, data = self.request('GET', '/api/cloud', cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'installed': True, 'remote': 'webdav', 'auto': True,
+                                                            'what': ['hiscores', 'config'], 'last': 1700000000,
+                                                            'result': 'ok'}))
+        body = {'action': 'remote', 'kind': 'webdav', 'fields': {'url': 'https://dav.example', 'user': 'joe', 'pass': 'pw1'}}
+        self.assertEqual(self.request('POST', '/api/cloud', body, cookie=cookie)[0], 200)
+        self.assertIn('url=https://dav.example\nuser=joe\npass=pw1\n', (tmp / 'secret.log').read_text())
+        self.assertNotIn('pw1', (tmp / 'cloud.log').read_text())
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'remote', 'kind': 'mega',
+                                                              'fields': {'user': 'a', 'pass': 'b'}}, cookie=cookie)
+        self.assertEqual(status, 500)
+        self.assertIn('401', json.loads(data)['error'])
+        for bad in ({'action': 'remote', 'kind': 'ftp', 'fields': {}}, {'action': 'what', 'what': ['games']},
+                    {'action': 'auto', 'on': 'yes'}, {'action': 'sync', 'direction': 'up'},
+                    {'action': 'authorize', 'kind': 'onedrive'}, {'action': 'nope'},
+                    {'action': 'remote', 'kind': 'webdav', 'fields': {'url': 'a\nb'}}):
+            self.assertEqual(self.request('POST', '/api/cloud', bad, cookie=cookie)[0], 400, bad)
+        # O OAuth: o endereco do site sai do /auth do rclone; o colado volta a ele.
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'authorize', 'kind': 'drive'}, cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'url': 'https://accounts.example/o?x=1'}))
+        self.assertEqual(self.request('POST', '/api/cloud', {'action': 'authorized', 'answer': 'https://evil/'},
+                                      cookie=cookie)[0], 400)
+        answer = 'http://127.0.0.1:%d/?state=abc&code=good&scope=drive' % self.auth_port
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'authorized', 'answer': answer}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.assertIn('token={"access_token":"ya29","expiry":"x"}\n', (tmp / 'secret.log').read_text())
+        self.assertIn('remote drive', (tmp / 'cloud.log').read_text())
+        # O token colado direto (de um rclone authorize noutro computador).
+        status, _, _ = self.request('POST', '/api/cloud', {'action': 'authorized', 'kind': 'dropbox',
+                                                           'answer': '{"access_token":"sl.x"}'}, cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertIn('remote dropbox', (tmp / 'cloud.log').read_text())
+        for body in ({'action': 'auto', 'on': False}, {'action': 'what', 'what': ['saves']}, {'action': 'forget'}):
+            self.assertEqual(self.request('POST', '/api/cloud', body, cookie=cookie)[0], 200, body)
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'sync', 'direction': 'pull'}, cookie=cookie)
+        self.assertEqual(status, 200)
+        log = (tmp / 'cloud.log').read_text()
+        for line in ('auto off', 'what saves', 'forget'):
+            self.assertIn(line, log)
+        deadline = time.time() + 10
+        while time.time() < deadline and 'sync pull' not in (tmp / 'cloud.log').read_text():
+            time.sleep(0.1)
+        self.assertIn('sync pull', (tmp / 'cloud.log').read_text())
+        self.assertEqual(self.request('GET', '/api/cloud')[0], 401)
 
     def test_avahi_lines_and_escapes(self):
         web = load_script('fliperos_web_avahi', 'config/fliperos-web')

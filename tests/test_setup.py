@@ -5251,6 +5251,131 @@ class TopbarTests(Base):
         self.assertLess(entry.index("FLIPEROS_SETUP_VERSION="), entry.index('source "$SETUP_DIR/lib/ui.sh"'))
 
 
+class CloudTests(unittest.TestCase):
+    """config/fliperos-cloud: o backup na nuvem pelo rclone (um rclone falso
+    que copia entre pastas), do painel web."""
+    TOOL = ROOT / "config/fliperos-cloud"
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="fliperos-cloud-"))
+        self.home = self.dir / "home"
+        self.cloud = self.dir / "cloud"
+        (self.home / ".mame/hiscore").mkdir(parents=True)
+        (self.home / ".mame/hiscore/sf2.hi").write_text("local")
+        (self.home / "nvram/mame").mkdir(parents=True)
+        (self.home / "nvram/mame/sf2.nv").write_text("nv")
+        bindir = self.dir / "bin"
+        bindir.mkdir()
+        # O rclone falso: "copy ORIGEM DESTINO" com fliperos:CAMINHO na pasta
+        # cloud; "obscure -" le a senha da entrada; mkdir cria.
+        rclone = bindir / "rclone"
+        rclone.write_text(
+            "#!/bin/bash\necho \"$*\" >> %(d)s/rclone.log\n"
+            "map() { case $1 in fliperos:*) echo %(c)s/${1#fliperos:} ;; *) echo $1 ;; esac; }\n"
+            "case $1 in\n"
+            "  obscure) echo \"OBS($(cat))\" ;;\n"
+            "  mkdir) [ -f %(d)s/refuse ] && { echo 'Failed to create: 401 Unauthorized' >&2; exit 1; }; mkdir -p \"$(map $2)\" ;;\n"
+            "  copy) args=(); for a in \"$@\"; do case $a in --*|copy|*.part|cloud.conf) ;; *) args+=(\"$a\") ;; esac; done\n"
+            "    src=$(map ${args[0]}); dst=$(map ${args[1]}); [ -d \"$src\" ] || exit 0; mkdir -p \"$dst\"; cp -a \"$src/.\" \"$dst/\" ;;\n"
+            "esac\n" % {"d": self.dir, "c": self.cloud})
+        rclone.chmod(0o755)
+        self.env = dict(os.environ, PATH="%s:%s" % (bindir, os.environ["PATH"]), HOME=str(self.home),
+                        FLIPEROS_CLOUD_LOG=str(self.dir / "cloud.log"), XDG_RUNTIME_DIR=str(self.dir))
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def run_(self, *args, stdin=None):
+        return subprocess.run(["bash", str(self.TOOL), *args], input=stdin, capture_output=True, text=True,
+                              env=self.env, timeout=60)
+
+    def status(self):
+        return dict(line.split("=", 1) for line in self.run_("status").stdout.splitlines())
+
+    def test_webdav_account_keeps_the_password_obscured(self):
+        self.assertEqual(self.status()["remote"], "")
+        r = self.run_("remote", "webdav", stdin="url=https://cloud.example/dav\nuser=joe\npass=s3cret\n")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        conf = (self.home / ".config/rclone/rclone.conf").read_text()
+        self.assertIn("[fliperos]\ntype = webdav\nurl = https://cloud.example/dav\nvendor = other\nuser = joe\n"
+                      "pass = OBS(s3cret)\n", conf)
+        self.assertEqual(oct((self.home / ".config/rclone/rclone.conf").stat().st_mode & 0o777), "0o600")
+        self.assertNotIn("s3cret", (self.dir / "rclone.log").read_text().replace("OBS(s3cret)", ""))
+        self.assertEqual(self.status()["remote"], "webdav")
+        # Outra conta troca a secao; forget a tira, sem mexer em outras.
+        conf_path = self.home / ".config/rclone/rclone.conf"
+        conf_path.write_text("[other]\ntype = local\n\n" + conf_path.read_text())
+        self.run_("forget")
+        self.assertEqual(conf_path.read_text().strip(), "[other]\ntype = local")
+        self.assertEqual(self.run_("remote", "webdav", stdin="url=ftp://x\nuser=a\npass=b\n").returncode, 2)
+        self.assertEqual(self.run_("remote", "nope", stdin="").returncode, 2)
+
+    def test_refused_account_is_not_kept(self):
+        (self.dir / "refuse").write_text("")
+        r = self.run_("remote", "mega", stdin="user=a@b.c\npass=x\n")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("401 Unauthorized", r.stdout)
+        self.assertEqual(self.status()["remote"], "")
+
+    def test_oauth_token_and_sync_both_ways(self):
+        token = '{"access_token":"ya29","token_type":"Bearer","expiry":"2026-11-10T00:00:00Z"}'
+        self.assertEqual(self.run_("remote", "drive", stdin="token=%s\n" % token).returncode, 0)
+        conf = (self.home / ".config/rclone/rclone.conf").read_text()
+        self.assertIn("type = drive\nscope = drive\ntoken = %s\n" % token, conf)
+        self.assertEqual(self.run_("remote", "dropbox", stdin="token=nope\n").returncode, 2)
+        # O recorde de outro gabinete ja esta na nuvem.
+        (self.cloud / "FliperOS/hiscores/hiscore").mkdir(parents=True, exist_ok=True)
+        (self.cloud / "FliperOS/hiscores/hiscore/kof98.hi").write_text("other")
+        r = self.run_("sync")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("@step 0 Syncing with the cloud", r.stdout)
+        self.assertEqual((self.cloud / "FliperOS/hiscores/hiscore/sf2.hi").read_text(), "local")
+        self.assertEqual((self.cloud / "FliperOS/hiscores/nvram/mame/sf2.nv").read_text(), "nv")
+        self.assertEqual((self.home / ".mame/hiscore/kof98.hi").read_text(), "other")
+        self.assertIn("--update", (self.dir / "rclone.log").read_text())
+        self.assertNotIn(" sync ", (self.dir / "rclone.log").read_text())
+        st = self.status()
+        self.assertEqual(st["result"], "ok")
+        self.assertTrue(st["last"].isdigit())
+        # So enviar: nada desce.
+        (self.cloud / "FliperOS/saves").mkdir(parents=True)
+        (self.cloud / "FliperOS/saves/x.srm").write_text("s")
+        self.run_("sync", "push")
+        self.assertFalse((self.home / "save/x.srm").exists())
+        self.assertEqual(self.run_("sync", "sideways").returncode, 2)
+
+    def test_what_and_auto_settings(self):
+        self.assertEqual(self.run_("what", "hiscores,saves").returncode, 0)
+        self.assertEqual(self.status()["what"], "hiscores,saves")
+        self.assertEqual(self.run_("what", "hiscores,games").returncode, 2)
+        self.assertEqual(self.run_("auto", "on").returncode, 0)
+        self.assertEqual(self.status()["auto"], "on")
+        self.assertEqual(self.run_("auto", "maybe").returncode, 2)
+        # Sem conta, sync recusa e watch sai na hora.
+        self.assertEqual(self.run_("sync").returncode, 1)
+        self.assertEqual(self.run_("watch", "1").returncode, 0)
+
+    def test_watch_syncs_after_the_game_closes(self):
+        self.run_("remote", "mega", stdin="user=a@b.c\npass=x\n")
+        self.run_("auto", "on")
+        self.run_("what", "hiscores,config")
+        game = subprocess.Popen(["sleep", "1"])
+        env = dict(self.env, FLIPEROS_CLOUD_GAP="0", FLIPEROS_CLOUD_POLL="0.2")
+        r = subprocess.run(["bash", str(self.TOOL), "watch", str(game.pid)], env=env, capture_output=True, text=True,
+                           timeout=60)
+        game.wait()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.cloud / "FliperOS/hiscores/hiscore/sf2.hi").exists())
+        # As configuracoes entraram (a primeira vez); a marca do vigia saiu.
+        self.assertIn("sync both hiscores,config", (self.dir / "cloud.log").read_text())
+        self.assertEqual(list(self.dir.glob("fliperos-cloud-watch-*")), [])
+        # Logo depois, so os recordes (configuracoes uma vez por dia).
+        game = subprocess.Popen(["sleep", "0"])
+        game.wait()
+        subprocess.run(["bash", str(self.TOOL), "watch", str(game.pid)], env=env, timeout=60)
+        self.assertIn("sync both hiscores\n", (self.dir / "cloud.log").read_text())
+
+
 class CheevosTests(Base):
     """Setup > Games > RetroAchievements (lib/cheevos.sh e config/fliperos-cheevos):
     o login pela API do site (um curl falso), so o token guardado, o
@@ -7987,7 +8112,7 @@ class SetupGroupsTests(Base):
                          ["video", "audio", "network", "games", "joysticks", "system", "return"])
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
-                                                       "scraper", "achievements", "romlist", "return"])
+                                                       "scraper", "romlist", "return"])
         self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update", "version",
                                                         "whatsnew", "debug", "lab", "oscr", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)

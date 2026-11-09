@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# fliperos-cloud: os hi-scores, os saves e as configuracoes do jogador numa
+# nuvem pelo rclone (Google Drive, Dropbox, WebDAV/Nextcloud, SFTP, Mega),
+# do painel web (Settings > Cloud backup). Roda como o usuario: o rclone le
+# ~/.config/rclone/rclone.conf, o remoto "fliperos".
+#
+#   fliperos-cloud status                 chave=valor: installed, remote, kind, auto, what, last, result
+#   fliperos-cloud remote TIPO            grava o remoto; os campos pela entrada padrao, um "chave=valor"
+#                                         por linha (a senha nunca na linha de comando):
+#                                           webdav  url user pass      sftp  host port user pass
+#                                           mega    user pass          drive|dropbox  token (o JSON do rclone)
+#   fliperos-cloud forget                 tira o remoto (o que esta na nuvem fica la)
+#   fliperos-cloud auto on|off            sincroniza sozinho ao fechar cada jogo
+#   fliperos-cloud what LISTA             o que sincronizar: hiscores,saves,config
+#   fliperos-cloud sync [push|pull|both]  agora (o padrao e both: os dois lados, o mais novo vence)
+#   fliperos-cloud watch PID              (fliperos-kms-run/x11-run) espera o jogo fechar e, com o
+#                                         automatico ligado, sincroniza os hi-scores e os saves; as
+#                                         configuracoes uma vez por dia
+#
+# Na nuvem, tudo fica em FliperOS/ (hiscores/, saves/, config/), o mesmo para
+# todos os gabinetes da pessoa: um recorde feito num aparece no outro. Nada e
+# apagado de nenhum lado (rclone copy --update, nunca sync): um arquivo so
+# e trocado por um mais novo.
+set -uo pipefail
+RCLONE=${FLIPEROS_RCLONE:-rclone}
+HOME_DIR=${FLIPEROS_CLOUD_HOME:-$HOME}
+STATE=${FLIPEROS_CLOUD_STATE:-$HOME_DIR/.config/fliperos/cloud.conf}
+RCLONE_CONF=${RCLONE_CONFIG:-$HOME_DIR/.config/rclone/rclone.conf}
+LOG=${FLIPEROS_CLOUD_LOG:-/opt/fliperos/logs/cloud.log}
+REMOTE=fliperos
+ROOT_DIR=FliperOS
+# O intervalo minimo entre duas sincronizacoes automaticas (s), e o das
+# configuracoes.
+AUTO_GAP=${FLIPEROS_CLOUD_GAP:-120}
+CONFIG_GAP=${FLIPEROS_CLOUD_CONFIG_GAP:-86400}
+export RCLONE_CONFIG=$RCLONE_CONF
+
+# As pastas de cada grupo: "local<TAB>na nuvem".
+pairs() {
+  case $1 in
+    hiscores)
+      printf '%s\t%s\n' "$HOME_DIR/.mame/hiscore" hiscores/hiscore "$HOME_DIR/nvram" hiscores/nvram
+      ;;
+    saves) printf '%s\t%s\n' "$HOME_DIR/save" saves ;;
+    config)
+      printf '%s\t%s\n' "$HOME_DIR/.mame/cfg" config/mame-cfg "$HOME_DIR/.config/fliperos" config/fliperos \
+        "$HOME_DIR/.local/share/fliperos/stats" config/stats "$HOME_DIR/.config/retroarch/remaps" config/retroarch-remaps \
+        "$HOME_DIR/.config/retroarch/config" config/retroarch-overrides
+      ;;
+  esac
+}
+
+state_get() { sed -n "s/^$1=//p" "$STATE" 2> /dev/null | tail -1; }
+state_set() {
+  local tmp
+  mkdir -p "${STATE%/*}"
+  tmp=$(mktemp "$STATE.XXXXXX") || return 1
+  { grep -v "^$1=" "$STATE" 2> /dev/null; printf '%s=%s\n' "$1" "$2"; } > "$tmp"
+  mv -f "$tmp" "$STATE"
+}
+
+installed() { command -v "$RCLONE" > /dev/null 2>&1; }
+remote_kind() { awk -v s="[$REMOTE]" '$0 == s { f = 1; next } /^\[/ { f = 0 } f && $1 == "type" { print $3; exit }' "$RCLONE_CONF" 2> /dev/null; }
+
+log() {
+  local dir=${LOG%/*}
+  [[ -w $dir || -w $LOG ]] || LOG=$HOME_DIR/.cache/fliperos-cloud.log
+  mkdir -p "${LOG%/*}" 2> /dev/null
+  printf '%s %s\n' "$(date '+%F %T')" "$*" >> "$LOG" 2> /dev/null
+}
+
+# write_remote TIPO LINHAS: troca a secao [fliperos] do rclone.conf.
+write_remote() {
+  local tmp
+  mkdir -p "${RCLONE_CONF%/*}"
+  chmod 700 "${RCLONE_CONF%/*}" 2> /dev/null
+  tmp=$(umask 077 && mktemp "$RCLONE_CONF.XXXXXX") || return 1
+  {
+    awk -v s="[$REMOTE]" '$0 == s { skip = 1; next } /^\[/ { skip = 0 } !skip' "$RCLONE_CONF" 2> /dev/null
+    [[ -z $1 ]] || printf '[%s]\ntype = %s\n%s\n' "$REMOTE" "$1" "$2"
+  } > "$tmp"
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$RCLONE_CONF"
+}
+
+obscure() { printf '%s' "$1" | "$RCLONE" obscure - 2> /dev/null; }
+
+cmd_remote() {
+  local kind=$1 line key value body="" pass="" token=""
+  local -A f=()
+  while IFS= read -r line; do
+    [[ $line == *=* ]] || continue
+    key=${line%%=*} value=${line#*=}
+    [[ $key =~ ^[a-z]+$ && $value != *$'\r'* ]] || return 2
+    f[$key]=$value
+  done
+  installed || { echo "rclone is not installed."; return 1; }
+  case $kind in
+    webdav)
+      [[ ${f[url]:-} =~ ^https?://[^[:space:]]+$ && -n ${f[user]:-} && -n ${f[pass]:-} ]] || return 2
+      pass=$(obscure "${f[pass]}") || return 1
+      body=$(printf 'url = %s\nvendor = other\nuser = %s\npass = %s' "${f[url]}" "${f[user]}" "$pass")
+      ;;
+    sftp)
+      [[ ${f[host]:-} =~ ^[A-Za-z0-9.:-]+$ && -n ${f[user]:-} && -n ${f[pass]:-} && ${f[port]:-22} =~ ^[0-9]+$ ]] || return 2
+      pass=$(obscure "${f[pass]}") || return 1
+      body=$(printf 'host = %s\nport = %s\nuser = %s\npass = %s' "${f[host]}" "${f[port]:-22}" "${f[user]}" "$pass")
+      ;;
+    mega)
+      [[ -n ${f[user]:-} && -n ${f[pass]:-} ]] || return 2
+      pass=$(obscure "${f[pass]}") || return 1
+      body=$(printf 'user = %s\npass = %s' "${f[user]}" "$pass")
+      ;;
+    drive | dropbox)
+      token=${f[token]:-}
+      [[ $token == \{*access_token*\} && $token != *$'\n'* ]] || return 2
+      body="token = $token"
+      [[ $kind == drive ]] && body=$(printf 'scope = drive\n%s' "$body")
+      ;;
+    *) return 2 ;;
+  esac
+  [[ -n $pass || -n $token ]] || return 1
+  [[ ${f[user]:-} != *$'\n'* ]] || return 2
+  write_remote "$kind" "$body" || return 1
+  # Confere ja: a pasta FliperOS na nuvem (cria se falta).
+  if ! out=$("$RCLONE" mkdir "$REMOTE:$ROOT_DIR" 2>&1); then
+    log "remote $kind: $out"
+    write_remote "" ""
+    echo "The cloud did not accept the account: $(tail -1 <<< "$out")"
+    return 1
+  fi
+  log "remote $kind saved"
+}
+
+# sync_group GRUPO push|pull|both
+sync_group() {
+  local group=$1 dir=$2 local_dir far rc=0
+  while IFS=$'\t' read -r local_dir far; do
+    if [[ $dir != pull && -d $local_dir ]]; then
+      "$RCLONE" copy --update --exclude 'cloud.conf' --exclude '*.part' "$local_dir" "$REMOTE:$ROOT_DIR/$far" \
+        >> "$LOG" 2>&1 || rc=1
+    fi
+    if [[ $dir != push ]]; then
+      mkdir -p "$local_dir" 2> /dev/null
+      "$RCLONE" copy --update --exclude 'cloud.conf' "$REMOTE:$ROOT_DIR/$far" "$local_dir" >> "$LOG" 2>&1 || rc=1
+    fi
+  done < <(pairs "$group")
+  return $rc
+}
+
+cmd_sync() {
+  local dir=${1:-both} groups=${2:-} group rc=0 lock
+  [[ $dir =~ ^(push|pull|both)$ ]] || return 2
+  installed || { echo "rclone is not installed."; return 1; }
+  [[ -n $(remote_kind) ]] || { echo "No cloud account yet."; return 1; }
+  groups=${groups:-$(state_get what)}
+  groups=${groups:-hiscores,saves,config}
+  log "sync $dir $groups"
+  # Uma de cada vez (o automatico e o botao do painel).
+  lock=${XDG_RUNTIME_DIR:-/tmp}/fliperos-cloud.lock
+  exec 8> "$lock"
+  flock -w 600 8 || { echo "Another sync is running."; return 1; }
+  [[ -w ${LOG%/*} || -w $LOG ]] || LOG=$HOME_DIR/.cache/fliperos-cloud.log
+  mkdir -p "${LOG%/*}" 2> /dev/null
+  echo "@step 0 Syncing with the cloud"
+  for group in ${groups//,/ }; do
+    [[ $group =~ ^(hiscores|saves|config)$ ]] || continue
+    echo "@msg $group"
+    sync_group "$group" "$dir" || rc=1
+    [[ $group == config ]] && state_set last_config "$(date +%s)"
+  done
+  state_set last "$(date +%s)"
+  state_set result "$([[ $rc == 0 ]] && echo ok || echo failed)"
+  log "sync done: $([[ $rc == 0 ]] && echo ok || echo failed)"
+  ((rc == 0)) || echo "@fail Some files did not sync (details in $LOG)"
+  return $rc
+}
+
+cmd_watch() {
+  local pid=$1 now groups last_config
+  [[ $pid =~ ^[0-9]+$ ]] || return 2
+  [[ $(state_get auto) == on ]] && installed && [[ -n $(remote_kind) ]] || return 0
+  # Um vigia por jogo: o fliperos-kms-run e o fliperos-x11-run de um mesmo
+  # jogo (o GroovyMAME passa pelos dois) tem o mesmo PID.
+  # (global: o trap do EXIT roda depois da funcao)
+  mark=${XDG_RUNTIME_DIR:-/tmp}/fliperos-cloud-watch-$pid
+  mkdir "$mark" 2> /dev/null || return 0
+  trap 'rmdir "$mark" 2> /dev/null' EXIT
+  # Ate o jogo fechar (um zumbi, ainda nao recolhido, ja fechou).
+  while kill -0 "$pid" 2> /dev/null && [[ $(awk '{ print $3 }' "/proc/$pid/stat" 2> /dev/null) != Z ]]; do
+    sleep "${FLIPEROS_CLOUD_POLL:-5}"
+  done
+  now=$(date +%s)
+  (($(state_get last || echo 0) + AUTO_GAP <= now)) || return 0
+  groups=$(state_get what)
+  groups=${groups:-hiscores,saves,config}
+  last_config=$(state_get last_config || echo 0)
+  # As configuracoes uma vez por dia; os hi-scores e os saves a cada jogo.
+  if [[ ,$groups, == *,config,* ]] && ((${last_config:-0} + CONFIG_GAP > now)); then
+    groups=$(tr ',' '\n' <<< "$groups" | grep -vx config | paste -sd,)
+  fi
+  [[ -n $groups ]] || return 0
+  cmd_sync both "$groups" > /dev/null
+}
+
+case ${1:-} in
+  status)
+    printf 'installed=%s\nremote=%s\nauto=%s\nwhat=%s\nlast=%s\nresult=%s\n' "$(installed && echo 1 || echo 0)" \
+      "$(remote_kind)" "$(state_get auto || echo off)" "$(state_get what)" "$(state_get last)" "$(state_get result)"
+    ;;
+  remote) cmd_remote "${2:-}" ;;
+  forget)
+    write_remote "" ""
+    log "remote removed"
+    ;;
+  auto)
+    [[ ${2:-} == on || ${2:-} == off ]] || exit 2
+    state_set auto "$2"
+    ;;
+  what)
+    [[ ${2:-} =~ ^((hiscores|saves|config)(,(hiscores|saves|config))*)?$ ]] || exit 2
+    state_set what "${2:-none}"
+    ;;
+  sync) cmd_sync "${2:-both}" "${3:-}" ;;
+  watch) cmd_watch "${2:-}" ;;
+  *)
+    sed -n '/^#   fliperos-cloud /p' "$0" | sed 's/^# *//' >&2
+    exit 2
+    ;;
+esac

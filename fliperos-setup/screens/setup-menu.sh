@@ -45,7 +45,6 @@ screen_setup_games() {
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
       "cleaner|Cleaner|Filter a MAME romset: only the games you want, per emulator." \
       "scraper|Scraper|Download covers, screenshots, logos and videos of the games." \
-      "achievements|RetroAchievements ($(cheevos_label))|Sign in to earn achievements in RetroArch and other emulators." \
       "romlist|AttractPlus ROM List|Attract-Mode Plus lists with the real name of each game." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
@@ -58,7 +57,6 @@ screen_setup_games() {
       downloader) screen_need_internet "The Downloader" && screen_downloads ;;
       cleaner) screen_cleaner ;;
       scraper) screen_need_internet "The Scraper" && screen_scraper ;;
-      achievements) screen_cheevos ;;
       romlist) screen_romlist ;;
       return) return 0 ;;
     esac
@@ -1163,7 +1161,7 @@ screen_scraper_source() {
     "The login is saved on this computer for the next times."
 }
 
-# screen_cheevos (Setup > Games > RetroAchievements): a conta do site para
+# screen_cheevos (menu principal > RetroAchievements): a conta do site para
 # as conquistas no RetroArch, DuckStation, PCSX2, Dolphin e Flycast
 # (lib/cheevos.sh). So o token da conta fica guardado, nunca a senha.
 screen_cheevos() {
@@ -1178,7 +1176,7 @@ screen_cheevos() {
     else
       entries+=("login|Sign in|Your user and password at retroachievements.org.")
     fi
-    entries+=("return|Return|Back to Games.")
+    entries+=("return|Return|Back to the menu.")
     choice=$(ui_menu_hints "$title" \
       "Account: $(cheevos_label). Free at retroachievements.org; the games tell you on screen when you unlock one." \
       "$last" "${entries[@]}") || return 0

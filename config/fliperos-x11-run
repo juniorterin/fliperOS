@@ -22,6 +22,11 @@ done
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
 command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
+# O backup na nuvem (config/fliperos-cloud, painel web): com o automatico
+# ligado, os recordes e saves sobem quando este jogo fechar (os exec abaixo
+# mantem o PID; antes do desvio do GroovyMAME, para valer nele tambem).
+cloud=${FLIPEROS_CLOUD:-/opt/fliperos/bin/fliperos-cloud}
+[[ -x $cloud ]] && { "$cloud" watch $$ < /dev/null > /dev/null 2>&1 & }
 # O groovymame escolhe sozinho entre o KMS e o X (config/fliperos-groovymame):
 # as linhas de frontend gravadas com "fliperos-x11-run groovymame" vao para
 # ele, que volta para ca (com FLIPEROS_GROOVYMAME_X11) so quando fica no X.

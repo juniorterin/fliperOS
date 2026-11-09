@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# fliperos-cheevos FORMATO ARQUIVO: a conta do RetroAchievements feita no
-# Setup > Games > RetroAchievements (ou no painel web) no ini de um emulador,
+# fliperos-cheevos FORMATO ARQUIVO: a conta do RetroAchievements feita pelo
+# menu principal > RetroAchievements (ou no painel web) no ini de um emulador,
 # a cada abertura (o fliperos-x11-run chama, como o usuario). O RetroArch a
 # le de /etc/fliperos/retroarch/cheevos.cfg (o fliperos-kms-run o poe no
 # --appendconfig); os outros guardam a conta no proprio ini:

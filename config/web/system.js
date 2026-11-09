@@ -305,7 +305,7 @@ const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWi
 // no lugar deles; um grupo novo do Setup que nao esteja aqui vai para o fim,
 // antes de Power.
 const SETTINGS_ORDER = ["Video", "Geometry", "Colour", "Scanlines", "Interlaced hacks", "Audio", "GunCon 2",
-  "Achievements", "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
+  "Achievements", "Cloud", "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
 
 async function loadSettings() {
   const res = await api("/api/settings");
@@ -327,11 +327,12 @@ async function loadSettings() {
     else for (const row of items) details.append(settingRow(row));
     boxes.set(group, details);
   }
-  const [geometry, network, cheevos] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null),
-    cheevosBox().catch(() => null)]);
+  const [geometry, network, cheevos, cloud] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null),
+    cheevosBox().catch(() => null), cloudBox().catch(() => null)]);
   if (geometry) boxes.set("Geometry", geometry);
   if (network) boxes.set("Network", network);
   if (cheevos) boxes.set("Achievements", cheevos);
+  if (cloud) boxes.set("Cloud", cloud);
   boxes.set("Password", passwordBox());
   boxes.set("Version", versionBox());
   boxes.set("Whatsnew", whatsnewBox());
@@ -431,6 +432,106 @@ function passwordBox() {
     }
   });
   return settingsBox("Password", "px-password", form);
+}
+
+// Cloud backup (config/fliperos-cloud): os hi-scores, saves e configuracoes
+// numa nuvem pelo rclone. Google Drive e Dropbox pelo login do site (o
+// endereco da pagina que nao abre volta colado aqui); WebDAV, SFTP e Mega
+// com usuario e senha. Sincroniza ao apertar e, ligado, ao fechar cada jogo.
+const CLOUD_FIELDS = { webdav: ["url", "user", "pass"], sftp: ["host", "port", "user", "pass"], mega: ["user", "pass"] };
+async function cloudBox() {
+  const state = await (await api("/api/cloud")).json();
+  const reload = () => loadSettings().catch(() => {});
+  const post = async (body) => {
+    const r = await api("/api/cloud", { method: "POST", body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) toast(data.error || r.statusText, "bad");
+    return r.ok ? data : null;
+  };
+  const content = el("div", { class: "setting pw" });
+  if (!state.installed) {
+    const install = el("button", { type: "button", class: "btn" }, icon("px-install"), t("cl_install"));
+    install.addEventListener("click", async () => {
+      if (await post({ action: "install" })) { toast(t("inst_started")); loadTasks().catch(() => {}); }
+    });
+    content.append(el("div", {}, t("cl_missing")), el("div", { class: "row start" }, install));
+  } else if (!state.remote) {
+    const kind = el("select", { "aria-label": t("cl_provider") },
+      ...["drive", "dropbox", "webdav", "sftp", "mega"].map((k) => el("option", { value: k }, t("cl_" + k))));
+    const area = el("div", { class: "setting pw" });
+    const draw = () => {
+      if (CLOUD_FIELDS[kind.value]) {
+        const inputs = CLOUD_FIELDS[kind.value].map((f) => el("input", { type: f === "pass" ? "password" : "text",
+          autocomplete: "off", "aria-label": t("cl_f_" + f), placeholder: t("cl_f_" + f) }));
+        const save = el("button", { type: "submit", class: "btn" }, icon("px-save"), t("cl_save"));
+        const form = el("form", { class: "setting pw" }, ...inputs, el("div", { class: "row start" }, save));
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          save.disabled = true;
+          const fields = Object.fromEntries(CLOUD_FIELDS[kind.value].map((f, i) => [f, inputs[i].value.trim()]));
+          try { if (await post({ action: "remote", kind: kind.value, fields })) { toast(t("cl_saved"), "ok"); reload(); } }
+          finally { save.disabled = false; }
+        });
+        area.replaceChildren(form);
+      } else {
+        const start = el("button", { type: "button", class: "btn" }, icon("px-password"), t("cl_signin"));
+        const answer = el("input", { type: "text", autocomplete: "off", "aria-label": t("cl_paste"), placeholder: t("cl_paste") });
+        const done = el("button", { type: "submit", class: "btn" }, icon("px-ok"), t("cl_save"));
+        const form = el("form", { class: "setting pw", hidden: "" }, el("div", { class: "dim" }, t("cl_paste_help")), answer,
+          el("div", { class: "row start" }, done));
+        start.addEventListener("click", async () => {
+          // A aba abre ja no clique (o navegador bloqueia a que abre depois de esperar).
+          const tab = window.open("about:blank", "_blank");
+          start.disabled = true;
+          try {
+            const data = await post({ action: "authorize", kind: kind.value });
+            if (data && data.url) {
+              if (tab) tab.location = data.url; else window.open(data.url, "_blank");
+              form.hidden = false;
+              answer.focus();
+            } else if (tab) tab.close();
+          } finally { start.disabled = false; }
+        });
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          done.disabled = true;
+          try { if (await post({ action: "authorized", kind: kind.value, answer: answer.value.trim() })) { toast(t("cl_saved"), "ok"); reload(); } }
+          finally { done.disabled = false; }
+        });
+        area.replaceChildren(el("div", { class: "row start" }, start), form);
+      }
+    };
+    kind.addEventListener("change", draw);
+    draw();
+    content.append(el("label", { class: "row start" }, el("span", {}, t("cl_provider")), kind), area);
+  } else {
+    const checks = ["hiscores", "saves", "config"].map((w) => {
+      const box = el("input", { type: "checkbox", "aria-label": t("cl_w_" + w) });
+      box.checked = state.what.includes(w);
+      box.addEventListener("change", () => post({ action: "what", what: checks.filter((c) => c.box.checked).map((c) => c.w) }));
+      return { w, box, label: el("label", { class: "row start" }, box, el("span", {}, t("cl_w_" + w))) };
+    });
+    const auto = el("select", { "aria-label": t("cl_auto") }, el("option", { value: "on" }, t("ra_on")), el("option", { value: "off" }, t("ra_off")));
+    auto.value = state.auto ? "on" : "off";
+    auto.addEventListener("change", () => post({ action: "auto", on: auto.value === "on" }));
+    const run = (direction, label, glyph) => {
+      const b = el("button", { type: "button", class: direction === "both" ? "btn" : "btn ghost" }, icon(glyph), t(label));
+      b.addEventListener("click", () => startTask("/api/cloud", { action: "sync", direction }));
+      return b;
+    };
+    const forget = el("button", { type: "button", class: "btn ghost" }, icon("px-remove"), t("cl_forget"));
+    forget.addEventListener("click", async () => {
+      if (!(await ask({ title: t("group_Cloud"), text: t("cl_forget_ask"), yes: t("cl_forget") }))) return;
+      if (await post({ action: "forget" })) reload();
+    });
+    const last = state.last ? new Date(state.last * 1000).toLocaleString() + (state.result === "failed" ? " · " + t("cl_failed") : "") : t("cl_never");
+    content.append(el("div", {}, t("cl_account").replace("%s", t("cl_" + state.remote) || state.remote)),
+      ...checks.map((c) => c.label), el("label", { class: "row start" }, el("span", {}, t("cl_auto")), auto),
+      el("div", { class: "row start" }, run("both", "cl_sync", "px-reset"), run("push", "cl_push", "px-up"), run("pull", "cl_pull", "px-install")),
+      el("div", { class: "dim" }, t("cl_last").replace("%s", last)), el("div", { class: "row start" }, forget));
+  }
+  content.append(el("div", { class: "dim" }, t("cl_note")));
+  return settingsBox("Cloud", "px-up", content);
 }
 
 // Setup > Games > RetroAchievements: entrar com a conta do site (so o token

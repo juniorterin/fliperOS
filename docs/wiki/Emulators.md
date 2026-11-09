@@ -286,7 +286,7 @@ It opens from the desktop menu (**Games > KOF Final Attack**) or with `fliperos-
 
 ## RetroAchievements
 
-**Setup > Games > RetroAchievements** (and the RetroAchievements box in the web panel's Settings) signs in to a free [retroachievements.org](https://retroachievements.org) account once, for every emulator that has achievements: RetroArch, DuckStation, PCSX2, Dolphin and Flycast. It also turns the achievements on or off and switches **hardcore mode** (no save states, rewind or cheats).
+**RetroAchievements** in the main menu, right after Start desktop (and the RetroAchievements box in the web panel's Settings) signs in to a free [retroachievements.org](https://retroachievements.org) account once, for every emulator that has achievements: RetroArch, DuckStation, PCSX2, Dolphin and Flycast. It also turns the achievements on or off and switches **hardcore mode** (no save states, rewind or cheats).
 
 The login trades the user and password for the account's token through the site's API (`dorequest.php?r=login2`, the same call the emulators make). The password goes to `curl` on standard input, never on a command line or in a log, and is not saved; only the token is, in `/etc/fliperos/cheevos` (mode 640, the user's group can read it).
 

@@ -403,7 +403,7 @@ main() {
       return
       ;;
     --cheevos)
-      # Setup > Games > RetroAchievements sem tela (lib/cheevos.sh): o painel web.
+      # Menu principal > RetroAchievements sem tela (lib/cheevos.sh): o painel web.
       cheevos_cli "${@:2}"
       return
       ;;
