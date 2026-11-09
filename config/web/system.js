@@ -305,7 +305,7 @@ const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWi
 // no lugar deles; um grupo novo do Setup que nao esteja aqui vai para o fim,
 // antes de Power.
 const SETTINGS_ORDER = ["Video", "Geometry", "Colour", "Scanlines", "Interlaced hacks", "Audio", "GunCon 2",
-  "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
+  "Achievements", "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
 
 async function loadSettings() {
   const res = await api("/api/settings");
@@ -327,9 +327,11 @@ async function loadSettings() {
     else for (const row of items) details.append(settingRow(row));
     boxes.set(group, details);
   }
-  const [geometry, network] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null)]);
+  const [geometry, network, cheevos] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null),
+    cheevosBox().catch(() => null)]);
   if (geometry) boxes.set("Geometry", geometry);
   if (network) boxes.set("Network", network);
+  if (cheevos) boxes.set("Achievements", cheevos);
   boxes.set("Password", passwordBox());
   boxes.set("Version", versionBox());
   boxes.set("Whatsnew", whatsnewBox());
@@ -429,6 +431,56 @@ function passwordBox() {
     }
   });
   return settingsBox("Password", "px-password", form);
+}
+
+// Setup > Games > RetroAchievements: entrar com a conta do site (so o token
+// fica no gabinete), ligar as conquistas e o modo hardcore, sair.
+async function cheevosBox() {
+  const state = await (await api("/api/cheevos")).json();
+  const post = async (body) => {
+    const r = await api("/api/cheevos", { method: "POST", body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) toast(data.error || r.statusText, "bad");
+    return r.ok;
+  };
+  const reload = () => loadSettings().catch(() => {});
+  const content = el("div", { class: "setting pw" });
+  if (state.user) {
+    const onOff = (key, value) => {
+      const select = el("select", { "aria-label": t(key) }, el("option", { value: "on" }, t("ra_on")), el("option", { value: "off" }, t("ra_off")));
+      select.value = value ? "on" : "off";
+      select.addEventListener("change", async () => { if (await post({ action: key, on: select.value === "on" })) reload(); });
+      return el("label", { class: "row start" }, el("span", {}, t("ra_" + key)), select);
+    };
+    const out = el("button", { type: "button", class: "btn ghost" }, icon("px-power"), t("ra_logout"));
+    out.addEventListener("click", async () => {
+      if (!(await ask({ title: "RetroAchievements", text: t("ra_logout_ask").replace("%s", state.user), yes: t("ra_logout") }))) return;
+      if (await post({ action: "logout" })) reload();
+    });
+    content.append(el("div", {}, t("ra_as").replace("%s", state.user)), onOff("enable", state.enabled),
+      onOff("hardcore", state.hardcore), el("div", { class: "row start" }, out));
+  } else {
+    const user = el("input", { autocomplete: "off", "aria-label": t("user"), placeholder: t("user") });
+    const pass = el("input", { type: "password", autocomplete: "off", "aria-label": t("password"), placeholder: t("password") });
+    const go = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("ra_login"));
+    const form = el("form", { class: "setting pw" }, user, pass, el("div", { class: "row start" }, go));
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      go.disabled = true;
+      try {
+        if (await post({ action: "login", user: user.value.trim(), password: pass.value })) {
+          toast(t("ra_done"), "ok");
+          reload();
+        }
+      } finally {
+        pass.value = "";
+        go.disabled = false;
+      }
+    });
+    content.append(form);
+  }
+  content.append(el("div", { class: "dim" }, t("ra_note")));
+  return settingsBox("Achievements", "px-achievements", content);
 }
 
 // Setup > System > What's new: o texto so ao abrir o grupo.

@@ -109,6 +109,8 @@ source "$SETUP_DIR/lib/splash.sh"
 source "$SETUP_DIR/lib/folders.sh"
 # shellcheck source=lib/extras.sh
 source "$SETUP_DIR/lib/extras.sh"
+# shellcheck source=lib/cheevos.sh
+source "$SETUP_DIR/lib/cheevos.sh"
 # shellcheck source=lib/emulators.sh
 source "$SETUP_DIR/lib/emulators.sh"
 # shellcheck source=lib/hardware.sh
@@ -398,6 +400,11 @@ main() {
     --bios)
       # Setup > Games > Downloader > Download BIOS sem tela: o painel web.
       bios_cli "${@:2}"
+      return
+      ;;
+    --cheevos)
+      # Setup > Games > RetroAchievements sem tela (lib/cheevos.sh): o painel web.
+      cheevos_cli "${@:2}"
       return
       ;;
     --scraper)

@@ -68,6 +68,10 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   [[ -f $buttons ]] && appendconfig+="|$buttons"
   # O DOFLinx (Setup > Games > Extras) le o jogo aberto pelo Network Command
   # Interface: o arquivo so existe com ele instalado.
+  # A conta do RetroAchievements do Setup > Games > RetroAchievements
+  # (lib/cheevos.sh): so existe depois de feita por la.
+  cheevos_cfg=${FLIPEROS_RA_CHEEVOS:-/etc/fliperos/retroarch/cheevos.cfg}
+  [[ -r $cheevos_cfg ]] && appendconfig+="|$cheevos_cfg"
   doflinx=${FLIPEROS_RA_DOFLINX:-/etc/fliperos/retroarch/doflinx.cfg}
   [[ -f $doflinx ]] && appendconfig+="|$doflinx"
   # O placar de uma partida versus no LED do gabinete (config/fliperos-versus)

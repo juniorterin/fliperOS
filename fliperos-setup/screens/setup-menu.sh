@@ -45,6 +45,7 @@ screen_setup_games() {
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
       "cleaner|Cleaner|Filter a MAME romset: only the games you want, per emulator." \
       "scraper|Scraper|Download covers, screenshots, logos and videos of the games." \
+      "achievements|RetroAchievements ($(cheevos_label))|Sign in to earn achievements in RetroArch and other emulators." \
       "romlist|AttractPlus ROM List|Attract-Mode Plus lists with the real name of each game." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
@@ -57,6 +58,7 @@ screen_setup_games() {
       downloader) screen_need_internet "The Downloader" && screen_downloads ;;
       cleaner) screen_cleaner ;;
       scraper) screen_need_internet "The Scraper" && screen_scraper ;;
+      achievements) screen_cheevos ;;
       romlist) screen_romlist ;;
       return) return 0 ;;
     esac
@@ -1159,6 +1161,55 @@ screen_scraper_source() {
   scraper_account_set "$source" "$creds"
   ui_msg "$title" "$name is the scraper provider now, with your account." "" \
     "The login is saved on this computer for the next times."
+}
+
+# screen_cheevos (Setup > Games > RetroAchievements): a conta do site para
+# as conquistas no RetroArch, DuckStation, PCSX2, Dolphin e Flycast
+# (lib/cheevos.sh). So o token da conta fica guardado, nunca a senha.
+screen_cheevos() {
+  local title="RetroAchievements" choice last="" user pass reason entries
+  while true; do
+    entries=()
+    if cheevos_logged_in; then
+      entries+=("enable|Achievements: $(cheevos_on && echo on || echo off)|Turn the achievements on or off in every emulator."
+        "hardcore|Hardcore mode: $([[ $(cheevos_get hardcore) == 1 ]] && echo on || echo off)|No save states, rewind or cheats: the strict way to play."
+        "login|Change account|Sign in with another RetroAchievements account."
+        "logout|Sign out|Forget the account on this cabinet.")
+    else
+      entries+=("login|Sign in|Your user and password at retroachievements.org.")
+    fi
+    entries+=("return|Return|Back to Games.")
+    choice=$(ui_menu_hints "$title" \
+      "Account: $(cheevos_label). Free at retroachievements.org; the games tell you on screen when you unlock one." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      login)
+        screen_need_internet "RetroAchievements" || continue
+        user=$(ui_input "$title" "RetroAchievements user." "$(cheevos_get user)") || continue
+        user=${user//[[:space:]]/}
+        [[ -n $user ]] || continue
+        pass=$(ui_input "$title" "Password of $user at retroachievements.org (it is not saved: only the login key is)." "" password) ||
+          continue
+        [[ -n $pass ]] || continue
+        ui_info "$title" "Signing in..." > /dev/tty 2>&1 || true
+        if reason=$(printf '%s\n' "$pass" | cheevos_login "$user"); then
+          ui_msg "$title" "$(ui_yes "Signed in as $(cheevos_get user).")" "" \
+            "RetroArch, DuckStation, PCSX2, Dolphin and Flycast use this account from the next game on."
+        else
+          ui_msg "$title" "$(ui_bad "Not signed in: $reason")"
+        fi
+        pass=""
+        ;;
+      enable) cheevos_cli enable "$(cheevos_on && echo off || echo on)" > /dev/null ;;
+      hardcore) cheevos_cli hardcore "$([[ $(cheevos_get hardcore) == 1 ]] && echo off || echo on)" > /dev/null ;;
+      logout)
+        ui_yesno "$title" "Sign out of $(cheevos_get user) on this cabinet?" no || continue
+        cheevos_logout
+        ;;
+      return) return 0 ;;
+    esac
+  done
 }
 
 # screen_scraper_scrape: as pastas com jogos, o que buscar e a raspagem, com

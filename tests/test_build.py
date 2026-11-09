@@ -6968,6 +6968,13 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1 $2" = "--wifi connect" ]; then read -r p; echo "wifi $p" >> %s/secret.log; fi\n'
                          'if [ "$1" = --password ]; then read -r p; [ ${#p} -lt 4 ] && exit 2; echo "password $p" >> %s/secret.log; fi\n'
                          'if [ "$1" = --whatsnew ]; then echo "This is FliperOS 0.23, update 63."; fi\n'
+                         # RetroAchievements: a senha chega pela entrada padrao.
+                         'if [ "$1" = --cheevos ]; then\n'
+                         '  case "$2" in\n'
+                         '    status) printf "user=Player1\\nenabled=1\\nhardcore=0\\n" ;;\n'
+                         '    login) read -r p; [ "$p" = s3cret ] || { echo "Invalid User/Password combination."; exit 1; } ;;\n'
+                         '    enable|hardcore) [ "$3" = on ] || [ "$3" = off ] || exit 2 ;;\n'
+                         '  esac\n  exit 0\nfi\n'
                          'if [ "$1" = --romfilter ]; then\n'
                          '  echo "$*" >> %s/romfilter.log\n'
                          '  case "$2 $3" in\n'
@@ -7232,6 +7239,30 @@ class WebPanelTests(unittest.TestCase):
         conn.request('GET', '/', headers={'Host': '192.168.1.9'})
         self.assertEqual(conn.getresponse().status, 302)
         conn.close()
+
+    def test_retroachievements_account(self):
+        # Setup > Games > RetroAchievements pelo painel: a senha so pela
+        # entrada padrao do Setup, o motivo de um login recusado na resposta.
+        cookie = self.login()
+        status, _, data = self.request('GET', '/api/cheevos', cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'user': 'Player1', 'enabled': True, 'hardcore': False}))
+        status, _, data = self.request('POST', '/api/cheevos', {'action': 'login', 'user': 'Player1', 'password': 'bad'},
+                                       cookie=cookie)
+        self.assertEqual(status, 401)
+        self.assertIn('Invalid User/Password', json.loads(data)['error'])
+        self.assertEqual(self.request('POST', '/api/cheevos', {'action': 'login', 'user': 'Player1', 'password': 's3cret'},
+                                      cookie=cookie)[0], 200)
+        for body in ({'action': 'login', 'user': 'a b', 'password': 'x'}, {'action': 'login', 'user': 'x'},
+                     {'action': 'enable', 'on': 'yes'}, {'action': 'nope'}):
+            self.assertEqual(self.request('POST', '/api/cheevos', body, cookie=cookie)[0], 400, body)
+        self.assertEqual(self.request('POST', '/api/cheevos', {'action': 'hardcore', 'on': True}, cookie=cookie)[0], 200)
+        self.assertEqual(self.request('POST', '/api/cheevos', {'action': 'logout'}, cookie=cookie)[0], 200)
+        log = self.volume_log.read_text()
+        self.assertIn('--cheevos login Player1', log)
+        self.assertIn('--cheevos hardcore on', log)
+        self.assertIn('--cheevos logout', log)
+        self.assertNotIn('s3cret', log)
+        self.assertEqual(self.request('GET', '/api/cheevos')[0], 401)
 
     def test_avahi_lines_and_escapes(self):
         web = load_script('fliperos_web_avahi', 'config/fliperos-web')

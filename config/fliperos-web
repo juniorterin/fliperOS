@@ -40,6 +40,8 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/wifi {"device", "ssid", "password", "hidden"}: conecta
     POST /api/password {"current", "password"}: a senha do gabinete (--password)
     GET  /api/whatsnew  o texto do What's new (--whatsnew)
+    GET  /api/cheevos   a conta do RetroAchievements (--cheevos status, sem o token)
+    POST /api/cheevos {"action": "login", "user", "password"} | "logout" | "enable"/"hardcore" + "on": bool
     GET  /api/versions  a versao (Setup > System > FliperOS version): level,
                       base, latest, hold, reboot e os updates que se pode
                       escolher (fliperos-update versions)
@@ -2971,6 +2973,14 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
             return self.send(200, data)
+        if url.path == "/api/cheevos":
+            # Setup > Games > RetroAchievements: a conta (sem o token).
+            try:
+                info = key_values(setup_out("--cheevos", "status"))
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, {"user": info.get("user", ""), "enabled": info.get("enabled") == "1",
+                                   "hardcore": info.get("hardcore") == "1"})
         if url.path == "/api/whatsnew":
             # Setup > System > What's new: os updates e o CHANGELOG.
             try:
@@ -3114,6 +3124,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, {"error": "a device, a network name and a password up to 63 characters"})
             return self.setup_call(["--wifi", "connect", device, ssid] + (["1"] if data.get("hidden") else []),
                                    password + "\n", timeout=90)
+        if url.path == "/api/cheevos":
+            return self.cheevos_action(self.body(), user)
         if url.path == "/api/password":
             # Setup > System > Password: com a senha de agora. O modo lab nao
             # troca a senha de ninguem.
@@ -3374,6 +3386,32 @@ class Handler(BaseHTTPRequestHandler):
         if done.returncode != 0:
             return self.send(500, {"error": (done.stderr or done.stdout).strip()[-300:] or "failed"})
         return self.send(200, {})
+
+    def cheevos_action(self, data, user):
+        """Setup > Games > RetroAchievements: entrar (a senha vai pela entrada
+        padrao do Setup, nunca na linha de comando nem gravada), sair, ligar e
+        o hardcore. O motivo de um login recusado volta ao painel."""
+        action = data.get("action")
+        if action == "login":
+            if user == LAB_USER:
+                return self.send(403, {"error": "not in the lab mode"})
+            name, password = str(data.get("user") or "").strip(), str(data.get("password") or "")
+            if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", name) or not password or "\n" in password:
+                return self.send(400, {"error": "user and password are needed"})
+            try:
+                done = subprocess.run([SETUP, "--cheevos", "login", name], input=password + "\n",
+                                      capture_output=True, text=True, timeout=60)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            if done.returncode != 0:
+                return self.send(400 if done.returncode == 2 else 401,
+                                 {"error": (done.stdout or done.stderr).strip()[-300:] or "not signed in"})
+            return self.send(200, {})
+        if action == "logout":
+            return self.setup_call(["--cheevos", "logout"])
+        if action in ("enable", "hardcore") and isinstance(data.get("on"), bool):
+            return self.setup_call(["--cheevos", action, "on" if data["on"] else "off"])
+        return self.send(400, {"error": "bad action"})
 
     def scraper_action(self, data):
         """Setup > Games > Scraper: a fonte, a conta, os tipos de midia (na

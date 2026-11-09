@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -5251,6 +5251,105 @@ class TopbarTests(Base):
         self.assertLess(entry.index("FLIPEROS_SETUP_VERSION="), entry.index('source "$SETUP_DIR/lib/ui.sh"'))
 
 
+class CheevosTests(Base):
+    """Setup > Games > RetroAchievements (lib/cheevos.sh e config/fliperos-cheevos):
+    o login pela API do site (um curl falso), so o token guardado, o
+    cheevos.cfg do RetroArch e os inis dos outros emuladores."""
+
+    def setUp(self):
+        super().setUp()
+        self.home = self.env.dir / "home"
+        (self.home / ".local/share/duckstation").mkdir(parents=True)
+        (self.home / ".local/share/duckstation/settings.ini").write_text("[Main]\nSetupWizardIncomplete = false\n")
+        (self.home / ".config/flycast").mkdir(parents=True)
+        (self.home / ".config/flycast/emu.cfg").write_text("[config]\npvr.rend = 3\n")
+        # O curl falso: a senha chega pela entrada (p@-), nunca nos argumentos.
+        self.env.stub("curl", 'echo "$*" > "%s/curl.args"; pass=$(cat)\n'
+                              'if [ "$pass" = "s3cret" ]; then\n'
+                              '  echo \'{"Success":true,"User":"Player1","Token":"AbC123","Score":10}\'\n'
+                              'else\n'
+                              '  echo \'{"Success":false,"Error":"Invalid User/Password combination. Please try again"}\'\n'
+                              'fi' % self.env.dir)
+        self.cenv = {"CHEEVOS_HOME": str(self.home), "CHEEVOS_TOOL": str(ROOT / "config/fliperos-cheevos"),
+                     "FLIPEROS_INI_SET": str(ROOT / "config/fliperos-ini-set"),
+                     "FLIPEROS_CHEEVOS": str(self.env.etc / "cheevos"), "FLIPEROS_USER": "nobody-here"}
+
+    def out(self, script):
+        return self.env.out(script, self.cenv)
+
+    def test_login_keeps_only_the_token(self):
+        self.out('printf "s3cret\\n" | cheevos_cli login player1')
+        saved = (self.env.etc / "cheevos").read_text()
+        self.assertIn("user=Player1\ntoken=AbC123\n", saved)
+        self.assertIn("enabled=1\n", saved)
+        self.assertNotIn("s3cret", saved)
+        self.assertEqual(oct((self.env.etc / "cheevos").stat().st_mode & 0o777), "0o640")
+        args = (self.env.dir / "curl.args").read_text()
+        self.assertNotIn("s3cret", args)
+        self.assertIn("r=login2", args)
+        self.assertIn("u=player1", args)
+        self.assertIn("p@-", args)
+        self.assertNotIn("s3cret", (self.env.dir / "setup.log").read_text())
+        # O RetroArch: o cfg por cima do retroarch.cfg, sem a senha.
+        cfg = (self.env.etc / "retroarch/cheevos.cfg").read_text()
+        for line in ('cheevos_enable = "true"', 'cheevos_username = "Player1"', 'cheevos_token = "AbC123"',
+                     'cheevos_password = ""', 'cheevos_hardcore_mode_enable = "false"'):
+            self.assertIn(line, cfg)
+        # Os inis que ja existem.
+        duck = (self.home / ".local/share/duckstation/settings.ini").read_text()
+        self.assertIn("[Cheevos]\nEnabled = true\nChallengeMode = false\nUsername = Player1\nToken = AbC123\n", duck)
+        self.assertIn("SetupWizardIncomplete = false", duck)
+        fly = (self.home / ".config/flycast/emu.cfg").read_text()
+        self.assertIn("[achievements]\nEnabled = yes\nHardcoreMode = no\nUserName = Player1\nToken = AbC123\n", fly)
+        self.assertIn("pvr.rend = 3", fly)
+        # O Dolphin e o PCSX2 nunca abertos: nada criado agora (a cada
+        # abertura o fliperos-x11-run cuida).
+        self.assertFalse((self.home / ".config/dolphin-emu").exists())
+        self.assertEqual(self.out("cheevos_label").strip(), "Player1")
+
+    def test_wrong_password_says_why(self):
+        r = self.env.run('printf "nope\\n" | cheevos_cli login player1', self.cenv)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Invalid User/Password", r.stdout)
+        self.assertFalse((self.env.etc / "cheevos").exists())
+        self.assertEqual(self.env.run("cheevos_cli login", self.cenv).returncode, 2)
+        self.assertEqual(self.out("cheevos_label").strip(), "not signed in")
+
+    def test_hardcore_off_and_sign_out(self):
+        self.out('printf "s3cret\\n" | cheevos_cli login player1; cheevos_cli hardcore on')
+        self.assertIn('cheevos_hardcore_mode_enable = "true"', (self.env.etc / "retroarch/cheevos.cfg").read_text())
+        self.assertIn("ChallengeMode = true", (self.home / ".local/share/duckstation/settings.ini").read_text())
+        self.assertEqual(self.out("cheevos_label").strip(), "Player1, hardcore")
+        self.out("cheevos_cli enable off")
+        self.assertIn('cheevos_enable = "false"', (self.env.etc / "retroarch/cheevos.cfg").read_text())
+        duck = (self.home / ".local/share/duckstation/settings.ini").read_text()
+        self.assertIn("Enabled = false", duck)
+        self.assertIn("Token = AbC123", duck)
+        self.assertEqual(self.out("cheevos_cli status"), "user=Player1\nenabled=0\nhardcore=1\n")
+        self.out("cheevos_cli logout")
+        duck = (self.home / ".local/share/duckstation/settings.ini").read_text()
+        self.assertIn("Username = \nToken = \n", duck)
+        self.assertIn('cheevos_token = ""', (self.env.etc / "retroarch/cheevos.cfg").read_text())
+        self.assertEqual(self.env.run("cheevos_cli enable on", self.cenv).returncode, 1)
+        self.assertEqual(self.env.run("cheevos_cli hardcore maybe", self.cenv).returncode, 2)
+
+    def test_tool_at_launch_creates_the_dolphin_ini_only_with_an_account(self):
+        tool = ["bash", str(ROOT / "config/fliperos-cheevos")]
+        ini = self.home / ".config/dolphin-emu/RetroAchievements.ini"
+        env = dict(os.environ, **self.cenv)
+        # Sem a conta do FliperOS, nada muda (a feita no emulador fica).
+        subprocess.run(tool + ["dolphin", str(ini)], env=env, check=True)
+        self.assertFalse(ini.exists())
+        self.out('printf "s3cret\\n" | cheevos_cli login player1')
+        subprocess.run(tool + ["dolphin", str(ini)], env=env, check=True)
+        self.assertEqual(ini.read_text(), "\n[Achievements]\nEnabled = True\nHardcoreEnabled = False\n"
+                                          "Username = Player1\nApiToken = AbC123\n")
+        pcsx2 = self.home / "PCSX2.ini"
+        subprocess.run(tool + ["pcsx2", str(pcsx2)], env=env, check=True)
+        self.assertIn("[Achievements]\nEnabled = true\n", pcsx2.read_text())
+        self.assertEqual(subprocess.run(tool + ["mame", str(pcsx2)], env=env, capture_output=True).returncode, 2)
+
+
 class ScraperTests(Base):
     """Setup > Games > Scraper: o que o Skyscraper raspa e onde a lista vai parar."""
 
@@ -7888,7 +7987,7 @@ class SetupGroupsTests(Base):
                          ["video", "audio", "network", "games", "joysticks", "system", "return"])
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
-                                                       "scraper", "romlist", "return"])
+                                                       "scraper", "achievements", "romlist", "return"])
         self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update", "version",
                                                         "whatsnew", "debug", "lab", "oscr", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)

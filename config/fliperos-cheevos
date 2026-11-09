@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# fliperos-cheevos FORMATO ARQUIVO: a conta do RetroAchievements feita no
+# Setup > Games > RetroAchievements (ou no painel web) no ini de um emulador,
+# a cada abertura (o fliperos-x11-run chama, como o usuario). O RetroArch a
+# le de /etc/fliperos/retroarch/cheevos.cfg (o fliperos-kms-run o poe no
+# --appendconfig); os outros guardam a conta no proprio ini:
+#
+#   duckstation  settings.ini        [Cheevos] Enabled ChallengeMode Username Token LoginTimestamp
+#   pcsx2        inis/PCSX2.ini      [Achievements] (as mesmas chaves do DuckStation)
+#   dolphin      RetroAchievements.ini [Achievements] Enabled HardcoreEnabled Username ApiToken
+#   flycast      emu.cfg             [achievements] Enabled HardcoreMode UserName Token
+#
+# So o token vai para os emuladores (a senha nunca fica gravada). Sem
+# /etc/fliperos/cheevos (a conta nunca foi feita pelo FliperOS), nada muda: a
+# conta feita dentro do emulador continua valendo. Com a conta desligada, as
+# conquistas desligam; sem conta (Log out), o usuario e o token saem.
+set -uo pipefail
+conf=${FLIPEROS_CHEEVOS:-/etc/fliperos/cheevos}
+iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+format=${1:-} file=${2:-}
+[[ -n $format && -n $file ]] || { echo "usage: fliperos-cheevos duckstation|pcsx2|dolphin|flycast FILE" >&2; exit 2; }
+[[ -r $conf ]] || exit 0
+
+get() { sed -n "s/^$1=//p" "$conf" 2> /dev/null | head -1; }
+user=$(get user) token=$(get token) hardcore=$(get hardcore) enabled=$(get enabled) stamp=$(get time)
+on=0
+[[ $enabled == 1 && -n $user && -n $token ]] && on=1
+[[ $hardcore == 1 ]] || hardcore=0
+# Um emulador que nunca abriu e uma conta desligada: nao ha o que desligar.
+[[ -f $file ]] || ((on)) || exit 0
+mkdir -p "${file%/*}" 2> /dev/null || exit 0
+
+set_key() { bash "$iniset" "$file" "$1" "$2" "$3" 2> /dev/null || true; }
+# bool VALOR SIM NAO
+bool() { if (($1)); then echo "$2"; else echo "$3"; fi; }
+
+case $format in
+  duckstation | pcsx2)
+    section=Cheevos
+    [[ $format == pcsx2 ]] && section=Achievements
+    set_key "$section" Enabled "$(bool "$on" true false)"
+    set_key "$section" ChallengeMode "$(bool "$((on && hardcore))" true false)"
+    if ((on)) || [[ -z $user ]]; then
+      set_key "$section" Username "$user"
+      set_key "$section" Token "$token"
+      set_key "$section" LoginTimestamp "${stamp:-0}"
+    fi
+    ;;
+  dolphin)
+    set_key Achievements Enabled "$(bool "$on" True False)"
+    set_key Achievements HardcoreEnabled "$(bool "$((on && hardcore))" True False)"
+    if ((on)) || [[ -z $user ]]; then
+      set_key Achievements Username "$user"
+      set_key Achievements ApiToken "$token"
+    fi
+    ;;
+  flycast)
+    set_key achievements Enabled "$(bool "$on" yes no)"
+    set_key achievements HardcoreMode "$(bool "$((on && hardcore))" yes no)"
+    if ((on)) || [[ -z $user ]]; then
+      set_key achievements UserName "$user"
+      set_key achievements Token "$token"
+    fi
+    ;;
+  *)
+    echo "fliperos-cheevos: unknown format $format" >&2
+    exit 2
+    ;;
+esac
+exit 0

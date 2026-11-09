@@ -105,6 +105,15 @@ stretch=$((300 * FLIPEROS_RES_W / (4 * FLIPEROS_RES_H)))
 # script que abre outro binario; com --app, por ele.
 export FLIPEROS_DEFLICKER_APP=${app:-$name}
 
+# A conta do RetroAchievements do Setup > Games > RetroAchievements no ini de
+# cada emulador que tem conquistas (config/fliperos-cheevos; sem a conta feita
+# pelo FliperOS, nada muda).
+cheevos_ini() {
+  local tool=${FLIPEROS_CHEEVOS_TOOL:-/opt/fliperos/bin/fliperos-cheevos}
+  [[ -x $tool ]] && "$tool" "$@" 2> /dev/null
+  return 0
+}
+
 case $name in
   flycast)
     # O limite de 250 e so o do controle na interface do Flycast: a super
@@ -114,6 +123,7 @@ case $name in
     # A BIOS em ~/bios/dc (fliperos-roms): o emu.cfg tem o Dreamcast.BiosPath,
     # e a variavel vale tambem num emu.cfg recriado pelo Flycast.
     export FLYCAST_BIOS_PATH="${FLYCAST_BIOS_PATH:+$FLYCAST_BIOS_PATH:}$HOME/bios/dc"
+    cheevos_ini flycast "${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg"
     # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
     netout=""
     [[ -x $outputs ]] && "$outputs" installed && netout=",network:NetworkOutput=yes"
@@ -147,6 +157,7 @@ case $name in
     "$iniset" "$gfx" Hardware VSync True 2> /dev/null || true
     # Sem os avisos do emulador na tela ao abrir o jogo.
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False 2> /dev/null || true
+    cheevos_ini dolphin "${gfx%/*}/RetroAchievements.ini"
     ;;
   pcsx2 | pcsx2x6)
     # O pcsx2x6 e o fork dos arcades Namco System 246/256 (~/roms/namco2x6): o
@@ -198,6 +209,7 @@ case $name in
       "$iniset" "$ini" EmuCore/GS AspectRatio Stretch
       "$iniset" "$ini" UI SetupWizardIncomplete false
       "$iniset" "$ini" UI StartFullscreen true
+      cheevos_ini pcsx2 "$ini"
       # Com um jogo (um frontend) o jogo abre direto, sem passar pelo Big
       # Picture; sem jogo, o Big Picture, que se usa pelo controle.
       if (($# > 1)); then
@@ -337,6 +349,7 @@ INI
       # imagem esticada no modo (640x240 e 8:3 em pixels; o tubo o mostra 4:3).
       "$iniset" "$ini" Main SetupWizardIncomplete false
       "$iniset" "$ini" Main StartFullscreen true
+      cheevos_ini duckstation "$ini"
       "$iniset" "$ini" Main HideCursorInFullscreen true
       "$iniset" "$ini" Main ConfirmPowerOff false
       # Com -nogui a janela do jogo nasce no tamanho guardado da janela
