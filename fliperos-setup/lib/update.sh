@@ -71,6 +71,7 @@ update_install_package() {
   export DEBIAN_FRONTEND=noninteractive
   ev_step 2 "Updating the package lists"
   update_wait_lock || return 1
+  update_heal_sources
   ev_run apt-get update || return 1
   ev_step 10 "Installing $pkg"
   log_line cmd "\$ apt-get install $pkg"
@@ -84,12 +85,25 @@ update_install_package() {
   ev_step 100 "$pkg installed"
 }
 
+# update_heal_sources: as fontes do apt repetidas com outra chave (o WineHQ
+# posto a mao e o do Wine Staging) fazem o apt recusar todas; uma fica
+# (fliperos-update apt-heal), o que mudou vai para o log.
+update_heal_sources() {
+  local tool=${FLIPEROS_UPDATE_TOOL:-/opt/fliperos/bin/fliperos-update} line
+  [[ -x $tool ]] || return 0
+  while IFS= read -r line; do
+    [[ -n $line ]] && log_line info "apt sources: $line"
+  done < <("$tool" apt-heal 2> /dev/null)
+  return 0
+}
+
 # update_run atualiza o sistema falando com a tela por eventos.
 update_run() {
   local rc
   export DEBIAN_FRONTEND=noninteractive
   ev_step 2 "Updating the package lists"
   update_wait_lock || return 1
+  update_heal_sources
   ev_run apt-get update || return 1
   ev_step 10 "Downloading updates"
   log_line cmd "\$ apt-get upgrade"

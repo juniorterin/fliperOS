@@ -10,6 +10,8 @@
   fliperos-update shutdown              ao desligar: aplica os pendentes
                                         guardados (fliperos-update-shutdown)
   fliperos-update notes                 o que muda em cada pendente (o changelog)
+  fliperos-update apt-heal              desliga as fontes do apt repetidas com
+                                        outra chave (o apply roda antes de cada patch)
   fliperos-update plan [--progress] [--result ARQUIVO]
   fliperos-update apply [--progress] [--result ARQUIVO]
   fliperos-update restore N
@@ -114,6 +116,121 @@ def log(text):
 
 class Fail(Exception):
     pass
+
+
+# ── As fontes do apt ─────────────────────────────────────────────
+# O mesmo repositorio em duas fontes com chaves diferentes (o WineHQ
+# acrescentado a mao com a winehq-archive.key, e o do Wine Staging do Setup
+# com a .asc) faz o apt recusar todas: "Conflicting values set for option
+# Signed-By", e todo apt-get, apt-mark e o proprio update param com 100.
+# O apt_heal deixa uma so (a do FliperOS, ou a primeira com a chave no
+# disco) e desliga as outras: a linha .list vira comentario, o bloco
+# .sources ganha "Enabled: no".
+APT_SOURCES = ('etc/apt/sources.list', 'etc/apt/sources.list.d')
+APT_OWN = ('winehq.sources',)
+APT_OFF = '# FliperOS: off, the same repository with another key: '
+
+
+def apt_entries(root):
+    """[(arquivo, linha ou bloco, uri, suite, signed-by)] das fontes ligadas."""
+    files = []
+    for rel in APT_SOURCES:
+        path = os.path.join(root, rel)
+        if os.path.isdir(path):
+            files += sorted(os.path.join(path, f) for f in os.listdir(path)
+                            if f.endswith(('.list', '.sources')))
+        elif os.path.isfile(path):
+            files.append(path)
+    out = []
+    for path in files:
+        try:
+            with open(path, encoding='utf-8', errors='replace') as f:
+                text = f.read()
+        except OSError:
+            continue
+        if path.endswith('.sources'):
+            for i, block in enumerate(re.split(r'\n\s*\n', text)):
+                fields, key = {}, None
+                for line in block.splitlines():
+                    if line.startswith('#') or not line.strip():
+                        continue
+                    if line[:1].isspace() and key:
+                        continue           # a chave inline continua
+                    key, _, value = line.partition(':')
+                    key = key.strip().lower()
+                    fields[key] = value.strip()
+                if fields.get('enabled', 'yes').lower() == 'no':
+                    continue
+                signed = fields.get('signed-by') or None
+                for uri in fields.get('uris', '').split():
+                    for suite in fields.get('suites', '').split():
+                        out.append((path, i, uri.rstrip('/'), suite, signed))
+        else:
+            for i, line in enumerate(text.splitlines()):
+                m = re.match(r'\s*deb(?:-src)?\s+(?:\[([^]]*)\]\s+)?(\S+)\s+(\S+)', line)
+                if not m:
+                    continue
+                opts = dict(o.split('=', 1) for o in (m.group(1) or '').split() if '=' in o)
+                out.append((path, i, m.group(2).rstrip('/'), m.group(3), opts.get('signed-by')))
+    return out
+
+
+def apt_disable(path, where):
+    """Desliga a linha (.list) ou o bloco (.sources) WHERE de PATH."""
+    with open(path, encoding='utf-8', errors='replace') as f:
+        text = f.read()
+    if path.endswith('.sources'):
+        blocks = re.split(r'(\n\s*\n)', text)
+        block = blocks[where * 2]
+        if re.search(r'(?im)^enabled:', block):
+            block = re.sub(r'(?im)^enabled:.*$', 'Enabled: no', block)
+        else:
+            block = block.rstrip('\n') + '\nEnabled: no'
+        blocks[where * 2] = block
+        text = ''.join(blocks)
+    else:
+        lines = text.split('\n')
+        lines[where] = APT_OFF + lines[where]
+        text = '\n'.join(lines)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(text)
+
+
+def apt_heal(root=None):
+    """Desliga as fontes repetidas com outra chave; devolve o que mudou."""
+    root = root or ROOT
+    groups = {}
+    for entry in apt_entries(root):
+        groups.setdefault((entry[2], entry[3]), []).append(entry)
+    changed = []
+    for (uri, suite), entries in sorted(groups.items()):
+        if len({e[4] for e in entries}) < 2:
+            continue
+
+        def rank(e):
+            key = e[4] and os.path.isfile(os.path.join(root, e[4].lstrip('/')))
+            return (os.path.basename(e[0]) not in APT_OWN, not key, e[0], e[1])
+        keep = min(entries, key=rank)
+        done = set()
+        for e in entries:
+            if e[4] == keep[4] or (e[0], e[1]) in done:
+                continue
+            done.add((e[0], e[1]))
+            try:
+                apt_disable(e[0], e[1])
+            except (OSError, IndexError):
+                continue
+            changed.append('%s %s: kept %s (%s), turned off %s (%s)'
+                           % (uri, suite, os.path.relpath(keep[0], root), keep[4],
+                              os.path.relpath(e[0], root), e[4]))
+    for line in changed:
+        log('apt sources: %s' % line)
+    return changed
+
+
+def cmd_apt_heal(args):
+    for line in apt_heal():
+        print(line)
 
 
 # ?? Estado ????????????????????????????????????????????????????????
@@ -365,9 +482,16 @@ def dry_run(src, root):
     escreveria em ROOT; None sem overlay (nem DRYRUN)."""
     base = tempfile.mkdtemp(prefix='fliperos-update-', dir='/run' if os.path.isdir('/run') else None)
     upper, work, merged = (os.path.join(base, d) for d in ('upper', 'work', 'merged'))
+    mounted = scratch = False
+    if not DRYRUN:
+        # Um tmpfs so do ensaio: o /run e pequeno, e a escrita do
+        # fliperos-rootfs.sh o enchia ("No space left on device"; o aviso
+        # passava a dar todos os arquivos como mudados aqui). Ele so ocupa a
+        # RAM do que for escrito.
+        scratch = subprocess.run(['mount', '-t', 'tmpfs', '-o', 'size=50%,mode=0700', 'fliperos-update', base],
+                                 capture_output=True).returncode == 0
     for d in (upper, work, merged):
         os.makedirs(d)
-    mounted = False
     try:
         if DRYRUN:
             r = subprocess.run(['bash', '-c', DRYRUN], env=dict(os.environ, SRC=src, UPPER=upper),
@@ -393,6 +517,8 @@ def dry_run(src, root):
     finally:
         if mounted:
             subprocess.run(['umount', '-l', merged], capture_output=True)
+        if scratch:
+            subprocess.run(['umount', '-l', base], capture_output=True)
         shutil.rmtree(base, ignore_errors=True)
 
 
@@ -608,6 +734,12 @@ def run_patches(todo, args, lines):
         pct = i * span
         if read_level() != n - 1:
             raise Fail('update %d needs update %d first' % (n, n - 1))
+        # O cabinet-update.sh do patch (o de quando ele saiu) usa o apt: as
+        # fontes em conflito o parariam ali, num update velho que nao as conserta.
+        try:
+            apt_heal()
+        except OSError as e:
+            log('apt sources not checked: %s' % e)
         src = download(patch, args.progress, pct + 2)
         say(args.progress, '@step %d Update %d: saving the files it replaces' % (pct + span // 5, n))
         changed, local, unknown, _ = classify(src, ROOT)
@@ -636,6 +768,10 @@ def go_back(patch, index, args, lines):
     que ela troca. Este fliperos-update fica (o da arvore antiga nao conhece
     a escolha e aplicaria tudo de novo ao desligar)."""
     n, level = patch[0], read_level()
+    try:
+        apt_heal()
+    except OSError as e:
+        log('apt sources not checked: %s' % e)
     src = download(patch, args.progress, 5)
     say(args.progress, '@step 25 Back to update %d: saving the files it replaces' % n)
     changed, local, unknown, _ = classify(src, ROOT)
@@ -795,6 +931,7 @@ def main():
     sub.add_parser('pending').set_defaults(func=cmd_pending)
     sub.add_parser('shutdown').set_defaults(func=cmd_shutdown)
     sub.add_parser('notes').set_defaults(func=cmd_notes)
+    sub.add_parser('apt-heal').set_defaults(func=cmd_apt_heal)
     for name, func in (('plan', cmd_plan), ('apply', cmd_apply)):
         s = sub.add_parser(name)
         s.add_argument('--progress', action='store_true')

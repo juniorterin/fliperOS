@@ -32,6 +32,10 @@ splash_sum() {
 }
 splash_before=$(splash_sum)
 
+# As fontes do apt repetidas com outra chave (o WineHQ posto a mao e o do
+# Wine Staging) param todo apt-get e apt-mark daqui para baixo: uma fica.
+python3 "$src/config/fliperos-update" apt-heal || echo "warning: the apt sources were not checked"
+
 echo "== FliperOS files (fliperos-rootfs.sh)"
 bash "$src/fliperos-rootfs.sh" /
 install -Dm755 "$src/fliperos-limine-update.py" /usr/local/sbin/fliperos-limine-update

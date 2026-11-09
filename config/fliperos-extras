@@ -33,6 +33,7 @@ WINE_PACKAGES="wine wine64 wine32:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-m
 # recomendados vao junto, como a WineHQ manda (FreeType, SDL2, GnuTLS...).
 WINEHQ_KEY=${FLIPEROS_WINEHQ_KEY:-/usr/local/share/fliperos/winehq-archive.asc}
 WINEHQ_URL="https://dl.winehq.org/wine-builds/ubuntu"
+UPDATE_TOOL=${FLIPEROS_UPDATE_TOOL:-/opt/fliperos/bin/fliperos-update}
 WINE_STAGING_PACKAGES="winehq-staging libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386"
 wine_staging_bin=${FLIPEROS_WINE_STAGING:-/opt/wine-staging/bin/wine}
 # As camadas do filtro de flicker e da OSD em 32 bits, as dos jogos do Wine
@@ -161,6 +162,9 @@ apt_install() {
     dpkg --add-architecture i386 >&2 || fail "could not enable the i386 architecture"
   fi
   say 2 "Updating the package lists"
+  # O mesmo repositorio com outra chave (o WineHQ posto a mao ao lado do
+  # winehq.sources do Wine Staging) faz o apt recusar todas: o nosso fica.
+  if [[ -x $UPDATE_TOOL ]]; then "$UPDATE_TOOL" apt-heal >&2 || true; fi
   apt-get -o DPkg::Lock::Timeout=300 update >&2 || fail "apt-get update failed (no network?)"
   say 10 "Downloading $label"
   apt-get -y -o DPkg::Lock::Timeout=300 -o APT::Status-Fd=3 install "$@" 3>&1 1>&2 | apt_progress

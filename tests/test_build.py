@@ -3167,6 +3167,63 @@ class UpdateTests(unittest.TestCase):
     def write_index(self):
         (self.tmp / 'index').write_text('# comentario\n' + ''.join('\t'.join(line) + '\n' for line in self.index))
 
+    def test_apt_sources_of_the_same_repository_with_another_key_keep_one(self):
+        # Um usuario acrescentou o WineHQ a mao (winehq-archive.key) e o Wine
+        # Staging do Setup pos o dele (.asc): o apt recusava todas as fontes
+        # ("Conflicting values set for option Signed-By") e o update 59 parava
+        # com 100. O nosso fica, o outro e desligado; o resto nao muda.
+        keys, lists = self.root / 'etc/apt/keyrings', self.root / 'etc/apt/sources.list.d'
+        keys.mkdir(parents=True)
+        lists.mkdir(parents=True)
+        (keys / 'winehq-archive.key').write_text('k')
+        (keys / 'winehq-archive.asc').write_text('k')
+        ours = ('Types: deb\nURIs: https://dl.winehq.org/wine-builds/ubuntu\nSuites: noble\nComponents: main\n'
+                'Architectures: amd64 i386\nSigned-By: /etc/apt/keyrings/winehq-archive.asc\n')
+        (lists / 'winehq.sources').write_text(ours)
+        (lists / 'winehq-noble.sources').write_text(
+            'Types: deb\nURIs: https://dl.winehq.org/wine-builds/ubuntu/\nSuites: noble\nComponents: main\n'
+            'Architectures: amd64 i386\nSigned-By: /etc/apt/keyrings/winehq-archive.key\n')
+        (lists / 'other.list').write_text(
+            'deb [signed-by=/etc/apt/keyrings/winehq-archive.key] https://dl.winehq.org/wine-builds/ubuntu/ noble main\n'
+            'deb http://archive.ubuntu.com/ubuntu noble main\n')
+        (self.root / 'etc/apt/sources.list').write_text('deb http://archive.ubuntu.com/ubuntu noble universe\n')
+        up = self.engine()
+        up.ROOT, up.LOG = str(self.root), str(self.tmp / 'log')
+        changed = up.apt_heal()
+        self.assertEqual(len(changed), 2, changed)
+        self.assertEqual((lists / 'winehq.sources').read_text(), ours)
+        self.assertIn('Enabled: no', (lists / 'winehq-noble.sources').read_text())
+        other = (lists / 'other.list').read_text().splitlines()
+        self.assertTrue(other[0].startswith('# FliperOS: off'), other)
+        self.assertEqual(other[1], 'deb http://archive.ubuntu.com/ubuntu noble main')
+        self.assertIn('apt sources: https://dl.winehq.org/wine-builds/ubuntu noble', (self.tmp / 'log').read_text())
+        # Consertado, nada mais muda; sem conflito, nada e tocado.
+        self.assertEqual(up.apt_heal(), [])
+        # Sem o nosso: fica o primeiro com a chave no disco.
+        (lists / 'winehq.sources').unlink()
+        (lists / 'winehq-noble.sources').write_text(
+            'Types: deb\nURIs: https://dl.winehq.org/wine-builds/ubuntu/\nSuites: noble\nComponents: main\n'
+            'Signed-By: /etc/apt/keyrings/winehq-archive.key\n')
+        (lists / 'zz.list').write_text(
+            'deb [signed-by=/etc/apt/keyrings/missing.gpg] https://dl.winehq.org/wine-builds/ubuntu noble main\n')
+        self.assertEqual(len(up.apt_heal()), 1)
+        self.assertNotIn('Enabled: no', (lists / 'winehq-noble.sources').read_text())
+        self.assertTrue((lists / 'zz.list').read_text().startswith('# FliperOS: off'))
+        # O apply conserta antes de cada patch (o cabinet-update.sh velho do
+        # patch usa o apt), e o comando e o cabinet-update.sh tambem.
+        src = (ROOT / 'config/fliperos-update').read_text()
+        apply = src.split('def run_patches(')[1].split('\ndef ')[0]
+        self.assertLess(apply.index('apt_heal()'), apply.index('download(patch'))
+        self.assertIn("sub.add_parser('apt-heal')", src)
+        cabinet = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertLess(cabinet.index('python3 "$src/config/fliperos-update" apt-heal'),
+                        cabinet.index('apt-mark manual'))
+        self.assertIn('update_heal_sources\n  ev_run apt-get update',
+                      (ROOT / 'fliperos-setup/lib/update.sh').read_text())
+        self.assertIn('"$UPDATE_TOOL" apt-heal >&2 || true', (ROOT / 'config/fliperos-extras').read_text())
+        # O ensaio do patch num tmpfs dele (o /run enchia).
+        self.assertIn("'size=50%,mode=0700'", src)
+
     def publish(self, conf, script=None, reboot='no', treehash=None):
         """O proximo patch: uma arvore com o config/app.conf (e o
         updates/NNNN.sh), em tar com a pasta de cima, como o do GitHub."""
