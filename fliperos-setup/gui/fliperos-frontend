@@ -105,6 +105,9 @@ ATTRACT_STEP = max(1.0, float(os.environ.get("FLIPEROS_ATTRACT_STEP", "30")))
 # Os botoes do atalho do painel, segurados juntos por EXIT_HOLD segundos
 # (no jogo e na hora de escolher). CAPTURE_WAIT: sem apertar, a escolha sai.
 EXIT_HOLD, CAPTURE_WAIT = 1.0, 8.0
+# O Frontend controls: o guia (arcade ou joypad) e o formato dele nas duas
+# primeiras linhas, as funcoes a partir desta.
+CONTROLS_FIRST = 2
 COMBO_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
 # Os minutos de cada ficha (Frontend options > Minutes per coin).
 COIN_MINUTES = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60)
@@ -240,6 +243,13 @@ class Frontend:
         self.input = feinput.Input(pygame, feinput.load_binds(pygame, cfg.get("controls")))
         # O formato do painel, para o guia (feview.PANEL_LAYOUTS).
         self.panel_layout = cfg.get("panel_layout") if cfg.get("panel_layout") in feview.PANEL_COUNT else "6"
+        # O guia: os botoes do painel de arcade ou os de um joypad, e qual
+        # videogame (gui/fepads.py: os botoes de cada um medidos).
+        import fepads
+        self.fp = fepads
+        self.guide_kind = "joypad" if cfg.get("guide") == "joypad" else "arcade"
+        pads = [k for k, _, _ in fepads.PADS]
+        self.joypad_layout = cfg.get("joypad_layout") if cfg.get("joypad_layout") in pads else pads[0]
         # A animacao da troca de romlist de cada modo (Tab > Transition;
         # feview.transition confere o nome).
         self.transitions = cfg.get("transitions") if isinstance(cfg.get("transitions"), dict) else {}
@@ -311,7 +321,7 @@ class Frontend:
         # controls, para o usuario dizer o que cada botao faz.
         self.controls_seen = cfg.get("controls_seen") is True
         if not self.controls_seen:
-            self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}
+            self.overlay, self.ov = "controls", {"sel": CONTROLS_FIRST, "col": 0, "wait": None}
         # A midia fisica: os drives (femedia.scan, lidos numa thread), o azulejo
         # escolhido na fileira (None: o foco na tira dos sistemas) e o
         # emulador escolhido para cada console (frontend.json media_emulators).
@@ -587,6 +597,7 @@ class Frontend:
                      "power_exit": self.power_exit, "commercial": self.commercial,
                      "coin_minutes": self.coin_minutes, "credit_until": self.credit_until,
                      "controls": self.input.binds, "panel_layout": self.panel_layout,
+                     "guide": self.guide_kind, "joypad_layout": self.joypad_layout,
                      "controls_seen": self.controls_seen, "transitions": self.transitions,
                      "media_emulators": self.media_emus})
 
@@ -1077,7 +1088,7 @@ class Frontend:
             elif sel == OPT_HIDDEN and a == "b1":
                 self.overlay, self.ov = "hidden", {"sel": 0, "rows": self.lib.hidden_games()}
             elif sel == OPT_CONTROLS and a == "b1":
-                self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}
+                self.overlay, self.ov = "controls", {"sel": CONTROLS_FIRST, "col": 0, "wait": None}
             elif a == "b1" and sel == 3 and self.game():
                 g = self.game()
                 self.lib.set_hidden(g["_system"]["key"], g["Name"], True)
@@ -1118,9 +1129,9 @@ class Frontend:
                     self.exit_key = list(key)
                     self.remember()
                     self.say("EXIT KEY: " + key[0], 2)
-                self.capture_done(1)
+                self.capture_done(2)
             elif a == "b2":
-                self.capture_done(1)
+                self.capture_done(2)
             return None
         if o == "exitpad":
             # Os botoes segurados juntos (capture_tick): os toques nao fazem nada.
@@ -1186,13 +1197,20 @@ class Frontend:
         deixa sem nada. Cada troca ja vale e fica gravada."""
         ov = self.ov
         funcs = self.fi.FUNCTIONS
-        exit_row, layout_row, reset_row = len(funcs), len(funcs) + 1, len(funcs) + 2
-        if ov["wait"] == "pad":
-            if a.startswith("pad:"):
-                self.bind_control(funcs[ov["sel"]], "pad", a[4:])
+        # O guia e o formato dele primeiro, depois as funcoes, o atalho que
+        # fecha o jogo e o RESET/SAVE (CONTROLS_FIRST: a primeira funcao).
+        guide_row, layout_row = 0, 1
+        first = CONTROLS_FIRST
+        exit_row, reset_row = first + len(funcs), first + len(funcs) + 1
+        if ov["wait"] in ("pad", "joy"):
+            # O painel e o joypad (as linhas "j:PAPEL" do mapa): cada coluna
+            # so aceita o seu.
+            kind = ov["wait"]
+            if a.startswith("pad:") and a.startswith("pad:j:") == (kind == "joy"):
+                self.bind_control(funcs[ov["sel"] - first], kind, a[6:] if kind == "joy" else a[4:])
                 self.controls_wait(None)
             elif a == "delete":
-                self.bind_control(funcs[ov["sel"]], "pad", None)
+                self.bind_control(funcs[ov["sel"] - first], kind, None)
                 self.controls_wait(None)
             elif a == "esc":
                 self.controls_wait(None)
@@ -1201,11 +1219,11 @@ class Frontend:
             if a.startswith("key:"):
                 key = int(a[4:])
                 if key == self.pg.K_DELETE:
-                    self.bind_control(funcs[ov["sel"]], "key", None)
+                    self.bind_control(funcs[ov["sel"] - first], "key", None)
                 elif key in self.input.panel_keys:
                     self.say("%s IS A PANEL CONTROL" % self.fi.key_name(self.pg, key), 2.4)
                 else:
-                    self.bind_control(funcs[ov["sel"]], "key", key)
+                    self.bind_control(funcs[ov["sel"] - first], "key", key)
                 self.controls_wait(None)
             elif a == "b2":
                 # Um controle desiste (o teclado esta escolhendo).
@@ -1217,13 +1235,25 @@ class Frontend:
             if ov["sel"] == reset_row:
                 # A ultima linha: RESET e SAVE lado a lado, comecando no SAVE.
                 ov["col"] = 1
-        elif sel == layout_row and a in ("left", "right", "b1"):
-            names = [k for k, _ in self.view.PANEL_LAYOUTS]
-            i = names.index(self.panel_layout) + (-1 if a == "left" else 1)
-            self.panel_layout = names[i % len(names)]
+        elif sel == guide_row and a in ("left", "right", "b1"):
+            # O guia: os botoes do painel de arcade ou os de um joypad.
+            self.guide_kind = "arcade" if self.guide_kind == "joypad" else "joypad"
             self.remember()
+        elif sel == layout_row and a in ("left", "right", "b1"):
+            # O formato do painel ou, com o guia de joypad, o videogame.
+            step = -1 if a == "left" else 1
+            if self.guide_kind == "joypad":
+                names = [k for k, _, _ in self.fp.PADS]
+                self.joypad_layout = names[(names.index(self.joypad_layout) + step) % len(names)]
+            else:
+                names = [k for k, _ in self.view.PANEL_LAYOUTS]
+                self.panel_layout = names[(names.index(self.panel_layout) + step) % len(names)]
+            self.remember()
+        elif a in ("left", "right") and sel == reset_row:
+            ov["col"] = 0 if a == "left" else 1
         elif a in ("left", "right"):
-            ov["col"] ^= 1
+            # As colunas: o painel, o joypad e a tecla.
+            ov["col"] = (ov["col"] + (1 if a == "right" else -1)) % 3
         elif a == "b1" and sel == reset_row and ov["col"] == 1:
             self.remember()
             self.say("CONTROLS SAVED")
@@ -1232,23 +1262,24 @@ class Frontend:
             self.input.bind(self.fi.default_binds(self.pg))
             self.remember()
             self.say("CONTROLS RESET")
-        elif a == "b1" and sel == exit_row and ov["col"] == 0:
+        elif a == "b1" and sel == exit_row and ov["col"] < 2:
+            # Os botoes segurados juntos (do painel; o joypad e o mesmo atalho).
             self.overlay, self.ov = "exitpad", {"since": time.monotonic(), "held": None}
         elif a == "b1" and sel == exit_row:
             self.overlay, self.ov = "exitkey", {"since": time.monotonic()}
             self.input.capture = True
         elif a == "b1":
-            self.controls_wait("pad" if ov["col"] == 0 else "key")
+            self.controls_wait(("pad", "joy", "key")[ov["col"]])
         elif a == "delete" and sel == exit_row:
             # O atalho sai (OFF).
-            if ov["col"] == 0:
+            if ov["col"] < 2:
                 self.exit_combo = []
             else:
                 self.exit_key = None
             self.remember()
-            self.say("EXIT BUTTONS OFF" if ov["col"] == 0 else "EXIT KEY OFF", 2)
-        elif a == "delete" and sel < len(funcs):
-            self.bind_control(funcs[sel], "pad" if ov["col"] == 0 else "key", None)
+            self.say("EXIT BUTTONS OFF" if ov["col"] < 2 else "EXIT KEY OFF", 2)
+        elif a == "delete" and first <= sel < exit_row:
+            self.bind_control(funcs[sel - first], ("pad", "joy", "key")[ov["col"]], None)
         elif a in ("b2", "esc"):
             self.controls_leave()
         return None
@@ -1269,10 +1300,10 @@ class Frontend:
             self.say("/".join(lost) + ": NO PANEL BUTTON", 2.6)
 
     def controls_wait(self, kind):
-        """Esperando o comando do painel ("pad") ou a tecla ("key") da funcao
-        escolhida; None, de volta a lista."""
+        """Esperando o comando do painel ("pad"), o papel do joypad ("joy") ou
+        a tecla ("key") da funcao escolhida; None, de volta a lista."""
         self.ov["wait"], self.ov["since"] = kind, time.monotonic()
-        self.input.capture_pad = kind == "pad"
+        self.input.capture_pad = kind in ("pad", "joy")
         self.input.capture = kind == "key"
 
     def bind_control(self, function, kind, value):
@@ -1284,19 +1315,20 @@ class Frontend:
         self.remember()
         names = self.view.FUNCTION_NAMES
         if value is None:
-            self.say("%s: NO %s" % (names[function], "BUTTON" if kind == "pad" else "KEY"), 2)
+            self.say("%s: NO %s" % (names[function], "KEY" if kind == "key" else "BUTTON"), 2)
         elif other:
             self.say("SWAPPED WITH " + names[other], 2.2)
         else:
-            shown = self.fi.pad_name(value) if kind == "pad" else self.fi.key_name(self.pg, value)
+            shown = {"pad": self.fi.pad_name, "joy": self.fi.joy_name}.get(
+                kind, lambda v: self.fi.key_name(self.pg, v))(value)
             self.say("%s: %s" % (names[function], shown), 2)
 
     def capture_done(self, col):
         """Fim da escolha do atalho: de volta ao Frontend controls, na linha
-        EXIT GAME e na coluna dele (0 os botoes, 1 a tecla)."""
+        EXIT GAME e na coluna dele (0 os botoes, 2 a tecla)."""
         self.input.capture = False
         self.overlay = "controls"
-        self.ov = {"sel": len(self.fi.FUNCTIONS), "col": col, "wait": None}
+        self.ov = {"sel": CONTROLS_FIRST + len(self.fi.FUNCTIONS), "col": col, "wait": None}
 
     def capture_tick(self, now):
         """A escolha dos botoes do atalho: dois ou mais comandos do painel
@@ -1329,7 +1361,7 @@ class Frontend:
                 self.ov["since"] = now
         if now - self.ov["since"] > CAPTURE_WAIT:
             self.say("NOTHING CHANGED")
-            self.capture_done(1 if o == "exitkey" else 0)
+            self.capture_done(2 if o == "exitkey" else 0)
 
     KEYS = ["1234567890", "QWERTYUIOP", "ASDFGHJKL-", "ZXCVBNM.:/"]
 

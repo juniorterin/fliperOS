@@ -129,9 +129,13 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
   # nela e o controle 1 do painel virava o jogador 2. Aqui o indice de cada
   # jogador (o do buttons.cfg, ou o padrao: jogador N, controle N-1) vira o
   # jsN desse controle; um controle que nao esta ligado, um jsN que nao existe.
+  # Na ordem do SDL, a dos /dev/input/eventN: a do arquivo e a da criacao, e
+  # um controle Bluetooth religado pega um eventN que estava livre e entra no
+  # meio dos outros no SDL.
   mapfile -t js < <(awk '/^H: Handlers=/ && /[= ]js[0-9]+/ && !/[= ]mouse[0-9]+/ {
-    match($0, /[= ]js[0-9]+/); print substr($0, RSTART + 3, RLENGTH - 3) }' \
-    "${FLIPEROS_INPUT_DEVICES:-/proc/bus/input/devices}" 2> /dev/null)
+    match($0, /[= ]js[0-9]+/); j = substr($0, RSTART + 3, RLENGTH - 3)
+    e = 999999; if (match($0, /event[0-9]+/)) e = substr($0, RSTART + 5, RLENGTH - 5)
+    print e, j }' "${FLIPEROS_INPUT_DEVICES:-/proc/bus/input/devices}" 2> /dev/null | sort -n -k1,1 | cut -d' ' -f2)
   shifted=0
   for i in "${!js[@]}"; do [[ ${js[i]} == "$i" ]] || shifted=1; done
   if ((shifted)); then

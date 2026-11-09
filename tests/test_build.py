@@ -5846,9 +5846,9 @@ class FrontendDataTests(unittest.TestCase):
         # comando do painel e uma tecla. Sem nada gravado, o de sempre.
         fi, pg = self.fi, self.fake_pygame()
         binds = fi.default_binds(pg)
-        self.assertEqual(binds['b1'], {'pad': 'b1', 'key': pg.K_RETURN})
-        self.assertEqual(binds['tab'], {'pad': None, 'key': pg.K_TAB})
-        self.assertEqual(binds['b5'], {'pad': 'b5', 'key': None})
+        self.assertEqual(binds['b1'], {'pad': 'b1', 'joy': 'accept', 'key': pg.K_RETURN})
+        self.assertEqual(binds['tab'], {'pad': None, 'joy': 'select', 'key': pg.K_TAB})
+        self.assertEqual(binds['b5'], {'pad': 'b5', 'joy': 'west', 'key': None})
         self.assertEqual(list(binds), list(fi.FUNCTIONS))
         self.assertNotIn('coin', fi.PAD)
         # Gravado: por cima do padrao; o que nao vale fica de fora, e um
@@ -5856,10 +5856,16 @@ class FrontendDataTests(unittest.TestCase):
         saved = {'tab': {'pad': 'b5'}, 'b5': {'pad': None, 'key': pg.K_q}, 'b4': {'pad': 'coin', 'key': 'x'},
                  'b6': {'key': True}, 'b3': {'pad': 'b1'}, 'nada': {'pad': 'b2'}}
         binds = fi.load_binds(pg, saved)
-        self.assertEqual(binds['tab'], {'pad': 'b5', 'key': pg.K_TAB})
-        self.assertEqual(binds['b5'], {'pad': None, 'key': pg.K_q})
-        self.assertEqual(binds['b4'], {'pad': 'b4', 'key': pg.K_f})
+        self.assertEqual(binds['tab'], {'pad': 'b5', 'joy': 'select', 'key': pg.K_TAB})
+        self.assertEqual(binds['b5'], {'pad': None, 'joy': 'west', 'key': pg.K_q})
+        self.assertEqual(binds['b4'], {'pad': 'b4', 'joy': 'north', 'key': pg.K_f})
         self.assertEqual(binds['b6']['key'], pg.K_PAGEDOWN)
+        # A coluna JOYPAD: o papel gravado vale (um que nao existe nao), e o
+        # mesmo papel em duas funcoes fica so na primeira.
+        joyed = fi.load_binds(pg, {'b2': {'joy': 'l2'}, 'b3': {'joy': 'nada'}, 'b6': {'joy': 'accept'}})
+        self.assertEqual((joyed['b2']['joy'], joyed['b3']['joy'], joyed['b6']['joy']), ('l2', 'l1', None))
+        self.assertEqual([fi.joy_name(r) for r in ('accept', 'cancel', 'north', 'l1', None)],
+                         ['ACCEPT', 'BACK', 'NORTH', 'L1', None])
         self.assertEqual((binds['b1']['pad'], binds['b3']['pad']), ('b1', None))
         self.assertEqual(fi.load_binds(pg, 'x'), fi.default_binds(pg))
         # Dar a uma funcao o botao de outra troca os dois; o mesmo de novo, ou
@@ -5924,7 +5930,7 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('held = frozenset(self.input.pad_held())', src)
         # A primeira abertura comeca no Frontend controls; ao sair dele, o guia.
         self.assertIn('self.controls_seen = cfg.get("controls_seen") is True', src)
-        self.assertIn('self.overlay, self.ov = "controls", {"sel": 0, "col": 0, "wait": None}', src)
+        self.assertIn('self.overlay, self.ov = "controls", {"sel": CONTROLS_FIRST, "col": 0, "wait": None}', src)
         self.assertIn('"controls_seen": self.controls_seen', src)
         # O SAVE no fim, ao lado do RESET: grava e sai, como o back.
         self.assertIn('elif a == "b1" and sel == reset_row and ov["col"] == 1:', src)
@@ -5935,7 +5941,7 @@ class FrontendDataTests(unittest.TestCase):
         # O atalho que fecha o jogo fica dentro do Frontend controls, nao no Tab.
         self.assertNotIn('"EXIT KEY")', view)
         self.assertIn('y = label(exit_row, "EXIT GAME", exit_icon, T.RED)', view)
-        self.assertIn('elif a == "b1" and sel == exit_row and ov["col"] == 0:', src)
+        self.assertIn('elif a == "b1" and sel == exit_row and ov["col"] < 2:', src)
         self.assertNotIn('OPT_EXIT', src)
         try:
             import pygame
@@ -5996,12 +6002,51 @@ class FrontendDataTests(unittest.TestCase):
         for layout, _ in feview.PANEL_LAYOUTS:
             fe.panel_layout = layout
             feview.draw_guide(fe, ui)
-        # As linhas depois das funcoes: o atalho que fecha o jogo, o formato e o RESET.
-        for row in range(len(fi.FUNCTIONS), len(fi.FUNCTIONS) + 3):
-            fe.ov = {'sel': row, 'col': 1, 'wait': None}
-            feview.draw_controls(fe, ui, 1.0)
+        # O guia e o formato antes das funcoes; depois delas o atalho que
+        # fecha o jogo e o RESET/SAVE (todas as linhas, nas tres colunas).
+        self.assertIn('CONTROLS_FIRST = 2', src)
+        self.assertIn('guide_row, layout_row, first = 0, 1, 2', view)
+        for row in range(len(fi.FUNCTIONS) + 4):
+            for col in range(3):
+                fe.ov = {'sel': row, 'col': col, 'wait': None}
+                feview.draw_controls(fe, ui, 1.0)
         fe.panel_layout = 'x'
         self.assertEqual(feview.panel_layout(fe), '6')
+        # O guia em joypad: a cruz e os botoes do videogame, cada funcao da
+        # coluna JOYPAD no botao dela (o aceitar no de sul sem o Button
+        # mapping); os ombros e o Select em texto embaixo.
+        import fepads
+        fe.input.binds = fi.default_binds(pygame)
+        fe.guide_kind = 'joypad'
+        joy = feview.joy_map(fe)
+        self.assertEqual((joy['south'], joy['east'], joy['l1'], joy['select']), ('b1', 'b2', 'b3', 'tab'))
+        for value, _, _ in fepads.PADS:
+            fe.joypad_layout = value
+            surf, c, labels, lines, (bl, bt, br, bb) = feview.joypad_parts(fe, joy)
+            self.assertTrue(labels, value)
+            feview.draw_guide(fe, ui)
+        fe.joypad_layout = 'playstation'
+        surf, c, labels, lines, _ = feview.joypad_parts(fe, joy)
+        self.assertEqual(sorted(t[0] for t in labels), ['BACK', 'FAVOURITE', 'FILTER', 'SELECT'])
+        roles = [[(r, f) for r, f, _ in words] for words, _ in lines]
+        # O rodape so com as opcoes do jogo e o modo (sem paginar, favorito, filtro).
+        self.assertEqual(sum(roles, []), [('SELECT', 'GAME OPTIONS'), ('START', 'VIEW MODE')])
+        fe.joypad_layout = 'nes'
+        _, _, _, lines, _ = feview.joypad_parts(fe, joy)
+        self.assertNotIn('FILTER', [f for words, _ in lines for _, f, _ in words])
+        # No Mega Drive os ombros sao o X e o Z: saem do texto.
+        fe.joypad_layout = 'megadrive'
+        surf, c, labels, lines, _ = feview.joypad_parts(fe, joy)
+        self.assertIn('PAGE UP', [t[0] for t in labels])
+        self.assertNotIn('L1', [r for words, _ in lines for r, _, _ in words])
+        # Apertado ao lado do direcional, os nomes sobem ou descem para caber.
+        for value, _, _ in fepads.PADS:
+            fe.joypad_layout = value
+            _, _, labels, _, (bl, bt, br, bb) = feview.joypad_parts(fe, joy, 150)
+            free = feview.joypad_parts(fe, joy)
+            # (o GameCube nao encolhe tanto: os feijoes ja sao largos)
+            self.assertLessEqual(br - bl, min(160, free[4][2] - free[4][0]), value)
+            self.assertEqual(len(labels), len(free[2]), value)
 
     def test_list_mode_icons_in_one_row_and_the_synopsis(self):
         # O modo lista: os icones numa fileira so e, fora do modo comercial, a
@@ -16828,6 +16873,7 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertRegex(menu, r'"games\|Games\|[^"]+" \\\n      "joysticks\|Joysticks\|')
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
         self.assertRegex(screen, r'"buttons\|Button mapping \(all emulators\)\|[^"]+" \\\n'
+                                 r'      "bluetooth\|Bluetooth\|[^"]+" \\\n'
                                  r'      "layout\|Buttons layout \(games of 1 to 5 buttons\)\|')
         self.assertIn('layout) screen_buttons_layout ;;', screen)
 
@@ -16839,9 +16885,13 @@ class ButtonMappingTests(unittest.TestCase):
                       ROOTFS)
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
         self.assertIn('"buttons|Button mapping (all emulators)|', screen)
-        body = screen.split('screen_buttons() {')[1].split('\n}\n')[0]
-        self.assertLess(body.index('padkeys_off'), body.index('buttons_capture'))
-        self.assertLess(body.rindex('buttons_capture'), body.index('padkeys_on'))
+        body = screen.split('screen_buttons_device() {')[1].split('\n}\n')[0]
+        # A captura (painel ou joypad) entre o padkeys_off e o padkeys_on.
+        self.assertLess(body.index('padkeys_off'), body.index('screen_buttons_pad "$title"'))
+        self.assertLess(body.index('padkeys_off'), body.index('screen_buttons_arcade "$title"'))
+        self.assertLess(body.index('screen_buttons_arcade "$title"'), body.index('padkeys_on'))
+        for name in ('screen_buttons_arcade', 'screen_buttons_pad'):
+            self.assertIn('buttons_capture', screen.split(name + '() {')[1].split('\n}\n')[0])
 
 
 class VulkanFpsLayerTests(unittest.TestCase):
@@ -18143,6 +18193,455 @@ class PhysicalMediaTests(unittest.TestCase):
         fe.ov = {'sel': 1, 'carts': [{'system': 'SNES', 'console': 'snes', 'title': 'SUPER MARIO WORLD'},
                                      {'system': 'MD', 'console': 'md', 'title': 'SONIC THE HEDGEHOG 2'}]}
         feview.draw_media_carts(fe, ui, 0.5)
+
+
+class JoypadMappingTests(unittest.TestCase):
+    """config/fliperos-buttons com o painel de 8 botoes e o joypad (o mapeador do
+    Batocera): o tipo de cada jogador, os analogicos, L3/R3, o hotkey e os gatilhos."""
+
+    # O Steam Virtual Gamepad do banco do SDL (o layout de um Xbox 360).
+    XBOX = ('03000000de280000ff11000001000000,Steam Virtual Gamepad,a:b0,b:b1,back:b6,dpdown:h0.4,dpleft:h0.8,'
+            'dpright:h0.2,dpup:h0.1,guide:b8,leftshoulder:b4,leftstick:b9,lefttrigger:a2,leftx:a0,lefty:a1,'
+            'rightshoulder:b5,rightstick:b10,righttrigger:a5,rightx:a3,righty:a4~,start:b7,x:b2,y:b3,'
+            'platform:Linux,')
+    RESTS = (0, 0, -32768, 0, 0, -32768)
+
+    def setUp(self):
+        self.rc = load_script('buttons', 'config/fliperos-buttons')
+
+    def pad(self):
+        return {c: (0, e) for c, e in self.rc.mapping_binds(self.XBOX).items()}
+
+    def test_the_known_layout_comes_from_the_sdl_mapping(self):
+        binds = self.rc.mapping_binds(self.XBOX)
+        # Pela posicao: o de sul e o 4, o de leste o 5, o de oeste o 1, o de norte o 2.
+        self.assertEqual((binds['b4'], binds['b5'], binds['b1'], binds['b2']), ('b0', 'b1', 'b2', 'b3'))
+        self.assertEqual((binds['b3'], binds['b6'], binds['b7'], binds['b8']), ('b4', 'b5', '+a2', '+a5'))
+        self.assertEqual((binds['coin'], binds['start'], binds['hotkey']), ('b6', 'b7', 'b8'))
+        self.assertEqual((binds['l3'], binds['r3'], binds['up']), ('b9', 'b10', 'h0.1'))
+        # O analogico pelo sentido de cima e da esquerda; "~" e ao contrario.
+        self.assertEqual((binds['lsup'], binds['lsleft'], binds['rsleft'], binds['rsup']),
+                         ('-a1', '-a0', '-a3', '+a4'))
+
+    def test_the_pad_goes_to_sdl_as_it_is(self):
+        line = self.rc.sdl_mapping_line('guid', 'Pad', self.pad(), self.rc.SDL_PAD_SLOTS, self.RESTS)
+        fields = set(line.split(',')[2:-1])
+        for field in ('a:b0', 'b:b1', 'x:b2', 'y:b3', 'leftshoulder:b4', 'rightshoulder:b5', 'lefttrigger:a2',
+                      'righttrigger:a5', 'back:b6', 'start:b7', 'guide:b8', 'leftstick:b9', 'rightstick:b10',
+                      'leftx:a0', 'lefty:a1', 'rightx:a3', 'righty:a4~', 'dpup:h0.1', 'platform:Linux'):
+            self.assertIn(field, fields)
+        # O painel continua como fight stick, com o 7 e o 8 no LB e no LT.
+        panel = {'b1': (0, 'b0'), 'b3': (0, 'b2'), 'b7': (0, 'b6'), 'b8': (0, 'b7')}
+        self.assertEqual(self.rc.sdl_mapping_line('g', 'Panel', panel).split(',')[2:-1],
+                         ['leftshoulder:b6', 'lefttrigger:b7', 'rightshoulder:b2', 'x:b0', 'platform:Linux'])
+        # O hotkey no proprio Select (o que o Batocera sugere) fica so no Back.
+        binds = dict(self.pad(), hotkey=(0, 'b6'))
+        line = self.rc.sdl_mapping_line('guid', 'Pad', binds, self.rc.SDL_PAD_SLOTS, self.RESTS)
+        self.assertIn('back:b6', line)
+        self.assertNotIn('guide:', line)
+        # Os jogadores do mapa: o tipo diz qual dos dois.
+        devices = {0: ('g0', 'Pad', 11, 6, self.RESTS), 1: ('g1', 'Panel', 10, 2, (0, 0))}
+        db = self.rc.sdl_user_db({1: self.pad(), 2: {k: (1, e) for k, (_, e) in panel.items()}}, devices, {1: 'pad'})
+        self.assertIn('lefttrigger:a2', db['g0'])
+        self.assertIn('x:b0', db['g1'])
+        self.assertIn('rightshoulder:b2', db['g1'])
+
+    def test_retroarch_gets_the_sticks_l3_r3_and_the_triggers(self):
+        cfg = self.rc.retroarch_cfg({1: self.pad()}, {0: 'Pad'}).split('\n')
+        for line in ('input_player1_l_x_minus_axis = "-0"', 'input_player1_l_x_plus_axis = "+0"',
+                     'input_player1_l_y_minus_axis = "-1"', 'input_player1_l_y_plus_axis = "+1"',
+                     'input_player1_r_y_minus_axis = "+4"', 'input_player1_r_y_plus_axis = "-4"',
+                     'input_player1_l3_btn = "9"', 'input_player1_r3_btn = "10"',
+                     'input_player1_l2_axis = "+2"', 'input_player1_r2_axis = "+5"',
+                     'input_player1_l_btn = "4"', 'input_player1_b_btn = "0"', 'input_player1_select_btn = "6"'):
+            self.assertIn(line, cfg)
+        # Os gatilhos sao comandos (o 7 e o 8): nao sao apagados como os de um painel.
+        self.assertNotIn('input_player1_l2_axis = "+99"', cfg)
+        self.assertFalse(any('hotkey' in line for line in cfg))
+        # MAME: os botoes 7 e 8 do painel, com as teclas padrao do jogador 1.
+        mame = self.rc.mame_cfg({1: {'b7': (0, 'b6'), 'b8': (0, 'b7')}}, {0: 'Panel'})
+        self.assertIn('<port type="P1_BUTTON7">', mame)
+        self.assertIn('JOYCODE_1_BUTTON8 OR KEYCODE_V', mame)
+
+    def test_flycast_dreamcast_and_dolphin_gamecube_from_the_pad(self):
+        cfg = self.rc.flycast_cfg('Pad', self.pad(), self.rc.FLYCAST_PAD, self.RESTS)
+        for bind in ('0-:btn_analog_left', '0+:btn_analog_right', '1-:btn_analog_up', '1+:btn_analog_down',
+                     '4+:axis2_up', '4-:axis2_down', '2+:btn_trigger_left', '5+:btn_trigger_right',
+                     '0:btn_a', '1:btn_b', '2:btn_x', '3:btn_y', '7:btn_start', '6:btn_menu'):
+            self.assertIn(' = ' + bind + '\n', cfg)
+        self.assertIn('triggers = 2,5', cfg)
+        self.assertNotIn('None', cfg)
+        # O painel no Flycast nao ganha analogico nem comando sem nome.
+        self.assertNotIn('None', self.rc.flycast_cfg('Pad', self.pad(), self.rc.FLYCAST_DC))
+        with tempfile.TemporaryDirectory() as tmp:
+            self.rc.DOLPHIN_DIR = tmp
+            devices = {0: ('g0', 'Pad', 11, 6, self.RESTS)}
+            self.rc.dolphin_save({1: self.pad()}, devices, {1: 'pad'})
+            ini = (Path(tmp) / 'GCPadNew.ini').read_text()
+            self.assertIn('Main Stick/Up = `Left Y+`', ini)
+            self.assertIn('C-Stick/Left = `Right X-`', ini)
+            self.assertIn('Triggers/L = `Trigger L`', ini)
+            self.rc.dolphin_save({1: self.pad()}, devices)
+            self.assertIn('Main Stick/Up = `Pad N`', (Path(tmp) / 'GCPadNew.ini').read_text())
+
+    def test_the_kind_lines_survive_the_map(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'map'
+            text = self.rc.map_text({1: self.pad(), 2: {'up': (1, 'h0.1'), 'b8': (1, 'b7')}},
+                                    {0: 'Pad', 1: 'Panel'}, {1: 'pad', 2: 'arcade'})
+            path.write_text(text)
+            self.assertTrue(text.startswith('1 kind 0 pad Pad\n'))
+            self.assertIn('2 kind 1 arcade Panel\n2 up 1 h0.1 Panel\n2 b8 1 b7 Panel\n', text)
+            self.assertEqual(self.rc.read_kinds(str(path)), {1: 'pad', 2: 'arcade'})
+            players, _ = self.rc.read_map(str(path))
+            self.assertEqual(players[1], self.pad())
+            # A linha nova nao atrapalha quem so le os comandos de painel.
+            self.assertEqual(self.rc.watch_state(players, {}, set()), {'1': [], '2': []})
+        self.assertEqual(self.rc.read_kinds('/nao/existe'), {})
+        self.assertEqual(self.rc.player_kind({}, 3), 'arcade')
+        # O hotkey vale num atalho (fliperos-buttons hotkey --combo hotkey+start).
+        self.assertIn('hotkey', self.rc.ALL_CONTROLS)
+        self.assertEqual(self.rc.fbneo_preset({1: {'b8': (0, 'b7')}}, 0x029744).count('Fire 8'), 1)
+
+    def test_the_pad_type_and_element_names(self):
+        self.assertEqual(self.rc.pad_type(1, ''), 'xbox')
+        self.assertEqual(self.rc.pad_type(4, ''), 'playstation')
+        self.assertEqual(self.rc.pad_type(5, ''), 'nintendo')
+        self.assertEqual(self.rc.pad_type(0, 'Sony Interactive Entertainment Wireless Controller'), 'playstation')
+        self.assertEqual(self.rc.pad_type(0, '8BitDo SN30 Pro'), 'generic')
+        self.assertEqual(self.rc.stick_axis('+a4'), (4, True))
+        self.assertIsNone(self.rc.stick_axis('b3'))
+
+    def test_bluetooth_controllers_take_the_free_players_by_connection_order(self):
+        rc = self.rc
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # Os nos do evdev: o event9 (8BitDo) foi ligado antes do event5 (Xbox).
+            for name, at in (('event9', 100), ('event5', 200)):
+                (tmp / name).write_text('')
+                os.utime(tmp / name, (at, at))
+            (tmp / 'bt.map').write_text('0500aaaa000000000000000000000000 kind pad 8BitDo\n'
+                                        '0500aaaa000000000000000000000000 b4 b0 8BitDo\n'
+                                        '0500bbbb000000000000000000000000 b4 b1 Xbox Wireless Controller\n'
+                                        '0500bbbb000000000000000000000000 lsup -a1 Xbox Wireless Controller\n')
+            profiles = rc.read_bt_profiles(str(tmp / 'bt.map'))
+            self.assertEqual(profiles['0500aaaa000000000000000000000000'], ('pad', {'b4': 'b0'}, '8BitDo'))
+            devices = {0: ('03000000panel', 'Panel'), 1: ('0500bbbb000000000000000000000000', 'Xbox Wireless Controller',
+                                                       11, 6, (), None, None, str(tmp / 'event5')),
+                       2: ('0500aaaa000000000000000000000000', '8BitDo', 11, 6, (), None, None, str(tmp / 'event9')),
+                       3: ('0500cccc000000000000000000000000', 'Sem perfil', 11, 6, (), None, None, '')}
+            players = {1: {'up': (0, 'h0.1')}, 2: {'b4': (9, 'b0')}}
+            names, kinds, autos = {0: 'Panel'}, {1: 'arcade', 2: 'pad'}, {2: '0500dead000000000000000000000000'}
+            self.assertTrue(rc.resolve_bluetooth(players, names, kinds, autos, devices, profiles))
+            # O jogador 2 era um Bluetooth de antes: sai, e os ligados entram pela
+            # ordem de conexao (o 8BitDo antes do Xbox, embora o SDL o conte depois).
+            self.assertEqual(players, {1: {'up': (0, 'h0.1')}, 2: {'b4': (2, 'b0')},
+                                       3: {'b4': (1, 'b1'), 'lsup': (1, '-a1')}})
+            self.assertEqual(autos, {2: '0500aaaa000000000000000000000000', 3: '0500bbbb000000000000000000000000'})
+            self.assertEqual(kinds[2], 'pad')
+            self.assertFalse(rc.resolve_bluetooth(players, names, kinds, autos, devices, profiles))
+            text = rc.map_text(players, names, kinds, autos)
+            self.assertIn('2 bt 2 0500aaaa000000000000000000000000 8BitDo\n2 kind 2 pad 8BitDo\n2 b4 2 b0 8BitDo\n', text)
+            (tmp / 'map').write_text(text)
+            self.assertEqual(rc.read_autos(str(tmp / 'map')), autos)
+            self.assertEqual(rc.read_map(str(tmp / 'map'))[0], players)
+        self.assertTrue(rc.is_bluetooth('05009b4e5e0400000b0b000000000000'))
+        self.assertFalse(rc.is_bluetooth('030000005e0400008e02000014010000'))
+
+    def test_wired_controllers_keep_their_players_by_port(self):
+        # O gabinete em 2026-11-09: um GameCube Nyxi pareado pegou um eventN
+        # livre e virou o controle 0 do SDL, a frente dos dois Xbox 360 com
+        # fio. Os com fio seguem pela porta, e o Bluetooth fica com o que sobra.
+        rc = self.rc
+        xbox = '030081b85e0400008e02000014010000'
+        nyxi = '0500d71f7e0500000920000001800000'
+        ports = {'event7': '', 'event8': 'usb2/2-2/2-2.2/2-2.2:1.0', 'event9': 'usb2/2-2/2-2.3/2-2.3:1.0'}
+        rc.port_of = lambda device: ports.get(os.path.basename(device[7]), '') if len(device) > 7 else ''
+        devices = {0: (nyxi, 'Pro Controller', 14, 4, (), None, None, '/dev/input/event7'),
+                   1: (xbox, 'Xbox 360 Controller', 11, 6, (), None, None, '/dev/input/event8'),
+                   2: (xbox, 'Xbox 360 Controller', 11, 6, (), None, None, '/dev/input/event9')}
+        players = {1: {'up': (0, 'h0.1'), 'b1': (0, 'b0')}, 2: {'up': (1, 'h0.1')}}
+        names = {0: 'Xbox 360 Controller', 1: 'Xbox 360 Controller'}
+        saved = {1: 'usb2/2-2/2-2.2/2-2.2:1.0', 2: 'usb2/2-2/2-2.3/2-2.3:1.0'}
+        kinds, autos = {}, {}
+        self.assertTrue(rc.resolve_wired(players, names, saved, autos, devices))
+        self.assertEqual(players, {1: {'up': (1, 'h0.1'), 'b1': (1, 'b0')}, 2: {'up': (2, 'h0.1')}})
+        profiles = {nyxi: ('pad', {'b4': 'b1'}, 'Pro Controller')}
+        rc.resolve_bluetooth(players, names, kinds, autos, devices, profiles)
+        self.assertEqual(players[3], {'b4': (0, 'b1')})
+        self.assertEqual(autos, {3: nyxi})
+        self.assertFalse(rc.resolve_wired(players, names, saved, autos, devices))
+        # O mapa guarda a porta de cada com fio.
+        text = rc.map_text(players, names, kinds, autos, saved)
+        self.assertIn('1 usb 1 usb2/2-2/2-2.2/2-2.2:1.0 Xbox 360 Controller\n', text)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'map').write_text(text)
+            self.assertEqual(rc.read_ports(str(Path(tmp) / 'map')), saved)
+        # Desligado o do jogador 2: um indice que nao existe, e nada pega o lugar.
+        del devices[2]
+        rc.resolve_wired(players, names, saved, autos, devices)
+        self.assertEqual(players[2], {'up': (rc.UNPLUGGED + 2, 'h0.1')})
+        # Dois jogadores na mesma porta: o de numero maior e um resto e sai.
+        twice = {1: {'up': (1, 'h0.1')}, 3: {'up': (93, 'h0.1')}}
+        same = {1: 'usb2/2-2/2-2.2/2-2.2:1.0', 3: 'usb2/2-2/2-2.2/2-2.2:1.0'}
+        self.assertTrue(rc.resolve_wired(twice, {1: 'Xbox 360 Controller'}, same, {}, devices))
+        self.assertEqual((list(twice), list(same)), ([1], [1]))
+        # Sem porta guardada (o mapa de antes): a do controle do indice de agora.
+        fresh = {}
+        players = {1: {'up': (1, 'h0.1')}}
+        rc.resolve_wired(players, {1: 'Xbox 360 Controller'}, fresh, {}, devices)
+        self.assertEqual(fresh, {1: 'usb2/2-2/2-2.2/2-2.2:1.0'})
+
+    def test_retroarch_follows_the_sdl_order_of_the_event_devices(self):
+        # Um Bluetooth religado no event7 (js3) fica antes dos Xbox (event8 js1,
+        # event9 js2) no SDL; a pistola no js0. O indice do SDL vira o jsN certo.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            prog = tmp / 'retroarch'
+            prog.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            prog.chmod(0o755)
+            buttons = tmp / 'buttons.cfg'
+            buttons.write_text('input_player1_joypad_index = "1"\ninput_player2_joypad_index = "2"\n'
+                               'input_player3_joypad_index = "0"\n')
+            (tmp / 'debug').write_text('')
+            dev = 'N: Name="%s"\nH: Handlers=%s \n\n'
+            (tmp / 'devices').write_text(dev % ('Namco GunCon 2', 'mouse1 event6 js0') + dev % ('Xbox', 'event8 js1')
+                                         + dev % ('Xbox', 'event9 js2') + dev % ('Nyxi', 'event7 js3'))
+            env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(buttons), FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'),
+                       PATH='%s:%s' % (tmp, os.environ['PATH']), FLIPEROS_INPUT_DEVICES=str(tmp / 'devices'),
+                       XDG_RUNTIME_DIR=str(tmp))
+            env.pop('DISPLAY', None)
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-kms-run'), 'retroarch', '-L', 'x'],
+                                 capture_output=True, text=True, env=env).stdout.split('\n')
+            lines = Path(out[1].split('|')[-1]).read_text()
+            for player, js in ((1, 1), (2, 2), (3, 3)):
+                self.assertIn('input_player%d_joypad_index = "%d"\n' % (player, js), lines)
+
+    def test_menus_confirm_with_south_and_go_back_with_east_on_a_joypad(self):
+        # O SNES30 do gabinete (HID generico): o BTN_SOUTH do kernel e o A, de
+        # leste. Pelo Button mapping, o de sul (b1 do SDL) confirma e o de
+        # leste (b0) volta; no painel, o botao 1 confirma e o 2 volta.
+        pk = load_script('padkeys_map', 'config/fliperos-padkeys')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'map'
+            path.write_text('1 usb 0 usb2/2-2/2-2.2/2-2.2:1.0 Xbox 360 Controller\n1 kind 0 arcade Xbox\n'
+                            '1 b1 0 b0 Xbox\n1 b2 0 b1 Xbox\n1 up 0 h0.1 Xbox\n'
+                            '3 bt 2 05004c6ac82d00004028000000010000 8Bitdo SNES30 GamePad\n3 kind 2 pad SNES30\n'
+                            '3 b4 2 b1 SNES30\n3 b5 2 b0 SNES30\n3 b1 2 b4 SNES30\n3 coin 2 b10 SNES30\n')
+            players = pk.read_players(str(path))
+        self.assertEqual(pk.guid_ids('05004c6ac82d00004028000000010000'), (5, 0x2dc8, 0x2840))
+        # Os botoes do SNES30: BTN_SOUTH (0x130) em diante, na ordem do SDL.
+        keys = {0x130, 0x131, 0x132, 0x133, 0x134, 0x135, 0x136, 0x137, 0x138, 0x139, 0x13a, 0x13b}
+        self.assertEqual(pk.sdl_buttons(keys)[:2], [0x130, 0x131])
+        pad = pk.mapped_buttons(keys, '', (5, 0x2dc8, 0x2840), players)
+        self.assertEqual((pad[0x131], pad[0x130]), (pk.KEY_ENTER, pk.KEY_ESC))
+        self.assertEqual(pad[0x134], pk.KEY_SPACE)
+        self.assertEqual(pad[0x13a], pk.KEY_ESC)   # o Select (b10)
+        mapper = pk.Mapper({}, pad)
+        self.assertEqual(mapper.event(pk.EV_KEY, 0x131, 1), [(pk.KEY_ENTER, 1)])
+        self.assertEqual(mapper.event(pk.EV_KEY, 0x130, 1), [(pk.KEY_ESC, 1)])
+        panel = pk.mapped_buttons({0x130, 0x131, 0x132}, 'usb2/2-2/2-2.2/2-2.2:1.0', (3, 0x45e, 0x28e), players)
+        self.assertEqual((panel[0x130], panel[0x131]), (pk.KEY_ENTER, pk.KEY_ESC))
+        # Fora do mapa: os codigos do kernel, como antes.
+        self.assertIsNone(pk.mapped_buttons(keys, 'outra', (3, 1, 2), players))
+        self.assertIs(pk.Mapper({}).buttons, pk.BUTTONS)
+        # O Attract-Mode: o joypad com o sul no papel do botao 1 e o leste no do 2.
+        roles = self.rc.menu_roles({1: {'b1': (0, 'b0')}, 3: {'b4': (2, 'b1'), 'b5': (2, 'b0'), 'b1': (2, 'b4')}},
+                                   {3: 'pad'})
+        self.assertEqual(roles[1], {'b1': (0, 'b0')})
+        self.assertEqual(roles[3], {'b1': (2, 'b1'), 'b2': (2, 'b0'), 'b4': (2, 'b4')})
+        # Os botoes da interface escolhidos (accept, cancel) valem mais.
+        roles = self.rc.menu_roles({3: {'b4': (2, 'b1'), 'b5': (2, 'b0'), 'b1': (2, 'b4'),
+                                        'accept': (2, 'b4'), 'cancel': (2, 'b1')}}, {3: 'pad'})
+        self.assertEqual(roles[3], {'b1': (2, 'b4'), 'b2': (2, 'b1')})
+        self.assertIn('accept', self.rc.ALL_CONTROLS)
+        self.assertEqual(self.rc.retroarch_lines(1, 'accept', 'b4'), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'map'
+            path.write_text('3 bt 2 05004c6ac82d00004028000000010000 SNES30\n3 kind 2 pad SNES30\n'
+                            '3 b4 2 b1 SNES30\n3 b5 2 b0 SNES30\n3 start 2 b11 SNES30\n'
+                            '3 accept 2 b4 SNES30\n3 cancel 2 b3 SNES30\n')
+            chosen = pk.mapped_buttons(keys, '', (5, 0x2dc8, 0x2840), pk.read_players(str(path)))
+        self.assertEqual(chosen[0x134], pk.KEY_ENTER)
+        self.assertEqual(chosen[0x133], pk.KEY_ESC)
+        self.assertNotIn(0x131, chosen)           # o sul nao e mais o Enter
+        self.assertEqual(chosen[0x13b], pk.KEY_ENTER)  # o Start continua
+        # O frontend do FliperOS (gui/feinput.py), o mesmo.
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feinput
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'map'
+            path.write_text('1 kind 0 arcade P\n1 b1 0 b0 P\n2 kind 1 pad Pad\n2 b4 1 b1 Pad\n2 b5 1 b0 Pad\n'
+                            '2 b1 1 b3 Pad\n')
+            # O joypad vira os papeis dele ("j:"), o aceitar e o voltar
+            # primeiro (sem escolha, o de sul e o de leste).
+            self.assertEqual(feinput.read_map(str(path)),
+                             [('j:accept', 1, 'b1'), ('j:cancel', 1, 'b0'), ('b1', 0, 'b0'),
+                              ('j:south', 1, 'b1'), ('j:east', 1, 'b0'), ('j:west', 1, 'b3')])
+            path.write_text('2 kind 1 pad Pad\n2 b4 1 b1 Pad\n2 b5 1 b0 Pad\n2 b1 1 b3 Pad\n'
+                            '2 accept 1 b3 Pad\n2 cancel 1 b1 Pad\n')
+            self.assertEqual(feinput.read_map(str(path))[:2], [('j:accept', 1, 'b3'), ('j:cancel', 1, 'b1')])
+            # O guia desenha o aceitar e o voltar no botao escolhido.
+            self.assertEqual(feinput.interface_roles(str(path)), {'accept': 'west', 'cancel': 'south'})
+
+    def test_a_controller_connected_or_removed_reassigns_the_bluetooth_players(self):
+        rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
+        self.assertIn('ACTION=="remove", ENV{ID_INPUT_JOYSTICK}=="1", \\\n'
+                      '  RUN+="/bin/systemctl --no-block restart fliperos-controllers.service"', rules)
+        controllers = (ROOT / 'config/fliperos-controllers').read_text()
+        self.assertIn("if os.environ.get('FLIPEROS_CONTROLLERS_ONLY') or not os.path.isfile(BT_MAP)", controllers)
+        self.assertIn("FLIPEROS_BUTTONS_FROM_CONTROLLERS='1'", controllers)
+        buttons = (ROOT / 'config/fliperos-buttons').read_text()
+        self.assertIn("os.system('FLIPEROS_CONTROLLERS_ONLY=1 \"%s\" > /dev/null 2>&1' % CONTROLLERS)", buttons)
+        # Como root o HIDAPI do SDL via o Nyxi com outro GUID, no comeco da
+        # lista; os emuladores (o usuario) o veem pelo evdev. Os dois sem ele.
+        self.assertIn("os.environ['SDL_JOYSTICK_HIDAPI'] = '0'", buttons)
+        self.assertIn("os.environ['SDL_JOYSTICK_HIDAPI'] = '0'", controllers)
+        self.assertEqual(self.rc.os.environ.get('SDL_JOYSTICK_HIDAPI'), '0')
+
+    def test_capture_has_hold_to_skip_and_identify(self):
+        source = (ROOT / 'config/fliperos-buttons').read_text()
+        self.assertIn("p.add_argument('--hold', type=float, default=0)", source)
+        self.assertIn("p.add_argument('--device', type=int, default=-1)", source)
+        self.assertIn("os.environ['SDL_GAMECONTROLLER_USE_BUTTON_LABELS'] = '0'", source)
+        self.assertIn("known = 'platform:' in mapping", source)
+
+
+class BluetoothToolTests(unittest.TestCase):
+    """config/fliperos-bluetooth: o texto do bluetoothctl, os controles primeiro e o
+    /etc/bluetooth como os controles pedem."""
+
+    INFO = ('Device E4:17:D8:00:11:22 (public)\n\tName: 8BitDo Pro 2\n\tAlias: 8BitDo Pro 2\n'
+            '\tClass: 0x00002508\n\tIcon: input-gaming\n\tPaired: yes\n\tTrusted: yes\n\tConnected: no\n'
+            '\tUUID: Human Interface Device... (00001124-0000-1000-8000-00805f9b34fb)\n')
+
+    def setUp(self):
+        self.bt = load_script('fliperos_bluetooth', 'config/fliperos-bluetooth')
+
+    def test_info_devices_and_prompts(self):
+        info = self.bt.parse_info(self.INFO)
+        self.assertEqual((info['Name'], info['Icon'], info['Paired'], info['Connected']),
+                         ('8BitDo Pro 2', 'input-gaming', 'yes', 'no'))
+        self.assertEqual(self.bt.parse_info('Device E4:17:D8:00:11:22 not available\n'), {})
+        out = '\x1b[0;94m[bluetooth]\x1b[0m# Device E4:17:D8:00:11:22 8BitDo Pro 2\r\nDevice 11:22:33:44:55:66 JBL\n'
+        self.assertEqual(self.bt.parse_devices(out), [('E4:17:D8:00:11:22', '8BitDo Pro 2'),
+                                                      ('11:22:33:44:55:66', 'JBL')])
+        self.assertEqual(self.bt.clean('[Xbox Wireless Controller]# [CHG] Device AA:BB:CC:DD:EE:FF Connected: yes'),
+                         '[CHG] Device AA:BB:CC:DD:EE:FF Connected: yes')
+        self.assertEqual(self.bt.device_line('E4:17:D8:00:11:22', info), 'E4:17:D8:00:11:22|8BitDo Pro 2|input-gaming|yes|no')
+
+    def test_controllers_come_first(self):
+        self.assertTrue(self.bt.is_gamepad({'Icon': 'input-gaming'}))
+        # Sem icone, pela classe: periferico (0x05) com gamepad (0x08 na classe menor).
+        self.assertTrue(self.bt.is_gamepad({'Class': '0x002508'}))
+        self.assertFalse(self.bt.is_gamepad({'Class': '0x240404', 'Icon': 'audio-headset'}))
+        rows = [('11:22:33:44:55:66', {'Name': 'JBL Flip', 'Icon': 'audio-card'}, ''),
+                ('AA:AA:AA:AA:AA:AA', {}, ''),
+                ('E4:17:D8:00:11:22', {'Name': 'Pro Controller', 'Icon': 'input-gaming'}, '')]
+        self.assertEqual([r[0] for r in self.bt.sort_devices(rows)],
+                         ['E4:17:D8:00:11:22', '11:22:33:44:55:66', 'AA:AA:AA:AA:AA:AA'])
+
+    def test_the_config_for_controllers(self):
+        main = ('[General]\n#Name = BlueZ\n#JustWorksRepairing = never\n\n[Policy]\n#AutoEnable=true\n')
+        out = self.bt.set_ini(main, 'General', 'JustWorksRepairing', 'always')
+        self.assertIn('JustWorksRepairing = always\n', out)
+        self.assertNotIn('#JustWorksRepairing', out)
+        out = self.bt.set_ini(out, 'General', 'FastConnectable', 'true')
+        self.assertRegex(out, r'\[General\]\n#Name = BlueZ\nJustWorksRepairing = always\nFastConnectable = true\n\n\[Policy\]')
+        self.assertEqual(self.bt.set_ini('', 'General', 'ClassicBondedOnly', 'false'),
+                         '[General]\nClassicBondedOnly = false\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            self.bt.BLUETOOTH_ETC = tmp
+            (Path(tmp) / 'main.conf').write_text(main)
+            self.assertTrue(self.bt.ensure_config())
+            self.assertFalse(self.bt.ensure_config())
+            self.assertIn('ClassicBondedOnly = false', (Path(tmp) / 'input.conf').read_text())
+            self.assertIn('AutoEnable = true', (Path(tmp) / 'main.conf').read_text())
+
+    def test_installed_in_the_image_and_by_the_update(self):
+        rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
+        self.assertIn('install -Dm755 "$src/config/fliperos-bluetooth" "$root/opt/fliperos/bin/fliperos-bluetooth"',
+                      rootfs)
+        self.assertRegex((ROOT / 'fliperos-mkiso.sh').read_text(), r'\n  bluez espeak-ng triggerhappy zsh picom\n')
+        self.assertIn('packages+=(bluez)', (ROOT / 'tools/cabinet-update.sh').read_text())
+
+
+class ButtonMappingGuiTests(unittest.TestCase):
+    """O painel de arcade de 1 a 8 botoes, o icone de cada numero e o mapeador de
+    joypad do Batocera na interface grafica."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_screens_draw(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        try:
+            import pygame
+            import widgets
+        finally:
+            sys.path.remove(str(self.GUI))
+        pygame.font.init()
+        surf = pygame.Surface((320, 240), pygame.SRCALPHA)
+        ctx = {"status": "", "version": ""}
+        for buttons in range(1, 9):
+            widgets.Capture("Button mapping", 1, "b%d" % buttons, ["up"], 5, 12, 8, 8, buttons).draw(surf, ctx)
+            widgets.panel_tile(buttons)(surf, 0, 0, 4)
+        pad = widgets.PadCapture("Button mapping", 2, "lsup", 13, "playstation", "Wireless Controller",
+                                 {"b4": "b0", "b5": "-", "up": "h0.1", "b7": "+a2"})
+        pad.draw(surf, ctx)
+        self.assertEqual([r[0] for r in widgets.PAD_ROWS],
+                         ["b4", "b5", "b2", "b1", "start", "coin", "up", "down", "left", "right", "b3", "b6",
+                          "lsup", "lsleft", "rsup", "rsleft", "b7", "b8", "l3", "r3", "hotkey"])
+        self.assertEqual([widgets.element_name(e) for e in ("b3", "h0.4", "h1.8", "-a1", "-", "")],
+                         ["BUTTON 3", "HAT DOWN", "HAT 1 LEFT", "AXIS 1-", "-NOT DEFINED-", "-NOT DEFINED-"])
+        # Os desenhos do Batocera estao todos la.
+        for _, _, icon in widgets.PAD_ROWS:
+            self.assertTrue((self.GUI / "icons/pad" / (icon + ".png")).is_file(), icon)
+            self.assertTrue((self.GUI / "icons/pad" / (icon + ".svg")).is_file(), icon)
+        self.assertIsNotNone(widgets.pad_icon("buttons_south", 11, (255, 0, 0)))
+        self.assertIn("Alec Lofquist", (self.GUI / "icons/README.md").read_text())
+        source = (self.GUI / "serve.py").read_text()
+        self.assertIn('if cmd == "padcapture":', source)
+        self.assertIn('elif style == "panel":', source)
+        # A lista de controles: o icone de com fio ou sem fio antes do nome.
+        self.assertIn('elif style == "controllers":', source)
+        menu = widgets.Menu("Button mapping", [("0", "P1 Xbox 360 Controller"), ("1", "-- Pro Controller"),
+                                               ("return", "Return")], "1", "", vertical=True,
+                            row_icons={"0": "wired", "1": "wireless"})
+        menu.draw(surf, ctx)
+        # Ao vivo: um controle ligado com a lista na tela a faz se refazer.
+        with tempfile.TemporaryDirectory() as tmp:
+            devices = Path(tmp) / "devices"
+            dev = 'N: Name="%s"\nH: Handlers=%s \n\n'
+            devices.write_text(dev % ("Namco GunCon 2", "mouse1 event6 js0") + dev % ("Xbox", "event8 js1")
+                               + dev % ("Keyboard", "sysrq kbd event3"))
+            self.assertEqual(widgets.joystick_signature(str(devices)),
+                             (("Namco GunCon 2", "mouse1 event6 js0"), ("Xbox", "event8 js1")))
+            menu.watch = lambda: widgets.joystick_signature(str(devices))
+            menu.tick()
+            menu._watched = (menu._watched[0] - 2, menu._watched[1])
+            self.assertNotEqual(menu.tick(), ("refresh", "1"))
+            devices.write_text(devices.read_text() + dev % ("Pro Controller", "event19 js4"))
+            menu._watched = (menu._watched[0] - 2, menu._watched[1])
+            self.assertEqual(menu.tick(), ("refresh", "1"))
+        self.assertIn('if action == "refresh":\n                return 124, value', source)
+        # Os botoes da interface: o verde e o vermelho.
+        for which in ("accept", "cancel"):
+            widgets.ConfirmCapture("Button mapping", 3, which, 10).draw(surf, ctx)
+        self.assertIn('if cmd == "confirmcapture":', source)
+        # O Esc na captura: as telas de captura sao canceladas pelo arquivo.
+        self.assertTrue(widgets.Capture.cancelable and widgets.PadCapture.cancelable
+                        and widgets.ConfirmCapture.cancelable)
+        self.assertIn('open(os.path.join(self.dir, "cancel"), "w").close()', source)
+        self.assertIn("if args.cancel and os.path.exists(args.cancel):\n                return 3",
+                      (ROOT / "config/fliperos-buttons").read_text())
+        # A ordem dos comandos do joypad e a mesma no Setup (lib/buttons.sh).
+        lib = (ROOT / "fliperos-setup/lib/buttons.sh").read_text()
+        self.assertIn("PAD_CONTROLS=(%s)" % " ".join(r[0] for r in widgets.PAD_ROWS), lib)
 
 
 if __name__ == '__main__':

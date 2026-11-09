@@ -2178,11 +2178,166 @@ def button_parts(layout, where, pad, buttons, step=30, r=12):
     return parts, ((min(xs), min(ys), max(xs), max(ys)) if parts else (0, 0, 0, 0))
 
 
+JOY_PAIRS = (("l1", "r1"), ("l2", "r2"), ("select", "start"))
+JOY_FOOTER_SKIP = ("b3", "b6", "b4", "b5")   # PAGE UP/DOWN, FAVOURITE e FILTER fora do rodape
+
+
+def joy_map(fe):
+    """{posicao do joypad: funcao} do Frontend controls (a coluna JOYPAD): o
+    aceitar e o voltar viram o botao que o Button mapping escolheu para eles."""
+    import feinput
+    try:
+        ui_roles = feinput.interface_roles()
+    except Exception:
+        ui_roles = {"accept": "south", "cancel": "east"}
+    out = {}
+    for f in feinput.FUNCTIONS:
+        role = fe.input.binds.get(f, {}).get("joy")
+        out.setdefault(ui_roles.get(role, role), f) if role else None
+    return out
+
+
+def joypad_parts(fe, joy, limit=1000):
+    """Os botoes do videogame do Joypad layout para o guia, em volta do
+    centro (0, 0): (o desenho, o meio dele, [(nome, cor, x, y do nome, ponta
+    da linha no botao, ponta da linha no nome)], [([(papel, funcao, cor)],
+    y)], limites). Cada botao com funcao leva o nome dela numa coluna fora do
+    conjunto (a esquerda ou a direita, como ele esta), com uma linha ate ele;
+    o do meio em cima ou embaixo. Mais largo que LIMIT, o de cima de uma
+    coluna sobe para cima do conjunto (e o de baixo desce), ate caber. Os
+    ombros, Start, Select e o que o videogame nao tem vao embaixo, o nome do
+    papel e a funcao na cor dela."""
+    import feinput
+    import fepads
+    size = 180
+    c = size // 2
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    pos = fepads.draw(surf, getattr(fe, "joypad_layout", "playstation"), c, c)
+    box = surf.get_bounding_rect()
+    top, bottom = box.top - c, box.bottom - c
+    sides = {-1: [], 1: []}
+    # Em cima e embaixo: [x do meio, nivel, nome, cor, largura, x, y, raio].
+    above, below = [], []
+    for role, (x, y, r) in pos.items():
+        f = joy.get(role)
+        if not f:
+            continue
+        text, color = FUNCTION_NAMES[f], FUNCTION_STYLE[f][0]
+        item = [text, color, tiny.width(text), x - c, y - c, r]
+        if abs(x - c) < r // 2:
+            (above if y < c else below).append(item)
+        else:
+            sides[-1 if x < c else 1].append(item)
+
+    def fits(group, item):
+        """O primeiro nivel de GROUP em que ITEM cabe sem encostar em outro."""
+        for level in range(3):
+            if all(abs(o[3] - item[3]) * 2 >= o[2] + item[2] + 6 for o in group if o[6] == level):
+                return level
+        return None
+
+    for group in (above, below):
+        for item in list(group):
+            item.append(fits([o for o in group if len(o) > 6], item) or 0)
+
+    def width():
+        cols = [max([o[2] for o in sides[s]] or [0]) for s in (-1, 1)]
+        xs = [box.left - c - (cols[0] + 5 if cols[0] else 0), box.right - c + (cols[1] + 5 if cols[1] else 0)]
+        xs += [o[3] - o[2] // 2 for o in above + below] + [o[3] + o[2] - o[2] // 2 for o in above + below]
+        return max(xs) - min(xs)
+
+    while width() > limit:
+        # A coluna mais larga cede o nome de cima (ou o de baixo).
+        side = max((-1, 1), key=lambda s: max([o[2] for o in sides[s]] or [0]))
+        if not sides[side]:
+            break
+        moved = False
+        for pick, group in ((min, above), (max, below)):
+            item = pick(sides[side], key=lambda o: o[4])
+            level = fits(group, item)
+            if level is not None:
+                sides[side].remove(item)
+                group.append(item + [level])
+                moved = True
+                break
+        if not moved:
+            break
+    labels = []
+    for item in above:
+        text, color, w, bx, by, r, level = item
+        ty = top - 8 - 7 * level
+        labels.append((text, color, bx - w // 2, ty, (bx, by - round(r * FLAT) - 2), (bx, ty + 6)))
+    for item in below:
+        text, color, w, bx, by, r, level = item
+        ty = bottom + 3 + 7 * level
+        labels.append((text, color, bx - w // 2, ty, (bx, by + round(r * FLAT) + LIFT + 2), (bx, ty - 1)))
+    for side, column in sides.items():
+        # A coluna em ordem de altura, cada nome 7 pixels abaixo do anterior.
+        column.sort(key=lambda o: o[4])
+        last = None
+        for text, color, w, bx, by, r in column:
+            ty = by - 2 if last is None else max(by - 2, last + 7)
+            last = ty
+            edge = (box.left - c - 5) if side < 0 else (box.right - c + 5)
+            labels.append((text, color, edge - w if side < 0 else edge, ty, (bx + side * (r + 1), by),
+                           (edge - side, ty + 2)))
+    # Os outros papeis com funcao (as setas sao do direcional): dois por
+    # linha, ou um se assim passar da largura.
+    drawn = set(pos)
+    order = [r for pair in JOY_PAIRS for r in pair] + ["south", "east", "west", "north"]
+    # Paginar, o favorito e o filtro nao vao em texto: so os do desenho.
+    rest = sorted((r for r in joy if r not in drawn and r not in ("up", "down", "left", "right")
+                   and joy[r] not in JOY_FOOTER_SKIP),
+                  key=lambda r: order.index(r) if r in order else len(order))
+    words = [(feinput.joy_name(r), FUNCTION_NAMES[joy[r]], FUNCTION_STYLE[joy[r]][0]) for r in rest]
+    per = 2 if words and max(joy_words_width(words[i:i + 2]) for i in range(0, len(words), 2)) <= limit else 1
+    xs = [box.left - c, box.right - c] + [t[2] for t in labels] + [t[2] + tiny.width(t[0]) for t in labels]
+    ys = [top, bottom] + [t[3] for t in labels] + [t[3] + 5 for t in labels]
+    y = max(ys) + 6
+    lines = []
+    for i in range(0, len(words), per):
+        w = joy_words_width(words[i:i + per])
+        xs += [-w // 2, w - w // 2]
+        lines.append((words[i:i + per], y))
+        y += 7
+    return surf, c, labels, lines, (min(xs), min(ys), max(xs), y - 1 if lines else max(ys))
+
+
+def joy_words_width(words):
+    """A largura de uma linha de papeis do guia: "L1 PAGE UP   R1 PAGE DOWN"."""
+    return sum(tiny.width(r) + 4 + tiny.width(f) for r, f, _ in words) + 12 * (len(words) - 1)
+
+
+def joy_words(ui, words, cx, y):
+    """Desenha uma linha de papeis no meio de cx: o papel em cinza, a funcao na cor dela."""
+    x = cx - joy_words_width(words) // 2
+    for r, f, color in words:
+        tiny.text(ui, r, T.COMMENT, x, y)
+        x += tiny.width(r) + 4
+        tiny.text(ui, f, T.FG, x, y)
+        x += tiny.width(f) + 12
+
+
+def dpad(ui, cx, cy):
+    """O direcional de um joypad (a cruz), no lugar da bola do painel: um
+    triangulo escuro em cada braco, o meio afundado."""
+    for grow, color in ((2, (0x10, 0x10, 0x16)), (0, (0x3C, 0x3E, 0x48))):
+        pygame.draw.rect(ui, color, (cx - 7 - grow, cy - 20 - grow, 14 + 2 * grow, 40 + 2 * grow),
+                         border_radius=3)
+        pygame.draw.rect(ui, color, (cx - 20 - grow, cy - 7 - grow, 40 + 2 * grow, 14 + 2 * grow),
+                         border_radius=3)
+    for d in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+        arrow(ui, cx + d[0] * 14, cy + d[1] * 14, d, (0x22, 0x23, 0x2A), 4)
+    pygame.draw.circle(ui, (0x30, 0x32, 0x3A), (cx, cy), 5)
+
+
 def draw_guide(fe, ui):
     """O guia dos controles, do jeito que o Frontend controls os deixou: o
     direcional com a funcao de cada direcao e os botoes no formato do painel,
     cada um na cor da funcao dele. Um comando sem funcao nao aparece (o
-    direcional sem nenhuma, nem ele). Os dois ficam no meio da janela."""
+    direcional sem nenhuma, nem ele). Os dois ficam no meio da janela. Com o
+    guia em joypad, a cruz e os botoes do videogame do Joypad layout, com as
+    funcoes da coluna JOYPAD."""
     # Deitado, o direcional a esquerda e os botoes a direita; em pe, o
     # direcional em cima e os botoes embaixo.
     vertical = T.VERTICAL is not None
@@ -2193,16 +2348,26 @@ def draw_guide(fe, ui):
     ui.blit(W.big(title, 1, W.LABEL), (px + 10, py + 9))
     for i, c in enumerate(W.RAINBOW):
         pygame.draw.rect(ui, c, (px + 18 + W.width(title), py + 10 + i, pw - 28 - W.width(title), 1))
-    pad = guide_map(fe)
-    # Os botoes que o painel tem (o formato dele) e que fazem alguma coisa.
-    layout = panel_layout(fe)
-    buttons = ["b%d" % n for n in range(1, PANEL_COUNT[layout] + 1) if pad.get("b%d" % n)]
-    try:
-        where = fe.fd.web.button_layout(6)
-    except Exception:  # sem o painel web (os testes): a ordem do painel
-        where = list(range(1, 7))
+    joypad = getattr(fe, "guide_kind", "arcade") == "joypad"
+    if joypad:
+        joy = joy_map(fe)
+        pad = {d: f for d, f in joy.items() if d in ("up", "down", "left", "right")}
+        # A largura que sobra ao lado do direcional (os nomes sobem se precisar).
+        sl, sr = stick_parts(pad)[2][::2] if pad else (0, 0)
+        limit = pw - 16 - ((sr - sl + 24) if pad and not vertical else 0)
+        jsurf, jc, jlabels, jlines, (bl, bt, br, bb) = joypad_parts(fe, joy, limit)
+        bparts = [] if not (jlabels or jlines) else [None]
+    else:
+        pad = guide_map(fe)
+        # Os botoes que o painel tem (o formato dele) e que fazem alguma coisa.
+        layout = panel_layout(fe)
+        buttons = ["b%d" % n for n in range(1, PANEL_COUNT[layout] + 1) if pad.get("b%d" % n)]
+        try:
+            where = fe.fd.web.button_layout(6)
+        except Exception:  # sem o painel web (os testes): a ordem do painel
+            where = list(range(1, 7))
+        bparts, (bl, bt, br, bb) = button_parts(layout, where, pad, buttons)
     sparts, hold, (sl, st, sr, sb) = stick_parts(pad)
-    bparts, (bl, bt, br, bb) = button_parts(layout, where, pad, buttons)
     split = bool(sparts and bparts)
     # A area entre o titulo e o "PRESS ANY BUTTON", e o espaco entre os dois.
     top, bottom, gap = py + 28, py + ph - 22, 24
@@ -2222,11 +2387,22 @@ def draw_guide(fe, ui):
         jy, by0 = (top + bottom) // 2 - (st + sb) // 2, (top + bottom) // 2 - (bt + bb) // 2
         if split:
             pygame.draw.line(ui, T.LINE, (x + ws + gap // 2, top), (x + ws + gap // 2, bottom - 4))
-    if sparts:
+        if joypad and jlines:
+            # O Select e o Start embaixo, a ultima linha na base do "3 S: LETTER
+            # BY LETTER" do direcional; os botoes no meio do que sobra em cima.
+            last = jy + 56 if sparts and hold else bottom - 6
+            first = last - 7 * (len(jlines) - 1)
+            btm = jlines[0][1] - 6
+            by0 = max(top - bt, (top + first - 4) // 2 - (bt + btm) // 2)
+            jlines = [(words, first + 7 * i - by0) for i, (words, _) in enumerate(jlines)]
+    if sparts and joypad:
+        dpad(ui, jx, jy)
+    elif sparts:
         pygame.draw.circle(ui, T.SPACE, (jx, jy), 21)
         pygame.draw.circle(ui, T.LINE, (jx, jy), 21, 2)
         pygame.draw.circle(ui, T.RED, (jx, jy), 9)
         pygame.draw.circle(ui, (0xff, 0xa0, 0xa0), (jx - 3, jy - 3), 3)
+    if sparts:
         for direction, f, label, color in sparts:
             d = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}[direction]
             arrow(ui, jx + d[0] * 30, jy + d[1] * 30, d, color, 5)
@@ -2244,6 +2420,14 @@ def draw_guide(fe, ui):
             tiny.centered(ui, "3 S: LETTER BY LETTER", T.COMMENT, jx, jy + 56)
     # Os botoes, o nome de cada um fora, em cima ou embaixo, com uma linha e a
     # seta ate ele.
+    if joypad and bparts:
+        ui.blit(jsurf, (mx - jc, by0 - jc))
+        for text, color, tx, ty, end, start in jlabels:
+            pygame.draw.line(ui, T.COMMENT, (mx + start[0], by0 + start[1]), (mx + end[0], by0 + end[1]))
+            tiny.text(ui, text, T.FG, mx + tx, by0 + ty)
+        for words, ly in jlines:
+            joy_words(ui, words, mx, by0 + ly)
+        bparts = []
     r = 12
     ry = round(r * FLAT)
     for b, f, dx, dy, text, tx, ty, side in bparts:
@@ -3194,24 +3378,32 @@ def draw_hidden(fe, ui, now):
 
 def draw_controls(fe, ui, now):
     """Tab > Frontend options > Frontend controls: cada funcao com o comando do
-    painel e a tecla dela (um traco: nenhum), o atalho que fecha o jogo (EXIT
-    GAME: os botoes segurados juntos e a tecla), o formato do painel e o
+    painel, o papel do joypad e a tecla dela (um traco: nenhum), o atalho que
+    fecha o jogo (EXIT GAME: os botoes segurados juntos e a tecla), o guia
+    (arcade ou joypad), o formato do painel ou o videogame do joypad e o
     RESET, a celula escolhida acesa. Esperando o novo, a celula pisca e a
     dica diz o que fazer."""
     import feinput
+    import fepads
     W.frame(ui, {}, "Controls", [])
     ov = fe.ov
     sel, col, wait = ov["sel"], ov["col"], ov.get("wait")
     funcs = feinput.FUNCTIONS
-    exit_row, layout_row, reset_row = len(funcs), len(funcs) + 1, len(funcs) + 2
-    # As colunas da tecla e do painel (em pe, mais estreitas).
-    kw, pw = (58, 40) if T.VERTICAL is not None else (74, 46)
+    # O guia e o formato dele primeiro, depois as funcoes (como o
+    # fliperos-frontend: CONTROLS_FIRST = 2), o atalho e o RESET/SAVE.
+    guide_row, layout_row, first = 0, 1, 2
+    exit_row, reset_row = first + len(funcs), first + len(funcs) + 1
+    joypad = getattr(fe, "guide_kind", "arcade") == "joypad"
+    # As colunas do painel, do joypad e da tecla (em pe, mais estreitas).
+    pw, jw, kw = (34, 38, 48) if T.VERTICAL is not None else (40, 46, 60)
     kx = SX + SW - kw
-    padx = kx - 4 - pw
-    y0, rh = 40, 12
+    jx = kx - 3 - jw
+    padx = jx - 3 - pw
+    columns = ((padx, pw), (jx, jw), (kx, kw))
+    y0, rh = 40, 11
     count = PANEL_COUNT[panel_layout(fe)]
-    tiny.centered(ui, "PANEL", T.CYAN if col == 0 else T.COMMENT, padx + pw // 2, 32)
-    tiny.centered(ui, "KEYBOARD", T.CYAN if col == 1 else T.COMMENT, kx + kw // 2, 32)
+    for c, (title, (cx, cw)) in enumerate(zip(("PANEL", "JOYPAD", "KEYBOARD"), columns)):
+        tiny.centered(ui, title, T.CYAN if col == c else T.COMMENT, cx + cw // 2, 32)
     blink = int(now * 3) % 2
 
     def label(i, text, draw_icon, color):
@@ -3221,24 +3413,24 @@ def draw_controls(fe, ui, now):
             tile_frame(ui, (SX, y, SW, rh - 1), True, now)
         icon = pygame.Surface((14, 14), pygame.SRCALPHA)
         draw_icon(icon, 7, 7, color)
-        ui.blit(pygame.transform.smoothscale(icon, (10, 10)), (SX + 4, y + 1))
-        W.text(ui, fit(text, padx - SX - 22), T.FG if i == sel else T.COMMENT, SX + 18, y + 2)
+        ui.blit(pygame.transform.smoothscale(icon, (9, 9)), (SX + 4, y + 1))
+        W.text(ui, fit(text, padx - SX - 22), T.FG if i == sel else T.COMMENT, SX + 17, y + 1)
         return y
 
-    def cells(i, y, values, dim=(False, False)):
-        """As duas celulas (painel e tecla) da linha i; dim apaga o valor."""
-        for c, (cx, cw) in enumerate(((padx, pw), (kx, kw))):
+    def cells(i, y, values, dim=(False, False, False)):
+        """As tres celulas (painel, joypad e tecla) da linha i; dim apaga o valor."""
+        for c, (cx, cw) in enumerate(columns):
             value, lit = values[c], i == sel and c == col
             rect = (cx, y, cw, rh - 1)
             if lit and wait:
                 W.block(ui, rect, T.PINK if blink else T.PURPLE, None)
-                tiny.centered(ui, "?", T.SPACE, cx + cw // 2, y + 3)
+                tiny.centered(ui, "?", T.SPACE, cx + cw // 2, y + 2)
                 continue
             W.block(ui, rect, T.PINK if lit else T.BG_DEEP, None)
             pygame.draw.rect(ui, T.PINK if lit else T.LINE, rect, 1)
             shown = tiny.fit(value, cw - 6) if value else "-"
             tiny.centered(ui, shown, T.SPACE if lit else (T.FG if value and not dim[c] else T.LINE),
-                          cx + cw // 2, y + 3)
+                          cx + cw // 2, y + 2)
 
     def wide(i, y, text, arrows=False):
         """Uma celula so, da coluna do painel ate a da tecla."""
@@ -3246,44 +3438,58 @@ def draw_controls(fe, ui, now):
         rect = (padx, y, kx + kw - padx, rh - 1)
         W.block(ui, rect, T.PINK if on else T.BG_DEEP, None)
         pygame.draw.rect(ui, T.PINK if on else T.LINE, rect, 1)
-        tiny.centered(ui, text, T.SPACE if on else T.FG, padx + rect[2] // 2, y + 3)
+        tiny.centered(ui, text, T.SPACE if on else T.FG, padx + rect[2] // 2, y + 2)
         if on and arrows:
-            arrow(ui, padx + 6, y + 5, (-1, 0), T.SPACE, 3)
-            arrow(ui, kx + kw - 7, y + 5, (1, 0), T.SPACE, 3)
+            arrow(ui, padx + 6, y + 4, (-1, 0), T.SPACE, 3)
+            arrow(ui, kx + kw - 7, y + 4, (1, 0), T.SPACE, 3)
 
-    for i, f in enumerate(funcs):
+    for i, f in enumerate(funcs, first):
         y = label(i, FUNCTION_NAMES[f], FUNCTION_STYLE[f][1], FUNCTION_STYLE[f][0])
         b = fe.input.binds[f]
         # Um botao que o formato do painel nao tem fica apagado.
         missing = bool(b["pad"]) and b["pad"][0] == "b" and int(b["pad"][1:]) > count
-        cells(i, y, (feinput.pad_name(b["pad"]), feinput.key_name(fe.pg, b["key"])), (missing, False))
+        cells(i, y, (feinput.pad_name(b["pad"]), feinput.joy_name(b.get("joy")),
+                     feinput.key_name(fe.pg, b["key"])), (missing, False, False))
     # O atalho que fecha o jogo: os botoes segurados juntos e a tecla.
     y = label(exit_row, "EXIT GAME", exit_icon, T.RED)
     combo = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in fe.exit_combo)
-    cells(exit_row, y, (combo, fe.exit_key[0] if fe.exit_key else None))
-    # O formato do painel: esquerda e direita trocam.
-    y = label(layout_row, "PANEL LAYOUT", view_icon, T.YELLOW)
-    wide(layout_row, y, dict(PANEL_LAYOUTS)[panel_layout(fe)], arrows=True)
+    cells(exit_row, y, (combo, None, fe.exit_key[0] if fe.exit_key else None))
+    # O guia: o painel de arcade ou um joypad (esquerda e direita trocam).
+    y = label(guide_row, "GUIDE", view_icon, T.CYAN)
+    wide(guide_row, y, "JOYPAD" if joypad else "ARCADE PANEL", arrows=True)
+    # O formato do painel ou o videogame do joypad.
+    y = label(layout_row, "JOYPAD LAYOUT" if joypad else "PANEL LAYOUT", view_icon, T.YELLOW)
+    if joypad:
+        name = dict((k, n) for k, n, _ in fepads.PADS).get(getattr(fe, "joypad_layout", ""), fepads.PADS[0][1])
+    else:
+        name = dict(PANEL_LAYOUTS)[panel_layout(fe)]
+    wide(layout_row, y, name, arrows=True)
     # A ultima linha: RESET e SAVE lado a lado (a coluna escolhe).
     y = y0 + reset_row * rh
     half = (SW - 4) // 2
     for c, (text, draw_icon, color) in enumerate((("RESET", reset_icon, T.ORANGE), ("SAVE", save_icon, T.GREEN))):
-        lit = sel == reset_row and c == col
+        lit = sel == reset_row and c == min(col, 1)
         rect = (SX + c * (half + 4), y, half, rh - 1)
         W.block(ui, rect, T.PINK if lit else T.BG_DEEP, None)
         pygame.draw.rect(ui, T.PINK if lit else (color if c else T.LINE), rect, 1)
         icon = pygame.Surface((14, 14), pygame.SRCALPHA)
         draw_icon(icon, 7, 7, T.SPACE if lit else color)
         tx = rect[0] + (half - W.width(text) - 14) // 2
-        ui.blit(pygame.transform.smoothscale(icon, (10, 10)), (tx, y + 1))
-        W.text(ui, text, T.SPACE if lit else T.FG, tx + 14, y + 2)
+        ui.blit(pygame.transform.smoothscale(icon, (9, 9)), (tx, y + 1))
+        W.text(ui, text, T.SPACE if lit else T.FG, tx + 14, y + 1)
     if wait == "pad":
         tips = ("PRESS A PANEL CONTROL - THE SAME ONE AGAIN: NONE", "ESC: CANCEL")
+    elif wait == "joy":
+        tips = ("PRESS A JOYPAD BUTTON - THE SAME ONE AGAIN: NONE", "ESC: CANCEL")
     elif wait == "key":
         tips = ("PRESS A KEY - THE SAME KEY OR DELETE: NONE", "BACK ON THE PANEL: CANCEL")
     elif sel == exit_row:
         tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
                 "IN A GAME THEY CLOSE IT (THE BUTTONS HELD 1 S)")
+    elif sel == guide_row:
+        tips = ("LEFT/RIGHT: THE ARCADE PANEL OR A JOYPAD", "THE GUIDE DRAWS ITS BUTTONS")
+    elif sel == layout_row and joypad:
+        tips = ("LEFT/RIGHT: THE VIDEOGAME OF THE JOYPAD", "THE GUIDE DRAWS ITS BUTTONS")
     elif sel == layout_row:
         tips = ("LEFT/RIGHT: THE SHAPE OF THE PANEL", "THE GUIDE DRAWS ONLY THE BUTTONS IT HAS")
     elif sel == reset_row and col == 1:

@@ -1,0 +1,460 @@
+#!/usr/bin/env python3
+"""Controles Bluetooth do FliperOS (Setup > Joysticks > Bluetooth).
+
+  fliperos-bluetooth status
+      installed= (o BlueZ, bluetoothctl), adapter= (o nome, vazio sem
+      adaptador), powered=, paired=, connected=
+  fliperos-bluetooth power on|off
+  fliperos-bluetooth scan SEGUNDOS
+      procura aparelhos nesse tempo e imprime os achados, os controles
+      primeiro: "MAC|NOME|ICONE|pareado|conectado" (yes/no)
+  fliperos-bluetooth devices
+      os pareados, no mesmo formato
+  fliperos-bluetooth pair MAC
+      pareia (sem PIN, como um controle pede), confia (para reconectar sozinho
+      a cada boot) e conecta. Status 1 se nao deu, com o motivo
+  fliperos-bluetooth autopair SEGUNDOS
+      procura nesse tempo e pareia todo controle (icone input-gaming) em modo
+      de pareamento que aparecer: o "pair Bluetooth pads automatically" do
+      Batocera. Imprime "MAC|NOME" de cada um pareado
+  fliperos-bluetooth connect|disconnect|remove MAC
+
+Tudo pelo bluetoothctl do BlueZ: uma sessao dele por pipe (scan, pair,
+autopair), com o agente NoInputNoOutput (o "just works" dos controles), ou um
+comando so. Antes de ligar, o adaptador sai do rfkill, o servico bluetooth
+sobe e o /etc/bluetooth ganha o que os controles pedem (ensure_config):
+JustWorksRepairing=always (parear de novo um controle que perdeu a chave),
+FastConnectable=true (reconexao mais rapida) e, no input.conf,
+ClassicBondedOnly=false (o DualShock 3 e varios controles genericos nao
+fazem bonding e eram recusados).
+"""
+import argparse
+import glob
+import os
+import queue
+import re
+import shutil
+import subprocess
+import sys
+import threading
+import time
+
+BLUETOOTHCTL = os.environ.get('FLIPEROS_BLUETOOTHCTL', 'bluetoothctl')
+BLUETOOTH_ETC = os.environ.get('FLIPEROS_BLUETOOTH_ETC', '/etc/bluetooth')
+RFKILL = os.environ.get('FLIPEROS_RFKILL', '/sys/class/rfkill')
+ANSI = re.compile(r'\x1b\[[0-9;?]*[A-Za-z]|\x01|\x02|\r')
+MAC = re.compile(r'([0-9A-F]{2}(?::[0-9A-F]{2}){5})', re.I)
+# Os icones (o "Icon:" do bluetoothctl info) de controle, e os da classe do
+# aparelho (Class of Device: periferico, gamepad ou joystick) sem icone.
+GAMING_ICONS = ('input-gaming', 'input-joystick')
+# O que o BlueZ quer em cada arquivo: (secao, chave, valor).
+CONFIG = {
+    'main.conf': [('General', 'JustWorksRepairing', 'always'), ('General', 'FastConnectable', 'true'),
+                  ('Policy', 'AutoEnable', 'true')],
+    'input.conf': [('General', 'ClassicBondedOnly', 'false')],
+}
+
+
+# ── Texto do bluetoothctl (testado em tests/test_build.py) ──────────
+
+def clean(line):
+    """A linha sem as cores, o prompt e os \\r do bluetoothctl."""
+    line = ANSI.sub('', line)
+    # O prompt ("[bluetooth]# ", "[Xbox Controller]# ") na frente do evento.
+    line = re.sub(r'^(\[[^\]]*\][#>] ?)+', '', line)
+    return line.strip()
+
+
+def parse_info(text):
+    """{Name, Icon, Paired, Trusted, Connected, Class...} do bluetoothctl info
+    (e do show); vazio com "Device ... not available"."""
+    out = {}
+    for line in text.splitlines():
+        line = clean(line)
+        if line.startswith(('Device ', 'Controller ')):
+            continue
+        m = re.match(r'([A-Za-z][\w ]*?):\s+(.*)$', line)
+        if m and m.group(1) not in out:
+            out[m.group(1)] = m.group(2).strip()
+    return out
+
+
+def parse_devices(text):
+    """[(MAC, nome)] das linhas "Device MAC NOME" (devices, paired-devices)."""
+    out = []
+    for line in text.splitlines():
+        m = re.match(r'Device ' + MAC.pattern + r'\s*(.*)$', clean(line))
+        if m:
+            out.append((m.group(1).upper(), m.group(2).strip()))
+    return out
+
+
+def is_gamepad(info):
+    """Um controle de jogo: o icone input-gaming ou, sem icone, a classe de
+    periferico (0x05) com gamepad ou joystick (bits 2-5 da classe menor)."""
+    if info.get('Icon') in GAMING_ICONS:
+        return True
+    try:
+        cls = int(info.get('Class', ''), 16)
+    except ValueError:
+        return False
+    return (cls >> 8) & 0x1f == 0x05 and (cls >> 2) & 0x0f in (1, 2)
+
+
+def nice_name(mac, info, fallback=''):
+    """O nome a mostrar: o do aparelho, o apelido ou o MAC."""
+    for key in ('Name', 'Alias'):
+        value = info.get(key, '')
+        if value and value.replace('-', ':').upper() != mac:
+            return value.replace('|', '/')
+    return (fallback or mac).replace('|', '/')
+
+
+def device_line(mac, info, fallback=''):
+    return '%s|%s|%s|%s|%s' % (mac, nice_name(mac, info, fallback), info.get('Icon', ''),
+                               info.get('Paired', 'no'), info.get('Connected', 'no'))
+
+
+def sort_devices(rows):
+    """Os controles primeiro, depois os que tem nome, depois o resto; cada
+    grupo pelo nome. rows: [(MAC, info, nome)]."""
+    def key(row):
+        mac, info, name = row
+        named = nice_name(mac, info, name) != mac
+        return (not is_gamepad(info), not named, nice_name(mac, info, name).lower())
+    return sorted(rows, key=key)
+
+
+def set_ini(text, section, key, value):
+    """O ini do BlueZ com KEY=VALUE na SECTION: a linha (comentada ou nao)
+    trocada, ou acrescentada no fim da secao (que nasce se nao existe)."""
+    lines = text.splitlines()
+    start = end = None
+    for i, line in enumerate(lines):
+        m = re.match(r'\s*\[([^\]]+)\]', line)
+        if m:
+            if start is not None and end is None:
+                end = i
+            if m.group(1).strip() == section:
+                start = i
+                end = None
+    if start is None:
+        lines += (['', '[%s]' % section] if lines else ['[%s]' % section]) + ['%s = %s' % (key, value)]
+        return '\n'.join(lines) + '\n'
+    end = len(lines) if end is None else end
+    pattern = re.compile(r'\s*#?\s*%s\s*=' % re.escape(key))
+    for i in range(start + 1, end):
+        if pattern.match(lines[i]):
+            lines[i] = '%s = %s' % (key, value)
+            return '\n'.join(lines) + '\n'
+    # Depois da ultima linha nao vazia da secao.
+    at = end
+    while at > start + 1 and not lines[at - 1].strip():
+        at -= 1
+    lines.insert(at, '%s = %s' % (key, value))
+    return '\n'.join(lines) + '\n'
+
+
+# ── O sistema ───────────────────────────────────────────────────
+
+def installed():
+    return shutil.which(BLUETOOTHCTL) is not None
+
+
+def run(*args, timeout=15):
+    """Um comando do bluetoothctl; a saida (vazia se ele nao roda)."""
+    try:
+        return subprocess.run([BLUETOOTHCTL] + list(args), capture_output=True, text=True,
+                              timeout=timeout, stdin=subprocess.DEVNULL).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ''
+
+
+def ensure_config():
+    """O /etc/bluetooth como os controles pedem; True se mudou algo (o
+    servico tem de reiniciar para ler)."""
+    changed = False
+    for name, values in CONFIG.items():
+        path = os.path.join(BLUETOOTH_ETC, name)
+        if not os.path.isfile(path) and name != 'input.conf':
+            continue
+        try:
+            with open(path, encoding='utf-8') as f:
+                text = f.read()
+        except OSError:
+            text = ''
+        new = text
+        for section, key, value in values:
+            new = set_ini(new, section, key, value)
+        if new != text:
+            try:
+                with open(path + '.new', 'w', encoding='utf-8') as f:
+                    f.write(new)
+                os.replace(path + '.new', path)
+                changed = True
+            except OSError:
+                pass
+    return changed
+
+
+def unblock():
+    """O adaptador fora do rfkill (bloqueado por software)."""
+    for dev in glob.glob(os.path.join(RFKILL, 'rfkill*')):
+        try:
+            with open(os.path.join(dev, 'type')) as f:
+                if f.read().strip() != 'bluetooth':
+                    continue
+            with open(os.path.join(dev, 'soft'), 'w') as f:
+                f.write('0')
+        except OSError:
+            pass
+
+
+def service(restart=False):
+    """O bluetoothd no ar (e reiniciado depois de mudar a configuracao)."""
+    action = 'restart' if restart else 'start'
+    subprocess.run(['systemctl', action, 'bluetooth.service'], stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL)
+    if restart:
+        time.sleep(1.5)
+
+
+def adapter():
+    """(nome do adaptador, ligado?) pelo "show"; ('', False) sem adaptador."""
+    text = run('show', timeout=5)
+    m = re.search(r'Controller ' + MAC.pattern + r'.*', text)
+    if not m:
+        return '', False
+    info = parse_info(text)
+    return info.get('Name') or info.get('Alias') or m.group(1), info.get('Powered') == 'yes'
+
+
+def info_of(mac):
+    return parse_info(run('info', mac, timeout=5))
+
+
+def paired():
+    """[(MAC, nome)] dos pareados (o "devices Paired" do BlueZ 5.65 em
+    diante, o "paired-devices" antes)."""
+    rows = parse_devices(run('devices', 'Paired', timeout=5))
+    return rows or parse_devices(run('paired-devices', timeout=5))
+
+
+class Session:
+    """Uma sessao do bluetoothctl por pipe: os comandos entram no stdin e as
+    linhas da saida (limpas) chegam numa fila."""
+
+    def __init__(self):
+        self.proc = subprocess.Popen([BLUETOOTHCTL], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, text=True, bufsize=1)
+        self.lines = queue.Queue()
+        self.seen = {}
+        threading.Thread(target=self.read, daemon=True).start()
+        self.send('agent NoInputNoOutput')
+        self.send('default-agent')
+
+    def read(self):
+        for raw in self.proc.stdout:
+            for part in raw.split('\r'):
+                line = clean(part)
+                if line:
+                    self.lines.put(line)
+
+    def send(self, command):
+        try:
+            self.proc.stdin.write(command + '\n')
+            self.proc.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+
+    def events(self, seconds):
+        """As linhas que chegam em `seconds` segundos; guarda os aparelhos
+        novos ([NEW] Device MAC NOME) em self.seen."""
+        deadline = time.monotonic() + seconds
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return
+            try:
+                line = self.lines.get(timeout=min(left, 0.2))
+            except queue.Empty:
+                continue
+            m = re.match(r'\[(?:NEW|CHG)\] Device ' + MAC.pattern + r'\s*(.*)$', line)
+            if m:
+                mac, rest = m.group(1).upper(), m.group(2)
+                if line.startswith('[NEW]'):
+                    self.seen.setdefault(mac, rest.strip())
+                elif rest.startswith('Name: ') or rest.startswith('Alias: '):
+                    self.seen[mac] = rest.split(': ', 1)[1].strip()
+            yield line
+
+    def wait(self, patterns, seconds):
+        """A primeira linha que casa com um dos padroes, ou None no tempo."""
+        for line in self.events(seconds):
+            for pattern in patterns:
+                if re.search(pattern, line):
+                    return line
+        return None
+
+    def close(self):
+        self.send('scan off')
+        self.send('quit')
+        try:
+            self.proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+
+
+def pair_in(session, mac):
+    """Pareia, confia e conecta MAC numa sessao com o scan ligado. (ok, motivo)."""
+    session.send('pair %s' % mac)
+    line = session.wait([r'Pairing successful', r'Failed to pair', r'AlreadyExists', r'not available',
+                         r'Paired: yes'], 30)
+    if line is None:
+        return False, 'the controller did not answer (is it still in pairing mode?)'
+    if 'Failed' in line or 'not available' in line:
+        return False, line
+    session.send('trust %s' % mac)
+    session.wait([r'trust succeeded', r'Trusted: yes'], 5)
+    session.send('connect %s' % mac)
+    line = session.wait([r'Connection successful', r'Failed to connect', r'Connected: yes'], 20)
+    if line is None or 'Failed' in line:
+        # Pareado e confiavel: muitos controles conectam sozinhos logo depois.
+        return True, 'paired; it connects when its button is pressed'
+    return True, 'connected'
+
+
+# ── Os comandos ─────────────────────────────────────────────────
+
+def power_on():
+    unblock()
+    service(restart=ensure_config())
+    run('power', 'on', timeout=10)
+
+
+def cmd_status(args):
+    if not installed():
+        print('installed=no')
+        return 0
+    name, powered = adapter()
+    devices = paired()
+    connected = sum(1 for mac, _ in devices if info_of(mac).get('Connected') == 'yes')
+    print('installed=yes')
+    print('adapter=%s' % name)
+    print('powered=%s' % ('yes' if powered else 'no'))
+    print('paired=%d' % len(devices))
+    print('connected=%d' % connected)
+    return 0
+
+
+def cmd_power(args):
+    if args.state == 'on':
+        power_on()
+    else:
+        run('power', 'off', timeout=10)
+    return 0
+
+
+def scan(seconds):
+    """{MAC: nome} dos aparelhos vistos em `seconds` segundos."""
+    power_on()
+    session = Session()
+    session.send('scan on')
+    for _ in session.events(seconds):
+        pass
+    session.close()
+    # O que o BlueZ ja conhecia (visto antes, pareado) tambem esta na lista.
+    found = dict(session.seen)
+    for mac, name in parse_devices(run('devices', timeout=5)):
+        found.setdefault(mac, name)
+    return found
+
+
+def cmd_scan(args):
+    found = scan(args.seconds)
+    rows = [(mac, info_of(mac), name) for mac, name in found.items()]
+    for mac, info, name in sort_devices(rows):
+        print(device_line(mac, info, name))
+    return 0
+
+
+def cmd_devices(args):
+    rows = [(mac, info_of(mac), name) for mac, name in paired()]
+    for mac, info, name in sort_devices(rows):
+        print(device_line(mac, info, name))
+    return 0
+
+
+def cmd_pair(args):
+    mac = args.mac.upper()
+    power_on()
+    session = Session()
+    session.send('scan on')
+    # O controle tem de estar a vista do BlueZ: espera ele aparecer.
+    if mac not in session.seen and not info_of(mac):
+        session.wait([re.escape(mac)], 15)
+    ok, why = pair_in(session, mac)
+    session.close()
+    print(why)
+    return 0 if ok else 1
+
+
+def cmd_autopair(args):
+    """Procura e pareia todo controle novo que aparecer no tempo."""
+    power_on()
+    session = Session()
+    session.send('scan on')
+    done, tried = [], set()
+    deadline = time.monotonic() + args.seconds
+    while time.monotonic() < deadline:
+        for _ in session.events(min(1.0, max(0.1, deadline - time.monotonic()))):
+            pass
+        for mac in list(session.seen):
+            if mac in tried:
+                continue
+            info = info_of(mac)
+            if info.get('Paired') == 'yes' or not is_gamepad(info):
+                continue
+            tried.add(mac)
+            ok, _ = pair_in(session, mac)
+            if ok:
+                done.append(mac)
+                print('%s|%s' % (mac, nice_name(mac, info, session.seen.get(mac, ''))), flush=True)
+    session.close()
+    return 0
+
+
+def cmd_simple(args):
+    out = run(args.command, args.mac.upper(), timeout=20)
+    ok = re.search(r'successful|succeeded|Device has been removed', out)
+    print(clean(out.strip().splitlines()[-1]) if out.strip() else '')
+    return 0 if ok else 1
+
+
+def main():
+    parser = argparse.ArgumentParser(prog='fliperos-bluetooth')
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('status').set_defaults(func=cmd_status)
+    p = sub.add_parser('power')
+    p.add_argument('state', choices=('on', 'off'))
+    p.set_defaults(func=cmd_power)
+    for name, func in (('scan', cmd_scan), ('autopair', cmd_autopair)):
+        p = sub.add_parser(name)
+        p.add_argument('seconds', type=float)
+        p.set_defaults(func=func)
+    sub.add_parser('devices').set_defaults(func=cmd_devices)
+    p = sub.add_parser('pair')
+    p.add_argument('mac')
+    p.set_defaults(func=cmd_pair)
+    for name in ('connect', 'disconnect', 'remove'):
+        p = sub.add_parser(name)
+        p.add_argument('mac')
+        p.set_defaults(func=cmd_simple)
+    args = parser.parse_args()
+    if args.command != 'status' and not installed():
+        sys.exit('fliperos-bluetooth: BlueZ (bluetoothctl) is not installed')
+    sys.exit(args.func(args) or 0)
+
+
+if __name__ == '__main__':
+    main()

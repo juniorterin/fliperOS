@@ -237,7 +237,14 @@ class Server:
                     pass
                 continue
             if self.app.window is not None:
-                self.app.pygame.event.pump()
+                if getattr(self.screen, "cancelable", False):
+                    # A captura do Button mapping: o Setup espera o controle,
+                    # e o Esc do teclado vira o arquivo que a faz parar
+                    # (fliperos-buttons capture --cancel).
+                    if "esc" in self.app.keys():
+                        open(os.path.join(self.dir, "cancel"), "w").close()
+                else:
+                    self.app.pygame.event.pump()
                 # Uma tela que muda sozinha (o tempo do Button mapping).
                 tick = getattr(self.screen, "tick", None)
                 if tick and tick() == "redraw":
@@ -280,7 +287,7 @@ class Server:
             if not entries:
                 return 1, ""
             marked = current.split(",") if cmd == "check" else [current] if cmd == "radio" else []
-            tiles = {}
+            tiles, icons = {}, {}
             if style == "layout":
                 # Buttons layout: "3-button games   [ ][ ][ ] / [1][2][3]" vira
                 # o nome e o icone do painel com os botoes nas posicoes.
@@ -292,6 +299,21 @@ class Server:
                         label = label.split("  ")[0].strip()
                     fixed.append((value, label, hint, installed, blocked))
                 entries = fixed
+            elif style == "panel":
+                # Button mapping: quantos botoes tem o painel, cada numero com
+                # o painel desenhado.
+                tiles = {e[0]: W.panel_tile(int(e[0])) for e in entries if e[0].isdigit()}
+            elif style == "controllers":
+                # Button mapping: a lista dos controles ("P1 nome", "-- BT
+                # nome"); o "BT" vira o icone do sem fio, os outros o do fio.
+                fixed = []
+                for value, label, hint, installed, blocked in entries:
+                    found = re.match(r"^(P\d+|--)( BT)? (.*)$", label) if value.isdigit() else None
+                    if found:
+                        icons[value] = "wireless" if found.group(2) else "wired"
+                        label = "%s %s" % (found.group(1), found.group(3))
+                    fixed.append((value, label, hint, installed, blocked))
+                entries = fixed
             options = [(e[0], e[1]) for e in entries]
             if cmd == "radio" and style in ("people", "dots") and all(e[0].isdigit() for e in entries):
                 # Ate quantos: as figuras acesas ate o valor.
@@ -301,8 +323,14 @@ class Server:
             elif cmd == "check" and style == "years":
                 screen = W.ToggleGrid(title, text, [(v, label, label[2:]) for v, label in options], marked, 6)
             else:
-                screen = W.Menu(title, entries, current, text, cmd, marked, tiles, vertical=style == "list")
+                screen = W.Menu(title, entries, current, text, cmd, marked, tiles,
+                                vertical=style in ("list", "controllers"), row_icons=icons)
+                if style == "controllers":
+                    # Um controle ligado ou tirado: o Setup refaz a lista (124).
+                    screen.watch = W.joystick_signature
             action, value = self.ask(screen, cmd)
+            if action == "refresh":
+                return 124, value
             if action != "select":
                 return 1, ""
             if cmd == "check":
@@ -379,8 +407,22 @@ class Server:
                 self.put(W.Live(plain(a[0]), plain(a[1]), pct, plain(a[3]), plain(a[4]), msgs), cmd)
             return 0, ""
         if cmd == "capture":
-            # titulo, jogador, comando, numero, total, segundos, ja apertados...
-            self.put(W.Capture(plain(a[0]), int(a[1]), a[2], a[6:], int(a[3]), int(a[4]), int(a[5]), int(a[5])), cmd)
+            # titulo, jogador, comando, numero, total, segundos, botoes do
+            # painel, ja apertados...
+            buttons = int(a[6]) if len(a) > 6 and a[6].isdigit() else 6
+            self.put(W.Capture(plain(a[0]), int(a[1]), a[2], a[7:], int(a[3]), int(a[4]), int(a[5]), int(a[5]),
+                               buttons), cmd)
+            return 0, ""
+        if cmd == "confirmcapture":
+            # titulo, jogador, accept|cancel, segundos
+            seconds = int(a[3]) if len(a) > 3 and a[3].isdigit() else 10
+            self.put(W.ConfirmCapture(plain(a[0]), int(a[1]), a[2], seconds), cmd)
+            return 0, ""
+        if cmd == "padcapture":
+            # titulo, jogador, comando, numero, tipo, nome do controle,
+            # "comando=elemento" dos feitos...
+            done = dict(d.split("=", 1) for d in a[6:] if "=" in d)
+            self.put(W.PadCapture(plain(a[0]), int(a[1]), a[2], int(a[3]), a[4], plain(a[5]), done), cmd)
             return 0, ""
         if cmd == "layout":
             # titulo, botoes do jogo, padrao (1 = oferecer), posicoes ja postas...

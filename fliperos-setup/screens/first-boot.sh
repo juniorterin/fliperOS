@@ -82,7 +82,7 @@ screen_first_boot_update() {
 screen_first_boot_controls() {
   [[ -s $BUTTONS_MAP ]] && return 0
   speak "Now the controls."
-  ui_msg "Welcome to FliperOS" "Now the controls: press each control of the panel when asked, so every emulator and the FliperOS frontend know them." "" \
+  ui_msg "Welcome to FliperOS" "Now the controls: choose each controller in the list, say which player it is and what it is (arcade panel or joypad), and press each control when asked, so every emulator and the FliperOS frontend know them." "" \
     "Do it again later in Setup > Joysticks > Button mapping."
   screen_buttons
 }

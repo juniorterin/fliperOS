@@ -289,6 +289,9 @@ install -Dm755 "$src/config/fliperos-mame-ini" "$root/opt/fliperos/bin/fliperos-
 # Setup > Joysticks > Button mapping: os botoes de cada jogador no RetroArch
 # e no GroovyMAME.
 install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"
+# Setup > Joysticks > Bluetooth: parear, conectar e esquecer controles pelo
+# bluetoothctl do BlueZ (o pacote bluez, fliperos-mkiso.sh).
+install -Dm755 "$src/config/fliperos-bluetooth" "$root/opt/fliperos/bin/fliperos-bluetooth"
 # Setup > Games > Cleaner > MAME ROM Cleaner: o que sai de uma pasta de ROMs, pelo XML do MAME.
 install -Dm755 "$src/config/fliperos-romclean" "$root/opt/fliperos/bin/fliperos-romclean"
 # O sistema de cada set do FBNeo: o fliperos-kms-run abre os de console que

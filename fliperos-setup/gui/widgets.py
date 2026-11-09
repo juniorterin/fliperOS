@@ -412,13 +412,21 @@ class Menu(Animated):
     carrossel: o icone de cada item vem de tiles (valor -> funcao que o
     desenha), de theme.ICONS (pelo valor) ou, sem nenhum, e a inicial."""
 
-    def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), tiles=None, vertical=False):
+    def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), tiles=None, vertical=False,
+                 row_icons=None):
         self.title = title
         self.text = text
         self.mode = mode
         # UI_STYLE=list: a lista vertical em texto, mesmo curta (as pastas).
         self.vertical = vertical
         self.tiles = tiles or {}
+        # Na lista vertical, um icone de 8x8 (theme.SMALL) antes do rotulo:
+        # o com fio e o sem fio da lista de controles.
+        self.row_icons = row_icons or {}
+        # watch: uma funcao olhada a cada segundo (joystick_signature); quando
+        # o que ela devolve muda, a tela fecha com ("refresh", item do cursor).
+        self.watch = None
+        self._watched = (0.0, None)
         self.entries = [(e[0], e[1], e[2] if len(e) > 2 else "") for e in entries]
         # Os itens "(installed)" (serve.py): um check verde no icone ou na linha.
         self.installed = {e[0] for e in entries if len(e) > 3 and e[3]}
@@ -479,7 +487,16 @@ class Menu(Animated):
 
     def tick(self):
         """Redesenhar enquanto o carrossel desliza, e o azulejo do meio
-        animado."""
+        animado; com watch, fechar quando a lista de fora mudou."""
+        if self.watch:
+            now = time.monotonic()
+            at, seen = self._watched
+            if now - at >= 1.0:
+                current = self.watch()
+                self._watched = (now, current)
+                # A primeira olhada so guarda; depois, mudou, fecha.
+                if at and current != seen:
+                    return ("refresh", self.entries[self.cursor][0])
         if self.slide:
             return "redraw"
         return Animated.tick(self) if self.carousel() else None
@@ -649,13 +666,18 @@ class Menu(Animated):
             # embaixo, no lugar da dica. O check de instalado fica no fim da
             # linha.
             room = w - 22 - (14 if value in self.installed or value in self.blocked else 0)
+            lx = x + 18
+            if value in self.row_icons:
+                surf.blit(T.small_icon(self.row_icons[value]), (lx, y + 2))
+                lx += 12
+                room -= 12
             if width(label) > room:
                 if selected:
                     full = label
                 while width(label + "..") > room:
                     label = label[:-1]
                 label += ".."
-            text(surf, label, color, x + 18, y + 2)
+            text(surf, label, color, lx, y + 2)
             if value in self.blocked:
                 cross(surf, x + w - 14, y, 10)
             if value in self.installed:
@@ -976,30 +998,141 @@ def layout_tile(order):
     return draw
 
 
+# Os controles ligados, como o kernel os lista: muda quando um controle e
+# ligado, pareado ou tirado (a lista do Button mapping se refaz).
+INPUT_DEVICES = "/proc/bus/input/devices"
+
+
+def joystick_signature(path=None):
+    """(nome, handlers) de cada aparelho com um /dev/input/jsN."""
+    import os
+    out, name = [], ""
+    try:
+        with open(path or os.environ.get("FLIPEROS_INPUT_DEVICES", INPUT_DEVICES), errors="replace") as f:
+            for line in f:
+                if line.startswith("N: Name="):
+                    name = line[8:].strip().strip('"')
+                elif line.startswith("H: Handlers=") and re.search(r"\bjs\d+\b", line):
+                    out.append((name, line[12:].strip()))
+    except OSError:
+        return ()
+    return tuple(sorted(out))
+
+
+# ── O painel de arcade (Button mapping) ─────────────────────────────
+
+def shade(color, k):
+    """A cor mais escura (k < 1) ou mais clara (k > 1, rumo ao branco)."""
+    if k <= 1:
+        return tuple(round(c * k) for c in color)
+    return tuple(round(c + (255 - c) * (k - 1)) for c in color)
+
+
+# As posicoes dos botoes de um painel de arcade: 1 2 3 7 em cima, 4 5 6 8
+# embaixo, cada coluna um pouco mais alta ou baixa como os dedos pedem (o
+# arco dos paineis Vewlix e Astro City). (coluna, linha) de b1 a b8.
+PANEL_SPOTS = {1: (0, 0), 2: (1, 0), 3: (2, 0), 4: (0, 1), 5: (1, 1), 6: (2, 1), 7: (3, 0), 8: (3, 1)}
+PANEL_ARC = [7, 0, 0, 4]
+# As cores das tampas dos botoes num painel parado (o icone do numero de
+# botoes): as de um painel classico.
+PANEL_CAPS = [T.RED, T.YELLOW, T.GREEN, T.CYAN, T.PURPLE, T.PINK, T.ORANGE, T.FG]
+
+
+def panel_spot(n, x, y, step, row):
+    """O centro do botao n do painel com a coluna 1 em x e a linha de cima em y."""
+    col, line = PANEL_SPOTS[n]
+    return x + col * step, y + line * row + PANEL_ARC[col] * step // 34
+
+
+def arcade_button(surf, cx, cy, r, state, label="", pulse=0.0, cap=None):
+    """Um botao de arcade visto de cima: a sombra, o aro, a tampa concava e o
+    brilho. state e "done" (verde), "ask" (amarelo, com o aro rosa pulsando),
+    "todo" (apagado) ou "idle" (a cor cap, o painel parado)."""
+    color = {"done": T.GREEN, "ask": T.YELLOW}.get(state, cap or T.LINE)
+    if state == "todo":
+        color = shade(T.LINE, 0.9)
+    if state == "ask":
+        pygame.draw.circle(surf, T.PINK, (cx, cy), r + 3 + round(2 * pulse))
+        pygame.draw.circle(surf, T.BG_DEEP, (cx, cy), r + 2)
+    pygame.draw.circle(surf, T.SPACE, (cx + 1, cy + 2), r)
+    pygame.draw.circle(surf, shade(color, 0.55), (cx, cy), r)
+    pygame.draw.circle(surf, color, (cx, cy), r - max(1, r // 5))
+    # A tampa concava: mais escura em cima, a luz batendo embaixo.
+    inner = max(2, r - max(2, r * 2 // 5))
+    pygame.draw.circle(surf, shade(color, 0.8), (cx, cy), inner)
+    pygame.draw.circle(surf, shade(color, 1.0), (cx, cy + 1), max(1, inner - 1))
+    if r >= 6:
+        pygame.draw.circle(surf, shade(color, 1.45), (cx - r // 3, cy - r // 3), max(1, r // 6))
+    if label:
+        ink = T.COMMENT if state == "todo" else T.SPACE
+        text(surf, label, ink, cx - width(label) // 2 + 1, cy - 3)
+
+
+def bat_top(surf, cx, cy, r, tilt=(0, 0), color=T.RED):
+    """A alavanca bat-top vista de cima: a arruela preta, a haste e a bola,
+    inclinada (tilt) para o lado pedido."""
+    pygame.draw.circle(surf, T.SPACE, (cx, cy + r // 2), r + r // 2)
+    pygame.draw.circle(surf, shade(T.LINE, 0.7), (cx, cy + r // 2), r + r // 2, max(1, r // 6))
+    bx, by = cx + tilt[0] * r // 2, cy - r // 2 + tilt[1] * r // 2
+    pygame.draw.line(surf, shade(T.FG, 0.6), (cx, cy + r // 2), (bx, by), max(2, r // 3))
+    pygame.draw.circle(surf, T.SPACE, (bx + 1, by + 2), r)
+    pygame.draw.circle(surf, shade(color, 0.6), (bx, by), r)
+    pygame.draw.circle(surf, color, (bx - 1, by - 1), r - max(1, r // 4))
+    pygame.draw.circle(surf, shade(color, 1.6), (bx - r // 3, by - r // 3), max(1, r // 4))
+
+
+def panel_tile(count):
+    """O icone de um painel de `count` botoes (1 a 8) no carrossel: a alavanca
+    e os botoes nas cores de um painel classico, no arco do painel."""
+    def draw(surf, x, y, scale):
+        size = 16 * scale
+        top = y + size // 5
+        h = size * 3 // 5
+        pygame.draw.rect(surf, shade(T.PURPLE, 0.45), (x, top + 2, size, h), border_radius=max(1, scale))
+        pygame.draw.rect(surf, T.BG_DEEP, (x, top, size, h), border_radius=max(1, scale))
+        pygame.draw.rect(surf, T.PURPLE, (x, top, size, h), max(1, scale // 2), border_radius=max(1, scale))
+        r = max(1, size // 14)
+        bat_top(surf, x + size * 3 // 16, top + h * 9 // 16, max(2, size // 11))
+        step = size * 3 // 16
+        for n in range(1, count + 1):
+            cx, cy = panel_spot(n, x + size * 7 // 16, top + h * 5 // 16, step, h * 3 // 8)
+            arcade_button(surf, cx, cy, r + 1, "idle", "", cap=PANEL_CAPS[n - 1])
+    return draw
+
+
 class Capture:
-    """O Button mapping pedindo um comando: o painel desenhado, com o
-    comando da vez aceso e os ja apertados em verde. controls sao up, down,
-    left, right, b1 a b6, start e coin."""
+    """O Button mapping pedindo um comando: o painel de arcade desenhado (a
+    alavanca, os botoes do painel no arco de um Vewlix, Start e a ficha), com
+    o comando da vez aceso e os ja apertados em verde. controls sao up, down,
+    left, right, b1 a b8, start e coin; buttons e quantos botoes o painel tem."""
 
     LABELS = {"up": "UP", "down": "DOWN", "left": "LEFT", "right": "RIGHT", "start": "START", "coin": "COIN"}
+    TILT = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+    # O Esc do teclado cancela o mapeamento (serve.py cria o arquivo cancel).
+    cancelable = True
 
-    def __init__(self, title, player, asking, done=(), number=1, total=12, left=8, seconds=8):
+    def __init__(self, title, player, asking, done=(), number=1, total=12, left=8, seconds=8, buttons=6):
         self.title = title
         self.player = player
         self.asking = asking
         self.done = set(done)
         self.number, self.total = number, total
         self.left, self.seconds = left, seconds
+        self.buttons = max(1, min(8, buttons))
         # O tempo anda sozinho: um quadrado a menos por segundo (tick).
         self.start = time.monotonic()
+        self._drawn = 0.0
 
     def key(self, k):
         return ("back", None) if k == "esc" else None
 
     def tick(self):
         left = max(0, self.seconds - int(time.monotonic() - self.start))
-        if left != self.left:
+        now = time.monotonic()
+        # O aro do botao da vez pulsa: uns 12 quadros por segundo.
+        if left != self.left or now - self._drawn >= 1 / 12:
             self.left = left
+            self._drawn = now
             return "redraw"
         return None
 
@@ -1010,41 +1143,58 @@ class Capture:
 
     @landscape
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("WAIT", "TO SKIP IT")])
-        block(surf, (24, 44, 272, 104), T.BG_DEEP, T.PURPLE)
-        pygame.draw.rect(surf, T.LINE, (24, 44, 272, 104), 1)
-        text(surf, "PLAYER %d" % self.player, T.PINK, 34, 53)
+        frame(surf, ctx, self.title, [("WAIT", "TO SKIP IT"), ("ESC", "CANCEL")])
+        pulse = (math.sin(time.monotonic() * 8) + 1) / 2
+        # O tampo: a madeira escura, a borda (T-molding) e a frente do painel.
+        x0, y0, w, h = 18, 42, 284, 108
+        pygame.draw.rect(surf, shade(T.PURPLE, 0.35), (x0 + 2, y0 + 4, w, h), border_radius=6)
+        pygame.draw.rect(surf, T.BG_DEEP, (x0, y0, w, h), border_radius=6)
+        pygame.draw.rect(surf, shade(T.BG_DEEP, 1.12), (x0 + 4, y0 + 4, w - 8, 18), border_radius=4)
+        pygame.draw.rect(surf, T.PURPLE, (x0, y0, w, h), 2, border_radius=6)
+        pygame.draw.line(surf, shade(T.PURPLE, 0.6), (x0 + 6, y0 + h - 4), (x0 + w - 7, y0 + h - 4))
 
-        for control, x in (("start", 168), ("coin", 232)):
+        # O jogador numa plaquinha.
+        tag = "%dP" % self.player
+        pygame.draw.rect(surf, T.PINK, (x0 + 8, y0 + 7, width(tag) + 6, 12), border_radius=3)
+        text(surf, tag, T.SPACE, x0 + 11, y0 + 9)
+        text(surf, "PLAYER %d" % self.player, T.PINK, x0 + width(tag) + 20, y0 + 9)
+
+        # Start (redondo, o 1P) e a ficha (a fenda da moedeira), em cima.
+        for control, x in (("start", 184), ("coin", 252)):
             state = self.state(control)
-            if state == "ask":
-                pygame.draw.rect(surf, T.PINK, (x - 3, 48, 54, 18))
-            if state == "todo":
-                pygame.draw.rect(surf, T.LINE, (x, 51, 48, 12), 1)
-            else:
-                pygame.draw.rect(surf, T.YELLOW if state == "ask" else T.GREEN, (x, 51, 48, 12))
             label = self.LABELS[control]
-            text(surf, label, T.COMMENT if state == "todo" else T.SPACE, x + 24 - width(label) // 2 + 1, 53)
+            if control == "start":
+                arcade_button(surf, x, y0 + 13, 6, state, "", pulse, cap=T.FG)
+            else:
+                color = {"done": T.GREEN, "ask": T.YELLOW}.get(state, T.LINE)
+                if state == "ask":
+                    pygame.draw.rect(surf, T.PINK, (x - 9 - round(2 * pulse), y0 + 4 - round(2 * pulse),
+                                                    18 + round(4 * pulse), 18 + round(4 * pulse)), border_radius=3)
+                pygame.draw.rect(surf, shade(color, 0.55), (x - 7, y0 + 6, 14, 14), border_radius=2)
+                pygame.draw.rect(surf, color, (x - 6, y0 + 7, 12, 12), border_radius=2)
+                pygame.draw.rect(surf, T.SPACE, (x - 1, y0 + 9, 2, 8))
+            text(surf, label, T.COMMENT if state == "todo" else T.FG, x + 11, y0 + 9)
 
-        # O direcional: a alavanca no meio e uma seta para cada lado.
-        cx, cy = 84, 106
-        pygame.draw.circle(surf, T.LINE, (cx, cy), 15)
-        pygame.draw.circle(surf, T.RED, (cx, cy), 8)
-        pygame.draw.rect(surf, T.FG, (cx - 3, cy - 4, 2, 2))
+        # A alavanca, inclinada para o lado pedido, com uma seta de cada lado.
+        cx, cy = 74, 108
+        tilt = self.TILT.get(self.asking, (0, 0))
         for control, dx, dy in (("up", 0, -1), ("down", 0, 1), ("left", -1, 0), ("right", 1, 0)):
             state = self.state(control)
-            for grow, color in ((3, T.PINK if state == "ask" else None),
+            for grow, color in ((2 + round(2 * pulse), T.PINK if state == "ask" else None),
                                 (0, {"ask": T.YELLOW, "done": T.GREEN}.get(state, T.LINE))):
                 if color:
-                    tip, base, half = 32 + grow, 21 - grow, 7 + grow
+                    tip, base, half = 33 + grow, 24 - grow, 6 + grow
                     pygame.draw.polygon(surf, color, [
                         (cx + dx * tip, cy + dy * tip),
                         (cx + dx * base - dy * half, cy + dy * base - dx * half),
                         (cx + dx * base + dy * half, cy + dy * base + dx * half)])
+        bat_top(surf, cx, cy + 2, 10, tilt)
 
-        for i in range(6):
-            control = "b%d" % (i + 1)
-            round_button(surf, 176 + (i % 3) * 36, 92 + (i // 3) * 32, 11, self.state(control), str(i + 1))
+        # Os botoes do painel: 1 2 3 7 em cima, 4 5 6 8 embaixo.
+        step = 34 if self.buttons <= 6 else 31
+        for n in range(1, self.buttons + 1):
+            bx, by = panel_spot(n, 154, 88, step, 34)
+            arcade_button(surf, bx, by, 12, self.state("b%d" % n), str(n), pulse)
 
         label = "PRESS " + self.LABELS.get(self.asking, "BUTTON " + self.asking[1:])
         name = big(label, 2, LABEL)
@@ -1056,6 +1206,238 @@ class Capture:
         for i in range(self.seconds):
             color = T.PINK if i < self.left else T.LINE
             pygame.draw.rect(surf, color, (T.WIDTH // 2 - self.seconds * 5 + 2 + i * 10, 198, 6, 6))
+
+
+class ConfirmCapture:
+    """O passo depois do mapeamento: os botoes da interface. O verde aceita e
+    o vermelho volta nos menus; o da vez (which: accept ou cancel) pulsa, e
+    sem apertar nada por seconds fica o de sempre. Sem nome de botao (sul,
+    leste, A): a pessoa olha o proprio controle, de qualquer tipo."""
+
+    cancelable = True
+
+    def __init__(self, title, player, which, seconds=10):
+        self.title = title
+        self.player = player
+        self.which = which if which in ("accept", "cancel") else "accept"
+        self.seconds = self.left = seconds
+        self.start = time.monotonic()
+        self._drawn = 0.0
+
+    def key(self, k):
+        return ("back", None) if k == "esc" else None
+
+    def tick(self):
+        now = time.monotonic()
+        left = max(0, self.seconds - int(now - self.start))
+        if left != self.left or now - self._drawn >= 1 / 12:
+            self.left = left
+            self._drawn = now
+            return "redraw"
+        return None
+
+    @landscape
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("WAIT", "KEEP THE USUAL"), ("ESC", "CANCEL")])
+        pulse = (math.sin(time.monotonic() * 8) + 1) / 2
+        centered(surf, "PLAYER %d: MENU BUTTONS" % self.player, T.PINK, 36)
+        x0, y0, w, h = 40, 50, 240, 96
+        pygame.draw.rect(surf, shade(T.PURPLE, 0.35), (x0 + 2, y0 + 4, w, h), border_radius=6)
+        pygame.draw.rect(surf, T.BG_DEEP, (x0, y0, w, h), border_radius=6)
+        pygame.draw.rect(surf, T.PURPLE, (x0, y0, w, h), 2, border_radius=6)
+        for which, cx, color, word in (("accept", 112, T.GREEN, "ACCEPT"), ("cancel", 208, T.RED, "BACK")):
+            asking = which == self.which
+            done = which == "accept" and self.which == "cancel"
+            if asking:
+                pygame.draw.circle(surf, T.PINK, (cx, 92), 25 + round(3 * pulse))
+                pygame.draw.circle(surf, T.BG_DEEP, (cx, 92), 24)
+            cap = color if asking or done else shade(color, 0.45)
+            arcade_button(surf, cx, 92, 20, "idle", "", cap=cap)
+            if done:
+                pygame.draw.lines(surf, T.SPACE, False, [(cx - 8, 92), (cx - 2, 99), (cx + 9, 85)], 4)
+            ink = T.FG if asking or done else T.COMMENT
+            text(surf, word, ink, cx - width(word) // 2, 126)
+        label = "PRESS ACCEPT" if self.which == "accept" else "PRESS BACK"
+        name = big(label, 2, LABEL)
+        x = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, 160))
+        surf.blit(name, (x, 158))
+        centered(surf, "THE BUTTON THAT %s IN THE MENUS" % ("ACCEPTS" if self.which == "accept" else "GOES BACK"),
+                 T.CYAN, 182)
+        for i in range(self.seconds):
+            color = T.PINK if i < self.left else T.LINE
+            pygame.draw.rect(surf, color, (T.WIDTH // 2 - self.seconds * 5 + 2 + i * 10, 198, 6, 6))
+
+
+# ── O mapeador de joypad (o do Batocera) ────────────────────────────
+
+# As linhas, na ordem do GuiInputConfig do batocera-emulationstation: o
+# comando do mapa (fliperos-buttons), o nome e o desenho (gui/icons/pad, os
+# do proprio Batocera).
+PAD_ROWS = [
+    ("b4", "SOUTH", "buttons_south"), ("b5", "EAST", "buttons_east"), ("b2", "NORTH", "buttons_north"),
+    ("b1", "WEST", "buttons_west"), ("start", "START", "button_start"), ("coin", "SELECT", "button_select"),
+    ("up", "D-PAD UP", "dpad_up"), ("down", "D-PAD DOWN", "dpad_down"), ("left", "D-PAD LEFT", "dpad_left"),
+    ("right", "D-PAD RIGHT", "dpad_right"), ("b3", "LEFT SHOULDER", "button_l"),
+    ("b6", "RIGHT SHOULDER", "button_r"), ("lsup", "LEFT ANALOG UP", "analog_up"),
+    ("lsleft", "LEFT ANALOG LEFT", "analog_left"), ("rsup", "RIGHT ANALOG UP", "analog_up"),
+    ("rsleft", "RIGHT ANALOG LEFT", "analog_left"), ("b7", "LEFT TRIGGER", "button_lt"),
+    ("b8", "RIGHT TRIGGER", "button_rt"), ("l3", "LEFT STICK PRESS", "analog_thumb"),
+    ("r3", "RIGHT STICK PRESS", "analog_thumb"), ("hotkey", "HOTKEY", "button_hotkey"),
+]
+# O botao como ele se chama no controle: um desenho do Batocera (as letras,
+# os simbolos do PlayStation) com a cor do controle, ou um rotulo.
+PAD_GLYPHS = {
+    "xbox": {"b4": ("button_a", T.GREEN), "b5": ("button_b", T.RED), "b1": ("button_x", T.CYAN),
+             "b2": ("button_y", T.YELLOW), "b3": "LB", "b6": "RB", "b7": "LT", "b8": "RT", "coin": "BACK",
+             "hotkey": "GUIDE"},
+    "playstation": {"b4": ("button_cross", T.CYAN), "b5": ("button_circle", T.RED),
+                    "b1": ("button_square", T.PINK), "b2": ("button_triangle", T.GREEN), "b3": "L1", "b6": "R1",
+                    "b7": "L2", "b8": "R2", "hotkey": "PS"},
+    "nintendo": {"b4": ("button_b", T.YELLOW), "b5": ("button_a", T.RED), "b1": ("button_y", T.GREEN),
+                 "b2": ("button_x", T.CYAN), "b3": "L", "b6": "R", "b7": "ZL", "b8": "ZR", "coin": "-",
+                 "start": "+", "hotkey": "HOME"},
+}
+PAD_TYPES = {"xbox": "XBOX", "playstation": "PLAYSTATION", "nintendo": "NINTENDO"}
+PAD_ICON_DIR = T.ICON_DIR + "/pad"
+_pad_icons = {}
+
+
+def pad_icon(name, size, color):
+    """O desenho do Batocera (branco) com `size` pixels, na cor pedida; None
+    sem o arquivo."""
+    key = (name, size, color)
+    if key not in _pad_icons:
+        img = None
+        try:
+            src = pygame.image.load("%s/%s.png" % (PAD_ICON_DIR, name))
+            img = pygame.transform.smoothscale(src.convert_alpha() if pygame.display.get_surface() else src,
+                                               (size, size))
+            img.fill(color + (255,), special_flags=pygame.BLEND_RGBA_MULT)
+        except (pygame.error, FileNotFoundError):
+            img = None
+        _pad_icons[key] = img
+    return _pad_icons[key]
+
+
+def element_name(element):
+    """O que foi apertado, como o Batocera mostra: BUTTON 3, HAT UP, AXIS 1-."""
+    if not element or element == "-":
+        return "-NOT DEFINED-"
+    if element.startswith("b"):
+        return "BUTTON " + element[1:]
+    if element.startswith("h"):
+        hat, _, bit = element[1:].partition(".")
+        side = {"1": "UP", "2": "RIGHT", "4": "DOWN", "8": "LEFT"}.get(bit, bit)
+        return "HAT %s" % side if hat == "0" else "HAT %s %s" % (hat, side)
+    if element.startswith("k:"):
+        return "KEY " + element[2:]
+    return "AXIS %s%s" % (element[2:], element[0])
+
+
+def scroll_text(surf, s, color, x, y, w):
+    """Um texto em w pixels: inteiro se cabe; senao ele corre, ida e volta,
+    sem cortar nada para sempre (o nome de um controle comprido)."""
+    full = width(s)
+    if full <= w:
+        text(surf, s, color, x, y)
+        return
+    img = T.font().render(s, False, color)
+    travel = full - w
+    t = time.monotonic() * 30 % (2 * travel + 60)
+    offset = min(travel, max(0, t - 30)) if t < travel + 30 else max(0, travel - (t - travel - 60))
+    surf.blit(img, (x, y), (round(offset), 0, w, img.get_height()))
+
+
+class PadCapture:
+    """O mapeador de joypad, como o "configure a controller" do Batocera: a
+    lista de todos os comandos com o desenho de cada um, o da vez aceso, os
+    feitos com o que foi apertado (BUTTON 3, AXIS 1-) e os pulados em
+    -NOT DEFINED-. Segurar qualquer botao pula o da vez. kind e o tipo do
+    controle (xbox, playstation, nintendo, generic): o nome de cada botao
+    nele vai junto (A, CROSS, LB...). done e {comando: elemento ou "-"}."""
+
+    ROW_H = 13
+    cancelable = True
+
+    def __init__(self, title, player, asking, number, kind="generic", name="", done=None):
+        self.title = title
+        self.player = player
+        self.asking = asking
+        self.number = number
+        self.kind = kind if kind in PAD_GLYPHS else "generic"
+        self.name = name
+        self.done = dict(done or {})
+        self._drawn = 0.0
+
+    def key(self, k):
+        return ("back", None) if k == "esc" else None
+
+    def tick(self):
+        now = time.monotonic()
+        if now - self._drawn >= 1 / 12:
+            self._drawn = now
+            return "redraw"
+        return None
+
+    def glyph(self, surf, control, x, y, color):
+        """O nome do botao no controle, depois do nome da linha; a largura."""
+        glyph = PAD_GLYPHS.get(self.kind, {}).get(control)
+        if not glyph:
+            return 0
+        if isinstance(glyph, tuple):
+            img = pad_icon(glyph[0], 11, glyph[1])
+            if img:
+                surf.blit(img, (x, y - 2))
+                return 13
+            return 0
+        w = width(glyph) + 4
+        pygame.draw.rect(surf, color, (x, y - 2, w, 11), 1, border_radius=2)
+        text(surf, glyph, color, x + 2, y)
+        return w + 2
+
+    @landscape
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("HOLD", "TO SKIP"), ("ESC", "CANCEL")])
+        pulse = (math.sin(time.monotonic() * 8) + 1) / 2
+        left, right = T.SAFE_X, T.SAFE_X + T.SAFE_W
+        # O cabecalho: o jogador, o controle e o tipo dele.
+        head = "PLAYER %d" % self.player
+        w = text(surf, head, T.PINK, left, 34)
+        # O controle (o tipo dele ja aparece no nome de cada botao).
+        device = self.name.upper() or "GAMEPAD %d" % self.player
+        scroll_text(surf, device, T.FG, left + w + 10, 34, right - left - w - 10)
+        centered(surf, "HOLD ANY BUTTON TO SKIP", T.CYAN, 46)
+
+        top, bottom = 58, footer_y() - 6
+        shown = (bottom - top) // self.ROW_H
+        cursor = next((i for i, row in enumerate(PAD_ROWS) if row[0] == self.asking), 0)
+        first = max(0, min(cursor - shown // 2, len(PAD_ROWS) - shown))
+        for i, (control, label, icon) in enumerate(PAD_ROWS[first:first + shown]):
+            y = top + i * self.ROW_H
+            asking = control == self.asking
+            if asking:
+                glowing = shade(T.PINK, 0.25 + 0.15 * pulse)
+                pygame.draw.rect(surf, glowing, (left - 4, y - 2, right - left + 2, self.ROW_H), border_radius=2)
+                pygame.draw.rect(surf, T.PINK, (left - 4, y - 2, right - left + 2, self.ROW_H), 1, border_radius=2)
+            color = T.YELLOW if asking else T.FG if control in self.done else T.COMMENT
+            img = pad_icon(icon, 11, color)
+            if img:
+                surf.blit(img, (left, y - 1))
+            x = left + 15 + text(surf, label, color, left + 15, y + 1) + 4
+            self.glyph(surf, control, x, y + 1, color)
+            if asking:
+                value, ink = "PRESS", T.YELLOW if pulse > 0.3 else T.ORANGE
+            elif control in self.done:
+                value = element_name(self.done[control])
+                ink = T.COMMENT if self.done[control] == "-" else T.GREEN
+            else:
+                value, ink = "", T.COMMENT
+            if value:
+                text(surf, value, ink, right - 6, y + 1, right=True)
+        if len(PAD_ROWS) > shown:
+            scrollbar(surf, right - 2, top - 2, shown * self.ROW_H, first, shown, len(PAD_ROWS))
+        text(surf, "%d/%d" % (self.number, len(PAD_ROWS)), T.CYAN, right, footer_y(), right=True)
 
 
 class LayoutEdit:

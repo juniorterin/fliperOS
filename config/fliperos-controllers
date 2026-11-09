@@ -320,6 +320,10 @@ def controllers():
     # O que se quer e o mapeamento do proprio SDL, sem o arquivo gerado aqui.
     for var in ('SDL_GAMECONTROLLERCONFIG', 'SDL_GAMECONTROLLERCONFIG_FILE'):
         os.environ.pop(var, None)
+    # Os controles como os emuladores (o usuario, sem o /dev/hidraw) os veem:
+    # sem o HIDAPI, que como root abre o controle Nintendo ou PlayStation com
+    # outro GUID (o fliperos-buttons faz o mesmo).
+    os.environ['SDL_JOYSTICK_HIDAPI'] = '0'
     sdl = ctypes.CDLL(ctypes.util.find_library('SDL2') or 'libSDL2-2.0.so.0')
     sdl.SDL_JoystickGetDeviceGUID.restype = GUID
     sdl.SDL_JoystickGetGUIDString.argtypes = [GUID, ctypes.c_char_p, ctypes.c_int]
@@ -428,7 +432,26 @@ def main():
             except OSError:
                 pass
             print('RetroArch: %s' % target)
+    bluetooth_players()
     return 0
+
+
+# Os controles Bluetooth do Button mapping (buttons-bt.map) nao tem jogador
+# fixo: a cada controle ligado ou tirado o fliperos-buttons save os poe nos
+# jogadores livres pela ordem de conexao e grava tudo nos emuladores. Nao
+# quando foi ele quem chamou este programa (FLIPEROS_CONTROLLERS_ONLY).
+BUTTONS = os.environ.get('FLIPEROS_BUTTONS_TOOL', '/opt/fliperos/bin/fliperos-buttons')
+BUTTONS_MAP = os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map')
+BT_MAP = os.environ.get('FLIPEROS_BUTTONS_BT_MAP', '/etc/fliperos/buttons-bt.map')
+
+
+def bluetooth_players():
+    if os.environ.get('FLIPEROS_CONTROLLERS_ONLY') or not os.path.isfile(BT_MAP) or not os.access(BUTTONS, os.X_OK):
+        return
+    import subprocess
+    env = dict(os.environ, FLIPEROS_BUTTONS_FROM_CONTROLLERS='1')
+    subprocess.run([BUTTONS, 'save', BUTTONS_MAP], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print('Bluetooth players: %s' % BUTTONS_MAP)
 
 
 if __name__ == '__main__':

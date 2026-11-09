@@ -26,6 +26,11 @@ SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GUN}=="1", ACTION=="add|remov
 # SDL (botoes que sobram, direcional digital mandado como eixos).
 SUBSYSTEM=="input", KERNEL=="event*", ACTION=="add", ENV{ID_INPUT_JOYSTICK}=="1", \
   TAG+="systemd", ENV{SYSTEMD_WANTS}+="fliperos-controllers.service"
+# Controle tirado: os controles Bluetooth do Button mapping tomam os
+# jogadores de novo pela ordem de conexao (o fliperos-controllers chama o
+# fliperos-buttons save). O SYSTEMD_WANTS so vale no add.
+SUBSYSTEM=="input", KERNEL=="event*", ACTION=="remove", ENV{ID_INPUT_JOYSTICK}=="1", \
+  RUN+="/bin/systemctl --no-block restart fliperos-controllers.service"
 
 # Volantes, pedais e analogicos calibrados em Setup > Joysticks
 # (fliperos-calibrate): o evdev tambem esquece essa calibracao a cada conexao.

@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """Configurador de botoes do FliperOS (Setup > Joysticks > Button mapping).
 
-  fliperos-buttons capture [--timeout SEGUNDOS]
-      espera o proximo comando de qualquer controle e imprime
-      "INDICE ELEMENTO NOME" (status 1 se o tempo acabou)
+  fliperos-buttons capture [--timeout SEGUNDOS] [--hold SEGUNDOS] [--device INDICE]
+      espera o proximo comando de qualquer controle (ou so do INDICE) e
+      imprime "INDICE ELEMENTO NOME" (status 1 se o tempo acabou). Com
+      --hold o comando vale ao soltar, e segurado esse tempo pula (status 2),
+      como o "hold any button to skip" do mapeador do Batocera; com --cancel
+      ARQUIVO, o arquivo aparecendo (o Esc da tela) para tudo (status 3)
+  fliperos-buttons identify INDICE
+      o controle como o SDL o conhece (name=, guid=, type= xbox, playstation,
+      nintendo ou generic, known=, mapping=) e, se o banco do SDL o tem, o
+      layout dele em linhas "bind CONTROLE ELEMENTO" (o joypad conhecido do
+      Setup, como o EmulationStation faz)
   fliperos-buttons save MAPA
       grava os botoes em todos os emuladores (abaixo)
   fliperos-buttons keyboard [--players N]
@@ -26,8 +34,16 @@ ELEMENTO na numeracao do SDL (joystick, nao game controller): b3 (botao),
 -a1 / +a1 (meio eixo), h0.1 / h0.2 / h0.4 / h0.8 (hat: cima, direita,
 baixo, esquerda). INDICE e a ordem do controle no SDL. MAPA: linhas
 "JOGADOR CONTROLE INDICE ELEMENTO NOME", CONTROLE em up down left right b1
-... b6 start coin (b1 a b6: os botoes na ordem do painel, 1 2 3 em cima e 4
-5 6 embaixo).
+... b8 start coin (b1 a b8: os botoes na ordem do painel, 1 2 3 7 em cima e
+4 5 6 8 embaixo) e, num joypad, l3 r3 hotkey e os analogicos lsup lsleft
+rsup rsleft (o eixo pego empurrando para cima ou para a esquerda). Uma linha
+"JOGADOR kind INDICE TIPO NOME" diz o tipo do controle do jogador: arcade
+(painel, JAMMA; o padrao) ou pad. No joypad o botao 1 e o de oeste, o 2 o de
+norte, o 3 o ombro esquerdo, o 4 o de sul, o 5 o de leste, o 6 o ombro
+direito, o 7 e o 8 os gatilhos: o RetroPad do proprio controle, e todo
+emulador abaixo le o joypad pelos mesmos b1 a b8. O que muda nele: o
+mapeamento do SDL (o joypad como ele e, nao como fight stick), o Dreamcast
+do Flycast (FLYCAST_PAD) e o GameCube do Dolphin (os analogicos).
 
 RetroArch: binds por jogador num arquivo que o fliperos-kms-run soma a
 config (--appendconfig), por cima do perfil automatico do controle; os
@@ -143,23 +159,46 @@ GAME_BUTTONS = os.environ.get('FLIPEROS_GAME_BUTTONS', '/var/lib/fliperos/game-b
 SUPERMODEL_GAMES = os.environ.get('FLIPEROS_SUPERMODEL_GAMES', '/usr/local/share/supermodel/Config/Games.xml')
 MODEL2_DB = os.environ.get('FLIPEROS_SDL_MODEL2_DB', '/var/lib/fliperos/gamecontrollerdb-model2.txt')
 USER_ID = 1000
+# As posicoes do Buttons layout (1 2 3 em cima, 4 5 6 embaixo); o painel
+# pode ter ate 8 botoes (o 7 e o 8 no fim de cada linha).
 PANEL_BUTTONS = 6
+MAX_BUTTONS = 8
 LAYOUT_COUNTS = range(1, 6)
 
-CONTROLS = ['up', 'down', 'left', 'right', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'start', 'coin']
-# Os botoes do painel no RetroPad (layout dos cores de arcade).
+CONTROLS = ['up', 'down', 'left', 'right', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'start', 'coin']
+# Os comandos que so um joypad tem (Setup > Button mapping > Joypad, o
+# mapeador do Batocera): os cliques dos analogicos, o hotkey e os dois
+# analogicos (o sentido de cima e o da esquerda de cada um, "-a1" ou "+a1":
+# o outro sentido e o mesmo eixo ao contrario).
+PAD_CONTROLS = ['l3', 'r3', 'hotkey', 'lsup', 'lsleft', 'rsup', 'rsleft']
+# Os botoes da interface (o passo depois do mapeamento): o de aceitar (verde)
+# e o de voltar (vermelho) nos menus do Setup, do frontend do FliperOS e do
+# Attract-Mode. Sem eles, o padrao: no joypad o de sul e o de leste, no painel
+# o botao 1 e o 2. Nenhum emulador os recebe.
+UI_CONTROLS = ['accept', 'cancel']
+ALL_CONTROLS = CONTROLS + PAD_CONTROLS + UI_CONTROLS
+# Analogico: (lado no RetroArch, eixo).
+STICKS = {'lsup': ('l', 'y'), 'lsleft': ('l', 'x'), 'rsup': ('r', 'y'), 'rsleft': ('r', 'x')}
+# O tipo do controle de cada jogador: "arcade" (painel, JAMMA) ou "pad"
+# (joypad). No mapa, uma linha "JOGADOR kind INDICE TIPO NOME"; sem ela, arcade.
+KINDS = ('arcade', 'pad')
+# Os botoes do painel no RetroPad (layout dos cores de arcade): Y X L L2 em
+# cima, B A R R2 embaixo. No joypad o botao 1 e o de oeste, o 2 o de norte,
+# o 4 o de sul e o 5 o de leste; o 3 e o 6 os ombros, o 7 e o 8 os gatilhos:
+# o RetroPad do proprio controle.
 RA_KEYS = {'up': 'up', 'down': 'down', 'left': 'left', 'right': 'right', 'b1': 'y', 'b2': 'x', 'b3': 'l',
-           'b4': 'b', 'b5': 'a', 'b6': 'r', 'start': 'start', 'coin': 'select'}
+           'b4': 'b', 'b5': 'a', 'b6': 'r', 'b7': 'l2', 'b8': 'r2', 'start': 'start', 'coin': 'select',
+           'l3': 'l3', 'r3': 'r3'}
 RA_HAT = {'1': 'up', '2': 'right', '4': 'down', '8': 'left'}
 MAME_PORTS = {'up': 'P%d_JOYSTICK_UP', 'down': 'P%d_JOYSTICK_DOWN', 'left': 'P%d_JOYSTICK_LEFT',
               'right': 'P%d_JOYSTICK_RIGHT', 'start': 'START%d', 'coin': 'COIN%d'}
-MAME_PORTS.update({'b%d' % n: 'P%%d_BUTTON%d' % n for n in range(1, 7)})
+MAME_PORTS.update({'b%d' % n: 'P%%d_BUTTON%d' % n for n in range(1, MAX_BUTTONS + 1)})
 # As teclas padrao do MAME (src/emu/inpttype.ipp): continuam valendo junto
 # do controle, e sao o mapa do "keyboard" (encoder que se diz teclado, como
 # o I-PAC, no layout do MAME).
 MAME_KEYS = {
     1: {'up': 'UP', 'down': 'DOWN', 'left': 'LEFT', 'right': 'RIGHT', 'b1': 'LCONTROL', 'b2': 'LALT',
-        'b3': 'SPACE', 'b4': 'LSHIFT', 'b5': 'Z', 'b6': 'X', 'start': '1', 'coin': '5'},
+        'b3': 'SPACE', 'b4': 'LSHIFT', 'b5': 'Z', 'b6': 'X', 'b7': 'C', 'b8': 'V', 'start': '1', 'coin': '5'},
     2: {'up': 'R', 'down': 'F', 'left': 'D', 'right': 'G', 'b1': 'A', 'b2': 'S', 'b3': 'Q', 'b4': 'W',
         'b5': 'E', 'start': '2', 'coin': '6'},
     3: {'up': 'I', 'down': 'K', 'left': 'J', 'right': 'L', 'b1': 'RCONTROL', 'b2': 'RSHIFT', 'b3': 'ENTER',
@@ -292,7 +331,13 @@ def js_axes(codes):
 def retroarch_lines(player, control, element, js=None):
     """Os binds do RetroArch de um controle de um jogador: o botao e o hat na
     numeracao do SDL (a do udev); o eixo na do /dev/input/js com `js`
-    (js_axes do aparelho), que so difere da do SDL quando ha hat antes dele."""
+    (js_axes do aparelho), que so difere da do SDL quando ha hat antes dele.
+    O analogico do joypad (lsup, lsleft...) da os dois sentidos do eixo; o
+    hotkey nao tem bind no RetroArch."""
+    if control in STICKS:
+        return retroarch_stick(player, control, element, js)
+    if control not in RA_KEYS:
+        return []
     key = 'input_player%d_%s' % (player, RA_KEYS[control])
     if control in DIRECTIONS:
         none_btn = none_axis = 'nul'
@@ -314,6 +359,28 @@ def retroarch_lines(player, control, element, js=None):
     if js:
         index = js[0].get(index, index)
     return ['%s_axis = "%s%d"' % (key, element[0], index), '%s_btn = "%s"' % (key, none_btn)]
+
+
+def stick_axis(element):
+    """(eixo, invertido?) de um analogico pego no sentido de cima ou da
+    esquerda: "-a1" e o eixo 1 como o SDL o ve, "+a1" o mesmo ao contrario.
+    None se o que foi apertado nao e eixo."""
+    m = re.fullmatch(r'([+-])a(\d+)', element)
+    return (int(m.group(2)), m.group(1) == '+') if m else None
+
+
+def retroarch_stick(player, control, element, js=None):
+    """O analogico no RetroArch: input_playerN_l_x_minus_axis e o plus."""
+    axis = stick_axis(element)
+    if axis is None:
+        return []
+    index, inverted = axis
+    if js:
+        index = js[0].get(index, index)
+    side, xy = STICKS[control]
+    minus, plus = ('+', '-') if inverted else ('-', '+')
+    key = 'input_player%d_%s_%s' % (player, side, xy)
+    return ['%s_minus_axis = "%s%d"' % (key, minus, index), '%s_plus_axis = "%s%d"' % (key, plus, index)]
 
 
 def keep_hat_axes(lines, old):
@@ -343,11 +410,13 @@ def read_cfg(path):
 def retroarch_triggers(player, binds):
     """Os botoes nos gatilhos (um eixo que so vai para um lado, como o LT e o
     RT do Xbox 360): o perfil automatico os poe tambem no L2 e no R2, e cada
-    um apertaria dois botoes do RetroPad. L2 e R2 ficam sem nada."""
+    um apertaria dois botoes do RetroPad. L2 e R2 ficam sem nada, menos os
+    que o mapa da a um comando (o botao 7 e o 8, os gatilhos de um joypad)."""
     if not any(e[0] in '+-' and control.startswith('b') for control, (_, e) in binds.items()):
         return []
+    mapped = {RA_KEYS[c] for c in binds if c in RA_KEYS}
     return ['input_player%d_%s_%s = "%s"' % (player, pad, kind, RA_NONE_BTN if kind == 'btn' else RA_NONE_AXIS)
-            for pad in ('l2', 'r2') for kind in ('btn', 'axis')]
+            for pad in ('l2', 'r2') if pad not in mapped for kind in ('btn', 'axis')]
 
 
 def read_map(path):
@@ -356,7 +425,7 @@ def read_map(path):
     with open(path, encoding='utf-8') as f:
         for line in f:
             parts = line.split(None, 4)
-            if len(parts) < 4 or parts[1] not in CONTROLS:
+            if len(parts) < 4 or parts[1] not in ALL_CONTROLS:
                 continue
             player, control, index, element = int(parts[0]), parts[1], int(parts[2]), parts[3]
             players.setdefault(player, {})[control] = (index, element)
@@ -364,12 +433,40 @@ def read_map(path):
     return players, names
 
 
-def map_text(players, names):
-    """O mapa de volta no formato do arquivo."""
+def read_kinds(path):
+    """{jogador: "arcade" ou "pad"} das linhas "JOGADOR kind INDICE TIPO NOME";
+    o jogador sem linha e arcade (o mapa de antes do joypad)."""
+    kinds = {}
+    try:
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                parts = line.split(None, 4)
+                if len(parts) >= 4 and parts[1] == 'kind' and parts[0].isdigit() and parts[3] in KINDS:
+                    kinds[int(parts[0])] = parts[3]
+    except OSError:
+        pass
+    return kinds
+
+
+def player_kind(kinds, player):
+    return kinds.get(player, 'arcade')
+
+
+def map_text(players, names, kinds=None, autos=None, ports=None):
+    """O mapa de volta no formato do arquivo; autos ({jogador: GUID}) sao os
+    controles Bluetooth postos pela ordem de conexao, ports ({jogador:
+    porta}) a porta de cada com fio."""
     lines = []
     for player in sorted(players):
         binds = players[player]
-        for control in CONTROLS:
+        index = next(iter(binds.values()))[0]
+        if autos and player in autos:
+            lines.append('%d bt %d %s %s\n' % (player, index, autos[player], names.get(index, '')))
+        elif ports and player in ports:
+            lines.append('%d usb %d %s %s\n' % (player, index, ports[player], names.get(index, '')))
+        if kinds and player in kinds:
+            lines.append('%d kind %d %s %s\n' % (player, index, kinds[player], names.get(index, '')))
+        for control in ALL_CONTROLS:
             if control in binds:
                 index, element = binds[control]
                 lines.append('%d %s %d %s %s\n' % (player, control, index, element, names.get(index, '')))
@@ -414,7 +511,7 @@ def retroarch_cfg(players, names, devices=None, old=None):
             lines.append('input_player%d_joypad_index = "%d"' % (player, index))
         js = device_js(devices, index)
         mine = []
-        for control in CONTROLS:
+        for control in ALL_CONTROLS:
             if control in binds:
                 mine += retroarch_lines(player, control, binds[control][1], js)
         lines += mine if js or not old else keep_hat_axes(mine, old)
@@ -593,26 +690,58 @@ def write_bytes(path, data, owner=None):
 
 # O painel como fight stick: X Y RB em cima, A B RT embaixo; a ficha e o Back.
 # A notacao dos elementos (b3, -a1, h0.1) e a do proprio mapeamento do SDL.
+# O 7 e o 8 de um painel de 8 botoes: LB em cima, LT embaixo (o fight stick
+# de 8 botoes).
 SDL_SLOTS = {'up': 'dpup', 'down': 'dpdown', 'left': 'dpleft', 'right': 'dpright', 'b1': 'x', 'b2': 'y',
-             'b3': 'rightshoulder', 'b4': 'a', 'b5': 'b', 'b6': 'righttrigger', 'start': 'start', 'coin': 'back'}
+             'b3': 'rightshoulder', 'b4': 'a', 'b5': 'b', 'b6': 'righttrigger', 'b7': 'leftshoulder',
+             'b8': 'lefttrigger', 'start': 'start', 'coin': 'back'}
+# O joypad como ele e: cada botao no seu lugar (o mesmo que o SDL faz para
+# um controle do banco dele), o hotkey no Guide e os analogicos.
+SDL_PAD_SLOTS = {'up': 'dpup', 'down': 'dpdown', 'left': 'dpleft', 'right': 'dpright', 'b1': 'x', 'b2': 'y',
+                 'b3': 'leftshoulder', 'b4': 'a', 'b5': 'b', 'b6': 'rightshoulder', 'b7': 'lefttrigger',
+                 'b8': 'righttrigger', 'start': 'start', 'coin': 'back', 'hotkey': 'guide', 'l3': 'leftstick',
+                 'r3': 'rightstick'}
+SDL_STICKS = {'lsup': 'lefty', 'lsleft': 'leftx', 'rsup': 'righty', 'rsleft': 'rightx'}
 
 
-def sdl_mapping_line(guid, name, binds, slots=None):
+def sdl_mapping_line(guid, name, binds, slots=None, rests=()):
+    """A linha do mapeamento do SDL. Com o joypad (SDL_PAD_SLOTS) vao os
+    analogicos ("lefty:a1", com ~ se pego ao contrario) e o gatilho num eixo
+    que repousa embaixo vai inteiro ("lefttrigger:a2"), como no banco do SDL:
+    "+a2" seria so a metade do curso."""
     slots = slots or SDL_SLOTS
-    fields = ['%s:%s' % (slots[c], e) for c, (_, e) in sorted(binds.items()) if c in slots]
+    fields = []
+    for c, (_, e) in sorted(binds.items()):
+        # O hotkey no proprio Select (o que o Batocera sugere sem um botao
+        # so dele) fica so no Back: o mesmo botao em dois lugares do SDL.
+        if c == 'hotkey' and binds.get('coin', (None, None))[1] == e:
+            continue
+        if c in slots:
+            m = re.fullmatch(r'\+a(\d+)', e)
+            if slots is SDL_PAD_SLOTS and m and c in ('b7', 'b8'):
+                axis = int(m.group(1))
+                if axis < len(rests) and rests[axis] <= -TRIGGER_REST:
+                    e = 'a%d' % axis
+            fields.append('%s:%s' % (slots[c], e))
+        elif slots is SDL_PAD_SLOTS and c in SDL_STICKS and stick_axis(e):
+            axis, inverted = stick_axis(e)
+            fields.append('%s:a%d%s' % (SDL_STICKS[c], axis, '~' if inverted else ''))
     return ','.join([guid, name.replace(',', ' ')] + sorted(fields) + ['platform:Linux']) + ','
 
 
-def sdl_user_db(players, devices):
+def sdl_user_db(players, devices, kinds=None):
     """As linhas do gamecontrollerdb-user.txt: um aparelho (GUID) por linha,
-    pelo primeiro jogador que o usa (dois paineis iguais tem o mesmo GUID)."""
+    pelo primeiro jogador que o usa (dois paineis iguais tem o mesmo GUID).
+    O painel vai como fight stick; o joypad, como ele e."""
     lines = {}
     for player in sorted(players):
         binds = players[player]
         index = next(iter(binds.values()))[0]
         if index in devices and devices[index][0] not in lines:
             guid, name = devices[index][:2]
-            lines[guid] = sdl_mapping_line(guid, name, binds)
+            pad = player_kind(kinds or {}, player) == 'pad'
+            rests = devices[index][4] if len(devices[index]) > 4 else ()
+            lines[guid] = sdl_mapping_line(guid, name, binds, SDL_PAD_SLOTS if pad else SDL_SLOTS, rests)
     return lines
 
 
@@ -670,6 +799,16 @@ FLYCAST_DC = {'up': 'btn_dpad1_up', 'down': 'btn_dpad1_down', 'left': 'btn_dpad1
               'start': 'btn_start', 'coin': 'btn_menu'}
 FLYCAST_ARCADE = dict(FLYCAST_DC, b1='btn_a', b2='btn_b', b3='btn_c', b4='btn_x', b5='btn_y', b6='btn_z',
                       coin='btn_d')
+# O joypad no Dreamcast como o padrao do Flycast para um game controller do
+# SDL (DefaultInputMapping, o FLYCAST_STD do fliperos-controllers): os
+# gatilhos nos do Dreamcast, o analogico esquerdo no dele, o direito no
+# segundo eixo.
+FLYCAST_PAD = {'up': 'btn_dpad1_up', 'down': 'btn_dpad1_down', 'left': 'btn_dpad1_left',
+               'right': 'btn_dpad1_right', 'b1': 'btn_x', 'b2': 'btn_y', 'b3': 'btn_z', 'b4': 'btn_a', 'b5': 'btn_b',
+               'b6': 'btn_c', 'b7': 'btn_trigger_left', 'b8': 'btn_trigger_right', 'start': 'btn_start',
+               'coin': 'btn_menu', 'hotkey': 'btn_dpad2_up'}
+FLYCAST_STICKS = {'lsup': ('btn_analog_up', 'btn_analog_down'), 'lsleft': ('btn_analog_left', 'btn_analog_right'),
+                  'rsup': ('axis2_up', 'axis2_down'), 'rsleft': ('axis2_left', 'axis2_right')}
 
 
 # O hat no Flycast e um botao: (hat + 1) << 8, mais 0 cima, 1 baixo, 2
@@ -680,10 +819,21 @@ FLYCAST_HAT = {'1': 0, '4': 1, '8': 2, '2': 3}
 def flycast_cfg(name, binds, keys, rests=()):
     """O mapeamento do Flycast; rests e o repouso dos eixos do aparelho: um
     gatilho vai em "triggers" (o Flycast o le de ponta a ponta, sempre "+";
-    com ~ quando repousa em cima), senao ele o trata como eixo de centro."""
+    com ~ quando repousa em cima), senao ele o trata como eixo de centro.
+    O comando que o Flycast nao tem em `keys` fica de fora; o analogico do
+    joypad vai nos dois sentidos (FLYCAST_STICKS)."""
     digital, analog, triggers = [], [], []
     for control, (_, element) in sorted(binds.items()):
+        if control in STICKS:
+            axis = stick_axis(element)
+            if axis and keys is FLYCAST_PAD:
+                neg, pos = FLYCAST_STICKS[control]
+                minus, plus = ('+', '-') if axis[1] else ('-', '+')
+                analog += ['%d%s:%s' % (axis[0], minus, neg), '%d%s:%s' % (axis[0], plus, pos)]
+            continue
         key = keys.get(control)
+        if not key:
+            continue
         if is_key(element):
             digital.append('%d:%s' % (KEYS[element[2:]][1], key))
         elif element.startswith('b'):
@@ -866,12 +1016,36 @@ def attract_path():
     return None
 
 
-def attract_save(players, devices):
+# Nos menus (Attract-Mode, o frontend do FliperOS, o Setup) um joypad
+# confirma no botao de sul e volta no de leste, como em todo console: o 4 e o
+# 5 do mapa fazem o papel do 1 e do 2 de um painel (e o 1 e o 2, o do 4 e do 5).
+PAD_ROLES = {'b4': 'b1', 'b5': 'b2', 'b1': 'b4', 'b2': 'b5'}
+
+
+def menu_roles(players, kinds):
+    """Os jogadores com os botoes no papel que fazem num menu: o joypad com
+    PAD_ROLES, o painel como esta; o aceitar e o voltar escolhidos no Button
+    mapping (accept, cancel) ficam no 1 e no 2, e o comando que tinha o mesmo
+    botao sai (um botao, uma coisa)."""
+    out = {}
+    for p, binds in players.items():
+        roles = ({PAD_ROLES.get(c, c): b for c, b in binds.items()} if player_kind(kinds or {}, p) == 'pad'
+                 else dict(binds))
+        chosen = {role: roles.pop(ui) for ui, role in (('accept', 'b1'), ('cancel', 'b2')) if ui in roles}
+        if chosen:
+            taken = set(chosen.values())
+            roles = {c: b for c, b in roles.items() if c not in chosen and b not in taken}
+            roles.update(chosen)
+        out[p] = roles
+    return out
+
+
+def attract_save(players, devices, kinds=None):
     """Grava o joystick no attract.cfg (so se ele existe: antes da primeira
     execucao o Attract-Mode ainda nao o criou, e o --session-start do Setup
     chama de novo). Devolve o caminho, ou None."""
     path = attract_path()
-    inputs = attract_inputs(players, devices)
+    inputs = attract_inputs(menu_roles(players, kinds), devices)
     if not path or not inputs:
         return None
     with open(path, encoding='utf-8', errors='replace') as f:
@@ -888,7 +1062,7 @@ def cmd_attract(args):
     players, _ = read_map(args.map)
     if not players:
         return 0
-    path = attract_save(players, sdl_devices())
+    path = attract_save(players, sdl_devices(), read_kinds(args.map))
     if path:
         print(path)
     return 0
@@ -1231,13 +1405,29 @@ DOLPHIN_GCPAD = [
     ('Triggers/L', 'Shoulder L'), ('Triggers/R', 'Trigger R'), ('Triggers/L-Analog', 'Shoulder L'),
     ('Triggers/R-Analog', 'Trigger R'), ('Triforce/Coin', 'Back'),
 ]
+# O joypad: o analogico do GameCube no esquerdo, o C-Stick no direito, o
+# direcional no D-Pad, L e R nos gatilhos e o Z no ombro direito. No SDL do
+# Dolphin (SDLGamepad.cpp) o Y vem invertido, como no XInput: "Left Y+" e
+# para cima.
+DOLPHIN_GCPAD_PAD = [
+    ('Buttons/A', 'Button S'), ('Buttons/B', 'Button W'), ('Buttons/X', 'Button E'), ('Buttons/Y', 'Button N'),
+    ('Buttons/Z', 'Shoulder R'), ('Buttons/Start', 'Start'),
+    ('Main Stick/Up', 'Left Y+'), ('Main Stick/Down', 'Left Y-'), ('Main Stick/Left', 'Left X-'),
+    ('Main Stick/Right', 'Left X+'),
+    ('C-Stick/Up', 'Right Y+'), ('C-Stick/Down', 'Right Y-'), ('C-Stick/Left', 'Right X-'),
+    ('C-Stick/Right', 'Right X+'),
+    ('D-Pad/Up', 'Pad N'), ('D-Pad/Down', 'Pad S'), ('D-Pad/Left', 'Pad W'), ('D-Pad/Right', 'Pad E'),
+    ('Triggers/L', 'Trigger L'), ('Triggers/R', 'Trigger R'), ('Triggers/L-Analog', 'Trigger L'),
+    ('Triggers/R-Analog', 'Trigger R'), ('Triforce/Coin', 'Back'),
+]
 DOLPHIN_CALIBRATION = ' '.join(['100.00 141.42'] * 4)
 DOLPHIN_GC_CONTROLLER = '6'  # SIDEVICE_GC_CONTROLLER
 
 
-def dolphin_save(players, devices):
+def dolphin_save(players, devices, kinds=None):
     """GCPad1 a GCPad4 no GCPadNew.ini, e no Dolphin.ini a porta de cada
-    jogador como controle de GameCube (sem nada nela, a 2 a 4 vem vazia)."""
+    jogador como controle de GameCube (sem nada nela, a 2 a 4 vem vazia).
+    O joypad com analogico esquerdo ganha o DOLPHIN_GCPAD_PAD."""
     gcpad = os.path.join(DOLPHIN_DIR, 'GCPadNew.ini')
     text = read_text(gcpad)
     ports = []
@@ -1249,7 +1439,8 @@ def dolphin_save(players, devices):
         # Aparelhos de mesmo nome: 0, 1... na ordem do SDL.
         cid = sum(1 for i in devices if i < index and devices[i][1].replace(',', ' ') == name)
         values = [('Device', 'SDL/%d/%s' % (cid, name))]
-        values += [(k, '`%s`' % v) for k, v in DOLPHIN_GCPAD]
+        pad = player_kind(kinds or {}, player) == 'pad' and 'lsup' in players[player]
+        values += [(k, '`%s`' % v) for k, v in (DOLPHIN_GCPAD_PAD if pad else DOLPHIN_GCPAD)]
         values += [('Main Stick/Calibration', DOLPHIN_CALIBRATION)]
         text = ini_section(text, 'GCPad%d' % player, values, replace=True)
         ports.append(player)
@@ -1409,7 +1600,8 @@ FBNEO_NAMES = {'up': ['Up'], 'down': ['Down'], 'left': ['Left'], 'right': ['Righ
                'b3': ['Fire 3', 'Button 3', 'Strong Punch', 'Button C'],
                'b4': ['Fire 4', 'Button 4', 'Weak Kick', 'Button D'],
                'b5': ['Fire 5', 'Button 5', 'Medium Kick'],
-               'b6': ['Fire 6', 'Button 6', 'Strong Kick']}
+               'b6': ['Fire 6', 'Button 6', 'Strong Kick'],
+               'b7': ['Fire 7', 'Button 7'], 'b8': ['Fire 8', 'Button 8']}
 FBNEO_HAT = {'1': 2, '2': 1, '4': 3, '8': 0}
 
 
@@ -1450,8 +1642,8 @@ def cmd_fbneo(args):
 
 def sdl_devices():
     """{indice: (guid, nome, botoes, eixos, repouso dos eixos, codigos ABS
-    dos eixos ou None, todos os codigos ABS ou None)} dos controles ligados;
-    vazio sem o SDL."""
+    dos eixos ou None, todos os codigos ABS ou None, caminho do evdev ou
+    "")} dos controles ligados; vazio sem o SDL."""
     try:
         lib = sdl()
     except OSError:
@@ -1478,18 +1670,244 @@ def sdl_devices():
             lib.SDL_JoystickGetGUIDString(lib.SDL_JoystickGetDeviceGUID(i), buf, 33)
             out[i] = (buf.value.decode(), (lib.SDL_JoystickNameForIndex(i) or b'').decode(errors='replace'),
                       lib.SDL_JoystickNumButtons(js), lib.SDL_JoystickNumAxes(js), state(lib, js)[1],
-                      abs_codes(lib, i), abs_all(lib, i))
+                      abs_codes(lib, i), abs_all(lib, i), device_path(lib, i))
     finally:
         lib.SDL_Quit()
     return out
 
 
+def device_path(lib, index):
+    """O /dev/input/eventN do controle INDICE ("" sem o SDL 2.24)."""
+    try:
+        path_for = lib.SDL_JoystickPathForIndex
+    except AttributeError:
+        return ''
+    path_for.restype = ctypes.c_char_p
+    path_for.argtypes = [ctypes.c_int]
+    return (path_for(index) or b'').decode(errors='replace')
+
+
+# ── Controles Bluetooth: o jogador pela ordem de conexao ────────
+
+# Um controle Bluetooth nao tem jogador fixo: o Button mapping guarda o
+# mapeamento dele pelo aparelho (o GUID do SDL) em buttons-bt.map, linhas
+# "GUID CONTROLE ELEMENTO NOME" ("GUID kind pad NOME" o tipo), e a cada
+# controle ligado ou tirado (fliperos-controllers, pela regra do udev) os
+# Bluetooth ligados ganham os jogadores que os fixos (painel, USB) nao usam,
+# na ordem em que conectaram, como no Batocera. No buttons.map eles entram
+# com uma linha "JOGADOR bt INDICE GUID NOME", e cada save os refaz.
+BT_MAP = os.environ.get('FLIPEROS_BUTTONS_BT_MAP', '/etc/fliperos/buttons-bt.map')
+MAX_PLAYERS = 8
+
+
+def is_bluetooth(guid):
+    """O GUID do SDL comeca pelo barramento (16 bits, little endian): 0x0005
+    e Bluetooth."""
+    return guid[:4].lower() == '0500'
+
+
+def read_bt_profiles(path=None):
+    """{GUID: (tipo, {controle: elemento}, nome)} do buttons-bt.map."""
+    out = {}
+    for line in read_text(path or BT_MAP).splitlines():
+        parts = line.split(None, 3)
+        if len(parts) < 3 or not re.fullmatch(r'[0-9a-fA-F]{32}', parts[0]):
+            continue
+        guid, control, element = parts[0].lower(), parts[1], parts[2]
+        kind, binds, name = out.get(guid, ('pad', {}, ''))
+        name = parts[3].strip() if len(parts) > 3 else name
+        if control == 'kind' and element in KINDS:
+            kind = element
+        elif control in ALL_CONTROLS:
+            binds[control] = element
+        out[guid] = (kind, binds, name)
+    return out
+
+
+def read_autos(path):
+    """{jogador: GUID} das linhas "JOGADOR bt INDICE GUID NOME"."""
+    out = {}
+    for line in read_text(path).splitlines():
+        parts = line.split(None, 4)
+        if len(parts) >= 4 and parts[1] == 'bt' and parts[0].isdigit():
+            out[int(parts[0])] = parts[3].lower()
+    return out
+
+
+def connected_at(device):
+    """Quando o controle foi ligado: a criacao do no do evdev dele (a ordem do
+    SDL repete o numero de um evento solto, e nao e a da conexao)."""
+    path = device[7] if len(device) > 7 else ''
+    try:
+        return os.stat(path).st_ctime_ns if path else 0
+    except OSError:
+        return 0
+
+
+def resolve_bluetooth(players, names, kinds, autos, devices, profiles):
+    """Tira os jogadores Bluetooth do mapa e poe os ligados agora: cada um com
+    o perfil do aparelho (o GUID, senao o nome), nos jogadores livres em ordem,
+    pela ordem de conexao. Muda os dicionarios; devolve se algo mudou."""
+    before = (repr(sorted(players.items())), repr(sorted(kinds.items())), repr(sorted(autos.items())))
+    for player in list(autos):
+        players.pop(player, None)
+        kinds.pop(player, None)
+        autos.pop(player, None)
+    taken = set(players)
+    fixed = {index for binds in players.values() for index, _ in binds.values()}
+    by_name = {name: guid for guid, (_, _, name) in profiles.items() if name}
+    ligados = sorted((i for i in devices if is_bluetooth(devices[i][0]) and i not in fixed),
+                     key=lambda i: (connected_at(devices[i]), i))
+    for index in ligados:
+        guid, name = devices[index][0].lower(), devices[index][1]
+        profile = profiles.get(guid) or profiles.get(by_name.get(name, ''))
+        free = [p for p in range(1, MAX_PLAYERS + 1) if p not in taken]
+        if not profile or not profile[1] or not free:
+            continue
+        player = free[0]
+        taken.add(player)
+        players[player] = {c: (index, e) for c, e in profile[1].items()}
+        kinds[player] = profile[0]
+        autos[player] = guid
+        names[index] = name
+    after = (repr(sorted(players.items())), repr(sorted(kinds.items())), repr(sorted(autos.items())))
+    return before != after
+
+
+# ── Controles com fio: o jogador pela porta ─────────────────────
+
+# O indice do SDL e a ordem dos /dev/input/eventN, e um controle ligado depois
+# (um Bluetooth) pode pegar um numero que estava livre e passar a frente dos
+# com fio: o "jogador 1 = controle 0" do mapa caia nele. Cada jogador com fio
+# guarda a porta do controle dele (o caminho no sysfs ate a interface USB),
+# numa linha "JOGADOR usb INDICE PORTA NOME", e cada save poe nele o indice
+# de agora do controle daquela porta. Os com fio tem a prioridade: os
+# Bluetooth so pegam os jogadores que sobram.
+UNPLUGGED = 90                    # o indice de um com fio desligado: nenhum
+
+
+def port_of(device):
+    """A porta do controle: o caminho dele no sysfs sem o "input/inputN" do
+    fim ("pci0000:00/0000:00:1a.7/usb2/2-2/2-2.2/2-2.2:1.0"); "" sem o
+    caminho."""
+    path = device[7] if len(device) > 7 else ''
+    if not path:
+        return ''
+    try:
+        real = os.path.realpath('/sys/class/input/%s/device' % os.path.basename(path))
+    except OSError:
+        return ''
+    real = re.sub(r'/input/input\d+$', '', real)
+    return real.split('/sys/devices/', 1)[-1] if '/sys/devices/' in real else ''
+
+
+def read_ports(path):
+    """{jogador: porta} das linhas "JOGADOR usb INDICE PORTA NOME"."""
+    out = {}
+    for line in read_text(path).splitlines():
+        parts = line.split(None, 4)
+        if len(parts) >= 4 and parts[1] == 'usb' and parts[0].isdigit():
+            out[int(parts[0])] = parts[3]
+    return out
+
+
+def resolve_wired(players, names, ports, autos, devices):
+    """Poe em cada jogador com fio o indice de agora do controle da porta dele
+    (sem porta guardada, a do indice de agora, que o Button mapping acabou de
+    pegar). Fora da porta, um com fio de mesmo nome que sobrou; desligado, o
+    indice UNPLUGGED + jogador, que nao existe. Devolve se algo mudou."""
+    wired = {i: port_of(d) for i, d in devices.items() if not is_bluetooth(d[0])}
+    by_port = {p: i for i, p in wired.items() if p}
+    changed, used = False, set()
+    order = sorted(p for p in players if p not in autos)
+    # Uma porta, um controle: o jogador que repete a porta de um de numero
+    # menor e um resto (o Nyxi que o HIDAPI fazia passar por com fio) e sai.
+    seen = set()
+    for player in list(order):
+        port = ports.get(player)
+        if port and port in seen:
+            players.pop(player)
+            ports.pop(player)
+            order.remove(player)
+            changed = True
+        elif port:
+            seen.add(port)
+    targets = {}
+    for player in order:
+        indexes = {i for i, _ in players[player].values()}
+        if any(i < 0 for i in indexes):
+            continue                      # teclado
+        index = next(iter(indexes))
+        port = ports.get(player)
+        if not port and index in wired:
+            port = wired[index]
+            if port:
+                ports[player] = port
+                changed = True
+        if port in by_port and by_port[port] not in used:
+            targets[player] = by_port[port]
+            used.add(by_port[port])
+    for player in order:
+        indexes = {i for i, _ in players[player].values()}
+        if player in targets or any(i < 0 for i in indexes):
+            continue
+        old = names.get(next(iter(indexes)), '')
+        same = [i for i in sorted(wired) if i not in used and devices[i][1] == old]
+        if same:
+            targets[player] = same[0]
+            used.add(same[0])
+            if wired[same[0]]:
+                ports[player] = wired[same[0]]
+        else:
+            targets[player] = UNPLUGGED + player
+    for player, index in targets.items():
+        old = next(iter(players[player].values()))[0]
+        if old != index:
+            name = names.get(old, '')
+            players[player] = {c: (index, e) for c, (_, e) in players[player].items()}
+            names[index] = devices[index][1] if index in devices else name
+            changed = True
+    return changed
+
+
+def cmd_list(args):
+    """Os controles ligados para o Button mapping: "INDICE|GUID|NOME|usb ou
+    bluetooth|JOGADOR" (o jogador do mapa agora, vazio se nenhum). Os com fio
+    primeiro, depois os Bluetooth pela ordem de conexao; o sensor de
+    movimento de um controle ("(IMU)") nao e um controle."""
+    devices = {i: d for i, d in sdl_devices().items() if not d[1].endswith('(IMU)')}
+    players, _ = read_map(args.map) if os.path.exists(args.map) else ({}, {})
+    owner = {}
+    for player in sorted(players):
+        for index, _ in players[player].values():
+            owner.setdefault(index, player)
+    wired = [i for i in sorted(devices) if not is_bluetooth(devices[i][0])]
+    wireless = sorted((i for i in devices if is_bluetooth(devices[i][0])),
+                      key=lambda i: (connected_at(devices[i]), i))
+    for index in wired + wireless:
+        guid, name = devices[index][:2]
+        print('%d|%s|%s|%s|%s' % (index, guid, name.replace('|', '/'),
+                                  'bluetooth' if is_bluetooth(guid) else 'usb', owner.get(index, '')))
+    return 0
+
+
 def cmd_save(args):
-    players, names = read_map(args.map)
-    if not players:
-        sys.exit('mapa vazio: %s' % args.map)
+    players, names = read_map(args.map) if os.path.exists(args.map) else ({}, {})
+    kinds = read_kinds(args.map)
+    autos = read_autos(args.map)
+    ports = read_ports(args.map)
+    profiles = read_bt_profiles()
     devices = sdl_devices()
-    fixed = fix_triggers(players, devices)
+    # Os com fio pela porta (a prioridade) e os Bluetooth ligados agora, nos
+    # jogadores que sobram, pela ordem de conexao.
+    moved = resolve_wired(players, names, ports, autos, devices) if devices else False
+    if profiles or autos:
+        moved = resolve_bluetooth(players, names, kinds, autos, devices, profiles) or moved
+    if not players:
+        if moved:
+            write(os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'), '')
+        sys.exit('mapa vazio: %s' % args.map)
+    fixed = fix_triggers(players, devices) or moved
     layouts = read_layouts(BUTTONS_LAYOUT)
     write(RA_BUTTONS, retroarch_cfg(players, names, devices, read_cfg(RA_BUTTONS)))
     for count in LAYOUT_COUNTS:
@@ -1503,7 +1921,7 @@ def cmd_save(args):
     write(MAME_CTRLR, mame_cfg(players, names, layouts, table), USER_ID)
     supermodel_save(players, layouts, table)
     hypseus_save(players)
-    attract = attract_save(players, devices)
+    attract = attract_save(players, devices, kinds)
     if attract:
         print(attract)
     print(RA_BUTTONS)
@@ -1521,10 +1939,11 @@ def cmd_save(args):
         index = next(iter(binds.values()))[0]
         name = names.get(index, '')
         rests = devices[index][4] if index in devices else ()
+        dreamcast = FLYCAST_PAD if player_kind(kinds, player) == 'pad' else FLYCAST_DC
         if name and name not in done:
             done.add(name)
             for folder in dirs:
-                for arcade, keys in ((False, FLYCAST_DC), (True, FLYCAST_ARCADE)):
+                for arcade, keys in ((False, dreamcast), (True, FLYCAST_ARCADE)):
                     path = os.path.join(folder, flycast_filename(name, arcade))
                     write(path, flycast_cfg(name, binds, keys, rests), USER_ID)
                     print(path)
@@ -1535,20 +1954,21 @@ def cmd_save(args):
         print(OPENBOR_SAVES)
         print(OPENBOR3_SAVES)
     if devices:
-        lines = sdl_user_db(players, devices)
+        lines = sdl_user_db(players, devices, kinds)
         write(SDL_USER_DB, ''.join(line + '\n' for line in lines.values()))
         print(SDL_USER_DB)
-        for path in (dolphin_save(players, devices) + model2_save(players, devices, layouts)
+        for path in (dolphin_save(players, devices, kinds) + model2_save(players, devices, layouts)
                      + pcsx2x6_save(players, devices, layouts)):
             print(path)
-        # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo.
-        if os.access(CONTROLLERS, os.X_OK):
-            os.system('"%s" > /dev/null 2>&1' % CONTROLLERS)
+        # O gamecontrollerdb.txt de novo, com o mapeamento por ultimo (sem
+        # que ele chame este save de volta: FLIPEROS_CONTROLLERS_ONLY).
+        if os.access(CONTROLLERS, os.X_OK) and not os.environ.get('FLIPEROS_BUTTONS_FROM_CONTROLLERS'):
+            os.system('FLIPEROS_CONTROLLERS_ONLY=1 "%s" > /dev/null 2>&1' % CONTROLLERS)
     # O mapa, para a atualizacao do sistema gravar tudo de novo.
     keep = os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map')
     if fixed:
-        # Com o sentido dos gatilhos acertado.
-        write(keep, map_text(players, names))
+        # Com o sentido dos gatilhos acertado e os Bluetooth de agora.
+        write(keep, map_text(players, names, kinds, autos, ports))
     elif os.path.abspath(args.map) != os.path.abspath(keep):
         with open(args.map, encoding='utf-8') as f:
             write(keep, f.read())
@@ -1595,6 +2015,13 @@ def cmd_keyboard(args):
 # le: o watch do painel web nao saia no SIGTERM, e o desligar esperava os 90 s
 # do systemd ate o SIGKILL. Vale para todo SDL_Init deste programa.
 os.environ['SDL_NO_SIGNAL_HANDLERS'] = '1'
+# Sem o HIDAPI do SDL: como root (o Setup, o fliperos-controllers) ele abre
+# um controle Nintendo ou PlayStation pelo /dev/hidraw, com outro nome, outro
+# GUID (o barramento USB, mesmo pelo Bluetooth) e no comeco da lista; os
+# emuladores, como o usuario, nao leem o hidraw (so do root) e o veem pelo
+# evdev, no fim. O mapa tem de ter os indices e os GUIDs que eles veem: o
+# GameCube Nyxi do gabinete virava o controle 0 "com fio" (2026-11-09).
+os.environ['SDL_JOYSTICK_HIDAPI'] = '0'
 
 
 def sdl():
@@ -1668,13 +2095,18 @@ def cmd_capture(args):
         rest = [state(lib, js) if js else None for js in sticks]
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline:
+            # O Esc da tela do Button mapping (a interface grafica cria o arquivo).
+            if args.cancel and os.path.exists(args.cancel):
+                return 3
             lib.SDL_JoystickUpdate()
             for index, js in enumerate(sticks):
-                if not js:
+                if not js or args.device >= 0 and index != args.device:
                     continue
                 now = state(lib, js)
                 element = pressed(rest[index], now)
                 if element:
+                    if args.hold and hold_skips(lib, js, element, args.hold):
+                        return 2
                     name = (lib.SDL_JoystickName(js) or b'').decode(errors='replace')
                     print('%d %s %s' % (index, element, name))
                     return 0
@@ -1683,6 +2115,117 @@ def cmd_capture(args):
         return 1
     finally:
         lib.SDL_Quit()
+
+
+def hold_skips(lib, js, element, hold):
+    """Como no mapeador do Batocera ("hold any button to skip"): o comando
+    vale quando o elemento e solto; segurado por `hold` segundos, ele pula o
+    comando da vez (True)."""
+    since = time.monotonic()
+    while time.monotonic() - since < hold:
+        lib.SDL_JoystickUpdate()
+        if not held(element, state(lib, js)):
+            return False
+        time.sleep(0.005)
+    return True
+
+
+# ── identify: o controle que o SDL conhece ──────────────────────
+
+# O tipo do controle (SDL_GameControllerType) e o desenho dos botoes: as
+# letras do Xbox, os simbolos do PlayStation ou as letras da Nintendo (A no
+# leste). O resto, os nomes de posicao (sul, leste...), como no Batocera.
+SDL_TYPES = {1: 'xbox', 2: 'xbox', 3: 'playstation', 4: 'playstation', 5: 'nintendo', 7: 'playstation',
+             8: 'xbox', 9: 'xbox', 10: 'xbox', 11: 'nintendo', 12: 'nintendo', 13: 'nintendo'}
+NAME_TYPES = [(r'xbox|x-box|xinput|8bitdo.*ultimate', 'xbox'),
+              (r'playstation|dualshock|dualsense|sony|ps[2345]\b', 'playstation'),
+              (r'nintendo|switch|joy-con|pro controller|snes|nes\b', 'nintendo')]
+
+
+def pad_type(sdl_type, name):
+    """xbox, playstation, nintendo ou generic: pelo SDL ou, sem ele, pelo nome."""
+    if sdl_type in SDL_TYPES:
+        return SDL_TYPES[sdl_type]
+    for pattern, kind in NAME_TYPES:
+        if re.search(pattern, name or '', re.I):
+            return kind
+    return 'generic'
+
+
+def mapping_binds(mapping):
+    """{controle do mapa: elemento} de um mapeamento do SDL ("a:b0,lefty:a1"),
+    no joypad (o inverso do SDL_PAD_SLOTS): o gatilho num eixo inteiro vira
+    "+a2", o analogico o sentido de cima ou da esquerda ("lefty:a1~" e +a1)."""
+    slots = {v: k for k, v in SDL_PAD_SLOTS.items()}
+    sticks = {v: k for k, v in SDL_STICKS.items()}
+    out = {}
+    for field in (mapping or '').split(',')[2:]:
+        key, _, value = field.partition(':')
+        if key in sticks:
+            m = re.fullmatch(r'a(\d+)(~?)', value)
+            if m:
+                out[sticks[key]] = ('+' if m.group(2) else '-') + 'a' + m.group(1)
+        elif key in slots:
+            m = re.fullmatch(r'a(\d+)~?', value)
+            if m:
+                value = '+a' + m.group(1)
+            if re.fullmatch(r'b\d+|h\d+\.[1248]|[+-]a\d+', value):
+                out[slots[key]] = value
+    return out
+
+
+def cmd_identify(args):
+    """O controle INDICE (a numeracao do SDL da captura): name=, guid=,
+    type= (xbox, playstation, nintendo, generic), known= (1: o banco do SDL
+    tem o mapeamento dele, que vem em mapping= e, no formato do mapa, em
+    linhas "bind CONTROLE ELEMENTO"). Como o EmulationStation acha um
+    controle conhecido; o mapeamento gerado pelo fliperos-controllers nao
+    conta (sem os arquivos dele)."""
+    for var in ('SDL_GAMECONTROLLERCONFIG', 'SDL_GAMECONTROLLERCONFIG_FILE'):
+        os.environ.pop(var, None)
+    # As letras A B X Y pela posicao, nao pelo rotulo (Nintendo: A no leste).
+    os.environ['SDL_GAMECONTROLLER_USE_BUTTON_LABELS'] = '0'
+    lib = sdl()
+
+    class GUID(ctypes.Structure):
+        _fields_ = [('data', ctypes.c_uint8 * 16)]
+    lib.SDL_JoystickGetDeviceGUID.restype = GUID
+    lib.SDL_JoystickGetGUIDString.argtypes = [GUID, ctypes.c_char_p, ctypes.c_int]
+    lib.SDL_JoystickNameForIndex.restype = ctypes.c_char_p
+    lib.SDL_GameControllerMappingForDeviceIndex.restype = ctypes.c_void_p
+    lib.SDL_free.argtypes = [ctypes.c_void_p]
+    if lib.SDL_Init(0x200 | 0x2000) != 0:  # JOYSTICK | GAMECONTROLLER
+        sys.exit('SDL: no joystick')
+    try:
+        if not 0 <= args.index < lib.SDL_NumJoysticks():
+            return 1
+        buf = ctypes.create_string_buffer(33)
+        lib.SDL_JoystickGetGUIDString(lib.SDL_JoystickGetDeviceGUID(args.index), buf, 33)
+        name = (lib.SDL_JoystickNameForIndex(args.index) or b'').decode(errors='replace')
+        mapping = ''
+        if lib.SDL_IsGameController(args.index):
+            p = lib.SDL_GameControllerMappingForDeviceIndex(args.index)
+            if p:
+                mapping = ctypes.string_at(p).decode(errors='replace')
+                lib.SDL_free(p)
+        try:
+            sdl_type = lib.SDL_GameControllerTypeForIndex(args.index)
+        except AttributeError:
+            sdl_type = 0
+    finally:
+        lib.SDL_Quit()
+    # Do banco do SDL (tem "platform:"), como no fliperos-controllers; o
+    # automatico do SDL nao e um controle conhecido.
+    known = 'platform:' in mapping
+    print('name=%s' % name)
+    print('guid=%s' % buf.value.decode())
+    print('type=%s' % pad_type(sdl_type, name))
+    print('known=%d' % known)
+    print('mapping=%s' % (mapping if known else ''))
+    if known:
+        for control, element in sorted(mapping_binds(mapping).items(), key=lambda kv: ALL_CONTROLS.index(kv[0])):
+            print('bind %s %s' % (control, element))
+    return 0
 
 
 # ── watch: os comandos apertados agora ──────────────────────────
@@ -1771,8 +2314,8 @@ def watch_state(players, sticks, keys):
     out = {}
     for player in sorted(players):
         on = []
-        for control in CONTROLS:
-            if control not in players[player]:
+        for control in ALL_CONTROLS:
+            if control not in players[player] or control in STICKS or control in UI_CONTROLS:
                 continue
             index, element = players[player][control]
             if is_key(element):
@@ -1886,7 +2429,7 @@ def cmd_hotkey(args):
         os.nice(10)
     except OSError:
         pass
-    combo = set(c for c in (args.combo or '').split('+') if c in CONTROLS)
+    combo = set(c for c in (args.combo or '').split('+') if c in ALL_CONTROLS)
     players = watch_players(args.map)
     wanted = combo | ({'coin'} if args.coin else set())
     elements = [e for binds in players.values() for c, (_, e) in binds.items() if c in wanted]
@@ -1931,7 +2474,16 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     p = sub.add_parser('capture')
     p.add_argument('--timeout', type=float, default=8)
+    p.add_argument('--hold', type=float, default=0)
+    p.add_argument('--device', type=int, default=-1)
+    p.add_argument('--cancel', default='')
     p.set_defaults(func=cmd_capture)
+    p = sub.add_parser('identify')
+    p.add_argument('index', type=int)
+    p.set_defaults(func=cmd_identify)
+    p = sub.add_parser('list')
+    p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_list)
     p = sub.add_parser('save')
     p.add_argument('map')
     p.set_defaults(func=cmd_save)

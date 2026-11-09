@@ -134,6 +134,8 @@ packages+=(samba-vfs-modules)
 packages+=(cdrdao mame-tools)
 # O avrdude grava o firmware do leitor de cartuchos (lib/oscr.sh).
 packages+=(avrdude)
+# Os controles Bluetooth (Setup > Joysticks > Bluetooth, config/fliperos-bluetooth).
+packages+=(bluez)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
 # repositorio local o tem (o das imagens anteriores nao tem: fica no X).

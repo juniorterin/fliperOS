@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# Setup > Joysticks: os botoes do painel (lib/buttons.sh), o layout deles por
-# numero de botoes do jogo, a calibracao do GunCon 2 e de volante/pedais/analogico
+# Setup > Joysticks: os botoes do painel ou do joypad (lib/buttons.sh), os
+# controles Bluetooth (screens/bluetooth.sh), o layout dos botoes por numero
+# de botoes do jogo, a calibracao do GunCon 2 e de volante/pedais/analogico
 # (config/fliperos-calibrate) e os joysticks da porta paralela (lpt.sh). Os
 # quirks USB ficam em System (screen_quirks): valem para qualquer aparelho.
 
@@ -10,7 +11,8 @@ screen_joysticks() {
   local choice last=""
   while true; do
     choice=$(ui_menu_hints "Joysticks" "$(buttons_players_line)" "$last" \
-      "buttons|Button mapping (all emulators)|Teach FliperOS the panel: press each control when asked." \
+      "buttons|Button mapping (all emulators)|Arcade panel or joypad: press each control when asked." \
+      "bluetooth|Bluetooth|Pair, connect and forget Bluetooth controllers." \
       "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
       "guncon|GunCon 2 (light gun)|Calibration, screen flash and how the gun reads dark parts." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
@@ -19,6 +21,7 @@ screen_joysticks() {
     last=$choice
     case $choice in
       buttons) screen_buttons ;;
+      bluetooth) screen_bluetooth ;;
       layout) screen_buttons_layout ;;
       guncon) screen_guncon ;;
       axes) screen_calibrate axes ;;
@@ -101,80 +104,319 @@ screen_gun_values() {
   done
 }
 
-# screen_buttons: quantos jogadores e, de cada um, os comandos na ordem do
-# painel, pegos no proprio controle (o primeiro comando diz qual controle e
-# o do jogador). Sem apertar nada por um tempo, o comando fica de fora. O
-# controle como teclado do menu fica desligado enquanto isso: os botoes
-# apertados nao podem responder o menu.
+# screen_buttons: os controles ligados numa lista; o escolhido diz qual
+# jogador ele e (de 1 ao numero de controles ligados) e o tipo: painel de
+# arcade ou JAMMA (com quantos botoes, de 1 a 8) ou joypad (o mapeador do
+# Batocera). Um controle Bluetooth nao tem numero: os Bluetooth tomam os
+# jogadores livres pela ordem em que conectam (fliperos-buttons). Pego e
+# salvo, volta a lista para o proximo. O encoder que se diz teclado tambem
+# esta na lista.
 screen_buttons() {
-  local title="Button mapping" kind players p control dev name got index element tries summary map n used
-  local -a pressed
-  kind=$(ui_menu_hints "$title" "What is wired to the panel?" panel \
-    "panel|Controllers (press each control)|Joystick encoders and pads: press each control when asked." \
-    "keyboard|Keyboard encoder (MAME default keys)|An encoder that types keys (I-PAC and others) in the MAME layout." \
-    "return|Return|Back to Joysticks.") || return 0
-  case $kind in
-    keyboard)
-      screen_buttons_keyboard
-      return 0
-      ;;
-    return) return 0 ;;
-  esac
-  players=$(ui_menu "$title" \
-    "Map the panel for all emulators, one player at a time: press each control when asked. How many players?" \
-    "$(buttons_players_connected)" "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
-  [[ $players == return ]] && return 0
-  map=$(mktemp)
-  padkeys_off
-  for ((p = 1; p <= players; p++)); do
-    dev="" n=0 pressed=()
-    for control in "${BUTTON_CONTROLS[@]}"; do
-      n=$((n + 1))
-      for ((tries = 0; tries < 3; tries++)); do
-        # O painel desenhado com o comando da vez: aceso na interface
-        # grafica, com um X piscando no texto (o gum do primeiro boot).
-        ui_capture "$title" "$p" "$control" "$n" "${#BUTTON_CONTROLS[@]}" 8 "${pressed[@]}" ||
-          ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press ${BUTTON_LABELS[$control]}")" "" \
-            "$n of ${#BUTTON_CONTROLS[@]}. Wait 8 seconds to skip it."
-        got=$(ui_capture_wait buttons_capture 8) || break
-        read -r index element name <<< "$got"
-        # Um botao so faz uma coisa: o que ja foi dado a outro comando (deste
-        # jogador ou de outro, no mesmo controle) nao vale.
-        used=$(buttons_used "$map" "$index" "$element")
-        if [[ -n $used ]]; then
-          ui_info "$title" "That one is already ${used% *} of player ${used##* }." \
-            "Press another control for ${BUTTON_LABELS[$control]}."
-          sleep 1.5
-          continue
-        fi
-        if [[ -z $dev || $index == "$dev" ]]; then
-          dev=$index
-          printf '%s %s %s %s %s\n' "$p" "$control" "$index" "$element" "$name" >> "$map"
-          pressed+=("$control")
-          sleep 0.3
-          break
-        fi
-        ui_info "$title" "That was another controller." "Press it on the controller of player $p."
-        sleep 1.5
-      done
+  local title="Button mapping" choice last="" line index guid name bus player text tag rc
+  local -a devices entries
+  while true; do
+    mapfile -t devices < <(buttons_list)
+    entries=()
+    for line in "${devices[@]}"; do
+      IFS='|' read -r index guid name bus player <<< "$line"
+      [[ $index =~ ^[0-9]+$ ]] || continue
+      # O jogador e o BT na frente: um nome comprido e cortado na lista.
+      tag="--"
+      [[ -n $player ]] && tag="P$player"
+      [[ $bus == bluetooth ]] && tag+=" BT"
+      entries+=("$index|$tag $name")
     done
+    if ((${#entries[@]})); then
+      text="Choose a controller to map: ${#entries[@]} connected (P = player, -- = not mapped). Wired ones come first; Bluetooth (BT) ones take the players left, by the order they connect."
+    else
+      text="No controller is connected. Connect one (Bluetooth: Joysticks > Bluetooth) and come back."
+    fi
+    # UI_STYLE=controllers: na interface grafica, a lista com o icone de com
+    # fio ou sem fio (o "BT") em cada controle.
+    # Um controle ligado, pareado ou tirado com a lista na tela: ela se refaz
+    # (status 124, com o item que estava sob o cursor).
+    rc=0
+    choice=$(UI_STYLE=controllers ui_menu "$title" "$text" "$last" "${entries[@]}" \
+      "keyboard|Keyboard encoder (MAME default keys)" "return|Return") || rc=$?
+    if ((rc == 124)); then
+      last=$choice
+      continue
+    fi
+    ((rc == 0)) || return 0
+    case $choice in
+      return) return 0 ;;
+      keyboard)
+        screen_buttons_keyboard
+        continue
+        ;;
+    esac
+    last=$choice
+    for line in "${devices[@]}"; do
+      [[ ${line%%|*} == "$choice" ]] && break
+    done
+    IFS='|' read -r index guid name bus player <<< "$line"
+    screen_buttons_device "$title" "$index" "$guid" "$name" "$bus" "$player" "${#entries[@]}"
   done
+}
+
+# screen_buttons_device TITULO INDICE GUID NOME BARRAMENTO JOGADOR LIGADOS: o
+# jogador do controle (o Bluetooth nao escolhe), o tipo e os comandos; no
+# fim pergunta se grava (buttons_store e buttons_save).
+screen_buttons_device() {
+  local title=$1 index=$2 guid=$3 name=$4 bus=$5 current=$6 count=$7 player kind nbuttons=0 p map shown
+  local -a entries
+  if [[ $bus == bluetooth ]]; then
+    player=bt
+    shown=${current:-$(buttons_next_player)}
+  else
+    ((count < 1)) && count=1
+    ((count > 8)) && count=8
+    ((current > count)) && count=$current
+    entries=()
+    for ((p = 1; p <= count; p++)); do
+      entries+=("$p|Player $p")
+    done
+    player=$(ui_menu "$title" "Which player is $name?" "${current:-1}" "${entries[@]}" "return|Return") || return 0
+    [[ $player =~ ^[0-9]+$ ]] || return 0
+    shown=$player
+  fi
+  kind=$(ui_menu_hints "$title" "$name: what kind of controller is it?" "$([[ $bus == bluetooth ]] && echo pad || echo arcade)" \
+    "arcade|Arcade stick or JAMMA panel|A stick and 1 to 8 buttons, on an encoder or a JAMMA board." \
+    "pad|Joypad (console controller)|Xbox, PlayStation, Nintendo, 8BitDo...: USB or Bluetooth." \
+    "return|Return|Back to the controllers.") || return 0
+  case $kind in
+    arcade)
+      entries=()
+      for ((p = 1; p <= BUTTONS_MAX; p++)); do
+        entries+=("$p|$p button$( ((p > 1)) && echo s)")
+      done
+      # UI_STYLE=panel: na interface grafica, o painel de cada numero desenhado.
+      nbuttons=$(UI_STYLE=panel ui_menu "$title" "How many buttons does it have? Start and Coin do not count." \
+        "$(buttons_panel_count)" "${entries[@]}" "return|Return") || return 0
+      [[ $nbuttons =~ ^[1-8]$ ]] || return 0
+      ;;
+    pad) ;;
+    *) return 0 ;;
+  esac
+  map=$(mktemp)
+  BUTTONS_SUMMARY="" BUTTONS_CANCELLED=0
+  rm -f "$BUTTONS_CANCEL"
+  padkeys_off
+  if [[ $kind == pad ]]; then
+    screen_buttons_pad "$title" "$shown" "$map" "$index" "$name"
+  else
+    screen_buttons_arcade "$title" "$shown" "$nbuttons" "$map" "$index" "$name"
+  fi
+  # Depois do controle, os botoes da interface: o de aceitar e o de voltar.
+  if ((!BUTTONS_CANCELLED)) && [[ -n $BUTTONS_SUMMARY ]]; then
+    screen_buttons_interface "$title" "$shown" "$map" "$index" "$name" "$kind"
+  fi
   padkeys_on
+  rm -f "$BUTTONS_CANCEL"
   ui_flush_input
-  if [[ ! -s $map ]]; then
+  # O Esc na captura: nada muda.
+  if ((BUTTONS_CANCELLED)); then
+    ui_msg "$title" "Cancelled: nothing was changed."
+    rm -f "$map"
+    return 0
+  fi
+  if [[ -z $BUTTONS_SUMMARY ]]; then
     ui_msg "$title" "Nothing was pressed: nothing was changed."
     rm -f "$map"
     return 0
   fi
-  summary=$(awk '{ print $1 }' "$map" | sort | uniq -c | awk '{ printf "player %s: %d of 12, ", $2, $1 }')
-  if ui_yesno "$title" "Save the mapping for all emulators? Controls mapped: ${summary%, }."; then
-    if buttons_save "$map"; then
-      ui_msg "$title" "Saved. The emulators use it from the next game."
+  if ui_yesno "$title" "Save $name for all emulators? Controls mapped: ${BUTTONS_SUMMARY%, }."; then
+    buttons_store "$map" "$player" "$index" "$guid"
+    if buttons_save "$BUTTONS_MAP"; then
+      if [[ $player == bt ]]; then
+        ui_msg "$title" "Saved. It takes the next free player when it connects (now player $shown)."
+      else
+        ui_msg "$title" "Saved as player $player. The emulators use it from the next game."
+      fi
     else
       ui_msg "$title" "$(ui_bad "Could not save the mapping.")" "Details in $FLIPEROS_LOG."
     fi
   fi
   rm -f "$map"
+}
+
+# screen_buttons_interface TITULO JOGADOR MAPA INDICE NOME TIPO: os botoes da
+# interface, o de aceitar (verde) e o de voltar (vermelho) nos menus do
+# Setup, do frontend do FliperOS e do Attract-Mode (linhas accept e cancel no
+# mapa). Sem apertar nada por 10 s fica o padrao: num joypad o de sul e o de
+# leste, num painel o botao 1 e o 2. So botoes valem, e o de voltar nao pode
+# ser o de aceitar.
+screen_buttons_interface() {
+  local title=$1 p=$2 map=$3 dev=$4 name=$5 kind=$6 which got rc element accept="" def
+  local -A defaults=([accept]=b1 [cancel]=b2)
+  [[ $kind == pad ]] && defaults=([accept]=b4 [cancel]=b5)
+  for which in accept cancel; do
+    while true; do
+      # Sem o nome de posicao (sul, leste): a pessoa olha o proprio controle
+      # (GameCube, Xbox, PlayStation...) e aperta o que quer.
+      ui_confirm_capture "$title" "$p" "$which" 10 ||
+        ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press the button that $([[ $which == accept ]] &&
+          echo "accepts (green)" || echo "goes back (red)") in the menus")" "" \
+          "Wait 10 seconds to keep the usual one, Esc cancels."
+      rc=0
+      got=$(ui_capture_wait buttons_capture 10 "" "$dev") || rc=$?
+      if ((rc == 3)); then
+        BUTTONS_CANCELLED=1
+        return 0
+      fi
+      if ((rc != 0)); then
+        # O padrao: o botao do mapa nesse papel.
+        def=$(awk -v p="$p" -v c="${defaults[$which]}" '$1 == p && $2 == c { print $4; exit }' "$map")
+        [[ $which == accept ]] && accept=$def
+        break
+      fi
+      read -r _ element _ <<< "$got"
+      if [[ ! $element =~ ^b[0-9]+$ || ($which == cancel && $element == "$accept") ]]; then
+        ui_info "$title" "Use another button." "The menus need a button, and Back cannot be the same as Accept."
+        sleep 1.5
+        continue
+      fi
+      printf '%s %s %s %s %s\n' "$p" "$which" "$dev" "$element" "$name" >> "$map"
+      [[ $which == accept ]] && accept=$element
+      sleep 0.3
+      break
+    done
+  done
+}
+
+# screen_buttons_arcade TITULO JOGADOR BOTOES MAPA INDICE NOME: os comandos
+# de um painel de BOTOES botoes no controle INDICE, no painel desenhado (o
+# comando da vez aceso na interface grafica, um X piscando no texto). So o
+# controle escolhido conta; sem apertar nada por 8 s, o comando fica de
+# fora. Poe em BUTTONS_SUMMARY quantos foram pegos.
+screen_buttons_arcade() {
+  local title=$1 p=$2 nbuttons=$3 map=$4 dev=$5 name=$6 control got index element tries used n=0 total rc
+  local -a controls pressed=()
+  read -r -a controls <<< "$(buttons_arcade_controls "$nbuttons")"
+  total=${#controls[@]}
+  printf '%s kind %s arcade %s\n' "$p" "$dev" "$name" >> "$map"
+  for control in "${controls[@]}"; do
+    n=$((n + 1))
+    for ((tries = 0; tries < 3; tries++)); do
+      ui_capture "$title" "$p" "$control" "$n" "$total" 8 "$nbuttons" "${pressed[@]}" ||
+        ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press ${BUTTON_LABELS[$control]}")" "" \
+          "$n of $total. Wait 8 seconds to skip it, Esc cancels."
+      rc=0
+      got=$(ui_capture_wait buttons_capture 8 "" "$dev") || rc=$?
+      if ((rc == 3)); then
+        BUTTONS_CANCELLED=1
+        return 0
+      fi
+      ((rc == 0)) || break
+      read -r index element _ <<< "$got"
+      # Um botao so faz uma coisa: o que ja foi dado a outro comando nao vale.
+      used=$(buttons_used "$map" "$index" "$element")
+      if [[ -n $used ]]; then
+        ui_info "$title" "That one is already ${used% *}." "Press another control for ${BUTTON_LABELS[$control]}."
+        sleep 1.5
+        continue
+      fi
+      printf '%s %s %s %s %s\n' "$p" "$control" "$dev" "$element" "$name" >> "$map"
+      pressed+=("$control")
+      sleep 0.3
+      break
+    done
+  done
+  ((${#pressed[@]})) || return 0
+  BUTTONS_SUMMARY="player $p: ${#pressed[@]} of $total, "
+}
+
+# screen_buttons_pad TITULO JOGADOR MAPA INDICE NOME: o mapeador de joypad do
+# Batocera (GuiInputConfig) no controle INDICE: a lista de todos os comandos
+# com o desenho de cada um, pedidos na ordem dele (sul, leste, norte, oeste,
+# Start, Select, direcional, ombros, analogicos, gatilhos, cliques e hotkey).
+# O comando vale ao soltar, e segurar qualquer botao 1 s pula o da vez (sem
+# nada por 10 s tambem). Antes, o SDL diz o tipo do controle (o desenho dos
+# botoes) e, num controle que ele conhece, oferece o layout inteiro
+# (screen_buttons_pad_known). Sem hotkey no fim, oferece o Select, como o
+# Batocera. Poe em BUTTONS_SUMMARY quantos foram pegos.
+screen_buttons_pad() {
+  local title=$1 p=$2 map=$3 dev=$4 name=$5 control type got index element tries used n=0 rc label
+  local total=${#PAD_CONTROLS[@]} count=0 coin=""
+  local -a done=()
+  if screen_buttons_pad_known "$title" "$p" "$dev" "$name" "$map"; then
+    BUTTONS_SUMMARY="player $p: known layout, "
+    return 0
+  fi
+  ((BUTTONS_CANCELLED)) && return 0
+  type=${BUTTONS_PAD_TYPE:-generic}
+  printf '%s kind %s pad %s\n' "$p" "$dev" "$name" >> "$map"
+  for control in "${PAD_CONTROLS[@]}"; do
+    n=$((n + 1))
+    for ((tries = 0; tries < 3; tries++)); do
+      label=$(buttons_pad_label "$control" "$type")
+      ui_pad_capture "$title" "$p" "$control" "$n" "$type" "$name" "${done[@]}" ||
+        ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press $label")" "" "$n of $total. Hold any button to skip it, Esc cancels."
+      rc=0
+      got=$(ui_capture_wait buttons_capture "$PAD_TIMEOUT" "$PAD_HOLD" "$dev") || rc=$?
+      if ((rc == 3)); then
+        BUTTONS_CANCELLED=1
+        return 0
+      fi
+      if ((rc != 0)); then
+        # Pulado: segurado, ou nada por PAD_TIMEOUT segundos.
+        done+=("$control=-")
+        break
+      fi
+      read -r index element _ <<< "$got"
+      used=$(buttons_used "$map" "$index" "$element")
+      if [[ -n $used ]]; then
+        ui_info "$title" "That one is already ${used% *}." "Press another control for $label."
+        sleep 1.5
+        continue
+      fi
+      printf '%s %s %s %s %s\n' "$p" "$control" "$dev" "$element" "$name" >> "$map"
+      done+=("$control=$element")
+      count=$((count + 1))
+      [[ $control == coin ]] && coin=$element
+      sleep 0.2
+      break
+    done
+  done
+  if [[ " ${done[*]} " == *" hotkey=-"* && -n $coin ]]; then
+    padkeys_on
+    ui_flush_input
+    if ui_yesno "$title" "No hotkey button was given. Use SELECT as the hotkey?"; then
+      printf '%s hotkey %s %s %s\n' "$p" "$dev" "$coin" "$name" >> "$map"
+    fi
+    padkeys_off
+  fi
+  ((count)) || return 0
+  BUTTONS_SUMMARY="player $p: $count of $total, "
+}
+
+# screen_buttons_pad_known TITULO JOGADOR INDICE NOME MAPA: o controle pelo
+# SDL (fliperos-buttons identify). Guarda o tipo dele em BUTTONS_PAD_TYPE; se
+# o banco do SDL o conhece, pergunta se fica o layout dele, como o
+# EmulationStation faz com um controle conhecido. Status 0: o layout foi
+# posto no mapa.
+screen_buttons_pad_known() {
+  local title=$1 p=$2 dev=$3 name=$4 map=$5 info choice kind control element
+  BUTTONS_PAD_TYPE=generic
+  info=$(buttons_identify "$dev") || return 1
+  kind=$(sed -n 's/^type=//p' <<< "$info")
+  [[ $kind =~ ^(xbox|playstation|nintendo|generic)$ ]] && BUTTONS_PAD_TYPE=$kind
+  [[ $(sed -n 's/^known=//p' <<< "$info") == 1 ]] || return 1
+  padkeys_on
+  choice=$(ui_menu_hints "$title" "$name: FliperOS knows this controller and where each of its buttons is." use \
+    "use|Use its layout|Each button where the controller has it: nothing more to press." \
+    "map|Map each button|Press each control when asked, as in Batocera.") || choice=cancel
+  padkeys_off
+  if [[ $choice == cancel ]]; then
+    BUTTONS_CANCELLED=1
+    return 2
+  fi
+  [[ $choice == use ]] || return 1
+  printf '%s kind %s pad %s\n' "$p" "$dev" "$name" >> "$map"
+  while read -r control element; do
+    printf '%s %s %s %s %s\n' "$p" "$control" "$dev" "$element" "$name" >> "$map"
+  done < <(sed -n 's/^bind //p' <<< "$info")
+  return 0
 }
 
 # screen_buttons_keyboard: o encoder que se diz teclado, no layout do MAME

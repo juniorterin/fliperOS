@@ -41,18 +41,94 @@ AXIS_ON = 0.55
 DEBOUNCE = 0.06
 
 
-def read_map(path=MAP):
-    """[(controle, indice do joystick, elemento)] de todos os jogadores."""
-    rows = []
+# O joypad (o tipo "pad" do Button mapping) tem a coluna dele no Frontend
+# controls: cada funcao vai num papel do joypad, e nao num botao do painel. Os
+# papeis: o aceitar e o voltar (os botoes da interface do Button mapping; sem
+# eles, o de sul e o de leste), os quatro botoes pela posicao, os ombros, os
+# gatilhos, Start, Select e o direcional. No mapa os botoes do joypad estao
+# nos comandos do RetroPad (o 4 e o de sul, o 5 o de leste...): JOY_ROLES os
+# traduz, e as linhas do joypad viram "j:PAPEL".
+JOY = ("up", "down", "left", "right", "accept", "cancel", "south", "east", "west", "north", "l1", "r1", "l2",
+       "r2", "start", "select")
+JOY_ROLES = {"up": "up", "down": "down", "left": "left", "right": "right", "b4": "south", "b5": "east",
+             "b1": "west", "b2": "north", "b3": "l1", "b6": "r1", "b7": "l2", "b8": "r2", "start": "start",
+             "coin": "select"}
+JOY_NAMES = {"accept": "ACCEPT", "cancel": "BACK", "l1": "L1", "r1": "R1", "l2": "L2", "r2": "R2"}
+# A funcao de cada papel de sempre: o aceitar escolhe e o voltar volta, os
+# ombros paginam, o de norte e o favorito, o de oeste o filtro, Start o modo e
+# Select as opcoes do jogo.
+JOY_DEFAULT = {"up": "up", "down": "down", "left": "left", "right": "right", "b1": "accept", "b2": "cancel",
+               "b3": "l1", "b6": "r1", "b4": "north", "b5": "west", "start": "start", "tab": "select"}
+MAP_CONTROLS = CONTROLS + ("b7", "b8")
+
+
+def read_lines(path=MAP):
     try:
         with open(path, encoding="utf-8") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) >= 4 and parts[1] in CONTROLS and parts[2].isdigit():
-                    rows.append((parts[1], int(parts[2]), parts[3]))
+            return [line.split() for line in f]
     except OSError:
-        pass
+        return []
+
+
+def read_map(path=MAP):
+    """[(controle, indice do joystick, elemento)] de todos os jogadores. O
+    painel com os comandos dele; o joypad com "j:PAPEL" (JOY_ROLES) e o
+    aceitar e o voltar dele ("j:accept", "j:cancel": os escolhidos no Button
+    mapping ou o de sul e o de leste), estes primeiro: apertando o botao
+    verde, o Frontend controls pega o "aceitar", e nao a posicao dele. O
+    Select do joypad e tambem a ficha."""
+    rows, pads, lines = [], set(), read_lines(path)
+    for parts in lines:
+        if len(parts) >= 4 and parts[1] == "kind" and parts[3] == "pad":
+            pads.add(parts[0])
+    ui = {}
+    for parts in lines:
+        if len(parts) < 4 or not parts[2].isdigit():
+            continue
+        if parts[0] in pads:
+            if parts[1] in ("accept", "cancel"):
+                ui.setdefault(parts[0], {})[parts[1]] = (int(parts[2]), parts[3])
+            elif parts[1] in ("b4", "b5"):
+                ui.setdefault(parts[0], {}).setdefault("south" if parts[1] == "b4" else "east",
+                                                       (int(parts[2]), parts[3]))
+    for player, found in sorted(ui.items()):
+        for role, fallback in (("accept", "south"), ("cancel", "east")):
+            bind = found.get(role) or found.get(fallback)
+            if bind:
+                rows.append(("j:" + role, bind[0], bind[1]))
+    for parts in lines:
+        if len(parts) < 4 or parts[1] not in MAP_CONTROLS or not parts[2].isdigit():
+            continue
+        if parts[0] in pads:
+            rows.append(("j:" + JOY_ROLES[parts[1]], int(parts[2]), parts[3]))
+            if parts[1] == "coin":
+                rows.append(("coin", int(parts[2]), parts[3]))
+        elif parts[1] in CONTROLS:
+            rows.append((parts[1], int(parts[2]), parts[3]))
     return rows
+
+
+def interface_roles(path=MAP):
+    """{"accept": papel, "cancel": papel} do primeiro joypad do mapa: o botao
+    que ele escolheu no Button mapping como aceitar e voltar, pela posicao
+    (o guia desenha a funcao nele); sem escolha, o de sul e o de leste."""
+    lines = read_lines(path)
+    pads = [p[0] for p in lines if len(p) >= 4 and p[1] == "kind" and p[3] == "pad"]
+    out = {"accept": "south", "cancel": "east"}
+    if not pads:
+        return out
+    mine = [p for p in lines if len(p) >= 4 and p[0] == pads[0]]
+    for which in ("accept", "cancel"):
+        element = next((p[3] for p in mine if p[1] == which), None)
+        role = next((JOY_ROLES[p[1]] for p in mine if p[3] == element and p[1] in JOY_ROLES), None)
+        if role:
+            out[which] = role
+    return out
+
+
+def joy_name(role):
+    """O papel do joypad na tela: ACCEPT, BACK, SOUTH, L1..."""
+    return None if role is None else JOY_NAMES.get(role, role.upper())
 
 
 DEFAULT = [("b1", -1, "b0"), ("b2", -1, "b1"), ("b3", -1, "b2"), ("b4", -1, "b3"), ("b5", -1, "b4"),
@@ -62,11 +138,12 @@ DEFAULT = [("b1", -1, "b0"), ("b2", -1, "b1"), ("b3", -1, "b2"), ("b4", -1, "b3"
 
 
 def default_binds(pg):
-    """O mapa das funcoes de sempre: {funcao: {"pad": comando, "key": tecla do pygame}}."""
+    """O mapa das funcoes de sempre: {funcao: {"pad": comando do painel,
+    "joy": papel do joypad, "key": tecla do pygame}}."""
     keys = {"up": pg.K_UP, "down": pg.K_DOWN, "left": pg.K_LEFT, "right": pg.K_RIGHT, "b1": pg.K_RETURN,
             "b2": pg.K_ESCAPE, "b3": pg.K_PAGEUP, "b6": pg.K_PAGEDOWN, "b4": pg.K_f, "b5": None,
             "start": pg.K_v, "tab": pg.K_TAB}
-    return {f: {"pad": None if f == "tab" else f, "key": keys[f]} for f in FUNCTIONS}
+    return {f: {"pad": None if f == "tab" else f, "joy": JOY_DEFAULT[f], "key": keys[f]} for f in FUNCTIONS}
 
 
 def load_binds(pg, saved):
@@ -81,9 +158,11 @@ def load_binds(pg, saved):
             continue
         if "pad" in b and (b["pad"] is None or b["pad"] in PAD):
             binds[f]["pad"] = b["pad"]
+        if "joy" in b and (b["joy"] is None or b["joy"] in JOY):
+            binds[f]["joy"] = b["joy"]
         if "key" in b and (b["key"] is None or (isinstance(b["key"], int) and not isinstance(b["key"], bool))):
             binds[f]["key"] = b["key"]
-    for kind in ("pad", "key"):
+    for kind in ("pad", "joy", "key"):
         seen = set()
         for f in FUNCTIONS:
             if binds[f][kind] in seen:
@@ -170,6 +249,8 @@ class Input:
         """As funcoes de cada comando do painel e de cada tecla (default_binds)."""
         self.binds = binds
         self.pad_fn = {b["pad"]: f for f, b in binds.items() if b["pad"]}
+        # O joypad pelos papeis dele (as linhas "j:PAPEL" do mapa).
+        self.pad_fn.update({"j:" + b["joy"]: f for f, b in binds.items() if b.get("joy")})
         self.key_fn = {b["key"]: f for f, b in binds.items() if b["key"] is not None}
 
     def pad_action(self, control):

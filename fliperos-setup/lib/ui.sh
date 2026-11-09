@@ -212,7 +212,15 @@ ui_gui_menu() {
     entries+=("${entry%%|*}"$'\x1d'"${entry#*|}"$'\x1d'"${UI_HINTS[i]:-}")
     i=$((i + 1))
   done
-  ui_gui_call "$mode" "$title" "$text" "$current" "${UI_STYLE:-}" "${entries[@]}" || return 1
+  local rc=0
+  ui_gui_call "$mode" "$title" "$text" "$current" "${UI_STYLE:-}" "${entries[@]}" || rc=$?
+  # 124: a lista mudou sozinha (UI_STYLE=controllers: um controle ligado ou
+  # tirado); imprime o item sob o cursor, para quem chamou refazer o menu nele.
+  if ((rc == 124)); then
+    printf '%s\n' "$UI_GUI_REPLY"
+    return 124
+  fi
+  ((rc == 0)) || return 1
   printf '%s\n' "$UI_GUI_REPLY"
 }
 
@@ -299,11 +307,12 @@ ui_progress() {
   return 0
 }
 
-# ui_capture TITULO JOGADOR COMANDO NUMERO TOTAL SEGUNDOS JA_APERTADOS...
-# mostra o Button mapping pedindo um comando (up, b3, start...) no painel
-# desenhado e volta na hora: na interface grafica o comando aceso, no texto
-# (ui_capture_text) um X que pisca enquanto ui_capture_wait espera. Status 1:
-# a tela e baixa demais para o painel (quem chamou mostra so o texto).
+# ui_capture TITULO JOGADOR COMANDO NUMERO TOTAL SEGUNDOS BOTOES JA_APERTADOS...
+# mostra o Button mapping pedindo um comando (up, b3, start...) no painel de
+# BOTOES botoes (1 a 8) desenhado e volta na hora: na interface grafica o
+# comando aceso, no texto (ui_capture_text) um X que pisca enquanto
+# ui_capture_wait espera. Status 1: a tela e baixa demais para o painel (quem
+# chamou mostra so o texto).
 UI_BLINK_ROW=0
 UI_BLINK_COL=0
 ui_capture() {
@@ -315,16 +324,16 @@ ui_capture() {
   ui_capture_text "$@"
 }
 
-# O painel do Button mapping no texto, 35x7 (cabe em 40 colunas): de cada
+# O painel do Button mapping no texto, 39x7 (cabe em 40 colunas): de cada
 # comando "COMANDO LINHA COLUNA ROTULO LINHA COLUNA", a celula "[ ]" e o
-# rotulo. O direcional a esquerda, os botoes 1 2 3 em cima e 4 5 6 embaixo,
-# como nos BUTTON_LABELS.
-UI_PANEL_W=35
+# rotulo. O direcional a esquerda, os botoes 1 2 3 7 em cima e 4 5 6 8
+# embaixo, como nos BUTTON_LABELS; so os do painel aparecem.
+UI_PANEL_W=39
 UI_PANEL_H=7
 UI_PANEL_CELLS=(
   "up 1 8 UP 0 8" "down 3 8 DOWN 4 7" "left 2 5 LEFT 2 0" "right 2 11 RIGHT 2 15"
-  "b1 1 24 1 0 25" "b2 1 28 2 0 29" "b3 1 32 3 0 33"
-  "b4 3 24 4 4 25" "b5 3 28 5 4 29" "b6 3 32 6 4 33"
+  "b1 1 24 1 0 25" "b2 1 28 2 0 29" "b3 1 32 3 0 33" "b7 1 36 7 0 37"
+  "b4 3 24 4 4 25" "b5 3 28 5 4 29" "b6 3 32 6 4 33" "b8 3 36 8 4 37"
   "coin 6 8 COIN 6 3" "start 6 28 START 6 22"
 )
 
@@ -332,15 +341,16 @@ UI_PANEL_CELLS=(
 # e, embaixo, o painel: o comando da vez em rosa com o X, os ja apertados em
 # verde com um *, o resto apagado. Guarda em UI_BLINK_ROW/COL onde fica o X.
 ui_capture_text() {
-  local title=$1 player=$2 control=$3 n=$4 total=$5 seconds=$6 cell name r c label lr lc color mark top left out=""
-  local -a pressed=("${@:7}")
+  local title=$1 player=$2 control=$3 n=$4 total=$5 seconds=$6 buttons=${7:-6} cell name r c label lr lc color mark top left out=""
+  local -a pressed=("${@:8}")
   ui_screen "$title" "$(ui_c "$C_PINK" "Player $player: press ${BUTTON_LABELS[$control]:-$control}")" "" \
-    "$n of $total. Wait $seconds seconds to skip it."
+    "$n of $total. Wait $seconds seconds to skip it, Esc cancels."
   ((UI_USED_ROWS + UI_PANEL_H <= UI_ROWS && UI_PANEL_W <= UI_COLS)) || return 1
   top=$((UI_USED_ROWS + 1))
   left=$(((UI_COLS - UI_PANEL_W) / 2 + 1))
   for cell in "${UI_PANEL_CELLS[@]}"; do
     read -r name r c label lr lc <<< "$cell"
+    [[ $name =~ ^b([1-8])$ ]] && ((BASH_REMATCH[1] > buttons)) && continue
     if [[ $name == "$control" ]]; then
       color=$C_PINK mark=X
       UI_BLINK_ROW=$((top + r)) UI_BLINK_COL=$((left + c + 1))
@@ -357,31 +367,62 @@ ui_capture_text() {
   printf '%s\e[%d;1H' "$out" $((top + UI_PANEL_H)) > /dev/tty
 }
 
+# ui_pad_capture TITULO JOGADOR COMANDO NUMERO TIPO NOME FEITOS... mostra o
+# mapeador de joypad (o do Batocera) pedindo o COMANDO de PAD_CONTROLS: a
+# lista inteira com o desenho de cada um, o da vez aceso, e nos FEITOS
+# ("comando=elemento", "comando=-" pulado) o que ficou. TIPO (xbox,
+# playstation, nintendo, generic) da o nome do botao no controle. Status 1:
+# sem interface grafica (quem chamou mostra o texto).
+ui_pad_capture() {
+  ui_gui_alive || return 1
+  ui_gui_call padcapture "$@"
+  return 0
+}
+
+# ui_confirm_capture TITULO JOGADOR accept|cancel SEGUNDOS mostra o passo dos
+# botoes da interface: o botao verde (aceitar) e o vermelho (voltar), o da
+# vez aceso e o tempo para ficar o de sempre. Sem nome de botao: a pessoa olha
+# o proprio controle. Status 1: sem interface grafica.
+ui_confirm_capture() {
+  ui_gui_alive || return 1
+  ui_gui_call confirmcapture "$@"
+  return 0
+}
+
 # ui_capture_wait COMANDO... roda o COMANDO (a espera pelo controle) e
 # imprime a saida dele, com o status dele. Enquanto espera, o X do painel de
 # ui_capture_text pisca: so a celula e reescrita, a cada 0,4 s, com o cursor
 # escondido. Sem painel (interface grafica, tela baixa) so roda o COMANDO.
 ui_capture_wait() {
-  local out pid rc tick=0 on=0
-  if ((UI_BLINK_ROW == 0)); then
+  local out pid rc tick=0 on=0 key
+  # Na interface grafica o Esc vira o arquivo de cancelar (gui/serve.py).
+  if ui_gui_alive; then
     "$@"
     return
   fi
   out=$(mktemp)
   "$@" > "$out" &
   pid=$!
-  printf '\e[?25l' > /dev/tty
+  ((UI_BLINK_ROW == 0)) || printf '\e[?25l' > /dev/tty 2> /dev/null
   while kill -0 "$pid" 2> /dev/null; do
-    if ((tick % 4 == 0)); then
+    if ((UI_BLINK_ROW != 0 && tick % 4 == 0)); then
       printf '\e[%d;%dH%s' "$UI_BLINK_ROW" "$UI_BLINK_COL" "$(ui_c "$C_PINK" "$( ((on)) && echo X || echo ' ')")" > /dev/tty
       on=$((!on))
     fi
     tick=$((tick + 1))
-    sleep 0.1
+    # O Esc no teclado cancela o mapeamento (BUTTONS_CANCEL, que o
+    # fliperos-buttons capture olha); sem terminal, so espera.
+    key="" rc=0
+    IFS= read -rsn1 -t 0.1 key < /dev/tty 2> /dev/null || rc=$?
+    if ((rc == 0)) && [[ $key == $'\e' && -n ${BUTTONS_CANCEL:-} ]]; then
+      : > "$BUTTONS_CANCEL"
+    elif ((rc != 0 && rc <= 128)); then
+      sleep 0.1
+    fi
   done
   wait "$pid"
   rc=$?
-  printf '\e[?25h' > /dev/tty
+  ((UI_BLINK_ROW == 0)) || printf '\e[?25h' > /dev/tty 2> /dev/null
   cat "$out"
   rm -f "$out"
   return "$rc"

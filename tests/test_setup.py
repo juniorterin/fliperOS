@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -3921,15 +3921,22 @@ class ButtonMappingTextPanelTests(Base):
         width = int(out.pop().split("=")[1])
         self.assertLessEqual(width, 40)
         names = [line.split()[0] for line in out]
-        self.assertEqual(names, "up down left right b1 b2 b3 b4 b5 b6 coin start".split())
+        self.assertEqual(names, "up down left right b1 b2 b3 b7 b4 b5 b6 b8 coin start".split())
         for line in out:
             _, _, col, label, _, lcol = line.split()
             self.assertLessEqual(int(col) + 3, width)
             self.assertLessEqual(int(lcol) + len(label), width)
 
     def test_the_mapper_waits_through_the_blink(self):
-        body = (SETUP / "screens/joysticks.sh").read_text().split("screen_buttons() {")[1].split("\n}\n")[0]
-        self.assertIn("got=$(ui_capture_wait buttons_capture 8)", body)
+        body = (SETUP / "screens/joysticks.sh").read_text().split("screen_buttons_arcade() {")[1].split("\n}\n")[0]
+        self.assertIn('got=$(ui_capture_wait buttons_capture 8 "" "$dev")', body)
+
+    def test_only_the_buttons_of_the_panel_are_drawn(self):
+        # O setimo argumento e quantos botoes o painel tem; os acima dele ficam de fora.
+        body = (SETUP / "lib/ui.sh").read_text().split("ui_capture_text() {")[1].split("\n}\n")[0]
+        self.assertIn("buttons=${7:-6}", body)
+        self.assertIn('local -a pressed=("${@:8}")', body)
+        self.assertIn("[[ $name =~ ^b([1-8])$ ]] && ((BASH_REMATCH[1] > buttons)) && continue", body)
 
 
 class CustomGamesTests(Base):
@@ -4204,7 +4211,8 @@ class FolderListsTests(unittest.TestCase):
             for call in calls:
                 self.assertIn(call, text, name)
         serve = (SETUP / "gui" / "serve.py").read_text()
-        self.assertIn('vertical=style == "list"', serve)
+        # (a lista de controles do Button mapping tambem e vertical)
+        self.assertIn('vertical=style in ("list", "controllers")', serve)
         self.assertIn("return (not self.vertical and", (SETUP / "gui" / "widgets.py").read_text())
 
 
@@ -4496,8 +4504,17 @@ class ButtonMappingNoRepeatTests(Base):
         saved = self.env.dir / "saved"
         out = self.env.out("""
             source %s/screens/joysticks.sh
-            ui_menu_hints() { echo panel; }
-            ui_menu() { echo 1; }
+            ui_menu_hints() { echo arcade; }
+            # A lista roda num $(...): o contador fica num arquivo.
+            listed=$(mktemp)
+            ui_menu() {
+              case $2 in
+                Choose*) [[ -s $listed ]] && echo return || { echo x > "$listed"; echo 0; } ;;
+                How*) echo 6 ;;
+                *) echo 1 ;;
+              esac
+            }
+            buttons_list() { echo "0|03000000aaaa|Pad|usb|"; }
             ui_capture() { return 1; }
             ui_capture_wait() { "$@"; }
             ui_info() { echo "info $*"; }
@@ -4509,8 +4526,9 @@ class ButtonMappingNoRepeatTests(Base):
             buttons_save() { cp "$1" %s; }
             screen_buttons
         """ % (SETUP, presses, presses, saved))
-        self.assertIn("info Button mapping That one is already UP of player 1. Press another control for DOWN.", out)
-        rows = [line.split() for line in saved.read_text().splitlines()]
+        self.assertIn("info Button mapping That one is already UP. Press another control for DOWN.", out)
+        rows = [line.split() for line in saved.read_text().splitlines() if line.split()[1] != "kind"]
+        self.assertIn("1 kind 0 arcade Pad", saved.read_text())
         self.assertEqual(len(rows), 12)
         self.assertEqual(len({(r[2], r[3]) for r in rows}), 12)
         self.assertEqual(rows[1][:4], ["1", "down", "0", "b1"])
@@ -4541,20 +4559,25 @@ class ButtonPlayersTests(Base):
         for connected, want in ((0, "1"), (1, "1"), (3, "3"), (6, "4")):
             self.assertEqual(self.env.out("buttons_players_connected", self.tool(connected, connected)).strip(), want)
 
-    def test_the_joysticks_menu_shows_the_line_and_the_picker_starts_on_the_connected(self):
+    def test_the_joysticks_menu_shows_the_line_and_the_players_follow_the_controllers(self):
         env = self.tool(3, 3, 3)
         log = self.env.dir / "calls"
         self.env.out("""
             source %s/screens/joysticks.sh
             ui_menu_hints() { echo "hints [$2]" >> %s; return 1; }
             screen_joysticks
-            ui_menu() { echo "menu [$3]" >> %s; return 1; }
-            ui_menu_hints() { echo panel; }
+            buttons_list() { printf '0|g0|Panel|usb|1\\n1|g1|Panel|usb|2\\n2|g2|Pad|usb|\\n'; }
+            listed=$(mktemp)
+            ui_menu() { echo "menu [$2] [$3] ${*:4}" >> %s; [[ -s $listed ]] && return 1; echo x > "$listed"; echo 1; }
             screen_buttons
         """ % (SETUP, log, log), env)
         calls = log.read_text()
         self.assertIn("hints [Players now: 3 of 3 mapped (controllers connected: 3)]", calls)
-        self.assertIn("menu [3]", calls)
+        # A lista: o jogador de cada um na frente do nome.
+        self.assertIn("0|P1 Panel 1|P2 Panel 2|-- Pad keyboard|Keyboard encoder (MAME default keys) return|Return",
+                      calls)
+        # O jogador: de 1 ao numero de controles ligados, comecando no de agora.
+        self.assertIn("menu [Which player is Panel?] [2] 1|Player 1 2|Player 2 3|Player 3 return|Return", calls)
 
 
 class GunCalibrationTests(Base):
@@ -9659,6 +9682,294 @@ class NvidiaDriverTests(Base):
         # A lista negra do nouveau do pacote e anulada: quem escolhe e a linha.
         self.assertIn('"$MODPROBE_DIR/nvidia-graphics-drivers.conf"', tool)
         self.assertIn("--no-install-recommends", tool)
+
+
+class ButtonMappingKindTests(Base):
+    """Button mapping: a lista dos controles ligados; o escolhido diz o jogador (o
+    Bluetooth, nao: ele toma o jogador pela ordem de conexao) e o tipo, painel de
+    arcade ou JAMMA (com quantos botoes, de 1 a 8) ou joypad (o mapeador do
+    Batocera: um controle que o SDL conhece usa o layout dele; os outros, um
+    comando por vez, segurar pula)."""
+
+    def run_mapper(self, kind, presses, devices="0|03000000aaaa|Panel|usb|", choose="0", player="1",
+                   identify="name=Pad\\ntype=generic\\nknown=0\\n", env=None):
+        d = self.env.dir
+        (d / "presses").write_text("\n".join(presses) + "\n")
+        (d / "calls").write_text("")
+        self.env.out("""
+            source %s/screens/joysticks.sh
+            log=%s
+            listed=$(mktemp)
+            ui_menu_hints() { echo "hints [$2] [$3]" >> $log; case $2 in *kind*) echo %s ;; *) echo use ;; esac; }
+            ui_menu() {
+              echo "menu [$2] [$3] ${*:4}" >> $log
+              case $2 in
+                Choose*) [[ -s $listed ]] && echo return || { echo x > "$listed"; echo %s; } ;;
+                How*) echo 4 ;;
+                *) echo %s ;;
+              esac
+            }
+            buttons_list() { printf '%%b' "%s"; }
+            ui_capture() { echo "capture $3 buttons=$7" >> $log; return 0; }
+            ui_pad_capture() { echo "pad $3 $5 [$6] ${*:7}" >> $log; return 0; }
+            ui_capture_wait() { "$@"; }
+            ui_info() { echo "info $*" >> $log; }
+            ui_msg() { echo "msg $*" >> $log; }
+            ui_yesno() { echo "yesno $2" >> $log; return 0; }
+            ui_flush_input() { :; }
+            padkeys_on() { :; }; padkeys_off() { :; }
+            buttons_capture() {
+              echo "wait $*" >> $log
+              local line; line=$(head -n 1 %s); sed -i 1d %s
+              [[ $line == skip ]] && return 2
+              [[ $line == esc ]] && return 3
+              [[ -n $line ]] && echo "$line"
+            }
+            buttons_identify() { printf '%%b' "%s"; }
+            buttons_save() { echo "save $1" >> $log; }
+            screen_buttons
+        """ % (SETUP, d / "calls", kind, choose, player, devices, d / "presses", d / "presses", identify), env)
+        calls = (d / "calls").read_text()
+        saved = self.env.etc / "buttons.map"
+        return (saved.read_text() if saved.exists() else ""), calls
+
+    def test_arcade_asks_the_player_and_how_many_buttons(self):
+        presses = ["0 h0.%d Panel" % b for b in (1, 4, 8, 2)] + ["0 b%d Panel" % n for n in range(6)]
+        saved, calls = self.run_mapper("arcade", presses)
+        self.assertIn("menu [Which player is Panel?] [1] 1|Player 1 return|Return", calls)
+        self.assertIn("hints [Panel: what kind of controller is it?] [arcade]", calls)
+        self.assertIn("menu [How many buttons does it have? Start and Coin do not count.] [6] "
+                      "1|1 button 2|2 buttons 3|3 buttons 4|4 buttons 5|5 buttons 6|6 buttons 7|7 buttons "
+                      "8|8 buttons return|Return", calls)
+        rows = saved.splitlines()
+        self.assertEqual(rows[0], "1 kind 0 arcade Panel")
+        self.assertEqual([r.split()[1] for r in rows[1:]], "up down left right b1 b2 b3 b4 start coin".split())
+        self.assertIn("capture b4 buttons=4", calls)
+        self.assertNotIn("capture b5", calls)
+        # So o controle escolhido conta.
+        self.assertIn("wait 8  0\n", calls)
+        self.assertIn("yesno Save Panel for all emulators? Controls mapped: player 1: 10 of 10.", calls)
+        self.assertIn("save %s" % (self.env.etc / "buttons.map"), calls)
+
+    def test_a_joypad_that_sdl_knows_uses_its_layout(self):
+        identify = "name=Xbox Wireless Controller\\ntype=xbox\\nknown=1\\nbind b4 b0\\nbind b5 b1\\nbind lsup -a1\\n"
+        saved, calls = self.run_mapper("pad", [], devices="0|03000000aaaa|Xbox Wireless Controller|usb|",
+                                       identify=identify)
+        self.assertIn("hints [Xbox Wireless Controller: FliperOS knows this controller", calls)
+        self.assertEqual(saved.splitlines(), [
+            "1 kind 0 pad Xbox Wireless Controller", "1 b4 0 b0 Xbox Wireless Controller",
+            "1 b5 0 b1 Xbox Wireless Controller", "1 lsup 0 -a1 Xbox Wireless Controller"])
+        self.assertIn("Controls mapped: player 1: known layout.", calls)
+        # Nada a apertar no controle (so os dois botoes da interface, que
+        # esperando ficam no padrao: o de sul e o de leste).
+        self.assertNotIn("wait 10 1", calls)
+        self.assertEqual(calls.count("wait 10  0"), 2)
+        # Sem nome de posicao: a pessoa olha o proprio controle.
+        self.assertEqual(calls.count("Wait 10 seconds to keep the usual one, Esc cancels."), 2)
+        self.assertNotIn("keep SOUTH", calls)
+
+    def test_the_menu_buttons_come_after_the_mapping(self):
+        identify = "name=Pad\\ntype=nintendo\\nknown=1\\nbind b4 b0\\nbind b5 b1\\nbind b2 b3\\nbind up h0.1\\n"
+        # O de aceitar no b3 (o norte); um direcional e o mesmo botao de novo
+        # nao valem para voltar; depois o b1.
+        saved, calls = self.run_mapper("pad", ["0 b3 Pad", "0 h0.1 Pad", "0 b3 Pad", "0 b1 Pad"],
+                                       devices="0|03000000aaaa|Pad|usb|", identify=identify)
+        self.assertEqual(calls.count("info Button mapping Use another button."), 2)
+        rows = saved.splitlines()
+        self.assertIn("1 accept 0 b3 Pad", rows)
+        self.assertIn("1 cancel 0 b1 Pad", rows)
+        self.assertLess(calls.index("yesno Save"), len(calls))
+
+    def test_a_joypad_is_mapped_like_in_batocera(self):
+        presses = ["0 b0 Pad", "0 b1 Pad", "skip", "0 b3 Pad", "0 b9 Pad", "0 b8 Pad", "0 h0.1 Pad", "0 h0.4 Pad",
+                   "0 h0.8 Pad", "0 h0.2 Pad", "0 b4 Pad", "0 b5 Pad", "0 -a1 Pad", "0 -a0 Pad", "skip", "skip",
+                   "0 +a2 Pad", "0 +a5 Pad", "0 b10 Pad", "0 b11 Pad", "skip"]
+        saved, calls = self.run_mapper("pad", presses, devices="0|03000000aaaa|Pad|usb|",
+                                       identify="name=Pad\\ntype=playstation\\nknown=0\\n")
+        rows = saved.splitlines()
+        self.assertEqual(rows[0], "1 kind 0 pad Pad")
+        controls = [r.split()[1] for r in rows[1:]]
+        self.assertEqual(controls, "b4 b5 b1 start coin up down left right b3 b6 lsup lsleft b7 b8 l3 r3 hotkey".split())
+        # Sem hotkey, o Select (como o Batocera oferece).
+        self.assertIn("yesno No hotkey button was given. Use SELECT as the hotkey?", calls)
+        self.assertEqual(rows[-1], "1 hotkey 0 b8 Pad")
+        # Segurar 1 s pula, e so o controle escolhido conta.
+        self.assertIn("wait 10 1 0\n", calls)
+        self.assertIn("pad b8 playstation [Pad] b4=b0 b5=b1 b2=- b1=b3", calls)
+        self.assertIn("Controls mapped: player 1: 17 of 21.", calls)
+
+    def test_a_new_player_number_swaps_with_the_controller_that_had_it(self):
+        (self.env.etc / "buttons.map").write_text(
+            "1 kind 0 arcade Panel\n1 up 0 h0.1 Panel\n2 kind 1 arcade Stick\n2 up 1 h0.1 Stick\n"
+            "3 bt 2 0500aaaa Pad\n3 kind 2 pad Pad\n3 b4 2 b0 Pad\n")
+        saved, calls = self.run_mapper("arcade", ["skip"] * 4 + ["1 b0 Stick"] + ["skip"] * 5,
+                                       devices="0|g0|Panel|usb|1\\n1|g1|Stick|usb|2\\n", choose="1", player="1")
+        self.assertIn("menu [Which player is Stick?] [2] 1|Player 1 2|Player 2 return|Return", calls)
+        # O Stick vira o 1; o Panel fica com o 2 de antes; o Bluetooth sai (o save o refaz).
+        self.assertEqual(saved.splitlines(), ["2 kind 0 arcade Panel", "2 up 0 h0.1 Panel",
+                                              "1 kind 1 arcade Stick", "1 b1 1 b0 Stick"])
+
+    def test_a_bluetooth_controller_is_kept_by_the_device(self):
+        (self.env.etc / "buttons.map").write_text("1 kind 0 arcade Panel\n1 up 0 h0.1 Panel\n")
+        (self.env.etc / "buttons-bt.map").write_text("0500bbbb b4 b2 Other\n0500AAAA b4 b9 Old\n")
+        identify = "name=8BitDo\\ntype=generic\\nknown=1\\nbind b4 b0\\nbind lsup -a1\\n"
+        saved, calls = self.run_mapper("pad", [], devices="0|g0|Panel|usb|1\\n1|0500aaaa|8BitDo Pro 2|bluetooth|",
+                                       choose="1", identify=identify)
+        # Sem pergunta de jogador: o primeiro livre agora (o 2).
+        self.assertNotIn("Which player", calls)
+        self.assertIn("hints [8BitDo Pro 2: what kind of controller is it?] [pad]", calls)
+        self.assertIn("msg Button mapping Saved. It takes the next free player when it connects (now player 2).",
+                      calls)
+        self.assertEqual(saved, "1 kind 0 arcade Panel\n1 up 0 h0.1 Panel\n")
+        self.assertEqual((self.env.etc / "buttons-bt.map").read_text().splitlines(), [
+            "0500bbbb b4 b2 Other", "0500aaaa kind pad 8BitDo Pro 2", "0500aaaa b4 b0 8BitDo Pro 2",
+            "0500aaaa lsup -a1 8BitDo Pro 2"])
+        self.assertIn("-- BT 8BitDo Pro 2", calls)
+
+    def test_esc_cancels_the_mapping(self):
+        # O Esc na captura (fliperos-buttons capture --cancel: status 3): nada muda.
+        (self.env.etc / "buttons.map").write_text("1 kind 0 arcade Panel\n1 up 0 h0.1 Panel\n")
+        for kind, presses in (("arcade", ["0 h0.1 Panel", "esc"]), ("pad", ["0 b0 Pad", "esc"])):
+            saved, calls = self.run_mapper(kind, presses)
+            self.assertIn("msg Button mapping Cancelled: nothing was changed.", calls, kind)
+            self.assertNotIn("yesno Save", calls, kind)
+            self.assertNotIn("save ", calls, kind)
+            self.assertEqual(saved, "1 kind 0 arcade Panel\n1 up 0 h0.1 Panel\n", kind)
+        # O Esc no "use o layout conhecido" tambem cancela.
+        lib = (SETUP / "lib/buttons.sh").read_text()
+        self.assertIn('"$BUTTONS" capture --timeout "$1" --cancel "$BUTTONS_CANCEL"', lib)
+        self.assertIn('|| choice=cancel', (SETUP / "screens/joysticks.sh").read_text())
+
+    def test_the_list_is_made_again_when_a_controller_connects(self):
+        # A GUI devolve 124 (um controle ligado com a lista na tela) e o item do
+        # cursor; a lista e pedida de novo, com o cursor nele.
+        d = self.env.dir
+        (d / "calls").write_text("")
+        self.env.out("""
+            source %s/screens/joysticks.sh
+            log=%s
+            n=$(mktemp)
+            buttons_list() { echo list >> $log; echo "0|g0|Panel|usb|1"; [[ -s $n ]] && echo "1|0500aa|Pad|bluetooth|"; }
+            ui_menu() {
+              echo "menu [$3] ${*:4}" >> $log
+              if [[ ! -s $n ]]; then echo x > "$n"; echo 0; return 124; fi
+              echo return
+            }
+            screen_buttons
+        """ % (SETUP, d / "calls"))
+        calls = (d / "calls").read_text().splitlines()
+        self.assertEqual(calls[0], "list")
+        self.assertEqual(calls[2], "list")
+        self.assertEqual(calls[3], "menu [0] 0|P1 Panel 1|-- BT Pad keyboard|Keyboard encoder (MAME default keys) "
+                                   "return|Return")
+        self.assertIn("UI_STYLE=controllers ui_menu", (SETUP / "screens/joysticks.sh").read_text())
+
+    def test_the_used_button_is_named_as_on_the_joypad(self):
+        m = self.env.dir / "map"
+        m.write_text("1 kind 0 pad Pad\n1 b4 0 b0 Pad\n2 b1 1 b0 Panel\n")
+        self.assertEqual(self.env.out('buttons_used %s 0 b0' % m).strip(), "SOUTH 1")
+        self.assertEqual(self.env.out('buttons_used %s 1 b0' % m).strip(), "BUTTON 1 (top row, left) 2")
+        self.assertEqual(self.env.out('buttons_used %s 1 b9' % m).strip(), "")
+        self.assertEqual(self.env.out("buttons_pad_label b4 playstation; buttons_pad_label b5 nintendo; "
+                                      "buttons_pad_label lsup xbox").splitlines(),
+                         ["SOUTH (CROSS)", "EAST (A)", "LEFT ANALOG UP"])
+        self.assertEqual(self.env.out("buttons_arcade_controls 2").strip(), "up down left right b1 b2 start coin")
+        m.write_text("1 kind 0 arcade P\n1 b8 0 b7 P\n2 kind 1 pad Pad\n2 b8 1 b9 Pad\n")
+        self.assertEqual(self.env.out("buttons_panel_count", {"BUTTONS_MAP": str(m)}).strip(), "8")
+        self.assertEqual(self.env.out("buttons_panel_count", {"BUTTONS_MAP": "/nao/existe"}).strip(), "6")
+        self.assertEqual(self.env.out("buttons_next_player", {"BUTTONS_MAP": str(m)}).strip(), "3")
+        m.write_text("1 up 0 h0.1 P\n2 bt 1 0500aaaa Pad\n2 b4 1 b0 Pad\n")
+        self.assertEqual(self.env.out("buttons_next_player", {"BUTTONS_MAP": str(m)}).strip(), "2")
+        self.assertEqual(self.env.out("buttons_next_player", {"BUTTONS_MAP": "/nao/existe"}).strip(), "1")
+
+    def test_the_menu_items(self):
+        screen = (SETUP / "screens/joysticks.sh").read_text()
+        self.assertIn('"bluetooth|Bluetooth|Pair, connect and forget Bluetooth controllers." \\', screen)
+        self.assertIn("bluetooth) screen_bluetooth ;;", screen)
+        self.assertIn('nbuttons=$(UI_STYLE=panel ui_menu "$title"', screen)
+        setup = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('source "$SETUP_DIR/lib/bluetooth.sh"', setup)
+        self.assertIn('source "$SETUP_DIR/screens/bluetooth.sh"', setup)
+
+
+class BluetoothScreenTests(Base):
+    """Setup > Joysticks > Bluetooth: instalar o BlueZ, parear, os pareados."""
+
+    def tool(self, status, scan="", devices="", pair_rc=0):
+        d = self.env.dir
+        (d / "bt").write_text(
+            '#!/bin/bash\necho "$*" >> %s\n'
+            'case $1 in\n'
+            '  status) printf "%%b" "%s" ;;\n'
+            '  scan) printf "%%b" "%s" ;;\n'
+            '  devices) printf "%%b" "%s" ;;\n'
+            '  pair) echo connected; exit %d ;;\n'
+            'esac\n' % (d / "btcalls", status, scan, devices, pair_rc))
+        (d / "bt").chmod(0o755)
+        (d / "btcalls").write_text("")
+        return {"BLUETOOTH": str(d / "bt")}
+
+    def screen(self, env, answers, yes=1, function="screen_bluetooth"):
+        d = self.env.dir
+        (d / "answers").write_text("\n".join(answers) + "\n")
+        (d / "calls").write_text("")
+        self.env.out("""
+            source %s/screens/joysticks.sh
+            source %s/screens/bluetooth.sh
+            log=%s
+            next() { local a; a=$(head -n 1 %s); sed -i 1d %s; [[ -n $a ]] || return 1; echo "$a"; }
+            ui_menu_hints() { echo "hints $1 [$2] ${*:4}" >> $log; next; }
+            ui_menu() { echo "menu $1 [$2] ${*:4}" >> $log; next; }
+            ui_yesno() { echo "yesno $2" >> $log; return %d; }
+            ui_msg() { echo "msg $*" >> $log; }
+            ui_info() { echo "info $*" >> $log; }
+            run_online() { echo "online $*" >> $log; }
+            screen_buttons() { echo "buttons" >> $log; }
+            %s
+        """ % (SETUP, SETUP, d / "calls", d / "answers", d / "answers", 0 if yes else 1, function), env)
+        return (d / "calls").read_text(), (d / "btcalls").read_text()
+
+    ON = "installed=yes\\nadapter=hci0\\npowered=yes\\npaired=1\\nconnected=0\\n"
+
+    def test_without_bluez_it_offers_to_install(self):
+        calls, _ = self.screen(self.tool("installed=no\\n"), [], yes=0)
+        self.assertIn("yesno The Bluetooth programs (BlueZ) are not installed. Install them now?", calls)
+        self.assertNotIn("online", calls)
+        calls, _ = self.screen(self.tool("installed=no\\n"), [], yes=1)
+        self.assertIn("online Installing Bluetooth  update_install_package bluez", calls)
+
+    def test_without_an_adapter_it_says_so(self):
+        calls, bt = self.screen(self.tool("installed=yes\\nadapter=\\n"), [])
+        self.assertIn("msg Bluetooth No Bluetooth adapter was found.", calls)
+        self.assertIn("power on", bt)
+
+    def test_pair_a_controller_then_map_it(self):
+        scan = ("E4:17:D8:00:11:22|8BitDo Pro 2|input-gaming|no|no\\n"
+                "11:22:33:44:55:66|JBL Flip|audio-card|no|no\\n"
+                "AA:BB:CC:DD:EE:FF|Old Pad|input-gaming|yes|no\\n")
+        calls, bt = self.screen(self.tool(self.ON, scan=scan), ["pair", "E4:17:D8:00:11:22", "return"])
+        self.assertIn("hints Bluetooth [Adapter: hci0 (on). Paired: 1, connected: 0.] pair|Pair a controller|", calls)
+        self.assertIn("devices|Paired devices (1)|", calls)
+        self.assertIn("scan 15", bt)
+        # Os ja pareados ficam de fora; o controle diz que e controle.
+        self.assertIn("E4:17:D8:00:11:22|8BitDo Pro 2 (controller) 11:22:33:44:55:66|JBL Flip return|Return", calls)
+        self.assertNotIn("Old Pad", calls.split("menu Pair a controller")[1])
+        self.assertIn("pair E4:17:D8:00:11:22", bt)
+        self.assertIn("yesno Paired: 8BitDo Pro 2 (connected). It reconnects by itself", calls)
+        self.assertIn("buttons", calls)
+
+    def test_automatic_pairing_and_forgetting(self):
+        d = self.env.dir
+        env = self.tool(self.ON, devices="E4:17:D8:00:11:22|8BitDo Pro 2|input-gaming|yes|yes\\n")
+        # O autopair do tool falso nao imprime nada: nenhum controle achado.
+        calls, bt = self.screen(env, ["auto", "return"])
+        self.assertIn("autopair 30", bt)
+        self.assertIn("msg Pair controllers automatically No controller in pairing mode was found.", calls)
+        calls, bt = self.screen(env, ["E4:17:D8:00:11:22", "remove", "return"], function="screen_bluetooth_devices")
+        self.assertIn("E4:17:D8:00:11:22|8BitDo Pro 2 (controller, connected) forgetall|Forget all devices", calls)
+        self.assertIn("hints 8BitDo Pro 2 [Connected.] disconnect|Disconnect|", calls)
+        self.assertIn("remove E4:17:D8:00:11:22", bt)
+        self.assertTrue(d.exists())
 
 
 if __name__ == "__main__":

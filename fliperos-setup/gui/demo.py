@@ -2,9 +2,17 @@
 # interface sem um FliperOS instalado (--demo NOME). Os rotulos e as dicas
 # sao os de fliperos-setup/screens/.
 
-from widgets import (Capture, Download, FilterBoard, GunResult, GunTarget, Input, LayoutEdit, Menu, Message,
-                     Progress, Stepper, ToggleGrid, YesNo, control_art,
-                     layout_tile)
+from widgets import (Capture, ConfirmCapture, Download, FilterBoard, GunResult, GunTarget, Input, LayoutEdit,
+                     Menu, Message, PadCapture, Progress, Stepper, ToggleGrid, YesNo, control_art,
+                     layout_tile, panel_tile)
+
+
+def confirm():
+    return ConfirmCapture("Button mapping", 3, "accept", 10)
+
+
+def confirm2():
+    return ConfirmCapture("Button mapping", 3, "cancel", 10)
 
 CONTEXT = {"version": "0.23", "status": "192.168.1.155 - 42%"}
 
@@ -119,6 +127,7 @@ def wifi():
 def joysticks():
     return Menu("Joysticks", [
         ("buttons", "Button mapping", "Teach FliperOS the panel: press each control when asked."),
+        ("bluetooth", "Bluetooth", "Pair, connect and forget Bluetooth controllers."),
         ("layout", "Buttons layout", "Where the buttons of 1 to 5-button games go on the panel."),
         ("guncon", "GunCon 2", "Shoot the targets so the gun hits where it points."),
         ("axes", "Wheel / analog", "Set the range and the center of each axis."),
@@ -137,6 +146,65 @@ def players():
 
 def capture():
     return Capture("Button mapping", 1, "b3", ["up", "down", "left", "right", "b1", "b2"], 7, 12, 5)
+
+
+def capture8():
+    return Capture("Button mapping", 2, "b7", ["up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6"],
+                   11, 14, 6, 8, 8)
+
+
+def controllers():
+    return Menu("Button mapping", [
+        ("0", "P1 Xbox 360 Controller"),
+        ("1", "P2 Xbox 360 Controller"),
+        ("2", "P3 8BitDo Ultimate 2 Wireless"),
+        ("3", "-- Pro Controller"),
+        ("keyboard", "Keyboard encoder (MAME default keys)"),
+        ("return", "Return"),
+    ], "3", "Choose a controller to map: 4 connected (P = player, -- = not mapped). Wired ones come first; "
+            "Bluetooth (BT) ones take the players left, by the order they connect.", vertical=True,
+        row_icons={"0": "wired", "1": "wired", "2": "wireless", "3": "wireless"})
+
+
+def player():
+    return Menu("Button mapping", [
+        ("1", "Player 1"), ("2", "Player 2"), ("3", "Player 3"), ("4", "Player 4"), ("return", "Return"),
+    ], "2", "Which player is vusb.wikidot.com V-USB Mame Panel?")
+
+
+def kind():
+    return Menu("Button mapping", [
+        ("arcade", "Arcade stick or JAMMA panel", "A stick and 1 to 8 buttons, on an encoder or a JAMMA board."),
+        ("pad", "Joypad (console controller)", "Xbox, PlayStation, Nintendo, 8BitDo...: USB or Bluetooth."),
+        ("return", "Return", "Back to the controllers."),
+    ], "arcade", "vusb.wikidot.com V-USB Mame Panel: what kind of controller is it?")
+
+
+def panelbuttons():
+    return Menu("Button mapping", [
+        (str(n), "%d button%s" % (n, "s" if n > 1 else "")) for n in range(1, 9)
+    ] + [("return", "Return")], "6", "How many buttons does each player have? Start and Coin do not count.",
+        tiles={str(n): panel_tile(n) for n in range(1, 9)})
+
+
+def padcapture():
+    return PadCapture("Button mapping", 1, "b3", 11, "xbox", "Xbox Wireless Controller", {
+        "b4": "b0", "b5": "b1", "b2": "b3", "b1": "b2", "start": "b7", "coin": "b6",
+        "up": "h0.1", "down": "h0.4", "left": "h0.8", "right": "-"})
+
+
+def padcapture2():
+    return PadCapture("Button mapping", 2, "b4", 1, "generic", "", {})
+
+
+def bluetooth():
+    return Menu("Bluetooth", [
+        ("pair", "Pair a controller", "Put it in pairing mode, then choose it in the list."),
+        ("auto", "Pair controllers automatically", "For 30 s every controller in pairing mode is paired."),
+        ("devices", "Paired devices (2)", "Connect, disconnect or forget a paired device."),
+        ("power", "Bluetooth: on", "Turn the Bluetooth adapter off or on."),
+        ("return", "Return", "Back to Joysticks."),
+    ], "pair", "Adapter: hci0 (on). Paired: 2, connected: 1.")
 
 
 # O layout de cada numero de botoes: a posicao (1 a 6) de cada botao do jogo.
@@ -321,7 +389,8 @@ SCREENS = {
     "main": main, "live": live, "setup": setup, "video": video, "monitor": monitor,
     "emulators": emulators, "power": power, "poweroff": poweroff, "install": install,
     "error": error, "wifi": wifi, "joysticks": joysticks, "players": players,
-    "capture": capture, "layout": layout, "layoutedit": layoutedit, "guncon": guncon,
+    "capture": capture, "capture8": capture8, "confirm": confirm, "confirm2": confirm2, "controllers": controllers, "player": player, "kind": kind, "panelbuttons": panelbuttons,
+    "padcapture": padcapture, "padcapture2": padcapture2, "bluetooth": bluetooth, "layout": layout, "layoutedit": layoutedit, "guncon": guncon,
     "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
     "gunresult": gunresult, "downloads": downloads, "torrent": torrent, "magnet": magnet,
     "magnetbrowser": magnetbrowser, "frontend": frontend,
@@ -332,6 +401,6 @@ SCREENS = {
 }
 # A escolha de um menu que abre outra tela de demonstracao.
 LINKS = {"games": "emulators", "network": "wifi", "shutdown": "power",
-         "buttons": "players", "2": "capture", "3": "layoutedit", "roms": "magnet",
+         "buttons": "controllers", "0": "player", "1": "kind", "arcade": "panelbuttons", "pad": "padcapture2", "6": "capture8", "3": "layoutedit", "roms": "magnet",
          "start": "download", "filter": "romfilter", "players": "filterplayers",
          "controls": "filtercontrols", "decades": "filteryears"}

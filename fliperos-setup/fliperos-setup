@@ -127,6 +127,8 @@ source "$SETUP_DIR/lib/padkeys.sh"
 source "$SETUP_DIR/lib/lpt.sh"
 # shellcheck source=lib/buttons.sh
 source "$SETUP_DIR/lib/buttons.sh"
+# shellcheck source=lib/bluetooth.sh
+source "$SETUP_DIR/lib/bluetooth.sh"
 # shellcheck source=lib/debug.sh
 source "$SETUP_DIR/lib/debug.sh"
 # shellcheck source=lib/ui.sh
@@ -159,6 +161,8 @@ source "$SETUP_DIR/screens/amd-driver.sh"
 source "$SETUP_DIR/screens/lpt.sh"
 # shellcheck source=screens/joysticks.sh
 source "$SETUP_DIR/screens/joysticks.sh"
+# shellcheck source=screens/bluetooth.sh
+source "$SETUP_DIR/screens/bluetooth.sh"
 # shellcheck source=screens/rom-cleaner.sh
 source "$SETUP_DIR/screens/rom-cleaner.sh"
 # shellcheck source=screens/downloader.sh
