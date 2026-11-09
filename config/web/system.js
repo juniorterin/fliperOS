@@ -305,7 +305,7 @@ const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWi
 // no lugar deles; um grupo novo do Setup que nao esteja aqui vai para o fim,
 // antes de Power.
 const SETTINGS_ORDER = ["Video", "Geometry", "Colour", "Scanlines", "Interlaced hacks", "Audio", "GunCon 2",
-  "Network", "Live screen", "System", "Password", "Services", "Whatsnew", "Power"];
+  "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
 
 async function loadSettings() {
   const res = await api("/api/settings");
@@ -331,6 +331,7 @@ async function loadSettings() {
   if (geometry) boxes.set("Geometry", geometry);
   if (network) boxes.set("Network", network);
   boxes.set("Password", passwordBox());
+  boxes.set("Version", versionBox());
   boxes.set("Whatsnew", whatsnewBox());
   const known = SETTINGS_ORDER.filter((name) => boxes.has(name));
   const extra = [...boxes.keys()].filter((name) => !SETTINGS_ORDER.includes(name));
@@ -442,6 +443,80 @@ function whatsnewBox() {
   box.addEventListener("toggle", () => fill().catch(() => {}));
   fill().catch(() => {});
   return box;
+}
+
+// Setup > System > FliperOS version: os updates da imagem ao mais novo (a
+// lista vem da rede, so ao abrir o grupo). "Usar" leva o gabinete a um
+// (fliperos-update goto, como tarefa); um mais velho fica preso nele ate sair
+// um update novo, e "Seguir os updates" volta ao mais novo.
+function versionBox() {
+  const body = el("div", { class: "setting versions" });
+  const box = settingsBox("Version", "px-up", body);
+  let loaded = false;
+  const fill = async () => {
+    if (!box.open || loaded) return;
+    loaded = true;
+    body.replaceChildren(el("div", { class: "dim" }, "…"));
+    const r = await api("/api/versions");
+    if (!r.ok) {
+      loaded = false;
+      body.replaceChildren(el("div", { class: "dim" }, t("ver_error")));
+      return;
+    }
+    const v = await r.json();
+    const head = el("div", { class: "row start" }, el("b", {}, t("ver_now").replace("%s", v.level)),
+      v.level === v.latest && v.hold == null ? el("span", { class: "tag on" }, t("ver_newest")) : "",
+      v.hold != null ? el("span", { class: "tag" }, t("ver_held")) : "");
+    const rows = (v.updates || []).map((u) => {
+      const use = el("button", { type: "button", class: "btn ghost" }, icon("px-ok"), t("ver_use"));
+      use.disabled = u.state === "current" && (v.hold != null || v.level === v.latest);
+      use.addEventListener("click", () => versionGo(u.n, v, box));
+      return el("div", { class: "nic-row" }, el("b", {}, String(u.n)), el("span", {}, u.title),
+        u.state === "current" ? el("span", { class: "tag on" }, t("ver_installed")) : "",
+        u.reboot ? el("span", { class: "tag" }, t("ver_restart")) : "", use);
+    });
+    const parts = [head];
+    if (v.reboot) parts.push(el("div", { class: "dim" }, t("ver_reboot")));
+    if (v.hold != null) {
+      const follow = el("button", { type: "button", class: "btn" }, icon("px-install"), t("ver_follow"));
+      follow.addEventListener("click", () => versionGo("latest", v, box));
+      parts.push(el("div", { class: "row start" }, follow));
+    }
+    parts.push(el("div", { class: "nics" }, ...rows), el("div", { class: "dim" }, t("ver_note")));
+    body.replaceChildren(...parts);
+  };
+  box.addEventListener("toggle", () => fill().catch(() => { loaded = false; }));
+  fill().catch(() => { loaded = false; });
+  return box;
+}
+
+async function versionGo(target, v, box) {
+  const n = target === "latest" ? v.latest : target;
+  const text = target === "latest" ? t("ver_follow_ask")
+    : n < v.level ? t("ver_back_ask").replace("%s", n)
+    : n > v.level ? t("ver_fwd_ask").replace("%s", n) : t("ver_stay_ask").replace("%s", n);
+  if (!(await ask({ title: t("group_Version"), text, yes: t("ver_use"), danger: n < v.level }))) return;
+  const r = await api("/api/versions", { method: "POST", body: JSON.stringify({ update: target }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return toast(data.error || r.statusText, "bad");
+  toast(t("ver_task"));
+  taskNext = 0;
+  let task = data;
+  while (task.running) {
+    await new Promise((done) => setTimeout(done, 1500));
+    const q = await api("/api/task?id=" + data.id);
+    if (!q.ok) return;
+    task = await q.json();
+  }
+  if (task.rc !== 0) return toast(t("ver_fail"), "bad");
+  toast(t("ver_done").replace("%s", n), "ok");
+  const after = await (await api("/api/versions")).json().catch(() => ({}));
+  if (after.reboot && (await ask({ title: t("group_Version"), text: t("set_restart"), yes: t("set_restart_now"), no: t("set_later") }))) {
+    const p = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "power.reboot", value: "1" }) });
+    toast(p.ok ? t("set_restarting") : p.statusText, p.ok ? "ok" : "bad");
+    return;
+  }
+  loadSettings().catch(() => {});
 }
 
 // Video Setup > Geometry: o monitor e o crt_range em uso, um digitado e a

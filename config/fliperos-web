@@ -39,6 +39,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/wifi {"device", "ssid", "password", "hidden"}: conecta
     POST /api/password {"current", "password"}: a senha do gabinete (--password)
     GET  /api/whatsnew  o texto do What's new (--whatsnew)
+    GET  /api/versions  a versao (Setup > System > FliperOS version): level,
+                      base, latest, hold, reboot e os updates que se pode
+                      escolher (fliperos-update versions)
+    POST /api/versions {"update": N|"latest"}: leva o gabinete a ele (tarefa)
     Os ajustes orientation, splash e mm_games viram tarefas ({"task": ...}).
     POST /api/favourite {"system", "game", "on"}: os favoritos do FliperOS
     POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
@@ -2221,6 +2225,31 @@ def setup_out(*args, timeout=60):
 # (--bios), Emulators & Games (config/fliperos-emulators) e Extras
 # (config/fliperos-extras). O que leva minutos e uma tarefa.
 EMULATORS_TOOL = ENV("FLIPEROS_EMULATORS", BIN + "/fliperos-emulators")
+UPDATE_TOOL = ENV("FLIPEROS_UPDATE_TOOL", BIN + "/fliperos-update")
+
+
+def versions():
+    """fliperos-update versions: os campos "chave=valor" e os updates
+    "N<TAB>estado<TAB>reboot<TAB>titulo", do mais novo ao mais velho."""
+    done = subprocess.run([UPDATE_TOOL, "versions"], capture_output=True, text=True, timeout=60)
+    if done.returncode != 0:
+        raise OSError((done.stderr or done.stdout).strip()[-300:] or "could not read the update list")
+    out = {"updates": []}
+    for line in done.stdout.splitlines():
+        if "=" in line.split("\t", 1)[0]:
+            key, _, value = line.partition("=")
+            if key in ("level", "base", "latest"):
+                out[key] = int(value) if value.isdigit() else 0
+            elif key == "hold":
+                out[key] = int(value) if value.isdigit() else None
+            elif key == "reboot":
+                out[key] = value == "yes"
+            continue
+        parts = line.split("\t", 3)
+        if len(parts) == 4 and parts[0].isdigit():
+            out["updates"].append({"n": int(parts[0]), "state": parts[1], "reboot": parts[2] == "yes",
+                                   "title": parts[3]})
+    return out
 PIXELCADE = ENV("FLIPEROS_PIXELCADE", BIN + "/fliperos-pixelcade")
 # Uma pasta de jogos do Scraper: mame, retroarch/fbneo.
 SYSTEM_KEY = re.compile(r"[A-Za-z0-9_+-][A-Za-z0-9_.+-]*(/[A-Za-z0-9_+-][A-Za-z0-9_.+-]*)?")
@@ -2936,6 +2965,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"text": setup_out("--whatsnew")})
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
+        if url.path == "/api/versions":
+            # Setup > System > FliperOS version: le o indice dos updates (a rede).
+            try:
+                return self.send(200, versions())
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
         if url.path == "/api/input/events":
             # O controle aceso no gabinete desenhado da pagina (o mesmo do OBS).
             return self.input_events()
@@ -3128,6 +3163,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.bios_action(self.body())
         if url.path == "/api/install":
             return self.install_action(self.body())
+        if url.path == "/api/versions":
+            return self.version_action(self.body())
         if url.path.startswith("/api/romfilter/"):
             return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
         if url.path == "/api/stream/offer":
@@ -3421,6 +3458,23 @@ class Handler(BaseHTTPRequestHandler):
         task = self.panel.tasks.start("%s %s" % ("Update" if row["installed"] else "Install", label), argv, "extras")
         if not task:
             return self.send(409, {"error": "another installation is running"})
+        return self.send(200, task.info())
+
+    def version_action(self, data):
+        """Setup > System > FliperOS version: o gabinete vai ao update pedido
+        (para frente ou para tras) ou volta a seguir os updates ("latest"),
+        como tarefa (fliperos-update goto); a faixa quem confere e ele."""
+        target = data.get("update")
+        if target == "latest":
+            word, label = "latest", "the newest update"
+        elif isinstance(target, int) and not isinstance(target, bool) and target > 0:
+            word, label = str(target), "update %d" % target
+        else:
+            return self.send(400, {"error": "update: a number or \"latest\""})
+        task = self.panel.tasks.start("FliperOS version: %s" % label, [UPDATE_TOOL, "goto", word, "--progress"],
+                                      "update")
+        if not task:
+            return self.send(409, {"error": "the FliperOS version is already changing"})
         return self.send(200, task.info())
 
     def stream_offer(self, data):

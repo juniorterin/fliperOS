@@ -788,6 +788,8 @@ img.fade.in { opacity: 1; transform: none; }
 .nics { display: grid; gap: 8px; }
 .nic-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .nic-row svg.px { width: 22px; height: 22px; }
+.versions .nic-row > span:not(.tag) { flex: 1 1 12em; min-width: 0; }
+.versions .nic-row .btn { margin-left: auto; }
 .wifi-nets { display: grid; gap: 6px; }
 :where(.sub) .wifi-net { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px;
   background: var(--card2); border: 1px solid var(--line); border-radius: 10px; color: var(--fg); }

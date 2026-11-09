@@ -6727,6 +6727,83 @@ class RomCleanerTests(Base):
         self.assertIn("item:notes|Read what changes", out)
         self.assertEqual(calls.splitlines()[:2], ["check", "notes"])
 
+    def version_screen(self, versions, script, goto_rc=0, goto_out="back\t61\tyes\t/b\tScanlines\nlevel=61\n"):
+        calls = self.env.dir / "ver.calls"
+        calls.unlink(missing_ok=True)
+        self.env.stub("fliperos-update", """
+            echo "$*" >> %s
+            out=""
+            for a in "$@"; do [[ $prev == --result ]] && out=$a; prev=$a; done
+            case $1 in
+              versions) printf "%%b" "%s" ;;
+              goto) printf "%%b" "%s" > "$out"; exit %d ;;
+            esac
+        """ % (calls, versions.replace("\t", "\\t").replace("\n", "\\n"),
+               goto_out.replace("\t", "\\t").replace("\n", "\\n"), goto_rc))
+        r = self.env.run("""
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            source %s/screens/patches.sh
+            ui_msg() { printf 'msg:%%s\\n' "$*"; }
+            ui_info() { :; }
+            status_line() { :; }
+            screen_need_internet() { return 0; }
+            screen_power_now() { echo "power:$1"; }
+            run_with_progress() { shift 2; "$@" > /dev/null; }
+        """ % (SETUP, SETUP, SETUP) + script, dict(self.vars, PATCH_BIN=str(self.env.bin / "fliperos-update")))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout + r.stderr, calls.read_text() if calls.exists() else ""
+
+    def test_version_screen_goes_back_and_follows_the_updates_again(self):
+        # Setup > System > FliperOS version: os updates da base ao mais novo,
+        # o de agora marcado; um mais velho pergunta antes e pode reiniciar.
+        versions = ("level=63\nbase=60\nlatest=63\nhold=\nreboot=no\n63\tcurrent\tno\tCartridges\n"
+                    "62\tolder\tno\tCDs\n61\tolder\tno\tScanlines\n60\tolder\tyes\tDisplayPort\n")
+        out, calls = self.version_screen(versions, """
+            ui_menu() {
+              printf 'text:%s\\n' "$2" >&2
+              printf 'default:%s\\n' "$3" >&2
+              printf 'item:%s\\n' "${@:4}" >&2
+              echo 61
+            }
+            ui_yesno() { echo "ask:$2" >&2; return 0; }
+            screen_update_version
+        """)
+        self.assertIn("text:This cabinet is at update 63, the newest. Choose the update to use.", out)
+        self.assertIn("default:63", out)
+        self.assertIn("item:63|Update 63: Cartridges", out)
+        self.assertIn("item:60|Update 60: DisplayPort", out)
+        self.assertNotIn("item:latest", out)
+        self.assertIn("ask:Go back to update 61?", out)
+        self.assertIn("goto 61 --progress --result", calls)
+        self.assertIn("power:reboot", out)
+        # Presa num mais velho: o "seguir os updates" leva ao mais novo.
+        held = versions.replace("level=63", "level=61").replace("hold=", "hold=61")
+        out, calls = self.version_screen(held, """
+            ui_menu() { printf 'item:%s\\n' "${@:4}" >&2; echo latest; }
+            ui_yesno() { echo "ask:$2" >&2; return 0; }
+            screen_update_version
+        """, goto_out="applied\t62\tno\t/b\tCDs\napplied\t63\tno\t/b\tCartridges\nlevel=63\n")
+        self.assertIn("item:latest|Follow the updates\n", out)
+        self.assertIn("ask:Install the updates up to update 63?", out)
+        self.assertIn("goto 63 --progress --result", calls)
+        self.assertIn("msg:FliperOS version FliperOS is at update 63.", out)
+        # Recusar a pergunta nao muda nada; uma falha diz onde esta o log.
+        out, calls = self.version_screen(versions, """
+            ui_menu() { echo 62; }
+            ui_yesno() { return 1; }
+            screen_update_version
+        """)
+        self.assertNotIn("goto", calls)
+        out, calls = self.version_screen(versions, """
+            ui_menu() { echo 62; }
+            ui_yesno() { return 0; }
+            screen_update_version
+        """, goto_rc=1)
+        self.assertIn("The change did not finish.", out)
+        self.assertIn("System > FliperOS version", (ROOT / "fliperos-setup/screens/patches.sh").read_text())
+        self.assertIn("version) screen_update_version ;;", (ROOT / "fliperos-setup/screens/setup-menu.sh").read_text())
+
     def test_wifi_connected_checks_for_the_update_right_away(self):
         # O boot so procura o update com a rede no ar: quem liga o Wi-Fi pelo
         # Setup e perguntado na hora, sem esperar o proximo boot.
@@ -7789,7 +7866,7 @@ class SetupGroupsTests(Base):
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
-        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update",
+        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update", "version",
                                                         "whatsnew", "debug", "lab", "oscr", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)

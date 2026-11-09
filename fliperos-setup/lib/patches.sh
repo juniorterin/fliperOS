@@ -29,3 +29,18 @@ patch_apply() {
   log_info "FliperOS update: applying"
   "$PATCH_BIN" apply --progress --result "$1" 2>> "$FLIPEROS_LOG"
 }
+
+# patch_versions: os updates que se pode escolher (fliperos-update versions):
+# level=, base=, latest=, hold=, reboot= e "N<TAB>estado<TAB>reboot<TAB>titulo"
+# do mais novo ao mais velho.
+patch_versions() {
+  "$PATCH_BIN" versions 2>> "$FLIPEROS_LOG"
+}
+
+# patch_goto N RESULTADO: leva o gabinete ao update N (ou latest), para
+# frente ou para tras, falando com a tela por eventos (back/applied<TAB>N<TAB>
+# reboot... em RESULTADO).
+patch_goto() {
+  log_info "FliperOS version: going to update $1"
+  "$PATCH_BIN" goto "$1" --progress --result "$2" 2>> "$FLIPEROS_LOG"
+}

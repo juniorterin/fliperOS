@@ -14,6 +14,20 @@
   fliperos-update apply [--progress] [--result ARQUIVO]
   fliperos-update restore N
   fliperos-update record ORIGEM [--root RAIZ]   (o manifesto e o nivel em RAIZ)
+  fliperos-update versions              os updates que se pode escolher:
+                                        level=, base=, latest=, hold=, reboot=
+                                        e "N<TAB>current|older|newer<TAB>reboot<TAB>titulo"
+  fliperos-update goto N|latest [--progress] [--result ARQUIVO]
+
+A versao escolhida (Setup > System > FliperOS version, painel web): o goto
+leva o gabinete ao update N. Para frente, aplica os que faltam ate ele; para
+tras, instala a arvore do N por cima (o tools/cabinet-update.sh dela, sem os
+updates/NNNN.sh). Nao desce abaixo da base (o nivel com que a ISO veio: os
+updates mais velhos sao de imagens mais velhas). Abaixo do mais novo, o
+gabinete fica preso nele (HOLD, "N MAIS_NOVO_VISTO"): o boot nao pergunta e
+o desligar nao aplica nada, ate sair um update depois do mais novo de quando
+a escolha foi feita (ele pode trazer a correcao). O goto para tras deixa este
+fliperos-update no lugar do da arvore antiga, que nao conhece a trava.
 
 Um patch e um commit do repo: o apply baixa a arvore dele, confere o
 treehash do indice e roda o tools/cabinet-update.sh dela (o mesmo do
@@ -55,6 +69,14 @@ STATE = os.environ.get('FLIPEROS_UPDATE_STATE', '/var/lib/fliperos/update')
 LEVEL = os.environ.get('FLIPEROS_UPDATE_LEVEL', '/etc/fliperos/patch-level')
 ROOT = os.environ.get('FLIPEROS_UPDATE_ROOT', '/')
 LOG = os.environ.get('FLIPEROS_UPDATE_LOG', '/var/log/fliperos-update.log')
+# A versao escolhida abaixo da mais nova ("N MAIS_NOVO_VISTO") e o nivel com
+# que a ISO veio (o mais velho que se pode escolher).
+HOLD = os.environ.get('FLIPEROS_UPDATE_HOLD', '/etc/fliperos/update-hold')
+BASE = os.environ.get('FLIPEROS_UPDATE_BASE', '/etc/fliperos/patch-base')
+# Este programa instalado: o goto para tras o devolve depois da arvore antiga.
+BIN = os.environ.get('FLIPEROS_UPDATE_BIN', '/opt/fliperos/bin/fliperos-update')
+# Um update aplicado que pede reiniciar (no /run: o boot o apaga).
+REBOOT_FLAG = os.environ.get('FLIPEROS_UPDATE_REBOOT_FLAG', '/run/fliperos-update-reboot')
 # O que aplica a arvore do patch (ORIGEM em $SRC). Os testes trocam.
 INSTALL = os.environ.get('FLIPEROS_UPDATE_INSTALL', 'bash "$SRC/tools/cabinet-update.sh"')
 # Sem overlay (os testes, ou um kernel sem ele): um comando que escreve em
@@ -109,6 +131,64 @@ def write_level(n):
     with open(LEVEL + '.tmp', 'w', encoding='utf-8') as f:
         f.write('%d\n' % n)
     os.replace(LEVEL + '.tmp', LEVEL)
+
+
+def read_hold():
+    """(N, mais novo visto) da versao escolhida; None sem escolha."""
+    try:
+        with open(HOLD, encoding='utf-8') as f:
+            n, seen = (int(word) for word in f.read().split()[:2])
+        return n, seen
+    except (OSError, ValueError):
+        return None
+
+
+def write_hold(n, seen):
+    os.makedirs(os.path.dirname(HOLD), exist_ok=True)
+    with open(HOLD + '.tmp', 'w', encoding='utf-8') as f:
+        f.write('%d %d\n' % (n, seen))
+    os.replace(HOLD + '.tmp', HOLD)
+
+
+def clear_hold():
+    try:
+        os.remove(HOLD)
+    except OSError:
+        pass
+
+
+def read_base():
+    """O update mais velho que se pode escolher: o nivel da ISO (o build o
+    grava). Numa instalacao de antes dele: o nivel antes do primeiro update
+    aplicado aqui (as copias em STATE/backup), ou o de agora."""
+    try:
+        with open(BASE, encoding='utf-8') as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        pass
+    base = read_level()
+    try:
+        applied = [int(d[:4]) for d in os.listdir(os.path.join(STATE, 'backup')) if re.match(r'\d{4}-', d)]
+        if applied:
+            base = min(base, min(applied) - 1)
+    except OSError:
+        pass
+    base = max(base, 0)
+    try:
+        os.makedirs(os.path.dirname(BASE), exist_ok=True)
+        with open(BASE, 'w', encoding='utf-8') as f:
+            f.write('%d\n' % base)
+    except OSError:
+        pass
+    return base
+
+
+def mark_reboot():
+    try:
+        with open(REBOOT_FLAG, 'w', encoding='utf-8') as f:
+            f.write('yes\n')
+    except OSError:
+        pass
 
 
 def manifest_path():
@@ -225,9 +305,16 @@ def read_index():
     return out
 
 
-def pending():
+def pending(index=None):
+    """Os updates acima do nivel. Com uma versao escolhida, nenhum ate sair
+    um depois do mais novo de quando ela foi escolhida; entao todos (o Apply
+    leva ao mais novo e solta a escolha)."""
     level = read_level()
-    return [p for p in read_index() if p[0] > level]
+    index = read_index() if index is None else index
+    hold = read_hold()
+    if hold and (not index or index[-1][0] <= hold[1]):
+        return []
+    return [p for p in index if p[0] > level]
 
 
 def work_dir(n):
@@ -360,8 +447,10 @@ def record(src, root, extra=()):
     return len(data)
 
 
-def backup(n, root, paths):
-    dest = os.path.join(STATE, 'backup', '%04d-%s' % (n, time.strftime('%Y%m%d-%H%M%S')))
+def backup(n, root, paths, prefix=''):
+    """A copia do que o update N troca, em STATE/backup/NNNN-DATA (o goto
+    para tras: back-NNNN-DATA, fora do restore N)."""
+    dest = os.path.join(STATE, 'backup', '%s%04d-%s' % (prefix, n, time.strftime('%Y%m%d-%H%M%S')))
     for rel in paths:
         src = os.path.join(root, rel)
         if not os.path.lexists(src):
@@ -413,12 +502,17 @@ def cmd_check(args):
 def saved_pending():
     """As linhas do ultimo check --save que o nivel de agora ainda nao tem."""
     level = read_level()
+    hold = read_hold()
     try:
         with open(pending_file(), encoding='utf-8') as f:
-            return [line.rstrip('\n') for line in f
-                    if line[:1].isdigit() and int(line.split('\t', 1)[0]) > level]
+            lines = [line.rstrip('\n') for line in f
+                     if line[:1].isdigit() and int(line.split('\t', 1)[0]) > level]
     except (OSError, ValueError):
         return []
+    # Guardado antes da escolha: so conta se ha um depois do mais novo visto.
+    if hold and not any(int(line.split('\t', 1)[0]) > hold[1] for line in lines):
+        return []
+    return lines
 
 
 def cmd_pending(args):
@@ -437,7 +531,8 @@ def powering_off():
 def cmd_shutdown(args):
     """O ExecStop do fliperos-update-shutdown.service: desligando com um
     update pendente, ele entra agora, com a rede ainda de pe."""
-    if not saved_pending() or not powering_off():
+    # Com uma versao escolhida nada entra sozinho: o boot pergunta.
+    if read_hold() or not saved_pending() or not powering_off():
         return
     log('powering off with an update pending: applying it')
     try:
@@ -488,49 +583,161 @@ def cmd_plan(args):
     say(args.progress, '@step 100 Done')
 
 
+def run_step(step, env, args, lines, n, saved):
+    """Um passo do update N (o INSTALL, o updates/NNNN.sh), com a saida no log
+    e as linhas "== " na tela; falhou, para tudo ali."""
+    with open(LOG, 'a', encoding='utf-8') as out:
+        proc = subprocess.Popen(['bash', '-c', step], env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            out.write(line)
+            if line.startswith('== '):
+                say(args.progress, '@msg %s' % line[3:].strip()[:70])
+        if proc.wait():
+            lines.append('failed\t%d\tbackup\t%s' % (n, saved))
+            write_result(args, lines)
+            raise Fail('update %d stopped (exit %d, see %s); its backup is in %s'
+                       % (n, proc.returncode, LOG, saved))
+
+
+def run_patches(todo, args, lines):
+    """Aplica TODO em ordem, um de cada vez (com o lock na mao)."""
+    for i, patch in enumerate(todo):
+        n = patch[0]
+        span = 100 // max(len(todo), 1)
+        pct = i * span
+        if read_level() != n - 1:
+            raise Fail('update %d needs update %d first' % (n, n - 1))
+        src = download(patch, args.progress, pct + 2)
+        say(args.progress, '@step %d Update %d: saving the files it replaces' % (pct + span // 5, n))
+        changed, local, unknown, _ = classify(src, ROOT)
+        saved = backup(n, ROOT, changed)
+        log('update %d (%s): %d files replaced, %d with local changes, backup %s'
+            % (n, patch[4], len(changed), len(local) + len(unknown), saved))
+        say(args.progress, '@step %d Update %d: %s' % (pct + span // 3, n, patch[4]))
+        env = dict(os.environ, SRC=src, FLIPEROS_UPDATE='1', FLIPEROS_UPDATE_SRC=src)
+        steps = [INSTALL]
+        script = os.path.join(src, 'updates', '%04d.sh' % n)
+        if os.path.isfile(script):
+            steps.append('bash "%s"' % script)
+        for step in steps:
+            run_step(step, env, args, lines, n, saved)
+        record(src, ROOT, changed)
+        write_level(n)
+        if patch[3]:
+            mark_reboot()
+        lines.append('applied\t%d\t%s\t%s\t%s' % (n, 'yes' if patch[3] else 'no', saved, patch[4]))
+        log('update %d applied' % n)
+
+
+def go_back(patch, index, args, lines):
+    """Leva o gabinete de volta ao update PATCH: a arvore dele instalada por
+    cima (o INSTALL, sem os updates/NNNN.sh, que ja rodaram), com a copia do
+    que ela troca. Este fliperos-update fica (o da arvore antiga nao conhece
+    a escolha e aplicaria tudo de novo ao desligar)."""
+    n, level = patch[0], read_level()
+    src = download(patch, args.progress, 5)
+    say(args.progress, '@step 25 Back to update %d: saving the files it replaces' % n)
+    changed, local, unknown, _ = classify(src, ROOT)
+    saved = backup(n, ROOT, changed, 'back-')
+    log('back to update %d (%s) from %d: %d files replaced, %d with local changes, backup %s'
+        % (n, patch[4], level, len(changed), len(local) + len(unknown), saved))
+    try:
+        with open(os.path.abspath(__file__), 'rb') as f:
+            me = f.read()
+    except OSError:
+        me = None
+    say(args.progress, '@step 40 Back to update %d: %s' % (n, patch[4]))
+    env = dict(os.environ, SRC=src, FLIPEROS_UPDATE='1', FLIPEROS_UPDATE_SRC=src, FLIPEROS_UPDATE_BACK='1')
+    run_step(INSTALL, env, args, lines, n, saved)
+    extra = list(changed)
+    if me and os.path.isdir(os.path.dirname(BIN)):
+        with open(BIN + '.tmp', 'wb') as f:
+            f.write(me)
+        os.chmod(BIN + '.tmp', 0o755)
+        os.replace(BIN + '.tmp', BIN)
+        if os.path.abspath(BIN).startswith(os.path.abspath(ROOT)):
+            extra.append(os.path.relpath(BIN, ROOT))
+    record(src, ROOT, extra)
+    write_level(n)
+    # Os que saem pediam reiniciar: a volta tambem pede.
+    reboot = any(p[3] for p in index if n < p[0] <= level)
+    if reboot:
+        mark_reboot()
+    lines.append('back\t%d\t%s\t%s\t%s' % (n, 'yes' if reboot else 'no', saved, patch[4]))
+    log('back to update %d' % n)
+
+
 def cmd_apply(args):
-    todo = pending()
-    lines, done = [], []
+    lines = []
     with lock():
-        for i, patch in enumerate(todo):
-            n = patch[0]
-            span = 100 // max(len(todo), 1)
-            pct = i * span
-            if read_level() != n - 1:
-                raise Fail('update %d needs update %d first' % (n, n - 1))
-            src = download(patch, args.progress, pct + 2)
-            say(args.progress, '@step %d Update %d: saving the files it replaces' % (pct + span // 5, n))
-            changed, local, unknown, _ = classify(src, ROOT)
-            saved = backup(n, ROOT, changed)
-            log('update %d (%s): %d files replaced, %d with local changes, backup %s'
-                % (n, patch[4], len(changed), len(local) + len(unknown), saved))
-            say(args.progress, '@step %d Update %d: %s' % (pct + span // 3, n, patch[4]))
-            env = dict(os.environ, SRC=src, FLIPEROS_UPDATE='1', FLIPEROS_UPDATE_SRC=src)
-            steps = [INSTALL]
-            script = os.path.join(src, 'updates', '%04d.sh' % n)
-            if os.path.isfile(script):
-                steps.append('bash "%s"' % script)
-            for step in steps:
-                with open(LOG, 'a', encoding='utf-8') as out:
-                    proc = subprocess.Popen(['bash', '-c', step], env=env, stdout=subprocess.PIPE,
-                                            stderr=subprocess.STDOUT, text=True)
-                    for line in proc.stdout:
-                        out.write(line)
-                        if line.startswith('== '):
-                            say(args.progress, '@msg %s' % line[3:].strip()[:70])
-                    if proc.wait():
-                        lines.append('failed\t%d\tbackup\t%s' % (n, saved))
-                        write_result(args, lines)
-                        raise Fail('update %d stopped (exit %d, see %s); its backup is in %s'
-                                   % (n, proc.returncode, LOG, saved))
-            record(src, ROOT, changed)
-            write_level(n)
-            done.append(n)
-            lines.append('applied\t%d\t%s\t%s\t%s' % (n, 'yes' if patch[3] else 'no', saved, patch[4]))
-            log('update %d applied' % n)
+        index = read_index()
+        todo = pending(index)
+        run_patches(todo, args, lines)
+        # Aplicar leva ao mais novo: a versao escolhida sai.
+        if todo and read_level() == index[-1][0]:
+            clear_hold()
     lines.append('level=%d' % read_level())
     write_result(args, lines)
     say(args.progress, '@step 100 FliperOS is up to date')
+
+
+def cmd_versions(args):
+    """Os updates que se pode escolher (da base ao mais novo), do mais novo ao
+    mais velho, e o estado: nivel, base, mais novo, escolha, reiniciar."""
+    index = read_index()
+    level, base, hold = read_level(), read_base(), read_hold()
+    latest = index[-1][0] if index else 0
+    print('level=%d' % level)
+    print('base=%d' % base)
+    print('latest=%d' % latest)
+    print('hold=%s' % (hold[0] if hold else ''))
+    print('reboot=%s' % ('yes' if os.path.exists(REBOOT_FLAG) else 'no'))
+    for n, _, _, reboot, title in reversed(index):
+        if n < base:
+            continue
+        state = 'current' if n == level else 'older' if n < level else 'newer'
+        print('%d\t%s\t%s\t%s' % (n, state, 'yes' if reboot else 'no', title))
+
+
+def cmd_goto(args):
+    """Leva o gabinete ao update N (para frente ou para tras) e o deixa nele
+    (abaixo do mais novo) ou volta a seguir os updates (o mais novo)."""
+    say(args.progress, '@step 2 Reading the update list')
+    index = read_index()
+    if not index:
+        raise Fail('the update list is empty')
+    latest = index[-1][0]
+    if args.n == 'latest':
+        n = latest
+    elif args.n.isdigit():
+        n = int(args.n)
+    else:
+        raise Fail('give an update number or "latest"')
+    base = max(read_base(), 1)
+    if not base <= n <= latest:
+        raise Fail('update %d cannot be chosen here (from %d to %d)' % (n, base, latest))
+    lines = []
+    with lock():
+        level = read_level()
+        if n > level:
+            run_patches([p for p in index if level < p[0] <= n], args, lines)
+        elif n < level:
+            go_back(index[n - 1], index, args, lines)
+        if n < latest:
+            write_hold(n, latest)
+        else:
+            clear_hold()
+        # O que o boot guardou para perguntar ja nao vale.
+        try:
+            os.remove(pending_file())
+        except OSError:
+            pass
+        log('version: update %d%s' % (n, ' (held)' if n < latest else ' (following the updates)'))
+    lines.append('level=%d' % read_level())
+    lines.append('hold=%s' % (n if n < latest else ''))
+    write_result(args, lines)
+    say(args.progress, '@step 100 FliperOS is at update %d' % read_level())
 
 
 def cmd_restore(args):
@@ -568,12 +775,17 @@ def cmd_record(args):
     except OSError as e:
         raise Fail('updates/index missing in %s: %s' % (args.src, e))
     write_level(max(last, read_level()))
+    if args.root:
+        # O build da ISO: o nivel dela e o mais velho que se pode escolher.
+        os.makedirs(os.path.dirname(BASE), exist_ok=True)
+        with open(BASE, 'w', encoding='utf-8') as f:
+            f.write('%d\n' % read_level())
     print('manifest=%d' % count)
     print('level=%d' % read_level())
 
 
 def main():
-    global ROOT, STATE, LEVEL
+    global ROOT, STATE, LEVEL, BASE, HOLD
     p = argparse.ArgumentParser(prog='fliperos-update')
     sub = p.add_subparsers(dest='cmd', required=True)
     sub.add_parser('level').set_defaults(func=cmd_level)
@@ -588,6 +800,12 @@ def main():
         s.add_argument('--progress', action='store_true')
         s.add_argument('--result')
         s.set_defaults(func=func)
+    sub.add_parser('versions').set_defaults(func=cmd_versions)
+    s = sub.add_parser('goto')
+    s.add_argument('n')
+    s.add_argument('--progress', action='store_true')
+    s.add_argument('--result')
+    s.set_defaults(func=cmd_goto)
     s = sub.add_parser('restore')
     s.add_argument('n', type=int)
     s.set_defaults(func=cmd_restore)
@@ -601,6 +819,8 @@ def main():
         ROOT = args.root
         STATE = os.path.join(ROOT, STATE.lstrip('/'))
         LEVEL = os.path.join(ROOT, LEVEL.lstrip('/'))
+        BASE = os.path.join(ROOT, BASE.lstrip('/'))
+        HOLD = os.path.join(ROOT, HOLD.lstrip('/'))
     try:
         args.func(args)
     except Fail as e:

@@ -76,6 +76,7 @@ screen_setup_system() {
       "password|Password|The password of the fliperos user: login, SSH and network share." \
       "cabinetname|Cabinet name|The name the other cabinets see in party and link play." \
       "update|System Update|Download and install the updates of all packages." \
+      "version|FliperOS version|Choose the update to use: an earlier one or the newest." \
       "whatsnew|What's new|The changelog of each FliperOS version and the updates installed." \
       "debug|Debug mode ($(debug_enabled && echo on || echo off))|Show boot and emulator messages on screen to find a problem." \
       "lab|Lab mode ($(lab_enabled && echo on || echo off))|Remote help: a temporary internet address to this cabinet." \
@@ -90,6 +91,7 @@ screen_setup_system() {
       password) screen_password ;;
       cabinetname) screen_cabinet_name ;;
       update) screen_need_internet "System Update" && screen_update ;;
+      version) screen_update_version ;;
       whatsnew) screen_whatsnew ;;
       debug) screen_debug ;;
       lab) screen_lab ;;

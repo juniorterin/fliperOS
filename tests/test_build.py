@@ -3132,6 +3132,10 @@ class UpdateTests(unittest.TestCase):
             FLIPEROS_UPDATE_TARBALL_URL=(self.tmp / 'tars').as_uri() + '/{commit}.tar.gz',
             FLIPEROS_UPDATE_STATE=str(self.state), FLIPEROS_UPDATE_LEVEL=str(self.root / 'etc/fliperos/patch-level'),
             FLIPEROS_UPDATE_ROOT=str(self.root), FLIPEROS_UPDATE_LOG=str(self.tmp / 'log'),
+            FLIPEROS_UPDATE_HOLD=str(self.root / 'etc/fliperos/update-hold'),
+            FLIPEROS_UPDATE_BASE=str(self.root / 'etc/fliperos/patch-base'),
+            FLIPEROS_UPDATE_BIN=str(self.root / 'opt/fliperos/bin/fliperos-update'),
+            FLIPEROS_UPDATE_REBOOT_FLAG=str(self.tmp / 'reboot'),
             FLIPEROS_UPDATE_DRYRUN='mkdir -p "$UPPER/etc/app" && cp "$SRC/config/app.conf" "$UPPER/etc/app/"',
             FLIPEROS_UPDATE_INSTALL='cp "$SRC/config/app.conf" "$FLIPEROS_UPDATE_ROOT/etc/app/" && '
                                     'echo "$SRC" >> "$FLIPEROS_UPDATE_ROOT/installs"')
@@ -3320,11 +3324,80 @@ class UpdateTests(unittest.TestCase):
         other = self.tmp / 'chroot'
         (other / 'etc/app').mkdir(parents=True)
         (other / 'etc/app/app.conf').write_text('v9')
-        env = {k: v for k, v in self.env.items() if k not in ('FLIPEROS_UPDATE_STATE', 'FLIPEROS_UPDATE_LEVEL')}
+        env = {k: v for k, v in self.env.items()
+               if k not in ('FLIPEROS_UPDATE_STATE', 'FLIPEROS_UPDATE_LEVEL', 'FLIPEROS_UPDATE_BASE', 'FLIPEROS_UPDATE_HOLD')}
         subprocess.run(['python3', str(ROOT / 'config/fliperos-update'), 'record', str(tree), '--root', str(other)],
                        check=True, capture_output=True, env=env, timeout=60)
         self.assertEqual((other / 'etc/fliperos/patch-level').read_text(), '2\n')
         self.assertIn('etc/app/app.conf\t', (other / 'var/lib/fliperos/update/manifest').read_text())
+        # O nivel da ISO e o mais velho que se pode escolher (o goto); o
+        # record do cabinet-push (sem --root) nao mexe nele.
+        self.assertEqual((other / 'etc/fliperos/patch-base').read_text(), '2\n')
+        self.assertFalse((self.root / 'etc/fliperos/patch-base').exists())
+
+    def test_goto_moves_back_and_forward_and_holds_the_choice(self):
+        (self.root / 'etc/app/app.conf').write_text('v0')
+        bin_ = self.root / 'opt/fliperos/bin/fliperos-update'
+        bin_.parent.mkdir(parents=True)
+        bin_.write_text('o antigo')
+        self.publish('v1')
+        self.publish('v2')
+        self.publish('v3', reboot='yes')
+        self.run_update('apply')
+        self.assertEqual((self.level(), self.conf()), ('3', 'v3'))
+        (self.tmp / 'reboot').unlink()
+        # A base: o nivel antes do primeiro update aplicado aqui.
+        versions = self.run_update('versions').stdout
+        self.assertEqual(versions, 'level=3\nbase=0\nlatest=3\nhold=\nreboot=no\n'
+                                   '3\tcurrent\tyes\tFix 3\n2\tolder\tno\tFix 2\n1\tolder\tno\tFix 1\n')
+        # Para tras: a arvore do 1 por cima, com copia; este fliperos-update
+        # fica no lugar; reiniciar, porque o 3 pedia; e a escolha fica.
+        out = self.run_update('goto', '1', '--progress', '--result', str(self.tmp / 'result')).stdout
+        self.assertIn('@step 100 FliperOS is at update 1', out)
+        result = (self.tmp / 'result').read_text()
+        self.assertRegex(result, r'^back\t1\tyes\t\S+/backup/back-0001-\d+-\d+\tFix 1\nlevel=1\nhold=1\n$')
+        self.assertEqual((self.level(), self.conf()), ('1', 'v1'))
+        self.assertEqual(Path((self.root / 'installs').read_text().split()[-1]).name, '0001')
+        back = next((self.state / 'backup').glob('back-0001-*'))
+        self.assertEqual((back / 'etc/app/app.conf').read_text(), 'v3')
+        self.assertEqual(bin_.read_text(), (ROOT / 'config/fliperos-update').read_text())
+        self.assertEqual((self.root / 'etc/fliperos/update-hold').read_text(), '1 3\n')
+        self.assertTrue((self.tmp / 'reboot').exists())
+        self.assertIn('hold=1\nreboot=yes\n3\tnewer\tyes\tFix 3\n', self.run_update('versions').stdout)
+        # Presa: o boot nao pergunta e o desligar nao aplica.
+        self.assertEqual(self.run_update('check', '--save').stdout, '')
+        self.assertEqual(self.run_update('pending').stdout, '')
+        self.env['FLIPEROS_UPDATE_JOBS'] = 'echo 105 poweroff.target start waiting'
+        (self.state / 'pending').write_text('2\tno\tFix 2\n3\tyes\tFix 3\n')
+        self.assertEqual(self.run_update('pending').stdout, '')
+        self.run_update('shutdown')
+        self.assertEqual(self.level(), '1')
+        # Um update novo depois da escolha: o boot oferece todos; o Apply leva
+        # ao mais novo e solta a escolha. O desligar segue sem aplicar.
+        self.publish('v4')
+        self.assertEqual(self.run_update('check', '--save').stdout, '2\tno\tFix 2\n3\tyes\tFix 3\n4\tno\tFix 4\n')
+        self.assertEqual(self.run_update('pending').stdout.count('\n'), 3)
+        self.run_update('shutdown')
+        self.assertEqual(self.level(), '1')
+        self.run_update('apply')
+        self.assertEqual((self.level(), self.conf()), ('4', 'v4'))
+        self.assertFalse((self.root / 'etc/fliperos/update-hold').exists())
+        # Para frente ate um do meio: aplica os que faltam e fica nele.
+        self.run_update('goto', '2')
+        self.run_update('goto', '3')
+        self.assertEqual((self.level(), self.conf()), ('3', 'v3'))
+        self.assertEqual((self.root / 'etc/fliperos/update-hold').read_text(), '3 4\n')
+        self.run_update('goto', 'latest')
+        self.assertEqual((self.level(), self.conf()), ('4', 'v4'))
+        self.assertFalse((self.root / 'etc/fliperos/update-hold').exists())
+        # Fora da faixa (abaixo da base, depois do mais novo): nada muda.
+        (self.root / 'etc/fliperos/patch-base').write_text('2\n')
+        for n in ('1', '5', '0', 'x'):
+            r = self.run_update('goto', n, check=False)
+            self.assertNotEqual(r.returncode, 0, n)
+        self.assertIn('update 1 cannot be chosen here (from 2 to 4)', self.run_update('goto', '1', check=False).stderr)
+        self.assertEqual(self.level(), '4')
+        self.assertNotIn('\tFix 1', self.run_update('versions').stdout)
 
     def test_treehash_is_the_one_of_the_published_tree(self):
         # O make-update.sh calcula o treehash do git archive; o gabinete, do
@@ -6945,6 +7018,12 @@ class WebPanelTests(unittest.TestCase):
                        'printf "installed=1\\nactive=1\\nurl=https://a-b.trycloudflare.com/lab?key=K\\n'
                        'expires=100\\nhours=4\\n"\n' % tmp)
         lab.chmod(0o755)
+        # O fliperos-update falso: a lista da versao; o goto fica no log.
+        update = tmp / 'fake-update'
+        update.write_text('#!/bin/sh\necho "$*" >> %s/update.log\n[ "$1" = versions ] || { echo "@step 50 Going"; exit 0; }\n'
+                          'printf "level=63\\nbase=60\\nlatest=63\\nhold=\\nreboot=no\\n'
+                          '63\\tcurrent\\tno\\tCartridges\\n62\\tolder\\tno\\tCDs\\n61\\tolder\\tyes\\tScanlines\\n"\n' % tmp)
+        update.chmod(0o755)
         (tmp / 'lab').mkdir()
         (tmp / 'run/1000').mkdir(parents=True, exist_ok=True)
         (tmp / 'run/1000/fliperos-marquee').write_text('event=game\nsystem=mame\nrom=sf2\ntitle=Street Fighter II\n'
@@ -6968,6 +7047,7 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_IDLE_GIF=str(ROOT / 'config/zedmd-fliperos.gif'),
                    FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
                    FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
+                   FLIPEROS_UPDATE_TOOL=str(update),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
                    FLIPEROS_WEB_GUI=str(ROOT / 'fliperos-setup/gui'))
         (tmp / 'mnt/USB/romset').mkdir(parents=True)
@@ -7975,6 +8055,32 @@ class WebPanelTests(unittest.TestCase):
         self.assertNotIn('nova senha', self.volume_log.read_text())
         text = json.loads(self.request('GET', '/api/whatsnew', cookie=cookie)[2])['text']
         self.assertIn('update 63', text)
+
+    def test_version_list_and_change(self):
+        # Setup > System > FliperOS version pelo painel: a lista e o goto como
+        # tarefa (uma troca por vez); so numero ou "latest".
+        cookie = self.login()
+        info = json.loads(self.request('GET', '/api/versions', cookie=cookie)[2])
+        self.assertEqual((info['level'], info['base'], info['latest'], info['hold'], info['reboot']),
+                         (63, 60, 63, None, False))
+        self.assertEqual(info['updates'][2], {'n': 61, 'state': 'older', 'reboot': True, 'title': 'Scanlines'})
+        status, _, data = self.request('POST', '/api/versions', {'update': 61}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        task = json.loads(data)
+        self.assertEqual(task['name'], 'FliperOS version: update 61')
+        for _ in range(50):
+            if not json.loads(self.request('GET', '/api/task?id=%d' % task['id'], cookie=cookie)[2])['running']:
+                break
+            time.sleep(0.1)
+        self.assertIn('goto 61 --progress\n', (Path(self.tmp.name) / 'update.log').read_text())
+        for bad in ({'update': '61; reboot'}, {'update': True}, {'update': 0}, {}):
+            self.assertEqual(self.request('POST', '/api/versions', bad, cookie=cookie)[0], 400, bad)
+        status, _, data = self.request('POST', '/api/versions', {'update': 'latest'}, cookie=cookie)
+        self.assertEqual(json.loads(data)['name'], 'FliperOS version: the newest update')
+        js = (ROOT / 'config/web/system.js').read_text()
+        self.assertIn('boxes.set("Version", versionBox());', js)
+        text = (ROOT / 'config/web/text.js').read_text()
+        self.assertEqual(text.count('group_Version:'), 2)
 
     def test_downloader_and_tasks(self):
         cookie = self.login()
