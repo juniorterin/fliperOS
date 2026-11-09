@@ -444,6 +444,12 @@ scraper_detect() {
     count=$(scraper_count "$dir")
     ((count > 0)) && printf '%s|%s|%s|%s\n' "$name" "$dir" "$platform" "$count"
   done
+  # O OpenBOR: os paks de ~/roms/openbor/Paks (a extensao em qualquer caixa,
+  # HFFgp32.PAK). A pasta de cima tem Saves, Logs e o v3 do 3.0, que nao sao
+  # jogos. Plataforma openbor do Skyscraper (id 214 no ScreenScraper); o que
+  # sai do proprio pak vem do fliperos-openbor-meta (frontends_openbor_meta).
+  count=$(scraper_files openbor "$ROMS_DIR/openbor/Paks" | wc -l)
+  ((count > 0)) && printf 'openbor|%s|openbor|%s\n' "$ROMS_DIR/openbor/Paks" "$count"
   for dir in "$ROMS_DIR"/retroarch/*/; do
     [[ -d $dir ]] || continue
     dir=${dir%/}
@@ -526,8 +532,9 @@ scraper_attract_emulator() {
       echo "DuckStation|$FLIPEROS_BIN/fliperos-x11-run|duckstation \"[romfilename]\"|.cue;.chd;.pbp;.m3u;.iso;.img;.ecm;.mds;.exe;.psexe" ;;
     dolphin)
       echo "Dolphin|$FLIPEROS_BIN/fliperos-x11-run|dolphin-emu -e \"[romfilename]\"|.iso;.gcm;.rvz;.wbfs;.ciso;.gcz;.wad" ;;
-    # Os paks de ~/roms/openbor/Paks (frontends_openbor): o comando openbor
-    # (config/fliperos-openbor) abre o pak direto, no 4 ou no 3.0.
+    # Os paks de ~/roms/openbor/Paks (scraper_detect): o comando openbor
+    # (config/fliperos-openbor) abre o pak direto, no 4 ou no 3.0, e o
+    # fliperos-x11-run no modo de video do pak.
     openbor)
       echo "OpenBOR|$FLIPEROS_BIN/fliperos-x11-run|openbor \"[romfilename]\"|.pak" ;;
     retroarch/*)
@@ -1139,6 +1146,9 @@ scraper_run() {
   # grava e o proprio Skyscraper, junto da lista).
   [[ -n $list ]] && scraper_media_has "$media" texto && scraper_texts "$list" "$key"
   scraper_media_record "$key" "$media"
+  # O OpenBOR: o titulo, o ano, o fabricante e a descricao do cache do
+  # Skyscraper vao para a lista do FliperOS, por cima do que saiu dos paks.
+  [[ $key == openbor ]] && frontends_openbor_meta
   # O sistema no ES-DE, com a arte de ~/media (lib/frontends.sh).
   [[ $format == esde ]] && frontends_esde
   ev_step 100 "$platform: done"

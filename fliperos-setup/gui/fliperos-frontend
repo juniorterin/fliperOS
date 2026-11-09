@@ -2507,6 +2507,10 @@ class Frontend:
                 self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == key), 0)
                 self.load_filter()
                 self.rebuild(keep=g["Name"] if g else None)
+                # O --romlists tambem grava arte (a tela de titulo dos paks do
+                # OpenBOR, fliperos-openbor-meta): um jogo guardado sem
+                # imagem e procurado de novo.
+                self.flush = True
                 # As listas chegaram (ou mudaram): o marquee ainda nao tem o sistema de agora.
                 name = (self.category() or {}).get("name", "")
                 if name and name != getattr(self, "announced", None):
