@@ -110,6 +110,14 @@ It is small on purpose: it only writes to serial ports and only accepts the USB 
 - **When it runs**: it opens with each game of GroovyMAME, Flycast, Supermodel and SM2-Emu and closes with it. What it says (the guns it found, the file it loaded) is in `/opt/fliperos/logs/qmamehook.log`.
 - **With Hook Of The Reaper also installed**, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless `/etc/fliperos/fliperos.conf` has the line `outputs_reader=qmamehook`.
 
+## Cartridge reader (Open Source Cartridge Reader)
+
+sanni's [Open Source Cartridge Reader](https://github.com/sanni/cartreader) HW5 dumps Super Nintendo, Mega Drive, Nintendo 64, Game Boy and Game Boy Advance cartridges. On its own, it writes each dump to its SD card. With the FliperOS firmware patch (`patches/oscr`), the frontend reads the cartridge over the USB cable and plays it or saves it to the core's folder ([Frontends](Frontends.md), "the cartridge reader").
+
+- **Installing the firmware**: Setup > System > Cartridge reader (OSCR). It asks whether the board has the 3.3V/5V switch or the VSELECT module, saves the firmware the reader has to `~/oscr`, writes the FliperOS one through the USB cable with `avrdude` and checks that the reader answers. **Restore the backup** puts the old one back.
+- **Safe probing**: while the frontend looks at the slots, the reader stays at 3.3V. A cartridge that only answers at 5V is picked by system on the screen, and the reader then sets that voltage, as its own menu does.
+- **Not tested on a real reader yet**: if you have one, open an issue with what worked and what didn't.
+
 ## Adding a project to this page
 
 A project fits here if its firmware or software is open source and it works on Linux without a closed driver.

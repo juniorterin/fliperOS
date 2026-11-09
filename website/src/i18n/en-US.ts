@@ -308,6 +308,10 @@ const enUS = {
         fourAlt: 'Pixel art of four Capcom cabinets of Super Street Fighter II: The Tournament Battle in a blue-tiled corner room, two on each wall with a long two-seat bench in front of each, red ball-top joysticks and three buttons per player, every screen on its own fighter select with its two player slots lit, joined by network cables on the floor.',
         raceAlt: 'Pixel art of four racing cabinets shaped like Formula 1 cars, cars 1 to 4 on their marquees, each screen showing a different spot of the same race with that player\'s car in its own colour, joined by network cables.',
       },
+      media: {
+        title: 'Your originals: discs and cartridges',
+        text: 'Put a PlayStation, PS2, Saturn, Sega CD or PC Engine CD disc in a CD or DVD drive, or a cartridge in the Open Source Cartridge Reader. The frontend finds the console, lets you pick the emulator or the RetroArch core that reads it, and plays it straight away or rips it to the right folder. The cabinet can even boot straight from the disc, like a console.',
+      },
     },
   },
   whatsNew: {
@@ -853,6 +857,13 @@ const enUS = {
         boards: 'Ultimarc, LED-Wiz, Howler, Adalight',
         text: 'LEDSpicer lights the buttons each game uses and plays light animations on the cabinet. FliperOS installs it and tells it which game opened and when it closed.',
         projects: ['LEDSpicer'],
+      },
+      {
+        id: 'cart',
+        title: 'Cartridge reader',
+        boards: 'Open Source Cartridge Reader HW5',
+        text: 'sanni’s open cartridge reader dumps Super Nintendo, Mega Drive, Nintendo 64, Game Boy and Game Boy Advance carts. With the FliperOS firmware patch, installed from Setup > System, the frontend reads the cart over USB and plays it or saves it to the right folder.',
+        projects: ['Open Source Cartridge Reader'],
       },
     ],
     disclaimer: 'Each project belongs to its own authors. FliperOS only installs or talks to them; the links go to each project’s page.',

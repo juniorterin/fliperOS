@@ -120,8 +120,11 @@ export const HOME_STEPS: { page: PageSlug; shot: string }[] = [
 // Os destaques da home, numa grade com tiles de tamanhos diferentes; o texto
 // de cada um está em highlights.items pelo id. {lang} vira en ou pt (os prints
 // do painel web têm um por idioma). Sem arquivo, o tile fica só com o texto.
-export type HighlightId = 'web' | 'multi' | 'gun' | 'live' | 'coin' | 'link';
+// O primeiro, a mídia física, é o destaque largo no alto da grade (HIGHLIGHT_WIDE).
+export type HighlightId = 'web' | 'multi' | 'gun' | 'live' | 'coin' | 'link' | 'media';
+export const HIGHLIGHT_WIDE: HighlightId[] = ['media'];
 export const HOME_HIGHLIGHTS: { id: HighlightId; page: PageSlug; shot: string; extra?: string; since?: string }[] = [
+  { id: 'media', page: 'media', shot: 'anim/media-disc', since: '0.23' },
   { id: 'web', page: 'web-panel', shot: 'web/phone-{lang}', extra: 'web/frontend-{lang}' },
   { id: 'multi', page: 'video', shot: 'multi/darius-1' },
   { id: 'gun', page: 'controls', shot: 'gui/guncon-target1' },

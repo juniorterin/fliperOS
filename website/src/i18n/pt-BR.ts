@@ -309,6 +309,10 @@ const ptBR: Messages = {
         fourAlt: 'Pixel art de quatro gabinetes Capcom de Super Street Fighter II: The Tournament Battle num canto de sala com piso azulejado, dois em cada parede e um banco comprido de dois lugares na frente de cada um, manches vermelhos de bola e três botões por jogador, cada tela na sua seleção de lutadores com os seus dois lugares acesos, ligados por cabos de rede no chão.',
         raceAlt: 'Pixel art de quatro gabinetes de corrida em forma de carro de Fórmula 1, carros 1 a 4 nos letreiros, cada tela mostrando um ponto diferente da mesma corrida com o carro do jogador na cor dele, ligados por cabos de rede.',
       },
+      media: {
+        title: 'Seus originais: discos e cartuchos',
+        text: 'Ponha um disco de PlayStation, PS2, Saturn, Sega CD ou PC Engine CD num drive de CD ou DVD, ou um cartucho no Open Source Cartridge Reader. O frontend descobre o console, deixa escolher o emulador ou o core do RetroArch que o lê, e joga na hora ou ripa para a pasta certa. O gabinete pode até ligar direto no disco, como um console.',
+      },
     },
   },
   whatsNew: {
@@ -854,6 +858,13 @@ const ptBR: Messages = {
         boards: 'Ultimarc, LED-Wiz, Howler, Adalight',
         text: 'O LEDSpicer acende os botões que cada jogo usa e faz animações de luz no gabinete. O FliperOS o instala e avisa qual jogo abriu e quando fechou.',
         projects: ['LEDSpicer'],
+      },
+      {
+        id: 'cart',
+        title: 'Leitor de cartuchos',
+        boards: 'Open Source Cartridge Reader HW5',
+        text: 'O leitor de cartuchos aberto do sanni faz o dump de cartuchos de Super Nintendo, Mega Drive, Nintendo 64, Game Boy e Game Boy Advance. Com o patch de firmware do FliperOS, instalado pelo Setup > System, o frontend lê o cartucho pela USB e joga ou guarda na pasta certa.',
+        projects: ['Open Source Cartridge Reader'],
       },
     ],
     disclaimer: 'Cada projeto é dos seus próprios autores. O FliperOS só os instala ou conversa com eles; os links levam à página de cada projeto.',

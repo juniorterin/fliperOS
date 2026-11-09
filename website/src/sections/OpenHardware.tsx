@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpRight, Crosshair, Gamepad2, Lightbulb, MonitorDot, Zap, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Crosshair, Gamepad2, Lightbulb, MemoryStick, MonitorDot, Zap, type LucideIcon } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -12,6 +12,7 @@ const ITEM_STYLE: Record<string, { icon: LucideIcon; color: string }> = {
   gun: { icon: Crosshair, color: 'text-orange border-orange/40 bg-orange/10' },
   outputs: { icon: Zap, color: 'text-yellow border-yellow/40 bg-yellow/10' },
   lights: { icon: Lightbulb, color: 'text-green border-green/40 bg-green/10' },
+  cart: { icon: MemoryStick, color: 'text-purple border-purple/40 bg-purple/10' },
 };
 
 // Os projetos de cada cartao, pelo nome que aparece nele.
@@ -26,6 +27,7 @@ const PROJECT_URL: Record<string, string> = {
   'Hook Of The Reaper': 'https://hotr.6bolt.com/',
   QMamehook: 'https://github.com/SeongGino/QMamehook',
   LEDSpicer: 'https://github.com/meduzapat/LEDSpicer',
+  'Open Source Cartridge Reader': 'https://github.com/sanni/cartreader',
 };
 
 export function OpenHardware() {

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Coins, Columns3, Crosshair, Network, Radio, Smartphone, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Coins, Columns3, Crosshair, Disc3, Network, Radio, Smartphone, type LucideIcon } from 'lucide-react';
 import Image from 'next/image';
 import { Reveal } from '@/components/Reveal';
 import { SectionHeading } from '@/components/SectionHeading';
@@ -8,7 +8,7 @@ import { TubeShot } from '@/components/TubeShot';
 import { pagePath } from '@/i18n';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Media } from '@/lib/media';
-import type { HighlightId, PageSlug } from '@/lib/site';
+import { HIGHLIGHT_WIDE, type HighlightId, type PageSlug } from '@/lib/site';
 
 export type Highlight = { id: HighlightId; page: PageSlug; since?: string; media?: Media; extra?: Media };
 
@@ -20,6 +20,7 @@ const ICON: Record<HighlightId, LucideIcon> = {
   live: Radio,
   coin: Coins,
   link: Network,
+  media: Disc3,
 };
 
 // Os quartos em pixel art (tools/site-art): o tile de várias telas e o do link.
@@ -67,7 +68,9 @@ export function Highlights({ items }: { items: Highlight[] }) {
   const { t, locale } = useI18n();
   const h = t.highlights;
   const web = items.find((i) => i.id === 'web');
-  const rest = items.filter((i) => i.id !== 'web');
+  // O destaque largo (a novidade da versão) vem antes de tudo, na linha toda.
+  const wide = items.filter((i) => HIGHLIGHT_WIDE.includes(i.id));
+  const rest = items.filter((i) => i.id !== 'web' && !HIGHLIGHT_WIDE.includes(i.id));
   const span: Record<string, string> = {
     multi: 'md:col-span-2',
     gun: 'md:col-span-2',
@@ -80,6 +83,31 @@ export function Highlights({ items }: { items: Highlight[] }) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading id="highlights" kicker={h.kicker} title={h.title} />
         <div className="mt-14 grid gap-4 md:grid-cols-6">
+          {wide.map((item) => (
+            <Reveal key={item.id} className="md:col-span-6">
+              <a
+                href={pagePath(locale, item.page)}
+                className="card group relative flex h-full flex-col gap-6 rounded-2xl p-5 sm:p-6 lg:flex-row lg:items-center"
+              >
+                {item.since ? (
+                  <span className="absolute top-4 right-4 z-10 rounded-md bg-pink px-2 py-0.5 font-mono text-[10px] font-bold tracking-wider text-bg-deeper uppercase">
+                    {h.newIn} {item.since}
+                  </span>
+                ) : null}
+                <span className="block w-full shrink-0 lg:w-[44%]">
+                  <Visual item={item} />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-3">
+                  <span className="text-2xl font-semibold text-fg">{h.items[item.id].title}</span>
+                  <span className="text-muted">{h.items[item.id].text}</span>
+                  <span className="inline-flex items-center gap-1.5 font-mono text-sm text-cyan transition-colors group-hover:text-fg">
+                    {t.nav.pages[item.page]}
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  </span>
+                </span>
+              </a>
+            </Reveal>
+          ))}
           {web ? (
             <Reveal className="md:col-span-4 md:row-span-2">
               <a href={pagePath(locale, web.page)} className="card group flex h-full flex-col gap-6 rounded-2xl p-5 sm:p-6 lg:flex-row lg:items-center">
