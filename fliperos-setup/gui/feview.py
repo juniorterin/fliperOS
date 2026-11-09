@@ -3909,8 +3909,9 @@ def cart_outline(ui, cx, top, w, h, color):
 
 def draw_cart_none(ui, ov, now):
     """O boot pelo OSCR sem cartucho: o contorno do leitor com a fenda em cima
-    e o cartucho flutuando sobre ela; o botao 1 o poe, e ele desce e some na
-    fenda, que acende."""
+    e o cartucho flutuando sobre ela; o botao 1 o poe, e ele desce ate a fenda
+    ficar logo abaixo do rotulo (o rotulo todo fica para fora, como num
+    cartucho de verdade) e la fica, encaixado, com a fenda acesa."""
     cx, cw, ch = WW // 2, 48, 40
     body = pygame.Rect(cx - 66, 116, 132, 26)
     slot = body.y + 8
@@ -3918,28 +3919,33 @@ def draw_cart_none(ui, ov, now):
     e = now - inserted if inserted is not None else 0.0
     done = inserted is not None and e >= INSERT_TIME
     pygame.draw.rect(ui, T.COMMENT, body, 1, border_radius=3)
-    pygame.draw.line(ui, T.GREEN if inserted is not None else T.FG, (cx - 30, slot), (cx + 30, slot), 2)
     led = T.GREEN if done and int(now * 6) % 2 else (T.LINE if done else T.COMMENT)
     ui.fill(led, (body.right - 12, body.bottom - 8, 4, 2))
     rest = slot - ch - 22
-    if inserted is None:
-        k = 0.5 - 0.5 * math.cos((now - ov.get("since", 0.0)) / FLOAT_PERIOD * 2 * math.pi)
-        c = tuple(round(a + (b - a) * k) for a, b in zip(T.LINE, T.PINK))
-        pygame.draw.lines(ui, c, False, [(cx - 6, slot - 14), (cx, slot - 8), (cx + 6, slot - 14)], 2)
-        cart_outline(ui, cx, round(rest + 8 * k), cw, ch, T.CYAN)
-        msg = ov.get("msg", "NO CARTRIDGE")
-        ui.blit(W.big(msg, 2, W.MARQUEE), ((WW - W.width(msg) * 2) // 2, 172))
-        tiny.centered(ui, tiny.fit(ov.get("sub", ""), WW - 16), T.FG, WW // 2, 194)
-        button_hint(ui, (WW - 110) // 2, 206, [("b2", "GAME LIST")])
-    elif not done:
-        # Desce e entra: o que passa da fenda fica escondido dentro do leitor.
-        y = rest + (slot + 2 - rest) * ease_io(e / INSERT_TIME)
+    # Encaixado: a fenda 4 px abaixo do fim do rotulo (cart_outline: de 6 a
+    # 6 + ch // 2 - 2 do topo).
+    seated = slot - (6 + ch // 2 - 2) - 4
+    if inserted is not None:
+        # Desce e para no encaixe: o que passa da fenda fica dentro do leitor,
+        # e a fenda acesa por cima do cartucho.
+        y = rest + (seated - rest) * ease_io(e / INSERT_TIME)
         clip = ui.get_clip()
         ui.set_clip(pygame.Rect(0, 0, WW, slot))
         cart_outline(ui, cx, round(y), cw, ch, T.CYAN)
         ui.set_clip(clip)
-    else:
-        W.centered(ui, "READING THE CARTRIDGE", T.GREEN, 172)
+        pygame.draw.line(ui, T.GREEN, (cx - 30, slot), (cx + 30, slot), 2)
+        if done:
+            W.centered(ui, "READING THE CARTRIDGE", T.GREEN, 172)
+        return
+    pygame.draw.line(ui, T.FG, (cx - 30, slot), (cx + 30, slot), 2)
+    k = 0.5 - 0.5 * math.cos((now - ov.get("since", 0.0)) / FLOAT_PERIOD * 2 * math.pi)
+    c = tuple(round(a + (b - a) * k) for a, b in zip(T.LINE, T.PINK))
+    pygame.draw.lines(ui, c, False, [(cx - 6, slot - 14), (cx, slot - 8), (cx + 6, slot - 14)], 2)
+    cart_outline(ui, cx, round(rest + 8 * k), cw, ch, T.CYAN)
+    msg = ov.get("msg", "NO CARTRIDGE")
+    ui.blit(W.big(msg, 2, W.MARQUEE), ((WW - W.width(msg) * 2) // 2, 172))
+    tiny.centered(ui, tiny.fit(ov.get("sub", ""), WW - 16), T.FG, WW // 2, 194)
+    button_hint(ui, (WW - 110) // 2, 206, [("b2", "GAME LIST")])
 
 
 def draw(fe, now):
