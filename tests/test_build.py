@@ -1782,6 +1782,23 @@ class GroovyMameTests(unittest.TestCase):
             self.assertEqual(int.from_bytes(bytes(spec[0:4]), 'little'), 48000)
             self.assertEqual(spec[6], 2)
             self.assertEqual(lib.SDL_GetDefaultAudioInfo(ctypes.byref(ctypes.c_char_p()), spec, 1), -1)
+            # O SDL_QUIT do SIGTERM vira o fechar da janela, que o MAME 0.289
+            # atende (o SDL_QUIT ele ignora). Sem janela criada fica como esta.
+            event = (ctypes.c_ubyte * 56)()
+            event[0:8] = (0x100).to_bytes(4, 'little') + (1234).to_bytes(4, 'little')
+            self.assertEqual(lib.fliperos_quit_to_close(event), 0)
+            self.assertEqual(int.from_bytes(bytes(event[0:4]), 'little'), 0x100)
+            ctypes.c_uint32.in_dll(lib, 'fliperos_last_window').value = 7
+            self.assertEqual(lib.fliperos_quit_to_close(event), 1)
+            self.assertEqual(int.from_bytes(bytes(event[0:4]), 'little'), 0x200)       # SDL_WINDOWEVENT
+            self.assertEqual(int.from_bytes(bytes(event[4:8]), 'little'), 1234)        # o timestamp fica
+            self.assertEqual(int.from_bytes(bytes(event[8:12]), 'little'), 7)          # a janela
+            self.assertEqual(event[12], 14)                                            # SDL_WINDOWEVENT_CLOSE
+            self.assertEqual(lib.fliperos_quit_to_close(event), 0)                     # outro evento: nada
+            self.assertEqual(lib.fliperos_quit_to_close(None), 0)
+        source = (ROOT / 'config/fliperos-sdl-audio.c').read_text()
+        self.assertIn('int SDL_PollEvent(void *event)', source)
+        self.assertIn('e->event = WINDOW_CLOSE;', source)
         for path, text in ((ROOT / 'fliperos-mkiso.sh', '/tmp/fliperos-sdl-audio.c /usr/local/lib/fliperos/'
                             'libfliperos-sdl-audio.so'),
                            (ROOT / 'tools/cabinet-update.sh', '"$src/config/fliperos-sdl-audio.c" \\\n'
@@ -9217,7 +9234,13 @@ class PowerKeyTests(unittest.TestCase):
         self.assertIn('export FLIPEROS_POWERKEY="games:${XDG_RUNTIME_DIR:-/tmp}/fliperos-fightcade.busy"', fightcade)
         self.assertIn("awk '/flycast\\.elf|\\.exe/ { print $1 }' <<< \"$running\" > \"$busy\"", fightcade)
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
-        self.assertIn('systemctl restart triggerhappy.service', update)
+        # O thd com o socket dele (o do Ubuntu e de stream e o udev manda
+        # datagrama): o update para os dois e sobe so o servico.
+        self.assertIn('ln -sfn /dev/null "$root/etc/systemd/system/triggerhappy.socket"', ROOTFS)
+        stop = update.index('systemctl stop triggerhappy.service triggerhappy.socket')
+        self.assertLess(stop, update.index('systemctl daemon-reload', stop))
+        self.assertLess(update.index('systemctl daemon-reload', stop), update.index('systemctl start triggerhappy.service'))
+        self.assertNotIn('systemctl restart triggerhappy', update)
         self.assertIn('systemctl kill -s HUP systemd-logind.service', update)
 
 

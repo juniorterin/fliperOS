@@ -464,8 +464,12 @@ systemctl enable fliperos-osd.service > /dev/null 2>&1 || true
 systemctl restart fliperos-osd.service
 # O botao de desligar (config/fliperos-powerkey): o triggerhappy rele as
 # teclas dele, e o logind a configuracao (pelo HUP, sem reiniciar: o X e as
-# sessoes abertas dependem dele).
-systemctl restart triggerhappy.service 2> /dev/null || true
+# sessoes abertas dependem dele). O triggerhappy.socket do Ubuntu sai
+# (mascarado pelo fliperos-rootfs.sh): o thd volta com o socket dele, que
+# o udev alcanca.
+systemctl stop triggerhappy.service triggerhappy.socket 2> /dev/null || true
+systemctl daemon-reload
+systemctl start triggerhappy.service 2> /dev/null || true
 systemctl kill -s HUP systemd-logind.service 2> /dev/null || true
 echo "fliperos-padkeys: $(systemctl is-active fliperos-padkeys.service)"
 echo "fliperos-gunkeys: $(systemctl is-active fliperos-gunkeys.service)"

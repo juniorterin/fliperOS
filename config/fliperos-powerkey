@@ -27,8 +27,9 @@ launcher) nao ha jogo a fechar: desliga.
 O jogo recebe o SIGTERM, para sair gravando o que tem a gravar. Se ele
 seguir aberto, o proximo aperto manda o SIGKILL, e sem aperto nenhum ele vai
 sozinho depois de KILL_AFTER segundos: no KMS nao ha Xorg para matar junto, e
-o GroovyMAME ficou aberto minutos depois do SIGTERM (no X ele caia com o
-Xorg). Quem espera e um processo a parte: os apertos repetidos que o
+o GroovyMAME ficava aberto depois do SIGTERM (o MAME 0.289 ignora o SDL_QUIT;
+hoje o config/fliperos-sdl-audio.c o troca pelo fechar da janela e ele sai
+na hora, gravando a nvram). Quem espera e um processo a parte: os apertos repetidos que o
 triggerhappy enfileira chegariam com o jogo ja fechado e desligariam a
 maquina. Por uns segundos depois de
 um aperto os outros nao contam: um aperto, uma acao (e ha placa que manda o

@@ -548,6 +548,14 @@ cat > "$root/etc/systemd/system/triggerhappy.service.d/fliperos.conf" << 'EOF'
 ExecStart=
 ExecStart=/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket --deviceglob /dev/input/event*
 EOF
+# O thd abre o proprio socket. O triggerhappy.socket do Ubuntu e de stream,
+# mas o th-cmd que a regra do udev (60-triggerhappy.rules) chama manda
+# datagrama ("Transport endpoint is not connected"): um teclado, painel ou
+# controle ligado depois do boot (e os aparelhos virtuais do padkeys e do
+# gunkeys, refeitos quando o servico deles reinicia) nunca chegava ao thd,
+# e o botao de desligar e o volume deles nao faziam nada. E cada restart do
+# servico apagava o /run/thd.socket do socket do systemd.
+ln -sfn /dev/null "$root/etc/systemd/system/triggerhappy.socket"
 
 # ── Botao de desligar ─────────────────────────────────────────────
 # Com um jogo aberto o botao fecha o jogo e volta ao frontend; sem jogo,
