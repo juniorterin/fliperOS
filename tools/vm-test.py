@@ -345,7 +345,7 @@ def dev(iso):
         assert guest.run('bash /tmp/repo/fliperos-rootfs.sh / > /tmp/rootfs.log 2>&1 || '
                          '{ tail /tmp/rootfs.log; false; }') == 0, 'fliperos-rootfs.sh falhou'
         guest.run('python3 /tmp/repo/config/fliperos-update record /tmp/repo', 1800)
-        guest.run('grep -o "<application title=.Screen Resolution.*" /home/fliperos/.config/openbox/lxde-rc.xml')
+        guest.run('grep -o "<application title=.Desktop Resolution.*" /home/fliperos/.config/openbox/lxde-rc.xml')
         guest.run('systemctl daemon-reload; systemctl restart fliperos-padkeys; sleep 2; '
                   'systemctl is-active fliperos-padkeys')
         guest.run('echo setup > /etc/fliperos/session; rm -f /etc/fliperos/firstboot '
@@ -370,9 +370,9 @@ def dev(iso):
         time.sleep(10)
         guest.screenshot('dev-03-320x240')
 
-        print('DEV: Screen Resolution: 384x288 sem confirmar (volta), depois o do boot', flush=True)
+        print('DEV: Desktop Resolution: 384x288 sem confirmar (volta), depois o do boot', flush=True)
         guest.run("runuser -u fliperos -- rm -f /home/fliperos/.config/fliperos/desktop-mode; ("
-                  + as_user + "WINIT_X11_SCALE_FACTOR=1 setsid alacritty --title 'Screen Resolution' "
+                  + as_user + "WINIT_X11_SCALE_FACTOR=1 setsid alacritty --title 'Desktop Resolution' "
                   "-e /opt/fliperos/bin/fliperos-resolution > /dev/null 2>&1 &)")
         time.sleep(25)
         guest.screenshot('dev-04-app')

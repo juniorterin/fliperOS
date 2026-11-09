@@ -19,7 +19,7 @@
 # FLIPEROS_DEFLICKER_APP_FILE: um arquivo com o nome do programa aberto
 # agora, que passa o --app (o fliperos-fightcade grava o do emulador).
 # --watch: fica olhando a cada 2 s e sobe, troca ou fecha o picom quando o
-# modo da tela (o Screen Resolution, a troca de modo de cada jogo), o
+# modo da tela (o Desktop Resolution, a troca de modo de cada jogo), o
 # programa ou o fliperos.conf mudam; sai junto com o X. Assim roda no
 # comeco da sessao do desktop (config/fliperos-lxde) e no X de cada
 # programa sem a camada (config/fliperos-x11-client). O picom do autostart

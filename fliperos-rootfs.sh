@@ -912,6 +912,9 @@ EOF
   # E o da App Store (o mesmo do menu e do painel).
   install -m755 -o 1000 -g 1000 "$src/config/applications/org.gnome.Software.desktop" \
     "$home/Desktop/app-store.desktop"
+  # E o do Desktop Resolution (o mesmo de Preferencias no menu).
+  install -m755 -o 1000 -g 1000 "$src/config/applications/fliperos-resolution.desktop" \
+    "$home/Desktop/desktop-resolution.desktop"
   # Layouts do Attract-Mode Plus (config/attractplus-layouts): os de
   # ~/.attract/layouts valem antes dos de /usr/share/attractplus de mesmo nome.
   mkdir -p "$home/.attract/layouts"
@@ -924,14 +927,14 @@ EOF
   chown 1000:1000 "$home/.attract" "$home/.attract/layouts" 2> /dev/null || true
   # Janelas e menus do Openbox no tema Dracula (fliperos-dracula.sh): o
   # openbox-lxde le ~/.config/openbox/lxde-rc.xml, que nasce da copia do
-  # padrao do sistema; so o nome do tema muda, e a janela do Screen
+  # padrao do sistema; so o nome do tema muda, e a janela do Desktop
   # Resolution abre maximizada (o Openbox a reajusta a cada troca de modo).
   # O do LXDE e do openbox-lxde-session; o do openbox puro fica de reserva.
   for rc in etc/xdg/openbox/LXDE/rc.xml etc/xdg/openbox/rc.xml; do
     [[ -f "$root/$rc" ]] || continue
     mkdir -p "$home/.config/openbox"
     sed -e '/<theme>/,/<\/theme>/ s|<name>[^<]*</name>|<name>Dracula</name>|' \
-      -e 's|</applications>|  <application title="Screen Resolution"><maximized>yes</maximized></application>\n</applications>|' \
+      -e 's|</applications>|  <application title="Desktop Resolution"><maximized>yes</maximized></application>\n</applications>|' \
       "$root/$rc" > "$home/.config/openbox/lxde-rc.xml"
     break
   done

@@ -172,7 +172,7 @@ The clock comes from the network (`systemd-timesyncd`). On the first test on the
 | `config/fliperos-controllers`, `config/fliperos-controllers.service` | Completes SDL2's (and Flycast's) automatic mapping of connected controllers |
 | `config/lxde/alacritty/alacritty.toml`, `config/fliperos-software.gschema.override`, `config/applications/org.gnome.Software.desktop` | The desktop's terminal (Alacritty) and App Store |
 | `fliperos-setup/lib/debug.sh` | Debug mode: boot and programs with or without text |
-| `config/fliperos-resolution`, `config/applications/fliperos-resolution.desktop` | Screen Resolution: the desktop resolution on the fly |
+| `config/fliperos-resolution`, `config/applications/fliperos-resolution.desktop` | Desktop Resolution: the desktop resolution on the fly |
 | `config/mame-ui.ini` | Dracula colors for GroovyMAME's UI |
 | `config/applications/`, `config/icons/`, `config/fliperos-launch` | Emulators in the LXDE menu and leaving the desktop to open them |
 | `config/fliperos-x11-run`, `config/fliperos-emulator-modes.conf` | Opens a program in an Xorg of its own in the requested mode (`--mode 640x240@60`) or in the per-emulator table's mode |

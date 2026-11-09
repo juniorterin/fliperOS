@@ -1435,7 +1435,7 @@ snes|RetroArch SNES|snes9x|240p,filter,pure|filter|core:Snes9x|The few interlace
 megadrive|RA Mega Drive|genesis_plus_gx|240p,filter,pure|filter|core:Genesis Plus GX|Interlaced Mega Drive games, like Sonic 2 split screen (Genesis Plus GX core).
 fbneo|RetroArch FBNeo|fbneo|240p,filter,pure|filter|core:FinalBurn Neo|Arcade games with more than 240 lines in the FBNeo core.
 fightcade|Fightcade Flycast|fightcade-flycast|240p,filter,pure|240p|fightcade|Flycast matches in Fightcade 2.
-desktop|Desktop|desktop|filter,pure|filter|desktop|The LXDE desktop, when Screen Resolution puts it in an interlaced mode.
+desktop|Desktop|desktop|filter,pure|filter|desktop|The LXDE desktop, when Desktop Resolution puts it in an interlaced mode.
 TABLE
 }
 

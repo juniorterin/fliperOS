@@ -854,7 +854,7 @@ class RootfsRunTests(unittest.TestCase):
     def test_openbox_rc_dracula_and_resolution_window(self):
         rc = (self.root / 'home/fliperos/.config/openbox/lxde-rc.xml').read_text()
         self.assertIn('<name>Dracula</name>', rc)
-        self.assertIn('<application title="Screen Resolution"><maximized>yes</maximized></application>\n'
+        self.assertIn('<application title="Desktop Resolution"><maximized>yes</maximized></application>\n'
                       '</applications>', rc)
 
     def test_new_programs_are_installed(self):
@@ -864,6 +864,7 @@ class RootfsRunTests(unittest.TestCase):
         self.assertTrue((self.root / 'usr/local/share/applications/fliperos-resolution.desktop').is_file())
         self.assertTrue((self.root / 'usr/local/share/applications/org.gnome.Software.desktop').is_file())
         self.assertTrue(os.access(self.root / 'home/fliperos/Desktop/app-store.desktop', os.X_OK))
+        self.assertTrue(os.access(self.root / 'home/fliperos/Desktop/desktop-resolution.desktop', os.X_OK))
         self.assertTrue(os.access(self.root / 'opt/fliperos/bin/fliperos-atom15', os.X_OK))
         self.assertTrue(os.access(self.root / 'opt/fliperos/bin/fliperos-amdgpu-load', os.X_OK))
         self.assertTrue(os.access(self.root / 'etc/initramfs-tools/hooks/fliperos-amdgpu', os.X_OK))
@@ -961,7 +962,7 @@ class ResolutionAppTests(unittest.TestCase):
     def test_lxde_applies_it_and_the_menu_has_it(self):
         self.assertIn('fliperos-resolution --apply-saved', (ROOT / 'config/fliperos-lxde').read_text())
         entry = (ROOT / 'config/applications/fliperos-resolution.desktop').read_text()
-        self.assertIn('Exec=alacritty --title "Screen Resolution" -e /opt/fliperos/bin/fliperos-resolution', entry)
+        self.assertIn('Exec=alacritty --title "Desktop Resolution" -e /opt/fliperos/bin/fliperos-resolution', entry)
         self.assertIn('Categories=Settings;', entry)
 
 
@@ -10711,7 +10712,7 @@ class TerminalThemeTests(unittest.TestCase):
 class EmulatorMenuTests(unittest.TestCase):
     """Emuladores no menu do LXDE: saem do desktop pelo fliperos-launch."""
 
-    # So os de jogos (Game;): o Screen Resolution fica em Preferencias.
+    # So os de jogos (Game;): o Desktop Resolution fica em Preferencias.
     APPS = sorted(p for p in (ROOT / 'config/applications').glob('fliperos-*.desktop')
                   if 'Categories=Game;' in p.read_text())
     # O que mostra o atalho (TryExec): o binario do emulador; o do Model 2 e

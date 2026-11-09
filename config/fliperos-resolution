@@ -16,7 +16,7 @@ for lib in "$LIB"/*.sh; do
   . "$lib"
 done
 STATE=${XDG_CONFIG_HOME:-$HOME/.config}/fliperos/desktop-mode
-TITLE="Screen Resolution"
+TITLE="Desktop Resolution"
 
 # res_output imprime a saida que esta com imagem agora (VGA-1, DVI-D-1...).
 res_output() {

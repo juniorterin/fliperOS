@@ -36,7 +36,7 @@ An emulator that wasn't built (`--skip-*`) doesn't show in the menu. Model 2 alw
 
 GroovyArcade's tools also ship: **AntiMicroX** and **QJoyPad** (controller as keyboard/mouse), `xterm`, `htop`, `evtest`, `joy2key`, `hwinfo`, `lshw`, `read-edid`, `i2c-tools`. **FliperOS Setup** lives in **System Tools** (and on the panel), like `gasetup.desktop`. The terminal uses the Dracula colors. Leaving the desktop goes back to the menu.
 
-**Screen Resolution (Preferences):** changes the desktop resolution **on the fly**. The list is the resolutions of the monitor chosen in Video Setup, plus *Other resolution...* (any `WIDTHxHEIGHT@HZ`).
+**Desktop Resolution (Preferences, and an icon on the desktop):** changes the desktop resolution **on the fly**. The list is the resolutions of the monitor chosen in Video Setup, plus *Other resolution...* (any `WIDTHxHEIGHT@HZ`).
 
 Switchres computes the mode within the ranges of `/etc/switchres.ini` (`switchres --calc`, the same calculation the emulators use) and `xrandr` applies it, adjusting the screen size; the window opens maximized and follows the change. Without confirmation within 15 seconds, the previous resolution comes back.
 
