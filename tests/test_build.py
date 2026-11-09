@@ -7085,6 +7085,17 @@ class WebPanelTests(unittest.TestCase):
                           'printf "level=63\\nbase=60\\nlatest=63\\nhold=\\nreboot=no\\n'
                           '63\\tcurrent\\tno\\tCartridges\\n62\\tolder\\tno\\tCDs\\n61\\tolder\\tyes\\tScanlines\\n"\n' % tmp)
         update.chmod(0o755)
+        # O avahi-browse falso: outro FliperOS (BANANA) na rede, por IPv4 e
+        # IPv6; o anuncio deste vai para tmp/avahi.
+        avahi = tmp / 'fake-avahi-browse'
+        avahi.write_text('#!/bin/sh\necho "$*" > %s/avahi.log\n'
+                         "echo '+;eth0;IPv4;FliperOS BANANA;_fliperos-web._tcp;local'\n"
+                         "echo '=;eth0;IPv6;FliperOS BANANA;_fliperos-web._tcp;local;fliperos-2.local;fd00::5;8081;"
+                         "\"id=other1\" \"name=BANANA\"'\n"
+                         "echo '=;eth0;IPv4;FliperOS BANANA;_fliperos-web._tcp;local;fliperos-2.local;192.168.1.20;8081;"
+                         "\"id=other1\" \"name=BANANA\"'\n" % tmp)
+        avahi.chmod(0o755)
+        (tmp / 'avahi').mkdir()
         (tmp / 'lab').mkdir()
         (tmp / 'run/1000').mkdir(parents=True, exist_ok=True)
         (tmp / 'run/1000/fliperos-marquee').write_text('event=game\nsystem=mame\nrom=sf2\ntitle=Street Fighter II\n'
@@ -7110,7 +7121,9 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
                    FLIPEROS_UPDATE_TOOL=str(update),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
-                   FLIPEROS_WEB_GUI=str(ROOT / 'fliperos-setup/gui'))
+                   FLIPEROS_WEB_GUI=str(ROOT / 'fliperos-setup/gui'),
+                   FLIPEROS_AVAHI_BROWSE=str(avahi),
+                   FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi/fliperos-web.service'))
         (tmp / 'mnt/USB/romset').mkdir(parents=True)
         (tmp / 'mnt/USB/.hidden').mkdir()
         # A midia dos jogos (~/media/TIPO/PASTA): o snap, o video e o logo do
@@ -7182,6 +7195,52 @@ class WebPanelTests(unittest.TestCase):
             res = conn.getresponse()
             self.assertEqual((res.status, res.getheader('Location')), (302, want), host)
             conn.close()
+
+    def test_cabinets_on_the_network(self):
+        # Este gabinete (o apelido do fliperos.conf, ou o bicho) e o BANANA
+        # que o Avahi achou, uma vez so (o IPv4); sem login.
+        status, _, data = self.request('GET', '/api/cabinets')
+        self.assertEqual(status, 200)
+        rows = json.loads(data)['cabinets']
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(rows[0]['self'])
+        self.assertIsNone(rows[0]['url'])
+        self.assertEqual((rows[1]['name'], rows[1]['address'], rows[1]['url']),
+                         ('BANANA', '192.168.1.20', 'http://192.168.1.20:8081/'))
+        self.assertIn('-prtk _fliperos-web._tcp', (Path(self.tmp.name) / 'avahi.log').read_text())
+        # O anuncio deste no Avahi, com o mesmo nome e id.
+        service = (Path(self.tmp.name) / 'avahi/fliperos-web.service').read_text()
+        self.assertIn('<type>_fliperos-web._tcp</type>', service)
+        self.assertIn('<port>%d</port>' % self.port, service)
+        self.assertIn('<txt-record>name=%s</txt-record>' % rows[0]['name'], service)
+        self.assertIn('<txt-record>id=%s</txt-record>' % rows[0]['id'], service)
+
+    def test_port_80_asks_which_cabinet(self):
+        # Com outro FliperOS na rede, fliperos.local/ mostra a lista; pelo IP
+        # ou outro caminho, segue direto para o painel.
+        import http.client
+        conn = http.client.HTTPConnection('127.0.0.1', self.redirect_port, timeout=20)
+        conn.request('GET', '/', headers={'Host': 'fliperos.local'})
+        res = conn.getresponse()
+        page = res.read().decode()
+        conn.close()
+        self.assertEqual(res.status, 200)
+        self.assertIn('href="http://192.168.1.20:8081/"', page)
+        self.assertIn('<b>BANANA</b>', page)
+        self.assertIn('this one', page)
+        conn = http.client.HTTPConnection('127.0.0.1', self.redirect_port, timeout=10)
+        conn.request('GET', '/', headers={'Host': '192.168.1.9'})
+        self.assertEqual(conn.getresponse().status, 302)
+        conn.close()
+
+    def test_avahi_lines_and_escapes(self):
+        web = load_script('fliperos_web_avahi', 'config/fliperos-web')
+        rows = web.avahi_cabinets(
+            '=;wlan0;IPv4;FliperOS\\032P\\195\\169;_fliperos-web._tcp;local;fliperos-3.local;10.0.0.3;8081;"id=x"\n'
+            '=;wlan0;IPv6;FliperOS;_fliperos-web._tcp;local;fliperos-4.local;fe80::1;8081;"id=y"\n'
+            '=;wlan0;IPv4;Other;_http._tcp;local;nas.local;10.0.0.9;80;\n')
+        self.assertEqual([(r['name'], r['address']) for r in rows], [('FliperOS Pé', '10.0.0.3')])
+        self.assertEqual(web.cabinet_url({'address': 'fd00::5', 'port': 8081}), 'http://[fd00::5]:8081/')
 
     def test_login_with_the_system_password_only(self):
         # So o usuario do FliperOS, com a senha dele; root sem senha valida e

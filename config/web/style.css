@@ -128,6 +128,13 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .menu-item { text-align: left; padding: 10px 12px; border-radius: 10px; border: 0; background: transparent; font-weight: 600; }
 .menu-item:hover { background: rgba(68,71,90,.4); }
 .menu-host { color: var(--dim); padding: 6px 12px; overflow-wrap: anywhere; }
+/* O seletor de gabinete (mais de um FliperOS na rede): troca de painel. */
+.cab-pick { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--dim); }
+.cab-pick select { height: 40px; min-width: 0; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);
+  color: var(--fg); font: 15px system-ui; padding: 0 10px; text-overflow: ellipsis; }
+#top-menu .cab-pick { padding: 6px 12px; }
+.crt-form .cab-pick { color: #9ff5bf; }
+.crt-form .cab-pick select { height: 46px; border-color: rgba(80,250,123,.45); background: rgba(0,0,0,.45); color: #d7ffe5; font-size: 16px; }
 
 /* As abas de cada area. */
 .subtabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 0 22px; padding: 2px; }

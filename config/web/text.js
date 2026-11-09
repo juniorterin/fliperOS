@@ -6,6 +6,7 @@ const TEXT = {
   en: {
     login_text: "Sign in with the cabinet's user and password (the same as SSH and the network share).",
     user: "User", password: "Password", enter: "Sign in", logout: "Sign out",
+    cabinet: "Cabinet", cabinet_this: "this one",
     offline: "The cabinet is not answering. Retrying…", now_playing: "Now playing",
     nothing: "Nothing open", frontend: "Frontend", fps_note: "Last minute, from the OpenGL layer of the game.",
     video: "Video", memory: "Memory", storage: "Storage", network: "Network", volume: "Volume", mute: "Mute / unmute",
@@ -184,6 +185,7 @@ const TEXT = {
   pt: {
     login_text: "Entre com o usuário e a senha do gabinete (os mesmos do SSH e da pasta de rede).",
     user: "Usuário", password: "Senha", enter: "Entrar", logout: "Sair",
+    cabinet: "Gabinete", cabinet_this: "este",
     offline: "O gabinete não está respondendo. Tentando de novo…", now_playing: "Jogando agora",
     nothing: "Nada aberto", frontend: "Frontend", fps_note: "Último minuto, da camada OpenGL do jogo.",
     video: "Vídeo", memory: "Memória", storage: "Armazenamento", network: "Rede", volume: "Volume", mute: "Mudo / som",

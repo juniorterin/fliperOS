@@ -13,6 +13,8 @@ RestartSec=10
 # Nada do painel precisa de tempo para sair: um filho preso (o watch dos
 # botoes) nao segura o desligar por 90 s.
 TimeoutStopSec=5
+# Desligado, some da lista dos outros gabinetes (o anuncio do Avahi).
+ExecStopPost=/bin/rm -f /etc/avahi/services/fliperos-web.service
 
 [Install]
 WantedBy=multi-user.target

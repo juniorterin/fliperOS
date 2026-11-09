@@ -32,10 +32,33 @@ function resolve(hash) {
   return [a, subs.includes(s) ? s : subs[0] || ""];
 }
 
+// ── Os gabinetes da rede ─────────────────────────────────────────
+// Com mais de um FliperOS na rede (o Avahi de cada painel, /api/cabinets),
+// o seletor aparece no login, na barra lateral e no menu do celular; escolher
+// outro abre o painel dele (o login e de cada gabinete).
+async function loadCabinets() {
+  const res = await fetch("/api/cabinets", { credentials: "same-origin" }).catch(() => null);
+  const data = res && res.ok ? await res.json().catch(() => ({})) : {};
+  const rows = data.cabinets || [];
+  for (const id of ["cab-pick-login", "cab-pick-side", "cab-pick-menu"]) {
+    const select = $(id).querySelector("select");
+    select.replaceChildren(...rows.map((r) => el("option", { value: r.url || "" },
+      r.name + " · " + (r.self ? t("cabinet_this") : r.address || r.host))));
+    select.value = "";
+    $(id).hidden = rows.length < 2;
+  }
+}
+for (const id of ["cab-pick-login", "cab-pick-side", "cab-pick-menu"]) {
+  $(id).querySelector("select").addEventListener("change", (event) => {
+    if (event.target.value) location.href = event.target.value;
+  });
+}
+
 // ── Login ────────────────────────────────────────────────────────
 function showLogin() {
   $("app").hidden = true;
   $("login").hidden = false;
+  loadCabinets();
   stop();
   $("password").focus();
 }
@@ -233,6 +256,7 @@ function start() {
   $("app").hidden = false;
   stop();
   tick();
+  loadCabinets();
   loadSystems().catch(() => {});
   loadFiles("").catch(() => {});
   renderTools();

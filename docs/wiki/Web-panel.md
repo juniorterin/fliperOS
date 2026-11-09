@@ -17,6 +17,8 @@ What you can do from the couch:
 
 The cabinet's state in a browser on the same network (a phone too): **http://fliperos.local**, or the cabinet's IP. Port 80 only forwards to the panel's own port, 8081, so `http://fliperos.local:8081` works too.
 
+**More than one cabinet on the network:** every FliperOS is called `fliperos`, so only one answers to `fliperos.local` (Avahi renames the others `fliperos-2.local` and so on). Each panel announces itself over mDNS as `_fliperos-web._tcp`, with the cabinet's nickname (the link name, `cabinet_name=` in `fliperos.conf`). With two or more on the network, `http://fliperos.local` first shows the list of cabinets, and the panel has a **Cabinet** selector on the sign-in screen, in the sidebar and in the phone menu. Picking one opens its panel by IP (each cabinet has its own sign-in). The announcement is `/etc/avahi/services/fliperos-web.service`, written by the panel and removed when it stops; it needs the `avahi` service (Setup > System > Services).
+
 You sign in with the same user and password as SSH and the network share (`fliperos`, changed in **Setup > System > Password**). Until 2026-10-22 the panel was on port 8080, which Pixelcade's own settings page also uses; with both installed one of them didn't open.
 
 The panel has ten pages, tabs at the top, each with its own address (`#frontend`, `#live`, `#romfilter`, `#downloads`, `#scraper`, `#install`, `#files`, `#settings`, `#status`, `#terminal`); the browser remembers the last one:

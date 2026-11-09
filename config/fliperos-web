@@ -18,6 +18,7 @@ A porta 80 so redireciona para a do painel: http://fliperos.local abre ele.
 
 API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/login   {"user", "password"}   GET /api/me   POST /api/logout
+    GET  /api/cabinets  este gabinete e os outros FliperOS da rede (Avahi), sem login
     GET  /api/status  o estado inteiro (o painel pede a cada 2 s)
     GET  /api/logs    os logs    GET /api/log?name=NOME&lines=N
     POST /api/volume  {"action": "up"|"down"|"mute"} ou {"set": 0..100}
@@ -2704,6 +2705,7 @@ class Panel:
 
 class Handler(BaseHTTPRequestHandler):
     panel = None
+    cabinets = None
     server_version = "fliperos-web"
     sys_version = ""
 
@@ -2821,6 +2823,16 @@ class Handler(BaseHTTPRequestHandler):
             if url.path.endswith("/css"):
                 return self.send(200, input_css().encode(), TYPES[".css"])
             return self.input_events()
+        if url.path == "/api/cabinets":
+            # Sem login: a tela de entrada ja mostra o seletor. Nomes e IPs
+            # que o mDNS ja da a qualquer um da rede; pelo tunel do modo lab
+            # (o cloudflared chega por 127.0.0.1), a rede de casa nao aparece.
+            if self.client_address[0] in ("127.0.0.1", "::1") and self.headers.get("Cf-Connecting-Ip"):
+                return self.send(200, {"cabinets": []})
+            rows = self.cabinets.list() if self.cabinets else []
+            for r in rows:
+                r["url"] = None if r.get("self") else cabinet_url(r)
+            return self.send(200, {"cabinets": rows})
         user = self.panel.sessions.user(self.token())
         if not user:
             return self.send(401, {"error": "login"})
@@ -3689,15 +3701,172 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
 
 
+# Os gabinetes da rede: cada painel se anuncia pelo Avahi (mDNS) como
+# _fliperos-web._tcp, com o apelido do gabinete (o do link, cabinet_name= do
+# fliperos.conf) e o machine-id. Todos se chamam fliperos, entao so um
+# responde por fliperos.local (os outros viram fliperos-2.local...): com mais
+# de um na rede, a porta 80 dele mostra a lista para escolher, e o painel de
+# cada um tem o seletor.
+AVAHI_SERVICE = ENV("FLIPEROS_WEB_AVAHI_SERVICE", "/etc/avahi/services/fliperos-web.service")
+CABINET_TYPE = "_fliperos-web._tcp"
+AVAHI_BROWSE = ENV("FLIPEROS_AVAHI_BROWSE", "avahi-browse")
+FELINK = os.path.join(GUI, "felink.py")
+
+
+def avahi_unescape(text):
+    """O avahi-browse -p escreve '.', ';' e '\\' como \\. e os outros bytes
+    fora do ASCII visivel como \\DDD (decimal)."""
+    raw = re.sub(rb"\\(\d{3})", lambda m: bytes([int(m.group(1)) & 255]),
+                 re.sub(rb"\\([^\d])", rb"\1", text.encode("utf-8", "surrogateescape")))
+    return raw.decode("utf-8", "replace")
+
+
+def avahi_cabinets(text):
+    """As linhas resolvidas ('=') do avahi-browse -prt: um gabinete por id
+    (IPv4 antes de IPv6, o mesmo gabinete em duas interfaces vira um)."""
+    found = {}
+    for line in text.splitlines():
+        fields = line.split(";")
+        if len(fields) < 10 or fields[0] != "=" or fields[4] != CABINET_TYPE:
+            continue
+        txt = dict(m.groups() for m in re.finditer(r'"([^"=]+)=([^"]*)"', ";".join(fields[9:])))
+        ident = txt.get("id") or fields[6]
+        address, ipv4 = fields[7], fields[2] == "IPv4"
+        if address.startswith("fe80:") or not fields[8].isdigit():
+            continue
+        old = found.get(ident)
+        if old and (old["ipv4"] or not ipv4):
+            continue
+        found[ident] = {"id": ident, "name": avahi_unescape(txt.get("name") or fields[3]),
+                        "host": avahi_unescape(fields[6]), "address": address, "port": int(fields[8]),
+                        "ipv4": ipv4}
+    return list(found.values())
+
+
+class Cabinets:
+    """Este gabinete e os outros FliperOS que o Avahi acha na rede."""
+
+    def __init__(self, port=8081):
+        self.port = port
+        self.lock = threading.Lock()
+        self.rows, self.when = None, 0.0
+        self._felink = None
+
+    def felink(self):
+        if self._felink is None:
+            try:
+                loader = SourceFileLoader("fliperos_felink", FELINK)
+                module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+                loader.exec_module(module)
+                self._felink = module
+            except Exception:
+                self._felink = False
+        return self._felink
+
+    def me(self):
+        link = self.felink()
+        if link:
+            ident = link.machine_id()
+            name = link.cabinet_name(ident, CONF)
+        else:
+            ident, name = socket.gethostname(), socket.gethostname().upper()
+        return {"id": ident, "name": name, "host": socket.gethostname() + ".local", "port": self.port}
+
+    def publish(self):
+        """O arquivo do servico no Avahi (ele relê a pasta sozinho): so grava
+        quando muda (o apelido trocado no Setup)."""
+        me = self.me()
+        esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        xml = ('<?xml version="1.0" standalone="no"?>\n'
+               '<!DOCTYPE service-group SYSTEM "avahi-service.dtd">\n'
+               '<!-- O painel web do FliperOS (config/fliperos-web): os outros gabinetes o acham. -->\n'
+               '<service-group>\n  <name>FliperOS %s</name>\n  <service>\n    <type>%s</type>\n'
+               '    <port>%d</port>\n    <txt-record>name=%s</txt-record>\n    <txt-record>id=%s</txt-record>\n'
+               '  </service>\n</service-group>\n') % (esc(me["name"]), CABINET_TYPE, self.port, esc(me["name"]),
+                                                       esc(me["id"]))
+        if read(AVAHI_SERVICE) == xml or not os.path.isdir(os.path.dirname(AVAHI_SERVICE)):
+            return
+        try:
+            with open(AVAHI_SERVICE + ".tmp", "w") as f:
+                f.write(xml)
+            os.replace(AVAHI_SERVICE + ".tmp", AVAHI_SERVICE)
+        except OSError:
+            pass
+
+    def browse(self):
+        try:
+            out = subprocess.run([AVAHI_BROWSE, "-prtk", CABINET_TYPE], capture_output=True, text=True,
+                                 timeout=6).stdout
+        except (OSError, subprocess.SubprocessError):
+            return []
+        return avahi_cabinets(out)
+
+    def list(self, max_age=20):
+        """Todos, este primeiro ("self": true) e os outros pelo nome."""
+        with self.lock:
+            if self.rows is None or time.monotonic() - self.when > max_age:
+                self.publish()
+                me = self.me()
+                others = [r for r in self.browse() if r["id"] != me["id"]]
+                self.rows = [dict(me, self=True)] + sorted(
+                    (dict(r, self=False) for r in others), key=lambda r: (r["name"], r["address"]))
+                self.when = time.monotonic()
+            return [dict(r) for r in self.rows]
+
+
+def cabinet_url(row):
+    address = row["address"]
+    return "http://%s:%d/" % ("[%s]" % address if ":" in address else address, row["port"])
+
+
+def picker_page(rows):
+    """A pagina da porta 80 com mais de um gabinete na rede: um botao para o
+    painel de cada um (pelo IP: o nome .local de cada um pode nao resolver
+    num celular)."""
+    esc = lambda s: (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                     .replace('"', "&quot;"))
+    items = "".join(
+        '<a class="cab" href="%s"><b>%s</b><small>%s · %s%s</small></a>' % (
+            esc(cabinet_url(r) if not r.get("self") else "http://%s:%d/" % (r["host"], r["port"])),
+            esc(r["name"]), esc(r["host"]), esc(r.get("address") or ""),
+            " · this one" if r.get("self") else "") for r in rows)
+    return ("""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>FliperOS: choose a cabinet</title>
+<style>
+:root{color-scheme:dark}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#191a21;
+color:#f8f8f2;font:16px/1.4 system-ui,sans-serif}main{width:min(420px,calc(100vw - 32px))}
+h1{font-size:22px;margin:0 0 4px;color:#ff79c6}p{margin:0 0 18px;color:#a4a8c0}
+.cab{display:block;padding:14px 16px;margin:0 0 10px;border-radius:10px;background:#282a36;border:2px solid #44475a;
+color:inherit;text-decoration:none}.cab:hover,.cab:focus{border-color:#bd93f9;outline:none}
+.cab b{display:block;font-size:18px;letter-spacing:.04em}.cab small{color:#8be9fd}
+</style></head><body><main><h1>FliperOS</h1>
+<p>There is more than one FliperOS on this network. Which one? / Há mais de um FliperOS nesta rede. Qual deles?</p>
+""" + items + "</main></body></html>").encode()
+
+
 class Redirect(BaseHTTPRequestHandler):
     """A porta 80: http://fliperos.local (sem a porta) leva ao painel, no
-    mesmo nome e no mesmo caminho."""
+    mesmo nome e no mesmo caminho. Com outros gabinetes na rede, quem chega
+    pelo nome de todos (fliperos.local) escolhe antes."""
     port = 8081
+    cabinets = None
 
     def do_GET(self):
         # O nome que o navegador usou (fliperos.local, o IP), sem a porta.
         m = re.fullmatch(r"(\[[0-9A-Fa-f:.]{2,45}\]|[A-Za-z0-9.\-]{1,253})(:\d+)?", self.headers.get("Host") or "")
         host = m.group(1) if m else "fliperos.local"
+        if self.cabinets and host.lower().rstrip(".") == "fliperos.local" and self.path in ("/", ""):
+            rows = self.cabinets.list()
+            if len(rows) > 1:
+                data = picker_page(rows)
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(data)
+                return
         self.send_response(HTTPStatus.FOUND)
         self.send_header("Location", "http://%s:%d%s" % (host, self.port, self.path if self.path.startswith("/") else "/"))
         self.send_header("Content-Length", "0")
@@ -3732,6 +3901,9 @@ def main():
     parser.add_argument("--redirect-port", type=int, default=int(ENV("FLIPEROS_WEB_REDIRECT_PORT", "80")))
     args = parser.parse_args()
     Handler.panel = Panel()
+    Handler.cabinets = Redirect.cabinets = Cabinets(args.port)
+    # Anuncia ja no boot (os outros acham este sem ninguem abrir o painel).
+    threading.Thread(target=Handler.cabinets.publish, daemon=True).start()
     server = ThreadingHTTPServer((args.bind, args.port), Handler)
     server.daemon_threads = True
     redirect_from(args.bind, args.redirect_port, args.port)

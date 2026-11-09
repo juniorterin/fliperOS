@@ -24,6 +24,7 @@
     <div class="rainbow"></div>
     <div class="bezel">
       <form id="login-form" class="crt-form">
+        <label id="cab-pick-login" class="cab-pick" hidden><span data-t="cabinet"></span><select aria-label="Cabinet"></select></label>
         <label><span data-t="user"></span><input id="user" name="user" autocomplete="username" value="fliperos" required></label>
         <label><span data-t="password"></span><input id="password" name="password" type="password" autocomplete="current-password" required></label>
         <p id="login-error" class="login-error" role="alert"></p>
@@ -46,6 +47,7 @@
       <a href="#system" data-area="system"><svg class="px"><use href="icons.svg#px-setup"/></svg><span><b data-t="area_system"></b><small data-t="area_system_sub"></small></span></a>
     </nav>
     <div class="side-foot">
+      <label id="cab-pick-side" class="cab-pick" hidden><span data-t="cabinet"></span><select aria-label="Cabinet"></select></label>
       <div class="host"><span id="conn-dot" class="dot ok"></span><div><b id="host-name">FliperOS</b><small id="host"></small></div></div>
       <div class="side-actions"><button id="lang" class="chip-btn" type="button" aria-label="Language">PT</button><button id="logout" class="chip-btn" type="button" data-t="logout"></button><span id="version" class="ver"></span></div>
       <div class="side-power"><button id="power-reboot" class="chip-btn" type="button"><svg class="g"><use href="icons.svg#g-refresh"/></svg><span data-t="power_reboot"></span></button><button id="power-off" class="chip-btn red" type="button"><svg class="g"><use href="icons.svg#g-power"/></svg><span data-t="power_off"></span></button></div>
@@ -69,6 +71,7 @@
         <button id="logout2" type="button" class="menu-item" data-t="logout"></button>
         <button id="power-reboot2" type="button" class="menu-item"><svg class="g"><use href="icons.svg#g-refresh"/></svg><span data-t="power_reboot"></span></button>
         <button id="power-off2" type="button" class="menu-item red"><svg class="g"><use href="icons.svg#g-power"/></svg><span data-t="power_off"></span></button>
+        <label id="cab-pick-menu" class="cab-pick" hidden><span data-t="cabinet"></span><select aria-label="Cabinet"></select></label>
         <small id="host2" class="menu-host"></small>
       </div>
     </header>
