@@ -371,6 +371,11 @@ for file in catver.ini nplayers.ini controls.xml flycast-controls.tsv; do
   install -Dm644 "$src/config/romclean/$file" "$root/usr/local/share/fliperos/romclean/$file"
 done
 [[ -f "$root/etc/fliperos/mame/mame.ini" ]] || install -Dm644 "$src/config/mame.ini" "$root/etc/fliperos/mame/mame.ini"
+# Jogos 2D da Midway em 320x240p a 59 Hz (o porque no config/mame-midway.ini):
+# o GroovyMAME le source/<driver>.ini so para os jogos daquele driver.
+for driver in midyunit midtunit midwunit midxunit; do
+  install -Dm644 "$src/config/mame-midway.ini" "$root/etc/fliperos/mame/source/$driver.ini"
+done
 # Cores Dracula da interface do GroovyMAME; o ui.ini e do usuario porque o
 # MAME o regrava quando a interface e personalizada pelo proprio menu.
 [[ -f "$root/etc/fliperos/mame/ui.ini" ]] || install -Dm644 "$src/config/mame-ui.ini" "$root/etc/fliperos/mame/ui.ini"

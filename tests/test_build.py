@@ -1879,6 +1879,21 @@ class GroovyMameTests(unittest.TestCase):
             out, ini = self.run_wrapper(*args, display=None)
             self.assertEqual(out, ['-inipath', ini, *args], args)
 
+    def test_midway_games_in_320x240_at_60hz(self):
+        # Os jogos 2D da Midway (400x254 a 54,7 Hz) esticavam na vertical no
+        # tubo: o ini de cada driver os poe em 320x240p, com faixa de 59-61 Hz.
+        # Sem o switchres_ini 0, o GroovyMAME ignoraria o crt_range daqui.
+        ini = (ROOT / 'config/mame-midway.ini').read_text()
+        for line in ('switchres_ini             0', 'monitor                   custom',
+                     'interlace                 0', 'resolution                320x240',
+                     'crt_range0                15625.00-15750.00,59.00-61.00,'):
+            self.assertIn('\n' + line, ini)
+        rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
+        self.assertIn('for driver in midyunit midtunit midwunit midxunit; do\n'
+                      '  install -Dm644 "$src/config/mame-midway.ini" "$root/etc/fliperos/mame/source/$driver.ini"', rootfs)
+        # Antes do chown da pasta: o usuario (e o Setup) escrevem nela.
+        self.assertLess(rootfs.index('mame/source/$driver.ini'), rootfs.index('chown -R 1000:1000 "$root/etc/fliperos/mame"'))
+
     def test_groovymame_switches_modes_in_x(self):
         # modesetting 1: o Switchres troca o modo de cada jogo (no X, pelo
         # XRandR; no gabinete, SR-1_384x224@59.64 no MvC). Chamado de dentro do
