@@ -3192,7 +3192,7 @@ class UpdateTests(unittest.TestCase):
         changed = up.apt_heal()
         self.assertEqual(len(changed), 2, changed)
         self.assertEqual((lists / 'winehq.sources').read_text(), ours)
-        self.assertIn('Enabled: no', (lists / 'winehq-noble.sources').read_text())
+        self.assertTrue((lists / 'winehq-noble.sources').read_text().endswith('Enabled: no\n'))
         other = (lists / 'other.list').read_text().splitlines()
         self.assertTrue(other[0].startswith('# FliperOS: off'), other)
         self.assertEqual(other[1], 'deb http://archive.ubuntu.com/ubuntu noble main')

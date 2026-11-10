@@ -185,7 +185,8 @@ def apt_disable(path, where):
         if re.search(r'(?im)^enabled:', block):
             block = re.sub(r'(?im)^enabled:.*$', 'Enabled: no', block)
         else:
-            block = block.rstrip('\n') + '\nEnabled: no'
+            body = block.rstrip('\n')
+            block = body + '\nEnabled: no' + block[len(body):]
         blocks[where * 2] = block
         text = ''.join(blocks)
     else:
