@@ -3414,6 +3414,36 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual((other / 'etc/fliperos/patch-base').read_text(), '2\n')
         self.assertFalse((self.root / 'etc/fliperos/patch-base').exists())
 
+    def test_cabinet_push_waits_for_the_running_update(self):
+        # O cabinet-update.sh de um cabinet-push pega o mesmo lock do
+        # fliperos-update antes de mexer em qualquer coisa; chamado pelo
+        # proprio fliperos-update (FLIPEROS_UPDATE=1), nao.
+        text = (ROOT / 'tools/cabinet-update.sh').read_text()
+        block = text.split('if [[ -z ${FLIPEROS_UPDATE:-} ]]; then', 1)[1].split('\nfi\n', 1)[0]
+        self.assertIn('exec 8> /var/lib/fliperos/update/.lock', block)
+        self.assertIn('flock -w 1800 8', block)
+        self.assertLess(text.index('exec 8> /var/lib/fliperos/update/.lock'), text.index('backup=/root/fliperos-backup'))
+        self.assertIn("os.path.join(STATE, '.lock')", (ROOT / 'config/fliperos-update').read_text())
+        # Com o lock na mao do fliperos-update, o bloco espera; solto, segue.
+        lock = self.tmp / '.lock'
+        script = block.replace('/var/lib/fliperos/update/.lock', str(lock)).replace(
+            'mkdir -p /var/lib/fliperos/update', 'true').replace('flock -w 1800 8', 'flock -w 1 8')
+        holder = subprocess.Popen(['python3', '-c', 'import fcntl, sys, time\nf = open(sys.argv[1], "w")\n'
+                                   'fcntl.flock(f, fcntl.LOCK_EX)\nprint("held", flush=True)\ntime.sleep(5)', str(lock)],
+                                  stdout=subprocess.PIPE, text=True)
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline(), 'held\n')
+        r = subprocess.run(['bash', '-c', 'set -e\n' + script + '\necho went on'], capture_output=True, text=True,
+                           timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('Waiting for the FliperOS update that is running', r.stdout)
+        self.assertIn('Another FliperOS update is still running', r.stderr)
+        holder.kill()
+        holder.wait()
+        r = subprocess.run(['bash', '-c', 'set -e\n' + script + '\necho went on'], capture_output=True, text=True,
+                           timeout=30)
+        self.assertEqual((r.returncode, r.stdout), (0, 'went on\n'))
+
     def test_goto_moves_back_and_forward_and_holds_the_choice(self):
         (self.root / 'etc/app/app.conf').write_text('v0')
         bin_ = self.root / 'opt/fliperos/bin/fliperos-update'

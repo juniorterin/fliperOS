@@ -14,6 +14,20 @@ src=$(cd "$(dirname "$0")/.." && pwd)
 lib=/usr/local/lib/fliperos-setup/lib
 [[ $EUID -eq 0 ]] || { echo "Run as root (sudo)." >&2; exit 1; }
 [[ -f /etc/fliperos/installed ]] || { echo "This is not an installed FliperOS." >&2; exit 1; }
+# Uma instalacao por vez, com o lock do config/fliperos-update (o update do
+# boot, do desligar, a versao escolhida no Setup ou no painel). Um
+# cabinet-push no meio de um deles rodava as duas arvores juntas: em
+# 2026-11-10 a volta ao update 65 terminou com os arquivos do push e o nivel
+# 66. Chamado pelo proprio fliperos-update (FLIPEROS_UPDATE=1), o lock ja e
+# dele.
+if [[ -z ${FLIPEROS_UPDATE:-} ]]; then
+  mkdir -p /var/lib/fliperos/update
+  exec 8> /var/lib/fliperos/update/.lock
+  if ! flock -n 8; then
+    echo "== Waiting for the FliperOS update that is running"
+    flock -w 1800 8 || { echo "Another FliperOS update is still running; try again later." >&2; exit 1; }
+  fi
+fi
 
 backup=/root/fliperos-backup-$(date +%Y%m%d-%H%M%S).tgz
 tar czf "$backup" --ignore-failed-read \
