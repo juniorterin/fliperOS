@@ -332,8 +332,10 @@ The rest (the real title, year, developer, genre, description, cover and logo) c
 |---|---|---|
 | Up to 240 lines (320x240) | as is, 60 Hz | as is, 60 Hz |
 | 241 to 288 lines (480x272) | as is, 50 Hz (like PAL) | as is, 60 Hz |
-| 289 to 447 lines (400x300) | 240 lines, 60 Hz (OpenBOR scales the game down) | as is, 60 Hz |
-| 448 lines or more (640x480, 800x600, 960x540) | half the lines, like FliperOS runs 480-line consoles: 640x240 at 60 Hz, 960x270 at 50 Hz; 800x600 (300 lines halved) goes to 800x240 | as is, 60 Hz |
+| More, divided exactly by 2 or 3 into 200 to 288 lines (640x480, 720x480, 960x540) | the divided size: 320x240 and 360x240 at 60 Hz, 480x270 at 50 Hz | as is, 60 Hz |
+| Any other (400x300, 800x600, 1280x720) | 240 lines, same shape: 320x240, 426x240 (OpenBOR scales the game down) | as is, 60 Hz |
+
+The mode always has the pak's shape: OpenBOR keeps the pak's aspect ratio in full screen (*Preserve Aspect Ratio*, the default in each pak's `.cfg`), so in a mode of another shape it leaves black bars (a 400x300 pak in 400x240 came out 320 pixels wide, seen on the cabinet).
 
 With **Setup > Video Setup > Interlaced hacks** on for OpenBOR, a 15 kHz monitor gets the other column (480 lines, interlaced). Without a pak (the menu, **Games > OpenBOR**), the mode stays the one in `emulator-modes.conf` (320x240).
 

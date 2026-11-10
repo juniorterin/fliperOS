@@ -28692,17 +28692,18 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <td>as is, 60 Hz</td>
 </tr>
 <tr>
-<td>289 to 447 lines (400x300)</td>
-<td>240 lines, 60 Hz (OpenBOR scales the game down)</td>
+<td>More, divided exactly by 2 or 3 into 200 to 288 lines (640x480, 720x480, 960x540)</td>
+<td>the divided size: 320x240 and 360x240 at 60 Hz, 480x270 at 50 Hz</td>
 <td>as is, 60 Hz</td>
 </tr>
 <tr>
-<td>448 lines or more (640x480, 800x600, 960x540)</td>
-<td>half the lines, like FliperOS runs 480-line consoles: 640x240 at 60 Hz, 960x270 at 50 Hz; 800x600 (300 lines halved) goes to 800x240</td>
+<td>Any other (400x300, 800x600, 1280x720)</td>
+<td>240 lines, same shape: 320x240, 426x240 (OpenBOR scales the game down)</td>
 <td>as is, 60 Hz</td>
 </tr>
 </tbody>
 </table>
+<p>The mode always has the pak's shape: OpenBOR keeps the pak's aspect ratio in full screen (<em>Preserve Aspect Ratio</em>, the default in each pak's <code>.cfg</code>), so in a mode of another shape it leaves black bars (a 400x300 pak in 400x240 came out 320 pixels wide, seen on the cabinet).</p>
 <p>With <strong>Setup &gt; Video Setup &gt; Interlaced hacks</strong> on for OpenBOR, a 15 kHz monitor gets the other column (480 lines, interlaced). Without a pak (the menu, <strong>Games &gt; OpenBOR</strong>), the mode stays the one in <code>emulator-modes.conf</code> (320x240).</p>
 <p><strong>Running a pak from the command line.</strong> The <code>openbor</code> command takes the pak as its only argument: the full path, or only the file name of a pak that is in <code>Paks</code>. In the console (Setup &gt; Exit to shell, on the cabinet), the same line the frontends run:</p>
 <pre><code class="language-sh">/opt/fliperos/bin/fliperos-x11-run openbor &quot;/home/fliperos/roms/openbor/Paks/My Game.pak&quot;

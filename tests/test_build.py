@@ -12299,9 +12299,13 @@ class NewEmulatorBuildTests(unittest.TestCase):
 
     def test_openbor_meta_mode_fits_the_monitor(self):
         meta = load_script('openbor_meta', 'config/fliperos-openbor-meta')
+        # O OpenBOR mantem a proporcao do pak: o modo tem a mesma forma (sem
+        # faixas pretas), dividido exato ou reduzido a 240 linhas.
         for (w, h), crt, other in (((320, 240), '320x240@60', '320x240@60'), ((480, 272), '480x272@50', '480x272@60'),
-                                   ((400, 300), '400x240@60', '400x300@60'), ((640, 480), '640x240@60', '640x480@60'),
-                                   ((960, 540), '960x270@50', '960x540@60'), ((800, 600), '800x240@60', '800x600@60')):
+                                   ((400, 300), '320x240@60', '400x300@60'), ((640, 480), '320x240@60', '640x480@60'),
+                                   ((720, 480), '360x240@60', '720x480@60'), ((800, 480), '400x240@60', '800x480@60'),
+                                   ((960, 540), '480x270@50', '960x540@60'), ((800, 600), '320x240@60', '800x600@60'),
+                                   ((640, 360), '426x240@60', '640x360@60'), ((1280, 720), '426x240@60', '1280x720@60')):
             self.assertEqual(meta.mode_for(w, h, '15k'), crt, (w, h))
             self.assertEqual(meta.mode_for(w, h, '31k'), other, (w, h))
         with tempfile.TemporaryDirectory() as tmp:
@@ -12311,7 +12315,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
             env = dict(os.environ, FLIPEROS_OPENBOR_PAKS=str(paks))
             run = lambda *a: subprocess.run(['python3', str(ROOT / 'config/fliperos-openbor-meta'), *a], env=env,
                                             capture_output=True, text=True, timeout=60)
-            self.assertEqual(run('mode', str(paks / 'Big.PAK'), '15k').stdout, '640x240@60\n')
+            self.assertEqual(run('mode', str(paks / 'Big.PAK'), '15k').stdout, '320x240@60\n')
             # So o nome: o pak de Paks/, como o comando openbor.
             self.assertEqual(run('mode', 'Big.PAK', '31k').stdout, '640x480@60\n')
             self.assertEqual(run('mode', 'Nope.pak', '15k').returncode, 1)

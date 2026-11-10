@@ -204,21 +204,27 @@ def info(path):
 # ── O modo de video ────────────────────────────────────────────────
 
 def mode_for(width, height, monitor):
-    """O modo do fliperos-x11-run para a resolucao do pak. Num monitor de 15
-    kHz so ha 240 linhas a 60 Hz (288 a 50, como o PAL): ate ai, a do pak;
-    um pak de 480 linhas ou mais vai na metade (640x480: 640x240, como o
-    FliperOS roda os 480 dos consoles); entre uma coisa e outra (400x300), o
-    OpenBOR reduz para 240 (tela cheia, SDL_WINDOW_FULLSCREEN_DESKTOP). Nos
-    outros monitores, a do pak."""
+    """O modo do fliperos-x11-run para a resolucao do pak. O OpenBOR, em tela
+    cheia, mantem a proporcao do pak ("Preserve Aspect Ratio", o padrao de
+    cada .cfg): num modo de outra proporcao sobram faixas pretas (400x300
+    num 400x240 saia com 320 de largura, visto no gabinete). Entao o modo tem
+    a forma do pak. Num monitor de 15 kHz so ha 240 linhas a 60 Hz (288 a 50,
+    como o PAL): ate ai, a do pak; senao a do pak dividida por 2 ou 3, se der
+    exata e com 200 linhas ou mais (640x480: 320x240; 960x540: 480x270); senao
+    240 linhas na mesma forma (400x300: 320x240). Nos outros monitores, a do
+    pak."""
     if monitor != "15k":
         return "%dx%d@60" % (width, height)
-    if height >= 448:
-        height //= 2
-    if height <= 240:
-        return "%dx%d@60" % (width, height)
-    if height <= 288:
-        return "%dx%d@50" % (width, height)
-    return "%dx240@60" % width
+    for d in (1, 2, 3):
+        if width % d or height % d or (d > 1 and height // d < 200):
+            continue
+        w, h = width // d, height // d
+        if h <= 240:
+            return "%dx%d@60" % (w, h)
+        if h <= 288:
+            return "%dx%d@50" % (w, h)
+    w = int(round(width * 240.0 / height / 2)) * 2
+    return "%dx240@60" % w
 
 
 def resolve(pak):

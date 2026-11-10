@@ -71,8 +71,9 @@ if [[ -z $mode ]]; then
   fi
   # Um pak do OpenBOR (openbor PAK, os frontends) abre no modo dele: a
   # resolucao do data/video.txt (400x300, 640x480...), que o
-  # fliperos-openbor-meta ajusta ao monitor (15 kHz: ate 240 linhas a 60 Hz,
-  # 288 a 50; 480 linhas na metade). Sem o pak, o modo da tabela.
+  # fliperos-openbor-meta ajusta ao monitor na mesma forma (15 kHz: ate 240
+  # linhas a 60 Hz, 288 a 50; 640x480 e 400x300 em 320x240). Sem o pak, o
+  # modo da tabela.
   meta=${FLIPEROS_OPENBOR_META:-/opt/fliperos/bin/fliperos-openbor-meta}
   if [[ $name == openbor && $# -eq 2 && -x $meta ]]; then
     monitor=31k
