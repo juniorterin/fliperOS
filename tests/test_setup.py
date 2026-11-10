@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos", "cloud"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -5259,6 +5259,48 @@ class TopbarTests(Base):
         self.assertLess(entry.index("FLIPEROS_SETUP_VERSION="), entry.index('source "$SETUP_DIR/lib/ui.sh"'))
 
 
+class CloudSetupTests(Base):
+    """Setup > Cloud backup (lib/cloud.sh): o rotulo do menu e a conta de
+    usuario e senha pela tela, com o fliperos-cloud falso."""
+
+    def setUp(self):
+        super().setUp()
+        self.log = self.env.dir / "cloud.log"
+        tool = self.env.dir / "fake-cloud"
+        tool.write_text('#!/bin/bash\necho "$* | $(cat 2>/dev/null | tr \'\\n\' \' \')" >> %s\n'
+                        'case $1 in status) cat %s/status 2>/dev/null ;; remote) [ "$2" = mega ] && { echo "401"; exit 1; } ;; esac\n'
+                        'exit 0\n' % (self.log, self.env.dir))
+        tool.chmod(0o755)
+        self.cenv = {"CLOUD_TOOL": str(tool), "FLIPEROS_USER": "nobody-here"}
+
+    def status(self, text):
+        (self.env.dir / "status").write_text(text)
+
+    def test_label_follows_the_state(self):
+        self.status("installed=0\n")
+        self.assertEqual(self.env.out("cloud_label", self.cenv).strip(), "rclone not installed")
+        self.status("installed=1\nremote=\n")
+        self.assertEqual(self.env.out("cloud_label", self.cenv).strip(), "no account")
+        self.status("installed=1\nremote=webdav\nauto=on\n")
+        self.assertEqual(self.env.out("cloud_label", self.cenv).strip(), "WebDAV (Nextcloud, ownCloud...), by itself")
+
+    def test_account_from_the_screen(self):
+        # WebDAV: endereco, usuario e senha pela entrada do fliperos-cloud;
+        # Google Drive so pelo painel (o login no site).
+        self.status("installed=1\nremote=\n")
+        out = self.env.out("""
+            source %s/screens/setup-menu.sh
+            : > "$RADIO_COUNT"
+            ui_radio() { echo x >> "$RADIO_COUNT"; case $(wc -l < "$RADIO_COUNT") in 1) echo webdav ;; 2) echo drive ;; *) return 1 ;; esac; }
+            ui_input() { case $2 in Address*) echo https://dav.example ;; User*) echo joe ;; Password*) echo pw1 ;; esac; }
+            ui_info() { :; }
+            ui_msg() { printf 'msg:%%s\\n' "$@"; }
+            screen_cloud
+        """ % SETUP, dict(self.cenv, RADIO_COUNT=str(self.env.dir / "radio")))
+        self.assertIn("remote webdav | url=https://dav.example user=joe pass=pw1", self.log.read_text())
+        self.assertIn("msg:http://fliperos.local > System > Cloud backup", out)
+
+
 class CloudTests(unittest.TestCase):
     """config/fliperos-cloud: o backup na nuvem pelo rclone (um rclone falso
     que copia entre pastas), do painel web."""
@@ -5317,6 +5359,42 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(conf_path.read_text().strip(), "[other]\ntype = local")
         self.assertEqual(self.run_("remote", "webdav", stdin="url=ftp://x\nuser=a\npass=b\n").returncode, 2)
         self.assertEqual(self.run_("remote", "nope", stdin="").returncode, 2)
+
+    def test_google_drive_by_device_code(self):
+        # Sem o cliente OAuth do FliperOS, nao ha login por codigo (status 3).
+        self.env["FLIPEROS_GOOGLE_OAUTH"] = str(self.dir / "google-oauth.conf")
+        self.assertEqual(self.run_("device-start").returncode, 3)
+        self.assertEqual(self.status()["device"], "0")
+        (self.dir / "google-oauth.conf").write_text("client_id=123-abc.apps.googleusercontent.com\nclient_secret=GOCSPX-x\n")
+        self.assertEqual(self.status()["device"], "1")
+        # O curl falso: o device/code da o codigo; o token responde
+        # "pendente" na primeira vez e o token na segunda.
+        curl = self.dir / "bin/curl"
+        curl.write_text(
+            "#!/bin/bash\necho \"$*\" >> %(d)s/curl.log\n"
+            "case \"$*\" in\n"
+            "  *device/code*) echo '{\"device_code\":\"DEV-1\",\"user_code\":\"ABCD-EFGH\",\"verification_url\":"
+            "\"https://www.google.com/device\",\"expires_in\":1800,\"interval\":5}' ;;\n"
+            "  *token*) if [ -f %(d)s/approved ]; then echo '{\"access_token\":\"ya29.x\",\"expires_in\":3599,"
+            "\"refresh_token\":\"1//r\",\"token_type\":\"Bearer\"}'; else touch %(d)s/approved; "
+            "echo '{\"error\":\"authorization_pending\"}'; fi ;;\n"
+            "esac\n" % {"d": self.dir})
+        curl.chmod(0o755)
+        r = self.run_("device-start")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(r.stdout, "code=ABCD-EFGH\nurl=https://www.google.com/device\ndevice=DEV-1\ninterval=5\n"
+                                   "expires=1800\n")
+        self.assertIn("scope=https://www.googleapis.com/auth/drive.file", (self.dir / "curl.log").read_text())
+        r = self.run_("device-poll", "DEV-1")
+        self.assertEqual((r.returncode, r.stdout.strip()), (4, "pending"))
+        r = self.run_("device-poll", "DEV-1")
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, "ok"), r.stderr)
+        conf = (self.home / ".config/rclone/rclone.conf").read_text()
+        self.assertIn("[fliperos]\ntype = drive\nclient_id = 123-abc.apps.googleusercontent.com\n"
+                      "client_secret = GOCSPX-x\nscope = drive.file\ntoken = {\"access_token\":\"ya29.x\","
+                      "\"token_type\":\"Bearer\",\"refresh_token\":\"1//r\",\"expiry\":\"", conf)
+        self.assertTrue((self.cloud / "FliperOS").is_dir())
+        self.assertEqual(self.run_("device-poll", "bad code!").returncode, 2)
 
     def test_refused_account_is_not_kept(self):
         (self.dir / "refuse").write_text("")
@@ -5465,6 +5543,41 @@ class CheevosTests(Base):
         self.assertIn('cheevos_token = ""', (self.env.etc / "retroarch/cheevos.cfg").read_text())
         self.assertEqual(self.env.run("cheevos_cli enable on", self.cenv).returncode, 1)
         self.assertEqual(self.env.run("cheevos_cli hardcore maybe", self.cenv).returncode, 2)
+
+    def test_signup_opens_the_browser_and_comes_back(self):
+        # Create an account: o endereco do cadastro para o navegador do
+        # fliperos-tty1, o pedido "browser" e a saida do Setup; ao voltar, a
+        # tela do RetroAchievements. Sem o navegador, o endereco na tela.
+        run = self.env.dir / "run"
+        run.mkdir()
+        env = dict(self.cenv, BROWSER_URL_FILE=str(run / "browser-url"), CHEEVOS_BROWSER_PENDING=str(run / "pending"),
+                   LAUNCH_REQUEST=str(run / "launch"))
+        script = """
+            source %s/screens/main-menu.sh
+            source %s/screens/setup-menu.sh
+            downloader_browser_ok() { %s; }
+            screen_need_internet() { return 0; }
+            ui_msg() { printf 'msg:%%s\\n' "$@"; }
+            ui_clear() { :; }
+            screen_cheevos_signup
+            echo "returned"
+        """
+        r = self.env.run(script % (SETUP, SETUP, "return 0"), env)
+        self.assertEqual(r.returncode, 20, r.stdout + r.stderr)
+        self.assertEqual((run / "browser-url").read_text(), "https://retroachievements.org/createaccount.php\n")
+        self.assertEqual((run / "launch").read_text(), "browser\n")
+        self.assertTrue((run / "pending").exists())
+        out = self.env.out("""
+            source %s/screens/setup-menu.sh
+            screen_cheevos() { echo "cheevos screen"; }
+            screen_cheevos_resume
+        """ % SETUP, env)
+        self.assertEqual(out.strip(), "cheevos screen")
+        self.assertFalse((run / "pending").exists())
+        self.assertFalse((run / "browser-url").exists())
+        out = self.env.out(script % (SETUP, SETUP, "return 1"), env)
+        self.assertIn("msg:https://retroachievements.org/createaccount.php", out)
+        self.assertIn("returned", out)
 
     def test_tool_at_launch_creates_the_dolphin_ini_only_with_an_account(self):
         tool = ["bash", str(ROOT / "config/fliperos-cheevos")]
@@ -8151,7 +8264,7 @@ class SetupGroupsTests(Base):
                 self.assertIn("      %s) " % value, body, name)
         # Imagem, som, rede, jogos, controles e o resto do sistema.
         self.assertEqual(order["screen_setup_menu"],
-                         ["video", "audio", "network", "games", "joysticks", "system", "return"])
+                         ["video", "audio", "network", "games", "joysticks", "system", "cloud", "return"])
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])

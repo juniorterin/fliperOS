@@ -16,6 +16,19 @@
 #   fliperos-cloud watch PID              (fliperos-kms-run/x11-run) espera o jogo fechar e, com o
 #                                         automatico ligado, sincroniza os hi-scores e os saves; as
 #                                         configuracoes uma vez por dia
+#   fliperos-cloud device-start           o login do Google Drive por codigo, como numa smart TV:
+#                                         code=, url=, device=, interval=, expires= (status 3: sem o
+#                                         cliente OAuth do FliperOS em /etc/fliperos/google-oauth.conf)
+#   fliperos-cloud device-poll DEVICE     pergunta uma vez ao Google: "pending" (status 4, ainda nao
+#                                         aprovado), "slow" (status 4, espere mais), a conta gravada
+#                                         (status 0) ou o motivo (status 1: negado, expirado)
+#
+# O login por codigo (o "OAuth 2.0 for TV and Limited-Input Devices" do
+# Google) usa um cliente do tipo "TVs and Limited Input devices" do projeto do
+# FliperOS, com o escopo drive.file: o rclone so ve os arquivos que ele mesmo
+# criou (a pasta FliperOS). O client_secret desse tipo de cliente nao e
+# segredo (o Google diz que vai junto do aplicativo). O rclone renova o token
+# com o mesmo cliente (client_id/client_secret no remoto).
 #
 # Na nuvem, tudo fica em FliperOS/ (hiscores/, saves/, config/), o mesmo para
 # todos os gabinetes da pessoa: um recorde feito num aparece no outro. Nada e
@@ -34,6 +47,10 @@ ROOT_DIR=FliperOS
 AUTO_GAP=${FLIPEROS_CLOUD_GAP:-120}
 CONFIG_GAP=${FLIPEROS_CLOUD_CONFIG_GAP:-86400}
 export RCLONE_CONFIG=$RCLONE_CONF
+GOOGLE_OAUTH=${FLIPEROS_GOOGLE_OAUTH:-/etc/fliperos/google-oauth.conf}
+GOOGLE_DEVICE_URL=${FLIPEROS_GOOGLE_DEVICE_URL:-https://oauth2.googleapis.com/device/code}
+GOOGLE_TOKEN_URL=${FLIPEROS_GOOGLE_TOKEN_URL:-https://oauth2.googleapis.com/token}
+GOOGLE_SCOPE=https://www.googleapis.com/auth/drive.file
 
 # As pastas de cada grupo: "local<TAB>na nuvem".
 pairs() {
@@ -172,7 +189,11 @@ cmd_sync() {
   state_set last "$(date +%s)"
   state_set result "$([[ $rc == 0 ]] && echo ok || echo failed)"
   log "sync done: $([[ $rc == 0 ]] && echo ok || echo failed)"
-  ((rc == 0)) || echo "@fail Some files did not sync (details in $LOG)"
+  if ((rc == 0)); then
+    echo "@step 100 Synced with the cloud"
+  else
+    echo "@fail Syncing with the cloud|Some files did not sync (details in $LOG)"
+  fi
   return $rc
 }
 
@@ -203,12 +224,72 @@ cmd_watch() {
   cmd_sync both "$groups" > /dev/null
 }
 
+# google_client: client_id e client_secret do cliente OAuth do FliperOS
+# (vazio sem ele: o login por codigo nao existe nesta maquina).
+google_client() {
+  local id secret
+  id=$(sed -n 's/^client_id=//p' "$GOOGLE_OAUTH" 2> /dev/null | head -1)
+  secret=$(sed -n 's/^client_secret=//p' "$GOOGLE_OAUTH" 2> /dev/null | head -1)
+  [[ $id == *.apps.googleusercontent.com && -n $secret ]] || return 1
+  printf '%s\n%s\n' "$id" "$secret"
+}
+
+cmd_device_start() {
+  local client id reply
+  client=$(google_client) || { echo "The FliperOS Google sign-in is not set up on this system."; return 3; }
+  id=${client%%$'\n'*}
+  reply=$(curl -sS --max-time 20 --data-urlencode "client_id=$id" --data-urlencode "scope=$GOOGLE_SCOPE" \
+    "$GOOGLE_DEVICE_URL" 2>&1) || { log "device-start: $reply"; echo "No answer from Google (no network?)."; return 1; }
+  if ! jq -e '.user_code and .device_code' <<< "$reply" > /dev/null 2>&1; then
+    log "device-start: $reply"
+    echo "Google refused: $(jq -r '.error_description // .error // "unexpected answer"' <<< "$reply" 2> /dev/null)"
+    return 1
+  fi
+  jq -r '"code=\(.user_code)\nurl=\(.verification_url // .verification_uri)\ndevice=\(.device_code)\ninterval=\(.interval // 5)\nexpires=\(.expires_in // 1800)"' <<< "$reply"
+}
+
+cmd_device_poll() {
+  local device=$1 client id secret reply error token
+  [[ $device =~ ^[A-Za-z0-9._/-]+$ ]] || return 2
+  client=$(google_client) || return 3
+  id=${client%%$'\n'*} secret=${client#*$'\n'}
+  reply=$(curl -sS --max-time 20 --data-urlencode "client_id=$id" --data-urlencode "client_secret=$secret" \
+    --data-urlencode "device_code=$device" --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+    "$GOOGLE_TOKEN_URL" 2>&1) || { echo "pending"; return 4; }
+  error=$(jq -r '.error // empty' <<< "$reply" 2> /dev/null)
+  case $error in
+    authorization_pending) echo pending; return 4 ;;
+    slow_down) echo slow; return 4 ;;
+    "") ;;
+    access_denied) echo "Access was not allowed on the Google page."; return 1 ;;
+    expired_token) echo "The code expired: start again."; return 1 ;;
+    *) log "device-poll: $reply"; echo "Google refused: $error"; return 1 ;;
+  esac
+  # O token no formato do rclone (oauth2.Token: expiry em RFC 3339).
+  token=$(jq -c '{access_token, token_type: (.token_type // "Bearer"), refresh_token,
+    expiry: ((now + (.expires_in // 3600)) | todate)}' <<< "$reply" 2> /dev/null)
+  [[ $token == *access_token* && $token == *refresh_token* ]] || { log "device-poll: $reply"; echo "Google gave no token."; return 1; }
+  write_remote drive "$(printf 'client_id = %s\nclient_secret = %s\nscope = drive.file\ntoken = %s' "$id" "$secret" "$token")" ||
+    return 1
+  if ! out=$("$RCLONE" mkdir "$REMOTE:$ROOT_DIR" 2>&1); then
+    log "remote drive: $out"
+    write_remote "" ""
+    echo "Google Drive did not accept the account: $(tail -1 <<< "$out")"
+    return 1
+  fi
+  log "remote drive saved (device sign-in)"
+  echo ok
+}
+
 case ${1:-} in
   status)
     printf 'installed=%s\nremote=%s\nauto=%s\nwhat=%s\nlast=%s\nresult=%s\n' "$(installed && echo 1 || echo 0)" \
       "$(remote_kind)" "$(state_get auto || echo off)" "$(state_get what)" "$(state_get last)" "$(state_get result)"
+    printf 'device=%s\n' "$(google_client > /dev/null && echo 1 || echo 0)"
     ;;
   remote) cmd_remote "${2:-}" ;;
+  device-start) cmd_device_start ;;
+  device-poll) cmd_device_poll "${2:-}" ;;
   forget)
     write_remote "" ""
     log "remote removed"

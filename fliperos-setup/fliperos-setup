@@ -109,6 +109,8 @@ source "$SETUP_DIR/lib/splash.sh"
 source "$SETUP_DIR/lib/folders.sh"
 # shellcheck source=lib/extras.sh
 source "$SETUP_DIR/lib/extras.sh"
+# shellcheck source=lib/cloud.sh
+source "$SETUP_DIR/lib/cloud.sh"
 # shellcheck source=lib/cheevos.sh
 source "$SETUP_DIR/lib/cheevos.sh"
 # shellcheck source=lib/emulators.sh
@@ -524,6 +526,8 @@ main() {
     [[ -f $FLIPEROS_ETC/firstboot ]] && screen_first_boot
     # De volta do navegador do Downloader: a tela do magnet link.
     ((SETUP_MENU_LOOP == 1)) && screen_downloader_resume
+    # De volta do cadastro do RetroAchievements: a tela dele.
+    ((SETUP_MENU_LOOP == 1)) && screen_cheevos_resume
     screen_main_menu
     rc=$?
   fi

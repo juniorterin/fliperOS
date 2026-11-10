@@ -128,6 +128,13 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .menu-item { text-align: left; padding: 10px 12px; border-radius: 10px; border: 0; background: transparent; font-weight: 600; }
 .menu-item:hover { background: rgba(68,71,90,.4); }
 .menu-host { color: var(--dim); padding: 6px 12px; overflow-wrap: anywhere; }
+/* As abas RetroAchievements e Backup na nuvem: uma coluna, os campos ate 420 px. */
+.stack { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.stack[hidden] { display: none; }
+.stack input:not([type=checkbox]), .stack > select { width: 100%; max-width: 420px; }
+.stack > .dim { font-size: 13px; }
+.stack label.row select { width: auto; }
+.device-code { font: 28px var(--px); letter-spacing: .18em; color: var(--green); padding: 10px 16px; border: 2px dashed var(--line); border-radius: 12px; }
 /* O seletor de gabinete (mais de um FliperOS na rede): troca de painel. */
 .cab-pick { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--dim); }
 .cab-pick select { height: 40px; min-width: 0; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);

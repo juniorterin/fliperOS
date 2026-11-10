@@ -387,6 +387,8 @@ screen_downloader_browser() {
     return 1
   fi
   rm -f "$(downloader_capture_file)"
+  # O endereco de outro pedido (o cadastro do RetroAchievements) nao vale aqui.
+  rm -f "${BROWSER_URL_FILE:-/run/fliperos/browser-url}"
   ui_clear
   exit "$SETUP_EXIT_LAUNCH"
 }

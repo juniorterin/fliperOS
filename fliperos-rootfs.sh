@@ -314,6 +314,8 @@ rm -f "$root/etc/systemd/system/multi-user.target.wants/fliperos-transmission.se
 # O painel web (config/fliperos-web, Setup > System > Services > Web panel):
 # sobe depois do boot (web=after no services.conf) ate a pessoa mudar.
 install -Dm755 "$src/config/fliperos-web" "$root/opt/fliperos/bin/fliperos-web"
+# O cliente OAuth do login do Google Drive por codigo (backup na nuvem, config/fliperos-cloud).
+install -Dm644 "$src/config/google-oauth.conf" "$root/etc/fliperos/google-oauth.conf"
 install -Dm644 "$src/config/fliperos-web.service" "$root/etc/systemd/system/fliperos-web.service"
 rm -rf "$root/usr/local/share/fliperos/web"
 install -Dm644 -t "$root/usr/local/share/fliperos/web" "$src"/config/web/*

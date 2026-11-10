@@ -16,6 +16,7 @@ screen_setup_menu() {
       "games|Games|Emulators, frontend, extras, downloads, cleaner and art." \
       "joysticks|Joysticks|Button mapping, light gun, wheel, LPT and USB controller fixes." \
       "system|System|Low latency, services, updates, debug mode and the boot splash." \
+      "cloud|Cloud backup|High scores, saves and settings in your cloud (rclone)." \
       "return|Return|Back to the FliperOS menu.") || return 0
     last=$choice
     case $choice in
@@ -25,9 +26,137 @@ screen_setup_menu() {
       games) screen_setup_games ;;
       joysticks) screen_joysticks ;;
       system) screen_setup_system ;;
+      cloud) screen_cloud ;;
       return) return 0 ;;
     esac
   done
+}
+
+# screen_cloud (Setup > Cloud backup): o mesmo backup do painel web
+# (lib/cloud.sh, config/fliperos-cloud): instalar o rclone, a conta, o que
+# sincronizar, o automatico e sincronizar agora. Google Drive e Dropbox
+# entram pelo site, entao so pelo painel (o navegador do celular ou do PC).
+screen_cloud() {
+  local title="Cloud backup" choice last="" remote what entries kind field value fields input w
+  if [[ ! -x $CLOUD_TOOL ]]; then
+    ui_msg "$title" "$(ui_bad "The cloud backup tool is missing on this system.")"
+    return 0
+  fi
+  while true; do
+    if [[ $(cloud_status installed) != 1 ]]; then
+      ui_yesno "$title" "Cloud backup uses rclone, which is not installed yet (a small download). Install it now?" yes ||
+        return 0
+      run_online "Installing rclone" "" cloud_install || return 0
+      continue
+    fi
+    remote=$(cloud_status remote)
+    if [[ -z $remote ]]; then
+      entries=()
+      for kind in "${CLOUD_KINDS[@]}"; do entries+=("${kind%%|*}|$(cut -d'|' -f2 <<< "$kind")"); done
+      kind=$(ui_radio "$title" "Where your high scores, saves and settings go. The same folder for all your cabinets." \
+        webdav "${entries[@]}") || return 0
+      fields=$(cloud_kind_fields "$kind")
+      if [[ $kind == drive && $(cloud_status device) == 1 ]]; then
+        screen_need_internet "$title" && screen_cloud_device
+        continue
+      fi
+      if [[ -z $fields ]]; then
+        ui_msg "$title" "$(cloud_kind_label "$kind") signs in at its site, so it is done in the web panel:" "" \
+          "http://fliperos.local > System > Cloud backup" "" "Open it on a phone or computer on the same network."
+        return 0
+      fi
+      input=""
+      for field in $fields; do
+        case $field in
+          url) value=$(ui_input "$title" "Address of the WebDAV folder (https://...)." "") || continue 2 ;;
+          host) value=$(ui_input "$title" "Host name or IP of the computer or NAS." "") || continue 2 ;;
+          port) value=$(ui_input "$title" "SSH port (empty: 22)." "22") || continue 2 ;;
+          user) value=$(ui_input "$title" "User at $(cloud_kind_label "$kind")." "") || continue 2 ;;
+          pass) value=$(ui_input "$title" "Password (saved hidden, only on this cabinet)." "" password) || continue 2 ;;
+        esac
+        value=${value//$'\n'/}
+        [[ -n $value || $field == port ]] && input+="$field=$value"$'\n'
+      done
+      ui_info "$title" "Checking the account..." > /dev/tty 2>&1 || true
+      if w=$(printf '%s' "$input" | cloud_run remote "$kind" 2>&1); then
+        ui_msg "$title" "$(ui_yes "$(cloud_kind_label "$kind") saved.")"
+      else
+        ui_msg "$title" "$(ui_bad "Not saved: ${w:-a field is missing or wrong.}")"
+      fi
+      input=""
+      continue
+    fi
+    what=$(cloud_status what)
+    what=${what:-hiscores,saves,config}
+    choice=$(ui_menu_hints "$title" \
+      "Account: $(cloud_kind_label "$remote"). Last sync: $(last=$(cloud_status last); [[ -n $last ]] && date -d "@$last" '+%F %R' || echo never)." \
+      "$last" \
+      "sync|Sync now|Both ways: each side keeps the newest file, nothing is deleted." \
+      "push|Send|Only from this cabinet to the cloud." \
+      "pull|Get|Only from the cloud to this cabinet." \
+      "auto|By itself: $([[ $(cloud_status auto) == on ]] && echo on || echo off)|Sync after each game; settings once a day." \
+      "what|What to sync|High scores, saves and settings." \
+      "forget|Remove the account|Forget the cloud account; the files stay in the cloud." \
+      "return|Return|Back to Setup.") || return 0
+    last=$choice
+    case $choice in
+      sync | push | pull)
+        screen_need_internet "$title" || continue
+        [[ $choice == sync ]] && choice=both
+        run_with_progress "$title" "" cloud_run sync "$choice"
+        ;;
+      auto) cloud_run auto "$([[ $(cloud_status auto) == on ]] && echo off || echo on)" > /dev/null ;;
+      what)
+        value=$(ui_checklist "$title" "What goes to the cloud." "$what" \
+          "hiscores|High scores (MAME hiscore and nvram)" "saves|Saves and memory cards" \
+          "config|Settings (controls per game, favourites, play stats)") || continue
+        cloud_run what "$(tr ' \n' ',,' <<< "$value" | sed 's/,,*/,/g; s/^,//; s/,$//')" > /dev/null
+        ;;
+      forget)
+        ui_yesno "$title" "Remove the cloud account from this cabinet? What is in the cloud stays there." no || continue
+        cloud_run forget > /dev/null
+        ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_cloud_device: o Google Drive por codigo, como numa smart TV: o
+# codigo e o endereco na tela, e o Setup pergunta ao Google a cada poucos
+# segundos se a pessoa ja aprovou no celular. Esc desiste.
+screen_cloud_device() {
+  local title="Google Drive" out code url device interval expires deadline rc reason
+  out=$(cloud_run device-start 2>&1) || {
+    ui_msg "$title" "$(ui_bad "${out:-Could not start the sign-in.}")"
+    return 0
+  }
+  code=$(sed -n 's/^code=//p' <<< "$out")
+  url=$(sed -n 's/^url=//p' <<< "$out")
+  device=$(sed -n 's/^device=//p' <<< "$out")
+  interval=$(sed -n 's/^interval=//p' <<< "$out")
+  expires=$(sed -n 's/^expires=//p' <<< "$out")
+  [[ $interval =~ ^[0-9]+$ ]] && ((interval >= 5)) || interval=5
+  [[ $expires =~ ^[0-9]+$ ]] || expires=1800
+  deadline=$((SECONDS + expires))
+  while ((SECONDS < deadline)); do
+    ui_timed_confirm "$title" "$interval" "Waiting..." "On a phone or computer, open:" "" "$url" "" \
+      "and type this code:" "" "$code" "" "Esc gives up."
+    rc=$?
+    ((rc == 1)) && return 0
+    reason=$(cloud_run device-poll "$device" 2>&1)
+    case $? in
+      0)
+        ui_msg "$title" "$(ui_yes "Google Drive saved.")" "" "Your backups go to the FliperOS folder in it."
+        return 0
+        ;;
+      4) [[ $reason == slow ]] && interval=$((interval + 5)) ;;
+      *)
+        ui_msg "$title" "$(ui_bad "Not saved: ${reason:-Google refused.}")"
+        return 0
+        ;;
+    esac
+  done
+  ui_msg "$title" "$(ui_bad "The code expired.")" "Choose Google Drive again for a new one."
 }
 
 # screen_setup_games (Setup > Games), na ordem de por jogos no gabinete: os
@@ -1161,6 +1290,37 @@ screen_scraper_source() {
     "The login is saved on this computer for the next times."
 }
 
+# screen_cheevos_signup: a pagina de cadastro do RetroAchievements no
+# navegador do gabinete (o Falkon do Downloader, que o fliperos-tty1 abre
+# depois que o Setup sai); com ele fechado, o Setup volta nesta tela
+# (screen_cheevos_resume). Sem o navegador, o endereco para abrir no celular.
+screen_cheevos_signup() {
+  local title="RetroAchievements"
+  if ! downloader_browser_ok || ! screen_need_internet "$title"; then
+    ui_msg "$title" "Create the account on a phone or computer, at:" "" "$CHEEVOS_SIGNUP_URL" "" \
+      "Then come back here and choose Sign in."
+    return 0
+  fi
+  mkdir -p "$(dirname "$BROWSER_URL_FILE")" 2> /dev/null
+  if ! printf '%s\n' "$CHEEVOS_SIGNUP_URL" > "$BROWSER_URL_FILE" || ! : > "$CHEEVOS_BROWSER_PENDING" ||
+    ! launcher_request browser; then
+    rm -f "$BROWSER_URL_FILE" "$CHEEVOS_BROWSER_PENDING"
+    ui_msg "$title" "$(ui_bad "Could not open the browser.")" "Details in $FLIPEROS_LOG."
+    return 0
+  fi
+  chmod 644 "$BROWSER_URL_FILE" 2> /dev/null
+  ui_clear
+  exit "$SETUP_EXIT_LAUNCH"
+}
+
+# screen_cheevos_resume: de volta do navegador do cadastro, a tela do
+# RetroAchievements (para entrar com a conta nova).
+screen_cheevos_resume() {
+  [[ -e $CHEEVOS_BROWSER_PENDING ]] || return 0
+  rm -f "$CHEEVOS_BROWSER_PENDING" "$BROWSER_URL_FILE"
+  screen_cheevos
+}
+
 # screen_cheevos (menu principal > RetroAchievements): a conta do site para
 # as conquistas no RetroArch, DuckStation, PCSX2, Dolphin e Flycast
 # (lib/cheevos.sh). So o token da conta fica guardado, nunca a senha.
@@ -1174,7 +1334,8 @@ screen_cheevos() {
         "login|Change account|Sign in with another RetroAchievements account."
         "logout|Sign out|Forget the account on this cabinet.")
     else
-      entries+=("login|Sign in|Your user and password at retroachievements.org.")
+      entries+=("login|Sign in|Your user and password at retroachievements.org."
+        "signup|Create an account|Free, at retroachievements.org; opens a browser here.")
     fi
     entries+=("return|Return|Back to the menu.")
     choice=$(ui_menu_hints "$title" \
@@ -1182,6 +1343,7 @@ screen_cheevos() {
       "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
+      signup) screen_cheevos_signup ;;
       login)
         screen_need_internet "RetroAchievements" || continue
         user=$(ui_input "$title" "RetroAchievements user." "$(cheevos_get user)") || continue

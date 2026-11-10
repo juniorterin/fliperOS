@@ -827,6 +827,12 @@ class PadKeysTests(unittest.TestCase):
         lib = (ROOT / 'fliperos-setup/lib/padkeys.sh').read_text()
         self.assertIn('echo "${1:-$$}" > "$PADKEYS_FLAG"', lib)
         self.assertIn('--padkeys on $$', (ROOT / 'config/fliperos-browser').read_text())
+        # O endereco que o Setup pede (o cadastro do RetroAchievements) chega
+        # ao navegador; sem ele, o padrao do Downloader.
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        self.assertIn('url=$(head -n 1 "${FLIPEROS_BROWSER_URL_FILE:-/run/fliperos/browser-url}" 2> /dev/null)', tty1)
+        self.assertIn('FLIPEROS_BROWSER_URL=${url:-${FLIPEROS_BROWSER_URL:-}} "$BIN/fliperos-browser"', tty1)
+        self.assertIn('url=${FLIPEROS_BROWSER_URL:-https://duckduckgo.com/}', (ROOT / 'config/fliperos-browser').read_text())
 
 
 class RootfsRunTests(unittest.TestCase):
@@ -7165,11 +7171,14 @@ class WebPanelTests(unittest.TestCase):
         cloud.write_text('#!/bin/sh\necho "$*" >> %s/cloud.log\n'
                          'case "$1" in\n'
                          '  status) printf "installed=1\\nremote=webdav\\nauto=on\\nwhat=hiscores,config\\n'
-                         'last=1700000000\\nresult=ok\\n" ;;\n'
+                         'last=1700000000\\nresult=ok\\ndevice=1\\n" ;;\n'
                          '  remote) cat >> %s/secret.log; [ "$2" = mega ] && { echo "The cloud did not accept the account: 401"; exit 1; } ;;\n'
                          '  what|auto) [ -n "$2" ] || exit 2 ;;\n'
                          '  sync) echo "@step 0 Syncing with the cloud"; echo "@msg hiscores" ;;\n'
-                         'esac\nexit 0\n' % (tmp, tmp))
+                         '  device-start) printf "code=ABCD-EFGH\\nurl=https://www.google.com/device\\ndevice=DEV-1\\n'
+                         'interval=5\\nexpires=1800\\n" ;;\n'
+                         '  device-poll) [ -f %s/approved ] && { echo ok; exit 0; }; touch %s/approved; echo pending; exit 4 ;;\n'
+                         'esac\nexit 0\n' % (tmp, tmp, tmp, tmp))
         cloud.chmod(0o755)
         # O "rclone authorize" falso: um servidor em 127.0.0.1 que manda o
         # /auth para o site e, com o codigo, imprime o token.
@@ -7368,7 +7377,7 @@ class WebPanelTests(unittest.TestCase):
         status, _, data = self.request('GET', '/api/cloud', cookie=cookie)
         self.assertEqual((status, json.loads(data)), (200, {'installed': True, 'remote': 'webdav', 'auto': True,
                                                             'what': ['hiscores', 'config'], 'last': 1700000000,
-                                                            'result': 'ok'}))
+                                                            'result': 'ok', 'device': True}))
         body = {'action': 'remote', 'kind': 'webdav', 'fields': {'url': 'https://dav.example', 'user': 'joe', 'pass': 'pw1'}}
         self.assertEqual(self.request('POST', '/api/cloud', body, cookie=cookie)[0], 200)
         self.assertIn('url=https://dav.example\nuser=joe\npass=pw1\n', (tmp / 'secret.log').read_text())
@@ -7408,6 +7417,14 @@ class WebPanelTests(unittest.TestCase):
         while time.time() < deadline and 'sync pull' not in (tmp / 'cloud.log').read_text():
             time.sleep(0.1)
         self.assertIn('sync pull', (tmp / 'cloud.log').read_text())
+        # O Google Drive por codigo: o codigo e o endereco; depois pendente e salvo.
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'device-start'}, cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {'code': 'ABCD-EFGH', 'url': 'https://www.google.com/device',
+                                                            'device': 'DEV-1', 'interval': '5', 'expires': '1800'}))
+        poll = {'action': 'device-poll', 'device': 'DEV-1'}
+        self.assertEqual(json.loads(self.request('POST', '/api/cloud', poll, cookie=cookie)[2]), {'state': 'pending'})
+        self.assertEqual(json.loads(self.request('POST', '/api/cloud', poll, cookie=cookie)[2]), {'state': 'ok'})
+        self.assertEqual(self.request('POST', '/api/cloud', {'action': 'device-poll', 'device': 'a b'}, cookie=cookie)[0], 400)
         self.assertEqual(self.request('GET', '/api/cloud')[0], 401)
 
     def test_avahi_lines_and_escapes(self):
@@ -7761,7 +7778,7 @@ class WebPanelTests(unittest.TestCase):
         areas = app[app.index('const AREAS = {'):app.index('};', app.index('const AREAS = {'))]
         self.assertEqual(re.findall(r'\["([a-z]+)", "px-', areas),
                          ['watch', 'obs', 'overview', 'install', 'downloads', 'romfilter', 'art', 'files',
-                          'status', 'logs', 'settings', 'terminal', 'lab'])
+                          'status', 'logs', 'settings', 'achievements', 'cloud', 'terminal', 'lab'])
         self.assertIn('status: "system/status"', app)
         self.assertIn('downloads: "library/downloads"', app)
         # Os scripts, em ordem (as globais de um valem nos outros), e o app.js por ultimo.

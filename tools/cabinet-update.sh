@@ -133,6 +133,8 @@ packages+=(picom)
 # O widelinks.so do "wide links = yes" (config/smb.conf): sem ele o Samba
 # recusa todo compartilhamento (vfs_init failed, 0x800704b3 no Windows).
 packages+=(samba-vfs-modules)
+# O backup na nuvem (config/fliperos-cloud: Setup > Cloud backup e o painel web).
+packages+=(rclone)
 # O rip dos discos no frontend (gui/femedia.py): o cdrdao le o CD em bruto e
 # o chdman (mame-tools) o junta num .chd.
 packages+=(cdrdao mame-tools)

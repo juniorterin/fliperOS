@@ -11,6 +11,7 @@ const AREAS = {
   library: { icon: "px-games", subs: [["overview", "px-games"], ["install", "px-emulators"], ["downloads", "px-torrent"],
     ["romfilter", "px-filter"], ["art", "px-scraper"], ["files", "px-dest"]] },
   system: { icon: "px-setup", subs: [["status", "px-chip"], ["logs", "px-romlist"], ["settings", "px-setup"],
+    ["achievements", "px-achievements"], ["cloud", "px-cloud"],
     ["terminal", "px-shell"], ["lab", "px-lab"]] },
 };
 // Os enderecos das dez paginas de antes continuam abrindo (o /lab manda
@@ -20,7 +21,8 @@ const OLD_PAGES = { status: "system/status", settings: "system/settings", termin
   romfilter: "library/romfilter" };
 const PAGE_OF = { "library/downloads": "downloads", "library/art": "scraper", "library/install": "install",
   "library/files": "files", "library/romfilter": "romfilter", "library/overview": "overview", "system/status": "status",
-  "system/logs": "logs", "system/settings": "settings", "system/terminal": "terminal", "system/lab": "lab" };
+  "system/logs": "logs", "system/settings": "settings", "system/terminal": "terminal", "system/lab": "lab",
+  "system/achievements": "achievements", "system/cloud": "cloud" };
 
 let sub = "";
 
@@ -118,6 +120,8 @@ function switchLang() {
   renderTools();
   renderRomFilter();
   loadSettings().catch(() => {});
+  if (page === "achievements") loadCheevos().catch(() => {});
+  if (page === "cloud") loadCloud().catch(() => {});
 }
 $("lang").addEventListener("click", switchLang);
 $("lang2").addEventListener("click", switchLang);
@@ -176,6 +180,8 @@ function showPage(hash) {
   else if (page === "scraper") loadScraper().catch(() => {});
   else if (page === "install") loadInstall().catch(() => {});
   else if (page === "settings") loadSettings().catch(() => {});
+  else if (page === "achievements") loadCheevos().catch(() => {});
+  else if (page === "cloud") loadCloud().catch(() => {});
   else if (page === "lab") loadLab().catch(() => {});
   else if (page === "romfilter") { if (!rf.loaded) loadRomFilter("").catch(() => {}); }
   else if (page === "logs") loadLogs().catch(() => {});

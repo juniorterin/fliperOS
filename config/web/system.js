@@ -305,7 +305,7 @@ const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWi
 // no lugar deles; um grupo novo do Setup que nao esteja aqui vai para o fim,
 // antes de Power.
 const SETTINGS_ORDER = ["Video", "Geometry", "Colour", "Scanlines", "Interlaced hacks", "Audio", "GunCon 2",
-  "Achievements", "Cloud", "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
+  "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
 
 async function loadSettings() {
   const res = await api("/api/settings");
@@ -327,12 +327,9 @@ async function loadSettings() {
     else for (const row of items) details.append(settingRow(row));
     boxes.set(group, details);
   }
-  const [geometry, network, cheevos, cloud] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null),
-    cheevosBox().catch(() => null), cloudBox().catch(() => null)]);
+  const [geometry, network] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null)]);
   if (geometry) boxes.set("Geometry", geometry);
   if (network) boxes.set("Network", network);
-  if (cheevos) boxes.set("Achievements", cheevos);
-  if (cloud) boxes.set("Cloud", cloud);
   boxes.set("Password", passwordBox());
   boxes.set("Version", versionBox());
   boxes.set("Whatsnew", whatsnewBox());
@@ -439,16 +436,16 @@ function passwordBox() {
 // endereco da pagina que nao abre volta colado aqui); WebDAV, SFTP e Mega
 // com usuario e senha. Sincroniza ao apertar e, ligado, ao fechar cada jogo.
 const CLOUD_FIELDS = { webdav: ["url", "user", "pass"], sftp: ["host", "port", "user", "pass"], mega: ["user", "pass"] };
-async function cloudBox() {
+async function cloudPage() {
   const state = await (await api("/api/cloud")).json();
-  const reload = () => loadSettings().catch(() => {});
+  const reload = () => loadCloud().catch(() => {});
   const post = async (body) => {
     const r = await api("/api/cloud", { method: "POST", body: JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) toast(data.error || r.statusText, "bad");
     return r.ok ? data : null;
   };
-  const content = el("div", { class: "setting pw" });
+  const content = el("div", { class: "stack" });
   if (!state.installed) {
     const install = el("button", { type: "button", class: "btn" }, icon("px-install"), t("cl_install"));
     install.addEventListener("click", async () => {
@@ -458,13 +455,44 @@ async function cloudBox() {
   } else if (!state.remote) {
     const kind = el("select", { "aria-label": t("cl_provider") },
       ...["drive", "dropbox", "webdav", "sftp", "mega"].map((k) => el("option", { value: k }, t("cl_" + k))));
-    const area = el("div", { class: "setting pw" });
+    const area = el("div", { class: "stack" });
+    let polling = null;
     const draw = () => {
-      if (CLOUD_FIELDS[kind.value]) {
+      if (polling) { clearTimeout(polling); polling = null; }
+      if (kind.value === "drive" && state.device) {
+        // Por codigo, como numa smart TV: o codigo grande e o endereco do
+        // Google; o painel pergunta sozinho ate a pessoa aprovar no celular.
+        const go = el("button", { type: "button", class: "btn" }, icon("px-password"), t("cl_code_get"));
+        const box = el("div", { class: "stack", hidden: "" });
+        go.addEventListener("click", async () => {
+          go.disabled = true;
+          const data = await post({ action: "device-start" });
+          go.disabled = false;
+          if (!data) return;
+          const deadline = Date.now() + Number(data.expires || 1800) * 1000;
+          let wait = Math.max(5, Number(data.interval) || 5) * 1000;
+          const status = el("div", { class: "dim" }, t("cl_code_wait"));
+          box.replaceChildren(el("div", {}, t("cl_code_step1")),
+            el("a", { class: "btn ghost", href: data.url, target: "_blank", rel: "noopener" }, icon("px-link"), data.url.replace(/^https?:\/\//, "")),
+            el("div", {}, t("cl_code_step2")), el("div", { class: "device-code" }, data.code), status);
+          box.hidden = false;
+          go.hidden = true;
+          const poll = async () => {
+            if (Date.now() > deadline) { status.textContent = t("cl_code_expired"); go.hidden = false; return; }
+            const r = await post({ action: "device-poll", device: data.device });
+            if (r && r.state === "ok") { toast(t("cl_saved"), "ok"); reload(); return; }
+            if (r && r.state === "error") { status.textContent = r.error; go.hidden = false; return; }
+            if (r && r.state === "slow") wait += 5000;
+            polling = setTimeout(poll, wait);
+          };
+          polling = setTimeout(poll, wait);
+        });
+        area.replaceChildren(el("div", { class: "dim" }, t("cl_code_help")), go, box);
+      } else if (CLOUD_FIELDS[kind.value]) {
         const inputs = CLOUD_FIELDS[kind.value].map((f) => el("input", { type: f === "pass" ? "password" : "text",
           autocomplete: "off", "aria-label": t("cl_f_" + f), placeholder: t("cl_f_" + f) }));
         const save = el("button", { type: "submit", class: "btn" }, icon("px-save"), t("cl_save"));
-        const form = el("form", { class: "setting pw" }, ...inputs, el("div", { class: "row start" }, save));
+        const form = el("form", { class: "stack" }, ...inputs, el("div", { class: "row start" }, save));
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
           save.disabled = true;
@@ -477,7 +505,7 @@ async function cloudBox() {
         const start = el("button", { type: "button", class: "btn" }, icon("px-password"), t("cl_signin"));
         const answer = el("input", { type: "text", autocomplete: "off", "aria-label": t("cl_paste"), placeholder: t("cl_paste") });
         const done = el("button", { type: "submit", class: "btn" }, icon("px-ok"), t("cl_save"));
-        const form = el("form", { class: "setting pw", hidden: "" }, el("div", { class: "dim" }, t("cl_paste_help")), answer,
+        const form = el("form", { class: "stack", hidden: "" }, el("div", { class: "dim" }, t("cl_paste_help")), answer,
           el("div", { class: "row start" }, done));
         start.addEventListener("click", async () => {
           // A aba abre ja no clique (o navegador bloqueia a que abre depois de esperar).
@@ -531,12 +559,12 @@ async function cloudBox() {
       el("div", { class: "dim" }, t("cl_last").replace("%s", last)), el("div", { class: "row start" }, forget));
   }
   content.append(el("div", { class: "dim" }, t("cl_note")));
-  return settingsBox("Cloud", "px-up", content);
+  return content;
 }
 
 // Setup > Games > RetroAchievements: entrar com a conta do site (so o token
 // fica no gabinete), ligar as conquistas e o modo hardcore, sair.
-async function cheevosBox() {
+async function cheevosPage() {
   const state = await (await api("/api/cheevos")).json();
   const post = async (body) => {
     const r = await api("/api/cheevos", { method: "POST", body: JSON.stringify(body) });
@@ -544,8 +572,8 @@ async function cheevosBox() {
     if (!r.ok) toast(data.error || r.statusText, "bad");
     return r.ok;
   };
-  const reload = () => loadSettings().catch(() => {});
-  const content = el("div", { class: "setting pw" });
+  const reload = () => loadCheevos().catch(() => {});
+  const content = el("div", { class: "stack" });
   if (state.user) {
     const onOff = (key, value) => {
       const select = el("select", { "aria-label": t(key) }, el("option", { value: "on" }, t("ra_on")), el("option", { value: "off" }, t("ra_off")));
@@ -564,7 +592,7 @@ async function cheevosBox() {
     const user = el("input", { autocomplete: "off", "aria-label": t("user"), placeholder: t("user") });
     const pass = el("input", { type: "password", autocomplete: "off", "aria-label": t("password"), placeholder: t("password") });
     const go = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("ra_login"));
-    const form = el("form", { class: "setting pw" }, user, pass, el("div", { class: "row start" }, go));
+    const form = el("form", { class: "stack" }, user, pass, el("div", { class: "row start" }, go));
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       go.disabled = true;
@@ -578,10 +606,21 @@ async function cheevosBox() {
         go.disabled = false;
       }
     });
-    content.append(form);
+    // Sem conta: o cadastro no site, numa aba nova do navegador de quem usa o painel.
+    const signup = el("a", { class: "btn ghost", href: "https://retroachievements.org/createaccount.php",
+      target: "_blank", rel: "noopener" }, icon("px-add"), t("ra_signup"));
+    content.append(form, el("div", { class: "row start" }, el("span", { class: "dim" }, t("ra_no_account")), signup));
   }
   content.append(el("div", { class: "dim" }, t("ra_note")));
-  return settingsBox("Achievements", "px-achievements", content);
+  return content;
+}
+
+// As abas Sistema > RetroAchievements e Sistema > Backup na nuvem.
+async function loadCheevos() {
+  $("cheevos-page").replaceChildren(await cheevosPage());
+}
+async function loadCloud() {
+  $("cloud-page").replaceChildren(await cloudPage());
 }
 
 // Setup > System > What's new: o texto so ao abrir o grupo.

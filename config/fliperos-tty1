@@ -96,7 +96,10 @@ menu() {
     # O navegador do Downloader (Setup > Games > Downloader): o Setup volta
     # depois, na tela do magnet link.
     if [[ $name == browser ]]; then
-      "$BIN/fliperos-browser"
+      # O endereco pedido pelo Setup (o cadastro do RetroAchievements); sem
+      # ele, a busca do Downloader.
+      url=$(head -n 1 "${FLIPEROS_BROWSER_URL_FILE:-/run/fliperos/browser-url}" 2> /dev/null)
+      FLIPEROS_BROWSER_URL=${url:-${FLIPEROS_BROWSER_URL:-}} "$BIN/fliperos-browser"
       continue
     fi
     [[ $name == default ]] && name=""

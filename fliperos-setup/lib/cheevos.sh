@@ -18,6 +18,13 @@ CHEEVOS_RA_CFG=${CHEEVOS_RA_CFG:-$FLIPEROS_ETC/retroarch/cheevos.cfg}
 CHEEVOS_API=${CHEEVOS_API:-https://retroachievements.org/dorequest.php}
 CHEEVOS_TOOL=${CHEEVOS_TOOL:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-cheevos}
 CHEEVOS_HOME=${CHEEVOS_HOME:-/home/$FLIPEROS_USER}
+# A pagina de cadastro do site (Create an account, no Setup e no painel).
+CHEEVOS_SIGNUP_URL=https://retroachievements.org/createaccount.php
+# O navegador do gabinete (config/fliperos-browser) abre o endereco deste
+# arquivo; com o pedido em CHEEVOS_BROWSER_PENDING, o Setup volta na tela do
+# RetroAchievements quando ele fecha.
+BROWSER_URL_FILE=${BROWSER_URL_FILE:-/run/fliperos/browser-url}
+CHEEVOS_BROWSER_PENDING=${CHEEVOS_BROWSER_PENDING:-/run/fliperos/cheevos-browser}
 
 # cheevos_get CHAVE: o valor guardado (vazio sem ele).
 cheevos_get() {

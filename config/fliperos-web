@@ -2262,7 +2262,7 @@ def cloud_status():
     last = info.get("last") or ""
     return {"installed": info.get("installed") == "1", "remote": info.get("remote", ""),
             "auto": info.get("auto") == "on", "what": what, "last": int(last) if last.isdigit() else None,
-            "result": info.get("result", "")}
+            "result": info.get("result", ""), "device": info.get("device") == "1"}
 
 
 class CloudAuth:
@@ -3579,6 +3579,31 @@ class Handler(BaseHTTPRequestHandler):
             if kind not in CLOUD_OAUTH or "\n" in token:
                 return self.send(400, {"error": "choose Google Drive or Dropbox first"})
             return self.cloud_run(["remote", kind], "token=%s\n" % token)
+        if action in ("device-start", "device-poll"):
+            # O Google Drive por codigo, como numa smart TV: o codigo e o
+            # endereco para a pessoa; depois o painel pergunta a cada poucos
+            # segundos se ela ja aprovou.
+            args = [action]
+            if action == "device-poll":
+                device = str(data.get("device") or "")
+                if not re.fullmatch(r"[A-Za-z0-9._/-]{1,512}", device):
+                    return self.send(400, {"error": "bad device"})
+                args.append(device)
+            try:
+                done = subprocess.run(as_player(CLOUD, *args), capture_output=True, text=True, timeout=40)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            out = done.stdout.strip()
+            if action == "device-start":
+                if done.returncode != 0:
+                    return self.send(500, {"error": out[-300:] or "failed"})
+                info = key_values(out)
+                return self.send(200, {k: info.get(k, "") for k in ("code", "url", "device", "interval", "expires")})
+            if done.returncode == 4:
+                return self.send(200, {"state": out or "pending"})
+            if done.returncode != 0:
+                return self.send(200, {"state": "error", "error": out[-300:] or "failed"})
+            return self.send(200, {"state": "ok"})
         if action == "forget":
             return self.cloud_run(["forget"])
         if action == "auto" and isinstance(data.get("on"), bool):
