@@ -19578,5 +19578,50 @@ class ButtonMappingGuiTests(unittest.TestCase):
         self.assertIn("PAD_CONTROLS=(%s)" % " ".join(r[0] for r in widgets.PAD_ROWS), lib)
 
 
+class GoogleOAuthSecretsTests(unittest.TestCase):
+    """O cliente OAuth do Google fica nos secrets do GitHub Actions, fora do
+    git (o push protection o recusa): tools/google-oauth-conf.sh o escreve no
+    build da ISO e no workflow que o publica no release "packages"."""
+
+    SCRIPT = ROOT / 'tools/google-oauth-conf.sh'
+
+    def run_script(self, path, **env):
+        return subprocess.run(['bash', str(self.SCRIPT), str(path)], capture_output=True, text=True,
+                              env=dict(os.environ, **env), timeout=30)
+
+    def test_the_client_comes_from_the_secrets_and_never_from_git(self):
+        # No git o arquivo fica sem o par.
+        conf = (ROOT / 'config/google-oauth.conf').read_text()
+        self.assertRegex(conf, r'(?m)^client_id=$')
+        self.assertRegex(conf, r'(?m)^client_secret=$')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'google-oauth.conf'
+            path.write_text(conf)
+            # Sem os secrets (um fork), o arquivo fica como esta.
+            r = self.run_script(path, CLIENT_ID='', CLIENT_SECRET='')
+            self.assertEqual((r.returncode, path.read_text()), (0, conf), r.stderr)
+            # Com eles, as duas linhas; os comentarios ficam.
+            r = self.run_script(path, CLIENT_ID='123-abc.apps.googleusercontent.com', CLIENT_SECRET='GOCSPX-x_y')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            text = path.read_text()
+            self.assertIn('client_id=123-abc.apps.googleusercontent.com\nclient_secret=GOCSPX-x_y\n', text)
+            self.assertEqual([l for l in text.splitlines() if l.startswith('#')],
+                             [l for l in conf.splitlines() if l.startswith('#')])
+            # Um par fora do formato do Google nao entra.
+            r = self.run_script(path, CLIENT_ID='x; rm -rf /', CLIENT_SECRET='y')
+            self.assertEqual(r.returncode, 1)
+            self.assertIn('client_secret=GOCSPX-x_y', path.read_text())
+        # O build da ISO o escreve antes de tudo, e o workflow Google OAuth o
+        # publica no release "packages" (de onde o fliperos-cloud o baixa).
+        release = (ROOT / '.github/workflows/release.yml').read_text()
+        self.assertLess(release.index('bash tools/google-oauth-conf.sh config/google-oauth.conf'),
+                        release.index('name: Versao, tag e changelog'))
+        self.assertIn('secrets.GOOGLE_OAUTH_CLIENT_SECRET', release)
+        publish = (ROOT / '.github/workflows/google-oauth.yml').read_text()
+        self.assertIn('workflow_dispatch', publish)
+        self.assertIn('gh release upload packages google-oauth.conf', publish)
+        self.assertIn('releases/download/packages/google-oauth.conf', (ROOT / 'config/fliperos-cloud').read_text())
+
+
 if __name__ == '__main__':
     unittest.main()

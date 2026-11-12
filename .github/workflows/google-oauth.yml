@@ -1,0 +1,34 @@
+# O cliente OAuth do Google do FliperOS (o "Entrar com o Google" do backup na
+# nuvem) para os gabinetes que so recebem updates: o config/fliperos-cloud
+# baixa o google-oauth.conf do release "packages" quando nao o tem. O par vem
+# dos secrets GOOGLE_OAUTH_CLIENT_ID e GOOGLE_OAUTH_CLIENT_SECRET (fora do
+# git). Roda a mao (Actions > Google OAuth > Run workflow), uma vez, e de novo
+# se o cliente mudar no Google Cloud (projeto fliperos-backup).
+name: Google OAuth
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Arquivo do cliente
+        env:
+          CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          [ -n "$CLIENT_ID" ] && [ -n "$CLIENT_SECRET" ] \
+            || { echo "::error::the GOOGLE_OAUTH_CLIENT_ID/SECRET secrets are missing"; exit 1; }
+          cp config/google-oauth.conf google-oauth.conf
+          bash tools/google-oauth-conf.sh google-oauth.conf
+
+      - name: No release "packages"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload packages google-oauth.conf -R "$GITHUB_REPOSITORY" --clobber

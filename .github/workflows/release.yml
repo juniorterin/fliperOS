@@ -40,6 +40,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # O cliente OAuth do Google (o "Entrar com o Google" do backup na nuvem)
+      # fica nos secrets, fora do git: a ISO sai com ele em
+      # /etc/fliperos/google-oauth.conf (o fliperos-rootfs.sh o instala do
+      # config/). Sem os secrets, a ISO sai com o arquivo vazio e o gabinete o
+      # baixa do release "packages" (workflow Google OAuth).
+      - name: Cliente OAuth do Google
+        env:
+          CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: bash tools/google-oauth-conf.sh config/google-oauth.conf
+
       - name: Versao, tag e changelog
         id: version
         run: |
