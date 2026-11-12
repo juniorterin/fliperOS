@@ -1417,6 +1417,9 @@ for _alias, _name in {
     # RetroAchievements: entrar, sair, ligar e o modo hardcore.
     "login": "password", "logout": "power", "hardcore": "achievements", "enable": "toggle", "signup": "add",
     # Cloud backup: sincronizar, enviar, receber, o automatico, o que vai e tirar a conta.
+    # O automatico (Download BIOS ao abrir o menu, Cloud backup sozinho): as
+    # setas em volta, nao a runa do Bluetooth.
+    "auto": "reset",
     "sync": "cloud", "push": "cloud", "pull": "install", "what": "filter", "forget": "remove",
 }.items():
     ICONS[_alias] = ICONS[_name]
@@ -1427,7 +1430,7 @@ ICONS["watch"] = ICONS["install"]
 ICONS["monitor"] = ICONS["video"]
 # Joysticks > Bluetooth (parear um, todos, os pareados, conectar, desconectar)
 # e o controle conhecido do Button mapping (usar o layout ou mapear).
-for _alias, _name in {"pair": "bluetooth", "auto": "bluetooth", "devices": "joysticks", "connect": "ok",
+for _alias, _name in {"pair": "bluetooth", "pairall": "bluetooth", "devices": "joysticks", "connect": "ok",
                       "disconnect": "power", "map": "buttons"}.items():
     ICONS[_alias] = ICONS[_name]
 for _name, _rows in ICONS.items():

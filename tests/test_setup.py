@@ -10263,12 +10263,29 @@ class ButtonMappingKindTests(Base):
 
     def test_the_menu_items(self):
         screen = (SETUP / "screens/joysticks.sh").read_text()
-        self.assertIn('"bluetooth|Bluetooth|Pair, connect and forget Bluetooth controllers." \\', screen)
+        self.assertIn('bluetooth_present && bt=("bluetooth|Bluetooth|Pair, connect and forget Bluetooth controllers.")',
+                      screen)
         self.assertIn("bluetooth) screen_bluetooth ;;", screen)
         self.assertIn('nbuttons=$(UI_STYLE=panel ui_menu "$title"', screen)
         setup = (SETUP / "fliperos-setup").read_text()
         self.assertIn('source "$SETUP_DIR/lib/bluetooth.sh"', setup)
         self.assertIn('source "$SETUP_DIR/screens/bluetooth.sh"', setup)
+
+    def test_bluetooth_only_with_an_adapter(self):
+        """O item Bluetooth so aparece com um adaptador (o hciN do kernel)."""
+        sysfs = self.env.dir / "btsys"
+        sysfs.mkdir(exist_ok=True)
+        script = """
+            source %s/lib/bluetooth.sh
+            source %s/screens/joysticks.sh
+            buttons_players_line() { echo players; }
+            ui_menu_hints() { echo "${*:4}" >&2; return 1; }
+            screen_joysticks 2>&1
+        """ % (SETUP, SETUP)
+        env = {"BLUETOOTH_SYSFS": str(sysfs)}
+        self.assertNotIn("bluetooth|", self.env.out(script, env))
+        (sysfs / "hci0").mkdir()
+        self.assertIn("bluetooth|Bluetooth|", self.env.out(script, env))
 
 
 class BluetoothScreenTests(Base):
@@ -10341,7 +10358,7 @@ class BluetoothScreenTests(Base):
         d = self.env.dir
         env = self.tool(self.ON, devices="E4:17:D8:00:11:22|8BitDo Pro 2|input-gaming|yes|yes\\n")
         # O autopair do tool falso nao imprime nada: nenhum controle achado.
-        calls, bt = self.screen(env, ["auto", "return"])
+        calls, bt = self.screen(env, ["pairall", "return"])
         self.assertIn("autopair 30", bt)
         self.assertIn("msg Pair controllers automatically No controller in pairing mode was found.", calls)
         calls, bt = self.screen(env, ["E4:17:D8:00:11:22", "remove", "return"], function="screen_bluetooth_devices")

@@ -9,10 +9,14 @@ CALIBRATE=${CALIBRATE:-/opt/fliperos/bin/fliperos-calibrate}
 
 screen_joysticks() {
   local choice last=""
+  local -a bt
   while true; do
+    # O Bluetooth so com um adaptador (dongle USB ou da placa-mae).
+    bt=()
+    bluetooth_present && bt=("bluetooth|Bluetooth|Pair, connect and forget Bluetooth controllers.")
     choice=$(ui_menu_hints "Joysticks" "$(buttons_players_line)" "$last" \
       "buttons|Button mapping (all emulators)|Arcade panel or joypad: press each control when asked." \
-      "bluetooth|Bluetooth|Pair, connect and forget Bluetooth controllers." \
+      "${bt[@]}" \
       "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
       "guncon|GunCon 2 (light gun)|Calibration, screen flash and how the gun reads dark parts." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \

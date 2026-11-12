@@ -28,14 +28,14 @@ screen_bluetooth() {
     paired=$(bluetooth_field paired "$status")
     choice=$(ui_menu_hints "$title" "$(bluetooth_summary "$status")" "$last" \
       "pair|Pair a controller|Put it in pairing mode, then choose it in the list." \
-      "auto|Pair controllers automatically|Pairs every controller that is in pairing mode, one by one." \
+      "pairall|Pair controllers automatically|Pairs every controller that is in pairing mode, one by one." \
       "devices|Paired devices (${paired:-0})|Connect, disconnect or forget a paired device." \
       "power|Bluetooth: $powered|Turn the Bluetooth adapter off or on." \
       "return|Return|Back to Joysticks.") || return 0
     last=$choice
     case $choice in
       pair) screen_bluetooth_pair ;;
-      auto) screen_bluetooth_auto ;;
+      pairall) screen_bluetooth_auto ;;
       devices) screen_bluetooth_devices ;;
       power)
         if [[ $powered == on ]]; then bluetooth_do power off; else bluetooth_do power on; fi

@@ -19076,6 +19076,34 @@ class BluetoothToolTests(unittest.TestCase):
             self.assertIn('ClassicBondedOnly = false', (Path(tmp) / 'input.conf').read_text())
             self.assertIn('AutoEnable = true', (Path(tmp) / 'main.conf').read_text())
 
+    def test_pairing_tries_twice(self):
+        """O primeiro pareamento de muitos controles falha e o segundo vai: na
+        falha o aparelho e esquecido e o pair vem de novo."""
+        class FakeSession:
+            def __init__(self, answers):
+                self.sent, self.answers = [], list(answers)
+
+            def send(self, command):
+                self.sent.append(command)
+
+            def wait(self, patterns, seconds):
+                if self.sent[-1].startswith(('pair ', 'trust ', 'connect ')):
+                    return self.answers.pop(0)
+                return None
+
+        mac = 'E4:17:D8:00:11:22'
+        s = FakeSession(['Failed to pair: org.bluez.Error.AuthenticationFailed', 'Pairing successful',
+                         'trust succeeded', 'Connection successful'])
+        self.assertEqual(self.bt.pair_in(s, mac), (True, 'connected'))
+        self.assertEqual([c for c in s.sent if c.startswith(('pair', 'remove'))],
+                         ['pair ' + mac, 'remove ' + mac, 'pair ' + mac])
+        s = FakeSession(['Failed to pair: x', 'Failed to pair: y'])
+        self.assertEqual(self.bt.pair_in(s, mac), (False, 'Failed to pair: y'))
+        self.assertEqual(sum(c.startswith('pair ') for c in s.sent), 2)
+        s = FakeSession(['Pairing successful', 'trust succeeded', 'Connection successful'])
+        self.assertTrue(self.bt.pair_in(s, mac)[0])
+        self.assertNotIn('remove ' + mac, s.sent)
+
     def test_installed_in_the_image_and_by_the_update(self):
         rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
         self.assertIn('install -Dm755 "$src/config/fliperos-bluetooth" "$root/opt/fliperos/bin/fliperos-bluetooth"',

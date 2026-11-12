@@ -12,7 +12,8 @@
       os pareados, no mesmo formato
   fliperos-bluetooth pair MAC
       pareia (sem PIN, como um controle pede), confia (para reconectar sozinho
-      a cada boot) e conecta. Status 1 se nao deu, com o motivo
+      a cada boot) e conecta; numa falha tenta de novo (o primeiro pareamento
+      de muitos controles falha). Status 1 se nao deu, com o motivo
   fliperos-bluetooth autopair SEGUNDOS
       procura nesse tempo e pareia todo controle (icone input-gaming) em modo
       de pareamento que aparecer: o "pair Bluetooth pads automatically" do
@@ -305,8 +306,31 @@ class Session:
             self.proc.kill()
 
 
-def pair_in(session, mac):
-    """Pareia, confia e conecta MAC numa sessao com o scan ligado. (ok, motivo)."""
+PAIR_TRIES = int(os.environ.get('FLIPEROS_BT_PAIR_TRIES', '2'))
+
+
+def pair_in(session, mac, tries=None):
+    """Pareia, confia e conecta MAC numa sessao com o scan ligado. (ok, motivo).
+    Muitos controles (8BitDo, os genericos) recusam o primeiro pareamento e
+    aceitam o segundo: na falha, o BlueZ esquece o meio-pareamento e tenta
+    de novo, PAIR_TRIES vezes no total."""
+    tries = PAIR_TRIES if tries is None else tries
+    ok, why = False, ''
+    for attempt in range(max(1, tries)):
+        if attempt:
+            session.send('cancel-pairing %s' % mac)
+            session.send('remove %s' % mac)
+            session.wait([r'Device has been removed', r'not available'], 3)
+            # O controle volta a aparecer no scan, ainda em modo de pareamento.
+            session.wait([re.escape(mac)], 6)
+        ok, why = pair_once(session, mac)
+        if ok:
+            return ok, why
+    return ok, why
+
+
+def pair_once(session, mac):
+    """Uma tentativa: pair, trust e connect."""
     session.send('pair %s' % mac)
     line = session.wait([r'Pairing successful', r'Failed to pair', r'AlreadyExists', r'not available',
                          r'Paired: yes'], 30)

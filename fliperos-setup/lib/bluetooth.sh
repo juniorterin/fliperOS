@@ -8,6 +8,13 @@
 BLUETOOTH=${BLUETOOTH:-/opt/fliperos/bin/fliperos-bluetooth}
 BLUETOOTH_SCAN=${BLUETOOTH_SCAN:-15}
 BLUETOOTH_AUTOPAIR=${BLUETOOTH_AUTOPAIR:-30}
+BLUETOOTH_SYSFS=${BLUETOOTH_SYSFS:-/sys/class/bluetooth}
+
+# bluetooth_present: ha um adaptador Bluetooth (o hciN do kernel, de um
+# dongle USB ou da placa-mae). Sem ele o Setup nem mostra o Bluetooth.
+bluetooth_present() {
+  compgen -G "$BLUETOOTH_SYSFS/hci*" > /dev/null
+}
 
 # bluetooth_status imprime as linhas "chave=valor" do fliperos-bluetooth
 # status (installed, adapter, powered, paired, connected).
