@@ -139,6 +139,8 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 packages+=(python3-pygame xclip)
 # O logotipo escrito dos sistemas no frontend (config/fliperos-syslogo).
 packages+=(python3-pil)
+# O controle como mouse e o teclado na tela do desktop (config/fliperos-deskpad).
+packages+=(python3-xlib python3-gi gir1.2-atspi-2.0 at-spi2-core libatk-adaptor xdotool)
 # Os videos do frontend (ffmpeg) e a tela ao vivo nas AMD (VA-API).
 packages+=(ffmpeg mesa-va-drivers)
 # Para compilar o filtro de flicker do entrelacado e a calibracao de cor

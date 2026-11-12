@@ -82,6 +82,8 @@ install -Dm755 "$src/config/fliperos-menu" "$root/usr/local/bin/fliperos-menu"
 # tela; ver config/fliperos-padkeys).
 install -Dm755 "$src/config/fliperos-padkeys" "$root/opt/fliperos/bin/fliperos-padkeys"
 install -Dm644 "$src/config/fliperos-padkeys.service" "$root/etc/systemd/system/fliperos-padkeys.service"
+# O controle como mouse e o teclado na tela no desktop (config/fliperos-lxde o abre).
+install -Dm755 "$src/config/fliperos-deskpad" "$root/opt/fliperos/bin/fliperos-deskpad"
 mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
 ln -sfn /etc/systemd/system/fliperos-padkeys.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-padkeys.service"

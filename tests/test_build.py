@@ -5345,7 +5345,7 @@ class FrontendDataTests(unittest.TestCase):
     def test_video_player(self):
         # O video vem do ffmpeg da imagem; sem ele, o Player nao abre nada
         # e a tela fica com a imagem.
-        self.assertRegex(MKISO, r'python3-pygame python3-pil ffmpeg ')
+        self.assertRegex(MKISO, r'python3-pygame python3-pil .*ffmpeg ')
         import fevideo
         old = fevideo.FFMPEG
         try:
@@ -19210,6 +19210,156 @@ class JoypadMappingTests(unittest.TestCase):
         self.assertIn("p.add_argument('--device', type=int, default=-1)", source)
         self.assertIn("os.environ['SDL_GAMECONTROLLER_USE_BUTTON_LABELS'] = '0'", source)
         self.assertIn("known = 'platform:' in mapping", source)
+
+
+class DeskpadTests(unittest.TestCase):
+    """config/fliperos-deskpad: o controle como mouse no desktop e o teclado na
+    tela que abre num campo de texto, sem os dois modos ao mesmo tempo."""
+
+    def setUp(self):
+        loader = importlib.machinery.SourceFileLoader('fliperos_deskpad', str(ROOT / 'config/fliperos-deskpad'))
+        spec = importlib.util.spec_from_loader('fliperos_deskpad', loader)
+        self.dp = importlib.util.module_from_spec(spec)
+        loader.exec_module(self.dp)
+        self.pk = self.dp.load_padkeys(str(ROOT / 'config/fliperos-padkeys'))
+        self.calls = []
+        test = self
+
+        class FakeX:
+            def width(self):
+                return 640
+
+            def move(self, dx, dy):
+                if dx or dy:
+                    test.calls.append(('move', dx, dy))
+
+            def button(self, number, down):
+                test.calls.append(('button', number, down))
+
+            def scroll(self, lines):
+                test.calls.append(('scroll', lines))
+
+            def type(self, action):
+                test.calls.append(action)
+
+        class FakeWindow:
+            win = None
+
+            def show(self, top=False):
+                test.calls.append(('show', top))
+
+            def hide(self):
+                test.calls.append(('hide',))
+
+            def draw(self, kb):
+                pass
+
+        self.desk = self.dp.Desk(FakeX(), FakeWindow(), self.pk)
+
+    def test_accept_is_the_right_click_and_back_the_left(self):
+        dp, desk = self.dp, self.desk
+        desk.key(dp.KEY_ENTER, 1, 0.0)
+        desk.key(dp.KEY_ENTER, 0, 0.1)
+        desk.key(dp.KEY_ESC, 1, 0.2)
+        desk.key(dp.KEY_ESC, 0, 0.3)
+        self.assertEqual(self.calls, [('button', 3, True), ('button', 3, False),
+                                      ('button', 1, True), ('button', 1, False)])
+        self.calls.clear()
+        desk.key(dp.KEY_PAGEDOWN, 1, 0.4)
+        self.assertEqual(self.calls, [('scroll', 3)])
+
+    def test_stick_and_dpad_move_the_pointer(self):
+        dp, desk = self.dp, self.desk
+        self.assertEqual(dp.stick(0, -32768, 32767), 0.0)
+        self.assertAlmostEqual(dp.stick(32767, -32768, 32767), 1.0, places=3)
+        self.assertLess(dp.stick(-32768, -32768, 32767), -0.99)
+        # O analogico no fim: MAX_SPEED larguras de tela por segundo.
+        desk.analog(dp.ABS_X, 1.0)
+        desk.tick(0.5, 1.0)
+        self.assertEqual(self.calls, [('move', round(dp.MAX_SPEED * 640 * 0.5), 0)])
+        desk.analog(dp.ABS_X, 0.0)
+        # A seta que veio do analogico nao anda de novo; a do direcional anda.
+        self.calls.clear()
+        desk.key(dp.KEY_DOWN, 1, 1.0, analog=True)
+        desk.tick(0.1, 1.1)
+        self.assertEqual(self.calls, [])
+        desk.key(dp.KEY_DOWN, 1, 1.0)
+        desk.tick(0.1, 1.1)
+        self.assertEqual(self.calls[0][:2], ('move', 0))
+        self.assertGreater(self.calls[0][2], 0)
+        # Segurando, acelera.
+        first = self.calls[0][2]
+        self.calls.clear()
+        desk.tick(0.1, 3.0)
+        self.assertGreater(self.calls[0][2], first)
+
+    def test_keyboard_mode_stops_the_mouse_and_types(self):
+        dp, desk = self.dp, self.desk
+        desk.key(dp.KEY_ENTER, 1, 0.0)         # um clique segurado
+        desk.analog(dp.ABS_X, 1.0)
+        desk.key(dp.KEY_SPACE, 1, 0.1)         # o botao 3 abre o teclado
+        self.assertTrue(desk.osk)
+        self.assertIn(('button', 3, False), self.calls)   # o clique e solto
+        self.calls.clear()
+        desk.tick(0.5, 0.6)
+        self.assertEqual(self.calls, [])       # o ponteiro parado
+        # Aceitar digita a tecla escolhida (o "q" da fileira de cima das letras).
+        desk.key(dp.KEY_ENTER, 1, 1.0)
+        desk.key(dp.KEY_ENTER, 0, 1.01)
+        self.assertEqual(self.calls, [('type', 'q')])
+        desk.key(dp.KEY_RIGHT, 1, 1.2)
+        desk.key(dp.KEY_RIGHT, 0, 1.21)
+        desk.tick(0.1, 1.5)
+        desk.key(dp.KEY_ENTER, 1, 2.0)
+        self.assertEqual(self.calls[-1], ('type', 'w'))
+        # Voltar fecha o teclado; o mouse volta.
+        desk.key(dp.KEY_ESC, 1, 3.0)
+        self.assertFalse(desk.osk)
+        self.assertEqual(self.calls[-1], ('hide',))
+        self.calls.clear()
+        desk.key(dp.KEY_ESC, 0, 3.1)
+        desk.tick(0.1, 3.2)
+        desk.key(dp.KEY_ESC, 1, 3.3)
+        self.assertEqual(self.calls, [('button', 1, True)])
+
+    def test_keyboard_follows_the_focused_text_field(self):
+        import types
+        desk = self.desk
+        focus = types.SimpleNamespace(editable=True, low=True, serial=1)
+        desk.follow_focus(focus)
+        self.assertTrue(desk.osk)
+        self.assertIn(('show', True), self.calls)   # o campo embaixo: o teclado em cima
+        desk.follow_focus(focus)                     # o mesmo foco nao reabre
+        self.assertEqual(self.calls.count(('show', True)), 1)
+        desk.follow_focus(types.SimpleNamespace(editable=False, low=False, serial=2))
+        self.assertFalse(desk.osk)
+        # Aberto pelo botao, o teclado nao fecha com a troca de foco.
+        desk.key(self.dp.KEY_SPACE, 1, 0.0)
+        desk.follow_focus(types.SimpleNamespace(editable=False, low=False, serial=3))
+        self.assertTrue(desk.osk)
+
+    def test_keyboard_special_keys(self):
+        kb = self.dp.Keyboard()
+        kb.row, kb.col = 4, 0
+        self.assertIsNone(kb.press())
+        self.assertTrue(kb.shift)
+        kb.row, kb.col = 1, 0
+        self.assertEqual(kb.press(), ('type', 'Q'))
+        names = [name for name, _ in kb.LAST]
+        for name, action in (('SPACE', ('type', ' ')), ('DEL', ('key', 'BackSpace')), ('ENTER', ('key', 'Return')),
+                             ('CLOSE', ('close',))):
+            kb.row, kb.col = 4, names.index(name)
+            self.assertEqual(kb.press(), action)
+
+    def test_started_by_the_desktop_and_installed(self):
+        lxde = (ROOT / 'config/fliperos-lxde').read_text()
+        self.assertIn('/opt/fliperos/bin/fliperos-deskpad < /dev/null >> "$deskpad_log" 2>&1 &', lxde)
+        self.assertLess(lxde.index('fliperos-deskpad'), lxde.index('exec startlxde'))
+        self.assertIn('install -Dm755 "$src/config/fliperos-deskpad" "$root/opt/fliperos/bin/fliperos-deskpad"',
+                      (ROOT / 'fliperos-rootfs.sh').read_text())
+        for pkg in ('python3-xlib', 'gir1.2-atspi-2.0', 'xdotool'):
+            self.assertIn(pkg, MKISO)
+            self.assertIn(pkg, (ROOT / 'tools/cabinet-update.sh').read_text())
 
 
 class PadColorTests(unittest.TestCase):

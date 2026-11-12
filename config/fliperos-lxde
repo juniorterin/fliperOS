@@ -47,4 +47,12 @@ if command -v systemctl > /dev/null; then
   fi
 fi
 
+# O controle como mouse e o teclado na tela que abre num campo de texto
+# (config/fliperos-deskpad). Ele acha o campo pela acessibilidade: o GTK a
+# liga sozinho com o at-spi; o Qt so com estas variaveis.
+export QT_ACCESSIBILITY=1 QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
+deskpad_log=${FLIPEROS_LOGS:-/opt/fliperos/logs}/deskpad.log
+touch "$deskpad_log" 2> /dev/null || deskpad_log=/dev/null
+/opt/fliperos/bin/fliperos-deskpad < /dev/null >> "$deskpad_log" 2>&1 &
+
 exec startlxde

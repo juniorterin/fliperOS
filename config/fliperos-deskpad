@@ -1,0 +1,577 @@
+#!/usr/bin/env python3
+"""O controle como mouse e teclado no desktop (a sessao LXDE).
+
+Dois modos, nunca os dois juntos (um botao nao vale duas vezes):
+
+  mouse      o analogico esquerdo move o ponteiro (mais longe do centro, mais
+             rapido), o direcional e o hat tambem (acelerando segurando), o
+             analogico direito e o L/R rolam. O botao de aceitar (o Enter do
+             Setup) e o clique direito, o de voltar (o Esc) e o esquerdo.
+  teclado    o teclado na tela: as setas andam pelas teclas, aceitar digita
+             a tecla, voltar fecha o teclado. O ponteiro fica parado.
+
+O teclado abre sozinho quando um campo de texto ganha o foco (o AT-SPI, a
+acessibilidade do GTK e do Qt) e fecha quando o foco sai dele; o botao 3 (X/Y
+num joypad, o Espaco do Setup) o abre e fecha em qualquer programa. A janela
+dele nao toma o foco (uma janela de dica, override-redirect): o texto vai para
+o campo que estava escolhido, pelo xdotool (que acha a tecla de cada letra no
+layout do teclado).
+
+Os botoes de aceitar e voltar sao os do Setup > Joysticks > Button mapping, os
+mesmos dos menus (o mapa do fliperos-padkeys). Com uma janela em tela cheia (um
+jogo aberto do desktop) o controle e so dela: nada aqui reage.
+
+Roda como o usuario, aberto pelo config/fliperos-lxde, e sai com o X.
+"""
+import fcntl
+import glob
+import importlib.machinery
+import importlib.util
+import os
+import select
+import shutil
+import struct
+import subprocess
+import sys
+import threading
+import time
+
+PADKEYS = os.environ.get('FLIPEROS_PADKEYS', '/opt/fliperos/bin/fliperos-padkeys')
+GUI = os.environ.get('FLIPEROS_GUI', '/usr/local/lib/fliperos-setup/gui')
+EVENTS = os.environ.get('FLIPEROS_INPUT_EVENTS', '/dev/input/event*')
+
+EV_KEY, EV_ABS = 0x01, 0x03
+ABS_X, ABS_Y, ABS_RX, ABS_RY = 0x00, 0x01, 0x03, 0x04
+KEY_ESC, KEY_ENTER, KEY_SPACE = 1, 28, 57
+KEY_UP, KEY_PAGEUP, KEY_LEFT, KEY_RIGHT, KEY_DOWN, KEY_PAGEDOWN = 103, 104, 105, 106, 108, 109
+ARROWS = {KEY_UP: (0, -1), KEY_DOWN: (0, 1), KEY_LEFT: (-1, 0), KEY_RIGHT: (1, 0)}
+
+# Os botoes do X: aceitar e o clique direito, voltar o esquerdo (o pedido do
+# gabinete); a rodinha e 4 (cima) e 5 (baixo).
+CLICK_ACCEPT, CLICK_BACK = 3, 1
+WHEEL_UP, WHEEL_DOWN = 4, 5
+
+# A velocidade do ponteiro, em larguras de tela por segundo: o analogico no
+# fim vai a MAX; o direcional comeca em DIGITAL_START e chega a MAX em
+# DIGITAL_RAMP segundos. DEAD e a folga do analogico parado.
+MAX_SPEED = 0.9
+DIGITAL_START, DIGITAL_RAMP = 0.2, 1.2
+DEAD = 0.15
+# Rolagem: linhas por segundo com o analogico direito no fim, e a repeticao
+# do L/R segurado.
+SCROLL_SPEED = 12.0
+TICK = 1 / 60
+
+
+def load_padkeys(path=None):
+    """O fliperos-padkeys como modulo: o mapa dos botoes, o Mapper e a repeticao."""
+    path = path or PADKEYS
+    loader = importlib.machinery.SourceFileLoader('fliperos_padkeys', path)
+    spec = importlib.util.spec_from_loader('fliperos_padkeys', loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+# ── O ponteiro ─────────────────────────────────────────────────────
+
+def stick(value, low, high):
+    """O eixo em -1..1, com a folga do meio e uma curva (devagar perto do
+    centro, para acertar um botao pequeno)."""
+    if high <= low:
+        return 0.0
+    v = (2.0 * (value - low) / (high - low)) - 1.0
+    v = max(-1.0, min(1.0, v))
+    if abs(v) < DEAD:
+        return 0.0
+    v = (abs(v) - DEAD) / (1 - DEAD) * (1 if v > 0 else -1)
+    return v * abs(v)
+
+
+class Pointer:
+    """As contas do movimento: o analogico (x, y), o direcional (dx, dy e
+    desde quando) e a rolagem. step(dt, largura) -> (dx, dy, rolagem) em
+    pixels e linhas inteiros; as fracoes ficam para o passo seguinte."""
+
+    def __init__(self):
+        self.analog = [0.0, 0.0]
+        self.scroll_axis = 0.0
+        self.digital = {}          # tecla -> desde quando
+        self.rest = [0.0, 0.0, 0.0]
+
+    def press(self, key, now):
+        self.digital.setdefault(key, now)
+
+    def release(self, key):
+        self.digital.pop(key, None)
+
+    def clear(self):
+        self.analog = [0.0, 0.0]
+        self.scroll_axis = 0.0
+        self.digital.clear()
+        self.rest = [0.0, 0.0, 0.0]
+
+    def moving(self):
+        return bool(self.digital) or any(self.analog) or bool(self.scroll_axis)
+
+    def step(self, dt, width, now):
+        vx, vy = self.analog
+        if self.digital:
+            held = now - min(self.digital.values())
+            speed = DIGITAL_START + (1 - DIGITAL_START) * min(1.0, held / DIGITAL_RAMP)
+            for key in self.digital:
+                ax, ay = ARROWS.get(key, (0, 0))
+                vx += ax * speed
+                vy += ay * speed
+        vx, vy = max(-1.0, min(1.0, vx)), max(-1.0, min(1.0, vy))
+        pixels = MAX_SPEED * width * dt
+        self.rest[0] += vx * pixels
+        self.rest[1] += vy * pixels
+        self.rest[2] += self.scroll_axis * SCROLL_SPEED * dt
+        out = []
+        for i in range(3):
+            whole = int(self.rest[i])
+            self.rest[i] -= whole
+            out.append(whole)
+        return tuple(out)
+
+
+# ── O teclado na tela ──────────────────────────────────────────────
+
+class Keyboard:
+    """As teclas e o cursor. As fileiras sao as do teclado do Setup grafico
+    (gui/widgets.py, Input.KB_ROWS); a de baixo tem as teclas especiais.
+    press() -> ("type", texto), ("key", nome do xdotool), ("close",) ou None."""
+
+    ROWS = (("1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm.@_"),
+            ("!#$%&*()+=", "QWERTYUIOP", "ASDFGHJKL:", "ZXCVBNM,?/"))
+    LAST = (("SHIFT", 1.5), ("SPACE", 3), ("DEL", 1.25), ("TAB", 1.25), ("ENTER", 1.5), ("CLOSE", 1.5))
+
+    def __init__(self):
+        self.row, self.col = 1, 0
+        self.shift = False
+
+    def move(self, key):
+        last = len(self.LAST)
+        r, c = self.row, self.col
+        if key in (KEY_UP, KEY_DOWN):
+            nr = (r + (1 if key == KEY_DOWN else -1)) % 5
+            if nr == 4:
+                c = min(last - 1, c * last // 10)
+            elif r == 4:
+                c = min(9, round((c + 0.5) * 10 / last))
+            r = nr
+        elif key in (KEY_LEFT, KEY_RIGHT):
+            c = (c + (1 if key == KEY_RIGHT else -1)) % (last if r == 4 else 10)
+        self.row, self.col = r, c
+
+    def label(self, r, c):
+        return self.ROWS[self.shift][r][c] if r < 4 else self.LAST[c][0]
+
+    def press(self):
+        if self.row < 4:
+            return ("type", self.label(self.row, self.col))
+        name = self.LAST[self.col][0]
+        if name == "SHIFT":
+            self.shift = not self.shift
+            return None
+        return {"SPACE": ("type", " "), "DEL": ("key", "BackSpace"), "TAB": ("key", "Tab"),
+                "ENTER": ("key", "Return"), "CLOSE": ("close",)}[name]
+
+
+class Window:
+    """A janela do teclado: uma janela de dica do SDL (override-redirect, nao
+    toma o foco), na parte de baixo da tela, ou em cima quando o campo esta
+    embaixo. Desenha com as cores do Dracula."""
+
+    BG, LINE, FG, PINK, PURPLE, COMMENT, GREEN, CYAN = (
+        (40, 42, 54), (68, 71, 90), (248, 248, 242), (255, 121, 198), (189, 147, 249), (98, 114, 164),
+        (80, 250, 123), (139, 233, 253))
+
+    def __init__(self):
+        os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
+        import pygame
+        from pygame._sdl2 import video
+        self.pg, self.video = pygame, video
+        pygame.display.init()
+        pygame.font.init()
+        info = pygame.display.Info()
+        self.screen = (info.current_w or 640, info.current_h or 480)
+        self.font = None
+        # A letra da interface grafica do Setup, se houver; senao a do pygame.
+        for path in sorted(glob.glob(os.path.join(GUI, 'fonts', '*.[to]tf'))):
+            try:
+                self.font = pygame.font.Font(path, max(8, self.screen[1] // 30))
+                break
+            except (OSError, pygame.error):
+                continue
+        if self.font is None:
+            self.font = pygame.font.Font(None, max(10, self.screen[1] // 22))
+        self.win = None
+        self.top = False
+
+    def show(self, top=False):
+        w, h = self.screen[0], max(90, self.screen[1] * 2 // 5)
+        y = 0 if top else self.screen[1] - h
+        if self.win is not None and self.top == top:
+            return
+        self.hide()
+        self.top = top
+        self.win = self.video.Window('FliperOS keyboard', size=(w, h), position=(0, y), tooltip=True,
+                                     always_on_top=True, skip_taskbar=True, borderless=True)
+        self.renderer = self.video.Renderer(self.win)
+
+    def hide(self):
+        if self.win is not None:
+            self.win.destroy()
+            self.win = None
+
+    def draw(self, kb):
+        if self.win is None:
+            return
+        pg = self.pg
+        w, h = self.win.size
+        surf = pg.Surface((w, h))
+        surf.fill(self.BG)
+        pg.draw.rect(surf, self.PURPLE, (0, 0, w, h), 2)
+        pad = 4
+        kh = (h - 2 * pad) // 5 - 2
+        kw = (w - 2 * pad) / 10
+
+        def key(rect, label, on, color):
+            pg.draw.rect(surf, self.PURPLE if on else self.BG, rect)
+            pg.draw.rect(surf, self.PINK if on else color, rect, 2 if on else 1)
+            img = self.font.render(label, True, self.FG if on else (self.COMMENT if color == self.LINE else color))
+            surf.blit(img, (rect[0] + (rect[2] - img.get_width()) // 2, rect[1] + (rect[3] - img.get_height()) // 2))
+
+        for r in range(4):
+            for c in range(10):
+                rect = (round(pad + c * kw), pad + r * (kh + 2), round(kw) - 2, kh)
+                key(rect, kb.label(r, c), (kb.row, kb.col) == (r, c), self.LINE)
+        x = pad
+        for i, (label, units) in enumerate(kb.LAST):
+            wd = round(units * kw)
+            color = self.GREEN if label == "ENTER" else self.CYAN if (label == "SHIFT" and kb.shift) else self.LINE
+            key((x, pad + 4 * (kh + 2), wd - 2, kh), label, (kb.row, kb.col) == (4, i), color)
+            x += wd
+        texture = self.video.Texture.from_surface(self.renderer, surf)
+        self.renderer.clear()
+        texture.draw()
+        self.renderer.present()
+
+    def pump(self):
+        self.pg.event.pump()
+
+
+# ── O X ────────────────────────────────────────────────────────────
+
+class X:
+    """O ponteiro, os cliques e as teclas pelo XTest (python3-xlib); sem ele,
+    pelo xdotool. As letras sempre pelo xdotool, que acha a tecla de cada uma
+    no layout do teclado (um teclado ABNT2 nao tem o @ onde o americano tem)."""
+
+    def __init__(self):
+        self.d = None
+        try:
+            from Xlib import X as XC, display
+            from Xlib.ext import xtest
+            self.d, self.XC, self.xtest = display.Display(), XC, xtest
+            root = self.d.screen().root
+            self.root = root
+            self.atoms = {name: self.d.intern_atom(name) for name in
+                          ('_NET_ACTIVE_WINDOW', '_NET_WM_STATE', '_NET_WM_STATE_FULLSCREEN')}
+        except Exception:  # noqa: BLE001 - sem Xlib, sem X: o xdotool
+            self.d = None
+        self.xdotool = shutil.which('xdotool')
+
+    def width(self):
+        if self.d is not None:
+            return self.d.screen().width_in_pixels
+        return 640
+
+    def move(self, dx, dy):
+        if not (dx or dy):
+            return
+        if self.d is not None:
+            self.xtest.fake_input(self.d, self.XC.MotionNotify, detail=True, x=dx, y=dy)
+            self.d.flush()
+        elif self.xdotool:
+            subprocess.run([self.xdotool, 'mousemove_relative', '--', str(dx), str(dy)])
+
+    def button(self, number, down):
+        if self.d is not None:
+            self.xtest.fake_input(self.d, self.XC.ButtonPress if down else self.XC.ButtonRelease, number)
+            self.d.flush()
+        elif self.xdotool:
+            subprocess.run([self.xdotool, 'mousedown' if down else 'mouseup', str(number)])
+
+    def scroll(self, lines):
+        number = WHEEL_DOWN if lines > 0 else WHEEL_UP
+        for _ in range(abs(lines)):
+            self.button(number, True)
+            self.button(number, False)
+
+    def type(self, action):
+        if not self.xdotool:
+            return
+        if action[0] == 'type':
+            subprocess.run([self.xdotool, 'type', '--clearmodifiers', '--', action[1]])
+        else:
+            subprocess.run([self.xdotool, 'key', '--clearmodifiers', action[1]])
+
+    def fullscreen(self):
+        """A janela ativa esta em tela cheia (um jogo aberto do desktop)?"""
+        if self.d is None:
+            return False
+        try:
+            prop = self.root.get_full_property(self.atoms['_NET_ACTIVE_WINDOW'], self.XC.AnyPropertyType)
+            if not prop or not prop.value or not prop.value[0]:
+                return False
+            win = self.d.create_resource_object('window', prop.value[0])
+            state = win.get_full_property(self.atoms['_NET_WM_STATE'], self.XC.AnyPropertyType)
+            return bool(state) and self.atoms['_NET_WM_STATE_FULLSCREEN'] in state.value
+        except Exception:  # noqa: BLE001 - janela que fechou no meio
+            return False
+
+
+# ── O campo de texto com o foco (AT-SPI) ───────────────────────────
+
+class Focus:
+    """Ouve o foco pelo AT-SPI numa thread: editable (um campo de texto tem o
+    foco), low (o campo esta na metade de baixo da tela) e serial (muda a
+    cada troca de foco). Sem o AT-SPI (python3-gi, gir1.2-atspi-2.0), so o
+    botao 3 abre o teclado."""
+
+    def __init__(self, screen_h):
+        self.editable, self.low, self.serial = False, False, 0
+        self.screen_h = screen_h
+        try:
+            import gi
+            gi.require_version('Atspi', '2.0')
+            from gi.repository import Atspi
+        except (ImportError, ValueError):
+            return
+        self.Atspi = Atspi
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def run(self):
+        Atspi = self.Atspi
+        Atspi.init()
+        listener = Atspi.EventListener.new(self.event)
+        listener.register('object:state-changed:focused')
+        Atspi.event_main()
+
+    def event(self, ev):
+        try:
+            if not ev.detail1:
+                return
+            source = ev.source
+            states = source.get_state_set()
+            editable = states.contains(self.Atspi.StateType.EDITABLE) and \
+                source.get_role() != self.Atspi.Role.TERMINAL
+            low = False
+            if editable:
+                try:
+                    box = source.get_extents(self.Atspi.CoordType.SCREEN)
+                    low = box.y + box.height / 2 > self.screen_h / 2
+                except Exception:  # noqa: BLE001
+                    low = False
+            self.editable, self.low = editable, low
+            self.serial += 1
+        except Exception:  # noqa: BLE001 - objeto que sumiu
+            pass
+
+
+# ── O laco ─────────────────────────────────────────────────────────
+
+class Desk:
+    """Os modos e o que cada botao faz neles (sem os aparelhos: os testes
+    chamam key() e tick() direto)."""
+
+    def __init__(self, x, window, pk):
+        self.x, self.window, self.pk = x, window, pk
+        self.pointer = Pointer()
+        self.kb = Keyboard()
+        self.osk = False
+        self.auto = False          # o teclado aberto pelo foco num campo
+        self.seen = 0              # o serial do foco ja tratado
+        self.down = set()          # botoes do X apertados agora
+        self.nav = pk.Keys(self.navigate)
+
+    # Os modos.
+    def open_osk(self, auto=False, top=False):
+        self.release_mouse()
+        self.osk, self.auto = True, auto
+        self.window.show(top)
+        self.window.draw(self.kb)
+
+    def close_osk(self):
+        self.nav.release_all()
+        self.osk = self.auto = False
+        self.window.hide()
+
+    def release_mouse(self):
+        for number in list(self.down):
+            self.x.button(number, False)
+        self.down.clear()
+        self.pointer.clear()
+
+    def follow_focus(self, focus):
+        """O teclado segue o campo de texto com o foco."""
+        if focus is None or focus.serial == self.seen:
+            return
+        self.seen = focus.serial
+        if focus.editable and not self.osk:
+            self.open_osk(auto=True, top=focus.low)
+        elif focus.editable and self.osk:
+            self.window.show(focus.low)
+            self.window.draw(self.kb)
+        elif not focus.editable and self.osk and self.auto:
+            self.close_osk()
+
+    # Os botoes.
+    def key(self, key, pressed, now, analog=False):
+        """Uma tecla do Mapper do padkeys (1 apertou, 0 soltou). analog: a
+        seta veio do analogico, que no modo mouse ja anda pelo eixo."""
+        if self.osk:
+            if key in ARROWS or key in (KEY_ENTER, KEY_ESC, KEY_SPACE):
+                self.nav.apply(key, pressed, now)
+            return
+        if key in ARROWS:
+            if analog:
+                return
+            if pressed:
+                self.pointer.press(key, now)
+            else:
+                self.pointer.release(key)
+        elif key in (KEY_ENTER, KEY_ESC):
+            number = CLICK_ACCEPT if key == KEY_ENTER else CLICK_BACK
+            if pressed and number not in self.down:
+                self.down.add(number)
+                self.x.button(number, True)
+            elif not pressed and number in self.down:
+                self.down.discard(number)
+                self.x.button(number, False)
+        elif key == KEY_SPACE and pressed:
+            self.open_osk()
+        elif key in (KEY_PAGEUP, KEY_PAGEDOWN) and pressed:
+            self.x.scroll(-3 if key == KEY_PAGEUP else 3)
+
+    def navigate(self, key, value):
+        """O teclado na tela (Keys do padkeys: 1 aperta, 2 repete, 0 solta)."""
+        if value == 0:
+            return
+        if key in ARROWS:
+            self.kb.move(key)
+        elif key == KEY_ENTER and value == 1:
+            action = self.kb.press()
+            if action == ("close",):
+                self.close_osk()
+                return
+            if action:
+                self.x.type(action)
+        elif key in (KEY_ESC, KEY_SPACE) and value == 1:
+            self.close_osk()
+            return
+        self.window.draw(self.kb)
+
+    def analog(self, axis, value):
+        if axis in (ABS_X, ABS_Y):
+            self.pointer.analog[axis] = value
+        elif axis == ABS_RY:
+            self.pointer.scroll_axis = value
+
+    def tick(self, dt, now):
+        if self.osk:
+            self.nav.tick(now)
+            return
+        dx, dy, lines = self.pointer.step(dt, self.x.width(), now)
+        self.x.move(dx, dy)
+        if lines:
+            self.x.scroll(lines)
+
+    def busy(self):
+        return self.osk or self.pointer.moving()
+
+
+def main():
+    pk = load_padkeys()
+    x = X()
+    if x.d is None and not x.xdotool:
+        sys.exit('fliperos-deskpad: no X connection (python3-xlib) and no xdotool')
+    window = Window()
+    desk = Desk(x, window, pk)
+    focus = Focus(window.screen[1])
+    pads, ranges = {}, {}
+    scanned, checked, paused = 0.0, 0.0, False
+    last = time.monotonic()
+    while True:
+        now = time.monotonic()
+        if now - scanned >= 2:
+            scanned = now
+            players = None
+            for path in sorted(glob.glob(EVENTS)):
+                if path in pads:
+                    continue
+                if players is None:
+                    players = pk.read_players()
+                try:
+                    pad = pk.Pad(path, players)
+                except (OSError, ValueError):
+                    continue
+                pads[path] = pad
+                axes = {}
+                for axis in pk.bits(pad.fd, EV_ABS, 0x40) & {ABS_X, ABS_Y, ABS_RX, ABS_RY}:
+                    info = bytearray(24)
+                    try:
+                        fcntl.ioctl(pad.fd, pk.eviocgabs(axis), info)
+                        axes[axis] = struct.unpack('6i', info)[1:3]
+                    except OSError:
+                        pass
+                ranges[path] = axes
+        # Com um jogo em tela cheia o controle e dele.
+        if now - checked >= 0.5:
+            checked = now
+            full = x.fullscreen()
+            if full and not paused:
+                desk.release_mouse()
+                if desk.osk:
+                    desk.close_osk()
+            paused = full
+        if not paused:
+            desk.follow_focus(focus)
+        timeout = TICK if desk.busy() else 0.25
+        ready, _, _ = select.select([p.fd for p in pads.values()], [], [], timeout)
+        now = time.monotonic()
+        for path, pad in list(pads.items()):
+            if pad.fd not in ready:
+                continue
+            try:
+                events = pad.read()
+            except OSError:
+                events = None
+            if events is None:
+                for key, value in pad.mapper.release():
+                    desk.key(key, value, now)
+                pad.close()
+                del pads[path]
+                ranges.pop(path, None)
+                desk.release_mouse()
+                continue
+            if paused:
+                continue
+            for etype, code, value in events:
+                if etype == EV_ABS and code in ranges.get(path, {}):
+                    low, high = ranges[path][code]
+                    desk.analog(code, stick(value, low, high))
+                for key, pressed in pad.mapper.event(etype, code, value):
+                    desk.key(key, pressed, now, analog=etype == EV_ABS and code in (ABS_X, ABS_Y))
+        dt, last = now - last, now
+        if not paused:
+            desk.tick(min(dt, 0.1), now)
+        if window.win is not None:
+            window.pump()
+
+
+if __name__ == '__main__':
+    main()
