@@ -19066,6 +19066,60 @@ class JoypadMappingTests(unittest.TestCase):
         self.assertIn("known = 'platform:' in mapping", source)
 
 
+class PadColorTests(unittest.TestCase):
+    """config/fliperos-padcolor: a luz RGB dos controles no roxo do Dracula."""
+
+    def run_tool(self, leds, *args, color=None):
+        env = dict(os.environ, FLIPEROS_LEDS=str(leds), FLIPEROS_CONF='/nao/existe')
+        if color:
+            env['FLIPEROS_PADCOLOR'] = color
+        return subprocess.run(['bash', str(ROOT / 'config/fliperos-padcolor')] + list(args),
+                              env=env, capture_output=True, text=True)
+
+    def led(self, root, name, multi=True, pad=True, max_=255):
+        dev = root / 'hid' / name.replace(':', '_')
+        (dev / 'input/input5/js0' if pad else dev / 'input/input5/mouse0').mkdir(parents=True)
+        led = root / 'leds' / name
+        led.mkdir(parents=True)
+        (led / 'device').symlink_to(dev)
+        (led / 'max_brightness').write_text('%d\n' % max_)
+        (led / 'brightness').write_text('0\n')
+        if multi:
+            (led / 'multi_index').write_text('red green blue\n')
+            (led / 'multi_intensity').write_text('0 0 0\n')
+        return led
+
+    def test_dracula_purple_on_a_pad_light(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pad = self.led(root, 'input5:rgb:indicator')
+            mouse = self.led(root, 'input9:rgb:indicator', pad=False)
+            r = self.run_tool(root / 'leds', 'all')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual((pad / 'multi_intensity').read_text(), '189 147 249\n')
+            self.assertEqual((pad / 'brightness').read_text(), '255\n')
+            # Um LED que nao e de controle fica.
+            self.assertEqual((mouse / 'multi_intensity').read_text(), '0 0 0\n')
+            # O DualShock 4 (hid-sony): um LED por cor.
+            red = self.led(root, '0005:054C:05C4.0001:red', multi=False)
+            blue = self.led(root, '0005:054C:05C4.0001:blue', multi=False)
+            self.run_tool(root / 'leds', 'apply', str(red))
+            self.run_tool(root / 'leds', 'apply', '0005:054C:05C4.0001:blue')
+            self.assertEqual((red / 'brightness').read_text(), '189\n')
+            self.assertEqual((blue / 'brightness').read_text(), '249\n')
+            # padcolor=off: a luz fica como o controle a acende.
+            (pad / 'multi_intensity').write_text('1 2 3\n')
+            self.run_tool(root / 'leds', 'all', color='off')
+            self.assertEqual((pad / 'multi_intensity').read_text(), '1 2 3\n')
+
+    def test_installed_with_its_udev_rule(self):
+        rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
+        self.assertIn('SUBSYSTEM=="leds", ACTION=="add", RUN+="/opt/fliperos/bin/fliperos-padcolor apply %S%p"',
+                      rules)
+        self.assertIn('install -Dm755 "$src/config/fliperos-padcolor" "$root/opt/fliperos/bin/fliperos-padcolor"',
+                      (ROOT / 'fliperos-rootfs.sh').read_text())
+
+
 class BluetoothToolTests(unittest.TestCase):
     """config/fliperos-bluetooth: o texto do bluetoothctl, os controles primeiro e o
     /etc/bluetooth como os controles pedem."""

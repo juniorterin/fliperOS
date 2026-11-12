@@ -46,3 +46,7 @@ SUBSYSTEM=="input", ATTRS{idVendor}=="046d", \
 # Thrustmaster: T150, T300, TX, T248, TMX e o modo inicial "bootloader" que
 # alguns expoem antes do hid-tminit chavear pro modo real.
 SUBSYSTEM=="input", ATTRS{idVendor}=="044f", MODE="0660", GROUP="input"
+
+# A luz colorida dos controles (DualSense, DualShock 4 e os 8BitDo que se
+# apresentam como eles) no roxo do FliperOS: config/fliperos-padcolor.
+SUBSYSTEM=="leds", ACTION=="add", RUN+="/opt/fliperos/bin/fliperos-padcolor apply %S%p"
