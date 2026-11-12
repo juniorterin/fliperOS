@@ -24,6 +24,7 @@
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
 #   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --systems, --downloader status|add|start|remove, --settings, --setting KEY VALUE, --outputs main|all,
+#   --emulator-ensure NOME (o frontend: instala ou compila o emulador do jogo),
 #   --padkeys on|off, --services-boot, --services-screen, --services-late (lib/services.sh),
 #   --bios-check (as BIOS que faltam, lib/downloader.sh),
 #   --romlists, --mediapacks auto|resume|status (o frontend do FliperOS),
@@ -393,6 +394,14 @@ main() {
       flock -n "$lock" || return 0
       FRONTENDS_RESYNC_FULL=1 frontends_lists > /dev/null
       return 0
+      ;;
+    --emulator-ensure)
+      # O frontend abriu um jogo de um emulador que nao esta aqui: instala
+      # (o pacote, ou baixa) ou compila (com os patches do FliperOS), com os
+      # eventos da barra de progresso (lib/emulators.sh).
+      [[ ${2:-} =~ ^[a-z0-9]+$ ]] || return 2
+      emulators_ensure "$2"
+      return
       ;;
     --bios-check)
       # A checagem automatica das BIOS, que o menu abre em segundo plano.

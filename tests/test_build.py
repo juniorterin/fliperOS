@@ -5475,7 +5475,7 @@ class FrontendDataTests(unittest.TestCase):
             fe = types.SimpleNamespace(overlay=None, ov={}, said=[])
             fe.say = lambda text, *a: fe.said.append(text)
             fe.launch = lambda argv, g: opened.append(argv)
-            for name in ('core_start', 'unpack_tick'):
+            for name in ('core_start', 'fetch_start', 'unpack_tick'):
                 setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
             argv = [kms, 'retroarch', '-L', want, '/r/Duck Hunt (World).nes']
             fe.core_start({'Name': 'Duck Hunt'}, argv, want)
@@ -5497,6 +5497,62 @@ class FrontendDataTests(unittest.TestCase):
         launch = frontend.split('    def launch(self, argv=None, game=None, media=False):')[1].split('    def play(')[0]
         self.assertLess(launch.index('missing_core(argv)'), launch.index('self.remember()'))
         self.assertIn('fe.ov.get("title", "EXTRACTING")', (ROOT / 'fliperos-setup/gui/feview.py').read_text())
+
+    def test_missing_emulator_is_installed_with_the_bar_before_the_game(self):
+        # O emulador do jogo que ainda nao esta aqui (o Model 2 sem compilar, o
+        # DuckStation sem baixar, um da imagem que faltou): o Setup o instala
+        # ou compila (--emulator-ensure) com a barra, e so entao o jogo abre.
+        import types
+        fm = self.frontend_module()
+        x11 = '/opt/fliperos/bin/fliperos-x11-run'
+        have = {'flycast'}
+        installed = lambda name: name in have
+        self.assertIsNone(fm.missing_emulator([x11, 'flycast', '/r/a.gdi'], installed))
+        self.assertEqual(fm.missing_emulator([x11, 'fliperos-model2', 'daytona'], installed), 'model2')
+        self.assertEqual(fm.missing_emulator([x11, '--mode', '640x480@60', 'duckstation', '/r/a.cue'], installed),
+                         'duckstation')
+        self.assertEqual(fm.missing_emulator(['/opt/fliperos/bin/fliperos-kms-run', '/opt/fliperos/fightcade/fightcade'],
+                                             installed), 'fightcade')
+        self.assertIsNone(fm.missing_emulator(['/bin/sh', 'game.sh'], installed))
+        self.assertIsNone(fm.missing_emulator([x11, 'someprogram'], installed))
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            mark = tmp / 'model2'
+            emulators = tmp / 'fliperos-emulators'
+            emulators.write_text('#!/bin/sh\n[ "$1" = installed ] && [ -e %s/"$2" ]\n' % tmp)
+            emulators.chmod(0o755)
+            setup = tmp / 'fliperos-setup'
+            setup.write_text('#!/bin/sh\necho "@step 20 Building $2"\n: > %s/"$2"\necho "@step 100 done"\n' % tmp)
+            setup.chmod(0o755)
+            fm.EMULATORS_TOOL = str(emulators)
+            opened = []
+            fe = types.SimpleNamespace(overlay=None, ov={}, said=[], fd=types.SimpleNamespace(SETUP=str(setup)))
+            fe.say = lambda text, *a: fe.said.append(text)
+            fe.launch = lambda argv, g: opened.append(argv)
+            for name in ('emulator_start', 'fetch_start', 'unpack_tick'):
+                setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
+            argv = [x11, 'fliperos-model2', 'daytona']
+            old_euid = os.geteuid
+            os.geteuid = lambda: 0          # sem o sudo do teste
+            try:
+                self.assertEqual(fm.missing_emulator(argv), 'model2')
+                fe.emulator_start({'Name': 'daytona'}, argv, 'model2')
+                self.assertEqual((fe.overlay, fe.ov['title']), ('unpack', 'INSTALLING'))
+                deadline = time.monotonic() + 10
+                while fe.ov.get('result') is None and time.monotonic() < deadline:
+                    time.sleep(0.05)
+            finally:
+                os.geteuid = old_euid
+            self.assertTrue(mark.exists())
+            self.assertEqual(fe.ov['progress'], (100, 100, 'done'))
+            fe.unpack_tick()
+            self.assertEqual((fe.overlay, opened), (None, [argv]))
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        launch = frontend.split('    def launch(self, argv=None, game=None, media=False):')[1].split('    def play(')[0]
+        self.assertLess(launch.index('missing_emulator(argv)'), launch.index('self.remember()'))
+        main = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertIn('--emulator-ensure)', main)
+        self.assertIn('emulators_ensure "$2"', main)
 
     def test_core_fetch_installs_from_the_buildbot_zip(self):
         import zipfile

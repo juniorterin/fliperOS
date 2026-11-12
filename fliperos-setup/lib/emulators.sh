@@ -41,6 +41,47 @@ emulators_install() {
   "$EMULATORS_CMD" install "$1" --progress "${args[@]}" 2>> "$FLIPEROS_LOG"
 }
 
+# emulators_ensure NOME: o emulador do jogo que o frontend quer abrir, se
+# ainda nao esta aqui. Os de fora da imagem como no Emulators & Games (o
+# Model 2 compilado, o DuckStation e o Fightcade baixados); um da imagem que
+# falta (uma imagem antiga) pelo pacote do FliperOS no repositorio dos
+# updates, ou, sem o pacote, compilado da receita dele com os patches do
+# FliperOS (o edge). Os eventos da barra (lib/progress.sh) saem na saida.
+emulators_ensure() {
+  local name=$1 kind pkg
+  if [[ -x $EMULATORS_CMD ]] && "$EMULATORS_CMD" installed "$name" > /dev/null 2>&1; then
+    ev_step 100 "$name is installed"
+    return 0
+  fi
+  kind=$(emulators_field "$name" 3)
+  case $kind in
+    "")
+      ev_fail "unknown emulator: $name"
+      return 1
+      ;;
+    image)
+      pkg=fliperos-$name
+      ev_step 1 "Looking for the $pkg package"
+      if apt-cache show "$pkg" > /dev/null 2>&1 || { apt-get update > /dev/null 2>&1 && apt-cache show "$pkg" > /dev/null 2>&1; }; then
+        update_install_package "$pkg" || return 1
+      elif emulators_edge_available "$name"; then
+        emulators_edge "$name" || return 1
+      else
+        ev_fail "there is no package or recipe for $name"
+        return 1
+      fi
+      ;;
+    *)
+      emulators_install "$name" || return 1
+      ;;
+  esac
+  if ! "$EMULATORS_CMD" installed "$name" > /dev/null 2>&1; then
+    ev_fail "$name is still missing after the install"
+    return 1
+  fi
+  ev_step 100 "$name installed"
+}
+
 # O mais novo do projeto (config/fliperos-emulators edge): um emulador num
 # pacote do FliperOS compilado aqui do ultimo commit, com os patches do
 # FliperOS; o pacote fica guardado e volta com emulators_edge_off.

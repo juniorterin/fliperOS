@@ -90,6 +90,7 @@ COLS = 3                     # as colunas da grade (o GRID_COLS do feview.py)
 BUTTONS_TOOL = os.environ.get("FLIPEROS_BUTTONS_TOOL", "/opt/fliperos/bin/fliperos-buttons")
 # O core do RetroArch que falta para o jogo, baixado antes de abrir (config/fliperos-core).
 CORE_TOOL = os.environ.get("FLIPEROS_CORE_TOOL", "/opt/fliperos/bin/fliperos-core")
+EMULATORS_TOOL = os.environ.get("FLIPEROS_EMULATORS_TOOL", "/opt/fliperos/bin/fliperos-emulators")
 # O marquee (Pixelcade, ZeDMD): o logotipo do sistema ao trocar de romlist.
 PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
 # O protetor de tela do marquee: IDLE_SECONDS sem apertar nenhum botao e o ZeDMD
@@ -169,6 +170,38 @@ def missing_core(argv):
         if flag in ("-L", "--libretro") and core.endswith("_libretro.so") and "/" in core:
             return None if os.path.exists(core) else core
     return None
+
+
+# O programa depois do fliperos-x11-run/kms-run -> o nome do emulador no
+# config/fliperos-emulators.
+EMULATOR_OF = {"groovymame": "groovymame", "flycast": "flycast", "pcsx2": "pcsx2", "pcsx2x6": "pcsx2x6",
+               "dolphin-emu": "dolphin", "supermodel": "supermodel", "openbor": "openbor",
+               "fliperos-model2": "model2", "duckstation": "duckstation", "fightcade": "fightcade",
+               "retroarch": "retroarch"}
+
+
+def missing_emulator(argv, installed=None):
+    """O emulador do comando quando ele ainda nao esta instalado (ou
+    compilado); senao None. installed(nome): o fliperos-emulators installed."""
+    if len(argv) < 2 or os.path.basename(argv[0]) not in ("fliperos-x11-run", "fliperos-kms-run"):
+        return None
+    words = argv[1:]
+    if words and words[0] == "--mode" and len(words) > 2:
+        words = words[2:]
+    if not words:
+        return None
+    name = EMULATOR_OF.get(os.path.basename(words[0]))
+    if not name:
+        return None
+    if installed is None:
+        def installed(n):
+            try:
+                return subprocess.run([EMULATORS_TOOL, "installed", n], stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      timeout=10).returncode == 0
+            except (OSError, subprocess.SubprocessError):
+                return True      # sem como saber: tenta abrir
+    return None if installed(name) else name
 
 
 def tree(pid):
@@ -1750,7 +1783,25 @@ class Frontend:
         extracao; B cancela. Depois o jogo abre (unpack_tick). media: o jogo e
         o disco do drive, e o cartao dele volta depois."""
         name = os.path.basename(core)[:-len("_libretro.so")]
-        ov = {"game": g, "argv": argv, "kind": "core", "title": "DOWNLOADING",
+        self.fetch_start(g, argv, "core", "DOWNLOADING", name, [CORE_TOOL, "fetch", name, "--progress"],
+                         lambda: os.path.isfile(core), media,
+                         env=dict(os.environ, FLIPEROS_RA_CORES=os.path.dirname(core)))
+
+    def emulator_start(self, g, argv, name, media=False):
+        """O emulador do jogo nao esta instalado: o Setup o instala (o pacote,
+        ou baixado) ou compila (com os patches do FliperOS), com a barra no
+        centro, como o core (fliperos-setup --emulator-ensure). Depois o jogo
+        abre."""
+        cmd = [self.fd.SETUP, "--emulator-ensure", name]
+        if os.geteuid() != 0 and os.path.exists("/usr/bin/sudo"):
+            cmd = ["sudo", "-n"] + cmd
+        self.fetch_start(g, argv, "emulator", "INSTALLING", name, cmd,
+                         lambda: missing_emulator(argv) is None, media)
+
+    def fetch_start(self, g, argv, kind, title, name, cmd, ready, media=False, env=None):
+        """Um comando com os eventos @step/@fail na barra do centro; B cancela.
+        ready(): o que o comando devia trazer esta aqui."""
+        ov = {"game": g, "argv": argv, "kind": kind, "title": title,
               "progress": (0, 100, name), "result": None, "cancel": threading.Event(), "error": ""}
         if media:
             ov["back"] = (self.overlay, self.ov)
@@ -1758,9 +1809,9 @@ class Frontend:
 
         def work():
             try:
-                proc = subprocess.Popen([CORE_TOOL, "fetch", name, "--progress"], stdout=subprocess.PIPE,
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL, text=True, start_new_session=True,
-                                        env=dict(os.environ, FLIPEROS_RA_CORES=os.path.dirname(core)))
+                                        env=env)
             except OSError:
                 ov["error"], ov["result"] = "no tool", False
                 return
@@ -1786,7 +1837,7 @@ class Frontend:
             if ov["cancel"].is_set():
                 ov["result"] = "cancel"
             else:
-                ov["result"] = proc.returncode == 0 and os.path.isfile(core)
+                ov["result"] = proc.returncode == 0 and ready()
             ov["cancel"].set()       # a thread do cancelamento sai
         threading.Thread(target=work, daemon=True).start()
 
@@ -1797,8 +1848,9 @@ class Frontend:
             return
         result, error, g = self.ov["result"], self.ov.get("error", ""), self.ov["game"]
         self.overlay = None
-        if self.ov.get("kind") == "core":
+        if self.ov.get("kind") in ("core", "emulator"):
             back, argv = self.ov.get("back"), self.ov["argv"]
+            core = self.ov.get("kind") == "core"
             if back:
                 # O disco do drive: de volta ao cartao dele (e o jogo abre dali).
                 self.overlay, self.ov = back
@@ -1807,7 +1859,11 @@ class Frontend:
             elif result is True:
                 self.launch(argv, g)
             elif result == "cancel":
-                self.say("DOWNLOAD CANCELLED", 3)
+                self.say("DOWNLOAD CANCELLED" if core else "INSTALL CANCELLED", 3)
+            elif not core:
+                self.say("NO NETWORK FOR THE EMULATOR" if "network" in error
+                         else "NOT ENOUGH SPACE" if "space" in error
+                         else "COULD NOT INSTALL THE EMULATOR", 4)
             elif "not available" in error:
                 self.say("CORE NOT AVAILABLE", 4)
             elif "network" in error:
@@ -2274,6 +2330,10 @@ class Frontend:
         core = missing_core(argv)
         if core:
             self.core_start(g, argv, core, media)
+            return
+        emulator = missing_emulator(argv)
+        if emulator:
+            self.emulator_start(g, argv, emulator, media)
             return
         self.remember()
         pg = self.pg

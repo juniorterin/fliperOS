@@ -4484,6 +4484,32 @@ class RetroArchSuperTests(Base):
 class EmulatorsTests(Base):
     """Setup > Games > Emulators & Games (lib/emulators.sh sobre o config/fliperos-emulators)."""
 
+    def test_ensure_installs_what_the_frontend_lacks(self):
+        # --emulator-ensure: um de fora da imagem como no Emulators & Games; um
+        # da imagem pelo pacote fliperos-NOME, ou compilado da receita (edge).
+        d = self.env.dir
+        (d / "emus").write_text(
+            '#!/bin/sh\nd=%s\ncase $1 in\n'
+            '  list) echo "flycast|0|image|Flycast"; echo "pcsx2x6|0|image|PCSX2x6"; echo "model2|0|build|Model 2" ;;\n'
+            '  installed) [ -e "$d/have-$2" ] ;;\n'
+            '  install) echo "install $2" >> $d/calls; : > "$d/have-$2"; echo "@step 100 built" ;;\n'
+            '  edge-available) [ "$2" = pcsx2x6 ] ;;\n'
+            '  edge) echo "edge $2" >> $d/calls; : > "$d/have-$2" ;;\n'
+            'esac\n' % d)
+        (d / "emus").chmod(0o755)
+        (d / "calls").write_text("")
+        env = {"EMULATORS_CMD": str(d / "emus")}
+        stubs = ('apt-cache() { [ "$2" = fliperos-flycast ]; }\napt-get() { :; }\n'
+                 'update_install_package() { echo "pkg $1" >> %s/calls; : > %s/have-flycast; }\n' % (d, d))
+        out = self.env.out(stubs + "emulators_ensure model2; emulators_ensure flycast; emulators_ensure pcsx2x6", env)
+        self.assertEqual((d / "calls").read_text().splitlines(), ["install model2", "pkg fliperos-flycast", "edge pcsx2x6"])
+        self.assertIn("@step 100 pcsx2x6 installed", out)
+        # Ja instalado: nada a fazer.
+        self.assertIn("@step 100 model2 is installed", self.env.out(stubs + "emulators_ensure model2", env))
+        r = self.env.run(stubs + "emulators_ensure nada", env)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("@fail", r.stdout)
+
     def test_list_field_and_install(self):
         d = self.env.dir
         (d / "emus").write_text('#!/bin/sh\nif [ "$1" = list ]; then\n'
