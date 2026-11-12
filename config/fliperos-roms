@@ -305,6 +305,30 @@ for dir in "$save"/retroarch/*/*/nvram; do
   folder "$nvram/retroarch/$core" "RetroArch, core $core: one <set>.nv per game."
   link_dir "$dir" "$nvram/retroarch/$core"
 done
+# A memoria que vem na imagem (config/nvram/SOURCES.md), com o que os jogos
+# destravam ja destravado. Cada jogo vem uma vez so, e so se a pasta ainda nao
+# tem a dele: o que a pessoa jogou fica, e os arquivos de um jogo nao se
+# misturam com os de outra origem. O .bundled anota os jogos ja vistos, entao
+# um apagado para comecar do zero nao volta; um que uma versao nova da imagem
+# trouxer entra no login seguinte.
+nvram_bundled=${FLIPEROS_NVRAM_BUNDLED:-/usr/share/fliperos/nvram}
+for emu in mame flycast; do
+  [[ -d $nvram_bundled/$emu && -d $nvram/$emu ]] || continue
+  seen=$nvram/$emu/.bundled
+  for item in "$nvram_bundled/$emu"/*; do
+    [[ -e $item ]] || continue
+    game=${item##*/}
+    # No MAME um jogo e uma pasta; no Flycast, os arquivos <set>.zip.*.
+    [[ $emu == mame ]] || game=${game%.*}
+    grep -qxF -- "$game" "$seen" 2> /dev/null && continue
+    if [[ $emu == mame ]]; then
+      [[ -e $nvram/$emu/$game ]] || cp -r -- "$item" "$nvram/$emu/" 2> /dev/null
+    elif ! compgen -G "$nvram/$emu/$game.*" > /dev/null; then
+      cp -- "$nvram_bundled/$emu/$game".* "$nvram/$emu/" 2> /dev/null
+    fi
+    printf '%s\n' "$game" >> "$seen" 2> /dev/null
+  done
+done
 
 # ── ~/splashscreen ──────────────────────────────────────────────────
 # Os temas do Plymouth, um por pasta. Os da imagem entram se faltam (um

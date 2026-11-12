@@ -624,6 +624,11 @@ for theme in "$src"/config/splashscreen/*/; do
   cp -r "$src/config/splashscreen/$theme" "$root/usr/share/plymouth/themes/$theme"
 done
 chmod -R a+rX "$root/usr/share/fliperos/splashscreen" "$root/usr/share/plymouth/themes"
+# A memoria dos arcades que vem na imagem (config/nvram, com o que os jogos
+# destravam ja destravado): o fliperos-roms a copia para ~/nvram.
+rm -rf "$root/usr/share/fliperos/nvram"
+cp -r "$src/config/nvram" "$root/usr/share/fliperos/nvram"
+chmod -R a+rX "$root/usr/share/fliperos/nvram"
 # O tema do FliperOS segue o monitor em pe (lib/splash.sh splash_orientation):
 # a copia nova volta a orientacao gravada (a imagem nova ainda nao tem o
 # fliperos.conf).

@@ -1282,6 +1282,51 @@ class RomFoldersTests(unittest.TestCase):
             self.assertEqual((home / 'nvram/flycast/mvsc2.zip.eeprom').read_text(), 'ee')
             self.assertFalse((home / 'nvram/mame/flycast').exists())
 
+    def test_nvram_of_the_image_comes_once_and_keeps_what_was_played(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / 'home'
+            bundled = Path(tmp) / 'bundled'
+            (bundled / 'mame/tekken3').mkdir(parents=True)
+            (bundled / 'mame/tekken3/at28c16').write_text('unlocked')
+            (bundled / 'mame/sf2').mkdir()
+            (bundled / 'mame/sf2/sf2.nv').write_text('unlocked')
+            (bundled / 'flycast').mkdir()
+            for name in ('kofxi.zip.nvmem', 'kofxi.zip.nvmem2', 'mvsc2.zip.eeprom'):
+                (bundled / 'flycast' / name).write_text('unlocked')
+            # Jogados antes: ficam, sem o arquivo de outra origem ao lado.
+            (home / 'nvram/mame/sf2').mkdir(parents=True)
+            (home / 'nvram/mame/sf2/sf2.nv').write_text('mine')
+            (home / 'nvram/flycast').mkdir(parents=True)
+            (home / 'nvram/flycast/kofxi.zip.nvmem').write_text('mine')
+            env = dict(os.environ, HOME=str(home), FLIPEROS_CORE_INFO=str(home / 'nada'),
+                       FLIPEROS_SAVES_OLD=str(home / 'nada'), FIGHTCADE_DIR=str(home / 'nenhum'),
+                       FLIPEROS_NVRAM_BUNDLED=str(bundled))
+            env.pop('XDG_DATA_HOME', None)
+            login = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            login()
+            self.assertEqual((home / 'nvram/mame/tekken3/at28c16').read_text(), 'unlocked')
+            self.assertEqual((home / 'nvram/mame/sf2/sf2.nv').read_text(), 'mine')
+            self.assertEqual((home / 'nvram/flycast/mvsc2.zip.eeprom').read_text(), 'unlocked')
+            self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem').read_text(), 'mine')
+            self.assertFalse((home / 'nvram/flycast/kofxi.zip.nvmem2').exists())
+            # Apagado para comecar do zero: nao volta.
+            shutil.rmtree(home / 'nvram/mame/tekken3')
+            (home / 'nvram/flycast/mvsc2.zip.eeprom').unlink()
+            login()
+            self.assertFalse((home / 'nvram/mame/tekken3').exists())
+            self.assertFalse((home / 'nvram/flycast/mvsc2.zip.eeprom').exists())
+            # Um jogo que uma imagem nova trouxer entra.
+            (bundled / 'flycast/ngbc.zip.nvmem').write_text('unlocked')
+            login()
+            self.assertEqual((home / 'nvram/flycast/ngbc.zip.nvmem').read_text(), 'unlocked')
+        # O que vem na imagem: cada arquivo no caminho que o emulador grava.
+        nv = ROOT / 'config/nvram'
+        self.assertTrue((nv / 'mame/tekken3/at28c16').is_file())
+        self.assertTrue((nv / 'mame/mk2/nvram').is_file())
+        self.assertTrue((nv / 'flycast/kofxi.zip.nvmem2').is_file())
+        self.assertFalse(list(nv.glob('flycast/*.net')))
+        self.assertIn('archive.org/details/nvram', (nv / 'SOURCES.md').read_text())
+
     def test_nvram_of_before_moves_inside_a_custom_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
@@ -1317,6 +1362,9 @@ class RomFoldersTests(unittest.TestCase):
             self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem').read_text(), 'fc')
             self.assertTrue((home / '.mame/nvram').is_symlink())
             self.assertIn('nvram_directory           $HOME/nvram/mame\n', (root / 'etc/fliperos/mame/mame.ini').read_text())
+            # A memoria que vem na imagem, para o fliperos-roms copiar.
+            self.assertTrue((root / 'usr/share/fliperos/nvram/mame/tekken3/at28c16').is_file())
+            self.assertTrue((root / 'usr/share/fliperos/nvram/flycast/kofxi.zip.nvmem').is_file())
 
     def test_duckstation_folder_only_with_duckstation(self):
         # Sem o DuckStation (baixado no Setup), nenhuma segunda pasta de PS1 ao

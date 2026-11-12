@@ -37,6 +37,10 @@ RetroArch opens its file browser in `~/roms`, GroovyMAME looks in `~/roms/mame`,
 
   Each emulator still writes to its usual path, which becomes a link to its folder here, with what it had inside. An installation from before these folders has its game sets moved from the root of `~/nvram` to `~/nvram/mame` at the next login.
 
+  FliperOS comes with the memory of several games with their hidden content already unlocked: in GroovyMAME, Tekken 3, Tekken Tag, Soul Edge, Dead or Alive++, Street Fighter EX and EX2, Rival Schools, Star Gladiator 2, Tech Romancer, Ultimate MK3 and MK II; in Flycast, the Naomi and Atomiswave games that Fightcade 2 brings (KOF XI, Marvel vs. Capcom 2, Power Stone 2, NeoGeo Battle Coliseum...), plus Cannon Spike and Faster than Speed.
+
+  Each game is copied to its emulator's folder at login only once, and only if it has no memory of its own yet: what you have played stays, and a game whose folder or files you delete to start from zero does not come back. The sources are in `config/nvram/SOURCES.md` in the repository.
+
   To use a file that unlocks content, close the game and put the file in the folder of its emulator with the name that emulator writes: `~/nvram/mame/tekken3/at28c16`, `~/nvram/flycast/kofxi.zip.nvmem`.
 - **`~/save`** (`\\fliperos\save`) — what you save while you play, one folder per emulator: `retroarch` (the game saves, `.srm`, and the save states), `mame` (the save states) and `ps2` (the PCSX2 memory cards).
 
