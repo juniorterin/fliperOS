@@ -243,6 +243,15 @@ drm_card_dual_amd() {
   [[ $mods == *$'\nradeon\n'* && $mods == *$'\namdgpu\n'* ]]
 }
 
+# amd_vulkan_capable CARD: a placa AMD faz Vulkan com o amdgpu (o RADV do
+# Mesa aceita toda GCN, e as placas de dois drivers sao GCN 1.0 e 1.1). Com o
+# radeon nenhuma tem Vulkan. FLIPEROS_VULKAN_ICD: o ICD do RADV na imagem
+# (mesa-vulkan-drivers); sem ele, nao.
+amd_vulkan_capable() {
+  drm_card_dual_amd "$1" || return 1
+  [[ -e ${FLIPEROS_VULKAN_ICD:-/usr/share/vulkan/icd.d/radeon_icd.x86_64.json} ]]
+}
+
 drm_dual_amd_cards() {
   local card
   for card in $(drm_cards); do

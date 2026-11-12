@@ -24,15 +24,27 @@ screen_amd_driver() {
   done
   saved=$(amd_driver)
   running=$(drm_card_driver "${cards%%$'\n'*}") || running=none
+  # Na instalacao, a placa que faz Vulkan no amdgpu (todas as que tem os
+  # dois drivers sao GCN, que o RADV do Mesa aceita) ja vem com o amdgpu
+  # sugerido: o Vulkan dos emuladores pesados so existe nele.
+  local recommended=radeon focus=$saved
+  if [[ $mode == install ]] && amd_vulkan_capable "${cards%%$'\n'*}"; then
+    recommended=amdgpu
+    conf_get amd_driver > /dev/null 2>&1 || focus=amdgpu
+  fi
   text=$(ui_fields \
     "Card|$names" \
     "In use now|$running" \
     "Saved|$saved")
-  text+=$'\n\n'"$(ui_yes "Recommended: radeon, the driver tested on the CRT.")"
+  if [[ $recommended == amdgpu ]]; then
+    text+=$'\n\n'"$(ui_yes "Recommended: amdgpu, this card does Vulkan with it (PCSX2, Dolphin, Flycast, RetroArch).")"
+  else
+    text+=$'\n\n'"$(ui_yes "Recommended: radeon, the driver tested on the CRT.")"
+  fi
   [[ $mode == install ]] && text+=$'\n'"You can change it later in Setup > Video Setup > Video driver."
-  choice=$(ui_menu_hints "Video driver" "$text" "$saved" \
-    "radeon|radeon (recommended)$([[ $saved == radeon ]] && echo " - current")|Tested at 15 kHz on the CRT. OpenGL only, no Vulkan." \
-    "amdgpu|amdgpu$([[ $saved == amdgpu ]] && echo " - current")|Adds Vulkan (PCSX2, Dolphin, Flycast). Seen on an R7 240." \
+  choice=$(ui_menu_hints "Video driver" "$text" "$focus" \
+    "radeon|radeon$([[ $recommended == radeon ]] && echo " (recommended)")$([[ $saved == radeon ]] && echo " - current")|Tested at 15 kHz on the CRT. OpenGL only, no Vulkan." \
+    "amdgpu|amdgpu$([[ $recommended == amdgpu ]] && echo " (recommended)")$([[ $saved == amdgpu ]] && echo " - current")|Adds Vulkan (PCSX2, Dolphin, Flycast). Seen on an R7 240." \
     "return|Return|Keep the driver as it is.") || return 0
   [[ $choice == return ]] && return 0
   if [[ $mode == install ]]; then

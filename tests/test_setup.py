@@ -9906,6 +9906,29 @@ class AmdDriverTests(Base):
         self.assertEqual(self.conf()["amd_driver"], "radeon")
         self.assertNotIn("amd_driver_trial", self.conf())
 
+    def test_install_suggests_amdgpu_on_a_vulkan_card(self):
+        # Na instalacao, a placa de dois drivers (GCN) faz Vulkan no amdgpu: ele
+        # vem sugerido e escolhido. Sem o RADV na imagem, fica o radeon.
+        self.gpu("card0", "radeon", "6798")
+        icd = self.env.dir / "radeon_icd.json"
+        icd.write_text("{}")
+        script = """
+            source %s/screens/amd-driver.sh
+            ui_fields() { printf "%%s\n" "$@"; }
+            ui_yes() { echo "$1"; }
+            ui_menu_hints() { echo "FOCUS=$3" >&2; echo "TEXT=$2" >&2; printf '%%s\\n' "${@:4}" >&2; echo amdgpu; }
+            screen_amd_driver install 2>&1
+        """ % SETUP
+        out = self.env.out(script, {"FLIPEROS_VULKAN_ICD": str(icd)})
+        self.assertIn("FOCUS=amdgpu", out)
+        self.assertIn("Recommended: amdgpu", out)
+        self.assertIn("amdgpu|amdgpu (recommended)|", out)
+        self.assertIn("radeon|radeon - current|", out)
+        self.assertEqual(self.conf()["amd_driver"], "amdgpu")
+        out = self.env.out(script, {"FLIPEROS_VULKAN_ICD": str(self.env.dir / "none.json")})
+        self.assertIn("radeon|radeon (recommended)", out)
+        self.assertIn("Recommended: radeon", out)
+
     def test_install_with_another_driver_starts_a_trial(self):
         self.gpu("card0", "radeon", "6798")
         target = self.env.dir / "target"
@@ -9949,7 +9972,7 @@ class AmdDriverTests(Base):
                       (SETUP / "screens/install-progress.sh").read_text())
         self.assertIn('source "$SETUP_DIR/screens/amd-driver.sh"', (SETUP / "fliperos-setup").read_text())
         screen = (SETUP / "screens/amd-driver.sh").read_text()
-        self.assertIn('"radeon|radeon (recommended)', screen)
+        self.assertIn('"radeon|radeon$([[ $recommended == radeon ]] && echo " (recommended)")', screen)
 
 
 class NvidiaDriverTests(Base):
