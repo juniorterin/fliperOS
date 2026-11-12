@@ -19351,6 +19351,28 @@ class DeskpadTests(unittest.TestCase):
             kb.row, kb.col = 4, names.index(name)
             self.assertEqual(kb.press(), action)
 
+    def test_one_per_display_and_it_leaves_on_kill(self):
+        # Duas copias leriam os mesmos controles: cada botao valeria duas vezes.
+        with tempfile.TemporaryDirectory() as tmp:
+            old = os.environ.get('XDG_RUNTIME_DIR')
+            os.environ['XDG_RUNTIME_DIR'] = tmp
+            try:
+                first = self.dp.single(':0')
+                self.assertIsNotNone(first)
+                self.assertIsNone(self.dp.single(':0'))
+                other = self.dp.single(':1')
+                self.assertIsNotNone(other)
+                os.close(first)
+                os.close(other)
+            finally:
+                if old is None:
+                    os.environ.pop('XDG_RUNTIME_DIR', None)
+                else:
+                    os.environ['XDG_RUNTIME_DIR'] = old
+        source = (ROOT / 'config/fliperos-deskpad').read_text()
+        self.assertIn("signal.signal(sig, lambda *_: os._exit(0))", source)
+        self.assertIn("if 'ConnectionClosed' in type(e).__name__:", source)
+
     def test_started_by_the_desktop_and_installed(self):
         lxde = (ROOT / 'config/fliperos-lxde').read_text()
         self.assertIn('/opt/fliperos/bin/fliperos-deskpad < /dev/null >> "$deskpad_log" 2>&1 &', lxde)

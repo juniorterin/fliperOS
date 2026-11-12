@@ -29,6 +29,7 @@ import importlib.machinery
 import importlib.util
 import os
 import select
+import signal
 import shutil
 import struct
 import subprocess
@@ -330,7 +331,10 @@ class X:
             win = self.d.create_resource_object('window', prop.value[0])
             state = win.get_full_property(self.atoms['_NET_WM_STATE'], self.XC.AnyPropertyType)
             return bool(state) and self.atoms['_NET_WM_STATE_FULLSCREEN'] in state.value
-        except Exception:  # noqa: BLE001 - janela que fechou no meio
+        except Exception as e:  # noqa: BLE001 - janela que fechou no meio
+            # O X fechou (saiu do desktop): sai junto.
+            if 'ConnectionClosed' in type(e).__name__:
+                os._exit(0)
             return False
 
 
@@ -494,7 +498,29 @@ class Desk:
         return self.osk or self.pointer.moving()
 
 
+def single(display):
+    """Um so por tela: uma segunda copia (o desktop aberto de novo sem a
+    primeira ter saido) leria os mesmos controles e cada botao valeria duas
+    vezes. O lock fica com o processo; None se outro ja o tem."""
+    folder = os.environ.get('XDG_RUNTIME_DIR') or '/tmp'
+    path = os.path.join(folder, 'fliperos-deskpad%s.lock' % display.replace('/', '_'))
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return None
+    return fd
+
+
 def main():
+    # O laco do AT-SPI (GLib) numa thread segura o SIGTERM: sem isto o
+    # programa nao saia com o kill, nem com a sessao.
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(sig, lambda *_: os._exit(0))
+    lock = single(os.environ.get('DISPLAY', ''))
+    if lock is None:
+        sys.exit('fliperos-deskpad: already running on this display')
     pk = load_padkeys()
     x = X()
     if x.d is None and not x.xdotool:
