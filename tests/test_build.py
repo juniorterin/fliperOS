@@ -19256,14 +19256,14 @@ class DeskpadTests(unittest.TestCase):
 
         self.desk = self.dp.Desk(FakeX(), FakeWindow(), self.pk)
 
-    def test_accept_is_the_right_click_and_back_the_left(self):
+    def test_accept_is_the_left_click_and_back_the_right(self):
         dp, desk = self.dp, self.desk
         desk.key(dp.KEY_ENTER, 1, 0.0)
         desk.key(dp.KEY_ENTER, 0, 0.1)
         desk.key(dp.KEY_ESC, 1, 0.2)
         desk.key(dp.KEY_ESC, 0, 0.3)
-        self.assertEqual(self.calls, [('button', 3, True), ('button', 3, False),
-                                      ('button', 1, True), ('button', 1, False)])
+        self.assertEqual(self.calls, [('button', 1, True), ('button', 1, False),
+                                      ('button', 3, True), ('button', 3, False)])
         self.calls.clear()
         desk.key(dp.KEY_PAGEDOWN, 1, 0.4)
         self.assertEqual(self.calls, [('scroll', 3)])
@@ -19299,7 +19299,7 @@ class DeskpadTests(unittest.TestCase):
         desk.analog(dp.ABS_X, 1.0)
         desk.key(dp.KEY_SPACE, 1, 0.1)         # o botao 3 abre o teclado
         self.assertTrue(desk.osk)
-        self.assertIn(('button', 3, False), self.calls)   # o clique e solto
+        self.assertIn(('button', 1, False), self.calls)   # o clique e solto
         self.calls.clear()
         desk.tick(0.5, 0.6)
         self.assertEqual(self.calls, [])       # o ponteiro parado
