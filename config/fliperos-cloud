@@ -56,6 +56,8 @@ AUTO_GAP=${FLIPEROS_CLOUD_GAP:-120}
 CONFIG_GAP=${FLIPEROS_CLOUD_CONFIG_GAP:-86400}
 export RCLONE_CONFIG=$RCLONE_CONF
 GOOGLE_OAUTH=${FLIPEROS_GOOGLE_OAUTH:-/etc/fliperos/google-oauth.conf}
+GOOGLE_OAUTH_CACHE=${FLIPEROS_GOOGLE_OAUTH_CACHE:-$HOME_DIR/.config/fliperos/google-oauth.conf}
+GOOGLE_OAUTH_URL=${FLIPEROS_GOOGLE_OAUTH_URL:-https://github.com/juniorterin/fliperOS/releases/download/packages/google-oauth.conf}
 GOOGLE_DEVICE_URL=${FLIPEROS_GOOGLE_DEVICE_URL:-https://oauth2.googleapis.com/device/code}
 GOOGLE_TOKEN_URL=${FLIPEROS_GOOGLE_TOKEN_URL:-https://oauth2.googleapis.com/token}
 GOOGLE_SCOPE=https://www.googleapis.com/auth/drive.file
@@ -166,12 +168,12 @@ sync_group() {
   local group=$1 dir=$2 local_dir far rc=0
   while IFS=$'\t' read -r local_dir far; do
     if [[ $dir != pull && -d $local_dir ]]; then
-      "$RCLONE" copy --update --exclude 'cloud.conf' --exclude '*.part' "$local_dir" "$REMOTE:$ROOT_DIR/$far" \
+      "$RCLONE" copy --update --exclude 'cloud.conf' --exclude 'google-oauth.conf' --exclude '.google-oauth-tried' --exclude '*.part' "$local_dir" "$REMOTE:$ROOT_DIR/$far" \
         >> "$LOG" 2>&1 || rc=1
     fi
     if [[ $dir != push ]]; then
       mkdir -p "$local_dir" 2> /dev/null
-      "$RCLONE" copy --update --exclude 'cloud.conf' "$REMOTE:$ROOT_DIR/$far" "$local_dir" >> "$LOG" 2>&1 || rc=1
+      "$RCLONE" copy --update --exclude 'cloud.conf' --exclude 'google-oauth.conf' --exclude '.google-oauth-tried' "$REMOTE:$ROOT_DIR/$far" "$local_dir" >> "$LOG" 2>&1 || rc=1
     fi
   done < <(pairs "$group")
   return $rc
@@ -236,14 +238,41 @@ cmd_watch() {
   cmd_sync both "$groups" > /dev/null
 }
 
-# google_client: client_id e client_secret do cliente OAuth do FliperOS
-# (vazio sem ele: o login por codigo nao existe nesta maquina).
-google_client() {
+# google_client_in ARQUIVO: client_id e client_secret, se o arquivo os tem no
+# formato certo.
+google_client_in() {
   local id secret
-  id=$(sed -n 's/^client_id=//p' "$GOOGLE_OAUTH" 2> /dev/null | head -1)
-  secret=$(sed -n 's/^client_secret=//p' "$GOOGLE_OAUTH" 2> /dev/null | head -1)
-  [[ $id == *.apps.googleusercontent.com && -n $secret ]] || return 1
+  id=$(sed -n 's/^client_id=//p' "$1" 2> /dev/null | head -1 | tr -d '\r')
+  secret=$(sed -n 's/^client_secret=//p' "$1" 2> /dev/null | head -1 | tr -d '\r')
+  [[ $id =~ ^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$ && $secret =~ ^[A-Za-z0-9_-]+$ ]] || return 1
   printf '%s\n%s\n' "$id" "$secret"
+}
+
+# google_client: o cliente OAuth do FliperOS. Ele fica fora do git (o push
+# protection do GitHub o recusa): vem no /etc/fliperos/google-oauth.conf ou,
+# sem ele, e baixado do release "packages" do FliperOS e guardado (no /etc
+# como root; senao, em ~/.config/fliperos, porque isto roda como o jogador).
+# Uma tentativa que falhou so se repete depois de uma hora. Sem cliente, o
+# Google Drive nao aparece.
+google_client() {
+  local tmp mark=${GOOGLE_OAUTH_CACHE%/*}/.google-oauth-tried dest
+  google_client_in "$GOOGLE_OAUTH" && return 0
+  google_client_in "$GOOGLE_OAUTH_CACHE" && return 0
+  [[ -n $(find "$mark" -mmin -60 2> /dev/null) ]] && return 1
+  mkdir -p "${GOOGLE_OAUTH_CACHE%/*}" 2> /dev/null
+  touch "$mark" 2> /dev/null
+  tmp=$(mktemp "${TMPDIR:-/tmp}/google-oauth.XXXXXX") || return 1
+  if ! curl -fsSL --max-time 15 -o "$tmp" "$GOOGLE_OAUTH_URL" 2> /dev/null || ! google_client_in "$tmp" > /dev/null; then
+    rm -f "$tmp"
+    return 1
+  fi
+  dest=$GOOGLE_OAUTH_CACHE
+  [[ -w ${GOOGLE_OAUTH%/*} ]] && dest=$GOOGLE_OAUTH
+  { echo "# O cliente OAuth do FliperOS, baixado de $GOOGLE_OAUTH_URL."; grep -E '^client_(id|secret)=' "$tmp"; } > "$dest.tmp" &&
+    chmod 644 "$dest.tmp" && mv -f "$dest.tmp" "$dest"
+  rm -f "$tmp" "$mark"
+  log "google: OAuth client downloaded to $dest"
+  google_client_in "$dest"
 }
 
 # ── Entrar com o Google ───────────────────────────────────────────

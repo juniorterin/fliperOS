@@ -5337,12 +5337,15 @@ class CloudTests(unittest.TestCase):
             "case $1 in\n"
             "  obscure) echo \"OBS($(cat))\" ;;\n"
             "  mkdir) [ -f %(d)s/refuse ] && { echo 'Failed to create: 401 Unauthorized' >&2; exit 1; }; mkdir -p \"$(map $2)\" ;;\n"
-            "  copy) args=(); for a in \"$@\"; do case $a in --*|copy|*.part|cloud.conf) ;; *) args+=(\"$a\") ;; esac; done\n"
+            "  copy) args=(); skip=0; for a in \"$@\"; do if ((skip)); then skip=0; continue; fi\n"
+            "      case $a in --exclude) skip=1 ;; --*|copy) ;; *) args+=(\"$a\") ;; esac; done\n"
             "    src=$(map ${args[0]}); dst=$(map ${args[1]}); [ -d \"$src\" ] || exit 0; mkdir -p \"$dst\"; cp -a \"$src/.\" \"$dst/\" ;;\n"
             "esac\n" % {"d": self.dir, "c": self.cloud})
         rclone.chmod(0o755)
         self.env = dict(os.environ, PATH="%s:%s" % (bindir, os.environ["PATH"]), HOME=str(self.home),
-                        FLIPEROS_CLOUD_LOG=str(self.dir / "cloud.log"), XDG_RUNTIME_DIR=str(self.dir))
+                        FLIPEROS_CLOUD_LOG=str(self.dir / "cloud.log"), XDG_RUNTIME_DIR=str(self.dir),
+                        FLIPEROS_GOOGLE_OAUTH=str(self.dir / "etc/google-oauth.conf"),
+                        FLIPEROS_GOOGLE_OAUTH_URL="file://%s/nowhere.conf" % self.dir)
 
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
@@ -5412,11 +5415,44 @@ class CloudTests(unittest.TestCase):
         self.fail("the Google sign-in did not finish: %s" % st)
 
     def test_google_needs_the_fliperos_client(self):
-        self.env["FLIPEROS_GOOGLE_OAUTH"] = str(self.dir / "none.conf")
         self.assertEqual(self.run_("google", "start").returncode, 3)
         self.assertEqual(self.status()["device"], "0")
         # O Google Drive nao entra mais pelo token colado.
         self.assertEqual(self.run_("remote", "drive", stdin='token={"access_token":"x"}\n').returncode, 2)
+
+    def test_google_client_downloaded_from_the_release(self):
+        # O /etc vazio (o do git): o cliente vem do release "packages", uma
+        # vez, conferido, e fica em ~/.config/fliperos (o jogador nao grava no /etc).
+        release = self.dir / "release.conf"
+        self.env["FLIPEROS_GOOGLE_OAUTH_URL"] = "file://%s" % release
+        (self.dir / "etc").mkdir()
+        etc = self.dir / "etc/google-oauth.conf"
+        etc.write_text("client_id=\nclient_secret=\n")
+        # Sem poder gravar no /etc (o jogador), em ~/.config/fliperos; como
+        # root, no proprio /etc.
+        (self.dir / "etc").chmod(0o555)
+        try:
+            dest = etc if os.access(self.dir / "etc", os.W_OK) else self.home / ".config/fliperos/google-oauth.conf"
+            # Fora do formato: nao grava, e so tenta de novo depois de uma hora.
+            release.write_text("client_id=evil\nclient_secret=x\n")
+            self.assertEqual(self.status()["device"], "0")
+            self.assertNotIn("evil", dest.read_text() if dest.exists() else "")
+            release.write_text("client_id=123-abc.apps.googleusercontent.com\nclient_secret=GOCSPX-x\n")
+            self.assertEqual(self.status()["device"], "0")
+            (self.home / ".config/fliperos/.google-oauth-tried").unlink()
+            self.assertEqual(self.status()["device"], "1")
+            self.assertIn("client_id=123-abc.apps.googleusercontent.com\nclient_secret=GOCSPX-x\n", dest.read_text())
+            self.assertEqual(oct(dest.stat().st_mode & 0o777), "0o644")
+            # Baixado, nao baixa de novo (o release some e continua valendo).
+            release.unlink()
+            self.assertEqual(self.status()["device"], "1")
+        finally:
+            (self.dir / "etc").chmod(0o755)
+        # O update nao troca um cliente preenchido pelo vazio do git.
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn("""if ! grep -qE '^client_id=.+' "$root/etc/fliperos/google-oauth.conf" 2> /dev/null; then
+  install -Dm644 "$src/config/google-oauth.conf" "$root/etc/fliperos/google-oauth.conf"
+fi""", rootfs)
 
     def test_google_approved_after_pending_and_slow_down(self):
         (self.cloud / "FliperOS/hiscores/hiscore").mkdir(parents=True)
