@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """A OSD do FliperOS: volume, filtro de flicker, scanlines (monitor de 31 kHz),
-geometria e cores por cima do jogo ou do frontend, sem sair deles.
+geometria, cores e, com uma GunCon 2 ligada, os ajustes dela (o flash, os
+numeros do driver e a recarga, valendo no tiro seguinte) por cima do jogo ou do
+frontend, sem sair deles.
 
     fliperos-osd                    o servico
     fliperos-osd --shot PAGINA ARQ  a imagem de uma pagina em PNG (os testes)
@@ -103,6 +105,9 @@ VOLUME_STEP = 5
 H_SIZE = (0.80, 1.20, 0.01)
 H_SHIFT = (-40, 40, 1)
 V_SHIFT = (-20, 20, 1)
+# A GunCon 2 (USB 0b9a:016a): com ela ligada, a pagina dela.
+SYS_INPUT = os.environ.get("FLIPEROS_SYS_INPUT", "/sys/class/input")
+GUNCON2 = ("0b9a", "016a")
 FILTER_LEVELS = ("off", "light", "medium", "strong")
 LABELS = {"off": "Off", "light": "Light", "medium": "Medium", "strong": "Strong"}
 
@@ -142,6 +147,21 @@ def filter_level(conf, program, core):
 
 
 # ── O que esta na tela ─────────────────────────────────────────────
+
+def guncon_present():
+    """Uma GunCon 2 ligada (o id USB de um input do kernel)."""
+    for ident in glob.glob(os.path.join(SYS_INPUT, "input*", "id")):
+        try:
+            with open(os.path.join(ident, "vendor")) as f:
+                vendor = f.read().strip().lower()
+            with open(os.path.join(ident, "product")) as f:
+                product = f.read().strip().lower()
+        except OSError:
+            continue
+        if (vendor, product) == GUNCON2:
+            return True
+    return False
+
 
 def on_screen():
     """{"pid", "program", "core", "uid", "runtime"} do programa cuja camada gravou
@@ -578,7 +598,7 @@ class Menu:
         if name == "geometry" and self.geometry and self.geometry.key:
             # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
             return "GEOMETRY " + self.geometry.key
-        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY"}.get(name, "")
+        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY", "guncon": "GUNCON 2"}.get(name, "")
 
     def rows_of(self, name):
         return getattr(self, "rows_" + name)()
@@ -604,6 +624,10 @@ class Menu:
         if conf.get("monitor", "") != "lcd" and self.mode:
             rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry")))
         rows.append(Row("page", "Colour", action=self.open_colour))
+        # A GunCon 2 ligada: os ajustes dela com o jogo aberto, para acertar a
+        # mira e o flash atirando (Setup > Joysticks > GunCon 2).
+        if guncon_present():
+            rows.append(Row("page", "GunCon 2", action=self.open_guncon))
         rows.append(Row("action", "Close", action=self.close))
         return rows
 
@@ -612,22 +636,44 @@ class Menu:
         self.worker.wait()
         self.open_page("colour")
 
-    def rows_colour(self):
+    def open_guncon(self):
+        self.worker.wait()
+        self.open_page("guncon")
+
+    def settings_rows(self, wanted, pretty=lambda key: str):
+        """As linhas de numero e de escolha do --settings cujas chaves passam
+        em wanted(chave); cada mudanca vale na hora (fliperos-setup --setting)."""
         rows = []
         settings = parse_settings(self.settings_text())
         for key, row in settings.items():
-            if not key.startswith("color.") or row["type"] == "action":
+            if not wanted(key) or row["type"] == "action":
                 continue
             if row["type"] == "number":
                 limits = number_options(row["options"])
                 if limits:
                     low, high, step = limits
-                    rows.append(Row("number", row["label"], int(float(row["value"])), int(low), int(high), int(step),
-                                    pretty=pretty_color(key), change=self.setter(key)))
+                    rows.append(Row("number", row["label"], int(float(row["value"] or 0)), int(low), int(high),
+                                    int(step), pretty=pretty(key), change=self.setter(key)))
             elif row["type"] == "choice":
                 rows.append(Row("choice", row["label"], row["value"], options=choice_options(row["options"]),
                                 change=self.setter(key)))
+        return rows
+
+    def rows_colour(self):
+        rows = self.settings_rows(lambda key: key.startswith("color."), pretty_color)
         rows.append(Row("action", "Back to the defaults", action=self.reset_colour))
+        rows.append(Row("action", "Back", action=self.back))
+        return rows
+
+    def rows_guncon(self):
+        """O flash da tela, os numeros do driver e a recarga fora da tela: o
+        fliperos-guncon2-calibrate --params os passa a pistola na hora, e o
+        tiro seguinte ja sai com eles. A calibracao (os alvos) fica no Setup."""
+        rows = self.settings_rows(lambda key: key == "gun_flash" or key == "gun_offscreen_reload"
+                                  or key.startswith("gun."))
+        if not rows:
+            self.status = "NO GUNCON 2 SETTINGS"
+        rows.append(Row("action", "Back to the defaults", action=self.reset_guncon))
         rows.append(Row("action", "Back", action=self.back))
         return rows
 
@@ -737,6 +783,15 @@ class Menu:
         self.status = "SAVING"
         self.dirty = True
         self.worker.put("geometry-save", apply)
+
+    def reset_guncon(self):
+        def apply():
+            run([SETUP, "--setting", "gun.reset", "1"], timeout=20)
+            if self.page["name"] == "guncon":
+                self.page["rows"] = self.rows_guncon()
+            self.status = "DEFAULT"
+            self.dirty = True
+        self.worker.put("guncon-reset", apply)
 
     def reset_colour(self):
         def apply():

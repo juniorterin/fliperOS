@@ -17531,6 +17531,8 @@ class OsdTests(unittest.TestCase):
         self.osd.run = self.fake_run
         self.osd.process_env = lambda pid: {}
         self.osd.X11Modes.counter = itertools.count(1)
+        # Sem GunCon 2, a nao ser no teste dela (o /sys da maquina nao entra).
+        self.osd.SYS_INPUT = str(Path(self.tmp.name) / 'input')
 
     MODE = {'clock': 13038, 'h': [640, 666, 727, 831], 'v': [480, 483, 489, 523], 'interlace': True}
 
@@ -17545,7 +17547,12 @@ class OsdTests(unittest.TestCase):
         elif args[1:] == ['--settings']:
             out = ('color.brightness|Colour|Brightness|number|0|-50..50:1|h\ncolor.gamma|Colour|Gamma|number|100|50..200:5|h\n'
                    'color.range|Colour|RGB range|choice|default|default=Card default;full=Full|h\n'
-                   'color.reset|Colour|Back|action|||h\nlatency|System|Latency|choice|low|low=Low|h\n')
+                   'color.reset|Colour|Back|action|||h\nlatency|System|Latency|choice|low|low=Low|h\n'
+                   'gun_flash|GunCon 2|Screen flash|choice|pulse|pulse=Pulse;hold=Hold;off=Off|h\n'
+                   'gun.flash_level|GunCon 2|Flash brightness (%)|number|100|10..100:10|h\n'
+                   'gun.edge_pct|GunCon 2|Edge band (%)|number|12|0..30:1|h\n'
+                   'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|on|on=On;off=Off|h\n'
+                   'gun.reset|GunCon 2|Back to the defaults|action|||h\n')
         elif args[1:] == ['mode']:
             out = '13038 640 666 727 831 480 483 489 523 1\n'
         elif args[0] == self.osd.SWITCHRES:
@@ -17648,6 +17655,38 @@ class OsdTests(unittest.TestCase):
         menu.key(keys.KEY_LEFT)
         worker.wait()
         self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx_rearmed', 'light'], self.calls)
+
+    def test_guncon_page_only_with_the_gun_and_live(self):
+        # A pagina da GunCon 2 so com ela ligada (USB 0b9a:016a); cada ajuste
+        # vai pelo --setting do Setup, que o passa a pistola na hora.
+        menu, _ = self.menu()
+        self.assertNotIn('GunCon 2', self.labels(menu))
+        ident = Path(self.osd.SYS_INPUT) / 'input7' / 'id'
+        ident.mkdir(parents=True)
+        (ident / 'vendor').write_text('0b9a\n')
+        (ident / 'product').write_text('016a\n')
+        menu, worker = self.menu()
+        self.assertEqual(self.labels(menu)[-2:], ['GunCon 2', 'Close'])
+        menu.page['cursor'] = self.labels(menu).index('GunCon 2')
+        menu.key(self.osd.KEY_ENTER)
+        self.assertEqual(menu.title(), 'GUNCON 2')
+        self.assertEqual(self.labels(menu), ['Screen flash', 'Flash brightness (%)', 'Edge band (%)',
+                                             'Off-screen reload button', 'Back to the defaults', 'Back'])
+        menu.key(self.osd.KEY_RIGHT)            # o flash: pulse -> hold
+        menu.key(self.osd.KEY_DOWN)
+        menu.key(self.osd.KEY_LEFT)             # o brilho: 100 -> 90
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--setting', 'gun_flash', 'hold'], self.calls)
+        self.assertIn([self.osd.SETUP, '--setting', 'gun.flash_level', '90'], self.calls)
+        menu.page['cursor'] = 4
+        menu.key(self.osd.KEY_ENTER)
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--setting', 'gun.reset', '1'], self.calls)
+        menu.key(self.osd.KEY_ESC)
+        self.assertEqual(menu.title(), 'FLIPEROS')
+        # Outro aparelho no mesmo /sys nao conta.
+        (ident / 'product').write_text('0001\n')
+        self.assertFalse(self.osd.guncon_present())
 
     def test_colour_page_comes_from_the_setup_settings(self):
         menu, worker = self.menu()
