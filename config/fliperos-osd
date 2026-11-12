@@ -83,6 +83,13 @@ RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
 # De quantos em quantos segundos se confere a resolucao do jogo na tela.
 GEOMETRY_POLL = 1.0
+# Os perfis da OSD (Profile, logo abaixo do Volume): cada ajuste vale para tudo
+# (default), so para a resolucao, so para o emulador ou so para o jogo. Uma
+# linha por ajuste: "escopo<TAB>chave<TAB>valor", o escopo "default",
+# "res:640x480i", "emu:pcsx2" ou "game:pcsx2/NOME". O default guarda o valor de
+# antes do primeiro ajuste de outro escopo, para voltar a ele.
+PROFILES = os.environ.get("FLIPEROS_OSD_PROFILES", "/etc/fliperos/osd-profiles.conf")
+PROFILE_KINDS = ("default", "resolution", "emulator", "game")
 
 # O arquivo das camadas: o cabecalho e os pixels RGBA de cima para baixo. seq
 # impar: gravando.
@@ -178,7 +185,11 @@ def on_screen():
             continue
         if best is None or age < best[0]:
             runtime = os.path.dirname(path)
-            best = (age, {"pid": int(fields[0]), "program": fields[2], "core": "" if fields[3] == "-" else fields[3],
+            try:
+                fps = float(fields[1])
+            except ValueError:
+                fps = None
+            best = (age, {"pid": int(fields[0]), "fps": fps, "program": fields[2], "core": "" if fields[3] == "-" else fields[3],
                           "runtime": runtime, "uid": int(os.path.basename(runtime)) if os.path.basename(runtime).isdigit() else 0})
     return best[1] if best else None
 
@@ -239,6 +250,113 @@ def current_mode():
 def mode_refresh(mode):
     rate = mode["clock"] * 1000.0 / (mode["h"][3] * mode["v"][3])
     return rate * 2 if mode["interlace"] else rate
+
+
+def mode_line(mode, fps=None):
+    """A linha embaixo do titulo: a resolucao, a frequencia horizontal e a
+    vertical, e o FPS do jogo no fim ("640x480i 15.69kHz 60.00Hz  59.9 FPS")."""
+    parts = []
+    if mode:
+        htotal = mode["h"][3] or 1
+        parts.append("%s %.2fkHz %.2fHz" % (resolution_key(mode), mode["clock"] / htotal, mode_refresh(mode)))
+    if fps is not None:
+        parts.append("%.1f FPS" % fps)
+    return "  ".join(parts)
+
+
+def game_name(pid):
+    """O jogo do processo: o ultimo argumento que nao e opcao, sem a pasta nem
+    a extensao (o set do MAME, o arquivo da ROM). "" sem um."""
+    try:
+        with open("/proc/%d/cmdline" % pid, "rb") as f:
+            args = [a.decode("utf-8", "replace") for a in f.read().split(b"\0") if a]
+    except (OSError, TypeError):
+        return ""
+    for arg in reversed(args[1:]):
+        if arg.startswith("-") or "=" in arg:
+            continue
+        name = os.path.basename(arg.rstrip("/"))
+        name = re.sub(r"\.(zip|7z|chd|iso|cue|bin|gdi|cdi|rvz|gcz|wbfs|elf|pak|lst|m3u|zst|gz)$", "", name, flags=re.I)
+        if name:
+            return name
+    return ""
+
+
+def profile_scopes(screen, mode, game=None):
+    """{tipo: escopo} dos perfis que valem para este jogo e este modo."""
+    screen = screen or {}
+    emulator = screen.get("core") or screen.get("program") or ""
+    scopes = {"default": "default"}
+    if mode:
+        scopes["resolution"] = "res:" + resolution_key(mode)
+    if emulator:
+        scopes["emulator"] = "emu:" + emulator
+        game = game if game is not None else game_name(screen.get("pid") or 0)
+        if game:
+            scopes["game"] = "game:%s/%s" % (emulator, game)
+    return scopes
+
+
+class Profiles:
+    """O arquivo dos perfis (PROFILES)."""
+
+    def __init__(self, path=None):
+        self.path = path or PROFILES
+        self.data = {}
+        try:
+            with open(self.path, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    parts = line.rstrip("\n").split("\t")
+                    if len(parts) == 3:
+                        self.data.setdefault(parts[0], {})[parts[1]] = parts[2]
+        except OSError:
+            pass
+
+    def keys(self):
+        return {key for values in self.data.values() for key in values}
+
+    def set(self, scope, key, value, before=None):
+        """O ajuste num escopo. Fora do default, o default guarda o valor de
+        antes (before) se ainda nao o tem: e para ele que se volta."""
+        if scope != "default" and before is not None and key not in self.data.get("default", {}):
+            self.data.setdefault("default", {})[key] = str(before)
+        self.data.setdefault(scope, {})[key] = str(value)
+        self.save()
+
+    def save(self):
+        lines = ["%s\t%s\t%s\n" % (scope, key, value) for scope in sorted(self.data)
+                 for key, value in sorted(self.data[scope].items())]
+        try:
+            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+            with open(self.path + ".new", "w", encoding="utf-8") as f:
+                f.writelines(lines)
+            os.replace(self.path + ".new", self.path)
+        except OSError:
+            pass
+
+    def effective(self, scopes):
+        """{chave: valor} do default com os escopos de cima por cima (a
+        resolucao, depois o emulador, depois o jogo)."""
+        out = {}
+        for kind in PROFILE_KINDS:
+            scope = scopes.get(kind)
+            if scope:
+                out.update(self.data.get(scope, {}))
+        return out
+
+    def chosen(self, scopes):
+        """O perfil que se abre: o mais especifico que ja tem ajustes."""
+        for kind in reversed(PROFILE_KINDS):
+            if kind in scopes and self.data.get(scopes[kind]):
+                return kind
+        return "default"
+
+
+def apply_setting(key, value):
+    """Um ajuste dos perfis no sistema, pelo Setup."""
+    if key == "volume":
+        return run([SETUP, "--volume", "set", str(value)], timeout=10)
+    return run([SETUP, "--setting", key, str(value)], timeout=20)
 
 
 def resolution_key(mode):
@@ -499,6 +617,7 @@ class Row:
         self.kind, self.label, self.value = kind, label, value
         self.low, self.high, self.step = low, high, step
         self.options, self.pretty, self.change, self.action = options, pretty, change, action
+        self.previous = None
 
     def text(self):
         if self.kind == "choice":
@@ -527,6 +646,7 @@ class Row:
             return False
         if value == self.value:
             return False
+        self.previous = self.value
         self.value = value
         if self.change:
             self.change(value)
@@ -581,6 +701,9 @@ class Menu:
         self.status = ""
         self.closing = False
         self.dirty = True
+        self.profiles = Profiles()
+        self.scopes = profile_scopes(self.screen, mode)
+        self.profile = self.profiles.chosen(self.scopes)
         self.open_page("main")
 
     # O que aparece.
@@ -603,12 +726,30 @@ class Menu:
     def rows_of(self, name):
         return getattr(self, "rows_" + name)()
 
+    def subtitle(self):
+        """A resolucao, as frequencias e o FPS, em letra menor embaixo do titulo
+        da pagina principal."""
+        if self.page["name"] != "main":
+            return ""
+        return mode_line(self.mode, self.screen.get("fps"))
+
+    def profile_label(self, kind):
+        scope = self.scopes.get(kind, "")
+        if kind == "default":
+            return "Default"
+        return {"resolution": "Res ", "emulator": "Emu ", "game": "Game "}[kind] + scope.split(":", 1)[1].split("/")[-1]
+
     def rows_main(self):
         rows = []
         volume = self.volume_state()
         if volume is not None:
             rows.append(Row("number", "Volume", volume, 0, 100, VOLUME_STEP, pretty=lambda v: "%d%%" % v,
                             change=self.set_volume))
+        # Para onde vao os ajustes: tudo, esta resolucao, este emulador ou
+        # este jogo (as setas trocam).
+        rows.append(Row("choice", "Profile", self.profile,
+                        options=[(kind, self.profile_label(kind)) for kind in PROFILE_KINDS if kind in self.scopes],
+                        change=self.set_profile))
         if self.mode and self.mode["interlace"]:
             conf = read_conf()
             program, core = self.screen.get("program", ""), self.screen.get("core", "")
@@ -713,13 +854,27 @@ class Menu:
                 self.dirty = True
 
     # O que as linhas fazem.
+    def set_profile(self, kind):
+        self.profile = kind
+        self.status = "FOR " + self.profile_label(kind).upper()
+
+    def store(self, key, value, before):
+        """Um ajuste no perfil escolhido: guardado nele (o default so guarda as
+        chaves que algum perfil ja tem) e posto no sistema agora."""
+        scope = self.scopes.get(self.profile, "default")
+        if scope != "default" or key in self.profiles.keys():
+            self.profiles.set(scope, key, value, before)
+        self.worker.put(key, lambda: apply_setting(key, value))
+
     def setter(self, key):
         def change(value):
-            self.worker.put(key, lambda: run([SETUP, "--setting", key, str(value)], timeout=20))
+            before = next((r.previous for r in self.page["rows"] if r.change is change), None)
+            self.store(key, value, before)
         return change
 
     def set_volume(self, value):
-        self.worker.put("volume", lambda: run([SETUP, "--volume", "set", str(value)], timeout=10))
+        before = next((r.previous for r in self.stack[0]["rows"] if r.label == "Volume"), None)
+        self.store("volume", value, before)
 
     def set_filter(self, value):
         program = self.screen.get("core") or self.screen.get("program", "")
@@ -881,16 +1036,22 @@ class Painter:
         elif page["cursor"] >= page["top"] + self.VISIBLE:
             page["top"] = page["cursor"] - self.VISIBLE + 1
         shown = rows[page["top"]:page["top"] + self.VISIBLE]
-        width, height = t.WIDTH - 2 * t.SAFE_X, 18 + len(shown) * self.ROW + 4
+        sub = menu.subtitle()
+        head = 18 + (7 if sub else 0)
+        width, height = t.WIDTH - 2 * t.SAFE_X, head + len(shown) * self.ROW + 4
         x, y = (t.WIDTH - width) // 2, t.HEIGHT - t.SAFE_Y - height
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
         pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
         self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
+        if sub:
+            # A resolucao com as frequencias e o FPS, na letra pequena.
+            import tiny
+            tiny.text(surface, sub, t.COMMENT, x + 6, y + 15)
         if menu.status:
             status = self.font.render(menu.status, False, t.CYAN)
             surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
         for i, row in enumerate(shown):
-            top = y + 17 + i * self.ROW
+            top = y + head - 1 + i * self.ROW
             chosen = page["top"] + i == page["cursor"]
             if chosen:
                 pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
@@ -908,7 +1069,7 @@ class Painter:
                 pg.draw.rect(surface, t.GREEN + (255,), (bar_x + 1, top + 4, round((bar_w - 2) * fraction), 3))
         # Ha mais linhas acima ou abaixo.
         if page["top"] > 0:
-            pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, y + 15), (x + width // 2 + 3, y + 15), (x + width // 2, y + 12)])
+            pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, y + head - 3), (x + width // 2 + 3, y + head - 3), (x + width // 2, y + head - 6)])
         if page["top"] + self.VISIBLE < len(rows):
             bottom = y + height - 2
             pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, bottom - 2), (x + width // 2 + 3, bottom - 2), (x + width // 2, bottom + 1)])
@@ -1125,6 +1286,10 @@ class Service:
         # (programa, resolucao) cuja geometria ja foi posta, e quando se olhou.
         self.geometry_seen = None
         self.geometry_polled = 0.0
+        # Os perfis: (jogo, resolucao) ja visto, quando se olhou e o que esta posto.
+        self.profile_seen = None
+        self.profile_polled = 0.0
+        self.profile_applied = {}
         os.makedirs(RUN_DIR, exist_ok=True)
         self.screen_file = Screen(os.path.join(RUN_DIR, "screen"))
         self.control = self.open_control()
@@ -1227,6 +1392,29 @@ class Service:
             if geometry.valid():
                 geometry.apply()
 
+    # Os perfis.
+    def apply_profiles(self, screen):
+        """Um jogo abriu, trocou de resolucao ou fechou: os ajustes dos perfis
+        que valem agora (o default por baixo, o jogo por cima) vao para o
+        sistema; so os que mudam."""
+        now = time.monotonic()
+        if now - self.profile_polled < GEOMETRY_POLL:
+            return
+        self.profile_polled = now
+        profiles = Profiles()
+        if not profiles.data:
+            return
+        mode = current_mode() if screen else None
+        seen = (screen["pid"], resolution_key(mode) if mode else "") if screen else None
+        if seen == self.profile_seen:
+            return
+        self.profile_seen = seen
+        wanted = profiles.effective(profile_scopes(screen, mode) if screen else {"default": "default"})
+        for key, value in sorted(wanted.items()):
+            if self.profile_applied.get(key) != value:
+                self.worker.put("profile-" + key, lambda key=key, value=value: apply_setting(key, value))
+                self.profile_applied[key] = value
+
     # A barra das teclas de volume.
     def bar_allowed(self, screen):
         """So o volume, sem tomar nada: vale tambem no modo comercial."""
@@ -1311,6 +1499,7 @@ class Service:
             screen = on_screen()
             self.watch_hotkey(screen)
             self.apply_saved_geometry(screen)
+            self.apply_profiles(screen)
             fds = [self.control]
             if self.hotkey:
                 fds.append(self.hotkey.stdout.fileno())
