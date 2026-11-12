@@ -395,6 +395,13 @@ class Server:
             action, _ = self.ask(screen, cmd)
             return {"select": 0, "timeout": 124}.get(action, 1), ""
         if cmd == "pager":
+        if cmd == "qr":
+            # titulo, segundos, codigo, linhas de texto ate "--", e a matriz do QR.
+            rest = a[3:]
+            cut = rest.index("--") if "--" in rest else len(rest)
+            screen = W.QrWait(plain(a[0]), self.lines(rest[:cut]), plain(a[2]), rest[cut + 1:], int(a[1]))
+            action, _ = self.ask(screen, cmd)
+            return {"select": 0, "timeout": 124}.get(action, 1), ""
             self.ask(W.Pager(plain(a[0]), plain(a[1]), a[2] == "inicio"), cmd)
             return 0, ""
         if cmd == "progress":

@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -5285,20 +5286,31 @@ class CloudSetupTests(Base):
         self.assertEqual(self.env.out("cloud_label", self.cenv).strip(), "WebDAV (Nextcloud, ownCloud...), by itself")
 
     def test_account_from_the_screen(self):
-        # WebDAV: endereco, usuario e senha pela entrada do fliperos-cloud;
-        # Google Drive so pelo painel (o login no site).
-        self.status("installed=1\nremote=\n")
-        out = self.env.out("""
+        # WebDAV: endereco, usuario e senha pela entrada do fliperos-cloud.
+        # Sem o cliente do Google (device=0), o Google Drive nem aparece; com
+        # ele, e o primeiro da lista.
+        self.status("installed=1\nremote=\ndevice=0\n")
+        script = """
             source %s/screens/setup-menu.sh
             : > "$RADIO_COUNT"
-            ui_radio() { echo x >> "$RADIO_COUNT"; case $(wc -l < "$RADIO_COUNT") in 1) echo webdav ;; 2) echo drive ;; *) return 1 ;; esac; }
+            ui_radio() {
+              echo "$3 ${*:4}" >> "$RADIO_COUNT"
+              (($(wc -l < "$RADIO_COUNT") == 1)) && echo webdav && return 0
+              return 1
+            }
             ui_input() { case $2 in Address*) echo https://dav.example ;; User*) echo joe ;; Password*) echo pw1 ;; esac; }
             ui_info() { :; }
             ui_msg() { printf 'msg:%%s\\n' "$@"; }
             screen_cloud
-        """ % SETUP, dict(self.cenv, RADIO_COUNT=str(self.env.dir / "radio")))
+        """ % SETUP
+        radio = self.env.dir / "radio"
+        self.env.out(script, dict(self.cenv, RADIO_COUNT=str(radio)))
         self.assertIn("remote webdav | url=https://dav.example user=joe pass=pw1", self.log.read_text())
-        self.assertIn("msg:http://fliperos.local > System > Cloud backup", out)
+        self.assertNotIn("drive|", radio.read_text())
+        self.assertTrue(radio.read_text().startswith("webdav "))
+        self.status("installed=1\nremote=\ndevice=1\n")
+        self.env.out(script, dict(self.cenv, RADIO_COUNT=str(radio)))
+        self.assertTrue(radio.read_text().startswith("drive drive|Google Drive"))
 
 
 class CloudTests(unittest.TestCase):
@@ -5360,41 +5372,107 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(self.run_("remote", "webdav", stdin="url=ftp://x\nuser=a\npass=b\n").returncode, 2)
         self.assertEqual(self.run_("remote", "nope", stdin="").returncode, 2)
 
-    def test_google_drive_by_device_code(self):
-        # Sem o cliente OAuth do FliperOS, nao ha login por codigo (status 3).
+    def google(self, answers, expires=1800):
+        """O Google falso: o device/code da CODE-N (N conta os pedidos); cada
+        pergunta do token tira a primeira resposta de answers (pending, slow,
+        expired, denied, ok; sem nenhuma, pending); about da o e-mail; revoke
+        registra o token."""
         self.env["FLIPEROS_GOOGLE_OAUTH"] = str(self.dir / "google-oauth.conf")
-        self.assertEqual(self.run_("device-start").returncode, 3)
-        self.assertEqual(self.status()["device"], "0")
+        self.env["FLIPEROS_GOOGLE_INTERVAL"] = "0.1"
+        self.env["FLIPEROS_GOOGLE_SLOWDOWN"] = "0.1"
         (self.dir / "google-oauth.conf").write_text("client_id=123-abc.apps.googleusercontent.com\nclient_secret=GOCSPX-x\n")
-        self.assertEqual(self.status()["device"], "1")
-        # O curl falso: o device/code da o codigo; o token responde
-        # "pendente" na primeira vez e o token na segunda.
+        (self.dir / "answers").write_text("".join(a + "\n" for a in answers))
         curl = self.dir / "bin/curl"
         curl.write_text(
             "#!/bin/bash\necho \"$*\" >> %(d)s/curl.log\n"
             "case \"$*\" in\n"
-            "  *device/code*) echo '{\"device_code\":\"DEV-1\",\"user_code\":\"ABCD-EFGH\",\"verification_url\":"
-            "\"https://www.google.com/device\",\"expires_in\":1800,\"interval\":5}' ;;\n"
-            "  *token*) if [ -f %(d)s/approved ]; then echo '{\"access_token\":\"ya29.x\",\"expires_in\":3599,"
-            "\"refresh_token\":\"1//r\",\"token_type\":\"Bearer\"}'; else touch %(d)s/approved; "
-            "echo '{\"error\":\"authorization_pending\"}'; fi ;;\n"
-            "esac\n" % {"d": self.dir})
+            "  *device/code*) n=$(( $(cat %(d)s/n 2>/dev/null || echo 0) + 1 )); echo $n > %(d)s/n\n"
+            "    echo \"{\\\"device_code\\\":\\\"DEV-$n\\\",\\\"user_code\\\":\\\"CODE-$n\\\",\\\"verification_url\\\":"
+            "\\\"https://www.google.com/device\\\",\\\"expires_in\\\":%(e)d,\\\"interval\\\":5}\" ;;\n"
+            "  *revoke*) echo '{}' ;;\n"
+            "  *about*) echo '{\"user\":{\"emailAddress\":\"joe@gmail.com\"}}' ;;\n"
+            "  *token*) a=$(head -n 1 %(d)s/answers); sed -i 1d %(d)s/answers\n"
+            "    case $a in\n"
+            "      ok) echo '{\"access_token\":\"ya29.x\",\"expires_in\":3599,\"refresh_token\":\"1//r\",\"token_type\":\"Bearer\"}' ;;\n"
+            "      slow) echo '{\"error\":\"slow_down\"}' ;;\n"
+            "      expired) echo '{\"error\":\"expired_token\"}' ;;\n"
+            "      denied) echo '{\"error\":\"access_denied\"}' ;;\n"
+            "      *) echo '{\"error\":\"authorization_pending\"}' ;;\n"
+            "    esac ;;\n"
+            "esac\n" % {"d": self.dir, "e": expires})
         curl.chmod(0o755)
-        r = self.run_("device-start")
+
+    def wait_google(self, until=("ok", "denied", "error", "stopped")):
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            st = dict(line.split("=", 1) for line in self.run_("google", "status").stdout.splitlines() if "=" in line)
+            if st.get("state") in until:
+                return st
+            time.sleep(0.2)
+        self.fail("the Google sign-in did not finish: %s" % st)
+
+    def test_google_needs_the_fliperos_client(self):
+        self.env["FLIPEROS_GOOGLE_OAUTH"] = str(self.dir / "none.conf")
+        self.assertEqual(self.run_("google", "start").returncode, 3)
+        self.assertEqual(self.status()["device"], "0")
+        # O Google Drive nao entra mais pelo token colado.
+        self.assertEqual(self.run_("remote", "drive", stdin='token={"access_token":"x"}\n').returncode, 2)
+
+    def test_google_approved_after_pending_and_slow_down(self):
+        (self.cloud / "FliperOS/hiscores/hiscore").mkdir(parents=True)
+        self.google(["pending", "slow", "pending", "ok"])
+        r = self.run_("google", "start")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(r.stdout, "code=ABCD-EFGH\nurl=https://www.google.com/device\ndevice=DEV-1\ninterval=5\n"
-                                   "expires=1800\n")
-        self.assertIn("scope=https://www.googleapis.com/auth/drive.file", (self.dir / "curl.log").read_text())
-        r = self.run_("device-poll", "DEV-1")
-        self.assertEqual((r.returncode, r.stdout.strip()), (4, "pending"))
-        r = self.run_("device-poll", "DEV-1")
-        self.assertEqual((r.returncode, r.stdout.strip()), (0, "ok"), r.stderr)
+        self.assertIn("state=waiting\ncode=CODE-1\nurl=https://www.google.com/device\n", r.stdout)
+        st = self.wait_google()
+        self.assertEqual((st["state"], st["account"]), ("ok", "joe@gmail.com"))
         conf = (self.home / ".config/rclone/rclone.conf").read_text()
         self.assertIn("[fliperos]\ntype = drive\nclient_id = 123-abc.apps.googleusercontent.com\n"
                       "client_secret = GOCSPX-x\nscope = drive.file\ntoken = {\"access_token\":\"ya29.x\","
                       "\"token_type\":\"Bearer\",\"refresh_token\":\"1//r\",\"expiry\":\"", conf)
-        self.assertTrue((self.cloud / "FliperOS").is_dir())
-        self.assertEqual(self.run_("device-poll", "bad code!").returncode, 2)
+        self.assertIn("scope=https://www.googleapis.com/auth/drive.file", (self.dir / "curl.log").read_text())
+        # A primeira sincronizacao ja rodou, e a conta aparece no status.
+        self.assertEqual((self.cloud / "FliperOS/hiscores/hiscore/sf2.hi").read_text(), "local")
+        st = self.status()
+        self.assertEqual((st["remote"], st["account"], st["result"]), ("drive", "joe@gmail.com", "ok"))
+
+    def test_google_expired_code_is_renewed_alone(self):
+        self.google(["expired", "pending", "ok"])
+        self.run_("google", "start")
+        st = self.wait_google()
+        self.assertEqual(st["state"], "ok")
+        self.assertEqual((self.dir / "n").read_text().strip(), "2")
+        self.assertIn("new code (1)", (self.dir / "cloud.log").read_text())
+
+    def test_google_code_renewed_when_its_time_runs_out(self):
+        # O codigo vale 1 s: sem aprovacao, a espera pede outro sozinha.
+        self.google(["pending"] * 30, expires=1)
+        self.run_("google", "start")
+        deadline = time.time() + 10
+        while time.time() < deadline and (self.dir / "n").read_text().strip() == "1":
+            time.sleep(0.2)
+        self.assertNotEqual((self.dir / "n").read_text().strip(), "1")
+        self.assertIn("state=waiting\ncode=CODE-", self.run_("google", "status").stdout)
+        self.run_("google", "cancel")
+        self.assertEqual(self.run_("google", "status").stdout, "state=none\n")
+
+    def test_google_denied(self):
+        self.google(["denied"])
+        self.run_("google", "start")
+        st = self.wait_google()
+        self.assertEqual((st["state"], st["error"]), ("denied", "Access was not allowed on the Google page."))
+        self.assertEqual(self.status()["remote"], "")
+
+    def test_google_forget_revokes_the_token(self):
+        self.google(["ok"])
+        self.run_("google", "start")
+        self.assertEqual(self.wait_google()["state"], "ok")
+        self.assertEqual(self.run_("forget").returncode, 0)
+        revoke = [line for line in (self.dir / "curl.log").read_text().splitlines() if "revoke" in line]
+        self.assertEqual(len(revoke), 1)
+        self.assertIn("token=1//r", revoke[0])
+        st = self.status()
+        self.assertEqual((st["remote"], st["account"]), ("", ""))
 
     def test_refused_account_is_not_kept(self):
         (self.dir / "refuse").write_text("")
@@ -5405,9 +5483,9 @@ class CloudTests(unittest.TestCase):
 
     def test_oauth_token_and_sync_both_ways(self):
         token = '{"access_token":"ya29","token_type":"Bearer","expiry":"2026-11-10T00:00:00Z"}'
-        self.assertEqual(self.run_("remote", "drive", stdin="token=%s\n" % token).returncode, 0)
+        self.assertEqual(self.run_("remote", "dropbox", stdin="token=%s\n" % token).returncode, 0)
         conf = (self.home / ".config/rclone/rclone.conf").read_text()
-        self.assertIn("type = drive\nscope = drive\ntoken = %s\n" % token, conf)
+        self.assertIn("type = dropbox\ntoken = %s\n" % token, conf)
         self.assertEqual(self.run_("remote", "dropbox", stdin="token=nope\n").returncode, 2)
         # O recorde de outro gabinete ja esta na nuvem.
         (self.cloud / "FliperOS/hiscores/hiscore").mkdir(parents=True, exist_ok=True)

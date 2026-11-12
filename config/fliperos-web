@@ -2243,7 +2243,23 @@ UPDATE_TOOL = ENV("FLIPEROS_UPDATE_TOOL", BIN + "/fliperos-update")
 CLOUD = ENV("FLIPEROS_CLOUD", BIN + "/fliperos-cloud")
 RCLONE = ENV("FLIPEROS_RCLONE", "rclone")
 CLOUD_KINDS = {"webdav": ("url", "user", "pass"), "sftp": ("host", "port", "user", "pass"), "mega": ("user", "pass")}
-CLOUD_OAUTH = ("drive", "dropbox")
+# O Dropbox entra pelo endereco colado (CloudAuth); o Google Drive so pelo
+# "Entrar com o Google" (fliperos-cloud google), sem colar nada.
+CLOUD_OAUTH = ("dropbox",)
+QRENCODE = ENV("FLIPEROS_QRENCODE", "qrencode")
+_qr_cache = {}
+
+
+def qr_svg(text):
+    """O QR code do texto em SVG (qrencode); vazio sem o qrencode."""
+    if text not in _qr_cache:
+        try:
+            done = subprocess.run([QRENCODE, "-t", "SVG", "-m", "2", "-s", "8", "-o", "-", text], capture_output=True,
+                                  text=True, timeout=10)
+            _qr_cache[text] = done.stdout if done.returncode == 0 and "<svg" in done.stdout else ""
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    return _qr_cache[text]
 
 
 def as_player(*argv):
@@ -2262,7 +2278,8 @@ def cloud_status():
     last = info.get("last") or ""
     return {"installed": info.get("installed") == "1", "remote": info.get("remote", ""),
             "auto": info.get("auto") == "on", "what": what, "last": int(last) if last.isdigit() else None,
-            "result": info.get("result", ""), "device": info.get("device") == "1"}
+            "result": info.get("result", ""), "device": info.get("device") == "1",
+            "account": info.get("account", "")}
 
 
 class CloudAuth:
@@ -3538,7 +3555,7 @@ class Handler(BaseHTTPRequestHandler):
         senha pela entrada padrao; o OAuth pelo CloudAuth), o automatico, o
         que sincronizar e sincronizar agora (tarefa)."""
         action = data.get("action")
-        if user == LAB_USER and action in ("remote", "authorize", "authorized", "forget"):
+        if user == LAB_USER and action in ("remote", "authorize", "authorized", "forget", "google-start"):
             return self.send(403, {"error": "not in the lab mode"})
         if action == "install":
             task = self.panel.tasks.start("Install rclone (cloud backup)",
@@ -3579,31 +3596,22 @@ class Handler(BaseHTTPRequestHandler):
             if kind not in CLOUD_OAUTH or "\n" in token:
                 return self.send(400, {"error": "choose Google Drive or Dropbox first"})
             return self.cloud_run(["remote", kind], "token=%s\n" % token)
-        if action in ("device-start", "device-poll"):
-            # O Google Drive por codigo, como numa smart TV: o codigo e o
-            # endereco para a pessoa; depois o painel pergunta a cada poucos
-            # segundos se ela ja aprovou.
-            args = [action]
-            if action == "device-poll":
-                device = str(data.get("device") or "")
-                if not re.fullmatch(r"[A-Za-z0-9._/-]{1,512}", device):
-                    return self.send(400, {"error": "bad device"})
-                args.append(device)
+        if action in ("google-start", "google-status", "google-cancel"):
+            # Entrar com o Google, como numa smart TV: a espera roda no
+            # gabinete (fliperos-cloud google); o painel so le o estado, com o
+            # QR code do endereco do Google.
             try:
-                done = subprocess.run(as_player(CLOUD, *args), capture_output=True, text=True, timeout=40)
+                done = subprocess.run(as_player(CLOUD, "google", action.split("-")[1]), capture_output=True,
+                                      text=True, timeout=40)
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
-            out = done.stdout.strip()
-            if action == "device-start":
-                if done.returncode != 0:
-                    return self.send(500, {"error": out[-300:] or "failed"})
-                info = key_values(out)
-                return self.send(200, {k: info.get(k, "") for k in ("code", "url", "device", "interval", "expires")})
-            if done.returncode == 4:
-                return self.send(200, {"state": out or "pending"})
-            if done.returncode != 0:
-                return self.send(200, {"state": "error", "error": out[-300:] or "failed"})
-            return self.send(200, {"state": "ok"})
+            if done.returncode == 3:
+                return self.send(400, {"error": done.stdout.strip() or "Google sign-in is not set up"})
+            info = key_values(done.stdout)
+            state = {k: info.get(k, "") for k in ("state", "code", "url", "account", "error")}
+            if state["url"].startswith("https://"):
+                state["qr"] = qr_svg(state["url"])
+            return self.send(200, state)
         if action == "forget":
             return self.cloud_run(["forget"])
         if action == "auto" and isinstance(data.get("on"), bool):

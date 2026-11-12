@@ -135,6 +135,9 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .stack > .dim { font-size: 13px; }
 .stack label.row select { width: auto; }
 .device-code { font: 28px var(--px); letter-spacing: .18em; color: var(--green); padding: 10px 16px; border: 2px dashed var(--line); border-radius: 12px; }
+.google-row { align-items: flex-start; gap: 20px; }
+.qr:empty { display: none; }
+.qr svg { width: 180px; height: 180px; background: #fff; border-radius: 8px; display: block; }
 /* O seletor de gabinete (mais de um FliperOS na rede): troca de painel. */
 .cab-pick { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--dim); }
 .cab-pick select { height: 40px; min-width: 0; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);

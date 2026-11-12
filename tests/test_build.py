@@ -7241,13 +7241,15 @@ class WebPanelTests(unittest.TestCase):
         cloud.write_text('#!/bin/sh\necho "$*" >> %s/cloud.log\n'
                          'case "$1" in\n'
                          '  status) printf "installed=1\\nremote=webdav\\nauto=on\\nwhat=hiscores,config\\n'
-                         'last=1700000000\\nresult=ok\\ndevice=1\\n" ;;\n'
+                         'last=1700000000\\nresult=ok\\ndevice=1\\naccount=\\n" ;;\n'
                          '  remote) cat >> %s/secret.log; [ "$2" = mega ] && { echo "The cloud did not accept the account: 401"; exit 1; } ;;\n'
                          '  what|auto) [ -n "$2" ] || exit 2 ;;\n'
                          '  sync) echo "@step 0 Syncing with the cloud"; echo "@msg hiscores" ;;\n'
-                         '  device-start) printf "code=ABCD-EFGH\\nurl=https://www.google.com/device\\ndevice=DEV-1\\n'
-                         'interval=5\\nexpires=1800\\n" ;;\n'
-                         '  device-poll) [ -f %s/approved ] && { echo ok; exit 0; }; touch %s/approved; echo pending; exit 4 ;;\n'
+                         '  google) case "$2" in\n'
+                         '      start|status) if [ -f %s/approved ]; then printf "state=ok\\naccount=joe@gmail.com\\n"; else\n'
+                         '        touch %s/approved; printf "state=waiting\\ncode=ABCD-EFGH\\nurl=https://www.google.com/device\\n"; fi ;;\n'
+                         '      cancel) ;;\n'
+                         '    esac ;;\n'
                          'esac\nexit 0\n' % (tmp, tmp, tmp, tmp))
         cloud.chmod(0o755)
         # O "rclone authorize" falso: um servidor em 127.0.0.1 que manda o
@@ -7298,12 +7300,16 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_SYSLOGO=str(syslogo),
                    FLIPEROS_IDLE_GIF=str(ROOT / 'config/zedmd-fliperos.gif'),
                    FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
+        # O qrencode falso: um SVG com o texto.
+        qrencode = tmp / 'fake-qrencode'
+        qrencode.write_text('#!/bin/sh\nfor a; do last=$a; done\necho "<svg>$last</svg>"\n')
+        qrencode.chmod(0o755)
                    FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
                    FLIPEROS_UPDATE_TOOL=str(update),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
                    FLIPEROS_WEB_GUI=str(ROOT / 'fliperos-setup/gui'),
                    FLIPEROS_AVAHI_BROWSE=str(avahi),
-                   FLIPEROS_CLOUD=str(cloud), FLIPEROS_RCLONE=str(rclone),
+                   FLIPEROS_CLOUD=str(cloud), FLIPEROS_RCLONE=str(rclone), FLIPEROS_QRENCODE=str(qrencode),
                    FLIPEROS_RCLONE_AUTH_PORT=str(cls.auth_port),
                    FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi/fliperos-web.service'))
         (tmp / 'mnt/USB/romset').mkdir(parents=True)
@@ -7447,7 +7453,7 @@ class WebPanelTests(unittest.TestCase):
         status, _, data = self.request('GET', '/api/cloud', cookie=cookie)
         self.assertEqual((status, json.loads(data)), (200, {'installed': True, 'remote': 'webdav', 'auto': True,
                                                             'what': ['hiscores', 'config'], 'last': 1700000000,
-                                                            'result': 'ok', 'device': True}))
+                                                            'result': 'ok', 'device': True, 'account': ''}))
         body = {'action': 'remote', 'kind': 'webdav', 'fields': {'url': 'https://dav.example', 'user': 'joe', 'pass': 'pw1'}}
         self.assertEqual(self.request('POST', '/api/cloud', body, cookie=cookie)[0], 200)
         self.assertIn('url=https://dav.example\nuser=joe\npass=pw1\n', (tmp / 'secret.log').read_text())
@@ -7462,15 +7468,15 @@ class WebPanelTests(unittest.TestCase):
                     {'action': 'remote', 'kind': 'webdav', 'fields': {'url': 'a\nb'}}):
             self.assertEqual(self.request('POST', '/api/cloud', bad, cookie=cookie)[0], 400, bad)
         # O OAuth: o endereco do site sai do /auth do rclone; o colado volta a ele.
-        status, _, data = self.request('POST', '/api/cloud', {'action': 'authorize', 'kind': 'drive'}, cookie=cookie)
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'authorize', 'kind': 'dropbox'}, cookie=cookie)
         self.assertEqual((status, json.loads(data)), (200, {'url': 'https://accounts.example/o?x=1'}))
         self.assertEqual(self.request('POST', '/api/cloud', {'action': 'authorized', 'answer': 'https://evil/'},
                                       cookie=cookie)[0], 400)
         answer = 'http://127.0.0.1:%d/?state=abc&code=good&scope=drive' % self.auth_port
-        status, _, data = self.request('POST', '/api/cloud', {'action': 'authorized', 'answer': answer}, cookie=cookie)
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'authorized', 'kind': 'dropbox', 'answer': answer}, cookie=cookie)
         self.assertEqual(status, 200, data)
         self.assertIn('token={"access_token":"ya29","expiry":"x"}\n', (tmp / 'secret.log').read_text())
-        self.assertIn('remote drive', (tmp / 'cloud.log').read_text())
+        self.assertIn('remote dropbox', (tmp / 'cloud.log').read_text())
         # O token colado direto (de um rclone authorize noutro computador).
         status, _, _ = self.request('POST', '/api/cloud', {'action': 'authorized', 'kind': 'dropbox',
                                                            'answer': '{"access_token":"sl.x"}'}, cookie=cookie)
@@ -7487,14 +7493,19 @@ class WebPanelTests(unittest.TestCase):
         while time.time() < deadline and 'sync pull' not in (tmp / 'cloud.log').read_text():
             time.sleep(0.1)
         self.assertIn('sync pull', (tmp / 'cloud.log').read_text())
-        # O Google Drive por codigo: o codigo e o endereco; depois pendente e salvo.
-        status, _, data = self.request('POST', '/api/cloud', {'action': 'device-start'}, cookie=cookie)
-        self.assertEqual((status, json.loads(data)), (200, {'code': 'ABCD-EFGH', 'url': 'https://www.google.com/device',
-                                                            'device': 'DEV-1', 'interval': '5', 'expires': '1800'}))
-        poll = {'action': 'device-poll', 'device': 'DEV-1'}
-        self.assertEqual(json.loads(self.request('POST', '/api/cloud', poll, cookie=cookie)[2]), {'state': 'pending'})
-        self.assertEqual(json.loads(self.request('POST', '/api/cloud', poll, cookie=cookie)[2]), {'state': 'ok'})
-        self.assertEqual(self.request('POST', '/api/cloud', {'action': 'device-poll', 'device': 'a b'}, cookie=cookie)[0], 400)
+        # Entrar com o Google: o codigo, o endereco e o QR code dele; a espera
+        # roda no gabinete e o painel so le o estado. O Google Drive nao entra
+        # mais pelo endereco colado.
+        self.assertEqual(self.request('POST', '/api/cloud', {'action': 'authorize', 'kind': 'drive'}, cookie=cookie)[0], 400)
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'google-start'}, cookie=cookie)
+        self.assertEqual((status, json.loads(data)), (200, {
+            'state': 'waiting', 'code': 'ABCD-EFGH', 'url': 'https://www.google.com/device', 'account': '', 'error': '',
+            'qr': '<svg>https://www.google.com/device</svg>\n'}))
+        status, _, data = self.request('POST', '/api/cloud', {'action': 'google-status'}, cookie=cookie)
+        self.assertEqual(json.loads(data)['state'], 'ok')
+        self.assertEqual(json.loads(data)['account'], 'joe@gmail.com')
+        self.assertEqual(self.request('POST', '/api/cloud', {'action': 'google-cancel'}, cookie=cookie)[0], 200)
+        self.assertIn('google start\ngoogle status\ngoogle cancel', (tmp / 'cloud.log').read_text())
         self.assertEqual(self.request('GET', '/api/cloud')[0], 401)
 
     def test_avahi_lines_and_escapes(self):

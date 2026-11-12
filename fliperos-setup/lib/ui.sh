@@ -944,6 +944,30 @@ ui_timed_confirm() {
   esac
 }
 
+# ui_qr_wait TITULO SEGUNDOS CODIGO ENDERECO TEXTO...: o QR code do endereco
+# (qrencode) e o codigo grande, esperando um tempo, como o ui_timed_confirm
+# (124 = acabou o tempo, 1 = Esc). Sem o qrencode, so o endereco e o codigo.
+ui_qr_wait() {
+  local title=$1 seconds=$2 code=$3 url=$4 rc short
+  local -a rows=()
+  shift 4
+  # Na tela, o endereco sem o https://www. (google.com/device cabe na linha).
+  short=${url#https://}
+  short=${short#www.}
+  if have qrencode; then
+    mapfile -t rows < <(qrencode -t ASCII -m 0 "$url" 2> /dev/null | sed 's/##/1/g; s/  /0/g')
+  fi
+  if ui_gui_alive; then
+    ui_gui_call qr "$title" "$seconds" "$code" "$@" "$short" -- "${rows[@]}"
+    return
+  fi
+  local -a block=()
+  have qrencode && mapfile -t block < <(qrencode -t UTF8 -m 1 "$url" 2> /dev/null)
+  ui_timed_confirm "$title" "$seconds" "Waiting..." "${block[@]}" "$@" "$short" "" "Code: $code"
+  rc=$?
+  return "$rc"
+}
+
 # ui_pager TITULO ARQUIVO [inicio] mostra o fim de um arquivo longo (log)
 # com rolagem; com "inicio", o comeco (uma lista). O conteudo vai como
 # argumento (ate 128 KB): a entrada padrao do gum tem de ser o teclado.

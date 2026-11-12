@@ -454,38 +454,61 @@ async function cloudPage() {
     content.append(el("div", {}, t("cl_missing")), el("div", { class: "row start" }, install));
   } else if (!state.remote) {
     const kind = el("select", { "aria-label": t("cl_provider") },
-      ...["drive", "dropbox", "webdav", "sftp", "mega"].map((k) => el("option", { value: k }, t("cl_" + k))));
+      // O Google Drive so com o cliente do FliperOS (Entrar com o Google).
+      ...["drive", "dropbox", "webdav", "sftp", "mega"].filter((k) => k !== "drive" || state.device)
+        .map((k) => el("option", { value: k }, t("cl_" + k))));
     const area = el("div", { class: "stack" });
     let polling = null;
     const draw = () => {
       if (polling) { clearTimeout(polling); polling = null; }
-      if (kind.value === "drive" && state.device) {
-        // Por codigo, como numa smart TV: o codigo grande e o endereco do
-        // Google; o painel pergunta sozinho ate a pessoa aprovar no celular.
-        const go = el("button", { type: "button", class: "btn" }, icon("px-password"), t("cl_code_get"));
-        const box = el("div", { class: "stack", hidden: "" });
-        go.addEventListener("click", async () => {
-          go.disabled = true;
-          const data = await post({ action: "device-start" });
-          go.disabled = false;
-          if (!data) return;
-          const deadline = Date.now() + Number(data.expires || 1800) * 1000;
-          let wait = Math.max(5, Number(data.interval) || 5) * 1000;
-          const status = el("div", { class: "dim" }, t("cl_code_wait"));
-          box.replaceChildren(el("div", {}, t("cl_code_step1")),
-            el("a", { class: "btn ghost", href: data.url, target: "_blank", rel: "noopener" }, icon("px-link"), data.url.replace(/^https?:\/\//, "")),
-            el("div", {}, t("cl_code_step2")), el("div", { class: "device-code" }, data.code), status);
+      if (kind.value === "drive") {
+        // Entrar com o Google, como numa smart TV: o QR code e o codigo; a
+        // espera roda no gabinete, e o painel so le o estado a cada 2 s.
+        const go = el("button", { type: "button", class: "btn" }, icon("px-password"), t("cl_google"));
+        const box = el("div", { class: "stack google-wait", hidden: "" });
+        const cancel = el("button", { type: "button", class: "btn ghost" }, icon("px-cancel"), t("cancel"));
+        let shown = "";
+        const show = (s) => {
+          if (s.state === "ok") { toast(t("cl_connected").replace("%s", s.account || "Google Drive"), "ok"); reload(); return true; }
+          if (s.state === "denied" || s.state === "error" || s.state === "stopped") {
+            box.replaceChildren(el("div", { class: "bad" }, s.error || t("cl_google_stopped")));
+            go.hidden = false;
+            return true;
+          }
+          if (s.state === "syncing") {
+            box.replaceChildren(el("div", {}, t("cl_google_syncing").replace("%s", s.account || "")));
+          } else if (s.code && s.code !== shown) {
+            shown = s.code;
+            const qr = el("div", { class: "qr" });
+            qr.innerHTML = s.qr || "";
+            box.replaceChildren(el("div", { class: "row start google-row" }, qr, el("div", { class: "stack" },
+              el("div", {}, t("cl_code_step1")),
+              el("a", { class: "btn ghost", href: s.url, target: "_blank", rel: "noopener" }, icon("px-link"), s.url.replace(/^https?:\/\//, "")),
+              el("div", {}, t("cl_code_step2")), el("div", { class: "device-code" }, s.code),
+              el("div", { class: "dim" }, t("cl_code_wait")), cancel)));
+          }
           box.hidden = false;
           go.hidden = true;
-          const poll = async () => {
-            if (Date.now() > deadline) { status.textContent = t("cl_code_expired"); go.hidden = false; return; }
-            const r = await post({ action: "device-poll", device: data.device });
-            if (r && r.state === "ok") { toast(t("cl_saved"), "ok"); reload(); return; }
-            if (r && r.state === "error") { status.textContent = r.error; go.hidden = false; return; }
-            if (r && r.state === "slow") wait += 5000;
-            polling = setTimeout(poll, wait);
-          };
-          polling = setTimeout(poll, wait);
+          return false;
+        };
+        const watch = async () => {
+          const r = await api("/api/cloud", { method: "POST", body: JSON.stringify({ action: "google-status" }) }).catch(() => null);
+          const s = r && r.ok ? await r.json() : null;
+          if (s && show(s)) return;
+          if ($("cloud-page").contains(box)) polling = setTimeout(watch, 2000);
+        };
+        go.addEventListener("click", async () => {
+          go.disabled = true;
+          const s = await post({ action: "google-start" });
+          go.disabled = false;
+          if (s && !show(s)) polling = setTimeout(watch, 2000);
+        });
+        cancel.addEventListener("click", async () => {
+          if (polling) clearTimeout(polling);
+          await post({ action: "google-cancel" });
+          box.hidden = true;
+          go.hidden = false;
+          shown = "";
         });
         area.replaceChildren(el("div", { class: "dim" }, t("cl_code_help")), go, box);
       } else if (CLOUD_FIELDS[kind.value]) {
@@ -553,7 +576,8 @@ async function cloudPage() {
       if (await post({ action: "forget" })) reload();
     });
     const last = state.last ? new Date(state.last * 1000).toLocaleString() + (state.result === "failed" ? " · " + t("cl_failed") : "") : t("cl_never");
-    content.append(el("div", {}, t("cl_account").replace("%s", t("cl_" + state.remote) || state.remote)),
+    content.append(el("div", {}, state.remote === "drive" && state.account ? t("cl_connected").replace("%s", state.account)
+      : t("cl_account").replace("%s", t("cl_" + state.remote) || state.remote)),
       ...checks.map((c) => c.label), el("label", { class: "row start" }, el("span", {}, t("cl_auto")), auto),
       el("div", { class: "row start" }, run("both", "cl_sync", "px-reset"), run("push", "cl_push", "px-up"), run("pull", "cl_pull", "px-install")),
       el("div", { class: "dim" }, t("cl_last").replace("%s", last)), el("div", { class: "row start" }, forget));

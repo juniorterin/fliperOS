@@ -2121,6 +2121,48 @@ class Pager:
         for line in content.split("\n"):
             self.lines += self.fold(line.expandtabs(4).rstrip())
         self.top = 0 if start else max(0, len(self.lines) - self.ROWS)
+class QrWait(Timed):
+    """ui_qr_wait: o Entrar com o Google no tubo, como numa smart TV. O QR
+    code (a matriz do qrencode, "1" e o modulo escuro) a esquerda, em branco
+    e preto com a margem, e a direita o endereco e o codigo grandes. Espera
+    como o Timed: no fim do tempo devolve "timeout", e o Setup pergunta o
+    estado e desenha de novo; Esc desiste."""
+
+    def __init__(self, title, lines, code, rows, seconds):
+        super().__init__(title, lines, "", seconds)
+        self.code = code
+        self.rows = [r for r in rows if r and set(r) <= {"0", "1"}]
+
+    def key(self, k):
+        return ("back", None) if k == "esc" else None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ESC", "BACK")])
+        top = 40 + extra() // 2
+        x = T.SAFE_X
+        if self.rows:
+            n = len(self.rows)
+            px = max(1, min(4, 132 // (n + 4)))
+            side = (n + 4) * px
+            pygame.draw.rect(surf, (255, 255, 255), (x, top, side, side))
+            for j, row in enumerate(self.rows):
+                for i, c in enumerate(row):
+                    if c == "1":
+                        pygame.draw.rect(surf, (0, 0, 0), (x + (i + 2) * px, top + (j + 2) * px, px, px))
+            x += side + 10
+        y = top
+        right = T.SAFE_X + T.SAFE_W - x
+        for line, color in self.lines:
+            for part in wrap(line, right):
+                text(surf, part, color or T.FG, x, y)
+                y += 12
+        img = big(self.code, 2, LABEL)
+        if img.get_width() > right:
+            img = big(self.code, 1, LABEL)
+        surf.blit(img, (x, y + 6))
+        text(surf, "WAITING" + "." * (int(time.monotonic()) % 4), T.COMMENT, x, y + 14 + img.get_height())
+
+
 
     @classmethod
     def fold(cls, line):

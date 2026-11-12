@@ -290,7 +290,7 @@ apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
   coreutils util-linux e2fsprogs dosfstools parted \
-  wget curl git ca-certificates jq rsync rclone fbset zstd \
+  wget curl git ca-certificates jq rsync rclone qrencode fbset zstd \
   xserver-xorg-core xserver-xorg-input-libinput xinit x11-xserver-utils x11-utils \
   libdrm2 libgbm1 mesa-vulkan-drivers mesa-va-drivers mesa-utils \
   libsdl2-2.0-0 libsdl2-dev build-essential cmake \

@@ -8,7 +8,7 @@
 #   fliperos-cloud remote TIPO            grava o remoto; os campos pela entrada padrao, um "chave=valor"
 #                                         por linha (a senha nunca na linha de comando):
 #                                           webdav  url user pass      sftp  host port user pass
-#                                           mega    user pass          drive|dropbox  token (o JSON do rclone)
+#                                           mega    user pass          dropbox  token (o JSON do rclone; o Google Drive so por "google start")
 #   fliperos-cloud forget                 tira o remoto (o que esta na nuvem fica la)
 #   fliperos-cloud auto on|off            sincroniza sozinho ao fechar cada jogo
 #   fliperos-cloud what LISTA             o que sincronizar: hiscores,saves,config
@@ -16,19 +16,27 @@
 #   fliperos-cloud watch PID              (fliperos-kms-run/x11-run) espera o jogo fechar e, com o
 #                                         automatico ligado, sincroniza os hi-scores e os saves; as
 #                                         configuracoes uma vez por dia
-#   fliperos-cloud device-start           o login do Google Drive por codigo, como numa smart TV:
-#                                         code=, url=, device=, interval=, expires= (status 3: sem o
-#                                         cliente OAuth do FliperOS em /etc/fliperos/google-oauth.conf)
-#   fliperos-cloud device-poll DEVICE     pergunta uma vez ao Google: "pending" (status 4, ainda nao
-#                                         aprovado), "slow" (status 4, espere mais), a conta gravada
-#                                         (status 0) ou o motivo (status 1: negado, expirado)
+#   fliperos-cloud google start           "Entrar com o Google", como numa smart TV: comeca (ou
+#                                         continua) a espera em segundo plano e imprime o estado
+#                                         (status 3: sem o cliente OAuth em /etc/fliperos/google-oauth.conf)
+#   fliperos-cloud google status          o estado: state=waiting|syncing|ok|denied|error|stopped,
+#                                         code=, url=, account=, error=
+#   fliperos-cloud google cancel          para a espera
 #
-# O login por codigo (o "OAuth 2.0 for TV and Limited-Input Devices" do
-# Google) usa um cliente do tipo "TVs and Limited Input devices" do projeto do
-# FliperOS, com o escopo drive.file: o rclone so ve os arquivos que ele mesmo
-# criou (a pasta FliperOS). O client_secret desse tipo de cliente nao e
-# segredo (o Google diz que vai junto do aplicativo). O rclone renova o token
-# com o mesmo cliente (client_id/client_secret no remoto).
+# "Entrar com o Google" e o "OAuth 2.0 for TV and Limited-Input Devices": um
+# cliente do tipo "TVs and Limited Input devices" do projeto do FliperOS, com o
+# escopo drive.file (o rclone so ve o que ele mesmo criou: a pasta FliperOS). O
+# client_secret desse tipo de cliente vai junto do aplicativo (o Google nao o
+# trata como segredo). O rclone renova o token com o mesmo cliente
+# (client_id/client_secret no remoto).
+#
+# A espera fica aqui, num processo solto (google-run), e nao em quem mostra a
+# tela: o painel web e o Setup so leem o estado ($XDG_RUNTIME_DIR). Ele
+# respeita o interval e o slow_down do Google e, se o codigo expira antes da
+# aprovacao, pede outro sozinho. Aprovado: grava o remoto, confere o acesso
+# criando a pasta FliperOS, guarda o e-mail da conta (Drive about) e roda a
+# primeira sincronizacao. Sem ninguem olhando o estado por 10 minutos (a tela
+# fechada), desiste. "forget" revoga o token no Google.
 #
 # Na nuvem, tudo fica em FliperOS/ (hiscores/, saves/, config/), o mesmo para
 # todos os gabinetes da pessoa: um recorde feito num aparece no outro. Nada e
@@ -51,6 +59,11 @@ GOOGLE_OAUTH=${FLIPEROS_GOOGLE_OAUTH:-/etc/fliperos/google-oauth.conf}
 GOOGLE_DEVICE_URL=${FLIPEROS_GOOGLE_DEVICE_URL:-https://oauth2.googleapis.com/device/code}
 GOOGLE_TOKEN_URL=${FLIPEROS_GOOGLE_TOKEN_URL:-https://oauth2.googleapis.com/token}
 GOOGLE_SCOPE=https://www.googleapis.com/auth/drive.file
+GOOGLE_ABOUT_URL=${FLIPEROS_GOOGLE_ABOUT_URL:-https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)}
+GOOGLE_REVOKE_URL=${FLIPEROS_GOOGLE_REVOKE_URL:-https://oauth2.googleapis.com/revoke}
+GOOGLE_RUN=${XDG_RUNTIME_DIR:-/tmp}/fliperos-cloud-google
+# Sem ninguem olhando o estado por tanto tempo (s), a espera desiste.
+GOOGLE_IDLE=${FLIPEROS_GOOGLE_IDLE:-600}
 
 # As pastas de cada grupo: "local<TAB>na nuvem".
 pairs() {
@@ -128,11 +141,10 @@ cmd_remote() {
       pass=$(obscure "${f[pass]}") || return 1
       body=$(printf 'user = %s\npass = %s' "${f[user]}" "$pass")
       ;;
-    drive | dropbox)
+    dropbox)
       token=${f[token]:-}
       [[ $token == \{*access_token*\} && $token != *$'\n'* ]] || return 2
       body="token = $token"
-      [[ $kind == drive ]] && body=$(printf 'scope = drive\n%s' "$body")
       ;;
     *) return 2 ;;
   esac
@@ -234,64 +246,192 @@ google_client() {
   printf '%s\n%s\n' "$id" "$secret"
 }
 
-cmd_device_start() {
-  local client id reply
-  client=$(google_client) || { echo "The FliperOS Google sign-in is not set up on this system."; return 3; }
-  id=${client%%$'\n'*}
-  reply=$(curl -sS --max-time 20 --data-urlencode "client_id=$id" --data-urlencode "scope=$GOOGLE_SCOPE" \
-    "$GOOGLE_DEVICE_URL" 2>&1) || { log "device-start: $reply"; echo "No answer from Google (no network?)."; return 1; }
-  if ! jq -e '.user_code and .device_code' <<< "$reply" > /dev/null 2>&1; then
-    log "device-start: $reply"
-    echo "Google refused: $(jq -r '.error_description // .error // "unexpected answer"' <<< "$reply" 2> /dev/null)"
-    return 1
-  fi
-  jq -r '"code=\(.user_code)\nurl=\(.verification_url // .verification_uri)\ndevice=\(.device_code)\ninterval=\(.interval // 5)\nexpires=\(.expires_in // 1800)"' <<< "$reply"
+# ── Entrar com o Google ───────────────────────────────────────────
+
+# gstate_write CHAVE=VALOR...: o estado da espera, inteiro de uma vez.
+gstate_write() {
+  local tmp
+  tmp=$(mktemp "$GOOGLE_RUN.XXXXXX") || return 1
+  printf '%s\n' "$@" > "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$GOOGLE_RUN"
+}
+gstate_get() { sed -n "s/^$1=//p" "$GOOGLE_RUN" 2> /dev/null | head -1; }
+google_pid() {
+  local pid
+  pid=$(cat "$GOOGLE_RUN.pid" 2> /dev/null)
+  [[ $pid =~ ^[0-9]+$ ]] && kill -0 "$pid" 2> /dev/null && echo "$pid"
 }
 
-cmd_device_poll() {
-  local device=$1 client id secret reply error token
-  [[ $device =~ ^[A-Za-z0-9._/-]+$ ]] || return 2
-  client=$(google_client) || return 3
-  id=${client%%$'\n'*} secret=${client#*$'\n'}
-  reply=$(curl -sS --max-time 20 --data-urlencode "client_id=$id" --data-urlencode "client_secret=$secret" \
-    --data-urlencode "device_code=$device" --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
-    "$GOOGLE_TOKEN_URL" 2>&1) || { echo "pending"; return 4; }
-  error=$(jq -r '.error // empty' <<< "$reply" 2> /dev/null)
-  case $error in
-    authorization_pending) echo pending; return 4 ;;
-    slow_down) echo slow; return 4 ;;
-    "") ;;
-    access_denied) echo "Access was not allowed on the Google page."; return 1 ;;
-    expired_token) echo "The code expired: start again."; return 1 ;;
-    *) log "device-poll: $reply"; echo "Google refused: $error"; return 1 ;;
-  esac
-  # O token no formato do rclone (oauth2.Token: expiry em RFC 3339).
-  token=$(jq -c '{access_token, token_type: (.token_type // "Bearer"), refresh_token,
-    expiry: ((now + (.expires_in // 3600)) | todate)}' <<< "$reply" 2> /dev/null)
-  [[ $token == *access_token* && $token == *refresh_token* ]] || { log "device-poll: $reply"; echo "Google gave no token."; return 1; }
-  write_remote drive "$(printf 'client_id = %s\nclient_secret = %s\nscope = drive.file\ntoken = %s' "$id" "$secret" "$token")" ||
-    return 1
-  if ! out=$("$RCLONE" mkdir "$REMOTE:$ROOT_DIR" 2>&1); then
-    log "remote drive: $out"
-    write_remote "" ""
-    echo "Google Drive did not accept the account: $(tail -1 <<< "$out")"
+# google_device_code: um codigo novo (USER_CODE, VER_URL, DEV_CODE, INTERVAL,
+# EXPIRES); status 1 com o motivo em GERR.
+google_device_code() {
+  local reply
+  reply=$(curl -sS --max-time 20 --data-urlencode "client_id=$GID" --data-urlencode "scope=$GOOGLE_SCOPE" \
+    "$GOOGLE_DEVICE_URL" 2>&1) || { log "google: $reply"; GERR="No answer from Google (no network?)."; return 1; }
+  if ! jq -e '.user_code and .device_code' <<< "$reply" > /dev/null 2>&1; then
+    log "google: $reply"
+    GERR="Google refused: $(jq -r '.error_description // .error // "unexpected answer"' <<< "$reply" 2> /dev/null)"
     return 1
   fi
-  log "remote drive saved (device sign-in)"
-  echo ok
+  USER_CODE=$(jq -r .user_code <<< "$reply")
+  VER_URL=$(jq -r '.verification_url // .verification_uri // "https://www.google.com/device"' <<< "$reply")
+  DEV_CODE=$(jq -r .device_code <<< "$reply")
+  INTERVAL=$(jq -r '.interval // 5' <<< "$reply")
+  EXPIRES=$(jq -r '.expires_in // 1800' <<< "$reply")
+  [[ $INTERVAL =~ ^[0-9]+$ ]] || INTERVAL=5
+  [[ $EXPIRES =~ ^[0-9]+$ ]] || EXPIRES=1800
+}
+
+# google_poll DEVICE: 0 aprovado (a resposta em REPLY), 4 pendente, 5 mais
+# devagar (slow_down), 6 o codigo expirou, 1 negado ou outro erro (GERR).
+google_poll() {
+  local error
+  REPLY=$(curl -sS --max-time 20 --data-urlencode "client_id=$GID" --data-urlencode "client_secret=$GSECRET" \
+    --data-urlencode "device_code=$1" --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+    "$GOOGLE_TOKEN_URL" 2>&1) || return 4
+  error=$(jq -r '.error // empty' <<< "$REPLY" 2> /dev/null)
+  case $error in
+    authorization_pending) return 4 ;;
+    slow_down) return 5 ;;
+    expired_token) return 6 ;;
+    access_denied) GERR="Access was not allowed on the Google page."; return 1 ;;
+    "") jq -e .access_token <<< "$REPLY" > /dev/null 2>&1 && return 0; return 4 ;;
+    *) log "google: $REPLY"; GERR="Google refused: $error"; return 1 ;;
+  esac
+}
+
+# google_save: o remoto com o token aprovado, a pasta FliperOS (confere o
+# acesso) e o e-mail da conta (ACCOUNT).
+google_save() {
+  local token access out
+  token=$(jq -c '{access_token, token_type: (.token_type // "Bearer"), refresh_token,
+    expiry: ((now + (.expires_in // 3600)) | todate)}' <<< "$REPLY" 2> /dev/null)
+  [[ $token == *access_token* && $token == *refresh_token* ]] || { log "google: $REPLY"; GERR="Google gave no token."; return 1; }
+  write_remote drive "$(printf 'client_id = %s\nclient_secret = %s\nscope = drive.file\ntoken = %s' "$GID" "$GSECRET" "$token")" ||
+    { GERR="Could not save the account."; return 1; }
+  if ! out=$("$RCLONE" mkdir "$REMOTE:$ROOT_DIR" 2>&1); then
+    log "google: $out"
+    write_remote "" ""
+    GERR="Google Drive did not accept the account: $(tail -1 <<< "$out")"
+    return 1
+  fi
+  access=$(jq -r .access_token <<< "$REPLY")
+  ACCOUNT=$(curl -sS --max-time 20 -H "Authorization: Bearer $access" "$GOOGLE_ABOUT_URL" 2> /dev/null |
+    jq -r '.user.emailAddress // empty' 2> /dev/null)
+  state_set account "${ACCOUNT:-Google Drive}"
+  ACCOUNT=${ACCOUNT:-Google Drive}
+  log "google: signed in as $ACCOUNT"
+}
+
+# google_run: a espera, solta (google start a abre).
+cmd_google_run() {
+  local deadline interval rc client renew=0
+  client=$(google_client) || return 3
+  GID=${client%%$'\n'*} GSECRET=${client#*$'\n'}
+  echo $$ > "$GOOGLE_RUN.pid"
+  trap 'rm -f "$GOOGLE_RUN.pid"' EXIT
+  while true; do
+    if ! google_device_code; then
+      gstate_write state=error "error=$GERR"
+      return 1
+    fi
+    gstate_write state=waiting "code=$USER_CODE" "url=$VER_URL"
+    deadline=$((SECONDS + EXPIRES))
+    interval=${FLIPEROS_GOOGLE_INTERVAL:-$INTERVAL}
+    while ((SECONDS < deadline)); do
+      sleep "$interval"
+      if (($(date +%s) - $(stat -c %Y "$GOOGLE_RUN.seen" 2> /dev/null || echo 0) > GOOGLE_IDLE)); then
+        log "google: nobody watching, stopped"
+        gstate_write state=stopped
+        return 0
+      fi
+      google_poll "$DEV_CODE"
+      rc=$?
+      case $rc in
+        0) break 2 ;;
+        4) ;;
+        5) interval=$(awk -v i="$interval" -v s="${FLIPEROS_GOOGLE_SLOWDOWN:-5}" 'BEGIN { print i + s }') ;;
+        6) break ;;
+        *)
+          gstate_write state=denied "error=$GERR"
+          return 1
+          ;;
+      esac
+    done
+    renew=$((renew + 1))
+    log "google: the code expired before the approval, new code ($renew)"
+  done
+  gstate_write state=syncing
+  if ! google_save; then
+    gstate_write state=error "error=$GERR"
+    return 1
+  fi
+  gstate_write state=syncing "account=$ACCOUNT"
+  cmd_sync both > /dev/null 2>&1
+  gstate_write state=ok "account=$ACCOUNT" "result=$(state_get result)"
+}
+
+cmd_google() {
+  local i
+  case ${1:-} in
+    start)
+      google_client > /dev/null || { echo "The FliperOS Google sign-in is not set up on this system."; return 3; }
+      touch "$GOOGLE_RUN.seen"
+      if [[ -z $(google_pid) ]]; then
+        gstate_write state=starting
+        setsid bash "$0" google-run < /dev/null > /dev/null 2>&1 &
+        for ((i = 0; i < 150; i++)); do
+          [[ $(gstate_get state) != starting ]] && break
+          sleep 0.1
+        done
+      fi
+      cmd_google status
+      ;;
+    status)
+      touch "$GOOGLE_RUN.seen" 2> /dev/null
+      [[ -f $GOOGLE_RUN ]] || { echo "state=none"; return 0; }
+      # A espera morreu sem dizer (o gabinete reiniciou o servico).
+      if [[ $(gstate_get state) =~ ^(starting|waiting|syncing)$ && -z $(google_pid) ]]; then
+        gstate_write state=stopped
+      fi
+      cat "$GOOGLE_RUN"
+      ;;
+    cancel)
+      i=$(google_pid) && kill "$i" 2> /dev/null
+      rm -f "$GOOGLE_RUN" "$GOOGLE_RUN.pid"
+      ;;
+    *) return 2 ;;
+  esac
+}
+
+# google_revoke: o token do remoto do Google Drive revogado no Google (Tirar a
+# conta); sem rede, so apaga daqui.
+google_revoke() {
+  local token
+  token=$(awk -v s="[$REMOTE]" '$0 == s { f = 1; next } /^\[/ { f = 0 } f && $1 == "token" { sub(/^token *= */, ""); print; exit }' \
+    "$RCLONE_CONF" 2> /dev/null | jq -r '.refresh_token // .access_token // empty' 2> /dev/null)
+  [[ -n $token ]] || return 0
+  if curl -sS --max-time 15 --data-urlencode "token=$token" "$GOOGLE_REVOKE_URL" > /dev/null 2>&1; then
+    log "google: token revoked"
+  else
+    log "google: could not revoke the token (no network?)"
+  fi
 }
 
 case ${1:-} in
   status)
     printf 'installed=%s\nremote=%s\nauto=%s\nwhat=%s\nlast=%s\nresult=%s\n' "$(installed && echo 1 || echo 0)" \
       "$(remote_kind)" "$(state_get auto || echo off)" "$(state_get what)" "$(state_get last)" "$(state_get result)"
-    printf 'device=%s\n' "$(google_client > /dev/null && echo 1 || echo 0)"
+    printf 'device=%s\naccount=%s\n' "$(google_client > /dev/null && echo 1 || echo 0)" "$(state_get account)"
     ;;
   remote) cmd_remote "${2:-}" ;;
-  device-start) cmd_device_start ;;
-  device-poll) cmd_device_poll "${2:-}" ;;
+  google) cmd_google "${2:-}" ;;
+  google-run) cmd_google_run ;;
   forget)
+    [[ $(remote_kind) == drive ]] && google_revoke
     write_remote "" ""
+    state_set account ""
     log "remote removed"
     ;;
   auto)

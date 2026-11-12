@@ -37,7 +37,7 @@ screen_setup_menu() {
 # sincronizar, o automatico e sincronizar agora. Google Drive e Dropbox
 # entram pelo site, entao so pelo painel (o navegador do celular ou do PC).
 screen_cloud() {
-  local title="Cloud backup" choice last="" remote what entries kind field value fields input w
+  local title="Cloud backup" choice last="" remote what entries kind field value fields input w device
   if [[ ! -x $CLOUD_TOOL ]]; then
     ui_msg "$title" "$(ui_bad "The cloud backup tool is missing on this system.")"
     return 0
@@ -52,12 +52,17 @@ screen_cloud() {
     remote=$(cloud_status remote)
     if [[ -z $remote ]]; then
       entries=()
-      for kind in "${CLOUD_KINDS[@]}"; do entries+=("${kind%%|*}|$(cut -d'|' -f2 <<< "$kind")"); done
+      device=$(cloud_status device)
+      for kind in "${CLOUD_KINDS[@]}"; do
+        # O Google Drive so com o cliente do FliperOS (Sign in with Google).
+        [[ ${kind%%|*} == drive && $device != 1 ]] && continue
+        entries+=("${kind%%|*}|$(cut -d'|' -f2 <<< "$kind")")
+      done
       kind=$(ui_radio "$title" "Where your high scores, saves and settings go. The same folder for all your cabinets." \
-        webdav "${entries[@]}") || return 0
+        "$([[ $device == 1 ]] && echo drive || echo webdav)" "${entries[@]}") || return 0
       fields=$(cloud_kind_fields "$kind")
-      if [[ $kind == drive && $(cloud_status device) == 1 ]]; then
-        screen_need_internet "$title" && screen_cloud_device
+      if [[ $kind == drive ]]; then
+        screen_need_internet "$title" && screen_cloud_google
         continue
       fi
       if [[ -z $fields ]]; then
@@ -89,7 +94,7 @@ screen_cloud() {
     what=$(cloud_status what)
     what=${what:-hiscores,saves,config}
     choice=$(ui_menu_hints "$title" \
-      "Account: $(cloud_kind_label "$remote"). Last sync: $(last=$(cloud_status last); [[ -n $last ]] && date -d "@$last" '+%F %R' || echo never)." \
+      "Account: $(account=$(cloud_status account); [[ $remote == drive && -n $account ]] && echo "$account" || cloud_kind_label "$remote"). Last sync: $(last=$(cloud_status last); [[ -n $last ]] && date -d "@$last" '+%F %R' || echo never)." \
       "$last" \
       "sync|Sync now|Both ways: each side keeps the newest file, nothing is deleted." \
       "push|Send|Only from this cabinet to the cloud." \
@@ -121,42 +126,53 @@ screen_cloud() {
   done
 }
 
-# screen_cloud_device: o Google Drive por codigo, como numa smart TV: o
-# codigo e o endereco na tela, e o Setup pergunta ao Google a cada poucos
-# segundos se a pessoa ja aprovou no celular. Esc desiste.
-screen_cloud_device() {
-  local title="Google Drive" out code url device interval expires deadline rc reason
-  out=$(cloud_run device-start 2>&1) || {
-    ui_msg "$title" "$(ui_bad "${out:-Could not start the sign-in.}")"
+# screen_cloud_google: "Sign in with Google", como numa smart TV: o QR code
+# do endereco do Google e o codigo na tela. A espera roda no gabinete
+# (fliperos-cloud google, que pede outro codigo sozinho quando um expira);
+# esta tela so le o estado a cada poucos segundos. Esc desiste.
+screen_cloud_google() {
+  local title="Sign in with Google" out state code url account error rc
+  out=$(cloud_run google start 2>&1)
+  if [[ $? -eq 3 ]]; then
+    ui_msg "$title" "$(ui_bad "${out:-Google sign-in is not set up on this system.}")"
     return 0
-  }
-  code=$(sed -n 's/^code=//p' <<< "$out")
-  url=$(sed -n 's/^url=//p' <<< "$out")
-  device=$(sed -n 's/^device=//p' <<< "$out")
-  interval=$(sed -n 's/^interval=//p' <<< "$out")
-  expires=$(sed -n 's/^expires=//p' <<< "$out")
-  [[ $interval =~ ^[0-9]+$ ]] && ((interval >= 5)) || interval=5
-  [[ $expires =~ ^[0-9]+$ ]] || expires=1800
-  deadline=$((SECONDS + expires))
-  while ((SECONDS < deadline)); do
-    ui_timed_confirm "$title" "$interval" "Waiting..." "On a phone or computer, open:" "" "$url" "" \
-      "and type this code:" "" "$code" "" "Esc gives up."
-    rc=$?
-    ((rc == 1)) && return 0
-    reason=$(cloud_run device-poll "$device" 2>&1)
-    case $? in
-      0)
-        ui_msg "$title" "$(ui_yes "Google Drive saved.")" "" "Your backups go to the FliperOS folder in it."
+  fi
+  while true; do
+    state=$(sed -n 's/^state=//p' <<< "$out")
+    code=$(sed -n 's/^code=//p' <<< "$out")
+    url=$(sed -n 's/^url=//p' <<< "$out")
+    account=$(sed -n 's/^account=//p' <<< "$out")
+    error=$(sed -n 's/^error=//p' <<< "$out")
+    case $state in
+      ok)
+        ui_msg "$title" "$(ui_yes "Connected as ${account:-Google Drive}.")" "" \
+          "The first sync is done: your backups are in the FliperOS folder of your Google Drive."
         return 0
         ;;
-      4) [[ $reason == slow ]] && interval=$((interval + 5)) ;;
-      *)
-        ui_msg "$title" "$(ui_bad "Not saved: ${reason:-Google refused.}")"
+      denied | error | stopped | none)
+        ui_msg "$title" "$(ui_bad "${error:-The sign-in stopped.}")" "" "Choose Sign in with Google to try again."
         return 0
+        ;;
+      syncing)
+        ui_timed_confirm "$title" 3 "Waiting..." "Connected as ${account:-Google Drive}." "" "First sync running..."
+        rc=$?
+        ;;
+      *)
+        if [[ -n $code ]]; then
+          ui_qr_wait "$title" 3 "$code" "$url" "On a phone, scan or open:"
+          rc=$?
+        else
+          ui_timed_confirm "$title" 2 "Waiting..." "Asking Google for a code..."
+          rc=$?
+        fi
         ;;
     esac
+    if ((rc == 1)); then
+      cloud_run google cancel > /dev/null 2>&1
+      return 0
+    fi
+    out=$(cloud_run google status 2>&1)
   done
-  ui_msg "$title" "$(ui_bad "The code expired.")" "Choose Google Drive again for a new one."
 }
 
 # screen_setup_games (Setup > Games), na ordem de por jogos no gabinete: os
