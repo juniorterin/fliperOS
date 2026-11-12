@@ -14770,6 +14770,54 @@ class GuiNotSupportedTests(unittest.TestCase):
         self.assertEqual(menu.blocked, {"emulationstation"})
 
 
+class GuiInputKeyboardTests(unittest.TestCase):
+    """Todo campo de texto do Setup grafico tem o teclado na tela, para o
+    controle: aberto num campo sem botoes, e pelo Enter no campo num com
+    botoes (o Esc o fecha e os botoes voltam)."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_every_field_gets_the_keyboard(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        # O frame importa o tiny na hora de desenhar.
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import widgets
+        pygame.font.init()
+        surf = pygame.Surface((320, 240), pygame.SRCALPHA)
+        ctx = {"status": "", "version": ""}
+        # Sem botoes: o teclado ja aberto; a tecla escolhida e digitada.
+        plain = widgets.Input("Name", ["Cabinet name:"], "ab", keyboard=True)
+        self.assertTrue(plain.keyboard)
+        plain.draw(surf, ctx)
+        self.assertIsNone(plain.key("enter"))
+        self.assertEqual(plain.value, "abq")
+        for k in ("down", "down", "down", "left"):     # a fileira de baixo, no OK
+            plain.key(k)
+        self.assertEqual(plain.key("enter"), ("select", "abq"))
+        # Com botoes: o Enter no campo abre o teclado, o Esc o fecha.
+        link = widgets.Input("ROM set link", ["Magnet:"], "", action=[("torrent", "TORRENT", "a .torrent")],
+                             keyboard=True)
+        self.assertFalse(link.keyboard)
+        self.assertIsNone(link.key("enter"))
+        self.assertTrue(link.keyboard)
+        link.draw(surf, ctx)
+        link.key("enter")
+        self.assertEqual(link.value, "q")
+        self.assertIsNone(link.key("esc"))
+        self.assertFalse(link.keyboard)
+        link.draw(surf, ctx)
+        self.assertEqual(link.key("down"), None)
+        self.assertEqual(link.key("enter"), ("select", "torrent"))
+        # Quem digita num teclado de verdade confirma com o Enter.
+        typed = widgets.Input("ROM set link", ["Magnet:"], "", action=[("torrent", "TORRENT", "")], keyboard=True)
+        typed.key("m")
+        self.assertEqual(typed.key("enter"), ("select", "m"))
+        self.assertIn("keyboard=True)", (self.GUI / "serve.py").read_text())
+
+
 class DrmMasterTests(unittest.TestCase):
     """gui/drmmaster.py: na Intel o Mesa deixa o master da tela depois do
     display.quit() do pygame, e o jogo seguinte nao abria."""

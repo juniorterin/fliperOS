@@ -761,11 +761,12 @@ class Input:
     direita trocam de botao, e o Enter num botao devolve o valor dele. A
     explicacao embaixo e a do botao escolhido.
 
-    keyboard: um teclado na tela embaixo do campo, para o controle (a senha
-    do Wi-Fi, como o Rename do frontend). As setas andam pelas teclas e o
-    Enter (botao 1) digita a tecla; SHIFT troca minusculas por maiusculas e
-    simbolos, SHOW mostra a senha e OK confirma. Quem digita num teclado de
-    verdade digita direto, e ai o Enter confirma."""
+    keyboard: um teclado na tela embaixo do campo, para o controle (como o
+    Rename do frontend). As setas andam pelas teclas e o Enter (botao 1)
+    digita a tecla; SHIFT troca minusculas por maiusculas e simbolos, SHOW
+    mostra a senha e OK confirma. Quem digita num teclado de verdade digita
+    direto, e ai o Enter confirma. Sem botoes, o teclado fica aberto; com
+    botoes, o Enter no campo o abre (no lugar dos botoes) e o Esc o fecha."""
 
     KB_ROWS = (("1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm.@_"),
                ("!#$%&*()+=", "QWERTYUIOP", "ASDFGHJKL:", "ZXCVBNM,?/"))
@@ -780,6 +781,9 @@ class Input:
         self.actions = [] if not action else list(action) if isinstance(action, list) else [action]
         self.action = self.actions[0] if self.actions else None
         self.focus = min(focus, len(self.actions))    # 0: o campo; 1...: os botoes
+        # O teclado na tela: sempre aberto num campo sem botoes; com botoes,
+        # aberto pelo Enter no campo (kb_allowed).
+        self.kb_allowed = keyboard
         self.keyboard = keyboard and not self.actions
         self.kb = (1, 0)          # fileira e coluna (na ultima, o indice em KB_LAST)
         self.shift = False
@@ -826,6 +830,10 @@ class Input:
 
     def key(self, k):
         if k == "esc":
+            if self.keyboard and self.actions:
+                # O teclado aberto pelo Enter fecha; os botoes voltam.
+                self.keyboard = False
+                return None
             return ("back", None)
         if self.keyboard:
             return self.kb_key(k)
@@ -846,6 +854,10 @@ class Input:
                 self.focus = max(0, self.focus - 1)
             return None
         if k == "enter":
+            if not self.focus and self.kb_allowed and not self.typed:
+                # O campo escolhido pelo controle: o teclado na tela abre.
+                self.keyboard = True
+                return None
             return ("select", self.actions[self.focus - 1][0] if self.focus else self.value)
         elif self.focus:
             return None
@@ -853,6 +865,7 @@ class Input:
             self.value = self.value[:-1]
         elif len(k) == 1:
             self.value += k
+            self.typed = True
         return None
 
     def draw_keyboard(self, surf, y, ctx):
@@ -887,7 +900,9 @@ class Input:
         if self.actions:
             keys.insert(0, ("ARROWS" if len(self.actions) > 1 else "UP DOWN", "SELECT"))
         if self.keyboard:
-            keys = [("ARROWS", "KEY"), ("ENTER", "TYPE"), ("ESC", "BACK")]
+            keys = [("ARROWS", "KEY"), ("ENTER", "TYPE"), ("ESC", "CLOSE" if self.actions else "BACK")]
+        elif self.kb_allowed and not self.focus:
+            keys = [("UP DOWN", "SELECT"), ("ENTER", "KEYBOARD"), ("ESC", "BACK")]
         frame(surf, ctx, self.title, keys)
         if self.keyboard:
             y = paragraph(surf, self.lines, 34 + extra() // 2, bottom=60 + extra() // 2) + 4
@@ -908,7 +923,7 @@ class Input:
         w = text(surf, shown, T.FG, x + 8, y + 7)
         if on:
             pygame.draw.rect(surf, T.PINK, (x + 9 + w, y + 6, 7, 10))
-        if self.actions:
+        if self.actions and not self.keyboard:
             # Os botoes lado a lado, centrados (um embaixo do outro, se nao
             # cabem); a explicacao e a do escolhido.
             # Cada botao com o icone do que ele faz (o .torrent, o navegador).

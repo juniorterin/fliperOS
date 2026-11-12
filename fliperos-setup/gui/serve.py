@@ -382,9 +382,10 @@ class Server:
             # 3 para o primeiro, 4 para o segundo...
             buttons = [(" button%d" % i, plain(a[j]).upper(), plain(a[j + 1]))
                        for i, j in enumerate(range(4, len(a) - 1, 2)) if a[j]]
-            # A senha (e o SSID oculto, "keyboard") com o teclado na tela.
+            # Todo campo com o teclado na tela, para o controle: aberto num
+            # campo sem botoes, e pelo Enter no campo num com botoes.
             screen = W.Input(plain(a[0]), self.lines([a[1]]), a[2], a[3] == "password", action=buttons,
-                             keyboard=a[3] in ("password", "keyboard"))
+                             keyboard=True)
             action, value = self.ask(screen, cmd)
             for i, b in enumerate(buttons):
                 if action == "select" and value == b[0]:
