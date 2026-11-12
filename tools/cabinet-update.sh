@@ -137,6 +137,8 @@ packages=(usbutils systemd-timesyncd p7zip-full gnome-software gnome-software-pl
 # A interface grafica do Setup (fliperos-setup/gui) e a area de transferencia
 # do navegador do Downloader (config/fliperos-browser).
 packages+=(python3-pygame xclip)
+# O logotipo escrito dos sistemas no frontend (config/fliperos-syslogo).
+packages+=(python3-pil)
 # Os videos do frontend (ffmpeg) e a tela ao vivo nas AMD (VA-API).
 packages+=(ffmpeg mesa-va-drivers)
 # Para compilar o filtro de flicker do entrelacado e a calibracao de cor
@@ -448,7 +450,9 @@ echo "== Scraper artwork in ~/media"
   scraper_media_migrate
   # O tema padrao do Attract-Mode Plus, baixado do GitHub dele se faltar
   # (config/fliperos-arcadeflow); as telas que estao no Basic passam para ele.
-  if launcher_installed attractplus && [[ $(scraper_attract_layout) != Arcadeflow ]]; then
+  # Tambem sem o Attract-Mode Plus: o logotipo dos sistemas no frontend do
+  # FliperOS (config/fliperos-syslogo) sai da fonte do tema.
+  if [[ $(scraper_attract_layout) != Arcadeflow ]]; then
     /opt/fliperos/bin/fliperos-arcadeflow fetch || echo "Arcadeflow: not downloaded (no network?); the displays stay on Basic"
   fi
   # O Pillow da arte das telas do Arcadeflow, onde o tema ja esta instalado.

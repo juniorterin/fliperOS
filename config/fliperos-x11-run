@@ -619,15 +619,14 @@ color=${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}
 vt=$(tty 2> /dev/null) || vt=""
 vt=${vt#/dev/tty}
 [[ $vt =~ ^[0-9]+$ ]] || vt=1
-# Cursor so para quem tem interface de mouse: Dolphin, Flycast, o Fightcade
-# (a sala de jogos) e o navegador do Downloader (fliperos-browser). O Flycast
-# o esconde durante o jogo em tela cheia; o Dolphin aberto direto num jogo
+# Cursor so para quem tem interface de mouse: Dolphin, o Fightcade (a sala
+# de jogos) e o navegador do Downloader (fliperos-browser). O Flycast vai sem:
+# a seta dele ficava parada no meio do jogo (e com uma pistola seguiria a
+# mira), e o menu dele se usa pelo controle. O Dolphin aberto direto num jogo
 # (-e, pelo frontend) deixava a seta no meio da tela, entao vai sem. O PCSX2
 # abre no Big Picture, que se usa pelo controle; os demais abrem direto no jogo.
 cursor=(-nocursor)
 case $name in
-  # Com uma pistola a seta seguiria a mira por cima do jogo.
-  flycast) [[ -n $guns ]] || cursor=() ;;
   fightcade | fliperos-browser) cursor=() ;;
   dolphin-emu) [[ " $* " == *" -e "* || " $* " == *" --exec"* ]] || cursor=() ;;
 esac

@@ -5297,7 +5297,7 @@ class FrontendDataTests(unittest.TestCase):
     def test_video_player(self):
         # O video vem do ffmpeg da imagem; sem ele, o Player nao abre nada
         # e a tela fica com a imagem.
-        self.assertRegex(MKISO, r'python3-pygame ffmpeg ')
+        self.assertRegex(MKISO, r'python3-pygame python3-pil ffmpeg ')
         import fevideo
         old = fevideo.FFMPEG
         try:
@@ -5761,6 +5761,46 @@ class FrontendDataTests(unittest.TestCase):
         finally:
             feview.logo_source = old
             feview._fitted.clear()
+
+    def test_missing_arcadeflow_is_fetched_for_the_logos(self):
+        # O logotipo sai da fonte do Arcadeflow, que so vinha com o
+        # Attract-Mode Plus: sem o tema, o frontend o baixa uma vez e os
+        # logotipos que faltaram sao feitos de novo.
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        with tempfile.TemporaryDirectory() as tmp:
+            theme = Path(tmp) / 'Arcadeflow'
+            calls = Path(tmp) / 'calls'
+            tool = Path(tmp) / 'arcadeflow'
+            tool.write_text('#!/bin/sh\necho "$*" >> %s\nmkdir -p %s && : > %s/data_systems.txt\n'
+                            % (calls, theme, theme))
+            tool.chmod(0o755)
+            old = feview.ARCADEFLOW, feview.ARCADEFLOW_THEME, dict(feview._theme), dict(feview._logos)
+            feview.ARCADEFLOW, feview.ARCADEFLOW_THEME = str(tool), str(theme)
+            feview._theme['state'] = None
+            feview._logos.clear()
+            feview._logos.update({'Naomi': None, 'Sega': '...'})
+            try:
+                self.assertTrue(feview.theme_ready())
+                self.assertEqual(calls.read_text(), 'fetch\n')
+                self.assertNotIn('Naomi', feview._logos)
+                self.assertIn('Sega', feview._logos)
+                # Com o tema, nada mais e baixado.
+                self.assertFalse(feview.theme_ready())
+                self.assertEqual(calls.read_text(), 'fetch\n')
+            finally:
+                feview.ARCADEFLOW, feview.ARCADEFLOW_THEME = old[0], old[1]
+                feview._theme.clear()
+                feview._theme.update(old[2])
+                feview._logos.clear()
+                feview._logos.update(old[3])
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertIn('  if [[ $(scraper_attract_layout) != Arcadeflow ]]; then\n'
+                      '    /opt/fliperos/bin/fliperos-arcadeflow fetch', update)
+        self.assertIn('packages+=(python3-pil)', update)
 
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
@@ -10496,7 +10536,7 @@ class LightGunTests(unittest.TestCase):
         self.assertIn('nocross=(-crosshairs=0)', x11)
         self.assertIn('config:rend.CrossHairColor1=0', x11)
         self.assertIn('sm2_set lightgun_crosshair false', x11)
-        self.assertIn('flycast) [[ -n $guns ]] || cursor=() ;;', x11)
+        self.assertNotIn('flycast) [[ -n $guns ]] || cursor=() ;;', x11)
         gm = (ROOT / 'config/fliperos-groovymame').read_text()
         self.assertIn('set -- -crosshairpath "$crosshairs" "$@"', gm)
         rules = (ROOT / 'config/99-fliperos-input.rules').read_text()
@@ -11365,8 +11405,9 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
 
     def test_mouse_cursor_only_for_emulators_with_a_mouse_interface(self):
-        for prog in ('dolphin-emu', 'flycast'):
-            self.assertNotIn('-nocursor', self.run_x11([prog]).stdout, prog)
+        self.assertNotIn('-nocursor', self.run_x11(['dolphin-emu']).stdout)
+        # O Flycast deixava a seta parada no meio do jogo.
+        self.assertIn('-nocursor', self.run_x11(['flycast']).stdout)
         # O Dolphin aberto direto num jogo deixava a seta no meio da tela.
         self.assertIn('-nocursor', self.run_x11(['dolphin-emu', '-e', 'game.iso']).stdout)
 
