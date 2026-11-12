@@ -29,5 +29,8 @@ updates/** text eol=lf
 *.gif binary
 *.ico binary
 config/openbor-legacy/OpenBOR-3.0 binary
+# A memoria dos arcades (NVRAM, EEPROM) e binaria: um byte 0d 0a virava 0a.
+config/nvram/** binary
+config/nvram/SOURCES.md text eol=lf
 # Os detectores do Fightcade ficam como o autor os escreveu (sem conversao de linhas).
 third-party/fightcade-detectors/** -text
