@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+"""A cor do anel RGB do 8BitDo Ultimate 2 Wireless (config/fliperos-padcolor).
+
+O Ultimate 2 nao mostra a luz ao kernel: a cor fica na configuracao gravada
+na flash do controle, junto com os perfis. O canal de configuracao (relatorio
+de saida 0x81, respostas no 0x02, 64 bytes) so existe pelo cabo USB e pelo
+dongle 2.4G; pelo Bluetooth o controle nao responde. Gravada uma vez pelo cabo,
+a cor fica no controle e vale tambem no Bluetooth.
+
+O protocolo e o do 8bitdo-ultimate2-linux (MIT, engenharia reversa do
+programa oficial): github.com/MiguelSanzBr/8bitdo-ultimate2-linux.
+So mexe na secao "custom" da luz dos 3 perfis (flag + 24 cores) e no tema
+(4 = custom); o resto da configuracao (botoes, sticks, perfis) fica igual.
+Antes da primeira gravacao de um controle, o registro inteiro vai para
+/var/lib/fliperos/8bitdo (o backup). Grava so o que mudou, confere lendo de
+volta e so entao salva na flash.
+
+  fliperos-padcolor-8bitdo list              os canais de configuracao ligados
+                                             (/dev/hidrawN nome)
+  fliperos-padcolor-8bitdo bluetooth         os Ultimate 2 so pelo Bluetooth (nome)
+  fliperos-padcolor-8bitdo apply DEV RRGGBB  a cor num controle (DEV = /dev/hidrawN)
+  fliperos-padcolor-8bitdo all RRGGBB        em todos os ligados pelo cabo/dongle
+"""
+import glob
+import os
+import select
+import struct
+import sys
+import time
+
+SYS = os.environ.get("FLIPEROS_SYS", "/sys")
+BACKUP_DIR = os.environ.get("FLIPEROS_8BITDO_BACKUP", "/var/lib/fliperos/8bitdo")
+VID = 0x2DC8
+# 0x310B pelo cabo em XInput, 0x6012 pelo cabo em DInput, 0x6013 o dongle 2.4G.
+PIDS = (0x310B, 0x6012, 0x6013)
+# O descritor do canal de configuracao comeca pela pagina do fabricante.
+CONFIG_DESCRIPTORS = (b"\x06\x7a\xff", b"\x06\xa0\xff")
+REPORT_SIZE = 64
+CHUNK = 45
+CFG_SIZE = 1592
+CMD_WRITE, CMD_READ, CMD_COMMIT, CMD_REPORT = 1, 2, 6, 7
+CMD_SET_THEME, CMD_GET_THEME = 0x40, 0x41
+COMMIT_KEY = 0x123
+THEME_CUSTOM = 4
+FLAG_ON = 0x20200911
+SLOTS = 3
+LED_SINGLE = 1292           # flag + 24 cores (u32 0x00RRGGBB, little endian) por perfil
+LED_SINGLE_SIZE = 100
+RETRIES = 30
+SAVE_WAIT = 3.0
+
+
+def crc16(data):
+    """CRC-16/MODBUS (0xA001 refletido, inicio 0xFFFF): o do cabecalho."""
+    c = 0xFFFF
+    for b in data:
+        for _ in range(8):
+            c = (c >> 1) ^ (0xA001 if (c ^ b) & 1 else 0)
+            b >>= 1
+    return c
+
+
+def build_request(cmd, sub=0, data=b"", total=0, offset=0, length=None, with_crc=True):
+    """81 04 | cmd | sub | len | crc(dados) | total | offset | dados, 64 bytes."""
+    length = len(data) if length is None else length
+    data = data.ljust(length, b"\0")
+    c = crc16(data) if with_crc else 0
+    body = b"\x04" + struct.pack("<HHHHII", cmd, sub, length, c, total, offset) + data
+    return (b"\x81" + body).ljust(REPORT_SIZE, b"\0")
+
+
+def parse_reply(report, cmd):
+    """02 04 | 4 | cmd | len | crc | total | offset | dados (do byte 18): (len, dados)."""
+    if len(report) < 18 or report[0] != 0x02 or report[1] != 0x04:
+        return None
+    if struct.unpack_from("<H", report, 4)[0] != cmd:
+        return None
+    length = struct.unpack_from("<H", report, 6)[0]
+    return length, bytes(report[18:18 + length])
+
+
+def single_section(color):
+    """A secao "custom" de um perfil: a flag e as 24 cores iguais."""
+    return struct.pack("<I", FLAG_ON) + struct.pack("<I", color & 0xFFFFFF) * 24
+
+
+def _read(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError:
+        return b""
+
+
+def _uevent(d):
+    out = {}
+    for line in _read(d + "/device/uevent").decode(errors="replace").splitlines():
+        key, _, value = line.partition("=")
+        out[key] = value
+    return out
+
+
+def _hid_id(ue):
+    try:
+        bus, vid, pid = (int(x, 16) for x in ue.get("HID_ID", "").split(":"))
+    except ValueError:
+        return None
+    return bus, vid, pid
+
+
+def find_devices():
+    """(/dev/hidrawN, nome, pasta do aparelho) de cada canal de configuracao ligado."""
+    for d in sorted(glob.glob(SYS + "/class/hidraw/hidraw*")):
+        ue = _uevent(d)
+        ids = _hid_id(ue)
+        if not ids or ids[0] == 0x05 or ids[1] != VID or ids[2] not in PIDS:
+            continue
+        if _read(d + "/device/report_descriptor")[:3] not in CONFIG_DESCRIPTORS:
+            continue
+        usb_dir = os.path.dirname(os.path.dirname(os.path.realpath(d + "/device")))
+        yield "/dev/" + os.path.basename(d), ue.get("HID_NAME", "8BitDo"), usb_dir
+
+
+def bluetooth_pads():
+    """Os Ultimate 2 ligados so pelo Bluetooth (nome): sem canal de configuracao."""
+    names = []
+    for d in sorted(glob.glob(SYS + "/class/hidraw/hidraw*")):
+        ue = _uevent(d)
+        ids = _hid_id(ue)
+        if ids and ids[0] == 0x05 and ids[1] == VID and "Ultimate 2" in ue.get("HID_NAME", ""):
+            names.append(ue["HID_NAME"])
+    return names
+
+
+def find_input_node(usb_dir):
+    """O js (ou event) do mesmo aparelho: o firmware so atende a configuracao
+    enquanto o computador le os relatorios do controle."""
+    for pat in (SYS + "/class/input/js*", SYS + "/class/input/event*"):
+        for n in sorted(glob.glob(pat)):
+            if os.path.realpath(n + "/device").startswith(usb_dir + "/"):
+                return "/dev/input/" + os.path.basename(n)
+    return None
+
+
+class Pad:
+    """O canal de configuracao aberto (hidraw) e o js do controle."""
+
+    def __init__(self, path, input_node=None):
+        self.fd = os.open(path, os.O_RDWR | os.O_NONBLOCK)
+        self.poll_fd = None
+        if input_node:
+            try:
+                self.poll_fd = os.open(input_node, os.O_RDONLY | os.O_NONBLOCK)
+            except OSError:
+                pass
+
+    def close(self):
+        for fd in (self.fd, self.poll_fd):
+            if fd is not None:
+                os.close(fd)
+
+    def _pump(self):
+        if self.poll_fd is None:
+            return
+        try:
+            while os.read(self.poll_fd, 64):
+                pass
+        except OSError:
+            pass
+
+    def send(self, cmd, sub=0, data=b"", total=0, offset=0, length=None, with_crc=True):
+        self._pump()
+        os.write(self.fd, build_request(cmd, sub, data, total, offset, length, with_crc))
+
+    def recv(self, cmd, timeout=0.5, offset=None):
+        end = time.time() + timeout
+        while (left := end - time.time()) > 0:
+            if not select.select([self.fd], [], [], min(left, 0.05))[0]:
+                self._pump()
+                continue
+            report = os.read(self.fd, REPORT_SIZE)
+            r = parse_reply(report, cmd)
+            if r and (offset is None or struct.unpack_from("<I", report, 14)[0] == offset):
+                return r
+        return None
+
+    def report(self, on):
+        self.send(CMD_REPORT, sub=1 if on else 0, with_crc=False)
+        self.recv(CMD_REPORT)
+
+    def read(self, start, size, total=CFG_SIZE):
+        buf, tries = bytearray(), 0
+        while len(buf) < size:
+            off = start + len(buf)
+            self.send(CMD_READ, total=total, offset=off, length=min(CHUNK, size - len(buf)))
+            r = self.recv(CMD_READ, offset=off)
+            if not r or r[0] == 0:
+                tries += 1
+                if tries >= RETRIES:
+                    raise IOError("read failed at offset %d" % off)
+                continue
+            tries = 0
+            buf += r[1][:r[0]]
+        return bytes(buf[:size])
+
+    def write(self, start, data):
+        off, end, tries = start, start + len(data), 0
+        while off < end:
+            self.send(CMD_WRITE, data=data[off - start:min(off + CHUNK, end) - start], total=CFG_SIZE, offset=off)
+            r = self.recv(CMD_WRITE, offset=off)
+            if not r or r[0] == 0:
+                tries += 1
+                if tries >= RETRIES:
+                    raise IOError("write failed at offset %d" % off)
+                continue
+            tries = 0
+            off += r[0]
+
+    def commit(self):
+        time.sleep(0.1)
+        self.send(CMD_COMMIT, sub=COMMIT_KEY, with_crc=False)
+        return self.recv(CMD_COMMIT, timeout=SAVE_WAIT) is not None
+
+    def get_theme(self):
+        self.send(CMD_GET_THEME)
+        r = self.recv(CMD_GET_THEME)
+        return r[1][0] if r and r[0] else None
+
+    def set_theme(self, theme):
+        self.send(CMD_SET_THEME, sub=theme)
+        return self.recv(CMD_SET_THEME) is not None
+
+
+def backup(pad, key):
+    """O registro inteiro, uma vez por controle (o primeiro estado que vimos)."""
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    path = os.path.join(BACKUP_DIR, key + ".bin")
+    if not os.path.exists(path):
+        record = pad.read(0, CFG_SIZE)
+        with open(path + ".tmp", "wb") as f:
+            f.write(record)
+        os.replace(path + ".tmp", path)
+    return path
+
+
+def apply(pad, color, key="ultimate2"):
+    """A cor nos 3 perfis e o tema custom. Devolve "same" (ja estava), "saved"
+    ou levanta IOError. Le de volta antes de salvar: se nao bater, nao salva
+    (desligar o controle volta ao que estava na flash)."""
+    want = single_section(color)
+    # As leituras como o read_config do 8bitdo-ultimate2-linux: com os
+    # relatorios ligados. So a gravacao vai entre o 7/0 e o 7/1.
+    sections = [pad.read(LED_SINGLE + LED_SINGLE_SIZE * s, LED_SINGLE_SIZE) for s in range(SLOTS)]
+    theme = pad.get_theme()
+    if all(s == want for s in sections) and theme == THEME_CUSTOM:
+        return "same"
+    backup(pad, key)
+    pad.report(False)
+    try:
+        for s, current in enumerate(sections):
+            if current != want:
+                pad.write(LED_SINGLE + LED_SINGLE_SIZE * s, want)
+        for s in range(SLOTS):
+            if pad.read(LED_SINGLE + LED_SINGLE_SIZE * s, LED_SINGLE_SIZE) != want:
+                raise IOError("the colour read back differs; nothing saved")
+        if theme != THEME_CUSTOM and not pad.set_theme(THEME_CUSTOM):
+            raise IOError("the controller did not confirm the LED theme")
+        if not pad.commit():
+            raise IOError("the controller did not confirm the save")
+        return "saved"
+    finally:
+        pad.report(True)
+
+
+def parse_color(text):
+    text = text.strip().lstrip("#").lower()
+    if len(text) != 6 or any(c not in "0123456789abcdef" for c in text):
+        raise ValueError(text)
+    return int(text, 16)
+
+
+def _key(dev):
+    ue = _uevent(SYS + "/class/hidraw/" + os.path.basename(dev))
+    uniq = ue.get("HID_UNIQ", "").replace(":", "")
+    ids = _hid_id(ue)
+    pid = "%04x" % ids[2] if ids else "pad"
+    return "ultimate2-%s-%s" % (pid, uniq or os.path.basename(dev))
+
+
+def apply_device(dev, color):
+    usb_dir = next((u for d, _, u in find_devices() if d == dev), None)
+    pad = Pad(dev, find_input_node(usb_dir) if usb_dir else None)
+    try:
+        return apply(pad, color, _key(dev))
+    finally:
+        pad.close()
+
+
+def main(argv):
+    if len(argv) >= 1 and argv[0] == "list":
+        for dev, name, _ in find_devices():
+            print(dev, name)
+        return 0
+    if len(argv) >= 1 and argv[0] == "bluetooth":
+        for name in bluetooth_pads():
+            print(name)
+        return 0
+    try:
+        if len(argv) == 3 and argv[0] == "apply":
+            color = parse_color(argv[2])
+            devs = [argv[1]]
+        elif len(argv) == 2 and argv[0] == "all":
+            color = parse_color(argv[1])
+            devs = [d for d, _, _ in find_devices()]
+        else:
+            print(__doc__.split("\n\n")[-1], file=sys.stderr)
+            return 2
+    except ValueError:
+        print("not a colour (RRGGBB): %s" % argv[-1], file=sys.stderr)
+        return 2
+    rc = 0
+    for dev in devs:
+        try:
+            print(dev, apply_device(dev, color))
+        except (IOError, OSError) as e:
+            print("%s: %s" % (dev, e), file=sys.stderr)
+            rc = 1
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

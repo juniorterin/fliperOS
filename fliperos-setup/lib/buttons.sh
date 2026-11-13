@@ -441,6 +441,29 @@ padcolor_name() {
   echo "#$color"
 }
 
+# padcolor_status: a linha do topo da tela da cor, pelo que esta ligado agora
+# (fliperos-padcolor list): quais controles mudam, o 8BitDo que esta so no
+# Bluetooth (muda pelo cabo uma vez) ou nenhum.
+padcolor_status() {
+  local kind name
+  local -a lit=() bt=()
+  [[ -x $PADCOLOR ]] && while read -r kind name; do
+    case $kind in
+      led | 8bitdo) lit+=("$name") ;;
+      bluetooth) bt+=("$name") ;;
+    esac
+  done < <("$PADCOLOR" list 2> /dev/null)
+  if ((${#lit[@]})); then
+    printf 'Changes now: %s.' "$(IFS=,; echo "${lit[*]}" | sed 's/,/, /g')"
+    ((${#bt[@]})) && printf ' %s on Bluetooth: plug it in by USB cable once to save the colour in it.' "${bt[0]}"
+  elif ((${#bt[@]})); then
+    printf '%s is on Bluetooth: plug it in by USB cable once and the colour is saved in it.' "${bt[0]}"
+  else
+    printf 'No controller connected has a light FliperOS can change. It works on DualSense, DualShock 4 and 8BitDo Ultimate 2 (by cable once).'
+  fi
+  echo
+}
+
 # padcolor_set COR: grava (RRGGBB, #RRGGBB ou off) e acende os controles
 # ligados agora; os que conectarem depois pegam a cor pela regra do udev.
 padcolor_set() {

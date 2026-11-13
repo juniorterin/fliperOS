@@ -528,6 +528,7 @@ install -Dm755 "$src/config/fliperos-guncon2-calibrate" "$root/usr/local/bin/fli
 install -Dm755 "$src/config/fliperos-calibrate" "$root/opt/fliperos/bin/fliperos-calibrate"
 install -Dm644 "$src/config/99-fliperos-input.rules" "$root/etc/udev/rules.d/99-fliperos-input.rules"
 install -Dm755 "$src/config/fliperos-padcolor" "$root/opt/fliperos/bin/fliperos-padcolor"
+install -Dm755 "$src/config/fliperos-padcolor-8bitdo" "$root/opt/fliperos/bin/fliperos-padcolor-8bitdo"
 # Discos montados sozinhos em /media/fliperos, com um icone no desktop para
 # cada um (config/fliperos-automount); sem senha pelo polkit.
 install -Dm644 "$src/config/99-fliperos-disks.rules" "$root/etc/udev/rules.d/99-fliperos-disks.rules"

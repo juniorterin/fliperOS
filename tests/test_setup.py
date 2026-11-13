@@ -4650,6 +4650,20 @@ class PadColorTests(Base):
         self.assertEqual(self.env.out("padcolor_name", env).strip(), "Off")
         self.assertEqual(self.env.run("padcolor_set zzz", env).returncode, 2)
 
+    def test_the_status_says_which_pads_change(self):
+        d = self.env.dir
+        tool = d / "padcolor"
+        env = {"PADCOLOR": str(tool)}
+        for listed, want in (
+                ("led DualSense Wireless Controller\\n8bitdo 8BitDo Ultimate 2 Wireless\\n",
+                 "Changes now: DualSense Wireless Controller, 8BitDo Ultimate 2 Wireless."),
+                ("bluetooth 8BitDo Ultimate 2 Wireless\\n",
+                 "8BitDo Ultimate 2 Wireless is on Bluetooth: plug it in by USB cable once and the colour is saved in it."),
+                ("", "No controller connected has a light FliperOS can change.")):
+            tool.write_text('#!/bin/sh\n[ "$1" = list ] && printf "%s"\nexit 0\n' % listed)
+            tool.chmod(0o755)
+            self.assertTrue(self.env.out("padcolor_status", env).startswith(want), (listed, want))
+
     def test_the_menu_picks_a_colour(self):
         env = self.tool()
         log = self.env.dir / "menu"
@@ -4661,7 +4675,8 @@ class PadColorTests(Base):
         menu = log.read_text()
         self.assertIn("[purple] purple|Purple (FliperOS)|#bd93f9 on the controller light.", menu)
         self.assertIn("off|Off|", menu)
-        self.assertEqual(self.calls(), "50fa7b all\n")
+        # O topo pergunta quem esta ligado (list); a escolha acende todos.
+        self.assertEqual(self.calls(), " list\n50fa7b all\n")
         self.assertIn("padcolor=50fa7b", (self.env.etc / "fliperos.conf").read_text())
 
 

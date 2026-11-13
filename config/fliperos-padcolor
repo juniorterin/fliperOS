@@ -4,15 +4,22 @@
 # O kernel mostra a luz RGB de um controle como um LED multicolorido em
 # /sys/class/leds (multi_index diz a ordem das cores, multi_intensity recebe
 # os tres valores): o DualSense e o DualShock 4 (hid-playstation, hid-sony),
-# e os 8BitDo que se apresentam como um deles. A maioria dos 8BitDo nao
-# expoe a luz ao Linux (o anel RGB do Ultimate 2 so muda pelo programa
-# deles): nesses nao ha o que mudar, e nada acontece.
+# e os 8BitDo que se apresentam como um deles. O 8BitDo Ultimate 2 guarda a
+# cor do anel na configuracao dele: o fliperos-padcolor-8bitdo grava pelo cabo
+# USB ou pelo dongle 2.4G, e ela fica valendo tambem no Bluetooth (que nao tem
+# o canal de configuracao). Os outros 8BitDo nao expoem a luz: nada acontece.
 #
 #   fliperos-padcolor apply LED      a cor num LED (/sys/class/leds/NOME ou o
 #                                    caminho dele), so se for de um controle
-#   fliperos-padcolor all            em todos os LEDs de controle ligados
+#   fliperos-padcolor hidraw NOME    um hidraw novo: se for o canal de
+#                                    configuracao de um Ultimate 2, grava a cor
+#                                    nele (em segundo plano)
+#   fliperos-padcolor all            em todos os controles ligados
+#   fliperos-padcolor list           os controles cuja luz muda agora
+#                                    ("led NOME", "8bitdo NOME") e os
+#                                    Ultimate 2 so no Bluetooth ("bluetooth NOME")
 #
-# Chamado pela regra do udev (99-fliperos-input.rules) a cada LED novo.
+# Chamado pela regra do udev (99-fliperos-input.rules) a cada LED e hidraw novo.
 # A cor: FLIPEROS_PADCOLOR (RRGGBB), ou padcolor= do fliperos.conf; "off"
 # deixa a luz como o controle a acende.
 set -uo pipefail
@@ -21,6 +28,7 @@ conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 # O roxo do Dracula (#bd93f9), o destaque do FliperOS.
 color=${FLIPEROS_PADCOLOR:-$(sed -n 's/^padcolor=//p' "$conf" 2> /dev/null | tail -n 1)}
 color=${color:-bd93f9}
+ultimate2=${FLIPEROS_PADCOLOR_8BITDO:-/opt/fliperos/bin/fliperos-padcolor-8bitdo}
 
 # is_pad LED: o LED e de um controle de jogo (o aparelho dele tem um input
 # com joystick) ou o nome diz que e de um (os drivers poem o nome do driver).
@@ -76,19 +84,59 @@ apply() {
   return 0
 }
 
+# color_led LED: um LED de cor de um controle (o que o apply muda).
+color_led() {
+  case ${1##*/} in
+    *:green | *:blue) return 1 ;;   # o DualShock 4 conta uma vez, pelo :red
+    *:red) ;;
+    *) [[ -f $1/multi_intensity && -f $1/multi_index ]] || return 1 ;;
+  esac
+  is_pad "$1"
+}
+
+# list: os controles cuja luz o FliperOS muda agora, e os Ultimate 2 que estao
+# so no Bluetooth (esses mudam pelo cabo). Vale tambem com padcolor=off.
+list() {
+  local led name
+  for led in "$leds"/*; do
+    if [[ ! -e $led ]] || ! color_led "$led"; then continue; fi
+    name=$(sed -n 's/^HID_NAME=//p' "$led/device/uevent" 2> /dev/null)
+    echo "led ${name:-${led##*/}}"
+  done
+  [[ -x $ultimate2 ]] || return 0
+  "$ultimate2" list 2> /dev/null | while read -r _ name; do echo "8bitdo $name"; done
+  "$ultimate2" bluetooth 2> /dev/null | while read -r name; do echo "bluetooth $name"; done
+}
+
+[[ ${1:-} == list ]] && { list; exit 0; }
 [[ ${color,,} == off ]] && exit 0
 case ${1:-} in
   apply)
     [[ -n ${2:-} ]] || { echo "usage: fliperos-padcolor apply LED" >&2; exit 2; }
     apply "$2"
     ;;
+  hidraw)
+    # Do udev: so o 8BitDo (2dc8) segue; a gravacao leva segundos e o js do
+    # controle tem de existir, entao vai fora do udev, depois de um instante.
+    [[ -n ${2:-} && -x $ultimate2 ]] || exit 0
+    grep -qi '^HID_ID=0003:00002DC8:' "/sys/class/hidraw/${2##*/}/device/uevent" 2> /dev/null || exit 0
+    [[ $color =~ ^[0-9a-fA-F]{6}$ ]] || exit 0
+    # shellcheck disable=SC2016 # o $0 e os $N sao do sh -c
+    cmd=(sh -c 'sleep 2; exec "$0" apply "$1" "$2"' "$ultimate2" "/dev/${2##*/}" "$color")
+    if command -v systemd-run > /dev/null; then
+      systemd-run --no-block --quiet --collect -- "${cmd[@]}" > /dev/null 2>&1 || setsid "${cmd[@]}" > /dev/null 2>&1 &
+    else
+      setsid "${cmd[@]}" > /dev/null 2>&1 &
+    fi
+    ;;
   all)
     for led in "$leds"/*; do
       [[ -e $led ]] && apply "$led"
     done
+    [[ -x $ultimate2 && $color =~ ^[0-9a-fA-F]{6}$ ]] && "$ultimate2" all "$color" > /dev/null 2>&1
     ;;
   *)
-    echo "usage: fliperos-padcolor apply LED | all" >&2
+    echo "usage: fliperos-padcolor apply LED | hidraw NAME | all | list" >&2
     exit 2
     ;;
 esac

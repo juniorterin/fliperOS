@@ -19723,6 +19723,165 @@ class PadColorTests(unittest.TestCase):
                       rules)
         self.assertIn('install -Dm755 "$src/config/fliperos-padcolor" "$root/opt/fliperos/bin/fliperos-padcolor"',
                       (ROOT / 'fliperos-rootfs.sh').read_text())
+        self.assertIn('SUBSYSTEM=="hidraw", ACTION=="add", ATTRS{idVendor}=="2dc8", '
+                      'RUN+="/opt/fliperos/bin/fliperos-padcolor hidraw %k"', rules)
+        self.assertIn('install -Dm755 "$src/config/fliperos-padcolor-8bitdo" '
+                      '"$root/opt/fliperos/bin/fliperos-padcolor-8bitdo"', (ROOT / 'fliperos-rootfs.sh').read_text())
+
+    def test_list_names_the_pads_and_the_8bitdo_on_bluetooth(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pad = self.led(root, 'input5:rgb:indicator')
+            (pad / 'device/uevent').write_text('HID_NAME=DualSense Wireless Controller\n')
+            self.led(root, '0005:054C:05C4.0001:red', multi=False)
+            self.led(root, '0005:054C:05C4.0001:green', multi=False)
+            tool = root / 'u2'
+            tool.write_text('#!/bin/sh\n[ "$1" = list ] && echo "/dev/hidraw4 8BitDo Ultimate 2 Wireless"\n'
+                            '[ "$1" = bluetooth ] && echo "8BitDo Ultimate 2 Wireless"\nexit 0\n')
+            tool.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_LEDS=str(root / 'leds'), FLIPEROS_CONF='/nao/existe',
+                       FLIPEROS_PADCOLOR='off', FLIPEROS_PADCOLOR_8BITDO=str(tool))
+            r = subprocess.run(['bash', str(ROOT / 'config/fliperos-padcolor'), 'list'], env=env,
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            # O DualShock 4 conta uma vez (pelo :red); off nao esconde a lista.
+            self.assertIn('led DualSense Wireless Controller', r.stdout.splitlines())
+            self.assertIn('8bitdo 8BitDo Ultimate 2 Wireless', r.stdout.splitlines())
+            self.assertIn('bluetooth 8BitDo Ultimate 2 Wireless', r.stdout.splitlines())
+            self.assertEqual(sum(l.startswith('led 0005:054C') for l in r.stdout.splitlines()), 1)
+
+
+class PadColor8BitDoTests(unittest.TestCase):
+    """config/fliperos-padcolor-8bitdo: a cor do anel do Ultimate 2 gravada na
+    configuracao dele, contra um controle de mentira com o protocolo."""
+
+    def setUp(self):
+        self.u2 = load_script('fliperos_padcolor_8bitdo', 'config/fliperos-padcolor-8bitdo')
+        u2 = self.u2
+
+        class FakePad(u2.Pad):
+            def __init__(pad, record, theme=2, ack_commit=True):
+                pad.ram = bytearray(record)
+                pad.flash = bytes(record)
+                pad.theme = theme
+                pad.ack_commit = ack_commit
+                pad.log = []
+                pad.answer = None
+                pad.reports_on = True
+
+            def close(pad):
+                pass
+
+            def send(pad, cmd, sub=0, data=b"", total=0, offset=0, length=None, with_crc=True):
+                raw = u2.build_request(cmd, sub, data, total, offset, length, with_crc)
+                self.assertEqual(len(raw), 64)
+                self.assertEqual(raw[:2], b"\x81\x04")
+                length = struct.unpack_from("<H", raw, 6)[0]
+                body = raw[18:18 + length]
+                if with_crc:
+                    self.assertEqual(struct.unpack_from("<H", raw, 8)[0], u2.crc16(body))
+                pad.log.append((cmd, sub, offset, length))
+                reply = b""
+                if cmd == u2.CMD_READ:
+                    reply = bytes(pad.ram[offset:offset + length])
+                elif cmd == u2.CMD_WRITE:
+                    self.assertFalse(pad.reports_on, "writes go between 7/0 and 7/1")
+                    self.assertEqual(total, u2.CFG_SIZE)
+                    # A secao da luz e nada mais (nunca 0x0C-0x13: crc, modo, perfil).
+                    self.assertTrue(any(u2.LED_SINGLE + 100 * s <= offset < u2.LED_SINGLE + 100 * (s + 1)
+                                        for s in range(3)), offset)
+                    pad.ram[offset:offset + length] = body
+                    reply = b"\0" * length
+                elif cmd == u2.CMD_GET_THEME:
+                    reply = bytes([pad.theme])
+                    length = 1
+                elif cmd == u2.CMD_SET_THEME:
+                    pad.theme = sub
+                elif cmd == u2.CMD_REPORT:
+                    pad.reports_on = sub == 1
+                elif cmd == u2.CMD_COMMIT:
+                    self.assertEqual(sub, u2.COMMIT_KEY)
+                    if not pad.ack_commit:
+                        pad.answer = None
+                        return
+                    pad.flash = bytes(pad.ram)
+                pad.answer = (length, reply)
+
+            def recv(pad, cmd, timeout=0.5, offset=None):
+                answer, pad.answer = pad.answer, None
+                return answer
+
+        self.FakePad = FakePad
+        self.record = bytes(i % 251 for i in range(u2.CFG_SIZE))
+
+    def test_saves_the_colour_in_the_three_profiles_and_keeps_the_rest(self):
+        u2 = self.u2
+        pad = self.FakePad(self.record)
+        with tempfile.TemporaryDirectory() as tmp:
+            u2.BACKUP_DIR = tmp
+            self.assertEqual(u2.apply(pad, 0xbd93f9, 'ultimate2-6012-test'), 'saved')
+            self.assertEqual(Path(tmp, 'ultimate2-6012-test.bin').read_bytes(), self.record)
+        want = struct.pack('<I', 0x20200911) + bytes.fromhex('f993bd00') * 24
+        for s in range(3):
+            off = 1292 + 100 * s
+            self.assertEqual(pad.flash[off:off + 100], want)
+        # Todo o resto do registro ficou igual.
+        rest = bytearray(pad.flash)
+        orig = bytearray(self.record)
+        for s in reversed(range(3)):
+            off = 1292 + 100 * s
+            del rest[off:off + 100], orig[off:off + 100]
+        self.assertEqual(rest, orig)
+        self.assertEqual(pad.theme, 4)
+        self.assertTrue(pad.reports_on)
+        # Cada pedaco no maximo 45 bytes.
+        self.assertTrue(all(length <= 45 for cmd, _, _, length in pad.log if cmd in (1, 2)))
+
+    def test_nothing_written_when_the_colour_is_already_there(self):
+        u2 = self.u2
+        pad = self.FakePad(self.record)
+        with tempfile.TemporaryDirectory() as tmp:
+            u2.BACKUP_DIR = tmp
+            u2.apply(pad, 0x50fa7b)
+            pad.log.clear()
+            self.assertEqual(u2.apply(pad, 0x50fa7b), 'same')
+        self.assertFalse([c for c, *_ in pad.log if c in (u2.CMD_WRITE, u2.CMD_COMMIT, u2.CMD_SET_THEME)])
+
+    def test_a_save_not_confirmed_fails_and_turns_reports_back_on(self):
+        u2 = self.u2
+        pad = self.FakePad(self.record, ack_commit=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            u2.BACKUP_DIR = tmp
+            with self.assertRaises(IOError):
+                u2.apply(pad, 0xff5555)
+        self.assertEqual(pad.flash, self.record)
+        self.assertTrue(pad.reports_on)
+
+    def test_finds_only_the_config_channel(self):
+        u2 = self.u2
+        with tempfile.TemporaryDirectory() as tmp:
+            sysfs = Path(tmp)
+            usb = sysfs / 'devices/usb1/1-1'
+            for n, hid_id, desc, name in (
+                    (0, '0003:00002DC8:00006012', b'\x05\x01\x09\x05', '8BitDo Ultimate 2 Wireless'),
+                    (1, '0003:00002DC8:00006012', b'\x06\x7a\xff\x09\x01', '8BitDo Ultimate 2 Wireless'),
+                    (2, '0005:00002DC8:00006012', b'\x05\x01\x09\x05', '8BitDo Ultimate 2 Wireless'),
+                    (3, '0003:0000054C:00000CE6', b'\x06\x7a\xff', 'DualSense')):
+                dev = usb / ('1-1:1.%d' % n) / ('0003:2DC8:6012.%04d' % n)
+                dev.mkdir(parents=True)
+                (dev / 'uevent').write_text('HID_ID=%s\nHID_NAME=%s\nHID_UNIQ=e4:17:d8\n' % (hid_id, name))
+                (dev / 'report_descriptor').write_bytes(desc)
+                hr = sysfs / 'class/hidraw' / ('hidraw%d' % n)
+                hr.mkdir(parents=True)
+                (hr / 'device').symlink_to(dev)
+            u2.SYS = str(sysfs)
+            found = list(u2.find_devices())
+            self.assertEqual([(d, n) for d, n, _ in found], [('/dev/hidraw1', '8BitDo Ultimate 2 Wireless')])
+            self.assertEqual(u2.bluetooth_pads(), ['8BitDo Ultimate 2 Wireless'])
+            self.assertEqual(u2._key('/dev/hidraw1'), 'ultimate2-6012-e417d8')
+        self.assertEqual(u2.parse_color('#BD93F9'), 0xbd93f9)
+        with self.assertRaises(ValueError):
+            u2.parse_color('zzz')
 
 
 class BluetoothToolTests(unittest.TestCase):

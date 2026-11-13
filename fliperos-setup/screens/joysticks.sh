@@ -20,7 +20,7 @@ screen_joysticks() {
       "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
       "guncon|GunCon 2 (light gun)|Calibration, screen flash and how the gun reads dark parts." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
-      "padcolor|Controller light: $(padcolor_name)|Colour of the light on DualSense, DualShock 4 and 8BitDo pads." \
+      "padcolor|Controller light: $(padcolor_name)|Light colour of DualSense, DualShock 4 and 8BitDo Ultimate 2." \
       "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
@@ -53,7 +53,7 @@ screen_padcolor() {
     "off|Off|FliperOS leaves the light as the controller sets it."
     "return|Return|Back to Joysticks.")
   choice=$(ui_menu_hints "$title" \
-    "Only pads that show their light to Linux: DualSense, DualShock 4, some 8BitDo." \
+    "$(padcolor_status)" \
     "$choice" "${entries[@]}") || return 0
   case $choice in
     return) return 0 ;;

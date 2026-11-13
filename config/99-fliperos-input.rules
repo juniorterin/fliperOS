@@ -50,3 +50,6 @@ SUBSYSTEM=="input", ATTRS{idVendor}=="044f", MODE="0660", GROUP="input"
 # A luz colorida dos controles (DualSense, DualShock 4 e os 8BitDo que se
 # apresentam como eles) no roxo do FliperOS: config/fliperos-padcolor.
 SUBSYSTEM=="leds", ACTION=="add", RUN+="/opt/fliperos/bin/fliperos-padcolor apply %S%p"
+# O 8BitDo Ultimate 2 pelo cabo ou dongle: a cor gravada na configuracao dele
+# (config/fliperos-padcolor-8bitdo), que vale depois tambem no Bluetooth.
+SUBSYSTEM=="hidraw", ACTION=="add", ATTRS{idVendor}=="2dc8", RUN+="/opt/fliperos/bin/fliperos-padcolor hidraw %k"
