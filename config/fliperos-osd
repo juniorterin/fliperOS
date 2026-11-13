@@ -1213,17 +1213,34 @@ class Painter:
         x, y = (W - width) // 2, H - safe_y - height
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
         pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
-        self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
+        import tiny
+        main = page["name"] == "main"
+        if main:
+            # FliperOS, o OS em outra cor; a direita, o perfil escolhido.
+            self.text(surface, "Fliper", t.PINK, x + 6, y + 5)
+            self.text(surface, "OS", t.PURPLE, x + 6 + self.font.size("Fliper")[0], y + 5)
+            title_w = self.font.size("FliperOS")[0]
+            label = menu.profile_label(menu.profile)
+            image = self.font.render(label, False, t.CYAN)
+            if image.get_width() + title_w + 18 <= width:
+                surface.blit(image, (x + width - 6 - image.get_width(), y + 5))
+            else:
+                tiny.text(surface, tiny.fit(label, width - title_w - 18), t.CYAN, x + width - 6, y + 6, right=True)
+        else:
+            self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
+            title_w = self.font.size(menu.title())[0]
         if sub:
-            # A resolucao com as frequencias e o FPS, na letra pequena.
-            import tiny
-            tiny.text(surface, tiny.fit(sub, width - 12), t.COMMENT, x + 6, y + 15)
-        if menu.status:
+            # A resolucao com as frequencias e o FPS, na letra pequena; o aviso
+            # (SAVED...) a direita dela.
+            room = width - 12 - (tiny.width(menu.status) + 8 if menu.status else 0)
+            tiny.text(surface, tiny.fit(sub, max(8, room)), t.COMMENT, x + 6, y + 15)
+            if menu.status:
+                tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 15, right=True)
+        elif menu.status:
             status = self.font.render(menu.status, False, t.CYAN)
-            if status.get_width() + self.font.size(menu.title())[0] + 18 <= width:
+            if status.get_width() + title_w + 18 <= width:
                 surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
             else:
-                import tiny
                 tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 6, right=True)
         for i, row in enumerate(shown):
             top = y + head - 1 + i * self.ROW
