@@ -108,6 +108,53 @@ def read_map(path=MAP):
     return rows
 
 
+# Os comandos que um atalho do jogo (EXIT GAME, EMULATOR MENU) pode ter: os
+# do painel e, num joypad, os gatilhos, os cliques dos analogicos e o hotkey,
+# pelos nomes do mapa (os do fliperos-buttons hotkey, que os le no jogo).
+COMBO_CONTROLS = CONTROLS + ("b7", "b8", "hotkey", "l3", "r3")
+
+
+def read_players(path=MAP):
+    """[(jogador, comando, indice do joystick, elemento)] do mapa, com os
+    nomes do mapa (sem o "j:PAPEL" do joypad): de quem e cada comando
+    segurado, para um atalho juntar os de jogadores diferentes."""
+    rows = []
+    for parts in read_lines(path):
+        if len(parts) >= 4 and parts[0].isdigit() and parts[1] in COMBO_CONTROLS and \
+                parts[2].lstrip("-").isdigit():
+            rows.append((int(parts[0]), parts[1], int(parts[2]), parts[3]))
+    return rows
+
+
+def combo_item_ok(item):
+    """Um comando de atalho gravado: "start" (de qualquer jogador) ou "2:start"."""
+    if not isinstance(item, str):
+        return False
+    player, sep, control = item.rpartition(":")
+    return control in COMBO_CONTROLS and (not sep or player.isdigit())
+
+
+def combo_from(held):
+    """O atalho dos comandos segurados ({(jogador, comando)}): os nomes, se
+    todos sao de um jogador (vale para qualquer um, como antes); senao
+    "JOGADOR:COMANDO" (P1 START + P2 START so juntos)."""
+    order = {c: i for i, c in enumerate(COMBO_CONTROLS)}
+    if len({p for p, _ in held}) <= 1:
+        return sorted({c for _, c in held}, key=lambda c: order.get(c, 99))
+    return ["%d:%s" % pc for pc in sorted(held, key=lambda pc: (pc[0], order.get(pc[1], 99)))]
+
+
+def combo_names(combo):
+    """Os comandos do atalho na tela: START, COIN, 1 a 8, as direcoes e, com
+    o jogador, "P2 START"."""
+    out = []
+    for item in combo or ():
+        player, sep, control = item.rpartition(":")
+        name = control[1:] if control[:1] == "b" and control[1:].isdigit() else control.upper()
+        out.append("P%s %s" % (player, name) if sep else name)
+    return out
+
+
 def interface_roles(path=MAP):
     """{"accept": papel, "cancel": papel} do primeiro joypad do mapa: o botao
     que ele escolheu no Button mapping como aceitar e voltar, pela posicao
@@ -222,6 +269,22 @@ def panel_keyboard(pg, rows):
     return keys
 
 
+def player_keyboard(pg, prows):
+    """As teclas de um encoder que se diz teclado: {tecla: [(jogador,
+    comando)]}. Os k:NOME do mapa; sem nenhum, as do MAME do jogador 1."""
+    named = [(p, c, e[2:]) for p, c, _, e in prows if e.startswith("k:")]
+    if not named:
+        named = [(1, c, n) for n, c in MAME_KEYS.items()]
+    keys = {}
+    for player, control, name in named:
+        try:
+            code = pg.key.key_code(KEY_ALIAS.get(name, name.lower()))
+        except (AttributeError, ValueError, TypeError):
+            continue
+        keys.setdefault(code, []).append((player, control))
+    return keys
+
+
 class Input:
     """Le os eventos do pygame e mantem o que esta apertado agora. poll()
     devolve as acoes apertadas desde a ultima chamada; held(acao) diz ha
@@ -242,6 +305,11 @@ class Input:
         # vira "pad:COMANDO", e nao a funcao dele.
         self.capture_pad = False
         self.panel_keys = panel_keyboard(pygame, self.rows)
+        # Os comandos de cada jogador segurados agora (players_held): o
+        # jogador 1 sem mapa.
+        self.prows = read_players() or [(1, c, j, e) for c, j, e in DEFAULT]
+        self.player_keys = player_keyboard(pygame, self.prows)
+        self.player_down = {}
         self.bind(binds or default_binds(pygame))
         self.open()
 
@@ -274,6 +342,18 @@ class Input:
         """Os comandos do painel segurados agora."""
         return {c for c in CONTROLS if self.held("pad:" + c) is not None}
 
+    def track(self, element, joy, on, source):
+        """O elemento do controle joy apertado (on) ou solto: os comandos dos
+        jogadores que ele e."""
+        for player, control, j, e in self.prows:
+            if e == element and j in (-1, joy):
+                sources = self.player_down.setdefault((player, control), set())
+                (sources.add if on else sources.discard)(source)
+
+    def players_held(self):
+        """{(jogador, comando)} segurados agora."""
+        return {k for k, sources in self.player_down.items() if sources}
+
     def open(self):
         pg = self.pg
         pg.joystick.init()
@@ -299,6 +379,7 @@ class Input:
         self.down.clear()
         self.sources.clear()
         self.loose.clear()
+        self.player_down.clear()
 
     def press(self, action, source, out):
         held = self.sources.setdefault(action, set())
@@ -335,6 +416,11 @@ class Input:
         out = []
         self.settle()
         for ev in pg.event.get():
+            if ev.type in (pg.KEYDOWN, pg.KEYUP) and ev.key in self.player_keys:
+                # O comando de cada jogador (o atalho do jogo), alem do resto.
+                for pc in self.player_keys[ev.key]:
+                    sources = self.player_down.setdefault(pc, set())
+                    (sources.add if ev.type == pg.KEYDOWN else sources.discard)(("k", ev.key))
             if ev.type == pg.QUIT:
                 out.append("quit")
             elif ev.type == pg.KEYDOWN:
@@ -371,9 +457,11 @@ class Input:
                 elif self.key_fn.get(ev.key):
                     self.release(self.key_fn[ev.key], ("k", ev.key))
             elif ev.type == pg.JOYBUTTONDOWN:
+                self.track("b%d" % ev.button, self.index(ev), True, ("b", ev.joy, ev.button))
                 for c in self.match("b%d" % ev.button, self.index(ev)):
                     self.pad_press(c, ("b", ev.joy, ev.button), out)
             elif ev.type == pg.JOYBUTTONUP:
+                self.track("b%d" % ev.button, self.index(ev), False, ("b", ev.joy, ev.button))
                 for c in self.match("b%d" % ev.button, self.index(ev)):
                     self.pad_release(c, ("b", ev.joy, ev.button))
             elif ev.type == pg.JOYHATMOTION:
@@ -381,6 +469,7 @@ class Input:
                 bits = (1 if y > 0 else 0) | (4 if y < 0 else 0) | (2 if x > 0 else 0) | (8 if x < 0 else 0)
                 joy = self.index(ev)
                 for d in (1, 2, 4, 8):
+                    self.track("h%d.%d" % (ev.hat, d), joy, bool(bits & d), ("h", joy, ev.hat, d))
                     for c in self.match("h%d.%d" % (ev.hat, d), joy):
                         if bits & d:
                             self.pad_press(c, ("h", joy, ev.hat, d), out)
@@ -389,6 +478,7 @@ class Input:
             elif ev.type == pg.JOYAXISMOTION:
                 joy = self.index(ev)
                 for sign, on in (("+", ev.value > AXIS_ON), ("-", ev.value < -AXIS_ON)):
+                    self.track("%sa%d" % (sign, ev.axis), joy, on, ("a", joy, ev.axis, sign))
                     for c in self.match("%sa%d" % (sign, ev.axis), joy):
                         if on:
                             self.pad_press(c, ("a", joy, ev.axis, sign), out)

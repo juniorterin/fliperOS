@@ -3502,7 +3502,7 @@ def draw_controls(fe, ui, now):
     # O guia e o formato dele primeiro, depois as funcoes (como o
     # fliperos-frontend: CONTROLS_FIRST = 2), o atalho e o RESET/SAVE.
     guide_row, layout_row, first = 0, 1, 2
-    exit_row, reset_row = first + len(funcs), first + len(funcs) + 1
+    exit_row, menu_row, reset_row = first + len(funcs), first + len(funcs) + 1, first + len(funcs) + 2
     joypad = getattr(fe, "guide_kind", "arcade") == "joypad"
     # As colunas do painel, do joypad e da tecla (em pe, mais estreitas).
     pw, jw, kw = (34, 38, 48) if T.VERTICAL is not None else (40, 46, 60)
@@ -3510,7 +3510,10 @@ def draw_controls(fe, ui, now):
     jx = kx - 3 - jw
     padx = jx - 3 - pw
     columns = ((padx, pw), (jx, jw), (kx, kw))
-    y0, rh = 40, 11
+    # As linhas: 11 pixels onde cabem (em pe), senao o que cabe nos 240 com
+    # o RESET/SAVE e as duas linhas de dica embaixo.
+    y0 = 40
+    rh = max(9, min(11, (HH - y0 - BUTTONS_GAP - 19) // (reset_row + 1)))
     count = PANEL_COUNT[panel_layout(fe)]
     for c, (title, (cx, cw)) in enumerate(zip(("PANEL", "JOYPAD", "KEYBOARD"), columns)):
         tiny.centered(ui, title, T.CYAN if col == c else T.COMMENT, cx + cw // 2, 32)
@@ -3527,10 +3530,16 @@ def draw_controls(fe, ui, now):
         W.text(ui, fit(text, padx - SX - 22), T.FG if i == sel else T.COMMENT, SX + 17, y + 1)
         return y
 
-    def cells(i, y, values, dim=(False, False, False)):
-        """As tres celulas (painel, joypad e tecla) da linha i; dim apaga o valor."""
+    def cells(i, y, values, dim=(False, False, False), span=False):
+        """As tres celulas (painel, joypad e tecla) da linha i; dim apaga o
+        valor. Com span, a primeira ocupa o painel e o joypad (o atalho do
+        jogo vale nos dois, e "P1 START+P2 START" nao cabe numa)."""
         for c, (cx, cw) in enumerate(columns):
-            value, lit = values[c], i == sel and c == col
+            if span and c == 1:
+                continue
+            if span and c == 0:
+                cw = jx + jw - padx
+            value, lit = values[c], i == sel and (c == col or (span and c == 0 and col < 2))
             rect = (cx, y, cw, rh - 1)
             if lit and wait:
                 W.block(ui, rect, T.PINK if blink else T.PURPLE, None)
@@ -3560,10 +3569,15 @@ def draw_controls(fe, ui, now):
         missing = bool(b["pad"]) and b["pad"][0] == "b" and int(b["pad"][1:]) > count
         cells(i, y, (feinput.pad_name(b["pad"]), feinput.joy_name(b.get("joy")),
                      feinput.key_name(fe.pg, b["key"])), (missing, False, False))
-    # O atalho que fecha o jogo: os botoes segurados juntos e a tecla.
+    # O atalho que fecha o jogo e o que abre o menu do emulador: os botoes
+    # segurados juntos (de um jogador, ou "P1 START+P2 START") e a tecla.
     y = label(exit_row, "EXIT GAME", exit_icon, T.RED)
-    combo = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in fe.exit_combo)
-    cells(exit_row, y, (combo, None, fe.exit_key[0] if fe.exit_key else None))
+    combo = "+".join(feinput.combo_names(fe.exit_combo))
+    cells(exit_row, y, (combo, None, fe.exit_key[0] if fe.exit_key else None), span=True)
+    y = label(menu_row, "EMULATOR MENU", options_icon, T.PURPLE)
+    combo = "+".join(feinput.combo_names(getattr(fe, "menu_combo", [])))
+    key = getattr(fe, "menu_key", None)
+    cells(menu_row, y, (combo, None, key[0] if key else None), span=True)
     # O guia: o painel de arcade ou um joypad (esquerda e direita trocam).
     y = label(guide_row, "GUIDE", view_icon, T.CYAN)
     wide(guide_row, y, "JOYPAD" if joypad else "ARCADE PANEL", arrows=True)
@@ -3599,6 +3613,9 @@ def draw_controls(fe, ui, now):
     elif sel == exit_row:
         tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
                 "IN A GAME THEY CLOSE IT (THE BUTTONS HELD 1 S)")
+    elif sel == menu_row:
+        tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
+                "IN A GAME THEY OPEN THE EMULATOR'S MENU (HELD 1 S)")
     elif sel == guide_row:
         tips = ("LEFT/RIGHT: THE ARCADE PANEL OR A JOYPAD", "THE GUIDE DRAWS ITS BUTTONS")
     elif sel == layout_row and joypad:
@@ -3608,7 +3625,7 @@ def draw_controls(fe, ui, now):
     elif sel == reset_row and col == 1:
         tips = ("SELECT: SAVE AND LEAVE", "EACH CHANGE ALREADY WORKS   LEFT: RESET")
     elif sel == reset_row:
-        tips = ("SELECT: THE FUNCTIONS GO BACK TO THE DEFAULTS", "THE EXIT SHORTCUT AND THE LAYOUT STAY")
+        tips = ("SELECT: THE FUNCTIONS GO BACK TO THE DEFAULTS", "THE GAME SHORTCUTS AND THE LAYOUT STAY")
     else:
         tips = ("SELECT: CHANGE   DELETE: NONE   LEFT/RIGHT: COLUMN",
                 "A BUTTON IN USE SWAPS WITH THE OLD ONE   BACK: DONE")
@@ -3758,15 +3775,18 @@ def draw_delete(fe, ui, now):
 
 
 def draw_capture(fe, ui, now):
-    """A escolha do atalho que fecha o jogo: a tecla (a proxima apertada) ou
-    os botoes do painel segurados juntos, com o tempo que falta."""
+    """A escolha do atalho que fecha o jogo ou abre o menu do emulador (ov
+    "which"): a tecla (a proxima apertada) ou os comandos segurados juntos,
+    de um jogador ou de varios, com o tempo que falta."""
+    import feinput
     pw, ph = min(250, WW - 6), 110
     px, py = (WW - pw) // 2, (HH - ph) // 2
     card(ui, (px, py, pw, ph))
     mono = time.monotonic()
+    does = "OPENS THE EMULATOR'S MENU" if fe.ov.get("which") == "menu" else "CLOSES THE GAME"
     if fe.overlay == "exitkey":
         W.centered(ui, "PRESS THE KEY", T.FG, py + 10)
-        tiny.centered(ui, "ON THE KEYBOARD THAT CLOSES THE GAME", T.COMMENT, WW // 2, py + 24)
+        tiny.centered(ui, "ON THE KEYBOARD THAT " + does, T.COMMENT, WW // 2, py + 24)
         # Uma tecla desenhada, piscando.
         kx, ky = WW // 2 - 16, py + 36
         W.block(ui, (kx, ky, 32, 28), T.BG_DEEP, None)
@@ -3776,12 +3796,10 @@ def draw_capture(fe, ui, now):
         tiny.centered(ui, "BACK ON THE PANEL: CANCEL", T.COMMENT, WW // 2, py + 72)
     else:
         W.centered(ui, "HOLD THE BUTTONS", T.FG, py + 10)
-        tiny.centered(ui, "2 OR MORE TOGETHER, FOR 1 SECOND", T.COMMENT, WW // 2, py + 24)
+        tiny.centered(ui, "2 OR MORE TOGETHER FOR 1 S - ANY PLAYERS", T.COMMENT, WW // 2, py + 24)
         held = fe.ov.get("held")
-        names = "+".join(c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper()
-                         for c in ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
-                         if held and c in held)
-        W.centered(ui, names or "...", T.YELLOW, py + 40)
+        names = "+".join(feinput.combo_names(feinput.combo_from(held))) if held else ""
+        W.centered(ui, fit(names, pw - 12) if names else "...", T.YELLOW, py + 40)
         # A barra de quanto ja foi segurado.
         bx, bw = px + 30, pw - 60
         W.block(ui, (bx, py + 56, bw, 8), T.BG_DEEP, None)
@@ -3789,7 +3807,7 @@ def draw_capture(fe, ui, now):
             fill = min(1.0, (mono - fe.ov.get("at", mono)) / 1.0)
             ui.fill(T.GREEN, (bx, py + 56, round(bw * fill), 8))
         pygame.draw.rect(ui, T.LINE, (bx, py + 56, bw, 8), 1)
-        tiny.centered(ui, "THE SAME BUTTONS CLOSE THE GAME, HELD 1 SECOND", T.COMMENT, WW // 2, py + 72)
+        tiny.centered(ui, "HELD 1 SECOND IN A GAME, THEY " + does.replace("S ", " ", 1), T.COMMENT, WW // 2, py + 72)
     wait = max(0, 8 - (mono - fe.ov.get("since", mono)))
     tiny.centered(ui, "NOTHING PRESSED: KEEPS AS IT WAS IN %d S" % math.ceil(wait), T.ORANGE, WW // 2, py + 90)
 

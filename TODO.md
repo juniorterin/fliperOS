@@ -79,7 +79,7 @@ As fases 5a (leitura), 5b (controle) e 5c (a tela ao vivo e o marquee para o OBS
   - **(b)** a versão estável v1.22.2, que usa a libswitchres no lugar desse motor (validar o 15 kHz de novo);
   - **(c)** esperar.
 
-  Enquanto isso: Start+Select no painel abre o menu, e de lá dá para usar Quit. Só um teclado de verdade serve para testar; teclas injetadas por uinput não chegam ao RetroArch.
+  Enquanto isso: Start+Select no painel abre o menu, e de lá dá para usar Quit. Em 2026-11-13, no commit fixado hoje (7d2e953), o F1 injetado por uinput abriu e fechou o Quick Menu no gabinete (é por ele que sai o EMULATOR MENU do frontend); Esc e F2 ainda não foram conferidos.
 - **RetroArch não fecha com Esc quando aberto pelo "jogo direto do boot"** (PS1, MAME 2010). SM2-Emu, GroovyMAME e Supermodel fecham. Provavelmente é o mesmo bug dos atalhos.
 - **Menu embaralhado uma vez** depois de sair de um jogo pelo botão de desligar. Não reproduzido; o log mostra a interface gráfica aberta normalmente.
 

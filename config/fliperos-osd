@@ -16,6 +16,14 @@ imagem de 320x240, como a tela logica da interface grafica. Por isso a OSD so
 abre com uma dessas camadas gravando o FPS (/run/user/*/fliperos-fps): no desktop
 ou num programa que elas nao alcancam, nada abre e os controles ficam com ele.
 
+A pagina principal tem o Volume, a Configuration (o perfil, o filtro do
+entrelacado, as scanlines, a geometria, as cores, a GunCon 2 e o Save) e os
+botoes Emulator menu, Close e Quit. O Emulator menu fecha a OSD e aperta a
+tecla do menu do proprio emulador (F1 no RetroArch, Tab no MAME...: menu_key
+do config/fliperos-buttons) por um teclado virtual que o servico cria ao
+comecar; so aparece num emulador que tem menu. O Quit fecha o jogo (SIGTERM,
+como o atalho do frontend). Num frontend, nenhum dos dois.
+
 Com o menu aberto, os controles ficam so com ele (EVIOCGRAB): o jogo nao ve os
 botoes, e continua rodando. Antes de tomar, espera soltar o atalho, ou o jogo
 ficaria com os botoes presos. Sair do menu, o jogo fechar ou 20 s sem mexer
@@ -144,6 +152,36 @@ SYS_INPUT = os.environ.get("FLIPEROS_SYS_INPUT", "/sys/class/input")
 GUNCON2 = ("0b9a", "016a")
 FILTER_LEVELS = ("off", "light", "medium", "strong")
 LABELS = {"off": "Off", "light": "Light", "medium": "Medium", "strong": "Strong"}
+
+
+# A pagina principal: o Volume, a Configuration (o resto dos ajustes e o Save)
+# e os botoes Emulator menu (o menu do proprio emulador: a OSD fecha e a tecla
+# dele sai pelo teclado virtual, menu_key do config/fliperos-buttons), Close
+# e Quit (fecha o jogo). Num frontend (o programa da camada e um destes), nem
+# o Emulator menu nem o Quit.
+NOT_GAMES = ("python3", "fliperos-gui", "fliperos-frontend", "attractplus", "attract", "es-de",
+             "emulationstation", "pegasus-fe")
+# O teclado virtual do Emulator menu: o mesmo nome do do fliperos-buttons
+# hotkey; a OSD nao o toma (Inputs.scan) nem o le.
+EMULATOR_KEYS = b"FliperOS emulator keys"
+# O jogo do Quit que nao sai com o SIGTERM em QUIT_KILL segundos leva o SIGKILL.
+QUIT_KILL = 5.0
+
+
+def is_game(screen):
+    """O programa na tela e um jogo (nao um frontend nem o Setup)?"""
+    program = (screen or {}).get("program") or ""
+    return bool(program) and program not in NOT_GAMES
+
+
+def load_buttons():
+    """O config/fliperos-buttons como modulo: a tecla do menu de cada emulador
+    (menu_key) e o teclado virtual (KeySender)."""
+    loader = importlib.machinery.SourceFileLoader("fliperos_buttons", BUTTONS)
+    spec = importlib.util.spec_from_loader("fliperos_buttons", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
 
 
 def load_padkeys():
@@ -780,8 +818,13 @@ def choice_options(text):
 class Menu:
     """As paginas do menu e o que cada linha faz."""
 
-    def __init__(self, screen, mode, worker):
+    def __init__(self, screen, mode, worker, emulator_key=None):
         self.screen, self.mode, self.worker = screen or {}, mode, worker
+        # A tecla do menu do emulador na tela (None: sem o botao Emulator
+        # menu) e o que fazer depois de fechar: "emulator" (apertar a tecla)
+        # ou "quit" (fechar o jogo).
+        self.emulator_key = emulator_key if is_game(self.screen) else None
+        self.after = None
         self.stack = []
         self.geometry = None
         self.status = ""
@@ -809,8 +852,8 @@ class Menu:
         if name == "geometry" and self.geometry and self.geometry.key:
             # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
             return "GEOMETRY " + self.geometry.key
-        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY", "guncon": "GUNCON 2",
-                "scanlines": "SCANLINES"}.get(name, "")
+        return {"main": "FLIPEROS", "config": "CONFIGURATION", "colour": "COLOUR", "geometry": "GEOMETRY",
+                "guncon": "GUNCON 2", "scanlines": "SCANLINES"}.get(name, "")
 
     def rows_of(self, name):
         return getattr(self, "rows_" + name)()
@@ -826,11 +869,28 @@ class Menu:
         return kind + ".cfg"
 
     def rows_main(self):
+        """O Volume, a Configuration e os botoes: Emulator menu (o do proprio
+        emulador, quando ele tem um), Close e Quit (so num jogo)."""
         rows = []
         volume = self.volume_state()
         if volume is not None:
             rows.append(Row("number", "Volume", volume, 0, 100, VOLUME_STEP, pretty=lambda v: "%d%%" % v,
                             change=self.set_volume))
+        rows.append(Row("page", "Configuration", action=lambda: self.open_page("config")))
+        if self.emulator_key is not None:
+            emulator = Row("buttons", "Emulator menu", "emulator", options=[("emulator", "Emulator menu")])
+            emulator.action = lambda: self.leave("emulator")
+            rows.append(emulator)
+        options = [("close", "Close")] + ([("quit", "Quit")] if is_game(self.screen) else [])
+        end = Row("buttons", "|".join(label for _, label in options), "close", options=options)
+        end.action = lambda: self.close() if end.value == "close" else self.leave("quit")
+        rows.append(end)
+        return rows
+
+    def rows_config(self):
+        """Configuration: o perfil, o filtro do entrelacado, as paginas dos
+        ajustes e, na base, Save (grava no perfil) e Back."""
+        rows = []
         # Para onde o Save grava (e o que o Delete profile apaga): tudo, esta resolucao, este emulador, este
         # core ou este jogo (as setas trocam).
         rows.append(Row("choice", "Save profile as", self.profile,
@@ -857,11 +917,25 @@ class Menu:
         # mira e o flash atirando (Setup > Joysticks > GunCon 2).
         if guncon_present():
             rows.append(Row("page", "GunCon 2", action=self.open_guncon))
-        # Na base, lado a lado: Save (grava no perfil) e Close.
-        buttons = Row("buttons", "Save|Close", "save", options=[("save", "Save"), ("close", "Close")])
-        buttons.action = lambda: self.save_profile() if buttons.value == "save" else self.close()
+        # Na base, lado a lado: Save (grava no perfil) e Back.
+        buttons = Row("buttons", "Save|Back", "save", options=[("save", "Save"), ("back", "Back")])
+        buttons.action = lambda: self.save_profile() if buttons.value == "save" else self.back()
         rows.append(buttons)
         return rows
+
+    def leave(self, what):
+        """Emulator menu ou Quit: a OSD fecha (o que nao foi salvo volta) e o
+        servico aperta a tecla do menu do emulador ou fecha o jogo."""
+        self.after = what
+        self.close()
+
+    def find_row(self, label):
+        """A linha de rotulo label nas paginas abertas (a de cima primeiro)."""
+        for page in reversed(self.stack):
+            for row in page["rows"]:
+                if row.label == label:
+                    return row
+        return None
 
     def open_colour(self):
         # Os valores de agora: o que estava na fila tem de chegar antes.
@@ -976,9 +1050,9 @@ class Menu:
     def set_profile(self, kind):
         self.profile = kind
         self.confirm_delete = None
-        for row in self.stack[0]["rows"]:
-            if row.label == "Delete profile":
-                row.value = self.delete_label(kind)
+        row = self.find_row("Delete profile")
+        if row:
+            row.value = self.delete_label(kind)
 
     def delete_label(self, kind):
         """O que o Delete profile apaga: o perfil escolhido; o default, que e o
@@ -1043,7 +1117,8 @@ class Menu:
 
     def set_filter(self, value):
         program = self.screen.get("core") or self.screen.get("program", "")
-        before = next((r.previous for r in self.stack[0]["rows"] if r.label == "Interlaced filter"), None)
+        row = self.find_row("Interlaced filter")
+        before = row.previous if row else None
         self.store("level." + program, value, before)
 
     def set_geometry(self, index, value):
@@ -1303,17 +1378,19 @@ class Painter:
         sub = menu.subtitle()
         head = 18 + (7 if sub else 0)
         safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
-        # As linhas que cabem: ate VISIBLE, menos num quadro baixo.
-        buttons = any(r.kind == "buttons" for r in rows)
-        extra = self.BUTTONS_GAP + self.BUTTONS_ROW - self.ROW + 2 if buttons else 0
-        visible = max(1, min(self.VISIBLE, (H - 2 * safe_y - head - 4 - extra) // self.ROW))
+        # As linhas que cabem: ate VISIBLE, menos num quadro baixo. Cada linha
+        # de botoes e mais alta, e a primeira se afasta das de cima.
+        def extra_of(some):
+            n = sum(1 for r in some if r.kind == "buttons")
+            return self.BUTTONS_GAP + n * (self.BUTTONS_ROW + 2 - self.ROW) if n else 0
+        visible = max(1, min(self.VISIBLE, (H - 2 * safe_y - head - 4 - extra_of(rows)) // self.ROW))
         # O cursor sempre a vista.
         if page["cursor"] < page["top"]:
             page["top"] = page["cursor"]
         elif page["cursor"] >= page["top"] + visible:
             page["top"] = page["cursor"] - visible + 1
         shown = rows[page["top"]:page["top"] + visible]
-        extra = extra if any(r.kind == "buttons" for r in shown) else 0
+        extra = extra_of(shown)
         width, height = W - 2 * safe_x, head + len(shown) * self.ROW + 4 + extra
         x, y = (W - width) // 2, H - safe_y - height
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
@@ -1347,28 +1424,39 @@ class Painter:
                 surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
             else:
                 tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 6, right=True)
+        top = y + head - 1
+        gapped = False
         for i, row in enumerate(shown):
-            top = y + head - 1 + i * self.ROW
             chosen = page["top"] + i == page["cursor"]
             if row.kind == "buttons":
-                # Os dois botoes lado a lado, com folga em volta e entre eles; o
+                # Os botoes lado a lado, com folga em volta e entre eles; o
                 # escolhido aceso quando a linha e a do cursor.
-                top += self.BUTTONS_GAP
+                if not gapped:
+                    top += self.BUTTONS_GAP
+                    gapped = True
+                n = max(1, len(row.options))
                 gap = max(6, width // 12)
-                bw = (width - 2 * gap - gap) // 2
+                bw = (width - (n + 1) * gap) // n
                 bh = self.BUTTONS_ROW
                 for k, (value, label) in enumerate(row.options):
                     bx = x + gap + k * (bw + gap)
                     on = chosen and row.value == value
                     pg.draw.rect(surface, (t.PURPLE if on else t.BG_DEEP) + (255,), (bx, top, bw, bh))
                     pg.draw.rect(surface, (t.PINK if on else t.COMMENT) + (255,), (bx, top, bw, bh), 2 if on else 1)
+                    # O icone na frente (BUTTON_ICONS: o check no Save, o X no
+                    # Close...); o rotulo que nao cabe vai na letra pequena.
+                    icon, color = self.BUTTON_ICONS.get(value, ("close", "RED"))
                     image = self.font.render(label, False, t.FG if on else t.COMMENT)
-                    # O icone na frente: o check no Save, o X no Close.
-                    ix = bx + (bw - image.get_width() - 12) // 2
                     iy = top + (bh - 8) // 2
-                    self.icon(surface, "save" if value == "save" else "close", ix, iy,
-                              (t.GREEN if value == "save" else t.RED) if on else t.COMMENT)
-                    surface.blit(image, (ix + 12, iy))
+                    if image.get_width() + 12 <= bw - 6:
+                        ix = bx + (bw - image.get_width() - 12) // 2
+                        surface.blit(image, (ix + 12, iy))
+                    else:
+                        text = tiny.fit(label, bw - 18)
+                        ix = bx + (bw - tiny.width(text) - 12) // 2
+                        tiny.text(surface, text, t.FG if on else t.COMMENT, ix + 12, iy + 1)
+                    self.icon(surface, icon, ix, iy, getattr(t, color) if on else t.COMMENT)
+                top += bh + 2
                 continue
             if chosen:
                 pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
@@ -1387,6 +1475,7 @@ class Painter:
                 bar_x, bar_w = x + 6 + 88, width - 6 - 88 - 6 - 8 * 7
                 pg.draw.rect(surface, t.COMMENT + (255,), (bar_x, top + 3, bar_w, 5), 1)
                 pg.draw.rect(surface, t.GREEN + (255,), (bar_x + 1, top + 4, round((bar_w - 2) * fraction), 3))
+            top += self.ROW
         # Ha mais linhas acima ou abaixo.
         if page["top"] > 0:
             pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, y + head - 3), (x + width // 2 + 3, y + head - 3), (x + width // 2, y + head - 6)])
@@ -1551,7 +1640,13 @@ class Painter:
         "back": ("...#....", "..##....", ".#######", "########", ".#######", "..##....", "...#....", "........"),
         "close": ("##....##", ".##..##.", "..####..", "...##...", "..####..", ".##..##.", "##....##", "........"),
         "save": (".......#", "......##", ".....##.", "#...##..", "##.##...", ".###....", "..#.....", "........"),
+        # As tres linhas de um menu (Emulator menu) e o simbolo de ligar (Quit).
+        "menu": ("........", "########", "........", "########", "........", "########", "........", "........"),
+        "quit": ("...##...", ".#.##.#.", "#..##..#", "#......#", "#......#", ".#....#.", "..####..", "........"),
     }
+    # O icone e a cor (do tema) de cada botao.
+    BUTTON_ICONS = {"save": ("save", "GREEN"), "close": ("close", "RED"), "back": ("back", "PINK"),
+                    "emulator": ("menu", "CYAN"), "quit": ("quit", "ORANGE")}
 
     def icon(self, surface, name, x, y, color):
         for j, line in enumerate(self.ICONS[name]):
@@ -1662,7 +1757,8 @@ class Inputs:
                 fcntl.ioctl(fd, self.pk.EVIOCGNAME, name)
                 name = bytes(name).split(b"\0")[0]
                 keys = self.pk.bits(fd, EV_KEY, 0x300)
-                pad, keyboard = self.pk.is_pad(name, keys), name != self.pk.NAME and self.is_keyboard(keys)
+                pad = self.pk.is_pad(name, keys)
+                keyboard = name not in (self.pk.NAME, EMULATOR_KEYS) and self.is_keyboard(keys)
                 if not pad and not keyboard:
                     os.close(fd)
                     continue
@@ -1778,6 +1874,15 @@ class Service:
         self.profile_seen = None
         self.profile_polled = 0.0
         self.profile_applied = {}
+        # O Emulator menu: a tecla de cada emulador (o fliperos-buttons) e o
+        # teclado virtual por onde ela sai, criado aqui, antes de qualquer
+        # jogo: o X e o SDL de cada um ja o conhecem.
+        self.buttons, self.keys = None, None
+        try:
+            self.buttons = load_buttons()
+            self.keys = self.buttons.KeySender(sorted(set(self.buttons.KEY_CODES.values())))
+        except (OSError, ImportError, SyntaxError, AttributeError) as exc:
+            print("fliperos-osd: no emulator menu key: %s" % exc, file=sys.stderr)
         os.makedirs(RUN_DIR, exist_ok=True)
         self.screen_file = Screen(os.path.join(RUN_DIR, "screen"))
         self.control = self.open_control()
@@ -1977,7 +2082,7 @@ class Service:
             pass
         if self.painter is None:
             self.painter = Painter()
-        menu = Menu(screen, current_mode(), self.worker)
+        menu = Menu(screen, current_mode(), self.worker, self.emulator_key(screen))
         pressed = []
         inputs = Inputs(self.padkeys, lambda key, value: pressed.append(key) if value else None)
         last = time.monotonic()
@@ -2021,6 +2126,59 @@ class Service:
             menu.leave_geometry()
             self.screen_file.hide()
             inputs.close()
+        # Com os controles de volta ao jogo: o Emulator menu ou o Quit.
+        if menu.after == "emulator":
+            self.press_emulator_key(menu.emulator_key)
+        elif menu.after == "quit":
+            self.quit_game(screen)
+
+    def emulator_key(self, screen):
+        """A tecla do menu do emulador na tela (None: um frontend, ou um
+        emulador sem menu proprio, ou sem o teclado virtual)."""
+        if not self.keys or not self.buttons or not is_game(screen):
+            return None
+        try:
+            home = pwd.getpwuid(screen["uid"]).pw_dir
+        except (KeyError, TypeError):
+            home = None
+        return self.buttons.menu_key(screen["program"], home)
+
+    def press_emulator_key(self, code):
+        # O jogo ve os controles soltos antes da tecla.
+        time.sleep(0.15)
+        try:
+            self.keys.press(code)
+        except OSError:
+            pass
+
+    def quit_game(self, screen):
+        """Quit: o SIGTERM no jogo (ele grava o que tem de gravar e o
+        frontend volta); se nao sair em QUIT_KILL segundos, o SIGKILL."""
+        pid = screen["pid"]
+
+        def started(p):
+            try:
+                with open("/proc/%d/stat" % p) as f:
+                    return f.read().rsplit(")", 1)[1].split()[19]
+            except (OSError, IndexError):
+                return None
+        start = started(pid)
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            return
+
+        def kill():
+            end = time.monotonic() + QUIT_KILL
+            while time.monotonic() < end:
+                if started(pid) != start:
+                    return
+                time.sleep(0.2)
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+        threading.Thread(target=kill, daemon=True).start()
 
     def loop(self):
         while self.running:
@@ -2076,7 +2234,7 @@ def shot(page, path):
         fw, fh = int(size.group(1)), int(size.group(2))
         mode = {"clock": 6700, "h": [fw, fw + 16, fw + 48, fw + 96], "v": [fh, fh + 3, fh + 6, fh + 20],
                 "interlace": False}
-    menu = Menu({"program": "pcsx2", "core": "", "fps": 59.9}, mode, Worker())
+    menu = Menu({"program": "pcsx2", "core": "", "fps": 59.9}, mode, Worker(), emulator_key=1)
     painter.theme.set_orientation(read_conf().get("orientation", ""))
     if page in ("volume", "mute"):
         canvas = painter.fit(lambda: painter.volume_bar(60, page == "mute"), mode)

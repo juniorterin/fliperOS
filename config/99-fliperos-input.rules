@@ -22,6 +22,12 @@ SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GUN}=="1", \
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_GUN}=="1", ACTION=="add|remove", \
   RUN+="/opt/fliperos/bin/fliperos-lightgun udev-retrigger %S%p"
 
+# O teclado virtual do menu dos emuladores (fliperos-buttons hotkey, que roda
+# como o jogador junto com o jogo do frontend): o grupo input escreve no
+# /dev/uinput. O uaccess da regra do antimicrox ja o dava a quem esta no
+# gabinete; este vale sem ela.
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660"
+
 # Controle ligado: o fliperos-controllers completa o mapeamento automatico do
 # SDL (botoes que sobram, direcional digital mandado como eixos).
 SUBSYSTEM=="input", KERNEL=="event*", ACTION=="add", ENV{ID_INPUT_JOYSTICK}=="1", \

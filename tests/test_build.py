@@ -5649,7 +5649,8 @@ class FrontendDataTests(unittest.TestCase):
             old = os.environ.get('FLIPEROS_POWERKEY')
             os.environ['FLIPEROS_POWERKEY'] = 'games:%s' % mark
             try:
-                fe = types.SimpleNamespace(power_exit=True, commercial=False, hotkeys=lambda: None, left=lambda: 0)
+                fe = types.SimpleNamespace(power_exit=True, commercial=False, hotkeys=lambda argv: None,
+                                           left=lambda: 0)
                 fe.stop = lambda proc, state, sig=signal.SIGTERM: fm.Frontend.stop(fe, proc, state, sig)
                 self.assertIsNone(play(fe, ['sh', '-c', 'cat %s > %s' % (mark, seen)]))
                 self.assertRegex(seen.read_text(), r'^\d+\n$')
@@ -5664,7 +5665,9 @@ class FrontendDataTests(unittest.TestCase):
                 self.assertLess(time.monotonic() - started, 5)
                 # O atalho: o vigia diz "exit".
                 fe.commercial = False
-                fe.hotkeys = lambda: subprocess.Popen(['echo', 'exit'], stdout=subprocess.PIPE, text=True)
+                fe.hotkeys = lambda argv: subprocess.Popen(['echo', 'ready\nexit'], stdout=subprocess.PIPE,
+                                                           text=True)
+                fe.menu_argv = lambda argv: argv
                 started = time.monotonic()
                 self.assertIsNone(play(fe, ['sleep', '30']))
                 self.assertLess(time.monotonic() - started, 5)
@@ -5673,6 +5676,44 @@ class FrontendDataTests(unittest.TestCase):
                     os.environ.pop('FLIPEROS_POWERKEY', None)
                 else:
                     os.environ['FLIPEROS_POWERKEY'] = old
+            # O vigia do atalho: o programa do jogo vai junto (a tecla do menu
+            # dele); no RetroArch, o Start + Select dele sai, logo depois do
+            # retroarch (o fliperos-kms-run le o jogo do fim).
+            kms = '/opt/fliperos/bin/fliperos-kms-run'
+            argv = [kms, 'retroarch', '-L', 'fbneo_libretro.so', '/r/sf2.zip']
+            self.assertEqual(fm.game_program(argv), 'retroarch')
+            self.assertEqual(fm.game_program(['/opt/fliperos/bin/fliperos-x11-run', '--mode', '640x480@60',
+                                              'flycast', 'x']), 'flycast')
+            self.assertIsNone(fm.game_program(['sh', 'x']))
+            os.environ['XDG_RUNTIME_DIR'] = tmp
+            fe = types.SimpleNamespace(menu_combo=['coin', 'b1'], menu_key=None)
+            out = fm.Frontend.menu_argv(fe, argv)
+            self.assertEqual(out[:4], [kms, 'retroarch', '--appendconfig', str(Path(tmp) / 'fliperos-retroarch-menu.cfg')])
+            self.assertEqual(out[-1], '/r/sf2.zip')
+            self.assertEqual((Path(tmp) / 'fliperos-retroarch-menu.cfg').read_text(),
+                             'input_menu_toggle_gamepad_combo = "0"\n')
+            self.assertEqual(fm.Frontend.menu_argv(fe, [kms, 'groovymame', 'sf2']), [kms, 'groovymame', 'sf2'])
+            fe.menu_combo = []
+            self.assertEqual(fm.Frontend.menu_argv(fe, argv), argv)
+            fe = types.SimpleNamespace(exit_key=None, exit_combo=['coin', 'start'], menu_key=['F11', 87],
+                                       menu_combo=['1:start', '2:start'], commercial=False)
+            seen_args = []
+            real = subprocess.Popen
+            fm.os.access = lambda *a: True
+            try:
+                fm.subprocess.Popen = lambda a, **k: seen_args.append(a)
+                fm.Frontend.hotkeys(fe, argv)
+            finally:
+                fm.subprocess.Popen = real
+            self.assertEqual(seen_args[0][1:], ['hotkey', '--combo', 'coin+start', '--hold', '1.0', '--menu-key', '87',
+                                               '--menu-combo', '1:start+2:start', '--menu-hold', '1.0',
+                                               '--program', 'retroarch'])
+            # De fabrica (um frontend.json sem "shortcuts"): ficha + Start
+            # fecha e ficha + botao 1 abre o menu; o que foi escolhido fica.
+            self.assertEqual((fm.DEFAULT_EXIT_COMBO, fm.DEFAULT_MENU_COMBO), (['coin', 'start'], ['coin', 'b1']))
+            src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+            self.assertIn('if cfg.get("shortcuts") is None and not combo:', src)
+            self.assertIn('"menu_key": self.menu_key, "menu_combo": self.menu_combo, "shortcuts": 1,', src)
 
     def test_changing_system_sends_the_logo_to_the_marquee(self):
         import types
@@ -6167,7 +6208,7 @@ class FrontendDataTests(unittest.TestCase):
         src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         self.assertIn('elif sel == OPT_CONTROLS and a == "b1":', src)
         self.assertIn('"controls": self.input.binds, "panel_layout": self.panel_layout', src)
-        self.assertIn('held = frozenset(self.input.pad_held())', src)
+        self.assertIn('held = frozenset(self.input.players_held())', src)
         # A primeira abertura comeca no Frontend controls; ao sair dele, o guia.
         self.assertIn('self.controls_seen = cfg.get("controls_seen") is True', src)
         self.assertIn('self.overlay, self.ov = "controls", {"sel": CONTROLS_FIRST, "col": 0, "wait": None}', src)
@@ -6181,7 +6222,7 @@ class FrontendDataTests(unittest.TestCase):
         # O atalho que fecha o jogo fica dentro do Frontend controls, nao no Tab.
         self.assertNotIn('"EXIT KEY")', view)
         self.assertIn('y = label(exit_row, "EXIT GAME", exit_icon, T.RED)', view)
-        self.assertIn('elif a == "b1" and sel == exit_row and ov["col"] < 2:', src)
+        self.assertIn('elif a == "b1" and sel in (exit_row, menu_row) and ov["col"] < 2:', src)
         self.assertNotIn('OPT_EXIT', src)
         try:
             import pygame
@@ -6246,10 +6287,24 @@ class FrontendDataTests(unittest.TestCase):
         # fecha o jogo e o RESET/SAVE (todas as linhas, nas tres colunas).
         self.assertIn('CONTROLS_FIRST = 2', src)
         self.assertIn('guide_row, layout_row, first = 0, 1, 2', view)
-        for row in range(len(fi.FUNCTIONS) + 4):
+        fe.menu_combo, fe.menu_key = ['1:start', '2:start'], ['F11', 87]
+        for row in range(len(fi.FUNCTIONS) + 5):
             for col in range(3):
                 fe.ov = {'sel': row, 'col': col, 'wait': None}
                 feview.draw_controls(fe, ui, 1.0)
+        # Tudo cabe nos 240 de altura: o RESET/SAVE e as dicas embaixo.
+        self.assertGreaterEqual(feview.HH, 40 + (len(fi.FUNCTIONS) + 5) * 10 + feview.BUTTONS_GAP + 19)
+        # A escolha dos botoes, de um jogador ou de dois.
+        for which in ('exit', 'menu'):
+            fe.overlay, fe.ov = 'exitpad', {'since': 0.0, 'held': frozenset({(1, 'start'), (2, 'start')}),
+                                             'which': which}
+            feview.draw_capture(fe, ui, 1.0)
+        self.assertEqual(fi.combo_from({(1, 'coin'), (1, 'start')}), ['start', 'coin'])
+        self.assertEqual(fi.combo_from({(2, 'start'), (1, 'start')}), ['1:start', '2:start'])
+        self.assertEqual(fi.combo_names(['1:start', '2:b3', 'coin']), ['P1 START', 'P2 3', 'COIN'])
+        self.assertTrue(fi.combo_item_ok('2:hotkey'))
+        self.assertFalse(fi.combo_item_ok('x:start'))
+        self.assertFalse(fi.combo_item_ok('select'))
         fe.panel_layout = 'x'
         self.assertEqual(feview.panel_layout(fe), '6')
         # O guia em joypad: a cruz e os botoes do videogame, cada funcao da
@@ -16827,13 +16882,81 @@ class ButtonMappingTests(unittest.TestCase):
         rc.Keyboards = Keys
         out = io.StringIO()
         try:
-            args = argparse.Namespace(key=[], combo='', hold=1.0, coin=False, map='/nonexistent')
+            args = argparse.Namespace(key=[], combo='', hold=1.0, coin=False, map='/nonexistent', menu_key=[],
+                                      menu_combo='', menu_hold=None, program='')
             vars(args).update(opts)
             with contextlib.redirect_stdout(out):
                 self.assertEqual(rc.cmd_hotkey(args), 0)
         finally:
             rc.Keyboards = old
-        return out.getvalue().split()
+        # "ready": o teclado virtual do menu ja existe (o jogo abre depois).
+        return [w for w in out.getvalue().split() if w != 'ready']
+
+    def test_hotkey_opens_the_emulator_menu_and_joins_players(self):
+        # O atalho do menu do emulador: "menu" uma vez por aperto (segurado,
+        # so de novo depois de soltar), com a tecla do menu do emulador pelo
+        # teclado virtual; o jogo segue. Sem mapa, o painel e o teclado do
+        # MAME: o Start 1 e a tecla 1 (evdev 2), a ficha a 5 (6), o botao 1 o
+        # Ctrl (29); o Start 2 e o 2 (3).
+        rc = self.rc
+        sent = []
+
+        class Sender:
+            def __init__(self, codes):
+                self.codes = codes
+
+            def press(self, code):
+                sent.append(code)
+
+            def close(self):
+                sent.append('closed')
+
+        old = rc.KeySender
+        rc.KeySender = Sender
+        try:
+            frames = [set(), {6, 29}, {6, 29}, {6, 29}, set(), {6, 29}, set()]
+            self.assertEqual(self.hotkey(frames, menu_combo='coin+b1', menu_hold=0, program='retroarch'),
+                             ['menu', 'menu'])
+            self.assertEqual(sent, [59, 59, 'closed'])
+            # A tecla do menu (no teclado) vale ao ser apertada.
+            del sent[:]
+            self.assertEqual(self.hotkey([set(), {88}, {88}, set()], menu_key=[88], program='flycast'), ['menu'])
+            self.assertEqual(sent, [15, 'closed'])
+        finally:
+            rc.KeySender = old
+        # Jogadores diferentes: o Start 1 e o Start 2 juntos (1:start+2:start);
+        # um Start so, nao. Sem jogador, os comandos valem num jogador so.
+        self.assertEqual(self.hotkey([set(), {2, 3}], combo='1:start+2:start', hold=0), ['exit'])
+        self.assertEqual(self.hotkey([set(), {2}, set()], combo='1:start+2:start', hold=0), [])
+        self.assertEqual(self.hotkey([set(), {2, 7}], combo='start+coin', hold=0), [])
+        self.assertEqual(rc.parse_combo('1:start+2:start+coin+bogus+x:b1'),
+                         [(1, 'start'), (2, 'start'), (None, 'coin')])
+        self.assertTrue(rc.combo_held([(1, 'start'), (None, 'coin')], {'1': ['start'], '2': ['coin']}))
+        self.assertFalse(rc.combo_held([(None, 'start'), (None, 'coin')], {'1': ['start'], '2': ['coin']}))
+
+    def test_menu_key_of_each_emulator(self):
+        # Conferidas no gabinete por um teclado virtual: F1 no RetroArch, Tab
+        # no GroovyMAME e no Flycast, F10 no SM2-Emu (o key_overlay dele), Esc
+        # no PCSX2 e no DuckStation. Sem menu proprio: o do FliperOS (OSD), pela
+        # tecla de midia dele.
+        rc = self.rc
+        self.assertEqual([rc.menu_key(p, '/nonexistent') for p in ('retroarch', '/usr/local/bin/groovymame',
+                                                                   'flycast', 'pcsx2', 'duckstation',
+                                                                   'fliperos-model2')],
+                         [59, 15, 15, 1, 1, 68])
+        self.assertIsNone(rc.menu_key('supermodel'))
+        self.assertIsNone(rc.menu_key('fliperos-kof'))
+        with tempfile.TemporaryDirectory() as home:
+            ini = Path(home) / '.config/sm2-emu/sm2-emu.ini'
+            ini.parent.mkdir(parents=True)
+            ini.write_text('[system]\nkey_exit = Escape\nkey_overlay = Tab\n')
+            self.assertEqual(rc.menu_key('sm2-emu', home), 15)
+            conf = Path(home) / 'fliperos.conf'
+            self.assertEqual(rc.osd_key(str(conf)), 164)
+            conf.write_text('osd_key=88,119\n')
+            self.assertEqual(rc.osd_key(str(conf)), 88)
+            conf.write_text('osd=off\n')
+            self.assertIsNone(rc.osd_key(str(conf)))
 
     def test_hotkey_closes_the_game_and_counts_coins(self):
         # O frontend do FliperOS le, junto com o jogo, o atalho que o fecha e
@@ -18174,15 +18297,86 @@ class OsdTests(unittest.TestCase):
         self.assertTrue(choice.move(1))
         self.assertEqual(choice.text(), 'On')
 
+    def config(self, screen=None, mode=None):
+        """O menu ja na pagina Configuration."""
+        menu, worker = self.menu(screen, mode)
+        menu.open_page('config')
+        return menu, worker
+
     def test_main_page_shows_the_filter_only_in_an_interlaced_mode(self):
-        menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Delete profile', 'Interlaced filter', 'Geometry', 'Colour', 'Save|Close'])
-        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Delete profile', 'Geometry', 'Colour', 'Save|Close'])
+        menu, _ = self.config()
+        self.assertEqual(self.labels(menu), ['Save profile as', 'Delete profile', 'Interlaced filter', 'Geometry',
+                                             'Colour', 'Save|Back'])
+        menu, _ = self.config(mode=dict(self.MODE, interlace=False))
+        self.assertEqual(self.labels(menu), ['Save profile as', 'Delete profile', 'Geometry', 'Colour', 'Save|Back'])
         # Num LCD nao ha geometria para ajustar.
         self.conf.write_text('monitor=lcd\n')
-        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Delete profile', 'Colour', 'Save|Close'])
+        menu, _ = self.config(mode=dict(self.MODE, interlace=False))
+        self.assertEqual(self.labels(menu), ['Save profile as', 'Delete profile', 'Colour', 'Save|Back'])
+
+    def test_main_page_is_volume_configuration_and_the_buttons(self):
+        # O Volume, a Configuration (o resto dos ajustes e o Save) e os botoes:
+        # Emulator menu (so num emulador com menu proprio), Close e Quit (so num
+        # jogo: sobre o frontend, nem um nem outro).
+        osd = self.osd
+        menu, _ = self.menu()
+        self.assertEqual(self.labels(menu), ['Volume', 'Configuration', 'Close|Quit'])
+        menu = osd.Menu({'program': 'retroarch', 'core': 'fbneo'}, self.MODE, osd.Worker(), emulator_key=59)
+        self.assertEqual(self.labels(menu), ['Volume', 'Configuration', 'Emulator menu', 'Close|Quit'])
+        menu = osd.Menu({'program': 'python3', 'core': ''}, self.MODE, osd.Worker(), emulator_key=59)
+        self.assertEqual(self.labels(menu), ['Volume', 'Configuration', 'Close'])
+        # Configuration abre a pagina; o Back dela volta.
+        menu, _ = self.menu()
+        menu.key(osd.KEY_DOWN)
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.title(), 'CONFIGURATION')
+        menu.page['cursor'] = len(menu.page['rows']) - 1
+        menu.key(osd.KEY_RIGHT)
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.title(), 'FLIPEROS')
+        # Emulator menu e Quit fecham a OSD e dizem ao servico o que fazer.
+        menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
+        menu.page['cursor'] = 2
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual((menu.closing, menu.after), (True, 'emulator'))
+        menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
+        menu.page['cursor'] = 3
+        menu.key(osd.KEY_RIGHT)
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual((menu.closing, menu.after), (True, 'quit'))
+        menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
+        menu.page['cursor'] = 3
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual((menu.closing, menu.after), (True, None))
+
+    def test_service_presses_the_emulator_key_or_quits_the_game(self):
+        # O servico: a tecla do menu de cada emulador pelo fliperos-buttons; o
+        # Quit e o SIGTERM no jogo, e o SIGKILL se ele nao sair.
+        import signal
+        import types
+        osd = self.osd
+        service = object.__new__(osd.Service)
+        service.buttons = load_script('buttons_osd', 'config/fliperos-buttons')
+        pressed = []
+        service.keys = types.SimpleNamespace(press=pressed.append)
+        uid = os.getuid()
+        self.assertEqual(service.emulator_key({'program': 'retroarch', 'uid': uid}), 59)
+        self.assertEqual(service.emulator_key({'program': 'groovymame', 'uid': uid}), 15)
+        self.assertIsNone(service.emulator_key({'program': 'supermodel', 'uid': uid}))
+        self.assertIsNone(service.emulator_key({'program': 'python3', 'uid': uid}))
+        sleep = osd.time.sleep
+        osd.time.sleep = lambda s: None
+        try:
+            service.press_emulator_key(59)
+        finally:
+            osd.time.sleep = sleep
+        self.assertEqual(pressed, [59])
+        child = subprocess.Popen(['sleep', '30'])
+        osd.QUIT_KILL = 0.5
+        service.quit_game({'pid': child.pid})
+        self.assertEqual(child.wait(5), -signal.SIGTERM)
+        source = (ROOT / 'config/fliperos-osd').read_text()
+        self.assertIn('name not in (self.pk.NAME, EMULATOR_KEYS)', source)
 
     def test_scanlines_page_on_a_31_khz_monitor(self):
         # So com frequency=31k, como no Video Setup: a pagina Scanlines, com
@@ -18195,9 +18389,9 @@ class OsdTests(unittest.TestCase):
                                'scanline.brightness|Scanlines|Brightness boost|number|115|100..200:5|h\n'
                                'scanline.reset|Scanlines|Back to the defaults|action|||h\n')
         self.conf.write_text('monitor=arcade_15_25_31\nfrequency=31k\nscanlines=on\n')
-        menu, worker = self.menu(mode=dict(self.MODE, interlace=False))
+        menu, worker = self.config(mode=dict(self.MODE, interlace=False))
         labels = self.labels(menu)
-        self.assertEqual(labels, ['Volume', 'Save profile as', 'Delete profile', 'Scanlines', 'Geometry', 'Colour', 'Save|Close'])
+        self.assertEqual(labels, ['Save profile as', 'Delete profile', 'Scanlines', 'Geometry', 'Colour', 'Save|Back'])
         menu.page['cursor'] = labels.index('Scanlines')
         menu.key(self.osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'SCANLINES')
@@ -18215,22 +18409,22 @@ class OsdTests(unittest.TestCase):
         worker.wait()
         self.assertIn([self.osd.SETUP, '--setting', 'scanline.reset', '1'], self.calls)
         self.conf.write_text('monitor=generic_15\nfrequency=15k\nscanlines=on\n')
-        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
+        menu, _ = self.config(mode=dict(self.MODE, interlace=False))
         self.assertNotIn('Scanlines', self.labels(menu))
 
     def test_settings_go_through_the_setup_with_the_program_or_the_core(self):
         menu, worker = self.menu()
         keys = self.osd
         menu.key(keys.KEY_LEFT)     # o volume
-        menu.key(keys.KEY_DOWN)     # Save profile as
+        menu.key(keys.KEY_DOWN)     # Configuration
+        menu.key(keys.KEY_ENTER)    # Save profile as
         menu.key(keys.KEY_DOWN)     # Delete profile
         menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_RIGHT)    # medium -> strong
         worker.wait()
         self.assertIn([self.osd.SETUP, '--volume', 'set', '75'], self.calls)
         self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx2', 'strong'], self.calls)
-        menu, worker = self.menu({'program': 'retroarch', 'core': 'pcsx_rearmed'})
-        menu.key(keys.KEY_DOWN)
+        menu, worker = self.config({'program': 'retroarch', 'core': 'pcsx_rearmed'})
         menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_LEFT)
@@ -18318,36 +18512,38 @@ class OsdTests(unittest.TestCase):
                                   'core': 'core:fbneo', 'game': 'game:fbneo/sf2'})
         menu, worker = self.menu()
         menu.scopes = dict(scopes)
-        menu.page['rows'] = menu.rows_main()
-        self.assertEqual(self.labels(menu)[:2], ['Volume', 'Save profile as'])
-        self.assertEqual(self.labels(menu)[-1], 'Save|Close')
-        profile = menu.page['rows'][1]
+        menu.open_page('config')
+        self.assertEqual(self.labels(menu)[0], 'Save profile as')
+        self.assertEqual(self.labels(menu)[-1], 'Save|Back')
+        profile = menu.page['rows'][0]
         self.assertEqual([label for _, label in profile.options],
                          ['default.cfg', 'resolution.cfg', 'emulator.cfg', 'core.cfg', 'game.cfg'])
-        menu.key(osd.KEY_DOWN)
         for _ in range(4):
             menu.key(osd.KEY_RIGHT)                 # game.cfg
         self.assertEqual(menu.profile, 'game')
-        menu.key(osd.KEY_UP)
+        menu.back()
+        menu.page['cursor'] = 0
         menu.key(osd.KEY_LEFT)                      # o volume: 80 -> 75, na hora
         worker.wait()
         self.assertIn([osd.SETUP, '--volume', 'set', '75'], self.calls)
         self.assertEqual(osd.Profiles().data, {})   # ainda sem o Save
-        # Save: a linha da base, o botao da esquerda.
+        # Save: a linha da base da Configuration, o botao da esquerda.
+        menu.page['cursor'] = 1
+        menu.key(osd.KEY_ENTER)
         menu.page['cursor'] = len(menu.page['rows']) - 1
         self.assertEqual(menu.page['rows'][-1].value, 'save')
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.status, 'SAVED GAME.CFG')
+        menu.back()
         saved = osd.Profiles()
         self.assertEqual(saved.data, {'default': {'volume': '80'}, 'game:fbneo/sf2': {'volume': '75'}})
         self.assertEqual(saved.effective(scopes), {'volume': '75'})
         self.assertEqual(saved.effective({'default': 'default', 'core': 'core:fbneo'}), {'volume': '80'})
         self.assertEqual(saved.chosen(scopes), 'game')
-        # Mudou e fechou sem salvar (Close, o botao da direita): volta o de antes.
+        # Mudou e fechou sem salvar (Close, na pagina principal): volta o de antes.
         menu.page['cursor'] = 0
         menu.key(osd.KEY_LEFT)                      # 75 -> 70
         menu.page['cursor'] = len(menu.page['rows']) - 1
-        menu.key(osd.KEY_RIGHT)
         self.assertEqual(menu.page['rows'][-1].value, 'close')
         menu.key(osd.KEY_ENTER)
         worker.wait()
@@ -18364,12 +18560,12 @@ class OsdTests(unittest.TestCase):
         menu, worker = self.menu()
         menu.scopes = osd.profile_scopes({'program': 'retroarch', 'core': 'fbneo', 'pid': 0}, self.MODE, game='sf2')
         menu.profile = menu.profiles.chosen(menu.scopes)
-        menu.page['rows'] = menu.rows_main()
+        menu.open_page('config')
         labels = self.labels(menu)
-        self.assertEqual(labels[1:3], ['Save profile as', 'Delete profile'])
-        row = menu.page['rows'][2]
+        self.assertEqual(labels[0:2], ['Save profile as', 'Delete profile'])
+        row = menu.page['rows'][1]
         self.assertEqual(row.text(), 'game.cfg')
-        menu.page['cursor'] = 2
+        menu.page['cursor'] = 1
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.status, 'ENTER AGAIN: DELETE GAME.CFG')
         self.assertIn('game:fbneo/sf2', osd.Profiles().data)
@@ -18379,7 +18575,7 @@ class OsdTests(unittest.TestCase):
         self.assertNotIn('game:fbneo/sf2', osd.Profiles().data)
         self.assertEqual(self.calls[-1], [osd.SETUP, '--volume', 'set', '80'])
         # O perfil escolhido acima muda o que se apaga; um vazio nao pede nada.
-        menu.page['rows'][1].value = 'core'
+        menu.page['rows'][0].value = 'core'
         menu.set_profile('core')
         self.assertEqual(row.text(), 'core.cfg')
         menu.key(osd.KEY_ENTER)
@@ -18425,8 +18621,8 @@ class OsdTests(unittest.TestCase):
         ident.mkdir(parents=True)
         (ident / 'vendor').write_text('0b9a\n')
         (ident / 'product').write_text('016a\n')
-        menu, worker = self.menu()
-        self.assertEqual(self.labels(menu)[-2:], ['GunCon 2', 'Save|Close'])
+        menu, worker = self.config()
+        self.assertEqual(self.labels(menu)[-2:], ['GunCon 2', 'Save|Back'])
         menu.page['cursor'] = self.labels(menu).index('GunCon 2')
         menu.key(self.osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'GUNCON 2')
@@ -18443,7 +18639,7 @@ class OsdTests(unittest.TestCase):
         worker.wait()
         self.assertIn([self.osd.SETUP, '--setting', 'gun.reset', '1'], self.calls)
         menu.key(self.osd.KEY_ESC)
-        self.assertEqual(menu.title(), 'FLIPEROS')
+        self.assertEqual(menu.title(), 'CONFIGURATION')
         # Outro aparelho no mesmo /sys nao conta.
         (ident / 'product').write_text('0001\n')
         self.assertFalse(self.osd.guncon_present())

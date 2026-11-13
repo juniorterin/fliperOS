@@ -29,6 +29,15 @@
       mudanca ({"1": ["up", "b1"], "2": []}), para a pagina do controle no
       OBS (fliperos-web); as teclas do mapa pelo evdev, sem tomar o
       teclado. Sem mapa, as teclas padrao do MAME dos jogadores 1 e 2
+  fliperos-buttons hotkey [--key CODIGO] [--combo C+C] [--menu-key CODIGO]
+                          [--menu-combo C+C] [--program NOME] [--coin] [MAPA]
+      junto com o jogo que o frontend do FliperOS abriu: "exit" (e sai) no
+      atalho que fecha o jogo, "menu" no que abre o menu do emulador (a
+      tecla do menu dele sai por um teclado virtual, menu_key), "coin" a
+      cada ficha (cmd_hotkey)
+  fliperos-buttons menu-key PROGRAMA
+      a tecla (o codigo do evdev) que abre o menu do emulador PROGRAMA, ou
+      "osd" (sem menu: a do menu na tela do FliperOS) e status 1 sem nenhuma
 
 ELEMENTO na numeracao do SDL (joystick, nao game controller): b3 (botao),
 -a1 / +a1 (meio eixo), h0.1 / h0.2 / h0.4 / h0.8 (hat: cima, direita,
@@ -132,6 +141,7 @@ fliperos-x11-run poe por cima do gamecontrollerdb.txt ao abrir o jogo.
 import argparse
 import ctypes
 import ctypes.util
+import fcntl
 import glob
 import json
 import os
@@ -2418,24 +2428,193 @@ def cmd_watch(args):
             sticks.close()
 
 
+def parse_combo(text):
+    """Os comandos de um atalho ("coin+start", "1:start+2:start"): [(jogador,
+    comando)]. O jogador None e o de qualquer um (os comandos sem jogador
+    valem juntos num mesmo jogador); com o numero, so o desse jogador: um
+    atalho pode juntar comandos de jogadores diferentes."""
+    out = []
+    for item in (text or '').split('+'):
+        player, sep, control = item.rpartition(':')
+        if control not in ALL_CONTROLS or control in STICKS or control in UI_CONTROLS:
+            continue
+        if sep and not player.isdigit():
+            continue
+        out.append((int(player) if sep else None, control))
+    return out
+
+
+def combo_held(combo, now):
+    """O atalho esta todo apertado em now ({"1": [comandos], ...}, o do
+    watch_state)? Os comandos com jogador no dele; os sem, todos num jogador."""
+    if not combo:
+        return False
+    if not all(c in now.get(str(p), ()) for p, c in combo if p is not None):
+        return False
+    loose = {c for p, c in combo if p is None}
+    return not loose or any(loose <= set(on) for on in now.values())
+
+
+# ── O menu de cada emulador ─────────────────────────────────────
+# A tecla que abre o menu do proprio emulador (o nome do programa do comando,
+# o de depois do fliperos-kms-run/x11-run, ou o que a camada da OSD anota),
+# conferida no gabinete apertando-a por um teclado virtual (uinput): F1 no
+# RetroArch, Tab no MAME e no Flycast, Esc no PCSX2 e no DuckStation (o
+# OpenPauseMenu do pcsx2.ini e do settings.ini) e a do overlay do SM2-Emu (a
+# key_overlay do sm2-emu.ini, F10 de fabrica). Quem nao tem menu (Supermodel,
+# Dolphin, OpenBOR, Hypseus, o KOF do Ikemen, o Fightcade) usa o menu na tela
+# do FliperOS (config/fliperos-osd).
+MENU_KEYS = {'retroarch': 'F1', 'groovymame': 'TAB', 'mame': 'TAB', 'flycast': 'TAB', 'pcsx2': 'ESCAPE',
+             'pcsx2-qt': 'ESCAPE', 'pcsx2x6': 'ESCAPE', 'duckstation': 'ESCAPE', 'duckstation-qt': 'ESCAPE',
+             'fliperos-model2': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2'}
+# Os nomes das teclas (os do SDL, que o sm2-emu.ini usa) no evdev.
+KEY_CODES = {'ESCAPE': 1, 'TAB': 15, 'BACKSPACE': 14, 'RETURN': 28, 'SPACE': 57, 'PAUSE': 119,
+             'INSERT': 110, 'DELETE': 111, 'HOME': 102, 'END': 107, 'PAGEUP': 104, 'PAGEDOWN': 109}
+KEY_CODES.update({'F%d' % n: code for n, code in enumerate((59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88), 1)})
+KEY_CODES.update({k: v for k, v in EVDEV_KEYS.items() if len(k) == 1})
+SM2_INI = '.config/sm2-emu/sm2-emu.ini'
+# O menu na tela do FliperOS (config/fliperos-osd) abre pelas teclas osd_key
+# do fliperos.conf: a de midia primeiro (Play/Pause, Pause, Play), que nenhum
+# jogo usa; a Pause do teclado (119) pausaria o FBNeo do Fightcade.
+OSD_CONF = os.environ.get('FLIPEROS_CONF', '/etc/fliperos/fliperos.conf')
+OSD_DEFAULT_KEYS = '119,164,201,207'
+OSD_MEDIA_KEYS = (164, 201, 207)
+
+
+def sm2_overlay_key(home):
+    """A tecla do overlay do SM2-Emu (key_overlay no sm2-emu.ini; F10)."""
+    try:
+        with open(os.path.join(home, SM2_INI), encoding='utf-8', errors='replace') as f:
+            for line in f:
+                key, sep, value = line.partition('=')
+                if sep and key.strip() == 'key_overlay' and value.strip():
+                    return value.strip().upper()
+    except OSError:
+        pass
+    return 'F10'
+
+
+def menu_key(program, home=None):
+    """O codigo do evdev da tecla do menu do emulador program, ou None (sem
+    menu proprio)."""
+    name = MENU_KEYS.get(os.path.basename(program or ''))
+    if name == 'sm2':
+        name = sm2_overlay_key(home or os.path.expanduser('~'))
+    return KEY_CODES.get(name) if name else None
+
+
+def osd_key(path=None):
+    """A tecla que abre o menu na tela do FliperOS (None com ele desligado)."""
+    conf = {}
+    try:
+        with open(path or OSD_CONF, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                key, sep, value = line.strip().partition('=')
+                if sep:
+                    conf[key] = value
+    except OSError:
+        pass
+    if conf.get('osd') == 'off':
+        return None
+    codes = [int(k) for k in conf.get('osd_key', OSD_DEFAULT_KEYS).split(',') if k.strip().isdigit()]
+    return next((k for k in codes if k in OSD_MEDIA_KEYS), codes[0] if codes else None)
+
+
+def cmd_menukey(args):
+    code = menu_key(args.program)
+    if code is None:
+        print('osd')
+        return 1
+    print(code)
+    return 0
+
+
+def _ioc(direction, kind, nr, size):
+    return (direction << 30) | (size << 16) | (ord(kind) << 8) | nr
+
+
+class KeySender:
+    """Um teclado virtual (uinput) com as teclas codes. Criado junto com o
+    jogo, antes de ele abrir: o X e o SDL ja o conhecem quando a tecla sai, e
+    o RetroArch (linuxraw) a recebe pelo console. press() aperta e solta."""
+
+    NAME = b'FliperOS emulator keys'
+    UI_DEV_CREATE = _ioc(0, 'U', 1, 0)
+    UI_DEV_DESTROY = _ioc(0, 'U', 2, 0)
+    UI_DEV_SETUP = _ioc(1, 'U', 3, 92)
+    UI_SET_EVBIT = _ioc(1, 'U', 100, 4)
+    UI_SET_KEYBIT = _ioc(1, 'U', 101, 4)
+
+    def __init__(self, codes, path='/dev/uinput'):
+        self.fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+        try:
+            fcntl.ioctl(self.fd, self.UI_SET_EVBIT, EV_KEY)
+            for code in codes:
+                fcntl.ioctl(self.fd, self.UI_SET_KEYBIT, code)
+            # BUS_VIRTUAL; vendor/produto sem significado (o do fliperos-padkeys + 1).
+            fcntl.ioctl(self.fd, self.UI_DEV_SETUP, struct.pack('HHHH80sI', 0x06, 0x1209, 0x0002, 1, self.NAME, 0))
+            fcntl.ioctl(self.fd, self.UI_DEV_CREATE)
+        except OSError:
+            os.close(self.fd)
+            raise
+
+    def press(self, code):
+        for value in (1, 0):
+            os.write(self.fd, INPUT_EVENT.pack(0, 0, EV_KEY, code, value) + INPUT_EVENT.pack(0, 0, 0, 0, 0))
+            if value:
+                time.sleep(0.08)
+
+    def close(self):
+        try:
+            fcntl.ioctl(self.fd, self.UI_DEV_DESTROY)
+        except OSError:
+            pass
+        os.close(self.fd)
+
+
 def cmd_hotkey(args):
     """Junto com o jogo que o frontend do FliperOS abriu: o atalho que fecha o
     jogo imprime "exit" e sai. O atalho e uma tecla (--key, o codigo do evdev;
-    repetido, qualquer uma delas) ou os comandos do painel segurados juntos por --hold segundos (--combo
-    start+b2, os do Button mapping, de um mesmo jogador). Com --coin, cada
-    ficha imprime "coin" (o modo comercial soma o tempo). Nada e tomado do
-    jogo: ele le os mesmos controles."""
+    repetido, qualquer uma delas) ou os comandos do painel segurados juntos
+    por --hold segundos (--combo start+b2, os do Button mapping; 1:start+2:start
+    junta os de jogadores diferentes, parse_combo).
+
+    O do menu do emulador (--menu-key, --menu-combo) imprime "menu" e segue:
+    com --program, a tecla do menu dele (menu_key; sem menu proprio, a do menu
+    na tela do FliperOS) sai por um teclado virtual criado aqui, antes do jogo
+    abrir ("ready" quando ele existe). Outro "menu" so depois de soltar.
+
+    Com --coin, cada ficha imprime "coin" (o modo comercial soma o tempo).
+    Nada e tomado do jogo: ele le os mesmos controles."""
     try:
         os.nice(10)
     except OSError:
         pass
-    combo = set(c for c in (args.combo or '').split('+') if c in ALL_CONTROLS)
+    combo = parse_combo(args.combo)
+    menu_combo = parse_combo(args.menu_combo)
+    sender, send = None, None
+    if args.program and (menu_combo or args.menu_key):
+        send = menu_key(args.program) or osd_key()
+        if send is not None:
+            try:
+                sender = KeySender([send])
+            except OSError as exc:
+                print('no virtual keyboard: %s' % exc, file=sys.stderr)
+    print('ready', flush=True)
     players = watch_players(args.map)
-    wanted = combo | ({'coin'} if args.coin else set())
+    wanted = {c for _, c in combo + menu_combo} | ({'coin'} if args.coin else set())
     elements = [e for binds in players.values() for c, (_, e) in binds.items() if c in wanted]
-    keyboards = Keyboards() if args.key or any(is_key(e) for e in elements) else None
+    keyboards = Keyboards() if args.key or args.menu_key or any(is_key(e) for e in elements) else None
     sticks = Sticks() if any(not is_key(e) for e in elements) else None
     since, coin, key_was = None, None, None
+    menu_since, menu_armed, menu_key_was = None, True, None
+    menu_hold = args.hold if args.menu_hold is None else args.menu_hold
+
+    def open_menu():
+        if sender:
+            sender.press(send)
+        print('menu', flush=True)
+
     try:
         while True:
             states = sticks.read() if sticks else {}
@@ -2450,14 +2629,25 @@ def cmd_hotkey(args):
                 print('exit', flush=True)
                 return 0
             key_was = key
+            key = any(code in keys for code in args.menu_key)
+            if key and menu_key_was is False:
+                open_menu()
+            menu_key_was = key
             now = watch_state(players, states, keys)
-            if combo and any(combo <= set(on) for on in now.values()):
+            if combo_held(combo, now):
                 since = since or time.monotonic()
                 if time.monotonic() - since >= args.hold:
                     print('exit', flush=True)
                     return 0
             else:
                 since = None
+            if combo_held(menu_combo, now):
+                menu_since = menu_since or time.monotonic()
+                if menu_armed and time.monotonic() - menu_since >= menu_hold:
+                    menu_armed = False
+                    open_menu()
+            else:
+                menu_since, menu_armed = None, True
             down = any('coin' in on for on in now.values())
             if args.coin and down and coin is False:
                 print('coin', flush=True)
@@ -2467,6 +2657,8 @@ def cmd_hotkey(args):
     finally:
         if sticks:
             sticks.close()
+        if sender:
+            sender.close()
 
 
 def main():
@@ -2507,9 +2699,16 @@ def main():
     p.add_argument('--key', type=int, action='append', default=[])
     p.add_argument('--combo', default='')
     p.add_argument('--hold', type=float, default=1.0)
+    p.add_argument('--menu-key', type=int, action='append', default=[])
+    p.add_argument('--menu-combo', default='')
+    p.add_argument('--menu-hold', type=float, default=None)
+    p.add_argument('--program', default='')
     p.add_argument('--coin', action='store_true')
     p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
     p.set_defaults(func=cmd_hotkey)
+    p = sub.add_parser('menu-key')
+    p.add_argument('program')
+    p.set_defaults(func=cmd_menukey)
     p = sub.add_parser('fbneo')
     p.add_argument('map')
     p.add_argument('version')

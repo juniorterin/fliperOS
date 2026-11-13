@@ -58,9 +58,11 @@ These are the defaults:
 
     Nothing pressed for 8 seconds keeps it as it was (Esc, or the panel's back button when choosing a key, cancels). The last line has **Reset** and **Save** side by side (left and right). Reset brings back the functions' defaults (the exit shortcut and the panel layout stay); **Save** saves and leaves the screen, like back. Each change works at once and is saved in `frontend.json` (`controls`).
 
-    **Exit game** is the shortcut that closes the open game. In the Panel column, select asks for the buttons: hold two or more together for a second, and in a game the same buttons held for a second close it. In commercial mode the coin can't be one of them. In the Keyboard column, select asks for the key: press it within 8 seconds (back on the panel cancels).
+    **Exit game** is the shortcut that closes the open game, and **Emulator menu** the one that opens the emulator's own menu (RetroArch's Quick Menu, MAME's menu, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay). Out of the box, like Batocera with Select as the hotkey: **coin + Start** held for a second closes the game, and **coin + button 1** held for a second opens the menu. An emulator with no menu of its own (Supermodel, Dolphin, OpenBOR, Hypseus, KOF, Fightcade) gets the FliperOS [on-screen menu](Installed-system.md#on-screen-menu) instead.
 
-    A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing. Delete turns either one off.
+    In the Panel/Joypad cell, select asks for the buttons: hold two or more together for a second. They can come from one player, and then any player's same buttons work, or from different players (**P1 START+P2 START**: only those two together). In commercial mode the coin can't be one of them, and turning commercial mode on drops a shortcut that has it. In the Keyboard column, select asks for the key: press it within 8 seconds (back on the panel cancels).
+
+    A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing, and so is the other shortcut's key or buttons. Delete turns either one off.
 
     **Panel layout** (left and right) is the shape of the panel that the guide draws: **6 buttons** in two rows (where Buttons layout puts them), **4 in line** like a Neo Geo MVS, **3 in line**, **2 in line** or **2 stacked**. The guide draws only the buttons that shape has, and in this screen a button it doesn't have shows dimmed (its function then works only from the keyboard).
 
@@ -68,7 +70,7 @@ These are the defaults:
   - **Power closes game**: on (the default), the cabinet's power button closes the open game; off, it does nothing while a game is open. With no game open it always powers off.
   - **Commercial mode** and, with it on, **Minutes per coin** (1 to 60, left and right).
 
-  The exit key and buttons are read alongside the game by `fliperos-buttons hotkey`, without taking anything from it. The frontend closes the game and what runs under it (the X server, the emulator) with SIGTERM, and SIGKILL after 4 seconds.
+  The keys and buttons of both shortcuts are read alongside the game by `fliperos-buttons hotkey`, without taking anything from it. The frontend closes the game and what runs under it (the X server, the emulator) with SIGTERM, and SIGKILL after 4 seconds. For the menu, `fliperos-buttons hotkey` creates a virtual keyboard (uinput, `FliperOS emulator keys`) before the game opens and presses the emulator's menu key on it: F1 in RetroArch, Tab in GroovyMAME and Flycast, Esc in PCSX2, PCSX2x6 and DuckStation, SM2-Emu's `key_overlay` (F10), or the on-screen menu's media key for the others (`fliperos-buttons menu-key PROGRAM` prints it). RetroArch opened this way loses its own Start + Select menu combo, which would open the menu a second before the shortcut closed it.
 
 **Commercial mode** (Tab > Frontend options), for a cabinet that charges by the time played:
 - Without time, the customer can browse the games but not choose one: button 1 shows INSERT COIN.

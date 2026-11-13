@@ -25,8 +25,10 @@ import time
 
 EV_KEY = 0x01
 KEY_ESC = 1
-# O teclado virtual do fliperos-padkeys so escreve com o Setup na tela.
-IGNORED = {b'FliperOS pad keys'}
+# O teclado virtual do fliperos-padkeys so escreve com o Setup na tela; o do
+# menu dos emuladores (fliperos-buttons hotkey, a OSD) manda o Esc do menu do
+# PCSX2 e do DuckStation, que nao fecha nada.
+IGNORED = {b'FliperOS pad keys', b'FliperOS emulator keys'}
 # O navegador do Downloader liga o controle como teclado: la o botao 2 (Esc
 # do fliperos-padkeys) tambem fecha.
 if os.environ.get('FLIPEROS_ESCQUIT_PADKEYS') == '1':

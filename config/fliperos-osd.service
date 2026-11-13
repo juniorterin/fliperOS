@@ -4,6 +4,8 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
+# O teclado virtual do Emulator menu.
+ExecStartPre=-/sbin/modprobe uinput
 ExecStart=/usr/bin/python3 /opt/fliperos/bin/fliperos-osd
 RuntimeDirectory=fliperos-osd
 RuntimeDirectoryMode=0755

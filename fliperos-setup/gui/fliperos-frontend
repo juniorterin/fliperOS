@@ -106,10 +106,19 @@ ATTRACT_STEP = max(1.0, float(os.environ.get("FLIPEROS_ATTRACT_STEP", "30")))
 # Os botoes do atalho do painel, segurados juntos por EXIT_HOLD segundos
 # (no jogo e na hora de escolher). CAPTURE_WAIT: sem apertar, a escolha sai.
 EXIT_HOLD, CAPTURE_WAIT = 1.0, 8.0
+# Os atalhos de fabrica nos jogos, como no Batocera com o Select de hotkey:
+# ficha + Start fecha o jogo e ficha + botao 1 abre o menu do emulador (os
+# dois segurados EXIT_HOLD segundos). Num frontend.json de antes deles
+# (sem "shortcuts"), so entram onde nada foi escolhido.
+DEFAULT_EXIT_COMBO, DEFAULT_MENU_COMBO = ["coin", "start"], ["coin", "b1"]
+# O RetroArch tem o atalho dele (Start + Select, input_menu_toggle_gamepad_combo
+# no retroarch.cfg), que abriria o menu na hora e o do frontend o fecharia
+# em seguida: com o EMULATOR MENU, so o do frontend (este arquivo vai no
+# --appendconfig, que o fliperos-kms-run poe no fim).
+RA_NO_COMBO = "input_menu_toggle_gamepad_combo = \"0\"\n"
 # O Frontend controls: o guia (arcade ou joypad) e o formato dele nas duas
 # primeiras linhas, as funcoes a partir desta.
 CONTROLS_FIRST = 2
-COMBO_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
 # Os minutos de cada ficha (Frontend options > Minutes per coin).
 COIN_MINUTES = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60)
 # A midia fisica: o estado dos drives e lido a cada MEDIA_POLL segundos; o
@@ -144,8 +153,21 @@ def panel_keys(rows):
 
 
 def combo_names(combo):
-    """Os botoes do atalho na tela: START, COIN, 1 a 6 e as direcoes."""
-    return [c[1:] if c[0] == "b" and c[1:].isdigit() else c.upper() for c in combo]
+    """Os botoes do atalho na tela: START, COIN, 1 a 8, as direcoes e, de um
+    jogador so, "P2 START" (feinput.combo_names)."""
+    import feinput
+    return feinput.combo_names(combo)
+
+
+def game_program(argv):
+    """O programa do comando do jogo: o de depois do fliperos-x11-run/kms-run
+    (e do --mode e do --app dele), o nome que o config/fliperos-buttons conhece."""
+    if len(argv) < 2 or os.path.basename(argv[0]) not in ("fliperos-x11-run", "fliperos-kms-run"):
+        return None
+    words = argv[1:]
+    while len(words) > 2 and words[0] in ("--mode", "--app"):
+        words = words[2:]
+    return os.path.basename(words[0]) if words else None
 
 
 def game_env():
@@ -183,14 +205,7 @@ EMULATOR_OF = {"groovymame": "groovymame", "flycast": "flycast", "pcsx2": "pcsx2
 def missing_emulator(argv, installed=None):
     """O emulador do comando quando ele ainda nao esta instalado (ou
     compilado); senao None. installed(nome): o fliperos-emulators installed."""
-    if len(argv) < 2 or os.path.basename(argv[0]) not in ("fliperos-x11-run", "fliperos-kms-run"):
-        return None
-    words = argv[1:]
-    if words and words[0] == "--mode" and len(words) > 2:
-        words = words[2:]
-    if not words:
-        return None
-    name = EMULATOR_OF.get(os.path.basename(words[0]))
+    name = EMULATOR_OF.get(game_program(argv) or "")
     if not name:
         return None
     if installed is None:
@@ -344,12 +359,22 @@ class Frontend:
         # no jogo, o modo comercial e os minutos de cada ficha; o tempo
         # comprado vai ate credit_until (a hora do relogio: segue correndo
         # com o gabinete desligado).
-        key = cfg.get("exit_key")
-        self.exit_key = key if isinstance(key, list) and len(key) == 2 else None
-        combo = cfg.get("exit_combo")
-        self.exit_combo = [c for c in combo if c in COMBO_CONTROLS] if isinstance(combo, list) else []
+        # O do menu do emulador (EMULATOR MENU) e igual: a tecla e os botoes.
+        def shortcut(name, default):
+            key = cfg.get(name + "_key")
+            combo = cfg.get(name + "_combo")
+            combo = [c for c in combo if feinput.combo_item_ok(c)] if isinstance(combo, list) else []
+            if cfg.get("shortcuts") is None and not combo:
+                combo = list(default)
+            return (key if isinstance(key, list) and len(key) == 2 else None), combo
+        self.exit_key, self.exit_combo = shortcut("exit", DEFAULT_EXIT_COMBO)
+        self.menu_key, self.menu_combo = shortcut("menu", DEFAULT_MENU_COMBO)
         self.power_exit = cfg.get("power_exit", True) is not False
         self.commercial = cfg.get("commercial") is True
+        if self.commercial:
+            # No modo comercial a ficha soma tempo: atalho com ela, nenhum.
+            self.exit_combo = [] if any(c.endswith("coin") for c in self.exit_combo) else self.exit_combo
+            self.menu_combo = [] if any(c.endswith("coin") for c in self.menu_combo) else self.menu_combo
         self.coin_minutes = cfg.get("coin_minutes") if cfg.get("coin_minutes") in COIN_MINUTES else 5
         self.credit_until = float(cfg.get("credit_until") or 0)
         self.coin_at = 0.0         # a ultima ficha (o relogio aparece piscando)
@@ -634,6 +659,7 @@ class Frontend:
                      "filters": self.filter_by, "control_filters": self.ctrl_by,
                      "game": g["Name"] if g else None, "positions": self.positions,
                      "clones": self.show_clones, "exit_key": self.exit_key, "exit_combo": self.exit_combo,
+                     "menu_key": self.menu_key, "menu_combo": self.menu_combo, "shortcuts": 1,
                      "power_exit": self.power_exit, "commercial": self.commercial,
                      "coin_minutes": self.coin_minutes, "credit_until": self.credit_until,
                      "controls": self.input.binds, "panel_layout": self.panel_layout,
@@ -1120,10 +1146,12 @@ class Frontend:
                     # Desligado, o tempo que restava some: ligado de novo,
                     # comeca sem ficha.
                     self.credit_until = 0.0
-                if self.commercial and "coin" in self.exit_combo:
-                    # A ficha passa a somar tempo: o atalho com ela sai.
-                    self.exit_combo = []
-                    self.say("EXIT BUTTONS OFF: COIN NOW ADDS TIME", 2.6)
+                coin = [c for c in (self.exit_combo, self.menu_combo) if any(i.endswith("coin") for i in c)]
+                if self.commercial and coin:
+                    # A ficha passa a somar tempo: os atalhos com ela saem.
+                    for combo in coin:
+                        combo.clear()
+                    self.say("GAME BUTTONS OFF: COIN NOW ADDS TIME", 2.6)
                 self.remember()
             elif sel == OPT_COIN and a in ("left", "right"):
                 i = COIN_MINUTES.index(self.coin_minutes) + (1 if a == "right" else -1)
@@ -1174,19 +1202,27 @@ class Frontend:
                 self.overlay = None
             return None
         if o == "exitkey":
-            # A tecla que fecha o jogo: a proxima apertada no teclado. Uma do
-            # painel (o encoder que se diz teclado) nao serve: cada botao faz
-            # uma coisa so. O botao 2 de um controle desiste.
+            # A tecla que fecha o jogo (ou abre o menu do emulador, ov
+            # "which"): a proxima apertada no teclado. Uma do painel (o
+            # encoder que se diz teclado) nao serve: cada botao faz uma coisa
+            # so; nem a do outro atalho. O botao 2 de um controle desiste.
+            menu = self.ov.get("which") == "menu"
             if a.startswith("key:"):
                 key = self.keytable.get(int(a[4:]))
+                other = self.exit_key if menu else self.menu_key
                 if key is None:
                     self.say("THIS KEY CANNOT BE USED", 2)
                 elif key[0] in panel_keys(self.input.rows):
                     self.say("%s IS A PANEL CONTROL" % key[0], 2.4)
+                elif other and other[1] == key[1]:
+                    self.say("%s ALREADY %s" % (key[0], "CLOSES THE GAME" if menu else "OPENS THE MENU"), 2.4)
                 else:
-                    self.exit_key = list(key)
+                    if menu:
+                        self.menu_key = list(key)
+                    else:
+                        self.exit_key = list(key)
                     self.remember()
-                    self.say("EXIT KEY: " + key[0], 2)
+                    self.say(("MENU KEY: " if menu else "EXIT KEY: ") + key[0], 2)
                 self.capture_done(2)
             elif a == "b2":
                 self.capture_done(2)
@@ -1259,7 +1295,7 @@ class Frontend:
         # fecha o jogo e o RESET/SAVE (CONTROLS_FIRST: a primeira funcao).
         guide_row, layout_row = 0, 1
         first = CONTROLS_FIRST
-        exit_row, reset_row = first + len(funcs), first + len(funcs) + 1
+        exit_row, menu_row, reset_row = first + len(funcs), first + len(funcs) + 1, first + len(funcs) + 2
         if ov["wait"] in ("pad", "joy"):
             # O painel e o joypad (as linhas "j:PAPEL" do mapa): cada coluna
             # so aceita o seu.
@@ -1320,22 +1356,30 @@ class Frontend:
             self.input.bind(self.fi.default_binds(self.pg))
             self.remember()
             self.say("CONTROLS RESET")
-        elif a == "b1" and sel == exit_row and ov["col"] < 2:
-            # Os botoes segurados juntos (do painel; o joypad e o mesmo atalho).
-            self.overlay, self.ov = "exitpad", {"since": time.monotonic(), "held": None}
-        elif a == "b1" and sel == exit_row:
-            self.overlay, self.ov = "exitkey", {"since": time.monotonic()}
+        elif a == "b1" and sel in (exit_row, menu_row) and ov["col"] < 2:
+            # Os botoes segurados juntos (do painel ou do joypad, de um
+            # jogador ou de varios).
+            which = "menu" if sel == menu_row else "exit"
+            self.overlay, self.ov = "exitpad", {"since": time.monotonic(), "held": None, "which": which}
+        elif a == "b1" and sel in (exit_row, menu_row):
+            which = "menu" if sel == menu_row else "exit"
+            self.overlay, self.ov = "exitkey", {"since": time.monotonic(), "which": which}
             self.input.capture = True
         elif a == "b1":
             self.controls_wait(("pad", "joy", "key")[ov["col"]])
-        elif a == "delete" and sel == exit_row:
+        elif a == "delete" and sel in (exit_row, menu_row):
             # O atalho sai (OFF).
-            if ov["col"] < 2:
+            name = "MENU" if sel == menu_row else "EXIT"
+            if ov["col"] < 2 and sel == menu_row:
+                self.menu_combo = []
+            elif ov["col"] < 2:
                 self.exit_combo = []
+            elif sel == menu_row:
+                self.menu_key = None
             else:
                 self.exit_key = None
             self.remember()
-            self.say("EXIT BUTTONS OFF" if ov["col"] < 2 else "EXIT KEY OFF", 2)
+            self.say(name + (" BUTTONS OFF" if ov["col"] < 2 else " KEY OFF"), 2)
         elif a == "delete" and first <= sel < exit_row:
             self.bind_control(funcs[sel - first], ("pad", "joy", "key")[ov["col"]], None)
         elif a in ("b2", "esc"):
@@ -1383,24 +1427,27 @@ class Frontend:
 
     def capture_done(self, col):
         """Fim da escolha do atalho: de volta ao Frontend controls, na linha
-        EXIT GAME e na coluna dele (0 os botoes, 2 a tecla)."""
+        dele (EXIT GAME ou EMULATOR MENU) e na coluna (0 os botoes, 2 a tecla)."""
+        row = CONTROLS_FIRST + len(self.fi.FUNCTIONS) + (1 if self.ov.get("which") == "menu" else 0)
         self.input.capture = False
         self.overlay = "controls"
-        self.ov = {"sel": CONTROLS_FIRST + len(self.fi.FUNCTIONS), "col": col, "wait": None}
+        self.ov = {"sel": row, "col": col, "wait": None}
 
     def capture_tick(self, now):
-        """A escolha dos botoes do atalho: dois ou mais comandos do painel
-        segurados juntos por EXIT_HOLD segundos; CAPTURE_WAIT sem nada, sai
-        como estava."""
+        """A escolha dos botoes do atalho: dois ou mais comandos segurados
+        juntos por EXIT_HOLD segundos, de um jogador ou de varios (P1 START +
+        P2 START); CAPTURE_WAIT sem nada, sai como estava. Os mesmos do outro
+        atalho nao servem."""
         o = self.overlay
         if o == "controls" and self.ov.get("wait") and now - self.ov["since"] > CAPTURE_WAIT:
             self.say("NOTHING CHANGED")
             self.controls_wait(None)
         if o not in ("exitkey", "exitpad"):
             return
-        held = frozenset(self.input.pad_held())
-        if o == "exitpad" and self.commercial and "coin" in held:
-            # No modo comercial a ficha soma tempo: ela nao fecha o jogo.
+        held = frozenset(self.input.players_held())
+        menu = self.ov.get("which") == "menu"
+        if o == "exitpad" and self.commercial and any(c == "coin" for _, c in held):
+            # No modo comercial a ficha soma tempo: ela nao e atalho.
             self.say("IN COMMERCIAL MODE COIN ADDS TIME", 2.4)
             self.capture_done(0)
             return
@@ -1408,9 +1455,17 @@ class Frontend:
             if held != self.ov["held"]:
                 self.ov["held"], self.ov["at"] = held, now
             elif now - self.ov["at"] >= EXIT_HOLD:
-                self.exit_combo = [a for a in COMBO_CONTROLS if a in held]
-                self.remember()
-                self.say("EXIT BUTTONS: " + "+".join(combo_names(self.exit_combo)), 2.4)
+                combo = self.fi.combo_from(held)
+                if combo == (self.exit_combo if menu else self.menu_combo):
+                    self.say("THESE ALREADY " + ("CLOSE THE GAME" if menu else "OPEN THE MENU"), 2.4)
+                elif menu:
+                    self.menu_combo = combo
+                    self.remember()
+                    self.say("MENU BUTTONS: " + "+".join(combo_names(combo)), 2.4)
+                else:
+                    self.exit_combo = combo
+                    self.remember()
+                    self.say("EXIT BUTTONS: " + "+".join(combo_names(combo)), 2.4)
                 self.capture_done(0)
             return
         if o == "exitpad":
@@ -2416,10 +2471,32 @@ class Frontend:
         fecha (Tab > Frontend options), as fichas e o fim do tempo do modo
         comercial, e o arquivo do botao de desligar (FLIPEROS_POWERKEY
         games:ARQ, do config/fliperos-session) com o PID do jogo, ou "hold"
-        com o botao desligado nos jogos. Devolve o aviso para a volta."""
+        com o botao desligado nos jogos. Devolve o aviso para a volta.
+
+        O atalho do menu do emulador vem antes do jogo: o teclado virtual
+        por onde a tecla do menu sai ja existe quando o jogo abre ("ready")."""
+        state = {}
+        watch = self.hotkeys(argv)
+        if watch:
+            ready = threading.Event()
+
+            def read():
+                for line in watch.stdout:
+                    if line.strip() == "exit":
+                        state["exit"] = True
+                    elif line.strip() == "coin":
+                        self.insert_coin()
+                    elif line.strip() == "ready":
+                        ready.set()
+                ready.set()
+            threading.Thread(target=read, daemon=True).start()
+            ready.wait(2)
+            argv = self.menu_argv(argv)
         try:
             proc = subprocess.Popen(argv, env=game_env())
         except OSError:
+            if watch:
+                watch.terminate()
             return None
         role = os.environ.get("FLIPEROS_POWERKEY", "")
         mark = role[len("games:"):] if role.startswith("games:") else None
@@ -2429,16 +2506,6 @@ class Frontend:
                     f.write("%d\n" % proc.pid if self.power_exit else "hold\n")
             except OSError:
                 mark = None
-        state = {}
-        watch = self.hotkeys()
-        if watch:
-            def read():
-                for line in watch.stdout:
-                    if line.strip() == "exit":
-                        state["exit"] = True
-                    elif line.strip() == "coin":
-                        self.insert_coin()
-            threading.Thread(target=read, daemon=True).start()
         try:
             while proc.poll() is None:
                 if state.pop("exit", False):
@@ -2476,14 +2543,38 @@ class Frontend:
                 pass
         state["kill"] = time.monotonic() + 4 if sig == signal.SIGTERM else None
 
-    def hotkeys(self):
-        """O fliperos-buttons hotkey junto com o jogo: o atalho que o fecha e,
-        no modo comercial, as fichas. Sem nada a ler, nenhum."""
+    def menu_argv(self, argv):
+        """O comando do jogo com o atalho do menu: no RetroArch, sem o Start +
+        Select dele (RA_NO_COMBO num --appendconfig), que abriria o menu e o
+        nosso o fecharia."""
+        if not (self.menu_combo or self.menu_key) or game_program(argv) != "retroarch":
+            return argv
+        path = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "fliperos-retroarch-menu.cfg")
+        try:
+            with open(path, "w") as f:
+                f.write(RA_NO_COMBO)
+        except OSError:
+            return argv
+        # Logo depois do retroarch: o fliperos-kms-run le o jogo do fim.
+        i = argv.index("retroarch") + 1 if "retroarch" in argv else 2
+        return argv[:i] + ["--appendconfig", path] + argv[i:]
+
+    def hotkeys(self, argv=None):
+        """O fliperos-buttons hotkey junto com o jogo: o atalho que o fecha, o
+        que abre o menu do emulador (--program: o fliperos-buttons sabe a
+        tecla de cada um) e, no modo comercial, as fichas. Sem nada a ler,
+        nenhum."""
         args = []
         if self.exit_key:
             args += ["--key", str(self.exit_key[1])]
         if self.exit_combo:
             args += ["--combo", "+".join(self.exit_combo), "--hold", str(EXIT_HOLD)]
+        if self.menu_key:
+            args += ["--menu-key", str(self.menu_key[1])]
+        if self.menu_combo:
+            args += ["--menu-combo", "+".join(self.menu_combo), "--menu-hold", str(EXIT_HOLD)]
+        if (self.menu_key or self.menu_combo) and game_program(argv or []):
+            args += ["--program", game_program(argv)]
         if self.commercial:
             args.append("--coin")
         if not args or not os.access(BUTTONS_TOOL, os.X_OK):
