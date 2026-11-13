@@ -16,12 +16,8 @@ Pedido de 2026-11-07. Os discos (a fileira PHYSICAL MEDIA, o cartão com PLAY / 
 
 ## Vídeo: conferir no tubo
 
-Feito e testado só no Docker ou sem olhar a tela; falta ver no CRT:
-- **Video Setup > Interlaced hacks:** um emulador marcado em "Interlaced filter" ou "Interlaced pure", e o preview do filtro (o Setup abre um Xorg só dele: se a tela ficar preta ou não voltar ao menu, é aí).
-- **Video Setup > Colour calibration:** os padrões de teste e as mudanças ao vivo; se a cor fica depois de sair do calibrador, ao abrir um jogo e ao voltar ao menu.
-- **OSD (2026-10-31):** testada no gabinete por teclado virtual e pelo FIFO, com a imagem do X capturada. Falta o atalho Start + Baixo no painel de verdade, a leitura da letra no tubo, e a geometria num jogo do RetroArch (em KMS, só foi testada no frontend).
-- **Video Setup > Scanlines (2026-11-03, bf511c6):** só aparecem com monitor de 31 kHz; testadas no Docker (OpenGL e Vulkan, o preview pela camada). Falta ver num tubo de 31 kHz: o escuro e o brilho num jogo de 240 linhas em 480p, e o preview abrindo no modo do monitor.
-- **Monitor vertical (2026-10-24):** o frontend e o Setup em 240x320 girados, o Plymouth já girado e o console em 480i pelo EDID próprio de dois modos. Nunca visto num tubo vertical.
+Os hacks de entrelaçado, a calibração de cor, as scanlines de 31 kHz e o monitor vertical foram vistos no CRT em 2026-11-13. Falta:
+- **OSD:** o atalho Start + Baixo no painel de verdade. Em 2026-11-13 só a tecla Pause abria a OSD: o vigia do atalho recomeçava a cada meio segundo (corrigido em 216ee7a, posto à mão no gabinete, vai no update 69), e segurar 1 s nunca completava. Falta confirmar no painel, e a geometria num jogo do RetroArch (em KMS, só foi testada no frontend).
 
 ## GroovyMAME no KMS
 
