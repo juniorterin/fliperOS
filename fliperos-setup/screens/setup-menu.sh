@@ -99,7 +99,7 @@ screen_cloud() {
       "sync|Sync now|Both ways: each side keeps the newest file, nothing is deleted." \
       "push|Send|Only from this cabinet to the cloud." \
       "pull|Get|Only from the cloud to this cabinet." \
-      "auto|By itself: $([[ $(cloud_status auto) == on ]] && echo on || echo off)|Sync after each game; settings once a day." \
+      "autosync|By itself: $([[ $(cloud_status auto) == on ]] && echo on || echo off)|Sync after each game; settings once a day." \
       "what|What to sync|High scores, saves and settings." \
       "forget|Remove the account|Forget the cloud account; the files stay in the cloud." \
       "return|Return|Back to Setup.") || return 0
@@ -110,7 +110,7 @@ screen_cloud() {
         [[ $choice == sync ]] && choice=both
         run_with_progress "$title" "" cloud_run sync "$choice"
         ;;
-      auto) cloud_run auto "$([[ $(cloud_status auto) == on ]] && echo off || echo on)" > /dev/null ;;
+      autosync) cloud_run auto "$([[ $(cloud_status auto) == on ]] && echo off || echo on)" > /dev/null ;;
       what)
         value=$(ui_checklist "$title" "What goes to the cloud." "$what" \
           "hiscores|High scores (MAME hiscore and nvram)" "saves|Saves and memory cards" \
