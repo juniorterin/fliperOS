@@ -41,6 +41,10 @@ pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 # Hook Of The Reaper e o LEDSpicer instalados, nada).
 outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
 [[ -x $outputs ]] && { "$outputs" launch "$@" < /dev/null > /dev/null 2>&1 & }
+# A luz do 8BitDo Ultimate 2 no estilo do FliperOS: as cores de jogo ate ele
+# fechar, depois a roleta de novo (config/fliperos-padcolor; sem jogo, nada).
+padcolor=${FLIPEROS_PADCOLOR_TOOL:-/opt/fliperos/bin/fliperos-padcolor}
+[[ -x $padcolor ]] && { "$padcolor" launch "$@" < /dev/null > /dev/null 2>&1 & }
 # As pistolas de luz ligadas (config/fliperos-lightgun): com uma, nenhum
 # emulador desenha mira nem a seta do X por cima do jogo.
 lightgun=${FLIPEROS_LIGHTGUN:-/opt/fliperos/bin/fliperos-lightgun}

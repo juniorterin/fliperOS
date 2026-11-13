@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A cor do anel RGB do 8BitDo Ultimate 2 Wireless (config/fliperos-padcolor).
+"""A luz dos aneis do 8BitDo Ultimate 2 Wireless (config/fliperos-padcolor).
 
 O Ultimate 2 nao mostra a luz ao kernel: a cor fica na configuracao gravada
 na flash do controle, junto com os perfis. O canal de configuracao (relatorio
@@ -9,8 +9,15 @@ a cor fica no controle e vale tambem no Bluetooth.
 
 O protocolo e o do 8bitdo-ultimate2-linux (MIT, engenharia reversa do
 programa oficial): github.com/MiguelSanzBr/8bitdo-ultimate2-linux.
-So mexe na secao "custom" da luz dos 3 perfis (flag + 24 cores) e no tema
-(4 = custom); o resto da configuracao (botoes, sticks, perfis) fica igual.
+Muda so a luz dos perfis que existem e o tema; o resto da configuracao
+(botoes, sticks, perfis) fica igual. Um controle sem perfil (o padrao de
+fabrica nao usa as cores) ganha o perfil 1 como o programa da 8BitDo o cria.
+
+Estilos: RRGGBB (uma cor nos 24 LEDs, tema custom) ou "fliperos": a roleta
+nos menus (tema hotwheel: um LED roxo girando sobre o rosa) e, com um jogo
+aberto ("game on", so a troca de tema, sem gravar na flash), o anel esquerdo
+roxo e o direito rosa (os LEDs 0-11 sao o esquerdo, 12-23 o direito; visto
+no controle).
 Antes da primeira gravacao de um controle, o registro inteiro vai para
 /var/lib/fliperos/8bitdo (o backup). Grava so o que mudou, confere lendo de
 volta e so entao salva na flash.
@@ -18,8 +25,9 @@ volta e so entao salva na flash.
   fliperos-padcolor-8bitdo list              os canais de configuracao ligados
                                              (/dev/hidrawN nome)
   fliperos-padcolor-8bitdo bluetooth         os Ultimate 2 so pelo Bluetooth (nome)
-  fliperos-padcolor-8bitdo apply DEV RRGGBB  a cor num controle (DEV = /dev/hidrawN)
-  fliperos-padcolor-8bitdo all RRGGBB        em todos os ligados pelo cabo/dongle
+  fliperos-padcolor-8bitdo apply DEV ESTILO  num controle (DEV = /dev/hidrawN)
+  fliperos-padcolor-8bitdo all ESTILO        em todos os ligados pelo cabo/dongle
+  fliperos-padcolor-8bitdo game on|off       o estilo fliperos: cores de jogo / roleta
 """
 import glob
 import os
@@ -41,7 +49,12 @@ CFG_SIZE = 1592
 CMD_WRITE, CMD_READ, CMD_COMMIT, CMD_REPORT = 1, 2, 6, 7
 CMD_SET_THEME, CMD_GET_THEME = 0x40, 0x41
 COMMIT_KEY = 0x123
-THEME_CUSTOM = 4
+THEME_HOTWHEEL, THEME_CUSTOM = 3, 4
+# O roxo e o rosa do FliperOS no LED: os do Dracula (#bd93f9, #ff79c6) saem
+# esbranquicados; estes sao os mesmos tons saturados (vistos no controle).
+PURPLE, PINK = 0x7A00FF, 0xFF0080
+STYLE = "fliperos"
+LED_HOTWHEEL = 1244         # flag, cor, fundo, velocidade (1-15) por perfil (16 bytes)
 FLAG_ON = 0x20200911
 SLOTS = 3
 LED_SINGLE = 1292           # flag + 24 cores (u32 0x00RRGGBB, little endian) por perfil
@@ -282,21 +295,34 @@ def new_profile(record, s, color, name="FliperOS"):
     put("BB", o + 9, 10, 40)
     put("III", 1208 + 12 * s, FLAG_ON, 0x260032, 0x084E50)          # temas da propria 8BitDo
     put("IIIB", 1244 + 16 * s, FLAG_ON, 0xCC6200, 0xCC0000, 7)
-    buf[LED_SINGLE + LED_SINGLE_SIZE * s:LED_SINGLE + LED_SINGLE_SIZE * (s + 1)] = single_section(color)
+    put_style(buf, s, color)
     return bytes(buf)
 
 
-def target_record(record, color):
-    """O registro com a cor: nos perfis que existem so a secao da luz; sem
+def put_style(buf, s, style):
+    """A luz do perfil S no estilo (RRGGBB ou "fliperos"); devolve o tema."""
+    if style == STYLE:
+        struct.pack_into("<IIIB", buf, LED_HOTWHEEL + 16 * s, FLAG_ON, PURPLE, PINK, 7)
+        section = struct.pack("<I", FLAG_ON) + struct.pack("<I", PURPLE) * 12 + struct.pack("<I", PINK) * 12
+        theme = THEME_HOTWHEEL
+    else:
+        section, theme = single_section(style), THEME_CUSTOM
+    buf[LED_SINGLE + LED_SINGLE_SIZE * s:LED_SINGLE + LED_SINGLE_SIZE * (s + 1)] = section
+    return theme
+
+
+def target_record(record, style):
+    """O registro com a luz: nos perfis que existem so as secoes da luz; sem
     nenhum perfil, o perfil 1 criado (o padrao de fabrica nao usa as cores).
-    Devolve (registro, criou o perfil)."""
+    Devolve (registro, criou o perfil, tema)."""
     enabled = [s for s in range(SLOTS) if slot_enabled(record, s)]
     if not enabled:
-        return new_profile(record, 0, color), True
+        return new_profile(record, 0, style), True, THEME_HOTWHEEL if style == STYLE else THEME_CUSTOM
     buf = bytearray(record)
+    theme = THEME_CUSTOM
     for s in enabled:
-        buf[LED_SINGLE + LED_SINGLE_SIZE * s:LED_SINGLE + LED_SINGLE_SIZE * (s + 1)] = single_section(color)
-    return bytes(buf), False
+        theme = put_style(buf, s, style)
+    return bytes(buf), False, theme
 
 
 # crc_value, gamepad_mode e cur_slot sao do firmware: nunca gravados.
@@ -331,8 +357,8 @@ def apply(pad, color, key="ultimate2"):
     # relatorios ligados. So a gravacao vai entre o 7/0 e o 7/1.
     record = pad.read(0, CFG_SIZE)
     theme = pad.get_theme()
-    want, created = target_record(record, color)
-    if same_record(want, record) and theme == THEME_CUSTOM:
+    want, created, want_theme = target_record(record, color)
+    if same_record(want, record) and theme == want_theme:
         return "same"
     backup(pad, key, record, theme)
     pad.report(False)
@@ -341,7 +367,7 @@ def apply(pad, color, key="ultimate2"):
             pad.write(start, want[start:end])
         if not same_record(pad.read(0, CFG_SIZE), want):
             raise IOError("the record read back differs; nothing saved")
-        if theme != THEME_CUSTOM and not pad.set_theme(THEME_CUSTOM):
+        if theme != want_theme and not pad.set_theme(want_theme):
             raise IOError("the controller did not confirm the LED theme")
         if not pad.commit():
             raise IOError("the controller did not confirm the save")
@@ -351,7 +377,10 @@ def apply(pad, color, key="ultimate2"):
 
 
 def parse_color(text):
+    """RRGGBB (ou #RRGGBB) num inteiro, ou o estilo "fliperos"."""
     text = text.strip().lstrip("#").lower()
+    if text == STYLE:
+        return STYLE
     if len(text) != 6 or any(c not in "0123456789abcdef" for c in text):
         raise ValueError(text)
     return int(text, 16)
@@ -378,7 +407,24 @@ def apply_device(dev, color):
         pad.close()
 
 
+def game(on):
+    """O estilo fliperos com um jogo aberto (on) ou fechado: so o tema, a
+    luz dos dois ja esta gravada. Sem 8BitDo pelo cabo/dongle, nada."""
+    for dev, _, usb_dir in find_devices():
+        try:
+            pad = Pad(dev, find_input_node(usb_dir))
+        except OSError:
+            continue
+        try:
+            pad.set_theme(THEME_CUSTOM if on else THEME_HOTWHEEL)
+        finally:
+            pad.close()
+    return 0
+
+
 def main(argv):
+    if len(argv) == 2 and argv[0] == "game" and argv[1] in ("on", "off"):
+        return game(argv[1] == "on")
     if len(argv) >= 1 and argv[0] == "list":
         for dev, name, _ in find_devices():
             print(dev, name)
@@ -398,7 +444,7 @@ def main(argv):
             print(__doc__.split("\n\n")[-1], file=sys.stderr)
             return 2
     except ValueError:
-        print("not a colour (RRGGBB): %s" % argv[-1], file=sys.stderr)
+        print("not a colour (RRGGBB or fliperos): %s" % argv[-1], file=sys.stderr)
         return 2
     rc = 0
     for dev in devs:

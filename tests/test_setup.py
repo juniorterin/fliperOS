@@ -4632,19 +4632,20 @@ class PadColorTests(Base):
         path = self.env.dir / "padcolor.calls"
         return path.read_text() if path.exists() else ""
 
-    def test_the_default_is_the_fliperos_purple(self):
-        self.assertEqual(self.env.out("padcolor_get; padcolor_name").split("\n")[:2], ["bd93f9", "Purple (FliperOS)"])
+    def test_the_default_is_the_fliperos_style(self):
+        self.assertEqual(self.env.out("padcolor_get; padcolor_name").split("\n")[:2],
+                         ["fliperos", "FliperOS (roulette, game colours)"])
 
     def test_a_colour_is_saved_and_lights_the_connected_pads(self):
         env = self.tool()
-        self.env.out("padcolor_set '#FF5555'", env)
-        self.assertIn("padcolor=ff5555", (self.env.etc / "fliperos.conf").read_text())
-        self.assertEqual(self.calls(), "ff5555 all\n")
+        self.env.out("padcolor_set '#FF0000'", env)
+        self.assertIn("padcolor=ff0000", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(self.calls(), "ff0000 all\n")
         self.assertEqual(self.env.out("padcolor_name", env).strip(), "Red")
         self.env.out("padcolor_set 123abc", env)
         self.assertEqual(self.env.out("padcolor_name", env).strip(), "#123abc")
-        # O roxo de volta tira a linha: o padrao do fliperos-padcolor.
-        self.env.out("padcolor_set bd93f9", env)
+        # O estilo FliperOS de volta tira a linha: o padrao do fliperos-padcolor.
+        self.env.out("padcolor_set fliperos", env)
         self.assertNotIn("padcolor=", (self.env.etc / "fliperos.conf").read_text())
 
     def test_a_new_8bitdo_profile_asks_for_the_profile_button(self):
@@ -4690,11 +4691,12 @@ class PadColorTests(Base):
             screen_padcolor
         """ % (SETUP, log), env)
         menu = log.read_text()
-        self.assertIn("[purple] purple|Purple (FliperOS)|#bd93f9 on the controller light.", menu)
+        self.assertIn("[roulette] roulette|FliperOS (roulette, game colours)|8BitDo: purple roulette", menu)
+        self.assertIn("purple|Purple|#7a00ff on the controller light.", menu)
         self.assertIn("off|Off|", menu)
         # O topo pergunta quem esta ligado (list); a escolha acende todos.
-        self.assertEqual(self.calls(), " list\n50fa7b all\n")
-        self.assertIn("padcolor=50fa7b", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(self.calls(), " list\n00ff40 all\n")
+        self.assertIn("padcolor=00ff40", (self.env.etc / "fliperos.conf").read_text())
 
 
 class GunCalibrationTests(Base):

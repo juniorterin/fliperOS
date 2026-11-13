@@ -19765,13 +19765,16 @@ class PadColorTests(unittest.TestCase):
             (led / 'multi_intensity').write_text('0 0 0\n')
         return led
 
-    def test_dracula_purple_on_a_pad_light(self):
+    def test_fliperos_purple_on_a_pad_light(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             pad = self.led(root, 'input5:rgb:indicator')
             mouse = self.led(root, 'input9:rgb:indicator', pad=False)
+            # O padrao (fliperos) num LED so: o roxo saturado, #7a00ff.
             r = self.run_tool(root / 'leds', 'all')
             self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual((pad / 'multi_intensity').read_text(), '122 0 255\n')
+            r = self.run_tool(root / 'leds', 'all', color='bd93f9')
             self.assertEqual((pad / 'multi_intensity').read_text(), '189 147 249\n')
             self.assertEqual((pad / 'brightness').read_text(), '255\n')
             # Um LED que nao e de controle fica.
@@ -19781,8 +19784,8 @@ class PadColorTests(unittest.TestCase):
             blue = self.led(root, '0005:054C:05C4.0001:blue', multi=False)
             self.run_tool(root / 'leds', 'apply', str(red))
             self.run_tool(root / 'leds', 'apply', '0005:054C:05C4.0001:blue')
-            self.assertEqual((red / 'brightness').read_text(), '189\n')
-            self.assertEqual((blue / 'brightness').read_text(), '249\n')
+            self.assertEqual((red / 'brightness').read_text(), '122\n')
+            self.assertEqual((blue / 'brightness').read_text(), '255\n')
             # padcolor=off: a luz fica como o controle a acende.
             (pad / 'multi_intensity').write_text('1 2 3\n')
             self.run_tool(root / 'leds', 'all', color='off')
@@ -19798,6 +19801,37 @@ class PadColorTests(unittest.TestCase):
                       'RUN+="/opt/fliperos/bin/fliperos-padcolor hidraw %k"', rules)
         self.assertIn('install -Dm755 "$src/config/fliperos-padcolor-8bitdo" '
                       '"$root/opt/fliperos/bin/fliperos-padcolor-8bitdo"', (ROOT / 'fliperos-rootfs.sh').read_text())
+
+    def test_launch_switches_the_8bitdo_to_game_colours_until_the_game_closes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / 'calls'
+            tool = root / 'u2'
+            tool.write_text('#!/bin/sh\necho "$*" >> "%s"\n' % log)
+            tool.chmod(0o755)
+            rom = root / 'sf2.zip'
+            rom.write_text('')
+            game = subprocess.Popen(['sleep', '0.5'])
+            env = dict(os.environ, FLIPEROS_LEDS=str(root), FLIPEROS_CONF='/nao/existe',
+                       FLIPEROS_PADCOLOR_8BITDO=str(tool), PADCOLOR_GAME_PID=str(game.pid))
+            tool_path = str(ROOT / 'config/fliperos-padcolor')
+            # O jogo fecha (e e recolhido: zumbi, o tail --pid esperaria) com o launch esperando.
+            r = subprocess.Popen(['bash', tool_path, 'launch', 'retroarch', '-L', 'core.so', str(rom)], env=env)
+            game.wait()
+            self.assertEqual(r.wait(timeout=10), 0)
+            self.assertEqual(log.read_text(), 'game on\ngame off\n')
+            # Um frontend (sem jogo), o GroovyMAME sem set, ou uma cor so: nada.
+            log.write_text('')
+            for args, colour in ((['es-de'], None), (['groovymame', '-listxml'], None),
+                                 (['retroarch', str(rom)], '7a00ff')):
+                e = dict(env, FLIPEROS_PADCOLOR=colour) if colour else env
+                subprocess.run(['bash', tool_path, 'launch'] + args, env=e, timeout=10)
+            self.assertEqual(log.read_text(), '')
+        for runner in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
+            self.assertIn('[[ -x $padcolor ]] && { "$padcolor" launch "$@" < /dev/null > /dev/null 2>&1 & }',
+                          (ROOT / runner).read_text())
+        self.assertIn('SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2dc8", MODE="0660", GROUP="input"',
+                      (ROOT / 'config/99-fliperos-input.rules').read_text())
 
     def test_list_names_the_pads_and_the_8bitdo_on_bluetooth(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -19950,6 +19984,44 @@ class PadColor8BitDoTests(unittest.TestCase):
             self.assertEqual(u2.apply(pad, 0xff5555), 'saved')
         writes = [(o, n) for c, _, o, n in pad.log if c == u2.CMD_WRITE]
         self.assertTrue(writes and all(1292 <= o and o + n <= 1392 for o, n in writes), writes)
+
+    def test_the_fliperos_style_roulette_and_game_rings(self):
+        u2 = self.u2
+        pad = self.FakePad(self.record)
+        with tempfile.TemporaryDirectory() as tmp:
+            u2.BACKUP_DIR = tmp
+            self.assertEqual(u2.parse_color('FliperOS'), 'fliperos')
+            self.assertEqual(u2.apply(pad, 'fliperos'), 'saved')
+            self.assertEqual(u2.apply(pad, 'fliperos'), 'same')
+        for s in (0, 2):
+            # A roleta: o roxo girando sobre o rosa, velocidade 7.
+            self.assertEqual(struct.unpack_from('<IIIB', pad.flash, 1244 + 16 * s),
+                             (0x20200911, 0x7a00ff, 0xff0080, 7))
+            # Em jogo: LEDs 0-11 (anel esquerdo) roxos, 12-23 (direito) rosa.
+            colours = struct.unpack_from('<I24I', pad.flash, 1292 + 100 * s)
+            self.assertEqual(colours, (0x20200911,) + (0x7a00ff,) * 12 + (0xff0080,) * 12)
+        self.assertEqual(pad.flash[1244 + 16:1244 + 32], self.record[1244 + 16:1244 + 32])
+        self.assertEqual(pad.theme, 3)
+        # Um controle sem perfil ganha o perfil 1 ja no estilo.
+        blank = self.FakePad(self.blank)
+        with tempfile.TemporaryDirectory() as tmp:
+            u2.BACKUP_DIR = tmp
+            self.assertEqual(u2.apply(blank, 'fliperos'), 'profile')
+        self.assertEqual(struct.unpack_from('<IIIB', blank.flash, 1244), (0x20200911, 0x7a00ff, 0xff0080, 7))
+        self.assertEqual(blank.theme, 3)
+
+    def test_game_on_and_off_only_switch_the_theme(self):
+        u2 = self.u2
+        pad = self.FakePad(self.record, theme=3)
+        u2.find_devices = lambda: iter([('/dev/hidraw9', '8BitDo', '/x')])
+        u2.find_input_node = lambda usb_dir: None
+        u2.Pad = lambda dev, node: pad
+        self.assertEqual(u2.main(['game', 'on']), 0)
+        self.assertEqual(pad.theme, 4)
+        u2.find_devices = lambda: iter([('/dev/hidraw9', '8BitDo', '/x')])
+        self.assertEqual(u2.main(['game', 'off']), 0)
+        self.assertEqual(pad.theme, 3)
+        self.assertFalse([c for c, *_ in pad.log if c in (u2.CMD_WRITE, u2.CMD_COMMIT)])
 
     def test_runs_skip_the_firmware_bytes(self):
         u2 = self.u2

@@ -403,30 +403,34 @@ gun_connected() {
   [[ -x $CALIBRATE ]] && [[ -n $("$CALIBRATE" list gun 2> /dev/null) ]]
 }
 
-# A cor da luz dos controles (config/fliperos-padcolor): padcolor= no
-# fliperos.conf, RRGGBB ou "off" (a luz fica como o controle a acende).
+# A luz dos controles (config/fliperos-padcolor): padcolor= no fliperos.conf,
+# "fliperos" (o padrao: a roleta roxa e rosa no 8BitDo Ultimate 2, as cores de
+# jogo com um jogo aberto, o roxo nos outros), RRGGBB ou "off" (a luz fica
+# como o controle a acende).
 PADCOLOR=${PADCOLOR:-/opt/fliperos/bin/fliperos-padcolor}
-PADCOLOR_DEFAULT=bd93f9
+PADCOLOR_DEFAULT=fliperos
 
-# padcolor_table: nome|Rotulo|RRGGBB, as cores do Dracula (o tema do FliperOS).
+# padcolor_table: nome|Rotulo|valor. As cores saturadas: as do Dracula saem
+# esbranquicadas no LED (visto no 8BitDo).
 padcolor_table() {
   printf '%s\n' \
-    "purple|Purple (FliperOS)|bd93f9" \
-    "pink|Pink|ff79c6" \
-    "red|Red|ff5555" \
-    "orange|Orange|ffb86c" \
-    "yellow|Yellow|f1fa8c" \
-    "green|Green|50fa7b" \
-    "cyan|Cyan|8be9fd" \
+    "roulette|FliperOS (roulette, game colours)|fliperos" \
+    "purple|Purple|7a00ff" \
+    "pink|Pink|ff0080" \
+    "red|Red|ff0000" \
+    "orange|Orange|ff6000" \
+    "yellow|Yellow|ffd000" \
+    "green|Green|00ff40" \
+    "cyan|Cyan|00e0ff" \
     "white|White|ffffff"
 }
 
-# padcolor_get: o valor de agora (RRGGBB em minusculas, ou off).
+# padcolor_get: o valor de agora (fliperos, RRGGBB em minusculas, ou off).
 padcolor_get() {
   local color
   color=$(conf_get padcolor 2> /dev/null)
   color=${color,,}
-  [[ $color == off || $color =~ ^[0-9a-f]{6}$ ]] || color=$PADCOLOR_DEFAULT
+  [[ $color == off || $color == fliperos || $color =~ ^[0-9a-f]{6}$ ]] || color=$PADCOLOR_DEFAULT
   echo "$color"
 }
 
@@ -464,12 +468,13 @@ padcolor_status() {
   echo
 }
 
-# padcolor_set COR: grava (RRGGBB, #RRGGBB ou off) e acende os controles
-# ligados agora; os que conectarem depois pegam a cor pela regra do udev.
+# padcolor_set COR: grava (fliperos, RRGGBB, #RRGGBB ou off) e acende os
+# controles ligados agora; os que conectarem depois pegam a cor pela regra
+# do udev.
 padcolor_set() {
   local color=${1#\#}
   color=${color,,}
-  [[ $color == off || $color =~ ^[0-9a-f]{6}$ ]] || return 2
+  [[ $color == off || $color == fliperos || $color =~ ^[0-9a-f]{6}$ ]] || return 2
   if [[ $color == "$PADCOLOR_DEFAULT" ]]; then
     conf_unset padcolor
   else

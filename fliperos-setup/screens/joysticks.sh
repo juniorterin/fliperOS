@@ -46,10 +46,14 @@ screen_padcolor() {
   choice=custom
   [[ $current == off ]] && choice=off
   while IFS='|' read -r name label hex; do
-    entries+=("$name|$label|#$hex on the controller light.")
+    if [[ $hex == fliperos ]]; then
+      entries+=("$name|$label|8BitDo: purple roulette, purple/pink rings in games.")
+    else
+      entries+=("$name|$label|#$hex on the controller light.")
+    fi
     [[ $hex == "$current" ]] && choice=$name
   done < <(padcolor_table)
-  entries+=("custom|Other colour|Type the colour as RRGGBB (like bd93f9)."
+  entries+=("custom|Other colour|Type the colour as RRGGBB (like 7a00ff)."
     "off|Off|FliperOS leaves the light as the controller sets it."
     "return|Return|Back to Joysticks.")
   choice=$(ui_menu_hints "$title" \
@@ -62,9 +66,9 @@ screen_padcolor() {
       ui_msg "$title" "Off. A controller already lit keeps its colour until it connects again."
       ;;
     custom)
-      value=$(ui_input "$title" "The colour as RRGGBB, like bd93f9 (the FliperOS purple)." \
-        "$([[ $current == off ]] || echo "$current")") || return 0
-      padcolor_set "$value" || ui_msg "$title" "Not a colour: $value. Six digits 0-9 and a-f, like bd93f9."
+      value=$(ui_input "$title" "The colour as RRGGBB, like 7a00ff (the FliperOS purple)." \
+        "$([[ $current =~ ^[0-9a-f]{6}$ ]] && echo "$current")") || return 0
+      padcolor_set "$value" || ui_msg "$title" "Not a colour: $value. Six digits 0-9 and a-f, like 7a00ff."
       ;;
     *)
       padcolor_set "$(padcolor_table | awk -F'|' -v n="$choice" '$1 == n {print $3}')"

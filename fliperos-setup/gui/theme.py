@@ -1465,7 +1465,7 @@ for _alias, _name in {
     "flash": "guncon", "pulse": "guncon", "hold": "guncon", "reload": "guncon",
     # A cor da luz dos controles (Joysticks > Controller light).
     "purple": "padcolor", "pink": "padcolor", "red": "padcolor", "orange": "padcolor",
-    "yellow": "padcolor", "green": "padcolor", "cyan": "padcolor", "white": "padcolor",
+    "yellow": "padcolor", "green": "padcolor", "cyan": "padcolor", "white": "padcolor", "roulette": "padcolor",
     "clones": "filter", "filters": "filter", "preset": "filter", "copy": "dest", "move": "link",
     "local": "disk", "mounted": "network", "missing": "network", "horizontal": "video",
     "vertical-cw": "orientation", "vertical-ccw": "orientation",

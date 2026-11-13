@@ -1,33 +1,46 @@
 #!/usr/bin/env bash
-# A luz colorida dos controles nas cores do FliperOS (o roxo do Dracula).
+# A luz colorida dos controles nas cores do FliperOS.
 #
 # O kernel mostra a luz RGB de um controle como um LED multicolorido em
 # /sys/class/leds (multi_index diz a ordem das cores, multi_intensity recebe
 # os tres valores): o DualSense e o DualShock 4 (hid-playstation, hid-sony),
 # e os 8BitDo que se apresentam como um deles. O 8BitDo Ultimate 2 guarda a
-# cor do anel na configuracao dele: o fliperos-padcolor-8bitdo grava pelo cabo
-# USB ou pelo dongle 2.4G, e ela fica valendo tambem no Bluetooth (que nao tem
-# o canal de configuracao). Os outros 8BitDo nao expoem a luz: nada acontece.
+# luz dos aneis na configuracao dele: o fliperos-padcolor-8bitdo grava pelo
+# cabo USB ou pelo dongle 2.4G, e ela fica valendo tambem no Bluetooth (que
+# nao tem o canal de configuracao). Os outros 8BitDo nao expoem a luz.
+#
+# padcolor= do fliperos.conf (ou FLIPEROS_PADCOLOR):
+#   fliperos (o padrao)  no Ultimate 2, a roleta nos menus (um LED roxo
+#                        girando sobre o rosa) e, com um jogo aberto, o anel
+#                        esquerdo roxo e o direito rosa; nos outros, o roxo
+#   RRGGBB               uma cor so
+#   off                  a luz como o controle a acende
 #
 #   fliperos-padcolor apply LED      a cor num LED (/sys/class/leds/NOME ou o
 #                                    caminho dele), so se for de um controle
 #   fliperos-padcolor hidraw NOME    um hidraw novo: se for o canal de
-#                                    configuracao de um Ultimate 2, grava a cor
+#                                    configuracao de um Ultimate 2, grava a luz
 #                                    nele (em segundo plano)
 #   fliperos-padcolor all            em todos os controles ligados
 #   fliperos-padcolor list           os controles cuja luz muda agora
 #                                    ("led NOME", "8bitdo NOME") e os
 #                                    Ultimate 2 so no Bluetooth ("bluetooth NOME")
+#   fliperos-padcolor launch PROGRAMA [ARGS...]
+#                                    do fliperos-kms-run e do fliperos-x11-run:
+#                                    com um jogo na linha de comando, o Ultimate 2
+#                                    fica nas cores de jogo ate ele fechar
 #
 # Chamado pela regra do udev (99-fliperos-input.rules) a cada LED e hidraw novo.
-# A cor: FLIPEROS_PADCOLOR (RRGGBB), ou padcolor= do fliperos.conf; "off"
-# deixa a luz como o controle a acende.
 set -uo pipefail
 leds=${FLIPEROS_LEDS:-/sys/class/leds}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
-# O roxo do Dracula (#bd93f9), o destaque do FliperOS.
 color=${FLIPEROS_PADCOLOR:-$(sed -n 's/^padcolor=//p' "$conf" 2> /dev/null | tail -n 1)}
-color=${color:-bd93f9}
+color=${color:-fliperos}
+color=${color,,}
+# O roxo do FliperOS num LED so: o do Dracula (#bd93f9) sai esbranquicado no
+# LED; este e o mesmo roxo saturado.
+ledcolor=$color
+[[ $color == fliperos ]] && ledcolor=7a00ff
 ultimate2=${FLIPEROS_PADCOLOR_8BITDO:-/opt/fliperos/bin/fliperos-padcolor-8bitdo}
 
 # is_pad LED: o LED e de um controle de jogo (o aparelho dele tem um input
@@ -47,7 +60,7 @@ is_pad() {
 apply() {
   local led=$1 index max r g b values="" name
   [[ $led == /* ]] || led=$leds/$led
-  [[ $color =~ ^[0-9a-fA-F]{6}$ ]] || return 0
+  [[ $ledcolor =~ ^[0-9a-fA-F]{6}$ ]] || return 0
   # O DualShock 4 no hid-sony: um LED por cor (NOME:red, :green, :blue).
   case ${led##*/} in
     *:red | *:green | *:blue)
@@ -55,9 +68,9 @@ apply() {
       max=$(cat "$led/max_brightness" 2> /dev/null)
       [[ $max =~ ^[0-9]+$ && $max -gt 0 ]] || max=255
       case ${led##*:} in
-        red) r=${color:0:2} ;;
-        green) r=${color:2:2} ;;
-        blue) r=${color:4:2} ;;
+        red) r=${ledcolor:0:2} ;;
+        green) r=${ledcolor:2:2} ;;
+        blue) r=${ledcolor:4:2} ;;
       esac
       echo $((16#$r * max / 255)) > "$led/brightness" 2> /dev/null
       return 0
@@ -68,9 +81,9 @@ apply() {
   read -r index < "$led/multi_index" || return 0
   max=$(cat "$led/max_brightness" 2> /dev/null)
   [[ $max =~ ^[0-9]+$ && $max -gt 0 ]] || max=255
-  r=$((16#${color:0:2} * max / 255))
-  g=$((16#${color:2:2} * max / 255))
-  b=$((16#${color:4:2} * max / 255))
+  r=$((16#${ledcolor:0:2} * max / 255))
+  g=$((16#${ledcolor:2:2} * max / 255))
+  b=$((16#${ledcolor:4:2} * max / 255))
   for name in $index; do
     case $name in
       red) values+="$r " ;;
@@ -109,7 +122,7 @@ list() {
 }
 
 [[ ${1:-} == list ]] && { list; exit 0; }
-[[ ${color,,} == off ]] && exit 0
+[[ $color == off ]] && exit 0
 case ${1:-} in
   apply)
     [[ -n ${2:-} ]] || { echo "usage: fliperos-padcolor apply LED" >&2; exit 2; }
@@ -120,7 +133,7 @@ case ${1:-} in
     # controle tem de existir, entao vai fora do udev, depois de um instante.
     [[ -n ${2:-} && -x $ultimate2 ]] || exit 0
     grep -qi '^HID_ID=0003:00002DC8:' "/sys/class/hidraw/${2##*/}/device/uevent" 2> /dev/null || exit 0
-    [[ $color =~ ^[0-9a-fA-F]{6}$ ]] || exit 0
+    [[ $color == fliperos || $color =~ ^[0-9a-f]{6}$ ]] || exit 0
     # shellcheck disable=SC2016 # o $0 e os $N sao do sh -c
     cmd=(sh -c 'sleep 2; exec "$0" apply "$1" "$2"' "$ultimate2" "/dev/${2##*/}" "$color")
     if command -v systemd-run > /dev/null; then
@@ -129,14 +142,33 @@ case ${1:-} in
       setsid "${cmd[@]}" > /dev/null 2>&1 &
     fi
     ;;
+  launch)
+    # O jogo e o pai (o fliperos-kms-run e o fliperos-x11-run chamam em
+    # segundo plano e viram o emulador): cores de jogo ate ele fechar. Jogo,
+    # como no fliperos-pixelcade: o ultimo argumento e um arquivo, ou o set
+    # do GroovyMAME e do Model 2. Sem jogo (um frontend, o menu de um
+    # emulador), nada.
+    [[ $color == fliperos && -x $ultimate2 && $# -ge 3 ]] || exit 0
+    prog=${2##*/}
+    last=${*: -1}
+    case $prog in
+      groovymame | fliperos-model2) [[ $last == -* ]] && exit 0 ;;
+      *) [[ -f $last ]] || exit 0 ;;
+    esac
+    pid=${PADCOLOR_GAME_PID:-$PPID}
+    [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1)) || exit 0
+    "$ultimate2" game on > /dev/null 2>&1
+    tail --pid="$pid" -f /dev/null 2> /dev/null
+    "$ultimate2" game off > /dev/null 2>&1
+    ;;
   all)
     for led in "$leds"/*; do
       [[ -e $led ]] && apply "$led"
     done
-    [[ -x $ultimate2 && $color =~ ^[0-9a-fA-F]{6}$ ]] && "$ultimate2" all "$color" 2> /dev/null
+    [[ -x $ultimate2 && ( $color == fliperos || $color =~ ^[0-9a-f]{6}$ ) ]] && "$ultimate2" all "$color" 2> /dev/null
     ;;
   *)
-    echo "usage: fliperos-padcolor apply LED | hidraw NAME | all | list" >&2
+    echo "usage: fliperos-padcolor apply LED | hidraw NAME | all | list | launch PROGRAM [ARGS...]" >&2
     exit 2
     ;;
 esac

@@ -52,4 +52,7 @@ SUBSYSTEM=="input", ATTRS{idVendor}=="044f", MODE="0660", GROUP="input"
 SUBSYSTEM=="leds", ACTION=="add", RUN+="/opt/fliperos/bin/fliperos-padcolor apply %S%p"
 # O 8BitDo Ultimate 2 pelo cabo ou dongle: a cor gravada na configuracao dele
 # (config/fliperos-padcolor-8bitdo), que vale depois tambem no Bluetooth.
+# O grupo input pode trocar o tema: os jogos (fliperos-padcolor launch) nao
+# rodam como root.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2dc8", MODE="0660", GROUP="input"
 SUBSYSTEM=="hidraw", ACTION=="add", ATTRS{idVendor}=="2dc8", RUN+="/opt/fliperos/bin/fliperos-padcolor hidraw %k"
