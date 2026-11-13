@@ -89,13 +89,35 @@ def core_of(system):
     return os.path.basename(m.group(1)).replace("_libretro.so", "").replace(".so", "")
 
 
+# Os que so abrem o programa (a linha do Setup e "fliperos-x11-run|flycast
+# ..." ou "fliperos-kms-run|retroarch -L ..."): o programa e o 1o argumento.
+RUNNERS = ("fliperos-x11-run", "fliperos-kms-run")
+# Os arcades do Flycast: ele os reconhece como arcade, pelo nome da ROM
+# (RC_CONSOLE_ARCADE no achievements.cpp dele), sem o RAHasher.
+FLYCAST_ARCADE = ("naomi", "naomi2", "atomiswave")
+
+
+def program_of(system):
+    """O programa que abre os jogos da pasta (o de dentro do runner)."""
+    exe = os.path.basename(system.get("exe", ""))
+    if exe not in RUNNERS:
+        return exe
+    words = system.get("args", "").split()
+    # O x11-run aceita --mode e --app antes do programa.
+    while len(words) >= 2 and words[0] in ("--mode", "--app"):
+        words = words[2:]
+    return os.path.basename(words[0]) if words else ""
+
+
 def console_of(system, filename, rahasher=None):
     """O console do RetroAchievements de um jogo, ou None se ali nao ha
     conquista (o emulador nao da, ou o hash dele precisa do RAHasher)."""
     platform = system.get("platform", "")
-    exe = os.path.basename(system.get("exe", ""))
+    exe = program_of(system)
     ext = os.path.splitext(filename)[1].lower()
     rahasher = os.path.exists(RAHASHER) if rahasher is None else rahasher
+    if exe == "flycast" and (system.get("key") in FLYCAST_ARCADE or platform in FLYCAST_ARCADE):
+        return 27
     if exe == "retroarch":
         core = core_of(system)
         if platform in ("arcade", "fba", "neogeo"):
@@ -105,7 +127,7 @@ def console_of(system, filename, rahasher=None):
         if platform in DISC_CONSOLES and rahasher:
             return DISC_CONSOLES[platform]
         return None
-    if exe in STANDALONE and rahasher and system.get("key") not in ("naomi", "naomi2", "atomiswave", "namco2x6"):
+    if exe in STANDALONE and rahasher and system.get("key") != "namco2x6":
         return STANDALONE[exe]
     return None
 

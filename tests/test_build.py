@@ -18133,21 +18133,34 @@ class FrontendCheevosTests(unittest.TestCase):
         self.assertEqual(self.fc.rom_hash(5, str(folder / 'c.zip')), md5(b'gba rom'))
 
     def test_only_where_the_emulator_gives_achievements(self):
-        ra = lambda core, platform: {'exe': 'retroarch', 'args': '-L /opt/fliperos/retroarch/cores/%s_libretro.so' % core,
-                                     'platform': platform, 'key': 'retroarch/' + core}
+        # As linhas como o Setup as da (lib/scraper.sh scraper_attract_emulator):
+        # o programa vem dentro do fliperos-kms-run ou do fliperos-x11-run.
+        bin_ = '/opt/fliperos/bin/'
+        ra = lambda core, platform: {'exe': bin_ + 'fliperos-kms-run', 'platform': platform, 'key': 'retroarch/' + core,
+                                     'args': 'retroarch -L /opt/fliperos/retroarch/cores/%s_libretro.so "[romfilename]"'
+                                             % core}
+        x11 = lambda program, platform, key: {'exe': bin_ + 'fliperos-x11-run', 'args': program + ' "[romfilename]"',
+                                               'platform': platform, 'key': key}
         self.assertEqual(self.fc.console_of(ra('snes9x', 'snes'), 'smw.sfc', False), 3)
         self.assertEqual(self.fc.console_of(ra('gambatte', 'gb'), 'zelda.gbc', False), 6)
         self.assertEqual(self.fc.console_of(ra('genesis_plus_gx', 'megadrive'), 'sonic.sms', False), 11)
         self.assertEqual(self.fc.console_of(ra('fbneo', 'fba'), 'sf2.zip', False), 27)
         # O MAME 2010 e o GroovyMAME nao dao conquistas.
         self.assertIsNone(self.fc.console_of(ra('mame2010', 'arcade'), 'sf2.zip', False))
-        self.assertIsNone(self.fc.console_of({'exe': 'groovymame', 'platform': 'arcade', 'key': 'mame'}, 'sf2.zip', False))
-        # Os discos so com o RAHasher; os arcades do Flycast e o fork Namco nunca.
-        duck = {'exe': '/usr/local/bin/duckstation', 'platform': 'psx', 'key': 'ps1'}
+        self.assertIsNone(self.fc.console_of({'exe': bin_ + 'fliperos-groovymame', 'args': 'sf2', 'platform': 'arcade',
+                                              'key': 'mame'}, 'sf2.zip', False))
+        # Os discos so com o RAHasher; o fork Namco nunca.
+        duck = x11('duckstation', 'psx', 'ps1')
         self.assertIsNone(self.fc.console_of(duck, 'ff7.chd', False))
         self.assertEqual(self.fc.console_of(duck, 'ff7.chd', True), 12)
-        self.assertIsNone(self.fc.console_of({'exe': 'flycast', 'platform': 'naomi', 'key': 'naomi'}, 'x.zip', True))
-        self.assertIsNone(self.fc.console_of({'exe': 'pcsx2x6', 'platform': 'ps2', 'key': 'namco2x6'}, 'x', True))
+        self.assertEqual(self.fc.console_of(x11('dolphin-emu -e', 'gc', 'dolphin'), 'zelda.rvz', True), 16)
+        self.assertEqual(self.fc.console_of(x11('flycast', 'dreamcast', 'dreamcast'), 'sonic.chd', True), 40)
+        self.assertIsNone(self.fc.console_of(x11('pcsx2x6', 'ps2', 'namco2x6'), 'x.acgame', True))
+        # Os arcades do Flycast sao arcade pelo nome da ROM, sem o RAHasher.
+        for key in ('naomi', 'naomi2', 'atomiswave'):
+            self.assertEqual(self.fc.console_of(x11('flycast', key, key), 'mvsc2.zip', False), 27, key)
+        self.assertEqual(self.fc.program_of({'exe': bin_ + 'fliperos-x11-run', 'args': '--mode 640x480 flycast x'}),
+                         'flycast')
 
     def test_lookup_fetches_once_and_counts_the_mode(self):
         import hashlib
@@ -18168,8 +18181,8 @@ class FrontendCheevosTests(unittest.TestCase):
                 return {'NumAchievements': 96, 'NumAwardedToUser': 13, 'NumAwardedToUserHardcore': 4}
             raise AssertionError(endpoint)
 
-        system = {'exe': 'retroarch', 'args': '-L x/snes9x_libretro.so', 'platform': 'snes', 'folder': str(roms),
-                  'key': 'retroarch/snes9x'}
+        system = {'exe': 'fliperos-kms-run', 'args': 'retroarch -L x/snes9x_libretro.so', 'platform': 'snes',
+                  'folder': str(roms), 'key': 'retroarch/snes9x'}
         game = {'_system': system, 'file': 'smw.sfc', 'Name': 'smw'}
         cache = self.tmp / 'cache'
         cheevos = self.fc.Cheevos(str(cache), conf=str(self.conf), fetch=fetch, rahasher=False)
@@ -18231,8 +18244,8 @@ class FrontendCheevosTests(unittest.TestCase):
     def test_game_menu_lists_the_achievements_done_first(self):
         # O trofeu do menu do jogo: a lista buscada agora no site, as feitas
         # primeiro (no hardcore, so as do hardcore), na ordem do site.
-        system = {'exe': 'retroarch', 'args': '-L x/snes9x_libretro.so', 'platform': 'snes', 'folder': str(self.tmp),
-                  'key': 'retroarch/snes9x'}
+        system = {'exe': 'fliperos-kms-run', 'args': 'retroarch -L x/snes9x_libretro.so', 'platform': 'snes',
+                  'folder': str(self.tmp), 'key': 'retroarch/snes9x'}
         (self.tmp / 'smw.sfc').write_bytes(b'mario')
         game = {'_system': system, 'file': 'smw.sfc', 'Name': 'smw'}
         info = {'NumAchievements': 3, 'NumAwardedToUser': 2, 'NumAwardedToUserHardcore': 1, 'Achievements': {
