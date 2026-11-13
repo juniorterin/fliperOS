@@ -3,6 +3,7 @@
 import { BookOpen, CircleDot, Package, Send } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 import { LogoMark, Wordmark } from '@/components/Logo';
+import { pagePath } from '@/i18n';
 import { useI18n } from '@/i18n/I18nProvider';
 import { AUTHOR_HANDLE, LINKS, readmeUrl } from '@/lib/site';
 
@@ -48,6 +49,9 @@ export function Footer() {
       <div className="border-t border-line/50">
         <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 px-4 py-6 font-mono text-xs leading-relaxed text-comment sm:px-6 md:flex-row md:justify-between lg:px-8">
           <p className="text-center md:text-left">{f.disclaimer}</p>
+          <a href={pagePath(locale, 'privacy')} className="shrink-0 underline-offset-4 transition-colors hover:text-purple hover:underline">
+            {f.privacy}
+          </a>
           <p className="shrink-0">
             {f.madeBy}{' '}
             <a

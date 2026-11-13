@@ -17,6 +17,7 @@ export const LINKS = {
   soyoR7240: 'https://pt.aliexpress.com/item/1005012468296916.html',
   oscr: 'https://pt.aliexpress.com/item/1005010307901792.html',
   artRepairTelegram: 'https://t.me/+1XiiRQtrBVFkNGEx',
+  googleUserDataPolicy: 'https://developers.google.com/terms/api-services-user-data-policy',
 } as const;
 
 // O id do vídeo de apresentação no YouTube (o player só carrega ao clicar).

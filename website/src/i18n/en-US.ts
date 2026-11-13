@@ -1032,9 +1032,64 @@ const enUS = {
     releases: 'Releases',
     issues: 'Issues',
     telegram: 'Telegram',
+    privacy: 'Privacy policy',
     madeBy: 'Made by',
     instagramLabel: 'on Instagram',
     disclaimer: 'Not affiliated with Ubuntu, MAME or emulator projects. All trademarks belong to their owners.',
+  },
+  privacy: {
+    meta: {
+      title: 'Privacy policy | FliperOS',
+      description: 'What FliperOS and its website do with your data, including the Google Drive access of the cloud backup.',
+    },
+    kicker: 'Privacy',
+    title: 'Privacy policy',
+    updated: 'Last updated: November 13, 2026',
+    intro:
+      'FliperOS is a free, open-source operating system for arcade cabinets. It has no accounts, no ads and no servers of its own that receive your data. This page explains the few places where data moves, and what happens to it.',
+    sections: [
+      {
+        title: 'Cloud backup with Google Drive',
+        paragraphs: [
+          'The cloud backup (web panel: Settings > Cloud backup, or the Setup) can copy your high scores, saves and settings to your own Google Drive. You turn it on yourself by signing in with Google; nothing is sent before that.',
+          'FliperOS asks Google only for the drive.file permission. With it, FliperOS can see and change only the files and folders it created itself (the FliperOS folder in your Drive). It cannot read, list or delete any other file in your Drive.',
+          'It also reads the e-mail address of the Google account, through the Drive API, only to show on the cabinet which account is signed in.',
+          'The files go straight from your cabinet to your Google Drive. They never pass through, and are never stored on, any server of the FliperOS project. The sign-in token is kept only on your cabinet, in the rclone configuration of the FliperOS user.',
+          'Your Google data is not sold, not shared with anyone, not used for advertising and not used to train AI models. It is used only to make the backup you asked for.',
+        ],
+      },
+      {
+        title: 'Google API Services User Data Policy',
+        paragraphs: [
+          "FliperOS's use and transfer of information received from Google APIs to any other app will adhere to the Google API Services User Data Policy, including the Limited Use requirements.",
+        ],
+      },
+      {
+        title: 'Removing access',
+        paragraphs: [
+          'To stop the backup, choose Forget in Settings > Cloud backup: the cabinet deletes its token and asks Google to revoke it. You can also remove FliperOS at any time in your Google account, under Security > Third-party apps and services. The FliperOS folder stays in your Drive until you delete it.',
+        ],
+      },
+      {
+        title: 'Updates and downloads',
+        paragraphs: [
+          'The cabinet checks for system updates and downloads packages from GitHub. Other features you start yourself (scraping, the downloader, BIOS packs, sign-in to sites such as RetroAchievements) talk directly to those services, under their own privacy policies.',
+        ],
+      },
+      {
+        title: 'This website',
+        paragraphs: [
+          'This site uses Google Analytics to count visits. Analytics cookies are only set if you accept them in the cookie notice; without that, Google receives only anonymous signals. A cookie also remembers the language you picked. The presentation video loads from YouTube only when you press play.',
+        ],
+      },
+      {
+        title: 'Changes and contact',
+        paragraphs: [
+          'If this policy changes, the new version is published on this page with a new date. For any question about privacy, write to:',
+        ],
+      },
+    ],
+    googlePolicy: 'Google API Services User Data Policy',
   },
 };
 

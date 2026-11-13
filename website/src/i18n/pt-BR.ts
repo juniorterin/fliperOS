@@ -1033,9 +1033,64 @@ const ptBR: Messages = {
     releases: 'Releases',
     issues: 'Issues',
     telegram: 'Telegram',
+    privacy: 'Política de privacidade',
     madeBy: 'Feito por',
     instagramLabel: 'no Instagram',
     disclaimer: 'Sem vínculo com o Ubuntu, o MAME ou os projetos de emuladores. As marcas pertencem aos seus donos.',
+  },
+  privacy: {
+    meta: {
+      title: 'Política de privacidade | FliperOS',
+      description: 'O que o FliperOS e o site fazem com os seus dados, inclusive o acesso ao Google Drive do backup na nuvem.',
+    },
+    kicker: 'Privacidade',
+    title: 'Política de privacidade',
+    updated: 'Última atualização: 13 de novembro de 2026',
+    intro:
+      'O FliperOS é um sistema operacional livre e de código aberto para gabinetes de fliperama. Ele não tem contas, nem anúncios, nem servidores próprios que recebam os seus dados. Esta página explica os poucos lugares por onde algum dado passa e o que acontece com ele.',
+    sections: [
+      {
+        title: 'Backup na nuvem com o Google Drive',
+        paragraphs: [
+          'O backup na nuvem (painel web: Settings > Cloud backup, ou o Setup) pode copiar os seus recordes, saves e configurações para o seu próprio Google Drive. Você mesmo liga o backup ao entrar com o Google; nada é enviado antes disso.',
+          'O FliperOS pede ao Google só a permissão drive.file. Com ela, o FliperOS só vê e altera os arquivos e pastas que ele mesmo criou (a pasta FliperOS no seu Drive). Ele não consegue ler, listar nem apagar nenhum outro arquivo do seu Drive.',
+          'Ele também lê o e-mail da conta Google, pela API do Drive, só para mostrar no gabinete qual conta está conectada.',
+          'Os arquivos vão direto do seu gabinete para o seu Google Drive. Eles nunca passam por nenhum servidor do projeto FliperOS nem ficam guardados em um. O token de acesso fica só no seu gabinete, na configuração do rclone do usuário do FliperOS.',
+          'Os seus dados do Google não são vendidos, não são compartilhados com ninguém e não são usados para publicidade nem para treinar modelos de IA. Eles servem só para fazer o backup que você pediu.',
+        ],
+      },
+      {
+        title: 'Política de Dados do Usuário dos Serviços de API do Google',
+        paragraphs: [
+          'O uso e a transferência, pelo FliperOS, de informações recebidas das APIs do Google para qualquer outro aplicativo seguem a Google API Services User Data Policy, incluindo os requisitos de Uso Limitado (Limited Use).',
+        ],
+      },
+      {
+        title: 'Como remover o acesso',
+        paragraphs: [
+          'Para parar o backup, escolha Forget em Settings > Cloud backup: o gabinete apaga o token e pede ao Google para revogá-lo. Você também pode remover o FliperOS a qualquer momento na sua conta Google, em Segurança > Apps e serviços de terceiros. A pasta FliperOS continua no seu Drive até você apagá-la.',
+        ],
+      },
+      {
+        title: 'Atualizações e downloads',
+        paragraphs: [
+          'O gabinete procura atualizações do sistema e baixa pacotes do GitHub. Os outros recursos que você mesmo usa (scraping, o downloader, os pacotes de BIOS, o login em sites como o RetroAchievements) falam direto com esses serviços, sob as políticas de privacidade deles.',
+        ],
+      },
+      {
+        title: 'Este site',
+        paragraphs: [
+          'Este site usa o Google Analytics para contar as visitas. Os cookies de análise só são gravados se você aceitar no aviso de cookies; sem isso, o Google recebe só sinais anônimos. Um cookie também lembra o idioma escolhido. O vídeo de apresentação só carrega do YouTube quando você aperta o play.',
+        ],
+      },
+      {
+        title: 'Mudanças e contato',
+        paragraphs: [
+          'Se esta política mudar, a nova versão é publicada nesta página com uma nova data. Para qualquer dúvida sobre privacidade, escreva para:',
+        ],
+      },
+    ],
+    googlePolicy: 'Google API Services User Data Policy',
   },
 };
 

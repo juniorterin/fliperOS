@@ -4,7 +4,7 @@ import { PAGE_SLUGS, SITE_URL } from '@/lib/site';
 
 // A home e cada página de detalhe, nos dois idiomas, com os alternates de cada uma.
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [undefined, ...PAGE_SLUGS].flatMap((page) => {
+  return [undefined, ...PAGE_SLUGS, 'privacy'].flatMap((page) => {
     const languages = {
       ...Object.fromEntries(LOCALES.map((l) => [l, `${SITE_URL}${pagePath(l, page)}`])),
       'x-default': page ? `${SITE_URL}${pagePath('en-US', page)}` : `${SITE_URL}/`,
