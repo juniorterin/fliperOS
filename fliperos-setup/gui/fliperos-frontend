@@ -69,6 +69,11 @@ LETTER_IDLE = 2.0
 # Esquerda e direita so andam na tira de romlists; parado PICK_WAIT segundos
 # num sistema (ou com o botao 1), a lista troca, com a animacao.
 PICK_WAIT = 0.6
+# Escolhido o sistema, a tira fica RIBBON_HOLD segundos com o numero de jogos
+# dele (so se sabe depois de ler a lista) e entao some aos poucos em
+# RIBBON_FADE (o do feview.py). Antes ela sumia logo, e o numero nem dava para
+# ler. Mexer na lista a fecha antes.
+RIBBON_HOLD, RIBBON_FADE = 1.6, 0.25
 # Quanto tempo fica o aviso de que outro gabinete abriu uma party ou um link.
 NOTICE = 6.0
 # Um jogo sem video e sem imagem, com o cursor parado nele por este tempo,
@@ -773,7 +778,8 @@ class Frontend:
         """O sistema da tira escolhido: a lista troca, com a animacao."""
         step, self.pick = self.pick, 0
         self.picking = False
-        self.ribbon_until = time.monotonic() + 0.25       # some aos poucos (feview.RIBBON_FADE)
+        # O numero de jogos a vista, depois some aos poucos (feview.RIBBON_FADE).
+        self.ribbon_until = time.monotonic() + RIBBON_HOLD + RIBBON_FADE
         if not step % len(self.cats):
             return                # deu a volta e parou no mesmo
         self.keep_position()
@@ -854,6 +860,12 @@ class Frontend:
             self.pick_category()
             if a == "b1":
                 return None
+        # A tira ainda a vista com o numero de jogos (RIBBON_HOLD): mexer na
+        # lista a fecha, aos poucos (outro sistema a abre de novo:
+        # switch_category).
+        now = time.monotonic()
+        if self.ribbon_until > now + RIBBON_FADE:
+            self.ribbon_until = now + RIBBON_FADE
         if self.letter_mode and a in ("up", "down"):
             # No modo letra, cada toque passa uma letra; segurando, repete
             # (tick). Dois segundos sem mexer, volta a lista normal.

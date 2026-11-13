@@ -5799,6 +5799,14 @@ class FrontendDataTests(unittest.TestCase):
         fe.tick(fe.pick_at + fm.PICK_WAIT + 0.01)
         self.assertEqual((fe.cat, fe.picking, loads), (2, False, [3, 2]))
         self.assertLess(fe.ribbon_until, float('inf'))
+        # Escolhido o sistema, a tira fica RIBBON_HOLD s com o numero de jogos
+        # (antes sumia em 0,25 s, sem dar para ler); mexer na lista a fecha.
+        fe.act('right')
+        fe.act('b1')
+        self.assertGreater(fe.ribbon_until - time.monotonic(), fm.RIBBON_HOLD)
+        fe.act('down')
+        self.assertLessEqual(fe.ribbon_until - time.monotonic(), fm.RIBBON_FADE)
+        self.assertEqual(moved, [1])
 
     def test_ribbon_moves_on_a_spring_and_tiles_grow_evenly(self):
         # A tira anda numa mola sem balanco: sai devagar, acelera, nao passa
