@@ -944,6 +944,27 @@ ui_timed_confirm() {
   esac
 }
 
+# ui_wait TITULO SEGUNDOS TEXTO...: a tela de uma espera sem prazo (quem
+# chama pergunta o estado a cada SEGUNDOS e desenha de novo). Sem contagem
+# regressiva: os SEGUNDOS sao so o intervalo da pergunta, e uma contagem que
+# recomeca a cada volta parece um prazo que nunca acaba. 124 = passou o
+# intervalo, 0 = Enter, 1 = Esc.
+ui_wait() {
+  local title=$1 seconds=$2 key rc
+  shift 2
+  if ui_gui_alive; then
+    ui_gui_call wait "$title" "$seconds" "$@"
+    return
+  fi
+  ui_screen "$title" "$@" "" "$(ui_dim "Esc: stop waiting")"
+  IFS= read -rsn1 -t "$seconds" key < /dev/tty
+  rc=$?
+  ((rc > 128)) && return 124
+  ((rc != 0)) && return 1
+  [[ $key == $'\e' ]] && return 1
+  return 0
+}
+
 # ui_qr_wait TITULO SEGUNDOS CODIGO ENDERECO TEXTO...: o QR code do endereco
 # (qrencode) e o codigo grande, esperando um tempo, como o ui_timed_confirm
 # (124 = acabou o tempo, 1 = Esc). Sem o qrencode, so o endereco e o codigo.
@@ -963,7 +984,7 @@ ui_qr_wait() {
   fi
   local -a block=()
   have qrencode && mapfile -t block < <(qrencode -t UTF8 -m 1 "$url" 2> /dev/null)
-  ui_timed_confirm "$title" "$seconds" "Waiting..." "${block[@]}" "$@" "$short" "" "Code: $code"
+  ui_wait "$title" "$seconds" "${block[@]}" "$@" "$short" "" "Code: $code"
   rc=$?
   return "$rc"
 }

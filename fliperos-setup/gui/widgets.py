@@ -2121,6 +2121,32 @@ class Timed(Message):
         centered(surf, "%d s" % self.left, T.COMMENT, y + 26)
 
 
+class Waiting(Timed):
+    """ui_wait: uma espera sem prazo. Os segundos sao so o intervalo em que o
+    Setup pergunta o estado; a tela nao mostra contagem (ela recomecaria a
+    cada volta), so o WAITING com os pontos andando. Esc desiste."""
+
+    def __init__(self, title, lines, seconds):
+        super().__init__(title, lines, "", seconds)
+
+    def key(self, k):
+        return ("back", None) if k == "esc" else None
+
+    def tick(self):
+        if time.monotonic() >= self.deadline:
+            return ("timeout", None)
+        dots = int(time.monotonic()) % 4
+        if dots != self.left:
+            self.left = dots
+            return "redraw"
+        return None
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ESC", "BACK")])
+        y = body(surf, self.lines, 34)
+        centered(surf, "WAITING" + "." * (int(time.monotonic()) % 4), T.COMMENT, y + 6)
+
+
 class QrWait(Timed):
     """ui_qr_wait: o Entrar com o Google no tubo, como numa smart TV. O QR
     code (a matriz do qrencode, "1" e o modulo escuro) a esquerda, em branco

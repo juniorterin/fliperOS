@@ -395,6 +395,11 @@ class Server:
             screen = W.Timed(plain(a[0]), self.lines(a[3:]), plain(a[2]), int(a[1]))
             action, _ = self.ask(screen, cmd)
             return {"select": 0, "timeout": 124}.get(action, 1), ""
+        if cmd == "wait":
+            # titulo, segundos (o intervalo da pergunta, nao um prazo), linhas.
+            screen = W.Waiting(plain(a[0]), self.lines(a[2:]), int(a[1]))
+            action, _ = self.ask(screen, cmd)
+            return {"select": 0, "timeout": 124}.get(action, 1), ""
         if cmd == "qr":
             # titulo, segundos, codigo, linhas de texto ate "--", e a matriz do QR.
             rest = a[3:]

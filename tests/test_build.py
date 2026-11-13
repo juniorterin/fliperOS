@@ -14807,6 +14807,48 @@ class GuiGridHeaderTests(unittest.TestCase):
                       (ROOT / 'fliperos-setup/screens/video-setup.sh').read_text())
 
 
+class GuiWaitingTests(unittest.TestCase):
+    """A espera do Entrar com o Google (ui_wait, widgets.Waiting): os segundos
+    sao so o intervalo em que o Setup pergunta o estado, entao a tela nao
+    mostra contagem regressiva (ela recomecava 3, 2, 1 a cada volta durante a
+    primeira sincronizacao); o tempo desde o comeco dela so sobe."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_no_countdown_and_timeout_after_the_interval(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import widgets
+        pygame.font.init()
+        drawn = []
+        original = widgets.centered
+        widgets.centered = lambda surf, s, *a, **k: drawn.append(s)
+        self.addCleanup(setattr, widgets, "centered", original)
+        screen = widgets.Waiting("Sign in with Google", [("First sync running for 0:03.", None)], 3)
+        screen.draw(pygame.Surface((320, 240), pygame.SRCALPHA), {"status": "", "version": ""})
+        self.assertTrue(any(s.startswith("WAITING") for s in drawn))
+        self.assertFalse([s for s in drawn if re.fullmatch(r"\d+ s", s)])
+        self.assertNotEqual(screen.tick(), ("timeout", None))
+        self.assertIsNone(screen.key("enter"))
+        self.assertEqual(screen.key("esc"), ("back", None))
+        screen.deadline -= 3
+        self.assertEqual(screen.tick(), ("timeout", None))
+
+    def test_google_sign_in_uses_the_wait_without_a_countdown(self):
+        menu = (ROOT / "fliperos-setup/screens/setup-menu.sh").read_text()
+        body = menu[menu.index("screen_cloud_google() {"):]
+        body = body[:body.index("\n}\n")]
+        self.assertNotIn("ui_timed_confirm", body)
+        self.assertIn("First sync running for", body)
+        ui = (ROOT / "fliperos-setup/lib/ui.sh").read_text()
+        qr = ui[ui.index("ui_qr_wait() {"):]
+        self.assertNotIn("ui_timed_confirm", qr[:qr.index("\n}\n")])
+        self.assertIn('if cmd == "wait":', (self.GUI / "serve.py").read_text())
+
+
 class GuiNotSupportedTests(unittest.TestCase):
     """Um item "(not supported)" de um menu do Setup grafico: a dica traz o
     motivo e o Menu desenha um X vermelho no icone (gui/serve.py, widgets.py)."""
