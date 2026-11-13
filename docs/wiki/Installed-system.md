@@ -127,7 +127,7 @@ Inside Configuration:
 The arrows move and change, the first button opens and the second goes back, as in the Setup's menus. In `fliperos.conf`:
 
 - `osd=off` turns it off. It is also in the web panel, in Video, and it stays closed in the frontend's commercial mode;
-- `osd_combo=start+down` is the shortcut, with the controls of the Button mapping;
+- `osd_combo=start+down` is the shortcut, with the controls of the Button mapping (`1:start+2:start` takes them from different players). The frontend changes it and `osd_key` in Frontend controls > OSD MENU;
 - `osd_hold=1.0` is how many seconds to hold them;
 - `osd_key=119,164,201,207` are the keys, as evdev codes: Pause, and the Play/Pause, Pause and Play of a remote. `0` is no key;
 - `geometry_640x480i=1.050:3:-2` is the geometry of one resolution (`WIDTHxLINES` and `p` or `i`): H size, H position and V position. Written by **Save** (`fliperos-setup --geometry set-res|reset-res`); another monitor type or **Reset Geometry** in the Setup erases them all.

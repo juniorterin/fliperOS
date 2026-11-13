@@ -6270,7 +6270,7 @@ class FrontendDataTests(unittest.TestCase):
         # O atalho que fecha o jogo fica dentro do Frontend controls, nao no Tab.
         self.assertNotIn('"EXIT KEY")', view)
         self.assertIn('y = label(exit_row, "EXIT GAME", exit_icon, T.RED)', view)
-        self.assertIn('elif a == "b1" and sel in (exit_row, menu_row) and ov["col"] < 2:', src)
+        self.assertIn('elif a == "b1" and sel in rows and ov["col"] < 2:', src)
         self.assertNotIn('OPT_EXIT', src)
         try:
             import pygame
@@ -6336,17 +6336,47 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('CONTROLS_FIRST = 2', src)
         self.assertIn('guide_row, layout_row, first = 0, 1, 2', view)
         fe.menu_combo, fe.menu_key = ['1:start', '2:start'], ['F11', 87]
-        for row in range(len(fi.FUNCTIONS) + 5):
+        fe.osd_combo, fe.osd_key = ['start', 'down'], ['PAUSE', 119]
+        for row in range(len(fi.FUNCTIONS) + 6):
             for col in range(3):
                 fe.ov = {'sel': row, 'col': col, 'wait': None}
                 feview.draw_controls(fe, ui, 1.0)
         # Tudo cabe nos 240 de altura: o RESET/SAVE e as dicas embaixo.
-        self.assertGreaterEqual(feview.HH, 40 + (len(fi.FUNCTIONS) + 5) * 10 + feview.BUTTONS_GAP + 19)
+        self.assertGreaterEqual(feview.HH, 40 + (len(fi.FUNCTIONS) + 6) * 9 + feview.BUTTONS_GAP + 19)
+        self.assertIn('y = label(osd_row, "OSD MENU", osd_icon, T.CYAN)', view)
+        self.assertIn('SHORTCUTS = ("exit", "menu", "osd")', src)
         # A escolha dos botoes, de um jogador ou de dois.
-        for which in ('exit', 'menu'):
+        for which in ('exit', 'menu', 'osd'):
             fe.overlay, fe.ov = 'exitpad', {'since': 0.0, 'held': frozenset({(1, 'start'), (2, 'start')}),
                                              'which': which}
             feview.draw_capture(fe, ui, 1.0)
+        fm = self.frontend_module()
+        names = ['K_ESCAPE', 'K_BACKSPACE', 'K_TAB', 'K_RETURN', 'K_SPACE', 'K_PAUSE', 'K_HOME', 'K_END', 'K_INSERT',
+                 'K_DELETE', 'K_PAGEUP', 'K_PAGEDOWN', 'K_0'] + ['K_F%d' % n for n in range(1, 13)] + \
+            ['K_' + c for c in 'qwertyuiopasdfghjklzxcvbnm'] + ['K_%d' % n for n in range(1, 10)]
+        osd = types.SimpleNamespace(fi=fi, keytable=fm.evdev_keys(types.SimpleNamespace(
+            **{n: i for i, n in enumerate(names)})))
+        self.assertEqual(fm.Frontend.osd_shortcut(osd, {}), (['PAUSE', 119], ['start', 'down']))
+        self.assertEqual(fm.Frontend.osd_shortcut(osd, {'osd_key': '164,88', 'osd_combo': '1:start+2:start'}),
+                         (['F12', 88], ['1:start', '2:start']))
+        self.assertEqual(fm.Frontend.osd_shortcut(osd, {'osd_key': '0', 'osd_combo': ''}), (None, []))
+        calls = []
+        import fedata as fedata_mod
+        real_setup = fedata_mod.setup
+        fedata_mod.setup = lambda *a, **k: calls.append(a)
+        try:
+            osd.osd_combo, osd.osd_key = ['start', 'down'], ['PAUSE', 119]
+            fm.Frontend.set_shortcut(osd, 'osd', combo=['coin', 'b2'])
+            fm.Frontend.set_shortcut(osd, 'osd', key=['F12', 88])
+            fm.Frontend.set_shortcut(osd, 'osd', key=None)
+            deadline = time.time() + 5
+            while len(calls) < 3 and time.time() < deadline:
+                time.sleep(0.05)
+        finally:
+            fedata_mod.setup = real_setup
+        self.assertEqual(sorted(calls), sorted([('--setting', 'osd_combo', 'coin+b2'),
+                                                ('--setting', 'osd_key', '88,164,201,207'),
+                                                ('--setting', 'osd_key', '164,201,207')]))
         self.assertEqual(fi.combo_from({(1, 'coin'), (1, 'start')}), ['start', 'coin'])
         self.assertEqual(fi.combo_from({(2, 'start'), (1, 'start')}), ['1:start', '2:start'])
         self.assertEqual(fi.combo_names(['1:start', '2:b3', 'coin']), ['P1 START', 'P2 3', 'COIN'])

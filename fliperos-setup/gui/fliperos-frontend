@@ -121,6 +121,14 @@ DEFAULT_EXIT_COMBO, DEFAULT_MENU_COMBO = ["coin", "start"], ["coin", "b1"]
 # em seguida: com o EMULATOR MENU, so o do frontend (este arquivo vai no
 # --appendconfig, que o fliperos-kms-run poe no fim).
 RA_NO_COMBO = "input_menu_toggle_gamepad_combo = \"0\"\n"
+# As linhas dos atalhos do jogo no Frontend controls, depois das funcoes: o
+# que fecha o jogo, o que abre o menu do emulador e o do menu na tela do
+# FliperOS (o da OSD, no fliperos.conf: os padroes dela, e as teclas de midia
+# de um controle remoto, que ficam sempre). O que cada um faz, nos avisos.
+SHORTCUTS = ("exit", "menu", "osd")
+SHORTCUT_TEXT = {"exit": ("EXIT", "CLOSE THE GAME"), "menu": ("MENU", "OPEN THE EMULATOR MENU"),
+                 "osd": ("OSD", "OPEN THE OSD MENU")}
+OSD_COMBO, OSD_KEYS, OSD_MEDIA_KEYS = "start+down", "119,164,201,207", (164, 201, 207)
 # O Frontend controls: o guia (arcade ou joypad) e o formato dele nas duas
 # primeiras linhas, as funcoes a partir desta.
 CONTROLS_FIRST = 2
@@ -374,6 +382,9 @@ class Frontend:
             return (key if isinstance(key, list) and len(key) == 2 else None), combo
         self.exit_key, self.exit_combo = shortcut("exit", DEFAULT_EXIT_COMBO)
         self.menu_key, self.menu_combo = shortcut("menu", DEFAULT_MENU_COMBO)
+        # O do menu na tela do FliperOS (OSD MENU) e do sistema: osd_combo e
+        # osd_key do fliperos.conf, que a OSD le (config/fliperos-osd).
+        self.osd_key, self.osd_combo = self.osd_shortcut(fedata.web.conf_values())
         self.power_exit = cfg.get("power_exit", True) is not False
         self.commercial = cfg.get("commercial") is True
         if self.commercial:
@@ -1214,27 +1225,25 @@ class Frontend:
                 self.overlay = None
             return None
         if o == "exitkey":
-            # A tecla que fecha o jogo (ou abre o menu do emulador, ov
-            # "which"): a proxima apertada no teclado. Uma do painel (o
-            # encoder que se diz teclado) nao serve: cada botao faz uma coisa
-            # so; nem a do outro atalho. O botao 2 de um controle desiste.
-            menu = self.ov.get("which") == "menu"
+            # A tecla de um atalho do jogo (ov "which": o que fecha o jogo,
+            # o que abre o menu do emulador ou o da OSD): a proxima apertada
+            # no teclado. Uma do painel (o encoder que se diz teclado) nao
+            # serve: cada botao faz uma coisa so; nem a de outro atalho. O
+            # botao 2 de um controle desiste.
+            which = self.ov.get("which") or "exit"
             if a.startswith("key:"):
                 key = self.keytable.get(int(a[4:]))
-                other = self.exit_key if menu else self.menu_key
+                other = next((w for w in SHORTCUTS if w != which and self.shortcut(w)[1]
+                              and key and self.shortcut(w)[1][1] == key[1]), None)
                 if key is None:
                     self.say("THIS KEY CANNOT BE USED", 2)
                 elif key[0] in panel_keys(self.input.rows):
                     self.say("%s IS A PANEL CONTROL" % key[0], 2.4)
-                elif other and other[1] == key[1]:
-                    self.say("%s ALREADY %s" % (key[0], "CLOSES THE GAME" if menu else "OPENS THE MENU"), 2.4)
+                elif other:
+                    self.say("%s ALREADY %s" % (key[0], SHORTCUT_TEXT[other][1].replace(" ", "S ", 1)), 2.4)
                 else:
-                    if menu:
-                        self.menu_key = list(key)
-                    else:
-                        self.exit_key = list(key)
-                    self.remember()
-                    self.say(("MENU KEY: " if menu else "EXIT KEY: ") + key[0], 2)
+                    self.set_shortcut(which, key=list(key))
+                    self.say("%s KEY: %s" % (SHORTCUT_TEXT[which][0], key[0]), 2)
                 self.capture_done(2)
             elif a == "b2":
                 self.capture_done(2)
@@ -1307,7 +1316,10 @@ class Frontend:
         # fecha o jogo e o RESET/SAVE (CONTROLS_FIRST: a primeira funcao).
         guide_row, layout_row = 0, 1
         first = CONTROLS_FIRST
-        exit_row, menu_row, reset_row = first + len(funcs), first + len(funcs) + 1, first + len(funcs) + 2
+        # Os atalhos do jogo (SHORTCUTS: EXIT GAME, EMULATOR MENU, OSD MENU).
+        exit_row = first + len(funcs)
+        rows = {exit_row + i: w for i, w in enumerate(SHORTCUTS)}
+        reset_row = exit_row + len(SHORTCUTS)
         if ov["wait"] in ("pad", "joy"):
             # O painel e o joypad (as linhas "j:PAPEL" do mapa): cada coluna
             # so aceita o seu.
@@ -1368,30 +1380,22 @@ class Frontend:
             self.input.bind(self.fi.default_binds(self.pg))
             self.remember()
             self.say("CONTROLS RESET")
-        elif a == "b1" and sel in (exit_row, menu_row) and ov["col"] < 2:
+        elif a == "b1" and sel in rows and ov["col"] < 2:
             # Os botoes segurados juntos (do painel ou do joypad, de um
             # jogador ou de varios).
-            which = "menu" if sel == menu_row else "exit"
-            self.overlay, self.ov = "exitpad", {"since": time.monotonic(), "held": None, "which": which}
-        elif a == "b1" and sel in (exit_row, menu_row):
-            which = "menu" if sel == menu_row else "exit"
-            self.overlay, self.ov = "exitkey", {"since": time.monotonic(), "which": which}
+            self.overlay, self.ov = "exitpad", {"since": time.monotonic(), "held": None, "which": rows[sel]}
+        elif a == "b1" and sel in rows:
+            self.overlay, self.ov = "exitkey", {"since": time.monotonic(), "which": rows[sel]}
             self.input.capture = True
         elif a == "b1":
             self.controls_wait(("pad", "joy", "key")[ov["col"]])
-        elif a == "delete" and sel in (exit_row, menu_row):
+        elif a == "delete" and sel in rows:
             # O atalho sai (OFF).
-            name = "MENU" if sel == menu_row else "EXIT"
-            if ov["col"] < 2 and sel == menu_row:
-                self.menu_combo = []
-            elif ov["col"] < 2:
-                self.exit_combo = []
-            elif sel == menu_row:
-                self.menu_key = None
+            if ov["col"] < 2:
+                self.set_shortcut(rows[sel], combo=[])
             else:
-                self.exit_key = None
-            self.remember()
-            self.say(name + (" BUTTONS OFF" if ov["col"] < 2 else " KEY OFF"), 2)
+                self.set_shortcut(rows[sel], key=None)
+            self.say(SHORTCUT_TEXT[rows[sel]][0] + (" BUTTONS OFF" if ov["col"] < 2 else " KEY OFF"), 2)
         elif a == "delete" and first <= sel < exit_row:
             self.bind_control(funcs[sel - first], ("pad", "joy", "key")[ov["col"]], None)
         elif a in ("b2", "esc"):
@@ -1437,10 +1441,49 @@ class Frontend:
                 kind, lambda v: self.fi.key_name(self.pg, v))(value)
             self.say("%s: %s" % (names[function], shown), 2)
 
+    # ── Os atalhos do jogo: EXIT GAME, EMULATOR MENU e OSD MENU ──
+    def osd_shortcut(self, conf):
+        """(tecla, botoes) do menu na tela do FliperOS no fliperos.conf: a
+        primeira tecla de osd_key que o teclado tem (as de midia de um
+        controle remoto ficam sempre) e o osd_combo ("" e nenhum)."""
+        names = {code: name for name, code in self.keytable.values()}
+        codes = [int(c) for c in conf.get("osd_key", OSD_KEYS).split(",") if c.strip().isdigit()]
+        key = next(([names[c], c] for c in codes if c in names), None)
+        combo = [c for c in conf.get("osd_combo", OSD_COMBO).split("+") if self.fi.combo_item_ok(c)]
+        return key, combo
+
+    def shortcut(self, which):
+        """(botoes, tecla) do atalho which: "exit", "menu" ou "osd"."""
+        return getattr(self, which + "_combo"), getattr(self, which + "_key")
+
+    def set_shortcut(self, which, combo=False, key=False):
+        """Troca os botoes (combo) ou a tecla (key; None tira) do atalho. Os do
+        frontend vao para o frontend.json; os da OSD, para o fliperos.conf pelo
+        Setup (como root), numa thread."""
+        if combo is not False:
+            setattr(self, which + "_combo", combo)
+        if key is not False:
+            setattr(self, which + "_key", key)
+        if which != "osd":
+            self.remember()
+            return
+        args = []
+        if combo is not False:
+            args.append(("osd_combo", "+".join(combo)))
+        if key is not False:
+            args.append(("osd_key", ",".join(str(c) for c in ([key[1]] if key else []) + list(OSD_MEDIA_KEYS))))
+
+        def work():
+            import fedata
+            for name, value in args:
+                fedata.setup("--setting", name, value, timeout=30)
+        threading.Thread(target=work, daemon=True).start()
+
     def capture_done(self, col):
         """Fim da escolha do atalho: de volta ao Frontend controls, na linha
-        dele (EXIT GAME ou EMULATOR MENU) e na coluna (0 os botoes, 2 a tecla)."""
-        row = CONTROLS_FIRST + len(self.fi.FUNCTIONS) + (1 if self.ov.get("which") == "menu" else 0)
+        dele (EXIT GAME, EMULATOR MENU ou OSD MENU) e na coluna (0 os botoes,
+        2 a tecla)."""
+        row = CONTROLS_FIRST + len(self.fi.FUNCTIONS) + SHORTCUTS.index(self.ov.get("which") or "exit")
         self.input.capture = False
         self.overlay = "controls"
         self.ov = {"sel": row, "col": col, "wait": None}
@@ -1457,7 +1500,7 @@ class Frontend:
         if o not in ("exitkey", "exitpad"):
             return
         held = frozenset(self.input.players_held())
-        menu = self.ov.get("which") == "menu"
+        which = self.ov.get("which") or "exit"
         if o == "exitpad" and self.commercial and any(c == "coin" for _, c in held):
             # No modo comercial a ficha soma tempo: ela nao e atalho.
             self.say("IN COMMERCIAL MODE COIN ADDS TIME", 2.4)
@@ -1468,16 +1511,12 @@ class Frontend:
                 self.ov["held"], self.ov["at"] = held, now
             elif now - self.ov["at"] >= EXIT_HOLD:
                 combo = self.fi.combo_from(held)
-                if combo == (self.exit_combo if menu else self.menu_combo):
-                    self.say("THESE ALREADY " + ("CLOSE THE GAME" if menu else "OPEN THE MENU"), 2.4)
-                elif menu:
-                    self.menu_combo = combo
-                    self.remember()
-                    self.say("MENU BUTTONS: " + "+".join(combo_names(combo)), 2.4)
+                other = next((w for w in SHORTCUTS if w != which and self.shortcut(w)[0] == combo), None)
+                if other:
+                    self.say("THESE ALREADY " + SHORTCUT_TEXT[other][1], 2.4)
                 else:
-                    self.exit_combo = combo
-                    self.remember()
-                    self.say("EXIT BUTTONS: " + "+".join(combo_names(combo)), 2.4)
+                    self.set_shortcut(which, combo=combo)
+                    self.say("%s BUTTONS: %s" % (SHORTCUT_TEXT[which][0], "+".join(combo_names(combo))), 2.4)
                 self.capture_done(0)
             return
         if o == "exitpad":

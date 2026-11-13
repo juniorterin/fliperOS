@@ -2062,6 +2062,12 @@ def options_icon(surf, cx, cy, c):
         surf.fill(c, (cx - 5, cy + dy - 1, 11, 2))
 
 
+def osd_icon(surf, cx, cy, c):
+    """O menu na tela (OSD): uma tela com o painel embaixo."""
+    pygame.draw.rect(surf, c, (cx - 6, cy - 5, 13, 11), 2)
+    surf.fill(c, (cx - 4, cy + 1, 9, 3))
+
+
 # As funcoes do frontend (feinput.FUNCTIONS): o nome, a cor e o desenho no
 # topo do botao, no guia dos controles e no Frontend controls.
 FUNCTION_NAMES = {"up": "GAMES UP", "down": "GAMES DOWN", "left": "LIST LEFT", "right": "LIST RIGHT",
@@ -3502,7 +3508,10 @@ def draw_controls(fe, ui, now):
     # O guia e o formato dele primeiro, depois as funcoes (como o
     # fliperos-frontend: CONTROLS_FIRST = 2), o atalho e o RESET/SAVE.
     guide_row, layout_row, first = 0, 1, 2
-    exit_row, menu_row, reset_row = first + len(funcs), first + len(funcs) + 1, first + len(funcs) + 2
+    # Os atalhos do jogo: EXIT GAME, EMULATOR MENU e OSD MENU (o SHORTCUTS do
+    # fliperos-frontend).
+    exit_row, menu_row, osd_row = first + len(funcs), first + len(funcs) + 1, first + len(funcs) + 2
+    reset_row = osd_row + 1
     joypad = getattr(fe, "guide_kind", "arcade") == "joypad"
     # As colunas do painel, do joypad e da tecla (em pe, mais estreitas).
     pw, jw, kw = (34, 38, 48) if T.VERTICAL is not None else (40, 46, 60)
@@ -3578,6 +3587,11 @@ def draw_controls(fe, ui, now):
     combo = "+".join(feinput.combo_names(getattr(fe, "menu_combo", [])))
     key = getattr(fe, "menu_key", None)
     cells(menu_row, y, (combo, None, key[0] if key else None), span=True)
+    # O do menu na tela do FliperOS (o osd_combo e o osd_key do fliperos.conf).
+    y = label(osd_row, "OSD MENU", osd_icon, T.CYAN)
+    combo = "+".join(feinput.combo_names(getattr(fe, "osd_combo", [])))
+    key = getattr(fe, "osd_key", None)
+    cells(osd_row, y, (combo, None, key[0] if key else None), span=True)
     # O guia: o painel de arcade ou um joypad (esquerda e direita trocam).
     y = label(guide_row, "GUIDE", view_icon, T.CYAN)
     wide(guide_row, y, "JOYPAD" if joypad else "ARCADE PANEL", arrows=True)
@@ -3616,6 +3630,9 @@ def draw_controls(fe, ui, now):
     elif sel == menu_row:
         tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
                 "IN A GAME THEY OPEN THE EMULATOR'S MENU (HELD 1 S)")
+    elif sel == osd_row:
+        tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
+                "IN A GAME THEY OPEN THE FLIPEROS OSD MENU (HELD 1 S)")
     elif sel == guide_row:
         tips = ("LEFT/RIGHT: THE ARCADE PANEL OR A JOYPAD", "THE GUIDE DRAWS ITS BUTTONS")
     elif sel == layout_row and joypad:
@@ -3783,7 +3800,8 @@ def draw_capture(fe, ui, now):
     px, py = (WW - pw) // 2, (HH - ph) // 2
     card(ui, (px, py, pw, ph))
     mono = time.monotonic()
-    does = "OPENS THE EMULATOR'S MENU" if fe.ov.get("which") == "menu" else "CLOSES THE GAME"
+    does = {"menu": "OPENS THE EMULATOR'S MENU", "osd": "OPENS THE OSD MENU"}.get(fe.ov.get("which"),
+                                                                                  "CLOSES THE GAME")
     if fe.overlay == "exitkey":
         W.centered(ui, "PRESS THE KEY", T.FG, py + 10)
         tiny.centered(ui, "ON THE KEYBOARD THAT " + does, T.COMMENT, WW // 2, py + 24)

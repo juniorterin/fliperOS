@@ -62,7 +62,9 @@ These are the defaults:
 
     In the Panel/Joypad cell, select asks for the buttons: hold two or more together for a second. They can come from one player, and then any player's same buttons work, or from different players (**P1 START+P2 START**: only those two together). In commercial mode the coin can't be one of them, and turning commercial mode on drops a shortcut that has it. In the Keyboard column, select asks for the key: press it within 8 seconds (back on the panel cancels).
 
-    A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing, and so is the other shortcut's key or buttons. Delete turns either one off.
+    **OSD menu**, under them, is the shortcut of the FliperOS [on-screen menu](Installed-system.md#on-screen-menu): **Start + Down** held for a second, and the Pause key, out of the box. It is the system's (`osd_combo` and `osd_key` in `fliperos.conf`, written through `fliperos-setup --setting`), so it also counts in the other frontends; the media keys of a wireless remote (Play/Pause, Pause, Play) always stay.
+
+    A key the panel itself sends (a keyboard encoder) is refused, since each button does one thing, and so are another shortcut's key or buttons. Delete turns either one off.
 
     **Panel layout** (left and right) is the shape of the panel that the guide draws: **6 buttons** in two rows (where Buttons layout puts them), **4 in line** like a Neo Geo MVS, **3 in line**, **2 in line** or **2 stacked**. The guide draws only the buttons that shape has, and in this screen a button it doesn't have shows dimmed (its function then works only from the keyboard).
 

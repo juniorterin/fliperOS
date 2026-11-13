@@ -138,7 +138,7 @@ settings_list() {
     printf 'mm_games|Video|Multi-screen games|choice|%s|on=One screen on each monitor;off=Everything on monitor 1|Games with 2 or 3 screens. Counts after a restart.\n' \
       "$(mm_games_on && echo on || echo off)"
   fi
-  printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second, or press Pause on a keyboard or Play/Pause on a remote.\n' \
+  printf 'osd|Video|On-screen menu|choice|%s|on=On;off=Off|Volume, filter, geometry and colour over any game: hold Start and Down for a second (Frontend controls > OSD MENU changes it), or press Pause on a keyboard or Play/Pause on a remote.\n' \
     "$([[ $(conf_get osd 2> /dev/null) == off ]] && echo off || echo on)"
   # Video Setup > Colour calibration.
   while IFS='|' read -r key label min max _ step help; do
@@ -434,6 +434,18 @@ settings_set() {
     osd)
       [[ $value == on || $value == off ]] || return 2
       conf_set osd "$value"
+      ;;
+    osd_combo)
+      # O atalho da OSD (Frontend controls > OSD MENU): os comandos do Button
+      # mapping, "start+down" ou de jogadores diferentes "1:start+2:start";
+      # vazio, nenhum. A OSD o rele sozinha.
+      [[ -z $value || $value =~ ^([0-9]+:)?[a-z0-9]+(\+([0-9]+:)?[a-z0-9]+)*$ ]] || return 2
+      conf_set osd_combo "$value"
+      ;;
+    osd_key)
+      # As teclas dela, como codigos do evdev ("119,164,201,207"); vazio, 0.
+      [[ -z $value || $value =~ ^[0-9]+(,[0-9]+)*$ ]] || return 2
+      conf_set osd_key "${value:-0}"
       ;;
     color.reset)
       color_reset

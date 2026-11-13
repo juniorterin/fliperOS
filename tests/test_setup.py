@@ -1802,6 +1802,18 @@ class SettingsCliTests(Base):
         self.env.out("settings_set osd off", env)
         self.assertIn("osd=off\n", (self.env.etc / "fliperos.conf").read_text())
         self.assertEqual(self.env.run("settings_set osd maybe", env).returncode, 2)
+        # O atalho dela, do Frontend controls > OSD MENU: os comandos (de um
+        # jogador ou de varios) e as teclas; vazio, nenhum.
+        self.env.out("settings_set osd_combo 1:start+2:start; settings_set osd_key 88,164,201,207", env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("osd_combo=1:start+2:start\n", conf)
+        self.assertIn("osd_key=88,164,201,207\n", conf)
+        self.env.out("settings_set osd_combo ''; settings_set osd_key ''", env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("osd_combo=\n", conf)
+        self.assertIn("osd_key=0\n", conf)
+        self.assertEqual(self.env.run("settings_set osd_combo 'start;reboot'", env).returncode, 2)
+        self.assertEqual(self.env.run("settings_set osd_key 'F1'", env).returncode, 2)
 
     def test_video_audio_and_power_rows(self):
         # O que faltava do Video Setup e do Audio Setup no painel, e desligar.
