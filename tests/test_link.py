@@ -673,7 +673,9 @@ class FrontendLinkTests(unittest.TestCase):
                                                             group_item=lambda extra: None, group_head=lambda extra: False,
                                                             elsewhere=fedata.elsewhere), filtered=lambda: games,
                                    rows=[], game=lambda: fe.rows[fe.cursor][0], parties_open=set(),
-                                   party_order=self.fm.Frontend.party_order)
+                                   party_order=self.fm.Frontend.party_order,
+                                   # Sem conquistas: o menu do jogo pergunta ao feview (b0afbd1).
+                                   view=types.SimpleNamespace(cheevos_of=lambda fe, g: None))
         fe.rebuild = lambda keep=None: self.fm.Frontend.rebuild(fe, keep)
         for name in ("popup_tiles", "link_profile", "overlay_act", "link_host", "link_join", "link_parties", "act"):
             setattr(fe, name, lambda *a, name=name: getattr(self.fm.Frontend, name)(fe, *a))
