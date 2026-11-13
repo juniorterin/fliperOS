@@ -71,9 +71,9 @@ screen_main_menu() {
     fi
     choice=$(ui_menu_hints "FliperOS" "" "$last" \
       "$start" \
-      "setup|Setup|Video, audio, network, controls, games and system." \
       "desktop|Start desktop|The LXDE desktop, for a mouse and a keyboard." \
       "achievements|RetroAchievements|Sign in to earn achievements in RetroArch and other emulators." \
+      "setup|Setup|Video, audio, network, controls, games and system." \
       "shell|Exit to shell|The command line. Type fliperos-menu to come back." \
       "power|Shutdown / Reboot|Power off or restart the computer.") || continue
     last=$choice
