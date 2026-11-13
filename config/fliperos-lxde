@@ -47,10 +47,23 @@ if command -v systemctl > /dev/null; then
   fi
 fi
 
-# O controle como mouse e o teclado na tela que abre num campo de texto
-# (config/fliperos-deskpad). Ele acha o campo pela acessibilidade: o GTK a
-# liga sozinho com o at-spi; o Qt so com estas variaveis.
+# O teclado na tela, o Onboard (config/fliperos-onboard.gschema.override):
+# abre sozinho num campo de texto, que ele acha pela acessibilidade (o GTK a
+# liga sozinho com o at-spi; o Qt so com estas variaveis). Encaixado embaixo,
+# com 2/5 da altura da tela e a largura toda; as teclas guardam a proporcao.
 export QT_ACCESSIBILITY=1 QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
+if command -v onboard > /dev/null; then
+  read -r screen_w screen_h < <(xrandr --current 2> /dev/null | sed -n 's/.* current \([0-9]*\) x \([0-9]*\).*/\1 \2/p')
+  if [[ -n ${screen_h:-} ]]; then
+    for orient in landscape portrait; do
+      gsettings set "org.onboard.window.$orient" dock-width "$screen_w" 2> /dev/null
+      gsettings set "org.onboard.window.$orient" dock-height "$((screen_h * 2 / 5))" 2> /dev/null
+    done
+  fi
+  onboard < /dev/null > /dev/null 2>&1 &
+fi
+# O controle como mouse (config/fliperos-deskpad): o botao 3 abre e fecha o
+# Onboard, e aceitar fora dele o fecha.
 deskpad_log=${FLIPEROS_LOGS:-/opt/fliperos/logs}/deskpad.log
 touch "$deskpad_log" 2> /dev/null || deskpad_log=/dev/null
 /opt/fliperos/bin/fliperos-deskpad < /dev/null >> "$deskpad_log" 2>&1 &

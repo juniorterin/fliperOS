@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
-"""O controle como mouse e teclado no desktop (a sessao LXDE).
+"""O controle como mouse no desktop (a sessao LXDE).
 
-Dois modos, nunca os dois juntos (um botao nao vale duas vezes):
+O analogico esquerdo move o ponteiro (mais longe do centro, mais rapido), o
+direcional e o hat tambem (acelerando segurando), o analogico direito e o L/R
+rolam. O botao de aceitar (o Enter do Setup) e o clique esquerdo, o de voltar
+(o Esc) e o direito.
 
-  mouse      o analogico esquerdo move o ponteiro (mais longe do centro, mais
-             rapido), o direcional e o hat tambem (acelerando segurando), o
-             analogico direito e o L/R rolam. O botao de aceitar (o Enter do
-             Setup) e o clique esquerdo, o de voltar (o Esc) e o direito.
-  teclado    o teclado na tela: as setas andam pelas teclas, aceitar digita
-             a tecla, voltar fecha o teclado. O ponteiro fica parado.
-
-O teclado abre sozinho quando um campo de texto ganha o foco (o AT-SPI, a
-acessibilidade do GTK e do Qt) e fecha quando o foco sai dele; o botao 3 (X/Y
-num joypad, o Espaco do Setup) o abre e fecha em qualquer programa. A janela
-dele nao toma o foco (uma janela de dica, override-redirect): o texto vai para
-o campo que estava escolhido, pelo xdotool (que acha a tecla de cada letra no
-layout do teclado).
+O teclado na tela e o Onboard do Ubuntu (config/fliperos-onboard.gschema.override):
+ele abre sozinho, encaixado embaixo, quando um campo de texto ganha o foco, e
+tecla-se apontando com o analogico e clicando com o aceitar. Daqui ele recebe,
+pelo D-Bus: o botao 3 (X/Y num joypad, o Espaco do Setup) o abre e fecha em
+qualquer programa; um clique de aceitar fora dele o fecha (o campo continua com
+o foco, e o Onboard sozinho nao fecharia); um jogo em tela cheia o esconde.
 
 Os botoes de aceitar e voltar sao os do Setup > Joysticks > Button mapping, os
 mesmos dos menus (o mapa do fliperos-padkeys). Com uma janela em tela cheia (um
@@ -34,11 +30,9 @@ import shutil
 import struct
 import subprocess
 import sys
-import threading
 import time
 
 PADKEYS = os.environ.get('FLIPEROS_PADKEYS', '/opt/fliperos/bin/fliperos-padkeys')
-GUI = os.environ.get('FLIPEROS_GUI', '/usr/local/lib/fliperos-setup/gui')
 EVENTS = os.environ.get('FLIPEROS_INPUT_EVENTS', '/dev/input/event*')
 
 EV_KEY, EV_ABS = 0x01, 0x03
@@ -65,7 +59,7 @@ TICK = 1 / 60
 
 
 def load_padkeys(path=None):
-    """O fliperos-padkeys como modulo: o mapa dos botoes, o Mapper e a repeticao."""
+    """O fliperos-padkeys como modulo: o mapa dos botoes e o Mapper."""
     path = path or PADKEYS
     loader = importlib.machinery.SourceFileLoader('fliperos_padkeys', path)
     spec = importlib.util.spec_from_loader('fliperos_padkeys', loader)
@@ -137,139 +131,11 @@ class Pointer:
         return tuple(out)
 
 
-# ── O teclado na tela ──────────────────────────────────────────────
-
-class Keyboard:
-    """As teclas e o cursor. As fileiras sao as do teclado do Setup grafico
-    (gui/widgets.py, Input.KB_ROWS); a de baixo tem as teclas especiais.
-    press() -> ("type", texto), ("key", nome do xdotool), ("close",) ou None."""
-
-    ROWS = (("1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm.@_"),
-            ("!#$%&*()+=", "QWERTYUIOP", "ASDFGHJKL:", "ZXCVBNM,?/"))
-    LAST = (("SHIFT", 1.5), ("SPACE", 3), ("DEL", 1.25), ("TAB", 1.25), ("ENTER", 1.5), ("CLOSE", 1.5))
-
-    def __init__(self):
-        self.row, self.col = 1, 0
-        self.shift = False
-
-    def move(self, key):
-        last = len(self.LAST)
-        r, c = self.row, self.col
-        if key in (KEY_UP, KEY_DOWN):
-            nr = (r + (1 if key == KEY_DOWN else -1)) % 5
-            if nr == 4:
-                c = min(last - 1, c * last // 10)
-            elif r == 4:
-                c = min(9, round((c + 0.5) * 10 / last))
-            r = nr
-        elif key in (KEY_LEFT, KEY_RIGHT):
-            c = (c + (1 if key == KEY_RIGHT else -1)) % (last if r == 4 else 10)
-        self.row, self.col = r, c
-
-    def label(self, r, c):
-        return self.ROWS[self.shift][r][c] if r < 4 else self.LAST[c][0]
-
-    def press(self):
-        if self.row < 4:
-            return ("type", self.label(self.row, self.col))
-        name = self.LAST[self.col][0]
-        if name == "SHIFT":
-            self.shift = not self.shift
-            return None
-        return {"SPACE": ("type", " "), "DEL": ("key", "BackSpace"), "TAB": ("key", "Tab"),
-                "ENTER": ("key", "Return"), "CLOSE": ("close",)}[name]
-
-
-class Window:
-    """A janela do teclado: uma janela de dica do SDL (override-redirect, nao
-    toma o foco), na parte de baixo da tela, ou em cima quando o campo esta
-    embaixo. Desenha com as cores do Dracula."""
-
-    BG, LINE, FG, PINK, PURPLE, COMMENT, GREEN, CYAN = (
-        (40, 42, 54), (68, 71, 90), (248, 248, 242), (255, 121, 198), (189, 147, 249), (98, 114, 164),
-        (80, 250, 123), (139, 233, 253))
-
-    def __init__(self):
-        os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
-        import pygame
-        from pygame._sdl2 import video
-        self.pg, self.video = pygame, video
-        pygame.display.init()
-        pygame.font.init()
-        info = pygame.display.Info()
-        self.screen = (info.current_w or 640, info.current_h or 480)
-        self.font = None
-        # A letra da interface grafica do Setup, se houver; senao a do pygame.
-        for path in sorted(glob.glob(os.path.join(GUI, 'fonts', '*.[to]tf'))):
-            try:
-                self.font = pygame.font.Font(path, max(8, self.screen[1] // 30))
-                break
-            except (OSError, pygame.error):
-                continue
-        if self.font is None:
-            self.font = pygame.font.Font(None, max(10, self.screen[1] // 22))
-        self.win = None
-        self.top = False
-
-    def show(self, top=False):
-        w, h = self.screen[0], max(90, self.screen[1] * 2 // 5)
-        y = 0 if top else self.screen[1] - h
-        if self.win is not None and self.top == top:
-            return
-        self.hide()
-        self.top = top
-        self.win = self.video.Window('FliperOS keyboard', size=(w, h), position=(0, y), tooltip=True,
-                                     always_on_top=True, skip_taskbar=True, borderless=True)
-        self.renderer = self.video.Renderer(self.win)
-
-    def hide(self):
-        if self.win is not None:
-            self.win.destroy()
-            self.win = None
-
-    def draw(self, kb):
-        if self.win is None:
-            return
-        pg = self.pg
-        w, h = self.win.size
-        surf = pg.Surface((w, h))
-        surf.fill(self.BG)
-        pg.draw.rect(surf, self.PURPLE, (0, 0, w, h), 2)
-        pad = 4
-        kh = (h - 2 * pad) // 5 - 2
-        kw = (w - 2 * pad) / 10
-
-        def key(rect, label, on, color):
-            pg.draw.rect(surf, self.PURPLE if on else self.BG, rect)
-            pg.draw.rect(surf, self.PINK if on else color, rect, 2 if on else 1)
-            img = self.font.render(label, True, self.FG if on else (self.COMMENT if color == self.LINE else color))
-            surf.blit(img, (rect[0] + (rect[2] - img.get_width()) // 2, rect[1] + (rect[3] - img.get_height()) // 2))
-
-        for r in range(4):
-            for c in range(10):
-                rect = (round(pad + c * kw), pad + r * (kh + 2), round(kw) - 2, kh)
-                key(rect, kb.label(r, c), (kb.row, kb.col) == (r, c), self.LINE)
-        x = pad
-        for i, (label, units) in enumerate(kb.LAST):
-            wd = round(units * kw)
-            color = self.GREEN if label == "ENTER" else self.CYAN if (label == "SHIFT" and kb.shift) else self.LINE
-            key((x, pad + 4 * (kh + 2), wd - 2, kh), label, (kb.row, kb.col) == (4, i), color)
-            x += wd
-        texture = self.video.Texture.from_surface(self.renderer, surf)
-        self.renderer.clear()
-        texture.draw()
-        self.renderer.present()
-
-    def pump(self):
-        self.pg.event.pump()
-
-
 # ── O X ────────────────────────────────────────────────────────────
 
 class X:
-    """O ponteiro, os cliques e as teclas pelo XTest (python3-xlib); sem ele,
-    pelo xdotool. As letras sempre pelo xdotool, que acha a tecla de cada uma
-    no layout do teclado (um teclado ABNT2 nao tem o @ onde o americano tem)."""
+    """O ponteiro e os cliques pelo XTest (python3-xlib); sem ele, pelo
+    xdotool."""
 
     def __init__(self):
         self.d = None
@@ -284,6 +150,7 @@ class X:
         except Exception:  # noqa: BLE001 - sem Xlib, sem X: o xdotool
             self.d = None
         self.xdotool = shutil.which('xdotool')
+        self.osk_win = None
 
     def width(self):
         if self.d is not None:
@@ -312,13 +179,47 @@ class X:
             self.button(number, True)
             self.button(number, False)
 
-    def type(self, action):
-        if not self.xdotool:
-            return
-        if action[0] == 'type':
-            subprocess.run([self.xdotool, 'type', '--clearmodifiers', '--', action[1]])
-        else:
-            subprocess.run([self.xdotool, 'key', '--clearmodifiers', action[1]])
+    def pointer(self):
+        """Onde esta o ponteiro (x, y), ou None."""
+        if self.d is None:
+            return None
+        try:
+            p = self.root.query_pointer()
+            return p.root_x, p.root_y
+        except Exception:  # noqa: BLE001
+            return None
+
+    def osk_rect(self):
+        """O retangulo (x, y, w, h) do teclado do Onboard quando esta na tela,
+        ou None. A janela do teclado e a "Onboard" do WM_CLASS onboard; escondida
+        e encaixada, ela fica mapeada fora da tela. O openbox a poe dentro da
+        moldura dele: procura tambem um nivel abaixo da raiz."""
+        if self.d is None:
+            return None
+        try:
+            if self.osk_win is None:
+                for top in self.root.query_tree().children:
+                    for win in [top] + list(top.query_tree().children):
+                        cls = win.get_wm_class()
+                        if cls and cls[0] == 'onboard' and win.get_wm_name() == 'Onboard':
+                            self.osk_win = win
+                            break
+                    if self.osk_win is not None:
+                        break
+                else:
+                    return None
+            if self.osk_win.get_attributes().map_state != self.XC.IsViewable:
+                return None
+            geo = self.osk_win.get_geometry()
+            pos = self.osk_win.translate_coords(self.root, 0, 0)
+            x, y = -pos.x, -pos.y
+            screen = self.d.screen()
+            if y >= screen.height_in_pixels or y + geo.height <= 0:
+                return None
+            return x, y, geo.width, geo.height
+        except Exception:  # noqa: BLE001 - o Onboard fechou: procura de novo
+            self.osk_win = None
+            return None
 
     def fullscreen(self):
         """A janela ativa esta em tela cheia (um jogo aberto do desktop)?"""
@@ -338,81 +239,41 @@ class X:
             return False
 
 
-# ── O campo de texto com o foco (AT-SPI) ───────────────────────────
+# ── O teclado na tela (Onboard) ────────────────────────────────────
 
-class Focus:
-    """Ouve o foco pelo AT-SPI numa thread: editable (um campo de texto tem o
-    foco), low (o campo esta na metade de baixo da tela) e serial (muda a
-    cada troca de foco). Sem o AT-SPI (python3-gi, gir1.2-atspi-2.0), so o
-    botao 3 abre o teclado."""
+class Onboard:
+    """Mostrar e esconder o Onboard pelo D-Bus dele. Sem o Onboard no ar a
+    chamada so falha, calada."""
 
-    def __init__(self, screen_h):
-        self.editable, self.low, self.serial = False, False, 0
-        self.screen_h = screen_h
+    DEST = 'org.onboard.Onboard'
+    PATH = '/org/onboard/Onboard/Keyboard'
+    IFACE = 'org.onboard.Onboard.Keyboard'
+
+    def call(self, method):
         try:
-            import gi
-            gi.require_version('Atspi', '2.0')
-            from gi.repository import Atspi
-        except (ImportError, ValueError):
-            return
-        self.Atspi = Atspi
-        threading.Thread(target=self.run, daemon=True).start()
-
-    def run(self):
-        Atspi = self.Atspi
-        Atspi.init()
-        listener = Atspi.EventListener.new(self.event)
-        listener.register('object:state-changed:focused')
-        Atspi.event_main()
-
-    def event(self, ev):
-        try:
-            if not ev.detail1:
-                return
-            source = ev.source
-            states = source.get_state_set()
-            editable = states.contains(self.Atspi.StateType.EDITABLE) and \
-                source.get_role() != self.Atspi.Role.TERMINAL
-            low = False
-            if editable:
-                try:
-                    box = source.get_extents(self.Atspi.CoordType.SCREEN)
-                    low = box.y + box.height / 2 > self.screen_h / 2
-                except Exception:  # noqa: BLE001
-                    low = False
-            self.editable, self.low = editable, low
-            self.serial += 1
-        except Exception:  # noqa: BLE001 - objeto que sumiu
+            subprocess.Popen(['dbus-send', '--session', '--type=method_call', '--dest=' + self.DEST,
+                              self.PATH, '%s.%s' % (self.IFACE, method)],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
             pass
+
+    def toggle(self):
+        self.call('ToggleVisible')
+
+    def hide(self):
+        self.call('Hide')
 
 
 # ── O laco ─────────────────────────────────────────────────────────
 
 class Desk:
-    """Os modos e o que cada botao faz neles (sem os aparelhos: os testes
-    chamam key() e tick() direto)."""
+    """O que cada botao faz (sem os aparelhos: os testes chamam key() e
+    tick() direto)."""
 
-    def __init__(self, x, window, pk):
-        self.x, self.window, self.pk = x, window, pk
+    def __init__(self, x, osk):
+        self.x, self.osk = x, osk
         self.pointer = Pointer()
-        self.kb = Keyboard()
-        self.osk = False
-        self.auto = False          # o teclado aberto pelo foco num campo
-        self.seen = 0              # o serial do foco ja tratado
         self.down = set()          # botoes do X apertados agora
-        self.nav = pk.Keys(self.navigate)
-
-    # Os modos.
-    def open_osk(self, auto=False, top=False):
-        self.release_mouse()
-        self.osk, self.auto = True, auto
-        self.window.show(top)
-        self.window.draw(self.kb)
-
-    def close_osk(self):
-        self.nav.release_all()
-        self.osk = self.auto = False
-        self.window.hide()
 
     def release_mouse(self):
         for number in list(self.down):
@@ -420,27 +281,18 @@ class Desk:
         self.down.clear()
         self.pointer.clear()
 
-    def follow_focus(self, focus):
-        """O teclado segue o campo de texto com o foco."""
-        if focus is None or focus.serial == self.seen:
-            return
-        self.seen = focus.serial
-        if focus.editable and not self.osk:
-            self.open_osk(auto=True, top=focus.low)
-        elif focus.editable and self.osk:
-            self.window.show(focus.low)
-            self.window.draw(self.kb)
-        elif not focus.editable and self.osk and self.auto:
-            self.close_osk()
+    def outside_osk(self):
+        """O ponteiro esta fora do teclado na tela aberto?"""
+        rect = self.x.osk_rect()
+        where = self.x.pointer()
+        if rect is None or where is None:
+            return False
+        x, y, w, h = rect
+        return not (x <= where[0] < x + w and y <= where[1] < y + h)
 
-    # Os botoes.
     def key(self, key, pressed, now, analog=False):
         """Uma tecla do Mapper do padkeys (1 apertou, 0 soltou). analog: a
-        seta veio do analogico, que no modo mouse ja anda pelo eixo."""
-        if self.osk:
-            if key in ARROWS or key in (KEY_ENTER, KEY_ESC, KEY_SPACE):
-                self.nav.apply(key, pressed, now)
-            return
+        seta veio do analogico, que ja anda pelo eixo."""
         if key in ARROWS:
             if analog:
                 return
@@ -451,33 +303,18 @@ class Desk:
         elif key in (KEY_ENTER, KEY_ESC):
             number = CLICK_ACCEPT if key == KEY_ENTER else CLICK_BACK
             if pressed and number not in self.down:
+                # Aceitar fora do teclado na tela o fecha; o clique segue.
+                if number == CLICK_ACCEPT and self.outside_osk():
+                    self.osk.hide()
                 self.down.add(number)
                 self.x.button(number, True)
             elif not pressed and number in self.down:
                 self.down.discard(number)
                 self.x.button(number, False)
         elif key == KEY_SPACE and pressed:
-            self.open_osk()
+            self.osk.toggle()
         elif key in (KEY_PAGEUP, KEY_PAGEDOWN) and pressed:
             self.x.scroll(-3 if key == KEY_PAGEUP else 3)
-
-    def navigate(self, key, value):
-        """O teclado na tela (Keys do padkeys: 1 aperta, 2 repete, 0 solta)."""
-        if value == 0:
-            return
-        if key in ARROWS:
-            self.kb.move(key)
-        elif key == KEY_ENTER and value == 1:
-            action = self.kb.press()
-            if action == ("close",):
-                self.close_osk()
-                return
-            if action:
-                self.x.type(action)
-        elif key in (KEY_ESC, KEY_SPACE) and value == 1:
-            self.close_osk()
-            return
-        self.window.draw(self.kb)
 
     def analog(self, axis, value):
         if axis in (ABS_X, ABS_Y):
@@ -486,16 +323,13 @@ class Desk:
             self.pointer.scroll_axis = value
 
     def tick(self, dt, now):
-        if self.osk:
-            self.nav.tick(now)
-            return
         dx, dy, lines = self.pointer.step(dt, self.x.width(), now)
         self.x.move(dx, dy)
         if lines:
             self.x.scroll(lines)
 
     def busy(self):
-        return self.osk or self.pointer.moving()
+        return self.pointer.moving()
 
 
 def single(display):
@@ -514,8 +348,6 @@ def single(display):
 
 
 def main():
-    # O laco do AT-SPI (GLib) numa thread segura o SIGTERM: sem isto o
-    # programa nao saia com o kill, nem com a sessao.
     for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
         signal.signal(sig, lambda *_: os._exit(0))
     lock = single(os.environ.get('DISPLAY', ''))
@@ -525,9 +357,8 @@ def main():
     x = X()
     if x.d is None and not x.xdotool:
         sys.exit('fliperos-deskpad: no X connection (python3-xlib) and no xdotool')
-    window = Window()
-    desk = Desk(x, window, pk)
-    focus = Focus(window.screen[1])
+    osk = Onboard()
+    desk = Desk(x, osk)
     pads, ranges = {}, {}
     scanned, checked, paused = 0.0, 0.0, False
     last = time.monotonic()
@@ -555,17 +386,14 @@ def main():
                     except OSError:
                         pass
                 ranges[path] = axes
-        # Com um jogo em tela cheia o controle e dele.
+        # Com um jogo em tela cheia o controle e dele, e o teclado na tela sai.
         if now - checked >= 0.5:
             checked = now
             full = x.fullscreen()
             if full and not paused:
                 desk.release_mouse()
-                if desk.osk:
-                    desk.close_osk()
+                osk.hide()
             paused = full
-        if not paused:
-            desk.follow_focus(focus)
         timeout = TICK if desk.busy() else 0.25
         ready, _, _ = select.select([p.fd for p in pads.values()], [], [], timeout)
         now = time.monotonic()
@@ -595,8 +423,6 @@ def main():
         dt, last = now - last, now
         if not paused:
             desk.tick(min(dt, 0.1), now)
-        if window.win is not None:
-            window.pump()
 
 
 if __name__ == '__main__':

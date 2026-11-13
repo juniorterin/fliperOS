@@ -19571,16 +19571,16 @@ class JoypadMappingTests(unittest.TestCase):
 
 
 class DeskpadTests(unittest.TestCase):
-    """config/fliperos-deskpad: o controle como mouse no desktop e o teclado na
-    tela que abre num campo de texto, sem os dois modos ao mesmo tempo."""
+    """config/fliperos-deskpad: o controle como mouse no desktop; o teclado na
+    tela e o Onboard, que ele abre, fecha e esconde pelo D-Bus."""
 
     def setUp(self):
         loader = importlib.machinery.SourceFileLoader('fliperos_deskpad', str(ROOT / 'config/fliperos-deskpad'))
         spec = importlib.util.spec_from_loader('fliperos_deskpad', loader)
         self.dp = importlib.util.module_from_spec(spec)
         loader.exec_module(self.dp)
-        self.pk = self.dp.load_padkeys(str(ROOT / 'config/fliperos-padkeys'))
         self.calls = []
+        self.osk_rect, self.where = None, (100, 100)
         test = self
 
         class FakeX:
@@ -19597,22 +19597,20 @@ class DeskpadTests(unittest.TestCase):
             def scroll(self, lines):
                 test.calls.append(('scroll', lines))
 
-            def type(self, action):
-                test.calls.append(action)
+            def osk_rect(self):
+                return test.osk_rect
 
-        class FakeWindow:
-            win = None
+            def pointer(self):
+                return test.where
 
-            def show(self, top=False):
-                test.calls.append(('show', top))
+        class FakeOnboard:
+            def toggle(self):
+                test.calls.append(('osk', 'toggle'))
 
             def hide(self):
-                test.calls.append(('hide',))
+                test.calls.append(('osk', 'hide'))
 
-            def draw(self, kb):
-                pass
-
-        self.desk = self.dp.Desk(FakeX(), FakeWindow(), self.pk)
+        self.desk = self.dp.Desk(FakeX(), FakeOnboard())
 
     def test_accept_is_the_left_click_and_back_the_right(self):
         dp, desk = self.dp, self.desk
@@ -19651,63 +19649,58 @@ class DeskpadTests(unittest.TestCase):
         desk.tick(0.1, 3.0)
         self.assertGreater(self.calls[0][2], first)
 
-    def test_keyboard_mode_stops_the_mouse_and_types(self):
+    def test_button_3_toggles_the_onboard_keyboard(self):
         dp, desk = self.dp, self.desk
-        desk.key(dp.KEY_ENTER, 1, 0.0)         # um clique segurado
+        desk.key(dp.KEY_SPACE, 1, 0.0)
+        desk.key(dp.KEY_SPACE, 0, 0.1)
+        self.assertEqual(self.calls, [('osk', 'toggle')])
+        # O ponteiro segue andando com o teclado aberto: tecla-se clicando.
         desk.analog(dp.ABS_X, 1.0)
-        desk.key(dp.KEY_SPACE, 1, 0.1)         # o botao 3 abre o teclado
-        self.assertTrue(desk.osk)
-        self.assertIn(('button', 1, False), self.calls)   # o clique e solto
+        desk.tick(0.1, 0.2)
+        self.assertEqual(self.calls[-1][0], 'move')
+
+    def test_accept_outside_the_keyboard_closes_it(self):
+        dp, desk = self.dp, self.desk
+        # Teclado fechado: so o clique.
+        desk.key(dp.KEY_ENTER, 1, 0.0)
+        desk.key(dp.KEY_ENTER, 0, 0.1)
+        self.assertEqual(self.calls, [('button', 1, True), ('button', 1, False)])
+        # Aberto embaixo, o ponteiro numa tecla: o clique digita, nada fecha.
+        self.osk_rect, self.where = (0, 288, 640, 192), (85, 347)
         self.calls.clear()
-        desk.tick(0.5, 0.6)
-        self.assertEqual(self.calls, [])       # o ponteiro parado
-        # Aceitar digita a tecla escolhida (o "q" da fileira de cima das letras).
         desk.key(dp.KEY_ENTER, 1, 1.0)
-        desk.key(dp.KEY_ENTER, 0, 1.01)
-        self.assertEqual(self.calls, [('type', 'q')])
-        desk.key(dp.KEY_RIGHT, 1, 1.2)
-        desk.key(dp.KEY_RIGHT, 0, 1.21)
-        desk.tick(0.1, 1.5)
-        desk.key(dp.KEY_ENTER, 1, 2.0)
-        self.assertEqual(self.calls[-1], ('type', 'w'))
-        # Voltar fecha o teclado; o mouse volta.
-        desk.key(dp.KEY_ESC, 1, 3.0)
-        self.assertFalse(desk.osk)
-        self.assertEqual(self.calls[-1], ('hide',))
+        desk.key(dp.KEY_ENTER, 0, 1.1)
+        self.assertEqual(self.calls, [('button', 1, True), ('button', 1, False)])
+        # O ponteiro fora: o teclado sai e o clique segue para a janela.
+        self.where = (320, 100)
         self.calls.clear()
-        desk.key(dp.KEY_ESC, 0, 3.1)
-        desk.tick(0.1, 3.2)
-        desk.key(dp.KEY_ESC, 1, 3.3)
+        desk.key(dp.KEY_ENTER, 1, 2.0)
+        self.assertEqual(self.calls, [('osk', 'hide'), ('button', 1, True)])
+        desk.key(dp.KEY_ENTER, 0, 2.1)
+        # Voltar (o clique direito) fora dele nao o fecha.
+        self.calls.clear()
+        desk.key(dp.KEY_ESC, 1, 3.0)
         self.assertEqual(self.calls, [('button', 3, True)])
 
-    def test_keyboard_follows_the_focused_text_field(self):
-        import types
-        desk = self.desk
-        focus = types.SimpleNamespace(editable=True, low=True, serial=1)
-        desk.follow_focus(focus)
-        self.assertTrue(desk.osk)
-        self.assertIn(('show', True), self.calls)   # o campo embaixo: o teclado em cima
-        desk.follow_focus(focus)                     # o mesmo foco nao reabre
-        self.assertEqual(self.calls.count(('show', True)), 1)
-        desk.follow_focus(types.SimpleNamespace(editable=False, low=False, serial=2))
-        self.assertFalse(desk.osk)
-        # Aberto pelo botao, o teclado nao fecha com a troca de foco.
-        desk.key(self.dp.KEY_SPACE, 1, 0.0)
-        desk.follow_focus(types.SimpleNamespace(editable=False, low=False, serial=3))
-        self.assertTrue(desk.osk)
-
-    def test_keyboard_special_keys(self):
-        kb = self.dp.Keyboard()
-        kb.row, kb.col = 4, 0
-        self.assertIsNone(kb.press())
-        self.assertTrue(kb.shift)
-        kb.row, kb.col = 1, 0
-        self.assertEqual(kb.press(), ('type', 'Q'))
-        names = [name for name, _ in kb.LAST]
-        for name, action in (('SPACE', ('type', ' ')), ('DEL', ('key', 'BackSpace')), ('ENTER', ('key', 'Return')),
-                             ('CLOSE', ('close',))):
-            kb.row, kb.col = 4, names.index(name)
-            self.assertEqual(kb.press(), action)
+    def test_onboard_settings_and_dbus(self):
+        from unittest import mock
+        override = (ROOT / 'config/fliperos-onboard.gschema.override').read_text()
+        for line in ("[org.onboard.auto-show]\nenabled=true", "docking-enabled=true", "keep-aspect-ratio=true",
+                     "docking-aspect-change-range=[1.0, 1.0]", "input-event-source='GTK'", "key-synth='XTest'",
+                     "start-minimized=true", "use-system-defaults=false"):
+            self.assertIn(line, override)
+        self.assertIn('install -Dm644 "$src/config/fliperos-onboard.gschema.override" \\\n'
+                      '  "$root/usr/share/glib-2.0/schemas/90_fliperos-onboard.gschema.override"',
+                      (ROOT / 'fliperos-rootfs.sh').read_text())
+        osk = self.dp.Onboard()
+        with mock.patch.object(self.dp.subprocess, 'Popen') as popen:
+            osk.toggle()
+            osk.hide()
+        self.assertEqual([c.args[0][-1] for c in popen.call_args_list],
+                         ['org.onboard.Onboard.Keyboard.ToggleVisible', 'org.onboard.Onboard.Keyboard.Hide'])
+        self.assertIn('--dest=org.onboard.Onboard', popen.call_args_list[0].args[0])
+        with mock.patch.object(self.dp.subprocess, 'Popen', side_effect=OSError):
+            osk.hide()   # sem dbus-send: calado
 
     def test_one_per_display_and_it_leaves_on_kill(self):
         # Duas copias leriam os mesmos controles: cada botao valeria duas vezes.
@@ -19735,9 +19728,13 @@ class DeskpadTests(unittest.TestCase):
         lxde = (ROOT / 'config/fliperos-lxde').read_text()
         self.assertIn('/opt/fliperos/bin/fliperos-deskpad < /dev/null >> "$deskpad_log" 2>&1 &', lxde)
         self.assertLess(lxde.index('fliperos-deskpad'), lxde.index('exec startlxde'))
+        # O Onboard antes do startlxde, com o encaixe na altura da tela.
+        self.assertIn('  onboard < /dev/null > /dev/null 2>&1 &\n', lxde)
+        self.assertLess(lxde.index('onboard < /dev/null'), lxde.index('exec startlxde'))
+        self.assertIn('dock-height "$((screen_h * 2 / 5))"', lxde)
         self.assertIn('install -Dm755 "$src/config/fliperos-deskpad" "$root/opt/fliperos/bin/fliperos-deskpad"',
                       (ROOT / 'fliperos-rootfs.sh').read_text())
-        for pkg in ('python3-xlib', 'gir1.2-atspi-2.0', 'xdotool'):
+        for pkg in ('python3-xlib', 'gir1.2-atspi-2.0', 'xdotool', 'onboard'):
             self.assertIn(pkg, MKISO)
             self.assertIn(pkg, (ROOT / 'tools/cabinet-update.sh').read_text())
 

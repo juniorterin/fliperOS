@@ -299,7 +299,7 @@ apt-get install -y --no-install-recommends \
   dkms evtest \
   kbd console-setup \
   xserver-xorg-video-radeon xserver-xorg-video-amdgpu \
-  openssh-server network-manager wpasupplicant iw python3 python3-pygame python3-pil python3-xlib python3-gi gir1.2-atspi-2.0 at-spi2-core libatk-adaptor xdotool ffmpeg xclip pciutils usbutils libdrm-tests edid-decode squashfs-tools \
+  openssh-server network-manager wpasupplicant iw python3 python3-pygame python3-pil python3-xlib python3-gi gir1.2-atspi-2.0 at-spi2-core libatk-adaptor xdotool onboard ffmpeg xclip pciutils usbutils libdrm-tests edid-decode squashfs-tools \
   systemd-timesyncd p7zip-full cdrdao mame-tools avrdude \
   gnome-software gnome-software-plugin-flatpak flatpak xdg-desktop-portal-gtk falkon transmission-gtk transmission-daemon \
   libnss3 libxss1 libxtst6 libcups2t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libgtk-3-0t64 libasound2t64 xdg-utils \

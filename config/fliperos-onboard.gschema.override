@@ -1,0 +1,33 @@
+# O teclado na tela do desktop: o Onboard (config/fliperos-lxde o abre e
+# config/fliperos-deskpad o liga ao controle). Abre sozinho quando um campo de
+# texto ganha o foco (auto-show, pelo AT-SPI) e sai quando o foco sai;
+# encaixado embaixo, com as teclas na proporcao do layout (a altura do encaixe
+# segue a tela, no fliperos-lxde). Escuro, sem dicas e minimizado ao abrir.
+# Os eventos pelo GTK e as teclas pelo XTest: os cliques do controle chegam
+# pelo XTest, e o Onboard caia com eles pelo XInput (visto no Xvfb).
+[org.onboard]
+use-system-defaults=false
+layout='Compact'
+theme='Nightshade'
+system-theme-tracking-enabled=false
+start-minimized=true
+show-tooltips=false
+
+[org.onboard.auto-show]
+enabled=true
+
+[org.onboard.keyboard]
+input-event-source='GTK'
+key-synth='XTest'
+
+[org.onboard.window]
+docking-enabled=true
+docking-edge='bottom'
+docking-shrink-workarea=false
+docking-aspect-change-range=[1.0, 1.0]
+keep-aspect-ratio=true
+force-to-top=true
+window-decoration=false
+
+[org.onboard.window.landscape]
+dock-expand=true

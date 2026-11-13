@@ -509,6 +509,9 @@ done
 # Store" no menu; o painel tem um botao para ela.
 install -Dm644 "$src/config/fliperos-software.gschema.override" \
   "$root/usr/share/glib-2.0/schemas/90_fliperos-software.gschema.override"
+# O teclado na tela do desktop (Onboard), aberto pelo config/fliperos-lxde.
+install -Dm644 "$src/config/fliperos-onboard.gschema.override" \
+  "$root/usr/share/glib-2.0/schemas/90_fliperos-onboard.gschema.override"
 if [[ -x "$root/usr/bin/glib-compile-schemas" ]] && [[ -d "$root/proc/1" || -n ${FLIPEROS_ROOTFS_CHROOT:-} ]]; then
   chroot "$root" glib-compile-schemas /usr/share/glib-2.0/schemas || true
 fi
