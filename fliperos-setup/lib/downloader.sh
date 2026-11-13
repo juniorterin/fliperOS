@@ -31,9 +31,9 @@ downloader_prepare() {
 }
 
 # downloader_service_on: o servico no ar, antes de cadastrar um link ou de
-# comecar um download. So sobe assim, quando um download e pedido: nunca no
-# boot (o fliperos-rootfs.sh tira o "enabled" de versoes anteriores), e sai
-# sozinho quando o ultimo torrent termina (o session-close do
+# comecar um download. Sobe quando um download e pedido e, no boot, so com
+# um download pela metade que nao esta pausado (fliperos-downloader-boot.
+# service); sai sozinho quando o ultimo torrent termina (o session-close do
 # config/fliperos-downloader).
 downloader_service_on() {
   systemctl start "$DOWNLOADER_SERVICE" >> "$FLIPEROS_LOG" 2>&1
@@ -126,7 +126,7 @@ downloader_filter_set_dest() {
   downloader_filter_save "$(downloader_filter_get target)" "$1" "$(downloader_filter_get preset)" "${kv[@]}"
 }
 
-# downloader_cli status|add TIPO LINK|start|remove TIPO [--delete-files]: o
+# downloader_cli status|add TIPO LINK|start|pause|resume|remove TIPO [--delete-files]: o
 # Downloader sem tela, pelas mesmas funcoes da tela do Setup (o painel web,
 # config/fliperos-web, fliperos-setup --downloader). O start nao apaga nada
 # (o prune so vem do Setup, depois de mudar o filtro).
@@ -161,6 +161,11 @@ downloader_cli() {
       }
       cat "$result"
       rm -f "$result"
+      ;;
+    pause | resume)
+      # Os torrents de ROM e CHD param e continuam; a pausa vale depois
+      # de um reboot tambem (o boot nao os retoma).
+      downloader "$1" 2>> "$FLIPEROS_LOG"
       ;;
     remove)
       [[ ${2:-} == roms || ${2:-} == chds ]] || return 2

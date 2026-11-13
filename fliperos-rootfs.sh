@@ -312,11 +312,15 @@ install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-
 # Setup > Games > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.
 install -Dm755 "$src/config/fliperos-snaps" "$root/opt/fliperos/bin/fliperos-snaps"
 # Setup > Games > Downloader: o romset e os CHDs por link magnetico, so o que o filtro
-# do ROM cleaner escolhe. O servico so sobe quando um download e pedido, nunca
-# no boot: o "enabled" de versoes anteriores sai.
+# do ROM cleaner escolhe. O servico sobe quando um download e pedido (o
+# "enabled" de versoes anteriores sai) e, no boot, so com um download pela
+# metade e sem a pausa (fliperos-downloader-boot.service).
 install -Dm755 "$src/config/fliperos-downloader" "$root/opt/fliperos/bin/fliperos-downloader"
 install -Dm644 "$src/config/fliperos-transmission.service" "$root/etc/systemd/system/fliperos-transmission.service"
 rm -f "$root/etc/systemd/system/multi-user.target.wants/fliperos-transmission.service"
+install -Dm644 "$src/config/fliperos-downloader-boot.service" "$root/etc/systemd/system/fliperos-downloader-boot.service"
+mkdir -p "$root/etc/systemd/system/multi-user.target.wants"
+ln -sfn /etc/systemd/system/fliperos-downloader-boot.service   "$root/etc/systemd/system/multi-user.target.wants/fliperos-downloader-boot.service"
 # O painel web (config/fliperos-web, Setup > System > Services > Web panel):
 # sobe depois do boot (web=after no services.conf) ate a pessoa mudar.
 install -Dm755 "$src/config/fliperos-web" "$root/opt/fliperos/bin/fliperos-web"

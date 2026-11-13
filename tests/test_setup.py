@@ -1959,6 +1959,10 @@ class DownloaderCliTests(Base):
         self.assertIn("add chds magnet:?xt=urn:btih:abc --progress\n", (self.env.dir / "dl.log").read_text())
         out = self.env.out("downloader_cli status", env)
         self.assertIn("filter=not chosen yet\n", out)
+        # Pausar e continuar (o painel web): direto no fliperos-downloader.
+        self.env.out("downloader_cli pause", env)
+        self.env.out("downloader_cli resume", env)
+        self.assertIn("pause\nresume\n", (self.env.dir / "dl.log").read_text())
 
 
 class BootTests(Base):

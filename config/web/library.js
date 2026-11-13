@@ -17,6 +17,12 @@ async function loadDownloader() {
   $("dl-pct").textContent = dlState.state === "downloading" ? pct + "%" : "";
   $("dl-bar").style.width = pct + "%";
   $("dl-filter").textContent = dlState.filter || "-";
+  // Pausar: so com um download andando ou pela metade; o pausado continua.
+  const isPaused = dlState.state === "paused";
+  const stopped = dlState.state === "waiting" && /stopped/.test(dlState.line || "");
+  $("dl-pause").hidden = isPaused || !(dlState.state === "downloading" || stopped);
+  $("dl-resume").hidden = !(isPaused || stopped);
+  $("dl-pct").textContent = dlState.state === "downloading" || isPaused ? pct + "%" + (isPaused ? " · " + t("dl_paused") : "") : "";
   if (document.activeElement && document.activeElement.closest(".dl-kind")) return;
   $("dl-kinds").replaceChildren(...["roms", "chds"].map((kind) => {
     const name = dlState[kind + "_name"];
@@ -53,6 +59,8 @@ async function downloaderTask(body) {
   loadDownloader();
 }
 $("dl-start").addEventListener("click", () => downloaderTask({ action: "start" }));
+$("dl-pause").addEventListener("click", () => downloaderTask({ action: "pause" }));
+$("dl-resume").addEventListener("click", () => downloaderTask({ action: "resume" }));
 
 // ── Download BIOS, Scraper e Instalar ────────────────────────────
 // As telas do Setup que tambem ficam aqui: Download BIOS (na pagina
@@ -148,6 +156,7 @@ async function loadScraper() {
   site.disabled = noSky || !scr.systems.length;
   site.title = noSky ? t("scr_no_sky") : "";
   showPacks(scr.packs);
+  showAutoScrape(scr.auto || {});
 }
 
 function renderScraperSystems() {
@@ -238,7 +247,29 @@ function showPacks(packs) {
 }
 
 async function loadPacks() {
-  showPacks((await (await api("/api/scraper?packs=1")).json()).packs || {});
+  const data = await (await api("/api/scraper?packs=1")).json();
+  showPacks(data.packs || {});
+  showAutoScrape(data.auto || {});
+}
+
+// A linha do scrape automatico: "1234 de 5000 jogos", o jogo da vez e os
+// pacotes de arte baixando (a mesma conta do menu do Tab do frontend).
+function autoScrapeLine(a) {
+  if (!a.on) return t("scr_auto_off");
+  if (!a.scanned) return t("scr_auto_counting");
+  if (!a.busy) return t("scr_auto_done").replace("%n", a.total);
+  return t("scr_auto_left").replace("%d", a.done).replace("%n", a.total);
+}
+
+function showAutoScrape(a) {
+  $("scr-auto-text").textContent = autoScrapeLine(a);
+  $("scr-auto-pct").textContent = a.on && a.scanned && a.total ? a.pct + "%" : "";
+  $("scr-auto-bar").style.width = (a.on ? a.pct || 0 : 0) + "%";
+  const now = [];
+  if (a.current) now.push(t("scr_auto_now").replace("%s", a.current));
+  if (a.packs_pct != null) now.push(t("scr_auto_packs").replace("%n", a.packs_pct));
+  $("scr-auto-now").textContent = now.join(" · ");
+  $("scr-auto-now").hidden = !now.length;
 }
 
 async function loadInstall() {

@@ -1,7 +1,9 @@
 // As tarefas (o que leva minutos: downloads, scraper, BIOS, instalacoes, a
 // limpeza de romsets, o modo lab): uma gaveta so, aberta pelo botao do topo,
 // com um selo de quantas estao rodando. Quando uma termina, um toast e o
-// cartao de quem a comecou se refaz (taskDone).
+// cartao de quem a comecou se refaz (taskDone). No alto da gaveta, o que roda
+// sozinho no gabinete (com jogo aberto ou nao): o scrape automatico e o
+// Downloader dos torrents de ROM e CHD, com o pausar dele.
 
 let openLogs = new Set(), taskNext = 0, tasksCount = 0;
 const taskRunning = new Map();
@@ -14,9 +16,47 @@ function taskDone(kind) {
   if (kind === "settings" && page === "settings") loadSettings().catch(() => {});
 }
 
+// Uma linha do que roda sozinho (background do /api/tasks).
+function backgroundRow(b) {
+  const isDl = b.kind === "download", isPaused = isDl && b.state === "paused";
+  const goOn = isDl && b.state !== "downloading";
+  let name, state, detail;
+  if (isDl) {
+    name = t("bg_download");
+    state = isPaused ? t("dl_paused") : b.state === "downloading" ? b.pct + "%" : t("bg_stopped");
+    detail = b.line;
+  } else {
+    name = t("bg_scrape");
+    state = b.scanned && b.total ? b.pct + "%" : "…";
+    const parts = [autoScrapeLine(b)];
+    if (b.current) parts.push(t("scr_auto_now").replace("%s", b.current));
+    if (b.packs_pct != null) parts.push(t("scr_auto_packs").replace("%n", b.packs_pct));
+    detail = parts.join(" · ");
+  }
+  const item = el("li", { class: "task" + (goOn ? "" : " running") },
+    el("div", { class: "task-head" }, icon(goOn ? "g-warn" : "g-refresh", "task-icon"),
+      el("strong", {}, name), el("span", { class: "task-state" }, state)));
+  item.append(meter(b.pct || 0));
+  if (detail) item.append(el("div", { class: "dim task-detail" }, detail));
+  if (isDl) {
+    const go = el("button", { type: "button", class: "btn small" + (goOn ? "" : " ghost") },
+      t(goOn ? "dl_resume" : "dl_pause"));
+    go.addEventListener("click", async () => {
+      go.disabled = true;
+      await api("/api/downloader", { method: "POST", body: JSON.stringify({ action: goOn ? "resume" : "pause" }) });
+      taskNext = 0;
+      loadTasks().catch(() => {});
+      if (page === "downloads") loadDownloader().catch(() => {});
+    });
+    item.append(el("div", { class: "task-actions" }, go));
+  }
+  return item;
+}
+
 async function loadTasks() {
   const res = await api("/api/tasks");
-  const tasks = (await res.json()).tasks || [];
+  const data = await res.json();
+  const tasks = data.tasks || [], bg = data.background || [];
   for (const task of tasks) {
     if (taskRunning.get(task.id) && !task.running) {
       taskDone(task.kind);
@@ -24,17 +64,19 @@ async function loadTasks() {
     }
     taskRunning.set(task.id, task.running);
   }
-  tasksCount = tasks.filter((x) => x.running).length;
+  // O selo conta tambem o que roda sozinho (o download pausado nao).
+  tasksCount = tasks.filter((x) => x.running).length
+    + bg.filter((b) => b.kind !== "download" || b.state === "downloading").length;
   $("tasks-badge").hidden = !tasksCount;
   $("tasks-badge").textContent = tasksCount;
   $("tasks-btn").classList.toggle("busy", tasksCount > 0);
   if ($("drawer").hidden) return;
   const list = $("tasks");
-  if (!tasks.length) {
+  if (!tasks.length && !bg.length) {
     list.replaceChildren(el("li", { class: "empty-task" }, icon("px-ok"), el("span", {}, t("no_tasks"))));
     return;
   }
-  const rows = [];
+  const rows = bg.map(backgroundRow);
   for (const task of tasks) {
     const done = !task.running, ok = done && task.rc === 0;
     const state = task.running ? (task.pct != null ? task.pct + "%" : "…") : ok ? t("task_ok") : t("task_fail") + " (" + task.rc + ")";

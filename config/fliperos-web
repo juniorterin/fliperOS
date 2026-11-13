@@ -64,10 +64,13 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
                       teclas e tela, texto = {"resize": [colunas, linhas]})
     GET  /api/settings    os ajustes do Setup que daqui mudam (lib/system.sh)
     POST /api/settings    {"key", "value"}: grava na hora, pelas funcoes do Setup
-    GET  /api/tasks       as tarefas em segundo plano   GET /api/task?id=N (o log)
+    GET  /api/tasks       as tarefas em segundo plano (e, em "background", o
+                          scrape automatico e o Downloader, que rodam sozinhos)
+                          GET /api/task?id=N (o log)
     POST /api/task/cancel {"id": N}
     GET  /api/downloader  o andamento do Downloader do Setup e o filtro
-    POST /api/downloader  {"action": "add", "kind": "roms"|"chds", "magnet"}
+    POST /api/downloader  {"action": "pause"|"resume"} (os torrents de ROM e CHD),
+                          {"action": "add", "kind": "roms"|"chds", "magnet"}
                       (sem magnet, o da imagem), {"action": "start"} (as duas
                       como tarefa) ou {"action": "remove", "kind", "delete"}
     GET  /api/romfilter?target=&folder=  o filtro do MAME ROM Cleaner: os
@@ -2217,6 +2220,53 @@ def downloader_status():
     return key_values(out)
 
 
+def scrape_progress():
+    """O scrape automatico (config/fliperos-scrape.service, gui/feharvest.py):
+    o andamento que ele grava em scrape-status.json (o mesmo que o menu do
+    Tab mostra). on: o servico no ar; busy: ainda ha o que buscar."""
+    path = ENV("FLIPEROS_SCRAPE_STATUS") or os.path.join(
+        player_home(), ".local", "share", "fliperos", "scrape-status.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        os.kill(int(data["pid"]), 0)
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"on": False}
+    total, left = int(data.get("total") or 0), int(data.get("left") or 0)
+    scanned = bool(data.get("scanned"))
+    packs = {}
+    for key, value in (data.get("packs") or {}).items():
+        try:
+            packs[key] = {"state": str(value[0]), "pct": int(value[1])}
+        except (IndexError, TypeError, ValueError):
+            continue
+    downloading = [p for p in packs.values() if p["state"] == "downloading"]
+    return {"on": True, "scanned": scanned, "total": total, "left": left, "done": max(0, total - left),
+            "pct": (total - left) * 100 // total if total else (100 if scanned else 0),
+            "current": str(data.get("current") or ""), "packs": packs,
+            "packs_pct": sum(p["pct"] for p in downloading) // len(downloading) if downloading else None,
+            "busy": not scanned or left > 0 or bool(data.get("current")) or bool(downloading)}
+
+
+def background(downloader):
+    """O que roda sozinho, fora das tarefas do painel: o scrape automatico
+    e o Downloader (com ou sem jogo aberto), enquanto tem o que fazer."""
+    rows = []
+    dl = downloader.get()
+    if dl.get("state") in ("downloading", "paused") or (
+            dl.get("state") == "waiting" and "stopped" in dl.get("line", "")):
+        try:
+            pct = int(dl.get("pct") or 0)
+        except ValueError:
+            pct = 0
+        rows.append({"kind": "download", "pct": pct, "state": dl.get("state"), "line": dl.get("line", ""),
+                     "paused": dl.get("paused") == "1"})
+    scrape = scrape_progress()
+    if scrape.get("on") and scrape.get("busy"):
+        rows.append(dict(scrape, kind="scrape"))
+    return rows
+
+
 def key_values(text):
     """As linhas "chave=valor" de uma saida do Setup."""
     values = {}
@@ -2423,7 +2473,8 @@ def scraper_info():
             "media": [m for m in info.get("media", "").split(",") if m and m != "none"],
             "skyscraper": info.get("skyscraper") == "1", "running": info.get("running") == "1",
             "pending": info.get("pending", "").split(), "sources": sources, "systems": systems,
-            "packs": {"pct": packs.get("pct", "0"), "state": packs.get("state", "none"), "line": packs.get("line", "")}}
+            "packs": {"pct": packs.get("pct", "0"), "state": packs.get("state", "none"), "line": packs.get("line", "")},
+            "auto": scrape_progress()}
 
 
 def bios_info():
@@ -3029,7 +3080,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(404, {"error": "no such file"})
             return self.send_file(path)
         if url.path == "/api/tasks":
-            return self.send(200, {"tasks": self.panel.tasks.all()})
+            return self.send(200, {"tasks": self.panel.tasks.all(), "background": background(self.panel.downloader)})
         if url.path == "/api/task":
             try:
                 task = self.panel.tasks.get(int((parse_qs(url.query).get("id") or ["0"])[0]))
@@ -3046,7 +3097,8 @@ class Handler(BaseHTTPRequestHandler):
                 packs = key_values(setup_out("--mediapacks", "status"))
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
-            return self.send(200, {"packs": {k: packs.get(k, "") for k in ("pct", "state", "line")}})
+            return self.send(200, {"packs": {k: packs.get(k, "") for k in ("pct", "state", "line")},
+                                   "auto": scrape_progress()})
         if url.path in ("/api/scraper", "/api/bios", "/api/install"):
             try:
                 info = {"/api/scraper": scraper_info, "/api/bios": bios_info,
@@ -3497,10 +3549,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def downloader_action(self, data):
         """O Downloader do Setup (Setup > Games > Downloader) pelas mesmas
-        funcoes dele: cadastrar o link (add) e aplicar o filtro (start), como
-        tarefas; remover um link, na hora."""
+        funcoes dele: cadastrar o link (add), aplicar o filtro (start) e
+        continuar (resume, que sobe o servico), como tarefas; pausar e
+        remover um link, na hora."""
         action, kind = data.get("action"), data.get("kind")
-        if action == "add" and kind in ("roms", "chds"):
+        if action == "pause":
+            try:
+                subprocess.run([SETUP, "--downloader", "pause"], capture_output=True, timeout=60)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            self.panel.downloader.when = None
+            return self.send(200, self.panel.downloader.get())
+        if action == "resume":
+            task = self.panel.tasks.start("Downloader: resume", [SETUP, "--downloader", "resume"], "downloader")
+        elif action == "add" and kind in ("roms", "chds"):
             magnet = str(data.get("magnet") or "").strip()
             if not magnet:
                 magnet = self.panel.downloader.get().get("default_" + kind, "")
@@ -3520,7 +3582,7 @@ class Handler(BaseHTTPRequestHandler):
             self.panel.downloader.when = None
             return self.send(200, self.panel.downloader.get())
         else:
-            return self.send(400, {"error": "action add (kind roms|chds, magnet), start, or remove (kind)"})
+            return self.send(400, {"error": "action add (kind roms|chds, magnet), start, pause, resume or remove (kind)"})
         if not task:
             return self.send(409, {"error": "the downloader is already busy with another task"})
         self.panel.downloader.when = None

@@ -1,8 +1,9 @@
-# Setup > Games > Downloader e Scraper > Art packs by torrent: so sobe
-# quando um download e pedido (fliperos-setup/lib/downloader.sh, o
-# downloader_service_on), nunca no boot. Sai sozinho quando o ultimo
-# torrent termina (o session-close do fliperos-downloader); um download
-# parado por um desligamento volta no "Start the download".
+# Setup > Games > Downloader e Scraper > Art packs by torrent: sobe quando
+# um download e pedido (fliperos-setup/lib/downloader.sh, o
+# downloader_service_on) e, no boot, so com um download de ROM/CHD pela
+# metade e sem a pausa (fliperos-downloader-boot.service); os pacotes de
+# arte voltam pelo scrape automatico. Sai sozinho quando o ultimo torrent
+# termina (o session-close do fliperos-downloader).
 [Unit]
 Description=FliperOS: downloader (Transmission) of Setup > Games > Downloader
 Wants=network-online.target

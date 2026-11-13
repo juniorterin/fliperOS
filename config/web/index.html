@@ -464,6 +464,8 @@
         <div id="dl-kinds" class="dl-kinds"></div>
         <div class="row">
           <button id="dl-start" type="button" data-icon="▶" data-t="dl_start"></button>
+          <button id="dl-pause" type="button" class="ghost" data-icon="⏸" data-t="dl_pause" hidden></button>
+          <button id="dl-resume" type="button" data-icon="⏯" data-t="dl_resume" hidden></button>
           <span class="dim" data-t="dl_note"></span>
         </div>
       </section>
@@ -558,6 +560,12 @@
         <h2 id="h-scr" data-t="page_scraper"></h2>
         <p class="dim" data-t="scr_intro"></p>
         <p id="scr-state" role="status"></p>
+        <!-- O scrape automatico (servico fliperos-scrape): segue com jogo
+             aberto e com o frontend fechado; aqui o andamento dele. -->
+        <h3 data-t="scr_auto"></h3>
+        <div class="row"><span id="scr-auto-text"></span><span id="scr-auto-pct" class="dim"></span></div>
+        <div class="meter"><div id="scr-auto-bar"></div></div>
+        <p id="scr-auto-now" class="dim"></p>
         <!-- O que cada tipo de pasta ganha: arcade tem muito mais arte. -->
         <ul class="scope">
           <li><span class="tag arcade" data-t="tag_arcade"></span><span data-t="scr_gets_arcade"></span></li>

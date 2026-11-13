@@ -21,6 +21,7 @@ do emulador que o plano diz e tira o torrent da lista.
   fliperos-downloader prune
   fliperos-downloader status
   fliperos-downloader finish
+  fliperos-downloader pause | resume | boot
   fliperos-downloader remove roms|chds [--delete-files]
 
 O estado fica em STATE: o filtro que o Setup grava (filter.scan e
@@ -28,7 +29,9 @@ filter.chds: as opcoes do fliperos-romclean, uma por linha) e, de cada tipo,
 o link (KIND.magnet; de um .torrent, o caminho da copia KIND.torrent), a
 lista de arquivos do torrent (KIND.json), o plano
 aplicado (KIND.plan, no formato do fliperos-romclean) e o que ja chegou as
-pastas dos emuladores (KIND.installed, "set<TAB>caminho"). So o que esta em
+pastas dos emuladores (KIND.installed, "set<TAB>caminho"). O "paused" e a
+pausa pedida pela pessoa (pause): segura os torrents de ROM e CHD parados,
+tambem depois de um reboot (boot), ate o resume ou o proximo start. So o que esta em
 KIND.installed e apagado quando o filtro deixa de escolher um jogo (prune):
 os arquivos postos a mao ficam, e os que estao fora das pastas do filtro de
 agora (os do filtro de outro emulador) tambem. O pai, a BIOS e o dispositivo de um jogo que
@@ -238,6 +241,17 @@ def meta_of(kind):
 
 def registered():
     return [k for k in KINDS if meta_of(k)]
+
+
+def unfinished(kind):
+    """Um Start aplicado que nao terminou: o plano existe e nada chegou
+    ainda, ou a pasta do torrent continua ali (o fim a apaga)."""
+    return read_state(kind + '.plan') is not None and (
+        read_state(kind + '.installed') is None or os.path.isdir(os.path.join(STAGING, kind)))
+
+
+def paused():
+    return os.path.exists(state('paused'))
 
 
 def lock():
@@ -529,6 +543,9 @@ def cmd_start(args):
     """Aplica o filtro: marca para baixar os arquivos do plano que ainda nao
     estao nas pastas dos emuladores e comeca."""
     say(args.progress, '@step 5 Applying the ROM cleaner filter')
+    # Comecar de novo tira a pausa.
+    if paused():
+        os.remove(state('paused'))
     rpc = Rpc()
     result = []
     try:
@@ -824,9 +841,8 @@ def cmd_status(args):
                 # O servico so sobe quando um download e pedido: sem ele, um
                 # Start aplicado com a pasta do torrent ainda ali (o fim a
                 # apaga) e um download que um desligamento parou.
-                if rpc is None and read_state(kind + '.plan') is not None and (
-                        not done or os.path.isdir(os.path.join(STAGING, kind))):
-                    done, word = False, 'stopped (Start the download goes on)'
+                if rpc is None and unfinished(kind):
+                    done, word = False, 'paused' if paused() else 'stopped (Start the download goes on)'
                 parts.append('%s %s' % (LABEL[kind], word))
                 pending = pending or not done
                 continue
@@ -851,7 +867,11 @@ def cmd_status(args):
             parts.append(text)
         if kinds:
             out['pct'] = (total - left) * 100 // total if total else 100
-            if active:
+            if paused() and (active or pending):
+                out['state'] = 'paused'
+                if not total:
+                    out['pct'] = 0
+            elif active:
                 out['state'] = 'downloading'
                 parts.append('%s/s, %s left' % (human(rate), duration(eta)))
             else:
@@ -859,8 +879,68 @@ def cmd_status(args):
                     read_state(k + '.installed') is not None for k in kinds) else 'waiting'
                 out['pct'] = 100 if out['state'] == 'done' else 0
             out['line'] = '; '.join(parts)
+    out['paused'] = 1 if paused() else 0
     for key, value in out.items():
         print('%s=%s' % (key, value))
+
+
+def our_torrents(rpc):
+    """Os torrents de ROM e CHD que estao no Transmission (os pacotes de
+    arte do Scraper usam o mesmo servico e nao entram na pausa)."""
+    found = []
+    for kind in registered():
+        h = meta_of(kind)['hash']
+        t = rpc.torrent(h, ['status', 'sizeWhenDone', 'leftUntilDone'])
+        if t is not None:
+            found.append((h, t))
+    return found
+
+
+def cmd_pause(args):
+    """Para os torrents de ROM e CHD e lembra (o "paused"): o boot nao os
+    retoma ate o resume (ou o proximo start)."""
+    write_state('paused', time.strftime('%Y-%m-%d %H:%M:%S\n'))
+    rpc = Rpc()
+    try:
+        rpc.wait(10 if service_up() else 0)
+    except OSError:
+        return  # o servico parado: nada esta baixando
+    try:
+        ids = [h for h, _ in our_torrents(rpc)]
+        if ids:
+            rpc.call('torrent-stop', ids=ids)
+    except OSError as e:
+        sys.exit('fliperos-downloader: %s' % e)
+
+
+def cmd_resume(args):
+    """Tira a pausa e continua o que falta, subindo o servico se preciso
+    (root: o Setup, o painel, o boot)."""
+    if paused():
+        os.remove(state('paused'))
+    if not any(unfinished(k) for k in registered()):
+        return
+    if not service_up():
+        try:
+            subprocess.run(['systemctl', 'start', SERVICE], timeout=120)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    rpc = Rpc()
+    try:
+        rpc.wait(60)
+        with lock():
+            for h, t in our_torrents(rpc):
+                if t['sizeWhenDone'] and t['leftUntilDone'] and t['status'] == 0:
+                    start_running(rpc, h)
+    except OSError as e:
+        sys.exit('fliperos-downloader: %s' % e)
+
+
+def cmd_boot(args):
+    """No boot (config/fliperos-downloader-boot.service): o download que um
+    desligamento parou continua sozinho, sem a pessoa pedir; o pausado fica."""
+    if not paused():
+        cmd_resume(args)
 
 
 def cmd_finish(args):
@@ -964,6 +1044,9 @@ def main():
     sub.add_parser('prune').set_defaults(func=cmd_prune)
     sub.add_parser('status').set_defaults(func=cmd_status)
     sub.add_parser('finish').set_defaults(func=cmd_finish)
+    sub.add_parser('pause').set_defaults(func=cmd_pause)
+    sub.add_parser('resume').set_defaults(func=cmd_resume)
+    sub.add_parser('boot').set_defaults(func=cmd_boot)
     p = sub.add_parser('remove')
     p.add_argument('kind', choices=KINDS)
     p.add_argument('--delete-files', action='store_true')

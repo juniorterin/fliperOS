@@ -516,11 +516,12 @@ lsblk -rnpo NAME,FSTYPE | awk '$2 != "" { print $1 }' | while read -r dev; do
 done
 echo "Disks: $(findmnt -rno TARGET | grep -c '^/media/fliperos/')"
 # O transmission-daemon do pacote nao: o do Setup > Games > Downloader e o
-# fliperos-transmission, que o Setup sobe quando um download e pedido (nunca
-# no boot: o fliperos-rootfs.sh tirou o "enabled" de versoes anteriores).
+# fliperos-transmission, que o Setup sobe quando um download e pedido (e o
+# fliperos-downloader-boot.service, no boot, com um download pela metade).
 systemctl disable --now transmission-daemon.service > /dev/null 2>&1 || true
 systemctl mask transmission-daemon.service > /dev/null 2>&1 || true
 systemctl try-restart fliperos-transmission.service
+systemctl enable fliperos-downloader-boot.service > /dev/null 2>&1 || true
 echo "fliperos-transmission: $(systemctl is-active fliperos-transmission.service 2> /dev/null)"
 
 # Pelo fliperos-update (FLIPEROS_UPDATE=1) ele mesmo grava o manifesto e o

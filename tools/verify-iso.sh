@@ -320,7 +320,7 @@ echo "ROM cleaner: fliperos-romclean, the MAME 2010 XML (0.139), catver.ini, npl
 
 # ── Downloader: o programa, o servico e o transmission-daemon ─
 for name in fliperos-downloader:opt/fliperos/bin/fliperos-downloader \
-  fliperos-transmission.service:etc/systemd/system/fliperos-transmission.service \
+  fliperos-transmission.service:etc/systemd/system/fliperos-transmission.service   fliperos-downloader-boot.service:etc/systemd/system/fliperos-downloader-boot.service \
   fliperos-downloader-magnets:usr/local/share/fliperos/downloader-magnets \
   fliperos-mediapacks:opt/fliperos/bin/fliperos-mediapacks \
   fliperos-media-torrents:usr/local/share/fliperos/media-torrents; do

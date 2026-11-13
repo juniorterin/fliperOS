@@ -1,0 +1,17 @@
+# O Downloader no boot (config/fliperos-downloader boot): um download de
+# ROM/CHD que um desligamento parou continua sozinho, com ou sem jogo
+# aberto, sem a pessoa voltar ao Setup. O pausado (Setup ou painel web)
+# fica parado. Sem download pela metade, nao faz nada e o Transmission nao
+# sobe.
+[Unit]
+Description=FliperOS: resume an unfinished ROM/CHD download at boot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/fliperos/bin/fliperos-downloader boot
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -3915,6 +3915,42 @@ class DownloaderTests(unittest.TestCase):
         self.assertFalse((self.state / 'roms.json').exists())
         self.assertNotIn(self.ROMS, self.torrents)
 
+    def test_pause_holds_after_a_reboot_and_resume_goes_on(self):
+        # O pausar do painel web: os torrents de ROM e CHD param, a pausa
+        # vale depois de um reboot (boot nao retoma) e o resume continua.
+        self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % self.ROMS)
+        self.dl('add', 'chds', 'magnet:?xt=urn:btih:%s' % self.CHDS)
+        self.dl('start')
+        self.assertTrue(all(t['status'] == 4 for t in self.torrents.values()))
+        self.dl('pause')
+        self.assertTrue((self.state / 'paused').exists())
+        self.assertTrue(all(t['status'] == 0 for t in self.torrents.values()))
+        status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
+        self.assertEqual((status['state'], status['paused']), ('paused', '1'))
+        self.assertIn('(paused)', status['line'])
+        self.dl('boot', check=False)
+        self.assertTrue(all(t['status'] == 0 for t in self.torrents.values()))
+        self.dl('resume', check=False)
+        self.assertFalse((self.state / 'paused').exists())
+        self.assertTrue(all(t['status'] == 4 for t in self.torrents.values()))
+        status = dict(line.split('=', 1) for line in self.dl('status').stdout.splitlines())
+        self.assertEqual((status['state'], status['paused']), ('downloading', '0'))
+        # Um desligamento no meio (sem a pausa): o boot continua sozinho.
+        for t in self.torrents.values():
+            t['status'] = 0
+        self.dl('boot', check=False)
+        self.assertTrue(all(t['status'] == 4 for t in self.torrents.values()))
+        # O Start de novo tambem tira a pausa.
+        self.dl('pause')
+        self.dl('start')
+        self.assertFalse((self.state / 'paused').exists())
+        # Terminado, o boot nao sobe nada.
+        self.complete()
+        self.dl(env=dict(self.env, TR_TORRENT_HASH=self.ROMS))
+        before = len(self.calls)
+        self.dl('boot', check=False)
+        self.assertFalse([m for m, _ in self.calls[before:] if m == 'torrent-start'])
+
     def test_the_bios_of_a_game_that_stays_is_not_deleted(self):
         self.dl('add', 'roms', 'magnet:?xt=urn:btih:%s' % self.ROMS)
         self.dl('start')
@@ -4041,6 +4077,12 @@ class DownloaderTests(unittest.TestCase):
         unit = (ROOT / 'config/fliperos-transmission.service').read_text()
         self.assertIn('User=fliperos', unit)
         self.assertIn('--config-dir /home/fliperos/.config/fliperos-transmission', unit)
+        # No boot, so o download pela metade e sem a pausa (fliperos-downloader boot).
+        boot = (ROOT / 'config/fliperos-downloader-boot.service').read_text()
+        self.assertIn('ExecStart=/usr/bin/python3 /opt/fliperos/bin/fliperos-downloader boot', boot)
+        self.assertIn('multi-user.target.wants/fliperos-downloader-boot.service', ROOTFS)
+        self.assertIn('systemctl enable fliperos-downloader-boot.service', (ROOT / 'tools/cabinet-update.sh').read_text())
+        self.assertIn('etc/systemd/system/fliperos-downloader-boot.service', (ROOT / 'tools/verify-iso.sh').read_text())
 
 
 class MediaPacksTests(unittest.TestCase):
@@ -8581,6 +8623,35 @@ class WebPanelTests(unittest.TestCase):
         tasks = json.loads(self.request('GET', '/api/tasks', cookie=cookie)[2])['tasks']
         self.assertEqual([t['id'] for t in tasks][:2], [adding['id'], task['id']])
         self.assertIn('downloader_cli "${@:2}"', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
+        # O que roda sozinho (com jogo aberto ou nao) vem em background: o
+        # Downloader e o scrape automatico (o scrape-status.json do servico).
+        status_file = Path(self.tmp.name) / '.local/share/fliperos/scrape-status.json'
+        status_file.parent.mkdir(parents=True, exist_ok=True)
+        status_file.write_text(json.dumps({'total': 200, 'left': 50, 'scanned': True, 'current': 'Metal Slug',
+                                           'torrent': [30, 'downloading'], 'pid': os.getpid(),
+                                           'packs': {'mame-videos': ['downloading', 30], 'mame-logos': ['done', 100]}}))
+        self.addCleanup(status_file.unlink)
+        bg = json.loads(self.request('GET', '/api/tasks', cookie=cookie)[2])['background']
+        self.assertEqual([(b['kind'], b['pct']) for b in bg], [('download', 40), ('scrape', 75)])
+        self.assertEqual((bg[1]['done'], bg[1]['current'], bg[1]['packs_pct'], bg[1]['busy']), (150, 'Metal Slug', 30, True))
+        auto = json.loads(self.request('GET', '/api/scraper?packs=1', cookie=cookie)[2])['auto']
+        self.assertEqual((auto['on'], auto['left']), (True, 50))
+        # Com o servico fora do ar (o pid nao existe), o scrape sai da lista.
+        status_file.write_text(json.dumps({'total': 200, 'left': 50, 'scanned': True, 'pid': 2 ** 22 + 1}))
+        bg = json.loads(self.request('GET', '/api/tasks', cookie=cookie)[2])['background']
+        self.assertEqual([b['kind'] for b in bg], ['download'])
+        # Pausar e na hora; continuar e uma tarefa (sobe o servico).
+        status, _, data = self.request('POST', '/api/downloader', {'action': 'pause'}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.assertIn('--downloader pause\n', self.volume_log.read_text())
+        status, _, data = self.request('POST', '/api/downloader', {'action': 'resume'}, cookie=cookie)
+        self.assertEqual(status, 200, data)
+        self.assertEqual(self.wait_task(cookie, data)['rc'], 0)
+        self.assertIn('--downloader resume\n', self.volume_log.read_text())
+        # O botao de pausar na pagina e na gaveta das tarefas.
+        web = ROOT / 'config/web'
+        self.assertIn('id="dl-pause"', (web / 'index.html').read_text())
+        self.assertIn('action: goOn ? "resume" : "pause"', (web / 'tasks.js').read_text())
 
     def wait_task(self, cookie, data):
         task = json.loads(data)
@@ -8606,7 +8677,7 @@ class WebPanelTests(unittest.TestCase):
                                               'note': 'needs your API key'})
         packs = {'pct': '30', 'state': 'downloading', 'line': 'Logos 3 of 10'}
         self.assertEqual(info['packs'], packs)
-        self.assertEqual(json.loads(self.request('GET', '/api/scraper?packs=1', cookie=cookie)[2]), {'packs': packs})
+        self.assertEqual(json.loads(self.request('GET', '/api/scraper?packs=1', cookie=cookie)[2]), {'packs': packs, 'auto': {'on': False}})
         account = {'action': 'account', 'source': 'screenscraper', 'user': 'joe', 'password': 's3cret'}
         self.assertEqual(self.request('POST', '/api/scraper', account, cookie=cookie)[0], 200)
         self.assertEqual((tmp / 'account.in').read_text(), 'joe:s3cret\n')
