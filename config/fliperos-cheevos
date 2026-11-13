@@ -14,9 +14,107 @@
 # /etc/fliperos/cheevos (a conta nunca foi feita pelo FliperOS), nada muda: a
 # conta feita dentro do emulador continua valendo. Com a conta desligada, as
 # conquistas desligam; sem conta (Log out), o usuario e o token saem.
+#
+#   fliperos-cheevos on retroarch    status 0 se o RetroArch tem as conquistas
+#                                    ligadas (o fliperos-kms-run poe o --verbose)
+#   fliperos-cheevos watch PID PROGRAMA
+#
+# O watch le as conquistas do log do emulador (os avisos de cada um ficam
+# desligados, ver o fliperos-x11-run) ate o PID fechar, e cada uma vai para a
+# barra da OSD (config/fliperos-osd, por $XDG_RUNTIME_DIR/fliperos-osd-achievements)
+# e para o marquee (fliperos-pixelcade achievement). As linhas:
+#
+#   RetroArch, Dolphin, PCSX2  "Awarding achievement ID: TITULO" (o rc_client)
+#   PCSX2                      "Achievement TITULO (ID) for game N unlocked"
+#   DuckStation                "Achievement ID (TITULO) for game N unlocked"
+#   Flycast                    a primeira, no $FLIPEROS_CHEEVOS_LOG (o patch
+#                              0006 do packaging; o log dele nao tem o nivel INFO)
+#
+# Com o modo debug (Setup > System > Debug mode) a saida vai para a tela e nao
+# para o log: ali a barra nao aparece no RetroArch, no Dolphin e no DuckStation.
 set -uo pipefail
 conf=${FLIPEROS_CHEEVOS:-/etc/fliperos/cheevos}
 iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+
+# on retroarch: a conta do menu principal > RetroAchievements (o cheevos.cfg,
+# por cima do retroarch.cfg) vale antes da feita no menu do RetroArch.
+retroarch_on() {
+  local setup_cfg=${FLIPEROS_RA_CHEEVOS:-/etc/fliperos/retroarch/cheevos.cfg}
+  local user_cfg=${RA_CFG:-${HOME:-/home/fliperos}/.config/retroarch/retroarch.cfg}
+  [[ -r $setup_cfg ]] && user_cfg=$setup_cfg
+  grep -qE '^cheevos_enable[[:space:]]*=[[:space:]]*"true"' "$user_cfg" 2> /dev/null
+}
+
+# log_of PROGRAMA: o log onde o emulador escreve as conquistas (vazio: um
+# programa sem conquistas). A saida do RetroArch, do Dolphin e do DuckStation
+# e a /opt/fliperos/logs/PROGRAMA.log do fliperos-kms-run e do x11-run; o
+# PCSX2 tem o emulog.txt dele.
+log_of() {
+  local home=${HOME:-/home/fliperos} logs=${FLIPEROS_LOGS:-/opt/fliperos/logs}
+  case ${1##*/} in
+    retroarch | dolphin-emu | duckstation) echo "$logs/${1##*/}.log" ;;
+    pcsx2) echo "$home/.config/PCSX2/logs/emulog.txt" ;;
+    pcsx2x6) echo "$home/.config/PCSX2x6/logs/emulog.txt" ;;
+    flycast) echo "${FLIPEROS_CHEEVOS_LOG:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-cheevos.log}" ;;
+  esac
+}
+
+# announce ID TITULO: uma conquista para a OSD (um arquivo por conquista, que
+# ela apaga ao ler) e para o marquee.
+announce() {
+  local dir=${FLIPEROS_OSD_ACHIEVEMENTS:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fliperos-osd-achievements} tmp
+  local pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
+  [[ -d $dir ]] || mkdir -m 700 "$dir" 2> /dev/null
+  if [[ -d $dir ]] && tmp=$(mktemp "$dir/.new.XXXXXX" 2> /dev/null); then
+    printf '%s\n' "$2" > "$tmp"
+    mv -f "$tmp" "$dir/$(date +%s%N)-$1"
+  fi
+  if [[ -x $pixelcade ]] && "$pixelcade" cheevos; then
+    "$pixelcade" achievement "$1" "$2" < /dev/null > /dev/null 2>&1 &
+  fi
+}
+
+# watch PID PROGRAMA: so as linhas novas (o log pode ser o da vez anterior,
+# ou ser esvaziado ao abrir: o tail -F segue o arquivo novo); uma conquista
+# que aparece em duas linhas (o PCSX2 tem as duas) sai uma vez.
+watch() {
+  local pid=$1 log line id title seen=" "
+  [[ $pid =~ ^[0-9]+$ ]] && ((pid > 1)) || return 0
+  log=$(log_of "$2")
+  [[ -n $log ]] || return 0
+  shopt -s extglob
+  tail --pid="$pid" -n 0 -F "$log" 2> /dev/null | while IFS= read -r line; do
+    # Sem o \r e as cores do terminal (o log do DuckStation tem as duas).
+    line=${line%$'\r'}
+    line=${line//$'\e['*([0-9;])m/}
+    if [[ $line =~ (Awarding|Unlocked\ unofficial)\ achievement\ ([0-9]+):\ (.*)$ ]]; then
+      id=${BASH_REMATCH[2]} title=${BASH_REMATCH[3]}
+    elif [[ $line =~ Achievement\ ([0-9]+)\ \((.*)\)\ for\ game\ [0-9]+\ unlocked ]]; then
+      id=${BASH_REMATCH[1]} title=${BASH_REMATCH[2]}
+    elif [[ $line =~ Achievement\ (.*)\ \(([0-9]+)\)\ for\ game\ .*\ unlocked ]]; then
+      id=${BASH_REMATCH[2]} title=${BASH_REMATCH[1]}
+    else
+      continue
+    fi
+    [[ $seen == *" $id "* ]] && continue
+    seen+="$id "
+    announce "$id" "$title"
+  done
+}
+
+case ${1:-} in
+  on)
+    [[ ${2:-} == retroarch ]] || exit 2
+    retroarch_on
+    exit $?
+    ;;
+  watch)
+    [[ $# -eq 3 ]] || { echo "usage: fliperos-cheevos watch PID PROGRAM" >&2; exit 2; }
+    watch "$2" "$3"
+    exit 0
+    ;;
+esac
+
 format=${1:-} file=${2:-}
 [[ -n $format && -n $file ]] || { echo "usage: fliperos-cheevos duckstation|pcsx2|dolphin|flycast FILE" >&2; exit 2; }
 [[ -r $conf ]] || exit 0

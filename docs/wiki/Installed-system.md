@@ -124,6 +124,16 @@ The arrows move and change, the first button opens and the second goes back, as 
 
 So the menu opens only where one of those layers is writing the FPS. On the LXDE desktop, in Fightcade's Wine emulators and in the Setup, nothing opens and the controls stay with the program. If a layer can't draw (a card below OpenGL 3), it tells the service, which gives the controls back.
 
+**Achievements.** Each [RetroAchievements](Emulators.md#retroachievements) unlock shows for 5 seconds in a bar like the volume one, without taking the controls:
+
+- on the left, the trophy, with a ring that draws itself and then a comet that spins around it;
+- the title, which waits a second and scrolls to its end within the 5 seconds when it doesn't fit;
+- under it, a green line that empties.
+
+The bar follows the game's frame like the menu, so it fits any resolution and the vertical monitor. Below 200 pixels wide or tall it gets lower (16 pixels, a small trophy and small letters), and the ring is corrected for the shape of the pixel so it stays round on the tube.
+
+`fliperos-cheevos watch` leaves one file per achievement in `/run/user/<uid>/fliperos-osd-achievements`. The service shows them in order, 30 pictures a second while the bar moves. The volume bar pauses it, and the menu puts it back in the queue. The service takes only regular files owned by the user, never a link, and an achievement that waits more than a minute is dropped. `osd=off` turns the bar off too.
+
 The controls are taken with `EVIOCGRAB` only after the shortcut is released, or the game would keep those buttons held.
 
 Settings go through the Setup's functions (`--setting`, `--volume`, `--geometry`), one at a time. Geometry uses Switchres's numbers (`switchres -c -g`). In a game on X it changes the mode through `xrandr`, because Xorg undoes a change made directly on the card. In KMS (RetroArch, the frontend) it uses `fliperos-color timing`.

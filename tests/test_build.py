@@ -13153,20 +13153,14 @@ class PixelcadeTests(unittest.TestCase):
             time.sleep(0.05)
         self.assertEqual(self.calls.read_text().splitlines(), ['http://pc/attract?nointerrupt'])
 
-    def test_retroachievements_from_the_retroarch_log(self):
+    def test_retroachievements_reach_the_marquee(self):
+        # As conquistas sao lidas dos logs pelo fliperos-cheevos watch, que so
+        # chama o achievement com um marquee que as mostra (o cheevos).
         cheevos = lambda: subprocess.run(['bash', str(self.SCRIPT), 'cheevos'], env=self.env).returncode
-        cfg = self.tmp / 'retroarch.cfg'
-        cfg.write_text('cheevos_enable = "true"\n')
-        # Sem painel, o RetroArch nao precisa do --verbose.
         self.assertNotEqual(cheevos(), 0)
         self.install()
         self.install_zedmd()
         self.assertEqual(cheevos(), 0)
-        cfg.write_text('cheevos_enable = "false"\n')
-        self.assertNotEqual(cheevos(), 0)
-        cfg.write_text('cheevos_enable = "true"\n')
-        log = self.tmp / 'retroarch.log'
-        log.write_text('[INFO] [RCHEEVOS] Awarding achievement 1: de outra vez\n')
         rom = self.roms / 'retroarch/snes9x/smw.sfc'
         rom.write_text('')
         game = subprocess.Popen(['/bin/sleep', '30'])
@@ -13175,23 +13169,13 @@ class PixelcadeTests(unittest.TestCase):
         subprocess.run(['bash', str(self.SCRIPT), 'launch', 'retroarch', '-L', 'x.so', str(rom)], env=env,
                        check=True, timeout=30)
         self.calls.unlink()
-        # So as conquistas de agora: a que ja estava no log nao volta.
-        time.sleep(1.5)
-        with log.open('a') as f:
-            f.write('[INFO] [RCHEEVOS] Awarding achievement 4567: Yoshi & Friends\n')
-        deadline = time.time() + 10
-        while time.time() < deadline and not self.calls.exists():
-            time.sleep(0.05)
-        time.sleep(0.2)
-        self.assertEqual(self.calls.read_text().splitlines(),
-                         ['http://pc/achievements/stream/snes/4567?t=Yoshi%20%26%20Friends&currentgame=smw'])
+        self.assertEqual(self.run_('achievement', '4567', 'Yoshi & Friends'),
+                         ['achievements/stream/snes/4567?t=Yoshi%20%26%20Friends&currentgame=smw'])
         self.assertIn('show game snes smw  Yoshi & Friends', self.dmd_calls(2))
-        self.calls.unlink()
         self.assertEqual(self.run_('achievement', '9', 'Title', 'What it took'),
                          ['achievements/stream/snes/9?t=Title%20%3A%20What%20it%20took&currentgame=smw'])
-        kms = (ROOT / 'config/fliperos-kms-run').read_text()
-        self.assertIn('"$pixelcade" cheevos', kms)
-        self.assertIn('set -- "$1" --verbose "${@:2}"', kms)
+        # O launch nao le mais o log do RetroArch.
+        self.assertNotIn('retroarch.log', self.SCRIPT.read_text())
 
     def test_versus_score_from_each_cabinets_side(self):
         self.install()
@@ -17763,6 +17747,116 @@ class VulkanFpsLayerTests(unittest.TestCase):
         self.assertIn('static int chain_ready(', source)
 
 
+class CheevosWatchTests(unittest.TestCase):
+    """config/fliperos-cheevos watch: as conquistas do log de cada emulador (os
+    avisos deles ficam desligados) para a barra da OSD e para o marquee."""
+
+    SCRIPT = ROOT / 'config/fliperos-cheevos'
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home, self.logs, self.spool = self.tmp / 'home', self.tmp / 'logs', self.tmp / 'spool'
+        for d in (self.home, self.logs, self.tmp / 'run'):
+            d.mkdir()
+        self.calls = self.tmp / 'pixelcade.calls'
+        pixelcade = self.tmp / 'pixelcade'
+        pixelcade.write_text('#!/bin/sh\n[ "$1" = cheevos ] && exit 0\necho "$*" >> %s\n' % self.calls)
+        pixelcade.chmod(0o755)
+        self.env = dict(os.environ, HOME=str(self.home), FLIPEROS_LOGS=str(self.logs),
+                        FLIPEROS_OSD_ACHIEVEMENTS=str(self.spool), FLIPEROS_PIXELCADE=str(pixelcade),
+                        XDG_RUNTIME_DIR=str(self.tmp / 'run'), FLIPEROS_CHEEVOS=str(self.tmp / 'none'))
+        self.env.pop('XDG_CONFIG_HOME', None)
+
+    def shown(self):
+        if not self.spool.is_dir():
+            return []
+        return [(self.spool / n).read_text().strip() for n in sorted(os.listdir(self.spool)) if not n.startswith('.')]
+
+    def watch(self, program, log, old, new, expect):
+        """O watch de PROGRAMA lendo log: o que ja estava (old) nao aparece, o
+        que chega (new) sim; ele sai quando o jogo fecha."""
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(old)
+        game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(game.kill)
+        watcher = subprocess.Popen(['bash', str(self.SCRIPT), 'watch', str(game.pid), program], env=self.env)
+        self.addCleanup(watcher.kill)
+        time.sleep(1)
+        with log.open('a') as f:
+            f.write(new)
+        deadline = time.time() + 10
+        while time.time() < deadline and len(self.shown()) < len(expect):
+            time.sleep(0.05)
+        time.sleep(0.3)
+        self.assertEqual(self.shown(), expect, program)
+        game.kill()
+        game.wait()
+        self.assertEqual(watcher.wait(timeout=10), 0)
+
+    def test_retroarch_line_to_the_osd_and_the_marquee(self):
+        self.watch('retroarch', self.logs / 'retroarch.log',
+                   '[INFO] [RCHEEVOS] Awarding achievement 1: de outra vez\n',
+                   '[INFO] [RCHEEVOS] Awarding achievement 4567: Yoshi & Friends\n'
+                   '[INFO] [RCHEEVOS] Unlocked unofficial achievement 12: Test\n', ['Yoshi & Friends', 'Test'])
+        deadline = time.time() + 5
+        while time.time() < deadline and len(self.calls.read_text().splitlines() if self.calls.exists() else []) < 2:
+            time.sleep(0.05)
+        self.assertEqual(sorted(self.calls.read_text().splitlines()),
+                         ['achievement 12 Test', 'achievement 4567 Yoshi & Friends'])
+
+    def test_each_emulators_wording_once(self):
+        # O PCSX2 escreve as duas linhas da mesma conquista: ela sai uma vez.
+        self.watch('pcsx2', self.home / '.config/PCSX2/logs/emulog.txt', '',
+                   '[   12.3456] Achievements: Awarding achievement 55: 100 Rings\n'
+                   '[   12.3457] Achievement 100 Rings (55) for game 9 unlocked\n'
+                   '[   13.0000] Achievement Combo (Hard) (56) for game 9 unlocked\n', ['100 Rings', 'Combo (Hard)'])
+
+    def test_duckstation_with_terminal_colours(self):
+        self.watch('duckstation', self.logs / 'duckstation.log', '',
+                   '\x1b[1;37m[  1.0] I(Achievements): Achievement 12 (Into the Fire (Hard)) for game 3 unlocked'
+                   '\x1b[0m\r\n', ['Into the Fire (Hard)'])
+
+    def test_dolphin_and_flycast(self):
+        self.watch('dolphin-emu', self.logs / 'dolphin-emu.log', '',
+                   '12:00:01:123 Core/AchievementManager.cpp:79 I[RetroAchievements]: Awarding achievement 9: Ride\n',
+                   ['Ride'])
+        shutil.rmtree(self.spool)
+        self.watch('flycast', self.tmp / 'run/fliperos-cheevos.log', '', 'Awarding achievement 3: Tail\n', ['Tail'])
+
+    def test_programs_without_achievements_and_retroarch_on(self):
+        r = subprocess.run(['bash', str(self.SCRIPT), 'watch', str(os.getpid()), 'groovymame'], env=self.env,
+                           timeout=5)
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(subprocess.run(['bash', str(self.SCRIPT), 'watch', '1'], env=self.env,
+                                        capture_output=True).returncode, 2)
+        on = lambda: subprocess.run(['bash', str(self.SCRIPT), 'on', 'retroarch'], env=self.env).returncode
+        cfg = self.home / '.config/retroarch/retroarch.cfg'
+        cfg.parent.mkdir(parents=True)
+        cfg.write_text('cheevos_enable = "true"\n')
+        self.env['FLIPEROS_RA_CHEEVOS'] = str(self.tmp / 'cheevos.cfg')
+        self.assertEqual(on(), 0)
+        # A conta do Setup (o cheevos.cfg) vale antes da do menu do RetroArch.
+        (self.tmp / 'cheevos.cfg').write_text('cheevos_enable = "false"\n')
+        self.assertNotEqual(on(), 0)
+        kms = (ROOT / 'config/fliperos-kms-run').read_text()
+        self.assertIn('"$cheevos" on retroarch', kms)
+        self.assertIn('set -- "$1" --verbose "${@:2}"', kms)
+        for runner in ('fliperos-kms-run', 'fliperos-x11-run'):
+            self.assertIn('"$cheevos" watch $$', (ROOT / 'config' / runner).read_text(), runner)
+
+    def test_emulators_keep_their_own_notifications_off(self):
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        for line in ('"$iniset" "$ini" Achievements Notifications false', '"$iniset" "$ini" Logging EnableFileLogging true',
+                     '"$iniset" "$ini" Cheevos Notifications false', '"$iniset" "$ini" Logging LogToConsole true',
+                     'achievements Notifications no', '"Logs RetroAchievements True"',
+                     '"$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False'):
+            self.assertIn(line, x11)
+        patch = (ROOT / 'packaging/patches/flycast/0006-achievements-log-and-no-notifications.patch').read_text()
+        self.assertIn('getenv("FLIPEROS_CHEEVOS_LOG")', patch)
+        self.assertIn('Option<bool> AchievementsNotifications("Notifications", true, "achievements");', patch)
+
+
 class OsdTests(unittest.TestCase):
     """A OSD (config/fliperos-osd): o menu por cima do jogo, as contas da
     geometria e o arquivo que as camadas leem. O desenho nas camadas e testado por
@@ -18413,6 +18507,178 @@ class OsdTests(unittest.TestCase):
         Path(self.osd.SETUP_FLAG).write_text('1\n')
         service.show_bar()
         self.assertFalse(path.exists())
+
+    def painter(self):
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        os.environ['FLIPEROS_GUI'] = str(ROOT / 'fliperos-setup/gui')
+        self.osd.GUI = os.environ['FLIPEROS_GUI']
+        return self.osd.Painter()
+
+    def test_achievement_bar_fits_any_frame_with_a_round_badge(self):
+        # Como o menu, a barra e desenhada no quadro do jogo (ate 320x240, em
+        # pe 240x320); abaixo de 200 pixels, a barra baixa. O circulo sai
+        # redondo no tubo: largura em pixels x proporcao do pixel = altura.
+        painter = self.painter()
+        t = painter.theme
+        title = 'Hungry Wolf : Beat Kim Dong Hwan with Rock Howard without losing a round'
+        try:
+            for orient, frame in (('', (256, 224)), ('', (160, 144)), ('', (384, 224)), ('', (2560, 240)),
+                                  ('', (640, 480)), ('vertical-cw', (2560, 240)), ('vertical-cw', (256, 224))):
+                t.set_orientation(orient)
+                mode = {'clock': 6700, 'h': [frame[0], 0, 0, frame[0] + 64], 'v': [frame[1], 0, 0, frame[1] + 20],
+                        'interlace': False}
+                canvas = painter.fit(lambda: painter.achievement_bar(title, 2.6), mode)
+                self.assertEqual(canvas.get_size(), (320, 240))
+                w, h = min(320, frame[0]), min(240, frame[1])
+                painter.size = ((h, w) if orient else (w, h)) if (w, h) != (320, 240) else None
+                try:
+                    W, H = painter.area()
+                    drawn = painter.achievement_bar(title, 2.6)
+                finally:
+                    painter.size = None
+                box = drawn.get_bounding_rect()
+                self.assertGreater(box.width, W // 2, frame)
+                self.assertLessEqual(box.right, W, frame)
+                self.assertLessEqual(box.bottom, H - min(t.SAFE_Y, H // 24), frame)
+                small = W < 200 or H < 200
+                self.assertEqual(box.height, 16 if small else 24, (orient, frame))
+                disc, ring = painter._badge_cache[1]
+                xs = [p[0] for p in ring]
+                ys = [p[1] for p in ring]
+                par = (3 / 4 if orient else 4 / 3) / (W / H)
+                self.assertAlmostEqual((max(xs) - min(xs) + 1) * par, max(ys) - min(ys) + 1, delta=1.5)
+        finally:
+            t.set_orientation('')
+
+    def test_achievement_title_waits_runs_and_the_line_empties(self):
+        painter = self.painter()
+        t = painter.theme
+        title = 'Hungry Wolf : Beat Kim Dong Hwan with Rock Howard without losing a round'
+        pg = painter.pg
+
+        def text_area(now, name=title):
+            # A linha do titulo (y 218-225 na tela de 320x240), sem o aro e
+            # sem a linha verde de baixo.
+            s = painter.achievement_bar(name, now)
+            return pg.image.tobytes(s.subsurface((60, 217, 240, 9)), 'RGBA')
+
+        def green(now):
+            s = painter.achievement_bar(title, now)
+            return sum(1 for x in range(320) if s.get_at((x, 227))[:3] == t.GREEN)
+
+        # Parado no comeco, correndo no meio, parado no fim.
+        self.assertEqual(text_area(0.6), text_area(1.3))
+        self.assertNotEqual(text_area(2.0), text_area(3.0))
+        self.assertEqual(text_area(4.6), text_area(4.9))
+        # Um titulo que cabe nao corre.
+        self.assertEqual(text_area(1.0, 'First Blood'), text_area(3.0, 'First Blood'))
+        self.assertGreater(green(1.0), green(3.0))
+        self.assertGreater(green(3.0), green(4.9))
+        # Depois dos 5 s e da saida, nada.
+        self.assertEqual(painter.achievement_bar(title, 5.4).get_bounding_rect().width, 0)
+
+    def test_achievements_are_taken_from_the_users_folder_safely(self):
+        run = Path(self.tmp.name) / 'run'
+        spool = run / '1000' / self.osd.ACHIEVEMENTS_DIR
+        spool.mkdir(parents=True)
+        self.osd.RUN_USER = str(run)
+        (spool / '2-55').write_text('Second\n')
+        os.utime(spool / '2-55', (200, 200))
+        (spool / '1-54').write_text('First\x07 one\nignored\n')
+        os.utime(spool / '1-54', (100, 100))
+        (spool / '.new.abc').write_text('half written\n')
+        secret = Path(self.tmp.name) / 'secret'
+        secret.write_text('do not show\n')
+        (spool / '3-56').symlink_to(secret)
+        self.assertEqual([title for _, title in self.osd.take_achievements()], ['First one', 'Second'])
+        # O que foi lido sai; o link tambem, sem tocar o arquivo dele; o meio
+        # gravado fica para depois.
+        self.assertEqual(sorted(os.listdir(spool)), ['.new.abc'])
+        self.assertTrue(secret.exists())
+        # A pasta como link para outro lugar nao e lida.
+        shutil.rmtree(spool)
+        other = Path(self.tmp.name) / 'other'
+        other.mkdir()
+        (other / '9-1').write_text('elsewhere\n')
+        spool.symlink_to(other)
+        self.assertEqual(self.osd.take_achievements(), [])
+        self.assertTrue((other / '9-1').exists())
+
+    def test_achievement_bar_runs_five_seconds_and_waits_for_the_volume(self):
+        frames = []
+
+        class FakePainter:
+            class theme:
+                @staticmethod
+                def set_orientation(orientation):
+                    pass
+
+            def achievement_rgba(self, title, now, mode):
+                frames.append((title, round(now, 2)))
+                return bytes(self.osd_size)
+
+        painter = FakePainter()
+        painter.osd_size = self.osd.WIDTH * self.osd.HEIGHT * 4
+
+        class Clock:
+            now = 1000.0
+
+            @classmethod
+            def monotonic(cls):
+                return cls.now
+
+            @classmethod
+            def time(cls):
+                return cls.now
+
+        self.osd.time = Clock
+        self.osd.current_mode = lambda: None
+        self.osd.SETUP_FLAG = str(Path(self.tmp.name) / 'flag')
+        self.osd.on_screen = lambda: {'pid': 1, 'uid': 1000, 'program': 'x', 'core': '', 'runtime': '/x'}
+        service = object.__new__(self.osd.Service)
+        service.painter = painter
+        service.bar_until = 0.0
+        service.cheevo, service.cheevo_polled = None, 0.0
+        service.cheevo_queue = [(1000.0, 'One'), (1000.0, 'Two')]
+        path = Path(self.tmp.name) / 'screen'
+        service.screen_file = self.osd.Screen(str(path))
+        service.tick_achievement()
+        self.assertEqual(frames[-1], ('One', 0.0))
+        Clock.now += 2.0
+        service.tick_achievement()
+        self.assertEqual(frames[-1], ('One', 2.0))
+        # A barra do volume por cima: a conquista para enquanto ela fica.
+        service.bar_until = Clock.now + 2
+        Clock.now += 1.0
+        service.tick_achievement()
+        Clock.now += 1.0
+        service.tick_achievement()
+        self.assertEqual(frames[-1], ('One', 2.0))
+        service.bar_until = 0.0
+        Clock.now += 0.5
+        service.tick_achievement()
+        self.assertEqual(frames[-1], ('One', 2.5))
+        self.assertTrue(path.exists())
+        # 5 s e a saida: some, e vem a proxima.
+        Clock.now += 3.0
+        service.tick_achievement()
+        self.assertFalse(path.exists())
+        self.assertIsNone(service.cheevo)
+        service.tick_achievement()
+        self.assertEqual(frames[-1], ('Two', 0.0))
+        service.screen_file.hide()
+        # Sem jogo na tela, ou com a OSD desligada, espera na fila.
+        service.cheevo = None
+        service.cheevo_queue = [(Clock.now, 'Three')]
+        self.conf.write_text('osd=off\n')
+        service.tick_achievement()
+        self.assertEqual(service.cheevo_queue, [(Clock.now, 'Three')])
+        # Uma que esperou demais nao aparece mais.
+        Clock.now += self.osd.CHEEVO_STALE + 1
+        service.collect_achievements()
+        self.assertEqual(service.cheevo_queue, [])
 
     def test_layers_and_service_agree_and_it_is_installed(self):
         for path in ('config/fliperos-deflicker.c', 'config/fliperos-vkfps.c'):

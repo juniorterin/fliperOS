@@ -5,6 +5,9 @@
 # GGPO atendida a cada 1 ms (0003), e nao uma vez por quadro, as maquinas a
 # ate um quadro uma da outra (0004) e a party travada como um link de arcade,
 # com um limite de previsao (o lockstep patch, 0005, network:GGPOMaxPrediction).
+# As conquistas (0006) vao para o $FLIPEROS_CHEEVOS_LOG, que a barra da OSD le
+# (config/fliperos-cheevos watch), e achievements.Notifications=no tira os
+# avisos dele da tela.
 #
 # Era compilado no chroot da ISO, do master do dia: um gabinete atualizado so
 # pela rede ficava com o Flycast da ISO que instalou. Como pacote, ele chega
@@ -19,7 +22,7 @@ FLYCAST_COMMIT="7adbf3caef251b153e348df3f469a0f35878339d"
 PKG_UPSTREAM="https://github.com/flyinghead/flycast"
 PKG_COMMIT_VAR="FLYCAST_COMMIT"
 PKG_VERSION="2.7.20261031"
-PKG_REVISION="1fliperos2"
+PKG_REVISION="1fliperos3"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://github.com/flyinghead/flycast"
 PKG_SUMMARY="Flycast (Dreamcast, Naomi, Atomiswave) with Vulkan"

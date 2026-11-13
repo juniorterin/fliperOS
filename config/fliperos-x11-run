@@ -37,6 +37,15 @@ fi
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 [[ -x $pixelcade ]] && { "$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 & }
+# As conquistas do RetroAchievements na barra da OSD e no marquee: o
+# fliperos-cheevos watch as le do log do emulador ate ele fechar (num programa
+# sem conquistas, sai na hora). Os avisos do proprio emulador ficam
+# desligados (abaixo, em cada um). O Flycast as escreve no
+# FLIPEROS_CHEEVOS_LOG (o patch dele), esvaziado aqui.
+cheevos=${FLIPEROS_CHEEVOS_TOOL:-/opt/fliperos/bin/fliperos-cheevos}
+export FLIPEROS_CHEEVOS_LOG=${FLIPEROS_CHEEVOS_LOG:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-cheevos.log}
+[[ $name != flycast ]] || { : > "$FLIPEROS_CHEEVOS_LOG"; } 2> /dev/null || true
+[[ -x $cheevos ]] && { "$cheevos" watch $$ "$name" < /dev/null > /dev/null 2>&1 & }
 # As saidas do jogo para placas e LEDs (config/fliperos-outputs; sem o
 # Hook Of The Reaper e o LEDSpicer instalados, nada).
 outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
@@ -144,6 +153,12 @@ case $name in
     # e a variavel vale tambem num emu.cfg recriado pelo Flycast.
     export FLYCAST_BIOS_PATH="${FLYCAST_BIOS_PATH:+$FLYCAST_BIOS_PATH:}$HOME/bios/dc"
     cheevos_ini flycast "${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg"
+    # Sem o aviso da conquista do proprio Flycast (a opcao vem do patch 0006):
+    # ela aparece na barra da OSD.
+    if [[ -f ${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg ]]; then
+      "${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}" "${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg" \
+        achievements Notifications no 2> /dev/null || true
+    fi
     # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
     netout=""
     [[ -x $outputs ]] && "$outputs" installed && netout=",network:NetworkOutput=yes"
@@ -178,6 +193,13 @@ case $name in
     # Sem os avisos do emulador na tela ao abrir o jogo.
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False 2> /dev/null || true
     cheevos_ini dolphin "${gfx%/*}/RetroAchievements.ini"
+    # As conquistas na saida (o dolphin-emu.log abaixo), para a barra da OSD
+    # (fliperos-cheevos watch): o Dolphin so as escreve com o log
+    # "RetroAchievements" ligado, no nivel Info (4).
+    for kv in "Options WriteToConsole True" "Options Verbosity 4" "Logs RetroAchievements True"; do
+      # shellcheck disable=SC2086 # secao, chave e valor
+      "$iniset" "${gfx%/*}/Logger.ini" $kv 2> /dev/null || true
+    done
     ;;
   pcsx2 | pcsx2x6)
     # O pcsx2x6 e o fork dos arcades Namco System 246/256 (~/roms/namco2x6): o
@@ -245,6 +267,11 @@ case $name in
       for osd in Speed FPS CPU GPU Resolution; do
         "$iniset" "$ini" EmuCore/GS "OsdShow$osd" false
       done
+      # Nem os avisos das conquistas, que ficam fora daquela posicao: elas
+      # aparecem na barra da OSD, lidas do logs/emulog.txt (fliperos-cheevos watch).
+      "$iniset" "$ini" Achievements Notifications false
+      "$iniset" "$ini" Achievements LeaderboardNotifications false
+      "$iniset" "$ini" Logging EnableFileLogging true
       "$iniset" "$ini" Folders Bios "$biosdir"
       if [[ $1 == pcsx2x6 ]]; then
         "$iniset" "$ini" Folders MemoryCards "$savedir"
@@ -383,8 +410,12 @@ INI
       "$iniset" "$ini" UI MainWindowMaximized false
       "$iniset" "$ini" BIOS SearchDirectory "$HOME/bios"
       # O log dele na saida, que vai para o duckstation.log (o painel web o
-      # mostra): sem BIOS ele so fecha, e ali fica onde a procurou.
+      # mostra): sem BIOS ele so fecha, e ali fica onde a procurou. Dali
+      # tambem saem as conquistas para a barra da OSD (fliperos-cheevos
+      # watch), sem o aviso dele na tela.
       "$iniset" "$ini" Logging LogToConsole true
+      "$iniset" "$ini" Cheevos Notifications false
+      "$iniset" "$ini" Cheevos LeaderboardNotifications false
       "$iniset" "$ini" Display AspectRatio "Stretch To Fill"
       # O corte fica o padrao (Overscan): a area toda do NTSC (240 linhas) ou
       # do PAL (288), que no modo de 240 ou 288 linhas da uma linha do jogo

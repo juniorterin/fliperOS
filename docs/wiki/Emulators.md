@@ -294,7 +294,17 @@ The login trades the user and password for the account's token through the site'
 - **DuckStation, PCSX2, Dolphin and Flycast** keep the account in their own ini. `config/fliperos-cheevos` writes it at each launch from `fliperos-x11-run` (`[Cheevos]` in DuckStation's `settings.ini`, `[Achievements]` in `PCSX2.ini` and Dolphin's `RetroAchievements.ini`, `[achievements]` in Flycast's `emu.cfg`), and the Setup writes it right away into the ones that already exist.
 - Without `/etc/fliperos/cheevos` nothing changes: an account made inside an emulator's own menu keeps working. Signing out clears the user and token everywhere.
 
-The Pixelcade/ZeDMD marquee shows each unlocked achievement in RetroArch ([Frontends](Frontends.md)).
+Each unlocked achievement shows over the game for 5 seconds, in a bar like the volume one ([On-screen menu](Installed-system.md#on-screen-menu)): a trophy with a spinning ring, the achievement's title (it scrolls when it doesn't fit) and a green line that empties. The Pixelcade/ZeDMD marquee shows it too ([Frontends](Frontends.md)).
+
+The emulators' own notifications stay off, so only the bar shows: RetroArch has no on-screen notifications, Dolphin no on-screen messages, PCSX2 and DuckStation get `Notifications = false` and `LeaderboardNotifications = false`, and Flycast `Notifications = no` in `[achievements]` (an option of FliperOS's patch 0006).
+
+`fliperos-cheevos watch`, started by `fliperos-kms-run` and `fliperos-x11-run`, reads each unlock from the emulator's log until the game closes:
+
+- RetroArch, Dolphin and DuckStation: their output in `/opt/fliperos/logs/<program>.log`. RetroArch writes the achievements there only with `--verbose`, which `fliperos-kms-run` adds when they are on. Dolphin needs its *RetroAchievements* log at the Info level (`Logger.ini`).
+- PCSX2: its own `logs/emulog.txt`.
+- Flycast: its release build leaves those log lines out, so patch 0006 writes each unlock to `$FLIPEROS_CHEEVOS_LOG`.
+
+In debug mode the output goes to the screen, not to the log, so RetroArch, Dolphin and DuckStation show no bar.
 
 ## Laserdisc (Hypseus Singe)
 

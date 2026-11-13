@@ -36,6 +36,12 @@ As teclas de volume (o triggerhappy, fliperos-setup --volume) escrevem "volume" 
 /run/fliperos-osd/control, e uma barra aparece por BAR_SECONDS, sem tomar os
 controles.
 
+As conquistas do RetroAchievements aparecem numa barra do mesmo estilo, por 5 s,
+tambem sem tomar os controles: o fliperos-cheevos watch as le do log de cada
+emulador (cujos avisos ficam desligados) e deixa uma por arquivo em
+/run/user/<uid>/fliperos-osd-achievements. A barra e animada (o aro em volta da
+taca), uma imagem nova a cada 1/CHEEVO_FPS s.
+
 Pelo mesmo arquivo (open, close, up, down, left, right, enter, esc) o menu tambem
 anda sem controle: os testes e o SSH.
 """
@@ -45,11 +51,13 @@ import importlib.machinery
 import importlib.util
 import itertools
 import json
+import math
 import os
 import pwd
 import re
 import select
 import signal
+import stat
 import struct
 import subprocess
 import sys
@@ -78,6 +86,24 @@ DEFAULT_KEYS = "119,164,201,207"
 IDLE_CLOSE = 20.0
 # Quanto tempo a barra das teclas de volume fica na tela.
 BAR_SECONDS = 2.0
+# A barra de uma conquista do RetroAchievements (config/fliperos-cheevos watch
+# deixa uma por arquivo em /run/user/<uid>/fliperos-osd-achievements): o
+# aro se desenha e a barra sai do circulo (ENTER), fica CHEEVO_SECONDS ao todo
+# (a linha verde se esvazia nesse tempo), e volta para o circulo (LEAVE). A
+# animacao vai a CHEEVO_FPS imagens por segundo.
+ACHIEVEMENTS_DIR = "fliperos-osd-achievements"
+CHEEVO_SECONDS, CHEEVO_ENTER, CHEEVO_LEAVE = 5.0, 0.45, 0.3
+CHEEVO_FPS = 30
+# Uma volta do cometa do aro; o titulo que nao cabe espera HOLD_START, corre
+# ate o fim e fica HOLD_END parado, tudo dentro dos 5 s (no minimo a 28 px/s,
+# a velocidade dos letreiros do frontend).
+CHEEVO_RING_PERIOD = 1.1
+CHEEVO_HOLD_START, CHEEVO_HOLD_END, CHEEVO_MIN_SPEED = 1.0, 0.7, 28.0
+# Uma conquista que espera mais que isso (o menu aberto, nenhum jogo na tela)
+# nao aparece mais.
+CHEEVO_STALE = 60.0
+# A taca de 8x8 da barra baixa (a de 16x16 e a do menu, theme.ICONS).
+MINI_TROPHY = ("YYYYYYYY", "OYFYYYYO", ".YFYYYY.", "..YYYY..", "...YY...", "...YY...", "..OOOO..", "..MMMM..")
 # Quanto tempo o menu espera soltarem o atalho antes de tomar os controles.
 RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
@@ -193,6 +219,54 @@ def on_screen():
             best = (age, {"pid": int(fields[0]), "fps": fps, "program": fields[2], "core": "" if fields[3] == "-" else fields[3],
                           "runtime": runtime, "uid": int(os.path.basename(runtime)) if os.path.basename(runtime).isdigit() else 0})
     return best[1] if best else None
+
+
+def take_achievements():
+    """As conquistas que o fliperos-cheevos watch deixou em
+    /run/user/<uid>/fliperos-osd-achievements, uma por arquivo: [(hora,
+    titulo)], as mais velhas primeiro; cada arquivo lido e apagado. A pasta e
+    do usuario e o servico e root: nada de link (nem a pasta, nem o arquivo) e
+    so o que e do dono de /run/user/<uid>."""
+    out = []
+    for runtime in glob.glob(os.path.join(RUN_USER, "*")):
+        try:
+            owner = os.stat(runtime).st_uid
+            dfd = os.open(os.path.join(runtime, ACHIEVEMENTS_DIR), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError:
+            continue
+        try:
+            if os.fstat(dfd).st_uid != owner:
+                continue
+            for name in sorted(os.listdir(dfd)):
+                if name.startswith("."):
+                    continue
+                try:
+                    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+                except OSError:
+                    fd = None
+                data, when = b"", 0.0
+                if fd is not None:
+                    try:
+                        st = os.fstat(fd)
+                        if stat.S_ISREG(st.st_mode) and st.st_uid == owner:
+                            data, when = os.read(fd, 1024), st.st_mtime
+                    finally:
+                        os.close(fd)
+                # Lido ou nao (um link, outro dono), o arquivo sai.
+                try:
+                    os.unlink(name, dir_fd=dfd)
+                except OSError:
+                    pass
+                title = data.decode("utf-8", "replace").split("\n")[0]
+                title = "".join(c for c in title if c.isprintable()).strip()[:200]
+                if title:
+                    out.append((when, name, title))
+        except OSError:
+            pass
+        finally:
+            os.close(dfd)
+    # Pela hora; na mesma hora, pelo nome (o watch o comeca pelos nanossegundos).
+    return [(when, title) for when, name, title in sorted(out)]
 
 
 def commercial(uid):
@@ -1095,6 +1169,29 @@ class Menu:
 
 # ── O desenho ──────────────────────────────────────────────────────
 
+def ease_out(f):
+    """0..1 que desacelera no fim (a barra saindo do circulo)."""
+    f = max(0.0, min(1.0, f))
+    return 1 - (1 - f) ** 3
+
+
+def lerp_color(a, b, f):
+    f = max(0.0, min(1.0, f))
+    return tuple(round(a[i] + (b[i] - a[i]) * f) for i in range(3))
+
+
+def ring_color(t, behind):
+    """A cor do aro a behind graus atras da cabeca do cometa: branco, rosa,
+    roxo e o azul do resto do aro."""
+    if behind < 15:
+        return lerp_color(t.FG, t.PINK, behind / 15)
+    if behind < 110:
+        return lerp_color(t.PINK, t.PURPLE, (behind - 15) / 95)
+    if behind < 230:
+        return lerp_color(t.PURPLE, t.COMMENT, (behind - 110) / 120)
+    return t.COMMENT
+
+
 class Painter:
     """A pagina numa imagem de 320x240, com as cores e a letra da interface
     grafica. O pygame so entra na primeira vez que o menu abre."""
@@ -1317,6 +1414,128 @@ class Painter:
             pg.draw.rect(surface, fill + (255,), (bar_x + 1, y + 6, round((bar_w - 2) * percent / 100), 4))
         return surface
 
+    # ── A barra de uma conquista ──
+    # Como a do volume (o fundo, a borda roxa, a letra), mais alta: o circulo
+    # da esquerda tem a taca e um aro com um cometa que gira. Responde ao
+    # quadro do jogo: area() e o quadro ate 320x240 (240x320 em pe); com menos
+    # de 200 pixels de largura ou de altura, a barra baixa (16 px, a taca de
+    # 8x8 e o titulo na letra pequena). O circulo sai redondo no tubo: a tela
+    # logica ocupa o tubo inteiro (4:3, 3:4 em pe), e o pixel dela nem sempre
+    # e quadrado (256x224, por exemplo).
+    _badge_cache = None
+
+    def achievement_bar(self, title, now):
+        """A barra da conquista now segundos depois de aparecer, em RGBA."""
+        pg, t = self.pg, self.theme
+        import tiny
+        W, H = self.area()
+        surface = pg.Surface((W, H), pg.SRCALPHA)
+        if now >= CHEEVO_SECONDS + CHEEVO_LEAVE:
+            return surface
+        par = (3 / 4 if t.VERTICAL else 4 / 3) / (W / H)
+        small = W < 200 or H < 200
+        safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
+        height = 16 if small else 24
+        rx = height / 2 / par
+        x0, width = safe_x, W - 2 * safe_x
+        y0 = H - safe_y - height
+        cx, cy = x0 + rx, y0 + height / 2
+        right_full = x0 + width
+        if now < CHEEVO_ENTER:
+            sweep, grow = ease_out(now / 0.2), ease_out((now - 0.15) / 0.3)
+        elif now >= CHEEVO_SECONDS:
+            back = (now - CHEEVO_SECONDS) / CHEEVO_LEAVE
+            grow, sweep = 1 - ease_out(back / 0.6), 1 - ease_out((back - 0.5) / 0.5)
+        else:
+            sweep = grow = 1.0
+        right = round(cx + (right_full - cx) * grow)
+        if right - round(cx) > 2:
+            bar = pg.Rect(round(cx), y0, right - round(cx), height)
+            pg.draw.rect(surface, t.BG_DEEP + (232,), bar)
+            pg.draw.rect(surface, t.PURPLE + (255,), bar, 1)
+            tx = round(cx + rx) + (4 if small else 6)
+            aw = right_full - 6 - tx
+            clip = pg.Rect(tx, y0 + 1, max(0, min(aw, right - 2 - tx)), height - 2)
+            surface.set_clip(clip)
+            head = next((h for h in ("ACHIEVEMENT UNLOCKED", "ACHIEVEMENT", "UNLOCKED") if tiny.width(h) <= aw),
+                        tiny.fit("UNLOCKED", max(0, aw)))
+            tiny.text(surface, head, t.PINK, tx, y0 + (2 if small else 4))
+            if small:
+                image = pg.Surface((tiny.width(title) + 1, 6), pg.SRCALPHA)
+                tiny.text(image, title, t.FG, 0, 0)
+                ty = y0 + 8
+            else:
+                image = self.font.render(title, False, t.FG)
+                ty = y0 + 12
+            travel = image.get_width() - aw
+            offset = 0.0
+            if travel > 0:
+                room = CHEEVO_SECONDS - CHEEVO_ENTER - CHEEVO_HOLD_START - CHEEVO_HOLD_END
+                speed = max(CHEEVO_MIN_SPEED, travel / room)
+                offset = min(travel, max(0.0, now - CHEEVO_ENTER - CHEEVO_HOLD_START) * speed)
+            surface.blit(image, (tx - round(offset), ty))
+            # Os 5 s: a linha que se esvazia, verde como a da barra de volume.
+            left = max(0.0, CHEEVO_SECONDS - now)
+            ly = y0 + height - 3
+            surface.fill(t.LINE + (255,), (tx, ly, max(0, aw), 1))
+            surface.fill(t.GREEN + (255,), (tx, ly, max(0, round(aw * left / CHEEVO_SECONDS)), 1))
+            surface.set_clip(None)
+        self.achievement_badge(surface, (cx, cy, rx, height / 2, par, small), now, sweep)
+        return surface
+
+    def badge_pixels(self, cx, cy, rx, outer, par, small):
+        """Os pixels do circulo: o fundo e os do aro com o angulo de cada um
+        (guardados: a geometria so muda com o quadro do jogo)."""
+        key = (cx, cy, rx, outer, par, small)
+        if self._badge_cache and self._badge_cache[0] == key:
+            return self._badge_cache[1]
+        inner = outer - (2 if small else 2.5)
+        disc, ring = [], []
+        for py in range(math.floor(cy - outer), math.ceil(cy + outer)):
+            for px in range(math.floor(cx - rx), math.ceil(cx + rx)):
+                dx, dy = (px + 0.5 - cx) * par, py + 0.5 - cy
+                d = math.hypot(dx, dy)
+                if d >= outer:
+                    continue
+                if d < inner:
+                    disc.append((px, py))
+                else:
+                    ring.append((px, py, math.degrees(math.atan2(dy, dx))))
+        self._badge_cache = (key, (disc, ring))
+        return disc, ring
+
+    def achievement_badge(self, surface, geometry, now, sweep):
+        """O circulo da esquerda: o fundo, o aro (um cometa que gira; na
+        entrada ele se desenha, na saida se apaga) e a taca, com um brilho
+        branco que passa por ela ao chegar."""
+        t = self.theme
+        cx, cy, rx, outer, par, small = geometry
+        disc, ring = self.badge_pixels(cx, cy, rx, outer, par, small)
+        if sweep <= 0:
+            return
+        for px, py in disc:
+            surface.fill(t.BG_DEEP + (240,), (px, py, 1, 1))
+        head = (-90 + 360 * now / CHEEVO_RING_PERIOD) % 360
+        for px, py, ang in ring:
+            if ((ang + 90) % 360) / 360 > sweep:
+                continue
+            color = t.PINK if sweep < 1 else ring_color(t, (head - ang) % 360)
+            surface.fill(color + (255,), (px, py, 1, 1))
+        if sweep < 1:
+            return
+        icon = MINI_TROPHY if small else t.ICONS["achievements"].strip("\n").split("\n")
+        n = len(icon)
+        glint = (now - CHEEVO_ENTER) * (20 if small else 40) - 4
+        ox, oy = round(cx - n / 2), round(cy - n / 2)
+        for j, line in enumerate(icon):
+            for i, c in enumerate(line):
+                if c == ".":
+                    continue
+                color = t.ICON_COLORS[c]
+                if c in "YO" and abs((i + j) / 2 - glint) < 1.2:
+                    color = t.FG
+                surface.fill(color + (255,), (ox + i, oy + j, 1, 1))
+
     def frame(self, surface):
         """A moldura e a cruz do meio: para ver os cantos enquanto ajusta."""
         pg, t = self.pg, self.theme
@@ -1365,6 +1584,10 @@ class Painter:
     def bar_rgba(self, percent, muted, mode):
         self.theme.set_orientation(read_conf().get("orientation", ""))
         return self.pg.image.tobytes(self.fit(lambda: self.volume_bar(percent, muted), mode), "RGBA")
+
+    def achievement_rgba(self, title, now, mode):
+        """Um quadro da animacao (a orientacao e posta uma vez, ao comecar)."""
+        return self.pg.image.tobytes(self.fit(lambda: self.achievement_bar(title, now), mode), "RGBA")
 
 
 class Screen:
@@ -1543,6 +1766,11 @@ class Service:
         self.hotkey_args = None
         self.running = True
         self.bar_until = 0.0
+        # As conquistas: as que esperam [(hora, titulo)], a da tela
+        # {"title", "born", "start", "last", "mode"} e quando se olhou a pasta.
+        self.cheevo_queue = []
+        self.cheevo = None
+        self.cheevo_polled = 0.0
         # (programa, resolucao) cuja geometria ja foi posta, e quando se olhou.
         self.geometry_seen = None
         self.geometry_polled = 0.0
@@ -1696,6 +1924,41 @@ class Service:
             self.bar_until = 0.0
             self.screen_file.hide()
 
+    # A barra das conquistas.
+    def collect_achievements(self):
+        now = time.monotonic()
+        if now - self.cheevo_polled < 0.25:
+            return
+        self.cheevo_polled = now
+        self.cheevo_queue += take_achievements()
+        old = time.time() - CHEEVO_STALE
+        self.cheevo_queue = [item for item in self.cheevo_queue if item[0] >= old]
+
+    def tick_achievement(self):
+        """Um quadro da conquista na tela, ou a proxima da fila. Com a barra do
+        volume por cima, a conquista espera (o tempo dela para)."""
+        now = time.monotonic()
+        if self.cheevo is None:
+            if not self.cheevo_queue or self.bar_until or not self.bar_allowed(on_screen()):
+                return
+            born, title = self.cheevo_queue.pop(0)
+            if self.painter is None:
+                self.painter = Painter()
+            self.painter.theme.set_orientation(read_conf().get("orientation", ""))
+            self.cheevo = {"title": title, "born": born, "start": now, "last": now, "mode": current_mode()}
+        cheevo = self.cheevo
+        if self.bar_until:
+            cheevo["start"] += now - cheevo["last"]
+            cheevo["last"] = now
+            return
+        cheevo["last"] = now
+        elapsed = now - cheevo["start"]
+        if elapsed >= CHEEVO_SECONDS + CHEEVO_LEAVE:
+            self.cheevo = None
+            self.screen_file.hide()
+            return
+        self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"]))
+
     # O menu.
     def open_menu(self):
         screen = on_screen()
@@ -1703,6 +1966,11 @@ class Service:
             return
         self.stop_hotkey()
         self.bar_until = 0.0
+        # A conquista na tela volta para a frente da fila: aparece de novo,
+        # inteira, depois do menu.
+        if self.cheevo is not None:
+            self.cheevo_queue.insert(0, (self.cheevo["born"], self.cheevo["title"]))
+            self.cheevo = None
         try:
             os.unlink(os.path.join(screen["runtime"], "fliperos-osd-refused"))
         except OSError:
@@ -1763,11 +2031,14 @@ class Service:
             fds = [self.control]
             if self.hotkey:
                 fds.append(self.hotkey.stdout.fileno())
-            ready = select.select(fds, [], [], 0.1 if self.bar_until else 0.5)[0]
+            self.collect_achievements()
+            timeout = 1.0 / CHEEVO_FPS if self.cheevo else 0.1 if self.bar_until or self.cheevo_queue else 0.5
+            ready = select.select(fds, [], [], timeout)[0]
             words = self.read_control() if self.control in ready else []
             if "volume" in words:
                 self.show_bar()
             self.tick_bar()
+            self.tick_achievement()
             if "open" in words:
                 self.open_menu()
             elif self.hotkey and self.hotkey.stdout.fileno() in ready and self.hotkey_fired():
@@ -1809,6 +2080,12 @@ def shot(page, path):
     painter.theme.set_orientation(read_conf().get("orientation", ""))
     if page in ("volume", "mute"):
         canvas = painter.fit(lambda: painter.volume_bar(60, page == "mute"), mode)
+    elif page == "achievement":
+        # FLIPEROS_OSD_SHOT_TIME: os segundos da animacao (sem: 2,6, com o
+        # titulo correndo); FLIPEROS_OSD_SHOT_TITLE, o titulo.
+        title = os.environ.get("FLIPEROS_OSD_SHOT_TITLE", "Hungry Wolf : Beat Kim Dong Hwan with Rock Howard")
+        when = float(os.environ.get("FLIPEROS_OSD_SHOT_TIME", "2.6"))
+        canvas = painter.fit(lambda: painter.achievement_bar(title, when), mode)
     else:
         if page != "main":
             menu.open_page(page)

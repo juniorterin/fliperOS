@@ -12,8 +12,8 @@
 # Os eventos chegam por tres caminhos:
 #   - o fliperos-kms-run e o fliperos-x11-run (todo jogo de todo frontend e
 #     emulador passa por eles): "launch" com a linha de comando do jogo. O
-#     launch fica esperando o jogo fechar (end) e, no RetroArch, le as
-#     conquistas (RetroAchievements) do log dele;
+#     launch fica esperando o jogo fechar (end); as conquistas
+#     (RetroAchievements) chegam pelo fliperos-cheevos watch (achievement);
 #   - o ES-DE: os scripts de evento game-select, system-select,
 #     screensaver-start e screensaver-end (esde);
 #   - o Attract-Mode Plus: o plugin Pixelcade (attract, screensaver).
@@ -49,7 +49,7 @@
 #   fliperos-pixelcade menu ITEM                   o item do menu do FliperOS sob o cursor (frontend,
 #                                                  setup, desktop, shell, power): a animacao dele
 #   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
-#   fliperos-pixelcade cheevos                     status 0 se o RetroArch deve registrar as conquistas no log
+#   fliperos-pixelcade cheevos                     status 0 se ha um marquee que mostra as conquistas
 #   fliperos-pixelcade versus V1 V2 P1 P2          o placar de uma partida versus (vitorias e pontos de cada lado)
 #   fliperos-pixelcade bg COMANDO [ARGS...]        o mesmo comando em segundo plano (volta na hora)
 #   fliperos-pixelcade panel                       status 0 se ha um painel instalado (Pixelcade ou ZeDMD)
@@ -75,8 +75,6 @@ menu_dir=${PIXELCADE_MENU_DIR:-/usr/local/share/fliperos/web}
 # Onde os emuladores gravam os recordes (.hi): o GroovyMAME (plugin hiscore)
 # e os cores de arcade do RetroArch.
 hi_dirs=${HISCORE_DIRS:-/home/fliperos/.mame/hiscore:/opt/fliperos/saves/retroarch}
-ra_cfg=${RA_CFG:-/home/fliperos/.config/retroarch/retroarch.cfg}
-ra_log=${RA_LOG:-${FLIPEROS_LOGS:-/opt/fliperos/logs}/retroarch.log}
 # Um jogo que fala direto com o painel (Visual Pinball) deixa aqui o pid
 # dele: o pixelweb e o dmdserver soltam a porta ate ele fechar.
 hold_file=${PIXELCADE_HOLD:-/tmp/fliperos-pixelcade.hold}
@@ -813,11 +811,7 @@ watch() {
     if [[ -n $source && -n $2 && -x $versus ]] && "$versus" has "$source" "$2" "${4:-}"; then
       "$versus" run "$source" "$2" "$pid" "${4:-}" &
     fi
-    if [[ ${3:-} == retroarch ]] && cheevos; then
-      cheevos_watch "$pid"
-    else
-      tail --pid="$pid" -f /dev/null
-    fi
+    tail --pid="$pid" -f /dev/null
     "$self" end "$1" "$2"
   ) < /dev/null > /dev/null 2>&1 &
 }
@@ -859,34 +853,11 @@ versus_score() {
   fi
 }
 
-# cheevos: status 0 se o RetroArch tem as conquistas (RetroAchievements)
-# ligadas e ha um painel para mostra-las. O fliperos-kms-run entao o abre com
-# --verbose: so assim a conquista aparece no log.
+# cheevos: status 0 se ha onde mostrar uma conquista (o Pixelcade, o ZeDMD
+# ou o marquee do OBS). O fliperos-cheevos watch, que as le dos logs dos
+# emuladores, so chama o achievement entao.
 cheevos() {
-  installed || zedmd_installed || overlay_on || return 1
-  # A conta do menu principal > RetroAchievements (cheevos.cfg, por cima do
-  # retroarch.cfg) vale antes da feita no menu do RetroArch.
-  local setup_cfg=${RA_CHEEVOS_CFG:-/etc/fliperos/retroarch/cheevos.cfg}
-  if [[ -r $setup_cfg ]]; then
-    grep -qE '^cheevos_enable[[:space:]]*=[[:space:]]*"true"' "$setup_cfg"
-    return
-  fi
-  grep -qE '^cheevos_enable[[:space:]]*=[[:space:]]*"true"' "$ra_cfg" 2> /dev/null
-}
-
-# cheevos_watch PID: as linhas "[RCHEEVOS] Awarding achievement ID: TITULO"
-# do log do RetroArch (rc_client.c do rcheevos), ate ele fechar. O
-# fliperos-kms-run esvazia o log ao abrir; o tail -F segue o arquivo novo.
-cheevos_watch() {
-  local line
-  # O log da vez anterior ja foi esvaziado quando o tail comeca: nenhuma
-  # conquista sai nos primeiros segundos do jogo.
-  sleep 2
-  tail --pid="$1" -n 0 -F "$ra_log" 2> /dev/null | while IFS= read -r line; do
-    if [[ $line =~ \[RCHEEVOS\]\ (Awarding|Unlocked\ unofficial)\ achievement\ ([0-9]+):\ (.*)$ ]]; then
-      achievement "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
-    fi
-  done
+  installed || zedmd_installed || overlay_on
 }
 
 # achievement ID TITULO [DESCRICAO]: uma conquista do jogo aberto: o

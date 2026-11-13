@@ -35,6 +35,8 @@ crt_card_driver() {
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
 [[ -x $pixelcade ]] && { "$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 & }
+# As conquistas do RetroAchievements (config/fliperos-cheevos).
+cheevos=${FLIPEROS_CHEEVOS_TOOL:-/opt/fliperos/bin/fliperos-cheevos}
 # O backup na nuvem (config/fliperos-cloud, painel web): com o automatico
 # ligado, os recordes e saves sobem quando este jogo fechar (o exec abaixo
 # mantem o PID). Sem conta, sai na hora.
@@ -187,12 +189,19 @@ if [[ "$(basename -- "$1")" == retroarch ]]; then
     esac
   done
   set -- "$1" --appendconfig "$appendconfig" "${args[@]}"
-  # As conquistas (RetroAchievements) no marquee: o fliperos-pixelcade as le
-  # do log, onde o RetroArch so as escreve com --verbose.
-  if [[ -x $pixelcade ]] && "$pixelcade" cheevos; then
+  # As conquistas (RetroAchievements) na barra da OSD e no marquee: o
+  # fliperos-cheevos watch (abaixo) as le do log, onde o RetroArch so as
+  # escreve com --verbose.
+  if [[ -x $cheevos ]] && "$cheevos" on retroarch; then
     set -- "$1" --verbose "${@:2}"
   fi
 fi
+# O fliperos-cheevos watch le as conquistas do log do programa ate ele fechar
+# (o exec abaixo mantem o PID); num programa sem conquistas, sai na hora. O
+# Flycast as escreve no FLIPEROS_CHEEVOS_LOG (o patch dele), esvaziado aqui.
+export FLIPEROS_CHEEVOS_LOG=${FLIPEROS_CHEEVOS_LOG:-${XDG_RUNTIME_DIR:-/tmp}/fliperos-cheevos.log}
+[[ $(basename -- "$1") != flycast ]] || { : > "$FLIPEROS_CHEEVOS_LOG"; } 2> /dev/null || true
+[[ -x $cheevos ]] && { "$cheevos" watch $$ "$(basename -- "$1")" < /dev/null > /dev/null 2>&1 & }
 # Monitores extras (Setup > Video Setup > Multiple Monitors): no KMS so o
 # principal fica ligado. RetroArch, SDL e Qt abrem na primeira saida
 # conectada, que pode ser um extra; o X os liga de novo.

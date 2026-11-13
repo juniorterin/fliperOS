@@ -1,0 +1,106 @@
+From 2997274eaf94784a4cd587baae464d21aff3d099 Mon Sep 17 00:00:00 2001
+From: FliperOS <fliperos@localhost>
+Date: Fri, 13 Nov 2026 08:46:34 -0300
+Subject: [PATCH] achievements: unlocks in $FLIPEROS_CHEEVOS_LOG, notifications
+ can be turned off (FliperOS)
+
+---
+ core/achievements/achievements.cpp | 22 ++++++++++++++++++++++
+ core/cfg/option.cpp                |  1 +
+ core/cfg/option.h                  |  2 ++
+ 3 files changed, 25 insertions(+)
+
+diff --git a/core/achievements/achievements.cpp b/core/achievements/achievements.cpp
+index 47375bd..b803a3b 100644
+--- a/core/achievements/achievements.cpp
++++ b/core/achievements/achievements.cpp
+@@ -39,6 +39,8 @@
+ #include <utility>
+ #include <xxhash.h>
+ #include <functional>
++#include <cstdio>
++#include <cstdlib>
+ #include "util/worker_thread.h"
+ #include "util/periodic_thread.h"
+ 
+@@ -615,6 +617,18 @@ void Achievements::handleUnlockEvent(const rc_client_event_t *event)
+ 	assert(cheevo != nullptr);
+ 
+ 	INFO_LOG(COMMON, "RA: Achievement %s (%u) for game %s unlocked", cheevo->title, cheevo->id, settings.content.title.c_str());
++	// FliperOS: the unlock for the on-screen bar (fliperos-cheevos watch), in
++	// the rc_client wording. INFO_LOG is compiled out of release builds.
++	if (const char *path = getenv("FLIPEROS_CHEEVOS_LOG"); path != nullptr && *path != '\0')
++	{
++		if (FILE *f = fopen(path, "a"); f != nullptr)
++		{
++			fprintf(f, "Awarding achievement %u: %s\n", cheevo->id, cheevo->title);
++			fclose(f);
++		}
++	}
++	if (!config::AchievementsNotifications)
++		return;
+ 	std::string title(cheevo->title);
+ 	std::string description(cheevo->description);
+ 	std::string url(512, '\0');
+@@ -663,6 +677,8 @@ void Achievements::handleLeaderboardStarted(const rc_client_event_t *event)
+ {
+ 	const rc_client_leaderboard_t *leaderboard = event->leaderboard;
+ 	INFO_LOG(COMMON, "RA: Leaderboard started: %s", leaderboard->title);
++	if (!config::AchievementsNotifications)
++		return;
+ 	std::string text = strprintf(i18n::T("Leaderboard %s started"), leaderboard->title);
+ 	notifier.notify(Notification::Unlocked, "", text, leaderboard->description);
+ }
+@@ -670,6 +686,8 @@ void Achievements::handleLeaderboardFailed(const rc_client_event_t *event)
+ {
+ 	const rc_client_leaderboard_t *leaderboard = event->leaderboard;
+ 	INFO_LOG(COMMON, "RA: Leaderboard failed: %s", leaderboard->title);
++	if (!config::AchievementsNotifications)
++		return;
+ 	std::string text = strprintf(i18n::T("Leaderboard %s failed"), leaderboard->title);
+ 	notifier.notify(Notification::Unlocked, "", text, leaderboard->description);
+ }
+@@ -677,6 +695,8 @@ void Achievements::handleLeaderboardSubmitted(const rc_client_event_t *event)
+ {
+ 	const rc_client_leaderboard_t *leaderboard = event->leaderboard;
+ 	INFO_LOG(COMMON, "RA: Leaderboard submitted: %s", leaderboard->title);
++	if (!config::AchievementsNotifications)
++		return;
+ 	std::string text = strprintf(i18n::T("Leaderboard %s submitted"), leaderboard->title);
+ 	notifier.notify(Notification::Unlocked, "", text, leaderboard->description);
+ }
+@@ -701,6 +721,8 @@ void Achievements::handleUpdateLeaderboardTracker(const rc_client_event_t *event
+ 
+ void Achievements::handleGameCompleted(const rc_client_event_t *event)
+ {
++	if (!config::AchievementsNotifications)
++		return;
+ 	const rc_client_game_t* game = rc_client_get_game_info(rc_client);
+ 	std::string text1 = strprintf(rc_client_get_hardcore_enabled(rc_client) ? i18n::T("Mastered %s") : i18n::T("Completed %s"), game->title);
+ 	rc_client_user_game_summary_t summary;
+diff --git a/core/cfg/option.cpp b/core/cfg/option.cpp
+index 6574b7e..574ba17 100644
+--- a/core/cfg/option.cpp
++++ b/core/cfg/option.cpp
+@@ -254,5 +254,6 @@ Option<bool> AchievementsHardcoreMode("HardcoreMode", false, "achievements");
+ OptionString AchievementsUserName("UserName", "", "achievements");
+ OptionString AchievementsToken("Token", "", "achievements");
+ OptionString AchievementsHostUrl("HostUrl", "", "achievements");
++Option<bool> AchievementsNotifications("Notifications", true, "achievements");
+ 
+ } // namespace config
+diff --git a/core/cfg/option.h b/core/cfg/option.h
+index 34c8b49..851159d 100644
+--- a/core/cfg/option.h
++++ b/core/cfg/option.h
+@@ -580,5 +580,7 @@ extern Option<bool> AchievementsHardcoreMode;
+ extern OptionString AchievementsUserName;
+ extern OptionString AchievementsToken;
+ extern OptionString AchievementsHostUrl;
++// FliperOS: no on-screen notification for unlocks, leaderboards and mastery
++extern Option<bool> AchievementsNotifications;
+ 
+ } // namespace config
+-- 
+2.34.1
+
