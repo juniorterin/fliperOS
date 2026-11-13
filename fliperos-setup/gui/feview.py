@@ -3377,6 +3377,10 @@ def draw_hidden(fe, ui, now):
         W.scrollbar(ui, px + pw - 6, py + 26, shown * 15 - 1, top, shown, len(rows))
 
 
+# A folga entre as funcoes e a linha do RESET/SAVE (Frontend controls).
+BUTTONS_GAP = 3
+
+
 def draw_controls(fe, ui, now):
     """Tab > Frontend options > Frontend controls: cada funcao com o comando do
     painel, o papel do joypad e a tecla dela (um traco: nenhum), o atalho que
@@ -3465,19 +3469,22 @@ def draw_controls(fe, ui, now):
     else:
         name = dict(PANEL_LAYOUTS)[panel_layout(fe)]
     wide(layout_row, y, name, arrows=True)
-    # A ultima linha: RESET e SAVE lado a lado (a coluna escolhe).
-    y = y0 + reset_row * rh
-    half = (SW - 4) // 2
+    # A ultima linha: RESET e SAVE lado a lado (a coluna escolhe), afastados
+    # das funcoes e um do outro, mais altos que as linhas de cima.
+    y = y0 + reset_row * rh + BUTTONS_GAP
+    gap = max(8, SW // 14)
+    half = (SW - 3 * gap) // 2
+    bh = rh + 2
     for c, (text, draw_icon, color) in enumerate((("RESET", reset_icon, T.ORANGE), ("SAVE", save_icon, T.GREEN))):
         lit = sel == reset_row and c == min(col, 1)
-        rect = (SX + c * (half + 4), y, half, rh - 1)
+        rect = (SX + gap + c * (half + gap), y, half, bh)
         W.block(ui, rect, T.PINK if lit else T.BG_DEEP, None)
-        pygame.draw.rect(ui, T.PINK if lit else (color if c else T.LINE), rect, 1)
+        pygame.draw.rect(ui, T.PINK if lit else (color if c else T.LINE), rect, 2 if lit else 1)
         icon = pygame.Surface((14, 14), pygame.SRCALPHA)
         draw_icon(icon, 7, 7, T.SPACE if lit else color)
         tx = rect[0] + (half - W.width(text) - 14) // 2
-        ui.blit(pygame.transform.smoothscale(icon, (9, 9)), (tx, y + 1))
-        W.text(ui, text, T.SPACE if lit else T.FG, tx + 14, y + 1)
+        ui.blit(pygame.transform.smoothscale(icon, (9, 9)), (tx, y + 2))
+        W.text(ui, text, T.SPACE if lit else T.FG, tx + 14, y + 2)
     if wait == "pad":
         tips = ("PRESS A PANEL CONTROL - THE SAME ONE AGAIN: NONE", "ESC: CANCEL")
     elif wait == "joy":
@@ -3500,7 +3507,7 @@ def draw_controls(fe, ui, now):
     else:
         tips = ("SELECT: CHANGE   DELETE: NONE   LEFT/RIGHT: COLUMN",
                 "A BUTTON IN USE SWAPS WITH THE OLD ONE   BACK: DONE")
-    y = y0 + (reset_row + 1) * rh
+    y = y0 + (reset_row + 1) * rh + BUTTONS_GAP + 2
     tiny.centered(ui, tips[0], T.YELLOW if wait else T.COMMENT, WW // 2, y + 3)
     tiny.centered(ui, tips[1], T.COMMENT, WW // 2, y + 10)
 

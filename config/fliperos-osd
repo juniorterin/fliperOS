@@ -1031,6 +1031,8 @@ class Painter:
 
     VISIBLE = 7     # as linhas que cabem sem cobrir a imagem que se esta ajustando
     ROW = 11
+    # A linha dos botoes (Save e Close): mais alta e afastada das de cima.
+    BUTTONS_GAP, BUTTONS_ROW = 5, 17
 
     def __init__(self):
         if GUI not in sys.path:
@@ -1135,14 +1137,17 @@ class Painter:
         head = 18 + (7 if sub else 0)
         safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
         # As linhas que cabem: ate VISIBLE, menos num quadro baixo.
-        visible = max(1, min(self.VISIBLE, (H - 2 * safe_y - head - 4) // self.ROW))
+        buttons = any(r.kind == "buttons" for r in rows)
+        extra = self.BUTTONS_GAP + self.BUTTONS_ROW - self.ROW + 2 if buttons else 0
+        visible = max(1, min(self.VISIBLE, (H - 2 * safe_y - head - 4 - extra) // self.ROW))
         # O cursor sempre a vista.
         if page["cursor"] < page["top"]:
             page["top"] = page["cursor"]
         elif page["cursor"] >= page["top"] + visible:
             page["top"] = page["cursor"] - visible + 1
         shown = rows[page["top"]:page["top"] + visible]
-        width, height = W - 2 * safe_x, head + len(shown) * self.ROW + 4
+        extra = extra if any(r.kind == "buttons" for r in shown) else 0
+        width, height = W - 2 * safe_x, head + len(shown) * self.ROW + 4 + extra
         x, y = (W - width) // 2, H - safe_y - height
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
         pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
@@ -1161,23 +1166,28 @@ class Painter:
         for i, row in enumerate(shown):
             top = y + head - 1 + i * self.ROW
             chosen = page["top"] + i == page["cursor"]
-            if chosen:
-                pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
             if row.kind == "buttons":
-                # Os dois botoes lado a lado; o escolhido aceso quando a linha e a do cursor.
-                half = (width - 12) // 2
-                for i, (value, label) in enumerate(row.options):
-                    bx = x + 6 + i * (half + 4)
+                # Os dois botoes lado a lado, com folga em volta e entre eles; o
+                # escolhido aceso quando a linha e a do cursor.
+                top += self.BUTTONS_GAP
+                gap = max(6, width // 12)
+                bw = (width - 2 * gap - gap) // 2
+                bh = self.BUTTONS_ROW
+                for k, (value, label) in enumerate(row.options):
+                    bx = x + gap + k * (bw + gap)
                     on = chosen and row.value == value
-                    pg.draw.rect(surface, (t.PURPLE if on else t.BG_DEEP) + (255,), (bx, top + 1, half - 4, self.ROW - 2))
-                    pg.draw.rect(surface, (t.PINK if on else t.COMMENT) + (255,), (bx, top + 1, half - 4, self.ROW - 2), 1)
+                    pg.draw.rect(surface, (t.PURPLE if on else t.BG_DEEP) + (255,), (bx, top, bw, bh))
+                    pg.draw.rect(surface, (t.PINK if on else t.COMMENT) + (255,), (bx, top, bw, bh), 2 if on else 1)
                     image = self.font.render(label, False, t.FG if on else t.COMMENT)
                     # O icone na frente: o check no Save, o X no Close.
-                    ix = bx + (half - 4 - image.get_width() - 11) // 2
-                    self.icon(surface, "save" if value == "save" else "close", ix, top + 2,
+                    ix = bx + (bw - image.get_width() - 12) // 2
+                    iy = top + (bh - 8) // 2
+                    self.icon(surface, "save" if value == "save" else "close", ix, iy,
                               (t.GREEN if value == "save" else t.RED) if on else t.COMMENT)
-                    surface.blit(image, (ix + 11, top + 2))
+                    surface.blit(image, (ix + 12, iy))
                 continue
+            if chosen:
+                pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
             value = row.text()
             # A seta para a esquerda no Back.
             shift = 0
