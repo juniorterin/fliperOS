@@ -20,9 +20,9 @@ A pagina principal tem a Configuration (o perfil, o filtro do entrelacado, as
 scanlines, a geometria, as cores, a GunCon 2 e o Save) e os botoes Emulator
 menu, Close e Quit. O volume nao entra no menu nem nos perfis: ele e das
 teclas de volume (a barra abaixo) e do painel web. Embaixo do titulo, em
-todas as paginas e enquanto o menu esta aberto: a resolucao, as frequencias,
-o FPS do jogo e a modeline, relidos a cada LIVE_POLL segundos (um jogo que
-troca de resolucao, a geometria sendo ajustada). O Emulator menu fecha a OSD e aperta a
+todas as paginas e enquanto o menu esta aberto: a resolucao, as frequencias e
+o FPS do jogo, relidos a cada LIVE_POLL segundos (um jogo que troca de
+resolucao, a geometria sendo ajustada). O Emulator menu fecha a OSD e aperta a
 tecla do menu do proprio emulador (F1 no RetroArch, Tab no MAME...: menu_key
 do config/fliperos-buttons) por um teclado virtual que o servico cria ao
 comecar; so aparece num emulador que tem menu. O Quit fecha o jogo (SIGTERM,
@@ -120,8 +120,8 @@ RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
 # De quantos em quantos segundos se confere a resolucao do jogo na tela.
 GEOMETRY_POLL = 1.0
-# Com o menu aberto: de quantos em quantos segundos a linha da resolucao, do
-# FPS e da modeline e relida.
+# Com o menu aberto: de quantos em quantos segundos a linha da resolucao e do
+# FPS e relida.
 LIVE_POLL = 1.0
 # Os perfis da OSD (Save profile as, no alto da Configuration): o Save grava os
 # ajustes feitos para tudo (default.cfg), so para a resolucao, o emulador, o
@@ -383,19 +383,6 @@ def mode_line(mode, fps=None):
     if fps is not None:
         parts.append("%.1f FPS" % fps)
     return "  ".join(parts)
-
-
-def modeline_text(mode, short=0):
-    """A modeline do modo na tela, como o Switchres e o xrandr a escrevem: o
-    clock em MHz, os quatro tempos horizontais, os quatro verticais e
-    "interlace". short 1 sem a palavra MODELINE, 2 tambem com "i" no lugar
-    de interlace (um quadro estreito)."""
-    if not mode:
-        return ""
-    text = "%.3f %s" % (mode["clock"] / 1000.0, " ".join(str(v) for v in mode["h"] + mode["v"]))
-    if mode["interlace"]:
-        text += " i" if short >= 2 else " interlace"
-    return text if short else "modeline " + text
 
 
 def game_name(pid):
@@ -882,19 +869,15 @@ class Menu:
         titulo de todas as paginas (relidos com o menu aberto, live)."""
         return mode_line(self.mode, self.screen.get("fps"))
 
-    def modeline(self, short=0):
-        """A modeline do modo na tela, na linha de baixo da do subtitle."""
-        return modeline_text(self.mode, short)
-
     def live(self, mode, fps):
         """O modo e o FPS de agora (o servico os rele a cada LIVE_POLL s com
         o menu aberto): mudou o que se ve, desenha de novo. A geometria sendo
         ajustada guarda o modo dela (Geometry), e os perfis o da abertura."""
-        before = (self.subtitle(), self.modeline())
+        before = self.subtitle()
         if mode:
             self.mode = mode
         self.screen["fps"] = fps
-        if (self.subtitle(), self.modeline()) != before:
+        if self.subtitle() != before:
             self.dirty = True
 
     def profile_label(self, kind):
@@ -1390,13 +1373,7 @@ class Painter:
             self.edge_band(surface, current.value)
         sub = menu.subtitle()
         safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
-        # A modeline na linha de baixo: inteira, sem a palavra MODELINE ou
-        # com "i" no lugar de interlace, o que couber.
-        import tiny
-        room = W - 2 * safe_x - 12
-        line = next((text for text in (menu.modeline(k) for k in (0, 1, 2)) if tiny.width(text) <= room),
-                    menu.modeline(2))
-        head = 18 + (7 if sub else 0) + (7 if line else 0)
+        head = 18 + (7 if sub else 0)
         # As linhas que cabem: ate VISIBLE, menos num quadro baixo. Cada linha
         # de botoes e mais alta, e a primeira se afasta das de cima.
         def extra_of(some):
@@ -1437,9 +1414,7 @@ class Painter:
             tiny.text(surface, tiny.fit(sub, max(8, room)), t.COMMENT, x + 6, y + 15)
             if menu.status:
                 tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 15, right=True)
-        if line:
-            tiny.text(surface, line, t.COMMENT, x + 6, y + 15 + (7 if sub else 0))
-        if not sub and menu.status:
+        elif menu.status:
             status = self.font.render(menu.status, False, t.CYAN)
             if status.get_width() + title_w + 18 <= width:
                 surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
@@ -2128,8 +2103,8 @@ class Service:
                 if now - last > IDLE_CLOSE:
                     menu.close()
                     break
-                # A resolucao, o FPS e a modeline de agora (o jogo trocou de
-                # modo, a geometria mudou o modo).
+                # A resolucao e o FPS de agora (o jogo trocou de modo, a
+                # geometria mudou o modo).
                 if now - polled >= LIVE_POLL:
                     polled = now
                     menu.live(current_mode(), current.get("fps"))

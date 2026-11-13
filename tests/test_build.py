@@ -13461,7 +13461,7 @@ class PixelcadeTests(unittest.TestCase):
         self.assertNotIn('pixelweb', MKISO)
         for wrapper in ('fliperos-kms-run', 'fliperos-x11-run'):
             text = (ROOT / 'config' / wrapper).read_text()
-            self.assertIn('"$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 &', text, wrapper)
+            self.assertIn('[[ -x $pixelcade ]] && after_game "$pixelcade" launch "$@"', text, wrapper)
 
     def test_zedmd_installed_into_the_image(self):
         self.assertIn('install -Dm755 "$src/config/fliperos-dmd" "$root/opt/fliperos/bin/fliperos-dmd"', ROOTFS)
@@ -13759,7 +13759,7 @@ class OutputsTests(unittest.TestCase):
         self.assertNotRegex((ROOT / 'config/mame.ini').read_text(), r'(?m)^output\s')
         for wrapper in ('fliperos-kms-run', 'fliperos-x11-run'):
             text = (ROOT / 'config' / wrapper).read_text()
-            self.assertIn('"$outputs" launch "$@" < /dev/null > /dev/null 2>&1 &', text, wrapper)
+            self.assertIn('[[ -x $outputs ]] && after_game "$outputs" launch "$@"', text, wrapper)
 
     def test_installed_into_the_image_and_the_extras(self):
         self.assertIn('install -Dm755 "$src/config/fliperos-outputs" "$root/opt/fliperos/bin/fliperos-outputs"', ROOTFS)
@@ -18495,15 +18495,13 @@ class OsdTests(unittest.TestCase):
         self.assertEqual(self.osd.mode_line(self.MODE), '640x480i 15.69kHz 60.00Hz')
         menu, _ = self.menu({'program': 'pcsx2', 'core': '', 'fps': 59.94})
         self.assertEqual(menu.subtitle(), '640x480i 15.69kHz 60.00Hz  59.9 FPS')
-        # E a modeline na linha de baixo; em todas as paginas.
-        self.assertEqual(menu.modeline(), 'modeline 13.038 640 666 727 831 480 483 489 523 interlace')
-        self.assertEqual(menu.modeline(2), '13.038 640 666 727 831 480 483 489 523 i')
+        # Em todas as paginas.
         menu.open_colour()
         self.assertEqual(menu.subtitle(), '640x480i 15.69kHz 60.00Hz  59.9 FPS')
 
     def test_mode_line_follows_the_game_while_the_menu_is_open(self):
         # O jogo troca de resolucao (ou a geometria muda o modo) com o menu
-        # aberto: a linha, a modeline e o FPS mudam, e o menu se desenha de novo.
+        # aberto: a linha e o FPS mudam, e o menu se desenha de novo.
         osd = self.osd
         menu, _ = self.menu({'program': 'pcsx2', 'core': '', 'fps': 59.94})
         menu.dirty = False
@@ -18513,14 +18511,13 @@ class OsdTests(unittest.TestCase):
         menu.live(progressive, 30.0)
         self.assertTrue(menu.dirty)
         self.assertEqual(menu.subtitle(), '320x240p 15.73kHz 60.03Hz  30.0 FPS')
-        self.assertEqual(menu.modeline(), 'modeline 6.700 320 336 368 426 240 243 246 262')
         # Sem modo lido, fica o de antes.
         menu.live(None, 30.0)
         self.assertEqual(menu.mode, progressive)
         # O servico rele a cada LIVE_POLL com o menu aberto.
         source = (ROOT / 'config/fliperos-osd').read_text()
         self.assertIn('menu.live(current_mode(), current.get("fps"))', source)
-        # O desenho cabe com as duas linhas, no 640x480i e num quadro estreito.
+        # O desenho cabe, no 640x480i e num quadro estreito.
         os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
         osd.GUI = str(ROOT / 'fliperos-setup/gui')
         try:
@@ -20566,8 +20563,34 @@ class PadColorTests(unittest.TestCase):
                 subprocess.run(['bash', tool_path, 'launch'] + args, env=e, timeout=10)
             self.assertEqual(log.read_text(), '')
         for runner in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
-            self.assertIn('[[ -x $padcolor ]] && { "$padcolor" launch "$@" < /dev/null > /dev/null 2>&1 & }',
-                          (ROOT / runner).read_text())
+            self.assertIn('[[ -x $padcolor ]] && after_game "$padcolor" launch "$@"', (ROOT / runner).read_text())
+
+    def test_game_watchers_live_outside_the_game_tree(self):
+        # O atalho de sair do frontend mata a arvore do jogo (tree() no
+        # fliperos-frontend): a roleta do 8BitDo, o "end" do Pixelcade, o fim
+        # do LEDSpicer e a nuvem morriam antes de agir. after_game os poe fora
+        # dela, com o PID do jogo (o do script, que o exec mantem) explicito.
+        for runner in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
+            text = (ROOT / runner).read_text()
+            self.assertIn('[[ -x $cloud ]] && after_game "$cloud" watch $$', text, runner)
+            self.assertNotRegex(text, r'\{ "\$(padcolor|pixelcade|outputs|cloud)"', runner)
+            helper = re.search(r'(?ms)^after_game\(\) \{.*?^\}\n', text).group(0)
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / 'seen'
+                tool = Path(tmp) / 'tool'
+                tool.write_text('#!/bin/sh\necho "$PPID $PADCOLOR_GAME_PID $PIXELCADE_GAME_PID $FLIPEROS_GAME_PID $1"'
+                                ' > "%s.tmp" && mv "%s.tmp" "%s"\n' % (out, out, out))
+                tool.chmod(0o755)
+                shell = subprocess.run(['bash', '-c', helper + 'after_game "$1" arg; echo $$; sleep 0.3', 'x', str(tool)],
+                                       capture_output=True, text=True, timeout=10)
+                for _ in range(50):
+                    if out.exists():
+                        break
+                    time.sleep(0.05)
+                ppid, *pids, arg = out.read_text().split()
+                game = shell.stdout.strip()
+                self.assertEqual((pids, arg), ([game] * 3, 'arg'), runner)
+                self.assertNotEqual(ppid, game, runner)
         self.assertIn('SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2dc8", MODE="0660", GROUP="input"',
                       (ROOT / 'config/99-fliperos-input.rules').read_text())
 

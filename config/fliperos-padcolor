@@ -143,8 +143,10 @@ case ${1:-} in
     fi
     ;;
   launch)
-    # O jogo e o pai (o fliperos-kms-run e o fliperos-x11-run chamam em
-    # segundo plano e viram o emulador): cores de jogo ate ele fechar. Jogo,
+    # O jogo e PADCOLOR_GAME_PID (o fliperos-kms-run e o fliperos-x11-run
+    # chamam pelo after_game, fora da arvore do jogo, e viram o emulador; sem
+    # ele, o pai): cores de jogo ate ele fechar, mesmo fechado pelo atalho
+    # do frontend, que mata tudo abaixo do jogo. Jogo,
     # como no fliperos-pixelcade: o ultimo argumento e um arquivo, ou o set
     # do GroovyMAME e do Model 2. Sem jogo (um frontend, o menu de um
     # emulador), nada.

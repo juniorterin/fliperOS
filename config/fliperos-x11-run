@@ -22,11 +22,19 @@ done
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
 command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
+# after_game COMANDO...: um vigia que age quando o jogo fecha (a roleta do
+# 8BitDo, o "end" do Pixelcade, o fim do perfil do LEDSpicer, a nuvem), fora
+# da arvore de processos do jogo. O frontend fecha o jogo matando tudo que
+# esta abaixo dele (o atalho de sair), e um vigia filho morria junto, antes de
+# agir. O PID do jogo vai explicito: o deste script, que o exec mantem.
+after_game() {
+  (PIXELCADE_GAME_PID=$$ FLIPEROS_GAME_PID=$$ PADCOLOR_GAME_PID=$$ "$@" < /dev/null > /dev/null 2>&1 &)
+}
 # O backup na nuvem (config/fliperos-cloud, painel web): com o automatico
 # ligado, os recordes e saves sobem quando este jogo fechar (os exec abaixo
 # mantem o PID; antes do desvio do GroovyMAME, para valer nele tambem).
 cloud=${FLIPEROS_CLOUD:-/opt/fliperos/bin/fliperos-cloud}
-[[ -x $cloud ]] && { "$cloud" watch $$ < /dev/null > /dev/null 2>&1 & }
+[[ -x $cloud ]] && after_game "$cloud" watch $$
 # O groovymame escolhe sozinho entre o KMS e o X (config/fliperos-groovymame):
 # as linhas de frontend gravadas com "fliperos-x11-run groovymame" vao para
 # ele, que volta para ca (com FLIPEROS_GROOVYMAME_X11) so quando fica no X.
@@ -36,7 +44,7 @@ fi
 # O jogo da linha de comando no marquee do Pixelcade (config/fliperos-pixelcade;
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
 pixelcade=${FLIPEROS_PIXELCADE:-/opt/fliperos/bin/fliperos-pixelcade}
-[[ -x $pixelcade ]] && { "$pixelcade" launch "$@" < /dev/null > /dev/null 2>&1 & }
+[[ -x $pixelcade ]] && after_game "$pixelcade" launch "$@"
 # As conquistas do RetroAchievements na barra da OSD e no marquee: o
 # fliperos-cheevos watch as le do log do emulador ate ele fechar (num programa
 # sem conquistas, sai na hora). Os avisos do proprio emulador ficam
@@ -49,11 +57,11 @@ export FLIPEROS_CHEEVOS_LOG=${FLIPEROS_CHEEVOS_LOG:-${XDG_RUNTIME_DIR:-/tmp}/fli
 # As saidas do jogo para placas e LEDs (config/fliperos-outputs; sem o
 # Hook Of The Reaper e o LEDSpicer instalados, nada).
 outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
-[[ -x $outputs ]] && { "$outputs" launch "$@" < /dev/null > /dev/null 2>&1 & }
+[[ -x $outputs ]] && after_game "$outputs" launch "$@"
 # A luz do 8BitDo Ultimate 2 no estilo do FliperOS: as cores de jogo ate ele
 # fechar, depois a roleta de novo (config/fliperos-padcolor; sem jogo, nada).
 padcolor=${FLIPEROS_PADCOLOR_TOOL:-/opt/fliperos/bin/fliperos-padcolor}
-[[ -x $padcolor ]] && { "$padcolor" launch "$@" < /dev/null > /dev/null 2>&1 & }
+[[ -x $padcolor ]] && after_game "$padcolor" launch "$@"
 # As pistolas de luz ligadas (config/fliperos-lightgun): com uma, nenhum
 # emulador desenha mira nem a seta do X por cima do jogo.
 lightgun=${FLIPEROS_LIGHTGUN:-/opt/fliperos/bin/fliperos-lightgun}
