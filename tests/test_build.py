@@ -17698,7 +17698,8 @@ class OsdTests(unittest.TestCase):
                    'gun.flash_level|GunCon 2|Flash brightness (%)|number|100|10..100:10|h\n'
                    'gun.edge_pct|GunCon 2|Edge band (%)|number|12|0..30:1|h\n'
                    'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|on|on=On;off=Off|h\n'
-                   'gun.reset|GunCon 2|Back to the defaults|action|||h\n')
+                   'gun.reset|GunCon 2|Back to the defaults|action|||h\n'
+                   + getattr(self, 'settings_extra', ''))
         elif args[1:] == ['mode']:
             out = '13038 640 666 727 831 480 483 489 523 1\n'
         elif args[0] == self.osd.SWITCHRES:
@@ -17769,21 +17770,36 @@ class OsdTests(unittest.TestCase):
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
         self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Colour', 'Save|Close'])
 
-    def test_scanlines_switch_on_a_31_khz_monitor(self):
-        # So com frequency=31k, como no Video Setup; vai pelo --setting do
-        # Setup, e as camadas releem o fliperos.conf com o jogo aberto.
+    def test_scanlines_page_on_a_31_khz_monitor(self):
+        # So com frequency=31k, como no Video Setup: a pagina Scanlines, com
+        # ligar e cada ajuste (o escuro, a espessura, a altura, o brilho), pelo
+        # --setting do Setup; as camadas releem o fliperos.conf com o jogo aberto.
+        self.settings_extra = ('scanlines|Scanlines|Scanlines|choice|on|off=Off;on=On|h\n'
+                               'scanline.strength|Scanlines|Darkness|number|50|5..100:5|h\n'
+                               'scanline.thickness|Scanlines|Thickness|number|50|10..90:10|h\n'
+                               'scanline.height|Scanlines|Line height|number|0|0..8:1|h\n'
+                               'scanline.brightness|Scanlines|Brightness boost|number|115|100..200:5|h\n'
+                               'scanline.reset|Scanlines|Back to the defaults|action|||h\n')
         self.conf.write_text('monitor=arcade_15_25_31\nfrequency=31k\nscanlines=on\n')
         menu, worker = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Scanlines', 'Geometry', 'Colour', 'Save|Close'])
-        self.assertEqual(menu.page['rows'][2].text(), 'On')
+        labels = self.labels(menu)
+        self.assertEqual(labels, ['Volume', 'Save profile as', 'Scanlines', 'Geometry', 'Colour', 'Save|Close'])
+        menu.page['cursor'] = labels.index('Scanlines')
+        menu.key(self.osd.KEY_ENTER)
+        self.assertEqual(menu.title(), 'SCANLINES')
+        self.assertEqual(self.labels(menu), ['Scanlines', 'Darkness', 'Thickness', 'Line height', 'Brightness boost',
+                                             'Back to the defaults', 'Back'])
+        self.assertEqual([r.text() for r in menu.page['rows'][:5]], ['On', '50%', '50%', 'Auto', '115%'])
+        menu.key(self.osd.KEY_LEFT)                 # desligar
         menu.key(self.osd.KEY_DOWN)
-        menu.key(self.osd.KEY_DOWN)
-        menu.key(self.osd.KEY_LEFT)
+        menu.key(self.osd.KEY_RIGHT)                # o escuro: 50 -> 55
         worker.wait()
         self.assertIn([self.osd.SETUP, '--setting', 'scanlines', 'off'], self.calls)
-        self.conf.write_text('monitor=arcade_15_25_31\nfrequency=31k\n')
-        menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(menu.page['rows'][2].text(), 'Off')
+        self.assertIn([self.osd.SETUP, '--setting', 'scanline.strength', '55'], self.calls)
+        menu.page['cursor'] = 5
+        menu.key(self.osd.KEY_ENTER)
+        worker.wait()
+        self.assertIn([self.osd.SETUP, '--setting', 'scanline.reset', '1'], self.calls)
         self.conf.write_text('monitor=generic_15\nfrequency=15k\nscanlines=on\n')
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
         self.assertNotIn('Scanlines', self.labels(menu))

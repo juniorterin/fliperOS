@@ -727,7 +727,8 @@ class Menu:
         if name == "geometry" and self.geometry and self.geometry.key:
             # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
             return "GEOMETRY " + self.geometry.key
-        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY", "guncon": "GUNCON 2"}.get(name, "")
+        return {"main": "FLIPEROS", "colour": "COLOUR", "geometry": "GEOMETRY", "guncon": "GUNCON 2",
+                "scanlines": "SCANLINES"}.get(name, "")
 
     def rows_of(self, name):
         return getattr(self, "rows_" + name)()
@@ -763,8 +764,8 @@ class Menu:
         # e a troca vale com o jogo aberto, para todos os jogos.
         conf = read_conf()
         if conf.get("frequency", "") == "31k":
-            rows.append(Row("choice", "Scanlines", "on" if conf.get("scanlines", "") == "on" else "off",
-                            options=[("off", "Off"), ("on", "On")], change=self.setter("scanlines")))
+            # A pagina das scanlines: ligar e cada ajuste, na hora.
+            rows.append(Row("page", "Scanlines", action=self.open_scanlines))
         if conf.get("monitor", "") != "lcd" and self.mode:
             rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry")))
         rows.append(Row("page", "Colour", action=self.open_colour))
@@ -782,6 +783,33 @@ class Menu:
         # Os valores de agora: o que estava na fila tem de chegar antes.
         self.worker.wait()
         self.open_page("colour")
+
+    def open_scanlines(self):
+        self.worker.wait()
+        self.open_page("scanlines")
+
+    def rows_scanlines(self):
+        """Ligadas ou nao e os ajustes do Setup > Video Setup > Scanlines (o
+        escuro, a espessura, a altura da linha e o brilho): as camadas releem o
+        fliperos.conf, e a mudanca aparece no jogo aberto."""
+        def pretty(key):
+            if key == "scanline.height":
+                return lambda v: "Auto" if v == 0 else "%d" % v
+            if key in ("scanline.strength", "scanline.thickness", "scanline.brightness"):
+                return lambda v: "%d%%" % v
+            return str
+        rows = self.settings_rows(lambda key: key == "scanlines" or key.startswith("scanline."), pretty)
+        rows.append(Row("action", "Back to the defaults", action=self.reset_scanlines))
+        rows.append(Row("action", "Back", action=self.back))
+        return rows
+
+    def reset_scanlines(self):
+        def apply():
+            run([SETUP, "--setting", "scanline.reset", "1"], timeout=20)
+            if self.page["name"] == "scanlines":
+                self.page["rows"] = self.rows_scanlines()
+            self.dirty = True
+        self.worker.put("scanlines-reset", apply)
 
     def open_guncon(self):
         self.worker.wait()
