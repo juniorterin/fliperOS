@@ -19950,6 +19950,8 @@ class PadColor8BitDoTests(unittest.TestCase):
             self.assertEqual([(d, n) for d, n, _ in found], [('/dev/hidraw1', '8BitDo Ultimate 2 Wireless')])
             self.assertEqual(u2.bluetooth_pads(), ['8BitDo Ultimate 2 Wireless'])
             self.assertEqual(u2._key('/dev/hidraw1'), 'ultimate2-6012-e417d8')
+            # O udev chama a cada hidraw do 8BitDo: o do gamepad/teclado fica quieto.
+            self.assertIsNone(u2.apply_device('/dev/hidraw0', 0x50fa7b))
         self.assertEqual(u2.parse_color('#BD93F9'), 0xbd93f9)
         with self.assertRaises(ValueError):
             u2.parse_color('zzz')

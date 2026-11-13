@@ -288,8 +288,12 @@ def _key(dev):
 
 
 def apply_device(dev, color):
+    """None quando DEV nao e um canal de configuracao: o udev chama a cada
+    hidraw do 8BitDo, e o dongle tem tambem o do teclado e o do gamepad."""
     usb_dir = next((u for d, _, u in find_devices() if d == dev), None)
-    pad = Pad(dev, find_input_node(usb_dir) if usb_dir else None)
+    if usb_dir is None:
+        return None
+    pad = Pad(dev, find_input_node(usb_dir))
     try:
         return apply(pad, color, _key(dev))
     finally:
@@ -321,7 +325,9 @@ def main(argv):
     rc = 0
     for dev in devs:
         try:
-            print(dev, apply_device(dev, color))
+            result = apply_device(dev, color)
+            if result:
+                print(dev, result)
         except (IOError, OSError) as e:
             print("%s: %s" % (dev, e), file=sys.stderr)
             rc = 1
