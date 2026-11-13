@@ -13367,8 +13367,8 @@ class PixelcadeTests(unittest.TestCase):
             self.assertIn(ids, rules)
         self.assertIn('SYMLINK+="zedmd"', rules)
         self.assertIn('zedmd|ZeDMD (open-source LED DMD, firmware 5.1+)', EXTRAS)
-        # O Pillow e o dmdserver vem pelo Extras: nada na imagem.
-        self.assertNotIn('python3-pil', MKISO)
+        # O dmdserver vem pelo Extras: nada na imagem. O Pillow esta nela pelo
+        # fliperos-syslogo (os logotipos dos sistemas).
         self.assertNotIn('libdmdutil', MKISO)
         helper = self.SCRIPT.read_text()
         self.assertRegex(helper, r'DMDUTIL_SHA256="[0-9a-f]{64}"')
@@ -17615,8 +17615,10 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertRegex(menu, r'"games\|Games\|[^"]+" \\\n      "joysticks\|Joysticks\|')
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
         self.assertRegex(screen, r'"buttons\|Button mapping \(all emulators\)\|[^"]+" \\\n'
-                                 r'      "bluetooth\|Bluetooth\|[^"]+" \\\n'
+                                 r'      "\$\{bt\[@\]\}" \\\n'
                                  r'      "layout\|Buttons layout \(games of 1 to 5 buttons\)\|')
+        # O Bluetooth entre os dois, so com um adaptador.
+        self.assertIn('bt=("bluetooth|Bluetooth|', screen)
         self.assertIn('layout) screen_buttons_layout ;;', screen)
 
     def test_setup_saves_the_mame_options(self):
