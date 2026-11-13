@@ -4647,6 +4647,19 @@ class PadColorTests(Base):
         self.env.out("padcolor_set bd93f9", env)
         self.assertNotIn("padcolor=", (self.env.etc / "fliperos.conf").read_text())
 
+    def test_a_new_8bitdo_profile_asks_for_the_profile_button(self):
+        d = self.env.dir
+        (d / "padcolor").write_text('#!/bin/sh\n[ "$1" = all ] && echo "/dev/hidraw3 profile"\nexit 0\n')
+        (d / "padcolor").chmod(0o755)
+        log = d / "msg"
+        self.env.out("""
+            source %s/screens/joysticks.sh
+            ui_menu_hints() { echo red; }
+            ui_msg() { echo "$2" >> %s; }
+            screen_padcolor
+        """ % (SETUP, log), {"PADCOLOR": str(d / "padcolor")})
+        self.assertIn("Press its profile button once", log.read_text())
+
     def test_off_and_a_bad_colour(self):
         env = self.tool()
         self.env.out("padcolor_set off", env)

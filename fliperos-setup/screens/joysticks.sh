@@ -70,6 +70,9 @@ screen_padcolor() {
       padcolor_set "$(padcolor_table | awk -F'|' -v n="$choice" '$1 == n {print $3}')"
       ;;
   esac
+  [[ ${PADCOLOR_PROFILE:-0} == 1 ]] && ui_msg "$title" \
+    "The 8BitDo had no profile, so it got profile 1 with this colour and its buttons as they are. Press its profile button once to use it."
+  return 0
 }
 
 # screen_guncon: tudo da GunCon 2 num menu (lib/buttons.sh): a calibracao, o

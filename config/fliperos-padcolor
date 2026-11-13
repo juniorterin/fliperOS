@@ -133,7 +133,7 @@ case ${1:-} in
     for led in "$leds"/*; do
       [[ -e $led ]] && apply "$led"
     done
-    [[ -x $ultimate2 && $color =~ ^[0-9a-fA-F]{6}$ ]] && "$ultimate2" all "$color" > /dev/null 2>&1
+    [[ -x $ultimate2 && $color =~ ^[0-9a-fA-F]{6}$ ]] && "$ultimate2" all "$color" 2> /dev/null
     ;;
   *)
     echo "usage: fliperos-padcolor apply LED | hidraw NAME | all | list" >&2

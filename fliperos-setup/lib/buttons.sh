@@ -475,7 +475,12 @@ padcolor_set() {
   else
     conf_set padcolor "$color"
   fi
-  [[ $color != off && -x $PADCOLOR ]] && FLIPEROS_PADCOLOR=$color "$PADCOLOR" all > /dev/null 2>&1
+  # PADCOLOR_PROFILE=1: um 8BitDo sem perfil ganhou o perfil 1 com a cor (o
+  # padrao de fabrica nao usa as cores); o botao de perfil liga ele.
+  PADCOLOR_PROFILE=0
+  if [[ $color != off && -x $PADCOLOR ]]; then
+    FLIPEROS_PADCOLOR=$color "$PADCOLOR" all 2> /dev/null | grep -q ' profile$' && PADCOLOR_PROFILE=1
+  fi
   log_info "Controller light: $color"
   return 0
 }
