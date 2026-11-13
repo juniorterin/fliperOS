@@ -17761,20 +17761,20 @@ class OsdTests(unittest.TestCase):
 
     def test_main_page_shows_the_filter_only_in_an_interlaced_mode(self):
         menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Volume', 'Profile', 'Interlaced filter', 'Geometry', 'Colour', 'Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Interlaced filter', 'Geometry', 'Colour', 'Save|Close'])
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Profile', 'Geometry', 'Colour', 'Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Geometry', 'Colour', 'Save|Close'])
         # Num LCD nao ha geometria para ajustar.
         self.conf.write_text('monitor=lcd\n')
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Profile', 'Colour', 'Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Colour', 'Save|Close'])
 
     def test_scanlines_switch_on_a_31_khz_monitor(self):
         # So com frequency=31k, como no Video Setup; vai pelo --setting do
         # Setup, e as camadas releem o fliperos.conf com o jogo aberto.
         self.conf.write_text('monitor=arcade_15_25_31\nfrequency=31k\nscanlines=on\n')
         menu, worker = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Profile', 'Scanlines', 'Geometry', 'Colour', 'Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Scanlines', 'Geometry', 'Colour', 'Save|Close'])
         self.assertEqual(menu.page['rows'][2].text(), 'On')
         menu.key(self.osd.KEY_DOWN)
         menu.key(self.osd.KEY_DOWN)
@@ -17804,6 +17804,32 @@ class OsdTests(unittest.TestCase):
         menu.key(keys.KEY_LEFT)
         worker.wait()
         self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx_rearmed', 'light'], self.calls)
+
+    def test_edge_band_is_drawn_while_it_is_set(self):
+        # GunCon 2 > Edge band: com o cursor nela, as faixas da borda da tela
+        # na largura do valor (perder a luz ali e tiro fora da tela).
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        self.osd.GUI = str(ROOT / 'fliperos-setup/gui')
+        painter = self.osd.Painter()
+        ident = Path(self.osd.SYS_INPUT) / 'input7' / 'id'
+        ident.mkdir(parents=True)
+        (ident / 'vendor').write_text('0b9a\n')
+        (ident / 'product').write_text('016a\n')
+        menu, _ = self.menu()
+        menu.open_guncon()
+        labels = self.labels(menu)
+        orange = painter.theme.ORANGE
+        menu.page['cursor'] = labels.index('Flash brightness (%)')
+        self.assertNotEqual(painter.panel(menu).get_at((2, 2))[:3], orange)
+        menu.page['cursor'] = labels.index('Edge band (%)')
+        surface = painter.panel(menu)
+        band = surface.get_at((2, 2))
+        self.assertEqual((band[:3], band[3] > 0), (orange, True))
+        # 12% de 320: a linha de dentro em x = 38.
+        self.assertEqual(surface.get_at((38, 100))[:3], orange)
+        self.assertEqual(surface.get_at((60, 100))[3], 0)
 
     def test_menu_is_whole_in_any_frame_size(self):
         # A camada estica a imagem de 320x240 no quadro do jogo pegando o pixel
@@ -17850,37 +17876,52 @@ class OsdTests(unittest.TestCase):
         self.assertEqual(menu.subtitle(), '')
 
     def test_profiles_keep_each_setting_where_it_was_made(self):
-        # Profile, logo abaixo do Volume: default (tudo), a resolucao, o
-        # emulador ou o jogo. Fora do default, o default guarda o valor de antes.
+        # Save profile as, logo abaixo do Volume: default.cfg (tudo), a
+        # resolucao, o emulador, o core ou o jogo. O Save (na base, ao lado do
+        # Close) grava o que mudou no perfil escolhido; fora do default, o
+        # default guarda o valor de antes. Close sem Save devolve o de antes.
         osd = self.osd
         scopes = osd.profile_scopes({'program': 'retroarch', 'core': 'fbneo', 'pid': 0}, self.MODE, game='sf2')
-        self.assertEqual(scopes, {'default': 'default', 'resolution': 'res:640x480i', 'emulator': 'emu:fbneo',
-                                  'game': 'game:fbneo/sf2'})
+        self.assertEqual(scopes, {'default': 'default', 'resolution': 'res:640x480i', 'emulator': 'emu:retroarch',
+                                  'core': 'core:fbneo', 'game': 'game:fbneo/sf2'})
         menu, worker = self.menu()
         menu.scopes = dict(scopes)
         menu.page['rows'] = menu.rows_main()
-        self.assertEqual(self.labels(menu)[:2], ['Volume', 'Profile'])
+        self.assertEqual(self.labels(menu)[:2], ['Volume', 'Save profile as'])
+        self.assertEqual(self.labels(menu)[-1], 'Save|Close')
         profile = menu.page['rows'][1]
         self.assertEqual([label for _, label in profile.options],
-                         ['Default', 'Res 640x480i', 'Emu fbneo', 'Game sf2'])
+                         ['default.cfg', 'resolution.cfg', 'emulator.cfg', 'core.cfg', 'game.cfg'])
         menu.key(osd.KEY_DOWN)
-        for _ in range(3):
-            menu.key(osd.KEY_RIGHT)                 # o jogo
+        for _ in range(4):
+            menu.key(osd.KEY_RIGHT)                 # game.cfg
         self.assertEqual(menu.profile, 'game')
         menu.key(osd.KEY_UP)
-        menu.key(osd.KEY_LEFT)                      # o volume: 80 -> 75, so neste jogo
+        menu.key(osd.KEY_LEFT)                      # o volume: 80 -> 75, na hora
         worker.wait()
         self.assertIn([osd.SETUP, '--volume', 'set', '75'], self.calls)
+        self.assertEqual(osd.Profiles().data, {})   # ainda sem o Save
+        # Save: a linha da base, o botao da esquerda.
+        menu.page['cursor'] = len(menu.page['rows']) - 1
+        self.assertEqual(menu.page['rows'][-1].value, 'save')
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.status, 'SAVED GAME.CFG')
         saved = osd.Profiles()
         self.assertEqual(saved.data, {'default': {'volume': '80'}, 'game:fbneo/sf2': {'volume': '75'}})
         self.assertEqual(saved.effective(scopes), {'volume': '75'})
-        self.assertEqual(saved.effective({'default': 'default', 'emulator': 'emu:fbneo'}), {'volume': '80'})
+        self.assertEqual(saved.effective({'default': 'default', 'core': 'core:fbneo'}), {'volume': '80'})
         self.assertEqual(saved.chosen(scopes), 'game')
-        # No default, uma chave que um perfil tem tambem e guardada.
-        menu.profile = 'default'
-        menu.key(osd.KEY_LEFT)
+        # Mudou e fechou sem salvar (Close, o botao da direita): volta o de antes.
+        menu.page['cursor'] = 0
+        menu.key(osd.KEY_LEFT)                      # 75 -> 70
+        menu.page['cursor'] = len(menu.page['rows']) - 1
+        menu.key(osd.KEY_RIGHT)
+        self.assertEqual(menu.page['rows'][-1].value, 'close')
+        menu.key(osd.KEY_ENTER)
         worker.wait()
-        self.assertEqual(osd.Profiles().data['default'], {'volume': '70'})
+        self.assertTrue(menu.closing)
+        self.assertEqual(self.calls[-1], [osd.SETUP, '--volume', 'set', '75'])
+        self.assertEqual(osd.Profiles().data['game:fbneo/sf2'], {'volume': '75'})
 
     def test_service_applies_the_profiles_when_a_game_opens_and_closes(self):
         osd = self.osd
@@ -17914,7 +17955,7 @@ class OsdTests(unittest.TestCase):
         (ident / 'vendor').write_text('0b9a\n')
         (ident / 'product').write_text('016a\n')
         menu, worker = self.menu()
-        self.assertEqual(self.labels(menu)[-2:], ['GunCon 2', 'Close'])
+        self.assertEqual(self.labels(menu)[-2:], ['GunCon 2', 'Save|Close'])
         menu.page['cursor'] = self.labels(menu).index('GunCon 2')
         menu.key(self.osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'GUNCON 2')

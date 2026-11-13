@@ -83,13 +83,14 @@ RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
 # De quantos em quantos segundos se confere a resolucao do jogo na tela.
 GEOMETRY_POLL = 1.0
-# Os perfis da OSD (Profile, logo abaixo do Volume): cada ajuste vale para tudo
-# (default), so para a resolucao, so para o emulador ou so para o jogo. Uma
-# linha por ajuste: "escopo<TAB>chave<TAB>valor", o escopo "default",
-# "res:640x480i", "emu:pcsx2" ou "game:pcsx2/NOME". O default guarda o valor de
-# antes do primeiro ajuste de outro escopo, para voltar a ele.
+# Os perfis da OSD (Save profile as, logo abaixo do Volume): o Save grava os
+# ajustes feitos para tudo (default.cfg), so para a resolucao, o emulador, o
+# core ou o jogo. Uma linha por ajuste: "escopo<TAB>chave<TAB>valor", o escopo
+# "default", "res:640x480i", "emu:retroarch", "core:fbneo" ou
+# "game:fbneo/NOME". O default guarda o valor de antes do primeiro ajuste de
+# outro escopo, para voltar a ele.
 PROFILES = os.environ.get("FLIPEROS_OSD_PROFILES", "/etc/fliperos/osd-profiles.conf")
-PROFILE_KINDS = ("default", "resolution", "emulator", "game")
+PROFILE_KINDS = ("default", "resolution", "emulator", "core", "game")
 
 # O arquivo das camadas: o cabecalho e os pixels RGBA de cima para baixo. seq
 # impar: gravando.
@@ -285,15 +286,18 @@ def game_name(pid):
 def profile_scopes(screen, mode, game=None):
     """{tipo: escopo} dos perfis que valem para este jogo e este modo."""
     screen = screen or {}
-    emulator = screen.get("core") or screen.get("program") or ""
+    program, core = screen.get("program") or "", screen.get("core") or ""
     scopes = {"default": "default"}
     if mode:
         scopes["resolution"] = "res:" + resolution_key(mode)
-    if emulator:
-        scopes["emulator"] = "emu:" + emulator
+    if program:
+        scopes["emulator"] = "emu:" + program
+    if core:
+        scopes["core"] = "core:" + core
+    if core or program:
         game = game if game is not None else game_name(screen.get("pid") or 0)
         if game:
-            scopes["game"] = "game:%s/%s" % (emulator, game)
+            scopes["game"] = "game:%s/%s" % (core or program, game)
     return scopes
 
 
@@ -638,7 +642,7 @@ class Row:
         """Muda o valor pela seta; True se mudou."""
         if self.kind == "number":
             value = round(max(self.low, min(self.high, self.value + direction * self.step)), 4)
-        elif self.kind == "choice" and self.options:
+        elif self.kind in ("choice", "buttons") and self.options:
             values = [v for v, _ in self.options]
             where = values.index(self.value) if self.value in values else 0
             value = values[max(0, min(len(values) - 1, where + direction))]
@@ -704,6 +708,8 @@ class Menu:
         self.profiles = Profiles()
         self.scopes = profile_scopes(self.screen, mode)
         self.profile = self.profiles.chosen(self.scopes)
+        # chave -> [valor de antes, valor novo] dos ajustes ainda nao salvos.
+        self.pending = {}
         self.open_page("main")
 
     # O que aparece.
@@ -734,10 +740,7 @@ class Menu:
         return mode_line(self.mode, self.screen.get("fps"))
 
     def profile_label(self, kind):
-        scope = self.scopes.get(kind, "")
-        if kind == "default":
-            return "Default"
-        return {"resolution": "Res ", "emulator": "Emu ", "game": "Game "}[kind] + scope.split(":", 1)[1].split("/")[-1]
+        return kind + ".cfg"
 
     def rows_main(self):
         rows = []
@@ -745,9 +748,9 @@ class Menu:
         if volume is not None:
             rows.append(Row("number", "Volume", volume, 0, 100, VOLUME_STEP, pretty=lambda v: "%d%%" % v,
                             change=self.set_volume))
-        # Para onde vao os ajustes: tudo, esta resolucao, este emulador ou
-        # este jogo (as setas trocam).
-        rows.append(Row("choice", "Profile", self.profile,
+        # Para onde o Save grava: tudo, esta resolucao, este emulador, este
+        # core ou este jogo (as setas trocam).
+        rows.append(Row("choice", "Save profile as", self.profile,
                         options=[(kind, self.profile_label(kind)) for kind in PROFILE_KINDS if kind in self.scopes],
                         change=self.set_profile))
         if self.mode and self.mode["interlace"]:
@@ -769,7 +772,10 @@ class Menu:
         # mira e o flash atirando (Setup > Joysticks > GunCon 2).
         if guncon_present():
             rows.append(Row("page", "GunCon 2", action=self.open_guncon))
-        rows.append(Row("action", "Close", action=self.close))
+        # Na base, lado a lado: Save (grava no perfil) e Close.
+        buttons = Row("buttons", "Save|Close", "save", options=[("save", "Save"), ("close", "Close")])
+        buttons.action = lambda: self.save_profile() if buttons.value == "save" else self.close()
+        rows.append(buttons)
         return rows
 
     def open_colour(self):
@@ -795,6 +801,7 @@ class Menu:
                     low, high, step = limits
                     rows.append(Row("number", row["label"], int(float(row["value"] or 0)), int(low), int(high),
                                     int(step), pretty=pretty(key), change=self.setter(key)))
+                    rows[-1].key = key
             elif row["type"] == "choice":
                 rows.append(Row("choice", row["label"], row["value"], options=choice_options(row["options"]),
                                 change=self.setter(key)))
@@ -856,15 +863,29 @@ class Menu:
     # O que as linhas fazem.
     def set_profile(self, kind):
         self.profile = kind
-        self.status = "FOR " + self.profile_label(kind).upper()
 
     def store(self, key, value, before):
-        """Um ajuste no perfil escolhido: guardado nele (o default so guarda as
-        chaves que algum perfil ja tem) e posto no sistema agora."""
-        scope = self.scopes.get(self.profile, "default")
-        if scope != "default" or key in self.profiles.keys():
-            self.profiles.set(scope, key, value, before)
+        """Um ajuste: posto no sistema agora e guardado no perfil so com o Save."""
+        if key in self.pending:
+            self.pending[key][1] = value
+        else:
+            self.pending[key] = [before, value]
         self.worker.put(key, lambda: apply_setting(key, value))
+
+    def save_profile(self):
+        """Save: os ajustes feitos vao para o perfil escolhido."""
+        scope = self.scopes.get(self.profile, "default")
+        for key, (before, value) in sorted(self.pending.items()):
+            self.profiles.set(scope, key, value, before)
+        self.pending.clear()
+        self.status = "SAVED " + self.profile_label(self.profile).upper()
+
+    def discard(self):
+        """Close sem Save: o que nao foi salvo volta como estava."""
+        for key, (before, value) in sorted(self.pending.items()):
+            if before is not None and str(before) != str(value):
+                self.worker.put("undo-" + key, lambda key=key, before=before: apply_setting(key, before))
+        self.pending.clear()
 
     def setter(self, key):
         def change(value):
@@ -878,7 +899,8 @@ class Menu:
 
     def set_filter(self, value):
         program = self.screen.get("core") or self.screen.get("program", "")
-        self.worker.put("filter", lambda: run([SETUP, "--setting", "level." + program, value], timeout=20))
+        before = next((r.previous for r in self.stack[0]["rows"] if r.label == "Interlaced filter"), None)
+        self.store("level." + program, value, before)
 
     def set_geometry(self, index, value):
         geometry = self.geometry
@@ -975,6 +997,7 @@ class Menu:
 
     def close(self):
         self.leave_geometry()
+        self.discard()
         self.closing = True
 
     def key(self, key):
@@ -1104,6 +1127,10 @@ class Painter:
         rows = page["rows"]
         if page["name"] == "geometry":
             self.frame(surface)
+        # A edge band da GunCon 2 enquanto se ajusta: as faixas da borda.
+        current = rows[page["cursor"]] if rows else None
+        if current is not None and getattr(current, "key", "") == "gun.edge_pct":
+            self.edge_band(surface, current.value)
         sub = menu.subtitle()
         head = 18 + (7 if sub else 0)
         safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
@@ -1136,9 +1163,29 @@ class Painter:
             chosen = page["top"] + i == page["cursor"]
             if chosen:
                 pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
+            if row.kind == "buttons":
+                # Os dois botoes lado a lado; o escolhido aceso quando a linha e a do cursor.
+                half = (width - 12) // 2
+                for i, (value, label) in enumerate(row.options):
+                    bx = x + 6 + i * (half + 4)
+                    on = chosen and row.value == value
+                    pg.draw.rect(surface, (t.PURPLE if on else t.BG_DEEP) + (255,), (bx, top + 1, half - 4, self.ROW - 2))
+                    pg.draw.rect(surface, (t.PINK if on else t.COMMENT) + (255,), (bx, top + 1, half - 4, self.ROW - 2), 1)
+                    image = self.font.render(label, False, t.FG if on else t.COMMENT)
+                    # O icone na frente: o check no Save, o X no Close.
+                    ix = bx + (half - 4 - image.get_width() - 11) // 2
+                    self.icon(surface, "save" if value == "save" else "close", ix, top + 2,
+                              (t.GREEN if value == "save" else t.RED) if on else t.COMMENT)
+                    surface.blit(image, (ix + 11, top + 2))
+                continue
             value = row.text()
-            self.row_text(surface, row.label, value, t.PINK if chosen else t.FG, t.CYAN, x, top,
-                          width - (10 if row.kind == "page" else 0))
+            # A seta para a esquerda no Back.
+            shift = 0
+            if row.label == "Back":
+                self.icon(surface, "back", x + 6, top + 2, t.PINK if chosen else t.FG)
+                shift = 11
+            self.row_text(surface, row.label, value, t.PINK if chosen else t.FG, t.CYAN, x + shift, top,
+                          width - shift - (10 if row.kind == "page" else 0))
             if row.kind == "page":
                 self.text(surface, ">", t.COMMENT, x + width - 14, top + 2)
             fraction = row.fraction()
@@ -1182,6 +1229,37 @@ class Painter:
         pg.draw.rect(surface, t.CYAN + (255,), (t.SAFE_X, t.SAFE_Y, w - 2 * t.SAFE_X, h - 2 * t.SAFE_Y), 1)
         pg.draw.line(surface, color, (w // 2, 0), (w // 2, h - 1))
         pg.draw.line(surface, color, (0, h // 2), (w - 1, h // 2))
+
+    # Os icones de 8x8 das linhas e dos botoes, em pixel como a letra.
+    ICONS = {
+        "back": ("...#....", "..##....", ".#######", "########", ".#######", "..##....", "...#....", "........"),
+        "close": ("##....##", ".##..##.", "..####..", "...##...", "..####..", ".##..##.", "##....##", "........"),
+        "save": (".......#", "......##", ".....##.", "#...##..", "##.##...", ".###....", "..#.....", "........"),
+    }
+
+    def icon(self, surface, name, x, y, color):
+        for j, line in enumerate(self.ICONS[name]):
+            for i, c in enumerate(line):
+                if c == "#":
+                    surface.fill(color, (x + i, y + j, 1, 1))
+
+    def edge_band(self, surface, percent):
+        """A edge band da GunCon 2 na tela: perder a luz dentro dessas faixas
+        da borda (percent da largura e da altura, de cada lado) conta como
+        tiro fora da tela (a recarga). Por baixo do menu."""
+        pg, t = self.pg, self.theme
+        w, h = surface.get_size()
+        bx, by = round(w * percent / 100), round(h * percent / 100)
+        if bx <= 0 and by <= 0:
+            return
+        band = t.ORANGE + (110,)
+        for rect in ((0, 0, w, by), (0, h - by, w, by), (0, by, bx, h - 2 * by), (w - bx, by, bx, h - 2 * by)):
+            if rect[2] > 0 and rect[3] > 0:
+                pg.draw.rect(surface, band, rect)
+        # A linha de dentro, onde a tela "de verdade" comeca.
+        pg.draw.rect(surface, t.ORANGE + (255,), (bx, by, max(1, w - 2 * bx), max(1, h - 2 * by)), 1)
+        import tiny
+        tiny.text(surface, "EDGE BAND %d%%" % percent, t.ORANGE, bx + 3, by + 3)
 
     def rgba(self, menu):
         self.theme.set_orientation(read_conf().get("orientation", ""))
