@@ -1283,6 +1283,10 @@ class RomFoldersTests(unittest.TestCase):
             self.assertFalse((home / 'nvram/mame/flycast').exists())
 
     def test_nvram_of_the_image_comes_once_and_keeps_what_was_played(self):
+        # O jogo que ja tinha memoria propria (a de fabrica, gravada ao abrir)
+        # recebe a destravada uma vez; a propria fica em .own. Antes ela
+        # ficava, e o ngbc jogado antes da imagem trazer a destravada nunca a
+        # recebia.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / 'home'
             bundled = Path(tmp) / 'bundled'
@@ -1293,11 +1297,16 @@ class RomFoldersTests(unittest.TestCase):
             (bundled / 'flycast').mkdir()
             for name in ('kofxi.zip.nvmem', 'kofxi.zip.nvmem2', 'mvsc2.zip.eeprom'):
                 (bundled / 'flycast' / name).write_text('unlocked')
-            # Jogados antes: ficam, sem o arquivo de outra origem ao lado.
+            # Jogados antes: a propria vai para .own, a destravada entra
+            # inteira (sem arquivo de outra origem ao lado).
             (home / 'nvram/mame/sf2').mkdir(parents=True)
             (home / 'nvram/mame/sf2/sf2.nv').write_text('mine')
             (home / 'nvram/flycast').mkdir(parents=True)
             (home / 'nvram/flycast/kofxi.zip.nvmem').write_text('mine')
+            (home / 'nvram/flycast/kofxi.zip.eeprom').write_text('mine')
+            # Ja igual a da imagem: nada muda. Da regra antiga (.bundled): passa pela nova.
+            (home / 'nvram/flycast/mvsc2.zip.eeprom').write_text('unlocked')
+            (home / 'nvram/flycast/.bundled').write_text('kofxi.zip\nmvsc2.zip\n')
             env = dict(os.environ, HOME=str(home), FLIPEROS_CORE_INFO=str(home / 'nada'),
                        FLIPEROS_SAVES_OLD=str(home / 'nada'), FIGHTCADE_DIR=str(home / 'nenhum'),
                        FLIPEROS_NVRAM_BUNDLED=str(bundled))
@@ -1305,10 +1314,19 @@ class RomFoldersTests(unittest.TestCase):
             login = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             login()
             self.assertEqual((home / 'nvram/mame/tekken3/at28c16').read_text(), 'unlocked')
-            self.assertEqual((home / 'nvram/mame/sf2/sf2.nv').read_text(), 'mine')
+            self.assertEqual((home / 'nvram/mame/sf2/sf2.nv').read_text(), 'unlocked')
+            self.assertEqual((home / 'nvram/mame/.own/sf2/sf2.nv').read_text(), 'mine')
             self.assertEqual((home / 'nvram/flycast/mvsc2.zip.eeprom').read_text(), 'unlocked')
-            self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem').read_text(), 'mine')
-            self.assertFalse((home / 'nvram/flycast/kofxi.zip.nvmem2').exists())
+            self.assertFalse((home / 'nvram/flycast/.own/mvsc2.zip.eeprom').exists())
+            self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem').read_text(), 'unlocked')
+            self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem2').read_text(), 'unlocked')
+            self.assertFalse((home / 'nvram/flycast/kofxi.zip.eeprom').exists())
+            self.assertEqual((home / 'nvram/flycast/.own/kofxi.zip.nvmem').read_text(), 'mine')
+            self.assertEqual((home / 'nvram/flycast/.own/kofxi.zip.eeprom').read_text(), 'mine')
+            # Jogado de novo depois: o que o jogo gravou fica.
+            (home / 'nvram/flycast/kofxi.zip.nvmem').write_text('played')
+            login()
+            self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem').read_text(), 'played')
             # Apagado para comecar do zero: nao volta.
             shutil.rmtree(home / 'nvram/mame/tekken3')
             (home / 'nvram/flycast/mvsc2.zip.eeprom').unlink()
@@ -18059,6 +18077,13 @@ class CheevosWatchTests(unittest.TestCase):
         patch = (ROOT / 'packaging/patches/flycast/0006-achievements-log-and-no-notifications.patch').read_text()
         self.assertIn('getenv("FLIPEROS_CHEEVOS_LOG")', patch)
         self.assertIn('Option<bool> AchievementsNotifications("Notifications", true, "achievements");', patch)
+        # Todos os avisos de conquista na tela, nao so o desbloqueio: o resumo
+        # do jogo ao abrir, o login, o desafio, o placar e o progresso.
+        for call in ('notifier.notify(Notification::Login, image, text1, text2, text3);', 'notifier.showChallenge(image);',
+                     'notifier.showLeaderboard(leaderboard->id, leaderboard->display);',
+                     'notifier.notify(Notification::Progress, image, progress);',
+                     'notifier.notify(Notification::Login, image, text);'):
+            self.assertRegex(patch, r'\+\s*if \(config::AchievementsNotifications\)\n\+\s*' + re.escape(call), call)
 
 
 class FrontendCheevosTests(unittest.TestCase):

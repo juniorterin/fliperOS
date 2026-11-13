@@ -875,7 +875,7 @@ class Frontend:
         # lista a fecha, aos poucos (outro sistema a abre de novo:
         # switch_category).
         now = time.monotonic()
-        if self.ribbon_until > now + RIBBON_FADE:
+        if getattr(self, "ribbon_until", 0) > now + RIBBON_FADE:
             self.ribbon_until = now + RIBBON_FADE
         if self.letter_mode and a in ("up", "down"):
             # No modo letra, cada toque passa uma letra; segurando, repete

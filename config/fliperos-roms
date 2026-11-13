@@ -306,27 +306,64 @@ for dir in "$save"/retroarch/*/*/nvram; do
   link_dir "$dir" "$nvram/retroarch/$core"
 done
 # A memoria que vem na imagem (config/nvram/SOURCES.md), com o que os jogos
-# destravam ja destravado. Cada jogo vem uma vez so, e so se a pasta ainda nao
-# tem a dele: o que a pessoa jogou fica, e os arquivos de um jogo nao se
-# misturam com os de outra origem. O .bundled anota os jogos ja vistos, entao
-# um apagado para comecar do zero nao volta; um que uma versao nova da imagem
-# trouxer entra no login seguinte.
+# destravam ja destravado. Cada jogo vem uma vez so. Se ele ja tem memoria
+# propria (a de fabrica que o jogo grava ao abrir pela primeira vez, sem nada
+# destravado), ela vai para ~/nvram/<emulador>/.own e a destravada entra no
+# lugar: antes a propria ficava, e o jogo jogado antes de a imagem trazer a
+# destravada (o ngbc no gabinete) nunca a recebia. Os arquivos de um jogo nao
+# se misturam com os de outra origem (todos os <set>.zip.* saem juntos). O
+# .unlocked anota os jogos ja feitos, entao um apagado para comecar do zero nao
+# volta; um que uma versao nova da imagem trouxer entra no login seguinte. (O
+# .bundled era a lista da regra antiga, que nao trocava a propria: cada jogo
+# dela passa uma vez pela regra nova.)
 nvram_bundled=${FLIPEROS_NVRAM_BUNDLED:-/usr/share/fliperos/nvram}
+# same_files PASTA_A PASTA_B NOME...: os arquivos NOME sao iguais nas duas.
+same_files() {
+  local a=$1 b=$2 name
+  shift 2
+  for name; do
+    cmp -s -- "$a/$name" "$b/$name" || return 1
+  done
+}
 for emu in mame flycast; do
   [[ -d $nvram_bundled/$emu && -d $nvram/$emu ]] || continue
-  seen=$nvram/$emu/.bundled
+  done_list=$nvram/$emu/.unlocked
+  own=$nvram/$emu/.own
   for item in "$nvram_bundled/$emu"/*; do
     [[ -e $item ]] || continue
     game=${item##*/}
     # No MAME um jogo e uma pasta; no Flycast, os arquivos <set>.zip.*.
     [[ $emu == mame ]] || game=${game%.*}
-    grep -qxF -- "$game" "$seen" 2> /dev/null && continue
+    grep -qxF -- "$game" "$done_list" 2> /dev/null && continue
     if [[ $emu == mame ]]; then
-      [[ -e $nvram/$emu/$game ]] || cp -r -- "$item" "$nvram/$emu/" 2> /dev/null
-    elif ! compgen -G "$nvram/$emu/$game.*" > /dev/null; then
-      cp -- "$nvram_bundled/$emu/$game".* "$nvram/$emu/" 2> /dev/null
+      if [[ -e $nvram/$emu/$game ]]; then
+        names=()
+        while IFS= read -r -d '' f; do names+=("${f#"$item"/}"); done < <(find "$item" -type f -print0)
+        if ! same_files "$item" "$nvram/$emu/$game" "${names[@]}"; then
+          mkdir -p "$own" 2> /dev/null
+          [[ -e $own/$game ]] || mv -- "$nvram/$emu/$game" "$own/" 2> /dev/null
+          rm -rf -- "${nvram:?}/$emu/$game"
+          cp -r -- "$item" "$nvram/$emu/" 2> /dev/null
+        fi
+      else
+        cp -r -- "$item" "$nvram/$emu/" 2> /dev/null
+      fi
+    else
+      names=()
+      for f in "$nvram_bundled/$emu/$game".*; do names+=("${f##*/}"); done
+      mine=()
+      for f in "$nvram/$emu/$game".*; do [[ -e $f ]] && mine+=("${f##*/}"); done
+      if ((${#mine[@]})) && ! same_files "$nvram_bundled/$emu" "$nvram/$emu" "${names[@]}"; then
+        mkdir -p "$own" 2> /dev/null
+        for f in "${mine[@]}"; do
+          [[ -e $own/$f ]] || cp -p -- "$nvram/$emu/$f" "$own/" 2> /dev/null
+          rm -f -- "${nvram:?}/$emu/$f"
+        done
+      fi
+      ((${#mine[@]})) && same_files "$nvram_bundled/$emu" "$nvram/$emu" "${names[@]}" ||
+        cp -- "$nvram_bundled/$emu/$game".* "$nvram/$emu/" 2> /dev/null
     fi
-    printf '%s\n' "$game" >> "$seen" 2> /dev/null
+    printf '%s\n' "$game" >> "$done_list" 2> /dev/null
   done
 done
 

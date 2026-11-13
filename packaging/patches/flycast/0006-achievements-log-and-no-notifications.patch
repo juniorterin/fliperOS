@@ -1,17 +1,17 @@
-From 2997274eaf94784a4cd587baae464d21aff3d099 Mon Sep 17 00:00:00 2001
+From 6e9098a7425262f2298fcdabe361d0d94de8b40a Mon Sep 17 00:00:00 2001
 From: FliperOS <fliperos@localhost>
 Date: Fri, 13 Nov 2026 08:46:34 -0300
 Subject: [PATCH] achievements: unlocks in $FLIPEROS_CHEEVOS_LOG, notifications
- can be turned off (FliperOS)
+  can be turned off (FliperOS)
 
 ---
- core/achievements/achievements.cpp | 22 ++++++++++++++++++++++
+ core/achievements/achievements.cpp | 50 +++++++++++++++++++++++++-----
  core/cfg/option.cpp                |  1 +
  core/cfg/option.h                  |  2 ++
- 3 files changed, 25 insertions(+)
+ 3 files changed, 46 insertions(+), 7 deletions(-)
 
 diff --git a/core/achievements/achievements.cpp b/core/achievements/achievements.cpp
-index 47375bd..b803a3b 100644
+index 47375bd..33ae14b 100644
 --- a/core/achievements/achievements.cpp
 +++ b/core/achievements/achievements.cpp
 @@ -39,6 +39,8 @@
@@ -23,7 +23,29 @@ index 47375bd..b803a3b 100644
  #include "util/worker_thread.h"
  #include "util/periodic_thread.h"
  
-@@ -615,6 +617,18 @@ void Achievements::handleUnlockEvent(const rc_client_event_t *event)
+@@ -387,7 +389,9 @@ void Achievements::authenticationSuccess(const rc_client_user_t *user)
+ 		{
+ 			std::string image = getOrDownloadImage(url.c_str());
+ 			std::string text = strprintf(i18n::T("User %s authenticated"), config::AchievementsUserName.get().c_str());
+-			notifier.notify(Notification::Login, image, text);
++			// FliperOS: notifications off -> the OSD bar only
++			if (config::AchievementsNotifications)
++				notifier.notify(Notification::Login, image, text);
+ 		});
+ 	}
+ 	loggedOn = true;
+@@ -402,7 +406,9 @@ void Achievements::clientLoginWithTokenCallback(int result, const char *error_me
+ 	if (result != RC_OK)
+ 	{
+ 		WARN_LOG(COMMON, "RA Login failed: %s", error_message);
+-		notifier.notify(Notification::Login, "", i18n::Ts("RetroAchievements authentication failed"), error_message);
++		// FliperOS: notifications off -> the OSD bar only
++		if (config::AchievementsNotifications)
++			notifier.notify(Notification::Login, "", i18n::Ts("RetroAchievements authentication failed"), error_message);
+ 		return;
+ 	}
+ 	achievements->authenticationSuccess(rc_client_get_user_info(client));
+@@ -615,6 +621,18 @@ void Achievements::handleUnlockEvent(const rc_client_event_t *event)
  	assert(cheevo != nullptr);
  
  	INFO_LOG(COMMON, "RA: Achievement %s (%u) for game %s unlocked", cheevo->title, cheevo->id, settings.content.title.c_str());
@@ -42,7 +64,18 @@ index 47375bd..b803a3b 100644
  	std::string title(cheevo->title);
  	std::string description(cheevo->description);
  	std::string url(512, '\0');
-@@ -663,6 +677,8 @@ void Achievements::handleLeaderboardStarted(const rc_client_event_t *event)
+@@ -639,7 +657,9 @@ void Achievements::handleAchievementChallengeIndicatorShowEvent(const rc_client_
+ 	{
+ 		asyncTask([this, url]() {
+ 			std::string image = getOrDownloadImage(url.c_str());
+-			notifier.showChallenge(image);
++			// FliperOS: notifications off -> the OSD bar only
++			if (config::AchievementsNotifications)
++				notifier.showChallenge(image);
+ 		});
+ 	}
+ }
+@@ -663,6 +683,8 @@ void Achievements::handleLeaderboardStarted(const rc_client_event_t *event)
  {
  	const rc_client_leaderboard_t *leaderboard = event->leaderboard;
  	INFO_LOG(COMMON, "RA: Leaderboard started: %s", leaderboard->title);
@@ -51,7 +84,7 @@ index 47375bd..b803a3b 100644
  	std::string text = strprintf(i18n::T("Leaderboard %s started"), leaderboard->title);
  	notifier.notify(Notification::Unlocked, "", text, leaderboard->description);
  }
-@@ -670,6 +686,8 @@ void Achievements::handleLeaderboardFailed(const rc_client_event_t *event)
+@@ -670,6 +692,8 @@ void Achievements::handleLeaderboardFailed(const rc_client_event_t *event)
  {
  	const rc_client_leaderboard_t *leaderboard = event->leaderboard;
  	INFO_LOG(COMMON, "RA: Leaderboard failed: %s", leaderboard->title);
@@ -60,7 +93,7 @@ index 47375bd..b803a3b 100644
  	std::string text = strprintf(i18n::T("Leaderboard %s failed"), leaderboard->title);
  	notifier.notify(Notification::Unlocked, "", text, leaderboard->description);
  }
-@@ -677,6 +695,8 @@ void Achievements::handleLeaderboardSubmitted(const rc_client_event_t *event)
+@@ -677,6 +701,8 @@ void Achievements::handleLeaderboardSubmitted(const rc_client_event_t *event)
  {
  	const rc_client_leaderboard_t *leaderboard = event->leaderboard;
  	INFO_LOG(COMMON, "RA: Leaderboard submitted: %s", leaderboard->title);
@@ -69,7 +102,26 @@ index 47375bd..b803a3b 100644
  	std::string text = strprintf(i18n::T("Leaderboard %s submitted"), leaderboard->title);
  	notifier.notify(Notification::Unlocked, "", text, leaderboard->description);
  }
-@@ -701,6 +721,8 @@ void Achievements::handleUpdateLeaderboardTracker(const rc_client_event_t *event
+@@ -684,7 +710,9 @@ void Achievements::handleShowLeaderboardTracker(const rc_client_event_t *event)
+ {
+ 	const rc_client_leaderboard_tracker_t *leaderboard = event->leaderboard_tracker;
+ 	DEBUG_LOG(COMMON, "RA: Show leaderboard[%d]: %s", leaderboard->id, leaderboard->display);
+-	notifier.showLeaderboard(leaderboard->id, leaderboard->display);
++	// FliperOS: notifications off -> the OSD bar only
++	if (config::AchievementsNotifications)
++		notifier.showLeaderboard(leaderboard->id, leaderboard->display);
+ }
+ void Achievements::handleHideLeaderboardTracker(const rc_client_event_t *event)
+ {
+@@ -696,11 +724,15 @@ void Achievements::handleUpdateLeaderboardTracker(const rc_client_event_t *event
+ {
+ 	const rc_client_leaderboard_tracker_t *leaderboard = event->leaderboard_tracker;
+ 	DEBUG_LOG(COMMON, "RA: Update leaderboard[%d]: %s", leaderboard->id, leaderboard->display);
+-	notifier.showLeaderboard(leaderboard->id, leaderboard->display);
++	// FliperOS: notifications off -> the OSD bar only
++	if (config::AchievementsNotifications)
++		notifier.showLeaderboard(leaderboard->id, leaderboard->display);
+ }
  
  void Achievements::handleGameCompleted(const rc_client_event_t *event)
  {
@@ -78,11 +130,33 @@ index 47375bd..b803a3b 100644
  	const rc_client_game_t* game = rc_client_get_game_info(rc_client);
  	std::string text1 = strprintf(rc_client_get_hardcore_enabled(rc_client) ? i18n::T("Mastered %s") : i18n::T("Completed %s"), game->title);
  	rc_client_user_game_summary_t summary;
+@@ -737,7 +769,9 @@ void Achievements::handleUpdateAchievementProgress(const rc_client_event_t *even
+ 		std::string image;
+ 		if (!url.empty())
+ 			image = getOrDownloadImage(url.c_str());
+-		notifier.notify(Notification::Progress, image, progress);
++		// FliperOS: notifications off -> the OSD bar only
++		if (config::AchievementsNotifications)
++			notifier.notify(Notification::Progress, image, progress);
+ 	});
+ }
+ 
+@@ -961,7 +995,9 @@ void Achievements::gameLoaded(int result, const char *errorMessage)
+ 		if (!url.empty())
+ 			image = getOrDownloadImage(url.c_str());
+ 		std::string text3 = settings.raHardcoreMode ? i18n::T("Hardcore Mode") : "";
+-		notifier.notify(Notification::Login, image, text1, text2, text3);
++		// FliperOS: notifications off -> the OSD bar only
++		if (config::AchievementsNotifications)
++			notifier.notify(Notification::Login, image, text1, text2, text3);
+ 	});
+ }
+ 
 diff --git a/core/cfg/option.cpp b/core/cfg/option.cpp
-index 6574b7e..574ba17 100644
+index 575622c..6805431 100644
 --- a/core/cfg/option.cpp
 +++ b/core/cfg/option.cpp
-@@ -254,5 +254,6 @@ Option<bool> AchievementsHardcoreMode("HardcoreMode", false, "achievements");
+@@ -249,5 +249,6 @@ Option<bool> AchievementsHardcoreMode("HardcoreMode", false, "achievements");
  OptionString AchievementsUserName("UserName", "", "achievements");
  OptionString AchievementsToken("Token", "", "achievements");
  OptionString AchievementsHostUrl("HostUrl", "", "achievements");
@@ -90,10 +164,10 @@ index 6574b7e..574ba17 100644
  
  } // namespace config
 diff --git a/core/cfg/option.h b/core/cfg/option.h
-index 34c8b49..851159d 100644
+index 05f9489..55cd7f4 100644
 --- a/core/cfg/option.h
 +++ b/core/cfg/option.h
-@@ -580,5 +580,7 @@ extern Option<bool> AchievementsHardcoreMode;
+@@ -576,5 +576,7 @@ extern Option<bool> AchievementsHardcoreMode;
  extern OptionString AchievementsUserName;
  extern OptionString AchievementsToken;
  extern OptionString AchievementsHostUrl;
