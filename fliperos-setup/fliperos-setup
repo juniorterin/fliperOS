@@ -25,6 +25,7 @@
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
 #   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --systems, --downloader status|add|start|remove, --settings, --setting KEY VALUE, --outputs main|all,
 #   --emulator-ensure NOME (o frontend: instala ou compila o emulador do jogo),
+#   --cloud-restore PASTA (o backup na nuvem: as configuracoes do sistema),
 #   --padkeys on|off, --services-boot, --services-screen, --services-late (lib/services.sh),
 #   --bios-check (as BIOS que faltam, lib/downloader.sh),
 #   --romlists, --mediapacks auto|resume|status (o frontend do FliperOS),
@@ -394,6 +395,13 @@ main() {
       flock -n "$lock" || return 0
       FRONTENDS_RESYNC_FULL=1 frontends_lists > /dev/null
       return 0
+      ;;
+    --cloud-restore)
+      # O backup na nuvem (config/fliperos-cloud, pelo sudo do jogador): as
+      # configuracoes do sistema que desceram, no /etc/fliperos.
+      [[ -d ${2:-} ]] || return 2
+      cloud_restore "$2"
+      return
       ;;
     --emulator-ensure)
       # O frontend abriu um jogo de um emulador que nao esta aqui: instala

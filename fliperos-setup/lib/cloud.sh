@@ -61,3 +61,42 @@ cloud_kind_fields() {
 cloud_install() {
   update_install_package rclone
 }
+
+# As chaves do fliperos.conf que sao gosto da pessoa e vao de um gabinete para
+# outro pela nuvem. O que e do hardware (monitor, placa, driver, geometria,
+# cor, modo de boot) fica o de cada maquina.
+CLOUD_CONF_KEYS='^(bios_auto|cabinet_name|deflicker.*|mode480_.*|level\..*|gun_.*|latency|launcher|marquee_overlay|menu_sounds|netshare_.*|osd.*|scanlines|scraper_.*|splash|stream_audio|stream_quality|volume|esde_240p|pegasus_240p|screens)$'
+
+# cloud_restore PASTA (fliperos-setup --cloud-restore, root): as configuracoes
+# do sistema que desceram da nuvem (config/fliperos-cloud, sync_system) no
+# lugar, so as que vieram mais novas que as daqui. Do fliperos.conf, so as
+# chaves de CLOUD_CONF_KEYS. Os botoes trocados vao para os emuladores.
+cloud_restore() {
+  local stage=$1 rel src dst key value buttons=0
+  [[ -d $stage ]] || return 1
+  while IFS= read -r -d '' src; do
+    rel=${src#"$stage"/}
+    dst=$FLIPEROS_ETC/$rel
+    case $rel in
+      .. | ../* | */../* | *..) continue ;;
+    esac
+    [[ -f $dst && ! $src -nt $dst ]] && continue
+    if [[ $rel == fliperos.conf ]]; then
+      while IFS='=' read -r key value; do
+        [[ -n $key && $key != \#* && $key =~ $CLOUD_CONF_KEYS ]] || continue
+        [[ $(conf_get "$key" 2> /dev/null) == "$value" ]] && continue
+        conf_set "$key" "$value"
+      done < "$src"
+      touch -r "$src" "$FLIPEROS_CONF" 2> /dev/null
+    else
+      install -D -m 644 "$src" "$dst" || continue
+      touch -r "$src" "$dst"
+      [[ $rel == buttons*.map || $rel == buttons.layout ]] && buttons=1
+    fi
+    log_info "nuvem: $rel restaurado"
+  done < <(find "$stage" -type f -print0)
+  if ((buttons)) && [[ -x ${BUTTONS:-} && -f ${BUTTONS_MAP:-} ]]; then
+    "$BUTTONS" save "$BUTTONS_MAP" >> "$FLIPEROS_LOG" 2>&1 || log_info "nuvem: os botoes nao foram para os emuladores"
+  fi
+  return 0
+}

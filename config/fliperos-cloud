@@ -12,6 +12,10 @@
 #   fliperos-cloud forget                 tira o remoto (o que esta na nuvem fica la)
 #   fliperos-cloud auto on|off            sincroniza sozinho ao fechar cada jogo
 #   fliperos-cloud what LISTA             o que sincronizar: hiscores,saves,config
+#                                         (config e tudo o que se configura e se usa: os
+#                                         emuladores, os frontends, os jogos jogados e os
+#                                         favoritos, os magnets do Downloader e, do sistema,
+#                                         os controles, a GunCon, os perfis da OSD...)
 #   fliperos-cloud sync [push|pull|both]  agora (o padrao e both: os dois lados, o mais novo vence)
 #   fliperos-cloud watch PID              (fliperos-kms-run/x11-run) espera o jogo fechar e, com o
 #                                         automatico ligado, sincroniza os hi-scores e os saves; as
@@ -75,11 +79,74 @@ pairs() {
       ;;
     saves) printf '%s\t%s\n' "$HOME_DIR/save" saves ;;
     config)
+      # Tudo o que a pessoa configura e o rastro do uso: o frontend do
+      # FliperOS (favoritos, escondidos, filtros, jogados e o tempo de cada
+      # um), os emuladores e os outros frontends. O pesado que se baixa de
+      # novo (cores, temas, arte, caches) fica de fora (EXCLUDES).
       printf '%s\t%s\n' "$HOME_DIR/.mame/cfg" config/mame-cfg "$HOME_DIR/.config/fliperos" config/fliperos \
         "$HOME_DIR/.local/share/fliperos/stats" config/stats "$HOME_DIR/.config/retroarch/remaps" config/retroarch-remaps \
-        "$HOME_DIR/.config/retroarch/config" config/retroarch-overrides
+        "$HOME_DIR/.config/retroarch/config" config/retroarch-overrides \
+        "$HOME_DIR/.local/share/fliperos" config/fliperos-data \
+        "$HOME_DIR/.config/retroarch" config/retroarch \
+        "$HOME_DIR/.mame" config/mame \
+        "$HOME_DIR/.config/flycast" config/flycast \
+        "$HOME_DIR/.config/PCSX2" config/pcsx2 \
+        "$HOME_DIR/.config/PCSX2x6" config/pcsx2x6 \
+        "$HOME_DIR/.config/dolphin-emu" config/dolphin \
+        "$HOME_DIR/.config/duckstation" config/duckstation \
+        "$HOME_DIR/.local/share/duckstation" config/duckstation-data \
+        "$HOME_DIR/.config/supermodel" config/supermodel \
+        "$HOME_DIR/.config/sm2-emu" config/sm2-emu \
+        "$HOME_DIR/.openbor" config/openbor \
+        "$HOME_DIR/.attract" config/attractplus \
+        "$HOME_DIR/ES-DE" config/es-de \
+        "$HOME_DIR/.config/pegasus-frontend" config/pegasus \
+        "$SYSTEM_DOWNLOADER" config/system/downloader
       ;;
   esac
+}
+
+# O que nao sobe: o que se baixa ou se refaz (cores, temas, arte, videos,
+# caches, logs) e os segredos do proprio backup.
+EXCLUDES=(--exclude 'cloud.conf' --exclude 'google-oauth.conf' --exclude '.google-oauth-tried' --exclude '*.part'
+  --exclude 'cores/**' --exclude 'assets/**' --exclude 'thumbnails/**' --exclude 'shaders/**' --exclude 'overlays/**'
+  --exclude 'database/**' --exclude 'system/**' --exclude 'downloads/**' --exclude 'logs/**' --exclude '*.log'
+  --exclude 'cache/**' --exclude 'Cache/**' --exclude 'layouts/**' --exclude 'scraped/**' --exclude 'snap/**'
+  --exclude 'downloaded_media/**' --exclude 'themes/**' --exclude 'artwork/**' --exclude 'hiscore/**'
+  --exclude 'Paks/**' --exclude '*.zip' --exclude '*.7z' --exclude '*.chd' --exclude '*.iso')
+
+# As configuracoes do sistema (/etc/fliperos, do root): sobem como estao e,
+# ao descer, ficam em SYSTEM_STAGE ate o Setup (fliperos-setup --cloud-restore,
+# pelo sudo) por as de cada pessoa no lugar. Os magnets e os filtros do
+# Downloader (do jogador) descem direto.
+SYSTEM_ETC=${FLIPEROS_CLOUD_SYSTEM_ETC:-/etc/fliperos}
+SYSTEM_DOWNLOADER=${FLIPEROS_CLOUD_DOWNLOADER:-/var/lib/fliperos/downloader}
+SYSTEM_STAGE=${FLIPEROS_CLOUD_STAGE:-$HOME_DIR/.local/share/fliperos-cloud/system}
+SYSTEM_RESTORE=${FLIPEROS_CLOUD_RESTORE:-sudo -n /usr/local/bin/fliperos-setup --cloud-restore}
+# Os arquivos do /etc/fliperos que sao da pessoa (os outros vem da imagem).
+SYSTEM_FILES=(buttons.map buttons-bt.map buttons.layout guncon2.conf services.conf session quirks.conf
+  osd-profiles.conf fliperos.conf cheevos 'retroarch/**' 'mame/**')
+
+# sync_system push|pull|both: o /etc/fliperos.
+sync_system() {
+  local dir=$1 rc=0 file
+  local -a filters=()
+  for file in "${SYSTEM_FILES[@]}"; do
+    filters+=(--include "$file")
+  done
+  filters+=(--exclude '*')
+  if [[ $dir != pull && -d $SYSTEM_ETC ]]; then
+    "$RCLONE" copy --update "${filters[@]}" "$SYSTEM_ETC" "$REMOTE:$ROOT_DIR/config/system/etc" >> "$LOG" 2>&1 || rc=1
+  fi
+  if [[ $dir != push ]]; then
+    mkdir -p "$SYSTEM_STAGE" 2> /dev/null
+    "$RCLONE" copy --update "${filters[@]}" "$REMOTE:$ROOT_DIR/config/system/etc" "$SYSTEM_STAGE" >> "$LOG" 2>&1 || rc=1
+    # Pelo Setup (root): so o que veio mais novo que o daqui.
+    if [[ -n $(find "$SYSTEM_STAGE" -type f -print -quit 2> /dev/null) ]]; then
+      $SYSTEM_RESTORE "$SYSTEM_STAGE" >> "$LOG" 2>&1 || rc=1
+    fi
+  fi
+  return $rc
 }
 
 state_get() { sed -n "s/^$1=//p" "$STATE" 2> /dev/null | tail -1; }
@@ -168,14 +235,15 @@ sync_group() {
   local group=$1 dir=$2 local_dir far rc=0
   while IFS=$'\t' read -r local_dir far; do
     if [[ $dir != pull && -d $local_dir ]]; then
-      "$RCLONE" copy --update --exclude 'cloud.conf' --exclude 'google-oauth.conf' --exclude '.google-oauth-tried' --exclude '*.part' "$local_dir" "$REMOTE:$ROOT_DIR/$far" \
+      "$RCLONE" copy --update "${EXCLUDES[@]}" "$local_dir" "$REMOTE:$ROOT_DIR/$far" \
         >> "$LOG" 2>&1 || rc=1
     fi
     if [[ $dir != push ]]; then
       mkdir -p "$local_dir" 2> /dev/null
-      "$RCLONE" copy --update --exclude 'cloud.conf' --exclude 'google-oauth.conf' --exclude '.google-oauth-tried' "$REMOTE:$ROOT_DIR/$far" "$local_dir" >> "$LOG" 2>&1 || rc=1
+      "$RCLONE" copy --update "${EXCLUDES[@]}" "$REMOTE:$ROOT_DIR/$far" "$local_dir" >> "$LOG" 2>&1 || rc=1
     fi
   done < <(pairs "$group")
+  [[ $group == config ]] && { sync_system "$dir" || rc=1; }
   return $rc
 }
 

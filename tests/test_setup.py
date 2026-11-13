@@ -5338,6 +5338,39 @@ class CloudSetupTests(Base):
         self.env.out(script, dict(self.cenv, RADIO_COUNT=str(radio)))
         self.assertTrue(radio.read_text().startswith("drive drive|Google Drive"))
 
+    def test_restore_puts_the_system_settings_back(self):
+        # --cloud-restore: o que veio da nuvem mais novo que o daqui vai para o
+        # /etc/fliperos; do fliperos.conf so o gosto da pessoa (o volume, a
+        # GunCon...), nunca o hardware (o monitor, o driver); botoes novos vao
+        # para os emuladores.
+        etc, stage = self.env.etc, self.env.dir / "stage"
+        (etc / "fliperos.conf").write_text("monitor=generic_15\nvolume=70\n")
+        (etc / "buttons.map").write_text("velho\n")
+        (etc / "guncon2.conf").write_text("daqui\n")
+        stage.mkdir()
+        (stage / "fliperos.conf").write_text("monitor=arcade_31\namd_driver=amdgpu\nvolume=55\ngun_flash=hold\n")
+        (stage / "buttons.map").write_text("1 kind 0 pad\n")
+        (stage / "guncon2.conf").write_text("da nuvem, mais velho\n")
+        old = time.time() - 3600
+        os.utime(stage / "guncon2.conf", (old, old))
+        (stage / "retroarch").mkdir()
+        (stage / "retroarch" / "p1.cfg").write_text("input_player1_a = x\n")
+        calls = self.env.dir / "buttons-calls"
+        self.env.stub("fliperos-buttons", 'echo "$*" >> %s' % calls)
+        self.env.out("cloud_restore %s" % stage, {"BUTTONS": str(self.env.bin / "fliperos-buttons")})
+        conf = (etc / "fliperos.conf").read_text()
+        self.assertIn("monitor=generic_15", conf)
+        self.assertNotIn("amd_driver", conf)
+        self.assertIn("volume=55", conf)
+        self.assertIn("gun_flash=hold", conf)
+        self.assertEqual((etc / "buttons.map").read_text(), "1 kind 0 pad\n")
+        self.assertEqual((etc / "guncon2.conf").read_text(), "daqui\n")
+        self.assertEqual((etc / "retroarch" / "p1.cfg").read_text(), "input_player1_a = x\n")
+        self.assertIn("save %s" % (etc / "buttons.map"), calls.read_text())
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('--cloud-restore)', main)
+        self.assertIn('cloud_restore "$2"', main)
+
 
 class CloudTests(unittest.TestCase):
     """config/fliperos-cloud: o backup na nuvem pelo rclone (um rclone falso
@@ -5364,7 +5397,7 @@ class CloudTests(unittest.TestCase):
             "  obscure) echo \"OBS($(cat))\" ;;\n"
             "  mkdir) [ -f %(d)s/refuse ] && { echo 'Failed to create: 401 Unauthorized' >&2; exit 1; }; mkdir -p \"$(map $2)\" ;;\n"
             "  copy) args=(); skip=0; for a in \"$@\"; do if ((skip)); then skip=0; continue; fi\n"
-            "      case $a in --exclude) skip=1 ;; --*|copy) ;; *) args+=(\"$a\") ;; esac; done\n"
+            "      case $a in --exclude|--include) skip=1 ;; --*|copy) ;; *) args+=(\"$a\") ;; esac; done\n"
             "    src=$(map ${args[0]}); dst=$(map ${args[1]}); [ -d \"$src\" ] || exit 0; mkdir -p \"$dst\"; cp -a \"$src/.\" \"$dst/\" ;;\n"
             "esac\n" % {"d": self.dir, "c": self.cloud})
         rclone.chmod(0o755)
@@ -5382,6 +5415,49 @@ class CloudTests(unittest.TestCase):
 
     def status(self):
         return dict(line.split("=", 1) for line in self.run_("status").stdout.splitlines())
+
+    def test_config_carries_everything_and_the_system_settings(self):
+        # O config leva tudo o que se configura e o uso (os emuladores, os
+        # frontends, os jogados e favoritos, os magnets do Downloader) e, do
+        # /etc/fliperos, os controles e o resto da pessoa; ao descer, o
+        # /etc/fliperos passa pelo Setup (--cloud-restore).
+        etc, dl, stage = self.dir / "etc", self.dir / "downloader", self.dir / "stage"
+        etc.mkdir()
+        (etc / "buttons.map").write_text("1 kind 0 pad\n")
+        (etc / "fliperos.conf").write_text("monitor=generic_15\nvolume=70\n")
+        (etc / "sessions.conf").write_text("da imagem\n")
+        dl.mkdir()
+        (dl / "chds.magnet").write_text("magnet:?xt=urn:btih:abc\n")
+        (self.home / ".config/flycast").mkdir(parents=True)
+        (self.home / ".config/flycast/emu.cfg").write_text("[config]\n")
+        (self.home / ".local/share/fliperos/stats").mkdir(parents=True)
+        (self.home / ".local/share/fliperos/stats/played.tsv").write_text("sf2\t10\n")
+        (self.home / ".config/retroarch/cores").mkdir(parents=True)
+        (self.home / ".config/retroarch/retroarch.cfg").write_text('video_driver = "gl"\n')
+        restore = self.dir / "restore"
+        restore.write_text("#!/bin/sh\necho \"$*\" >> %s/restored\n" % self.dir)
+        restore.chmod(0o755)
+        self.env.update(FLIPEROS_CLOUD_SYSTEM_ETC=str(etc), FLIPEROS_CLOUD_DOWNLOADER=str(dl),
+                        FLIPEROS_CLOUD_STAGE=str(stage), FLIPEROS_CLOUD_RESTORE=str(restore))
+        self.run_("remote", "webdav", stdin="url=https://x/dav\nuser=a\npass=b\n")
+        r = self.run_("sync", "push", "config")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        far = self.cloud / "FliperOS/config"
+        self.assertTrue((far / "flycast/emu.cfg").is_file())
+        self.assertTrue((far / "fliperos-data/stats/played.tsv").is_file())
+        self.assertTrue((far / "retroarch/retroarch.cfg").is_file())
+        self.assertTrue((far / "system/downloader/chds.magnet").is_file())
+        self.assertTrue((far / "system/etc/buttons.map").is_file())
+        log = (self.dir / "rclone.log").read_text()
+        self.assertIn("--include buttons.map", log)
+        self.assertIn("--exclude cores/**", log)
+        # Descendo: o /etc/fliperos vai para a pasta do meio e o Setup o poe no lugar.
+        r = self.run_("sync", "pull", "config")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((stage / "buttons.map").is_file())
+        self.assertEqual((self.dir / "restored").read_text().strip(), str(stage))
+        tool = self.TOOL.read_text()
+        self.assertIn("SYSTEM_RESTORE=${FLIPEROS_CLOUD_RESTORE:-sudo -n /usr/local/bin/fliperos-setup --cloud-restore}", tool)
 
     def test_webdav_account_keeps_the_password_obscured(self):
         self.assertEqual(self.status()["remote"], "")
