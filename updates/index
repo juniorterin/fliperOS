@@ -67,3 +67,4 @@
 64	85a85e0972d61f350863c710c55e8f7e6e2b993c	7d4b802bafeea2c1471cf831771a6f74c82b2859bb9072d58b5f9fd16df6a3e3	no	The cartridge stops with its label outside the reader
 65	f851526d82ee014ef0d82d209a892c50ab213caf	32103e67d03f77d02f6ebe6a3dc4b0328b800257334a02db699302e6b56f2456	no	Bluetooth controllers, arcade or joypad mapping, the joypad guide; version chooser; Midway games in 320x240
 66	430604d2bf7167c23cfd99bfbb04159ece610da2	22b9d97830c861aa5e88df9c976656c4144ff5e6de01db5bbf547a6ec8bfa383	no	The 0.24 image's level: updates no longer stop on apt sources with two keys, RetroAchievements, cloud backup
+67	9a9b60b7d920ffb20854b1f36abd3349de2f59fa	52c682e1abe3fb7f6bc6b40331ed07e480437a6abf3d955af303fb7acd6a7008	no	The graphical Setup menu is back; cloud backup with Google sign-in, OSD profiles and scanlines, the controller as the desktop mouse
