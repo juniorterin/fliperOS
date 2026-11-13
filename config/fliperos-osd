@@ -1022,46 +1022,125 @@ class Painter:
     def text(self, surface, text, color, x, y):
         surface.blit(self.font.render(text, False, color), (x, y))
 
+    # ── O tamanho do quadro do jogo ──
+    # A camada estica a imagem de 320x240 no quadro do jogo pegando o pixel mais
+    # perto. Num quadro menor (os 224 linhas do arcade, os 256 de largura de um
+    # console) ela pularia linhas e colunas, e a letra se desfazia. Entao o
+    # desenho e feito no tamanho do quadro (ate 320x240) e espalhado na imagem
+    # exatamente nas linhas e colunas que a camada le: todo pixel chega a tela.
+    size = None     # (largura, altura) logicos do desenho; None: a tela
+
+    def area(self):
+        t = self.theme
+        return self.size or (t.WIDTH, t.HEIGHT)
+
+    @staticmethod
+    def frame_size(mode):
+        """O quadro do jogo (o modo de video), ou a tela inteira sem modo."""
+        if not mode:
+            return WIDTH, HEIGHT
+        return max(1, mode["h"][0]), max(1, mode["v"][0])
+
+    @staticmethod
+    def sources(frame, size):
+        """Para cada pixel da imagem (size), o do desenho (frame menor que
+        size) que a camada vai mostrar: a camada le o pixel
+        floor((i + 0.5) * size / frame) da imagem para o pixel i do quadro."""
+        out = [None] * size
+        for i in range(frame):
+            out[min(size - 1, int((i + 0.5) * size / frame))] = i
+        for k in range(size):
+            if out[k] is None:
+                out[k] = min(frame - 1, int(k * frame / size))
+        return out
+
+    def fit(self, draw, mode):
+        """O desenho (draw(), na tela logica) pronto para a camada: no tamanho
+        do quadro do jogo quando ele e menor que a imagem, espalhado nela."""
+        pg, t = self.pg, self.theme
+        fw, fh = self.frame_size(mode)
+        w, h = min(WIDTH, fw), min(HEIGHT, fh)
+        if (w, h) == (WIDTH, HEIGHT):
+            self.size = None
+            return t.upright(draw())
+        # Em pe, a tela logica e a deitada girada.
+        self.size = (h, w) if t.VERTICAL else (w, h)
+        try:
+            small = t.upright(draw())
+        finally:
+            self.size = None
+        rows = pg.Surface((w, HEIGHT), pg.SRCALPHA)
+        for y, src in enumerate(self.sources(h, HEIGHT)):
+            rows.blit(small, (0, y), (0, src, w, 1), special_flags=pg.BLEND_RGBA_ADD)
+        out = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
+        for x, src in enumerate(self.sources(w, WIDTH)):
+            out.blit(rows, (x, 0), (src, 0, 1, HEIGHT), special_flags=pg.BLEND_RGBA_ADD)
+        return out
+
+    def row_text(self, surface, label, value, color, value_color, x, top, width):
+        """Uma linha do menu: o rotulo a esquerda e o valor a direita. Se nao
+        cabem na letra do menu (um quadro estreito), a letra pequena."""
+        import tiny
+        need = self.font.size(label)[0] + (self.font.size(value)[0] + 8 if value else 0) + 12 + (8 if value == "" else 0)
+        if need <= width:
+            self.text(surface, label, color, x + 6, top + 2)
+            if value:
+                image = self.font.render(value, False, value_color)
+                surface.blit(image, (x + width - 6 - image.get_width(), top + 2))
+            return
+        if value:
+            right = tiny.fit(value, width // 2 - 8)
+            tiny.text(surface, right, value_color, x + width - 6, top + 3, right=True)
+            left = tiny.fit(label, width - 18 - tiny.width(right))
+        else:
+            left = tiny.fit(label, width - 12)
+        tiny.text(surface, left, color, x + 6, top + 3)
+
     def panel(self, menu):
         pg, t = self.pg, self.theme
-        t.set_orientation(read_conf().get("orientation", ""))
-        surface = pg.Surface((t.WIDTH, t.HEIGHT), pg.SRCALPHA)
+        W, H = self.area()
+        surface = pg.Surface((W, H), pg.SRCALPHA)
         page = menu.page
         rows = page["rows"]
         if page["name"] == "geometry":
             self.frame(surface)
+        sub = menu.subtitle()
+        head = 18 + (7 if sub else 0)
+        safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
+        # As linhas que cabem: ate VISIBLE, menos num quadro baixo.
+        visible = max(1, min(self.VISIBLE, (H - 2 * safe_y - head - 4) // self.ROW))
         # O cursor sempre a vista.
         if page["cursor"] < page["top"]:
             page["top"] = page["cursor"]
-        elif page["cursor"] >= page["top"] + self.VISIBLE:
-            page["top"] = page["cursor"] - self.VISIBLE + 1
-        shown = rows[page["top"]:page["top"] + self.VISIBLE]
-        sub = menu.subtitle()
-        head = 18 + (7 if sub else 0)
-        width, height = t.WIDTH - 2 * t.SAFE_X, head + len(shown) * self.ROW + 4
-        x, y = (t.WIDTH - width) // 2, t.HEIGHT - t.SAFE_Y - height
+        elif page["cursor"] >= page["top"] + visible:
+            page["top"] = page["cursor"] - visible + 1
+        shown = rows[page["top"]:page["top"] + visible]
+        width, height = W - 2 * safe_x, head + len(shown) * self.ROW + 4
+        x, y = (W - width) // 2, H - safe_y - height
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
         pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
         self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
         if sub:
             # A resolucao com as frequencias e o FPS, na letra pequena.
             import tiny
-            tiny.text(surface, sub, t.COMMENT, x + 6, y + 15)
+            tiny.text(surface, tiny.fit(sub, width - 12), t.COMMENT, x + 6, y + 15)
         if menu.status:
             status = self.font.render(menu.status, False, t.CYAN)
-            surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
+            if status.get_width() + self.font.size(menu.title())[0] + 18 <= width:
+                surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
+            else:
+                import tiny
+                tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 6, right=True)
         for i, row in enumerate(shown):
             top = y + head - 1 + i * self.ROW
             chosen = page["top"] + i == page["cursor"]
             if chosen:
                 pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
-            self.text(surface, row.label, t.PINK if chosen else t.FG, x + 6, top + 2)
+            value = row.text()
+            self.row_text(surface, row.label, value, t.PINK if chosen else t.FG, t.CYAN, x, top,
+                          width - (10 if row.kind == "page" else 0))
             if row.kind == "page":
                 self.text(surface, ">", t.COMMENT, x + width - 14, top + 2)
-            value = row.text()
-            if value:
-                image = self.font.render(value, False, t.CYAN)
-                surface.blit(image, (x + width - 6 - image.get_width(), top + 2))
             fraction = row.fraction()
             if fraction is not None and len(row.label) <= 10 and width > 240:
                 bar_x, bar_w = x + 6 + 88, width - 6 - 88 - 6 - 8 * 7
@@ -1070,7 +1149,7 @@ class Painter:
         # Ha mais linhas acima ou abaixo.
         if page["top"] > 0:
             pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, y + head - 3), (x + width // 2 + 3, y + head - 3), (x + width // 2, y + head - 6)])
-        if page["top"] + self.VISIBLE < len(rows):
+        if page["top"] + visible < len(rows):
             bottom = y + height - 2
             pg.draw.polygon(surface, t.COMMENT + (255,), [(x + width // 2 - 3, bottom - 2), (x + width // 2 + 3, bottom - 2), (x + width // 2, bottom + 1)])
         return surface
@@ -1078,33 +1157,39 @@ class Painter:
     def volume_bar(self, percent, muted):
         """A barra das teclas de volume, no lugar do menu, em RGBA."""
         pg, t = self.pg, self.theme
-        t.set_orientation(read_conf().get("orientation", ""))
-        surface = pg.Surface((t.WIDTH, t.HEIGHT), pg.SRCALPHA)
-        width, height = t.WIDTH - 2 * t.SAFE_X, 16
-        x, y = (t.WIDTH - width) // 2, t.HEIGHT - t.SAFE_Y - height
+        W, H = self.area()
+        surface = pg.Surface((W, H), pg.SRCALPHA)
+        width, height = W - 2 * min(t.SAFE_X, W // 20), 16
+        x, y = (W - width) // 2, H - min(t.SAFE_Y, H // 24) - height
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
         pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
         self.text(surface, "Volume", t.PINK, x + 6, y + 4)
         value = self.font.render("Mute" if muted else "%d%%" % percent, False, t.ORANGE if muted else t.CYAN)
         surface.blit(value, (x + width - 6 - value.get_width(), y + 4))
         bar_x, bar_w = x + 6 + 56, width - 6 - 56 - 6 - 8 * 5
-        pg.draw.rect(surface, t.COMMENT + (255,), (bar_x, y + 5, bar_w, 6), 1)
-        fill = t.COMMENT if muted else t.GREEN
-        pg.draw.rect(surface, fill + (255,), (bar_x + 1, y + 6, round((bar_w - 2) * percent / 100), 4))
+        if bar_w > 8:
+            pg.draw.rect(surface, t.COMMENT + (255,), (bar_x, y + 5, bar_w, 6), 1)
+            fill = t.COMMENT if muted else t.GREEN
+            pg.draw.rect(surface, fill + (255,), (bar_x + 1, y + 6, round((bar_w - 2) * percent / 100), 4))
         return surface
 
     def frame(self, surface):
         """A moldura e a cruz do meio: para ver os cantos enquanto ajusta."""
         pg, t = self.pg, self.theme
         color = t.FG + (255,)
-        w, h = t.WIDTH, t.HEIGHT
+        w, h = surface.get_size()
         pg.draw.rect(surface, color, (0, 0, w, h), 1)
         pg.draw.rect(surface, t.CYAN + (255,), (t.SAFE_X, t.SAFE_Y, w - 2 * t.SAFE_X, h - 2 * t.SAFE_Y), 1)
         pg.draw.line(surface, color, (w // 2, 0), (w // 2, h - 1))
         pg.draw.line(surface, color, (0, h // 2), (w - 1, h // 2))
 
     def rgba(self, menu):
-        return self.pg.image.tobytes(self.theme.upright(self.panel(menu)), "RGBA")
+        self.theme.set_orientation(read_conf().get("orientation", ""))
+        return self.pg.image.tobytes(self.fit(lambda: self.panel(menu), menu.mode), "RGBA")
+
+    def bar_rgba(self, percent, muted, mode):
+        self.theme.set_orientation(read_conf().get("orientation", ""))
+        return self.pg.image.tobytes(self.fit(lambda: self.volume_bar(percent, muted), mode), "RGBA")
 
 
 class Screen:
@@ -1428,7 +1513,7 @@ class Service:
             return
         if self.painter is None:
             self.painter = Painter()
-        self.screen_file.show(self.painter.pg.image.tobytes(self.painter.theme.upright(self.painter.volume_bar(*state)), "RGBA"))
+        self.screen_file.show(self.painter.bar_rgba(*state, current_mode()))
         self.bar_until = time.monotonic() + BAR_SECONDS
 
     def tick_bar(self):
@@ -1517,24 +1602,49 @@ class Service:
         self.running = False
 
 
+def layer_view(pg, canvas, frame):
+    """O que a camada mostra num quadro de frame (largura, altura): o pixel
+    floor((i + 0.5) * 320 / largura) da imagem para cada pixel i (os testes)."""
+    fw, fh = frame
+    out = pg.Surface((fw, fh), pg.SRCALPHA)
+    rows = pg.Surface((WIDTH, fh), pg.SRCALPHA)
+    for y in range(fh):
+        rows.blit(canvas, (0, y), (0, min(HEIGHT - 1, int((y + 0.5) * HEIGHT / fh)), WIDTH, 1),
+                  special_flags=pg.BLEND_RGBA_ADD)
+    for x in range(fw):
+        out.blit(rows, (x, 0), (min(WIDTH - 1, int((x + 0.5) * WIDTH / fw)), 0, 1, fh),
+                 special_flags=pg.BLEND_RGBA_ADD)
+    return out
+
+
 def shot(page, path):
-    """A imagem de uma pagina, sem jogo e sem controle (os testes do desenho)."""
+    """A imagem de uma pagina, sem jogo e sem controle (os testes do desenho).
+    FLIPEROS_OSD_SHOT_FRAME=LARGURAxALTURA: como a camada a mostra num quadro
+    desse tamanho (sem: 640x480i)."""
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     painter = Painter()
+    pg = painter.pg
     mode = {"clock": 13038, "h": [640, 666, 727, 831], "v": [480, 483, 489, 523], "interlace": True}
-    menu = Menu({"program": "pcsx2", "core": ""}, mode, Worker())
-    if page == "volume":
-        surface = painter.theme.upright(painter.volume_bar(60, False))
-    elif page == "mute":
-        surface = painter.theme.upright(painter.volume_bar(60, True))
+    size = re.fullmatch(r"(\d+)x(\d+)", os.environ.get("FLIPEROS_OSD_SHOT_FRAME", ""))
+    if size:
+        fw, fh = int(size.group(1)), int(size.group(2))
+        mode = {"clock": 6700, "h": [fw, fw + 16, fw + 48, fw + 96], "v": [fh, fh + 3, fh + 6, fh + 20],
+                "interlace": False}
+    menu = Menu({"program": "pcsx2", "core": "", "fps": 59.9}, mode, Worker())
+    painter.theme.set_orientation(read_conf().get("orientation", ""))
+    if page in ("volume", "mute"):
+        canvas = painter.fit(lambda: painter.volume_bar(60, page == "mute"), mode)
     else:
         if page != "main":
             menu.open_page(page)
-        surface = painter.theme.upright(painter.panel(menu))
-    backdrop = painter.pg.Surface((WIDTH, HEIGHT))
+        canvas = painter.fit(lambda: painter.panel(menu), mode)
+    frame = Painter.frame_size(mode)
+    view = layer_view(pg, canvas, frame)
+    backdrop = pg.Surface(frame)
     backdrop.fill((40, 80, 160))
-    backdrop.blit(surface, (0, 0))
-    painter.pg.image.save(painter.pg.transform.scale(backdrop, (WIDTH * 2, HEIGHT * 2)), path)
+    backdrop.blit(view, (0, 0))
+    # Na proporcao de um tubo 4:3, 640x480 no arquivo.
+    pg.image.save(pg.transform.scale(backdrop, (WIDTH * 2, HEIGHT * 2)), path)
 
 
 def main():

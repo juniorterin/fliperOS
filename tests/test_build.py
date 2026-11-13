@@ -17805,6 +17805,40 @@ class OsdTests(unittest.TestCase):
         worker.wait()
         self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx_rearmed', 'light'], self.calls)
 
+    def test_menu_is_whole_in_any_frame_size(self):
+        # A camada estica a imagem de 320x240 no quadro do jogo pegando o pixel
+        # mais perto: num quadro menor (256x224, 160x144) ela pulava linhas e
+        # colunas e a letra se desfazia. O menu e desenhado no tamanho do quadro
+        # e chega a tela pixel a pixel; num quadro maior, fica como era.
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        os.environ['FLIPEROS_GUI'] = str(ROOT / 'fliperos-setup/gui')
+        self.osd.GUI = os.environ['FLIPEROS_GUI']
+        painter = self.osd.Painter()
+        pg = painter.pg
+        self.assertEqual(self.osd.Painter.sources(224, 240)[:16], [0, 1, 2, 3, 4, 5, 6, 6, 7, 8, 9, 10, 11, 12, 13, 14])
+        for frame in ((256, 224), (160, 144), (320, 224), (2560, 240), (640, 480)):
+            mode = {'clock': 6700, 'h': [frame[0], 0, 0, frame[0] + 64], 'v': [frame[1], 0, 0, frame[1] + 20],
+                    'interlace': False}
+            menu, _ = self.menu(mode=mode)
+            canvas = painter.fit(lambda: painter.panel(menu), mode)
+            self.assertEqual(canvas.get_size(), (320, 240))
+            seen = self.osd.layer_view(pg, canvas, frame)
+            w, h = min(320, frame[0]), min(240, frame[1])
+            painter.size = (w, h) if (w, h) != (320, 240) else None
+            try:
+                drawn = painter.panel(menu)
+            finally:
+                painter.size = None
+            # Num quadro menor, o que a tela mostra e o desenho inteiro.
+            if frame[0] <= 320 and frame[1] <= 240:
+                self.assertEqual(pg.image.tobytes(seen, 'RGBA'), pg.image.tobytes(drawn, 'RGBA'), frame)
+            # O painel cabe no quadro.
+            box = drawn.get_bounding_rect()
+            self.assertLessEqual(box.right, w, frame)
+            self.assertLessEqual(box.bottom, h, frame)
+
     def test_mode_line_under_the_title(self):
         # Embaixo de FLIPEROS, em letra menor: a resolucao, as frequencias e o FPS.
         self.assertEqual(self.osd.mode_line(self.MODE, 59.94), '640x480i 15.69kHz 60.00Hz  59.9 FPS')
@@ -18133,6 +18167,10 @@ class OsdTests(unittest.TestCase):
                 drawn.append((percent, muted))
                 return pixels
 
+            def bar_rgba(self, percent, muted, mode):
+                return self.pg.image.tobytes(self.theme.upright(self.volume_bar(percent, muted)), 'RGBA')
+
+        self.osd.current_mode = lambda: None
         service = object.__new__(self.osd.Service)
         service.painter = FakePainter()
         service.bar_until = 0.0
