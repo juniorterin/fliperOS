@@ -17,7 +17,8 @@ Pedido de 2026-11-07. Os discos (a fileira PHYSICAL MEDIA, o cartão com PLAY / 
 ## Vídeo: conferir no tubo
 
 Os hacks de entrelaçado, a calibração de cor, as scanlines de 31 kHz e o monitor vertical foram vistos no CRT em 2026-11-13. Falta:
-- **OSD:** o atalho Start + Baixo no painel de verdade. Em 2026-11-13 só a tecla Pause abria a OSD: o vigia do atalho recomeçava a cada meio segundo (corrigido em 216ee7a, posto à mão no gabinete, vai no update 69), e segurar 1 s nunca completava. Falta confirmar no painel, e a geometria num jogo do RetroArch (em KMS, só foi testada no frontend).
+- **OSD:** o atalho do painel abriu a OSD no gabinete em 2026-11-13 (Direita + Start, escolhido em Frontend controls > OSD MENU; antes do 216ee7a o vigia recomeçava a cada meio segundo e segurar 1 s nunca completava). Falta a geometria num jogo do RetroArch (em KMS, só foi testada no frontend).
+- **Atalhos do jogo (Frontend controls):** EXIT GAME e EMULATOR MENU segurados no painel de verdade, e o Esc do menu do PCSX2, do PCSX2x6 e do DuckStation (sem jogo nem BIOS no gabinete, não testados). Os outros menus foram abertos por teclado virtual (RetroArch, GroovyMAME, Flycast, SM2-Emu).
 
 ## GroovyMAME no KMS
 
@@ -75,7 +76,7 @@ As fases 5a (leitura), 5b (controle) e 5c (a tela ao vivo e o marquee para o OBS
   - **(b)** a versão estável v1.22.2, que usa a libswitchres no lugar desse motor (validar o 15 kHz de novo);
   - **(c)** esperar.
 
-  Enquanto isso: Start+Select no painel abre o menu, e de lá dá para usar Quit. Em 2026-11-13, no commit fixado hoje (7d2e953), o F1 injetado por uinput abriu e fechou o Quick Menu no gabinete (é por ele que sai o EMULATOR MENU do frontend); Esc e F2 ainda não foram conferidos.
+  Enquanto isso: Start+Select no painel abre o menu (fora do frontend do FliperOS; aberto por ele, o menu é o atalho EMULATOR MENU e o Start+Select fica desligado), e de lá dá para usar Quit. Em 2026-11-13, no commit fixado hoje (7d2e953), o F1 injetado por uinput abriu e fechou o Quick Menu no gabinete (é por ele que sai o EMULATOR MENU do frontend); Esc e F2 ainda não foram conferidos.
 - **RetroArch não fecha com Esc quando aberto pelo "jogo direto do boot"** (PS1, MAME 2010). SM2-Emu, GroovyMAME e Supermodel fecham. Provavelmente é o mesmo bug dos atalhos.
 - **Menu embaralhado uma vez** depois de sair de um jogo pelo botão de desligar. Não reproduzido; o log mostra a interface gráfica aberta normalmente.
 

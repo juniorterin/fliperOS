@@ -799,16 +799,29 @@ class Frontend:
         self.marquee_logo((self.category() or {}).get("name", ""), before, step)
         self.load_filter()
         # A tela de antes sai e a nova entra, pedaco por pedaco (feview.draw:
-        # o slide da tela inteira, ou a animacao do modo, feview.TRANSITIONS).
+        # o slide da tela inteira, ou a animacao do modo, feview.TRANSITIONS),
+        # so depois que a tira dos sistemas fecha: ate la, a tela de antes
+        # fica parada embaixo dela (hurry_intro adianta).
         if getattr(self, "last_ui", None) is not None:
-            self.slide = (self.last_ui, 1 if step > 0 else -1, time.monotonic())
-            self.intro = {"side": 1 if step > 0 else -1, "start": time.monotonic(),
+            start = time.monotonic() + RIBBON_HOLD + RIBBON_FADE
+            self.slide = (self.last_ui, 1 if step > 0 else -1, start)
+            self.intro = {"side": 1 if step > 0 else -1, "start": start,
                           "old": getattr(self, "last_screen", None)}
         self.cursor = 0
         self.opened.clear()
         # O jogo onde o cursor parou nesta game list da ultima vez.
         self.rebuild(keep=self.positions.get((self.category() or {}).get("key")))
         self.remember()
+
+    def hurry_intro(self, start):
+        """A tira fechou antes (mexer na lista): a animacao da troca, que a
+        esperava, comeca quando ela termina de sumir."""
+        intro = getattr(self, "intro", None)
+        if intro and intro["start"] > start:
+            intro["start"] = start
+        slide = getattr(self, "slide", None)
+        if slide and slide[2] > start:
+            self.slide = (slide[0], slide[1], start)
 
     def letter_jump(self, step, wrap=True):
         """O cursor no primeiro jogo da letra seguinte (ou anterior)."""
@@ -877,6 +890,7 @@ class Frontend:
         now = time.monotonic()
         if getattr(self, "ribbon_until", 0) > now + RIBBON_FADE:
             self.ribbon_until = now + RIBBON_FADE
+            self.hurry_intro(now + RIBBON_FADE)
         if self.letter_mode and a in ("up", "down"):
             # No modo letra, cada toque passa uma letra; segurando, repete
             # (tick). Dois segundos sem mexer, volta a lista normal.

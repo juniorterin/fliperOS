@@ -5781,7 +5781,7 @@ class FrontendDataTests(unittest.TestCase):
         fe.marquee_logo = lambda *a: None
         fe.rebuild = lambda keep=None: loads.append(fe.cat)
         fe.move = moved.append
-        for name in ('switch_category', 'cancel_pick', 'pick_category', 'act', 'tick'):
+        for name in ('switch_category', 'cancel_pick', 'pick_category', 'act', 'tick', 'hurry_intro'):
             setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
         fe.act('right')
         fe.mode = 'flow'
@@ -5822,9 +5822,17 @@ class FrontendDataTests(unittest.TestCase):
         fe.act('right')
         fe.act('b1')
         self.assertGreater(fe.ribbon_until - time.monotonic(), fm.RIBBON_HOLD)
+        # A animacao de entrar na lista so comeca quando a tira fecha.
+        self.assertAlmostEqual(fe.slide[2], fe.ribbon_until, places=1)
+        self.assertAlmostEqual(fe.intro['start'], fe.ribbon_until, places=1)
         fe.act('down')
         self.assertLessEqual(fe.ribbon_until - time.monotonic(), fm.RIBBON_FADE)
         self.assertEqual(moved, [1])
+        # Mexer na lista fecha a tira antes, e a animacao vem junto.
+        self.assertLessEqual(fe.intro['start'] - time.monotonic(), fm.RIBBON_FADE)
+        self.assertEqual(fe.slide[2], fe.intro['start'])
+        # O desenho: ate a hora, a tela de antes parada (a lista nova embaixo).
+        self.assertIn('waiting = intro.get("old")', (ROOT / 'fliperos-setup/gui/feview.py').read_text())
 
     def test_ribbon_moves_on_a_spring_and_tiles_grow_evenly(self):
         # A tira anda numa mola sem balanco: sai devagar, acelera, nao passa
@@ -18430,15 +18438,19 @@ class OsdTests(unittest.TestCase):
         menu, _ = self.config(mode=dict(self.MODE, interlace=False))
         self.assertEqual(self.labels(menu), ['Save profile as', 'Delete profile', 'Colour', 'Save|Back'])
 
-    def test_main_page_is_configuration_and_the_buttons(self):
-        # A Configuration (os ajustes e o Save) e os botoes: Emulator menu (so
-        # num emulador com menu proprio), Close e Quit (so num jogo: sobre o
-        # frontend, nem um nem outro). O volume nao: e das teclas de volume.
+    def test_main_page_is_configuration_and_the_items(self):
+        # A Configuration (os ajustes e o Save) e os itens com icone: Emulator
+        # menu (so num emulador com menu proprio), Close e Quit (so num jogo:
+        # sobre o frontend, nem um nem outro). O volume nao: e das teclas de
+        # volume.
         osd = self.osd
         menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Configuration', 'Close|Quit'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Close', 'Quit'])
         menu = osd.Menu({'program': 'retroarch', 'core': 'fbneo'}, self.MODE, osd.Worker(), emulator_key=59)
-        self.assertEqual(self.labels(menu), ['Configuration', 'Emulator menu', 'Close|Quit'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Emulator menu', 'Close', 'Quit'])
+        self.assertEqual([getattr(r, 'icon', None) for r in menu.page['rows']],
+                         [None, ('menu', 'CYAN'), ('close', 'RED'), ('quit', 'ORANGE')])
+        self.assertEqual({r.kind for r in menu.page['rows'][1:]}, {'action'})
         menu = osd.Menu({'program': 'python3', 'core': ''}, self.MODE, osd.Worker(), emulator_key=59)
         self.assertEqual(self.labels(menu), ['Configuration', 'Close'])
         self.assertFalse([c for c in self.calls if '--volume' in c])
@@ -18451,19 +18463,22 @@ class OsdTests(unittest.TestCase):
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'FLIPEROS')
         # Emulator menu e Quit fecham a OSD e dizem ao servico o que fazer.
-        menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
-        menu.page['cursor'] = 1
-        menu.key(osd.KEY_ENTER)
-        self.assertEqual((menu.closing, menu.after), (True, 'emulator'))
-        menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
-        menu.page['cursor'] = 2
-        menu.key(osd.KEY_RIGHT)
-        menu.key(osd.KEY_ENTER)
-        self.assertEqual((menu.closing, menu.after), (True, 'quit'))
-        menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
-        menu.page['cursor'] = 2
-        menu.key(osd.KEY_ENTER)
-        self.assertEqual((menu.closing, menu.after), (True, None))
+        for cursor, after in ((1, 'emulator'), (2, None), (3, 'quit')):
+            menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
+            menu.page['cursor'] = cursor
+            menu.key(osd.KEY_ENTER)
+            self.assertEqual((menu.closing, menu.after), (True, after))
+        # Os icones na frente dos itens, desenhados na cor deles.
+        if importlib.util.find_spec('pygame'):
+            os.environ['SDL_VIDEODRIVER'] = 'dummy'
+            osd.GUI = str(ROOT / 'fliperos-setup/gui')
+            painter = osd.Painter()
+            menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
+            surface = painter.panel(menu)
+            colours = {tuple(surface.get_at((x, y))[:3]) for x in range(surface.get_width())
+                       for y in range(surface.get_height())}
+            for name in ('CYAN', 'RED', 'ORANGE'):
+                self.assertIn(getattr(painter.theme, name), colours)
 
     def test_service_presses_the_emulator_key_or_quits_the_game(self):
         # O servico: a tecla do menu de cada emulador pelo fliperos-buttons; o
@@ -18718,8 +18733,8 @@ class OsdTests(unittest.TestCase):
         menu.page['cursor'] = filter_row
         menu.key(osd.KEY_LEFT)                      # light -> off
         menu.back()
-        menu.page['cursor'] = len(menu.page['rows']) - 1
-        self.assertEqual(menu.page['rows'][-1].value, 'close')
+        menu.page['cursor'] = self.labels(menu).index('Close')
+        self.assertEqual(menu.page['rows'][menu.page['cursor']].icon, ('close', 'RED'))
         menu.key(osd.KEY_ENTER)
         worker.wait()
         self.assertTrue(menu.closing)

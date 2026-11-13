@@ -108,11 +108,11 @@ Hold **Start and Down** for a second, or press **Pause** on a keyboard or **Play
 
 Under the title, on every page, a small line shows the resolution, the two frequencies and the game's FPS (`640x480i 15.69kHz 60.00Hz  59.9 FPS`). It is read again every second while the menu is open, so a game that changes resolution, or a geometry being adjusted, shows at once.
 
-The first page has **Configuration** with the settings, and the buttons:
+The first page has **Configuration** with the settings, and three items, each with its icon:
 
 - **Configuration**: the settings below, the profile they are saved to, and **Save** and **Back** at the bottom.
-- **Emulator menu**: closes this menu and opens the emulator's own one (RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay) by pressing its key on a virtual keyboard. It only shows in an emulator that has a menu.
-- **Close** closes this menu, putting back what wasn't saved, and **Quit** closes the game (SIGTERM, SIGKILL after 5 seconds), like the frontend's Exit game shortcut. Over a frontend there is no Emulator menu nor Quit.
+- **Emulator menu** (three lines): closes this menu and opens the emulator's own one (RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay) by pressing its key on a virtual keyboard. It only shows in an emulator that has a menu.
+- **Close** (an X) closes this menu, putting back what wasn't saved, and **Quit** (the power sign) closes the game (SIGTERM, SIGKILL after 5 seconds), like the frontend's Exit game shortcut. Over a frontend there is no Emulator menu nor Quit.
 
 The volume is not in the menu nor in the profiles: the volume keys of a keyboard or of a panel change it and show a bar for 2 seconds, without taking the controls or opening the menu, and the [web panel](Web-panel.md) has it too.
 

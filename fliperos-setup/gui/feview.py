@@ -4312,11 +4312,16 @@ def draw(fe, now):
     # O video nos tres modos, e nao com uma tela inteira por cima (a pagina
     # "+", o Classify, o Rename). Na lista, os da grade e da tela cheia param.
     fe.abs_now = now
-    # A troca de romlist: a tela de antes sai por baixo do que entra.
+    # A troca de romlist: a tela de antes sai por baixo do que entra. Ela
+    # comeca quando a tira dos sistemas fecha (intro["start"] no futuro): ate
+    # la, a tela de antes fica parada (waiting).
     intro = getattr(fe, "intro", None)
+    waiting = None
     if intro is not None:
         intro.setdefault("style", transition(fe))
-        if intro["style"] == "slide" or now - intro["start"] >= INTRO:
+        if now < intro["start"]:
+            waiting = intro.get("old")
+        elif intro["style"] == "slide" or now - intro["start"] >= INTRO:
             fe.intro = None
         else:
             fe.slide = None
@@ -4333,10 +4338,13 @@ def draw(fe, now):
         draw_full(fe, ui, back, t)
     else:
         draw_flow(fe, ui, t)
-    if not fe.video_used:
+    if not fe.video_used or waiting is not None:
         fe.player.request(None, 0, 0, now)
     slide = getattr(fe, "slide", None)
-    if slide and not fe.shot and now - slide[2] < SLIDE:
+    if waiting is not None and not fe.shot:
+        # A tira ainda aberta: a lista nova so entra depois dela.
+        back.blit(waiting, (0, 0))
+    elif slide and not fe.shot and 0 <= now - slide[2] < SLIDE:
         # A troca de romlist: a tela de antes sai para um lado e a nova
         # entra pelo outro (o fundo fica).
         old, side, start = slide

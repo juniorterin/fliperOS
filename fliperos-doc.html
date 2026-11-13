@@ -1464,11 +1464,11 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <h2 id="on-screen-menu">On-screen menu</h2>
 <p>Hold <strong>Start and Down</strong> for a second, or press <strong>Pause</strong> on a keyboard or <strong>Play/Pause</strong> on a wireless remote, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.</p>
 <p>Under the title, on every page, a small line shows the resolution, the two frequencies and the game's FPS (<code>640x480i 15.69kHz 60.00Hz  59.9 FPS</code>). It is read again every second while the menu is open, so a game that changes resolution, or a geometry being adjusted, shows at once.</p>
-<p>The first page has <strong>Configuration</strong> with the settings, and the buttons:</p>
+<p>The first page has <strong>Configuration</strong> with the settings, and three items, each with its icon:</p>
 <ul>
 <li><strong>Configuration</strong>: the settings below, the profile they are saved to, and <strong>Save</strong> and <strong>Back</strong> at the bottom.</li>
-<li><strong>Emulator menu</strong>: closes this menu and opens the emulator's own one (RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay) by pressing its key on a virtual keyboard. It only shows in an emulator that has a menu.</li>
-<li><strong>Close</strong> closes this menu, putting back what wasn't saved, and <strong>Quit</strong> closes the game (SIGTERM, SIGKILL after 5 seconds), like the frontend's Exit game shortcut. Over a frontend there is no Emulator menu nor Quit.</li>
+<li><strong>Emulator menu</strong> (three lines): closes this menu and opens the emulator's own one (RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay) by pressing its key on a virtual keyboard. It only shows in an emulator that has a menu.</li>
+<li><strong>Close</strong> (an X) closes this menu, putting back what wasn't saved, and <strong>Quit</strong> (the power sign) closes the game (SIGTERM, SIGKILL after 5 seconds), like the frontend's Exit game shortcut. Over a frontend there is no Emulator menu nor Quit.</li>
 </ul>
 <p>The volume is not in the menu nor in the profiles: the volume keys of a keyboard or of a panel change it and show a bar for 2 seconds, without taking the controls or opening the menu, and the <a href="#Web-panel">web panel</a> has it too.</p>
 <p>Inside Configuration:</p>

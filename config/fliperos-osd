@@ -889,14 +889,17 @@ class Menu:
         teclas de volume e do painel web."""
         rows = []
         rows.append(Row("page", "Configuration", action=lambda: self.open_page("config")))
+        # Itens do menu, cada um com o icone dele (Painter.ICONS e a cor do tema).
+        items = []
         if self.emulator_key is not None:
-            emulator = Row("buttons", "Emulator menu", "emulator", options=[("emulator", "Emulator menu")])
-            emulator.action = lambda: self.leave("emulator")
-            rows.append(emulator)
-        options = [("close", "Close")] + ([("quit", "Quit")] if is_game(self.screen) else [])
-        end = Row("buttons", "|".join(label for _, label in options), "close", options=options)
-        end.action = lambda: self.close() if end.value == "close" else self.leave("quit")
-        rows.append(end)
+            items.append(("Emulator menu", ("menu", "CYAN"), lambda: self.leave("emulator")))
+        items.append(("Close", ("close", "RED"), self.close))
+        if is_game(self.screen):
+            items.append(("Quit", ("quit", "ORANGE"), lambda: self.leave("quit")))
+        for label, icon, action in items:
+            row = Row("action", label, action=action)
+            row.icon = icon
+            rows.append(row)
         return rows
 
     def rows_config(self):
@@ -1457,9 +1460,14 @@ class Painter:
             if chosen:
                 pg.draw.rect(surface, t.LINE + (255,), (x + 2, top, width - 4, self.ROW))
             value = row.text()
-            # A seta para a esquerda no Back.
+            # O icone na frente: a seta para a esquerda no Back; os itens da
+            # pagina principal (Emulator menu, Close, Quit) com o deles.
             shift = 0
-            if row.label == "Back":
+            icon = getattr(row, "icon", None)
+            if icon:
+                self.icon(surface, icon[0], x + 6, top + 2, getattr(t, icon[1]))
+                shift = 11
+            elif row.label == "Back":
                 self.icon(surface, "back", x + 6, top + 2, t.PINK if chosen else t.FG)
                 shift = 11
             self.row_text(surface, row.label, value, t.PINK if chosen else t.FG, t.CYAN, x + shift, top,
