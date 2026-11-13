@@ -1,5 +1,7 @@
 # Linked cabinets
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/arcade-link-4.png" width="288" alt="Four linked cabinets">
+
 Some arcade games were built to be played on several machines at once: racing cabinets joined by a link cable, or a fighting game that needs four cabinets for its tournament mode.
 
 This page lists those games, how the link works in each emulator FliperOS ships, and what each game needs to start: how many cabinets, how many players and screens, whether one cabinet must be master, and whether you tell the game how many cabinets there are.
@@ -70,6 +72,8 @@ A few things apply to all of them:
 This comes from the emulators' source and from how the games behaved in the tests. The delay was not measured with a camera.
 
 ## SM2-Emu: Sega Model 2
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/link-daytona.webp" width="480" alt="Daytona USA linked between cabinets">
 
 The link is a UDP ring. In `sm2-emu.ini` (or in F10 > Network):
 
@@ -189,6 +193,8 @@ GroovyMAME shows a warning screen for imperfect games, and the game waits on it.
 
 ### Super Street Fighter II: The Tournament Battle
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/ssf2tb-en.webp" width="480" alt="Super Street Fighter II: The Tournament Battle on linked cabinets">
+
 The sets are `ssf2tb`, `ssf2tba`, `ssf2tbh`, `ssf2tbj`, `ssf2tbj1`, `ssf2tbr1` and `ssf2tbu`. The bootleg `ssf2tbd` has the board but no link.
 
 It needs **four cabinets**, in a **chain, not a ring**. Turn on Machine Configuration > Communication on each one. There is no master or slave: the first machine is the one with an empty remote host, and the last has an empty local host.
@@ -237,6 +243,8 @@ Virtua Racing, Rad Rally, OutRunners and Stadium Cross were started in MAME 0.28
 The Derby Owners Club, World Club Champion Football and Mushiking sets are online and card games, and were not tried.
 
 ## Party play: more players than controls
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/netplay-menu.webp" width="480" alt="The net play menu of the frontend">
 
 Some games have more players than a cabinet has controls: X-Men has four players, and FBNeo runs it. For these, a party lets cabinets on the local network share one game, through RetroArch's net play. There is no emulator link and no NVRAM per cabinet: every machine runs the same game, and the inputs travel over the network.
 
@@ -302,6 +310,8 @@ Then, on 6 November 2026, between the owner's cabinet and a PC: the cabinet's fr
 
 ### GroovyMAME lockstep
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0.22-ssf2t-party-fight.png" width="480" alt="A GroovyMAME party in lockstep">
+
 MAME has no net play of its own. FliperOS builds GroovyMAME from the source of the release's tag with its **lockstep patch** (`packaging/patches/groovymame/0001-lockstep-patch.patch`), so any MAME game of two or more players can be a party, the way a link board keeps arcade machines together:
 
 - Every cabinet runs the same game from the same start: MAME's random seed is fixed, the party has an empty NVRAM folder (the game's factory memory) and a cfg folder of its own (the game's factory settings), the hiscore plugin and the autosave are off, and the clock of the game (`-rtc`) is the first cabinet's time on all of them. The mapping of the panel stays: it is the ctrlr file, not the cfg.
@@ -337,6 +347,8 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 **Every cabinet runs at the speed of the slowest.** Use the same video mode on all of them: a CRT whose refresh is a little slower holds the others back.
 
 ### Cores and emulators with net play
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/netplay-select.webp" width="320" alt="Choosing a game for net play">
 
 **The frontend offers net play with every RetroArch core marked "deterministic", with Flycast's GGPO, with Dolphin and with GroovyMAME's lockstep.** A RetroArch core needs a state that it saves and loads quickly and always the same way. A core that cannot do that refuses net play, or loses the sync. FBNeo and GroovyMAME have been played between two machines so far; the others are in the frontend but not yet tested on FliperOS.
 

@@ -1,5 +1,7 @@
 ## The FliperOS frontend
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-list.webp" width="480" alt="The FliperOS frontend: game list">
+
 The default since 2026-10-23: the game list in the look of the Setup menu (Press Start 2P, Dracula colours, the animated background), drawn at 320x240 and stretched to the screen mode. It ships in the image (`fliperos-setup/gui/fliperos-frontend`, Python and pygame) and is the `fliperos` row of the session table.
 
 It shows the same thing as the [Web panel](Web-panel.md), from the same code:
@@ -27,7 +29,7 @@ It shows the same thing as the [Web panel](Web-panel.md), from the same code:
 
 It pauses while a game is open. A game is tried once every 30 days (what a source does not have stays missing): `~/.local/share/fliperos/scrape-state.json`. Tab > Frontend options shows a progress bar, how many games are left and the torrents' progress.
 
-Genre, controls and buttons show with Arcadeflow's icons when Arcadeflow has been downloaded (it can't ship in the image). In the list they come without text, in one row: the genre, the number of players, the control (a pistol for light-gun games, which Arcadeflow has no icon for) and the buttons. They shrink a little when the row doesn't fit.
+Genre, controls and buttons show with Arcadeflow's icons, which come with the image (`fliperos-setup/gui/icons/metapics`), so they don't need the Arcadeflow theme. In the list they come without text, in one row: the genre, the number of players, the control (a pistol for light-gun games, which Arcadeflow has no icon for) and the buttons. They shrink a little when the row doesn't fit.
 
 Below them, out of commercial mode, the list shows the game's synopsis (the start of its arcade-history text, saved by the scrape in `~/media/info`), scrolling slowly upwards with a transparent fade at the top and the bottom. It starts two seconds after the cursor stops on the game, and goes around from the end to the start. Console games have no synopsis, and with the monitor upright there is no room for it. In commercial mode the coin indicator takes its place.
 
@@ -35,11 +37,13 @@ Below them, out of commercial mode, the list shows the game's synopsis (the star
 
 The guide draws the controls as Frontend controls left them: the joystick and the panel buttons in the panel's shape, each button in its function's colour, both centred in the window. A button with no function is left out of the drawing, and so is the joystick when no direction has one.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/list-guide.webp" width="480" alt="The controls guide of the frontend, arcade panel"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-guide-playstation.png" width="480" alt="The controls guide with a PlayStation joypad"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-fe-controls-joypad.png" width="480" alt="Frontend controls with the JOYPAD column">
+
 These are the defaults:
 - Up and down move through the games; past the last one comes the first again, and before the first the last (holding stops at the end, the next press goes around). Holding speeds up, and after 3 seconds the letter mode starts: the letter big in the middle of the screen, the cursor jumping from letter to letter (slowly at first, faster after a short hold).
   - The letter mode stays after letting go: each tap of up or down moves one letter.
   - Two seconds without touching anything (or any other button) end it, on the first game of that letter.
-- Left and right change the game list (each games folder, and Arcade with all the arcade folders together); the screen slides to the new one. A strip of tiles shows the lists around the chosen one: each tile has the system's written logo (the same as the marquee's, from the Arcadeflow theme, made once and kept in `~/.cache/fliperos/syslogo`), filling 80% of a tile as wide as the logo needs, with the emulator's icon sitting on the bottom right corner; under it, the number of games. Without Arcadeflow, or a system it doesn't know, the tile is square with only the emulator's icon, and the list's name is written under it. The same logo also replaces the list's name at the top of the screen. Each game list remembers where the cursor was, also after the frontend is closed or the cabinet turned off. In the grid they move through it, and change the game list only when the chosen game already touches that side; a tab below the thumbnails names the next one.
+- Left and right change the game list (each games folder, and Arcade with all the arcade folders together); the screen slides to the new one. A strip of tiles shows the lists around the chosen one: each tile has the system's written logo (the same as the marquee's, drawn with Arcadeflow's logo font and system table, which ship in the image in `config/syslogo` with its author's permission, made once and kept in `~/.cache/fliperos/syslogo`), filling 80% of a tile as wide as the logo needs, with the emulator's icon sitting on the bottom right corner; under it, the number of games. For a system that table doesn't know, the tile is square with only the emulator's icon, and the list's name is written under it. The same logo also replaces the list's name at the top of the screen. Each game list remembers where the cursor was, also after the frontend is closed or the cabinet turned off. In the grid they move through it, and change the game list only when the chosen game already touches that side; a tab below the thumbnails names the next one.
 - Button 1 opens the game's menu: Play, Favourite and "+". The "+" page has the game's information from the Arcade Database, saved on the cabinet, in two pages. The first has the cover, year, genre, players and control, the player 1 buttons drawn on the panel where **Buttons layout** puts them (with their colour and what they do, the same drawing as the controls guide; the joystick directions are left out) and the game's description. A blinking arrow on the right leads to the second: the game's pictures, maker, series, screen, status, language, set and rating, and the rest of the arcade-history.com text (Technical, Trivia...). A value too long for its line shows with "..." and then scrolls inside it, like a marquee.
 - Button 2 goes back; from the list, it asks whether to return to the FliperOS menu.
 - Buttons 3 and 6 move a page up and down. Button 4 marks or unmarks the favourite. Button 5 opens the filters; the filter belongs to the romlist (each one keeps its own, and changing romlist brings back its filter). The menu lists only the filters that leave at least one game in the romlist. Its first line, CONTROL, picks a control type with left and right (joystick 8-way, 4-way or 2-way, twin joystick, analog stick, trackball, spinner, paddle, positional, pedal, lightgun, keyboard, mahjong), showing only the types some game of the romlist has; it also belongs to the romlist and combines with the filter.
@@ -52,7 +56,7 @@ These are the defaults:
   Under them come the **frontend options**. The game options and the frontend options are one list that scrolls with the chosen line (always whole lines, never cut in half), with the Auto scrape box fixed at the bottom; the card is 200 pixels tall, so it fits on the tube. Each option is saved at once in `~/.config/fliperos/frontend.json`:
   - **View**: list, full screen or grid, with left and right (Start also switches it).
   - **Show clones** and **Hidden games** (the list of hidden games; button 1 brings one back).
-  - **Frontend controls**: a screen with the frontend's functions (games up and down, list left and right, select, back, page up and down, favourite, filter, view mode and game options). Each one has a **Panel** column and a **Keyboard** column; left and right switch between them.
+  - **Frontend controls**: a screen with the frontend's functions (games up and down, list left and right, select, back, page up and down, favourite, filter, view mode and game options). Each one has a **Panel** (or **Joypad**) column and a **Keyboard** column; left and right switch between them. The first two rows are **GUIDE** and **JOYPAD/PANEL LAYOUT**: with a joypad, the guide draws that controller instead of the arcade panel (PlayStation, Xbox, GameCube, Super Nintendo, NES, Dreamcast, Saturn, Mega Drive, Neo Geo CD or Nintendo 64).
 
     Select asks for the new one: press the panel control (a button, a direction or Start) or the key. A button or key that another function already had swaps: that function gets the old one. The same one again, or Delete, leaves the function with none; any function can have none.
 
@@ -85,7 +89,9 @@ These are the defaults:
 
 The buttons are the panel's own, from Setup > Joysticks > Button mapping (`/etc/fliperos/buttons.map`). Without a mapping, a common pad works, and so does a keyboard encoder in MAME's layout.
 
-A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).
+A game opened from the frontend gets the screen, the sound and the controls, and counts in the play statistics of FliperOS (`~/.local/share/fliperos/stats`, the Most Played filter), which don't depend on Attract-Mode being installed.
+
+**Emulator not installed yet.** A game whose emulator isn't on the cabinet yet (one the Setup downloads or builds, like Model 2 or DuckStation) installs or builds it first, with a progress bar, and then opens (`fliperos-setup --emulator-ensure`).
 
 **Achievements badge.** Next to the FAV and PLAYED tags, a game with [RetroAchievements](Emulators.md#retroachievements) gets a yellow trophy with how many achievements you have and how many the game has (`3/24`). In hardcore mode it counts the hardcore ones, and with all of them the numbers turn yellow. It needs the account's **Web API Key** (retroachievements.org/settings, *Keys*), saved in the RetroAchievements menu or in the web panel.
 
@@ -101,6 +107,8 @@ In the game menu (button 1 on a game), such a game also has a trophy before the 
 The numbers come from the site's Web API: each console's game list with the hashes (once a week), your progress (when the frontend opens) and the game just played (when it closes). They are kept in `~/.cache/fliperos/cheevos`, and everything is fetched in the background: the badge shows up when the answer arrives.
 
 ### Physical media: CDs and DVDs
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0.23-disc-card.png" width="480" alt="A disc in the drive, shown by the frontend">
 
 With a CD or DVD drive connected (USB drives too), the system strip shows a pink arrow pointing down. Down goes to the **PHYSICAL MEDIA** row under the strip: one tile per drive, saying whether it has a disc (DISC, EMPTY, OPEN). Left and right move between drives, up goes back to the systems and button 2 closes the strip.
 
@@ -119,6 +127,8 @@ The disc's card always has three tiles:
 The drives belong to the `cdrom` group, which the cabinet's user is in (the ISO creates it there; the update adds it).
 
 ### Physical media: the cartridge reader (OSCR)
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0.23-oscr-carts.png" width="480" alt="Cartridges from the Open Source Cartridge Reader">
 
 The [Open Source Cartridge Reader](https://github.com/sanni/cartreader) HW5 (sanni's) shows up in the same row as **OSCR**, as soon as its USB cable is in (the CH340 converter of the HW5, or an Arduino Mega). The stock OSCR writes its dumps to its own SD card, and its USB only serves the firmware tool. So FliperOS needs the OSCR to run **its patched firmware** (`patches/oscr`), which adds commands on that same USB line:
 - `SCAN` reads the header of the cart in each slot;
@@ -151,6 +161,8 @@ The two `.hex` files come with the image and the updates (`config/oscr`, install
 With no disc, the screen shows the drive's outline and a disc floating below the slot, with NO DISC. When a disc goes in, it slides into the slot, the slot turns green and the disc is read. The card then waits for PLAY; there is no countdown. Button 2 leaves for the game list, also from the card. A disc that can't be played (unknown, Dreamcast) shows UNKNOWN DISC until it comes out.
 
 ## Setup > Games > Frontend
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/setup-games.webp" width="480" alt="Setup > Games">
 
 The default launcher, the one that opens when the computer starts; one that isn't installed can be installed from the FliperOS repository, which ships inside the image (`/opt/fliperos/repo`, below). Whatever doesn't have a package yet shows as *not available yet*.
 
@@ -204,7 +216,7 @@ The events below are the ones of Pixelcade's own EmulationStation scripts ([alin
 - **Visual Pinball**: a program whose name starts with `vpinball` draws the display itself, over the same serial port. When it opens, `pixelweb` (and `dmdserver`) close and let go of the port; when it ends, the services open them again. FliperOS doesn't ship Visual Pinball.
 - **Changing the system in the FliperOS frontend**: when you switch the game list (left and right), the system's written logo (NAOMI, ATOMISWAVE, SEGA MODEL 3...) slides in on the marquee from the side the list moved to, with the previous one leaving, and blinks twice. It is the same slide as the frontend's screen.
 
-  The logos are the ones of the Arcadeflow's displays menu: each is a character of the theme's font, drawn when needed by `fliperos-syslogo` from `~/.attract/layouts/Arcadeflow` (the Setup downloads the theme; Arcadeflow has no license, so none of it is in the image). Without the theme, or for a system that isn't in it, the marquee shows the system's art as before.
+  The logos are the ones of the Arcadeflow's displays menu: each is a character of the theme's font, drawn when needed by `fliperos-syslogo`. The font and the theme's `data_systems.txt` ship in the image (`config/syslogo`, installed in `/usr/local/share/fliperos/syslogo`) with the permission of Arcadeflow's author, so the logos don't need the theme; the rest of Arcadeflow is still downloaded by the Setup. For a system that isn't in that table, the marquee shows the system's art as before.
 
   The ZeDMD gets the frames straight from `fliperos-dmd slide`. The Pixelcade only shows files, so the logo goes in a GIF in `~/pixelcade/console` (`fliperos-logo-*`, replaced at each switch). `fliperos-syslogo export DIR` writes every logo as a PNG.
 

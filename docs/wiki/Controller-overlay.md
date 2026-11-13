@@ -1,5 +1,7 @@
 # Controller on the stream
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/obs-en.webp" width="640" alt="The controller overlay in OBS">
+
 Put your controller on the screen of your live stream. The stick and the buttons light up while you press them on the cabinet, like the input displays of fighting game streams. Viewers see every motion and every button.
 
 It's a page for an OBS **Browser Source**, with a transparent background, so it sits on top of the game. You restyle it in the web panel, in a CSS editor with a live preview. A saved style shows up in OBS at once.
@@ -28,6 +30,8 @@ The address carries a key, the same as the marquee's and the live screen's, beca
 The demo only changes the preview in the panel. In OBS, leave it out of the address, or the buttons light up on their own.
 
 ## What it shows
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/web-controller.webp" width="480" alt="The controller overlay lighting up">
 
 Each player has:
 

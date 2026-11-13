@@ -76,6 +76,8 @@ On an installation from before SM2-Emu, `~/roms/model2` was a link to the folder
 
 ## MAME ROM Cleaner
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/romfilter.webp" width="480" alt="The MAME ROM Cleaner parameters">
+
 In Setup > Games > **Cleaner**, with the MAME CHD Cleaner. From a folder with a MAME romset, it **copies** (or moves) into the emulator's folder the games that pass the filters, with the parent, the BIOS and the devices they need.
 
 It works like [ROMLister](https://www.waste.org/~winkles/ROMLister/): it joins the XML of the romset's MAME version with `catver.ini` (categories and adult games), `nplayers.ini` (how two people play) and Controls.dat's `controls.xml` (the buttons the game really uses), and filters by what the cabinet has.
@@ -124,6 +126,8 @@ The copy shows its progress and resumes where it stopped; from a writable folder
 
 ## Downloader
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/downloader.webp" width="480" alt="The Downloader">
+
 Setup > Games > **Downloader** gathers what downloads games: **ROM/CHD MAME torrent**, [Free games](#free-games) and [Download BIOS](#download-bios).
 
 The torrent screen, in order: the **Filter** (the same parameters screen as the ROM Cleaner, for GroovyMAME, Flycast, SM2-Emu, Supermodel or MAME 2010 / MAME 3D (the PlayStation-based arcade games), saved apart, only for the torrent; until one is saved, the Joystick cabinet preset), the **ROM set magnet link** (required), the **CHD set magnet link** (optional; both come filled in with the links shipped in the image, MAME 0.289 ROMs and MAME 0.288 CHDs, both merged, from `/usr/local/share/fliperos/downloader-magnets`: Enter uses them, or paste another; under the field, **Web browser** opens a browser to find a magnet link and **.torrent file** picks a `.torrent` on a USB disk, the network share or the home folder), the **Download folder** (the folder browser; by default the emulator's, `~/roms/mame` with the BIOS in `~/bios/mame` — elsewhere the BIOS go with the games; for Flycast, the folder of `naomi`, `naomi2` and `atomiswave`) and **Start the download**, which needs the ROM link — the CHDs are those of the games the romset brings.
@@ -155,6 +159,8 @@ Setup > Games > Downloader > Free games downloads open-source homebrew into the 
 Each file comes from the project's own releases page, with a pinned sha256 and the license in the list (GPL and zlib, checked in each one's repository); only those for installed cores, and what is already there stays. The image ships nobody's ROMs or BIOS (`config/fliperos-freeroms`, `lib/freeroms.sh`).
 
 ## Download BIOS
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/bios.webp" width="480" alt="Download BIOS">
 
 Setup > Games > Downloader > **Download BIOS** brings the BIOS that the games in your folders need and `~/bios` doesn't have yet. It looks at every folder of `~/roms` that has files:
 

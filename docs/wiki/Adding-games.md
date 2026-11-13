@@ -22,6 +22,8 @@ BIOS files of your own go in `~/bios` (`\\fliperos\bios`): `~/bios/mame` for MAM
 
 ## Make the frontend see the folder
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/list.webp" width="480" alt="A games folder in the frontend">
+
 A folder with games becomes a **system** in the frontend when you pick the frontend in **Setup > Games > Frontend**. For ES-DE and Pegasus, pick it again (even if it already is the default) every time a folder gets its first games: the Setup only creates what is missing, so nothing you changed is lost. Attract-Mode Plus gets the new folder by itself the next time it opens.
 
 - **Attract-Mode Plus**: for each folder the Setup creates an emulator (`~/.attract/emulators/<name>.cfg`, with the command that opens the game and where the artwork is), a display in `~/.attract/config/displays.cfg` (`~/.attract/attract.cfg` before Attract-Mode Plus first runs), and a game list (romlist, `~/.attract/romlists/<name>.txt`) built from the files in the folder.
@@ -71,6 +73,8 @@ The exception is an arcade list with real game names: it leaves the BIOS sets ou
 - or delete `~/.attract/romlists/<name>.txt` and pick the frontend again in Setup > Games > Frontend.
 
 ## Real game names
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/list-rename.webp" width="480" alt="Renaming a game in the frontend">
 
 A game list made only from the files shows the file name: `mvsc2u` instead of *Marvel Vs. Capcom 2 New Age of Heroes*.
 
@@ -126,6 +130,8 @@ What FliperOS added is listed in the theme's `fliperos_systems.txt` and taken ou
 Everything else shows the file name until it is scraped: **Setup > Games > Scraper** writes the names, descriptions and artwork to `~/ES-DE/gamelists/<system>/gamelist.xml`. ES-DE's own scraper (*Main menu > Scraper*) also works and saves to the same places.
 
 ## Artwork
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/full-card.webp" width="480" alt="A game with its artwork">
 
 All artwork lives in `~/media` (`\\fliperos\media`), one folder per type and, inside it, the same folders as `~/roms`.
 

@@ -1,5 +1,7 @@
 What happens from boot onwards on an installed FliperOS: the default launcher, the Setup menu and what each of its items does. The desktop is covered in [Desktop and theme](Desktop.md).
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/main.webp" width="480" alt="The FliperOS menu of an installed cabinet">
+
 **Boot without text:** from Limine straight to Plymouth, and **the splash stays on screen until the menu or the frontend opens**: `fliperos-tty1` takes it down right before the launcher, the menu, the first boot or the update notice, so the login and the wait for the network (for the update check) don't leave the screen black.
 
 Ubuntu's `plymouth-quit` only takes it down after 90 seconds, as a safety net, and `plymouth-quit-wait` doesn't hold the tty1 login.
@@ -33,6 +35,8 @@ Connecting to a Wi-Fi network in *Setup > Network Setup* runs the same check rig
 Before asking it lists the **files changed on this machine that the update replaces** (up to six on screen, the rest in *View the files*): it rehearses the update in an overlay over `/` and compares each file it would write with what FliperOS itself installed (`/var/lib/fliperos/update/manifest`, the sha256 of each file, recorded by the ISO and by each update).
 
 Each of those files is copied to `/var/lib/fliperos/update/backup/NNNN-date/` before being replaced (`fliperos-update restore N` puts them back), and the Setup choices (video, latency, buttons) are applied again afterwards. Personal files (`fliperos.conf`, button maps, ROMs, saves, frontend lists) aren't touched.
+
+**Choosing the FliperOS version.** *Setup > System > FliperOS version*, and *System > FliperOS version* in the web panel, list the updates from the one the cabinet's image came with to the newest (`fliperos-update versions`). Pick an earlier one to go back if an update broke something (the files it replaces are copied first, as above), or a newer one to go forward (`fliperos-update goto N|latest`). On an earlier one the cabinet stays there: the boot no longer asks and nothing is installed at power off (`/etc/fliperos/update-hold`) until a newer update than the ones it had seen comes out. **Follow the updates** goes back to the newest.
 
 Updates are numbered and **always applied in order**: update N only goes in on a machine at N−1 (`/etc/fliperos/patch-level`), a list with a gap is refused, and if one fails nothing after it is applied (it is offered again at the next boot; log in `/var/log/fliperos-update.log`).
 
@@ -103,6 +107,8 @@ Where FliperOS applies them:
 Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on `radeon` and on `amdgpu`), the Setup writes `color_ctm=sw`. Then saturation and hue go through the same layers as the flicker filter (`libfliperos-deflicker.so` in OpenGL, `libfliperos-vkfps.so` in Vulkan, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.
 
 ## On-screen menu
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/osd-main.webp" width="480" alt="The on-screen menu over a game">
 
 Hold **Start and Down** for a second, or press **Pause** on a keyboard or **Play/Pause** on a wireless remote, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.
 
@@ -187,7 +193,7 @@ To drive it without a controller, write `open`, `close`, `up`, `down`, `left`, `
 
     The sounds are your own — FliperOS ships no game sounds: `move.wav` and `select.wav` in `/opt/fliperos/sounds/menu` (over the network, the FliperOS share, folder `sounds/menu`). With one of them there, it turns on by itself; the Audio Setup item turns it off and on (`menu_sounds` in `fliperos.conf`);
   - **Network Setup** — Wi-Fi from the list of networks (with signal) or a **hidden network by typing the SSID**; once connected, the IP shows in the title, next to the disk usage;
-  - **Joysticks** — each player's buttons and where the buttons of 1 to 5-button games go on the panel, light gun and wheel calibration, joysticks on the parallel port. For a keyboard encoder (I-PAC and the like), Button mapping writes MAME's default keys instead. See [Controls](Controls.md);
+  - **Joysticks** — each player's buttons (arcade panel or joypad) and where the buttons of 1 to 5-button games go on the panel, Bluetooth controllers, the controller light, light gun and wheel calibration, joysticks on the parallel port. For a keyboard encoder (I-PAC and the like), Button mapping writes MAME's default keys instead. See [Controls](Controls.md);
   - **Games** — what puts games in the cabinet, in the order of use:
     - **Frontend** — the default boot launcher; what isn't in the image is installed (or downloaded) from here. See [Frontends](Frontends.md).
 
@@ -266,6 +272,8 @@ The script finds the open game through the `FLIPEROS_POWERKEY` variable that `fl
 `triggerhappy` reads `/dev/input` and calls `fliperos-setup --volume up|down|mute` (5% steps on the Audio Setup card, saved on every press because cabinets are usually switched off at the wall); `config/fliperos-volume.triggers` says which keys. The LXDE panel only handles the mouse, so the volume doesn't change twice. No volume bar appears during a game (nothing draws on top of an emulator in KMS).
 
 ## Web panel
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/status-en.webp" width="640" alt="The status page of the web panel">
 
 The cabinet in a browser on the same network, a phone too: **http://fliperos.local**. Games to play, the screen live and in OBS, settings while you play, files, the ROM filter, downloads, the system status and a terminal. It has its own page: **[Web panel](Web-panel.md)**.
 

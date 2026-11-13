@@ -2,6 +2,8 @@ Which preset to choose for your tube, how to centre the picture, and what sits b
 
 ## Choosing the preset
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/radio.webp" width="480" alt="Video Setup > Monitor Type">
+
 Choose it in **Setup > Video Setup > Monitor Type**. A preset tells Switchres which frequencies the monitor accepts, so it can make a mode for each game.
 
 - **Arcade monitor, model unknown:** start with `generic_15`, the narrowest range. If the picture is stable, `arcade_15` and then `arcade_15ex` allow more games at their exact frequency.
@@ -46,6 +48,8 @@ Choose it in **Setup > Video Setup > Monitor Type**. A preset tells Switchres wh
 The frequencies are Switchres' presets, as listed in [GroovyArcade's monitor definitions](https://gitlab.com/groovyarcade/support/-/wikis/3-Post-Installation-and-Maintenance/3.5-Monitor-Definitions), with the exact timings of each one. The last column is what `lib/monitor.sh` does. The project hasn't checked each preset on a real monitor: they are as Switchres defines them.
 
 ## Centring the picture
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/osd-geometry.webp" width="480" alt="Geometry in the on-screen menu">
 
 1. **Put the monitor's own controls back in the middle** first. In most cases Switchres gives a centred picture that fills the screen.
 2. Use **Setup > Video Setup > Geometry**: it stretches, shrinks and moves the picture on a grid, and saves the result as the **Custom** monitor ([Install](Install.md)).

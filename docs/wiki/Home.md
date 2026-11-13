@@ -1,5 +1,7 @@
 **FliperOS** is Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a **15 kHz kernel** (kernel.org 6.18 LTS + the D0023R patches, the same as GroovyArcade's `linux-15khz`), Switchres, emulators and frontends ready to play, the **GunCon 2 light gun** working out of the box (driver and calibration for the tube, see [Controls](Controls.md)), and a setup menu made for the tube's screen.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/og-room.png" width="640" alt="A room of arcade cabinets running FliperOS">
+
 The media is **installation-only** and follows the GroovyArcade flow: a boot menu with the frequency range, a spoken test of the video outputs, *Testing Results*, the **FliperOS Setup** menu and installation to the HD/SSD. On the installed system the same program becomes the setup menu that appears when the frontend closes.
 
 The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://github.com/charmbracelet/gum), with the **Dracula** theme and English text, designed for **640x480i**: 80x30 characters, nothing animated or blinking.
@@ -9,6 +11,8 @@ The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://g
 [![Telegram group](https://img.shields.io/badge/Telegram-join%20the%20group-26A5E4?logo=telegram&logoColor=white)](https://t.me/fliperos15khz) Questions, photos of your cabinet and help from other users. Each release is posted there with pictures and how the new features work.
 
 ## Using it
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-list.webp" width="480" alt="The FliperOS frontend on a 15 kHz screen">
 
 | Page | What it covers |
 | --- | --- |
@@ -34,6 +38,8 @@ The screens belong to **`fliperos-setup`**, written in Bash with [Gum](https://g
 | [DIY hardware](DIY-hardware.md) | Open-source projects to build with an Arduino, a Raspberry Pi Pico or an ESP32: control panel encoders, spinner, light gun, LED display, button lights |
 
 ## Hacking on it
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/setup-carousel.webp" width="480" alt="The graphical FliperOS Setup">
 
 | Page | What it covers |
 | --- | --- |

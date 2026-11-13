@@ -1,5 +1,7 @@
 ## LXDE desktop
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/desktop.webp" width="480" alt="The LXDE desktop of FliperOS">
+
 GroovyArcade's LXDE: full `lxde` with openbox-lxde, panel at the bottom (menu, file manager, terminal, tasks, CPU, volume, tray, network, clock), no compositor, no DPMS or screensaver, Sans 10 font and the Video Setup orientation.
 
 The wallpaper is `/usr/share/fliperos/wallpaper.jpg` (`config/wallpaper.jpg`, a pixel-art city at night), stretched to the screen, which is 4:3 in every CRT mode. Everything in the Dracula theme (see below).
@@ -33,6 +35,8 @@ GroovyMAME, Model 2 (SM2-Emu) and Fightcade don't bring one into the image, so t
 None of them runs inside the desktop's X — RetroArch and GroovyMAME use KMS, the others start an Xorg of their own in the mode from the modes table ([Emulators](Emulators.md)) —, so the shortcut (`fliperos-launch`) saves the request and closes the desktop (with a confirmation if there are open windows), `fliperos-session` opens the emulator on the CRT and, when it closes, **the desktop comes back**.
 
 An emulator that wasn't built (`--skip-*`) doesn't show in the menu. Model 2 always does: it is not compiled into the image, and the first click clones and builds it ([Emulators](Emulators.md)). Steam and Heroic (GOG), once installed through Setup > Games > Extras, also live in Games, but open inside the desktop itself.
+
+**The controller is the mouse.** On the desktop, the stick of the first controller moves the pointer, the accept button is the right click and the back button the left click (`config/fliperos-deskpad`). Button 3 opens and closes an **on-screen keyboard**, which also opens by itself when a text field gets the focus, and types into it. A window in full screen (a game, a video) pauses it. Its log is `/opt/fliperos/logs/deskpad.log`. Every text field of the graphical Setup has the same on-screen keyboard: Enter on the field opens it.
 
 GroovyArcade's tools also ship: **AntiMicroX** and **QJoyPad** (controller as keyboard/mouse), `xterm`, `htop`, `evtest`, `joy2key`, `hwinfo`, `lshw`, `read-edid`, `i2c-tools`. **FliperOS Setup** lives in **System Tools** (and on the panel), like `gasetup.desktop`. The terminal uses the Dracula colors. Leaving the desktop goes back to the menu.
 

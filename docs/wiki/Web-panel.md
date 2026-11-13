@@ -1,5 +1,7 @@
 **The cabinet from your phone or PC.** Open **http://fliperos.local** in a browser on the same network (or the cabinet's IP) and sign in with the `fliperos` user. There is nothing to install on the phone or the computer.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/status-en.webp" width="640" alt="The web panel">
+
 What you can do from the couch:
 
 - **Pick a game and play it** on the tube, with the pictures, the history and the buttons of each arcade game from the Arcade Database, your favourites and the game filters.
@@ -14,6 +16,8 @@ What you can do from the couch:
 - **Open a terminal** on the cabinet, without an SSH program.
 
 ## Page by page
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/web-live.webp" width="640" alt="The Live screen of the web panel">
 
 The cabinet's state in a browser on the same network (a phone too): **http://fliperos.local**, or the cabinet's IP. Port 80 only forwards to the panel's own port, 8081, so `http://fliperos.local:8081` works too.
 

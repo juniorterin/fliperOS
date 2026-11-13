@@ -1,5 +1,7 @@
 # Multiple monitors
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/arcade-3-screens.png" width="208" alt="A cabinet with three screens">
+
 Some arcade games were built for two or three monitors side by side or stacked: Darius and The Ninja Warriors (3 screens in a row), Punch-Out!! and Super Punch-Out!! (2 screens, one above the other), Ferrari F355 Challenge, Airline Pilots and Sega Strike Fighter (3 screens in a row, one NAOMI board per screen).
 
 FliperOS drives **two arcade CRTs** from the analog outputs of one video card, and up to **three** with a second video card or an active converter on a digital output (both experimental). When a game has 2 or more screens and the multi-screen mode is on, the emulator sends each screen to its own monitor. Every other game stays on monitor 1.
@@ -61,6 +63,8 @@ New monitors only turn on **after a reboot**: the Setup offers it when you leave
 
 ## Which emulators use it
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/multi/darius-1.webp" width="480" alt="Darius across three screens">
+
 | Emulator | Games | Monitors |
 | --- | --- | --- |
 | **GroovyMAME** | Every MAME system with 2 or more screens (Darius, Darius II, The Ninja Warriors, Punch-Out!!, Super Punch-Out!!, Vs. Tennis...) | 2 or 3. With 2 monitors, a 3-screen game opens on the first 2 |
@@ -69,6 +73,8 @@ New monitors only turn on **after a reboot**: the Setup offers it when you leave
 The other emulators (RetroArch, PCSX2, Dolphin, Supermodel, Model 2...) and the frontends stay on monitor 1. It works from any launcher: the frontends, LXDE's **Games** menu, GroovyMAME's own game list and the terminal all go through the same commands.
 
 ## How it works
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/multi/punchout-2.webp" width="480" alt="Punch-Out!! on two screens">
 
 **Boot.** Each extra monitor gets the boot mode of monitor 1, forced on, in the kernel line (`video=DVI-I-1:640x480iSe`; with an EDID boot, the preset's mode; on a digital output, the preset's super resolution). Rotation (Monitor Orientation) applies to all of them.
 

@@ -1,5 +1,7 @@
 What weighs most in the delay between pressing the button and the picture changing is the same on FliperOS and on GroovyArcade: the same kernel patches (the same video output on radeon/amdgpu), the same Switchres and GroovyMAME, and the CRT, which doesn't process the image.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/setup-latency.webp" width="480" alt="Setup > Latency">
+
 FliperOS applies the tweaks GA already makes and adds others, in two modes chosen in **Setup > System > Latency** (`fliperos-setup/lib/latency.sh`).
 
 | Tweak | GroovyArcade | FliperOS Standard | FliperOS Low latency |

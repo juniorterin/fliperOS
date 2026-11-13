@@ -4,6 +4,8 @@ Only two of these have been used with FliperOS so far: the V-USB MamePanel, whic
 
 ## Control panel (joysticks and buttons)
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/jamma-board.webp" width="360" alt="A JAMMA board">
+
 After plugging the panel in, map each player's buttons once in **Setup > Joysticks > Button mapping**; the mapping goes to every emulator ([Controls](Controls.md)).
 
 | Project | Board | What the computer sees |
@@ -25,6 +27,8 @@ After plugging the panel in, map each player's buttons once in **Setup > Joystic
 GroovyMAME and the MAME cores of RetroArch read a mouse as the spinner or trackball of the game. FliperOS has no screen to set this up: it is done in the emulator's own input menu.
 
 ## Light gun
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/guncon-2.webp" width="300" alt="Namco GunCon 2">
 
 FliperOS ships the driver and the calibration for the **GunCon 2**, which reads the tube itself ([Controls](Controls.md)). The projects below work another way: an infrared camera in the gun looks at LEDs placed around the screen, so they don't depend on the kind of monitor.
 
@@ -111,6 +115,8 @@ It is small on purpose: it only writes to serial ports and only accepts the USB 
 - **With Hook Of The Reaper also installed**, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless `/etc/fliperos/fliperos.conf` has the line `outputs_reader=qmamehook`.
 
 ## Cartridge reader (Open Source Cartridge Reader)
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/oscr-hw5.webp" width="360" alt="Open Source Cartridge Reader HW5">
 
 sanni's [Open Source Cartridge Reader](https://github.com/sanni/cartreader) HW5 dumps Super Nintendo, Mega Drive, Nintendo 64, Game Boy and Game Boy Advance cartridges. On its own, it writes each dump to its SD card. With the FliperOS firmware patch (`patches/oscr`), the frontend reads the cartridge over the USB cable and plays it or saves it to the core's folder ([Frontends](Frontends.md), "the cartridge reader").
 

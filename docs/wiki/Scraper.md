@@ -1,5 +1,7 @@
 **Setup > Games > Scraper** has four items: **Scrape the games**, **Scrape with a site (Skyscraper)**, **Scraper provider** and **Art packs by torrent**.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/list-more.webp" width="480" alt="Game information and art fetched by the Scraper">
+
 **Scrape the games** is the FliperOS scraper, the same one the [FliperOS frontend](Frontends.md) runs by itself in the background. For every game in the folders (or one folder), it fetches only what the game still lacks, with no account:
 - arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
 - consoles: the cover and screenshot from libretro-thumbnails;

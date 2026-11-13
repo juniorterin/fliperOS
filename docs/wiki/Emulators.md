@@ -14,6 +14,8 @@
 | Fightcade 2 (downloaded through the Setup) | online matches: FBNeo, SNES9x and FBA (Wine), Flycast | its own Xorg | the lobby at 512x448 (interlaced at 15 kHz); the matches in the **game's native resolution**: each FBNeo/FBA game in its own mode (384x224 for CPS, via GroovyMAME and Switchres), SNES9x at 256x224, Flycast at 640x240 |
 | Steam, Heroic (GOG, Epic, Amazon), through Setup > Games > Extras | PC games | inside the LXDE desktop | the desktop's |
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-play.webp" width="480" alt="A game opened from the frontend">
+
 Dedicated pages: [Fightcade 2](Fightcade-2.md), [ROMs, BIOS and artwork](ROMs.md) (the folders in `~`) and [Controls](Controls.md) (buttons, SDL, calibration).
 
 All of them appear in LXDE's **Games** menu ([Desktop and theme](Desktop.md)).
@@ -35,6 +37,8 @@ Switchres attaches each game's mode to the connector (the `ATTACHMODE` of kernel
 This needs the SDL2 of the `fliperos-sdl2-kms` package (`packaging/packages`), installed in `/usr/local/lib/fliperos/sdl2-kms` and loaded only by GroovyMAME. It is Ubuntu's SDL2 with GroovyArcade's two KMS patches (`packaging/patches/sdl2`): SDL re-reads the connector's modes on every query, and puts the original mode back when the window closes.
 
 Ubuntu's SDL2 reads the mode list once, when it opens, and picked the closest of the old modes: the game stayed in the boot mode.
+
+**Midway 2D games** (Mortal Kombat 1 to 3, NBA Jam, Smash TV, NARC and the others on the Y, T, W and X-unit boards) are 400x254 at 54.7 Hz. Switchres makes that exact mode, but the tube shows it stretched up and down: more lines than the 224/240 games, and a frame the TV's vertical deflection doesn't make up for. `config/mame-midway.ini`, installed as `/etc/fliperos/mame/source/<driver>.ini` (read after `mame.ini` only for those drivers), runs them in **320x240p at 59 Hz**, the height of the other games; the game itself still runs at 54.7 Hz.
 
 `SDL_KMSDRM_REQUIRE_DRM_MASTER=0` must not be set: with it, Switchres's SDL2 backend switches the mode by itself (`kms_modesetting`), and SDL undoes the switch on its next frame.
 
@@ -246,6 +250,8 @@ For testing:
 - `tools/deflicker-test.sh` builds the library and checks the result on a software-rendered Xvfb. It covers the per-program and per-core levels, the desktop shader and the preview with its arrows.
 
 ## Emulators & Games
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/checklist.webp" width="480" alt="Setup > Games > Emulators & Games">
 
 **Setup > Games > Emulators & Games** lists the emulators of the desktop menu (RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel, OpenBOR, Model 2, Fightcade 2, DuckStation) and KOF Final Attack, each marked **installed** or **not installed** — the same file the desktop menu looks at (`TryExec`) to show the shortcut.
 

@@ -2,6 +2,8 @@ Controllers on FliperOS: what the Setup offers in **Joysticks** and in **System 
 
 ## Light gun (GunCon 2)
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/guncon-2.webp" width="360" alt="Namco GunCon 2">
+
 FliperOS plays light gun games on the tube with Namco's **GunCon 2** (the PlayStation 2 gun, USB `0b9a:016a`), with nothing to install. The gun reads the beam of the CRT, which is exactly the screen FliperOS is made for; on an LCD it doesn't aim. What ships with the system:
 
 - **The driver.** GunCon 2 has no driver in the mainline kernel. The build compiles [beardypig/guncon2](https://github.com/beardypig/guncon2) through DKMS for the system's kernel and loads it at boot (`/etc/modules-load.d/fliperos-guncon2.conf`): plug the gun into USB and it shows up as an input device.
@@ -21,19 +23,31 @@ FliperOS plays light gun games on the tube with Namco's **GunCon 2** (the PlaySt
 
 ## Setup > Joysticks
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/joysticks.webp" width="480" alt="Setup > Joysticks">
+
 Calibrators and the parallel port (`config/fliperos-calibrate`, `screens/joysticks.sh`):
 
 ### Button mapping (all emulators)
 
-The first question is what is wired to the panel.
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-controllers.png" width="480" alt="Button mapping: the connected controllers">
 
-**Keyboard encoder (MAME default keys)** is for an encoder that types keys (I-PAC and the like) in MAME's layout: nothing is pressed, only the number of players is asked, and every emulator below gets MAME's default keys for each player (`fliperos-buttons keyboard`; player 1: arrows, Left Ctrl, Left Alt, Space, Left Shift, Z, X, 1 Start, 5 Coin; player 2: R F D G, A S Q W E, 2, 6; players 3 and 4 have only the stick and buttons 1 to 3, as in MAME).
+It opens on the list of **connected controllers**, each with a wired or wireless icon; the list refreshes by itself when a controller is turned on or plugged in. Pick one, then:
+
+1. **The player** it belongs to (P1, P2...).
+2. **The kind of controller:** *Arcade stick or JAMMA panel* (a stick and 1 to 8 buttons, then how many buttons it has) or *Joypad* (Xbox, PlayStation, Nintendo, 8BitDo...). A joypad FliperOS already knows, from its SDL mapping, can keep its own layout with nothing to press (*Use its layout*), like Batocera does; *Map each button* asks for each one, and holding a button skips that input.
+3. **The menu buttons:** at the end you press the buttons that accept and go back in the menus. Esc cancels the whole mapping.
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-kind.png" width="480" alt="Button mapping: arcade panel or joypad"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-padcapture.png" width="480" alt="Button mapping: pressing each joypad button">
+
+Wired controllers always take the first players, in the order of their USB ports; Bluetooth ones take the players left, in the order they connect (their profiles are kept by GUID in `/etc/fliperos/buttons-bt.map`).
+
+**Keyboard encoder (MAME default keys)**, at the end of the list, is for an encoder that types keys (I-PAC and the like) in MAME's layout: nothing is pressed, only the number of players is asked, and every emulator below gets MAME's default keys for each player (`fliperos-buttons keyboard`; player 1: arrows, Left Ctrl, Left Alt, Space, Left Shift, Z, X, 1 Start, 5 Coin; player 2: R F D G, A S Q W E, 2, 6; players 3 and 4 have only the stick and buttons 1 to 3, as in MAME).
 
 RetroArch's own shortcuts that sit on those keys (Space fast-forward, F fullscreen, K frame advance...) are turned off in `buttons.cfg`, and Supermodel drops its own default keys, which would be another player's. **Controllers (press each control)** is the mapping below.
 
 Each player's panel, input by input: up, down, left, right, buttons 1 to 6 in panel order (1 2 3 on top, 4 5 6 below), Start and Coin.
 
-The first input pressed tells which controller belongs to the player (on a V-USB panel with two identical devices, one per player); with nothing pressed for 8 seconds the input is skipped; the controller-as-keyboard for the menu is off meanwhile.
+On a panel that shows up as one device for two players (a V-USB board), the first input pressed tells which half belongs to the player. With nothing pressed for 8 seconds the input is skipped; the controller-as-keyboard for the menu is off meanwhile.
 
 **The number of players follows the controllers that are connected.** The Setup > Joysticks screen says "Players now: 2 of 2 mapped (controllers connected: 2)" and the question "How many players?" starts on the number of controllers connected. Pull one controller out and its player leaves the count; plug it back and the player returns. `fliperos-buttons players` prints the same count (`mapped`, `connected`, `active` and `player1=on|off`). A keyboard encoder's players are always counted. The frontend uses this count for the players a cabinet takes in net play, and says "1 PLAYER" or "2 PLAYERS" on screen when it changes.
 
@@ -47,7 +61,21 @@ The map lives in `/etc/fliperos/buttons.map`, and a system update writes everyth
 
 A trigger (an axis resting at one end, like an Xbox 360 controller's LT/RT) can only be pressed one way: if the capture started with it still held, it used to record the release, and the button then counted as pressed at rest in every emulator; the capture now ignores that release, and saving fixes the direction from the controller's resting position, also in a map saved before.
 
+### Bluetooth
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-bluetooth.png" width="480" alt="Setup > Joysticks > Bluetooth">
+
+**Setup > Joysticks > Bluetooth** shows up only when the machine has a Bluetooth adapter. It pairs, connects and forgets controllers (`config/fliperos-bluetooth`, a front end of `bluetoothctl`), or pairs every controller that is in pairing mode during 30 seconds. A failed pairing is tried once more, after forgetting the device. A paired controller then shows in the Button mapping list with the wireless icon.
+
+### Controller light
+
+**Setup > Joysticks > Controller light** sets the colour of the controllers that have one: DualSense, DualShock 4 and some 8BitDo through the kernel's colour LEDs, and the ring of the **8BitDo Ultimate 2** through its own protocol (`config/fliperos-padcolor`, `config/fliperos-padcolor-8bitdo`). Out of the box (`padcolor=fliperos`) they are FliperOS purple; *Other colour* takes any `RRGGBB`, and *Off* leaves the light as the controller sets it. The screen says which of the connected controllers change.
+
+On the Ultimate 2 the menus show a purple light running over pink, and while a game is open the left ring turns purple and the right one pink; the roulette comes back when the game closes. That pad only takes settings over the USB cable or its 2.4G dongle: over Bluetooth it keeps the colour saved by cable. A pad with no profile at all gets profile 1 "FliperOS" with the 8BitDo app's defaults, and its profile button has to be pressed once.
+
 ### Buttons layout (games of 1 to 5 buttons)
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/layout-edit.webp" width="480" alt="Buttons layout">
 
 Where the buttons of a game go on the panel, by how many buttons the game uses. Pick the number of buttons (1 to 5) and then, for button 1, button 2 and so on, its place on the panel (top row or bottom row; left, middle or right). The panel is drawn as you go, and the list shows the layout of each number:
 
@@ -73,6 +101,8 @@ SM2-Emu reads game buttons 1 to 4 from A B X Y and always takes RB as button 4, 
 The other emulators keep the Button mapping order: FBNeo arranges the buttons of each game by itself, and the others have one mapping for all games.
 
 ### GunCon 2 (light gun)
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/setup-guncon.webp" width="480" alt="GunCon 2 calibration targets">
 
 Everything about the gun in one menu (`screen_guncon`), with the gun's state and the current values on top. All of it but the calibration is also in the web panel's **GunCon 2** group, and counts at once, even in an open game.
 

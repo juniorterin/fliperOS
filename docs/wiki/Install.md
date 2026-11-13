@@ -2,6 +2,8 @@ From the written media to the system on disk: writing the ISO, the boot menu, th
 
 ## Writing the media
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/install.webp" width="480" alt="Installing FliperOS from the boot media">
+
 Write the ISO **byte for byte** to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).
 
 The ISO uses the **Limine** bootloader and is **hybrid** (`xorriso` + `limine bios-install`): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — **Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work**. Use **balenaEtcher**, or Rufus in "DD Image mode", or `dd`:
@@ -63,6 +65,8 @@ Once validated, gatools' `configure_from_connector` applies:
 
 ### With a DisplayPort or HDMI to VGA converter
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/displayport-vga-adapter.webp" width="360" alt="A DisplayPort to VGA converter">
+
 A converter reports an EDID of its own, with 31 kHz modes, so the *Testing Results* screen says **Monitor detection: LCD OR MODERN CRT**. That is expected, not a failure. What you do:
 
 1. **Boot menu:** start with the default **15 kHz** entry. If the screen stays black, restart with **EDID progressive** (interlaced modes often fail on converters; see [Video cards](Video-cards.md#converters)).
@@ -76,9 +80,13 @@ Everything is saved in **`/etc/fliperos/fliperos.conf`** (GPU, driver, connector
 
 ## FliperOS Setup
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/main-setup.webp" width="480" alt="The FliperOS Setup menu">
+
 The media's menu (gasetup's `isomainmenu`): **Install to HD/SSD**, **Recovery Mode**, **Terminal** and **Shutdown**. The title shows the host and the IP.
 
 ### Install to HD/SSD
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/live.webp" width="480" alt="Install to HD/SSD in the Setup">
 
 1. **Do you want to configure video?** — *Yes* opens **Video Setup**:
    - **Monitor Type**: the 29 Switchres presets, in the gatools list, plus **Custom**: your own `crt_range0` (the timings that really fit your monitor), made on the Geometry grid or typed in (16 values, as in `switchres.ini`, of the same 15/25/31 kHz band as the preset).

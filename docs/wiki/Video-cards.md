@@ -21,6 +21,8 @@ Three cards have been seen on a CRT by the project: an AMD R7 240 (`radeon` and 
 
 ## AMD/ATI
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/soyo-r7-240.webp" width="360" alt="A Radeon R7 240 card">
+
 The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover `radeon` and `amdgpu` (DCE and DCN 1 to 3): native boot at `640x480iS` and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.
 
 Good, cheap choices: **HD 5450, HD 6450, HD 7750, R7 240, R7 250**.
@@ -51,6 +53,8 @@ On Windows, forum posts say CRT_EmuDriver doesn't support the 3000 and the 5000,
 **ATOM-15 isn't needed.** Flashing a supported Radeon with [ATOM-15](#atom-15-15-khz-from-power-on) makes it start at 15 kHz from the BIOS, which [GroovyArcade's FAQ](https://gitlab.com/groovyarcade/support/-/wikis/1-About-GroovyArcade/1.3-General-FAQ) describes as protection against out-of-range signals at boot. Once the kernel has loaded, 15 kHz is there either way.
 
 ## Converters
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/displayport-vga-adapter.webp" width="360" alt="A DisplayPort to VGA converter">
 
 A card with only digital outputs can drive a CRT through an **active converter** with a DAC chip inside. A passive adapter doesn't work on a digital output.
 
