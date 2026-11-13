@@ -2121,21 +2121,6 @@ class Timed(Message):
         centered(surf, "%d s" % self.left, T.COMMENT, y + 26)
 
 
-class Pager:
-    """ui_pager: um texto longo (um log, uma lista, um changelog) com
-    rolagem. As linhas largas demais quebram nas palavras, e a continuacao de
-    um item ("- ", "1. ") fica alinhada ao texto dele; so uma palavra maior
-    que a linha quebra no meio."""
-
-    ROWS, COLS = 17, 36
-    BULLET = re.compile(r"\s*(?:[-*]|\d+\.)\s+")
-
-    def __init__(self, title, content, start=False):
-        self.title = title
-        self.lines = []
-        for line in content.split("\n"):
-            self.lines += self.fold(line.expandtabs(4).rstrip())
-        self.top = 0 if start else max(0, len(self.lines) - self.ROWS)
 class QrWait(Timed):
     """ui_qr_wait: o Entrar com o Google no tubo, como numa smart TV. O QR
     code (a matriz do qrencode, "1" e o modulo escuro) a esquerda, em branco
@@ -2178,6 +2163,21 @@ class QrWait(Timed):
         text(surf, "WAITING" + "." * (int(time.monotonic()) % 4), T.COMMENT, x, y + 14 + img.get_height())
 
 
+class Pager:
+    """ui_pager: um texto longo (um log, uma lista, um changelog) com
+    rolagem. As linhas largas demais quebram nas palavras, e a continuacao de
+    um item ("- ", "1. ") fica alinhada ao texto dele; so uma palavra maior
+    que a linha quebra no meio."""
+
+    ROWS, COLS = 17, 36
+    BULLET = re.compile(r"\s*(?:[-*]|\d+\.)\s+")
+
+    def __init__(self, title, content, start=False):
+        self.title = title
+        self.lines = []
+        for line in content.split("\n"):
+            self.lines += self.fold(line.expandtabs(4).rstrip())
+        self.top = 0 if start else max(0, len(self.lines) - self.ROWS)
 
     @classmethod
     def fold(cls, line):

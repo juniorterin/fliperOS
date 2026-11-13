@@ -7316,6 +7316,10 @@ class WebPanelTests(unittest.TestCase):
                          '    esac ;;\n'
                          'esac\nexit 0\n' % (tmp, tmp, tmp, tmp))
         cloud.chmod(0o755)
+        # O qrencode falso: um SVG com o texto.
+        qrencode = tmp / 'fake-qrencode'
+        qrencode.write_text('#!/bin/sh\nfor a; do last=$a; done\necho "<svg>$last</svg>"\n')
+        qrencode.chmod(0o755)
         # O "rclone authorize" falso: um servidor em 127.0.0.1 que manda o
         # /auth para o site e, com o codigo, imprime o token.
         with socket.socket() as s:
@@ -7364,10 +7368,6 @@ class WebPanelTests(unittest.TestCase):
                    FLIPEROS_EXTRAS=str(extras), FLIPEROS_DMD=str(dmd), FLIPEROS_SYSLOGO=str(syslogo),
                    FLIPEROS_IDLE_GIF=str(ROOT / 'config/zedmd-fliperos.gif'),
                    FLIPEROS_OVERLAY_KEY=str(tmp / 'overlay.key'),
-        # O qrencode falso: um SVG com o texto.
-        qrencode = tmp / 'fake-qrencode'
-        qrencode.write_text('#!/bin/sh\nfor a; do last=$a; done\necho "<svg>$last</svg>"\n')
-        qrencode.chmod(0o755)
                    FLIPEROS_EMULATORS=str(emulators), FLIPEROS_PIXELCADE=str(pixelcade),
                    FLIPEROS_UPDATE_TOOL=str(update),
                    FLIPEROS_BUTTONS_TOOL=str(buttons), FLIPEROS_INPUT_CSS=str(tmp / 'etc/input-overlay.css'),
