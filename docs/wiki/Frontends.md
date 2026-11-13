@@ -83,6 +83,17 @@ The buttons are the panel's own, from Setup > Joysticks > Button mapping (`/etc/
 
 A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).
 
+**Achievements badge.** Next to the FAV and PLAYED tags, a game with [RetroAchievements](Emulators.md#retroachievements) gets a yellow trophy with how many achievements you have and how many the game has (`3/24`). In hardcore mode it counts the hardcore ones, and with all of them the numbers turn yellow. It needs the account's **Web API Key** (retroachievements.org/settings, *Keys*), saved in the RetroAchievements menu or in the web panel.
+
+The badge only shows where the game's emulator gives achievements:
+
+- RetroArch cartridge consoles (NES, SNES, Game Boy, GBA, Mega Drive, N64, PC Engine and the rest the site knows);
+- arcade in FBNeo and MAME 2003-Plus (not GroovyMAME, nor the other MAME cores).
+
+`gui/fecheevos.py` finds the game by the same hash as the emulators (rcheevos): for arcade, the name of the file; for cartridges, the file without its header, also inside a `.zip`. Disc systems (PlayStation, PS2, GameCube, Dreamcast) have a hash of their own and only get the badge with `RAHasher` installed (`/usr/local/bin/RAHasher`).
+
+The numbers come from the site's Web API: each console's game list with the hashes (once a week), your progress (when the frontend opens) and the game just played (when it closes). They are kept in `~/.cache/fliperos/cheevos`, and everything is fetched in the background: the badge shows up when the answer arrives.
+
 ### Physical media: CDs and DVDs
 
 With a CD or DVD drive connected (USB drives too), the system strip shows a pink arrow pointing down. Down goes to the **PHYSICAL MEDIA** row under the strip: one tile per drive, saying whether it has a disc (DISC, EMPTY, OPEN). Left and right move between drives, up goes back to the systems and button 2 closes the strip.

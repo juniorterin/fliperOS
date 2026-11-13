@@ -315,6 +315,13 @@ class Frontend:
         if "error" in loaded:
             raise loaded["error"]
         self.lib = loaded["lib"]
+        # O selo das conquistas do RetroAchievements (gui/fecheevos.py): so com
+        # a conta e a Web API Key do menu RetroAchievements; busca numa thread.
+        try:
+            import fecheevos
+            self.cheevos = fecheevos.Cheevos(os.path.join(fedata.cache_dir(), "cheevos"))
+        except Exception:      # sem o selo, o resto abre igual
+            self.cheevos = None
         self.mode = cfg.get("mode", "list") if cfg.get("mode") in MODES else "list"
         self.cats = self.lib.categories()
         self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == cfg.get("category")), 0)
@@ -2353,6 +2360,8 @@ class Frontend:
         if played > 10 and g:
             self.lib.played(g, played)
             self.rebuild(keep=g["Name"])          # o grupo RECENT acompanha
+            if getattr(self, "cheevos", None) is not None:
+                self.cheevos.refresh_game(g)      # as conquistas desta partida no selo
         self.harvest.paused = False
         self.open()
         self.input.open()

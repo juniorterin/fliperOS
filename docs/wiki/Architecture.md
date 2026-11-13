@@ -174,7 +174,8 @@ The clock comes from the network (`systemd-timesyncd`). On the first test on the
 | `fliperos-setup/lib/debug.sh` | Debug mode: boot and programs with or without text |
 | `config/fliperos-resolution`, `config/applications/fliperos-resolution.desktop` | Desktop Resolution: the desktop resolution on the fly |
 | `config/fliperos-cloud` | Cloud backup: high scores, saves and settings through rclone (web panel) |
-| `fliperos-setup/lib/cheevos.sh`, `config/fliperos-cheevos` | RetroAchievements: the login (token only) and the account in each emulator's config |
+| `fliperos-setup/lib/cheevos.sh`, `config/fliperos-cheevos` | RetroAchievements: the login (token only), the Web API Key, the account in each emulator's config, and the unlocks read from the logs for the on-screen bar (`watch`) |
+| `fliperos-setup/gui/fecheevos.py` | The frontend's achievements badge: the rcheevos hash of each game and the Web API numbers, cached |
 | `config/mame-ui.ini` | Dracula colors for GroovyMAME's UI |
 | `config/applications/`, `config/icons/`, `config/fliperos-launch` | Emulators in the LXDE menu and leaving the desktop to open them |
 | `config/fliperos-x11-run`, `config/fliperos-emulator-modes.conf` | Opens a program in an Xorg of its own in the requested mode (`--mode 640x240@60`) or in the per-emulator table's mode |

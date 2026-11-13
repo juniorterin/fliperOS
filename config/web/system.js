@@ -610,8 +610,27 @@ async function cheevosPage() {
       if (!(await ask({ title: "RetroAchievements", text: t("ra_logout_ask").replace("%s", state.user), yes: t("ra_logout") }))) return;
       if (await post({ action: "logout" })) reload();
     });
+    // A Web API Key da conta: com ela o frontend mostra as conquistas de cada jogo.
+    const key = el("input", { type: "password", autocomplete: "off", "aria-label": t("ra_apikey"),
+      placeholder: state.apikey ? t("ra_apikey_set") : t("ra_apikey") });
+    const save = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("ra_apikey_save"));
+    const keyForm = el("form", { class: "stack" }, el("span", {}, t("ra_apikey")), key,
+      el("div", { class: "row start" }, save), el("div", { class: "dim" }, t("ra_apikey_hint")));
+    keyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      save.disabled = true;
+      try {
+        if (await post({ action: "apikey", key: key.value.trim() })) {
+          toast(t(key.value.trim() ? "ra_apikey_saved" : "ra_apikey_removed"), "ok");
+          reload();
+        }
+      } finally {
+        key.value = "";
+        save.disabled = false;
+      }
+    });
     content.append(el("div", {}, t("ra_as").replace("%s", state.user)), onOff("enable", state.enabled),
-      onOff("hardcore", state.hardcore), el("div", { class: "row start" }, out));
+      onOff("hardcore", state.hardcore), keyForm, el("div", { class: "row start" }, out));
   } else {
     const user = el("input", { autocomplete: "off", "aria-label": t("user"), placeholder: t("user") });
     const pass = el("input", { type: "password", autocomplete: "off", "aria-label": t("password"), placeholder: t("password") });

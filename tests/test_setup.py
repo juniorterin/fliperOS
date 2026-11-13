@@ -5836,7 +5836,7 @@ class CheevosTests(Base):
         duck = (self.home / ".local/share/duckstation/settings.ini").read_text()
         self.assertIn("Enabled = false", duck)
         self.assertIn("Token = AbC123", duck)
-        self.assertEqual(self.out("cheevos_cli status"), "user=Player1\nenabled=0\nhardcore=1\n")
+        self.assertEqual(self.out("cheevos_cli status"), "user=Player1\nenabled=0\nhardcore=1\napikey=0\n")
         self.out("cheevos_cli logout")
         duck = (self.home / ".local/share/duckstation/settings.ini").read_text()
         self.assertIn("Username = \nToken = \n", duck)
@@ -5878,6 +5878,36 @@ class CheevosTests(Base):
         out = self.env.out(script % (SETUP, SETUP, "return 1"), env)
         self.assertIn("msg:https://retroachievements.org/createaccount.php", out)
         self.assertIn("returned", out)
+
+    def test_web_api_key_is_checked_kept_and_goes_with_the_account(self):
+        # A Web API Key (o selo das conquistas no frontend): conferida no
+        # perfil da conta, pela entrada do curl (-K -), nunca nos argumentos.
+        self.env.stub("curl", 'echo "$*" >> "%s/curl.args"; in=$(cat)\n'
+                              'case "$in" in\n'
+                              '  *API_GetUserProfile*y=GoodKey1234567890ab*) echo \'{"User":"Player1","ID":7}\' ;;\n'
+                              '  *API_GetUserProfile*) echo \'{}\' ;;\n'
+                              '  *) echo \'{"Success":true,"User":"Player1","Token":"AbC123"}\' ;;\n'
+                              'esac' % self.env.dir)
+        self.assertIn("Sign in first", self.env.run('printf "GoodKey1234567890ab\\n" | cheevos_cli apikey', self.cenv).stdout)
+        self.out('printf "s3cret\\n" | cheevos_cli login player1')
+        r = self.env.run('printf "BadKey1234567890abcd\\n" | cheevos_cli apikey', self.cenv)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("did not accept", r.stdout)
+        self.assertEqual(self.env.run('printf "no spaces!\\n" | cheevos_cli apikey', self.cenv).returncode, 1)
+        self.out('printf "GoodKey1234567890ab\\n" | cheevos_cli apikey')
+        saved = self.env.etc / "cheevos"
+        self.assertIn("apikey=GoodKey1234567890ab\n", saved.read_text())
+        self.assertNotIn("GoodKey", (self.env.dir / "curl.args").read_text())
+        self.assertIn("apikey=1", self.out("cheevos_cli status"))
+        # Fica ao ligar, desligar e no hardcore; a mesma conta de novo tambem.
+        self.out('cheevos_cli enable off; cheevos_cli hardcore on; printf "s3cret\\n" | cheevos_cli login player1')
+        self.assertIn("apikey=GoodKey1234567890ab\n", saved.read_text())
+        # Vazia, sai; sair da conta tambem a leva.
+        self.out('printf "\\n" | cheevos_cli apikey')
+        self.assertNotIn("apikey=", saved.read_text())
+        self.out('printf "GoodKey1234567890ab\\n" | cheevos_cli apikey; cheevos_logout')
+        self.assertNotIn("apikey=", saved.read_text())
+        self.assertIn("apikey=0", self.out("cheevos_cli status"))
 
     def test_tool_at_launch_creates_the_dolphin_ini_only_with_an_account(self):
         tool = ["bash", str(ROOT / "config/fliperos-cheevos")]

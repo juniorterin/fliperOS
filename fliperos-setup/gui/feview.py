@@ -1232,7 +1232,7 @@ def draw_list(fe, ui, now):
             if party:
                 cabinet_row(s, px + 22, y + 3, party["used"], party["max"] or 1, w=5, h=8, gap=1)
             y += 18
-        y += play_chips(s, game, px, y)
+        y += play_chips(s, game, px, y, cheevos_of(fe, game))
     # O modo comercial: o indicador debaixo dos icones dos comandos; fora
     # dele, a sinopse do jogo rolando.
     with part(fe, ui, "text", 1) as s:
@@ -1373,20 +1373,46 @@ def group_header(fe, ui, rect, head, on, now):
     W.text(ui, str(count), color, lx + lw - 6, y + 2, right=True)
 
 
-def play_chips(ui, game, x, y):
-    """Os selinhos do jogo: * FAV e o contador de partidas (PLAYED nX, do
-    NOME.stat). Devolve a altura que usou (0 sem nenhum)."""
+# O trofeu amarelo de 7x7 do selo das conquistas.
+TROPHY = (".YYYYY.", "YYYYYYY", "Y.YYY.Y", ".YYYYY.", "..YYY..", "...Y...", ".YYYYY.")
+
+
+def cheevos_of(fe, game):
+    """(tem, total) das conquistas do jogo (gui/fecheevos.py), ou None."""
+    cheevos = getattr(fe, "cheevos", None)
+    if cheevos is None:
+        return None
+    try:
+        return cheevos.lookup(game)
+    except Exception:          # um cache estragado nao derruba a tela
+        return None
+
+
+def play_chips(ui, game, x, y, trophy=None):
+    """Os selinhos do jogo: * FAV, o contador de partidas (PLAYED nX, do
+    NOME.stat) e, num jogo com conquistas do RetroAchievements, o trofeu com
+    quantas o jogador tem e quantas o jogo tem (trophy = (tem, total), ja
+    todas em amarelo). Devolve a altura que usou (0 sem nenhum)."""
     played = game.get("PlayedCount")
     chips = []
     if game.get("Favourite") == "1":
-        chips.append(("* FAV", T.YELLOW))
+        chips.append(("* FAV", T.YELLOW, False))
     if played:
-        chips.append(("PLAYED %sX" % played, T.COMMENT))
-    for text, color in chips:
-        w = tiny.width(text) + 8
+        chips.append(("PLAYED %sX" % played, T.COMMENT, False))
+    if trophy:
+        have, total = trophy
+        chips.append(("%d/%d" % (have, total), T.YELLOW if total and have >= total else T.FG, True))
+    for text, color, icon in chips:
+        lead = 11 if icon else 4
+        w = tiny.width(text) + lead + 4
         W.block(ui, (x, y, w, 10), T.BG_DEEP, None)
         pygame.draw.rect(ui, T.LINE, (x, y, w, 10), 1)
-        tiny.text(ui, text, color, x + 4, y + 3)
+        if icon:
+            for j, row in enumerate(TROPHY):
+                for i, c in enumerate(row):
+                    if c == "Y":
+                        ui.fill(T.YELLOW, (x + 3 + i, y + 2 + j, 1, 1))
+        tiny.text(ui, text, color, x + lead, y + 3)
         x += w + 4
     return 14 if chips else 0
 
@@ -1421,7 +1447,7 @@ def list_info_vertical(fe, ui, game, box, now):
         if party:
             cabinet_row(ui, x + 22, y + 2, party["used"], party["max"] or 1, w=5, h=8, gap=1)
         y += 14
-    y += play_chips(ui, game, x, y + 2)
+    y += play_chips(ui, game, x, y + 2, cheevos_of(fe, game))
     if fe.commercial:
         # No meio do espaco que sobra embaixo dos icones.
         coin_box(fe, ui, x + (w - COIN_W) // 2, y + max(0, (bottom - y - COIN_H) // 2), now)

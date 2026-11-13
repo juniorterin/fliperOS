@@ -3181,7 +3181,7 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
             return self.send(200, {"user": info.get("user", ""), "enabled": info.get("enabled") == "1",
-                                   "hardcore": info.get("hardcore") == "1"})
+                                   "hardcore": info.get("hardcore") == "1", "apikey": info.get("apikey") == "1"})
         if url.path == "/api/whatsnew":
             # Setup > System > What's new: os updates e o CHANGELOG.
             try:
@@ -3716,6 +3716,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {})
         if action == "logout":
             return self.setup_call(["--cheevos", "logout"])
+        if action == "apikey":
+            # A Web API Key (o selo das conquistas no frontend), pela entrada
+            # padrao como a senha; vazia tira a guardada.
+            if user == LAB_USER:
+                return self.send(403, {"error": "not in the lab mode"})
+            key = str(data.get("key") or "").strip()
+            if key and not re.fullmatch(r"[A-Za-z0-9]{16,64}", key):
+                return self.send(400, {"error": "not a Web API Key"})
+            try:
+                done = subprocess.run([SETUP, "--cheevos", "apikey"], input=key + "\n",
+                                      capture_output=True, text=True, timeout=60)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            if done.returncode != 0:
+                return self.send(400, {"error": (done.stdout or done.stderr).strip()[-300:] or "not saved"})
+            return self.send(200, {})
         if action in ("enable", "hardcore") and isinstance(data.get("on"), bool):
             return self.setup_call(["--cheevos", action, "on" if data["on"] else "off"])
         return self.send(400, {"error": "bad action"})

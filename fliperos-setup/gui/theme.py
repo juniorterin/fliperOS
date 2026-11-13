@@ -1492,8 +1492,10 @@ for _alias, _name in {
     "site": "scraper",
     # Emulators & Games: compilar o mais novo do projeto e voltar ao pacote.
     "edge": "install", "package": "reset",
-    # RetroAchievements: entrar, sair, ligar e o modo hardcore.
+    # RetroAchievements: entrar, sair, ligar, o modo hardcore e a Web API Key
+    # (o selo das conquistas no frontend).
     "login": "password", "logout": "power", "hardcore": "achievements", "enable": "toggle", "signup": "add",
+    "apikey": "password",
     # Cloud backup: sincronizar, enviar, receber, o automatico, o que vai e tirar a conta.
     # O automatico (Download BIOS ao abrir o menu, Cloud backup sozinho): as
     # setas em volta, nao a runa do Bluetooth.

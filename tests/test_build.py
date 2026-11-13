@@ -7532,7 +7532,8 @@ class WebPanelTests(unittest.TestCase):
         # entrada padrao do Setup, o motivo de um login recusado na resposta.
         cookie = self.login()
         status, _, data = self.request('GET', '/api/cheevos', cookie=cookie)
-        self.assertEqual((status, json.loads(data)), (200, {'user': 'Player1', 'enabled': True, 'hardcore': False}))
+        self.assertEqual((status, json.loads(data)), (200, {'user': 'Player1', 'enabled': True, 'hardcore': False,
+                                                            'apikey': False}))
         status, _, data = self.request('POST', '/api/cheevos', {'action': 'login', 'user': 'Player1', 'password': 'bad'},
                                        cookie=cookie)
         self.assertEqual(status, 401)
@@ -17855,6 +17856,158 @@ class CheevosWatchTests(unittest.TestCase):
         patch = (ROOT / 'packaging/patches/flycast/0006-achievements-log-and-no-notifications.patch').read_text()
         self.assertIn('getenv("FLIPEROS_CHEEVOS_LOG")', patch)
         self.assertIn('Option<bool> AchievementsNotifications("Notifications", true, "achievements");', patch)
+
+
+class FrontendCheevosTests(unittest.TestCase):
+    """O selo das conquistas no frontend (gui/fecheevos.py e o play_chips do
+    feview): o hash do rcheevos, so onde o emulador da conquistas, e os
+    numeros da Web API num cache."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        self.addCleanup(sys.path.remove, str(ROOT / 'fliperos-setup/gui'))
+        import fecheevos
+        self.fc = fecheevos
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.conf = self.tmp / 'cheevos'
+        self.conf.write_text('enabled=1\nuser=Player1\ntoken=T\nhardcore=0\ntime=1\napikey=K\n')
+
+    def test_hash_is_the_one_of_rcheevos(self):
+        import hashlib
+        md5 = lambda b: hashlib.md5(b).hexdigest()
+        folder = self.tmp / 'roms'
+        folder.mkdir()
+        # Arcade: o nome sem a extensao; a pasta de console do FBNeo na frente.
+        self.assertEqual(self.fc.rom_hash(27, str(folder / 'sf2.zip')), md5(b'sf2'))
+        (folder / 'nes').mkdir()
+        self.assertEqual(self.fc.rom_hash(27, str(folder / 'nes' / 'smb.zip')), md5(b'nes_smb'))
+        # NES sem o cabecalho iNES; SNES sem o do copiador (512 a mais).
+        body = bytes(range(256)) * 64
+        (folder / 'a.nes').write_bytes(b'NES\x1a' + bytes(12) + body)
+        self.assertEqual(self.fc.rom_hash(7, str(folder / 'a.nes')), md5(body))
+        snes = bytes(0x2000 * 2)
+        (folder / 'a.sfc').write_bytes(bytes(512) + snes)
+        self.assertEqual(self.fc.rom_hash(3, str(folder / 'a.sfc')), md5(snes))
+        (folder / 'b.sfc').write_bytes(snes)
+        self.assertEqual(self.fc.rom_hash(3, str(folder / 'b.sfc')), md5(snes))
+        # N64 v64 (trocado de 2 em 2) e n64 (de 4 em 4) viram o z64.
+        z64 = b'\x80\x37\x12\x40' + bytes(range(4, 64))
+        v64 = bytearray(z64)
+        v64[0::2], v64[1::2] = z64[1::2], z64[0::2]
+        n64 = b''.join(z64[i:i + 4][::-1] for i in range(0, len(z64), 4))
+        for name, data in (('a.z64', z64), ('a.v64', bytes(v64)), ('a.n64', n64)):
+            (folder / name).write_bytes(data)
+            self.assertEqual(self.fc.rom_hash(2, str(folder / name)), md5(z64), name)
+        # Num .zip, o arquivo de dentro.
+        with zipfile.ZipFile(folder / 'c.zip', 'w') as z:
+            z.writestr('Game (USA).gba', b'gba rom')
+        self.assertEqual(self.fc.rom_hash(5, str(folder / 'c.zip')), md5(b'gba rom'))
+
+    def test_only_where_the_emulator_gives_achievements(self):
+        ra = lambda core, platform: {'exe': 'retroarch', 'args': '-L /opt/fliperos/retroarch/cores/%s_libretro.so' % core,
+                                     'platform': platform, 'key': 'retroarch/' + core}
+        self.assertEqual(self.fc.console_of(ra('snes9x', 'snes'), 'smw.sfc', False), 3)
+        self.assertEqual(self.fc.console_of(ra('gambatte', 'gb'), 'zelda.gbc', False), 6)
+        self.assertEqual(self.fc.console_of(ra('genesis_plus_gx', 'megadrive'), 'sonic.sms', False), 11)
+        self.assertEqual(self.fc.console_of(ra('fbneo', 'fba'), 'sf2.zip', False), 27)
+        # O MAME 2010 e o GroovyMAME nao dao conquistas.
+        self.assertIsNone(self.fc.console_of(ra('mame2010', 'arcade'), 'sf2.zip', False))
+        self.assertIsNone(self.fc.console_of({'exe': 'groovymame', 'platform': 'arcade', 'key': 'mame'}, 'sf2.zip', False))
+        # Os discos so com o RAHasher; os arcades do Flycast e o fork Namco nunca.
+        duck = {'exe': '/usr/local/bin/duckstation', 'platform': 'psx', 'key': 'ps1'}
+        self.assertIsNone(self.fc.console_of(duck, 'ff7.chd', False))
+        self.assertEqual(self.fc.console_of(duck, 'ff7.chd', True), 12)
+        self.assertIsNone(self.fc.console_of({'exe': 'flycast', 'platform': 'naomi', 'key': 'naomi'}, 'x.zip', True))
+        self.assertIsNone(self.fc.console_of({'exe': 'pcsx2x6', 'platform': 'ps2', 'key': 'namco2x6'}, 'x', True))
+
+    def test_lookup_fetches_once_and_counts_the_mode(self):
+        import hashlib
+        roms = self.tmp / 'snes'
+        roms.mkdir()
+        (roms / 'smw.sfc').write_bytes(b'mario')
+        calls = []
+
+        def fetch(endpoint, **params):
+            calls.append((endpoint, params))
+            if endpoint == 'API_GetGameList.php':
+                return [{'ID': 228, 'NumAchievements': 96, 'Hashes': [hashlib.md5(b'mario').hexdigest().upper()]},
+                        {'ID': 9, 'NumAchievements': 0, 'Hashes': ['00']}]
+            if endpoint == 'API_GetUserCompletionProgress.php':
+                return {'Total': 1, 'Results': [{'GameID': 228, 'NumAwarded': 12, 'NumAwardedHardcore': 3,
+                                                 'MaxPossible': 96}]}
+            if endpoint == 'API_GetGameInfoAndUserProgress.php':
+                return {'NumAchievements': 96, 'NumAwardedToUser': 13, 'NumAwardedToUserHardcore': 4}
+            raise AssertionError(endpoint)
+
+        system = {'exe': 'retroarch', 'args': '-L x/snes9x_libretro.so', 'platform': 'snes', 'folder': str(roms),
+                  'key': 'retroarch/snes9x'}
+        game = {'_system': system, 'file': 'smw.sfc', 'Name': 'smw'}
+        cache = self.tmp / 'cache'
+        cheevos = self.fc.Cheevos(str(cache), conf=str(self.conf), fetch=fetch, rahasher=False)
+
+        def settle():
+            deadline = time.time() + 10
+            result = None
+            while time.time() < deadline:
+                result = cheevos.lookup(game)
+                if result and not cheevos.pending:
+                    return result
+                time.sleep(0.05)
+            return result
+
+        self.assertEqual(settle(), (12, 96))
+        self.assertEqual([c[0] for c in calls].count('API_GetGameList.php'), 1)
+        self.assertEqual(calls[0][1], {'i': 3, 'f': 1, 'h': 1})
+        # Depois de jogar: so aquele jogo de novo.
+        cheevos.refresh_game(game)
+        deadline = time.time() + 10
+        while time.time() < deadline and cheevos.lookup(game) != (13, 96):
+            time.sleep(0.05)
+        self.assertEqual(cheevos.lookup(game), (13, 96))
+        # Outro frontend aberto le o cache sem ir ao site; no hardcore, os do hardcore.
+        self.conf.write_text(self.conf.read_text().replace('hardcore=0', 'hardcore=1'))
+        again = self.fc.Cheevos(str(cache), conf=str(self.conf), fetch=lambda *a, **k: self.fail('no fetch'),
+                                rahasher=False)
+        again.progress['time'] = time.time()
+        self.assertEqual(again.lookup(game), (4, 96))
+        # Sem a Web API Key, ou com as conquistas desligadas, nada.
+        self.conf.write_text('enabled=1\nuser=Player1\ntoken=T\n')
+        self.assertIsNone(self.fc.Cheevos(str(cache), conf=str(self.conf), rahasher=False).lookup(game))
+
+    def test_trophy_chip_next_to_fav_and_played(self):
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        import pygame
+        import feview
+        import theme
+        pygame.font.init()
+        ui = pygame.Surface((320, 40), pygame.SRCALPHA)
+        game = {'Favourite': '1', 'PlayedCount': '3'}
+        self.assertEqual(feview.play_chips(ui, game, 0, 0), 14)
+        plain = ui.get_bounding_rect().width
+        ui.fill((0, 0, 0, 0))
+        feview.play_chips(ui, game, 0, 0, (3, 24))
+        self.assertGreater(ui.get_bounding_rect().width, plain + 20)
+        yellow = [x for x in range(plain + 4, 320) if ui.get_at((x, 4))[:3] == theme.YELLOW]
+        self.assertTrue(yellow)
+        # So o selo das conquistas, sem FAV nem partidas.
+        ui.fill((0, 0, 0, 0))
+        self.assertEqual(feview.play_chips(ui, {}, 0, 0, (24, 24)), 14)
+        self.assertEqual(feview.play_chips(ui, {}, 0, 0, None), 0)
+        fe = type('Fe', (), {'cheevos': type('C', (), {'lookup': lambda self, g: (1, 2)})()})()
+        self.assertEqual(feview.cheevos_of(fe, {}), (1, 2))
+        self.assertIsNone(feview.cheevos_of(object(), {}))
+
+    def test_key_reaches_the_setup_and_the_panel(self):
+        web = (ROOT / 'config/fliperos-web').read_text()
+        self.assertIn('if action == "apikey":', web)
+        self.assertIn('[SETUP, "--cheevos", "apikey"], input=key + "\\n"', web)
+        self.assertIn('post({ action: "apikey", key: key.value.trim() })', (ROOT / 'config/web/system.js').read_text())
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('fecheevos.Cheevos(os.path.join(fedata.cache_dir(), "cheevos"))', frontend)
+        self.assertIn('self.cheevos.refresh_game(g)', frontend)
 
 
 class OsdTests(unittest.TestCase):

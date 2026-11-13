@@ -7,7 +7,10 @@
 # O login troca usuario e senha pelo token da conta (a API do site, a mesma
 # do rcheevos dos emuladores); so o token fica guardado, em
 # /etc/fliperos/cheevos (do root, lido pelo grupo do usuario):
-#   enabled=1  user=NOME  token=TOKEN  hardcore=0|1  time=EPOCH
+#   enabled=1  user=NOME  token=TOKEN  hardcore=0|1  time=EPOCH  apikey=CHAVE
+# O apikey e a Web API Key da conta (retroachievements.org/settings): com ela
+# o frontend mostra quantas conquistas cada jogo tem (gui/fecheevos.py). Sai
+# junto com a conta (Sign out ou outra conta).
 # O RetroArch le /etc/fliperos/retroarch/cheevos.cfg, que nasce daqui (o
 # fliperos-kms-run o poe no --appendconfig); os outros recebem a conta no ini
 # de cada um a cada abertura (config/fliperos-cheevos, pelo fliperos-x11-run),
@@ -52,13 +55,19 @@ cheevos_label() {
   fi
 }
 
-# cheevos_save USER TOKEN ENABLED HARDCORE grava o arquivo (0640, grupo do
-# usuario: os emuladores o leem) e passa a conta aos emuladores.
+# cheevos_save USER TOKEN ENABLED HARDCORE [APIKEY] grava o arquivo (0640,
+# grupo do usuario: os emuladores o leem) e passa a conta aos emuladores. Sem
+# APIKEY, fica a de antes, se a conta e a mesma.
 cheevos_save() {
-  local tmp group
+  local tmp group apikey=${5-}
+  if (($# < 5)); then
+    apikey=$(cheevos_get apikey)
+    [[ -n $1 && $1 == "$(cheevos_get user)" ]] || apikey=""
+  fi
   mkdir -p "$(dirname "$CHEEVOS_FILE")"
   tmp=$(umask 077 && mktemp "$CHEEVOS_FILE.XXXXXX") || return 1
   printf 'enabled=%s\nuser=%s\ntoken=%s\nhardcore=%s\ntime=%s\n' "$3" "$1" "$2" "$4" "$(date +%s)" > "$tmp"
+  [[ -z $apikey ]] || printf 'apikey=%s\n' "$apikey" >> "$tmp"
   group=$(id -gn "$FLIPEROS_USER" 2> /dev/null) && chgrp "$group" "$tmp" 2> /dev/null
   chmod 640 "$tmp"
   mv -f "$tmp" "$CHEEVOS_FILE"
@@ -140,15 +149,45 @@ cheevos_logout() {
   cheevos_save "" "" 0 "$(cheevos_get hardcore)"
 }
 
-# cheevos_cli status|login USUARIO|logout|enable on|off|hardcore on|off: o
-# painel web. Status 2: pedido errado.
+# cheevos_apikey (a chave pela entrada padrao; vazia tira a guardada): a Web
+# API Key da conta, conferida no site (o perfil da conta tem de vir com ela).
+# Status 0 e a chave guardada; 1 com o motivo na saida.
+CHEEVOS_WEB_API=${CHEEVOS_WEB_API:-https://retroachievements.org/API}
+cheevos_apikey() {
+  local key user reply name
+  IFS= read -r key || true
+  key=${key//[[:space:]]/}
+  cheevos_logged_in || { echo "Sign in first."; return 1; }
+  user=$(cheevos_get user)
+  if [[ -n $key ]]; then
+    [[ $key =~ ^[A-Za-z0-9]{16,64}$ ]] || { echo "That is not a Web API Key (letters and digits, from retroachievements.org/settings)."; return 1; }
+    # A chave vai no endereco: pelo -K - (a entrada), fora da lista de processos.
+    reply=$(printf 'url = "%s/API_GetUserProfile.php?u=%s&y=%s"\n' "$CHEEVOS_WEB_API" "$user" "$key" |
+      curl -sS --max-time 20 -A "FliperOS/1.0 (achievements badge)" -K - 2>&1) || {
+      log_warn "RetroAchievements: Web API Key sem resposta: ${reply//$key/KEY}"
+      echo "No answer from retroachievements.org (no network?)."
+      return 1
+    }
+    name=$(jq -r '.User // empty' <<< "$reply" 2> /dev/null)
+    if [[ ${name,,} != "${user,,}" ]]; then
+      log_warn "RetroAchievements: Web API Key recusada para $user"
+      echo "retroachievements.org did not accept this key for $user."
+      return 1
+    fi
+  fi
+  cheevos_save "$user" "$(cheevos_get token)" "$(cheevos_get enabled)" "$(cheevos_get hardcore)" "$key"
+}
+
+# cheevos_cli status|login USUARIO|logout|enable on|off|hardcore on|off|apikey:
+# o painel web (a senha e a chave pela entrada padrao). Status 2: pedido errado.
 cheevos_cli() {
   local hard
   case ${1:-} in
     status)
-      printf 'user=%s\nenabled=%s\nhardcore=%s\n' "$(cheevos_get user)" "$(cheevos_on && echo 1 || echo 0)" \
-        "$([[ $(cheevos_get hardcore) == 1 ]] && echo 1 || echo 0)"
+      printf 'user=%s\nenabled=%s\nhardcore=%s\napikey=%s\n' "$(cheevos_get user)" "$(cheevos_on && echo 1 || echo 0)" \
+        "$([[ $(cheevos_get hardcore) == 1 ]] && echo 1 || echo 0)" "$([[ -n $(cheevos_get apikey) ]] && echo 1 || echo 0)"
       ;;
+    apikey) cheevos_apikey ;;
     login)
       [[ -n ${2:-} ]] || return 2
       cheevos_login "$2"

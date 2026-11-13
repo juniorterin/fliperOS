@@ -293,6 +293,7 @@ The login trades the user and password for the account's token through the site'
 - **RetroArch** reads `/etc/fliperos/retroarch/cheevos.cfg`, which `fliperos-kms-run` adds to `--appendconfig`, above `retroarch.cfg` (an update rewrites that one).
 - **DuckStation, PCSX2, Dolphin and Flycast** keep the account in their own ini. `config/fliperos-cheevos` writes it at each launch from `fliperos-x11-run` (`[Cheevos]` in DuckStation's `settings.ini`, `[Achievements]` in `PCSX2.ini` and Dolphin's `RetroAchievements.ini`, `[achievements]` in Flycast's `emu.cfg`), and the Setup writes it right away into the ones that already exist.
 - Without `/etc/fliperos/cheevos` nothing changes: an account made inside an emulator's own menu keeps working. Signing out clears the user and token everywhere.
+- **Web API key** (in the same menu and in the web panel) keeps the account's Web API Key, from retroachievements.org/settings (*Keys*). The frontend needs it for the achievements badge ([Frontends](Frontends.md)). The Setup checks it against the account's profile (`API_GetUserProfile`), sending it to `curl` on standard input, and it is cleared when you sign out or switch accounts.
 
 Each unlocked achievement shows over the game for 5 seconds, in a bar like the volume one ([On-screen menu](Installed-system.md#on-screen-menu)): a trophy with a spinning ring, the achievement's title (it scrolls when it doesn't fit) and a green line that empties. The Pixelcade/ZeDMD marquee shows it too ([Frontends](Frontends.md)).
 

@@ -1352,6 +1352,7 @@ screen_cheevos() {
     if cheevos_logged_in; then
       entries+=("enable|Achievements: $(cheevos_on && echo on || echo off)|Turn the achievements on or off in every emulator."
         "hardcore|Hardcore mode: $([[ $(cheevos_get hardcore) == 1 ]] && echo on || echo off)|No save states, rewind or cheats: the strict way to play."
+        "apikey|Web API key: $([[ -n $(cheevos_get apikey) ]] && echo set || echo not set)|For the frontend's trophy badge: retroachievements.org/settings."
         "login|Change account|Sign in with another RetroAchievements account."
         "logout|Sign out|Forget the account on this cabinet.")
     else
@@ -1379,6 +1380,19 @@ screen_cheevos() {
             "RetroArch, DuckStation, PCSX2, Dolphin and Flycast use this account from the next game on."
         else
           ui_msg "$title" "$(ui_bad "Not signed in: $reason")"
+        fi
+        pass=""
+        ;;
+      apikey)
+        screen_need_internet "RetroAchievements" || continue
+        pass=$(ui_input "$title" "Web API Key from retroachievements.org/settings (Keys). Empty removes it." "" password) ||
+          continue
+        ui_info "$title" "Checking the key..." > /dev/tty 2>&1 || true
+        if reason=$(printf '%s\n' "$pass" | cheevos_apikey); then
+          ui_msg "$title" "$(ui_yes "$([[ -n $pass ]] && echo "Key saved." || echo "Key removed.")")" "" \
+            "The frontend shows how many achievements each game has, and how many you have."
+        else
+          ui_msg "$title" "$(ui_bad "Not saved: $reason")"
         fi
         pass=""
         ;;

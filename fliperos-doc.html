@@ -2036,6 +2036,14 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p><strong>The power button.</strong> With no game open, the cabinet's power button powers off; with a game open it closes the game (Tab &gt; Frontend options &gt; Power closes game). The frontend tells <code>fliperos-powerkey</code> which process is the game through the file named in <code>FLIPEROS_POWERKEY=games:FILE</code> (<code>$XDG_RUNTIME_DIR/fliperos-frontend.game</code>): its other children, the video player and the scraper, are not a game. Before this, the button killed the video and never powered off.</p>
 <p>The buttons are the panel's own, from Setup &gt; Joysticks &gt; Button mapping (<code>/etc/fliperos/buttons.map</code>). Without a mapping, a common pad works, and so does a keyboard encoder in MAME's layout.</p>
 <p>A game opened from the frontend gets the screen, the sound and the controls, and counts in Attract-Mode's play statistics (the Most Played filter).</p>
+<p><strong>Achievements badge.</strong> Next to the FAV and PLAYED tags, a game with <a href="#Emulators">RetroAchievements</a> gets a yellow trophy with how many achievements you have and how many the game has (<code>3/24</code>). In hardcore mode it counts the hardcore ones, and with all of them the numbers turn yellow. It needs the account's <strong>Web API Key</strong> (retroachievements.org/settings, <em>Keys</em>), saved in the RetroAchievements menu or in the web panel.</p>
+<p>The badge only shows where the game's emulator gives achievements:</p>
+<ul>
+<li>RetroArch cartridge consoles (NES, SNES, Game Boy, GBA, Mega Drive, N64, PC Engine and the rest the site knows);</li>
+<li>arcade in FBNeo and MAME 2003-Plus (not GroovyMAME, nor the other MAME cores).</li>
+</ul>
+<p><code>gui/fecheevos.py</code> finds the game by the same hash as the emulators (rcheevos): for arcade, the name of the file; for cartridges, the file without its header, also inside a <code>.zip</code>. Disc systems (PlayStation, PS2, GameCube, Dreamcast) have a hash of their own and only get the badge with <code>RAHasher</code> installed (<code>/usr/local/bin/RAHasher</code>).</p>
+<p>The numbers come from the site's Web API: each console's game list with the hashes (once a week), your progress (when the frontend opens) and the game just played (when it closes). They are kept in <code>~/.cache/fliperos/cheevos</code>, and everything is fetched in the background: the badge shows up when the answer arrives.</p>
 <h3 id="physical-media-cds-and-dvds">Physical media: CDs and DVDs</h3>
 <p>With a CD or DVD drive connected (USB drives too), the system strip shows a pink arrow pointing down. Down goes to the <strong>PHYSICAL MEDIA</strong> row under the strip: one tile per drive, saying whether it has a disc (DISC, EMPTY, OPEN). Left and right move between drives, up goes back to the systems and button 2 closes the strip.</p>
 <p>Button 1 on a drive reads the disc. READING stays on screen while the disc spins and <code>gui/femedia.py</code> finds the console from the disc itself:
@@ -28640,6 +28648,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <li><strong>RetroArch</strong> reads <code>/etc/fliperos/retroarch/cheevos.cfg</code>, which <code>fliperos-kms-run</code> adds to <code>--appendconfig</code>, above <code>retroarch.cfg</code> (an update rewrites that one).</li>
 <li><strong>DuckStation, PCSX2, Dolphin and Flycast</strong> keep the account in their own ini. <code>config/fliperos-cheevos</code> writes it at each launch from <code>fliperos-x11-run</code> (<code>[Cheevos]</code> in DuckStation's <code>settings.ini</code>, <code>[Achievements]</code> in <code>PCSX2.ini</code> and Dolphin's <code>RetroAchievements.ini</code>, <code>[achievements]</code> in Flycast's <code>emu.cfg</code>), and the Setup writes it right away into the ones that already exist.</li>
 <li>Without <code>/etc/fliperos/cheevos</code> nothing changes: an account made inside an emulator's own menu keeps working. Signing out clears the user and token everywhere.</li>
+<li><strong>Web API key</strong> (in the same menu and in the web panel) keeps the account's Web API Key, from retroachievements.org/settings (<em>Keys</em>). The frontend needs it for the achievements badge (<a href="#Frontends">Frontends</a>). The Setup checks it against the account's profile (<code>API_GetUserProfile</code>), sending it to <code>curl</code> on standard input, and it is cleared when you sign out or switch accounts.</li>
 </ul>
 <p>Each unlocked achievement shows over the game for 5 seconds, in a bar like the volume one (<a href="#Installed-system">On-screen menu</a>): a trophy with a spinning ring, the achievement's title (it scrolls when it doesn't fit) and a green line that empties. The Pixelcade/ZeDMD marquee shows it too (<a href="#Frontends">Frontends</a>).</p>
 <p>The emulators' own notifications stay off, so only the bar shows: RetroArch has no on-screen notifications, Dolphin no on-screen messages, PCSX2 and DuckStation get <code>Notifications = false</code> and <code>LeaderboardNotifications = false</code>, and Flycast <code>Notifications = no</code> in <code>[achievements]</code> (an option of FliperOS's patch 0006).</p>
@@ -31370,7 +31379,11 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td><code>fliperos-setup/lib/cheevos.sh</code>, <code>config/fliperos-cheevos</code></td>
-<td>RetroAchievements: the login (token only) and the account in each emulator's config</td>
+<td>RetroAchievements: the login (token only), the Web API Key, the account in each emulator's config, and the unlocks read from the logs for the on-screen bar (<code>watch</code>)</td>
+</tr>
+<tr>
+<td><code>fliperos-setup/gui/fecheevos.py</code></td>
+<td>The frontend's achievements badge: the rcheevos hash of each game and the Web API numbers, cached</td>
 </tr>
 <tr>
 <td><code>config/mame-ui.ini</code></td>
