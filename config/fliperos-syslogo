@@ -4,11 +4,14 @@
 #
 # O Arcadeflow nao desenha esses logotipos com imagens: cada um e um
 # caractere da fonte dele (fonts/font_Roboto-Allcaps-EXT4X.ttf, a partir de
-# U+E900), e o data_systems.txt do tema diz qual. O Arcadeflow nao tem
-# licenca: nada dele vem na imagem nem no repositorio. Aqui o logotipo e
-# desenhado na hora, da fonte do tema que o Setup > Games > Frontend baixou
-# para ~/.attract/layouts/Arcadeflow. Sem o tema, nao ha logotipo (exit 1) e
-# quem chama usa o nome em texto.
+# U+E900), e o data_systems.txt do tema diz qual. A fonte e a tabela vem na
+# imagem (config/syslogo, com a autorizacao do autor do tema), em
+# /usr/local/share/fliperos/syslogo: o logotipo nao depende do tema. Com o
+# tema instalado (Setup > Games > Frontend), vale o dele, que tem tambem os
+# nomes das telas do FliperOS e os glifos proprios (o MAME 2010). Sem o tema,
+# os nomes das pastas do FliperOS vem de ALIASES (o Setup o grava:
+# frontends_syslogo_aliases). Sem logotipo, exit 1 e quem chama usa o nome
+# em texto.
 #
 # O caractere de cada sistema e o do indice dele no data_systems.txt: o tema
 # conta as linhas em branco entre os sistemas (cada um e uma entrada de 16
@@ -37,6 +40,9 @@ except ImportError:
 
 ATTRACT = os.environ.get('ATTRACT_DIR', '/home/fliperos/.attract')
 THEME = os.path.join(ATTRACT, 'layouts', 'Arcadeflow')
+BUNDLED = os.environ.get('FLIPEROS_SYSLOGO_DATA', '/usr/local/share/fliperos/syslogo')
+ALIASES = os.environ.get('FLIPEROS_SYSLOGO_ALIASES', '/var/lib/fliperos/syslogo-aliases')
+FONT = 'font_Roboto-Allcaps-EXT4X.ttf'
 FIRST = 0xE900
 COLOR = (139, 233, 253)       # o do marquee do sistema (fliperos-dmd COLOR['system'])
 
@@ -49,12 +55,34 @@ OFF, ON = 0.12, 0.18
 BLINKS = 2
 
 
+def theme_dir():
+    """O tema instalado, se tem a tabela; senao a copia da imagem."""
+    if os.path.isfile(os.path.join(THEME, 'data_systems.txt')):
+        return THEME
+    return BUNDLED
+
+
+def aliases(name):
+    """Os sistemas do tema de uma pasta do FliperOS ("Supermodel" -> sega
+    model 3), da tabela que o Setup grava: "NOME|SISTEMA[|SISTEMA...]"."""
+    low = ' '.join(name.lower().split())
+    try:
+        with open(ALIASES, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                parts = [p.strip() for p in line.rstrip('\n').split('|')]
+                if len(parts) > 1 and ' '.join(parts[0].lower().split()) == low:
+                    return [p.lower() for p in parts[1:] if p]
+    except OSError:
+        pass
+    return []
+
+
 def table(theme=None):
     """{nome em minusculas: caractere} do data_systems.txt do tema."""
     out = {}
     blanks = 0
     try:
-        with open(os.path.join(theme or THEME, 'data_systems.txt'), encoding='utf-8') as f:
+        with open(os.path.join(theme or theme_dir(), 'data_systems.txt'), encoding='utf-8') as f:
             lines = f.read().split('\n')
     except OSError:
         return out
@@ -74,14 +102,18 @@ def lookup(name, theme=None):
     vem entre parenteses ("Arcade (various) (MAME 2010)" -> "Arcade")."""
     sys_table = table(theme)
     low = ' '.join(name.lower().split())
-    for key in (low, re.sub(r'\s*\(.*$', '', low)):
+    for key in [low, re.sub(r'\s*\(.*$', '', low)] + aliases(name):
         if key in sys_table and sys_table[key] > FIRST - 1:
             return sys_table[key]
     return None
 
 
 def font(size):
-    return ImageFont.truetype(os.path.join(THEME, 'fonts', 'font_Roboto-Allcaps-EXT4X.ttf'), size)
+    folder = theme_dir()
+    for path in (os.path.join(folder, 'fonts', FONT), os.path.join(folder, FONT)):
+        if os.path.isfile(path):
+            return ImageFont.truetype(path, size)
+    raise OSError('no logo font in ' + folder)
 
 
 def render(name, height=None, color=(255, 255, 255)):
@@ -196,7 +228,7 @@ def main(argv):
         done = set()
         names = {}
         try:
-            with open(os.path.join(THEME, 'data_systems.txt'), encoding='utf-8') as f:
+            with open(os.path.join(theme_dir(), 'data_systems.txt'), encoding='utf-8') as f:
                 for line in f.read().split('\n'):
                     fields = line.rstrip('\r').split(',')
                     if len(fields) > 11 and fields[0] != 'null':

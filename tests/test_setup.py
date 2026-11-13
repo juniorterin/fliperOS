@@ -8193,10 +8193,15 @@ class RomCleanerTests(Base):
         got = self.env.dir / "af-systems"
         self.env.stub("fliperos-arcadeflow", '[ "$1" = systems ] && cat > "%s"' % got)
         env = dict(self.vars, ROMS_DIR=str(roms), RA_INFO_DIR=str(info), ATTRACT_DIR=str(attract),
-                   ARCADEFLOW=str(self.env.bin / "fliperos-arcadeflow"))
-        # Sem o tema instalado, nada.
+                   ARCADEFLOW=str(self.env.bin / "fliperos-arcadeflow"),
+                   SYSLOGO_ALIASES=str(self.env.dir / "af-aliases"))
+        # Sem o tema instalado, so a tabela dos logotipos da imagem (sem o titulo
+        # do sistema proprio, que so a fonte do tema tem).
         self.env.out("frontends_arcadeflow_systems", env)
         self.assertFalse(got.exists())
+        aliases = (self.env.dir / "af-aliases").read_text().splitlines()
+        self.assertIn("Supermodel|sega model 3", aliases)
+        self.assertIn("Arcade (various) (MAME 2010 (0.139))|mame|arcade", aliases)
         (attract / "layouts" / "Arcadeflow").mkdir(parents=True)
         (attract / "layouts" / "Arcadeflow" / "data_systems.txt").write_text("mame,0\n")
         self.env.out("frontends_arcadeflow_systems", env)

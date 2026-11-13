@@ -5866,46 +5866,6 @@ class FrontendDataTests(unittest.TestCase):
             feview.logo_source = old
             feview._fitted.clear()
 
-    def test_missing_arcadeflow_is_fetched_for_the_logos(self):
-        # O logotipo sai da fonte do Arcadeflow, que so vinha com o
-        # Attract-Mode Plus: sem o tema, o frontend o baixa uma vez e os
-        # logotipos que faltaram sao feitos de novo.
-        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
-        try:
-            import feview
-        finally:
-            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
-        with tempfile.TemporaryDirectory() as tmp:
-            theme = Path(tmp) / 'Arcadeflow'
-            calls = Path(tmp) / 'calls'
-            tool = Path(tmp) / 'arcadeflow'
-            tool.write_text('#!/bin/sh\necho "$*" >> %s\nmkdir -p %s && : > %s/data_systems.txt\n'
-                            % (calls, theme, theme))
-            tool.chmod(0o755)
-            old = feview.ARCADEFLOW, feview.ARCADEFLOW_THEME, dict(feview._theme), dict(feview._logos)
-            feview.ARCADEFLOW, feview.ARCADEFLOW_THEME = str(tool), str(theme)
-            feview._theme['state'] = None
-            feview._logos.clear()
-            feview._logos.update({'Naomi': None, 'Sega': '...'})
-            try:
-                self.assertTrue(feview.theme_ready())
-                self.assertEqual(calls.read_text(), 'fetch\n')
-                self.assertNotIn('Naomi', feview._logos)
-                self.assertIn('Sega', feview._logos)
-                # Com o tema, nada mais e baixado.
-                self.assertFalse(feview.theme_ready())
-                self.assertEqual(calls.read_text(), 'fetch\n')
-            finally:
-                feview.ARCADEFLOW, feview.ARCADEFLOW_THEME = old[0], old[1]
-                feview._theme.clear()
-                feview._theme.update(old[2])
-                feview._logos.clear()
-                feview._logos.update(old[3])
-        update = (ROOT / 'tools/cabinet-update.sh').read_text()
-        self.assertIn('  if [[ $(scraper_attract_layout) != Arcadeflow ]]; then\n'
-                      '    /opt/fliperos/bin/fliperos-arcadeflow fetch', update)
-        self.assertIn('packages+=(python3-pil)', update)
-
     def test_ribbon_tiles_get_the_system_logo_once(self):
         # Os azulejos da tira de romlists: o logotipo escrito do sistema
         # (fliperos-syslogo png NOME ARQUIVO 48 f8f8f2) e feito uma vez e fica em
@@ -14540,10 +14500,31 @@ class SysLogoTests(unittest.TestCase):
         self.assertIsNone(self.mod.render('Nao Existe'))
         self.assertEqual(self.mod.render('Naomi', 20).height, 20)
 
-    def test_without_the_theme_there_is_no_logo(self):
+    def test_without_the_theme_the_image_copy_and_the_folder_names(self):
+        # Sem o tema, a tabela e a fonte que vem na imagem (config/syslogo); os
+        # nomes das pastas do FliperOS pela tabela que o Setup grava.
         self.mod.THEME = str(self.tmp / 'nenhum')
+        self.mod.BUNDLED = str(self.tmp / 'nada')
         self.assertIsNone(self.mod.lookup('Naomi'))
         self.assertIsNone(self.mod.render('Naomi'))
+        bundled = self.tmp / 'imagem'
+        bundled.mkdir()
+        (bundled / 'data_systems.txt').write_text(self.DATA)
+        self.mod.BUNDLED = str(bundled)
+        self.assertEqual(self.mod.lookup('Naomi'), ord('N'))
+        self.assertIsNone(self.mod.lookup('Flycast'))
+        aliases = self.tmp / 'aliases'
+        aliases.write_text('Flycast|sega dreamcast|naomi\nSupermodel|sega model 3\n')
+        self.mod.ALIASES = str(aliases)
+        self.assertEqual(self.mod.lookup('flycast'), ord('N'))
+        self.assertIsNone(self.mod.lookup('Supermodel'))
+        # A fonte e a tabela de verdade vem no repositorio e vao para a imagem.
+        data = ROOT / 'config/syslogo'
+        self.assertGreater((data / 'font_Roboto-Allcaps-EXT4X.ttf').stat().st_size, 100000)
+        self.assertIn('sega model 3', self.mod.table(str(data)))
+        self.assertIn('install -Dm644 "$src/config/syslogo/data_systems.txt" '
+                      '"$root/usr/local/share/fliperos/syslogo/data_systems.txt"', ROOTFS)
+        self.assertIn('install -Dm644 "$src/config/syslogo/font_Roboto-Allcaps-EXT4X.ttf"', ROOTFS)
 
     def test_the_logo_slides_in_from_the_side_the_list_moved_to(self):
         for step in (1, -1):

@@ -1,0 +1,1361 @@
+null,0,0,NULL,CRT,NONE,4,3,OTHER,null,null,null,null,null,null,null
+
+abc 80,0,0,ABC,CRT,NONE,4,3,COMPUTER,Luxor,1978,ABC80,null,rom,joystick (8-way),1
+luxor abc 80
+abc80
+luxor abc80
+
+acorn archimedes,0,0,ARC,CRT,NONE,4,3,COMPUTER,Acorn,1987,Archimedes,84,rom,joystick (8-way),1
+archimedes
+
+acorn atom,256,192,ATM,CRT,NONE,4,3,COMPUTER,Acorn,1980,Acorn Atom,83,rom,joystick (8-way),1
+atom
+
+acorn bbc micro,0,0,BBC,CRT,NONE,4,3,COMPUTER,Acorn,1981,BBC Micro,37,rom,joystick (8-way),1
+bbc micro
+
+acorn electron,0,0,ELECT,CRT,NONE,4,3,COMPUTER,Acorn,1983,Electron,85,rom,joystick (8-way),1
+electron
+
+action max,320,200,AMAX,CRT,NONE,4,3,CONSOLE,Worlds of Wonder,1987,Action Max,81,rom,lightgun,1
+actionmax
+
+alice,0,0,ALC,CRT,NONE,4,3,COMPUTER,Matra,1983,Alice,null,rom,joystick (8-way),1
+matra alice
+
+amstrad cpc,0,0,CPC,CRT,NONE,4,3,COMPUTER,Amstrad,1984,Amstrad CPC,65,rom,joystick (8-way),1
+cpc
+
+amstrad gx4000,0,0,GX4K,CRT,NONE,4,3,CONSOLE,Amstrad,1990,Amstrad GX4000,87,rom,joystick (8-way),2
+gx4000
+
+apf mp1000,256,192,APF,CRT,NONE,4,3,CONSOLE,APF Electronics,1978,APF MP1000,null,rom,joystick (8-way),2
+apf-mp1000
+
+apogee bk-01,0,0,BK01,CRT,NONE,4,3,COMPUTER,ARB Plant,1988,Apogee BK-01,null,null,joystick (8-way),1
+apogej bk-01
+
+apple ii,0,0,APLII,CRT,NONE,4,3,COMPUTER,Apple,1977,Apple II,86,rom,joystick (8-way),1
+apple 2
+
+apple iic,0,0,AIIC,CRT,NONE,4,3,COMPUTER,Apple,1984,Apple IIc,86,rom,joystick (8-way),1
+apple 2c
+
+apple iigs,0,0,AIIGS,CRT,NONE,4,3,COMPUTER,Apple,1986,Apple IIGS,217,rom,joystick (8-way),1
+apple 2gs
+apple ii gs
+apple 2 gs
+
+apple iii,0,0,APLIII,CRT,NONE,4,3,COMPUTER,Apple,1980,Apple III,null,rom,joystick (8-way),1
+apple 3
+
+apple mac os,0,0,MOS,CRT,NONE,4,3,COMPUTER,Apple,1984,Mac OS,146,rom,joystick (8-way),1
+macos
+mac os
+
+apple macintosh,0,0,MAC,CRT,NONE,4,3,COMPUTER,Apple,1984,Macintosh,146,rom,joystick (8-way),1
+macintosh
+mac
+
+apple pippin,640,480,PPN,CRT,NONE,4,3,CONSOLE,Apple,1996,Pippin,null,rom,joystick (8-way),4
+pippin
+
+aquarius,0,0,AQ,CRT,NONE,4,3,COMPUTER,Mattel,1983,Aquarius,null,null,joystick (8-way),1
+mattel aquarius
+
+arcade,0,0,ARC,CRT,NONE,-4,3,ARCADE,Various,null,Arcade,75,rom,null,null
+coin op
+
+arcade64,0,0,AR64,CRT,NONE,-4,3,ARCADE,Various,null,Arcade64,75,rom,null,null
+arcade 64
+
+arduboy,128,64,ABOY,LCD,NONE,0,0,HANDHELD,Kevin Bates,2015,Arduboy,263,rom,joystick (8-way),2
+arduboy fx
+
+atari 8bit,0,0,A8BIT,CRT,NONE,4,3,COMPUTER,Atari,1979,Atari 8 Bit,43,rom,joystick (8-way),1
+atari 8 bit
+atari8bit
+
+atari 400,0,0,A400,CRT,NONE,4,3,COMPUTER,Atari,1979,Atari 400,43,rom,joystick (8-way),1
+atari400
+
+atari 800,0,0,A800,CRT,NONE,4,3,COMPUTER,Atari,1979,Atari 800,43,rom,joystick (8-way),1
+atari800
+
+atari 2600,256,192,2600,CRT,NONE,4,3,CONSOLE,Atari,1977,Atari 2600,26,rom,joystick (8-way),1
+2600
+vcs 2600
+atari vcs 2600
+atari2600
+
+atari 5200,320,240,5200,CRT,NONE,4,3,CONSOLE,Atari,1982,Atari 5200,40,rom,joystick (8-way),1
+5200
+vcs 5200
+atari vcs 5200
+atari5200
+
+atari 7800,320,240,7800,CRT,NONE,4,3,CONSOLE,Atari,1986,Atari 7800,41,rom,joystick (8-way),2
+7800
+vcs 7800
+atari vcs 7800
+atari7800
+
+atari falcon 030,320,200,FLC,CRT,NONE,4,3,COMPUTER,Atari,1992,Falcon 030,42,rom,joystick (8-way),1
+falcon 030
+atari falcon030
+falcon030
+atari falcon
+falcon
+
+atari jaguar cd,0,0,JCD,CRT,NONE,4,3,CONSOLE,Atari,1993,Jaguar CD,171,rom,joystick (8-way),6
+jaguar cd
+
+atari jaguar,0,0,JAG,CRT,NONE,4,3,CONSOLE,Atari,1993,Jaguar,27,rom,joystick (8-way),6
+jaguar
+
+atari lynx 2,160,102,LYNX2,LCD,NONE,-160,102,HANDHELD,Atari,1989,Lynx 2,28,rom,joystick (8-way),2
+lynx 2
+atari lynx ii
+lynx ii
+
+atari lynx,160,102,LYNX,LCD,NONE,-160,102,HANDHELD,Atari,1989,Lynx,28,rom,joystick (8-way),2
+lynx
+atarilynx
+
+atari st,320,200,ST,CRT,NONE,4,3,COMPUTER,Atari,1985,Atari ST,42,rom,joystick (8-way),1
+
+atari xegs,320,240,XEGS,CRT,NONE,4,3,CONSOLE,Atari,1987,Atari XEGS,43,rom,joystick (8-way),1
+xegs
+atari xe
+
+atari,0,0,ATA,CRT,NONE,-4,3,ARCADE,Atari,null,Atari,160,rom,null,null
+atari classics
+
+atomiswave,0,0,ATW,CRT,NONE,-4,3,ARCADE,Sammy,null,Atomiswave,53,rom,null,null
+sammy atomiswave
+
+bally astrocade,160,102,AST,CRT,NONE,4,3,CONSOLE,Bally,1978,Astrocade,44,rom,joystick (8-way),1
+astrocade
+
+bandai swan crystal,224,144,SWCR,LCD,NONE,-224,144,HANDHELD,Bandai,2002,SwanCrystal,46,rom,joystick (8-way),2
+bandai swancrystal
+swancrystal
+swan crystal
+
+bandai wonderswan color,224,144,WSWC,LCD,NONE,-224,144,HANDHELD,Bandai,1999,WonderSwan Color,46,rom,joystick (8-way),2
+wonderswan color
+wonderswancolor
+
+bandai wonderswan,224,144,WSW,LCD,LCDBW,-224,144,HANDHELD,Bandai,2000,WonderSwan,45,rom,joystick (8-way),2
+wonderswan
+
+camputers lynx,256,252,CALY,CRT,NONE,4,3,COMPUTER,Camputers,1983,Lynx PC,88,rom,joystick (8-way),1
+lynx pc
+
+capcom play system 1,0,0,CPS1,CRT,NONE,-4,3,ARCADE,Capcom,1988,Capcom CP System,6,rom,null,null
+capcom play system
+capcom play system i
+cps 1
+capcom cps 1
+cps1
+capcom cps1
+cps i
+capcom cp system
+capcom cp system 1
+capcom cp system i
+
+capcom play system 2,0,0,CPS2,CRT,NONE,-4,3,ARCADE,Capcom,1993,Capcom CP System II,7,rom,null,null
+capcom play system ii
+cps 2
+capcom cps 2
+cps2
+capcom cps2
+cps ii
+capcom cp system 2
+capcom cp system ii
+
+capcom play system 3,0,0,CPS3,CRT,NONE,-4,3,ARCADE,Capcom,1996,Capcom CP System III,8,rom,null,null
+capcom play system iii
+cps 3
+capcom cps 3
+cps3
+capcom cps3
+cps iii
+capcom cp system 3
+capcom cp system iii
+
+capcom power system changer,0,0,CRT,CPSC,NONE,-4,3,CONSOLE,Capcom,1994,CPS Changer,75,rom,null,null
+capcom cps changer
+cps changer
+power system changer
+
+capcom,0,0,CAPC,CRT,NONE,-4,3,ARCADE,Capcom,null,Capcom,151,rom,null,null
+capcom classics
+
+casio loopy,0,0,LOPY,CRT,NONE,4,3,CONSOLE,Casio,1995,Casio Loopy,98,rom,joystick (8-way),4
+loopy
+
+casio pv-1000,256,192,PV1K,CRT,NONE,4,3,CONSOLE,Casio,1983,Casio PV-1000,74,rom,joystick (8-way),2
+casio pv1000
+pv-1000
+pv1000
+
+casio pv-2000,256,192,PV2K,CRT,NONE,4,3,COMPUTER,Casio,1983,Casio PV-2000,74,rom,joystick (8-way),2
+casio pv2000
+pv-2000
+pv2000
+
+cave 68000,0,0,CV68K,CRT,NONE,-4,3,ARCADE,Cave,1995,Cave 68000,47,rom,null,null
+cave68000
+cave 68k
+
+cave cv1000,0,0,CV1K,CRT,NONE,-4,3,ARCADE,Cave,2004,Cave cv1000,47,rom,null,null
+cavecv1000
+cv1000
+
+cave,0,0,CAVE,CRT,NONE,-4,3,ARCADE,Cave,null,Cave,47,rom,null,null
+
+cdi,384,280,CDI,CRT,NONE,4,3,CONSOLE,Philips,1990,CDI,133,rom,joystick (8-way),4
+philips cdi
+cd-i
+philips cd-i
+
+chip8,64,32,CP-8,LCD,LCDBW,0,0,HANDHELD,Joseph Weisbecker,1978,CHIP-8,null,rom,joystick (8-way),2
+chip-8
+
+coleco adam,0,0,ADAM,CRT,NONE,4,3,COMPUTER,Coleco,1983,Adam,89,rom,joystick (8-way),1
+adam
+
+coleco vision,0,0,COLE,CRT,NONE,4,3,CONSOLE,Coleco,1982,Coleco Vision,48,rom,joystick (8-way),2
+colecovision
+
+colour genie,0,0,EG2K,CRT,NONE,4,3,COMPUTER,EACA,1982,Colour Genie,92,rom,joystick (8-way),1
+eaca colour genie
+eg2000 colour genie
+
+commodore 16,0,0,C16,CRT,NONE,4,3,COMPUTER,Commodore,1984,C 16,99,rom,joystick (8-way),1
+c16
+c 16
+c=16
+
+commodore 64,0,0,C64,CRT,NONE,4,3,COMPUTER,Commodore,1982,C 64,66,rom,joystick (8-way),1
+c 64
+c=64
+c64
+
+commodore 65,0,0,C65,CRT,NONE,4,3,COMPUTER,Commodore,1990,C 65,null,rom,joystick (8-way),1
+c 65
+c=65
+c65
+
+commodore amiga 1200,320,200,A12,CRT,NONE,4,3,COMPUTER,Commodore,1992,Amiga 1200,111,rom,joystick (8-way),1
+amiga 1200
+commodore amiga1200
+amiga1200
+a1200
+
+commodore amiga cd32,320,200,CD32,CRT,NONE,4,3,CONSOLE,Commodore,1993,Amiga CD32,130,iso,joystick (8-way),4
+amiga cd32
+amigacd32
+
+commodore amiga,320,200,AMY,CRT,NONE,4,3,COMPUTER,Commodore,1985,Amiga,64,rom,joystick (8-way),1
+amiga
+
+commodore 128,0,0,C128,CRT,NONE,4,3,COMPUTER,Commodore,1985,C 128,66,rom,joystick (8-way),1
+c 128
+c=128
+c128
+
+commodore cdtv,320,200,CDTV,CRT,NONE,4,3,CONSOLE,Commodore,1991,CDTV,129,rom,joystick (8-way),1
+cdtv
+amiga cdtv
+amigacdtv
+
+commodore pet,0,0,PET,CRT,NONE,4,3,COMPUTER,Commodore,1977,C PET,240,rom,joystick (8-way),1
+pet
+c= pet
+c pet
+
+commodore plus4,0,0,CP4,CRT,NONE,4,3,COMPUTER,Commodore,1984,C Plus4,99,rom,joystick (8-way),1
+plus4
+c plus4
+c= plus4
+
+commodore vic20,0,0,VIC20,CRT,NONE,4,3,COMPUTER,Commodore,1980,C Vic20,73,rom,joystick (8-way),1
+vic20
+vic 20
+c= vic20
+c vic20
+c vic 20
+
+daphne,0,0,DPH,CRT,NONE,4,3,ARCADE,Various,null,Daphne,49,dossier,null,null
+
+data east,0,0,DATE,CRT,NONE,-4,3,ARCADE,Data East,null,Data East,162,rom,null,null
+dataeast
+data east classics
+dataeast classics
+
+dirksimple,0,0,DRKS,CRT,NONE,4,3,ARCADE,Various,null,Dirksimple,49,dossier,null,null
+
+dragon 32,320,200,DR32,CRT,NONE,4,3,COMPUTER,Dragon Data,1982,Dragon 32,91,rom,joystick (8-way),1
+dragon32
+
+elektronika bk,256,256,BK10,CRT,NONE,4,3,COMPUTER,Elektronika,1984,Elektronika BK-0010,93,rom,joystick (8-way),1
+elektronika bk-0010
+elektronika bk0010
+bk-0010
+bk0010
+elektronika bk-0010-01
+elektronika bk0010-01
+bk-0010-01
+bk0010-01
+
+emerson arcadia 2001,128,104,ARC,CRT,NONE,4,3,CONSOLE,Emerson,1982,Arcadia 2001,94,rom,joystick (8-way),1
+arcadia 2001
+arcadia-2001
+
+enterprise,320,256,ENTR,CRT,NONE,4,3,COMPUTER,Elan,1985,Enterprise,null,rom,joystick (8-way),1
+elan enterprise
+
+entex adventure vision,150,40,ADV,CRT,NONE,4,3,CONSOLE,Entex,1983,Adventure Vision,78,rom,joystick (8-way),4
+adventure vision
+
+epoch cassette vision,0,0,CVIS,CRT,NONE,4,3,CONSOLE,Epoch,1981,Cassette Vision,null,rom,joystick (8-way),2
+cassette vision
+
+epoch cassette vision jr,0,0,CVJR,CRT,NONE,4,3,CONSOLE,Epoch,1982,Cassette Vision Jr,null,rom,joystick (8-way),2
+cassette vision jr
+
+epoch super cassette vision,309,246,SCVIS,CRT,NONE,4,3,CONSOLE,Epoch,1984,Super Cassette Vision,67,rom,joystick (8-way),2
+super cassette vision
+
+exelvision exl 100,320,250,EXL1,CRT,NONE,4,3,COMPUTER,Exelvision,1984,EXL 100,96,rom,joystick (8-way),1
+exl 100
+exelvision exl100
+exl100
+
+exidy sorcerer,0,0,SORC,CRT,NONE,4,3,COMPUTER,Exidy,1978,Exidy Sorcerer,null,null,joystick (8-way),1
+sorcerer
+
+fairchild channel f,128,64,CHF,CRT,NONE,4,3,CONSOLE,Fairchild,1976,Channel F,80,rom,joystick (8-way),2
+channel f
+
+fbneo,0,0,FBN,CRT,NONE,-4,3,ARCADE,Various,null,FB NEO,75,rom,null,null
+final burn neo
+finalburn neo
+fb neo
+
+fujitsu fm towns marty,0,0,MARTY,CRT,NONE,4,3,CONSOLE,Fujitsu,1993,Marty,null,null,joystick (8-way),2
+marty
+fm towns marty
+fujitsu marty
+
+fujitsu fm towns,0,0,FM-T,CRT,NONE,4,3,COMPUTER,Fujitsu,1989,FM Towns,null,null,joystick (8-way),1
+fm towns
+
+fujitsu micro 7,640,200,FM7,CRT,NONE,4,3,COMPUTER,Fujitsu,1982,FM-7,97,rom,joystick (8-way),1
+fm7
+fm-7
+fujitsu fm-7
+fujitsu fm7
+
+funtech super acan,320,240,ACAN,CRT,NONE,4,3,CONSOLE,Funtech,1995,Super Acan,100,rom,joystick (8-way),4
+super acan
+acan
+
+future pinball,0,0,FPIN,CRT,NONE,4,3,PINBALL,Various,null,Future Pinball,199,fichier,null,null
+futurepinball
+
+gaelco,0,0,GAE,CRT,NONE,-4,3,ARCADE,Gaelco,null,Gaelco,75,rom,null,null
+
+gamate,160,152,GMT,LCD,LCDGBC,160,152,HANDHELD,Bit Corporation,1990,Gamate,266,rom,joystick (8-way),2
+
+game king,48,32,GK,LCD,LCDGBC,48,32,HANDHELD,Timetop,2004,GameKing,null,rom,joystick (8-way),2
+gameking
+
+game king 2,48,32,GK2,LCD,LCDGBC,48,32,HANDHELD,Timetop,2005,GameKing 2,null,rom,joystick (8-way),2
+game king ii
+gameking 2
+gameking ii
+
+game king 3,48,32,GK2,LCD,NONE,48,32,HANDHELD,Timetop,2005,GameKing 3,null,rom,joystick (8-way),2
+game king iii
+gameking 3
+gameking iii
+
+game master,0,0,GMAS,LCD,LCDBW,0,0,HANDHELD,Hartung,1990,Game Master,103,rom,joystick (8-way),2
+systema 2000
+super game
+game tronic
+
+game park gp32,0,0,GP32,LCD,NONE,0,0,HANDHELD,Game Park,2001,GP32,101,rom,joystick (8-way),2
+gamepark gp32
+gp32
+
+game pocket computer,75,64,GPC,LCD,LCDBW,75,64,HANDHELD,Epoch,1984,Game Pocket Computer,95,rom,joystick (8-way),4
+epoch game pocket computer
+
+hbmame,0,0,HBMM,CRT,NONE,-4,3,ARCADE,Various,null,HBMAME,75,rom,null,null
+hbmame arcade
+arcade hbmame
+
+hector hrx,0,0,HECT,CRT,NONE,4,3,COMPUTER,Hector,1983,Hector HRX,null,null,joystick (8-way),1
+hector
+
+hyper neo geo 64,0,0,HNG64,CRT,NONE,4,3,ARCADE,SNK,1994,Hyper Neo Geo 64,null,null,joystick (8-way),4
+neo geo 64
+
+ibm pc,0,0,IBMPC,CRT,NONE,4,3,COMPUTER,IBM,1981,IBM Personal Computer,135,dossier,joystick (8-way),1
+ibm personal computer
+pc ibm
+
+intellivision,0,0,INTL,CRT,NONE,4,3,CONSOLE,Mattel,1979,IntelliVision,115,rom,joystick (8-way),9
+mattel intellivision
+
+interton vc 4000,0,0,VC4K,CRT,NONE,4,3,CONSOLE,Interton,1983,Interton VC 4000,null,null,joystick (8-way),2
+vc 4000
+video computer 4000
+
+irem,0,0,IREM,CRT,NONE,-4,3,ARCADE,Irem,null,Irem,148,rom,null,null
+irem classics
+
+jupiter ace,256,192,JACE,CRT,NONE,4,3,COMPUTER,Jupiter Cantab,1982,Jupiter ACE,126,rom,joystick (8-way),1
+
+konami,0,0,KNMI,CRT,NONE,-4,3,ARCADE,Konami,null,Konami,158,rom,null,null
+konami classics
+
+lcd game,0,0,LCD,LCD,NONE,0,0,HANDHELD,Various,null,LCD Game,null,null,null,null
+lcd handheld
+
+linux,0,0,LIN,LCD,NONE,0,0,COMPUTER,Various,null,Linux,145,rom,joystick (8-way),2
+linux games
+
+lowres nx,160,128,LRNX,LCD,NONE,160,128,CONSOLE,Timo Kloss,2017,LowRes NX,244,rom,joystick (8-way),4
+lowresnx
+
+magnavox odyssey 2,160,200,ODY2,CRT,NONE,4,3,CONSOLE,Magnavox,1972,Odyssey 2,null,null,joystick (8-way),1
+odyssey 2
+magnavox odyssey2
+odyssey2
+
+magnavox odyssey,262,240,ODY,CRT,NONE,4,3,CONSOLE,Magnavox,1972,Odyssey,null,null,joystick (8-way),1
+odyssey
+
+mame,0,0,ARC,CRT,NONE,-4,3,ARCADE,Various,null,MAME,75,rom,null,null
+m.a.m.e.
+
+mb microvision,16,16,MVIS,LCD,LCDBW,0,0,HANDHELD,Milton Bradley,1979,Microvision,null,null,null,null
+microvision
+milton bradley microvision
+
+mega 65,0,0,M65,CRT,NONE,4,3,COMPUTER,MEGA,2021,MEGA 65,null,rom,joystick (8-way),2
+mega65
+
+mega duck,160,144,DUCK,LCD,LCDGBC,0,0,HANDHELD,Welback,1993,Mega Duck,90,rom,joystick (8-way),2
+mega duck wg-108
+cougar boy
+
+memotech mtx,256,192,MTX,CRT,NONE,4,3,COMPUTER,Memotech,1983,Memotech MTX,null,null,joystick (8-way),2
+mtx
+mtx512
+memotech mtx512
+
+microbee,0,0,MBEE,CRT,NONE,4,3,COMPUTER,Applied Technology,1982,MicroBee,null,rom,joystick (8-way),1
+micro bee
+
+microsoft windows,0,0,WIN,CRT,NONE,4,3,COMPUTER,Microsoft,1993,Windows,138,iso,joystick (8-way),1
+ms windows
+windows
+
+microsoft windows 3.x,0,0,WIN3,CRT,NONE,4,3,COMPUTER,Microsoft,1992,Windows 3x,136,dossier,joystick (8-way),1
+ms windows 3.x
+windows 3.x
+windows 3.11
+windows 3x
+
+microsoft windows 9x,0,0,W9x,CRT,NONE,4,3,COMPUTER,Microsoft,1995,Windows 9x,137,rom,joystick (8-way),1
+ms windows 9x
+windows 9x
+windows 95
+windows 98
+
+midway,0,0,MIDW,CRT,NONE,-4,3,ARCADE,Midway,null,Midway,150,rom,null,null
+midway classics
+
+mikrosha,320,240,MIKR,CRT,NONE,4,3,COMPUTER,Radio-86RK,1986,Mikrosha,124,rom,joystick (8-way),1
+radio-86rk
+radio-86rk mikrosha
+
+ms dos,320,200,DOS,CRT,NONE,4,3,COMPUTER,Microsoft,1981,MS DOS,135,dossier,joystick (8-way),1
+msdos
+ms-dos
+
+msx 2,0,0,MSX2,CRT,NONE,4,3,COMPUTER,Ascii Microsoft,1985,MSX 2,116,rom,joystick (8-way),1
+msx2
+msx-2
+
+msx 2+,0,0,MSX2+,CRT,NONE,4,3,COMPUTER,Ascii Microsoft,1988,MSX 2plus,117,rom,joystick (8-way),1
+msx2+
+msx2plus
+msx 2plus
+
+msx turbo r,0,0,MSX-TR,CRT,NONE,4,3,COMPUTER,Ascii Microsoft,1990,MSX turbo R,118,rom,joystick (8-way),1
+msx turbor
+msx turbo-r
+
+msx,256,192,MSX,CRT,8BIT,4,3,COMPUTER,Ascii Microsoft,1983,MSX,113,rom,joystick (8-way),1
+msx 1
+msx-1
+
+mugen,0,0,MGEN,CRT,NONE,4,3,COMPUTER,Various,null,MUGEN,null,null,joystick (8-way),6
+m.u.g.e.n.
+
+nabu,480,250,NABU,CRT,NONE,4,3,COMPUTER,NABU,1982,NABU,0,rom,joystick (8-way),1
+nabu personal computer
+nabu pc
+
+namco,0,0,NMCO,CRT,NONE,-4,3,ARCADE,Namco,null,Namco,75,rom,null,null
+namco classics
+
+namco system 11,0,0,N11,CRT,NONE,-4,3,ARCADE,Namco,1994,Namco System 11,75,rom,null,null
+system 21
+
+namco system 12,0,0,N12,CRT,NONE,-4,3,ARCADE,Namco,1996,Namco System 12,75,rom,null,null
+system 21
+
+namco system 21,0,0,N21,CRT,NONE,-4,3,ARCADE,Namco,1988,Namco System 21,75,rom,null,null
+system 21
+
+namco system 22,0,0,N22,CRT,NONE,-4,3,ARCADE,Namco,1992,Namco System 22,75,rom,null,null
+system 22
+
+namco system 2x6,0,0,N2X6,CRT,NONE,-4,3,ARCADE,Namco,2000,Namco System 2x6,75,rom,null,null
+system 2x6
+system 246
+system 256
+namco system 246
+namco system 256
+
+nec coregrafx ii,256,224,CGFX,CRT,NONE,4,3,CONSOLE,NEC,1991,CoreGrafx II,31,rom,joystick (8-way),2
+coregrafx ii
+core grafx ii
+coregrafx 2
+core grafx 2
+nec coregrafx 2
+
+nec coregrafx,256,224,CGII,CRT,NONE,4,3,CONSOLE,NEC,1989,CoreGrafx,31,rom,joystick (8-way),2
+coregrafx
+core grafx
+
+nec pc engine cd,256,224,PCECD,CRT,NONE,4,3,CONSOLE,NEC,1988,PC Engine CD,114,iso,joystick (8-way),2
+pc engine cd
+pc engine-cd
+nec pc engine-cd
+pcenginecd
+
+nec pc engine duo,256,224,PCE2,CRT,NONE,4,3,CONSOLE,NEC,1992,PC Engine Duo,114,iso,joystick (8-way),2
+pc engine duo
+
+nec pc engine gt,256,224,PCE-GT,LCD,NONE,0,0,HANDHELD,NEC,1990,PC Engine GT,31,rom,joystick (8-way),2
+pc engine gt
+
+nec pc engine lt,256,224,PCE-LT,LCD,NONE,0,0,HANDHELD,NEC,1991,PC Engine LT,31,rom,joystick (8-way),2
+pc engine lt
+
+nec pc engine,256,224,PCE,CRT,NONE,4,3,CONSOLE,NEC,1987,PC Engine,31,rom,joystick (8-way),2
+pc engine
+pcengine
+
+nec pc-88,0,0,PC88,CRT,NONE,4,3,COMPUTER,NEC,1981,NEC PC-8800,221,rom,joystick (8-way),1
+nec pc-8800
+nec pc-8801
+pc-88
+pc-8800
+pc-8801
+pc88
+
+nec pc-98,0,0,PC98,CRT,NONE,4,3,COMPUTER,NEC,1982,NEC PC-9800,208,rom,joystick (8-way),1
+nec pc-9800
+nec pc-9801
+pc-98
+pc-9800
+pc-9801
+pc98
+
+nec pcfx,0,0,PC-FX,CRT,NONE,4,3,CONSOLE,NEC,1994,NEC PC-FX,72,rom,joystick (8-way),6
+pc-fx
+nec pc-fx
+pcfx
+nec pc fx
+pc fx
+
+nec supergrafx,256,224,SGX,CRT,NONE,4,3,CONSOLE,NEC,1989,SuperGrafx,105,rom,joystick (8-way),2
+supergrafx
+pc engine supergrafx
+nec pc engine supergrafx
+sgfx
+
+nec turbo duo,256,224,TBD,CRT,NONE,4,3,CONSOLE,NEC,1992,Turbo Duo,114,iso,joystick (8-way),2
+nec turboduo
+turbo duo
+turboduo
+
+nec turbo express,256,224,TXP,LCD,NONE,0,0,HANDHELD,NEC,1990,TurboExpress,31,rom,joystick (8-way),2
+nec turboexpress
+turbo express
+turboexpress
+
+nec turbografx 16,256,224,TGX16,CRT,NONE,4,3,CONSOLE,NEC,1989,TurboGrafx 16,31,rom,joystick (8-way),2
+turbografx
+turbografx-16
+nec turbografx
+turbografx 16
+turbo grafx 16
+nec turbografx-16
+nec turbo grafx
+nec turbo grafx 16
+
+nec turbografx cd,256,224,TGXCD,CRT,NONE,4,3,CONSOLE,NEC,1989,TurboGrafx CD,114,iso,joystick (8-way),2
+nec turbografx-cd
+turbografx-cd
+turbografx cd
+
+neo geo cd,320,224,NGCD,CRT,NONE,4,3,CONSOLE,SNK,1994,Neo Geo CD,70,iso,joystick (8-way),4
+snk neo geo cd
+neogeocd
+
+neo geo cdz,320,224,NGCDZ,CRT,NONE,4,3,CONSOLE,SNK,1995,Neo Geo CDZ,70,iso,joystick (8-way),4
+snk neo geo cdz
+neogeocdz
+
+neo geo mvs,320,224,MVS,CRT,NONE,-4,3,ARCADE,SNK,1990,Neo Geo MVS,68,rom,joystick (8-way),4
+snk neo geo mvs
+snk mvs
+mvs
+neogeo mvs
+snk neogeo mvs
+
+neo geo pocket color,160,152,NGPC,LCD,NONE,0,0,HANDHELD,SNK,1999,Neo Geo Pocket Color,82,rom,joystick (8-way),2
+snk neo geo pocket color
+ngpc
+
+neo geo pocket,160,152,NGP,LCD,LCDBW,0,0,HANDHELD,SNK,1998,Neo Geo Pocket,25,rom,joystick (8-way),2
+snk neo geo pocket
+ngp
+
+neo geo,320,224,NEOGEO,CRT,NONE,4,3,CONSOLE,SNK,1990,Neo Geo,142,rom,joystick (8-way),4
+snk neo geo
+snk neo geo aes
+neo geo aes
+neogeo
+snk neogeo
+neogeo aes
+snk neogeo aes
+
+nintendo 3ds,0,0,3DS,LCD,NONE,0,0,HANDHELD,Nintendo,2011,Nintendo 3DS,17,rom,joystick (8-way),4
+3ds
+
+nintendo 64,0,0,N64,CRT,NONE,4,3,CONSOLE,Nintendo,1996,Nintendo 64,14,rom,joystick (8-way),6
+nintendo n64
+n64
+
+nintendo 64dd,0,0,64DD,CRT,NONE,4,3,CONSOLE,Nintendo,1999,Nintendo 64 64DD,122,rom,joystick (8-way),6
+nintendo 64 dd
+nintendo 64 64dd
+64 dd
+64dd
+n64dd
+
+nintendo ds,0,0,DS,LCD,NONE,0,0,HANDHELD,Nintendo,2004,Nintendo DS,15,rom,joystick (8-way),4
+ds
+
+nintendo dsi,0,0,DSI,LCD,NONE,0,0,HANDHELD,Nintendo,2008,Nintendo DSi,15,rom,joystick (8-way),4
+dsi
+nintendo ds i
+ds i
+
+nintendo famicom disk system,256,240,FDS,CRT,NONE,4,3,CONSOLE,Nintendo,1986,Family Computer Disk System,106,rom,joystick (8-way),2
+famicom disk system
+nintendo family computer disk system
+family computer disk system
+
+nintendo famicom,256,240,FAM,CRT,NONE,4,3,CONSOLE,Nintendo,1983,Family Computer,3,rom,joystick (8-way),2
+famicom
+nintendo family computer
+family computer
+
+nintendo game and watch,0,0,G&W,LCD,NONE,0,0,HANDHELD,Nintendo,1980,Game & Watch,52,rom,null,null
+game & watch
+nintendo game & watch
+game and watch
+
+nintendo game boy advance sp,240,160,GBASP,LCD,LCDGBA,0,0,HANDHELD,Nintendo,2003,Game Boy Advance SP,12,rom,joystick (8-way),2
+nintendo gameboy advance sp
+gameboy advance sp
+game boy advance sp
+gameboyadvance sp
+gba sp
+
+nintendo game boy advance,240,160,GBA,LCD,LCDGBA,0,0,HANDHELD,Nintendo,2001,Game Boy Advance,12,rom,joystick (8-way),2
+nintendo gameboy advance
+gameboy advance
+game boy advance
+gameboyadvance
+gba
+
+nintendo game boy color,160,144,GBC,LCD,NONE,0,0,HANDHELD,Nintendo,1998,Game Boy Color,10,rom,joystick (8-way),2
+nintendo gameboy color
+gameboy color
+game boy color
+gbc
+
+nintendo game boy light,160,144,GBL,LCD,LCDGBL,0,0,HANDHELD,Nintendo,1998,Game Boy Light,9,rom,joystick (8-way),2
+nintendo gameboy light
+gameboy light
+game boy light
+gbl
+
+nintendo game boy micro,240,160,GBM,LCD,LCDGBA,0,0,HANDHELD,Nintendo,2005,Game Boy Micro,12,rom,joystick (8-way),2
+nintendo gameboy micro
+gameboy micro
+game boy micro
+gameboymicro
+gbm
+
+nintendo game boy pocket,160,144,GBP,LCD,LCDGBP,0,0,HANDHELD,Nintendo,1996,Game Boy Pocket,9,rom,joystick (8-way),2
+nintendo gameboy pocket
+gameboy pocket
+game boy pocket
+gbp
+
+nintendo game boy,160,144,GB,LCD,LCDGBC,0,0,HANDHELD,Nintendo,1989,Game Boy,9,rom,joystick (8-way),2
+gameboy
+nintendo gameboy
+game boy
+gb
+
+nintendo gamecube,0,0,CUBE,CRT,NONE,4,3,CONSOLE,Nintendo,2001,GameCube,13,iso,joystick (8-way),4
+nintendo game cube
+game cube
+gamecube
+gc
+
+nintendo nes,256,240,NES,CRT,NONE,4,3,CONSOLE,Nintendo,1985,Nintendo Entertainment System,3,rom,joystick (8-way),2
+nintendo entertainment system
+nes
+
+nintendo nes new-style,256,240,NES-NS,CRT,NONE,4,3,CONSOLE,Nintendo,1993,Nintendo Entertainment System New-Style,3,rom,joystick (8-way),2
+nintendo entertainment system new-style
+nes new-style
+
+nintendo new famicom,256,240,NES-NS,CRT,NONE,4,3,CONSOLE,Nintendo,1993,Family Computer New,3,rom,joystick (8-way),2
+nintendo new family computer
+new famicom
+new family computer
+family computer new
+
+nintendo playchoice 10,256,240,PC10,CRT,NONE,4,3,ARCADE,Nintendo,1986,PlayChoice 10,75,rom,joystick (8-way),2
+nintendo playchoice-10
+playchoice 10
+playchoice-10
+playchoice
+nintendo playchoice
+
+nintendo satellaview,256,224,SATV,CRT,NONE,4,3,CONSOLE,Nintendo,1995,Satellaview,107,rom,joystick (8-way),4
+satellaview
+
+nintendo snes eu,256,224,SNSEU,CRT,NONE,4,3,CONSOLE,Nintendo,1991,Super Nintendo Entertainment System EU,4,rom,joystick (8-way),4
+snes eu
+super nintendo eu
+super nintendo entertainment system eu
+nintendo super nintendo entertainment system eu
+
+nintendo snes,256,224,SNES,CRT,NONE,4,3,CONSOLE,Nintendo,1991,Super Nintendo Entertainment System,4,rom,joystick (8-way),4
+super nintendo
+super nintendo entertainment system
+nintendo super nintendo entertainment system
+snes
+
+nintendo snes new-style,256,224,SNES,CRT,NONE,4,3,CONSOLE,Nintendo,1997,Super NES New-Style,4,rom,joystick (8-way),4
+super nintendo new-style
+super nintendo entertainment system new-style
+nintendo super nintendo entertainment system new-style
+snes new-style
+super nes new-style
+
+nintendo super famicom,256,224,SFAM,CRT,NONE,4,3,CONSOLE,Nintendo,1990,Super Famicom,4,rom,joystick (8-way),4
+super famicom
+
+nintendo super famicom jr,256,224,SF-JR,CRT,NONE,4,3,CONSOLE,Nintendo,1998,Super Famicom Jr,4,rom,joystick (8-way),4
+super famicom jr
+
+nintendo super game boy,160,144,SGB,CRT,NONE,0,0,CONSOLE,Nintendo,1994,Super Game Boy,9,rom,joystick (8-way),2
+super gameboy
+nintendo super gameboy
+super game boy
+
+nintendo super system,256,224,NSSYS,CRT,NONE,4,3,ARCADE,Nintendo,1991,Nintendo Super System,75,rom,joystick (8-way),4
+nintendo supersystem
+super system
+supersystem
+
+nintendo switch,0,0,SWT,LCD,NONE,0,0,HANDHELD,Nintendo,2017,Nintendo Switch,225,rom,joystick (8-way),4
+switch
+
+nintendo virtual console,0,0,VCON,LCD,NONE,0,0,CONSOLE,Nintendo,2006,Virtual Console,16,iso,joystick (8-way),4
+virtual console
+
+nintendo virtual console u,0,0,VCNU,LCD,NONE,0,0,CONSOLE,Nintendo,2013,Virtual Console U,16,iso,joystick (8-way),4
+virtual console u
+
+nintendo virtualboy,0,0,VBOY,CRT,NONE,4,3,CONSOLE,Nintendo,1995,Virtualboy,11,rom,joystick (8-way),2
+nintendo virtual boy
+virtualboy
+virtual boy
+
+nintendo vs system,0,0,NINVS,CRT,NONE,-4,3,ARCADE,Nintendo,null,VS System,75,rom,null,null
+vs system
+
+nintendo wii ware,0,0,WIIW,CRT,NONE,4,3,CONSOLE,Nintendo,2008,Wii Ware,16,iso,joystick (8-way),4
+wii ware
+wiiware
+nintendo wiiware
+
+nintendo wii,0,0,WII,CRT,NONE,4,3,CONSOLE,Nintendo,2006,Wii,16,iso,joystick (8-way),4
+wii
+
+nintendo wiiu,0,0,WIIU,CRT,NONE,4,3,CONSOLE,Nintendo,2012,Wii U,18,iso,joystick (8-way),4
+wii u
+nintendo wii u
+wiiu
+
+nintendo,0,0,NINT,CRT,NONE,-4,3,ARCADE,Nintendo,null,Nintendo,161,rom,null,null
+nintendo classics
+
+nokia n-gage,176,208,NGAGE,LCD,NONE,176,208,HANDHELD,Nokia,2003,N-Gage,30,rom,joystick (8-way),2
+ngage
+nokia ngage
+n-gage
+
+nuon,0,0,NUON,CRT,NONE,4,3,CONSOLE,VM Labs,2000,Nuon,null,null,joystick (8-way),6
+vm labs nuon
+
+olivetti pc1,320,200,PC1,CRT,NONE,4,3,COMPUTER,Olivetti Prodest,1987,Olivetti PC1,135,dossier,joystick (8-way),1
+olivetti prodest pc1
+olivetti pc 1
+olivetti prodest pc 1
+
+olivetti pc128,320,200,PC128,CRT,NONE,4,3,COMPUTER,Olivetti Prodest,1986,Olivetti PC128,141,rom,joystick (8-way),1
+olivetti pc 128
+olivetti prodest pc128
+olivetti prodest pc 128
+
+openbor,0,0,OBOR,CRT,NONE,4,3,COMPUTER,Various,null,OpenBor,214,fichier,null,null
+open bor
+
+oric,240,220,ORC,CRT,NONE,4,3,COMPUTER,Tangerine,1984,Oric,131,rom,joystick (8-way),1
+
+othello multivision,256,192,OTHL,CRT,NONE,4,3,CONSOLE,Tsukuda Original,1983,Othello Multivision,109,rom,joystick (8-way),2
+multivision
+
+p2000,0,0,P2K,CRT,NONE,4,3,COMPUTER,Philips,1980,P2000,287,rom,joystick (8-way),1
+p2000t
+philips p2000
+philips p2000t
+
+panasonic 3do,0,0,3DO,CRT,NONE,4,3,CONSOLE,3DO Company,1993,3DO,29,iso,joystick (8-way),3
+3do
+
+pc,0,0,PC,CRT,NONE,4,3,COMPUTER,Various,null,PC,135,dossier,joystick (8-way),1
+pc games
+
+pecom 64,240,216,PE64,CRT,NONE,4,3,COMPUTER,Elektronska Industrija,1985,Pecom 64,125,rom,joystick (8-way),1
+
+pegasus,256,256,PEGS,CRT,NONE,4,3,COMPUTER,Technosys,1981,Pegasus,83,rom,joystick (8-way),1
+aamber pegasus
+
+pgm,0,0,PGM,CRT,NONE,-4,3,ARCADE,IGS,1997,PGM,75,rom,null,null
+polygame master
+igs pgm
+
+pgm2,0,0,PGM2,CRT,NONE,-4,3,ARCADE,IGS,2007,PGM2,75,rom,null,null
+polygame master 2
+pgm 2
+igs pgm2
+
+pico-8,128,128,PIC8,LCD,NONE,0,0,CONSOLE,Lexaloffle Games,2015,PICO-8,234,rom,joystick (8-way),2
+pico8
+
+pinball arcade,0,0,PAR,CRT,NONE,4,3,PINBALL,Various,null,Pinball Arcade,200,fichier,null,null
+
+pinball fx2,0,0,PFX2,CRT,NONE,4,3,PINBALL,Various,null,Pinball FX2,143,fichier,null,null
+pinball fx 2
+
+pinball fx3,0,0,PFX3,CRT,NONE,4,3,PINBALL,Various,null,Pinball FX3,201,fichier,null,null
+pinball fx 3
+
+playstation 2,0,0,PS2,CRT,NONE,4,3,CONSOLE,Sony,2000,PS2,58,iso,joystick (8-way),4
+sony playstation 2
+ps2
+sony ps2
+
+playstation 3,0,0,PS3,LCD,NONE,16,9,CONSOLE,Sony,2006,PS3,59,iso,joystick (8-way),4
+sony playstation 3
+ps3
+sony ps3
+
+playstation 4,0,0,PS4,LCD,NONE,16,9,CONSOLE,Sony,2013,PS4,null,null,joystick (8-way),4
+sony playstation 4
+ps4
+sony ps4
+
+playstation 5,0,0,PS5,LCD,NONE,16,9,CONSOLE,Sony,2020,PS5,null,null,joystick (8-way),4
+sony playstation 5
+ps5
+sony ps5
+
+playstation portable,0,0,PSP,LCD,NONE,0,0,HANDHELD,Sony,2004,PSP,61,rom,joystick (8-way),4
+sony playstation portable
+psp
+sony psp
+
+playstation,0,0,PSX,CRT,NONE,4,3,CONSOLE,Sony,1994,PlayStation,57,iso,joystick (8-way),4
+sony playstation
+psx
+sony psx
+
+pocket challenge v2,224,144,PCV2,LCD,LCDBW,224,144,HANDHELD,Benesse Corporation,2000,Pocket Challenge V2,237,iso,joystick (8-way),3
+pocket challenge
+
+psone,0,0,PSX,CRT,NONE,4,3,CONSOLE,Sony,2000,PSOne,57,iso,joystick (8-way),4
+sony psone
+ps one
+sony ps one
+
+psvita,960,544,PSV,LCD,NONE,960,544,HANDHELD,Sony,2011,PS Vita,62,rom,joystick (8-way),4
+ps vita
+sony ps vita
+sony playstation vita
+vita
+playstation vita
+
+rca studio ii,0,0,RCAS2,CRT,NONE,4,3,CONSOLE,RCA,1977,RCA Studio II,null,null,joystick (8-way),2
+studio ii
+rca studio 2
+studio 2
+
+retroarch,0,0,RARCH,CRT,NONE,-4,3,ARCADE,Various,null,RetroArch,75,rom,null,null
+
+sam coupe,256,192,SCPE,CRT,NONE,4,3,COMPUTER,MGT,1989,SAM coupe,213,rom,joystick (8-way),1
+sam coupé
+
+scummvm,0,0,SVM,CRT,NONE,4,3,COMPUTER,Various,null,ScummVM,123,dossier,null,null
+scumm vm
+
+sega 32x,320,224,32X,CRT,NONE,4,3,CONSOLE,Sega,1994,Sega 32X,19,rom,joystick (8-way),3
+32x
+sega32x
+
+sega cd,320,224,SCD,CRT,NONE,4,3,CONSOLE,Sega,1992,Sega CD,20,iso,joystick (8-way),3
+segacd
+sega-cd
+
+sega dreamcast,0,0,DCST,CRT,NONE,4,3,CONSOLE,Sega,1999,Dreamcast,23,iso,joystick (8-way),4
+dreamcast
+
+sega dreamcast eu,0,0,DCST,CRT,NONE,4,3,CONSOLE,Sega,1999,Dreamcast EU,23,iso,joystick (8-way),4
+dreamcast eu
+
+sega dreamcast jp,0,0,DCST,CRT,NONE,4,3,CONSOLE,Sega,1999,Dreamcast JP,23,iso,joystick (8-way),4
+dreamcast jp
+
+sega game gear,160,144,GG,LCD,NONE,4,3,HANDHELD,Sega,1991,Game Gear,21,rom,joystick (8-way),2
+game gear
+gamegear
+sega gamegear
+
+sega game gear eu,160,144,GG,LCD,NONE,4,3,HANDHELD,Sega,1990,Game Gear EU,21,rom,joystick (8-way),2
+game gear eu
+gamegear eu
+sega gamegear eu
+
+sega genesis 2,320,224,GEN2,CRT,NONE,4,3,CONSOLE,Sega,1994,Genesis 2,1,rom,joystick (8-way),3
+genesis II
+sega genesis II
+genesis 2
+
+sega genesis,320,224,GEN,CRT,NONE,4,3,CONSOLE,Sega,1989,Genesis,1,rom,joystick (8-way),3
+genesis
+
+sega genesis cdx,320,224,CDX,CRT,NONE,4,3,CONSOLE,Sega,1994,Genesis CDX,20,iso,joystick (8-way),3
+genesis cdx
+cdx
+sega cdx
+
+sega hikaru,0,0,HIKARU,CRT,NONE,-4,3,ARCADE,Sega,1999,Hikaru,75,rom,null,null
+hikaru
+
+sega mark 3,256,192,MKIII,CRT,NONE,4,3,CONSOLE,Sega,1985,Sega MKIII,2,rom,joystick (8-way),2
+sega mark iii
+mark 3
+mark iii
+sega mk iii
+sega mk 3
+sega mkiii
+sega mk3
+
+sega master system 2,256,192,SMS2,CRT,NONE,4,3,CONSOLE,Sega,1990,Master System 2,2,rom,joystick (8-way),2
+master system ii
+sega master system ii
+master system 2
+
+sega master system,256,192,SMS,CRT,NONE,4,3,CONSOLE,Sega,1987,Master System,2,rom,joystick (8-way),2
+master system
+mastersystem
+sega mastersystem
+
+sega mega cd,320,224,MCD,CRT,NONE,4,3,CONSOLE,Sega,1991,Mega CD,20,iso,joystick (8-way),3
+mega cd
+megacd
+mega-cd
+sega megacd
+sega mega-cd
+
+sega mega drive 2 japan,320,224,MD2,CRT,NONE,4,3,CONSOLE,Sega,1992,Mega Drive 2 Japan,1,rom,joystick (8-way),3
+megadrive 2 japan
+sega megadrive 2 japan
+mega drive 2 japan
+
+sega mega drive 32x,320,224,M32X,CRT,NONE,4,3,CONSOLE,Sega,1994,Mega Drive 32X,19,rom,joystick (8-way),3
+megadrive 32x
+sega megadrive 32x
+mega drive 32x
+
+sega mega drive ii,320,224,MDII,CRT,NONE,4,3,CONSOLE,Sega,1992,Mega Drive II,1,rom,joystick (8-way),3
+megadrive ii
+sega megadrive ii
+mega drive ii
+
+sega mega drive japan,320,224,MDJ,CRT,NONE,4,3,CONSOLE,Sega,1988,Mega Drive Japan,1,rom,joystick (8-way),3
+megadrive japan
+mega drive japan
+sega megadrive japan
+
+sega mega drive,320,224,MD,CRT,NONE,4,3,CONSOLE,Sega,1990,Mega Drive,1,rom,joystick (8-way),3
+megadrive
+mega drive
+sega mega drive
+
+sega mega play,0,0,SM-P,CRT,NONE,4,3,ARCADE,Sega,1991,Mega Play,75,rom,joystick (8-way),3
+mega play
+mega-play
+sega mega-play
+megaplay
+sega megaplay
+
+sega mega tech,0,0,SM-T,CRT,NONE,4,3,ARCADE,Sega,1989,Mega Tech,75,rom,joystick (8-way),3
+mega tech
+mega-tech
+sega mega-tech
+
+sega model 1,0,0,SM1,CRT,NONE,-4,3,ARCADE,Sega,1992,Sega Model 1,75,rom,null,null
+model 1
+sega model1
+model1
+
+sega model 2,0,0,SM2,CRT,NONE,-4,3,ARCADE,Sega,1993,Sega Model 2,54,rom,null,null
+model 2
+sega model2
+model2
+
+sega model 3,0,0,SM3,CRT,NONE,-4,3,ARCADE,Sega,1996,Sega Model 3,55,rom,null,null
+model 3
+sega model3
+model3
+
+sega multi-mega,320,224,MMGA,CRT,NONE,4,3,CONSOLE,Sega,1994,Multi-Mega,20,iso,joystick (8-way),3
+multi-mega
+multi mega
+sega multi mega
+multimega
+sega multimega
+
+sega naomi 2 gd-rom,0,0,NAGD2,CRT,NONE,-4,3,ARCADE,Sega,2000,Naomi 2 GD-ROM System,227,rom,null,null
+sega naomi 2 gdrom
+sega naomi 2 gd-rom system
+sega naomi 2 gdrom system
+sega naomi 2 gd
+naomi 2 gd
+naomi 2 gd-rom system
+naomi 2 gdrom system
+naomi 2 gdrom
+naomi 2 gd-rom
+
+sega naomi 2,0,0,NAO2,CRT,NONE,-4,3,ARCADE,Sega,2000,Naomi 2,230,rom,null,null
+naomi 2
+
+sega naomi gd-rom,0,0,NAOGD,CRT,NONE,-4,3,ARCADE,Sega,1998,Naomi GD-ROM System,227,rom,null,null
+sega naomi gdrom
+sega naomi gd-rom system
+sega naomi gdrom system
+sega naomi gd
+naomi gd
+naomi gd-rom system
+naomi gdrom system
+naomi gdrom
+naomi gd-rom
+
+sega naomi,0,0,NAOM,CRT,NONE,-4,3,ARCADE,Sega,1998,Naomi,56,rom,null,null
+naomi
+
+sega nomad,320,224,NMD,LCD,NONE,4,3,HANDHELD,Sega,1995,Nomad,1,rom,joystick (8-way),6
+genesis nomad
+nomad
+
+sega pico,0,0,PICO,LCD,NONE,0,0,HANDHELD,Sega,1993,Pico,null,rom,null,null
+pico
+
+sega saturn japan,0,0,SATJP,CRT,NONE,4,3,CONSOLE,Sega,1994,Sega Saturn Japan,22,iso,joystick (8-way),6
+saturn japan
+
+sega saturn,0,0,SAT,CRT,NONE,4,3,CONSOLE,Sega,1995,Saturn,22,iso,joystick (8-way),6
+saturn
+
+sega sc 3000,256,192,SC3K,CRT,NONE,4,3,COMPUTER,Sega,1983,SC-3000,109,rom,joystick (8-way),2
+sega sc-3000
+sega sc3000
+sc 3000
+sc-3000
+sc3000
+
+sega sg 1000,256,192,SG1K,CRT,NONE,4,3,CONSOLE,Sega,1983,SG-1000,109,rom,joystick (8-way),2
+sega sg-1000
+sega sg1000
+sg 1000
+sg-1000
+sg1000
+
+sega stv,320,224,STV,CRT,NONE,4,3,ARCADE,Sega,1995,ST-V,69,rom,null,null
+sega st-v
+stv
+st-v
+
+sega super 32x,320,224,S32X,CRT,NONE,4,3,CONSOLE,Sega,1994,Super 32X,19,rom,joystick (8-way),3
+super 32x
+sega 32x japan
+
+sega system sp,0,0,SSSP,CRT,NONE,-4,3,ARCADE,Sega,2004,Sega System SP,75,rom,null,null
+sega aurora
+system sp
+aurora
+
+sega wondermega,320,224,WMGA,CRT,NONE,4,3,CONSOLE,Sega Victor,1992,Wondermega,20,iso,joystick (8-way),3
+victor wondermega
+wondermega
+
+sega,0,0,SEGA,CRT,NONE,-4,3,ARCADE,Sega,null,Sega,147,rom,null,null
+sega classics
+
+sharp mz-2500,320,200,MZ25K,CRT,NONE,4,3,COMPUTER,Sharp,1985,MZ-2500,null,null,joystick (8-way),2
+mz2500
+sharp mz2500
+mz-2500
+
+sharp x1,320,200,X1,CRT,NONE,4,3,COMPUTER,Sharp,1982,X1,220,rom,joystick (8-way),1
+x1
+
+sharp x68000,0,0,X68K,CRT,NONE,4,3,COMPUTER,Sharp,1987,X68000,79,rom,joystick (8-way),2
+x68k
+x68000
+sharp x68k
+
+sinclair ql,256,256,QL,CRT,NONE,4,3,COMPUTER,Sinclair,1984,Sinclair QL,null,null,joystick (8-way),1
+ql
+
+sinclair zx spectrum,256,192,ZX-S,CRT,NONE,4,3,COMPUTER,Sinclair,1982,ZX Spectrum,76,rom,joystick (8-way),1
+zx spectrum
+sinclair spectrum
+spectrum
+
+sinclair zx spectrum 3,256,192,SP3,CRT,NONE,4,3,COMPUTER,Sinclair,1987,ZX Spectrum 3,76,rom,joystick (8-way),1
+zx spectrum +3
+zx spectrum 3
+spectrum 3
+spectrum +3
+
+sinclair zx80,0,0,ZX80,CRT,NONE,4,3,COMPUTER,Sinclair,1980,ZX 80,null,rom,joystick (8-way),1
+zx 80
+sinclair zx 80
+zx80
+
+sinclair zx81,0,0,ZX81,CRT,NONE,4,3,COMPUTER,Sinclair,1981,ZX 81,77,rom,joystick (8-way),1
+zx 81
+sinclair zx 81
+zx81
+
+snk,0,0,SNK,CRT,NONE,-4,3,ARCADE,SNK,null,SNK,154,rom,null,null
+snk classics
+
+sol-20,0,0,SOL20,CRT,NONE,4,3,COMPUTER,Processor Technology,1976,Sol-20,0,rom,joystick (8-way),1
+sol terminal computer
+sol-20 terminal computer
+sol20 terminal computer
+sol20
+
+sord m5,256,192,SORD,CRT,NONE,4,3,COMPUTER,Sord,1982,Sord M5,null,null,joystick (8-way),2
+
+spectravideo,256,192,SVI,CRT,8BIT,4,3,COMPUTER,Spectravideo,1983,Spectravideo,218,rom,joystick (8-way),1
+svi
+sv-318
+sv-328
+
+steam,0,0,STEAM,CRT,NONE,0,0,COMPUTER,Steam,null,Steam,null,null,null,null
+
+taito nesicaxlive,0,0,NSCA,LCD,NONE,16,9,ARCADE,Taito,2010,NESiCAxlive,75,rom,null,null
+nesicaxlive
+
+taito type x,0,0,TYPX,CRT,NONE,-4,3,ARCADE,Taito,2004,Taito Type X,112,rom,null,null
+taito typex
+taito type-x
+type x
+typex
+type-x
+
+taito,0,0,TAI,CRT,NONE,-4,3,ARCADE,Taito,null,Taito,157,rom,null,null
+taito classics
+
+teknoparrot,0,0,TKPR,LCD,NONE,0,0,ARCADE,Various,null,TeknoParrot,75,rom,null,null
+
+thomson,320,200,THM,CRT,NONE,4,3,COMPUTER,Thomson,1984,Thomson,141,rom,joystick (8-way),1
+thomson moto
+thomson mo6
+
+ti994a,256,192,TI99,CRT,NONE,4,3,COMPUTER,Texas Instruments,1981,TI994A,205,rom,joystick (8-way),1
+ti-99 4a
+ti99
+ti-99
+
+ti83,64,96,TI83,LCD,LCDBW,0,0,HANDHELD,Texas Instruments,1996,TI83,null,rom,joystick (8-way),1
+ti-83
+texas instruments ti83
+texas instruments ti-83
+
+tiger game com,200,160,GCOM,LCD,LCDBW,0,0,HANDHELD,Tiger,1997,Game Com,121,rom,joystick (8-way),4
+game com
+game.com
+tiger game.com
+
+tiger,0,0,TGR,LCD,NONE,0,0,HANDHELD,Tiger,null,Tiger,null,null,null,null
+tiger handhelds
+tiger electronics
+
+tomy tutor,256,192,TOMYT,CRT,NONE,4,3,COMPUTER,Tomy,1982,Tomy Tutor,null,null,joystick (8-way),2
+
+triforce,0,0,TRIF,CRT,NONE,4,3,ARCADE,Various,null,Triforce,75,rom,null,null
+
+trs-80 color computer,320,200,COCO,CRT,NONE,4,3,COMPUTER,Tandy,1980,TRS-80 Color Computer,144,rom,joystick (8-way),1
+trs80 color computer
+trs-80 coco
+trs80 coco
+coco
+
+trs-80,320,200,TRS,CRT,NONE,4,3,COMPUTER,Tandy,1977,TRS-80,144,rom,joystick (8-way),1
+radio shack trs-80
+tandy trs-80
+trs80
+
+ultra 64,0,0,U64,CRT,NONE,4,3,ARCADE,Various,null,Ultra 64,75,rom,null,null
+ultra64
+
+uzebox,0,0,UZBX,CRT,NONE,4,3,CONSOLE,Belogic Software,2008,uZebox,216,rom,joystick (8-way),4
+
+vector-06c,256,256,V06C,CRT,NONE,4,3,COMPUTER,Temirazov Sokolov,1987,Vector-06C,null,null,joystick (8-way),1
+vector 06c
+
+vectrex,0,0,VECT,CRT,NONE,9,11,CONSOLE,GCE,1982,Vectrex,102,rom,joystick (8-way),4
+
+vg5000,320,250,VG5K,CRT,NONE,4,3,COMPUTER,Philips,1984,VG5000,261,rom,joystick (8-way),1
+philips vg5000
+vg 5000
+philips vg 5000
+
+videopac plus,320,238,VPLUS,CRT,NONE,4,3,CONSOLE,Philips,1983,Videopac Plus,104,rom,joystick (8-way),1
+philips videopac plus
+
+videopac,160,200,VPAC,CRT,NONE,4,3,CONSOLE,Philips,1978,Videopac,104,rom,joystick (8-way),1
+philips videopac
+
+videoton tvc,0,0,TVC,CRT,NONE,4,3,COMPUTER,Videoton,1986,Videoton TVC,null,rom,joystick (8-way),1
+videoton tv-computer
+tvc
+tv-computer
+
+vircon 32,640,360,VC32,LCD,NONE,16,9,CONSOLE,Carra,2023,Vircon32,272,rom,joystick (8-way),4
+vircon32
+
+visual pinball,0,0,VPIN,CRT,NONE,4,3,PINBALL,Various,null,Visual Pinball,198,fichier,null,null
+visualpinball
+
+vtech creativision,256,192,CRTV,CRT,NONE,4,3,CONSOLE,VTech,1982,CreatiVision,241,rom,joystick (8-way),4
+creativision
+
+vtech socrates,0,0,SOCR,CRT,NONE,4,3,CONSOLE,VTech,1988,Socrates,null,rom,null,null
+socrates
+
+vtech v smile,320,240,VSML,CRT,NONE,4,3,CONSOLE,VTech,2004,V Smile,120,rom,joystick (8-way),4
+vsmile
+v smile
+
+wasm-4,160,160,WASM,LCD,NONE,0,0,HANDHELD,Aduros,2021,WASM-4,262,rom,joystick (8-way),2
+wasm4
+
+watara supervision,160,160,WSVIS,LCD,LCDGBC,0,0,HANDHELD,Watara,1992,Supervision,207,rom,joystick (8-way),2
+quickshot supervision
+supervision
+
+williams,0,0,WILL,CRT,NONE,-4,3,ARCADE,Williams,null,Williams,150,rom,null,null
+williams classics
+
+xbox 360,0,0,XB360,CRT,NONE,4,3,CONSOLE,Microsoft,2005,XBox 360,33,iso,joystick (8-way),4
+x box 360
+microsoft xbox 360
+microsoft x box 360
+xbox360
+
+xbox one,0,0,XBONE,CRT,NONE,4,3,CONSOLE,Microsoft,2013,XBox One,34,iso,joystick (8-way),4
+x box one
+microsoft xbox one
+microsoft x box one
+xboxone
+
+xbox,0,0,XBOX,CRT,NONE,4,3,CONSOLE,Microsoft,2001,XBox,32,iso,joystick (8-way),4
+x box
+microsoft x box
+microsoft xbox
+
+zaccaria pinball,0,0,ZAC,CRT,NONE,4,3,PINBALL,Various,null,Zaccaria Pinball,null,fichier,null,null
+
+zemmix,256,192,ZMX,CRT,8BIT,4,3,CONSOLE,Daewoo,1985,Zemmix,113,rom,joystick (8-way),1
+daewoo zemmix
+
+zemmix v,256,192,ZMXV,CRT,8BIT,4,3,CONSOLE,Daewoo,1988,Zemmix V,113,rom,joystick (8-way),1
+daewoo zemmix v
+
+zemmix super v,0,0,ZMSV,CRT,NONE,4,3,CONSOLE,Daewoo,1990,Zemmix Super V,116,rom,joystick (8-way),2
+daewoo zemix super v
+
+zemmix neo,0,0,ZMXN,CRT,NONE,4,3,CONSOLE,Various,2013,Zemmix Neo,117,rom,joystick (8-way),2
+
+zmenuarcade,0,0,ARC,ARC,NONE,0,0,ARCADE,null,null,_arcade,null,null,null,null
+
+zmenucomputer,0,0,CMP,CMP,NONE,0,0,COMPUTER,null,null,_computer,null,null,null,null
+
+zmenuconsole,0,0,CNS,CNS,NONE,0,0,CONSOLE,null,null,_console,null,null,null,null
+
+zmenuhandheld,0,0,HND,HND,NONE,0,0,HANDHELD,null,null,_handheld,null,null,null,null
+
+zmenupinball,0,0,PBL,PBL,NONE,0,0,PINBALL,null,null,_pinball,null,null,null,null
+
+zmenucollections,0,0,COL,COL,NONE,0,0,COLLECTIONS,null,null,_collections,null,null,null,null
+
+settings,0,0,SET,SET,NONE,0,0,SETTINGS,null,null,settings,null,null,null,null

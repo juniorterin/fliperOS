@@ -34,3 +34,4 @@ config/nvram/** binary
 config/nvram/SOURCES.md text eol=lf
 # Os detectores do Fightcade ficam como o autor os escreveu (sem conversao de linhas).
 third-party/fightcade-detectors/** -text
+config/syslogo/** binary

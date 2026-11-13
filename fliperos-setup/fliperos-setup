@@ -394,6 +394,8 @@ main() {
       exec {lock}> /run/fliperos-romlists.lock
       flock -n "$lock" || return 0
       FRONTENDS_RESYNC_FULL=1 frontends_lists > /dev/null
+      # Os nomes das pastas para o logotipo dos sistemas (config/fliperos-syslogo).
+      frontends_syslogo_aliases
       return 0
       ;;
     --cloud-restore)

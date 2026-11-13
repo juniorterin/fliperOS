@@ -274,8 +274,33 @@ frontends_attract() {
 # pasta ou o nome do sistema do core. Um core de MAME ganha um sistema so
 # dele ("TELA<tab>TITULO|..."), com a arte do MAME e o resto do nome por cima.
 frontends_arcadeflow_systems() {
-  local key platform name core corename systems title
+  # A tabela dos logotipos sem o tema (config/fliperos-syslogo), sempre.
+  frontends_syslogo_aliases
   [[ -f $ATTRACT_DIR/layouts/Arcadeflow/data_systems.txt ]] || return 0
+  frontends_system_names | "$ARCADEFLOW" systems 2>> "$FLIPEROS_LOG"
+  return 0
+}
+
+# SYSLOGO_ALIASES: os sistemas do Arcadeflow de cada pasta do FliperOS
+# ("NOME|SISTEMA..."), para o fliperos-syslogo desenhar o logotipo com a
+# fonte e a tabela que vem na imagem, sem o tema instalado.
+SYSLOGO_ALIASES=${SYSLOGO_ALIASES:-/var/lib/fliperos/syslogo-aliases}
+
+frontends_syslogo_aliases() {
+  local tmp
+  mkdir -p "${SYSLOGO_ALIASES%/*}" 2> /dev/null
+  tmp=$(mktemp "$SYSLOGO_ALIASES.XXXXXX" 2> /dev/null) || return 0
+  # Sem o titulo de um sistema proprio (o "<tab>MAME 2010"): o glifo dele so
+  # existe na fonte do tema.
+  frontends_system_names | sed 's/\t[^|]*//' > "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$SYSLOGO_ALIASES"
+}
+
+# frontends_system_names: "NOME[<tab>TITULO]|SISTEMA..." de cada pasta com
+# jogos, com os nomes de sistema do Arcadeflow.
+frontends_system_names() {
+  local key platform name core corename systems title
   while IFS='|' read -r key _ platform name _; do
     title=""
     case $key in
@@ -305,8 +330,7 @@ frontends_arcadeflow_systems() {
       *) systems=$platform ;;
     esac
     printf '%s%s|%s\n' "$name" "${title:+$'\t'$title}" "$systems"
-  done < <(frontends_systems) | "$ARCADEFLOW" systems 2>> "$FLIPEROS_LOG"
-  return 0
+  done < <(frontends_systems)
 }
 
 # frontends_attract_defaults: os padroes do FliperOS no Attract-Mode Plus, a

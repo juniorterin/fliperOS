@@ -3057,7 +3057,8 @@ def draw_ribbon(fe, ui, now):
 
 # O logotipo escrito de cada sistema (o do Arcadeflow, config/fliperos-syslogo)
 # para os azulejos da tira de romlists: feito uma vez por nome, numa thread, e
-# guardado em ~/.cache; sem o tema ou sem o sistema nele, o azulejo fica so com
+# guardado em ~/.cache (a fonte e a tabela vem na imagem); sem o sistema na
+# tabela, o azulejo fica so com
 # o icone, como antes.
 SYSLOGO = os.environ.get("FLIPEROS_SYSLOGO", "/opt/fliperos/bin/fliperos-syslogo")
 SYSLOGO_CACHE = os.path.join(os.path.expanduser("~"), ".cache", "fliperos", "syslogo")
@@ -3130,48 +3131,6 @@ def ribbon_icon(cat, name, size):
     return _fitted[key]
 
 
-# O logotipo sai da fonte do Arcadeflow, que so chegava ao escolher o
-# Attract-Mode Plus no Setup: num gabinete instalado com o frontend do
-# FliperOS (o padrao) o tema nao existia e o logotipo sumia do topo e da tira.
-# Sem o tema, o frontend o baixa uma vez (fliperos-arcadeflow fetch, como o
-# usuario, numa thread) e os logotipos que faltaram sao feitos de novo.
-ARCADEFLOW = os.environ.get("FLIPEROS_ARCADEFLOW", "/opt/fliperos/bin/fliperos-arcadeflow")
-ARCADEFLOW_THEME = os.path.join(os.environ.get("ATTRACT_DIR", os.path.expanduser("~/.attract")),
-                                "layouts", "Arcadeflow")
-_theme = {"state": None}   # None, "fetching", "done"
-_theme_lock = None
-
-
-def theme_ready():
-    """O tema com o que o fliperos-syslogo le (a tabela e a fonte); sem ele,
-    baixa-o (uma vez por execucao; bloqueia a thread que chamou). True se
-    ficou pronto agora: quem chamou tenta o logotipo de novo."""
-    import subprocess
-    import threading
-    global _theme_lock
-    if os.path.isfile(os.path.join(ARCADEFLOW_THEME, "data_systems.txt")):
-        return False
-    if _theme_lock is None:
-        _theme_lock = threading.Lock()
-    with _theme_lock:
-        # Quem esperou o download de outra thread so tenta de novo.
-        if _theme["state"] is not None:
-            return os.path.isfile(os.path.join(ARCADEFLOW_THEME, "data_systems.txt"))
-        _theme["state"] = "fetching"
-        try:
-            subprocess.run([ARCADEFLOW, "fetch"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, timeout=1800)
-        except (OSError, subprocess.SubprocessError):
-            pass
-        _theme["state"] = "done"
-    if not os.path.isfile(os.path.join(ARCADEFLOW_THEME, "data_systems.txt")):
-        return False
-    # Os que ficaram sem logotipo por falta do tema sao feitos de novo.
-    for key in [k for k, v in _logos.items() if v is None]:
-        del _logos[key]
-    return True
-
-
 def logo_source(name):
     """O logotipo do sistema no tamanho em que foi feito (para a proporcao), ou
     None (ainda sendo feito, ou sem logotipo). Na primeira vez, comeca a faze-lo."""
@@ -3181,8 +3140,6 @@ def logo_source(name):
 
         def work():
             path = logo_file(name)
-            if path is None and theme_ready():
-                path = logo_file(name)
             surf = None
             if path:
                 try:
