@@ -1463,13 +1463,14 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>Without a CTM (the cabinet's Radeon R7 240 has only the 256-point LUT, on <code>radeon</code> and on <code>amdgpu</code>), the Setup writes <code>color_ctm=sw</code>. Then saturation and hue go through the same layers as the flicker filter (<code>libfliperos-deflicker.so</code> in OpenGL, <code>libfliperos-vkfps.so</code> in Vulkan, in every emulator and frontend, and in the Setup's menu), and through picom on the desktop. Only the text console stays without them.</p>
 <h2 id="on-screen-menu">On-screen menu</h2>
 <p>Hold <strong>Start and Down</strong> for a second, or press <strong>Pause</strong> on a keyboard or <strong>Play/Pause</strong> on a wireless remote, and a menu opens over the game or the frontend. The game keeps running and stops seeing the controls until the menu closes, which also happens after 20 seconds without a press or when the game closes.</p>
-<p>The first page has the volume, <strong>Configuration</strong> with every other setting, and the buttons:</p>
+<p>Under the title, on every page, a small line shows the resolution, the two frequencies and the game's FPS (<code>640x480i 15.69kHz 60.00Hz  59.9 FPS</code>). It is read again every second while the menu is open, so a game that changes resolution, or a geometry being adjusted, shows at once.</p>
+<p>The first page has <strong>Configuration</strong> with the settings, and the buttons:</p>
 <ul>
-<li><strong>Volume</strong>. The volume keys of a keyboard or of a panel also show a bar for 2 seconds, without taking the controls or opening the menu.</li>
 <li><strong>Configuration</strong>: the settings below, the profile they are saved to, and <strong>Save</strong> and <strong>Back</strong> at the bottom.</li>
 <li><strong>Emulator menu</strong>: closes this menu and opens the emulator's own one (RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay) by pressing its key on a virtual keyboard. It only shows in an emulator that has a menu.</li>
 <li><strong>Close</strong> closes this menu, putting back what wasn't saved, and <strong>Quit</strong> closes the game (SIGTERM, SIGKILL after 5 seconds), like the frontend's Exit game shortcut. Over a frontend there is no Emulator menu nor Quit.</li>
 </ul>
+<p>The volume is not in the menu nor in the profiles: the volume keys of a keyboard or of a panel change it and show a bar for 2 seconds, without taking the controls or opening the menu, and the <a href="#Web-panel">web panel</a> has it too.</p>
 <p>Inside Configuration:</p>
 <ul>
 <li><strong>Save profile as</strong> and <strong>Delete profile</strong>: where Save writes the changes (every game, this resolution, this emulator, this core or this game), and erasing that profile.</li>
@@ -2052,7 +2053,8 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <li>RetroArch cartridge consoles (NES, SNES, Game Boy, GBA, Mega Drive, N64, PC Engine and the rest the site knows);</li>
 <li>arcade in FBNeo and MAME 2003-Plus (not GroovyMAME, nor the other MAME cores).</li>
 </ul>
-<p><code>gui/fecheevos.py</code> finds the game by the same hash as the emulators (rcheevos): for arcade, the name of the file; for cartridges, the file without its header, also inside a <code>.zip</code>. Disc systems (PlayStation, PS2, GameCube, Dreamcast) have a hash of their own and only get the badge with <code>RAHasher</code> installed (<code>/usr/local/bin/RAHasher</code>).</p>
+<p><code>gui/fecheevos.py</code> finds the game by the same hash as the emulators (rcheevos): for arcade, the name of the file; for cartridges, the file without its header, also inside a <code>.zip</code>. Disc systems (PlayStation, PS2, GameCube, Dreamcast, Sega CD, Saturn, PC Engine CD) have a hash of their own, read from the disc's boot files, also inside a CHD: for them it runs RetroAchievements' <code>RAHasher</code> (<code>/usr/local/bin/RAHasher</code>, the <code>fliperos-rahasher</code> package, built from RALibretro).</p>
+<p>In the game menu (button 1 on a game), such a game also has a trophy before the <strong>+</strong>. It opens the list of its achievements, fetched from the site right then: the ones you have first, each with a yellow trophy, then the ones still to get, each with its title, description and points. Up and down go through them, and the selected one scrolls what doesn't fit. Button 1 plays and button 2 goes back to the menu.</p>
 <p>The numbers come from the site's Web API: each console's game list with the hashes (once a week), your progress (when the frontend opens) and the game just played (when it closes). They are kept in <code>~/.cache/fliperos/cheevos</code>, and everything is fetched in the background: the badge shows up when the answer arrives.</p>
 <h3 id="physical-media-cds-and-dvds">Physical media: CDs and DVDs</h3>
 <p>With a CD or DVD drive connected (USB drives too), the system strip shows a pink arrow pointing down. Down goes to the <strong>PHYSICAL MEDIA</strong> row under the strip: one tile per drive, saying whether it has a disc (DISC, EMPTY, OPEN). Left and right move between drives, up goes back to the systems and button 2 closes the strip.</p>
@@ -31357,7 +31359,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td><code>config/fliperos-osd</code>, <code>config/fliperos-osd.service</code></td>
-<td>The on-screen menu over games and frontends: volume, Interlaced filter, scanlines, geometry and colour</td>
+<td>The on-screen menu over games and frontends: Interlaced filter, scanlines, geometry, colour and the profiles; the volume keys' bar</td>
 </tr>
 <tr>
 <td><code>config/fliperos-calibrate</code></td>
