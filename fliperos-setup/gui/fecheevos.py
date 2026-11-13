@@ -249,6 +249,44 @@ class Cheevos:
         have = (done[1] if self.hardcore else done[0]) if done else 0
         return have, total
 
+    def game_id(self, game):
+        """O id do jogo no site, se ja se sabe (o hash e a lista do console)."""
+        system = game.get("_system") or {}
+        console = console_of(system, game.get("file") or "", self.rahasher)
+        path = os.path.join(system.get("folder", ""), game.get("file") or "")
+        with self.lock:
+            known = self.hashes.get(path)
+            games = self.lists.get(console) or {}
+        found = games.get(known[2]) if known else None
+        return found[0] if found else None
+
+    def achievements(self, game):
+        """As conquistas do jogo, buscadas agora no site (o menu do jogo as
+        mostra): [{"title", "description", "points", "earned"}], as feitas
+        primeiro e cada grupo na ordem do site. No hardcore, so as do hardcore
+        contam como feitas. Atualiza tambem o selo. None sem o jogo."""
+        game_id = self.game_id(game)
+        if not self.on or game_id is None:
+            return None
+        row = self.fetch("API_GetGameInfoAndUserProgress.php", u=self.user, g=game_id)
+        if not isinstance(row, dict):
+            return None
+        out = []
+        for a in (row.get("Achievements") or {}).values():
+            done = a.get("DateEarnedHardcore") if self.hardcore else (a.get("DateEarned") or a.get("DateEarnedHardcore"))
+            out.append({"title": str(a.get("Title") or ""), "description": str(a.get("Description") or ""),
+                        "points": int(a.get("Points") or 0), "earned": bool(done),
+                        "order": int(a.get("DisplayOrder") or 0), "id": int(a.get("ID") or 0)})
+        out.sort(key=lambda a: (not a["earned"], a["order"], a["id"]))
+        with self.lock:
+            games = dict(self.progress.get("games", {}))
+            games[str(game_id)] = [int(row.get("NumAwardedToUser") or 0), int(row.get("NumAwardedToUserHardcore") or 0),
+                                   int(row.get("NumAchievements") or len(out))]
+            self.progress = {"time": self.progress.get("time", 0), "games": games}
+            data = dict(self.progress)
+        self.save("progress.json", data)
+        return out
+
     def refresh_game(self, game):
         """Depois de uma partida: o progresso daquele jogo de novo."""
         system = game.get("_system") or {}

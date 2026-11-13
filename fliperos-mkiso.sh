@@ -505,7 +505,7 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2 fliperos-gum' >> "$LOG_FILE" 2>&1 \
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2 fliperos-gum fliperos-rahasher' >> "$LOG_FILE" 2>&1 \
     || err "Installing Attract-Mode Plus, GroovyMAME, its SDL2 and the emulators from the local repository failed (see $LOG_FILE)"
   ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME and its KMS SDL2 and the emulators installed"
 }

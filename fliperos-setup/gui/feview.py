@@ -2520,8 +2520,21 @@ def popup_icon(ui, kind, cx, cy, on, lit=False, net=False):
         pads_icon(ui, cx, cy, on)
     elif kind == "fav":
         star(ui, cx, cy, T.YELLOW if on else T.COMMENT, 11, outline=False)
+    elif kind == "cheevos":
+        trophy_icon(ui, cx, cy, 2, None if on else T.COMMENT)
     else:
         plus_icon(ui, cx, cy, T.CYAN if on else T.COMMENT)
+
+
+def trophy_icon(ui, cx, cy, scale=1, color=None):
+    """A taca do menu (theme.ICONS["achievements"], 16x16) centrada em (cx,
+    cy), nas cores dela ou toda em color (apagada)."""
+    rows = T.ICONS["achievements"].strip("\n").split("\n")
+    x0, y0 = cx - 8 * scale, cy - 8 * scale
+    for j, row in enumerate(rows):
+        for i, c in enumerate(row):
+            if c != ".":
+                ui.fill(color or T.ICON_COLORS[c], (x0 + i * scale, y0 + j * scale, scale, scale))
 
 
 def draw_popup(fe, ui, now):
@@ -2949,6 +2962,72 @@ def draw_more(fe, ui, now):
     if source:
         tiny.text(ui, tiny.fit(source, SW - 20), T.COMMENT, right - 4, HH - 9, right=True)
     page_arrow(ui, now, -1)
+
+
+CHEEVO_ROW = 21             # a altura de uma conquista na lista (titulo e descricao)
+
+
+def draw_cheevos(fe, ui, now):
+    """As conquistas do jogo (o trofeu do menu do jogo): quantas feitas, e
+    cada uma com a taca (amarela se feita), o titulo, os pontos e a
+    descricao; as feitas primeiro. A escolhida fica acesa, e o que nao cabe
+    dela corre (marquee); nas outras, o fim sai com "...". """
+    g = fe.ov["game"]
+    W.frame(ui, {}, fit(fe.fd.short_title(g), 240) or "Game", [])
+    y0 = 34
+    right = SX + SW
+    rows = fe.ov.get("list")
+    if fe.ov.get("loading") or not rows:
+        box = (SX, y0, SW, HH - 12 - y0)
+        W.block(ui, box, T.BG_DEEP, None)
+        if fe.ov.get("loading"):
+            W.glow(ui, (box[0] + 2, box[1] + 2, box[2] - 4, box[3] - 4), {"now": now})
+            msg, color = "LOOKING IT UP...", T.CYAN
+        elif fe.ov.get("error"):
+            msg, color = "NO ANSWER FROM RETROACHIEVEMENTS.ORG", T.ORANGE
+        else:
+            msg, color = "NO ACHIEVEMENTS", T.COMMENT
+        tiny.centered(ui, msg, color, SX + SW // 2, y0 + box[3] // 2 - 2)
+        return
+    done = sum(1 for a in rows if a["earned"])
+    points = sum(a["points"] for a in rows if a["earned"])
+    trophy_icon(ui, SX + 8, y0 + 4, 1)
+    W.text(ui, "%d/%d" % (done, len(rows)), T.YELLOW if done == len(rows) else T.FG, SX + 20, y0 + 1)
+    tiny.text(ui, "%d/%d POINTS" % (points, sum(a["points"] for a in rows)), T.COMMENT, right, y0 + 3, right=True)
+    top = y0 + 16
+    visible = max(1, (HH - 12 - top) // CHEEVO_ROW)
+    sel = fe.ov["sel"] % len(rows)
+    first = max(0, min(sel - visible // 2, len(rows) - visible))
+    for i, a in enumerate(rows[first:first + visible]):
+        y = top + i * CHEEVO_ROW
+        on = first + i == sel
+        if on:
+            W.block(ui, (SX, y, SW, CHEEVO_ROW - 2), T.LINE, None)
+            pygame.draw.rect(ui, T.PINK, (SX, y, SW, CHEEVO_ROW - 2), 1)
+        for j, line in enumerate(TROPHY):
+            for k, c in enumerate(line):
+                if c == "Y":
+                    ui.fill(T.YELLOW if a["earned"] else T.COMMENT, (SX + 4 + k, y + 3 + j, 1, 1))
+        pts = "%d" % a["points"]
+        tiny.text(ui, pts, T.CYAN if a["earned"] else T.COMMENT, right - 4, y + 3, right=True)
+        tx = SX + 15
+        tw = right - 10 - tiny.width(pts) - tx
+        title_color = T.FG if a["earned"] else T.COMMENT
+        desc_color = T.PURPLE if a["earned"] else T.COMMENT
+        if on:
+            marquee(ui, a["title"], T.PINK, tx, y + 2, tw, now)
+            img = pygame.Surface((tiny.width(a["description"]) + 1, 6), pygame.SRCALPHA)
+            tiny.text(img, a["description"], T.FG, 0, 0)
+            ticker(ui, img, tx, y + 12, right - 4 - tx, now)
+        else:
+            W.text(ui, fit(a["title"].upper(), tw), title_color, tx, y + 2)
+            tiny.text(ui, tiny.fit(a["description"], right - 4 - tx), desc_color, tx, y + 12)
+    # Ha mais acima ou abaixo.
+    if first > 0:
+        pygame.draw.polygon(ui, T.COMMENT, [(right - 2, top - 2), (right - 8, top - 2), (right - 5, top - 5)])
+    if first + visible < len(rows):
+        bottom = top + visible * CHEEVO_ROW
+        pygame.draw.polygon(ui, T.COMMENT, [(right - 2, bottom), (right - 8, bottom), (right - 5, bottom + 3)])
 
 
 def draw_filter(fe, ui, now):
@@ -4286,6 +4365,8 @@ def draw(fe, now):
             draw_popup(fe, top, t)
         elif o == "more":
             draw_more(fe, top, t)
+        elif o == "cheevos":
+            draw_cheevos(fe, top, t)
         elif o == "filter":
             draw_filter(fe, top, t)
         elif o == "lobby":

@@ -90,7 +90,9 @@ The badge only shows where the game's emulator gives achievements:
 - RetroArch cartridge consoles (NES, SNES, Game Boy, GBA, Mega Drive, N64, PC Engine and the rest the site knows);
 - arcade in FBNeo and MAME 2003-Plus (not GroovyMAME, nor the other MAME cores).
 
-`gui/fecheevos.py` finds the game by the same hash as the emulators (rcheevos): for arcade, the name of the file; for cartridges, the file without its header, also inside a `.zip`. Disc systems (PlayStation, PS2, GameCube, Dreamcast) have a hash of their own and only get the badge with `RAHasher` installed (`/usr/local/bin/RAHasher`).
+`gui/fecheevos.py` finds the game by the same hash as the emulators (rcheevos): for arcade, the name of the file; for cartridges, the file without its header, also inside a `.zip`. Disc systems (PlayStation, PS2, GameCube, Dreamcast, Sega CD, Saturn, PC Engine CD) have a hash of their own, read from the disc's boot files, also inside a CHD: for them it runs RetroAchievements' `RAHasher` (`/usr/local/bin/RAHasher`, the `fliperos-rahasher` package, built from RALibretro).
+
+In the game menu (button 1 on a game), such a game also has a trophy before the **+**. It opens the list of its achievements, fetched from the site right then: the ones you have first, each with a yellow trophy, then the ones still to get, each with its title, description and points. Up and down go through them, and the selected one scrolls what doesn't fit. Button 1 plays and button 2 goes back to the menu.
 
 The numbers come from the site's Web API: each console's game list with the hashes (once a week), your progress (when the frontend opens) and the game just played (when it closes). They are kept in `~/.cache/fliperos/cheevos`, and everything is fetched in the background: the badge shows up when the answer arrives.
 

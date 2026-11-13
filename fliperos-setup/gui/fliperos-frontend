@@ -996,9 +996,12 @@ class Frontend:
                 self.ov["cancel"].set()
             return None
         if a == "b2" and o not in ("rename", "exitkey", "exitpad"):
-            self.overlay = {"more": "popup", "classify": "options"}.get(o)
+            self.overlay = {"more": "popup", "cheevos": "popup", "classify": "options"}.get(o)
             if self.overlay == "popup":
-                self.ov = {"sel": len(self.popup_tiles()) - 1}
+                # De volta no azulejo de onde veio (o "+" ou o trofeu).
+                tiles = self.popup_tiles()
+                back = next((i for i, t in enumerate(tiles) if t["kind"] == o), len(tiles) - 1)
+                self.ov = {"sel": back}
             elif self.overlay == "options":
                 self.ov = {"sel": 0}
             return None
@@ -1039,12 +1042,27 @@ class Frontend:
                     self.overlay = None
                 elif kind == "more":
                     self.open_more()
+                elif kind == "cheevos":
+                    self.open_cheevos()
                 elif kind in ("link", "new"):
                     self.link_host(tile.get("take"))
                 elif kind == "join":
                     self.link_join(tile["party"], tile.get("take"))
                 else:
                     self.say(tile["label"])
+            return None
+        if o == "cheevos":
+            # A lista das conquistas: cima/baixo uma, 3/6 uma pagina; o 1 joga.
+            n = len(self.ov.get("list") or [])
+            if n and a in ("up", "down"):
+                self.ov["sel"] = (self.ov["sel"] + (1 if a == "down" else -1)) % n
+            elif n and a in ("b3", "b6"):
+                self.ov["sel"] = max(0, min(n - 1, self.ov["sel"] + (-6 if a == "b3" else 6)))
+            elif a == "b1":
+                self.overlay = None
+                return "launch"
+            elif a == "b4":
+                self.toggle_fav()
             return None
         if o == "more":
             if a in ("up", "down"):
@@ -1439,6 +1457,24 @@ class Frontend:
         self.ov["key"] = (r, c)
         return None
 
+    def open_cheevos(self):
+        """O trofeu do menu do jogo: as conquistas dele (feitas e por fazer),
+        buscadas agora no RetroAchievements (gui/fecheevos.py), numa thread."""
+        g = self.game()
+        self.overlay = "cheevos"
+        self.ov = {"game": g, "list": None, "loading": True, "error": False, "sel": 0}
+        ov = self.ov
+
+        def work():
+            try:
+                ov["list"] = self.cheevos.achievements(g)
+                ov["error"] = ov["list"] is None
+            except Exception:      # sem rede, o site fora: a tela diz
+                ov["error"] = True
+            ov["loading"] = False
+
+        threading.Thread(target=work, daemon=True).start()
+
     def open_more(self):
         g = self.game()
         self.overlay = "more"
@@ -1601,6 +1637,10 @@ class Frontend:
                           "take": min(pick or local, local, prof["max"])})
         fav = g is not None and g.get("Favourite") == "1"
         tiles.append({"kind": "fav", "label": "UNFAVOURITE" if fav else "FAVOURITE"})
+        # Um jogo com conquistas do RetroAchievements (o mesmo do selo): o
+        # trofeu abre a lista delas (open_cheevos).
+        if g is not None and self.view.cheevos_of(self, g):
+            tiles.append({"kind": "cheevos", "label": "ACHIEVEMENTS"})
         tiles.append({"kind": "more", "label": "MORE"})
         return tiles
 

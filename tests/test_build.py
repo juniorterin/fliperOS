@@ -15052,7 +15052,8 @@ class OnDemandFrontendTests(unittest.TestCase):
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
         iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-flycast', 'fliperos-groovymame', 'fliperos-gum',
-               'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-retroarch', 'fliperos-sdl2-kms', 'fliperos-supermodel')
+               'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-rahasher', 'fliperos-retroarch', 'fliperos-sdl2-kms',
+               'fliperos-supermodel')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
         self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
@@ -15240,15 +15241,16 @@ class PackagingTests(unittest.TestCase):
 
     def test_every_recipe_is_a_launcher_an_emulator_or_its_library(self):
         # Os frontends, os emuladores que vinham compilados na ISO (os updates
-        # os levam como pacote), o SDL do GroovyMAME e o gum do Setup.
+        # os levam como pacote), o SDL do GroovyMAME, o gum do Setup e o
+        # RAHasher do selo das conquistas (gui/fecheevos.py).
         table = (ROOT / 'config/fliperos-sessions.conf').read_text()
         emulators = {line.split('|')[0] for line in
                      (ROOT / 'config/fliperos-emulators').read_text().split('table() {')[1].split('\nEOF')[0].splitlines()
                      if '|' in line}
         for recipe in self.recipe_files():
             name = recipe.stem[len('fliperos-'):]
-            self.assertTrue(recipe.stem in table or name in emulators or recipe.stem in ('fliperos-sdl2-kms', 'fliperos-gum'),
-                            recipe.stem)
+            self.assertTrue(recipe.stem in table or name in emulators
+                            or recipe.stem in ('fliperos-sdl2-kms', 'fliperos-gum', 'fliperos-rahasher'), recipe.stem)
 
     def test_attractplus_patches_apply_on_linux_and_keep_the_kernel_joystick_order(self):
         # patch -p1 no container: um patch em CRLF nao se aplica.
@@ -17999,6 +18001,56 @@ class FrontendCheevosTests(unittest.TestCase):
         fe = type('Fe', (), {'cheevos': type('C', (), {'lookup': lambda self, g: (1, 2)})()})()
         self.assertEqual(feview.cheevos_of(fe, {}), (1, 2))
         self.assertIsNone(feview.cheevos_of(object(), {}))
+
+    def test_game_menu_lists_the_achievements_done_first(self):
+        # O trofeu do menu do jogo: a lista buscada agora no site, as feitas
+        # primeiro (no hardcore, so as do hardcore), na ordem do site.
+        system = {'exe': 'retroarch', 'args': '-L x/snes9x_libretro.so', 'platform': 'snes', 'folder': str(self.tmp),
+                  'key': 'retroarch/snes9x'}
+        (self.tmp / 'smw.sfc').write_bytes(b'mario')
+        game = {'_system': system, 'file': 'smw.sfc', 'Name': 'smw'}
+        info = {'NumAchievements': 3, 'NumAwardedToUser': 2, 'NumAwardedToUserHardcore': 1, 'Achievements': {
+            '1': {'ID': 1, 'Title': 'Start', 'Description': 'Begin', 'Points': 1, 'DisplayOrder': 1,
+                  'DateEarned': '2026-01-01', 'DateEarnedHardcore': None},
+            '2': {'ID': 2, 'Title': 'Middle', 'Description': 'Go on', 'Points': 5, 'DisplayOrder': 2},
+            '3': {'ID': 3, 'Title': 'End', 'Description': 'Finish', 'Points': 10, 'DisplayOrder': 3,
+                  'DateEarned': '2026-01-02', 'DateEarnedHardcore': '2026-01-02'}}}
+        asked = []
+        cheevos = self.fc.Cheevos(str(self.tmp / 'cache'), conf=str(self.conf),
+                                  fetch=lambda e, **p: asked.append((e, p)) or info, rahasher=False)
+        self.assertIsNone(cheevos.achievements(game))       # o jogo ainda nao reconhecido
+        cheevos.hashes[str(self.tmp / 'smw.sfc')] = [5, 0, 'h']
+        cheevos.lists[3] = {'h': [228, 3]}
+        rows = cheevos.achievements(game)
+        self.assertEqual([(r['title'], r['earned']) for r in rows], [('Start', True), ('End', True), ('Middle', False)])
+        self.assertEqual(asked[-1], ('API_GetGameInfoAndUserProgress.php', {'u': 'Player1', 'g': 228}))
+        self.assertEqual(cheevos.progress['games']['228'], [2, 1, 3])
+        cheevos.hardcore = True
+        self.assertEqual([r['title'] for r in cheevos.achievements(game) if r['earned']], ['End'])
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('if g is not None and self.view.cheevos_of(self, g):', src)
+        self.assertIn('elif kind == "cheevos":\n                    self.open_cheevos()', src)
+
+    def test_achievements_screen_draws_each_state(self):
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        import pygame
+        import feview
+        import theme
+        pygame.init()
+        fe = type('Fe', (), {})()
+        fe.fd = type('Fd', (), {'short_title': staticmethod(lambda g: 'Game')})()
+        rows = [{'title': 'T%d' % i, 'description': 'a long description ' * 4, 'points': i, 'earned': i < 2}
+                for i in range(12)]
+        for ov in ({'loading': True, 'list': None}, {'loading': False, 'list': None, 'error': True},
+                   {'loading': False, 'list': rows, 'sel': 11}):
+            fe.ov = dict(ov, game={'Name': 'g'}, sel=ov.get('sel', 0))
+            ui = pygame.Surface((theme.WIDTH, theme.HEIGHT))
+            feview.draw_cheevos(fe, ui, 1.0)
+        ui2 = pygame.Surface((80, 80))
+        feview.popup_icon(ui2, 'cheevos', 40, 40, True)
+        self.assertIn(theme.YELLOW, {ui2.get_at((x, y))[:3] for x in range(80) for y in range(80)})
 
     def test_key_reaches_the_setup_and_the_panel(self):
         web = (ROOT / 'config/fliperos-web').read_text()
