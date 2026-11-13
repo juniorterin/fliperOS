@@ -1,57 +1,62 @@
 ---
-description: FliperOS ? emuladores e frontends (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Fightcade 2, ROM cleaner). Use ao mexer em lançadores, configs de emuladores ou modos de vídeo por emulador.
+description: FliperOS — emuladores e frontends (GroovyMAME, RetroArch, Flycast, PCSX2/PCSX2x6, Dolphin, Supermodel, SM2-Emu, Fightcade 2, ROM cleaner). Use ao mexer em lançadores, configs de emuladores ou modos de vídeo por emulador.
 alwaysApply: false
 ---
 
-# FliperOS ? emuladores e frontends
+# FliperOS — emuladores e frontends (atualizado em 2026-11-13)
 
 ## Caminhos de lançamento
-- `config/fliperos-kms-run`: RetroArch em KMS. Acrescenta `/etc/fliperos/retroarch/retroarch.cfg` por cima da config do usuário.
-  Padr?es: `glcore` + áudio `sdl2`, com fallback para `gl` (via `eglinfo`) em placas GL 2.x.
-- `config/fliperos-x11-run` + `fliperos-x11-client`: Xorg próprio + openbox + Switchres. Emuladores 480i rodam em 640x240p com stretch.
-  Os modos ficam em `/etc/fliperos/emulator-modes.conf`; há também `--mode WxH@HZ`.
-- Antes de gravar nomes de opç?es de emulador em configs, confira na fonte upstream.
+- `config/fliperos-kms-run`: programas em KMS (RetroArch, GroovyMAME, frontends). Acrescenta
+  `/etc/fliperos/retroarch/retroarch.cfg` por cima da config do usuário. Faz `exec < /dev/tty` quando
+  o stdin não é terminal (ES-DE lança com `popen`).
+- `config/fliperos-x11-run` + `fliperos-x11-client`: Xorg próprio + openbox + Switchres para quem
+  precisa de X (Flycast, PCSX2, Dolphin, Wine...). Emuladores 480i rodam em 640x240p com stretch.
+  Modos em `/etc/fliperos/emulator-modes.conf`; há também `--mode WxH@HZ`.
+- Antes de gravar nomes de opções de emulador em configs, confira na fonte upstream.
 
 ## GroovyMAME
-- Release oficial `gm0289sr222f` (n?o compila), em `/usr/local/libexec/groovymame`. O wrapper `config/fliperos-groovymame` passa `-inipath /etc/fliperos/mame`.
-- `mame.ini` segue o gasetup: `aspect 4:3`, `modesetting 1`, `switchres_ini 1`, `uifont default`. O usuário pediu para n?o mexer mais em aspect.
-- Roda em X com openbox. Sem argumentos, usa `-noautosync -waitvsync` por causa do bug de fd do emusync; n?o remova enquanto o upstream n?o corrigir.
+- Release oficial (não compila), em `/usr/local/libexec/groovymame`; wrapper `config/fliperos-groovymame`
+  passa `-inipath /etc/fliperos/mame`. `mame.ini` segue o gasetup: `aspect 4:3`, `modesetting 1`,
+  `switchres_ini 1`. O usuário pediu para não mexer mais em aspect.
+- **KMS por padrão** via `fliperos-sdl2-kms` (SDL2 com os patches do GroovyArcade, só no
+  LD_LIBRARY_PATH do GroovyMAME). `SDL_KMSDRM_REQUIRE_DRM_MASTER=0` tem de ficar sem definir.
+  X fica de fallback: `groovymame_video=x11`, jogos multitela ou máquina sem o pacote.
 - Para calcular um modeline sem mexer na tela: `switchres W H R -c -m generic_15 -a 4:3`.
+- Lockstep de rede (dois gabinetes): plugin Lua (TCP) e patch C++ (UDP).
 
 ## RetroArch
-- Compilado do master com SDL2 opcional; o driver de entrada padr?o é `udev` (mostra os números reais dos bot?es do painel).
-- Os cores ficam em `/opt/fliperos/retroarch`, pertencentes ao usuário.
-- O core mame2010 é compilado com `ARCHOPTS=-U_FORTIFY_SOURCE`: as máquinas H8/3002 (Namco System 12/23...) abortavam. `verify-iso.sh` verifica `__strcat_chk`.
-- O modo CRT usa a engine de modeline interna (`gfx/modeline/`), sem libswitchres. `crt_switch_resolution 4` = `/etc/switchres.ini`.
-- Diagnóstico headless no gabinete:
-  - drivers null com `--appendconfig`;
-  - backtrace via LD_PRELOAD com `backtrace_symbols_fd` + `nm -n`;
-  - o gabinete n?o tem `unzip`; use `python3 -m zipfile`.
+- Pacote `fliperos-retroarch` (commit fixado, patches em `packaging/patches/retroarch`). Padrões:
+  `glcore` + áudio `sdl2`, fallback `gl` em placas GL 2.x; **Vulkan em amdgpu** com o patch
+  khr_display que aplica os modos CRT.
+- Cores em `/opt/fliperos/retroarch`, do usuário. mame2010 compilado com `ARCHOPTS=-U_FORTIFY_SOURCE`.
+- Modo CRT usa a engine de modeline interna (`gfx/modeline/`); `crt_switch_resolution 4` =
+  `/etc/switchres.ini`. Pistola de luz em todos os cores via `lightgun-games.tsv`.
+- Diagnóstico headless no gabinete: drivers null com `--appendconfig`; backtrace via LD_PRELOAD com
+  `backtrace_symbols_fd` + `nm -n`; sem `unzip` (use `python3 -m zipfile`).
 
 ## Outros emuladores
-- **Flycast**: em X, com `rend.ScreenStretching`, `rend.LinearInterpolation=no` e Port B = controller.
-- **PCSX2** (AppImage 2.8.2):
-  - ini por jogo em `~/.config/PCSX2/gamesettings/<serial>_<crc>.ini`;
-  - `UserHacks=true` desliga os hacks do GameDB;
-  - o x11-run exporta `mesa_glthread=true` e liga o d-pad também ao analógico esquerdo.
-- **Dolphin** (2609, compilado do fonte): API de gamepad SDL3, com dispositivos `SDL/<id>/<nome>`.
-- **Supermodel**:
-  - só CLI; sem argumentos, o `fliperos-launch` abre um seletor (Alacritty + gum) com os jogos de Model 3;
-  - o gargalo é o PPC: jogos stepping 1.5/2.x rodam com `-ppc-frequency=75` (`FLIPEROS_SUPERMODEL_PPC`, 0 desliga).
-- **Hypseus Singe** v2.12.1, OpenBOR; Wine (os emuladores do Fightcade), Steam e Heroic pelo Setup > Games > Extras. O Model 2 Emulator (Wine) saiu: o Model 2 é o SM2-Emu (`fliperos-model2` só repassa para ele).
-- **Button mapping** (`config/fliperos-buttons`, Setup > Joysticks): aplica o mapeamento a todos os emuladores (RetroArch, Flycast + Flycast Dojo, Dolphin, Hypseus, PCSX2...). **Buttons layout** (mesmo menu): a posição no painel dos botões dos jogos de 1 a 5 botões (`/etc/fliperos/buttons.layout`), aplicada por jogo no GroovyMAME (ctrlr) nos cores MAME do RetroArch (`buttons-N.cfg` pelo `fliperos-kms-run`), no Supermodel (seção `[ jogo ]` do `Supermodel.ini`) e no SM2-Emu (`gamecontrollerdb-model2[-N].txt`, somado pelo `fliperos-x11-run`).
+- **Flycast** (pacote `fliperos-flycast`, patches próprios: lockstep, conquistas): em X,
+  `rend.ScreenStretching`, `rend.LinearInterpolation=no`, Port B = controller.
+- **PCSX2** (AppImage): ini por jogo em `~/.config/PCSX2/gamesettings/`; `UserHacks=true` desliga os
+  hacks do GameDB. **PCSX2x6** (Namco 246/256) é emulador separado, AppImage fixada, dados em
+  `~/.config/PCSX2x6`, ROMs em `~/roms/namco246` e `namco256`. Teste: Tekken 5, savestate slot 2.
+- **Dolphin** (pacote `fliperos-dolphin`): API SDL3, net play por patch (`--netplay host|join`).
+- **Supermodel**: só CLI, `-res` do modo Switchres, `-no-quad-rendering`; jogos pesados com
+  `-ppc-frequency` (`FLIPEROS_SUPERMODEL_PPC`, 0 desliga).
+- **Model 2** = SM2-Emu (`fliperos-model2` só repassa). DuckStation é baixado pelo Setup (AppImage).
+- Hypseus Singe, OpenBOR, Wine (jogos de PC, emuladores do Fightcade), Steam e Heroic pelo Setup.
+- **Button mapping** (`config/fliperos-buttons`, Setup > Joysticks) aplica o mapeamento a todos os
+  emuladores. **Buttons layout** (`/etc/fliperos/buttons.layout`) posiciona os botões dos jogos de 1 a
+  5 botões por emulador. Atalhos de jogo: coin+start sai, coin+b1 abre o menu do emulador.
 
 ## Fightcade 2
-- Baixado do site pelo Setup (`fetch:`), instalado em `/opt/fliperos/fightcade` (pertence ao usuário, se auto-atualiza).
-- O lobby abre em 640x480i. Os modos dos jogos s?o por emulador: FBNeo 320x240, Flycast 640x240. O launcher faz polling dos processos.
-- Wine 32-bit precisa de OpenGL 32-bit. O Flycast Dojo é AppImage, ent?o usa `APPIMAGE_EXTRACT_AND_RUN=1`.
-- O `fcade` (PyInstaller) chama `/usr/bin/wine` por caminho fixo: n?o dá para interceptar pelo PATH.
-- FBNeo no 15 kHz: uma vigia faz SIGSTOP no FBNeo ao abrir, pega o tamanho do jogo no `groovymame -listxml` (cache em `~/.cache/fliperos/fightcade-modes`), cria o modo e liga o `bVidArcaderesHor`. O Wine troca o modo sozinho se ele existir em ~1,2 s; sen?o o FBNeo dá erro.
-- Botões: preset `config/presets/fliperos.ini` (`fliperos-buttons fbneo`) com `nPlayerDefaultControls 15`; `bSaveInputs 0`. O "Map Controllers" do winebus fica desligado para o painel chegar cru (sen?o vira XInput, com o RT como eixo). Para ver o mapeamento aplicado, feche com `wine taskkill /im fcadefbneo.exe` (o `pkill` n?o grava o ini).
-- N?o testado online nem no CRT.
+- Baixado pelo Setup (`fetch:`), em `/opt/fliperos/fightcade` (do usuário, se auto-atualiza). Lobby em
+  640x480i; FBNeo 320x240, Flycast 640x240. Wine 32-bit precisa de GL 32-bit.
+- O `fcade` chama `/usr/bin/wine` por caminho fixo. FBNeo no 15 kHz: uma vigia pausa o FBNeo, pega o
+  tamanho no `groovymame -listxml` e cria o modo. Os frontends não devem detectar as ROMs do Fightcade.
+- Não testado online nem no CRT.
 
 ## ROM cleaner (estilo ROMLister)
-- Tela de parâmetros com pickers radio/checkbox; usa catver/nplayers/controls.
-- O padr?o é copiar, n?o mover. Pasta de rede SMB montada somente leitura em `/mnt/network`.
-- Nunca apaga BIOS/parents dos jogos que passaram no filtro.
-- O compartilhamento do PC do usuário é `\\PC1\romsets` (192.168.1.158).
+- Tela de parâmetros com pickers; usa catver/nplayers/controls. Padrão é copiar, não mover. Pasta SMB
+  montada somente leitura em `/mnt/network`. Nunca apaga BIOS/parents dos jogos que passaram.
+- Filtros para jogos de link/completude levam todos os 13 tipos de controle (preset `working`).

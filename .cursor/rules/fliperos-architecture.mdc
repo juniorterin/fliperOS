@@ -1,46 +1,70 @@
 ---
-description: FliperOS ? arquitetura, decis?es e estado (setup Gum, kernel, Limine, vídeo 15 kHz, hardware, docs/wiki). Use ao mexer no setup, build da ISO, boot, vídeo ou documentaç?o.
+description: FliperOS — arquitetura, decisões e estado (Setup Gum + GUI, frontend próprio, OSD, painel web, kernel, Limine, vídeo 15 kHz, hardware, updates, docs/wiki). Use ao mexer no Setup, build da ISO, boot, vídeo ou documentação.
 alwaysApply: false
 ---
 
-# FliperOS ? arquitetura e decis?es
+# FliperOS — arquitetura e decisões (atualizado em 2026-11-13, versão 0.24, update 69)
 
-## Setup (fliperos-setup, desde 2026-09-29)
-- Bash + Gum, tema Dracula, tela 640x480i, fluxo do GroovyArcade (gasetup). A UI fica em `fliperos-setup/screens` + `lib/ui.sh`.
-  O resto de `lib/` nunca chama gum (há teste que verifica). Cores s?o índices da paleta, nunca hex. As telas cabem em 80x30 (64x24 para 25 kHz).
-- O Setup nunca lança X/KMS diretamente: grava `/run/fliperos/launch` e sai com código 20, e o loop `config/fliperos-tty1` abre o programa.
-- O Setup se recarrega quando os arquivos dele mudam (`screen_reload_if_updated`).
-- Gum 2.0.2 com patches próprios (`patches/gum/`, por exemplo Space no `choose --no-limit`).
-- Latency: Standard = paridade com GA (`mitigations=off`, governor performance...). Low = + `preempt=full`, frame delay automático e preemptive frames no RetroArch.
-- `fliperos-padkeys`: o joystick controla o Setup via uinput, ativo só com o Setup na tela (`/run/fliperos/padkeys`). Setup > System > Quirks = `usbhid.quirks` (controles) e `usb-storage.quirks` (discos).
-- Zsh + Oh My Zsh + Dracula como shell do usuário. Os emuladores ficam no menu Games do LXDE via `fliperos-launch`.
+## Setup (`fliperos-setup`)
+- Bash + Gum (2.0.2 com patches em `patches/gum/`), tema Dracula, fluxo do GroovyArcade (gasetup).
+  A UI fica em `fliperos-setup/screens` + `lib/ui.sh`; o resto de `lib/` nunca chama gum (teste
+  verifica). Cores são índices da paleta, nunca hex. Telas cabem em 80x30 (64x24 para 25 kHz).
+- GUI gráfica em `fliperos-setup/gui/` (Python + pygame): tela lógica 320x240 esticada para 640x240,
+  carrossel com ícones grandes. `lib/ui.sh` sobe `fliperos-gui --serve` no `--menu` de um sistema
+  instalado; `ui=text` em fliperos.conf (ou `FLIPEROS_UI=text`) desliga.
+- O Setup nunca lança X/KMS diretamente: grava `/run/fliperos/launch` e sai com código 20, e o loop
+  `config/fliperos-tty1` abre o programa. Ele se recarrega quando seus arquivos mudam.
+- `fliperos-padkeys`: o joystick controla o Setup via uinput, só com o Setup na tela.
+- Latency: Standard = paridade com GA (`mitigations=off`, governor performance...). Low = +
+  `preempt=full`, frame delay automático e preemptive frames no RetroArch.
+
+## Frontend próprio e camadas sobre o jogo
+- Sessão padrão `fliperos`: `gui/fliperos-frontend` + `fedata`/`feview`/`feinput`/`fevideo`...
+  Listas em `~/.local/share/fliperos/lists`, estatísticas em `.../stats`, favoritos em
+  `~/.config/fliperos/favourites`. Attract-Mode Plus e ES-DE são opcionais: nada novo lê `~/.attract`
+  ou `~/ES-DE`.
+- OSD (`config/fliperos-osd`, serviço root): atalho de `fliperos-buttons hotkey` (Start+Baixo 1 s ou
+  Pause), desenha 320x240 RGBA em `/run/fliperos-osd/screen`, mostrado pelas camadas GL
+  (`fliperos-deflicker.c`) e Vulkan (`fliperos-vkfps.c`). Geometria por resolução em
+  `geometry_<WxH><p|i>` no fliperos.conf.
+- Painel web `fliperos-web` na porta 8081 (login com a senha do sistema): status, jogos, Live
+  (go2rtc/WebRTC), som. Modo Lab = túnel cloudflared com shell root por 4 h.
 
 ## Kernel, boot, vídeo
-- Kernel 6.18 LTS com os patches D0023R 01?09, sempre compilado (`fliperos-kernel.sh`, cache em `output/kernel-cache/`).
-- Bootloader **Limine** (n?o GRUB), v11.4.1 fixado. Em disco instalado, kernel e initrd ficam na ESP (`/boot/efi/fliperos/`), sincronizados por `fliperos-limine-update`.
-  Parâmetros do kernel em `/etc/default/fliperos-boot`. N?o reintroduza o GRUB.
-- 15 kHz validado no hardware (2026-09-27), servindo de baseline de regress?o: VGA-1, 15.649 kHz, 59.958 Hz, 640x240p real, clock 13020, htotal 832, vtotal 261.
-- Escopo de hardware: todas as AMD/ATI cobertas pelo CRT_EmuDriver (radeon + amdgpu, HD2000?HD7000) + Intel iGPU como gambiarra experimental. Nunca assuma uma placa só.
-- Gabinete: i3-540, 6 GB de RAM, placa H55, R7 240 na VGA-1, SSD Kingston 240 GB, Wi-Fi USB TP-Link 8822BU, painel V-USB (quirk MULTI_INPUT ? 2 gamepads).
+- Kernel 6.18 LTS com os patches 15 kHz (`patches/kernel-15khz/`), sempre compilado
+  (`fliperos-kernel.sh`, cache em `output/kernel-cache/`), sem FUNCTION_TRACER/STACK_TRACER.
+  Initrd sem firmware NVIDIA/nouveau.
+- Bootloader **Limine** (não GRUB). Em disco instalado, kernel e initrd ficam na ESP
+  (`/boot/efi/fliperos/`), sincronizados por `fliperos-limine-update`. Parâmetros em
+  `/etc/default/fliperos-boot`. Não reintroduza o GRUB.
+- Modo de boot Custom segue o Switchres (`crt_range0`): modeline do Xorg + EDID do kernel.
+- 15 kHz validado no hardware (2026-09-27): VGA-1, 15.649 kHz, 59.958 Hz, 640x240p real.
+- Escopo de hardware: todas as AMD/ATI do CRT_EmuDriver (radeon + amdgpu) + Intel iGPU (Ironlake
+  funciona) + NVIDIA via nouveau. Tonga (R9 380/380X) precisa de `amdgpu.dc=0` para DVI-I analógico.
+  Conversores DP/HDMI→VGA não descem a 15 kHz: viram "super resolution". Nunca assuma uma placa só.
 
-## Build e distribuiç?o
-- O build da ISO roda inteiro no Docker (`fliperos-mkiso.sh`), com testes em QEMU/TCG (`tools/verify-iso.sh`, `tools/vm-test.py`).
-- Antes de uma ISO completa, pré-valide qualquer build novo num container noble limpo.
-- O repositório APT próprio vai dentro da imagem (`/opt/fliperos/repo`). Frontends (Attract-Mode Plus, ES-DE, Pegasus...) v?m de .debs próprios.
-- Programas fechados ou sem licença para redistribuir (Fightcade 2, DuckStation, Arcadeflow) n?o entram na imagem: o Setup os baixa (`fetch`).
-- Download de BIOS e romsets: recusado. `~/bios` é onde o usuário coloca os dele.
+## Build e distribuição
+- O build da ISO roda inteiro no Docker (`fliperos-mkiso.sh`), com testes em QEMU/TCG
+  (`tools/verify-iso.sh`, `tools/vm-test.py`, inclusive `updates` de 0.8.1 até hoje).
+- Repositório APT próprio dentro da imagem (`/opt/fliperos/repo`), receitas em
+  `packaging/packages/*.sh` (RetroArch, GroovyMAME, Flycast, Dolphin, SDL2-KMS, Gum, frontends...).
+  Os mesmos .debs vão para a release `packages` e chegam aos gabinetes por update.
+- Programas fechados ou sem licença para redistribuir (Fightcade 2, DuckStation, tema Arcadeflow) não
+  entram na imagem: o Setup os baixa (`fetch`). Logos de marcas podem ser commitados.
+- `~/bios` é onde o usuário coloca as BIOS; o Setup tem "Download BIOS" por arquivo.
 
 ## Pastas do usuário (`config/fliperos-roms`, a cada login)
-- `~/roms/<sistema>` (inclui `naomi`, `naomi2`, `atomiswave`, `fightcade/{fbneo,flycast,snes9x,fc1}`).
-- `~/bios` (system_directory do RetroArch; subpastas `dc`, `ps2`, `mame`).
-- `~/media/{snap,preview,logo,box,marquee,texto}/<plataforma>` e `~/config` com links para as configs.
+- `~/roms/<sistema>`, `~/bios` (system_directory do RetroArch; `dc`, `ps2`, `mame`), `~/nvram/<emulador>`
+  no mesmo formato de `~/roms`.
+- `~/media/{snap,preview,logo,box,marquee,dmd,texto}/<mesmas pastas de ~/roms>` e `~/config` com links.
 
-## Documentaç?o
-- `README.md` curto: menos de 4000 caracteres, sem detalhes de funcionalidade. O detalhe vai em `docs/wiki/*.md`. Página nova entra em `Home.md`, `_Sidebar.md` e nas linhas de links do README (`DocsTests` verifica).
-- `fliperos-doc.html` é gerado (`tools/render-docs.py --output fliperos-doc.html`, precisa de `python3-markdown`).
-- Depois de mudar `docs/wiki`, republique com `bash tools/wiki-publish.sh`.
-- `docs/wikipedia/FliperOS.wiki` é um rascunho, n?o submetido.
+## Documentação
+- `README.md` curto (< 4000 caracteres, `DocsTests`). Detalhe em `docs/wiki/*.md`; página nova entra em
+  `Home.md`, `_Sidebar.md` e nas linhas de links do README.
+- `fliperos-doc.html` é gerado (`tools/render-docs.py --output fliperos-doc.html`).
+- Depois de mudar `docs/wiki`, publique com `bash tools/wiki-publish.sh` (sem argumentos, árvore limpa).
 
-## Refer?ncias externas
-- GroovyArcade: gitlab.com/groovyarcade/gasetup, tools/gatools, tools/galauncher, os. Clone com `GIT_TERMINAL_PROMPT=0`.
+## Referências externas
+- GroovyArcade: gitlab.com/groovyarcade (gasetup, tools/gatools, tools/galauncher, os). Clone com
+  `GIT_TERMINAL_PROMPT=0`.
 - Lakka-LibreELEC (github.com/libretro/Lakka-LibreELEC): prior art de joypad, vídeo e empacotamento.

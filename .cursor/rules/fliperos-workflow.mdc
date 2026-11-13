@@ -1,40 +1,85 @@
 ---
-description: FliperOS ? como trabalhar neste repo (commit/push, aplicar no gabinete, correç?es gerais, testes)
+description: FliperOS — como trabalhar neste repo (commit/push, várias sessões, gabinete, updates e releases, testes, Telegram)
 alwaysApply: true
 ---
 
-# FliperOS ? fluxo de trabalho (memórias do Claude, 2026-09/10)
+# FliperOS — fluxo de trabalho (memórias do Claude, atualizado em 2026-11-13)
 
 FliperOS = ISO Ubuntu 24.04 (noble) para gabinetes arcade com CRT 15 kHz, no estilo GroovyArcade.
-Repo `git@github.com:juniorterin/fliperOS.git`, branch `main`. Interface (Setup, menu do boot,
-mensagens de build/CLI) e documentaç?o (README, CHANGELOG, docs/wiki com nomes de página em
-ingl?s) em inglês; comentários de código e mensagens de commit em PT-BR. Site oficial em
-`website/` (Next.js, i18n pt-BR/en-US em `website/src/i18n`).
+Repo `git@github.com:juniorterin/fliperOS.git`, branch `main`. Interface (Setup, frontend, menu do
+boot, mensagens de build/CLI) e documentação (README, CHANGELOG, docs/wiki, notas de update) em
+inglês; comentários de código em PT-BR. Site oficial em `website/` (Next.js, i18n pt-BR/en-US em
+`website/src/i18n`; o push em `main` publica). Leia também o `CLAUDE.md` (WSL2/chroot, Docker,
+releases).
 
 ## Regras que o usuário pediu
-- **Sempre commit + push**: todo trabalho concluído é commitado e depois `git push origin main`, sem perguntar.
-  Nunca force-push; se o push for rejeitado, faça fetch e avise. Um commit por mudança lógica.
-  Outras sess?es podem estar mexendo na mesma árvore: commite só os seus hunks.
-- **Aplicar no gabinete também**: toda mudança vai pro repo E pro gabinete via SSH. Uma ISO inteira leva cerca de 2 h, e o gabinete é a bancada de testes.
-- **Correç?es gerais**: corrija a classe do problema para qualquer gabinete. Nunca commite mapeamentos,
-  GUIDs, nomes do painel (V-USB "Mame Panel 32") ou de jogos do usuário. Configs pessoais ficam só no gabinete.
-- Nunca rode `debootstrap`/`chroot` com bind de `/dev` no WSL2 (ver CLAUDE.md). Builds com chroot rodam no Docker.
+- **Responda em português**, e chame a máquina de "gabinete".
+- **Sempre commit + push**: todo trabalho concluído é commitado e depois `git push origin main`, sem
+  perguntar. Nunca force-push; se o push for rejeitado, faça fetch e avise. Um commit por mudança
+  lógica. Ajuda de teste temporária ("põe no gabinete pra testar") não vai pro repo.
+- **Aplicar no gabinete também**: a mudança vai pro repo E pro gabinete. Uma ISO leva ~2 h; o gabinete
+  é a bancada de testes.
+- **Correções gerais**: corrija a classe do problema para qualquer gabinete. Nunca commite mapeamentos,
+  GUIDs, nomes do painel do usuário ou dos jogos dele. Configs pessoais ficam só no gabinete.
+- **Dados próprios**: favoritos, filtros, listas e estatísticas ficam no armazenamento do FliperOS
+  (`~/.config/fliperos`, `~/.local/share/fliperos`), nunca nos arquivos do Attract-Mode/ES-DE.
+- **Reaproveite a ferramenta da comunidade** (MAMEHooker, HOTR, DOFLinx...), mesmo via Wine, antes de
+  escrever um equivalente próprio.
+- **Texto que não cabe corre** (`feview.ticker`/`marquee`), nunca é cortado.
+- **Item de menu novo do Setup sempre ganha ícone** (`ICONS` em `fliperos-setup/gui/theme.py`;
+  desenho novo pede `python3 tools/web-icons.py`). Dicas cabem em 2×34 colunas.
+- **OSD responsivo**: tudo que aparece sobre o jogo funciona em qualquer tamanho de frame e na vertical.
+- **Prints na proporção certa** (640x240 e 2560x240 são 4:3 no tubo); nunca esticados.
+- **Telegram**: commits, patches, updates e releases vão pro grupo, sempre com uma parte 🇧🇷 e uma 🇺🇸.
+  Updates e releases saem sozinhos pelo `telegram.yml`; commits ainda não têm rota — avise quando não
+  foi postado.
+- Itens pendentes vão no `TODO.md` (português); remova o item no mesmo commit que o constrói.
+
+## Várias sessões na mesma árvore
+- O índice do git é compartilhado. Rode `git diff --cached --stat` e `git status` logo antes de
+  commitar; faça `git add` + `git commit` no mesmo comando. Nunca `git add -A` / `commit -a`.
+- Se houver arquivos de outra sessão staged, ou hunks dela no mesmo arquivo, commite por um índice
+  privado (`GIT_INDEX_FILE=.git/index-<eu> git read-tree HEAD`, refeito na hora do commit) ou num
+  worktree limpo de `origin/main`. Nunca `-U0` + `--unidiff-zero`. Confira com
+  `git diff --stat HEAD <commit>` que só os seus arquivos entraram.
+- Trabalho não commitado de outra sessão fica intocado. `cabinet-push.sh` manda a árvore de trabalho,
+  não o HEAD: confira `git status` antes.
 
 ## Gabinete
-- IP via DHCP, atualmente **192.168.1.155**. Se n?o responder: `Resolve-DnsName fliperos.local -Type A`. Se nem assim responder, deve estar desligado; n?o fique em loop tentando.
-- Login `fliperos`/`fliperos`. Use PuTTY: `plink -batch -ssh -pw fliperos fliperos@IP "bash -s" < script` e `pscp -batch -pw fliperos`.
-  O shell de login remoto é zsh, ent?o mande os comandos por `bash -s`.
-- `sudo -S` l? a senha do stdin (`echo fliperos | sudo -S -p ''`). Nunca passe dados pelo pipe nem heredoc para um `sudo -S`: grave um script antes e rode esse script com sudo.
-- `pkill -f padrao` pode matar o próprio shell. Use `[p]adrao`.
-- Push completo: `tools/cabinet-push.sh IP`, que precisa da imagem Docker `fliperos-ssh`. Mantenha a lista `packages=` de `tools/cabinet-update.sh` em sincronia com `fliperos-mkiso.sh`.
-- Nunca rode binário de GUI/emulador por SSH só para consultá-lo (`flycast -version` abriu o Flycast). Use `grep -a` no binário.
-- Para testar sem atrapalhar o usuário, suba um X separado em `:1`. Depois devolva o tty1 ao menu (`fliperos-tty1` / `fliperos-setup --menu`).
+- IP por DHCP: ache com `Resolve-DnsName fliperos.local -Type A`. Se não responder, está desligado;
+  não fique em loop.
+- Login `fliperos`/`fliperos`. PuTTY: `plink -batch -ssh -pw fliperos fliperos@IP "bash -s" < script`
+  e `pscp -batch -pw fliperos`. O shell remoto é zsh: mande por `bash -s`.
+- `sudo -S` lê a senha do stdin: copie o script antes e rode `echo fliperos | sudo -S bash /tmp/x.sh`.
+- Chave de host mudou? Nunca aceite sem o usuário.
+- `pkill -f padrao` pode matar o próprio shell: use `[p]adrao`.
+- Push completo: `tools/cabinet-push.sh IP` (imagem Docker `fliperos-ssh`). Mantenha `packages=` de
+  `tools/cabinet-update.sh` em sincronia com `fliperos-mkiso.sh`.
+- Nunca rode binário de GUI/emulador por SSH só para consultá-lo; use `grep -a` no binário.
+- Gabinete de outro usuário (modo Lab, `tools/labsh.py`): só leitura sem o OK explícito do usuário.
 
-## Testes e git neste PC Windows
-- O Python do Windows n?o serve. Rode no WSL como root:
-  `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-22.04 -u root -e bash -c "cd /mnt/c/Users/dssds/Desktop/Trabalho/ubuntu-15khz && python3 tests/test_build.py [Classe]"`.
-  Falhas que s?o só do ambiente: `tomllib` (Python 3.10) e 3 DiskTests (falta `jq`).
-  Alternativa: imagem Docker `fliperos-tests` (`docker run --rm -v "$(pwd -W):/w" -w /w fliperos-tests python3 tests/test_setup.py`).
-- O wrapper do git injeta `--trailer`, que este git n?o suporta. Commite com `"$(type -P git)" commit -F arquivo`.
-- `.gitattributes` força LF. Ao vendorizar algo clonado do GitHub neste PC, confira se veio com CRLF.
-- `api.github.com` n?o é alcançável daqui, e o `gh` n?o está autenticado. Use páginas do github.com ou raw.githubusercontent.com.
+## Updates (OTA) e releases
+- Cada update = `updates/notes/NNNN.md` + `updates/notes/pt-BR/NNNN.md` + linha em `updates/index`,
+  gerados por `tools/make-update.sh` (precisa de árvore limpa: publique de um clone limpo).
+  Confira se não há `updates/notes/NNNN.md` não rastreado de outra sessão antes de pegar um número.
+- O `fliperos-update` baixa a árvore do GitHub: nunca acrescente caminhos ao TREE; arquivos novos vão
+  em `updates/` ou `config/`. .debs chegam pela release `packages` (`tools/publish-packages.sh` +
+  `updates/packages.list`). Patches que só o build da ISO aplica precisam de um `updates/NNNN.sh`.
+- Mudança que gera arquivo (EDID, initramfs, modprobe.d) precisa de um passo no update que o gere.
+- Release: bump de `FLIPEROS_VERSION`, seção `## X` no CHANGELOG (quatro títulos), `docs/telegram/X.md`
+  bilíngue, update publicado, checagem da regra 9 do CLAUDE.md, `git tag -a X` no commit do update.
+  O workflow Release monta a ISO (~2h30). `gh` só está logado no WSL Ubuntu-22.04.
+
+## Testes e ferramentas neste PC Windows
+- Não há Python no Windows. Tudo roda em Docker (`fliperos-tests`, `fliperos-tests-pil` para PIL/
+  TelegramTests), ou no WSL:
+  `MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/w" -w /w fliperos-tests python3 tests/test_setup.py`
+  (idem `tests/test_build.py`, `tests/test_link.py`).
+- Antes de um job pesado rode `powershell -NoProfile -File tools\docker-health.ps1` e `docker ps`
+  (um job pesado por vez entre as sessões; ver CLAUDE.md).
+- Depois de mexer em `fliperos-setup/screens/*.sh`, rode o `tests/test_setup.py` inteiro.
+- Cópia para teste: `git -c core.autocrlf=false archive` (senão scripts com CRLF) e `chmod -R a+x
+  config tools fliperos-setup updates` dentro do container.
+- Escreva scripts e mensagens de commit com a ferramenta Write (heredoc no Bash expande `$` e quebra
+  barras; `Set-Content` do PowerShell põe BOM/CRLF). Commite com `git commit -F arquivo`.
+- Git 2.20: sem `git restore`, sem `add -p`. `.gitattributes` força LF.
