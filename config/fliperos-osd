@@ -319,6 +319,12 @@ class Profiles:
     def keys(self):
         return {key for values in self.data.values() for key in values}
 
+    def delete(self, scope):
+        """Apaga um perfil; devolve as chaves que ele tinha."""
+        keys = list(self.data.pop(scope, {}))
+        self.save()
+        return keys
+
     def set(self, scope, key, value, before=None):
         """O ajuste num escopo. Fora do default, o default guarda o valor de
         antes (before) se ainda nao o tem: e para ele que se volta."""
@@ -624,6 +630,8 @@ class Row:
         self.previous = None
 
     def text(self):
+        if self.kind == "action" and self.value:
+            return str(self.value)
         if self.kind == "choice":
             for value, label in self.options:
                 if value == self.value:
@@ -749,11 +757,13 @@ class Menu:
         if volume is not None:
             rows.append(Row("number", "Volume", volume, 0, 100, VOLUME_STEP, pretty=lambda v: "%d%%" % v,
                             change=self.set_volume))
-        # Para onde o Save grava: tudo, esta resolucao, este emulador, este
+        # Para onde o Save grava (e o que o Delete profile apaga): tudo, esta resolucao, este emulador, este
         # core ou este jogo (as setas trocam).
         rows.append(Row("choice", "Save profile as", self.profile,
                         options=[(kind, self.profile_label(kind)) for kind in PROFILE_KINDS if kind in self.scopes],
                         change=self.set_profile))
+        # Apagar o perfil escolhido acima (o Enter duas vezes).
+        rows.append(Row("action", "Delete profile", self.profile_label(self.profile), action=self.delete_profile))
         if self.mode and self.mode["interlace"]:
             conf = read_conf()
             program, core = self.screen.get("program", ""), self.screen.get("core", "")
@@ -891,6 +901,30 @@ class Menu:
     # O que as linhas fazem.
     def set_profile(self, kind):
         self.profile = kind
+        self.confirm_delete = None
+        for row in self.stack[0]["rows"]:
+            if row.label == "Delete profile":
+                row.value = self.profile_label(kind)
+
+    def delete_profile(self):
+        """Delete profile: o perfil escolhido em Save profile as sai (o
+        segundo Enter confirma), e o que ele mudava volta ao que vale sem ele."""
+        scope = self.scopes.get(self.profile, "default")
+        name = self.profile_label(self.profile).upper()
+        if not self.profiles.data.get(scope):
+            self.status = "NO " + name
+            return
+        if getattr(self, "confirm_delete", None) != scope:
+            self.confirm_delete = scope
+            self.status = "ENTER AGAIN: DELETE " + name
+            return
+        self.confirm_delete = None
+        keys = self.profiles.delete(scope)
+        wanted = self.profiles.effective(self.scopes)
+        for key in keys:
+            if key in wanted:
+                self.worker.put("profile-" + key, lambda key=key, value=wanted[key]: apply_setting(key, value))
+        self.status = "DELETED " + name
 
     def store(self, key, value, before):
         """Um ajuste: posto no sistema agora e guardado no perfil so com o Save."""

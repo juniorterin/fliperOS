@@ -17762,13 +17762,13 @@ class OsdTests(unittest.TestCase):
 
     def test_main_page_shows_the_filter_only_in_an_interlaced_mode(self):
         menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Interlaced filter', 'Geometry', 'Colour', 'Save|Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Delete profile', 'Interlaced filter', 'Geometry', 'Colour', 'Save|Close'])
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Geometry', 'Colour', 'Save|Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Delete profile', 'Geometry', 'Colour', 'Save|Close'])
         # Num LCD nao ha geometria para ajustar.
         self.conf.write_text('monitor=lcd\n')
         menu, _ = self.menu(mode=dict(self.MODE, interlace=False))
-        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Colour', 'Save|Close'])
+        self.assertEqual(self.labels(menu), ['Volume', 'Save profile as', 'Delete profile', 'Colour', 'Save|Close'])
 
     def test_scanlines_page_on_a_31_khz_monitor(self):
         # So com frequency=31k, como no Video Setup: a pagina Scanlines, com
@@ -17783,7 +17783,7 @@ class OsdTests(unittest.TestCase):
         self.conf.write_text('monitor=arcade_15_25_31\nfrequency=31k\nscanlines=on\n')
         menu, worker = self.menu(mode=dict(self.MODE, interlace=False))
         labels = self.labels(menu)
-        self.assertEqual(labels, ['Volume', 'Save profile as', 'Scanlines', 'Geometry', 'Colour', 'Save|Close'])
+        self.assertEqual(labels, ['Volume', 'Save profile as', 'Delete profile', 'Scanlines', 'Geometry', 'Colour', 'Save|Close'])
         menu.page['cursor'] = labels.index('Scanlines')
         menu.key(self.osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'SCANLINES')
@@ -17808,13 +17808,15 @@ class OsdTests(unittest.TestCase):
         menu, worker = self.menu()
         keys = self.osd
         menu.key(keys.KEY_LEFT)     # o volume
-        menu.key(keys.KEY_DOWN)     # o Profile
+        menu.key(keys.KEY_DOWN)     # Save profile as
+        menu.key(keys.KEY_DOWN)     # Delete profile
         menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_RIGHT)    # medium -> strong
         worker.wait()
         self.assertIn([self.osd.SETUP, '--volume', 'set', '75'], self.calls)
         self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx2', 'strong'], self.calls)
         menu, worker = self.menu({'program': 'retroarch', 'core': 'pcsx_rearmed'})
+        menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_LEFT)
@@ -17938,6 +17940,36 @@ class OsdTests(unittest.TestCase):
         self.assertTrue(menu.closing)
         self.assertEqual(self.calls[-1], [osd.SETUP, '--volume', 'set', '75'])
         self.assertEqual(osd.Profiles().data['game:fbneo/sf2'], {'volume': '75'})
+
+    def test_delete_profile_asks_twice_and_puts_back_what_is_left(self):
+        # Delete profile, abaixo do Save profile as: apaga o perfil escolhido
+        # nele (o segundo Enter confirma), e o que ele mudava volta ao que vale
+        # sem ele (o default).
+        osd = self.osd
+        osd.Profiles().set('game:fbneo/sf2', 'volume', '75', before='80')
+        menu, worker = self.menu()
+        menu.scopes = osd.profile_scopes({'program': 'retroarch', 'core': 'fbneo', 'pid': 0}, self.MODE, game='sf2')
+        menu.profile = menu.profiles.chosen(menu.scopes)
+        menu.page['rows'] = menu.rows_main()
+        labels = self.labels(menu)
+        self.assertEqual(labels[1:3], ['Save profile as', 'Delete profile'])
+        row = menu.page['rows'][2]
+        self.assertEqual(row.text(), 'game.cfg')
+        menu.page['cursor'] = 2
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.status, 'ENTER AGAIN: DELETE GAME.CFG')
+        self.assertIn('game:fbneo/sf2', osd.Profiles().data)
+        menu.key(osd.KEY_ENTER)
+        worker.wait()
+        self.assertEqual(menu.status, 'DELETED GAME.CFG')
+        self.assertNotIn('game:fbneo/sf2', osd.Profiles().data)
+        self.assertEqual(self.calls[-1], [osd.SETUP, '--volume', 'set', '80'])
+        # O perfil escolhido acima muda o que se apaga; um vazio nao pede nada.
+        menu.page['rows'][1].value = 'core'
+        menu.set_profile('core')
+        self.assertEqual(row.text(), 'core.cfg')
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.status, 'NO CORE.CFG')
 
     def test_service_applies_the_profiles_when_a_game_opens_and_closes(self):
         osd = self.osd
