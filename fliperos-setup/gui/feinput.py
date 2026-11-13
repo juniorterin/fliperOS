@@ -182,6 +182,39 @@ DEFAULT = [("b1", -1, "b0"), ("b2", -1, "b1"), ("b3", -1, "b2"), ("b4", -1, "b3"
            ("b6", -1, "b5"), ("coin", -1, "b6"), ("start", -1, "b7"),
            ("up", -1, "h0.1"), ("down", -1, "h0.4"), ("left", -1, "h0.8"), ("right", -1, "h0.2"),
            ("up", -1, "-a1"), ("down", -1, "+a1"), ("left", -1, "-a0"), ("right", -1, "+a0")]
+# De quanto em quanto tempo o frontend confere se o mapa mudou: um controle
+# Bluetooth que chega ganha o jogador dele pelo fliperos-buttons save (o
+# fliperos-controllers, pelo udev), depois do aviso do SDL.
+MAP_POLL = 1.0
+
+
+def map_stamp(path=None):
+    """O que diz se o mapa mudou: a hora e o tamanho do arquivo (None sem ele)."""
+    try:
+        st = os.stat(path or MAP)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+def unmapped_rows(mapped, pads):
+    """As linhas de um controle comum (DEFAULT) para cada controle ligado que
+    o mapa nao tem: um joypad ligado com o frontend aberto (ou nunca mapeado)
+    anda nos menus como sem mapa nenhum. pads: {indice: True se e um game
+    controller do SDL}; num que nao e, so o direcional digital e os botoes (o
+    eixo de um volante ou de um pedal parado numa ponta seria uma direcao
+    apertada para sempre). Sem mapa, o DEFAULT ja vale para todos."""
+    if not mapped:
+        return []
+    known = {j for _, j, e in mapped if not e.startswith("k:")}
+    if -1 in known:
+        return []
+    rows = []
+    for index, gamepad in sorted(pads.items()):
+        if index in known:
+            continue
+        rows += [(c, index, e) for c, _, e in DEFAULT if gamepad or e[0] in "bh"]
+    return rows
 
 
 def default_binds(pg):
@@ -292,8 +325,8 @@ class Input:
 
     def __init__(self, pygame, binds=None):
         self.pg = pygame
-        self.rows = read_map() or DEFAULT
         self.sticks = []
+        self.pads = {}             # indice do controle -> e um game controller do SDL?
         self.down = {}             # acao -> hora em que foi apertada
         self.loose = {}            # acao solta -> quando a soltura vale
         self.sources = {}          # acao -> fontes que a seguram (teclado, botoes)
@@ -304,14 +337,51 @@ class Input:
         # Escolhendo o comando do painel de uma funcao: cada comando apertado
         # vira "pad:COMANDO", e nao a funcao dele.
         self.capture_pad = False
-        self.panel_keys = panel_keyboard(pygame, self.rows)
-        # Os comandos de cada jogador segurados agora (players_held): o
-        # jogador 1 sem mapa.
-        self.prows = read_players() or [(1, c, j, e) for c, j, e in DEFAULT]
-        self.player_keys = player_keyboard(pygame, self.prows)
         self.player_down = {}
+        self.load_map()
         self.bind(binds or default_binds(pygame))
         self.open()
+
+    def load_map(self):
+        """O mapa (o Button mapping), lido de novo quando o arquivo muda: com
+        o frontend aberto, um controle Bluetooth que chega entra no mapa pelo
+        fliperos-buttons save. Antes ele era lido so ao abrir, e o controle
+        novo avisava e nao andava nos menus."""
+        pg = self.pg
+        self.stamp = map_stamp(MAP)
+        self.map_checked = time.monotonic()
+        self.mapped = read_map(MAP)
+        self.panel_keys = panel_keyboard(pg, self.mapped or DEFAULT)
+        # Os comandos de cada jogador segurados agora (players_held): o
+        # jogador 1 sem mapa.
+        self.prows = read_players(MAP) or [(1, c, j, e) for c, j, e in DEFAULT]
+        self.player_keys = player_keyboard(pg, self.prows)
+        self.player_down.clear()
+        self.rows = (self.mapped or DEFAULT) + unmapped_rows(self.mapped, self.pads)
+
+    def check_map(self):
+        """O mapa mudou desde a ultima vez (MAP_POLL): de novo."""
+        now = time.monotonic()
+        if now - self.map_checked < MAP_POLL:
+            return
+        self.map_checked = now
+        if map_stamp(MAP) != self.stamp:
+            self.load_map()
+
+    def gamepad(self, index, stick):
+        """O controle e um game controller do SDL (um joypad de verdade, com o
+        mapeamento do banco do SDL)? Sem o modulo, os que tem direcional e
+        quatro botoes."""
+        try:
+            from pygame._sdl2 import controller
+            if not controller.get_init():
+                controller.init()
+            return bool(controller.is_controller(index))
+        except Exception:
+            try:
+                return stick.get_numhats() > 0 and stick.get_numbuttons() >= 4
+            except Exception:
+                return False
 
     def bind(self, binds):
         """As funcoes de cada comando do painel e de cada tecla (default_binds)."""
@@ -359,14 +429,19 @@ class Input:
         pg.joystick.init()
         self.sticks = []
         self.order = {}            # instance_id do SDL -> indice do controle (o do mapa)
+        self.pads = {}
         for i in range(pg.joystick.get_count()):
             try:
                 j = pg.joystick.Joystick(i)
                 j.init()
                 self.sticks.append(j)
                 self.order[j.get_instance_id()] = i
+                self.pads[i] = self.gamepad(i, j)
             except pg.error:
                 pass
+        # Um controle ligado agora: o mapa pode ter mudado com ele, e o que o
+        # mapa nao tem ganha os comandos de um controle comum.
+        self.load_map()
 
     def index(self, ev):
         """O indice do controle do evento, na ordem do SDL (a do mapa)."""
@@ -375,6 +450,12 @@ class Input:
 
     def close(self):
         """Solta os controles (o jogo vai abri-los)."""
+        try:
+            from pygame._sdl2 import controller
+            if controller.get_init():
+                controller.quit()
+        except Exception:
+            pass
         self.pg.joystick.quit()
         self.down.clear()
         self.sources.clear()
@@ -415,6 +496,7 @@ class Input:
         pg = self.pg
         out = []
         self.settle()
+        self.check_map()
         for ev in pg.event.get():
             if ev.type in (pg.KEYDOWN, pg.KEYUP) and ev.key in self.player_keys:
                 # O comando de cada jogador (o atalho do jogo), alem do resto.

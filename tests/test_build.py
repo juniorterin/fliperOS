@@ -6107,6 +6107,46 @@ class FrontendDataTests(unittest.TestCase):
         finally:
             fi.time.monotonic = real
 
+    def test_a_pad_plugged_in_with_the_frontend_open_works(self):
+        # Um controle ligado com o frontend aberto avisava e nao andava nos
+        # menus: o mapa era lido so ao abrir, e um controle fora dele nao tinha
+        # comando nenhum. Agora o que o mapa nao tem anda como um controle comum
+        # (so direcional digital e botoes num que nao e game controller: o eixo
+        # de um volante ou pedal), e o mapa reescrito (o Bluetooth que chega,
+        # fliperos-buttons save) e lido de novo.
+        fi = self.fi
+        mapped = [('up', 0, 'h0.1'), ('b1', 0, 'b0')]
+        rows = fi.unmapped_rows(mapped, {0: True, 1: True, 2: False})
+        self.assertFalse([r for r in rows if r[1] == 0])
+        self.assertIn(('b1', 1, 'b0'), rows)
+        self.assertIn(('up', 1, '-a1'), rows)
+        self.assertIn(('down', 2, 'h0.4'), rows)
+        self.assertFalse([r for r in rows if r[1] == 2 and 'a' in r[2]])
+        self.assertEqual(fi.unmapped_rows([], {1: True}), [])                    # sem mapa: DEFAULT para todos
+        self.assertEqual(fi.unmapped_rows([('b1', -1, 'b0')], {1: True}), [])    # o mapa vale para qualquer um
+        self.assertIn(('b1', 0, 'b0'), fi.unmapped_rows([('b1', -1, 'k:LCONTROL')], {0: True}))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'buttons.map'
+            path.write_text('1 up 0 h0.1 Panel\n1 b1 0 b0 Panel\n')
+            real = fi.MAP
+            fi.MAP = str(path)
+            try:
+                inp = object.__new__(fi.Input)
+                inp.pg, inp.pads, inp.player_down = self.fake_pygame(), {0: True, 1: True}, {}
+                inp.load_map()
+                self.assertEqual(inp.match('b0', 1), ['b1'])
+                path.write_text('1 up 0 h0.1 Panel\n1 b1 0 b0 Panel\n2 b1 1 b3 Pad\n2 up 1 h0.1 Pad\n')
+                inp.check_map()                     # antes do MAP_POLL: ainda o controle comum
+                self.assertEqual(inp.match('b3', 1), ['b4'])
+                inp.map_checked = 0.0
+                inp.check_map()
+                self.assertEqual(inp.match('b3', 1), ['b1'])
+                self.assertEqual(inp.match('b0', 1), [])
+            finally:
+                fi.MAP = real
+        source = (ROOT / 'fliperos-setup/gui/feinput.py').read_text()
+        self.assertIn('self.check_map()\n        for ev in pg.event.get():', source)
+
     @staticmethod
     def fake_pygame():
         import types
