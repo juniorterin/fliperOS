@@ -231,43 +231,121 @@ class Pad:
         return self.recv(CMD_SET_THEME) is not None
 
 
-def backup(pad, key):
-    """O registro inteiro, uma vez por controle (o primeiro estado que vimos)."""
+def backup(pad, key, record, theme):
+    """O registro inteiro e o tema, uma vez por controle (o primeiro estado
+    que vimos): KEY.bin e KEY.theme."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
     path = os.path.join(BACKUP_DIR, key + ".bin")
     if not os.path.exists(path):
-        record = pad.read(0, CFG_SIZE)
         with open(path + ".tmp", "wb") as f:
             f.write(record)
         os.replace(path + ".tmp", path)
+    tpath = os.path.join(BACKUP_DIR, key + ".theme")
+    if theme is not None and not os.path.exists(tpath):
+        with open(tpath, "w") as f:
+            f.write("%d\n" % theme)
     return path
 
 
+def slot_enabled(record, s):
+    return struct.unpack_from("<I", record, 4 * s)[0] == FLAG_ON
+
+
+def new_profile(record, s, color, name="FliperOS"):
+    """O perfil S como o programa da 8BitDo cria um perfil novo (default_slot
+    do 8bitdo-ultimate2-linux), no modo do controle, com a cor no anel."""
+    buf = bytearray(record)
+    mode = struct.unpack_from("<H", buf, 16)[0]
+    put = lambda fmt, off, *v: struct.pack_into("<" + fmt, buf, off, *v)  # noqa: E731
+    put("I", 4 * s, FLAG_ON)
+    buf[20 + 32 * s:52 + 32 * s] = name[:16].encode("utf-16-be").ljust(32, b"\0")
+    put("Iff", 116 + 12 * s, FLAG_ON, 1.0, 1.0)                     # vibracao
+    put("IBBBB", 152 + 8 * s, FLAG_ON, 17, 128, 17, 128)            # sticks
+    trig = 77 if mode == 0 else 0
+    put("IBBBB", 176 + 8 * s, FLAG_ON, trig, 255, trig, 255)        # gatilhos
+    put("IBBBB", 1148 + 8 * s, FLAG_ON, 1, 100, 1, 100)             # vibracao dos gatilhos
+    put("II", 200 + 8 * s, FLAG_ON, 0)                              # especiais: nenhum
+    # Cada botao faz o que diz (no modo Switch, A/B e X/Y trocados).
+    keys = ([0x1000, 0x2000, 0x20, 0x10] if mode == 0 else [0x2000, 0x1000, 0x10, 0x20]) + [
+        0x400, 0x800, 0x4000, 0x8000, 0x2, 0x4, 0x8, 0x1, 0x400000 if mode == 0 else 0x10000,
+        0x20000, 0x200, 0x100, 0x80, 0x40, 0, 0, 0, 0]
+    put("I22I", 224 + 92 * s, FLAG_ON, *keys)
+    o = 500 + 216 * s                                               # macros: nenhuma
+    put("IB", o, FLAG_ON, 0)
+    for r in range(4):
+        ro = o + 8 + 52 * r
+        buf[ro:ro + 32] = b"\0" * 32
+        put("BBHH", ro + 32, mode, 0, 0, 0)
+        put("III", ro + 40, 0, 0, 0)
+    o = 1172 + 12 * s                                               # giroscopio desligado
+    put("I", o, 0x20190000)
+    put("BB", o + 9, 10, 40)
+    put("III", 1208 + 12 * s, FLAG_ON, 0x260032, 0x084E50)          # temas da propria 8BitDo
+    put("IIIB", 1244 + 16 * s, FLAG_ON, 0xCC6200, 0xCC0000, 7)
+    buf[LED_SINGLE + LED_SINGLE_SIZE * s:LED_SINGLE + LED_SINGLE_SIZE * (s + 1)] = single_section(color)
+    return bytes(buf)
+
+
+def target_record(record, color):
+    """O registro com a cor: nos perfis que existem so a secao da luz; sem
+    nenhum perfil, o perfil 1 criado (o padrao de fabrica nao usa as cores).
+    Devolve (registro, criou o perfil)."""
+    enabled = [s for s in range(SLOTS) if slot_enabled(record, s)]
+    if not enabled:
+        return new_profile(record, 0, color), True
+    buf = bytearray(record)
+    for s in enabled:
+        buf[LED_SINGLE + LED_SINGLE_SIZE * s:LED_SINGLE + LED_SINGLE_SIZE * (s + 1)] = single_section(color)
+    return bytes(buf), False
+
+
+# crc_value, gamepad_mode e cur_slot sao do firmware: nunca gravados.
+FIRMWARE_OWNED = (12, 20)
+
+
+def runs(old, new, gap=16):
+    """Os trechos (inicio, fim) que mudaram, juntando os proximos, fora de
+    FIRMWARE_OWNED."""
+    out = []
+    for i in range(len(old)):
+        if old[i] == new[i] or FIRMWARE_OWNED[0] <= i < FIRMWARE_OWNED[1]:
+            continue
+        if out and i - out[-1][1] <= gap and not (out[-1][1] <= FIRMWARE_OWNED[0] < i):
+            out[-1][1] = i + 1
+        else:
+            out.append([i, i + 1])
+    return [tuple(r) for r in out]
+
+
+def same_record(a, b):
+    lo, hi = FIRMWARE_OWNED
+    return a[:lo] == b[:lo] and a[hi:] == b[hi:]
+
+
 def apply(pad, color, key="ultimate2"):
-    """A cor nos 3 perfis e o tema custom. Devolve "same" (ja estava), "saved"
-    ou levanta IOError. Le de volta antes de salvar: se nao bater, nao salva
-    (desligar o controle volta ao que estava na flash)."""
-    want = single_section(color)
+    """A cor e o tema custom. Devolve "same" (ja estava), "saved", "profile"
+    (criou o perfil 1: aperte o botao de perfil) ou levanta IOError. Le de
+    volta antes de salvar: se nao bater, nao salva (desligar o controle volta
+    ao que estava na flash)."""
     # As leituras como o read_config do 8bitdo-ultimate2-linux: com os
     # relatorios ligados. So a gravacao vai entre o 7/0 e o 7/1.
-    sections = [pad.read(LED_SINGLE + LED_SINGLE_SIZE * s, LED_SINGLE_SIZE) for s in range(SLOTS)]
+    record = pad.read(0, CFG_SIZE)
     theme = pad.get_theme()
-    if all(s == want for s in sections) and theme == THEME_CUSTOM:
+    want, created = target_record(record, color)
+    if same_record(want, record) and theme == THEME_CUSTOM:
         return "same"
-    backup(pad, key)
+    backup(pad, key, record, theme)
     pad.report(False)
     try:
-        for s, current in enumerate(sections):
-            if current != want:
-                pad.write(LED_SINGLE + LED_SINGLE_SIZE * s, want)
-        for s in range(SLOTS):
-            if pad.read(LED_SINGLE + LED_SINGLE_SIZE * s, LED_SINGLE_SIZE) != want:
-                raise IOError("the colour read back differs; nothing saved")
+        for start, end in runs(record, want):
+            pad.write(start, want[start:end])
+        if not same_record(pad.read(0, CFG_SIZE), want):
+            raise IOError("the record read back differs; nothing saved")
         if theme != THEME_CUSTOM and not pad.set_theme(THEME_CUSTOM):
             raise IOError("the controller did not confirm the LED theme")
         if not pad.commit():
             raise IOError("the controller did not confirm the save")
-        return "saved"
+        return "profile" if created else "saved"
     finally:
         pad.report(True)
 

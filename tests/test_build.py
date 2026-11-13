@@ -19858,9 +19858,8 @@ class PadColor8BitDoTests(unittest.TestCase):
                 elif cmd == u2.CMD_WRITE:
                     self.assertFalse(pad.reports_on, "writes go between 7/0 and 7/1")
                     self.assertEqual(total, u2.CFG_SIZE)
-                    # A secao da luz e nada mais (nunca 0x0C-0x13: crc, modo, perfil).
-                    self.assertTrue(any(u2.LED_SINGLE + 100 * s <= offset < u2.LED_SINGLE + 100 * (s + 1)
-                                        for s in range(3)), offset)
+                    # Nunca 0x0C-0x13: crc, modo e perfil ativo sao do firmware.
+                    self.assertTrue(offset + length <= 12 or offset >= 20, (offset, length))
                     pad.ram[offset:offset + length] = body
                     reply = b"\0" * length
                 elif cmd == u2.CMD_GET_THEME:
@@ -19883,23 +19882,33 @@ class PadColor8BitDoTests(unittest.TestCase):
                 return answer
 
         self.FakePad = FakePad
-        self.record = bytes(i % 251 for i in range(u2.CFG_SIZE))
+        # Um controle com os perfis 1 e 3 (o 2 apagado), modo XInput (3).
+        record = bytearray(i % 251 for i in range(u2.CFG_SIZE))
+        for s, flag in ((0, 0x20200911), (1, 0xFFFFFFFF), (2, 0x20200911)):
+            struct.pack_into('<I', record, 4 * s, flag)
+        struct.pack_into('<HH', record, 16, 3, 0)
+        self.record = bytes(record)
+        # Um controle de fabrica: flash apagada, sem perfil (cur_slot 3).
+        blank = bytearray(b'\xff' * u2.CFG_SIZE)
+        struct.pack_into('<HH', blank, 16, 3, 3)
+        self.blank = bytes(blank)
 
-    def test_saves_the_colour_in_the_three_profiles_and_keeps_the_rest(self):
+    def test_saves_the_colour_in_the_profiles_and_keeps_the_rest(self):
         u2 = self.u2
         pad = self.FakePad(self.record)
         with tempfile.TemporaryDirectory() as tmp:
             u2.BACKUP_DIR = tmp
             self.assertEqual(u2.apply(pad, 0xbd93f9, 'ultimate2-6012-test'), 'saved')
             self.assertEqual(Path(tmp, 'ultimate2-6012-test.bin').read_bytes(), self.record)
+            self.assertEqual(Path(tmp, 'ultimate2-6012-test.theme').read_text(), '2\n')
         want = struct.pack('<I', 0x20200911) + bytes.fromhex('f993bd00') * 24
-        for s in range(3):
+        for s in (0, 2):
             off = 1292 + 100 * s
             self.assertEqual(pad.flash[off:off + 100], want)
-        # Todo o resto do registro ficou igual.
+        # Todo o resto do registro ficou igual, o perfil apagado tambem.
         rest = bytearray(pad.flash)
         orig = bytearray(self.record)
-        for s in reversed(range(3)):
+        for s in (2, 0):
             off = 1292 + 100 * s
             del rest[off:off + 100], orig[off:off + 100]
         self.assertEqual(rest, orig)
@@ -19907,6 +19916,47 @@ class PadColor8BitDoTests(unittest.TestCase):
         self.assertTrue(pad.reports_on)
         # Cada pedaco no maximo 45 bytes.
         self.assertTrue(all(length <= 45 for cmd, _, _, length in pad.log if cmd in (1, 2)))
+
+    def test_a_pad_with_no_profile_gets_profile_1_like_the_8bitdo_app(self):
+        u2 = self.u2
+        pad = self.FakePad(self.blank)
+        with tempfile.TemporaryDirectory() as tmp:
+            u2.BACKUP_DIR = tmp
+            self.assertEqual(u2.apply(pad, 0x50fa7b), 'profile')
+        f = pad.flash
+        self.assertEqual(f[12:20], self.blank[12:20])
+        self.assertEqual(struct.unpack_from('<I', f, 0)[0], 0x20200911)
+        self.assertEqual(f[4:12], b'\xff' * 8)
+        self.assertEqual(f[20:52].decode('utf-16-be').rstrip('\0'), 'FliperOS')
+        # Cada botao faz o que diz (XInput): A B X Y LB RB LT RT L3 R3 Select Start Star=Menu Home + d-pad.
+        keys = struct.unpack_from('<I22I', f, 224)
+        self.assertEqual(keys[0], 0x20200911)
+        self.assertEqual(keys[1:], (0x2000, 0x1000, 0x10, 0x20, 0x400, 0x800, 0x4000, 0x8000, 0x2, 0x4, 0x8, 0x1,
+                                    0x10000, 0x20000, 0x200, 0x100, 0x80, 0x40, 0, 0, 0, 0))
+        self.assertEqual(struct.unpack_from('<IBBBB', f, 152), (0x20200911, 17, 128, 17, 128))
+        self.assertEqual(struct.unpack_from('<IBBBB', f, 176), (0x20200911, 0, 255, 0, 255))
+        self.assertEqual(struct.unpack_from('<Iff', f, 116), (0x20200911, 1.0, 1.0))
+        self.assertEqual(struct.unpack_from('<I', f, 1172)[0], 0x20190000)
+        self.assertEqual(f[1292:1392], struct.pack('<I', 0x20200911) + bytes.fromhex('7bfa5000') * 24)
+        # Os perfis 2 e 3 continuam apagados.
+        for s in (1, 2):
+            self.assertEqual(f[1292 + 100 * s:1392 + 100 * s], b'\xff' * 100)
+            self.assertEqual(f[224 + 92 * s:316 + 92 * s], b'\xff' * 92)
+        self.assertEqual(pad.theme, 4)
+        # Feito o perfil, a cor nova muda so a luz dele.
+        pad.log.clear()
+        with tempfile.TemporaryDirectory() as tmp:
+            u2.BACKUP_DIR = tmp
+            self.assertEqual(u2.apply(pad, 0xff5555), 'saved')
+        writes = [(o, n) for c, _, o, n in pad.log if c == u2.CMD_WRITE]
+        self.assertTrue(writes and all(1292 <= o and o + n <= 1392 for o, n in writes), writes)
+
+    def test_runs_skip_the_firmware_bytes(self):
+        u2 = self.u2
+        old = bytes(40)
+        new = bytes([1]) * 40
+        self.assertEqual(u2.runs(old, new), [(0, 12), (20, 40)])
+        self.assertEqual(u2.runs(bytes(100), bytes(30) + b'\1' + bytes(10) + b'\1' + bytes(58)), [(30, 42)])
 
     def test_nothing_written_when_the_colour_is_already_there(self):
         u2 = self.u2
