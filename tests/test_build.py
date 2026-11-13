@@ -18314,20 +18314,20 @@ class OsdTests(unittest.TestCase):
         menu, _ = self.config(mode=dict(self.MODE, interlace=False))
         self.assertEqual(self.labels(menu), ['Save profile as', 'Delete profile', 'Colour', 'Save|Back'])
 
-    def test_main_page_is_volume_configuration_and_the_buttons(self):
-        # O Volume, a Configuration (o resto dos ajustes e o Save) e os botoes:
-        # Emulator menu (so num emulador com menu proprio), Close e Quit (so num
-        # jogo: sobre o frontend, nem um nem outro).
+    def test_main_page_is_configuration_and_the_buttons(self):
+        # A Configuration (os ajustes e o Save) e os botoes: Emulator menu (so
+        # num emulador com menu proprio), Close e Quit (so num jogo: sobre o
+        # frontend, nem um nem outro). O volume nao: e das teclas de volume.
         osd = self.osd
         menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Volume', 'Configuration', 'Close|Quit'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Close|Quit'])
         menu = osd.Menu({'program': 'retroarch', 'core': 'fbneo'}, self.MODE, osd.Worker(), emulator_key=59)
-        self.assertEqual(self.labels(menu), ['Volume', 'Configuration', 'Emulator menu', 'Close|Quit'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Emulator menu', 'Close|Quit'])
         menu = osd.Menu({'program': 'python3', 'core': ''}, self.MODE, osd.Worker(), emulator_key=59)
-        self.assertEqual(self.labels(menu), ['Volume', 'Configuration', 'Close'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Close'])
+        self.assertFalse([c for c in self.calls if '--volume' in c])
         # Configuration abre a pagina; o Back dela volta.
         menu, _ = self.menu()
-        menu.key(osd.KEY_DOWN)
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'CONFIGURATION')
         menu.page['cursor'] = len(menu.page['rows']) - 1
@@ -18336,16 +18336,16 @@ class OsdTests(unittest.TestCase):
         self.assertEqual(menu.title(), 'FLIPEROS')
         # Emulator menu e Quit fecham a OSD e dizem ao servico o que fazer.
         menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
-        menu.page['cursor'] = 2
+        menu.page['cursor'] = 1
         menu.key(osd.KEY_ENTER)
         self.assertEqual((menu.closing, menu.after), (True, 'emulator'))
         menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
-        menu.page['cursor'] = 3
+        menu.page['cursor'] = 2
         menu.key(osd.KEY_RIGHT)
         menu.key(osd.KEY_ENTER)
         self.assertEqual((menu.closing, menu.after), (True, 'quit'))
         menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
-        menu.page['cursor'] = 3
+        menu.page['cursor'] = 2
         menu.key(osd.KEY_ENTER)
         self.assertEqual((menu.closing, menu.after), (True, None))
 
@@ -18415,14 +18415,11 @@ class OsdTests(unittest.TestCase):
     def test_settings_go_through_the_setup_with_the_program_or_the_core(self):
         menu, worker = self.menu()
         keys = self.osd
-        menu.key(keys.KEY_LEFT)     # o volume
-        menu.key(keys.KEY_DOWN)     # Configuration
-        menu.key(keys.KEY_ENTER)    # Save profile as
+        menu.key(keys.KEY_ENTER)    # Configuration: Save profile as
         menu.key(keys.KEY_DOWN)     # Delete profile
         menu.key(keys.KEY_DOWN)
         menu.key(keys.KEY_RIGHT)    # medium -> strong
         worker.wait()
-        self.assertIn([self.osd.SETUP, '--volume', 'set', '75'], self.calls)
         self.assertIn([self.osd.SETUP, '--setting', 'level.pcsx2', 'strong'], self.calls)
         menu, worker = self.config({'program': 'retroarch', 'core': 'pcsx_rearmed'})
         menu.key(keys.KEY_DOWN)
@@ -18498,11 +18495,78 @@ class OsdTests(unittest.TestCase):
         self.assertEqual(self.osd.mode_line(self.MODE), '640x480i 15.69kHz 60.00Hz')
         menu, _ = self.menu({'program': 'pcsx2', 'core': '', 'fps': 59.94})
         self.assertEqual(menu.subtitle(), '640x480i 15.69kHz 60.00Hz  59.9 FPS')
+        # E a modeline na linha de baixo; em todas as paginas.
+        self.assertEqual(menu.modeline(), 'modeline 13.038 640 666 727 831 480 483 489 523 interlace')
+        self.assertEqual(menu.modeline(2), '13.038 640 666 727 831 480 483 489 523 i')
         menu.open_colour()
-        self.assertEqual(menu.subtitle(), '')
+        self.assertEqual(menu.subtitle(), '640x480i 15.69kHz 60.00Hz  59.9 FPS')
+
+    def test_mode_line_follows_the_game_while_the_menu_is_open(self):
+        # O jogo troca de resolucao (ou a geometria muda o modo) com o menu
+        # aberto: a linha, a modeline e o FPS mudam, e o menu se desenha de novo.
+        osd = self.osd
+        menu, _ = self.menu({'program': 'pcsx2', 'core': '', 'fps': 59.94})
+        menu.dirty = False
+        menu.live(dict(self.MODE), 59.94)
+        self.assertFalse(menu.dirty)
+        progressive = {'clock': 6700, 'h': [320, 336, 368, 426], 'v': [240, 243, 246, 262], 'interlace': False}
+        menu.live(progressive, 30.0)
+        self.assertTrue(menu.dirty)
+        self.assertEqual(menu.subtitle(), '320x240p 15.73kHz 60.03Hz  30.0 FPS')
+        self.assertEqual(menu.modeline(), 'modeline 6.700 320 336 368 426 240 243 246 262')
+        # Sem modo lido, fica o de antes.
+        menu.live(None, 30.0)
+        self.assertEqual(menu.mode, progressive)
+        # O servico rele a cada LIVE_POLL com o menu aberto.
+        source = (ROOT / 'config/fliperos-osd').read_text()
+        self.assertIn('menu.live(current_mode(), current.get("fps"))', source)
+        # O desenho cabe com as duas linhas, no 640x480i e num quadro estreito.
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        osd.GUI = str(ROOT / 'fliperos-setup/gui')
+        try:
+            painter = osd.Painter()
+        except ImportError:
+            self.skipTest('sem pygame')
+        for mode in (self.MODE, dict(progressive, h=[256, 272, 296, 341])):
+            menu.live(mode, 60.0)
+            drawn = painter.fit(lambda: painter.panel(menu), mode)
+            self.assertEqual(drawn.get_size(), (320, 240))
+
+    def test_hotkey_ready_line_is_not_the_shortcut(self):
+        # O fliperos-buttons hotkey imprime "ready" ao comecar: a OSD nao o
+        # para por isso (parado e reaberto sem fim, o Start+Baixo segurado
+        # 1 s nunca completava). "exit" abre o menu.
+        osd = self.osd
+        service = object.__new__(osd.Service)
+
+        class Hotkey:
+            def __init__(self, fd):
+                self.stdout = type('Out', (), {'fileno': lambda _self: fd})()
+                self.stopped = False
+
+            def terminate(self):
+                self.stopped = True
+
+            def wait(self, timeout=None):
+                return 0
+        read, write = os.pipe()
+        self.addCleanup(os.close, read)
+        os.write(write, b'ready\n')
+        service.hotkey = hotkey = Hotkey(read)
+        self.assertFalse(service.hotkey_fired())
+        self.assertIs(service.hotkey, hotkey)
+        os.write(write, b'exit\n')
+        self.assertTrue(service.hotkey_fired())
+        self.assertIsNone(service.hotkey)
+        self.assertTrue(hotkey.stopped)
+        # Saiu sem dizer nada: para, e o laco o abre de novo.
+        os.close(write)
+        service.hotkey = hotkey = Hotkey(read)
+        self.assertFalse(service.hotkey_fired())
+        self.assertIsNone(service.hotkey)
 
     def test_profiles_keep_each_setting_where_it_was_made(self):
-        # Save profile as, logo abaixo do Volume: default.cfg (tudo), a
+        # Save profile as, no alto da Configuration: default.cfg (tudo), a
         # resolucao, o emulador, o core ou o jogo. O Save (na base, ao lado do
         # Close) grava o que mudou no perfil escolhido; fora do default, o
         # default guarda o valor de antes. Close sem Save devolve o de antes.
@@ -18521,42 +18585,52 @@ class OsdTests(unittest.TestCase):
         for _ in range(4):
             menu.key(osd.KEY_RIGHT)                 # game.cfg
         self.assertEqual(menu.profile, 'game')
-        menu.back()
-        menu.page['cursor'] = 0
-        menu.key(osd.KEY_LEFT)                      # o volume: 80 -> 75, na hora
+        filter_row = self.labels(menu).index('Interlaced filter')
+        menu.page['cursor'] = filter_row
+        menu.key(osd.KEY_LEFT)                      # o filtro: medium -> light, na hora
         worker.wait()
-        self.assertIn([osd.SETUP, '--volume', 'set', '75'], self.calls)
+        self.assertIn([osd.SETUP, '--setting', 'level.pcsx2', 'light'], self.calls)
         self.assertEqual(osd.Profiles().data, {})   # ainda sem o Save
         # Save: a linha da base da Configuration, o botao da esquerda.
-        menu.page['cursor'] = 1
-        menu.key(osd.KEY_ENTER)
         menu.page['cursor'] = len(menu.page['rows']) - 1
         self.assertEqual(menu.page['rows'][-1].value, 'save')
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.status, 'SAVED GAME.CFG')
-        menu.back()
         saved = osd.Profiles()
-        self.assertEqual(saved.data, {'default': {'volume': '80'}, 'game:fbneo/sf2': {'volume': '75'}})
-        self.assertEqual(saved.effective(scopes), {'volume': '75'})
-        self.assertEqual(saved.effective({'default': 'default', 'core': 'core:fbneo'}), {'volume': '80'})
+        self.assertEqual(saved.data, {'default': {'level.pcsx2': 'medium'}, 'game:fbneo/sf2': {'level.pcsx2': 'light'}})
+        self.assertEqual(saved.effective(scopes), {'level.pcsx2': 'light'})
+        self.assertEqual(saved.effective({'default': 'default', 'core': 'core:fbneo'}), {'level.pcsx2': 'medium'})
         self.assertEqual(saved.chosen(scopes), 'game')
         # Mudou e fechou sem salvar (Close, na pagina principal): volta o de antes.
-        menu.page['cursor'] = 0
-        menu.key(osd.KEY_LEFT)                      # 75 -> 70
+        menu.page['cursor'] = filter_row
+        menu.key(osd.KEY_LEFT)                      # light -> off
+        menu.back()
         menu.page['cursor'] = len(menu.page['rows']) - 1
         self.assertEqual(menu.page['rows'][-1].value, 'close')
         menu.key(osd.KEY_ENTER)
         worker.wait()
         self.assertTrue(menu.closing)
-        self.assertEqual(self.calls[-1], [osd.SETUP, '--volume', 'set', '75'])
-        self.assertEqual(osd.Profiles().data['game:fbneo/sf2'], {'volume': '75'})
+        self.assertEqual(self.calls[-1], [osd.SETUP, '--setting', 'level.pcsx2', 'light'])
+        self.assertEqual(osd.Profiles().data['game:fbneo/sf2'], {'level.pcsx2': 'light'})
+
+    def test_volume_is_not_in_the_profiles(self):
+        # Um perfil gravado antes com o volume: ele nao e lido, nao volta ao
+        # sistema e sai do arquivo no proximo Save.
+        osd = self.osd
+        Path(osd.PROFILES).write_text('default\tvolume\t80\ndefault\tcolor.gamma\t100\n'
+                                      'emu:pcsx2\tvolume\t40\n')
+        profiles = osd.Profiles()
+        self.assertEqual(profiles.data, {'default': {'color.gamma': '100'}})
+        self.assertEqual(profiles.effective({'default': 'default', 'emulator': 'emu:pcsx2'}), {'color.gamma': '100'})
+        profiles.save()
+        self.assertNotIn('volume', Path(osd.PROFILES).read_text())
 
     def test_delete_profile_asks_twice_and_puts_back_what_is_left(self):
         # Delete profile, abaixo do Save profile as: apaga o perfil escolhido
         # nele (o segundo Enter confirma), e o que ele mudava volta ao que vale
         # sem ele (o default).
         osd = self.osd
-        osd.Profiles().set('game:fbneo/sf2', 'volume', '75', before='80')
+        osd.Profiles().set('game:fbneo/sf2', 'color.gamma', '120', before='100')
         menu, worker = self.menu()
         menu.scopes = osd.profile_scopes({'program': 'retroarch', 'core': 'fbneo', 'pid': 0}, self.MODE, game='sf2')
         menu.profile = menu.profiles.chosen(menu.scopes)
@@ -18573,7 +18647,7 @@ class OsdTests(unittest.TestCase):
         worker.wait()
         self.assertEqual(menu.status, 'DELETED GAME.CFG')
         self.assertNotIn('game:fbneo/sf2', osd.Profiles().data)
-        self.assertEqual(self.calls[-1], [osd.SETUP, '--volume', 'set', '80'])
+        self.assertEqual(self.calls[-1], [osd.SETUP, '--setting', 'color.gamma', '100'])
         # O perfil escolhido acima muda o que se apaga; um vazio nao pede nada.
         menu.page['rows'][0].value = 'core'
         menu.set_profile('core')
@@ -18581,14 +18655,14 @@ class OsdTests(unittest.TestCase):
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.status, 'NO CORE.CFG')
         # O default e o padrao de tudo: nao se apaga.
-        osd.Profiles().set('default', 'volume', '80')
+        osd.Profiles().set('default', 'color.gamma', '100')
         menu.profiles = osd.Profiles()
         menu.set_profile('default')
         self.assertEqual(row.text(), '-')
         menu.key(osd.KEY_ENTER)
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.status, 'DEFAULT.CFG STAYS')
-        self.assertEqual(osd.Profiles().data['default'], {'volume': '80'})
+        self.assertEqual(osd.Profiles().data['default'], {'color.gamma': '100'})
 
     def test_service_applies_the_profiles_when_a_game_opens_and_closes(self):
         osd = self.osd

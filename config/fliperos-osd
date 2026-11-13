@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A OSD do FliperOS: volume, filtro de flicker, scanlines (monitor de 31 kHz),
+"""A OSD do FliperOS: filtro de flicker, scanlines (monitor de 31 kHz),
 geometria, cores e, com uma GunCon 2 ligada, os ajustes dela (o flash, os
 numeros do driver e a recarga, valendo no tiro seguinte) por cima do jogo ou do
 frontend, sem sair deles.
@@ -16,9 +16,13 @@ imagem de 320x240, como a tela logica da interface grafica. Por isso a OSD so
 abre com uma dessas camadas gravando o FPS (/run/user/*/fliperos-fps): no desktop
 ou num programa que elas nao alcancam, nada abre e os controles ficam com ele.
 
-A pagina principal tem o Volume, a Configuration (o perfil, o filtro do
-entrelacado, as scanlines, a geometria, as cores, a GunCon 2 e o Save) e os
-botoes Emulator menu, Close e Quit. O Emulator menu fecha a OSD e aperta a
+A pagina principal tem a Configuration (o perfil, o filtro do entrelacado, as
+scanlines, a geometria, as cores, a GunCon 2 e o Save) e os botoes Emulator
+menu, Close e Quit. O volume nao entra no menu nem nos perfis: ele e das
+teclas de volume (a barra abaixo) e do painel web. Embaixo do titulo, em
+todas as paginas e enquanto o menu esta aberto: a resolucao, as frequencias,
+o FPS do jogo e a modeline, relidos a cada LIVE_POLL segundos (um jogo que
+troca de resolucao, a geometria sendo ajustada). O Emulator menu fecha a OSD e aperta a
 tecla do menu do proprio emulador (F1 no RetroArch, Tab no MAME...: menu_key
 do config/fliperos-buttons) por um teclado virtual que o servico cria ao
 comecar; so aparece num emulador que tem menu. O Quit fecha o jogo (SIGTERM,
@@ -29,8 +33,7 @@ botoes, e continua rodando. Antes de tomar, espera soltar o atalho, ou o jogo
 ficaria com os botoes presos. Sair do menu, o jogo fechar ou 20 s sem mexer
 devolvem os controles.
 
-Os ajustes vao pelas funcoes do Setup (fliperos-setup --setting, --volume,
---geometry), um por vez numa fila: segurar a seta nao empilha chamadas. A
+Os ajustes vao pelas funcoes do Setup (fliperos-setup --setting, --geometry), um por vez numa fila: segurar a seta nao empilha chamadas. A
 geometria vale na hora, com as contas do Switchres, e so fica se for salva: num
 jogo em KMS, pelo fliperos-color timing; num jogo no X, pelo xrandr, como o
 proprio Switchres faz (uma troca direta na placa, o Xorg desfaz).
@@ -117,7 +120,10 @@ RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
 # De quantos em quantos segundos se confere a resolucao do jogo na tela.
 GEOMETRY_POLL = 1.0
-# Os perfis da OSD (Save profile as, logo abaixo do Volume): o Save grava os
+# Com o menu aberto: de quantos em quantos segundos a linha da resolucao, do
+# FPS e da modeline e relida.
+LIVE_POLL = 1.0
+# Os perfis da OSD (Save profile as, no alto da Configuration): o Save grava os
 # ajustes feitos para tudo (default.cfg), so para a resolucao, o emulador, o
 # core ou o jogo. Uma linha por ajuste: "escopo<TAB>chave<TAB>valor", o escopo
 # "default", "res:640x480i", "emu:retroarch", "core:fbneo" ou
@@ -125,6 +131,9 @@ GEOMETRY_POLL = 1.0
 # outro escopo, para voltar a ele.
 PROFILES = os.environ.get("FLIPEROS_OSD_PROFILES", "/etc/fliperos/osd-profiles.conf")
 PROFILE_KINDS = ("default", "resolution", "emulator", "core", "game")
+# O que nao e de perfil: o volume (gravado por perfis de antes) nao e lido nem
+# posto de volta; o proximo Save o tira do arquivo.
+NOT_PROFILED = ("volume",)
 
 # O arquivo das camadas: o cabecalho e os pixels RGBA de cima para baixo. seq
 # impar: gravando.
@@ -142,7 +151,6 @@ KEYBOARD = {KEY_UP: KEY_UP, KEY_DOWN: KEY_DOWN, KEY_LEFT: KEY_LEFT, KEY_RIGHT: K
             KEY_ENTER: KEY_ENTER, KEY_KPENTER: KEY_ENTER, KEY_SPACE: KEY_ENTER, KEY_LCTRL: KEY_ENTER,
             KEY_ESC: KEY_ESC, KEY_LALT: KEY_ESC}
 COMMANDS = {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "enter": KEY_ENTER, "esc": KEY_ESC}
-VOLUME_STEP = 5
 # Ate onde vai a geometria: o Switchres ainda reduz ao que o monitor aceita.
 H_SIZE = (0.80, 1.20, 0.01)
 H_SHIFT = (-40, 40, 1)
@@ -154,7 +162,7 @@ FILTER_LEVELS = ("off", "light", "medium", "strong")
 LABELS = {"off": "Off", "light": "Light", "medium": "Medium", "strong": "Strong"}
 
 
-# A pagina principal: o Volume, a Configuration (o resto dos ajustes e o Save)
+# A pagina principal: a Configuration (os ajustes e o Save)
 # e os botoes Emulator menu (o menu do proprio emulador: a OSD fecha e a tecla
 # dele sai pelo teclado virtual, menu_key do config/fliperos-buttons), Close
 # e Quit (fecha o jogo). Num frontend (o programa da camada e um destes), nem
@@ -377,6 +385,19 @@ def mode_line(mode, fps=None):
     return "  ".join(parts)
 
 
+def modeline_text(mode, short=0):
+    """A modeline do modo na tela, como o Switchres e o xrandr a escrevem: o
+    clock em MHz, os quatro tempos horizontais, os quatro verticais e
+    "interlace". short 1 sem a palavra MODELINE, 2 tambem com "i" no lugar
+    de interlace (um quadro estreito)."""
+    if not mode:
+        return ""
+    text = "%.3f %s" % (mode["clock"] / 1000.0, " ".join(str(v) for v in mode["h"] + mode["v"]))
+    if mode["interlace"]:
+        text += " i" if short >= 2 else " interlace"
+    return text if short else "modeline " + text
+
+
 def game_name(pid):
     """O jogo do processo: o ultimo argumento que nao e opcao, sem a pasta nem
     a extensao (o set do MAME, o arquivo da ROM). "" sem um."""
@@ -423,7 +444,7 @@ class Profiles:
             with open(self.path, encoding="utf-8", errors="replace") as f:
                 for line in f:
                     parts = line.rstrip("\n").split("\t")
-                    if len(parts) == 3:
+                    if len(parts) == 3 and parts[1] not in NOT_PROFILED:
                         self.data.setdefault(parts[0], {})[parts[1]] = parts[2]
         except OSError:
             pass
@@ -476,8 +497,6 @@ class Profiles:
 
 def apply_setting(key, value):
     """Um ajuste dos perfis no sistema, pelo Setup."""
-    if key == "volume":
-        return run([SETUP, "--volume", "set", str(value)], timeout=10)
     return run([SETUP, "--setting", key, str(value)], timeout=20)
 
 
@@ -859,23 +878,33 @@ class Menu:
         return getattr(self, "rows_" + name)()
 
     def subtitle(self):
-        """A resolucao, as frequencias e o FPS, em letra menor embaixo do titulo
-        da pagina principal."""
-        if self.page["name"] != "main":
-            return ""
+        """A resolucao, as frequencias e o FPS, em letra menor embaixo do
+        titulo de todas as paginas (relidos com o menu aberto, live)."""
         return mode_line(self.mode, self.screen.get("fps"))
+
+    def modeline(self, short=0):
+        """A modeline do modo na tela, na linha de baixo da do subtitle."""
+        return modeline_text(self.mode, short)
+
+    def live(self, mode, fps):
+        """O modo e o FPS de agora (o servico os rele a cada LIVE_POLL s com
+        o menu aberto): mudou o que se ve, desenha de novo. A geometria sendo
+        ajustada guarda o modo dela (Geometry), e os perfis o da abertura."""
+        before = (self.subtitle(), self.modeline())
+        if mode:
+            self.mode = mode
+        self.screen["fps"] = fps
+        if (self.subtitle(), self.modeline()) != before:
+            self.dirty = True
 
     def profile_label(self, kind):
         return kind + ".cfg"
 
     def rows_main(self):
-        """O Volume, a Configuration e os botoes: Emulator menu (o do proprio
-        emulador, quando ele tem um), Close e Quit (so num jogo)."""
+        """A Configuration e os botoes: Emulator menu (o do proprio emulador,
+        quando ele tem um), Close e Quit (so num jogo). O volume nao: e das
+        teclas de volume e do painel web."""
         rows = []
-        volume = self.volume_state()
-        if volume is not None:
-            rows.append(Row("number", "Volume", volume, 0, 100, VOLUME_STEP, pretty=lambda v: "%d%%" % v,
-                            change=self.set_volume))
         rows.append(Row("page", "Configuration", action=lambda: self.open_page("config")))
         if self.emulator_key is not None:
             emulator = Row("buttons", "Emulator menu", "emulator", options=[("emulator", "Emulator menu")])
@@ -1034,18 +1063,6 @@ class Menu:
         out = run([SETUP, "--settings"], timeout=20)
         return out.stdout if out else ""
 
-    def volume_state(self):
-        state = volume_state()
-        return state[0] if state else None
-
-    def refresh_volume(self):
-        """As teclas de volume com o menu aberto: a linha mostra o valor novo."""
-        state = volume_state()
-        for row in self.stack[0]["rows"]:
-            if state and row.label == "Volume":
-                row.value = state[0]
-                self.dirty = True
-
     # O que as linhas fazem.
     def set_profile(self, kind):
         self.profile = kind
@@ -1110,10 +1127,6 @@ class Menu:
             before = next((r.previous for r in self.page["rows"] if r.change is change), None)
             self.store(key, value, before)
         return change
-
-    def set_volume(self, value):
-        before = next((r.previous for r in self.stack[0]["rows"] if r.label == "Volume"), None)
-        self.store("volume", value, before)
 
     def set_filter(self, value):
         program = self.screen.get("core") or self.screen.get("program", "")
@@ -1376,8 +1389,14 @@ class Painter:
         if current is not None and getattr(current, "key", "") == "gun.edge_pct":
             self.edge_band(surface, current.value)
         sub = menu.subtitle()
-        head = 18 + (7 if sub else 0)
         safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
+        # A modeline na linha de baixo: inteira, sem a palavra MODELINE ou
+        # com "i" no lugar de interlace, o que couber.
+        import tiny
+        room = W - 2 * safe_x - 12
+        line = next((text for text in (menu.modeline(k) for k in (0, 1, 2)) if tiny.width(text) <= room),
+                    menu.modeline(2))
+        head = 18 + (7 if sub else 0) + (7 if line else 0)
         # As linhas que cabem: ate VISIBLE, menos num quadro baixo. Cada linha
         # de botoes e mais alta, e a primeira se afasta das de cima.
         def extra_of(some):
@@ -1418,7 +1437,9 @@ class Painter:
             tiny.text(surface, tiny.fit(sub, max(8, room)), t.COMMENT, x + 6, y + 15)
             if menu.status:
                 tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 15, right=True)
-        elif menu.status:
+        if line:
+            tiny.text(surface, line, t.COMMENT, x + 6, y + 15 + (7 if sub else 0))
+        if not sub and menu.status:
             status = self.font.render(menu.status, False, t.CYAN)
             if status.get_width() + title_w + 18 <= width:
                 surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
@@ -1949,12 +1970,16 @@ class Service:
                 self.hotkey = None
 
     def hotkey_fired(self):
-        """O fliperos-buttons hotkey imprimiu "exit" e saiu."""
+        """O fliperos-buttons hotkey imprimiu "exit" (e sai)? Ele imprime
+        tambem "ready" ao comecar: isso nao e o atalho, e ele segue (parado a
+        cada linha, ele recomecava sem fim e o segurar do atalho nunca
+        completava). Sem nada (ele saiu), para, e o laco o abre de novo."""
         try:
             data = os.read(self.hotkey.stdout.fileno(), 256)
         except OSError:
             data = b""
-        self.stop_hotkey()
+        if b"exit" in data or not data:
+            self.stop_hotkey()
         return b"exit" in data
 
     # A geometria de cada resolucao.
@@ -2086,7 +2111,7 @@ class Service:
         pressed = []
         inputs = Inputs(self.padkeys, lambda key, value: pressed.append(key) if value else None)
         last = time.monotonic()
-        scanned = last
+        scanned = polled = last
         try:
             while self.running and not menu.closing:
                 now = time.monotonic()
@@ -2103,6 +2128,11 @@ class Service:
                 if now - last > IDLE_CLOSE:
                     menu.close()
                     break
+                # A resolucao, o FPS e a modeline de agora (o jogo trocou de
+                # modo, a geometria mudou o modo).
+                if now - polled >= LIVE_POLL:
+                    polled = now
+                    menu.live(current_mode(), current.get("fps"))
                 if menu.dirty:
                     menu.dirty = False
                     self.screen_file.show(self.painter.rgba(menu))
@@ -2113,8 +2143,6 @@ class Service:
                     for word in self.read_control():
                         if word == "close":
                             menu.close()
-                        elif word == "volume":
-                            menu.refresh_volume()
                         elif word in COMMANDS:
                             pressed.append(COMMANDS[word])
                 inputs.keys.tick(time.monotonic())
