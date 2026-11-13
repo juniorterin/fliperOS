@@ -763,7 +763,7 @@ class Menu:
                         options=[(kind, self.profile_label(kind)) for kind in PROFILE_KINDS if kind in self.scopes],
                         change=self.set_profile))
         # Apagar o perfil escolhido acima (o Enter duas vezes).
-        rows.append(Row("action", "Delete profile", self.profile_label(self.profile), action=self.delete_profile))
+        rows.append(Row("action", "Delete profile", self.delete_label(self.profile), action=self.delete_profile))
         if self.mode and self.mode["interlace"]:
             conf = read_conf()
             program, core = self.screen.get("program", ""), self.screen.get("core", "")
@@ -904,13 +904,21 @@ class Menu:
         self.confirm_delete = None
         for row in self.stack[0]["rows"]:
             if row.label == "Delete profile":
-                row.value = self.profile_label(kind)
+                row.value = self.delete_label(kind)
+
+    def delete_label(self, kind):
+        """O que o Delete profile apaga: o perfil escolhido; o default, que e o
+        padrao de tudo, nao se apaga."""
+        return "-" if kind == "default" else self.profile_label(kind)
 
     def delete_profile(self):
         """Delete profile: o perfil escolhido em Save profile as sai (o
         segundo Enter confirma), e o que ele mudava volta ao que vale sem ele."""
         scope = self.scopes.get(self.profile, "default")
         name = self.profile_label(self.profile).upper()
+        if scope == "default":
+            self.status = "DEFAULT.CFG STAYS"
+            return
         if not self.profiles.data.get(scope):
             self.status = "NO " + name
             return

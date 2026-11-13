@@ -17970,6 +17970,15 @@ class OsdTests(unittest.TestCase):
         self.assertEqual(row.text(), 'core.cfg')
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.status, 'NO CORE.CFG')
+        # O default e o padrao de tudo: nao se apaga.
+        osd.Profiles().set('default', 'volume', '80')
+        menu.profiles = osd.Profiles()
+        menu.set_profile('default')
+        self.assertEqual(row.text(), '-')
+        menu.key(osd.KEY_ENTER)
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.status, 'DEFAULT.CFG STAYS')
+        self.assertEqual(osd.Profiles().data['default'], {'volume': '80'})
 
     def test_service_applies_the_profiles_when_a_game_opens_and_closes(self):
         osd = self.osd
