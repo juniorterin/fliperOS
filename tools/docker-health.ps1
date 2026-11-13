@@ -28,10 +28,15 @@ $vm = Get-CimInstance Win32_PerfFormattedData_VidPerfProvider_HyperVVMVidPartiti
   Where-Object { $_.Name -ne '_Total' }
 foreach ($v in $vm) { "VM:       {0:N1} GB ({1})" -f ($v.PhysicalPagesAllocated * 4KB / 1GB), $v.Name }
 
-$job = Start-Job { docker ps --format '{{.Names}}  {{.Status}}' 2>&1 }
+# O codigo de saida vem de dentro do job: o $LASTEXITCODE daqui e de outro
+# comando. Sem container rodando a saida e vazia, e isso e "ok", nao "nao responde".
+$job = Start-Job {
+  $o = docker ps --format '{{.Names}}  {{.Status}}' 2>&1
+  [pscustomobject]@{ Code = $LASTEXITCODE; Out = @($o | ForEach-Object { "$_" }) }
+}
 if (Wait-Job $job -Timeout 30) {
-  $out = Receive-Job $job
-  if ($LASTEXITCODE -ne 0 -and ($out -join ' ') -match 'error|cannot|failed') { $docker = $null } else { $docker = $out }
+  $r = Receive-Job $job
+  if ($r.Code -ne 0) { $docker = $null } else { $docker = @($r.Out) }
 } else {
   Stop-Job $job
   $docker = $null
