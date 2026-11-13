@@ -402,3 +402,57 @@ gun_reset() {
 gun_connected() {
   [[ -x $CALIBRATE ]] && [[ -n $("$CALIBRATE" list gun 2> /dev/null) ]]
 }
+
+# A cor da luz dos controles (config/fliperos-padcolor): padcolor= no
+# fliperos.conf, RRGGBB ou "off" (a luz fica como o controle a acende).
+PADCOLOR=${PADCOLOR:-/opt/fliperos/bin/fliperos-padcolor}
+PADCOLOR_DEFAULT=bd93f9
+
+# padcolor_table: nome|Rotulo|RRGGBB, as cores do Dracula (o tema do FliperOS).
+padcolor_table() {
+  printf '%s\n' \
+    "purple|Purple (FliperOS)|bd93f9" \
+    "pink|Pink|ff79c6" \
+    "red|Red|ff5555" \
+    "orange|Orange|ffb86c" \
+    "yellow|Yellow|f1fa8c" \
+    "green|Green|50fa7b" \
+    "cyan|Cyan|8be9fd" \
+    "white|White|ffffff"
+}
+
+# padcolor_get: o valor de agora (RRGGBB em minusculas, ou off).
+padcolor_get() {
+  local color
+  color=$(conf_get padcolor 2> /dev/null)
+  color=${color,,}
+  [[ $color == off || $color =~ ^[0-9a-f]{6}$ ]] || color=$PADCOLOR_DEFAULT
+  echo "$color"
+}
+
+# padcolor_name: o rotulo da cor de agora (o da tabela, ou #RRGGBB, ou Off).
+padcolor_name() {
+  local color name label hex
+  color=$(padcolor_get)
+  [[ $color == off ]] && { echo Off; return 0; }
+  while IFS='|' read -r name label hex; do
+    [[ $hex == "$color" ]] && { echo "$label"; return 0; }
+  done < <(padcolor_table)
+  echo "#$color"
+}
+
+# padcolor_set COR: grava (RRGGBB, #RRGGBB ou off) e acende os controles
+# ligados agora; os que conectarem depois pegam a cor pela regra do udev.
+padcolor_set() {
+  local color=${1#\#}
+  color=${color,,}
+  [[ $color == off || $color =~ ^[0-9a-f]{6}$ ]] || return 2
+  if [[ $color == "$PADCOLOR_DEFAULT" ]]; then
+    conf_unset padcolor
+  else
+    conf_set padcolor "$color"
+  fi
+  [[ $color != off && -x $PADCOLOR ]] && FLIPEROS_PADCOLOR=$color "$PADCOLOR" all > /dev/null 2>&1
+  log_info "Controller light: $color"
+  return 0
+}

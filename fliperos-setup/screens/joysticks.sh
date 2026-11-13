@@ -20,6 +20,7 @@ screen_joysticks() {
       "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
       "guncon|GunCon 2 (light gun)|Calibration, screen flash and how the gun reads dark parts." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
+      "padcolor|Controller light: $(padcolor_name)|Colour of the light on DualSense, DualShock 4 and 8BitDo pads." \
       "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
@@ -29,10 +30,46 @@ screen_joysticks() {
       layout) screen_buttons_layout ;;
       guncon) screen_guncon ;;
       axes) screen_calibrate axes ;;
+      padcolor) screen_padcolor ;;
       lpt) screen_lpt ;;
       return) return 0 ;;
     esac
   done
+}
+
+# screen_padcolor: a cor da luz dos controles que a mostram ao Linux
+# (lib/buttons.sh, config/fliperos-padcolor); muda na hora nos ligados.
+screen_padcolor() {
+  local title="Controller light" choice current name label hex value
+  local -a entries=()
+  current=$(padcolor_get)
+  choice=custom
+  [[ $current == off ]] && choice=off
+  while IFS='|' read -r name label hex; do
+    entries+=("$name|$label|#$hex on the controller light.")
+    [[ $hex == "$current" ]] && choice=$name
+  done < <(padcolor_table)
+  entries+=("custom|Other colour|Type the colour as RRGGBB (like bd93f9)."
+    "off|Off|FliperOS leaves the light as the controller sets it."
+    "return|Return|Back to Joysticks.")
+  choice=$(ui_menu_hints "$title" \
+    "Only pads that show their light to Linux: DualSense, DualShock 4, some 8BitDo." \
+    "$choice" "${entries[@]}") || return 0
+  case $choice in
+    return) return 0 ;;
+    off)
+      padcolor_set off
+      ui_msg "$title" "Off. A controller already lit keeps its colour until it connects again."
+      ;;
+    custom)
+      value=$(ui_input "$title" "The colour as RRGGBB, like bd93f9 (the FliperOS purple)." \
+        "$([[ $current == off ]] || echo "$current")") || return 0
+      padcolor_set "$value" || ui_msg "$title" "Not a colour: $value. Six digits 0-9 and a-f, like bd93f9."
+      ;;
+    *)
+      padcolor_set "$(padcolor_table | awk -F'|' -v n="$choice" '$1 == n {print $3}')"
+      ;;
+  esac
 }
 
 # screen_guncon: tudo da GunCon 2 num menu (lib/buttons.sh): a calibracao, o

@@ -4615,6 +4615,56 @@ class ButtonPlayersTests(Base):
         self.assertIn("menu [Which player is Panel?] [2] 1|Player 1 2|Player 2 3|Player 3 return|Return", calls)
 
 
+class PadColorTests(Base):
+    """Setup > Joysticks > Controller light: padcolor= e os controles ligados na hora."""
+
+    def tool(self):
+        d = self.env.dir
+        (d / "padcolor").write_text('#!/bin/sh\necho "$FLIPEROS_PADCOLOR $*" >> "%s/padcolor.calls"\n' % d)
+        (d / "padcolor").chmod(0o755)
+        return {"PADCOLOR": str(d / "padcolor")}
+
+    def calls(self):
+        path = self.env.dir / "padcolor.calls"
+        return path.read_text() if path.exists() else ""
+
+    def test_the_default_is_the_fliperos_purple(self):
+        self.assertEqual(self.env.out("padcolor_get; padcolor_name").split("\n")[:2], ["bd93f9", "Purple (FliperOS)"])
+
+    def test_a_colour_is_saved_and_lights_the_connected_pads(self):
+        env = self.tool()
+        self.env.out("padcolor_set '#FF5555'", env)
+        self.assertIn("padcolor=ff5555", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(self.calls(), "ff5555 all\n")
+        self.assertEqual(self.env.out("padcolor_name", env).strip(), "Red")
+        self.env.out("padcolor_set 123abc", env)
+        self.assertEqual(self.env.out("padcolor_name", env).strip(), "#123abc")
+        # O roxo de volta tira a linha: o padrao do fliperos-padcolor.
+        self.env.out("padcolor_set bd93f9", env)
+        self.assertNotIn("padcolor=", (self.env.etc / "fliperos.conf").read_text())
+
+    def test_off_and_a_bad_colour(self):
+        env = self.tool()
+        self.env.out("padcolor_set off", env)
+        self.assertEqual(self.calls(), "")
+        self.assertEqual(self.env.out("padcolor_name", env).strip(), "Off")
+        self.assertEqual(self.env.run("padcolor_set zzz", env).returncode, 2)
+
+    def test_the_menu_picks_a_colour(self):
+        env = self.tool()
+        log = self.env.dir / "menu"
+        self.env.out("""
+            source %s/screens/joysticks.sh
+            ui_menu_hints() { echo "[$3] ${*:4}" >> %s; echo green; }
+            screen_padcolor
+        """ % (SETUP, log), env)
+        menu = log.read_text()
+        self.assertIn("[purple] purple|Purple (FliperOS)|#bd93f9 on the controller light.", menu)
+        self.assertIn("off|Off|", menu)
+        self.assertEqual(self.calls(), "50fa7b all\n")
+        self.assertIn("padcolor=50fa7b", (self.env.etc / "fliperos.conf").read_text())
+
+
 class GunCalibrationTests(Base):
     """Setup > Joysticks > GunCon 2 > Calibrate: quantos jogadores, uma pistola por vez."""
 
