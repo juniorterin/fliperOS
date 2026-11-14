@@ -18,13 +18,39 @@ wiki = root / 'docs' / 'wiki'
 WIKI_URL = 'https://github.com/juniorterin/fliperOS/wiki'
 
 
-def render(text):
+def github_slug(value, separator='-'):
+    """The anchor GitHub gives a heading: lower case, punctuation dropped,
+    each space a hyphen ("Setup > Games" -> "setup--games")."""
+    return re.sub(r'[^\w\- ]', '', value.strip().lower()).replace(' ', separator)
+
+
+def page_link(name, anchor):
+    # Every page lives in this one file, so its anchors carry the page name:
+    # "How it works" is a heading on many pages.
+    if not (wiki / (name + '.md')).exists():
+        return None
+    return '#%s-%s' % (name, anchor) if anchor else '#%s' % name
+
+
+def render(text, page=None):
+    # Anchors of this page first, before the links below turn into "#...".
+    if page:
+        text = re.sub(r'\]\(#([^)]+)\)', lambda m: '](#%s-%s)' % (page, m.group(1)), text)
+        text = re.sub(r'<a id="([^"]+)"></a>', lambda m: '<a id="%s-%s"></a>' % (page, m.group(1)), text)
+
     # Links to wiki pages become links inside this document.
-    text = re.sub(r'\]\(%s/([A-Za-z0-9_-]+)\)' % re.escape(WIKI_URL), r'](#\1)', text)
+    def outside(m):
+        return '](%s)' % (page_link(m.group(1), m.group(2)) or '#' + m.group(1))
+    text = re.sub(r'\]\(%s/([A-Za-z0-9_-]+)(?:#([^)]*))?\)' % re.escape(WIKI_URL), outside, text)
     text = text.replace('](%s)' % WIKI_URL, '](#Install)')
-    text = re.sub(r'\]\(([A-Za-z0-9_-]+)\.md(?:#[^)]*)?\)',
-                  lambda m: '](#%s)' % m.group(1) if (wiki / (m.group(1) + '.md')).exists() else m.group(0), text)
-    return markdown.markdown(text, extensions=['tables', 'fenced_code', 'toc'])
+
+    def inside(m):
+        target = page_link(m.group(1), m.group(2))
+        return '](%s)' % target if target else m.group(0)
+    text = re.sub(r'\]\(([A-Za-z0-9_-]+)\.md(?:#([^)]*))?\)', inside, text)
+    slug = (lambda value, separator: '%s-%s' % (page, github_slug(value, separator))) if page else github_slug
+    return markdown.markdown(text, extensions=['tables', 'fenced_code', 'toc'],
+                             extension_configs={'toc': {'slugify': slug}})
 
 
 pages = []
@@ -33,7 +59,7 @@ for title, name in re.findall(r'\[([^\]]+)\]\(([A-Za-z0-9_-]+)\.md\)', (wiki / '
         pages.append((title, name))
 body = render((root / 'README.md').read_text(encoding='utf-8'))
 for title, name in pages:
-    body += '\n<h1 id="%s">%s</h1>\n' % (name, title) + render((wiki / (name + '.md')).read_text(encoding='utf-8'))
+    body += '\n<h1 id="%s">%s</h1>\n' % (name, title) + render((wiki / (name + '.md')).read_text(encoding='utf-8'), name)
 html = '''<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FliperOS — technical documentation</title>

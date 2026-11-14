@@ -15637,11 +15637,52 @@ class DocsTests(unittest.TestCase):
             # As referencias "secao N" eram do README de uma pagina so.
             self.assertNotRegex(text, r'(se[cç][aã]o|[Ss]ection) \d', page.name)
 
+    def top_pages(self):
+        # As paginas de topo: as do _Sidebar sem recuo (as subpaginas vem
+        # recuadas debaixo delas).
+        return set(re.findall(r'^- \[[^\]]+\]\((%s)\.md\)' % self.PAGE,
+                              (self.WIKI / '_Sidebar.md').read_text(), re.M))
+
+    @staticmethod
+    def anchors(text):
+        """As ancoras que o GitHub da a uma pagina: uma por titulo (minusculas,
+        sem pontuacao, cada espaco um hifen; repetido ganha -1, -2) e os <a id>."""
+        found, seen = set(re.findall(r'<a (?:id|name)="([^"]+)"', text)), {}
+        for heading in re.findall(r'^#{1,6} +(.+?)\s*$', re.sub(r'```.*?```', '', text, flags=re.S), re.M):
+            heading = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', heading)
+            heading = re.sub(r'<[^>]+>|[`*]', '', heading)
+            slug = re.sub(r'[^\w\- ]', '', heading.strip().lower()).replace(' ', '-')
+            found.add('%s-%d' % (slug, seen[slug]) if slug in seen else slug)
+            seen[slug] = seen.get(slug, 0) + 1
+        return found
+
     def test_every_page_is_in_the_index_and_in_the_sidebar(self):
         self.assertGreaterEqual(len(self.pages()), 10)
         for index in ('Home.md', '_Sidebar.md'):
             listed = set(re.findall(r'\]\((%s)\.md\)' % self.PAGE, (self.WIKI / index).read_text())) - {'Home'}
             self.assertEqual(listed, self.pages(), index)
+        self.assertGreaterEqual(len(self.top_pages()), 10)
+
+    def test_anchors_lead_to_a_heading(self):
+        # Um link "Pagina#secao" (entre paginas, no README, no painel web ou no
+        # site) cai num titulo que existe: dividir uma pagina nao pode deixar
+        # um link de fora no topo da pagina errada.
+        anchors = {p.stem: self.anchors(p.read_text(encoding='utf-8')) for p in self.WIKI.glob('*.md')}
+        sources = [(p.name, p.stem) for p in self.WIKI.glob('*.md')]
+        sources += [(path, None) for path in ('README.md', 'README.pt-BR.md', 'config/web/index.html',
+                                              'config/web/library.js')]
+        sources += [(str(p.relative_to(ROOT)), None) for p in (ROOT / 'website/src').rglob('*.ts*')]
+        for name, own in sources:
+            text = (self.WIKI / name if own else ROOT / name).read_text(encoding='utf-8')
+            links = re.findall(r'\]\((%s)\.md#([^)\s]+)\)' % self.PAGE, text)
+            links += re.findall(re.escape(self.URL) + r'/(%s)#([\w-]+)' % self.PAGE, text)
+            links += re.findall(r'docs/wiki/(%s)\.md#([\w-]+)' % self.PAGE, text)
+            links += re.findall(r'\$\{LINKS\.docs\}/(%s)#([\w-]+)' % self.PAGE, text)
+            links += re.findall(r"docs: '(%s)#([\w-]+)'" % self.PAGE, text)
+            if own:
+                links += [(own, anchor) for anchor in re.findall(r'\]\(#([^)\s]+)\)', text)]
+            for page, anchor in links:
+                self.assertIn(anchor, anchors.get(page, set()), '%s: %s#%s' % (name, page, anchor))
 
     def test_readmes_guide_from_install_to_play_in_both_languages(self):
         english = (ROOT / 'README.md').read_text(encoding='utf-8')
@@ -15650,9 +15691,11 @@ class DocsTests(unittest.TestCase):
         self.assertRegex(english.split('\n## ')[0], r'\(README\.pt-BR\.md\)|href="README\.pt-BR\.md"')
         self.assertRegex(portuguese.split('\n## ')[0], r'\(README\.md\)|href="README\.md"')
         for readme in (english, portuguese):
-            # Leva a cada pagina da wiki, e so a paginas que existem.
+            # Leva a cada pagina de topo da wiki (as subpaginas estao nelas), e so
+            # a paginas que existem.
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
-            self.assertEqual(linked, self.pages())
+            self.assertLessEqual(self.top_pages(), linked)
+            self.assertLessEqual(linked, self.pages())
             for needed in ('dd if=fliperos-0.24.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
                            'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
                 self.assertIn(needed, readme)
