@@ -906,6 +906,9 @@ def games(system, favs=frozenset()):
             except OSError:
                 continue
         out.append({"Name": name, "Title": name, "file": file})
+    if system["key"].startswith("custom/"):
+        for entry in out:
+            entry.update(custom_info(system, entry))
     stats = play_stats(system)
     for entry in out:
         name = entry["Name"]
@@ -914,6 +917,41 @@ def games(system, favs=frozenset()):
         if name in stats:
             entry["PlayedCount"], entry["PlayedTime"] = stats[name]
     out.sort(key=lambda e: (e.get("Title") or e["Name"]).lower())
+    return out
+
+
+# O campo Control da romlist (como o Attract-Mode o escreve) de cada tipo de
+# controle do cfg de um jogo custom (config/fliperos-customgame CONTROLS).
+CUSTOM_CONTROLS = {"joy8": "joystick (8-way)", "joy4": "joystick (4-way)", "joy2": "joystick (2-way)",
+                   "twin": "double joystick (8-way)", "trackball": "trackball", "spinner": "dial",
+                   "paddle": "paddle", "positional": "positional", "analog": "analog stick", "pedal": "pedal",
+                   "lightgun": "lightgun", "keyboard": "keyboard", "mahjong": "mahjong"}
+
+
+def custom_info(system, entry):
+    """Do NOME.cfg ao lado do NOME.sh de um jogo custom: a categoria, os
+    jogadores, os botoes e os controles, nos campos da romlist (o filtro e
+    o Classify do frontend; o que a pessoa muda no Classify vale por cima)."""
+    cfg = {}
+    stem = (entry.get("file") or entry["Name"])
+    stem = stem[:-3] if stem.endswith(".sh") else stem
+    try:
+        with open(os.path.join(system["folder"], stem + ".cfg"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                key, sep, value = line.strip().partition("=")
+                if sep and not key.startswith("#"):
+                    cfg[key.strip()] = value.strip()
+    except OSError:
+        return {}
+    out = {}
+    if cfg.get("category"):
+        out["Category"] = cfg["category"]
+    for key, field in (("players", "Players"), ("buttons", "Buttons")):
+        if cfg.get(key, "").isdigit():
+            out[field] = cfg[key]
+    controls = [CUSTOM_CONTROLS[c] for c in cfg.get("controls", "").split(",") if c in CUSTOM_CONTROLS]
+    if controls:
+        out["Control"] = ", ".join(controls)
     return out
 
 
@@ -975,7 +1013,20 @@ def game_command(system, name):
     except ValueError:
         return None
     argv = [a.replace("[romfilename]", path).replace("[name]", entry["Name"]) for a in argv]
+    if custom_command(system, argv):
+        return argv
     return argv if argv and argv[0] in LAUNCHERS else None
+
+
+def custom_command(system, argv):
+    """O comando de um jogo custom (Setup > Games > Custom games): o sh com o
+    NOME.sh do grupo, que abre o jogo pelo fliperos-x11-run. So um .sh de
+    dentro de ~/roms/custom/GRUPO."""
+    if not system["key"].startswith("custom/") or len(argv) != 2 or argv[0] != "/bin/sh":
+        return False
+    root = os.path.realpath(os.path.join(player_home(), "roms", "custom"))
+    path = os.path.realpath(argv[1])
+    return path.endswith(".sh") and os.path.dirname(os.path.dirname(path)) == root and os.path.isfile(path)
 
 
 # ── A midia dos jogos ──────────────────────────────────────────────

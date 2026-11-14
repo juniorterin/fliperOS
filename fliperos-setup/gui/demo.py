@@ -325,6 +325,35 @@ def romfilter2():
     return romfilter(11)
 
 
+def customgames():
+    # Setup > Games > Custom games: os grupos com quantos jogos tem (e os
+    # pacotes novos de cada um, em verde).
+    return FilterBoard("Custom games", [
+        ("group:PC games", "PC games", "games", (12, 2), "The games of PC games, and packages to install in it."),
+        ("group:Linux", "Linux", "games", (3, 0), "The games of Linux, and packages to install in it."),
+        ("group:Beat em ups of the nineties", "Beat em ups of the nineties", "games", (1, 0),
+         "The games of Beat em ups of the nineties."),
+        ("+group", "Add group", "action", "+ GROUP", "A group is a system in the frontends (PC games...)."),
+        ("+new", "New games", "text", "2 NEW", "Packages put in ~/roms/custom, ready to install."),
+        ("+squash", "Packed", "action", "FOLDERS", "Game folders kept in one compressed file (squashfs)."),
+        ("return", "Return", "action", "BACK", ""),
+    ], 0, note="Games that are not a ROM, in groups. The frontends show each group as a system.", enter="OPEN")
+
+
+def customgroup():
+    import os
+    icons = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+    pic = os.path.join(icons, sorted(f for f in os.listdir(icons) if f.endswith(".png"))[0])
+    return FilterBoard("Custom games: PC games", [
+        ("+add", "Add games", "text", "2 NEW", "Install a package, or add a game by its command."),
+        ("+create", "Package", "action", "NEW ZIP", "Make a GAME.fliperos-customgame.zip from a game folder."),
+        ("+all", "All new", "text", "2 PACKAGES", "Install every package in ~/roms/custom/PC games."),
+        ("game:Metal Slug X", "Metal Slug X", "image", (pic, "WIN 240P"), "Metal Slug X: Windows 240p."),
+        ("game:Doom", "Doom", "image", ("", "LINUX 384X224@59.6"), "Doom: Linux 384x224@59.6."),
+        ("return", "Return", "action", "BACK", ""),
+    ], 3, note="2 games in PC games, a system in the frontends.", enter="OPEN")
+
+
 def filterplayers():
     return Stepper("Players", "The most players a game may have.", [
         ("0", "Any"), ("1", "Up to 1"), ("2", "Up to 2"), ("3", "Up to 3"), ("4", "Up to 4"),
@@ -474,6 +503,7 @@ SCREENS = {
     "quirks": quirks, "axes": axes, "padcolor": padcolor, "latency": latency, "recovery": recovery,
     "wifipass": wifipass,
     "download": download, "extras": extras, "romfilter": romfilter, "romfilter2": romfilter2,
+    "customgames": customgames, "customgroup": customgroup,
     "filterplayers": filterplayers, "filterbuttons": filterbuttons,
     "filtercontrols": filtercontrols, "filteryears": filteryears,
 }

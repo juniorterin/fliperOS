@@ -1480,6 +1480,13 @@ for _alias, _name in {
     "+add": "add", "+new": "addfolder", "+edit": "edit", "custom": "games",
     # As pastas de jogo em squashfs (Custom games): comprimidas, como os CHDs.
     "+squash": "chds", "+pack": "chds",
+    # Custom games: os pacotes (fazer, de um jogo, instalar todos), o grupo
+    # novo, o jogo pelo comando, as informacoes (o modo, a categoria, os
+    # controles, os jogadores) e a midia do pacote (imagem, video, texto).
+    "+create": "chds", "+package": "chds", "+all": "install", "+group": "addfolder", "+command": "edit",
+    "info": "romlist", "mode": "video", "category": "filter", "controls": "joysticks", "players": "joysticks",
+    "keep": "remove", "snap": "video", "text": "romlist", "next": "ok", "file": "romlist", "type": "edit",
+    "none": "remove",
     # Colour calibration: na tela (as barras de cor) ou pelos numeros.
     "calibrate": "colour", "values": "romlist",
     # Scanlines: ligar e desligar, e o ajuste na tela.

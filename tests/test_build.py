@@ -7084,7 +7084,7 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('PRELOAD=/a/x.so\n', run.stdout)
         self.assertNotIn('libfliperos-deflicker', run.stdout)
 
-    def client_launch(self, args, lib32=True):
+    def client_launch(self, args, lib32=True, extra=None):
         """O comando que o fliperos-x11-client passa ao Switchres (--launch),
         com as camadas e o picom de mentira."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -7108,7 +7108,7 @@ class DeflickerTests(unittest.TestCase):
                     (bin_dir / tool).symlink_to(shutil.which(tool))
             env = dict(os.environ, FLIPEROS_DEFLICKER_LIB=str(tmp / 'l64.so'), FLIPEROS_DEFLICKER_LIB32=str(tmp / 'l32.so'),
                        FLIPEROS_DESKTOP_DEFLICKER=str(tmp / 'picom'), FLIPEROS_COLOR='/nonexistent', PATH=str(bin_dir),
-                       FLIPEROS_RES_W='640', FLIPEROS_RES_H='480', FLIPEROS_RES_HZ='60')
+                       FLIPEROS_RES_W='640', FLIPEROS_RES_H='480', FLIPEROS_RES_HZ='60', **(extra or {}))
             out = subprocess.run(['bash', str(tmp / 'client'), *args], capture_output=True, text=True, env=env).stdout
             time.sleep(0.2)
             launch = out.split('LAUNCH=', 1)[1].strip() if 'LAUNCH=' in out else ''
@@ -7205,6 +7205,31 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('MODE=320 240 60', out)
         self.assertIn('APP=x', out)
         self.assertIn('APP=myprog', EmulatorModeTests.run_x11(EmulatorModeTests(), ['myprog']).stdout)
+
+    def test_custom_windows_games_get_the_32_bit_layer_by_flag(self):
+        # O executor dos jogos custom (o .exe esta no cfg, nao no comando):
+        # o --wine do fliperos-x11-run leva a camada de 32 bits; o --wine nao
+        # chega ao programa.
+        out = EmulatorModeTests.run_x11(EmulatorModeTests(), ['--mode', '640x240@60', '--app', 'custom_pc_pang', '--wine',
+                                                              'myprog', 'run', 'x.cfg']).stdout
+        self.assertIn('WINE=1', out)
+        self.assertIn('APP=custom_pc_pang', out)
+        self.assertIn('fliperos-x11-client myprog run x.cfg --', out)
+        self.assertIn('WINE=\n', EmulatorModeTests.run_x11(EmulatorModeTests(), ['--app', 'custom_x', 'myprog']).stdout)
+        launch, picom = self.client_launch(['fliperos-customgame', 'run', 'x.cfg'], extra={'FLIPEROS_USES_WINE': '1'})
+        self.assertIn('LD_PRELOAD=l64.so:l32.so ', launch)
+        self.assertFalse(picom)
+        launch, picom = self.client_launch(['fliperos-customgame', 'run', 'x.cfg'], lib32=False,
+                                           extra={'FLIPEROS_USES_WINE': '1'})
+        self.assertNotIn('LD_PRELOAD', launch)
+        self.assertTrue(picom)
+        self.assertIn('LD_PRELOAD=l64.so ', self.client_launch(['fliperos-customgame', 'run', 'x.cfg'])[0])
+        # Cada jogo custom com o log dele.
+        run = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn('[[ $app == custom_* ]] && log_name=$app', run)
+        # O executor e o ajudante entram na imagem.
+        self.assertIn('install -Dm755 "$src/config/fliperos-customgame" "$root/opt/fliperos/bin/fliperos-customgame"',
+                      ROOTFS)
 
     def run_x11(self, args, conf, lib=True, flycast_rend=None):
         with tempfile.TemporaryDirectory() as tmp:
@@ -9101,6 +9126,59 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(web.game_file('groovymame', ['groovymame', 'sf2']), 'sf2')
         self.assertEqual(web.game_file('groovymame', ['groovymame', '-inipath', '/etc/mame', 'sf2']), 'sf2')
         self.assertIsNone(web.game_file('groovymame', ['groovymame']))
+
+    def test_custom_games_open_and_carry_their_cfg(self):
+        # Um jogo custom abre pelo sh com o NOME.sh (o frontend e o painel
+        # mostravam "cannot open"); so um .sh de ~/roms/custom/GRUPO. A
+        # categoria, os jogadores, os botoes e os controles vem do NOME.cfg.
+        web = SourceFileLoader('fliperos_web_custom', str(ROOT / 'config/fliperos-web')).load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            group = home / 'roms/custom/PC games'
+            group.mkdir(parents=True)
+            (group / 'Pang.sh').write_text('#!/bin/sh\n')
+            (group / 'Pang.cfg').write_text('# x\nname=Pang\nplatform=windows\ncategory=Shooter / Gallery\n'
+                                            'controls=joy8,lightgun,bogus\nbuttons=2\nplayers=4\n')
+            (group / 'Old.sh').write_text('#!/bin/sh\n')
+            (group / 'Pang.fliperos-customgame.zip').write_text('zip')
+            old = os.environ.get('FLIPEROS_HOME')
+            os.environ['FLIPEROS_HOME'] = str(home)
+            os.environ['FLIPEROS_LISTS'] = str(home / 'lists')
+            try:
+                system = {'key': 'custom/PC games', 'folder': str(group), 'platform': 'ports', 'name': 'PC games',
+                          'exe': '/bin/sh', 'args': '"[romfilename]"', 'extensions': ['.sh'], 'arcade': False}
+                games = {g['Name']: g for g in web.games(system)}
+                self.assertEqual(sorted(games), ['Old', 'Pang'])
+                pang = games['Pang']
+                self.assertEqual((pang['Category'], pang['Players'], pang['Buttons'], pang['Control']),
+                                 ('Shooter / Gallery', '4', '2', 'joystick (8-way), lightgun'))
+                self.assertNotIn('Category', games['Old'])
+                self.assertEqual(web.game_command(system, 'Pang'), ['/bin/sh', str(group / 'Pang.sh')])
+                # O sh fora de ~/roms/custom, ou num sistema que nao e custom: nao.
+                other = dict(system, key='ports', folder=str(group))
+                self.assertIsNone(web.game_command(other, 'Pang'))
+                outside = home / 'elsewhere'
+                outside.mkdir()
+                (outside / 'X.sh').write_text('#!/bin/sh\n')
+                self.assertIsNone(web.game_command(dict(system, folder=str(outside)), 'X'))
+            finally:
+                os.environ.pop('FLIPEROS_LISTS', None)
+                if old is None:
+                    os.environ.pop('FLIPEROS_HOME', None)
+                else:
+                    os.environ['FLIPEROS_HOME'] = old
+        # O frontend da ao atalho do menu o nome do jogo (o --app do .sh):
+        # sem menu proprio, abre a OSD.
+        front = load_script('fliperos_frontend_custom', 'fliperos-setup/gui/fliperos-frontend')
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / 'Pang.sh'
+            script.write_text("#!/bin/sh\nexec /opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 "
+                              "--app custom_pc_games_pang --wine /opt/fliperos/bin/fliperos-customgame run x.cfg\n")
+            self.assertEqual(front.game_program(['/bin/sh', str(script)]), 'custom_pc_games_pang')
+        self.assertEqual(front.game_program(['/opt/fliperos/bin/fliperos-x11-run', '--mode', '640x240@60', '--wine',
+                                             '/opt/fliperos/bin/fliperos-customgame', 'run', 'x.cfg']),
+                         'fliperos-customgame')
+        self.assertEqual(front.game_program(['/opt/fliperos/bin/fliperos-kms-run', 'retroarch', '-L', 'x']), 'retroarch')
 
 
 def fightcade_package(path, files=None):
@@ -11511,6 +11589,7 @@ class EmulatorModeTests(unittest.TestCase):
             # xinit falso: mostra o modo pedido e o comando.
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
                                            'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n'
+                                           'echo "WINE=${FLIPEROS_USES_WINE:-}"\n'
                                            'echo "PRELOAD=${LD_PRELOAD:-}"\n')
             for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'pcsx2x6', 'myprog', 'supermodel', 'hypseus',
                          'fightcade', 'sm2-emu', 'duckstation', 'openbor'):

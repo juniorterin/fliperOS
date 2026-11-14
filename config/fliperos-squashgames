@@ -8,6 +8,7 @@
 #
 #   fliperos-squashgames pack PASTA [--progress]    PASTA.squashfs, montado na PASTA
 #   fliperos-squashgames unpack PASTA [--progress]  de volta a pasta comum, com o que o jogo gravou
+#   fliperos-squashgames remove PASTA               apaga o jogo: a pasta, o arquivo e a camada gravavel
 #   fliperos-squashgames mount-all | umount-all     as da lista (fliperos-squashgames.service)
 #   fliperos-squashgames list                       PASTA|montada (0 ou 1)|tamanho do arquivo
 #
@@ -200,6 +201,21 @@ cmd_unpack() {
   say 100 "$(basename -- "$folder") unpacked"
 }
 
+# cmd_remove PASTA: o jogo apagado (Custom games > Delete, ou um pacote
+# instalado de novo por cima): desmonta e apaga a pasta, o PASTA.squashfs e
+# o que o jogo gravou por cima.
+cmd_remove() {
+  local folder image data
+  folder=$(folder_ok "${1:-}") || fail "not a folder inside $home: ${1:-}"
+  image=$(image_of "$folder") data=$(data_of "$folder")
+  listed "$folder" || [[ -e $image ]] || fail "$folder is not packed"
+  do_umount "$folder" || fail "the folder is in use (close the game and try again)"
+  list_remove "$folder"
+  rm -rf -- "$data" "$folder"
+  rm -f -- "$image"
+  say 100 "$(basename -- "$folder") removed"
+}
+
 cmd_list() {
   local folder size
   [[ -f $LIST ]] || return 0
@@ -234,16 +250,17 @@ cmd_umount_all() {
 
 [[ ${3:-} == --progress ]] && progress=1
 case ${1:-} in
-  pack | unpack | mount-all | umount-all)
+  pack | unpack | remove | mount-all | umount-all)
     ((EUID == 0)) || fail "${1} needs root (Setup > Games > Custom games)"
     ;;&
   pack) cmd_pack "${2:-}" ;;
   unpack) cmd_unpack "${2:-}" ;;
+  remove) cmd_remove "${2:-}" ;;
   mount-all) cmd_mount_all ;;
   umount-all) cmd_umount_all ;;
   list) cmd_list ;;
   *)
-    sed -n '9,12p' "$0" | sed 's/^# *//' >&2
+    sed -n '9,13p' "$0" | sed 's/^# *//' >&2
     exit 1
     ;;
 esac

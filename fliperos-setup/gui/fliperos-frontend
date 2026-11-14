@@ -46,6 +46,7 @@ import atexit
 import json
 import os
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -175,13 +176,27 @@ def combo_names(combo):
 
 def game_program(argv):
     """O programa do comando do jogo: o de depois do fliperos-x11-run/kms-run
-    (e do --mode e do --app dele), o nome que o config/fliperos-buttons conhece."""
+    (e do --mode e do --app dele), o nome que o config/fliperos-buttons conhece.
+    Um jogo custom (/bin/sh NOME.sh): o --app do script, custom_GRUPO_NOME
+    (sem menu proprio: o atalho do menu abre o da tela do FliperOS)."""
+    if len(argv) == 2 and argv[0] == "/bin/sh" and argv[1].endswith(".sh"):
+        return custom_app(argv[1])
     if len(argv) < 2 or os.path.basename(argv[0]) not in ("fliperos-x11-run", "fliperos-kms-run"):
         return None
     words = argv[1:]
-    while len(words) > 2 and words[0] in ("--mode", "--app"):
-        words = words[2:]
+    while words and words[0] in ("--mode", "--app", "--wine"):
+        words = words[1:] if words[0] == "--wine" else words[2:]
     return os.path.basename(words[0]) if words else None
+
+
+def custom_app(script):
+    """O --app custom_... da linha exec de um NOME.sh dos jogos custom."""
+    try:
+        with open(script, encoding="utf-8", errors="replace") as f:
+            found = re.search(r"\s--app\s+(custom_[a-z0-9_]+)", f.read(8192))
+    except OSError:
+        return None
+    return found.group(1) if found else None
 
 
 def game_env():

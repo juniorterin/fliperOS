@@ -113,6 +113,12 @@ class Server:
             return int(data) if data.isdigit() else 0
         if kind == "screens":
             return tuple((flags(data) + [False, False])[:2])
+        if kind == "games":
+            n, _, new = data.partition(",")
+            return (int(n) if n.isdigit() else 0, int(new) if new.isdigit() else 0)
+        if kind == "image":
+            path, _, label = data.rpartition(";")
+            return (path, label.upper())
         return data.upper()
 
     def download(self, title, pct, step, msgs):
@@ -344,8 +350,11 @@ class Server:
             if not items:
                 return 1, ""
             cursor = max(0, [i[0] for i in items].index(a[2]) if a[2] in [i[0] for i in items] else 0)
-            # a[3]: o arquivo do placar, que a contagem do Setup escreve depois.
-            action, value = self.ask(W.FilterBoard(plain(a[0]), items, cursor, note=plain(a[1]), score=a[3]), cmd)
+            # a[3]: o arquivo do placar, que a contagem do Setup escreve
+            # depois, e (depois do \x1c) o que o Enter faz (UI_BOARD_ENTER).
+            score, _, enter = a[3].partition("\x1c")
+            action, value = self.ask(W.FilterBoard(plain(a[0]), items, cursor, note=plain(a[1]), score=score,
+                                                   enter=enter), cmd)
             return (0, value) if action == "select" else (1, "")
         if cmd == "grid":
             # titulo, texto, colunas ("valor|rotulo" separados por GS), opcoes

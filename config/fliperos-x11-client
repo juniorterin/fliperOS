@@ -54,7 +54,13 @@ deflicker32=${FLIPEROS_DEFLICKER_LIB32:-/usr/local/lib/fliperos/i386/libfliperos
 wine_re='(^|[[:space:]/;&(])wine(64)?([[:space:]]|$)|\.[eE][xX][eE]([[:space:]"]|$)'
 uses_wine=0
 [[ $* =~ $wine_re ]] && uses_wine=1
+# Um jogo custom do Windows (fliperos-x11-run --wine): o .exe esta no cfg
+# dele, nao no comando. Sem a camada de 32 bits, o filtro e o do picom.
 picom=0
+if [[ ${FLIPEROS_USES_WINE:-} == 1 ]]; then
+  uses_wine=1
+  [[ -f $deflicker32 ]] || picom=1
+fi
 case $(basename -- "$1") in
   fightcade*) picom=1 ;;
   wine* | *.exe) [[ -f $deflicker32 ]] || picom=1 ;;

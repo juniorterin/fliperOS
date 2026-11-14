@@ -231,8 +231,9 @@ ui_gui_menu() {
 # tem o titulo e o valor desenhado (o tipo e o dado sao os do mini() de
 # gui/widgets.py), e a ajuda do que esta sob o cursor aparece embaixo; com
 # UI_BOARD_SCORE=ARQUIVO, o placar (games= e bytes=) aparece quando ele
-# fica pronto. No texto e o ui_menu com os rotulos. Imprime o valor
-# escolhido; 1 = Esc.
+# fica pronto. Com UI_BOARD_ENTER=OPEN, a legenda diz que o Enter abre (os
+# azulejos que levam a outra tela). No texto e o ui_menu com os rotulos.
+# Imprime o valor escolhido; 1 = Esc.
 ui_board() {
   local title=$1 text=$2 default=$3 entry key label name kind data help
   local -a plain=() items=()
@@ -243,7 +244,8 @@ ui_board() {
     items+=("$key"$'\x1d'"$name"$'\x1d'"$kind"$'\x1d'"$data"$'\x1d'"$help")
   done
   if ui_gui_alive; then
-    ui_gui_call board "$title" "$text" "$default" "${UI_BOARD_SCORE:-}" "${items[@]}" || return 1
+    ui_gui_call board "$title" "$text" "$default" "${UI_BOARD_SCORE:-}${UI_BOARD_ENTER:+$'\x1c'$UI_BOARD_ENTER}" "${items[@]}" ||
+      return 1
     printf '%s\n' "$UI_GUI_REPLY"
     return 0
   fi

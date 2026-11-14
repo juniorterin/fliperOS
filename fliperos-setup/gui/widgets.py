@@ -11,6 +11,7 @@
 
 
 import math
+import os
 import re
 import time
 
@@ -1716,8 +1717,53 @@ def mini(surf, kind, data, x, y):
         wide, tall = data
         pygame.draw.rect(surf, T.CYAN if wide else T.LINE, (x + 8, y + 3, 24, 16), 0 if wide else 1)
         pygame.draw.rect(surf, T.CYAN if tall else T.LINE, (x + 50, y, 16, 20), 0 if tall else 1)
+    elif kind == "games":
+        # Os jogos de um grupo (Custom games) e, embaixo, os pacotes novos.
+        n, new = data
+        text(surf, "%d GAME%s" % (n, "" if n == 1 else "S"), T.FG, x, y + (1 if new else 5))
+        if new:
+            text(surf, "%d NEW" % new, T.GREEN, x, y + 11)
+    elif kind == "image":
+        # A imagem do jogo (ou um quadro vazio) e o rotulo em duas linhas.
+        path, label = data
+        img = thumbnail(path, 26, 20)
+        if img:
+            surf.blit(img, (x + (26 - img.get_width()) // 2, y + (20 - img.get_height()) // 2))
+        else:
+            pygame.draw.rect(surf, T.LINE, (x, y, 26, 20), 1)
+        words = label.split(" ", 1) + [""]
+        scroll_text(surf, words[0], T.FG, x + 30, y + 1, 54)
+        scroll_text(surf, words[1], T.CYAN, x + 30, y + 11, 54)
     else:
-        text(surf, data, T.GREEN if kind == "action" else T.FG, x, y + 5)
+        scroll_text(surf, data, T.GREEN if kind == "action" else T.FG, x, y + 5, 84)
+
+
+_THUMBS = {}
+
+
+def thumbnail(path, w, h):
+    """A imagem do arquivo reduzida para caber em w x h (guardada pelo
+    caminho e pela data); None se nao abre."""
+    try:
+        key = (path, os.path.getmtime(path), w, h)
+    except (OSError, TypeError):
+        return None
+    if key not in _THUMBS:
+        try:
+            src = pygame.image.load(path)
+            scale = min(w / src.get_width(), h / src.get_height())
+            size = (max(1, int(src.get_width() * scale)), max(1, int(src.get_height() * scale)))
+            _THUMBS[key] = pygame.transform.smoothscale(src.convert_alpha() if pygame.display.get_surface() else src, size)
+        except (pygame.error, ValueError, ZeroDivisionError, OSError):
+            _THUMBS[key] = None
+    return _THUMBS[key]
+
+
+def clipped_text(surf, s, color, x, y, w):
+    """O comeco do texto que cabe em w pixels (o azulejo que nao esta sob o
+    cursor: o selecionado corre, scroll_text)."""
+    img = T.font().render(s, False, color)
+    surf.blit(img, (x, y), (0, 0, w, img.get_height()))
 
 
 class FilterBoard(Animated):
@@ -1727,10 +1773,13 @@ class FilterBoard(Animated):
 
     COLS, ROWS = 3, 3
 
-    def __init__(self, title, items, cursor=0, games="", size="", note="", score=""):
+    def __init__(self, title, items, cursor=0, games="", size="", note="", score="", enter="CHANGE"):
         self.title = title
         self.items = items
         self.cursor = cursor
+        # O que o Enter faz: CHANGE nos parametros, OPEN nos azulejos que
+        # levam a outra tela (os grupos e os jogos de Custom games).
+        self.enter = enter or "CHANGE"
         self.games, self.size = games, size
         self.note = note
         self.top = 0
@@ -1777,7 +1826,7 @@ class FilterBoard(Animated):
 
     @landscape
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("ENTER", "CHANGE"), ("ESC", "BACK")])
+        frame(surf, ctx, self.title, [("ARROWS", "MOVE"), ("ENTER", self.enter), ("ESC", "BACK")])
         x, right = T.SAFE_X, T.SAFE_X + T.SAFE_W
         row = self.cursor // self.COLS
         self.top = min(max(self.top, row - self.ROWS + 1), row)
@@ -1789,11 +1838,9 @@ class FilterBoard(Animated):
             w = text(surf, self.size, T.FG, right, 34, right=True)
             text(surf, "SIZE", T.RED, right - w - 8, 34, right=True)
         elif self.note:
-            # Sem o placar, a linha do que esta sendo filtrado (so o comeco).
-            note = self.note.split(". ")[0]
-            while width(note) > T.SAFE_W - 8 * (rows + 1):
-                note = note[:-1]
-            text(surf, note, T.COMMENT, x, 34)
+            # Sem o placar, a linha do que esta sendo filtrado (a primeira
+            # frase); a que nao cabe corre, nada e cortado.
+            scroll_text(surf, self.note.split(". ")[0], T.COMMENT, x, 34, T.SAFE_W - 8 * (rows + 1))
         # Uma marca por linha de azulejos: onde o cursor esta no painel.
         for r in range(rows):
             color = T.PINK if r == row else T.COMMENT if self.top <= r < self.top + self.ROWS else T.LINE
@@ -1809,7 +1856,11 @@ class FilterBoard(Animated):
             if on:
                 glow(surf, (tx + 2, ty + 2, 88, 36), ctx)
             pygame.draw.rect(surf, T.PINK if on else T.LINE, (tx, ty, 92, 40), 2 if on else 1)
-            text(surf, title.upper(), T.PINK if on else T.COMMENT, tx + 4, ty + 4)
+            # O nome que nao cabe corre no azulejo sob o cursor.
+            if on:
+                scroll_text(surf, title.upper(), T.PINK, tx + 4, ty + 4, 84)
+            else:
+                clipped_text(surf, title.upper(), T.COMMENT, tx + 4, ty + 4, 84)
             mini(surf, kind, data, tx + 4, ty + 16)
 
         for i, line in enumerate(wrap(self.items[self.cursor][4], T.SAFE_W)[:2]):

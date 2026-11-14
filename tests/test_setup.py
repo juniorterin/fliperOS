@@ -3971,20 +3971,40 @@ class CustomGamesTests(Base):
         cmd = "wine ~/games/Pang \\$ Deluxe/pang.exe --full 'x y'"
         self.env.out('customgames_save "PC games" "Pang" 240p "%s"' % cmd, self.e)
         script = self.roms / "custom" / "PC games" / "Pang.sh"
+        cfg = self.roms / "custom" / "PC games" / "Pang.cfg"
         self.assertTrue(os.access(script, os.X_OK))
         text = script.read_text()
         self.assertIn("# mode: 640x240@60\n", text)
         self.assertIn("# command: wine ~/games/Pang $ Deluxe/pang.exe --full 'x y'\n", text)
-        # O script roda o comando como ele foi digitado, pelo fliperos-x11-run.
+        # O comando fica no cfg, como o dos pacotes.
+        self.assertIn("platform=command\ncommand=wine ~/games/Pang $ Deluxe/pang.exe --full 'x y'\nmode=640x240@60\n",
+                      cfg.read_text())
+        # O script abre o executor pelo fliperos-x11-run.
         fake = self.env.dir / "x11"
         fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@"\n')
         fake.chmod(0o755)
         text = text.replace("/opt/fliperos/bin/fliperos-x11-run", str(fake))
         script.write_text(text)
         out = subprocess.run(["sh", str(script)], capture_output=True, text=True).stdout.splitlines()
-        # --app: o nome dele para o filtro de flicker e a OSD (sem ele, "bash").
-        self.assertEqual(out[:6], ["--mode", "640x240@60", "--app", "custom_pc_games_pang", "bash", "-c"])
-        self.assertEqual(out[6], "wine ~/games/Pang $ Deluxe/pang.exe --full 'x y'")
+        # --app: o nome dele para o filtro de flicker e a OSD (sem ele, "bash");
+        # --wine: o comando tem o wine (a camada de 32 bits).
+        self.assertEqual(out, ["--mode", "640x240@60", "--app", "custom_pc_games_pang", "--wine",
+                               "/opt/fliperos/bin/fliperos-customgame", "run", str(cfg)])
+        # Sem wine no comando, sem --wine.
+        self.env.out("customgames_save 'PC games' Tetris 480i './tetris -f'", self.e)
+        self.assertIn("--app custom_pc_games_tetris /opt/fliperos/bin/fliperos-customgame run ",
+                      (self.roms / "custom" / "PC games" / "Tetris.sh").read_text())
+        # O executor roda o comando na home, pelo bash.
+        home = self.env.dir / "home"
+        home.mkdir()
+        (self.roms / "custom" / "PC games" / "Echo.cfg").write_text(
+            "platform=command\ncommand=pwd > out.txt; echo \"$0\" >> out.txt\nmode=640x240@60\n")
+        r = subprocess.run(["python3", str(ROOT / "config/fliperos-customgame"), "run",
+                            str(self.roms / "custom" / "PC games" / "Echo.cfg")],
+                           env=dict(os.environ, HOME=str(home), FLIPEROS_USER="nobody-here",
+                                    FLIPEROS_CUSTOMGAME_KEYS="off"), capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((home / "out.txt").read_text().split(), [str(home), "bash"])
 
     def test_each_entry_has_its_own_flicker_filter_row(self):
         self.assertEqual(self.env.out("customgames_app 'PC games' 'Pang Deluxe!'", self.e).strip(),
@@ -4099,8 +4119,16 @@ class CustomGamesTests(Base):
         hand = group / "Mine.sh"
         hand.write_text("#!/bin/sh\necho mine\n")
         self.env.out("customgames_refresh", self.e)
-        self.assertIn("--mode 640x480@60 --app custom_pc_games_pang bash -c wine\\ pang.exe\n", old.read_text())
+        self.assertIn("--mode 640x480@60 --app custom_pc_games_pang --wine /opt/fliperos/bin/fliperos-customgame run ",
+                      old.read_text())
+        # A de antes do cfg ganhou o dela, com o comando.
+        self.assertIn("platform=command\ncommand=wine pang.exe\nmode=640x480@60\n", (group / "Pang.cfg").read_text())
         self.assertEqual(hand.read_text(), "#!/bin/sh\necho mine\n")
+        self.assertFalse((group / "Mine.cfg").exists())
+        # De novo (o proximo update): pelo cfg, igual.
+        before = old.read_text()
+        self.env.out("customgames_refresh", self.e)
+        self.assertEqual(old.read_text(), before)
         update = (ROOT / "tools" / "cabinet-update.sh").read_text()
         self.assertIn("customgames_refresh", update.split('echo "== Kernel line')[1].split('\n)\n')[0])
 
@@ -4138,6 +4166,232 @@ class CustomGamesTests(Base):
         script = self.roms / "custom" / "PC games" / "Pang.sh"
         self.assertEqual(self.env.out("bootgame_command 'custom/PC games' \"$F\"", dict(self.e, F=str(script)))
                          .splitlines(), ["/bin/sh", str(script)])
+
+    # ── Os pacotes (JOGO.fliperos-customgame.zip) ──
+
+    def pkg_env(self):
+        media, e = self.media_env()
+        games = self.env.dir / "games"
+        e = dict(e, CUSTOM_GAMES_TOOL=str(ROOT / "config/fliperos-customgame"), CUSTOM_GAMES_GAMES=str(games),
+                 CUSTOM_GAMES_SQUASH="0", FLIPEROS_USER="nobody-here")
+        return media, games, e
+
+    def make_pkg(self, path, base="Pang", cfg=None, files=None, extra=None):
+        """Um pacote: o cfg, a pasta do jogo e o resto (nome -> conteudo)."""
+        import zipfile
+        cfg = cfg if cfg is not None else ("name=%s\nplatform=windows\nexe=bin/pang.exe\nmode=480i\n"
+                                           "category=Shooter / Gallery\ncontrols=joy8\nbuttons=2\nplayers=2\n" % base)
+        files = files if files is not None else {"bin/pang.exe": b"MZ", "data/levels.dat": b"x" * 4000}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr(base + ".cfg", cfg)
+            for name, data in files.items():
+                zf.writestr("%s/%s" % (base, name), data)
+            for name, data in (extra or {}).items():
+                zf.writestr(name, data)
+        return path
+
+    def test_package_in_a_group_folder_installs_without_asking_the_group(self):
+        media, games, e = self.pkg_env()
+        custom = self.roms / "custom"
+        zip_ = self.make_pkg(custom / "PC games" / "Pang.fliperos-customgame.zip",
+                             extra={"Pang.jpg": b"jpg", "Pang.mp4": b"mp4", "Pang.txt": "Balloons.\n",
+                                    "Pang.key": "p1_b1=Z\nnonsense\np1_start=ENTER\n", "Pang.ppdb": "export PW_X=1\n"})
+        rows = self.env.out("customgames_pending", e).splitlines()
+        self.assertEqual(rows, ["%s|PC games|Pang|windows|new|" % zip_])
+        out = self.env.out("customgames_install \"$Z\" 'PC games'", dict(e, Z=str(zip_)))
+        self.assertIn("@step 100 Pang installed", out)
+        # A pasta do jogo em ~/games/GRUPO/NOME, com o .ppdb ao lado do .exe.
+        folder = games / "PC games" / "Pang"
+        self.assertEqual((folder / "bin/pang.exe").read_bytes(), b"MZ")
+        self.assertEqual((folder / "bin/pang.exe.ppdb").read_text(), "export PW_X=1\n")
+        # A midia do pacote onde o frontend procura; o que faltava, de exemplo.
+        self.assertEqual((media / "snap/custom/PC games/Pang.jpg").read_bytes(), b"jpg")
+        self.assertEqual((media / "preview/custom/PC games/Pang.mp4").read_bytes(), b"mp4")
+        self.assertEqual((media / "texto/custom/PC games/Pang.txt").read_text(), "Balloons.\n")
+        self.assertFalse((media / "snap/custom/PC games/Pang.png").exists())
+        self.assertTrue((media / "logo/custom/PC games/Pang.png").exists())
+        # O cfg, o mapa do controle (so as linhas validas) e o script.
+        group = custom / "PC games"
+        cfg = (group / "Pang.cfg").read_text()
+        for line in ("platform=windows", "exe=bin/pang.exe", "mode=640x480@60", "category=Shooter / Gallery",
+                     "controls=joy8", "buttons=2", "players=2", "folder=%s" % folder, "package=%s" % zip_):
+            self.assertIn(line + "\n", cfg)
+        self.assertEqual([l for l in (group / "Pang.key").read_text().splitlines() if not l.startswith("#")],
+                         ["p1_b1=Z", "p1_start=ENTER"])
+        self.assertIn("--mode 640x480@60 --app custom_pc_games_pang --wine %s run " % e["CUSTOM_GAMES_TOOL"],
+                      (group / "Pang.sh").read_text())
+        # O zip fica onde estava, fora da lista; trocado, volta como update.
+        self.assertTrue(zip_.exists())
+        self.assertEqual(self.env.out("customgames_pending", e), "")
+        self.assertEqual(self.env.out("customgames_count 'PC games'; customgames_kind_label 'PC games' Pang", e)
+                         .splitlines(), ["1", "Windows 480i"])
+        os.utime(zip_, (1, 1))
+        self.assertTrue(self.env.out("customgames_pending", e).endswith("|update|\n"))
+        # De novo sem replace: status 3; com replace, por cima.
+        self.assertEqual(self.env.run("customgames_install \"$Z\" 'PC games'", dict(e, Z=str(zip_))).returncode, 3)
+        (folder / "save.dat").write_text("old save")
+        self.env.out("customgames_install \"$Z\" 'PC games' replace", dict(e, Z=str(zip_)))
+        self.assertFalse((folder / "save.dat").exists())
+        self.assertEqual(self.env.out("customgames_pending", e), "")
+
+    def test_package_in_the_root_goes_to_the_group_chosen(self):
+        media, games, e = self.pkg_env()
+        zip_ = self.make_pkg(self.roms / "custom" / "Doom.fliperos-customgame.zip", base="Doom",
+                             cfg="name=Doom\nplatform=native\ncommand=./doom -f\nmode=320x240@60\n",
+                             files={"doom": b"\x7fELF...", "doom1.wad": b"wad"})
+        # Sem grupo ainda; o Add games de um grupo o mostra junto dos dele.
+        self.assertEqual(self.env.out("customgames_pending", e).split("|")[1:5], ["", "Doom", "native", "new"])
+        self.env.out("mkdir -p \"$CUSTOM_GAMES_DIR/Linux\"", e)
+        self.assertEqual(len(self.env.out("customgames_pending Linux", e).splitlines()), 1)
+        self.env.out("customgames_install \"$Z\" Linux", dict(e, Z=str(zip_)))
+        folder = games / "Linux" / "Doom"
+        # O executavel do Linux sem o bit de execucao no zip: pelo cabecalho ELF.
+        self.assertTrue(os.access(folder / "doom", os.X_OK))
+        self.assertFalse(os.access(folder / "doom1.wad", os.X_OK))
+        script = (self.roms / "custom" / "Linux" / "Doom.sh").read_text()
+        self.assertIn("--mode 320x240@60 --app custom_linux_doom %s run " % e["CUSTOM_GAMES_TOOL"], script)
+        self.assertNotIn("--wine", script)
+        # O executor roda o comando dentro da pasta do jogo.
+        (folder / "doom").write_text("#!/bin/sh\npwd > ran.txt\n")
+        cfg = self.roms / "custom" / "Linux" / "Doom.cfg"
+        r = subprocess.run(["python3", e["CUSTOM_GAMES_TOOL"], "run", str(cfg)], capture_output=True, text=True,
+                           env=dict(os.environ, FLIPEROS_CUSTOMGAME_KEYS="off", FLIPEROS_USER="nobody-here"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((folder / "ran.txt").read_text().strip(), str(folder))
+        # Apagar com a pasta: tudo sai; o zip fica e volta a lista.
+        self.env.out("customgames_delete Linux Doom folder", e)
+        self.assertFalse(folder.exists())
+        self.assertFalse((self.roms / "custom" / "Linux" / "Doom.cfg").exists())
+        self.assertEqual(self.env.out("customgames_pending", e).split("|")[4], "new")
+
+    def test_a_bad_zip_is_refused_and_nothing_is_written(self):
+        media, games, e = self.pkg_env()
+        custom = self.roms / "custom"
+        cases = {
+            "dots": dict(extra={"../evil.txt": "x"}),
+            "absolute": dict(extra={"/etc/evil": "x"}),
+            "stranger": dict(extra={"readme.txt": "x"}),
+            "noexe": dict(cfg="name=X\nplatform=windows\nexe=bin/missing.exe\n"),
+            "platform": dict(cfg="name=X\nplatform=amiga\ncommand=x\n"),
+            "mode": dict(cfg="name=X\nplatform=native\ncommand=x\nmode=big\n"),
+            "controls": dict(cfg="name=X\nplatform=native\ncommand=x\ncontrols=joy9\n"),
+            "name": dict(cfg="name=../x\nplatform=native\ncommand=x\n"),
+            "empty": dict(files={}),
+        }
+        for label, kw in cases.items():
+            zip_ = self.make_pkg(custom / ("%s.fliperos-customgame.zip" % label), **kw)
+            r = self.env.run("customgames_install \"$Z\" G", dict(e, Z=str(zip_)))
+            self.assertNotEqual(r.returncode, 0, label)
+            self.assertIn("@fail", r.stdout, label)
+            zip_.unlink()
+        # Um link no zip (feito no Linux): recusado.
+        import zipfile
+        zip_ = custom / "link.fliperos-customgame.zip"
+        self.make_pkg(zip_)
+        with zipfile.ZipFile(zip_, "a") as zf:
+            info = zipfile.ZipInfo("Pang/bin/evil")
+            info.create_system = 3
+            info.external_attr = (0o120777 << 16)
+            zf.writestr(info, "/etc/passwd")
+        r = self.env.run("customgames_install \"$Z\" G", dict(e, Z=str(zip_)))
+        self.assertIn("link in the zip", r.stdout)
+        self.assertFalse(games.exists() and any(games.rglob("*")))
+        self.assertFalse((custom / "G").exists())
+        # Na lista, o ruim aparece como bad, com o motivo.
+        row = self.env.out("customgames_pending", e).strip().split("|")
+        self.assertEqual(row[4], "bad")
+        self.assertIn("link in the zip", row[5])
+        self.assertEqual(self.env.out("customgames_pending_ok", e), "")
+
+    def test_a_zip_of_the_whole_folder_also_works(self):
+        # Zipado clicando na pasta (no Windows): tudo dentro de "Pang/".
+        import zipfile
+        media, games, e = self.pkg_env()
+        zip_ = self.roms / "custom" / "G" / "Pang.fliperos-customgame.zip"
+        zip_.parent.mkdir(parents=True)
+        with zipfile.ZipFile(zip_, "w") as zf:
+            zf.writestr("Pang/Pang.cfg", "name=Pang\nplatform=native\ncommand=./pang\n")
+            zf.writestr("Pang\\Pang\\pang", "#!/bin/sh\n")
+            zf.writestr("Pang/Pang.png", "png")
+        out = self.env.out("customgames_tool inspect \"$Z\"", dict(e, Z=str(zip_)))
+        self.assertIn("base=Pang\n", out)
+        self.assertIn("media=snap\n", out)
+        self.assertIn("mode=640x240@60\n", out)
+        self.env.out("customgames_install \"$Z\" G", dict(e, Z=str(zip_)))
+        self.assertTrue(os.access(games / "G" / "Pang" / "pang", os.X_OK))
+
+    def test_create_package_from_a_folder(self):
+        # O Create package: a pasta, o .exe, a imagem, o texto digitado, o
+        # mapa do controle; o pacote volta a instalar igual.
+        import zipfile
+        media, games, e = self.pkg_env()
+        src = self.env.dir / "src" / "Metal Slug X"
+        (src / "bin").mkdir(parents=True)
+        (src / "bin" / "mslugx.exe").write_bytes(b"MZ")
+        (src / "movie.bik").write_bytes(b"bik" * 100)
+        (src / "bin" / "mslugx.exe.ppdb").write_text("export PW_WINE_USE=WINE_LG\n")
+        pic = self.env.dir / "shot.png"
+        pic.write_bytes(b"png")
+        out = self.roms / "custom" / "PC" / "Metal Slug X.fliperos-customgame.zip"
+        out.parent.mkdir(parents=True)
+        events = self.env.out(
+            "customgames_pack_run --out \"$O\" --name 'Metal Slug X' --platform windows --folder \"$S\" "
+            "--exe bin/mslugx.exe --mode 240p --category 'Shooter / Walking' --controls joy8 --buttons 3 "
+            "--players 2 --snap \"$P\" --text-string 'Run and gun.' --ppdb \"$S/bin/mslugx.exe.ppdb\"",
+            dict(e, O=str(out), S=str(src), P=str(pic)))
+        self.assertIn("@step 100 Metal Slug X packed", events)
+        with zipfile.ZipFile(out) as zf:
+            names = sorted(zf.namelist())
+            self.assertEqual(zf.getinfo("Metal Slug X/movie.bik").compress_type, zipfile.ZIP_STORED)
+            self.assertIn("exe=bin/mslugx.exe\n", zf.read("Metal Slug X.cfg").decode())
+        self.assertEqual(names, ["Metal Slug X.cfg", "Metal Slug X.png", "Metal Slug X.ppdb", "Metal Slug X.txt",
+                                 "Metal Slug X/bin/mslugx.exe", "Metal Slug X/bin/mslugx.exe.ppdb",
+                                 "Metal Slug X/movie.bik"])
+        self.env.out("customgames_install \"$O\" PC", dict(e, O=str(out)))
+        self.assertEqual((media / "texto/custom/PC/Metal Slug X.txt").read_text(), "Run and gun.\n")
+        self.assertIn("controls=joy8\n", (self.roms / "custom" / "PC" / "Metal Slug X.cfg").read_text())
+        # Fora da pasta, o .exe e recusado.
+        r = self.env.run("customgames_pack_run --out \"$O\" --name X --platform windows --folder \"$S\" --exe ../shot.png",
+                         dict(e, O=str(out), S=str(src)))
+        self.assertIn("@fail", r.stdout)
+
+    def test_categories_last_folder_and_labels(self):
+        catver = self.env.dir / "catver.ini"
+        catver.write_text("[FOLDER_SETTINGS]\nRootFolderIcon mame\n[ROOT_FOLDER]\n[Category]\n"
+                          "sf2=Fighter / Versus\r\nmk=Fighter / Versus * Mature *\nkof=Fighter / 2.5D\n"
+                          "pang=Shooter / Gallery\n[VerAdded]\nsf2=.36\n")
+        e = dict(self.e, CUSTOM_GAMES_CATVER=str(catver))
+        self.assertEqual(self.env.out("customgames_subgenres Fighter", e).splitlines(),
+                         ["Fighter / 2.5D", "Fighter / Versus"])
+        self.assertIn("|Shooter|", "|%s|" % self.env.out("echo \"$CUSTOM_GAMES_GENRES\"", e).strip())
+        # O seletor de arquivo do Create package volta a ultima pasta.
+        home = self.roms.parent
+        (home / "games").mkdir()
+        self.assertEqual(self.env.out("customgames_last_dir", e).strip(), str(home / "games"))
+        pic = self.env.dir / "pics" / "a.png"
+        pic.parent.mkdir()
+        pic.write_text("x")
+        self.env.out("customgames_last_dir_set \"$P\"", dict(e, P=str(pic)))
+        self.assertEqual(self.env.out("customgames_last_dir", e).strip(), str(pic.parent))
+        self.env.out("customgames_save G Cmd 384x224@59.6 'echo'", e)
+        self.assertEqual(self.env.out("customgames_kind_label G Cmd", e).strip(), "Command 384x224@59.6")
+
+    def test_screens_use_tiles_and_ask_the_group_only_for_root_packages(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        top = menu.split("screen_custom_games() {")[1].split("\n}\n")[0]
+        self.assertIn("UI_BOARD_ENTER=OPEN ui_board", top)
+        self.assertIn('|games|$n,$new|', top)
+        group = menu.split("screen_custom_group() {")[1].split("\n}\n")[0]
+        self.assertIn('|image|$snap;', group)
+        add = menu.split("screen_custom_add() {")[1].split("\n}\n")[0]
+        self.assertNotIn("screen_custom_group_pick", add)
+        pending = menu.split("screen_custom_pending() {")[1].split("\n}\n")[0]
+        self.assertIn('if [[ -z $group ]]; then\n            group=$(screen_custom_group_pick', pending)
+        # Cada seletor de arquivo do Create package lembra a pasta.
+        create = menu.split("screen_custom_package_create() {")[1].split("\n}\n")[0]
+        self.assertNotIn("ui_browse \"$title\" \"Open", create)
+        self.assertGreaterEqual(create.count("customgames_browse "), 5)
 
 
 class ArcadeResyncTests(Base):
@@ -4221,7 +4475,8 @@ class FolderListsTests(unittest.TestCase):
             "rom-cleaner.sh": ['share=$(UI_STYLE=list ui_menu "$title" "Which shared folder'],
             "mediapacks.sh": ['folders=$(UI_STYLE=list ui_menu "$title" "Which games is it for?"'],
             "setup-menu.sh": ['choice=$(UI_STYLE=list ui_menu "$title" "The game opens straight',
-                              'choice=$(UI_STYLE=list ui_menu "$title" "Which group?'],
+                              'choice=$(UI_STYLE=list ui_menu "$title" "$1" "${2:-${groups[0]}}"',
+                              'choice=$(UI_STYLE=list ui_menu "$title" "Packages waiting in ~/roms/custom.'],
         }
         for name, calls in screens.items():
             text = (SETUP / "screens" / name).read_text()

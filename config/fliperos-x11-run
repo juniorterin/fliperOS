@@ -2,23 +2,30 @@
 # Abre um programa num Xorg so para ele, num modo de video criado pelo
 # Switchres (fliperos-x11-client) no monitor escolhido no Setup:
 #
-#   fliperos-x11-run [--mode LARGURAxALTURA@HZ] [--app NOME] programa [argumentos]
+#   fliperos-x11-run [--mode LARGURAxALTURA@HZ] [--app NOME] [--wine] programa [argumentos]
 #
 # Sem --mode, o modo vem de /etc/fliperos/emulator-modes.conf (um para
 # monitor de 15 kHz, outro para 25/31 kHz e LCD) ou, fora da tabela,
 # 320x240@60. docs/wiki/Emulators.md, "Running a program at 640x240".
-# --app: o nome do programa para o filtro de flicker (deflicker_NOME=) e a
-# OSD, no lugar do nome do comando (um jogo custom abre pelo bash).
+# --app: o nome do programa para o filtro de flicker (deflicker_NOME=), a
+# OSD e o log, no lugar do nome do comando (um jogo custom abre pelo
+# fliperos-customgame). --wine: o programa abre um jogo do Windows (o
+# fliperos-x11-client poe a camada de 32 bits), mesmo sem wine no comando.
 set -euo pipefail
 MODES=${FLIPEROS_MODES:-/etc/fliperos/emulator-modes.conf}
 CONF=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 
 mode="" app=""
-while [[ ${1:-} == --mode || ${1:-} == --app ]]; do
+while [[ ${1:-} == --mode || ${1:-} == --app || ${1:-} == --wine ]]; do
+  if [[ $1 == --wine ]]; then
+    export FLIPEROS_USES_WINE=1
+    shift
+    continue
+  fi
   [[ $1 == --mode ]] && mode=${2:-} || app=${2:-}
   shift 2 || true
 done
-[[ $# -gt 0 ]] || { echo "Usage: fliperos-x11-run [--mode 640x240@60] [--app NAME] program [arguments]" >&2; exit 2; }
+[[ $# -gt 0 ]] || { echo "Usage: fliperos-x11-run [--mode 640x240@60] [--app NAME] [--wine] program [arguments]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
 command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
@@ -688,7 +695,10 @@ esac
 # A saida do X, do Switchres e do emulador vai para
 # /opt/fliperos/logs/<programa>.log, nao para a tela; no modo debug (Setup > System >
 # Debug mode) ela aparece. Sem como gravar o log, abre assim mesmo.
-log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$name.log"
+# Um jogo custom tem o log dele (custom_GRUPO_NOME.log), nao um so de todos.
+log_name=$name
+[[ $app == custom_* ]] && log_name=$app
+log="${FLIPEROS_LOGS:-/opt/fliperos/logs}/$log_name.log"
 # Um frontend que espera o jogo lendo a saida do comando (o ES-DE: popen ate
 # o fim do arquivo) veria o pipe fechar ja na troca para o log e retomaria a
 # tela com o jogo aberto. Uma copia do pipe fica com o programa ate ele sair.

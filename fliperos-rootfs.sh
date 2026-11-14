@@ -206,6 +206,9 @@ install -Dm644 "$src/config/fliperos-vkfps-i386.json" "$root/usr/share/vulkan/im
 # Os jogos guardados em squashfs (Setup > Games > Custom games > Pack a game
 # folder): o ajudante root, que as monta no boot pelo servico.
 install -Dm755 "$src/config/fliperos-squashgames" "$root/opt/fliperos/bin/fliperos-squashgames"
+# Os pacotes de jogo custom (JOGO.fliperos-customgame.zip: conferir, instalar,
+# fazer) e o executor que os NOME.sh dos jogos custom chamam.
+install -Dm755 "$src/config/fliperos-customgame" "$root/opt/fliperos/bin/fliperos-customgame"
 install -Dm644 "$src/config/fliperos-squashgames.service" "$root/etc/systemd/system/fliperos-squashgames.service"
 ln -sfn /etc/systemd/system/fliperos-squashgames.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-squashgames.service"
