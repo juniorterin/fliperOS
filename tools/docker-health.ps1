@@ -12,8 +12,16 @@
 # handles demais. Reiniciar o Docker ou rodar wsl --shutdown nao devolve
 # essa memoria; parar o processo que vaza (ou reiniciar o Windows) devolve.
 #
+# Outra queda, com memoria sobrando: o proprio WSL trava (2026-11-13, tres vezes).
+# Ou o servico inteiro (wsl -l -v nunca volta), ou so a VM do Docker (a distro
+# docker-desktop aparece Running mas nao executa nada). Os travamentos antigos
+# vieram segundos depois de o PC voltar da suspensao. Reabrir o Docker nao
+# resolve; so reiniciar o servico do WSL (admin) ou o Windows.
+#
 # Saida 0: pode usar. 1: commit acima de 85% (nao comece job pesado; feche
-# programas ou reinicie o Windows). 2: o Docker nao responde.
+# programas ou reinicie o Windows). 2: o Docker nao responde, o WSL sim
+# (reiniciar o Docker uma vez pode resolver). 3: o WSL travou (reiniciar o
+# Docker nao resolve; pergunte ao usuario).
 $m = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory
 $os = Get-CimInstance Win32_OperatingSystem
 $pct = [math]::Round(100 * $m.CommittedBytes / $m.CommitLimit)
@@ -53,6 +61,36 @@ if ($pct -ge 85) {
   exit 1
 }
 if ($null -eq $docker) {
+  # Roda um wsl.exe com limite de tempo: travado, ele nunca volta. A saida vem
+  # em UTF-16, com NULs no meio. $null = nao respondeu.
+  function Invoke-WslTimed([string[]]$wslArgs, [int]$sec) {
+    $j = Start-Job { param($a) $o = & wsl.exe @a 2>&1; [pscustomobject]@{ Code = $LASTEXITCODE; Out = (@($o | ForEach-Object { "$_" }) -join "`n") -replace "`0", '' } } -ArgumentList (,$wslArgs)
+    if (Wait-Job $j -Timeout $sec) { $r = Receive-Job $j; Remove-Job $j -Force; return $r }
+    Stop-Job $j; Remove-Job $j -Force; return $null
+  }
+  $resume = Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-Power-Troubleshooter'; Id = 1 } -MaxEvents 1 -ErrorAction SilentlyContinue
+  if ($resume -and $resume.TimeCreated -gt $os.LastBootUpTime) {
+    $ago = (Get-Date) - $resume.TimeCreated
+    "Suspensao: o PC voltou da suspensao ha {0} h {1} min" -f [int][math]::Floor($ago.TotalHours), $ago.Minutes
+  }
+  $wslState = 'ok'
+  $list = Invoke-WslTimed @('-l', '-v') 20
+  if ($null -eq $list) {
+    $wslState = 'servico'
+    "WSL:      TRAVADO (wsl -l -v nao responde)"
+  } elseif ($list.Out -match '(?m)docker-desktop\s+Running') {
+    # So testa a VM se ela ja esta ligada: com ela parada, o teste a ligaria.
+    if ($null -eq (Invoke-WslTimed @('-d', 'docker-desktop', '-e', 'true') 20)) {
+      $wslState = 'vm'
+      "WSL:      a VM do Docker (docker-desktop) TRAVOU: aparece Running mas nao executa nada"
+    } else { "WSL:      ok, VM do Docker ligada e respondendo" }
+  } else {
+    "WSL:      ok, VM do Docker desligada (Docker Desktop fechado ou parando?)"
+  }
+  if ($wslState -ne 'ok') {
+    "AVISO: o WSL travou. Reiniciar o Docker NAO resolve. Pergunte ao usuario: reiniciar o servico do WSL como admin (taskkill /F no wslservice.exe, Start-Service WslService, depois abrir o Docker Desktop; derruba as distros WSL de todas as sessoes) ou reiniciar o Windows."
+    exit 3
+  }
   "AVISO: o Docker nao responde com memoria sobrando. Uma sessao so reinicia o Docker, e uma vez (Quit pela bandeja e abrir de novo)."
   exit 2
 }
