@@ -1345,6 +1345,15 @@ screen_cheevos_resume() {
 # screen_cheevos (menu principal > RetroAchievements): a conta do site para
 # as conquistas no RetroArch, DuckStation, PCSX2, Dolphin e Flycast
 # (lib/cheevos.sh). So o token da conta fica guardado, nunca a senha.
+# screen_cheevos_apikey_help: a Web API Key se cola no painel web, que tem o
+# link para a pagina do site de onde ela se copia. Com ela, o frontend mostra
+# as conquistas de cada jogo.
+screen_cheevos_apikey_help() {
+  ui_msg "RetroAchievements" "To see all your achievements in the games list, paste your Web API Key in the web panel:" "" \
+    "http://fliperos.local > System > RetroAchievements" "" \
+    "Open it on a phone or computer on the same network. The page has the link to where you copy the key."
+}
+
 screen_cheevos() {
   local title="RetroAchievements" choice last="" user pass reason entries
   while true; do
@@ -1352,7 +1361,7 @@ screen_cheevos() {
     if cheevos_logged_in; then
       entries+=("enable|Achievements: $(cheevos_on && echo on || echo off)|Turn the achievements on or off in every emulator."
         "hardcore|Hardcore mode: $([[ $(cheevos_get hardcore) == 1 ]] && echo on || echo off)|No save states, rewind or cheats: the strict way to play."
-        "apikey|Web API key: $([[ -n $(cheevos_get apikey) ]] && echo set || echo not set)|For the frontend's trophy badge: retroachievements.org/settings."
+        "apikey|Web API key: $([[ -n $(cheevos_get apikey) ]] && echo set || echo not set)|Paste it in the web panel, System > RetroAchievements."
         "login|Change account|Sign in with another RetroAchievements account."
         "logout|Sign out|Forget the account on this cabinet.")
     else
@@ -1378,12 +1387,18 @@ screen_cheevos() {
         if reason=$(printf '%s\n' "$pass" | cheevos_login "$user"); then
           ui_msg "$title" "$(ui_yes "Signed in as $(cheevos_get user).")" "" \
             "RetroArch, DuckStation, PCSX2, Dolphin and Flycast use this account from the next game on."
+          [[ -n $(cheevos_get apikey) ]] || screen_cheevos_apikey_help
         else
           ui_msg "$title" "$(ui_bad "Not signed in: $reason")"
         fi
         pass=""
         ;;
       apikey)
+        # A chave e longa: o caminho e colar no painel web (o celular ou o PC),
+        # que tem o link para a pagina do site onde ela fica. Digitar aqui
+        # continua possivel, com um teclado.
+        screen_cheevos_apikey_help
+        ui_yesno "$title" "Or type the key here, with a keyboard?" no || continue
         screen_need_internet "RetroAchievements" || continue
         pass=$(ui_input "$title" "Web API Key from retroachievements.org/settings (Keys). Empty removes it." "" password) ||
           continue

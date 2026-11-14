@@ -5921,6 +5921,24 @@ class CheevosTests(Base):
         self.assertNotIn("apikey=", saved.read_text())
         self.assertIn("apikey=0", self.out("cheevos_cli status"))
 
+    def test_web_api_key_is_pasted_in_the_web_panel(self):
+        # O item Web API key e o login sem chave mandam ao painel web, que tem
+        # o link para a pagina do site onde a chave fica.
+        out = self.env.out("""
+            source %s/screens/setup-menu.sh
+            ui_msg() { printf 'msg:%%s\\n' "$@"; }
+            screen_cheevos_apikey_help
+        """ % SETUP, self.cenv)
+        self.assertIn("msg:http://fliperos.local > System > RetroAchievements", out)
+        self.assertIn("paste your Web API Key in the web panel", out)
+        menu = (SETUP / "screens/setup-menu.sh").read_text()
+        self.assertIn('[[ -n $(cheevos_get apikey) ]] || screen_cheevos_apikey_help', menu)
+        self.assertIn('ui_yesno "$title" "Or type the key here, with a keyboard?" no || continue', menu)
+        system = (ROOT / "config/web/system.js").read_text()
+        self.assertIn('href: "https://retroachievements.org/settings"', system)
+        for lang in ("Get my key at retroachievements.org", "Pegar minha chave no retroachievements.org"):
+            self.assertIn(lang, (ROOT / "config/web/text.js").read_text())
+
     def test_tool_at_launch_creates_the_dolphin_ini_only_with_an_account(self):
         tool = ["bash", str(ROOT / "config/fliperos-cheevos")]
         ini = self.home / ".config/dolphin-emu/RetroAchievements.ini"
