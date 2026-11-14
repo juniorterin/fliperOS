@@ -38,6 +38,15 @@
   fliperos-buttons menu-key PROGRAMA
       a tecla (o codigo do evdev) que abre o menu do emulador PROGRAMA, ou
       "osd" (sem menu: a do menu na tela do FliperOS) e status 1 sem nenhuma
+  fliperos-buttons gamekeys ARQUIVO.key [--parent PID] [--map MAPA]
+      junto com um jogo custom (config/fliperos-customgame): o controle vira
+      teclado, pelas linhas "pN_CONTROLE=TECLA" do .key (o jogo sem suporte a
+      joystick). Le os controles como o watch (o mapa de cada jogador, sem
+      tomar nada do jogo) e aperta as teclas num teclado virtual. O socket
+      $XDG_RUNTIME_DIR/fliperos-gamekeys/sock atende a OSD (Controller
+      configuration): "reload" le o .key de novo, "capture SEGUNDOS" responde
+      o proximo controle apertado (pN_CONTROLE, ou none), "mute"/"unmute"
+      calam as teclas com a OSD aberta. Sai junto com o PID
 
 ELEMENTO na numeracao do SDL (joystick, nao game controller): b3 (botao),
 -a1 / +a1 (meio eixo), h0.1 / h0.2 / h0.4 / h0.8 (hat: cima, direita,
@@ -2269,12 +2278,16 @@ def held(element, now):
 
 class Keyboards:
     """As teclas apertadas em todos os /dev/input/event*, lidas junto com o
-    jogo (sem EVIOCGRAB); os aparelhos ligados depois entram a cada 2 s."""
+    jogo (sem EVIOCGRAB); os aparelhos ligados depois entram a cada 2 s.
+    skip: os aparelhos cujo nome comeca assim ficam de fora (os teclados
+    virtuais do FliperOS, que o gamekeys aperta)."""
 
-    def __init__(self, pattern=None):
+    def __init__(self, pattern=None, skip=None):
         self.pattern = pattern or os.environ.get('FLIPEROS_INPUT_EVENTS', '/dev/input/event*')
         self.devices = {}
         self.scanned = None
+        self.skip = skip
+        self.skipped = set()
 
     def scan(self):
         if self.scanned is not None and time.monotonic() - self.scanned < 2:
@@ -2282,11 +2295,15 @@ class Keyboards:
         self.scanned = time.monotonic()
         known = {path for path, _ in self.devices.values()}
         for path in glob.glob(self.pattern):
-            if path in known:
+            if path in known or path in self.skipped:
                 continue
             try:
                 fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
             except OSError:
+                continue
+            if self.skip and device_name(fd).startswith(self.skip):
+                os.close(fd)
+                self.skipped.add(path)
                 continue
             self.devices[fd] = (path, set())
 
@@ -2560,9 +2577,13 @@ class KeySender:
 
     def press(self, code):
         for value in (1, 0):
-            os.write(self.fd, INPUT_EVENT.pack(0, 0, EV_KEY, code, value) + INPUT_EVENT.pack(0, 0, 0, 0, 0))
+            self.key(code, value)
             if value:
                 time.sleep(0.08)
+
+    def key(self, code, down):
+        """Aperta (down) ou solta a tecla, com o SYN_REPORT."""
+        os.write(self.fd, INPUT_EVENT.pack(0, 0, EV_KEY, code, 1 if down else 0) + INPUT_EVENT.pack(0, 0, 0, 0, 0))
 
     def close(self):
         try:
@@ -2661,9 +2682,293 @@ def cmd_hotkey(args):
             sender.close()
 
 
+# ── gamekeys: o controle como teclado num jogo custom ─────────────
+# As teclas do .key (config/fliperos-customgame), pelos nomes do evdev sem o
+# KEY_ (linux/input-event-codes.h): as do teclado de 105 teclas que um jogo
+# de PC usa.
+GAME_KEYS = {'ESC': 1, 'MINUS': 12, 'EQUAL': 13, 'BACKSPACE': 14, 'TAB': 15, 'LEFTBRACE': 26, 'RIGHTBRACE': 27,
+             'ENTER': 28, 'LEFTCTRL': 29, 'SEMICOLON': 39, 'APOSTROPHE': 40, 'GRAVE': 41, 'LEFTSHIFT': 42,
+             'BACKSLASH': 43, 'COMMA': 51, 'DOT': 52, 'SLASH': 53, 'RIGHTSHIFT': 54, 'KPASTERISK': 55, 'LEFTALT': 56,
+             'SPACE': 57, 'CAPSLOCK': 58, 'KPMINUS': 74, 'KPPLUS': 78, 'KPDOT': 83, 'KPENTER': 96, 'RIGHTCTRL': 97,
+             'KPSLASH': 98, 'RIGHTALT': 100, 'HOME': 102, 'UP': 103, 'PAGEUP': 104, 'LEFT': 105, 'RIGHT': 106,
+             'END': 107, 'DOWN': 108, 'PAGEDOWN': 109, 'INSERT': 110, 'DELETE': 111, 'PAUSE': 119}
+GAME_KEYS.update(zip('1234567890', range(2, 12)))
+GAME_KEYS.update(zip('QWERTYUIOP', range(16, 26)))
+GAME_KEYS.update(zip('ASDFGHJKL', range(30, 39)))
+GAME_KEYS.update(zip('ZXCVBNM', range(44, 51)))
+GAME_KEYS.update({'F%d' % n: code for n, code in enumerate((59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88), 1)})
+GAME_KEYS.update({'KP%d' % n: code for n, code in zip((7, 8, 9, 4, 5, 6, 1, 2, 3, 0),
+                                                      (71, 72, 73, 75, 76, 77, 79, 80, 81, 82))})
+GAME_KEY_LINE = re.compile(r'^p([1-8])_(%s)=([A-Z0-9_]+)$' % '|'.join(CONTROLS))
+GAME_KEYS_HEADER = ('# FliperOS: controller to keyboard for this game (on-screen menu > Controller configuration).\n'
+                    '# PLAYER_CONTROL=KEY; controls up down left right b1..b8 start coin, keys as in evdev.\n')
+GAMEKEYS_HZ = 250
+GAMEKEYS_DIR = 'fliperos-gamekeys'
+
+
+def device_name(fd):
+    """O nome do aparelho do evdev (EVIOCGNAME), em bytes."""
+    buf = bytearray(256)
+    try:
+        n = fcntl.ioctl(fd, _ioc(2, 'E', 0x06, len(buf)), buf)
+    except OSError:
+        return b''
+    return bytes(buf[:max(0, n - 1)]).rstrip(b'\0')
+
+
+def read_gamekeys(path):
+    """{(jogador, controle): codigo do evdev} das linhas validas do .key."""
+    out = {}
+    try:
+        with open(path, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                found = GAME_KEY_LINE.match(line.strip())
+                if found and found.group(3) in GAME_KEYS:
+                    out[(int(found.group(1)), found.group(2))] = GAME_KEYS[found.group(3)]
+    except OSError:
+        pass
+    return out
+
+
+def gamekeys_text(keymap):
+    """O .key de {(jogador, controle): codigo}, na ordem dos jogadores e dos
+    controles."""
+    names = {code: name for name, code in GAME_KEYS.items()}
+    lines = ['p%d_%s=%s' % (p, c, names[code]) for (p, c), code in
+             sorted(keymap.items(), key=lambda kv: (kv[0][0], CONTROLS.index(kv[0][1])))]
+    return GAME_KEYS_HEADER + ''.join(line + '\n' for line in lines)
+
+
+def save_gamekeys(path, keymap):
+    """Grava o .key (pelo .tmp), com o dono da pasta: a OSD roda como root."""
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(gamekeys_text(keymap))
+    try:
+        st = os.stat(os.path.dirname(path) or '.')
+        os.chown(tmp, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def gamekeys_run_dir(uid=None, run_user='/run/user'):
+    """A pasta do socket do gamekeys: a do XDG_RUNTIME_DIR do jogador (com
+    uid, a dele em /run/user, que a OSD procura)."""
+    if uid is None:
+        return os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp', GAMEKEYS_DIR)
+    return os.path.join(run_user, str(uid), GAMEKEYS_DIR)
+
+
+def gamekeys_call(folder, command, timeout=2.0):
+    """Manda um comando ao gamekeys da pasta e devolve a resposta (None: ele
+    nao esta rodando)."""
+    import socket
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect(os.path.join(folder, 'sock'))
+            s.sendall((command + '\n').encode())
+            data = b''
+            while not data.endswith(b'\n'):
+                chunk = s.recv(256)
+                if not chunk:
+                    break
+                data += chunk
+    except OSError:
+        return None
+    return data.decode('utf-8', 'replace').strip()
+
+
+def gamekeys_current(folder):
+    """O .key do jogo que o gamekeys da pasta atende, ou None."""
+    try:
+        with open(os.path.join(folder, 'current'), encoding='utf-8') as f:
+            return f.readline().strip() or None
+    except OSError:
+        return None
+
+
+class GameKeySender(KeySender):
+    """O teclado virtual do gamekeys, com todas as teclas do GAME_KEYS (o .key
+    relido pode usar qualquer uma). Outro nome: os leitores de teclado do
+    FliperOS o deixam de fora."""
+
+    NAME = b'FliperOS game keys'
+
+
+class GameKeys:
+    """O controle virando teclado: step(apertados) aperta e solta as teclas
+    do mapa (sender.key). capture() espera o proximo controle apertado sem
+    mandar tecla; o que ficou apertado no fim dele so vale depois de solto."""
+
+    def __init__(self, keymap, sender):
+        self.keymap = dict(keymap)
+        self.sender = sender
+        self.sent = set()
+        self.before = set()
+        self.ignore = set()
+        self.capture = None
+        # Com a OSD aberta nenhuma tecla sai (um controle lido pelo HIDAPI do
+        # SDL escapa do EVIOCGRAB dela).
+        self.muted = False
+
+    def reload(self, keymap):
+        self.keymap = dict(keymap)
+
+    def mute(self, on):
+        self.muted = on
+        if on:
+            self.release()
+        else:
+            self.ignore = set(self.before)
+
+    def release(self):
+        for code in sorted(self.sent):
+            self.sender.key(code, False)
+        self.sent = set()
+
+    def start_capture(self, reply, seconds, now=None):
+        self.release()
+        self.capture = (reply, (now if now is not None else time.monotonic()) + seconds)
+
+    def step(self, pressed, now=None):
+        pressed = set(pressed)
+        new = pressed - self.before
+        self.before = pressed
+        if self.capture:
+            reply, deadline = self.capture
+            if new:
+                player, control = min(new, key=lambda pc: (pc[0], CONTROLS.index(pc[1])))
+                self.capture = None
+                self.ignore = set(pressed)
+                reply('p%d_%s' % (player, control))
+            elif (now if now is not None else time.monotonic()) > deadline:
+                self.capture = None
+                self.ignore = set(pressed)
+                reply('none')
+            return
+        if self.muted:
+            return
+        self.ignore &= pressed
+        want = {self.keymap[pc] for pc in pressed - self.ignore if pc in self.keymap}
+        for code in sorted(want - self.sent):
+            self.sender.key(code, True)
+        for code in sorted(self.sent - want):
+            self.sender.key(code, False)
+        self.sent = want
+
+
+class NoSender:
+    """Sem /dev/uinput: o gamekeys segue (a OSD ainda captura os controles)."""
+
+    def key(self, code, down):
+        pass
+
+    def close(self):
+        pass
+
+
+def cmd_gamekeys(args):
+    import signal
+    import socket
+    players = watch_players(args.map)
+    elements = [e for binds in players.values() for _, e in binds.values()]
+    keyboards = Keyboards(skip=b'FliperOS') if any(is_key(e) for e in elements) else None
+    sticks = None if all(is_key(e) for e in elements) else Sticks()
+    try:
+        sender = GameKeySender(sorted(set(GAME_KEYS.values())))
+    except OSError as exc:
+        print('no virtual keyboard: %s' % exc, file=sys.stderr)
+        sender = NoSender()
+    keys = GameKeys(read_gamekeys(args.keyfile), sender)
+    folder = gamekeys_run_dir()
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, 'sock')
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(path)
+    server.listen(4)
+    server.setblocking(False)
+    with open(os.path.join(folder, 'current'), 'w', encoding='utf-8') as f:
+        f.write('%s\n%d\n' % (os.path.abspath(args.keyfile), os.getpid()))
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    checked = time.monotonic()
+
+    def answer(conn):
+        def reply(text):
+            try:
+                conn.sendall((text + '\n').encode())
+            except OSError:
+                pass
+            conn.close()
+        return reply
+
+    try:
+        while True:
+            states = sticks.read() if sticks else {}
+            if keyboards:
+                keyboards.read(1 / GAMEKEYS_HZ)
+            else:
+                time.sleep(1 / GAMEKEYS_HZ)
+            now = watch_state(players, states, keyboards.down() if keyboards else set())
+            keys.step({(int(p), c) for p, on in now.items() for c in on if c in CONTROLS})
+            try:
+                conn, _ = server.accept()
+            except (BlockingIOError, InterruptedError):
+                conn = None
+            if conn:
+                conn.settimeout(0.5)
+                try:
+                    words = conn.recv(256).decode('utf-8', 'replace').split()
+                except OSError:
+                    words = []
+                if words[:1] == ['reload']:
+                    keys.reload(read_gamekeys(args.keyfile))
+                    answer(conn)('ok')
+                elif words[:1] in (['mute'], ['unmute']):
+                    keys.mute(words[0] == 'mute')
+                    answer(conn)('ok')
+                elif words[:1] == ['capture']:
+                    seconds = float(words[1]) if len(words) > 1 and words[1].replace('.', '', 1).isdigit() else 5.0
+                    conn.settimeout(seconds + 2)
+                    keys.start_capture(answer(conn), seconds)
+                else:
+                    answer(conn)('?')
+            if args.parent and time.monotonic() - checked > 1:
+                checked = time.monotonic()
+                try:
+                    os.kill(args.parent, 0)
+                except ProcessLookupError:
+                    return 0
+                except PermissionError:
+                    pass
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        keys.release()
+        sender.close()
+        if sticks:
+            sticks.close()
+        for name in ('sock', 'current'):
+            try:
+                os.unlink(os.path.join(folder, name))
+            except OSError:
+                pass
+
+
 def main():
     parser = argparse.ArgumentParser(prog='fliperos-buttons')
     sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('gamekeys')
+    p.add_argument('keyfile')
+    p.add_argument('--parent', type=int, default=0)
+    p.add_argument('--map', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_gamekeys)
     p = sub.add_parser('capture')
     p.add_argument('--timeout', type=float, default=8)
     p.add_argument('--hold', type=float, default=0)

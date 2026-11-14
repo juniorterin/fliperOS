@@ -172,8 +172,43 @@ NOT_GAMES = ("python3", "fliperos-gui", "fliperos-frontend", "attractplus", "att
 # O teclado virtual do Emulator menu: o mesmo nome do do fliperos-buttons
 # hotkey; a OSD nao o toma (Inputs.scan) nem o le.
 EMULATOR_KEYS = b"FliperOS emulator keys"
+# O teclado virtual do controle de um jogo custom (fliperos-buttons gamekeys):
+# a OSD tambem nao o toma.
+GAME_KEYS_NAME = b"FliperOS game keys"
 # O jogo do Quit que nao sai com o SIGTERM em QUIT_KILL segundos leva o SIGKILL.
 QUIT_KILL = 5.0
+# Controller configuration (os jogos custom, no lugar do Emulator menu): o
+# teclado na tela, linha a linha, com (nome no evdev, rotulo, largura em
+# teclas). As setas sao desenhadas (UP DOWN LEFT RIGHT). A ultima linha sao os
+# botoes Clear (limpa tudo), Save e Back.
+OSK_ROWS = (
+    (("ESC", "ESC", 1.5),) + tuple(("F%d" % n, "F%d" % n, 1) for n in range(1, 13)),
+    (("GRAVE", "`", 1),) + tuple((d, d, 1) for d in "1234567890") +
+    (("MINUS", "-", 1), ("EQUAL", "=", 1), ("BACKSPACE", "BKSP", 2)),
+    (("TAB", "TAB", 1.5),) + tuple((c, c, 1) for c in "QWERTYUIOP") +
+    (("LEFTBRACE", "[", 1), ("RIGHTBRACE", "]", 1), ("BACKSLASH", "\\", 1.5)),
+    (("CAPSLOCK", "CAPS", 1.75),) + tuple((c, c, 1) for c in "ASDFGHJKL") +
+    (("SEMICOLON", ";", 1), ("APOSTROPHE", "'", 1), ("ENTER", "ENTER", 2.25)),
+    (("LEFTSHIFT", "SHIFT", 2.25),) + tuple((c, c, 1) for c in "ZXCVBNM") +
+    (("COMMA", ",", 1), ("DOT", ".", 1), ("SLASH", "/", 1), ("RIGHTSHIFT", "SHIFT", 1.75), ("UP", "UP", 1)),
+    (("LEFTCTRL", "CTRL", 1.5), ("LEFTALT", "ALT", 1.5), ("SPACE", "SPACE", 5), ("RIGHTALT", "ALT", 1.5),
+     ("RIGHTCTRL", "CTRL", 1.5), ("LEFT", "LEFT", 1), ("DOWN", "DOWN", 1), ("RIGHT", "RIGHT", 1)),
+    (("INSERT", "INS", 1.5), ("DELETE", "DEL", 1.5), ("HOME", "HOME", 1.5), ("END", "END", 1.5),
+     ("PAGEUP", "PGUP", 1.5), ("PAGEDOWN", "PGDN", 1.5), ("PAUSE", "PAUSE", 1.5), ("KPENTER", "KPENT", 1.5),
+     ("KPPLUS", "KP+", 1), ("KPMINUS", "KP-", 1)),
+)
+OSK_BUTTONS = (("clear", "Clear"), ("save", "Save"), ("back", "Back"))
+# Quanto o Enter numa tecla espera o botao do controle.
+CAPTURE_SECONDS = 5
+# Os controles do .key, na ordem do buttons.map, e o nome curto de cada um
+# na linha de baixo do teclado ("Z: P1 B3, P2 B3").
+CONTROL_ORDER = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "start", "coin")
+CONTROL_NAMES = {"up": "UP", "down": "DOWN", "left": "LEFT", "right": "RIGHT", "start": "START", "coin": "COIN"}
+
+
+def control_name(pc):
+    player, control = pc
+    return "P%d %s" % (player, CONTROL_NAMES.get(control, control.upper()))
 
 
 def is_game(screen):
@@ -824,12 +859,20 @@ def choice_options(text):
 class Menu:
     """As paginas do menu e o que cada linha faz."""
 
-    def __init__(self, screen, mode, worker, emulator_key=None):
+    def __init__(self, screen, mode, worker, emulator_key=None, gamekeys=None):
         self.screen, self.mode, self.worker = screen or {}, mode, worker
         # A tecla do menu do emulador na tela (None: sem o botao Emulator
         # menu) e o que fazer depois de fechar: "emulator" (apertar a tecla)
         # ou "quit" (fechar o jogo).
         self.emulator_key = emulator_key if is_game(self.screen) else None
+        # Um jogo custom com o mapa do controle rodando (fliperos-buttons
+        # gamekeys): {"folder", "keyfile", "buttons"}; o Controller
+        # configuration no lugar do Emulator menu. osk: o teclado na tela
+        # dele; capture_request: a tecla que espera o botao (o servico
+        # pergunta ao gamekeys e chama capture_done).
+        self.gamekeys = gamekeys if is_game(self.screen) else None
+        self.osk = None
+        self.capture_request = None
         self.after = None
         self.stack = []
         self.geometry = None
@@ -859,7 +902,7 @@ class Menu:
             # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
             return "GEOMETRY " + self.geometry.key
         return {"main": "FLIPEROS", "config": "CONFIGURATION", "colour": "COLOUR", "geometry": "GEOMETRY",
-                "guncon": "GUNCON 2", "scanlines": "SCANLINES"}.get(name, "")
+                "guncon": "GUNCON 2", "scanlines": "SCANLINES", "keys": "CONTROLLER"}.get(name, "")
 
     def rows_of(self, name):
         return getattr(self, "rows_" + name)()
@@ -893,6 +936,9 @@ class Menu:
         items = []
         if self.emulator_key is not None:
             items.append(("Emulator menu", ("menu", "CYAN"), lambda: self.leave("emulator")))
+        elif self.gamekeys:
+            # Um jogo custom: o controle como teclado (os jogos sem joystick).
+            items.append(("Controller configuration", ("pad", "CYAN"), self.open_keys))
         items.append(("Close", ("close", "RED"), self.close))
         if is_game(self.screen):
             items.append(("Quit", ("quit", "ORANGE"), lambda: self.leave("quit")))
@@ -937,6 +983,104 @@ class Menu:
         buttons.action = lambda: self.save_profile() if buttons.value == "save" else self.back()
         rows.append(buttons)
         return rows
+
+    # ── Controller configuration (os jogos custom) ──
+    # O teclado na tela: Enter numa tecla espera um botao do controle (o
+    # gamekeys diz qual, pN_CONTROLE), que passa a mandar essa tecla; o mesmo
+    # botao de novo na mesma tecla a limpa. As teclas com botao ficam acesas.
+    # Save grava o .key do jogo e o gamekeys o rele; Back sai sem gravar.
+
+    def rows_keys(self):
+        return []
+
+    def open_keys(self):
+        buttons = self.gamekeys["buttons"]
+        names = {code: name for name, code in buttons.GAME_KEYS.items()}
+        current = buttons.read_gamekeys(self.gamekeys["keyfile"])
+        self.osk = {"map": {pc: names[code] for pc, code in current.items() if code in names},
+                    "row": 1, "col": 1, "button": 1, "changed": False}
+        self.open_page("keys")
+
+    def osk_rows(self):
+        """As linhas do teclado; a ultima, os botoes (com peso 1 cada)."""
+        return [list(row) for row in OSK_ROWS] + [[(v, label, 1) for v, label in OSK_BUTTONS]]
+
+    @staticmethod
+    def osk_centers(row):
+        total, at, out = sum(w for _, _, w in row), 0.0, []
+        for _, _, w in row:
+            out.append((at + w / 2) / total)
+            at += w
+        return out
+
+    def osk_current(self):
+        rows = self.osk_rows()
+        return rows[self.osk["row"]][self.osk["col"]][0]
+
+    def osk_bound(self, key):
+        """Os controles que mandam a tecla key, em ordem."""
+        return sorted((pc for pc, name in self.osk["map"].items() if name == key),
+                      key=lambda pc: (pc[0], CONTROL_ORDER.index(pc[1]) if pc[1] in CONTROL_ORDER else 99))
+
+    def osk_key(self, key):
+        osk = self.osk
+        rows = self.osk_rows()
+        if key == KEY_ESC:
+            self.back()
+        elif key in (KEY_UP, KEY_DOWN):
+            # A tecla da outra linha mais perto da de agora.
+            here = self.osk_centers(rows[osk["row"]])[osk["col"]]
+            osk["row"] = max(0, min(len(rows) - 1, osk["row"] + (1 if key == KEY_DOWN else -1)))
+            centers = self.osk_centers(rows[osk["row"]])
+            osk["col"] = min(range(len(centers)), key=lambda i: abs(centers[i] - here))
+        elif key in (KEY_LEFT, KEY_RIGHT):
+            osk["col"] = max(0, min(len(rows[osk["row"]]) - 1, osk["col"] + (1 if key == KEY_RIGHT else -1)))
+        elif key == KEY_ENTER:
+            current = self.osk_current()
+            if osk["row"] == len(rows) - 1:
+                if current == "clear":
+                    osk["map"] = {}
+                    osk["changed"] = True
+                    self.status = "CLEARED"
+                elif current == "save":
+                    self.save_keys()
+                else:
+                    self.back()
+            else:
+                self.capture_request = current
+                self.status = ""
+        self.dirty = True
+
+    def capture_done(self, answer):
+        """A resposta do gamekeys a tecla capture_request: pN_CONTROLE, none
+        (ninguem apertou) ou None (o gamekeys nao respondeu)."""
+        key, self.capture_request = self.capture_request, None
+        self.dirty = True
+        found = re.fullmatch(r"p([1-8])_([a-z0-9]+)", answer or "")
+        if not found:
+            self.status = "NO BUTTON" if answer == "none" else "NO CONTROLLER MAPPER"
+            return
+        control = (int(found.group(1)), found.group(2))
+        if self.osk["map"].get(control) == key:
+            del self.osk["map"][control]
+            self.status = "%s CLEARED" % key
+        else:
+            self.osk["map"][control] = key
+            self.status = "%s SET" % key
+        self.osk["changed"] = True
+
+    def save_keys(self):
+        buttons = self.gamekeys["buttons"]
+        try:
+            buttons.save_gamekeys(self.gamekeys["keyfile"],
+                                  {pc: buttons.GAME_KEYS[name] for pc, name in self.osk["map"].items()})
+        except OSError as exc:
+            print("fliperos-osd: could not save %s: %s" % (self.gamekeys["keyfile"], exc), file=sys.stderr)
+            self.status = "NOT SAVED"
+            return
+        buttons.gamekeys_call(self.gamekeys["folder"], "reload")
+        self.osk["changed"] = False
+        self.status = "SAVED"
 
     def leave(self, what):
         """Emulator menu ou Quit: a OSD fecha (o que nao foi salvo volta) e o
@@ -1222,6 +1366,10 @@ class Menu:
         """Uma tecla do menu (os codigos do evdev)."""
         page = self.page
         rows = page["rows"]
+        if page["name"] == "keys":
+            if self.capture_request is None:
+                self.osk_key(key)
+            return
         if key == KEY_ESC:
             self.back()
         elif not rows:
@@ -1362,8 +1510,105 @@ class Painter:
             left = tiny.fit(label, width - 12)
         tiny.text(surface, left, color, x + 6, top + 3)
 
+    def keyboard(self, menu):
+        """Controller configuration: o teclado na tela (as teclas com botao
+        acesas, o cursor em rosa), embaixo o que a tecla do cursor tem (ou o
+        pedido do botao) e os botoes Clear, Save e Back. Cabe em todo
+        quadro: as teclas dividem a largura, e a letra e a pequena."""
+        pg, t = self.pg, self.theme
+        import tiny
+        W, H = self.area()
+        surface = pg.Surface((W, H), pg.SRCALPHA)
+        osk = menu.osk
+        rows = menu.osk_rows()
+        keys, buttons = rows[:-1], rows[-1]
+        safe_x, safe_y = min(t.SAFE_X, W // 20), min(t.SAFE_Y, H // 24)
+        width = W - 2 * safe_x
+        sub = menu.subtitle()
+        head = 18 + (7 if sub else 0)
+        info_h, bh = 9, self.BUTTONS_ROW
+        key_h = max(7, min(12, (H - 2 * safe_y - head - 6 - info_h - self.BUTTONS_GAP - bh) // len(keys)))
+        height = head + len(keys) * key_h + 2 + info_h + self.BUTTONS_GAP + bh + 4
+        x, y = (W - width) // 2, H - safe_y - height
+        pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
+        pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
+        self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
+        if sub:
+            room = width - 12 - (tiny.width(menu.status) + 8 if menu.status else 0)
+            tiny.text(surface, tiny.fit(sub, max(8, room)), t.COMMENT, x + 6, y + 15)
+            if menu.status:
+                tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 15, right=True)
+        elif menu.status:
+            tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 6, right=True)
+        inner = width - 8
+        top = y + head
+        bound = set(osk["map"].values())
+        for r, row in enumerate(keys):
+            total = sum(w for _, _, w in row)
+            at = 0.0
+            for c, (name, label, w) in enumerate(row):
+                kx = x + 4 + round(inner * at / total)
+                kw = x + 4 + round(inner * (at + w) / total) - kx - 1
+                at += w
+                cursor = (r, c) == (osk["row"], osk["col"])
+                lit = name in bound
+                waiting = cursor and menu.capture_request is not None
+                fill = t.YELLOW if waiting else t.PURPLE if lit else t.BG_DEEP
+                pg.draw.rect(surface, fill + (255,), (kx, top, kw, key_h - 1))
+                pg.draw.rect(surface, (t.PINK if cursor else t.LINE) + (255,), (kx, top, kw, key_h - 1), 1)
+                color = t.BG_DEEP if waiting else t.FG if lit or cursor else t.COMMENT
+                cx, cy = kx + kw // 2, top + (key_h - 1) // 2
+                if label in ("UP", "DOWN", "LEFT", "RIGHT"):
+                    # As setas desenhadas: a letra nao tem.
+                    d = 2
+                    points = {"UP": [(cx - d, cy + 1), (cx + d, cy + 1), (cx, cy - d + 1)],
+                              "DOWN": [(cx - d, cy - 1), (cx + d, cy - 1), (cx, cy + d - 1)],
+                              "LEFT": [(cx + 1, cy - d), (cx + 1, cy + d), (cx - d + 1, cy)],
+                              "RIGHT": [(cx - 1, cy - d), (cx - 1, cy + d), (cx + d - 1, cy)]}[label]
+                    pg.draw.polygon(surface, color + (255,), points)
+                else:
+                    text = tiny.fit(label, max(3, kw - 2))
+                    tiny.text(surface, text, color, cx - tiny.width(text) // 2, cy - 2)
+            top += key_h
+        # A tecla do cursor: os botoes dela, ou o pedido do botao.
+        top += 2
+        current = menu.osk_current() if osk["row"] < len(keys) else ""
+        label = next((lab for row in keys for n, lab, _ in row if n == current), current)
+        if menu.capture_request is not None:
+            line, color = "PRESS A BUTTON FOR %s (%dS)" % (label, CAPTURE_SECONDS), t.YELLOW
+        elif current:
+            names = [control_name(pc) for pc in menu.osk_bound(current)]
+            line, color = "%s: %s" % (label, ", ".join(names) if names else "NOT SET"), t.CYAN if names else t.COMMENT
+        else:
+            line, color = "%d BUTTONS SET" % len(osk["map"]), t.COMMENT
+        tiny.text(surface, tiny.fit(line, width - 12), color, x + 6, top + 1)
+        top += info_h + self.BUTTONS_GAP
+        # Os botoes Clear, Save e Back, como os da Configuration.
+        n = len(buttons)
+        gap = max(6, width // 12)
+        bw = (width - (n + 1) * gap) // n
+        for k, (value, text, _) in enumerate(buttons):
+            bx = x + gap + k * (bw + gap)
+            on = osk["row"] == len(keys) and osk["col"] == k
+            pg.draw.rect(surface, (t.PURPLE if on else t.BG_DEEP) + (255,), (bx, top, bw, bh))
+            pg.draw.rect(surface, (t.PINK if on else t.COMMENT) + (255,), (bx, top, bw, bh), 2 if on else 1)
+            icon, icon_color = self.BUTTON_ICONS.get(value, ("close", "RED"))
+            image = self.font.render(text, False, t.FG if on else t.COMMENT)
+            iy = top + (bh - 8) // 2
+            if image.get_width() + 12 <= bw - 6:
+                ix = bx + (bw - image.get_width() - 12) // 2
+                surface.blit(image, (ix + 12, iy))
+            else:
+                small = tiny.fit(text, bw - 18)
+                ix = bx + (bw - tiny.width(small) - 12) // 2
+                tiny.text(surface, small, t.FG if on else t.COMMENT, ix + 12, iy + 1)
+            self.icon(surface, icon, ix, iy, getattr(t, icon_color) if on else t.COMMENT)
+        return surface
+
     def panel(self, menu):
         pg, t = self.pg, self.theme
+        if menu.page["name"] == "keys" and menu.osk is not None:
+            return self.keyboard(menu)
         W, H = self.area()
         surface = pg.Surface((W, H), pg.SRCALPHA)
         page = menu.page
@@ -1647,10 +1892,12 @@ class Painter:
         # As tres linhas de um menu (Emulator menu) e o simbolo de ligar (Quit).
         "menu": ("........", "########", "........", "########", "........", "########", "........", "........"),
         "quit": ("...##...", ".#.##.#.", "#..##..#", "#......#", "#......#", ".#....#.", "..####..", "........"),
+        # Um controle (Controller configuration): a cruz e dois botoes.
+        "pad": ("........", ".######.", "#.#####.", "...#.#.#", "#.#####.", "#.####.#", ".#....#.", "........"),
     }
     # O icone e a cor (do tema) de cada botao.
     BUTTON_ICONS = {"save": ("save", "GREEN"), "close": ("close", "RED"), "back": ("back", "PINK"),
-                    "emulator": ("menu", "CYAN"), "quit": ("quit", "ORANGE")}
+                    "emulator": ("menu", "CYAN"), "quit": ("quit", "ORANGE"), "clear": ("close", "ORANGE")}
 
     def icon(self, surface, name, x, y, color):
         for j, line in enumerate(self.ICONS[name]):
@@ -1762,7 +2009,7 @@ class Inputs:
                 name = bytes(name).split(b"\0")[0]
                 keys = self.pk.bits(fd, EV_KEY, 0x300)
                 pad = self.pk.is_pad(name, keys)
-                keyboard = name not in (self.pk.NAME, EMULATOR_KEYS) and self.is_keyboard(keys)
+                keyboard = name not in (self.pk.NAME, EMULATOR_KEYS, GAME_KEYS_NAME) and self.is_keyboard(keys)
                 if not pad and not keyboard:
                     os.close(fd)
                     continue
@@ -2090,14 +2337,32 @@ class Service:
             pass
         if self.painter is None:
             self.painter = Painter()
-        menu = Menu(screen, current_mode(), self.worker, self.emulator_key(screen))
+        gamekeys = self.gamekeys(screen)
+        menu = Menu(screen, current_mode(), self.worker, self.emulator_key(screen), gamekeys)
         pressed = []
         inputs = Inputs(self.padkeys, lambda key, value: pressed.append(key) if value else None)
         last = time.monotonic()
         scanned = polled = last
+        # O mapa do controle do jogo custom fica calado com o menu aberto.
+        if gamekeys:
+            self.buttons.gamekeys_call(gamekeys["folder"], "mute")
         try:
             while self.running and not menu.closing:
                 now = time.monotonic()
+                if menu.capture_request is not None:
+                    # Controller configuration: o pedido do botao na tela, os
+                    # controles soltos (o gamekeys le pelo SDL, que o EVIOCGRAB
+                    # daqui calaria) e, com a resposta, tomados de novo depois
+                    # de soltar o botao.
+                    self.screen_file.show(self.painter.rgba(menu))
+                    inputs.close()
+                    answer = self.buttons.gamekeys_call(gamekeys["folder"], "capture %d" % CAPTURE_SECONDS,
+                                                        timeout=CAPTURE_SECONDS + 2)
+                    menu.capture_done(answer)
+                    del pressed[:]
+                    inputs = Inputs(self.padkeys, lambda key, value: pressed.append(key) if value else None)
+                    last = scanned = time.monotonic()
+                    continue
                 inputs.poll_grab()
                 if now - scanned >= 2:
                     scanned = now
@@ -2137,11 +2402,25 @@ class Service:
             menu.leave_geometry()
             self.screen_file.hide()
             inputs.close()
+            if gamekeys:
+                self.buttons.gamekeys_call(gamekeys["folder"], "unmute")
         # Com os controles de volta ao jogo: o Emulator menu ou o Quit.
         if menu.after == "emulator":
             self.press_emulator_key(menu.emulator_key)
         elif menu.after == "quit":
             self.quit_game(screen)
+
+    def gamekeys(self, screen):
+        """O mapa do controle de um jogo custom (custom_GRUPO_NOME, o --app
+        dele) rodando: {"folder", "keyfile", "buttons"}, ou None."""
+        if not self.buttons or not is_game(screen) or not screen.get("program", "").startswith("custom_"):
+            return None
+        try:
+            folder = self.buttons.gamekeys_run_dir(screen["uid"], RUN_USER)
+            keyfile = self.buttons.gamekeys_current(folder)
+        except (AttributeError, KeyError, TypeError):
+            return None
+        return {"folder": folder, "keyfile": keyfile, "buttons": self.buttons} if keyfile else None
 
     def emulator_key(self, screen):
         """A tecla do menu do emulador na tela (None: um frontend, ou um
@@ -2249,6 +2528,26 @@ def shot(page, path):
     painter.theme.set_orientation(read_conf().get("orientation", ""))
     if page in ("volume", "mute"):
         canvas = painter.fit(lambda: painter.volume_bar(60, page == "mute"), mode)
+    elif page in ("keys", "keys-capture"):
+        # Controller configuration de um jogo custom: um .key de exemplo
+        # (FLIPEROS_OSD_SHOT_KEYS, ou o de dentro) e, em keys-capture, a
+        # tecla esperando o botao.
+        import tempfile
+        buttons = load_buttons()
+        keyfile = os.environ.get("FLIPEROS_OSD_SHOT_KEYS")
+        if not keyfile:
+            keyfile = os.path.join(tempfile.mkdtemp(prefix="fliperos-osd-shot-"), "Game.key")
+            with open(keyfile, "w", encoding="utf-8") as f:
+                f.write("p1_up=UP\np1_down=DOWN\np1_left=LEFT\np1_right=RIGHT\np1_b1=Z\np1_b2=X\n"
+                        "p1_b3=LEFTCTRL\np2_b3=LEFTCTRL\np1_start=ENTER\np1_coin=5\np1_b4=SPACE\n")
+        menu = Menu({"program": "custom_pc_games_pang", "core": "", "fps": 59.9}, mode, Worker(),
+                    gamekeys={"folder": "/nonexistent", "keyfile": keyfile, "buttons": buttons})
+        menu.open_keys()
+        for key in os.environ.get("FLIPEROS_OSD_SHOT_MOVES", "down down right right right").split():
+            menu.key({"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT}[key])
+        if page == "keys-capture":
+            menu.capture_request = menu.osk_current()
+        canvas = painter.fit(lambda: painter.panel(menu), mode)
     elif page == "achievement":
         # FLIPEROS_OSD_SHOT_TIME: os segundos da animacao (sem: 2,6, com o
         # titulo correndo); FLIPEROS_OSD_SHOT_TITLE, o titulo.

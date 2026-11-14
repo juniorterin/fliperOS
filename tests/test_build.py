@@ -17215,6 +17215,80 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertTrue(rc.combo_held([(1, 'start'), (None, 'coin')], {'1': ['start'], '2': ['coin']}))
         self.assertFalse(rc.combo_held([(None, 'start'), (None, 'coin')], {'1': ['start'], '2': ['coin']}))
 
+    def test_gamekeys_turn_the_controller_into_keys(self):
+        # Um jogo custom sem joystick: o controle aperta as teclas do .key
+        # (por jogador e comando do Button mapping); a OSD pede o proximo
+        # comando apertado (capture), e o que ficou apertado no fim so manda
+        # tecla depois de solto; com a OSD aberta (mute), nada sai.
+        rc = self.rc
+        events = []
+
+        class Sender:
+            def key(self, code, down):
+                events.append((code, down))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            keyfile = Path(tmp) / 'Pang.key'
+            keyfile.write_text('# x\np1_b1=Z\np1_start=ENTER\np2_b1=Z\np1_up=UP\nnonsense\np1_b2=NOPE\np9_b1=X\n')
+            keymap = rc.read_gamekeys(str(keyfile))
+            self.assertEqual(keymap, {(1, 'b1'): 44, (1, 'start'): 28, (2, 'b1'): 44, (1, 'up'): 103})
+            keys = rc.GameKeys(keymap, Sender())
+            keys.step({(1, 'b1'), (1, 'up')})
+            keys.step({(1, 'b1'), (2, 'b1')})       # dois jogadores na mesma tecla: uma tecla so
+            keys.step(set())
+            self.assertEqual(events, [(44, True), (103, True), (103, False), (44, False)])
+            del events[:]
+            got = []
+            keys.start_capture(got.append, 5, now=0)
+            keys.step({(1, 'start')}, now=1)
+            self.assertEqual(got, ['p1_start'])
+            keys.step({(1, 'start')}, now=2)        # ainda apertado: nada
+            keys.step(set(), now=3)
+            keys.step({(1, 'start')}, now=4)
+            self.assertEqual(events, [(28, True)])
+            keys.start_capture(got.append, 1, now=10)
+            keys.step(set(), now=12)
+            self.assertEqual(got[-1], 'none')
+            del events[:]
+            keys.mute(True)
+            keys.step({(1, 'b1')})
+            self.assertEqual(events, [])
+            keys.mute(False)
+            keys.step({(1, 'b1')})
+            self.assertEqual(events, [])            # apertado durante o mute: so depois de soltar
+            # O .key gravado pela OSD, na ordem dos jogadores e dos comandos.
+            rc.save_gamekeys(str(keyfile), {(2, 'b1'): 44, (1, 'start'): 28, (1, 'b3'): 29})
+            text = keyfile.read_text()
+            self.assertTrue(text.startswith('# FliperOS: controller to keyboard'))
+            self.assertEqual([l for l in text.splitlines() if not l.startswith('#')],
+                             ['p1_b3=LEFTCTRL', 'p1_start=ENTER', 'p2_b1=Z'])
+            # O laco de verdade: o socket da OSD (sem uinput e sem controle aqui).
+            run = Path(tmp) / 'run'
+            run.mkdir()
+            env = dict(os.environ, XDG_RUNTIME_DIR=str(run), FLIPEROS_INPUT_EVENTS=str(Path(tmp) / 'none*'))
+            proc = subprocess.Popen([sys.executable, str(ROOT / 'config/fliperos-buttons'), 'gamekeys', str(keyfile),
+                                     '--parent', str(os.getpid()), '--map', str(Path(tmp) / 'no.map')], env=env,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                folder = str(run / 'fliperos-gamekeys')
+                for _ in range(100):
+                    if rc.gamekeys_current(folder):
+                        break
+                    time.sleep(0.05)
+                self.assertEqual(rc.gamekeys_current(folder), str(keyfile))
+                self.assertEqual(rc.gamekeys_call(folder, 'reload'), 'ok')
+                self.assertEqual(rc.gamekeys_call(folder, 'mute'), 'ok')
+                self.assertEqual(rc.gamekeys_call(folder, 'capture 0.3', timeout=3), 'none')
+                self.assertEqual(rc.gamekeys_run_dir(1000, '/run/user'), '/run/user/1000/fliperos-gamekeys')
+            finally:
+                proc.terminate()
+                proc.wait(5)
+            self.assertIsNone(rc.gamekeys_current(folder))
+            self.assertIsNone(rc.gamekeys_call(folder, 'reload'))
+        # O executor dos jogos custom o sobe com o .key do jogo e o PID dele.
+        runner = (ROOT / 'config/fliperos-customgame').read_text()
+        self.assertIn('[tool, "gamekeys", keyfile, "--parent", str(os.getpid())]', runner)
+
     def test_menu_key_of_each_emulator(self):
         # Conferidas no gabinete por um teclado virtual: F1 no RetroArch, Tab
         # no GroovyMAME e no Flycast, F10 no SM2-Emu (o key_overlay dele), Esc
@@ -18615,6 +18689,128 @@ class OsdTests(unittest.TestCase):
         menu, _ = self.config(mode=dict(self.MODE, interlace=False))
         self.assertEqual(self.labels(menu), ['Save profile as', 'Delete profile', 'Colour', 'Save|Back'])
 
+    def test_custom_game_controller_configuration(self):
+        # Um jogo custom (custom_GRUPO_NOME) com o mapa do controle rodando:
+        # Controller configuration no lugar do Emulator menu. O teclado na
+        # tela: Enter numa tecla pede o botao (o servico pergunta ao
+        # gamekeys), o mesmo botao de novo limpa, Save grava o .key e manda
+        # o gamekeys reler; Back sai sem gravar.
+        osd = self.osd
+        buttons = load_script('fliperos_buttons_osd', 'config/fliperos-buttons')
+        calls = []
+        buttons.gamekeys_call = lambda folder, command, timeout=2.0: calls.append((folder, command)) or 'ok'
+        keyfile = Path(self.tmp.name) / 'Pang.key'
+        keyfile.write_text('p1_b1=Z\n')
+        gamekeys = {'folder': '/run/user/1000/fliperos-gamekeys', 'keyfile': str(keyfile), 'buttons': buttons}
+        screen = {'program': 'custom_pc_games_pang', 'core': ''}
+        menu = osd.Menu(screen, self.MODE, osd.Worker(), None, gamekeys)
+        self.assertEqual(self.labels(menu), ['Configuration', 'Controller configuration', 'Close', 'Quit'])
+        self.assertEqual(menu.page['rows'][1].icon, ('pad', 'CYAN'))
+        # Sobre o frontend, nao; sem o gamekeys, nao.
+        self.assertNotIn('Controller configuration',
+                         self.labels(osd.Menu({'program': 'python3'}, self.MODE, osd.Worker(), None, gamekeys)))
+        self.assertNotIn('Controller configuration', self.labels(osd.Menu(screen, self.MODE, osd.Worker())))
+        menu.page['cursor'] = 1
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.title(), 'CONTROLLER')
+        self.assertEqual(menu.osk_current(), '1')
+        self.assertEqual(menu.osk_bound('Z'), [(1, 'b1')])
+        # Ate o X (linha do Z, uma a direita).
+        for key in (osd.KEY_DOWN, osd.KEY_DOWN, osd.KEY_DOWN):
+            menu.key(key)
+        self.assertEqual(menu.osk_current(), 'Z')
+        menu.key(osd.KEY_RIGHT)
+        self.assertEqual(menu.osk_current(), 'X')
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.capture_request, 'X')
+        menu.key(osd.KEY_RIGHT)                     # esperando o botao: as teclas nao andam
+        self.assertEqual(menu.osk_current(), 'X')
+        menu.capture_done('p1_b2')
+        self.assertEqual(menu.osk['map'], {(1, 'b1'): 'Z', (1, 'b2'): 'X'})
+        menu.key(osd.KEY_ENTER)
+        menu.capture_done('p1_b1')                  # o botao 1 sai do Z e vai para o X
+        self.assertEqual(menu.osk['map'], {(1, 'b1'): 'X', (1, 'b2'): 'X'})
+        menu.key(osd.KEY_ENTER)
+        menu.capture_done('p1_b1')                  # de novo na mesma tecla: limpa
+        self.assertEqual(menu.osk['map'], {(1, 'b2'): 'X'})
+        menu.key(osd.KEY_ENTER)
+        menu.capture_done('none')
+        self.assertEqual(menu.status, 'NO BUTTON')
+        menu.key(osd.KEY_ENTER)
+        menu.capture_done(None)
+        self.assertEqual(menu.status, 'NO CONTROLLER MAPPER')
+        # Save, na linha de baixo (descendo do X chega no Clear all).
+        for _ in range(5):
+            menu.key(osd.KEY_DOWN)
+        self.assertEqual(menu.osk_current(), 'clear')
+        menu.key(osd.KEY_RIGHT)
+        self.assertEqual(menu.osk_current(), 'save')
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual([l for l in keyfile.read_text().splitlines() if not l.startswith('#')], ['p1_b2=X'])
+        self.assertEqual(calls, [('/run/user/1000/fliperos-gamekeys', 'reload')])
+        self.assertEqual(menu.status, 'SAVED')
+        # Clear all e Back: sai sem gravar.
+        menu.key(osd.KEY_LEFT)
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.osk['map'], {})
+        menu.key(osd.KEY_ESC)
+        self.assertEqual(menu.title(), 'FLIPEROS')
+        self.assertIn('p1_b2=X', keyfile.read_text())
+        # O servico acha o gamekeys pelo uid da camada e o arquivo current.
+        service = object.__new__(osd.Service)
+        service.buttons = buttons
+        run_user = Path(self.tmp.name) / 'run'
+        (run_user / '1000' / 'fliperos-gamekeys').mkdir(parents=True)
+        (run_user / '1000' / 'fliperos-gamekeys' / 'current').write_text('%s\n99\n' % keyfile)
+        old = osd.RUN_USER
+        osd.RUN_USER = str(run_user)
+        try:
+            found = service.gamekeys({'program': 'custom_pc_games_pang', 'uid': 1000})
+            self.assertEqual(found['keyfile'], str(keyfile))
+            self.assertIsNone(service.gamekeys({'program': 'retroarch', 'uid': 1000}))
+            self.assertIsNone(service.gamekeys({'program': 'custom_x', 'uid': 1001}))
+        finally:
+            osd.RUN_USER = old
+        # A OSD nao toma o teclado virtual do gamekeys.
+        self.assertIn('GAME_KEYS_NAME) and self.is_keyboard(keys)', (ROOT / 'config/fliperos-osd').read_text())
+
+    def test_controller_configuration_fits_any_frame(self):
+        # O teclado e desenhado no quadro do jogo, como o menu: cabe em todos,
+        # deitado e em pe, e a tecla esperando o botao fica amarela.
+        painter = self.painter()
+        t = painter.theme
+        osd = self.osd
+        buttons = load_script('fliperos_buttons_osd2', 'config/fliperos-buttons')
+        keyfile = Path(self.tmp.name) / 'Pang.key'
+        keyfile.write_text('p1_b1=Z\np1_up=UP\n')
+        try:
+            for orient, frame in (('', (320, 240)), ('', (256, 224)), ('', (384, 224)), ('', (640, 480)),
+                                  ('', (160, 144)), ('vertical-cw', (256, 224)), ('vertical-cw', (640, 480))):
+                t.set_orientation(orient)
+                mode = {'clock': 6700, 'h': [frame[0], 0, 0, frame[0] + 64], 'v': [frame[1], 0, 0, frame[1] + 20],
+                        'interlace': False}
+                menu = osd.Menu({'program': 'custom_pc_games_pang', 'core': '', 'fps': 60.0}, mode, osd.Worker(),
+                                None, {'folder': '/x', 'keyfile': str(keyfile), 'buttons': buttons})
+                menu.open_keys()
+                menu.capture_request = 'Z'
+                canvas = painter.fit(lambda: painter.panel(menu), mode)
+                self.assertEqual(canvas.get_size(), (320, 240))
+                w, h = min(320, frame[0]), min(240, frame[1])
+                painter.size = ((h, w) if orient else (w, h)) if (w, h) != (320, 240) else None
+                try:
+                    W, H = painter.area()
+                    drawn = painter.panel(menu)
+                finally:
+                    painter.size = None
+                self.assertEqual(drawn.get_size(), (W, H))
+                # A caixa inteira dentro do quadro (o canto de cima tem a borda).
+                box = drawn.get_bounding_rect()
+                self.assertGreaterEqual(box.top, 0, (orient, frame))
+                self.assertLessEqual(box.bottom, H, (orient, frame))
+                self.assertGreater(box.height, 60, (orient, frame))
+        finally:
+            t.set_orientation('')
+
     def test_main_page_is_configuration_and_the_items(self):
         # A Configuration (os ajustes e o Save) e os itens com icone: Emulator
         # menu (so num emulador com menu proprio), Close e Quit (so num jogo:
@@ -18684,7 +18880,7 @@ class OsdTests(unittest.TestCase):
         service.quit_game({'pid': child.pid})
         self.assertEqual(child.wait(5), -signal.SIGTERM)
         source = (ROOT / 'config/fliperos-osd').read_text()
-        self.assertIn('name not in (self.pk.NAME, EMULATOR_KEYS)', source)
+        self.assertIn('name not in (self.pk.NAME, EMULATOR_KEYS, GAME_KEYS_NAME)', source)
 
     def test_scanlines_page_on_a_31_khz_monitor(self):
         # So com frequency=31k, como no Video Setup: a pagina Scanlines, com
