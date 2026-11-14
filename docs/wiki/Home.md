@@ -56,10 +56,14 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `nvram`, `save`, `config`), the MAME ROM Cleaner, the CHD Cleaner, the Downloader, Download BIOS, the free games |
+| [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `nvram`, `save`, `config`), unlocked arcade memory, custom folders on another disk |
+| [Downloader](Downloader.md) | MAME ROM and CHD sets by torrent, only the games your filter picks, and the free homebrew games |
+| [BIOS](BIOS.md) | Download BIOS: what it looks for, RetroBIOS and the reference pack, the check at each menu opening |
+| [ROM Cleaner](ROM-Cleaner.md) | The MAME ROM Cleaner (every parameter and preset) and the CHD Cleaner |
 | [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games, for every frontend |
-| [Adding games](Adding-games.md) | Step by step: games, real names and artwork in Attract-Mode Plus and ES-DE, emulator command lines in KMS or X11, adding a new emulator |
+| [Adding games](Adding-games.md) | Step by step: copy the games, make the frontend see them, real names, artwork, play; KMS or X11 command lines |
 | [Custom games](Custom-games.md) | PC games (Windows and Linux) and programs that are not a ROM: packages (`.fliperos-customgame.zip`), adding your game from the cabinet, PortProton, the controller as a keyboard, squashfs, the command for other frontends |
+| [Adding an emulator](Adding-an-emulator.md) | An emulator FliperOS doesn't ship, opened from every frontend in four steps |
 
 ## Emulators
 

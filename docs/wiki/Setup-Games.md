@@ -9,8 +9,8 @@
 | **Extras** | Wine, Steam, Heroic, Pixelcade, ZeDMD, game output tools, the live screen | Below |
 | **Custom games** | PC games, scripts and your own emulators, as frontend systems | [Custom games](Custom-games.md) |
 | **Folders** | Where ROMs, BIOS and art are; an external disk instead | [ROMs, BIOS and artwork](ROMs.md#custom-folders) |
-| **Downloader** | MAME ROM/CHD sets by torrent, free homebrew games, the BIOS your games lack | [ROMs, BIOS and artwork](ROMs.md#downloader) |
-| **Cleaner** | Filter a MAME romset: only the games you want, for each emulator | [ROMs, BIOS and artwork](ROMs.md#mame-rom-cleaner) |
+| **Downloader** | MAME ROM/CHD sets by torrent, free homebrew games, the BIOS your games lack | [ROMs, BIOS and artwork](Downloader.md) |
+| **Cleaner** | Filter a MAME romset: only the games you want, for each emulator | [ROMs, BIOS and artwork](ROM-Cleaner.md) |
 | **Scraper** | Covers, screenshots, logos and videos of the games | [Scraper](Scraper.md) |
 | **AttractPlus ROM List** | Attract-Mode Plus lists with each game's real name | [Adding games](Adding-games.md) |
 

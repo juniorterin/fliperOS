@@ -1,72 +1,81 @@
-**Setup > Games > Scraper** has four items: **Scrape the games**, **Scrape with a site (Skyscraper)**, **Scraper provider** and **Art packs by torrent**.
+The art of your games: covers, screenshots, logos, marquees, videos and descriptions. Most of it arrives by itself; **Setup > Games > Scraper** fetches it all at once, or from a site of your choice.
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/list-more.webp" width="480" alt="Game information and art fetched by the Scraper">
 
-**Scrape the games** is the FliperOS scraper, the same one the [FliperOS frontend](Frontends.md) runs by itself in the background. For every game in the folders (or one folder), it fetches only what the game still lacks, with no account:
-- arcade: the information, screenshot, flyer, marquee and logo from the Arcade Database;
-- consoles: the cover and screenshot from libretro-thumbnails;
-- logos and videos: the art packs below, by torrent; a pack kept in one `.zip` per letter (the MAME videos) is fetched one file at a time from inside the zip over HTTP instead of whole letters.
+## Three ways
 
-A bar shows each game and how many are left; at the end it says how many games still lack something no source has. It is `gui/fliperos-scrape`, run as the player; while it runs, the frontend's own scrape waits. The games it tried are recorded in `~/.local/share/fliperos/scrape-state.json`, so the frontend does not try them again for 30 days.
+| Way | Account | What it brings |
+| --- | --- | --- |
+| **Automatically** | None | The FliperOS frontend fetches what a game lacks when the cursor stays on it for 2 seconds, and the *Auto scrape* service keeps fetching in the background, also during a game |
+| **Scrape the games** | None | The same, for every game at once |
+| **Scrape with a site** | Depends on the site | Skyscraper, with the site you pick: names, descriptions and art, and the game lists of Attract-Mode Plus, ES-DE and Pegasus |
 
-**Scrape with a site** is the Skyscraper scraper below: the site chosen in Scraper provider (ScreenScraper with your account, for instance), and the game lists of Attract-Mode Plus, ES-DE and Pegasus.
+**Art packs by torrent** brings the logos and videos of the arcade games you have, in the background.
 
-**Scraper provider** picks where the art and the information come from, and keeps the account of the providers that ask for one, the way ES-DE and Arcadeflow keep the ScreenScraper login in their options:
+The art goes to `~/media` ([ROMs, BIOS and artwork](ROMs.md#media)), where every frontend reads it.
+
+## Scrape the games
+
+FliperOS's own scraper, the same one the frontend runs by itself. For every game in the folders (or one folder) it fetches only what the game still lacks, with no account:
+
+- **arcade:** the information, screenshot, flyer, marquee and logo from the [Arcade Database](https://adb.arcadeitalia.net);
+- **consoles:** the cover and screenshot from [libretro-thumbnails](https://github.com/libretro-thumbnails);
+- **logos and videos:** from the art packs below, only the files of your games.
+
+It runs in the background: any key returns to the menu while it goes on, and opening it again shows the progress. At the end it says how many games still lack something no source has. A game tried once isn't tried again for 30 days.
+
+Logos, videos and descriptions of console games only come from a site: ScreenScraper covers every system.
+
+## Scrape with a site
+
+**Skyscraper** (the same GroovyArcade packages) with the site chosen in **Scraper provider**.
+
+### Scraper provider
 
 | Provider | Has | Account |
-|---|---|---|
-| ScreenScraper | every system | user and password, optional (a free account raises the daily limits) |
-| TheGamesDB | consoles and computers | none |
-| ArcadeDB | arcade games | none |
-| progetto-SNAPS | arcade screenshots only | none |
-| MobyGames | every system | your API key, required |
-| IGDB | consoles and computers | a Twitch client ID and secret, required |
-| OpenRetro | Amiga and old computers | none |
+| --- | --- | --- |
+| ScreenScraper | Every system | User and password, optional (a free account raises the daily limits) |
+| TheGamesDB | Consoles and computers | None |
+| ArcadeDB | Arcade games | None |
+| progetto-SNAPS | Arcade screenshots only | None |
+| MobyGames | Every system | Your API key, required |
+| IGDB | Consoles and computers | A Twitch client ID and secret, required |
+| OpenRetro | Amiga and old computers | None |
 
-The choice is saved in `fliperos.conf` (`scraper_source`) and the account in `/etc/fliperos/scraper-accounts`, a file only root reads; it is what Skyscraper gets in `-u`. A provider that only works with an account doesn't scrape until it has one.
+A provider that only works with an account doesn't scrape until it has one. The account is easier to type in the web panel's **Library > Art** than with a joystick.
 
-**Art packs by torrent** brings logos and videos from torrents, without an account and without the per-day limits of the providers. The screen comes filled with packs from the Internet Archive: logos and videos for MAME (also used by the RetroArch arcade cores), Naomi and Naomi 2, Atomiswave, Model 2 and Model 3.
+### Scraping
 
-Each pack belongs to some folders of `~/roms`, and it **only downloads when those folders have ROMs**, and only the files of the games that are in them: the torrent's file list is compared with the names of the ROMs, and the rest of the torrent is never downloaded. A game that already has that art in `~/media` is skipped.
+1. **What to fetch:** a checklist of screenshots, logos, covers, marquees, descriptions and videos. Videos start unchecked: they take much more space.
+2. **Clones:** in the MAME folder, it asks whether to also fetch the clones of the games you have, which in a merged romset live inside the parent's zip.
+3. It goes folder by folder: the folders with games FliperOS knows how to open (`~/roms/mame`, `dreamcast`, `ps2`, `dolphin` and the RetroArch core folders).
 
-Where a pack keeps the files inside `.zip` archives by letter (the MAME videos), only the archives of the letters your games start with are downloaded, and only your games' files come out of them.
+**Resuming:** if the cabinet was switched off or the Setup closed midway, **Setup > Games > Scraper** (or the web panel) offers to resume from where it stopped, with the same choices.
 
-The download is done by the same Transmission service as the [Downloader](ROMs.md), in the background, even with a game open; when a torrent ends, each file goes to `~/media/logo/<games folder>` or `~/media/preview/<games folder>` with the name of the ROM, and the torrent is removed.
+The game lists go to the frontend that opens at boot: Attract-Mode Plus romlists, ES-DE gamelists, Pegasus metadata. A system that fails doesn't stop the others.
 
-**Add a torrent** takes a pack of your own (a magnet link or the address of a `.torrent`, the kind of art and the folder it is for), and the link of a pack that comes filled in can be changed. The packs are in `config/fliperos-media-torrents` and the program is `/opt/fliperos/bin/fliperos-mediapacks`.
+### progetto-SNAPS
 
-**Scrape with a site** — covers, screenshots, logos, videos and information for each ROM, with **Skyscraper** (the same one GroovyArcade packages), from the one chosen in Scraper provider.
+The in-game screenshots of [progetto-SNAPS](https://www.progettosnaps.net/snapshots/) by AntoPISA, the set GroovyArcade users know, for the arcade folders only (MAME, Naomi, Atomiswave…). Only the screenshots of your games are copied, to `~/media/snap/<games folder>`. The site has no logos, covers or descriptions, so those still come from the other sources.
 
-**What to fetch** is a checklist: screenshots (`snap`), logos, covers (`box`), marquees, descriptions (`texto`) and videos (`preview`, unchecked at first: they take much more space).
+## Art packs by torrent
 
-Skyscraper only downloads the checked types (`--flags noscreenshots,nocovers,nowheels,nomarquees` and `videos`) and only exports those; the choice is remembered. An artwork type the folder didn't have yet makes it fetch again the games already in the cache (`--refresh`): without that Skyscraper doesn't go back to them.
+Logos and videos from torrents, without an account and without the daily limits of the sites. The screen comes filled with packs from the Internet Archive: logos and videos for MAME (also used by the RetroArch arcade cores), Naomi and Naomi 2, Atomiswave, Model 2 and Model 3.
 
-The folders with games (each one's `_info.txt` doesn't count) that FliperOS knows how to open are included: `~/roms/mame`, `dreamcast`, `ps2`, `dolphin` and the RetroArch core folders (`~/roms/retroarch/<core>`, by the platform of the `systemid` in the core's `.info`).
+- A pack **only downloads when its folders have ROMs**, and only the files of the games in them. A game that already has that art is skipped.
+- The download runs in the background, even with a game open, and an interrupted one can be resumed.
+- **Add a torrent** takes a pack of your own: a magnet link or a `.torrent` address, the kind of art and the folder it is for. The link of a pack that comes filled in can be changed too.
 
-Artwork and text go to **`~/media/<type>/<system>`** ([ROMs, BIOS and artwork](ROMs.md)): Skyscraper writes each type into a subfolder with a fixed name (`screenshots`, `covers`, `wheels`, `marquees`, `videos`), and for it `~/media/.skyscraper/<system>` has links with those names to `snap`, `box`, `logo`, `marquee` and `preview`; the descriptions come out of the generated list into `~/media/texto`.
+## How it works
 
-The list goes to the frontend. With **GroovyMAME** as the default launcher, the MAME folder only gets the artwork: `mame.ini` and `ui.ini` already look in `~/media/<type>/arcade` (the first `snapshot_directory` is still F12's).
+- **Scrape the games** is `gui/fliperos-scrape`, run as the player (`--daemon` is the *Auto scrape* service, at the lowest CPU and disk priority). The games it tried are in `~/.local/share/fliperos/scrape-state.json`; while it runs, the frontend's own scrape waits.
+- **The art packs** are `config/fliperos-media-torrents`, run by `/opt/fliperos/bin/fliperos-mediapacks` (`fliperos-setup --mediapacks auto`, checked every 6 hours by the frontend). The torrent's file list is compared with your ROM names, and the rest is never downloaded. A pack that keeps its files in one `.zip` per letter (the MAME videos) would bring gigabytes for a few videos, so those files come one at a time from inside the zip over HTTP. The download is the same Transmission as the [Downloader](Downloader.md); each file goes to `~/media/logo/<games folder>` or `~/media/preview/<games folder>`, and the torrent is removed.
+- **Skyscraper:** the provider is `scraper_source` in `fliperos.conf` and the accounts are in `/etc/fliperos/scraper-accounts`, readable by root only (Skyscraper's `-u`). Only the checked types are downloaded and exported (`--flags noscreenshots,nocovers,nowheels,nomarquees`, `videos`); a type the folder didn't have yet makes it fetch the cached games again (`--refresh`). The images come out each as it came (the Setup's `artwork.xml`), not composited as in Skyscraper's default.
+- Skyscraper writes each type into a fixed folder name (`screenshots`, `covers`, `wheels`, `marquees`, `videos`), so `~/media/.skyscraper/<system>` has links with those names into `~/media`; the descriptions come out of the generated list into `~/media/texto`. The RetroArch core folders are scraped as the platform of the `systemid` in the core's `.info`.
+- **Clones:** `groovymame -listclones`; the scraped folder becomes one of references in `~/.cache/fliperos-scraper` (links to the ROMs and a small file per clone).
+- **Resuming:** Skyscraper only writes its cache at the end of each run, so the games go in batches of 20 (`--includefrom`), and the work is recorded in `/var/lib/fliperos/scraper`, readable by root only.
+- **The lists:** ES-DE's go to `~/ES-DE/gamelists/<system>` (Skyscraper's `esde` format); Attract-Mode Plus's to `~/.attract/romlists`, with the descriptions in `~/.attract/scraper/<emulator>/overview` (a link into `~/media/texto`), and any missing emulator and display is created, like GroovyArcade's `efc.sh`; Pegasus's `metadata.pegasus.txt` lives in the ROM folder. With GroovyMAME as the launcher, the MAME folder only gets the art, which `mame.ini` and `ui.ini` already read from `~/media`.
+- **progetto-SNAPS:** `/opt/fliperos/bin/fliperos-snaps` follows the site's guidelines: the pack names come from its Snapshots page, each pack through its download link, one at a time; the monthly update wins over the full set (about 520 MB). The packs stay in `/var/cache/fliperos/snaps` (about 1 GB unpacked), so another folder later downloads nothing again.
+- The commands: `fliperos-setup --scraper status|sources|systems|source|account|media|scrape|site|resume` (`lib/scraper.sh`).
 
-In **ES-DE** (FliperOS's EmulationStation) the list goes to `~/ES-DE/gamelists/<system>` (Skyscraper's `esde` format, relative paths) and `MediaDirectory` is `~/media/.es-de`, with one link per ES-DE type (`screenshots`, `covers`, `marquees` = logo, `videos`) into `~/media`.
-
-Earlier artwork (`~/.mame/scraped/mame`, `~/.attract/scraped/<folder>`, `<ROM folder>/media`) moves to `~/media` in `tools/cabinet-update.sh` and when the folder is scraped.
-
-The images come out each one as it came (screenshot, cover, logo, marquee; the Setup's `artwork.xml`), and not composited on top of each other as in Skyscraper's default.
-
-**Clones**: in the MAME folder the Setup asks whether to also fetch the clones of the existing games (`groovymame -listclones`: mvscu, mvscj...), which in a merged romset are inside the parent's zip and have no file — the scraped folder becomes one of references in `~/.cache/fliperos-scraper` (links to the ROMs and a small file per clone).
-
-**Resuming**: Skyscraper only writes its cache at the end of each run, so the games go in batches of 20 (`--includefrom`) and the work is recorded in `/var/lib/fliperos/scraper` (the folders still to do, the files of each one already saved, the source and the account, readable by root only); if the machine was switched off or the Setup closed midway, Setup > Games > Scraper offers to resume from the batch where it stopped.
-
-In **Attract-Mode Plus** (the default launcher's, or with no frontend chosen, if it is installed) the Setup creates, like GroovyArcade's `efc.sh`, any missing emulator in `~/.attract/emulators` — with the command that opens the game (`fliperos-x11-run groovymame [name]`, `fliperos-kms-run retroarch -L <core>`, `fliperos-x11-run flycast/pcsx2/dolphin-emu`) and the artwork in `~/media/<type>/<system>` — and its display in `attract.cfg` (AdvanceMenu theme); Skyscraper writes the romlist to `~/.attract/romlists` and the descriptions to `~/.attract/scraper/<emulator>/overview`, a link to `~/media/texto/<system>`.
-
-In Pegasus, `metadata.pegasus.txt` lives in the ROM folder itself, pointing to the artwork in `~/media`. What already exists (a display, an emulator changed in Attract-Mode) isn't rewritten — the emulator created by the Setup is redone, so the artwork moves to `~/media` —, and a system that fails doesn't stop the others.
-
-**progetto-SNAPS** (no account) is one of the providers, for the arcade folders only (MAME, Naomi, Atomiswave...): the in-game screenshots of [progetto-SNAPS](https://www.progettosnaps.net/snapshots/) by AntoPISA, the same set GroovyArcade users know.
-
-`/opt/fliperos/bin/fliperos-snaps` follows the site's guidelines: the pack names come from its Snapshots page and each pack goes through its download link, one at a time; the monthly update (`pS_snap_upd_N.zip`) wins over the full set (`pS_snap_fullset_N.zip`, about 520 MB, with the images in a 7z).
-
-The packs stay in `/var/cache/fliperos/snaps` (about 1 GB with the 7z unpacked), so scraping another folder later downloads nothing again, and a newer version replaces the older one.
-
-Only the screenshots of the games in the folder are copied, to `~/media/snap/<games folder>` (`~/media/snap/mame`); one that is already there stays.
-
-The site doesn't host logos, covers or descriptions, so those still come from the other sources; the Attract-Mode Plus romlist and the ES-DE/Pegasus lists are refreshed the same way.
+See also: [ROMs, BIOS and artwork](ROMs.md), [FliperOS frontend](FliperOS-frontend.md), [Web panel: Library](Web-panel-Library.md#art).

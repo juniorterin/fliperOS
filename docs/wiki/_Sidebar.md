@@ -35,9 +35,13 @@
 **Games**
 
 - [ROMs, BIOS and artwork](ROMs.md)
+  - [Downloader](Downloader.md)
+  - [BIOS](BIOS.md)
+  - [ROM Cleaner](ROM-Cleaner.md)
   - [Scraper](Scraper.md)
   - [Adding games](Adding-games.md)
   - [Custom games](Custom-games.md)
+  - [Adding an emulator](Adding-an-emulator.md)
 
 **Emulators**
 

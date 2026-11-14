@@ -1,182 +1,142 @@
-## The folders in `~`
+Where your games, BIOS, art, memory and saves live on the cabinet, and how to put them there.
 
-**ROMs in `~/roms`.** The collection lives in `/home/fliperos/roms` (`\\fliperos\roms` over the network), with one folder per emulator — `mame`, `ps2`, `dreamcast` (Flycast's discs), `naomi`, `naomi2` and `atomiswave` (Flycast's arcades, one system per folder: in the frontends each one is a system, with its own platform in the Scraper), `model3`, `dolphin`, `openbor/Paks`, `hypseus`, `model2` (a link to the emulator's folder in Wine) — and one per **RetroArch core** in `~/roms/retroarch/<core>` (every core RetroArch knows: those in the core info files, ~330), each one with an `_info.txt` naming the system and the extensions.
-
-`fliperos-roms` creates whatever is missing at every login, so a new core from the Online Updater gets a folder.
-
-RetroArch opens its file browser in `~/roms`, GroovyMAME looks in `~/roms/mame`, Flycast in `~/roms/dreamcast`, `naomi`, `naomi2` and `atomiswave` (`Dreamcast.ContentPath`) and PCSX2 lists `~/roms/ps2` (if no folder has been chosen yet).
-
-`/opt/fliperos/roms` became a link to `~/roms`: the old paths still work, and an earlier installation had its ROMs moved there (only renamed, without overwriting anything).
-
-**BIOS, artwork and settings.** Next to `~/roms`, `fliperos-roms` creates (at every login, only what is missing, each folder with its own `_info.txt`):
-
-- **`~/bios`** (`\\fliperos\bios`) — RetroArch's *system* folder (`system_directory`): the loose files in it and the subfolders the cores look for.
-
-  `~/bios/dc` is the one for **Flycast** and the Flycast core (`dc_boot.bin`, `dc_flash.bin`, `naomi.zip`, `awbios.zip`...; `Dreamcast.BiosPath` in `emu.cfg` and `FLYCAST_BIOS_PATH` in `fliperos-x11-run`), `~/bios/ps2` the one for **PCSX2** (its `bios` folder, `~/.config/PCSX2/bios`, becomes a link there, with whatever it already had) and `~/bios/mame` is in **GroovyMAME**'s `rompath` (BIOS and devices such as `neogeo.zip` and `qsound.zip`; they still work from `~/roms/mame`).
-
-  `/opt/fliperos/bios` became a link to `~/bios`. FliperOS ships no BIOS, but you don't have to look for them: [Download BIOS](#download-bios) brings the ones the games in your folders need. BIOS of your own can still go here.
-- **`~/media`** (`\\fliperos\media`) — the frontends' artwork and text, one folder per type and, inside, the same folders as `~/roms` (`mame`, `model2`, `naomi`, `ps2`, `retroarch/snes9x`...), so the art of a games folder is in the folder of the same name: `snap` (screenshots), `preview` (videos), `logo` (wheel), `box` (covers and flyers), `marquee` and `texto` (each game's description, `.txt`).
-
-  Setup > Games > Scraper writes there, and the frontends read from there: Attract-Mode through the emulator's `artwork` lines, ES-DE through `MediaDirectory`, Pegasus through `metadata.pegasus.txt` and GroovyMAME's game list through `mame.ini` (`snapshot_directory`) and `ui.ini` (`covers_directory`, `flyers_directory`, `marquees_directory`, `logos_directory`).
-
-  Artwork placed by hand with the ROM name (`snap/mame/sf2.png` for `~/roms/mame/sf2.zip`) also shows in Attract-Mode, ES-DE and GroovyMAME.
-
-  An installation from before this layout, with one folder per scraper platform (`snap/arcade`, `snap/snes`), is moved by itself the next time the launcher opens: see [Adding games](Adding-games.md#artwork).
-- **`~/config`** (`\\fliperos\config`) — links to the configuration of each installed emulator and frontend: `retroarch`, `groovymame` (`/etc/fliperos/mame`, with `mame.ini` and `ui.ini`), `flycast`, `pcsx2`, `dolphin`, `supermodel`, `openbor` (the `.cfg` files in `~/roms/openbor/Saves`), `hypseus`, `model2`, `attractmode`, `es-de`, `pegasus` and `skyscraper`.
-
-  Each link appears once the program has created its configuration (usually after being opened once); a deleted one comes back at the next login, and one left without a target (the program was removed) goes away.
-- **`~/nvram`** (`\\fliperos\nvram`) — what the arcade games remember without power: dip settings, credits, the scores a game saves and what it has unlocked. It has one folder per emulator and per RetroArch core that keeps this, as in `~/roms`:
-
-  - `mame`: GroovyMAME, one folder per game set (`nvram_directory` in `mame.ini`). To start a game from zero, delete its folder.
-  - `flycast`: Flycast, the Naomi and Atomiswave memory of each game (`kofxi.zip.nvmem`, `mvsc2.zip.eeprom`) and the Dreamcast memory cards (`vmu_save_*.bin`). All systems share one folder because Flycast keeps a single one.
-  - `model2`: SM2-Emu, with its save states in `states`.
-  - `model3`: Supermodel.
-  - `hypseus`: Hypseus Singe.
-  - `fightcade/flycast`: the Flycast of Fightcade 2, separate from the system's. See [Fightcade 2](Fightcade-2.md).
-  - `retroarch/<core>`: `mame2010` and `fbneo` from the start. Other cores of the MAME family get theirs at the login after their first game, with what they have already saved.
-
-  Each emulator still writes to its usual path, which becomes a link to its folder here, with what it had inside. An installation from before these folders has its game sets moved from the root of `~/nvram` to `~/nvram/mame` at the next login.
-
-  FliperOS comes with the memory of several games with their hidden content already unlocked: in GroovyMAME, Tekken 3, Tekken Tag, Soul Edge, Dead or Alive++, Street Fighter EX and EX2, Rival Schools, Star Gladiator 2, Tech Romancer, Ultimate MK3 and MK II; in Flycast, the Naomi and Atomiswave games that Fightcade 2 brings (KOF XI, Marvel vs. Capcom 2, Power Stone 2, NeoGeo Battle Coliseum...), plus Cannon Spike and Faster than Speed.
-
-  Each game is copied to its emulator's folder at login only once, and only if it has no memory of its own yet: what you have played stays, and a game whose folder or files you delete to start from zero does not come back. The sources are in `config/nvram/SOURCES.md` in the repository.
-
-  To use a file that unlocks content, close the game and put the file in the folder of its emulator with the name that emulator writes: `~/nvram/mame/tekken3/at28c16`, `~/nvram/flycast/kofxi.zip.nvmem`.
-- **`~/save`** (`\\fliperos\save`) — what you save while you play, one folder per emulator: `retroarch` (the game saves, `.srm`, and the save states), `mame` (the save states) and `ps2` (the PCSX2 memory cards).
-
-  An installation from before these folders is moved by itself at the next login: `~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch` and `~/.config/PCSX2/memcards` become links to the new folders, with what they had inside, so the old paths keep working.
-- **`~/splashscreen`** (`\\fliperos\splashscreen`) — the boot splash themes (Plymouth), one folder per theme with its `.plymouth` file.
-
-  The bundled ones (`fliperos`, `fliperos-text`, `cogwheel`, `into-it` and `windoze95`) are copied there when missing and follow the new versions of the image while left untouched (a hidden `.bundled` file keeps the copy's checksum); to change one, copy its folder with a new name.
-
-  Setup > System > Splash screen previews them and sets the one used at boot ([Installed system](Installed-system.md)). More themes: [Plymouth Themes on Gnome-look](https://www.gnome-look.org/browse?cat=108&ord=latest).
-
-## Custom folders
-
-Setup > Games > **Folders** shows the whole structure: `~/roms`, `~/bios`, `~/media`, `~/nvram`, `~/save` and `~/splashscreen` and, inside them, the folder of each emulator (`~/roms/mame`, `~/roms/model2`), of each RetroArch core (`~/roms/retroarch/mame2010`), of each Fightcade emulator, of each BIOS subfolder and of each type of art (`~/media/snap`, and inside it the same folders as `~/roms`: `~/media/snap/mame`, `~/media/snap/model2`, `~/media/snap/retroarch/mame2010`).
-
-Any of them can have its own **custom folder**: another folder used in its place, for when the ROMs, the art or the BIOS are on external storage (a USB disk, a second drive; the disks are mounted by themselves in `/media/fliperos/<label>`, where the folder browser opens).
-
-So the MAME 2010 sets can be on one disk, the Model 2 videos on another (`~/media/preview/model2`) and the Model 2 sets somewhere else. Each line says whether the folder has a custom folder, or how many of the folders inside it have one. `~/config` is left out: it only holds links.
-
-- **Link this to another folder** — the folder becomes a link to the chosen one and the folder used until then is renamed next to it, with `old-` in the name and everything in it: `~/old-roms`, `~/roms/old-mame`, `~/roms/retroarch/old-mame2010`, `~/media/old-snap`. Nothing is copied or deleted.
-
-  `fliperos-roms` then creates in the custom folder what is missing, and the default frontend reads the game folders again. Everything that looks in the folder — the emulators, the frontends, the Scraper, the network shares — goes through the link; the `old-` folders are not listed as systems.
-
-  On a folder that already has a custom folder, **Change the custom folder** only swaps the link.
-- **Unlink the custom folder** — the link goes away and the `old-` folder gets its name back; if it was deleted, a new empty folder is created. Nothing is deleted from the custom folder.
-
-Nothing about this is saved in a file: the state is what is on the disk, so a link made or removed by hand (SSH, the desktop) counts the same.
-
-A link you made yourself shows as a custom folder; a link whose disk is not connected shows as *not found*, and at login that folder is left alone while the others are created as usual; a link deleted by hand brings the `old-` folder back at the next login (or when Setup > Games > Folders is opened, also when an empty folder had already been created in its place).
-
-A folder with files in it is never removed to make room: if there is already an `old-mame` when a custom folder is added, the current one is kept as `old2-mame`.
-
-On an installation from before SM2-Emu, `~/roms/model2` was a link to the folder of the old Model 2 Emulator (Wine): the games in it move to a plain `~/roms/model2`, and that folder is deleted (`config/fliperos-roms`). A file that could not be moved keeps the old folder, with it.
-
-## MAME ROM Cleaner
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/romfilter.webp" width="480" alt="The MAME ROM Cleaner parameters">
-
-In Setup > Games > **Cleaner**, with the MAME CHD Cleaner. From a folder with a MAME romset, it **copies** (or moves) into the emulator's folder the games that pass the filters, with the parent, the BIOS and the devices they need.
-
-It works like [ROMLister](https://www.waste.org/~winkles/ROMLister/): it joins the XML of the romset's MAME version with `catver.ini` (categories and adult games), `nplayers.ini` (how two people play) and Controls.dat's `controls.xml` (the buttons the game really uses), and filters by what the cabinet has.
-
-For the Naomi, Naomi 2 and Atomiswave games the controls and the buttons come from Flycast's own game table instead: MAME's XML gives nearly all of them the board's generic panel (an 8-way joystick and 6 buttons), steering wheel and light gun games included, so with only joysticks marked in **Controls** those games no longer pass.
-
-**Where the romset is**: in a folder on this machine (disk, USB stick; the menu's own folder browser: Enter opens, `..` goes back, **Use this folder** chooses) or in a **network shared folder** (Windows, NAS: the Setup asks for the computer, the user and the password and lists its shared folders; it is mounted read-only at `/mnt/network` with `cifs-utils`, the password goes in a file only root can read, never on the command line, and is only kept, in `/etc/fliperos/netshare.cred`, if you ask — `lib/netshare.sh`).
-
-That way the whole romset stays on the home computer and the cabinet takes only what it uses.
-
-**For which emulator**: **GroovyMAME** (the XML is `groovymame -listxml`; games go to `~/roms/mame` and BIOS and devices to `~/bios/mame`, which is also in the `rompath`: outside the games folder they don't show as games in the frontends), **Flycast** (the same romset and the same XML, only its systems: **Naomi**, **Naomi 2** and **Atomiswave**, each in its own folder, `~/roms/naomi`, `~/roms/naomi2` and `~/roms/atomiswave`, with the BIOS — `naomi.zip`, `naomi2.zip`, `awbios.zip` and the special ones — in `~/bios/dc` and without MAME's devices, which Flycast doesn't use; a set's system is that of the first BIOS in the `romof` chain), **SM2-Emu** and **Supermodel** (the same romset and XML, only the Sega Model 2 games — the `model2` driver, Model 2/2A/2B/2C — into `~/roms/model2`, or the Model 3 games — the `model3` driver — into `~/roms/model3`; neither uses BIOS, and of MAME's devices only SM2-Emu's I/O boards go along, `model1io.zip` and `model1io2.zip`, which Daytona USA, Desert Tank and Virtua Cop need beside their zip and which the Model 2 game list hides; as in Flycast, MAME's emulation status doesn't filter; a folder with `model2`, `model3` or `supermodel` in its name already suggests it), **MAME 2010 / MAME 3D** (0.139, the one in RetroArch's `mame2010` core, which runs the **PlayStation-based (PSX) arcade games** well — ZN-1/ZN-2, Namco System 11/12, Konami GV/GQ, Taito G-NET: Tekken 3, Soul Calibur, Street Fighter EX —, so its filter starts with the PlayStation-based hardware preset; a folder with `2010` or `MAME 3D` in its name already suggests it; the XML ships in the image at `/usr/local/share/fliperos/mame2010.xml.xz`, pinned by commit and sha256; games and BIOS in `~/roms/retroarch/mame2010`, where the core looks for them) or another version (an XML from `mame -listxml`).
-
-What was read from the XML stays in `/var/cache/fliperos` (a minute with GroovyMAME's; the next read takes a second).
-
-**The parameters screen** shows each parameter with its current choice; **Enter opens its options** — choose one (radio, `(*)`) or check several (checkbox, `[x]`: Space or button 3 toggles, `a` checks all, Enter confirms) — and returns to the screen with the choice made.
-
-The parameters: games (coin-op machines only, or everything), emulation (working, with imperfect, or everything), **categories** (the genres of `catver.ini`, with how many sets each has; slot machines, pinball, computers and consoles start unchecked; **Mahjong**, which `catver.ini` keeps inside Tabletop, is a category of its own and also starts unchecked, in every preset but Everything), **adult games** (`* Mature *` in `catver.ini`), players, **play mode** (from `nplayers.ini`: single player, two or more alternating, two or more simultaneous, not stated), buttons (those of `controls.xml` when it knows the game — Metal Slug has 4 in MAME and uses 3 —, otherwise MAME's), **panel controls** (8, 4 and 2-way joystick, two joysticks per player, trackball, spinner, paddle, rotary, analog, pedals, light gun, keyboard, mahjong; a buttons-only game always passes; the 0.139 types, `joy8way`, `vjoy2way`, `doublejoy8way`, and the current ones, `joy` and `doublejoy` with `ways`), screen (horizontal, vertical; every preset but Everything starts with only the one of the monitor set in Video Setup > Monitor Orientation, horizontal when it was never set), **resolution** (low, up to 288 lines, the only progressive one on a 15 kHz tube; medium; high — from the XML's `pixclock`/`htotal` or, without them, from the lines), clones (the best version of each game, parents only, or all) and the preferred **region**, bootlegs, prototypes, **decades**, vector games, games with CHD (keep, remove, or only those), **board** (Neo-Geo, CPS-1, CPS-2, CPS-3, the PlayStation-based ones — ZN-1/ZN-2, Namco System 10/11/12, Konami GV/GQ/573/Twinkle, Taito G-NET, from the Sony CPU in the XML — the Midway Mortal Kombat boards, Sega Model 2, Sega Model 3, Sega Naomi, Sega Naomi 2 and Sammy Atomiswave; with no board checked every board goes, except Naomi, Naomi 2 and Atomiswave, which run better in Flycast and only go to GroovyMAME when checked).
-
-The three data files **ship in the image**, in `/usr/local/share/fliperos/romclean` (`config/romclean` in the repository): `catver.ini` 0.289 from [progetto-SNAPS](https://www.progettosnaps.net/catver/), `nplayers.ini` 0.278 from [NPlayers](http://nplayers.arcadebelgium.be) (CC BY-SA 3.0) and `controls.xml` 0.141.1 from Controls.dat.
-
-To use newer ones, or the ones that came with your romset, put them **with the romset**: the Setup looks first in its folder, in the one above and in the `folders` subfolder (the MAME UI's), and only then in the system folder, which an update rewrites.
-
-The screen says which ones it found and their version (*Data files*); without one of them, its parameters don't show.
-
-Presets: **Joystick cabinet** (arcade only, up to 2 players and 6 buttons, joysticks, one version of each game, no bootlegs, prototypes or adult games), **Everything that works**, **PlayStation-based hardware** (the MAME 3D games) and **Everything**.
-
-Whatever the chosen games use goes along: the parent (in a merged romset the clone is in its zip), the BIOS and the devices with ROMs (`romof`, `cloneof`, `device_ref`), also those of the games already at the destination.
-
-Before touching anything, the summary (how many go and their size, the free space, how many aren't in the XML, which are left alone) and the list; the copy shows its progress, each file arrives as `.part` and only then gets its name (an interrupted copy never passes as complete), whatever is already at the destination with the same size stays — repeating resumes where it stopped — and what arrives is owned by the owner of the emulator's folder.
-
-**Move** (only from a writable folder) takes the files out of the romset and then asks whether to delete what's left; Flycast's sets never enter that list, so the same romset can be cleaned for Flycast afterwards — except in a MAME 2010 romset, which Flycast can't read: there the Naomi and Atomiswave sets the filter leaves out are deleted like the others, instead of staying in the core's folder where the frontend would list games MAME 0.139 doesn't run (`config/fliperos-romclean`, `lib/romclean.sh`).
-
-## MAME CHD Cleaner
-
-CHDs usually come in a separate, huge collection.
-
-This item looks at the games **already in the emulator's ROM folder** (`~/roms/mame`; for Flycast, `~/roms/naomi` and `~/roms/naomi2`; for MAME 2010 / MAME 3D, the core's folder), checks in the MAME XML which ones use a disk and copies, from the CHD folder (one subfolder per game, on this machine or in a network folder), only theirs, into the ROM folder (`<folder>/<game>/<disk>.chd`, where MAME and Flycast look for them).
-
-A clone's disk that is the same as the parent's comes from the parent's folder; a disk without a dump doesn't count.
-
-From each folder only the disks those games use are taken: in a merged collection the parent's folder also holds the disks of every other version, and they stay behind (the Downloader does the same, so they are never downloaded).
-
-The screen shows how many games use CHDs, how many folders were found and their size, the free space and the list of what **wasn't found**; you can include the clones inside the zips (merged romset) and change the ROM folder.
-
-The copy shows its progress and resumes where it stopped; from a writable folder you can also move (`fliperos-romclean chds`).
-
-## Downloader
+| Page | What it covers |
+| --- | --- |
+| [Downloader](Downloader.md) | MAME ROM and CHD sets by torrent, only the games your filter picks, and the free homebrew games |
+| [BIOS](BIOS.md) | Download BIOS: the BIOS your games lack, found and downloaded by themselves |
+| [ROM Cleaner](ROM-Cleaner.md) | The MAME ROM Cleaner and the CHD Cleaner: only the games that suit your cabinet, from a full romset |
+| [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games |
+| [Adding games](Adding-games.md) | Step by step: copy the games, make the frontends see them, names and art |
+| [Custom games](Custom-games.md) | PC games and programs that are not a ROM, packages, PortProton |
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/downloader.webp" width="480" alt="The Downloader">
 
-Setup > Games > **Downloader** gathers what downloads games: **ROM/CHD MAME torrent**, [Free games](#free-games) and [Download BIOS](#download-bios).
+## The folders in `~`
 
-The torrent screen, in order: the **Filter** (the same parameters screen as the ROM Cleaner, for GroovyMAME, Flycast, SM2-Emu, Supermodel or MAME 2010 / MAME 3D (the PlayStation-based arcade games), saved apart, only for the torrent; until one is saved, the Joystick cabinet preset), the **ROM set magnet link** (required), the **CHD set magnet link** (optional; both come filled in with the links shipped in the image, MAME 0.289 ROMs and MAME 0.288 CHDs, both merged, from `/usr/local/share/fliperos/downloader-magnets`: Enter uses them, or paste another; under the field, **Web browser** opens a browser to find a magnet link and **.torrent file** picks a `.torrent` on a USB disk, the network share or the home folder), the **Download folder** (the folder browser; by default the emulator's, `~/roms/mame` with the BIOS in `~/bios/mame` — elsewhere the BIOS go with the games; for Flycast, the folder of `naomi`, `naomi2` and `atomiswave`) and **Start the download**, which needs the ROM link — the CHDs are those of the games the romset brings.
+Everything is in the home folder, `/home/fliperos`, and each folder is also a network share (`\\fliperos\roms` and so on):
 
-It downloads **only what the filter chooses** — the games, with their parents, BIOS and devices, and the CHDs of those games — never the whole set; the Setup says so when a link is pasted. Before marking anything, Start checks that the whole download fits on the disk; if not, it says how much is needed and how much is free.
+| Folder | What it holds |
+| --- | --- |
+| `~/roms` | The games, one folder per emulator and per RetroArch core |
+| `~/bios` | The BIOS and firmware |
+| `~/media` | The art and text the frontends show |
+| `~/nvram` | What arcade games remember without power: settings, credits, scores, unlocks |
+| `~/save` | What you save while playing: saves, save states, memory cards |
+| `~/config` | Links to each emulator's and frontend's settings |
+| `~/splashscreen` | The boot screen themes |
 
-**Where the sets are in the torrent** is found from the file list: at its top or in any subfolder (`MAME 0.289/ROMs (merged)/`, next to Software Lists, readmes or extras) — the folder with the most `.zip`/`.7z` sets, or, for CHDs, with the most `<game>/<disk>.chd` folders; the Setup shows which folder and how many sets, and the rest of the torrent is never downloaded.
+Each folder has an `_info.txt` that says what goes in it. Missing folders are created at every login, so a new RetroArch core from its Online Updater gets its folder.
 
-A torrent without any (the CHD link pasted as the romset) is refused. **Transmission** does the download: its own `transmission-daemon` (`fliperos-transmission.service`, as the `fliperos` user, at low CPU and disk priority, RPC only on `127.0.0.1:9092`; the stock `transmission-daemon.service` is masked).
+### `~/roms`
 
-It is set for speed (`fliperos-downloader config`, at each start): up to 150 peers per torrent and 500 in all (Transmission's default, 50 and 200, left most of a big romset's peers out), a 64 MB write cache, no speed limit, DHT, PEX, local peer discovery, µTP and UPnP on, and a stalled torrent leaves the queue after 5 minutes. The disk priority is the lowest normal one (best-effort 7): the "idle" class it had only wrote while nothing else read the disk, and the frontend's videos read it all the time.
+One folder per emulator, and one per **RetroArch core** in `~/roms/retroarch/<core>` (every core RetroArch knows, about 330), each with an `_info.txt` naming the system and the extensions.
 
-It never starts at boot: the Setup (or the web panel) starts it when a link is added or a download (or an art pack) is started, and it quits by itself when its last torrent ends. A download stopped by a shutdown shows as *stopped* and goes on with **Start the download**.
+| Folder | What goes in it | Opens in |
+| --- | --- | --- |
+| `mame` | MAME sets (`.zip`, `.7z`) and their CHD folders | GroovyMAME |
+| `naomi`, `naomi2`, `atomiswave` | MAME sets of these systems, one system per folder | Flycast |
+| `model2` | MAME sets of Model 2 | SM2-Emu |
+| `model3` | MAME sets of Model 3 | Supermodel |
+| `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
+| `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u` (once DuckStation is installed) | DuckStation |
+| `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
+| `namco2x6` | Namco System 246/256 games | PCSX2x6 ([Emulators](Emulators.md#namco-system-246-and-256-pcsx2x6)) |
+| `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
+| `openbor/Paks` | OpenBOR games (`.pak`) | OpenBOR |
+| `hypseus` | Laserdisc games | Hypseus Singe |
+| `custom` | Custom game packages to install ([Custom games](Custom-games.md)) | — |
+| `retroarch/<core>` | What that core opens (its `_info.txt` lists the extensions) | RetroArch |
 
-The link is added running (paused, Transmission doesn't look for peers) and, as soon as the file list arrives, stopped with no file marked; the list goes through `fliperos-romclean` (`scan --names`, `chds --names --with`), only the chosen files are marked, and what is already in the emulator folders isn't downloaded again.
+MAME sets stay zipped and are never renamed: frontends and MAME find a game by its set name (`sf2ce.zip`).
 
-The terminal shows a **progress bar** (size, peers, speed, time left); any key returns to the menu and the download goes on, even with a game open. When a torrent ends, each file goes to the download folder (the BIOS to `~/bios/mame`, the CHDs in `<game>/`) and the torrent leaves Transmission without seeding.
+### `~/bios`
 
-**When the filter changes** (or a new MAME version), with links set up, the Setup says how many ROMs and CHDs it **adds** (and their size) and how many it **deletes**, with the list, and asks before applying; only what the downloader brought is ever deleted, never files put there by hand.
+RetroArch's *system* folder: the loose files in it and the subfolders the cores look for. FliperOS ships no BIOS, but you don't have to look for them: [Download BIOS](BIOS.md) brings the ones your games need.
 
-Removing a link can also delete what it brought. A parent, BIOS or device that a game still in the folders uses (the ROM folders of the filter and GroovyMAME's `rompath`) is never deleted: `neogeo.zip` stays while there is an MVS game, even one copied by the ROM Cleaner (`fliperos-romclean uses`).
+| Subfolder | For |
+| --- | --- |
+| `~/bios` itself | The RetroArch cores (`scph5501.bin`…) |
+| `~/bios/dc` | Flycast and its core: `dc_boot.bin`, `dc_flash.bin`, `naomi.zip`, `awbios.zip`… |
+| `~/bios/ps2` | PCSX2 |
+| `~/bios/mame` | GroovyMAME's BIOS and devices: `neogeo.zip`, `qsound.zip`… (they also work from `~/roms/mame`) |
 
-State in `/var/lib/fliperos/downloader` (`config/fliperos-downloader`, `lib/downloader.sh`). Afterwards, AttractPlus > ROM List updates the game names in the frontend.
+A BIOS left in a games folder shows up as a game in the frontend, so keep them here.
+
+### `~/media`
+
+The frontends' art and text: one folder per type and, inside each, the same folders as `~/roms` (`mame`, `model2`, `naomi`, `ps2`, `retroarch/snes9x`…). The file is named after the ROM: the screenshot of `~/roms/mame/sf2.zip` is `~/media/snap/mame/sf2.png`.
+
+| Folder | What it holds |
+| --- | --- |
+| `snap` | Screenshots (`.png`) |
+| `preview` | Videos (`.mp4`) |
+| `logo` | Logos, wheel art |
+| `box` | Covers and flyers |
+| `marquee` | Cabinet marquees |
+| `texto` | Each game's description (`.txt`) |
+| `dmd` | Art made for a 128x32 LED display ([LED displays](LED-displays.md#art-for-the-display)) |
+| `info` | Game information saved by the scrape and the web panel (Arcade Database answers, your CLASSIFY choices) |
+
+The [Scraper](Scraper.md) fills these folders, and the frontends read from them; art you place by hand with the ROM name shows too. Each games folder has its own art folder, so two folders with the same game can each have their own video, and each art folder can be on another disk (**Folders**, below).
+
+### `~/nvram`
+
+What the arcade games remember without power: dip settings, credits, the scores a game saves, what it has unlocked. One folder per emulator:
+
+| Folder | What it holds |
+| --- | --- |
+| `mame` | GroovyMAME, one folder per set. To start a game from zero, delete its folder |
+| `flycast` | Naomi and Atomiswave memory of each game, and the Dreamcast memory cards |
+| `model2` | SM2-Emu, with its save states in `states` |
+| `model3` | Supermodel |
+| `hypseus` | Hypseus Singe |
+| `fightcade/flycast` | Fightcade 2's Flycast, separate from the system's ([Fightcade 2](Fightcade-2.md)) |
+| `retroarch/<core>` | `mame2010`, `fbneo`, and the other MAME-family cores after their first game |
+
+**Unlocked arcade memory.** FliperOS comes with the memory of several games with their hidden content already unlocked:
+
+- in GroovyMAME: Tekken 3, Tekken Tag, Soul Edge, Dead or Alive++, Street Fighter EX and EX2, Rival Schools, Star Gladiator 2, Tech Romancer, Ultimate MK3 and MK II;
+- in Flycast: the Naomi and Atomiswave games Fightcade 2 brings (KOF XI, Marvel vs. Capcom 2, Power Stone 2, NeoGeo Battle Coliseum…), plus Cannon Spike and Faster than Speed.
+
+Each one is copied only once, and only if the game has no memory of its own yet: what you have played stays, and a game you reset by deleting its folder does not come back. To use an unlock file of your own, close the game and put it in the emulator's folder with the name that emulator writes: `~/nvram/mame/tekken3/at28c16`, `~/nvram/flycast/kofxi.zip.nvmem`.
+
+### `~/save`
+
+What you save while playing, one folder per emulator: `retroarch` (game saves, `.srm`, and save states), `mame` (save states) and `ps2` (PCSX2's memory cards). The [cloud backup](Cloud-backup.md) can keep it in your cloud.
+
+### `~/config`
+
+Links to the configuration of each installed emulator and frontend: `retroarch`, `groovymame` (`mame.ini` and `ui.ini`), `flycast`, `pcsx2`, `dolphin`, `supermodel`, `openbor`, `hypseus`, `model2`, `attractmode`, `es-de`, `pegasus` and `skyscraper`. Each link appears once the program has created its configuration, usually after it was opened once.
+
+### `~/splashscreen`
+
+The boot splash themes, one folder per theme with its `.plymouth` file. The bundled ones are copied there and follow new versions while you leave them untouched; to change one, copy its folder with a new name. See [System Setup](Setup-System.md#splash-screen).
+
+## Custom folders
+
+**Setup > Games > Folders** shows the whole structure: the folders above and, inside them, each emulator's, each RetroArch core's, each Fightcade emulator's, each BIOS subfolder and each type of art.
+
+Any of them can have its own **custom folder**: another folder used in its place, for when the ROMs, the art or the BIOS are on another disk (a USB disk, a second drive, mounted by themselves in `/media/fliperos/<label>`). So the MAME 2010 sets can be on one disk and the Model 2 videos on another.
+
+- **Link this to another folder:** the folder becomes a link to the chosen one, and the folder used until then is renamed next to it with `old-` in the name (`~/roms/old-mame`), with everything in it. Nothing is copied or deleted.
+- **Change the custom folder** swaps the link of a folder that already has one.
+- **Unlink the custom folder:** the link goes away and the `old-` folder gets its name back. Nothing is deleted from the custom folder.
+
+Each line says whether the folder has a custom folder, or how many folders inside it have one. Everything that looks in the folder (emulators, frontends, the Scraper, the network shares) goes through the link. A disk that isn't connected shows as *not found*, and that folder is left alone.
 
 ## Free games
 
-Setup > Games > Downloader > Free games downloads open-source homebrew into the RetroArch core folders (`~/roms/retroarch/<core>`), so the frontends don't start empty and to test video, sound and controls without anyone's ROMs: the 240p Test Suites for NES, Game Boy and GBA, Thwaite, Nova the Squirrel, Libbet and the Magic Floor and µCity.
+**Setup > Games > Downloader > Free games** brings open-source homebrew, so the frontends don't start empty and you can test video, sound and controls: see [Downloader](Downloader.md#free-games).
 
-Each file comes from the project's own releases page, with a pinned sha256 and the license in the list (GPL and zlib, checked in each one's repository); only those for installed cores, and what is already there stays. The image ships nobody's ROMs or BIOS (`config/fliperos-freeroms`, `lib/freeroms.sh`).
+## How it works
 
-## Download BIOS
+- `config/fliperos-roms` runs at every login and creates what is missing, only what is missing. `/opt/fliperos/roms` and `/opt/fliperos/bios` are links to `~/roms` and `~/bios`, so old paths still work.
+- RetroArch opens its file browser in `~/roms`; GroovyMAME looks in `~/roms/mame` (with `~/bios/mame` in its `rompath`), Flycast in `~/roms/dreamcast`, `naomi`, `naomi2` and `atomiswave` (`Dreamcast.ContentPath`), PCSX2 in `~/roms/ps2`.
+- BIOS paths: `~/bios` is RetroArch's `system_directory`; `Dreamcast.BiosPath` in Flycast's `emu.cfg` and `FLYCAST_BIOS_PATH` in `fliperos-x11-run` point to `~/bios/dc`; PCSX2's own `~/.config/PCSX2/bios` is a link to `~/bios/ps2`.
+- Art paths: Attract-Mode reads `~/media` through each emulator's `artwork` lines, ES-DE through `MediaDirectory` and links in `~/media/.es-de`, Pegasus through `metadata.pegasus.txt`, GroovyMAME's game list through `mame.ini` (`snapshot_directory`) and `ui.ini` (`covers_directory`, `flyers_directory`, `marquees_directory`, `logos_directory`). An installation from before this layout, with one folder per scraper platform (`snap/arcade`, `snap/snes`), is moved by itself the next time the launcher opens.
+- Memory and saves: each emulator still writes to its usual path (`~/.mame/nvram`, `~/.mame/sta`, `/opt/fliperos/saves/retroarch`, `~/.config/PCSX2/memcards`…), which becomes a link to its folder here. The unlocked memories are in `config/nvram`, with their sources in `config/nvram/SOURCES.md`.
+- Splash themes: a hidden `.bundled` file keeps each bundled copy's checksum, so an edited theme is never overwritten.
+- Custom folders: nothing is saved in a file; the state is what is on the disk, so a link made or removed by hand counts the same. A folder with files is never removed to make room: with an `old-mame` already there, the current one becomes `old2-mame`. A link deleted by hand brings the `old-` folder back at the next login.
+- `~/roms/model2` is a plain folder; on an installation from the old Wine Model 2 Emulator, where it was a link, the games moved into it.
 
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/bios.webp" width="480" alt="Download BIOS">
-
-Setup > Games > Downloader > **Download BIOS** brings the BIOS that the games in your folders need and `~/bios` doesn't have yet. It looks at every folder of `~/roms` that has files:
-
-- **RetroArch cores** (`~/roms/retroarch/<core>`): the firmware listed in the core's own `.info` file (PCSX ReARMed asks for `scph5501.bin`, Flycast for `dc/dc_boot.bin`, FBNeo for `fbneo/neogeo.zip`), into `~/bios` at the path the core asks for. The optional ones come too: without them a core falls back to an imitation BIOS (HLE) or doesn't open part of its games (Sega CD, Famicom Disk System);
-- **MAME sets** (`~/roms/mame`, `naomi`, `naomi2`, `atomiswave`, and the arcade cores): the BIOS and devices those sets use, from the MAME XML (`fliperos-romclean uses`): `neogeo.zip`, `qsound.zip`… go to `~/bios/mame`, the Naomi and Atomiswave ones to `~/bios/dc`, FBNeo's to `~/bios/fbneo`, and those of the other MAME cores next to their games;
-- **PCSX2** (`~/roms/ps2`): its BIOS in `~/bios/ps2`;
-- **Flycast** (`~/roms/dreamcast`, `naomi`, `naomi2`, `atomiswave` and the RetroArch Flycast core): any game of it brings every BIOS Flycast knows into `~/bios/dc` (`dc_boot.bin`, `dc_flash.bin`, `naomi.zip`, `naomi2.zip`, `naomigd.zip`, `awbios.zip`, `segasp.zip` and the game boards `airlbios`, `f355bios`, `f355dlx`, `hod2bios`), even for a set the MAME list doesn't know.
-
-The files come from a reference BIOS pack, the [Batocera v36 full BIOS pack](https://archive.org/details/full-pack-bios-batocera-v-36) on the Internet Archive (`/usr/local/share/fliperos/bios-pack`).
-
-Its torrent is only read, never downloaded: it gives the archive item and the name of its 1.1 GB `.zip`, and the Internet Archive serves each file inside that `.zip` on its own, so only the missing BIOS are downloaded (on the cabinet, 13 files and 22.6 MB for PS1, Naomi, Atomiswave and Neo-Geo games).
-
-A BIOS already in place, also one put next to the games, is never downloaded again, and nothing is overwritten. Files over 64 MB (the DSi NAND, the PS3 and Vita updates) are left out.
-
-The check also runs **by itself each time the FliperOS menu opens**, in the background (`fliperos-setup --bios-check`), so a game folder copied over the network gets its BIOS without anyone asking.
-
-It only runs when a folder of `~/roms` or `~/bios` changed since the last check (a deleted BIOS comes back); without network it tries again 10 minutes later. **Check when the menu opens** turns it off (`bios_auto=off` in `fliperos.conf`).
-
-The screen shows how many were downloaded, how many were already there and which ones **aren't in the pack**, which you put in `~/bios` yourself. The pack is Batocera 36's: a newer MAME may want a BIOS file it doesn't have yet. State in `/var/lib/fliperos/bios` (`config/fliperos-bios`, `lib/downloader.sh`).
+See also: [Adding games](Adding-games.md), [Remote access](Remote-access.md#the-network-share).

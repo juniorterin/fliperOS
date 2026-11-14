@@ -77,7 +77,7 @@ system               arcade
 
 `[romfilename]` is the full path of the game file (keep the quotes: file names have spaces), and `[name]` the name without the extension, for emulators that open a game by name (GroovyMAME, Model 2). For a KMS program, `executable` is `/opt/fliperos/bin/fliperos-kms-run` and `args` starts with the program (`retroarch -L <core> "[romfilename]"`).
 
-Copy a `.cfg` with a new name, change those lines, give it a romlist (**Generate Collection/Rom List**) and a display (**Displays > Add new display**). Which command, KMS or X11: [Adding an emulator](Adding-games.md#adding-a-new-emulator).
+Copy a `.cfg` with a new name, change those lines, give it a romlist (**Generate Collection/Rom List**) and a display (**Displays > Add new display**). Which command, KMS or X11: [Adding an emulator](Adding-an-emulator.md).
 
 **The Setup rewrites the `.cfg` files it created** (the first line is `# Criado pelo FliperOS Setup`), to keep the art paths up to date. To keep your change in one of them, delete that first line.
 

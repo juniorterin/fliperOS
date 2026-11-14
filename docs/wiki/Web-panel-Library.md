@@ -39,7 +39,7 @@ What each emulator and extra is: [Games Setup](Setup-Games.md).
 
 **Download BIOS** shows the last check (downloaded, already there, not in the pack, failed) and the list by state; the ones that failed or are not in the pack open first, since they ask for something from you. **Check now** runs the check as a task, and a box turns the check at each menu opening off or on.
 
-How both work: [ROMs, BIOS and artwork](ROMs.md#downloader).
+How both work: [ROMs, BIOS and artwork](Downloader.md).
 
 ## ROM filter
 
@@ -55,7 +55,7 @@ The filter of the MAME ROM Cleaner, with the same parameters, options and preset
 3. The scoreboard (**GAMES** and **SIZE**) counts what passes after every change, and stays in view while you scroll.
 4. For a folder, **Preview** shows what goes where (sets, size, parents, BIOS and devices, free space), then **Copy them** or **Move them** runs as a task.
 
-What each parameter means: [ROMs, BIOS and artwork](ROMs.md#mame-rom-cleaner).
+What each parameter means: [ROMs, BIOS and artwork](ROM-Cleaner.md).
 
 ## Art
 
