@@ -71,3 +71,4 @@
 68	6c1e913ca1a448714131c36beb920748ae72dcfe	520e04fad12c1d2fe797c013ba87b6ad5d466ce0941f90f920b2a7edcf33d0cf	no	Achievements on screen and in the frontend; game shortcuts for the emulator menu and exit; OSD menu reorganised
 69	4174ff0dd1d7166f4723abe9dd6d3e4653f1c822	a7f1c67d35da9933c024f4ee24ff7af538726f339b05b7bf11dead20a2fbb82b	no	OSD shortcut and live line, controller hotplug in the frontend, 8BitDo roulette after a game, unlocked NVRAM, achievements badge
 70	da454c34395c3f1414f2e22b1b34fb37406ddf75	0f0b3c2f8cef9310c31f16ae06f34d6f18c6c78aea58f7ef44d21f40f25a96ad	no	Flycast without its own achievement notices
+71	a3283a2a7dcf9dc0f25e7c10cb986380f80875de	9bae0ca24e75ce8c41dd20bd0b187621a84c8407ee4acc3429e4d4c05163d09e	no	GunCon 2 calibration works again after a bad one
