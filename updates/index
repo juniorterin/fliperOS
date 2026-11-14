@@ -72,3 +72,4 @@
 69	4174ff0dd1d7166f4723abe9dd6d3e4653f1c822	a7f1c67d35da9933c024f4ee24ff7af538726f339b05b7bf11dead20a2fbb82b	no	OSD shortcut and live line, controller hotplug in the frontend, 8BitDo roulette after a game, unlocked NVRAM, achievements badge
 70	da454c34395c3f1414f2e22b1b34fb37406ddf75	0f0b3c2f8cef9310c31f16ae06f34d6f18c6c78aea58f7ef44d21f40f25a96ad	no	Flycast without its own achievement notices
 71	a3283a2a7dcf9dc0f25e7c10cb986380f80875de	9bae0ca24e75ce8c41dd20bd0b187621a84c8407ee4acc3429e4d4c05163d09e	no	GunCon 2 calibration works again after a bad one
+72	25a70277675ee9c1add760fd31180f37ee7be89d	93d5967e2680cb7c35dda08dfce96ce48517fc361e1e6513cbabde7e8fa967d4	no	Game counts on the system strip, button 1 opens a system at once
