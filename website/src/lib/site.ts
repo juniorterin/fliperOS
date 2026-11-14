@@ -78,11 +78,11 @@ export function isPageSlug(value: string): value is PageSlug {
 
 // A página da wiki com o detalhe completo de cada uma.
 export const PAGE_WIKI: Record<PageSlug, string> = {
-  frontend: 'Frontends',
+  frontend: 'FliperOS-frontend',
   setup: 'Installed-system',
   games: 'ROMs',
-  media: 'Frontends',
-  video: 'Kernel-15-kHz',
+  media: 'Physical-media',
+  video: 'Picture-filters',
   'web-panel': 'Web-panel',
   emulators: 'Emulators',
   link: 'Linked-cabinets',

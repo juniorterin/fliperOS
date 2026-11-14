@@ -1,6 +1,6 @@
 #!/bin/sh
 # O emulador do frontend do FliperOS: o fliperos-frontend do repositorio num
-# container, visto no navegador (docs/wiki/Frontend-emulator.md).
+# container, visto no navegador (docs/wiki/Build-and-tests.md, Frontend emulator).
 #
 #   sh tools/fe-emulator/run.sh          abre (cria a imagem na primeira vez)
 #   sh tools/fe-emulator/run.sh reset    apaga a pasta pessoal de mentira e abre

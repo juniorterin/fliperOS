@@ -100,7 +100,7 @@ export function Pixelcade() {
           <p className="max-w-2xl text-xs leading-relaxed text-comment">{p.disclaimer}</p>
           <div className="flex shrink-0 flex-wrap gap-3">
             <a
-              href={`${LINKS.docs}/Frontends#pixelcade-marquee`}
+              href={`${LINKS.docs}/Pixelcade`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-lg border border-cyan/60 bg-cyan/10 px-4 py-2.5 text-sm font-medium text-fg transition hover:border-cyan hover:bg-cyan/20 hover:shadow-[0_0_20px_-6px] hover:shadow-cyan"

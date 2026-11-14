@@ -34,7 +34,7 @@ const PROJECT_URL: Record<string, string> = {
 // Os dois aparelhos com foto: a GunCon 2 (Wikimedia Commons, CC BY-SA 3.0) e o
 // OSCR HW5 (wiki do projeto, CC0). O crédito de cada foto vai na legenda.
 const PHOTO_CARDS = [
-  { id: 'guncon', src: '/art/guncon-2.webp', width: 800, height: 648, docs: 'Controls#light-gun-guncon-2', shop: undefined },
+  { id: 'guncon', src: '/art/guncon-2.webp', width: 800, height: 648, docs: 'Light-guns', shop: undefined },
   { id: 'oscr', src: '/art/oscr-hw5.webp', width: 640, height: 565, docs: 'DIY-hardware#cartridge-reader-open-source-cartridge-reader', shop: LINKS.oscr },
 ] as const;
 

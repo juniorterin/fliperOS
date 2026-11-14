@@ -99,7 +99,7 @@ Abra **http://fliperos.local** no celular ou no PC da mesma rede (usuário `flip
   <img src="website/public/screenshots/web/phone-pt.webp" width="173" alt="Painel web no celular: jogando agora a 59,6 FPS e a lista de jogos com busca">
 </p>
 
-No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](docs/wiki/Installed-system.md#on-screen-menu): volume, filtro do entrelaçado, geometria e cores, por cima do jogo aberto.
+No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](https://github.com/juniorterin/fliperOS/wiki/On-screen-menu): filtro do entrelaçado, scanlines, geometria, cores e a GunCon 2, gravados por jogo se você quiser, mais o menu do emulador e Sair, por cima do jogo aberto.
 
 Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
@@ -275,7 +275,7 @@ Detalhes em [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) 
 2. No **frontend do FliperOS**: **cima/baixo** andam pelos jogos (segure para pular de letra em letra), **esquerda/direita** trocam a lista de jogos (cada pasta, e *Arcade* com todas as pastas de arcade juntas) e o **Start** alterna entre lista, tela cheia e grade. O **botão 4** marca um favorito e o **botão 5** abre os filtros; o **Tab** abre as opções. (No **Attract-Mode Plus**, esquerda/direita trocam o sistema e cima/baixo andam pelos jogos; o **Tab** abre a configuração dele, onde *Controls* liga botões para trocar de filtro e o que mais você quiser.)
 3. Aperte o **botão 1** (ou Enter) num jogo e escolha *Play*. A tela fica preta por um instante enquanto o Switchres acerta o modo de vídeo daquele jogo, e o jogo começa.
 4. Ponha crédito com a **Ficha** e comece com o **Start**.
-5. **Sair do jogo**: no GroovyMAME, **Esc** no teclado. No RetroArch, **Start + Ficha** juntos abrem o menu dele, e então *Quick Menu > Close Content*. Os outros emuladores usam a tecla ou o menu de saída de cada um ([Emulators](https://github.com/juniorterin/fliperOS/wiki/Emulators)). Você volta para a lista de jogos.
+5. **Sair do jogo**: segure **Ficha + Start** por um segundo, em qualquer emulador. **Ficha + botão 1** abre o menu do próprio emulador, e **Start + Baixo** o menu na tela do FliperOS, que também tem *Quit*. Você volta para a lista de jogos. Os atalhos se trocam no *Tab > Frontend controls* do frontend ([Frontend controls](https://github.com/juniorterin/fliperOS/wiki/Frontend-controls)).
 6. **Botão 2** na lista de jogos (ou **Esc**, e confirmar) sai do frontend e volta para o menu do FliperOS, onde *Shutdown / Reboot* desliga o gabinete com segurança.
 7. **Botão de desligar do gabinete** (um aperto curto): com um jogo aberto, fecha o jogo e volta para a lista de jogos; na lista de jogos, desliga o gabinete com segurança. Então, de dentro de um jogo, são dois apertos para desligar: espere a lista aparecer antes do segundo.
 

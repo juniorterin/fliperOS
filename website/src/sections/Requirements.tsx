@@ -110,7 +110,7 @@ export function Requirements() {
                   <ArrowUpRight className="size-4" aria-hidden="true" />
                 </a>
                 <a
-                  href={`${LINKS.docs}/Video-cards#converters`}
+                  href={`${LINKS.docs}/Converters`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-cyan transition-colors hover:text-fg"

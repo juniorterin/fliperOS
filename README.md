@@ -99,7 +99,7 @@ Open **http://fliperos.local** on a phone or PC on the same network (user `flipe
   <img src="website/public/screenshots/web/phone-en.webp" width="173" alt="Web panel on a phone: now playing at 59.6 FPS and the game list with search">
 </p>
 
-At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](docs/wiki/Installed-system.md#on-screen-menu): volume, Interlaced filter, scanlines, geometry and colour, over the running game.
+At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](https://github.com/juniorterin/fliperOS/wiki/On-screen-menu): Interlaced filter, scanlines, geometry, colour and the GunCon 2, saved per game if you want, plus the emulator's menu and Quit, over the running game.
 
 Every page in detail: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
@@ -275,7 +275,7 @@ Details in [Frontends](https://github.com/juniorterin/fliperOS/wiki/Frontends) a
 2. In the **FliperOS frontend**: **up/down** move through the games (hold to jump letter by letter), **left/right** change the game list (each folder, and *Arcade* with all the arcade folders together) and **Start** switches between list, full screen and grid. **Button 4** marks a favourite and **button 5** opens the filters; **Tab** opens the options. (In **Attract-Mode Plus**, left/right change the system and up/down move through the games; **Tab** opens its configuration, where *Controls* binds buttons to change filters and anything else.)
 3. Press **button 1** (or Enter) on a game and choose *Play*. The screen goes black for a moment while Switchres sets the video mode for that game, and the game starts.
 4. Insert a credit with **Coin** and start with **Start**.
-5. **Leaving the game**: in GroovyMAME, **Esc** on the keyboard. In RetroArch, **Start + Coin** together open its menu, then *Quick Menu > Close Content*. The other emulators use their own exit key or menu ([Emulators](https://github.com/juniorterin/fliperOS/wiki/Emulators)). You go back to the game list.
+5. **Leaving the game**: hold **Coin + Start** for a second, in any emulator. **Coin + button 1** opens the emulator's own menu, and **Start + Down** the FliperOS on-screen menu, which also has *Quit*. You go back to the game list. The shortcuts can be changed in the frontend's *Tab > Frontend controls* ([Frontend controls](https://github.com/juniorterin/fliperOS/wiki/Frontend-controls)).
 6. **Button 2** in the game list (or **Esc**, and confirming) leaves the frontend and returns to the FliperOS menu, where *Shutdown / Reboot* turns the cabinet off safely.
 7. **The cabinet's power button** (a short press): with a game open, it closes the game and returns to the game list; in the game list, it turns the cabinet off safely. So from inside a game it takes two presses to power off: wait for the list to show before the second one.
 
