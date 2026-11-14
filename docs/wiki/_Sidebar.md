@@ -16,6 +16,7 @@ Using it
 - [ROMs, BIOS and artwork](ROMs.md)
 - [Scraper](Scraper.md)
 - [Adding games](Adding-games.md)
+- [Custom games](Custom-games.md)
 - [Controls](Controls.md)
 - [Desktop and theme](Desktop.md)
 - [Linked cabinets](Linked-cabinets.md)
