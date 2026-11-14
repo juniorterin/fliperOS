@@ -131,6 +131,8 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 | --- | --- |
 | [15 kHz kernel](Kernel-15-kHz.md) | The kernel and the patches |
 | [Build and tests](Build-and-tests.md) | Building the ISO in Docker, the build options, the ISO audit, publishing the release, the tests, updating a cabinet over the network |
+| [Publishing updates](Publishing-updates.md) | Making and publishing a FliperOS update, and lining it up with a new ISO |
+| [Commands](Commands.md) | The `fliperos-*` commands for a terminal: launching, updates, games, controls, cloud, logs |
 | [Architecture](Architecture.md) | How `fliperos-setup` is organized, the other components (splash, network, diagnostics) and what each file in the repository is |
 | [Sources](Sources.md) | Where each part came from: GroovyArcade, Switchres and the other projects consulted |
 

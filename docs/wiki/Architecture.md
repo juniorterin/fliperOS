@@ -16,12 +16,34 @@ fliperos-setup/
 │   ├── hardware.sh latency.sh   CPU/memory/GPU and the latency modes
 │   ├── quirks.sh padkeys.sh     usbhid quirks; controller in the menus
 │   ├── lpt.sh            parallel port joysticks (db9, gamecon, turbografx)
-│   └── ui.sh             Gum, theme, screen frame
-└── screens/              screens — they only combine ui.sh with the logic
-    ├── output-test.sh (test + Testing Results)  main-menu.sh  setup-menu.sh
-    ├── video-setup.sh  disk-selection.sh  install-progress.sh  progress.sh
-    └── recovery.sh  first-boot.sh  latency.sh  lpt.sh  rom-cleaner.sh  downloader.sh
+│   ├── buttons.sh bluetooth.sh  Button mapping, GunCon 2 settings; Bluetooth
+│   ├── cheevos.sh cloud.sh      RetroAchievements; cloud backup (rclone)
+│   ├── customgames.sh emulators.sh extras.sh frontends.sh  Games items
+│   ├── multimonitor.sh atom15.sh oscr.sh  extra monitors; card firmware; cartridge reader
+│   ├── services.sh system.sh    services table; the settings list of the web panel
+│   ├── patches.sh whatsnew.sh   FliperOS updates and versions; What's new
+│   └── ui.sh             the screen layer: Gum in text, or the graphical menu
+├── screens/              screens — they only combine ui.sh with the logic
+│   ├── output-test.sh (test + Testing Results)  main-menu.sh  setup-menu.sh
+│   ├── video-setup.sh  amd-driver.sh  atom15.sh  disk-selection.sh  install-progress.sh
+│   ├── joysticks.sh  bluetooth.sh  lpt.sh  latency.sh  folders.sh
+│   ├── downloader.sh  mediapacks.sh  rom-cleaner.sh  patches.sh  whatsnew.sh
+│   └── recovery.sh  first-boot.sh  splash.sh  progress.sh
+└── gui/                  Python and pygame
+    ├── fliperos-gui      the graphical Setup: draws the screens ui.sh sends (--serve)
+    ├── fliperos-frontend the FliperOS frontend, with its modules:
+    │     feview.py (drawing, animations, rolling text)  fedata.py (lists, favourites, stats)
+    │     feinput.py (controls)  femedia.py (discs, OSCR)  fecheevos.py (achievements)
+    │     felink.py (link and party)  fepads.py (joypad drawings)  fenamco.py (Namco packs)
+    │     febios.py (BIOS box)  feharvest.py (automatic scrape)  fevideo.py (videos)
+    ├── fliperos-scrape   "Scrape the games" and the Auto scrape service
+    ├── theme.py widgets.py background.py  the look shared by the Setup and the frontend
+    ├── color-calibrate.py scanline-preview.py flicker-preview.py gunscreen.py  test screens
+    ├── custom-media.py drmmaster.py serve.py tiny.py  helpers
+    └── icons/ fonts/ link-profiles.json
 ```
+
+The Setup's screens never draw: they call `lib/ui.sh`, which sends each screen to the graphical menu (`gui/fliperos-gui`) when it is up, or draws it with Gum in text. So one screen file serves both menus ([Installed system](Installed-system.md#graphical-and-text-menus)).
 
 Long operations (install, repair, update, scraper) don't know about the screen: they write events (`@step`, `@pct`, `@msg`, `@fail`) that `screens/progress.sh` draws. Everything goes to `/var/log/fliperos-setup.log`.
 

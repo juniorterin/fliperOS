@@ -97,5 +97,7 @@
 
 - [15 kHz kernel](Kernel-15-kHz.md)
 - [Build and tests](Build-and-tests.md)
+  - [Publishing updates](Publishing-updates.md)
 - [Architecture](Architecture.md)
+  - [Commands](Commands.md)
 - [Sources](Sources.md)

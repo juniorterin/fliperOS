@@ -163,3 +163,17 @@ The emulator only watches. It does not announce itself, and every cabinet's addr
 ## Website
 
 The project website lives in [`website/`](https://github.com/juniorterin/fliperOS/tree/main/website) (Next.js, server-rendered, English and Portuguese). `npm run dev` inside the folder serves it locally; the `Dockerfile` there builds the standalone server that Coolify (or any Docker host) runs on port 3000. Its README has the details.
+
+## Updates between versions
+
+FliperOS updates (without a new ISO) and how they line up with a release: [Publishing updates](Publishing-updates.md).
+
+## Writing the wiki
+
+The pages live in `docs/wiki`, one file per page, flat (the GitHub wiki has no folders). `bash tools/wiki-publish.sh`, with no arguments, publishes them; `tools/render-docs.py --output fliperos-doc.html` makes the single-file HTML.
+
+- **Index pages and subpages.** A subject with a lot to say gets an index page (a short intro and a table of its subpages) and one page per part. The `_Sidebar.md` lists the top pages without indentation and the subpages under them; `Home.md` lists every page; the READMEs link every top page. `DocsTests` checks all three.
+- **Each page:** what it is and where it is in the menu, in a sentence or two; a picture; the sections a player needs (setting up, using, options); `## Problems` when there are any; `## How it works` at the end, with the paths, services and files; a "See also" line.
+- **Text:** short paragraphs (up to about 420 characters), `##`/`###` headings and no H1, menu paths in bold (**Setup > Games > Downloader**, **System > Settings** in the web panel), British English. No history ("until update 58", dates): that is the CHANGELOG. Commands use `sed`, not an editor: the cabinet has none in the terminal.
+- **Links** between pages point to the file, `Page.md` or `Page.md#heading`, as in [Commands](Commands.md); the publish script drops the `.md`. An anchor must exist: `DocsTests` checks every `Page#heading` used by the wiki, the READMEs, the web panel and the website. When a section moves to another page, leave an `<a id="old-anchor"></a>` on the old page, since cabinets that don't update keep their old links.
+- **Pictures** are `<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/...">`, from `website/public/screenshots`, `docs/telegram/img` or `docs/img`. A 640x240 screen is shown at 4:3.
