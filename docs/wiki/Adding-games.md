@@ -69,32 +69,8 @@ Pick the game in the frontend, or in the web panel's **Frontend** area, which op
 
 ## Emulator command lines: KMS or X11
 
-### What KMS and X11 are
-
-Linux has two ways to put a program on the screen, and FliperOS uses both.
-
-- **KMS** (Kernel Mode Setting) means the program draws **directly on the video card**, without any window system. It is the lightest and fastest path, with the least input lag, and the program changes the video mode itself. RetroArch, GroovyMAME and the frontends run like this. The FliperOS wrapper is **`fliperos-kms-run`**.
-- **X11** (Xorg, the classic Linux window system) is for programs that only know how to open a window: Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu, Hypseus. The wrapper is **`fliperos-x11-run`**: it starts an Xorg just for that program, has **Switchres** make a video mode for your monitor, opens the program full screen and closes Xorg when it exits.
-
-Both wrappers are started from the console, as the frontends do. Inside the LXDE desktop (which already is an X session), run the emulator directly.
-
-The commands, as a frontend calls them:
-
-```bash
-# KMS: RetroArch with a core
-/opt/fliperos/bin/fliperos-kms-run retroarch -L /opt/fliperos/retroarch/cores/fbneo_libretro.so "/home/fliperos/roms/retroarch/fbneo/sf2.zip"
-
-# X11: the mode comes from /etc/fliperos/emulator-modes.conf
-/opt/fliperos/bin/fliperos-x11-run flycast "/home/fliperos/roms/naomi/mvsc2.zip"
-
-# X11 with a mode chosen on the spot (width x height @ Hz)
-/opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 pcsx2 "/home/fliperos/roms/ps2/game.iso"
-
-# GroovyMAME opens a game by its set name (it runs in KMS; the wrapper picks)
-/opt/fliperos/bin/fliperos-x11-run groovymame sf2
-```
-
-The X11 video mode of each program is in `/etc/fliperos/emulator-modes.conf`: one column for 15 kHz, another for 25/31 kHz and LCD; a program not in the table gets 320x240@60. More on the modes: [Emulators](Emulators.md#running-a-program-at-640x240).
+<a id="what-kms-and-x11-are"></a>
+Each frontend opens a game with one command, through FliperOS's wrappers: `fliperos-kms-run` for RetroArch and GroovyMAME, `fliperos-x11-run` for the emulators that need a window. What each one does, the video mode of each emulator and how to run any program at 640x240: [KMS and X11](KMS-and-X11.md).
 
 ## Custom games
 

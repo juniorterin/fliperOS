@@ -105,7 +105,7 @@ To test a resolution with a real game, the GroovyArcade wiki has [tables of game
 
 ## The picture is there but wrong
 
-Off-centre, too large or too small: [Monitors](Monitors.md#centring-the-picture). Flickering menus: the Interlaced hacks in [Emulators](Emulators.md#interlaced-hacks-640x240-filter-or-pure-interlaced).
+Off-centre, too large or too small: [Monitors](Monitors.md#centring-the-picture). Flickering menus: the Interlaced hacks in [Emulators](Picture-filters.md).
 
 ## Asking for help
 

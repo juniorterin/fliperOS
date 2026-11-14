@@ -1,42 +1,61 @@
-Fightcade 2 (online arcade and console matches, with rollback) is closed-source freeware with no clear permission to redistribute — **it isn't in the image or in the repository**.
+[Fightcade 2](https://www.fightcade.com) is online arcade and console matches, with rollback. It is closed-source freeware with no clear permission to redistribute, so **it isn't in the image**: the Setup downloads it from its site.
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/extras.webp" width="480" alt="Setup > Games > Extras with Wine">
 
-In **Setup > Games > Frontend** it shows as *Fightcade 2 (not installed)*: when chosen, the Setup **downloads the official Linux package from its website** (about 160 MB, `https://www.fightcade.com/download/linux`), with a progress bar, to `/opt/fliperos/fightcade` — a user-owned folder, because Fightcade updates itself by writing there.
+## Installing
 
-In the sessions table the package column is `fetch:fliperos-fightcade` (a program downloaded from its website, not a `.deb`), and the line's "binary", `/opt/fliperos/fightcade/fightcade`, only exists after the download. Once installed it can be the boot launcher and shows in **Games > Fightcade 2** in LXDE.
+**Setup > Games > Emulators & Games > Fightcade 2**, or pick it in **Setup > Games > Frontend**, where it shows as *Fightcade 2 (not installed)*. The Setup downloads the official Linux package (about 160 MB) with a progress bar, and Wine, which its emulators need.
 
-`/opt/fliperos/bin/fliperos-fightcade fetch` downloads it again on top (repair): the ROMs and settings stay.
+Once installed it can be the boot launcher, and it shows in the desktop's **Games > Fightcade 2**. Choosing it again in Emulators & Games downloads it again on top, which repairs it: the ROMs and settings stay.
 
-- **ROMs in `~/roms/fightcade`**, one folder per emulator it uses: `fbneo` (the `.zip` files of FBNeo 0.2.97.44, with `neogeo.zip`; console games in subfolders `megadrive`, `nes`, `sms`...), `flycast` (Naomi, Atomiswave, Dreamcast), `snes9x` and `fc1` (the Fightcade 1 games, FB Alpha 0.2.96.74 romset).
+## ROMs
 
-  The `ROMs` folders inside Fightcade become links to them (`config/fliperos-roms`); the folders exist even before installing. RetroArch's FBNeo core shares the `fbneo` folder while its own (`~/roms/retroarch/fbneo`) has no games. The romsets are the ones each emulator asks for, not those of the current MAME.
-- **Arcade memory in `~/nvram/fightcade/flycast`**: the package brings the memory of many Naomi and Atomiswave games (`emulator/flycast/data`, which becomes a link to this folder). The `.net` files are the ones used online.
+The ROMs are Fightcade's own sets, in `~/roms/fightcade`, one folder per emulator:
 
-  At installation, the system's Flycast (`~/nvram/flycast`) also gets a copy of this memory, without the `.net` files, for the games that have none of their own yet. What you have played stays.
-- **Lobby screen**: the lobby is a desktop page (a 1280x800 window) and doesn't fit in 240 lines, so it is the only program in the modes table that opens interlaced at 15 kHz: **512x448** (`fightcade 512x448@60` in `/etc/fliperos/emulator-modes.conf`; wider pixels than 640x480 for bigger text, and an interlaced 15 kHz mode can't have much fewer lines), with the page scaled down in proportion to the height (`--force-device-scale-factor`, 100% at 600 lines, 0.75 at 448; `FIGHTCADE_SCALE` sets another value, and *Text > Zoom In/Out*, Ctrl+= and Ctrl+-, adjusts it on the fly).
-- **Matches in the game's native resolution**: on a 15 kHz tube, **every FBNeo and FBA (Fightcade 1) game plays in its own original resolution**, like GroovyMAME does in GroovyArcade — Street Fighter II (CPS) at **384x224 at 59.637 Hz**, Neo Geo at 320x224, and so on — with a modeline made for it by Switchres.
+| Folder | Games |
+| --- | --- |
+| `fbneo` | FBNeo 0.2.97.44 sets, with `neogeo.zip`; console games in subfolders (`megadrive`, `nes`, `sms`…) |
+| `flycast` | Naomi, Atomiswave, Dreamcast |
+| `snes9x` | Super Nintendo |
+| `fc1` | The Fightcade 1 games, FB Alpha 0.2.96.74 sets |
 
-  Nothing is scaled: each pixel of the board is one pixel on the tube, with no stretching to 320 or 640 and no 16:9 window.
+The romsets are the ones each emulator asks for, not those of the current MAME. The frontends don't list them: they are for Fightcade. To play one in RetroArch's FBNeo core, copy it to `~/roms/retroarch/fbneo` ([Versus score](Versus-score.md#fbneo-in-retroarch)).
 
-  How it works: when FBNeo or FBA opens, `fliperos-fightcade` pauses it (before Wine reads its settings), takes the game's size and refresh from GroovyMAME's `-listxml` (the romset names are the same; the answer is cached in `~/.cache/fliperos/fightcade-modes`), adds the mode to the output with Switchres and turns on the emulator's *ArcadeRes* option (`bVidArcaderesHor` in `fcadefbneo.ini`, `bVidArcaderes` in FBA's); then it lets the emulator go on, and Wine switches the screen to the game's mode.
+**Arcade memory:** the package brings the memory of many Naomi and Atomiswave games, kept in `~/nvram/fightcade/flycast`. At installation the system's Flycast gets a copy too, for the games that have none of their own yet.
 
-  It works the same in an online match and in *Test game*. Vertical games, games GroovyMAME doesn't know and widths the modeline can't make exact use the table's mode instead (`fightcade-fbneo` and `fightcade-fc1`, 320x240), at the game's own refresh rate when GroovyMAME knows it.
+## On the tube
 
-  **The screen and the emulator run at the same rate**: the emulators run each game at its original speed (`bForce60Hz 0`, which FliperOS sets once in FBA, where it comes turned on), and the output keeps only one mode of each size, because the emulators ask Wine for a size, not for a refresh rate (CPS2 and CPS3 are both 384x224, at 59.637 and 59.599 Hz). `FIGHTCADE_NATIVE=0` turns it off.
-- **The other emulators** also open in their native modes from the table: **SNES9x at 256x224 at 60.0988 Hz** (the console's own mode, `fightcade-snes9x`) and Flycast at **640x240**, **stretched to 200%** like the system Flycast (`fightcade-flycast`).
+- **The lobby** is a desktop page that doesn't fit in 240 lines, so it opens interlaced at **512x448**, with the page scaled to the height. *Text > Zoom In/Out* (Ctrl+= and Ctrl+-) adjusts it.
+- **FBNeo and FBA matches run in each game's own resolution**, like GroovyMAME: Street Fighter II (CPS) at **384x224 at 59.637 Hz**, Neo Geo at 320x224, and so on. Each pixel of the board is one pixel on the tube, and the screen runs at the game's own rate. Vertical games and games GroovyMAME doesn't know use 320x240.
+- **SNES9x** runs at 256x224 at 60.0988 Hz, the console's own mode; **Flycast** at 640x240, stretched, like the system's Flycast.
+- **Pure picture:** scanlines, bilinear filtering, shaders, motion blur, hardware gamma and SNES9x's hi-res blending are turned off once, with VSync on; what you change later stays.
 
-  `fliperos-fightcade` checks every second whether one of its emulators is open: if so, Switchres computes the modeline and `xrandr` switches the screen to its mode; when it closes, it goes back to the lobby's.
+On 25/31 kHz monitors and LCDs the matches stay in the lobby's mode.
 
-  For each emulator to fill the mode, its file (created from the package's *default*) gets full screen at that size on each launch, following the table, and, only the first time (whatever is changed later in the emulator itself stays), the game already in full screen (`bVidAutoSwitchFull 1`, `fullscreen = yes`, SNES9x's `EmulateFullscreen`) and, on a tube, a 4:3 monitor instead of the package's 16:9. On the other monitors (25/31 kHz, LCD) the matches stay in the lobby's mode.
-- **Pure picture**: scanlines, bilinear filtering, shaders, motion blur, hardware gamma and SNES9x's hi-res blending are turned off once (each emulator keeps what you change later), with VSync on.
-- **Keys**: it needs a keyboard and mouse (the login, the lobby). **Ctrl+W** (*Window > Close*) closes Fightcade and returns to the menu; **Alt+Tab** switches between the lobby and the match's emulator and **Alt+F4** closes the front window (`config/openbox-fightcade.xml`).
-- **Wine**: the FBNeo, SNES9x and FBA emulators are 32-bit Windows programs; they run in Wine, which isn't in the image: downloading Fightcade through the Setup installs it first (or Setup > Games > Extras), with a prefix of their own (`~/.local/share/fliperos/wine-fightcade`), without the Mono/Gecko window. 32-bit Wine's Direct3D draws through **32-bit OpenGL** (`libgl1:i386`, `libgl1-mesa-dri:i386`, `libglx-mesa0:i386`, installed together with Wine): without it FBNeo stops at *"Couldn't initialise DirectX9 Alternate video output"*.
+## Keys
 
-  The prefix is created the first time the lobby opens (about 15 s), not on the first match. Fightcade's Flycast (Flycast Dojo) is native, but ships as an **AppImage**, which asks for FUSE: the launcher exports `APPIMAGE_EXTRACT_AND_RUN=1`, and it extracts itself to `/tmp` on each launch and runs from there.
+It needs a keyboard and a mouse for the login and the lobby.
 
-  Every time the lobby opens, Dojo receives the system Flycast's video and control options (`~/.config/flycast/emu.cfg`): every `rend.*` and `pvr.*` option — no linear interpolation, Texture Filtering on Force Nearest, per-pixel transparency, resolution — except the stretch, which follows Dojo's own mode, and the whole `[input]` section (both controllers on ports A and B), plus the controller mapping files. Whatever you change in those options in the system Flycast also applies to Dojo.
+| Keys | What they do |
+| --- | --- |
+| **Ctrl+W** | Closes Fightcade and returns to the menu |
+| **Alt+Tab** | Switches between the lobby and the match's emulator |
+| **Alt+F4** | Closes the front window |
 
-Checked on a virtual screen with package 2.1.45: download, repair, the lobby open, FBNeo opening in Wine, Alt+Tab and Ctrl+W; and, on an Xorg that accepts new modes, the mode switch — a game requested through Fightcade's own `fcade://` takes the screen to 320x240 in 1 s, Flycast to 640x240 in full screen, and the lobby comes back on close.
+The power button closes a match's emulator, and the lobby comes back ([Power and volume buttons](Power-and-volume-buttons.md)).
 
-On the cabinet's 15 kHz tube, a CPS game in FBNeo opened in its native 384x224, pixel for pixel. **Not checked**: an online match (needs an account).
+## What was checked
+
+On a virtual screen with package 2.1.45: download, repair, the lobby, FBNeo opening in Wine, Alt+Tab and Ctrl+W, and the mode switches (a game requested through Fightcade's `fcade://` takes the screen to its mode in a second, Flycast to 640x240, and the lobby comes back on close). On the cabinet's 15 kHz tube, a CPS game in FBNeo opened in its native 384x224, pixel for pixel. **Not checked:** an online match, which needs an account.
+
+## How it works
+
+- The package goes to `/opt/fliperos/fightcade`, a user-owned folder, because Fightcade updates itself by writing there. `fliperos-fightcade fetch` downloads it again. In the sessions table its package is `fetch:fliperos-fightcade`. The `ROMs` folders inside Fightcade are links to `~/roms/fightcade` (`config/fliperos-roms`), and `emulator/flycast/data` to `~/nvram/fightcade/flycast` (the `.net` files are the ones used online).
+- **The lobby:** `fightcade 512x448@60` in `emulator-modes.conf`, with `--force-device-scale-factor` (0.75 at 448 lines; `FIGHTCADE_SCALE` sets another). Its interlacing gets picom's flicker filter at the Other programs level of **Interlaced hacks**, and a Flycast match the Fightcade Flycast row's.
+- **Native modes:** when FBNeo or FBA opens, `fliperos-fightcade` pauses it (before Wine reads its settings), takes the game's size and refresh from GroovyMAME's `-listxml` (cached in `~/.cache/fliperos/fightcade-modes`), adds the mode with Switchres and turns on the emulator's *ArcadeRes* (`bVidArcaderesHor` in `fcadefbneo.ini`, `bVidArcaderes` in FBA's), then lets it go on, and Wine switches the screen. `bForce60Hz 0` keeps each game at its own speed, and only one mode of each size stays on the output, because the emulators ask Wine for a size, not a rate. `FIGHTCADE_NATIVE=0` turns it off.
+- **The other emulators:** `fliperos-fightcade` checks every second whether one is open, and `xrandr` switches to its mode from the table (`fightcade-snes9x`, `fightcade-flycast`, `fightcade-fbneo`, `fightcade-fc1`). Each emulator's file gets full screen at that size on each launch and, the first time, the game in full screen and a 4:3 monitor.
+- **Wine:** FBNeo, SNES9x and FBA are 32-bit Windows programs, run in Wine with a prefix of their own (`~/.local/share/fliperos/wine-fightcade`, created the first time the lobby opens, about 15 s), without the Mono/Gecko window. 32-bit Wine's Direct3D needs **32-bit OpenGL** (`libgl1:i386`, `libgl1-mesa-dri:i386`, `libglx-mesa0:i386`, installed with Wine), or FBNeo stops at *"Couldn't initialise DirectX9 Alternate video output"*.
+- **Flycast Dojo** is native but an AppImage: the launcher exports `APPIMAGE_EXTRACT_AND_RUN=1`. Every time the lobby opens, Dojo receives the system Flycast's video and control options (`rend.*`, `pvr.*` except the stretch, and `[input]`) and the controller mapping files.
+- The keys are `config/openbox-fightcade.xml`.
+
+See also: [Emulators](Emulators.md), [Linked cabinets](Linked-cabinets.md).

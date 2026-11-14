@@ -40,7 +40,7 @@ One folder per emulator, and one per **RetroArch core** in `~/roms/retroarch/<co
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u` (once DuckStation is installed) | DuckStation |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
-| `namco2x6` | Namco System 246/256 games | PCSX2x6 ([Emulators](Emulators.md#namco-system-246-and-256-pcsx2x6)) |
+| `namco2x6` | Namco System 246/256 games | PCSX2x6 ([Emulators](Namco-246-256.md)) |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
 | `openbor/Paks` | OpenBOR games (`.pak`) | OpenBOR |
 | `hypseus` | Laserdisc games | Hypseus Singe |

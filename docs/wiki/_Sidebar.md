@@ -46,6 +46,15 @@
 **Emulators**
 
 - [Emulators](Emulators.md)
+  - [KMS and X11](KMS-and-X11.md)
+  - [GroovyMAME](GroovyMAME.md)
+  - [RetroArch](RetroArch.md)
+  - [Flycast](Flycast.md)
+  - [Sega Model 2 and 3](Sega-Model-2-and-3.md)
+  - [PlayStation 2 and Namco 246/256](Namco-246-256.md)
+  - [OpenBOR](OpenBOR.md)
+  - [Windows games](Windows-games.md)
+  - [More emulators](More-emulators.md)
   - [Fightcade 2](Fightcade-2.md)
 
 **Controls**

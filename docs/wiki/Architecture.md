@@ -74,7 +74,7 @@ The mode comes from `--mode`, or from the program's line in `/etc/fliperos/emula
 
 It also adds each emulator's own full-screen and stretch options, turns the extra monitors back on, exports `SDL_VIDEODRIVER=x11`, and writes the same log.
 
-The Xorg's client is `fliperos-x11-client`: it starts Openbox (which fits the window to the screen at every mode switch) and hands over to `switchres WIDTH HEIGHT HZ --switch --launch "<program>"`, which creates the modeline for the monitor in `/etc/switchres.ini`, switches to it and runs the program. More in [Emulators](Emulators.md#running-a-program-at-640x240).
+The Xorg's client is `fliperos-x11-client`: it starts Openbox (which fits the window to the screen at every mode switch) and hands over to `switchres WIDTH HEIGHT HZ --switch --launch "<program>"`, which creates the modeline for the monitor in `/etc/switchres.ini`, switches to it and runs the program. More in [Emulators](KMS-and-X11.md#running-a-program-at-640x240).
 
 ### Commands that wrap themselves
 

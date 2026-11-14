@@ -10,7 +10,7 @@ A 15 kHz tube shows 240 lines progressive, or 480 lines interlaced. Many games a
 | **Interlaced filter** | All the lines, interlaced, with the flicker filter at that program's level |
 | **Interlaced pure** | All the lines, interlaced, without the filter. Sharpest, with the flicker |
 
-How 640x240 works for programs that ask for a bigger window: [Emulators](Emulators.md#running-a-program-at-640x240).
+How 640x240 works for programs that ask for a bigger window: [Emulators](KMS-and-X11.md#running-a-program-at-640x240).
 
 ### Interlaced hacks
 

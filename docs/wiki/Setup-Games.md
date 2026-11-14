@@ -86,7 +86,7 @@ Programs left out of the ISO, so it fits in a single GitHub file, installed over
 
 | Extra | What it is for |
 | --- | --- |
-| **Wine** | The Windows emulators of Fightcade 2, and Windows games ([Emulators](Emulators.md#wine-and-wine-staging)) |
+| **Wine** | The Windows emulators of Fightcade 2, and Windows games ([Emulators](Windows-games.md)) |
 | **Wine Staging** | The newest Wine, with game fixes not in Wine yet |
 | **Steam** | Steam games, inside the desktop |
 | **Heroic** | GOG, Epic and Amazon games, inside the desktop |

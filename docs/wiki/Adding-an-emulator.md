@@ -10,7 +10,7 @@ Put the program where the system finds it: a package (`sudo apt install ...`), o
 /opt/fliperos/bin/fliperos-x11-run myemu "/home/fliperos/roms/myemu/game.bin"
 ```
 
-If it opens full screen, plays and returns to the console when you quit, it will work from any frontend. Use `fliperos-kms-run` instead only if the program runs without X (most don't; see [What KMS and X11 are](Adding-games.md#what-kms-and-x11-are)).
+If it opens full screen, plays and returns to the console when you quit, it will work from any frontend. Use `fliperos-kms-run` instead only if the program runs without X (most don't; see [What KMS and X11 are](KMS-and-X11.md#what-kms-and-x11-are)).
 
 ## Step 2: make the command frontend-proof
 

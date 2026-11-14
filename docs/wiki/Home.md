@@ -69,7 +69,16 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [Emulators](Emulators.md) | Each emulator and the video mode it opens in, GroovyMAME, RetroArch, running a program at 640x240, laserdisc, OpenBOR, Model 2, Steam, GOG and Wine, Namco System 246/256 |
+| [Emulators](Emulators.md) | Every emulator, what it runs, how it comes and its video mode; what every game gets |
+| [KMS and X11](KMS-and-X11.md) | How each emulator reaches the tube, running any program at 640x240, cards without low dotclocks |
+| [GroovyMAME](GroovyMAME.md) | Arcade at native resolution, the Midway games, missing files, the package, GroovyMAME in X |
+| [RetroArch](RetroArch.md) | The cores, the light gun in every core, the D-pad, video, updating |
+| [Flycast](Flycast.md) | Dreamcast, Naomi, Naomi 2 and Atomiswave: folders, BIOS, picture, updating |
+| [Sega Model 2 and 3](Sega-Model-2-and-3.md) | SM2-Emu, built on the cabinet, its outputs and speed; Supermodel |
+| [PlayStation 2 and Namco 246/256](Namco-246-256.md) | PCSX2, and PCSX2x6 for the Namco boards: the files of a game, packed games, what was tested |
+| [OpenBOR](OpenBOR.md) | Paks in the frontends, information from the pak, each pak's video mode, old paks |
+| [Windows games](Windows-games.md) | Wine, Wine Staging, Steam and Heroic |
+| [More emulators](More-emulators.md) | Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack |
 | [Fightcade 2](Fightcade-2.md) | Online matches: download through the Setup, ROMs, the lobby, matches in each game's native resolution, keys |
 
 ## Controls
