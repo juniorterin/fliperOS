@@ -306,6 +306,30 @@ Installing a package puts the game folder in `~/games/<group>/<name>` and packs 
 
 Behind it is `fliperos-customgame` (`inspect`, `pending`, `install`, `pack`), which is also what each `<name>.sh` runs: `fliperos-customgame run <name>.cfg` opens the game, with the controller mapper next to it.
 
+### Opening a custom game from another frontend
+
+The FliperOS frontend, Attract-Mode Plus, ES-DE and Pegasus already list each group as a system: the Setup writes their configuration. For any other frontend, or a launcher of your own, the command that opens an installed custom game is its script:
+
+```
+/bin/sh "/home/fliperos/roms/custom/<group>/<name>.sh"
+```
+
+For example `/bin/sh "/home/fliperos/roms/custom/PC games/Metal Slug X.sh"`. Use the full path, in quotes when the group or the name has spaces. In a frontend that fills in the game's file, point the system at the folder `~/roms/custom/<group>`, with the extension `.sh` and the command `/bin/sh "%ROM%"` (ES-DE), `"[romfilename]"` with the executable `/bin/sh` (Attract-Mode), or `/bin/sh "{file.path}"` (Pegasus).
+
+Run it from the console (tty), as the player `fliperos`, outside an X session: the script opens its own X server in the game's video mode. It is one line, which you can also use on its own:
+
+```
+exec /opt/fliperos/bin/fliperos-x11-run --mode 640x240@60 --app custom_pc_games_metal_slug_x --wine \
+  /opt/fliperos/bin/fliperos-customgame run "/home/fliperos/roms/custom/PC games/Metal Slug X.cfg"
+```
+
+- `--mode`: the video mode from the `.cfg`.
+- `--app`: the game's name for the flicker filter and the on-screen menu, `custom_` plus the group and the name in lower case, with `_` for everything else.
+- `--wine`: only for a Windows game, so the 32-bit flicker filter and on-screen menu are loaded.
+- The last part opens the game from its `.cfg`: the command in the game folder, or the `.exe` in PortProton. The controller mapper (`<name>.key`) starts with it.
+
+Changing the video mode or the information in the Setup rewrites the script, so call the `.sh` rather than a copy of its line.
+
 ### Windows games: PortProton
 
 Windows games in a package run in **PortProton** (Wine and Proton builds made for games). It is not in the image: the Setup offers to download it, about 3 GB in `~/PortProton`, the first time you create or install a Windows package. Without it, the game opens with the system's Wine, if there is one.
