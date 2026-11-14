@@ -1,50 +1,67 @@
-## LXDE desktop
+**Start desktop** in the FliperOS menu opens LXDE, the same desktop as GroovyArcade's, for a mouse and a keyboard, or the controller as a mouse. Leaving it goes back to the menu.
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/desktop.webp" width="480" alt="The LXDE desktop of FliperOS">
 
-GroovyArcade's LXDE: full `lxde` with openbox-lxde, panel at the bottom (menu, file manager, terminal, tasks, CPU, volume, tray, network, clock), no compositor, no DPMS or screensaver, Sans 10 font and the Video Setup orientation.
+## What is on it
 
-The wallpaper is `/usr/share/fliperos/wallpaper.jpg` (`config/wallpaper.jpg`, a pixel-art city at night), stretched to the screen, which is 4:3 in every CRT mode. Everything in the Dracula theme (see below).
+The panel at the bottom has the menu, the file manager, the terminal, the tasks, CPU, volume, the tray, the network and the clock. The wallpaper is a pixel-art city at night, and everything is in the Dracula theme (below).
 
-**Terminal: Alacritty.** `lxterminal` and `xterm` (the system's default terminal, with bitmap fonts the image doesn't even have) didn't draw Gum's borders; they were removed, and the terminal in the panel, the menu and *FliperOS Setup* is **Alacritty**, which always works in UTF-8 and draws borders and blocks by itself, without depending on the font.
+| Program | Where | What it is |
+| --- | --- | --- |
+| **Alacritty** | Panel, menu | The terminal, in Dracula colours |
+| **App Store** | Desktop, panel, System Tools | GNOME Software with Flatpak and Flathub: Ubuntu packages and Flatpak apps. Installing asks for the `fliperos` password |
+| **Falkon** | Internet | The web browser |
+| **Transmission** | Internet | Torrents |
+| **FliperOS Setup** | Panel, System Tools | The Setup in a window |
+| **Home** | Desktop | Your folders: roms, bios, media, config |
+| **Desktop Resolution** | Desktop, Preferences | Changes the desktop's resolution (below) |
+| **AntiMicroX**, **QJoyPad** | Menu | A controller as keyboard and mouse |
+| `htop`, `evtest`, `joy2key`, `hwinfo`, `lshw`, `read-edid`, `i2c-tools` | Terminal | GroovyArcade's tools |
 
-Dracula theme with the console palette (`config/lxde/alacritty/alacritty.toml`), DejaVu Sans Mono, non-blinking cursor (blinking redraws the screen, which flickers in interlaced modes). The font size doesn't follow the DPI from the CRT's EDID (it would give 50 DPI or less): `fliperos-lxde` exports `WINIT_X11_SCALE_FACTOR=1`.
+The App Store downloads no updates by itself and has no welcome screen: disk and network activity in the middle of a game hurts latency.
 
-Since the `lxde` metapackage depends on `lxterminal`, the image installs its components one by one.
+### Emulators in the menu
 
-**App Store:** **GNOME Software** with the **Flatpak** plugin and **Flathub** as a source, in the menu (System Tools), on the panel and on the desktop as *App Store*: Ubuntu packages and Flatpak apps (emulators, games, programs). Ubuntu 24.04's App Center depends on snap, which isn't in the image.
+**Games** has RetroArch, GroovyMAME, Flycast, PCSX2, Supermodel, Dolphin, OpenBOR, Model 2 and, once downloaded through the Setup, Fightcade 2, with the projects' own icons.
 
-No automatic update downloads and no welcome screen (`config/fliperos-software.gschema.override`): disk and network activity in the middle of a game hurts latency, for the same reason the apt timers are masked. Installing asks for the user's password (`fliperos`), through lxpolkit.
+None of them runs inside the desktop: choosing one closes the desktop (asking first if there are open windows), the emulator opens on the CRT in its own video mode, and when it closes **the desktop comes back**.
 
-**Disks on the desktop:** every disk is **mounted by itself**, at boot and when it is plugged in (a second hard disk, a USB stick, a Windows partition), in `/media/fliperos/<label>`, and gets a **hard disk icon on the desktop** to open it.
+Model 2 always shows: the first click downloads and builds it ([Emulators](Emulators.md)). Steam and Heroic (GOG), once installed through **Setup > Games > Extras**, also live in Games, but open inside the desktop itself.
 
-A disk **without a label** is named after its model, like `/media/fliperos/TOSHIBA_HDWD110` (from its second partition on, with the number: `TOSHIBA_HDWD110_2`), instead of a code like `5E2C-4AEF`. The old code path still works: it is a link to the new folder, so a game set to open at boot or a frontend list that saved it keeps working.
+## Disks
 
-The mount is done by udisks2 as the `fliperos` user, so FAT, exFAT and NTFS disks belong to the user (NTFS through the kernel's `ntfs3`): a udev rule (`config/99-fliperos-disks.rules`) starts `fliperos-automount@<device>.service` for each file system, and `config/fliperos-automount` leaves out what is already mounted, swap, encrypted, LVM and RAID volumes, and system partitions (EFI, Windows recovery and reserved).
+Every disk is **mounted by itself**, at boot and when it is plugged in: a second hard disk, a USB stick, a Windows partition. It goes to `/media/fliperos/<label>` and gets a **hard disk icon on the desktop**.
 
-A polkit rule (`config/50-fliperos-udisks.rules`) lets the user mount, unmount and eject internal disks without a password; formatting and partitioning still ask for it. The icons come from PCManFM (`show_mounts=1`) with `gvfs`, which also offers *Unmount* and *Eject* in the icon's menu.
+- A disk without a label is named after its model, like `/media/fliperos/TOSHIBA_HDWD110` (its second partition on: `TOSHIBA_HDWD110_2`).
+- FAT, exFAT and NTFS disks belong to the user, so you can write to them.
+- The icon's menu has **Unmount** and **Eject**. Mounting and ejecting need no password; formatting and partitioning ask for it.
 
-Nothing is mounted on the installation media, where a mounted disk couldn't be erased by the installer.
+Nothing is mounted on the installation media, where the installer may need to erase a disk.
 
-**Browser and torrents:** **Falkon** and **Transmission** ship in the image and appear in the menu (Internet) as *Falkon (browser)* and *Transmission (torrent)*: `fliperos-rootfs.sh` copies each package's entry to `/usr/local/share/applications`, which takes precedence, with the name changed in every language.
+## The controller as a mouse
 
-**Emulators in the menu (Games):** RetroArch, GroovyMAME, Flycast, PCSX2, Supermodel, Dolphin, OpenBOR, Model 2 and, once downloaded through the Setup, Fightcade 2, with the projects' own icons.
+On the desktop, the first controller is the mouse:
 
-GroovyMAME, Model 2 (SM2-Emu) and Fightcade don't bring one into the image, so their official icons come from `config/icons`; Supermodel has no icon of its own and gets a FliperOS monogram.
+| Controller | Does |
+| --- | --- |
+| Stick or D-pad | Moves the pointer |
+| Accept button (button 1) | Left click |
+| Back button (button 2) | Right click |
+| Button 3 | Opens and closes the **on-screen keyboard** |
 
-None of them runs inside the desktop's X — RetroArch and GroovyMAME use KMS, the others start an Xorg of their own in the mode from the modes table ([Emulators](Emulators.md)) —, so the shortcut (`fliperos-launch`) saves the request and closes the desktop (with a confirmation if there are open windows), `fliperos-session` opens the emulator on the CRT and, when it closes, **the desktop comes back**.
+The on-screen keyboard (Onboard) also opens by itself when a text field gets the focus, and types into it. A window in full screen (a game, a video) pauses the controller-mouse.
 
-An emulator that wasn't built (`--skip-*`) doesn't show in the menu. Model 2 always does: it is not compiled into the image, and the first click clones and builds it ([Emulators](Emulators.md)). Steam and Heroic (GOG), once installed through Setup > Games > Extras, also live in Games, but open inside the desktop itself.
+Every text field of the graphical Setup has an on-screen keyboard too: Enter on the field opens it.
 
-**The controller is the mouse.** On the desktop, the stick of the first controller moves the pointer, the accept button is the right click and the back button the left click (`config/fliperos-deskpad`). Button 3 opens and closes an **on-screen keyboard**, which also opens by itself when a text field gets the focus, and types into it. A window in full screen (a game, a video) pauses it. Its log is `/opt/fliperos/logs/deskpad.log`. Every text field of the graphical Setup has the same on-screen keyboard: Enter on the field opens it.
+## Desktop Resolution
 
-GroovyArcade's tools also ship: **AntiMicroX** and **QJoyPad** (controller as keyboard/mouse), `xterm`, `htop`, `evtest`, `joy2key`, `hwinfo`, `lshw`, `read-edid`, `i2c-tools`. **FliperOS Setup** lives in **System Tools** (and on the panel), like `gasetup.desktop`. The terminal uses the Dracula colors. Leaving the desktop goes back to the menu.
+Changes the desktop's resolution **on the fly**. The list is the resolutions of the monitor chosen in Video Setup, plus **Other resolution...** for any `WIDTHxHEIGHT@HZ`.
 
-**Desktop Resolution (Preferences, and an icon on the desktop):** changes the desktop resolution **on the fly**. The list is the resolutions of the monitor chosen in Video Setup, plus *Other resolution...* (any `WIDTHxHEIGHT@HZ`).
+Without a confirmation within 15 seconds, the previous resolution comes back. **Use every time the desktop starts** keeps it for the next time.
 
-Switchres computes the mode within the ranges of `/etc/switchres.ini` (`switchres --calc`, the same calculation the emulators use) and `xrandr` applies it, adjusting the screen size; the window opens maximized and follows the change. Without confirmation within 15 seconds, the previous resolution comes back.
+Only the desktop changes: the console, the Setup and the frontends keep the Video Setup resolution. With an LCD monitor, the list is the modes of its EDID.
 
-*Use every time the desktop starts* saves the mode in `~/.config/fliperos/desktop-mode`, which `fliperos-lxde` applies when the desktop opens; choosing the boot resolution forgets the saved one. Only the desktop changes: the console, the setup and the frontends keep the Video Setup resolution. With an LCD monitor, the list is the modes from its EDID.
+In an interlaced mode, the desktop gets the flicker filter at the Desktop row's level of **Setup > Video Setup > Interlaced hacks** ([Interlaced, colour and scanlines](Picture-filters.md)).
 
 ## Dracula theme
 
@@ -52,18 +69,29 @@ Switchres computes the mode within the ranges of `/etc/switchres.ini` (`switchre
 
 | Where | How |
 | --- | --- |
-| Console and `fliperos-setup` | VT palette (below) and Gum with its indices |
-| LXDE — GTK 2/3 windows and programs | official `dracula/gtk` theme, pinned by commit (`fliperos-dracula.sh`), with GTK 2's `murrine`/`pixbuf` engines |
-| LXDE — Openbox borders and menus | `config/openbox-3/themerc` (`dracula/gtk` has no Openbox theme), selected in `lxde-rc.xml` |
-| LXDE — panel, background, terminal | colors in `config/lxde` (lxpanel, pcmanfm, lxterminal) |
-| Terminal (zsh) | **Oh My Zsh** with the official `dracula/zsh` theme, both pinned by commit in `/usr/local/share/oh-my-zsh` (`fliperos-dracula.sh`), without automatic updates; `~/.zshrc` is `config/zshrc`. On the Linux console the arrow and git's ✓/✗ become `>`, `ok` and `*` (the console font lacks those symbols) |
-| RetroArch | the **Dracula theme built into RGUI** (`rgui_menu_color_theme = 17`) |
-| GroovyMAME | UI colors (menus, game list, sliders) in `/etc/fliperos/mame/ui.ini` (`config/mame-ui.ini`, ARGB) |
+| Console and the text Setup | The VT palette (below) and Gum with its indices |
+| LXDE windows and programs (GTK 2/3) | The official `dracula/gtk` theme, pinned by commit, with GTK 2's `murrine`/`pixbuf` engines |
+| LXDE window borders and menus (Openbox) | `config/openbox-3/themerc` (`dracula/gtk` has no Openbox theme) |
+| LXDE panel, background, terminal | The colours in `config/lxde` |
+| Terminal (zsh) | **Oh My Zsh** with the official `dracula/zsh` theme, both pinned by commit, without automatic updates. On the Linux console the arrow and git's ✓/✗ become `>`, `ok` and `*` |
+| RetroArch | The **Dracula theme built into RGUI** (`rgui_menu_color_theme = 17`) |
+| GroovyMAME | UI colours (menus, game list, sliders) in `/etc/fliperos/mame/ui.ini` |
 
 ### On the console
 
-The Linux console only has 16 colors, and the background only accepts the first 8.
+The Linux console has 16 colours, and the background takes only the first 8. The palette is reprogrammed with the Dracula tones at boot and again by the Setup, and Gum's styles use the palette **indices**, so the tube and a graphical terminal show the same thing. The console font (Lat15/Uni2) has the rounded borders, the bar blocks and the arrows the screens use.
 
-The VT palette is reprogrammed with the Dracula tones at boot (`/etc/vtrgb`, applied by Ubuntu's `setvtrgb.service`, with `config/vtrgb-dracula` as a higher-priority alternative) and again by `fliperos-setup`; Gum's styles use the palette **indices**, not hexadecimal colors.
+## How it works
 
-That way the tube and a graphical terminal show the same thing. The console font (Lat15/Uni2) has the rounded borders, the bar blocks and the arrows the screens use.
+- LXDE is GroovyArcade's: `lxde` components with openbox-lxde, no DPMS or screensaver, Sans 10, and the Video Setup orientation. The `lxde` metapackage depends on `lxterminal`, so the image installs its components one by one, without `lxterminal` and `xterm`: they didn't draw Gum's borders. **Alacritty** works in UTF-8 and draws borders and blocks by itself (`config/lxde/alacritty/alacritty.toml`, DejaVu Sans Mono, a cursor that doesn't blink, since blinking redraws the screen and flickers in interlaced modes). `fliperos-lxde` exports `WINIT_X11_SCALE_FACTOR=1`, because the CRT's EDID would give 50 DPI or less.
+- The only compositor is picom, for the flicker filter, run only while the screen is interlaced (`config/fliperos-desktop-deflicker`).
+- The App Store: `config/fliperos-software.gschema.override` turns off automatic downloads and the welcome screen; installing asks through lxpolkit. Ubuntu 24.04's App Center depends on snap, which isn't in the image.
+- Disks: a udev rule (`config/99-fliperos-disks.rules`) starts `fliperos-automount@<device>.service` for each file system; `config/fliperos-automount` leaves out what is mounted, swap, encrypted, LVM and RAID volumes and system partitions, and udisks2 mounts the rest as the `fliperos` user (NTFS through the kernel's `ntfs3`). The old UUID path of a disk without a label still works, as a hidden link. A polkit rule (`config/50-fliperos-udisks.rules`) lets the user mount, unmount and eject without a password. The icons are PCManFM's (`show_mounts=1`) with `gvfs`.
+- Falkon and Transmission: `fliperos-rootfs.sh` copies each package's menu entry to `/usr/local/share/applications`, with the name changed in every language.
+- Emulators: the menu entry runs `fliperos-launch`, which saves the request and closes the desktop; `fliperos-session` opens the emulator and then the desktop again. GroovyMAME, Model 2 and Fightcade icons come from `config/icons`; Supermodel gets a FliperOS monogram. An emulator left out of the build (`--skip-*`) doesn't show.
+- The controller-mouse is `config/fliperos-deskpad` (log `/opt/fliperos/logs/deskpad.log`); the keyboard is Ubuntu's Onboard, set by `config/fliperos-onboard.gschema.override`.
+- Desktop Resolution is `fliperos-resolution`: Switchres computes the mode within `/etc/switchres.ini` (`switchres --calc`, as for the emulators) and `xrandr` applies it. The saved mode is `~/.config/fliperos/desktop-mode`, applied by `fliperos-lxde`.
+- Logout (the menu item, the panel button and the end of the session) opens a full-screen menu in the Setup's look: back to the FliperOS menu, reboot, power off or cancel (`config/fliperos-logout`).
+- The theme is installed by `fliperos-dracula.sh`; Oh My Zsh lives in `/usr/local/share/oh-my-zsh` and `~/.zshrc` is `config/zshrc`. The VT palette is `/etc/vtrgb` (`config/vtrgb-dracula`, applied by Ubuntu's `setvtrgb.service`).
+
+See also: [Installed system](Installed-system.md), [Emulators](Emulators.md).

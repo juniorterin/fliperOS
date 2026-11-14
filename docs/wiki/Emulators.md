@@ -180,74 +180,7 @@ The same file named after another core (`config/<Core>/<Core>.switchres.ini`) do
 
 ## Interlaced hacks: 640x240, filter or pure interlaced
 
-**Setup > Video Setup > Interlaced hacks** is a table with one row per program and three columns, one mark per row, like the Services table. It sets how each program shows games with more than 240 lines on a 15 kHz tube:
-
-- **640x240**: the 640x240 progressive mode described above. No flicker, half the lines.
-- **Interlaced filter**: all the lines, interlaced (the program's 25/31 kHz line in `emulator-modes.conf`, 640x480 or 496x384, which Switchres makes interlaced on the tube; GroovyMAME and RetroArch pick each game's own interlaced mode, such as 448i, 480i or 576i) with the flicker filter at that program's level.
-- **Interlaced pure**: the same interlaced mode without the filter. Sharpest, with the flicker.
-
-Marking **Interlaced filter** on a row opens that program's level (light, medium, strong) and **Preview on the screen**. The preview opens a test screen at 640x480i through the same path as the emulators.
-
-It is made to flicker: one-pixel stripes and a checkerboard, small text, thin frames and a grid, a moving line and a scrolling marquee. The arrows change the level while it is on the tube, and Enter keeps it (off makes the row pure). To choose another level for a row already on the filter, mark pure and then the filter again.
-
-| Row | 640x240 means | Interlaced means | Default |
-| --- | --- | --- | --- |
-| Flycast, PCSX2, DuckStation, Dolphin, Hypseus Singe | `fliperos-x11-run` opens the 640x240 line of the table | the 640x480 line | 640x240 |
-| Supermodel, SM2-Emu (384 lines) | 640x240 at 57.524 Hz | 496x384 at 57.524 Hz, interlaced | 640x240 |
-| GroovyMAME | `interlace 0` in `mame.ini`: Switchres never picks an interlaced mode | `interlace 1` | Interlaced filter |
-| RetroArch PS1, SNES, Mega Drive, FBNeo | `interlace 0` in the core's own `switchres.ini` | `interlace 1` | Interlaced filter |
-| RetroArch MAME 2010 | the same, `interlace 0` (the shipped file) | `interlace 1` | 640x240 |
-| Fightcade Flycast | its Flycast matches at 640x240 | 640x480, with or without the filter (picom, see below) | 640x240 |
-| Desktop | none (the resolution comes from Desktop Resolution) | picom with or without the filter | Interlaced filter |
-| Other programs | none | custom games and anything else in an interlaced mode | Interlaced filter |
-
-The default of each row is what that program already did. The choices are saved in `fliperos.conf`:
-- `mode480_PROGRAM=240p|filter|pure`, which `fliperos-x11-run` and `fliperos-fightcade` read;
-- `deflicker_PROGRAM=light|medium|strong|off`, which the filter reads;
-- `deflicker=` for the Other programs row.
-
-PROGRAM is the command name in `emulator-modes.conf`, or the RetroArch core without `_libretro.so`. The core files are written as `~/.config/retroarch/config/<Core>/<Core>.switchres.ini` without the `# FliperOS` header, so updates leave them alone. Everything counts from the next game.
-
-## Interlaced flicker filter
-
-When a game does run interlaced (any interlaced mode, whatever its size: 480i, 448i, 576i, the 496-line one Switchres makes for Model 3), a line one pixel tall exists in only one of the two fields, so it is drawn 30 times a second and flickers. The filter blends each line with its neighbour before the frame goes out. Then every detail is in both fields: the flicker goes away and the image is a little softer.
-- **Medium**, the default, averages each line with the next one. That is RePlayOS's "Interlaced Flicker Reduction", which samples between two lines.
-- **Light** (15/70/15) keeps more detail.
-- **Strong** (a third each from the line above, the line and the line below) hides the most.
-- **Off** leaves the picture sharp, with the flicker.
-
-The level is per program, in the Interlaced hacks table above.
-
-The filter finds the level from the first of these that is set:
-1. a file named by `FLIPEROS_DEFLICKER_FILE`, re-read every 30 frames (the preview);
-2. `FLIPEROS_DEFLICKER`;
-3. the open RetroArch core: `deflicker_pcsx_rearmed=`. The filter lists the loaded libraries every 30 frames to see which `*_libretro.so` is open. It does not wrap `dlopen`, which would change where each program looks for its own libraries;
-4. the program: `deflicker_flycast=`. The name comes from `FLIPEROS_DEFLICKER_APP`, which `fliperos-x11-run` sets to the table name, or else from the process;
-5. `deflicker=`.
-
-It works below the emulators, so no emulator needs a shader of its own.
-
-`libfliperos-deflicker.so` (`config/fliperos-deflicker.c`, built with the image and on each update into `/usr/local/lib/fliperos`) is loaded through `LD_PRELOAD` by `fliperos-kms-run` (RetroArch and the other KMS emulators) and by `fliperos-x11-client` (the emulators in their own Xorg).
-
-It is not loaded into Xorg or into Switchres: `fliperos-x11-run` takes it out of an `LD_PRELOAD` inherited from a frontend, and `fliperos-x11-client` puts it back on the emulator alone. The library catches the frame swap (`glXSwapBuffers`, `eglSwapBuffers`, including lookups through `dlsym` and `GetProcAddress`, as SDL does).
-
-It copies the frame, draws it back through a three-tap vertical filter and restores the GL state the emulator had. It checks the CRTC mode of every card (`/dev/dri/card0` to `card7`, since the monitor's card is not always `card0`) through DRM every 30 frames: in a progressive mode (240p, 31 kHz, LCD) it does nothing.
-
-Programs in **Vulkan** (PCSX2, Dolphin, DuckStation and Flycast on `amdgpu`) get the same filter from the implicit Vulkan layer `config/fliperos-vkfps.c`, on with `FLIPEROS_VK_FPS=1`. Before each present, in an interlaced mode, it copies the image and draws it back with the same weights and the same level. They stay on Vulkan: the layer asks the swapchain for what it needs and allocates nothing until the first filtered frame.
-
-The layer was tested on Mesa's software driver (lavapipe) with the Khronos validation layers on (`tools/vkfps-test.sh`), and on the cabinet's R7 240 (RADV on `amdgpu`) in a real interlaced Xorg. There, one-line stripes gave the expected values at each level, and Flycast and PCSX2 ran in Vulkan with it, at the same speed with and without the filter and with no GPU errors. The level changes from the web panel with the game open. Dolphin and DuckStation have not run with it yet. The software saturation and hue of the colour calibration go through it too, for cards without a colour matrix.
-
-The LXDE desktop draws without OpenGL, so it gets the same filter through **picom** with a window shader (`config/fliperos-desktop-deflicker --watch`, started by `fliperos-lxde`, at the Desktop row's level `deflicker_desktop=`). It checks the screen mode every 2 seconds and runs picom only while it is interlaced, so a change in Desktop Resolution counts at once. Ubuntu's own picom autostart (`/etc/xdg/autostart/picom.desktop`, without the shader) would take the screen first, since only one compositor runs at a time: `fliperos-lxde` puts `/etc/fliperos/xdg` first in `XDG_CONFIG_DIRS`, where a `picom.desktop` with `Hidden=true` hides it.
-
-Programs in **Wine** are mostly 32-bit, and a 32-bit process can't load the 64-bit library. When Wine is installed from the Extras (the Ubuntu Wine or Wine Staging), the Setup also builds the library for 32 bits (`/usr/local/lib/fliperos/i386/libfliperos-deflicker.so`, with `gcc-multilib` and `libdrm-dev:i386`), and the update rebuilds it when the source changes. When the command runs `wine` or a `.exe`, including a custom game's `bash -c "wine ..."`, `fliperos-x11-client` puts both in `LD_PRELOAD`. The Linux loader skips the one that isn't of the process's kind, and the Wine game gets the filter and the on-screen menu. Games that draw in **Vulkan through DXVK** get the Vulkan layer built for 32 bits as well (`/usr/local/lib/fliperos/i386/libfliperos-vkfps.so`). Its manifest (`config/fliperos-vkfps-i386.json`, a layer of its own name with `library_arch` 32) is only taken by the 32-bit Vulkan loader. `tools/vkfps-test.sh` runs the whole layer test in 32 bits with `ARCH=i386` (lavapipe; Ubuntu has no 32-bit validation layers): the three levels, the on-screen menu, the FPS, the scanlines and the gun flash gave the same values as in 64 bits.
-
-The programs that still cannot take the library get the same picom over their whole Xorg, without the on-screen menu: `fliperos-x11-client` starts it for Fightcade (its lobby is Electron) and for a `wine` or `.exe` command when the 32-bit library is missing. The Fightcade lobby (512x448, interlaced on a 15 kHz tube) uses the Other programs level; while a Flycast match is open, `fliperos-fightcade` switches it to the Fightcade Flycast row's level (`deflicker_fightcade-flycast=`). The Wine matches run at 240 lines, so there picom has nothing to filter and stays off.
-
-For testing:
-- `FLIPEROS_DEFLICKER=off|light|medium|strong` overrides the level.
-- `FLIPEROS_DEFLICKER_FORCE=1` filters in any mode.
-- `FLIPEROS_DEFLICKER_DEBUG=1` prints the level it picked (with the program and the core) and the size and GL profile it filters.
-- `tools/deflicker-test.sh` builds the library and checks the result on a software-rendered Xvfb. It covers the per-program and per-core levels, the desktop shader and the preview with its arrows.
+Whether each program shows games taller than 240 lines at 640x240 or interlaced, and the flicker filter, are on their own page: [Interlaced, colour and scanlines](Picture-filters.md).
 
 ## Emulators & Games
 
@@ -269,7 +202,7 @@ Choosing one that is not installed installs it (`config/fliperos-emulators`):
 
   Each launch (`fliperos-x11-run`) sets full screen, `AspectRatio = Stretch To Fill` and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2).
 
-  Its renderer stays on Automatic, which picks **Vulkan** where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); the [interlaced flicker filter](#interlaced-flicker-filter) works on either.
+  Its renderer stays on Automatic, which picks **Vulkan** where there is one (amdgpu, Intel; radeon has none, and it uses OpenGL); the [interlaced flicker filter](Picture-filters.md#the-flicker-filter) works on either.
 
   A renderer chosen in DuckStation itself stays. Esc or Select+Start opens its menu. Opened from a frontend it closes with the game (`-batch`); from the desktop menu it opens in Big Picture. Not seen on the CRT yet.
 - **KOF Final Attack (Ikemen GO, 4:3)**: below.
@@ -292,26 +225,7 @@ It opens from the desktop menu (**Games > KOF Final Attack**) or with `fliperos-
 
 ## RetroAchievements
 
-**RetroAchievements** in the main menu, right after Start desktop (and the **System > RetroAchievements** tab of the web panel) signs in to a free [retroachievements.org](https://retroachievements.org) account once, for every emulator that has achievements: RetroArch, DuckStation, PCSX2, Dolphin and Flycast. It also turns the achievements on or off and switches **hardcore mode** (no save states, rewind or cheats). Without an account, *Create an account* opens the site's sign-up page: in the cabinet's own browser (the Downloader's Falkon; the Setup comes back to the RetroAchievements screen when it closes), or in a new tab from the web panel.
-
-The login trades the user and password for the account's token through the site's API (`dorequest.php?r=login2`, the same call the emulators make). The password goes to `curl` on standard input, never on a command line or in a log, and is not saved; only the token is, in `/etc/fliperos/cheevos` (mode 640, the user's group can read it).
-
-- **RetroArch** reads `/etc/fliperos/retroarch/cheevos.cfg`, which `fliperos-kms-run` adds to `--appendconfig`, above `retroarch.cfg` (an update rewrites that one).
-- **DuckStation, PCSX2, Dolphin and Flycast** keep the account in their own ini. `config/fliperos-cheevos` writes it at each launch from `fliperos-x11-run` (`[Cheevos]` in DuckStation's `settings.ini`, `[Achievements]` in `PCSX2.ini` and Dolphin's `RetroAchievements.ini`, `[achievements]` in Flycast's `emu.cfg`), and the Setup writes it right away into the ones that already exist.
-- Without `/etc/fliperos/cheevos` nothing changes: an account made inside an emulator's own menu keeps working. Signing out clears the user and token everywhere.
-- **Web API key** (in the same menu and in the web panel) keeps the account's Web API Key, from retroachievements.org/settings (*Keys*). The frontend needs it for the achievements badge ([Frontends](Frontends.md)). The Setup checks it against the account's profile (`API_GetUserProfile`), sending it to `curl` on standard input, and it is cleared when you sign out or switch accounts.
-
-Each unlocked achievement shows over the game for 5 seconds, in a bar like the volume one ([On-screen menu](Installed-system.md#on-screen-menu)): a trophy with a spinning ring, the achievement's title (it scrolls when it doesn't fit) and a green line that empties. The Pixelcade/ZeDMD marquee shows it too ([Frontends](Frontends.md)).
-
-The emulators' own notifications stay off, so only the bar shows: RetroArch has no on-screen notifications, Dolphin no on-screen messages, PCSX2 and DuckStation get `Notifications = false` and `LeaderboardNotifications = false`, and Flycast `Notifications = no` in `[achievements]` (an option of FliperOS's patch 0006).
-
-`fliperos-cheevos watch`, started by `fliperos-kms-run` and `fliperos-x11-run`, reads each unlock from the emulator's log until the game closes:
-
-- RetroArch, Dolphin and DuckStation: their output in `/opt/fliperos/logs/<program>.log`. RetroArch writes the achievements there only with `--verbose`, which `fliperos-kms-run` adds when they are on. Dolphin needs its *RetroAchievements* log at the Info level (`Logger.ini`).
-- PCSX2: its own `logs/emulog.txt`.
-- Flycast: its release build leaves those log lines out, so patch 0006 writes each unlock to `$FLIPEROS_CHEEVOS_LOG`.
-
-In debug mode the output goes to the screen, not to the log, so RetroArch, Dolphin and DuckStation show no bar.
+The account, hardcore mode, the bar over the game and the badge in the game list are on their own page: [RetroAchievements](RetroAchievements.md).
 
 ## Laserdisc (Hypseus Singe)
 
