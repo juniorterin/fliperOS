@@ -53,6 +53,10 @@
 **Network**
 
 - [Web panel](Web-panel.md)
+  - [Web panel: Frontend](Web-panel-Frontend.md)
+  - [Web panel: Live](Web-panel-Live.md)
+  - [Web panel: Library](Web-panel-Library.md)
+  - [Web panel: System](Web-panel-System.md)
   - [Controller on the stream](Controller-overlay.md)
 - [Linked cabinets](Linked-cabinets.md)
 

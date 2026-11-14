@@ -84,7 +84,11 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [Web panel](Web-panel.md) | The cabinet from a phone or PC at http://fliperos.local: games to play, the live screen and OBS, settings while you play, files, the ROM filter, downloads, the system status, a terminal |
+| [Web panel](Web-panel.md) | The cabinet from a phone or PC at http://fliperos.local: signing in, more than one cabinet, the four areas, the tasks drawer, the JSON API |
+| [Web panel: Frontend](Web-panel-Frontend.md) | The cabinet drawing, now playing, the LED marquee preview, picking a game and playing it, the game sheet |
+| [Web panel: Live](Web-panel-Live.md) | The screen live with sound, quality, and the OBS pages: live screen, marquee, controller, the delay for OBS |
+| [Web panel: Library](Web-panel-Library.md) | Installing emulators, the Downloader and Download BIOS, the ROM filter, the art, files |
+| [Web panel: System](Web-panel-System.md) | Status and logs, every Setup setting while you play, RetroAchievements, cloud backup, terminal, lab mode |
 | [Controller on the stream](Controller-overlay.md) | Your stick and buttons lighting up on the live stream, as a page for OBS, restyled in the panel with a live CSS editor |
 | [Linked cabinets](Linked-cabinets.md) | The games that link several machines (Daytona, the Tournament Battle, Scud Race and more), and party and net play: more players than one cabinet's controls |
 
