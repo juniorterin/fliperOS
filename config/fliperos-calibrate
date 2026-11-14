@@ -30,7 +30,16 @@ import time
 import tty
 
 GUNCON_CONF = os.environ.get('FLIPEROS_GUNCON_CONF', '/etc/fliperos/guncon2.conf')
+GUNCON_PARAMS = os.environ.get('GUNCON2_PARAMS', '/sys/module/guncon2/parameters')
 AXES_CONF = os.environ.get('FLIPEROS_CALIBRATION_CONF', '/etc/fliperos/calibration.conf')
+# A faixa da pistola durante a calibracao. O driver (config/guncon2-patches)
+# decide pela faixa calibrada se a pistola ve a tela: com uma faixa salva
+# errada (visto: X 521..589 num tubo de 144..728) todo tiro de verdade saia
+# como fora da tela, e nenhuma calibracao nova conseguia ler um tiro.
+OPEN_X, OPEN_Y = (0, 1023), (0, 511)
+# Menor faixa que se aceita gravar: a tela inteira le uns 580 em X e 230 em Y
+# a 15 kHz (metade de X a 31 kHz). Menos que isto e tiro no mesmo lugar.
+MIN_SPAN = (100, 50)
 GUNCON_ID = (0x0b9a, 0x016a)
 PADKEYS_NAME = b'FliperOS pad keys'
 
@@ -79,6 +88,18 @@ def guncon_range(raw1, raw2, frac1, frac2):
 def median(values):
     s = sorted(values)
     return s[len(s) // 2]
+
+
+def gun_sees(x, y):
+    """O tiro leu a tela? Sem luz o GunCon 2 manda x 0 ou 1 (y 5), e o driver,
+    fora da tela, um valor abaixo da faixa, negativo com a faixa aberta."""
+    return x > 1 and y > 0
+
+
+def plausible_range(xr, yr):
+    """A faixa medida cobre a tela? Dois alvos lidos quase no mesmo ponto dao
+    uma faixa curta, que travaria a pistola (veja OPEN_X)."""
+    return xr[1] - xr[0] >= MIN_SPAN[0] and yr[1] - yr[0] >= MIN_SPAN[1]
 
 
 def axis_calibration(seen_min, seen_max, rest, orig_min, orig_max):
@@ -301,9 +322,55 @@ def draw_target(screen, row, col):
     screen.write('\033[0;30;47m')
 
 
+def drain(dev):
+    """Joga fora os eventos na fila: tiros dados antes do alvo aparecer (o
+    segundo de um tiro duplo caia no alvo seguinte, na mira do anterior)."""
+    while dev.events():
+        pass
+
+
+def gun_param(name, value=None):
+    """Le (ou escreve) um parametro do driver guncon2; None se ele nao tem."""
+    path = os.path.join(GUNCON_PARAMS, name)
+    try:
+        if value is None:
+            with open(path) as f:
+                return f.read().strip()
+        with open(path, 'w') as f:
+            f.write(str(value))
+        return str(value)
+    except OSError:
+        return None
+
+
+def open_range(path):
+    """Abre a faixa da pistola e tira a espera do flash (a tela ja e branca)
+    durante a calibracao, para o driver deixar passar todo tiro. Devolve a
+    funcao que poe tudo como estava."""
+    dev = Device(path, write=True)
+    saved = {axis: dev.absinfo(axis)[1:3] for axis in (ABS_X, ABS_Y)}
+    dev.set_abs(ABS_X, *OPEN_X)
+    dev.set_abs(ABS_Y, *OPEN_Y)
+    flash = gun_param('flash_ms')
+    if flash is not None:
+        gun_param('flash_ms', 0)
+
+    def restore():
+        try:
+            for axis, (lo, hi) in saved.items():
+                dev.set_abs(axis, lo, hi)
+        finally:
+            dev.close()
+            if flash is not None:
+                gun_param('flash_ms', flash)
+
+    return restore
+
+
 def shoot(screen, gun, need):
     """Coordenadas cruas de `need` tiros (gatilho). Esc ou B cancela."""
-    x = y = 0
+    drain(gun)
+    x, y = gun.absinfo(ABS_X)[0], gun.absinfo(ABS_Y)[0]
     shots = []
     while len(shots) < need:
         if screen.key() == '\033':
@@ -318,7 +385,7 @@ def shoot(screen, gun, need):
             elif etype == EV_KEY and value == 1 and code in (BTN_B, BTN_MIDDLE, BTN_SELECT):
                 raise Cancelled()
             elif etype == EV_KEY and value == 1 and code == BTN_LEFT:
-                if x <= 0 or y <= 0:
+                if not gun_sees(x, y):
                     screen.at(screen.rows, 2, 'The gun did not see the screen: aim at the white area.   ')
                     continue
                 shots.append((x, y))
@@ -328,7 +395,13 @@ def shoot(screen, gun, need):
 
 def calibrate_guncon(path, label=''):
     gun = Device(path)
-    screen = make_screen()
+    reopen = open_range(path)
+    try:
+        screen = make_screen()
+    except BaseException:
+        reopen()
+        gun.close()
+        raise
     title = 'GunCon 2 calibration' + (' (%s)' % label if label else '')
     try:
         # Alvos a 15% e 85% da tela, longe da borda, onde o tubo distorce.
@@ -346,9 +419,10 @@ def calibrate_guncon(path, label=''):
         fy = [(r - 0.5) / screen.rows for r, _ in (t1, t2)]
         xr = guncon_range(points[0][0], points[1][0], fx[0], fx[1])
         yr = guncon_range(points[0][1], points[1][1], fy[0], fy[1])
-        if xr[1] - xr[0] < 20 or yr[1] - yr[0] < 20:
+        if not plausible_range(xr, yr):
             white(screen, 'The two targets read almost the same position.',
                   'Nothing was saved. Press Enter.')
+            drain(gun)
             wait_enter(screen, gun)
             return 1
         # Conferencia no centro, ja com a faixa nova.
@@ -363,19 +437,23 @@ def calibrate_guncon(path, label=''):
               'Trigger or Enter saves. B or Esc discards.')
         if hasattr(screen, 'show_result'):
             screen.show_result(hit, want)
+        time.sleep(0.3)
+        drain(gun)
         if not confirm(screen, gun):
             return 1
-        # A faixa desta pistola (pela porta USB) e a geral, que vale para as que
-        # ainda nao foram calibradas (o mesmo tubo, em geral a mesma faixa).
-        write_guncon_conf(gun_conf_path(GUNCON_CONF, gun.phys), xr, yr)
-        write_guncon_conf(GUNCON_CONF, xr, yr)
-        apply_guncon(path, xr, yr)
-        return 0
+        phys = gun.phys
     except Cancelled:
         return 1
     finally:
+        reopen()
         screen.restore()
         gun.close()
+    # A faixa desta pistola (pela porta USB) e a geral, que vale para as que
+    # ainda nao foram calibradas (o mesmo tubo, em geral a mesma faixa).
+    write_guncon_conf(gun_conf_path(GUNCON_CONF, phys), xr, yr)
+    write_guncon_conf(GUNCON_CONF, xr, yr)
+    apply_guncon(path, xr, yr)
+    return 0
 
 
 def wait_enter(screen, dev):

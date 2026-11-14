@@ -1069,6 +1069,42 @@ class CalibrateTests(unittest.TestCase):
         self.assertAlmostEqual(hi, 720, delta=1)
         self.assertEqual(self.C.median([300, 900, 310]), 310)
 
+    def test_a_bad_saved_range_does_not_lock_the_next_calibration(self):
+        # Gabinete de um usuario (2026-11-14): a faixa salva X 521..589 fazia o
+        # driver ver todo tiro como fora da tela, e a calibracao nao lia nada.
+        # Os cantos a 15%/85% de 320x240 leram X 231/640 e Y 42/202.
+        fx, fy = (47.5 / 320, 271.5 / 320), (35.5 / 240, 203.5 / 240)
+        xr = self.C.guncon_range(231, 640, *fx)
+        yr = self.C.guncon_range(42, 202, *fy)
+        self.assertEqual(xr, (144, 729))
+        self.assertEqual(yr, (8, 237))
+        self.assertTrue(self.C.plausible_range(xr, yr))
+        self.assertFalse(self.C.plausible_range((521, 589), (-30, 304)))
+        # Sem luz: x 0/1 do GunCon 2, ou o fora da tela do driver (negativo).
+        for x, y in ((0, 5), (1, 5), (-129, -64), (512, -72)):
+            self.assertFalse(self.C.gun_sees(x, y))
+        self.assertTrue(self.C.gun_sees(430, 115))
+        # A faixa aberta deixa o fora da tela do driver negativo (patch 0004).
+        lo, hi = self.C.OPEN_X
+        self.assertLess(lo - (hi - lo) // 8 - 1, 0)
+        lo, hi = self.C.OPEN_Y
+        self.assertLess(lo - (hi - lo) // 8 - 1, 0)
+        # Abre antes dos alvos, devolve antes de aplicar a faixa nova.
+        src = (ROOT / 'config/fliperos-calibrate').read_text()
+        body = src[src.index('def calibrate_guncon'):src.index('def wait_enter')]
+        self.assertLess(body.index('open_range(path)'), body.index('make_screen()'))
+        self.assertLess(body.index('reopen()\n        screen.restore()'), body.index('apply_guncon(path'))
+
+    def test_flash_wait_is_off_while_calibrating(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'flash_ms').write_text('100\n')
+            with mock.patch.object(self.C, 'GUNCON_PARAMS', tmp):
+                self.assertEqual(self.C.gun_param('flash_ms'), '100')
+                self.C.gun_param('flash_ms', 0)
+                self.assertEqual(self.C.gun_param('flash_ms'), '0')
+                self.assertIsNone(self.C.gun_param('missing'))
+
     def test_each_gun_has_its_own_conf_by_usb_port(self):
         # Duas GunCon 2 sao iguais no vendor/produto: a porta USB as separa.
         base = '/etc/fliperos/guncon2.conf'
