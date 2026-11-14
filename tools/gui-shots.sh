@@ -64,3 +64,11 @@ shot yesno poweroff
 shot progress install
 shot error error
 shot input wifi
+shot system system
+shot version versions
+shot quirks quirks
+shot calibration axes
+shot padcolor padcolor
+shot latency latency
+shot recovery recovery
+shot extras extras "left"

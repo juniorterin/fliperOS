@@ -1087,6 +1087,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>What to try when the tube shows nothing, or when only some games go black. Most of this comes from the <a href="https://gitlab.com/groovyarcade/support/-/wikis/home">GroovyArcade wiki</a>, adapted to where FliperOS keeps each thing, so it hasn't all been tried here.</p>
 <p><strong>If the picture rolls or tears at a frequency the monitor can't take, turn the monitor off first.</strong> A 31 kHz signal can damage a 15 kHz tube.</p>
 <h2 id="getting-in-without-a-picture">Getting in without a picture</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/recovery.webp" width="480" alt="Recovery Mode on the install media"></p>
 <p>The system usually booted even with a black tube. From another computer on the same network:</p>
 <ul>
 <li><strong>SSH</strong>, on from the first boot: <code>ssh fliperos@fliperos.local</code>.</li>
@@ -1095,6 +1096,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </ul>
 <p><strong>Debug mode</strong> in the Setup shows the boot messages instead of the splash (<a href="#Installed-system">Installed system</a>).</p>
 <h2 id="what-the-system-sees">What the system sees</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/system.webp" width="480" alt="Setup > System &gt; Debug mode"&gt;</p>
 <p>This lists each video output, whether something is connected, its EDID and its modes, then the card, the driver and what FliperOS saved:</p>
 <pre><code class="language-bash">for c in /sys/class/drm/card?-*; do
   echo &quot;${c##*/}: $(cat &quot;$c/status&quot;), EDID $(wc -c &lt; &quot;$c/edid&quot;) bytes&quot;
@@ -1322,6 +1324,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>Limine only reads FAT, so the kernel and initrd live <strong>on the ESP</strong> (<code>/boot/efi/fliperos/</code>), maintained by <code>fliperos-limine-update</code> — the equivalent of <code>update-grub</code>, called by the kernel and initramfs hooks. The kernel parameters are in <code>/etc/default/fliperos-boot</code>.</p>
 <p>The new disk carries what was decided on the media: <code>fliperos.conf</code>, Switchres, MAME, Xorg, the kernel line, the configured Wi-Fi networks and the sound card.</p>
 <h3 id="recovery-mode">Recovery Mode</h3>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/recovery.webp" width="480" alt="Recovery Mode"></p>
 <p>Looks for disks with FliperOS (a <code>FliperOS</code> partition with the <code>/etc/fliperos/installed</code> marker) and offers: a terminal inside the installed system (<code>chroot</code>, gasetup's <code>rescue_mode</code>), <strong>reinstall the bootloader</strong> (the "Fix UEFI boot", for BIOS and UEFI), <strong>apply this session's video settings</strong> (graphics card replaced) and <strong>restore the system files</strong> from the media, keeping ROMs, saves, home, network, audio and video.</p>
 <h1 id="Installed-system">Installed system</h1>
 <p>What happens from boot onwards on an installed FliperOS: the default launcher, the Setup menu and what each of its items does. The desktop is covered in <a href="#Desktop">Desktop and theme</a>.</p>
@@ -1347,6 +1350,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>Before asking it lists the <strong>files changed on this machine that the update replaces</strong> (up to six on screen, the rest in <em>View the files</em>): it rehearses the update in an overlay over <code>/</code> and compares each file it would write with what FliperOS itself installed (<code>/var/lib/fliperos/update/manifest</code>, the sha256 of each file, recorded by the ISO and by each update).</p>
 <p>Each of those files is copied to <code>/var/lib/fliperos/update/backup/NNNN-date/</code> before being replaced (<code>fliperos-update restore N</code> puts them back), and the Setup choices (video, latency, buttons) are applied again afterwards. Personal files (<code>fliperos.conf</code>, button maps, ROMs, saves, frontend lists) aren't touched.</p>
 <p><strong>Choosing the FliperOS version.</strong> <em>Setup &gt; System &gt; FliperOS version</em>, and <em>System &gt; FliperOS version</em> in the web panel, list the updates from the one the cabinet's image came with to the newest (<code>fliperos-update versions</code>). Pick an earlier one to go back if an update broke something (the files it replaces are copied first, as above), or a newer one to go forward (<code>fliperos-update goto N|latest</code>). On an earlier one the cabinet stays there: the boot no longer asks and nothing is installed at power off (<code>/etc/fliperos/update-hold</code>) until a newer update than the ones it had seen comes out. <strong>Follow the updates</strong> goes back to the newest.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/version.webp" width="480" alt="Setup > System &gt; FliperOS version"&gt;</p>
 <p>Updates are numbered and <strong>always applied in order</strong>: update N only goes in on a machine at N−1 (<code>/etc/fliperos/patch-level</code>), a list with a gap is refused, and if one fails nothing after it is applied (it is offered again at the next boot; log in <code>/var/log/fliperos-update.log</code>).</p>
 <p>Each one is a repository commit listed in <code>updates/index</code> with the sha256 of its files (downloaded over HTTPS from GitHub and checked before anything is written), plus an optional <code>updates/NNNN.sh</code> for what isn't a file copy and its changelog in <code>updates/notes/NNNN.md</code> (required). They are published with <code>tools/make-update.sh "title" [--reboot]</code>.</p>
 <p>When an update is available, the boot screen first shows <strong>what it changes</strong> (the changelog of each pending part, with scrolling: <code>fliperos-update notes</code>), then the files of this machine it replaces, and asks; <em>Read what changes</em> in that menu shows the changelog again. After it is applied, the <a href="#whats-new">What's new</a> screen lists it with its changelog.</p>
@@ -2161,6 +2165,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 - <strong>Service</strong>: <code>fliperos-doflinx.service</code> runs it as the <code>fliperos</code> user after <code>pixelweb</code> answers.
 - It has not been tested with a marquee yet.</p>
 <h2 id="zedmd-open-source-led-display">ZeDMD (open-source LED display)</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/zedmd-startup-led.gif" width="640" alt="The FliperOS startup animation drawn as the ZeDMD LEDs show it (preview)"></p>
 <p><a href="https://github.com/PPUC/ZeDMD">ZeDMD</a> is an open-source LED display you can build yourself: an ESP32 board driving HUB75 LED panels, 128x32 (two 64x32 panels) or 256x64. <strong>Setup &gt; Games &gt; Extras &gt; ZeDMD</strong> installs support for it.</p>
 <p><strong>It needs ZeDMD firmware 5.1.0 or newer.</strong> Older firmware, like the one that works on Batocera 41, doesn't connect to FliperOS. <a href="#zedmd-firmware-version">ZeDMD firmware version</a> says how to check yours and how to update it.</p>
 <p>The display gets the same events as the Pixelcade marquee: the game selected in ES-DE or Attract-Mode Plus, the system selected in ES-DE, the game opened from any frontend or emulator (with the high scores or "Now Playing" scrolling first), the game closed, the screensaver, the RetroAchievements and "Bye" at shutdown.</p>
@@ -2278,6 +2283,7 @@ The coin stays the coin (commercial mode). A key that the panel itself sends (a 
 <p>Everything the build prints goes to <code>/var/log/&lt;package&gt;-build.log</code>. It needs about 4 GB free in <code>/var/tmp</code>. Choosing the frontend again rebuilds it. A recipe marked <code>PKG_ON_DEMAND=1</code> is left out of <code>build-deb.sh --list-iso</code>, which is the list the CI builds for the image.</p>
 <h1 id="Scoreboard-games">Scoreboard games</h1>
 <p>Every game shows on the LED display (ZeDMD or Pixelcade) and in the marquee preview of the <a href="#Web-panel">web panel</a>: its artwork or name when it is selected and when it opens, see <a href="#Frontends">Frontends</a>. This page lists the games that also have more data, and which data each one has.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/zedmd-startup-led.gif" width="640" alt="The FliperOS startup animation drawn as the ZeDMD LEDs show it (preview)"></p>
 <p><strong>The data</strong></p>
 <ul>
 <li><strong>Artwork or name</strong>: every game. The ZeDMD looks for <code>~/media/dmd</code>, <code>marquee</code> and <code>logo</code>; the Pixelcade for <code>marquee</code> and <code>logo</code>; without art, the game's name.</li>
@@ -29004,6 +29010,7 @@ media=DVD
 <p>Still open: a hand-made <code>.acgame</code> shows in the frontend under its file name (<code>NM00019</code>), because the list does not read its <code>name=</code> line.</p>
 <h1 id="Fightcade-2">Fightcade 2</h1>
 <p>Fightcade 2 (online arcade and console matches, with rollback) is closed-source freeware with no clear permission to redistribute — <strong>it isn't in the image or in the repository</strong>.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/extras.webp" width="480" alt="Setup > Games &gt; Extras with Wine"&gt;</p>
 <p>In <strong>Setup &gt; Games &gt; Frontend</strong> it shows as <em>Fightcade 2 (not installed)</em>: when chosen, the Setup <strong>downloads the official Linux package from its website</strong> (about 160 MB, <code>https://www.fightcade.com/download/linux</code>), with a progress bar, to <code>/opt/fliperos/fightcade</code> — a user-owned folder, because Fightcade updates itself by writing there.</p>
 <p>In the sessions table the package column is <code>fetch:fliperos-fightcade</code> (a program downloaded from its website, not a <code>.deb</code>), and the line's "binary", <code>/opt/fliperos/fightcade/fightcade</code>, only exists after the download. Once installed it can be the boot launcher and shows in <strong>Games &gt; Fightcade 2</strong> in LXDE.</p>
 <p><code>/opt/fliperos/bin/fliperos-fightcade fetch</code> downloads it again on top (repair): the ROMs and settings stay.</p>
@@ -29635,6 +29642,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-bluetooth.png" width="480" alt="Setup > Joysticks &gt; Bluetooth"&gt;</p>
 <p><strong>Setup &gt; Joysticks &gt; Bluetooth</strong> shows up only when the machine has a Bluetooth adapter. It pairs, connects and forgets controllers (<code>config/fliperos-bluetooth</code>, a front end of <code>bluetoothctl</code>), or pairs every controller that is in pairing mode during 30 seconds. A failed pairing is tried once more, after forgetting the device. A paired controller then shows in the Button mapping list with the wireless icon.</p>
 <h3 id="controller-light">Controller light</h3>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/padcolor.webp" width="480" alt="Setup > Joysticks &gt; Controller light"&gt;</p>
 <p><strong>Setup &gt; Joysticks &gt; Controller light</strong> sets the colour of the controllers that have one: DualSense, DualShock 4 and some 8BitDo through the kernel's colour LEDs, and the ring of the <strong>8BitDo Ultimate 2</strong> through its own protocol (<code>config/fliperos-padcolor</code>, <code>config/fliperos-padcolor-8bitdo</code>). Out of the box (<code>padcolor=fliperos</code>) they are FliperOS purple; <em>Other colour</em> takes any <code>RRGGBB</code>, and <em>Off</em> leaves the light as the controller sets it. The screen says which of the connected controllers change.</p>
 <p>On the Ultimate 2 the menus show a purple light running over pink, and while a game is open the left ring turns purple and the right one pink; the roulette comes back when the game closes. That pad only takes settings over the USB cable or its 2.4G dongle: over Bluetooth it keeps the colour saved by cable. A pad with no profile at all gets profile 1 "FliperOS" with the 8BitDo app's defaults, and its profile button has to be pressed once.</p>
 <h3 id="buttons-layout-games-of-1-to-5-buttons">Buttons layout (games of 1 to 5 buttons)</h3>
@@ -29705,6 +29713,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p><strong>Back to the defaults</strong> puts all of these back; the calibration stays.</p>
 <p>The driver's values are written by <code>fliperos-guncon2-calibrate</code>: when the gun arrives (udev) and, with <code>--params</code>, by the Setup and the web panel the moment they change.</p>
 <h3 id="calibrate-wheel-pedals-or-analog-stick">Calibrate wheel, pedals or analog stick</h3>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/calibration.webp" width="480" alt="Choosing the wheel or pedals to calibrate"></p>
 <p>The axes show live; turn the wheel from end to end and press each pedal all the way, then leave everything at rest. An axis that rests in the middle (wheel, analog stick) gets a symmetric range around the rest position — the center gives 0 and both sides reach the end — and a 1% dead zone; a pedal keeps the range seen.</p>
 <p>It goes to <code>/etc/fliperos/calibration.conf</code> (one line per axis) and udev reapplies it on every connection.</p>
 <h3 id="lpt-joysticks">LPT joysticks</h3>
@@ -29712,6 +29721,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>The adapter can't be detected: you say which one it is and what is connected to each input, and the setup writes <code>/etc/modprobe.d/fliperos-lpt.conf</code> (the module options, plus <code>blacklist lp</code>: the printer driver would claim the port, and the joystick drivers want it for themselves) and <code>/etc/modules-load.d/fliperos-lpt.conf</code> (loads at boot), loads the driver right away and shows the joysticks created.</p>
 <p>The kernel finds the port itself (<code>parport_pc</code>) when it exists — on the motherboard it often comes <strong>disabled in the BIOS</strong> (Super I/O &gt; Parallel Port); without one, a PCI/PCIe parallel card. Parallel port joysticks also move the menus.</p>
 <h2 id="setup-system-quirks">Setup &gt; System &gt; Quirks</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/quirks.webp" width="480" alt="Setup > System &gt; Quirks"&gt;</p>
 <p>Kernel fixes for USB devices that arrive wrong. It sits in System, not in Joysticks, because it is about any USB device. Two kinds, told apart by the code:</p>
 <ul>
 <li><strong>Controllers, guns, keyboards</strong> (the <code>usbhid.quirks</code> parameter): code <code>0xVENDOR:0xPRODUCT:0xFLAGS</code>;</li>
@@ -30542,6 +30552,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <p><strong>What was left out, and why:</strong> a <code>PREEMPT_RT</code> kernel (GA has a <code>linux-rt</code>), because <code>preempt=full</code> covers cabinet use and RT trades throughput for predictability, which is only worth it with measurements showing a gain; limiting the CPU C-states, because the gain would be microseconds when the CPU wakes up, against more power draw and heat; and RetroArch's <code>video_hard_sync</code>, because in KMS the 2-image swapchain already waits for each flip.</p>
 <p><strong>Compared with GA:</strong> on the same hardware, expect a tie in Standard mode (with an advantage of a few ms from USB at 1000 Hz) and up to 1 to 2 frames less in RetroArch games in Low latency mode. A hand-tuned GA gets to the same place; the difference is that FliperOS ships this way out of the box.</p>
 <h2 id="recommended-hardware">Recommended hardware</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/latency.webp" width="480" alt="Setup > System &gt; Latency with the check of this computer"&gt;</p>
 <table>
 <thead>
 <tr>
@@ -30999,6 +31010,7 @@ mame gunbustr -comm_localhost &quot;&quot; -comm_remotehost 127.0.0.1 -comm_remo
 <p>If you use one of these on your cabinet, or another one, open an issue in the <a href="https://github.com/juniorterin/fliperOS/issues">repository</a> saying which board, what the Setup showed in <strong>Setup &gt; System &gt; Quirks &gt; USB devices connected now</strong>, and whether it needed a quirk: that is what turns a line of this page from "should work" into "tested".</p>
 <h1 id="Kernel-15-kHz">15 kHz kernel</h1>
 <p><code>fliperos-kernel.sh</code> downloads kernel.org <strong>6.18.54</strong>, applies <code>patches/kernel-15khz/6.18/</code> (D0023R's 01 to 09, plus FliperOS's own 10, which lets nouveau take modes under 25 MHz on analog outputs: see <a href="#Video-cards">Video cards</a>) on top of the <code>.config</code> of Ubuntu 24.04's own kernel and builds the <code>.deb</code>s. No module signing and no debug info. Compiling takes hours, so the <code>.deb</code>s stay in a cache keyed by version and patch hash (<code>/output/kernel-cache/&lt;key&gt;/</code>): the next build reuses them.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/video.webp" width="480" alt="Video Setup: the modes made by Switchres on the 15 kHz kernel"></p>
 <p>Switchres (<code>v2.2.1</code>, the same version as GroovyArcade's package) is compiled with <code>grid</code> and <code>geometry</code>, and at build time generates one EDID per monitor preset plus the two super resolution ones used by the boot's EDID entries (<code>fliperos-rebuild-edids</code>, GroovyArcade's <code>rebuild_edids</code>). The initramfs hook carries all of them into the initramfs.</p>
 <h1 id="Build-and-tests">Build and tests</h1>
 <h2 id="build">Build</h2>
@@ -31116,6 +31128,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
   docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-ssh sh tools/cabinet-push.sh 192.168.1.111</code></p>
 <p><code>tools/cabinet-push.sh</code> sends the setup, <code>config/</code>, <code>fliperos-rootfs.sh</code> and the frontends repository; there, <code>tools/cabinet-update.sh</code> keeps a copy of what changes in <code>/root/fliperos-backup-DATE.tgz</code>, runs the same <code>fliperos-rootfs.sh</code> as the build and applies what comes from outside it: <code>fliperos-limine-update</code>, automatic login, DNS, clock, new packages (through apt), kernel line and services. At the end it restarts tty1.</p>
 <h2 id="frontend-emulator">Frontend emulator</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-grid.webp" width="480" alt="The frontend, as the frontend emulator shows it"></p>
 <p>The FliperOS frontend running on any PC with Docker, with no cabinet and no Python. It is the real <code>fliperos-setup/gui/fliperos-frontend</code> from the repository, on a virtual X screen (Xvfb). You watch and drive it in the browser through noVNC.</p>
 <p>From Git Bash, at the root of the repository:</p>
 <pre><code class="language-sh">sh tools/fe-emulator/run.sh
@@ -31159,6 +31172,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>The project website lives in <a href="https://github.com/juniorterin/fliperOS/tree/main/website"><code>website/</code></a> (Next.js, server-rendered, English and Portuguese). <code>npm run dev</code> inside the folder serves it locally; the <code>Dockerfile</code> there builds the standalone server that Coolify (or any Docker host) runs on port 3000. Its README has the details.</p>
 <h1 id="Architecture">Architecture</h1>
 <h2 id="fliperos-setup"><code>fliperos-setup</code></h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/setup.webp" width="480" alt="The Setup menu"></p>
 <pre><code>fliperos-setup/
 ├── fliperos-setup        entry point (media or installed system)
 ├── lib/                  logic — no file here calls gum, except ui.sh

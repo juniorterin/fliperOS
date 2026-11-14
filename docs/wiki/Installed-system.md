@@ -38,6 +38,8 @@ Each of those files is copied to `/var/lib/fliperos/update/backup/NNNN-date/` be
 
 **Choosing the FliperOS version.** *Setup > System > FliperOS version*, and *System > FliperOS version* in the web panel, list the updates from the one the cabinet's image came with to the newest (`fliperos-update versions`). Pick an earlier one to go back if an update broke something (the files it replaces are copied first, as above), or a newer one to go forward (`fliperos-update goto N|latest`). On an earlier one the cabinet stays there: the boot no longer asks and nothing is installed at power off (`/etc/fliperos/update-hold`) until a newer update than the ones it had seen comes out. **Follow the updates** goes back to the newest.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/version.webp" width="480" alt="Setup > System > FliperOS version">
+
 Updates are numbered and **always applied in order**: update N only goes in on a machine at N−1 (`/etc/fliperos/patch-level`), a list with a gap is refused, and if one fails nothing after it is applied (it is offered again at the next boot; log in `/var/log/fliperos-update.log`).
 
 Each one is a repository commit listed in `updates/index` with the sha256 of its files (downloaded over HTTPS from GitHub and checked before anything is written), plus an optional `updates/NNNN.sh` for what isn't a file copy and its changelog in `updates/notes/NNNN.md` (required). They are published with `tools/make-update.sh "title" [--reboot]`.

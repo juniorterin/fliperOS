@@ -1,5 +1,7 @@
 Fightcade 2 (online arcade and console matches, with rollback) is closed-source freeware with no clear permission to redistribute — **it isn't in the image or in the repository**.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/extras.webp" width="480" alt="Setup > Games > Extras with Wine">
+
 In **Setup > Games > Frontend** it shows as *Fightcade 2 (not installed)*: when chosen, the Setup **downloads the official Linux package from its website** (about 160 MB, `https://www.fightcade.com/download/linux`), with a progress bar, to `/opt/fliperos/fightcade` — a user-owned folder, because Fightcade updates itself by writing there.
 
 In the sessions table the package column is `fetch:fliperos-fightcade` (a program downloaded from its website, not a `.deb`), and the line's "binary", `/opt/fliperos/fightcade/fightcade`, only exists after the download. Once installed it can be the boot launcher and shows in **Games > Fightcade 2** in LXDE.

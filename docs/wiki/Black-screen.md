@@ -4,6 +4,8 @@ What to try when the tube shows nothing, or when only some games go black. Most 
 
 ## Getting in without a picture
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/recovery.webp" width="480" alt="Recovery Mode on the install media">
+
 The system usually booted even with a black tube. From another computer on the same network:
 
 - **SSH**, on from the first boot: `ssh fliperos@fliperos.local`.
@@ -13,6 +15,8 @@ The system usually booted even with a black tube. From another computer on the s
 **Debug mode** in the Setup shows the boot messages instead of the splash ([Installed system](Installed-system.md)).
 
 ## What the system sees
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/system.webp" width="480" alt="Setup > System > Debug mode">
 
 This lists each video output, whether something is connected, its EDID and its modes, then the card, the driver and what FliperOS saved:
 

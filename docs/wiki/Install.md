@@ -118,4 +118,6 @@ The new disk carries what was decided on the media: `fliperos.conf`, Switchres, 
 
 ### Recovery Mode
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/recovery.webp" width="480" alt="Recovery Mode">
+
 Looks for disks with FliperOS (a `FliperOS` partition with the `/etc/fliperos/installed` marker) and offers: a terminal inside the installed system (`chroot`, gasetup's `rescue_mode`), **reinstall the bootloader** (the "Fix UEFI boot", for BIOS and UEFI), **apply this session's video settings** (graphics card replaced) and **restore the system files** from the media, keeping ROMs, saves, home, network, audio and video.

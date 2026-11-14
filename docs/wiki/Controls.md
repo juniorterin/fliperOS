@@ -69,6 +69,8 @@ A trigger (an axis resting at one end, like an Xbox 360 controller's LT/RT) can 
 
 ### Controller light
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/padcolor.webp" width="480" alt="Setup > Joysticks > Controller light">
+
 **Setup > Joysticks > Controller light** sets the colour of the controllers that have one: DualSense, DualShock 4 and some 8BitDo through the kernel's colour LEDs, and the ring of the **8BitDo Ultimate 2** through its own protocol (`config/fliperos-padcolor`, `config/fliperos-padcolor-8bitdo`). Out of the box (`padcolor=fliperos`) they are FliperOS purple; *Other colour* takes any `RRGGBB`, and *Off* leaves the light as the controller sets it. The screen says which of the connected controllers change.
 
 On the Ultimate 2 the menus show a purple light running over pink, and while a game is open the left ring turns purple and the right one pink; the roulette comes back when the game closes. That pad only takes settings over the USB cable or its 2.4G dongle: over Bluetooth it keeps the colour saved by cable. A pad with no profile at all gets profile 1 "FliperOS" with the 8BitDo app's defaults, and its profile button has to be pressed once.
@@ -137,6 +139,8 @@ The driver's values are written by `fliperos-guncon2-calibrate`: when the gun ar
 
 ### Calibrate wheel, pedals or analog stick
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/calibration.webp" width="480" alt="Choosing the wheel or pedals to calibrate">
+
 The axes show live; turn the wheel from end to end and press each pedal all the way, then leave everything at rest. An axis that rests in the middle (wheel, analog stick) gets a symmetric range around the rest position — the center gives 0 and both sides reach the end — and a 1% dead zone; a pedal keeps the range seen.
 
 It goes to `/etc/fliperos/calibration.conf` (one line per axis) and udev reapplies it on every connection.
@@ -150,6 +154,8 @@ The adapter can't be detected: you say which one it is and what is connected to 
 The kernel finds the port itself (`parport_pc`) when it exists — on the motherboard it often comes **disabled in the BIOS** (Super I/O > Parallel Port); without one, a PCI/PCIe parallel card. Parallel port joysticks also move the menus.
 
 ## Setup > System > Quirks
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/quirks.webp" width="480" alt="Setup > System > Quirks">
 
 Kernel fixes for USB devices that arrive wrong. It sits in System, not in Joysticks, because it is about any USB device. Two kinds, told apart by the code:
 

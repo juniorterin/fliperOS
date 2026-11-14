@@ -125,6 +125,8 @@ docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_build.py
 
 ## Frontend emulator
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-grid.webp" width="480" alt="The frontend, as the frontend emulator shows it">
+
 The FliperOS frontend running on any PC with Docker, with no cabinet and no Python. It is the real `fliperos-setup/gui/fliperos-frontend` from the repository, on a virtual X screen (Xvfb). You watch and drive it in the browser through noVNC.
 
 From Git Bash, at the root of the repository:

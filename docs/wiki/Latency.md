@@ -35,6 +35,8 @@ FliperOS applies the tweaks GA already makes and adds others, in two modes chose
 
 ## Recommended hardware
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/latency.webp" width="480" alt="Setup > System > Latency with the check of this computer">
+
 | Use | CPU | Memory and disk | GPU |
 | --- | --- | --- | --- |
 | **Standard** (up to PS1 and most of arcade) | x86-64 with 2 cores | 4 GB, 16 GB of disk | AMD with VGA or DVI-I output, within CRT_EmuDriver's range (HD 2000 to R7/R9 GCN 1.0) |

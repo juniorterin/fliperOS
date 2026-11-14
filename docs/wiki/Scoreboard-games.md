@@ -1,5 +1,7 @@
 Every game shows on the LED display (ZeDMD or Pixelcade) and in the marquee preview of the [web panel](Web-panel.md): its artwork or name when it is selected and when it opens, see [Frontends](Frontends.md). This page lists the games that also have more data, and which data each one has.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/zedmd-startup-led.gif" width="640" alt="The FliperOS startup animation drawn as the ZeDMD LEDs show it (preview)">
+
 **The data**
 
 - **Artwork or name**: every game. The ZeDMD looks for `~/media/dmd`, `marquee` and `logo`; the Pixelcade for `marquee` and `logo`; without art, the game's name.

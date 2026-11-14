@@ -236,6 +236,8 @@ The events below are the ones of Pixelcade's own EmulationStation scripts ([alin
 
 ## ZeDMD (open-source LED display)
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/zedmd-startup-led.gif" width="640" alt="The FliperOS startup animation drawn as the ZeDMD LEDs show it (preview)">
+
 [ZeDMD](https://github.com/PPUC/ZeDMD) is an open-source LED display you can build yourself: an ESP32 board driving HUB75 LED panels, 128x32 (two 64x32 panels) or 256x64. **Setup > Games > Extras > ZeDMD** installs support for it.
 
 **It needs ZeDMD firmware 5.1.0 or newer.** Older firmware, like the one that works on Batocera 41, doesn't connect to FliperOS. [ZeDMD firmware version](#zedmd-firmware-version) says how to check yours and how to update it.

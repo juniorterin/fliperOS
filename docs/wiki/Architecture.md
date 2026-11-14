@@ -1,5 +1,7 @@
 ## `fliperos-setup`
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/setup.webp" width="480" alt="The Setup menu">
+
 ```
 fliperos-setup/
 ├── fliperos-setup        entry point (media or installed system)

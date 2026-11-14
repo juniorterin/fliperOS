@@ -374,6 +374,83 @@ def extras():
 
 
 
+def system():
+    return Menu("System", [
+        ("latency", "Latency", "Standard or low latency mode, and a check of this computer."),
+        ("services", "Services", "SSH, network share, Wi-Fi: at boot, after boot or off."),
+        ("quirks", "Quirks (USB device fixes)", "Kernel fixes for a USB device read wrong: encoders, guns, disks."),
+        ("password", "Password", "The password of the fliperos user: login, SSH and network share."),
+        ("update", "System Update", "Download and install the updates of all packages."),
+        ("version", "FliperOS version", "Choose the update to use: an earlier one or the newest."),
+        ("whatsnew", "What's new", "The changelog of each FliperOS version and the updates installed."),
+        ("debug", "Debug mode (off)", "Show boot and emulator messages on screen to find a problem."),
+        ("lab", "Lab mode (off)", "Remote help: a temporary internet address to this cabinet."),
+        ("splash", "Splash screen", "The boot screen theme, with a preview."),
+        ("return", "Return", "Back to Setup."),
+    ], "debug")
+
+
+def versions():
+    return Menu("FliperOS version", [
+        ("69", "Update 69: OSD shortcut and live line, controller hotplug", "Newer: installs the ones up to it. The newest."),
+        ("68", "Update 68: Achievements on screen and in the frontend", "Newer: installs the ones up to it."),
+        ("67", "Update 67: The graphical Setup menu is back", "Installed now."),
+        ("66", "Update 66: The 0.24 image's level", "Earlier: undoes the ones after it."),
+        ("return", "Return", "Back to System."),
+    ], "67", "This cabinet is at update 67. Choose the update to use.", vertical=True)
+
+
+def quirks():
+    return Menu("Quirks", [
+        ("0x0079:0x0006:0x0040", "Generic USB Joystick: two players (0x0079:0x0006:0x0040)"),
+        ("add", "Add a quirk"),
+        ("usb", "USB devices connected now"),
+        ("return", "Return"),
+    ], "add", "Kernel fixes for USB devices read wrong (controllers, guns, keyboards, disks). "
+              "Choose a quirk to delete it. Changes apply after a restart.", vertical=True)
+
+
+def axes():
+    return Menu("Calibration", [
+        ("/dev/input/event7", "Logitech G29 Driving Force Racing Wheel (event7)"),
+        ("/dev/input/event9", "Thrustmaster T-Pedals (event9)"),
+    ], "/dev/input/event7", "Which one?", vertical=True)
+
+
+def padcolor():
+    return Menu("Controller light", [
+        ("roulette", "FliperOS (roulette, game colours)", "8BitDo: purple roulette, purple/pink rings in games."),
+        ("purple", "Purple", "#7a00ff on the controller light."),
+        ("pink", "Pink", "#ff0080 on the controller light."),
+        ("red", "Red", "#ff0000 on the controller light."),
+        ("cyan", "Cyan", "#00e0ff on the controller light."),
+        ("custom", "Other colour", "Type the colour as RRGGBB (like 7a00ff)."),
+        ("off", "Off", "FliperOS leaves the light as the controller sets it."),
+        ("return", "Return", "Back to Joysticks."),
+    ], "roulette", "Changes now: DualSense Wireless Controller, 8BitDo Ultimate 2 Wireless.")
+
+
+def latency():
+    return Menu("Latency", [
+        ("standard", "Standard (any hardware)"),
+        ("low", "Low latency (modern CPUs) - current"),
+        ("check", "Check this computer"),
+        ("ideal", "Recommended hardware"),
+        ("return", "Return"),
+    ], "low", "Mode: Low latency\nCPU: Intel Core i5-3470\nCores: 4 cores, 4 threads, 3.6 GHz\n"
+              "Memory: 8 GB\nGPU: AMD Radeon R7 240 (Oland)", vertical=True)
+
+
+def recovery():
+    return Menu("Recovery Mode", [
+        ("shell", "Open a terminal in the installed system"),
+        ("bootloader", "Reinstall the bootloader"),
+        ("video", "Apply this session's video settings (new video card)"),
+        ("restore", "Restore system files (keeps ROMs and settings)"),
+        ("return", "Return"),
+    ], "bootloader", "FliperOS on sda2 (Kingston SA400S37240G): what to do?", vertical=True)
+
+
 def frontend():
     reason = "Needs OpenGL 3.3 or OpenGL ES 3.0, and this video card gives OpenGL ES 2.0"
     return Menu("Frontend", [
@@ -393,7 +470,8 @@ SCREENS = {
     "padcapture": padcapture, "padcapture2": padcapture2, "bluetooth": bluetooth, "layout": layout, "layoutedit": layoutedit, "guncon": guncon,
     "guntarget1": guntarget1, "guntarget2": guntarget2, "guntarget3": guntarget3,
     "gunresult": gunresult, "downloads": downloads, "torrent": torrent, "magnet": magnet,
-    "magnetbrowser": magnetbrowser, "frontend": frontend,
+    "magnetbrowser": magnetbrowser, "frontend": frontend, "system": system, "versions": versions,
+    "quirks": quirks, "axes": axes, "padcolor": padcolor, "latency": latency, "recovery": recovery,
     "wifipass": wifipass,
     "download": download, "extras": extras, "romfilter": romfilter, "romfilter2": romfilter2,
     "filterplayers": filterplayers, "filterbuttons": filterbuttons,
