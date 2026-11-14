@@ -41,7 +41,10 @@ sessões do Claude dividem este Docker.
 7. Nunca mate `com.docker.backend` nem rode `wsl --shutdown` para
    "destravar" o Docker: isso deixa outra VM com memória presa. Se ele não
    responde com memória sobrando, uma sessão só faz Quit pela bandeja e
-   abre de novo, uma vez; se não voltar, pergunte ao usuário.
+   abre de novo, uma vez; se não voltar, pergunte ao usuário. Saída 3 do
+   `docker-health.ps1` é o próprio WSL travado: reabrir o Docker não
+   resolve, pergunte ao usuário direto (o que resolve é reiniciar o serviço
+   do WSL como admin, ou o Windows).
 
 # Releases e updates
 
