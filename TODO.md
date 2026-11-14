@@ -60,6 +60,19 @@ O link e o net play pelo frontend entraram na 0.19; depois, o net play ganhou to
 Feito em 2026-11-07 e testado só no Docker:
 - **Filtro de flicker e OSD nos jogos do Wine:** a camada de 32 bits (compilada pelo Extras junto com o Wine) e o nome próprio de cada jogo custom (`--app custom_<grupo>_<nome>`, com linha em Interlaced hacks). A camada compila em 32 bits, e o carregador pula a da outra arquitetura (Docker noble), mas nenhum jogo do Wine rodou com ela. A camada do Vulkan de 32 bits (DXVK) passou no teste com o lavapipe de 32 bits (`ARCH=i386 tools/vkfps-test.sh`). Falta abrir no gabinete um jogo de 32 bits do Wine em 640x480i, um em OpenGL e um em DXVK, e ver a OSD com a linha do filtro.
 - **Pastas de jogo em squashfs** (Custom games > Pack a game folder): empacotar, montar, gravar por cima, desmontar e desempacotar foram testados num container com a home em tmpfs, com lz4 (o kernel do WSL não tem o zstd do squashfs; o do FliperOS tem). Falta num gabinete: um jogo do Wine empacotado abrindo, o serviço montando no boot e o compartilhamento de rede com a pasta montada.
+- **Pacotes de jogo custom** (`JOGO.fliperos-customgame.zip`, 2026-11-14): criar, instalar, os azulejos e o executor foram testados no Docker. Falta num gabinete:
+  - um pacote feito no assistente e instalado em outro gabinete;
+  - o jogo aberto pelo frontend (antes os custom davam "CANNOT OPEN THIS GAME") e pelo painel web.
+- **Controller configuration** (OSD dos jogos custom): o teclado foi conferido em imagem (320x240, 256x224, vertical) e o `gamekeys` pelo socket, sem controle de verdade. Falta:
+  - no tubo, ler as teclas;
+  - com o painel, capturar um botão e o jogo receber a tecla;
+  - um controle lido pelo HIDAPI calado com a OSD aberta;
+  - um painel que se diz teclado (I-PAC): o jogo recebe a tecla nova e também a original.
+- **PortProton**: a instalação sem janelas (scripts fixos, primeiro download num Xvfb, o curl por https) e o `.ppdb` deram certo num container Ubuntu 24.04 (~3 GB). Nenhum jogo abriu ainda. Falta:
+  - instalar pelo Setup num gabinete;
+  - abrir um `.exe` de verdade em 640x240 e 480i;
+  - ver se o filtro e a OSD entram no runtime dele (`PW_USE_RUNTIME=1`, bubblewrap). Se não entrarem, gravar `PW_USE_RUNTIME=0` no `.ppdb` gerado;
+  - ver se alguma janela do yad aparece no meio do jogo.
 - **Wine Staging** (Extras): o repositório e os pacotes foram conferidos (`winehq-staging` 11.21 para o noble, chave D43F...672F), mas a instalação nunca rodou. Falta instalar num gabinete que já tem o Wine do Ubuntu (a troca pelo apt) e abrir o Fightcade (FBNeo, SNES9x, FBA) com ele.
 
 ## Painel web e API REST (fase 5)

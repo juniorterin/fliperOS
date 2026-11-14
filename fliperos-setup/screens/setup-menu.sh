@@ -877,6 +877,11 @@ screen_custom_install() {
   name=$(sed -n 's/^name=//p' <<< "$info")
   platform=$(sed -n 's/^platform=//p' <<< "$info")
   bytes=$(sed -n 's/^bytes=//p' <<< "$info")
+  # Um jogo do Windows: o PortProton antes (so na primeira vez).
+  if [[ $platform == windows ]] && ! screen_portproton_need; then
+    ui_yesno "$title" "Install $name without PortProton? It will open with the system's Wine, if there is one." no ||
+      return 1
+  fi
   if [[ -e $(customgames_file "$group" "$name") || -e $(customgames_cfg "$group" "$name") ]]; then
     ui_yesno "$title" "$name is already in $group. Install the package over it? What the game saved in its folder is lost." no ||
       return 1
@@ -1038,6 +1043,41 @@ screen_custom_game_info() {
   screen_custom_games_refresh
 }
 
+# ── O PortProton ──
+
+# screen_portproton_need: o PortProton antes do primeiro jogo do Windows
+# (criar ou instalar um pacote): pergunta, confere a internet e instala.
+# Status 1: nao ficou instalado.
+screen_portproton_need() {
+  local title="PortProton"
+  portproton_installed && return 0
+  ui_yesno "$title" "Windows games run in PortProton (Wine and Proton made for games), not installed yet. Download it now? About 3 GB, in ~/PortProton." yes ||
+    return 1
+  screen_need_internet "PortProton" || return 1
+  run_with_progress "Getting PortProton" "" portproton_run_install || return 1
+  portproton_installed
+}
+
+# screen_portproton_ppdb EXE: o Wine que roda o jogo, gravado no EXE.ppdb
+# pelo PortProton (o caminho fica em PORTPROTON_PPDB; vazio se ele nao o
+# gravou). Status 1: Esc.
+screen_portproton_ppdb() {
+  local exe=$1 title="PortProton" choice value label
+  local -a entries=()
+  PORTPROTON_PPDB=""
+  while IFS='|' read -r value label; do
+    [[ -n $value ]] && entries+=("$value|$label")
+  done < <("$CUSTOM_GAMES_PORTPROTON" versions 2>> "${FLIPEROS_LOG:-/dev/null}")
+  ((${#entries[@]})) || entries=("PROTON_LG|Proton LG (PortProton's default)")
+  choice=$(UI_STYLE=list ui_radio "$title" \
+    "Which Wine runs $(basename "$exe")? Keep the first one; try another only if the game fails with it." \
+    "${entries[0]%%|*}" "${entries[@]}") || return 1
+  ui_info "$title" "Writing the PortProton settings of $(basename "$exe")..."
+  "$CUSTOM_GAMES_PORTPROTON" edit-db "$exe" "PW_WINE_USE=$choice" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1
+  [[ -f $exe.ppdb ]] && PORTPROTON_PPDB=$exe.ppdb
+  return 0
+}
+
 # ── Criar um pacote ──
 # O assistente de Create package: o nome, Windows ou Linux, a pasta, o .exe
 # (o PortProton) ou o comando, a imagem, o video, o texto, o modo e as
@@ -1105,8 +1145,13 @@ screen_custom_package_create() {
         ui_msg "$title" "$(ui_bad "The .exe must be inside the game folder:")" "$folder"
       done
       exe=${exe#"$folder"/}
-      if declare -F screen_portproton_ppdb > /dev/null; then
-        ppdb=$(screen_portproton_ppdb "$folder/$exe" "$mode") || return 0
+      # As configuracoes do PortProton do jogo (o Wine dele) no .ppdb.
+      if screen_portproton_need; then
+        screen_portproton_ppdb "$folder/$exe" || return 0
+        ppdb=$PORTPROTON_PPDB
+      else
+        ui_msg "$title" "Without PortProton the package goes without a .ppdb:" \
+          "the FliperOS that installs it runs the game with PortProton's defaults."
       fi
     else
       while true; do

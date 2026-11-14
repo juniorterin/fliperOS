@@ -1,0 +1,14 @@
+#!/bin/bash
+# O curl dos downloads do PortProton (config/fliperos-portproton): ele passa
+# enderecos sem esquema ("github.com/Castro-Fidel/..."), que o curl mandaria
+# por http, na porta 80. Muitas redes a bloqueiam (a do gabinete, onde o
+# primeiro download do PortProton parava numa janela de erro): aqui eles vao
+# por https.
+args=()
+for a in "$@"; do
+  if [[ $a =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(:[0-9]+)?/ ]]; then
+    a="https://$a"
+  fi
+  args+=("$a")
+done
+exec /usr/bin/curl "${args[@]}"

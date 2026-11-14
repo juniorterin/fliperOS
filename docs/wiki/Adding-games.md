@@ -257,6 +257,76 @@ Each entry also has its own row in **Video Setup > Interlaced hacks**, with only
 
 A PC game in Wine gets the filter and the on-screen menu like the emulators, also when it is a 32-bit Windows program (most are). Installing Wine from the Extras also builds a 32-bit copy of the filter library, and `fliperos-x11-client` loads both when the command runs `wine` or a `.exe`; each process takes the one of its own kind.
 
+### The screens
+
+**Setup > Games > Custom games** shows the groups as tiles, each with its number of games; packages waiting to be installed in a group show in green. *Add group* makes a new one, *New games* lists every package waiting, and *Packed* is the squashfs list below.
+
+Inside a group, the games are tiles with their picture, and three tiles come first:
+
+- **Add games**: the packages of this group and the ones in `~/roms/custom` (they go to this group, no question), or a game by its command, as before.
+- **Package**: makes a package from a game folder (below).
+- **All new**: installs every package in `~/roms/custom/<group>`.
+
+A game tile opens *Information and video mode* (the video mode, the category, the controls, the buttons and the players), *Make a package of it* and *Delete*. Deleting an installed package can also delete its game folder.
+
+### Game packages
+
+A custom game can travel as one file, `<game>.fliperos-customgame.zip`, from one FliperOS to another. Put it in `~/roms/custom` (the network share `\\fliperos\roms\custom`) or straight in a group folder, `~/roms/custom/<group>`, and open **Setup > Games > Custom games**. A package in a group folder is installed in that group without asking; one in `~/roms/custom` asks for the group.
+
+Inside the zip:
+
+| File | What it is |
+|---|---|
+| `<game>.cfg` | the settings (required) |
+| `<game>/` | the game's folder, with all its files |
+| `<game>.jpg`, `.png` or `.webp` | the picture |
+| `<game>.mp4`, `.mkv` or `.webm` | the video |
+| `<game>.txt` | the text the frontend shows |
+| `<game>.key` | the controller as a keyboard (below) |
+| `<game>.ppdb` | PortProton's settings, in a Windows game |
+
+The `.cfg` has one `key=value` per line:
+
+```
+name=Pang
+platform=windows
+exe=bin/pang.exe
+mode=240p
+category=Shooter / Gallery
+controls=joy8
+buttons=2
+players=2
+```
+
+`platform` is `windows` (with `exe=`, the `.exe` inside the folder) or `native` (with `command=`, run inside the game folder, for example `./pang.x86_64 -fullscreen`). `mode` is 240p, 480i or `WIDTHxHEIGHT@HZ`. `category` is one of MAME's (catver.ini), and `controls` one or more of `joy8 joy4 joy2 twin trackball spinner paddle positional analog pedal lightgun keyboard mahjong`. The frontend shows and filters by the category, the controls, the buttons and the players. A zip made by right-clicking the folder, with everything inside one folder, works too.
+
+Installing a package puts the game folder in `~/games/<group>/<name>` and packs it in squashfs (below), the media in `~/media`, and the `.cfg` and the `.key` next to `<name>.sh`. The zip stays where it was and leaves the list; if you replace it with a new one, it shows up again to install over the old game. The package is checked first: a zip with an absolute path, a `..`, a link or a file that isn't one of the above is refused, and nothing is written.
+
+**Package** (inside a group) makes one, step by step: the name; Windows or Linux; the game folder; the `.exe` (Windows) or the command (Linux, with a *Browse* button for the program); the picture, the video and the text (optional; the text can also be typed); the video mode; the category, the controls, the buttons and the players. Every file picker opens where the previous one stopped, also the next time. The zip goes to `~/roms/custom/<group>`, and the Setup offers to install it right away.
+
+Behind it is `fliperos-customgame` (`inspect`, `pending`, `install`, `pack`), which is also what each `<name>.sh` runs: `fliperos-customgame run <name>.cfg` opens the game, with the controller mapper next to it.
+
+### Windows games: PortProton
+
+Windows games in a package run in **PortProton** (Wine and Proton builds made for games). It is not in the image: the Setup offers to download it, about 3 GB in `~/PortProton`, the first time you create or install a Windows package. Without it, the game opens with the system's Wine, if there is one.
+
+The `.ppdb` is PortProton's file of settings for one `.exe`, next to it (`pang.exe.ppdb`). When creating a package, the Setup asks which Wine build runs the game and writes the `.ppdb`; installing puts it back next to the `.exe`.
+
+### The controller as a keyboard
+
+Many PC games only take the keyboard. While a custom game runs, `fliperos-buttons gamekeys` turns the panel into keys, from the game's `<name>.key`:
+
+```
+p1_up=UP
+p1_b1=Z
+p1_start=ENTER
+p2_coin=6
+```
+
+The lines are per player and command of **Joysticks > Button mapping** (`up down left right b1`…`b8 start coin`), so the same package works on any panel. The keys are the Linux names (`Z`, `ENTER`, `SPACE`, `LEFTCTRL`, `F1`, `UP`…).
+
+To set them up, open the **on-screen menu** during the game: a custom game has **Controller configuration** in place of *Emulator menu*. It shows a keyboard; the keys that already have a button are lit. Choose a key, press Enter, then press the controller button that should send it (5 seconds). The same button again on the same key clears it. The line under the keyboard says which buttons the key under the cursor has. *Save* writes the `.key` and takes effect at once; *Clear* empties it; *Back* leaves without saving. While the menu is open, the buttons send no keys.
+
 ### Packing a game folder (squashfs)
 
 A PC game can have thousands of small files. **Setup > Games > Custom games > Pack a game folder (squashfs)** turns its folder into one compressed file. That makes the game easier on the disk, the network share and anything that copies or lists files.

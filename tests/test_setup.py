@@ -4377,6 +4377,51 @@ class CustomGamesTests(Base):
         self.env.out("customgames_save G Cmd 384x224@59.6 'echo'", e)
         self.assertEqual(self.env.out("customgames_kind_label G Cmd", e).strip(), "Command 384x224@59.6")
 
+    def test_portproton_installer_pieces(self):
+        # O PortProton (jogos do Windows): o curl dele vai por https nos
+        # enderecos sem esquema (a porta 80 bloqueada parava o primeiro
+        # download numa janela); check, versions; o executor o usa.
+        tmp = self.env.dir / "pp"
+        (tmp / "bin").mkdir(parents=True)
+        fake = tmp / "bin" / "curl"
+        fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        fake.chmod(0o755)
+        shim = (ROOT / "config/fliperos-portproton-curl").read_text().replace("/usr/bin/curl", str(fake))
+        (tmp / "shim").write_text(shim)
+        out = subprocess.run(["bash", str(tmp / "shim"), "-f", "-L", "github.com/Castro-Fidel/x/y.tar.xz",
+                              "https://a.b/c", "-o", "/tmp/out.tar.xz", "x.exe"],
+                             capture_output=True, text=True).stdout.split()
+        self.assertEqual(out, ["-f", "-L", "https://github.com/Castro-Fidel/x/y.tar.xz", "https://a.b/c", "-o",
+                               "/tmp/out.tar.xz", "x.exe"])
+        home = tmp / "home"
+        tool = ["bash", str(ROOT / "config/fliperos-portproton")]
+        env = dict(os.environ, FLIPEROS_PORTPROTON_HOME=str(home), FLIPEROS_USER="nobody-here")
+        self.assertNotEqual(subprocess.run(tool + ["check"], env=env).returncode, 0)
+        (home / "PortProton/data/scripts").mkdir(parents=True)
+        (home / "PortProton/data/scripts/start.sh").write_text("")
+        (home / "PortProton/data/tmp/libs_v3").mkdir(parents=True)
+        (home / "PortProton/data/dist/WINE_LG_11-1").mkdir(parents=True)
+        (home / "PortProton/data/dist/GE-Proton9").mkdir(parents=True)
+        self.assertEqual(subprocess.run(tool + ["check"], env=env).returncode, 0)
+        versions = subprocess.run(tool + ["versions"], env=env, capture_output=True, text=True).stdout.splitlines()
+        self.assertEqual([v.split("|")[0] for v in versions], ["PROTON_LG", "WINE_LG", "GE-Proton9"])
+        pp = (ROOT / "config/fliperos-portproton").read_text()
+        # Os scripts numa versao fixa, conferida; o primeiro download sem janelas.
+        self.assertRegex(pp, r"PORTWINE_COMMIT=[0-9a-f]{40}\n")
+        self.assertRegex(pp, r"PORTWINE_SHA256=[0-9a-f]{64}\n")
+        self.assertIn('headless timeout 3000 bash "$START" cli --edit-db', pp)
+        self.assertIn("SKIP_CHECK_UPDATES=1", pp)
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        for name in ("fliperos-portproton", "fliperos-portproton-curl"):
+            self.assertIn('"$src/config/%s" "$root/opt/fliperos/bin/%s"' % (name, name), rootfs)
+        runner = (ROOT / "config/fliperos-customgame").read_text()
+        self.assertIn('return [portproton, "run", exe]', runner)
+        # A tela pergunta, confere a internet e so entao baixa.
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        need = menu.split("screen_portproton_need() {")[1].split("\n}\n")[0]
+        self.assertLess(need.index("ui_yesno"), need.index("screen_need_internet"))
+        self.assertLess(need.index("screen_need_internet"), need.index("run_with_progress"))
+
     def test_screens_use_tiles_and_ask_the_group_only_for_root_packages(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         top = menu.split("screen_custom_games() {")[1].split("\n}\n")[0]

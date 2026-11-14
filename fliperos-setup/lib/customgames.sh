@@ -418,7 +418,7 @@ customgames_snap() {
 # empacotada em squashfs (sem dar, ela fica solta: o jogo abre igual).
 # Status 3: o jogo ja existe (sem replace).
 customgames_install() {
-  local zip=$1 group=$2 replace=${3:-} info name platform cfg folder rc
+  local zip=$1 group=$2 replace=${3:-} info name cfg folder rc
   local -a opts=()
   ev_step 0 "Checking the package"
   if ! info=$(customgames_tool inspect "$zip" 2>&1); then
@@ -426,7 +426,6 @@ customgames_install() {
     return 1
   fi
   name=$(sed -n 's/^name=//p' <<< "$info")
-  platform=$(sed -n 's/^platform=//p' <<< "$info")
   cfg=$(customgames_cfg "$group" "$name")
   if [[ -n $replace ]]; then
     opts+=(--replace)
@@ -434,9 +433,8 @@ customgames_install() {
     folder=$(customgames_cfg_field "$cfg" folder)
     [[ -n $folder && -e $folder.squashfs ]] && { customgames_remove_folder "$folder" || { ev_fail "close the game first: $folder is in use"; return 1; }; }
   fi
-  if [[ $platform == windows ]] && declare -F portproton_ensure > /dev/null; then
-    portproton_ensure 2 30 || return 1
-  fi
+  # O PortProton de um jogo do Windows: a tela o pergunta e instala antes
+  # (screen_portproton_need); sem ele o jogo abre pelo Wine do sistema.
   customgames_tool install "$zip" --group "$group" "${opts[@]}" --progress 30 70 2>> "${FLIPEROS_LOG:-/dev/null}"
   rc=$?
   if ((rc == 3)); then
@@ -457,6 +455,41 @@ customgames_install() {
   ev_step 100 "$name installed"
   log_info "pacote instalado: $zip em $group / $name"
   return 0
+}
+
+# ── O PortProton (os jogos do Windows) ──
+# config/fliperos-portproton: instalado so quando o primeiro jogo custom do
+# Windows aparece (criar um pacote ou instalar um), na home do jogador.
+CUSTOM_GAMES_PORTPROTON=${CUSTOM_GAMES_PORTPROTON:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-portproton}
+
+portproton_installed() {
+  [[ -x $CUSTOM_GAMES_PORTPROTON ]] && "$CUSTOM_GAMES_PORTPROTON" check > /dev/null 2>&1
+}
+
+# portproton_ensure INICIO FIM: dentro de uma tela de progresso, instala o
+# PortProton se falta, com as etapas dele entre INICIO e FIM %.
+portproton_ensure() {
+  local start=$1 end=$2 rc
+  portproton_installed && return 0
+  if [[ ! -x $CUSTOM_GAMES_PORTPROTON ]]; then
+    ev_fail "the PortProton installer ($CUSTOM_GAMES_PORTPROTON) is missing"
+    return 1
+  fi
+  ev_step "$start" "Installing PortProton (Windows games)"
+  "$CUSTOM_GAMES_PORTPROTON" install --progress 2>> "${FLIPEROS_LOG:-/dev/null}" |
+    awk -v s="$start" -v e="$end" '/^@(step|pct) [0-9]+/ { $2 = int(s + $2 * (e - s) / 100); print; fflush(); next }
+      { print; fflush() }'
+  rc=${PIPESTATUS[0]}
+  ((rc == 0)) && portproton_installed && return 0
+  ((rc == 0)) && ev_fail "PortProton did not start (details in /var/log/fliperos-setup.log)"
+  return 1
+}
+
+# portproton_run_install: so a instalacao, com a tela de progresso.
+portproton_run_install() {
+  ev_step 0 "Starting"
+  portproton_ensure 0 100 || return 1
+  ev_step 100 "PortProton installed"
 }
 
 # customgames_pending_ok [GRUPO]: os pacotes que dao para instalar (sem os

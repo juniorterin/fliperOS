@@ -209,6 +209,10 @@ install -Dm755 "$src/config/fliperos-squashgames" "$root/opt/fliperos/bin/fliper
 # Os pacotes de jogo custom (JOGO.fliperos-customgame.zip: conferir, instalar,
 # fazer) e o executor que os NOME.sh dos jogos custom chamam.
 install -Dm755 "$src/config/fliperos-customgame" "$root/opt/fliperos/bin/fliperos-customgame"
+# O PortProton dos jogos do Windows: o instalador (so roda quando o primeiro
+# jogo do Windows aparece) e o curl dele, que vai por https.
+install -Dm755 "$src/config/fliperos-portproton" "$root/opt/fliperos/bin/fliperos-portproton"
+install -Dm755 "$src/config/fliperos-portproton-curl" "$root/opt/fliperos/bin/fliperos-portproton-curl"
 install -Dm644 "$src/config/fliperos-squashgames.service" "$root/etc/systemd/system/fliperos-squashgames.service"
 ln -sfn /etc/systemd/system/fliperos-squashgames.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-squashgames.service"

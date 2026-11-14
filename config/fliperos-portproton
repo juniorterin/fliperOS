@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# O PortProton dos jogos custom do Windows (Setup > Games > Custom games):
+# Wine e Proton feitos para jogos, com as configuracoes de cada .exe num
+# arquivo ao lado dele (JOGO.exe.ppdb). Nao vem na imagem: o Setup o instala
+# quando o primeiro jogo do Windows aparece (criar ou instalar um pacote).
+#
+#   fliperos-portproton check                  status 0: instalado
+#   fliperos-portproton install [--progress]   (root) os pacotes, os scripts
+#                                              e o primeiro download (~3 GB)
+#   fliperos-portproton versions               "VALOR|rotulo" de cada Wine
+#   fliperos-portproton edit-db EXE VAR=VALOR  grava o EXE.ppdb
+#   fliperos-portproton run EXE                abre o jogo (no X dele)
+#
+# O instalador oficial so funciona com janelas (yad): aqui os scripts do
+# PortWINE vao direto para ~/PortProton/data, numa versao fixa (commit e
+# sha256), e o primeiro start.sh roda num X virtual (xvfb-run) no modo cli,
+# que baixa o runtime, os plugins, o DXVK e o Wine sem janela nenhuma.
+# Nada e atualizado sozinho (SKIP_CHECK_UPDATES): a versao muda com o
+# FliperOS. Os downloads do PortProton passam pelo curl daqui (o
+# fliperos-portproton-curl): ele chama enderecos sem https://, que o curl
+# mandaria pela porta 80, bloqueada em muitas redes (visto na do gabinete).
+#
+# Tudo roda como o jogador (FLIPEROS_USER), na home dele.
+set -uo pipefail
+user=${FLIPEROS_USER:-fliperos}
+home=${FLIPEROS_PORTPROTON_HOME:-$(getent passwd "$user" | cut -d: -f6)}
+PP=$home/PortProton
+START=$PP/data/scripts/start.sh
+BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
+CURL_SHIM=${FLIPEROS_PORTPROTON_CURL:-$BIN/fliperos-portproton-curl}
+# Os scripts do PortWINE (github.com/Castro-Fidel/PortWINE), fixos.
+PORTWINE_COMMIT=bc3e52e4ce71be2c62f3ec819dc1f5f8f917b090
+PORTWINE_SHA256=fdf8abffb4e3876fb80177740b994a5c8ba89b3ebc807978c0e82baf79932085
+PORTWINE_URL=https://github.com/Castro-Fidel/PortWINE/archive/$PORTWINE_COMMIT.tar.gz
+# As dependencias do .deb oficial (PortProton_dpkg 1.7.5), sem o .deb (ele so
+# traz o instalador de janelas), e o X virtual do primeiro download.
+DEPS=(ca-certificates coreutils curl file libc6 libnss3 xz-utils bubblewrap tar vulkan-tools libvulkan1
+  libvulkan1:i386 zstd cabextract xdg-utils openssl bc libgl1 libgl1:i386 pciutils desktop-file-utils
+  fontconfig yad jq libimage-exiftool-perl xvfb xauth)
+# O que o primeiro download traz: o runtime (libs) e o Wine padrao.
+READY=(data/scripts/start.sh data/tmp)
+
+progress=0 step=""
+say() {
+  step=$2
+  if ((progress)); then printf '@step %s %s\n' "$1" "$2"; else printf '%s\n' "$2"; fi
+}
+fail() {
+  if ((progress)); then printf '@fail %s|%s\n' "$step" "$1"; else printf 'fliperos-portproton: %s\n' "$1" >&2; fi
+  exit 1
+}
+
+# as_player COMANDO...: como o jogador, na home dele, com o curl daqui e sem
+# as atualizacoes sozinhas do PortProton.
+as_player() {
+  local shim_dir
+  shim_dir=$(mktemp -d)
+  [[ -x $CURL_SHIM ]] && ln -s "$CURL_SHIM" "$shim_dir/curl"
+  chmod 755 "$shim_dir"
+  local -a env=(HOME="$home" USER="$user" LOGNAME="$user" PATH="$shim_dir:/usr/local/bin:/usr/bin:/bin"
+    LANGUAGE=en_US LANG=C.UTF-8 SKIP_CHECK_UPDATES=1)
+  [[ -n ${DISPLAY:-} ]] && env+=(DISPLAY="$DISPLAY")
+  [[ -n ${XAUTHORITY:-} ]] && env+=(XAUTHORITY="$XAUTHORITY")
+  [[ -n ${XDG_RUNTIME_DIR:-} ]] && env+=(XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR")
+  local rc
+  if ((EUID == 0)) && [[ $(id -un) != "$user" ]]; then
+    runuser -u "$user" -- env -i "${env[@]}" "$@"
+  else
+    env "${env[@]}" "$@"
+  fi
+  rc=$?
+  rm -rf "$shim_dir"
+  return "$rc"
+}
+
+# headless COMANDO...: sem X (o Setup), num X virtual.
+headless() {
+  if [[ -n ${DISPLAY:-} ]]; then
+    as_player "$@"
+  else
+    as_player xvfb-run -a "$@"
+  fi
+}
+
+cmd_check() {
+  local f
+  for f in "${READY[@]}"; do
+    [[ -e $PP/$f ]] || return 1
+  done
+  [[ -n $(find "$PP/data/tmp" -maxdepth 2 -name 'libs*' -print -quit 2> /dev/null) ]]
+}
+
+# apt_install PACOTES...: o i386 ligado antes (os pacotes :i386).
+apt_install() {
+  export DEBIAN_FRONTEND=noninteractive
+  grep -qx i386 < <(dpkg --print-foreign-architectures) || dpkg --add-architecture i386 || return 1
+  apt-get update -q >&2 || return 1
+  apt-get install -y -q --no-install-recommends "$@" >&2
+}
+
+cmd_install() {
+  local tmp dummy
+  ((EUID == 0)) || fail "install needs root (Setup > Games > Custom games)"
+  [[ -n $home && -d $home ]] || fail "no home folder for $user"
+  say 2 "Installing the packages PortProton needs"
+  apt_install "${DEPS[@]}" || fail "apt could not install the packages (details in the log)"
+  say 20 "Downloading the PortProton scripts"
+  tmp=$(mktemp -d) || fail "no temporary folder"
+  chmod 755 "$tmp"
+  curl -fsSL --retry 3 -o "$tmp/portwine.tar.gz" "$PORTWINE_URL" >&2 || { rm -rf "$tmp"; fail "could not download $PORTWINE_URL"; }
+  if [[ $(sha256sum "$tmp/portwine.tar.gz" | cut -d' ' -f1) != "$PORTWINE_SHA256" ]]; then
+    rm -rf "$tmp"
+    fail "the PortProton scripts did not match their checksum"
+  fi
+  as_player mkdir -p "$PP/data" "$home/.config" || { rm -rf "$tmp"; fail "could not create $PP"; }
+  chmod 644 "$tmp/portwine.tar.gz"
+  as_player tar -xzf "$tmp/portwine.tar.gz" --strip-components=2 -C "$PP/data" \
+    "PortWINE-$PORTWINE_COMMIT/data_from_portwine" >&2 || { rm -rf "$tmp"; fail "could not unpack the PortProton scripts"; }
+  as_player sh -c 'printf "%s\n" "$1" > "$HOME/.config/PortProton.conf"' sh "$PP"
+  # O primeiro start.sh: o runtime, os plugins, o DXVK e o VKD3D (~1,6 GB);
+  # depois o Wine (~0,4 GB) e o prefixo (~0,8 GB).
+  # o --launch de um .exe vazio traz o Wine padrao (o jogo nao abre: ele so
+  # existe para isso).
+  say 25 "Downloading PortProton's runtime, Wine and DXVK (about 3 GB)"
+  dummy=$tmp/fliperos-first-run.exe
+  printf 'MZ' > "$dummy"
+  chmod 644 "$dummy"
+  watch_size 25 95 &
+  local watcher=$!
+  headless timeout 3000 bash "$START" cli --edit-db "$dummy" PW_WINE_USE=PROTON_LG >&2
+  headless timeout 1200 bash "$START" cli --launch "$dummy" >&2
+  kill "$watcher" 2> /dev/null
+  wait "$watcher" 2> /dev/null
+  rm -rf "$tmp"
+  cmd_check || fail "PortProton did not finish its first download (details in the log)"
+  say 100 "PortProton installed"
+}
+
+# watch_size INICIO FIM: o tamanho de ~/PortProton (ate ~3 GB) como @pct.
+watch_size() {
+  local start=$1 end=$2 kb pct last=""
+  while sleep 3; do
+    kb=$(du -sk "$PP" 2> /dev/null | cut -f1)
+    pct=$((start + (end - start) * ${kb:-0} / 3000000))
+    ((pct > end)) && pct=$end
+    if ((progress)) && [[ $pct != "$last" ]]; then
+      printf '@pct %s\n' "$pct"
+      last=$pct
+    fi
+  done
+}
+
+cmd_versions() {
+  local dir name
+  # Os nomes que o PW_WINE_USE aceita: o Proton e o Wine padrao do PortProton
+  # e os que ja estao baixados.
+  echo "PROTON_LG|Proton LG (PortProton's default)"
+  echo "WINE_LG|Wine LG"
+  for dir in "$PP/data/dist"/*/; do
+    [[ -d $dir ]] || continue
+    name=$(basename "$dir")
+    [[ $name == PROTON_LG* || $name == WINE_LG* ]] && continue
+    echo "$name|$name"
+  done
+  return 0
+}
+
+cmd_edit_db() {
+  local exe=${1:-}
+  [[ -f $exe ]] || fail "no such .exe: $exe"
+  cmd_check || fail "PortProton is not installed"
+  shift
+  headless timeout 600 bash "$START" cli --edit-db "$exe" "$@" >&2
+  [[ -f $exe.ppdb ]] || fail "PortProton did not write $exe.ppdb"
+  ((EUID == 0)) && chown "$user:" "$exe.ppdb" 2> /dev/null
+  return 0
+}
+
+cmd_run() {
+  local exe=${1:-}
+  [[ -f $exe ]] || fail "no such .exe: $exe"
+  cmd_check || fail "PortProton is not installed"
+  as_player bash "$START" cli --launch "$exe"
+}
+
+for arg in "$@"; do
+  [[ $arg == --progress ]] && progress=1
+done
+case ${1:-} in
+  check) cmd_check ;;
+  install) cmd_install ;;
+  versions) cmd_versions ;;
+  edit-db) shift; cmd_edit_db "$@" ;;
+  run) shift; cmd_run "$@" ;;
+  *)
+    sed -n '7,11p' "$0" | sed 's/^# *//' >&2
+    exit 1
+    ;;
+esac
