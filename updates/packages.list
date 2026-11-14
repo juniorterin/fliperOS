@@ -4,7 +4,7 @@
 # Nao edite a mao: tools/publish-packages.sh a refaz.
 fliperos-attractplus	3.2.3-1fliperos4	2e5a505d24b3370c0e022eb0869b9d5a7a5564c0f629323f922aec4e105b8411	always
 fliperos-dolphin	2609-1fliperos1	d5bf5cd7f1486569c292457038b808d010bc2ca0975cd6e8741c94f9552864da	always
-fliperos-flycast	2.7.20261031-1fliperos3	9bb42d6ff5c13a5f0d6d42ec8b55178ee7b96f56bef17d8c8261bc8d046243ee	always
+fliperos-flycast	2.7.20261031-1fliperos4	9a0785a8d3c73424d5ecd1a10a2a4a15869a9c35b1d5e21e244389f599324c69	always
 fliperos-groovymame	0.289.222f-1fliperos2	c1370c4b11464d71c218bf214cb170287f50c9a4a760ffc1cb7f01d1e639fac6	installed
 fliperos-gum	2.0.2-1fliperos1	08ba3979e96bf2b22b5383f2e23ba9be91ddfe45851e72d27cbb53074bcdd938	installed
 fliperos-openbor	7533.20260922-1fliperos1	92c15dc6b0b6899e60f74230042df1b02dc502eb2dd701aedcad52ea9664912f	installed
