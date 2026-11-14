@@ -1,5 +1,7 @@
 PC games for Windows on the cabinet: through Wine, PortProton, Steam or Heroic (GOG, Epic, Amazon). None of them is in the image: they come from **Setup > Games > Extras** ([Games Setup](Setup-Games.md#extras)), or by themselves with the first Windows game you add.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/extras.webp" width="480" alt="Setup > Games > Extras">
+
 | Way | For | Opens |
 | --- | --- | --- |
 | **Custom games** with PortProton | A Windows game you have as a folder or a package | On the tube, from the frontends, in its own video mode ([Custom games](Custom-games.md)) |

@@ -2,6 +2,8 @@ The sound and the network of the cabinet: **Setup > Audio Setup** and **Setup > 
 
 ## Audio Setup
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/setup-audio.webp" width="480" alt="Setup > Audio Setup">
+
 | Item | What it does |
 | --- | --- |
 | **Default card** | The sound card used by the system and every emulator |
@@ -32,6 +34,8 @@ A new sound cuts the one still playing, and the Enter sound keeps going after th
 - Menu sounds are FliperOS's Gum patch `patches/gum/0002-sons-do-menu.patch` in the text menu, and the graphical menu itself; `menu_sounds=` in `fliperos.conf`.
 
 ## Network Setup
+
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/setup-network.webp" width="480" alt="Setup > Network Setup">
 
 | Item | What it does |
 | --- | --- |

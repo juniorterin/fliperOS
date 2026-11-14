@@ -1,5 +1,7 @@
 The cabinet's power button closes the game before it powers off, and the volume keys work on any screen.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/osd-volume.webp" width="480" alt="The volume bar over a game">
+
 ## The power button
 
 A short press of the power button (the motherboard's, or a panel key programmed to send `KEY_POWER`) depends on what is on screen:

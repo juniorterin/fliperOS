@@ -1,5 +1,7 @@
 [RetroAchievements](https://retroachievements.org) gives achievements to classic games: beat a boss, find a secret, finish without continuing. FliperOS signs in once for every emulator that has them, shows each unlock over the game and counts them in the game list.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/retroachievements-setup.webp" width="480" alt="RetroAchievements in the FliperOS menu">
+
 ## Signing in
 
 **RetroAchievements** in the FliperOS menu, right after Start desktop. The web panel has the same in **System > RetroAchievements**.

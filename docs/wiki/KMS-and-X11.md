@@ -1,5 +1,7 @@
 How FliperOS puts each emulator on the tube in the right video mode, and how to run any program at 640x240.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-play.webp" width="480" alt="A game opened from the frontend">
+
 ## What KMS and X11 are
 
 Linux has two ways to put a program on the screen, and FliperOS uses both.

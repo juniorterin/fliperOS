@@ -1,5 +1,7 @@
 During a two-player fight, the LED display shows the score: the matches each side has won since the game opened. It works with a [Pixelcade](Pixelcade.md) or a [ZeDMD](ZeDMD.md), and in the web panel's marquee preview and OBS page.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/ssf2tb-en.webp" width="480" alt="A fight with the score on the marquee">
+
 | Display | What you see |
 | --- | --- |
 | **ZeDMD** | The score stays on the display: `GUILE 3 x 1 KEN`, with each side's character when the game tells it, or `P1` and `P2` |

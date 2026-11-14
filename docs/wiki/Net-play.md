@@ -1,6 +1,5 @@
 More players than one cabinet has controls: a **party** joins 2 to 4 cabinets on the local network to play one game together, each cabinet with its own controllers. It works for the games of RetroArch's net play cores, Flycast's NAOMI and Atomiswave games, every MAME game of GroovyMAME, and Dolphin.
 
-
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/netplay-menu.webp" width="480" alt="The net play menu of the frontend">
 
 Some games have more players than a cabinet has controls: X-Men has four players, and FBNeo runs it. For these, a party lets cabinets on the local network share one game, through RetroArch's net play. There is no emulator link and no NVRAM per cabinet: every machine runs the same game, and the inputs travel over the network.
