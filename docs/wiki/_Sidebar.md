@@ -60,6 +60,11 @@
 **Controls**
 
 - [Controls](Controls.md)
+  - [Button mapping](Button-mapping.md)
+  - [Bluetooth](Bluetooth.md)
+  - [Controller light](Controller-light.md)
+  - [Light guns](Light-guns.md)
+  - [Wheels, LPT and quirks](Wheels-and-quirks.md)
 
 **Cabinet hardware**
 

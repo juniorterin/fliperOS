@@ -22,8 +22,8 @@ A game whose core isn't installed yet (from a disc or a cartridge, for example) 
 
 - **Leaving a game:** **coin + Start** held for a second ([Frontend controls](Frontend-controls.md#game-shortcuts)).
 - **RetroArch's menu (Quick Menu):** **coin + button 1** held for a second. A single Esc on a keyboard closes the game.
-- **Controls:** the buttons of **Setup > Joysticks > Button mapping**, also the D-pad of a gamepad RetroArch has no profile for (an 8BitDo Ultimate and many others whose D-pad is a hat) ([Button mapping](Controls.md#button-mapping-all-emulators)).
-- **Light gun:** in every core that has one (FBNeo, PlayStation, SNES, Mega Drive, Master System, NES with Nestopia and Mesen's Zapper), the gun is set up by itself for the games that use it, and the other players stay on their pads ([Controls](Controls.md#guncon-2-light-gun)).
+- **Controls:** the buttons of **Setup > Joysticks > Button mapping**, also the D-pad of a gamepad RetroArch has no profile for (an 8BitDo Ultimate and many others whose D-pad is a hat) ([Button mapping](Button-mapping.md)).
+- **Light gun:** in every core that has one (FBNeo, PlayStation, SNES, Mega Drive, Master System, NES with Nestopia and Mesen's Zapper), the gun is set up by itself for the games that use it, and the other players stay on their pads ([Controls](Light-guns.md)).
 - **Achievements:** [RetroAchievements](RetroAchievements.md).
 - **Party and net play** across cabinets: [Linked cabinets](Linked-cabinets.md#party-play-more-players-than-controls).
 

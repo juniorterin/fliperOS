@@ -33,7 +33,7 @@ The first boot has nothing to choose about what opens at power on: it is the Fli
 
 1. **Wi-Fi**, only when the network cable brings no internet and there is a Wi-Fi adapter. It asks again after a failed connection, until you say no. Later: **Setup > Network Setup**.
 2. **Updates** published after the ISO are applied as soon as there is internet. If one needs a restart, the cabinet restarts and the wizard goes on.
-3. **Controls**: the Button mapping of **Setup > Joysticks**, which every emulator and the frontend use. It draws the panel: the control being asked blinks, the ones already pressed turn green. See [Controls](Controls.md#button-mapping-all-emulators).
+3. **Controls**: the Button mapping of **Setup > Joysticks**, which every emulator and the frontend use. It draws the panel: the control being asked blinks, the ones already pressed turn green. See [Controls](Button-mapping.md).
 4. **Live screen**: the web panel's live screen is installed and turned on. If it can't download, it stays in **Setup > Games > Extras > Live screen**.
 
 ## The FliperOS menu

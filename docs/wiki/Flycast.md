@@ -30,7 +30,7 @@ Flycast is a FliperOS package, updated over the network with FliperOS. **Setup >
 - `fliperos-x11-run flycast` passes `-config` with `rend.ScreenStretching=200` (800 on a card with super resolutions), and the content and BIOS paths (`Dreamcast.ContentPath`, `Dreamcast.BiosPath`, `FLYCAST_BIOS_PATH`).
 - The patches are in `config/flycast-patches`: the black loading screen, the lockstep party, and 0006, which writes each achievement unlock to `$FLIPEROS_CHEEVOS_LOG` and adds `Notifications = no`. If a newer Flycast doesn't take a patch, the build warns and leaves it out.
 - `emu.cfg` comes with `rend.LinearInterpolation = no` and `rend.TextureFiltering = 1`. Flycast saves its own default when it closes, so on an older `emu.cfg` each is changed once (`/var/lib/fliperos/flycast-texture-nearest`); after that the choice is yours.
-- Flycast builds its default mapping from SDL, but doesn't understand a D-pad wired to a half axis; `fliperos-controllers` writes Dreamcast and arcade mapping files for those controllers, only if there isn't one yet ([Controls](Controls.md#controllers-in-sdl)).
+- Flycast builds its default mapping from SDL, but doesn't understand a D-pad wired to a half axis; `fliperos-controllers` writes Dreamcast and arcade mapping files for those controllers, only if there isn't one yet ([Controls](Wheels-and-quirks.md#controllers-in-sdl)).
 - Its memory lives in `~/nvram/flycast`: each Naomi or Atomiswave game's `.nvmem`/`.eeprom`, and the Dreamcast's `vmu_save_*.bin`.
 
 See also: [Emulators](Emulators.md), [Linked cabinets](Linked-cabinets.md).

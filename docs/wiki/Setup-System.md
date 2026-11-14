@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **Latency** | Standard or low latency mode, and a check of this computer | [Latency](Latency.md) |
 | **Services** | SSH, network share, Wi-Fi and the others: at boot, after boot or off | Below |
-| **Quirks (USB device fixes)** | Kernel fixes for a USB device read wrong: encoders, guns, disks | [Controls](Controls.md#setup--system--quirks) |
+| **Quirks (USB device fixes)** | Kernel fixes for a USB device read wrong: encoders, guns, disks | [Controls](Wheels-and-quirks.md#quirks-usb-device-fixes) |
 | **Password** | The password of the `fliperos` user | Below |
 | **Cabinet name** | The name other cabinets see in party and link play | Below |
 | **System Update** | Download and install the updates of all Ubuntu packages | [Updates and versions](Updates-and-versions.md#system-update-ubuntu-packages) |

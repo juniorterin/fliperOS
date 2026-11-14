@@ -84,7 +84,7 @@ On or off, **Darkness**, **Thickness**, **Line height** and **Brightness boost**
 
 ### GunCon 2
 
-The light gun's screen flash and its timing: **Screen flash**, flash brightness, flash wait, dark hold, edge band, off-screen reload and the defaults. Adjust them while you shoot at the game itself. See [Light guns](Controls.md#guncon-2-light-gun).
+The light gun's screen flash and its timing: **Screen flash**, flash brightness, flash wait, dark hold, edge band, off-screen reload and the defaults. Adjust them while you shoot at the game itself. See [Light guns](Light-guns.md).
 
 ## Bars that don't take the controls
 

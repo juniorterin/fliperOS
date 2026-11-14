@@ -85,7 +85,12 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [Controls](Controls.md) | Each player's buttons, Bluetooth, the controller light, the GunCon 2 light gun (driver and calibration), wheel and pedals, parallel port, USB quirks, how SDL sees each controller |
+| [Controls](Controls.md) | Setup > Joysticks item by item, the shortcuts in games, where each control is set |
+| [Button mapping](Button-mapping.md) | Each controller's player and buttons, arcade panel or joypad, keyboard encoder, Buttons layout |
+| [Bluetooth](Bluetooth.md) | Pairing wireless controllers, players, forgetting |
+| [Controller light](Controller-light.md) | DualSense, DualShock 4 and 8BitDo lights, the Ultimate 2 roulette |
+| [Light guns](Light-guns.md) | The GunCon 2: calibration, several guns, the screen flash, the gun in each emulator and RetroArch core |
+| [Wheels, LPT and quirks](Wheels-and-quirks.md) | Wheel and pedal calibration, parallel port joysticks, USB quirks, controllers in SDL |
 
 ## Cabinet hardware
 

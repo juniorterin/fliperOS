@@ -1,197 +1,39 @@
-Controllers on FliperOS: what the Setup offers in **Joysticks** and in **System > Quirks** and how the emulators see each controller. Using the controller in the Setup menus is covered in [Installed system](Installed-system.md).
-
-## Light gun (GunCon 2)
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/guncon-2.webp" width="360" alt="Namco GunCon 2">
-
-FliperOS plays light gun games on the tube with Namco's **GunCon 2** (the PlayStation 2 gun, USB `0b9a:016a`), with nothing to install. The gun reads the beam of the CRT, which is exactly the screen FliperOS is made for; on an LCD it doesn't aim. What ships with the system:
-
-- **The driver.** GunCon 2 has no driver in the mainline kernel. The build compiles [beardypig/guncon2](https://github.com/beardypig/guncon2) through DKMS for the system's kernel and loads it at boot (`/etc/modules-load.d/fliperos-guncon2.conf`): plug the gun into USB and it shows up as an input device.
-- **The calibration.** The raw position the gun reports depends on the tube and on where the cabinet's gun sits, and evdev forgets the range on every reconnection. **Setup > Joysticks > GunCon 2 > Calibrate** measures it on your monitor once (below), and the udev rule `99-fliperos-input.rules` reapplies it (`fliperos-guncon2-calibrate`) every time the gun is plugged in.
-- **Marked as a gun.** The same rule tags the GunCon 2 `ID_INPUT_GUN=1`, so the Model 2 emulator (SM2-Emu) reads the gun itself instead of the mouse pointer. A CRT gun misses the beam for a frame every now and then (a GunCon 2 then reports x 0, y 5); through the pointer that frame jumped the aim to the corner and a shot in the middle of the screen became a reload. SM2-Emu keeps the last position that saw the screen for up to 150 ms (FliperOS patch `config/sm2-emu-patches/0002`).
-- **The driver's FliperOS patches** (`config/guncon2-patches`). The gun sends the same report for a dark part of the picture and for an aim off the screen (x 0 or 1, y 5; its sixth byte is always 0, checked with usbmon), so the driver tells them apart by context:
-  - a miss keeps the last aim that saw the screen for up to `hold_ms` (150);
-  - a miss right after an aim within `edge_pct` (12%) of an edge is off the screen at once, since the gun crosses the edge to leave;
-  - off the screen, both axes go out of the calibrated range, so MAME (which clamps the aim to the range) and every other emulator read it as off the screen;
-  - off the screen, the trigger also presses the right button, the reload of Flycast, RetroArch and SM2-Emu (`offscreen_reload`);
-  - a stalled USB endpoint (seen on a flaky hub port) is cleared, where the original driver stopped reading the gun for good without a word in the log.
-
-  The parameters change live in `/sys/module/guncon2/parameters/`.
-- **The screen flash** (below): with it, a shot over a dark part hits where the gun points, and only a shot off the screen reloads.
-- **The menus.** The controller-as-keyboard of the Setup menus leaves light guns out, so aiming doesn't move through the menu.
-- **The games.** In the [MAME ROM Cleaner](ROMs.md), tell it the cabinet has a **Light gun** among its controls, and the gun games of the romset are kept along with the others.
-
-## Setup > Joysticks
+Controllers on FliperOS: arcade panels, joypads, Bluetooth pads, light guns, wheels. Set them once in **Setup > Joysticks**, and every emulator, frontend and menu uses them.
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/joysticks.webp" width="480" alt="Setup > Joysticks">
 
-Calibrators and the parallel port (`config/fliperos-calibrate`, `screens/joysticks.sh`):
-
-### Button mapping (all emulators)
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-controllers.png" width="480" alt="Button mapping: the connected controllers">
-
-It opens on the list of **connected controllers**, each with a wired or wireless icon; the list refreshes by itself when a controller is turned on or plugged in. Pick one, then:
-
-1. **The player** it belongs to (P1, P2...).
-2. **The kind of controller:** *Arcade stick or JAMMA panel* (a stick and 1 to 8 buttons, then how many buttons it has) or *Joypad* (Xbox, PlayStation, Nintendo, 8BitDo...). A joypad FliperOS already knows, from its SDL mapping, can keep its own layout with nothing to press (*Use its layout*), like Batocera does; *Map each button* asks for each one, and holding a button skips that input.
-3. **The menu buttons:** at the end you press the buttons that accept and go back in the menus. Esc cancels the whole mapping.
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-kind.png" width="480" alt="Button mapping: arcade panel or joypad"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-padcapture.png" width="480" alt="Button mapping: pressing each joypad button">
-
-Wired controllers always take the first players, in the order of their USB ports; Bluetooth ones take the players left, in the order they connect (their profiles are kept by GUID in `/etc/fliperos/buttons-bt.map`).
-
-**Keyboard encoder (MAME default keys)**, at the end of the list, is for an encoder that types keys (I-PAC and the like) in MAME's layout: nothing is pressed, only the number of players is asked, and every emulator below gets MAME's default keys for each player (`fliperos-buttons keyboard`; player 1: arrows, Left Ctrl, Left Alt, Space, Left Shift, Z, X, 1 Start, 5 Coin; player 2: R F D G, A S Q W E, 2, 6; players 3 and 4 have only the stick and buttons 1 to 3, as in MAME).
-
-RetroArch's own shortcuts that sit on those keys (Space fast-forward, F fullscreen, K frame advance...) are turned off in `buttons.cfg`, and Supermodel drops its own default keys, which would be another player's. **Controllers (press each control)** is the mapping below.
-
-Each player's panel, input by input: up, down, left, right, buttons 1 to 6 in panel order (1 2 3 on top, 4 5 6 below), Start and Coin.
-
-On a panel that shows up as one device for two players (a V-USB board), the first input pressed tells which half belongs to the player. With nothing pressed for 8 seconds the input is skipped; the controller-as-keyboard for the menu is off meanwhile.
-
-**The number of players follows the controllers that are connected.** The Setup > Joysticks screen says "Players now: 2 of 2 mapped (controllers connected: 2)" and the question "How many players?" starts on the number of controllers connected. Pull one controller out and its player leaves the count; plug it back and the player returns. `fliperos-buttons players` prints the same count (`mapped`, `connected`, `active` and `player1=on|off`). A keyboard encoder's players are always counted. The frontend uses this count for the players a cabinet takes in net play, and says "1 PLAYER" or "2 PLAYERS" on screen when it changes.
-
-Each button does one thing: a button already given to another input (of this player or another one on the same controller) is refused, and the screen says which input has it and asks for another one.
-
-It is read through SDL (`config/fliperos-buttons`), and the result goes to both: in **RetroArch**, each player's binds in `/etc/fliperos/retroarch/buttons.cfg`, which `fliperos-kms-run` adds to the config (`--appendconfig`) on top of the controller's automatic profile, with the buttons in the arcade cores' layout (Y X L / B A R, Start and Select on the coin); in **GroovyMAME**, the ctrlr `~/.mame/ctrlr/fliperos.cfg` (each player's `JOYCODE`s, together with MAME's default keys) and in `mame.ini` `ctrlr fliperos` and `joystickprovider sdljoy` — with `sdlgame`, the default, MAME sees the panel through SDL's game controller mapping (A, B, X, Y...), which doesn't follow the button order.
-
-It also applies to the other emulators: the device's **SDL game controller** mapping (GUID), in fight stick layout (X Y RB on top, A B RT below, coin on Back), in `/var/lib/fliperos/gamecontrollerdb-user.txt`, which `fliperos-controllers` puts last in `gamecontrollerdb.txt` (PCSX2, with Pad1/Pad2 on SDL through `fliperos-x11-run` while PCSX2 has no SDL bind; DuckStation the same way — it points SDL to its own database, but `SDL_GAMECONTROLLERCONFIG_FILE` takes priority; KOF Final Attack's Ikemen GO, which adds its own `external/gamecontrollerdb.txt` after SDL starts, so `fliperos-kof` hands it that database with the FliperOS one last, `save/gamecontrollerdb-fliperos.txt`, on every launch; AntiMicroX); in **Dolphin**, `GCPad1` to `GCPad4` in `GCPadNew.ini` with that mapping (4 = A, 1 = B, 5 = X, 2 = Y, 3 = Z, 6 = R, coin on the Triforce Coin) and each player's port enabled in `Dolphin.ini`; **Flycast** by device name (Dreamcast through SDL; arcade, Naomi and Atomiswave, with the panel's button N on the game's button N and coin on D; a hat D-pad becomes Flycast's hat button code and a trigger goes in its `triggers` list), and the same files in Fightcade's Flycast Dojo; **Attract-Mode Plus**, the joystick entries of `input_map` in `attract.cfg`: each player's directions, Select on button 1 and Back on button 2, plus its default shortcuts (Up + button 1 and so on) for player 1, replacing the old controller's entries (keyboard entries and other commands stay; it is written again every time Attract-Mode opens, so one installed after the mapping gets it too); **Supermodel**, Start, coin, directions and buttons 1 to 4 for players 1 and 2 in `Supermodel.ini`; **Hypseus Singe**, the `[KEYBOARD]` of `~/.hypseus/hypinput.ini` (buttons 1 to 3 and skill 1 to 3, Start and coin for both players); and **OpenBOR**, in each player's keys of `Saves/default.cfg` and of each pak's `.cfg` (the `s_savedata` struct: 1 attack, 2 jump, 3 special, 4 to 6 the other attacks, coin on Esc).
-
-The map lives in `/etc/fliperos/buttons.map`, and a system update writes everything again.
-
-A trigger (an axis resting at one end, like an Xbox 360 controller's LT/RT) can only be pressed one way: if the capture started with it still held, it used to record the release, and the button then counted as pressed at rest in every emulator; the capture now ignores that release, and saving fixes the direction from the controller's resting position, also in a map saved before.
-
-### Bluetooth
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-bluetooth.png" width="480" alt="Setup > Joysticks > Bluetooth">
-
-**Setup > Joysticks > Bluetooth** shows up only when the machine has a Bluetooth adapter. It pairs, connects and forgets controllers (`config/fliperos-bluetooth`, a front end of `bluetoothctl`), or pairs every controller that is in pairing mode during 30 seconds. A failed pairing is tried once more, after forgetting the device. A paired controller then shows in the Button mapping list with the wireless icon.
-
-### Controller light
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/padcolor.webp" width="480" alt="Setup > Joysticks > Controller light">
-
-**Setup > Joysticks > Controller light** sets the colour of the controllers that have one: DualSense, DualShock 4 and some 8BitDo through the kernel's colour LEDs, and the ring of the **8BitDo Ultimate 2** through its own protocol (`config/fliperos-padcolor`, `config/fliperos-padcolor-8bitdo`). Out of the box (`padcolor=fliperos`) they are FliperOS purple; *Other colour* takes any `RRGGBB`, and *Off* leaves the light as the controller sets it. The screen says which of the connected controllers change.
-
-On the Ultimate 2 the menus show a purple light running over pink, and while a game is open the left ring turns purple and the right one pink; the roulette comes back when the game closes. That pad only takes settings over the USB cable or its 2.4G dongle: over Bluetooth it keeps the colour saved by cable. A pad with no profile at all gets profile 1 "FliperOS" with the 8BitDo app's defaults, and its profile button has to be pressed once.
-
-### Buttons layout (games of 1 to 5 buttons)
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/layout-edit.webp" width="480" alt="Buttons layout">
-
-Where the buttons of a game go on the panel, by how many buttons the game uses. Pick the number of buttons (1 to 5) and then, for button 1, button 2 and so on, its place on the panel (top row or bottom row; left, middle or right). The panel is drawn as you go, and the list shows the layout of each number:
-
-```
-3-button games   [1][2][3] / [ ][ ][ ]
-4-button games   [1][2][ ] / [3][4][ ]      or      [1][3][ ] / [2][4][ ]
-```
-
-Without a layout, the game's button N is on the panel's button N (1 2 3 on top, 4 5 6 below); *Default layout* goes back to that. Six-button games always use the whole panel. It needs the Button mapping done first: the layout moves the buttons mapped there.
-
-The choice is saved in `/etc/fliperos/buttons.layout` (one line per number of buttons: the panel position of button 1, of button 2...).
-
-How many buttons each game has comes from GroovyMAME's game list (`-listxml`) with the real counts of `controls.xml` on top (`fliperos-romclean buttons` writes the table `/var/lib/fliperos/game-buttons.txt`; the first time it reads the list, about a minute).
-
-The **MAME 2010** core has a table of its own, `game-buttons-mame2010.txt`, from the game list of MAME 0.139: that version gives some games the generic button block of their board instead of the buttons the game has. Tekken 3 and the other System 12 games are buttons 1 2 4 5 of a block of 6 there, and 1 2 3 4 in today's MAME.
-
-Such a game (0.139 lists more buttons than the game has, and today's MAME lists only the game's) counts as its whole block, so no layout moves it: the punches stay on the top row and the kicks under them, as on the original panel.
-
-It applies where the panel's button N is the game's button N: in **GroovyMAME**, a `<system>` per game in the ctrlr `fliperos.cfg` (a clone follows its parent's); in RetroArch's **MAME** and **MAME 2010** cores, a `buttons-N.cfg` next to `buttons.cfg`, which `fliperos-kms-run` adds to the config of a game with N buttons; in **Supermodel** (Model 3), the buttons of the game in its own section of `Supermodel.ini` (`[ vf3 ]`), which Supermodel adds to `[ Global ]` when the game opens — the fighting games (Punch, Kick, Guard, Escape), the Virtua Striker series (Short Pass, Long Pass, Shoot) and Spikeout (Shift, Beat, Charge, Jump), by the input type of each game in `Games.xml`; other settings you keep in that section stay; in **SM2-Emu** (Model 2), a game controller mapping of its own, `/var/lib/fliperos/gamecontrollerdb-model2.txt` and a `gamecontrollerdb-model2-N.txt` per layout, which `fliperos-x11-run` puts on top of the system's `gamecontrollerdb.txt` for that launch.
-
-SM2-Emu reads game buttons 1 to 4 from A B X Y and always takes RB as button 4, so the fight stick mapping of the other emulators put button 1 on the bottom row; its own mapping puts the panel's button N on the game's button N, layout or not. The Model 2 mapping is written with the panel connected (it goes by the device's GUID).
-
-The other emulators keep the Button mapping order: FBNeo arranges the buttons of each game by itself, and the others have one mapping for all games.
-
-### GunCon 2 (light gun)
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/setup-guncon.webp" width="480" alt="GunCon 2 calibration targets">
-
-Everything about the gun in one menu (`screen_guncon`), with the gun's state and the current values on top. All of it but the calibration is also in the web panel's **GunCon 2** group, and counts at once, even in an open game.
-
-**Calibrate.** The screen turns white (the gun needs light where it aims) with a target in each corner; three shots at each (the median counts; a shot off the screen is rejected), and the calibrator computes the gun's real range on the tube — GunCon 2 is linear, so two known points give the edges.
-
-A shot at the center checks the result before saving `/etc/fliperos/guncon2.conf`, which the udev rule reapplies on every connection (evdev forgets the calibration).
-
-**Two or more guns.** With more than one GunCon 2 connected, Calibrate asks how many players have a gun and goes through them one at a time: for each player you pull the trigger of the gun that is theirs (the first to shoot is taken), then the targets appear. Two GunCon 2 look the same to the system, so each range is saved by the gun's USB port (`/etc/fliperos/guncon2-<port>.conf`), and the udev rule reapplies the one that belongs to the gun that arrived; a gun that was never calibrated uses the general `guncon2.conf` (the last one calibrated).
-
-**Screen flash.** A CRT gun only finds its aim where the screen is lit. Over a dark part of the picture it sees nothing, and the shot went out on the last aim or, past the hold, off the screen: Area 51 reloaded while shooting at its dark floor. Like RePlayOS's `GCON2 FLASH`, the screen lights up on a shot:
-
-- **Pulse** (the default): two light frames on each shot.
-- **Hold**: light while the trigger is held.
-- **Off**: no flash.
-
-The OpenGL and Vulkan layers of the emulators (`config/fliperos-deflicker.c`, `config/fliperos-vkfps.c`) read the triggers of the devices tagged `ID_INPUT_GUN` without grabbing them, and paint the whole frame. From the GunCon 2 they flash on the raw trigger, which the driver sends at once as a `MSC_RAW` event (patch 0006; the emulators ignore it): its `BTN_LEFT` is held back while the gun sees nothing, and a flash drawn on it came only after the wait, too late. The GunCon 2 driver then waits up to the flash wait for a report that sees the lit screen before it sends a trigger pulled without light: the shot goes out at the real aim, or off the screen if not even the flash lit it.
-
-**Settings in numbers:**
-
-| Setting | Default | `fliperos.conf` | What it does |
-|---|---|---|---|
-| Flash brightness (%) | 100 | `gun_flash_level` | How light the flash is (10 to 100). Too low and the gun misses it |
-| Flash wait (ms) | 100 | `gun_flash_ms` | How long a shot without light waits for the flash (driver `flash_ms`) |
-| Dark hold (ms) | 150 | `gun_hold_ms` | How long the aim stays put when the gun stops seeing light (`hold_ms`) |
-| Edge band (%) | 12 | `gun_edge_pct` | Losing light this close to an edge is off the screen at once (`edge_pct`) |
-
-**Off-screen reload button** (on): off the screen the trigger also presses the right button, the reload of Flycast, RetroArch and SM2-Emu (`gun_offscreen_reload`, driver `offscreen_reload`).
-
-**Back to the defaults** puts all of these back; the calibration stays.
-
-The driver's values are written by `fliperos-guncon2-calibrate`: when the gun arrives (udev) and, with `--params`, by the Setup and the web panel the moment they change.
-
-### Calibrate wheel, pedals or analog stick
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/calibration.webp" width="480" alt="Choosing the wheel or pedals to calibrate">
-
-The axes show live; turn the wheel from end to end and press each pedal all the way, then leave everything at rest. An axis that rests in the middle (wheel, analog stick) gets a symmetric range around the rest position — the center gives 0 and both sides reach the end — and a 1% dead zone; a pedal keeps the range seen.
-
-It goes to `/etc/fliperos/calibration.conf` (one line per axis) and udev reapplies it on every connection.
-
-### LPT joysticks
-
-Joysticks and pads on the **parallel port**, through the kernel's own drivers: **gamepad adapter** (`gamecon`: NES, SNES, N64, PlayStation, DDR mat, Multisystem; up to 5 per port, on pins 10, 11, 12, 13 and 15), **DB9 adapter** (`db9`: Atari/Amiga/Master System, 3/5/6-button Genesis, Saturn, CD32; needs the port in EPP or ECP mode in the BIOS) and **TurboGraFX interface** (`turbografx`: up to 7 Multisystem joysticks).
-
-The adapter can't be detected: you say which one it is and what is connected to each input, and the setup writes `/etc/modprobe.d/fliperos-lpt.conf` (the module options, plus `blacklist lp`: the printer driver would claim the port, and the joystick drivers want it for themselves) and `/etc/modules-load.d/fliperos-lpt.conf` (loads at boot), loads the driver right away and shows the joysticks created.
-
-The kernel finds the port itself (`parport_pc`) when it exists — on the motherboard it often comes **disabled in the BIOS** (Super I/O > Parallel Port); without one, a PCI/PCIe parallel card. Parallel port joysticks also move the menus.
-
-## Setup > System > Quirks
-
-<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/quirks.webp" width="480" alt="Setup > System > Quirks">
-
-Kernel fixes for USB devices that arrive wrong. It sits in System, not in Joysticks, because it is about any USB device. Two kinds, told apart by the code:
-
-- **Controllers, guns, keyboards** (the `usbhid.quirks` parameter): code `0xVENDOR:0xPRODUCT:0xFLAGS`;
-- **Disks and pen drives** (the `usb-storage.quirks` parameter): code `VENDOR:PRODUCT:LETTERS`, without `0x`, for example `152d:0578:u`, where `u` turns UAS off for a SATA adapter that hangs or drops off.
-
-Each quirk has a **name** you give it and a **code**, for example `0x16c0:0x05e1:0x40` for a dual Xin-Mo encoder to show up as two players. Choosing one from the list deletes it; **USB devices connected now** shows the vendor:product of each connected device.
-
-Useful flags: `0x40` one device per player (MULTI_INPUT, dual encoders), `0x8` no GET requests (NOGET, an encoder that hangs), `0x400` always poll (ALWAYS_POLL).
-
-The kernel reads at most 4 controller quirks (disk quirks have no such limit), and only at boot: the list lives in `/etc/fliperos/quirks.conf`, goes into the kernel line (`/etc/default/fliperos-boot`) and applies after a reboot. Done on the installation media, it goes along to the disk.
-
-## Controllers in SDL
-
-AntiMicroX, PCSX2, Dolphin, Flycast and RetroArch use SDL2, which maps a controller outside its database automatically and incompletely: it leaves out the buttons without a counterpart on a modern controller (`BTN_C`, `BTN_Z`, extra buttons — in controller mode AntiMicroX doesn't even show them) and puts on the **analog stick** a digital D-pad that the device sends as axes from −1 to +1 (common in arcade encoders and V-USB projects), and then a game that moves with the D-pad doesn't move.
-
-`fliperos-controllers` (at boot and whenever a controller is connected, through udev) asks SDL itself how it sees each controller and, only for those with an automatic mapping or with no mapping and a digital D-pad, completes it: leftover buttons go to triggers, `misc1` and paddles, and the digital axes become the **D-pad**.
-
-Controllers in SDL's database (Xbox, DualShock...) stay as they are; real analog ones (wheel, flight stick) too. The result goes to `/var/lib/fliperos/gamecontrollerdb.txt` (cumulative), pointed to by `SDL_GAMECONTROLLERCONFIG_FILE` in `/etc/environment` and in the launchers.
-
-**Flycast** builds its default mapping from SDL but doesn't understand a D-pad wired to a half axis; for those controllers it also gets mapping files (Dreamcast and arcade, in Flycast's own convention), only if there isn't one yet.
-
-It also ships with player 2 (port B) with a controller — its default leaves only player 1 — and with **linear interpolation off** (`rend.LinearInterpolation = no` in `emu.cfg`; the *Linear Interpolation* option in its settings): Flycast's default blurs the image when taking it to the tube's mode, and without the filter the pixels come out sharp.
-
-In an earlier `emu.cfg`, the option is only turned off if it isn't saved yet; once saved, the choice is yours.
-
-**Texture Filtering** comes as *Force Nearest-Neighbor* (`rend.TextureFiltering = 1`) for the same reason; Flycast saves its default (0) when it closes, so in an earlier `emu.cfg` it is changed once (marked in `/var/lib/fliperos/flycast-texture-nearest`) and after that the choice is yours.
-
-**RetroArch** is compiled with SDL2, so the `sdl2` joypad driver shows in **Drivers > Input** next to `udev`, and the choice is kept (the system `retroarch.cfg` doesn't pin the joypad driver).
-
-The default is still `udev`, which shows in the menu the real number of each controller button; with `sdl2` the same mappings as the other emulators apply, a controller without a profile falls back to the built-in "Standard Gamepad", and the numbers become SDL's (A = 0, B = 1...).
-
-SDL reads the mappings when it opens: a controller connected for the first time with RetroArch open only works correctly after reopening it.
-
-With `udev`, arcade panels and encoders were "not configured" (there's no factory profile for them); `fliperos-controllers` writes one in `/opt/fliperos/retroarch/autoconfig/udev` for every controller with a digital D-pad and no analog stick that no profile covers, with the buttons in panel order in the arcade cores' layout (FBNeo): **1 2 3 = Y X L** (top row), **4 5 6 = B A R** (bottom row) — the MAME cores read the RetroPad's Button 1-6 in another order (MAME, B A Y X L R; MAME 2010, A B X Y L R), and a core remap (`config/retroarch-remaps`, in `~/.config/retroarch/config/remaps/<core>`; one saved from RetroArch's menu stays) takes the panel's button N to the game's Button N, as in GroovyMAME; on a panel with up to 9 buttons the 7th is Start and the 8th Select (coin); with 10 or more, 7 and 8 are L2/R2 and Select/Start move to 9 and 10, as on USB encoders.
-
-The profile carries the name and VID+PID (V-USB's VID+PID is the same across different projects) and isn't rewritten: one saved from the menu (**Save Controller Profile**) stays.
-
-RetroArch's menu always names the buttons after the RetroPad's (A, B, X, Y...); with an arcade core open, **Quick Menu > Controls** shows the game's names. An encoder whose D-pad is axes only and which the kernel merges into a single controller may need a quirk (Setup > System > Quirks).
+| Page | What it covers |
+| --- | --- |
+| [Button mapping](Button-mapping.md) | Each controller's player and buttons, arcade panel or joypad, the keyboard encoder, Buttons layout for 1 to 5-button games |
+| [Bluetooth](Bluetooth.md) | Pairing wireless controllers |
+| [Controller light](Controller-light.md) | The colour of DualSense, DualShock 4 and 8BitDo lights, the Ultimate 2 roulette |
+| [Light guns](Light-guns.md) | The GunCon 2: driver, calibration, several guns, the screen flash, the gun in each emulator |
+| [Wheels, LPT and quirks](Wheels-and-quirks.md) | Calibrating a wheel or pedals, parallel port joysticks, USB quirks, controllers in SDL |
+| [Frontend controls](Frontend-controls.md) | The frontend's buttons, and the shortcuts to quit a game or open its menu |
+
+## Setup > Joysticks
+
+| Item | What it does |
+| --- | --- |
+| **Button mapping** | Controller, player, kind, buttons ([Button mapping](Button-mapping.md)) |
+| **Bluetooth** | Only with a Bluetooth adapter ([Bluetooth](Bluetooth.md)) |
+| **Buttons layout** | Where the buttons of 1 to 5-button games go ([Button mapping](Button-mapping.md#buttons-layout-games-of-1-to-5-buttons)) |
+| **GunCon 2** | Calibrate, screen flash, settings ([Light guns](Light-guns.md)) |
+| **Calibrate wheel, pedals or analog stick** | ([Wheels, LPT and quirks](Wheels-and-quirks.md)) |
+| **Controller light** | ([Controller light](Controller-light.md)) |
+| **LPT joysticks** | ([Wheels, LPT and quirks](Wheels-and-quirks.md#lpt-joysticks)) |
+
+USB fixes are in **Setup > System > Quirks** ([Wheels, LPT and quirks](Wheels-and-quirks.md#quirks-usb-device-fixes)).
+
+## In the games
+
+- **Quit a game:** coin + Start held for a second. **The emulator's menu:** coin + button 1. **The FliperOS on-screen menu:** Start + Down ([Frontend controls](Frontend-controls.md#game-shortcuts)).
+- **In the menus**, the controller is the keyboard ([Installed system](Installed-system.md#controller-in-the-menus)); **on the desktop**, it is the mouse ([Desktop and theme](Desktop.md#the-controller-as-a-mouse)).
+- **In custom games** that only take the keyboard, the on-screen menu's **Controller configuration** maps buttons to keys ([Custom games](Custom-games.md#the-controller-as-a-keyboard)).
+
+## Where sections moved
+
+<a id="button-mapping-all-emulators"></a><a id="light-gun-guncon-2"></a><a id="guncon-2-light-gun"></a><a id="setup--system--quirks"></a><a id="controllers-in-sdl"></a>
+This page used to hold every control. Button mapping is now on [Button mapping](Button-mapping.md), the GunCon 2 on [Light guns](Light-guns.md), Quirks and SDL on [Wheels, LPT and quirks](Wheels-and-quirks.md).
+
+See also: [DIY hardware](DIY-hardware.md), [Latency](Latency.md).
