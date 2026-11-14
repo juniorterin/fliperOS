@@ -614,8 +614,8 @@ async function cheevosPage() {
     const key = el("input", { type: "password", autocomplete: "off", "aria-label": t("ra_apikey"),
       placeholder: state.apikey ? t("ra_apikey_set") : t("ra_apikey") });
     const save = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("ra_apikey_save"));
-    // A pagina da conta no site, onde fica a chave (Settings > Keys), numa aba nova.
-    const where = el("a", { class: "btn ghost", href: "https://retroachievements.org/settings", target: "_blank",
+    // A aba da conta no site onde fica a chave (Settings > Applications), numa aba nova.
+    const where = el("a", { class: "btn ghost", href: "https://retroachievements.org/settings?tab=applications", target: "_blank",
       rel: "noopener" }, icon("px-password"), t("ra_apikey_get"));
     const keyForm = el("form", { class: "stack" }, el("span", {}, t("ra_apikey")), key,
       el("div", { class: "row start" }, save, where), el("div", { class: "dim" }, t("ra_apikey_hint")));

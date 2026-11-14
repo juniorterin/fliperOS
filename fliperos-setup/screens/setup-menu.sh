@@ -1400,7 +1400,7 @@ screen_cheevos() {
         screen_cheevos_apikey_help
         ui_yesno "$title" "Or type the key here, with a keyboard?" no || continue
         screen_need_internet "RetroAchievements" || continue
-        pass=$(ui_input "$title" "Web API Key from retroachievements.org/settings (Keys). Empty removes it." "" password) ||
+        pass=$(ui_input "$title" "Web API Key from retroachievements.org/settings?tab=applications. Empty removes it." "" password) ||
           continue
         ui_info "$title" "Checking the key..." > /dev/tty 2>&1 || true
         if reason=$(printf '%s\n' "$pass" | cheevos_apikey); then

@@ -5935,7 +5935,7 @@ class CheevosTests(Base):
         self.assertIn('[[ -n $(cheevos_get apikey) ]] || screen_cheevos_apikey_help', menu)
         self.assertIn('ui_yesno "$title" "Or type the key here, with a keyboard?" no || continue', menu)
         system = (ROOT / "config/web/system.js").read_text()
-        self.assertIn('href: "https://retroachievements.org/settings"', system)
+        self.assertIn('href: "https://retroachievements.org/settings?tab=applications"', system)
         for lang in ("Get my key at retroachievements.org", "Pegar minha chave no retroachievements.org"):
             self.assertIn(lang, (ROOT / "config/web/text.js").read_text())
 
