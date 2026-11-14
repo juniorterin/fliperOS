@@ -103,6 +103,9 @@ echo "fe-emulator: pronto em http://localhost:${FE_EMU_PORT:-6080}/vnc.html?auto
 export DISPLAY=:0 SDL_VIDEODRIVER=x11 SDL_AUDIODRIVER=dummy
 export HOME=$H FLIPEROS_HOME=$H FLIPEROS_SETUP=/emu/fliperos-setup FLIPEROS_BUTTONS_MAP=/nonexistent
 export FLIPEROS_VIDEO_AUDIO=null FLIPEROS_WEB_MODULE=/config/fliperos-web PYTHONDONTWRITEBYTECODE=1
+# O logotipo escrito de cada sistema na tira (o fliperos-syslogo, com a fonte
+# e a tabela do Arcadeflow que vem na imagem): os do repositorio.
+export FLIPEROS_SYSLOGO=/config/fliperos-syslogo FLIPEROS_SYSLOGO_DATA=/config/syslogo
 # A rede dos gabinetes e a do lan-relay.py: o frontend ve as festas, mas nao
 # se anuncia e nao entra em nenhuma.
 export FLIPEROS_LINK_FAKE=/tmp/link-table.json

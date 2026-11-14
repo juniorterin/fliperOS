@@ -5428,7 +5428,7 @@ class FrontendDataTests(unittest.TestCase):
         (tmp / 'sf2.zip').write_bytes(b'x')
         lib = fd.Library.__new__(fd.Library)
         lib.lock = threading.Lock()
-        lib.cache = {'x': []}
+        lib.cache, lib.epoch = {'x': []}, 0
         system = {'key': 'mame', 'arcade': True, 'folder': str(tmp)}
         game = {'Name': 'kinst', 'file': 'kinst.zip', '_system': system}
         self.assertEqual(len(lib.rom_files(game)), 2)
@@ -5437,6 +5437,61 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(lib.cache, {})
         # O clone sem arquivo proprio (dentro do zip do pai) nao tem o que apagar.
         self.assertEqual(lib.rom_files({'Name': 'sf2ce', '_system': system}), [])
+
+    def test_game_counts_cached_and_lists_read_ahead(self):
+        # A tira dos sistemas mostra o numero de jogos de cada romlist ja ao
+        # passar por ela (o da ultima vez, em ~/.cache/fliperos), e as listas
+        # das outras sao lidas em segundo plano: escolher um sistema abre na
+        # hora. O "Arcade" junta as listas das pastas (cada uma lida uma vez).
+        fd = self.fd
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        os.environ['FLIPEROS_HOME'] = str(tmp)
+        self.addCleanup(os.environ.pop, 'FLIPEROS_HOME', None)
+        reads = []
+
+        def games(system, favs=frozenset()):
+            reads.append(system['key'])
+            return [{'Name': '%s%d' % (system['key'], i), 'Title': '%s %d' % (system['key'], i)} for i in range(3)]
+        old = fd.web.games, fd.PRELOAD_REST
+        fd.web.games, fd.PRELOAD_REST = games, 0
+        self.addCleanup(lambda: setattr(fd.web, 'games', old[0]) or setattr(fd, 'PRELOAD_REST', old[1]))
+        lib = fd.Library.__new__(fd.Library)
+        lib.lock, lib.count_lock = threading.Lock(), threading.Lock()
+        lib.cache, lib.epoch, lib.counts = {}, 0, fd.load_counts()
+        lib.preload_job, lib.preloading = None, False
+        lib.edits = lambda system, name: {}
+        lib.favourites = lambda: set()
+        self.assertEqual(lib.counts, {})
+        mame, fbneo = {'key': 'mame', 'name': 'MAME'}, {'key': 'fbneo', 'name': 'FBNeo'}
+        arcade = {'key': '@arcade', 'name': 'Arcade', 'parts': [mame, fbneo]}
+        lib.preload([mame, arcade, fbneo], lambda cat: len(lib.games(cat)))
+        deadline = time.monotonic() + 5
+        while lib.preloading and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(lib.preloading)
+        self.assertEqual(sorted(reads), ['fbneo', 'mame'])
+        self.assertEqual([g['Name'] for g in lib.cache['@arcade']][:2], ['fbneo0', 'fbneo1'])
+        self.assertIs(lib.cache['@arcade'][3], lib.cache['mame'][0])
+        # Gravado no cache: o frontend aberto de novo ja tem os numeros.
+        self.assertEqual(fd.load_counts(), {'mame': 3, '@arcade': 6, 'fbneo': 3})
+        lib.set_count('mame', 2)
+        self.assertEqual(fd.load_counts()['mame'], 2)
+        # Uma lista lida antes de o cache esvaziar (releitura) nao entra nele.
+        epoch = lib.epoch
+        lib.forget()
+        lib.keep('mame', [], epoch)
+        self.assertEqual(lib.cache, {})
+        lib.keep('mame', [], lib.epoch)
+        self.assertEqual(lib.cache, {'mame': []})
+        # A tira: o numero do sistema no meio vem do cache, tambem antes de
+        # abrir a lista dele.
+        view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        ribbon = view.split('def draw_ribbon(')[1].split('\ndef ')[0]
+        self.assertIn('shown = counts.get(c["key"])', ribbon)
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('self.lib.set_count(cat["key"], self.count_of(games))', frontend)
+        self.assertIn('self.lib.preload([self.cats[i] for i in order], self.list_count)', frontend)
 
     def test_video_player(self):
         # O video vem do ffmpeg da imagem; sem ele, o Player nao abre nada
@@ -5831,10 +5886,14 @@ class FrontendDataTests(unittest.TestCase):
         fe.tick(fe.pick_at + fm.PICK_WAIT + 0.01)
         self.assertEqual((fe.cat, fe.pick, loads, fe.slide[:2]), (3, 0, [3], ('old', 1)))
         self.assertLess(fe.ribbon_until, float('inf'))
-        # O botao 1 escolhe na hora; para a esquerda, a tela sai pelo outro lado.
+        # O botao 1 escolhe na hora; para a esquerda, a tela sai pelo outro
+        # lado. A tira some ja e a animacao da lista comeca junto.
         fe.act('left')
         fe.act('b1')
         self.assertEqual((fe.cat, fe.pick, loads, fe.slide[1]), (2, 0, [3, 2], -1))
+        self.assertLessEqual(fe.ribbon_until - time.monotonic(), fm.RIBBON_FADE)
+        self.assertLessEqual(fe.intro['start'], time.monotonic())
+        self.assertEqual(fe.slide[2], fe.intro['start'])
         # O botao 2 volta: a tira para no sistema da lista, nada e lido.
         fe.act('right')
         fe.act('right')
@@ -5853,10 +5912,13 @@ class FrontendDataTests(unittest.TestCase):
         fe.tick(fe.pick_at + fm.PICK_WAIT + 0.01)
         self.assertEqual((fe.cat, fe.picking, loads), (2, False, [3, 2]))
         self.assertLess(fe.ribbon_until, float('inf'))
-        # Escolhido o sistema, a tira fica RIBBON_HOLD s com o numero de jogos
-        # (antes sumia em 0,25 s, sem dar para ler); mexer na lista a fecha.
+        # Escolhido o sistema parando na tira, ela fica RIBBON_HOLD s com o
+        # numero de jogos (uma espera curta: o numero ja aparece ao passar);
+        # mexer na lista a fecha.
+        self.assertLessEqual(fm.RIBBON_HOLD, 1.0)
         fe.act('right')
-        fe.act('b1')
+        fe.tick(fe.pick_at + fm.PICK_WAIT + 0.01)
+        self.assertEqual(fe.cat, 3)
         self.assertGreater(fe.ribbon_until - time.monotonic(), fm.RIBBON_HOLD)
         # A animacao de entrar na lista so comeca quando a tira fecha.
         self.assertAlmostEqual(fe.slide[2], fe.ribbon_until, places=1)

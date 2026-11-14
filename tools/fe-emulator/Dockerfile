@@ -5,7 +5,7 @@
 #   docker build -t fliperos-fe-emulator tools/fe-emulator
 FROM ubuntu:24.04
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      python3 python3-pygame ffmpeg jq util-linux \
+      python3 python3-pygame python3-pil ffmpeg jq util-linux \
       xvfb x11vnc novnc websockify xdotool \
     && rm -rf /var/lib/apt/lists/*
 COPY start.sh fake-run lan-relay.py /emu/

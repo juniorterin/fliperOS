@@ -3160,9 +3160,13 @@ def draw_ribbon(fe, ui, now):
         label = fit(c["name"], WW - 20)
         ui.blit(W.big(label, 1, W.LABEL), ((WW - W.width(label)) // 2, band_y + 80))
         count_y = band_y + 93
-    # Os jogos so do sistema ja na lista (o da tira ainda nao foi lido).
-    if not pick:
+    # O numero de jogos da lista do sistema no meio: o anotado da ultima vez
+    # que ela foi lida (fedata.COUNTS, no cache), tambem antes de abri-la.
+    counts = getattr(getattr(fe, "lib", None), "counts", None) or {}
+    shown = counts.get(c["key"])
+    if shown is None and not pick:
         shown = sum(1 for g, _, extra in fe.rows if g is not None and not fe.fd.group_item(extra))
+    if shown is not None:
         tiny.centered(ui, "%d GAMES" % shown, T.CYAN, WW // 2, count_y)
 
 

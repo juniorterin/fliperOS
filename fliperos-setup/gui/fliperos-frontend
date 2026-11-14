@@ -67,13 +67,14 @@ LRATE0, LRATE1, LSPEEDUP = 3.0, 10.0, 0.8
 # a lista volta ao normal.
 LETTER_IDLE = 2.0
 # Esquerda e direita so andam na tira de romlists; parado PICK_WAIT segundos
-# num sistema (ou com o botao 1), a lista troca, com a animacao.
+# num sistema, a lista troca, com a animacao; o botao 1 a troca na hora.
 PICK_WAIT = 0.6
-# Escolhido o sistema, a tira fica RIBBON_HOLD segundos com o numero de jogos
-# dele (so se sabe depois de ler a lista) e entao some aos poucos em
-# RIBBON_FADE (o do feview.py). Antes ela sumia logo, e o numero nem dava para
-# ler. Mexer na lista a fecha antes.
-RIBBON_HOLD, RIBBON_FADE = 1.6, 0.25
+# Escolhido o sistema parando na tira, ela fica RIBBON_HOLD segundos com o
+# numero de jogos dele e entao some aos poucos em RIBBON_FADE (o do
+# feview.py); a animacao da lista nova vem depois. O numero ja aparece ao
+# passar pelo sistema (o do cache, fedata.COUNTS), entao a espera e curta.
+# Com o botao 1 ou mexendo na lista ela some ja.
+RIBBON_HOLD, RIBBON_FADE = 0.8, 0.25
 # Quanto tempo fica o aviso de que outro gabinete abriu uma party ou um link.
 NOTICE = 6.0
 # Um jogo sem video e sem imagem, com o cursor parado nele por este tempo,
@@ -505,6 +506,8 @@ class Frontend:
         # Onde o cursor parou em cada game list (frontend.json positions).
         self.positions = dict(cfg.get("positions") or {})
         self.rebuild(keep=self.positions.get((self.category() or {}).get("key")) or cfg.get("game"))
+        # As outras romlists, lidas em segundo plano (a tira abre na hora).
+        self.preload()
         # As listas acompanham as pastas: o Setup confere e refaz (as de
         # arcade pelo XML do MAME) em segundo plano.
         if not self.shot:
@@ -590,7 +593,40 @@ class Frontend:
         hidden = self.lib.hidden()
         games = [g for g in self.lib.games(cat) if (g["_system"]["key"], g["Name"]) not in hidden]
         games = self.fd.apply_control(games, self.ctrl)
-        return self.fd.apply_filter(games, self.lib.filters[self.flt % len(self.lib.filters)])
+        games = self.fd.apply_filter(games, self.lib.filters[self.flt % len(self.lib.filters)])
+        self.lib.set_count(cat["key"], self.count_of(games))
+        return games
+
+    def count_of(self, games):
+        """O numero de jogos da tira: as linhas da lista, como o contador
+        embaixo dela. Na tela cheia e na grade os clones tem linha propria
+        (com Show clones); no modo lista ficam debaixo do pai, e contam so
+        os pais."""
+        if self.show_clones and self.mode != "list":
+            return len(games)
+        return len(self.fd.tree(games))
+
+    def list_count(self, cat):
+        """O numero de jogos da lista de outra romlist, com o filtro e o tipo
+        de controle dela (filter_by, ctrl_by): o da tira, antes de abri-la."""
+        hidden = self.lib.hidden()
+        games = [g for g in self.lib.games(cat) if (g["_system"]["key"], g["Name"]) not in hidden]
+        games = self.fd.apply_control(games, self.ctrl_by.get(cat["key"]))
+        filters = self.lib.filters
+        names = [f["name"] for f in filters]
+        name = self.filter_by.get(cat["key"])
+        flt = filters[names.index(name) if name in names else self.default_filter()]
+        return self.count_of(self.fd.apply_filter(games, flt))
+
+    def preload(self):
+        """Os jogos das outras romlists lidos em segundo plano (as vizinhas na
+        tira primeiro) e o numero de cada uma no cache: a tira mostra o numero
+        ao passar e a lista abre na hora."""
+        if self.shot or not self.cats:
+            return
+        n = len(self.cats)
+        order = sorted(range(n), key=lambda i: min((i - self.cat) % n, (self.cat - i) % n))
+        self.lib.preload([self.cats[i] for i in order], self.list_count)
 
     def rebuild(self, keep=None):
         """As linhas da tela: (jogo, nivel, clones). Na lista os clones ficam
@@ -785,12 +821,16 @@ class Frontend:
         self.picking = False
         self.ribbon_until = time.monotonic() + 0.4
 
-    def pick_category(self):
-        """O sistema da tira escolhido: a lista troca, com a animacao."""
+    def pick_category(self, now=False):
+        """O sistema da tira escolhido: a lista troca, com a animacao. Parado
+        na tira, ela fica RIBBON_HOLD s com o numero de jogos antes; com o
+        botao 1 (now) a tira some e a animacao comeca na hora."""
         step, self.pick = self.pick, 0
         self.picking = False
         # O numero de jogos a vista, depois some aos poucos (feview.RIBBON_FADE).
-        self.ribbon_until = time.monotonic() + RIBBON_HOLD + RIBBON_FADE
+        hold = 0.0 if now else RIBBON_HOLD
+        at = time.monotonic()
+        self.ribbon_until = at + hold + RIBBON_FADE
         if not step % len(self.cats):
             return                # deu a volta e parou no mesmo
         self.keep_position()
@@ -801,9 +841,10 @@ class Frontend:
         # A tela de antes sai e a nova entra, pedaco por pedaco (feview.draw:
         # o slide da tela inteira, ou a animacao do modo, feview.TRANSITIONS),
         # so depois que a tira dos sistemas fecha: ate la, a tela de antes
-        # fica parada embaixo dela (hurry_intro adianta).
+        # fica parada embaixo dela (hurry_intro adianta). Com o botao 1 ela
+        # comeca ja, com a tira sumindo por cima.
         if getattr(self, "last_ui", None) is not None:
-            start = time.monotonic() + RIBBON_HOLD + RIBBON_FADE
+            start = at if now else at + hold + RIBBON_FADE
             self.slide = (self.last_ui, 1 if step > 0 else -1, start)
             self.intro = {"side": 1 if step > 0 else -1, "start": start,
                           "old": getattr(self, "last_screen", None)}
@@ -881,7 +922,7 @@ class Frontend:
             if a == "b2":
                 self.cancel_pick()
                 return None
-            self.pick_category()
+            self.pick_category(now=a == "b1")
             if a == "b1":
                 return None
         # A tira ainda a vista com o numero de jogos (RIBBON_HOLD): mexer na
@@ -1005,6 +1046,7 @@ class Frontend:
         g = self.game()
         self.mode = MODES[(MODES.index(self.mode) + step) % len(MODES)]
         self.rebuild(keep=g["Name"] if g else None)
+        self.preload()             # o numero das outras romlists segue o modo (count_of)
         self.remember()
 
     def toggle_fav(self):
@@ -1206,6 +1248,7 @@ class Frontend:
                 g = self.game()
                 self.show_clones = not self.show_clones
                 self.rebuild(keep=(g.get("CloneOf") or g["Name"]) if g else None)
+                self.preload()         # o numero das outras muda junto
                 self.remember()
                 self.say("CLONES SHOWN" if self.show_clones else "CLONES HIDDEN")
             elif sel == OPT_HIDDEN and a == "b1":
@@ -2772,6 +2815,7 @@ class Frontend:
                 self.cat = next((i for i, c in enumerate(self.cats) if c["key"] == key), 0)
                 self.load_filter()
                 self.rebuild(keep=g["Name"] if g else None)
+                self.preload()         # as listas novas das outras romlists
                 # O --romlists tambem grava arte (a tela de titulo dos paks do
                 # OpenBOR, fliperos-openbor-meta): um jogo guardado sem
                 # imagem e procurado de novo.

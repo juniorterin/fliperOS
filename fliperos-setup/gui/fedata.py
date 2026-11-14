@@ -53,6 +53,13 @@ VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")
 # Os campos que o Classify muda (os da romlist do Attract-Mode).
 EDIT_FIELDS = ("Title", "Category", "Players", "Buttons", "Control", "Year", "Manufacturer", "Rotation", "Series")
 ARCADE_ALL = "Arcade"
+# Quantos jogos a lista de cada romlist mostrou da ultima vez ({chave: n},
+# em ~/.cache/fliperos): a tira dos sistemas mostra o numero ja ao passar
+# por ela, antes de ler a lista (Library.counts).
+COUNTS = "frontend-counts.json"
+# A pre-leitura das listas (Library.preload) descansa entre uma e outra: a
+# tela segue lisa enquanto ela le.
+PRELOAD_REST = 0.05
 
 
 def load_web():
@@ -107,6 +114,16 @@ def cached(name, fresh):
     except OSError:
         pass
     return save_cache(name, fresh())
+
+
+def load_counts():
+    """O numero de jogos de cada romlist da ultima vez (COUNTS)."""
+    try:
+        with open(os.path.join(cache_dir(), COUNTS), encoding="utf-8") as f:
+            data = json.load(f)
+        return {str(k): int(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
 
 
 def save_cache(name, text):
@@ -294,6 +311,11 @@ class Library:
         self.filters = [FAVOURITES] + web.parse_filters(cached("frontend-filters", lambda: setup("--filters")))
         self.info = web.GameInfo()
         self.cache = {}            # chave -> lista de jogos
+        self.epoch = 0             # muda quando o cache esvazia (uma lista lida antes nao entra)
+        self.counts = load_counts()
+        self.count_lock = threading.Lock()
+        self.preload_job = None    # (romlists, count) que a pre-leitura ainda vai fazer
+        self.preloading = False
         self.stamps = self.folder_stamps()
         self.refreshing = False
         self.generation = 0        # muda a cada releitura (a tela refaz a lista)
@@ -337,40 +359,91 @@ class Library:
         with self.lock:
             if key in self.cache:
                 return self.cache[key]
-        favs = self.favourites()
-        out = []
-        for system in category.get("parts", [category]):
-            try:
-                rows = web.games(system, favs)
-            except OSError:
-                rows = []
-            # Namco 246/256: as pastas com os .gz do archive.org viram o jogo
-            # (a versao mais nova) e as outras versoes, extraidas ao escolher.
-            if system.get("key") in fenamco.KEYS:
-                try:
-                    rows = fenamco.merge(system, rows)
-                except OSError:
-                    pass
-            for g in rows:
-                g["_system"] = system
-                edits = self.edits(system, g["Name"])
-                if edits:
-                    g.update(edits)
-                    g["Edited"] = "1"
-                out.append(g)
+            epoch = self.epoch
         if "parts" in category:
+            # Todas as de arcade juntas: as listas de cada pasta (as mesmas,
+            # lidas uma vez so), pelo titulo.
+            out = [g for system in category["parts"] for g in self.games(system)]
             out.sort(key=lambda e: (e.get("Title") or e["Name"]).lower())
+            return self.keep(key, out, epoch)
+        system = category
+        try:
+            rows = web.games(system, self.favourites())
+        except OSError:
+            rows = []
+        # Namco 246/256: as pastas com os .gz do archive.org viram o jogo
+        # (a versao mais nova) e as outras versoes, extraidas ao escolher.
+        if system.get("key") in fenamco.KEYS:
+            try:
+                rows = fenamco.merge(system, rows)
+            except OSError:
+                pass
+        for g in rows:
+            g["_system"] = system
+            edits = self.edits(system, g["Name"])
+            if edits:
+                g.update(edits)
+                g["Edited"] = "1"
+        return self.keep(key, rows, epoch)
+
+    def keep(self, key, games, epoch):
+        """Guarda a lista lida, se o cache nao esvaziou enquanto ela era lida
+        (uma releitura ou um forget no meio: a lista seria a de antes)."""
         with self.lock:
-            self.cache[key] = out
-        return out
+            if self.epoch == epoch:
+                self.cache[key] = games
+        return games
 
     def forget(self, key=None):
         with self.lock:
+            self.epoch += 1
             if key is None:
                 self.cache.clear()
             else:
                 self.cache.pop(key, None)
                 self.cache.pop("@arcade", None)
+
+    # ── O numero de jogos de cada romlist e a pre-leitura ──
+    def set_count(self, key, n):
+        """Anota quantos jogos a lista da romlist mostra (o numero da tira),
+        gravado em ~/.cache so quando muda."""
+        with self.count_lock:
+            if self.counts.get(key) == n:
+                return
+            self.counts[key] = n
+            save_cache(COUNTS, json.dumps(self.counts, sort_keys=True))
+
+    def preload(self, categories, count=None):
+        """Em segundo plano, os jogos de cada romlist na ordem dada (as vizinhas
+        na tira primeiro): escolher um sistema na tira abre a lista na hora.
+        count(romlist), se dado, e o numero que a lista dela mostra
+        (set_count). Um pedido novo no meio recomeca por ele."""
+        with self.lock:
+            self.preload_job = (list(categories), count)
+            if self.preloading:
+                return
+            self.preloading = True
+
+        def work():
+            while True:
+                with self.lock:
+                    job, self.preload_job = self.preload_job, None
+                    if job is None:
+                        self.preloading = False
+                        return
+                cats, count = job
+                for cat in cats:
+                    if self.preload_job is not None:
+                        break
+                    try:
+                        self.games(cat)
+                        if count:
+                            self.set_count(cat["key"], count(cat))
+                    except Exception:  # uma pasta fora (o disco saiu): fica para a proxima
+                        pass
+                    time.sleep(PRELOAD_REST)
+
+        threading.Thread(target=work, daemon=True).start()
 
     # ── O que a pessoa muda num jogo ──
     def edits_path(self, system, name):
@@ -564,8 +637,9 @@ class Library:
                     if filters:
                         self.filters = [FAVOURITES] + filters
                     self.cache.clear()
+                    self.epoch += 1
+                    self.generation += 1
                 self.stamps = self.folder_stamps()
-                self.generation += 1
             finally:
                 self.refreshing = False
                 if done:
