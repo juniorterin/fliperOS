@@ -7,7 +7,7 @@ Its games go in `~/roms/dolphin` (`.iso`, `.rvz`, `.wbfs`). It is compiled from 
 - It opens in its own Xorg at **640x240** on a 15 kHz tube, stretched to fill it (`AspectRatio=3`), or interlaced with **Interlaced hacks**.
 - On amdgpu it runs in **Vulkan**.
 - It has no menu of its own for the panel, so **coin + button 1** opens the FliperOS [on-screen menu](On-screen-menu.md).
-- **Net play** between cabinets, with FliperOS's patch ([Linked cabinets](Linked-cabinets.md#dolphin-net-play)), and [RetroAchievements](RetroAchievements.md).
+- **Net play** between cabinets, with FliperOS's patch ([Linked cabinets](Net-play.md#dolphin-net-play)), and [RetroAchievements](RetroAchievements.md).
 
 ## DuckStation (PlayStation)
 

@@ -29,10 +29,10 @@ The same options as GroovyArcade (`os/groovyarcade/syslinux/syslinux.cfg`). Here
 | NVIDIA 15 kHz | `video=1280x480iS` | NVIDIA: super resolution; the output test then tries native modes (see [Video cards](Video-cards.md)) |
 | NTSC | `video=720x480iS` | NTSC TV |
 | PAL | `video=768x576iS` | PAL TV |
-| EDID progressive | `drm.edid_firmware=edid/generic_15_super_resp.bin video=e` | Switchres EDID, all outputs forced. For DisplayPort or HDMI through a [converter](Video-cards.md#converters) |
+| EDID progressive | `drm.edid_firmware=edid/generic_15_super_resp.bin video=e` | Switchres EDID, all outputs forced. For DisplayPort or HDMI through a [converter](Converters.md) |
 | EDID interlaced | `drm.edid_firmware=edid/generic_15_super_resi.bin video=e` | Same, interlaced |
 
-**Intel HD:** the boot menu is drawn at 31 kHz and the card makes no low clocks, so do the whole installation on a monitor at a standard frequency (an LCD or a PC monitor) and connect the CRT only afterwards, with the cabinet powered off. See [Video cards](Video-cards.md#intel).
+**Intel HD:** the boot menu is drawn at 31 kHz and the card makes no low clocks, so do the whole installation on a monitor at a standard frequency (an LCD or a PC monitor) and connect the CRT only afterwards, with the cabinet powered off. See [Video cards](Video-cards-Intel.md).
 
 The `S` at the end of the mode comes from the 15 kHz patch: it uses the kernel's fixed table of low-dotclock modes (`drm_modes_low_dotclock.c`), and `i` means interlaced. Every entry carries `quiet splash consoleblank=0` and `radeon` on SI/CIK cards.
 
@@ -69,7 +69,7 @@ Once validated, gatools' `configure_from_connector` applies:
 
 A converter reports an EDID of its own, with 31 kHz modes, so the *Testing Results* screen says **Monitor detection: LCD OR MODERN CRT**. That is expected, not a failure. What you do:
 
-1. **Boot menu:** start with the default **15 kHz** entry. If the screen stays black, restart with **EDID progressive** (interlaced modes often fail on converters; see [Video cards](Video-cards.md#converters)).
+1. **Boot menu:** start with the default **15 kHz** entry. If the screen stays black, restart with **EDID progressive** (interlaced modes often fail on converters; see [Video cards](Converters.md)).
 2. **Output test:** press ENTER on the output where you can see the screen (the DisplayPort or HDMI one).
 3. **Testing Results:** read it and choose **Validate settings**.
 4. **Monitor Type:** pick your **CRT** (`generic_15` for a TV or an ordinary 15 kHz arcade monitor). This is the choice that matters: the Setup can't tell a CRT behind a converter from an LCD, and only your answer says it is a tube. Choosing *LCD* here writes no video mode and leaves the output at the converter's own 31 kHz mode.
@@ -100,6 +100,7 @@ The media's menu (gasetup's `isomainmenu`): **Install to HD/SSD**, **Recovery Mo
 
      Downwards the image only moves while there are blank lines below it (Switchres doesn't go past the *front porch*); when it stops, the adjustment is the monitor's **V-POS**;
    - **Multiple Monitors**: a second arcade monitor on another analog output (VGA, DVI-I) of the same card, and a third, or one on a second video card or on a digital output through an active VGA converter, as an experimental option, for games with 2 or 3 screens (Darius, The Ninja Warriors and Punch-Out!! in GroovyMAME, F355 Challenge in Flycast), with a switch to turn the multi-screen mode off. See [Multiple monitors](Multiple-Monitors.md).
+   - **Video driver**, only with an AMD card that works with both drivers (HD 7000, R7/R9 200 and 300): **radeon** or **amdgpu**. A card that does Vulkan with amdgpu comes with amdgpu suggested, for the Vulkan of PCSX2, Dolphin, Flycast and RetroArch; the first boot asks you to confirm the picture. When the card has the choice and it wasn't made in Video Setup, the installation asks it before the disk. See [Video Setup](Setup-Video.md#radeon-or-amdgpu).
 2. **Cabinet name** (optional; empty or Esc skips it): the name the other cabinets on your local network see in party and link play, up to 12 letters. With no name the cabinet gets a fruit or an animal. It can be changed later in Setup > System > Cabinet name. See [Linked cabinets](Linked-cabinets.md).
 3. **Automatically Partition** — lists the disks by **model, size, path and bus** (USB/NVMe/SATA). Not listed: the installation media itself, disks under 16 GiB, mounted or in swap, with RAID/LVM/encryption or active dependents — each one with the reason, above the list.
 

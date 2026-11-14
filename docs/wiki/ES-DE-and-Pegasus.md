@@ -8,7 +8,7 @@
 
 Choosing the frontend again rebuilds it. The log is `/var/log/<package>-build.log`.
 
-**ES-DE needs OpenGL 3.3** (or OpenGL ES 3.0). A card with less, like a first-generation Intel HD (OpenGL 2.1), can't open it: the Frontend screen marks it with a red X and the reason, and asks before choosing it. See [Video cards](Video-cards.md#limits-of-the-intel-hd).
+**ES-DE needs OpenGL 3.3** (or OpenGL ES 3.0). A card with less, like a first-generation Intel HD (OpenGL 2.1), can't open it: the Frontend screen marks it with a red X and the reason, and asks before choosing it. See [Video cards](Video-cards-Intel.md#limits-of-the-intel-hd).
 
 ## The 240p themes
 

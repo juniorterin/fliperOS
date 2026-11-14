@@ -57,7 +57,7 @@ Runs the output test again at the next boot, as on the installation media: the s
 Only with a card that has a choice:
 
 - An **AMD** card that works with both drivers (GCN 1.0 and 1.1: HD 7000, R7/R9 200 and 300, like the R7 240) picks **radeon** or **amdgpu**.
-- An **NVIDIA** card picks **nouveau** or NVIDIA's own driver, or compares them. See [NVIDIA cards](Video-cards.md#nvidia).
+- An **NVIDIA** card picks **nouveau** or NVIDIA's own driver, or compares them. See [NVIDIA cards](Video-cards-NVIDIA.md).
 
 ### radeon or amdgpu
 
@@ -76,11 +76,11 @@ With amdgpu set, the boot menu (a key while the system boots) gets a **FliperOS 
 
 Only with an NVIDIA card on an analog output, or a DisplayPort output with a converter, and a 15 kHz monitor. It shows the grid test again and finds the lowest dotclock that card or converter really shows.
 
-If it passes, games get native low resolutions; if not, super resolutions. The result counts for the boot mode, Switchres, GroovyMAME and RetroArch. See [Video cards](Video-cards.md#nvidia) and [Converters](Video-cards.md#converters).
+If it passes, games get native low resolutions; if not, super resolutions. The result counts for the boot mode, Switchres, GroovyMAME and RetroArch. See [Video cards](Video-cards-NVIDIA.md) and [Converters](Converters.md).
 
 ## Card firmware
 
-Only with an AMD card: writes ATOM-15 into the card's BIOS, so it gives 15 kHz from power on, before Linux even starts. It rewrites the card's BIOS, at your own risk. See [ATOM-15](Video-cards.md#atom-15-15-khz-from-power-on).
+Only with an AMD card: writes ATOM-15 into the card's BIOS, so it gives 15 kHz from power on, before Linux even starts. It rewrites the card's BIOS, at your own risk. See [ATOM-15](ATOM-15.md).
 
 ## How it works
 

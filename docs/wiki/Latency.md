@@ -2,7 +2,9 @@ What weighs most in the delay between pressing the button and the picture changi
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/setup-latency.webp" width="480" alt="Setup > Latency">
 
-FliperOS applies the tweaks GA already makes and adds others, in two modes chosen in **Setup > System > Latency** (`fliperos-setup/lib/latency.sh`).
+## The two modes
+
+FliperOS applies the tweaks GroovyArcade already makes and adds others, in two modes chosen in **Setup > System > Latency**: **Standard**, for any machine, and **Low latency**, for modern CPUs. The same screen checks this computer against the recommendation (`fliperos-setup/lib/latency.sh`).
 
 | Tweak | GroovyArcade | FliperOS Standard | FliperOS Low latency |
 | --- | --- | --- | --- |
@@ -17,7 +19,7 @@ FliperOS applies the tweaks GA already makes and adds others, in two modes chose
 | RetroArch preemptive frames (1 frame) | no | no | yes |
 | apt and man-db running by themselves | don't exist (Arch) | masked | masked |
 
-**What each tweak does:**
+## What each tweak does
 
 - **`mitigations=off audit=0`** — GA's default line. Turns off the kernel's Spectre/Meltdown protections, which cost the most on the older CPUs (without hardware fixes) typical of cabinets. It trades security for performance, acceptable on a machine that only runs games.
 - **USB at 1000 Hz** — a full-speed controller is polled every 8 ms (125 Hz); the average wait drops from ~4 ms to ~0.5 ms. It applies to whatever uses the `usbhid` driver (Zero Delay/Xin-Mo style encoders, I-PAC as a keyboard, trackball); Xbox controllers use `xpad` and don't change.
@@ -29,9 +31,13 @@ FliperOS applies the tweaks GA already makes and adds others, in two modes chose
 - **Preemptive frames** — removes the game's own internal delay (1 frame), redoing the last frame only when the input changes (lighter than run-ahead, which redoes every frame). It needs a core with savestates; those without turn the feature off with a warning.
 - **apt and man-db** — Ubuntu's timers would run `apt update` and the `man` reindexing in the middle of a game. Updating lives in Setup > System > System Update, as in GA.
 
-**What was left out, and why:** a `PREEMPT_RT` kernel (GA has a `linux-rt`), because `preempt=full` covers cabinet use and RT trades throughput for predictability, which is only worth it with measurements showing a gain; limiting the CPU C-states, because the gain would be microseconds when the CPU wakes up, against more power draw and heat; and RetroArch's `video_hard_sync`, because in KMS the 2-image swapchain already waits for each flip.
+## What was left out, and why
 
-**Compared with GA:** on the same hardware, expect a tie in Standard mode (with an advantage of a few ms from USB at 1000 Hz) and up to 1 to 2 frames less in RetroArch games in Low latency mode. A hand-tuned GA gets to the same place; the difference is that FliperOS ships this way out of the box.
+ a `PREEMPT_RT` kernel (GA has a `linux-rt`), because `preempt=full` covers cabinet use and RT trades throughput for predictability, which is only worth it with measurements showing a gain; limiting the CPU C-states, because the gain would be microseconds when the CPU wakes up, against more power draw and heat; and RetroArch's `video_hard_sync`, because in KMS the 2-image swapchain already waits for each flip.
+
+## Compared with GroovyArcade
+
+ on the same hardware, expect a tie in Standard mode (with an advantage of a few ms from USB at 1000 Hz) and up to 1 to 2 frames less in RetroArch games in Low latency mode. A hand-tuned GA gets to the same place; the difference is that FliperOS ships this way out of the box.
 
 ## Recommended hardware
 
@@ -43,7 +49,7 @@ FliperOS applies the tweaks GA already makes and adds others, in two modes chose
 | **Low latency** | AVX2 (x86-64-v3: 4th-generation Intel Core, AMD Ryzen or newer), 4 threads, 3.0 GHz or more | 4 GB (8 GB better) | same |
 | **Everything** (PS2, Model 3, Dreamcast) | 4 physical cores with AVX2 and single-thread PassMark ≥ 2000 (Core i7-7700, Ryzen 5 3600 or newer) | 16 GB, SSD | same: at CRT resolutions even the R7 240 exceeds PCSX2's minimum (G3D ≥ 600) |
 
-The "Everything" tier follows the *Moderate* level of the [PCSX2 requirements](https://pcsx2.net/docs/setup/requirements), the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD RX and newer, recent NVIDIA) need a converter: see [Converters](Video-cards.md#converters).
+The "Everything" tier follows the *Moderate* level of the [PCSX2 requirements](https://pcsx2.net/docs/setup/requirements), the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD RX and newer, recent NVIDIA) need a converter: see [Converters](Converters.md).
 
 **The CPU's speed decides more than its cores.** For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing.
 
@@ -51,7 +57,7 @@ The "Everything" tier follows the *Moderate* level of the [PCSX2 requirements](h
 
 ### Small machines
 
-A cabinet doesn't need a tower. GroovyArcade [benchmarked these](https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.2-Hardware-Examples) with GroovyMAME, listed from fastest to slowest; its page has the results, photos and manuals. None has been tried on FliperOS. Check that the outputs suit your monitor: many of them have DisplayPort or a bridged VGA ([Video cards](Video-cards.md#amdati)).
+A cabinet doesn't need a tower. GroovyArcade [benchmarked these](https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.2-Hardware-Examples) with GroovyMAME, listed from fastest to slowest; its page has the results, photos and manuals. None has been tried on FliperOS. Check that the outputs suit your monitor: many of them have DisplayPort or a bridged VGA ([Video cards](Video-cards-AMD.md)).
 
 | Machine | CPU | Graphics |
 | --- | --- | --- |

@@ -16,7 +16,12 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [Video cards](Video-cards.md) | Which AMD, NVIDIA and Intel cards work, native resolution or super resolution, converters, ATOM-15 |
+| [Video cards](Video-cards.md) | Which cards work, native resolution or super resolution, changing the card |
+| [AMD cards](Video-cards-AMD.md) | The Radeons, the drivers and Vulkan, GCN 2 and 3 with DVI-I, APUs, the cards GroovyArcade reports |
+| [NVIDIA cards](Video-cards-NVIDIA.md) | nouveau and the low resolution test, NVIDIA's own driver |
+| [Intel graphics](Video-cards-Intel.md) | Super resolution, the 240p mode, the limits of the Intel HD |
+| [Converters](Converters.md) | DisplayPort or HDMI to VGA: which ones, what to expect |
+| [ATOM-15](ATOM-15.md) | 15 kHz from power on, in the card's BIOS, at your own risk |
 | [Monitors](Monitors.md) | Which preset for your tube, centring the picture, what goes between the card and the monitor |
 | [Install](Install.md) | Writing the media, the boot menu, the video output test, installing to the HD/SSD, Recovery Mode |
 | [Black screen](Black-screen.md) | What to try when the tube shows nothing or some games go black, getting in without a picture |
@@ -117,7 +122,8 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 | [Web panel: Library](Web-panel-Library.md) | Installing emulators, the Downloader and Download BIOS, the ROM filter, the art, files |
 | [Web panel: System](Web-panel-System.md) | Status and logs, every Setup setting while you play, RetroAchievements, cloud backup, terminal, lab mode |
 | [Controller on the stream](Controller-overlay.md) | Your stick and buttons lighting up on the live stream, as a page for OBS, restyled in the panel with a live CSS editor |
-| [Linked cabinets](Linked-cabinets.md) | The games that link several machines (Daytona, the Tournament Battle, Scud Race and more), and party and net play: more players than one cabinet's controls |
+| [Linked cabinets](Linked-cabinets.md) | The games that link several machines (Daytona, the Tournament Battle, Scud Race and more): cabinets, players, screens, master and slave, each emulator |
+| [Party and net play](Net-play.md) | More players than one cabinet's controls: RetroArch net play, Flycast GGPO, GroovyMAME lockstep, Dolphin |
 
 ## Hacking on it
 

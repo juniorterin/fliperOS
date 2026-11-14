@@ -84,6 +84,6 @@ The video card gives VGA: red, green, blue and separate horizontal and vertical 
 - **JAMMA cabinet:** the [Ultimarc J-PAC](https://www.ultimarc.com/control-interfaces/j-pac-en/j-pac-jamma-interface/) connects a VGA card and USB to the JAMMA connector and has a video amplifier for arcade monitors. It also works as the keyboard encoder of the panel.
 
   Forum posts say it makes composite sync from the VGA's two sync lines and checks the frequency before passing it on. It doesn't make the 15 kHz signal: FliperOS does.
-- **SCART TV or monitor:** a VGA to SCART cable. A GTX 980 Ti was seen on a CRT that way ([Video cards](Video-cards.md#nvidia)).
+- **SCART TV or monitor:** a VGA to SCART cable. A GTX 980 Ti was seen on a CRT that way ([Video cards](Video-cards-NVIDIA.md)).
 
 Neither the project nor the GroovyArcade wiki documents the wiring of each monitor, so follow the manual of your monitor and of the interface. Keep the tube off until the card is known to output 15 kHz if you are not sure of the boot mode.

@@ -3,6 +3,11 @@
 **Start here**
 
 - [Video cards](Video-cards.md)
+  - [AMD cards](Video-cards-AMD.md)
+  - [NVIDIA cards](Video-cards-NVIDIA.md)
+  - [Intel graphics](Video-cards-Intel.md)
+  - [Converters](Converters.md)
+  - [ATOM-15](ATOM-15.md)
 - [Monitors](Monitors.md)
 - [Install](Install.md)
 - [Black screen](Black-screen.md)
@@ -86,6 +91,7 @@
   - [Web panel: System](Web-panel-System.md)
   - [Controller on the stream](Controller-overlay.md)
 - [Linked cabinets](Linked-cabinets.md)
+  - [Party and net play](Net-play.md)
 
 **Hacking on it**
 
