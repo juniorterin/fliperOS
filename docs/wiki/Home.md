@@ -45,7 +45,12 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [Frontends](Frontends.md) | The FliperOS frontend, physical media, choosing the boot frontend, the Pixelcade and ZeDMD marquees, the 240p themes for EmulationStation and Pegasus |
+| [Frontends](Frontends.md) | Which frontend, choosing the one that opens at boot, where FliperOS keeps your lists and favourites |
+| [FliperOS frontend](FliperOS-frontend.md) | The default game list: the system strip, three views, clones, RECENT and FAVOURITES, switch animations, the game menu, filters, the Tab menu, attract and commercial modes, the vertical monitor |
+| [Frontend controls](Frontend-controls.md) | The buttons, the controls guide, coin + Start to quit, coin + button 1 for the emulator menu, changing them, joypad guides |
+| [Physical media](Physical-media.md) | CDs, DVDs and cartridges (OSCR) in the frontend: play, rip to the folder, boot from media, the reader's firmware |
+| [Attract-Mode Plus](Attract-Mode-Plus.md) | The Arcadeflow theme, real game names, the romlists and their cleanup, the art lines, an emulator by hand |
+| [ES-DE and Pegasus](ES-DE-and-Pegasus.md) | Built on the cabinet, the 240p themes, the systems file, a system by hand |
 
 ## Games
 
@@ -73,7 +78,11 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [Scoreboard games](Scoreboard-games.md) | The fighting games whose match-up score shows on the ZeDMD or Pixelcade display, in GroovyMAME and in RetroArch |
+| [LED displays](LED-displays.md) | The marquee that follows the frontend and the game: what it shows, art for the display, the menu animations |
+| [Pixelcade](Pixelcade.md) | The Pixelcade LED or LCD marquee: installing it, the paid art pack, each frontend, DOFLinx effects |
+| [ZeDMD](ZeDMD.md) | The open-source LED display: installing it, the startup animation, the firmware version and how to update it |
+| [Versus score](Versus-score.md) | The match score of fighting games on the display, in GroovyMAME, RetroArch with FBNeo and Model 2 |
+| [Scoreboard games](Scoreboard-games.md) | The list of games with the versus score and the high scores, and which emulator has each |
 | [Multiple monitors](Multiple-Monitors.md) | Two or three arcade monitors on one card: the Setup, the multi-screen games in GroovyMAME (Darius, Punch-Out!!) and Flycast (F355 Challenge), how it works |
 | [DIY hardware](DIY-hardware.md) | Open-source projects to build with an Arduino, a Raspberry Pi Pico or an ESP32: control panel encoders, spinner, light gun, LED display, button lights, the cartridge reader |
 | [Latency](Latency.md) | The Standard and Low latency modes, what each tweak does, recommended hardware, how to measure |

@@ -26,6 +26,11 @@
 **Frontends**
 
 - [Frontends](Frontends.md)
+  - [FliperOS frontend](FliperOS-frontend.md)
+  - [Frontend controls](Frontend-controls.md)
+  - [Physical media](Physical-media.md)
+  - [Attract-Mode Plus](Attract-Mode-Plus.md)
+  - [ES-DE and Pegasus](ES-DE-and-Pegasus.md)
 
 **Games**
 
@@ -45,7 +50,11 @@
 
 **Cabinet hardware**
 
-- [Scoreboard games](Scoreboard-games.md)
+- [LED displays](LED-displays.md)
+  - [Pixelcade](Pixelcade.md)
+  - [ZeDMD](ZeDMD.md)
+  - [Versus score](Versus-score.md)
+  - [Scoreboard games](Scoreboard-games.md)
 - [Multiple monitors](Multiple-Monitors.md)
 - [DIY hardware](DIY-hardware.md)
 - [Latency](Latency.md)

@@ -33,7 +33,7 @@ It shows the game's art (the ZeDMD looks for `~/media/dmd`, then `marquee`, then
 
 Turning the preview on, or changing the device, checks whether that device's software is installed on the cabinet and offers to install it. The preview works without it; the real display needs it. Idle, the preview plays the ZeDMD's logo animation, and with nothing open it shows the animated FliperOS logo.
 
-The same preview shows under the screen in **Live** and in **Live > OBS**. The marquee hardware itself: [Frontends](Frontends.md#pixelcade-marquee).
+The same preview shows under the screen in **Live** and in **Live > OBS**. The marquee hardware itself: [LED displays](LED-displays.md).
 
 ## Games
 

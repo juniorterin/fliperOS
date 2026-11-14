@@ -16,7 +16,7 @@ Which preset suits your tube, and why a 31 kHz preset can damage a 15 kHz monito
 
 **Horizontal**, **Vertical (clockwise)** or **Vertical (counter-clockwise)**, for a monitor turned on its side.
 
-With a vertical monitor the Setup, the splash screen and the FliperOS frontend turn their picture, and the frontend changes its layout for a tall screen. See [FliperOS frontend](Frontends.md).
+With a vertical monitor the Setup, the splash screen and the FliperOS frontend turn their picture, and the frontend changes its layout for a tall screen. See [FliperOS frontend](FliperOS-frontend.md#vertical-monitor).
 
 ## Resolution
 

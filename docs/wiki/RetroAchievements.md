@@ -28,7 +28,7 @@ Each unlock shows over the game for 5 seconds, in a bar that doesn't take the co
 - the achievement's title, which scrolls when it doesn't fit;
 - a green line that empties.
 
-The bar follows the game's frame, so it fits any resolution and a vertical monitor. The emulators' own notifications stay off, so only this bar shows. The Pixelcade or ZeDMD marquee shows the achievement too ([Frontends](Frontends.md)).
+The bar follows the game's frame, so it fits any resolution and a vertical monitor. The emulators' own notifications stay off, so only this bar shows. The Pixelcade or ZeDMD marquee shows the achievement too ([LED displays](LED-displays.md)).
 
 ## In the game list
 

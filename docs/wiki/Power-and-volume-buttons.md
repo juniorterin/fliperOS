@@ -19,7 +19,7 @@ From inside a game it takes two presses to power off.
 - A game that doesn't close is killed by the next press.
 - Holding the button for 4 seconds still cuts the power: that is the motherboard, not FliperOS.
 
-In the FliperOS frontend, **Tab > POWER CLOSES GAME** turned off makes the button do nothing while a game is open ([Frontends](Frontends.md)).
+In the FliperOS frontend, **Tab > POWER CLOSES GAME** turned off makes the button do nothing while a game is open ([FliperOS frontend](FliperOS-frontend.md#the-tab-menu)).
 
 ## Volume keys
 

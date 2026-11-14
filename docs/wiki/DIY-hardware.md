@@ -43,7 +43,7 @@ The GunCon 2 calibration of the Setup is for the GunCon 2 only. These guns are c
 
 | Project | Board | With FliperOS |
 | --- | --- | --- |
-| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > Games > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). **Needs ZeDMD firmware 5.1.0 or newer**: older firmware, like the one that works on Batocera 41, doesn't connect ([how to check and update it](Frontends.md#zedmd-firmware-version)). GPL-2.0 |
+| [ZeDMD](https://github.com/PPUC/ZeDMD) | ESP32 (the ESP32-S3-N16R8 is the recommended one) or Raspberry Pi Pico, driving HUB75 LED panels of 128x32 or 256x64 | **Setup > Games > Extras > ZeDMD** installs the support: the display shows the selected game, the game that is open, its high scores and the achievements ([Frontends](Frontends.md)). **Needs ZeDMD firmware 5.1.0 or newer**: older firmware, like the one that works on Batocera 41, doesn't connect ([how to check and update it](ZeDMD.md#firmware-version)). GPL-2.0 |
 | [libdmdutil](https://github.com/vpinball/libdmdutil) | (runs on the PC) | The library, from the Visual Pinball project, whose `dmdserver` FliperOS uses to talk to the ZeDMD |
 
 The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the [Frontends](Frontends.md) page.
@@ -81,7 +81,7 @@ A Model 2 gun cabinet has no recoil, so the board never says that a shot was fir
 
 Each was checked with a reader on port 8000 through a game played by a script: a credit, a start, shots until the magazine is empty and lives lost, for player 1; the fighting games with two scripted two-player matches, one won by each side. Player 2 in the gun games and a real gun haven't been tried.
 
-The wins feed the [versus score on the LED display](Frontends.md#versus-score-on-the-led-display). The addresses were found in the sets of the MAME 0.289 romset, and belong to the revision that set opens as.
+The wins feed the [versus score on the LED display](Versus-score.md). The addresses were found in the sets of the MAME 0.289 romset, and belong to the revision that set opens as.
 
 The games on two coins a credit that start by themselves when the credit completes (Daytona USA, Sega Rally, Sega Touring Car, Motor Raid, Manx TT, Wave Runner, Sega Water Ski, Virtual On) have no `Credits`: it is spent the moment it exists. The two baseball games and the credit counter of Rail Chase 2 weren't found.
 

@@ -73,7 +73,7 @@ The [Open Source Cartridge Reader](https://github.com/sanni/cartreader) reads ca
 - **Install the FliperOS firmware**: pick **HW5 with the voltage switch** or **HW5 with the VSELECT module**. It first saves the firmware the reader has, then writes the FliperOS one.
 - **Restore the backup**: writes back the firmware saved before the install.
 
-Using the cartridges in the frontend: [Physical media](Frontends.md#physical-media-the-cartridge-reader-oscr).
+Using the cartridges in the frontend: [Physical media](Physical-media.md#cartridges-oscr).
 
 ## Splash screen
 

@@ -53,8 +53,8 @@ What opens when the computer turns on. The list:
 | --- | --- |
 | **Setup menu** | The FliperOS menu |
 | **A game at boot** | One game, straight from the boot (below) |
-| **FliperOS frontend** | The default ([FliperOS frontend](Frontends.md)) |
-| **Boot from media** | The FliperOS frontend on the disc in a drive, or the cartridge in the cartridge reader ([Physical media](Frontends.md#physical-media-cds-and-dvds)) |
+| **FliperOS frontend** | The default ([FliperOS frontend](FliperOS-frontend.md)) |
+| **Boot from media** | The FliperOS frontend on the disc in a drive, or the cartridge in the cartridge reader ([Physical media](Physical-media.md#boot-from-media)) |
 | **Attract-Mode Plus**, **EmulationStation**, **Pegasus** | Other frontends, installed from the FliperOS repository if missing ([Frontends](Frontends.md)) |
 | **RetroArch**, **GroovyMAME** | The emulator's own menu |
 | **Fightcade 2** | The online lobby ([Fightcade 2](Fightcade-2.md)) |
@@ -90,8 +90,8 @@ Programs left out of the ISO, so it fits in a single GitHub file, installed over
 | **Wine Staging** | The newest Wine, with game fixes not in Wine yet |
 | **Steam** | Steam games, inside the desktop |
 | **Heroic** | GOG, Epic and Amazon games, inside the desktop |
-| **Pixelcade** | The LED/LCD marquee software (closed source) ([Frontends](Frontends.md#pixelcade-marquee)) |
-| **ZeDMD** | The open-source LED display, firmware 5.1 or newer ([Frontends](Frontends.md#zedmd-open-source-led-display)) |
+| **Pixelcade** | The LED/LCD marquee software (closed source) ([Pixelcade](Pixelcade.md)) |
+| **ZeDMD** | The open-source LED display, firmware 5.1 or newer ([ZeDMD](ZeDMD.md)) |
 | **DOFLinx** | Effects on the Pixelcade marquee during a game |
 | **Hook Of The Reaper** | Game outputs (lamps, recoil) to light guns and boards; a Windows program, run through Wine ([DIY hardware](DIY-hardware.md#hook-of-the-reaper)) |
 | **QMamehook** | Game outputs to serial light guns; native, built on the cabinet |

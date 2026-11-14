@@ -1,11 +1,11 @@
-Every game shows on the LED display (ZeDMD or Pixelcade) and in the marquee preview of the [web panel](Web-panel.md): its artwork or name when it is selected and when it opens, see [Frontends](Frontends.md). This page lists the games that also have more data, and which data each one has.
+Every game shows on the LED display (ZeDMD or Pixelcade) and in the marquee preview of the [web panel](Web-panel.md): its artwork or name when it is selected and when it opens, see [LED displays](LED-displays.md). This page lists the games that also have more data, and which data each one has.
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/zedmd-startup-led.gif" width="640" alt="The FliperOS startup animation drawn as the ZeDMD LEDs show it (preview)">
 
 **The data**
 
 - **Artwork or name**: every game. The ZeDMD looks for `~/media/dmd`, `marquee` and `logo`; the Pixelcade for `marquee` and `logo`; without art, the game's name.
-- **Wins**: the rounds or matches each side has won in the session, in [Versus score on the LED display](Frontends.md#versus-score-on-the-led-display). It comes from a [Fightcade](https://www.fightcade.com) detector ([fightcade-detectors](https://github.com/fightcadeorg/fightcade-detectors), commit `de9e7a9`), read from the game's memory by GroovyMAME or by the FBNeo core of RetroArch, or, for Model 2, published by the emulator itself.
+- **Wins**: the rounds or matches each side has won in the session, in [Versus score on the LED display](Versus-score.md). It comes from a [Fightcade](https://www.fightcade.com) detector ([fightcade-detectors](https://github.com/fightcadeorg/fightcade-detectors), commit `de9e7a9`), read from the game's memory by GroovyMAME or by the FBNeo core of RetroArch, or, for Model 2, published by the emulator itself.
 - **Characters**: the detector also tells who each side is playing; without it the scoreboard shows the wins only.
 - **Points** (each player's score): the code reads them from a line of `config/versus-games.conf`, but **no game has one yet**: a game only goes in after its address was watched in a real match.
 - **High scores**: the top of the high score table, for GroovyMAME. The address of the table of each game is in MAME's `hiscore.dat`; the `hiscore` plugin keeps the `.hi` file and [hi2txt](https://greatstoneex.github.io/hi2txt-doc/doc/index.html) decodes it. Only the sets in both lists are here.
