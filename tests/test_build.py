@@ -7376,6 +7376,195 @@ class DeflickerTests(unittest.TestCase):
                 self.assertRegex(syms, r' T %s\n' % name)
 
 
+class WebCustomGamesTests(unittest.TestCase):
+    """config/fliperos-web, Setup > Games > Custom games no painel: o servidor
+    de verdade com um fliperos-setup falso (--customgames), o
+    fliperos-customgame de verdade (scan) e a pasta de espera da arte."""
+
+    @classmethod
+    def setUpClass(cls):
+        import ctypes
+        import ctypes.util
+        import pwd
+        import socket
+        cls.tmp = tempfile.TemporaryDirectory()
+        tmp = cls.dir = Path(cls.tmp.name)
+        lib = ctypes.CDLL(ctypes.util.find_library('crypt') or 'libcrypt.so.1')
+        lib.crypt.restype = ctypes.c_char_p
+        lib.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+        (tmp / 'shadow').write_text('fliperos:%s:19000:0:99999:7:::\n' % lib.crypt(b'arcade', b'$6$x$').decode())
+        setup = tmp / 'fliperos-setup'
+        setup.write_text(
+            '#!/bin/sh\necho "$*" >> TMP/setup.log\n[ "$1" = --customgames ] || exit 0\n'
+            'case "$2" in\n'
+            '  describe) printf "group\\tPC games\\t1\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
+            'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
+            'mode\\t240p\\t640x240@60\\ngenre\\tShooter\\nsub\\tShooter / Gallery\\ngenre\\tMaze\\n'
+            'control\\tjoy8\\t8-way joystick\\nportproton\\t0\\ngames\\t/h/games\\nfree\\t1000\\n" ;;\n'
+            '  check) cp "$3" TMP/check.rows; echo "error|2|exe|Pick the .exe."; echo bytes=10; echo free=99 ;;\n'
+            '  bulk) cp "$3" TMP/bulk.rows; echo "$4" > TMP/bulk.flag; echo "@step 10 Adding"; echo "@row 1 ok"\n'
+            '    echo "@row 2 fail Pang is already in PC games"; sleep 1; echo "@fail Adding|1 of 2 games were not added"\n'
+            '    exit 1 ;;\n'
+            '  edit) [ "$4" = name=Nope ] && exit 2; exit 0 ;;\n'
+            '  install|pack|squash|install-all) echo "@step 50 Working"; sleep 2 ;;\n'
+            'esac\nexit 0\n'.replace('TMP', str(tmp)))
+        setup.chmod(0o755)
+        (tmp / 'roms/custom').mkdir(parents=True)
+        (tmp / 'src/Metal_Slug_X').mkdir(parents=True)
+        (tmp / 'src/Metal_Slug_X/MSX.exe').write_bytes(b'MZ')
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            cls.port = s.getsockname()[1]
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            redirect = s.getsockname()[1]
+        env = dict(os.environ, FLIPEROS_SHADOW=str(tmp / 'shadow'), FLIPEROS_WEB_STATIC=str(ROOT / 'config/web'),
+                   FLIPEROS_SETUP=str(setup), FLIPEROS_HOME=str(tmp), FLIPEROS_RUN_USER=str(tmp / 'run'),
+                   FLIPEROS_USER=pwd.getpwuid(os.getuid()).pw_name, FLIPEROS_CONF=str(tmp / 'fliperos.conf'),
+                   FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_WEB_STAGE=str(tmp / 'stage'),
+                   FLIPEROS_CUSTOMGAME=str(ROOT / 'config/fliperos-customgame'),
+                   FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'))
+        cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
+                                       '--port', str(cls.port), '--redirect-port', str(redirect)], env=env)
+        for _ in range(100):
+            try:
+                with socket.create_connection(('127.0.0.1', cls.port), timeout=0.2):
+                    break
+            except OSError:
+                time.sleep(0.1)
+        cls.cookie = None
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.terminate()
+        cls.server.wait(timeout=10)
+        cls.tmp.cleanup()
+
+    def call(self, method, path, body=None):
+        import http.client
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=20)
+        raw = isinstance(body, bytes)
+        headers = {'Content-Type': 'application/octet-stream' if raw else 'application/json', 'X-FliperOS': '1'}
+        if self.cookie:
+            headers['Cookie'] = self.cookie
+        conn.request(method, path, body if raw else json.dumps(body) if body is not None else None, headers)
+        res = conn.getresponse()
+        data = res.read()
+        if path == '/api/login':
+            type(self).cookie = res.getheader('Set-Cookie').split(';')[0]
+        conn.close()
+        try:
+            return res.status, json.loads(data)
+        except ValueError:
+            return res.status, data
+
+    def setUp(self):
+        if not self.cookie:
+            self.assertEqual(self.call('POST', '/api/login', {'user': 'fliperos', 'password': 'arcade'})[0], 200)
+
+    def wait_task(self, task_id):
+        for _ in range(100):
+            status, info = self.call('GET', '/api/task?id=%d' % task_id)
+            if not info['running']:
+                return info
+            time.sleep(0.1)
+        self.fail('the task did not end')
+
+    def test_describe_is_json_with_the_choices(self):
+        status, info = self.call('GET', '/api/customgames')
+        self.assertEqual(status, 200)
+        self.assertEqual(info['groups'], [{'name': 'PC games', 'count': 1}])
+        game = info['games'][0]
+        self.assertEqual((game['name'], game['platform'], game['mode'], game['players'], game['command']),
+                         ('Pang', 'command', '640x240@60', '2', 'wine pang.exe'))
+        self.assertEqual(info['pending'][0]['state'], 'new')
+        self.assertEqual(info['genres'], [{'name': 'Shooter', 'subs': ['Shooter / Gallery']}, {'name': 'Maze', 'subs': []}])
+        self.assertEqual(info['controls'], [{'value': 'joy8', 'label': '8-way joystick'}])
+        self.assertEqual((info['portproton'], info['games_dir'], info['free']), (False, '/h/games', 1000))
+
+    def test_scan_finds_the_games_of_a_folder(self):
+        import urllib.parse
+        status, found = self.call('GET', '/api/customgames/scan?path=' + urllib.parse.quote(str(self.dir / 'src')))
+        self.assertEqual(status, 200)
+        self.assertEqual([(g['name'], g['exe']) for g in found['games']], [('Metal Slug X', 'MSX.exe')])
+        status, one = self.call('GET', '/api/customgames/scan?one=1&path=' + urllib.parse.quote(str(self.dir / 'src/Metal_Slug_X')))
+        self.assertEqual(one['exes'], ['MSX.exe'])
+        self.assertEqual(self.call('GET', '/api/customgames/scan?path=relative')[0], 404)
+
+    def test_art_waits_in_the_stage_and_rows_go_to_the_setup(self):
+        # A arte: so as extensoes de cada tipo.
+        self.assertEqual(self.call('POST', '/api/customgames/stage?kind=snap&name=x.exe', b'MZ')[0], 400)
+        status, staged = self.call('POST', '/api/customgames/stage?kind=snap&name=Pang%20title.PNG', b'PNGDATA')
+        self.assertEqual(status, 200)
+        self.assertRegex(staged['id'], r'^[0-9a-f]{16}\.png$')
+        self.assertEqual((self.dir / 'stage' / staged['id']).read_bytes(), b'PNGDATA')
+        rows = [{'group': 'PC games', 'name': 'Metal Slug X', 'platform': 'windows',
+                 'folder': str(self.dir / 'src/Metal_Slug_X/'), 'exe': 'MSX.exe', 'snap': staged['id'],
+                 'command': 'line one\nline\ttwo'},
+                {'group': 'PC games', 'name': 'Pang', 'platform': 'windows', 'snap': '0123456789abcdef.png'}]
+        status, check = self.call('POST', '/api/customgames/check', {'rows': rows})
+        self.assertEqual(status, 200)
+        # As linhas da pagina contam de 0; o Setup, de 1.
+        self.assertEqual(check, {'errors': [{'row': 1, 'field': 'exe', 'error': 'Pick the .exe.'}], 'bytes': 10,
+                                 'free': 99})
+        lines = (self.dir / 'check.rows').read_text().splitlines()
+        first, second = (l.split('\x1f') for l in lines)
+        self.assertEqual(len(first), 16)
+        self.assertEqual(first[:5], ['PC games', 'Metal Slug X', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
+        self.assertEqual(first[5], 'line one line two')
+        self.assertEqual(first[11], str(self.dir / 'stage' / staged['id']))
+        # Uma arte que nao esta na espera: um caminho que nao existe.
+        self.assertFalse(os.path.exists(second[11]))
+        self.assertTrue(second[11].startswith(str(self.dir / 'stage')))
+        # O arquivo do check nao fica.
+        self.assertEqual([p.name for p in (self.dir / 'stage').glob('rows-*')], [])
+        self.assertEqual(self.call('POST', '/api/customgames/check', {'rows': []})[0], 400)
+        self.assertEqual(self.call('POST', '/api/customgames/check', {'rows': 'x'})[0], 400)
+
+    def test_bulk_is_a_task_with_a_result_per_row(self):
+        rows = [{'group': 'G', 'name': 'A', 'platform': 'command', 'command': 'a'},
+                {'group': 'PC games', 'name': 'Pang', 'platform': 'command', 'command': 'b'}]
+        status, task = self.call('POST', '/api/customgames/bulk', {'rows': rows, 'portproton': True})
+        self.assertEqual(status, 200)
+        self.assertEqual(task['kind'], 'customgames')
+        # Um de cada vez.
+        self.assertEqual(self.call('POST', '/api/customgames/bulk', {'rows': rows})[0], 409)
+        info = self.wait_task(task['id'])
+        self.assertEqual(info['rows'], [{'row': 0, 'ok': True, 'error': ''},
+                                        {'row': 1, 'ok': False, 'error': 'Pang is already in PC games'}])
+        self.assertEqual(info['error'], '1 of 2 games were not added')
+        self.assertEqual((self.dir / 'bulk.flag').read_text().strip(), '--portproton')
+        self.assertEqual(len((self.dir / 'bulk.rows').read_text().splitlines()), 2)
+
+    def test_edit_delete_group_media_and_packages(self):
+        log = self.dir / 'setup.log'
+        ok = lambda path, body: self.call('POST', '/api/customgames/' + path, body)[0]
+        self.assertEqual(ok('edit', {'group': 'PC games', 'name': 'Pang', 'new_name': 'Pang DX', 'players': '2'}), 200)
+        self.assertIn('--customgames edit group=PC games name=Pang new_name=Pang DX players=2', log.read_text())
+        self.assertEqual(ok('edit', {'group': 'PC games', 'name': 'Nope'}), 400)
+        self.assertEqual(ok('delete', {'group': 'PC games', 'name': 'Pang', 'folder': True}), 200)
+        self.assertIn('--customgames delete PC games Pang folder', log.read_text())
+        self.assertEqual(ok('group', {'name': 'Homebrew'}), 200)
+        self.assertEqual(ok('media', {'group': 'PC games', 'name': 'Pang'}), 400)
+        self.assertEqual(ok('media', {'group': 'PC games', 'name': 'Pang', 'snap': '0123456789abcdef.png'}), 400)
+        staged = self.call('POST', '/api/customgames/stage?kind=video&name=v.mp4', b'MP4')[1]['id']
+        self.assertEqual(ok('media', {'group': 'PC games', 'name': 'Pang', 'video': staged, 'text_string': 'Hi'}), 200)
+        self.assertIn('--customgames media PC games Pang --video %s --text-string Hi' % (self.dir / 'stage' / staged),
+                      log.read_text())
+        # Um pacote so de ~/roms/custom.
+        outside = self.dir / 'X.fliperos-customgame.zip'
+        outside.write_bytes(b'PK')
+        self.assertEqual(ok('install', {'zip': str(outside), 'group': 'G'}), 400)
+        zip_ = self.dir / 'roms/custom/Z.fliperos-customgame.zip'
+        zip_.write_bytes(b'PK')
+        status, task = self.call('POST', '/api/customgames/install', {'zip': str(zip_), 'group': 'G', 'replace': True})
+        self.assertEqual(status, 200)
+        self.wait_task(task['id'])
+        self.assertIn('--customgames install %s G replace' % zip_, log.read_text())
+        self.assertEqual(ok('squash', {'folder': str(self.dir / 'src'), 'action': 'crush'}), 400)
+        self.assertEqual(ok('nonsense', {}), 404)
+
+
 class WebPanelTests(unittest.TestCase):
     """config/fliperos-web, o painel web (fase 5a): o servidor de verdade num
     endereco local, com um /etc/shadow, um fliperos-setup (o volume) e um FPS

@@ -32,7 +32,7 @@
 #   --scrape-now RESULTADO [CHAVE...] (o Scrape the games em segundo plano),
 #   --scraper ... e --bios ... (o Scraper e o Download BIOS do painel web),
 #   --bootgame, --geometry, --wifi status|scan|connect, --password (na
-#   entrada), --whatsnew (o painel web)
+#   entrada), --whatsnew, --customgames ... (o painel web)
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -357,6 +357,12 @@ main() {
       # O filtro do MAME ROM Cleaner e do Downloader sem tela (lib/romclean.sh):
       # a pagina ROM filter do painel web.
       romfilter_cli "${@:2}"
+      return
+      ;;
+    --customgames)
+      # Setup > Games > Custom games sem tela (lib/customgames.sh): o painel
+      # web, um jogo ou a tabela de muitos.
+      customgames_cli "${@:2}"
       return
       ;;
     --filters)

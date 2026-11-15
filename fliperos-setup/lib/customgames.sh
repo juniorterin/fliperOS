@@ -445,15 +445,22 @@ customgames_install() {
   customgames_entry "$group" "$name" || { ev_fail "could not write $name.sh"; return 1; }
   ev_step 72 "Pictures for $name"
   customgames_media "$group" "$name"
-  folder=$(customgames_cfg_field "$cfg" folder)
-  if ((CUSTOM_GAMES_SQUASH)) && [[ -x $SQUASHGAMES_CMD && -d $folder ]] && ((EUID == 0)); then
-    # 75 a 99: as etapas do empacotamento; uma falha so avisa.
-    "$SQUASHGAMES_CMD" pack "$folder" --progress 2>> "${FLIPEROS_LOG:-/dev/null}" |
-      awk '/^@(step|pct) [0-9]+/ { $2 = int(75 + $2 * 0.24); print; fflush(); next }
-           /^@fail / { sub(/^@fail [^|]*\|/, ""); print "@msg Not packed: " $0; fflush() }'
-  fi
+  # 75 a 99: as etapas do empacotamento; uma falha so avisa.
+  customgames_squash "$(customgames_cfg_field "$cfg" folder)" 75 99
   ev_step 100 "$name installed"
   log_info "pacote instalado: $zip em $group / $name"
+  return 0
+}
+
+# customgames_squash PASTA INICIO FIM: a pasta de um jogo instalado em
+# squashfs (CUSTOM_GAMES_SQUASH), com as etapas entre INICIO e FIM %. Sem dar,
+# ela fica solta: o jogo abre igual, e a tela so ganha um aviso.
+customgames_squash() {
+  local folder=$1 start=$2 end=$3
+  ((CUSTOM_GAMES_SQUASH)) && [[ -x $SQUASHGAMES_CMD && -d $folder ]] && ((EUID == 0)) || return 0
+  "$SQUASHGAMES_CMD" pack "$folder" --progress 2>> "${FLIPEROS_LOG:-/dev/null}" |
+    awk -v s="$start" -v e="$end" '/^@(step|pct) [0-9]+/ { $2 = int(s + $2 * (e - s) / 100); print; fflush(); next }
+         /^@fail / { sub(/^@fail [^|]*\|/, ""); print "@msg Not packed: " $0; fflush() }'
   return 0
 }
 
@@ -626,4 +633,503 @@ customgames_refresh() {
     customgames_save "$group" "$name" "$mode" "$cmd" > /dev/null || log_warn "jogo personalizado nao regravado: $group / $name"
   done < <(customgames_list)
   return 0
+}
+
+# ── O painel web: fliperos-setup --customgames ───────────────────
+# config/fliperos-web (Setup > Games > Custom games no painel): a lista, o
+# cadastro de um jogo ou de muitos (a tabela), editar, apagar, os pacotes e
+# as pastas em squashfs. Os jogos de uma pasta (Windows ou Linux) sao
+# copiados para ~/games/GRUPO/NOME (fliperos-customgame add), como os de um
+# pacote.
+#
+# As linhas da tabela (check e bulk) vem num arquivo, uma por jogo, com os
+# campos separados pelo caractere 0x1f (o tab juntaria campos vazios no read):
+#   grupo nome plataforma pasta exe comando modo categoria controles botoes
+#   jogadores imagem video texto texto_digitado wine
+# plataforma windows, native ou command; imagem/video/texto sao caminhos de
+# arquivos (o painel os sobe antes); wine e o PW_WINE_USE do PortProton.
+
+CUSTOM_GAMES_SEP=$'\x1f'
+
+# customgames_out CAMPO...: uma linha do describe, os campos separados por tab
+# (os tabs de dentro viram espaco).
+customgames_out() {
+  local out="" f tab=$'\t'
+  for f in "$@"; do
+    out+="${out:+$tab}${f//$tab/ }"
+  done
+  printf '%s\n' "$out"
+}
+
+# customgames_describe: tudo o que a pagina mostra e os dropdowns dela.
+customgames_describe() {
+  local group name cfg file platform mode cmd line value label
+  local -a f
+  while IFS= read -r group; do
+    customgames_out group "$group" "$(customgames_count "$group")"
+  done < <(customgames_groups)
+  while IFS='|' read -r group name _; do
+    cfg=$(customgames_cfg "$group" "$name")
+    file=$(customgames_file "$group" "$name")
+    platform=$(customgames_platform "$group" "$name")
+    mode=$(customgames_cfg_field "$cfg" mode)
+    [[ -n $mode ]] || mode=$(customgames_field "$file" mode)
+    cmd=$(customgames_cfg_field "$cfg" command)
+    [[ -n $cmd ]] || cmd=$(customgames_field "$file" command)
+    customgames_out game "$group" "$name" "$platform" "$mode" "$(customgames_cfg_field "$cfg" category)" \
+      "$(customgames_cfg_field "$cfg" controls)" "$(customgames_cfg_field "$cfg" buttons)" \
+      "$(customgames_cfg_field "$cfg" players)" "$cmd" "$(customgames_cfg_field "$cfg" exe)" \
+      "$(customgames_cfg_field "$cfg" folder)" "$(customgames_cfg_field "$cfg" package)"
+  done < <(customgames_list)
+  while IFS= read -r line; do
+    IFS='|' read -ra f <<< "$line"
+    customgames_out pending "${f[@]}"
+  done < <(customgames_pending)
+  customgames_out mode 240p "$(customgames_mode 240p)"
+  customgames_out mode 480i "$(customgames_mode 480i)"
+  IFS='|' read -ra f <<< "$CUSTOM_GAMES_GENRES"
+  for value in "${f[@]}"; do
+    customgames_out genre "$value"
+    while IFS= read -r line; do
+      customgames_out sub "$line"
+    done < <(customgames_subgenres "$value")
+  done
+  while IFS='|' read -r value label; do
+    customgames_out control "$value" "$label"
+  done < <(romclean_options controls)
+  while IFS='|' read -r value line label; do
+    customgames_out squash "$value" "$line" "$label"
+  done < <(squashgames_list 2> /dev/null)
+  if portproton_installed; then
+    customgames_out portproton 1
+    while IFS='|' read -r value label; do
+      [[ -n $value ]] && customgames_out wine "$value" "$label"
+    done < <("$CUSTOM_GAMES_PORTPROTON" versions 2>> "${FLIPEROS_LOG:-/dev/null}")
+  else
+    customgames_out portproton 0
+  fi
+  customgames_out games "$CUSTOM_GAMES_GAMES"
+  customgames_out free "$(customgames_free "$CUSTOM_GAMES_GAMES")"
+  return 0
+}
+
+# customgames_free PASTA: os bytes livres no disco dela (ou da que existe
+# acima dela).
+customgames_free() {
+  local dir=$1
+  while [[ -n $dir && $dir != / && ! -d $dir ]]; do dir=$(dirname "$dir"); done
+  df -B1 --output=avail "${dir:-/}" 2> /dev/null | tail -n 1 | tr -d ' '
+}
+
+# customgames_row_fields LINHA: os campos de uma linha da tabela em R_*.
+customgames_row_fields() {
+  local -a f
+  IFS=$CUSTOM_GAMES_SEP read -r -a f <<< "$1"
+  R_GROUP=${f[0]:-} R_NAME=${f[1]:-} R_PLATFORM=${f[2]:-} R_FOLDER=${f[3]:-} R_EXE=${f[4]:-}
+  R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
+  R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
+  R_WINE=${f[15]:-}
+}
+
+# customgames_row_errors: o que esta errado na linha de R_* (uma linha
+# "CAMPO|MOTIVO" por erro; nada se ela serve). Nao grava nada.
+customgames_row_errors() {
+  local c exe real dest controls
+  controls=" $(romclean_options controls | cut -d'|' -f1 | tr '\n' ' ') "
+  customgames_valid_name "$R_GROUP" || echo "group|The group cannot be empty, start with a dot or have / or |."
+  if ! customgames_valid_name "$R_NAME"; then
+    echo "name|The name cannot be empty, start with a dot or have / or |."
+  elif customgames_valid_name "$R_GROUP" &&
+    [[ -e $(customgames_file "$R_GROUP" "$R_NAME") || -e $(customgames_cfg "$R_GROUP" "$R_NAME") ]]; then
+    echo "name|$R_NAME is already in $R_GROUP."
+  fi
+  [[ -z $R_MODE ]] || customgames_mode "$R_MODE" > /dev/null ||
+    echo "mode|Invalid video mode: use 240p, 480i or WIDTHxHEIGHT@HZ (e.g. 320x240@60)."
+  case $R_PLATFORM in
+    command)
+      customgames_valid_command "$R_COMMAND" || echo "command|The command cannot be empty."
+      ;;
+    windows | native)
+      if [[ -z $R_FOLDER || ! -d $R_FOLDER ]]; then
+        echo "folder|Not a folder: ${R_FOLDER:-(empty)}"
+      else
+        real=$(realpath -- "$R_FOLDER")
+        dest=$(realpath -m -- "$CUSTOM_GAMES_GAMES/$R_GROUP/$R_NAME")
+        if [[ $real == "$dest" || $real == "$dest"/* || $dest == "$real"/* ]]; then
+          echo "folder|The game folder cannot be copied into itself: pick the folder of this game only."
+        fi
+        if [[ $R_PLATFORM == windows ]]; then
+          exe=$(realpath -m -- "$real/$R_EXE")
+          if [[ -z $R_EXE || $exe != "$real"/* || ! -f $exe ]]; then
+            echo "exe|Pick the .exe that opens the game, inside its folder."
+          fi
+        else
+          customgames_valid_command "$R_COMMAND" || echo "command|The command cannot be empty (e.g. ./game.x86_64)."
+        fi
+      fi
+      ;;
+    *) echo "platform|The type is Windows, Linux or Command." ;;
+  esac
+  ((${#R_CATEGORY} <= 80)) || echo "category|The category is too long."
+  for c in ${R_CONTROLS//,/ }; do
+    [[ $controls == *" $c "* ]] || echo "controls|Unknown control: $c"
+  done
+  [[ -z $R_BUTTONS || $R_BUTTONS =~ ^[0-8]$ ]] || echo "buttons|Buttons: 0 to 8."
+  [[ -z $R_PLAYERS || $R_PLAYERS =~ ^[1-8]$ ]] || echo "players|Players: 1 to 8."
+  [[ -z $R_SNAP || -f $R_SNAP ]] || echo "snap|The picture was not found: send it again."
+  [[ -z $R_VIDEO || -f $R_VIDEO ]] || echo "video|The video was not found: send it again."
+  [[ -z $R_TEXT || -f $R_TEXT ]] || echo "text|The text file was not found: send it again."
+  return 0
+}
+
+# customgames_check ARQUIVO: "error|LINHA|CAMPO|MOTIVO" de cada erro (as
+# linhas contam de 1; dois jogos com o mesmo nome no mesmo grupo tambem),
+# bytes= (o que sera copiado) e free= (o livre em ~/games). Nao grava nada.
+customgames_check() {
+  local file=$1 line n=0 bytes=0 err key size
+  local -A seen=()
+  [[ -f $file ]] || return 2
+  while IFS= read -r line || [[ -n $line ]]; do
+    ((n++))
+    customgames_row_fields "$line"
+    while IFS= read -r err; do
+      [[ -n $err ]] && printf 'error|%d|%s\n' "$n" "$err"
+    done < <(customgames_row_errors)
+    key="$R_GROUP/$R_NAME"
+    if [[ -n ${seen[$key]:-} ]]; then
+      printf 'error|%d|name|%s is twice in the table (row %s).\n' "$n" "$R_NAME" "${seen[$key]}"
+    else
+      seen[$key]=$n
+    fi
+    if [[ $R_PLATFORM == windows || $R_PLATFORM == native ]] && [[ -d $R_FOLDER ]]; then
+      size=$(du -sb -- "$R_FOLDER" 2> /dev/null | cut -f1)
+      bytes=$((bytes + ${size:-0}))
+    fi
+  done < "$file"
+  printf 'bytes=%s\nfree=%s\n' "$bytes" "$(customgames_free "$CUSTOM_GAMES_GAMES")"
+}
+
+# customgames_set_info GRUPO NOME: a categoria, os controles, os botoes e os
+# jogadores de R_* no cfg (os vazios saem).
+customgames_set_info() {
+  local cfg
+  cfg=$(customgames_cfg "$1" "$2")
+  customgames_cfg_set "$cfg" category "$R_CATEGORY" &&
+    customgames_cfg_set "$cfg" controls "$R_CONTROLS" &&
+    customgames_cfg_set "$cfg" buttons "$R_BUTTONS" &&
+    customgames_cfg_set "$cfg" players "$R_PLAYERS"
+}
+
+# customgames_media_set GRUPO NOME [--snap ARQ] [--video ARQ] [--text ARQ]
+# [--text-string TEXTO]: a arte de verdade do jogo (a de exemplo daquele tipo
+# sai).
+customgames_media_set() {
+  local group=$1 name=$2
+  shift 2
+  (($#)) || return 0
+  customgames_media_dirs "$group"
+  customgames_tool media --group "$group" --name "$name" "$@" 2>> "${FLIPEROS_LOG:-/dev/null}"
+}
+
+# customgames_row_media: as opcoes da arte de R_* para o fliperos-customgame
+# (em R_MEDIA).
+customgames_row_media() {
+  R_MEDIA=()
+  [[ -n $R_SNAP ]] && R_MEDIA+=(--snap "$R_SNAP")
+  [[ -n $R_VIDEO ]] && R_MEDIA+=(--video "$R_VIDEO")
+  [[ -n $R_TEXT ]] && R_MEDIA+=(--text "$R_TEXT")
+  [[ -n $R_TEXT_STRING ]] && R_MEDIA+=(--text-string "$R_TEXT_STRING")
+  return 0
+}
+
+# customgames_add_row INICIO FIM: grava o jogo de R_* (as etapas de um jogo
+# de uma pasta entre INICIO e FIM %, na saida). Na falha, status 1 e o
+# motivo em R_WHY.
+customgames_add_row() {
+  local start=$1 end=$2 mode err folder rc copy_end
+  local -a args
+  R_WHY=""
+  mode=$(customgames_mode "${R_MODE:-240p}") || { R_WHY="invalid video mode"; return 1; }
+  customgames_row_media
+  case $R_PLATFORM in
+    command)
+      customgames_save "$R_GROUP" "$R_NAME" "$mode" "$R_COMMAND" || { R_WHY="could not save $R_NAME"; return 1; }
+      customgames_set_info "$R_GROUP" "$R_NAME"
+      customgames_media_set "$R_GROUP" "$R_NAME" "${R_MEDIA[@]}"
+      ;;
+    windows | native)
+      args=(--group "$R_GROUP" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
+      if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
+      [[ -n $R_CATEGORY ]] && args+=(--category "$R_CATEGORY")
+      [[ -n $R_CONTROLS ]] && args+=(--controls "$R_CONTROLS")
+      [[ -n $R_BUTTONS ]] && args+=(--buttons "$R_BUTTONS")
+      [[ -n $R_PLAYERS ]] && args+=(--players "$R_PLAYERS")
+      # A copia ate 85% da faixa; o squashfs no resto.
+      copy_end=$((start + (end - start) * 85 / 100))
+      customgames_media_dirs "$R_GROUP"
+      err=$(mktemp)
+      customgames_tool add "${args[@]}" "${R_MEDIA[@]}" --progress "$start" "$copy_end" 2> "$err" | grep -v '^@fail '
+      rc=${PIPESTATUS[0]}
+      if ((rc != 0)); then
+        cat "$err" >> "${FLIPEROS_LOG:-/dev/null}"
+        if ((rc == 3)); then R_WHY="$R_NAME is already in $R_GROUP"; else R_WHY=$(tail -n 1 "$err"); fi
+        rm -f "$err"
+        return 1
+      fi
+      rm -f "$err"
+      customgames_entry "$R_GROUP" "$R_NAME" || { R_WHY="could not write $R_NAME.sh"; return 1; }
+      folder=$(customgames_cfg_field "$(customgames_cfg "$R_GROUP" "$R_NAME")" folder)
+      # O Wine que o PortProton usa neste jogo (o EXE.ppdb ao lado do .exe).
+      if [[ $R_PLATFORM == windows && -n $R_WINE ]] && portproton_installed; then
+        "$CUSTOM_GAMES_PORTPROTON" edit-db "$folder/$R_EXE" "PW_WINE_USE=$R_WINE" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1 ||
+          log_warn "PortProton: PW_WINE_USE nao gravado em $folder/$R_EXE"
+      fi
+      customgames_squash "$folder" "$copy_end" "$end"
+      ;;
+    *)
+      R_WHY="unknown type: $R_PLATFORM"
+      return 1
+      ;;
+  esac
+  customgames_media "$R_GROUP" "$R_NAME"
+  log_info "jogo personalizado do painel: $R_GROUP / $R_NAME ($R_PLATFORM)"
+  return 0
+}
+
+# customgames_refresh_frontends: os grupos nos frontends (como no Setup).
+customgames_refresh_frontends() {
+  frontends_configure "$(launcher_current)" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1
+  return 0
+}
+
+# customgames_bulk ARQUIVO [--portproton]: grava cada linha da tabela, com
+# os eventos da tela de progresso e "@row N ok" ou "@row N fail MOTIVO" por
+# linha. Com --portproton e algum jogo do Windows, o PortProton antes. Os
+# frontends sao refeitos uma vez, no fim. Status 1: alguma linha falhou.
+customgames_bulk() {
+  local file=$1 pp=${2:-} line n=0 total ok=0 start=2 a b why windows=0
+  local -a rows
+  [[ -f $file ]] || return 2
+  mapfile -t rows < "$file"
+  total=${#rows[@]}
+  ((total)) || return 2
+  ev_step 0 "Checking $total games"
+  for line in "${rows[@]}"; do
+    customgames_row_fields "$line"
+    [[ $R_PLATFORM == windows ]] && windows=1
+  done
+  if [[ $pp == --portproton ]] && ((windows)) && ! portproton_installed; then
+    portproton_ensure 2 30 ||
+      ev_msg "PortProton was not installed: the Windows games open with the system's Wine, if there is one."
+    start=30
+  fi
+  for line in "${rows[@]}"; do
+    ((n++))
+    customgames_row_fields "$line"
+    a=$((start + (95 - start) * (n - 1) / total))
+    b=$((start + (95 - start) * n / total))
+    ev_step "$a" "Adding ${R_NAME:-row $n} ($n of $total)"
+    why=$(customgames_row_errors | head -n 1)
+    if [[ -n $why ]]; then
+      echo "@row $n fail ${why#*|}"
+      continue
+    fi
+    if customgames_add_row "$a" "$b"; then
+      echo "@row $n ok"
+      ((ok++))
+    else
+      echo "@row $n fail ${R_WHY:-could not add $R_NAME}"
+    fi
+  done
+  if ((ok)); then
+    ev_step 96 "Putting the games in the frontend"
+    customgames_refresh_frontends
+  fi
+  if ((ok < total)); then
+    ev_step 100 "$ok of $total games added"
+    ev_fail "$((total - ok)) of $total games were not added"
+    return 1
+  fi
+  ev_step 100 "$total games added"
+  return 0
+}
+
+# customgames_edit CHAVE=VALOR...: um jogo mudado pelo painel (group e name
+# dizem qual). O de um comando muda de nome, grupo, comando e modo (como o
+# Edit do Setup); os outros so o modo e as informacoes (category, controls,
+# buttons, players), como o Information and video mode. Status 2: jogo ou
+# valor que nao serve.
+customgames_edit() {
+  local pair key value group="" name="" new_group="" new_name="" cmd="" mode="" platform cfg file
+  local have_cmd=0 have_mode=0
+  local -A info=()
+  for pair in "$@"; do
+    key=${pair%%=*} value=${pair#*=}
+    case $key in
+      group) group=$value ;;
+      name) name=$value ;;
+      new_group) new_group=$value ;;
+      new_name) new_name=$value ;;
+      command) cmd=$value have_cmd=1 ;;
+      mode) mode=$value have_mode=1 ;;
+      category | controls | buttons | players) info[$key]=$value ;;
+      *) return 2 ;;
+    esac
+  done
+  customgames_valid_name "$group" && customgames_valid_name "$name" || return 2
+  file=$(customgames_file "$group" "$name")
+  [[ -f $file ]] || return 2
+  platform=$(customgames_platform "$group" "$name")
+  [[ $platform == script ]] && return 2
+  new_group=${new_group:-$group} new_name=${new_name:-$name}
+  if ((have_mode)); then
+    mode=$(customgames_mode "$mode") || return 2
+  fi
+  R_CATEGORY=${info[category]-} R_CONTROLS=${info[controls]-} R_BUTTONS=${info[buttons]-} R_PLAYERS=${info[players]-}
+  R_GROUP=$new_group R_NAME=$new_name R_PLATFORM=command R_COMMAND=x R_MODE="" R_FOLDER="" R_EXE=""
+  R_SNAP="" R_VIDEO="" R_TEXT=""
+  # As informacoes conferidas como as da tabela (o nome novo, se mudou).
+  if [[ $new_group/$new_name != "$group/$name" ]]; then
+    [[ $platform == command ]] || return 2
+    customgames_row_errors | grep -q '^\(group\|name\)|' && return 2
+  fi
+  customgames_row_errors | grep -q '^\(category\|controls\|buttons\|players\)|' && return 2
+  cfg=$(customgames_cfg "$group" "$name")
+  if [[ $platform == command ]]; then
+    ((have_cmd)) || cmd=$(customgames_cfg_field "$cfg" command)
+    [[ -n $cmd ]] || cmd=$(customgames_field "$file" command)
+    ((have_mode)) || mode=$(customgames_cfg_field "$cfg" mode)
+    [[ -n $mode ]] || mode=$(customgames_field "$file" mode)
+    customgames_valid_command "$cmd" || return 2
+    customgames_save "$new_group" "$new_name" "$mode" "$cmd" "$group" "$name" || return 1
+    group=$new_group name=$new_name
+    cfg=$(customgames_cfg "$group" "$name")
+  elif ((have_mode)); then
+    customgames_cfg_set "$cfg" mode "$mode" && customgames_entry "$group" "$name" || return 1
+  fi
+  for key in category controls buttons players; do
+    [[ -n ${info[$key]+set} ]] && { customgames_cfg_set "$cfg" "$key" "${info[$key]}" || return 1; }
+  done
+  customgames_media "$group" "$name"
+  customgames_refresh_frontends
+  return 0
+}
+
+# customgames_pack_game GRUPO NOME: o pacote de um jogo instalado (o Make a
+# package of it do Setup), com a arte de verdade dele, em
+# ~/roms/custom/GRUPO/NOME.fliperos-customgame.zip; com os eventos de
+# progresso.
+customgames_pack_game() {
+  local group=$1 name=$2 cfg platform folder exe base out value ext
+  local -a args
+  cfg=$(customgames_cfg "$group" "$name")
+  platform=$(customgames_cfg_field "$cfg" platform)
+  [[ $platform == windows || $platform == native ]] || { ev_fail "only Windows and Linux games are packed"; return 2; }
+  folder=$(customgames_cfg_field "$cfg" folder)
+  exe=$(customgames_cfg_field "$cfg" exe)
+  base=$(printf '%s' "$name" | sed 's/[^A-Za-z0-9 ._()&+,-]\{1,\}/_/g')
+  out=$CUSTOM_GAMES_DIR/$group/$base.fliperos-customgame.zip
+  args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder"
+    --mode "$(customgames_cfg_field "$cfg" mode)")
+  if [[ $platform == windows ]]; then args+=(--exe "$exe"); else args+=(--command "$(customgames_cfg_field "$cfg" command)"); fi
+  for value in category controls buttons players; do
+    [[ -n $(customgames_cfg_field "$cfg" "$value") ]] && args+=("--$value" "$(customgames_cfg_field "$cfg" "$value")")
+  done
+  [[ -f ${cfg%.cfg}.key ]] && args+=(--key "${cfg%.cfg}.key")
+  [[ -n $exe && -f $folder/$exe.ppdb ]] && args+=(--ppdb "$folder/$exe.ppdb")
+  # A arte de verdade (as de exemplo nao vao: quem instala ganha as suas).
+  for value in snap preview texto; do
+    for ext in $(customgames_media_exts "$value"); do
+      [[ -f $CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext ]] || continue
+      customgames_media_sample "$CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext" && continue
+      case $value in snap) args+=(--snap) ;; preview) args+=(--video) ;; texto) args+=(--text) ;; esac
+      args+=("$CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext")
+      break
+    done
+  done
+  customgames_pack_run "${args[@]}"
+}
+
+# customgames_install_all GRUPO: os pacotes da pasta do grupo e os de
+# ~/roms/custom sem grupo (entram nele), um depois do outro; o que ja existe
+# e trocado (o painel ja mostrou "update").
+customgames_install_all() {
+  local group=$1 row zip g state n=0 ok=0 total
+  local -a rows
+  mapfile -t rows < <(customgames_pending_ok "$group")
+  total=${#rows[@]}
+  ((total)) || { ev_step 100 "Nothing to install"; return 0; }
+  for row in "${rows[@]}"; do
+    IFS='|' read -r zip g _ _ state _ <<< "$row"
+    ((n++))
+    ev_msg "Package $n of $total: $(basename "$zip")"
+    if customgames_install "$zip" "${g:-$group}" "$([[ $state == update ]] && echo replace)"; then
+      ((ok++))
+    fi
+  done
+  customgames_refresh_frontends
+  ((ok == total)) || { ev_fail "$((total - ok)) of $total packages were not installed"; return 1; }
+  return 0
+}
+
+# customgames_cli SUBCOMANDO...: o fliperos-setup --customgames.
+#   describe | check ARQ | bulk ARQ [--portproton] | edit CHAVE=VALOR... |
+#   delete GRUPO NOME [folder] | group NOME | media GRUPO NOME --snap ARQ... |
+#   install ZIP GRUPO [replace] [--portproton] | install-all GRUPO |
+#   pack GRUPO NOME | squash pack|unpack PASTA | portproton
+# Status 2: subcomando ou argumento que nao serve.
+customgames_cli() {
+  local sub=${1:-} rc zip group replace pp
+  shift
+  case $sub in
+    describe) customgames_describe ;;
+    check) customgames_check "${1:-}" ;;
+    bulk) customgames_bulk "${1:-}" "${2:-}" ;;
+    edit) customgames_edit "$@" ;;
+    delete)
+      customgames_valid_name "${1:-}" && customgames_valid_name "${2:-}" || return 2
+      [[ -e $(customgames_file "$1" "$2") || -e $(customgames_cfg "$1" "$2") ]] || return 2
+      customgames_delete "$1" "$2" "$([[ ${3:-} == folder ]] && echo folder)" || return 1
+      customgames_refresh_frontends
+      ;;
+    group)
+      customgames_valid_name "${1:-}" || return 2
+      mkdir -p "$CUSTOM_GAMES_DIR/$1" && chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_DIR" "$CUSTOM_GAMES_DIR/$1" 2> /dev/null
+      customgames_media_dirs "$1"
+      ;;
+    media)
+      customgames_valid_name "${1:-}" && customgames_valid_name "${2:-}" && [[ -e $(customgames_file "$1" "$2") ]] || return 2
+      customgames_media_set "$@" || return 1
+      customgames_media "$1" "$2"
+      ;;
+    install)
+      zip=${1:-} group=${2:-} replace="" pp=""
+      shift 2 2> /dev/null
+      for rc in "$@"; do
+        case $rc in replace) replace=replace ;; --portproton) pp=1 ;; esac
+      done
+      [[ -f $zip ]] && customgames_valid_name "$group" || return 2
+      if ((pp)) && customgames_tool inspect "$zip" 2> /dev/null | grep -qx 'platform=windows' && ! portproton_installed; then
+        portproton_ensure 0 100 || ev_msg "PortProton was not installed: the game opens with the system's Wine, if there is one."
+      fi
+      customgames_install "$zip" "$group" $replace
+      rc=$?
+      ((rc == 0)) && customgames_refresh_frontends
+      return $rc
+      ;;
+    install-all)
+      customgames_valid_name "${1:-}" || return 2
+      customgames_install_all "$1"
+      ;;
+    pack)
+      customgames_valid_name "${1:-}" && customgames_valid_name "${2:-}" && [[ -f $(customgames_cfg "$1" "$2") ]] || return 2
+      customgames_pack_game "$1" "$2"
+      ;;
+    squash)
+      [[ ${1:-} == pack || ${1:-} == unpack ]] && [[ -d ${2:-} ]] || return 2
+      squashgames_run "$1" "$2"
+      ;;
+    portproton) portproton_run_install ;;
+    *) return 2 ;;
+  esac
 }

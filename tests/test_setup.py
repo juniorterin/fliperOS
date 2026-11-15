@@ -4438,6 +4438,187 @@ class CustomGamesTests(Base):
         self.assertNotIn("ui_browse \"$title\" \"Open", create)
         self.assertGreaterEqual(create.count("customgames_browse "), 5)
 
+    # ── O painel web (fliperos-setup --customgames) ──
+
+    def panel_rows(self, rows):
+        """O arquivo da tabela: um jogo por linha, os campos separados por 0x1f."""
+        fields = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
+                  "buttons", "players", "snap", "video", "text", "text_string", "wine")
+        path = self.env.dir / "rows"
+        path.write_text("".join("\x1f".join(r.get(f, "") for f in fields) + "\n" for r in rows))
+        return path
+
+    def panel_sources(self):
+        src = self.env.dir / "src"
+        (src / "Metal_Slug_X" / "data").mkdir(parents=True)
+        (src / "Metal_Slug_X" / "MetalSlugX.exe").write_bytes(b"MZ" + b"x" * 3000)
+        (src / "Metal_Slug_X" / "unins000.exe").write_bytes(b"MZ")
+        (src / "Metal_Slug_X" / "data" / "a.dat").write_text("d")
+        (src / "Cave Story").mkdir()
+        game = src / "Cave Story" / "CaveStory.x86_64"
+        game.write_text("#!/bin/sh\necho hi\n")
+        game.chmod(0o755)
+        (src / "snap.png").write_bytes(b"png")
+        return src
+
+    def test_add_copies_a_folder_and_scan_picks_the_exe(self):
+        media, games, e = self.pkg_env()
+        src = self.panel_sources()
+        tool = ["python3", str(ROOT / "config/fliperos-customgame"), "--roms", str(self.roms / "custom"),
+                "--games", str(games), "--media", str(media)]
+        env = dict(os.environ, FLIPEROS_USER="nobody-here")
+        found = json.loads(subprocess.run(tool + ["scan", str(src)], capture_output=True, text=True, env=env).stdout)
+        rows = {g["name"]: g for g in found["games"]}
+        # Os nomes pelas pastas; o .exe que abre o jogo (o desinstalador nao).
+        self.assertEqual(rows["Metal Slug X"]["exes"], ["MetalSlugX.exe"])
+        self.assertEqual((rows["Metal Slug X"]["platform"], rows["Metal Slug X"]["exe"]), ("windows", "MetalSlugX.exe"))
+        self.assertEqual((rows["Cave Story"]["platform"], rows["Cave Story"]["command"]),
+                         ("native", "./CaveStory.x86_64"))
+        one = json.loads(subprocess.run(tool + ["scan", "--one", str(src / "Cave Story")], capture_output=True,
+                                        text=True, env=env).stdout)
+        self.assertEqual(one["programs"], ["CaveStory.x86_64"])
+        # add: a pasta copiada para ~/games/GRUPO/NOME, o cfg sem package=.
+        r = subprocess.run(tool + ["add", "--group", "PC games", "--name", "Metal Slug X", "--platform", "windows",
+                                   "--folder", str(src / "Metal_Slug_X"), "--exe", "MetalSlugX.exe", "--mode", "480i",
+                                   "--snap", str(src / "snap.png")], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        folder = games / "PC games" / "Metal Slug X"
+        self.assertEqual((folder / "data" / "a.dat").read_text(), "d")
+        cfg = (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text()
+        self.assertIn("platform=windows\nexe=MetalSlugX.exe\nmode=640x480@60\n", cfg)
+        self.assertIn("folder=%s\n" % folder, cfg)
+        self.assertNotIn("package=", cfg)
+        self.assertEqual((media / "snap/custom/PC games/Metal Slug X.png").read_bytes(), b"png")
+        # De novo: 3 (ja existe). A pasta de destino dentro da de origem: nao.
+        again = tool + ["add", "--group", "PC games", "--name", "Metal Slug X", "--platform", "windows",
+                        "--folder", str(src / "Metal_Slug_X"), "--exe", "MetalSlugX.exe"]
+        self.assertEqual(subprocess.run(again, capture_output=True, env=env).returncode, 3)
+        inside = subprocess.run(tool + ["add", "--group", "G", "--name", "N", "--platform", "native", "--folder",
+                                        str(games), "--command", "x"], capture_output=True, text=True, env=env)
+        self.assertEqual(inside.returncode, 1)
+        self.assertIn("cannot be copied into itself", inside.stderr)
+        # Um .exe fora da pasta, ou o comando vazio: nao.
+        bad = subprocess.run(tool + ["add", "--group", "G", "--name", "N", "--platform", "windows", "--folder",
+                                     str(src / "Metal_Slug_X"), "--exe", "../snap.png"], capture_output=True, env=env)
+        self.assertEqual(bad.returncode, 1)
+        self.assertFalse((games / "G").exists() and any((games / "G").iterdir()))
+
+    def test_panel_table_is_checked_then_added_row_by_row(self):
+        media, games, e = self.pkg_env()
+        src = self.panel_sources()
+        self.env.out("customgames_save 'PC games' Old 240p 'echo old'", e)
+        rows = self.panel_rows([
+            {"group": "PC games", "name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"),
+             "exe": "MetalSlugX.exe", "mode": "480i", "players": "2", "controls": "joy8", "snap": str(src / "snap.png")},
+            {"group": "PC games", "name": "Cave Story", "platform": "native", "folder": str(src / "Cave Story"),
+             "command": "./CaveStory.x86_64", "category": "Platform / Run Jump", "buttons": "3"},
+            {"group": "Tools", "name": "Clock", "platform": "command", "command": "xclock", "mode": "320x240@60"},
+            {"group": "PC games", "name": "Old", "platform": "command", "command": "echo"},
+            {"group": "PC games", "name": "Broken", "platform": "windows", "folder": str(src / "Metal_Slug_X"),
+             "exe": "nope.exe", "mode": "999", "controls": "joy8,wheel"},
+            {"group": "Tools", "name": "Clock", "platform": "command", "command": "xclock"},
+        ])
+        out = self.env.out('customgames_check "$F"', dict(e, F=str(rows))).splitlines()
+        errors = [l.split("|", 3)[1:] for l in out if l.startswith("error|")]
+        fields = {(n, f) for n, f, _ in errors}
+        # Os erros por linha e campo: o que ja existe, o .exe, o modo, o
+        # controle e o nome repetido na tabela.
+        self.assertEqual(fields, {("4", "name"), ("5", "exe"), ("5", "mode"), ("5", "controls"), ("6", "name")})
+        self.assertIn("twice in the table (row 3)", [m for n, f, m in errors if n == "6"][0])
+        bytes_ = int([l for l in out if l.startswith("bytes=")][0][6:])
+        self.assertGreater(bytes_, 3000)
+        self.assertTrue([l for l in out if l.startswith("free=")][0][5:].isdigit())
+        # O bulk: cada linha, com @row; os frontends uma vez so, no fim.
+        script = 'customgames_refresh_frontends() { echo x >> "$D/refresh"; }; customgames_bulk "$F"'
+        r = self.env.run(script, dict(e, F=str(rows), D=str(self.env.dir)))
+        self.assertEqual(r.returncode, 1)
+        marks = [l for l in r.stdout.splitlines() if l.startswith("@row ")]
+        self.assertEqual(marks[:3], ["@row 1 ok", "@row 2 ok", "@row 3 ok"])
+        self.assertTrue(marks[3].startswith("@row 4 fail Old is already in PC games"), marks[3])
+        self.assertTrue(marks[4].startswith("@row 5 fail "), marks[4])
+        # A sexta e repetida: a terceira ja criou o Clock.
+        self.assertTrue(marks[5].startswith("@row 6 fail Clock is already in Tools"), marks[5])
+        self.assertIn("@fail ", r.stdout)
+        self.assertEqual((self.env.dir / "refresh").read_text(), "x\n")
+        # Os jogos de uma pasta: copiados, o script e o cfg com a pasta nova.
+        folder = games / "PC games" / "Metal Slug X"
+        self.assertTrue((folder / "MetalSlugX.exe").is_file())
+        sh = (self.roms / "custom" / "PC games" / "Metal Slug X.sh").read_text()
+        self.assertIn("--mode 640x480@60 --app custom_pc_games_metal_slug_x --wine ", sh)
+        cfg = (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text()
+        self.assertIn("controls=joy8\n", cfg)
+        self.assertIn("players=2\n", cfg)
+        native = (self.roms / "custom" / "PC games" / "Cave Story.cfg").read_text()
+        self.assertIn("platform=native\ncommand=./CaveStory.x86_64\n", native)
+        self.assertIn("category=Platform / Run Jump\n", native)
+        self.assertTrue(os.access(games / "PC games" / "Cave Story" / "CaveStory.x86_64", os.X_OK))
+        # A arte da linha vale; o que faltava ganha a de exemplo.
+        self.assertEqual((media / "snap/custom/PC games/Metal Slug X.png").read_bytes(), b"png")
+        self.assertTrue((media / "logo/custom/PC games/Metal Slug X.png").exists())
+        self.assertNotIn("Metal Slug X.png", (media / ".custom-samples").read_text().split("snap/")[-1]
+                         if (media / ".custom-samples").exists() else "")
+        # O comando: o modo digitado.
+        self.assertIn("# mode: 320x240@60\n", (self.roms / "custom" / "Tools" / "Clock.sh").read_text())
+
+    def test_panel_describe_lists_the_games_and_the_choices(self):
+        media, games, e = self.pkg_env()
+        self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'; "
+                     "customgames_cfg_set \"$(customgames_cfg 'PC games' Pang)\" players 2", e)
+        rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
+        self.assertIn(["group", "PC games", "1"], rows)
+        game = [r for r in rows if r[0] == "game"][0]
+        self.assertEqual(game[:5] + [game[8], game[9]],
+                         ["game", "PC games", "Pang", "command", "640x480@60", "2", "wine pang.exe"])
+        self.assertIn(["mode", "480i", "640x480@60"], rows)
+        self.assertIn(["genre", "Shooter"], rows)
+        self.assertIn(["control", "joy8", "8-way joystick"], rows)
+        self.assertEqual(len([r for r in rows if r[0] == "control"]), 13)
+        self.assertIn(["portproton", "0"], rows)
+        self.assertIn(["games", str(games)], rows)
+        self.assertTrue([r for r in rows if r[0] == "free"][0][1].isdigit())
+
+    def test_panel_edit_delete_group_and_media(self):
+        media, games, e = self.pkg_env()
+        src = self.panel_sources()
+        script = 'customgames_refresh_frontends() { :; }; customgames_cli %s'
+        self.env.out("customgames_save 'PC games' Pang 240p 'wine pang.exe'", e)
+        # O de um comando muda de nome, de comando e as informacoes.
+        r = self.env.run(script % "edit group='PC games' name=Pang new_name='Pang DX' command='wine dx.exe' "
+                         "mode=480i category='Shooter / Gallery' players=2", e)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        cfg = (self.roms / "custom" / "PC games" / "Pang DX.cfg").read_text()
+        self.assertIn("command=wine dx.exe\nmode=640x480@60\ncategory=Shooter / Gallery\n", cfg)
+        self.assertIn("players=2\n", cfg)
+        self.assertFalse((self.roms / "custom" / "PC games" / "Pang.sh").exists())
+        # Um controle que nao existe, ou um jogo que nao existe: 2.
+        self.assertEqual(self.env.run(script % "edit group='PC games' name='Pang DX' controls=wheel", e).returncode, 2)
+        self.assertEqual(self.env.run(script % "edit group='PC games' name=Nope mode=480i", e).returncode, 2)
+        # O de uma pasta: so o modo e as informacoes (nome e grupo ficam).
+        rows = self.panel_rows([{"group": "PC games", "name": "MSX", "platform": "windows",
+                                 "folder": str(src / "Metal_Slug_X"), "exe": "MetalSlugX.exe"}])
+        self.env.out(script % 'bulk "$F"', dict(e, F=str(rows)))
+        self.assertEqual(self.env.run(script % "edit group='PC games' name=MSX new_name=Other", e).returncode, 2)
+        self.assertEqual(self.env.run(script % "edit group='PC games' name=MSX mode=320x240@60 buttons=4", e).returncode, 0)
+        self.assertIn("# mode: 320x240@60\n", (self.roms / "custom" / "PC games" / "MSX.sh").read_text())
+        self.assertIn("buttons=4\n", (self.roms / "custom" / "PC games" / "MSX.cfg").read_text())
+        # A arte trocada: a de exemplo sai.
+        sample = media / "snap/custom/PC games/MSX.png"
+        self.assertTrue(sample.exists())
+        jpg = self.env.dir / "real.jpg"
+        jpg.write_bytes(b"jpg")
+        self.env.out(script % "media 'PC games' MSX --snap \"$J\"", dict(e, J=str(jpg)))
+        self.assertFalse(sample.exists())
+        self.assertEqual((media / "snap/custom/PC games/MSX.jpg").read_bytes(), b"jpg")
+        # Um grupo novo; apagar com a pasta do jogo.
+        self.env.out(script % "group 'Homebrew'", e)
+        self.assertTrue((self.roms / "custom" / "Homebrew").is_dir())
+        self.assertEqual(self.env.run(script % "group '.bad'", e).returncode, 2)
+        self.env.out(script % "delete 'PC games' MSX folder", e)
+        self.assertFalse((games / "PC games" / "MSX").exists())
+        self.assertFalse((self.roms / "custom" / "PC games" / "MSX.cfg").exists())
+        self.assertEqual(self.env.run(script % "delete 'PC games' MSX", e).returncode, 2)
+        self.assertEqual(self.env.run(script % "nonsense", e).returncode, 2)
+
 
 class ArcadeResyncTests(Base):
     """As romlists de arcade do Attract-Mode com as informacoes do MAME (os

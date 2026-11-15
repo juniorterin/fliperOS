@@ -17,6 +17,16 @@
   fliperos-customgame pack --out ZIP --name NOME --platform windows|native
                            --folder PASTA (--exe ARQUIVO | --command COMANDO) [...]
       o pacote feito pelo Setup (Create package)
+  fliperos-customgame add --group GRUPO --name NOME --platform windows|native
+                          --folder PASTA (--exe ARQUIVO | --command COMANDO) [...]
+      um jogo de uma pasta (o painel web): a pasta copiada para
+      ~/games/GRUPO/NOME, a midia e o NOME.cfg (sem package=). Status 3: o
+      jogo ja existe (sem --replace)
+  fliperos-customgame media --group GRUPO --name NOME [--snap|--video|--text ARQ] [--text-string T]
+      troca a arte de um jogo (a de exemplo deixa de ser)
+  fliperos-customgame scan PASTA [--one]
+      JSON dos jogos das subpastas (ou da propria pasta, com --one): o nome,
+      o tamanho, os .exe e os programas do Linux em ordem de chance
   fliperos-customgame run ARQUIVO.cfg
       abre o jogo (o NOME.sh o chama pelo fliperos-x11-run): o comando dentro
       da pasta do jogo, o .exe pelo PortProton, e o mapa do controle para o
@@ -40,6 +50,8 @@ absoluto, nenhum "..", nenhum atalho (link) e nenhum arquivo especial.
 """
 
 import argparse
+import io
+import json
 import os
 import pwd
 import re
@@ -478,26 +490,52 @@ def unmark_sample(media, path):
         write_file(samples, "".join(keep))
 
 
+def put_media(media, group, name, kind, ext, opener):
+    """Grava uma midia do jogo em ~/media/TIPO/custom/GRUPO/NOME.ext; opener()
+    abre o conteudo (do zip ou de um arquivo solto)."""
+    exts = dict(MEDIA)[kind]
+    folder = os.path.join(media, kind, "custom", group)
+    makedirs(folder)
+    # A nova vale: as outras extensoes do mesmo tipo (a de exemplo, uma
+    # antiga) sairiam na frente dela.
+    for other in exts:
+        old = os.path.join(folder, "%s.%s" % (name, other))
+        if os.path.isfile(old):
+            os.remove(old)
+            unmark_sample(media, old)
+    dest = os.path.join(folder, "%s.%s" % (name, ext))
+    with opener() as src, open(dest + ".tmp", "wb") as out:
+        shutil.copyfileobj(src, out, CHUNK)
+    os.chmod(dest + ".tmp", 0o644)
+    give(dest + ".tmp")
+    os.replace(dest + ".tmp", dest)
+
+
 def install_media(pkg, args, group, name):
-    for kind, exts in MEDIA:
+    for kind, _ in MEDIA:
         if kind not in pkg.extra:
             continue
         info, ext = pkg.extra[kind]
-        folder = os.path.join(args.media, kind, "custom", group)
-        makedirs(folder)
-        # A do pacote vale: as outras extensoes do mesmo tipo (a de exemplo,
-        # uma antiga) sairiam na frente dela.
-        for other in exts:
-            old = os.path.join(folder, "%s.%s" % (name, other))
-            if os.path.isfile(old):
-                os.remove(old)
-                unmark_sample(args.media, old)
-        dest = os.path.join(folder, "%s.%s" % (name, ext))
-        with pkg.zf.open(info) as src, open(dest + ".tmp", "wb") as out:
-            shutil.copyfileobj(src, out, CHUNK)
-        os.chmod(dest + ".tmp", 0o644)
-        give(dest + ".tmp")
-        os.replace(dest + ".tmp", dest)
+        put_media(args.media, group, name, kind, ext, lambda info=info: pkg.zf.open(info))
+
+
+def media_files(snap=None, video=None, text=None):
+    """[(tipo, extensao, caminho)] dos arquivos de midia soltos, conferidos."""
+    out = []
+    for path, kind in ((snap, "snap"), (video, "preview"), (text, "texto")):
+        if not path:
+            continue
+        ext = path.rsplit(".", 1)[-1].lower() if "." in os.path.basename(path) else ""
+        if ext not in dict(MEDIA)[kind] or not os.path.isfile(path):
+            raise Bad("not a %s file: %s" % ({"snap": "picture", "preview": "video", "texto": "text"}[kind], path))
+        out.append((kind, ext, path))
+    return out
+
+
+def put_text(media, group, name, text):
+    """O texto digitado (\\n vira quebra de linha) como a midia texto."""
+    data = (text.replace("\\n", "\n").strip() + "\n").encode("utf-8")
+    put_media(media, group, name, "texto", "txt", lambda: io.BytesIO(data))
 
 
 def free_bytes(path):
@@ -657,6 +695,255 @@ def cmd_pack(args):
     return 0
 
 
+# ── Adicionar de uma pasta (o painel web) ──
+# A pasta de um jogo (subida pelo painel, num disco externo...) copiada para
+# ~/games/GRUPO/NOME, como a de um pacote instalado, com o cfg sem package=.
+
+def tree_files(folder):
+    """[(caminho, relativo)] dos arquivos da pasta, e os atalhos que ficam
+    dentro dela (os .so de um jogo do Linux) como (caminho, relativo, alvo)."""
+    files, links = [], []
+    root = os.path.realpath(folder)
+    for top, dirs, names in os.walk(folder):
+        dirs.sort()
+        for n in sorted(names) + [d for d in dirs if os.path.islink(os.path.join(top, d))]:
+            path = os.path.join(top, n)
+            rel = os.path.relpath(path, folder).replace(os.sep, "/")
+            if os.path.islink(path):
+                target = os.readlink(path)
+                real = os.path.realpath(path)
+                if not os.path.isabs(target) and (real == root or real.startswith(root + os.sep)):
+                    links.append((path, rel, target))
+                continue
+            if os.path.isfile(path):
+                files.append((path, rel))
+    return files, links
+
+
+def copy_tree(folder, target, progress):
+    files, links = tree_files(folder)
+    total = max(1, sum(os.path.getsize(p) for p, _ in files))
+    done = 0
+    for path, rel in files:
+        dest = os.path.join(target, *rel.split("/"))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(path, "rb") as src, open(dest, "wb") as out:
+            while True:
+                chunk = src.read(CHUNK)
+                if not chunk:
+                    break
+                out.write(chunk)
+                done += len(chunk)
+                progress.tick(done / total)
+        os.chmod(dest, 0o755 if os.stat(path).st_mode & 0o111 else 0o644)
+    for _, rel, link in links:
+        dest = os.path.join(target, *rel.split("/"))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        os.symlink(link, dest)
+    for top, dirs, _ in os.walk(target):
+        for d in dirs:
+            if not os.path.islink(os.path.join(top, d)):
+                os.chmod(os.path.join(top, d), 0o755)
+
+
+def cmd_add(args):
+    progress = Progress(args.progress is not None, *(args.progress or (0, 100)))
+    progress.step(0, "Checking %s" % args.name)
+    try:
+        group, name = args.group, args.name
+        if not valid_name(group):
+            raise Bad("invalid group name: %r" % group)
+        if not valid_name(name):
+            raise Bad("invalid game name: %r" % name)
+        source = os.path.realpath(args.folder)
+        if not os.path.isdir(source):
+            raise Bad("not a folder: %s" % args.folder)
+        gdir = os.path.join(args.roms, group)
+        folder = os.path.join(args.games, group, name)
+        real = os.path.realpath(folder)
+        if source == real or source.startswith(real + os.sep) or real.startswith(source + os.sep):
+            raise Bad("the game folder cannot be copied into itself: %s" % args.folder)
+        exists = any(os.path.exists(os.path.join(gdir, name + ext)) for ext in (".sh", ".cfg")) \
+            or os.path.lexists(folder)
+        if exists and not args.replace:
+            print("%s is already in %s" % (name, group), file=sys.stderr)
+            return 3
+        if os.path.ismount(folder):
+            raise Bad("%s is a packed folder: remove it first" % folder)
+        files, _ = tree_files(source)
+        if not files:
+            raise Bad("the folder %s is empty" % args.folder)
+        cfg = {"name": name, "platform": args.platform, "mode": args.mode, "category": args.category or "",
+               "controls": args.controls or "", "buttons": args.buttons or "", "players": args.players or ""}
+        rels = {r for _, r in files}
+        if args.platform == "windows":
+            cfg["exe"] = rel_path(args.exe or "")
+            if cfg["exe"] not in rels:
+                raise Bad("the .exe %s is not in the folder %s" % (args.exe or "(none)", args.folder))
+        else:
+            cfg["command"] = args.command or ""
+            if not cfg["command"].strip():
+                raise Bad("no command (what opens the game, run in its folder)")
+        cfg = check_cfg(cfg, name, rels)
+        media = media_files(args.snap, args.video, args.text)
+        size = sum(os.path.getsize(p) for p, _ in files)
+        if free_bytes(args.games) < size + (64 << 20):
+            raise Bad("not enough free space: the game needs %d MB" % (size >> 20))
+        makedirs(os.path.join(args.games, group))
+        makedirs(gdir)
+        tmp = os.path.join(args.games, group, ".%s.installing" % name)
+        shutil.rmtree(tmp, ignore_errors=True)
+        os.mkdir(tmp)
+        progress.step(0.01, "Copying %s" % name)
+        try:
+            copy_tree(source, tmp, Progress(progress.on, progress.pct(0.01), progress.pct(0.95)))
+            give_tree(tmp)
+            if os.path.lexists(folder):
+                shutil.rmtree(folder)
+            os.rename(tmp, folder)
+        except BaseException:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        progress.step(0.96, "Pictures and settings")
+        for kind, ext, path in media:
+            put_media(args.media, group, name, kind, ext, lambda path=path: open(path, "rb"))
+        if args.text_string:
+            put_text(args.media, group, name, args.text_string)
+        write_file(os.path.join(gdir, name + ".cfg"), cfg_text(dict(cfg, folder=folder)))
+    except (Bad, OSError) as exc:
+        if progress.on:
+            print("@fail Copying|%s" % exc, flush=True)
+        print(str(exc), file=sys.stderr)
+        return 1
+    progress.step(1, "%s added" % name)
+    return 0
+
+
+def cmd_media(args):
+    """A arte de um jogo trocada (o painel web): as outras extensoes do
+    mesmo tipo saem, e a de exemplo deixa de ser."""
+    try:
+        if not (valid_name(args.group) and valid_name(args.name)):
+            raise Bad("invalid group or game name")
+        for kind, ext, path in media_files(args.snap, args.video, args.text):
+            put_media(args.media, args.group, args.name, kind, ext, lambda path=path: open(path, "rb"))
+        if args.text_string:
+            put_text(args.media, args.group, args.name, args.text_string)
+    except (Bad, OSError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    return 0
+
+
+# ── Achar os jogos de uma pasta (o painel web: Importar de uma pasta) ──
+
+# Os .exe que nao abrem o jogo: instaladores, desinstaladores, as bibliotecas
+# do Windows e os relatorios de erro.
+SKIP_EXE = re.compile(r"^(unins\d*|uninst(all)?|setup|install(er)?|vc_?redist.*|dxsetup|dxwebsetup|directx.*|"
+                      r"dotnet.*|ndp\d.*|unitycrashhandler(32|64)?|crashreport.*|crashpad_handler|ue[45]prereqsetup.*|"
+                      r"oalinst|physx.*|easyanticheat.*|be_?setup|.*redist.*|dosbox_?setup|config(urator)?|"
+                      r"launcher_?setup|notification_helper|quicksfv|7z.*|winrar.*)\.(exe|bat)$", re.I)
+LINUX_EXTS = (".x86_64", ".x86", ".appimage", ".sh", ".bin", ".run")
+SCAN_DEPTH = 3
+SCAN_FILES = 20000
+
+
+def simple(s):
+    return re.sub(r"[^a-z0-9]+", "", s.lower())
+
+
+def game_name(folder):
+    """O nome de um jogo pelo nome da pasta: _ e . viram espacos."""
+    name = re.sub(r"\s+", " ", re.sub(r"[_.]+", " ", os.path.basename(folder.rstrip("/")))).strip()
+    return name if valid_name(name) else ""
+
+
+def rank(rels, folder_name, sizes):
+    """Os candidatos em ordem: o nome parecido com o da pasta, o mais raso, o
+    maior."""
+    want = simple(folder_name)
+
+    def score(rel):
+        stem = simple(os.path.splitext(os.path.basename(rel))[0])
+        near = 3 if stem and stem == want else 2 if stem and want and (stem in want or want in stem) else 0
+        return (-near, rel.count("/"), -sizes.get(rel, 0), rel.lower())
+    return sorted(rels, key=score)
+
+
+def scan_folder(folder):
+    exes, programs, sizes = [], [], {}
+    total = count = 0
+    for top, dirs, names in os.walk(folder):
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and not os.path.islink(os.path.join(top, d)))
+        depth = os.path.relpath(top, folder).count(os.sep) + (top != folder)
+        if depth >= SCAN_DEPTH:
+            dirs[:] = []
+        for n in sorted(names):
+            path = os.path.join(top, n)
+            if os.path.islink(path) or not os.path.isfile(path):
+                continue
+            count += 1
+            try:
+                st = os.stat(path)
+            except OSError:
+                continue
+            total += st.st_size
+            if count > SCAN_FILES:
+                continue
+            rel = os.path.relpath(path, folder).replace(os.sep, "/")
+            low = n.lower()
+            sizes[rel] = st.st_size
+            if low.endswith((".exe", ".bat")):
+                if not SKIP_EXE.match(n):
+                    exes.append(rel)
+                continue
+            # As bibliotecas (os .so, as pastas lib*) nao abrem o jogo.
+            if low.endswith(".so") or ".so." in low or any(p.startswith("lib") for p in rel.lower().split("/")[:-1]):
+                continue
+            if low.endswith(LINUX_EXTS) or st.st_mode & 0o111:
+                try:
+                    with open(path, "rb") as f:
+                        head = f.read(4)
+                except OSError:
+                    continue
+                if runnable(head) or low.endswith(".appimage"):
+                    programs.append(rel)
+    name = os.path.basename(folder.rstrip("/"))
+    exes, programs = rank(exes, name, sizes), rank(programs, name, sizes)
+    row = {"path": folder, "name": game_name(folder), "bytes": total, "files": count, "exes": exes[:40],
+           "programs": programs[:40], "platform": "windows" if exes else "native" if programs else "",
+           "exe": exes[0] if exes else "", "command": ""}
+    if not exes and programs:
+        row["command"] = "./" + programs[0].replace(" ", "\\ ")
+    return row
+
+
+def cmd_scan(args):
+    folder = os.path.realpath(args.folder)
+    if not os.path.isdir(folder):
+        print("not a folder: %s" % args.folder, file=sys.stderr)
+        return 1
+    if args.one:
+        out = scan_folder(folder)
+    else:
+        games = []
+        try:
+            names = sorted(os.listdir(folder), key=str.lower)
+        except OSError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        for n in names:
+            path = os.path.join(folder, n)
+            if n.startswith(".") or not os.path.isdir(path):
+                continue
+            row = scan_folder(path)
+            if row["name"]:
+                games.append(row)
+        out = {"path": folder, "games": games}
+    print(json.dumps(out))
+    return 0
+
+
 # ── Abrir ──
 
 def mapper(cfg_path):
@@ -767,6 +1054,26 @@ def main():
     for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--progress", nargs="*", type=int)
+    s = sub.add_parser("add")
+    s.add_argument("--group", required=True)
+    s.add_argument("--name", required=True)
+    s.add_argument("--platform", choices=PLATFORMS, required=True)
+    s.add_argument("--folder", required=True)
+    s.add_argument("--exe")
+    s.add_argument("--command")
+    s.add_argument("--mode", default="640x240@60")
+    for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string"):
+        s.add_argument("--" + opt)
+    s.add_argument("--replace", action="store_true")
+    s.add_argument("--progress", nargs="*", type=int)
+    s = sub.add_parser("media")
+    s.add_argument("--group", required=True)
+    s.add_argument("--name", required=True)
+    for opt in ("snap", "video", "text", "text-string"):
+        s.add_argument("--" + opt)
+    s = sub.add_parser("scan")
+    s.add_argument("folder")
+    s.add_argument("--one", action="store_true")
     s = sub.add_parser("run")
     s.add_argument("cfg")
     args = p.parse_args()
@@ -775,7 +1082,7 @@ def main():
         if value is not None and len(value) not in (0, 2):
             p.error("--progress takes no value or START END")
     return {"inspect": cmd_inspect, "pending": cmd_pending, "install": cmd_install, "pack": cmd_pack,
-            "run": cmd_run}[args.cmd](args)
+            "add": cmd_add, "media": cmd_media, "scan": cmd_scan, "run": cmd_run}[args.cmd](args)
 
 
 if __name__ == "__main__":

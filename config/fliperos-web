@@ -1594,12 +1594,15 @@ def tail(path, lines):
 class Task:
     """Um comando em segundo plano (o Downloader aplicando o filtro, lendo um
     link...): a saida guardada e os eventos de progresso do Setup
-    (lib/progress.sh: @step PCT TEXTO, @pct PCT, @msg TEXTO, @fail ETAPA|ERRO)."""
+    (lib/progress.sh: @step PCT TEXTO, @pct PCT, @msg TEXTO, @fail ETAPA|ERRO).
+    As linhas "@row N ok|fail MOTIVO" (a tabela de jogos custom) ficam a parte,
+    todas, fora do limite do historico."""
 
     def __init__(self, task_id, name, argv, kind):
         self.id, self.name, self.kind = task_id, name, kind
         self.started, self.ended, self.rc = time.time(), None, None
         self.pct, self.step, self.error = None, "", ""
+        self.rows = []
         self.lines = collections.deque(maxlen=400)
         self.lock = threading.Lock()
         self.proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -1621,6 +1624,11 @@ class Task:
                     self.step = rest
                 elif word == "@fail":
                     self.error = rest.partition("|")[2] or rest
+                elif word == "@row":
+                    number, _, result = rest.partition(" ")
+                    state, _, why = result.partition(" ")
+                    if number.isdigit() and state in ("ok", "fail"):
+                        self.rows.append({"row": int(number) - 1, "ok": state == "ok", "error": why})
         rc = self.proc.wait()
         with self.lock:
             self.rc, self.ended = rc, time.time()
@@ -1640,6 +1648,7 @@ class Task:
                    "error": self.error, "last": last}
             if log:
                 row["log"] = "\n".join(self.lines)
+                row["rows"] = list(self.rows)
             return row
 
     def cancel(self):
@@ -2558,6 +2567,145 @@ def tool_lines(argv, fields):
     return rows
 
 
+# ── Jogos custom (Setup > Games > Custom games) ────────────────────
+# A pagina config/web/customgames.js: a lista, um jogo ou a tabela de muitos
+# (fliperos-setup --customgames, lib/customgames.sh) e a arte de cada linha,
+# subida antes para uma pasta de espera (stage) e passada ao Setup pelo
+# caminho. Os jogos de uma pasta sao copiados para ~/games/GRUPO/NOME.
+CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
+CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
+                     "buttons", "players", "snap", "video", "text", "text_string", "wine")
+CUSTOMGAME_ROWS = 500
+CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
+# A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
+# tamanho maximo de cada tipo.
+STAGE_KINDS = {"snap": (("png", "jpg", "jpeg", "webp", "gif"), 32 << 20),
+               "video": (("mp4", "mkv", "webm", "avi", "mov", "flv"), 4 << 30),
+               "text": (("txt",), 1 << 20)}
+STAGE_HOURS = 24
+
+
+def stage_dir():
+    # Fora da home: o painel roda como root, e um ~/.cache criado por ele
+    # seria do root (os programas do jogador nao gravariam nele).
+    return ENV("FLIPEROS_WEB_STAGE", "/var/cache/fliperos-web/stage")
+
+
+def stage_clean():
+    """A arte e as tabelas esperando ha mais de um dia saem."""
+    folder = stage_dir()
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return
+    limit = time.time() - STAGE_HOURS * 3600
+    for name in names:
+        path = os.path.join(folder, name)
+        try:
+            if os.path.getmtime(path) < limit:
+                os.unlink(path)
+        except OSError:
+            pass
+
+
+def stage_path(token):
+    """O arquivo de um id da pasta de espera, ou None."""
+    if not re.fullmatch(r"[0-9a-f]{16}\.[a-z0-9]{1,5}", str(token or "")):
+        return None
+    path = os.path.join(stage_dir(), token)
+    return path if os.path.isfile(path) else None
+
+
+def customgame_field(value, limit=1024):
+    """Um campo de uma linha da tabela: texto de uma linha so, sem os
+    caracteres de controle (o 0x1f separa os campos no arquivo)."""
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", str(value if value is not None else "")).strip()[:limit]
+
+
+def customgame_rows_file(rows):
+    """O arquivo da tabela para o Setup (um jogo por linha, campos separados
+    por 0x1f), com a arte trocada pelo caminho na pasta de espera. Uma arte
+    que nao esta mais la vira um caminho que nao existe: o Setup diz que
+    falta. None: a tabela nao serve."""
+    if not isinstance(rows, list) or not rows or len(rows) > CUSTOMGAME_ROWS:
+        return None
+    lines = []
+    for row in rows:
+        if not isinstance(row, dict):
+            return None
+        fields = []
+        for key in CUSTOMGAME_FIELDS:
+            value = customgame_field(row.get(key), 4096 if key == "text_string" else 1024)
+            if key in ("snap", "video", "text") and value:
+                value = stage_path(value) or os.path.join(stage_dir(), "missing-" + re.sub(r"\W", "", value)[:32])
+            elif key == "folder" and value:
+                value = os.path.normpath(value)
+            fields.append(value)
+        lines.append("\x1f".join(fields))
+    os.makedirs(stage_dir(), exist_ok=True)
+    path = os.path.join(stage_dir(), "rows-%s.tab" % secrets.token_hex(8))
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return path
+
+
+def customgames_info():
+    """fliperos-setup --customgames describe como JSON: os grupos, os jogos,
+    os pacotes esperando e as escolhas dos dropdowns."""
+    out = setup_out("--customgames", "describe", timeout=120)
+    info = {"groups": [], "games": [], "pending": [], "modes": [], "genres": [], "controls": [], "squash": [],
+            "wine": [], "portproton": False, "games_dir": "", "free": 0}
+    for line in out.splitlines():
+        f = line.split("\t")
+        kind, rest = f[0], f[1:]
+        if kind == "group" and len(rest) >= 2:
+            info["groups"].append({"name": rest[0], "count": int(rest[1]) if rest[1].isdigit() else 0})
+        elif kind == "game" and len(rest) >= 12:
+            info["games"].append(dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
+                                           "players", "command", "exe", "folder", "package"), rest)))
+        elif kind == "pending" and len(rest) >= 5:
+            info["pending"].append(dict(zip(("zip", "group", "name", "platform", "state", "why"), rest + [""])))
+        elif kind == "mode" and len(rest) == 2:
+            info["modes"].append({"label": rest[0], "value": rest[1]})
+        elif kind == "genre" and rest:
+            info["genres"].append({"name": rest[0], "subs": []})
+        elif kind == "sub" and rest and info["genres"]:
+            info["genres"][-1]["subs"].append(rest[0])
+        elif kind == "control" and len(rest) == 2:
+            info["controls"].append({"value": rest[0], "label": rest[1]})
+        elif kind == "squash" and len(rest) >= 3:
+            info["squash"].append({"folder": rest[0], "mounted": rest[1] == "1", "size": rest[2]})
+        elif kind == "wine" and len(rest) == 2:
+            info["wine"].append({"value": rest[0], "label": rest[1]})
+        elif kind == "portproton" and rest:
+            info["portproton"] = rest[0] == "1"
+        elif kind == "games" and rest:
+            info["games_dir"] = rest[0]
+        elif kind == "free" and rest and rest[0].isdigit():
+            info["free"] = int(rest[0])
+    return info
+
+
+def customgames_check(path):
+    """fliperos-setup --customgames check: os erros por linha (contadas de 0,
+    como as da pagina), o que sera copiado e o livre."""
+    out = setup_out("--customgames", "check", path, timeout=300)
+    errors, values = [], key_values(out)
+    for line in out.splitlines():
+        if line.startswith("error|"):
+            parts = line.split("|", 3)
+            if len(parts) == 4 and parts[1].isdigit():
+                errors.append({"row": int(parts[1]) - 1, "field": parts[2], "error": parts[3]})
+    number = lambda key: int(values.get(key, "0")) if values.get(key, "0").isdigit() else 0
+    return {"errors": errors, "bytes": number("bytes"), "free": number("free")}
+
+
+def inside(path, folder):
+    """O caminho real de PATH esta dentro de FOLDER."""
+    real, base = os.path.realpath(path), os.path.realpath(folder)
+    return real.startswith(base + os.sep)
+
+
 def installables():
     """Os emuladores (com a versao instalada) e os extras, como nas telas
     Emulators & Games e Extras."""
@@ -3042,8 +3190,8 @@ class Handler(BaseHTTPRequestHandler):
         cookie = SimpleCookie(self.headers.get("Cookie", ""))
         return cookie["fliperos_session"].value if "fliperos_session" in cookie else None
 
-    def body(self):
-        size = min(int(self.headers.get("Content-Length") or 0), 65536)
+    def body(self, limit=65536):
+        size = min(int(self.headers.get("Content-Length") or 0), limit)
         try:
             return json.loads(self.rfile.read(size) or b"{}")
         except ValueError:
@@ -3169,6 +3317,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"settings": settings()})
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
+        if url.path in ("/api/customgames", "/api/customgames/scan"):
+            return self.customgames_get(url)
         if url.path == "/api/terminal":
             return self.open_terminal(user == LAB_USER)
         if url.path == "/api/lab":
@@ -3445,6 +3595,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.version_action(self.body())
         if url.path.startswith("/api/romfilter/"):
             return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
+        if url.path.startswith("/api/customgames/"):
+            return self.customgames_post(url)
         if url.path == "/api/stream/offer":
             return self.stream_offer(self.body())
         if url.path == "/api/lab":
@@ -4056,6 +4208,145 @@ class Handler(BaseHTTPRequestHandler):
         if not task:
             return self.send(409, {"error": "the ROM filter is already copying"})
         return self.send(200, task.info())
+
+    # ── Jogos custom ──
+
+    def customgames_get(self, url):
+        query = parse_qs(url.query)
+        if url.path == "/api/customgames/scan":
+            # Importar de uma pasta: os jogos das subpastas (ou, com one=1, o
+            # da propria pasta), com os .exe e os programas achados.
+            path = os.path.normpath((query.get("path") or [""])[0])
+            if not path.startswith("/") or not os.path.isdir(path):
+                return self.send(404, {"error": "no such folder"})
+            argv = ["python3", CUSTOMGAME_TOOL, "scan", path] + (["--one"] if (query.get("one") or [""])[0] == "1" else [])
+            try:
+                done = subprocess.run(argv, capture_output=True, text=True, timeout=120)
+                return self.send(200, json.loads(done.stdout))
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                return self.send(500, {"error": str(exc)})
+        try:
+            return self.send(200, customgames_info())
+        except (OSError, subprocess.SubprocessError) as exc:
+            return self.send(500, {"error": str(exc)})
+
+    def customgames_post(self, url):
+        action = url.path.rsplit("/", 1)[1]
+        if action == "stage":
+            return self.customgame_stage(parse_qs(url.query))
+        data = self.body(4 << 20)
+        tasks = self.panel.tasks
+        if action in ("check", "bulk"):
+            path = customgame_rows_file(data.get("rows"))
+            if not path:
+                return self.send(400, {"error": "rows: a list of 1 to %d games" % CUSTOMGAME_ROWS})
+            if action == "check":
+                try:
+                    return self.send(200, customgames_check(path))
+                except (OSError, subprocess.SubprocessError) as exc:
+                    return self.send(500, {"error": str(exc)})
+                finally:
+                    os.unlink(path)
+            argv = [SETUP, "--customgames", "bulk", path] + (["--portproton"] if data.get("portproton") else [])
+            count = len(data["rows"])
+            task = tasks.start("Custom games: %d game%s" % (count, "" if count == 1 else "s"), argv, "customgames")
+            if not task:
+                os.unlink(path)
+                return self.send(409, {"error": "custom games are already being added"})
+            return self.send(200, task.info())
+        group = customgame_field(data.get("group"), 255)
+        name = customgame_field(data.get("name"), 255)
+        if action == "edit":
+            args = ["group=" + group, "name=" + name]
+            for key in ("new_group", "new_name", "command", "mode", "category", "controls", "buttons", "players"):
+                if key in data:
+                    args.append("%s=%s" % (key, customgame_field(data[key])))
+            return self.setup_call(["--customgames", "edit"] + args, timeout=180)
+        if action == "delete":
+            return self.setup_call(["--customgames", "delete", group, name] + (["folder"] if data.get("folder") else []),
+                                   timeout=180)
+        if action == "group":
+            return self.setup_call(["--customgames", "group", name])
+        if action == "media":
+            args = []
+            for key, opt in (("snap", "--snap"), ("video", "--video"), ("text", "--text")):
+                if data.get(key):
+                    path = stage_path(data[key])
+                    if not path:
+                        return self.send(400, {"error": "the %s was not found: send it again" % key})
+                    args += [opt, path]
+            if data.get("text_string"):
+                args += ["--text-string", customgame_field(data["text_string"], 4096)]
+            if not args:
+                return self.send(400, {"error": "nothing to change"})
+            return self.setup_call(["--customgames", "media", group, name] + args, timeout=120)
+        if action == "install":
+            if data.get("all"):
+                argv = [SETUP, "--customgames", "install-all", group]
+                title = "Install the packages of %s" % group
+            else:
+                path = str(data.get("zip", ""))
+                roms = os.path.join(player_home(), "roms", "custom")
+                if not path.endswith(CUSTOMGAME_SUFFIX) or not os.path.isfile(path) or not inside(path, roms):
+                    return self.send(400, {"error": "no such package in ~/roms/custom"})
+                argv = [SETUP, "--customgames", "install", path, group] + \
+                    (["replace"] if data.get("replace") else []) + (["--portproton"] if data.get("portproton") else [])
+                title = "Install %s" % os.path.basename(path)[:-len(CUSTOMGAME_SUFFIX)]
+        elif action == "pack":
+            argv, title = [SETUP, "--customgames", "pack", group, name], "Package of %s" % name
+        elif action == "squash":
+            folder = os.path.normpath(str(data.get("folder", "")))
+            if data.get("action") not in ("pack", "unpack") or not folder.startswith("/") or not os.path.isdir(folder):
+                return self.send(400, {"error": "action pack or unpack, and a game folder"})
+            argv = [SETUP, "--customgames", "squash", data["action"], folder]
+            title = "%s %s" % ("Pack" if data["action"] == "pack" else "Unpack", os.path.basename(folder))
+        elif action == "portproton":
+            argv, title = [SETUP, "--customgames", "portproton"], "Install PortProton"
+        else:
+            return self.send(404, {"error": "not found"})
+        task = tasks.start(title, argv, "customgames")
+        if not task:
+            return self.send(409, {"error": "another custom games task is running"})
+        return self.send(200, task.info())
+
+    def customgame_stage(self, query):
+        """A arte de uma linha da tabela (ou do Editar), antes de gravar o
+        jogo: o corpo e o arquivo, numa pasta de espera; o id volta."""
+        kind = (query.get("kind") or [""])[0]
+        name = (query.get("name") or [""])[0]
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        try:
+            size = int(self.headers.get("Content-Length") or -1)
+        except ValueError:
+            size = -1
+        exts, limit = STAGE_KINDS.get(kind, ((), 0))
+        if ext not in exts or not 0 < size <= limit:
+            self.close_connection = True
+            return self.send(400, {"error": "a %s file up to %d MB" % ("/".join(exts) or "picture, video or text",
+                                                                       limit >> 20)})
+        stage_clean()
+        folder = stage_dir()
+        os.makedirs(folder, exist_ok=True)
+        token = "%s.%s" % (secrets.token_hex(8), ext)
+        path = os.path.join(folder, token)
+        try:
+            with open(path + ".part", "wb") as f:
+                left = size
+                while left > 0:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        raise OSError("the upload was cut")
+                    f.write(chunk)
+                    left -= len(chunk)
+            os.replace(path + ".part", path)
+        except OSError as exc:
+            try:
+                os.unlink(path + ".part")
+            except OSError:
+                pass
+            self.close_connection = True
+            return self.send(500, {"error": str(exc)})
+        return self.send(200, {"id": token, "name": name, "size": size})
 
     def upload(self, query):
         """O corpo do pedido e o arquivo: gravado aos pedacos num .part na
