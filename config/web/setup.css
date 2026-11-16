@@ -6,7 +6,9 @@
 /* ── Os grupos ── */
 .setup-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; }
 .setup-head p { margin: 0; max-width: 820px; }
-.setup-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 10px; margin: 18px 0; }
+.setup-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 10px; margin: 18px 0 24px;
+  /* A linha que separa os grupos (o seletor de areas) dos itens do grupo. */
+  padding-bottom: 24px; border-bottom: 1px solid var(--line); }
 .setup-groups .sg { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line);
   background: var(--card2); color: var(--fg); text-decoration: none; min-width: 0; transition: border-color .2s, background .2s; }
 .setup-groups .sg:hover { border-color: var(--purple); }
@@ -24,7 +26,7 @@
   -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 760px) {
   /* No celular, os grupos numa fila que rola de lado (como as abas). */
-  .setup-groups { display: flex; overflow-x: auto; scrollbar-width: none; margin: 14px -14px; padding: 2px 14px; }
+  .setup-groups { display: flex; overflow-x: auto; scrollbar-width: none; margin: 14px -14px 18px; padding: 2px 14px 16px; }
   .setup-groups::-webkit-scrollbar { display: none; }
   .setup-groups .sg { flex: none; padding: 8px 12px; }
   .setup-groups .sg small { display: none; }
