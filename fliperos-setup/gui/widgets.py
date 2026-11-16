@@ -21,6 +21,8 @@ import theme as T
 
 ROW = 14
 CONTENT_Y = 40
+# A altura de uma linha do paragraph().
+TEXT_ROW = 12
 
 
 # A dica e a legenda das teclas seguem o pe da tela (240 deitado, 320 em pe,
@@ -413,13 +415,21 @@ class Menu(Animated):
     carrossel: o icone de cada item vem de tiles (valor -> funcao que o
     desenha), de theme.ICONS (pelo valor) ou, sem nenhum, e a inicial."""
 
+    # As linhas de texto acima da lista do seletor de pastas (fixed): o pedido
+    # e o caminho da pasta.
+    FIXED_TEXT_ROWS = 3
+
     def __init__(self, title, entries, default=None, text="", mode="menu", marked=(), tiles=None, vertical=False,
-                 row_icons=None):
+                 row_icons=None, fixed=False):
         self.title = title
         self.text = text
         self.mode = mode
         # UI_STYLE=list: a lista vertical em texto, mesmo curta (as pastas).
         self.vertical = vertical
+        # UI_STYLE=browse (o seletor de pastas e arquivos, ui_browse): a lista
+        # tem sempre a mesma altura, entre numa pasta com muitos ou poucos
+        # itens, de nome curto ou comprido, de caminho curto ou comprido.
+        self.fixed = fixed
         self.tiles = tiles or {}
         # Na lista vertical, um icone de 8x8 (theme.SMALL) antes do rotulo:
         # o com fio e o sem fio da lista de controles.
@@ -631,10 +641,17 @@ class Menu(Animated):
         y0 = CONTENT_Y
         hints = any(e[2] for e in self.entries)
         bottom = hint_y() - 6 if hints else footer_y() - 8
-        if not hints and any(width(e[1]) > T.SAFE_W - 46 for e in self.entries):
-            # Ha rotulos cortados: sobra espaco para o do cursor, inteiro.
+        if not hints and (self.fixed or any(width(e[1]) > T.SAFE_W - 46 for e in self.entries)):
+            # Ha rotulos cortados: sobra espaco para o do cursor, inteiro (no
+            # seletor de pastas, sempre: a altura nao muda de uma pasta a outra).
             bottom -= 24
-        if self.text:
+        if self.text and self.fixed:
+            # O seletor: o texto e o caminho num espaco fixo (FIXED_TEXT_ROWS
+            # linhas); a lista comeca sempre no mesmo lugar.
+            top = y0 + self.FIXED_TEXT_ROWS * TEXT_ROW + 4
+            paragraph(surf, [self.text], y0, bottom=top - 4)
+            y0 = top
+        elif self.text:
             # O texto deixa pelo menos tres linhas para a lista.
             y0 = paragraph(surf, [self.text], y0, bottom=bottom - 3 * ROW - 4) + 4
         rows = max(1, (bottom - y0) // ROW)

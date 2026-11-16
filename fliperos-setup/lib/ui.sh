@@ -575,7 +575,8 @@ ui_list_height() {
   # da paginacao (packaging/patches/gum: uma linha antes da lista, outra depois).
   free=$((UI_ROWS - UI_USED_ROWS - 5))
   ((free < 3)) && free=3
-  ((items < free)) && free=$items
+  # UI_LIST_FIXED (o seletor de pastas): a altura toda, com poucos itens tambem.
+  ((items < free)) && [[ -z ${UI_LIST_FIXED:-} ]] && free=$items
   printf '%s\n' "$free"
 }
 
@@ -1048,8 +1049,10 @@ ui_browse() {
         paths+=("$path")
       done
     fi
-    # Pastas: na interface grafica, a lista vertical em texto (UI_STYLE=list).
-    choice=$(UI_STYLE=list ui_menu "$title" "$text"$'\n'"$(ui_c "$C_CYAN" "$dir")" "$default" "${entries[@]}") ||
+    # Pastas: na interface grafica, a lista vertical em texto, sempre da
+    # mesma altura (UI_STYLE=browse); no texto, a lista do gum tambem
+    # (UI_LIST_FIXED). Entrar numa pasta com mais ou menos itens nao muda a tela.
+    choice=$(UI_STYLE=browse UI_LIST_FIXED=1 ui_menu "$title" "$text"$'\n'"$(ui_c "$C_CYAN" "$dir")" "$default" "${entries[@]}") ||
       return 1
     case $choice in
       use)

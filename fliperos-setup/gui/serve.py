@@ -70,7 +70,7 @@ class Server:
                 out.append((plain(line), self.colors.get(code, self.T.FG)))
         return out
 
-    def entries(self, args):
+    def entries(self, args, notes=True):
         """Os itens de um menu: (valor, rotulo, dica, instalado, bloqueado). Um rotulo sem
         dica que termina com um parentese ("Pixelcade (LED/LCD marquee)") vira
         o nome e a dica: o nome cabe grande no carrossel. "(installed)" no fim
@@ -82,15 +82,15 @@ class Server:
             value, label, hint = (plain(arg).split(GS) + ["", ""])[:3]
             # Cada parentese do fim vira uma frase da dica, na ordem:
             # "Hypseus Singe (Laserdisc) (installed)" -> "Laserdisc. Installed".
-            notes = []
-            found = NOTE.match(label)
+            found_notes = []
+            found = NOTE.match(label) if notes else None
             while found:
-                notes.insert(0, found.group(2)[:1].upper() + found.group(2)[1:])
+                found_notes.insert(0, found.group(2)[:1].upper() + found.group(2)[1:])
                 label = found.group(1)
                 found = NOTE.match(label)
-            if notes:
-                hint = ". ".join(notes + ([hint] if hint else []))
-            out.append((value, label, hint, "Installed" in notes, "Not supported" in notes))
+            if found_notes:
+                hint = ". ".join(found_notes + ([hint] if hint else []))
+            out.append((value, label, hint, "Installed" in found_notes, "Not supported" in found_notes))
         return out
 
     @staticmethod
@@ -289,7 +289,9 @@ class Server:
         W = self.W
         if cmd in ("menu", "radio", "check"):
             title, text, current, style = plain(a[0]), plain(a[1]), a[2], a[3]
-            entries = self.entries(a[4:])
+            # No seletor de pastas (browse) o nome fica inteiro: "Game (USA).zip"
+            # e um arquivo, nao um nome com dica.
+            entries = self.entries(a[4:], notes=style != "browse")
             if not entries:
                 return 1, ""
             marked = current.split(",") if cmd == "check" else [current] if cmd == "radio" else []
@@ -330,7 +332,8 @@ class Server:
                 screen = W.ToggleGrid(title, text, [(v, label, label[2:]) for v, label in options], marked, 6)
             else:
                 screen = W.Menu(title, entries, current, text, cmd, marked, tiles,
-                                vertical=style in ("list", "controllers"), row_icons=icons)
+                                vertical=style in ("list", "controllers", "browse"), row_icons=icons,
+                                fixed=style == "browse")
                 if style == "controllers":
                     # Um controle ligado ou tirado: o Setup refaz a lista (124).
                     screen.watch = W.joystick_signature

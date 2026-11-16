@@ -4833,9 +4833,22 @@ class FolderListsTests(unittest.TestCase):
     """Toda listagem de pastas e a lista vertical em texto na interface
     grafica (UI_STYLE=list), nunca o carrossel de icones."""
 
+    def env_height(self, call):
+        env = Env()
+        try:
+            return env.out("source %s/lib/ui.sh; UI_ROWS=30 UI_USED_ROWS=8; %s" % (SETUP, call)).strip()
+        finally:
+            env.close()
+
     def test_every_folder_listing_is_a_vertical_list(self):
         ui = (SETUP / "lib" / "ui.sh").read_text().split("ui_browse() {")[1].split("\n}\n")[0]
-        self.assertIn("choice=$(UI_STYLE=list ui_menu", ui)
+        # O seletor: a lista vertical sempre da mesma altura (no grafico e no gum).
+        self.assertIn("choice=$(UI_STYLE=browse UI_LIST_FIXED=1 ui_menu", ui)
+        serve = (SETUP / "gui" / "serve.py").read_text()
+        self.assertIn('vertical=style in ("list", "controllers", "browse")', serve)
+        self.assertIn('fixed=style == "browse"', serve)
+        self.assertEqual(self.env_height("UI_LIST_FIXED=1 ui_list_height 2"), self.env_height("ui_list_height 99"))
+        self.assertEqual(self.env_height("ui_list_height 2"), "2")
         screens = {
             "folders.sh": ['choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Folders in $FOLDERS_HOME',
                            'choice=$(UI_STYLE=list ui_menu "$title" "${text:+$text'],
@@ -4851,7 +4864,7 @@ class FolderListsTests(unittest.TestCase):
                 self.assertIn(call, text, name)
         serve = (SETUP / "gui" / "serve.py").read_text()
         # (a lista de controles do Button mapping tambem e vertical)
-        self.assertIn('vertical=style in ("list", "controllers")', serve)
+        self.assertIn('vertical=style in ("list", "controllers", "browse")', serve)
         self.assertIn("return (not self.vertical and", (SETUP / "gui" / "widgets.py").read_text())
 
 
