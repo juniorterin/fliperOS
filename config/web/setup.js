@@ -135,18 +135,54 @@ async function loadSettings() {
   }
   delete $("setup-page").dataset.page;
   $("setup-page").replaceChildren();
-  if (!$("settings").children.length) $("settings").replaceChildren(el("p", { class: "dim" }, t("setup_loading")));
+  // Os ajustes vem do Setup do gabinete (fliperos-setup --settings), que leva
+  // alguns segundos. Trocar de grupo desenha na hora com os da ultima leitura
+  // (setupRows) e le de novo por tras; sem eles (a primeira vez), o aviso de
+  // carregando no lugar da lista. O grupo clicado gira enquanto le.
+  const switched = setupShown !== group.id;
+  const cached = !!setupRows && switched;
+  if (cached) setupDraw(group, setupRows);
+  else if (!setupRows) {
+    $("settings").replaceChildren(el("p", { class: "dim setup-loading" }, el("span", { class: "spinner" }), t("setup_loading")));
+  }
+  setupBusy(group.id, true);
   let rows;
   try {
     const [settingsRes, itemsRes] = await Promise.all([api("/api/settings"), api("/api/setup/items")]);
     rows = (await settingsRes.json()).settings || [];
     setupInfo = itemsRes.ok ? await itemsRes.json() : { items: {}, info: {} };
   } catch (e) {
-    if (e.message !== "login") $("settings").replaceChildren(el("p", { class: "error" }, t("setup_error").replace("%s", e.message)));
+    setupBusy(group.id, false);
+    if (e.message !== "login" && !setupRows) {
+      $("settings").replaceChildren(el("p", { class: "error" }, t("setup_error").replace("%s", e.message)));
+    }
     return;
   }
+  setupBusy(group.id, false);
+  const changed = JSON.stringify(rows) !== JSON.stringify(setupRows);
+  setupRows = rows;
   // Mudou de grupo enquanto o Setup respondia: o outro desenha.
   if (setupGroup() !== group || $("settings").hidden) return;
+  // Desenhado agora ha pouco com a leitura de antes, e nada mudou: fica (sem
+  // piscar). Depois de um ajuste (o mesmo grupo), desenha sempre: as caixas
+  // (o volume, a geometria) leem as coisas delas de novo.
+  if (cached && !changed && setupShown === group.id) return;
+  setupDraw(group, rows);
+}
+
+// Os ajustes da ultima leitura e o grupo desenhado com eles.
+let setupRows = null;
+let setupShown = "";
+
+// setupBusy: o grupo esta lendo os ajustes do gabinete (gira no alto).
+function setupBusy(id, on) {
+  const link = $("setup-groups").querySelector('a[href="#system/setup/' + id + '"]');
+  if (link) link.classList.toggle("busy", on);
+  $("settings").setAttribute("aria-busy", String(on));
+}
+
+function setupDraw(group, rows) {
+  setupShown = group.id;
   const items = [];
   for (const item of group.items) {
     if (item.when && !setupInfo.items[item.when]) continue;

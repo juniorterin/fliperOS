@@ -7830,6 +7830,16 @@ class WebSetupTests(WebSetupBase):
         app = (ROOT / 'config/web/app.js').read_text()
         self.assertIn('"system/settings": "system/setup"', app)
         self.assertNotIn('async function loadSettings', (ROOT / 'config/web/system.js').read_text())
+        # As abas so sao refeitas ao trocar de area: refeitas a cada clique num
+        # grupo do Setup (o endereco muda), a animacao de entrada tocava de novo.
+        self.assertIn('if (tabs.dataset.area === a && tabs.dataset.lang === lang) {', app)
+        # Trocar de grupo desenha com a ultima leitura e le por tras; a primeira
+        # leitura (lenta: fliperos-setup --settings) tem o anel de carregando.
+        setup = (ROOT / 'config/web/setup.js').read_text()
+        self.assertIn('if (cached) setupDraw(group, setupRows);', setup)
+        self.assertIn('el("span", { class: "spinner" }), t("setup_loading")', setup)
+        self.assertIn('link.classList.toggle("busy", on);', setup)
+        self.assertIn('.setup-groups .sg.busy::after', (ROOT / 'config/web/setup.css').read_text())
 
 
 class WebPanelTests(unittest.TestCase):

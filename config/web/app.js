@@ -161,9 +161,23 @@ function showPage(hash) {
     $("page-sub").textContent = t("intro_" + a);
     $("area-icon").setAttribute("href", "icons.svg#" + AREAS[a].icon);
     $("subtabs").hidden = !AREAS[a].subs.length;
-    $("subtabs").replaceChildren(...AREAS[a].subs.map(([name, glyph]) => el("a", {
-      href: "#" + a + "/" + name, class: name === s ? "on" : "", "aria-current": name === s ? "page" : "false" },
-    icon(glyph), t("sub_" + name))));
+    // As abas so sao refeitas ao trocar de area (ou de idioma): refeitas, a
+    // animacao de entrada delas tocava de novo a cada clique dentro da aba
+    // (os grupos do Setup mudam o endereco). Na mesma area, so a acesa muda.
+    const tabs = $("subtabs");
+    if (tabs.dataset.area === a && tabs.dataset.lang === lang) {
+      tabs.querySelectorAll("a").forEach((link) => {
+        const on = link.getAttribute("href") === "#" + a + "/" + s;
+        link.className = on ? "on" : "";
+        link.setAttribute("aria-current", on ? "page" : "false");
+      });
+    } else {
+      tabs.dataset.area = a;
+      tabs.dataset.lang = lang;
+      tabs.replaceChildren(...AREAS[a].subs.map(([name, glyph]) => el("a", {
+        href: "#" + a + "/" + name, class: name === s ? "on" : "", "aria-current": name === s ? "page" : "false" },
+      icon(glyph), t("sub_" + name))));
+    }
   };
   if (document.startViewTransition && before && before !== a && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
     document.startViewTransition(apply);

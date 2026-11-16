@@ -11,6 +11,13 @@
   background: var(--card2); color: var(--fg); text-decoration: none; min-width: 0; transition: border-color .2s, background .2s; }
 .setup-groups .sg:hover { border-color: var(--purple); }
 .setup-groups .sg.on { border-color: var(--pink); background: rgba(255,121,198,.10); box-shadow: 0 0 16px rgba(255,121,198,.18); }
+/* O grupo lendo os ajustes do gabinete: um anel girando no canto. */
+.setup-groups .sg { position: relative; }
+.setup-groups .sg.busy::after { content: ""; position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--pink); border-right-color: var(--cyan); animation: spin .9s linear infinite; }
+/* A primeira leitura: o anel e o texto no lugar da lista. */
+.setup-loading { display: flex; align-items: center; gap: 12px; padding: 18px 4px; }
+.setup-loading .spinner { width: 22px; height: 22px; border-width: 2px; flex: none; }
 .setup-groups .sg span { display: grid; min-width: 0; }
 .setup-groups .sg b { font-weight: 650; }
 .setup-groups .sg small { color: var(--dim); font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2;
