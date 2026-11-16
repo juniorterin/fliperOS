@@ -25,15 +25,15 @@ const CG_PASTE_ORDER = ["name", "group", "platform", "folder", "run", "mode", "c
 // ── A pagina ──
 
 async function customGamesPage(box) {
-  const add = el("button", { type: "button", class: "btn" }, icon("px-add"), t("cg_add"));
+  const add = el("button", { type: "button", class: "btn small" }, icon("g-plus"), t("cg_add"));
   add.addEventListener("click", () => cgAddOne());
-  const group = el("button", { type: "button", class: "btn ghost" }, icon("px-addfolder"), t("cg_new_group"));
+  const group = el("button", { type: "button", class: "btn ghost small" }, t("cg_new_group"));
   group.addEventListener("click", () => cgNewGroup().then((name) => name && cgLoad()));
-  const bulk = el("a", { class: "btn ghost", href: "#cg-bulk" }, icon("px-romlist"), t("cg_bulk"));
+  const bulk = el("a", { class: "btn ghost small", href: "#cg-bulk" }, t("cg_bulk"));
   bulk.addEventListener("click", (ev) => { ev.preventDefault(); $("cg-bulk").scrollIntoView({ behavior: "smooth" }); });
   const zipInput = el("input", { type: "file", accept: ".zip", hidden: "" });
   zipInput.addEventListener("change", () => { const f = zipInput.files[0]; zipInput.value = ""; if (f) cgInstallZip(f); });
-  const zip = el("button", { type: "button", class: "btn ghost" }, icon("px-install"), t("cg_install_zip"));
+  const zip = el("button", { type: "button", class: "btn ghost small" }, t("cg_install_zip"));
   zip.addEventListener("click", () => zipInput.click());
   cg.el = {
     list: el("div", { class: "cg-list" }),
@@ -41,8 +41,8 @@ async function customGamesPage(box) {
     packed: el("section", { class: "cg-sec" }),
     bulk: el("section", { class: "cg-sec cg-bulk", id: "cg-bulk" }),
   };
-  box.append(el("div", { class: "cg-head" }, el("h3", {}, icon("px-games"), t("cg_title")), el("p", { class: "dim" }, t("cg_intro")),
-    el("div", { class: "row start" }, add, bulk, group, zip, zipInput)),
+  box.append(el("div", { class: "cg-head" }, el("h2", {}, t("cg_title")), el("p", { class: "lead" }, t("cg_intro")),
+    el("div", { class: "cg-bar" }, add, bulk, group, zip, zipInput)),
   cg.el.list, cg.el.pending, cg.el.bulk, cg.el.packed);
   cgDraftLoad();
   await cgLoad();
@@ -114,8 +114,8 @@ function cgTile(game) {
   const actions = [["g-play", "cg_play", () => cgPlay(game)]];
   if (game.platform !== "script") actions.push(["px-edit", "cg_edit", () => cgEdit(game)]);
   if (game.platform === "windows" || game.platform === "native") actions.push(["px-install", "cg_package", () => cgPack(game)]);
-  actions.push(["px-remove", "cg_delete", () => cgDelete(game)]);
-  return el("div", { class: "cg-tile" }, el("div", { class: "cg-snap" }, img),
+  actions.push(["g-trash", "cg_delete", () => cgDelete(game)]);
+  return el("div", { class: "cg-tile", tabindex: "0" }, el("div", { class: "cg-snap" }, img),
     el("b", { title: game.name }, game.name), el("span", { class: "tag" }, cgKindLabel(game)),
     el("div", { class: "cg-actions" }, ...actions.map(([glyph, label, fn]) => {
       const b = el("button", { type: "button", class: "icon-btn small", title: t(label), "aria-label": t(label) + ": " + game.name },
@@ -404,22 +404,22 @@ function cgRenderBulk() {
   const box = cg.el.bulk;
   if (!box.dataset.built) {
     box.dataset.built = "1";
-    const addRow = el("button", { type: "button", class: "btn ghost small" }, icon("px-add"), t("cg_rows"));
+    const addRow = el("button", { type: "button", class: "btn ghost small" }, icon("g-plus"), t("cg_rows"));
     addRow.addEventListener("click", () => { cg.rows.push(cgNewRow({ group: cg.defaultGroup })); cgTableDraw(true); });
-    const importBtn = el("button", { type: "button", class: "btn ghost small" }, icon("px-addfolder"), t("cg_import"));
+    const importBtn = el("button", { type: "button", class: "btn ghost small" }, t("cg_import"));
     importBtn.addEventListener("click", cgImport);
-    const pasteBtn = el("button", { type: "button", class: "btn ghost small" }, icon("px-romlist"), t("cg_paste"));
+    const pasteBtn = el("button", { type: "button", class: "btn ghost small" }, t("cg_paste"));
     pasteBtn.addEventListener("click", cgPasteDialog);
-    const clear = el("button", { type: "button", class: "btn ghost small" }, icon("px-remove"), t("cg_clear"));
+    const clear = el("button", { type: "button", class: "btn-text quiet" }, t("cg_clear"));
     clear.addEventListener("click", async () => {
       if (cg.rows.length && (await ask({ title: t("cg_clear"), text: t("cg_clear_ask"), yes: t("cg_clear"), danger: true }))) {
         cg.rows = [];
         cgTableDraw();
       }
     });
-    const check = el("button", { type: "button", class: "btn ghost" }, icon("px-ok"), t("cg_check"));
+    const check = el("button", { type: "button", class: "btn ghost small" }, t("cg_check"));
     check.addEventListener("click", () => cgCheck(cg.rows, $("cg-status")).catch(() => {}));
-    const save = el("button", { type: "button", class: "btn" }, icon("px-save"), t("cg_save_all"));
+    const save = el("button", { type: "button", class: "btn small" }, t("cg_save_all"));
     save.id = "cg-save";
     save.addEventListener("click", () => cgSaveTable().catch(() => {}));
     box.append(el("h4", {}, icon("px-romlist"), t("cg_bulk")), el("p", { class: "dim" }, t("cg_copy_note")),
@@ -427,7 +427,7 @@ function cgRenderBulk() {
         el("span", { id: "cg-default-group" })), addRow, importBtn, pasteBtn, clear),
       el("div", { class: "cg-table-wrap" }, el("table", { class: "cg-table", id: "cg-table" })),
       el("div", { id: "cg-pp" }), el("div", { class: "cg-status", id: "cg-status", role: "status" }),
-      el("div", { class: "row start cg-foot" }, check, save, el("span", { class: "dim" }, t("cg_draft"))));
+      el("div", { class: "cg-foot" }, el("span", { class: "dim" }, t("cg_draft")), el("span", { class: "grow" }), check, save));
     // Colar no meio da tabela: as linhas da planilha a partir dessa.
     box.querySelector("#cg-table").addEventListener("paste", (ev) => {
       const text = (ev.clipboardData || window.clipboardData).getData("text");

@@ -7456,6 +7456,7 @@ class WebSetupBase(unittest.TestCase):
                    FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_WEB_STAGE=str(tmp / 'stage'),
                    FLIPEROS_CUSTOMGAME=str(ROOT / 'config/fliperos-customgame'),
                    FLIPEROS_TTY1=str(tmp / 'installed-fliperos-tty1'),
+                   FLIPEROS_OSD_PROFILES=str(tmp / 'osd-profiles.conf'), FLIPEROS_MENU_SOUNDS=str(tmp / 'sounds'),
                    FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'))
         (tmp / 'installed-fliperos-tty1').write_text('#!/bin/bash\n')
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
@@ -7839,7 +7840,61 @@ class WebSetupTests(WebSetupBase):
         self.assertIn('if (cached) setupDraw(group, setupRows);', setup)
         self.assertIn('el("span", { class: "spinner" }), t("setup_loading")', setup)
         self.assertIn('link.classList.toggle("busy", on);', setup)
-        self.assertIn('.setup-groups .sg.busy::after', (ROOT / 'config/web/setup.css').read_text())
+        self.assertIn('.glist a.busy::after', (ROOT / 'config/web/setup.css').read_text())
+        # As abas so de texto: a ponta com mais abas esmaece e mostra a seta.
+        self.assertIn('$("subtabs-bar").dataset.more = left && right ? "both"', app)
+        self.assertIn('<div id="subtabs-bar" class="subtabs-bar">', index)
+        # O Setup como lista: a busca e a coluna dos grupos; no celular, os
+        # grupos sao a primeira tela.
+        self.assertIn('<input id="setup-q" type="search"', index)
+        self.assertIn('.setup[data-mobile="list"] .setup-pane { display: none; }', (ROOT / 'config/web/setup.css').read_text())
+
+    def test_osd_profiles_list_and_delete(self):
+        # Os perfis que a OSD grava (Save profile as), do mais especifico ao
+        # padrao; apagar um tira as linhas dele e deixa o arquivo como era.
+        conf = self.dir / 'osd-profiles.conf'
+        conf.write_text('core:fbneo\tscanline.strength\t40\ndefault\tcolor.gamma\t100\ngame:fbneo/sf2\tcolor.gamma\t110\n'
+                        'game:fbneo/sf2\tvolume\t80\nres:640x480i\tcolor.contrast\t105\nemu:groovymame\tlevel.groovymame\tmedium\n')
+        os.chmod(conf, 0o640)
+        status, data = self.call('GET', '/api/osd/profiles')
+        self.assertEqual(status, 200)
+        self.assertEqual([(p['kind'], p['name'], p['where']) for p in data['profiles']],
+                         [('game', 'sf2', 'fbneo'), ('core', 'fbneo', ''), ('emulator', 'groovymame', ''),
+                          ('resolution', '640x480i', ''), ('default', '', '')])
+        # O volume nao e de perfil (a OSD o ignora).
+        self.assertEqual(data['profiles'][0]['values'], {'color.gamma': '110'})
+        post = lambda body: self.call('POST', '/api/osd/profiles', body)
+        self.assertEqual(post({'action': 'delete', 'scope': 'default'})[0], 400)
+        self.assertEqual(post({'action': 'delete', 'scope': 'core:nope'})[0], 404)
+        self.assertEqual(post({'action': 'nuke', 'scope': 'core:fbneo'})[0], 400)
+        status, data = post({'action': 'delete', 'scope': 'game:fbneo/sf2'})
+        self.assertEqual(status, 200)
+        self.assertNotIn('game:fbneo/sf2', conf.read_text())
+        self.assertIn('core:fbneo\tscanline.strength\t40\n', conf.read_text())
+        self.assertEqual(len(data['profiles']), 4)
+        self.assertEqual(conf.stat().st_mode & 0o777, 0o640)
+        self.assertIn('api("/api/osd/profiles", { method: "POST"', (ROOT / 'config/web/setup.js').read_text())
+
+    def test_menu_sounds_upload_play_delete(self):
+        # Os dois sons do menu do Setup (sounds/menu): so WAV, ate 2 MB, do
+        # jogador como os da rede; ouvir no navegador e tirar.
+        sounds = self.dir / 'sounds'
+        status, data = self.call('GET', '/api/sounds')
+        self.assertEqual((status, data['sounds']), (200, {'move': None, 'select': None}))
+        wav = b'RIFF\x24\x00\x00\x00WAVEfmt ' + b'\x00' * 24
+        self.assertEqual(self.call('POST', '/api/sounds/upload?which=move', b'not a wave file')[0], 400)
+        self.assertEqual(self.call('POST', '/api/sounds/upload?which=boom', wav)[0], 400)
+        status, data = self.call('POST', '/api/sounds/upload?which=move', wav)
+        self.assertEqual(status, 200)
+        self.assertEqual(data['sounds']['move']['size'], len(wav))
+        self.assertIsNone(data['sounds']['select'])
+        self.assertEqual((sounds / 'move.wav').read_bytes(), wav)
+        self.assertEqual(self.call('GET', '/api/sounds/file?which=move'), (200, wav))
+        self.assertEqual(self.call('GET', '/api/sounds/file?which=select')[0], 404)
+        self.assertEqual(self.call('POST', '/api/sounds', {'action': 'delete', 'which': '../x'})[0], 400)
+        self.assertEqual(self.call('POST', '/api/sounds', {'action': 'delete', 'which': 'move'})[0], 200)
+        self.assertFalse((sounds / 'move.wav').exists())
+        self.assertIn('cgPostFile("/api/sounds/upload?which=" + which', (ROOT / 'config/web/setup.js').read_text())
 
 
 class WebPanelTests(unittest.TestCase):
@@ -9328,7 +9383,7 @@ class WebPanelTests(unittest.TestCase):
         status, _, data = self.request('POST', '/api/versions', {'update': 'latest'}, cookie=cookie)
         self.assertEqual(json.loads(data)['name'], 'FliperOS version: the newest update')
         js = (ROOT / 'config/web/setup.js').read_text()
-        self.assertIn('version: async () => { openGroups.add("Version"); return unwrap(versionBox()); },', js)
+        self.assertIn('const SETUP_PAGES = { custom: (box) => customGamesPage(box), version: versionPage, whatsnew: whatsnewPage };', js)
         text = (ROOT / 'config/web/text.js').read_text()
         self.assertEqual(text.count('group_Version:'), 2)
 

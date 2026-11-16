@@ -16,10 +16,11 @@ The **System** area of the [web panel](Web-panel.md): the cabinet's status and l
 
 Refreshed every second:
 
-- **Video:** what Video Setup asks (monitor, frequency, resolution, connector, orientation) next to what is on screen now: the mode, the horizontal kHz and vertical Hz, interlaced or progressive, and the full **modeline** of each active output.
-- **CPU:** the total, each core and the load, plus the temperatures of the sensors.
-- **GPU:** the name and the driver, plus what the card reports: use, VRAM, clock, temperature, power.
-- **Memory, disks and network:** the speed of each interface, its IPs and the Wi-Fi signal.
+- **On the tube:** the horizontal kHz on a display, then the band (15, 25 or 31 kHz), the mode, the vertical Hz, interlaced or progressive, the output and card, the **driver** in use, and the full **modeline** of each active output. **Asked in Video Setup** opens what Video Setup asks (monitor, frequency, resolution, connector, orientation).
+- **CPU:** the total, the load and each core as a column of segments, like a VU meter.
+- **Memory** and the swap; the **GPU**: its name and what the card reports (use, VRAM, clock, temperature, power).
+- **Temperatures:** each sensor as a bar up to the part's limit (yellow near it, red at it).
+- **Disks and network:** each mounted disk, each interface with its IPs, the traffic and the Wi-Fi signal.
 
 ## Processes and logs
 
@@ -28,9 +29,15 @@ The processes using the most CPU, and the logs: those of `/opt/fliperos/logs` (e
 <a id="settings"></a>
 ## Setup
 
-The same Setup as on the cabinet: the seven groups at the top (**Video**, **Audio**, **Network**, **Games**, **Joysticks**, **System**, **Cloud backup**) and, in each one, the same items in the same order, with the same names and hints. Each change is saved and applied at once.
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/setup-en.webp" width="640" alt="The Setup in the web panel, as a list of settings">
 
-What can't be done from a phone (a test grid, the colour patterns, mapping the buttons, the gun targets) has **Open on the cabinet**: the screen opens on the tube in place of what is there, and when you leave it what was on screen comes back. **Watch it live** next to it opens the [live screen](Web-panel-Live.md). **Open the whole Setup on the cabinet**, at the top, does the same with the whole menu.
+The same Setup as on the cabinet, as a list of settings like a phone's Settings: the seven groups in a column on the left (**Video**, **Audio**, **Network**, **Games**, **Joysticks**, **System**, **Cloud backup**, each with how many items it has here) and the open group on the right, with the same items in the same order. Each item is a section, one row per setting: the name on the left, the control on the right (a switch for on/off, side-by-side buttons for two or three short choices, a list for the rest, a slider for a number), and the explanation behind the **ⓘ**. Each change is saved and applied at once.
+
+**Search a setting**, above the groups, looks in every group: a setting found can be changed right there, and an item without settings leads to its group. On a phone the groups are the first screen; a group opens in its place, with **‹ Setup** to go back.
+
+What can't be done from a phone (a test grid, the colour patterns, mapping the buttons, the gun targets) is a row marked **on the cabinet**: it asks first, then the screen opens on the tube in place of what is there, and when you leave it what was on screen comes back. **Watch it live**, in the same question, opens the [live screen](Web-panel-Live.md). **Open the whole Setup on the cabinet**, under the groups, does the same with the whole menu.
+
+**Video** starts with the **video card** in use and its driver; with a card that takes two drivers (radeon or amdgpu, nouveau or NVIDIA's), **change on the cabinet** opens the choice on the tube, which goes back by itself if no picture comes. In **Interlaced hacks**, picking **Filter** for a program shows the filter level on the same row.
 
 | Group | Here | On the cabinet |
 | --- | --- | --- |
@@ -45,9 +52,14 @@ Items that only some cabinets have show only there, as on the cabinet: scanlines
 
 A colour slider saves while it moves, so the game on screen changes with it; the **−** and **+** at its sides move it one step per tap. A new monitor or resolution counts after a restart, and the page offers to restart when it is saved.
 
+### On-screen menu profiles and menu sounds
+
+- **Video > On-screen menu:** the switch, and the profiles saved in the [on-screen menu](On-screen-menu.md) with **Save profile as**: each one with its kind (game, core, emulator, resolution, default) and what it changes. The arrow opens its settings; the **✕** deletes it, and what it changed goes back to the profile below it from the next game. The default profile stays.
+- **Audio > Menu sounds:** the switch and the two sounds of the Setup's menu, **When the cursor moves** (`move.wav`) and **On Enter** (`select.wav`): **Send** a `.wav` (or drop it on the row), play it in the browser, **Replace** or remove it. They are the files of the `sounds/menu` folder of the network share.
+
 ### Folders, quirks and the rest
 
-- **Folders:** each folder of `~` (and the folders inside them) can be a folder of another disk: **Use another folder** opens the cabinet's folders and disks; **Undo the custom folder** brings back the one used before. See [ROMs](ROMs.md).
+- **Folders:** each folder of `~` (and the folders inside them) can be a folder of another disk: **Change** opens the cabinet's folders and disks; **Undo** brings back the one used before. See [ROMs](ROMs.md).
 - **Custom frontends:** a name and the command that opens it, like the other frontends; edit or delete each one.
 - **Quirks:** pick a USB device connected now and the fix (one device per player, no GET requests, always poll, UAS off for a disk), or type the code. They count after a restart. See [Wheels and quirks](Wheels-and-quirks.md).
 - **Bluetooth:** turn it on, **Look for controllers** (15 seconds, with the controller in pairing mode), **Pair**. See [Bluetooth](Bluetooth.md).
@@ -112,6 +124,7 @@ Starts and stops a temporary internet address to the panel, for someone helping 
 
 - The video status comes from DRM, through `fliperos-video-check`. The volume goes through `fliperos-setup --volume up|down|mute|get|set N`.
 - The Setup tree (`config/web/setup.js`) has the ids of the Setup's menus; a test checks the two match. Settings go through the same functions as the Setup's screens: `fliperos-setup --settings` lists them and `--setting KEY VALUE` changes one (`settings_list` in `lib/system.sh`). `--setup-items` says which items this cabinet has; `--quirks`, `--folders`, `--frontends`, `--bluetooth`, `--system-update` and `--attract-romlist` do the rest without a screen.
+- The on-screen menu profiles are the lines of `/etc/fliperos/osd-profiles.conf` (`scope<TAB>key<TAB>value`, the file `fliperos-osd` writes); deleting one rewrites the file without its lines. The menu sounds are `move.wav` and `select.wav` in `/opt/fliperos/sounds/menu`: a file sent is checked (a RIFF/WAVE file, 2 MB at most) and belongs to the player, like the ones sent over the network.
 - **Open on the cabinet** writes the request to `fliperos-web-launch`, like a game: `fliperos-tty1` runs `fliperos-setup --screen NAME` (only the names in `screens/panel.sh`), and the video screens end like Video Setup (Xorg and the kernel line again).
 - Custom games go through `fliperos-setup --customgames` (`lib/customgames.sh`): `describe`, `check`, `bulk` (one row per game, with an `@row N ok|fail` line each), `edit`, `delete`, `media`, `install`, `pack`, `squash`. A folder is copied by `fliperos-customgame add`, and `fliperos-customgame scan` finds the games of a folder. The art of a row waits in `/var/cache/fliperos-web/stage` until the game is saved (a day at most).
 - The terminal is a login shell in a pseudo-terminal (`setsid -c`, so Ctrl+C and job control work), at normal priority. The page talks to it over a WebSocket (`/api/terminal`) that only the panel's own page can open, after the login. The screen is drawn by [xterm.js](https://xtermjs.org) 5.5.0 with its fit addon (MIT), shipped inside the panel.

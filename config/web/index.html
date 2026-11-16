@@ -76,7 +76,13 @@
         <small id="host2" class="menu-host"></small>
       </div>
     </header>
-    <nav id="subtabs" class="subtabs" aria-label="Pages"></nav>
+    <!-- As abas da area: so texto; com mais abas do que cabem, a ponta que
+         tem mais esmaece e uma seta pisca devagar (app.js, tabsEdges). -->
+    <div id="subtabs-bar" class="subtabs-bar">
+      <nav id="subtabs" class="subtabs" aria-label="Pages"></nav>
+      <button id="tabs-left" class="tabs-more l" type="button" tabindex="-1" data-ta="tabs_left"><svg class="g"><use href="icons.svg#g-chev"/></svg></button>
+      <button id="tabs-right" class="tabs-more r" type="button" tabindex="-1" data-ta="tabs_right"><svg class="g"><use href="icons.svg#g-chev"/></svg></button>
+    </div>
 
     <!-- ===== Frontend: o gabinete desenhado e a vitrine dos jogos ===== -->
     <div class="area" data-area="frontend">
@@ -626,128 +632,137 @@
 
     <!-- ===== Sistema ===== -->
     <div class="area" data-area="system">
-      <!-- Status: o video no tubo num mostrador, a CPU em anel, os
-           termometros, a GPU, a memoria, os discos e a rede (system.js). -->
+      <!-- A area inteira no mesmo desenho (setup.css): superficies sem
+           borda, rotulos pequenos em maiusculas e listas de ajustes. -->
+      <!-- Status: o tubo (os kHz, o modo, a saida e o driver), a CPU com os
+           nucleos em VU, a memoria, a GPU, as temperaturas, os discos e a
+           rede (system.js, renderStatus). -->
       <div class="sub" data-sub="status">
-        <div class="dash">
-          <section class="dcard dial-card" aria-labelledby="h-video">
-            <h2 id="h-video"><svg class="px"><use href="icons.svg#px-video"/></svg><span data-t="st_tube"></span></h2>
-            <div class="dial">
-              <div class="dial-screen"><div class="led" id="st-khz"></div><small>kHz</small></div>
-              <span class="band" id="st-band"></span>
+        <div class="st-dash">
+          <section class="st-card st-tube" aria-labelledby="h-video">
+            <h3 id="h-video" data-t="st_tube"></h3>
+            <div class="st-tube-body">
+              <div class="st-led" id="st-led"><span id="st-khz">--.--</span><small>kHz</small></div>
+              <div class="st-tube-info">
+                <div class="st-chips" id="st-mode"></div>
+                <div id="modelines"></div>
+                <details class="st-more">
+                  <summary><svg class="g"><use href="icons.svg#g-chevd"/></svg><span data-t="wanted"></span></summary>
+                  <div class="table-wrap"><table id="video-table"></table></div>
+                </details>
+              </div>
             </div>
-            <div class="st-chips" id="st-mode"></div>
-            <div id="modelines"></div>
-            <details class="more">
-              <summary><svg class="g"><use href="icons.svg#g-chevd"/></svg><span data-t="wanted"></span></summary>
-              <div class="table-wrap"><table id="video-table"></table></div>
-            </details>
           </section>
-          <section class="dcard" aria-labelledby="h-cpu">
-            <h2 id="h-cpu"><svg class="px"><use href="icons.svg#px-chip"/></svg>CPU</h2>
-            <div class="ring-row"><div class="ring" id="cpu-ring"></div><div class="ring-text"><b id="cpu-total" class="big">-</b><span id="load" class="dim"></span></div></div>
-            <div id="cores" class="eq"></div>
+          <section class="st-card st-cpu" aria-labelledby="h-cpu">
+            <h3 id="h-cpu">CPU</h3>
+            <div class="st-big" id="cpu-total">-</div>
+            <div class="dim" id="load"></div>
+            <div id="cores" class="st-cores"></div>
           </section>
-          <section class="dcard temps-card" aria-labelledby="h-temps">
-            <h2 id="h-temps"><svg class="px"><use href="icons.svg#px-latency"/></svg><span data-t="st_temps"></span></h2>
-            <div class="therms" id="temps"></div>
-            <div class="legend"><span><i class="t1"></i><span data-t="st_cold"></span></span><span><i class="t2"></i><span data-t="st_warm"></span></span>
-              <span><i class="t3"></i><span data-t="st_hot"></span></span><span><i class="t4"></i><span data-t="st_limit"></span></span></div>
+          <section class="st-card st-mem" aria-labelledby="h-mem">
+            <h3 id="h-mem" data-t="memory"></h3>
+            <div class="st-big" id="mem-used">-</div>
+            <div class="dim" id="mem-total"></div>
+            <div class="st-meter" id="mem-bar"><i></i></div>
+            <div id="mem-swap" hidden>
+              <div class="st-kv"><span data-t="swap"></span><span class="val" id="mem-swap-val"></span></div>
+              <div class="st-meter" id="mem-swap-bar"><i></i></div>
+            </div>
           </section>
-          <section class="dcard" aria-labelledby="h-gpu">
-            <h2 id="h-gpu"><svg class="px"><use href="icons.svg#px-system"/></svg>GPU</h2>
+          <section class="st-card st-gpu-card" aria-labelledby="h-gpu">
+            <h3 id="h-gpu">GPU</h3>
             <div id="gpus"></div>
+            <p id="gpus-none" class="dim" data-t="st_gpu_none" hidden></p>
           </section>
-          <section class="dcard" aria-labelledby="h-disks">
-            <h2 id="h-disks"><svg class="px"><use href="icons.svg#px-disk"/></svg><span data-t="storage"></span></h2>
-            <div id="disks"></div>
+          <section class="st-card st-temps" aria-labelledby="h-temps">
+            <h3 id="h-temps" data-t="st_temps"></h3>
+            <div id="temps" class="st-temp-list"></div>
           </section>
-          <section class="dcard" aria-labelledby="h-net">
-            <h2 id="h-net"><svg class="px"><use href="icons.svg#px-network"/></svg><span data-t="network"></span></h2>
-            <div id="network"></div>
-          </section>
-          <section class="dcard" aria-labelledby="h-mem">
-            <h2 id="h-mem"><svg class="px"><use href="icons.svg#px-chip"/></svg><span data-t="memory"></span></h2>
-            <div id="memory"></div>
+          <section class="st-card st-net" aria-labelledby="h-net">
+            <h3 id="h-net" data-t="st_disknet"></h3>
+            <div id="disks" class="st-list"></div>
+            <div id="network" class="st-list"></div>
           </section>
         </div>
       </div>
-      <div class="sub grid" data-sub="logs">
-      <section class="card wide st-half" aria-labelledby="h-proc">
-        <h2 id="h-proc" data-t="processes"></h2>
-        <div class="table-wrap"><table id="procs"></table></div>
-      </section>
-  
-      <section class="card wide st-half" aria-labelledby="h-logs">
-        <h2 id="h-logs" data-t="logs"></h2>
-        <div class="row">
-          <select id="log-name" aria-label="Log"></select>
-          <button id="log-refresh" class="ghost" type="button" data-t="refresh"></button>
+      <div class="sub" data-sub="logs">
+        <div class="sys-split">
+          <section class="st-card" aria-labelledby="h-proc">
+            <h3 id="h-proc" data-t="processes"></h3>
+            <div class="table-wrap"><table id="procs"></table></div>
+          </section>
+          <section class="st-card" aria-labelledby="h-logs">
+            <h3 id="h-logs" data-t="logs"></h3>
+            <div class="log-bar">
+              <select id="log-name" class="sel" aria-label="Log"></select>
+              <button id="log-refresh" class="btn-text" type="button" data-t="refresh"></button>
+            </div>
+            <pre id="log-text" class="log"></pre>
+          </section>
         </div>
-        <pre id="log-text" class="log"></pre>
-      </section>
       </div>
-      <div class="sub grid" data-sub="setup">
-      <!-- O Setup inteiro (setup.js): os grupos, os itens de cada um e, em
-           Jogos > Jogos custom, a pagina deles (customgames.js). -->
-      <section class="card wide" aria-labelledby="h-set">
-        <div class="setup-head">
-          <div>
-            <h2 id="h-set" data-t="setup_title"></h2>
-            <p class="dim" data-t="setup_note"></p>
-          </div>
-          <button id="setup-whole" class="btn ghost small" type="button"><svg class="px"><use href="icons.svg#px-arcade"/></svg><span data-t="setup_whole"></span></button>
-        </div>
-        <nav id="setup-groups" class="setup-groups" aria-label="Setup"></nav>
-        <div id="settings"></div>
-        <div id="setup-page" hidden></div>
-      </section>
-      </div>
-      <div class="sub grid" data-sub="achievements">
-      <!-- RetroAchievements: a conta (config/web/system.js, cheevosPage). -->
-      <section class="card wide" aria-labelledby="h-cheevos">
-        <h2 id="h-cheevos" data-t="sub_achievements"></h2>
-        <div id="cheevos-page"></div>
-      </section>
-      </div>
-      <div class="sub grid" data-sub="cloud">
-      <!-- Backup na nuvem pelo rclone (config/web/system.js, cloudPage). -->
-      <section class="card wide" aria-labelledby="h-cloud">
-        <h2 id="h-cloud" data-t="sub_cloud"></h2>
-        <div id="cloud-page"></div>
-      </section>
-      </div>
-      <div class="sub grid" data-sub="terminal">
-      <!-- Terminal. -->
-      <section class="card wide" aria-labelledby="h-term">
-        <h2 id="h-term" data-t="terminal"></h2>
-        <div class="row">
-          <button id="term-open" type="button" data-t="term_open"></button>
-          <button id="term-close" class="ghost" type="button" data-t="term_close" hidden></button>
-          <span id="term-note" class="dim" role="status"></span>
-        </div>
-        <div id="term" class="term" hidden></div>
-      </section>
-      </div>
-      <div class="sub grid" data-sub="lab">
-      <!-- O modo lab (config/fliperos-lab): este painel num endereco
-           temporario da internet, para alguem ajudar de longe. -->
-      <section class="card wide" aria-labelledby="h-lab">
-        <h2 id="h-lab" data-t="lab"></h2>
-        <p id="lab-note" class="dim"></p>
-        <p id="lab-state"></p>
-        <div id="lab-box" class="ovl-box" hidden>
-          <div class="obs-url">
-            <input id="lab-url" type="text" readonly aria-label="Lab address">
-            <button id="lab-copy" type="button" data-icon="📋" data-t="copy"></button>
+      <div class="sub" data-sub="setup">
+        <!-- O Setup inteiro (setup.js): a busca e os grupos numa coluna; o
+             grupo aberto em listas de ajustes e, em Jogos > Jogos custom, a
+             pagina deles (customgames.js). No celular, os grupos sao a
+             primeira tela (data-mobile). -->
+        <div id="setup" class="setup" data-mobile="list">
+          <aside class="setup-nav" aria-label="Setup">
+            <label class="setup-search"><svg class="g"><use href="icons.svg#g-search"/></svg><input id="setup-q" type="search" data-tp="setup_search" autocomplete="off" aria-label="Search"></label>
+            <nav id="setup-groups" class="glist" aria-label="Setup"></nav>
+            <button id="setup-whole" class="cab-all" type="button"><svg class="px"><use href="icons.svg#px-arcade"/></svg><span data-t="setup_whole"></span></button>
+          </aside>
+          <div class="setup-pane">
+            <div id="settings"></div>
+            <div id="setup-page" hidden></div>
           </div>
         </div>
-        <p id="lab-step" class="dim" hidden></p>
-        <div class="row">
-          <button id="lab-start" type="button" data-icon="🧪" data-t="lab_start"></button>
-          <button id="lab-stop" class="ghost danger" type="button" data-icon="✖" data-t="lab_stop" hidden></button>
+      </div>
+      <div class="sub" data-sub="achievements">
+        <!-- RetroAchievements: a conta (system.js, cheevosPage). -->
+        <div id="cheevos-page" class="spage-box"></div>
+      </div>
+      <div class="sub" data-sub="cloud">
+        <!-- Backup na nuvem pelo rclone (system.js, cloudPage). -->
+        <div id="cloud-page" class="spage-box"></div>
+      </div>
+      <div class="sub" data-sub="terminal">
+        <!-- Terminal. -->
+        <div class="spage wide">
+          <h2 data-t="terminal"></h2>
+          <p class="lead" data-t="term_lead"></p>
+          <div class="term-bar">
+            <button id="term-open" class="btn small" type="button" data-t="term_open"></button>
+            <button id="term-close" class="btn-text" type="button" data-t="term_close" hidden></button>
+            <span id="term-note" class="dim" role="status"></span>
+          </div>
+          <div id="term" class="term" hidden></div>
         </div>
-      </section>
+      </div>
+      <div class="sub" data-sub="lab">
+        <!-- O modo lab (config/fliperos-lab): este painel num endereco
+             temporario da internet, para alguem ajudar de longe. -->
+        <div class="spage">
+          <h2 data-t="lab"></h2>
+          <p id="lab-note" class="lead"></p>
+          <section class="ssec">
+            <div class="slist">
+              <div class="srow">
+                <div class="lbl"><b id="lab-state"></b></div>
+                <div class="ctl">
+                  <button id="lab-start" class="btn-text" type="button" data-t="lab_start"></button>
+                  <button id="lab-stop" class="btn-text red" type="button" data-t="lab_stop" hidden></button>
+                </div>
+              </div>
+              <div id="lab-box" class="srow has-field" hidden>
+                <div class="lbl"><b data-t="lab_copy"></b></div>
+                <div class="ctl"><button id="lab-copy" class="btn-text" type="button" data-t="copy"></button></div>
+                <input id="lab-url" class="fld code-txt" type="text" readonly aria-label="Lab address">
+              </div>
+              <div id="lab-step" class="srow dim-row" hidden></div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   </main>
@@ -779,7 +794,7 @@
     <h3 id="ask-title"></h3>
     <p id="ask-text"></p>
     <input id="ask-input" autocomplete="off" hidden>
-    <footer><button id="ask-no" class="btn ghost" value="no"></button><button id="ask-yes" class="btn" value="yes"></button></footer>
+    <footer><a id="ask-extra" class="btn ghost" hidden></a><button id="ask-no" class="btn ghost" value="no"></button><button id="ask-yes" class="btn" value="yes"></button></footer>
   </form>
 </dialog>
 

@@ -1,23 +1,47 @@
 // Sistema: o status (o video, a CPU, a GPU, a memoria, os discos e a rede,
-// do /api/status de cada segundo), os processos e os logs, os ajustes, o
-// modo lab e o terminal.
+// do /api/status de cada segundo), os processos e os logs, as pecas das
+// listas de ajustes (a area inteira usa as mesmas), os ajustes do Setup, as
+// abas RetroAchievements e Backup na nuvem, o modo lab e o terminal.
 "use strict";
 
-// O anel de um medidor (CPU, memoria): a cor pelo quanto esta usado.
-function ringSvg(pct) {
-  const p = Math.max(0, Math.min(100, pct || 0)), r = 26, len = 2 * Math.PI * r;
-  const color = p > 90 ? "var(--red)" : p > 70 ? "var(--orange)" : "var(--green)";
-  return '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="' + r + '" class="ring-base"/>' +
-    '<circle cx="32" cy="32" r="' + r + '" class="ring-fill" stroke="' + color + '" stroke-dasharray="' + (len * p / 100).toFixed(1) +
-    " " + len.toFixed(1) + '" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle">' + Math.round(p) + "%</text></svg>";
+// ── Status ───────────────────────────────────────────────────────
+
+// Um medidor fino: a cor pelo quanto esta usado (ou pelo nivel dado).
+function stMeter(pct, level) {
+  const box = el("div", { class: "st-meter" }, el("i"));
+  stMeterSet(box, pct, level);
+  return box;
+}
+function stMeterSet(box, pct, level) {
+  const p = Math.max(0, Math.min(100, pct || 0));
+  box.firstChild.style.width = p + "%";
+  const cls = level != null ? level : p > 90 ? "hot" : p > 70 ? "warn" : "";
+  if (box.firstChild.className !== cls) box.firstChild.className = cls;
 }
 
-// Uma barra com a cor pelo quanto esta usado.
-function bar(pct) {
-  const p = Math.max(0, Math.min(100, pct || 0));
-  const box = el("div", { class: "sbar " + (p > 90 ? "hot" : p > 70 ? "warn" : "") }, el("i"));
-  box.firstChild.style.width = p + "%";
-  return box;
+// keyedRows: as linhas de uma lista que muda a cada segundo, feitas uma vez
+// por chave (as barras andam suave, nada pisca); make(item) devolve
+// { node, update(item) }.
+function keyedRows(box, items, keyOf, make) {
+  if (!box.keyed) box.keyed = new Map();
+  const seen = new Set();
+  items.forEach((item, i) => {
+    const key = keyOf(item, i);
+    seen.add(key);
+    let row = box.keyed.get(key);
+    if (!row) {
+      row = make(item);
+      box.keyed.set(key, row);
+    }
+    row.update(item);
+    if (box.children[i] !== row.node) box.insertBefore(row.node, box.children[i] || null);
+  });
+  for (const [key, row] of box.keyed) {
+    if (!seen.has(key)) {
+      row.node.remove();
+      box.keyed.delete(key);
+    }
+  }
 }
 
 // O nome de gente de cada sensor e o limite padrao da peca, quando o sensor
@@ -32,114 +56,154 @@ function sensorName(x) {
   return [s, x.label, 90];
 }
 
-// Os termometros: feitos uma vez por sensor; a coluna sobe e desce suave.
-const therms = new Map();
+// As temperaturas: o nome, a barra ate o limite da peca e os graus.
 function renderTemps(rows) {
-  const box = $("temps"), seen = new Set();
-  rows.slice(0, 10).forEach((x, i) => {
-    const key = x.sensor + "|" + x.label + "|" + i;
-    seen.add(key);
-    let th = therms.get(key);
-    const [name, label, fallback] = sensorName(x);
-    const limit = x.max || fallback, top = Math.max(110, limit + 10);
-    if (!th) {
-      th = { node: el("div", { class: "therm" }, el("div", { class: "therm-tube" }, el("div", { class: "glass" }, el("div", { class: "fill" })),
-        el("div", { class: "bulb" }), el("div", { class: "limit" })), el("div", { class: "deg" }), el("b", {}, name), el("small", {}, label)) };
-      th.fill = th.node.querySelector(".fill");
-      th.deg = th.node.querySelector(".deg");
-      th.limit = th.node.querySelector(".limit");
-      box.append(th.node);
-      therms.set(key, th);
-    }
-    const ratio = x.celsius / limit;
-    const level = ratio < .55 ? "t1" : ratio < .75 ? "t2" : ratio < .88 ? "t3" : "t4";
-    th.node.className = "therm " + level;
-    th.fill.style.height = Math.min(100, (x.celsius / top) * 100) + "%";
-    th.limit.style.bottom = "calc(30px + " + (limit / top) + " * (100% - 30px))";
-    th.deg.textContent = Math.round(x.celsius) + "°";
-    th.node.title = name + " " + label + ": " + x.celsius + " °C (" + t("st_limit") + " " + limit + " °C)";
+  keyedRows($("temps"), rows.slice(0, 10), (x, i) => lang + x.sensor + "|" + x.label + "|" + i, () => {
+    const name = el("span", { class: "st-temp-name" }), bar = stMeter(0), deg = el("span", { class: "val" });
+    const node = el("div", { class: "st-temp" }, name, bar, deg);
+    return { node, update(x) {
+      const [kind, label, fallback] = sensorName(x);
+      const limit = x.max || fallback, ratio = x.celsius / limit;
+      setText(name, kind + (label && label !== kind ? " · " + label : ""));
+      stMeterSet(bar, ratio * 100, ratio < .75 ? "" : ratio < .88 ? "warn" : "hot");
+      setText(deg, Math.round(x.celsius) + "°");
+      node.title = kind + " " + (label || "") + ": " + x.celsius + " °C (" + t("st_limit") + " " + limit + " °C)";
+    } };
   });
-  for (const [key, th] of therms) if (!seen.has(key)) { th.node.remove(); therms.delete(key); }
-  $("temps").closest(".dcard").hidden = !rows.length;
+  $("temps").closest(".st-card").hidden = !rows.length;
+}
+
+// A placa do tubo: a da saida acesa (a primeira, sem saida).
+function statusGpu(s) {
+  const gpus = Array.isArray(s.gpus) ? s.gpus : [];
+  const out = ((s.video || {}).outputs || []).find((o) => o.active);
+  const card = out && out.card ? out.card.replace("/dev/dri/", "") : "";
+  return gpus.find((g) => g.card === card) || gpus[0] || null;
+}
+
+// O nome curto da placa (o lspci da o fabricante inteiro e o chip):
+// "Advanced Micro Devices, Inc. [AMD/ATI] Oland PRO [Radeon R7 240/340]" vira
+// "AMD Radeon R7 240/340".
+function gpuName(name) {
+  if (!name) return "";
+  const model = /\[([^\]]+)\]\s*$/.exec(name);
+  const vendor = /AMD|ATI/.test(name) ? "AMD " : /NVIDIA/i.test(name) ? "NVIDIA " : /Intel/.test(name) ? "Intel " : "";
+  return model && !/^AMD\/ATI$/.test(model[1]) ? vendor + model[1] : name.replace(/ Corporation| Inc\.|,/g, "");
 }
 
 // Uma linha de fato: o rotulo e o valor.
-const kv = (label, value) => el("div", { class: "kv" }, el("span", {}, label), el("b", {}, value));
+const kv = (label, value) => el("div", { class: "st-kv" }, el("span", {}, label), el("span", { class: "val" }, value));
 
 function renderStatus(s) {
-  // O video no tubo: os kHz no mostrador, a faixa (15, 25 ou 31 kHz) e o modo.
+  // O video no tubo: os kHz no mostrador, a faixa, o modo, a saida e o driver.
   const v = s.video || {}, w = v.wanted || {};
   const out = (v.outputs || []).find((o) => o.active);
-  led($("st-khz"), out ? Number(out.horizontal_khz).toFixed(2) : "--.--");
   const khz = out ? Number(out.horizontal_khz) : 0;
-  const band = !out ? "" : khz < 20 ? "15 kHz" : khz < 28 ? "25 kHz" : "31 kHz";
-  $("st-band").textContent = band;
-  $("st-band").className = "band " + (khz < 20 ? "b15" : khz < 28 ? "b25" : "b31");
-  $("st-mode").replaceChildren(...(out ? [
-    el("span", { class: "chip-s" }, icon("g-screenh"), out.width + "×" + out.height),
-    el("span", { class: "chip-s" }, Number(out.vertical_hz).toFixed(2) + " Hz"),
-    el("span", { class: "chip-s" }, out.interlaced ? t("interlaced") : t("progressive")),
-    el("span", { class: "chip-s" }, icon("g-ext"), out.connector + " · " + out.card.replace("/dev/dri/", "")),
-  ] : [el("span", { class: "dim" }, t("no_output"))]));
-  $("modelines").replaceChildren(...(v.outputs || []).filter((o) => o.active).map((o) =>
-    el("div", { class: "modeline" }, o.connector + ": Modeline " + o.modeline)));
-  const table = $("video-table");
-  table.replaceChildren(...[["monitor", w.monitor], ["frequency", w.frequency], ["resolution", w.boot_resolution],
-    ["connector", w.connector], ["orientation", w.orientation], ["framebuffer", v.framebuffer]]
-    .map(([k, val]) => el("tr", {}, el("th", {}, t(k)), el("td", {}, val || "-"))));
+  setText($("st-khz"), out ? khz.toFixed(2) : "--.--");
+  $("st-led").classList.toggle("off", !out);
+  const gpu = statusGpu(s);
+  const chips = out ? [[khz < 20 ? "15 kHz" : khz < 28 ? "25 kHz" : "31 kHz", "band " + (khz < 20 ? "b15" : khz < 28 ? "b25" : "b31")],
+    [out.width + "×" + out.height], [Number(out.vertical_hz).toFixed(2) + " Hz"],
+    [out.interlaced ? t("interlaced") : t("progressive")], [out.connector + " · " + out.card.replace("/dev/dri/", "")]] : [];
+  if (gpu && gpu.driver) chips.push(["driver " + gpu.driver, "drv"]);
+  const chipKey = lang + JSON.stringify(chips);
+  if ($("st-mode").dataset.key !== chipKey) {
+    $("st-mode").dataset.key = chipKey;
+    $("st-mode").replaceChildren(...(chips.length ? chips.map(([text, cls]) => el("span", { class: "st-chip" + (cls ? " " + cls : "") }, text))
+      : [el("span", { class: "dim" }, t("no_output"))]));
+  }
+  const lines = (v.outputs || []).filter((o) => o.active).map((o) => o.connector + ": Modeline " + o.modeline);
+  if ($("modelines").dataset.key !== lines.join("\n")) {
+    $("modelines").dataset.key = lines.join("\n");
+    $("modelines").replaceChildren(...lines.map((line) => el("div", { class: "modeline" }, line)));
+  }
+  const wanted = [["monitor", w.monitor], ["frequency", w.frequency], ["resolution", w.boot_resolution],
+    ["connector", w.connector], ["orientation", w.orientation], ["framebuffer", v.framebuffer]];
+  const wantedKey = lang + JSON.stringify(wanted);
+  if ($("video-table").dataset.key !== wantedKey) {
+    $("video-table").dataset.key = wantedKey;
+    $("video-table").replaceChildren(...wanted.map(([k, val]) => el("tr", {}, el("th", {}, t(k)), el("td", {}, val || "-"))));
+  }
 
-  // CPU: o anel, a carga e os nucleos em barras que sobem e descem.
+  // CPU: o total, a carga e cada nucleo numa coluna de segmentos, como um VU.
   const cpu = s.cpu || {};
-  $("cpu-ring").innerHTML = ringSvg(cpu.total);
-  $("cpu-total").textContent = (cpu.total ?? 0).toFixed(0) + "%";
-  $("load").textContent = t("load") + " " + (s.load || []).join(" ");
+  setText($("cpu-total"), (cpu.total ?? 0).toFixed(0) + "%");
+  setText($("load"), t("load") + " " + (s.load || []).join(" "));
   const cores = $("cores"), list = cpu.cores || [];
   if (cores.children.length !== list.length) {
-    cores.replaceChildren(...list.map((_, i) => el("div", { class: "core" }, el("div", { class: "col" }, el("i")), el("small", {}, "#" + i))));
+    cores.replaceChildren(...list.map((_, i) => el("div", { class: "st-core" },
+      el("div", { class: "vcol" }, ...Array.from({ length: 10 }, () => el("i"))), el("small", {}, "#" + i))));
   }
   list.forEach((c, i) => {
-    const bar = cores.children[i].querySelector("i");
-    bar.style.height = Math.max(2, c) + "%";
-    bar.className = c > 90 ? "hot" : c > 70 ? "warn" : "";
-    cores.children[i].title = "#" + i + " " + c.toFixed(0) + "%";
+    const core = cores.children[i], lit = Math.max(1, Math.round(c / 10));
+    [...core.firstChild.children].forEach((seg, k) => {
+      const cls = k < lit ? "on" + (k >= 8 ? " h" : k >= 6 ? " w" : "") : "";
+      if (seg.className !== cls) seg.className = cls;
+    });
+    core.title = t("st_core").replace("%n", i).replace("%p", c.toFixed(0));
   });
 
   renderTemps(s.temperatures || []);
 
-  // GPU: o nome, o driver, e o que a placa diz (uso, VRAM, relogio, consumo).
-  $("gpus").replaceChildren(...(Array.isArray(s.gpus) ? s.gpus : []).map((g) => {
-    const box = el("div", { class: "gpu" }, el("div", { class: "gpu-head" }, el("b", {}, g.name || g.slot), el("span", { class: "tag" }, g.driver)));
-    if (g.busy != null) box.append(kv(t("busy"), g.busy + "%"), bar(g.busy));
-    if (g.vram_total) box.append(kv(t("vram"), bytes(g.vram_used) + " " + t("of") + " " + bytes(g.vram_total)), bar((100 * g.vram_used) / g.vram_total));
-    if (g.clock) box.append(kv(t("clock"), g.clock));
-    if (g.celsius != null) box.append(kv(t("temp"), g.celsius + " °C"));
-    if (g.watts != null) box.append(kv(t("power"), g.watts + " W"));
-    return box;
-  }));
+  // GPU: o nome e o que a placa diz (uso, VRAM, relogio, temperatura, consumo).
+  const gpus = Array.isArray(s.gpus) ? s.gpus : [];
+  keyedRows($("gpus"), gpus, (g) => lang + (g.slot || g.card), () => {
+    const name = el("b", { class: "st-name" }), busy = el("span", { class: "val" }), busyBar = stMeter(0);
+    const vram = el("span", { class: "val" }), vramBar = stMeter(0), facts = el("div", { class: "st-facts" });
+    const busyRow = el("div", {}, el("div", { class: "st-kv" }, el("span", {}, t("busy")), busy), busyBar);
+    const vramRow = el("div", {}, el("div", { class: "st-kv" }, el("span", {}, t("vram")), vram), vramBar);
+    return { node: el("div", { class: "st-gpu" }, name, busyRow, vramRow, facts), update(g) {
+      setText(name, gpuName(g.name) || g.slot);
+      name.title = g.name || "";
+      busyRow.hidden = g.busy == null;
+      if (g.busy != null) { setText(busy, g.busy + "%"); stMeterSet(busyBar, g.busy); }
+      vramRow.hidden = !g.vram_total;
+      if (g.vram_total) {
+        setText(vram, bytes(g.vram_used) + " " + t("of") + " " + bytes(g.vram_total));
+        stMeterSet(vramBar, (100 * g.vram_used) / g.vram_total);
+      }
+      const rows = [[t("clock"), g.clock], [t("temp"), g.celsius != null ? g.celsius + " °C" : ""],
+        [t("power"), g.watts != null ? g.watts + " W" : ""]].filter(([, x]) => x);
+      const key = JSON.stringify(rows);
+      if (facts.dataset.key !== key) {
+        facts.dataset.key = key;
+        facts.replaceChildren(...rows.map(([k, x]) => kv(k, x)));
+      }
+    } };
+  });
+  $("gpus-none").hidden = gpus.length > 0;
 
-  // Memoria: o anel e a troca.
+  // Memoria: o usado, o total, a barra e a troca.
   const m = s.memory || {};
-  const used = m.total ? (100 * m.used) / m.total : 0;
-  const ring = el("div", { class: "ring" });
-  ring.innerHTML = ringSvg(used);
-  $("memory").replaceChildren(el("div", { class: "ring-row" }, ring, el("div", { class: "ring-text" },
-    el("b", {}, bytes(m.used)), el("span", { class: "dim" }, t("of") + " " + bytes(m.total)))),
-  m.swap_total ? el("div", {}, kv(t("swap"), bytes(m.swap_used) + " " + t("of") + " " + bytes(m.swap_total)),
-    bar((100 * m.swap_used) / m.swap_total)) : "");
+  setText($("mem-used"), bytes(m.used));
+  setText($("mem-total"), t("of") + " " + bytes(m.total));
+  stMeterSet($("mem-bar"), m.total ? (100 * m.used) / m.total : 0);
+  $("mem-swap").hidden = !m.swap_total;
+  if (m.swap_total) {
+    setText($("mem-swap-val"), bytes(m.swap_used) + " " + t("of") + " " + bytes(m.swap_total));
+    stMeterSet($("mem-swap-bar"), (100 * m.swap_used) / m.swap_total);
+  }
 
-  // Os discos montados.
-  $("disks").replaceChildren(...(Array.isArray(s.disks) ? s.disks : []).map((d) => el("div", { class: "disk" },
-    el("div", { class: "disk-head" }, icon("px-disk"), el("b", {}, d.mount), el("span", { class: "dim" }, bytes(d.used) + " / " + bytes(d.total))),
-    bar(d.total ? (100 * d.used) / d.total : 0))));
-
-  // A rede: cada placa, os enderecos, o trafego e o sinal do Wi-Fi.
-  const net = Object.entries(s.network || {});
-  $("network").replaceChildren(...net.map(([name, n]) => el("div", { class: "nic" },
-    el("div", { class: "nic-head" }, icon(/^w/.test(name) ? "px-network" : "px-link"), el("b", {}, name),
-      el("span", { class: "dim" }, (n.ipv4 || []).join(", ") || "-")),
-    el("div", { class: "nic-rates" }, el("span", { class: "down" }, "↓ " + rate(n.rx_bps)), el("span", { class: "up" }, "↑ " + rate(n.tx_bps))))),
-  s.wifi ? el("div", { class: "wifi" }, el("span", { class: "signal", "data-bars": String(Math.ceil((s.wifi.signal || 0) / 25)) },
-    el("i"), el("i"), el("i"), el("i")), el("b", {}, s.wifi.ssid), el("span", { class: "dim" }, t("signal") + " " + s.wifi.signal + "%")) : "");
+  // Os discos montados e a rede (cada placa, o endereco, o trafego e o sinal).
+  keyedRows($("disks"), Array.isArray(s.disks) ? s.disks : [], (d) => lang + d.mount, () => {
+    const mount = el("b"), size = el("span", { class: "dim" }), bar = stMeter(0);
+    return { node: el("div", { class: "st-disk" }, el("div", { class: "st-kv" }, mount, size), bar), update(d) {
+      setText(mount, d.mount);
+      setText(size, bytes(d.used) + " " + t("of") + " " + bytes(d.total));
+      stMeterSet(bar, d.total ? (100 * d.used) / d.total : 0);
+    } };
+  });
+  const nics = Object.entries(s.network || {}).map(([name, n]) => ({ name, n, wifi: /^w/.test(name) ? s.wifi : null }));
+  keyedRows($("network"), nics, (x) => lang + x.name, () => {
+    const head = el("b"), ip = el("span", { class: "dim" }), sig = el("span", { class: "dim" }), rates = el("span", { class: "val" });
+    return { node: el("div", { class: "st-nic" }, el("div", { class: "st-kv" }, head, ip), el("div", { class: "st-kv" }, sig, rates)),
+      update(x) {
+        setText(head, x.name + (x.wifi && x.wifi.ssid ? " · " + x.wifi.ssid : ""));
+        setText(ip, (x.n.ipv4 || []).join(", ") || "-");
+        setText(sig, x.wifi ? t("signal") + " " + x.wifi.signal + "%" : "");
+        setText(rates, "↓ " + rate(x.n.rx_bps) + "   ↑ " + rate(x.n.tx_bps));
+      } };
+  });
 
   renderProcesses(s.processes || []);
 }
@@ -281,71 +345,422 @@ async function showLog() {
 $("log-name").addEventListener("change", showLog);
 $("log-refresh").addEventListener("click", showLog);
 
-// ── Os ajustes ───────────────────────────────────────────────────
-// Os ajustes do Setup que podem mudar daqui (fliperos-setup --settings):
-// cada mudanca grava na hora. A arvore do Setup que os mostra, item por
-// item, fica em setup.js (loadSettings); aqui as linhas e as caixas.
+// ── As listas de ajustes ─────────────────────────────────────────
+// A area Sistema inteira usa as mesmas pecas: uma secao (um rotulo pequeno
+// em maiusculas e um bloco) e, no bloco, uma linha por ajuste: o nome a
+// esquerda, o controle a direita, a explicacao atras do (i), aberta embaixo.
 
-const openGroups = new Set(["Video"]);
-// Os icones do Setup em cada ajuste (os do carrossel no tubo).
-const SETTING_ICONS = [["monitor", "px-video"], ["resolution", "px-resolution"], ["video.previous", "px-reset"],
-  ["cabinet_name", "px-cabinetname"], ["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"],
-  ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
-  ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["osd", "px-layout"],
-  ["audio_card", "px-audio"], ["mame_latency", "px-latency"], ["audio.", "px-mixer"], ["power.", "px-power"],
-  ["service.", "px-services"], ["mode480.", "px-mode480"], ["color.", "px-colour"], ["scanlines", "px-scanlines"],
-  ["scanline.", "px-scanlines"], ["gun_flash", "px-guncon"], ["gun_offscreen_reload", "px-guncon"], ["gun.", "px-guncon"],
-  ["padcolor", "px-padcolor"]];
-const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWith(".") && key.startsWith(k))) || [0, "px-setup"])[1];
-
-// settingsBox: um grupo dos que nao vem do --settings (Geometria, Rede...),
-// que tambem lembra se estava aberto.
-function settingsBox(name, iconName, ...content) {
-  const details = el("details", { class: "box-" + name.toLowerCase() },
-    el("summary", {}, icon(iconName), t("group_" + name)), ...content);
-  if (openGroups.has(name)) details.open = true;
-  details.addEventListener("toggle", () => { details.open ? openGroups.add(name) : openGroups.delete(name); });
-  return details;
+function uiSection(title, rows, note, attrs) {
+  const sec = el("section", Object.assign({ class: "ssec" }, attrs || {}));
+  if (title) sec.append(el("h3", {}, title));
+  sec.append(el("div", { class: "slist" }, ...rows));
+  if (note) sec.append(el("p", { class: "ssec-note" }, note));
+  return sec;
 }
 
-// Setup > Network: as interfaces, as redes ao alcance (so ao pedir: a busca
-// leva uns segundos) e conectar com a senha.
-async function wifiBox() {
-  const res = await api("/api/wifi");
-  const devices = (await res.json()).devices || [];
-  const wifi = devices.filter((d) => d.type === "wifi");
-  const list = el("div", { class: "nics" }, ...devices.map((d) => el("div", { class: "nic-row" },
-    icon(d.type === "wifi" ? "px-network" : "px-link"), el("b", {}, d.device),
-    el("span", { class: "tag " + (d.state === "connected" ? "on" : "") }, d.state),
-    el("span", { class: "dim" }, [d.connection, d.ip].filter(Boolean).join(" · ")))));
-  const nets = el("div", { class: "wifi-nets" });
-  const scan = el("button", { type: "button", class: "btn ghost" }, icon("px-scan"), t("wifi_scan"));
-  scan.disabled = !wifi.length;
-  scan.addEventListener("click", async () => {
-    scan.disabled = true;
-    nets.replaceChildren(el("div", { class: "dim" }, t("wifi_scanning")));
-    try {
-      const r = await api("/api/wifi?scan=1");
-      const found = (await r.json()).networks || [];
-      nets.replaceChildren(found.length ? el("div", { class: "dim" }, t("wifi_nets")) : el("div", { class: "dim" }, t("wifi_nonet")),
-        ...found.map((n) => {
-          const b = el("button", { type: "button", class: "wifi-net" }, wifiBars(Number(n.signal)), el("b", {}, n.ssid),
-            el("span", { class: "dim" }, n.security || t("wifi_open")));
-          b.addEventListener("click", () => wifiConnect(n.device, n.ssid, !!n.security, false));
-          return b;
-        }));
-    } finally {
-      scan.disabled = false;
+// uiRow({ label, sub, control, help, cls, before, after, href, mono, id }):
+// before vai antes do nome (as barras do sinal, uma etiqueta); after vai
+// embaixo, na largura toda (o nivel do filtro, um formulario). Com href, a
+// linha e um link.
+function uiRow(o) {
+  const attrs = { class: "srow" + (o.cls ? " " + o.cls : "") + (o.sub ? " has-sub" : "") };
+  if (o.href) attrs.href = o.href;
+  if (o.id) attrs.id = o.id;
+  const row = el(o.href ? "a" : "div", attrs);
+  const lbl = el("div", { class: "lbl" }, ...(o.before || []), el("b", {}, o.label));
+  row.append(lbl);
+  const controls = [].concat(o.control || []).filter(Boolean);
+  if (controls.length) row.append(el("div", { class: "ctl" }, ...controls));
+  if (o.sub) row.append(el("div", { class: "srow-sub" + (o.mono ? " code-txt" : "") }, o.sub));
+  if (o.help) {
+    const help = el("div", { class: "help", hidden: "" }, o.help);
+    const btn = el("button", { type: "button", class: "info-btn", "aria-label": t("setup_about").replace("%s", o.label),
+      "aria-expanded": "false" }, icon("g-info"));
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      help.hidden = !help.hidden;
+      btn.setAttribute("aria-expanded", String(!help.hidden));
+    });
+    lbl.append(btn);
+    row.append(help);
+  }
+  for (const node of o.after || []) row.append(node);
+  return row;
+}
+
+// uiClickable: a linha inteira abre algo (Abrir no gabinete), pelo clique
+// ou pelo Enter; os controles dentro dela continuam deles.
+function uiClickable(row, open) {
+  row.classList.add("tap");
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.addEventListener("click", (ev) => {
+    if (!ev.target.closest(".ctl button, .ctl a, .ctl input, .ctl select, .info-btn, .help, .srow-form")) open();
+  });
+  row.addEventListener("keydown", (ev) => {
+    if ((ev.key === "Enter" || ev.key === " ") && ev.target === row) {
+      ev.preventDefault();
+      open();
     }
   });
-  const hidden = el("button", { type: "button", class: "btn ghost" }, icon("px-add"), t("wifi_hidden"));
-  hidden.disabled = !wifi.length;
-  hidden.addEventListener("click", async () => {
+  return row;
+}
+
+// Os controles: change/pick devolvem false (ou uma promessa de false) quando
+// a gravacao falhou, e o controle volta ao que era.
+function uiSwitch(on, label, change) {
+  const b = el("button", { type: "button", class: "tgl", role: "switch", "aria-checked": String(!!on), "aria-label": label });
+  b.addEventListener("click", async () => {
+    const next = b.getAttribute("aria-checked") !== "true";
+    b.setAttribute("aria-checked", String(next));
+    b.disabled = true;
+    let ok = false;
+    try { ok = (await change(next)) !== false; } catch (e) { ok = false; }
+    if (!ok) b.setAttribute("aria-checked", String(!next));
+    b.disabled = false;
+  });
+  return b;
+}
+
+// uiChoice: 2 ou 3 opcoes curtas, lado a lado.
+function uiChoice(options, value, label, pick) {
+  const box = el("div", { class: "choice", role: "group", "aria-label": label });
+  const mark = (v) => [...box.children].forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === v)));
+  for (const o of options) {
+    const b = el("button", { type: "button", "data-value": o.value }, o.label);
+    b.addEventListener("click", async () => {
+      if (b.getAttribute("aria-pressed") === "true" || box.classList.contains("busy")) return;
+      const before = value;
+      mark(o.value);
+      box.classList.add("busy");
+      let ok = false;
+      try { ok = (await pick(o.value)) !== false; } catch (e) { ok = false; }
+      box.classList.remove("busy");
+      if (ok) value = o.value; else mark(before);
+    });
+    box.append(b);
+  }
+  mark(value);
+  return box;
+}
+
+function uiSelect(options, value, label, change) {
+  const s = el("select", { class: "sel", "aria-label": label }, ...options.map((o) => el("option", { value: o.value }, o.label)));
+  s.value = value;
+  let current = s.value;
+  s.addEventListener("change", async () => {
+    const next = s.value;
+    s.disabled = true;
+    let ok = false;
+    try { ok = (await change(next)) !== false; } catch (e) { ok = false; }
+    s.disabled = false;
+    if (ok) current = next; else s.value = current;
+  });
+  return s;
+}
+
+// Um botao de texto (a acao da linha) e um so de icone.
+function uiButton(text, run, cls) {
+  const b = el("button", { type: "button", class: "btn-text" + (cls ? " " + cls : "") }, text);
+  b.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    b.disabled = true;
+    try { await run(b); } catch (e) { if (e.message !== "login") toast(e.message, "bad"); } finally { b.disabled = false; }
+  });
+  return b;
+}
+function uiIconButton(glyph, label, run) {
+  const b = el("button", { type: "button", class: "ibtn", "aria-label": label, title: label },
+    glyph.startsWith("g-") ? icon(glyph) : glyph);
+  b.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    b.disabled = true;
+    try { await run(b); } catch (e) { if (e.message !== "login") toast(e.message, "bad"); } finally { b.disabled = false; }
+  });
+  return b;
+}
+
+// "no gabinete ↗": a etiqueta das linhas que abrem uma tela no tubo.
+const uiCabGo = (text) => el("span", { class: "cab-go" }, el("span", { class: "tagcab" }, icon("px-arcade"), text), icon("g-ext"));
+
+// Um campo de formulario aberto embaixo de uma linha.
+const uiField = (attrs) => el("input", Object.assign({ class: "fld", autocomplete: "off" }, attrs));
+
+// ── Os ajustes do Setup ──────────────────────────────────────────
+// Os ajustes que podem mudar daqui (fliperos-setup --settings): cada mudanca
+// grava na hora. A arvore do Setup que os mostra, item por item, fica em
+// setup.js (loadSettings); aqui a linha de cada ajuste e as caixas.
+
+const settingKeyIn = (table, key) => table[key] || (Object.entries(table).find(([k]) => k.endsWith(".") && key.startsWith(k)) || [])[1];
+const settingLabel = (row) => (lang === "pt" && SETTING_NAMES_PT[row.key]) || row.label;
+
+function settingHelp(row) {
+  if (lang !== "pt" || !row.help) return row.help || "";
+  if (SETTING_HELP_PT[row.key]) return SETTING_HELP_PT[row.key];
+  for (const [re, pt] of SETTING_HELP_PT_RE) if (re.test(row.help)) return row.help.replace(re, pt);
+  return row.help;
+}
+
+function settingOptions(row) {
+  const table = SETTING_OPTIONS[lang] || {};
+  const own = settingKeyIn(table, row.key) || {}, all = table["*"] || {};
+  return (row.options || []).map((o) => ({ value: o.value, label: own[o.value] || all[o.value] || o.label }));
+}
+
+// O controle de cada escolha: liga/desliga vira chave; 2 ou 3 opcoes curtas,
+// botoes lado a lado; o resto, um seletor.
+function settingKind(row, options) {
+  if (row.type !== "choice") return row.type;
+  if (options.length === 2 && options.every((o) => o.value === "on" || o.value === "off")) return "switch";
+  const total = options.reduce((n, o) => n + o.label.length, 0);
+  return options.length <= 3 && options.every((o) => o.label.length <= 12) && total <= 32 ? "buttons" : "select";
+}
+
+const settingActionLabel = (row) => (SETTING_ACTIONS[lang] || {})[row.key] || SETTING_ACTIONS.en[row.key] || t("set_go");
+
+// settingPost grava um ajuste. Os que refazem a imagem do boot (row.task)
+// voltam como tarefa: o andamento fica na gaveta, e a lista se refaz no fim.
+async function settingPost(row, value) {
+  const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value }) });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.task) {
+    toast(t("set_task").replace("%s", settingLabel(row)));
+    taskNext = 0;
+    if (row.restart) restartWhenDone(data.task.id, settingLabel(row)).catch(() => {});
+  }
+  return { res, data };
+}
+
+// settingSave: grava e diz; true quando gravou.
+async function settingSave(row, value) {
+  const { res, data } = await settingPost(row, value);
+  if (res.ok && data.task) {
+    row.value = value;
+    return true;
+  }
+  if (res.ok) {
+    row.value = data.setting ? data.setting.value : value;
+    toast(t("saved").replace("%s", settingLabel(row)), "ok");
+    return true;
+  }
+  toast(data.error || res.statusText, "bad");
+  return false;
+}
+
+// restartWhenDone: o monitor, a resolucao, a orientacao so valem no proximo
+// boot. Quando a tarefa termina bem, a pagina oferece reiniciar ja.
+async function restartWhenDone(id, label) {
+  let task = { running: true };
+  while (task.running) {
+    await new Promise((done) => setTimeout(done, 1500));
+    const r = await api("/api/task?id=" + id);
+    if (!r.ok) return;
+    task = await r.json();
+  }
+  if (task.rc !== 0) return;
+  if (!(await ask({ title: label, text: t("set_restart"), yes: t("set_restart_now"), no: t("set_later") }))) return;
+  const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "power.reboot", value: "1" }) });
+  toast(r.ok ? t("set_restarting") : r.statusText, r.ok ? "ok" : "bad");
+}
+
+// Os ajustes que podem deixar o tubo sem imagem pedem confirmacao antes.
+const CONFIRM_SETTINGS = ["monitor", "resolution"];
+
+function settingRow(row) {
+  const label = settingLabel(row), help = settingHelp(row);
+  const id = "set-" + row.key.replace(/[^a-z0-9]/gi, "-");
+  if (row.type === "action") {
+    // Um botao (voltar as cores ao padrao, reiniciar): depois dele, os outros
+    // ajustes do grupo mudaram, e a lista volta do Setup.
+    const danger = row.key.startsWith("power.");
+    const go = uiButton(settingActionLabel(row), async () => {
+      if (!(await ask({ title: label, text: help, yes: settingActionLabel(row), danger }))) return;
+      const { res, data } = await settingPost(row, "1");
+      toast(res.ok ? t("saved").replace("%s", label) : (data.error || res.statusText), res.ok ? "ok" : "bad");
+      if (res.ok && !danger) loadSettings().catch(() => {});
+    }, danger ? "red" : "");
+    const back = row.key === "video.previous" && /^Back to (.*?): /.exec(row.help || "");
+    return uiRow({ label, sub: back ? back[1] : "", control: go, help, id, cls: danger ? "danger" : "" });
+  }
+  if (row.type === "text") {
+    // Um texto (o nome do gabinete): grava ao sair do campo ou no Enter.
+    const input = el("input", { type: "text", class: "txt", value: row.value, maxlength: String(row.max || 64),
+      autocomplete: "off", spellcheck: "false", "aria-label": label });
+    input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); input.blur(); } });
+    input.addEventListener("change", async () => {
+      input.disabled = true;
+      try {
+        const { res, data } = await settingPost(row, input.value.trim());
+        if (res.ok && data.setting) {
+          input.value = row.value = data.setting.value;
+          toast(t("saved").replace("%s", label), "ok");
+        } else {
+          input.value = row.value;
+          toast(data.error || res.statusText, "bad");
+        }
+      } finally {
+        input.disabled = false;
+      }
+    });
+    return uiRow({ label, control: input, help, id });
+  }
+  if (row.type === "number") return uiRow({ label, control: settingSlider(row, label), help, id, cls: "has-slider" });
+  const options = settingOptions(row);
+  const kind = settingKind(row, options);
+  let control;
+  if (kind === "switch") {
+    control = uiSwitch(row.value === "on", label, (on) => settingSave(row, on ? "on" : "off"));
+  } else if (kind === "buttons") {
+    control = uiChoice(options, row.value, label, (value) => settingSave(row, value));
+  } else {
+    control = uiSelect(options, row.value, label, async (value) => {
+      if (CONFIRM_SETTINGS.includes(row.key)) {
+        const name = (options.find((o) => o.value === value) || {}).label || value;
+        if (!(await ask({ title: label, text: t("set_video_ask").replace("%s", name), yes: t("set_go") }))) return false;
+      }
+      return settingSave(row, value);
+    });
+  }
+  const long = kind === "buttons" && options.reduce((n, o) => n + o.label.length, 0) > 20;
+  return uiRow({ label, control, help, id, cls: long ? "wrap-ctl" : "" });
+}
+
+// Os numeros (a calibracao de cor, a pistola): um slider com o valor ao
+// lado; grava enquanto anda (um a cada 300 ms: a cor muda na tela do jogo
+// com o dedo ainda no slider) e ao soltar. O - e o + dao um passo por toque.
+function settingSlider(row, label) {
+  const range = el("input", { type: "range", min: String(row.min), max: String(row.max), step: String(row.step || 1),
+    value: row.value, "aria-label": label });
+  const shown = el("output", { class: "val" }, prettyNumber(row.key, row.value));
+  let timer = null, busy = false;
+  const save = async (dragging) => {
+    busy = true;
+    try {
+      const { res, data } = await settingPost(row, range.value);
+      if (dragging) return;
+      if (res.ok && data.setting) range.value = row.value = data.setting.value;
+      else if (res.ok) row.value = range.value;
+      else {
+        range.value = row.value;
+        toast(data.error || res.statusText, "bad");
+      }
+      shown.textContent = prettyNumber(row.key, range.value);
+    } finally {
+      busy = false;
+    }
+  };
+  range.addEventListener("input", () => {
+    shown.textContent = prettyNumber(row.key, range.value);
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (!busy) save(true); }, 300);
+  });
+  range.addEventListener("change", () => { clearTimeout(timer); save(false); });
+  const stepper = (sign) => {
+    const b = el("button", { type: "button", class: "step", "aria-label": t(sign < 0 ? "less" : "more") + ": " + label },
+      sign < 0 ? "−" : "+");
+    b.addEventListener("click", () => {
+      const step = Number(row.step || 1);
+      range.value = String(Math.min(Number(row.max), Math.max(Number(row.min), Number(range.value) + sign * step)));
+      shown.textContent = prettyNumber(row.key, range.value);
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (!busy) save(false); }, 400);
+    });
+    return b;
+  };
+  return el("div", { class: "slider" }, stepper(-1), range, stepper(1), shown);
+}
+
+// prettyNumber: o valor como o Setup mostra (1.00, 6500 K, 100%, +5, 150 ms).
+function prettyNumber(key, value) {
+  const v = Number(value);
+  if (/gamma$/.test(key)) return (v / 100).toFixed(2);
+  if (/temperature$/.test(key)) return v + " K";
+  if (/(contrast|gain|saturation|strength|thickness|_pct|flash_level)$/.test(key) || key === "scanline.brightness") return v + "%";
+  if (/(_ms|latency)$/.test(key)) return v + " ms";
+  if (/hue$/.test(key)) return v + "°";
+  if (key === "scanline.height") return v ? String(v) : "auto";
+  return v > 0 ? "+" + v : String(v);
+}
+
+// Os jogos entrelacados: uma linha por programa, o modo em botoes (640x240,
+// entrelacado com filtro, entrelacado puro) e, so com o filtro, o nivel dele
+// na mesma linha, logo embaixo. O Setup manda duas linhas por programa
+// (mode480.CHAVE e deflicker.CHAVE); aqui elas viram uma so. Os primeiros
+// ficam a vista; o resto atras de "Mais N programas".
+const M480_SHOWN = 6;
+
+function mode480Rows(items) {
+  const levels = new Map(items.filter((r) => r.key.startsWith("deflicker.")).map((r) => [r.key.slice(10), r]));
+  const rows = items.filter((r) => r.key.startsWith("mode480.")).map((r) => mode480Row(r, levels.get(r.key.slice(8))));
+  if (rows.length > M480_SHOWN + 1) {
+    const rest = rows.slice(M480_SHOWN);
+    rest.forEach((r) => { r.hidden = true; });
+    const names = rest.map((r) => r.dataset.name);
+    const more = uiClickable(uiRow({ label: t("setup_more").replace("%n", rest.length),
+      sub: names.slice(0, 4).join(", ") + (names.length > 4 ? "…" : ""), control: icon("g-chevd"), cls: "more-row" }), () => {
+      rest.forEach((r) => { r.hidden = false; });
+      more.remove();
+    });
+    rows.splice(M480_SHOWN, 0, more);
+  }
+  return rows;
+}
+
+function mode480Row(row, level) {
+  let lvl = null;
+  const options = row.options.map((o) => ({ value: o.value, label: t("m480s_" + o.value) }));
+  const r = uiRow({ label: row.label, help: lang === "pt" ? "" : row.help, cls: "m480",
+    control: uiChoice(options, row.value, row.label, async (value) => {
+      const ok = await settingSave(row, value);
+      if (ok) drawLevel();
+      return ok;
+    }) });
+  r.dataset.name = row.label;
+  function drawLevel() {
+    if (lvl) lvl.remove();
+    lvl = null;
+    if (!level || row.value !== "filter") return;
+    lvl = el("div", { class: "lvl" }, el("span", {}, t("m480_level_short")),
+      uiChoice(level.options.map((o) => ({ value: o.value, label: t("m480_" + o.value) })), level.value,
+        t("m480_level_short") + ": " + row.label, (value) => settingSave(level, value)));
+    r.append(lvl);
+  }
+  drawLevel();
+  return r;
+}
+
+// ── As caixas que nao vem do --settings ──────────────────────────
+
+// Setup > Network: as placas, as redes ao alcance (so ao pedir: a busca leva
+// uns segundos) e conectar com a senha.
+async function wifiRows() {
+  const devices = (await (await api("/api/wifi")).json()).devices || [];
+  const wifi = devices.filter((d) => d.type === "wifi");
+  const joined = new Set(wifi.filter((d) => d.state === "connected").map((d) => d.connection));
+  const rows = devices.map((d) => uiRow({ label: d.connection || d.device, sub: [d.device, d.ip].filter(Boolean).join(" · "),
+    control: d.state === "connected" ? el("span", { class: "okmark" }, icon("g-check"), t(d.type === "wifi" ? "wifi_connected" : "bt_connected"))
+      : el("span", { class: "dim" }, d.state) }));
+  if (!wifi.length) return [...rows, uiRow({ label: "Wi-Fi", sub: t("wifi_none") })];
+  let found = [];
+  const scanRow = uiRow({ label: t("wifi_scan"), control: uiButton(t("wifi_scan_go"), async () => {
+    found.forEach((n) => n.remove());
+    found = [uiRow({ label: t("wifi_scanning"), cls: "dim-row" })];
+    scanRow.after(...found);
+    const r = await api("/api/wifi?scan=1");
+    const nets = (await r.json()).networks || [];
+    found.forEach((n) => n.remove());
+    found = nets.length ? nets.map((n) => uiRow({ label: n.ssid, before: [wifiBars(Number(n.signal))], sub: n.security || t("wifi_open"),
+      control: joined.has(n.ssid) ? el("span", { class: "okmark" }, icon("g-check"), t("wifi_connected"))
+        : uiButton(t("wifi_connect"), () => wifiConnect(n.device, n.ssid, !!n.security, false)) }))
+      : [uiRow({ label: t("wifi_nonet"), cls: "dim-row" })];
+    scanRow.after(...found);
+  }) });
+  const hidden = uiRow({ label: t("wifi_hidden"), sub: t("wifi_hidden_sub"), control: uiButton(t("wifi_connect"), async () => {
     const ssid = await ask({ title: t("wifi_hidden"), text: t("wifi_name"), input: "" });
     if (ssid) wifiConnect(wifi[0].device, ssid, true, true);
-  });
-  return settingsBox("Network", "px-network", el("div", { class: "setting" }, list,
-    wifi.length ? el("div", { class: "row start" }, scan, hidden) : el("div", { class: "dim" }, t("wifi_none")), nets));
+  }) });
+  return [...rows, scanRow, hidden];
 }
 
 // wifiBars: o sinal em 4 barrinhas (como o do Status).
@@ -366,13 +781,13 @@ async function wifiConnect(device, ssid, secured, isHidden) {
   if (r.ok) loadSettings().catch(() => {});
 }
 
-// Setup > System > Password: a de agora e a nova duas vezes.
-function passwordBox() {
-  const field = (key, auto) => el("input", { type: "password", autocomplete: auto, "aria-label": t(key), placeholder: t(key) });
+// Setup > System > Password: Trocar abre a de agora e a nova duas vezes.
+function passwordRow() {
+  const field = (key, auto) => uiField({ type: "password", autocomplete: auto, "aria-label": t(key), placeholder: t(key) });
   const current = field("pw_current", "current-password"), first = field("pw_new", "new-password"), again = field("pw_again", "new-password");
-  const save = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("pw_save"));
-  const form = el("form", { class: "setting pw" }, current, first, again, el("div", { class: "row start" }, save),
-    el("div", { class: "dim" }, t("pw_note")));
+  const save = el("button", { type: "submit", class: "btn small" }, t("pw_save"));
+  const form = el("form", { class: "srow-form", hidden: "" }, current, first, again, el("div", { class: "srow-form-foot" }, save),
+    el("p", { class: "dim" }, t("pw_note")));
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (first.value !== again.value) return toast(t("pw_diff"), "bad");
@@ -382,315 +797,66 @@ function passwordBox() {
       const r = await api("/api/password", { method: "POST", body: JSON.stringify({ current: current.value, password: first.value }) });
       const data = await r.json().catch(() => ({}));
       toast(r.ok ? t("pw_done") : r.status === 403 ? t("pw_wrong") : (data.error || r.statusText), r.ok ? "ok" : "bad");
-      if (r.ok) form.reset();
+      if (r.ok) {
+        form.reset();
+        form.hidden = true;
+      }
     } finally {
       save.disabled = false;
     }
   });
-  return settingsBox("Password", "px-password", form);
+  const open = uiButton(t("pw_change"), () => {
+    form.hidden = !form.hidden;
+    if (!form.hidden) current.focus();
+  });
+  return uiRow({ label: t("si_password"), sub: t("sih_password"), control: open, after: [form] });
 }
 
-// Cloud backup (config/fliperos-cloud): os hi-scores, saves e configuracoes
-// numa nuvem pelo rclone. Google Drive e Dropbox pelo login do site (o
-// endereco da pagina que nao abre volta colado aqui); WebDAV, SFTP e Mega
-// com usuario e senha. Sincroniza ao apertar e, ligado, ao fechar cada jogo.
-const CLOUD_FIELDS = { webdav: ["url", "user", "pass"], sftp: ["host", "port", "user", "pass"], mega: ["user", "pass"] };
-async function cloudPage() {
-  const state = await (await api("/api/cloud")).json();
-  const reload = () => loadCloud().catch(() => {});
-  const post = async (body) => {
-    const r = await api("/api/cloud", { method: "POST", body: JSON.stringify(body) });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) toast(data.error || r.statusText, "bad");
-    return r.ok ? data : null;
-  };
-  const content = el("div", { class: "stack" });
-  if (!state.installed) {
-    const install = el("button", { type: "button", class: "btn" }, icon("px-install"), t("cl_install"));
-    install.addEventListener("click", async () => {
-      if (await post({ action: "install" })) { toast(t("inst_started")); loadTasks().catch(() => {}); }
-    });
-    content.append(el("div", {}, t("cl_missing")), el("div", { class: "row start" }, install));
-  } else if (!state.remote) {
-    const kind = el("select", { "aria-label": t("cl_provider") },
-      // O Google Drive so com o cliente do FliperOS (Entrar com o Google).
-      ...["drive", "dropbox", "webdav", "sftp", "mega"].filter((k) => k !== "drive" || state.device)
-        .map((k) => el("option", { value: k }, t("cl_" + k))));
-    const area = el("div", { class: "stack" });
-    let polling = null;
-    const draw = () => {
-      if (polling) { clearTimeout(polling); polling = null; }
-      if (kind.value === "drive") {
-        // Entrar com o Google, como numa smart TV: o QR code e o codigo; a
-        // espera roda no gabinete, e o painel so le o estado a cada 2 s.
-        const go = el("button", { type: "button", class: "btn" }, icon("px-password"), t("cl_google"));
-        const box = el("div", { class: "stack google-wait", hidden: "" });
-        const cancel = el("button", { type: "button", class: "btn ghost" }, icon("px-cancel"), t("cancel"));
-        let shown = "";
-        const show = (s) => {
-          if (s.state === "ok") { toast(t("cl_connected").replace("%s", s.account || "Google Drive"), "ok"); reload(); return true; }
-          if (s.state === "denied" || s.state === "error" || s.state === "stopped") {
-            box.replaceChildren(el("div", { class: "bad" }, s.error || t("cl_google_stopped")));
-            go.hidden = false;
-            return true;
-          }
-          if (s.state === "syncing") {
-            // A primeira sincronizacao, com a barra (pct do fliperos-cloud).
-            const pct = /^\d+$/.test(s.pct || "") ? Number(s.pct) : null;
-            box.replaceChildren(el("div", {}, t("cl_google_syncing").replace("%s", s.account || "") + (pct != null ? " " + pct + "%" : "")),
-              ...(pct != null ? [meter(pct)] : []));
-          } else if (s.code && s.code !== shown) {
-            shown = s.code;
-            const qr = el("div", { class: "qr" });
-            qr.innerHTML = s.qr || "";
-            box.replaceChildren(el("div", { class: "row start google-row" }, qr, el("div", { class: "stack" },
-              el("div", {}, t("cl_code_step1")),
-              el("a", { class: "btn ghost", href: s.url, target: "_blank", rel: "noopener" }, icon("px-link"), s.url.replace(/^https?:\/\//, "")),
-              el("div", {}, t("cl_code_step2")), el("div", { class: "device-code" }, s.code),
-              el("div", { class: "dim" }, t("cl_code_wait")), cancel)));
-          }
-          box.hidden = false;
-          go.hidden = true;
-          return false;
-        };
-        const watch = async () => {
-          const r = await api("/api/cloud", { method: "POST", body: JSON.stringify({ action: "google-status" }) }).catch(() => null);
-          const s = r && r.ok ? await r.json() : null;
-          if (s && show(s)) return;
-          if ($("cloud-page").contains(box)) polling = setTimeout(watch, 2000);
-        };
-        go.addEventListener("click", async () => {
-          go.disabled = true;
-          const s = await post({ action: "google-start" });
-          go.disabled = false;
-          if (s && !show(s)) polling = setTimeout(watch, 2000);
-        });
-        cancel.addEventListener("click", async () => {
-          if (polling) clearTimeout(polling);
-          await post({ action: "google-cancel" });
-          box.hidden = true;
-          go.hidden = false;
-          shown = "";
-        });
-        area.replaceChildren(el("div", { class: "dim" }, t("cl_code_help")), go, box);
-      } else if (CLOUD_FIELDS[kind.value]) {
-        const inputs = CLOUD_FIELDS[kind.value].map((f) => el("input", { type: f === "pass" ? "password" : "text",
-          autocomplete: "off", "aria-label": t("cl_f_" + f), placeholder: t("cl_f_" + f) }));
-        const save = el("button", { type: "submit", class: "btn" }, icon("px-save"), t("cl_save"));
-        const form = el("form", { class: "stack" }, ...inputs, el("div", { class: "row start" }, save));
-        form.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          save.disabled = true;
-          const fields = Object.fromEntries(CLOUD_FIELDS[kind.value].map((f, i) => [f, inputs[i].value.trim()]));
-          try { if (await post({ action: "remote", kind: kind.value, fields })) { toast(t("cl_saved"), "ok"); reload(); } }
-          finally { save.disabled = false; }
-        });
-        area.replaceChildren(form);
-      } else {
-        const start = el("button", { type: "button", class: "btn" }, icon("px-password"), t("cl_signin"));
-        const answer = el("input", { type: "text", autocomplete: "off", "aria-label": t("cl_paste"), placeholder: t("cl_paste") });
-        const done = el("button", { type: "submit", class: "btn" }, icon("px-ok"), t("cl_save"));
-        const form = el("form", { class: "stack", hidden: "" }, el("div", { class: "dim" }, t("cl_paste_help")), answer,
-          el("div", { class: "row start" }, done));
-        start.addEventListener("click", async () => {
-          // A aba abre ja no clique (o navegador bloqueia a que abre depois de esperar).
-          const tab = window.open("about:blank", "_blank");
-          start.disabled = true;
-          try {
-            const data = await post({ action: "authorize", kind: kind.value });
-            if (data && data.url) {
-              if (tab) tab.location = data.url; else window.open(data.url, "_blank");
-              form.hidden = false;
-              answer.focus();
-            } else if (tab) tab.close();
-          } finally { start.disabled = false; }
-        });
-        form.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          done.disabled = true;
-          try { if (await post({ action: "authorized", kind: kind.value, answer: answer.value.trim() })) { toast(t("cl_saved"), "ok"); reload(); } }
-          finally { done.disabled = false; }
-        });
-        area.replaceChildren(el("div", { class: "row start" }, start), form);
-      }
-    };
-    kind.addEventListener("change", draw);
-    draw();
-    content.append(el("label", { class: "row start" }, el("span", {}, t("cl_provider")), kind), area);
-  } else {
-    const checks = ["hiscores", "saves", "config"].map((w) => {
-      const box = el("input", { type: "checkbox", "aria-label": t("cl_w_" + w) });
-      box.checked = state.what.includes(w);
-      box.addEventListener("change", () => post({ action: "what", what: checks.filter((c) => c.box.checked).map((c) => c.w) }));
-      return { w, box, label: el("label", { class: "row start" }, box, el("span", {}, t("cl_w_" + w))) };
-    });
-    const auto = el("select", { "aria-label": t("cl_auto") }, el("option", { value: "on" }, t("ra_on")), el("option", { value: "off" }, t("ra_off")));
-    auto.value = state.auto ? "on" : "off";
-    auto.addEventListener("change", () => post({ action: "auto", on: auto.value === "on" }));
-    const run = (direction, label, glyph) => {
-      const b = el("button", { type: "button", class: direction === "both" ? "btn" : "btn ghost" }, icon(glyph), t(label));
-      b.addEventListener("click", () => startTask("/api/cloud", { action: "sync", direction }));
-      return b;
-    };
-    const forget = el("button", { type: "button", class: "btn ghost" }, icon("px-remove"), t("cl_forget"));
-    forget.addEventListener("click", async () => {
-      if (!(await ask({ title: t("group_Cloud"), text: t("cl_forget_ask"), yes: t("cl_forget") }))) return;
-      if (await post({ action: "forget" })) reload();
-    });
-    const last = state.last ? new Date(state.last * 1000).toLocaleString() + (state.result === "failed" ? " · " + t("cl_failed") : "") : t("cl_never");
-    content.append(el("div", {}, state.remote === "drive" && state.account ? t("cl_connected").replace("%s", state.account)
-      : t("cl_account").replace("%s", t("cl_" + state.remote) || state.remote)),
-      ...checks.map((c) => c.label), el("label", { class: "row start" }, el("span", {}, t("cl_auto")), auto),
-      el("div", { class: "row start" }, run("both", "cl_sync", "px-reset"), run("push", "cl_push", "px-up"), run("pull", "cl_pull", "px-install")),
-      el("div", { class: "dim" }, t("cl_last").replace("%s", last)), el("div", { class: "row start" }, forget));
-  }
-  content.append(el("div", { class: "dim" }, t("cl_note")));
-  return content;
-}
-
-// Setup > Games > RetroAchievements: entrar com a conta do site (so o token
-// fica no gabinete), ligar as conquistas e o modo hardcore, sair.
-async function cheevosPage() {
-  const state = await (await api("/api/cheevos")).json();
-  const post = async (body) => {
-    const r = await api("/api/cheevos", { method: "POST", body: JSON.stringify(body) });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) toast(data.error || r.statusText, "bad");
-    return r.ok;
-  };
-  const reload = () => loadCheevos().catch(() => {});
-  const content = el("div", { class: "stack" });
-  if (state.user) {
-    const onOff = (key, value) => {
-      const select = el("select", { "aria-label": t(key) }, el("option", { value: "on" }, t("ra_on")), el("option", { value: "off" }, t("ra_off")));
-      select.value = value ? "on" : "off";
-      select.addEventListener("change", async () => { if (await post({ action: key, on: select.value === "on" })) reload(); });
-      return el("label", { class: "row start" }, el("span", {}, t("ra_" + key)), select);
-    };
-    const out = el("button", { type: "button", class: "btn ghost" }, icon("px-power"), t("ra_logout"));
-    out.addEventListener("click", async () => {
-      if (!(await ask({ title: "RetroAchievements", text: t("ra_logout_ask").replace("%s", state.user), yes: t("ra_logout") }))) return;
-      if (await post({ action: "logout" })) reload();
-    });
-    // A Web API Key da conta: com ela o frontend mostra as conquistas de cada jogo.
-    const key = el("input", { type: "password", autocomplete: "off", "aria-label": t("ra_apikey"),
-      placeholder: state.apikey ? t("ra_apikey_set") : t("ra_apikey") });
-    const save = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("ra_apikey_save"));
-    // A aba da conta no site onde fica a chave (Settings > Applications), numa aba nova.
-    const where = el("a", { class: "btn ghost", href: "https://retroachievements.org/settings?tab=applications", target: "_blank",
-      rel: "noopener" }, icon("px-password"), t("ra_apikey_get"));
-    const keyForm = el("form", { class: "stack" }, el("span", {}, t("ra_apikey")), key,
-      el("div", { class: "row start" }, save, where), el("div", { class: "dim" }, t("ra_apikey_hint")));
-    keyForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      save.disabled = true;
-      try {
-        if (await post({ action: "apikey", key: key.value.trim() })) {
-          toast(t(key.value.trim() ? "ra_apikey_saved" : "ra_apikey_removed"), "ok");
-          reload();
-        }
-      } finally {
-        key.value = "";
-        save.disabled = false;
-      }
-    });
-    content.append(el("div", {}, t("ra_as").replace("%s", state.user)), onOff("enable", state.enabled),
-      onOff("hardcore", state.hardcore), keyForm, el("div", { class: "row start" }, out));
-  } else {
-    const user = el("input", { autocomplete: "off", "aria-label": t("user"), placeholder: t("user") });
-    const pass = el("input", { type: "password", autocomplete: "off", "aria-label": t("password"), placeholder: t("password") });
-    const go = el("button", { type: "submit", class: "btn" }, icon("px-password"), t("ra_login"));
-    const form = el("form", { class: "stack" }, user, pass, el("div", { class: "row start" }, go));
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      go.disabled = true;
-      try {
-        if (await post({ action: "login", user: user.value.trim(), password: pass.value })) {
-          toast(t("ra_done"), "ok");
-          reload();
-        }
-      } finally {
-        pass.value = "";
-        go.disabled = false;
-      }
-    });
-    // Sem conta: o cadastro no site, numa aba nova do navegador de quem usa o painel.
-    const signup = el("a", { class: "btn ghost", href: "https://retroachievements.org/createaccount.php",
-      target: "_blank", rel: "noopener" }, icon("px-add"), t("ra_signup"));
-    content.append(form, el("div", { class: "row start" }, el("span", { class: "dim" }, t("ra_no_account")), signup));
-  }
-  content.append(el("div", { class: "dim" }, t("ra_note")));
-  return content;
-}
-
-// As abas Sistema > RetroAchievements e Sistema > Backup na nuvem.
-async function loadCheevos() {
-  $("cheevos-page").replaceChildren(await cheevosPage());
-}
-async function loadCloud() {
-  $("cloud-page").replaceChildren(await cloudPage());
-}
-
-// Setup > System > What's new: o texto so ao abrir o grupo.
-function whatsnewBox() {
-  const pre = el("pre", { class: "log whatsnew" });
-  const box = settingsBox("Whatsnew", "px-up", el("div", { class: "setting" }, pre));
-  const fill = async () => {
-    if (!box.open || pre.textContent) return;
-    const r = await api("/api/whatsnew");
-    pre.textContent = ((await r.json()).text || "").trim() || t("wn_none");
-  };
-  box.addEventListener("toggle", () => fill().catch(() => {}));
-  fill().catch(() => {});
-  return box;
+// Video Setup > Geometry: o crt_range em uso (o publicado para o monitor, ou
+// um digitado). O ajuste com a grade de teste e no tubo (Abrir no gabinete).
+async function geometryRows(ctx) {
+  const g = ctx ? await ctx.json("/api/geometry") : await (await api("/api/geometry")).json();
+  const field = el("input", { type: "text", class: "fld code-txt", value: g.range || g.preset || "", spellcheck: "false",
+    "aria-label": "crt_range0" });
+  const save = uiButton(t("geo_save"), async () => {
+    const r = await api("/api/geometry", { method: "POST", body: JSON.stringify({ action: "set", range: field.value }) });
+    toast(r.ok ? t("geo_saved") : r.status === 409 ? t("geo_freq") : t("geo_bad"), r.ok ? "ok" : "bad");
+    if (r.ok) loadSettings().catch(() => {});
+  });
+  save.hidden = true;
+  field.addEventListener("input", () => { save.hidden = field.value === (g.range || g.preset || ""); });
+  field.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); save.click(); } });
+  return [uiRow({ label: t("geo_monitor"), sub: (g.label || g.monitor || "-") + " · " + t(g.range ? "geo_custom" : "geo_preset"),
+    control: save, help: t("geo_note"), after: [field], cls: "has-field" })];
 }
 
 // Setup > System > FliperOS version: os updates da imagem ao mais novo (a
-// lista vem da rede, so ao abrir o grupo). "Usar" leva o gabinete a um
-// (fliperos-update goto, como tarefa); um mais velho fica preso nele ate sair
-// um update novo, e "Seguir os updates" volta ao mais novo.
-function versionBox() {
-  const body = el("div", { class: "setting versions" });
-  const box = settingsBox("Version", "px-up", body);
-  let loaded = false;
-  const fill = async () => {
-    if (!box.open || loaded) return;
-    loaded = true;
-    body.replaceChildren(el("div", { class: "dim" }, "…"));
-    const r = await api("/api/versions");
-    if (!r.ok) {
-      loaded = false;
-      body.replaceChildren(el("div", { class: "dim" }, t("ver_error")));
-      return;
-    }
-    const v = await r.json();
-    const head = el("div", { class: "row start" }, el("b", {}, t("ver_now").replace("%s", v.level)),
-      v.level === v.latest && v.hold == null ? el("span", { class: "tag on" }, t("ver_newest")) : "",
-      v.hold != null ? el("span", { class: "tag" }, t("ver_held")) : "");
-    const rows = (v.updates || []).map((u) => {
-      const use = el("button", { type: "button", class: "btn ghost" }, icon("px-ok"), t("ver_use"));
-      use.disabled = u.state === "current" && (v.hold != null || v.level === v.latest);
-      use.addEventListener("click", () => versionGo(u.n, v, box));
-      return el("div", { class: "nic-row" }, el("b", {}, String(u.n)), el("span", {}, u.title),
-        u.state === "current" ? el("span", { class: "tag on" }, t("ver_installed")) : "",
-        u.reboot ? el("span", { class: "tag" }, t("ver_restart")) : "", use);
-    });
-    const parts = [head];
-    if (v.reboot) parts.push(el("div", { class: "dim" }, t("ver_reboot")));
-    if (v.hold != null) {
-      const follow = el("button", { type: "button", class: "btn" }, icon("px-install"), t("ver_follow"));
-      follow.addEventListener("click", () => versionGo("latest", v, box));
-      parts.push(el("div", { class: "row start" }, follow));
-    }
-    parts.push(el("div", { class: "nics" }, ...rows), el("div", { class: "dim" }, t("ver_note")));
-    body.replaceChildren(...parts);
-  };
-  box.addEventListener("toggle", () => fill().catch(() => { loaded = false; }));
-  fill().catch(() => { loaded = false; });
-  return box;
+// lista vem da rede). "Usar" leva o gabinete a um (fliperos-update goto,
+// como tarefa); um mais velho fica preso nele ate sair um update novo, e
+// "Seguir os updates" volta ao mais novo.
+async function versionPage(box) {
+  const body = el("div", {}, el("p", { class: "dim setup-loading" }, el("span", { class: "spinner" }), t("setup_loading")));
+  box.append(el("h2", {}, t("si_version")), el("p", { class: "lead" }, t("sih_version")), body);
+  const r = await api("/api/versions");
+  if (!r.ok) {
+    body.replaceChildren(el("p", { class: "dim" }, t("ver_error")));
+    return;
+  }
+  const v = await r.json();
+  const tags = [v.level === v.latest && v.hold == null ? t("ver_newest") : "", v.hold != null ? t("ver_held") : ""].filter(Boolean);
+  const now = uiRow({ label: t("ver_now").replace("%s", v.level), sub: tags.join(" · "),
+    control: v.hold != null ? uiButton(t("ver_follow"), () => versionGo("latest", v)) : "" });
+  const rows = (v.updates || []).map((u) => {
+    const use = uiButton(t("ver_use"), () => versionGo(u.n, v));
+    use.disabled = u.state === "current" && (v.hold != null || v.level === v.latest);
+    return uiRow({ label: u.title, before: [el("span", { class: "vnum" }, String(u.n))],
+      sub: [u.state === "current" ? t("ver_installed") : "", u.reboot ? t("ver_restart") : ""].filter(Boolean).join(" · "),
+      control: u.state === "current" && use.disabled ? el("span", { class: "okmark" }, icon("g-check"), t("ver_installed")) : use });
+  });
+  body.replaceChildren(uiSection("", [now], v.reboot ? t("ver_reboot") : ""), uiSection(t("ss_updates"), rows, t("ver_note")));
 }
 
-async function versionGo(target, v, box) {
+async function versionGo(target, v) {
   const n = target === "latest" ? v.latest : target;
   const text = target === "latest" ? t("ver_follow_ask")
     : n < v.level ? t("ver_back_ask").replace("%s", n)
@@ -719,244 +885,245 @@ async function versionGo(target, v, box) {
   loadSettings().catch(() => {});
 }
 
-// Video Setup > Geometry: o monitor e o crt_range em uso, um digitado e a
-// volta ao padrao do monitor. O ajuste com a grade de teste e no tubo, com as
-// setas: fica no Setup do gabinete.
-async function geometryBox() {
-  const res = await api("/api/geometry");
-  const g = await res.json();
-  const details = el("details", { class: "geometry" }, el("summary", {}, icon("px-geometry"), t("group_Geometry")));
-  if (openGroups.has("Geometry")) details.open = true;
-  details.addEventListener("toggle", () => { details.open ? openGroups.add("Geometry") : openGroups.delete("Geometry"); });
-  const field = el("input", { type: "text", class: "mono", value: g.range || g.preset || "", spellcheck: "false", "aria-label": "crt_range0" });
-  const save = el("button", { type: "button" }, t("geo_save"));
-  save.addEventListener("click", async () => {
-    const r = await api("/api/geometry", { method: "POST", body: JSON.stringify({ action: "set", range: field.value }) });
+// Setup > System > What's new: o que mudou em cada versao e os updates.
+async function whatsnewPage(box) {
+  const pre = el("pre", { class: "log whatsnew" }, "…");
+  box.append(el("h2", {}, t("si_whatsnew")), el("p", { class: "lead" }, t("sih_whatsnew")), pre);
+  const r = await api("/api/whatsnew");
+  pre.textContent = ((await r.json()).text || "").trim() || t("wn_none");
+}
+
+// ── Backup na nuvem ──────────────────────────────────────────────
+// config/fliperos-cloud: os hi-scores, saves e configuracoes numa nuvem pelo
+// rclone. Google Drive e Dropbox pelo login do site (o endereco da pagina que
+// nao abre volta colado aqui); WebDAV, SFTP e Mega com usuario e senha.
+// Sincroniza ao apertar e, ligado, ao fechar cada jogo.
+const CLOUD_FIELDS = { webdav: ["url", "user", "pass"], sftp: ["host", "port", "user", "pass"], mega: ["user", "pass"] };
+async function cloudPage() {
+  const state = await (await api("/api/cloud")).json();
+  const reload = () => loadCloud().catch(() => {});
+  const post = async (body) => {
+    const r = await api("/api/cloud", { method: "POST", body: JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
-    toast(r.ok ? t("geo_saved") : r.status === 409 ? t("geo_freq") : t("geo_bad"), r.ok ? "ok" : "bad");
-    if (r.ok) loadSettings().catch(() => {});
-  });
-  const reset = el("button", { type: "button", class: "ghost" }, t("geo_reset"));
-  reset.disabled = !g.range;
-  reset.addEventListener("click", async () => {
-    if (!(await ask({ title: t("geo_reset"), text: t("geo_reset_text"), yes: t("geo_reset") }))) return;
-    const r = await api("/api/geometry", { method: "POST", body: JSON.stringify({ action: "reset" }) });
-    toast(r.ok ? t("geo_was_reset") : r.statusText, r.ok ? "ok" : "bad");
-    loadSettings().catch(() => {});
-  });
-  details.append(el("div", { class: "setting geo" },
-    el("div", { class: "geo-head" }, el("span", { class: "dim" }, t("monitor")), el("b", {}, g.label || g.monitor || "-"),
-      el("span", { class: "tag " + (g.range ? "on" : "") }, t(g.range ? "geo_custom" : "geo_preset"))),
-    el("label", {}, t("geo_range")), field, el("div", { class: "row start" }, save, reset),
-    el("div", { class: "dim" }, t("geo_note"))));
-  return details;
-}
-
-// settingPost grava um ajuste. Os que refazem a imagem do boot (row.task)
-// voltam como tarefa: o andamento fica na gaveta, e a lista se refaz no fim.
-async function settingPost(row, value) {
-  const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value }) });
-  const data = await res.json().catch(() => ({}));
-  if (res.ok && data.task) {
-    toast(t("set_task").replace("%s", row.label));
-    taskNext = 0;
-    if (row.restart) restartWhenDone(data.task.id, row.label).catch(() => {});
-  }
-  return { res, data };
-}
-
-// restartWhenDone: o monitor, a resolucao, a orientacao so valem no proximo
-// boot. Quando a tarefa termina bem, a pagina oferece reiniciar ja.
-async function restartWhenDone(id, label) {
-  let task = { running: true };
-  while (task.running) {
-    await new Promise((done) => setTimeout(done, 1500));
-    const r = await api("/api/task?id=" + id);
-    if (!r.ok) return;
-    task = await r.json();
-  }
-  if (task.rc !== 0) return;
-  if (!(await ask({ title: label, text: t("set_restart"), yes: t("set_restart_now"), no: t("set_later") }))) return;
-  const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "power.reboot", value: "1" }) });
-  toast(r.ok ? t("set_restarting") : r.statusText, r.ok ? "ok" : "bad");
-}
-
-// Os ajustes que podem deixar o tubo sem imagem pedem confirmacao antes.
-const CONFIRM_SETTINGS = ["monitor", "resolution"];
-
-function settingRow(row) {
-  const id = "set-" + row.key.replace(/[^a-z0-9]/gi, "-");
-  let control;
-  if (row.type === "action") {
-    // Um botao (o voltar ao padrao das cores): depois dele, os outros
-    // ajustes do grupo mudaram, e a lista volta do Setup.
-    const danger = row.key.startsWith("power.");
-    const button = el("button", { id, type: "button", class: "btn " + (danger ? "red" : "ghost") }, icon(settingIcon(row.key)), row.label);
-    button.addEventListener("click", async () => {
-      if (!(await ask({ title: row.label, text: row.help, yes: t("set_go"), danger }))) return;
-      button.disabled = true;
-      try {
-        const { res, data } = await settingPost(row, "1");
-        toast(res.ok ? t("saved").replace("%s", row.label) : (data.error || res.statusText), res.ok ? "ok" : "bad");
-        if (!danger) await loadSettings();
-      } finally {
-        button.disabled = false;
+    if (!r.ok) toast(data.error || r.statusText, "bad");
+    return r.ok ? data : null;
+  };
+  const page = el("div", { class: "spage" }, el("h2", {}, t("sub_cloud")), el("p", { class: "lead" }, t("cl_lead")));
+  if (!state.installed) {
+    page.append(uiSection("", [uiRow({ label: "rclone", sub: t("cl_missing"), control: uiButton(t("cl_install"), async () => {
+      if (await post({ action: "install" })) { toast(t("inst_started")); loadTasks().catch(() => {}); }
+    }) })]));
+  } else if (!state.remote) {
+    const kind = el("select", { class: "sel", "aria-label": t("cl_provider") },
+      // O Google Drive so com o cliente do FliperOS (Entrar com o Google).
+      ...["drive", "dropbox", "webdav", "sftp", "mega"].filter((k) => k !== "drive" || state.device)
+        .map((k) => el("option", { value: k }, t("cl_" + k))));
+    const area = el("div", { class: "srow-form stack" });
+    let polling = null;
+    const draw = () => {
+      if (polling) { clearTimeout(polling); polling = null; }
+      if (kind.value === "drive") {
+        // Entrar com o Google, como numa smart TV: o QR code e o codigo; a
+        // espera roda no gabinete, e o painel so le o estado a cada 2 s.
+        const go = el("button", { type: "button", class: "btn small" }, t("cl_google"));
+        const box = el("div", { class: "stack google-wait", hidden: "" });
+        const cancel = el("button", { type: "button", class: "btn ghost small" }, t("cancel"));
+        let shown = "";
+        const show = (s) => {
+          if (s.state === "ok") { toast(t("cl_connected").replace("%s", s.account || "Google Drive"), "ok"); reload(); return true; }
+          if (s.state === "denied" || s.state === "error" || s.state === "stopped") {
+            box.replaceChildren(el("div", { class: "bad" }, s.error || t("cl_google_stopped")));
+            go.hidden = false;
+            return true;
+          }
+          if (s.state === "syncing") {
+            // A primeira sincronizacao, com a barra (pct do fliperos-cloud).
+            const pct = /^\d+$/.test(s.pct || "") ? Number(s.pct) : null;
+            box.replaceChildren(el("div", {}, t("cl_google_syncing").replace("%s", s.account || "") + (pct != null ? " " + pct + "%" : "")),
+              ...(pct != null ? [stMeter(pct, "")] : []));
+          } else if (s.code && s.code !== shown) {
+            shown = s.code;
+            const qr = el("div", { class: "qr" });
+            qr.innerHTML = s.qr || "";
+            box.replaceChildren(el("div", { class: "row start google-row" }, qr, el("div", { class: "stack" },
+              el("div", {}, t("cl_code_step1")),
+              el("a", { class: "btn-text", href: s.url, target: "_blank", rel: "noopener" }, s.url.replace(/^https?:\/\//, "")),
+              el("div", {}, t("cl_code_step2")), el("div", { class: "device-code" }, s.code),
+              el("div", { class: "dim" }, t("cl_code_wait")), cancel)));
+          }
+          box.hidden = false;
+          go.hidden = true;
+          return false;
+        };
+        const watch = async () => {
+          const r = await api("/api/cloud", { method: "POST", body: JSON.stringify({ action: "google-status" }) }).catch(() => null);
+          const s = r && r.ok ? await r.json() : null;
+          if (s && show(s)) return;
+          if ($("cloud-page").contains(box)) polling = setTimeout(watch, 2000);
+        };
+        go.addEventListener("click", async () => {
+          go.disabled = true;
+          const s = await post({ action: "google-start" });
+          go.disabled = false;
+          if (s && !show(s)) polling = setTimeout(watch, 2000);
+        });
+        cancel.addEventListener("click", async () => {
+          if (polling) clearTimeout(polling);
+          await post({ action: "google-cancel" });
+          box.hidden = true;
+          go.hidden = false;
+          shown = "";
+        });
+        area.replaceChildren(el("div", { class: "dim" }, t("cl_code_help")), go, box);
+      } else if (CLOUD_FIELDS[kind.value]) {
+        const inputs = CLOUD_FIELDS[kind.value].map((f) => uiField({ type: f === "pass" ? "password" : "text",
+          "aria-label": t("cl_f_" + f), placeholder: t("cl_f_" + f) }));
+        const save = el("button", { type: "submit", class: "btn small" }, t("cl_save"));
+        const form = el("form", { class: "stack" }, ...inputs, el("div", { class: "srow-form-foot" }, save));
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          save.disabled = true;
+          const fields = Object.fromEntries(CLOUD_FIELDS[kind.value].map((f, i) => [f, inputs[i].value.trim()]));
+          try { if (await post({ action: "remote", kind: kind.value, fields })) { toast(t("cl_saved"), "ok"); reload(); } }
+          finally { save.disabled = false; }
+        });
+        area.replaceChildren(form);
+      } else {
+        const start = el("button", { type: "button", class: "btn small" }, t("cl_signin"));
+        const answer = uiField({ type: "text", "aria-label": t("cl_paste"), placeholder: t("cl_paste") });
+        const done = el("button", { type: "submit", class: "btn small" }, t("cl_save"));
+        const form = el("form", { class: "stack", hidden: "" }, el("div", { class: "dim" }, t("cl_paste_help")), answer,
+          el("div", { class: "srow-form-foot" }, done));
+        start.addEventListener("click", async () => {
+          // A aba abre ja no clique (o navegador bloqueia a que abre depois de esperar).
+          const tab = window.open("about:blank", "_blank");
+          start.disabled = true;
+          try {
+            const data = await post({ action: "authorize", kind: kind.value });
+            if (data && data.url) {
+              if (tab) tab.location = data.url; else window.open(data.url, "_blank");
+              form.hidden = false;
+              answer.focus();
+            } else if (tab) tab.close();
+          } finally { start.disabled = false; }
+        });
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          done.disabled = true;
+          try { if (await post({ action: "authorized", kind: kind.value, answer: answer.value.trim() })) { toast(t("cl_saved"), "ok"); reload(); } }
+          finally { done.disabled = false; }
+        });
+        area.replaceChildren(el("div", { class: "srow-form-foot" }, start), form);
       }
-    });
-    return el("div", { class: "setting" }, button, el("div", { class: "dim" }, row.help));
+    };
+    kind.addEventListener("change", draw);
+    draw();
+    page.append(uiSection("", [uiRow({ label: t("cl_provider"), control: kind, after: [area] })]));
+  } else {
+    const what = (w) => uiRow({ label: t("cl_w_" + w), control: uiSwitch(state.what.includes(w), t("cl_w_" + w), async (on) => {
+      const chosen = new Set(state.what);
+      if (on) chosen.add(w); else chosen.delete(w);
+      const list = ["hiscores", "saves", "config"].filter((x) => chosen.has(x));
+      if (!(await post({ action: "what", what: list }))) return false;
+      state.what = list;
+      return true;
+    }) });
+    const auto = uiRow({ label: t("cl_auto"), control: uiSwitch(state.auto, t("cl_auto"), async (on) => !!(await post({ action: "auto", on }))) });
+    const run = (direction, label) => uiButton(t(label), () => startTask("/api/cloud", { action: "sync", direction }), direction === "both" ? "" : "quiet");
+    const forget = uiButton(t("cl_forget_go"), async () => {
+      if (!(await ask({ title: t("group_Cloud"), text: t("cl_forget_ask"), yes: t("cl_forget"), danger: true }))) return;
+      if (await post({ action: "forget" })) reload();
+    }, "red");
+    const last = state.last ? new Date(state.last * 1000).toLocaleString() + (state.result === "failed" ? " · " + t("cl_failed") : "") : t("cl_never");
+    page.append(uiSection(t("ra_account"), [uiRow({ label: t("cl_" + state.remote) || state.remote, sub: state.account || "", control: forget })]),
+      uiSection(t("cl_what"), ["hiscores", "saves", "config"].map(what)),
+      uiSection("", [auto, uiRow({ label: t("cl_sync"), sub: t("cl_last").replace("%s", last), cls: "wrap-ctl",
+        control: [run("both", "cl_sync_go"), run("push", "cl_push_go"), run("pull", "cl_pull_go")] })]));
   }
-  if (row.type === "text") {
-    // Um texto (o nome do gabinete): grava no Gravar ou no Enter.
-    const input = el("input", { id, type: "text", value: row.value, maxlength: String(row.max || 64),
-      autocomplete: "off", spellcheck: "false" });
-    const button = el("button", { type: "submit", class: "btn ghost" }, icon("px-save"), t("geo_save"));
-    const about = el("div", { class: "dim" }, row.help);
-    const form = el("form", { class: "text-setting" }, input, button);
-    form.addEventListener("submit", async (event) => {
+  page.append(el("p", { class: "ssec-note" }, t("cl_note")));
+  return page;
+}
+
+// ── RetroAchievements ────────────────────────────────────────────
+// Entrar com a conta do site (so o token fica no gabinete), ligar as
+// conquistas e o modo hardcore, a Web API Key, sair.
+async function cheevosPage() {
+  const state = await (await api("/api/cheevos")).json();
+  const post = async (body) => {
+    const r = await api("/api/cheevos", { method: "POST", body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) toast(data.error || r.statusText, "bad");
+    return r.ok;
+  };
+  const reload = () => loadCheevos().catch(() => {});
+  const page = el("div", { class: "spage" }, el("h2", {}, "RetroAchievements"), el("p", { class: "lead" }, t("ra_lead")));
+  if (state.user) {
+    const onOff = (key, value) => uiRow({ label: t("ra_" + key), control: uiSwitch(value, t("ra_" + key), async (on) => {
+      const ok = await post({ action: key, on });
+      if (ok) reload();
+      return ok;
+    }) });
+    const out = uiButton(t("ra_logout"), async () => {
+      if (!(await ask({ title: "RetroAchievements", text: t("ra_logout_ask").replace("%s", state.user), yes: t("ra_logout") }))) return;
+      if (await post({ action: "logout" })) reload();
+    });
+    // A Web API Key da conta: com ela o frontend mostra as conquistas de cada jogo.
+    const key = uiField({ type: "password", "aria-label": t("ra_apikey"), placeholder: state.apikey ? t("ra_apikey_set") : t("ra_apikey") });
+    const save = el("button", { type: "submit", class: "btn small" }, t("ra_apikey_save"));
+    // A aba da conta no site onde fica a chave (Settings > Applications), numa aba nova.
+    const where = el("a", { class: "btn-text", href: "https://retroachievements.org/settings?tab=applications", target: "_blank",
+      rel: "noopener" }, t("ra_apikey_get"));
+    const keyForm = el("form", { class: "srow-form inline" }, key, save);
+    keyForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      button.disabled = true;
+      save.disabled = true;
       try {
-        const { res, data } = await settingPost(row, input.value.trim());
-        if (res.ok && data.setting) {
-          input.value = row.value = data.setting.value;
-          about.textContent = data.setting.help;
-          toast(t("saved").replace("%s", row.label), "ok");
-        } else {
-          toast(data.error || res.statusText, "bad");
+        if (await post({ action: "apikey", key: key.value.trim() })) {
+          toast(t(key.value.trim() ? "ra_apikey_saved" : "ra_apikey_removed"), "ok");
+          reload();
         }
       } finally {
-        button.disabled = false;
+        key.value = "";
+        save.disabled = false;
       }
     });
-    return el("div", { class: "setting" }, el("label", { for: id }, icon(settingIcon(row.key)), row.label), form, about);
-  }
-  if (row.type === "choice") {
-    control = el("select", { id }, ...row.options.map((o) => el("option", { value: o.value }, o.label)));
-    control.value = row.value;
+    page.append(uiSection(t("ra_account"), [uiRow({ label: state.user, sub: t("ra_as").replace("%s", state.user), control: out }),
+      onOff("enable", state.enabled), onOff("hardcore", state.hardcore)]),
+    uiSection(t("ra_key_title"), [uiRow({ label: t("ra_apikey"), sub: t("ra_apikey_hint"), control: where, after: [keyForm], cls: "has-field" })]));
   } else {
-    // Os numeros (a calibracao de cor): um slider com o valor ao lado, que
-    // anda junto; grava ao soltar.
-    control = el("input", { id, type: "range", min: String(row.min), max: String(row.max),
-      step: String(row.step || 1), value: row.value });
-  }
-  const about = el("div", { class: "dim" }, row.help);
-  let shown = null;
-  // Os sliders gravam tambem enquanto andam (um a cada 300 ms): a cor muda
-  // na tela do jogo com o dedo ainda no slider. Eles nao ficam desligados
-  // enquanto gravam, senao o arrasto parava.
-  let timer = null, busy = false;
-  if (row.type === "number") {
-    shown = el("output", { for: id, class: "slider-value" }, prettyNumber(row.key, row.value));
-    control.addEventListener("input", () => {
-      shown.textContent = prettyNumber(row.key, control.value);
-      clearTimeout(timer);
-      timer = setTimeout(() => { if (!busy) save(true); }, 300);
-    });
-  }
-  control.addEventListener("change", () => { clearTimeout(timer); save(false); });
-  async function save(dragging) {
-    const number = row.type === "number";
-    if (CONFIRM_SETTINGS.includes(row.key)) {
-      const label = (row.options.find((o) => o.value === control.value) || {}).label || control.value;
-      if (!(await ask({ title: row.label, text: t("set_video_ask").replace("%s", label), yes: t("set_go") }))) {
-        control.value = row.value;
-        return;
-      }
-    }
-    if (!number) control.disabled = true;
-    busy = true;
-    try {
-      const { res, data } = await settingPost(row, control.value);
-      if (dragging) return;
-      if (res.ok && data.task) {
-        row.value = control.value;
-      } else if (res.ok && data.setting) {
-        control.value = data.setting.value;
-        about.textContent = data.setting.help;
-        row.value = data.setting.value;
-        toast(t("saved").replace("%s", row.label));
-      } else {
-        control.value = row.value;
-        toast(data.error || res.statusText);
-      }
-      if (shown) shown.textContent = prettyNumber(row.key, control.value);
-    } finally {
-      busy = false;
-      control.disabled = false;
-    }
-  }
-  let field = control;
-  if (shown) {
-    // - e +: um passo do ajuste por toque, para acertar sem arrastar. Os
-    // toques seguidos gravam juntos, um pouco depois do ultimo.
-    const stepper = (sign, label) => {
-      const button = el("button", { type: "button", class: "step", "aria-label": t(sign < 0 ? "less" : "more") + ": " + row.label }, label);
-      button.addEventListener("click", () => {
-        const step = Number(row.step || 1);
-        const value = Math.min(Number(row.max), Math.max(Number(row.min), Number(control.value) + sign * step));
-        control.value = String(value);
-        shown.textContent = prettyNumber(row.key, control.value);
-        clearTimeout(timer);
-        timer = setTimeout(() => { if (!busy) save(false); }, 400);
-      });
-      return button;
-    };
-    field = el("div", { class: "slider" }, stepper(-1, "−"), control, stepper(1, "+"), shown);
-  }
-  return el("div", { class: "setting" }, el("label", { for: id }, icon(settingIcon(row.key)), row.label), field, about);
-}
-
-// Os jogos entrelacados: um cartao por emulador, com o modo em botoes
-// (640x240, entrelacado com filtro, entrelacado puro) e, so no com filtro, o
-// nivel do filtro logo embaixo. O Setup manda duas linhas por emulador (mode480.CHAVE e
-// deflicker.CHAVE); aqui elas viram uma so.
-function mode480Rows(items) {
-  const levels = new Map(items.filter((r) => r.key.startsWith("deflicker.")).map((r) => [r.key.slice(10), r]));
-  const out = [el("div", { class: "setting m480-intro" },
-    el("div", { class: "dim" }, t("m480_intro")))];
-  for (const row of items.filter((r) => r.key.startsWith("mode480."))) {
-    const level = levels.get(row.key.slice(8));
-    const card = el("div", { class: "setting m480" }, el("label", {}, row.label),
-      choiceChips(row, (o) => t("m480_" + o.value)));
-    if (level && row.value === "filter") {
-      card.append(el("div", { class: "m480-level" }, el("span", { class: "dim" }, t("m480_level")),
-        choiceChips(level, (o) => t("m480_" + o.value))));
-    }
-    card.append(el("div", { class: "dim" }, row.help));
-    out.push(card);
-  }
-  return out;
-}
-
-// choiceChips: as opcoes de um ajuste de escolha como botoes; o marcado e o
-// valor de agora, e um clique grava e recarrega a lista.
-function choiceChips(row, label) {
-  return el("div", { class: "chips", role: "group", "aria-label": row.label }, ...row.options.map((o) => {
-    const b = el("button", { type: "button", "aria-pressed": String(o.value === row.value) }, label(o));
-    b.addEventListener("click", async () => {
-      if (o.value === row.value) return;
-      b.disabled = true;
+    const user = uiField({ "aria-label": t("user"), placeholder: t("user") });
+    const pass = uiField({ type: "password", "aria-label": t("password"), placeholder: t("password") });
+    const go = el("button", { type: "submit", class: "btn small" }, t("ra_login"));
+    const form = el("form", { class: "srow-form" }, user, pass, el("div", { class: "srow-form-foot" }, go));
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      go.disabled = true;
       try {
-        const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: row.key, value: o.value }) });
-        const data = await res.json().catch(() => ({}));
-        toast(res.ok ? t("saved").replace("%s", row.label) : (data.error || res.statusText));
-        await loadSettings();
+        if (await post({ action: "login", user: user.value.trim(), password: pass.value })) {
+          toast(t("ra_done"), "ok");
+          reload();
+        }
       } finally {
-        b.disabled = false;
+        pass.value = "";
+        go.disabled = false;
       }
     });
-    return b;
-  }));
+    // Sem conta: o cadastro no site, numa aba nova do navegador de quem usa o painel.
+    const signup = el("a", { class: "btn-text", href: "https://retroachievements.org/createaccount.php",
+      target: "_blank", rel: "noopener" }, t("ra_signup"));
+    page.append(uiSection(t("ra_account"), [uiRow({ label: t("ra_login"), after: [form], cls: "has-field" }),
+      uiRow({ label: t("ra_no_account"), control: signup })]));
+  }
+  page.append(el("p", { class: "ssec-note" }, t("ra_note")));
+  return page;
 }
 
-// prettyNumber: o valor como o Setup mostra (1.00, 6500 K, 100%, +5).
-function prettyNumber(key, value) {
-  const v = Number(value);
-  if (/gamma$/.test(key)) return (v / 100).toFixed(2);
-  if (/temperature$/.test(key)) return v + " K";
-  if (/(contrast|gain|saturation)$/.test(key)) return v + "%";
-  if (/hue$/.test(key)) return v + "°";
-  return v > 0 ? "+" + v : String(v);
+// As abas Sistema > RetroAchievements e Sistema > Backup na nuvem.
+async function loadCheevos() {
+  $("cheevos-page").replaceChildren(await cheevosPage());
+}
+async function loadCloud() {
+  $("cloud-page").replaceChildren(await cloudPage());
 }
 
 // ── Modo lab ─────────────────────────────────────────────────────
@@ -1040,7 +1207,7 @@ async function openTerminal() {
     term = new window.Terminal({
       cursorBlink: true, fontSize: 14, scrollback: 5000,
       fontFamily: '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace',
-      theme: { background: "#191a21", foreground: "#f8f8f2", cursor: "#f8f8f2", selectionBackground: "#44475a",
+      theme: { background: "#08090c", foreground: "#f8f8f2", cursor: "#f8f8f2", selectionBackground: "#44475a",
         black: "#21222c", red: "#ff5555", green: "#50fa7b", yellow: "#f1fa8c", blue: "#bd93f9", magenta: "#ff79c6",
         cyan: "#8be9fd", white: "#f8f8f2", brightBlack: "#6272a4", brightRed: "#ff6e6e", brightGreen: "#69ff94",
         brightYellow: "#ffffa5", brightBlue: "#d6acff", brightMagenta: "#ff92df", brightCyan: "#a4ffff",

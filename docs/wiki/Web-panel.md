@@ -87,6 +87,8 @@ The page's own API also serves scripts. Sign in with `POST /api/login {"user","p
 | `GET`/`POST /api/settings {"key","value"}` | Settings |
 | `GET /api/setup/items`; `POST /api/setup/open {"screen"}`, `/api/setup/task {"name":"system-update"\|"attract-romlist"}` | The Setup: this cabinet's items, a Setup screen on the tube, the tasks |
 | `GET`/`POST /api/quirks`, `/api/folders`, `/api/frontends`, `/api/bluetooth` (`?scan=1`) | Quirks, Folders, custom frontends, Bluetooth |
+| `GET /api/osd/profiles`; `POST /api/osd/profiles {"action":"delete","scope"}` | The on-screen menu profiles |
+| `GET /api/sounds`, `/api/sounds/file?which=move\|select`; `POST /api/sounds/upload?which=` (the `.wav`), `/api/sounds {"action":"delete","which"}` | The menu sounds |
 | `GET /api/customgames`, `/api/customgames/scan?path=&one=1`; `POST /api/customgames/stage?kind=&name=`, `/check`, `/bulk {"rows","portproton"}`, `/edit`, `/delete`, `/group`, `/media`, `/install`, `/pack`, `/squash` | Custom games |
 | `GET`/`POST /api/downloader` (`add`, `start`, `remove`), `GET /api/romfilter`, `POST /api/romfilter/count`, `/save`, `/scan`, `/run` | Downloader and ROM filter |
 | `GET /api/stream`, `POST /api/stream/offer {"fps","sdp"}`, `/api/stream/install` | The live screen |

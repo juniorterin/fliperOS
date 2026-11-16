@@ -2567,6 +2567,83 @@ def tool_lines(argv, fields):
     return rows
 
 
+# ── Os perfis da OSD e os sons do menu (Setup > Video, Setup > Audio) ──
+# Os perfis que o menu na tela grava com Save profile as (config/fliperos-osd,
+# class Profiles): "escopo<TAB>chave<TAB>valor", o escopo "default",
+# "res:640x480i", "emu:retroarch", "core:fbneo" ou "game:fbneo/NOME". O painel
+# lista e apaga um; o que ele mudava volta ao que vale embaixo dele no proximo
+# jogo (a OSD le o arquivo a cada jogo).
+OSD_PROFILES = ENV("FLIPEROS_OSD_PROFILES", "/etc/fliperos/osd-profiles.conf")
+OSD_KINDS = (("game:", "game"), ("core:", "core"), ("emu:", "emulator"), ("res:", "resolution"))
+OSD_ORDER = ("game", "core", "emulator", "resolution", "default")
+# Os sons do menu do Setup (lib/audio.sh, o gum do FliperOS): move.wav e
+# select.wav, que na rede ficam no compartilhamento FliperOS, sounds/menu.
+MENU_SOUNDS = ENV("FLIPEROS_MENU_SOUNDS", "/opt/fliperos/sounds/menu")
+MENU_SOUND_NAMES = ("move", "select")
+MENU_SOUND_MAX = 2 << 20
+
+
+def osd_profile_lines():
+    try:
+        with open(OSD_PROFILES, encoding="utf-8", errors="replace") as f:
+            return [line.rstrip("\n").split("\t") for line in f]
+    except OSError:
+        return []
+
+
+def osd_profiles():
+    """Os perfis, do mais especifico ao padrao: o tipo, o nome, onde (o core
+    de um jogo) e os ajustes. O volume nao e de perfil (a OSD o ignora)."""
+    data = {}
+    for parts in osd_profile_lines():
+        if len(parts) == 3 and parts[1] != "volume":
+            data.setdefault(parts[0], {})[parts[1]] = parts[2]
+    rows = []
+    for scope, values in data.items():
+        kind = "default" if scope == "default" else next((k for prefix, k in OSD_KINDS if scope.startswith(prefix)), "")
+        if not kind:
+            continue
+        name, where = scope.split(":", 1)[1] if ":" in scope else "", ""
+        if kind == "game":
+            where, _, name = name.partition("/")
+        rows.append({"scope": scope, "kind": kind, "name": name, "where": where, "values": values})
+    rows.sort(key=lambda r: (OSD_ORDER.index(r["kind"]), r["name"].lower(), r["where"]))
+    return rows
+
+
+def osd_profile_delete(scope):
+    """Tira as linhas de um perfil (nunca o padrao). False: nao havia."""
+    lines = osd_profile_lines()
+    keep = [parts for parts in lines if parts[0] != scope]
+    if scope == "default" or len(keep) == len(lines):
+        return False
+    tmp = OSD_PROFILES + ".new"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines("\t".join(parts) + "\n" for parts in keep)
+    try:
+        shutil.copymode(OSD_PROFILES, tmp)
+    except OSError:
+        pass
+    os.replace(tmp, OSD_PROFILES)
+    return True
+
+
+def menu_sound_path(which):
+    return os.path.join(MENU_SOUNDS, which + ".wav") if which in MENU_SOUND_NAMES else None
+
+
+def menu_sounds():
+    """{move: {size, mtime} ou None, select: ...}."""
+    out = {}
+    for which in MENU_SOUND_NAMES:
+        try:
+            st = os.stat(menu_sound_path(which))
+            out[which] = {"size": st.st_size, "mtime": int(st.st_mtime)}
+        except OSError:
+            out[which] = None
+    return out
+
+
 # ── Jogos custom (Setup > Games > Custom games) ────────────────────
 # A pagina config/web/customgames.js: a lista, um jogo ou a tabela de muitos
 # (fliperos-setup --customgames, lib/customgames.sh) e a arte de cada linha,
@@ -3395,6 +3472,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.customgames_get(url)
         if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
             return self.setup_get(url)
+        if url.path in ("/api/osd/profiles", "/api/sounds", "/api/sounds/file"):
+            return self.osd_sounds_get(url)
         if url.path == "/api/terminal":
             return self.open_terminal(user == LAB_USER)
         if url.path == "/api/lab":
@@ -3676,6 +3755,8 @@ class Handler(BaseHTTPRequestHandler):
         if url.path in ("/api/setup/open", "/api/setup/task", "/api/quirks", "/api/folders", "/api/frontends",
                         "/api/bluetooth"):
             return self.setup_post(url.path, self.body())
+        if url.path in ("/api/osd/profiles", "/api/sounds", "/api/sounds/upload"):
+            return self.osd_sounds_post(url)
         if url.path == "/api/stream/offer":
             return self.stream_offer(self.body())
         if url.path == "/api/lab":
@@ -4287,6 +4368,68 @@ class Handler(BaseHTTPRequestHandler):
         if not task:
             return self.send(409, {"error": "the ROM filter is already copying"})
         return self.send(200, task.info())
+
+    # ── Os perfis da OSD e os sons do menu ──
+
+    def osd_sounds_get(self, url):
+        if url.path == "/api/osd/profiles":
+            return self.send(200, {"profiles": osd_profiles()})
+        if url.path == "/api/sounds":
+            return self.send(200, {"sounds": menu_sounds()})
+        # O som para ouvir no navegador.
+        path = menu_sound_path((parse_qs(url.query).get("which") or [""])[0])
+        try:
+            with open(path, "rb") as f:
+                data = f.read(MENU_SOUND_MAX + 1)
+        except (OSError, TypeError):
+            return self.send(404, {"error": "no such sound"})
+        return self.send(200, data, "audio/wav")
+
+    def osd_sounds_post(self, url):
+        if url.path == "/api/sounds/upload":
+            # O corpo e o .wav (ate 2 MB): conferido (RIFF/WAVE) antes de
+            # trocar o de agora, e do jogador, como os da rede.
+            path = menu_sound_path((parse_qs(url.query).get("which") or [""])[0])
+            try:
+                size = int(self.headers.get("Content-Length") or -1)
+            except ValueError:
+                size = -1
+            if not path or not 12 <= size <= MENU_SOUND_MAX:
+                self.close_connection = True
+                return self.send(400, {"error": "a .wav file up to %d MB" % (MENU_SOUND_MAX >> 20)})
+            data = self.rfile.read(size)
+            if len(data) != size or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+                return self.send(400, {"error": "not a WAV file"})
+            try:
+                os.makedirs(MENU_SOUNDS, exist_ok=True)
+                with open(path + ".part", "wb") as f:
+                    f.write(data)
+                os.replace(path + ".part", path)
+            except OSError as exc:
+                return self.send(500, {"error": str(exc)})
+            give_to_player(path)
+            return self.send(200, {"sounds": menu_sounds()})
+        data = self.body()
+        if url.path == "/api/sounds":
+            path = menu_sound_path(str(data.get("which", "")))
+            if data.get("action") != "delete" or not path:
+                return self.send(400, {"error": "bad request"})
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, {"sounds": menu_sounds()})
+        scope = str(data.get("scope", ""))
+        if data.get("action") != "delete" or not scope or scope == "default":
+            return self.send(400, {"error": "bad request"})
+        try:
+            if not osd_profile_delete(scope):
+                return self.send(404, {"error": "no such profile"})
+        except OSError as exc:
+            return self.send(500, {"error": str(exc)})
+        return self.send(200, {"profiles": osd_profiles()})
 
     # ── O resto do Setup ──
 

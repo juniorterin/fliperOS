@@ -178,6 +178,47 @@ Object.assign(TEXT.en, {
   cg_zip_group: "Group of the package", cg_zip_sent: "%s sent: installing…",
 });
 
+Object.assign(TEXT.en, {
+  // As listas de ajustes (a busca, as linhas, Abrir no gabinete)
+  setup_search: "Search a setting", setup_search_title: "Search", setup_found: "%n settings with “%s”",
+  setup_found_1: "1 setting with “%s”", setup_found_none: "No setting with “%s”.", setup_about: "About %s",
+  setup_on_cab: "on the cabinet", setup_swap_cab: "change on the cabinet", setup_more: "%n more programs",
+  si_gpu: "Video card", sih_gpu: "The card in use and its driver.",
+  ss_outputs: "Card and outputs", ss_updates: "Updates", gpu_none: "No video card found",
+  gpu_takes: "This card takes %s", gpu_driver: "Driver in use",
+  sicl_resolution: "Custom resolution", sicl_geometry: "Test grid", sicl_monitors: "Monitors and their order",
+  sicl_colour: "Test patterns", sicl_scanlines: "Test picture", sicl_guncon: "Calibrate", sicl_latency: "Check this computer",
+  sicl_bluetooth: "Pair on the cabinet",
+  // Os perfis do menu na tela
+  osd_note: "Profiles are saved in the on-screen menu with Save profile as. In a game the most specific one counts: the game's, then the core's, the emulator's, the resolution's and the default.",
+  osd_k_game: "Game", osd_k_core: "Core", osd_k_emulator: "Emulator", osd_k_resolution: "Resolution", osd_k_default: "Default",
+  osd_all: "Everything", osd_default_sub: "The values from before the other profiles", osd_res_sub: "Every game at %s",
+  osd_core_sub: "Every %s game", osd_emu_sub: "Every game in %s",
+  osd_none: "No profile yet: save one in the on-screen menu (Save profile as).", osd_open: "See the settings of %s",
+  osd_delete: "Delete the profile %s", osd_delete_title: "Delete the profile %s?",
+  osd_delete_ask: "Its settings go away, and what it changed goes back to what counts below it (the %s).",
+  osd_below_game: "core or emulator profile", osd_below_other: "default", osd_deleted: "Profile %s deleted.",
+  osd_level: "Interlaced filter (%s)",
+  // Os sons do menu
+  snd_move: "When the cursor moves", snd_select: "On Enter", snd_none: "No sound: send or drop a .wav here",
+  snd_send: "Send", snd_swap: "Replace", snd_play: "Play %s", snd_remove: "Remove %s", snd_only_wav: "Only .wav files, up to 2 MB.",
+  snd_sent: "Saved as %s.", snd_removed: "%s removed.", snd_remove_ask: "Remove %s? The menu goes quiet for this sound.",
+  snd_note: "Your sounds in .wav, short (under a second). Also over the network, in the sounds/menu folder of the FliperOS share.",
+  // As outras linhas
+  wifi_connected: "connected", wifi_scan_go: "Look", wifi_hidden_sub: "Type the network name", pw_change: "Change",
+  fe_add_go: "Add", qk_add_go: "Add", bt_scan_go: "Look", rl_go: "Make the lists", up_go: "Update", geo_monitor: "crt_range",
+  vol_mute: "Mute", lab_copy: "Copy the address",
+  // Status e as outras abas
+  st_disknet: "Disks and network", st_core: "Core %n: %p%", st_gpu_none: "No card read.",
+  ra_lead: "Achievements in your games, from retroachievements.org.",
+  ra_account: "Account", ra_key_title: "Web API Key",
+  cl_lead: "High scores, saves and settings in the FliperOS folder of your cloud, the same for every cabinet.",
+  cl_what: "What to sync", cl_sync_go: "Sync", cl_push_go: "Send", cl_pull_go: "Fetch", cl_forget_go: "Remove",
+  term_lead: "The cabinet shell in the browser, as the fliperos user.",
+  m480s_240p: "240p", m480s_filter: "Filter", m480s_pure: "Pure", m480_level_short: "Filter level",
+  fo_link_go: "Change", fo_unlink_go: "Undo", tabs_left: "More tabs on the left", tabs_right: "More tabs on the right",
+});
+
 Object.assign(TEXT.pt, {
   sub_setup: "Setup",
   setup_title: "Setup",
@@ -346,3 +387,149 @@ Object.assign(TEXT.pt, {
   cg_folder_title: "Escolher uma pasta", cg_use_folder: "Usar esta pasta", cg_up: "Subir", cg_places: "Discos e pastas",
   cg_zip_group: "Grupo do pacote", cg_zip_sent: "%s enviado: instalando…",
 });
+
+Object.assign(TEXT.pt, {
+  setup_search: "Buscar um ajuste", setup_search_title: "Busca", setup_found: "%n ajustes com “%s”",
+  setup_found_1: "1 ajuste com “%s”", setup_found_none: "Nenhum ajuste com “%s”.", setup_about: "Sobre %s",
+  setup_on_cab: "no gabinete", setup_swap_cab: "trocar no gabinete", setup_more: "Mais %n programas",
+  si_gpu: "Placa de vídeo", sih_gpu: "A placa em uso e o driver dela.",
+  ss_outputs: "Placa e saídas", ss_updates: "Atualizações", gpu_none: "Nenhuma placa de vídeo encontrada",
+  gpu_takes: "Esta placa aceita %s", gpu_driver: "Driver em uso",
+  sicl_resolution: "Resolução custom", sicl_geometry: "Grade de teste", sicl_monitors: "Os monitores e a ordem deles",
+  sicl_colour: "Padrões de teste", sicl_scanlines: "Imagem de teste", sicl_guncon: "Calibrar", sicl_latency: "Testar este computador",
+  sicl_bluetooth: "Parear no gabinete",
+  osd_note: "Os perfis são gravados no menu na tela com Save profile as. Num jogo vale o mais específico: o do jogo, depois o do core, o do emulador, o da resolução e o padrão.",
+  osd_k_game: "Jogo", osd_k_core: "Core", osd_k_emulator: "Emulador", osd_k_resolution: "Resolução", osd_k_default: "Padrão",
+  osd_all: "Tudo", osd_default_sub: "Os valores de antes dos outros perfis", osd_res_sub: "Todo jogo em %s",
+  osd_core_sub: "Todos os jogos do %s", osd_emu_sub: "Todos os jogos no %s",
+  osd_none: "Nenhum perfil ainda: grave um no menu na tela (Save profile as).", osd_open: "Ver os ajustes de %s",
+  osd_delete: "Apagar o perfil %s", osd_delete_title: "Apagar o perfil %s?",
+  osd_delete_ask: "Os ajustes deste perfil saem, e o que ele mudava volta ao que vale embaixo dele (o perfil %s).",
+  osd_below_game: "do core ou do emulador", osd_below_other: "padrão", osd_deleted: "Perfil %s apagado.",
+  osd_level: "Filtro do entrelaçado (%s)",
+  snd_move: "Ao mover o cursor", snd_select: "Ao apertar Enter", snd_none: "Nenhum som: envie ou arraste um .wav para cá",
+  snd_send: "Enviar", snd_swap: "Trocar", snd_play: "Ouvir %s", snd_remove: "Tirar %s", snd_only_wav: "Só arquivos .wav, até 2 MB.",
+  snd_sent: "Gravado como %s.", snd_removed: "%s tirado.", snd_remove_ask: "Tirar %s? O menu fica sem este som.",
+  snd_note: "Seus sons em .wav, curtos (menos de 1 segundo). Também pela rede, na pasta sounds/menu do compartilhamento FliperOS.",
+  wifi_connected: "conectada", wifi_scan_go: "Procurar", wifi_hidden_sub: "Digitar o nome da rede", pw_change: "Trocar",
+  fe_add_go: "Adicionar", qk_add_go: "Adicionar", bt_scan_go: "Procurar", rl_go: "Fazer as listas", up_go: "Atualizar",
+  geo_monitor: "crt_range", vol_mute: "Mudo", lab_copy: "Copiar o endereço",
+  st_disknet: "Disco e rede", st_core: "Núcleo %n: %p%", st_gpu_none: "Nenhuma placa lida.",
+  ra_lead: "Conquistas nos seus jogos, do retroachievements.org.",
+  ra_account: "Conta", ra_key_title: "Web API Key",
+  cl_lead: "Hi-scores, saves e configurações na pasta FliperOS da sua nuvem, a mesma para todos os gabinetes.",
+  cl_what: "O que sincronizar", cl_sync_go: "Sincronizar", cl_push_go: "Enviar", cl_pull_go: "Buscar", cl_forget_go: "Tirar",
+  term_lead: "O shell do gabinete no navegador, como o usuário fliperos.",
+  m480s_240p: "240p", m480s_filter: "Filtro", m480s_pure: "Puro", m480_level_short: "Nível do filtro",
+  fo_link_go: "Trocar", fo_unlink_go: "Desfazer", tabs_left: "Mais abas à esquerda", tabs_right: "Mais abas à direita",
+});
+
+// O botao de cada acao do --settings (o resto e "Fazer").
+const SETTING_ACTIONS = {
+  en: { "video.previous": "Go back", "color.reset": "Reset", "scanline.reset": "Reset", "gun.reset": "Reset", "audio.test": "Play",
+    "power.reboot": "Restart", "power.poweroff": "Turn off" },
+  pt: { "video.previous": "Voltar", "color.reset": "Voltar", "scanline.reset": "Voltar", "gun.reset": "Voltar", "audio.test": "Tocar",
+    "power.reboot": "Reiniciar", "power.poweroff": "Desligar" },
+};
+
+// Os ajustes do --settings vem do gabinete em ingles (o Setup e em ingles).
+// Em portugues: o nome, as opcoes curtas (os botoes lado a lado) e a ajuda
+// das linhas fixas; o que nao esta aqui fica como o gabinete mandou.
+const SETTING_NAMES_PT = {
+  monitor: "Tipo de monitor", resolution: "Resolução de boot", "video.previous": "Voltar ao monitor anterior",
+  orientation: "Orientação", mm_games: "Jogos de várias telas", osd: "Menu na tela",
+  "color.brightness": "Brilho", "color.contrast": "Contraste", "color.gamma": "Gama", "color.temperature": "Temperatura de cor",
+  "color.red_gain": "Ganho do vermelho", "color.green_gain": "Ganho do verde", "color.blue_gain": "Ganho do azul",
+  "color.red_offset": "Nível de preto do vermelho", "color.green_offset": "Nível de preto do verde",
+  "color.blue_offset": "Nível de preto do azul", "color.red_gamma": "Gama do vermelho", "color.green_gamma": "Gama do verde",
+  "color.blue_gamma": "Gama do azul", "color.saturation": "Saturação", "color.hue": "Matiz", "color.range": "Faixa RGB",
+  "color.reset": "Voltar ao padrão", scanlines: "Scanlines", "scanline.strength": "Escuridão", "scanline.thickness": "Espessura",
+  "scanline.height": "Altura da linha", "scanline.brightness": "Reforço do brilho", "scanline.reset": "Voltar ao padrão",
+  audio_card: "Placa de som", mame_latency: "Latência do áudio do MAME", menu_sounds: "Sons do menu", "audio.test": "Testar o som",
+  gun_flash: "Flash da tela", "gun.flash_level": "Brilho do flash (%)", "gun.flash_ms": "Espera do flash (ms)",
+  "gun.hold_ms": "Mira parada no escuro (ms)", "gun.edge_pct": "Faixa da borda (%)", gun_offscreen_reload: "Recarregar fora da tela",
+  "gun.reset": "Voltar ao padrão", padcolor: "Luz do controle", stream_audio: "Som na tela ao vivo",
+  stream_quality: "Qualidade da tela ao vivo", marquee_overlay: "Letreiro para o OBS", cabinet_name: "Nome do gabinete",
+  launcher: "O que abre ao ligar", splash: "Tela de boot", latency: "Modo de latência", debug: "Modo debug",
+  "service.ssh": "SSH", "service.samba": "Compartilhamento de rede", "service.avahi": "fliperos.local", "service.wifi": "Wi-Fi",
+  "service.netwait": "Esperar a rede", "service.web": "Painel web", "service.scrape": "Scraper automático",
+  "service.stream": "Tela ao vivo", "power.reboot": "Reiniciar o gabinete", "power.poweroff": "Desligar o gabinete",
+};
+// As opcoes curtas: por chave (ou pelo comeco, "service."), e "*" para todas.
+const SETTING_OPTIONS = {
+  en: {
+    orientation: { horizontal: "Horizontal", "vertical-cw": "Vertical ↻", "vertical-ccw": "Vertical ↺" },
+    gun_flash: { pulse: "Pulse", hold: "Hold", off: "Off" }, latency: { standard: "Standard", low: "Low" },
+    "service.": { boot: "Boot", after: "After boot", off: "Off" },
+  },
+  pt: {
+    "*": { on: "Ligado", off: "Desligado" },
+    orientation: { horizontal: "Horizontal", "vertical-cw": "Vertical ↻", "vertical-ccw": "Vertical ↺" },
+    mm_games: { on: "Uma tela em cada monitor", off: "Tudo no monitor 1" },
+    "color.range": { default: "Padrão da placa", full: "Completa (0-255)", limited: "Limitada (16-235)" },
+    gun_flash: { pulse: "Pulso", hold: "Segurar", off: "Desligado" }, latency: { standard: "Padrão", low: "Baixa" },
+    stream_quality: { light: "Leve (Wi-Fi fraco)", normal: "Normal", high: "Alta", max: "Máxima (cabo)" },
+    "service.": { boot: "No boot", after: "Depois", off: "Desligado" },
+    padcolor: { fliperos: "FliperOS (roleta, cores dos jogos)", "7a00ff": "Roxo", ff0080: "Rosa", ff0000: "Vermelho",
+      ff6000: "Laranja", ffd000: "Amarelo", "00ff40": "Verde", "00e0ff": "Ciano", ffffff: "Branco", off: "Desligada" },
+  },
+};
+const SETTING_HELP_PT = {
+  monitor: "O modelo do monitor ou as frequências dele (15, 25 ou 31 kHz): o Switchres, o MAME e o RetroArch seguem este ajuste, e ele escolhe a resolução de boot. Vale depois de reiniciar.",
+  resolution: "O modo do boot, dos menus, do frontend e do desktop (cada jogo escolhe o dele). Vale depois de reiniciar.",
+  orientation: "Como o monitor está montado no gabinete. O boot é preparado de novo (cerca de um minuto); tudo segue depois de reiniciar.",
+  mm_games: "Jogos de 2 ou 3 telas. Vale depois de reiniciar.",
+  osd: "Volume, filtro, geometria e cor por cima de qualquer jogo: segure Start e Baixo por um segundo (Frontend controls > OSD MENU troca isso), ou aperte Pause num teclado ou Play/Pause num controle remoto.",
+  "color.brightness": "Sobe ou desce a imagem inteira: aumente se os cinzas escuros somem no preto.",
+  "color.contrast": "Abre ou aperta a imagem em volta do cinza do meio.",
+  "color.gamma": "Os cinzas do meio: acima de 1.00 ficam mais claros, abaixo mais escuros. O preto e o branco ficam.",
+  "color.temperature": "A cor do branco: 6500 K é neutro, 9300 K azulado (muitos monitores de fliperama), 5000 K quente.",
+  "color.saturation": "A força das cores: 0 é preto e branco.", "color.hue": "Gira todas as cores na roda de cores.",
+  "color.range": "Completa para um monitor de PC ou um CRT, limitada para uma TV que espera 16-235.",
+  "color.reset": "Todos os ajustes de cor de volta ao padrão: a imagem exatamente como a placa manda.",
+  scanlines: "Espaços escuros entre as linhas do jogo, como num tubo de 15 kHz. Vale na hora, até num jogo aberto.",
+  "scanline.strength": "O quanto são escuros os espaços entre as linhas do jogo.",
+  "scanline.thickness": "A parte escura de cada linha do jogo (só com 3 ou mais linhas da tela por linha do jogo).",
+  "scanline.height": "Linhas da tela por linha do jogo. 0 = automático: 2 com 480 linhas, nenhuma com 240.",
+  "scanline.brightness": "Compensa a luz que as linhas escuras tiram.",
+  "scanline.reset": "Escuridão, espessura, altura da linha e reforço de volta ao padrão.",
+  audio_card: "A placa usada pelo sistema e pelos emuladores. Os jogos abertos depois da troca usam ela.",
+  mame_latency: "A latência do áudio do GroovyMAME (0 = padrão). Menor responde mais rápido; aumente se o som estalar.",
+  menu_sounds: "Os arquivos WAV de sounds/menu, quando houver.",
+  "audio.test": "Uma voz nas caixas do gabinete: se ela é ouvida, a placa de som é a certa.",
+  gun_flash: "Uma pistola de CRT só acha a mira onde a tela está acesa: o flash acende a tela no tiro, então as partes escuras acertam e fora da tela recarrega. Vale na hora, até num jogo aberto.",
+  "gun.flash_level": "Menor é mais calmo; baixo demais e a pistola não vê.",
+  "gun.flash_ms": "Quanto um tiro no escuro espera pelo flash.", "gun.hold_ms": "Quanto a mira fica parada sem luz.",
+  "gun.edge_pct": "Perder a luz tão perto de uma borda conta como fora da tela.",
+  gun_offscreen_reload: "Fora da tela o gatilho também aperta o botão de recarregar do Flycast, do RetroArch e do SM2-Emu.",
+  "gun.reset": "O flash, os números e o botão de recarregar de volta ao padrão. A calibração fica.",
+  padcolor: "A cor da luz do DualSense, do DualShock 4 e do 8BitDo Ultimate 2 (um 8BitDo no Bluetooth grava a cor quando ligado no cabo USB). Desligada: o controle fica com a dele.",
+  stream_audio: "Uma cópia do som para a tela ao vivo (um loopback ALSA no relógio da placa). Os jogos abertos depois da troca levam ela.",
+  stream_quality: "A imagem da tela ao vivo: mais qualidade gasta mais rede e CPU. Vale a partir da próxima conexão.",
+  marquee_overlay: "O letreiro do jogo na tela como uma página para uma Browser Source do OBS (o endereço fica na página Ao vivo do painel).",
+  launcher: "O que abre por padrão (Setup > Jogos > Frontend). Para abrir um jogo só, use Abrir ao ligar na página dele em Frontend. Vale a partir do próximo boot.",
+  splash: "A imagem enquanto o gabinete liga (Setup > Splash screen, onde fica a prévia). A imagem do boot é refeita: cerca de um minuto.",
+  latency: "Os ajustes dos emuladores valem na hora; os do kernel depois de reiniciar.",
+  debug: "Os frontends e os emuladores seguem na hora; o boot, depois de reiniciar.",
+  "service.ssh": "O terminal deste computador a partir de outro (PuTTY, ssh, WinSCP).",
+  "service.samba": "A pasta FliperOS na rede, para o Windows e outros computadores.",
+  "service.avahi": "Achar este computador na rede pelo nome fliperos.local.",
+  "service.wifi": "O rádio do Wi-Fi. O cabo de rede funciona de qualquer jeito.",
+  "service.netwait": "O boot espera a rede subir. Desligado: segue sem ela.",
+  "service.web": "Este gabinete num navegador da mesma rede: http://fliperos.local (usuário e senha de Setup > Sistema > Senha).",
+  "service.scrape": "Busca a arte, os vídeos e as informações que faltam aos seus jogos, por trás, até com um jogo aberto.",
+  "service.stream": "A tela do gabinete ao vivo no painel web (instalada em Setup > Jogos > Extras > Live screen).",
+  "power.reboot": "O jogo na tela fecha e o gabinete reinicia. O painel volta em cerca de um minuto.",
+  "power.poweroff": "O jogo na tela fecha e o gabinete desliga. Ele é ligado de novo no gabinete.",
+};
+// Os textos que o gabinete monta com um nome ou um numero dentro.
+const SETTING_HELP_PT_RE = [
+  [/^Back to (.*): the monitor and resolution before the last change\./, "Volta para $1: o monitor e a resolução de antes da última troca. Use quando a imagem não voltou. Vale depois de reiniciar."],
+  [/^The name the other cabinets on the network see in party and link play\. Up to (\d+) letters and numbers; empty: (.*)\.$/,
+    "O nome que os outros gabinetes da rede veem na party e no link. Até $1 letras e números; vazio: $2."],
+];
+// A dica do driver de video (--setup-items) em portugues.
+const DRIVER_HINT_PT = {
+  "radeon (tested on the CRT) or amdgpu (with Vulkan).": "radeon (o testado no CRT) ou amdgpu (com Vulkan).",
+  "nouveau or NVIDIA's own driver (native 15 kHz, 3D speed).": "nouveau ou o driver da própria NVIDIA (15 kHz nativo, 3D rápido).",
+};

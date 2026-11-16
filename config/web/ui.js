@@ -126,7 +126,8 @@ async function copyText(text, field) {
 
 // Confirmar (ou perguntar, com input): o dialogo do painel no lugar do
 // confirm() do navegador. Resolve com true/false (ou o texto, ou null).
-function ask({ title, text = "", yes = t("ok"), no = t("cancel"), danger = false, input = null }) {
+// extra: { label, href }, um link ao lado (Ver ao vivo), que fecha o dialogo.
+function ask({ title, text = "", yes = t("ok"), no = t("cancel"), danger = false, input = null, extra = null }) {
   const dlg = $("ask");
   $("ask-title").textContent = title;
   $("ask-text").textContent = text;
@@ -134,6 +135,14 @@ function ask({ title, text = "", yes = t("ok"), no = t("cancel"), danger = false
   $("ask-yes").textContent = yes;
   $("ask-no").textContent = no;
   $("ask-yes").className = "btn" + (danger ? " red" : "");
+  const link = $("ask-extra");
+  link.hidden = !extra;
+  dlg.classList.toggle("wide", !!extra);
+  if (extra) {
+    link.replaceChildren(icon("g-camera"), extra.label);
+    link.href = extra.href;
+    link.onclick = () => dlg.close();
+  }
   const field = $("ask-input");
   field.hidden = input === null;
   field.value = input || "";

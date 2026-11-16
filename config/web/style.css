@@ -24,6 +24,14 @@
   --yellow: #f1fa8c;
   --px: "Pixel", ui-monospace, monospace;
   --r: 16px;
+  /* A area Sistema (setup.css): superficies sem borda e um fio fino entre
+     as linhas; os valores em ciano. */
+  --surface: #17181f;
+  --raise: #1f2029;
+  --hair: #2b2d3a;
+  --value: #8be9fd;
+  --bad: #ff6e6e;
+  --page: 1120px;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -146,14 +154,34 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .crt-form .cab-pick { color: #9ff5bf; }
 .crt-form .cab-pick select { height: 46px; border-color: rgba(80,250,123,.45); background: rgba(0,0,0,.45); color: #d7ffe5; font-size: 16px; }
 
-/* As abas de cada area. */
-.subtabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 0 22px; padding: 2px; }
+/* As abas de cada area: so texto, um traco embaixo da aberta. Rolam de lado;
+   so a ponta que ainda tem abas esmaece (data-more, app.js tabsEdges), e uma
+   seta pisca bem devagar nela. */
+.subtabs-bar { position: relative; margin: 0 0 24px; border-bottom: 1px solid var(--hair); }
+.subtabs { display: flex; gap: 22px; overflow-x: auto; scrollbar-width: none; }
 .subtabs::-webkit-scrollbar { display: none; }
-.subtabs a { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 10px; border-radius: 14px;
-  border: 1px solid var(--line); color: var(--muted); font-weight: 650; background: var(--card2); text-decoration: none; }
-.subtabs a svg.px { width: 26px; height: 26px; }
-.subtabs a:hover { border-color: var(--purple); color: var(--fg); }
-.subtabs a.on { border-color: var(--pink); color: var(--fg); background: rgba(255,121,198,.14); box-shadow: 0 0 18px rgba(255,121,198,.2); }
+.subtabs-bar[data-more="right"] .subtabs { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); }
+.subtabs-bar[data-more="left"] .subtabs { -webkit-mask-image: linear-gradient(90deg, transparent, #000 48px);
+  mask-image: linear-gradient(90deg, transparent, #000 48px); }
+.subtabs-bar[data-more="both"] .subtabs {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 48px, #000 calc(100% - 48px), transparent); }
+.subtabs a { flex: none; padding: 10px 0 11px; margin-bottom: -1px; color: var(--dim); font-weight: 600; font-size: 14.5px;
+  text-decoration: none; border-bottom: 2px solid transparent; transition: color .15s; }
+.subtabs a:hover { color: var(--muted); }
+.subtabs a.on { color: var(--fg); border-bottom-color: var(--pink); }
+.tabs-more { position: absolute; top: 0; bottom: 1px; width: 30px; display: none; place-items: center; border: 0; padding: 0;
+  background: none; color: var(--pink); animation: blink-slow 2.8s ease-in-out infinite; }
+.tabs-more.l { left: -6px; } .tabs-more.r { right: -6px; }
+.tabs-more svg.g { width: 12px; height: 12px; }
+.tabs-more.l svg { transform: scaleX(-1); }
+.subtabs-bar[data-more="right"] .tabs-more.r, .subtabs-bar[data-more="left"] .tabs-more.l,
+.subtabs-bar[data-more="both"] .tabs-more { display: grid; }
+@keyframes blink-slow { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+/* A area Sistema num container junto da barra lateral: em tela larga nada
+   ocupa a largura toda (o que sobra fica a direita). */
+body[data-area="system"] .subtabs-bar, .area[data-area="system"] { max-width: var(--page); }
 .area { animation: fade .3s both; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .25s; }
 
@@ -345,24 +373,10 @@ th.vid-part { color: var(--fg); font-weight: 700; font-size: 14px; padding-top: 
 .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; border: 1px solid var(--line); }
 .tag.on { color: var(--green); border-color: var(--green); }
 .tag.off { color: var(--orange); border-color: var(--orange); }
-/* Configuracoes: um grupo por <details>, um ajuste por linha. */
-#settings details { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
-#settings summary { cursor: pointer; padding: 10px 12px; color: var(--purple); font-weight: 650; }
-.setting { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
-  padding: 8px 12px; border-top: 1px solid var(--line); }
-.setting label { font-weight: 550; }
-.setting select, .setting input { min-width: 9em; }
-/* Os sliders da cor, com o valor ao lado. */
+/* Os sliders (a cor, a pistola, o volume), com o valor ao lado. */
 .slider { display: flex; align-items: center; gap: 10px; min-width: min(100%, 300px); }
 .slider input[type="range"] { flex: 1; min-width: 160px; padding: 0; accent-color: var(--pink); }
 .slider-value { min-width: 4.5em; text-align: right; font-variant-numeric: tabular-nums; color: var(--cyan); }
-.setting .dim { grid-column: 1 / -1; font-size: 13px; }
-@media (max-width: 520px) { .setting { grid-template-columns: 1fr; } }
-/* Os jogos entrelacados: o modo em botoes e, no com filtro, a forca dele. */
-.m480 .chips, .m480-level { grid-column: 1 / -1; }
-.m480-level { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 12px;
-  border-left: 2px solid var(--pink); }
-.m480-intro .dim { line-height: 1.5; }
 
 /* Downloads e tarefas. */
 .dl-kinds { display: grid; gap: 10px; margin: 10px 0; }
@@ -660,14 +674,6 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .live-quality select { color: var(--fg); font-size: 14px; }
 /* Com tres colunas, o endereco do OBS ocupa duas: a linha fica cheia. */
 @media (min-width: 1040px) { .live-obs-card { grid-column: span 2; } }
-/* Status no desktop: a Tela ao lado do Video e os Processos ao lado dos Logs
-   (seis colunas: os cartoes pequenos de dois em dois, os largos inteiros). */
-@media (min-width: 1100px) {
-  .sub.grid[data-sub="status"] { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .sub.grid[data-sub="status"] > .card { grid-column: span 2; }
-  .sub.grid[data-sub="status"] > .wide { grid-column: span 6; }
-  .sub.grid[data-sub="status"] > .st-half { grid-column: span 3; }
-}
 
 /* Os enderecos para o OBS: o campo grande com Copiar e Abrir, as escolhas que
    o montam e os passos. */
@@ -744,8 +750,9 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
   .mob-brand { display: block; } .mob-brand svg { width: 34px; height: 34px; }
   .page-title { font-size: 13px; } .page-sub { display: none; }
   .hide-sm { display: none; } .pill { padding: 10px; } .only-sm { display: grid; }
-  .subtabs { margin: 0 -16px 16px; padding: 2px 16px; }
-  .subtabs a { padding: 7px 12px 7px 8px; font-size: 14px; } .subtabs a svg.px { width: 22px; height: 22px; }
+  .subtabs-bar { margin: 0 0 18px; }
+  .subtabs { gap: 20px; }
+  .subtabs a { font-size: 14px; }
   .bottomnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
     padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); background: rgb(20,21,28); border-top: 1px solid var(--line); }
   .bottomnav a { display: grid; justify-items: center; gap: 4px; font-size: 11.5px; font-weight: 650; color: var(--dim); padding: 4px 0;
@@ -763,12 +770,6 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 @keyframes up { from { transform: translateY(60px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
-/* Sistema > Processos e logs: lado a lado no PC. */
-@media (min-width: 1000px) {
-  .sub.grid[data-sub="logs"] { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
-  .sub.grid[data-sub="logs"] > .card { grid-column: auto; }
-  .sub.grid[data-sub="logs"] .log { max-height: 640px; }
-}
 
 /* ?? Animacoes de entrada: a area e a aba que abrem entram em cascata ?? */
 .area > *, .sub > * { animation: enter .55s cubic-bezier(.2, .8, .2, 1) both; }
@@ -777,10 +778,6 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 .area > :nth-child(4), .sub > :nth-child(4) { animation-delay: .18s; }
 .area > :nth-child(5), .sub > :nth-child(5) { animation-delay: .24s; }
 .area > :nth-child(n+6), .sub > :nth-child(n+6) { animation-delay: .3s; }
-.subtabs a { animation: enter .4s cubic-bezier(.2, .8, .2, 1) both; }
-.subtabs a:nth-child(2) { animation-delay: .04s; } .subtabs a:nth-child(3) { animation-delay: .08s; }
-.subtabs a:nth-child(4) { animation-delay: .12s; } .subtabs a:nth-child(5) { animation-delay: .16s; }
-.subtabs a:nth-child(6) { animation-delay: .2s; }
 .page-title { animation: title-in .5s steps(6) both; }
 @keyframes enter { from { opacity: 0; transform: translateY(18px) scale(.985); } }
 @keyframes title-in { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
@@ -788,34 +785,7 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
 img.fade { opacity: 0; transform: scale(1.04); transition: opacity .45s ease, transform .7s cubic-bezier(.2, .8, .2, 1); }
 img.fade.in { opacity: 1; transform: none; }
 
-/* Ajustes: os icones do Setup nos grupos e em cada ajuste. */
-#settings details { border-radius: 16px; margin-bottom: 14px; background: var(--card2); overflow: hidden; }
-#settings summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; font-size: 15px; list-style: none; }
-#settings summary::-webkit-details-marker { display: none; }
-#settings summary svg.px { width: 30px; height: 30px; }
-#settings details[open] summary { border-bottom: 1px solid var(--line); }
-#settings .setting { padding: 14px 16px; gap: 8px 16px; }
-#settings .setting > label { display: flex; align-items: center; gap: 10px; }
-#settings .setting > label svg.px { width: 24px; height: 24px; }
-#settings .geo { grid-template-columns: minmax(0, 1fr); }
-.geo-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-#settings .setting > button.btn { justify-self: start; }
-/* Rede, senha e novidades: uma coluna so, como a Geometria. */
-#settings .box-network .setting, #settings .pw, #settings .box-whatsnew .setting { grid-template-columns: minmax(0, 1fr); }
+/* As listas dos jogos custom (os pacotes novos, as pastas compactadas). */
 .nics { display: grid; gap: 8px; }
 .nic-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .nic-row svg.px { width: 22px; height: 22px; }
-.versions .nic-row > span:not(.tag) { flex: 1 1 12em; min-width: 0; }
-.versions .nic-row .btn { margin-left: auto; }
-.wifi-nets { display: grid; gap: 6px; }
-:where(.sub) .wifi-net { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px;
-  background: var(--card2); border: 1px solid var(--line); border-radius: 10px; color: var(--fg); }
-.wifi-net b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.wifi-net:hover { border-color: var(--purple); }
-#settings .pw input { width: 100%; max-width: 360px; }
-#settings .text-setting { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-#settings .text-setting input { flex: 1 1 180px; min-width: 0; max-width: 360px; }
-pre.whatsnew { max-height: 420px; overflow: auto; white-space: pre-wrap; }
-.geo input.mono { width: 100%; font: 13px ui-monospace, "JetBrains Mono", monospace; color: var(--cyan); }
-.boot-btn { margin-top: 14px; }
-.boot-btn svg.px { width: 20px; height: 20px; }

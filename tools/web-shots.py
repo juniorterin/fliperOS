@@ -46,16 +46,37 @@ SHOTS = [
     ("tarefas-pc", "#library", 1440, 900, 1, False, False, "tasks"),
     ("biblioteca-celular", "#library", 390, 844, 2, True, False, ""),
     ("downloads-pc", "#library/downloads", 1440, 900, 1, False, False, ""),
-    ("status-pc", "#system", 1440, 900, 1, False, False, ""),
-    ("ajustes-celular", "#system/settings", 390, 844, 2, True, False, ""),
-    ("ajustes-pc-aberto", "#system/settings", 1440, 900, 1, False, True, "open-all"),
-    ("ajustes-celular-aberto", "#system/settings", 390, 844, 2, True, True, "open-all"),
+    ("status-pc", "#system", 1440, 900, 1, False, True, ""),
+    ("status-celular", "#system/status", 390, 844, 2, True, True, ""),
+    ("logs-pc", "#system/logs", 1440, 900, 1, False, False, ""),
     ("aovivo-pc", "#live/obs", 1440, 900, 1, False, False, ""),
-    # O Setup inteiro (setup.js) e os jogos custom (customgames.js).
-    ("setup-video-pc", "#system/setup/video", 1440, 900, 1, False, True, "open-all"),
-    ("setup-jogos-pc", "#system/setup/games", 1440, 900, 1, False, True, "open-all"),
-    ("setup-controles-celular", "#system/setup/joysticks", 390, 844, 2, True, True, "open-all"),
-    ("setup-sistema-pc", "#system/setup/system", 1440, 900, 1, False, True, "open-all"),
+    # O Setup inteiro como lista (setup.js) e os jogos custom (customgames.js).
+    ("setup-video-pc", "#system/setup/video", 1440, 900, 1, False, True, ""),
+    ("setup-video-celular", "#system/setup/video", 390, 844, 2, True, True, "filter"),
+    ("setup-lista-celular", "#system/setup", 390, 844, 2, True, False, ""),
+    ("setup-audio-pc", "#system/setup/audio", 1440, 900, 1, False, True, ""),
+    ("setup-rede-pc", "#system/setup/network", 1440, 900, 1, False, True, ""),
+    ("setup-jogos-pc", "#system/setup/games", 1440, 900, 1, False, True, ""),
+    ("setup-controles-celular", "#system/setup/joysticks", 390, 844, 2, True, True, ""),
+    ("setup-sistema-pc", "#system/setup/system", 1440, 900, 1, False, True, ""),
+    ("setup-versao-pc", "#system/setup/system/version", 1440, 900, 1, False, False, ""),
+    ("setup-busca-pc", "#system/setup/video", 1440, 900, 1, False, True, "search"),
+    ("setup-gabinete-pc", "#system/setup/video", 1440, 900, 1, False, False, "cabinet"),
+    ("conquistas-pc", "#system/achievements", 1440, 900, 1, False, False, ""),
+    ("nuvem-celular", "#system/cloud", 390, 844, 2, True, False, ""),
+    ("terminal-pc", "#system/terminal", 1440, 900, 1, False, False, ""),
+    ("lab-celular", "#system/lab", 390, 844, 2, True, False, ""),
+    # As do site e da wiki (website/public/screenshots/web, 1280x800).
+    ("site-status", "#system/status", 1280, 800, 1, False, False, ""),
+    ("site-setup", "#system/setup/video", 1280, 800, 1, False, False, ""),
+    # As do post do Telegram de um update (docs/telegram/img).
+    ("tg-entrelacado", "#system/setup/video", 1280, 800, 1, False, False, "scroll:#si-video-mode480"),
+    ("tg-osd", "#system/setup/video", 1280, 800, 1, False, False, "scroll:#si-video-osd"),
+    ("tg-sons", "#system/setup/audio", 1280, 800, 1, False, False, ""),
+    ("tg-gabinete", "#system/setup/video", 1280, 800, 1, False, False, "cabinet"),
+    ("tg-custom", "#system/setup/games/custom", 1280, 800, 1, False, False, ""),
+    ("tg-celular-lista", "#system/setup", 390, 844, 2, True, False, ""),
+    ("tg-celular-video", "#system/setup/video", 390, 844, 2, True, False, ""),
     ("custom-pc", "#system/setup/games/custom", 1440, 900, 1, False, True, "cg-table"),
     ("custom-celular", "#system/setup/games/custom", 390, 844, 2, True, True, "cg-table"),
     ("custom-adicionar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-add"),
@@ -284,7 +305,28 @@ def demo(tmp):
           " the monitor and resolution before the last change.'\n"
           "    echo 'orientation|Video|Monitor orientation|choice|horizontal|horizontal=Horizontal;"
           "vertical-cw=Vertical clockwise|How the monitor is mounted in the cabinet.'\n"
+          "    echo 'osd|Video|On-screen menu|choice|on|on=On;off=Off|Volume, filter, geometry and colour over any game.'\n"
+          "    echo 'color.brightness|Colour|Brightness|number|0|-50..50:1|Moves the whole picture up or down.'\n"
+          "    echo 'color.contrast|Colour|Contrast|number|100|50..150:1|Spreads or squeezes the picture.'\n"
           "    echo 'color.gamma|Colour|Gamma|number|100|50..200:5|The midtones.'\n"
+          "    echo 'color.reset|Colour|Back to the defaults|action|||Every colour setting back to the default.'\n"
+          "    for p in RetroArch:240p Flycast:filter Dolphin:filter PCSX2:pure GroovyMAME:240p SM2-Emu:240p Supermodel:240p"
+          " DuckStation:240p PPSSPP:240p; do k=${p%%%%:*}; v=${p#*:};"
+          " echo \"mode480.$k|Interlaced hacks|$k|choice|$v|240p=640x240;filter=Interlaced filter;pure=Interlaced pure|How $k draws.\";"
+          " echo \"deflicker.$k|Interlaced hacks|$k: filter level|choice|medium|light=Light;medium=Medium;strong=Strong|The level.\"; done\n"
+          "    echo 'menu_sounds|Audio|Menu sounds|choice|on|on=On;off=Off|The WAV files in sounds/menu.'\n"
+          "    echo 'gun_flash|GunCon 2|Screen flash|choice|pulse|pulse=Pulse (two light frames on each shot);hold=Hold;off=Off|The flash.'\n"
+          "    echo 'gun.flash_level|GunCon 2|Flash brightness (%%)|number|100|10..100:10|Lower is calmer.'\n"
+          "    echo 'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|on|on=On;off=Off|Off the screen the trigger reloads.'\n"
+          "    echo 'padcolor|Joysticks|Controller light|choice|fliperos|fliperos=FliperOS (roulette, game colours);7a00ff=Purple;"
+          "ff0080=Pink;off=Off|The light colour of DualSense.'\n"
+          "    echo 'stream_audio|Live screen|Live screen sound|choice|on|off=Off;on=On|A copy of the sound for the live screen.'\n"
+          "    echo 'stream_quality|Live screen|Live screen quality|choice|normal|light=Light (weak Wi-Fi);normal=Normal;high=High;"
+          "max=Maximum (network cable)|The picture of the live screen.'\n"
+          "    echo 'launcher|System|What starts when the cabinet turns on|choice|fliperos|fliperos=FliperOS frontend;"
+          "attractplus=Attract-Mode Plus;esde=ES-DE;menu=FliperOS menu|The default launcher.'\n"
+          "    echo 'debug|System|Debug mode|choice|off|off=Off;on=On (show all text)|Frontends and emulators follow it now.'\n"
+          "    echo 'splash|System|Boot splash|choice|fliperos|fliperos=FliperOS;arcade=Arcade;neon=Neon|The picture while the cabinet boots.'\n"
           "    echo 'audio_card|Audio|Sound card|choice|1_0|0_3=HDMI 0;1_0=HD-Audio Generic - ALC887 Analog|The card used by the system.'\n"
           "    echo 'mame_latency|Audio|MAME audio latency|number|0.0|0..50:0.5|Lower responds faster.'\n"
           "    echo 'audio.test|Audio|Test sound|action|||A voice on the cabinet speakers.'\n"
@@ -341,6 +383,22 @@ def demo(tmp):
           " 'horizontal_khz': 15.6875, 'vertical_hz': 59.6, 'interlaced': False, 'clock_khz': 13013, 'htotal': 830, 'vtotal': 263,"
           " 'flags': 10}], []\n")
     write(os.path.join(tmp, "fliperos.conf"), "monitor=generic_15\nfrequency=15k\nboot_resolution=640x240S\nconnector=VGA-1\n")
+    # Os perfis do menu na tela e um dos dois sons do menu ja enviado.
+    write(os.path.join(tmp, "osd-profiles.conf"), "default\tcolor.brightness\t0\ndefault\tcolor.gamma\t100\n"
+          "game:fbneo/sf2\tcolor.brightness\t6\ngame:fbneo/sf2\tcolor.gamma\t110\ngame:fbneo/sf2\tlevel.fbneo\tstrong\n"
+          "core:fbneo\tcolor.contrast\t110\nemu:groovymame\tlevel.groovymame\tmedium\nres:640x480i\tcolor.contrast\t105\n")
+    write(os.path.join(tmp, "sounds", "move.wav"), b"RIFF\x24\x23\x00\x00WAVEfmt " + bytes(9000), "wb")
+    # A placa de video no /sys (o driver e o nome do lspci de mentira).
+    dev = os.path.join(tmp, "pci", "0000:01:00.0")
+    for name, value in (("gpu_busy_percent", "12"), ("mem_info_vram_used", str(310 << 20)), ("mem_info_vram_total", str(2 << 30)),
+                        ("pp_dpm_sclk", "0: 300Mhz\n1: 1050Mhz *\n")):
+        write(os.path.join(dev, name), value + "\n")
+    os.makedirs(os.path.join(tmp, "drivers", "amdgpu"), exist_ok=True)
+    os.symlink(os.path.join(tmp, "drivers", "amdgpu"), os.path.join(dev, "driver"))
+    os.makedirs(os.path.join(tmp, "sys/class/drm/card0"), exist_ok=True)
+    os.symlink(dev, os.path.join(tmp, "sys/class/drm/card0/device"))
+    write(os.path.join(tmp, "bin", "lspci"), "#!/bin/sh\necho '01:00.0 \"VGA compatible controller\" "
+          "\"Advanced Micro Devices, Inc. [AMD/ATI]\" \"Oland PRO [Radeon R7 240/340]\"'\n", mode=0o755)
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
@@ -350,7 +408,9 @@ def demo(tmp):
                FLIPEROS_VIDEO_CHECK=check, FLIPEROS_BUTTONS_TOOL=buttons, FLIPEROS_STREAM=stream,
                FLIPEROS_UPDATE_TOOL=update, FLIPEROS_WEB_STAGE=os.path.join(tmp, "stage"),
                FLIPEROS_LOGS=os.path.join(tmp, "logs"), FLIPEROS_ADB_URL="http://127.0.0.1:9/none",
-               FLIPEROS_OVERLAY_KEY=os.path.join(tmp, "overlay.key"), FLIPEROS_SYS=os.path.join(tmp, "sys"))
+               FLIPEROS_OVERLAY_KEY=os.path.join(tmp, "overlay.key"), FLIPEROS_SYS=os.path.join(tmp, "sys"),
+               FLIPEROS_OSD_PROFILES=os.path.join(tmp, "osd-profiles.conf"), FLIPEROS_MENU_SOUNDS=os.path.join(tmp, "sounds"),
+               PATH=os.path.join(tmp, "bin") + os.pathsep + os.environ.get("PATH", ""))
     # Os sensores de temperatura (o hwmon do /sys): CPU, GPU, disco e Wi-Fi.
     for n, (name, label, temp, crit) in enumerate((("coretemp", "Core 0", 52, 100), ("coretemp", "Core 1", 58, 100),
                                                    ("amdgpu", "edge", 71, 0), ("nvme", "Composite", 38, 84),
@@ -491,6 +551,22 @@ def main():
         elif action == "open-all":
             browser.js("document.querySelectorAll('#settings details').forEach((d) => { d.open = true; })")
             browser.wait(3)
+        elif action == "filter":
+            # Um programa com o filtro: o nivel aparece na mesma linha.
+            browser.js("const b = document.querySelector('.m480 .choice button[data-value=\"filter\"]');"
+                       " if (b) b.closest('.srow').scrollIntoView()")
+            browser.wait(1)
+        elif action == "search":
+            browser.js("const q = document.getElementById('setup-q'); q.value = 'gama'; q.dispatchEvent(new Event('input'))")
+            browser.wait(1.5)
+        elif action.startswith("scroll:"):
+            # Uma secao no alto da tela (o seletor depois de "scroll:").
+            browser.js("const s = document.querySelector(%s); if (s) { s.scrollIntoView(); window.scrollBy(0, -16); }"
+                       % json.dumps(action[7:]))
+            browser.wait(1)
+        elif action == "cabinet":
+            browser.js("document.querySelector('#settings .srow.cab-row').click()")
+            browser.wait(1)
         elif action in ("cg-table", "cg-table-view"):
             # A tabela com linhas de exemplo (as de "Importar de uma pasta" e
             # uma com os erros que o Setup devolve).

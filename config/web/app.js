@@ -160,10 +160,11 @@ function showPage(hash) {
     $("page-title").textContent = t("area_" + a).toUpperCase();
     $("page-sub").textContent = t("intro_" + a);
     $("area-icon").setAttribute("href", "icons.svg#" + AREAS[a].icon);
-    $("subtabs").hidden = !AREAS[a].subs.length;
+    $("subtabs-bar").hidden = !AREAS[a].subs.length;
     // As abas so sao refeitas ao trocar de area (ou de idioma): refeitas, a
     // animacao de entrada delas tocava de novo a cada clique dentro da aba
     // (os grupos do Setup mudam o endereco). Na mesma area, so a acesa muda.
+    // So texto: o icone de cada uma fica em AREAS (o menu do celular).
     const tabs = $("subtabs");
     if (tabs.dataset.area === a && tabs.dataset.lang === lang) {
       tabs.querySelectorAll("a").forEach((link) => {
@@ -174,10 +175,14 @@ function showPage(hash) {
     } else {
       tabs.dataset.area = a;
       tabs.dataset.lang = lang;
-      tabs.replaceChildren(...AREAS[a].subs.map(([name, glyph]) => el("a", {
+      tabs.replaceChildren(...AREAS[a].subs.map(([name]) => el("a", {
         href: "#" + a + "/" + name, class: name === s ? "on" : "", "aria-current": name === s ? "page" : "false" },
-      icon(glyph), t("sub_" + name))));
+      t("sub_" + name))));
     }
+    // A aba aberta a vista (no celular, a do Setup ficava fora da tela).
+    const open = tabs.querySelector("a.on");
+    if (open) tabs.scrollLeft = Math.max(0, open.offsetLeft - (tabs.clientWidth - open.offsetWidth) / 2);
+    tabsEdges();
   };
   if (document.startViewTransition && before && before !== a && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
     document.startViewTransition(apply);
@@ -215,6 +220,18 @@ function showPage(hash) {
 }
 
 window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));
+
+// tabsEdges: que ponta da barra das abas ainda tem abas escondidas. So essa
+// esmaece (no fim da rolagem nada fica coberto) e mostra a seta, que rola.
+function tabsEdges() {
+  const nav = $("subtabs"), max = nav.scrollWidth - nav.clientWidth;
+  const left = nav.scrollLeft > 4, right = nav.scrollLeft < max - 4;
+  $("subtabs-bar").dataset.more = left && right ? "both" : left ? "left" : right ? "right" : "";
+}
+$("subtabs").addEventListener("scroll", tabsEdges, { passive: true });
+window.addEventListener("resize", tabsEdges);
+$("tabs-left").addEventListener("click", () => $("subtabs").scrollBy({ left: -160, behavior: "smooth" }));
+$("tabs-right").addEventListener("click", () => $("subtabs").scrollBy({ left: 160, behavior: "smooth" }));
 
 function firstPage() {
   let saved = "";
