@@ -288,6 +288,14 @@ async function openOnCabinet(screen, label) {
   if (!(await ask({ title: label, text: t("cab_ask").replace("%s", label), yes: t("cab_open") }))) return;
   const res = await api("/api/setup/open", { method: "POST", body: JSON.stringify({ screen }) });
   const data = await res.json().catch(() => ({}));
+  // Um update trocou o tty1 com algo na tela: so depois de reiniciar.
+  if (res.status === 409 && data.code === "restart") {
+    if (await ask({ title: label, text: t("cab_restart"), yes: t("set_restart_now"), no: t("set_later") })) {
+      const r = await api("/api/settings", { method: "POST", body: JSON.stringify({ key: "power.reboot", value: "1" }) });
+      toast(r.ok ? t("set_restarting") : r.statusText, r.ok ? "ok" : "bad");
+    }
+    return;
+  }
   toast(res.ok ? t("cab_done").replace("%s", label) : data.error || res.statusText, res.ok ? "ok" : "bad");
 }
 $("setup-whole").addEventListener("click", () => openOnCabinet("setup", t("setup_title")));

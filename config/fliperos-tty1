@@ -16,6 +16,10 @@ ETC=${FLIPEROS_ETC:-/etc/fliperos}
 BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
 REQUEST=${FLIPEROS_LAUNCH_REQUEST:-/run/fliperos/launch}
 PLYMOUTH_PID=${FLIPEROS_PLYMOUTH_PID:-/run/plymouth/pid}
+# Este arquivo quando o tty1 subiu: o bash segue com o codigo que leu, e um
+# update feito com um jogo ou o frontend na tela troca o arquivo sem reiniciar
+# o tty1. O laco do menu ve a troca e continua no novo (tty1_reload).
+TTY1_STAMP=$(stat -c '%Y:%s' "$0" 2> /dev/null)
 
 # splash_off: tira o splash do boot logo antes do que aparece na tela. O
 # systemd o deixa no ar ate aqui (o plymouth-quit do fliperos-rootfs.sh),
@@ -79,6 +83,14 @@ web_launch() {
   return 0
 }
 
+# tty1_reload: este arquivo mudou desde que o tty1 subiu (um update): o menu
+# continua pelo arquivo novo, que traz o web_launch novo (as telas do Setup
+# pedidas pelo painel). So a parte do menu: o boot ja passou.
+tty1_reload() {
+  [[ -n $TTY1_STAMP && $(stat -c '%Y:%s' "$0" 2> /dev/null) != "$TTY1_STAMP" ]] || return 0
+  exec "$0" --menu
+}
+
 menu() {
   local rc name remote=()
   splash_off
@@ -87,6 +99,7 @@ menu() {
   # monitor do gabinete. O teste e aqui, antes do sudo, que sempre da um pty.
   [[ $(tty 2> /dev/null) == /dev/tty[0-9]* ]] || remote=(--remote)
   while true; do
+    tty1_reload
     # No SSH (--remote) o pedido do painel nao e deste terminal.
     if ((${#remote[@]} == 0)) && web_launch; then
       continue

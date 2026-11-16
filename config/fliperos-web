@@ -2717,6 +2717,39 @@ SETUP_TASKS = {"system-update": ("System Update", "--system-update"),
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
 
+TTY1_SCRIPT = ENV("FLIPEROS_TTY1", BIN + "/fliperos-tty1")
+
+
+def tty1_outdated():
+    """O fliperos-tty1 que roda agora e de antes do instalado: um update o
+    trocou com um jogo ou o frontend na tela, e o bash que roda segue com o
+    codigo de antes (o web_launch dele nao conhece as telas do Setup) ate o
+    tty1 reiniciar. Sem ele rodando (ou sem o /proc), False."""
+    try:
+        mtime = os.path.getmtime(TTY1_SCRIPT)
+        with open(os.path.join(PROC, "stat")) as f:
+            btime = next(int(line.split()[1]) for line in f if line.startswith("btime "))
+        hz = os.sysconf("SC_CLK_TCK")
+        pids = [p for p in os.listdir(PROC) if p.isdigit()]
+    except (OSError, StopIteration, ValueError):
+        return False
+    for pid in pids:
+        try:
+            with open(os.path.join(PROC, pid, "cmdline"), "rb") as f:
+                argv = f.read().split(b"\0")[:3]
+            if not any(a.endswith(b"/fliperos-tty1") for a in argv):
+                continue
+            with open(os.path.join(PROC, pid, "stat")) as f:
+                # O campo 22 (starttime, em ticks desde o boot), contando
+                # depois do nome entre parenteses.
+                started = btime + int(f.read().rsplit(")", 1)[1].split()[19]) / hz
+        except (OSError, ValueError, IndexError):
+            continue
+        if started + 1 < mtime:
+            return True
+    return False
+
+
 def setup_lines(*args, fields, timeout=60):
     """As linhas "a|b|c" de um comando do Setup sem tela, como dicionarios
     (a ultima coluna leva o resto)."""
@@ -4297,6 +4330,11 @@ class Handler(BaseHTTPRequestHandler):
             screen = str(data.get("screen", ""))
             if screen not in PANEL_SCREENS.split():
                 return self.send(400, {"error": "no such Setup screen"})
+            # O tty1 de antes do update fecharia o que esta na tela e
+            # ignoraria o pedido: a pagina oferece reiniciar.
+            if tty1_outdated():
+                return self.send(409, {"error": "the cabinet needs a restart to open Setup screens from here",
+                                       "code": "restart"})
             return self.send(200, self.panel.launch(["sudo", "-n", SETUP, "--screen", screen], tty1=True))
         if path == "/api/setup/task":
             name = str(data.get("name", ""))

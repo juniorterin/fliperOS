@@ -7455,7 +7455,9 @@ class WebSetupBase(unittest.TestCase):
                    FLIPEROS_USER=pwd.getpwuid(os.getuid()).pw_name, FLIPEROS_CONF=str(tmp / 'fliperos.conf'),
                    FLIPEROS_SESSION_FILE=str(tmp / 'session'), FLIPEROS_WEB_STAGE=str(tmp / 'stage'),
                    FLIPEROS_CUSTOMGAME=str(ROOT / 'config/fliperos-customgame'),
+                   FLIPEROS_TTY1=str(tmp / 'installed-fliperos-tty1'),
                    FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'))
+        (tmp / 'installed-fliperos-tty1').write_text('#!/bin/bash\n')
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
                                        '--port', str(cls.port), '--redirect-port', str(redirect)], env=env)
         for _ in range(100):
@@ -7619,6 +7621,52 @@ class WebSetupTests(WebSetupBase):
         self.assertEqual(request, ['return=menu', 'sudo', '-n', str(self.dir / 'fliperos-setup'), '--screen', 'geometry'])
         for bad in ('nope', 'geometry; reboot', '', None):
             self.assertEqual(self.call('POST', '/api/setup/open', {'screen': bad})[0], 400, bad)
+
+    def test_open_asks_for_a_restart_after_an_update_with_a_game_on_screen(self):
+        # Um fliperos-tty1 rodando que subiu antes do arquivo instalado (o
+        # update trocou o arquivo com o frontend na tela): o pedido seria
+        # ignorado, entao o painel pede para reiniciar, sem fechar nada.
+        (self.dir / 'bin').mkdir(exist_ok=True)
+        running = self.dir / 'bin' / 'fliperos-tty1'
+        running.write_text('sleep 30\n')
+        proc = subprocess.Popen(['bash', str(running)])
+        try:
+            time.sleep(0.3)
+            installed = self.dir / 'installed-fliperos-tty1'
+            later = time.time() + 120
+            os.utime(installed, (later, later))
+            launch = self.dir / 'run' / str(os.getuid()) / 'fliperos-web-launch'
+            if launch.exists():
+                launch.unlink()
+            status, data = self.call('POST', '/api/setup/open', {'screen': 'buttons'})
+            self.assertEqual((status, data['code']), (409, 'restart'))
+            self.assertFalse(launch.exists())
+            # O tty1 de agora e o do arquivo: abre.
+            before = time.time() - 600
+            os.utime(installed, (before, before))
+            self.assertEqual(self.call('POST', '/api/setup/open', {'screen': 'buttons'})[0], 200)
+        finally:
+            proc.kill()
+            proc.wait()
+        js = (ROOT / 'config/web/setup.js').read_text()
+        self.assertIn('if (res.status === 409 && data.code === "restart") {', js)
+
+    def test_tty1_follows_its_file_after_an_update(self):
+        # O laco do menu continua pelo arquivo novo quando um update o trocou.
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        self.assertLess(tty1.index("TTY1_STAMP=$(stat -c '%Y:%s' \"$0\""), tty1.index('tty1_reload() {'))
+        loop = tty1.split('menu() {')[1].split('\n}\n')[0]
+        self.assertLess(loop.index('    tty1_reload\n'), loop.index('web_launch; then'))
+        body = 'tty1_reload() {' + tty1.split('tty1_reload() {')[1].split('\n}\n')[0] + '\n}\n'
+        script = self.dir / 'tty1-copy'
+        script.write_text('#!/bin/bash\necho "RELOADED $*"\n')
+        script.chmod(0o755)
+        stamp = 'TTY1_STAMP=$(stat -c %%Y:%%s "$0"); %s' % body
+        same = subprocess.run(['bash', '-c', stamp + 'tty1_reload; echo stayed', str(script)], capture_output=True, text=True)
+        self.assertEqual(same.stdout, 'stayed\n')
+        changed = subprocess.run(['bash', '-c', stamp + 'echo "# update" >> "$0"; tty1_reload; echo stayed', str(script)],
+                                 capture_output=True, text=True)
+        self.assertEqual(changed.stdout, 'RELOADED --menu\n')
 
     def test_tty1_opens_only_a_setup_screen(self):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
