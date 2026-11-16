@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **Emulators & Games** | What is installed, and installing or updating what isn't in the image | Below |
 | **Frontend** | What starts when the computer turns on | Below |
-| **Extras** | Wine, Steam, Heroic, Pixelcade, ZeDMD, game output tools, the live screen | Below |
+| **Extras** | Wine, PortProton, Steam, Heroic, Pixelcade, ZeDMD, game output tools, the live screen | Below |
 | **Custom games** | PC games, scripts and your own emulators, as frontend systems | [Custom games](Custom-games.md) |
 | **Folders** | Where ROMs, BIOS and art are; an external disk instead | [ROMs, BIOS and artwork](ROMs.md#custom-folders) |
 | **Downloader** | MAME ROM/CHD sets by torrent, free homebrew games, the BIOS your games lack | [ROMs, BIOS and artwork](Downloader.md) |
@@ -88,6 +88,7 @@ Programs left out of the ISO, so it fits in a single GitHub file, installed over
 | --- | --- |
 | **Wine** | The Windows emulators of Fightcade 2, and Windows games ([Emulators](Windows-games.md)) |
 | **Wine Staging** | The newest Wine, with game fixes not in Wine yet |
+| **PortProton** | Wine and Proton builds made for games, for the Windows games in Custom games; about 3 GB ([Custom games](Custom-games.md#windows-games-portproton)) |
 | **Steam** | Steam games, inside the desktop |
 | **Heroic** | GOG, Epic and Amazon games, inside the desktop |
 | **Pixelcade** | The LED/LCD marquee software (closed source) ([Pixelcade](Pixelcade.md)) |

@@ -13059,14 +13059,15 @@ class NewEmulatorBuildTests(unittest.TestCase):
             wine.chmod(0o755)
             env = dict(os.environ, FLIPEROS_WINE=str(wine), FLIPEROS_STEAM=tmp + '/none',
                        FLIPEROS_HEROIC=tmp + '/none', FLIPEROS_PIXELCADE=tmp + '/none',
-                       FLIPEROS_OUTPUTS=tmp + '/none', FLIPEROS_WINE_STAGING=tmp + '/none')
+                       FLIPEROS_OUTPUTS=tmp + '/none', FLIPEROS_WINE_STAGING=tmp + '/none',
+                       FLIPEROS_PORTPROTON=tmp + '/none')
             run = lambda *a: subprocess.run(['bash', str(ROOT / 'config/fliperos-extras'), *a], env=env,
                                             capture_output=True, text=True)
             rows = [line.split('|') for line in run('list').stdout.splitlines()]
             self.assertEqual([(r[0], r[1]) for r in rows],
-                             [('wine', '1'), ('wine-staging', '0'), ('steam', '0'), ('heroic', '0'), ('pixelcade', '0'),
-                              ('zedmd', '0'), ('doflinx', '0'), ('hotr', '0'), ('qmamehook', '0'), ('ledspicer', '0'),
-                              ('stream', '0')])
+                             [('wine', '1'), ('wine-staging', '0'), ('portproton', '0'), ('steam', '0'), ('heroic', '0'),
+                              ('pixelcade', '0'), ('zedmd', '0'), ('doflinx', '0'), ('hotr', '0'), ('qmamehook', '0'),
+                              ('ledspicer', '0'), ('stream', '0')])
             # O Wine Staging diz o que traz a mais que o Wine.
             self.assertEqual(rows[1][2], 'Wine Staging (newest Wine, with game fixes not in Wine yet)')
             self.assertNotEqual(run('installed', 'wine-staging').returncode, 0)
@@ -13079,6 +13080,40 @@ class NewEmulatorBuildTests(unittest.TestCase):
             out = run('install', 'nada', '--progress')
             self.assertNotEqual(out.returncode, 0)
             self.assertIn('unknown extra', out.stdout)
+
+    def test_portproton_is_an_extra(self):
+        """Setup > Games > Extras > PortProton: o fliperos-portproton faz tudo
+        (os pacotes, os scripts e o primeiro download), com as etapas dele, e
+        o "instalado" e o check dele."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tool = Path(tmp) / 'fliperos-portproton'
+            tool.write_text('#!/bin/sh\necho "$*" >> "%s/args"\n'
+                            'case $1 in\n  check) [ -f "%s/ready" ] ;;\n'
+                            '  install) echo "@step 25 Downloading PortProton"; touch "%s/ready" ;;\nesac\n'
+                            % (tmp, tmp, tmp))
+            tool.chmod(0o755)
+            env = dict(os.environ, FLIPEROS_PORTPROTON=str(tool))
+            run = lambda *a: subprocess.run(['bash', str(ROOT / 'config/fliperos-extras'), *a], env=env,
+                                            capture_output=True, text=True)
+            row = next(r.split('|') for r in run('list').stdout.splitlines() if r.startswith('portproton|'))
+            self.assertEqual(row, ['portproton', '0', 'PortProton (Wine and Proton for Windows custom games)'])
+            self.assertNotEqual(run('installed', 'portproton').returncode, 0)
+            if os.geteuid() == 0:
+                out = run('install', 'portproton', '--progress')
+                self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+                self.assertIn('install --progress', (Path(tmp) / 'args').read_text())
+                self.assertEqual(out.stdout.splitlines()[0], '@step 25 Downloading PortProton')
+                self.assertIn('@step 100 PortProton installed', out.stdout)
+                self.assertEqual(run('installed', 'portproton').returncode, 0)
+                # Sem o helper, falha dizendo qual falta.
+                env['FLIPEROS_PORTPROTON'] = tmp + '/none'
+                out = run('install', 'portproton', '--progress')
+                self.assertNotEqual(out.returncode, 0)
+                self.assertIn('@fail PortProton|', out.stdout)
+        extras = (ROOT / 'fliperos-setup/lib/extras.sh').read_text()
+        self.assertIn('portproton) echo "Wine and Proton made for games: runs Windows custom games."', extras)
+        self.assertIn('portproton) echo "PortProton runs the Windows games of Setup > Games > Custom games', extras)
+        self.assertTrue((ROOT / 'fliperos-setup/gui/icons/portproton.png').is_file())
 
     def test_wine_staging_from_winehq_in_place_of_wine(self):
         branch = EXTRAS.split('\n    wine-staging)\n')[1].split(';;')[0]

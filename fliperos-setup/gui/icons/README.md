@@ -8,6 +8,7 @@ QMamehook has no icon of its own and keeps its initial.
 | File | Source |
 | --- | --- |
 | `wine.png` | Wine, `dlls/user32/resources/oic_winlogo.ico` (256 px frame) |
+| `portproton.png` | PortProton, `data_from_portwine/img/w.png` of github.com/Castro-Fidel/PortWINE |
 | `steam.png` | Steam, `store.steampowered.com/favicon.ico` (256 px frame) |
 | `heroic.png` | Heroic Games Launcher, `public/icon.png` |
 | `pixelcade.png` | Pixelcade, `pixelcade.org/favicon.ico` |

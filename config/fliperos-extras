@@ -36,6 +36,10 @@ WINEHQ_URL="https://dl.winehq.org/wine-builds/ubuntu"
 UPDATE_TOOL=${FLIPEROS_UPDATE_TOOL:-/opt/fliperos/bin/fliperos-update}
 WINE_STAGING_PACKAGES="winehq-staging libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386"
 wine_staging_bin=${FLIPEROS_WINE_STAGING:-/opt/wine-staging/bin/wine}
+# O PortProton (Wine e Proton feitos para jogos), o dos jogos custom do
+# Windows: o config/fliperos-portproton o instala na home do jogador (~3 GB).
+# O Setup tambem o oferece sozinho no primeiro pacote do Windows.
+portproton=${FLIPEROS_PORTPROTON:-/opt/fliperos/bin/fliperos-portproton}
 # As camadas do filtro de flicker e da OSD em 32 bits, as dos jogos do Wine
 # (config/fliperos-deflicker.c no OpenGL, config/fliperos-vkfps.c no Vulkan,
 # o DXVK), compiladas com qualquer um dos dois: o fonte vem na imagem.
@@ -89,6 +93,7 @@ extras_label() {
   case $1 in
     wine) echo "Wine" ;;
     wine-staging) echo "Wine Staging" ;;
+    portproton) echo "PortProton" ;;
     steam) echo "Steam" ;;
     heroic) echo "Heroic" ;;
     pixelcade) echo "Pixelcade" ;;
@@ -105,6 +110,7 @@ extras_installed() {
   case $1 in
     wine) [[ -x $wine_bin ]] ;;
     wine-staging) [[ -x $wine_staging_bin ]] ;;
+    portproton) [[ -x $portproton ]] && "$portproton" check > /dev/null 2>&1 ;;
     steam) [[ -x $steam_bin ]] ;;
     heroic) [[ -x $heroic_bin ]] ;;
     pixelcade) [[ -x $pixelcade ]] && "$pixelcade" installed ;;
@@ -123,6 +129,7 @@ extras_list() {
   done << 'LIST'
 wine|Wine (Fightcade 2 emulators)
 wine-staging|Wine Staging (newest Wine, with game fixes not in Wine yet)
+portproton|PortProton (Wine and Proton for Windows custom games)
 steam|Steam
 heroic|Heroic (GOG, Epic, Amazon)
 pixelcade|Pixelcade (LED/LCD marquee)
@@ -210,7 +217,7 @@ install_heroic() {
 extras_install() {
   local name=$1 pkgs
   label=$(extras_label "$name")
-  [[ -n $label ]] || fail "unknown extra: $name (wine, wine-staging, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook, ledspicer or stream)"
+  [[ -n $label ]] || fail "unknown extra: $name (wine, wine-staging, portproton, steam, heroic, pixelcade, zedmd, doflinx, hotr, qmamehook, ledspicer or stream)"
   ((EUID == 0)) || fail "installing $label needs root (Setup > Games > Extras)"
   case $name in
     wine)
@@ -240,6 +247,13 @@ extras_install() {
       # shellcheck disable=SC2086
       apt_install --install-recommends $pkgs $LAYER32_PACKAGES
       build_layer32
+      ;;
+    # Os pacotes, os scripts fixos e o primeiro download (o runtime, o DXVK e
+    # o Wine, ~3 GB) sao todos do fliperos-portproton, com as etapas dele.
+    # Instalado, roda de novo: os scripts voltam a versao deste FliperOS.
+    portproton)
+      [[ -x $portproton ]] || fail "$portproton is missing"
+      if ((progress)); then "$portproton" install --progress || exit 1; else "$portproton" install || exit 1; fi
       ;;
     steam)
       # shellcheck disable=SC2086

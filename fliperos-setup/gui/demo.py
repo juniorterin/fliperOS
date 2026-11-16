@@ -388,6 +388,7 @@ def filteryears():
 def extras():
     return Menu("Extras", [
         ("wine", "Wine (Fightcade 2 emulators)"),
+        ("portproton", "PortProton (Wine and Proton for Windows custom games)"),
         ("steam", "Steam (installed)"),
         ("heroic", "Heroic (GOG, Epic, Amazon)"),
         ("pixelcade", "Pixelcade (LED/LCD marquee)"),

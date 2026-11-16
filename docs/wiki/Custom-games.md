@@ -175,7 +175,7 @@ A `.sh` you put in a group folder by hand also shows up in the frontends.
 
 ## Windows games: PortProton
 
-Windows games in a package run in **PortProton**, a launcher of Wine and Proton builds made for games. It is not in the image. The Setup offers to download it the first time a Windows package is created or installed:
+Windows games in a package run in **PortProton**, a launcher of Wine and Proton builds made for games. It is not in the image. You can install it ahead in **Setup > Games > Extras > PortProton** (choosing it again puts back the version of your FliperOS), or let the Setup offer it the first time a Windows package is created or installed. Either way:
 
 1. It asks, and checks the internet.
 2. Installs the packages PortProton needs (the 32-bit Vulkan and OpenGL libraries, `yad`, `bubblewrap`, `xvfb`...).
@@ -322,5 +322,5 @@ The System Update rewrites every entry's script (`customgames_refresh`), and giv
 - **"is not a FliperOS game package".** The reason is shown: usually a file with another name next to the `.cfg`, a missing game folder, or a `.cfg` value out of the list above.
 - **A Linux game says "permission denied".** Its program must be executable: the Setup fixes the ones that start like a Linux program; for a launcher script without `#!`, run it through `bash ./script.sh` in the command.
 - **The keys don't reach the game.** Check that the game window has the focus (most do, alone in their Xorg), that the map was saved (*Save* in Controller configuration), and Joysticks > Button mapping: the map follows it.
-- **PortProton's install failed.** The details are in `/var/log/fliperos-setup.log`. It needs the internet and about 3 GB free in the home; choosing a Windows package again retries.
+- **PortProton's install failed.** The details are in `/var/log/fliperos-setup.log`. It needs the internet and about 3 GB free in the home; choosing a Windows package again, or Setup > Games > Extras > PortProton, retries.
 - **Not seen on a cabinet yet** (TODO.md): a real `.exe` through PortProton, the filter and on-screen menu inside PortProton's runtime, and the key capture with a real panel.

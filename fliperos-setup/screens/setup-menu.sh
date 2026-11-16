@@ -190,7 +190,7 @@ screen_setup_games() {
     choice=$(ui_menu_hints "Games" "" "$last" \
       "emulators|Emulators & Games|What is installed, and install what is not in the image." \
       "frontend|Frontend|The game list that starts when the computer turns on." \
-      "extras|Extras|Wine, Steam, Heroic, Pixelcade, ZeDMD and game output tools." \
+      "extras|Extras|Wine, PortProton, Steam, Heroic, Pixelcade, ZeDMD, game outputs." \
       "custom|Custom games|PC games, scripts and your own emulators, as frontend systems." \
       "folders|Folders|Where ROMs, BIOS and art are; use an external disk instead." \
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \

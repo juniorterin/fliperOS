@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Setup > Games > Extras: o Wine, o Steam e o Heroic, que nao vem na imagem para a
-# ISO caber num arquivo do GitHub, o Pixelcade (codigo fechado) e o ZeDMD. O
+# Setup > Games > Extras: o Wine, o PortProton, o Steam e o Heroic, que nao vem na
+# imagem para a ISO caber num arquivo do GitHub, o Pixelcade (codigo fechado) e o ZeDMD. O
 # config/fliperos-extras os instala pela rede, escrevendo os eventos da tela
 # de progresso (lib/progress.sh).
 
@@ -28,6 +28,7 @@ extras_label() {
 extras_note() {
   case $1 in
     wine-staging) echo "Wine Staging is the newest Wine from WineHQ, with fixes that are not in Wine yet: more Windows games run, and some run better (graphics, controllers, sound). It is a test version, updated every two weeks, so a game can also break. It takes the place of Wine: Fightcade and your custom games use it from now on." ;;
+    portproton) echo "PortProton runs the Windows games of Setup > Games > Custom games, with Wine and Proton builds made for games. It downloads about 3 GB into ~/PortProton." ;;
     zedmd) echo "ZeDMD needs firmware 5.1.0 or newer. Older ones (3.x, 4.x, 5.0, which work on Batocera 41) don't connect. The display shows its version on its logo at power on. How to update: FliperOS wiki, Frontends page." ;;
   esac
 }
@@ -37,11 +38,13 @@ extras_hint() {
   case $1 in
     wine) echo "Runs Windows programs: Fightcade 2 emulators and PC games." ;;
     wine-staging) echo "Newer Wine with fixes for more Windows games. Replaces Wine." ;;
+    portproton) echo "Wine and Proton made for games: runs Windows custom games." ;;
   esac
 }
 
 extras_done() {
   case $1 in
+    portproton) echo "Windows custom games open in it from now on." ;;
     zedmd) echo "If the display stays on its logo, its firmware is older than 5.1: update it (FliperOS wiki, Frontends page)." ;;
   esac
 }

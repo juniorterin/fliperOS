@@ -1778,7 +1778,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>Extras</strong></td>
-<td>Wine, Steam, Heroic, Pixelcade, ZeDMD, game output tools, the live screen</td>
+<td>Wine, PortProton, Steam, Heroic, Pixelcade, ZeDMD, game output tools, the live screen</td>
 <td>Below</td>
 </tr>
 <tr>
@@ -1930,6 +1930,10 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <tr>
 <td><strong>Wine Staging</strong></td>
 <td>The newest Wine, with game fixes not in Wine yet</td>
+</tr>
+<tr>
+<td><strong>PortProton</strong></td>
+<td>Wine and Proton builds made for games, for the Windows games in Custom games; about 3 GB (<a href="#Custom-games-windows-games-portproton">Custom games</a>)</td>
 </tr>
 <tr>
 <td><strong>Steam</strong></td>
@@ -2796,6 +2800,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tbody>
 </table>
 <p>An account made inside an emulator's own menu keeps working while you don't sign in here.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/web-achievements.webp" width="640" alt="RetroAchievements in the web panel"></p>
 <h2 id="RetroAchievements-while-you-play">While you play</h2>
 <p>Each unlock shows over the game for 5 seconds, in a bar that doesn't take the controls:</p>
 <ul>
@@ -2859,6 +2864,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#On-screen-menu">On-screen menu</a>.</p>
 <h1 id="Cloud-backup">Cloud backup</h1>
 <p>Your high scores, saves and settings in a cloud of your own: Google Drive, Dropbox, WebDAV (Nextcloud, ownCloud), SFTP (a PC or a NAS) or MEGA. Every cabinet you sign in uses the same folder, so a record made on one shows up on the others.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/web-cloud.webp" width="640" alt="Cloud backup in the web panel"></p>
 <p>It is in <strong>Setup &gt; Cloud backup</strong> on the cabinet, and in <strong>System &gt; Cloud backup</strong> in the <a href="#Web-panel">web panel</a>.</p>
 <h2 id="Cloud-backup-setting-it-up">Setting it up</h2>
 <ol>
@@ -5202,7 +5208,7 @@ players=2
 <p><strong>Add games &gt; By its command</strong> asks for a name, the command (as you would type it in a terminal, for example <code>wine ~/games/pang/pang.exe</code>) and the video mode. The command runs from the home folder. It is the quickest way for a script or an emulator you installed yourself, but it has no package: copying it means copying the folder and the entry by hand.</p>
 <p>A <code>.sh</code> you put in a group folder by hand also shows up in the frontends.</p>
 <h2 id="Custom-games-windows-games-portproton">Windows games: PortProton</h2>
-<p>Windows games in a package run in <strong>PortProton</strong>, a launcher of Wine and Proton builds made for games. It is not in the image. The Setup offers to download it the first time a Windows package is created or installed:</p>
+<p>Windows games in a package run in <strong>PortProton</strong>, a launcher of Wine and Proton builds made for games. It is not in the image. You can install it ahead in <strong>Setup &gt; Games &gt; Extras &gt; PortProton</strong> (choosing it again puts back the version of your FliperOS), or let the Setup offer it the first time a Windows package is created or installed. Either way:</p>
 <ol>
 <li>It asks, and checks the internet.</li>
 <li>Installs the packages PortProton needs (the 32-bit Vulkan and OpenGL libraries, <code>yad</code>, <code>bubblewrap</code>, <code>xvfb</code>...).</li>
@@ -5409,7 +5415,7 @@ p2_b1=LEFTCTRL
 <li><strong>"is not a FliperOS game package".</strong> The reason is shown: usually a file with another name next to the <code>.cfg</code>, a missing game folder, or a <code>.cfg</code> value out of the list above.</li>
 <li><strong>A Linux game says "permission denied".</strong> Its program must be executable: the Setup fixes the ones that start like a Linux program; for a launcher script without <code>#!</code>, run it through <code>bash ./script.sh</code> in the command.</li>
 <li><strong>The keys don't reach the game.</strong> Check that the game window has the focus (most do, alone in their Xorg), that the map was saved (<em>Save</em> in Controller configuration), and Joysticks &gt; Button mapping: the map follows it.</li>
-<li><strong>PortProton's install failed.</strong> The details are in <code>/var/log/fliperos-setup.log</code>. It needs the internet and about 3 GB free in the home; choosing a Windows package again retries.</li>
+<li><strong>PortProton's install failed.</strong> The details are in <code>/var/log/fliperos-setup.log</code>. It needs the internet and about 3 GB free in the home; choosing a Windows package again, or Setup &gt; Games &gt; Extras &gt; PortProton, retries.</li>
 <li><strong>Not seen on a cabinet yet</strong> (TODO.md): a real <code>.exe</code> through PortProton, the filter and on-screen menu inside PortProton's runtime, and the key capture with a real panel.</li>
 </ul>
 <h1 id="Adding-an-emulator">Adding an emulator</h1>
@@ -5867,6 +5873,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#Adding-an-emulator">Adding an emulator</a>.</p>
 <h1 id="GroovyMAME">GroovyMAME</h1>
 <p><a href="https://github.com/antonioginer/GroovyMAME">GroovyMAME</a> is MAME with Switchres inside: every arcade game opens in its own original video mode, on the tube. It is the arcade emulator of FliperOS, as on GroovyArcade. Its games go in <code>~/roms/mame</code>.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-groovymame.webp" width="480" alt="Garou: Mark of the Wolves in GroovyMAME, at its native 320x224"></p>
 <h2 id="GroovyMAME-native-resolution">Native resolution</h2>
 <p>GroovyMAME runs in KMS, without Xorg, like GroovyArcade. Switchres makes each game's exact mode and SDL switches to it. On the cabinet: Street Fighter II at <code>384x224@59.64</code> (99.9% speed), The King of Fighters '98 at <code>320x224@59.19</code>.</p>
 <p><strong>Midway 2D games</strong> (Mortal Kombat 1 to 3, NBA Jam, Smash TV, NARC and the others on the Y, T, W and X-unit boards) are 400x254 at 54.7 Hz. Switchres makes that mode, but the tube shows it stretched up and down, so FliperOS runs them in <strong>320x240p at 59 Hz</strong>, the height of the other games; the game itself still runs at 54.7 Hz.</p>
@@ -5915,6 +5922,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#KMS-and-X11">KMS and X11</a>, <a href="#ROM-Cleaner">ROM Cleaner</a>.</p>
 <h1 id="RetroArch">RetroArch</h1>
 <p><a href="https://www.retroarch.com">RetroArch</a> runs the consoles, and some arcade boards, through its cores. On FliperOS each game opens in its own mode on the tube (CRT SwitchRes), with your panel's buttons already mapped.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-play.webp" width="480" alt="A game opened from the frontend"></p>
 <h2 id="RetroArch-cores">Cores</h2>
 <p>Seven come compiled, to work without network:</p>
 <table>
@@ -5988,6 +5996,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#KMS-and-X11">KMS and X11</a>.</p>
 <h1 id="Flycast">Flycast</h1>
 <p><a href="https://github.com/flyinghead/flycast">Flycast</a> runs the Dreamcast and the Sega arcade boards built on it: Naomi, Naomi 2 and Atomiswave.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-flycast.webp" width="480" alt="Virtua Fighter 4 Evolution (Naomi 2) in Flycast, at 640x240"></p>
 <table>
 <thead>
 <tr>
@@ -6044,6 +6053,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#Linked-cabinets">Linked cabinets</a>.</p>
 <h1 id="Sega-Model-2-and-3">Sega Model 2 and 3</h1>
 <p>Sega's 3D arcade boards of the 1990s: <strong>Model 2</strong> (Daytona USA, Virtua Fighter 2, The House of the Dead, Sega Rally) in <a href="https://github.com/dmanlfc/sm2-emu">SM2-Emu</a>, and <strong>Model 3</strong> (Scud Race, Virtua Fighter 3, Daytona USA 2) in <a href="https://github.com/trzy/Supermodel">Supermodel</a>.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-model2.webp" width="480" alt="Fighting Vipers in SM2-Emu"></p>
 <table>
 <thead>
 <tr>
@@ -6098,6 +6108,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <h1 id="Namco-246-256">PlayStation 2 and Namco 246/256</h1>
 <p>The PlayStation 2 and the Namco arcade boards built on it: <strong>PCSX2</strong> for the PS2 games, <strong>PCSX2x6</strong> for the Namco System 246, 256 and Super 256 (Tekken 4 and 5, Soul Calibur II and III, Time Crisis 3 and 4, Bloody Roar 3…).</p>
 <h2 id="Namco-246-256-pcsx2-playstation-2">PCSX2 (PlayStation 2)</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-pcsx2.webp" width="480" alt="Need for Speed Underground 2 in PCSX2, at 640x240"></p>
 <p>The official PCSX2 AppImage, in the image. Its games go in <code>~/roms/ps2</code> (<code>.iso</code>, <code>.chd</code>, <code>.cso</code>), its BIOS in <code>~/bios/ps2</code> (<a href="#BIOS">Download BIOS</a> brings it).</p>
 <ul>
 <li>It opens in its own Xorg at <strong>640x240</strong> on a 15 kHz tube, stretched to fill it, or interlaced with <strong>Interlaced hacks</strong> (<a href="#Picture-filters">Interlaced, colour and scanlines</a>).</li>
@@ -6109,6 +6120,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 </ul>
 <p><code>fliperos-x11-run</code> opens it with <code>mesa_glthread=true</code> (Mesa's OpenGL thread; export <code>mesa_glthread=false</code> to run without it). The first <code>PCSX2.ini</code> is <code>config/pcsx2.ini</code>; <code>LUp</code>/<code>LDown</code>/<code>LLeft</code>/<code>LRight</code> point to the D-pad when they are empty or on the keyboard. It is the AppImage (pinned by version and checksum, in <code>/opt/pcsx2</code>) because its current code needs SDL3 and Qt 6.10, which Ubuntu 24.04 doesn't have.</p>
 <h2 id="Namco-246-256-pcsx2x6-namco-system-246-and-256">PCSX2x6 (Namco System 246 and 256)</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-namco.webp" width="480" alt="Tekken 5 Dark Resurrection in PCSX2x6"></p>
 <p>PCSX2x6 is PS2Homebrew-arcade's fork of PCSX2 for the Namco arcade boards. It is an emulator of its own, next to PCSX2; the image carries v0.2.22 (<code>/opt/pcsx2x6</code>, checked by sha256). Its settings are in <code>~/.config/PCSX2x6</code>, apart from PCSX2's.</p>
 <p>Each game is a <code>NM00000.acgame</code> file (a text file with the game's name, its <code>gameid</code>, the <code>platform</code>, the dongle and the image) plus a folder of the same name with the game's <code>boot.elf</code> (from the fork's proverb project) and its image (<code>.chd</code> or <code>.iso</code>), in <code>~/roms/namco2x6</code> (one folder for the 246, the 256 and the Super 256; the older <code>namco246</code> and <code>namco256</code> folders are moved into it at the next login). One folder in each place, like <code>~/roms</code>:</p>
 <table>
@@ -6460,6 +6472,7 @@ media=DVD
 <li><strong>Net play</strong> between cabinets, with FliperOS's patch (<a href="#Net-play-dolphin-net-play">Linked cabinets</a>), and <a href="#RetroAchievements">RetroAchievements</a>.</li>
 </ul>
 <h2 id="More-emulators-duckstation-playstation">DuckStation (PlayStation)</h2>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-duckstation.webp" width="480" alt="A PlayStation game in DuckStation"></p>
 <p>Its license (CC BY-NC-ND 4.0) doesn't allow it in the image: <strong>Setup &gt; Games &gt; Emulators &amp; Games &gt; DuckStation</strong> downloads the official AppImage from its GitHub, and choosing it again updates it. A PlayStation game opened before it is installed installs it first.</p>
 <ul>
 <li>Its games go in <code>~/roms/ps1</code> (created once it is installed), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>. The BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</li>
@@ -34132,6 +34145,14 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td>Quirks, Folders, custom frontends, Bluetooth</td>
 </tr>
 <tr>
+<td><code>GET /api/osd/profiles</code>; <code>POST /api/osd/profiles {"action":"delete","scope"}</code></td>
+<td>The on-screen menu profiles</td>
+</tr>
+<tr>
+<td><code>GET /api/sounds</code>, <code>/api/sounds/file?which=move\|select</code>; <code>POST /api/sounds/upload?which=</code> (the <code>.wav</code>), <code>/api/sounds {"action":"delete","which"}</code></td>
+<td>The menu sounds</td>
+</tr>
+<tr>
 <td><code>GET /api/customgames</code>, <code>/api/customgames/scan?path=&amp;one=1</code>; <code>POST /api/customgames/stage?kind=&amp;name=</code>, <code>/check</code>, <code>/bulk {"rows","portproton"}</code>, <code>/edit</code>, <code>/delete</code>, <code>/group</code>, <code>/media</code>, <code>/install</code>, <code>/pack</code>, <code>/squash</code></td>
 <td>Custom games</td>
 </tr>
@@ -34456,17 +34477,21 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <h2 id="Web-panel-System-status">Status</h2>
 <p>Refreshed every second:</p>
 <ul>
-<li><strong>Video:</strong> what Video Setup asks (monitor, frequency, resolution, connector, orientation) next to what is on screen now: the mode, the horizontal kHz and vertical Hz, interlaced or progressive, and the full <strong>modeline</strong> of each active output.</li>
-<li><strong>CPU:</strong> the total, each core and the load, plus the temperatures of the sensors.</li>
-<li><strong>GPU:</strong> the name and the driver, plus what the card reports: use, VRAM, clock, temperature, power.</li>
-<li><strong>Memory, disks and network:</strong> the speed of each interface, its IPs and the Wi-Fi signal.</li>
+<li><strong>On the tube:</strong> the horizontal kHz on a display, then the band (15, 25 or 31 kHz), the mode, the vertical Hz, interlaced or progressive, the output and card, the <strong>driver</strong> in use, and the full <strong>modeline</strong> of each active output. <strong>Asked in Video Setup</strong> opens what Video Setup asks (monitor, frequency, resolution, connector, orientation).</li>
+<li><strong>CPU:</strong> the total, the load and each core as a column of segments, like a VU meter.</li>
+<li><strong>Memory</strong> and the swap; the <strong>GPU</strong>: its name and what the card reports (use, VRAM, clock, temperature, power).</li>
+<li><strong>Temperatures:</strong> each sensor as a bar up to the part's limit (yellow near it, red at it).</li>
+<li><strong>Disks and network:</strong> each mounted disk, each interface with its IPs, the traffic and the Wi-Fi signal.</li>
 </ul>
 <h2 id="Web-panel-System-processes-and-logs">Processes and logs</h2>
 <p>The processes using the most CPU, and the logs: those of <code>/opt/fliperos/logs</code> (each emulator and frontend, the cloud backup, OpenBOR, DuckStation…), the Setup's and the updates'. The first place to look when a game doesn't open.</p>
 <p><a id="Web-panel-System-settings"></a></p>
 <h2 id="Web-panel-System-setup">Setup</h2>
-<p>The same Setup as on the cabinet: the seven groups at the top (<strong>Video</strong>, <strong>Audio</strong>, <strong>Network</strong>, <strong>Games</strong>, <strong>Joysticks</strong>, <strong>System</strong>, <strong>Cloud backup</strong>) and, in each one, the same items in the same order, with the same names and hints. Each change is saved and applied at once.</p>
-<p>What can't be done from a phone (a test grid, the colour patterns, mapping the buttons, the gun targets) has <strong>Open on the cabinet</strong>: the screen opens on the tube in place of what is there, and when you leave it what was on screen comes back. <strong>Watch it live</strong> next to it opens the <a href="#Web-panel-Live">live screen</a>. <strong>Open the whole Setup on the cabinet</strong>, at the top, does the same with the whole menu.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/setup-en.webp" width="640" alt="The Setup in the web panel, as a list of settings"></p>
+<p>The same Setup as on the cabinet, as a list of settings like a phone's Settings: the seven groups in a column on the left (<strong>Video</strong>, <strong>Audio</strong>, <strong>Network</strong>, <strong>Games</strong>, <strong>Joysticks</strong>, <strong>System</strong>, <strong>Cloud backup</strong>, each with how many items it has here) and the open group on the right, with the same items in the same order. Each item is a section, one row per setting: the name on the left, the control on the right (a switch for on/off, side-by-side buttons for two or three short choices, a list for the rest, a slider for a number), and the explanation behind the <strong>ⓘ</strong>. Each change is saved and applied at once.</p>
+<p><strong>Search a setting</strong>, above the groups, looks in every group: a setting found can be changed right there, and an item without settings leads to its group. On a phone the groups are the first screen; a group opens in its place, with <strong>‹ Setup</strong> to go back.</p>
+<p>What can't be done from a phone (a test grid, the colour patterns, mapping the buttons, the gun targets) is a row marked <strong>on the cabinet</strong>: it asks first, then the screen opens on the tube in place of what is there, and when you leave it what was on screen comes back. <strong>Watch it live</strong>, in the same question, opens the <a href="#Web-panel-Live">live screen</a>. <strong>Open the whole Setup on the cabinet</strong>, under the groups, does the same with the whole menu.</p>
+<p><strong>Video</strong> starts with the <strong>video card</strong> in use and its driver; with a card that takes two drivers (radeon or amdgpu, nouveau or NVIDIA's), <strong>change on the cabinet</strong> opens the choice on the tube, which goes back by itself if no picture comes. In <strong>Interlaced hacks</strong>, picking <strong>Filter</strong> for a program shows the filter level on the same row.</p>
 <table>
 <thead>
 <tr>
@@ -34510,9 +34535,14 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </table>
 <p>Items that only some cabinets have show only there, as on the cabinet: scanlines at 31 kHz, the video driver with a card that has a choice, Bluetooth with an adapter.</p>
 <p>A colour slider saves while it moves, so the game on screen changes with it; the <strong>−</strong> and <strong>+</strong> at its sides move it one step per tap. A new monitor or resolution counts after a restart, and the page offers to restart when it is saved.</p>
+<h3 id="Web-panel-System-on-screen-menu-profiles-and-menu-sounds">On-screen menu profiles and menu sounds</h3>
+<ul>
+<li><strong>Video &gt; On-screen menu:</strong> the switch, and the profiles saved in the <a href="#On-screen-menu">on-screen menu</a> with <strong>Save profile as</strong>: each one with its kind (game, core, emulator, resolution, default) and what it changes. The arrow opens its settings; the <strong>✕</strong> deletes it, and what it changed goes back to the profile below it from the next game. The default profile stays.</li>
+<li><strong>Audio &gt; Menu sounds:</strong> the switch and the two sounds of the Setup's menu, <strong>When the cursor moves</strong> (<code>move.wav</code>) and <strong>On Enter</strong> (<code>select.wav</code>): <strong>Send</strong> a <code>.wav</code> (or drop it on the row), play it in the browser, <strong>Replace</strong> or remove it. They are the files of the <code>sounds/menu</code> folder of the network share.</li>
+</ul>
 <h3 id="Web-panel-System-folders-quirks-and-the-rest">Folders, quirks and the rest</h3>
 <ul>
-<li><strong>Folders:</strong> each folder of <code>~</code> (and the folders inside them) can be a folder of another disk: <strong>Use another folder</strong> opens the cabinet's folders and disks; <strong>Undo the custom folder</strong> brings back the one used before. See <a href="#ROMs">ROMs</a>.</li>
+<li><strong>Folders:</strong> each folder of <code>~</code> (and the folders inside them) can be a folder of another disk: <strong>Change</strong> opens the cabinet's folders and disks; <strong>Undo</strong> brings back the one used before. See <a href="#ROMs">ROMs</a>.</li>
 <li><strong>Custom frontends:</strong> a name and the command that opens it, like the other frontends; edit or delete each one.</li>
 <li><strong>Quirks:</strong> pick a USB device connected now and the fix (one device per player, no GET requests, always poll, UAS off for a disk), or type the code. They count after a restart. See <a href="#Wheels-and-quirks">Wheels and quirks</a>.</li>
 <li><strong>Bluetooth:</strong> turn it on, <strong>Look for controllers</strong> (15 seconds, with the controller in pairing mode), <strong>Pair</strong>. See <a href="#Bluetooth">Bluetooth</a>.</li>
@@ -34600,6 +34630,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <ul>
 <li>The video status comes from DRM, through <code>fliperos-video-check</code>. The volume goes through <code>fliperos-setup --volume up|down|mute|get|set N</code>.</li>
 <li>The Setup tree (<code>config/web/setup.js</code>) has the ids of the Setup's menus; a test checks the two match. Settings go through the same functions as the Setup's screens: <code>fliperos-setup --settings</code> lists them and <code>--setting KEY VALUE</code> changes one (<code>settings_list</code> in <code>lib/system.sh</code>). <code>--setup-items</code> says which items this cabinet has; <code>--quirks</code>, <code>--folders</code>, <code>--frontends</code>, <code>--bluetooth</code>, <code>--system-update</code> and <code>--attract-romlist</code> do the rest without a screen.</li>
+<li>The on-screen menu profiles are the lines of <code>/etc/fliperos/osd-profiles.conf</code> (<code>scope&lt;TAB&gt;key&lt;TAB&gt;value</code>, the file <code>fliperos-osd</code> writes); deleting one rewrites the file without its lines. The menu sounds are <code>move.wav</code> and <code>select.wav</code> in <code>/opt/fliperos/sounds/menu</code>: a file sent is checked (a RIFF/WAVE file, 2 MB at most) and belongs to the player, like the ones sent over the network.</li>
 <li><strong>Open on the cabinet</strong> writes the request to <code>fliperos-web-launch</code>, like a game: <code>fliperos-tty1</code> runs <code>fliperos-setup --screen NAME</code> (only the names in <code>screens/panel.sh</code>), and the video screens end like Video Setup (Xorg and the kernel line again).</li>
 <li>Custom games go through <code>fliperos-setup --customgames</code> (<code>lib/customgames.sh</code>): <code>describe</code>, <code>check</code>, <code>bulk</code> (one row per game, with an <code>@row N ok|fail</code> line each), <code>edit</code>, <code>delete</code>, <code>media</code>, <code>install</code>, <code>pack</code>, <code>squash</code>. A folder is copied by <code>fliperos-customgame add</code>, and <code>fliperos-customgame scan</code> finds the games of a folder. The art of a row waits in <code>/var/cache/fliperos-web/stage</code> until the game is saved (a day at most).</li>
 <li>The terminal is a login shell in a pseudo-terminal (<code>setsid -c</code>, so Ctrl+C and job control work), at normal priority. The page talks to it over a WebSocket (<code>/api/terminal</code>) that only the panel's own page can open, after the login. The screen is drawn by <a href="https://xtermjs.org">xterm.js</a> 5.5.0 with its fit addon (MIT), shipped inside the panel.</li>
