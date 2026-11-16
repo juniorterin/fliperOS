@@ -5950,11 +5950,14 @@ class CloudSetupTests(Base):
 
 
 class CloudTests(unittest.TestCase):
-    """config/fliperos-cloud: o backup na nuvem pelo rclone (um rclone falso
-    que copia entre pastas), do painel web."""
+    """config/fliperos-cloud: o backup na nuvem pelo rclone (o de verdade, com
+    a nuvem numa pasta), do painel web."""
     TOOL = ROOT / "config/fliperos-cloud"
+    RCLONE = shutil.which("rclone")
 
     def setUp(self):
+        if not self.RCLONE:
+            self.skipTest("rclone is not installed (rebuild the tests/Dockerfile image)")
         self.dir = Path(tempfile.mkdtemp(prefix="fliperos-cloud-"))
         self.home = self.dir / "home"
         self.cloud = self.dir / "cloud"
@@ -5964,27 +5967,31 @@ class CloudTests(unittest.TestCase):
         (self.home / "nvram/mame/sf2.nv").write_text("nv")
         bindir = self.dir / "bin"
         bindir.mkdir()
-        # O rclone falso: "copy ORIGEM DESTINO" com fliperos:CAMINHO na pasta
-        # cloud; "obscure -" le a senha da entrada; mkdir cria.
+        # O rclone de verdade com o remoto fliperos: numa pasta (cloud), seja
+        # qual for o tipo da conta; "obscure -" le a senha da entrada; mkdir
+        # cria (ou recusa a conta, com o arquivo refuse).
         rclone = bindir / "rclone"
         rclone.write_text(
             "#!/bin/bash\necho \"$*\" >> %(d)s/rclone.log\n"
-            "map() { case $1 in fliperos:*) echo %(c)s/${1#fliperos:} ;; *) echo $1 ;; esac; }\n"
             "case $1 in\n"
             "  obscure) echo \"OBS($(cat))\" ;;\n"
-            "  mkdir) [ -f %(d)s/refuse ] && { echo 'Failed to create: 401 Unauthorized' >&2; exit 1; }; mkdir -p \"$(map $2)\" ;;\n"
-            "  copy) args=(); skip=0; for a in \"$@\"; do if ((skip)); then skip=0; continue; fi\n"
-            "      case $a in --exclude|--include) skip=1 ;; --*|copy) ;; *) args+=(\"$a\") ;; esac; done\n"
-            "    src=$(map ${args[0]}); dst=$(map ${args[1]}); [ -d \"$src\" ] || exit 0; mkdir -p \"$dst\"; cp -a \"$src/.\" \"$dst/\" ;;\n"
-            "esac\n" % {"d": self.dir, "c": self.cloud})
+            "  mkdir) [ -f %(d)s/refuse ] && { echo 'Failed to create: 401 Unauthorized' >&2; exit 1; }\n"
+            "    mkdir -p \"%(c)s/${2#fliperos:}\" ;;\n"
+            "  *) args=(); for a in \"$@\"; do case $a in fliperos:*) args+=(\"%(c)s/${a#fliperos:}\") ;;"
+            " *) args+=(\"$a\") ;; esac; done\n"
+            "    exec %(r)s \"${args[@]}\" ;;\n"
+            "esac\n" % {"d": self.dir, "c": self.cloud, "r": self.RCLONE})
         rclone.chmod(0o755)
         self.env = dict(os.environ, PATH="%s:%s" % (bindir, os.environ["PATH"]), HOME=str(self.home),
                         FLIPEROS_CLOUD_LOG=str(self.dir / "cloud.log"), XDG_RUNTIME_DIR=str(self.dir),
                         FLIPEROS_GOOGLE_OAUTH=str(self.dir / "etc/google-oauth.conf"),
-                        FLIPEROS_GOOGLE_OAUTH_URL="file://%s/nowhere.conf" % self.dir)
+                        FLIPEROS_GOOGLE_OAUTH_URL="file://%s/nowhere.conf" % self.dir,
+                        FLIPEROS_CLOUD_SYSTEM_ETC=str(self.dir / "etc"), FLIPEROS_CLOUD_DOWNLOADER=str(self.dir / "dl"),
+                        FLIPEROS_CLOUD_STAGE=str(self.dir / "stage"), FLIPEROS_CLOUD_RESTORE="true")
 
     def tearDown(self):
-        shutil.rmtree(self.dir, ignore_errors=True)
+        if hasattr(self, "dir"):
+            shutil.rmtree(self.dir, ignore_errors=True)
 
     def run_(self, *args, stdin=None):
         return subprocess.run(["bash", str(self.TOOL), *args], input=stdin, capture_output=True, text=True,
@@ -6010,7 +6017,21 @@ class CloudTests(unittest.TestCase):
         (self.home / ".local/share/fliperos/stats").mkdir(parents=True)
         (self.home / ".local/share/fliperos/stats/played.tsv").write_text("sf2\t10\n")
         (self.home / ".config/retroarch/cores").mkdir(parents=True)
+        (self.home / ".config/retroarch/cores/fbneo_libretro.so").write_text("core")
+        (self.home / ".config/retroarch/system").mkdir(parents=True)
+        (self.home / ".config/retroarch/system/neogeo.zip").write_text("bios")
         (self.home / ".config/retroarch/retroarch.cfg").write_text('video_driver = "gl"\n')
+        (self.home / ".mame/cfg").mkdir(parents=True)
+        (self.home / ".mame/cfg/sf2.cfg").write_text("<mameconfig/>")
+        (self.home / ".local/share/fliperos/versus-detectors").mkdir(parents=True)
+        (self.home / ".local/share/fliperos/versus-detectors/sf2.lua").write_text("--")
+        (self.home / ".local/share/fliperos/scrape-state.lock").write_text("")
+        (self.home / ".attract/layouts/Arcadeflow").mkdir(parents=True)
+        (self.home / ".attract/layouts/Arcadeflow/layout.nut").write_text("//")
+        (self.home / ".attract/attract.cfg").write_text("display\tMAME\n")
+        (etc / "retroarch").mkdir()
+        (etc / "retroarch/retroarch.cfg").write_text("menu_driver = rgui\n")
+        (dl / "x.part").write_text("partial")
         restore = self.dir / "restore"
         restore.write_text("#!/bin/sh\necho \"$*\" >> %s/restored\n" % self.dir)
         restore.chmod(0o755)
@@ -6023,11 +6044,22 @@ class CloudTests(unittest.TestCase):
         self.assertTrue((far / "flycast/emu.cfg").is_file())
         self.assertTrue((far / "fliperos-data/stats/played.tsv").is_file())
         self.assertTrue((far / "retroarch/retroarch.cfg").is_file())
+        self.assertTrue((far / "mame/cfg/sf2.cfg").is_file())
+        self.assertTrue((far / "attractplus/attract.cfg").is_file())
         self.assertTrue((far / "system/downloader/chds.magnet").is_file())
         self.assertTrue((far / "system/etc/buttons.map").is_file())
-        log = (self.dir / "rclone.log").read_text()
-        self.assertIn("--include buttons.map", log)
-        self.assertIn("--exclude cores/**", log)
+        self.assertTrue((far / "system/etc/retroarch/retroarch.cfg").is_file())
+        # O que se baixa ou se refaz nao sobe, nem o que e da imagem; os
+        # recordes do MAME vao so em hiscores/; uma pasta dentro de outra
+        # (as estatisticas, o cfg do MAME) nao sobe duas vezes.
+        sent = sorted(str(p.relative_to(far)) for p in far.rglob("*") if p.is_file())
+        for name in ("retroarch/cores/fbneo_libretro.so", "retroarch/system/neogeo.zip", "system/etc/sessions.conf",
+                     "fliperos-data/versus-detectors/sf2.lua", "fliperos-data/scrape-state.lock",
+                     "attractplus/layouts/Arcadeflow/layout.nut", "system/downloader/x.part", "mame/hiscore/sf2.hi"):
+            self.assertNotIn(name, sent)
+        self.assertFalse((far / "stats").exists())
+        self.assertFalse((far / "mame-cfg").exists())
+        self.assertFalse((self.cloud / "FliperOS/hiscores").exists())
         # Descendo: o /etc/fliperos vai para a pasta do meio e o Setup o poe no lugar.
         r = self.run_("sync", "pull", "config")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -6222,6 +6254,52 @@ fi""", rootfs)
         self.run_("sync", "push")
         self.assertFalse((self.home / "save/x.srm").exists())
         self.assertEqual(self.run_("sync", "sideways").returncode, 2)
+
+    def test_one_pass_each_way_with_progress(self):
+        # Enviar e receber sao uma passada do rclone cada (a nuvem listada uma
+        # vez, --fast-list), e a barra enche: "@step PCT Sending: N of M
+        # files" de 0 a 50, "Receiving" de 50 a 100, sem nunca voltar.
+        for i in range(30):
+            (self.home / ("nvram/mame/g%d.nv" % i)).write_text(str(i))
+        (self.home / "save").mkdir()
+        (self.home / "save/x.srm").write_text("s")
+        # Na nuvem, uma pasta do update 66 (config/stats): nao desce nem da erro.
+        (self.cloud / "FliperOS/config/stats").mkdir(parents=True)
+        (self.cloud / "FliperOS/config/stats/played.tsv").write_text("old")
+        self.run_("remote", "mega", stdin="user=a@b.c\npass=x\n")
+        r = self.run_("sync")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        copies = [line for line in (self.dir / "rclone.log").read_text().splitlines() if line.startswith("copy ")]
+        self.assertEqual(len(copies), 2)
+        self.assertIn("--fast-list", copies[0])
+        steps = [(int(pct), text) for pct, text in re.findall(r"^@step (\d+) (.*)$", r.stdout, re.M)]
+        self.assertEqual([s for s in steps if s[1].startswith("Sending: ")][-1], (50, "Sending: 33 of 33 files"))
+        self.assertEqual([s for s in steps if s[1].startswith("Receiving: ")][-1], (100, "Receiving: 33 of 33 files"))
+        self.assertEqual([s[0] for s in steps], sorted(s[0] for s in steps))
+        self.assertEqual(steps[-1], (100, "Synced with the cloud"))
+        self.assertTrue((self.cloud / "FliperOS/saves/x.srm").is_file())
+        self.assertEqual((self.cloud / "FliperOS/hiscores/nvram/mame/g29.nv").read_text(), "29")
+        self.assertFalse((self.home / ".local/share/fliperos/stats").exists())
+        log = (self.dir / "cloud.log").read_text()
+        self.assertIn("Sending: 0 checked, 33 copied", log)
+        self.assertIn("Receiving: 33 checked, 0 copied", log)
+
+    def test_two_games_closing_together_sync_once(self):
+        # Dois vigias de jogos que fecharam juntos: o segundo espera a vez e,
+        # com a sincronizacao de agora ha pouco, nao repete.
+        self.run_("remote", "mega", stdin="user=a@b.c\npass=x\n")
+        self.run_("auto", "on")
+        self.run_("what", "hiscores")
+        env = dict(self.env, FLIPEROS_CLOUD_GAP="600", FLIPEROS_CLOUD_POLL="0.1")
+        games = [subprocess.Popen(["sleep", "0.5"]) for _ in range(2)]
+        watchers = [subprocess.Popen(["bash", str(self.TOOL), "watch", str(g.pid)], env=env,
+                                     stdout=subprocess.DEVNULL) for g in games]
+        for game in games:
+            game.wait()
+        for watcher in watchers:
+            self.assertEqual(watcher.wait(timeout=60), 0)
+        self.assertEqual((self.dir / "cloud.log").read_text().count("sync both hiscores"), 1)
+        self.assertTrue((self.cloud / "FliperOS/hiscores/hiscore/sf2.hi").is_file())
 
     def test_what_and_auto_settings(self):
         self.assertEqual(self.run_("what", "hiscores,saves").returncode, 0)

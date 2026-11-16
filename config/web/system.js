@@ -476,7 +476,10 @@ async function cloudPage() {
             return true;
           }
           if (s.state === "syncing") {
-            box.replaceChildren(el("div", {}, t("cl_google_syncing").replace("%s", s.account || "")));
+            // A primeira sincronizacao, com a barra (pct do fliperos-cloud).
+            const pct = /^\d+$/.test(s.pct || "") ? Number(s.pct) : null;
+            box.replaceChildren(el("div", {}, t("cl_google_syncing").replace("%s", s.account || "") + (pct != null ? " " + pct + "%" : "")),
+              ...(pct != null ? [meter(pct)] : []));
           } else if (s.code && s.code !== shown) {
             shown = s.code;
             const qr = el("div", { class: "qr" });

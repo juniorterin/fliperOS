@@ -3873,7 +3873,7 @@ class Handler(BaseHTTPRequestHandler):
             if done.returncode == 3:
                 return self.send(400, {"error": done.stdout.strip() or "Google sign-in is not set up"})
             info = key_values(done.stdout)
-            state = {k: info.get(k, "") for k in ("state", "code", "url", "account", "error")}
+            state = {k: info.get(k, "") for k in ("state", "code", "url", "account", "error", "pct")}
             if state["url"].startswith("https://"):
                 state["qr"] = qr_svg(state["url"])
             return self.send(200, state)

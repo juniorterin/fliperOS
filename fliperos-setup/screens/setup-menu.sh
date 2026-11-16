@@ -131,7 +131,7 @@ screen_cloud() {
 # (fliperos-cloud google, que pede outro codigo sozinho quando um expira);
 # esta tela so le o estado a cada poucos segundos. Esc desiste.
 screen_cloud_google() {
-  local title="Sign in with Google" out state code url account error rc synced_at=0 elapsed
+  local title="Sign in with Google" out state code url account error rc synced_at=0 elapsed pct
   out=$(cloud_run google start 2>&1)
   if [[ $? -eq 3 ]]; then
     ui_msg "$title" "$(ui_bad "${out:-Google sign-in is not set up on this system.}")"
@@ -158,8 +158,9 @@ screen_cloud_google() {
         # 3 da ui_wait e so o intervalo da pergunta).
         ((synced_at)) || synced_at=$SECONDS
         elapsed=$((SECONDS - synced_at))
+        pct=$(sed -n 's/^pct=//p' <<< "$out")
         ui_wait "$title" 3 "Connected as ${account:-Google Drive}." "" \
-          "First sync running for $(printf '%d:%02d' $((elapsed / 60)) $((elapsed % 60)))."
+          "First sync running for $(printf '%d:%02d' $((elapsed / 60)) $((elapsed % 60)))$([[ $pct =~ ^[0-9]+$ ]] && echo " ($pct%)")."
         rc=$?
         ;;
       *)

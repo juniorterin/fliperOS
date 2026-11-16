@@ -24,7 +24,7 @@
 #                                         continua) a espera em segundo plano e imprime o estado
 #                                         (status 3: sem o cliente OAuth em /etc/fliperos/google-oauth.conf)
 #   fliperos-cloud google status          o estado: state=waiting|syncing|ok|denied|error|stopped,
-#                                         code=, url=, account=, error=
+#                                         code=, url=, account=, error=, pct= (syncing)
 #   fliperos-cloud google cancel          para a espera
 #
 # "Entrar com o Google" e o "OAuth 2.0 for TV and Limited-Input Devices": um
@@ -46,6 +46,13 @@
 # todos os gabinetes da pessoa: um recorde feito num aparece no outro. Nada e
 # apagado de nenhum lado (rclone copy --update, nunca sync): um arquivo so
 # e trocado por um mais novo.
+#
+# Cada direcao e uma passada so do rclone: o lado de ca vira uma arvore so,
+# com as pastas no mesmo lugar que tem em FliperOS/ (o backend "combine" do
+# rclone), e a nuvem e listada uma vez (--fast-list: no Google Drive, poucas
+# chamadas em vez de uma por pasta). Com uma passada por pasta, enviar levava
+# minutos so listando. As estatisticas do rclone (JSON, a cada segundo) viram
+# a barra de progresso: "@step PCT Sending: N of M files".
 set -uo pipefail
 RCLONE=${FLIPEROS_RCLONE:-rclone}
 HOME_DIR=${FLIPEROS_CLOUD_HOME:-$HOME}
@@ -71,7 +78,7 @@ GOOGLE_RUN=${XDG_RUNTIME_DIR:-/tmp}/fliperos-cloud-google
 # Sem ninguem olhando o estado por tanto tempo (s), a espera desiste.
 GOOGLE_IDLE=${FLIPEROS_GOOGLE_IDLE:-600}
 
-# As pastas de cada grupo: "local<TAB>na nuvem".
+# As pastas de cada grupo: "local<TAB>na nuvem" (o caminho em FliperOS/).
 pairs() {
   case $1 in
     hiscores)
@@ -81,11 +88,14 @@ pairs() {
     config)
       # Tudo o que a pessoa configura e o rastro do uso: o frontend do
       # FliperOS (favoritos, escondidos, filtros, jogados e o tempo de cada
-      # um), os emuladores e os outros frontends. O pesado que se baixa de
-      # novo (cores, temas, arte, caches) fica de fora (EXCLUDES).
-      printf '%s\t%s\n' "$HOME_DIR/.mame/cfg" config/mame-cfg "$HOME_DIR/.config/fliperos" config/fliperos \
-        "$HOME_DIR/.local/share/fliperos/stats" config/stats "$HOME_DIR/.config/retroarch/remaps" config/retroarch-remaps \
-        "$HOME_DIR/.config/retroarch/config" config/retroarch-overrides \
+      # um, em fliperos-data), os emuladores e os outros frontends. O pesado
+      # que se baixa de novo (cores, temas, arte, caches) fica de fora
+      # (EXCLUDES). Uma pasta dentro de outra nao entra de novo: os remaps
+      # do RetroArch, o cfg do MAME e as estatisticas ja vao com a de fora
+      # (as config/mame-cfg, config/stats, config/retroarch-remaps e
+      # config/retroarch-overrides do update 66 ficam la, sem uso).
+      # O /etc/fliperos (config/system/etc) entra pelo tree_build.
+      printf '%s\t%s\n' "$HOME_DIR/.config/fliperos" config/fliperos \
         "$HOME_DIR/.local/share/fliperos" config/fliperos-data \
         "$HOME_DIR/.config/retroarch" config/retroarch \
         "$HOME_DIR/.mame" config/mame \
@@ -106,14 +116,21 @@ pairs() {
   esac
 }
 
-# O que nao sobe: o que se baixa ou se refaz (cores, temas, arte, videos,
-# caches, logs) e os segredos do proprio backup.
-EXCLUDES=(--exclude 'cloud.conf' --exclude 'google-oauth.conf' --exclude '.google-oauth-tried' --exclude '*.part'
-  --exclude 'cores/**' --exclude 'assets/**' --exclude 'thumbnails/**' --exclude 'shaders/**' --exclude 'overlays/**'
-  --exclude 'database/**' --exclude 'system/**' --exclude 'downloads/**' --exclude 'logs/**' --exclude '*.log'
-  --exclude 'cache/**' --exclude 'Cache/**' --exclude 'layouts/**' --exclude 'scraped/**' --exclude 'snap/**'
-  --exclude 'downloaded_media/**' --exclude 'themes/**' --exclude 'artwork/**' --exclude 'hiscore/**'
-  --exclude 'Paks/**' --exclude '*.zip' --exclude '*.7z' --exclude '*.chd' --exclude '*.iso')
+# O que nao sobe nem desce (regras de filtro do rclone; sem a barra do
+# comeco, valem em qualquer pasta): o que se baixa ou se refaz (cores, temas,
+# arte, videos, caches, logs, travas) e os segredos do proprio backup. Com a
+# barra, so naquele lugar: os recordes do MAME vao em hiscores/, os
+# detectores do Versus e o patch do KOF vem de novo do sistema e da rede, e o
+# estado do scraper e do gabinete (as ROMs daqui que ele ja tentou) e muda o
+# tempo todo enquanto ele roda (o rclone recusava: "md5 hash differ"). O
+# "system/**" (a pasta de BIOS do RetroArch) fica no filter_write, depois do
+# Downloader, que mora em config/system/.
+EXCLUDES=(cloud.conf google-oauth.conf .google-oauth-tried '*.part' '*.lock'
+  'cores/**' 'assets/**' 'thumbnails/**' 'shaders/**' 'overlays/**' 'database/**' 'downloads/**' 'logs/**' '*.log'
+  'cache/**' 'Cache/**' 'layouts/**' 'scraped/**' 'snap/**' 'downloaded_media/**' 'themes/**' 'artwork/**'
+  'Paks/**' '*.zip' '*.7z' '*.chd' '*.iso'
+  /config/mame/hiscore/** /config/fliperos-data/versus-detectors/** /config/fliperos-data/kof-patch/**
+  '/config/fliperos-data/scrape-*.json')
 
 # As configuracoes do sistema (/etc/fliperos, do root): sobem como estao e,
 # ao descer, ficam em SYSTEM_STAGE ate o Setup (fliperos-setup --cloud-restore,
@@ -127,26 +144,132 @@ SYSTEM_RESTORE=${FLIPEROS_CLOUD_RESTORE:-sudo -n /usr/local/bin/fliperos-setup -
 SYSTEM_FILES=(buttons.map buttons-bt.map buttons.layout guncon2.conf services.conf session quirks.conf
   osd-profiles.conf fliperos.conf cheevos 'retroarch/**' 'mame/**')
 
-# sync_system push|pull|both: o /etc/fliperos.
-sync_system() {
-  local dir=$1 rc=0 file
-  local -a filters=()
-  for file in "${SYSTEM_FILES[@]}"; do
-    filters+=(--include "$file")
+# O rclone de cada passada: as transferencias em paralelo (muitos arquivos
+# pequenos), sem avisar dos links simbolicos (os saves e as nvram do
+# RetroArch apontam para ~/save e ~/nvram, que ja vao) e as estatisticas.
+COPY_ARGS=(--update --fast-list --skip-links --transfers 8 --checkers 16
+  --use-json-log --stats 1s --stats-log-level NOTICE)
+
+# tree_build push|pull GRUPOS: o lado de ca como uma arvore so, com as pastas
+# no mesmo lugar que tem em FliperOS/ na nuvem. Cada pasta do meio (a raiz,
+# hiscores/, config/, config/system/) e um remoto "combine" do rclone pelas
+# variaveis de ambiente (RCLONE_CONFIG_FLCLOUDn_*: nada no rclone.conf) cujas
+# subpastas sao as pastas daqui ou outro combine. Enviando, so as pastas que
+# existem; recebendo, as que existem ou se criam. TREE e o remoto da raiz;
+# LEAVES, os caminhos na nuvem de cada pasta.
+tree_build() {
+  local dir=$1 groups=$2 group local_dir far path rest part child n=1 key
+  local -A name=([.]=flcloud0) ups=()
+  LEAVES=()
+  for group in ${groups//,/ }; do
+    [[ $group =~ ^(hiscores|saves|config)$ ]] || continue
+    while IFS=$'\t' read -r local_dir far; do
+      if [[ $dir == push ]]; then
+        [[ -d $local_dir ]] || continue
+      else
+        mkdir -p "$local_dir" 2> /dev/null || continue
+      fi
+      LEAVES+=("$far")
+      path=. rest=$far
+      while [[ $rest == */* ]]; do
+        part=${rest%%/*} rest=${rest#*/}
+        if [[ $path == . ]]; then child=$part; else child=$path/$part; fi
+        if [[ -z ${name[$child]:-} ]]; then
+          name[$child]=flcloud$n
+          n=$((n + 1))
+          ups[$path]+=" \"$part=${name[$child]}:\""
+        fi
+        path=$child
+      done
+      ups[$path]+=" \"$rest=$local_dir\""
+    done < <(
+      pairs "$group"
+      [[ $group != config ]] || printf '%s\t%s\n' "$([[ $dir == push ]] && echo "$SYSTEM_ETC" || echo "$SYSTEM_STAGE")" config/system/etc
+    )
   done
-  filters+=(--exclude '*')
-  if [[ $dir != pull && -d $SYSTEM_ETC ]]; then
-    "$RCLONE" copy --update "${filters[@]}" "$SYSTEM_ETC" "$REMOTE:$ROOT_DIR/config/system/etc" >> "$LOG" 2>&1 || rc=1
-  fi
-  if [[ $dir != push ]]; then
-    mkdir -p "$SYSTEM_STAGE" 2> /dev/null
-    "$RCLONE" copy --update "${filters[@]}" "$REMOTE:$ROOT_DIR/config/system/etc" "$SYSTEM_STAGE" >> "$LOG" 2>&1 || rc=1
-    # Pelo Setup (root): so o que veio mais novo que o daqui.
-    if [[ -n $(find "$SYSTEM_STAGE" -type f -print -quit 2> /dev/null) ]]; then
-      $SYSTEM_RESTORE "$SYSTEM_STAGE" >> "$LOG" 2>&1 || rc=1
+  for key in "${!name[@]}"; do
+    [[ -n ${ups[$key]:-} ]] || continue
+    export "RCLONE_CONFIG_${name[$key]^^}_TYPE=combine" "RCLONE_CONFIG_${name[$key]^^}_UPSTREAMS=${ups[$key]# }"
+  done
+  TREE=flcloud0:
+}
+
+has_leaf() {
+  local leaf
+  for leaf in "${LEAVES[@]}"; do
+    [[ $leaf == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# filter_write ARQUIVO: as regras do rclone para a arvore (LEAVES): do
+# /etc/fliperos, so os SYSTEM_FILES; nada do EXCLUDES; e so as pastas da
+# arvore (a nuvem pode ter outras: as de grupos que nao vao agora, as do
+# update 66), que o combine nao saberia onde por.
+filter_write() {
+  local leaf file
+  {
+    if has_leaf config/system/etc; then
+      for file in "${SYSTEM_FILES[@]}"; do
+        printf '+ /config/system/etc/%s\n' "$file"
+      done
     fi
-  fi
-  return $rc
+    echo '- /config/system/etc/**'
+    printf -- '- %s\n' "${EXCLUDES[@]}"
+    has_leaf config/system/downloader && echo '+ /config/system/downloader/**'
+    echo '- system/**'
+    for leaf in "${LEAVES[@]}"; do
+      [[ $leaf == config/system/etc ]] || printf '+ /%s/**\n' "$leaf"
+    done
+    echo '- **'
+  } > "$1"
+}
+
+# O que o jq tira de cada linha do rclone (--use-json-log): "S" e as contas
+# das estatisticas (verificados, copiados, os totais, bytes, erros e, em
+# centesimos de arquivo, o que ja foi dos grandes que estao indo: um pequeno
+# o rclone le inteiro para o buffer, de 16 MiB, e diz 100% antes de subir);
+# "L" e o resto, para o log.
+STATS_JQ='(try fromjson catch null) as $j
+  | if ($j | type) != "object" then "L " + sub("^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9:]{8} "; "")
+    elif $j.stats then $j.stats as $s
+      | "S \($s.checks // 0) \($s.transfers // 0) \($s.totalChecks // 0) \($s.totalTransfers // 0) \($s.bytes // 0) \($s.errors // 0) \([$s.transferring[]? | select((.size // 0) > 16777216) | (.bytes // 0) * 100 / .size] | add // 0 | floor)"
+    else "L \($j.level // "info"): \($j.msg // "" | gsub("\\s+"; " "))\(if $j.object then " (\($j.object))" else "" end)"
+    end'
+
+# copy_run VERBO DE ATE ESTIMATIVA FILTRO ORIGEM DESTINO: um rclone copy com a
+# barra indo de DE a ATE ("@step PCT VERBO: N of M files"). M e o maior entre
+# a ESTIMATIVA (os arquivos daqui) e o que o rclone ja achou; a barra nunca
+# volta. No fim, as contas no log.
+copy_run() {
+  local verb=$1 from=$2 to=$3 est=$4 filter=$5 src=$6 dst=$7 rc
+  "$RCLONE" copy "${COPY_ARGS[@]}" --filter-from "$filter" "$src" "$dst" 2>&1 > /dev/null |
+    jq -R --unbuffered -r "$STATS_JQ" 2> /dev/null | {
+    local kind rest c t tc tt bytes errors part total files pct shown=$from line last="" stats=""
+    while IFS=' ' read -r kind rest; do
+      if [[ $kind != S ]]; then
+        log "$rest"
+        continue
+      fi
+      read -r c t tc tt bytes errors part <<< "$rest"
+      [[ "$c$t$tc$tt$bytes$errors$part" =~ ^[0-9]+$ ]] || continue
+      stats="$c checked, $t copied, $bytes bytes, $errors errors"
+      total=$((tc + tt > est ? tc + tt : est))
+      ((total > 0)) || total=1
+      files=$((c + t < total ? c + t : total))
+      pct=$((from + (to - from) * ((c + t) * 100 + part) / (total * 100)))
+      ((pct > to)) && pct=$to
+      ((pct < shown)) && pct=$shown
+      shown=$pct
+      line="@step $pct $verb: $files of $total files"
+      [[ $line == "$last" ]] && continue
+      echo "$line"
+      last=$line
+    done
+    log "$verb: ${stats:-no statistics}"
+  }
+  rc=${PIPESTATUS[0]}
+  return "$rc"
 }
 
 state_get() { sed -n "s/^$1=//p" "$STATE" 2> /dev/null | tail -1; }
@@ -230,44 +353,60 @@ cmd_remote() {
   log "remote $kind saved"
 }
 
-# sync_group GRUPO push|pull|both
-sync_group() {
-  local group=$1 dir=$2 local_dir far rc=0
-  while IFS=$'\t' read -r local_dir far; do
-    if [[ $dir != pull && -d $local_dir ]]; then
-      "$RCLONE" copy --update "${EXCLUDES[@]}" "$local_dir" "$REMOTE:$ROOT_DIR/$far" \
-        >> "$LOG" 2>&1 || rc=1
-    fi
-    if [[ $dir != push ]]; then
-      mkdir -p "$local_dir" 2> /dev/null
-      "$RCLONE" copy --update "${EXCLUDES[@]}" "$REMOTE:$ROOT_DIR/$far" "$local_dir" >> "$LOG" 2>&1 || rc=1
-    fi
-  done < <(pairs "$group")
-  [[ $group == config ]] && { sync_system "$dir" || rc=1; }
-  return $rc
-}
-
+# cmd_sync push|pull|both [GRUPOS] [auto]: enviar e depois receber, uma
+# passada do rclone cada, metade da barra cada uma. "auto" (o vigia) confere
+# o intervalo de novo depois de pegar a vez: outro vigia pode ter acabado de
+# sincronizar enquanto este esperava.
 cmd_sync() {
-  local dir=${1:-both} groups=${2:-} group rc=0 lock
+  local dir=${1:-both} groups=${2:-} mode=${3:-} rc=0 lock work est phase i=0 from to
+  local -a phases=()
   [[ $dir =~ ^(push|pull|both)$ ]] || return 2
   installed || { echo "rclone is not installed."; return 1; }
   [[ -n $(remote_kind) ]] || { echo "No cloud account yet."; return 1; }
   groups=${groups:-$(state_get what)}
   groups=${groups:-hiscores,saves,config}
-  log "sync $dir $groups"
   # Uma de cada vez (o automatico e o botao do painel).
   lock=${XDG_RUNTIME_DIR:-/tmp}/fliperos-cloud.lock
   exec 8> "$lock"
   flock -w 600 8 || { echo "Another sync is running."; return 1; }
+  if [[ $mode == auto ]] && (($(state_get last || echo 0) + AUTO_GAP > $(date +%s))); then
+    return 0
+  fi
   [[ -w ${LOG%/*} || -w $LOG ]] || LOG=$HOME_DIR/.cache/fliperos-cloud.log
   mkdir -p "${LOG%/*}" 2> /dev/null
+  log "sync $dir $groups"
   echo "@step 0 Syncing with the cloud"
-  for group in ${groups//,/ }; do
-    [[ $group =~ ^(hiscores|saves|config)$ ]] || continue
-    echo "@msg $group"
-    sync_group "$group" "$dir" || rc=1
-    [[ $group == config ]] && state_set last_config "$(date +%s)"
+  work=$(mktemp -d "${TMPDIR:-/tmp}/fliperos-cloud.XXXXXX") || return 1
+  # A estimativa da barra: quantos arquivos ha aqui para enviar.
+  est=0
+  tree_build push "$groups"
+  if ((${#LEAVES[@]})); then
+    filter_write "$work/count.filter"
+    est=$("$RCLONE" size --json --skip-links --filter-from "$work/count.filter" "$TREE" 2>> "$LOG" | jq -r '.count // 0' 2> /dev/null)
+    [[ $est =~ ^[0-9]+$ ]] || est=0
+  fi
+  [[ $dir != pull ]] && phases+=(push)
+  [[ $dir != push ]] && phases+=(pull)
+  for phase in "${phases[@]}"; do
+    from=$((100 * i / ${#phases[@]})) to=$((100 * (i + 1) / ${#phases[@]}))
+    i=$((i + 1))
+    tree_build "$phase" "$groups"
+    ((${#LEAVES[@]})) || continue
+    filter_write "$work/$phase.filter"
+    if [[ $phase == push ]]; then
+      echo "@msg Sending to the cloud"
+      copy_run Sending "$from" "$to" "$est" "$work/$phase.filter" "$TREE" "$REMOTE:$ROOT_DIR" || rc=1
+    else
+      echo "@msg Receiving from the cloud"
+      copy_run Receiving "$from" "$to" "$est" "$work/$phase.filter" "$REMOTE:$ROOT_DIR" "$TREE" || rc=1
+      # O /etc/fliperos pelo Setup (root): so o que veio mais novo que o daqui.
+      if has_leaf config/system/etc && [[ -n $(find "$SYSTEM_STAGE" -type f -print -quit 2> /dev/null) ]]; then
+        $SYSTEM_RESTORE "$SYSTEM_STAGE" >> "$LOG" 2>&1 || rc=1
+      fi
+    fi
   done
+  rm -rf "$work"
+  [[ ,$groups, == *,config,* ]] && state_set last_config "$(date +%s)"
   state_set last "$(date +%s)"
   state_set result "$([[ $rc == 0 ]] && echo ok || echo failed)"
   log "sync done: $([[ $rc == 0 ]] && echo ok || echo failed)"
@@ -303,7 +442,7 @@ cmd_watch() {
     groups=$(tr ',' '\n' <<< "$groups" | grep -vx config | paste -sd,)
   fi
   [[ -n $groups ]] || return 0
-  cmd_sync both "$groups" > /dev/null
+  cmd_sync both "$groups" auto > /dev/null
 }
 
 # google_client_in ARQUIVO: client_id e client_secret, se o arquivo os tem no
@@ -423,7 +562,7 @@ google_save() {
 
 # google_run: a espera, solta (google start a abre).
 cmd_google_run() {
-  local deadline interval rc client renew=0
+  local deadline interval rc client renew=0 line
   client=$(google_client) || return 3
   GID=${client%%$'\n'*} GSECRET=${client#*$'\n'}
   echo $$ > "$GOOGLE_RUN.pid"
@@ -464,8 +603,13 @@ cmd_google_run() {
     gstate_write state=error "error=$GERR"
     return 1
   fi
-  gstate_write state=syncing "account=$ACCOUNT"
-  cmd_sync both > /dev/null 2>&1
+  gstate_write state=syncing "account=$ACCOUNT" pct=0
+  # A primeira sincronizacao, com a porcentagem no estado (a tela mostra).
+  cmd_sync both 2> /dev/null | while IFS= read -r line; do
+    [[ $line == "@step "* ]] || continue
+    line=${line#@step }
+    gstate_write state=syncing "account=$ACCOUNT" "pct=${line%% *}"
+  done
   gstate_write state=ok "account=$ACCOUNT" "result=$(state_get result)"
 }
 

@@ -8078,7 +8078,7 @@ class WebPanelTests(unittest.TestCase):
         status, _, data = self.request('POST', '/api/cloud', {'action': 'google-start'}, cookie=cookie)
         self.assertEqual((status, json.loads(data)), (200, {
             'state': 'waiting', 'code': 'ABCD-EFGH', 'url': 'https://www.google.com/device', 'account': '', 'error': '',
-            'qr': '<svg>https://www.google.com/device</svg>\n'}))
+            'pct': '', 'qr': '<svg>https://www.google.com/device</svg>\n'}))
         status, _, data = self.request('POST', '/api/cloud', {'action': 'google-status'}, cookie=cookie)
         self.assertEqual(json.loads(data)['state'], 'ok')
         self.assertEqual(json.loads(data)['account'], 'joe@gmail.com')

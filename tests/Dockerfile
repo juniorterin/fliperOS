@@ -5,11 +5,12 @@
 # RetroArch, o Pillow, o fontTools e a DejaVu dos que desenham (DMD,
 # capturas, a arte e os logotipos do Arcadeflow) e o markdown do
 # tools/render-docs.py: a mesma imagem roda o test_setup.py e o test_build.py.
+# O rclone (o 1.60 da ISO) dos testes do backup na nuvem, numa pasta.
 #   docker build -t fliperos-tests -f tests/Dockerfile tests
 #   docker run --rm -v "$PWD:/w" -w /w fliperos-tests python3 tests/test_setup.py
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 jq util-linux git curl ca-certificates xz-utils python3-pil python3-markdown \
-      python3-fonttools fonts-dejavu-core \
+      python3-fonttools fonts-dejavu-core rclone \
     && rm -rf /var/lib/apt/lists/*
