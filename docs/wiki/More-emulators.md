@@ -11,6 +11,8 @@ Its games go in `~/roms/dolphin` (`.iso`, `.rvz`, `.wbfs`). It is compiled from 
 
 ## DuckStation (PlayStation)
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-duckstation.webp" width="480" alt="A PlayStation game in DuckStation">
+
 Its license (CC BY-NC-ND 4.0) doesn't allow it in the image: **Setup > Games > Emulators & Games > DuckStation** downloads the official AppImage from its GitHub, and choosing it again updates it. A PlayStation game opened before it is installed installs it first.
 
 - Its games go in `~/roms/ps1` (created once it is installed), and it also lists the ones in `~/roms/retroarch/pcsx_rearmed`. The BIOS is the one in `~/bios`, the same as RetroArch's.

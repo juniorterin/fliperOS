@@ -1,5 +1,7 @@
 [RetroArch](https://www.retroarch.com) runs the consoles, and some arcade boards, through its cores. On FliperOS each game opens in its own mode on the tube (CRT SwitchRes), with your panel's buttons already mapped.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-play.webp" width="480" alt="A game opened from the frontend">
+
 ## Cores
 
 Seven come compiled, to work without network:

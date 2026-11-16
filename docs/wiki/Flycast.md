@@ -1,5 +1,7 @@
 [Flycast](https://github.com/flyinghead/flycast) runs the Dreamcast and the Sega arcade boards built on it: Naomi, Naomi 2 and Atomiswave.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-flycast.webp" width="480" alt="Virtua Fighter 4 Evolution (Naomi 2) in Flycast, at 640x240">
+
 | Games | Folder | BIOS in `~/bios/dc` |
 | --- | --- | --- |
 | Dreamcast (`.gdi`, `.cdi`, `.chd`) | `~/roms/dreamcast` | `dc_boot.bin`, `dc_flash.bin` |

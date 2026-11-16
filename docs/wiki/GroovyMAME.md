@@ -1,5 +1,7 @@
 [GroovyMAME](https://github.com/antonioginer/GroovyMAME) is MAME with Switchres inside: every arcade game opens in its own original video mode, on the tube. It is the arcade emulator of FliperOS, as on GroovyArcade. Its games go in `~/roms/mame`.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-groovymame.webp" width="480" alt="Garou: Mark of the Wolves in GroovyMAME, at its native 320x224">
+
 ## Native resolution
 
 GroovyMAME runs in KMS, without Xorg, like GroovyArcade. Switchres makes each game's exact mode and SDL switches to it. On the cabinet: Street Fighter II at `384x224@59.64` (99.9% speed), The King of Fighters '98 at `320x224@59.19`.

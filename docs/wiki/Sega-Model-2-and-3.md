@@ -1,5 +1,7 @@
 Sega's 3D arcade boards of the 1990s: **Model 2** (Daytona USA, Virtua Fighter 2, The House of the Dead, Sega Rally) in [SM2-Emu](https://github.com/dmanlfc/sm2-emu), and **Model 3** (Scud Race, Virtua Fighter 3, Daytona USA 2) in [Supermodel](https://github.com/trzy/Supermodel).
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-model2.webp" width="480" alt="Fighting Vipers in SM2-Emu">
+
 | Board | Emulator | Folder | Sets |
 | --- | --- | --- | --- |
 | Model 2 (2, 2A, 2B, 2C) | SM2-Emu | `~/roms/model2` | MAME sets |
