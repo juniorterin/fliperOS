@@ -4620,6 +4620,147 @@ class CustomGamesTests(Base):
         self.assertEqual(self.env.run(script % "nonsense", e).returncode, 2)
 
 
+class PanelSetupTests(Base):
+    """O Setup inteiro no painel web: as telas que ele abre no gabinete
+    (screens/panel.sh, --screen) e o que muda de longe (lib/system.sh)."""
+
+    def test_screens_from_the_panel_are_a_closed_list(self):
+        panel = SETUP / "screens" / "panel.sh"
+        script = ("source %s\n" % panel) + 'video_snapshot() { echo snap; }; video_setup_leave() { echo "leave $1 $VIDEO_CHANGED"; }\n'
+        # As do Video Setup terminam como ele (o Xorg, a linha do kernel).
+        r = self.env.run(script + "screen_geometry() { echo geo; VIDEO_CHANGED=1; }; screen_from_panel geometry")
+        self.assertEqual(r.stdout.split(), ["geo", "leave", "snap", "1"])
+        r = self.env.run(script + "screen_buttons() { echo map; }; screen_from_panel buttons")
+        self.assertEqual(r.stdout.split(), ["map"])
+        for bad in ("nope", "geometry; reboot", "", "setup geometry"):
+            self.assertEqual(self.env.run(script + "screen_from_panel '%s'" % bad).returncode, 2, bad)
+        text = panel.read_text()
+        names = re.search(r'PANEL_SCREENS="([^"]+)"', text).group(1).split()
+        body = text.split("screen_from_panel() {")[1].split("\n}\n")[0]
+        for name in names:
+            self.assertIn("\n    %s) " % name, body)
+        # O servidor confere a mesma lista; o fliperos-setup confere antes de
+        # abrir a interface e abre a tela depois do ui_init.
+        web = (ROOT / "config" / "fliperos-web").read_text()
+        self.assertEqual(re.search(r'PANEL_SCREENS = "([^"]+)"', web).group(1).split(), names)
+        main = (SETUP / "fliperos-setup").read_text()
+        self.assertIn('source "$SETUP_DIR/screens/panel.sh"', main)
+        self.assertLess(main.index('panel_screen_known "${2:-}" || return 2'), main.index("  ui_init\n"))
+        self.assertLess(main.index("  ui_init\n"), main.index('screen_from_panel "${2:-}"'))
+        # O Video Setup termina pelo mesmo video_setup_leave.
+        video = (SETUP / "screens" / "video-setup.sh").read_text()
+        self.assertIn('  video_setup_leave "$before"\n}\n', video.split("screen_video_setup() {")[1])
+
+    def test_items_that_depend_on_the_cabinet(self):
+        e = {"BLUETOOTH_SYSFS": str(self.env.dir / "bt")}
+        stubs = ("atom15_card() { return 1; }; drm_card_low_dotclock_testable() { return 1; }; "
+                 "launcher_installed() { [[ $1 == attractplus ]]; }; ")
+        rows = self.env.out(stubs + "drm_dual_amd_cards() { :; }; nvidia_card() { return 1; }; setup_items", e).splitlines()
+        self.assertIn("item|driver|0", rows)
+        self.assertIn("item|lowdot|0", rows)
+        self.assertIn("item|firmware|0", rows)
+        self.assertIn("item|bluetooth|0", rows)
+        self.assertIn("item|romlist|1", rows)
+        rows = self.env.out(stubs + "drm_dual_amd_cards() { echo card0; }; setup_items", e).splitlines()
+        self.assertIn("item|driver|1", rows)
+        self.assertIn("info|driver|radeon (tested on the CRT) or amdgpu (with Vulkan).", rows)
+        (self.env.dir / "bt" / "hci0").mkdir(parents=True)
+        self.assertIn("item|bluetooth|1", self.env.out(stubs + "setup_items", e).splitlines())
+        # O Video Setup usa as mesmas funcoes.
+        video = (SETUP / "screens" / "video-setup.sh").read_text()
+        for name in ("setup_driver_hint", "setup_lowdot_hint", "setup_firmware_hint"):
+            self.assertIn("hint=$(%s) && " % name, video)
+
+    def test_quirks_from_the_panel(self):
+        e = {"QUIRKS_FILE": str(self.env.etc / "quirks.conf")}
+        boot = "settings_boot() { echo BOOT; }; "
+        self.assertIn("BOOT", self.env.out(boot + "quirks_cli add 'Xin-Mo dual' 0x16C0:0x05E1:0x40", e))
+        self.assertEqual(self.env.out("quirks_cli list", e).strip(), "0x16c0:0x05e1:0x40|Xin-Mo dual")
+        self.assertEqual(self.env.run(boot + "quirks_cli add X nonsense", e).returncode, 1)
+        self.assertEqual(self.env.run(boot + "quirks_cli add X 0x16c0:0x05e1:0x8", e).returncode, 3)
+        for n in range(1, 4):
+            self.env.out(boot + "quirks_cli add P%d 0x1234:0x000%d:0x40" % (n, n), e)
+        r = self.env.run(boot + "quirks_cli add Fifth 0x1234:0x0009:0x40", e)
+        self.assertEqual((r.returncode, r.stdout.strip()), (2, "max=4"))
+        self.assertIn("BOOT", self.env.out(boot + "quirks_cli delete 0x16c0:0x05e1:0x40", e))
+        self.assertNotIn("Xin-Mo", self.env.out("quirks_cli list", e))
+        self.assertEqual(self.env.run(boot + "quirks_cli delete 0xdead:0xbeef:0x40", e).returncode, 2)
+        self.env.stub("lsusb", "echo 'Bus 001 Device 004: ID 16c0:05e1 Van Ooijen Technische Informatica Free shared USB VID/PID pair'\n"
+                               "echo 'Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub'")
+        self.assertEqual(self.env.out("quirks_cli devices", e).splitlines(),
+                         ["0x16c0:0x05e1|Van Ooijen Technische Informatica Free shared USB VID/PID pair"])
+
+    def test_folders_from_the_panel(self):
+        home = self.env.dir / "home"
+        (home / "roms" / "mame").mkdir(parents=True)
+        (home / "bios").mkdir()
+        disk = self.env.dir / "disk" / "ROMs"
+        disk.mkdir(parents=True)
+        e = {"FOLDERS_HOME": str(home), "FOLDERS_MOUNTS": str(self.env.dir / "disk"),
+             "FOLDERS_SCRIPT": "/nonexistent", "FLIPEROS_USER": "nobody-here"}
+        stubs = 'frontends_configure() { echo REFRESH; }; launcher_current() { echo setup; }; '
+        rows = [l.split("|") for l in self.env.out("folders_cli list", e).splitlines()]
+        self.assertEqual(rows[0][:4], ["roms", "default", "", "1"])
+        self.assertEqual(rows[-1], ["start", str(self.env.dir / "disk")])
+        out = self.env.out(stubs + "folders_cli link roms \"$D\"", dict(e, D=str(disk)))
+        self.assertIn("kept=~/old-roms", out)
+        # O frontend le as pastas de novo (a saida dele vai para o log).
+        self.assertIn("REFRESH", (self.env.dir / "setup.log").read_text())
+        self.assertEqual(os.readlink(home / "roms"), str(disk))
+        self.assertEqual(self.env.out("folders_cli list", e).splitlines()[0].split("|")[:3], ["roms", "custom", str(disk)])
+        # As pastas de dentro de uma pasta.
+        self.assertTrue(self.env.out("folders_cli list bios", e).startswith("start|"))
+        # Uma recusa diz o motivo.
+        r = self.env.run(stubs + "folders_cli link bios \"$D\"", dict(e, D=str(home / "bios" / "x")))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("is not a folder", r.stdout)
+        self.assertEqual(self.env.run("folders_cli link ../etc /tmp", e).returncode, 2)
+        (self.env.dir / "setup.log").write_text("")
+        self.env.out(stubs + "folders_cli unlink roms", e)
+        self.assertIn("REFRESH", (self.env.dir / "setup.log").read_text())
+        self.assertTrue((home / "roms" / "mame").is_dir())
+        self.assertFalse((home / "roms").is_symlink())
+
+    def test_custom_frontends_from_the_panel(self):
+        # A tabela dos launchers do sistema (o fliperos-session) existe sempre.
+        (self.env.etc / "sessions.conf").write_text("setup|none||setup|FliperOS menu\n")
+        e = {"CUSTOM_SESSIONS": str(self.env.etc / "sessions.custom.conf")}
+        name = self.env.out("frontends_cli save '' 'My frontend' '/bin/true --full'", e).strip()
+        self.assertEqual(name, "custom-1")
+        self.assertEqual(self.env.out("frontends_cli list", e).strip(), "custom-1|My frontend|/bin/true --full|1")
+        self.env.out("frontends_cli save custom-1 'Other' '/nonexistent/fe'", e)
+        self.assertEqual(self.env.out("frontends_cli list", e).strip(), "custom-1|Other|/nonexistent/fe|0")
+        self.assertEqual(self.env.run("frontends_cli save '' 'A|B' 'x'", e).returncode, 1)
+        self.assertEqual(self.env.run("frontends_cli save custom-9 'X' 'x'", e).returncode, 2)
+        self.env.out("launcher_current() { echo setup; }; frontends_cli delete custom-1", e)
+        self.assertEqual(self.env.out("frontends_cli list", e).strip(), "")
+        self.assertEqual(self.env.run("frontends_cli delete custom-1", e).returncode, 2)
+
+    def test_bluetooth_from_the_panel_checks_the_address(self):
+        tool = self.env.dir / "bt-tool"
+        tool.write_text('#!/bin/sh\necho "$*" >> %s/bt.log\n' % self.env.dir)
+        tool.chmod(0o755)
+        e = {"BLUETOOTH": str(tool)}
+        self.env.out("bluetooth_cli pair AA:BB:CC:DD:EE:FF; bluetooth_cli power off; bluetooth_cli scan 20", e)
+        self.assertEqual((self.env.dir / "bt.log").read_text().splitlines(),
+                         ["pair AA:BB:CC:DD:EE:FF", "power off", "scan 20"])
+        for bad in ("pair nope", "remove 'AA:BB:CC:DD:EE:FF; reboot'", "power maybe", "scan 999", "rm -rf"):
+            self.assertEqual(self.env.run("bluetooth_cli %s" % bad, e).returncode, 2, bad)
+
+    def test_controller_light_is_a_setting(self):
+        row = [l for l in self.env.out("settings_list").splitlines() if l.startswith("padcolor|")][0].split("|")
+        self.assertEqual(row[1:5], ["Joysticks", "Controller light", "choice", "fliperos"])
+        self.assertIn("fliperos=FliperOS (roulette, game colours)", row[5])
+        self.assertTrue(row[5].endswith(";off=Off"))
+        self.env.out("settings_set padcolor ff0000")
+        self.assertIn("padcolor=ff0000\n", (self.env.etc / "fliperos.conf").read_text())
+        self.assertEqual(self.env.run("settings_set padcolor nope").returncode, 2)
+        # Uma cor digitada a mao continua na lista.
+        self.env.out("conf_set padcolor 123abc")
+        row = [l for l in self.env.out("settings_list").splitlines() if l.startswith("padcolor|")][0].split("|")
+        self.assertTrue(row[5].startswith("123abc=#123abc;"))
+
+
 class ArcadeResyncTests(Base):
     """As romlists de arcade do Attract-Mode com as informacoes do MAME (os
     filtros das telas) tambem para os jogos postos depois da AttractPlus ROM
@@ -10998,8 +11139,12 @@ class NvidiaDriverTests(Base):
         self.assertNotIn("nouveau driver", plain)
 
     def test_menu_and_installer_are_wired(self):
-        video = (SETUP / "screens/video-setup.sh").read_text()
-        self.assertIn("elif nvidia_card > /dev/null; then", video)
+        # O Video driver aparece com uma NVIDIA (setup_driver_hint, a mesma
+        # conta do Video Setup e do Setup do painel web).
+        hint = (SETUP / "lib/system.sh").read_text().split("setup_driver_hint() {")[1].split("\n}\n")[0]
+        self.assertIn("elif nvidia_card > /dev/null; then", hint)
+        self.assertIn('hint=$(setup_driver_hint) && driver=("driver|Video driver|$hint")',
+                      (SETUP / "screens/video-setup.sh").read_text())
         screen = (SETUP / "screens/amd-driver.sh").read_text()
         self.assertIn('run_online "Installing the NVIDIA driver" "" nvidia_driver_install', screen)
         rootfs = (ROOT / "fliperos-rootfs.sh").read_text()

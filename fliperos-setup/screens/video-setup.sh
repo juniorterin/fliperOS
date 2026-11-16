@@ -729,27 +729,13 @@ screen_video_setup() {
   # O video de agora: se o monitor ou a resolucao mudam e o gabinete fica sem
   # imagem, o painel web volta a ele (video_previous_restore).
   before=$(video_snapshot)
-  # Video driver so aparece com uma placa que tem escolha: AMD que aceita os
-  # dois drivers, ou NVIDIA (nouveau ou o driver dela).
-  local driver=()
-  if [[ -n $(drm_dual_amd_cards) ]]; then
-    driver=("driver|Video driver|radeon (tested on the CRT) or amdgpu (with Vulkan).")
-  elif nvidia_card > /dev/null; then
-    driver=("driver|Video driver|nouveau or NVIDIA's own driver (native 15 kHz, 3D speed).")
-  fi
-  # O grid de dotclock baixo com uma NVIDIA (nouveau) na saida principal, ou
-  # numa DisplayPort (o conversor decide).
-  local lowdot=() lowconn
-  lowconn=$(conf_get connector 2> /dev/null) || lowconn=""
-  if [[ $lowconn == DP-* ]] && drm_output_low_dotclock_testable "$(video_conf_card)" "$lowconn" 2> /dev/null; then
-    lowdot=("lowdot|Low resolutions|Test if the DisplayPort converter shows native 15 kHz modes.")
-  elif drm_card_low_dotclock_testable "$(conf_get card 2> /dev/null)" 2> /dev/null; then
-    lowdot=("lowdot|Low resolutions|NVIDIA: test if this card shows native 15 kHz modes.")
-  fi
-  # O ATOM-15 so numa placa AMD, e so no sistema instalado.
-  local firmware=()
-  is_installed && ! is_live && atom15_card > /dev/null 2>&1 &&
-    firmware=("firmware|Card firmware|15 kHz from power on. Rewrites the card's BIOS: at your own risk.")
+  # Os itens que so aparecem em algumas placas (lib/system.sh, os mesmos que
+  # o Setup do painel web mostra): Video driver, Low resolutions e Card
+  # firmware.
+  local driver=() lowdot=() firmware=() hint
+  hint=$(setup_driver_hint) && driver=("driver|Video driver|$hint")
+  hint=$(setup_lowdot_hint) && lowdot=("lowdot|Low resolutions|$hint")
+  hint=$(setup_firmware_hint) && firmware=("firmware|Card firmware|$hint")
   while true; do
     # Ate 5 linhas na interface grafica, ou o carrossel de icones vira lista:
     # a orientacao vai junto da resolucao, e Monitors so com mais de um.
@@ -816,6 +802,14 @@ screen_video_setup() {
       return) break ;;
     esac
   done
+  video_setup_leave "$before"
+}
+
+# video_setup_leave ANTES: o fim do Video Setup (tambem o de uma tela dele
+# aberta pelo painel web, screen_from_panel): com algo mudado, o video de
+# antes guardado, o Xorg e a linha do kernel de novo, e reiniciar.
+video_setup_leave() {
+  local before=$1
   ((VIDEO_CHANGED)) || return 0
   video_snapshot_keep "$before"
   if is_installed && ! is_live; then

@@ -58,6 +58,15 @@ web_launch() {
     "$BIN/fliperos-kms-run" | "$BIN/fliperos-x11-run")
       FLIPEROS_POWERKEY=game "${lines[@]:1}"
       ;;
+    # Abrir no gabinete (o Setup no painel): so uma tela do Setup, pelo nome
+    # (o fliperos-setup confere a lista, screens/panel.sh).
+    sudo)
+      if [[ ${#lines[@]} -eq 6 && ${lines[*]:2:3} == "-n /usr/local/bin/fliperos-setup --screen" ]]; then
+        sudo -n /usr/local/bin/fliperos-setup --screen "${lines[5]}"
+      else
+        echo "Ignoring an unknown request from the web panel: ${lines[*]:1}" >&2
+      fi
+      ;;
     *) echo "Ignoring an unknown request from the web panel: ${lines[*]:1}" >&2 ;;
   esac
   python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2> /dev/null

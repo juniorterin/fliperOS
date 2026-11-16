@@ -2706,6 +2706,46 @@ def inside(path, folder):
     return real.startswith(base + os.sep)
 
 
+# ── O resto do Setup (config/web/setup.js) ─────────────────────────
+# A arvore inteira do Setup no painel: o que muda de longe pelo Setup sem
+# tela (--setup-items, --quirks, --folders, --frontends, --bluetooth) e as
+# telas que precisam do tubo, abertas no gabinete (fliperos-setup --screen,
+# screens/panel.sh: a mesma lista).
+PANEL_SCREENS = "setup geometry resolution monitors colour scanlines outputs driver lowdot firmware mixer buttons layout guncon axes bluetooth lpt latency oscr"
+SETUP_TASKS = {"system-update": ("System Update", "--system-update"),
+               "attract-romlist": ("AttractPlus ROM List", "--attract-romlist")}
+MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+
+
+def setup_lines(*args, fields, timeout=60):
+    """As linhas "a|b|c" de um comando do Setup sem tela, como dicionarios
+    (a ultima coluna leva o resto)."""
+    rows = []
+    for line in setup_out(*args, timeout=timeout).splitlines():
+        parts = line.split("|", len(fields) - 1)
+        if len(parts) == len(fields):
+            rows.append(dict(zip(fields, parts)))
+    return rows
+
+
+def setup_items():
+    """fliperos-setup --setup-items: os itens que dependem do gabinete e o
+    texto que vai junto de alguns."""
+    items, info = {}, {}
+    for row in setup_lines("--setup-items", fields=("kind", "id", "value")):
+        if row["kind"] == "item":
+            items[row["id"]] = row["value"] == "1"
+        elif row["kind"] == "info":
+            info[row["id"]] = row["value"]
+    return {"items": items, "info": info}
+
+
+def bluetooth_rows(*args, timeout=60):
+    return [dict(r, paired=r["paired"] == "yes", connected=r["connected"] == "yes")
+            for r in setup_lines("--bluetooth", *args, fields=("mac", "name", "icon", "paired", "connected"),
+                                 timeout=timeout)]
+
+
 def installables():
     """Os emuladores (com a versao instalada) e os extras, como nas telas
     Emulators & Games e Extras."""
@@ -3000,11 +3040,12 @@ class Panel:
         rows = self.systems.get()
         return next((s for s in rows if s["key"] == key), None) if isinstance(rows, list) else None
 
-    def launch(self, argv):
+    def launch(self, argv, tty1=False):
         """Pede ao fliperos-tty1 que abra o jogo (o arquivo fliperos-web-launch
         do usuario: o que volta depois e o comando) e fecha o que esta na
         tela para ele chegar la. Com so o desktop aberto, o caminho e o do
-        menu Jogos do desktop (fliperos-next)."""
+        menu Jogos do desktop (fliperos-next); com tty1 (uma tela do Setup,
+        que roda no console), sempre o fliperos-tty1."""
         with self.launch_lock:
             user = pwd.getpwnam(PLAYER)
             runtime = os.path.join(RUN_USER, str(user.pw_uid))
@@ -3017,7 +3058,7 @@ class Panel:
             else:
                 back = "menu"
             self.last_back = back
-            only_desktop = state["desktop"] and not state["games"]
+            only_desktop = state["desktop"] and not state["games"] and not tty1
             path = os.path.join(runtime, "fliperos-next" if only_desktop else "fliperos-web-launch")
             lines = argv if only_desktop else ["return=" + back] + argv
             tmp = path + ".tmp"
@@ -3319,6 +3360,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(500, {"error": str(exc)})
         if url.path in ("/api/customgames", "/api/customgames/scan"):
             return self.customgames_get(url)
+        if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
+            return self.setup_get(url)
         if url.path == "/api/terminal":
             return self.open_terminal(user == LAB_USER)
         if url.path == "/api/lab":
@@ -3597,6 +3640,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
         if url.path.startswith("/api/customgames/"):
             return self.customgames_post(url)
+        if url.path in ("/api/setup/open", "/api/setup/task", "/api/quirks", "/api/folders", "/api/frontends",
+                        "/api/bluetooth"):
+            return self.setup_post(url.path, self.body())
         if url.path == "/api/stream/offer":
             return self.stream_offer(self.body())
         if url.path == "/api/lab":
@@ -4208,6 +4254,116 @@ class Handler(BaseHTTPRequestHandler):
         if not task:
             return self.send(409, {"error": "the ROM filter is already copying"})
         return self.send(200, task.info())
+
+    # ── O resto do Setup ──
+
+    def setup_get(self, url):
+        query = parse_qs(url.query)
+        try:
+            if url.path == "/api/setup/items":
+                return self.send(200, setup_items())
+            if url.path == "/api/quirks":
+                return self.send(200, {
+                    "quirks": setup_lines("--quirks", "list", fields=("code", "name")),
+                    "devices": setup_lines("--quirks", "devices", fields=("id", "name")), "max": 4})
+            if url.path == "/api/folders":
+                path = (query.get("path") or [""])[0]
+                folders, start = [], ""
+                for line in setup_out("--folders", "list", *([path] if path else [])).splitlines():
+                    parts = line.split("|", 4)
+                    if parts[0] == "start" and len(parts) == 2:
+                        start = parts[1]
+                    elif len(parts) == 5:
+                        folders.append({"path": parts[0], "state": parts[1], "target": parts[2],
+                                        "inner": parts[3] == "1", "about": parts[4]})
+                return self.send(200, {"folders": folders, "start": start, "path": path})
+            if url.path == "/api/frontends":
+                return self.send(200, {"frontends": [dict(r, installed=r["installed"] == "1") for r in setup_lines(
+                    "--frontends", "list", fields=("name", "label", "command", "installed"))]})
+            # Bluetooth: o adaptador e os pareados; com scan=1, os achados (segundos).
+            info = key_values(setup_out("--bluetooth", "status"))
+            data = {"powered": info.get("powered") == "yes", "adapter": info.get("adapter", ""),
+                    "installed": info.get("installed", "yes") != "no", "devices": bluetooth_rows("devices")}
+            if (query.get("scan") or [""])[0] == "1":
+                data["found"] = bluetooth_rows("scan", "15", timeout=90)
+            return self.send(200, data)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return self.send(500, {"error": str(exc)})
+
+    def setup_post(self, path, data):
+        if path == "/api/setup/open":
+            # Abrir no gabinete: uma tela do Setup no tubo, no lugar do que
+            # esta la (que volta depois).
+            screen = str(data.get("screen", ""))
+            if screen not in PANEL_SCREENS.split():
+                return self.send(400, {"error": "no such Setup screen"})
+            return self.send(200, self.panel.launch(["sudo", "-n", SETUP, "--screen", screen], tty1=True))
+        if path == "/api/setup/task":
+            name = str(data.get("name", ""))
+            if name not in SETUP_TASKS:
+                return self.send(400, {"error": "no such task"})
+            title, option = SETUP_TASKS[name]
+            task = self.panel.tasks.start(title, [SETUP, option], "setup-" + name)
+            if not task:
+                return self.send(409, {"error": "already running"})
+            return self.send(200, task.info())
+        action = str(data.get("action", ""))
+        field = lambda key, limit=1024: customgame_field(data.get(key), limit)
+        if path == "/api/quirks":
+            if action == "add":
+                args = ["--quirks", "add", field("name", 80), field("code", 64)]
+            elif action == "delete":
+                args = ["--quirks", "delete", field("code", 64)]
+            else:
+                return self.send(400, {"error": "action add or delete"})
+            return self.setup_answer(args, {1: (400, "invalid code"), 2: (409, "the kernel reads at most 4 quirks of "
+                                                                          "controllers, guns and keyboards"),
+                                            3: (409, "this device already has a quirk")}, bad_rc=None)
+        if path == "/api/folders":
+            if action == "link":
+                args = ["--folders", "link", field("path", 255), os.path.normpath(field("target", 4096) or ".")]
+            elif action == "unlink":
+                args = ["--folders", "unlink", field("path", 255)]
+            else:
+                return self.send(400, {"error": "action link or unlink"})
+            return self.setup_answer(args, {}, timeout=180)
+        if path == "/api/frontends":
+            if action == "save":
+                args = ["--frontends", "save", field("name", 64), field("label", 80), field("command", 1024)]
+            elif action == "delete":
+                args = ["--frontends", "delete", field("name", 64)]
+            else:
+                return self.send(400, {"error": "action save or delete"})
+            return self.setup_answer(args, {1: (400, "the name and the command cannot be empty or have a | character")})
+        # Bluetooth: parear leva ate meio minuto.
+        mac = field("mac", 32)
+        if action == "power":
+            args = ["--bluetooth", "power", "on" if data.get("on") else "off"]
+        elif action in ("pair", "connect", "disconnect", "remove") and MAC_RE.match(mac):
+            args = ["--bluetooth", action, mac]
+        else:
+            return self.send(400, {"error": "action power, pair, connect, disconnect or remove, and the address"})
+        return self.setup_answer(args, {1: (500, "the controller did not answer: put it in pairing mode again")},
+                                 timeout=90)
+
+    def setup_answer(self, args, errors, timeout=60, bad_rc=2):
+        """Um comando do Setup sem tela: 200 com a saida (linhas chave=valor
+        viram campos, o resto vai em "text"), ou o erro do status (errors:
+        status -> (codigo, mensagem); a saida, quando ha, explica melhor)."""
+        try:
+            done = subprocess.run([SETUP, *args], capture_output=True, text=True, timeout=timeout)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return self.send(500, {"error": str(exc)})
+        out = done.stdout.strip()
+        if done.returncode == 0:
+            return self.send(200, dict(key_values(out), text=out))
+        if done.returncode in errors:
+            code, message = errors[done.returncode]
+            return self.send(code, {"error": message if "=" in out or not out else out})
+        if done.returncode == bad_rc:
+            return self.send(400, {"error": "bad request"})
+        return self.send(500 if done.returncode != 1 else 400,
+                         {"error": out[-300:] or (done.stderr or "").strip()[-300:] or "failed"})
 
     # ── Jogos custom ──
 

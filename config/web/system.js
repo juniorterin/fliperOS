@@ -281,63 +281,22 @@ async function showLog() {
 $("log-name").addEventListener("change", showLog);
 $("log-refresh").addEventListener("click", showLog);
 
-// ── Configuracoes ────────────────────────────────────────────────
+// ── Os ajustes ───────────────────────────────────────────────────
 // Os ajustes do Setup que podem mudar daqui (fliperos-setup --settings):
-// cada mudanca grava na hora. Os grupos abertos ficam abertos.
+// cada mudanca grava na hora. A arvore do Setup que os mostra, item por
+// item, fica em setup.js (loadSettings); aqui as linhas e as caixas.
 
 const openGroups = new Set(["Video"]);
-// Os icones do Setup em cada grupo e em cada ajuste (os do carrossel no tubo).
-const GROUP_ICONS = { System: "px-system", Video: "px-video", Audio: "px-audio", Power: "px-power", Services: "px-services",
-  "Interlaced hacks": "px-mode480", Colour: "px-colour", Scanlines: "px-scanlines", "GunCon 2": "px-guncon",
-  "Live screen": "px-outputs" };
+// Os icones do Setup em cada ajuste (os do carrossel no tubo).
 const SETTING_ICONS = [["monitor", "px-video"], ["resolution", "px-resolution"], ["video.previous", "px-reset"],
   ["cabinet_name", "px-cabinetname"], ["launcher", "px-frontend"], ["latency", "px-latency"], ["debug", "px-debug"],
   ["menu_sounds", "px-audio"], ["stream_audio", "px-audio"], ["stream_quality", "px-video"], ["marquee_overlay", "px-outputs"],
   ["orientation", "px-orientation"], ["splash", "px-desktop"], ["mm_games", "px-outputs"], ["osd", "px-layout"],
   ["audio_card", "px-audio"], ["mame_latency", "px-latency"], ["audio.", "px-mixer"], ["power.", "px-power"],
   ["service.", "px-services"], ["mode480.", "px-mode480"], ["color.", "px-colour"], ["scanlines", "px-scanlines"],
-  ["scanline.", "px-scanlines"], ["gun_flash", "px-guncon"], ["gun_offscreen_reload", "px-guncon"], ["gun.", "px-guncon"]];
+  ["scanline.", "px-scanlines"], ["gun_flash", "px-guncon"], ["gun_offscreen_reload", "px-guncon"], ["gun.", "px-guncon"],
+  ["padcolor", "px-padcolor"]];
 const settingIcon = (key) => (SETTING_ICONS.find(([k]) => key === k || (k.endsWith(".") && key.startsWith(k))) || [0, "px-setup"])[1];
-
-// A ordem dos grupos, a do Setup no tubo: o video e as telas dele, o som, os
-// controles, a rede, a tela ao vivo, o sistema e, por ultimo, desligar. Os
-// grupos que nao vem do --settings (Geometria, Rede, Senha, Novidades) entram
-// no lugar deles; um grupo novo do Setup que nao esteja aqui vai para o fim,
-// antes de Power.
-const SETTINGS_ORDER = ["Video", "Geometry", "Colour", "Scanlines", "Interlaced hacks", "Audio", "GunCon 2",
-  "Network", "Live screen", "System", "Password", "Services", "Version", "Whatsnew", "Power"];
-
-async function loadSettings() {
-  const res = await api("/api/settings");
-  const rows = (await res.json()).settings || [];
-  const groups = new Map();
-  for (const row of rows) {
-    if (!groups.has(row.group)) groups.set(row.group, []);
-    groups.get(row.group).push(row);
-  }
-  const boxes = new Map();
-  for (const [group, items] of groups) {
-    const details = el("details", { class: "box-" + group.toLowerCase().replace(/[^a-z0-9]+/g, "-") },
-      el("summary", {}, icon(GROUP_ICONS[group] || "px-setup"), t("group_" + group)));
-    if (openGroups.has(group)) details.open = true;
-    details.addEventListener("toggle", () => {
-      details.open ? openGroups.add(group) : openGroups.delete(group);
-    });
-    if (group === "Interlaced hacks") details.append(...mode480Rows(items));
-    else for (const row of items) details.append(settingRow(row));
-    boxes.set(group, details);
-  }
-  const [geometry, network] = await Promise.all([geometryBox().catch(() => null), wifiBox().catch(() => null)]);
-  if (geometry) boxes.set("Geometry", geometry);
-  if (network) boxes.set("Network", network);
-  boxes.set("Password", passwordBox());
-  boxes.set("Version", versionBox());
-  boxes.set("Whatsnew", whatsnewBox());
-  const known = SETTINGS_ORDER.filter((name) => boxes.has(name));
-  const extra = [...boxes.keys()].filter((name) => !SETTINGS_ORDER.includes(name));
-  const order = [...known.filter((name) => name !== "Power"), ...extra, ...known.filter((name) => name === "Power")];
-  $("settings").replaceChildren(...order.map((name) => boxes.get(name)));
-}
 
 // settingsBox: um grupo dos que nao vem do --settings (Geometria, Rede...),
 // que tambem lembra se estava aberto.

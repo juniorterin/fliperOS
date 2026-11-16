@@ -16,6 +16,7 @@
 #   sudo fliperos-setup --first-boot    escolhe o launcher padrao
 #   sudo fliperos-setup --output-test   refaz o teste de saidas
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
+#   sudo fliperos-setup --screen NOME   uma tela pedida pelo painel web (screens/panel.sh)
 #   sudo fliperos-setup --latency       abre direto o Setup > System > Latency
 #   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
 #   sudo fliperos-setup --driver-confirm  confirma a imagem do driver de video trocado
@@ -32,7 +33,9 @@
 #   --scrape-now RESULTADO [CHAVE...] (o Scrape the games em segundo plano),
 #   --scraper ... e --bios ... (o Scraper e o Download BIOS do painel web),
 #   --bootgame, --geometry, --wifi status|scan|connect, --password (na
-#   entrada), --whatsnew, --customgames ... (o painel web)
+#   entrada), --whatsnew, --customgames ..., --setup-items, --quirks ...,
+#   --folders ..., --frontends ..., --bluetooth ..., --system-update,
+#   --attract-romlist (o painel web)
 #
 # lib/ tem a logica (nenhum arquivo de lib/ chama o gum, exceto lib/ui.sh);
 # screens/ tem as telas.
@@ -183,6 +186,8 @@ source "$SETUP_DIR/screens/whatsnew.sh"
 source "$SETUP_DIR/screens/splash.sh"
 # shellcheck source=screens/folders.sh
 source "$SETUP_DIR/screens/folders.sh"
+# shellcheck source=screens/panel.sh
+source "$SETUP_DIR/screens/panel.sh"
 
 # A versao do Setup em disco quando este processo abriu e os argumentos dele:
 # atualizado com a tela aberta (System Update, tools/cabinet-update.sh), ele
@@ -193,7 +198,7 @@ SETUP_STAMP=$(setup_stamp)
 SETUP_ARGS=("$@")
 
 usage() {
-  sed -n '8,20p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+  sed -n '8,23p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }
 
 restore_terminal() {
@@ -211,6 +216,11 @@ main() {
     --version)
       echo "fliperos-setup $FLIPEROS_SETUP_VERSION"
       return 0
+      ;;
+    --screen)
+      # Uma tela pedida pelo painel web (screens/panel.sh): um nome que nao e
+      # da lista nem abre a interface.
+      panel_screen_known "${2:-}" || return 2
       ;;
     --help | -h)
       usage
@@ -365,6 +375,36 @@ main() {
       customgames_cli "${@:2}"
       return
       ;;
+    --setup-items)
+      # O Setup no painel web (lib/system.sh): os itens que dependem do
+      # gabinete e o que vai junto deles.
+      setup_items
+      return
+      ;;
+    --quirks)
+      quirks_cli "${@:2}"
+      return
+      ;;
+    --folders)
+      folders_cli "${@:2}"
+      return
+      ;;
+    --frontends)
+      frontends_cli "${@:2}"
+      return
+      ;;
+    --bluetooth)
+      bluetooth_cli "${@:2}"
+      return
+      ;;
+    --system-update)
+      system_update_cli
+      return
+      ;;
+    --attract-romlist)
+      romlists_cli
+      return
+      ;;
     --filters)
       # Os filtros de jogos do FliperOS (genero, fabricante, ano), no formato
       # do Attract-Mode: os das telas dele e os do painel web.
@@ -508,6 +548,11 @@ main() {
     --video-setup)
       screen_video_setup
       return 0
+      ;;
+    --screen)
+      # "Abrir no gabinete" no Setup do painel web (screens/panel.sh).
+      screen_from_panel "${2:-}"
+      return
       ;;
     --latency)
       screen_latency

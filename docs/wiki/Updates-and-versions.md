@@ -31,7 +31,7 @@ If one part fails, nothing after it goes in, and it is offered again at the next
 
 ## Choosing the version
 
-**Setup > System > FliperOS version**, and **System > Settings > Version** in the web panel, list the updates from the one the cabinet's image came with up to the newest.
+**Setup > System > FliperOS version**, and **System > Setup > System > FliperOS version** in the web panel, list the updates from the one the cabinet's image came with up to the newest.
 
 | You pick | What happens |
 | --- | --- |

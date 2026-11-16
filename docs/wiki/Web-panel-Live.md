@@ -25,7 +25,7 @@ The **Streaming** card has the service state, the encoder (the graphics card, or
 
 ### Sound
 
-The live screen carries the cabinet's sound, on by default. A game opened after the sound was turned on goes to the stream with sound; one already open keeps playing only on the cabinet until it is reopened. It is in the Live screen group of **System > Settings**.
+The live screen carries the cabinet's sound, on by default. A game opened after the sound was turned on goes to the stream with sound; one already open keeps playing only on the cabinet until it is reopened. It is in **System > Setup > Network > Live screen**.
 
 ## OBS
 

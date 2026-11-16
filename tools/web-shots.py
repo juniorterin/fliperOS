@@ -51,7 +51,38 @@ SHOTS = [
     ("ajustes-pc-aberto", "#system/settings", 1440, 900, 1, False, True, "open-all"),
     ("ajustes-celular-aberto", "#system/settings", 390, 844, 2, True, True, "open-all"),
     ("aovivo-pc", "#live/obs", 1440, 900, 1, False, False, ""),
+    # O Setup inteiro (setup.js) e os jogos custom (customgames.js).
+    ("setup-video-pc", "#system/setup/video", 1440, 900, 1, False, True, "open-all"),
+    ("setup-jogos-pc", "#system/setup/games", 1440, 900, 1, False, True, "open-all"),
+    ("setup-controles-celular", "#system/setup/joysticks", 390, 844, 2, True, True, "open-all"),
+    ("setup-sistema-pc", "#system/setup/system", 1440, 900, 1, False, True, "open-all"),
+    ("custom-pc", "#system/setup/games/custom", 1440, 900, 1, False, True, "cg-table"),
+    ("custom-celular", "#system/setup/games/custom", 390, 844, 2, True, True, "cg-table"),
+    ("custom-adicionar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-add"),
+    ("custom-adicionar-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-add"),
+    ("custom-tabela-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-table-view"),
 ]
+
+# Os jogos custom de exemplo: grupo, nome, plataforma, modo, cena.
+CUSTOM_GAMES = [("PC games", "Metal Slug X", "windows", "640x240@60", "shooter"),
+                ("PC games", "Cave Story", "native", "640x240@60", "platform"),
+                ("PC games", "Pang Deluxe", "command", "640x480@60", "racing"),
+                ("Homebrew", "Pong 2026", "command", "320x240@60", "")]
+# A tabela de exemplo (o que "Importar de uma pasta" e "Colar" deixariam),
+# com uma linha de erro como o Setup a devolve.
+CUSTOM_TABLE = """[
+ {group: "PC games", name: "Street Racer 98", platform: "windows", folder: "/media/fliperos/USB/Street Racer 98",
+  exes: ["Racer.exe", "Setup/config.exe"], exe: "Racer.exe", mode: "240p", category: "Driving / Race", players: "2",
+  buttons: "4", controls: ["joy8", "pedal"]},
+ {group: "PC games", name: "Tyrian 2000", platform: "windows", folder: "/media/fliperos/USB/Tyrian2000",
+  exes: ["tyrian.exe"], exe: "tyrian.exe", mode: "other", modeOther: "320x200@70", category: "Shooter / Flying Vertical",
+  players: "1", buttons: "3", controls: ["joy8"]},
+ {group: "Homebrew", name: "Celeste Classic", platform: "native", folder: "/home/fliperos/games/celeste",
+  programs: ["celeste.x86_64"], command: "./celeste.x86_64", mode: "240p", category: "Platform / Run Jump",
+  players: "1", buttons: "2", controls: ["joy8"]},
+ {group: "PC games", name: "Metal Slug X", platform: "windows", folder: "", exe: "", mode: "240p",
+  errors: {name: "Metal Slug X is already in PC games.", folder: "Not a folder: (empty)"}}
+]"""
 
 
 # ── A arte de exemplo: cenas de pixel geradas (nada de jogo de verdade) ──
@@ -210,6 +241,34 @@ def demo(tmp):
     write(os.path.join(home, ".config/fliperos/favourites"), "mame\tsf2\nmame\tmslug\nmame\tkof98\nmame\tmvsc2\nmame\toutrun\n")
     for rom, count, secs in (("sf2", 23, 15120), ("mslug", 9, 5400), ("kof98", 14, 9000), ("ffight", 4, 2400)):
         write(os.path.join(home, ".local/share/fliperos/stats/MAME", rom + ".stat"), "%d\n%d\n" % (count, secs))
+    # Os jogos custom: os grupos como sistemas (custom/GRUPO), um .sh por jogo e
+    # a imagem de cada um; o fliperos-setup --customgames descreve os mesmos.
+    describe = []
+    for group in sorted({g[0] for g in CUSTOM_GAMES}):
+        folder = os.path.join(home, "roms", "custom", group)
+        lines.append("custom/%s|%s|custom|%s|/bin/sh|\"[romfilename]\"|.sh|0" % (group, folder, group))
+        describe.append("group\t%s\t%d" % (group, sum(1 for g in CUSTOM_GAMES if g[0] == group)))
+    for n, (group, name, platform, mode, kind) in enumerate(CUSTOM_GAMES):
+        write(os.path.join(home, "roms", "custom", group, name + ".sh"), "#!/bin/sh\n", mode=0o755)
+        if kind:
+            write(os.path.join(home, "media", "snap", "custom", group, name + ".png"), scene(kind, 40 + n), "wb")
+        describe.append("\t".join(("game", group, name, platform, mode, "", "joy8", "2", "2",
+                                   "wine pang.exe" if platform == "command" else "./CaveStory.x86_64" if platform == "native" else "",
+                                   "MetalSlugX.exe" if platform == "windows" else "", "/home/fliperos/games/%s/%s" % (group, name), "")))
+    describe += ["pending\t/home/fliperos/roms/custom/Tetris DX.fliperos-customgame.zip\t\tTetris DX\twindows\tnew\t",
+                 "mode\t240p\t640x240@60", "mode\t480i\t640x480@60"]
+    for genre, subs in (("Driving", ("Race", "Motorcycle")), ("Fighter", ("Versus", "2.5D")), ("Platform", ("Run Jump",)),
+                        ("Puzzle", ("Drop", "Match")), ("Shooter", ("Flying Vertical", "Gallery", "Scrolling"))):
+        describe.append("genre\t" + genre)
+        describe += ["sub\t%s / %s" % (genre, s) for s in subs]
+    for value, label in (("joy8", "8-way joystick"), ("joy4", "4-way joystick"), ("joy2", "2-way joystick"),
+                         ("twin", "Twin sticks"), ("trackball", "Trackball"), ("spinner", "Spinner"), ("paddle", "Paddle"),
+                         ("positional", "Rotary joystick"), ("analog", "Analog stick"), ("pedal", "Pedals"),
+                         ("lightgun", "Light gun"), ("keyboard", "Keyboard"), ("mahjong", "Mahjong")):
+        describe.append("control\t%s\t%s" % (value, label))
+    describe += ["squash\t/home/fliperos/games/PC games/Metal Slug X\t1\t412M", "portproton\t0",
+                 "games\t/home/fliperos/games", "free\t%d" % (183 << 30)]
+    write(os.path.join(tmp, "customgames"), "\n".join(describe) + "\n")
     setup = os.path.join(tmp, "fliperos-setup")
     write(setup, "#!/bin/sh\ncase \"$1\" in\n  --systems) cat %s/systems ;;\n"
           "  --volume) [ \"$2\" = state ] && echo 72 on ;;\n"
@@ -239,7 +298,19 @@ def demo(tmp):
           "  --wifi) case \"$2\" in status) echo 'eth0|ethernet|unavailable||'; echo 'wlan0|wifi|connected|Casa|192.168.1.241' ;;\n"
           "    scan) echo 'wlan0|Casa|82|WPA2'; echo 'wlan0|Vizinho 5G|41|WPA2'; echo 'wlan0|Cafe|20|' ;; esac ;;\n"
           "  --whatsnew) printf 'This is FliperOS 0.24, update 66.\\n\\nUpdates installed:\\n- 34. Web panel redesign\\n' ;;\n"
-          "esac\nexit 0\n" % tmp, mode=0o755)
+          "  --customgames) case \"$2\" in describe) cat %s/customgames ;; check) echo bytes=1288490188; echo free=196494753792 ;; esac ;;\n"
+          "  --setup-items) printf 'item|driver|1\\ninfo|driver|radeon (tested on the CRT) or amdgpu (with Vulkan).\\n"
+          "item|bluetooth|1\\nitem|romlist|1\\ninfo|buttons|Player 1: arcade panel (V-USB Mame Panel). Player 2: 8BitDo Pro 2.\\n"
+          "info|lpt|\\n' ;;\n"
+          "  --frontends) [ \"$2\" = list ] && echo 'custom-1|Pegasus|pegasus-fe --silent|1' ;;\n"
+          "  --folders) [ \"$2\" = list ] && printf 'roms|custom|/media/fliperos/USB/ROMs|1|The games: one folder per emulator.\\n"
+          "bios|default||1|The BIOS files of RetroArch and of the other emulators.\\nmedia|default||1|The art the frontends show.\\n"
+          "start|/media/fliperos\\n' ;;\n"
+          "  --quirks) case \"$2\" in list) echo '0x16c0:0x05e1:0x40|Xin-Mo dual encoder' ;;\n"
+          "    devices) echo '0x16c0:0x05e1|Van Ooijen Technische Informatica Free shared VID'; echo '0x2dc8:0x6101|8BitDo Pro 2' ;; esac ;;\n"
+          "  --bluetooth) case \"$2\" in status) printf 'installed=yes\\nadapter=hci0\\npowered=yes\\n' ;;\n"
+          "    devices) echo 'E4:17:D8:00:11:22|8BitDo Pro 2|input-gaming|yes|yes' ;; esac ;;\n"
+          "esac\nexit 0\n" % (tmp, tmp), mode=0o755)
     write(os.path.join(tmp, "systems"), "\n".join(lines) + "\n")
     # O jogo aberto: um processo "groovymame" com o set na linha de comando.
     sleeper = os.path.join(tmp, "game")
@@ -261,6 +332,10 @@ def demo(tmp):
           "'[\"b4\"]' '[\"b2\",\"b5\"]' '[]'; do echo \"{\\\"1\\\": $s, \\\"2\\\": [\\\"b1\\\"]}\"; sleep .3; done; done\n", mode=0o755)
     stream = os.path.join(tmp, "fliperos-stream")
     write(stream, "#!/bin/sh\n[ \"$1\" = status ] && printf 'installed=1\\nactive=1\\nencoder=x264\\naudio=1\\nlink=wired\\n'\nexit 0\n", mode=0o755)
+    # O fliperos-update: os updates da versao (Setup > System > FliperOS version).
+    update = os.path.join(tmp, "fliperos-update")
+    write(update, "#!/bin/sh\n[ \"$1\" = versions ] && printf 'level=74\\nbase=60\\nlatest=74\\nhold=\\nreboot=no\\n"
+          "74\\tcurrent\\tno\\tCustom games in the web panel\\n73\\tolder\\tno\\tCustom game packages\\n'\nexit 0\n", mode=0o755)
     check = os.path.join(tmp, "video-check.py")
     write(check, "def read_active():\n    return [{'card': '/dev/dri/card0', 'connector': 'VGA-1', 'active': True, 'width': 640, 'height': 240,"
           " 'horizontal_khz': 15.6875, 'vertical_hz': 59.6, 'interlaced': False, 'clock_khz': 13013, 'htotal': 830, 'vtotal': 263,"
@@ -273,6 +348,7 @@ def demo(tmp):
                FLIPEROS_WEB_GUI=os.path.join(ROOT, "fliperos-setup/gui"), FLIPEROS_HOME=home, FLIPEROS_USER="root",
                FLIPEROS_SETUP=setup, FLIPEROS_RUN_USER=os.path.join(tmp, "run"), FLIPEROS_CONF=os.path.join(tmp, "fliperos.conf"),
                FLIPEROS_VIDEO_CHECK=check, FLIPEROS_BUTTONS_TOOL=buttons, FLIPEROS_STREAM=stream,
+               FLIPEROS_UPDATE_TOOL=update, FLIPEROS_WEB_STAGE=os.path.join(tmp, "stage"),
                FLIPEROS_LOGS=os.path.join(tmp, "logs"), FLIPEROS_ADB_URL="http://127.0.0.1:9/none",
                FLIPEROS_OVERLAY_KEY=os.path.join(tmp, "overlay.key"), FLIPEROS_SYS=os.path.join(tmp, "sys"))
     # Os sensores de temperatura (o hwmon do /sys): CPU, GPU, disco e Wi-Fi.
@@ -414,7 +490,17 @@ def main():
             browser.wait(1.5)
         elif action == "open-all":
             browser.js("document.querySelectorAll('#settings details').forEach((d) => { d.open = true; })")
-            browser.wait(2)
+            browser.wait(3)
+        elif action in ("cg-table", "cg-table-view"):
+            # A tabela com linhas de exemplo (as de "Importar de uma pasta" e
+            # uma com os erros que o Setup devolve).
+            browser.js("cg.rows = %s.map((r) => cgNewRow(r)); cgTableDraw();"
+                       " document.getElementById('cg-status').textContent = t('cg_errors');%s"
+                       % (CUSTOM_TABLE, " document.getElementById('cg-table').scrollIntoView();" if action == "cg-table-view" else ""))
+            browser.wait(1.5)
+        elif action == "cg-add":
+            browser.js("cgAddOne()")
+            browser.wait(1.5)
         elif action.startswith("obs-"):
             browser.js("obsPick(%s); document.getElementById('ovl-on').click()" % json.dumps(action[4:]) if action == "obs-marquee"
                        else "obsPick(%s)" % json.dumps(action[4:]))

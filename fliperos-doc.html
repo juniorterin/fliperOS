@@ -2703,7 +2703,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>After it is applied, the Setup choices (video, latency, buttons) are applied again, so the cabinet stays set up as it was.</p>
 <p>If one part fails, nothing after it goes in, and it is offered again at the next boot. The log is <code>/var/log/fliperos-update.log</code>.</p>
 <h2 id="Updates-and-versions-choosing-the-version">Choosing the version</h2>
-<p><strong>Setup &gt; System &gt; FliperOS version</strong>, and <strong>System &gt; Settings &gt; Version</strong> in the web panel, list the updates from the one the cabinet's image came with up to the newest.</p>
+<p><strong>Setup &gt; System &gt; FliperOS version</strong>, and <strong>System &gt; Setup &gt; System &gt; FliperOS version</strong> in the web panel, list the updates from the one the cabinet's image came with up to the newest.</p>
 <table>
 <thead>
 <tr>
@@ -4977,6 +4977,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 </tr>
 </tbody>
 </table>
+<p>The <a href="#Web-panel-System-custom-games">web panel</a> has the same page in <strong>System &gt; Setup &gt; Games &gt; Custom games</strong>, plus a table to add many games at once: rows typed or picked in lists, imported from a folder (one subfolder per game) or pasted from a spreadsheet. There, a Windows or Linux game in a folder is copied to <code>~/games/GROUP/NAME</code>, like an installed package.</p>
 <h2 id="Custom-games-contents">Contents</h2>
 <ul>
 <li><a href="#Custom-games-step-by-step-adding-your-game-from-the-cabinet">Step by step: adding your game from the cabinet</a></li>
@@ -34055,7 +34056,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td><strong>System</strong></td>
-<td>Status, Processes and logs, Settings, RetroAchievements, Cloud backup, Terminal, Lab mode</td>
+<td>Status, Processes and logs, the whole Setup (with custom games), RetroAchievements, Cloud backup, Terminal, Lab mode</td>
 <td><a href="#Web-panel-System">System area</a></td>
 </tr>
 </tbody>
@@ -34076,7 +34077,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p>A temporary internet address to the panel, for someone helping you from far away, in <strong>System &gt; Lab mode</strong> or <strong>Setup &gt; System &gt; Lab mode</strong>. What it gives and how it ends: <a href="#Remote-access-lab-mode">Remote access</a>.</p>
 <p><a id="Web-panel-monitor-without-a-picture"></a></p>
 <h2 id="Web-panel-no-picture-after-a-monitor-change">No picture after a monitor change?</h2>
-<p>The panel doesn't need the tube: from a phone, <strong>System &gt; Settings &gt; Video &gt; Back to the previous monitor</strong> brings back the monitor and resolution from before the last change. See <a href="#Web-panel-System-no-picture-after-a-monitor-change">System area</a>.</p>
+<p>The panel doesn't need the tube: from a phone, <strong>System &gt; Setup &gt; Video &gt; Back to the previous monitor</strong> brings back the monitor and resolution from before the last change. See <a href="#Web-panel-System-no-picture-after-a-monitor-change">System area</a>.</p>
 <h2 id="Web-panel-security">Security</h2>
 <p>The page is plain HTTP, so the password crosses the network unencrypted: use it on a network you trust. On one you don't control, change the password, or turn the panel off in Services.</p>
 <h2 id="Web-panel-how-it-works">How it works</h2>
@@ -34121,6 +34122,18 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <tr>
 <td><code>GET</code>/<code>POST /api/settings {"key","value"}</code></td>
 <td>Settings</td>
+</tr>
+<tr>
+<td><code>GET /api/setup/items</code>; <code>POST /api/setup/open {"screen"}</code>, <code>/api/setup/task {"name":"system-update"\|"attract-romlist"}</code></td>
+<td>The Setup: this cabinet's items, a Setup screen on the tube, the tasks</td>
+</tr>
+<tr>
+<td><code>GET</code>/<code>POST /api/quirks</code>, <code>/api/folders</code>, <code>/api/frontends</code>, <code>/api/bluetooth</code> (<code>?scan=1</code>)</td>
+<td>Quirks, Folders, custom frontends, Bluetooth</td>
+</tr>
+<tr>
+<td><code>GET /api/customgames</code>, <code>/api/customgames/scan?path=&amp;one=1</code>; <code>POST /api/customgames/stage?kind=&amp;name=</code>, <code>/check</code>, <code>/bulk {"rows","portproton"}</code>, <code>/edit</code>, <code>/delete</code>, <code>/group</code>, <code>/media</code>, <code>/install</code>, <code>/pack</code>, <code>/squash</code></td>
+<td>Custom games</td>
 </tr>
 <tr>
 <td><code>GET</code>/<code>POST /api/downloader</code> (<code>add</code>, <code>start</code>, <code>remove</code>), <code>GET /api/romfilter</code>, <code>POST /api/romfilter/count</code>, <code>/save</code>, <code>/scan</code>, <code>/run</code></td>
@@ -34264,7 +34277,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p>The first boot installs and turns on the live screen. If it couldn't download (no internet), install it with <strong>Install</strong> on the <strong>Streaming</strong> card, or in <strong>Setup &gt; Games &gt; Extras &gt; Live screen</strong>. Then it is a service in <strong>Setup &gt; System &gt; Services</strong> (<em>Live screen</em>).</p>
 <p>The <strong>Streaming</strong> card has the service state, the encoder (the graphics card, or software), the sound, and <strong>Turn off</strong>.</p>
 <h3 id="Web-panel-Live-sound">Sound</h3>
-<p>The live screen carries the cabinet's sound, on by default. A game opened after the sound was turned on goes to the stream with sound; one already open keeps playing only on the cabinet until it is reopened. It is in the Live screen group of <strong>System &gt; Settings</strong>.</p>
+<p>The live screen carries the cabinet's sound, on by default. A game opened after the sound was turned on goes to the stream with sound; one already open keeps playing only on the cabinet until it is reopened. It is in <strong>System &gt; Setup &gt; Network &gt; Live screen</strong>.</p>
 <h2 id="Web-panel-Live-obs">OBS</h2>
 <p>Three pages for an OBS <strong>Browser Source</strong>, each with its own address. In OBS: <strong>Sources &gt; + &gt; Browser</strong>, paste the address, set the width and height the card gives.</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/obs-en.webp" width="640" alt="The OBS pages of the web panel"></p>
@@ -34400,7 +34413,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </ul>
 <p>See also: <a href="#Web-panel">Web panel</a>, <a href="#ROMs">ROMs, BIOS and artwork</a>, <a href="#Scraper">Scraper</a>.</p>
 <h1 id="Web-panel-System">Web panel: System</h1>
-<p>The <strong>System</strong> area of the <a href="#Web-panel">web panel</a>: the cabinet's status and logs, every Setup setting while you play, accounts, a terminal and lab mode.</p>
+<p>The <strong>System</strong> area of the <a href="#Web-panel">web panel</a>: the cabinet's status and logs, the whole Setup while you play, custom games, accounts, a terminal and lab mode.</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/status-en.webp" width="640" alt="The status page of the web panel"></p>
 <table>
 <thead>
@@ -34419,8 +34432,8 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td>What uses the CPU, and every FliperOS log</td>
 </tr>
 <tr>
-<td><strong>Settings</strong></td>
-<td>The Setup's settings, in the Setup's order</td>
+<td><strong>Setup</strong></td>
+<td>The whole Setup of the cabinet, in the same order, and custom games</td>
 </tr>
 <tr>
 <td><strong>RetroAchievements</strong></td>
@@ -34450,83 +34463,131 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </ul>
 <h2 id="Web-panel-System-processes-and-logs">Processes and logs</h2>
 <p>The processes using the most CPU, and the logs: those of <code>/opt/fliperos/logs</code> (each emulator and frontend, the cloud backup, OpenBOR, DuckStation…), the Setup's and the updates'. The first place to look when a game doesn't open.</p>
-<h2 id="Web-panel-System-settings">Settings</h2>
-<p>The Setup's settings, in the same order as on the cabinet. Each change is saved and applied at once.</p>
+<p><a id="Web-panel-System-settings"></a></p>
+<h2 id="Web-panel-System-setup">Setup</h2>
+<p>The same Setup as on the cabinet: the seven groups at the top (<strong>Video</strong>, <strong>Audio</strong>, <strong>Network</strong>, <strong>Games</strong>, <strong>Joysticks</strong>, <strong>System</strong>, <strong>Cloud backup</strong>) and, in each one, the same items in the same order, with the same names and hints. Each change is saved and applied at once.</p>
+<p>What can't be done from a phone (a test grid, the colour patterns, mapping the buttons, the gun targets) has <strong>Open on the cabinet</strong>: the screen opens on the tube in place of what is there, and when you leave it what was on screen comes back. <strong>Watch it live</strong> next to it opens the <a href="#Web-panel-Live">live screen</a>. <strong>Open the whole Setup on the cabinet</strong>, at the top, does the same with the whole menu.</p>
 <table>
 <thead>
 <tr>
 <th>Group</th>
-<th>What it has</th>
+<th>Here</th>
+<th>On the cabinet</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Video</strong></td>
-<td>Monitor type, boot resolution, <strong>Back to the previous monitor</strong>, orientation, multi-screen games, the on-screen menu on or off</td>
-</tr>
-<tr>
-<td><strong>Geometry</strong></td>
-<td>The saved geometry, and resetting it to the monitor preset</td>
-</tr>
-<tr>
-<td><strong>Colour</strong></td>
-<td>Every colour calibration value and <strong>Back to the defaults</strong></td>
-</tr>
-<tr>
-<td><strong>Scanlines</strong></td>
-<td>The scanlines of a 31 kHz monitor</td>
-</tr>
-<tr>
-<td><strong>Interlaced hacks</strong></td>
-<td>A card per program: 640x240, Interlaced with filter or Interlaced pure, and the filter's strength</td>
+<td>Monitor type, <strong>Back to the previous monitor</strong>, orientation, boot resolution, geometry (typed) and its reset, multi-screen games, interlaced hacks, colour values, scanlines values, the on-screen menu</td>
+<td>A custom resolution, the geometry grid, the monitors, the colour patterns, the scanlines picture, the output test, the video driver, low resolutions, the card firmware</td>
 </tr>
 <tr>
 <td><strong>Audio</strong></td>
-<td>The sound card, MAME audio latency, menu sounds, a test sound</td>
-</tr>
-<tr>
-<td><strong>GunCon 2</strong></td>
-<td>The light gun's settings</td>
+<td>The sound card, the volume, MAME audio latency, a test sound, menu sounds</td>
+<td>AlsaMixer</td>
 </tr>
 <tr>
 <td><strong>Network</strong></td>
-<td>Wi-Fi</td>
+<td>Wi-Fi (also a hidden network) and the connections; the live screen's sound and quality, the marquee for OBS</td>
+<td></td>
 </tr>
 <tr>
-<td><strong>Live screen</strong></td>
-<td>Sound, quality, the marquee overlay for OBS</td>
+<td><strong>Games</strong></td>
+<td>What starts at power on and <strong>custom frontends</strong>; <a href="#Web-panel-System-custom-games">custom games</a>; <strong>Folders</strong>; <strong>AttractPlus ROM List</strong>; links to Emulators, Extras, Downloader, Cleaner and Scraper</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Joysticks</strong></td>
+<td><strong>Bluetooth</strong> (pair, connect, forget), GunCon 2 values, <strong>Controller light</strong></td>
+<td>Button mapping, Buttons layout, the gun targets, wheel and pedals, LPT joysticks</td>
 </tr>
 <tr>
 <td><strong>System</strong></td>
-<td>The cabinet name, what starts at power on, the boot splash, latency mode, debug mode</td>
-</tr>
-<tr>
-<td><strong>Password</strong></td>
-<td>The <code>fliperos</code> user's password</td>
-</tr>
-<tr>
-<td><strong>Services</strong></td>
-<td>The whole services table</td>
-</tr>
-<tr>
-<td><strong>Version</strong></td>
-<td>Choose the FliperOS update, or follow the updates (<a href="#Updates-and-versions-choosing-the-version">Updates and versions</a>)</td>
-</tr>
-<tr>
-<td><strong>What's new</strong></td>
-<td>The changelog</td>
-</tr>
-<tr>
-<td><strong>Power</strong></td>
-<td>Restart, turn off</td>
+<td>Latency mode, services, <strong>Quirks</strong>, password, cabinet name, <strong>System Update</strong>, FliperOS version, what's new, debug mode, boot splash, restart and turn off</td>
+<td>The latency check of the computer, the cartridge reader firmware</td>
 </tr>
 </tbody>
 </table>
-<p>A colour slider saves while it moves, so the game on screen changes with it; the <strong>−</strong> and <strong>+</strong> at its sides move it one step per tap.</p>
-<p>A new monitor or resolution counts after a restart, and the page offers to restart when it is saved. The video driver is not here: changing it asks for a confirmation on the cabinet's screen, so it stays in the Setup.</p>
+<p>Items that only some cabinets have show only there, as on the cabinet: scanlines at 31 kHz, the video driver with a card that has a choice, Bluetooth with an adapter.</p>
+<p>A colour slider saves while it moves, so the game on screen changes with it; the <strong>−</strong> and <strong>+</strong> at its sides move it one step per tap. A new monitor or resolution counts after a restart, and the page offers to restart when it is saved.</p>
+<h3 id="Web-panel-System-folders-quirks-and-the-rest">Folders, quirks and the rest</h3>
+<ul>
+<li><strong>Folders:</strong> each folder of <code>~</code> (and the folders inside them) can be a folder of another disk: <strong>Use another folder</strong> opens the cabinet's folders and disks; <strong>Undo the custom folder</strong> brings back the one used before. See <a href="#ROMs">ROMs</a>.</li>
+<li><strong>Custom frontends:</strong> a name and the command that opens it, like the other frontends; edit or delete each one.</li>
+<li><strong>Quirks:</strong> pick a USB device connected now and the fix (one device per player, no GET requests, always poll, UAS off for a disk), or type the code. They count after a restart. See <a href="#Wheels-and-quirks">Wheels and quirks</a>.</li>
+<li><strong>Bluetooth:</strong> turn it on, <strong>Look for controllers</strong> (15 seconds, with the controller in pairing mode), <strong>Pair</strong>. See <a href="#Bluetooth">Bluetooth</a>.</li>
+<li><strong>System Update</strong> and <strong>AttractPlus ROM List</strong> run as tasks, with the progress in the drawer.</li>
+</ul>
 <h3 id="Web-panel-System-no-picture-after-a-monitor-change">No picture after a monitor change?</h3>
-<p>The panel doesn't need the tube. From a phone, open <strong>Settings &gt; Video</strong> and pick the right monitor or resolution, or press <strong>Back to the previous monitor</strong>: it brings back the monitor and resolution from before the last change, made here or in <strong>Setup &gt; Video Setup</strong>. Pressed again, it goes back to the new one.</p>
-<p>A custom resolution and the Geometry grid stay on the cabinet's screen, since they need you to see the picture.</p>
+<p>The panel doesn't need the tube. From a phone, open <strong>Setup &gt; Video</strong> and pick the right monitor or resolution, or press <strong>Back to the previous monitor</strong>: it brings back the monitor and resolution from before the last change, made here or in <strong>Setup &gt; Video Setup</strong>. Pressed again, it goes back to the new one.</p>
+<h2 id="Web-panel-System-custom-games">Custom games</h2>
+<p><strong>Setup &gt; Games &gt; Custom games</strong>: the games that are not a ROM (PC games for Windows or Linux, scripts, your own emulators), in groups that are systems in the frontends. The same as on the cabinet (<a href="#Custom-games">Custom games</a>), with a table to add many at once.</p>
+<ul>
+<li><strong>The games:</strong> each group with its games, each with its picture: <strong>Open</strong> on the cabinet, <strong>Edit</strong> (video mode, category, players, buttons, controls, picture, video, text; the name, group and command too for a command), <strong>Make a package</strong>, <strong>Delete</strong>.</li>
+<li><strong>Add a game:</strong> a group, a name, the type (<strong>Windows</strong>, <strong>Linux</strong> or <strong>Command</strong>), the folder, the <code>.exe</code> or the command, the mode and the rest, in one window.</li>
+<li><strong>New packages</strong> and <strong>Install a package (.zip)</strong>: the zip goes to <code>~/roms/custom/GROUP</code> and installs.</li>
+<li><strong>Packed game folders:</strong> pack a game folder into squashfs, or unpack it.</li>
+</ul>
+<p>Windows and Linux games are <strong>copied</strong> to <code>~/games/GROUP/NAME</code> and packed in squashfs, like an installed package: the folder can be on a USB disk, in <code>~/games</code> after sending it in <strong>Files</strong>, or on the network share. The first Windows game offers to download PortProton (about 3 GB).</p>
+<h3 id="Web-panel-System-adding-many-games">Adding many games</h3>
+<p><strong>Add many games</strong> is a table, one game per row:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Group</td>
+<td>A list of the groups, and <strong>+ New group…</strong></td>
+</tr>
+<tr>
+<td>Name</td>
+<td>Typed</td>
+</tr>
+<tr>
+<td>Type</td>
+<td>Windows, Linux or Command</td>
+</tr>
+<tr>
+<td>Folder</td>
+<td>Typed, or picked in the cabinet's folders</td>
+</tr>
+<tr>
+<td>Executable / command</td>
+<td>The <code>.exe</code> files found in the folder (installers left out), or the Linux programs; a command is typed</td>
+</tr>
+<tr>
+<td>Video mode</td>
+<td>240p, 480i, or another (<code>WIDTHxHEIGHT@HZ</code>)</td>
+</tr>
+<tr>
+<td>Category</td>
+<td>MAME's categories (<code>catver.ini</code>)</td>
+</tr>
+<tr>
+<td>Players, Buttons</td>
+<td>A list</td>
+</tr>
+<tr>
+<td>Controls</td>
+<td>The 13 kinds, picked in a window</td>
+</tr>
+<tr>
+<td>Art</td>
+<td>A picture and a video, sent at once</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>+ Row</strong> adds a row in the group chosen at the top; the copy button on a row duplicates it (without the name and the art).</li>
+<li><strong>Import from a folder</strong>: pick a folder with one subfolder per game (<code>~/games</code>, a USB disk); each subfolder becomes a row, with its name, its type and its <code>.exe</code>.</li>
+<li><strong>Paste from a spreadsheet</strong>: copy rows in Excel, Google Sheets or LibreOffice and paste them in the window, or straight into the table. The columns are Name, Group, Type, Folder, Executable or command, Mode, Category, Players, Buttons, Controls; a first row with the column names can put them in any order.</li>
+<li><strong>Check</strong> asks the Setup what is wrong: the cells in red say why, and the page says how much will be copied and how much is free. <strong>Save all</strong> checks again and adds them one by one: each row turns green or keeps its error, and the ones added leave the table.</li>
+</ul>
+<p>The table stays in the browser until it is saved.</p>
 <h2 id="Web-panel-System-retroachievements">RetroAchievements</h2>
 <p>Sign in to your retroachievements.org account (or open the sign-up page in a new tab), turn the achievements and hardcore mode on or off, and paste the <strong>Web API Key</strong> for the badge in the game list; the tab links to the page where you copy it. See <a href="#RetroAchievements">RetroAchievements</a>.</p>
 <h2 id="Web-panel-System-cloud-backup">Cloud backup</h2>
@@ -34538,11 +34599,13 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <h2 id="Web-panel-System-how-it-works">How it works</h2>
 <ul>
 <li>The video status comes from DRM, through <code>fliperos-video-check</code>. The volume goes through <code>fliperos-setup --volume up|down|mute|get|set N</code>.</li>
-<li>Settings go through the same functions as the Setup's screens: <code>fliperos-setup --settings</code> lists the groups, and <code>--setting KEY VALUE</code> changes one (<code>settings_list</code> in <code>lib/system.sh</code>). Debug and latency rewrite the kernel line the way their screens do; their kernel part counts after a restart. A run of taps on <strong>−</strong> or <strong>+</strong> saves once, just after the last.</li>
+<li>The Setup tree (<code>config/web/setup.js</code>) has the ids of the Setup's menus; a test checks the two match. Settings go through the same functions as the Setup's screens: <code>fliperos-setup --settings</code> lists them and <code>--setting KEY VALUE</code> changes one (<code>settings_list</code> in <code>lib/system.sh</code>). <code>--setup-items</code> says which items this cabinet has; <code>--quirks</code>, <code>--folders</code>, <code>--frontends</code>, <code>--bluetooth</code>, <code>--system-update</code> and <code>--attract-romlist</code> do the rest without a screen.</li>
+<li><strong>Open on the cabinet</strong> writes the request to <code>fliperos-web-launch</code>, like a game: <code>fliperos-tty1</code> runs <code>fliperos-setup --screen NAME</code> (only the names in <code>screens/panel.sh</code>), and the video screens end like Video Setup (Xorg and the kernel line again).</li>
+<li>Custom games go through <code>fliperos-setup --customgames</code> (<code>lib/customgames.sh</code>): <code>describe</code>, <code>check</code>, <code>bulk</code> (one row per game, with an <code>@row N ok|fail</code> line each), <code>edit</code>, <code>delete</code>, <code>media</code>, <code>install</code>, <code>pack</code>, <code>squash</code>. A folder is copied by <code>fliperos-customgame add</code>, and <code>fliperos-customgame scan</code> finds the games of a folder. The art of a row waits in <code>/var/cache/fliperos-web/stage</code> until the game is saved (a day at most).</li>
 <li>The terminal is a login shell in a pseudo-terminal (<code>setsid -c</code>, so Ctrl+C and job control work), at normal priority. The page talks to it over a WebSocket (<code>/api/terminal</code>) that only the panel's own page can open, after the login. The screen is drawn by <a href="https://xtermjs.org">xterm.js</a> 5.5.0 with its fit addon (MIT), shipped inside the panel.</li>
 <li>RetroAchievements and Cloud backup call the same programs as the Setup: <code>lib/cheevos.sh</code> and <code>config/fliperos-cloud</code>.</li>
 </ul>
-<p>See also: <a href="#Web-panel">Web panel</a>, <a href="#Setup-System">System Setup</a>.</p>
+<p>See also: <a href="#Web-panel">Web panel</a>, <a href="#Setup-System">System Setup</a>, <a href="#Custom-games">Custom games</a>.</p>
 <h1 id="Controller-overlay">Controller on the stream</h1>
 <h1 id="Controller-overlay-controller-on-the-stream">Controller on the stream</h1>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/obs-en.webp" width="640" alt="The controller overlay in OBS"></p>
@@ -35515,7 +35578,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <ul>
 <li><strong>Index pages and subpages.</strong> A subject with a lot to say gets an index page (a short intro and a table of its subpages) and one page per part. The <code>_Sidebar.md</code> lists the top pages without indentation and the subpages under them; <code>Home.md</code> lists every page; the READMEs link every top page. <code>DocsTests</code> checks all three.</li>
 <li><strong>Each page:</strong> what it is and where it is in the menu, in a sentence or two; a picture; the sections a player needs (setting up, using, options); <code>## Problems</code> when there are any; <code>## How it works</code> at the end, with the paths, services and files; a "See also" line.</li>
-<li><strong>Text:</strong> short paragraphs (up to about 420 characters), <code>##</code>/<code>###</code> headings and no H1, menu paths in bold (<strong>Setup &gt; Games &gt; Downloader</strong>, <strong>System &gt; Settings</strong> in the web panel), British English. No history ("until update 58", dates): that is the CHANGELOG. Commands use <code>sed</code>, not an editor: the cabinet has none in the terminal.</li>
+<li><strong>Text:</strong> short paragraphs (up to about 420 characters), <code>##</code>/<code>###</code> headings and no H1, menu paths in bold (<strong>Setup &gt; Games &gt; Downloader</strong>, <strong>System &gt; Setup</strong> in the web panel), British English. No history ("until update 58", dates): that is the CHANGELOG. Commands use <code>sed</code>, not an editor: the cabinet has none in the terminal.</li>
 <li><strong>Links</strong> between pages point to the file, <code>Page.md</code> or <code>Page.md#heading</code>, as in <a href="#Commands">Commands</a>; the publish script drops the <code>.md</code>. An anchor must exist: <code>DocsTests</code> checks every <code>Page#heading</code> used by the wiki, the READMEs, the web panel and the website. When a section moves to another page, leave an <code>&lt;a id="Build-and-tests-old-anchor"&gt;&lt;/a&gt;</code> on the old page, since cabinets that don't update keep their old links.</li>
 <li><strong>Pictures</strong> are <code>&lt;img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/..."&gt;</code>, from <code>website/public/screenshots</code>, <code>docs/telegram/img</code> or <code>docs/img</code>. A 640x240 screen is shown at 4:3.</li>
 </ul>

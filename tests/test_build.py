@@ -7376,10 +7376,11 @@ class DeflickerTests(unittest.TestCase):
                 self.assertRegex(syms, r' T %s\n' % name)
 
 
-class WebCustomGamesTests(unittest.TestCase):
-    """config/fliperos-web, Setup > Games > Custom games no painel: o servidor
-    de verdade com um fliperos-setup falso (--customgames), o
-    fliperos-customgame de verdade (scan) e a pasta de espera da arte."""
+class WebSetupBase(unittest.TestCase):
+    """config/fliperos-web, o Setup no painel: o servidor de verdade com um
+    fliperos-setup falso (--customgames, --setup-items, --quirks, --folders,
+    --frontends, --bluetooth), o fliperos-customgame de verdade (scan) e a
+    pasta de espera da arte. As classes de baixo trazem os testes."""
 
     @classmethod
     def setUpClass(cls):
@@ -7395,7 +7396,37 @@ class WebCustomGamesTests(unittest.TestCase):
         (tmp / 'shadow').write_text('fliperos:%s:19000:0:99999:7:::\n' % lib.crypt(b'arcade', b'$6$x$').decode())
         setup = tmp / 'fliperos-setup'
         setup.write_text(
-            '#!/bin/sh\necho "$*" >> TMP/setup.log\n[ "$1" = --customgames ] || exit 0\n'
+            '#!/bin/sh\necho "$*" >> TMP/setup.log\n'
+            'case "$1" in\n'
+            '  --setup-items) printf "item|driver|1\\ninfo|driver|radeon or amdgpu\\nitem|bluetooth|0\\n'
+            'info|monitors|1\\n"; exit 0 ;;\n'
+            '  --quirks) case "$2" in\n'
+            '      list) echo "0x16c0:0x05e1:0x40|Xin-Mo" ;;\n'
+            '      devices) echo "0x16c0:0x05e1|Free shared VID" ;;\n'
+            '      add) [ "$4" = bad ] && exit 1; [ "$4" = full ] && { echo max=4; exit 2; }; [ "$4" = dup ] && exit 3 ;;\n'
+            '    esac; exit 0 ;;\n'
+            '  --folders) case "$2" in\n'
+            '      list) echo "roms|custom|/media/d/ROMs|1|The games."; echo "bios|default||1|The BIOS files."\n'
+            '        echo "start|/media/fliperos" ;;\n'
+            '      link) [ "$4" = /nope ] && { echo "/nope is not a folder."; exit 1; }; echo "kept=~/old-roms" ;;\n'
+            '      unlink) echo new=1 ;;\n'
+            '    esac; exit 0 ;;\n'
+            '  --frontends) case "$2" in\n'
+            '      list) echo "custom-1|Pegasus|pegasus-fe --silent|1" ;;\n'
+            '      save) case "$4" in *"|"*) exit 1 ;; esac; [ -z "$3" ] && echo custom-2 ;;\n'
+            '      delete) [ "$3" = custom-1 ] || exit 2 ;;\n'
+            '    esac; exit 0 ;;\n'
+            '  --bluetooth) case "$2" in\n'
+            '      status) printf "installed=yes\\nadapter=hci0\\npowered=yes\\n" ;;\n'
+            '      devices) echo "AA:BB:CC:DD:EE:FF|8BitDo Pro 2|input-gaming|yes|yes" ;;\n'
+            '      scan) echo "11:22:33:44:55:66|DualSense|input-gaming|no|no" ;;\n'
+            '      pair) [ "$3" = 11:22:33:44:55:66 ] || exit 1; echo connected ;;\n'
+            '    esac; exit 0 ;;\n'
+            '  --system-update) echo "@step 50 Downloading updates"; sleep 1; exit 0 ;;\n'
+            '  --attract-romlist) echo "@step 30 Reading"; exit 0 ;;\n'
+            '  --customgames) ;;\n'
+            '  *) exit 0 ;;\n'
+            'esac\n'
             'case "$2" in\n'
             '  describe) printf "group\\tPC games\\t1\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
             'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
@@ -7410,6 +7441,7 @@ class WebCustomGamesTests(unittest.TestCase):
             'esac\nexit 0\n'.replace('TMP', str(tmp)))
         setup.chmod(0o755)
         (tmp / 'roms/custom').mkdir(parents=True)
+        (tmp / 'run' / str(os.getuid())).mkdir(parents=True)
         (tmp / 'src/Metal_Slug_X').mkdir(parents=True)
         (tmp / 'src/Metal_Slug_X/MSX.exe').write_bytes(b'MZ')
         with socket.socket() as s:
@@ -7469,6 +7501,10 @@ class WebCustomGamesTests(unittest.TestCase):
                 return info
             time.sleep(0.1)
         self.fail('the task did not end')
+
+
+class WebCustomGamesTests(WebSetupBase):
+    """Setup > Games > Custom games no painel: a lista, a tabela, a arte."""
 
     def test_describe_is_json_with_the_choices(self):
         status, info = self.call('GET', '/api/customgames')
@@ -7563,6 +7599,189 @@ class WebCustomGamesTests(unittest.TestCase):
         self.assertIn('--customgames install %s G replace' % zip_, log.read_text())
         self.assertEqual(ok('squash', {'folder': str(self.dir / 'src'), 'action': 'crush'}), 400)
         self.assertEqual(ok('nonsense', {}), 404)
+
+
+class WebSetupTests(WebSetupBase):
+    """O resto do Setup no painel: os itens do gabinete, Abrir no gabinete,
+    Quirks, Folders, os frontends da pessoa, Bluetooth e as tarefas."""
+
+    def test_items_of_this_cabinet(self):
+        status, data = self.call('GET', '/api/setup/items')
+        self.assertEqual(status, 200)
+        self.assertEqual(data['items'], {'driver': True, 'bluetooth': False})
+        self.assertEqual(data['info'], {'driver': 'radeon or amdgpu', 'monitors': '1'})
+
+    def test_open_on_the_cabinet_asks_the_tty1(self):
+        status, data = self.call('POST', '/api/setup/open', {'screen': 'geometry'})
+        self.assertEqual(status, 200)
+        self.assertEqual(data['via'], 'tty1')
+        request = (self.dir / 'run' / str(os.getuid()) / 'fliperos-web-launch').read_text().splitlines()
+        self.assertEqual(request, ['return=menu', 'sudo', '-n', str(self.dir / 'fliperos-setup'), '--screen', 'geometry'])
+        for bad in ('nope', 'geometry; reboot', '', None):
+            self.assertEqual(self.call('POST', '/api/setup/open', {'screen': bad})[0], 400, bad)
+
+    def test_tty1_opens_only_a_setup_screen(self):
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        body = 'web_launch() {' + tty1.split('web_launch() {')[1].split('\n}')[0] + '\n}\n'
+        launch = self.dir / 'launch'
+        script = ('BIN=/opt/fliperos/bin; WEB_LAUNCH=%s; splash_off() { :; }\n'
+                  'sudo() { echo "SUDO $*"; }\npython3() { :; }\n%sweb_launch\n' % (launch, body))
+        for lines, expected in (
+                (['return=menu', 'sudo', '-n', '/usr/local/bin/fliperos-setup', '--screen', 'geometry'],
+                 'SUDO -n /usr/local/bin/fliperos-setup --screen geometry'),
+                (['return=menu', 'sudo', '-n', '/bin/rm', '--screen', 'x'], None),
+                (['return=menu', 'sudo', '-n', '/usr/local/bin/fliperos-setup', '--screen', 'a', 'b'], None)):
+            launch.write_text('\n'.join(lines) + '\n')
+            out = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+            # O web_launch limpa a tela (\e[H...) antes: o SUDO vem no meio da linha.
+            sudo = [l[l.index('SUDO'):] for l in out.stdout.splitlines() if 'SUDO' in l]
+            self.assertEqual(sudo, [expected] if expected else [], lines)
+            if not expected:
+                self.assertIn('Ignoring an unknown request', out.stderr)
+
+    def test_quirks(self):
+        status, data = self.call('GET', '/api/quirks')
+        self.assertEqual(data, {'quirks': [{'code': '0x16c0:0x05e1:0x40', 'name': 'Xin-Mo'}],
+                                'devices': [{'id': '0x16c0:0x05e1', 'name': 'Free shared VID'}], 'max': 4})
+        post = lambda body: self.call('POST', '/api/quirks', body)
+        self.assertEqual(post({'action': 'add', 'name': 'Gun', 'code': '0x1:0x2:0x40'})[0], 200)
+        self.assertIn('--quirks add Gun 0x1:0x2:0x40', (self.dir / 'setup.log').read_text())
+        self.assertEqual(post({'action': 'add', 'name': 'X', 'code': 'bad'}), (400, {'error': 'invalid code'}))
+        status, data = post({'action': 'add', 'name': 'X', 'code': 'full'})
+        self.assertEqual(status, 409)
+        self.assertIn('at most 4', data['error'])
+        self.assertEqual(post({'action': 'add', 'name': 'X', 'code': 'dup'})[0], 409)
+        self.assertEqual(post({'action': 'delete', 'code': '0x16c0:0x05e1:0x40'})[0], 200)
+        self.assertEqual(post({'action': 'nuke'})[0], 400)
+
+    def test_folders(self):
+        status, data = self.call('GET', '/api/folders')
+        self.assertEqual(data['start'], '/media/fliperos')
+        self.assertEqual(data['folders'][0], {'path': 'roms', 'state': 'custom', 'target': '/media/d/ROMs', 'inner': True,
+                                              'about': 'The games.'})
+        status, data = self.call('POST', '/api/folders', {'action': 'link', 'path': 'roms', 'target': '/media/d/ROMs/'})
+        self.assertEqual((status, data['kept']), (200, '~/old-roms'))
+        self.assertIn('--folders link roms /media/d/ROMs', (self.dir / 'setup.log').read_text())
+        self.assertEqual(self.call('POST', '/api/folders', {'action': 'link', 'path': 'bios', 'target': '/nope'}),
+                         (400, {'error': '/nope is not a folder.'}))
+        self.assertEqual(self.call('POST', '/api/folders', {'action': 'unlink', 'path': 'roms'})[1]['new'], '1')
+
+    def test_custom_frontends(self):
+        status, data = self.call('GET', '/api/frontends')
+        self.assertEqual(data['frontends'], [{'name': 'custom-1', 'label': 'Pegasus', 'command': 'pegasus-fe --silent',
+                                              'installed': True}])
+        status, data = self.call('POST', '/api/frontends', {'action': 'save', 'label': 'ES', 'command': 'es-de'})
+        self.assertEqual((status, data['text']), (200, 'custom-2'))
+        self.assertEqual(self.call('POST', '/api/frontends', {'action': 'save', 'label': 'A|B', 'command': 'x'})[0], 400)
+        self.assertEqual(self.call('POST', '/api/frontends', {'action': 'delete', 'name': 'custom-9'})[0], 400)
+
+    def test_bluetooth(self):
+        status, data = self.call('GET', '/api/bluetooth')
+        self.assertEqual((data['powered'], data['adapter']), (True, 'hci0'))
+        self.assertEqual(data['devices'][0], {'mac': 'AA:BB:CC:DD:EE:FF', 'name': '8BitDo Pro 2', 'icon': 'input-gaming',
+                                              'paired': True, 'connected': True})
+        self.assertNotIn('found', data)
+        found = self.call('GET', '/api/bluetooth?scan=1')[1]['found']
+        self.assertEqual(found[0]['name'], 'DualSense')
+        self.assertEqual(self.call('POST', '/api/bluetooth', {'action': 'pair', 'mac': '11:22:33:44:55:66'})[0], 200)
+        self.assertEqual(self.call('POST', '/api/bluetooth', {'action': 'pair', 'mac': 'AA:AA:AA:AA:AA:AA'})[0], 500)
+        self.assertEqual(self.call('POST', '/api/bluetooth', {'action': 'pair', 'mac': 'x; reboot'})[0], 400)
+        self.assertEqual(self.call('POST', '/api/bluetooth', {'action': 'power', 'on': False})[0], 200)
+        self.assertIn('--bluetooth power off', (self.dir / 'setup.log').read_text())
+
+    def test_system_update_and_rom_list_are_tasks(self):
+        status, task = self.call('POST', '/api/setup/task', {'name': 'system-update'})
+        self.assertEqual((status, task['kind']), (200, 'setup-system-update'))
+        self.assertEqual(self.call('POST', '/api/setup/task', {'name': 'system-update'})[0], 409)
+        self.assertEqual(self.wait_task(task['id'])['rc'], 0)
+        self.assertEqual(self.call('POST', '/api/setup/task', {'name': 'rm'})[0], 400)
+
+    def test_the_panel_tree_is_the_setup_tree(self):
+        # Os itens de cada grupo do Setup no painel (config/web/setup.js) sao
+        # os do menu do Setup no gabinete: um item novo no Setup sem o lugar
+        # dele no painel quebra aqui (os "extra" sao so do painel).
+        js = (ROOT / 'config/web/setup.js').read_text()
+        tree = js[js.index('const SETUP_TREE = ['):js.index('\n];', js.index('const SETUP_TREE = ['))]
+        panel, extra, group = {}, {}, None
+        for line in tree.splitlines():
+            m = re.match(r'  \{ id: "([a-z_]+)", icon: "(px-[a-z0-9-]+)"', line)
+            if m:
+                group = m.group(1)
+                panel[group], extra[group] = set(), set()
+                continue
+            m = re.match(r'    \{ id: "([a-z_0-9]+)"(.*)\},$', line)
+            if m:
+                ids = {m.group(1)}
+                also = re.search(r'also: \[([^\]]*)\]', m.group(2))
+                if also:
+                    ids |= set(re.findall(r'"([a-z_0-9]+)"', also.group(1)))
+                (extra if 'extra: true' in m.group(2) else panel)[group].update(ids)
+
+        def menu(path, func):
+            text = (ROOT / path).read_text().split(func + '() {')[1].split('\n}\n')[0]
+            ids = set(re.findall(r'^\s+"([a-z][a-z_0-9]*)\|', text, re.M))
+            # Os itens que so aparecem em alguns gabinetes: driver=("driver|...").
+            ids |= set(re.findall(r'=\("([a-z][a-z_0-9]*)\|', text))
+            return ids - {'return'}
+        setup = {'video': menu('fliperos-setup/screens/video-setup.sh', 'screen_video_setup'),
+                 'audio': menu('fliperos-setup/screens/setup-menu.sh', 'screen_audio'),
+                 'network': menu('fliperos-setup/screens/setup-menu.sh', 'screen_network'),
+                 'games': menu('fliperos-setup/screens/setup-menu.sh', 'screen_setup_games'),
+                 'joysticks': menu('fliperos-setup/screens/joysticks.sh', 'screen_joysticks'),
+                 'system': menu('fliperos-setup/screens/setup-menu.sh', 'screen_setup_system'),
+                 'cloud': {'cloud'}}
+        top = menu('fliperos-setup/screens/setup-menu.sh', 'screen_setup_menu')
+        self.assertEqual(set(panel), top)
+        for name, ids in setup.items():
+            self.assertEqual(panel[name], ids, name)
+        # Cada icone existe no sprite; cada item tem rotulo e dica nas duas linguas.
+        icons = set(re.findall(r'id="(px-[a-z0-9-]+)"', (ROOT / 'config/web/icons.svg').read_text()))
+        mapped = dict(re.findall(r'(\w+): "(px-[a-z0-9-]+)"', js[js.index('const SETUP_ICON'):js.index('};', js.index('const SETUP_ICON'))]))
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        en, pt = text.split('Object.assign(TEXT.pt')[0], 'Object.assign(TEXT.pt' + text.split('Object.assign(TEXT.pt', 1)[1]
+        for name in panel:
+            self.assertIn('sg_%s:' % name, en)
+            self.assertIn('sg_%s:' % name, pt)
+            for item in (panel[name] | extra[name]) - {'hidden', 'status'}:
+                self.assertIn(mapped.get(item, 'px-' + item), icons, item)
+        labels = set(re.findall(r'^    \{ id: "([a-z_0-9]+)"(?:, label: "([a-z_]+)")?', tree, re.M))
+        for item, label in labels:
+            for prefix in ('si_', 'sih_'):
+                self.assertIn(prefix + (label or item) + ':', en, item)
+                self.assertIn(prefix + (label or item) + ':', pt, item)
+        # A tela de cada "Abrir no gabinete" esta na lista do --screen.
+        screens = re.search(r'PANEL_SCREENS="([^"]+)"', (ROOT / 'fliperos-setup/screens/panel.sh').read_text()).group(1).split()
+        for screen in re.findall(r'cabinet: "([a-z0-9]+)"', tree):
+            self.assertIn(screen, screens)
+
+    def test_every_setting_has_its_item(self):
+        # Toda chave do --settings (lib/system.sh) cai num item da arvore: nada
+        # some do painel.
+        body = (ROOT / 'fliperos-setup/lib/system.sh').read_text().split('settings_list() {')[1].split('\n}\n')[0]
+        keys = set(re.findall(r"printf '([a-z0-9_.]+(?:%s)?)\|", body))
+        self.assertGreater(len(keys), 25)
+        js = (ROOT / 'config/web/setup.js').read_text()
+        tree_keys = [k for group in re.findall(r'keys: \[([^\]]*)\]', js) for k in re.findall(r'"([a-z0-9_.]+)"', group)]
+        for key in keys:
+            key = key.replace('%s', '')
+            self.assertTrue(any(key == k or (k.endswith('.') and key.startswith(k)) for k in tree_keys), key)
+
+    def test_the_page_files_are_served(self):
+        index = (ROOT / 'config/web/index.html').read_text()
+        for name in ('setup-text.js', 'setup.js', 'customgames.js', 'setup.css'):
+            self.assertIn(name, index)
+            status, data = self.call('GET', '/' + name)
+            self.assertEqual(status, 200, name)
+        # setup-text.js depois de text.js; setup.js e customgames.js depois de system.js.
+        scripts = re.findall(r'<script src="([a-z-]+\.js)"></script>', index)
+        self.assertLess(scripts.index('text.js'), scripts.index('setup-text.js'))
+        self.assertLess(scripts.index('setup-text.js'), scripts.index('ui.js'))
+        self.assertLess(scripts.index('system.js'), scripts.index('setup.js'))
+        self.assertEqual(scripts[-1], 'app.js')
+        # A aba de antes (#system/settings) abre o Setup.
+        app = (ROOT / 'config/web/app.js').read_text()
+        self.assertIn('"system/settings": "system/setup"', app)
+        self.assertNotIn('async function loadSettings', (ROOT / 'config/web/system.js').read_text())
 
 
 class WebPanelTests(unittest.TestCase):
@@ -8437,7 +8656,7 @@ class WebPanelTests(unittest.TestCase):
         areas = app[app.index('const AREAS = {'):app.index('};', app.index('const AREAS = {'))]
         self.assertEqual(re.findall(r'\["([a-z]+)", "px-', areas),
                          ['watch', 'obs', 'overview', 'install', 'downloads', 'romfilter', 'art', 'files',
-                          'status', 'logs', 'settings', 'achievements', 'cloud', 'terminal', 'lab'])
+                          'status', 'logs', 'setup', 'achievements', 'cloud', 'terminal', 'lab'])
         self.assertIn('status: "system/status"', app)
         self.assertIn('downloads: "library/downloads"', app)
         # Os scripts, em ordem (as globais de um valem nos outros), e o app.js por ultimo.
@@ -9050,8 +9269,8 @@ class WebPanelTests(unittest.TestCase):
             self.assertEqual(self.request('POST', '/api/versions', bad, cookie=cookie)[0], 400, bad)
         status, _, data = self.request('POST', '/api/versions', {'update': 'latest'}, cookie=cookie)
         self.assertEqual(json.loads(data)['name'], 'FliperOS version: the newest update')
-        js = (ROOT / 'config/web/system.js').read_text()
-        self.assertIn('boxes.set("Version", versionBox());', js)
+        js = (ROOT / 'config/web/setup.js').read_text()
+        self.assertIn('version: async () => { openGroups.add("Version"); return unwrap(versionBox()); },', js)
         text = (ROOT / 'config/web/text.js').read_text()
         self.assertEqual(text.count('group_Version:'), 2)
 

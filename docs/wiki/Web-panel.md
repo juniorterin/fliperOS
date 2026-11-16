@@ -25,7 +25,7 @@ The menu on the left (at the bottom on a phone) has four areas, each with its ta
 | **Frontend** | The cabinet drawing, now playing, the marquee preview, the games | [Frontend area](Web-panel-Frontend.md) |
 | **Live** | Watch, OBS | [Live area](Web-panel-Live.md) |
 | **Library** | Overview, Install, Downloads, ROM filter, Art, Files | [Library area](Web-panel-Library.md) |
-| **System** | Status, Processes and logs, Settings, RetroAchievements, Cloud backup, Terminal, Lab mode | [System area](Web-panel-System.md) |
+| **System** | Status, Processes and logs, the whole Setup (with custom games), RetroAchievements, Cloud backup, Terminal, Lab mode | [System area](Web-panel-System.md) |
 
 Each area and tab has its own address (`#live`, `#library`…), and the browser remembers the last one. The top bar has **EN/PT** (the page follows the browser's language), the cabinet picker, and **Reboot** and **Power off**.
 
@@ -58,7 +58,7 @@ A temporary internet address to the panel, for someone helping you from far away
 <a id="monitor-without-a-picture"></a>
 ## No picture after a monitor change?
 
-The panel doesn't need the tube: from a phone, **System > Settings > Video > Back to the previous monitor** brings back the monitor and resolution from before the last change. See [System area](Web-panel-System.md#no-picture-after-a-monitor-change).
+The panel doesn't need the tube: from a phone, **System > Setup > Video > Back to the previous monitor** brings back the monitor and resolution from before the last change. See [System area](Web-panel-System.md#no-picture-after-a-monitor-change).
 
 ## Security
 
@@ -85,6 +85,9 @@ The page's own API also serves scripts. Sign in with `POST /api/login {"user","p
 | `POST /api/favourite {"system","game","on"}`, `/api/launch {"system","game"}`, `/api/close` | Favourite, play, close the game |
 | `GET /api/files?root=roms&path=`, `/api/download?root=&path=`; `POST /api/upload?root=&path=&name=` (`&overwrite=1`), `/api/mkdir`, `/api/delete` | Files |
 | `GET`/`POST /api/settings {"key","value"}` | Settings |
+| `GET /api/setup/items`; `POST /api/setup/open {"screen"}`, `/api/setup/task {"name":"system-update"\|"attract-romlist"}` | The Setup: this cabinet's items, a Setup screen on the tube, the tasks |
+| `GET`/`POST /api/quirks`, `/api/folders`, `/api/frontends`, `/api/bluetooth` (`?scan=1`) | Quirks, Folders, custom frontends, Bluetooth |
+| `GET /api/customgames`, `/api/customgames/scan?path=&one=1`; `POST /api/customgames/stage?kind=&name=`, `/check`, `/bulk {"rows","portproton"}`, `/edit`, `/delete`, `/group`, `/media`, `/install`, `/pack`, `/squash` | Custom games |
 | `GET`/`POST /api/downloader` (`add`, `start`, `remove`), `GET /api/romfilter`, `POST /api/romfilter/count`, `/save`, `/scan`, `/run` | Downloader and ROM filter |
 | `GET /api/stream`, `POST /api/stream/offer {"fps","sdp"}`, `/api/stream/install` | The live screen |
 | `GET`/`POST /api/overlay {"action":"newkey"}`; by key, without login: `/overlay/marquee`, `/overlay/live`, `/overlay/input`, `/api/overlay/state`, `/api/overlay/art`, `POST /api/overlay/offer` | The OBS pages |

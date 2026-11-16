@@ -8,6 +8,8 @@ Everything is in **Setup > Games > Custom games**. There are three ways to add a
 | **Create a package** from a game folder | the game is on the cabinet, a USB stick or the network, and you want it complete (picture, video, text, controller map) and easy to copy to another FliperOS |
 | **By its command** | quick: a group, a name, a command line and the video mode |
 
+The [web panel](Web-panel-System.md#custom-games) has the same page in **System > Setup > Games > Custom games**, plus a table to add many games at once: rows typed or picked in lists, imported from a folder (one subfolder per game) or pasted from a spreadsheet. There, a Windows or Linux game in a folder is copied to `~/games/GROUP/NAME`, like an installed package.
+
 ## Contents
 
 - [Step by step: adding your game from the cabinet](#step-by-step-adding-your-game-from-the-cabinet)

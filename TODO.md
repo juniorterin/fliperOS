@@ -81,6 +81,11 @@ As fases 5a (leitura), 5b (controle) e 5c (a tela ao vivo e o marquee para o OBS
 - **Trackball pelo celular:** pronto, mas desligado desde 2026-10-17, a pedido. O cartão está escondido e `FLIPEROS_WEB_TRACKBALL=1` no serviço liga de novo.
 - **A carga da tela ao vivo com um jogo pesado aberto** (o serviço roda com Nice=10).
 - **Remote play:** ficou para depois, a pedido. Seria um controle virtual alimentado pelo navegador.
+- **O Setup inteiro no painel e os jogos custom por ele** (Sistema > Setup): testados no Docker (o Setup de verdade nos testes, a página no Chromium sem tela). Falta num gabinete:
+  - "Abrir no gabinete" de uma tela de vídeo (a Geometria) e de uma de controle (o Button mapping), voltando ao frontend no fim;
+  - a tabela com uma pasta de jogo do Windows e uma do Linux copiadas para `~/games` e compactadas, abrindo pelo frontend;
+  - Importar de uma pasta num disco USB, e Colar de uma planilha copiada do Google Planilhas no celular;
+  - Bluetooth (procurar e parear pelo painel), Quirks e Pastas mudados de longe.
 
 ## Bugs
 

@@ -97,7 +97,7 @@ settings_opts() {
 }
 
 settings_list() {
-  local name desc key label state allowed help opts min max step entry monitor res
+  local name desc key label state allowed help opts min max step entry monitor res value
   # ── Video (Setup > Video Setup) ──
   # O monitor: o preset ou, com o custom do Geometry ativo, o custom (escolher
   # um preset o desfaz, como no Monitor Type).
@@ -189,6 +189,13 @@ settings_list() {
   printf 'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|%s|on=On;off=Off|Off the screen the trigger also presses the reload button of Flycast, RetroArch and SM2-Emu.\n' \
     "$(gun_reload_on && echo on || echo off)"
   printf 'gun.reset|GunCon 2|Back to the defaults|action|||Flash, numbers and the reload button back to the defaults. The calibration stays.\n'
+  # ── Joysticks > Controller light (lib/buttons.sh) ──
+  opts=$(padcolor_table | while IFS='|' read -r name label value; do printf '%s|%s\n' "$value" "$label"; done | settings_opts)
+  value=$(padcolor_get)
+  # Uma cor fora da tabela (#RRGGBB digitado a mao) continua escolhida.
+  [[ ";$opts;" == *";$value="* || $value == off ]] || opts="$value=#$value;$opts"
+  printf 'padcolor|Joysticks|Controller light|choice|%s|%s;off=Off|The light colour of DualSense, DualShock 4 and 8BitDo Ultimate 2 (an 8BitDo on Bluetooth saves it once plugged in by USB cable). Off: the controller keeps its own.\n' \
+    "$value" "$opts"
   # ── A tela ao vivo (config/fliperos-stream) e o marquee para o OBS ──
   if [[ -x $STREAM_GO2RTC ]]; then
     printf 'stream_audio|Live screen|Live screen sound|choice|%s|off=Off;on=On|A copy of the sound for the live screen (an ALSA loopback on the card clock). Games opened after the change get it.\n' \
@@ -394,6 +401,9 @@ settings_set() {
     gun_offscreen_reload)
       gun_reload_set "$value" || return 2
       ;;
+    padcolor)
+      padcolor_set "$value" || return 2
+      ;;
     gun.reset)
       gun_reset
       ;;
@@ -476,4 +486,223 @@ settings_set() {
       ;;
     *) return 2 ;;
   esac
+}
+
+# ── O resto do Setup no painel web ───────────────────────────────
+# O Setup do painel (config/web/setup.js) mostra a arvore inteira do Setup.
+# Daqui: os itens que so aparecem em alguns gabinetes (os mesmos do Video
+# Setup e do Joysticks) e o que da para mudar de longe sem tela: Quirks,
+# Folders, os frontends da pessoa, Bluetooth, System Update e a AttractPlus
+# ROM List. O que precisa do tubo o painel abre no gabinete
+# (screens/panel.sh, --screen).
+
+# setup_driver_hint: a dica do Video driver quando a placa tem escolha (AMD
+# que aceita os dois drivers, ou NVIDIA). Status 1: sem escolha.
+setup_driver_hint() {
+  if [[ -n $(drm_dual_amd_cards) ]]; then
+    echo "radeon (tested on the CRT) or amdgpu (with Vulkan)."
+  elif nvidia_card > /dev/null; then
+    echo "nouveau or NVIDIA's own driver (native 15 kHz, 3D speed)."
+  else
+    return 1
+  fi
+}
+
+# setup_lowdot_hint: a dica do Low resolutions, o grid de dotclock baixo com
+# uma NVIDIA (nouveau) na saida principal, ou numa DisplayPort (o conversor
+# decide). Status 1: nao se aplica.
+setup_lowdot_hint() {
+  local conn
+  conn=$(conf_get connector 2> /dev/null) || conn=""
+  if [[ $conn == DP-* ]] && drm_output_low_dotclock_testable "$(video_conf_card)" "$conn" 2> /dev/null; then
+    echo "Test if the DisplayPort converter shows native 15 kHz modes."
+  elif drm_card_low_dotclock_testable "$(conf_get card 2> /dev/null)" 2> /dev/null; then
+    echo "NVIDIA: test if this card shows native 15 kHz modes."
+  else
+    return 1
+  fi
+}
+
+# setup_firmware_hint: o ATOM-15, so numa placa AMD e no sistema instalado.
+setup_firmware_hint() {
+  is_installed && ! is_live && atom15_card > /dev/null 2>&1 || return 1
+  echo "15 kHz from power on. Rewrites the card's BIOS: at your own risk."
+}
+
+# setup_items: "item|ID|0 ou 1" dos itens que dependem do gabinete e
+# "info|ID|TEXTO" do que o painel mostra junto de um item.
+setup_items() {
+  local hint
+  printf 'item|scanlines|%d\n' "$(scanlines_available && echo 1 || echo 0)"
+  hint=$(setup_driver_hint) && printf 'item|driver|1\ninfo|driver|%s\n' "$hint" || echo "item|driver|0"
+  hint=$(setup_lowdot_hint) && printf 'item|lowdot|1\ninfo|lowdot|%s\n' "$hint" || echo "item|lowdot|0"
+  hint=$(setup_firmware_hint) && printf 'item|firmware|1\ninfo|firmware|%s\n' "$hint" || echo "item|firmware|0"
+  printf 'item|bluetooth|%d\n' "$(bluetooth_present && echo 1 || echo 0)"
+  printf 'item|romlist|%d\n' "$(launcher_installed attractplus && echo 1 || echo 0)"
+  printf 'info|monitors|%s\n' "$(mm_count)"
+  printf 'info|buttons|%s\n' "$(buttons_players_line 2> /dev/null | tr '\n|' '  ')"
+  printf 'info|lpt|%s\n' "$(lpt_current)"
+  printf 'info|latency|%s\n' "$(latency_mode)"
+  return 0
+}
+
+# quirks_cli list|devices|add NOME CODIGO|delete CODIGO (Setup > System >
+# Quirks): add e delete levam os quirks para a linha do kernel, como as telas.
+# Status: 1 codigo invalido, 2 pedido errado (ou ja ha 4 do usbhid: "max" na
+# saida), 3 o dispositivo ja tem quirk.
+quirks_cli() {
+  local rc
+  case ${1:-} in
+    list) quirks_list ;;
+    devices) quirks_usb_devices | sed 's/  /|/' ;;
+    add)
+      [[ -n ${3:-} ]] || return 1
+      quirk_add "${2:-}" "$3"
+      rc=$?
+      ((rc == 2)) && echo "max=$QUIRKS_MAX"
+      ((rc == 0)) || return "$rc"
+      settings_boot
+      ;;
+    delete)
+      quirks_list | cut -d'|' -f1 | grep -qxF -- "${2:-}" || return 2
+      quirk_delete "$2" || return 1
+      settings_boot
+      ;;
+    *) return 2 ;;
+  esac
+}
+
+# folders_cli list [PASTA] | link PASTA ALVO | unlink PASTA (Setup > Games >
+# Folders). list: "pasta|estado|alvo|tem pastas dentro|descricao" das raizes,
+# ou das pastas de dentro da PASTA. link e unlink imprimem o motivo de uma
+# recusa (status 1) e, com as pastas de jogos ou de arte, refazem o frontend.
+folders_cli() {
+  local rel rc=0
+  case ${1:-} in
+    list)
+      if [[ -n ${2:-} ]]; then
+        folders_known "$2" || return 2
+        rel=$(folders_children "$2")
+      else
+        rel=$(folders_list)
+      fi
+      while IFS= read -r rel; do
+        [[ -n $rel ]] || continue
+        printf '%s|%s|%s|%d|%s\n' "$rel" "$(folders_state "$rel")" "$(folders_target "$rel" 2> /dev/null)" \
+          "$(folders_container "$rel" && echo 1 || echo 0)" "$(folders_description "$rel" | tr '|\n' '  ')"
+      done <<< "$rel"
+      printf 'start|%s\n' "$(folders_browse_start)"
+      ;;
+    link)
+      folders_known "${2:-}" && [[ -n ${3:-} ]] || return 2
+      if ! folders_link "$2" "$3"; then
+        echo "${FOLDERS_ERROR:-Could not link the folder (details in the log).}"
+        return 1
+      fi
+      [[ -n $FOLDERS_KEPT ]] && echo "kept=${FOLDERS_KEPT/#$FOLDERS_HOME/\~}"
+      folders_cli_refresh "$2"
+      ;;
+    unlink)
+      folders_known "${2:-}" || return 2
+      folders_unlink "$2" || rc=$?
+      if ((rc == 1)); then
+        echo "${FOLDERS_ERROR:-Could not unlink the folder (details in the log).}"
+        return 1
+      fi
+      ((rc == 2)) && echo "new=1"
+      folders_cli_refresh "$2"
+      ;;
+    *) return 2 ;;
+  esac
+  return 0
+}
+
+# folders_cli_refresh PASTA: as pastas de jogos e de arte mudaram de lugar,
+# o frontend padrao le de novo (o screen_folders_refresh sem a tela).
+folders_cli_refresh() {
+  [[ $1 == roms || $1 == roms/* || $1 == media || $1 == media/* ]] || return 0
+  frontends_configure "$(launcher_current)" >> "$FLIPEROS_LOG" 2>&1
+  return 0
+}
+
+# frontends_cli list|save NOME ROTULO COMANDO|delete NOME (Setup > Games >
+# Frontend > a custom frontend). list: "nome|rotulo|comando|instalado".
+# save com NOME vazio cria um novo e imprime o nome dele. Status 2: pedido
+# errado; 1: rotulo ou comando que nao serve.
+frontends_cli() {
+  local name label
+  case ${1:-} in
+    list)
+      while IFS='|' read -r name label; do
+        [[ -n $name ]] || continue
+        printf '%s|%s|%s|%d\n' "$name" "$label" "$(launcher_field "$name" 3)" \
+          "$(launcher_installed "$name" && echo 1 || echo 0)"
+      done < <(launcher_custom_list)
+      ;;
+    save)
+      [[ -z ${2:-} ]] || launcher_custom "$2" || return 2
+      launcher_custom_save "${2:-}" "${3:-}" "${4:-}" || return 1
+      ;;
+    delete)
+      launcher_custom "${2:-}" || return 2
+      launcher_custom_delete "$2"
+      ;;
+    *) return 2 ;;
+  esac
+}
+
+# bluetooth_cli status|devices|scan [SEGUNDOS]|pair MAC|connect MAC|
+# disconnect MAC|remove MAC|power on|off (Setup > Joysticks > Bluetooth).
+# Os aparelhos: "MAC|NOME|ICONE|pareado|conectado". Status 2: pedido errado.
+bluetooth_cli() {
+  local mac_re='^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'
+  case ${1:-} in
+    status) bluetooth_status ;;
+    devices) bluetooth_devices ;;
+    scan)
+      [[ -z ${2:-} || ${2:-} =~ ^[0-9]{1,2}$ ]] || return 2
+      bluetooth_scan "${2:-$BLUETOOTH_SCAN}"
+      ;;
+    pair)
+      [[ ${2:-} =~ $mac_re ]] || return 2
+      bluetooth_pair "$2"
+      ;;
+    connect | disconnect | remove)
+      [[ ${2:-} =~ $mac_re ]] || return 2
+      bluetooth_do "$1" "$2"
+      ;;
+    power)
+      [[ ${2:-} == on || ${2:-} == off ]] || return 2
+      bluetooth_do power "$2"
+      ;;
+    *) return 2 ;;
+  esac
+}
+
+# system_update_cli: o System Update sem tela (Setup > System > System
+# Update), com os eventos de progresso.
+system_update_cli() {
+  update_run || return 1
+  ev_step 100 "The system is up to date"
+}
+
+# romlists_cli: a AttractPlus ROM List de todas as pastas de arcade, sem
+# perguntar (a tela deixa escolher as pastas), com os eventos de progresso.
+romlists_cli() {
+  local result line
+  local -a found
+  launcher_installed attractplus || { ev_fail "Attract-Mode Plus is not installed"; return 2; }
+  mapfile -t found < <(frontends_romlist_systems)
+  if ((${#found[@]} == 0)); then
+    frontends_attract
+    ev_fail "No arcade games were found"
+    return 1
+  fi
+  result=$(mktemp)
+  frontends_romlist "$result" "${found[@]}" || { rm -f "$result"; return 1; }
+  while IFS=$'\t' read -r line _; do
+    [[ -n $line && $line != total ]] && ev_msg "$line: $(awk -F'\t' -v n="$line" '$1 == n { print $2 }' "$result") games"
+  done < "$result"
+  ev_step 100 "$(awk -F'\t' '$1 == "total" { print $2 }' "$result") games in the lists"
+  rm -f "$result"
 }

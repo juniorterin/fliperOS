@@ -10,22 +10,24 @@ const AREAS = {
   live: { icon: "px-video", subs: [["watch", "px-video"], ["obs", "px-outputs"]] },
   library: { icon: "px-games", subs: [["overview", "px-games"], ["install", "px-emulators"], ["downloads", "px-torrent"],
     ["romfilter", "px-filter"], ["art", "px-scraper"], ["files", "px-dest"]] },
-  system: { icon: "px-setup", subs: [["status", "px-chip"], ["logs", "px-romlist"], ["settings", "px-setup"],
+  system: { icon: "px-setup", subs: [["status", "px-chip"], ["logs", "px-romlist"], ["setup", "px-setup"],
     ["achievements", "px-achievements"], ["cloud", "px-cloud"],
     ["terminal", "px-shell"], ["lab", "px-lab"]] },
 };
 // Os enderecos das dez paginas de antes continuam abrindo (o /lab manda
-// para #status), e o codigo de cada pagina confere o nome antigo (page).
-const OLD_PAGES = { status: "system/status", settings: "system/settings", terminal: "system/terminal",
-  downloads: "library/downloads", scraper: "library/art", install: "library/install", files: "library/files",
-  romfilter: "library/romfilter" };
+// para #status), e o codigo de cada pagina confere o nome antigo (page). A
+// aba Configuracoes virou o Setup inteiro (#system/setup).
+const OLD_PAGES = { status: "system/status", settings: "system/setup", "system/settings": "system/setup",
+  terminal: "system/terminal", downloads: "library/downloads", scraper: "library/art", install: "library/install",
+  files: "library/files", romfilter: "library/romfilter" };
 const PAGE_OF = { "library/downloads": "downloads", "library/art": "scraper", "library/install": "install",
   "library/files": "files", "library/romfilter": "romfilter", "library/overview": "overview", "system/status": "status",
-  "system/logs": "logs", "system/settings": "settings", "system/terminal": "terminal", "system/lab": "lab",
+  "system/logs": "logs", "system/setup": "settings", "system/terminal": "terminal", "system/lab": "lab",
   "system/achievements": "achievements", "system/cloud": "cloud" };
 
 let sub = "";
 
+// O Setup tem mais niveis: #system/setup/GRUPO/PAGINA (setup.js, setupPath).
 function resolve(hash) {
   const name = OLD_PAGES[hash] || hash;
   const [a, s] = name.split("/");
@@ -140,6 +142,8 @@ document.addEventListener("click", (ev) => {
 function showPage(hash) {
   const [a, s] = resolve(hash);
   const before = area;
+  const deep = a === "system" && s === "setup" ? (OLD_PAGES[hash] || hash).split("/").slice(2).join("/") : "";
+  if (a === "system" && s === "setup") setupPath = deep;
   const apply = () => {
     area = a;
     sub = s;
@@ -167,7 +171,7 @@ function showPage(hash) {
   area = a;
   sub = s;
   page = PAGE_OF[a + "/" + s] || a;
-  try { localStorage.setItem("fliperos-page", a + (s ? "/" + s : "")); } catch (e) { /* sem armazenamento */ }
+  try { localStorage.setItem("fliperos-page", a + (s ? "/" + s : "") + (deep ? "/" + deep : "")); } catch (e) { /* sem armazenamento */ }
   if (sheetOpen) closeSheet();
   $("top-menu").hidden = true;
   if (before !== a) window.scrollTo(0, 0);
