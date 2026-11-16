@@ -75,3 +75,4 @@
 72	25a70277675ee9c1add760fd31180f37ee7be89d	93d5967e2680cb7c35dda08dfce96ce48517fc361e1e6513cbabde7e8fa967d4	no	Game counts on the system strip, button 1 opens a system at once
 73	015d7a9d98455d7361fe2b854898edfda6a26a29	b214a62f0f18346628ae31eccfd1ab901bb581c8af2cbda23c9268d38375c508	no	Custom game packages, Controller configuration, PortProton
 74	8e3482c0842c67fe8c08d0ee063238fc6acd5cbd	d5500f93eb0904e80b6df5886cf41648d20f545458552342a90c7a3dd9b3d088	no	Faster cloud backup, the whole Setup and custom games in the web panel
+75	4a07314e7e9c7494c982ccaf67ab1e46ff5bf4eb	30150c983b2110f1497d98de22f437b31bf07f091fc55ba8a633fed4fa3326eb	no	The web panel's System area, redesigned
