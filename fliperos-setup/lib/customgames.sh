@@ -907,13 +907,15 @@ customgames_refresh_frontends() {
 # linha. Com --portproton e algum jogo do Windows, o PortProton antes. Os
 # frontends sao refeitos uma vez, no fim. Status 1: alguma linha falhou.
 customgames_bulk() {
-  local file=$1 pp=${2:-} line n=0 total ok=0 start=2 a b why windows=0
+  local file=$1 pp=${2:-} line n=0 total ok=0 start=2 a b why windows=0 games
   local -a rows
   [[ -f $file ]] || return 2
   mapfile -t rows < "$file"
   total=${#rows[@]}
   ((total)) || return 2
-  ev_step 0 "Checking $total games"
+  games=games
+  ((total == 1)) && games=game
+  ev_step 0 "Checking $total $games"
   for line in "${rows[@]}"; do
     customgames_row_fields "$line"
     [[ $R_PLATFORM == windows ]] && windows=1
@@ -946,11 +948,11 @@ customgames_bulk() {
     customgames_refresh_frontends
   fi
   if ((ok < total)); then
-    ev_step 100 "$ok of $total games added"
-    ev_fail "$((total - ok)) of $total games were not added"
+    ev_step 100 "$ok of $total $games added"
+    ev_fail "$((total - ok)) of $total $games $( ((total - ok == 1)) && echo was || echo were) not added"
     return 1
   fi
-  ev_step 100 "$total games added"
+  ev_step 100 "$total $games added"
   return 0
 }
 

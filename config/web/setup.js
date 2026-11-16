@@ -575,6 +575,8 @@ function pickFolder({ title, start = "", extra = [] }) {
     let chosen = null;
     const show = async (path) => {
       const res = await api("/api/dirs?path=" + encodeURIComponent(path || ""));
+      // A pasta de comeco que nao existe (um gabinete sem ~/games): os lugares.
+      if (!res.ok && path && path === start) return show("");
       const data = await res.json().catch(() => ({}));
       const list = el("div", { class: "pick-list" });
       const go = (label, to) => {
