@@ -1,5 +1,7 @@
 Your high scores, saves and settings in a cloud of your own: Google Drive, Dropbox, WebDAV (Nextcloud, ownCloud), SFTP (a PC or a NAS) or MEGA. Every cabinet you sign in uses the same folder, so a record made on one shows up on the others.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/web-cloud.webp" width="640" alt="Cloud backup in the web panel">
+
 It is in **Setup > Cloud backup** on the cabinet, and in **System > Cloud backup** in the [web panel](Web-panel.md).
 
 ## Setting it up

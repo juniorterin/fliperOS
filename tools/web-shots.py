@@ -444,7 +444,7 @@ def main():
     if args.all:
         routes = ["frontend", "live/watch", "live/obs", "library/overview", "library/install", "library/downloads",
                   "library/romfilter", "library/art", "library/files", "system/status", "system/logs", "system/settings",
-                  "system/terminal", "system/lab"]
+                  "system/terminal", "system/lab", "system/achievements", "system/cloud"]
         SHOTS[:] = [("00-login-pc", "", 1440, 900, 1, False, False, "logout"),
                     ("00-login-celular", "", 390, 844, 2, True, False, "logout")]
         for i, route in enumerate(routes, 1):

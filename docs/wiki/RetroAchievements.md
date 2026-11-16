@@ -22,6 +22,8 @@ Signed in, the screen has:
 
 An account made inside an emulator's own menu keeps working while you don't sign in here.
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/web-achievements.webp" width="640" alt="RetroAchievements in the web panel">
+
 ## While you play
 
 Each unlock shows over the game for 5 seconds, in a bar that doesn't take the controls:
