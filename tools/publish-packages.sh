@@ -62,7 +62,16 @@ for recipe in $(bash packaging/build-deb.sh --list-iso); do
   # shellcheck source=/dev/null
   version=$(PKG_VERSION="" PKG_REVISION="" && . "packaging/packages/$recipe.sh" && echo "$PKG_VERSION-$PKG_REVISION")
   deb=$dir/${recipe}_${version}_amd64.deb
-  [[ -f $deb ]] || die "$deb is missing: build it first (bash packaging/build-deb.sh $recipe)"
+  if [[ ! -f $deb ]]; then
+    # Nao compilado aqui, mas ja publicado nesta versao: a linha da lista
+    # fica como esta (tools/publish-changed-packages.sh so compila o que mudou).
+    row=$(awk -F'\t' -v n="$recipe" -v v="$version" '$1 == n && $2 == v { print; exit }' "$list" 2> /dev/null)
+    [[ -n $row ]] && grep -qx "${deb##*/}" <<< "$published" ||
+      die "$deb is missing: build it first (bash packaging/build-deb.sh $recipe)"
+    rows+=("$row")
+    echo "${deb##*/}: already published (not built here)"
+    continue
+  fi
   publish "$recipe" "$version" "$deb"
 done
 
