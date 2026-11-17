@@ -593,7 +593,7 @@ function cgCard(info, actions = []) {
 // motivo em ingles do verificador.
 const CG_PROBLEM_CODES = ["not_zip", "unsafe", "encrypted", "misnamed", "cfg_missing", "cfg_many", "cfg_text", "folder_missing",
   "stranger", "strangers_more", "two_files", "name_missing", "name_bad", "platform_missing", "platform_bad", "exe_missing",
-  "exe_not_found", "command_missing", "mode_bad", "category_long", "controls_bad", "buttons_bad", "players_bad"];
+  "exe_not_found", "command_missing", "mode_bad", "category_long", "controls_bad", "buttons_bad", "players_bad", "runner_bad"];
 
 function cgProblems(p) {
   const base = p.name || cgBaseName(p).replace(/\.fliperos-customgame\.zip$|\.zip$/i, "");
@@ -892,7 +892,7 @@ function cgRenderPacked() {
 function cgNewRow(values) {
   return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "480i",
     modeOther: "", category: "", players: "", buttons: "", controls: [], snap: null, video: null, text: null, key: null, ppdb: null,
-    wine: "", exes: [], programs: [], errors: {}, state: "", error: "" }, values || {});
+    wine: "", runner: "portproton", exes: [], programs: [], errors: {}, state: "", error: "" }, values || {});
 }
 
 // A arte de uma linha: {id} subida pela pessoa, ou {path} a que veio com a
@@ -916,6 +916,7 @@ function cgFound(row, found) {
     const known = ((cg.info && cg.info.modes) || []).find((m) => m.value === cfg.mode);
     if (known) { row.mode = known.label; row.modeOther = ""; } else { row.mode = "other"; row.modeOther = cfg.mode; }
   }
+  if (cfg.runner) row.runner = cfg.runner;
   if (cfg.category && !row.category) row.category = cfg.category;
   if (cfg.players && !row.players) row.players = cfg.players;
   if (cfg.buttons && !row.buttons) row.buttons = cfg.buttons;
@@ -1133,6 +1134,12 @@ function cgControls(row, { redraw, editing, package: pkg } = {}) {
     } else {
       out.run = text("exe", row.folder ? t("cg_no_exe") : "game.exe", "code-in");
     }
+    // O que roda o jogo (runner= no cfg): PortProton (o padrao), Wine ou Wine
+    // Staging. Um jogo instalado troca pelo Setup.
+    if (!editing) {
+      out.run = el("div", { class: "cg-runner" }, out.run, select("runner", [["portproton", t("cg_runner_portproton")],
+        ["wine", t("cg_runner_wine")], ["wine-staging", t("cg_runner_staging")]], true));
+    }
   } else {
     out.run = text("command", row.platform === "native" ? t("cg_ph_native") : t("cg_ph_command"), "code-in");
     if (row.platform === "native" && row.programs.length) {
@@ -1160,7 +1167,8 @@ function cgControls(row, { redraw, editing, package: pkg } = {}) {
   out.buttons = select("buttons", [["", t("cg_any")], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.controls = cgControlsButton(row, changed);
   out.art = cgArt(row, changed);
-  if (row.platform === "windows" && cg.info && cg.info.wine && cg.info.wine.length && !editing && !pkg) {
+  if (row.platform === "windows" && (row.runner || "portproton") === "portproton" && cg.info && cg.info.wine &&
+      cg.info.wine.length && !editing && !pkg) {
     out.art = el("div", { class: "cg-artwine" }, out.art, select("wine", [["", t("cg_wine_default")], ...cg.info.wine.map((w) => [w.value, w.label])], false));
   }
   return out;
@@ -1382,7 +1390,8 @@ function cgPayload(row) {
     exe: row.platform === "windows" ? row.exe : "", command: row.platform === "windows" ? "" : row.command, mode: cgRowMode(row),
     category: row.category, controls: row.controls.join(","), buttons: row.buttons, players: row.players,
     snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), wine: row.platform === "windows" ? row.wine : "",
-    key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "" };
+    key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "",
+    runner: row.platform === "windows" ? row.runner || "portproton" : "" };
 }
 
 // O id da arte subida, ou o caminho da que veio com a pasta.

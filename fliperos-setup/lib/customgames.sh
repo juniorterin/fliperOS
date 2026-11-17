@@ -579,12 +579,12 @@ customgames_tool() {
 # customgames_found PASTA: o que veio com a pasta de um jogo na estrutura do
 # pacote (fliperos-customgame found) em CG_FOUND_FOLDER (a pasta do jogo: a
 # de dentro, quando PASTA e o zip aberto), CG_FOUND_SNAP, CG_FOUND_VIDEO,
-# CG_FOUND_TEXT, CG_FOUND_KEY, CG_FOUND_PPDB e CG_FOUND_EXE (o exe= do
+# CG_FOUND_TEXT, CG_FOUND_KEY, CG_FOUND_PPDB, CG_FOUND_EXE e CG_FOUND_RUNNER (o exe= e o runner= do
 # JOGO.cfg, dentro da pasta do jogo).
 customgames_found() {
   local line key value
   CG_FOUND_FOLDER=$1 CG_FOUND_SNAP="" CG_FOUND_VIDEO="" CG_FOUND_TEXT="" CG_FOUND_KEY="" CG_FOUND_PPDB=""
-  CG_FOUND_EXE=""
+  CG_FOUND_EXE="" CG_FOUND_RUNNER=""
   while IFS= read -r line; do
     key=${line%%=*} value=${line#*=}
     case $key in
@@ -595,6 +595,7 @@ customgames_found() {
       key) CG_FOUND_KEY=$value ;;
       ppdb) CG_FOUND_PPDB=$value ;;
       cfg_exe) CG_FOUND_EXE=$value ;;
+      cfg_runner) CG_FOUND_RUNNER=$value ;;
     esac
   done < <(customgames_tool found "$1" 2>> "${FLIPEROS_LOG:-/dev/null}")
   return 0
@@ -902,7 +903,8 @@ customgames_describe() {
     customgames_out game "$group" "$name" "$platform" "$mode" "$(customgames_cfg_field "$cfg" category)" \
       "$(customgames_cfg_field "$cfg" controls)" "$(customgames_cfg_field "$cfg" buttons)" \
       "$(customgames_cfg_field "$cfg" players)" "$cmd" "$(customgames_cfg_field "$cfg" exe)" \
-      "$(customgames_cfg_field "$cfg" folder)" "$(customgames_cfg_field "$cfg" package)"
+      "$(customgames_cfg_field "$cfg" folder)" "$(customgames_cfg_field "$cfg" package)" \
+      "$(customgames_cfg_field "$cfg" runner)"
   done < <(customgames_list)
   while IFS= read -r line; do
     IFS='|' read -ra f <<< "$line"
@@ -954,7 +956,7 @@ customgames_row_fields() {
   R_GROUP=${f[0]:-} R_NAME=${f[1]:-} R_PLATFORM=${f[2]:-} R_FOLDER=${f[3]:-} R_EXE=${f[4]:-}
   R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
   R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
-  R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-}
+  R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-} R_RUNNER=${f[18]:-}
 }
 
 # customgames_row_errors [package]: o que esta errado na linha de R_* (uma
@@ -1011,6 +1013,10 @@ customgames_row_errors() {
   [[ -z $R_TEXT || -f $R_TEXT ]] || echo "text|The text file was not found: send it again."
   [[ -z ${R_KEY:-} || -f $R_KEY ]] || echo "key|The .key file was not found: pick the folder again."
   [[ -z ${R_PPDB:-} || -f $R_PPDB ]] || echo "ppdb|The .ppdb file was not found: pick the folder again."
+  case ${R_RUNNER:-} in
+    "" | portproton | wine | wine-staging) ;;
+    *) echo "runner|The runner is PortProton, Wine or Wine Staging." ;;
+  esac
   return 0
 }
 
@@ -1092,6 +1098,7 @@ customgames_add_row() {
     windows | native)
       args=(--group "$R_GROUP" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
       if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
+      [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
       # O JOGO.key e o JOGO.ppdb que vieram com a pasta (a estrutura do pacote).
       [[ -n ${R_KEY:-} ]] && args+=(--key "$R_KEY")
       [[ -n ${R_PPDB:-} && $R_PLATFORM == windows ]] && args+=(--ppdb "$R_PPDB")
@@ -1115,7 +1122,7 @@ customgames_add_row() {
       customgames_entry "$R_GROUP" "$R_NAME" || { R_WHY="could not write $R_NAME.sh"; return 1; }
       folder=$(customgames_cfg_field "$(customgames_cfg "$R_GROUP" "$R_NAME")" folder)
       # O Wine que o PortProton usa neste jogo (o EXE.ppdb ao lado do .exe).
-      if [[ $R_PLATFORM == windows && -n $R_WINE ]] && portproton_installed; then
+      if [[ $R_PLATFORM == windows && -n $R_WINE && ${R_RUNNER:-portproton} == portproton ]] && portproton_installed; then
         "$CUSTOM_GAMES_PORTPROTON" edit-db "$folder/$R_EXE" "PW_WINE_USE=$R_WINE" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1 ||
           log_warn "PortProton: PW_WINE_USE nao gravado em $folder/$R_EXE"
       fi
@@ -1353,6 +1360,7 @@ customgames_pack_game() {
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder"
     --mode "$(customgames_cfg_field "$cfg" mode)")
   if [[ $platform == windows ]]; then args+=(--exe "$exe"); else args+=(--command "$(customgames_cfg_field "$cfg" command)"); fi
+  [[ $platform == windows && -n $(customgames_cfg_field "$cfg" runner) ]] && args+=(--runner "$(customgames_cfg_field "$cfg" runner)")
   for value in category controls buttons players; do
     [[ -n $(customgames_cfg_field "$cfg" "$value") ]] && args+=("--$value" "$(customgames_cfg_field "$cfg" "$value")")
   done
@@ -1415,7 +1423,7 @@ customgames_test() {
   mode=$(customgames_mode "${R_MODE:-480i}")
   real=$(realpath -- "$R_FOLDER")
   pairs=("format=1" "name=$R_NAME" "platform=$R_PLATFORM" "mode=$mode" "folder=$real")
-  if [[ $R_PLATFORM == windows ]]; then pairs+=("exe=$R_EXE"); else pairs+=("command=$R_COMMAND"); fi
+  if [[ $R_PLATFORM == windows ]]; then pairs+=("exe=$R_EXE" "runner=${R_RUNNER:-}"); else pairs+=("command=$R_COMMAND"); fi
   customgames_cfg_write "$cfg" "${pairs[@]}" || { echo "could not write $cfg"; return 1; }
   # O .key que veio com a pasta comeca o teste (o menu na tela o mostra).
   [[ -n ${R_KEY:-} && -f $R_KEY && ! -f $dir/$R_NAME.key ]] && cp -- "$R_KEY" "$dir/$R_NAME.key" &&
@@ -1456,11 +1464,12 @@ customgames_create() {
   [[ -n ${R_KEY:-} ]] || R_KEY=$(customgames_test_key "$R_NAME")
   args=(--out "$out" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
   if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
+  [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
   for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players SNAP:snap VIDEO:video TEXT:text \
     KEY:key PPDB:ppdb TEXT_STRING:text-string; do
     var=R_${key%%:*}
     [[ -n ${!var:-} ]] || continue
-    [[ $key == PPDB:ppdb && $R_PLATFORM != windows ]] && continue
+    [[ $key == PPDB:ppdb && ($R_PLATFORM != windows || ${R_RUNNER:-portproton} != portproton) ]] && continue
     args+=("--${key#*:}" "${!var}")
   done
   customgames_tool pack "${args[@]}" --progress 0 100 2>> "${FLIPEROS_LOG:-/dev/null}"

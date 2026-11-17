@@ -2652,7 +2652,7 @@ def menu_sounds():
 # caminho. Os jogos de uma pasta sao copiados para ~/games/GRUPO/NOME.
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
-                     "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb")
+                     "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner")
 CUSTOMGAME_ROWS = 500
 CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 # A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
@@ -2764,7 +2764,7 @@ def customgames_info():
             info["groups"].append({"name": rest[0], "count": int(rest[1]) if rest[1].isdigit() else 0})
         elif kind == "game" and len(rest) >= 12:
             info["games"].append(dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
-                                           "players", "command", "exe", "folder", "package"), rest)))
+                                           "players", "command", "exe", "folder", "package", "runner"), rest)))
         elif kind == "pending" and len(rest) >= 5:
             # bad: why (os textos) e codes (codigo=argumento;..., que a pagina traduz).
             info["pending"].append(dict(zip(("zip", "group", "name", "platform", "state", "why", "codes"),

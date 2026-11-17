@@ -1050,6 +1050,15 @@ screen_custom_pick_mode() {
   customgames_mode "$choice"
 }
 
+# screen_custom_pick_runner NOME ATUAL: imprime o que roda o jogo do Windows
+# (portproton, wine ou wine-staging). Status 1: Esc.
+screen_custom_pick_runner() {
+  ui_radio "Runner" "What runs $1: if the game does not open or runs badly in one, try another." "${2:-portproton}" \
+    "portproton|PortProton (default, made for games)" \
+    "wine|Wine" \
+    "wine-staging|Wine Staging (newest Wine)"
+}
+
 # screen_custom_pick_category ATUAL: o genero e depois a categoria do
 # catver.ini ("Shooter / Gallery"). Status 1: Esc.
 screen_custom_pick_category() {
@@ -1173,7 +1182,7 @@ customgames_browse() {
 screen_custom_package_create() {
   local group=$1 from=${2:-} title="Create package" name="" platform=native folder="" exe="" cmd="" snap="" video=""
   local text="" text_string="" mode=640x480@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
-  local out base value rel
+  local out base value rel runner=portproton
   local -a args
   if [[ -n $from ]]; then
     cfg=$(customgames_cfg "$group" "$from")
@@ -1181,6 +1190,8 @@ screen_custom_package_create() {
     platform=$(customgames_cfg_field "$cfg" platform)
     folder=$(customgames_cfg_field "$cfg" folder)
     exe=$(customgames_cfg_field "$cfg" exe)
+    runner=$(customgames_cfg_field "$cfg" runner)
+    runner=${runner:-portproton}
     cmd=$(customgames_cfg_field "$cfg" command)
     mode=$(customgames_cfg_field "$cfg" mode)
     category=$(customgames_cfg_field "$cfg" category)
@@ -1207,7 +1218,7 @@ screen_custom_package_create() {
     done
     # 2. Windows ou Linux.
     platform=$(ui_radio "$title" "Is $name a Windows game (a .exe) or a Linux one?" windows \
-      "windows|Windows (.exe, runs in PortProton)" "native|Linux (a program or a command)") || return 0
+      "windows|Windows (.exe)" "native|Linux (a program or a command)") || return 0
     # 3. A pasta do jogo.
     folder=$(customgames_browse "Open the folder of $name (everything the game needs), then Use this folder." dir) ||
       return 0
@@ -1226,9 +1237,15 @@ screen_custom_package_create() {
         exe=""
       done
       exe=${exe#"$folder"/}
+      # O que roda o jogo (runner= no cfg): o PortProton, o Wine ou o Wine
+      # Staging (o do JOGO.cfg, se veio um).
+      runner=${CG_FOUND_RUNNER:-$runner}
+      runner=$(screen_custom_pick_runner "$name" "$runner") || return 0
       # As configuracoes do PortProton do jogo (o Wine dele) no .ppdb: o
-      # JOGO.ppdb que veio com a pasta, ou feito agora.
-      if [[ -n $CG_FOUND_PPDB ]]; then
+      # JOGO.ppdb que veio com a pasta, ou feito agora. So com o PortProton.
+      if [[ $runner != portproton ]]; then
+        ppdb=""
+      elif [[ -n $CG_FOUND_PPDB ]]; then
         ppdb=$CG_FOUND_PPDB
       elif screen_portproton_need; then
         screen_portproton_ppdb "$folder/$exe" || return 0
@@ -1290,7 +1307,7 @@ screen_custom_package_create() {
     ui_yesno "$title" "$(basename "$out") already exists in ~/roms/custom-packages. Replace it?" no || return 0
   fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder" --mode "$mode")
-  [[ $platform == windows ]] && args+=(--exe "$exe") || args+=(--command "$cmd")
+  [[ $platform == windows ]] && args+=(--exe "$exe" --runner "$runner") || args+=(--command "$cmd")
   for value in category controls buttons players snap video text key ppdb; do
     [[ -n ${!value} ]] && args+=("--$value" "${!value}")
   done

@@ -488,6 +488,8 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 :where(.sub, .cg-dialog) .cg-artbtn.on.found { border-color: var(--purple); }
 .cg-chip { font-size: 12px; white-space: nowrap; }
 .cg-artwine { display: grid; gap: 6px; }
+/* O exe e o runner (PortProton, Wine, Wine Staging) do jogo do Windows, um embaixo do outro. */
+.cg-runner { display: grid; gap: 6px; }
 .cg-status { margin: 12px 0 4px; min-height: 1.4em; }
 .cg-status .ok { color: var(--green); } .cg-status .error { color: var(--bad); }
 .cg-ppnote { display: flex; gap: 8px; align-items: center; margin-top: 10px; color: var(--orange); }

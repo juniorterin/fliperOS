@@ -45,7 +45,7 @@ Then, with the controller:
 4. **Windows or Linux**: a Windows game is a `.exe`; a Linux one is a program or a command.
 5. **The game folder**: open it in the folder picker and choose *Use this folder*. Everything the game needs must be inside it. If the folder has the [package's structure](#a-folder-with-the-packages-structure) (`<game>.jpg`, `<game>.mp4`, `<game>.txt`, `<game>.key`, `<game>.ppdb` or `<game>.cfg` next to the folder `<game>`), those files are picked by themselves: steps 6 and 7 come already filled.
 6. **What opens the game**:
-   - Windows: pick the `.exe` inside the folder. The first time, the Setup offers to download PortProton (about 3 GB, see [below](#windows-games-portproton)). Then choose which Wine runs it; keep the first one unless the game fails with it.
+   - Windows: pick the `.exe` inside the folder, then **what runs it**: PortProton (the default), Wine or Wine Staging. If the game doesn't open or runs badly with one, make the package again with another (see [Windows games: PortProton, Wine or Wine Staging](#windows-games-portproton)). With PortProton, the first time the Setup offers to download it (about 3 GB); then choose which of its Wine builds runs the game; keep the first one unless the game fails with it.
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
 7. **Picture, video and text** (optional): pick each file, or type the text. Without them the game gets samples, which you can replace later.
 8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.
@@ -183,6 +183,7 @@ players=2
 | `name` | the name in the frontend (required) |
 | `platform` | `windows` or `native` (required) |
 | `exe` | Windows: the `.exe`, relative to the game folder |
+| `runner` | Windows: what runs it, `portproton` (the default, without the line), `wine` or `wine-staging` |
 | `command` | Linux: the command line, run inside the game folder |
 | `mode` | `240p` (640x240), `240p-hack` (640x240 on the tube, the game sees 640x480), `480i` (640x480) or `WIDTHxHEIGHT@HZ`, for example `384x224@59.6` (without it, 480i) |
 | `category` | a category of MAME's catver.ini, `Genre / Subgenre` |
@@ -230,6 +231,16 @@ PortProton's own installer only works with windows and a mouse. FliperOS install
 The **`.ppdb`** is PortProton's settings file for one `.exe`, next to it: `mslugx.exe.ppdb`. It says, for example, which Wine runs the game (`PW_WINE_USE`) and which prefix it uses. When you create a package, the Setup asks which Wine runs the game and PortProton writes the `.ppdb`; installing the package puts it back next to the `.exe`. The choices are Proton LG (PortProton's default), Wine LG, and any other build already downloaded in `~/PortProton/data/dist`.
 
 Without PortProton (you said no, or it failed), a Windows package can still be installed: the game opens with the system's Wine (Setup > Games > Extras), if there is one.
+
+**PortProton, Wine or Wine Staging.** Each Windows game says what runs it (`runner=` in its `.cfg`), chosen when the package is created, in the Setup or in the web panel's **Create package** and **Games** table:
+
+| Runner | What it is | Installed from |
+|---|---|---|
+| PortProton (default) | Wine and Proton builds made for games, with DXVK, in a container of their own | Setup > Games > Extras > PortProton, or offered with the first Windows game |
+| Wine | the system's Wine | Setup > Games > Extras > Wine |
+| Wine Staging | the newest Wine from WineHQ, with fixes not in Wine yet (it takes the place of Wine) | Setup > Games > Extras > Wine Staging |
+
+Some games only open, or run better, with one of them. The `.ppdb` only goes with PortProton. When the game's runner isn't installed on a cabinet, the game opens with the first of the others that is (PortProton, then Wine, then Wine Staging), and the game's log says so.
 
 ## The controller as a keyboard
 

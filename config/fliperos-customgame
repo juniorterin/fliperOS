@@ -95,6 +95,13 @@ VIDEO_EXTS = ("mp4", "mkv", "webm", "avi", "mov", "flv")
 # As midias do pacote e a pasta de ~/media de cada uma (as do fedata.py).
 MEDIA = (("snap", IMAGE_EXTS), ("preview", VIDEO_EXTS), ("texto", ("txt",)))
 PLATFORMS = ("windows", "native")
+# O que abre um jogo do Windows (runner= no cfg): o PortProton (o padrao, sem a
+# linha), o Wine do sistema ou o Wine Staging (Setup > Games > Extras). Um jogo
+# que roda melhor (ou so roda) num deles leva a escolha no pacote; o que nao
+# estiver instalado cai no proximo (windows_command).
+RUNNERS = ("portproton", "wine", "wine-staging")
+DEFAULT_RUNNER = "portproton"
+WINE_STAGING = os.environ.get("FLIPEROS_WINE_STAGING") or "/opt/wine-staging/bin/wine"
 # Os 13 tipos de controle do filtro de ROMs (lib/romclean.sh) e como o
 # Attract-Mode os escreve no campo Control da romlist (fliperos-romclean
 # control_label): o frontend os filtra por ele.
@@ -114,7 +121,7 @@ MODE_RE = re.compile(r"^[1-9][0-9]{1,3}x[1-9][0-9]{1,3}@[1-9][0-9]{0,2}(\.[0-9]+
 KEY_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "start", "coin")
 KEY_LINE = re.compile(r"^p([1-8])_(%s)=([A-Z0-9_]{1,24})$" % "|".join(KEY_CONTROLS))
 # A ordem das chaves no cfg gravado.
-CFG_ORDER = ("format", "name", "platform", "exe", "command", "mode", "category", "controls", "buttons", "players",
+CFG_ORDER = ("format", "name", "platform", "exe", "runner", "command", "mode", "category", "controls", "buttons", "players",
              "folder", "package", "package_stamp")
 # O que ja vem comprimido vai no zip sem comprimir de novo (o pacote feito no
 # gabinete: o video, as imagens e os arquivos dos jogos que ja sao zip).
@@ -274,6 +281,11 @@ def check_cfg(cfg, base, game_files, problems=None):
         elif game_files and exe not in game_files:
             bad("exe_not_found", exe, "%s.cfg: %s is not in the folder %s" % (base, exe, base))
         out["exe"] = exe
+        runner = cfg.get("runner", "").strip().lower()
+        if runner and runner not in RUNNERS:
+            bad("runner_bad", runner, "%s.cfg: runner must be %s, not %r" % (base, ", ".join(RUNNERS), runner))
+        elif runner and runner != DEFAULT_RUNNER:
+            out["runner"] = runner
     elif platform == "native":
         command = cfg.get("command", "")
         if not command.strip():
@@ -794,6 +806,7 @@ def cmd_pack(args):
             if not exe.startswith(folder + os.sep) or not os.path.isfile(exe):
                 raise Bad("the .exe must be inside the game folder: %s" % args.exe)
             cfg["exe"] = os.path.relpath(exe, folder).replace(os.sep, "/")
+            cfg["runner"] = args.runner or ""
         else:
             cfg["command"] = args.command or ""
         rels = {r for _, r in files}
@@ -937,6 +950,7 @@ def cmd_add(args):
         rels = {r for _, r in files}
         if args.platform == "windows":
             cfg["exe"] = rel_path(args.exe or "")
+            cfg["runner"] = args.runner or ""
             if cfg["exe"] not in rels:
                 raise Bad("the .exe %s is not in the folder %s" % (args.exe or "(none)", args.folder))
         else:
@@ -1168,6 +1182,8 @@ def cfg_hints(cfg, game):
     exe = rel_path(cfg.get("exe", ""))
     if platform == "windows" and exe and os.path.isfile(os.path.join(game, *exe.split("/"))):
         out["exe"] = exe
+    if platform == "windows" and cfg.get("runner", "").strip().lower() in RUNNERS:
+        out["runner"] = cfg["runner"].strip().lower()
     if platform == "native" and cfg.get("command", "").strip():
         out["command"] = cfg["command"].strip()
     mode = mode_of(cfg.get("mode", ""))
@@ -1249,7 +1265,7 @@ def scan_folder(folder):
     hints = found["cfg"]
     for key in ("snap", "video", "text", "key", "ppdb", "where"):
         row[key] = found[key]
-    row["cfg"] = {k: v for k, v in hints.items() if k in ("mode", "category", "controls", "buttons", "players")}
+    row["cfg"] = {k: v for k, v in hints.items() if k in ("mode", "runner", "category", "controls", "buttons", "players")}
     if hints.get("name"):
         row["name"] = hints["name"]
     # cfg_run: o exe= (ou command=) veio do JOGO.cfg (a pagina o poe por
@@ -1307,17 +1323,37 @@ def mapper(cfg_path):
         return None
 
 
-def windows_command(exe):
-    """O .exe pelo PortProton (instalado pelo Setup na hora do primeiro jogo
-    do Windows); sem ele, pelo Wine do sistema."""
-    portproton = os.path.join(BIN, "fliperos-portproton")
-    if os.access(portproton, os.X_OK) and subprocess.run([portproton, "check"], stdout=subprocess.DEVNULL,
-                                                         stderr=subprocess.DEVNULL).returncode == 0:
-        return [portproton, "run", exe]
-    wine = shutil.which("wine")
-    if wine:
-        print("fliperos-customgame: PortProton is not installed, opening %s with %s" % (exe, wine), file=sys.stderr)
-        return [wine, exe]
+def runner_command(runner, exe):
+    """O comando de um runner instalado, ou None."""
+    if runner == "portproton":
+        portproton = os.path.join(BIN, "fliperos-portproton")
+        if os.access(portproton, os.X_OK) and subprocess.run([portproton, "check"], stdout=subprocess.DEVNULL,
+                                                             stderr=subprocess.DEVNULL).returncode == 0:
+            return [portproton, "run", exe]
+    elif runner == "wine-staging":
+        if os.access(WINE_STAGING, os.X_OK):
+            return [WINE_STAGING, exe]
+    elif runner == "wine":
+        # Com o Wine Staging instalado, o wine do PATH ja e ele (o da WineHQ
+        # toma o lugar do Ubuntu, config/fliperos-extras).
+        wine = shutil.which("wine")
+        if wine:
+            return [wine, exe]
+    return None
+
+
+def windows_command(exe, runner=""):
+    """O .exe pelo runner do jogo (runner= no cfg; sem ele, o PortProton, que o
+    Setup instala na hora do primeiro jogo do Windows). Sem o escolhido, o
+    primeiro instalado dos outros, com o aviso no log."""
+    runner = runner if runner in RUNNERS else DEFAULT_RUNNER
+    for name in (runner,) + tuple(r for r in RUNNERS if r != runner):
+        argv = runner_command(name, exe)
+        if argv:
+            if name != runner:
+                print("fliperos-customgame: %s is not installed, opening %s with %s" % (runner, exe, name),
+                      file=sys.stderr)
+            return argv
     return None
 
 
@@ -1340,9 +1376,9 @@ def cmd_run(args):
             argv, cwd = ["bash", "-c", cfg.get("command", "")], folder
         else:
             exe = os.path.join(folder, *cfg.get("exe", "").split("/"))
-            argv, cwd = windows_command(exe), os.path.dirname(exe)
+            argv, cwd = windows_command(exe, cfg.get("runner", "")), os.path.dirname(exe)
             if not argv:
-                print("fliperos-customgame: neither PortProton nor Wine is installed", file=sys.stderr)
+                print("fliperos-customgame: neither PortProton nor Wine nor Wine Staging is installed", file=sys.stderr)
                 return 1
     else:
         print("fliperos-customgame: unknown platform %r in %s" % (platform, path), file=sys.stderr)
@@ -1397,6 +1433,7 @@ def main():
     s.add_argument("--platform", choices=PLATFORMS, required=True)
     s.add_argument("--folder", required=True)
     s.add_argument("--exe")
+    s.add_argument("--runner", choices=RUNNERS)
     s.add_argument("--command")
     s.add_argument("--mode", default=DEFAULT_MODE)
     for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string", "key", "ppdb"):
@@ -1408,6 +1445,7 @@ def main():
     s.add_argument("--platform", choices=PLATFORMS, required=True)
     s.add_argument("--folder", required=True)
     s.add_argument("--exe")
+    s.add_argument("--runner", choices=RUNNERS)
     s.add_argument("--command")
     s.add_argument("--mode", default=DEFAULT_MODE)
     for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string", "key", "ppdb"):

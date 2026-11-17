@@ -113,7 +113,7 @@ Those files are found in the opened zip (pick the folder that holds `GAME/` and 
 | Name | Typed |
 | Type | Windows, Linux or Command |
 | Folder | Typed, or picked in the cabinet's folders |
-| Executable / command | The `.exe` files found in the folder (installers left out), or the Linux programs; a command is typed |
+| Executable / command | The `.exe` files found in the folder (installers left out), with what runs it below (PortProton, Wine or Wine Staging; PortProton by default), or the Linux programs; a command is typed |
 | Video mode | 240p, 240p hack (Mugen: 640x240 on the tube, the game sees 640x480), 480i, or another (`WIDTHxHEIGHT@HZ`) |
 | Category | MAME's categories (`catver.ini`) |
 | Players, Buttons | A list |

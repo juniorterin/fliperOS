@@ -4283,6 +4283,48 @@ class CustomGamesTests(Base):
         self.assertFalse((self.roms / "custom" / "Linux" / "Doom.cfg").exists())
         self.assertEqual(self.env.out("customgames_pending", e).split("|")[4], "new")
 
+    def test_windows_game_opens_with_its_runner(self):
+        # runner= no cfg: PortProton (o padrao, sem a linha), wine ou
+        # wine-staging; sem o escolhido, o primeiro instalado dos outros.
+        media, games, e = self.pkg_env()
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip",
+                             cfg="name=Pang\nplatform=windows\nexe=bin/pang.exe\nrunner=wine-staging\n")
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(zip_)))
+        cfg = self.roms / "custom" / "PC" / "Pang.cfg"
+        self.assertIn("runner=wine-staging\n", cfg.read_text())
+        tools = self.env.dir / "runners"
+        (tools / "bin").mkdir(parents=True)
+        for name, path in (("staging", tools / "staging"), ("wine", tools / "wine"),
+                           ("portproton", tools / "bin" / "fliperos-portproton")):
+            path.write_text('#!/bin/sh\n[ "$1" = check ] && exit 0\necho "%s $*" > %s/ran\n' % (name, tools))
+            path.chmod(0o755)
+
+        def run(runner, staging=True, portproton=True):
+            text = re.sub(r"(?m)^runner=.*\n", "", cfg.read_text()) + ("runner=%s\n" % runner if runner else "")
+            cfg.write_text(text)
+            (tools / "ran").unlink(missing_ok=True)
+            (tools / "bin" / "fliperos-portproton").chmod(0o755 if portproton else 0o644)
+            env = dict(os.environ, FLIPEROS_CUSTOMGAME_KEYS="off", FLIPEROS_USER="nobody-here",
+                       FLIPEROS_BIN=str(tools / "bin"), FLIPEROS_WINE_STAGING=str(tools / ("staging" if staging else "none")),
+                       PATH="%s:%s" % (tools, os.environ["PATH"]))
+            r = subprocess.run(["python3", e["CUSTOM_GAMES_TOOL"], "run", str(cfg)], capture_output=True, text=True, env=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return (tools / "ran").read_text().split()[0], r.stderr
+
+        self.assertEqual(run("wine-staging")[0], "staging")
+        self.assertEqual(run("wine")[0], "wine")
+        self.assertEqual(run("")[0], "portproton")
+        self.assertEqual(run("portproton")[0], "portproton")
+        # O Wine Staging nao instalado: o PortProton, com o aviso.
+        ran, err = run("wine-staging", staging=False)
+        self.assertEqual(ran, "portproton")
+        self.assertIn("wine-staging is not installed", err)
+        self.assertEqual(run("", portproton=False)[0], "wine")
+        # Um runner que nao existe e recusado no pacote.
+        bad = self.make_pkg(self.roms / "custom-packages" / "Bad.fliperos-customgame.zip", base="Bad",
+                            cfg="name=Bad\nplatform=windows\nexe=bin/pang.exe\nrunner=dosbox\n")
+        self.assertIn("runner_bad", self.env.out("customgames_pending", dict(e, Z=str(bad))))
+
     def test_a_bad_zip_is_refused_and_nothing_is_written(self):
         media, games, e = self.pkg_env()
         custom = self.roms / "custom"
