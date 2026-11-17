@@ -1151,8 +1151,16 @@ function cgControls(row, { redraw, editing, package: pkg } = {}) {
   // O modo: 240p, 240p hack (Mugen), 480i ou outro (o campo LxA@Hz aparece).
   const modes = ((cg.info && cg.info.modes) || [{ label: "240p" }, { label: "480i" }])
     .map((m) => [m.label, m.label === "240p-hack" ? t("cg_mode_hack") : m.label]);
+  // O campo LxA@Hz existe sempre e so aparece com "outro": quem nao redesenha
+  // (o Editar) mostra o campo do mesmo jeito.
   const mode = select("mode", [...modes, ["other", t("cg_mode_other")]], true);
-  out.mode = row.mode === "other" ? el("div", { class: "cg-mode" }, mode, text("modeOther", t("cg_ph_mode"), "code-in")) : mode;
+  const modeOther = text("modeOther", t("cg_ph_mode"), "code-in");
+  modeOther.hidden = row.mode !== "other";
+  mode.addEventListener("change", () => {
+    modeOther.hidden = mode.value !== "other";
+    if (!modeOther.hidden && modeOther.isConnected) modeOther.focus();
+  });
+  out.mode = el("div", { class: "cg-mode" }, mode, modeOther);
   // A categoria do catver.ini: o genero e as categorias dele.
   const category = el("select", { "aria-label": t("cg_f_category") }, el("option", { value: "" }, t("cg_none")),
     ...((cg.info && cg.info.genres) || []).map((g) => el("optgroup", { label: g.name }, el("option", { value: g.name }, g.name),
