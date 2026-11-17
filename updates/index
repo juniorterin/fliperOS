@@ -83,3 +83,4 @@
 80	8b470fd2be4f5d5b75a0d1ad60cdbcc521e4b62b	5df31bd08c2c30cbd6e00ade3de9e49649f3b892b2a2463c10588aa587db0d16	no	Model 2 emulator is now Keisho (new address, rebuilt with your settings)
 81	86c49568275fc803631c7ab1fb3dc25deee69e22	4c5145307af9096f0623d16403d4a1cbfa069a5f33e9ef2264bea64bd8b6473e	no	Cloud backup keeps your custom folders
 82	65dd151e7c252c3c1b5d03c8c43d3c06284eee90	6be7bc2a32fe4bce24a767a19c5292b374cd2c7143692b4de8b2379c522ec49f	no	Quiet update: the ps1, custom and custom-packages folders exist from the first login, Custom games has its own area in the web panel
+83	0cb3a2826e204b59908700b5910260b126d40a9b	5d4d2e9f68725a2deca633b6cff305db8b27c1845d957b8e262f8ba661b24638	no	Keisho runs Model 2 and Model 3 with Vulkan or OpenGL; Supermodel removed
