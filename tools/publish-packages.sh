@@ -75,6 +75,25 @@ for recipe in $(bash packaging/build-deb.sh --list-iso); do
   publish "$recipe" "$version" "$deb"
 done
 
+# As receitas sob demanda (compiladas no gabinete pelo Setup) nao vao na
+# ISO nem na lista, mas o .deb pronto fica no release como copia: se o
+# upstream sair do ar, ainda ha o que instalar. So se o .deb existe aqui.
+for recipe in $(bash packaging/build-deb.sh --list | grep -vxFf <(bash packaging/build-deb.sh --list-iso)); do
+  version=$(PKG_VERSION="" PKG_REVISION="" && . "packaging/packages/$recipe.sh" && echo "$PKG_VERSION-$PKG_REVISION")
+  deb=$dir/${recipe}_${version}_amd64.deb
+  file=${deb##*/}
+  if [[ ! -f $deb ]]; then
+    echo "$recipe: no local .deb, no backup copy"
+  elif [[ $file == *[+:]* ]]; then
+    echo "$file: not backed up (GitHub renames + and : in asset names; change the recipe's version)"
+  elif grep -qx "$file" <<< "$published"; then
+    echo "$file: backup already published"
+  else
+    gh release upload "$tag" -R "$repo" "$deb" || die "could not upload $file"
+    echo "$file: backup published"
+  fi
+done
+
 # O kernel 15 kHz (fliperos-kernel.sh build output/kernel): a imagem e os
 # headers do build de agora, se ja compilados. Cada build e um pacote novo
 # (linux-image-6.18.54-15khz.N), instalado ao lado do anterior.
