@@ -15,7 +15,8 @@
 #                                         (config e tudo o que se configura e se usa: os
 #                                         emuladores, os frontends, os jogos jogados e os
 #                                         favoritos, os magnets do Downloader e, do sistema,
-#                                         os controles, a GunCon, os perfis da OSD...)
+#                                         os controles, a GunCon, os perfis da OSD, as
+#                                         custom folders...)
 #   fliperos-cloud sync [push|pull|both]  agora (o padrao e both: os dois lados, o mais novo vence)
 #   fliperos-cloud watch PID              (fliperos-kms-run/x11-run) espera o jogo fechar e, com o
 #                                         automatico ligado, sincroniza os hi-scores e os saves; as
@@ -143,6 +144,12 @@ SYSTEM_RESTORE=${FLIPEROS_CLOUD_RESTORE:-sudo -n /usr/local/bin/fliperos-setup -
 # Os arquivos do /etc/fliperos que sao da pessoa (os outros vem da imagem).
 SYSTEM_FILES=(buttons.map buttons-bt.map buttons.layout guncon2.conf services.conf session quirks.conf
   osd-profiles.conf fliperos.conf cheevos 'retroarch/**' 'mame/**')
+
+# As custom folders (Setup > Games > Folders) sao links em ~, que o rclone
+# nao leva: o Setup as anota em ~/.config/fliperos/folders.list (que vai no
+# config/fliperos) antes de cada passada e, depois de receber, refaz as que
+# faltam aqui, com o disco ligado.
+FOLDERS_CLI=${FLIPEROS_CLOUD_FOLDERS:-sudo -n /usr/local/bin/fliperos-setup --folders}
 
 # O rclone de cada passada: as transferencias em paralelo (muitos arquivos
 # pequenos), sem avisar dos links simbolicos (os saves e as nvram do
@@ -377,6 +384,11 @@ cmd_sync() {
   log "sync $dir $groups"
   echo "@step 0 Syncing with the cloud"
   work=$(mktemp -d "${TMPDIR:-/tmp}/fliperos-cloud.XXXXXX") || return 1
+  # A lista das custom folders igual ao disco (tambem so recebendo: uma que
+  # a pessoa tirou aqui nao volta da lista antiga).
+  if [[ ,$groups, == *,config,* ]]; then
+    $FOLDERS_CLI cloud-export >> "$LOG" 2>&1 || log "folders: the list was not updated"
+  fi
   # A estimativa da barra: quantos arquivos ha aqui para enviar.
   est=0
   tree_build push "$groups"
@@ -402,6 +414,9 @@ cmd_sync() {
       # O /etc/fliperos pelo Setup (root): so o que veio mais novo que o daqui.
       if has_leaf config/system/etc && [[ -n $(find "$SYSTEM_STAGE" -type f -print -quit 2> /dev/null) ]]; then
         $SYSTEM_RESTORE "$SYSTEM_STAGE" >> "$LOG" 2>&1 || rc=1
+      fi
+      if has_leaf config/fliperos; then
+        $FOLDERS_CLI cloud-restore >> "$LOG" 2>&1 || log "folders: the custom folders were not restored"
       fi
     fi
   done

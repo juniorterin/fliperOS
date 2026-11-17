@@ -8,9 +8,11 @@
 #
 # Uma pasta e dita pelo caminho dela a partir de ~ ("roms/retroarch/fbneo").
 #
-# Nada disso fica anotado: o estado e sempre o que esta no disco. Um link
-# feito ou apagado a mao (SSH, a pasta da rede, o desktop) vale igual ao do
-# Setup.
+# O estado e sempre o que esta no disco. Um link feito ou apagado a mao
+# (SSH, a pasta da rede, o desktop) vale igual ao do Setup. So a nuvem tem
+# uma copia: o rclone nao leva links, entao a lista FOLDERS_LIST (pasta e
+# alvo) vai com as configuracoes e, numa instalacao nova, refaz os links
+# (folders_cloud_export e folders_cloud_restore, pelo fliperos-cloud).
 
 FOLDERS_HOME=${FOLDERS_HOME:-/home/$FLIPEROS_USER}
 # As raizes. A ~/config fica de fora: so tem links para as configuracoes,
@@ -19,6 +21,9 @@ FOLDERS_NAMES="roms bios media nvram save splashscreen"
 # Onde o fliperos-automount monta os discos: o navegador de pastas abre ali.
 FOLDERS_MOUNTS=${FOLDERS_MOUNTS:-/media/$FLIPEROS_USER}
 FOLDERS_SCRIPT=${FOLDERS_SCRIPT:-/opt/fliperos/bin/fliperos-roms}
+# A copia para a nuvem: "PASTA<tab>ALVO" por linha, em ~/.config/fliperos
+# (o config/fliperos do backup).
+FOLDERS_LIST=${FOLDERS_LIST:-$FOLDERS_HOME/.config/fliperos/folders.list}
 # Por que a ultima troca foi recusada, em palavras para a tela.
 FOLDERS_ERROR=""
 # Onde ficou a pasta de antes na ultima troca (vazio: nenhuma foi guardada).
@@ -310,6 +315,7 @@ folders_link() {
   fi
   folders_own "$path"
   log_info "Folders: $path -> $target${FOLDERS_KEPT:+ (a de antes em $FOLDERS_KEPT)}"
+  folders_list_set "$rel" "$target"
   folders_populate
   return 0
 }
@@ -343,6 +349,103 @@ folders_unlink() {
     rc=2
   fi
   log_info "Folders: $path sem custom folder (a de antes $( ((rc)) && echo "nao existia, criada" || echo "voltou"))"
+  folders_list_set "$rel" ""
   folders_populate
   return "$rc"
+}
+
+# folders_list_read imprime a lista da nuvem ("PASTA<tab>ALVO"), so as
+# linhas que servem.
+folders_list_read() {
+  local rel target
+  [[ -f $FOLDERS_LIST ]] || return 0
+  while IFS=$'\t' read -r rel target; do
+    folders_known "$rel" && [[ $target == /* ]] || continue
+    printf '%s\t%s\n' "$rel" "$target"
+  done < "$FOLDERS_LIST"
+  return 0
+}
+
+# folders_list_write LINHAS grava a lista em ordem (a pasta antes das de
+# dentro) e so se mudou: a data do arquivo decide quem vence na nuvem. Sem
+# lista e sem nenhuma custom folder, nada e criado: uma instalacao nova nao
+# manda uma lista vazia por cima da que esta na nuvem.
+folders_list_write() {
+  local content tmp
+  content=$(LC_ALL=C sort -u <<< "$1" | sed '/^$/d')
+  if [[ -f $FOLDERS_LIST ]]; then
+    [[ $(< "$FOLDERS_LIST") == "$content" ]] && return 0
+  else
+    [[ -n $content ]] || return 0
+  fi
+  folders_mkdir "${FOLDERS_LIST%/*}" || return 1
+  tmp=$(mktemp "$FOLDERS_LIST.XXXXXX") || return 1
+  [[ -z $content ]] || printf '%s\n' "$content" > "$tmp"
+  chmod 644 "$tmp"
+  mv -f -- "$tmp" "$FOLDERS_LIST" || return 1
+  folders_own "$FOLDERS_LIST"
+  return 0
+}
+
+# folders_mkdir PASTA: cria a pasta (e as de cima) com a pessoa de dona.
+folders_mkdir() {
+  [[ -d $1 ]] && return 0
+  folders_mkdir "${1%/*}" || return 1
+  mkdir -- "$1" 2>> "$FLIPEROS_LOG" || return 1
+  folders_own "$1"
+}
+
+# folders_list_set PASTA ALVO troca a linha da PASTA (ALVO vazio: tira).
+folders_list_set() {
+  local rel=$1 target=$2 line lines=""
+  while IFS= read -r line; do
+    [[ -n $line && ${line%%$'\t'*} != "$rel" ]] && lines+=$line$'\n'
+  done < <(folders_list_read)
+  [[ -z $target ]] || lines+=$rel$'\t'$target
+  folders_list_write "$lines"
+}
+
+# folders_cloud_export: a lista fica igual ao disco antes de ir para a nuvem.
+# Uma custom folder daqui entra (com o alvo daqui); uma linha cuja pasta aqui
+# e comum sai se o alvo esta aqui (a pessoa tirou o link), mas fica se o
+# alvo nao esta (o disco ainda nao foi ligado aqui: a custom folder e de
+# outro gabinete ou espera o disco).
+folders_cloud_export() {
+  local rel target lines=""
+  local -A seen=()
+  while IFS=$'\t' read -r rel target; do
+    [[ -n $rel ]] || continue
+    seen[$rel]=1
+    case $(folders_state "$rel") in
+      custom | offline) lines+=$rel$'\t'$(folders_target "$rel")$'\n' ;;
+      *) [[ -d $target ]] || lines+=$rel$'\t'$target$'\n' ;;
+    esac
+  done < <(folders_list_read)
+  while IFS= read -r rel; do
+    [[ -n $rel && -z ${seen[$rel]:-} ]] || continue
+    folders_known "$rel" || continue
+    lines+=$rel$'\t'$(folders_target "$rel")$'\n'
+  done < <(folders_customs)
+  folders_list_write "$lines"
+}
+
+# folders_cloud_restore: refaz as custom folders da lista que vieram da
+# nuvem e ainda nao estao aqui, com o alvo presente (o disco ligado). Uma
+# pasta que aqui ja e um link fica como esta. Imprime cada pasta refeita.
+folders_cloud_restore() {
+  local rel target
+  while IFS=$'\t' read -r rel target; do
+    [[ -n $rel ]] || continue
+    [[ -L $(folders_path "$rel") ]] && continue
+    if [[ ! -d $target ]]; then
+      log_info "Folders: ~/$rel -> $target espera o disco (nuvem)"
+      continue
+    fi
+    if folders_link "$rel" "$target"; then
+      printf '%s\n' "$rel"
+    else
+      log_info "Folders: ~/$rel -> $target nao voltou da nuvem: $FOLDERS_ERROR"
+    fi
+  done < <(folders_list_read)
+  return 0
 }

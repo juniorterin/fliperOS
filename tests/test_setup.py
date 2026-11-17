@@ -5258,6 +5258,62 @@ class PanelSetupTests(Base):
         self.assertTrue((home / "roms" / "mame").is_dir())
         self.assertFalse((home / "roms").is_symlink())
 
+    def test_custom_folders_come_back_from_the_cloud(self):
+        # O rclone nao leva links: a lista das custom folders vai com as
+        # configuracoes e, numa instalacao nova, refaz os links.
+        home = self.env.dir / "home"
+        (home / "roms" / "mame").mkdir(parents=True)
+        (home / "media" / "snap").mkdir(parents=True)
+        disk = self.env.dir / "disk"
+        (disk / "ROMs").mkdir(parents=True)
+        (disk / "snaps").mkdir()
+        lst = home / ".config/fliperos/folders.list"
+        e = {"FOLDERS_HOME": str(home), "FOLDERS_MOUNTS": str(disk),
+             "FOLDERS_SCRIPT": "/nonexistent", "FLIPEROS_USER": "nobody-here"}
+        stubs = 'frontends_configure() { echo REFRESH; }; launcher_current() { echo setup; }; '
+        # Sem nenhuma custom folder, nenhuma lista (uma instalacao nova nao
+        # manda uma vazia por cima da que esta na nuvem).
+        self.env.out("folders_cli cloud-export", e)
+        self.assertFalse(lst.exists())
+        self.env.out(stubs + 'folders_cli link roms "$D/ROMs"', e | {"D": str(disk)})
+        self.assertEqual(lst.read_text(), "roms\t%s/ROMs\n" % disk)
+        # Um link feito a mao entra na lista antes de ir para a nuvem.
+        shutil.rmtree(home / "media" / "snap")
+        os.symlink(disk / "snaps", home / "media" / "snap")
+        self.env.out("folders_cli cloud-export", e)
+        self.assertEqual(lst.read_text(), "media/snap\t%s/snaps\nroms\t%s/ROMs\n" % (disk, disk))
+        saved = lst.read_text()
+        # A instalacao nova: pastas comuns, a lista que desceu da nuvem e uma
+        # custom folder de um disco que nao esta aqui.
+        os.unlink(home / "roms")
+        os.unlink(home / "media" / "snap")
+        shutil.rmtree(home / "old-roms")
+        (home / "roms" / "mame").mkdir(parents=True)
+        (home / "media" / "snap").mkdir()
+        lst.write_text(saved + "bios\t/nowhere/BIOS\n")
+        (self.env.dir / "setup.log").write_text("")
+        out = self.env.out(stubs + "folders_cli cloud-restore", e)
+        self.assertEqual(sorted(out.split()), ["restored=media/snap", "restored=roms"])
+        self.assertEqual(os.readlink(home / "roms"), str(disk / "ROMs"))
+        self.assertEqual(os.readlink(home / "media" / "snap"), str(disk / "snaps"))
+        self.assertFalse((home / "bios").is_symlink())
+        log = (self.env.dir / "setup.log").read_text()
+        self.assertIn("REFRESH", log)
+        self.assertIn("/nowhere/BIOS espera o disco", log)
+        # A que espera o disco continua na lista; uma que a pessoa tira sai e
+        # nao volta na proxima vez.
+        self.env.out("folders_cli cloud-export", e)
+        self.assertIn("bios\t/nowhere/BIOS", lst.read_text())
+        self.env.out(stubs + "folders_cli unlink roms", e)
+        self.assertNotIn("roms\t", lst.read_text())
+        self.assertEqual(self.env.out(stubs + "folders_cli cloud-restore", e).strip(), "")
+        self.assertFalse((home / "roms").is_symlink())
+        # Tirado a mao (com o disco aqui): sai da lista no proximo envio.
+        os.unlink(home / "media" / "snap")
+        (home / "media" / "snap").mkdir()
+        self.env.out("folders_cli cloud-export", e)
+        self.assertEqual(lst.read_text(), "bios\t/nowhere/BIOS\n")
+
     def test_custom_frontends_from_the_panel(self):
         # A tabela dos launchers do sistema (o fliperos-session) existe sempre.
         (self.env.etc / "sessions.conf").write_text("setup|none||setup|FliperOS menu\n")
@@ -6678,7 +6734,8 @@ class CloudTests(unittest.TestCase):
                         FLIPEROS_GOOGLE_OAUTH=str(self.dir / "etc/google-oauth.conf"),
                         FLIPEROS_GOOGLE_OAUTH_URL="file://%s/nowhere.conf" % self.dir,
                         FLIPEROS_CLOUD_SYSTEM_ETC=str(self.dir / "etc"), FLIPEROS_CLOUD_DOWNLOADER=str(self.dir / "dl"),
-                        FLIPEROS_CLOUD_STAGE=str(self.dir / "stage"), FLIPEROS_CLOUD_RESTORE="true")
+                        FLIPEROS_CLOUD_STAGE=str(self.dir / "stage"), FLIPEROS_CLOUD_RESTORE="true",
+                        FLIPEROS_CLOUD_FOLDERS="true")
 
     def tearDown(self):
         if hasattr(self, "dir"):
@@ -6690,6 +6747,26 @@ class CloudTests(unittest.TestCase):
 
     def status(self):
         return dict(line.split("=", 1) for line in self.run_("status").stdout.splitlines())
+
+    def test_custom_folders_list_goes_and_comes_back(self):
+        # Com o config, o Setup poe as custom folders na lista antes de enviar
+        # (e ela sobe no config/fliperos) e as refaz depois de receber.
+        folders = self.dir / "folders"
+        folders.write_text("#!/bin/sh\necho \"$*\" >> %s/folders.log\n"
+                           "[ \"$1\" = cloud-export ] && mkdir -p %s/.config/fliperos && "
+                           "printf 'roms\\t/media/x/ROMs\\n' > %s/.config/fliperos/folders.list\nexit 0\n"
+                           % (self.dir, self.home, self.home))
+        folders.chmod(0o755)
+        self.env["FLIPEROS_CLOUD_FOLDERS"] = str(folders)
+        self.run_("remote", "webdav", stdin="url=https://x/dav\nuser=a\npass=b\n")
+        r = self.run_("sync", "both", "config")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual((self.dir / "folders.log").read_text().split(), ["cloud-export", "cloud-restore"])
+        self.assertTrue((self.cloud / "FliperOS/config/fliperos/folders.list").is_file())
+        # Sem o config, nada das pastas.
+        (self.dir / "folders.log").unlink()
+        self.run_("sync", "both", "saves")
+        self.assertFalse((self.dir / "folders.log").exists())
 
     def test_config_carries_everything_and_the_system_settings(self):
         # O config leva tudo o que se configura e o uso (os emuladores, os
@@ -6757,6 +6834,7 @@ class CloudTests(unittest.TestCase):
         self.assertTrue((stage / "buttons.map").is_file())
         self.assertEqual((self.dir / "restored").read_text().strip(), str(stage))
         tool = self.TOOL.read_text()
+        self.assertIn("FOLDERS_CLI=${FLIPEROS_CLOUD_FOLDERS:-sudo -n /usr/local/bin/fliperos-setup --folders}", tool)
         self.assertIn("SYSTEM_RESTORE=${FLIPEROS_CLOUD_RESTORE:-sudo -n /usr/local/bin/fliperos-setup --cloud-restore}", tool)
 
     def test_webdav_account_keeps_the_password_obscured(self):
