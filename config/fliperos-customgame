@@ -82,6 +82,7 @@ import signal
 import stat
 import subprocess
 import sys
+import time
 import zipfile
 
 ENV = os.environ.get
@@ -1357,6 +1358,98 @@ def windows_command(exe, runner=""):
     return None
 
 
+# O que sobra do jogo. O frontend fecha o jogo com SIGTERM em toda a arvore
+# e SIGKILL 4 s depois nos que ainda estao abaixo dele; um processo que sai
+# da arvore antes disso (o pai morreu: vai para o init) escapa dos dois. O
+# PortProton deixava um pv-adverb e um winedevice.exe a cada jogo fechado
+# (o srt-bwrap morria com o SIGTERM, o pv-adverb esperava o winedevice, que
+# nunca saia: visto num gabinete em 2026-11-17). Como subreaper, o executor
+# adota esses orfaos (eles seguem na arvore do frontend) e, quando o jogo
+# acaba, fecha o que restou: SIGTERM, LEFTOVER_GRACE s, SIGKILL.
+PR_SET_CHILD_SUBREAPER = 36
+LEFTOVER_GRACE = 3.0
+LEFTOVER_KILL_WAIT = 2.0
+
+
+def become_subreaper():
+    """Os orfaos dos processos do jogo passam a ser filhos deste."""
+    try:
+        import ctypes
+        libc = ctypes.CDLL(None, use_errno=True)
+        return libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) == 0
+    except (OSError, AttributeError):
+        return False
+
+
+def descendants(pid, proc="/proc"):
+    """Os PIDs abaixo de pid (filhos, netos...), pelo PPID do /proc/N/stat."""
+    children = {}
+    try:
+        entries = os.listdir(proc)
+    except OSError:
+        return []
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        try:
+            with open(os.path.join(proc, entry, "stat"), encoding="ascii", errors="replace") as f:
+                # O nome vem entre parenteses e pode ter espacos: o resto
+                # comeca depois do ultimo ")" (estado, PPID...).
+                ppid = int(f.read().rpartition(")")[2].split()[1])
+        except (OSError, IndexError, ValueError):
+            continue
+        children.setdefault(ppid, []).append(int(entry))
+    out, todo = [], [pid]
+    while todo:
+        for child in children.get(todo.pop(), ()):
+            out.append(child)
+            todo.append(child)
+    return out
+
+
+def reap():
+    """Recolhe os filhos (adotados) que ja sairam: zumbis tambem contam como
+    descendentes."""
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if not pid:
+            return
+
+
+def end_leftovers(grace=LEFTOVER_GRACE, kill_wait=LEFTOVER_KILL_WAIT):
+    """O jogo saiu: os processos dele que ainda rodam levam SIGTERM e, os que
+    nao saem em grace s, SIGKILL (de novo enquanto aparecerem netos adotados,
+    ate kill_wait s). Devolve quantos havia."""
+    me = os.getpid()
+    reap()
+    first = descendants(me)
+    for sig, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, kill_wait)):
+        deadline = time.monotonic() + wait
+        sent = set()
+        while True:
+            reap()
+            left = descendants(me)
+            if not left:
+                return len(first)
+            for pid in left:
+                # No SIGKILL, cada um que aparecer (o filho de um morto vem
+                # para ca); no SIGTERM, uma vez cada.
+                if sig == signal.SIGKILL or pid not in sent:
+                    try:
+                        os.kill(pid, sig)
+                    except OSError:
+                        pass
+                    sent.add(pid)
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.1)
+    reap()
+    return len(first)
+
+
 def cmd_run(args):
     path = os.path.abspath(args.cfg)
     try:
@@ -1384,6 +1477,7 @@ def cmd_run(args):
         print("fliperos-customgame: unknown platform %r in %s" % (platform, path), file=sys.stderr)
         return 1
     keys = mapper(path)
+    become_subreaper()
     try:
         game = subprocess.Popen(argv, cwd=cwd)
     except OSError as exc:
@@ -1407,6 +1501,7 @@ def cmd_run(args):
             keys.wait(3)
         except subprocess.TimeoutExpired:
             keys.kill()
+    end_leftovers()
     return rc
 
 

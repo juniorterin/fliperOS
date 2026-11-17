@@ -368,7 +368,7 @@ Changing the video mode or the information in the Setup rewrites the script, so 
 
 | Program | What it does |
 |---|---|
-| `fliperos-customgame` | `inspect ZIP` (checks a package and prints its `.cfg`), `pending` (the packages waiting), `install ZIP --group G` (installs one), `pack` (makes one), `add` (copies a game folder, the web panel), `scan` and `found` (the games of a folder and what came with them in the package's structure), `run CFG` (opens a game) |
+| `fliperos-customgame` | `inspect ZIP` (checks a package and prints its `.cfg`), `pending` (the packages waiting), `install ZIP --group G` (installs one), `pack` (makes one), `add` (copies a game folder, the web panel), `scan` and `found` (the games of a folder and what came with them in the package's structure), `run CFG` (opens a game; when it ends, closes whatever the game left running: SIGTERM, then SIGKILL 3 s later) |
 | `fliperos-portproton` | `check`, `install` (as root, the Setup), `versions`, `edit-db EXE VAR=VALUE`, `run EXE` |
 | `fliperos-portproton-curl` | the curl of PortProton's downloads, over https |
 | `fliperos-buttons gamekeys KEY` | the controller as a keyboard; its socket `$XDG_RUNTIME_DIR/fliperos-gamekeys/sock` answers the on-screen menu (`reload`, `mute`, `unmute`, `capture SECONDS`) and exits with the game |
@@ -376,6 +376,8 @@ Changing the video mode or the information in the Setup rewrites the script, so 
 | `fliperos-x11-run`, `fliperos-x11-client` | the game's own Xorg in its video mode, with the flicker filter and the on-screen menu |
 
 The System Update rewrites every entry's script (`customgames_refresh`), and gives a `.cfg` to the entries made by command before packages existed.
+
+**Nothing stays running after the game.** `run` becomes a *subreaper* (`PR_SET_CHILD_SUBREAPER`): a process of the game whose parent dies is handed to it instead of to `init`, so it stays inside the tree the frontend closes. When the game ends, `run` sends SIGTERM to whatever is left and SIGKILL 3 s later. Before, each PortProton game closed with the exit shortcut left a `pv-adverb` and a `winedevice.exe` behind: the frontend's SIGTERM killed PortProton's container (`srt-bwrap`), its `pv-adverb` went to `init` and missed the SIGKILL 4 s later, still waiting for a `winedevice.exe` that never quits.
 
 ## Problems
 

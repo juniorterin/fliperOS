@@ -10209,6 +10209,49 @@ class WebPanelTests(unittest.TestCase):
                          'fliperos-customgame')
         self.assertEqual(front.game_program(['/opt/fliperos/bin/fliperos-kms-run', 'retroarch', '-L', 'x']), 'retroarch')
 
+    def test_custom_game_leaves_nothing_running(self):
+        # Um processo do jogo que fica orfao ia para o init e escapava do
+        # SIGKILL do frontend: o PortProton deixava um pv-adverb e um
+        # winedevice.exe a cada jogo fechado (gabinete, 2026-11-17). O executor
+        # os adota (subreaper) e fecha quando o jogo sai, tambem o que ignora
+        # o SIGTERM.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            pids = tmp / 'pids'
+            game = tmp / 'game'
+            game.mkdir()
+            script = game / 'run.sh'
+            script.write_text('#!/bin/sh\n'
+                              '( sleep 300 & echo $! >> "$PIDS" )\n'
+                              '( trap "" TERM; sh -c \'echo $$ >> "$PIDS"; exec sleep 300\' & )\n'
+                              'while [ "$(wc -l < "$PIDS" 2>/dev/null || echo 0)" -lt 2 ]; do sleep 0.05; done\n')
+            script.chmod(0o755)
+            cfg = tmp / 'Orphans.cfg'
+            cfg.write_text('format=1\nname=Orphans\nplatform=native\ncommand=./run.sh\nfolder=%s\n' % game)
+            env = dict(os.environ, PIDS=str(pids), FLIPEROS_CUSTOMGAME_KEYS='off', FLIPEROS_BIN=str(tmp / 'nobin'))
+            start = time.monotonic()
+            subprocess.run(['python3', str(ROOT / 'config/fliperos-customgame'), 'run', str(cfg)], env=env,
+                           timeout=30, check=True)
+            self.assertLess(time.monotonic() - start, 15)
+            orphans = [int(p) for p in pids.read_text().split()]
+            self.assertEqual(len(orphans), 2)
+            for pid in orphans:
+                try:
+                    with open('/proc/%d/stat' % pid) as f:
+                        state = f.read().rpartition(')')[2].split()[0]
+                except OSError:
+                    state = 'gone'
+                self.assertIn(state, ('gone', 'Z'), pid)
+        # Os descendentes pelo PPID, com nome de processo com espaco e ")".
+        tool = load_script('fliperos_customgame_reaper', 'config/fliperos-customgame')
+        with tempfile.TemporaryDirectory() as proc:
+            for pid, name, ppid in ((10, 'game', 1), (11, 'wine (x)', 10), (12, 'C:\\a b.exe', 11), (13, 'other', 1)):
+                (Path(proc) / str(pid)).mkdir()
+                (Path(proc) / str(pid) / 'stat').write_text('%d (%s) S %d 1 1\n' % (pid, name, ppid))
+            (Path(proc) / 'self').mkdir()
+            self.assertEqual(sorted(tool.descendants(10, proc)), [11, 12])
+            self.assertEqual(tool.descendants(13, proc), [])
+
 
 def fightcade_package(path, files=None):
     """Um pacote como o do Fightcade para Linux: tudo dentro de Fightcade/."""
