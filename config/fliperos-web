@@ -200,7 +200,7 @@ MEDIA_CACHE = "private, no-cache"
 GUI = ENV("FLIPEROS_WEB_GUI", "/usr/local/lib/fliperos-setup/gui")
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
 EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "pcsx2x6", "duckstation", "duckstation-qt",
-             "dolphin-emu", "supermodel", "keisho", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
+             "dolphin-emu", "keisho", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
 FRONTENDS = ("attractplus", "attract", "emulationstation", "es-de", "pegasus-fe", "fliperos-gui",
              "fliperos-frontend")
 
@@ -640,7 +640,7 @@ def game_file(name, args):
     files = [a for a in args[1:] if not a.startswith("-") and "." in os.path.basename(a)]
     if files:
         return os.path.basename(files[-1])
-    if name in ("groovymame", "mame", "fliperos-model2") and len(args) > 1 and not args[-1].startswith("-") \
+    if name in ("groovymame", "mame", "fliperos-model2", "fliperos-model3") and len(args) > 1 and not args[-1].startswith("-") \
             and not args[-2].startswith("-"):
         return args[-1]
     return None
@@ -1110,7 +1110,7 @@ def system_icon(system):
     for name in ("groovymame", "flycast", "pcsx2x6", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
         if name in exe:
             return name
-    if "sm2" in exe:
+    if "sm2" in exe or "keisho" in exe or "model3" in exe:
         return "model2"
     if "duckstation" in exe:
         return "pcsx2"

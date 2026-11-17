@@ -1457,8 +1457,8 @@ pcsx2x6|PCSX2x6|pcsx2x6|240p,filter,pure|240p|x11|Namco System 246/256 arcade ga
 duckstation|DuckStation|duckstation|240p,filter,pure|240p|x11|PlayStation (the few interlaced games, like Tekken 3 menus or Tobal 2).
 dolphin|Dolphin|dolphin-emu|240p,filter,pure|240p|x11|GameCube and Wii.
 laserdisc|Hypseus Singe|hypseus singe|240p,filter,pure|240p|x11|Laserdisc games.
-model3|Supermodel|supermodel|240p,filter,pure|240p|x11|Sega Model 3 (384 lines).
-model2|Keisho|keisho sm2-emu fliperos-model2|240p,filter,pure|240p|x11|Sega Model 2 (384 lines).
+model3|Keisho (Model 3)|fliperos-model3|240p,filter,pure|240p|x11|Sega Model 3 (384 lines).
+model2|Keisho (Model 2)|keisho sm2-emu fliperos-model2|240p,filter,pure|240p|x11|Sega Model 2 (384 lines).
 groovymame|GroovyMAME|groovymame|240p,filter,pure|filter|mame|Arcade games with more than 240 lines. 240p: Switchres never picks an interlaced mode.
 psx|RetroArch PS1|pcsx_rearmed|240p,filter,pure|filter|core:PCSX-ReARMed|PlayStation games in high resolution (PCSX ReARMed core).
 mame2010|RA MAME 2010|mame2010|240p,filter,pure|240p|core:MAME 2010|Arcade games with more than 240 lines in the MAME 2010 core.

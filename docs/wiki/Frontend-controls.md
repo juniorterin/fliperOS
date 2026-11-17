@@ -38,7 +38,7 @@ Out of the box, like Batocera with Select as the hotkey:
 | **EMULATOR MENU** | Coin + button 1 | Opens the emulator's own menu: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the Keisho overlay |
 | **OSD MENU** | Start + Down, or the Pause key | Opens the FliperOS [on-screen menu](On-screen-menu.md) |
 
-An emulator with no menu of its own (Supermodel, Dolphin, OpenBOR, Hypseus, KOF, Fightcade) and a custom game get the FliperOS on-screen menu instead of an emulator menu.
+An emulator with no menu of its own (Dolphin, OpenBOR, Hypseus, KOF, Fightcade) and a custom game get the FliperOS on-screen menu instead of an emulator menu.
 
 The OSD MENU shortcut is the system's, so it also counts in the other frontends. The media keys of a wireless remote (Play/Pause, Pause, Play) always open the on-screen menu.
 

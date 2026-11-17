@@ -79,7 +79,7 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 | [GroovyMAME](GroovyMAME.md) | Arcade at native resolution, the Midway games, missing files, the package, GroovyMAME in X |
 | [RetroArch](RetroArch.md) | The cores, the light gun in every core, the D-pad, video, updating |
 | [Flycast](Flycast.md) | Dreamcast, Naomi, Naomi 2 and Atomiswave: folders, BIOS, picture, updating |
-| [Sega Model 2 and 3](Sega-Model-2-and-3.md) | Keisho, built on the cabinet, its outputs and speed; Supermodel |
+| [Sega Model 2 and 3](Sega-Model-2-and-3.md) | Keisho for both boards: Vulkan or OpenGL, outputs, speed, coming from Supermodel |
 | [PlayStation 2 and Namco 246/256](Namco-246-256.md) | PCSX2, and PCSX2x6 for the Namco boards: the files of a game, packed games, what was tested |
 | [OpenBOR](OpenBOR.md) | Paks in the frontends, information from the pak, each pak's video mode, old paks |
 | [Windows games](Windows-games.md) | Wine, Wine Staging, Steam and Heroic |

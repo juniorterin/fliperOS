@@ -20,13 +20,12 @@
 
 The emulators of the desktop menu, each marked installed or not, with its version and the one the latest update brings.
 
-**In the image:** RetroArch, GroovyMAME, Flycast, PCSX2, PCSX2x6, Dolphin, Supermodel and OpenBOR. FliperOS updates bring their new versions.
+**In the image:** RetroArch, GroovyMAME, Flycast, PCSX2, PCSX2x6, Dolphin, Keisho (Model 2 and 3) and OpenBOR. FliperOS updates bring their new versions.
 
 **Installed from here**, the first time you choose them:
 
 | Emulator | How it gets in |
 | --- | --- |
-| **Model 2** (Keisho) | Downloaded and built on the cabinet: several minutes |
 | **Fightcade 2** | Downloaded from its site ([Fightcade 2](Fightcade-2.md)) |
 | **DuckStation** | Downloaded from its site |
 | **KOF Final Attack** (Ikemen GO, 4:3) | **Download from itch.io** (the free game, 1.4 GB, patched by itself; needs 7 GB free) or **Use a folder I have** (the folder with `Final Attack.exe`, on a USB disk, the network or home) |
@@ -37,7 +36,7 @@ An installed one has **Update**, which downloads the newest version over it. Mod
 
 ### The newest version of a packaged emulator
 
-RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Supermodel and OpenBOR come as FliperOS packages, tested on the cabinet. Each one also has **Build the newest**:
+RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, Keisho and OpenBOR come as FliperOS packages, tested on the cabinet. Each one also has **Build the newest**:
 
 1. It downloads the project's latest code (PCSX2: its latest stable release), puts in the FliperOS patches and builds it on the cabinet.
 2. It needs the network and takes several minutes. **GroovyMAME takes many hours**, often a whole night, with 20 GB free and the cabinet left on: the whole MAME is compiled, and each MAME version changes the romset.

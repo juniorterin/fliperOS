@@ -6,7 +6,7 @@ The FliperOS commands you can type in a terminal (SSH, the web panel's Terminal,
 | --- | --- |
 | `fliperos-menu` | Back to the FliperOS menu from the shell. Over SSH, the text menu in the session |
 | `sudo fliperos-setup` | The Setup, as a text menu |
-| `fliperos-launch NAME` | Opens an emulator as the desktop's Games menu does: `retroarch`, `groovymame`, `flycast`, `pcsx2`, `pcsx2x6`, `duckstation`, `supermodel`, `dolphin`, `openbor`, `model2`, `fightcade`, `kof`; or `--mode WxH@HZ PROGRAM` |
+| `fliperos-launch NAME` | Opens an emulator as the desktop's Games menu does: `retroarch`, `groovymame`, `flycast`, `pcsx2`, `pcsx2x6`, `duckstation`, `dolphin`, `openbor`, `model2`, `model3`, `fightcade`, `kof`; or `--mode WxH@HZ PROGRAM` |
 | `fliperos-kms-run PROGRAM [ARGS]` | Runs a program on the console, without X ([KMS and X11](KMS-and-X11.md)) |
 | `fliperos-x11-run [--mode WxH@HZ] [--app NAME] [--wine] PROGRAM [ARGS]` | Runs a program in its own Xorg, in its video mode |
 | `fliperos-resolution [--apply-saved]` | The desktop's resolution; reverts after 15 s without confirmation |

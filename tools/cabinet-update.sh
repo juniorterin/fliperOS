@@ -395,25 +395,31 @@ else
   echo "no map (Setup > Joysticks > Button mapping)"
 fi
 
-# O SM2-Emu e compilado na maquina (Setup > Games > Emulators & Games): os
-# patches do FliperOS que o update trouxe so entravam numa abertura pelo menu
-# do desktop, que pergunta. Pelos frontends nunca. Ja compilado e com outros
-# patches, compila de novo aqui; se falhar, o de antes fica (e o menu do
-# desktop pergunta de novo).
-echo "== Model 2 (Keisho) with the patches of this version"
-sm2=/usr/local/bin/fliperos-sm2emu
-if [[ -x $sm2 ]] && runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --outdated; then
-  mkdir -p /opt/fliperos/logs
-  if "$sm2" --deps > /opt/fliperos/logs/keisho-build.log 2>&1 &&
-    runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --build >> /opt/fliperos/logs/keisho-build.log 2>&1; then
-    echo "rebuilt"
-  else
-    echo "warning: did not rebuild (the previous build stays; /opt/fliperos/logs/keisho-build.log)"
+# Model 2 e Model 3 sao o Keisho, do pacote fliperos-keisho (acima, pela
+# updates/packages.list). O Supermodel sai, mas so depois que o Keisho
+# chegou: sem ele o gabinete ficaria sem Model 3. As NVRAMs (~/nvram/model3)
+# e a configuracao ficam: o Keisho le o mesmo <jogo>.nv. O Keisho que o Model
+# 2 compilava no gabinete (~/.local/src/keisho) fica onde esta, sem uso.
+echo "== Model 2 and 3 in Keisho (Supermodel removed)"
+runuser -u fliperos -- env HOME=/home/fliperos /usr/local/bin/fliperos-sm2emu --migrate || true
+# O Interlaced hacks e o filtro de cada programa (mode480_, deflicker_,
+# deflicker_level_ no fliperos.conf) vao do supermodel ao fliperos-model3,
+# quando o nome novo ainda nao tem o seu.
+for key in mode480 deflicker deflicker_level; do
+  if grep -q "^${key}_supermodel=" /etc/fliperos/fliperos.conf 2> /dev/null &&
+    ! grep -q "^${key}_fliperos-model3=" /etc/fliperos/fliperos.conf; then
+    sed -i "s/^${key}_supermodel=/${key}_fliperos-model3=/" /etc/fliperos/fliperos.conf
   fi
+done
+if dpkg -s fliperos-keisho > /dev/null 2>&1; then
+  if dpkg -s fliperos-supermodel > /dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 purge -y -q fliperos-supermodel ||
+      echo "warning: could not remove Supermodel"
+  fi
+  echo "Keisho $(dpkg-query -W -f='${Version}' fliperos-keisho)"
 else
-  echo "not built here, or already with these patches"
+  echo "warning: Keisho did not arrive (no network?); Supermodel stays until the next update"
 fi
-
 echo "== MAME 2010 XML (ROM cleaner)"
 /opt/fliperos/bin/fliperos-romclean fetch-mame2010 /usr/local/share/fliperos/mame2010.xml.xz || echo "failed (no network?)"
 
@@ -463,6 +469,8 @@ echo "== Scraper artwork in ~/media"
   fi
   # O Pillow da arte das telas do Arcadeflow, onde o tema ja esta instalado.
   [[ $(scraper_attract_layout) != Arcadeflow ]] || /opt/fliperos/bin/fliperos-arcadeflow pillow
+  # A tela "Supermodel" dos frontends virou "Model 3" (o Keisho).
+  frontends_supermodel_gone
   frontends_configure "$(launcher_current)"
   # A configuracao de 240p do ES-DE e do Pegasus instalados (lib/frontends.sh).
   frontends_240p

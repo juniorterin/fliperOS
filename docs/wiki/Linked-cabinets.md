@@ -26,11 +26,11 @@ Every row says how it was checked. **Tested** means two or more instances were l
 | Wave Runner | Keisho | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
 | Cyber Troopers Virtual-On Twin | Keisho | not checked | 1 | 1 | Network Link Attribute | not checked | Solo |
 | Super GT 24h | Keisho | set by Link Max | 1 | 1 | Link Type | **Yes** (Link Max) | Solo |
-| Scud Race | Supermodel | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID in the test menu, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
-| Daytona USA 2 | Supermodel | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
-| Dirt Devils | Supermodel | 2 (four did not link) | 1 | 1 | Yes (Communication Mode, starts as slave, and Machine ID) | No | **Tested** with 2 |
-| Spikeout | Supermodel | not checked | 2 | 1 | not checked | not checked | Solo |
-| Sega Rally 2, Le Mans 24, Harley-Davidson | Supermodel | not checked | 1 | 1 | not checked | not checked | Solo |
+| Scud Race | Keisho (tested in Supermodel) | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID in the test menu, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
+| Daytona USA 2 | Keisho (tested in Supermodel) | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
+| Dirt Devils | Keisho (tested in Supermodel) | 2 (four did not link) | 1 | 1 | Yes (Communication Mode, starts as slave, and Machine ID) | No | **Tested** with 2 |
+| Spikeout | Keisho | not checked | 2 | 1 | not checked | not checked | Solo |
+| Sega Rally 2, Le Mans 24, Harley-Davidson | Keisho | not checked | 1 | 1 | not checked | not checked | Solo |
 | Club Kart: European Session | Flycast | 2 | 1 | 1 | Yes (the first is the server) | No | **Tested** with 2 |
 | Gunbuster | GroovyMAME | 2 | 2 | 1 | Yes (ID 0 and ID 1) | No | Source |
 | Virtua Racing, Virtua Formula | GroovyMAME | not checked | 1 | 1 | Set by the game | No | Source |
@@ -44,7 +44,7 @@ Every row says how it was checked. **Tested** means two or more instances were l
 
 **Model 2 goes to Keisho.** GroovyMAME emulates Model 2 poorly, and Keisho has its own link.
 
-**Model 3 goes to Supermodel.** MAME's Model 3 communication board is an empty stub: the network code in it is commented out, so no data crosses between two MAME instances.
+**Model 3 goes to Keisho** (until November 2026, Supermodel). MAME's Model 3 communication board is an empty stub: the network code in it is commented out, so no data crosses between two MAME instances. The Model 3 link games were tested in Supermodel; FliperOS now opens them in Keisho, with the same UDP ring as Model 2 (`link_*` in `keisho.ini`, port 15112), the cabinets in any order, and the same NVRAM files (Keisho reads Supermodel's format; `scud.zip` opens as `scudau` and `dirtdvls.zip` as `dirtdvlsau`, the sets the files were made for). **Not yet raced between FliperOS cabinets in Keisho.**
 
 **Model 1, System 32, CPS-2 and Gunbuster go to GroovyMAME.** These are the boards whose link MAME really emulates.
 
@@ -109,7 +109,7 @@ Two races were played this way, one machine on a PC and one on the cabinet's CRT
 
 **Daytona in GroovyMAME** links the same way, with the `-comm_*` options below. There the order is the other way round: start the slave first, then the master. Two masters never link: both stay on "Network Checking".
 
-## Supermodel: Sega Model 3
+## Supermodel: Sega Model 3 (the tests before Keisho)
 
 Supermodel's games with a net board are Daytona USA 2 (and Power Edition), Dirt Devils, Harley-Davidson, Le Mans 24, Scud Race (and Plus), Ski Champ, Spikeout (and Final Edition), Sega Rally 2 and Virtual-On 2. The Lost World has none.
 

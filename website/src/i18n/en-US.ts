@@ -37,7 +37,7 @@ const enUS = {
     faq: [
       {
         q: 'What is FliperOS?',
-        a: 'FliperOS is a free Linux distribution based on Ubuntu 24.04 (amd64) that turns a PC into an arcade machine for a CRT monitor. It has a 15 kHz kernel, Switchres, GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin and Supermodel, a frontend of its own (Attract-Mode Plus, ES-DE and Pegasus are options), a web panel and a setup menu made for the tube.',
+        a: 'FliperOS is a free Linux distribution based on Ubuntu 24.04 (amd64) that turns a PC into an arcade machine for a CRT monitor. It has a 15 kHz kernel, Switchres, GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin and Keisho, a frontend of its own (Attract-Mode Plus, ES-DE and Pegasus are options), a web panel and a setup menu made for the tube.',
       },
       {
         q: 'How is FliperOS different from GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi?',
@@ -239,7 +239,6 @@ const enUS = {
       { id: 'groovymame', label: 'GroovyMAME' },
       { id: 'retroarch', label: 'RetroArch' },
       { id: 'flycast', label: 'Flycast' },
-      { id: 'supermodel', label: 'Supermodel' },
       { id: 'model2', label: 'Keisho' },
       { id: 'pcsx2', label: 'PCSX2' },
       { id: 'pcsx2x6', label: 'PCSX2x6 (Namco System 246, System 256)' },
@@ -510,7 +509,7 @@ const enUS = {
     emulators: {
       meta: {
         title: 'Emulators and frontends on FliperOS',
-        description: 'GroovyMAME, RetroArch, Flycast, PCSX2, DuckStation, Dolphin, Supermodel, Keisho, Hypseus Singe and OpenBOR in the right video mode for the CRT, with the FliperOS frontend, Attract-Mode Plus, ES-DE, Pegasus and Fightcade 2.',
+        description: 'GroovyMAME, RetroArch, Flycast, PCSX2, DuckStation, Dolphin, Keisho, Hypseus Singe and OpenBOR in the right video mode for the CRT, with the FliperOS frontend, Attract-Mode Plus, ES-DE, Pegasus and Fightcade 2.',
       },
       kicker: 'Emulators & frontends',
       title: 'Every emulator in the right video mode.',
@@ -660,8 +659,7 @@ const enUS = {
       { id: 'pcsx2x6', name: 'PCSX2x6 (Namco System 246, System 256)', systems: 'Namco arcade boards', note: 'Fork of PCSX2 as its own emulator: it only opens the games in the namco2x6 folder' },
       { id: 'duckstation', name: 'DuckStation', systems: 'PlayStation', note: 'Installed from the Setup (its license keeps it out of the image)' },
       { id: 'dolphin', name: 'Dolphin (GameCube, Wii, Triforce)', systems: 'Nintendo consoles and Sega arcade', note: 'Built from the stable version' },
-      { id: 'supermodel', name: 'Supermodel', systems: 'Sega Model 3', note: '640x240 at 57.524 Hz on 15 kHz' },
-      { id: 'model2', name: 'Keisho', systems: 'Sega Model 2', note: 'Built from the menu, full speed on older CPUs' },
+      { id: 'model2', name: 'Keisho', systems: 'Sega Model 2 and Model 3', note: 'Vulkan or OpenGL by the video card, 640x240 at 57.524 Hz' },
       { id: 'hypseus', name: 'Hypseus Singe', systems: 'Laserdisc', note: 'Dragon’s Lair, Space Ace' },
       { id: 'openbor', name: 'OpenBOR', systems: 'Beat ’em ups', note: '320x240' },
     ],
@@ -713,7 +711,7 @@ const enUS = {
       { id: 'dolphin', name: 'Dolphin', systems: 'GameCube, Wii', level: 'frontend', note: 'Its own net play through a FliperOS patch: up to 4 cabinets, one player each; input delay, no rollback' },
       { id: 'mame2010', name: 'MAME 2010', systems: 'Arcade', level: 'no', note: '' },
       { id: 'groovymame', name: 'GroovyMAME', systems: 'Arcade (MAME 0.289)', level: 'frontend', note: 'Lockstep with a FliperOS patch: every player of the game (up to 10) on as many cabinets, on the same frame, no input delay. Tested on two machines' },
-      { id: 'boards', name: 'Supermodel, Keisho', systems: 'Model 3, Model 2', level: 'no', note: 'They link boards instead, for the link games' },
+      { id: 'boards', name: 'Keisho', systems: 'Model 2, Model 3', level: 'no', note: 'They link boards instead, for the link games' },
       { id: 'others', name: 'PCSX2, DuckStation, Hypseus, OpenBOR', systems: 'PS2, PS1, Laserdisc, beat ’em ups', level: 'no', note: '' },
     ],
     netplayCta: 'Linked cabinets and party play: the full guide',
@@ -783,7 +781,7 @@ const enUS = {
       { id: 'versus', title: 'Scoreboard mode', text: 'In fighting games the display becomes a scoreboard: the two characters and each side’s wins in the session, fixed on the ZeDMD and as text on Pixelcade. About 200 arcade games in GroovyMAME and 100 in RetroArch’s FBNeo core, through Fightcade’s detectors.' },
       { id: 'install', title: 'Install from the Setup', text: 'Setup > Games > Extras > ZeDMD or Pixelcade downloads the display’s program and turns on the service, the ES-DE scripts and the Attract-Mode Plus plugin.' },
       { id: 'browse', title: 'Follows the menu', text: 'In ES-DE and Attract-Mode Plus the display changes as you move through systems and games.' },
-      { id: 'launch', title: 'Every launcher', text: 'GroovyMAME, RetroArch, Flycast, Supermodel, Dolphin and the other emulators update the display when the game starts, whatever frontend opened it.' },
+      { id: 'launch', title: 'Every launcher', text: 'GroovyMAME, RetroArch, Flycast, Keisho, Dolphin and the other emulators update the display when the game starts, whatever frontend opened it.' },
       { id: 'usb', title: 'Plug and play', text: 'Plug the display into USB and the service starts by itself. With no display connected it gives up after a few tries and stays out of the way.' },
       { id: 'scores', title: 'High scores at launch', text: 'For arcade games, the top three high scores scroll across the display when the game starts. For other games, its name. Then the game’s artwork stays.' },
       { id: 'attract', title: 'Screensaver', text: 'When the ES-DE or Attract-Mode Plus screensaver starts, the display goes into attract mode. When it ends, the selected game comes back.' },
@@ -851,7 +849,7 @@ const enUS = {
         id: 'outputs',
         title: 'Recoil, lamps and motors',
         boards: 'Serial and USB HID boards',
-        text: 'GroovyMAME, Flycast, Supermodel and Keisho publish what each game drives outside the screen. Hook Of The Reaper, the successor of MAMEHooker, takes it to light guns and to your own boards. It is a Windows program, run through Wine. QMamehook does the same for serial light guns, natively on Linux.',
+        text: 'GroovyMAME, Flycast and Keisho publish what each game drives outside the screen. Hook Of The Reaper, the successor of MAMEHooker, takes it to light guns and to your own boards. It is a Windows program, run through Wine. QMamehook does the same for serial light guns, natively on Linux.',
         projects: ['Hook Of The Reaper', 'QMamehook'],
       },
       {

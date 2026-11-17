@@ -226,8 +226,8 @@ def missing_core(argv):
 # O programa depois do fliperos-x11-run/kms-run -> o nome do emulador no
 # config/fliperos-emulators.
 EMULATOR_OF = {"groovymame": "groovymame", "flycast": "flycast", "pcsx2": "pcsx2", "pcsx2x6": "pcsx2x6",
-               "dolphin-emu": "dolphin", "supermodel": "supermodel", "openbor": "openbor",
-               "fliperos-model2": "model2", "duckstation": "duckstation", "fightcade": "fightcade",
+               "dolphin-emu": "dolphin", "openbor": "openbor",
+               "fliperos-model2": "keisho", "fliperos-model3": "keisho", "keisho": "keisho", "duckstation": "duckstation", "fightcade": "fightcade",
                "retroarch": "retroarch"}
 
 

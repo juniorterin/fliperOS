@@ -68,7 +68,7 @@ Each emulator is a file in `~/.attract/emulators/<name>.cfg` (`~/config/attractm
 
 ```text
 executable           /opt/fliperos/bin/fliperos-x11-run
-args                 supermodel "[romfilename]"
+args                 fliperos-model3 "[romfilename]"
 workdir              $HOME
 rompath              /home/fliperos/roms/model3/
 romext               .zip

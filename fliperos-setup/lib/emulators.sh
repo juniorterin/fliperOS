@@ -131,7 +131,7 @@ emulators_latest() {
 # quando ele muda (a troca, a volta do teste da troca, a instalacao).
 # O Flycast vai do OpenGL ao Vulkan equivalente (pvr.rend 0 e 3, 4 e 5) e o
 # Dolphin ao Vulkan; o PCSX2 e o DuckStation ficam no automatico, que ja
-# escolhe o Vulkan onde ha. O RetroArch nao passa por aqui: o
+# escolhe o Vulkan onde ha. O Keisho (Model 2 e 3) vai ao vulkan ou ao opengl. O RetroArch nao passa por aqui: o
 # fliperos-kms-run o abre em Vulkan no amdgpu a cada abertura (so com o
 # patch do khr_display, packaging/patches/retroarch, que troca o modo do CRT).
 EMULATORS_HOME=${EMULATORS_HOME:-/home/$FLIPEROS_USER}
@@ -150,6 +150,19 @@ emulators_ini() {
 # emulators_ini_get ARQUIVO CHAVE: o valor de "CHAVE = valor" (vazio sem ele).
 emulators_ini_get() {
   sed -n "s/^$2 *= *//p" "$1" 2> /dev/null | head -1 | tr -d '\r'
+}
+
+# emulators_keisho ARQUIVO VALOR: o graphics_backend do keisho.ini (sem
+# secao: o Keisho le a chave em qualquer uma), trocado ou acrescentado.
+emulators_keisho() {
+  if grep -q '^graphics_backend[[:space:]=]' "$1"; then
+    sed -i -E "s/^graphics_backend[[:space:]=].*/graphics_backend = $2/" "$1"
+  else
+    printf 'graphics_backend = %s\n' "$2" >> "$1"
+  fi
+  # O sed -i grava um arquivo novo, de quem roda (root, no Setup).
+  chown --reference="${1%/*}" "$1" 2> /dev/null
+  return 0
 }
 
 # emulators_vulkan DRIVER (amdgpu ou radeon) acerta o renderizador de cada
@@ -182,6 +195,17 @@ emulators_vulkan() {
   value=$(emulators_ini_get "$file" Renderer)
   if [[ -f $file ]] && [[ $driver:$value == amdgpu:OpenGL || $driver:$value == radeon:Vulkan ]]; then
     emulators_ini "$file" GPU Renderer Automatic
+  fi
+  # Keisho (Model 2 e 3): graphics_backend vulkan ou opengl. Sem a chave, o
+  # fliperos-x11-run a grava pelo driver na primeira abertura.
+  file=$home/.config/keisho/keisho.ini
+  value=$(emulators_ini_get "$file" graphics_backend)
+  if [[ -f $file ]]; then
+    if [[ $driver == amdgpu && $value != vulkan ]]; then
+      emulators_keisho "$file" vulkan
+    elif [[ $driver == radeon && $value == vulkan ]]; then
+      emulators_keisho "$file" opengl
+    fi
   fi
   log_info "emuladores no driver $driver: $([[ $driver == amdgpu ]] && echo Vulkan || echo o renderizador de fabrica)"
 }

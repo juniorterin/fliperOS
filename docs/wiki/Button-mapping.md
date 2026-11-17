@@ -33,7 +33,7 @@ The screen opens on the list of **connected controllers**, each with a wired or 
 | 2 | R F D G; A S Q W E; 2 Start; 6 Coin |
 | 3 and 4 | The stick and buttons 1 to 3, as in MAME |
 
-RetroArch's own shortcuts on those keys (Space fast-forward, F fullscreen, K frame advance…) are turned off, and Supermodel drops its own default keys, which would be another player's.
+RetroArch's own shortcuts on those keys (Space fast-forward, F fullscreen, K frame advance…) are turned off.
 
 ## Buttons layout (games of 1 to 5 buttons)
 
@@ -48,7 +48,7 @@ Where a game's buttons go on the panel, by how many buttons it uses. Pick the nu
 
 Without a layout, the game's button N is the panel's button N; **Default layout** goes back to that. Six-button games always use the whole panel. It needs the Button mapping done first.
 
-It applies where the panel's button N is the game's button N: GroovyMAME, RetroArch's MAME and MAME 2010 cores, Supermodel, Keisho and PCSX2x6. FBNeo arranges each game's buttons by itself, and the other emulators have one mapping for all games.
+It applies where the panel's button N is the game's button N: GroovyMAME, RetroArch's MAME and MAME 2010 cores, Keisho (Model 2 and 3) and PCSX2x6. FBNeo arranges each game's buttons by itself, and the other emulators have one mapping for all games.
 
 ## Joypad guides
 
@@ -65,7 +65,7 @@ Mapping a joypad also sets the FliperOS frontend's controls guide to draw it ([F
 - **Dolphin:** `GCPad1` to `GCPad4` in `GCPadNew.ini` (4 = A, 1 = B, 5 = X, 2 = Y, 3 = Z, 6 = R, coin on the Triforce Coin), each player's port enabled in `Dolphin.ini`.
 - **Flycast:** by device name (Dreamcast through SDL; arcade with the panel's button N on the game's button N and coin on D; a hat D-pad becomes Flycast's hat code, a trigger goes in its `triggers` list), and the same files in Fightcade's Flycast Dojo.
 - **Attract-Mode Plus:** the joystick entries of `input_map` in `attract.cfg` (directions, Select on button 1, Back on button 2, and its default shortcuts for player 1), written every time it opens.
-- **Supermodel:** Start, coin, directions and buttons 1 to 4 for players 1 and 2 in `Supermodel.ini`. **Hypseus:** the `[KEYBOARD]` of `~/.hypseus/hypinput.ini`. **OpenBOR:** each player's keys in `Saves/default.cfg` and each pak's `.cfg` (1 attack, 2 jump, 3 special, 4 to 6 the other attacks, coin on Esc). **PCSX2x6:** the `[JVS]` section ([PlayStation 2 and Namco 246/256](Namco-246-256.md#the-buttons)).
+- **Hypseus:** the `[KEYBOARD]` of `~/.hypseus/hypinput.ini`. **OpenBOR:** each player's keys in `Saves/default.cfg` and each pak's `.cfg` (1 attack, 2 jump, 3 special, 4 to 6 the other attacks, coin on Esc). **PCSX2x6:** the `[JVS]` section ([PlayStation 2 and Namco 246/256](Namco-246-256.md#the-buttons)).
 - **Triggers:** an axis resting at one end (an Xbox controller's LT/RT) can only be pressed one way; the capture ignores the release of a trigger held when it started, and saving fixes the direction from the resting position.
 - **Buttons layout** is `/etc/fliperos/buttons.layout` (one line per number of buttons: the position of button 1, of button 2…). The button count of each game comes from GroovyMAME's `-listxml` with the real counts of `controls.xml` on top (`fliperos-romclean buttons` writes `/var/lib/fliperos/game-buttons.txt`); MAME 2010 has its own table, `game-buttons-mame2010.txt`, and a game whose 0.139 entry lists its board's generic block (Tekken 3) counts as that block, so the punches stay on top and the kicks below. Where it goes: a `<system>` per game in GroovyMAME's ctrlr (a clone follows its parent), a `buttons-N.cfg` for RetroArch's MAME cores, a game section in `Supermodel.ini` by the input type of each game in `Games.xml`, and `/var/lib/fliperos/gamecontrollerdb-model2-N.txt` for Keisho, which reads game buttons 1 to 4 from A B X Y and always takes RB as button 4.
 - The screen is `screens/joysticks.sh`, on top of `lib/buttons.sh`.

@@ -1,40 +1,32 @@
 #!/usr/bin/env bash
-# Keisho (Sega Model 2, Linux nativo; ate novembro de 2026 se chamava
-# SM2-Emu). Nao entra compilado na imagem: a primeira abertura clona, compila
-# e so entao lista os jogos. O binario fica em ~/.local/src/keisho, do usuario.
+# Keisho (Sega Model 2 e Model 3; ate novembro de 2026 se chamava SM2-Emu, e
+# o Model 3 era o Supermodel): a lista dos jogos do menu do desktop, e a
+# mudanca das pastas do SM2-Emu para as do Keisho. O emulador vem no pacote
+# fliperos-keisho (packaging/packages); o mais novo do projeto e o Setup >
+# Games > Emulators & Games que compila (config/fliperos-emulators edge).
 #
-#   fliperos-sm2emu --pick ARQUIVO
+#   fliperos-sm2emu --pick ARQUIVO [model2|model3]
 #     a lista no Gum; o .zip escolhido vai para ARQUIVO (vazio = cancelou).
-#   fliperos-sm2emu --deps
-#     instala o que falta do compilador (como root, ou pelo sudo).
-#   fliperos-sm2emu --build
-#     clona e compila, ou atualiza e compila de novo, sem perguntar nada
-#     (Setup > Games > Emulators & Games, config/fliperos-emulators).
-#   fliperos-sm2emu --outdated
-#     status 0 se ja compilado com outros patches que os desta versao do
-#     FliperOS: o update do sistema o recompila (tools/cabinet-update.sh).
 #   fliperos-sm2emu --migrate
-#     so leva as pastas do SM2-Emu para as do Keisho (feito tambem por
-#     qualquer das outras).
+#     so leva as pastas do SM2-Emu para as do Keisho (feito tambem pela
+#     outra).
 set -euo pipefail
 
+bin=${FLIPEROS_KEISHO_BIN:-/usr/local/bin/keisho}
+games_xml=${FLIPEROS_KEISHO_GAMES:-/usr/local/share/keisho/games.xml}
+# O Keisho que o Model 2 compilava no gabinete, antes do pacote: um gabinete
+# que ainda nao recebeu o pacote usa esse.
 src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/keisho}
-bin=$src/build/bin/keisho
-roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
-games_xml=$src/build/bin/games.xml
-repo=${FLIPEROS_SM2_REPO:-https://github.com/Keisho-Emu/Keisho.git}
-# Patches do FliperOS, aplicados por cima do upstream. O que o upstream
-# aceita sai daqui (a velocidade e o menu em 15 kHz ja estao la), e a pasta
-# pode estar vazia.
-patches=${FLIPEROS_SM2_PATCHES:-/usr/local/share/fliperos/sm2-emu-patches}
-stamp=$src/build/fliperos-patches
-# O binario de antes do nome novo: o fonte ainda nao recompilado o tem.
-old_bin=$src/build/bin/sm2-emu
+if [[ ! -x $bin && -x $src/build/bin/keisho ]]; then
+  bin=$src/build/bin/keisho
+  games_xml=$src/build/bin/games.xml
+fi
+repo=https://github.com/Keisho-Emu/Keisho.git
 
 # migrate: o SM2-Emu virou Keisho (executavel keisho, keisho.ini em
-# ~/.config/keisho, dados em ~/.local/share/keisho). Leva o fonte, a
-# configuracao e os dados das pastas antigas para as novas, uma vez. O
-# fonte passa a puxar do repositorio novo.
+# ~/.config/keisho, dados em ~/.local/share/keisho). Leva o fonte que o
+# gabinete compilava, a configuracao e os dados das pastas antigas para as
+# novas, uma vez.
 migrate() {
   local config=${XDG_CONFIG_HOME:-$HOME/.config} data=${XDG_DATA_HOME:-$HOME/.local/share}
   local old_src=${FLIPEROS_SM2_OLD_SRC:-$HOME/.local/src/sm2-emu}
@@ -65,12 +57,6 @@ theme() {
   export GUM_CHOOSE_HEADER_FOREGROUND=4
   export GUM_CHOOSE_ITEM_FOREGROUND=7
   export GUM_CHOOSE_SELECTED_FOREGROUND=5
-  export GUM_CONFIRM_PROMPT_FOREGROUND=7
-  export GUM_CONFIRM_PROMPT_BOLD=false
-  export GUM_CONFIRM_SELECTED_FOREGROUND=0
-  export GUM_CONFIRM_SELECTED_BACKGROUND=5
-  export GUM_CONFIRM_UNSELECTED_FOREGROUND=7
-  export GUM_CONFIRM_UNSELECTED_BACKGROUND=0
 }
 
 pause() {
@@ -78,100 +64,10 @@ pause() {
   read -r _
 }
 
-# deps_missing: o que o build pede e a imagem pode nao ter (o glslc, o
-# ninja, os cabecalhos do X e do ALSA para o SDL3 vendido, e os do HarfBuzz
-# e do fontconfig, do menu traduzido: sem o HarfBuzz do sistema o build
-# compila o vendido, bem mais demorado).
-deps_missing() {
-  local tool header
-  for tool in git cmake ninja g++ glslc pkg-config; do
-    command -v "$tool" > /dev/null || return 0
-  done
-  for header in X11/Xlib.h alsa/asoundlib.h harfbuzz/hb.h fontconfig/fontconfig.h; do
-    [[ -f /usr/include/$header ]] || return 0
-  done
-  return 1
-}
-
-install_deps() {
-  local script
-  script=$(mktemp)
-  cat > "$script" << 'EOF'
-#!/bin/bash
-set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y --no-install-recommends \
-  cmake ninja-build build-essential glslc git ca-certificates pkg-config \
-  libgl-dev libegl-dev libpugixml-dev libcurl4-openssl-dev \
-  libharfbuzz-dev libfontconfig-dev \
-  libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
-  libxi-dev libxfixes-dev libxss-dev libxrender-dev libxtst-dev \
-  libasound2-dev libpulse-dev libudev-dev \
-  libwayland-dev libwayland-bin libxkbcommon-dev libdecor-0-dev
-EOF
-  chmod +x "$script"
-  sudo bash "$script"
-  local rc=$?
-  rm -f "$script"
-  return "$rc"
-}
-
-# patches_id: muda quando o FliperOS traz outro conjunto de patches.
-patches_id() {
-  { cat "$patches"/*.patch 2> /dev/null || true; } | sha256sum | cut -d' ' -f1
-}
-
-# apply_patches: cada patch que ainda se aplica a esta versao do upstream.
-# O que nao se aplica fica de fora (o upstream mudou aquele trecho), e o
-# build segue sem ele.
-apply_patches() {
-  local patch
-  for patch in "$patches"/*.patch; do
-    [[ -f $patch ]] || continue
-    if git -C "$src" apply --check "$patch" 2> /dev/null; then
-      git -C "$src" apply "$patch"
-    else
-      printf 'Skipping %s: it does not apply to this version.\n' "${patch##*/}"
-    fi
-  done
-}
-
-# build_tree [update]: clona (raso, com os submodulos) ou, com "update",
-# atualiza e reaplica os patches. Compila em Release com LTO. Cada passo que falha volta na hora: chamado
-# num "||", o set -e de dentro nao valeria.
-build_tree() {
-  mkdir -p "${src%/*}" || return 1
-  if [[ ! -d $src/.git ]]; then
-    rm -rf "$src"
-    GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --shallow-submodules \
-      "$repo" "$src" || return 1
-  else
-    # Os patches da vez anterior saem antes do pull.
-    git -C "$src" checkout -- . || return 1
-    if [[ ${1:-} == update ]]; then
-      GIT_TERMINAL_PROMPT=0 git -C "$src" pull --ff-only || return 1
-      git -C "$src" submodule update --init --recursive --depth 1 || return 1
-    fi
-  fi
-  apply_patches || return 1
-  # O build de uma pasta que mudou de nome (~/.local/src/sm2-emu) guarda o
-  # caminho velho no cache do CMake, que entao se recusa: comeca do zero.
-  if [[ -f $src/build/CMakeCache.txt ]] &&
-    ! grep -qxF "CMAKE_HOME_DIRECTORY:INTERNAL=$src" "$src/build/CMakeCache.txt"; then
-    rm -rf "$src/build"
-  fi
-  cmake -S "$src" -B "$src/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-    -DSM2_BUILD_TESTS=OFF -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON || return 1
-  nice -n 5 cmake --build "$src/build" -j "$(nproc)" || return 1
-  rm -f "$old_bin"
-  patches_id > "$stamp"
-}
-
-# game_rows: "titulo<TAB>arquivo" dos .zip de ~/roms/model2, pelo nome no
-# games.xml (o .zip que ele nao conhece fica pelo nome do arquivo). Os zips
-# de dispositivo (model1io.zip: a placa de I/O, lida ao lado do jogo) nao
-# sao jogos e ficam de fora.
+# game_rows: "titulo<TAB>arquivo" dos .zip da pasta, pelo nome no games.xml
+# (o .zip que ele nao conhece fica pelo nome do arquivo). Os zips de
+# dispositivo (model1io.zip: a placa de I/O, lida ao lado do jogo) nao sao
+# jogos e ficam de fora.
 game_rows() {
   python3 - "$roms" "$games_xml" << 'PY'
 import os
@@ -202,113 +98,48 @@ PY
 }
 
 case ${1:-} in
-  --migrate)
-    # So a migracao acima (config/fliperos-x11-run, antes de abrir um jogo).
-    exit 0
-    ;;
-  --deps)
-    deps_missing || exit 0
-    install_deps
-    exit
-    ;;
-  --build)
-    if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi
-    exit
-    ;;
-  --outdated)
-    # Compilado, mas com outro conjunto de patches que o desta versao do
-    # FliperOS (o update do sistema o recompila: tools/cabinet-update.sh).
-    # Ou ainda o SM2-Emu, de antes do nome novo.
-    [[ -x $bin && $(cat "$stamp" 2> /dev/null) != "$(patches_id)" ]] ||
-      [[ -x $old_bin && ! -x $bin ]]
-    exit
+  --migrate) exit 0 ;;
+  --pick) ;;
+  *)
+    echo "Usage: fliperos-sm2emu --pick FILE [model2|model3] | --migrate" >&2
+    exit 2
     ;;
 esac
-if [[ ${1:-} != --pick ]]; then
-  echo "Usage: fliperos-sm2emu --pick FILE | --deps | --build | --outdated | --migrate" >&2
-  exit 2
-fi
 dest=${2:?}
+system=${3:-model2}
+case $system in
+  model3) roms=${FLIPEROS_MODEL3_DIR:-$HOME/roms/model3} label="Model 3" ;;
+  *) roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2} label="Model 2" ;;
+esac
 : > "$dest"
 theme
 
 if [[ ! -x $bin ]]; then
-  gum confirm "Clone and build Model 2 now? Needs the network and takes a few minutes." || exit 0
-  if deps_missing; then
-    printf 'Installing build tools. sudo may ask for the password.\n'
-    if ! install_deps; then
-      printf 'Could not install the build tools.\n'
-      pause
-      exit 1
-    fi
-  fi
-  printf 'Cloning and building. This takes a few minutes.\n'
-  # Um fonte ja clonado sem o binario (o SM2-Emu de antes do nome novo)
-  # atualiza antes: compilado como esta, sairia o executavel velho.
-  build=(build_tree)
-  [[ -d $src/.git ]] && build+=(update)
-  if ! "${build[@]}"; then
-    printf 'Build failed.\n'
-    pause
-    exit 1
-  fi
-elif [[ $(cat "$stamp" 2> /dev/null) != "$(patches_id)" ]]; then
-  # Um update do FliperOS trouxe outros patches. O que saiu deles foi para
-  # o upstream: o fonte daqui, sem o pull, ficaria sem aquelas correcoes.
-  if gum confirm "Update Model 2 with the new fixes? Needs the network and takes a few minutes."; then
-    if deps_missing; then
-      printf 'Installing build tools. sudo may ask for the password.\n'
-      if ! install_deps; then
-        printf 'Could not install the build tools.\n'
-        pause
-        exit 1
-      fi
-    fi
-    printf 'Updating and building.\n'
-    if ! build_tree update; then
-      printf 'Build failed.\n'
-      pause
-      exit 1
-    fi
-  fi
+  printf 'Keisho (Model 2 and 3) is not installed.\nInstall it in Setup > Games > Emulators & Games.\n'
+  pause
+  exit 0
 fi
 
-header="Model 2 - choose a game (Esc cancels)"
+header="$label - choose a game (Esc cancels)"
 while :; do
   rows=$(game_rows)
   if [[ -z $rows ]]; then
-    printf 'No Model 2 games in %s.\nCopy the MAME .zip files there.\n' "$roms"
+    printf 'No %s games in %s.\nCopy the MAME .zip files there.\n' "$label" "$roms"
     pause
     exit 0
   fi
-  list=$(printf '%s\nUpdate Model 2\tUPDATE\n' "$rows")
   choice=$(gum choose --header "$header" \
     --height "$(($(tput lines 2> /dev/null || echo 24) - 2))" \
-    --label-delimiter $'\t' <<< "$list") || exit 0
-  if [[ $choice == UPDATE ]]; then
-    if deps_missing; then
-      printf 'Installing build tools. sudo may ask for the password.\n'
-      if ! install_deps; then
-        printf 'Could not install the build tools.\n'
-        pause
-        continue
-      fi
-    fi
-    printf 'Updating and building.\n'
-    if ! build_tree update; then
-      printf 'Build failed.\n'
-      pause
-    fi
-    header="Model 2 - choose a game (Esc cancels)"
-    continue
-  fi
+    --label-delimiter $'\t' <<< "$rows") || exit 0
   [[ -n $choice ]] || exit 0
   # Um zip incompleto faz o emulador sair na hora, e o desktop volta sem
   # dizer o que faltou. Aqui a falha fica nesta lista. NVRAM descartavel:
   # o teste grava a dele ao sair, por cima da do jogo.
   nv=$(mktemp -d)
   ok=0
-  err=$("$bin" --boot-test 1 --log-level error --nvram "$nv" "$choice" 2>&1 >/dev/null) && ok=1
+  err=$("$bin" --boot-test 1 --log-level error --nvram "$nv" \
+    --model2-rom-dir "${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}" \
+    --model3-rom-dir "${FLIPEROS_MODEL3_DIR:-$HOME/roms/model3}" "$choice" 2>&1 > /dev/null) && ok=1
   rm -rf "$nv"
   if ((ok)); then
     printf '%s\n' "$choice" > "$dest"

@@ -190,7 +190,7 @@ RULES = {
     'cps3': lambda m: m['source'] == 'cps3',
     'midway': lambda m: m['source'] in ('midtunit', 'midwunit', 'midxunit', 'midyunit'),
     'psx': lambda m: any(PSX_CPU.match(cpu) for cpu in m['cpus']),
-    # Os jogos do SM2-Emu e do Supermodel (Model 2/2A/2B/2C e Model 3).
+    # Os jogos do Keisho (Model 2/2A/2B/2C e Model 3).
     'model2': lambda m: m['source'] == 'model2',
     'model3': lambda m: m['source'] == 'model3',
 }

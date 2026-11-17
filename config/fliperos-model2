@@ -1,28 +1,42 @@
 #!/usr/bin/env bash
-# Sega Model 2 pelo Keisho (o antigo SM2-Emu). O Model 2 Emulator (Wine)
-# saiu: este comando so repassa para o binario compilado em ~/.local/src/keisho. Aberto por um
-# frontend, via fliperos-x11-run. Pelo menu, o fliperos-launch escolhe o jogo
-# antes (config/fliperos-sm2emu).
+# Sega Model 2 e Model 3 pelo Keisho (o antigo SM2-Emu, que tambem substituiu
+# o Supermodel). Instalado duas vezes: fliperos-model2 e fliperos-model3, e o
+# nome diz o sistema. Aberto por um frontend, via fliperos-x11-run. Pelo menu,
+# o fliperos-launch escolhe o jogo antes (config/fliperos-sm2emu).
 #
 #   fliperos-model2 [jogo]      (nome sem .zip, ou o caminho do .zip)
+#   fliperos-model3 [jogo]
+#
+# O Keisho vem no pacote fliperos-keisho (/usr/local/bin/keisho). Um gabinete
+# que ainda o tem so compilado em ~/.local/src/keisho (o Model 2 de antes do
+# pacote) usa esse.
 set -euo pipefail
+system=model2
+[[ ${0##*/} == fliperos-model3 ]] && system=model3
+bin=${FLIPEROS_KEISHO_BIN:-/usr/local/bin/keisho}
 src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/keisho}
-bin=$src/build/bin/keisho
-roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
+[[ -x $bin ]] || bin=$src/build/bin/keisho
+model2=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
+model3=${FLIPEROS_MODEL3_DIR:-$HOME/roms/model3}
+roms=$model2
+[[ $system == model3 ]] && roms=$model3
 if [[ ! -x $bin ]]; then
-  echo "Model 2 is not built yet. Open it from the desktop menu once to clone and build it." >&2
+  echo "Keisho (Model 2 and 3) is not installed. Install it in Setup > Games > Emulators & Games." >&2
   exit 1
 fi
 args=()
+given=" "
 prev=
 for arg in "$@"; do
   # O valor de uma opcao (--game daytona, --nvram dir) fica como veio: so o
   # nome solto do jogo vira o caminho do .zip.
   case $prev in
-    --game | --config | --nvram | --rom-dir | --gpu | --graphics-backend | --log-level | --screenshot-dir | --render-scale | --load-state)
+    --game | --config | --nvram | --rom-dir | --model1-rom-dir | --model2-rom-dir | --model3-rom-dir | --gpu | \
+      --graphics-backend | --log-level | --screenshot-dir | --render-scale | --load-state)
       args+=("$arg")
       ;;
     *)
+      [[ $arg == --* ]] && given+="$arg "
       if [[ $arg != -* && ! -e $arg && -f $roms/$arg.zip ]]; then
         args+=("$roms/$arg.zip")
       else
@@ -32,4 +46,14 @@ for arg in "$@"; do
   esac
   prev=$arg
 done
-exec "$bin" "${args[@]}"
+# As pastas de cada sistema (um clone acha os chips do pai na pasta dele).
+opts=()
+[[ $given == *" --model2-rom-dir "* ]] || opts+=(--model2-rom-dir "$model2")
+[[ $given == *" --model3-rom-dir "* ]] || opts+=(--model3-rom-dir "$model3")
+# A memoria e os save states do Model 3 em ~/nvram/model3, onde o Supermodel
+# os deixava (o Keisho le o mesmo <jogo>.nv); os do Model 2 ficam no
+# nvram_dir dele, que o fliperos-roms liga a ~/nvram/model2.
+if [[ $system == model3 && $given != *" --nvram "* ]]; then
+  opts+=(--nvram "${FLIPEROS_MODEL3_NVRAM:-$HOME/nvram/model3}")
+fi
+exec "$bin" "${opts[@]}" "${args[@]}"

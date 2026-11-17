@@ -4,7 +4,7 @@
 #  Gera a midia de instalacao do FliperOS (Ubuntu 24.04 + kernel 15 kHz)
 #  Uso: sudo bash fliperos-mkiso.sh [--output /caminho/saida.iso]
 #       [--skip-switchres] [--skip-groovymame] [--skip-retroarch]
-#       [--skip-flycast] [--skip-pcsx2] [--skip-supermodel]
+#       [--skip-flycast] [--skip-pcsx2] [--skip-keisho]
 #       [--skip-dolphin] [--skip-hypseus] [--skip-openbor]
 #       [--skip-skyscraper] [--skip-input-drivers] [--skip-wheel-drivers]
 #       [--kernel-cache DIR] [--repo DIR] [--splash fliperos-text|fliperos|evangelion|none]
@@ -35,7 +35,7 @@ SKIP_GROOVYMAME=false
 SKIP_RETROARCH=false
 SKIP_FLYCAST=false
 SKIP_PCSX2=false
-SKIP_SUPERMODEL=false
+SKIP_KEISHO=false
 SKIP_DOLPHIN=false
 SKIP_HYPSEUS=false
 SKIP_OPENBOR=false
@@ -105,7 +105,7 @@ while [[ $# -gt 0 ]]; do
     --skip-retroarch)  SKIP_RETROARCH=true; shift ;;
     --skip-flycast)    SKIP_FLYCAST=true; shift ;;
     --skip-pcsx2)      SKIP_PCSX2=true; shift ;;
-    --skip-supermodel) SKIP_SUPERMODEL=true; shift ;;
+    --skip-keisho) SKIP_KEISHO=true; shift ;;
     --skip-dolphin)    SKIP_DOLPHIN=true; shift ;;
     --skip-hypseus)    SKIP_HYPSEUS=true; shift ;;
     --skip-openbor)    SKIP_OPENBOR=true; shift ;;
@@ -505,7 +505,7 @@ install_local_repo_chroot() {
   chmod -R a+rX "$repo"
   echo "deb [trusted=yes] file:/opt/fliperos/repo ./" > "$CHROOT_DIR/etc/apt/sources.list.d/fliperos.list"
   chroot "$CHROOT_DIR" bash -c 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2 fliperos-gum fliperos-rahasher' >> "$LOG_FILE" 2>&1 \
+    apt-get install -y --no-install-recommends fliperos-attractplus fliperos-sdl2-kms fliperos-retroarch fliperos-dolphin fliperos-flycast fliperos-groovymame fliperos-keisho fliperos-openbor fliperos-pcsx2 fliperos-gum fliperos-rahasher' >> "$LOG_FILE" 2>&1 \
     || err "Installing Attract-Mode Plus, GroovyMAME, its SDL2 and the emulators from the local repository failed (see $LOG_FILE)"
   ok "Local repository with $(ls "$repo"/*.deb | wc -l) package(s); Attract-Mode Plus, GroovyMAME and its KMS SDL2 and the emulators installed"
 }
@@ -919,7 +919,7 @@ install_mame2010_xml() {
 # HAVE_X11/HAVE_WAYLAND) e o binario resultante reporta "KMS: yes",
 # "EGL: yes", "udev: yes" em --features.
 # Por isso RetroArch/Flycast usam fliperos-kms-run (sem Xorg), diferente
-# de PCSX2/Supermodel que continuam em fliperos-x11-run.
+# de PCSX2/Keisho que continuam em fliperos-x11-run.
 # Com SDL2 para o driver de controle "sdl2" existir em Drivers > Controle
 # (mapeamentos do fliperos-controllers, como os outros emuladores; sem
 # perfil, o "Standard Gamepad" embutido). Entrada e controle ficam no
@@ -1170,20 +1170,20 @@ build_pcsx2x6_chroot() {
   record_version pcsx2x6 "$PCSX2X6_VERSION"
 }
 
-# ── Supermodel (Sega Model 3), X11 ────────────────────────────
-# O pacote fliperos-supermodel (packaging/packages, instalado por
+# ── Keisho (Sega Model 2 e Model 3), X11 ──────────────────────
+# O pacote fliperos-keisho (packaging/packages, instalado por
 # install_local_repo_chroot): o mesmo .deb que os updates levam a quem so
-# atualiza pela rede. SDL2+OpenGL, sem caminho KMS/DRM documentado pelo
-# projeto: fica em X11 via fliperos-x11-run.
-build_supermodel_chroot() {
-  if $SKIP_SUPERMODEL; then
-    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-supermodel' >> "$LOG_FILE" 2>&1 || true
-    warn "Supermodel skipped (--skip-supermodel)"
+# atualiza pela rede. SDL3 com Vulkan e OpenGL, em X11 via fliperos-x11-run.
+# Substituiu o Supermodel (Model 3) e o build no gabinete (Model 2).
+build_keisho_chroot() {
+  if $SKIP_KEISHO; then
+    chroot "$CHROOT_DIR" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq fliperos-keisho' >> "$LOG_FILE" 2>&1 || true
+    warn "Keisho skipped (--skip-keisho)"
     return
   fi
-  chroot "$CHROOT_DIR" dpkg -s fliperos-supermodel > /dev/null 2>&1 ||
-    err "fliperos-supermodel is not installed (local repository); use --skip-supermodel for an ISO without it"
-  ok "Supermodel (fliperos-supermodel)"
+  chroot "$CHROOT_DIR" dpkg -s fliperos-keisho > /dev/null 2>&1 ||
+    err "fliperos-keisho is not installed (local repository); use --skip-keisho for an ISO without it"
+  ok "Keisho (fliperos-keisho)"
 }
 
 # ── Hypseus Singe (laserdisc: Dragon's Lair, Space Ace...), X11 ──
@@ -1503,7 +1503,7 @@ summary() {
   $SKIP_RETROARCH  && echo -e "  ${YLW}RetroArch not included${RST}"
   $SKIP_FLYCAST    && echo -e "  ${YLW}Flycast not included${RST}"
   $SKIP_PCSX2      && echo -e "  ${YLW}PCSX2 not included${RST}"
-  $SKIP_SUPERMODEL && echo -e "  ${YLW}Supermodel not included${RST}"
+  $SKIP_KEISHO && echo -e "  ${YLW}Keisho (Model 2 and 3) not included${RST}"
   $SKIP_DOLPHIN    && echo -e "  ${YLW}Dolphin not included${RST}"
   $SKIP_HYPSEUS    && echo -e "  ${YLW}Hypseus Singe not included${RST}"
   $SKIP_OPENBOR    && echo -e "  ${YLW}OpenBOR not included${RST}"
@@ -1559,7 +1559,7 @@ build_flycast_chroot
 build_deflicker_chroot
 build_pcsx2_chroot
 build_pcsx2x6_chroot
-build_supermodel_chroot
+build_keisho_chroot
 build_hypseus_chroot
 build_openbor_chroot
 build_dolphin_chroot

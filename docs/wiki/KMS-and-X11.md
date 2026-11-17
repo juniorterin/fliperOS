@@ -9,7 +9,7 @@ Linux has two ways to put a program on the screen, and FliperOS uses both.
 | Path | What it is | Who uses it | Wrapper |
 | --- | --- | --- | --- |
 | **KMS** | The program draws **directly on the video card**, without a window system. The lightest path, with the least input lag, and the program changes the video mode itself | RetroArch, GroovyMAME, the frontends | `fliperos-kms-run` |
-| **X11** | Xorg, the classic window system, for programs that only know how to open a window | Flycast, PCSX2, PCSX2x6, DuckStation, Dolphin, Supermodel, Keisho, Hypseus, OpenBOR, Wine games | `fliperos-x11-run` |
+| **X11** | Xorg, the classic window system, for programs that only know how to open a window | Flycast, PCSX2, PCSX2x6, DuckStation, Dolphin, Keisho, Hypseus, OpenBOR, Wine games | `fliperos-x11-run` |
 
 `fliperos-x11-run` starts an Xorg just for that program, has **Switchres** make the video mode for the monitor chosen in Video Setup, opens the program full screen and closes Xorg when the program exits. Nothing else runs in that X: no desktop, no panel.
 
@@ -36,7 +36,7 @@ Both wrappers are started from the console, as the frontends do. Inside the LXDE
 | GroovyMAME | KMS | Each game's own mode (Switchres) | The same |
 | RetroArch | KMS | Each game's own mode (CRT SwitchRes) | The same |
 | Flycast, PCSX2, PCSX2x6, DuckStation, Dolphin, Hypseus | X11 | 640x240 | 640x480 |
-| Supermodel, Keisho | X11 | 640x240 at 57.524 Hz | 496x384 |
+| Keisho (Model 2 and 3) | X11 | 640x240 at 57.524 Hz | 496x384 |
 | OpenBOR | X11 | Each pak's own mode ([OpenBOR](OpenBOR.md)) | The same |
 | Fightcade 2 | X11 | The lobby at 512x448, each match in its game's mode ([Fightcade 2](Fightcade-2.md)) | |
 | KOF Final Attack | X11 | 320x240 | |
@@ -87,7 +87,6 @@ In a frontend, the emulator's command becomes `/opt/fliperos/bin/fliperos-x11-ru
 | PCSX2 | `AspectRatio = Stretch` |
 | DuckStation | `AspectRatio = Stretch To Fill` |
 | Dolphin | `AspectRatio=3` |
-| Supermodel | `-fullscreen -res=640,240 -stretch` |
 | Hypseus | `-x 640 -y 240 -ignore_aspect_ratio` |
 | Keisho | `aspect_mode = stretch` |
 

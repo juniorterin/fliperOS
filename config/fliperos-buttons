@@ -106,11 +106,6 @@ OpenBOR: as teclas de cada jogador (o codigo do joystick do OpenBOR:
 struct do Saves/default.cfg e no .cfg de cada pak, do 4 e do 3.0 (v3/Saves,
 os paks antigos, config/fliperos-openbor).
 
-Supermodel: Start, ficha, direcional e os botoes 1 a 4 (Punch, Kick, Guard,
-Escape, a ordem do padrao dele) dos jogadores 1 e 2 no Supermodel.ini, com
-as teclas padrao junto. O padrao dele poe Start e ficha nos botoes 9 e 10,
-que um painel de 8 botoes nao tem.
-
 Dolphin: GCPad1 a GCPad4 no GCPadNew.ini pelo SDL (o layout de fight stick
 acima vira A B X Y Z R do GameCube, a ficha a Coin do Triforce) e a porta
 de cada jogador ligada no Dolphin.ini.
@@ -141,8 +136,7 @@ aplica o layout onde o botao N do painel e o botao N do jogo: no GroovyMAME,
 um <system> por jogo no ctrlr (o clone segue o do pai); nos cores MAME do
 RetroArch, um buttons-BOTOES.cfg ao lado do buttons.cfg, que o
 fliperos-kms-run soma a config do jogo que tem esse numero de botoes; no
-Supermodel (Model 3), os botoes do jogo (luta, futebol, Spikeout) na secao
-dele do Supermodel.ini; no SM2-Emu (Model 2), um mapeamento de game
+Keisho (Model 2 e Model 3), um mapeamento de game
 controller so dele (gamecontrollerdb-model2.txt, com o botao N do painel no
 botao N do jogo, e um gamecontrollerdb-model2-BOTOES.txt por layout), que o
 fliperos-x11-run poe por cima do gamecontrollerdb.txt ao abrir o jogo.
@@ -167,7 +161,6 @@ SDL_USER_DB = os.environ.get('FLIPEROS_SDL_USER_DB', '/var/lib/fliperos/gamecont
 FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
 OPENBOR_SAVES = os.environ.get('FLIPEROS_OPENBOR_SAVES', '/opt/fliperos/roms/openbor/Saves')
 OPENBOR3_SAVES = os.environ.get('FLIPEROS_OPENBOR3_SAVES', '/opt/fliperos/roms/openbor/v3/Saves')
-SUPERMODEL_INI = os.environ.get('FLIPEROS_SUPERMODEL_INI', '/home/fliperos/.config/supermodel/Config/Supermodel.ini')
 DOLPHIN_DIR = os.environ.get('FLIPEROS_DOLPHIN_DIR', '/home/fliperos/.config/dolphin-emu')
 HYPSEUS_INI = os.environ.get('FLIPEROS_HYPSEUS_INI', '/home/fliperos/.hypseus/hypinput.ini')
 FLYCAST_DOJO_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_DOJO_MAPPINGS',
@@ -175,7 +168,6 @@ FLYCAST_DOJO_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_DOJO_MAPPINGS',
 CONTROLLERS = os.environ.get('FLIPEROS_CONTROLLERS', '/opt/fliperos/bin/fliperos-controllers')
 BUTTONS_LAYOUT = os.environ.get('FLIPEROS_BUTTONS_LAYOUT', '/etc/fliperos/buttons.layout')
 GAME_BUTTONS = os.environ.get('FLIPEROS_GAME_BUTTONS', '/var/lib/fliperos/game-buttons.txt')
-SUPERMODEL_GAMES = os.environ.get('FLIPEROS_SUPERMODEL_GAMES', '/usr/local/share/supermodel/Config/Games.xml')
 MODEL2_DB = os.environ.get('FLIPEROS_SDL_MODEL2_DB', '/var/lib/fliperos/gamecontrollerdb-model2.txt')
 USER_ID = 1000
 # As posicoes do Buttons layout (1 2 3 em cima, 4 5 6 embaixo); o painel
@@ -226,7 +218,7 @@ MAME_KEYS = {
         'b3': 'ENTER_PAD', 'start': '4', 'coin': '8'},
 }
 # Cada tecla do MAME nos outros: (RetroArch, scancode do SDL (OpenBOR,
-# Flycast), Supermodel, SDL_Keycode (Hypseus)).
+# Flycast), Supermodel (fora de uso), SDL_Keycode (Hypseus)).
 KEYS = {
     'UP': ('up', 82, 'UP', 'SDLK_UP'), 'DOWN': ('down', 81, 'DOWN', 'SDLK_DOWN'),
     'LEFT': ('left', 80, 'LEFT', 'SDLK_LEFT'), 'RIGHT': ('right', 79, 'RIGHT', 'SDLK_RIGHT'),
@@ -1189,179 +1181,6 @@ def openbor_save(players, devices):
             write_bytes(path, openbor_with_keys(data, players, devices, at), USER_ID)
 
 
-# ── Supermodel ──────────────────────────────────────────────────
-
-# controle: (chave do jogador 1, chave do jogador 2, tecla padrao do jogador 1)
-SUPERMODEL_KEYS = {
-    'start': ('InputStart1', 'InputStart2', 'KEY_1'), 'coin': ('InputCoin1', 'InputCoin2', 'KEY_3'),
-    'up': ('InputJoyUp', 'InputJoyUp2', 'KEY_UP'), 'down': ('InputJoyDown', 'InputJoyDown2', 'KEY_DOWN'),
-    'left': ('InputJoyLeft', 'InputJoyLeft2', 'KEY_LEFT'), 'right': ('InputJoyRight', 'InputJoyRight2', 'KEY_RIGHT'),
-    'b1': ('InputPunch', 'InputPunch2', 'KEY_A'), 'b2': ('InputKick', 'InputKick2', 'KEY_S'),
-    'b3': ('InputGuard', 'InputGuard2', 'KEY_D'), 'b4': ('InputEscape', 'InputEscape2', 'KEY_F'),
-}
-SUPERMODEL_P2_KEYS = {'start': 'KEY_2', 'coin': 'KEY_4'}
-SUPERMODEL_AXES = ['XAXIS', 'YAXIS', 'ZAXIS', 'RXAXIS', 'RYAXIS', 'RZAXIS']
-SUPERMODEL_HAT = {'1': 'UP', '2': 'RIGHT', '4': 'DOWN', '8': 'LEFT'}
-
-
-# Os botoes de cada tipo de jogo do Games.xml (<input type>), na ordem do
-# padrao do Supermodel (JOYn_BUTTON1, 2...): (jogador 1, jogador 2). O
-# Spikeout tem um jogador por gabinete.
-SUPERMODEL_FAMILIES = {
-    'fighting': [('InputPunch', 'InputPunch2'), ('InputKick', 'InputKick2'), ('InputGuard', 'InputGuard2'),
-                 ('InputEscape', 'InputEscape2')],
-    'spikeout': [('InputShift', None), ('InputBeat', None), ('InputCharge', None), ('InputJump', None)],
-    'soccer': [('InputShortPass', 'InputShortPass2'), ('InputLongPass', 'InputLongPass2'),
-               ('InputShoot', 'InputShoot2')],
-}
-SUPERMODEL_BUTTON_KEYS = ['KEY_A', 'KEY_S', 'KEY_D', 'KEY_F']
-
-
-def supermodel_code(index, element):
-    """O nome de entrada do Supermodel (SDL: JOY1 e o controle 0) de um elemento."""
-    if is_key(element):
-        return 'KEY_' + KEYS[element[2:]][2]
-    joy = 'JOY%d_' % (index + 1)
-    if element.startswith('b'):
-        return joy + 'BUTTON%d' % (int(element[1:]) + 1)
-    if element.startswith('h'):
-        hat, direction = element[1:].split('.')
-        return joy + 'POV%d_%s' % (int(hat) + 1, SUPERMODEL_HAT[direction])
-    axis = int(element[2:])
-    name = SUPERMODEL_AXES[axis] if axis < len(SUPERMODEL_AXES) else SUPERMODEL_AXES[-1]
-    return joy + '%s_%s' % (name, 'NEG' if element[0] == '-' else 'POS')
-
-
-def supermodel_values(players):
-    """{chave do Supermodel.ini: valor} dos jogadores 1 e 2."""
-    out = {}
-    for player in (1, 2):
-        for control, (index, element) in players.get(player, {}).items():
-            if control not in SUPERMODEL_KEYS:
-                continue
-            key = SUPERMODEL_KEYS[control][player - 1]
-            default = SUPERMODEL_KEYS[control][2] if player == 1 else SUPERMODEL_P2_KEYS.get(control)
-            code = supermodel_code(index, element)
-            # Com o teclado no layout do MAME, a tecla padrao do Supermodel
-            # (o A do soco) seria a de outro comando: so a do mapa.
-            if is_key(element):
-                default = None
-            out[key] = '"%s,%s"' % (default, code) if default else '"%s"' % code
-    for family in ('spikeout', 'soccer'):
-        out.update(supermodel_buttons(players, SUPERMODEL_FAMILIES[family], range(1, PANEL_BUTTONS + 1)))
-    return out
-
-
-def supermodel_buttons(players, inputs, order):
-    """{chave: valor} dos botoes de um tipo de jogo, o botao N na posicao
-    order[N - 1] do painel; a tecla padrao junto no jogador 1."""
-    out = {}
-    for n, keys in enumerate(inputs):
-        for player, key in zip((1, 2), keys):
-            bind = players.get(player, {}).get('b%d' % order[n])
-            if not key or not bind:
-                continue
-            code = supermodel_code(*bind)
-            if player == 1 and not is_key(bind[1]):
-                out[key] = '"%s,%s"' % (SUPERMODEL_BUTTON_KEYS[n], code)
-            else:
-                out[key] = '"%s"' % code
-    return out
-
-
-def supermodel_games(path):
-    """{jogo: tipo} dos jogos do Games.xml com botoes de SUPERMODEL_FAMILIES."""
-    import xml.etree.ElementTree as ET
-    games = {}
-    try:
-        root = ET.parse(path).getroot()
-    except (OSError, ET.ParseError):
-        return games
-    for game in root.iter('game'):
-        for inp in game.iter('input'):
-            if inp.get('type') in SUPERMODEL_FAMILIES and game.get('name'):
-                games[game.get('name')] = inp.get('type')
-    return games
-
-
-def supermodel_game_section(text, game, values):
-    """O Supermodel.ini com `values` na secao [ game ] (o Supermodel a soma
-    a [ Global ] ao abrir o jogo), sem os botoes de um layout anterior; o
-    resto da secao fica, e a que fica vazia sai."""
-    owned = {k for inputs in SUPERMODEL_FAMILIES.values() for keys in inputs for k in keys if k}
-    lines = text.splitlines()
-    start = next((i for i, l in enumerate(lines) if re.match(r'\s*\[\s*%s\s*\]\s*$' % re.escape(game), l)), None)
-    new = ['%s = %s' % kv for kv in sorted(values.items())]
-    if start is None:
-        if not new:
-            return text
-        while lines and not lines[-1].strip():
-            lines.pop()
-        return '\n'.join(lines + ([''] if lines else []) + ['[ %s ]' % game] + new) + '\n'
-    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith('[')), len(lines))
-    body = []
-    for line in lines[start + 1:end]:
-        m = re.match(r'\s*(\w+)\s*=', line)
-        if not (m and m.group(1) in owned):
-            body.append(line)
-    while body and not body[-1].strip():
-        body.pop()
-    body += new
-    head, tail = lines[:start], lines[end:]
-    if not any(l.strip() for l in body):
-        while head and not head[-1].strip():
-            head.pop()
-        return '\n'.join(head + ([''] if head and tail else []) + tail) + '\n'
-    return '\n'.join(head + [lines[start]] + body + ([''] if tail else []) + tail) + '\n'
-
-
-def supermodel_layouts(text, players, layouts, table, games):
-    """As secoes dos jogos do Games.xml: os botoes no layout do numero de
-    botoes do jogo (o da tabela; sem ele, os do tipo do jogo)."""
-    for game in sorted(games):
-        inputs = SUPERMODEL_FAMILIES[games[game]]
-        count = min(table[game][0], len(inputs)) if game in table else len(inputs)
-        values = {}
-        if count in layouts:
-            values = supermodel_buttons(players, inputs[:count], layout_order(layouts, count))
-        text = supermodel_game_section(text, game, values)
-    return text
-
-
-def supermodel_ini(text, values):
-    """O Supermodel.ini com as chaves de `values` na secao [ Global ]: as que
-    ja existem trocadas, as que faltam logo depois do cabecalho."""
-    lines = text.splitlines()
-    rest = dict(values)
-    for i, line in enumerate(lines):
-        m = re.match(r'\s*(\w+)\s*=', line)
-        if m and m.group(1) in rest:
-            lines[i] = '%s = %s' % (m.group(1), rest.pop(m.group(1)))
-    if rest:
-        new = ['%s = %s' % kv for kv in sorted(rest.items())]
-        head = next((i for i, l in enumerate(lines) if re.match(r'\s*\[\s*Global\s*\]', l)), None)
-        if head is None:
-            lines = ['[ Global ]'] + new + [''] + lines
-        else:
-            lines[head + 1:head + 1] = new
-    return '\n'.join(lines) + '\n'
-
-
-def supermodel_save(players, layouts=None, table=None):
-    try:
-        with open(SUPERMODEL_INI, encoding='utf-8', errors='replace') as f:
-            text = f.read()
-    except OSError:
-        text = ''
-    text = supermodel_ini(text, supermodel_values(players))
-    text = supermodel_layouts(text, players, layouts or {}, table or {}, supermodel_games(SUPERMODEL_GAMES))
-    write(SUPERMODEL_INI, text, USER_ID)
-    try:
-        os.chown(os.path.dirname(os.path.dirname(SUPERMODEL_INI)), USER_ID, USER_ID)
-    except OSError:
-        pass
-
-
 def read_text(path):
     try:
         with open(path, encoding='utf-8', errors='replace') as f:
@@ -1938,14 +1757,12 @@ def cmd_save(args):
             os.remove(path)
     table = read_games(GAME_BUTTONS) if layouts else {}
     write(MAME_CTRLR, mame_cfg(players, names, layouts, table), USER_ID)
-    supermodel_save(players, layouts, table)
     hypseus_save(players)
     attract = attract_save(players, devices, kinds)
     if attract:
         print(attract)
     print(RA_BUTTONS)
     print(MAME_CTRLR)
-    print(SUPERMODEL_INI)
     print(HYPSEUS_INI)
     # Flycast, e o Flycast Dojo do Fightcade se ja baixado: por nome de
     # aparelho (o do primeiro jogador que o usa).
@@ -2477,13 +2294,14 @@ def combo_held(combo, now):
 # o de depois do fliperos-kms-run/x11-run, ou o que a camada da OSD anota),
 # conferida no gabinete apertando-a por um teclado virtual (uinput): F1 no
 # RetroArch, Tab no MAME e no Flycast, Esc no PCSX2 e no DuckStation (o
-# OpenPauseMenu do pcsx2.ini e do settings.ini) e a do overlay do SM2-Emu (a
-# key_overlay do sm2-emu.ini, F10 de fabrica). Quem nao tem menu (Supermodel,
-# Dolphin, OpenBOR, Hypseus, o KOF do Ikemen, o Fightcade) usa o menu na tela
-# do FliperOS (config/fliperos-osd).
+# OpenPauseMenu do pcsx2.ini e do settings.ini) e a do overlay do Keisho, no
+# Model 2 e no Model 3 (a key_overlay do keisho.ini, F10 de fabrica). Quem nao
+# tem menu (Dolphin, OpenBOR, Hypseus, o KOF do Ikemen, o Fightcade) usa o
+# menu na tela do FliperOS (config/fliperos-osd).
 MENU_KEYS = {'retroarch': 'F1', 'groovymame': 'TAB', 'mame': 'TAB', 'flycast': 'TAB', 'pcsx2': 'ESCAPE',
              'pcsx2-qt': 'ESCAPE', 'pcsx2x6': 'ESCAPE', 'duckstation': 'ESCAPE', 'duckstation-qt': 'ESCAPE',
-             'fliperos-model2': 'sm2', 'keisho': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2'}
+             'fliperos-model2': 'sm2', 'fliperos-model3': 'sm2', 'keisho': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2',
+             'model3': 'sm2'}
 # Os nomes das teclas (os do SDL, que o sm2-emu.ini usa) no evdev.
 KEY_CODES = {'ESCAPE': 1, 'TAB': 15, 'BACKSPACE': 14, 'RETURN': 28, 'SPACE': 57, 'PAUSE': 119,
              'INSERT': 110, 'DELETE': 111, 'HOME': 102, 'END': 107, 'PAGEUP': 104, 'PAGEDOWN': 109}

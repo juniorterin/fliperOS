@@ -3276,7 +3276,7 @@ def system_icon(cat):
     for name in ("groovymame", "flycast", "pcsx2x6", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
         if name in exe:
             return name
-    if "sm2" in exe:
+    if "sm2" in exe or "keisho" in exe or "model3" in exe:
         return "model2"
     if "duckstation" in exe:
         return "pcsx2"

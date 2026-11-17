@@ -29,10 +29,10 @@
 #     por READ_CORE_RAM, e o detector e avaliado aqui. As linhas "retroarch"
 #     da tabela vao por READ_CORE_MEMORY. Os cores do MAME (mame2010, mame)
 #     nao deixam ler a memoria.
-#   - SM2-Emu (Model 2): o proprio emulador le a memoria e publica os rounds
+#   - Keisho (Model 2): o proprio emulador le a memoria e publica os rounds
 #     de cada lado (P1_Wins, P2_Wins) entre as saidas do jogo, na porta 8000
 #     (o protocolo do MAMEHooker; ver config/fliperos-outputs). Os jogos que
-#     os tem sao os do games.xml dele (o patch em config/sm2-emu-patches).
+#     os tem sao os do games.xml dele (o patch do FliperOS, aceito por ele).
 #
 # As vitorias da sessao vem do detector, do proprio jogo (wins1, wins2) ou
 # dos rounds: o vencedor e contado quando os rounds voltam a zero. A cada
@@ -59,7 +59,10 @@ FEED = os.environ.get('VERSUS_FEED') or os.path.join(os.environ.get('XDG_RUNTIME
 RA_COMMAND = os.environ.get('RA_COMMAND', '127.0.0.1:55355')
 # As saidas do SM2-Emu e a tabela de jogos dele, ao lado do binario.
 SM2_OUTPUTS = os.environ.get('SM2_OUTPUTS', '127.0.0.1:8000')
-SM2_GAMES = os.environ.get('SM2_GAMES', '/home/fliperos/.local/src/keisho/build/bin/games.xml')
+# O do pacote fliperos-keisho; sem ele, o do Keisho que o gabinete compilava.
+SM2_GAMES = os.environ.get('SM2_GAMES') or next(
+    (p for p in ('/usr/local/share/keisho/games.xml', '/home/fliperos/.local/src/keisho/build/bin/games.xml')
+     if os.path.isfile(p)), '/usr/local/share/keisho/games.xml')
 # Os detectores do Fightcade, num commit fixo (a pasta que o plugin do MAME le).
 DETECTORS = os.environ.get('VERSUS_DETECTORS', '/home/fliperos/.local/share/fliperos/versus-detectors')
 DETECTORS_COMMIT = 'de9e7a99c494af488ed64155678e9d22d78f7ae6'
@@ -209,7 +212,7 @@ def fields_of(source, game, tables=None, core=''):
     return (fields or None), names
 
 
-# model2_has: o games.xml do SM2-Emu da ao jogo as saidas P1_Wins e P2_Wins.
+# model2_has: o games.xml do Keisho da ao jogo as saidas P1_Wins e P2_Wins.
 # O .zip de um jogo pode abrir como uma revisao dele (doa.zip como "doaa"):
 # vale o jogo com esse nome ou um clone dele.
 def model2_has(game):

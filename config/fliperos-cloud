@@ -106,7 +106,6 @@ pairs() {
         "$HOME_DIR/.config/dolphin-emu" config/dolphin \
         "$HOME_DIR/.config/duckstation" config/duckstation \
         "$HOME_DIR/.local/share/duckstation" config/duckstation-data \
-        "$HOME_DIR/.config/supermodel" config/supermodel \
         "$HOME_DIR/.config/keisho" config/sm2-emu \
         "$HOME_DIR/.openbor" config/openbor \
         "$HOME_DIR/.attract" config/attractplus \

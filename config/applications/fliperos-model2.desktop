@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=Model 2
-GenericName=Sega Model 2 emulator
-Comment=Clone and build on first launch; opens on the CRT
+GenericName=Sega Model 2 emulator (Keisho)
+Comment=Opens on the CRT; the desktop comes back when it closes
 Exec=/opt/fliperos/bin/fliperos-launch model2
-TryExec=/usr/local/bin/fliperos-model2
+TryExec=/usr/local/bin/keisho
 Icon=/usr/local/share/pixmaps/fliperos-model2.png
 Terminal=false
 Categories=Game;Emulator;

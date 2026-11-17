@@ -20,11 +20,11 @@ That way the whole romset stays on the home computer, and the cabinet takes only
 | **GroovyMAME** | Every game | `~/roms/mame`; BIOS and devices to `~/bios/mame`, so they don't show as games |
 | **Flycast** | Only Naomi, Naomi 2 and Atomiswave, each in its folder | `~/roms/naomi`, `naomi2`, `atomiswave`; BIOS to `~/bios/dc` |
 | **Keisho** | Only Sega Model 2 (Model 2/2A/2B/2C) | `~/roms/model2`, with the I/O boards Daytona USA, Desert Tank and Virtua Cop need |
-| **Supermodel** | Only Sega Model 3 | `~/roms/model3` |
+| **Keisho (Model 3)** | Only Sega Model 3 | `~/roms/model3` |
 | **MAME 2010** (MAME 3D) | MAME 0.139, the version of RetroArch's `mame2010` core, which runs the PlayStation-based arcade games well (Tekken 3, Soul Calibur, Street Fighter EX) | `~/roms/retroarch/mame2010`, games and BIOS |
 | **Another version** | An XML from `mame -listxml` | The folder you pick |
 
-A folder with `model2`, `model3`, `supermodel`, `2010` or `MAME 3D` in its name already suggests its emulator.
+A folder with `model2`, `model3`, `supermodel`, `keisho`, `2010` or `MAME 3D` in its name already suggests its emulator.
 
 ### 3. The filter
 
@@ -81,7 +81,7 @@ The screen shows how many games use CHDs, how many folders were found and their 
 - It joins the XML of the romset's MAME version with `catver.ini` (categories and adult games), `nplayers.ini` (how two people play) and Controls.dat's `controls.xml` (the buttons and controls the game really uses). For Naomi, Naomi 2 and Atomiswave the controls and buttons come from Flycast's own game table: MAME's XML gives nearly all of them a generic 8-way joystick and 6 buttons, wheel and gun games included.
 - **The data files ship in the image**, in `/usr/local/share/fliperos/romclean` (`config/romclean`): `catver.ini` 0.289 from [progetto-SNAPS](https://www.progettosnaps.net/catver/), `nplayers.ini` 0.278 from [NPlayers](http://nplayers.arcadebelgium.be) (CC BY-SA 3.0) and `controls.xml` 0.141.1 from Controls.dat. To use newer ones, put them **with the romset**: the Setup looks first in its folder, the one above and the `folders` subfolder, and only then in the system folder. The screen says which ones it found (*Data files*); without one, its parameters don't show.
 - The XML: GroovyMAME's is `groovymame -listxml`; MAME 2010's ships at `/usr/local/share/fliperos/mame2010.xml.xz`, pinned by commit and checksum. What was read stays in `/var/cache/fliperos` (a minute with GroovyMAME's, a second after).
-- A set's system (Flycast) is that of the first BIOS in its `romof` chain. MAME's emulation status doesn't filter Flycast, Keisho and Supermodel. Resolution comes from the XML's `pixclock`/`htotal`, or from the lines. Controls cover both the 0.139 types (`joy8way`, `vjoy2way`, `doublejoy8way`) and the current ones (`joy`, `doublejoy` with `ways`).
+- A set's system (Flycast) is that of the first BIOS in its `romof` chain. MAME's emulation status doesn't filter Flycast and Keisho. Resolution comes from the XML's `pixclock`/`htotal`, or from the lines. Controls cover both the 0.139 types (`joy8way`, `vjoy2way`, `doublejoy8way`) and the current ones (`joy`, `doublejoy` with `ways`).
 - Copying: each file arrives as `.part` and only then gets its name, and what arrives belongs to the owner of the emulator's folder. Moving: Flycast's sets never enter the delete list, so the same romset can be cleaned for Flycast afterwards, except in a MAME 2010 romset, which Flycast can't read.
 - The network folder is mounted read-only at `/mnt/network` with `cifs-utils`; the password goes in a file only root can read, never on the command line, and is kept in `/etc/fliperos/netshare.cred` only if you ask (`lib/netshare.sh`).
 - CHD Cleaner: a clone's disk that is the same as the parent's comes from the parent's folder; a disk without a dump doesn't count.

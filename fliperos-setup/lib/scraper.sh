@@ -331,7 +331,7 @@ scraper_platform() {
     dreamcast) echo dreamcast ;;
     # Os arcades do Flycast, uma pasta por sistema (MAME ROM Cleaner).
     naomi | naomi2 | atomiswave) echo "$1" ;;
-    # Supermodel e SM2-Emu: os .zip do MAME, que o Skyscraper
+    # Keisho (Model 2 e 3): os .zip do MAME, que o Skyscraper
     # procura como arcade.
     model2 | model3) echo arcade ;;
     ps2) echo ps2 ;;
@@ -517,7 +517,7 @@ scraper_attract_emulator() {
     atomiswave)
       echo "Atomiswave|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.zip;.7z" ;;
     model3)
-      echo "Supermodel|$FLIPEROS_BIN/fliperos-x11-run|supermodel \"[romfilename]\"|.zip" ;;
+      echo "Model 3|$FLIPEROS_BIN/fliperos-x11-run|fliperos-model3 \"[romfilename]\"|.zip" ;;
     model2)
       echo "Model 2|$FLIPEROS_BIN/fliperos-x11-run|fliperos-model2 [name]|.zip" ;;
     ps2)

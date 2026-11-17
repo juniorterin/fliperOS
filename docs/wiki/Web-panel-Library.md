@@ -50,7 +50,7 @@ The filter of the MAME ROM Cleaner, with the same parameters, options and preset
 - **Downloader filter:** what the Downloader takes from the torrents. It opens with the saved filter, and **Save** records it.
 - **Clean a romset folder:** a folder with a romset (a disk, a USB drive, the network folder mounted by the Setup), picked in a folder list.
 
-1. Pick the emulator (the MAME version of the romset: GroovyMAME, Flycast, Keisho, Supermodel, MAME 2010) and a preset. A folder's emulator is guessed from its name.
+1. Pick the emulator (the MAME version of the romset: GroovyMAME, Flycast, Keisho, MAME 2010) and a preset. A folder's emulator is guessed from its name.
 2. Change the tiles: which games, players and controls, screen, categories and years, hardware. A yes/no tile switches with a click; the others open their options, with a search box on long lists. A pink dot marks a value changed from the preset.
 3. The scoreboard (**GAMES** and **SIZE**) counts what passes after every change, and stays in view while you scroll.
 4. For a folder, **Preview** shows what goes where (sets, size, parents, BIOS and devices, free space), then **Copy them** or **Move them** runs as a task.

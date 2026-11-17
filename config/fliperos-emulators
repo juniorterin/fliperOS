@@ -12,8 +12,7 @@
 #   fliperos-emulators edge-off NOME           volta ao pacote (como root)
 #   fliperos-emulators edge-status NOME        o commit do mais novo instalado
 #
-# tipo: image (compilado na imagem: nao se instala depois), build (o SM2-Emu,
-# clonado e compilado na maquina: config/fliperos-sm2emu), fetch (baixado do
+# tipo: image (compilado na imagem: nao se instala depois), fetch (baixado do
 # site de quem o faz: o Fightcade, config/fliperos-fightcade, e o DuckStation,
 # config/fliperos-duckstation) e source (um jogo convertido: config/
 # fliperos-kof; baixado do itch.io, ou da pasta que a pessoa traz, --source
@@ -27,7 +26,6 @@ user=${FLIPEROS_USER:-fliperos}
 home=${FLIPEROS_HOME:-$(getent passwd "$user" 2> /dev/null | cut -d: -f6)}
 home=${home:-/home/$user}
 root=${FLIPEROS_EMULATORS_ROOT:-}
-sm2emu=${FLIPEROS_SM2EMU:-/usr/local/bin/fliperos-sm2emu}
 fightcade=${FLIPEROS_FIGHTCADE:-/opt/fliperos/bin/fliperos-fightcade}
 duckstation=${FLIPEROS_DUCKSTATION:-/opt/fliperos/bin/fliperos-duckstation}
 kof=${FLIPEROS_KOF:-/usr/local/bin/fliperos-kof}
@@ -42,9 +40,8 @@ flycast|image|$root/usr/local/bin/flycast|Flycast (Dreamcast, Naomi, Atomiswave)
 pcsx2|image|$root/usr/local/bin/pcsx2|PCSX2 (PlayStation 2)
 pcsx2x6|image|$root/usr/local/bin/pcsx2x6|PCSX2x6 (Namco System 246/256)
 dolphin|image|$root/usr/local/bin/dolphin-emu|Dolphin (GameCube, Wii, Triforce)
-supermodel|image|$root/usr/local/bin/supermodel|Supermodel (Sega Model 3)
 openbor|image|$root/usr/local/bin/openbor|OpenBOR (beat 'em ups)
-model2|build|$home/.local/src/keisho/build/bin/keisho|Model 2 (Keisho, Sega Model 2)
+keisho|image|$root/usr/local/bin/keisho|Keisho (Sega Model 2 and 3)
 fightcade|fetch|$root/opt/fliperos/fightcade/fightcade|Fightcade 2 (online arcade)
 duckstation|fetch|$root/usr/local/bin/duckstation|DuckStation (PlayStation)
 kof|source|$home/roms/ikemen/kof-final-attack/Ikemen_GO_Linux|KOF Final Attack (Ikemen GO, 4:3)
@@ -64,7 +61,7 @@ emulator_installed() {
 # ── Versoes ──────────────────────────────────────────────────────
 # A versao instalada sai de arquivos, sem abrir o emulador: o que o build da
 # imagem gravou (emulator-versions, nome=versao), o metainfo dos AppImages, o
-# VERSION.txt do Fightcade, o commit do codigo do SM2-Emu e, numa imagem
+# VERSION.txt do Fightcade e, numa imagem
 # antiga sem o arquivo, o texto de versao do binario do GroovyMAME. Um
 # emulador que vem num pacote do FliperOS (o RetroArch) grava a sua em
 # emulator-versions.d/NOME, que vale antes: o pacote atualizado pela rede
@@ -88,7 +85,6 @@ emulator_version() {
       pcsx2) v=$(metainfo_version "$root/opt/pcsx2") ;;
       duckstation) v=$(metainfo_version "$root/opt/duckstation") ;;
       fightcade) v=$(tr -d '[:space:]' < "$root/opt/fliperos/fightcade/VERSION.txt" 2> /dev/null) ;;
-      model2) v=$(git -c safe.directory='*' -C "$home/.local/src/keisho" log -1 --format='%cs %h' 2> /dev/null) ;;
       groovymame)
         v=$(grep -a -o -m 1 -E '0\.[0-9]{3} \((unknown|mame[0-9]+)\)' "$root/usr/local/libexec/groovymame" 2> /dev/null |
           head -n 1)
@@ -137,11 +133,10 @@ emulator_latest() {
       v=$(pinned FLYCAST_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-flycast.sh")
       [[ -n $v ]] && echo "${v:0:7}"
       ;;
-    supermodel)
-      v=$(pinned SUPERMODEL_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-supermodel.sh")
+    keisho)
+      v=$(pinned KEISHO_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-keisho.sh")
       [[ -n $v ]] && echo "${v:0:7}"
       ;;
-    model2) remote_head "${FLIPEROS_SM2_REPO:-https://github.com/Keisho-Emu/Keisho.git}" ;;
     duckstation) remote_head https://github.com/stenzek/duckstation refs/tags/latest ;;
   esac
 }
@@ -177,14 +172,6 @@ emulator_install() {
   ((progress)) && args=(--progress)
   case $kind in
     image) fail "it comes compiled in the FliperOS image, and this image was built without it" ;;
-    build)
-      [[ -x $sm2emu ]] || fail "the Model 2 builder ($sm2emu) is missing"
-      say 5 "Installing the build tools"
-      "$sm2emu" --deps >&2 || fail "could not install the build tools (no network?)"
-      say 20 "Downloading and building Model 2 (a few minutes)"
-      as_user "$sm2emu" --build >&2 || fail "the build failed (details in the log)"
-      say 100 "Model 2 installed"
-      ;;
     fetch)
       local fetcher
       case $name in

@@ -90,7 +90,7 @@ Every emulator is opened through one of them, and both refuse to run inside an X
 - gives the program the session's terminal as its input when a frontend handed it `/dev/null`;
 - sends the program's output to `/opt/fliperos/logs/<program>.log` (to the screen in Debug mode).
 
-**`fliperos-x11-run`** is for what needs X: Flycast, PCSX2, Dolphin, Supermodel, Model 2, OpenBOR, Hypseus. It starts an Xorg just for that program and closes it when the program exits.
+**`fliperos-x11-run`** is for what needs X: Flycast, PCSX2, Dolphin, Keisho (Model 2 and 3), OpenBOR, Hypseus. It starts an Xorg just for that program and closes it when the program exits.
 
 The mode comes from `--mode`, or from the program's line in `/etc/fliperos/emulator-modes.conf` (one column for a 15 kHz monitor, another for 25/31 kHz and LCD), or is 320x240@60.
 

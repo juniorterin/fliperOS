@@ -44,10 +44,10 @@ Each system is a `<system>` block:
 ```xml
 <system>
   <name>model3</name>
-  <fullname>Supermodel</fullname>
+  <fullname>Model 3</fullname>
   <path>/home/fliperos/roms/model3</path>
   <extension>.zip .ZIP</extension>
-  <command label="Supermodel">/opt/fliperos/bin/fliperos-x11-run supermodel %ROM%</command>
+  <command label="Model 3">/opt/fliperos/bin/fliperos-x11-run fliperos-model3 %ROM%</command>
   <platform>arcade</platform>
   <theme>model3</theme>
 </system>

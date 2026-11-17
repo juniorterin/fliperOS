@@ -149,7 +149,7 @@ romclean_visible() {
 }
 
 # romclean_own_emulator ALVO: o alvo e um emulador que nao e o MAME (Flycast,
-# SM2-Emu, Supermodel), com o romset do MAME so de uma placa. A
+# Keisho), com o romset do MAME so de uma placa. A
 # emulacao que conta e a dele: o status do MAME nao filtra.
 romclean_own_emulator() {
   [[ $1 =~ ^(flycast|model2|model3)$ ]]
@@ -407,7 +407,7 @@ romclean_args() {
       systems) printf '%s\n' --systems "${value:-$(romclean_all systems)}" ;;
     esac
   done
-  # No SM2-Emu e no Supermodel so entram os jogos da placa deles.
+  # No Keisho (Model 2 e Model 3) so entram os jogos de cada placa.
   [[ $target == model[23] ]] && printf '%s\n' --hardware "$target"
   return 0
 }
@@ -495,7 +495,7 @@ romclean_data_args() {
 # vao: groovymame (o MAME deste sistema), flycast (o mesmo romset, so Naomi,
 # Naomi 2 e Atomiswave, uma pasta por sistema), model2 e model3 (o mesmo
 # romset, so os jogos do Sega Model 2 para o SM2-Emu e do Model 3
-# para o Supermodel), mame2010 (o 0.139 do core do RetroArch, o "MAME 3D":
+# para o Keisho), mame2010 (o 0.139 do core do RetroArch, o "MAME 3D":
 # os jogos de arcade baseados no PlayStation, que ele roda bem) ou file
 # (outro XML).
 
@@ -514,7 +514,7 @@ romclean_target_label() {
     groovymame) echo "GroovyMAME $(groovymame_version)" ;;
     flycast) echo "Flycast (Naomi, Naomi 2, Atomiswave)" ;;
     model2) echo "Keisho (Sega Model 2)" ;;
-    model3) echo "Supermodel (Sega Model 3)" ;;
+    model3) echo "Keisho (Sega Model 3)" ;;
     mame2010) echo "MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games" ;;
     *) echo "$1" ;;
   esac
@@ -522,7 +522,7 @@ romclean_target_label() {
 
 # romclean_default_target PASTA imprime o emulador provavel do romset: o
 # MAME 2010 numa pasta que tem "2010" ou "MAME 3D" no nome, o Flycast numa
-# de Naomi ou Atomiswave, o Model 2 ou o Supermodel numa de Model 2 ou
+# de Naomi ou Atomiswave, o Model 2 ou o Model 3 numa de Model 2 ou
 # Model 3, senao o GroovyMAME instalado.
 romclean_default_target() {
   local name=${1,,}
@@ -532,7 +532,7 @@ romclean_default_target() {
     echo flycast
   elif [[ ${name##*/} =~ model.?2 ]]; then
     echo model2
-  elif [[ ${name##*/} =~ model.?3|supermodel ]]; then
+  elif [[ ${name##*/} =~ model.?3|supermodel|keisho ]]; then
     echo model3
   else
     echo groovymame
@@ -598,7 +598,7 @@ romclean_target_args() {
     printf '%s\n' --dest "$dest"
     # Os dispositivos com ROM sao do MAME. O SM2-Emu le so as placas de I/O
     # (model1io, model1io2: Daytona, Desert Tank, Virtua Cop), num zip ao lado
-    # do jogo; o Supermodel nao usa nenhum.
+    # do jogo; no Model 3 nenhum.
     [[ $target == model2 ]] && printf '%s\n' --only-devices model1io,model1io2
     [[ $target == model3 ]] && printf '%s\n' --no-devices
     # O romset do MAME 2010 (0.139) nao serve ao Flycast: os jogos de Naomi

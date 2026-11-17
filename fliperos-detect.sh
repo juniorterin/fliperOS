@@ -21,7 +21,7 @@ for status in /sys/class/drm/card*-*/status; do
     cat "$status"
 done
 printf '\nInstalled components:\n'
-for executable in switchres grid geometry groovymame retroarch pcsx2 flycast supermodel Skyscraper; do
+for executable in switchres grid geometry groovymame retroarch pcsx2 flycast keisho Skyscraper; do
     command -v "$executable" || printf '%s: missing\n' "$executable"
 done
 printf '\nfliperos-setup configuration (/etc/fliperos/fliperos.conf):\n'

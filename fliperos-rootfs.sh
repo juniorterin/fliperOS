@@ -121,7 +121,7 @@ install -Dm644 "$src/config/fliperos-vkfps.json" "$root/usr/share/vulkan/implici
   || install -Dm644 "$src/config/fliperos-emulator-modes.conf" "$root/etc/fliperos/emulator-modes.conf"
 # Tabelas de versoes anteriores: Model 2 e 3 em 496x384 no 15 kHz, que so
 # existe entrelacado. So muda a linha que ainda e a de fabrica.
-sed -i -E 's/^(supermodel|fliperos-model2)( +)496x384@57\.524  496x384@57\.524$/\1\2640x240@57.524  496x384@57.524/' \
+sed -i -E 's/^(supermodel|fliperos-model2|fliperos-model3)( +)496x384@57\.524  496x384@57\.524$/\1\2640x240@57.524  496x384@57.524/' \
   "$root/etc/fliperos/emulator-modes.conf"
 # O SNES9x do Fightcade era 320x240 no 15 kHz; agora o do console. A sala
 # era 640x480; agora 512x448 (o texto maior).
@@ -135,18 +135,15 @@ while IFS= read -r line; do
   grep -q "^${line%%[[:space:]]*}[[:space:]]" "$root/etc/fliperos/emulator-modes.conf" ||
     printf '%s\n' "$line" >> "$root/etc/fliperos/emulator-modes.conf"
 done < <(grep -E '^[^#[:space:]]+[[:space:]]' "$src/config/fliperos-emulator-modes.conf")
-# Model 2 no Wine: no PATH, para os frontends tambem chamarem.
+# Model 2 e Model 3 no Keisho (pacote fliperos-keisho): o mesmo lancador com
+# dois nomes, no PATH, para os frontends tambem chamarem.
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
-# SM2-Emu: so o lancador. O fonte e o binario nascem em ~/.local/src na
-# primeira abertura (config/fliperos-sm2emu), fora da imagem.
+install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model3"
+# A lista dos jogos do menu do desktop e a mudanca das pastas do SM2-Emu.
 install -Dm755 "$src/config/fliperos-sm2emu" "$root/usr/local/bin/fliperos-sm2emu"
-# Os patches que ele aplica no fonte antes de compilar. O que o upstream
-# aceitou sai de config/sm2-emu-patches, e a pasta pode estar vazia.
+# Os patches que o SM2-Emu aplicava no fonte compilado no gabinete: agora vem
+# no pacote (packaging/patches/keisho).
 rm -rf "$root/usr/local/share/fliperos/sm2-emu-patches"
-install -d "$root/usr/local/share/fliperos/sm2-emu-patches"
-for patch in "$src"/config/sm2-emu-patches/*.patch; do
-  [[ ! -f $patch ]] || install -m644 "$patch" "$root/usr/local/share/fliperos/sm2-emu-patches/"
-done
 # O firmware do leitor de cartuchos (Setup > System > Cartridge reader,
 # lib/oscr.sh): o OSCR com o patch do FliperOS (patches/oscr), feito pelo
 # tools/oscr-firmware.sh. Vem no config/ para os updates o levarem.
@@ -166,15 +163,15 @@ install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fli
 install -Dm755 "$src/config/fliperos-frontend-build" "$root/opt/fliperos/bin/fliperos-pegasus"
 install -Dm755 "$src/packaging/build-deb.sh" "$root/usr/local/share/fliperos/packaging/build-deb.sh"
 # Os emuladores em pacote (RetroArch, Dolphin, Flycast, GroovyMAME,
-# Supermodel, OpenBOR, PCSX2): a receita e os patches tambem vem para o Setup >
+# Keisho, OpenBOR, PCSX2): a receita e os patches tambem vem para o Setup >
 # Emulators & Games compilar (ou baixar, o GroovyMAME) o mais novo do projeto
 # com eles (config/fliperos-emulators edge).
 for recipe in fliperos-emulationstation fliperos-pegasus fliperos-retroarch fliperos-dolphin fliperos-flycast \
-  fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2; do
+  fliperos-groovymame fliperos-keisho fliperos-openbor fliperos-pcsx2; do
   install -Dm644 "$src/packaging/packages/$recipe.sh" "$root/usr/local/share/fliperos/packaging/packages/$recipe.sh"
 done
 rm -rf "$root/usr/local/share/fliperos/packaging/patches"
-for patch in "$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch; do
+for patch in "$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast,keisho}/*.patch; do
   install -Dm644 "$patch" "$root/usr/local/share/fliperos/packaging/patches/$(basename "$(dirname "$patch")")/${patch##*/}"
 done
 # Arcadeflow, o tema padrao do Attract-Mode Plus (Setup > Games > Frontend): o que o
@@ -475,9 +472,12 @@ install -Dm644 "$src/config/pcsx2x6-jvs-bindings" "$root/etc/fliperos/pcsx2x6-jv
 
 # Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
 # compilado; os icones dos projetos vem do build de cada um. Os que nao
-# entram na imagem com icone (o GroovyMAME do release, o SM2-Emu e o
-# Fightcade, baixados depois) levam o oficial de config/icons; o Supermodel,
-# sem icone proprio, o monograma do FliperOS.
+# entram na imagem com icone (o GroovyMAME do release, o Keisho, com o Model 2
+# e o Model 3, e o Fightcade) levam o oficial de config/icons. O Supermodel
+# saiu: o item e o icone dele tambem.
+rm -f "$root/usr/local/share/applications/fliperos-supermodel.desktop" \
+  "$root/usr/local/share/pixmaps/fliperos-supermodel.svg" \
+  "$root/usr/local/share/fliperos/packaging/packages/fliperos-supermodel.sh"
 for file in "$src"/config/applications/*.desktop; do
   install -Dm644 "$file" "$root/usr/local/share/applications/${file##*/}"
 done

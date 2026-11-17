@@ -63,7 +63,7 @@ On a card that gives less than OpenGL 3, the Setup marks the item with a red X (
 | Video Setup | Interlaced hacks (the flicker filter) | OpenGL 3.0 |
 | Games > Emulators & Games | PCSX2, Dolphin, DuckStation | OpenGL 3.3 or Vulkan (each project's own minimum) |
 
-Flycast, Supermodel and the other emulators are not marked: their minimum was not checked against this card.
+Flycast, Keisho and the other emulators are not marked: their minimum was not checked against this card.
 
 ## Several cards
 

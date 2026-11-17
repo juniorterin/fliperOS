@@ -27,6 +27,11 @@ while [[ ${1:-} == --mode || ${1:-} == --app || ${1:-} == --wine ]]; do
 done
 [[ $# -gt 0 ]] || { echo "Usage: fliperos-x11-run [--mode 640x240@60] [--app NAME] [--wine] program [arguments]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
+# O Supermodel saiu: o Model 3 e o Keisho. Um frontend com o comando de antes
+# ("supermodel ARQUIVO.zip", ate o Setup refazer as telas) abre o jogo nele.
+if [[ $1 == supermodel ]] && ! command -v supermodel > /dev/null; then
+  set -- fliperos-model3 "${@:2}"
+fi
 command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
 # after_game COMANDO...: um vigia que age quando o jogo fecha (a roleta do
@@ -127,7 +132,7 @@ fi
 # Placa sem dotclock baixo (Intel, NVIDIA: o Setup grava dotclock_min no
 # switchres.ini). O Switchres dobraria a largura ate passar do minimo, e o
 # modo sairia com uma largura que as contas abaixo nao conhecem (o Flycast
-# estreito no meio, o Supermodel num pedaco da tela). Com a super resolucao
+# estreito no meio, o Keisho num pedaco da tela). Com a super resolucao
 # (25 MHz) pede direto a largura dela, como o RetroArch: so a largura muda,
 # linhas e frequencias ficam. Com o minimo de uma NVIDIA no nouveau (o degrau
 # do grid, abaixo de 25) faz aqui a mesma dobra do Switchres, so quando o
@@ -155,7 +160,7 @@ fi
 # modo largo. Numa placa que faz o modo pedido, desfaz o que tinha mudado.
 gpufit=${FLIPEROS_GPUFIT:-/opt/fliperos/bin/fliperos-gpufit}
 case $name in
-  flycast | dolphin-emu | pcsx2 | pcsx2x6 | duckstation | hypseus | singe | supermodel | fliperos-model2 | keisho | sm2-emu | groovymame) ;;
+  flycast | dolphin-emu | pcsx2 | pcsx2x6 | duckstation | hypseus | singe | fliperos-model2 | fliperos-model3 | keisho | sm2-emu | groovymame) ;;
   *)
     if [[ -x $gpufit ]]; then
       fit=$("$gpufit" launch --program "$name" --app "${app:-$name}" --mode "${requested_w}x$FLIPEROS_RES_H" \
@@ -521,60 +526,7 @@ INI
     # 640x240 (o esticado de 200% dos outros).
     set -- "$@" -fullscreen -x "$FLIPEROS_RES_W" -y "$FLIPEROS_RES_H" -ignore_aspect_ratio
     ;;
-  supermodel)
-    # Com ~/.config/supermodel (criado na primeira abertura) ele procura ali
-    # o Games.xml e o Music.xml, e os Assets em ~/.local/share/supermodel; o
-    # build os deixa em /usr/local/share/supermodel. Sem o Games.xml nenhuma
-    # ROM e reconhecida ("No complete Model 3 games found").
-    share=${FLIPEROS_SUPERMODEL_SHARE:-/usr/local/share/supermodel}
-    mkdir -p "$HOME/.config/supermodel/Config" "$HOME/.local/share/supermodel"
-    for f in Config/Games.xml Config/Music.xml; do
-      [[ -e $HOME/.config/supermodel/$f || ! -e $share/$f ]] || ln -s "$share/$f" "$HOME/.config/supermodel/$f"
-    done
-    [[ -e $HOME/.local/share/supermodel/Assets || ! -d $share/Assets ]] ||
-      ln -s "$share/Assets" "$HOME/.local/share/supermodel/Assets"
-    # Sem -res ele abre em 496x384 (o nativo do Model 3), que no 15 kHz so
-    # existe entrelacado; aqui ocupa o modo da tabela, esticado para o 4:3.
-    # O PowerPC emulado e o gargalo num processador fraco (Fighting Vipers 2
-    # no i3 540: 35 quadros/s a 166 MHz, 59 a 75 MHz): nos jogos de stepping
-    # 1.5 e 2.x (100 e 166 MHz) ele roda a FLIPEROS_SUPERMODEL_PPC; os de 1.0
-    # ja sao 66 MHz.
-    ppc=()
-    game=$(basename -- "${*: -1}" .zip)
-    step=$(awk -v g="<game name=\"$game\"" 'index($0, g) { found = 1 }
-      found && /<stepping>/ { gsub(/.*<stepping>|<\/stepping>.*/, ""); print; exit }' \
-      "$share/Config/Games.xml" 2> /dev/null) || step=""
-    if [[ $step == 1.5 || $step == 2.* ]] && [[ ${FLIPEROS_SUPERMODEL_PPC:-75} != 0 ]]; then
-      ppc=(-ppc-frequency="${FLIPEROS_SUPERMODEL_PPC:-75}")
-    fi
-    # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
-    netout=()
-    [[ -x $outputs ]] && "$outputs" installed && netout=(-outputs=net)
-    # Os quads de verdade (o padrao do Supermodel, por geometry shader)
-    # quebram poligonos nas Radeon antigas: no gabinete (Oland, radeonsi) o
-    # Fighting Vipers 2 tinha triangulos pretos e brancos e texturas vazadas,
-    # e com triangulos ainda chegou aos 57,5 quadros/s. O QuadRendering
-    # escrito no Supermodel.ini fica.
-    quads=()
-    grep -qE '^[[:space:]]*QuadRendering[[:space:]]*=' "$HOME/.config/supermodel/Config/Supermodel.ini" 2> /dev/null ||
-      quads=(-no-quad-rendering)
-    # Com uma pistola, sem a mira dos jogos de pistola.
-    nocross=()
-    [[ -n $guns ]] && nocross=(-crosshairs=0)
-    set -- "$1" -fullscreen -res="$FLIPEROS_RES_W,$FLIPEROS_RES_H" -stretch "${quads[@]}" "${ppc[@]}" "${netout[@]}" \
-      "${nocross[@]}" "${@:2}"
-    # O Switchres nem sempre cria o modo pedido: no 15 kHz o 496x384 do entrelacado
-    # vira 661x496 entrelacado (as linhas que cabem, na mesma proporcao), e o
-    # Supermodel desenhava os 496x384 do -res num quadrado no meio da tela.
-    # Depois da troca, o -res do modo na tela (o ultimo -res vale). Numa
-    # linha so: o printf %q do fliperos-x11-client poria a quebra num $'\n',
-    # que o sh do Switchres nao entende.
-    # shellcheck disable=SC2016 # o $ e do awk
-    fit='/ connected/ { for (i = 3; i <= NF; i++) if ($i ~ /^[0-9]+x[0-9]+[+]/) { split($i, a, /[x+]/); print a[1] "," a[2]; exit } }'
-    # shellcheck disable=SC2016 # o $ e do sh -c, depois da troca de modo
-    set -- sh -c 'res=$(xrandr --current 2> /dev/null | awk "$0"); exec "$@" ${res:+-res=$res}' "$fit" "$@"
-    ;;
-  fliperos-model2 | keisho | sm2-emu)
+  fliperos-model2 | fliperos-model3 | keisho | sm2-emu)
     # O SM2-Emu virou Keisho: a configuracao de antes vai para a pasta nova
     # antes que o mkdir abaixo crie uma vazia.
     sm2emu=${FLIPEROS_SM2EMU:-/usr/local/bin/fliperos-sm2emu}
@@ -601,6 +553,27 @@ INI
     if [[ ! -e $cfg/.fliperos-vsync ]]; then
       sm2_set vsync true
       : > "$cfg/.fliperos-vsync"
+    fi
+    # O renderizador pelo driver da placa do CRT, como nos outros emuladores
+    # (lib/emulators.sh, que o troca quando o driver muda): Vulkan no amdgpu,
+    # OpenGL nos outros (o radeon nao tem Vulkan). So quando o ini ainda nao
+    # diz: quem escolher no menu do F10 fica com a escolha. Sem Vulkan na
+    # placa, o proprio Keisho cai para o OpenGL.
+    if ! grep -qE '^graphics_backend[[:space:]]*=[[:space:]]*[a-z]' "$ini" 2> /dev/null; then
+      drm=${FLIPEROS_DRM_SYSFS:-/sys/class/drm} card_driver=""
+      for status in "$drm"/card[0-9]*-*/status; do
+        [[ $(cat "$status" 2> /dev/null) == connected ]] || continue
+        card=${status%/status}
+        card=${card##*/}
+        card_driver=$(readlink -f "$drm/${card%%-*}/device/driver" 2> /dev/null) || card_driver=""
+        card_driver=${card_driver##*/}
+        break
+      done
+      if [[ $card_driver == amdgpu ]]; then
+        sm2_set graphics_backend vulkan
+      else
+        sm2_set graphics_backend opengl
+      fi
     fi
     # As saidas do jogo pela rede (as lampadas; nos jogos de pistola, com o
     # patch do FliperOS, o recuo, a municao e a vida), se ha quem as leia

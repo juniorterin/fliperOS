@@ -22,7 +22,7 @@ sample() {
   cat > $H/.cache/fliperos/frontend-systems << EOF
 mame|$H/roms/mame|arcade|MAME|/opt/fliperos/bin/fliperos-x11-run|groovymame [name]|.zip;.7z|1
 model2|$H/roms/model2|arcade|Model 2|/opt/fliperos/bin/fliperos-x11-run|fliperos-model2 [name]|.zip|1
-model3|$H/roms/model3|arcade|Supermodel|/opt/fliperos/bin/fliperos-x11-run|supermodel "[romfilename]"|.zip|1
+model3|$H/roms/model3|arcade|Model 3|/opt/fliperos/bin/fliperos-x11-run|fliperos-model3 "[romfilename]"|.zip|1
 naomi|$H/roms/naomi|naomi|Naomi|/opt/fliperos/bin/fliperos-x11-run|flycast "[romfilename]"|.zip;.7z|1
 retroarch/snes9x|$H/roms/retroarch/snes9x|snes|Super Nintendo (Snes9x)|/opt/fliperos/bin/fliperos-kms-run|retroarch -L snes9x_libretro.so "[romfilename]"|.sfc;.smc;.zip|0
 EOF

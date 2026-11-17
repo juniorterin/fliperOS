@@ -50,7 +50,7 @@ The Pixelcade marquee, which FliperOS also supports, is a commercial product wit
 
 ## Game outputs: lamps, recoil, motors and button lights
 
-Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and Keisho (Model 2) can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > Games > Extras**. They can be installed together.
+Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast and Keisho (Model 2 and 3) can publish these **outputs** over the network (TCP port 8000, one `name = value` line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in **Setup > Games > Extras**. They can be installed together.
 
 | Project | What it drives | With FliperOS |
 | --- | --- | --- |
@@ -94,7 +94,7 @@ The patch reaches a cabinet that already built Model 2 the next time **Games > M
 - **What is installed**: 64-bit Wine and a virtual screen (`xvfb`) from apt, and the program from its own website (pinned version and hash) into `~/hotr`. It gets its own Wine folder, separate from Fightcade's. Nothing of this is in the image.
 - **Setting it up**: on the desktop, **Preferences > Hook Of The Reaper** opens its window. Add your light guns and assign each one to a player, as its [tutorial](https://hotr.6bolt.com/pmwiki.php/Tutorial/Setup) shows. The settings stay in `~/hotr/data`.
 - **Game files**: it comes with its own files for over 200 gun games (`~/hotr/defaultLG`), which work with any gun it supports. MAMEHooker `.ini` files go in `~/hotr/ini/MAME`. The folder is also at `~/config/hotr`, shared on the network.
-- **When it runs**: it opens with each game of GroovyMAME, Flycast, Supermodel and Keisho and closes with it. It runs on the virtual screen, so none of its windows or warnings appear over the game. Installing it again from the Extras updates the program and keeps your guns, players and `.ini` files.
+- **When it runs**: it opens with each game of GroovyMAME, Flycast and Keisho and closes with it. It runs on the virtual screen, so none of its windows or warnings appear over the game. Installing it again from the Extras updates the program and keeps your guns, players and `.ini` files.
 - **USB HID guns and boards**: the install lets the `fliperos` user open the USB HID devices (`/dev/hidraw*`, group `input`), which is how Wine reaches them. Serial boards already belong to the user's `dialout` group.
 
 ### LEDSpicer
@@ -111,7 +111,7 @@ It is small on purpose: it only writes to serial ports and only accepts the USB 
 - **What is installed**: its author publishes only the Windows program, so the install builds version 2.2 from source (pinned by hash) into `~/qmamehook`. The compiler and Qt 6 come from apt; it takes about two minutes. Nothing of this is in the image.
 - **Game files**: MAMEHooker `.ini` files go in `~/qmamehook/ini`, one per ROM set (`sf2ce.ini`). The folder is also at `~/config/qmamehook`, shared on the network. For a game without a file, QMamehook writes one there listing the outputs the game sent, for you to fill in.
 - **Players**: the guns are numbered in the order of their USB product IDs, so the `.ini` writes to port 1 for the first gun, 2 for the second.
-- **When it runs**: it opens with each game of GroovyMAME, Flycast, Supermodel and Keisho and closes with it. What it says (the guns it found, the file it loaded) is in `/opt/fliperos/logs/qmamehook.log`.
+- **When it runs**: it opens with each game of GroovyMAME, Flycast and Keisho and closes with it. What it says (the guns it found, the file it loaded) is in `/opt/fliperos/logs/qmamehook.log`.
 - **With Hook Of The Reaper also installed**, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless `/etc/fliperos/fliperos.conf` has the line `outputs_reader=qmamehook`.
 
 ## Cartridge reader (Open Source Cartridge Reader)

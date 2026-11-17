@@ -36,7 +36,7 @@ One folder per emulator, and one per **RetroArch core** in `~/roms/retroarch/<co
 | `mame` | MAME sets (`.zip`, `.7z`) and their CHD folders | GroovyMAME |
 | `naomi`, `naomi2`, `atomiswave` | MAME sets of these systems, one system per folder | Flycast |
 | `model2` | MAME sets of Model 2 | Keisho |
-| `model3` | MAME sets of Model 3 | Supermodel |
+| `model3` | MAME sets of Model 3 | Keisho |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u` (they open once DuckStation is installed) | DuckStation |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
@@ -89,7 +89,7 @@ What the arcade games remember without power: dip settings, credits, the scores 
 | `mame` | GroovyMAME, one folder per set. To start a game from zero, delete its folder |
 | `flycast` | Naomi and Atomiswave memory of each game, and the Dreamcast memory cards |
 | `model2` | Keisho, with its save states in `states` |
-| `model3` | Supermodel |
+| `model3` | Keisho, with its save states in `states` |
 | `hypseus` | Hypseus Singe |
 | `fightcade/flycast` | Fightcade 2's Flycast, separate from the system's ([Fightcade 2](Fightcade-2.md)) |
 | `retroarch/<core>` | `mame2010`, `fbneo`, and the other MAME-family cores after their first game |
@@ -107,7 +107,7 @@ What you save while playing, one folder per emulator: `retroarch` (game saves, `
 
 ### `~/config`
 
-Links to the configuration of each installed emulator and frontend: `retroarch`, `groovymame` (`mame.ini` and `ui.ini`), `flycast`, `pcsx2`, `dolphin`, `supermodel`, `openbor`, `hypseus`, `model2`, `attractmode`, `es-de`, `pegasus` and `skyscraper`. Each link appears once the program has created its configuration, usually after it was opened once.
+Links to the configuration of each installed emulator and frontend: `retroarch`, `groovymame` (`mame.ini` and `ui.ini`), `flycast`, `pcsx2`, `dolphin`, `openbor`, `hypseus`, `model2`, `attractmode`, `es-de`, `pegasus` and `skyscraper`. Each link appears once the program has created its configuration, usually after it was opened once.
 
 ### `~/splashscreen`
 

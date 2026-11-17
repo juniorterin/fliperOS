@@ -154,7 +154,10 @@ class PlanTests(unittest.TestCase):
         return [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i} for i in range(1, n + 1)]
 
     def test_slaves_first_for_a_ring_of_four_starts_the_master_last(self):
-        plan = felink.make_plan(felink.Profiles().get("scud"), self.members(4))
+        # Nenhum perfil e slaves-first desde o Keisho (o Supermodel era); a
+        # ordem continua para um que precise.
+        prof = dict(felink.Profiles().get("scud"), order="slaves-first")
+        plan = felink.make_plan(prof, self.members(4))
         self.assertEqual(plan["order"], [4, 3, 2, 1])
         self.assertEqual(plan["delays"], {"4": 0, "3": 10, "2": 20, "1": 30})
 
@@ -183,13 +186,18 @@ class CommandTests(unittest.TestCase):
         self.p = felink.Profiles()
         self.members = [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i} for i in range(1, 5)]
 
-    def test_supermodel_gets_the_net_options_after_the_rom(self):
-        prof = self.p.get("scud")
-        plan = felink.make_plan(prof, self.members)
-        argv = felink.command(prof, ["x11-run", "supermodel", "/r/scud.zip"], plan, 2, "scud")
-        self.assertEqual(argv, ["x11-run", "supermodel", "/r/scud.zip", "-net", "-port-in=1970", "-port-out=1970",
-                                "-address-out=10.0.0.3"])
-        self.assertEqual(felink.command(prof, ["x", "supermodel", "r"], plan, 4, "scud")[-1], "-address-out=10.0.0.1")
+    def test_model3_opens_the_set_of_the_nvram_in_keisho(self):
+        # O Model 3 no Keisho: o set das NVRAMs (scud.zip as fez no scudau)
+        # antes do arquivo, e o anel de UDP no keisho.ini, como o Daytona.
+        for game, want in (("scud", "scudau"), ("daytona2", "daytona2"), ("dirtdvls", "dirtdvlsau")):
+            prof = self.p.get(game)
+            self.assertEqual((prof["emulator"], prof["port"]), ("sm2emu", 15112), game)
+            plan = felink.make_plan(prof, self.members[:2])
+            argv = felink.command(prof, ["x11-run", "fliperos-model3", "/r/%s.zip" % game], plan, 2, game)
+            self.assertEqual(argv, ["x11-run", "fliperos-model3", "--game", want, "/r/%s.zip" % game])
+            keys = felink.sm2_keys(prof, plan, 2, "10.0.0.2")
+            self.assertEqual((keys["link_next_ip"], keys["link_port"]), ("10.0.0.1", "15112"))
+            self.assertTrue(prof["nvram"]["files"]["nv"].startswith(want), game)
 
     def test_sm2emu_names_the_set_before_the_game(self):
         prof = self.p.get("daytona")
@@ -396,7 +404,7 @@ class PartyTests(unittest.TestCase):
         g3, _ = self.guest("G3")
         plan = self.host.start()
         self.assertEqual(plan["n"], 3)
-        self.assertEqual(plan["order"], [3, 2, 1])
+        self.assertEqual(plan["order"], [1, 2, 3])
         self.assertTrue(wait(lambda: g3.plan is not None and g2.plan is not None))
         self.assertEqual((g2.plan, g3.number), (plan, 3))
         self.assertEqual(self.host.state, "playing")
@@ -583,9 +591,10 @@ class LinkTests(unittest.TestCase):
         dest = os.path.join(self.b.home, "nvram", "model3", "scudau.nv")
         os.makedirs(os.path.dirname(dest))
         Path(dest).write_bytes(b"mine")
-        argv = self.b.command(["x11-run", "supermodel", "/r/scud.zip"])
-        self.assertEqual(argv[:3], ["x11-run", "supermodel", "/r/scud.zip"])
-        self.assertIn("-net", argv)
+        argv = self.b.command(["x11-run", "fliperos-model3", "/r/scud.zip"])
+        self.assertEqual(argv, ["x11-run", "fliperos-model3", "--game", "scudau", "/r/scud.zip"])
+        ini = Path(self.b.home, ".config", "keisho", "keisho.ini").read_text()
+        self.assertIn("link_enabled = true", ini)
         self.assertEqual(Path(dest).read_bytes(), Path(felink.NVRAM_SRC, "supermodel/scud/cabinet2.nv").read_bytes())
         self.b.leave()
         self.assertEqual(Path(dest).read_bytes(), b"mine")

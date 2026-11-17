@@ -687,8 +687,6 @@ def link_args(profile, plan, number):
     port = profile["port"]
     nxt = neighbour(profile, plan, number)
     emu = profile["emulator"]
-    if emu == "supermodel":
-        return ["-net", "-port-in=%d" % port, "-port-out=%d" % port, "-address-out=%s" % nxt]
     if emu == "flycast" and profile.get("ggpo"):
         # O GGPO: cada lado manda para o IP do outro (network:server, nos dois: vazio e o
         # 127.0.0.1) e o servidor e o jogador 1. Sem atraso de entrada: no cabo o
@@ -776,14 +774,13 @@ def sm2_keys(profile, plan, number, ip):
 
 def command(profile, base, plan, number, game):
     """O comando do jogo em link. base: o do frontend (fedata command), que
-    termina no nome do jogo (sm2emu, groovymame) ou no arquivo (supermodel)."""
+    termina no nome do jogo (sm2emu, groovymame) ou no arquivo (sm2emu do Model 3)."""
     argv = list(base)
     extra = link_args(profile, plan, number)
-    if profile["emulator"] == "supermodel":
-        return argv + extra
     if profile["emulator"] == "sm2emu":
-        # --game antes do jogo: o x11-run le o ultimo argumento como o jogo.
-        return argv[:-1] + ["--game", game] + argv[-1:]
+        # --game antes do jogo: o x11-run le o ultimo argumento como o jogo. O
+        # set do perfil (game), quando ha: o das NVRAMs (scud.zip as fez no scudau).
+        return argv[:-1] + ["--game", profile.get("game") or game] + argv[-1:]
     if len(argv) > 1 and argv[-2] in ("-e", "--exec"):
         # O Dolphin: o arquivo vem depois do -e.
         return argv[:-2] + extra + argv[-2:]

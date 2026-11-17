@@ -779,6 +779,27 @@ frontends_romlist() {
 }
 
 # frontends_configure NOME grava os sistemas no frontend (os que precisam).
+# frontends_supermodel_gone: o Model 3 passou do Supermodel ao Keisho, e a
+# tela "Supermodel" virou "Model 3" (scraper_attract_emulator). Sai a tela
+# velha do Attract-Mode, com o .cfg que o Setup fez (um mudado a mao fica); a
+# lista do FliperOS dela sai (o Setup refaz a do Model 3) e as partidas
+# jogadas, guardadas pelo nome da tela, passam para o nome novo. Os
+# favoritos sao pela pasta (model3) e ficam.
+frontends_supermodel_gone() {
+  local acfg dir cfg=$ATTRACT_DIR/emulators/Supermodel.cfg
+  if [[ -f $cfg ]] && head -1 "$cfg" | grep -q '^# Criado pelo FliperOS Setup'; then
+    rm -f "$cfg" "$ATTRACT_DIR/romlists/Supermodel.txt"
+    for acfg in "$ATTRACT_DIR/attract.cfg" "$ATTRACT_DIR/config/displays.cfg"; do
+      scraper_attract_display_remove "$acfg" Supermodel
+    done
+  fi
+  rm -f "$FLIPEROS_LISTS/Supermodel.txt"
+  for dir in "${FLIPEROS_STATS:-/home/fliperos/.local/share/fliperos/stats}" "$ATTRACT_DIR/stats"; do
+    [[ -d $dir/Supermodel && ! -e "$dir/Model 3" ]] && mv "$dir/Supermodel" "$dir/Model 3"
+  done
+  return 0
+}
+
 frontends_configure() {
   case $1 in
     attractplus) frontends_attract ;;

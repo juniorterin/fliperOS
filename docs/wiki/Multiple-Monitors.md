@@ -70,7 +70,7 @@ New monitors only turn on **after a reboot**: the Setup offers it when you leave
 | **GroovyMAME** | Every MAME system with 2 or more screens (Darius, Darius II, The Ninja Warriors, Punch-Out!!, Super Punch-Out!!, Vs. Tennis...) | 2 or 3. With 2 monitors, a 3-screen game opens on the first 2 |
 | **Flycast** | NAOMI multi-board games: Ferrari F355 Challenge (deluxe, twin, twin 2), Airline Pilots, Sega Strike Fighter | 3 (left, center, right), all analog |
 
-The other emulators (RetroArch, PCSX2, Dolphin, Supermodel, Model 2...) and the frontends stay on monitor 1. It works from any launcher: the frontends, LXDE's **Games** menu, GroovyMAME's own game list and the terminal all go through the same commands.
+The other emulators (RetroArch, PCSX2, Dolphin, Keisho...) and the frontends stay on monitor 1. It works from any launcher: the frontends, LXDE's **Games** menu, GroovyMAME's own game list and the terminal all go through the same commands.
 
 ## How it works
 

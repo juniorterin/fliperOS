@@ -216,7 +216,7 @@ buttons_keyboard() {
 # 4 5 6 embaixo) os botoes dos jogos de 1 a 5 botoes. Uma linha "BOTOES
 # POSICAO..." por numero de botoes no buttons.layout; sem linha, o botao N
 # do jogo fica na posicao N. O fliperos-buttons aplica (GroovyMAME, os cores
-# MAME do RetroArch, Supermodel e SM2-Emu) pela tabela de quantos botoes cada
+# MAME do RetroArch e Keisho) pela tabela de quantos botoes cada
 # jogo tem.
 
 BUTTONS_MAP=${BUTTONS_MAP:-$FLIPEROS_ETC/buttons.map}

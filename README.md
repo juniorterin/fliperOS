@@ -64,7 +64,7 @@ In development: 0.25 is tested in QEMU and on a 15 kHz CRT cabinet. Full documen
 ## What's included
 
 - 📺 **Video**: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.
-- 🕹️ **Emulators**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Keisho (Model 2), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup > Games > Extras.
+- 🕹️ **Emulators**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho (Model 2 and Model 3), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup > Games > Extras.
 - 🎮 **Frontends**: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen and grid; clones folded under each game; letter-by-letter scrolling), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.
 - 🔫 **Light gun**: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup > Joysticks. Wheels too.
 - ⚙️ **Setup**: video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency.
@@ -204,7 +204,7 @@ In the menus, the panel or a gamepad already acts as the keyboard: directions = 
 
 1. *Setup > Joysticks > Button mapping* (the first boot already offers it; this is how to redo it).
 2. For each player, press what it asks for, in order: up, down, left, right, **buttons 1 to 6** in panel order (1 2 3 in the top row, 4 5 6 in the bottom row), **Start** and **Coin**. The first input pressed tells which controller belongs to that player. With nothing pressed for 8 seconds, that input is skipped.
-3. The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Hypseus and OpenBOR).
+3. The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus and OpenBOR).
 4. Light gun (GunCon 2), wheel and pedals have their own calibrators in the same menu, and *Setup > System > Quirks* fixes USB devices that arrive wrong (for example a dual encoder showing up as a single player). See [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 
 <p align="center">
@@ -244,8 +244,8 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 | --- | --- | --- |
 | `mame` | Arcade: MAME sets (`.zip`, `.7z`) and their CHD folders | GroovyMAME |
 | `naomi`, `naomi2`, `atomiswave` | Sega Naomi and Sammy Atomiswave sets | Flycast |
-| `model3` | Sega Model 3 sets | Supermodel |
-| `model2` | Sega Model 2 sets | Model 2 (Keisho, Games menu; built on first launch) |
+| `model3` | Sega Model 3 sets | Model 3 (Keisho) |
+| `model2` | Sega Model 2 sets | Model 2 (Keisho) |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
@@ -367,7 +367,7 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
   - *Custom games*: PC games, scripts and your own emulators, which the frontends show as systems, installed from packages or made on the cabinet. See [Custom games](https://github.com/juniorterin/fliperOS/wiki/Custom-games).
   - *Emulators & Games*: the emulators of the desktop menu, each marked *installed* or *not installed*.
 
-    Choose one that is not installed to install it: **Model 2** (Keisho, downloaded and built on the machine, several minutes), **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. The others come in the image.
+    Choose one that is not installed to install it: **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. The others come in the image.
   - *Folders*: the folders FliperOS uses (`roms`, `bios`, `media`, `nvram`, `save`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art.
 
     Choose one and *Link this to another folder* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a link to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Unlink the custom folder* brings the previous one back.
@@ -375,7 +375,7 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
     - *ROM/CHD MAME torrent*: you paste the magnet link of a romset (and one of CHDs) and it downloads, through Transmission, only the games the ROM Cleaner filter chooses, straight into the emulator's folder. The MAME version of the romset must match the emulator;
     - *Free games (open-source homebrew)*: downloads free homebrew games to the RetroArch folders, so the frontend has something to show.
   - *Cleaner*: for those who have a full romset.
-    - *MAME ROM Cleaner*: you say where the romset is (a folder, USB disk or network share) and which emulator it is for (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...).
+    - *MAME ROM Cleaner*: you say where the romset is (a folder, USB disk or network share) and which emulator it is for (GroovyMAME, Flycast, Model 2, Model 3, MAME 2010...).
 
       It keeps only the games that work and suit your cabinet (horizontal or vertical, players, buttons and controls you have, categories, with or without clones, bootlegs, prototypes and adult games), shows how many and how much space, and copies or moves them to the right folder. *See the list* shows the games, *Change the parameters* changes the filter;
     - *MAME CHD Cleaner*: brings the CHDs (the disk images some games need) of only the games that stayed.

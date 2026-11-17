@@ -64,7 +64,7 @@ Em desenvolvimento: a 0.25 é testada no QEMU e num gabinete com CRT de 15 kHz. 
 ## O que vem nele
 
 - 📺 **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- 🕹️ **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Keisho (Model 2), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Games > Extras.
+- 🕹️ **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho (Model 2 e Model 3), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Games > Extras.
 - 🎮 **Frontends**: o frontend do próprio FliperOS como padrão (no visual do menu do Setup: lista, tela cheia e grade; clones agrupados sob cada jogo; rolagem de letra em letra), além de Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus (compilados no gabinete na primeira vez que você os escolhe) e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
 - 🔫 **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
 - ⚙️ **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
@@ -204,7 +204,7 @@ Nos menus, o painel ou um controle já funciona como teclado: direcional = setas
 
 1. *Setup > Joysticks > Button mapping* (o primeiro boot já oferece; aqui é como refazer).
 2. Para cada jogador, aperte o que ele pede, nesta ordem: cima, baixo, esquerda, direita, **botões 1 a 6** na ordem do painel (1 2 3 na fileira de cima, 4 5 6 na de baixo), **Start** e **Ficha** (Coin). O primeiro comando apertado diz qual controle é daquele jogador. Sem nada apertado por 8 segundos, aquele comando fica de fora.
-3. O mapeamento vai para todos os emuladores de uma vez (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Hypseus e OpenBOR).
+3. O mapeamento vai para todos os emuladores de uma vez (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus e OpenBOR).
 4. Pistola de luz (GunCon 2), volante e pedais têm calibradores no mesmo menu, e o *Setup > System > Quirks* corrige aparelhos USB que chegam errados (por exemplo, um encoder duplo que aparece como um jogador só). Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 
 <p align="center">
@@ -244,8 +244,8 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 | --- | --- | --- |
 | `mame` | Fliperama: sets do MAME (`.zip`, `.7z`) e as pastas de CHD | GroovyMAME |
 | `naomi`, `naomi2`, `atomiswave` | Sets de Sega Naomi e Sammy Atomiswave | Flycast |
-| `model3` | Sets de Sega Model 3 | Supermodel |
-| `model2` | Sets de Sega Model 2 | Model 2 (Keisho, menu Games; compilado na primeira abertura) |
+| `model3` | Sets de Sega Model 3 | Model 3 (Keisho) |
+| `model2` | Sets de Sega Model 2 | Model 2 (Keisho) |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube e Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
@@ -367,12 +367,12 @@ Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles,
   - *Custom games*: jogos de PC, scripts e emuladores seus, que os frontends mostram como sistemas, instalados de pacotes ou feitos no gabinete. Veja [Custom games](https://github.com/juniorterin/fliperOS/wiki/Custom-games).
   - *Emulators & Games*: os emuladores do menu do desktop, cada um marcado *installed* ou *not installed*.
 
-    Escolha um que não está instalado para instalar: o **Model 2** (Keisho, baixado e compilado na máquina, vários minutos), o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. Os outros vêm na imagem.
+    Escolha um que não está instalado para instalar: o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. Os outros vêm na imagem.
   - *Downloader*:
     - *ROM/CHD MAME torrent*: você cola o link magnet de um romset (e um de CHDs) e ele baixa, pelo Transmission, só os jogos que o filtro do ROM Cleaner escolhe, direto na pasta do emulador. A versão do MAME do romset precisa ser a do emulador;
     - *Free games (open-source homebrew)*: baixa jogos homebrew livres para as pastas do RetroArch, para o frontend ter o que mostrar.
   - *Cleaner*: para quem tem um romset completo.
-    - *MAME ROM Cleaner*: você diz onde está o romset (uma pasta, um disco USB ou um compartilhamento de rede) e para qual emulador ele é (GroovyMAME, Flycast, Supermodel, Model 2, MAME 2010...).
+    - *MAME ROM Cleaner*: você diz onde está o romset (uma pasta, um disco USB ou um compartilhamento de rede) e para qual emulador ele é (GroovyMAME, Flycast, Model 2, Model 3, MAME 2010...).
 
       Ele fica só com os jogos que funcionam e combinam com o seu gabinete (horizontal ou vertical, jogadores, botões e controles que você tem, categorias, com ou sem clones, bootlegs, protótipos e jogos adultos), mostra quantos são e o espaço, e copia ou move para a pasta certa. *See the list* mostra os jogos, *Change the parameters* muda o filtro;
     - *MAME CHD Cleaner*: traz os CHDs (as imagens de disco que alguns jogos precisam) só dos jogos que ficaram.

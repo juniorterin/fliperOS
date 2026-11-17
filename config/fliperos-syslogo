@@ -63,7 +63,7 @@ def theme_dir():
 
 
 def aliases(name):
-    """Os sistemas do tema de uma pasta do FliperOS ("Supermodel" -> sega
+    """Os sistemas do tema de uma pasta do FliperOS ("Model 3" -> sega
     model 3), da tabela que o Setup grava: "NOME|SISTEMA[|SISTEMA...]"."""
     low = ' '.join(name.lower().split())
     try:

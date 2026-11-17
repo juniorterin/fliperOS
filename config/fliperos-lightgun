@@ -32,7 +32,7 @@
 #   fliperos-lightgun udev-x SYSPATH
 #     para a regra do udev (IMPORT): LIBINPUT_IGNORE_DEVICE=1 numa pistola
 #     que nao e a primeira. O X junta todos os mouses num ponteiro so, e o
-#     GroovyMAME, o Supermodel e o Flycast leem a mira desse ponteiro: a
+#     GroovyMAME, o Keisho e o Flycast leem a mira desse ponteiro: a
 #     pistola do jogador 2 puxaria a mira do jogador 1. Na primeira, =0.
 #   fliperos-lightgun udev-retrigger SYSPATH
 #     reavalia as outras pistolas quando uma chega (a primeira pode mudar).

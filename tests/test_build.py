@@ -1475,7 +1475,7 @@ class RomFoldersTests(unittest.TestCase):
             home = Path(tmp)
             # O que cada um ja gravou no caminho dele vai junto.
             for d, name in (('.local/share/flycast', 'kofxi.zip.nvmem'), ('.local/share/keisho/saves', 'daytona.nv'),
-                            ('.local/share/supermodel/NVRAM', 'scud.nv'), ('roms/hypseus/ram', 'ace.gz'),
+                            ('roms/hypseus/ram', 'ace.gz'),
                             ('save/retroarch/MAME 2010/mame2010/nvram', 'tekken3.nv'),
                             ('save/retroarch/FinalBurn Neo/fbneo', 'sf2.fs'),
                             ('save/retroarch/MAME 2003-Plus/mame2003-plus/nvram', 'dino.nv')):
@@ -1485,7 +1485,6 @@ class RomFoldersTests(unittest.TestCase):
                 self.nvram_login(home)
             for link, target, name in (('.local/share/flycast', 'flycast', 'kofxi.zip.nvmem'),
                                        ('.local/share/keisho/saves', 'model2', 'daytona.nv'),
-                                       ('.local/share/supermodel/NVRAM', 'model3', 'scud.nv'),
                                        ('roms/hypseus/ram', 'hypseus', 'ace.gz'),
                                        ('save/retroarch/MAME 2010/mame2010/nvram', 'retroarch/mame2010', 'tekken3.nv'),
                                        ('save/retroarch/FinalBurn Neo/fbneo', 'retroarch/fbneo', 'sf2.fs'),
@@ -5865,7 +5864,8 @@ class FrontendDataTests(unittest.TestCase):
         have = {'flycast'}
         installed = lambda name: name in have
         self.assertIsNone(fm.missing_emulator([x11, 'flycast', '/r/a.gdi'], installed))
-        self.assertEqual(fm.missing_emulator([x11, 'fliperos-model2', 'daytona'], installed), 'model2')
+        self.assertEqual(fm.missing_emulator([x11, 'fliperos-model2', 'daytona'], installed), 'keisho')
+        self.assertEqual(fm.missing_emulator([x11, 'fliperos-model3', '/r/scud.zip'], installed), 'keisho')
         self.assertEqual(fm.missing_emulator([x11, '--mode', '640x480@60', 'duckstation', '/r/a.cue'], installed),
                          'duckstation')
         self.assertEqual(fm.missing_emulator(['/opt/fliperos/bin/fliperos-kms-run', '/opt/fliperos/fightcade/fightcade'],
@@ -5892,8 +5892,8 @@ class FrontendDataTests(unittest.TestCase):
             old_euid = os.geteuid
             os.geteuid = lambda: 0          # sem o sudo do teste
             try:
-                self.assertEqual(fm.missing_emulator(argv), 'model2')
-                fe.emulator_start({'Name': 'daytona'}, argv, 'model2')
+                self.assertEqual(fm.missing_emulator(argv), 'keisho')
+                fe.emulator_start({'Name': 'daytona'}, argv, 'keisho')
                 self.assertEqual((fe.overlay, fe.ov['title']), ('unpack', 'INSTALLING'))
                 deadline = time.monotonic() + 10
                 while fe.ov.get('result') is None and time.monotonic() < deadline:
@@ -7586,7 +7586,7 @@ class DeflickerTests(unittest.TestCase):
     def test_480i_per_program_on_15khz(self):
         # Setup > Video Setup > Interlaced hacks: com filtro ou puro, o modo da
         # coluna dos outros monitores (640x480, entrelacado no tubo); sem
-        # nada ou em 240p, o 640x240 de sempre. Supermodel no seu 496x384.
+        # nada ou em 240p, o 640x240 de sempre. Model 3 (Keisho) no seu 496x384.
         for conf, mode in (('', 'MODE=640 240 60'), ('mode480_flycast=240p\n', 'MODE=640 240 60'),
                            ('mode480_flycast=filter\n', 'MODE=640 480 60'),
                            ('mode480_flycast=pure\n', 'MODE=640 480 60')):
@@ -7594,7 +7594,7 @@ class DeflickerTests(unittest.TestCase):
             self.assertIn(mode, out, conf)
             # O nome da tabela vai para a camada (o nivel do programa).
             self.assertIn('APP=flycast', out)
-        self.assertIn('MODE=496 384 57.524', self.run_x11(['supermodel'], 'mode480_supermodel=pure\n')[0])
+        self.assertIn('MODE=496 384 57.524', self.run_x11(['fliperos-model3'], 'mode480_fliperos-model3=pure\n')[0])
         self.assertIn('MODE=640 240 60', self.run_x11(['pcsx2'], 'mode480_flycast=filter\n')[0])
         # O mesmo nas partidas de Flycast do Fightcade.
         fightcade = (ROOT / 'config/fliperos-fightcade').read_text()
@@ -12170,7 +12170,6 @@ class LightGunTests(unittest.TestCase):
 
     def test_emulators_hide_the_crosshair_with_a_gun(self):
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
-        self.assertIn('nocross=(-crosshairs=0)', x11)
         self.assertIn('config:rend.CrossHairColor1=0', x11)
         self.assertIn('sm2_set lightgun_crosshair false', x11)
         self.assertNotIn('flycast) [[ -n $guns ]] || cursor=() ;;', x11)
@@ -12685,7 +12684,8 @@ class EmulatorMenuTests(unittest.TestCase):
     # o lancador, que avisa quando falta o Wine (Setup > Games > Extras) ou o
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
     # pelo Setup.
-    TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/fliperos-model2',
+    TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/keisho',
+               'model3': '/usr/local/bin/keisho',
                'fightcade': '/opt/fliperos/fightcade/fightcade',
                'kof': '/home/fliperos/roms/ikemen/kof-final-attack/Ikemen_GO_Linux'}
 
@@ -12694,7 +12694,7 @@ class EmulatorMenuTests(unittest.TestCase):
 
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
-        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'pcsx2x6', 'supermodel',
+        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'pcsx2x6', 'model3',
                                  'dolphin', 'openbor', 'model2', 'fightcade', 'duckstation', 'kof'})
 
     def test_entries_go_through_the_launcher(self):
@@ -12705,7 +12705,10 @@ class EmulatorMenuTests(unittest.TestCase):
             self.assertEqual(e['Exec'], '/opt/fliperos/bin/fliperos-launch ' + name)
             self.assertEqual(e['TryExec'], self.TRYEXEC.get(name, '/usr/local/bin/' + name))
             self.assertIn('Game;', e['Categories'])
-            self.assertIn('  %s) label=' % name, launcher)
+            if name in ('model2', 'model3'):
+                self.assertIn('  model2 | model3)', launcher)
+            else:
+                self.assertIn('  %s) label=' % name, launcher)
 
     def test_every_icon_is_installed(self):
         own = {p.name for p in (ROOT / 'config/icons').iterdir() if p.suffix in ('.svg', '.png')}
@@ -12869,8 +12872,8 @@ class EmulatorModeTests(unittest.TestCase):
                                            'echo "WINE=${FLIPEROS_USES_WINE:-}"\n'
                                            'echo "PRELOAD=${LD_PRELOAD:-}"\n'
                                            'echo "SCREEN=${FLIPEROS_X11_SCREEN:-}"\n')
-            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'pcsx2x6', 'myprog', 'supermodel', 'hypseus',
-                         'fightcade', 'sm2-emu', 'keisho', 'duckstation', 'openbor'):
+            for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'pcsx2x6', 'myprog', 'hypseus',
+                         'fightcade', 'sm2-emu', 'keisho', 'fliperos-model3', 'duckstation', 'openbor'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
@@ -13012,9 +13015,9 @@ class EmulatorModeTests(unittest.TestCase):
             out = self.run_x11(['flycast', 'game.gdi'], extra=extra).stdout
             self.assertIn('MODE=2560 240 60', out)
             self.assertIn('rend.ScreenStretching=800', out)
-            out = self.run_x11(['supermodel', 'vf3.zip'], extra=extra).stdout
+            out = self.run_x11(['fliperos-model3', 'vf3.zip'], extra=extra).stdout
             self.assertIn('MODE=2560 240 57.524', out)
-            self.assertIn('-res=2560,240 -stretch', out)
+            self.assertIn('fliperos-model3 --fullscreen vf3.zip', out)
             self.assertIn('-x 2560 -y 240', self.run_x11(['hypseus', 'lair', 'vldp'], extra=extra).stdout)
             self.assertIn('MODE=2560 480 60', self.run_x11(['flycast'], frequency='31k', extra=extra).stdout)
             self.assertIn('MODE=2560 240 60', self.run_x11(['--mode', '640x240@60', 'myprog'], extra=extra).stdout)
@@ -13080,46 +13083,9 @@ class EmulatorModeTests(unittest.TestCase):
                 height = int(line.split()[1].split('x')[1].split('@')[0])
                 # So o Fightcade: a sala de jogos e uma pagina de desktop.
                 self.assertLessEqual(height, 480 if line.split()[0] == 'fightcade' else 240, line)
-        out = self.run_x11(['supermodel', 'game.zip']).stdout
+        out = self.run_x11(['fliperos-model3', 'game.zip']).stdout
         self.assertIn('MODE=640 240 57.524', out)
-        self.assertIn('-fullscreen -res=640,240 -stretch -no-quad-rendering game.zip', out)
-        self.assertIn('-res=496,384', self.run_x11(['supermodel'], frequency='31k').stdout)
-
-    def test_supermodel_takes_the_mode_switchres_made(self):
-        # No 15 kHz o Switchres faz do 496x384 do 480i um 661x496 entrelacado:
-        # com o -res da tabela o jogo ficava num quadrado no meio da tela. O
-        # comando passa pelo printf %q do fliperos-x11-client e pelo sh do
-        # Switchres, como no gabinete.
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            bin_dir = tmp / 'bin'
-            bin_dir.mkdir()
-            (bin_dir / 'xinit').write_text('#!/bin/bash\nshift\nargs=()\nwhile [[ $1 != -- ]]; do args+=("$1"); shift; done\n'
-                                           'sh -c "$(printf \'%q \' "${args[@]}")"\n')
-            (bin_dir / 'supermodel').write_text('#!/bin/sh\necho "SM=$*"\n')
-            (bin_dir / 'xrandr').write_text('#!/bin/sh\necho "HDMI-1 disconnected primary (normal left)"\n'
-                                            'echo "VGA-1 connected primary 661x496+0+0 (0x3c8) normal (normal left)"\n'
-                                            'echo "   640x240  60.00 +"\n')
-            for p in bin_dir.iterdir():
-                p.chmod(0o755)
-            (tmp / 'fliperos.conf').write_text('frequency=15k\nmode480_supermodel=filter\n')
-            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), HOME=str(tmp),
-                       FLIPEROS_CONF=str(tmp / 'fliperos.conf'),
-                       FLIPEROS_MODES=str(ROOT / 'config/fliperos-emulator-modes.conf'),
-                       FLIPEROS_DEBUG_FLAG=str(tmp / 'debug'), FLIPEROS_LOGS=str(tmp))
-            env.pop('DISPLAY', None)
-            run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-x11-run'), 'supermodel', 'fv2.zip'],
-                                         capture_output=True, text=True, env=env).stdout + (tmp / 'supermodel.log').read_text()
-            self.assertIn('SM=-fullscreen -res=496,384 -stretch -no-quad-rendering fv2.zip -res=661,496', run())
-            # Sem o xrandr, o tamanho da tabela.
-            (bin_dir / 'xrandr').write_text('#!/bin/sh\nexit 1\n')
-            self.assertIn('SM=-fullscreen -res=496,384 -stretch -no-quad-rendering fv2.zip\n', run())
-            # Quads quebram poligonos nas Radeon antigas: desligados, a nao ser
-            # que o Supermodel.ini da pessoa diga outra coisa.
-            ini = tmp / '.config/supermodel/Config/Supermodel.ini'
-            ini.parent.mkdir(parents=True, exist_ok=True)
-            ini.write_text('[ Global ]\nQuadRendering = 1\n')
-            self.assertIn('SM=-fullscreen -res=496,384 -stretch fv2.zip\n', run())
+        self.assertIn('MODE=496 384 57.524', self.run_x11(['fliperos-model3'], frequency='31k').stdout)
 
     def test_stretched_200_percent_at_640x240(self):
         # 640x240 tem pixels 8:3; para o 4:3 encher o tubo, cada emulador estica
@@ -13138,7 +13104,9 @@ class EmulatorModeTests(unittest.TestCase):
         # Nem os avisos do PCSX2 na tela.
         _, ini = DeflickerTests().run_x11(['pcsx2'], '')
         self.assertRegex(ini, r'\[EmuCore/GS\][^\[]*OsdMessagesPos = 0\n')
-        self.assertIn('-stretch', self.run_x11(['supermodel']).stdout)
+        with tempfile.TemporaryDirectory() as home:
+            self.run_x11(['fliperos-model3', 'scud.zip'], home=Path(home))
+            self.assertIn('aspect_mode = stretch\n', (Path(home) / '.config/keisho/keisho.ini').read_text())
         # Hypseus: jogo e player primeiro, opcoes no fim.
         out = self.run_x11(['hypseus', 'lair', 'vldp', '-framefile', 'f.txt']).stdout
         self.assertIn('hypseus lair vldp -framefile f.txt -fullscreen -x 640 -y 240 -ignore_aspect_ratio', out)
@@ -13153,11 +13121,13 @@ class EmulatorModeTests(unittest.TestCase):
             (root / 'etc/fliperos/emulator-modes.conf').write_text(
                 'flycast             640x240@60      640x480@60\n'
                 'supermodel          496x384@57.524  496x384@57.524\n'
+                'fliperos-model3     496x384@57.524  496x384@57.524\n'
                 'fliperos-model2     320x240@60      496x384@57.524\n')
             subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
                            capture_output=True, timeout=120)
             table = (root / 'etc/fliperos/emulator-modes.conf').read_text()
             self.assertIn('supermodel          640x240@57.524  496x384@57.524\n', table)
+            self.assertIn('fliperos-model3     640x240@57.524  496x384@57.524\n', table)
             # Linha mudada pela pessoa fica como esta.
             self.assertIn('fliperos-model2     320x240@60      496x384@57.524\n', table)
             sm2 = next(l for l in (ROOT / 'config/fliperos-emulator-modes.conf').read_text().splitlines()
@@ -13211,7 +13181,7 @@ class EmulatorModeTests(unittest.TestCase):
             esc = Path(tmp) / 'escquit'
             esc.write_text('#!/bin/sh\necho "$*" >> %s\n' % calls)
             esc.chmod(0o755)
-            for prog, watched in (('flycast', True), ('dolphin-emu', True), ('supermodel', False)):
+            for prog, watched in (('flycast', True), ('dolphin-emu', True), ('fliperos-model3', False)):
                 calls.write_text('')
                 self.run_x11([prog], extra={'FLIPEROS_ESCQUIT': str(esc)})
                 for _ in range(50):
@@ -13532,32 +13502,17 @@ class EmulatorModeTests(unittest.TestCase):
                 self.run_x11(['duckstation'], home=home, extra=extra_lib)
                 self.assertIn('Renderer = OpenGL\n', ini_path.read_text())
 
-    def test_supermodel_finds_its_game_list(self):
-        # Com ~/.config/supermodel ele procura ali o Games.xml; o build o deixa
-        # em /usr/local/share/supermodel ("No complete Model 3 games found").
-        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
-        self.assertIn('share=${FLIPEROS_SUPERMODEL_SHARE:-/usr/local/share/supermodel}', x11)
-        # PowerPC a 75 MHz nos jogos de 100 e 166 MHz; os de 66 ficam.
-        with tempfile.TemporaryDirectory() as share:
-            (Path(share) / 'Config').mkdir()
-            (Path(share) / 'Config/Games.xml').write_text(
-                '<games>\n<game name="fvipers2">\n<hardware>\n<stepping>2.0</stepping>\n</hardware>\n</game>\n'
-                '<game name="fvipers2o" parent="fvipers2">\n<hardware>\n<stepping>1.5</stepping>\n</hardware>\n'
-                '</game>\n<game name="vf3">\n<hardware>\n<stepping>1.0</stepping>\n</hardware>\n</game>\n</games>\n')
-            extra = {'FLIPEROS_SUPERMODEL_SHARE': share}
-            for rom, ppc in (('/r/fvipers2.zip', True), ('/r/fvipers2o.zip', True), ('/r/vf3.zip', False),
-                             ('/r/outro.zip', False)):
-                out = self.run_x11(['supermodel', rom], extra=extra).stdout
-                self.assertEqual('-no-quad-rendering -ppc-frequency=75 %s' % rom in out, ppc, out)
-            out = self.run_x11(['supermodel', '/r/fvipers2.zip'],
-                               extra=dict(extra, FLIPEROS_SUPERMODEL_PPC='0')).stdout
-            self.assertIn('-no-quad-rendering /r/fvipers2.zip', out)
-        self.assertIn('for f in Config/Games.xml Config/Music.xml; do', x11)
-        self.assertIn('ln -s "$share/Assets" "$HOME/.local/share/supermodel/Assets"', x11)
+    def test_model3_opens_in_keisho_and_old_supermodel_commands_too(self):
+        # O Supermodel saiu: o comando "supermodel ARQUIVO" de um frontend que
+        # o Setup ainda nao refez abre o jogo no fliperos-model3 (o Keisho).
+        out = self.run_x11(['supermodel', '/r/scud.zip']).stdout
+        self.assertIn('fliperos-model3 --fullscreen /r/scud.zip', out)
+        self.assertIn('MODE=640 240 57.524', out)
         # Pelo menu do desktop, sem jogo, o .zip se escolhe antes, numa lista
-        # no terminal com o nome de cada jogo do Games.xml.
+        # no terminal com o nome de cada jogo do games.xml do Keisho.
         launch = (ROOT / 'config/fliperos-launch').read_text()
-        self.assertIn('--pick-supermodel "$pick"', launch)
+        self.assertIn('  supermodel) [[ $1 == supermodel ]] && set -- model3 "${@:2}" ;&', launch)
+        self.assertIn('run=("$x11" "fliperos-$system" "$rom")', launch)
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             roms, bin_dir = tmp / 'model3', tmp / 'bin'
@@ -13565,18 +13520,21 @@ class EmulatorModeTests(unittest.TestCase):
             bin_dir.mkdir()
             for f in ('vf3.zip', 'scud.zip', 'zzz.zip', '_info.txt'):
                 (roms / f).write_text('x')
-            (tmp / 'Games.xml').write_text(
-                '<games><game name="vf3"><identity><title>Virtua Fighter 3</title>'
-                '<version>Japan, Revision D</version></identity></game>'
-                '<game name="scud"><identity><title>Scud Race</title></identity></game></games>')
+            (tmp / 'games.xml').write_text(
+                '<games><game name="vf3"><title>Virtua Fighter 3</title><version>Japan, Revision D</version></game>'
+                '<game name="scud"><title>Scud Race</title></game></games>')
+            keisho = tmp / 'keisho'
+            keisho.write_text('#!/bin/sh\nexit 0\n')
+            keisho.chmod(0o755)
             # O gum escolhe o primeiro e devolve o valor (depois do TAB).
             gum = bin_dir / 'gum'
             gum.write_text('#!/bin/sh\ntee "$GUM_IN" | head -1 | cut -f2\n')
             gum.chmod(0o755)
             env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), FLIPEROS_MODEL3_DIR=str(roms),
-                       FLIPEROS_SUPERMODEL_GAMES=str(tmp / 'Games.xml'), GUM_IN=str(tmp / 'list'))
-            subprocess.run(['bash', str(ROOT / 'config/fliperos-launch'), '--pick-supermodel', str(tmp / 'out')],
-                           env=env, check=True, capture_output=True, timeout=30)
+                       FLIPEROS_KEISHO_BIN=str(keisho), FLIPEROS_KEISHO_GAMES=str(tmp / 'games.xml'),
+                       GUM_IN=str(tmp / 'list'), HOME=str(tmp))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-sm2emu'), '--pick', str(tmp / 'out'), 'model3'],
+                           env=env, check=True, capture_output=True, timeout=30, stdin=subprocess.DEVNULL)
             self.assertEqual((tmp / 'list').read_text().splitlines(),
                              ['Scud Race\t%s/scud.zip' % roms, 'Virtua Fighter 3 (Japan, Revision D)\t%s/vf3.zip' % roms,
                               'zzz\t%s/zzz.zip' % roms])
@@ -13616,11 +13574,11 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('MODE=640 240 57.524', out)
             self.assertIn('--fullscreen vf2.zip', out)
             ini = home / '.config' / 'keisho' / 'keisho.ini'
-            self.assertEqual(ini.read_text(), 'aspect_mode = stretch\nvsync = true\n')
-            ini.write_text('vsync = false\naspect_mode = 4:3\nscaling_method = nearest\n')
+            self.assertEqual(ini.read_text(), 'aspect_mode = stretch\nvsync = true\ngraphics_backend = opengl\n')
+            ini.write_text('vsync = false\naspect_mode = 4:3\nscaling_method = nearest\ngraphics_backend = vulkan\n')
             self.run_x11(['keisho', 'vf2.zip'], home=home)
             self.assertEqual(ini.read_text(),
-                             'vsync = false\naspect_mode = stretch\nscaling_method = nearest\n')
+                             'vsync = false\naspect_mode = stretch\nscaling_method = nearest\ngraphics_backend = vulkan\n')
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             ini = home / '.config' / 'keisho' / 'keisho.ini'
@@ -13628,9 +13586,21 @@ class EmulatorModeTests(unittest.TestCase):
             ini.write_text('vsync = false\naspect_mode = 4:3\n')
             out = self.run_x11(['keisho', 'vf2.zip'], frequency='31k', home=home).stdout
             self.assertIn('MODE=496 384 57.524', out)
-            self.assertEqual(ini.read_text(), 'vsync = true\naspect_mode = 4:3\n')
+            self.assertEqual(ini.read_text(), 'vsync = true\naspect_mode = 4:3\ngraphics_backend = opengl\n')
+        # No amdgpu, o Vulkan (a placa do conector ligado).
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            drm = home / 'drm'
+            (drm / 'card0-VGA-1').mkdir(parents=True)
+            (drm / 'card0-VGA-1/status').write_text('connected\n')
+            (drm / 'drivers/amdgpu').mkdir(parents=True)
+            (drm / 'card0').mkdir()
+            (drm / 'card0/device').mkdir()
+            (drm / 'card0/device/driver').symlink_to(drm / 'drivers/amdgpu')
+            self.run_x11(['fliperos-model3', 'scud.zip'], home=home, extra={'FLIPEROS_DRM_SYSFS': str(drm)})
+            self.assertIn('graphics_backend = vulkan\n', (home / '.config/keisho/keisho.ini').read_text())
         launch = (ROOT / 'config/fliperos-launch').read_text()
-        self.assertIn('/usr/local/bin/fliperos-sm2emu --pick "$pick"', launch)
+        self.assertIn('/usr/local/bin/fliperos-sm2emu --pick "$pick" "$system"', launch)
         self.assertIn('usr/local/bin/fliperos-sm2emu', ROOTFS)
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -13640,10 +13610,6 @@ class EmulatorModeTests(unittest.TestCase):
             bin_dir.mkdir()
             (src / 'build' / 'bin' / 'keisho').write_text('#!/bin/sh\necho "$@" > "$HOME/args"\n')
             (src / 'build' / 'bin' / 'keisho').chmod(0o755)
-            # Compilado com os patches desta versao: nao pede para recompilar.
-            patches = ROOT / 'config' / 'sm2-emu-patches'
-            digest = hashlib.sha256(b''.join(p.read_bytes() for p in sorted(patches.glob('*.patch'))))
-            (src / 'build' / 'fliperos-patches').write_text(digest.hexdigest() + '\n')
             (src / 'build' / 'bin' / 'games.xml').write_text(
                 '<games><game name="vf2"><title>Virtua Fighter 2</title><version>2.1</version></game>'
                 '<game name="hotd"><title>The House of the Dead</title></game>'
@@ -13657,14 +13623,13 @@ class EmulatorModeTests(unittest.TestCase):
             gum.chmod(0o755)
             env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
                        FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms),
-                       FLIPEROS_SM2_PATCHES=str(patches), GUM_IN=str(tmp / 'list'), HOME=str(tmp))
+                       FLIPEROS_KEISHO_BIN=str(tmp / 'none'), GUM_IN=str(tmp / 'list'), HOME=str(tmp))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-sm2emu'), '--pick', str(tmp / 'out')],
                            env=env, check=True, capture_output=True, timeout=30, stdin=subprocess.DEVNULL)
             self.assertEqual((tmp / 'list').read_text().splitlines(),
                              ['outro\t%s/outro.zip' % roms,
                               'The House of the Dead\t%s/hotd.zip' % roms,
-                              'Virtua Fighter 2 (2.1)\t%s/vf2.zip' % roms,
-                              'Update Model 2\tUPDATE'])
+                              'Virtua Fighter 2 (2.1)\t%s/vf2.zip' % roms])
             self.assertEqual((tmp / 'out').read_text().strip(), '%s/outro.zip' % roms)
             # O teste rapido do zip roda com uma NVRAM descartavel, nao a do jogo.
             args = (tmp / 'args').read_text().split()
@@ -13710,84 +13675,27 @@ class EmulatorModeTests(unittest.TestCase):
             self.run_x11(['keisho', '/roms/model2/hotd.zip'], home=home, extra=extra)
             self.assertIn('outputs_network = false\n', ini.read_text())
 
-    def test_sm2emu_patches_apply_on_linux_and_only_touch_the_emulator(self):
-        # git apply, no gabinete: um patch em CRLF nao se aplica. E so o
-        # fonte e a tabela de jogos do emulador.
-        for patch in sorted((ROOT / 'config/sm2-emu-patches').glob('*.patch')):
+    def test_keisho_package_applies_every_patch_with_vulkan(self):
+        # O Keisho vem num pacote (Model 2 e 3): o commit fixo, todo patch de
+        # packaging/patches/keisho entra (em LF, so no fonte do emulador), com
+        # o Vulkan; o cabinet recebe a receita e os patches para o "mais novo".
+        recipe = (ROOT / 'packaging/packages/fliperos-keisho.sh').read_text()
+        self.assertRegex(recipe, r'KEISHO_COMMIT="[0-9a-f]{40}"')
+        self.assertIn('PKG_UPSTREAM="https://github.com/Keisho-Emu/Keisho"', recipe)
+        self.assertIn('-DSM2_BUILD_VULKAN=ON', recipe)
+        self.assertIn('git -C "$dir" apply "$patch" || return 1', recipe)
+        self.assertIn('rm -rf "$STAGING/usr/local/share/applications"', recipe)
+        patches = sorted((ROOT / 'packaging/patches/keisho').glob('*.patch'))
+        self.assertTrue(patches)
+        for patch in patches:
             data = patch.read_bytes()
             self.assertNotIn(b'\r', data, patch.name)
-            files = re.findall(r'(?m)^diff --git a/(\S+) b/', data.decode())
-            self.assertTrue(files, patch.name)
-            for name in files:
+            for name in re.findall(r'(?m)^diff --git a/(\S+) b/', data.decode()):
                 self.assertRegex(name, r'^(src|data)/', patch.name)
-
-    def test_sm2emu_applies_patches_and_updates_when_they_change(self):
-        rootfs = ROOTFS
-        # A pasta dos patches pode estar vazia (o upstream aceitou todos).
-        self.assertIn('for patch in "$src"/config/sm2-emu-patches/*.patch', rootfs)
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            up, src, roms, bin_dir, patches = (tmp / n for n in ('up', 'src', 'roms', 'bin', 'patches'))
-            for d in (up, roms, bin_dir, patches):
-                d.mkdir(parents=True)
-            (roms / 'vf2.zip').write_text('x')
-            git = ['git', '-C', str(up), '-c', 'user.name=t', '-c', 'user.email=t@t']
-            (up / 'a.txt').write_text('one\n')
-            subprocess.run(['git', 'init', '-q', str(up)], check=True)
-            subprocess.run(git + ['add', 'a.txt'], check=True)
-            subprocess.run(git + ['commit', '-qm', 'x'], check=True)
-            subprocess.run(['git', 'clone', '-q', str(up), str(src)], check=True)
-            (src / 'build' / 'bin').mkdir(parents=True)
-            (src / 'build' / 'bin' / 'keisho').write_text('#!/bin/sh\n')
-            (src / 'build' / 'bin' / 'keisho').chmod(0o755)
-            (patches / '0001-ok.patch').write_text(
-                'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n')
-            (patches / '0002-old.patch').write_text(
-                'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-zzz\n+yyy\n')
-            (bin_dir / 'cmake').write_text('#!/bin/sh\necho "$@" >> "$HOME/cmake.log"\n')
-            (bin_dir / 'gum').write_text('#!/bin/sh\n[ "$1" = confirm ] && exit 0\n'
-                                         'tee "$GUM_IN" | head -1 | cut -f2\n')
-            # O que falta do compilador seria instalado com sudo.
-            (bin_dir / 'sudo').write_text('#!/bin/sh\nexit 0\n')
-            for f in ('cmake', 'gum', 'sudo'):
-                (bin_dir / f).chmod(0o755)
-            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']),
-                       FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms),
-                       FLIPEROS_SM2_PATCHES=str(patches), GUM_IN=str(tmp / 'list'), HOME=str(tmp))
-            run = lambda: subprocess.run(['bash', str(ROOT / 'config/fliperos-sm2emu'), '--pick', str(tmp / 'out')],
-                                         env=env, check=True, capture_output=True, text=True, timeout=30,
-                                         stdin=subprocess.DEVNULL)
-            # Binario sem a marca dos patches: atualiza, recompila com o que
-            # se aplica, e pula o patch que esta versao ja nao aceita.
-            out = run().stdout
-            self.assertEqual((src / 'a.txt').read_text(), 'two\n')
-            self.assertIn('Skipping 0002-old.patch', out)
-            log = (tmp / 'cmake.log').read_text()
-            self.assertIn('-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON', log)
-            self.assertIn('--build', log)
-            # Mesmos patches: abre a lista direto.
-            run()
-            self.assertEqual((tmp / 'cmake.log').read_text(), log)
-            # Outro conjunto: tira os antigos do fonte e aplica de novo.
-            (patches / '0001-ok.patch').write_text(
-                'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+three\n')
-            run()
-            self.assertEqual((src / 'a.txt').read_text(), 'three\n')
-            # O upstream aceitou o patch e ele saiu do FliperOS: o fonte vem
-            # do pull, senao ficaria sem a correcao.
-            (up / 'a.txt').write_text('upstream\n')
-            subprocess.run(git + ['commit', '-qam', 'y'], check=True)
-            for patch in patches.glob('*.patch'):
-                patch.unlink()
-            log = (tmp / 'cmake.log').read_text()
-            out = run().stdout
-            self.assertEqual((src / 'a.txt').read_text(), 'upstream\n')
-            self.assertNotIn('Skipping', out)
-            self.assertGreater(len((tmp / 'cmake.log').read_text()), len(log))
-            # Sem patches e ja compilado assim: abre a lista direto.
-            log = (tmp / 'cmake.log').read_text()
-            run()
-            self.assertEqual((tmp / 'cmake.log').read_text(), log)
+        self.assertIn('packaging/patches/{emulationstation,retroarch,dolphin,flycast,keisho}/*.patch', ROOTFS)
+        self.assertIn('fliperos-groovymame fliperos-keisho fliperos-openbor fliperos-pcsx2; do', ROOTFS)
+        self.assertIn('rm -rf "$root/usr/local/share/fliperos/sm2-emu-patches"', ROOTFS)
+        self.assertNotIn('config/sm2-emu-patches', ROOTFS)
 
     def test_pcsx2_ini_is_adjusted_after_first_run(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -13816,8 +13724,8 @@ class NewEmulatorBuildTests(unittest.TestCase):
     def test_pinned_versions(self):
         self.assertRegex(MKISO, r'HYPSEUS_TAG="v2\.[0-9.]+"')   # a serie 3 exige SDL3
         self.assertRegex((ROOT / 'packaging/packages/fliperos-openbor.sh').read_text(), r'OPENBOR_COMMIT="[0-9a-f]{40}"')
-        self.assertRegex((ROOT / 'packaging/packages/fliperos-supermodel.sh').read_text(),
-                         r'SUPERMODEL_COMMIT="[0-9a-f]{40}"')
+        self.assertRegex((ROOT / 'packaging/packages/fliperos-keisho.sh').read_text(),
+                         r'KEISHO_COMMIT="[0-9a-f]{40}"')
         self.assertRegex((ROOT / 'packaging/packages/fliperos-dolphin.sh').read_text(), r'PKG_VERSION="[0-9]{4}[a-z]?"')
         self.assertRegex(EXTRAS, r'HEROIC_SHA256="[0-9a-f]{64}"')
 
@@ -13827,7 +13735,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
                            ('--skip-dolphin', 'build_dolphin_chroot')):
             self.assertIn(flag + ')', MKISO)
             self.assertIn('\n' + step + '\n', main)
-        self.assertLess(main.index('build_supermodel_chroot'), main.index('build_hypseus_chroot'))
+        self.assertLess(main.index('build_keisho_chroot'), main.index('build_hypseus_chroot'))
         self.assertLess(main.index('prepare_extras_chroot'), main.index('create_squashfs'))
         # As opcoes antigas ainda sao aceitas (scripts de quem ja gera a ISO).
         self.assertIn('--skip-wine|--skip-steam|--skip-heroic) shift ;;', MKISO)
@@ -14403,7 +14311,7 @@ class NewEmulatorBuildTests(unittest.TestCase):
         # O Model 2 do Wine saiu. O comando abre o Keisho, compilado no home.
         self.assertNotRegex(MKISO, r'(?i)m2emulator.*(http|zip)')
         helper = (ROOT / 'config/fliperos-model2').read_text()
-        self.assertIn('keisho', helper)
+        self.assertIn('/usr/local/bin/keisho', helper)
         self.assertNotIn('wine', helper)
         self.assertNotIn('WINEPREFIX=', helper)
 
@@ -14419,11 +14327,22 @@ class NewEmulatorBuildTests(unittest.TestCase):
             (roms / 'daytona.zip').write_text('x')
             (src / 'build' / 'bin' / 'keisho').write_text('#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "$HOME/args"\n')
             (src / 'build' / 'bin' / 'keisho').chmod(0o755)
-            env = dict(os.environ, FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms), HOME=str(tmp))
+            env = dict(os.environ, FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms), HOME=str(tmp),
+                       FLIPEROS_KEISHO_BIN=str(tmp / 'none'), FLIPEROS_MODEL3_DIR=str(tmp / 'm3'))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-model2'), '--game', 'daytona', '--nvram', 'saves',
                             'daytona'], env=env, check=True, timeout=30)
             self.assertEqual((tmp / 'args').read_text().splitlines(),
-                             ['--game', 'daytona', '--nvram', 'saves', '%s/daytona.zip' % roms])
+                             ['--model2-rom-dir', str(roms), '--model3-rom-dir', str(tmp / 'm3'),
+                              '--game', 'daytona', '--nvram', 'saves', '%s/daytona.zip' % roms])
+            # Com o nome fliperos-model3: a pasta e a NVRAM do Model 3.
+            (tmp / 'm3').mkdir()
+            (tmp / 'm3' / 'scud.zip').write_text('x')
+            link = tmp / 'fliperos-model3'
+            link.symlink_to(ROOT / 'config/fliperos-model2')
+            subprocess.run(['bash', str(link), 'scud'], env=env, check=True, timeout=30)
+            self.assertEqual((tmp / 'args').read_text().splitlines(),
+                             ['--model2-rom-dir', str(roms), '--model3-rom-dir', str(tmp / 'm3'),
+                              '--nvram', str(tmp / 'nvram/model3'), '%s/scud.zip' % (tmp / 'm3')])
 
 
 class PixelcadeTests(unittest.TestCase):
@@ -15255,7 +15174,7 @@ class OutputsTests(unittest.TestCase):
         self.assertEqual(len(self.lines('qmh.log', 1)), 1)
         subprocess.run(['pkill', '-f', str(self.tmp / 'qmamehook/QMamehook')])
         (self.tmp / 'qmh.log').unlink()
-        self.run_('launch', '/home/fliperos/.local/src/keisho/build/bin/keisho', '--fullscreen', '/x/hotd.zip')
+        self.run_('launch', '/usr/local/bin/keisho', '--fullscreen', '/x/hotd.zip')
         self.assertEqual(len(self.lines('qmh.log', 1)), 1)
 
     def test_qmamehook_source_is_pinned_and_built(self):
@@ -15412,7 +15331,6 @@ class OutputsTests(unittest.TestCase):
         self.assertIn('"$outputs_helper" installed; then\n  set -- -output network "$@"', gm)
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
         self.assertIn('netout=",network:NetworkOutput=yes"', x11)
-        self.assertIn('netout=(-outputs=net)', x11)
         self.assertIn('sm2_set outputs_network true', x11)
         # A porta 8000 fica visivel na rede: nunca ligada no mame.ini da imagem.
         self.assertNotRegex((ROOT / 'config/mame.ini').read_text(), r'(?m)^output\s')
@@ -16766,8 +16684,8 @@ class OnDemandFrontendTests(unittest.TestCase):
 
     def test_the_iso_repository_keeps_only_the_recipes_that_are_not_on_demand(self):
         iso = ('fliperos-attractplus', 'fliperos-dolphin', 'fliperos-flycast', 'fliperos-groovymame', 'fliperos-gum',
-               'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-rahasher', 'fliperos-retroarch', 'fliperos-sdl2-kms',
-               'fliperos-supermodel')
+               'fliperos-keisho', 'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-rahasher', 'fliperos-retroarch',
+               'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
         self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
@@ -16783,7 +16701,7 @@ class OnDemandFrontendTests(unittest.TestCase):
             self.assertIn('"$root/opt/fliperos/bin/%s"' % name, rootfs)
             self.assertIn(name, rootfs)
         self.assertIn('config/fliperos-frontend-build', rootfs)
-        self.assertIn('packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch', rootfs)
+        self.assertIn('packaging/patches/{emulationstation,retroarch,dolphin,flycast,keisho}/*.patch', rootfs)
         self.assertIn('COPY packaging/', (ROOT / 'Dockerfile.fliperos').read_text())
         self.assertIn('config packaging', (ROOT / 'tools/cabinet-push.sh').read_text())
 
@@ -18144,8 +18062,8 @@ class EmulatorsMenuTests(unittest.TestCase):
     def test_the_cabinet_gets_the_flycast_recipe_and_patches(self):
         rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
         self.assertIn('for recipe in fliperos-emulationstation fliperos-pegasus fliperos-retroarch fliperos-dolphin '
-                      'fliperos-flycast \\\n  fliperos-groovymame fliperos-supermodel fliperos-openbor fliperos-pcsx2; do', rootfs)
-        self.assertIn('"$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast}/*.patch', rootfs)
+                      'fliperos-flycast \\\n  fliperos-groovymame fliperos-keisho fliperos-openbor fliperos-pcsx2; do', rootfs)
+        self.assertIn('"$src"/packaging/patches/{emulationstation,retroarch,dolphin,flycast,keisho}/*.patch', rootfs)
         for name, upstream, var in (('flycast', 'https://github.com/flyinghead/flycast', 'FLYCAST_COMMIT'),
                                     ('retroarch', 'https://github.com/libretro/RetroArch', 'RA_COMMIT'),
                                     ('dolphin', 'https://github.com/dolphin-emu/dolphin', 'PKG_VERSION')):
@@ -18175,31 +18093,35 @@ class EmulatorsMenuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             env = {'FLIPEROS_EMULATORS_ROOT': str(tmp / 'root'), 'FLIPEROS_HOME': str(tmp / 'home')}
-            for path in ('root/usr/local/bin/retroarch', 'home/.local/src/keisho/build/bin/keisho'):
-                (tmp / path).parent.mkdir(parents=True)
+            for path in ('root/usr/local/bin/retroarch', 'root/usr/local/bin/keisho'):
+                (tmp / path).parent.mkdir(parents=True, exist_ok=True)
                 (tmp / path).write_text('')
                 (tmp / path).chmod(0o755)
             rows = [r.split('|') for r in self.run_cmd('fliperos-emulators', 'list', env=env).stdout.splitlines()]
             # Os do menu do desktop (config/applications), na ordem dele, e o KOF.
             self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'flycast', 'pcsx2', 'pcsx2x6',
-                                                    'dolphin', 'supermodel', 'openbor', 'model2', 'fightcade',
+                                                    'dolphin', 'openbor', 'keisho', 'fightcade',
                                                     'duckstation', 'kof'])
             state = {r[0]: (r[1], r[2]) for r in rows}
             self.assertEqual(state['retroarch'], ('1', 'image'))
             self.assertEqual(state['flycast'], ('0', 'image'))
-            self.assertEqual(state['model2'], ('1', 'build'))
+            self.assertEqual(state['keisho'], ('1', 'image'))
             self.assertEqual(state['fightcade'], ('0', 'fetch'))
             self.assertEqual(state['duckstation'], ('0', 'fetch'))
             self.assertEqual(state['kof'], ('0', 'source'))
-            self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'model2', env=env).returncode, 0)
+            self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'keisho', env=env).returncode, 0)
             self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'kof', env=env).returncode, 1)
         # O arquivo que diz "instalado" e o TryExec do atalho do desktop.
         script = (ROOT / 'config/fliperos-emulators').read_text()
-        for name in ('retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin', 'supermodel', 'openbor', 'fightcade',
+        for name in ('retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin', 'openbor', 'fightcade',
                      'duckstation'):
             tryexec = re.search(r'(?m)^TryExec=(.+)$',
                                 (ROOT / 'config/applications' / ('fliperos-%s.desktop' % name)).read_text()).group(1)
             self.assertIn('|$root%s|' % tryexec, script, name)
+        for name in ('model2', 'model3'):
+            self.assertIn('TryExec=/usr/local/bin/keisho\n',
+                          (ROOT / 'config/applications' / ('fliperos-%s.desktop' % name)).read_text())
+        self.assertIn('keisho|image|$root/usr/local/bin/keisho|', script)
 
     def test_versions_and_what_the_update_brings(self):
         # A versao instalada sai de arquivos, sem abrir o emulador; a do update
@@ -18228,33 +18150,26 @@ class EmulatorsMenuTests(unittest.TestCase):
                 (root / 'opt' / app / 'usr/share/metainfo/a.xml').write_text(
                     '<releases>\n  <release version="%s" date="2026-10-01"/>\n</releases>\n' % version)
             (root / 'opt/fliperos/fightcade/VERSION.txt').write_text('2.1.45\n')
-            # O SM2-Emu: o codigo compilado num commit, e o repositorio com um novo.
-            repo = tmp / 'sm2-remote'
-            git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@t']
-            subprocess.run([*git, 'init', '-q', str(repo)], check=True)
-            subprocess.run([*git, '-C', str(repo), 'commit', '-q', '--allow-empty', '-m', 'a'], check=True)
-            src = home / '.local/src/keisho'
-            subprocess.run(['git', 'clone', '-q', str(repo), str(src)], check=True)
-            (src / 'build/bin').mkdir(parents=True)
-            (src / 'build/bin/keisho').write_text('')
-            (src / 'build/bin/keisho').chmod(0o755)
-            subprocess.run([*git, '-C', str(repo), 'commit', '-q', '--allow-empty', '-m', 'b'], check=True)
-            new = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--short=7', 'HEAD'], capture_output=True,
-                                 text=True).stdout.strip()
+            # O Keisho: o pacote grava a versao; o update traz o commit da receita.
+            (root / 'usr/local/bin/keisho').write_text('')
+            (root / 'usr/local/bin/keisho').chmod(0o755)
+            (root / 'usr/local/share/fliperos/emulator-versions.d').mkdir(parents=True, exist_ok=True)
+            (root / 'usr/local/share/fliperos/emulator-versions.d/keisho').write_text('2026-11-16 d7c7dd8\n')
+            (tmp / 'packaging/packages/fliperos-keisho.sh').write_text('KEISHO_COMMIT="%s"\n' % ('e' * 40))
             mkiso = tmp / 'fliperos-mkiso.sh'
             mkiso.write_text('')
             (tmp / 'packaging/packages/fliperos-pcsx2.sh').write_text('PKG_VERSION="2.8.2"\n')
             # O GroovyMAME que o update traz: a tag da receita do pacote.
             (tmp / 'packaging/packages/fliperos-groovymame.sh').write_text('GROOVYMAME_TAG="gm0290sr222g"\n')
             env = {'FLIPEROS_EMULATORS_ROOT': str(root), 'FLIPEROS_HOME': str(home),
-                   'FLIPEROS_MKISO_URL': mkiso.as_uri(), 'FLIPEROS_SM2_REPO': str(repo)}
+                   'FLIPEROS_MKISO_URL': mkiso.as_uri()}
             got = dict(r.split('|') for r in self.run_cmd('fliperos-emulators', 'versions', env=env).stdout.splitlines())
             self.assertEqual(got['retroarch'], '2026-11-05 7d2e953')
             self.assertEqual(got['groovymame'], '0.289')
             self.assertEqual(got['pcsx2'], '2.8.2')
             self.assertEqual(got['duckstation'], '0.1-12083-g00e299795')
             self.assertEqual(got['fightcade'], '2.1.45')
-            self.assertRegex(got['model2'], r'^\d{4}-\d\d-\d\d [0-9a-f]{7}$')
+            self.assertEqual(got['keisho'], '2026-11-16 d7c7dd8')
             # Nao instalado: sem versao.
             self.assertEqual(got['flycast'], '')
 
@@ -18264,7 +18179,7 @@ class EmulatorsMenuTests(unittest.TestCase):
             # O commit fixado na receita do pacote: o que o proximo update leva.
             self.assertEqual(latest('retroarch'), '2026-11-05 7d2e953|8e3f00a|new')
             self.assertEqual(latest('groovymame'), '0.289|0.290|new')
-            self.assertEqual(latest('model2'), '%s|%s|new' % (got['model2'], new))
+            self.assertEqual(latest('keisho'), '2026-11-16 d7c7dd8|eeeeeee|new')
             # Sem como saber a nova (o Fightcade nao diz a versao antes de baixar).
             self.assertEqual(latest('fightcade'), '2.1.45||unknown')
         # O build da imagem grava a versao de cada emulador dela.
@@ -18278,7 +18193,7 @@ class EmulatorsMenuTests(unittest.TestCase):
         self.assertIn("git -C \"$dir\" log -1 --format='%h' > \"$STAGING/usr/local/share/fliperos/emulator-versions.d/openbor\"",
                       (ROOT / 'packaging/packages/fliperos-openbor.sh').read_text())
         # Os que vem em pacote gravam a versao em emulator-versions.d.
-        for name in ('retroarch', 'flycast', 'supermodel'):
+        for name in ('retroarch', 'flycast', 'keisho'):
             self.assertIn("git -C \"$dir\" log -1 --format='%%cs %%h' > "
                           "\"$STAGING/usr/local/share/fliperos/emulator-versions.d/%s\"" % name,
                           (ROOT / ('packaging/packages/fliperos-%s.sh' % name)).read_text())
@@ -18287,25 +18202,21 @@ class EmulatorsMenuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             calls = tmp / 'calls'
-            for name in ('sm2emu', 'fightcade', 'duckstation', 'kof'):
+            for name in ('fightcade', 'duckstation', 'kof'):
                 (tmp / name).write_text('#!/bin/sh\necho "%s $* HOME=$HOME" >> "%s"\n' % (name, calls))
                 (tmp / name).chmod(0o755)
-            env = {'FLIPEROS_SM2EMU': str(tmp / 'sm2emu'), 'FLIPEROS_FIGHTCADE': str(tmp / 'fightcade'),
+            env = {'FLIPEROS_FIGHTCADE': str(tmp / 'fightcade'),
                    'FLIPEROS_DUCKSTATION': str(tmp / 'duckstation'),
                    'FLIPEROS_KOF': str(tmp / 'kof'), 'FLIPEROS_HOME': str(tmp / 'home'),
                    'FLIPEROS_USER': 'root', 'FLIPEROS_EMULATORS_ROOT': str(tmp / 'root')}
-            run = self.run_cmd('fliperos-emulators', 'install', 'model2', '--progress', env=env)
+            run = self.run_cmd('fliperos-emulators', 'install', 'fightcade', '--progress', env=env)
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertIn('@step 100 Model 2 installed', run.stdout)
-            self.run_cmd('fliperos-emulators', 'install', 'fightcade', '--progress', env=env)
             self.run_cmd('fliperos-emulators', 'install', 'duckstation', '--progress', env=env)
             self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', '--source', '/media/usb/KOF', env=env)
             # Sem a pasta, o KOF baixa o jogo do itch.io.
             self.run_cmd('fliperos-emulators', 'install', 'kof', '--progress', env=env)
             self.assertEqual(calls.read_text().splitlines(),
-                             ['sm2emu --deps HOME=%s' % os.environ.get('HOME', ''),
-                              'sm2emu --build HOME=%s' % (tmp / 'home'),
-                              'fightcade fetch --progress HOME=%s' % os.environ.get('HOME', ''),
+                             ['fightcade fetch --progress HOME=%s' % os.environ.get('HOME', ''),
                               'duckstation fetch --progress HOME=%s' % os.environ.get('HOME', ''),
                               'kof install /media/usb/KOF --progress HOME=%s' % (tmp / 'home'),
                               'kof install --progress HOME=%s' % (tmp / 'home')])
@@ -18314,37 +18225,23 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertEqual(run.returncode, 1)
             self.assertIn('@fail Flycast (Dreamcast, Naomi, Atomiswave)|it comes compiled in the FliperOS image',
                           run.stdout)
-        sm2 = (ROOT / 'config/fliperos-sm2emu').read_text()
-        self.assertIn('  --deps)\n    deps_missing || exit 0\n    install_deps\n', sm2)
-        self.assertIn('if [[ -d $src/.git ]]; then build_tree update; else build_tree; fi', sm2)
 
-    def test_sm2emu_rebuilt_by_the_update_when_the_patches_change(self):
-        # Os patches novos do SM2-Emu so entravam numa abertura pelo menu do
-        # desktop; pelos frontends nunca. O update do sistema o recompila.
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            src, patches = tmp / 'keisho', tmp / 'patches'
-            (src / 'build/bin').mkdir(parents=True)
-            patches.mkdir()
-            (patches / '0001.patch').write_text('one\n')
-            env = {'FLIPEROS_SM2_SRC': str(src), 'FLIPEROS_SM2_PATCHES': str(patches)}
-            outdated = lambda: self.run_cmd('fliperos-sm2emu', '--outdated', env=env).returncode
-            self.assertEqual(outdated(), 1)  # nao compilado
-            (src / 'build/bin/keisho').write_text('')
-            (src / 'build/bin/keisho').chmod(0o755)
-            self.assertEqual(outdated(), 0)  # compilado antes do stamp
-            stamp = subprocess.run('cat %s/*.patch | sha256sum | cut -d" " -f1' % patches, shell=True,
-                                   capture_output=True, text=True).stdout
-            (src / 'build/fliperos-patches').write_text(stamp)
-            self.assertEqual(outdated(), 1)  # em dia
-            (patches / '0002.patch').write_text('two\n')
-            self.assertEqual(outdated(), 0)  # o update trouxe outro patch
+    def test_update_removes_supermodel_only_after_keisho(self):
+        # O Model 3 passou ao Keisho: o update tira o Supermodel so depois que
+        # o pacote do Keisho chegou (sem ele, o gabinete ficaria sem Model 3).
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
-        step = update.split('echo "== Model 2 (Keisho) with the patches of this version"')[1].split('\nfi\n')[0]
-        self.assertIn('runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --outdated', step)
-        self.assertIn('runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --build', step)
-        self.assertLess(update.index('fliperos-buttons save /etc/fliperos/buttons.map'),
-                        update.index('"$sm2" --outdated'))
+        step = update.split('echo "== Model 2 and 3 in Keisho (Supermodel removed)"')[1].split('\nfi\n')[0]
+        self.assertIn('if dpkg -s fliperos-keisho > /dev/null 2>&1; then', step)
+        self.assertIn('purge -y -q fliperos-supermodel', step)
+        self.assertIn('fliperos-sm2emu --migrate', step)
+        self.assertIn('sed -i "s/^${key}_supermodel=/${key}_fliperos-model3=/"', step)
+        self.assertLess(update.index('packages-sync.sh'), update.index('purge -y -q fliperos-supermodel'))
+        listed = {l.split('\t')[0]: l.split('\t')[3] for l in (ROOT / 'updates/packages.list').read_text().splitlines()
+                  if l and not l.startswith('#')}
+        self.assertEqual(listed.get('fliperos-keisho'), 'always')
+        self.assertNotIn('fliperos-supermodel', listed)
+        self.assertFalse((ROOT / 'packaging/packages/fliperos-supermodel.sh').exists())
+        self.assertIn('frontends_supermodel_gone\n  frontends_configure', update)
 
     def test_sm2emu_folders_move_to_keisho(self):
         # O SM2-Emu virou Keisho (keisho, ~/.config/keisho/keisho.ini,
@@ -18366,7 +18263,7 @@ class EmulatorsMenuTests(unittest.TestCase):
             (home / '.local/share/sm2-emu/screenshots').mkdir(parents=True)
             env = {'HOME': str(home), 'XDG_CONFIG_HOME': '', 'XDG_DATA_HOME': '',
                    'FLIPEROS_SM2_SRC': '', 'FLIPEROS_SM2_PATCHES': str(home / 'none')}
-            self.assertEqual(self.run_cmd('fliperos-sm2emu', '--outdated', env=env).returncode, 0)
+            self.assertEqual(self.run_cmd('fliperos-sm2emu', '--migrate', env=env).returncode, 0)
             new = home / '.local/src/keisho'
             self.assertFalse(old.exists())
             self.assertTrue((new / 'build/bin/sm2-emu').exists())
@@ -19001,12 +18898,7 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertIn('[MOUSE]\n', hyp)
             arcade = 'SDL_' + name.replace('/', '-').replace(':', '-') + '_arcade.cfg'
             self.assertTrue((tmp / 'dojo' / 'mappings' / arcade).is_file())
-            sm = (tmp / 'supermodel' / 'Config' / 'Supermodel.ini').read_text()
-            self.assertTrue(sm.startswith('[ Global ]\n'), sm)
-            for line in ('InputCoin1 = "KEY_3,JOY1_BUTTON8"', 'InputPunch = "KEY_A,JOY1_BUTTON1"',
-                         'InputJoyUp = "KEY_UP,JOY1_YAXIS_NEG"', 'InputStart2 = "KEY_2,JOY2_BUTTON7"',
-                         'InputPunch2 = "JOY2_BUTTON1"'):
-                self.assertIn(line + '\n', sm, line)
+            self.assertFalse((tmp / 'supermodel').exists())
             ra = (tmp / 'ra' / 'buttons.cfg').read_text()
             for line in ('input_player1_joypad_index = "0"', 'input_player2_joypad_index = "1"',
                          'input_player1_up_axis = "-1"', 'input_player1_y_btn = "0"', 'input_player1_select_btn = "7"',
@@ -19089,11 +18981,6 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertEqual(sf2['P2_BUTTON1'], 'NONE')
             self.assertEqual(sf2['P2_BUTTON2'], 'KEYCODE_A OR GUNCODE_2_BUTTON2 OR GUNCODE_2_BUTTON3')
             self.assertNotIn(' OR KEYCODE', (tmp / 'ctrlr' / 'fliperos.cfg').read_text())
-            sm = (tmp / 'supermodel' / 'Config' / 'Supermodel.ini').read_text()
-            # So a tecla do mapa: o A padrao do Supermodel e o botao 1 do jogador 2.
-            for line in ('InputPunch = "KEY_LEFTCTRL"', 'InputPunch2 = "KEY_A"', 'InputCoin1 = "KEY_5"',
-                         'InputJoyUp2 = "KEY_R"'):
-                self.assertIn(line + '\n', sm, line)
             hyp = (tmp / 'hypseus' / 'hypinput.ini').read_text()
             self.assertRegex(hyp, r'(?m)^KEY_BUTTON1 +\= SDLK_LCTRL +0 +0$')
             self.assertRegex(hyp, r'(?m)^KEY_START2 +\= SDLK_2 +0 +0$')
@@ -19175,22 +19062,6 @@ class ButtonMappingTests(unittest.TestCase):
                 self.rc.OPENBOR_SAVES, self.rc.OPENBOR3_SAVES = old4, old3
             self.assertEqual(len((saves4 / 'default.cfg').read_bytes()), 320)
             self.assertEqual(len((saves3 / 'default.cfg').read_bytes()), 352)
-
-    def test_supermodel_start_and_coin_on_the_panel(self):
-        # O padrao do Supermodel poe Start e ficha nos botoes 9 e 10; o painel
-        # de 8 botoes do gabinete tem Start no 7 e a ficha no 8.
-        code = self.rc.supermodel_code
-        self.assertEqual(code(0, 'b6'), 'JOY1_BUTTON7')
-        self.assertEqual(code(1, '+a0'), 'JOY2_XAXIS_POS')
-        self.assertEqual(code(0, 'h0.4'), 'JOY1_POV1_DOWN')
-        values = self.rc.supermodel_values({1: self.PANEL})
-        self.assertEqual(values['InputStart1'], '"KEY_1,JOY1_BUTTON7"')
-        self.assertEqual(values['InputEscape'], '"KEY_F,JOY1_BUTTON4"')
-        self.assertNotIn('InputStart2', values)
-        # As chaves que existem sao trocadas no lugar; o resto do arquivo fica.
-        old = '[ Global ]\nInputStart1 = "KEY_1,JOY1_BUTTON9"\nWideScreen = 0\n'
-        text = self.rc.supermodel_ini(old, {'InputStart1': '"X"', 'InputCoin1': '"Y"'})
-        self.assertEqual(text, '[ Global ]\nInputCoin1 = "Y"\nInputStart1 = "X"\nWideScreen = 0\n')
 
     def test_dolphin_gamecube_pads_on_sdl(self):
         # Dois paineis iguais: SDL/0 e SDL/1 com o mesmo nome; o teclado do
@@ -19471,47 +19342,6 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertIn(line, cfg)
         short = {c: b for c, b in self.PANEL.items() if c != 'b4'}
         self.assertIn('input_player1_x_btn = "99"', rc.retroarch_layout_cfg({1: short}, 4, [1, 4, 2, 5, 3, 6]))
-
-    def test_supermodel_layout_goes_to_the_section_of_the_game(self):
-        # O Supermodel soma a secao [ jogo ] a [ Global ]: os botoes do tipo
-        # do jogo (Games.xml) no layout do numero de botoes dele.
-        rc = self.rc
-        p2 = {c: (1, e) for c, (_, e) in self.PANEL.items()}
-        players = {1: self.PANEL, 2: p2}
-        with tempfile.TemporaryDirectory() as tmp:
-            xml = Path(tmp) / 'Games.xml'
-            xml.write_text('<games>' + ''.join(
-                '<game name="%s"><hardware><inputs><input type="common"/><input type="%s"/></inputs></hardware></game>'
-                % g for g in (('vf3', 'fighting'), ('fvipers2', 'fighting'), ('vs2', 'soccer'),
-                              ('spikeout', 'spikeout'), ('scud', 'vehicle'))) + '</games>')
-            games = rc.supermodel_games(str(xml))
-            self.assertEqual(rc.supermodel_games(str(xml) + '.nada'), {})
-        self.assertEqual(games, {'vf3': 'fighting', 'fvipers2': 'fighting', 'vs2': 'soccer', 'spikeout': 'spikeout'})
-        # No [ Global ], futebol e Spikeout tambem na ordem do painel.
-        values = rc.supermodel_values(players)
-        self.assertEqual(values['InputShortPass'], '"KEY_A,JOY1_BUTTON1"')
-        self.assertEqual(values['InputShoot2'], '"JOY2_BUTTON3"')
-        self.assertEqual(values['InputJump'], '"KEY_F,JOY1_BUTTON4"')
-        self.assertNotIn('InputJump2', values)
-        # Os jogos de 3 botoes na linha de baixo; o vf3 tem 4 (tabela), o
-        # futebol 3 (do tipo), o fvipers2 3 (tabela).
-        layouts, table = {3: [4, 5, 6]}, {'vf3': (4, ''), 'fvipers2': (3, '')}
-        old = ('[ Global ]\nXResolution = 496\n\n[ vf3 ]\nInputPunch = "JOY1_BUTTON9"\n\n'
-               '[ fvipers2 ]\nPowerPCFrequency = 75\nInputKick = "JOY1_BUTTON9"\n\n[ scud ]\nInputVR1 = "KEY_Q"\n')
-        text = rc.supermodel_layouts(old, players, layouts, table, games)
-        self.assertEqual(text, '[ Global ]\nXResolution = 496\n\n'
-                               '[ fvipers2 ]\nPowerPCFrequency = 75\nInputGuard = "KEY_D,JOY1_BUTTON6"\n'
-                               'InputGuard2 = "JOY2_BUTTON6"\nInputKick = "KEY_S,JOY1_BUTTON5"\n'
-                               'InputKick2 = "JOY2_BUTTON5"\nInputPunch = "KEY_A,JOY1_BUTTON4"\n'
-                               'InputPunch2 = "JOY2_BUTTON4"\n\n[ scud ]\nInputVR1 = "KEY_Q"\n\n'
-                               '[ vs2 ]\nInputLongPass = "KEY_S,JOY1_BUTTON5"\nInputLongPass2 = "JOY2_BUTTON5"\n'
-                               'InputShoot = "KEY_D,JOY1_BUTTON6"\nInputShoot2 = "JOY2_BUTTON6"\n'
-                               'InputShortPass = "KEY_A,JOY1_BUTTON4"\nInputShortPass2 = "JOY2_BUTTON4"\n')
-        # Gravar de novo nao muda nada; sem layout, so fica o que e da pessoa.
-        self.assertEqual(rc.supermodel_layouts(text, players, layouts, table, games), text)
-        self.assertEqual(rc.supermodel_layouts(text, players, {}, table, games),
-                         '[ Global ]\nXResolution = 496\n\n[ fvipers2 ]\nPowerPCFrequency = 75\n\n'
-                         '[ scud ]\nInputVR1 = "KEY_Q"\n')
 
     def test_model2_mapping(self):
         # SM2-Emu: os botoes 1 a 4 do jogo em A B X Y, na posicao do painel

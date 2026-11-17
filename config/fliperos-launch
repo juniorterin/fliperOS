@@ -6,64 +6,19 @@
 # o desktop fecha, o fliperos-session abre o emulador e, quando ele fecha,
 # volta para o desktop.
 #
-#   fliperos-launch retroarch|groovymame|flycast|pcsx2|pcsx2x6|duckstation|supermodel|dolphin|openbor|model2|sm2emu|fightcade|kof
+#   fliperos-launch retroarch|groovymame|flycast|pcsx2|pcsx2x6|duckstation|dolphin|openbor|model2|model3|fightcade|kof
 #   fliperos-launch --mode 640x240@60 programa [argumentos]   (qualquer programa)
 #   fliperos-launch custom ~/roms/custom/GRUPO/NOME.sh        (um jogo custom)
 set -euo pipefail
 
 usage() {
-  echo "Usage: fliperos-launch retroarch|groovymame|flycast|pcsx2|pcsx2x6|duckstation|supermodel|dolphin|openbor|model2|sm2emu|fightcade|kof" >&2
+  echo "Usage: fliperos-launch retroarch|groovymame|flycast|pcsx2|pcsx2x6|duckstation|dolphin|openbor|model2|model3|fightcade|kof" >&2
   echo "       fliperos-launch --mode WIDTHxHEIGHT@HZ program [arguments]" >&2
   echo "       fliperos-launch custom GAME.sh" >&2
   exit 2
 }
 
 x11=/opt/fliperos/bin/fliperos-x11-run
-model3=${FLIPEROS_MODEL3_DIR:-$HOME/roms/model3}
-games_xml=${FLIPEROS_SUPERMODEL_GAMES:-/usr/local/share/supermodel/Config/Games.xml}
-
-# supermodel_games: "nome<TAB>arquivo" dos .zip de ~/roms/model3, pelo nome
-# do Games.xml do Supermodel (o .zip que ele nao conhece fica pelo nome).
-supermodel_games() {
-  python3 - "$model3" "$games_xml" << 'PY'
-import os
-import sys
-import xml.etree.ElementTree as ET
-
-folder, games_xml = sys.argv[1:3]
-names = {}
-try:
-    for game in ET.parse(games_xml).getroot().iter('game'):
-        identity = game.find('identity')
-        if identity is None:
-            continue
-        title, version = identity.findtext('title', ''), identity.findtext('version', '')
-        names[game.get('name')] = '%s (%s)' % (title, version) if version else title
-except (OSError, ET.ParseError):
-    pass
-try:
-    files = [f for f in os.listdir(folder) if f.lower().endswith('.zip')]
-except OSError:
-    files = []
-rows = sorted(((names.get(f[:-4], f[:-4]), os.path.join(folder, f)) for f in files), key=lambda r: r[0].lower())
-for label, path in rows:
-    print('%s\t%s' % (label, path))
-PY
-}
-
-# --pick-supermodel ARQUIVO: roda no terminal; a lista dos jogos, e o
-# escolhido (o caminho do .zip) vai para ARQUIVO.
-if [[ ${1:-} == --pick-supermodel ]]; then
-  games=$(supermodel_games)
-  if [[ -z $games ]]; then
-    printf 'No Model 3 games in %s.\nCopy the MAME .zip files there.\n\nPress Enter to close.' "$model3"
-    read -r _
-    exit 0
-  fi
-  gum choose --header "Supermodel - choose a game (Esc cancels)" --height "$(($(tput lines 2> /dev/null || echo 24) - 2))" \
-    --label-delimiter $'\t' <<< "$games" > "$2" || true
-  exit 0
-fi
 
 case ${1:-} in
   retroarch) label=RetroArch run=(/opt/fliperos/bin/fliperos-kms-run retroarch) ;;
@@ -72,38 +27,26 @@ case ${1:-} in
   pcsx2) label=PCSX2 run=("$x11" pcsx2) ;;
   pcsx2x6) label="PCSX2x6 (Namco)" run=("$x11" pcsx2x6) ;;
   duckstation) label=DuckStation run=("$x11" duckstation) ;;
-  supermodel) label=Supermodel run=("$x11" supermodel)
-    # Sem tela propria, sem jogo o Supermodel fecha na hora: pelo menu, o
-    # jogo (o .zip do MAME) se escolhe aqui, numa lista no terminal.
-    if [[ $# -ge 2 ]]; then
-      run+=("${@:2}")
-    else
-      pick=$(mktemp)
-      ${FLIPEROS_TERMINAL:-alacritty} -T Supermodel -e bash "$(readlink -f -- "${BASH_SOURCE[0]}")" \
-        --pick-supermodel "$pick" || true
-      rom=$(< "$pick")
-      rm -f "$pick"
-      [[ -n $rom ]] || exit 0
-      run+=("$rom")
-    fi
-    ;;
   dolphin) label=Dolphin run=("$x11" dolphin-emu) ;;
   openbor) label=OpenBOR run=("$x11" openbor) ;;
-  # O SM2-Emu nao vem compilado: o --pick clona e compila na primeira vez,
-  # e a lista dos .zip de ~/roms/model2 sai antes de fechar o desktop. O
-  # sm2emu e o atalho de antes, quando havia um item so para ele.
+  # Model 2 e Model 3 no Keisho (o Supermodel saiu). Sem tela propria, sem
+  # jogo ele fecha: pelo menu, o .zip se escolhe antes de fechar o desktop,
+  # numa lista no terminal (config/fliperos-sm2emu). sm2emu e supermodel sao
+  # os atalhos de antes.
   sm2emu) set -- model2 "${@:2}" ;&
-  model2) label="Model 2"
-    bin=${FLIPEROS_SM2_BIN:-$HOME/.local/src/keisho/build/bin/keisho}
+  supermodel) [[ $1 == supermodel ]] && set -- model3 "${@:2}" ;&
+  model2 | model3)
+    system=$1
+    label="Model ${system#model}"
     if [[ $# -ge 2 ]]; then
-      run=("$x11" "$bin" "${@:2}")
+      run=("$x11" "fliperos-$system" "${@:2}")
     else
       pick=$(mktemp)
-      ${FLIPEROS_TERMINAL:-alacritty} -T "Model 2" -e /usr/local/bin/fliperos-sm2emu --pick "$pick" || true
+      ${FLIPEROS_TERMINAL:-alacritty} -T "$label" -e /usr/local/bin/fliperos-sm2emu --pick "$pick" "$system" || true
       rom=$(< "$pick")
       rm -f "$pick"
       [[ -n $rom ]] || exit 0
-      run=("$x11" "$bin" "$rom")
+      run=("$x11" "fliperos-$system" "$rom")
     fi
     ;;
   # O Fightcade se abre no Xorg dele sozinho, como na sessao de boot

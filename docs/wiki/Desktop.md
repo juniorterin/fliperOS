@@ -22,7 +22,7 @@ The App Store downloads no updates by itself and has no welcome screen: disk and
 
 ### Emulators in the menu
 
-**Games** has RetroArch, GroovyMAME, Flycast, PCSX2, Supermodel, Dolphin, OpenBOR, Model 2 and, once downloaded through the Setup, Fightcade 2, with the projects' own icons.
+**Games** has RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, OpenBOR, Model 2, Model 3 and, once downloaded through the Setup, Fightcade 2, with the projects' own icons.
 
 None of them runs inside the desktop: choosing one closes the desktop (asking first if there are open windows), the emulator opens on the CRT in its own video mode, and when it closes **the desktop comes back**.
 

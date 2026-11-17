@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Model 3
+GenericName=Sega Model 3 emulator (Keisho)
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch model3
+TryExec=/usr/local/bin/keisho
+Icon=/usr/local/share/pixmaps/fliperos-model3.png
+Terminal=false
+Categories=Game;Emulator;
