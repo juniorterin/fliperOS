@@ -38,13 +38,14 @@ One folder per emulator, and one per **RetroArch core** in `~/roms/retroarch/<co
 | `model2` | MAME sets of Model 2 | Keisho |
 | `model3` | MAME sets of Model 3 | Supermodel |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
-| `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u` (once DuckStation is installed) | DuckStation |
+| `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u` (they open once DuckStation is installed) | DuckStation |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `namco2x6` | Namco System 246/256 games | PCSX2x6 ([Emulators](Namco-246-256.md)) |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
 | `openbor/Paks` | OpenBOR games (`.pak`) | OpenBOR |
 | `hypseus` | Laserdisc games | Hypseus Singe |
-| `custom` | Custom game packages to install ([Custom games](Custom-games.md)) | — |
+| `custom` | The groups of [Custom games](Custom-games.md), one folder each (made by the Setup) | Its own program |
+| `custom-packages` | Custom game packages to install (`.fliperos-customgame.zip`, [Custom games](Custom-games.md)) | Install games |
 | `retroarch/<core>` | What that core opens (its `_info.txt` lists the extensions) | RetroArch |
 
 MAME sets stay zipped and are never renamed: frontends and MAME find a game by its set name (`sf2ce.zip`).

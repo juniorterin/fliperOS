@@ -1624,21 +1624,23 @@ class RomFoldersTests(unittest.TestCase):
             self.assertTrue((root / 'usr/share/fliperos/nvram/mame/tekken3/at28c16').is_file())
             self.assertTrue((root / 'usr/share/fliperos/nvram/flycast/kofxi.zip.nvmem').is_file())
 
-    def test_duckstation_folder_only_with_duckstation(self):
-        # Sem o DuckStation (baixado no Setup), nenhuma segunda pasta de PS1 ao
-        # lado da do core do RetroArch.
+    def test_ps1_and_custom_folders_exist_from_the_start(self):
+        # A ~/roms/ps1 existe mesmo sem o DuckStation (baixado no Setup), e as
+        # do Custom games (os grupos e os pacotes) tambem: um jogo ou um pacote
+        # pode ser copiado antes de instalar o emulador ou abrir o Custom games.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(tmp / 'nada'),
                        FIGHTCADE_DIR=str(tmp / 'nenhum'), FLIPEROS_DUCKSTATION_BIN=str(tmp / 'duckstation'))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
-            self.assertFalse((tmp / 'roms/ps1').exists())
-            (tmp / 'duckstation').write_text('#!/bin/sh\n')
-            (tmp / 'duckstation').chmod(0o755)
-            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             self.assertIn('DuckStation (PlayStation)', (tmp / 'roms/ps1/_info.txt').read_text())
             self.assertTrue((tmp / 'media/snap/ps1').is_dir())
             self.assertFalse((tmp / 'roms/psx').exists())
+            self.assertIn('Custom games', (tmp / 'roms/custom/_info.txt').read_text())
+            self.assertIn('\\\\fliperos\\roms\\custom-packages', (tmp / 'roms/custom-packages/_info.txt').read_text())
+            # Nao sao pastas de jogos de um emulador: sem pasta de arte propria.
+            self.assertFalse((tmp / 'media/snap/custom').exists())
+            self.assertFalse((tmp / 'media/snap/custom-packages').exists())
 
     def test_old_psx_folder_becomes_ps1(self):
         # A pasta do DuckStation era ~/roms/psx: os jogos e a arte vao para a

@@ -99,8 +99,10 @@ if [[ -e $roms/duckstation || -L $roms/duckstation ]]; then
     renameto "$dir" "${dir%/duckstation}/ps1"
   done
 fi
-[[ ! -x ${FLIPEROS_DUCKSTATION_BIN:-/usr/local/bin/duckstation} ]] ||
-  folder "$roms/ps1" "DuckStation (PlayStation): .cue/.bin .chd .pbp .m3u .iso. It also lists the games in ~/roms/retroarch/pcsx_rearmed. The BIOS (scph5501.bin...) goes in ~/bios."
+# A pasta existe desde a instalacao, com ou sem o DuckStation, para os jogos
+# ja terem onde ir (tambem pelo compartilhamento de rede). Vazia, nenhum
+# frontend a mostra (scraper_detect so lista pasta com jogo).
+folder "$roms/ps1" "DuckStation (PlayStation): .cue/.bin .chd .pbp .m3u .iso. DuckStation is installed in Setup > Games > Emulators & Games; it also lists the games in ~/roms/retroarch/pcsx_rearmed. The BIOS (scph5501.bin...) goes in ~/bios."
 # PCSX2x6, o fork do PCSX2 dos arcades Namco System 246, 256 e Super 256: uma
 # pasta so, e so ela abre nele (o PCSX2 oficial fica com a ~/roms/ps2). As
 # pastas por placa de antes (namco246, namco256) entram nela, sem sobrescrever
@@ -140,6 +142,11 @@ folder "$roms/fightcade/fbneo" "Fightcade 2, FBNeo: arcade .zip sets of FBNeo (r
 folder "$roms/fightcade/flycast" "Fightcade 2, Flycast: Naomi and Atomiswave .zip sets, Dreamcast games (.chd .gdi .cdi)."
 folder "$roms/fightcade/snes9x" "Fightcade 2, SNES9x: Super Nintendo games in .zip."
 folder "$roms/fightcade/fc1" "Fightcade 1 games (FBA): .zip sets of FB Alpha 0.2.96.74. They do not work in FBNeo, and FBNeo sets do not work here."
+# Setup > Games > Custom games (lib/customgames.sh): os grupos em ~/roms/custom
+# e os pacotes em ~/roms/custom-packages, as duas desde a instalacao, para um
+# pacote poder ser copiado (do PC, pela rede) antes de abrir o Custom games.
+folder "$roms/custom" "Custom games (Setup > Games > Custom games): one folder per group, each game a .sh made by the Setup. Packages go in ~/roms/custom-packages."
+folder "$roms/custom-packages" "Custom game packages (GAME.fliperos-customgame.zip): put them here (on the network, \\\\fliperos\\roms\\custom-packages) and install them in Setup > Games > Custom games > Install games, or with the web panel."
 
 # As ROMs do Fightcade sao so do Fightcade: os frontends nao as listam. A
 # pasta do core FBNeo do RetroArch ja foi um link para ~/roms/fightcade/fbneo
@@ -228,7 +235,7 @@ for type in snap preview logo box marquee dmd texto; do
     dir=${dir%/}
     name=${dir#"$roms"/}
     case ${name##*/} in old-* | old[0-9]*-*) continue ;; esac
-    case $name in retroarch | fightcade | openbor | hypseus) continue ;; esac
+    case $name in retroarch | fightcade | openbor | hypseus | custom | custom-packages) continue ;; esac
     restore "$media/$type/$name"
     [[ -e $media/$type/$name || -L $media/$type/$name ]] || mkdir -p "$media/$type/$name" 2> /dev/null
   done
