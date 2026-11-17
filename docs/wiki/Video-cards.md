@@ -4,6 +4,17 @@ The difference between them is the **dotclock**: a 320x240 game at 15 kHz needs 
 
 A card that doesn't uses a **super resolution**: the same lines and the same refresh as the game, with the width multiplied (1280 or 2560 instead of 320). On a CRT the picture is almost the same, since the beam has no horizontal pixels. What gives it away: RetroArch draws its notifications at 2560 wide, so they come out squeezed.
 
+**Each game opened is checked against the card.** On a card that only makes super resolutions, a game has to stretch itself across the wide mode. RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, DuckStation, Supermodel, Model 2 and Hypseus already do. For the others, FliperOS changes the game's own settings when it opens (`fliperos-gpufit`):
+
+| Game | What changes | Result |
+| --- | --- | --- |
+| OpenBOR (4 and 3.0) | Its *stretch* option, in each `.cfg` of `Saves/` | Fills the screen (seen on a CRT) |
+| Ikemen GO (KOF Final Attack, custom games with `save/config.ini`) | `WindowWidth`/`WindowHeight` at the wide mode, `KeepAspect = 0` | Fills the screen (seen on a CRT) |
+| MUGEN (custom games with `data/mugen.cfg`) | `Width`/`Height` of `[Video]` at the wide mode | Opens, but narrow: MUGEN 1.0 keeps 4:3, and its OpenGL mode scattered the picture |
+| Other custom games, the Fightcade lobby | Nothing | Narrow, or doesn't open |
+
+When the game can't fill the screen, an orange **VIDEO CARD WARNING** bar shows at the bottom of the screen for a few seconds, over the game. The 240p hack of custom games doesn't work on these cards: the X can't enlarge a screen into the wide mode (the tube stays black), so it is turned off there. On a card that makes the game's own mode (another card, another monitor), the next launch puts the old settings back (kept in `~/.local/share/fliperos/gpufit.json`).
+
 | Page | What it covers |
 | --- | --- |
 | [AMD cards](Video-cards-AMD.md) | Which Radeons, the drivers and Vulkan, GCN 2 and 3 with DVI-I, APUs, the cards GroovyArcade reports |

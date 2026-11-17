@@ -133,6 +133,7 @@ fi
 # do grid, abaixo de 25) faz aqui a mesma dobra do Switchres, so quando o
 # modo fica abaixo dele: 640x240 (13 MHz) fica, 320x240 (6,5 MHz) vira 640.
 sr_ini=${FLIPEROS_SWITCHRES_INI:-/etc/switchres.ini}
+requested_w=$FLIPEROS_RES_W
 read -r dotclock_min super_width < <(awk '$1 == "dotclock_min" { d = $2 } $1 == "super_width" { s = $2 }
   END { print d + 0, (s + 0 > 0 ? int(s) : 2560) }' "$sr_ini" 2> /dev/null) || dotclock_min=0
 if awk -v d="${dotclock_min:-0}" 'BEGIN { exit !(d >= 25) }'; then
@@ -145,6 +146,24 @@ elif [[ ${dotclock_min:-0} != 0 ]]; then
   FLIPEROS_RES_W=$(awk -v w="$FLIPEROS_RES_W" -v d="$dotclock_min" -v k="$khz" \
     'BEGIN { while (w * 1.3 * k / 1000 <= d) w *= 2; print w }')
 fi
+# A configuracao do jogo cabe na placa? (config/fliperos-gpufit) Os emuladores
+# que enchem o modo sozinhos (o esticado de cada um, abaixo) cabem sempre. Os
+# outros, numa placa so de super resolucao: o OpenBOR, o MUGEN e o Ikemen GO
+# esticam pela configuracao deles; o resto ganha um aviso na OSD. O xrandr
+# --scale que amplia (a tela do jogo menor que o modo) deixa o tubo preto, visto
+# no gabinete com o radeon: a tela do 240p hack sai quando o jogo ja pede o
+# modo largo. Numa placa que faz o modo pedido, desfaz o que tinha mudado.
+gpufit=${FLIPEROS_GPUFIT:-/opt/fliperos/bin/fliperos-gpufit}
+case $name in
+  flycast | dolphin-emu | pcsx2 | pcsx2x6 | duckstation | hypseus | singe | supermodel | fliperos-model2 | sm2-emu | groovymame) ;;
+  *)
+    if [[ -x $gpufit ]]; then
+      fit=$("$gpufit" launch --program "$name" --app "${app:-$name}" --mode "${requested_w}x$FLIPEROS_RES_H" \
+        --wide "$FLIPEROS_RES_W" --screen "${FLIPEROS_X11_SCREEN:-}" -- "$@" 2> /dev/null) || fit=""
+      [[ $fit != *drop-screen* ]] || unset FLIPEROS_X11_SCREEN
+    fi
+    ;;
+esac
 
 # Tela cheia e imagem esticada: num modo como 640x240 (tela 8:3 em pixels,
 # que o tubo mostra em 4:3) um emulador que "mantem 4:3" usaria so metade da

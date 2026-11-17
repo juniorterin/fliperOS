@@ -12605,6 +12605,126 @@ class EmulatorMenuTests(unittest.TestCase):
         self.assertIn('fliperos-launch', ROOTFS)
 
 
+class GpuFitTests(unittest.TestCase):
+    """config/fliperos-gpufit: numa placa so de super resolucao o OpenBOR, o
+    MUGEN e o Ikemen GO esticam pela configuracao deles, o resto ganha um
+    aviso na OSD; numa placa que faz o modo, o que mudou volta."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.runtime = self.dir / 'run'
+        self.runtime.mkdir()
+        self.env = dict(os.environ, HOME=str(self.dir), XDG_RUNTIME_DIR=str(self.runtime),
+                        FLIPEROS_OPENBOR_DIR=str(self.dir / 'openbor'), FLIPEROS_KOF_DIR=str(self.dir / 'kof'),
+                        FLIPEROS_GPUFIT_STATE=str(self.dir / 'gpufit.json'))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def fit(self, *args, command=('myprog',)):
+        return subprocess.run(['python3', str(ROOT / 'config/fliperos-gpufit'), 'launch'] + list(args) + ['--'] +
+                              list(command), env=self.env, capture_output=True, text=True, check=True).stdout
+
+    def notices(self):
+        folder = self.runtime / 'fliperos-osd-notices'
+        return [p.read_text() for p in sorted(folder.iterdir())] if folder.exists() else []
+
+    def custom(self, name, files):
+        folder = self.dir / 'games' / name
+        for rel, text in files.items():
+            (folder / rel).parent.mkdir(parents=True, exist_ok=True)
+            (folder / rel).write_bytes(text.encode('latin-1'))
+        cfg = self.dir / ('%s.cfg' % name)
+        cfg.write_text('format=1\nname=%s\nplatform=windows\nexe=game.exe\nfolder=%s\n' % (name, folder))
+        return folder, ['/opt/fliperos/bin/fliperos-customgame', 'run', str(cfg)]
+
+    def test_openbor_stretch_on_a_super_resolution_card_and_back(self):
+        rc = load_script('buttons', 'config/fliperos-buttons')
+        saves4, saves3 = self.dir / 'openbor/Saves', self.dir / 'openbor/v3/Saves'
+        saves4.mkdir(parents=True)
+        saves3.mkdir(parents=True)
+        files = {saves4 / 'default.cfg': rc.openbor_default(), saves4 / 'Batman SD.cfg': rc.openbor_default(),
+                 saves3 / 'default.cfg': rc.openbor3_default()}
+        for path, data in files.items():
+            path.write_bytes(data)
+        self.assertEqual(self.fit('--program', 'openbor', '--mode', '320x240', '--wide', '2560', command=['openbor']), '')
+        # O int do stretch (o oitavo dos 12 do 4, o 14o dos 17 do 3.0) liga; o resto fica.
+        for path, data in files.items():
+            new = path.read_bytes()
+            at = 292 if len(data) == 320 else 328
+            self.assertEqual(struct.unpack_from('<i', new, at)[0], 1, path)
+            self.assertEqual(new[:at] + new[at + 4:], data[:at] + data[at + 4:], path)
+        self.assertEqual(self.notices(), [])
+        # Na placa que faz o modo, tudo volta como era.
+        self.fit('--program', 'openbor', '--mode', '320x240', '--wide', '320', command=['openbor'])
+        for path, data in files.items():
+            self.assertEqual(path.read_bytes(), data, path)
+
+    def test_mugen_asks_for_the_wide_mode_and_loses_the_240p_hack_screen(self):
+        video = ('[Config]\r\nGameWidth = 640\r\n[Video]\r\n ;You can force an alternate resolution\r\n'
+                 ';Width  = 1280\r\n;Height = 720\r\nDepth = 16\r\nFullScreen = 1\r\n[Sound]\r\nSound = 1\r\n')
+        folder, command = self.custom('Kof z', {'data/mugen.cfg': video})
+        out = self.fit('--program', 'fliperos-customgame', '--mode', '640x240', '--wide', '2560',
+                       '--screen', '640x480', command=command)
+        self.assertEqual(out.split(), ['drop-screen'])
+        text = (folder / 'data/mugen.cfg').read_bytes().decode('latin-1')
+        section = text.split('[Video]')[1].split('[Sound]')[0]
+        self.assertIn('Width = 2560\r\n', section)
+        self.assertIn('Height = 240\r\n', section)
+        self.assertIn(';Width  = 1280\r\n', section)
+        self.assertNotIn('Width = 2560', text.split('[Video]')[0])
+        # Abre, mas o MUGEN 1.0 guarda o 4:3: estreito, com o aviso.
+        self.assertEqual(self.notices(), ["Kof z: MUGEN keeps 4:3 inside this card's super resolution (2560x240). "
+                                          "It will look narrow.\n"])
+        # De novo na mesma placa: nada muda; na placa que faz o modo, volta.
+        self.fit('--program', 'fliperos-customgame', '--mode', '640x240', '--wide', '2560', command=command)
+        self.assertEqual((folder / 'data/mugen.cfg').read_bytes().decode('latin-1'), text)
+        self.assertEqual(self.fit('--program', 'fliperos-customgame', '--mode', '640x240', '--wide', '640',
+                                  '--screen', '640x480', command=command), '')
+        self.assertEqual((folder / 'data/mugen.cfg').read_bytes(), video.encode('latin-1'))
+
+    def test_ikemen_takes_the_wide_window_without_keeping_aspect(self):
+        config = ('[Video]\nRenderMode               = OpenGL 3.3\nWindowWidth              = 320\n'
+                  'WindowHeight             = 240\nFullscreen               = 1\n'
+                  '; Set to 0 to stretch the game space to fit the whole window.\nKeepAspect               = 1\n'
+                  '[Sound]\nKeepAspect = 1\n')
+        kof = self.dir / 'kof/save'
+        kof.mkdir(parents=True)
+        (kof / 'config.ini').write_text(config)
+        self.fit('--program', 'fliperos-kof', '--mode', '320x240', '--wide', '2560', command=['fliperos-kof', 'run'])
+        text = (kof / 'config.ini').read_text()
+        self.assertIn('WindowWidth              = 2560\n', text)
+        self.assertIn('WindowHeight             = 240\n', text)
+        self.assertIn('KeepAspect               = 0\n', text)
+        self.assertIn('[Sound]\nKeepAspect = 1\n', text)
+        self.fit('--program', 'fliperos-kof', '--mode', '320x240', '--wide', '320', command=['fliperos-kof', 'run'])
+        self.assertEqual((kof / 'config.ini').read_text(), config)
+        # Um jogo custom do Ikemen GO (save/config.ini na pasta) tambem.
+        folder, command = self.custom('Ikemen game', {'save/config.ini': config})
+        self.fit('--program', 'x', '--mode', '320x240', '--wide', '2560', command=command)
+        self.assertIn('KeepAspect               = 0', (folder / 'save/config.ini').read_text())
+
+    def test_a_game_that_cant_stretch_gets_a_notice(self):
+        _, command = self.custom('Pang', {'game.exe': 'MZ'})
+        out = self.fit('--program', 'x', '--mode', '640x480', '--wide', '2560', command=command)
+        self.assertEqual(out, '')
+        [notice] = self.notices()
+        self.assertEqual(notice, "Pang won't stretch to this card's super resolution (2560x480). "
+                                 "It may look narrow or not open.\n")
+        # Curto, para dar para ler correndo na barra.
+        self.assertLessEqual(len(notice), 110)
+        # O 240p hack sem MUGEN: a tela sai (preto no tubo) e o aviso diz.
+        out = self.fit('--program', 'x', '--mode', '640x240', '--wide', '2560', '--screen', '640x480', command=command)
+        self.assertEqual(out.split(), ['drop-screen'])
+        self.assertIn("Pang: the 240p hack doesn't work on this card's super resolution (2560x240)", self.notices()[-1])
+        # Placa que faz o modo, ou o navegador do Downloader: nada.
+        count = len(self.notices())
+        self.fit('--program', 'x', '--mode', '640x480', '--wide', '640', command=command)
+        self.fit('--program', 'fliperos-browser', '--mode', '640x480', '--wide', '2560', command=['fliperos-browser'])
+        self.assertEqual(len(self.notices()), count)
+
+
 class EmulatorModeTests(unittest.TestCase):
     """fliperos-x11-run: o modo de cada emulador (640x240 nos de 480i num
     monitor de 15 kHz), o --mode para qualquer programa e a imagem esticada
@@ -12783,6 +12903,28 @@ class EmulatorModeTests(unittest.TestCase):
             # Sem switchres.ini: como antes.
             extra = {'FLIPEROS_SWITCHRES_INI': str(Path(tmp) / 'nao-existe.ini')}
             self.assertIn('MODE=640 240 60', self.run_x11(['flycast'], extra=extra).stdout)
+
+    def test_gpufit_runs_for_programs_that_dont_fill_the_mode(self):
+        # O fliperos-gpufit confere cada jogo que nao enche o modo sozinho; o
+        # "drop-screen" dele tira a tela do 240p hack.
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = Path(tmp) / 'calls'
+            fake = Path(tmp) / 'gpufit'
+            fake.write_text('#!/bin/sh\necho "$@" >> %s\necho drop-screen\n' % calls)
+            fake.chmod(0o755)
+            ini = Path(tmp) / 'switchres.ini'
+            ini.write_text('dotclock_min 25.0\nsuper_width 2560\n')
+            extra = {'FLIPEROS_GPUFIT': str(fake), 'FLIPEROS_SWITCHRES_INI': str(ini)}
+            out = self.run_x11(['--mode', '640x240@60/640x480', '--app', 'custom_g_k', 'myprog'], extra=extra).stdout
+            self.assertIn('SCREEN=\n', out)
+            self.assertIn('MODE=2560 240 60', out)
+            self.assertIn('launch --program myprog --app custom_g_k --mode 640x240 --wide 2560 --screen 640x480 -- myprog',
+                          calls.read_text())
+            calls.unlink()
+            self.run_x11(['flycast', 'game.gdi'], extra=extra)
+            self.assertFalse(calls.exists())
+            self.assertIn('--mode 320x240 --wide 2560', (self.run_x11(['openbor'], extra=extra), calls.read_text())[1])
+        self.assertRegex(ROOTFS, r' fliperos-gpufit[^\n]*; do')
 
     def test_nouveau_minimum_doubles_only_narrow_modes(self):
         # Uma NVIDIA no nouveau que so mostrou o grid de 384 de largura
@@ -20862,6 +21004,59 @@ class OsdTests(unittest.TestCase):
         Clock.now += self.osd.CHEEVO_STALE + 1
         service.collect_achievements()
         self.assertEqual(service.cheevo_queue, [])
+
+    def test_notice_bar_is_orange_with_the_warning_and_stays_longer(self):
+        # O aviso do fliperos-gpufit: a mesma barra, laranja, o triangulo no
+        # circulo, e fica NOTICE_SECONDS (a conquista some aos 5 s).
+        painter = self.painter()
+        t = painter.theme
+        text = 'Kof z asks for 640x240, but this video card only makes super resolutions (2560x240)'
+        s = painter.achievement_bar(text, 2.0, 'notice')
+        colors = {s.get_at((x, y))[:3] for x in range(320) for y in range(200, 240)}
+        self.assertIn(t.ORANGE, colors)
+        self.assertNotIn(t.PINK, colors)
+        self.assertNotIn(t.PURPLE, colors)
+        self.assertGreater(painter.achievement_bar(text, 7.0, 'notice').get_bounding_rect().width, 0)
+        self.assertEqual(painter.achievement_bar(text, 7.0).get_bounding_rect().width, 0)
+        self.assertEqual(painter.achievement_bar(text, self.osd.NOTICE_SECONDS + 0.4, 'notice')
+                         .get_bounding_rect().width, 0)
+        # A barra baixa (quadro pequeno) tem o triangulo de 8x8.
+        self.assertEqual(len(self.osd.MINI_WARNING), 8)
+        self.assertEqual({len(line) for line in self.osd.WARNING_ICON.strip('\n').split('\n')}, {16})
+
+    def test_notices_come_from_their_own_folder_into_the_queue(self):
+        run = Path(self.tmp.name) / 'run'
+        spool = run / '1000' / self.osd.NOTICES_DIR
+        spool.mkdir(parents=True)
+        self.osd.RUN_USER = str(run)
+        (spool / '1').write_text('Pang asks for 640x480\n')
+        frames = []
+
+        class FakePainter:
+            class theme:
+                @staticmethod
+                def set_orientation(orientation):
+                    pass
+
+            def achievement_rgba(self, title, now, mode, kind='cheevo'):
+                frames.append((title, kind))
+                return bytes(self.osd.WIDTH * self.osd.HEIGHT * 4)
+
+        painter = FakePainter()
+        painter.osd = self.osd
+        self.osd.current_mode = lambda: None
+        self.osd.SETUP_FLAG = str(Path(self.tmp.name) / 'flag')
+        self.osd.on_screen = lambda: {'pid': 1, 'uid': 1000, 'program': 'x', 'core': '', 'runtime': '/x'}
+        service = object.__new__(self.osd.Service)
+        service.painter = painter
+        service.bar_until = 0.0
+        service.cheevo, service.cheevo_polled, service.cheevo_queue = None, 0.0, []
+        service.screen_file = self.osd.Screen(str(Path(self.tmp.name) / 'screen'))
+        service.collect_achievements()
+        self.assertEqual([item[1:] for item in service.cheevo_queue], [('Pang asks for 640x480', 'notice')])
+        service.tick_achievement()
+        self.assertEqual(frames, [('Pang asks for 640x480', 'notice')])
+        service.screen_file.hide()
 
     def test_layers_and_service_agree_and_it_is_installed(self):
         for path in ('config/fliperos-deflicker.c', 'config/fliperos-vkfps.c'):

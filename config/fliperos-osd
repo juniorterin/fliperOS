@@ -115,6 +115,32 @@ CHEEVO_HOLD_START, CHEEVO_HOLD_END, CHEEVO_MIN_SPEED = 1.0, 0.7, 28.0
 CHEEVO_STALE = 60.0
 # A taca de 8x8 da barra baixa (a de 16x16 e a do menu, theme.ICONS).
 MINI_TROPHY = ("YYYYYYYY", "OYFYYYYO", ".YFYYYY.", "..YYYY..", "...YY...", "...YY...", "..OOOO..", "..MMMM..")
+# Os avisos de quem abre o jogo (config/fliperos-gpufit: a configuracao do
+# jogo nao cabe no que a placa de video faz), um por arquivo em
+# /run/user/<uid>/fliperos-osd-notices: a mesma barra, em laranja, com um
+# triangulo de alerta no circulo, por NOTICE_SECONDS (o texto e mais longo).
+NOTICES_DIR = "fliperos-osd-notices"
+NOTICE_SECONDS = 14.0
+NOTICE_HEADS = ("VIDEO CARD WARNING", "VIDEO CARD", "WARNING")
+WARNING_ICON = """
+................
+.......OO.......
+.......OO.......
+......OOOO......
+......OFFO......
+.....OOFFOO.....
+.....OOFFOO.....
+....OOOFFOOO....
+....OOOFFOOO....
+...OOOOFFOOOO...
+...OOOOOOOOOO...
+..OOOOOFFOOOOO..
+..OOOOOFFOOOOO..
+.OOOOOOOOOOOOOO.
+.OOOOOOOOOOOOOO.
+................
+"""
+MINI_WARNING = ("...OO...", "...OO...", "..OFFO..", "..OFFO..", ".OOFFOO.", ".OOOOOO.", "OOOFFOOO", "OOOOOOOO")
 # Quanto tempo o menu espera soltarem o atalho antes de tomar os controles.
 RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
@@ -307,17 +333,18 @@ def on_screen():
     return best[1] if best else None
 
 
-def take_achievements():
+def take_achievements(folder=ACHIEVEMENTS_DIR):
     """As conquistas que o fliperos-cheevos watch deixou em
     /run/user/<uid>/fliperos-osd-achievements, uma por arquivo: [(hora,
     titulo)], as mais velhas primeiro; cada arquivo lido e apagado. A pasta e
     do usuario e o servico e root: nada de link (nem a pasta, nem o arquivo) e
-    so o que e do dono de /run/user/<uid>."""
+    so o que e do dono de /run/user/<uid>. Com NOTICES_DIR, os avisos, do
+    mesmo jeito."""
     out = []
     for runtime in glob.glob(os.path.join(RUN_USER, "*")):
         try:
             owner = os.stat(runtime).st_uid
-            dfd = os.open(os.path.join(runtime, ACHIEVEMENTS_DIR), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            dfd = os.open(os.path.join(runtime, folder), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         except OSError:
             continue
         try:
@@ -1770,13 +1797,16 @@ class Painter:
     # e quadrado (256x224, por exemplo).
     _badge_cache = None
 
-    def achievement_bar(self, title, now):
-        """A barra da conquista now segundos depois de aparecer, em RGBA."""
+    def achievement_bar(self, title, now, kind="cheevo"):
+        """A barra da conquista now segundos depois de aparecer, em RGBA. Com
+        kind="notice", a de um aviso: laranja, o triangulo e NOTICE_SECONDS."""
         pg, t = self.pg, self.theme
         import tiny
+        notice = kind == "notice"
+        seconds = NOTICE_SECONDS if notice else CHEEVO_SECONDS
         W, H = self.area()
         surface = pg.Surface((W, H), pg.SRCALPHA)
-        if now >= CHEEVO_SECONDS + CHEEVO_LEAVE:
+        if now >= seconds + CHEEVO_LEAVE:
             return surface
         par = (3 / 4 if t.VERTICAL else 4 / 3) / (W / H)
         small = W < 200 or H < 200
@@ -1789,8 +1819,8 @@ class Painter:
         right_full = x0 + width
         if now < CHEEVO_ENTER:
             sweep, grow = ease_out(now / 0.2), ease_out((now - 0.15) / 0.3)
-        elif now >= CHEEVO_SECONDS:
-            back = (now - CHEEVO_SECONDS) / CHEEVO_LEAVE
+        elif now >= seconds:
+            back = (now - seconds) / CHEEVO_LEAVE
             grow, sweep = 1 - ease_out(back / 0.6), 1 - ease_out((back - 0.5) / 0.5)
         else:
             sweep = grow = 1.0
@@ -1798,14 +1828,14 @@ class Painter:
         if right - round(cx) > 2:
             bar = pg.Rect(round(cx), y0, right - round(cx), height)
             pg.draw.rect(surface, t.BG_DEEP + (232,), bar)
-            pg.draw.rect(surface, t.PURPLE + (255,), bar, 1)
+            pg.draw.rect(surface, (t.ORANGE if notice else t.PURPLE) + (255,), bar, 1)
             tx = round(cx + rx) + (4 if small else 6)
             aw = right_full - 6 - tx
             clip = pg.Rect(tx, y0 + 1, max(0, min(aw, right - 2 - tx)), height - 2)
             surface.set_clip(clip)
-            head = next((h for h in ("ACHIEVEMENT UNLOCKED", "ACHIEVEMENT", "UNLOCKED") if tiny.width(h) <= aw),
-                        tiny.fit("UNLOCKED", max(0, aw)))
-            tiny.text(surface, head, t.PINK, tx, y0 + (2 if small else 4))
+            heads = NOTICE_HEADS if notice else ("ACHIEVEMENT UNLOCKED", "ACHIEVEMENT", "UNLOCKED")
+            head = next((h for h in heads if tiny.width(h) <= aw), tiny.fit(heads[-1], max(0, aw)))
+            tiny.text(surface, head, t.ORANGE if notice else t.PINK, tx, y0 + (2 if small else 4))
             if small:
                 image = pg.Surface((tiny.width(title) + 1, 6), pg.SRCALPHA)
                 tiny.text(image, title, t.FG, 0, 0)
@@ -1816,17 +1846,17 @@ class Painter:
             travel = image.get_width() - aw
             offset = 0.0
             if travel > 0:
-                room = CHEEVO_SECONDS - CHEEVO_ENTER - CHEEVO_HOLD_START - CHEEVO_HOLD_END
+                room = seconds - CHEEVO_ENTER - CHEEVO_HOLD_START - CHEEVO_HOLD_END
                 speed = max(CHEEVO_MIN_SPEED, travel / room)
                 offset = min(travel, max(0.0, now - CHEEVO_ENTER - CHEEVO_HOLD_START) * speed)
             surface.blit(image, (tx - round(offset), ty))
             # Os 5 s: a linha que se esvazia, verde como a da barra de volume.
-            left = max(0.0, CHEEVO_SECONDS - now)
+            left = max(0.0, seconds - now)
             ly = y0 + height - 3
             surface.fill(t.LINE + (255,), (tx, ly, max(0, aw), 1))
-            surface.fill(t.GREEN + (255,), (tx, ly, max(0, round(aw * left / CHEEVO_SECONDS)), 1))
+            surface.fill((t.ORANGE if notice else t.GREEN) + (255,), (tx, ly, max(0, round(aw * left / seconds)), 1))
             surface.set_clip(None)
-        self.achievement_badge(surface, (cx, cy, rx, height / 2, par, small), now, sweep)
+        self.achievement_badge(surface, (cx, cy, rx, height / 2, par, small), now, sweep, kind)
         return surface
 
     def badge_pixels(self, cx, cy, rx, outer, par, small):
@@ -1850,10 +1880,11 @@ class Painter:
         self._badge_cache = (key, (disc, ring))
         return disc, ring
 
-    def achievement_badge(self, surface, geometry, now, sweep):
+    def achievement_badge(self, surface, geometry, now, sweep, kind="cheevo"):
         """O circulo da esquerda: o fundo, o aro (um cometa que gira; na
         entrada ele se desenha, na saida se apaga) e a taca, com um brilho
-        branco que passa por ela ao chegar."""
+        branco que passa por ela ao chegar. Num aviso, o aro laranja parado e
+        o triangulo."""
         t = self.theme
         cx, cy, rx, outer, par, small = geometry
         disc, ring = self.badge_pixels(cx, cy, rx, outer, par, small)
@@ -1865,11 +1896,17 @@ class Painter:
         for px, py, ang in ring:
             if ((ang + 90) % 360) / 360 > sweep:
                 continue
-            color = t.PINK if sweep < 1 else ring_color(t, (head - ang) % 360)
+            if kind == "notice":
+                color = t.ORANGE
+            else:
+                color = t.PINK if sweep < 1 else ring_color(t, (head - ang) % 360)
             surface.fill(color + (255,), (px, py, 1, 1))
         if sweep < 1:
             return
-        icon = MINI_TROPHY if small else t.ICONS["achievements"].strip("\n").split("\n")
+        if kind == "notice":
+            icon = MINI_WARNING if small else WARNING_ICON.strip("\n").split("\n")
+        else:
+            icon = MINI_TROPHY if small else t.ICONS["achievements"].strip("\n").split("\n")
         n = len(icon)
         glint = (now - CHEEVO_ENTER) * (20 if small else 40) - 4
         ox, oy = round(cx - n / 2), round(cy - n / 2)
@@ -1939,9 +1976,9 @@ class Painter:
         self.theme.set_orientation(read_conf().get("orientation", ""))
         return self.pg.image.tobytes(self.fit(lambda: self.volume_bar(percent, muted), mode), "RGBA")
 
-    def achievement_rgba(self, title, now, mode):
+    def achievement_rgba(self, title, now, mode, kind="cheevo"):
         """Um quadro da animacao (a orientacao e posta uma vez, ao comecar)."""
-        return self.pg.image.tobytes(self.fit(lambda: self.achievement_bar(title, now), mode), "RGBA")
+        return self.pg.image.tobytes(self.fit(lambda: self.achievement_bar(title, now, kind), mode), "RGBA")
 
 
 class Screen:
@@ -2303,6 +2340,9 @@ class Service:
             return
         self.cheevo_polled = now
         self.cheevo_queue += take_achievements()
+        # Os avisos (fliperos-gpufit) na mesma fila, com o tipo no fim.
+        self.cheevo_queue += [(when, title, "notice") for when, title in take_achievements(NOTICES_DIR)]
+        self.cheevo_queue.sort(key=lambda item: item[0])
         old = time.time() - CHEEVO_STALE
         self.cheevo_queue = [item for item in self.cheevo_queue if item[0] >= old]
 
@@ -2313,11 +2353,12 @@ class Service:
         if self.cheevo is None:
             if not self.cheevo_queue or self.bar_until or not self.bar_allowed(on_screen()):
                 return
-            born, title = self.cheevo_queue.pop(0)
+            born, title, *kind = self.cheevo_queue.pop(0)
             if self.painter is None:
                 self.painter = Painter()
             self.painter.theme.set_orientation(read_conf().get("orientation", ""))
-            self.cheevo = {"title": title, "born": born, "start": now, "last": now, "mode": current_mode()}
+            self.cheevo = {"title": title, "born": born, "start": now, "last": now, "mode": current_mode(),
+                           "kind": kind[0] if kind else "cheevo"}
         cheevo = self.cheevo
         if self.bar_until:
             cheevo["start"] += now - cheevo["last"]
@@ -2325,11 +2366,15 @@ class Service:
             return
         cheevo["last"] = now
         elapsed = now - cheevo["start"]
-        if elapsed >= CHEEVO_SECONDS + CHEEVO_LEAVE:
+        notice = cheevo.get("kind") == "notice"
+        if elapsed >= (NOTICE_SECONDS if notice else CHEEVO_SECONDS) + CHEEVO_LEAVE:
             self.cheevo = None
             self.screen_file.hide()
             return
-        self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"]))
+        if notice:
+            self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"], "notice"))
+        else:
+            self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"]))
 
     # O menu.
     def auto_keys(self, screen):
@@ -2360,7 +2405,10 @@ class Service:
         # A conquista na tela volta para a frente da fila: aparece de novo,
         # inteira, depois do menu.
         if self.cheevo is not None:
-            self.cheevo_queue.insert(0, (self.cheevo["born"], self.cheevo["title"]))
+            item = (self.cheevo["born"], self.cheevo["title"])
+            if self.cheevo.get("kind") == "notice":
+                item += ("notice",)
+            self.cheevo_queue.insert(0, item)
             self.cheevo = None
         try:
             os.unlink(os.path.join(screen["runtime"], "fliperos-osd-refused"))

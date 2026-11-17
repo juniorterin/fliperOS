@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""A configuracao do jogo cabe no que a placa de video faz? Conferido a cada
+jogo aberto pelo fliperos-x11-run.
+
+  fliperos-gpufit launch --program NOME [--app APP] --mode LxA --wide L
+                         [--screen LxA] -- COMANDO...
+
+Uma placa sem dotclock baixo (Intel, NVIDIA, a saida HDMI/DisplayPort: o Setup
+grava dotclock_min 25 no switchres.ini) so faz super resolucoes: o modo do
+jogo sai com a largura da placa (2560x240 no lugar de 320x240), as linhas e a
+frequencia ficam. --mode e o modo que o jogo pediu e --wide a largura que a
+placa vai fazer; iguais, a placa faz o modo pedido.
+
+Os emuladores que enchem o modo sozinhos (Flycast, PCSX2, Supermodel...) nem
+passam por aqui. Os outros, numa placa so de super resolucao:
+
+  - o OpenBOR (o 4 e o 3.0) liga o stretch dele em cada .cfg (Saves/ e
+    v3/Saves/): em tela cheia o jogo enche a janela da largura da placa;
+  - um jogo do MUGEN (um jogo custom com data/mugen.cfg) ganha Width e Height
+    do [Video] no tamanho do modo largo: o MUGEN pede ao Wine esse modo, que
+    existe, e abre. Estreito: o MUGEN 1.0 guarda o 4:3 (no OpenGLScreen a
+    imagem se espalhou), entao ele tambem ganha o aviso;
+  - um jogo do Ikemen GO (o KOF Final Attack, um jogo custom com
+    save/config.ini) ganha WindowWidth/WindowHeight no modo largo e
+    KeepAspect = 0;
+  - a tela do 240p hack sai (imprime "drop-screen"): o xrandr --scale que
+    amplia deixa o tubo preto (visto no gabinete com o radeon). O MUGEN e o
+    Ikemen ja pedem o modo que existe; os outros ficam com o aviso;
+  - o resto (um jogo custom que nao estica, a sala do Fightcade, um programa
+    qualquer) recebe um aviso na OSD (config/fliperos-osd, a barra laranja):
+    o jogo pode sair estreito, ou nem abrir.
+
+O que muda fica anotado em ~/.local/share/fliperos/gpufit.json (o valor de
+antes de cada chave): numa placa que faz o modo pedido (a mesma maquina com
+outra placa, outro monitor), a abertura seguinte devolve os valores de antes.
+"""
+import argparse
+import json
+import os
+import re
+import struct
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+ENV = os.environ.get
+STATE = ENV("FLIPEROS_GPUFIT_STATE") or os.path.join(HOME, ".local/share/fliperos/gpufit.json")
+OPENBOR_DIR = ENV("FLIPEROS_OPENBOR_DIR", "/opt/fliperos/roms/openbor")
+KOF_DIR = ENV("FLIPEROS_KOF_DIR") or os.path.join(HOME, "roms/ikemen/kof-final-attack")
+NOTICES_DIR = "fliperos-osd-notices"
+# O s_savedata do OpenBOR (config/fliperos-buttons): (tamanho, versao, onde
+# fica o int do stretch). 4: 10 ints, keys[52], joyrumble[4], e o stretch e o
+# oitavo dos 12 ints seguintes. 3.0: 13 ints no comeco e o stretch e o 14o dos
+# 17 seguintes.
+OPENBOR_LAYOUTS = ((320, 0x00033749, 40 + 52 * 4 + 16 + 7 * 4),
+                   (352, 0x00033748, 52 + 52 * 4 + 16 + 13 * 4))
+# Quem nao e jogo (o navegador do Downloader) nao ganha aviso.
+NO_NOTICE = {"fliperos-browser"}
+
+
+# ── O estado: o valor de antes de cada coisa mudada ─────────────────
+
+def load_state():
+    try:
+        with open(STATE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    try:
+        os.makedirs(os.path.dirname(STATE), exist_ok=True)
+        tmp = STATE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=1, sort_keys=True)
+        os.replace(tmp, STATE)
+    except OSError:
+        pass
+
+
+def write_atomic(path, data):
+    tmp = path + ".fliperos-tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    try:
+        os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+    except OSError:
+        pass
+    os.replace(tmp, path)
+
+
+# ── OpenBOR: o int do stretch no .cfg ───────────────────────────────
+
+def openbor_cfgs():
+    out = []
+    for saves in (os.path.join(OPENBOR_DIR, "Saves"), os.path.join(OPENBOR_DIR, "v3", "Saves")):
+        try:
+            names = sorted(os.listdir(saves))
+        except OSError:
+            continue
+        out += [os.path.join(saves, n) for n in names if n.lower().endswith(".cfg")]
+    return out
+
+
+def openbor_stretch(path, value, state, restore):
+    """Liga (value 1) ou devolve o stretch de um .cfg do OpenBOR."""
+    try:
+        with open(path, "rb") as f:
+            data = bytearray(f.read())
+    except OSError:
+        return
+    layout = next((at for size, version, at in OPENBOR_LAYOUTS
+                   if len(data) == size and struct.unpack_from("<I", data)[0] == version), None)
+    if layout is None:
+        return
+    key = "openbor:" + path
+    current = struct.unpack_from("<i", data, layout)[0]
+    if restore:
+        if key not in state:
+            return
+        target = state.pop(key)["stretch"]
+    else:
+        if key not in state:
+            state[key] = {"stretch": current}
+        target = value
+    if current != target:
+        struct.pack_into("<i", data, layout, target)
+        try:
+            write_atomic(path, bytes(data))
+        except OSError:
+            pass
+
+
+# ── Os .ini/.cfg de texto (MUGEN, Ikemen GO): chaves de uma secao ──
+
+def ini_edit(path, section, values, state, restore, kind):
+    """values {chave: valor}; None apaga a linha. Guarda o de antes (None: a
+    chave nao existia, ou estava comentada) e devolve no restore."""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        return False
+    text = raw.decode("latin-1")
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.split(newline)
+    key = "%s:%s" % (kind, path)
+    if restore:
+        if key not in state:
+            return True
+        values = state.pop(key)
+    start = next((i for i, line in enumerate(lines) if line.strip().lower() == "[%s]" % section.lower()), None)
+    if start is None:
+        return False
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].strip().startswith("[")), len(lines))
+    before = {}
+    for name, value in values.items():
+        # A linha da chave, sem comentario na frente: "Width = 320 ; nota".
+        pattern = re.compile(r"^(\s*%s\s*=\s*)([^;]*?)(\s*(;.*)?)$" % re.escape(name), re.I)
+        hit = next((i for i in range(start + 1, end) if pattern.match(lines[i])), None)
+        if hit is None:
+            before[name] = None
+            if value is not None:
+                lines.insert(start + 1, "%s = %s" % (name, value))
+                end += 1
+            continue
+        m = pattern.match(lines[hit])
+        before[name] = m.group(2)
+        if value is None:
+            del lines[hit]
+            end -= 1
+        else:
+            lines[hit] = "%s%s%s" % (m.group(1), value, m.group(3) or "")
+    if not restore and key not in state:
+        state[key] = before
+    data = newline.join(lines).encode("latin-1")
+    if data != raw:
+        try:
+            write_atomic(path, data)
+        except OSError:
+            return False
+    return True
+
+
+def find_ci(folder, *parts):
+    """O caminho de folder/parts sem diferenca de maiusculas (o jogo do
+    Windows: Data/Mugen.cfg)."""
+    path = folder
+    for part in parts:
+        try:
+            names = os.listdir(path)
+        except OSError:
+            return None
+        hit = next((n for n in names if n.lower() == part.lower()), None)
+        if hit is None:
+            return None
+        path = os.path.join(path, hit)
+    return path
+
+
+# ── O jogo da linha de comando ──────────────────────────────────────
+
+def custom_cfg(command):
+    """O cfg de um jogo custom (fliperos-customgame run CFG): {chave: valor}."""
+    for i, arg in enumerate(command[:-1]):
+        if os.path.basename(arg) == "fliperos-customgame" and command[i + 1] == "run" and i + 2 < len(command):
+            out = {}
+            try:
+                with open(command[i + 2], encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if "=" in line and not line.lstrip().startswith("#"):
+                            k, v = line.rstrip("\n").split("=", 1)
+                            out[k.strip()] = v.strip()
+            except OSError:
+                return None
+            return out
+    return None
+
+
+def engine_files(program, command):
+    """(motor, arquivo, nome do jogo): "mugen", "ikemen" ou "" (nenhum que
+    se estique sozinho)."""
+    if program == "fliperos-kof":
+        return "ikemen", find_ci(KOF_DIR, "save", "config.ini"), "KOF Final Attack"
+    cfg = custom_cfg(command)
+    if cfg is not None:
+        name = cfg.get("name") or "This game"
+        folder = cfg.get("folder", "")
+        if folder:
+            exe = cfg.get("exe", "")
+            # O exe pode estar numa subpasta: o MUGEN le o data/ ao lado dele.
+            base = os.path.join(folder, os.path.dirname(exe)) if exe else folder
+            for root in (base, folder):
+                mugen = find_ci(root, "data", "mugen.cfg")
+                if mugen:
+                    return "mugen", mugen, name
+                ikemen = find_ci(root, "save", "config.ini")
+                if ikemen:
+                    return "ikemen", ikemen, name
+        return "", None, name
+    return "", None, program
+
+
+def notify(text):
+    runtime = ENV("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid()
+    folder = os.path.join(runtime, NOTICES_DIR)
+    try:
+        os.makedirs(folder, mode=0o700, exist_ok=True)
+        path = os.path.join(folder, "%d" % time.time_ns())
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            f.write(text[:200] + "\n")
+        os.replace(path + ".tmp", path)
+    except OSError:
+        pass
+
+
+def size(value):
+    m = re.fullmatch(r"(\d+)x(\d+)", value or "")
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def launch(args):
+    mode = size(args.mode)
+    if not mode:
+        return 0
+    width, height = mode
+    wide = args.wide
+    restore = wide <= width
+    program = args.program
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    state = load_state()
+    out = []
+    if program == "openbor":
+        for path in openbor_cfgs():
+            openbor_stretch(path, 1, state, restore)
+    else:
+        engine, path, name = engine_files(program, command)
+        done = False
+        if engine == "mugen" and path:
+            # Abre (o modo largo existe; com a tela do 240p hack o tubo ficava
+            # preto), mas estreito: no RenderMode System o MUGEN 1.0 guarda o
+            # 4:3 dentro da janela, e o OpenGLScreen espalhou pedacos pela tela
+            # (os dois vistos no gabinete com o KOF Zillion). Fica o aviso.
+            ini_edit(path, "Video", {"Width": wide, "Height": height}, state, restore, "mugen")
+        elif engine == "ikemen" and path:
+            done = ini_edit(path, "Video", {"WindowWidth": wide, "WindowHeight": height, "KeepAspect": 0},
+                            state, restore, "ikemen")
+        if not restore:
+            # A tela do 240p hack sai sempre: ampliada pelo xrandr o tubo fica
+            # preto, e nem o aviso apareceria.
+            if args.screen:
+                out.append("drop-screen")
+            if not done and program not in NO_NOTICE:
+                # Curto: a barra corre o texto que nao cabe, e no tubo ele
+                # tem de dar para ler (uns 60 px/s em NOTICE_SECONDS).
+                if engine == "mugen" and path:
+                    text = "%s: MUGEN keeps 4:3 inside this card's super resolution (%dx%d). It will look narrow."
+                elif args.screen:
+                    text = "%s: the 240p hack doesn't work on this card's super resolution (%dx%d). It may not open."
+                else:
+                    text = "%s won't stretch to this card's super resolution (%dx%d). It may look narrow or not open."
+                notify(text % (name, wide, height))
+    save_state(state)
+    if out:
+        print("\n".join(out))
+    return 0
+
+
+def main():
+    p = argparse.ArgumentParser(prog="fliperos-gpufit")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("launch")
+    s.add_argument("--program", required=True)
+    s.add_argument("--app", default="")
+    s.add_argument("--mode", required=True)
+    s.add_argument("--wide", type=int, required=True)
+    s.add_argument("--screen", default="")
+    s.add_argument("command", nargs=argparse.REMAINDER)
+    args = p.parse_args()
+    return launch(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
