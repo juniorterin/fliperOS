@@ -284,35 +284,12 @@ mode_add() {
 
 # mode_game MODO troca a tela para o modo do emulador; mode_lobby volta ao
 # da sala.
-#
-# O metodo stretch da super resolucao (fliperos-x11-run poe FLIPEROS_X11_SCREEN
-# quando a placa so faz modos largos): o modo criado pelo Switchres tem a
-# largura da placa (2560x240 para um 320x240), e a tela do X continua do
-# tamanho pedido, esticada nele. Cada troca leva o --scale dela; sem ele a
-# partida ficava numa tela de 2560 de largura, sem o modo que o emulador pede.
-stretch_of() { # NOME_DO_MODO LARGURA ALTURA: o --scale que estica LxA no modo
-  [[ -n ${FLIPEROS_X11_SCREEN:-} ]] || return 0
-  xrandr --verbose 2> /dev/null | awk -v n="$1" -v w="$2" -v h="$3" '
-    $1 == n && $2 ~ /^\(0x/ { found = 1; next }
-    found && $1 == "h:" { for (i = 2; i < NF; i++) if ($i == "width") mw = $(i + 1) }
-    found && $1 == "v:" { for (i = 2; i < NF; i++) if ($i == "height") mh = $(i + 1)
-      if (mw > 0 && mh > 0) printf "--scale %gx%g\n", w / mw, h / mh; exit }'
-}
-lobby_scale=""
-if [[ ${FLIPEROS_X11_SCREEN:-} =~ ^([0-9]+)x([0-9]+)$ && ${FLIPEROS_RES_W:-0} -gt 0 && ${FLIPEROS_RES_H:-0} -gt 0 ]]; then
-  lobby_scale=$(awk -v sw="${BASH_REMATCH[1]}" -v sh="${BASH_REMATCH[2]}" -v w="$FLIPEROS_RES_W" -v h="$FLIPEROS_RES_H" \
-    'BEGIN { printf "--scale %gx%g", sw / w, sh / h }')
-fi
 mode_game() {
-  local name scale=""
-  name=$(mode_add "$1") || return 1
-  [[ $1 =~ ^([0-9]+)x([0-9]+)@ ]] && scale=$(stretch_of "$name" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
-  # shellcheck disable=SC2086 # "--scale LxA" sao duas palavras
-  xrandr --output "$output" --mode "$name" $scale
+  local name
+  name=$(mode_add "$1") && xrandr --output "$output" --mode "$name"
 }
 mode_lobby() {
-  # shellcheck disable=SC2086 # "--scale LxA" sao duas palavras
-  [[ -n $output && -n $lobby_id ]] && xrandr --output "$output" --mode "$lobby_id" $lobby_scale
+  [[ -n $output && -n $lobby_id ]] && xrandr --output "$output" --mode "$lobby_id"
 }
 
 # idle_close: o FBNeo (e o FBA, do mesmo codigo) que nao acha a ROM mostra o
