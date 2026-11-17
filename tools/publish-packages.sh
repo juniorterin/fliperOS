@@ -99,6 +99,9 @@ done
 # (linux-image-6.18.54-15khz.N), instalado ao lado do anterior.
 kernel_dir=${FLIPEROS_KERNEL_DIR:-output/kernel}
 kernel_build=$(sed -n 's/^KERNEL_BUILD="\(.*\)"/\1/p' fliperos-kernel.sh)
+# Sobe como copia, sem linha na lista: a lista so tem os pacotes das receitas
+# da ISO (o teste confere) e o kernel chega por outro caminho.
+recipe_rows=${#rows[@]}
 for deb in "$kernel_dir"/linux-image-*.deb "$kernel_dir"/linux-headers-*.deb; do
   [[ -f $deb ]] || continue
   file=${deb##*/}
@@ -109,6 +112,7 @@ for deb in "$kernel_dir"/linux-image-*.deb "$kernel_dir"/linux-headers-*.deb; do
   [[ $version == *-"${kernel_build}"fliperos ]] || continue
   publish "$name" "$version" "$deb"
 done
+rows=("${rows[@]:0:recipe_rows}")
 
 {
   echo "# Os .deb do repositorio da ISO, no release \"packages\" do GitHub, para os"

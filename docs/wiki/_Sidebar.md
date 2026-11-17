@@ -93,11 +93,17 @@
 - [Linked cabinets](Linked-cabinets.md)
   - [Party and net play](Net-play.md)
 
-**Hacking on it**
+**For developers**
 
-- [15 kHz kernel](Kernel-15-kHz.md)
-- [Build and tests](Build-and-tests.md)
+- [Development](Development.md)
+  - [Development environment](Development-environment.md)
+  - [Making a change](Making-a-change.md)
+  - [Packages](Packages.md)
+  - [Making a release](Making-a-release.md)
+  - [Build and tests](Build-and-tests.md)
   - [Publishing updates](Publishing-updates.md)
+  - [Variables](Variables.md)
+- [15 kHz kernel](Kernel-15-kHz.md)
 - [Architecture](Architecture.md)
   - [Commands](Commands.md)
 - [Sources](Sources.md)

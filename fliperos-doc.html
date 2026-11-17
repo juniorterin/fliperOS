@@ -70,7 +70,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li>📺 <strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
-<li>🕹️ <strong>Emulators</strong>: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, SM2-Emu (Model 2), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup &gt; Games &gt; Extras.</li>
+<li>🕹️ <strong>Emulators</strong>: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Supermodel, Keisho (Model 2), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup &gt; Games &gt; Extras.</li>
 <li>🎮 <strong>Frontends</strong>: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen and grid; clones folded under each game; letter-by-letter scrolling), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.</li>
 <li>🔫 <strong>Light gun</strong>: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup &gt; Joysticks. Wheels too.</li>
 <li>⚙️ <strong>Setup</strong>: video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency.</li>
@@ -253,7 +253,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <tr>
 <td><code>model2</code></td>
 <td>Sega Model 2 sets</td>
-<td>Model 2 (SM2-Emu, Games menu; built on first launch)</td>
+<td>Model 2 (Keisho, Games menu; built on first launch)</td>
 </tr>
 <tr>
 <td><code>dreamcast</code></td>
@@ -390,7 +390,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><em>Custom games</em>: PC games, scripts and your own emulators, which the frontends show as systems, installed from packages or made on the cabinet. See <a href="#Custom-games">Custom games</a>.</li>
 <li>
 <p><em>Emulators &amp; Games</em>: the emulators of the desktop menu, each marked <em>installed</em> or <em>not installed</em>.</p>
-<p>Choose one that is not installed to install it: <strong>Model 2</strong> (SM2-Emu, downloaded and built on the machine, several minutes), <strong>Fightcade 2</strong> (downloaded from its site) and <strong>KOF Final Attack</strong> on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with <code>Final Attack.exe</code>, on a USB disk or the network) and it downloads the <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> and Ikemen GO and makes a converted copy. The others come in the image.
+<p>Choose one that is not installed to install it: <strong>Model 2</strong> (Keisho, downloaded and built on the machine, several minutes), <strong>Fightcade 2</strong> (downloaded from its site) and <strong>KOF Final Attack</strong> on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with <code>Final Attack.exe</code>, on a USB disk or the network) and it downloads the <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> and Ikemen GO and makes a converted copy. The others come in the image.
   - <em>Folders</em>: the folders FliperOS uses (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>splashscreen</code>) and the ones inside them: each emulator, each RetroArch core, each type of art.</p>
 <p>Choose one and <em>Link this to another folder</em> to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): <code>~/roms/mame</code> becomes a link to it and the folder used until then is kept as <code>~/roms/old-mame</code>. Each folder can point to a different place. <em>Unlink the custom folder</em> brings the previous one back.
   - <em>Downloader</em>:
@@ -431,7 +431,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </code></pre>
 <h2 id="documentation">Documentation</h2>
 <p><strong>Using it:</strong> <a href="#Video-cards">Video cards</a> · <a href="#Monitors">Monitors</a> · <a href="#Install">Install</a> · <a href="#Black-screen">Black screen</a> · <a href="#Installed-system">Installed system</a> · <a href="#Frontends">Frontends</a> · <a href="#ROMs">ROMs, BIOS and artwork</a> · <a href="#Emulators">Emulators</a> · <a href="#Controls">Controls</a> · <a href="#LED-displays">LED displays</a> · <a href="#Multiple-Monitors">Multiple monitors</a> · <a href="#DIY-hardware">DIY hardware</a> · <a href="#Latency">Latency</a> · <a href="#Web-panel">Web panel</a> · <a href="#Linked-cabinets">Linked cabinets</a></p>
-<p><strong>Hacking on it:</strong> <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
+<p><strong>Hacking on it:</strong> <a href="#Development">Development</a> · <a href="#Kernel-15-kHz">15 kHz kernel</a> · <a href="#Build-and-tests">Build and tests</a> · <a href="#Architecture">Architecture</a> · <a href="#Sources">Sources</a></p>
 <p>Each of these pages opens with a table of its subpages (the Setup screen by screen, the web panel by area, each frontend, the Pixelcade and the ZeDMD…), and the wiki's sidebar lists them all. The pages live in <a href="docs/wiki"><code>docs/wiki</code></a> and go to the wiki with <code>bash tools/wiki-publish.sh</code>. <a href="fliperos-doc.html"><code>fliperos-doc.html</code></a> is all of it in one file (<code>tools/render-docs.py</code>).</p>
 <h2 id="contributors">Contributors</h2>
 <p>People who helped FliperOS with code, tests on their own hardware or ideas:</p>
@@ -1861,7 +1861,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </thead>
 <tbody>
 <tr>
-<td><strong>Model 2</strong> (SM2-Emu)</td>
+<td><strong>Model 2</strong> (Keisho)</td>
 <td>Downloaded and built on the cabinet: several minutes</td>
 </tr>
 <tr>
@@ -2256,7 +2256,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>Emulator menu</strong></td>
-<td>Closes this menu and opens the emulator's own: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay. Only in an emulator that has one</td>
+<td>Closes this menu and opens the emulator's own: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the Keisho overlay. Only in an emulator that has one</td>
 </tr>
 <tr>
 <td><strong>Controller configuration</strong></td>
@@ -2467,7 +2467,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <td>640x240</td>
 </tr>
 <tr>
-<td>Supermodel, SM2-Emu (384 lines)</td>
+<td>Supermodel, Keisho (384 lines)</td>
 <td>640x240</td>
 </tr>
 <tr>
@@ -2647,7 +2647,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <td>its 640x480 line, which Switchres makes interlaced</td>
 </tr>
 <tr>
-<td>Supermodel, SM2-Emu</td>
+<td>Supermodel, Keisho</td>
 <td>640x240 at 57.524 Hz</td>
 <td>496x384 at 57.524 Hz, interlaced</td>
 </tr>
@@ -3740,7 +3740,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <tr>
 <td><strong>EMULATOR MENU</strong></td>
 <td>Coin + button 1</td>
-<td>Opens the emulator's own menu: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay</td>
+<td>Opens the emulator's own menu: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the Keisho overlay</td>
 </tr>
 <tr>
 <td><strong>OSD MENU</strong></td>
@@ -3779,7 +3779,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <ul>
 <li>The buttons come from <strong>Setup &gt; Joysticks &gt; Button mapping</strong> (<code>/etc/fliperos/buttons.map</code>, <a href="#Controls">Controls</a>). The frontend's choices are saved in <code>~/.config/fliperos/frontend.json</code> (<code>controls</code>).</li>
 <li>The shortcuts are read alongside the game by <code>fliperos-buttons hotkey</code>, without taking anything from it. <strong>EXIT GAME</strong> closes the game and what runs under it (the X server, the emulator) with SIGTERM, and SIGKILL after 4 seconds.</li>
-<li>For <strong>EMULATOR MENU</strong>, <code>fliperos-buttons hotkey</code> creates a virtual keyboard (uinput, <code>FliperOS emulator keys</code>) before the game opens and presses the emulator's menu key on it: F1 in RetroArch, Tab in GroovyMAME and Flycast, Esc in PCSX2, PCSX2x6 and DuckStation, SM2-Emu's <code>key_overlay</code> (F10), or the on-screen menu's media key for the others (<code>fliperos-buttons menu-key PROGRAM</code> prints it). RetroArch opened this way loses its own Start + Select menu combo, which would open its menu a second before the shortcut closed it.</li>
+<li>For <strong>EMULATOR MENU</strong>, <code>fliperos-buttons hotkey</code> creates a virtual keyboard (uinput, <code>FliperOS emulator keys</code>) before the game opens and presses the emulator's menu key on it: F1 in RetroArch, Tab in GroovyMAME and Flycast, Esc in PCSX2, PCSX2x6 and DuckStation, Keisho's <code>key_overlay</code> (F10), or the on-screen menu's media key for the others (<code>fliperos-buttons menu-key PROGRAM</code> prints it). RetroArch opened this way loses its own Start + Select menu combo, which would open its menu a second before the shortcut closed it.</li>
 <li><strong>OSD MENU</strong> is <code>osd_combo</code> and <code>osd_key</code> in <code>fliperos.conf</code>, written through <code>fliperos-setup --setting</code>.</li>
 <li>A game opened from the frontend gets the screen, the sound and the controls, and counts in the play statistics.</li>
 </ul>
@@ -4223,7 +4223,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <tr>
 <td><code>model2</code></td>
 <td>MAME sets of Model 2</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 </tr>
 <tr>
 <td><code>model3</code></td>
@@ -4237,7 +4237,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><code>ps1</code></td>
-<td><code>.cue</code>, <code>.chd</code>, <code>.pbp</code>, <code>.m3u</code> (once DuckStation is installed)</td>
+<td><code>.cue</code>, <code>.chd</code>, <code>.pbp</code>, <code>.m3u</code> (they open once DuckStation is installed)</td>
 <td>DuckStation</td>
 </tr>
 <tr>
@@ -4267,8 +4267,13 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><code>custom</code></td>
-<td>Custom game packages to install (<a href="#Custom-games">Custom games</a>)</td>
-<td>—</td>
+<td>The groups of <a href="#Custom-games">Custom games</a>, one folder each (made by the Setup)</td>
+<td>Its own program</td>
+</tr>
+<tr>
+<td><code>custom-packages</code></td>
+<td>Custom game packages to install (<code>.fliperos-customgame.zip</code>, <a href="#Custom-games">Custom games</a>)</td>
+<td>Install games</td>
 </tr>
 <tr>
 <td><code>retroarch/&lt;core&gt;</code></td>
@@ -4372,7 +4377,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><code>model2</code></td>
-<td>SM2-Emu, with its save states in <code>states</code></td>
+<td>Keisho, with its save states in <code>states</code></td>
 </tr>
 <tr>
 <td><code>model3</code></td>
@@ -4434,7 +4439,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h3 id="Downloader-setting-it-up">Setting it up</h3>
 <p>The screen, in order:</p>
 <ol>
-<li><strong>Filter:</strong> which games you want, for <strong>GroovyMAME</strong>, <strong>Flycast</strong>, <strong>SM2-Emu</strong>, <strong>Supermodel</strong> or <strong>MAME 2010</strong> (the PlayStation-based arcade games). It is the same parameters screen as the <a href="#ROM-Cleaner">ROM Cleaner</a>, saved apart, only for the torrent. Until you save one, it is the <em>Joystick cabinet</em> preset.</li>
+<li><strong>Filter:</strong> which games you want, for <strong>GroovyMAME</strong>, <strong>Flycast</strong>, <strong>Keisho</strong>, <strong>Supermodel</strong> or <strong>MAME 2010</strong> (the PlayStation-based arcade games). It is the same parameters screen as the <a href="#ROM-Cleaner">ROM Cleaner</a>, saved apart, only for the torrent. Until you save one, it is the <em>Joystick cabinet</em> preset.</li>
 <li><strong>ROM set magnet link</strong> (required) and <strong>CHD set magnet link</strong> (optional). Both come filled in with the links shipped in the image (MAME 0.289 ROMs and MAME 0.288 CHDs, both merged): Enter uses them, or paste another. Under the field, <strong>Web browser</strong> opens a browser to find a magnet link, and <strong>.torrent file</strong> picks a <code>.torrent</code> on a USB disk, the network share or the home folder.</li>
 <li><strong>Download folder:</strong> by default the emulator's own: <code>~/roms/mame</code> with the BIOS in <code>~/bios/mame</code>; for Flycast, the folders of <code>naomi</code>, <code>naomi2</code> and <code>atomiswave</code>. Elsewhere, the BIOS go with the games.</li>
 <li><strong>Start the download.</strong> It first checks that the whole download fits on the disk; if not, it says how much is needed and how much is free.</li>
@@ -4574,7 +4579,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td><code>~/roms/naomi</code>, <code>naomi2</code>, <code>atomiswave</code>; BIOS to <code>~/bios/dc</code></td>
 </tr>
 <tr>
-<td><strong>SM2-Emu</strong></td>
+<td><strong>Keisho</strong></td>
 <td>Only Sega Model 2 (Model 2/2A/2B/2C)</td>
 <td><code>~/roms/model2</code>, with the I/O boards Daytona USA, Desert Tank and Virtua Cop need</td>
 </tr>
@@ -4719,7 +4724,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li>It joins the XML of the romset's MAME version with <code>catver.ini</code> (categories and adult games), <code>nplayers.ini</code> (how two people play) and Controls.dat's <code>controls.xml</code> (the buttons and controls the game really uses). For Naomi, Naomi 2 and Atomiswave the controls and buttons come from Flycast's own game table: MAME's XML gives nearly all of them a generic 8-way joystick and 6 buttons, wheel and gun games included.</li>
 <li><strong>The data files ship in the image</strong>, in <code>/usr/local/share/fliperos/romclean</code> (<code>config/romclean</code>): <code>catver.ini</code> 0.289 from <a href="https://www.progettosnaps.net/catver/">progetto-SNAPS</a>, <code>nplayers.ini</code> 0.278 from <a href="http://nplayers.arcadebelgium.be">NPlayers</a> (CC BY-SA 3.0) and <code>controls.xml</code> 0.141.1 from Controls.dat. To use newer ones, put them <strong>with the romset</strong>: the Setup looks first in its folder, the one above and the <code>folders</code> subfolder, and only then in the system folder. The screen says which ones it found (<em>Data files</em>); without one, its parameters don't show.</li>
 <li>The XML: GroovyMAME's is <code>groovymame -listxml</code>; MAME 2010's ships at <code>/usr/local/share/fliperos/mame2010.xml.xz</code>, pinned by commit and checksum. What was read stays in <code>/var/cache/fliperos</code> (a minute with GroovyMAME's, a second after).</li>
-<li>A set's system (Flycast) is that of the first BIOS in its <code>romof</code> chain. MAME's emulation status doesn't filter Flycast, SM2-Emu and Supermodel. Resolution comes from the XML's <code>pixclock</code>/<code>htotal</code>, or from the lines. Controls cover both the 0.139 types (<code>joy8way</code>, <code>vjoy2way</code>, <code>doublejoy8way</code>) and the current ones (<code>joy</code>, <code>doublejoy</code> with <code>ways</code>).</li>
+<li>A set's system (Flycast) is that of the first BIOS in its <code>romof</code> chain. MAME's emulation status doesn't filter Flycast, Keisho and Supermodel. Resolution comes from the XML's <code>pixclock</code>/<code>htotal</code>, or from the lines. Controls cover both the 0.139 types (<code>joy8way</code>, <code>vjoy2way</code>, <code>doublejoy8way</code>) and the current ones (<code>joy</code>, <code>doublejoy</code> with <code>ways</code>).</li>
 <li>Copying: each file arrives as <code>.part</code> and only then gets its name, and what arrives belongs to the owner of the emulator's folder. Moving: Flycast's sets never enter the delete list, so the same romset can be cleaned for Flycast afterwards, except in a MAME 2010 romset, which Flycast can't read.</li>
 <li>The network folder is mounted read-only at <code>/mnt/network</code> with <code>cifs-utils</code>; the password goes in a file only root can read, never on the command line, and is kept in <code>/etc/fliperos/netshare.cred</code> only if you ask (<code>lib/netshare.sh</code>).</li>
 <li>CHD Cleaner: a clone's disk that is the same as the parent's comes from the parent's folder; a disk without a dump doesn't count.</li>
@@ -5578,7 +5583,7 @@ exec /opt/myemu/myemu --fullscreen --no-gui &quot;$1&quot;
 <pre><code class="language-bash">sudo chmod +x /usr/local/bin/myemu-run
 /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;/home/fliperos/roms/myemu/game.bin&quot;
 </code></pre>
-<p>The <code>exec</code> keeps the emulator as the program the wrapper waits for. This is how FliperOS opens SM2-Emu for a frontend (<code>fliperos-model2</code>).</p>
+<p>The <code>exec</code> keeps the emulator as the program the wrapper waits for. This is how FliperOS opens Keisho for a frontend (<code>fliperos-model2</code>).</p>
 <p>The cabinet has no terminal text editor: write the script over SFTP, from the desktop's text editor, or with <code>cat &gt; file</code> in the terminal.</p>
 <h2 id="Adding-an-emulator-step-3-the-video-mode-x11-only">Step 3: the video mode (X11 only)</h2>
 <p><code>fliperos-x11-run</code> takes the mode from <code>/etc/fliperos/emulator-modes.conf</code> by the <strong>program's name</strong> (the first word after the wrapper, without its path). Add a line:</p>
@@ -5683,7 +5688,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><a href="#Sega-Model-2-and-3">Sega Model 2 and 3</a></td>
-<td>SM2-Emu, built on the cabinet, and Supermodel</td>
+<td>Keisho, built on the cabinet, and Supermodel</td>
 </tr>
 <tr>
 <td><a href="#Namco-246-256">PlayStation 2 and Namco 246/256</a></td>
@@ -5773,7 +5778,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td>640x240</td>
 </tr>
 <tr>
-<td><a href="#Sega-Model-2-and-3-model-2-sm2-emu">SM2-Emu</a></td>
+<td><a href="#Sega-Model-2-and-3-model-2-keisho">Keisho</a></td>
 <td>Sega Model 2</td>
 <td>Built on the cabinet</td>
 <td>640x240 at 57.524 Hz</td>
@@ -5851,7 +5856,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <tr>
 <td><strong>X11</strong></td>
 <td>Xorg, the classic window system, for programs that only know how to open a window</td>
-<td>Flycast, PCSX2, PCSX2x6, DuckStation, Dolphin, Supermodel, SM2-Emu, Hypseus, OpenBOR, Wine games</td>
+<td>Flycast, PCSX2, PCSX2x6, DuckStation, Dolphin, Supermodel, Keisho, Hypseus, OpenBOR, Wine games</td>
 <td><code>fliperos-x11-run</code></td>
 </tr>
 </tbody>
@@ -5900,7 +5905,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <td>640x480</td>
 </tr>
 <tr>
-<td>Supermodel, SM2-Emu</td>
+<td>Supermodel, Keisho</td>
 <td>X11</td>
 <td>640x240 at 57.524 Hz</td>
 <td>496x384</td>
@@ -5985,7 +5990,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <td><code>-x 640 -y 240 -ignore_aspect_ratio</code></td>
 </tr>
 <tr>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td><code>aspect_mode = stretch</code></td>
 </tr>
 </tbody>
@@ -6185,8 +6190,8 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 </ul>
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#Linked-cabinets">Linked cabinets</a>.</p>
 <h1 id="Sega-Model-2-and-3">Sega Model 2 and 3</h1>
-<p>Sega's 3D arcade boards of the 1990s: <strong>Model 2</strong> (Daytona USA, Virtua Fighter 2, The House of the Dead, Sega Rally) in <a href="https://github.com/dmanlfc/sm2-emu">SM2-Emu</a>, and <strong>Model 3</strong> (Scud Race, Virtua Fighter 3, Daytona USA 2) in <a href="https://github.com/trzy/Supermodel">Supermodel</a>.</p>
-<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-model2.webp" width="480" alt="Fighting Vipers in SM2-Emu"></p>
+<p>Sega's 3D arcade boards of the 1990s: <strong>Model 2</strong> (Daytona USA, Virtua Fighter 2, The House of the Dead, Sega Rally) in <a href="https://github.com/Keisho-Emu/Keisho">Keisho</a> (called SM2-Emu until November 2026), and <strong>Model 3</strong> (Scud Race, Virtua Fighter 3, Daytona USA 2) in <a href="https://github.com/trzy/Supermodel">Supermodel</a>.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-model2.webp" width="480" alt="Fighting Vipers in Keisho"></p>
 <table>
 <thead>
 <tr>
@@ -6199,7 +6204,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <tbody>
 <tr>
 <td>Model 2 (2, 2A, 2B, 2C)</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td><code>~/roms/model2</code></td>
 <td>MAME sets</td>
 </tr>
@@ -6212,8 +6217,8 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 </tbody>
 </table>
 <p>Both open in their own Xorg at <strong>640x240 at 57.524 Hz</strong> on a 15 kHz tube (the boards' refresh), stretched to fill it, or 496x384 interlaced with <strong>Interlaced hacks</strong> (<a href="#Picture-filters">Interlaced, colour and scanlines</a>). Both have link play between cabinets: Daytona USA, Scud Race and more (<a href="#Linked-cabinets">Linked cabinets</a>).</p>
-<h2 id="Sega-Model-2-and-3-model-2-sm2-emu">Model 2 (SM2-Emu)</h2>
-<p>SM2-Emu is <strong>not compiled into the image</strong>. The first time, it is downloaded and built on the cabinet, a few minutes with the network:</p>
+<h2 id="Sega-Model-2-and-3-model-2-keisho">Model 2 (Keisho)</h2>
+<p>Keisho is <strong>not compiled into the image</strong>. The first time, it is downloaded and built on the cabinet, a few minutes with the network:</p>
 <ul>
 <li>from <strong>Setup &gt; Games &gt; Emulators &amp; Games &gt; Model 2</strong>;</li>
 <li>from the desktop's <strong>Games &gt; Model 2</strong>, which opens a terminal and asks;</li>
@@ -6222,8 +6227,8 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <p>From the desktop menu, the same screen then lists the <code>.zip</code> files in <code>~/roms/model2</code> by their names, with <strong>Update Model 2</strong> at the bottom (it pulls the newest source and rebuilds). A set that can't be loaded stays on that screen, with the missing chip named.</p>
 <p><strong>Sets:</strong> chips are matched by CRC32, so a zip has to be a MAME Model 2 set; one made only for the old Model 2 Emulator can miss a chip. Daytona USA, Desert Tank and Virtua Cop also need MAME's I/O boards (<code>model1io.zip</code>, <code>model1io2.zip</code>) next to them, which the <a href="#ROM-Cleaner">ROM Cleaner</a> brings.</p>
 <p><strong>Controls:</strong> a gamepad is read by button position, with the keyboard live beside it (5 and 6 insert coins, 1 and 2 start, the arrows and Z X C V are player 1). <strong>F9</strong> quits; <strong>F10</strong> is the emulator's own settings menu, readable at 640x240. <strong>coin + button 1</strong> opens it too.</p>
-<p><strong>Game outputs:</strong> with FliperOS's patch it publishes the recoil, ammunition and life of the gun games, the round wins of the fighting games (for the <a href="#Versus-score">versus score</a>) and the credits, on TCP port 8000 (<a href="#DIY-hardware-model-2-game-outputs">DIY hardware</a>).</p>
-<p><strong>Speed:</strong> it uses one CPU core. FliperOS's speed work on the geometry coprocessors is part of SM2-Emu itself since 0.9.41: on the cabinet's i3-540 the speed went from 0.93× to 2.34× on The House of the Dead, 0.71× to 1.65× on Last Bronx, 0.85× to 2.84× on Fighting Vipers. OpenGL 4.3 is needed.</p>
+<p><strong>Game outputs:</strong> it publishes the recoil, ammunition and life of the gun games, the round wins of the fighting games (for the <a href="#Versus-score">versus score</a>) and the credits, on TCP port 8000 (<a href="#DIY-hardware-model-2-game-outputs">DIY hardware</a>).</p>
+<p><strong>Speed:</strong> it uses one CPU core. FliperOS's speed work on the geometry coprocessors is part of the emulator itself since 0.9.41: on the cabinet's i3-540 the speed went from 0.93× to 2.34× on The House of the Dead, 0.71× to 1.65× on Last Bronx, 0.85× to 2.84× on Fighting Vipers. OpenGL 4.3 is needed.</p>
 <h2 id="Sega-Model-2-and-3-model-3-supermodel">Model 3 (Supermodel)</h2>
 <p>Supermodel comes in the image, as a FliperOS package updated with FliperOS (and <strong>Build the newest</strong> in Emulators &amp; Games).</p>
 <ul>
@@ -6233,8 +6238,8 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 </ul>
 <h2 id="Sega-Model-2-and-3-how-it-works">How it works</h2>
 <ul>
-<li><strong>SM2-Emu</strong> is cloned to <code>~/.local/src/sm2-emu</code> and built as the user (<code>config/fliperos-sm2emu --deps</code> installs what the compiler lacks: <code>glslc</code>, ninja, the X, ALSA, HarfBuzz and fontconfig headers; <code>--build</code> builds with link-time optimization). Patches in <code>config/sm2-emu-patches</code> (installed in <code>/usr/local/share/fliperos/sm2-emu-patches</code>) are applied before compiling; a patch that no longer applies is skipped. When an update brings other patches, it rebuilds by itself (<code>fliperos-sm2emu --outdated</code>, log in <code>/opt/fliperos/logs/sm2-emu-build.log</code>; if the build fails the previous one stays).</li>
-<li><code>fliperos-model2</code> opens a game for the frontends with <code>exec</code>, so the wrapper waits for it. Each launch sets <code>aspect_mode = stretch</code> when the mode is wider than 4:3, and the first one <code>vsync = true</code>. The quick check of a set uses a throwaway NVRAM. The log is <code>/opt/fliperos/logs/sm2-emu.log</code>; the game's memory and save states are in <code>~/nvram/model2</code>.</li>
+<li><strong>Keisho</strong> is cloned to <code>~/.local/src/keisho</code> and built as the user (<code>config/fliperos-sm2emu --deps</code> installs what the compiler lacks: <code>glslc</code>, ninja, the X, ALSA, HarfBuzz and fontconfig headers; <code>--build</code> builds with link-time optimization). Patches in <code>config/sm2-emu-patches</code> (installed in <code>/usr/local/share/fliperos/sm2-emu-patches</code>) are applied before compiling; a patch that no longer applies is skipped. When an update brings other patches, it rebuilds by itself (<code>fliperos-sm2emu --outdated</code>, log in <code>/opt/fliperos/logs/keisho-build.log</code>; if the build fails the previous one stays).</li>
+<li><code>fliperos-model2</code> opens a game for the frontends with <code>exec</code>, so the wrapper waits for it. Each launch sets <code>aspect_mode = stretch</code> when the mode is wider than 4:3, and the first one <code>vsync = true</code>. The quick check of a set uses a throwaway NVRAM. The log is <code>/opt/fliperos/logs/fliperos-model2.log</code> (<code>keisho.log</code> from the desktop menu); its settings are <code>~/.config/keisho/keisho.ini</code>; the game's memory and save states are in <code>~/nvram/model2</code>.</li>
 <li><strong>Supermodel</strong> gets <code>-fullscreen -res=640,240 -stretch</code> (<code>-res=2560,240</code> with super resolutions), <code>-no-quad-rendering</code>, and <code>-ppc-frequency=75</code> for the Step 1.5/2.x games. Its memory is in <code>~/nvram/model3</code>.</li>
 </ul>
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#Linked-cabinets">Linked cabinets</a>.</p>
@@ -6608,7 +6613,7 @@ media=DVD
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-duckstation.webp" width="480" alt="A PlayStation game in DuckStation"></p>
 <p>Its license (CC BY-NC-ND 4.0) doesn't allow it in the image: <strong>Setup &gt; Games &gt; Emulators &amp; Games &gt; DuckStation</strong> downloads the official AppImage from its GitHub, and choosing it again updates it. A PlayStation game opened before it is installed installs it first.</p>
 <ul>
-<li>Its games go in <code>~/roms/ps1</code> (created once it is installed), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>. The BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</li>
+<li>Its games go in <code>~/roms/ps1</code> (it is there from the install, so games can be copied before it), and it also lists the ones in <code>~/roms/retroarch/pcsx_rearmed</code>. The BIOS is the one in <code>~/bios</code>, the same as RetroArch's.</li>
 <li>Each launch sets full screen, <em>Stretch To Fill</em> and the BIOS folder; the first one also skips its setup wizard and puts both panels on SDL (Cross/Circle/Square/Triangle on A/B/X/Y, as in PCSX2).</li>
 <li><strong>PAL games</strong> run at 50 Hz on the tube, 240p games without field flicker, and the picture is cropped so one game line is one tube line.</li>
 <li>The renderer stays on Automatic: <strong>Vulkan</strong> where there is one (amdgpu, Intel), OpenGL on radeon. A renderer you choose in DuckStation stays.</li>
@@ -6882,7 +6887,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 4-button games   [1][2][ ] / [3][4][ ]      or      [1][3][ ] / [2][4][ ]
 </code></pre>
 <p>Without a layout, the game's button N is the panel's button N; <strong>Default layout</strong> goes back to that. Six-button games always use the whole panel. It needs the Button mapping done first.</p>
-<p>It applies where the panel's button N is the game's button N: GroovyMAME, RetroArch's MAME and MAME 2010 cores, Supermodel, SM2-Emu and PCSX2x6. FBNeo arranges each game's buttons by itself, and the other emulators have one mapping for all games.</p>
+<p>It applies where the panel's button N is the game's button N: GroovyMAME, RetroArch's MAME and MAME 2010 cores, Supermodel, Keisho and PCSX2x6. FBNeo arranges each game's buttons by itself, and the other emulators have one mapping for all games.</p>
 <h2 id="Button-mapping-joypad-guides">Joypad guides</h2>
 <p>Mapping a joypad also sets the FliperOS frontend's controls guide to draw it (<a href="#Frontend-controls-guide-and-panel-layout">Frontend controls</a>).</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-guide-snes.png" width="320" alt="The controls guide with a Super Nintendo pad"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-guide-megadrive.png" width="320" alt="The controls guide with a Mega Drive pad"></p>
@@ -6897,7 +6902,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li><strong>Attract-Mode Plus:</strong> the joystick entries of <code>input_map</code> in <code>attract.cfg</code> (directions, Select on button 1, Back on button 2, and its default shortcuts for player 1), written every time it opens.</li>
 <li><strong>Supermodel:</strong> Start, coin, directions and buttons 1 to 4 for players 1 and 2 in <code>Supermodel.ini</code>. <strong>Hypseus:</strong> the <code>[KEYBOARD]</code> of <code>~/.hypseus/hypinput.ini</code>. <strong>OpenBOR:</strong> each player's keys in <code>Saves/default.cfg</code> and each pak's <code>.cfg</code> (1 attack, 2 jump, 3 special, 4 to 6 the other attacks, coin on Esc). <strong>PCSX2x6:</strong> the <code>[JVS]</code> section (<a href="#Namco-246-256-the-buttons">PlayStation 2 and Namco 246/256</a>).</li>
 <li><strong>Triggers:</strong> an axis resting at one end (an Xbox controller's LT/RT) can only be pressed one way; the capture ignores the release of a trigger held when it started, and saving fixes the direction from the resting position.</li>
-<li><strong>Buttons layout</strong> is <code>/etc/fliperos/buttons.layout</code> (one line per number of buttons: the position of button 1, of button 2…). The button count of each game comes from GroovyMAME's <code>-listxml</code> with the real counts of <code>controls.xml</code> on top (<code>fliperos-romclean buttons</code> writes <code>/var/lib/fliperos/game-buttons.txt</code>); MAME 2010 has its own table, <code>game-buttons-mame2010.txt</code>, and a game whose 0.139 entry lists its board's generic block (Tekken 3) counts as that block, so the punches stay on top and the kicks below. Where it goes: a <code>&lt;system&gt;</code> per game in GroovyMAME's ctrlr (a clone follows its parent), a <code>buttons-N.cfg</code> for RetroArch's MAME cores, a game section in <code>Supermodel.ini</code> by the input type of each game in <code>Games.xml</code>, and <code>/var/lib/fliperos/gamecontrollerdb-model2-N.txt</code> for SM2-Emu, which reads game buttons 1 to 4 from A B X Y and always takes RB as button 4.</li>
+<li><strong>Buttons layout</strong> is <code>/etc/fliperos/buttons.layout</code> (one line per number of buttons: the position of button 1, of button 2…). The button count of each game comes from GroovyMAME's <code>-listxml</code> with the real counts of <code>controls.xml</code> on top (<code>fliperos-romclean buttons</code> writes <code>/var/lib/fliperos/game-buttons.txt</code>); MAME 2010 has its own table, <code>game-buttons-mame2010.txt</code>, and a game whose 0.139 entry lists its board's generic block (Tekken 3) counts as that block, so the punches stay on top and the kicks below. Where it goes: a <code>&lt;system&gt;</code> per game in GroovyMAME's ctrlr (a clone follows its parent), a <code>buttons-N.cfg</code> for RetroArch's MAME cores, a game section in <code>Supermodel.ini</code> by the input type of each game in <code>Games.xml</code>, and <code>/var/lib/fliperos/gamecontrollerdb-model2-N.txt</code> for Keisho, which reads game buttons 1 to 4 from A B X Y and always takes RB as button 4.</li>
 <li>The screen is <code>screens/joysticks.sh</code>, on top of <code>lib/buttons.sh</code>.</li>
 </ul>
 <p>See also: <a href="#Controls">Controls</a>, <a href="#Frontend-controls">Frontend controls</a>.</p>
@@ -6988,7 +6993,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <ol>
 <li>Plug the gun into USB. It shows up as a gun at once.</li>
 <li><strong>Setup &gt; Joysticks &gt; GunCon 2 &gt; Calibrate</strong>, once (below).</li>
-<li>Play: the gun games of MAME, Flycast, SM2-Emu and the RetroArch cores take it by themselves.</li>
+<li>Play: the gun games of MAME, Flycast, Keisho and the RetroArch cores take it by themselves.</li>
 </ol>
 <p>To keep the gun games when you clean a romset, mark <strong>Light gun</strong> among the controls in the <a href="#ROM-Cleaner">ROM Cleaner</a>. The FliperOS frontend shows a pistol icon on gun games, and its CONTROL filter can list only them.</p>
 <h2 id="Light-guns-calibrate">Calibrate</h2>
@@ -7055,7 +7060,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <tr>
 <td>Off-screen reload</td>
 <td>On</td>
-<td>Off the screen, the trigger also presses the reload button of Flycast, RetroArch and SM2-Emu</td>
+<td>Off the screen, the trigger also presses the reload button of Flycast, RetroArch and Keisho</td>
 </tr>
 </tbody>
 </table>
@@ -7082,7 +7087,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td>Naomi and Atomiswave gun games (The House of the Dead 2, Confidential Mission…)</td>
 </tr>
 <tr>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td>The Model 2 gun games (The House of the Dead, Virtua Cop), read straight from the gun</td>
 </tr>
 </tbody>
@@ -7093,7 +7098,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li><strong>The driver:</strong> GunCon 2 has no driver in the mainline kernel. The build compiles <a href="https://github.com/beardypig/guncon2">beardypig/guncon2</a> through DKMS for the system's kernel and loads it at boot (<code>/etc/modules-load.d/fliperos-guncon2.conf</code>).</li>
 <li><strong>The driver's FliperOS patches</strong> (<code>config/guncon2-patches</code>). The gun sends the same report for a dark part of the picture and for an aim off the screen (x 0 or 1, y 5), so the driver tells them apart by context: a miss keeps the last aim for up to <code>hold_ms</code>; a miss right after an aim within <code>edge_pct</code> of an edge is off the screen at once; off the screen both axes go out of the calibrated range, so every emulator reads it as off the screen; off the screen the trigger also presses the right button (<code>offscreen_reload</code>); a stalled USB endpoint is cleared, where the original driver stopped reading the gun for good. The parameters change live in <code>/sys/module/guncon2/parameters/</code>.</li>
 <li><strong>The calibration:</strong> GunCon 2 is linear, so two known points give the edges. It is saved in <code>/etc/fliperos/guncon2.conf</code> (and <code>guncon2-&lt;port&gt;.conf</code> per gun), and the udev rule <code>99-fliperos-input.rules</code> reapplies it (<code>fliperos-guncon2-calibrate</code>) on every connection, since evdev forgets the range. The driver judges an aim by the saved range, and the calibrator opens that range up first, so a bad calibration can always be redone.</li>
-<li><strong>Marked as a gun:</strong> the same rule tags it <code>ID_INPUT_GUN=1</code>, so SM2-Emu reads the gun itself instead of the mouse pointer; SM2-Emu keeps the last position that saw the screen for up to 150 ms (<code>config/sm2-emu-patches/0002</code>).</li>
+<li><strong>Marked as a gun:</strong> the same rule tags it <code>ID_INPUT_GUN=1</code>, so Keisho reads the gun itself instead of the mouse pointer; Keisho keeps the last position that saw the screen for up to 150 ms (<code>config/sm2-emu-patches/0001</code>).</li>
 <li><strong>The flash:</strong> the OpenGL and Vulkan layers (<code>config/fliperos-deflicker.c</code>, <code>config/fliperos-vkfps.c</code>) read the triggers of the devices tagged <code>ID_INPUT_GUN</code> without grabbing them, and paint the whole frame. They flash on the raw trigger, which the driver sends at once as <code>MSC_RAW</code> (patch 0006), and the driver waits up to the flash wait for a report that sees the lit screen before sending a trigger pulled without light.</li>
 <li><strong>Settings:</strong> <code>gun_flash</code> (pulse, hold, off), <code>gun_flash_level</code>, <code>gun_flash_ms</code>, <code>gun_hold_ms</code>, <code>gun_edge_pct</code> and <code>gun_offscreen_reload</code> in <code>fliperos.conf</code>; <code>fliperos-guncon2-calibrate --params</code> writes them to the driver the moment they change.</li>
 <li><strong>RetroArch:</strong> <code>config/lightgun-games.tsv</code> lists the gun games of each core, and the core's port devices are set for them; the gun's own joystick is remapped so it doesn't take player 1's pad.</li>
@@ -7489,7 +7494,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td>About 100: the CPS1, CPS2, Neo Geo and CPS3 ones</td>
 </tr>
 <tr>
-<td><strong>SM2-Emu</strong> (Model 2)</td>
+<td><strong>Keisho</strong> (Model 2)</td>
 <td>Virtua Fighter 2, Fighting Vipers, Sonic the Fighters, Last Bronx and Dead or Alive: the rounds, no characters</td>
 </tr>
 </tbody>
@@ -7501,14 +7506,14 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <h2 id="Versus-score-settings">Settings</h2>
 <ul>
 <li><code>versus_side=2</code> in <code>/etc/fliperos/fliperos.conf</code> puts player 2 first, for the cabinet on that side.</li>
-<li><strong>Checking a game:</strong> open it and run <code>fliperos-versus watch mame &lt;game&gt;</code> over SSH (<code>model2</code> for SM2-Emu): it prints the wins and the characters as they change, to compare with the screen.</li>
+<li><strong>Checking a game:</strong> open it and run <code>fliperos-versus watch mame &lt;game&gt;</code> over SSH (<code>model2</code> for Keisho): it prints the wins and the characters as they change, to compare with the screen.</li>
 </ul>
 <h2 id="Versus-score-what-was-checked">What was checked</h2>
 <p>With Fightcade's own detectors and no picture on the tube:</p>
 <ul>
 <li><strong>GroovyMAME:</strong> Street Fighter II' Champion Edition, The King of Fighters '98, Mortal Kombat II and Street Fighter III 3rd Strike, one of each kind of detector, played by a script. The wins and the characters came out right, and so did the 128x32 picture sent to the display.</li>
 <li><strong>RetroArch (FBNeo):</strong> the memory the detectors describe was read right in the demos (the match start and the characters). No match was played there, so a win has not been seen counted in RetroArch.</li>
-<li><strong>SM2-Emu:</strong> the real emulator up to the rounds arriving, and a scripted feed for the count; not seen in a match on a cabinet.</li>
+<li><strong>Keisho:</strong> the real emulator up to the rounds arriving, and a scripted feed for the count; not seen in a match on a cabinet.</li>
 <li>A real LED display showing the score has not been seen yet.</li>
 </ul>
 <h2 id="Versus-score-how-it-works">How it works</h2>
@@ -7517,7 +7522,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li><strong>GroovyMAME:</strong> for a game with a detector, the <code>groovymame</code> command turns on the <code>fliperos-versus</code> plugin. It evaluates the detector every frame, as Fightcade's emulator does (a condition counts after 30 frames in a row), and writes <code>fliperos_wins1</code>, <code>fliperos_wins2</code>, <code>fliperos_char1</code> and <code>fliperos_char2</code> to a file in the session's runtime folder, which <code>fliperos-versus</code> follows. These are not MAME outputs: in today's MAME a script can't create new outputs.</li>
 <li><strong>RetroArch:</strong> <code>fliperos-kms-run</code> turns on RetroArch's Network Command Interface for a game with a detector (<code>/etc/fliperos/retroarch/versus.cfg</code>), and <code>fliperos-versus</code> reads the game's memory ten times a second (<code>READ_CORE_RAM</code>) and evaluates the detector itself. A detector that uses the CPU's own addresses can't be read there.</li>
 <li><strong>FBNeo console sets:</strong> the system of each set comes from FBNeo's own lists (<code>/opt/fliperos/bin/fliperos-fbneo</code>; a name in more than one system is settled by the CRCs inside the <code>.zip</code>), and the game opens through a link in <code>~/.cache/fliperos-fbneo/&lt;system&gt;/</code>, with its parent set and the system BIOS linked next to it. The core only looks for a console <code>.zip</code> in a folder named after a system (<code>megadrive</code>, <code>sms</code>, <code>nes</code>, <code>pce</code>, <code>tg16</code>, <code>sgx</code>, <code>msx</code>, <code>coleco</code>, <code>sg1000</code>, <code>gamegear</code>, <code>spectrum</code>, <code>fds</code>, <code>snes</code>, <code>ngp</code>, <code>channelf</code>).</li>
-<li><strong>Model 2:</strong> FliperOS's SM2-Emu patch publishes the rounds each side has taken among the game's outputs (<code>P1_Wins</code>, <code>P2_Wins</code> on TCP port 8000, see <a href="#DIY-hardware-model-2-game-outputs">DIY hardware</a>). With a display installed, <code>fliperos-x11-run</code> turns that port on for these games, and a match counts for the side with more rounds when they go back to zero.</li>
+<li><strong>Model 2:</strong> Keisho publishes the rounds each side has taken among the game's outputs (<code>P1_Wins</code>, <code>P2_Wins</code> on TCP port 8000, see <a href="#DIY-hardware-model-2-game-outputs">DIY hardware</a>). With a display installed, <code>fliperos-x11-run</code> turns that port on for these games, and a match counts for the side with more rounds when they go back to zero.</li>
 <li><strong>Points:</strong> the detectors don't have each player's points. <code>/etc/fliperos/versus-games.conf</code> is a table of addresses read directly (the format is at its top; your own lines go in <code>~/config/versus-games.conf</code>). It is empty for now.</li>
 <li>Nothing is turned on without a Pixelcade or a ZeDMD installed, or the web panel's marquee preview.</li>
 </ul>
@@ -7538,10 +7543,10 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <ul>
 <li><strong>GroovyMAME</strong>: 199 sets (the ones in MAME 0.289).</li>
 <li><strong>RetroArch (FBNeo core)</strong>: 103 sets (the ones in the core's game list). Detectors written as CPU addresses can't be read there.</li>
-<li><strong>Model 2 (SM2-Emu)</strong> is outside the Fightcade list: the emulator itself publishes the rounds each side has taken, with FliperOS's patch, for <code>vf2</code>, <code>fvipers</code>, <code>schamp</code>, <code>lastbrnx</code> and <code>doa</code> (<a href="#DIY-hardware-model-2-game-outputs">DIY hardware</a>). The scoreboard shows the session wins, without the characters.</li>
+<li><strong>Model 2 (Keisho)</strong> is outside the Fightcade list: the emulator itself publishes the rounds each side has taken (FliperOS's patch, now part of Keisho), for <code>vf2</code>, <code>fvipers</code>, <code>schamp</code>, <code>lastbrnx</code> and <code>doa</code> (<a href="#DIY-hardware-model-2-game-outputs">DIY hardware</a>). The scoreboard shows the session wins, without the characters.</li>
 </ul>
 <p><strong>High scores.</strong> 2388 sets have both the address of the table (<code>hiscore.dat</code>, 5856 sets) and a description in hi2txt (2971 names): Pac-Man, Galaga, Donkey Kong, 1942, TMNT, Gradius and so on. 17 of them also have wins. Most fighting games have wins but no high scores: <code>hiscore.dat</code> has a table but hi2txt has no description for them (<code>sf2ce</code>, <code>sfa3</code>), or the other way round (<code>kof98</code>, <code>mk2</code>).</p>
-<p><strong>Files.</strong> The last column links to the file that holds each game's data: the Fightcade detector (<code>third-party/fightcade-detectors/&lt;set&gt;.inf</code>, a copy kept in this repository), the SM2-Emu patch that publishes the Model 2 rounds, and the line of the game in MAME's <a href="https://github.com/mamedev/mame/blob/6df80b69e1/plugins/hiscore/hiscore.dat">hiscore.dat</a> (the address of its high score table; pinned to MAME commit <code>6df80b6</code>). hi2txt's description of each game is inside its <code>hi2txt.zip</code>, which the cabinet downloads, so it has no link.</p>
+<p><strong>Files.</strong> The last column links to the file that holds each game's data: the Fightcade detector (<code>third-party/fightcade-detectors/&lt;set&gt;.inf</code>, a copy kept in this repository), Keisho's games.xml, which publishes the Model 2 rounds, and the line of the game in MAME's <a href="https://github.com/mamedev/mame/blob/6df80b69e1/plugins/hiscore/hiscore.dat">hiscore.dat</a> (the address of its high score table; pinned to MAME commit <code>6df80b6</code>). hi2txt's description of each game is inside its <code>hi2txt.zip</code>, which the cabinet downloads, so it has no link.</p>
 <p>This page is generated by <code>tools/scoreboard-games.py</code>.</p>
 <table>
 <thead>
@@ -13715,7 +13720,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td style="text-align: center;"></td>
 <td style="text-align: center;">yes</td>
 <td style="text-align: center;"></td>
-<td><a href="https://github.com/juniorterin/fliperOS/blob/main/config/sm2-emu-patches/0001-outputs-game-state.patch">patch</a></td>
+<td><a href="https://github.com/Keisho-Emu/Keisho/blob/main/data/games.xml">games.xml</a></td>
 </tr>
 <tr>
 <td>Deathsmiles (Japan, 2007/10/09 MASTER VER)</td>
@@ -15915,7 +15920,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td style="text-align: center;"></td>
 <td style="text-align: center;">yes</td>
 <td style="text-align: center;"></td>
-<td><a href="https://github.com/juniorterin/fliperOS/blob/main/config/sm2-emu-patches/0001-outputs-game-state.patch">patch</a></td>
+<td><a href="https://github.com/Keisho-Emu/Keisho/blob/main/data/games.xml">games.xml</a></td>
 </tr>
 <tr>
 <td>Final Star Force (Japan, set 1)</td>
@@ -19915,7 +19920,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td style="text-align: center;"></td>
 <td style="text-align: center;">yes</td>
 <td style="text-align: center;"></td>
-<td><a href="https://github.com/juniorterin/fliperOS/blob/main/config/sm2-emu-patches/0001-outputs-game-state.patch">patch</a></td>
+<td><a href="https://github.com/Keisho-Emu/Keisho/blob/main/data/games.xml">games.xml</a></td>
 </tr>
 <tr>
 <td>Le Bagnard (bootleg on Crazy Kong hardware)</td>
@@ -26935,7 +26940,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td style="text-align: center;"></td>
 <td style="text-align: center;">yes</td>
 <td style="text-align: center;"></td>
-<td><a href="https://github.com/juniorterin/fliperOS/blob/main/config/sm2-emu-patches/0001-outputs-game-state.patch">patch</a></td>
+<td><a href="https://github.com/Keisho-Emu/Keisho/blob/main/data/games.xml">games.xml</a></td>
 </tr>
 <tr>
 <td>Sonic Wings (Japan)</td>
@@ -31905,7 +31910,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td style="text-align: center;"></td>
 <td style="text-align: center;">yes</td>
 <td style="text-align: center;"></td>
-<td><a href="https://github.com/juniorterin/fliperOS/blob/main/config/sm2-emu-patches/0001-outputs-game-state.patch">patch</a></td>
+<td><a href="https://github.com/Keisho-Emu/Keisho/blob/main/data/games.xml">games.xml</a></td>
 </tr>
 <tr>
 <td>Vs 10-Yard Fight (Japan)</td>
@@ -33841,7 +33846,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </table>
 <p>The Pixelcade marquee, which FliperOS also supports, is a commercial product with closed software; it is on the <a href="#Frontends">Frontends</a> page.</p>
 <h2 id="DIY-hardware-game-outputs-lamps-recoil-motors-and-button-lights">Game outputs: lamps, recoil, motors and button lights</h2>
-<p>Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and SM2-Emu (Model 2) can publish these <strong>outputs</strong> over the network (TCP port 8000, one <code>name = value</code> line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in <strong>Setup &gt; Games &gt; Extras</strong>. They can be installed together.</p>
+<p>Arcade games drive things outside the screen: start lamps, gun recoil, motors, digit displays. GroovyMAME, Flycast, Supermodel and Keisho (Model 2) can publish these <strong>outputs</strong> over the network (TCP port 8000, one <code>name = value</code> line per change). On Windows the program that reads them is MAMEHooker. FliperOS has three readers, each one an extra in <strong>Setup &gt; Games &gt; Extras</strong>. They can be installed together.</p>
 <table>
 <thead>
 <tr>
@@ -33871,9 +33876,9 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p>The emulators only open port 8000 when one of them is installed, because the port is reachable from the network and accepts a pause command.</p>
 <p>None of them has been tried with a real gun or board on a FliperOS cabinet yet. QMamehook was built and run against a simulated game: it connects to the port, looks for the game's <code>.ini</code> and closes with the game.</p>
 <p>Hook Of The Reaper was run under Wine against a simulated game: it connects to the port, loads the game's file and closes with the game.</p>
-<p>On the test cabinet it was installed from the Extras and opened with a Model 2 game (The House of the Dead in SM2-Emu, on a virtual screen): it stayed connected to the game's port for the whole run and closed with it. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.</p>
+<p>On the test cabinet it was installed from the Extras and opened with a Model 2 game (The House of the Dead in Keisho, on a virtual screen): it stayed connected to the game's port for the whole run and closed with it. Whether Wine reaches each gun's serial port or USB HID interface still has to be seen on hardware.</p>
 <h3 id="DIY-hardware-model-2-game-outputs">Model 2 game outputs</h3>
-<p>A Model 2 gun cabinet has no recoil, so the board never says that a shot was fired, and SM2-Emu on its own only publishes the lamps. FliperOS adds a patch to it (<code>config/sm2-emu-patches</code>, to be offered to the SM2-Emu project) that reads the game's own memory and publishes it as outputs. The gun games use the names Hook Of The Reaper's game files already listen for:</p>
+<p>A Model 2 gun cabinet has no recoil, so the board never says that a shot was fired, and Keisho on its own would only publish the lamps. FliperOS wrote the part that reads the game's own memory and publishes it as outputs; it was accepted into the emulator (its <code>data/games.xml</code>), so it needs no patch any more. The gun games use the names Hook Of The Reaper's game files already listen for:</p>
 <table>
 <thead>
 <tr>
@@ -33918,7 +33923,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li><strong>What is installed</strong>: 64-bit Wine and a virtual screen (<code>xvfb</code>) from apt, and the program from its own website (pinned version and hash) into <code>~/hotr</code>. It gets its own Wine folder, separate from Fightcade's. Nothing of this is in the image.</li>
 <li><strong>Setting it up</strong>: on the desktop, <strong>Preferences &gt; Hook Of The Reaper</strong> opens its window. Add your light guns and assign each one to a player, as its <a href="https://hotr.6bolt.com/pmwiki.php/Tutorial/Setup">tutorial</a> shows. The settings stay in <code>~/hotr/data</code>.</li>
 <li><strong>Game files</strong>: it comes with its own files for over 200 gun games (<code>~/hotr/defaultLG</code>), which work with any gun it supports. MAMEHooker <code>.ini</code> files go in <code>~/hotr/ini/MAME</code>. The folder is also at <code>~/config/hotr</code>, shared on the network.</li>
-<li><strong>When it runs</strong>: it opens with each game of GroovyMAME, Flycast, Supermodel and SM2-Emu and closes with it. It runs on the virtual screen, so none of its windows or warnings appear over the game. Installing it again from the Extras updates the program and keeps your guns, players and <code>.ini</code> files.</li>
+<li><strong>When it runs</strong>: it opens with each game of GroovyMAME, Flycast, Supermodel and Keisho and closes with it. It runs on the virtual screen, so none of its windows or warnings appear over the game. Installing it again from the Extras updates the program and keeps your guns, players and <code>.ini</code> files.</li>
 <li><strong>USB HID guns and boards</strong>: the install lets the <code>fliperos</code> user open the USB HID devices (<code>/dev/hidraw*</code>, group <code>input</code>), which is how Wine reaches them. Serial boards already belong to the user's <code>dialout</code> group.</li>
 </ul>
 <h3 id="DIY-hardware-ledspicer">LEDSpicer</h3>
@@ -33933,7 +33938,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li><strong>What is installed</strong>: its author publishes only the Windows program, so the install builds version 2.2 from source (pinned by hash) into <code>~/qmamehook</code>. The compiler and Qt 6 come from apt; it takes about two minutes. Nothing of this is in the image.</li>
 <li><strong>Game files</strong>: MAMEHooker <code>.ini</code> files go in <code>~/qmamehook/ini</code>, one per ROM set (<code>sf2ce.ini</code>). The folder is also at <code>~/config/qmamehook</code>, shared on the network. For a game without a file, QMamehook writes one there listing the outputs the game sent, for you to fill in.</li>
 <li><strong>Players</strong>: the guns are numbered in the order of their USB product IDs, so the <code>.ini</code> writes to port 1 for the first gun, 2 for the second.</li>
-<li><strong>When it runs</strong>: it opens with each game of GroovyMAME, Flycast, Supermodel and SM2-Emu and closes with it. What it says (the guns it found, the file it loaded) is in <code>/opt/fliperos/logs/qmamehook.log</code>.</li>
+<li><strong>When it runs</strong>: it opens with each game of GroovyMAME, Flycast, Supermodel and Keisho and closes with it. What it says (the guns it found, the file it loaded) is in <code>/opt/fliperos/logs/qmamehook.log</code>.</li>
 <li><strong>With Hook Of The Reaper also installed</strong>, only one of the two opens with the game, because a gun's serial port can't be shared: Hook Of The Reaper, unless <code>/etc/fliperos/fliperos.conf</code> has the line <code>outputs_reader=qmamehook</code>.</li>
 </ul>
 <h2 id="DIY-hardware-cartridge-reader-open-source-cartridge-reader">Cartridge reader (Open Source Cartridge Reader)</h2>
@@ -34545,7 +34550,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p><strong>Clean a romset folder:</strong> a folder with a romset (a disk, a USB drive, the network folder mounted by the Setup), picked in a folder list.</p>
 </li>
 <li>
-<p>Pick the emulator (the MAME version of the romset: GroovyMAME, Flycast, SM2-Emu, Supermodel, MAME 2010) and a preset. A folder's emulator is guessed from its name.</p>
+<p>Pick the emulator (the MAME version of the romset: GroovyMAME, Flycast, Keisho, Supermodel, MAME 2010) and a preset. A folder's emulator is guessed from its name.</p>
 </li>
 <li>Change the tiles: which games, players and controls, screen, categories and years, hardware. A yes/no tile switches with a click; the others open their options, with a search box on long lists. A pink dot marks a value changed from the preset.</li>
 <li>The scoreboard (<strong>GAMES</strong> and <strong>SIZE</strong>) counts what passes after every change, and stays in view while you scroll.</li>
@@ -34990,7 +34995,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <tbody>
 <tr>
 <td>Daytona USA</td>
-<td>SM2-Emu, GroovyMAME</td>
+<td>Keisho, GroovyMAME</td>
 <td>2 to 8</td>
 <td>1</td>
 <td>1</td>
@@ -35010,7 +35015,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>Sega Touring Car Championship</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td>not checked</td>
 <td>1</td>
 <td>1</td>
@@ -35020,7 +35025,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>Indy 500</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td>not checked</td>
 <td>1</td>
 <td>1</td>
@@ -35030,7 +35035,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>Motor Raid</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td>not checked</td>
 <td>1</td>
 <td>1</td>
@@ -35040,7 +35045,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>Wave Runner</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td>not checked</td>
 <td>1</td>
 <td>1</td>
@@ -35050,7 +35055,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>Cyber Troopers Virtual-On Twin</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td>not checked</td>
 <td>1</td>
 <td>1</td>
@@ -35060,7 +35065,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>Super GT 24h</td>
-<td>SM2-Emu</td>
+<td>Keisho</td>
 <td>set by Link Max</td>
 <td>1</td>
 <td>1</td>
@@ -35182,7 +35187,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </table>
 <p>"Not checked" means the answer was not found, not that the game has no limit. The sections below say what each emulator needs.</p>
 <h2 id="Linked-cabinets-which-emulator">Which emulator</h2>
-<p><strong>Model 2 goes to SM2-Emu.</strong> GroovyMAME emulates Model 2 poorly, and SM2-Emu has its own link.</p>
+<p><strong>Model 2 goes to Keisho.</strong> GroovyMAME emulates Model 2 poorly, and Keisho has its own link.</p>
 <p><strong>Model 3 goes to Supermodel.</strong> MAME's Model 3 communication board is an empty stub: the network code in it is commented out, so no data crosses between two MAME instances.</p>
 <p><strong>Model 1, System 32, CPS-2 and Gunbuster go to GroovyMAME.</strong> These are the boards whose link MAME really emulates.</p>
 <h2 id="Linked-cabinets-how-a-link-starts">How a link starts</h2>
@@ -35199,9 +35204,9 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p><strong>The other cars or players are seen with the delay of the original boards.</strong> The games exchange their state at the pace of the frames (the ring boards of MAME send one VSYNC packet a frame). So you see the other cabinet a frame or two late, as in the arcade. On the network cable a packet takes well under a millisecond (a frame is 16.7 ms at 60 Hz), so the cable adds almost nothing to it. In a ring of more machines, a packet goes through each machine on its way, as it did on the real boards.</p>
 <p><strong>There is no rollback and no input delay to tune.</strong> The games wait for each other by themselves. When the network stops, the game says so (COMMUNICATION ERROR, or the link drops) and does not catch up later. That is why the link is on the cable only.</p>
 <p>This comes from the emulators' source and from how the games behaved in the tests. The delay was not measured with a camera.</p>
-<h2 id="Linked-cabinets-sm2-emu-sega-model-2">SM2-Emu: Sega Model 2</h2>
+<h2 id="Linked-cabinets-keisho-sega-model-2">Keisho: Sega Model 2</h2>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/link-daytona.webp" width="480" alt="Daytona USA linked between cabinets"></p>
-<p>The link is a UDP ring. In <code>sm2-emu.ini</code> (or in F10 &gt; Network):</p>
+<p>The link is a UDP ring. In <code>keisho.ini</code> (or in F10 &gt; Network):</p>
 <pre><code class="language-ini">[network]
 link_enabled = true
 link_local_ip =
@@ -35354,7 +35359,7 @@ supermodel scud.zip -net -port-in=1971 -port-out=1970 -address-out=127.0.0.1   #
 </ul>
 <p>A pair raced (ID 1 master, ID 2 slave), with lap times 0'20"96 and 0'21"03. <strong>Four instances did not link:</strong> only two of the four links came up, in both start orders. This was not solved, so treat two as the limit.</p>
 <h2 id="Linked-cabinets-one-nvram-for-each-cabinet-number">One NVRAM for each cabinet number</h2>
-<p>The role of a cabinet (master or slave, car number or machine ID) is saved in the game's NVRAM, so each cabinet number needs its own file. The repository keeps them in <code>config/link-nvram</code>: SM2-Emu Daytona USA, and Supermodel Scud Race, Daytona USA 2 and Dirt Devils. The README there says what each file holds and how to use it.</p>
+<p>The role of a cabinet (master or slave, car number or machine ID) is saved in the game's NVRAM, so each cabinet number needs its own file. The repository keeps them in <code>config/link-nvram</code>: Keisho Daytona USA, and Supermodel Scud Race, Daytona USA 2 and Dirt Devils. The README there says what each file holds and how to use it.</p>
 <h2 id="Linked-cabinets-groovymame">GroovyMAME</h2>
 <p>The link uses four options. They are the same for every board:</p>
 <table>
@@ -35602,7 +35607,7 @@ More players than one cabinet has controls, on 2 to 4 cabinets: RetroArch's net 
 <td><strong>Tested</strong>: SSF2 Turbo, cabinet and PC, in sync</td>
 </tr>
 <tr>
-<td>Supermodel, SM2-Emu</td>
+<td>Supermodel, Keisho</td>
 <td>Model 3, Model 2</td>
 <td><strong>No net play.</strong> Their network is the board link of the link games above</td>
 <td>Source</td>
@@ -35617,10 +35622,458 @@ More players than one cabinet has controls, on 2 to 4 cabinets: RetroArch's net 
 </table>
 <p>Fightcade 2 has its own rollback (FBNeo, Flycast and others), but over the Internet with its own matchmaking: it is not part of the cabinets' link or net play.</p>
 <p>See also: <a href="#Linked-cabinets">Linked cabinets</a>, <a href="#FliperOS-frontend-the-game-menu">FliperOS frontend</a>.</p>
-<h1 id="Kernel-15-kHz">15 kHz kernel</h1>
-<p><code>fliperos-kernel.sh</code> downloads kernel.org <strong>6.18.54</strong>, applies <code>patches/kernel-15khz/6.18/</code> (D0023R's 01 to 09, plus FliperOS's own 10, which lets nouveau take modes under 25 MHz on analog outputs: see <a href="#Video-cards">Video cards</a>) on top of the <code>.config</code> of Ubuntu 24.04's own kernel and builds the <code>.deb</code>s. No module signing and no debug info. Compiling takes hours, so the <code>.deb</code>s stay in a cache keyed by version and patch hash (<code>/output/kernel-cache/&lt;key&gt;/</code>): the next build reuses them.</p>
-<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/video.webp" width="480" alt="Video Setup: the modes made by Switchres on the 15 kHz kernel"></p>
-<p>Switchres (<code>v2.2.1</code>, the same version as GroovyArcade's package) is compiled with <code>grid</code> and <code>geometry</code>, and at build time generates one EDID per monitor preset plus the two super resolution ones used by the boot's EDID entries (<code>fliperos-rebuild-edids</code>, GroovyArcade's <code>rebuild_edids</code>). The initramfs hook carries all of them into the initramfs.</p>
+<h1 id="Development">Development</h1>
+<p>Everything a programmer needs to work on FliperOS: setting up the machine, making and testing a change, building the ISO, packaging a program, publishing an update and cutting a release. The user's side of the project starts at <a href="#Home">Home</a>.</p>
+<p>FliperOS is built on Windows with Docker, from one repository: the ISO build scripts, <code>fliperos-setup</code> (the Bash and Gum setup, and the pygame GUI), the <code>config/</code> files that land in the installed system, the <code>.deb</code> recipes in <code>packaging/</code>, the tests in <code>tests/</code>, and the network updates in <code>updates/</code>. <a href="#Architecture">Architecture</a> says what each file is.</p>
+<h2 id="Development-i-want-to">I want to…</h2>
+<table>
+<thead>
+<tr>
+<th>I want to…</th>
+<th>Read</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Set up a machine to work on it, and know what not to do</td>
+<td><a href="#Development-environment">Development environment</a></td>
+</tr>
+<tr>
+<td>Change or add a feature, test it and get it into the repository</td>
+<td><a href="#Making-a-change">Making a change</a></td>
+</tr>
+<tr>
+<td>Add an emulator to the Setup and the frontends</td>
+<td><a href="#Adding-an-emulator">Adding an emulator</a></td>
+</tr>
+<tr>
+<td>Build the ISO, or check one</td>
+<td><a href="#Build-and-tests-build">Build and tests</a></td>
+</tr>
+<tr>
+<td>Change a compiled program, or add one</td>
+<td><a href="#Packages">Packages</a></td>
+</tr>
+<tr>
+<td>Put a new <code>.deb</code> on GitHub</td>
+<td><a href="#Packages-publishing">Packages</a></td>
+</tr>
+<tr>
+<td>Send a change to machines that are already installed</td>
+<td><a href="#Publishing-updates">Publishing updates</a></td>
+</tr>
+<tr>
+<td>Release a new version</td>
+<td><a href="#Making-a-release">Making a release</a></td>
+</tr>
+<tr>
+<td>Find what a variable or an option does</td>
+<td><a href="#Variables">Variables</a></td>
+</tr>
+<tr>
+<td>Change the 15 kHz kernel</td>
+<td><a href="#Kernel-15-kHz">15 kHz kernel</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="Development-pages">Pages</h2>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>What it covers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#Development-environment">Development environment</a></td>
+<td>What runs where on Windows, the rules that keep the build from breaking the machine, working in the same repository as other people</td>
+</tr>
+<tr>
+<td><a href="#Making-a-change">Making a change</a></td>
+<td>Where the code lives, running the tests, trying a change on a cabinet without a new ISO, writing the docs, committing</td>
+</tr>
+<tr>
+<td><a href="#Packages">Packages</a></td>
+<td>The <code>.deb</code> recipes: anatomy, building, versions, publishing to the <code>packages</code> release, programs built on demand, the newest-version mode</td>
+</tr>
+<tr>
+<td><a href="#Making-a-release">Making a release</a></td>
+<td>The whole release in order: packages, update, changelog, version, tag, the build and the posts</td>
+</tr>
+<tr>
+<td><a href="#Build-and-tests">Build and tests</a></td>
+<td>Building the ISO in Docker, the options, the audit, the release workflow, the tests, the frontend emulator</td>
+</tr>
+<tr>
+<td><a href="#Publishing-updates">Publishing updates</a></td>
+<td>Making a network update and lining it up with a new ISO</td>
+</tr>
+<tr>
+<td><a href="#Variables">Variables</a></td>
+<td>The options, environment variables, recipe fields, secrets and state files</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Development-how-it-works">How it works</h2>
+<ul>
+<li>The same code builds the ISO and the updates: <code>fliperos-rootfs.sh</code> installs <code>fliperos-setup</code> and <code>config/</code> into the image, and <code>tools/cabinet-update.sh</code> applies them again on an installed machine.</li>
+<li>Compiled programs are <code>.deb</code> packages from <code>packaging/packages/</code>. The ISO carries them in a local repository; the updates download the same files from the <code>packages</code> release on GitHub.</li>
+<li>A release is a tag: pushing it starts the <strong>Release</strong> workflow, which builds the ISO and publishes it. Updates are lines in <code>updates/index</code>, published by <code>tools/make-update.sh</code>.</li>
+<li>The repository's <code>CLAUDE.md</code> holds the rules that came from real failures (the build, Docker, releases). <a href="#Development-environment">Development environment</a> and <a href="#Making-a-release">Making a release</a> explain them.</li>
+</ul>
+<p>See also: <a href="#Architecture">Architecture</a>, <a href="#Commands">Commands</a>, <a href="#Sources">Sources</a>.</p>
+<h1 id="Development-environment">Development environment</h1>
+<p>How the work is set up on a Windows machine: what runs where, the rules that keep the build from breaking the machine, and what to do when Docker or WSL misbehave. Anything heavy runs in Docker; the Windows side only drives it.</p>
+<h2 id="Development-environment-what-runs-where">What runs where</h2>
+<table>
+<thead>
+<tr>
+<th>Job</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Building the ISO, the kernel and the packages</td>
+<td>Docker (<code>Dockerfile.fliperos</code>, <code>Dockerfile.packages</code>), never directly in WSL</td>
+</tr>
+<tr>
+<td>The tests (<code>test_setup.py</code>, <code>test_build.py</code>)</td>
+<td>Docker, image <code>fliperos-tests</code> (Ubuntu 24.04 with <code>python3</code> and <code>jq</code>)</td>
+</tr>
+<tr>
+<td>The <code>gh</code> command (releases, Actions logs, uploads)</td>
+<td>WSL Ubuntu 22.04: it is logged in only there</td>
+</tr>
+<tr>
+<td><code>tools/make-update.sh</code>, <code>tools/publish-*.sh</code></td>
+<td>WSL, where there is a Linux <code>python3</code>, <code>gh</code> and <code>docker</code></td>
+</tr>
+<tr>
+<td>Editing, <code>git</code></td>
+<td>Windows (Git Bash or PowerShell)</td>
+</tr>
+</tbody>
+</table>
+<p>The Windows side has no usable Python. Run Python through Docker or WSL.</p>
+<p>In Git Bash, a Docker mount needs <code>MSYS_NO_PATHCONV=1</code> and <code>$(pwd -W)</code> instead of <code>$PWD</code>, or the path is rewritten. In PowerShell, <code>${PWD}</code> works as it is. A long job (the kernel build, a whole ISO) runs as a detached container (<code>docker run -d --name …</code>), not as a background task of the terminal: those die with the session.</p>
+<h2 id="Development-environment-the-rules">The rules</h2>
+<p>These come from builds that broke the machine.</p>
+<ol>
+<li><strong>No <code>debootstrap</code> or <code>chroot</code> with a bind mount of <code>/dev</code> on WSL2.</strong> It exposes the host's real <code>/dev</code> inside the chroot, corrupts the host's <code>/dev/null</code> (it becomes a regular file) and leaves mounts stuck. A container has no such problem, so the build is Docker.</li>
+<li><strong><code>/dev/null</code> as a regular file means something leaked.</strong> Check with <code>stat /dev/null</code>: it has to be a character device. If it is not, stop the build; do not just run <code>mknod</code> and try again.</li>
+<li><strong>The same kind of error twice</strong> (stuck mount, corrupted <code>/dev</code>, failing <code>umount</code>): stop and find the cause before a third try.</li>
+<li><strong>Check Docker's health before anything heavy</strong> (an ISO, the kernel, packages, the test suites) and before restarting Docker:</li>
+</ol>
+<p><code>powershell
+   powershell -NoProfile -File tools\docker-health.ps1</code></p>
+<ol>
+<li><strong>One heavy Docker job at a time</strong>, across everyone using the machine: look at <code>docker ps</code> first. Two builds in parallel have taken Docker down.</li>
+<li><strong>Never kill <code>com.docker.backend</code> and never run <code>wsl --shutdown</code></strong> to unstick Docker: that leaves another VM holding memory.</li>
+</ol>
+<h2 id="Development-environment-docker-healthps1">docker-health.ps1</h2>
+<table>
+<thead>
+<tr>
+<th>Exit</th>
+<th>Meaning</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Fine</td>
+<td>Go ahead</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Windows' committed memory is above 85%</td>
+<td>Do not start anything heavy or restart Docker; close programs or restart Windows</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Docker does not answer, WSL does</td>
+<td>Quit Docker Desktop from the tray and open it again, once</td>
+</tr>
+<tr>
+<td>3</td>
+<td>WSL itself is hung</td>
+<td>Reopening Docker does not help: restart the WSL service as administrator, or Windows</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Development-environment-working-with-other-people">Working with other people</h2>
+<p>Several people (or several Claude sessions) can work in the same checkout. The git index is shared, so a <code>git add</code> by one shows up in another's commit. Look at <code>git diff --cached --stat</code> first, and add and commit in one go. If someone else has staged files, commit with <code>git commit -- PATH…</code> or a private <code>GIT_INDEX_FILE</code>.</p>
+<p>Commit only your own files, even when <code>git status</code> shows many changed files: they belong to someone's work in progress. Push to <code>main</code> after each change.</p>
+<h2 id="Development-environment-problems">Problems</h2>
+<ul>
+<li><strong>Docker Desktop is stopped.</strong> Start it and wait for <code>docker info</code> to answer. A stopped daemon kills any running build.</li>
+<li><strong>A mount stays stuck after a failed build.</strong> Do not retry; read rule 3.</li>
+<li><strong><code>gh</code> says you are not logged in.</strong> You are in the wrong shell: use WSL (<code>wsl -d Ubuntu-22.04 -- gh …</code>).</li>
+</ul>
+<h2 id="Development-environment-how-it-works">How it works</h2>
+<ul>
+<li>Windows' committed memory (commit) runs out when something leaks handles, and Docker then fails with error 1455 ("paging file too small") and "engine stopped unexpectedly". <code>tools/docker-health.ps1</code> prints the commit, the free memory, the processes that look like they are leaking and the state of Docker and WSL.</li>
+<li>The rules are in the repository's <code>CLAUDE.md</code>, which every Claude session reads first.</li>
+</ul>
+<p>See also: <a href="#Build-and-tests">Build and tests</a>, <a href="#Making-a-change">Making a change</a>, <a href="#Development">Development</a>.</p>
+<h1 id="Making-a-change">Making a change</h1>
+<p>How a change goes from an idea to the repository, and from there to a cabinet: where the code lives, which tests to run, how to try it on a real machine without building an ISO, and what else to touch.</p>
+<h2 id="Making-a-change-where-the-code-lives">Where the code lives</h2>
+<table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A Setup screen or option</td>
+<td><code>fliperos-setup/screens/*.sh</code> (the screens) and <code>fliperos-setup/lib/*.sh</code> (what they call)</td>
+</tr>
+<tr>
+<td>The graphical Setup and the frontend</td>
+<td><code>fliperos-setup/gui/</code> (pygame): <code>fliperos-frontend</code>, <code>feview.py</code>, <code>theme.py</code></td>
+</tr>
+<tr>
+<td>A command, a service or a file in the installed system</td>
+<td><code>config/</code> (installed by <code>fliperos-rootfs.sh</code>)</td>
+</tr>
+<tr>
+<td>What goes into the image and how</td>
+<td><code>fliperos-mkiso.sh</code>, <code>fliperos-rootfs.sh</code>, <code>fliperos-kernel.sh</code></td>
+</tr>
+<tr>
+<td>A compiled program</td>
+<td><code>packaging/packages/NAME.sh</code> and <code>packaging/patches/NAME/</code> (<a href="#Packages">Packages</a>)</td>
+</tr>
+<tr>
+<td>What a network update does</td>
+<td><code>updates/</code> and <code>tools/cabinet-update.sh</code> (<a href="#Publishing-updates">Publishing updates</a>)</td>
+</tr>
+<tr>
+<td>The web panel</td>
+<td><code>config/fliperos-web</code> and <code>config/web/</code></td>
+</tr>
+<tr>
+<td>The docs</td>
+<td><code>docs/wiki/</code>, <code>README.md</code>, <code>README.pt-BR.md</code>; the site is in <code>website/</code></td>
+</tr>
+</tbody>
+</table>
+<p>A new Setup menu item also needs an icon in <code>fliperos-setup/gui/theme.py</code> (a test fails without it). Text that does not fit a row runs on the selected row (<code>feview.ticker</code>); it is not cut.</p>
+<h2 id="Making-a-change-testing-it">Testing it</h2>
+<p>Run the tests in Docker, after <a href="#Development-environment">checking Docker's health</a>:</p>
+<pre><code class="language-powershell">docker build -t fliperos-tests -f tests/Dockerfile tests
+docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
+docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_build.py
+</code></pre>
+<ul>
+<li><code>tests/test_setup.py</code> runs the logic of <code>fliperos-setup</code> against a fake system.</li>
+<li><code>tests/test_build.py</code> checks the boot menu, kernel pins, image files, the recipes, the release text and the docs (<code>DocsTests</code>).</li>
+<li>Run both whenever a screen or a file in <code>config/</code> changes. A hint balloon in a screen has to fit two lines of 34 columns, and <code>test_setup.py</code> checks it.</li>
+<li>A screen can be seen as text with <code>tools/ui-snapshot.sh SCREEN</code>, and the frontend runs on a PC with <code>sh tools/fe-emulator/run.sh</code>. Both are in <a href="#Build-and-tests-tests">Build and tests</a>.</li>
+</ul>
+<h2 id="Making-a-change-trying-it-on-a-cabinet">Trying it on a cabinet</h2>
+<p>An ISO takes hours, so a change is tried on an installed machine. From the repository, in the <code>fliperos-ssh</code> container:</p>
+<pre><code class="language-powershell">docker build -t fliperos-ssh -f tools/Dockerfile.ssh tools
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-ssh sh tools/cabinet-push.sh 192.168.1.111
+</code></pre>
+<p><code>tools/cabinet-push.sh</code> sends <code>fliperos-setup</code>, <code>config/</code>, <code>packaging/</code>, <code>fliperos-rootfs.sh</code> and <code>updates/</code>, and runs <code>tools/cabinet-update.sh</code> there. The cabinet's address can change: check it (<code>fliperos.local</code>) before assuming the old one. A file you put on a cabinet by hand is overwritten by the next update.</p>
+<h2 id="Making-a-change-a-change-that-needs-a-generated-file">A change that needs a generated file</h2>
+<p>A change that only works after a file is generated (an EDID, the initramfs, a <code>modprobe.d</code> file) needs a step that generates it on the machines that already have that setting, like <code>boot_apply</code> in <code>tools/cabinet-update.sh</code>. Installing the new scripts is not enough. See <a href="#Publishing-updates-a-change-that-needs-a-generated-file">Publishing updates</a>.</p>
+<h2 id="Making-a-change-finishing">Finishing</h2>
+<ol>
+<li>Document it on the page of its subject, not on an index page (<a href="#Build-and-tests-writing-the-wiki">Build and tests</a> has the rules).</li>
+<li>Commit and push to <code>main</code>. Commit only your own files.</li>
+<li>If cabinets that are already installed need it, publish an update (<a href="#Publishing-updates">Publishing updates</a>). If it is a compiled program, publish the package first (<a href="#Packages-publishing">Packages</a>).</li>
+<li>If it belongs in the next version, add it to the <code>CHANGELOG.md</code> section when you make the release (<a href="#Making-a-release">Making a release</a>).</li>
+</ol>
+<h2 id="Making-a-change-problems">Problems</h2>
+<ul>
+<li><strong>The tests fail on a file you did not touch.</strong> Another person's unfinished work is in the same checkout; run the tests on a clean <code>git worktree</code> of <code>HEAD</code>.</li>
+<li><strong>A change works through <code>cabinet-push.sh</code> but not after an update.</strong> An update carries only <code>fliperos-setup</code>, <code>config</code>, <code>updates</code>, <code>fliperos-rootfs.sh</code>, <code>fliperos-video-check.py</code>, <code>fliperos-limine-update.py</code> and <code>tools/cabinet-update.sh</code>. A file anywhere else (<code>tools/</code>, <code>packaging/</code>) never reaches a cabinet that way. Put new files under <code>config/</code> or <code>updates/</code>.</li>
+</ul>
+<h2 id="Making-a-change-how-it-works">How it works</h2>
+<ul>
+<li><code>tools/cabinet-update.sh</code> runs the same <code>fliperos-rootfs.sh</code> as the build, then applies what the build does outside it: the bootloader, automatic login, DNS, the clock, packages and the kernel line. It keeps a copy of what it changes in <code>/root/fliperos-backup-DATE.tgz</code>.</li>
+<li>A network update downloads the files of one commit from GitHub and checks them against a hash of those paths (<code>TREE</code> in <code>config/fliperos-update</code>). Adding a path to <code>TREE</code> makes older cabinets compute another hash and refuse the update, so new files go under the paths already there.</li>
+</ul>
+<p>See also: <a href="#Development">Development</a>, <a href="#Architecture">Architecture</a>, <a href="#Adding-an-emulator">Adding an emulator</a>.</p>
+<h1 id="Packages">Packages</h1>
+<p>The compiled programs of FliperOS (RetroArch, Flycast, Dolphin, GroovyMAME, Keisho, PCSX2, OpenBOR, Gum, SDL2 for KMS, Attract-Mode Plus, RAHasher) are <code>.deb</code> packages built from recipes in <code>packaging/packages/</code>. The ISO installs them from a local repository, and the network updates download the very same files, so someone who installed the ISO and someone who only applied updates end up with the same binary.</p>
+<h2 id="Packages-a-recipe">A recipe</h2>
+<p><code>packaging/packages/NAME.sh</code> is a Bash file that sets the package's fields and defines <code>pkg_build()</code>. The fields are listed in <a href="#Variables-recipe-fields">Variables</a>; the shape is:</p>
+<pre><code class="language-bash">PKG_NAME=&quot;fliperos-example&quot;
+PKG_VERSION=&quot;1.2.3&quot;
+PKG_REVISION=&quot;1fliperos1&quot;
+PKG_SUMMARY=&quot;One line&quot;
+PKG_DESCRIPTION=&quot;Longer text&quot;
+PKG_BUILD_DEPS=&quot;build-essential pkg-config git ca-certificates libfoo-dev&quot;
+PKG_SHLIB_TARGETS=&quot;usr/local/bin/example&quot;   # where dpkg-shlibdeps looks for the Depends
+COMMIT=&quot;0123456789abcdef0123456789abcdef01234567&quot;
+
+pkg_build() {
+  git init -q &quot;$SRC/example&quot; \
+    &amp;&amp; git -C &quot;$SRC/example&quot; fetch -q --depth 1 https://github.com/owner/example &quot;$COMMIT&quot; \
+    &amp;&amp; git -C &quot;$SRC/example&quot; checkout -q FETCH_HEAD || return 1
+  make -C &quot;$SRC/example&quot; -j&quot;$(nproc)&quot; &amp;&amp;
+    make -C &quot;$SRC/example&quot; install DESTDIR=&quot;$STAGING&quot; || return 1
+}
+</code></pre>
+<ul>
+<li><code>pkg_build</code> compiles into <code>$SRC</code> and installs into <code>$STAGING</code>, which becomes the package's contents. Chain the steps with <code>&amp;&amp;</code> and <code>return 1</code> on failure: the shell ignores <code>set -e</code> inside a function called with <code>||</code>.</li>
+<li>Pin the source to a commit or a release tag. The patches in <code>packaging/patches/NAME/</code> are checked against that exact version, and a new commit is a new version of the package.</li>
+<li>The <code>Depends</code> line is computed from the binaries listed in <code>PKG_SHLIB_TARGETS</code>, not written by hand. A library opened with <code>dlopen</code> does not show there: add it to <code>PKG_RUNTIME_EXTRA</code>.</li>
+<li>A recipe is for the Ubuntu 24.04 the ISO uses: building on another base produces wrong dependencies.</li>
+</ul>
+<h2 id="Packages-building">Building</h2>
+<pre><code class="language-bash">bash packaging/build-deb.sh --list         # every recipe
+bash packaging/build-deb.sh --list-iso     # the ones that go in the ISO
+</code></pre>
+<p>It runs as root inside the <code>Dockerfile.packages</code> image (Ubuntu 24.04), which is how the Release workflow builds too. <code>tools/publish-changed-packages.sh</code> does it for you (below); by hand:</p>
+<pre><code class="language-bash">docker build -f Dockerfile.packages -t fliperos-packages .
+docker run --rm -v &quot;$PWD/output/packages:/pkg/output/packages&quot; fliperos-packages bash packaging/build-deb.sh fliperos-example
+</code></pre>
+<p>The result is <code>output/packages/NAME_VERSION-REVISION_amd64.deb</code>. <code>--skip-existing</code> leaves a package whose file is already there alone, and <code>--output DIR</code> changes the folder. <code>bash packaging/make-repo.sh</code> turns the folder into the flat APT repository the ISO build carries (<code>output/repo</code>).</p>
+<p>A rebuilt <code>.deb</code> is never byte-identical to the one built before. What counts is the published file's sha256.</p>
+<h2 id="Packages-versions">Versions</h2>
+<ul>
+<li><strong>A changed recipe, patch or asset needs a new <code>PKG_REVISION</code></strong> (<code>1fliperos1</code> → <code>1fliperos2</code>). A <code>.deb</code> that is already published is never replaced: the same version with other contents would leave the cabinets that already have it on the old build.</li>
+<li><strong>A new upstream version</strong> changes <code>PKG_VERSION</code> (and usually restarts the revision).</li>
+<li>The version has no <code>+</code> or <code>:</code>: GitHub renames them in asset names and the download then fails.</li>
+<li>A package that follows the project's HEAD (RetroArch, Flycast) puts the date in <code>PKG_VERSION</code>, so each new commit sorts higher.</li>
+</ul>
+<h2 id="Packages-publishing">Publishing</h2>
+<p>Packages are published to the <code>packages</code> release of the GitHub repository, and <code>updates/packages.list</code> says which version, with which sha256, each cabinet should have:</p>
+<pre><code>NAME&lt;TAB&gt;VERSION&lt;TAB&gt;SHA256&lt;TAB&gt;WHEN
+</code></pre>
+<p><code>WHEN</code> is <code>always</code> (every cabinet gets it, as the ISO does) or <code>installed</code> (only a cabinet that already has the package is raised). A new package enters as <code>installed</code>; after it is tested on a cabinet, change it to <code>always</code> by hand and publish an update.</p>
+<p>Run it in WSL, from the repository (<code>gh</code> is logged in only there), after <a href="#Development-environment">checking Docker's health</a>:</p>
+<pre><code class="language-bash">tools/publish-changed-packages.sh                       # shows the state of each package
+tools/publish-changed-packages.sh --run                 # builds what changed, publishes, commits and pushes the list
+tools/publish-changed-packages.sh --run --bump          # first raises the revision of the ones that changed without one
+tools/publish-changed-packages.sh --run --bump NAME…    # rebuilds the named ones with a new revision
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>em dia</td>
+<td>The recipe, its patches and its version match the list</td>
+</tr>
+<tr>
+<td>versão nova</td>
+<td><code>PKG_VERSION</code>/<code>PKG_REVISION</code> differ from the list: it is built</td>
+</tr>
+<tr>
+<td>pacote novo</td>
+<td>Not in the list yet: it is built and enters as <code>installed</code></td>
+</tr>
+<tr>
+<td>sem revisão</td>
+<td>The recipe or its patches changed since the list's row was written, with the same revision: needs <code>--bump</code></td>
+</tr>
+</tbody>
+</table>
+<p>Comments and the <code>PKG_UPSTREAM</code>, <code>PKG_COMMIT_VAR</code> and <code>PKG_EDGE_*</code> fields do not count as a change (they do not alter the <code>.deb</code>). <code>--force</code> builds even if another container is running, <code>--no-commit</code> leaves the commit of the list for later.</p>
+<p>The routine checks <code>tools/docker-health.ps1</code> and <code>docker ps</code> before building, builds only what is needed, and runs <code>tools/publish-packages.sh</code>, which:</p>
+<ul>
+<li>uploads each <code>.deb</code> that is not on the release yet and rewrites <code>updates/packages.list</code> (a package already published keeps its published sha256);</li>
+<li>keeps a copy of the on-demand packages (below) and of the 15 kHz kernel's <code>.deb</code>s on the release, outside the list;</li>
+<li>accepts a package that is not built here if that exact version is already published.</li>
+</ul>
+<p>After the push, an update has to carry the new list to the machines: see <a href="#Publishing-updates">Publishing updates</a> and <a href="#Making-a-release">Making a release</a>.</p>
+<h2 id="Packages-programs-built-on-demand">Programs built on demand</h2>
+<p>A recipe with <code>PKG_ON_DEMAND=1</code> is not in the ISO and not in the list: the Setup builds the program on the cabinet when someone chooses it (<code>config/fliperos-frontend-build</code>). EmulationStation (ES-DE) and Pegasus are like that. Their <code>.deb</code> is still kept on the release as a copy.</p>
+<h2 id="Packages-the-newest-version-of-a-program">The newest version of a program</h2>
+<p><strong>Setup &gt; Games &gt; Emulators &amp; Games</strong> can build the newest version of a packaged emulator on the cabinet with the same recipe (<code>fliperos-emulators edge NAME</code>). A recipe supports it with:</p>
+<ul>
+<li><code>PKG_UPSTREAM</code>: the project's address;</li>
+<li><code>PKG_COMMIT_VAR</code>: the variable of the recipe that holds the commit or tag to build;</li>
+<li><code>PKG_EDGE_TAGS</code> (a regex of the stable tags, for Dolphin) or <code>PKG_EDGE_RELEASE</code> (the latest GitHub release, for PCSX2); without either, the project's HEAD.</li>
+</ul>
+<p>The package's files are kept aside with <code>dpkg-divert</code>, so updates keep replacing the package without erasing the newer build, and <code>fliperos-emulators edge-off NAME</code> goes back to it. A patch that does not fit the newer code stops the build and the package stays.</p>
+<h2 id="Packages-if-an-upstream-disappears">If an upstream disappears</h2>
+<p>The published <code>.deb</code> stays installable: a cabinet downloads it from the release, not from the project. What is lost is the ability to rebuild with another version. For that, the recipe's pinned source has to be reachable, so keep an eye on the projects the recipes pull from.</p>
+<h2 id="Packages-problems">Problems</h2>
+<ul>
+<li><strong><code>publish-packages: … is missing: build it first</code>.</strong> The package is in the recipes but its <code>.deb</code> is not in <code>output/packages</code> and not published at that version. Build it.</li>
+<li><strong><code>the local build differs; the published one stays</code>.</strong> Normal: only the published file counts. Raise the revision if the code changed.</li>
+<li><strong>A cabinet does not get a package.</strong> Look at its row: <code>installed</code> skips a cabinet that does not have the package yet. <code>packages-sync.sh</code> also skips a file whose sha256 does not match the list.</li>
+<li><strong>The test on the list fails.</strong> <code>updates/packages.list</code> has to have one row for each recipe of <code>--list-iso</code>, with the recipe's version and no other rows.</li>
+</ul>
+<h2 id="Packages-how-it-works">How it works</h2>
+<ul>
+<li><code>updates/packages-sync.sh</code> runs during an update, on the cabinet: for each row, if the package is missing (and the row is <code>always</code>) or older, it downloads <code>NAME_VERSION_amd64.deb</code> from the release (<code>FLIPEROS_PACKAGES_URL</code>), checks the sha256, caches it in <code>/var/cache/fliperos/packages</code> and prints the path for <code>tools/cabinet-update.sh</code> to install.</li>
+<li>The Release workflow gets the packages the same way: it downloads from the release each file the list names, checks the sha256, and compiles only the recipes that have no file yet. The ISO and the updates therefore carry the same binaries. The build's cache key is the hash of <code>packaging/</code> and <code>Dockerfile.packages</code>.</li>
+<li>Packaged emulators write their version to <code>/usr/local/share/fliperos/emulator-versions.d/NAME</code>, which <code>config/fliperos-emulators</code> reads first.</li>
+</ul>
+<p>See also: <a href="#Making-a-release">Making a release</a>, <a href="#Publishing-updates">Publishing updates</a>, <a href="#Adding-an-emulator">Adding an emulator</a>, <a href="#Development">Development</a>.</p>
+<h1 id="Making-a-release">Making a release</h1>
+<p>A release is a new ISO with a version number. This page is the whole procedure in order, with what can go wrong at each step; the details of the build and the publishing script are in <a href="#Build-and-tests-release">Build and tests</a>.</p>
+<p>The one rule that shapes the order: <strong>someone who installs the new ISO and someone who only applies the updates must end up with the same system.</strong> So the packages and the update come first, and the tag is placed on the commit that carries them.</p>
+<h2 id="Making-a-release-before-you-start">Before you start</h2>
+<ul>
+<li>Check that nobody else is about to tag: another session or person may have unfinished work in the same repository.</li>
+<li>Work from WSL for the <code>gh</code> steps (<a href="#Development-environment">Development environment</a>).</li>
+<li>Tag only when the tests pass: <code>test_setup.py</code> and <code>test_build.py</code> (<a href="#Making-a-change-testing-it">Making a change</a>).</li>
+</ul>
+<h2 id="Making-a-release-the-steps">The steps</h2>
+<ol>
+<li><strong>Publish the packages that changed.</strong> <code>tools/publish-changed-packages.sh</code> shows which; <code>--run</code> builds and publishes them (<a href="#Packages-publishing">Packages</a>). The ISO build downloads the published <code>.deb</code>s, so a package that is not published is compiled again by the build, and the cabinets would not have it.</li>
+<li><strong>Publish the update.</strong> Write <code>updates/notes/NNNN.md</code> (English, shown on the cabinet) and <code>updates/notes/pt-BR/NNNN.md</code> (Portuguese, for the Telegram group), then run <code>tools/make-update.sh "Title"</code>, with <code>--reboot</code> if the machine has to restart (<a href="#Publishing-updates">Publishing updates</a>). The update has to cover everything that changed in the system since the last one.</li>
+<li><strong>Check that nothing is left out.</strong> This has to print nothing (<code>LAST_UPDATE</code> is the commit of the last line of <code>updates/index</code>):</li>
+</ol>
+<p><code>bash
+   git log --oneline LAST_UPDATE..HEAD -- fliperos-setup config packaging patches fliperos-rootfs.sh fliperos-mkiso.sh</code></p>
+<p>If it prints commits, go back to step 2. A change that only works after a generated file (an EDID, the initramfs, a <code>modprobe.d</code> file) needs a step in the update that generates it, as <code>boot_apply</code> in <code>tools/cabinet-update.sh</code> does.
+4. <strong>Raise the version.</strong> Change <code>FLIPEROS_VERSION</code> in <code>fliperos-mkiso.sh</code>, then change the other places that name it: <code>git grep -n "fliperos-0\.25"</code> (use the old version) lists the READMEs, the wiki and the tests. The tag has to be exactly this number, with no <code>v</code>.
+5. <strong>Write the changelog.</strong> Add <code>## VERSION</code> at the top of <code>CHANGELOG.md</code>, above the previous version, with what changed since it (<code>git log PREVIOUS..HEAD</code> lists the commits). The section has an intro and the four headings <code>**System changes:**</code>, <code>**Package changes:**</code>, <code>**fliperos-setup changes:**</code> and <code>**Tool changes:**</code>, each with a list of items. <code>ReleaseTests</code> fails if the first section is not the version of <code>FLIPEROS_VERSION</code> or if a heading is missing.
+6. <strong>Optional: the Telegram text.</strong> <code>docs/telegram/VERSION.md</code> is a list of messages (a picture and a caption each, in Portuguese and English) separated by <code>---</code>. Without it, the group gets the changelog section. Check it with <code>python3 tools/telegram-post.py --dry-run VERSION</code> (<a href="#Build-and-tests-telegram-group">Telegram group</a>).
+7. <strong>Commit and push to <code>main</code>.</strong>
+8. <strong>Tag and push the tag:</strong></p>
+<p><code>bash
+   git tag 0.26
+   git push origin 0.26</code></p>
+<ol>
+<li><strong>Follow the build.</strong> It takes about 3 hours without caches (the limit is 6):</li>
+</ol>
+<p><code>bash
+   wsl -d Ubuntu-22.04 -- gh run list -R juniorterin/fliperOS -w Release
+   wsl -d Ubuntu-22.04 -- gh run watch RUN_ID --exit-status
+   wsl -d Ubuntu-22.04 -- gh run view RUN_ID --log-failed</code></p>
+<ol>
+<li><strong>Check the result.</strong> The release has the ISO (or its parts), <code>fliperos-VERSION.sha256</code>, <code>fliperos-VERSION-pkglist.txt</code> and the changelog text; the Telegram group got the post. <code>tools/verify-iso.sh</code> ran on the ISO before it was published.</li>
+</ol>
+<h2 id="Making-a-release-doing-it-again">Doing it again</h2>
+<ul>
+<li><strong>Redo a version that was just tagged:</strong> <code>git tag -f 0.26</code> on the new commit, then <code>git push -f origin 0.26</code>. The build of the old tag still running is cancelled, and a release that was already published is replaced. Do it only for a version nobody has downloaded yet.</li>
+<li><strong>Build without publishing:</strong> <em>Actions &gt; Release &gt; Run workflow</em>. It builds the current version's ISO and keeps it as an artifact for 3 days.</li>
+<li><strong>Post to Telegram again:</strong> <em>Actions &gt; Telegram &gt; Run workflow</em>, with the version (<em>dry run</em> only checks the file). With <code>all</code> it posts every version of the changelog, oldest first.</li>
+<li><strong>Publish an ISO built on your machine:</strong> <code>tools/release-publish.sh</code>, in the audit container (<a href="#Build-and-tests-release">Build and tests</a>). It refuses an ISO that is not from the current repository, one with a Wi-Fi network saved in it, and a version without a changelog section.</li>
+</ul>
+<h2 id="Making-a-release-problems">Problems</h2>
+<ul>
+<li><strong>The workflow stops at the first step.</strong> The tag is not <code>FLIPEROS_VERSION</code>, the changelog has no section for it, or the Telegram text does not pass the dry run. The message names which.</li>
+<li><strong>The build fails.</strong> <code>fliperos-mkiso.log</code> is kept as a workflow artifact for 7 days. A recipe that compiled badly shows there.</li>
+<li><strong>Cabinets on the previous level miss something that is in the ISO.</strong> Step 3 was skipped: publish the update that covers the difference.</li>
+</ul>
+<h2 id="Making-a-release-how-it-works">How it works</h2>
+<ul>
+<li><code>.github/workflows/release.yml</code> runs on a tag that starts with a digit. It checks the tag, the changelog and the Telegram text, then builds the packages repository (the published <code>.deb</code>s come first, only the missing ones are compiled), then the ISO with <code>Dockerfile.fliperos</code>, then publishes with <code>tools/release-publish.sh --replace</code>, then calls the Telegram workflow.</li>
+<li>The kernel and the packages are cached by key: the kernel by <code>fliperos-kernel.sh key</code> (the version, the patches and the script), the packages by the hash of <code>packaging/</code> and <code>Dockerfile.packages</code>.</li>
+<li>The Google sign-in of the cloud backup gets its client from repository secrets while the ISO builds (<a href="#Variables-github-secrets-and-variables">Variables</a>).</li>
+</ul>
+<p>See also: <a href="#Publishing-updates">Publishing updates</a>, <a href="#Packages">Packages</a>, <a href="#Build-and-tests">Build and tests</a>, <a href="#Development">Development</a>.</p>
 <h1 id="Build-and-tests">Build and tests</h1>
 <h2 id="Build-and-tests-build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
@@ -35860,7 +36313,488 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <li>Before asking, the update is rehearsed in an overlay over <code>/</code>, and each file it would write is compared with the manifest of what FliperOS installed (<code>/var/lib/fliperos/update/manifest</code>); a file changed on the machine is copied to <code>/var/lib/fliperos/update/backup/NNNN-date/</code> first.</li>
 <li><code>tools/cabinet-push.sh</code> copies the working tree to a cabinet over SSH, for testing before an update exists.</li>
 </ul>
-<p>See also: <a href="#Updates-and-versions">Updates and versions</a>, <a href="#Build-and-tests">Build and tests</a>.</p>
+<p>See also: <a href="#Updates-and-versions">Updates and versions</a>, <a href="#Build-and-tests">Build and tests</a>, <a href="#Packages">Packages</a>, <a href="#Making-a-release">Making a release</a>.</p>
+<h1 id="Variables">Variables</h1>
+<p>The options, environment variables, recipe fields, secrets and state files a developer meets, with where each is defined and what it does. Defaults are the ones in the code.</p>
+<h2 id="Variables-iso-build-options">ISO build options</h2>
+<p><code>fliperos-mkiso.sh</code> takes these on the command line (run it as root, in the build container). The table with what each one removes is in <a href="#Build-and-tests-build">Build and tests</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--output FILE</code> (or a <code>*.iso</code> argument)</td>
+<td><code>/tmp/fliperos-VERSION.iso</code></td>
+<td>Where the ISO is written</td>
+</tr>
+<tr>
+<td><code>--skip-switchres</code>, <code>--skip-groovymame</code>, <code>--skip-retroarch</code>, <code>--skip-flycast</code>, <code>--skip-pcsx2</code>, <code>--skip-keisho</code>, <code>--skip-dolphin</code>, <code>--skip-hypseus</code>, <code>--skip-openbor</code>, <code>--skip-skyscraper</code></td>
+<td>all included</td>
+<td>Leaves that part out of the image</td>
+</tr>
+<tr>
+<td><code>--skip-input-drivers</code></td>
+<td>included</td>
+<td>Without the GunCon 2 and wheel drivers</td>
+</tr>
+<tr>
+<td><code>--skip-wheel-drivers</code></td>
+<td>included</td>
+<td>Without only the wheel drivers</td>
+</tr>
+<tr>
+<td><code>--kernel-cache DIR</code></td>
+<td><code>/output/kernel-cache</code> when <code>/output</code> exists</td>
+<td>Where the kernel <code>.deb</code>s are kept and reused</td>
+</tr>
+<tr>
+<td><code>--repo DIR</code></td>
+<td><code>/output/repo</code> when it exists</td>
+<td>The APT repository of packages carried into the image</td>
+</tr>
+<tr>
+<td><code>--splash NAME</code></td>
+<td><code>fliperos-text</code></td>
+<td><code>fliperos-text</code>, <code>fliperos</code>, <code>evangelion</code> or <code>none</code></td>
+</tr>
+<tr>
+<td><code>--wifi-ssid</code>, <code>--wifi-psk</code></td>
+<td>none</td>
+<td>Saves a Wi-Fi network in the image; the password is stored as plain text</td>
+</tr>
+</tbody>
+</table>
+<p><code>--skip-wine</code>, <code>--skip-steam</code>, <code>--skip-heroic</code> and <code>--with-wheel-drivers</code> are accepted and ignored.</p>
+<h2 id="Variables-build-variables">Build variables</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Where</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FLIPEROS_VERSION</code></td>
+<td><code>fliperos-mkiso.sh</code></td>
+<td>The ISO's version. The release tag has to equal it, and <code>CHANGELOG.md</code> has to start with its section</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_REPO</code></td>
+<td><code>fliperos-mkiso.sh</code></td>
+<td>The package repository folder (set by <code>--repo</code>)</td>
+</tr>
+<tr>
+<td><code>KERNEL_CACHE</code></td>
+<td><code>fliperos-mkiso.sh</code></td>
+<td>The kernel cache folder (set by <code>--kernel-cache</code>)</td>
+</tr>
+<tr>
+<td><code>UBUNTU_CODENAME</code>, <code>UBUNTU_MIRROR</code></td>
+<td><code>fliperos-mkiso.sh</code></td>
+<td><code>noble</code> and <code>http://archive.ubuntu.com/ubuntu</code>: the base the image is made from</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_ROOTFS_CHROOT</code></td>
+<td><code>fliperos-rootfs.sh</code></td>
+<td>Set to <code>1</code> by <code>fliperos-mkiso.sh</code> when <code>fliperos-rootfs.sh</code> runs in the build chroot, where <code>/proc/1</code> does not exist, so it still compiles the schemas and the alternatives</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Variables-kernel">Kernel</h2>
+<p>In <code>fliperos-kernel.sh</code> (<code>bash fliperos-kernel.sh key</code> prints the cache key, <code>build OUTPUT</code> compiles):</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KERNEL_VERSION</code></td>
+<td>The kernel.org version (<code>6.18.54</code>)</td>
+</tr>
+<tr>
+<td><code>KERNEL_SERIES</code></td>
+<td>The series, taken from <code>KERNEL_VERSION</code></td>
+</tr>
+<tr>
+<td><code>KERNEL_BUILD</code></td>
+<td>Rises with every new or changed patch. The kernel becomes <code>6.18.54-15khz.N</code>, a new package installed beside the previous one, which Limine keeps as the previous kernel</td>
+</tr>
+<tr>
+<td><code>KERNEL_PATCHES_SHA256</code></td>
+<td>The hash of the patches of this build. <code>test_build.py</code> fails if the patches change without <code>KERNEL_BUILD</code> rising</td>
+</tr>
+</tbody>
+</table>
+<p>The cache key changes with the version, a patch or the script, and a build with the same key reuses the <code>.deb</code>s. See <a href="#Kernel-15-kHz">15 kHz kernel</a>.</p>
+<h2 id="Variables-recipe-fields">Recipe fields</h2>
+<p>Set in <code>packaging/packages/NAME.sh</code>; <code>packaging/build-deb.sh</code> reads them. See <a href="#Packages">Packages</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PKG_NAME</code></td>
+<td>The package name (required)</td>
+</tr>
+<tr>
+<td><code>PKG_VERSION</code></td>
+<td>The upstream version (required). No <code>+</code> or <code>:</code></td>
+</tr>
+<tr>
+<td><code>PKG_REVISION</code></td>
+<td>The package revision, default <code>1</code>. Raise it on every change</td>
+</tr>
+<tr>
+<td><code>PKG_SUMMARY</code>, <code>PKG_DESCRIPTION</code></td>
+<td>The one-line and the long description</td>
+</tr>
+<tr>
+<td><code>PKG_SECTION</code></td>
+<td>The Debian section, default <code>games</code></td>
+</tr>
+<tr>
+<td><code>PKG_HOMEPAGE</code></td>
+<td>The project's address</td>
+</tr>
+<tr>
+<td><code>PKG_BUILD_DEPS</code></td>
+<td>The packages <code>apt-get</code> installs before building</td>
+</tr>
+<tr>
+<td><code>PKG_SHLIB_TARGETS</code></td>
+<td>The binaries (paths inside the package) that <code>dpkg-shlibdeps</code> reads to compute <code>Depends</code></td>
+</tr>
+<tr>
+<td><code>PKG_RUNTIME_EXTRA</code></td>
+<td>Dependencies added by hand, such as a library opened with <code>dlopen</code></td>
+</tr>
+<tr>
+<td><code>PKG_ON_DEMAND</code></td>
+<td><code>1</code>: not in the ISO, built on the cabinet when chosen</td>
+</tr>
+<tr>
+<td><code>PKG_UPSTREAM</code></td>
+<td>The project's address, for the newest-version mode</td>
+</tr>
+<tr>
+<td><code>PKG_COMMIT_VAR</code></td>
+<td>The recipe variable that holds the commit or tag to build in that mode</td>
+</tr>
+<tr>
+<td><code>PKG_EDGE_TAGS</code></td>
+<td>A regex of the stable tags to choose from (Dolphin)</td>
+</tr>
+<tr>
+<td><code>PKG_EDGE_RELEASE</code></td>
+<td>Use the latest GitHub release (PCSX2)</td>
+</tr>
+<tr>
+<td><code>PKG_EDGE_WAIT</code></td>
+<td>How long the newest-version build takes, when it is not minutes</td>
+</tr>
+</tbody>
+</table>
+<p>Inside <code>pkg_build()</code>: <code>SRC</code> is where to compile, <code>STAGING</code> is the package's root, and <code>FLIPEROS_EDGE=1</code> marks a newest-version build, where the pinned commit is not the one being built.</p>
+<h2 id="Variables-publishing">Publishing</h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Where</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FLIPEROS_GH_REPO</code></td>
+<td><code>tools/publish-packages.sh</code></td>
+<td>The GitHub repository of the release, default <code>juniorterin/fliperOS</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_KERNEL_DIR</code></td>
+<td><code>tools/publish-packages.sh</code></td>
+<td>Where the kernel <code>.deb</code>s are, default <code>output/kernel</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_PACKAGES_URL</code></td>
+<td><code>updates/packages-sync.sh</code></td>
+<td>Where a cabinet downloads packages from, default the <code>packages</code> release of the repository</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_PACKAGES_CACHE</code></td>
+<td><code>updates/packages-sync.sh</code></td>
+<td>The cabinet's download cache, default <code>/var/cache/fliperos/packages</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_PACKAGES_ARCH</code></td>
+<td><code>updates/packages-sync.sh</code></td>
+<td>The architecture of the file names, default <code>amd64</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_VERIFY_DIR</code></td>
+<td><code>tools/verify-iso.sh</code></td>
+<td>A folder to extract the ISO into, for whoever uses the result afterwards</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_USER</code>, <code>FLIPEROS_PASSWORD</code></td>
+<td><code>tools/cabinet-push.sh</code></td>
+<td>The cabinet's login to send files over SSH, default <code>fliperos</code> and <code>fliperos</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="Variables-github-secrets-and-variables">GitHub secrets and variables</h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Where</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GITHUB_TOKEN</code></td>
+<td>Release workflow</td>
+<td>The workflow's own token, used to publish the release</td>
+</tr>
+<tr>
+<td><code>TELEGRAM_BOT_TOKEN</code></td>
+<td>Secret, Telegram workflow</td>
+<td>The token of the bot (from @BotFather) that is an administrator of the group. Without it nothing is posted and the workflow only warns</td>
+</tr>
+<tr>
+<td><code>TELEGRAM_CHAT_ID</code></td>
+<td>Repository variable</td>
+<td>The group to post in; <code>@fliperos15khz</code> when it is not set</td>
+</tr>
+<tr>
+<td><code>GOOGLE_OAUTH_CLIENT_ID</code>, <code>GOOGLE_OAUTH_CLIENT_SECRET</code></td>
+<td>Secrets, Release workflow</td>
+<td>The Google sign-in of the cloud backup. They go into <code>/etc/fliperos/google-oauth.conf</code> through <code>tools/google-oauth-conf.sh</code>; without them the file is empty and the cabinet downloads it from the <code>packages</code> release</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Variables-on-the-cabinet">On the cabinet</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Where</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FLIPEROS_CONF</code></td>
+<td>many <code>config/</code> commands</td>
+<td>The settings file, default <code>/etc/fliperos/fliperos.conf</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_ETC</code></td>
+<td><code>config/fliperos-roms</code>, <code>-tty1</code>, <code>-automount</code></td>
+<td>The settings folder, default <code>/etc/fliperos</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_USER</code></td>
+<td><code>config/fliperos-emulators</code>, <code>-arcadeflow</code> and others</td>
+<td>The arcade user whose home they work on, default <code>fliperos</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_UI</code></td>
+<td><code>fliperos-setup/lib/ui.sh</code></td>
+<td><code>text</code> or <code>gui</code>: forces the Setup's interface (<code>ui=</code> in <code>fliperos.conf</code> does the same)</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_LOG</code></td>
+<td><code>fliperos-setup/lib/common.sh</code></td>
+<td>The Setup's log, default <code>/var/log/fliperos-setup.log</code></td>
+</tr>
+<tr>
+<td><code>FLIPEROS_NO_SPEECH</code></td>
+<td><code>fliperos-setup/lib/speech.sh</code></td>
+<td><code>1</code> turns the spoken prompts off</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_UPDATE</code></td>
+<td><code>config/fliperos-update</code></td>
+<td><code>1</code> while an update runs: <code>tools/cabinet-update.sh</code> then does not take the update lock a second time</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_RECIPES</code>, <code>FLIPEROS_EDGE_STATE</code>, <code>FLIPEROS_EDGE_WORK</code></td>
+<td><code>config/fliperos-emulators</code></td>
+<td>Where the newest-version mode finds the recipes, keeps its state and builds. Defaults <code>/usr/local/share/fliperos/packaging/packages</code>, <code>/var/lib/fliperos/edge</code>, <code>/var/cache/fliperos/edge</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="Variables-picture-filters-and-the-on-screen-menu">Picture filters and the on-screen menu</h2>
+<p>These are read by the preloaded libraries and the commands that draw over a game (<a href="#Picture-filters">Interlaced, colour and scanlines</a>, <a href="#On-screen-menu">On-screen menu</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FLIPEROS_DEFLICKER</code></td>
+<td><code>off</code>, <code>light</code>, <code>medium</code> or <code>strong</code>: overrides the interlaced filter level</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_DEFLICKER_FORCE</code></td>
+<td><code>1</code> filters in any video mode, not only interlaced</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_DEFLICKER_DEBUG</code>, <code>FLIPEROS_DEFLICKER_QUIET</code></td>
+<td>Print what the filter does, or keep it silent</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_DEFLICKER_APP</code></td>
+<td>The program's name (the one in the <code>fliperos-x11-run</code> table), so each program has its own setting</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_DEFLICKER_FILE</code></td>
+<td>A file with the filter level, read again every 30 frames (the Setup's preview changes the level on the spot)</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_SCANLINES_FILE</code></td>
+<td>A file with the scanline settings, read again every 30 frames and active on any monitor (the preview)</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_COLOR_FILE</code></td>
+<td>A file with the colour settings (saturation and hue), read again every 30 frames (the calibrator)</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_OSD_FILE</code></td>
+<td>The on-screen menu's picture, <code>/run/fliperos-osd/screen</code>, which exists only while the menu is open</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_GUN_DEVICES</code></td>
+<td>The light-gun input events to read, separated by <code>:</code> (for the tests)</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_VK_FPS</code></td>
+<td><code>1</code> loads the Vulkan layer that counts frames for the web panel (set by <code>fliperos-kms-run</code> and <code>fliperos-x11-client</code>)</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_FPS_FILE</code></td>
+<td>The file the frame counter writes each second, instead of <code>$XDG_RUNTIME_DIR/fliperos-fps</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="Variables-tests-and-tools">Tests and tools</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Where</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FLIPEROS_GUI_HEADLESS</code></td>
+<td><code>fliperos-setup/gui/serve.py</code></td>
+<td><code>1</code> runs the graphical Setup without video, for the tests</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_GUI_KEYS</code></td>
+<td><code>fliperos-setup/gui/serve.py</code></td>
+<td>The keys the GUI presses, in order</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_GUI_SHOTS</code></td>
+<td><code>fliperos-setup/gui/serve.py</code></td>
+<td>A folder where each screen is saved as a PNG</td>
+</tr>
+<tr>
+<td><code>FLIPEROS_GUI_BG</code></td>
+<td><code>fliperos-setup/gui/background.py</code></td>
+<td>Fixes the GUI's background instead of picking one</td>
+</tr>
+<tr>
+<td><code>FE_EMU_PORT</code>, <code>FE_EMU_SIZE</code></td>
+<td><code>tools/fe-emulator/run.sh</code></td>
+<td>The frontend emulator's browser port (<code>6080</code>) and screen size (<code>960x720</code>)</td>
+</tr>
+<tr>
+<td><code>MSYS_NO_PATHCONV</code></td>
+<td>Git Bash</td>
+<td><code>1</code> stops Git Bash rewriting the paths of a Docker mount</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Variables-state-files">State files</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>updates/index</code></td>
+<td>One line per update: number, commit, tree hash, reboot, title</td>
+</tr>
+<tr>
+<td><code>updates/packages.list</code></td>
+<td>Name, version, sha256 and <code>always</code>/<code>installed</code> of each package of the ISO</td>
+</tr>
+<tr>
+<td><code>updates/notes/NNNN.md</code>, <code>updates/notes/pt-BR/NNNN.md</code></td>
+<td>The notes of an update, in English and Portuguese</td>
+</tr>
+<tr>
+<td><code>docs/telegram/VERSION.md</code>, <code>docs/telegram/update-NNNN.md</code></td>
+<td>The Telegram posts, with pictures</td>
+</tr>
+<tr>
+<td><code>CHANGELOG.md</code></td>
+<td>The text of each release</td>
+</tr>
+<tr>
+<td><code>/etc/fliperos/patch-level</code></td>
+<td>The cabinet's update level</td>
+</tr>
+<tr>
+<td><code>/var/log/fliperos-update.log</code></td>
+<td>The cabinet's update log</td>
+</tr>
+<tr>
+<td><code>/var/lib/fliperos/update/manifest</code></td>
+<td>What FliperOS installed, to tell the user's own changes apart</td>
+</tr>
+<tr>
+<td><code>/etc/fliperos/fliperos.conf</code></td>
+<td>The cabinet's settings</td>
+</tr>
+</tbody>
+</table>
+<h2 id="Variables-how-it-works">How it works</h2>
+<ul>
+<li>Command-line options are parsed at the top of each script (<code>fliperos-mkiso.sh</code> takes them in a <code>case</code>), and <code>--help</code> prints the usage.</li>
+<li>Environment variables with a default use <code>${NAME:-default}</code>, so a test or a developer overrides one without editing the file.</li>
+</ul>
+<p>See also: <a href="#Build-and-tests">Build and tests</a>, <a href="#Packages">Packages</a>, <a href="#Commands">Commands</a>, <a href="#Development">Development</a>.</p>
+<h1 id="Kernel-15-kHz">15 kHz kernel</h1>
+<p><code>fliperos-kernel.sh</code> downloads kernel.org <strong>6.18.54</strong>, applies <code>patches/kernel-15khz/6.18/</code> (D0023R's 01 to 09, plus FliperOS's own 10, which lets nouveau take modes under 25 MHz on analog outputs: see <a href="#Video-cards">Video cards</a>) on top of the <code>.config</code> of Ubuntu 24.04's own kernel and builds the <code>.deb</code>s. No module signing and no debug info. Compiling takes hours, so the <code>.deb</code>s stay in a cache keyed by version and patch hash (<code>/output/kernel-cache/&lt;key&gt;/</code>): the next build reuses them.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/video.webp" width="480" alt="Video Setup: the modes made by Switchres on the 15 kHz kernel"></p>
+<p>Switchres (<code>v2.2.1</code>, the same version as GroovyArcade's package) is compiled with <code>grid</code> and <code>geometry</code>, and at build time generates one EDID per monitor preset plus the two super resolution ones used by the boot's EDID entries (<code>fliperos-rebuild-edids</code>, GroovyArcade's <code>rebuild_edids</code>). The initramfs hook carries all of them into the initramfs.</p>
 <h1 id="Architecture">Architecture</h1>
 <h2 id="Architecture-fliperos-setup"><code>fliperos-setup</code></h2>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/setup.webp" width="480" alt="The Setup menu"></p>
@@ -36208,7 +37142,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td><code>config/fliperos-model2</code>, <code>config/fliperos-sm2emu</code>, <code>config/sm2-emu-patches</code>, <code>config/fliperos-ini-set</code></td>
-<td>Model 2 is SM2-Emu (clone, apply the FliperOS patches if there are any, build with LTO, game list; the binary is not in the image); per-section ini tweaks (PCSX2)</td>
+<td>Model 2 is Keisho (clone, apply the FliperOS patches if there are any, build with LTO, game list; the binary is not in the image); per-section ini tweaks (PCSX2)</td>
 </tr>
 <tr>
 <td><code>config/fliperos-fightcade</code>, <code>config/openbox-fightcade.xml</code></td>

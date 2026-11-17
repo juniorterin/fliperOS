@@ -67,4 +67,4 @@ curl -fsSL https://raw.githubusercontent.com/juniorterin/fliperOS/main/updates/b
 - Before asking, the update is rehearsed in an overlay over `/`, and each file it would write is compared with the manifest of what FliperOS installed (`/var/lib/fliperos/update/manifest`); a file changed on the machine is copied to `/var/lib/fliperos/update/backup/NNNN-date/` first.
 - `tools/cabinet-push.sh` copies the working tree to a cabinet over SSH, for testing before an update exists.
 
-See also: [Updates and versions](Updates-and-versions.md), [Build and tests](Build-and-tests.md).
+See also: [Updates and versions](Updates-and-versions.md), [Build and tests](Build-and-tests.md), [Packages](Packages.md), [Making a release](Making-a-release.md).

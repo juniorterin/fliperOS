@@ -125,10 +125,16 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 | [Linked cabinets](Linked-cabinets.md) | The games that link several machines (Daytona, the Tournament Battle, Scud Race and more): cabinets, players, screens, master and slave, each emulator |
 | [Party and net play](Net-play.md) | More players than one cabinet's controls: RetroArch net play, Flycast GGPO, GroovyMAME lockstep, Dolphin |
 
-## Hacking on it
+## For developers
 
 | Page | What it covers |
 | --- | --- |
+| [Development](Development.md) | Where to start: what to read to change something, build the ISO, package a program, publish an update or make a release |
+| [Development environment](Development-environment.md) | What runs where on Windows, the rules that protect the build and Docker, working in a shared repository |
+| [Making a change](Making-a-change.md) | Where the code lives, the tests, trying a change on a cabinet, the docs and the commit |
+| [Packages](Packages.md) | The `.deb` recipes, building, versions and publishing them to GitHub |
+| [Making a release](Making-a-release.md) | The whole release in order: packages, update, changelog, version, tag, build and posts |
+| [Variables](Variables.md) | The build options, environment variables, recipe fields, secrets and state files |
 | [15 kHz kernel](Kernel-15-kHz.md) | The kernel and the patches |
 | [Build and tests](Build-and-tests.md) | Building the ISO in Docker, the build options, the ISO audit, publishing the release, the tests, updating a cabinet over the network |
 | [Publishing updates](Publishing-updates.md) | Making and publishing a FliperOS update, and lining it up with a new ISO |
