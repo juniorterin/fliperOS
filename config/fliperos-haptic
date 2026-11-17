@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Vibracao nos controles modernos: o gabinete responde quando um frontend
+abre e fecha e quando um jogo comeca e termina (o menu e o frontend do
+FliperOS sentem cada toque por conta propria: gui/fehaptic.py).
+
+    fliperos-haptic EVENTO                   toca um padrao agora (tick, step,
+                                             select, back, open, close, start,
+                                             end, error, coin)
+    fliperos-haptic launch PROGRAMA [ARGS]   do fliperos-kms-run e do
+                                             fliperos-x11-run (after_game)
+
+launch olha o comando: um frontend (o do FliperOS, o AttractPlus, o ES-DE, o
+Pegasus) da "open" e, quando fecha, "close"; um jogo (o ultimo argumento e o
+arquivo, ou o set do GroovyMAME) da "start" e, quando fecha, "end", ou
+"error" se caiu em poucos segundos (provavelmente nao abriu). O menu de um
+emulador ou uma ferramenta, sem jogo, nada. O jogo e HAPTIC_GAME_PID (o
+after_game: fora da arvore do jogo, sobrevive ao atalho de sair do frontend);
+sem ele, o pai.
+
+Controles: so joypad com rumble (volante, pistola e painel ficam de fora);
+haptic=off|low|on|high no fliperos.conf (gui/fehaptic.py).
+"""
+import os
+import sys
+import time
+
+sys.path.insert(0, os.environ.get("FLIPEROS_GUI_DIR", "/usr/local/lib/fliperos-setup/gui"))
+try:
+    import fehaptic
+except ImportError:
+    sys.exit(0)           # sem o modulo (uma imagem antiga): nada
+
+
+def alive(pid):
+    try:
+        with open("/proc/%d/stat" % pid) as f:
+            return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return False
+
+
+def launch(argv):
+    if not argv:
+        return 2
+    kind = fehaptic.classify(argv[0], argv[-1])
+    if not kind or not fehaptic.level():
+        return 0
+    pid = os.environ.get("HAPTIC_GAME_PID") or str(os.getppid())
+    if not pid.isdigit() or int(pid) <= 1:
+        return 0
+    pid = int(pid)
+    began = time.monotonic()
+    fehaptic.play_all("open" if kind == "frontend" else "start")
+    while alive(pid):
+        time.sleep(0.25)
+    if kind == "frontend":
+        fehaptic.play_all("close")
+    else:
+        crashed = time.monotonic() - began < fehaptic.CRASH_SECONDS
+        fehaptic.play_all("error" if crashed else "end")
+    return 0
+
+
+def main(argv):
+    if not argv:
+        print("usage: fliperos-haptic EVENT | launch PROGRAM [ARGS...]", file=sys.stderr)
+        return 2
+    if argv[0] == "launch":
+        return launch(argv[1:])
+    if argv[0] not in fehaptic.PATTERNS:
+        print("fliperos-haptic: unknown event %s (%s)" % (argv[0], ", ".join(fehaptic.PATTERNS)), file=sys.stderr)
+        return 2
+    fehaptic.play_all(argv[0])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

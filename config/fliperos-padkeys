@@ -29,9 +29,18 @@ import os
 import re
 import select
 import struct
+import sys
 import time
 
-FLAG = os.environ.get('FLIPEROS_PADKEYS_FLAG', '/run/fliperos/padkeys')
+# O retorno haptico do menu (gui/fehaptic.py): cada tecla que sai do
+# controle, um toque no proprio controle. Sem o modulo, sem vibracao.
+sys.path.insert(0, os.environ.get('FLIPEROS_GUI_DIR', '/usr/local/lib/fliperos-setup/gui'))
+try:
+    import fehaptic
+except ImportError:
+    fehaptic = None
+
+FLAG =os.environ.get('FLIPEROS_PADKEYS_FLAG', '/run/fliperos/padkeys')
 NAME = b'FliperOS pad keys'
 
 
@@ -83,6 +92,9 @@ BUTTONS = {
 }
 KEYS = sorted(set(BUTTONS.values()))
 REPEAT = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PAGEUP, KEY_PAGEDOWN}
+# O que cada tecla faz sentir (gui/fehaptic.py PATTERNS).
+HAPTIC_KEYS = {KEY_UP: 'tick', KEY_DOWN: 'tick', KEY_LEFT: 'tick', KEY_RIGHT: 'tick', KEY_SPACE: 'tick',
+               KEY_PAGEUP: 'step', KEY_PAGEDOWN: 'step', KEY_ENTER: 'select', KEY_ESC: 'back'}
 # Mais lento que o teclado: num modo entrelacado o menu redesenha devagar.
 # Um toque rapido no direcional anda um item so; a repeticao so comeca
 # depois de meio segundo segurando.
@@ -363,6 +375,21 @@ class Pad:
             os.close(self.fd)
             raise
         self.mapper = Mapper(ranges, mapped_buttons(keys, device_port(path), ids, players), wheel)
+        # O mesmo aparelho para a vibracao (None: sem rumble, volante, ou haptic=off).
+        self.haptic = None
+        self.scale = fehaptic.level() if fehaptic else 0
+        if self.scale:
+            try:
+                self.haptic = fehaptic.Pad(path)
+            except (OSError, ValueError):
+                pass
+
+    def feel(self, key):
+        """O toque de uma tecla do menu: seta, Enter (aceitar), Esc (voltar)."""
+        if self.haptic:
+            event = HAPTIC_KEYS.get(key)
+            if event:
+                self.haptic.play(event, self.scale)
 
     def read(self):
         """Eventos pendentes; OSError quando o controle foi desligado."""
@@ -375,6 +402,8 @@ class Pad:
         return [EVENT.unpack_from(data, i)[2:] for i in range(0, len(data) - EVENT.size + 1, EVENT.size)]
 
     def close(self):
+        if self.haptic:
+            self.haptic.close()
         os.close(self.fd)
 
 
@@ -392,8 +421,12 @@ def uinput_open():
 def main():
     out = uinput_open()
 
+    current = [None]    # o controle que apertou por ultimo (a repeticao vibra nele)
+
     def emit(key, value):
         os.write(out, EVENT.pack(0, 0, EV_KEY, key, value) + EVENT.pack(0, 0, EV_SYN, 0, 0))
+        if value in (1, 2) and current[0]:
+            current[0].feel(key)
 
     keys = Keys(emit)
     pads = {}
@@ -404,6 +437,7 @@ def main():
                 for pad in pads.values():
                     pad.close()
                 pads.clear()
+                current[0] = None
                 keys.release_all()
             time.sleep(0.5)
             continue
@@ -431,9 +465,12 @@ def main():
             if events is None:
                 for key, value in pad.mapper.release():
                     keys.apply(key, value, now)
+                if current[0] is pad:
+                    current[0] = None
                 pad.close()
                 del pads[pad.path]
                 continue
+            current[0] = pad
             for etype, code, value in events:
                 for key, pressed in pad.mapper.event(etype, code, value):
                     keys.apply(key, pressed, now)

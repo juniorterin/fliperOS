@@ -37,7 +37,7 @@ crt_card_driver() {
 # esta abaixo dele (o atalho de sair), e um vigia filho morria junto, antes de
 # agir. O PID do jogo vai explicito: o deste script, que o exec mantem.
 after_game() {
-  (PIXELCADE_GAME_PID=$$ FLIPEROS_GAME_PID=$$ PADCOLOR_GAME_PID=$$ "$@" < /dev/null > /dev/null 2>&1 &)
+  (PIXELCADE_GAME_PID=$$ FLIPEROS_GAME_PID=$$ PADCOLOR_GAME_PID=$$ HAPTIC_GAME_PID=$$ "$@" < /dev/null > /dev/null 2>&1 &)
 }
 # O jogo da linha de comando no marquee do Pixelcade (config/fliperos-pixelcade;
 # sem o Pixelcade instalado, nada). Em segundo plano: a abertura nao espera.
@@ -58,6 +58,10 @@ outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
 # fechar, depois a roleta de novo (config/fliperos-padcolor; sem jogo, nada).
 padcolor=${FLIPEROS_PADCOLOR_TOOL:-/opt/fliperos/bin/fliperos-padcolor}
 [[ -x $padcolor ]] && after_game "$padcolor" launch "$@"
+# O retorno haptico dos controles modernos: abrir/fechar um frontend e comecar/
+# terminar um jogo (config/fliperos-haptic; sem joypad com rumble, nada).
+haptic=${FLIPEROS_HAPTIC_TOOL:-/opt/fliperos/bin/fliperos-haptic}
+[[ -x $haptic ]] && after_game "$haptic" launch "$@"
 # A config do FliperOS entra por cima da do usuario (ver o cabecalho de
 # config/retroarch.cfg). Fica aqui, e nao em quem chama, porque a sessao de
 # boot so passa o nome do binario.

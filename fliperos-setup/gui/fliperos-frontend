@@ -1095,6 +1095,12 @@ class Frontend:
         """Um jogo pedido sem tempo: o indicador pisca mais forte."""
         self.nag_at = time.monotonic()
         self.say("INSERT COIN")
+        self.buzz("error")
+
+    def buzz(self, event):
+        """Um toque de retorno (gui/fehaptic.py) no controle em uso."""
+        if self.input.buzzer:
+            self.input.buzzer.feel(event)
 
     def option_count(self):
         return OPT_COIN + 1 if self.commercial else OPT_COIN
@@ -2548,6 +2554,7 @@ class Frontend:
         argv = argv or (self.lib.command(g) if g else None)
         if not argv:
             self.say("CANNOT OPEN THIS GAME")
+            self.buzz("error")
             return
         if self.locked():
             self.nag()
@@ -2733,6 +2740,7 @@ class Frontend:
                 elif now >= self.repeat[a]:
                     self.repeat[a] = now + 0.12
                     self.overlay_act(a)
+                    self.input.feel([a], self.input.buzzer and self.input.buzzer.pad)
                 continue
             step = 1 if a == "down" else -1
             if self.letter_mode:
@@ -2755,6 +2763,7 @@ class Frontend:
                 if n:
                     self.acc -= n
                     self.move(step * n * (COLS if self.mode == "flow" else 1), wrap=False)
+                    self.input.feel(["up"], self.input.buzzer and self.input.buzzer.pad)   # segurando: um tique por passo
         for a, gap in (("left", 0.5), ("right", 0.5), ("b3", 0.18), ("b6", 0.18)):
             held = self.input.held(a)
             if held is None or self.overlay:

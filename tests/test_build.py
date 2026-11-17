@@ -22946,5 +22946,164 @@ class GoogleOAuthSecretsTests(unittest.TestCase):
         self.assertIn('releases/download/packages/google-oauth.conf', (ROOT / 'config/fliperos-cloud').read_text())
 
 
+class HapticTests(unittest.TestCase):
+    """gui/fehaptic.py e config/fliperos-haptic: a vibracao dos controles
+    modernos ao navegar, abrir e fechar frontend e jogo."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        self.addCleanup(sys.path.remove, str(ROOT / 'fliperos-setup/gui'))
+        import fehaptic
+        self.fh = fehaptic
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def test_every_pattern_fits_the_kernel_effect_slots(self):
+        # O kernel guarda 16 efeitos por controle; um padrao tem poucos passos,
+        # e cada um de duracao valida (replay.length e 16 bits).
+        for name, plan in self.fh.PATTERNS.items():
+            self.assertLessEqual(len(plan), 4, name)
+            for delay, ms, strong, weak in plan:
+                self.assertTrue(0 <= delay < 1000 and 0 < ms < 500, name)
+                self.assertTrue(0 <= strong <= 0xffff and 0 <= weak <= 0xffff, name)
+        # Os eventos que o pedido cita.
+        for name in ('open', 'close', 'start', 'end', 'error', 'tick', 'select', 'back'):
+            self.assertIn(name, self.fh.PATTERNS)
+
+    def test_open_rises_and_close_falls(self):
+        power = lambda e: [s + w for _d, _m, s, w in self.fh.PATTERNS[e]]
+        self.assertEqual(power('open'), sorted(power('open')))
+        self.assertEqual(power('close'), sorted(power('close'), reverse=True))
+        # O fim se desfaz em ecos cada vez mais leves.
+        self.assertEqual(power('end'), sorted(power('end'), reverse=True))
+
+    def test_level_from_env_and_conf(self):
+        self.assertEqual(self.fh.level('off'), 0.0)
+        self.assertEqual(self.fh.level('low'), 0.5)
+        self.assertEqual(self.fh.level('on'), 1.0)
+        self.assertEqual(self.fh.level('high'), 1.5)
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('screens=1\nhaptic=off\n')
+        self.fh.CONF = str(conf)
+        try:
+            saved = os.environ.pop('FLIPEROS_HAPTIC', None)
+            self.assertEqual(self.fh.level(), 0.0)
+        finally:
+            self.fh.CONF = '/etc/fliperos/fliperos.conf'
+            if saved is not None:
+                os.environ['FLIPEROS_HAPTIC'] = saved
+        # A forca nunca passa do maximo do motor.
+        self.assertTrue(all(s <= 0xffff and w <= 0xffff for _d, _m, s, w in self.fh.steps('error', 3.0)))
+        self.assertEqual(self.fh.steps('nao-existe'), [])
+
+    def test_classify_frontends_games_and_tools(self):
+        rom = self.tmp / 'sf2.zip'
+        rom.write_text('')
+        c = self.fh.classify
+        self.assertEqual(c('/usr/local/lib/fliperos-setup/gui/fliperos-frontend', '--media'), 'frontend')
+        self.assertEqual(c('es-de', '--no-splash'), 'frontend')
+        self.assertEqual(c('attractplus', '--loglevel'), 'frontend')
+        self.assertEqual(c('retroarch', str(rom)), 'game')
+        self.assertEqual(c('groovymame', 'sf2'), 'game')
+        # O menu de um emulador, o GroovyMAME sem set, ferramentas: sem aviso.
+        self.assertEqual(c('groovymame', '-listxml'), '')
+        self.assertEqual(c('retroarch', '--menu'), '')
+
+    def test_effect_struct_matches_the_kernel(self):
+        # ff_effect: type, id, direction, trigger(2), replay(length, delay), e a
+        # uniao a partir do byte 16 (rumble: strong, weak). 48 bytes no x86_64.
+        buf = self.fh._effect(30, 70, 0x1234, 0x4321)
+        self.assertEqual(len(buf), 48)
+        import struct
+        self.assertEqual(struct.unpack_from('<HhHHHHH', buf), (0x50, -1, 0, 0, 0, 30, 70))
+        self.assertEqual(struct.unpack_from('<HH', buf, 16), (0x1234, 0x4321))
+
+    def test_only_rumble_gamepads_buzz(self):
+        # Sem /dev/input legivel (aqui), ninguem vibra e nada quebra.
+        empty = self.tmp / 'input'
+        empty.mkdir()
+        self.assertEqual(self.fh.pads(str(empty)), [])
+
+    def test_buzzer_goes_to_the_pad_in_use_and_throttles(self):
+        class Joy:
+            def __init__(self):
+                self.calls = []
+
+            def rumble(self, low, high, ms):
+                self.calls.append((low, high, ms))
+
+        a, b = Joy(), Joy()
+        buzzer = self.fh.Buzzer()
+        buzzer.scale = 1.0
+        buzzer.feel('select', a)
+        buzzer.feel('tick', a)            # logo depois: engolido pelo intervalo minimo
+        self.assertEqual(len(a.calls), 1)
+        self.assertEqual(b.calls, [])
+        buzzer.use(b)
+        buzzer.feel('tick')               # o controle em uso
+        self.assertEqual(len(b.calls), 1)
+        # Um padrao de varios passos anda pela fila (pump).
+        c = Joy()
+        buzzer.feel('back', c)
+        self.assertEqual(len(c.calls), 1)
+        buzzer.queue = [(0, c, 0.1, 0.2, 16)]
+        buzzer.pump()
+        self.assertEqual(len(c.calls), 2)
+        # Teclado (sem controle) e haptic=off: nada.
+        buzzer.pad = None
+        buzzer.feel('select')
+        off = self.fh.Buzzer()
+        off.scale = 0
+        d = Joy()
+        off.feel('select', d)
+        self.assertEqual(d.calls, [])
+
+    def test_actions_map_to_events(self):
+        e = self.fh.action_event
+        self.assertEqual((e('up'), e('b1'), e('b2'), e('left')), ('tick', 'select', 'back', 'step'))
+        self.assertEqual(e('esc'), '')
+        self.assertEqual(e('char:a'), '')
+
+    def test_launch_hook_waits_for_the_game_and_tells_crash_from_end(self):
+        # fliperos-haptic launch: "start" ao abrir e "end" ao fechar; fechou em
+        # menos de CRASH_SECONDS, "error". Os controles ficam por conta de
+        # play_all, aqui trocado por um registro.
+        tool = (ROOT / 'config/fliperos-haptic').read_text()
+        self.assertIn('fehaptic.play_all("open" if kind == "frontend" else "start")', tool)
+        self.assertIn('fehaptic.play_all("error" if crashed else "end")', tool)
+        self.assertIn('fehaptic.play_all("close")', tool)
+        rom = self.tmp / 'sf2.zip'
+        rom.write_text('')
+        log = self.tmp / 'calls'
+        shim = self.tmp / 'fehaptic.py'
+        real = (ROOT / 'fliperos-setup/gui/fehaptic.py').read_text()
+        shim.write_text(real + '\n\ndef play_all(event, wait=True):\n    open(%r, "a").write(event + "\\n")\n'
+                         '    return 1\n\n\nlevel = lambda env=None: 1.0\n' % str(log))
+        game = subprocess.Popen(['sleep', '0.5'])
+        env = dict(os.environ, FLIPEROS_GUI_DIR=str(self.tmp), HAPTIC_GAME_PID=str(game.pid))
+        r = subprocess.Popen([sys.executable, str(ROOT / 'config/fliperos-haptic'), 'launch', 'retroarch',
+                              '-L', 'core.so', str(rom)], env=env)
+        game.wait()
+        self.assertEqual(r.wait(timeout=10), 0)
+        # Fechou em meio segundo: caiu logo ao abrir.
+        self.assertEqual(log.read_text(), 'start\nerror\n')
+        # Sem jogo na linha (o menu de um emulador): nada.
+        log.write_text('')
+        subprocess.run([sys.executable, str(ROOT / 'config/fliperos-haptic'), 'launch', 'retroarch', '--menu'],
+                       env=env, timeout=10)
+        self.assertEqual(log.read_text(), '')
+
+    def test_wiring(self):
+        for runner in ('config/fliperos-kms-run', 'config/fliperos-x11-run'):
+            text = (ROOT / runner).read_text()
+            self.assertIn('[[ -x $haptic ]] && after_game "$haptic" launch "$@"', text, runner)
+            self.assertIn('HAPTIC_GAME_PID=$$', text, runner)
+        self.assertIn('install -Dm755 "$src/config/fliperos-haptic" "$root/opt/fliperos/bin/fliperos-haptic"',
+                      (ROOT / 'fliperos-rootfs.sh').read_text())
+        # O menu do Setup (padkeys) e o frontend usam o mesmo modulo.
+        self.assertIn('HAPTIC_KEYS', (ROOT / 'config/fliperos-padkeys').read_text())
+        self.assertIn('fehaptic.Buzzer()', (ROOT / 'fliperos-setup/gui/feinput.py').read_text())
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -15,7 +15,12 @@
 import os
 import time
 
-MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
+try:
+    import fehaptic
+except ImportError:
+    fehaptic = None
+
+MAP =os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "start", "coin")
 # As funcoes do frontend, na ordem da tela do Frontend controls. O nome e a
 # acao (b1 escolhe, b2 volta, b3/b6 pagina, b4 favorito, b5 filtros, start o
@@ -338,6 +343,10 @@ class Input:
         # vira "pad:COMANDO", e nao a funcao dele.
         self.capture_pad = False
         self.player_down = {}
+        # O retorno haptico (gui/fehaptic.py): cada acao vibra o controle que a
+        # fez; o teclado nao vibra nada.
+        self.buzzer = fehaptic.Buzzer() if fehaptic else None
+        self.joys = {}             # indice do controle -> Joystick
         self.load_map()
         self.bind(binds or default_binds(pygame))
         self.open()
@@ -429,6 +438,7 @@ class Input:
         pg.joystick.init()
         self.sticks = []
         self.order = {}            # instance_id do SDL -> indice do controle (o do mapa)
+        self.joys = {}
         self.pads = {}
         for i in range(pg.joystick.get_count()):
             try:
@@ -436,6 +446,7 @@ class Input:
                 j.init()
                 self.sticks.append(j)
                 self.order[j.get_instance_id()] = i
+                self.joys[i] = j
                 self.pads[i] = self.gamepad(i, j)
             except pg.error:
                 pass
@@ -457,6 +468,9 @@ class Input:
         except Exception:
             pass
         self.pg.joystick.quit()
+        self.joys.clear()
+        if self.buzzer:
+            self.buzzer.pad, self.buzzer.queue = None, []
         self.down.clear()
         self.sources.clear()
         self.loose.clear()
@@ -495,9 +509,17 @@ class Input:
     def poll(self):
         pg = self.pg
         out = []
+        done, source = 0, None         # as acoes ja atribuidas a um controle (haptico)
         self.settle()
         self.check_map()
         for ev in pg.event.get():
+            # As acoes que o evento anterior gerou vibram o controle dele.
+            self.feel(out[done:], source)
+            done = len(out)
+            source = self.joys.get(self.index(ev)) if ev.type in (
+                pg.JOYBUTTONDOWN, pg.JOYHATMOTION, pg.JOYAXISMOTION) else None
+            if self.buzzer and ev.type in (pg.KEYDOWN, pg.JOYBUTTONDOWN, pg.JOYHATMOTION, pg.JOYAXISMOTION):
+                self.buzzer.use(source)
             if ev.type in (pg.KEYDOWN, pg.KEYUP) and ev.key in self.player_keys:
                 # O comando de cada jogador (o atalho do jogo), alem do resto.
                 for pc in self.player_keys[ev.key]:
@@ -568,7 +590,19 @@ class Input:
                             self.pad_release(c, ("a", joy, ev.axis, sign))
             elif ev.type in (getattr(pg, "JOYDEVICEADDED", -1), getattr(pg, "JOYDEVICEREMOVED", -2)):
                 self.open()
+        self.feel(out[done:], source)
+        if self.buzzer:
+            self.buzzer.pump()
         return out
+
+    def feel(self, actions, joystick):
+        """O toque do que o controle acabou de fazer (fehaptic.ACTION_EVENT)."""
+        if not (self.buzzer and joystick and actions):
+            return
+        for action in actions:
+            event = fehaptic.action_event(action)
+            if event:
+                self.buzzer.feel(event, joystick)
 
     def held(self, action):
         t = self.down.get(action)

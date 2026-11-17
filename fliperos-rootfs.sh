@@ -543,6 +543,9 @@ install -Dm755 "$src/config/fliperos-calibrate" "$root/opt/fliperos/bin/fliperos
 install -Dm644 "$src/config/99-fliperos-input.rules" "$root/etc/udev/rules.d/99-fliperos-input.rules"
 install -Dm755 "$src/config/fliperos-padcolor" "$root/opt/fliperos/bin/fliperos-padcolor"
 install -Dm755 "$src/config/fliperos-padcolor-8bitdo" "$root/opt/fliperos/bin/fliperos-padcolor-8bitdo"
+# Vibracao nos controles modernos ao abrir/fechar frontend e jogo
+# (gui/fehaptic.py tem os padroes; o menu e o frontend vibram por conta propria).
+install -Dm755 "$src/config/fliperos-haptic" "$root/opt/fliperos/bin/fliperos-haptic"
 # Discos montados sozinhos em /media/fliperos, com um icone no desktop para
 # cada um (config/fliperos-automount); sem senha pelo polkit.
 install -Dm644 "$src/config/99-fliperos-disks.rules" "$root/etc/udev/rules.d/99-fliperos-disks.rules"

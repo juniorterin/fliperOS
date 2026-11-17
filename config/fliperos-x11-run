@@ -40,7 +40,7 @@ name=$(basename -- "$1")
 # esta abaixo dele (o atalho de sair), e um vigia filho morria junto, antes de
 # agir. O PID do jogo vai explicito: o deste script, que o exec mantem.
 after_game() {
-  (PIXELCADE_GAME_PID=$$ FLIPEROS_GAME_PID=$$ PADCOLOR_GAME_PID=$$ "$@" < /dev/null > /dev/null 2>&1 &)
+  (PIXELCADE_GAME_PID=$$ FLIPEROS_GAME_PID=$$ PADCOLOR_GAME_PID=$$ HAPTIC_GAME_PID=$$ "$@" < /dev/null > /dev/null 2>&1 &)
 }
 # O backup na nuvem (config/fliperos-cloud, painel web): com o automatico
 # ligado, os recordes e saves sobem quando este jogo fechar (os exec abaixo
@@ -74,6 +74,10 @@ outputs=${FLIPEROS_OUTPUTS:-/opt/fliperos/bin/fliperos-outputs}
 # fechar, depois a roleta de novo (config/fliperos-padcolor; sem jogo, nada).
 padcolor=${FLIPEROS_PADCOLOR_TOOL:-/opt/fliperos/bin/fliperos-padcolor}
 [[ -x $padcolor ]] && after_game "$padcolor" launch "$@"
+# O retorno haptico dos controles modernos: abrir/fechar um frontend e comecar/
+# terminar um jogo (config/fliperos-haptic; sem joypad com rumble, nada).
+haptic=${FLIPEROS_HAPTIC_TOOL:-/opt/fliperos/bin/fliperos-haptic}
+[[ -x $haptic ]] && after_game "$haptic" launch "$@"
 # As pistolas de luz ligadas (config/fliperos-lightgun): com uma, nenhum
 # emulador desenha mira nem a seta do X por cima do jogo.
 lightgun=${FLIPEROS_LIGHTGUN:-/opt/fliperos/bin/fliperos-lightgun}
