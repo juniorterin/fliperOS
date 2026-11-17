@@ -82,3 +82,4 @@
 79	57a93c47c3415cc6e67b20961af817a593e074a6	0f8ca11b19a5479ed507561f08b45557ea9c991743626421aa9fc8c045f1b0eb	no	No false video card question, custom games leave nothing running, games fill super resolution cards
 80	8b470fd2be4f5d5b75a0d1ad60cdbcc521e4b62b	5df31bd08c2c30cbd6e00ade3de9e49649f3b892b2a2463c10588aa587db0d16	no	Model 2 emulator is now Keisho (new address, rebuilt with your settings)
 81	86c49568275fc803631c7ab1fb3dc25deee69e22	4c5145307af9096f0623d16403d4a1cbfa069a5f33e9ef2264bea64bd8b6473e	no	Cloud backup keeps your custom folders
+82	65dd151e7c252c3c1b5d03c8c43d3c06284eee90	6be7bc2a32fe4bce24a767a19c5292b374cd2c7143692b4de8b2379c522ec49f	no	Quiet update: the ps1, custom and custom-packages folders exist from the first login, Custom games has its own area in the web panel
