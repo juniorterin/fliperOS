@@ -22970,6 +22970,18 @@ class HapticTests(unittest.TestCase):
         for name in ('open', 'close', 'start', 'end', 'error', 'tick', 'select', 'back'):
             self.assertIn(name, self.fh.PATTERNS)
 
+    def test_presets_are_valid_and_playable_by_name(self):
+        self.assertGreaterEqual(len(self.fh.PRESETS), 20)
+        for name, plan in self.fh.PRESETS.items():
+            self.assertLessEqual(len(plan), 12, name)        # o kernel guarda 16 efeitos
+            for delay, ms, strong, weak in plan:
+                self.assertTrue(0 <= delay < 1500 and 0 < ms < 1000, name)
+                self.assertTrue(0 <= strong <= 0xffff and 0 <= weak <= 0xffff, name)
+            self.assertIn(name, self.fh.ALL)
+        self.assertGreater(self.fh.duration('heartbeat'), 0.8)
+        tool = (ROOT / 'config/fliperos-haptic').read_text()
+        self.assertIn('argv[0] == "demo"', tool)
+
     def test_open_rises_and_close_falls(self):
         power = lambda e: [s + w for _d, _m, s, w in self.fh.PATTERNS[e]]
         self.assertEqual(power('open'), sorted(power('open')))

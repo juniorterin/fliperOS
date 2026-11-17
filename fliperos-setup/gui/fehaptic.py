@@ -18,6 +18,7 @@ haptic= do /etc/fliperos/fliperos.conf (ou FLIPEROS_HAPTIC):
 """
 import fcntl
 import glob
+import math
 import os
 import re
 import struct
@@ -84,15 +85,69 @@ def level(env=None):
     return {"off": 0.0, "0": 0.0, "no": 0.0, "false": 0.0, "low": 0.5, "high": 1.5}.get(value, 1.0)
 
 
+def _ramp(start, end, n, ms=70, gap=80, motor="both"):
+    """n passos de forca indo de start a end (0 a 65535) no(s) motor(es)."""
+    out = []
+    for i in range(n):
+        v = int(start + (end - start) * i / max(1, n - 1))
+        out.append((i * gap, ms, v if motor in ("both", "strong") else 0, v if motor in ("both", "weak") else 0))
+    return tuple(out)
+
+
+# A biblioteca para experimentar (fliperos-haptic list | demo | NOME): tipos de
+# vibracao que nenhum evento usa ainda. Ate 12 passos (o kernel guarda 16).
+PRESETS = {
+    # Os dois motores, um de cada vez e juntos.
+    "left-motor": ((0, 400, 0xc000, 0),),
+    "right-motor": ((0, 400, 0, 0xc000),),
+    "both-motors": ((0, 400, 0xc000, 0xc000),),
+    # Esquerdo e direito alternando: mostra que sao dois.
+    "alternate": tuple((i * 130, 100, 0xc000 if i % 2 == 0 else 0, 0 if i % 2 == 0 else 0xc000) for i in range(6)),
+    # Extremos.
+    "thump": ((0, 300, 0xffff, 0),),
+    "buzz": ((0, 300, 0, 0xffff),),
+    "purr": ((0, 700, 0x2800, 0),),
+    # Corpo humano e motor.
+    "heartbeat": ((0, 90, 0xc000, 0x2000), (150, 80, 0x8000, 0), (750, 90, 0xc000, 0x2000), (900, 80, 0x8000, 0)),
+    "engine-rev": _ramp(0x2800, 0xf000, 8, ms=90, gap=90, motor="strong"),
+    "engine-idle": tuple((i * 110, 70, 0x3800 + (i % 2) * 0x1000, 0x1000) for i in range(8)),
+    # Subir, descer, onda.
+    "ramp-up": _ramp(0x2000, 0xffff, 8),
+    "ramp-down": _ramp(0xffff, 0x2000, 8),
+    "wave": tuple((i * 90, 80, int(0xe000 * abs(math.sin(i * 0.5))) + 0x1800, 0) for i in range(12)),
+    # Rajadas.
+    "machine-gun": tuple((i * 90, 45, 0x4000, 0xd000) for i in range(10)),
+    "pulse-train": tuple((i * 140, 60, 0x8000, 0x8000) for i in range(6)),
+    "knock-knock": ((0, 60, 0xc000, 0x4000), (130, 60, 0xc000, 0x4000), (330, 60, 0xc000, 0x4000), (460, 60, 0xc000, 0x4000)),
+    # Impactos.
+    "explosion": ((0, 220, 0xffff, 0xffff), (260, 120, 0xa000, 0x6000), (420, 100, 0x6000, 0x3000), (560, 80, 0x3000, 0x1000)),
+    "sword-clash": ((0, 50, 0x4000, 0xffff), (80, 160, 0x8000, 0x4000), (280, 100, 0x3000, 0x2000)),
+    "earthquake": ((0, 900, 0x6000, 0), (100, 70, 0, 0xc000), (350, 70, 0, 0xc000), (600, 70, 0, 0xc000)),
+    # Avisos e respostas.
+    "sonar-ping": ((0, 60, 0, 0xe000), (300, 60, 0, 0x8000), (560, 60, 0, 0x4000), (780, 60, 0, 0x2000)),
+    "notification": ((0, 50, 0, 0xb000), (100, 50, 0, 0xb000), (240, 120, 0x9000, 0x6000)),
+    "success": ((0, 70, 0x4000, 0x5000), (110, 70, 0x6000, 0x8000), (220, 140, 0xc000, 0xc000)),
+    "fail": ((0, 140, 0xc000, 0xc000), (200, 140, 0x8000, 0x6000), (400, 220, 0x5000, 0x2000)),
+    "warning": ((0, 120, 0xc000, 0xc000), (220, 120, 0xc000, 0xc000), (440, 300, 0xe000, 0x8000)),
+    "sos": tuple((i * 130, 60 if i < 3 or i > 5 else 130, 0, 0xc000) for i in range(9)),
+    "rain": tuple((i * 85, 40, 0, 0x5000 + (i * 37 % 5) * 0x1800) for i in range(12)),
+}
+ALL = dict(PATTERNS, **PRESETS)
+
+
+def plan_of(event):
+    return ALL.get(event, ())
+
+
 def steps(event, scale=1.0):
     """Os passos de um padrao na forca de scale (a forca nunca passa do
     maximo); evento desconhecido, nenhum."""
     return [(d, ms, min(0xffff, int(s * scale)), min(0xffff, int(w * scale)))
-            for d, ms, s, w in PATTERNS.get(event, ())]
+            for d, ms, s, w in plan_of(event)]
 
 
 def duration(event):
-    return max((d + ms for d, ms, _s, _w in PATTERNS.get(event, ())), default=0) / 1000.0
+    return max((d + ms for d, ms, _s, _w in plan_of(event)), default=0) / 1000.0
 
 
 def classify(program, last):
@@ -205,13 +260,20 @@ def pads(root="/dev/input"):
     return found
 
 
-def play_all(event, wait=True):
-    """Toca event em todos os controles; com wait, segura os controles
-    abertos ate acabar (fechar apaga os efeitos no kernel). Devolve quantos."""
-    scale = level()
-    if not scale or event not in PATTERNS:
+def play_all(event, wait=True, only=None, scale=None):
+    """Toca event em todos os controles (only: so os de nome com esse texto);
+    com wait, segura os controles abertos ate acabar (fechar apaga os efeitos
+    no kernel). Devolve quantos."""
+    scale = level() if scale is None else scale
+    if not scale or event not in ALL:
         return 0
     found = pads()
+    if only:
+        keep = [p for p in found if only.lower().encode() in p.name.lower()]
+        for p in found:
+            if p not in keep:
+                p.close()
+        found = keep
     n = sum(1 for p in found if p.play(event, scale))
     if wait and n:
         time.sleep(duration(event) + 0.05)

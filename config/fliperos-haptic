@@ -62,15 +62,38 @@ def launch(argv):
 
 
 def main(argv):
+    argv = list(argv)
+    only = None
+    if "--pad" in argv:                    # so o controle de nome com este texto
+        i = argv.index("--pad")
+        only = argv[i + 1] if i + 1 < len(argv) else None
+        del argv[i:i + 2]
     if not argv:
-        print("usage: fliperos-haptic EVENT | launch PROGRAM [ARGS...]", file=sys.stderr)
+        print("usage: fliperos-haptic EVENT|PRESET [--pad TEXT] | list | demo [PRESET...] [--pad TEXT] "
+              "| launch PROGRAM [ARGS...]", file=sys.stderr)
         return 2
     if argv[0] == "launch":
         return launch(argv[1:])
-    if argv[0] not in fehaptic.PATTERNS:
-        print("fliperos-haptic: unknown event %s (%s)" % (argv[0], ", ".join(fehaptic.PATTERNS)), file=sys.stderr)
+    if argv[0] == "list":
+        print("Events: " + ", ".join(fehaptic.PATTERNS))
+        print("Presets: " + ", ".join(fehaptic.PRESETS))
+        print("Pads: " + (", ".join(p.name.decode(errors="replace") for p in fehaptic.pads()) or "none"))
+        return 0
+    if argv[0] == "demo":
+        # Cada preset com o nome na tela, para sentir um de cada vez.
+        names = argv[1:] or list(fehaptic.PRESETS)
+        for name in names:
+            if name not in fehaptic.ALL:
+                print("unknown: %s" % name, file=sys.stderr)
+                continue
+            print("%-14s" % name, flush=True)
+            fehaptic.play_all(name, only=only, scale=1.0)
+            time.sleep(0.9)
+        return 0
+    if argv[0] not in fehaptic.ALL:
+        print("fliperos-haptic: unknown %s (try: fliperos-haptic list)" % argv[0], file=sys.stderr)
         return 2
-    fehaptic.play_all(argv[0])
+    fehaptic.play_all(argv[0], only=only)
     return 0
 
 
