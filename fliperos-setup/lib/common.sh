@@ -13,6 +13,7 @@ FLIPEROS_CONF=${FLIPEROS_CONF:-$FLIPEROS_ETC/fliperos.conf}
 FLIPEROS_LOG=${FLIPEROS_LOG:-/var/log/fliperos-setup.log}
 FLIPEROS_USER=${FLIPEROS_USER:-fliperos}
 DRM_SYSFS=${DRM_SYSFS:-/sys/class/drm}
+PCI_SYSFS=${PCI_SYSFS:-/sys/bus/pci/devices}
 PROC_CMDLINE=${PROC_CMDLINE:-/proc/cmdline}
 LIVE_IMAGE=${LIVE_IMAGE:-/run/live/medium/live/filesystem.squashfs}
 SWITCHRES_INI=${SWITCHRES_INI:-/etc/switchres.ini}

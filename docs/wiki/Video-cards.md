@@ -42,6 +42,8 @@ Three cards have been seen on a CRT by the project: an AMD R7 240 (`radeon` and 
 
 The output test stores the card's PCI id (`gpu_id` in `/etc/fliperos/fliperos.conf`). At each boot the installed system checks that the card is still there; a card that comes or goes but is not the main one (a new CPU graphics with the AMD still in) changes nothing.
 
+The check looks at the PCI bus, where the card is from power-on, with or without its driver. It runs early in the boot, and the video driver can come after it (an R9 380's `amdgpu` came 1 s later): until then only `simpledrm`, the firmware's framebuffer with no PCI id, is a video card, and the card seemed changed. Cabinets that got that false question lose it by themselves: when the saved card is there and the boot wrote no safe mode for another one, the flag is dropped without asking.
+
 When the main card changed:
 
 1. **Before any picture** (`fliperos-driver-trial.service`): FliperOS writes a safe mode for the new card on its first analog output, with the monitor that was set (native boot mode on a card that makes low clocks, `1280x480iS` on an Intel), drops what belonged to the old card (extra monitors, the NVIDIA grid step) and **reboots once**. A saved `320x240` mode on an Intel, which can't make that clock, no longer leaves the screen black. Without an analog output, or with an LCD monitor, it only marks the change.

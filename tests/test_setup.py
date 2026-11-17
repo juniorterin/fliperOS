@@ -104,6 +104,7 @@ class Env:
         e.update({
             "PATH": "%s:%s" % (self.bin, e.get("PATH", "/usr/bin:/bin")),
             "DRM_SYSFS": str(self.drm),
+            "PCI_SYSFS": str(self.dir / "pci"),
             "FLIPEROS_ETC": str(self.etc),
             "FLIPEROS_CONF": str(self.etc / "fliperos.conf"),
             "FLIPEROS_LOG": str(self.dir / "setup.log"),
@@ -1096,6 +1097,50 @@ class HardwareChangeTests(Base):
         self.installed()
         self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
         self.assertNotIn("hw_changed", self.read_conf())
+
+    def simpledrm(self):
+        """O card0 do simpledrm: o framebuffer do firmware, sem ID do PCI, que
+        existe no boot antes do driver da placa."""
+        (self.env.drm / "card0" / "device").mkdir(parents=True)
+
+    def test_the_card_on_the_bus_before_its_driver_is_not_a_change(self):
+        # R9 380 num gabinete (2026-11-17): o servico de boot rodou com so o
+        # simpledrm; o amdgpu entrou 1 s depois. A placa ja estava no PCI.
+        self.simpledrm()
+        pci = self.env.dir / "pci" / "0000:01:00.0"
+        pci.mkdir(parents=True)
+        (pci / "vendor").write_text("0x1002\n")
+        (pci / "device").write_text("0x6939\n")
+        self.installed()
+        self.saved(ids=self.TONGA, gpu="AMD Radeon R9 285/380", driver="amdgpu", card="card1")
+        self.assertEqual(self.env.run("video_hw_changed").returncode, 1)
+        self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
+        self.assertNotIn("hw_", self.read_conf())
+
+    def test_boot_with_only_the_simpledrm_marks_nothing(self):
+        # A placa gravada sumiu, mas o driver da nova ainda nao entrou: sem
+        # placa de verdade nao ha modo seguro a gravar nem ID para a trava.
+        self.simpledrm()
+        self.installed()
+        self.saved()
+        self.assertEqual(self.env.out(self.STUBS + "video_hw_boot_check", {"HW_BOOT_WAIT": "0"}).strip(), "")
+        self.assertNotIn("hw_", self.read_conf())
+
+    def test_a_false_alarm_from_the_boot_is_cleared_without_asking(self):
+        # O que ficou nos gabinetes marcados assim: a placa gravada esta aqui
+        # e o boot nao gravou modo em outra (hw_safe_boot=unknown).
+        self.gpu("card1", "amdgpu", self.TONGA, boot=True)
+        self.installed()
+        self.saved(ids=self.TONGA, gpu="AMD Radeon R9 285/380", driver="amdgpu", card="card1", hw_changed=1,
+                   hw_old_gpu="AMD Radeon R9 285/380", hw_safe_boot="unknown", hw_check_asked=1)
+        self.assertEqual(self.screen(0).strip(), "")
+        conf = self.read_conf()
+        self.assertNotIn("hw_", conf)
+        self.assertIn("gpu_id=1002:6939\n", conf)
+        # Uma troca de verdade com o modo seguro (hw_safe_boot = gpu_id) ainda pergunta.
+        self.saved(ids=self.TONGA, gpu="AMD Radeon R9 285/380", driver="amdgpu", card="card1", hw_changed=1,
+                   hw_old_gpu="AMD Radeon R7 240", hw_safe_boot="1002:6939")
+        self.assertIn("ASK The video card changed: it was AMD Radeon R7 240", self.screen(1))
 
     def screen(self, answers):
         """screen_hw_change_check com ui_yesno respondendo ANSWERS (0 = sim)."""

@@ -450,6 +450,39 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Which video cards FliperOS supports, and what each one gives on a 15 kHz CRT.</p>
 <p>The difference between them is the <strong>dotclock</strong>: a 320x240 game at 15 kHz needs about 6.5 MHz, a 640x480i boot about 13 MHz. A card that generates those clocks shows each game at its <strong>native resolution</strong>.</p>
 <p>A card that doesn't uses a <strong>super resolution</strong>: the same lines and the same refresh as the game, with the width multiplied (1280 or 2560 instead of 320). On a CRT the picture is almost the same, since the beam has no horizontal pixels. What gives it away: RetroArch draws its notifications at 2560 wide, so they come out squeezed.</p>
+<p><strong>Each game opened is checked against the card.</strong> On a card that only makes super resolutions, a game has to stretch itself across the wide mode. RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, DuckStation, Supermodel, Model 2 and Hypseus already do. For the others, FliperOS changes the game's own settings when it opens (<code>fliperos-gpufit</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Game</th>
+<th>What changes</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenBOR (4 and 3.0)</td>
+<td>Its <em>stretch</em> option, in each <code>.cfg</code> of <code>Saves/</code></td>
+<td>Fills the screen (seen on a CRT)</td>
+</tr>
+<tr>
+<td>Ikemen GO (KOF Final Attack, custom games with <code>save/config.ini</code>)</td>
+<td><code>WindowWidth</code>/<code>WindowHeight</code> at the wide mode, <code>KeepAspect = 0</code></td>
+<td>Fills the screen (seen on a CRT)</td>
+</tr>
+<tr>
+<td>MUGEN (custom games with <code>data/mugen.cfg</code>)</td>
+<td><code>Width</code>/<code>Height</code> of <code>[Video]</code> at the wide mode</td>
+<td>Opens, but narrow: MUGEN 1.0 keeps 4:3, and its OpenGL mode scattered the picture</td>
+</tr>
+<tr>
+<td>Other custom games, the Fightcade lobby</td>
+<td>Nothing</td>
+<td>Narrow, or doesn't open</td>
+</tr>
+</tbody>
+</table>
+<p>When the game can't fill the screen, an orange <strong>VIDEO CARD WARNING</strong> bar shows at the bottom of the screen for a few seconds, over the game. The 240p hack of custom games doesn't work on these cards: the X can't enlarge a screen into the wide mode (the tube stays black), so it is turned off there. On a card that makes the game's own mode (another card, another monitor), the next launch puts the old settings back (kept in <code>~/.local/share/fliperos/gpufit.json</code>).</p>
 <table>
 <thead>
 <tr>
@@ -544,6 +577,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Three cards have been seen on a CRT by the project: an AMD R7 240 (<code>radeon</code> and <code>amdgpu</code>), an Intel HD Graphics (Ironlake, <code>i915</code>) and an NVIDIA GTX 980 Ti (<code>nouveau</code>). The other lines come from the kernel patches and from what the GroovyArcade and Batocera communities report (<a href="#Video-cards-AMD-reported-by-groovyarcade">list below</a>).</p>
 <h2 id="Video-cards-changing-the-video-card">Changing the video card</h2>
 <p>The output test stores the card's PCI id (<code>gpu_id</code> in <code>/etc/fliperos/fliperos.conf</code>). At each boot the installed system checks that the card is still there; a card that comes or goes but is not the main one (a new CPU graphics with the AMD still in) changes nothing.</p>
+<p>The check looks at the PCI bus, where the card is from power-on, with or without its driver. It runs early in the boot, and the video driver can come after it (an R9 380's <code>amdgpu</code> came 1 s later): until then only <code>simpledrm</code>, the firmware's framebuffer with no PCI id, is a video card, and the card seemed changed. Cabinets that got that false question lose it by themselves: when the saved card is there and the boot wrote no safe mode for another one, the flag is dropped without asking.</p>
 <p>When the main card changed:</p>
 <ol>
 <li><strong>Before any picture</strong> (<code>fliperos-driver-trial.service</code>): FliperOS writes a safe mode for the new card on its first analog output, with the monitor that was set (native boot mode on a card that makes low clocks, <code>1280x480iS</code> on an Intel), drops what belonged to the old card (extra monitors, the NVIDIA grid step) and <strong>reboots once</strong>. A saved <code>320x240</code> mode on an Intel, which can't make that clock, no longer leaves the screen black. Without an analog output, or with an LCD monitor, it only marks the change.</li>
@@ -5018,10 +5052,10 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <li><strong>Windows or Linux</strong>: a Windows game is a <code>.exe</code>; a Linux one is a program or a command.</li>
 <li><strong>The game folder</strong>: open it in the folder picker and choose <em>Use this folder</em>. Everything the game needs must be inside it. If the folder has the <a href="#Custom-games-a-folder-with-the-packages-structure">package's structure</a> (<code>&lt;game&gt;.jpg</code>, <code>&lt;game&gt;.mp4</code>, <code>&lt;game&gt;.txt</code>, <code>&lt;game&gt;.key</code>, <code>&lt;game&gt;.ppdb</code> or <code>&lt;game&gt;.cfg</code> next to the folder <code>&lt;game&gt;</code>), those files are picked by themselves: steps 6 and 7 come already filled.</li>
 <li><strong>What opens the game</strong>:</li>
-<li>Windows: pick the <code>.exe</code> inside the folder. The first time, the Setup offers to download PortProton (about 3 GB, see <a href="#Custom-games-windows-games-portproton">below</a>). Then choose which Wine runs it; keep the first one unless the game fails with it.</li>
+<li>Windows: pick the <code>.exe</code> inside the folder, then <strong>what runs it</strong>: PortProton (the default), Wine or Wine Staging. If the game doesn't open or runs badly with one, make the package again with another (see <a href="#Custom-games-windows-games-portproton">Windows games: PortProton, Wine or Wine Staging</a>). With PortProton, the first time the Setup offers to download it (about 3 GB); then choose which of its Wine builds runs the game; keep the first one unless the game fails with it.</li>
 <li>Linux: type the command, run inside the game folder (for example <code>./game.x86_64 -fullscreen</code>), or press <em>Browse</em> to pick the program and the Setup writes <code>./&lt;program&gt;</code> for you.</li>
 <li><strong>Picture, video and text</strong> (optional): pick each file, or type the text. Without them the game gets samples, which you can replace later.</li>
-<li><strong>Video mode</strong>: 240p, 480i or another resolution and refresh rate.</li>
+<li><strong>Video mode</strong>: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.</li>
 <li><strong>Category, controls, buttons, players</strong>: what the frontend shows and filters by.</li>
 <li>The Setup writes <code>~/roms/custom-packages/&lt;game&gt;.fliperos-customgame.zip</code> and asks whether to <strong>install it now</strong>. Say yes and pick the group (or a new one, for example <em>PC games</em>; each group is a system in the frontends): the game folder is copied to <code>~/games/&lt;group&gt;/&lt;game&gt;</code> and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.</li>
 <li>Open the frontend: the game is in the system of its group.</li>
@@ -5205,12 +5239,16 @@ players=2
 <td>Windows: the <code>.exe</code>, relative to the game folder</td>
 </tr>
 <tr>
+<td><code>runner</code></td>
+<td>Windows: what runs it, <code>portproton</code> (the default, without the line), <code>wine</code> or <code>wine-staging</code></td>
+</tr>
+<tr>
 <td><code>command</code></td>
 <td>Linux: the command line, run inside the game folder</td>
 </tr>
 <tr>
 <td><code>mode</code></td>
-<td><code>240p</code> (640x240), <code>480i</code> (640x480) or <code>WIDTHxHEIGHT@HZ</code>, for example <code>384x224@59.6</code> (without it, 480i)</td>
+<td><code>240p</code> (640x240), <code>240p-hack</code> (640x240 on the tube, the game sees 640x480), <code>480i</code> (640x480) or <code>WIDTHxHEIGHT@HZ</code>, for example <code>384x224@59.6</code> (without it, 480i)</td>
 </tr>
 <tr>
 <td><code>category</code></td>
@@ -5277,6 +5315,34 @@ players=2
 <p>PortProton's own installer only works with windows and a mouse. FliperOS installs it without any, and PortProton never updates itself (the version changes with FliperOS updates). Its downloads go over https: it asks for addresses without <code>https://</code>, which would go through port 80, blocked on many networks. On those networks the first download used to stop on an error window waiting for a click.</p>
 <p>The <strong><code>.ppdb</code></strong> is PortProton's settings file for one <code>.exe</code>, next to it: <code>mslugx.exe.ppdb</code>. It says, for example, which Wine runs the game (<code>PW_WINE_USE</code>) and which prefix it uses. When you create a package, the Setup asks which Wine runs the game and PortProton writes the <code>.ppdb</code>; installing the package puts it back next to the <code>.exe</code>. The choices are Proton LG (PortProton's default), Wine LG, and any other build already downloaded in <code>~/PortProton/data/dist</code>.</p>
 <p>Without PortProton (you said no, or it failed), a Windows package can still be installed: the game opens with the system's Wine (Setup &gt; Games &gt; Extras), if there is one.</p>
+<p><strong>PortProton, Wine or Wine Staging.</strong> Each Windows game says what runs it (<code>runner=</code> in its <code>.cfg</code>), chosen when the package is created, in the Setup or in the web panel's <strong>Create package</strong> and <strong>Games</strong> table:</p>
+<table>
+<thead>
+<tr>
+<th>Runner</th>
+<th>What it is</th>
+<th>Installed from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PortProton (default)</td>
+<td>Wine and Proton builds made for games, with DXVK, in a container of their own</td>
+<td>Setup &gt; Games &gt; Extras &gt; PortProton, or offered with the first Windows game</td>
+</tr>
+<tr>
+<td>Wine</td>
+<td>the system's Wine</td>
+<td>Setup &gt; Games &gt; Extras &gt; Wine</td>
+</tr>
+<tr>
+<td>Wine Staging</td>
+<td>the newest Wine from WineHQ, with fixes not in Wine yet (it takes the place of Wine)</td>
+<td>Setup &gt; Games &gt; Extras &gt; Wine Staging</td>
+</tr>
+</tbody>
+</table>
+<p>Some games only open, or run better, with one of them. The <code>.ppdb</code> only goes with PortProton. When the game's runner isn't installed on a cabinet, the game opens with the first of the others that is (PortProton, then Wine, then Wine Staging), and the game's log says so.</p>
 <h2 id="Custom-games-the-controller-as-a-keyboard">The controller as a keyboard</h2>
 <p>Many PC games only take the keyboard. While a custom game runs, <code>fliperos-buttons gamekeys</code> reads the controllers and presses keys on a virtual keyboard (<em>FliperOS game keys</em>), from the game's <code>&lt;name&gt;.key</code>:</p>
 <pre><code>p1_up=UP
@@ -5304,7 +5370,8 @@ p2_b1=LEFTCTRL
 <p>While the menu is open, the buttons send no keys to the game. The keyboard fits every game resolution and the vertical monitor.</p>
 <p>Several buttons can send the same key (player 1 and player 2 button 1 on <code>LEFTCTRL</code>, for example). The mapper doesn't take the controller from the game: a game that reads the joystick as well gets both.</p>
 <h2 id="Custom-games-video-mode-flicker-filter-and-on-screen-menu">Video mode, flicker filter and on-screen menu</h2>
-<p>Each game opens in its own Xorg, in its video mode (<code>fliperos-x11-run --mode</code>): 240p, 480i (interlaced on a 15 kHz monitor) or any <code>WIDTHxHEIGHT@HZ</code>. Switchres makes the mode for the monitor chosen in the Setup.</p>
+<p>Each game opens in its own Xorg, in its video mode (<code>fliperos-x11-run --mode</code>): 240p, 240p hack, 480i (interlaced on a 15 kHz monitor) or any <code>WIDTHxHEIGHT@HZ</code>. Switchres makes the mode for the monitor chosen in the Setup.</p>
+<p><strong>240p hack (Mugen)</strong> is for a Windows game that only opens full screen at 640x480, like M.U.G.E.N with <code>GameWidth = 640</code> and <code>GameHeight = 480</code>: in plain 240p it shows a white screen with "Error detected" (<code>mugen.log</code>: <code>trying 640x480x16 mode ... failed</code>), because the Wine of PortProton only offers modes up to the size of the screen. With the hack the tube stays at 640x240 (true 240p, no flicker), the X screen is 640x480 scaled down to it (<code>xrandr --scale 1x2</code>, mode <code>640x240@60/640x480</code> in the <code>.cfg</code>), and picom with vsync stops the tearing of games that draw through X without OpenGL (M.U.G.E.N with <code>RenderMode = System</code>). A game that opens at 320x240 or 640x240 by itself stays in plain 240p or <code>320x240@60</code>.</p>
 <p>Each game has its own row in <strong>Video Setup &gt; Interlaced hacks</strong> (only the flicker filter: the mode is the game's), and the level chosen in the on-screen menu during the game stays with that game. Its name for the filter, the menu and the log is <code>custom_</code> plus the group and the name in lower case, with <code>_</code> for everything else: <em>PC games</em> / <em>Metal Slug X</em> is <code>custom_pc_games_metal_slug_x</code>, and its log is <code>/opt/fliperos/logs/custom_pc_games_metal_slug_x.log</code>.</p>
 <p>Windows games are mostly 32-bit: the 32-bit flicker filter and on-screen menu go with them (built when Wine is installed from the Extras), and with DXVK the 32-bit Vulkan layer.</p>
 <p>The frontend's <strong>Emulator menu</strong> shortcut opens the on-screen menu in a custom game (it has no emulator menu of its own). <strong>Exit game</strong> closes it like any other game.</p>
@@ -5449,7 +5516,7 @@ p2_b1=LEFTCTRL
 <tbody>
 <tr>
 <td><code>fliperos-customgame</code></td>
-<td><code>inspect ZIP</code> (checks a package and prints its <code>.cfg</code>), <code>pending</code> (the packages waiting), <code>install ZIP --group G</code> (installs one), <code>pack</code> (makes one), <code>add</code> (copies a game folder, the web panel), <code>scan</code> and <code>found</code> (the games of a folder and what came with them in the package's structure), <code>run CFG</code> (opens a game)</td>
+<td><code>inspect ZIP</code> (checks a package and prints its <code>.cfg</code>), <code>pending</code> (the packages waiting), <code>install ZIP --group G</code> (installs one), <code>pack</code> (makes one), <code>add</code> (copies a game folder, the web panel), <code>scan</code> and <code>found</code> (the games of a folder and what came with them in the package's structure), <code>run CFG</code> (opens a game; when it ends, closes whatever the game left running: SIGTERM, then SIGKILL 3 s later)</td>
 </tr>
 <tr>
 <td><code>fliperos-portproton</code></td>
@@ -5474,6 +5541,7 @@ p2_b1=LEFTCTRL
 </tbody>
 </table>
 <p>The System Update rewrites every entry's script (<code>customgames_refresh</code>), and gives a <code>.cfg</code> to the entries made by command before packages existed.</p>
+<p><strong>Nothing stays running after the game.</strong> <code>run</code> becomes a <em>subreaper</em> (<code>PR_SET_CHILD_SUBREAPER</code>): a process of the game whose parent dies is handed to it instead of to <code>init</code>, so it stays inside the tree the frontend closes. When the game ends, <code>run</code> sends SIGTERM to whatever is left and SIGKILL 3 s later. Before, each PortProton game closed with the exit shortcut left a <code>pv-adverb</code> and a <code>winedevice.exe</code> behind: the frontend's SIGTERM killed PortProton's container (<code>srt-bwrap</code>), its <code>pv-adverb</code> went to <code>init</code> and missed the SIGKILL 4 s later, still waiting for a <code>winedevice.exe</code> that never quits.</p>
 <h2 id="Custom-games-problems">Problems</h2>
 <ul>
 <li><strong>The game doesn't open from the frontend.</strong> Read its log, <code>/opt/fliperos/logs/custom_&lt;group&gt;_&lt;name&gt;.log</code> (also in the web panel &gt; Logs). For a package, check that the game folder exists: a disk or packed folder that is not mounted leaves it empty.</li>
@@ -34696,11 +34764,11 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>Executable / command</td>
-<td>The <code>.exe</code> files found in the folder (installers left out), or the Linux programs; a command is typed</td>
+<td>The <code>.exe</code> files found in the folder (installers left out), with what runs it below (PortProton, Wine or Wine Staging; PortProton by default), or the Linux programs; a command is typed</td>
 </tr>
 <tr>
 <td>Video mode</td>
-<td>240p, 480i, or another (<code>WIDTHxHEIGHT@HZ</code>)</td>
+<td>240p, 240p hack (Mugen: 640x240 on the tube, the game sees 640x480), 480i, or another (<code>WIDTHxHEIGHT@HZ</code>)</td>
 </tr>
 <tr>
 <td>Category</td>

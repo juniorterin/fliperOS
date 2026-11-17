@@ -318,6 +318,18 @@ screen_hw_change_check() {
   if conf_get hw_retest > /dev/null 2>&1; then
     text="You asked to test the video outputs again. Run the test now? It takes about a minute."
   else
+    id=$(conf_get gpu_id 2> /dev/null) || id=""
+    if conf_get hw_changed > /dev/null 2>&1 && [[ -n $id && $(conf_get hw_safe_boot 2> /dev/null) != "$id" ]] &&
+      video_hw_present "$id"; then
+      # A placa gravada esta aqui e o boot nao pos o modo seguro em outra (ele
+      # grava o ID dela nos dois): o aviso veio do boot que olhou antes do
+      # driver (so o simpledrm, hw_safe_boot=unknown). Nao houve troca.
+      for key in $HW_FLAGS; do
+        conf_unset "$key"
+      done
+      log_info "aviso de hardware de video: falso, a placa $id continua aqui"
+      return 0
+    fi
     if conf_get hw_changed > /dev/null 2>&1; then
       change=$(video_hw_changed) ||
         change="$(conf_get hw_old_gpu 2> /dev/null || echo "the old card")|$(drm_card_name "$(video_main_card)")"

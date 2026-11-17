@@ -646,6 +646,32 @@ video_main_card() {
   drm_cards | head -n 1
 }
 
+# video_hw_present ID: uma placa com esse ID ("1002:6939") esta no barramento
+# PCI, com o driver carregado ou nao. O boot olhava so as placas do DRM, e o
+# servico pode rodar antes do driver: so o simpledrm (o framebuffer do
+# firmware, sem ID do PCI) existia e a placa de sempre parecia trocada (R9
+# 380 num gabinete, 2026-11-17: o amdgpu entrou 1 s depois).
+video_hw_present() {
+  local dev vendor device
+  [[ -n ${1:-} ]] || return 1
+  for dev in "$PCI_SYSFS"/*; do
+    vendor=$(cat "$dev/vendor" 2> /dev/null) || continue
+    device=$(cat "$dev/device" 2> /dev/null) || continue
+    [[ ${vendor#0x}:${device#0x} == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# video_hw_real_card: alguma placa do DRM tem ID do PCI (o driver dela
+# entrou); o simpledrm, que vem antes, nao conta.
+video_hw_real_card() {
+  local card
+  for card in $(drm_cards); do
+    drm_card_id "$card" > /dev/null 2>&1 && return 0
+  done
+  return 1
+}
+
 # video_hw_changed: a placa principal do fliperos.conf nao esta mais aqui.
 # Status 0 e imprime "NOME ANTIGO|NOME NOVO" se trocou; 1 se e a mesma ou se
 # nao ha o que comparar (sem teste de saidas feito, ou sem placa). Uma placa a
@@ -657,6 +683,8 @@ video_hw_changed() {
   conf_get card > /dev/null 2>&1 || return 1
   saved_id=$(conf_get gpu_id 2> /dev/null) || saved_id=""
   saved_driver=$(conf_get driver 2> /dev/null) || saved_driver=""
+  # No barramento, mesmo sem o driver carregado ainda: a mesma placa.
+  [[ -n $saved_id ]] && video_hw_present "$saved_id" && return 1
   first=$(video_main_card)
   [[ -n $first ]] || return 1
   for card in $(drm_cards); do
@@ -693,14 +721,17 @@ video_hw_boot_check() {
   local id card conn monitor flags change tries
   is_installed && ! is_live || return 0
   conf_get card > /dev/null 2>&1 || return 0
-  # A placa pode demorar a aparecer no sysfs (o servico nao espera o udev).
+  # A placa pode demorar a aparecer no sysfs (o servico nao espera o udev); o
+  # simpledrm aparece antes do driver dela e nao serve para o modo seguro.
   for ((tries = 0; tries < ${HW_BOOT_WAIT:-20}; tries++)); do
-    [[ -n $(drm_cards) ]] && break
+    video_hw_real_card && break
     sleep 0.5
   done
   change=$(video_hw_changed) || return 0
   card=$(video_main_card)
-  id=$(drm_card_id "$card" 2> /dev/null) || id=unknown
+  # Sem uma placa com driver: nada a gravar (o aviso antes do launcher, com o
+  # driver ja carregado, ainda percebe a troca).
+  id=$(drm_card_id "$card" 2> /dev/null) || return 0
   [[ $(conf_get hw_safe_boot 2> /dev/null) == "$id" ]] && return 0
   log_warn "placa de video trocada: ${change/|/ -> }"
   # O nome da placa antiga, para o aviso: o modo seguro grava o da nova.

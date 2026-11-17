@@ -168,14 +168,15 @@ game_mode() {
 }
 
 # hw_maybe_changed: o fliperos.conf tem o ID da placa de video (gpu_id) e
-# nenhuma placa daqui tem esse ID: a placa foi trocada. So le o sysfs, sem
-# subir o Setup. Sem gpu_id (instalacao antiga) quem decide e o servico de boot
+# nenhuma placa do barramento PCI tem esse ID (com driver ou sem, como o
+# video_hw_present): a placa foi trocada. So le o sysfs, sem subir o Setup.
+# Sem gpu_id (instalacao antiga) quem decide e o servico de boot
 # (video_hw_boot_check), que grava o ID na primeira vez.
 hw_maybe_changed() {
   local id dev vendor device
   id=$(sed -n 's/^gpu_id=//p' "$ETC/fliperos.conf" 2> /dev/null | head -n 1)
   [[ -n $id ]] || return 1
-  for dev in /sys/class/drm/card[0-9]*/device; do
+  for dev in /sys/bus/pci/devices/*; do
     [[ -r $dev/vendor && -r $dev/device ]] || continue
     vendor=$(< "$dev/vendor")
     device=$(< "$dev/device")
