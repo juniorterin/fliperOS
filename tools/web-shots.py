@@ -89,6 +89,8 @@ SHOTS = [
     ("custom-previa-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-create-preview"),
     ("custom-arte-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-table-art"),
     ("custom-estrutura-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-structure"),
+    ("custom-teste-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-test-panel"),
+    ("custom-teste-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-test-panel"),
     ("custom-estrutura-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-structure"),
     ("custom-apagar-grupo-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-group-delete"),
 ]
@@ -285,6 +287,9 @@ def demo(tmp):
         write(os.path.join(home, "roms", "custom", group, name + ".sh"), "#!/bin/sh\n", mode=0o755)
         if kind:
             write(os.path.join(home, "media", "snap", "custom", group, name + ".png"), scene(kind, 40 + n), "wb")
+            if n % 2 == 0:
+                # O logotipo (a wheel) de uns jogos, por cima da imagem.
+                write(os.path.join(home, "media", "logo", "custom", group, name + ".png"), marquee_art(n + 5, 320, 80), "wb")
         describe.append("\t".join(("game", group, name, platform, mode, "", "joy8", "2", "2",
                                    "wine pang.exe" if platform == "command" else "./CaveStory.x86_64" if platform == "native" else "",
                                    "MetalSlugX.exe" if platform == "windows" else "", "/home/fliperos/games/%s/%s" % (group, name), "")))
@@ -661,6 +666,15 @@ def main():
         elif action == "cg-structure":
             # A estrutura do pacote aberta (na aba Criar pacote).
             browser.js("cgShowTab('create'); cg.el.structure.open = true; cg.el.structure.scrollIntoView({block: 'start'})")
+            browser.wait(1)
+        elif action == "cg-test-panel":
+            # O jogo aberto no teste: o aviso das teclas e a captura (com uma foto ja tirada).
+            browser.js("cgShowTab('create'); Object.assign(cg.createRow, {name: 'Street Fighter 4'});"
+                       " cg.el.createStatus.replaceChildren(cgTestPanel(cg.createRow));"
+                       " (() => { const f = document.createElement('figure'); f.className = 'cg-capshot snap';"
+                       " const i = document.createElement('img'); i.src = 'icon-512.png'; f.append(i);"
+                       " document.querySelector('.cg-capshots').append(f); })();"
+                       " cg.el.createStatus.scrollIntoView({block: 'center'})")
             browser.wait(1)
         elif action == "cg-group-delete":
             # A pergunta de apagar o grupo PC games (o que vai junto). void: a

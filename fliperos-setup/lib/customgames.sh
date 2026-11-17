@@ -91,6 +91,7 @@ customgames_media_exts() {
   case $1 in
     preview) echo "mp4 mkv webm avi mov flv" ;;
     texto) echo "txt" ;;
+    logo) echo "png jpg jpeg webp" ;;
     *) echo "png jpg jpeg webp gif" ;;
   esac
 }
@@ -956,7 +957,7 @@ customgames_row_fields() {
   R_GROUP=${f[0]:-} R_NAME=${f[1]:-} R_PLATFORM=${f[2]:-} R_FOLDER=${f[3]:-} R_EXE=${f[4]:-}
   R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
   R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
-  R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-} R_RUNNER=${f[18]:-}
+  R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-} R_RUNNER=${f[18]:-} R_LOGO=${f[19]:-}
 }
 
 # customgames_row_errors [package]: o que esta errado na linha de R_* (uma
@@ -1011,6 +1012,7 @@ customgames_row_errors() {
   [[ -z $R_SNAP || -f $R_SNAP ]] || echo "snap|The picture was not found: send it again."
   [[ -z $R_VIDEO || -f $R_VIDEO ]] || echo "video|The video was not found: send it again."
   [[ -z $R_TEXT || -f $R_TEXT ]] || echo "text|The text file was not found: send it again."
+  [[ -z ${R_LOGO:-} || -f $R_LOGO ]] || echo "logo|The logo was not found: send it again."
   [[ -z ${R_KEY:-} || -f $R_KEY ]] || echo "key|The .key file was not found: pick the folder again."
   [[ -z ${R_PPDB:-} || -f $R_PPDB ]] || echo "ppdb|The .ppdb file was not found: pick the folder again."
   case ${R_RUNNER:-} in
@@ -1059,7 +1061,7 @@ customgames_set_info() {
 }
 
 # customgames_media_set GRUPO NOME [--snap ARQ] [--video ARQ] [--text ARQ]
-# [--text-string TEXTO]: a arte de verdade do jogo (a de exemplo daquele tipo
+# [--logo ARQ] [--text-string TEXTO]: a arte de verdade do jogo (a de exemplo daquele tipo
 # sai).
 customgames_media_set() {
   local group=$1 name=$2
@@ -1076,6 +1078,7 @@ customgames_row_media() {
   [[ -n $R_SNAP ]] && R_MEDIA+=(--snap "$R_SNAP")
   [[ -n $R_VIDEO ]] && R_MEDIA+=(--video "$R_VIDEO")
   [[ -n $R_TEXT ]] && R_MEDIA+=(--text "$R_TEXT")
+  [[ -n ${R_LOGO:-} ]] && R_MEDIA+=(--logo "$R_LOGO")
   [[ -n $R_TEXT_STRING ]] && R_MEDIA+=(--text-string "$R_TEXT_STRING")
   return 0
 }
@@ -1316,7 +1319,7 @@ customgames_edit() {
   fi
   R_CATEGORY=${info[category]-} R_CONTROLS=${info[controls]-} R_BUTTONS=${info[buttons]-} R_PLAYERS=${info[players]-}
   R_GROUP=$new_group R_NAME=$new_name R_PLATFORM=command R_COMMAND=x R_MODE="" R_FOLDER="" R_EXE=""
-  R_SNAP="" R_VIDEO="" R_TEXT="" R_KEY="" R_PPDB=""
+  R_SNAP="" R_VIDEO="" R_TEXT="" R_LOGO="" R_KEY="" R_PPDB=""
   # As informacoes conferidas como as da tabela (o nome novo, se mudou).
   if [[ $new_group/$new_name != "$group/$name" ]]; then
     [[ $platform == command ]] || return 2
@@ -1367,11 +1370,11 @@ customgames_pack_game() {
   [[ -f ${cfg%.cfg}.key ]] && args+=(--key "${cfg%.cfg}.key")
   [[ -n $exe && -f $folder/$exe.ppdb ]] && args+=(--ppdb "$folder/$exe.ppdb")
   # A arte de verdade (as de exemplo nao vao: quem instala ganha as suas).
-  for value in snap preview texto; do
+  for value in snap preview texto logo; do
     for ext in $(customgames_media_exts "$value"); do
       [[ -f $CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext ]] || continue
       customgames_media_sample "$CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext" && continue
-      case $value in snap) args+=(--snap) ;; preview) args+=(--video) ;; texto) args+=(--text) ;; esac
+      case $value in snap) args+=(--snap) ;; preview) args+=(--video) ;; texto) args+=(--text) ;; logo) args+=(--logo) ;; esac
       args+=("$CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext")
       break
     done
@@ -1465,7 +1468,7 @@ customgames_create() {
   args=(--out "$out" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
   if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
   [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
-  for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players SNAP:snap VIDEO:video TEXT:text \
+  for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players SNAP:snap VIDEO:video TEXT:text LOGO:logo \
     KEY:key PPDB:ppdb TEXT_STRING:text-string; do
     var=R_${key%%:*}
     [[ -n ${!var:-} ]] || continue

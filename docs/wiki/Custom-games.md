@@ -43,7 +43,7 @@ Then, with the controller:
 2. Choose **Create package**, then **From a game folder**. The group comes later, when the package is installed.
 3. **Name**: how the frontend shows the game.
 4. **Windows or Linux**: a Windows game is a `.exe`; a Linux one is a program or a command.
-5. **The game folder**: open it in the folder picker and choose *Use this folder*. Everything the game needs must be inside it. If the folder has the [package's structure](#a-folder-with-the-packages-structure) (`<game>.jpg`, `<game>.mp4`, `<game>.txt`, `<game>.key`, `<game>.ppdb` or `<game>.cfg` next to the folder `<game>`), those files are picked by themselves: steps 6 and 7 come already filled.
+5. **The game folder**: open it in the folder picker and choose *Use this folder*. Everything the game needs must be inside it. If the folder has the [package's structure](#a-folder-with-the-packages-structure) (`<game>.jpg`, `<game>.logo.png`, `<game>.mp4`, `<game>.txt`, `<game>.key`, `<game>.ppdb` or `<game>.cfg` next to the folder `<game>`), those files are picked by themselves: steps 6 and 7 come already filled.
 6. **What opens the game**:
    - Windows: pick the `.exe` inside the folder, then **what runs it**: PortProton (the default), Wine or Wine Staging. If the game doesn't open or runs badly with one, make the package again with another (see [Windows games: PortProton, Wine or Wine Staging](#windows-games-portproton)). With PortProton, the first time the Setup offers to download it (about 3 GB); then choose which of its Wine builds runs the game; keep the first one unless the game fails with it.
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
@@ -132,7 +132,7 @@ What installing does:
 **Create package** has two ways: **From a game folder** is the step-by-step of the [first section](#step-by-step-adding-your-game-from-the-cabinet), and **From an installed game** packs a Windows or Linux game already in a group, with what it has now (the same as **Make a package of it** on the game). The web panel's **Create package** tab is the same form, without the group. Some details:
 
 - Every file picker of the assistant opens where the previous one stopped (the game folder, then the picture's folder...), and the next package starts there too (`~/.config/fliperos/customgame-last-dir`). The first time it starts at `~/games`, the plugged disks or the home.
-- A game folder with the [package's structure](#a-folder-with-the-packages-structure) fills the picture, the video, the text, the `.key` and the `.ppdb` by itself, and the `.exe` when its `<game>.cfg` names one (the `.exe` and Wine questions are skipped then). Picking the opened zip uses the game folder inside it.
+- A game folder with the [package's structure](#a-folder-with-the-packages-structure) fills the picture, the logo, the video, the text, the `.key` and the `.ppdb` by itself, and the `.exe` when its `<game>.cfg` names one (the `.exe` and Wine questions are skipped then). Picking the opened zip uses the game folder inside it.
 - The `.exe` and the Linux program must be inside the game folder: the package stores the path relative to it.
 - The text can be a `.txt` or typed on the on-screen keyboard.
 - The zip is `~/roms/custom-packages/<name>.fliperos-customgame.zip`, and shows in **Install games**; one with that name already there is replaced only if you say so. Pictures, videos and files that are already compressed are stored as they are; the rest is compressed.
@@ -146,6 +146,7 @@ A package is always named `<game>.fliperos-customgame.zip`, and always has this 
 <game>.fliperos-customgame.zip
 ├─ <game>.cfg    the settings (required)
 ├─ <game>.jpg    the picture (.png, .webp... too)
+├─ <game>.logo.png   the logo over the picture (a .png with a transparent background; .webp too)
 ├─ <game>.mp4    the video
 ├─ <game>.txt    the text the frontend shows
 ├─ <game>.key    controller → keyboard (optional: the on-screen menu makes it the first time)
@@ -158,6 +159,7 @@ A package is always named `<game>.fliperos-customgame.zip`, and always has this 
 | `<game>.cfg` | yes | the settings |
 | `<game>/` | yes | the game folder, with all its files |
 | `<game>.png`, `.jpg`, `.jpeg`, `.webp` or `.gif` | no | the picture (snap) |
+| `<game>.logo.png` (or `.jpg`, `.jpeg`, `.webp`) | no | the logo (wheel): the frontends show it over the picture; installed, it is `~/media/logo/custom/<group>/<game>.png` |
 | `<game>.mp4`, `.mkv`, `.webm`, `.avi`, `.mov` or `.flv` | no | the video |
 | `<game>.txt` | no | the text the frontend shows |
 | `<game>.key` | no | the [controller map](#the-controller-as-a-keyboard) |
@@ -209,7 +211,7 @@ The same files loose in a folder (the zip opened, or kept that way on a disk) ar
 | the game folder itself | that folder | next to it, with its name (`Metal Slug X/` and `Metal Slug X.jpg`) |
 | the game folder, without files next to it | that folder | a picture or video inside it with the game's name, or named `snap`, `screenshot`, `cover`, `title`, `preview`, `video`, `trailer`, `gameplay`... |
 
-Names are compared without case, spaces or `_` (`Metal_Slug_X.jpg` goes with `Metal Slug X/`). The `<game>.cfg` counts only when it is a FliperOS one (`platform=windows` or `native`); a game's own `.cfg` is left alone. What it says fills the `.exe` or the command, the video mode, the category, the players, the buttons and the controls.
+Names are compared without case, spaces or `_` (`Metal_Slug_X.jpg` goes with `Metal Slug X/`). The logo is `Metal Slug X.logo.png` next to the folder, or inside it a file called `logo`, `wheel`, `marquee` or `gamelogo` (`Metal Slug X.png` inside the folder is the picture, never the logo). The `<game>.cfg` counts only when it is a FliperOS one (`platform=windows` or `native`); a game's own `.cfg` is left alone. What it says fills the `.exe` or the command, the video mode, the category, the players, the buttons and the controls.
 
 ## Adding a game by its command
 

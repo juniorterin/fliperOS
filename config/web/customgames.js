@@ -12,6 +12,7 @@ const cg = { root: null, info: null, rows: [], seq: 0, el: null, busy: false, de
 const CG_DRAFT = "fliperos-cg-draft";
 const CG_TAB = "fliperos-cg-tab";
 const CG_TABS = ["games", "install", "create"];
+const CG_CAPTURE_SECONDS = 10;
 // O nome de todo pacote (config/fliperos-customgame SUFFIX).
 const CG_SUFFIX = ".fliperos-customgame.zip";
 // As colunas da tabela, na ordem; o rotulo de cada uma tambem vai em cada
@@ -97,22 +98,37 @@ const CG_EXAMPLE_CFG = [["name", CG_EXAMPLE], ["platform", "windows"], ["exe", "
   ["category", "Fighter / Versus"], ["controls", "joy8"], ["buttons", "6"], ["players", "2"]];
 const CG_CFG_KEYS = ["name", "platform", "exe", "command", "mode", "category", "controls", "buttons", "players"];
 
+// Os arquivos do pacote: [rotulo, classe (a cor), chave do texto, extensao no
+// nome, obrigatorio].
+const CG_FILES = [[".cfg", "t-cfg", "cfg", "cfg", true], [".jpg", "t-img", "jpg", "jpg"], ["logo", "t-logo", "logo", "logo.png"],
+  [".mp4", "t-vid", "mp4", "mp4"], [".txt", "t-txt", "txt", "txt"], [".key", "t-key", "key", "key"], [".ppdb", "t-ppdb", "ppdb", "ppdb"]];
+
+// A estrutura do pacote: o zip aberto, cada arquivo com a cor do seu tipo e
+// se e obrigatorio, e o cfg de exemplo ao lado, com o que cada chave faz.
 function cgStructure() {
-  const rows = [["cfg", ".cfg"], ["jpg", ".jpg"], ["mp4", ".mp4"], ["txt", ".txt"], ["key", ".key"], ["ppdb", ".ppdb"]];
   const game = CG_EXAMPLE;
-  const line = (branch, file, what) => el("div", {}, el("span", { class: "dim" }, branch), el("code", {}, file), el("span", {}, what));
+  const need = (on) => el("span", { class: "cg-need" + (on ? " on" : "") }, t(on ? "cg_required" : "cg_optional"));
+  const file = (label, cls, key, ext, required) => el("li", { class: "cg-file " + cls },
+    el("span", { class: "cg-ext" }, label),
+    el("span", { class: "cg-fname" }, el("code", {}, game + (ext ? "." + ext : "/")), el("small", {}, t("cg_tree_" + key))),
+    need(required));
+  const cfg = el("pre", { class: "cg-cfg" }, ...CG_EXAMPLE_CFG.flatMap(([k, v]) =>
+    [el("span", { class: "cg-k" }, k), el("span", { class: "cg-eq" }, "="), el("span", { class: "cg-v" }, v), "\n"]));
   return el("details", { class: "cg-structure" },
-    el("summary", {}, t("cg_structure"), " ", el("code", {}, t("cg_game_word") + CG_SUFFIX)),
-    el("div", { class: "cg-structure-grid" },
-      el("div", {}, el("h5", {}, t("cg_example")),
-        el("div", { class: "cg-tree" }, el("div", {}, el("code", { class: "cg-zip" }, game + CG_SUFFIX)),
-          ...rows.map(([k, ext]) => line("├─ ", game + ext, t("cg_tree_" + k))),
-          line("└─ ", game + "/", t("cg_tree_folder")))),
-      el("div", {}, el("h5", {}, t("cg_cfg_example").replace("%s", game + ".cfg")),
-        el("pre", { class: "cg-cfg" }, CG_EXAMPLE_CFG.map(([k, v]) => k + "=" + v).join("\n")),
+    el("summary", {}, icon("px-install"), el("b", {}, t("cg_structure")), el("code", { class: "cg-zipname" }, t("cg_game_word") + CG_SUFFIX),
+      icon("g-chevd")),
+    el("div", { class: "cg-anatomy" },
+      el("section", { class: "cg-card-files" },
+        el("h5", {}, t("cg_example")),
+        el("div", { class: "cg-zipbar" }, icon("px-install"), el("code", {}, game + CG_SUFFIX)),
+        el("ul", { class: "cg-filelist" }, ...CG_FILES.map((f) => file(...f)), file("/", "t-dir", "folder", "", true))),
+      el("section", { class: "cg-card-cfg" },
+        el("h5", {}, t("cg_cfg_title")),
+        el("div", { class: "cg-cfgfile" }, el("span", { class: "cg-ext" }, ".cfg"), el("code", {}, game + ".cfg"), need(true)),
+        cfg,
         el("dl", { class: "cg-cfg-keys" }, ...CG_CFG_KEYS.flatMap((k) => [el("dt", {}, el("code", {}, k)),
           el("dd", {}, t("cg_cfg_" + k).replace("%s", game + "/"))])))),
-    el("p", { class: "dim" }, t("cg_structure_note")));
+    el("p", { class: "cg-structure-note" }, icon("g-info"), el("span", {}, t("cg_structure_note"))));
 }
 
 async function cgLoad() {
@@ -215,11 +231,13 @@ function cgTile(game) {
   img.addEventListener("error", () => { img.replaceWith(el("div", { class: "cg-noimg" }, game.name.slice(0, 2).toUpperCase())); });
   img.src = mediaUrl(system, game.name, "snap");
   fadeIn(img);
+  const logo = el("img", { class: "cg-logo", alt: "", loading: "lazy", src: mediaUrl(system, game.name, "logo") });
+  logo.addEventListener("error", () => logo.remove());
   const actions = [["g-play", "cg_play", () => cgPlay(game)]];
   if (game.platform !== "script") actions.push(["px-edit", "cg_edit", () => cgEdit(game)]);
   if (game.platform === "windows" || game.platform === "native") actions.push(["px-install", "cg_package", () => cgPack(game)]);
   actions.push(["g-trash", "cg_delete", () => cgDelete(game)]);
-  return el("div", { class: "cg-tile", tabindex: "0" }, el("div", { class: "cg-snap" }, img),
+  return el("div", { class: "cg-tile", tabindex: "0" }, el("div", { class: "cg-snap" }, img, logo),
     el("b", { title: game.name }, game.name), el("span", { class: "tag" }, cgKindLabel(game)),
     el("div", { class: "cg-actions" }, ...actions.map(([glyph, label, fn]) => {
       const b = el("button", { type: "button", class: "icon-btn small", title: t(label), "aria-label": t(label) + ": " + game.name },
@@ -299,6 +317,7 @@ async function cgEdit(game) {
       if (row.snap && row.snap.id) media.snap = row.snap.id;
       if (row.video && row.video.id) media.video = row.video.id;
       if (row.text && row.text.id) media.text = row.text.id;
+      if (row.logo && row.logo.id) media.logo = row.logo.id;
       if (text.value.trim()) media.text_string = text.value.trim().replace(/\n/g, "\\n");
       if (Object.keys(media).length) {
         const r = await api("/api/customgames/media", { method: "POST", body: JSON.stringify(Object.assign({
@@ -526,7 +545,7 @@ function cgPackageCard(p) {
     actions.push(group, cgPkgButton("cg_install", () => cgInstallPackage(p, group.value), "small"));
   }
   const card = cgCard({ name: p.name, file: p.file, platform: p.platform, mode: p.mode, category: p.category, controls: p.controls,
-    buttons: p.buttons, players: p.players, snap: media("snap"), video: media("preview"), text: media("texto"),
+    buttons: p.buttons, players: p.players, snap: media("snap"), logo: media("logo"), video: media("preview"), text: media("texto"),
     size: p.bytes || p.size, key: p.key, ppdb: p.ppdb, tag, problems: p.state === "bad" ? cgProblems(p) : [] }, actions);
   card.dataset.zip = p.zip;
   return card;
@@ -547,6 +566,12 @@ function cgCard(info, actions = []) {
     img.addEventListener("error", () => img.replaceWith(initials()));
     art.append(img);
   } else art.append(initials());
+  // O logotipo (a wheel) por cima da imagem, embaixo, como o frontend o poe.
+  if (info.logo) {
+    const logo = el("img", { class: "cg-logo", alt: name, loading: "lazy", src: info.logo });
+    logo.addEventListener("error", () => logo.remove());
+    art.append(logo);
+  }
   const card = el("article", { class: "cg-card", tabindex: "-1" });
   if (info.video) {
     const video = el("video", { loop: "", playsinline: "", preload: "none", src: info.video, "aria-hidden": "true" });
@@ -765,7 +790,7 @@ function cgCreatePreview() {
   const mode = (((cg.info && cg.info.modes) || []).find((m) => m.label === modeLabel) || { value: modeLabel }).value;
   const card = cgCard({ name: row.name.trim() || t("cg_ph_name"), platform: row.platform, mode, category: row.category,
     controls: row.controls.join(","), buttons: row.buttons, players: row.players,
-    snap: row.snap ? row.snap.url || "" : "", video: row.video ? row.video.url || "" : "",
+    snap: row.snap ? row.snap.url || "" : "", logo: row.logo ? row.logo.url || "" : "", video: row.video ? row.video.url || "" : "",
     text: row.text && !row.text.value ? row.text.url || "" : "", textValue: row.text ? row.text.value || "" : "",
     key: !!row.key, ppdb: !!row.ppdb && row.platform === "windows", tag: { cls: "new", text: t("cg_preview") } });
   box.replaceChildren(el("h5", {}, t("cg_preview_title")), card, el("p", { class: "dim" }, t("cg_preview_note")));
@@ -799,9 +824,7 @@ async function cgTest(button) {
       await sleep(2000);
       const s = await api("/api/status").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
       if (s.fps && s.fps.program === out.app) {
-        status.replaceChildren(el("span", { class: "ok" }, t("cg_test_open").replace("%s", row.name)));
-        await ask({ title: t("cg_test_open").replace("%s", row.name), text: t("cg_test_keys"), yes: "OK", no: t("cg_test_close") })
-          .then((ok) => (ok ? null : api("/api/close", { method: "POST", body: "{}" })));
+        status.replaceChildren(cgTestPanel(row));
         return;
       }
     }
@@ -810,6 +833,56 @@ async function cgTest(button) {
     cg.busy = false;
     button.disabled = false;
   }
+}
+
+// O jogo aberto no teste: o aviso das teclas e a captura da tela do gabinete,
+// a foto e 10 segundos de video, que vao para a imagem e o video do pacote.
+function cgTestPanel(row) {
+  const msg = el("span", { class: "cg-capmsg", role: "status" });
+  const shots = el("div", { class: "cg-capshots" });
+  const photo = el("button", { type: "button", class: "btn small" }, icon("g-camera"), t("cg_cap_photo"));
+  const video = el("button", { type: "button", class: "btn small ghost" }, icon("g-play"), t("cg_cap_video"));
+  const close = el("button", { type: "button", class: "btn small ghost" }, icon("g-close"), t("cg_test_close"));
+  const busy = (on) => { photo.disabled = on; video.disabled = on; };
+  // A foto sai na hora; o video leva 10 s (a contagem) e o tempo de codificar.
+  const capture = async (kind) => {
+    busy(true);
+    let timer = 0;
+    if (kind === "video") {
+      let left = CG_CAPTURE_SECONDS;
+      msg.textContent = t("cg_cap_recording").replace("%n", left);
+      timer = setInterval(() => {
+        left = Math.max(0, left - 1);
+        msg.textContent = left ? t("cg_cap_recording").replace("%n", left) : t("cg_cap_encoding");
+      }, 1000);
+    } else msg.textContent = t("cg_cap_taking");
+    try {
+      const res = await api("/api/customgames/capture?kind=" + kind, { method: "POST", body: "{}" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { msg.replaceChildren(el("span", { class: "error" }, data.error || res.statusText)); return; }
+      const url = cgStagedUrl(data.id);
+      row[kind === "snap" ? "snap" : "video"] = { id: data.id, name: data.name, url };
+      msg.replaceChildren(el("span", { class: "ok" }, t(kind === "snap" ? "cg_cap_photo_ok" : "cg_cap_video_ok")));
+      const thumb = kind === "snap" ? el("img", { src: url, alt: "" })
+        : el("video", { src: url, controls: "", loop: "", muted: "", playsinline: "", preload: "metadata" });
+      shots.append(el("figure", { class: "cg-capshot " + kind }, thumb));
+      cgCreateDraw();
+    } finally {
+      clearInterval(timer);
+      busy(false);
+    }
+  };
+  photo.addEventListener("click", () => capture("snap").catch(() => busy(false)));
+  video.addEventListener("click", () => capture("video").catch(() => busy(false)));
+  close.addEventListener("click", async () => {
+    await api("/api/close", { method: "POST", body: "{}" });
+    msg.textContent = "";
+  });
+  return el("div", { class: "cg-testbar" },
+    el("div", { class: "cg-testhead" }, icon("g-check"), el("b", {}, t("cg_test_open").replace("%s", row.name))),
+    el("p", { class: "cg-testnote" }, t("cg_test_keys")),
+    el("p", { class: "cg-capnote dim" }, t("cg_cap_note")),
+    el("div", { class: "cg-testact" }, photo, video, close, msg), shots);
 }
 
 async function cgCreate(button) {
@@ -904,7 +977,7 @@ function cgRenderPacked() {
 
 function cgNewRow(values) {
   return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "480i",
-    modeOther: "", category: "", players: "", buttons: "", controls: [], snap: null, video: null, text: null, key: null, ppdb: null,
+    modeOther: "", category: "", players: "", buttons: "", controls: [], snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
     wine: "", runner: "portproton", exes: [], programs: [], errors: {}, state: "", error: "" }, values || {});
 }
 
@@ -912,13 +985,15 @@ function cgNewRow(values) {
 // pasta do jogo (fica no gabinete; a miniatura vem dele).
 const cgArtUrl = (path, kind) => "/api/customgames/art?path=" + encodeURIComponent(path) + (kind ? "&kind=" + kind : "");
 const cgBase = (path) => path.split("/").pop();
+// A arte guardada na espera do servidor (a que subiu ou a capturada no teste).
+const cgStagedUrl = (id) => "/api/customgames/staged?id=" + encodeURIComponent(id);
 
 // cgFound: o que veio com a pasta (a estrutura do pacote: JOGO.jpg, .mp4,
 // .txt, .key, .ppdb e o JOGO.cfg) na linha. O que a pessoa subiu fica; o que
 // veio de outra pasta antes sai.
 function cgFound(row, found) {
   if (found.path) row.folder = found.path;
-  for (const key of ["snap", "video", "text"]) {
+  for (const key of ["snap", "video", "text", "logo"]) {
     if (row[key] && row[key].id) continue;
     const path = found[key] || "";
     row[key] = path ? { path, name: cgBase(path), url: cgArtUrl(path, key === "snap" ? "" : key) } : null;
@@ -943,7 +1018,7 @@ function cgFound(row, found) {
 
 // O que veio com a pasta, para a mensagem: "imagem, video, .key".
 function cgFoundList(row) {
-  return [["snap", "cg_f_snap"], ["video", "cg_f_video"], ["text", "cg_f_text"], ["key", "cg_f_key"], ["ppdb", "cg_f_ppdb"]]
+  return [["snap", "cg_f_snap"], ["logo", "cg_f_logo"], ["video", "cg_f_video"], ["text", "cg_f_text"], ["key", "cg_f_key"], ["ppdb", "cg_f_ppdb"]]
     .filter(([k]) => row[k] && row[k].path).map(([, label]) => t(label).toLowerCase());
 }
 
@@ -955,8 +1030,8 @@ function cgDraftLoad() {
       cg.rows.forEach((r) => {
         r.id = ++cg.seq;
         // Os enderecos do navegador (blob:) nao voltam: a arte da pasta, sim.
-        for (const k of ["snap", "video", "text"]) {
-          if (r[k]) r[k].url = r[k].path ? cgArtUrl(r[k].path, k === "snap" ? "" : k) : "";
+        for (const k of ["snap", "video", "text", "logo"]) {
+          if (r[k]) r[k].url = r[k].path ? cgArtUrl(r[k].path, k === "snap" ? "" : k) : r[k].id && k !== "text" ? cgStagedUrl(r[k].id) : "";
         }
       });
       cg.defaultGroup = saved.group || "";
@@ -1062,7 +1137,7 @@ function cgTableRow(row, index) {
   const dup = el("button", { type: "button", class: "icon-btn small", title: t("cg_dup"), "aria-label": t("cg_dup") }, icon("g-copy"));
   dup.addEventListener("click", () => {
     const copy = cgNewRow(Object.assign({}, row, { id: undefined, name: "", folder: row.platform === "command" ? "" : row.folder,
-      snap: null, video: null, text: null, errors: {}, state: "", error: "", controls: row.controls.slice() }));
+      snap: null, video: null, text: null, logo: null, errors: {}, state: "", error: "", controls: row.controls.slice() }));
     copy.id = ++cg.seq;
     cg.rows.splice(index + 1, 0, copy);
     cgTableDraw();
@@ -1090,7 +1165,7 @@ function cgTableRow(row, index) {
 
 // O erro do Setup cai na coluna dela (exe e command sao a mesma coluna).
 function cgFieldError(row, column) {
-  const map = { run: ["exe", "command"], art: ["snap", "video", "text", "key", "ppdb"], group: ["group"], name: ["name"], platform: ["platform"],
+  const map = { run: ["exe", "command"], art: ["snap", "logo", "video", "text", "key", "ppdb"], group: ["group"], name: ["name"], platform: ["platform"],
     folder: ["folder"], mode: ["mode"], category: ["category"], players: ["players"], buttons: ["buttons"], controls: ["controls"] };
   return (map[column] || []).map((f) => row.errors[f]).filter(Boolean).join(" ");
 }
@@ -1234,7 +1309,7 @@ function cgArt(row, changed) {
     const label = t("cg_f_" + key);
     const button = el("button", { type: "button", class: "cg-artbtn" + (current ? " on" : "") + (current && current.path ? " found" : ""),
       title: current && current.path ? t("cg_from_folder") + ": " + current.path : label });
-    if (current && current.url && key === "snap") button.append(el("img", { src: current.url, alt: "" }));
+    if (current && current.url && (key === "snap" || key === "logo")) button.append(el("img", { src: current.url, alt: "", class: key }));
     else button.append(icon(glyph), el("span", {}, current ? current.name : label));
     button.addEventListener("click", () => input.click());
     input.addEventListener("change", async () => {
@@ -1274,7 +1349,8 @@ function cgArt(row, changed) {
     return el("span", { class: "cg-slot" }, el("span", { class: "tag on cg-chip", title: t("cg_from_folder") + ": " + row[key].path },
       t("cg_f_" + key)), drop);
   };
-  box.append(slot("snap", ".png,.jpg,.jpeg,.webp,.gif", "snap", "g-camera"), slot("video", ".mp4,.mkv,.webm,.avi,.mov,.flv", "video", "g-play"),
+  box.append(slot("snap", ".png,.jpg,.jpeg,.webp,.gif", "snap", "g-camera"), slot("logo", ".png,.jpg,.jpeg,.webp", "logo", "g-star"),
+    slot("video", ".mp4,.mkv,.webm,.avi,.mov,.flv", "video", "g-play"),
     slot("text", ".txt", "text", "g-list"), ...["key", "ppdb"].filter((k) => row[k]).map(chip));
   return box;
 }
@@ -1410,7 +1486,7 @@ function cgPayload(row) {
   return { group: row.group, name: row.name.trim(), platform: row.platform, folder: row.platform === "command" ? "" : row.folder.trim(),
     exe: row.platform === "windows" ? row.exe : "", command: row.platform === "windows" ? "" : row.command, mode: cgRowMode(row),
     category: row.category, controls: row.controls.join(","), buttons: row.buttons, players: row.players,
-    snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), wine: row.platform === "windows" ? row.wine : "",
+    snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), logo: cgArtRef(row.logo), wine: row.platform === "windows" ? row.wine : "",
     key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "",
     runner: row.platform === "windows" ? row.runner || "portproton" : "" };
 }

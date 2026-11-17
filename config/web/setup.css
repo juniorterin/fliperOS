@@ -417,28 +417,100 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-group h4 .cg-gdel { margin-left: auto; border: 0; background: none; color: var(--dim); }
 .cg-group h4 .cg-gdel:hover { background: var(--raise); color: var(--bad); }
 .cg-group h4 .cg-gdel svg.g { width: 13px; height: 13px; }
-/* A estrutura do pacote: a arvore do JOGO.fliperos-customgame.zip. */
-.cg-structure { margin: -12px 0 26px; padding: 10px 14px; border-radius: 14px; background: var(--surface); font-size: 13px; }
-.cg-structure summary { cursor: pointer; color: var(--muted); }
+/* A estrutura do pacote: o zip aberto, cada arquivo com a cor do seu tipo e
+   se e obrigatorio, e o cfg de exemplo ao lado. */
+.cg-structure { margin: -12px 0 26px; overflow: hidden; border: 1px solid var(--hair); border-radius: 16px; background: var(--surface); font-size: 13px; }
+.cg-structure summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 13px 16px; cursor: pointer; list-style: none; color: var(--fg); }
+.cg-structure summary::-webkit-details-marker { display: none; }
+.cg-structure summary > svg.px { flex: none; width: 22px; height: 22px; }
+.cg-structure summary > b { font-size: 14px; }
+.cg-structure summary > svg.g:last-child { width: 12px; height: 12px; margin-left: auto; color: var(--dim); transition: transform .2s; }
+.cg-structure[open] summary { border-bottom: 1px solid var(--hair); }
+.cg-structure[open] summary > svg.g:last-child { transform: rotate(180deg); }
 .cg-structure code { font-size: 12.5px; color: var(--fg); overflow-wrap: anywhere; }
-.cg-structure-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 6px 28px; margin-top: 10px; }
-.cg-structure h5 { margin: 4px 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
-.cg-cfg { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--bg-deep); font-size: 12.5px; line-height: 1.6;
-  overflow-x: auto; color: var(--fg); }
-.cg-cfg-keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; }
-.cg-cfg-keys dd { margin: 0; min-width: 0; color: var(--dim); }
-.cg-tree { display: grid; gap: 3px; margin: 0 0 6px; }
-.cg-tree > div { display: flex; gap: 8px; align-items: baseline; }
-.cg-tree > div > span:first-child { flex: none; white-space: pre; }
-.cg-tree > div > code { flex: none; }
-.cg-tree > div > span:last-child { min-width: 0; color: var(--dim); }
-.cg-tree .cg-zip { color: var(--green); }
-/* No celular, o que cada arquivo e vai para a linha de baixo do nome. */
-@media (max-width: 520px) {
-  .cg-tree > div { flex-wrap: wrap; row-gap: 0; }
-  .cg-tree > div > span:last-child { flex-basis: 100%; padding-left: 2.6em; font-size: 12.5px; }
+.cg-structure .cg-zipname { padding: 2px 9px; border-radius: 8px; background: var(--bg-deep); color: var(--green); font-size: 12px; }
+.cg-anatomy { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+.cg-anatomy > section { min-width: 0; padding: 16px; }
+.cg-anatomy > section + section { border-left: 1px solid var(--hair); }
+@media (max-width: 900px) {
+  .cg-anatomy { grid-template-columns: minmax(0, 1fr); }
+  .cg-anatomy > section + section { border-left: 0; border-top: 1px solid var(--hair); }
 }
-.cg-structure > p { margin: 6px 0 2px; max-width: 72ch; }
+.cg-structure h5 { margin: 0 0 10px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.cg-zipbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px 12px; border: 1px solid rgba(80, 250, 123, .28);
+  border-radius: 10px; background: rgba(80, 250, 123, .08); }
+.cg-zipbar svg.px { flex: none; width: 20px; height: 20px; }
+.cg-zipbar code { color: var(--green); }
+.cg-filelist { display: grid; gap: 6px; margin: 0 0 0 11px; padding: 0 0 0 16px; list-style: none; border-left: 2px solid var(--hair); }
+.cg-file { --c: var(--dim); position: relative; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 10px; background: var(--raise); }
+.cg-file::before { content: ""; position: absolute; top: 50%; left: -16px; width: 14px; border-top: 2px solid var(--hair); }
+.cg-ext { display: grid; place-items: center; min-width: 52px; height: 24px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+  border-radius: 7px; background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c);
+  font: 700 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.cg-file.t-cfg, .cg-cfgfile { --c: var(--cyan); } .cg-file.t-img { --c: var(--pink); } .cg-file.t-logo { --c: var(--yellow); }
+.cg-file.t-vid { --c: var(--purple); } .cg-file.t-txt { --c: var(--fg); } .cg-file.t-key { --c: var(--green); }
+.cg-file.t-ppdb { --c: var(--orange); } .cg-file.t-dir { --c: var(--muted); }
+.cg-fname { display: grid; gap: 1px; min-width: 0; }
+.cg-fname small { font-size: 12px; line-height: 1.35; color: var(--dim); }
+.cg-need { padding: 2px 8px; border: 1px solid var(--hair); border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--dim); white-space: nowrap; }
+.cg-need.on { border-color: rgba(80, 250, 123, .4); background: rgba(80, 250, 123, .08); color: var(--green); }
+@media (max-width: 520px) {
+  .cg-file { grid-template-columns: 56px minmax(0, 1fr); align-items: start; }
+  .cg-file .cg-need { display: none; }
+  .cg-file .cg-need.on { display: inline-block; grid-column: 2; grid-row: auto; justify-self: start; }
+}
+.cg-cfgfile { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.cg-cfgfile .cg-need { margin-left: auto; }
+.cg-cfg { margin: 0 0 14px; padding: 12px 14px; overflow-x: auto; border: 1px solid var(--hair); border-radius: 12px; background: var(--bg-deep);
+  font: 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.cg-cfg .cg-k { color: var(--cyan); } .cg-cfg .cg-eq { color: var(--dim); } .cg-cfg .cg-v { color: var(--yellow); }
+.cg-cfg-keys { display: grid; grid-template-columns: auto minmax(0, 1fr); margin: 0; }
+.cg-cfg-keys dt, .cg-cfg-keys dd { padding: 6px 0; border-top: 1px solid var(--hair); }
+.cg-cfg-keys dt { padding-right: 14px; }
+.cg-cfg-keys dt code { color: var(--cyan); }
+.cg-cfg-keys dd { margin: 0; min-width: 0; line-height: 1.4; color: var(--dim); }
+.cg-structure-note { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 16px; border-top: 1px solid var(--hair);
+  background: var(--raise); line-height: 1.45; color: var(--muted); }
+.cg-structure-note svg.g { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--cyan); }
+
+/* O logotipo (a wheel) por cima da imagem, embaixo, com um degrade para ler. */
+.cg-snap, .cg-cmedia { position: relative; }
+.cg-snap:has(.cg-logo)::after, .cg-cmedia:has(.cg-logo)::after { content: ""; position: absolute; inset: 45% 0 0; pointer-events: none;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .6)); }
+.cg-snap > .cg-logo, .cg-cmedia > .cg-logo { position: absolute; z-index: 1; left: 8%; right: 8%; bottom: 7%; width: auto; height: auto; max-width: 84%;
+  max-height: 34%; margin: 0 auto; object-fit: contain; image-rendering: auto; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .9)); pointer-events: none; }
+.cg-artbtn img.logo { object-fit: contain; background: var(--bg-deep); }
+
+/* O teste no gabinete: o aviso das teclas e a captura da tela. */
+.cg-testbar { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid rgba(80, 250, 123, .3); border-radius: 14px; background: rgba(80, 250, 123, .06); }
+.cg-testhead { display: flex; align-items: center; gap: 8px; color: var(--green); }
+.cg-testhead svg.g { width: 14px; height: 14px; }
+.cg-testnote, .cg-capnote { margin: 0; max-width: 78ch; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.cg-capnote { font-size: 12.5px; }
+.cg-testact { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cg-testact svg.g { width: 12px; height: 12px; }
+.cg-capmsg { font-size: 13px; color: var(--muted); }
+.cg-capshots { display: flex; flex-wrap: wrap; gap: 10px; }
+.cg-capshots:empty { display: none; }
+.cg-capshot { margin: 0; overflow: hidden; border-radius: 10px; background: var(--bg-deep); }
+.cg-capshot img, .cg-capshot video { display: block; width: 240px; max-width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
+
+/* A pagina: abas em pilulas, grupos com a contagem, tiles que sobem ao passar. */
+.cg-tabs { border-bottom: 0; }
+.cg-tabs .subtabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--surface); }
+.cg-tabs .subtabs a { margin: 0; padding: 8px 16px; border: 0; border-radius: 10px; }
+.cg-tabs .subtabs a.on { background: var(--raise); box-shadow: inset 0 0 0 1px rgba(255, 121, 198, .45); }
+.cg-group h4 { gap: 8px 10px; font-size: 12.5px; color: var(--muted); }
+.cg-group h4::before { content: ""; width: 4px; height: 15px; border-radius: 2px; background: var(--pink); }
+.cg-group h4 .dim { padding: 1px 9px; border-radius: 999px; background: var(--raise); font-size: 12px; }
+.cg-tile { border: 1px solid var(--hair); transition: transform .15s, border-color .15s, box-shadow .15s; }
+.cg-tile:hover, .cg-tile:focus-within { transform: translateY(-2px); border-color: var(--purple); box-shadow: 0 10px 26px rgba(0, 0, 0, .4); }
+.cg-tile > .tag { max-width: calc(100% - 22px); margin: 3px 11px 11px; padding: 1px 9px; overflow: hidden; border-radius: 999px;
+  background: var(--raise); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.cg-empty { padding: 28px 18px; border: 1px dashed var(--hair); border-radius: 14px; background: none; text-align: center; }
+.cg-card { border: 1px solid var(--hair); }
+@media (prefers-reduced-motion: reduce) { .cg-tile { transition: none; } .cg-tile:hover, .cg-tile:focus-within { transform: none; } }
 
 /* A tabela: rola de lado dentro dela (a pagina nao). Campos sem borda, que
    aparecem ao passar o mouse ou ao digitar. */

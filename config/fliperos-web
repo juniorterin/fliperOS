@@ -1513,11 +1513,23 @@ def screenshot():
     menu grafico) pela camada OpenGL, que grava o quadro pedido em
     $XDG_RUNTIME_DIR/fliperos-shot.ppm. None: nada que de para fotografar
     (o console de texto, um programa sem OpenGL)."""
-    state = on_screen()
-    if state["desktop"] and not state["games"]:
+    frame = grab_frame()
+    return (png(*frame[:3]), frame[3]) if frame else (None, None)
+
+
+def grab_frame(source=None, wait=3.0):
+    """(largura, altura, linhas, de onde veio) do quadro de agora, ou None.
+    source "x11" ou "opengl" pula a escolha (o video grava sempre pelo mesmo
+    caminho, sem olhar os processos a cada quadro)."""
+    if source is None:
+        state = on_screen()
+        if state["desktop"] and not state["games"]:
+            shot = x11_capture()
+            if shot:
+                return shot + ("x11",)
+    elif source == "x11":
         shot = x11_capture()
-        if shot:
-            return png(*shot), "x11"
+        return shot + ("x11",) if shot else None
     user = pwd.getpwnam(PLAYER)
     runtime = os.path.join(RUN_USER, str(user.pw_uid))
     request = os.path.join(runtime, "fliperos-shot-request")
@@ -1529,17 +1541,82 @@ def screenshot():
     with open(request, "w"):
         pass
     os.chown(request, user.pw_uid, user.pw_gid)
-    end = time.monotonic() + 3
+    end = time.monotonic() + wait
     while time.monotonic() < end:
         if os.path.exists(out) and not os.path.exists(request):
-            return png(*read_ppm(out)), "opengl"
-        time.sleep(0.05)
+            return read_ppm(out) + ("opengl",)
+        time.sleep(0.01)
     try:
         os.unlink(request)
     except OSError:
         pass
+    if source == "opengl":
+        return None
     shot = x11_capture()
-    return (png(*shot), "x11") if shot else (None, None)
+    return shot + ("x11",) if shot else None
+
+
+# ── Foto e video do jogo no teste (Criar pacote) ───────────────────
+# Um jogo de 15 kHz de 640x240 sai esticado (8:3) numa imagem: as linhas se
+# repetem ate ficar em 4:3, como o frontend mostra.
+FFMPEG = ENV("FLIPEROS_FFMPEG", "ffmpeg")
+CAPTURE_SECONDS = int(ENV("FLIPEROS_CAPTURE_SECONDS", "10"))
+
+
+def aspect_rows(width, height):
+    """Quantas vezes cada linha se repete para a imagem ficar em 4:3 (1: ja
+    esta, ou e quase)."""
+    return max(1, round(width * 0.75 / height)) if height and width / height > 2 else 1
+
+
+def record_video(out, seconds=CAPTURE_SECONDS, grab=None, clock=time.monotonic):
+    """Grava SECONDS segundos da tela em OUT (H.264 em .mp4): os quadros da
+    camada (ou do X) vao para o ffmpeg, que da o tempo de cada um pela hora
+    em que chegou (a taxa e a que o jogo deixa tirar). (quadros, None) ou
+    (0, o motivo)."""
+    grab = grab or grab_frame
+    first = grab()
+    if not first:
+        return 0, "nothing to capture: the text console, or a program without OpenGL"
+    width, height, rows, source = first
+    repeat = aspect_rows(width, height)
+    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
+           "-video_size", "%dx%d" % (width, height), "-use_wallclock_as_timestamps", "1", "-i", "-",
+           "-vf", "scale=iw:ih*%d:flags=neighbor,crop=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" % repeat,
+           "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-movflags", "+faststart", "-an", out]
+    try:
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError:
+        return 0, "ffmpeg is not installed on the cabinet"
+    frames = 0
+    end = clock() + seconds
+    try:
+        frame = first
+        while True:
+            if frame and frame[0] == width and frame[1] == height:
+                proc.stdin.write(b"".join(frame[2]))
+                frames += 1
+            if clock() >= end:
+                break
+            frame = grab(source)
+    except (BrokenPipeError, OSError):
+        pass
+    try:
+        proc.stdin.close()
+    except OSError:
+        pass
+    try:
+        err = proc.stderr.read().decode("utf-8", "replace").strip()
+        proc.wait(timeout=120)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        return 0, "ffmpeg took too long to encode the video"
+    if proc.returncode != 0 or not os.path.isfile(out) or os.path.getsize(out) == 0:
+        return 0, err[-300:] or "ffmpeg could not make the video"
+    if frames < 3:
+        os.unlink(out)
+        return 0, "the screen did not change enough to record (%d frame%s)" % (frames, "" if frames == 1 else "s")
+    return frames, None
 
 
 def version():
@@ -2652,12 +2729,13 @@ def menu_sounds():
 # caminho. Os jogos de uma pasta sao copiados para ~/games/GRUPO/NOME.
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
-                     "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner")
+                     "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo")
 CUSTOMGAME_ROWS = 500
 CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 # A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
 # tamanho maximo de cada tipo.
 STAGE_KINDS = {"snap": (("png", "jpg", "jpeg", "webp", "gif"), 32 << 20),
+               "logo": (("png", "jpg", "jpeg", "webp"), 16 << 20),
                "video": (("mp4", "mkv", "webm", "avi", "mov", "flv"), 4 << 30),
                "text": (("txt",), 1 << 20)}
 # O que veio com a pasta do jogo (a estrutura do pacote: o scan acha) vai
@@ -2736,7 +2814,7 @@ def customgame_rows_file(rows):
         fields = []
         for key in CUSTOMGAME_FIELDS:
             value = customgame_field(row.get(key), 4096 if key == "text_string" else 1024)
-            if key in ("snap", "video", "text", "key", "ppdb") and value:
+            if key in ("snap", "video", "text", "logo", "key", "ppdb") and value:
                 found = found_path(key, value) if value.startswith("/") else None
                 staged = stage_path(value) if key in STAGE_KINDS else None
                 value = found or staged or os.path.join(stage_dir(), "missing-" + re.sub(r"\W", "", value)[:32])
@@ -3190,6 +3268,7 @@ class Panel:
         self.cloud_auth = CloudAuth()
         self.downloader = Cached(3, downloader_status)
         self.launch_lock = threading.Lock()
+        self.capture_lock = threading.Lock()
         # O que volta depois de um jogo aberto daqui, para o proximo pedido
         # feito com ele ainda na tela (sem fliperos-session no meio).
         self.last_back = "menu"
@@ -3528,7 +3607,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"settings": settings()})
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
-        if url.path in ("/api/customgames", "/api/customgames/scan", "/api/customgames/art", "/api/customgames/packages",
+        if url.path in ("/api/customgames", "/api/customgames/scan", "/api/customgames/art", "/api/customgames/staged", "/api/customgames/packages",
                         "/api/customgames/package-media"):
             return self.customgames_get(url)
         if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
@@ -4623,6 +4702,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.loads(done.stdout))
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 return self.send(500, {"error": str(exc)})
+        if url.path == "/api/customgames/staged":
+            # A arte guardada na pasta de espera (a foto e o video capturados),
+            # para a previa: so os ids que o stage e o capture deram.
+            path = stage_path((query.get("id") or [""])[0])
+            if not path:
+                return self.send(404, {"error": "no such file"})
+            return self.send_inline(path, CUSTOMGAME_MEDIA_TYPES.get(os.path.splitext(path)[1].lower(), "application/octet-stream"),
+                                    MEDIA_CACHE)
         if url.path == "/api/customgames/art":
             # A arte que veio com a pasta do jogo (o scan a achou), pelo
             # caminho no gabinete: a miniatura e a previa do Criar pacote
@@ -4660,6 +4747,8 @@ class Handler(BaseHTTPRequestHandler):
         action = url.path.rsplit("/", 1)[1]
         if action == "stage":
             return self.customgame_stage(parse_qs(url.query))
+        if action == "capture":
+            return self.customgame_capture(parse_qs(url.query))
         data = self.body(4 << 20)
         tasks = self.panel.tasks
         if action in ("check-create", "create"):
@@ -4742,7 +4831,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.setup_answer(["--customgames", "group-info", name], {}, timeout=60)
         if action == "media":
             args = []
-            for key, opt in (("snap", "--snap"), ("video", "--video"), ("text", "--text")):
+            for key, opt in (("snap", "--snap"), ("video", "--video"), ("text", "--text"), ("logo", "--logo")):
                 if data.get(key):
                     path = stage_path(data[key])
                     if not path:
@@ -4787,6 +4876,45 @@ class Handler(BaseHTTPRequestHandler):
         if not task:
             return self.send(409, {"error": "another custom games task is running"})
         return self.send(200, task.info())
+
+    def customgame_capture(self, query):
+        """Criar pacote > Testar: a foto (kind=snap) ou 10 segundos de video
+        (kind=video) do que o gabinete mostra agora, guardados na pasta de
+        espera como o que a pessoa subiria; o id volta, como no stage (a
+        pagina o poe na imagem ou no video do pacote)."""
+        kind = (query.get("kind") or [""])[0]
+        if kind not in ("snap", "video"):
+            return self.send(400, {"error": "kind: snap or video"})
+        stage_clean()
+        folder = stage_dir()
+        os.makedirs(folder, exist_ok=True)
+        token = "%s.%s" % (secrets.token_hex(8), "png" if kind == "snap" else "mp4")
+        path = os.path.join(folder, token)
+        if kind == "snap":
+            with self.panel.launch_lock:
+                frame = grab_frame()
+            if not frame:
+                return self.send(503, {"error": "nothing to capture: the text console, or a program without OpenGL"})
+            width, height, rows, _ = frame
+            repeat = aspect_rows(width, height)
+            if repeat > 1:
+                rows = [row for row in rows for _ in range(repeat)]
+                height *= repeat
+            with open(path, "wb") as f:
+                f.write(png(width, height, rows))
+        else:
+            seconds = CAPTURE_SECONDS
+            if not self.panel.capture_lock.acquire(blocking=False):
+                return self.send(409, {"error": "a video is already being recorded"})
+            try:
+                frames, why = record_video(path + ".part.mp4", seconds)
+            finally:
+                self.panel.capture_lock.release()
+            if why:
+                return self.send(503, {"error": why})
+            os.replace(path + ".part.mp4", path)
+        size = os.path.getsize(path)
+        return self.send(200, {"id": token, "name": "capture." + token.rsplit(".", 1)[1], "size": size})
 
     def customgame_stage(self, query):
         """A arte de uma linha da tabela (ou do Editar), antes de gravar o

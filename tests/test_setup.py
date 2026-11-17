@@ -4462,6 +4462,58 @@ class CustomGamesTests(Base):
                          dict(e, O=str(out), S=str(src)))
         self.assertIn("@fail", r.stdout)
 
+    def test_a_package_logo_installs_packs_and_is_found(self):
+        # JOGO.logo.png: o logotipo vai para ~/media/logo/custom/GRUPO/JOGO.png
+        # (no lugar do de exemplo), volta ao empacotar e a pasta solta o acha.
+        import zipfile
+        media, games, e = self.pkg_env()
+        tool = str(ROOT / "config/fliperos-customgame")
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip",
+                             extra={"Pang.png": b"snap", "Pang.logo.png": b"logo"})
+        inspected = subprocess.run(["python3", tool, "inspect", str(zip_)], capture_output=True, text=True)
+        self.assertIn("media=snap,logo\n", inspected.stdout)
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(zip_)))
+        self.assertEqual((media / "logo/custom/PC/Pang.png").read_bytes(), b"logo")
+        self.assertEqual((media / "snap/custom/PC/Pang.png").read_bytes(), b"snap")
+        # Dois logotipos no zip sao um problema do pacote (um por jogo).
+        two = self.make_pkg(self.roms / "custom-packages" / "Two.fliperos-customgame.zip", base="Two",
+                            extra={"Two.logo.png": b"a", "Two.logo.webp": b"b"})
+        self.assertIn("two logo files", subprocess.run(["python3", tool, "inspect", str(two)],
+                                                       capture_output=True, text=True).stderr)
+        # O pacote de um jogo instalado leva o logotipo de verdade (o de exemplo nao).
+        zip_.unlink()
+        self.env.out("customgames_pack_game PC Pang", e)
+        self.assertTrue(zip_.exists())
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertEqual(zf.read("Pang.logo.png"), b"logo")
+        # A pasta solta: o logotipo ao lado da pasta, ou logo.png dentro dela.
+        loose = self.env.dir / "loose"
+        (loose / "Foo").mkdir(parents=True)
+        (loose / "Foo" / "Foo.exe").write_bytes(b"MZ")
+        (loose / "Foo.jpg").write_bytes(b"s")
+        (loose / "Foo.logo.png").write_bytes(b"l")
+        found = subprocess.run(["python3", tool, "found", str(loose / "Foo")], capture_output=True, text=True).stdout
+        self.assertIn("logo=%s\n" % (loose / "Foo.logo.png"), found)
+        self.assertIn("snap=%s\n" % (loose / "Foo.jpg"), found)
+        (loose / "Foo.logo.png").unlink()
+        (loose / "Foo" / "Wheel.png").write_bytes(b"w")
+        (loose / "Foo" / "Foo.png").write_bytes(b"s")
+        found = subprocess.run(["python3", tool, "found", str(loose / "Foo")], capture_output=True, text=True).stdout
+        # Foo.png dentro da pasta e a imagem, nunca o logotipo; Wheel.png e um nome de logotipo.
+        self.assertIn("logo=%s\n" % (loose / "Foo" / "Wheel.png"), found)
+        (loose / "Foo" / "logo.png").write_bytes(b"l")
+        found = subprocess.run(["python3", tool, "found", str(loose / "Foo")], capture_output=True, text=True).stdout
+        self.assertIn("logo=%s\n" % (loose / "Foo" / "logo.png"), found)
+        # A tabela do painel: o logotipo vai para o --logo do pack.
+        src = self.panel_sources()
+        logo = self.env.dir / "logo.png"
+        logo.write_bytes(b"png")
+        rows = self.panel_rows([{"name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"),
+                                 "exe": "MetalSlugX.exe", "logo": str(logo)}])
+        self.env.out("customgames_cli create \"$F\"", dict(e, F=str(rows)))
+        with zipfile.ZipFile(self.roms / "custom-packages" / "Metal Slug X.fliperos-customgame.zip") as zf:
+            self.assertEqual(zf.read("Metal Slug X.logo.png"), b"png")
+
     def test_categories_last_folder_and_labels(self):
         catver = self.env.dir / "catver.ini"
         catver.write_text("[FOLDER_SETTINGS]\nRootFolderIcon mame\n[ROOT_FOLDER]\n[Category]\n"
@@ -4613,7 +4665,7 @@ class CustomGamesTests(Base):
     def panel_rows(self, rows):
         """O arquivo da tabela: um jogo por linha, os campos separados por 0x1f."""
         fields = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
-                  "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb")
+                  "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo")
         path = self.env.dir / "rows"
         path.write_text("".join("\x1f".join(r.get(f, "") for f in fields) + "\n" for r in rows))
         return path

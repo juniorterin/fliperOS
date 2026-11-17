@@ -7796,6 +7796,10 @@ class WebSetupBase(unittest.TestCase):
                    FLIPEROS_OSD_PROFILES=str(tmp / 'osd-profiles.conf'), FLIPEROS_MENU_SOUNDS=str(tmp / 'sounds'),
                    FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'))
         (tmp / 'installed-fliperos-tty1').write_text('#!/bin/bash\n')
+        # O ffmpeg falso da captura: o que chega pelo stdin vira o arquivo (o ultimo argumento).
+        (tmp / 'ffmpeg').write_text('#!/bin/sh\nfor a; do out=$a; done\ncat > "$out"\n')
+        (tmp / 'ffmpeg').chmod(0o755)
+        env.update(FLIPEROS_FFMPEG=str(tmp / 'ffmpeg'), FLIPEROS_CAPTURE_SECONDS='1')
         cls.server = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-web'), '--bind', '127.0.0.1',
                                        '--port', str(cls.port), '--redirect-port', str(redirect)], env=env)
         for _ in range(100):
@@ -7868,6 +7872,64 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual(one['exes'], ['MSX.exe'])
         self.assertEqual(self.call('GET', '/api/customgames/scan?path=relative')[0], 404)
 
+    def layer_answers(self, seconds, width=12, height=4):
+        """O papel da camada OpenGL: a cada pedido de quadro grava um PPM e o apaga (so ate SECONDS)."""
+        import threading
+        runtime = self.dir / 'run' / str(os.getuid())
+        request, ppm = runtime / 'fliperos-shot-request', runtime / 'fliperos-shot.ppm'
+        head = b'P6\n%d %d\n255\n' % (width, height)
+
+        def layer():
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                if request.exists():
+                    ppm.write_bytes(head + b'@' * (width * height * 3))
+                    request.unlink()
+                time.sleep(0.005)
+        thread = threading.Thread(target=layer)
+        thread.start()
+        return thread
+
+    def test_capture_a_photo_and_a_video_of_the_game_under_test(self):
+        # Criar pacote > Testar: a foto e 10 s de video da tela do gabinete vao
+        # para a pasta de espera; os ids entram na imagem e no video do pacote.
+        self.assertEqual(self.call('POST', '/api/customgames/capture?kind=gif')[0], 400)
+        self.assertEqual(self.call('POST', '/api/customgames/capture')[0], 400)
+        # A foto: 12x4 e largo demais (3:1), cada linha se repete ate ficar 4:3 (x2 aqui).
+        thread = self.layer_answers(1.5)
+        status, photo = self.call('POST', '/api/customgames/capture?kind=snap')
+        thread.join()
+        self.assertEqual(status, 200, photo)
+        self.assertRegex(photo['id'], r'^[0-9a-f]{16}\.png$')
+        staged = (self.dir / 'stage' / photo['id']).read_bytes()
+        self.assertEqual(staged[:8], b'\x89PNG\r\n\x1a\n')
+        import struct
+        self.assertEqual(struct.unpack('>II', staged[16:24]), (12, 8))
+        # A previa da pagina le a mesma arte pelo id (e so pelos ids da espera).
+        status, data = self.call('GET', '/api/customgames/staged?id=' + photo['id'])
+        self.assertEqual((status, data[:4]), (200, b'\x89PNG'))
+        self.assertEqual(self.call('GET', '/api/customgames/staged?id=../../etc/passwd')[0], 404)
+        self.assertEqual(self.call('GET', '/api/customgames/staged?id=0123456789abcdef.png')[0], 404)
+        # O video: os quadros vao ao ffmpeg (o falso grava o que recebe).
+        thread = self.layer_answers(3)
+        status, video = self.call('POST', '/api/customgames/capture?kind=video')
+        thread.join()
+        self.assertEqual(status, 200, video)
+        self.assertRegex(video['id'], r'^[0-9a-f]{16}\.mp4$')
+        raw = (self.dir / 'stage' / video['id']).read_bytes()
+        self.assertEqual(len(raw) % (12 * 4 * 3), 0)
+        self.assertGreaterEqual(len(raw) // (12 * 4 * 3), 3)
+        # Os ids valem como a arte do pacote (o mesmo que o stage da).
+        rows = [{'group': 'PC games', 'name': 'Pang', 'platform': 'windows', 'snap': photo['id'], 'video': video['id']}]
+        self.assertEqual(self.call('POST', '/api/customgames/check', {'rows': rows})[0], 200)
+        # Ninguem responde (o console de texto): 503, e nada fica na espera.
+        before = sorted(p.name for p in (self.dir / 'stage').iterdir())
+        status, none = self.call('POST', '/api/customgames/capture?kind=snap')
+        self.assertEqual(status, 503, none)
+        status, none = self.call('POST', '/api/customgames/capture?kind=video')
+        self.assertEqual(status, 503, none)
+        self.assertEqual(sorted(p.name for p in (self.dir / 'stage').iterdir()), before)
+
     def test_art_waits_in_the_stage_and_rows_go_to_the_setup(self):
         # A arte: so as extensoes de cada tipo.
         self.assertEqual(self.call('POST', '/api/customgames/stage?kind=snap&name=x.exe', b'MZ')[0], 400)
@@ -7886,8 +7948,9 @@ class WebCustomGamesTests(WebSetupBase):
                                  'free': 99})
         lines = (self.dir / 'check.rows').read_text().splitlines()
         first, second = (l.split('\x1f') for l in lines)
-        # O runner (PortProton, Wine, Wine Staging) e o ultimo campo.
-        self.assertEqual(len(first), 19)
+        # O runner (PortProton, Wine, Wine Staging) e depois dele o logotipo, o ultimo campo.
+        self.assertEqual(len(first), 20)
+        self.assertEqual(first[19], '')
         self.assertEqual(first[:5], ['PC games', 'Metal Slug X', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
         self.assertEqual(first[5], 'line one line two')
         self.assertEqual(first[11], str(self.dir / 'stage' / staged['id']))
@@ -7993,7 +8056,13 @@ class WebCustomGamesTests(WebSetupBase):
         js = (ROOT / 'config/web/customgames.js').read_text()
         test = js.split('async function cgTest(')[1].split('\n}\n')[0]
         self.assertIn('s.fps && s.fps.program === out.app', test)
-        self.assertIn('t("cg_test_keys")', test)
+        # Com o jogo aberto: o painel das teclas e da captura (a foto e os 10 s de video).
+        self.assertIn('cgTestPanel(row)', test)
+        panel = js.split('function cgTestPanel(')[1].split('\n}\n')[0]
+        self.assertIn('t("cg_test_keys")', panel)
+        self.assertIn('"/api/customgames/capture?kind=" + kind', panel)
+        self.assertIn('capture("snap")', panel)
+        self.assertIn('capture("video")', panel)
 
     def test_package_cards_read_the_zips(self):
         # Os cartoes: o fliperos-customgame packages (JSON) e a midia de
@@ -8081,12 +8150,17 @@ class WebCustomGamesTests(WebSetupBase):
         js = (ROOT / 'config/web/customgames.js').read_text()
         self.assertIn('const CG_SUFFIX = ".fliperos-customgame.zip";', js)
         self.assertIn('if (!file.name.toLowerCase().endsWith(CG_SUFFIX)) {', js)
-        # A arvore: os seis arquivos e a pasta, com um texto para cada um.
-        self.assertIn('[["cfg", ".cfg"], ["jpg", ".jpg"], ["mp4", ".mp4"], ["txt", ".txt"], ["key", ".key"], ["ppdb", ".ppdb"]]', js)
+        # A arvore: os sete arquivos (o logotipo e o JOGO.logo.png) e a pasta, com um texto e a cor de cada um.
+        files = js[js.index('const CG_FILES = ['):js.index('];', js.index('const CG_FILES = ['))]
+        self.assertEqual(re.findall(r'\["([^"]+)", "t-\w+", "(\w+)", "([\w.]+)"', files),
+                         [('.cfg', 'cfg', 'cfg'), ('.jpg', 'jpg', 'jpg'), ('logo', 'logo', 'logo.png'), ('.mp4', 'mp4', 'mp4'),
+                          ('.txt', 'txt', 'txt'), ('.key', 'key', 'key'), ('.ppdb', 'ppdb', 'ppdb')])
         text = (ROOT / 'config/web/setup-text.js').read_text()
-        for key in ('cg_tree_cfg', 'cg_tree_jpg', 'cg_tree_mp4', 'cg_tree_txt', 'cg_tree_key', 'cg_tree_ppdb',
+        for key in ('cg_tree_cfg', 'cg_tree_jpg', 'cg_tree_logo', 'cg_tree_mp4', 'cg_tree_txt', 'cg_tree_key', 'cg_tree_ppdb',
                     'cg_tree_folder', 'cg_structure', 'cg_zip_name', 'cg_group_delete', 'cg_found', 'cg_example',
-                    'cg_cfg_example'):
+                    'cg_cfg_title', 'cg_required', 'cg_optional', 'cg_f_logo', 'cg_cap_photo', 'cg_cap_video',
+                    'cg_cap_taking', 'cg_cap_recording', 'cg_cap_encoding', 'cg_cap_photo_ok', 'cg_cap_video_ok',
+                    'cg_cap_note'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
         # O cfg do exemplo (Street Fighter 4) e aceito pelo instalador, e
         # cada chave dele tem a explicacao.
