@@ -26,32 +26,33 @@ import time
 CONF = os.environ.get("FLIPEROS_CONF", "/etc/fliperos/fliperos.conf")
 
 # Cada passo: (atraso ms, duracao ms, forte, fraco). O motor "forte" e o
-# grave, de baixa frequencia; o "fraco" e o agudo, que da o clique: um tique
-# de menu e so o agudo, um baque e o grave. Valores de 0 a 65535. Todos os
-# passos de um padrao sobem de uma vez, cada um com o proprio atraso (o
-# kernel guarda ate 16 efeitos por controle: padroes de ate 4 passos).
+# grave, de baixa frequencia; o "fraco" e o agudo. Valores de 0 a 65535.
+# Pulsos curtos (menos de ~40 ms) nao se sentem: o kernel atualiza o rumble a
+# cada 50 ms e o motor leva dezenas de ms para girar, entao chegam fracos e
+# atrasados. Por isso os dois motores juntos, 45 ms ou mais, e os passos de um
+# padrao separados por 100 ms ou mais. Todos os passos sobem de uma vez, cada
+# um com o proprio atraso (o kernel guarda 16 efeitos por controle: ate 4).
 PATTERNS = {
-    # Andar numa lista: um clique seco, quase so o agudo.
-    "tick": ((0, 16, 0, 0x3800),),
-    # Trocar de sistema/aba: um clique mais cheio.
-    "step": ((0, 24, 0x1800, 0x4800),),
+    # Andar numa lista: um clique seco.
+    "tick": ((0, 45, 0x5000, 0x9000),),
+    # Trocar de sistema/aba: mais cheio.
+    "step": ((0, 60, 0x7000, 0xb000),),
     # Aceitar (botao 1, Start): um toque firme.
-    "select": ((0, 30, 0x3800, 0x5000),),
-    # Voltar (botao 2): dois cliques leves, "desfazendo".
-    "back": ((0, 16, 0, 0x3000), (55, 16, 0, 0x2400)),
+    "select": ((0, 80, 0xa000, 0xc000),),
+    # Voltar (botao 2): dois cliques, "desfazendo".
+    "back": ((0, 45, 0x5000, 0x9000), (110, 45, 0x5000, 0x9000)),
     # Algo abre (frontend, menu): sobe, de leve a firme.
-    "open": ((0, 40, 0x0c00, 0x1800), (50, 40, 0x1c00, 0x2800), (100, 70, 0x3400, 0x3400)),
+    "open": ((0, 70, 0x3000, 0x4000), (100, 70, 0x5000, 0x6000), (200, 110, 0x9000, 0x8000)),
     # Algo fecha: desce, de firme a leve (o inverso).
-    "close": ((0, 60, 0x3000, 0x3000), (80, 40, 0x1c00, 0x2000), (130, 36, 0x0c00, 0x1000)),
-    # O jogo comeca: da partida, sobe e termina num baque.
-    "start": ((0, 50, 0x1400, 0x2400), (70, 50, 0x2400, 0x3400), (140, 100, 0x6800, 0x4000)),
+    "close": ((0, 110, 0x9000, 0x8000), (140, 70, 0x5000, 0x6000), (240, 60, 0x3000, 0x4000)),
+    # O jogo comeca: sobe e termina num baque.
+    "start": ((0, 80, 0x4000, 0x5000), (110, 80, 0x6000, 0x7000), (220, 160, 0xe000, 0xa000)),
     # O jogo terminou (fechado de proposito): o baque se desfaz em dois ecos.
-    "end": ((0, 80, 0x5000, 0x2800), (120, 50, 0x2800, 0x1400), (210, 40, 0x1000, 0x0800)),
-    # O jogo caiu logo depois de abrir, ou o que foi pedido nao da: tres
-    # trancos secos.
-    "error": ((0, 60, 0x5800, 0x5800), (110, 60, 0x5800, 0x5800), (220, 60, 0x5800, 0x5800)),
-    # A ficha: um estalo agudo e um grave curto.
-    "coin": ((0, 26, 0, 0x6000), (46, 34, 0x4800, 0x1000)),
+    "end": ((0, 160, 0xe000, 0x8000), (220, 90, 0x7000, 0x5000), (340, 70, 0x3000, 0x2000)),
+    # O jogo caiu logo depois de abrir, ou o que foi pedido nao da: tres trancos.
+    "error": ((0, 90, 0xc000, 0xc000), (160, 90, 0xc000, 0xc000), (320, 90, 0xc000, 0xc000)),
+    # A ficha: um estalo agudo e um grave.
+    "coin": ((0, 50, 0, 0xc000), (90, 70, 0xa000, 0x4000)),
 }
 
 # Um jogo que fecha antes disto, depois de abrir, provavelmente nao abriu:
@@ -59,7 +60,7 @@ PATTERNS = {
 CRASH_SECONDS = 6.0
 # Dois tiques seguidos mais perto que isto viram um so (segurando o direcional
 # a lista anda mais rapido do que a mao sente).
-MIN_GAP = 0.07
+MIN_GAP = 0.06
 
 EV_KEY, EV_FF = 0x01, 0x15
 FF_RUMBLE, FF_AUTOCENTER = 0x50, 0x61
