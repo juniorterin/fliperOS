@@ -19,7 +19,7 @@ How 640x240 works for programs that ask for a bigger window: [Emulators](KMS-and
 | Row | Default |
 | --- | --- |
 | Flycast, PCSX2, DuckStation, Dolphin, Hypseus Singe | 640x240 |
-| Supermodel, SM2-Emu (384 lines) | 640x240 |
+| Supermodel, Keisho (384 lines) | 640x240 |
 | GroovyMAME | Interlaced filter |
 | RetroArch PS1, SNES, Mega Drive, FBNeo | Interlaced filter |
 | RetroArch MAME 2010 | 640x240 |
@@ -103,7 +103,7 @@ PROGRAM is the command name in `emulator-modes.conf`, or the RetroArch core with
 | Row | 640x240 is | Interlaced is |
 | --- | --- | --- |
 | Flycast, PCSX2, DuckStation, Dolphin, Hypseus | the 640x240 line of `emulator-modes.conf` | its 640x480 line, which Switchres makes interlaced |
-| Supermodel, SM2-Emu | 640x240 at 57.524 Hz | 496x384 at 57.524 Hz, interlaced |
+| Supermodel, Keisho | 640x240 at 57.524 Hz | 496x384 at 57.524 Hz, interlaced |
 | GroovyMAME | `interlace 0` in `mame.ini` | `interlace 1`: each game's own interlaced mode |
 | RetroArch cores | `interlace 0` in the core's `switchres.ini` | `interlace 1` |
 | Desktop, Fightcade | — | picom, with or without the filter |

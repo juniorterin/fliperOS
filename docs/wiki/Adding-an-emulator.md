@@ -37,7 +37,7 @@ sudo chmod +x /usr/local/bin/myemu-run
 /opt/fliperos/bin/fliperos-x11-run myemu-run "/home/fliperos/roms/myemu/game.bin"
 ```
 
-The `exec` keeps the emulator as the program the wrapper waits for. This is how FliperOS opens SM2-Emu for a frontend (`fliperos-model2`).
+The `exec` keeps the emulator as the program the wrapper waits for. This is how FliperOS opens Keisho for a frontend (`fliperos-model2`).
 
 The cabinet has no terminal text editor: write the script over SFTP, from the desktop's text editor, or with `cat > file` in the terminal.
 

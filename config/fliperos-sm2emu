@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# SM2-Emu (Sega Model 2, Linux nativo). Nao entra compilado na imagem: a
-# primeira abertura clona, compila e so entao lista os jogos. O binario fica
-# em ~/.local/src/sm2-emu, do usuario.
+# Keisho (Sega Model 2, Linux nativo; ate novembro de 2026 se chamava
+# SM2-Emu). Nao entra compilado na imagem: a primeira abertura clona, compila
+# e so entao lista os jogos. O binario fica em ~/.local/src/keisho, do usuario.
 #
 #   fliperos-sm2emu --pick ARQUIVO
 #     a lista no Gum; o .zip escolhido vai para ARQUIVO (vazio = cancelou).
@@ -13,18 +13,49 @@
 #   fliperos-sm2emu --outdated
 #     status 0 se ja compilado com outros patches que os desta versao do
 #     FliperOS: o update do sistema o recompila (tools/cabinet-update.sh).
+#   fliperos-sm2emu --migrate
+#     so leva as pastas do SM2-Emu para as do Keisho (feito tambem por
+#     qualquer das outras).
 set -euo pipefail
 
-src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/sm2-emu}
-bin=$src/build/bin/sm2-emu
+src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/keisho}
+bin=$src/build/bin/keisho
 roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
 games_xml=$src/build/bin/games.xml
-repo=${FLIPEROS_SM2_REPO:-https://github.com/dmanlfc/sm2-emu.git}
+repo=${FLIPEROS_SM2_REPO:-https://github.com/Keisho-Emu/Keisho.git}
 # Patches do FliperOS, aplicados por cima do upstream. O que o upstream
 # aceita sai daqui (a velocidade e o menu em 15 kHz ja estao la), e a pasta
 # pode estar vazia.
 patches=${FLIPEROS_SM2_PATCHES:-/usr/local/share/fliperos/sm2-emu-patches}
 stamp=$src/build/fliperos-patches
+# O binario de antes do nome novo: o fonte ainda nao recompilado o tem.
+old_bin=$src/build/bin/sm2-emu
+
+# migrate: o SM2-Emu virou Keisho (executavel keisho, keisho.ini em
+# ~/.config/keisho, dados em ~/.local/share/keisho). Leva o fonte, a
+# configuracao e os dados das pastas antigas para as novas, uma vez. O
+# fonte passa a puxar do repositorio novo.
+migrate() {
+  local config=${XDG_CONFIG_HOME:-$HOME/.config} data=${XDG_DATA_HOME:-$HOME/.local/share}
+  local old_src=${FLIPEROS_SM2_OLD_SRC:-$HOME/.local/src/sm2-emu}
+  if [[ -d $old_src/.git && ! -e $src ]]; then
+    mkdir -p "${src%/*}"
+    mv "$old_src" "$src"
+  fi
+  if [[ -d $src/.git ]] && [[ $(git -C "$src" remote get-url origin 2> /dev/null) == *dmanlfc/sm2-emu* ]]; then
+    git -C "$src" remote set-url origin "$repo"
+  fi
+  if [[ -d $config/sm2-emu && ! -e $config/keisho ]]; then
+    mv "$config/sm2-emu" "$config/keisho"
+    [[ -f $config/keisho/sm2-emu.ini && ! -e $config/keisho/keisho.ini ]] &&
+      mv "$config/keisho/sm2-emu.ini" "$config/keisho/keisho.ini"
+  fi
+  if [[ -d $data/sm2-emu && ! -L $data/sm2-emu && ! -e $data/keisho ]]; then
+    mv "$data/sm2-emu" "$data/keisho"
+  fi
+  return 0
+}
+migrate
 
 # theme: os mesmos indices da paleta Dracula do Setup. O Alacritty do
 # desktop ja usa essa paleta, entao aqui so se pintam os papeis do Gum.
@@ -124,9 +155,16 @@ build_tree() {
     fi
   fi
   apply_patches || return 1
+  # O build de uma pasta que mudou de nome (~/.local/src/sm2-emu) guarda o
+  # caminho velho no cache do CMake, que entao se recusa: comeca do zero.
+  if [[ -f $src/build/CMakeCache.txt ]] &&
+    ! grep -qxF "CMAKE_HOME_DIRECTORY:INTERNAL=$src" "$src/build/CMakeCache.txt"; then
+    rm -rf "$src/build"
+  fi
   cmake -S "$src" -B "$src/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DSM2_BUILD_TESTS=OFF -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON || return 1
   nice -n 5 cmake --build "$src/build" -j "$(nproc)" || return 1
+  rm -f "$old_bin"
   patches_id > "$stamp"
 }
 
@@ -164,6 +202,10 @@ PY
 }
 
 case ${1:-} in
+  --migrate)
+    # So a migracao acima (config/fliperos-x11-run, antes de abrir um jogo).
+    exit 0
+    ;;
   --deps)
     deps_missing || exit 0
     install_deps
@@ -176,12 +218,14 @@ case ${1:-} in
   --outdated)
     # Compilado, mas com outro conjunto de patches que o desta versao do
     # FliperOS (o update do sistema o recompila: tools/cabinet-update.sh).
-    [[ -x $bin && $(cat "$stamp" 2> /dev/null) != "$(patches_id)" ]]
+    # Ou ainda o SM2-Emu, de antes do nome novo.
+    [[ -x $bin && $(cat "$stamp" 2> /dev/null) != "$(patches_id)" ]] ||
+      [[ -x $old_bin && ! -x $bin ]]
     exit
     ;;
 esac
 if [[ ${1:-} != --pick ]]; then
-  echo "Usage: fliperos-sm2emu --pick FILE | --deps | --build | --outdated" >&2
+  echo "Usage: fliperos-sm2emu --pick FILE | --deps | --build | --outdated | --migrate" >&2
   exit 2
 fi
 dest=${2:?}
@@ -199,7 +243,11 @@ if [[ ! -x $bin ]]; then
     fi
   fi
   printf 'Cloning and building. This takes a few minutes.\n'
-  if ! build_tree; then
+  # Um fonte ja clonado sem o binario (o SM2-Emu de antes do nome novo)
+  # atualiza antes: compilado como esta, sairia o executavel velho.
+  build=(build_tree)
+  [[ -d $src/.git ]] && build+=(update)
+  if ! "${build[@]}"; then
     printf 'Build failed.\n'
     pause
     exit 1

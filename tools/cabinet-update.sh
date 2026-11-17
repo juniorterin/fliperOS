@@ -400,15 +400,15 @@ fi
 # do desktop, que pergunta. Pelos frontends nunca. Ja compilado e com outros
 # patches, compila de novo aqui; se falhar, o de antes fica (e o menu do
 # desktop pergunta de novo).
-echo "== Model 2 (SM2-Emu) with the patches of this version"
+echo "== Model 2 (Keisho) with the patches of this version"
 sm2=/usr/local/bin/fliperos-sm2emu
 if [[ -x $sm2 ]] && runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --outdated; then
   mkdir -p /opt/fliperos/logs
-  if "$sm2" --deps > /opt/fliperos/logs/sm2-emu-build.log 2>&1 &&
-    runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --build >> /opt/fliperos/logs/sm2-emu-build.log 2>&1; then
+  if "$sm2" --deps > /opt/fliperos/logs/keisho-build.log 2>&1 &&
+    runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --build >> /opt/fliperos/logs/keisho-build.log 2>&1; then
     echo "rebuilt"
   else
-    echo "warning: did not rebuild (the previous build stays; /opt/fliperos/logs/sm2-emu-build.log)"
+    echo "warning: did not rebuild (the previous build stays; /opt/fliperos/logs/keisho-build.log)"
   fi
 else
   echo "not built here, or already with these patches"

@@ -225,7 +225,7 @@ class CommandTests(unittest.TestCase):
 
     def test_ini_set_replaces_or_appends_and_returns_the_old_text(self):
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "cfg", "sm2-emu.ini")
+            path = os.path.join(d, "cfg", "keisho.ini")
             self.assertEqual(felink.ini_set(path, {"link_enabled": "true"}), "")
             before = felink.ini_set(path, {"link_enabled": "false", "link_port": "15112"})
             self.assertEqual(before, "link_enabled = true\n")
@@ -599,7 +599,7 @@ class LinkTests(unittest.TestCase):
         self.assertTrue(wait(lambda: self.b.parties_for("model2", "daytona")))
         self.b.join_party(self.b.parties_for("model2", "daytona")[0], prof, "model2", "daytona")
         self.a.start_now()
-        ini = os.path.join(self.a.home, "cfg", "sm2-emu", "sm2-emu.ini")
+        ini = os.path.join(self.a.home, "cfg", "keisho", "keisho.ini")
         argv = self.a.command(["x11-run", "fliperos-model2", "daytona"])
         self.assertEqual(argv, ["x11-run", "fliperos-model2", "--game", "daytona", "daytona"])
         text = Path(ini).read_text()

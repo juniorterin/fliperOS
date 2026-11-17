@@ -513,7 +513,7 @@ romclean_target_label() {
   case $1 in
     groovymame) echo "GroovyMAME $(groovymame_version)" ;;
     flycast) echo "Flycast (Naomi, Naomi 2, Atomiswave)" ;;
-    model2) echo "SM2-Emu (Sega Model 2)" ;;
+    model2) echo "Keisho (Sega Model 2)" ;;
     model3) echo "Supermodel (Sega Model 3)" ;;
     mame2010) echo "MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games" ;;
     *) echo "$1" ;;

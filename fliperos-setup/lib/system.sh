@@ -186,7 +186,7 @@ settings_list() {
   while IFS='|' read -r key label min max _ step help; do
     printf 'gun.%s|GunCon 2|%s|number|%s|%s..%s:%s|%s\n' "$key" "$label" "$(gun_get "$key")" "$min" "$max" "$step" "$help"
   done < <(gun_table)
-  printf 'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|%s|on=On;off=Off|Off the screen the trigger also presses the reload button of Flycast, RetroArch and SM2-Emu.\n' \
+  printf 'gun_offscreen_reload|GunCon 2|Off-screen reload button|choice|%s|on=On;off=Off|Off the screen the trigger also presses the reload button of Flycast, RetroArch and Keisho.\n' \
     "$(gun_reload_on && echo on || echo off)"
   printf 'gun.reset|GunCon 2|Back to the defaults|action|||Flash, numbers and the reload button back to the defaults. The calibration stays.\n'
   # ── Joysticks > Controller light (lib/buttons.sh) ──

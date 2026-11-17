@@ -1429,7 +1429,7 @@ class RomFoldersTests(unittest.TestCase):
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             self.assertEqual(os.readlink(tmp / 'roms/model2'), str(tmp / 'disk'))
             self.assertEqual((old / 'roms/srallyc.zip').read_text(), 'rom')
-        self.assertIn('cfglink model2 "$HOME/.config/sm2-emu"', (ROOT / 'config/fliperos-roms').read_text())
+        self.assertIn('cfglink model2 "$HOME/.config/keisho"', (ROOT / 'config/fliperos-roms').read_text())
 
     def test_nvram_and_save_folders_take_over_the_old_ones(self):
         # ~/nvram e ~/save existem, e as pastas de antes (do MAME, do RetroArch e
@@ -1474,7 +1474,7 @@ class RomFoldersTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             # O que cada um ja gravou no caminho dele vai junto.
-            for d, name in (('.local/share/flycast', 'kofxi.zip.nvmem'), ('.local/share/sm2-emu/saves', 'daytona.nv'),
+            for d, name in (('.local/share/flycast', 'kofxi.zip.nvmem'), ('.local/share/keisho/saves', 'daytona.nv'),
                             ('.local/share/supermodel/NVRAM', 'scud.nv'), ('roms/hypseus/ram', 'ace.gz'),
                             ('save/retroarch/MAME 2010/mame2010/nvram', 'tekken3.nv'),
                             ('save/retroarch/FinalBurn Neo/fbneo', 'sf2.fs'),
@@ -1484,7 +1484,7 @@ class RomFoldersTests(unittest.TestCase):
             for _ in range(2):
                 self.nvram_login(home)
             for link, target, name in (('.local/share/flycast', 'flycast', 'kofxi.zip.nvmem'),
-                                       ('.local/share/sm2-emu/saves', 'model2', 'daytona.nv'),
+                                       ('.local/share/keisho/saves', 'model2', 'daytona.nv'),
                                        ('.local/share/supermodel/NVRAM', 'model3', 'scud.nv'),
                                        ('roms/hypseus/ram', 'hypseus', 'ace.gz'),
                                        ('save/retroarch/MAME 2010/mame2010/nvram', 'retroarch/mame2010', 'tekken3.nv'),
@@ -12787,7 +12787,7 @@ class EmulatorModeTests(unittest.TestCase):
                                            'echo "PRELOAD=${LD_PRELOAD:-}"\n'
                                            'echo "SCREEN=${FLIPEROS_X11_SCREEN:-}"\n')
             for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'pcsx2x6', 'myprog', 'supermodel', 'hypseus',
-                         'fightcade', 'sm2-emu', 'duckstation', 'openbor'):
+                         'fightcade', 'sm2-emu', 'keisho', 'duckstation', 'openbor'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
@@ -13506,19 +13506,19 @@ class EmulatorModeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             db = home / 'gamecontrollerdb-model2.txt'
-            merged = home / '.config' / 'sm2-emu' / 'gamecontrollerdb.txt'
+            merged = home / '.config' / 'keisho' / 'gamecontrollerdb.txt'
             (home / 'sys.txt').write_text('sistema\n')
             (home / 'games').write_text('vf2 3\nvcop 1\n')
             extra = {'FLIPEROS_SDL_MODEL2_DB': str(db), 'FLIPEROS_GAME_BUTTONS': str(home / 'games'),
                      'SDL_GAMECONTROLLERCONFIG_FILE': str(home / 'sys.txt')}
             # Sem o Button mapping feito, nada muda.
-            self.run_x11(['sm2-emu', '/r/vf2.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', '/r/vf2.zip'], home=home, extra=extra)
             self.assertFalse(merged.exists())
             db.write_text('painel\n')
             (home / 'gamecontrollerdb-model2-3.txt').write_text('layout de 3\n')
-            self.run_x11(['sm2-emu', '/r/vf2.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', '/r/vf2.zip'], home=home, extra=extra)
             self.assertEqual(merged.read_text(), 'sistema\nlayout de 3\n')
-            self.run_x11(['sm2-emu', '/r/vcop.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', '/r/vcop.zip'], home=home, extra=extra)
             self.assertEqual(merged.read_text(), 'sistema\npainel\n')
         x11 = (ROOT / 'config/fliperos-x11-run').read_text()
         self.assertIn('export SDL_GAMECONTROLLERCONFIG_FILE=$cfg/gamecontrollerdb.txt', x11)
@@ -13529,21 +13529,21 @@ class EmulatorModeTests(unittest.TestCase):
         # liga na primeira abertura e depois fica como a pessoa deixar.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            out = self.run_x11(['sm2-emu', 'vf2.zip'], home=home).stdout
+            out = self.run_x11(['keisho', 'vf2.zip'], home=home).stdout
             self.assertIn('MODE=640 240 57.524', out)
             self.assertIn('--fullscreen vf2.zip', out)
-            ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
+            ini = home / '.config' / 'keisho' / 'keisho.ini'
             self.assertEqual(ini.read_text(), 'aspect_mode = stretch\nvsync = true\n')
             ini.write_text('vsync = false\naspect_mode = 4:3\nscaling_method = nearest\n')
-            self.run_x11(['sm2-emu', 'vf2.zip'], home=home)
+            self.run_x11(['keisho', 'vf2.zip'], home=home)
             self.assertEqual(ini.read_text(),
                              'vsync = false\naspect_mode = stretch\nscaling_method = nearest\n')
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
+            ini = home / '.config' / 'keisho' / 'keisho.ini'
             ini.parent.mkdir(parents=True)
             ini.write_text('vsync = false\naspect_mode = 4:3\n')
-            out = self.run_x11(['sm2-emu', 'vf2.zip'], frequency='31k', home=home).stdout
+            out = self.run_x11(['keisho', 'vf2.zip'], frequency='31k', home=home).stdout
             self.assertIn('MODE=496 384 57.524', out)
             self.assertEqual(ini.read_text(), 'vsync = true\naspect_mode = 4:3\n')
         launch = (ROOT / 'config/fliperos-launch').read_text()
@@ -13555,8 +13555,8 @@ class EmulatorModeTests(unittest.TestCase):
             (src / 'build' / 'bin').mkdir(parents=True)
             roms.mkdir()
             bin_dir.mkdir()
-            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\necho "$@" > "$HOME/args"\n')
-            (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
+            (src / 'build' / 'bin' / 'keisho').write_text('#!/bin/sh\necho "$@" > "$HOME/args"\n')
+            (src / 'build' / 'bin' / 'keisho').chmod(0o755)
             # Compilado com os patches desta versao: nao pede para recompilar.
             patches = ROOT / 'config' / 'sm2-emu-patches'
             digest = hashlib.sha256(b''.join(p.read_bytes() for p in sorted(patches.glob('*.patch'))))
@@ -13594,37 +13594,37 @@ class EmulatorModeTests(unittest.TestCase):
         # fica com a escolha.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
+            ini = home / '.config' / 'keisho' / 'keisho.ini'
             helper = home / 'outputs'
             helper.write_text('#!/bin/sh\nexit 0\n')
             helper.chmod(0o755)
             extra = {'FLIPEROS_OUTPUTS': str(helper)}
-            self.run_x11(['sm2-emu', 'hotd.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', 'hotd.zip'], home=home, extra=extra)
             self.assertIn('outputs_network = true\n', ini.read_text())
             # O ini que o emulador regrava ao sair.
             ini.write_text('outputs_network = true\noutputs_network_port = 8000\n')
             helper.write_text('#!/bin/sh\n[ "$1" != installed ]\n')
-            self.run_x11(['sm2-emu', 'hotd.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', 'hotd.zip'], home=home, extra=extra)
             self.assertIn('outputs_network = false\noutputs_network_port = 8000\n', ini.read_text())
             ini.write_text('outputs_network = true\n')
-            self.run_x11(['sm2-emu', 'hotd.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', 'hotd.zip'], home=home, extra=extra)
             self.assertIn('outputs_network = true\n', ini.read_text())
         # O placar versus no LED tambem le a porta: com um painel instalado,
         # num jogo que publica os rounds.
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            ini = home / '.config' / 'sm2-emu' / 'sm2-emu.ini'
+            ini = home / '.config' / 'keisho' / 'keisho.ini'
             for name, body in (('outputs', '[ "$1" != installed ]\n'), ('panel', '[ "$1" = panel ]\n'),
                                ('versus', '[ "$1 $2 $3" = "has model2 vf2" ]\n')):
                 (home / name).write_text('#!/bin/sh\n' + body)
                 (home / name).chmod(0o755)
             extra = {'FLIPEROS_OUTPUTS': str(home / 'outputs'), 'FLIPEROS_PIXELCADE': str(home / 'panel'),
                      'FLIPEROS_VERSUS': str(home / 'versus')}
-            self.run_x11(['sm2-emu', '/roms/model2/hotd.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', '/roms/model2/hotd.zip'], home=home, extra=extra)
             self.assertNotIn('outputs_network', ini.read_text())
-            self.run_x11(['sm2-emu', '/roms/model2/vf2.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', '/roms/model2/vf2.zip'], home=home, extra=extra)
             self.assertIn('outputs_network = true\n', ini.read_text())
-            self.run_x11(['sm2-emu', '/roms/model2/hotd.zip'], home=home, extra=extra)
+            self.run_x11(['keisho', '/roms/model2/hotd.zip'], home=home, extra=extra)
             self.assertIn('outputs_network = false\n', ini.read_text())
 
     def test_sm2emu_patches_apply_on_linux_and_only_touch_the_emulator(self):
@@ -13655,8 +13655,8 @@ class EmulatorModeTests(unittest.TestCase):
             subprocess.run(git + ['commit', '-qm', 'x'], check=True)
             subprocess.run(['git', 'clone', '-q', str(up), str(src)], check=True)
             (src / 'build' / 'bin').mkdir(parents=True)
-            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\n')
-            (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
+            (src / 'build' / 'bin' / 'keisho').write_text('#!/bin/sh\n')
+            (src / 'build' / 'bin' / 'keisho').chmod(0o755)
             (patches / '0001-ok.patch').write_text(
                 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n')
             (patches / '0002-old.patch').write_text(
@@ -14317,10 +14317,10 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertLess(body.index('dpkg --add-architecture i386'), body.index('install "$@"'))
 
     def test_model2_emulator_is_not_redistributed(self):
-        # O Model 2 do Wine saiu. O comando abre o SM2-Emu, compilado no home.
+        # O Model 2 do Wine saiu. O comando abre o Keisho, compilado no home.
         self.assertNotRegex(MKISO, r'(?i)m2emulator.*(http|zip)')
         helper = (ROOT / 'config/fliperos-model2').read_text()
-        self.assertIn('sm2-emu', helper)
+        self.assertIn('keisho', helper)
         self.assertNotIn('wine', helper)
         self.assertNotIn('WINEPREFIX=', helper)
 
@@ -14334,8 +14334,8 @@ class NewEmulatorBuildTests(unittest.TestCase):
             (src / 'build' / 'bin').mkdir(parents=True)
             roms.mkdir()
             (roms / 'daytona.zip').write_text('x')
-            (src / 'build' / 'bin' / 'sm2-emu').write_text('#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "$HOME/args"\n')
-            (src / 'build' / 'bin' / 'sm2-emu').chmod(0o755)
+            (src / 'build' / 'bin' / 'keisho').write_text('#!/bin/sh\nfor a in "$@"; do echo "$a"; done > "$HOME/args"\n')
+            (src / 'build' / 'bin' / 'keisho').chmod(0o755)
             env = dict(os.environ, FLIPEROS_SM2_SRC=str(src), FLIPEROS_MODEL2_DIR=str(roms), HOME=str(tmp))
             subprocess.run(['bash', str(ROOT / 'config/fliperos-model2'), '--game', 'daytona', '--nvram', 'saves',
                             'daytona'], env=env, check=True, timeout=30)
@@ -15172,7 +15172,7 @@ class OutputsTests(unittest.TestCase):
         self.assertEqual(len(self.lines('qmh.log', 1)), 1)
         subprocess.run(['pkill', '-f', str(self.tmp / 'qmamehook/QMamehook')])
         (self.tmp / 'qmh.log').unlink()
-        self.run_('launch', '/home/fliperos/.local/src/sm2-emu/build/bin/sm2-emu', '--fullscreen', '/x/hotd.zip')
+        self.run_('launch', '/home/fliperos/.local/src/keisho/build/bin/keisho', '--fullscreen', '/x/hotd.zip')
         self.assertEqual(len(self.lines('qmh.log', 1)), 1)
 
     def test_qmamehook_source_is_pinned_and_built(self):
@@ -15872,7 +15872,7 @@ class VersusTests(unittest.TestCase):
         # O SM2-Emu publica os rounds: a porta abre para o placar, e o leitor e a fonte "model2".
         self.assertIn('"$versus" has model2 "${game%.zip}"; }; then',
                       (ROOT / 'config/fliperos-x11-run').read_text())
-        self.assertIn('fliperos-model2 | sm2-emu) source=model2 ;;', (ROOT / 'config/fliperos-pixelcade').read_text())
+        self.assertIn('fliperos-model2 | keisho | sm2-emu) source=model2 ;;', (ROOT / 'config/fliperos-pixelcade').read_text())
         # O Network Command Interface so num jogo da tabela.
         self.assertIn('network_cmd_enable = "true"', (ROOT / 'config/retroarch-versus.cfg').read_text())
         self.assertNotIn('network_cmd', (ROOT / 'config/retroarch.cfg').read_text())
@@ -18092,7 +18092,7 @@ class EmulatorsMenuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             env = {'FLIPEROS_EMULATORS_ROOT': str(tmp / 'root'), 'FLIPEROS_HOME': str(tmp / 'home')}
-            for path in ('root/usr/local/bin/retroarch', 'home/.local/src/sm2-emu/build/bin/sm2-emu'):
+            for path in ('root/usr/local/bin/retroarch', 'home/.local/src/keisho/build/bin/keisho'):
                 (tmp / path).parent.mkdir(parents=True)
                 (tmp / path).write_text('')
                 (tmp / path).chmod(0o755)
@@ -18150,11 +18150,11 @@ class EmulatorsMenuTests(unittest.TestCase):
             git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@t']
             subprocess.run([*git, 'init', '-q', str(repo)], check=True)
             subprocess.run([*git, '-C', str(repo), 'commit', '-q', '--allow-empty', '-m', 'a'], check=True)
-            src = home / '.local/src/sm2-emu'
+            src = home / '.local/src/keisho'
             subprocess.run(['git', 'clone', '-q', str(repo), str(src)], check=True)
             (src / 'build/bin').mkdir(parents=True)
-            (src / 'build/bin/sm2-emu').write_text('')
-            (src / 'build/bin/sm2-emu').chmod(0o755)
+            (src / 'build/bin/keisho').write_text('')
+            (src / 'build/bin/keisho').chmod(0o755)
             subprocess.run([*git, '-C', str(repo), 'commit', '-q', '--allow-empty', '-m', 'b'], check=True)
             new = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--short=7', 'HEAD'], capture_output=True,
                                  text=True).stdout.strip()
@@ -18240,15 +18240,15 @@ class EmulatorsMenuTests(unittest.TestCase):
         # desktop; pelos frontends nunca. O update do sistema o recompila.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            src, patches = tmp / 'sm2-emu', tmp / 'patches'
+            src, patches = tmp / 'keisho', tmp / 'patches'
             (src / 'build/bin').mkdir(parents=True)
             patches.mkdir()
             (patches / '0001.patch').write_text('one\n')
             env = {'FLIPEROS_SM2_SRC': str(src), 'FLIPEROS_SM2_PATCHES': str(patches)}
             outdated = lambda: self.run_cmd('fliperos-sm2emu', '--outdated', env=env).returncode
             self.assertEqual(outdated(), 1)  # nao compilado
-            (src / 'build/bin/sm2-emu').write_text('')
-            (src / 'build/bin/sm2-emu').chmod(0o755)
+            (src / 'build/bin/keisho').write_text('')
+            (src / 'build/bin/keisho').chmod(0o755)
             self.assertEqual(outdated(), 0)  # compilado antes do stamp
             stamp = subprocess.run('cat %s/*.patch | sha256sum | cut -d" " -f1' % patches, shell=True,
                                    capture_output=True, text=True).stdout
@@ -18257,11 +18257,48 @@ class EmulatorsMenuTests(unittest.TestCase):
             (patches / '0002.patch').write_text('two\n')
             self.assertEqual(outdated(), 0)  # o update trouxe outro patch
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
-        step = update.split('echo "== Model 2 (SM2-Emu) with the patches of this version"')[1].split('\nfi\n')[0]
+        step = update.split('echo "== Model 2 (Keisho) with the patches of this version"')[1].split('\nfi\n')[0]
         self.assertIn('runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --outdated', step)
         self.assertIn('runuser -u fliperos -- env HOME=/home/fliperos "$sm2" --build', step)
         self.assertLess(update.index('fliperos-buttons save /etc/fliperos/buttons.map'),
                         update.index('"$sm2" --outdated'))
+
+    def test_sm2emu_folders_move_to_keisho(self):
+        # O SM2-Emu virou Keisho (keisho, ~/.config/keisho/keisho.ini,
+        # ~/.local/share/keisho): o fonte, a configuracao e os dados vao para
+        # as pastas novas, e o fonte passa a puxar do repositorio novo. Com so
+        # o binario velho, o update recompila.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            old = home / '.local/src/sm2-emu'
+            subprocess.run(['git', 'init', '-q', str(old)], check=True)
+            subprocess.run(['git', '-C', str(old), 'remote', 'add', 'origin',
+                            'https://github.com/dmanlfc/sm2-emu.git'], check=True)
+            (old / 'build/bin').mkdir(parents=True)
+            (old / 'build/bin/sm2-emu').write_text('')
+            (old / 'build/bin/sm2-emu').chmod(0o755)
+            (home / '.config/sm2-emu').mkdir(parents=True)
+            (home / '.config/sm2-emu/sm2-emu.ini').write_text('vsync = false\n')
+            (home / '.config/sm2-emu/.fliperos-vsync').write_text('')
+            (home / '.local/share/sm2-emu/screenshots').mkdir(parents=True)
+            env = {'HOME': str(home), 'XDG_CONFIG_HOME': '', 'XDG_DATA_HOME': '',
+                   'FLIPEROS_SM2_SRC': '', 'FLIPEROS_SM2_PATCHES': str(home / 'none')}
+            self.assertEqual(self.run_cmd('fliperos-sm2emu', '--outdated', env=env).returncode, 0)
+            new = home / '.local/src/keisho'
+            self.assertFalse(old.exists())
+            self.assertTrue((new / 'build/bin/sm2-emu').exists())
+            self.assertEqual(subprocess.run(['git', '-C', str(new), 'remote', 'get-url', 'origin'],
+                                            capture_output=True, text=True).stdout.strip(),
+                             'https://github.com/Keisho-Emu/Keisho.git')
+            self.assertEqual((home / '.config/keisho/keisho.ini').read_text(), 'vsync = false\n')
+            self.assertTrue((home / '.config/keisho/.fliperos-vsync').exists())
+            self.assertFalse((home / '.config/sm2-emu').exists())
+            self.assertTrue((home / '.local/share/keisho/screenshots').is_dir())
+            # Uma segunda vez nao mexe em nada.
+            self.assertEqual(self.run_cmd('fliperos-sm2emu', '--migrate', env=env).returncode, 0)
+            self.assertEqual((home / '.config/keisho/keisho.ini').read_text(), 'vsync = false\n')
+        x11 = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertLess(x11.index('"$sm2emu" --migrate'), x11.index('cfg=${XDG_CONFIG_HOME:-$HOME/.config}/keisho'))
 
     def test_duckstation_fetch_extracts_the_appimage(self):
         # A licenca do DuckStation nao deixa redistribuir: o AppImage oficial
@@ -18640,10 +18677,10 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertIsNone(rc.menu_key('supermodel'))
         self.assertIsNone(rc.menu_key('fliperos-kof'))
         with tempfile.TemporaryDirectory() as home:
-            ini = Path(home) / '.config/sm2-emu/sm2-emu.ini'
+            ini = Path(home) / '.config/keisho/keisho.ini'
             ini.parent.mkdir(parents=True)
             ini.write_text('[system]\nkey_exit = Escape\nkey_overlay = Tab\n')
-            self.assertEqual(rc.menu_key('sm2-emu', home), 15)
+            self.assertEqual(rc.menu_key('keisho', home), 15)
             conf = Path(home) / 'fliperos.conf'
             self.assertEqual(rc.osd_key(str(conf)), 164)
             conf.write_text('osd_key=88,119\n')

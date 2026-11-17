@@ -9274,7 +9274,7 @@ class RomCleanerTests(Base):
         out = self.env.out("romclean_targets", self.vars).splitlines()
         self.assertEqual([o.split("|")[0] for o in out], ["groovymame", "flycast", "model2", "model3", "file"])
         self.assertEqual(out[0], "groovymame|GroovyMAME 0.289")
-        self.assertEqual(out[2:4], ["model2|SM2-Emu (Sega Model 2)", "model3|Supermodel (Sega Model 3)"])
+        self.assertEqual(out[2:4], ["model2|Keisho (Sega Model 2)", "model3|Supermodel (Sega Model 3)"])
         (self.env.dir / "mame2010.xml.xz").write_bytes(b"")
         # O MAME 2010 e o "MAME 3D", dos jogos de arcade baseados no PlayStation.
         self.assertIn("mame2010|MAME 2010 / MAME 3D (0.139, RetroArch core): PlayStation-based (PSX) arcade games",

@@ -132,7 +132,7 @@ fi
 [[ ! -d $old_model2 || -n $(ls -A "$old_model2/roms" 2> /dev/null) ]] || rm -rf -- "$old_model2" 2> /dev/null
 [[ -L $config/model2 && $(readlink -- "$config/model2") == "$old_model2" ]] && rm -f -- "$config/model2"
 restore "$roms/model2"
-folder "$roms/model2" "SM2-Emu (Sega Model 2): MAME .zip sets."
+folder "$roms/model2" "Keisho (Sega Model 2): MAME .zip sets."
 # Fightcade 2 (Setup > Games > Frontend): uma pasta por emulador dele. Os romsets
 # sao os que cada um pede, nao os do MAME atual.
 folder "$roms/fightcade" "Fightcade 2: one folder per emulator it uses. They work once Fightcade is installed (Setup > Games > Frontend)."
@@ -262,7 +262,7 @@ fi
 folder "$nvram" "Arcade memory kept without power (dip settings, credits, scores, what a game has unlocked): one folder per emulator and RetroArch core, as in ~/roms."
 folder "$nvram/mame" "GroovyMAME: one folder per game set. To start a game from zero, delete its folder."
 folder "$nvram/flycast" "Flycast: Naomi and Atomiswave memory (<set>.zip.nvmem, .nvmem2, .eeprom) and the Dreamcast memory cards (vmu_save_*.bin)."
-folder "$nvram/model2" "SM2-Emu (Sega Model 2): the NVRAM and EEPROM of each game, and its save states in states/."
+folder "$nvram/model2" "Keisho (Sega Model 2): the NVRAM and EEPROM of each game, and its save states in states/."
 merge_old "$nvram/namco246" "$nvram/namco2x6"
 merge_old "$nvram/namco256" "$nvram/namco2x6"
 folder "$nvram/namco2x6" "PCSX2x6, Namco System 246/256: the memory of each game (32 KB, NM00000.bin: settings, credits, scores). To start a game from zero, delete its file."
@@ -287,7 +287,7 @@ if command -v pcsx2 > /dev/null 2>&1 || [[ -d $HOME/.config/PCSX2 ]]; then
   link_dir "$HOME/.config/PCSX2/memcards" "$save/ps2"
 fi
 link_dir "$data/flycast" "$nvram/flycast"
-link_dir "$data/sm2-emu/saves" "$nvram/model2"
+link_dir "$data/keisho/saves" "$nvram/model2"
 link_dir "$data/supermodel/NVRAM" "$nvram/model3"
 link_dir "$roms/hypseus/ram" "$nvram/hypseus"
 [[ -d $fightcade/emulator/flycast/data ]] && link_dir "$fightcade/emulator/flycast/data" "$nvram/fightcade/flycast"
@@ -409,7 +409,7 @@ cfglink dolphin "$HOME/.config/dolphin-emu"
 cfglink supermodel "$HOME/.config/supermodel"
 cfglink openbor "$roms/openbor/Saves"
 cfglink hypseus "$HOME/.hypseus"
-cfglink model2 "$HOME/.config/sm2-emu"
+cfglink model2 "$HOME/.config/keisho"
 cfglink attractmode "$HOME/.attract"
 cfglink es-de "$HOME/ES-DE"
 cfglink pegasus "$HOME/.config/pegasus-frontend"

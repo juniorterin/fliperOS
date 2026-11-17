@@ -1603,7 +1603,7 @@ class Link:
         self.undo.append(place_files(self.home, items))
         if prof["emulator"] == "sm2emu":
             cfg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(self.home, ".config")
-            ini = os.path.join(cfg, "sm2-emu", "sm2-emu.ini")
+            ini = os.path.join(cfg, "keisho", "keisho.ini")
             ini_set(ini, sm2_keys(prof, plan, number, self.wire.ip))
             self.undo.append(lambda: ini_set(ini, {"link_enabled": "false"}))
         return argv

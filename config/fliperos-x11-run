@@ -155,7 +155,7 @@ fi
 # modo largo. Numa placa que faz o modo pedido, desfaz o que tinha mudado.
 gpufit=${FLIPEROS_GPUFIT:-/opt/fliperos/bin/fliperos-gpufit}
 case $name in
-  flycast | dolphin-emu | pcsx2 | pcsx2x6 | duckstation | hypseus | singe | supermodel | fliperos-model2 | sm2-emu | groovymame) ;;
+  flycast | dolphin-emu | pcsx2 | pcsx2x6 | duckstation | hypseus | singe | supermodel | fliperos-model2 | keisho | sm2-emu | groovymame) ;;
   *)
     if [[ -x $gpufit ]]; then
       fit=$("$gpufit" launch --program "$name" --app "${app:-$name}" --mode "${requested_w}x$FLIPEROS_RES_H" \
@@ -574,10 +574,14 @@ INI
     # shellcheck disable=SC2016 # o $ e do sh -c, depois da troca de modo
     set -- sh -c 'res=$(xrandr --current 2> /dev/null | awk "$0"); exec "$@" ${res:+-res=$res}' "$fit" "$@"
     ;;
-  fliperos-model2 | sm2-emu)
-    cfg=${XDG_CONFIG_HOME:-$HOME/.config}/sm2-emu
+  fliperos-model2 | keisho | sm2-emu)
+    # O SM2-Emu virou Keisho: a configuracao de antes vai para a pasta nova
+    # antes que o mkdir abaixo crie uma vazia.
+    sm2emu=${FLIPEROS_SM2EMU:-/usr/local/bin/fliperos-sm2emu}
+    [[ ! -x $sm2emu ]] || "$sm2emu" --migrate || true
+    cfg=${XDG_CONFIG_HOME:-$HOME/.config}/keisho
     mkdir -p "$cfg"
-    ini=$cfg/sm2-emu.ini
+    ini=$cfg/keisho.ini
     # sm2_set CHAVE VALOR: troca a linha da chave no ini, ou a acrescenta.
     sm2_set() {
       if [[ -f $ini ]] && grep -q "^$1[[:space:]=]" "$ini"; then

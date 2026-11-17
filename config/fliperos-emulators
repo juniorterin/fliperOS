@@ -44,7 +44,7 @@ pcsx2x6|image|$root/usr/local/bin/pcsx2x6|PCSX2x6 (Namco System 246/256)
 dolphin|image|$root/usr/local/bin/dolphin-emu|Dolphin (GameCube, Wii, Triforce)
 supermodel|image|$root/usr/local/bin/supermodel|Supermodel (Sega Model 3)
 openbor|image|$root/usr/local/bin/openbor|OpenBOR (beat 'em ups)
-model2|build|$home/.local/src/sm2-emu/build/bin/sm2-emu|Model 2 (SM2-Emu, Sega Model 2)
+model2|build|$home/.local/src/keisho/build/bin/keisho|Model 2 (Keisho, Sega Model 2)
 fightcade|fetch|$root/opt/fliperos/fightcade/fightcade|Fightcade 2 (online arcade)
 duckstation|fetch|$root/usr/local/bin/duckstation|DuckStation (PlayStation)
 kof|source|$home/roms/ikemen/kof-final-attack/Ikemen_GO_Linux|KOF Final Attack (Ikemen GO, 4:3)
@@ -88,7 +88,7 @@ emulator_version() {
       pcsx2) v=$(metainfo_version "$root/opt/pcsx2") ;;
       duckstation) v=$(metainfo_version "$root/opt/duckstation") ;;
       fightcade) v=$(tr -d '[:space:]' < "$root/opt/fliperos/fightcade/VERSION.txt" 2> /dev/null) ;;
-      model2) v=$(git -c safe.directory='*' -C "$home/.local/src/sm2-emu" log -1 --format='%cs %h' 2> /dev/null) ;;
+      model2) v=$(git -c safe.directory='*' -C "$home/.local/src/keisho" log -1 --format='%cs %h' 2> /dev/null) ;;
       groovymame)
         v=$(grep -a -o -m 1 -E '0\.[0-9]{3} \((unknown|mame[0-9]+)\)' "$root/usr/local/libexec/groovymame" 2> /dev/null |
           head -n 1)
@@ -141,7 +141,7 @@ emulator_latest() {
       v=$(pinned SUPERMODEL_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-supermodel.sh")
       [[ -n $v ]] && echo "${v:0:7}"
       ;;
-    model2) remote_head "${FLIPEROS_SM2_REPO:-https://github.com/dmanlfc/sm2-emu.git}" ;;
+    model2) remote_head "${FLIPEROS_SM2_REPO:-https://github.com/Keisho-Emu/Keisho.git}" ;;
     duckstation) remote_head https://github.com/stenzek/duckstation refs/tags/latest ;;
   esac
 }

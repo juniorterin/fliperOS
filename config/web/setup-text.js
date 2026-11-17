@@ -639,7 +639,7 @@ const SETTING_HELP_PT = {
   "gun.flash_level": "Menor é mais calmo; baixo demais e a pistola não vê.",
   "gun.flash_ms": "Quanto um tiro no escuro espera pelo flash.", "gun.hold_ms": "Quanto a mira fica parada sem luz.",
   "gun.edge_pct": "Perder a luz tão perto de uma borda conta como fora da tela.",
-  gun_offscreen_reload: "Fora da tela o gatilho também aperta o botão de recarregar do Flycast, do RetroArch e do SM2-Emu.",
+  gun_offscreen_reload: "Fora da tela o gatilho também aperta o botão de recarregar do Flycast, do RetroArch e do Keisho.",
   "gun.reset": "O flash, os números e o botão de recarregar de volta ao padrão. A calibração fica.",
   padcolor: "A cor da luz do DualSense, do DualShock 4 e do 8BitDo Ultimate 2 (um 8BitDo no Bluetooth grava a cor quando ligado no cabo USB). Desligada: o controle fica com a dele.",
   stream_audio: "Uma cópia do som para a tela ao vivo (um loopback ALSA no relógio da placa). Os jogos abertos depois da troca levam ela.",

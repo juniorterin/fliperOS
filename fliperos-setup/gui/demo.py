@@ -83,7 +83,7 @@ def emulators():
         ("groovymame", "GroovyMAME"),
         ("flycast", "Flycast"),
         ("pcsx2", "PCSX2"),
-        ("sm2emu", "SM2-Emu (Model 2)"),
+        ("sm2emu", "Keisho (Model 2)"),
         ("hypseus", "Hypseus Singe"),
         ("openbor", "OpenBOR"),
         ("fightcade", "Fightcade 2"),

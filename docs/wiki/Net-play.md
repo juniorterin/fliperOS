@@ -121,7 +121,7 @@ FliperOS sets no input delay (`netplay_input_latency_frames_min` and `_range` ar
 | Flycast | NAOMI, NAOMI 2, Atomiswave | **Yes, in the frontend**: GGPO rollback, up to four players on two to four cabinets (FliperOS patch) | Two Flycast linked on the cabinet by hand, game screen not seen |
 | Dolphin | GameCube, Wii | **Yes, in the frontend** (FliperOS patch): two to four cabinets, one player each; input delay, no rollback | Patched build compiled; not played between two machines |
 | GroovyMAME | Arcade (MAME 0.289) | **Yes, in the frontend**: lockstep, every player of the game (up to 10) on as many cabinets, no input delay (FliperOS patch) | **Tested**: SSF2 Turbo, cabinet and PC, in sync |
-| Supermodel, SM2-Emu | Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
+| Supermodel, Keisho | Model 3, Model 2 | **No net play.** Their network is the board link of the link games above | Source |
 | PCSX2, DuckStation, Hypseus Singe, OpenBOR | PS2, PS1, Laserdisc, beat 'em ups | **No** | Source |
 
 Fightcade 2 has its own rollback (FBNeo, Flycast and others), but over the Internet with its own matchmaking: it is not part of the cabinets' link or net play.

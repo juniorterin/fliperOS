@@ -264,7 +264,7 @@ launch() {
   (($# >= 1)) || return 0
   prog=${1##*/}
   case $prog in
-    groovymame | flycast | supermodel | fliperos-model2 | sm2-emu)
+    groovymame | flycast | supermodel | fliperos-model2 | keisho | sm2-emu)
       case $(gun_reader) in
         hotr) hotr_game "$pid" ;;
         qmamehook) qmh_game "$pid" ;;

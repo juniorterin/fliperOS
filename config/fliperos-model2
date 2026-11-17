@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Sega Model 2 pelo SM2-Emu. O Model 2 Emulator (Wine) saiu: este comando
-# so repassa para o binario compilado em ~/.local/src/sm2-emu. Aberto por um
+# Sega Model 2 pelo Keisho (o antigo SM2-Emu). O Model 2 Emulator (Wine)
+# saiu: este comando so repassa para o binario compilado em ~/.local/src/keisho. Aberto por um
 # frontend, via fliperos-x11-run. Pelo menu, o fliperos-launch escolhe o jogo
 # antes (config/fliperos-sm2emu).
 #
 #   fliperos-model2 [jogo]      (nome sem .zip, ou o caminho do .zip)
 set -euo pipefail
-src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/sm2-emu}
-bin=$src/build/bin/sm2-emu
+src=${FLIPEROS_SM2_SRC:-$HOME/.local/src/keisho}
+bin=$src/build/bin/keisho
 roms=${FLIPEROS_MODEL2_DIR:-$HOME/roms/model2}
 if [[ ! -x $bin ]]; then
   echo "Model 2 is not built yet. Open it from the desktop menu once to clone and build it." >&2

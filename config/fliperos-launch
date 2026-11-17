@@ -94,7 +94,7 @@ case ${1:-} in
   # sm2emu e o atalho de antes, quando havia um item so para ele.
   sm2emu) set -- model2 "${@:2}" ;&
   model2) label="Model 2"
-    bin=${FLIPEROS_SM2_BIN:-$HOME/.local/src/sm2-emu/build/bin/sm2-emu}
+    bin=${FLIPEROS_SM2_BIN:-$HOME/.local/src/keisho/build/bin/keisho}
     if [[ $# -ge 2 ]]; then
       run=("$x11" "$bin" "${@:2}")
     else

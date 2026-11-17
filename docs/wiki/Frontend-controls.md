@@ -35,7 +35,7 @@ Out of the box, like Batocera with Select as the hotkey:
 | Shortcut | Held for a second | What it does |
 | --- | --- | --- |
 | **EXIT GAME** | Coin + Start | Closes the game and goes back to the list |
-| **EMULATOR MENU** | Coin + button 1 | Opens the emulator's own menu: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay |
+| **EMULATOR MENU** | Coin + button 1 | Opens the emulator's own menu: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the Keisho overlay |
 | **OSD MENU** | Start + Down, or the Pause key | Opens the FliperOS [on-screen menu](On-screen-menu.md) |
 
 An emulator with no menu of its own (Supermodel, Dolphin, OpenBOR, Hypseus, KOF, Fightcade) and a custom game get the FliperOS on-screen menu instead of an emulator menu.
@@ -75,7 +75,7 @@ The first two rows set the drawing of the guide:
 
 - The buttons come from **Setup > Joysticks > Button mapping** (`/etc/fliperos/buttons.map`, [Controls](Controls.md)). The frontend's choices are saved in `~/.config/fliperos/frontend.json` (`controls`).
 - The shortcuts are read alongside the game by `fliperos-buttons hotkey`, without taking anything from it. **EXIT GAME** closes the game and what runs under it (the X server, the emulator) with SIGTERM, and SIGKILL after 4 seconds.
-- For **EMULATOR MENU**, `fliperos-buttons hotkey` creates a virtual keyboard (uinput, `FliperOS emulator keys`) before the game opens and presses the emulator's menu key on it: F1 in RetroArch, Tab in GroovyMAME and Flycast, Esc in PCSX2, PCSX2x6 and DuckStation, SM2-Emu's `key_overlay` (F10), or the on-screen menu's media key for the others (`fliperos-buttons menu-key PROGRAM` prints it). RetroArch opened this way loses its own Start + Select menu combo, which would open its menu a second before the shortcut closed it.
+- For **EMULATOR MENU**, `fliperos-buttons hotkey` creates a virtual keyboard (uinput, `FliperOS emulator keys`) before the game opens and presses the emulator's menu key on it: F1 in RetroArch, Tab in GroovyMAME and Flycast, Esc in PCSX2, PCSX2x6 and DuckStation, Keisho's `key_overlay` (F10), or the on-screen menu's media key for the others (`fliperos-buttons menu-key PROGRAM` prints it). RetroArch opened this way loses its own Start + Select menu combo, which would open its menu a second before the shortcut closed it.
 - **OSD MENU** is `osd_combo` and `osd_key` in `fliperos.conf`, written through `fliperos-setup --setting`.
 - A game opened from the frontend gets the screen, the sound and the controls, and counts in the play statistics.
 

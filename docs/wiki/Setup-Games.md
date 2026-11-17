@@ -26,7 +26,7 @@ The emulators of the desktop menu, each marked installed or not, with its versio
 
 | Emulator | How it gets in |
 | --- | --- |
-| **Model 2** (SM2-Emu) | Downloaded and built on the cabinet: several minutes |
+| **Model 2** (Keisho) | Downloaded and built on the cabinet: several minutes |
 | **Fightcade 2** | Downloaded from its site ([Fightcade 2](Fightcade-2.md)) |
 | **DuckStation** | Downloaded from its site |
 | **KOF Final Attack** (Ikemen GO, 4:3) | **Download from itch.io** (the free game, 1.4 GB, patched by itself; needs 7 GB free) or **Use a folder I have** (the folder with `Final Attack.exe`, on a USB disk, the network or home) |

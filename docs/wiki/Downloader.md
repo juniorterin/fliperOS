@@ -8,7 +8,7 @@
 
 The screen, in order:
 
-1. **Filter:** which games you want, for **GroovyMAME**, **Flycast**, **SM2-Emu**, **Supermodel** or **MAME 2010** (the PlayStation-based arcade games). It is the same parameters screen as the [ROM Cleaner](ROM-Cleaner.md), saved apart, only for the torrent. Until you save one, it is the *Joystick cabinet* preset.
+1. **Filter:** which games you want, for **GroovyMAME**, **Flycast**, **Keisho**, **Supermodel** or **MAME 2010** (the PlayStation-based arcade games). It is the same parameters screen as the [ROM Cleaner](ROM-Cleaner.md), saved apart, only for the torrent. Until you save one, it is the *Joystick cabinet* preset.
 2. **ROM set magnet link** (required) and **CHD set magnet link** (optional). Both come filled in with the links shipped in the image (MAME 0.289 ROMs and MAME 0.288 CHDs, both merged): Enter uses them, or paste another. Under the field, **Web browser** opens a browser to find a magnet link, and **.torrent file** picks a `.torrent` on a USB disk, the network share or the home folder.
 3. **Download folder:** by default the emulator's own: `~/roms/mame` with the BIOS in `~/bios/mame`; for Flycast, the folders of `naomi`, `naomi2` and `atomiswave`. Elsewhere, the BIOS go with the games.
 4. **Start the download.** It first checks that the whole download fits on the disk; if not, it says how much is needed and how much is free.

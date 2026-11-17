@@ -18,14 +18,14 @@ Every row says how it was checked. **Tested** means two or more instances were l
 
 | Game | Emulator | Cabinets | Players per cabinet | Screens | Master / slave | Cabinets set in the game | Checked |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Daytona USA | SM2-Emu, GroovyMAME | 2 to 8 | 1 | 1 | Yes (Link ID) | No (found when the link starts) | **Tested** with 2 |
+| Daytona USA | Keisho, GroovyMAME | 2 to 8 | 1 | 1 | Yes (Link ID) | No (found when the link starts) | **Tested** with 2 |
 | Super Street Fighter II: The Tournament Battle | GroovyMAME | 4 | 2 | 1 | No (the first one has an empty remote host) | No (the game finds its place in the chain) | **Tested** with 4 |
-| Sega Touring Car Championship | SM2-Emu | not checked | 1 | 1 | Link Type | not checked | Solo |
-| Indy 500 | SM2-Emu | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
-| Motor Raid | SM2-Emu | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
-| Wave Runner | SM2-Emu | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
-| Cyber Troopers Virtual-On Twin | SM2-Emu | not checked | 1 | 1 | Network Link Attribute | not checked | Solo |
-| Super GT 24h | SM2-Emu | set by Link Max | 1 | 1 | Link Type | **Yes** (Link Max) | Solo |
+| Sega Touring Car Championship | Keisho | not checked | 1 | 1 | Link Type | not checked | Solo |
+| Indy 500 | Keisho | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
+| Motor Raid | Keisho | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
+| Wave Runner | Keisho | not checked | 1 | 1 | Network Type + Cabinet ID | not checked | Solo |
+| Cyber Troopers Virtual-On Twin | Keisho | not checked | 1 | 1 | Network Link Attribute | not checked | Solo |
+| Super GT 24h | Keisho | set by Link Max | 1 | 1 | Link Type | **Yes** (Link Max) | Solo |
 | Scud Race | Supermodel | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID in the test menu, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
 | Daytona USA 2 | Supermodel | 2 to 8 (car numbers 1 to 8) | 1 | 1 | Yes (Link ID, starts as master) | No (found when the link starts) | **Tested** with 2 and 4 |
 | Dirt Devils | Supermodel | 2 (four did not link) | 1 | 1 | Yes (Communication Mode, starts as slave, and Machine ID) | No | **Tested** with 2 |
@@ -42,7 +42,7 @@ Every row says how it was checked. **Tested** means two or more instances were l
 
 ## Which emulator
 
-**Model 2 goes to SM2-Emu.** GroovyMAME emulates Model 2 poorly, and SM2-Emu has its own link.
+**Model 2 goes to Keisho.** GroovyMAME emulates Model 2 poorly, and Keisho has its own link.
 
 **Model 3 goes to Supermodel.** MAME's Model 3 communication board is an empty stub: the network code in it is commented out, so no data crosses between two MAME instances.
 
@@ -69,11 +69,11 @@ A few things apply to all of them:
 
 This comes from the emulators' source and from how the games behaved in the tests. The delay was not measured with a camera.
 
-## SM2-Emu: Sega Model 2
+## Keisho: Sega Model 2
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/link-daytona.webp" width="480" alt="Daytona USA linked between cabinets">
 
-The link is a UDP ring. In `sm2-emu.ini` (or in F10 > Network):
+The link is a UDP ring. In `keisho.ini` (or in F10 > Network):
 
 ```ini
 [network]
@@ -173,7 +173,7 @@ A pair raced (ID 1 master, ID 2 slave), with lap times 0'20"96 and 0'21"03. **Fo
 
 ## One NVRAM for each cabinet number
 
-The role of a cabinet (master or slave, car number or machine ID) is saved in the game's NVRAM, so each cabinet number needs its own file. The repository keeps them in `config/link-nvram`: SM2-Emu Daytona USA, and Supermodel Scud Race, Daytona USA 2 and Dirt Devils. The README there says what each file holds and how to use it.
+The role of a cabinet (master or slave, car number or machine ID) is saved in the game's NVRAM, so each cabinet number needs its own file. The repository keeps them in `config/link-nvram`: Keisho Daytona USA, and Supermodel Scud Race, Daytona USA 2 and Dirt Devils. The README there says what each file holds and how to use it.
 
 ## GroovyMAME
 

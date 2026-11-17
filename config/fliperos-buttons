@@ -2483,13 +2483,13 @@ def combo_held(combo, now):
 # do FliperOS (config/fliperos-osd).
 MENU_KEYS = {'retroarch': 'F1', 'groovymame': 'TAB', 'mame': 'TAB', 'flycast': 'TAB', 'pcsx2': 'ESCAPE',
              'pcsx2-qt': 'ESCAPE', 'pcsx2x6': 'ESCAPE', 'duckstation': 'ESCAPE', 'duckstation-qt': 'ESCAPE',
-             'fliperos-model2': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2'}
+             'fliperos-model2': 'sm2', 'keisho': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2'}
 # Os nomes das teclas (os do SDL, que o sm2-emu.ini usa) no evdev.
 KEY_CODES = {'ESCAPE': 1, 'TAB': 15, 'BACKSPACE': 14, 'RETURN': 28, 'SPACE': 57, 'PAUSE': 119,
              'INSERT': 110, 'DELETE': 111, 'HOME': 102, 'END': 107, 'PAGEUP': 104, 'PAGEDOWN': 109}
 KEY_CODES.update({'F%d' % n: code for n, code in enumerate((59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88), 1)})
 KEY_CODES.update({k: v for k, v in EVDEV_KEYS.items() if len(k) == 1})
-SM2_INI = '.config/sm2-emu/sm2-emu.ini'
+SM2_INI = '.config/keisho/keisho.ini'
 # O menu na tela do FliperOS (config/fliperos-osd) abre pelas teclas osd_key
 # do fliperos.conf: a de midia primeiro (Play/Pause, Pause, Play), que nenhum
 # jogo usa; a Pause do teclado (119) pausaria o FBNeo do Fightcade.
@@ -2499,7 +2499,7 @@ OSD_MEDIA_KEYS = (164, 201, 207)
 
 
 def sm2_overlay_key(home):
-    """A tecla do overlay do SM2-Emu (key_overlay no sm2-emu.ini; F10)."""
+    """A tecla do overlay do Keisho (key_overlay no keisho.ini; F10)."""
     try:
         with open(os.path.join(home, SM2_INI), encoding='utf-8', errors='replace') as f:
             for line in f:

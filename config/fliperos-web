@@ -200,7 +200,7 @@ MEDIA_CACHE = "private, no-cache"
 GUI = ENV("FLIPEROS_WEB_GUI", "/usr/local/lib/fliperos-setup/gui")
 # Os programas que contam como "o jogo aberto", na ordem de preferencia.
 EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "pcsx2x6", "duckstation", "duckstation-qt",
-             "dolphin-emu", "supermodel", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
+             "dolphin-emu", "supermodel", "keisho", "sm2-emu", "hypseus", "singe", "openbor", "fcadefbneo.exe")
 FRONTENDS = ("attractplus", "attract", "emulationstation", "es-de", "pegasus-fe", "fliperos-gui",
              "fliperos-frontend")
 

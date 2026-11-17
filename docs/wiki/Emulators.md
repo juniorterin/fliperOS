@@ -8,7 +8,7 @@ The emulators FliperOS ships or installs, the systems they run and the video mod
 | [GroovyMAME](GroovyMAME.md) | Arcade at native resolution: the Midway games, missing files, the package and building the newest |
 | [RetroArch](RetroArch.md) | The cores, the light gun in every core, the D-pad, video, updating |
 | [Flycast](Flycast.md) | Dreamcast, Naomi, Naomi 2 and Atomiswave |
-| [Sega Model 2 and 3](Sega-Model-2-and-3.md) | SM2-Emu, built on the cabinet, and Supermodel |
+| [Sega Model 2 and 3](Sega-Model-2-and-3.md) | Keisho, built on the cabinet, and Supermodel |
 | [PlayStation 2 and Namco 246/256](Namco-246-256.md) | PCSX2, and PCSX2x6 for Tekken 5, Soul Calibur II and the other Namco boards |
 | [OpenBOR](OpenBOR.md) | Beat 'em up paks: information from the pak, each pak's own video mode, old paks |
 | [Windows games](Windows-games.md) | Wine, Wine Staging, Steam and Heroic |
@@ -28,7 +28,7 @@ The emulators FliperOS ships or installs, the systems they run and the video mod
 | [Supermodel](Sega-Model-2-and-3.md#model-3-supermodel) | Sega Model 3 | In the image | 640x240 at 57.524 Hz |
 | [OpenBOR](OpenBOR.md) | Beat 'em ups | In the image | Each pak's own mode |
 | [Hypseus Singe](More-emulators.md#hypseus-singe-laserdisc) | Laserdisc | In the image | 640x240 |
-| [SM2-Emu](Sega-Model-2-and-3.md#model-2-sm2-emu) | Sega Model 2 | Built on the cabinet | 640x240 at 57.524 Hz |
+| [Keisho](Sega-Model-2-and-3.md#model-2-keisho) | Sega Model 2 | Built on the cabinet | 640x240 at 57.524 Hz |
 | [DuckStation](More-emulators.md#duckstation-playstation) | PlayStation | Downloaded | 640x240 |
 | [Fightcade 2](Fightcade-2.md) | Online arcade matches | Downloaded | Each game's own mode |
 | [KOF Final Attack](More-emulators.md#kof-final-attack-ikemen-go-43) | One game, Ikemen GO | Downloaded or from your copy | 320x240 |
