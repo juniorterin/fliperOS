@@ -12784,6 +12784,61 @@ class EmulatorModeTests(unittest.TestCase):
             extra = {'FLIPEROS_SWITCHRES_INI': str(Path(tmp) / 'nao-existe.ini')}
             self.assertIn('MODE=640 240 60', self.run_x11(['flycast'], extra=extra).stdout)
 
+    def test_super_resolution_stretches_programs_that_dont_fill_the_mode(self):
+        # O metodo stretch: o OpenBOR, um jogo custom (Wine ou Linux) e o
+        # resto veem a tela do tamanho pedido, esticada no modo largo; os
+        # emuladores que enchem o modo sozinhos desenham na largura da placa.
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / 'switchres.ini'
+            ini.write_text('\tdotclock_min              25.0\n\tsuper_width               2560\n')
+            extra = {'FLIPEROS_SWITCHRES_INI': str(ini)}
+            out = self.run_x11(['openbor'], extra=extra).stdout
+            self.assertIn('MODE=2560 240 60', out)
+            self.assertIn('SCREEN=320x240', out)
+            out = self.run_x11(['--mode', '640x480@60', '--app', 'custom_g_x', '--wine', 'myprog'], extra=extra).stdout
+            self.assertIn('MODE=2560 480 60', out)
+            self.assertIn('SCREEN=640x480', out)
+            # O 240p hack ja diz a tela: ela fica (640x480 no modo de 2560x240).
+            out = self.run_x11(['--mode', '640x240@60/640x480', 'myprog'], extra=extra).stdout
+            self.assertIn('MODE=2560 240 60', out)
+            self.assertIn('SCREEN=640x480', out)
+            self.assertIn('SCREEN=512x448', self.run_x11(['fightcade'], extra=extra).stdout)
+            for prog in ('flycast', 'supermodel', 'hypseus', 'pcsx2', 'dolphin-emu', 'sm2-emu'):
+                out = self.run_x11([prog], extra=extra).stdout
+                self.assertIn('MODE=2560 ', out, prog)
+                self.assertIn('SCREEN=\n', out, prog)
+            # O dobro do nouveau tambem: 320 vira 640 no modo, a tela fica 320.
+            ini.write_text('dotclock_min 7.7\n')
+            self.assertIn('SCREEN=320x240', self.run_x11(['--mode', '320x240@60', 'myprog'], extra=extra).stdout)
+            # Placa com dotclock baixo: nada muda.
+            ini.write_text('dotclock_min 0\n')
+            self.assertIn('SCREEN=\n', self.run_x11(['openbor'], extra=extra).stdout)
+
+    def test_fightcade_keeps_the_stretch_when_it_switches_modes(self):
+        # Na super resolucao a partida troca para um modo largo do Switchres:
+        # a troca leva o --scale que mantem a tela do tamanho pedido, e a
+        # volta para a sala, o da sala.
+        fc = (ROOT / 'config/fliperos-fightcade').read_text()
+        self.assertIn('xrandr --output "$output" --mode "$name" $scale', fc)
+        self.assertIn('xrandr --output "$output" --mode "$lobby_id" $lobby_scale', fc)
+        start = fc.index('stretch_of() {')
+        func = fc[start:fc.index('\n}\n', start) + 3]
+        verbose = ('VGA-1 connected primary 512x448+0+0\n'
+                   '  fliperos-320x240@60 (0x4a) 53.280MHz -HSync -VSync\n'
+                   '        h: width  2560 start 2696 end 2944 total 3400 skew    0 clock  15.67KHz\n'
+                   '        v: height  240 start  243 end  246 total  262           clock  59.81Hz\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'xrandr').write_text('#!/bin/sh\ncat <<"E"\n%sE\n' % verbose)
+            (Path(tmp) / 'xrandr').chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (tmp, os.environ['PATH']), FLIPEROS_X11_SCREEN='512x448')
+            out = subprocess.run(['bash', '-c', func + 'stretch_of fliperos-320x240@60 320 240'], env=env,
+                                 capture_output=True, text=True, check=True).stdout
+            self.assertEqual(out.strip(), '--scale 0.125x1')
+            env.pop('FLIPEROS_X11_SCREEN')
+            out = subprocess.run(['bash', '-c', func + 'stretch_of fliperos-320x240@60 320 240'], env=env,
+                                 capture_output=True, text=True, check=True).stdout
+            self.assertEqual(out, '')
+
     def test_nouveau_minimum_doubles_only_narrow_modes(self):
         # Uma NVIDIA no nouveau que so mostrou o grid de 384 de largura
         # (dotclock_min 7.7): o 640x240 (13 MHz) fica, o 320x240 (6,5 MHz)
