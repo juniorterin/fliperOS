@@ -22,6 +22,7 @@ Sem dependencias: evdev lido e calibrado com struct e ioctl.
 import fcntl
 import glob
 import os
+import re
 import select
 import struct
 import sys
@@ -50,9 +51,24 @@ BTN_B, BTN_SELECT = 0x131, 0x13a
 KEY_ESC = 1
 ABS_NAMES = {0: 'X', 1: 'Y', 2: 'Z', 3: 'RX', 4: 'RY', 5: 'RZ', 6: 'Throttle', 7: 'Rudder',
              8: 'Wheel', 9: 'Gas', 10: 'Brake'}
+ABS_RX, ABS_RY, ABS_HAT0X, ABS_HAT0Y = 0x03, 0x04, 0x10, 0x11
+# O nome de um eixo que descansa numa ponta (pedal, gatilho, manete) quando
+# o codigo ja diz o que e; os outros sao "PEDAL Y", "PEDAL RZ".
+PEDAL_NAMES = {6: 'THROTTLE', 7: 'RUDDER', 9: 'GAS', 10: 'BRAKE'}
 HATS = range(0x10, 0x18)
 EVENT = struct.Struct('llHHi')
 ABSINFO = struct.Struct('6i')   # value, minimum, maximum, fuzz, flat, resolution
+# Setas, F1... no terminal: ESC [ ... letra, ou ESC O letra.
+ESCAPE_SEQ = re.compile(rb'\x1b(\[[0-9;?]*[ -/]*[@-~]|O.)')
+
+# Force feedback (linux/input.h): o volante puxa e treme no teste.
+EV_FF = 0x15
+FF_RUMBLE, FF_PERIODIC, FF_CONSTANT, FF_SINE, FF_AUTOCENTER = 0x50, 0x51, 0x52, 0x5a, 0x61
+# Volante: tem o centramento do force feedback, ou o nome diz.
+WHEEL_NAME = re.compile(rb'wheel|racing|driving|steering|formula', re.I)
+# Segurar um botao do controle este tempo passa para o passo seguinte; um
+# toque so acende o botao na tela (o teste dos botoes).
+HOLD = 1.0
 
 
 def _ioc(direction, nr, size):
@@ -62,6 +78,11 @@ def _ioc(direction, nr, size):
 EVIOCGID = _ioc(2, 0x02, 8)
 EVIOCGNAME = _ioc(2, 0x06, 256)
 EVIOCGPHYS = _ioc(2, 0x07, 256)
+# struct ff_effect tem 48 bytes no x86_64 (a union alinhada em 8, pelo
+# ponteiro do ff_periodic_effect).
+FF_EFFECT_SIZE = 48
+EVIOCSFF = _ioc(1, 0x80, FF_EFFECT_SIZE)
+EVIOCRMFF = _ioc(1, 0x81, 4)
 
 
 def eviocgbit(ev, length):
@@ -102,20 +123,149 @@ def plausible_range(xr, yr):
     return xr[1] - xr[0] >= MIN_SPAN[0] and yr[1] - yr[0] >= MIN_SPAN[1]
 
 
-def axis_calibration(seen_min, seen_max, rest, orig_min, orig_max):
+def axis_calibration(seen_min, seen_max, rest, orig_min, orig_max, wheel=False):
     """(min, max, zona morta) de um eixo pelo curso visto e pelo repouso, ou
-    None se ele quase nao se mexeu. Eixo centrado (volante, analogico): faixa
-    simetrica em volta do repouso, para o centro dar 0, com 1% de zona morta;
-    o lado mais longo satura no fim do curso. Eixo de repouso numa ponta
-    (pedal): a faixa vista, sem zona morta."""
+    None se ele quase nao se mexeu. Volante (wheel): o curso de batente a
+    batente, sem zona morta; o centro e o meio dele, que e o mecanico, e nao
+    o repouso: sem mola (o centramento do driver Logitech vem em 0) o
+    volante fica onde a mao o deixou. Analogico: faixa simetrica em volta do
+    repouso, para o centro dar 0, com 1% de zona morta; o lado mais longo
+    satura no fim do curso. Repouso longe do meio do curso (mais de 10%) nao
+    e centro (um eixo sem mola de outro controle): o meio do curso. Eixo de
+    repouso numa ponta (pedal): a faixa vista, sem zona morta."""
     span = orig_max - orig_min
     seen = seen_max - seen_min
     if span <= 0 or seen < span * 0.05:
         return None
+    if wheel:
+        return seen_min, seen_max, 0
     if rest - seen_min > seen * 0.2 and seen_max - rest > seen * 0.2:
+        if abs(rest - (seen_min + seen_max) / 2) > seen * 0.1:
+            return seen_min, seen_max, max(1, round(seen * 0.01))
         half = min(rest - seen_min, seen_max - rest)
         return rest - half, rest + half, max(1, round(2 * half * 0.01))
     return seen_min, seen_max, 0
+
+
+def read_key(data):
+    """O que a calibracao entende de uma leitura do terminal: "\\n" (Enter),
+    "\\033" (um Esc sozinho), outro caractere ou "". Setas e outras sequencias
+    de escape nao contam: com o controle como teclado ligado, girar o volante
+    mandava ESC [ D, e o ESC delas cancelava a calibracao."""
+    data = ESCAPE_SEQ.sub(b'', data)
+    if b'\n' in data or b'\r' in data:
+        return '\n'
+    if data == b'\x1b':
+        return '\033'
+    if data[:1] in (b'', b'\x1b'):
+        return ''
+    return data[:1].decode(errors='replace')
+
+
+def ff_effect(kind, length_ms, level=0, period=50, strong=0, weak=0):
+    """Um struct ff_effect para o EVIOCSFF (id -1: o kernel da um). A forca
+    constante vai sempre na direcao 0x4000 e o lado sai do sinal do nivel: o
+    hid-lg4ff do kernel ignora a direcao, o new-lg4ff multiplica pelo seno
+    dela (que e 1 em 0x4000)."""
+    head = struct.pack('<HhHHHHH', kind, -1, 0x4000, 0, 0, length_ms, 0) + b'\0\0'
+    if kind == FF_CONSTANT:
+        body = struct.pack('<hHHHH', level, 0, 0, 0, 0)
+    elif kind == FF_PERIODIC:
+        # waveform, period, magnitude, offset, phase, envelope (4)
+        body = struct.pack('<HHhhHHHHH', FF_SINE, period, level, 0, 0, 0, 0, 0, 0)
+    else:
+        body = struct.pack('<HH', strong, weak)
+    return bytearray(head + body.ljust(FF_EFFECT_SIZE - len(head), b'\0'))
+
+
+# A tela dos botoes desenha o controle com cada botao no lugar dele.
+# Volantes de PlayStation da Logitech: a ordem dos botoes do relatorio USB
+# (o Driving Force Pro tem estes 14; o cambio sequencial sao os dois
+# ultimos). Volante que nao esta na lista usa os mesmos lugares, com o
+# numero do botao no lugar do simbolo.
+LOGITECH_PS = ['cross', 'square', 'circle', 'triangle', 'r1', 'l1', 'r2', 'l2', 'select', 'start',
+               'r3', 'l3', 'gear_up', 'gear_down']
+KNOWN_LAYOUTS = {(0x046d, 0xc298): ('wheel', 'ps', LOGITECH_PS)}   # Driving Force Pro
+# Joypad que o kernel ja diz o que e cada botao (xpad, hid-sony, hid-nintendo).
+PAD_CODES = {0x130: 'south', 0x131: 'east', 0x133: 'north', 0x134: 'west', 0x136: 'tl', 0x137: 'tr',
+             0x138: 'tl2', 0x139: 'tr2', 0x13a: 'select', 0x13b: 'start', 0x13c: 'mode',
+             0x13d: 'thumbl', 0x13e: 'thumbr', 0x220: 'dup', 0x221: 'ddown', 0x222: 'dleft', 0x223: 'dright'}
+SONY_NAME = re.compile(rb'sony|playstation|dualshock|dualsense', re.I)
+
+
+def button_layout(ident, name, buttons, wheel):
+    """(familia, simbolos, lugar de cada botao) para a tela dos botoes:
+    'wheel' (o volante de frente), 'pad' (o joypad) ou 'grid' (painel,
+    encoder: os botoes em fileiras). simbolos: 'ps' (cruz, quadrado...),
+    'xbox' (A B X Y) ou 'numbers'. O lugar e None quando nao ha um."""
+    if ident in KNOWN_LAYOUTS:
+        family, symbols, slots = KNOWN_LAYOUTS[ident]
+        return family, symbols, [slots[i] if i < len(slots) else None for i in range(len(buttons))]
+    if wheel:
+        return 'wheel', 'numbers', [LOGITECH_PS[i] if i < len(LOGITECH_PS) else None for i in range(len(buttons))]
+    if any(code in PAD_CODES for code in buttons):
+        return 'pad', 'ps' if SONY_NAME.search(name) else 'xbox', [PAD_CODES.get(code) for code in buttons]
+    return 'grid', 'numbers', [None] * len(buttons)
+
+
+# O teste do force feedback: (nome, efeito, ms). Puxa para um lado, para o
+# outro e treme; o lado que aparece na tela e o que o volante andou.
+FF_TEST = [('pull', (FF_CONSTANT, 700, 0x5000), 700),
+           ('pull', (FF_CONSTANT, 700, -0x5000), 700),
+           ('shake', None, 900)]
+
+
+def axis_kind(code, lo, hi, value, wheel):
+    """'wheel' (o X de um volante), 'pedal' (descansa numa ponta: pedal,
+    gatilho, manete) ou 'center' (analogico, eixo de volante de outro
+    controle), pelo valor de agora, com o controle solto."""
+    span = max(1, hi - lo)
+    if wheel and code == ABS_X:
+        return 'wheel'
+    if min(value - lo, hi - value) <= span * 0.1:
+        return 'pedal'
+    return 'center'
+
+
+def axis_fraction(kind, value, lo, hi, rest):
+    """Posicao para a barra: pedal de 0 a 1 (quanto foi pisado, da ponta de
+    repouso), o resto de -1 a 1 em volta do meio."""
+    span = max(1, hi - lo)
+    if kind == 'pedal':
+        return max(0.0, min(1.0, abs(value - rest) / span))
+    return max(-1.0, min(1.0, (value - (lo + hi) / 2) / (span / 2)))
+
+
+def axis_label(kind, code):
+    if kind == 'wheel':
+        return 'WHEEL'
+    name = PEDAL_NAMES.get(code) or ABS_NAMES.get(code, str(code)).upper()
+    return name if code in PEDAL_NAMES or kind != 'pedal' else 'PEDAL ' + name
+
+
+def bar_cells(kind, frac, seen, width):
+    """[(cor, caractere)] de uma linha da barra. Pedal: cheia da esquerda ate
+    a pressao; o resto: do meio ate a posicao, com o meio marcado. O ponto
+    mais longe visto fica amarelo (o quanto ja chegou)."""
+    cells = [('1;30', '░')] * width
+    if kind == 'pedal':
+        fill = round(frac * width)
+        for i in range(fill):
+            cells[i] = ('1;32', '█')
+        top = round(max(seen) * width) - 1
+        if top >= fill:
+            cells[top] = ('0;33', '█')
+        return cells
+    half = width // 2
+    pos = max(0, min(width - 1, half + round(frac * half)))
+    for i in range(min(half, pos), max(half, pos) + 1):
+        cells[i] = ('1;36', '█')
+    for f in seen:
+        mark = max(0, min(width - 1, half + round(f * half)))
+        if not min(half, pos) <= mark <= max(half, pos):
+            cells[mark] = ('0;33', '█')
+    cells[half] = ('1;37', '█')
+    return cells
 
 
 def read_axes_conf(path):
@@ -198,6 +348,8 @@ class Device:
         self.ident = (vid, pid)
         self.keys = self.bits(EV_KEY, 0x300)
         self.abs = self.bits(EV_ABS, 0x40)
+        self.ff = self.bits(EV_FF, 0x80)
+        self.effects = {}
 
     def bits(self, ev, count):
         buf = bytearray((count + 7) // 8)
@@ -226,6 +378,45 @@ class Device:
         joyish = any(0x120 <= k < 0x140 or 0x2c0 <= k < 0x2e8 for k in self.keys)
         return (joyish and not self.is_gun() and BTN_LEFT not in self.keys
                 and self.name != PADKEYS_NAME and bool(self.analog_axes()))
+
+    def is_wheel(self):
+        return FF_AUTOCENTER in self.ff or bool(WHEEL_NAME.search(self.name))
+
+    def buttons(self):
+        """Os botoes de joystick/gamepad na ordem do SDL (de BTN_JOYSTICK em
+        diante): o botao 1 da tela e o primeiro."""
+        return sorted(k for k in self.keys if 0x120 <= k < 0x140 or 0x2c0 <= k < 0x2e8)
+
+    def ff_kinds(self):
+        """Os efeitos do teste que o controle faz: pull (forca constante) e
+        shake (periodico, ou o rumble de um joypad)."""
+        out = []
+        if FF_CONSTANT in self.ff:
+            out.append('pull')
+        if FF_PERIODIC in self.ff or FF_RUMBLE in self.ff:
+            out.append('shake')
+        return out
+
+    def ff_play(self, effect):
+        """Sobe o efeito (ff_effect) e o toca uma vez. Fechar o arquivo apaga
+        os efeitos dele no kernel."""
+        buf = effect
+        fcntl.ioctl(self.fd, EVIOCSFF, buf)
+        eid = struct.unpack_from('<h', buf, 2)[0]
+        os.write(self.fd, EVENT.pack(0, 0, EV_FF, eid, 1))
+        return eid
+
+    def ff_stop(self, eid):
+        try:
+            os.write(self.fd, EVENT.pack(0, 0, EV_FF, eid, 0))
+            fcntl.ioctl(self.fd, EVIOCRMFF, eid)
+        except OSError:
+            pass
+
+    def shake_effect(self, ms):
+        if FF_PERIODIC in self.ff:
+            return ff_effect(FF_PERIODIC, ms, 0x4000, period=60)
+        return ff_effect(FF_RUMBLE, ms, strong=0xA000, weak=0x6000)
 
     def events(self):
         try:
@@ -273,13 +464,142 @@ class Screen:
     def key(self):
         """Tecla apertada, sem esperar (Enter = "\\n", Esc = "\\033")."""
         if select.select([self.fd], [], [], 0)[0]:
-            return os.read(self.fd, 16).decode(errors='replace')[:1]
+            return read_key(os.read(self.fd, 64))
         return ''
+
+    def flush(self):
+        """Joga fora o que foi digitado antes do passo atual."""
+        if self.saved:
+            try:
+                termios.tcflush(self.fd, termios.TCIFLUSH)
+            except termios.error:
+                pass
 
     def restore(self):
         self.write('\033[0m\033[2J\033[H\033[?25h')
         if self.saved:
             termios.tcsetattr(self.fd, termios.TCSADRAIN, self.saved)
+
+    # A calibracao de eixos no terminal (Setup em texto) ----------------
+
+    def axes(self, state):
+        """Os eixos em barras, os botoes e o passo, em 40 colunas ou mais
+        (o console de 320x240 tem 40x30). Ate 10 quadros por segundo."""
+        now = time.monotonic()
+        if now - getattr(self, 'drawn', 0) < 0.1 and state['step'] == getattr(self, 'last_step', None):
+            return
+        self.drawn, self.last_step = now, state['step']
+        cols = max(30, self.cols)
+        out = ['\033[?25l\033[0m\033[2J']
+
+        def put(row, col, text):
+            out.append('\033[%d;%dH%s\033[0m' % (row, col, text))
+
+        put(1, 2, '\033[1;35m' + ('Calibrate: ' + state['name'])[:cols - 2])
+        row = 2
+        for line in wrap_text(state['text'], cols - 2):
+            put(row, 2, '\033[1;37m' + line)
+            row += 1
+        row += 1
+        width = cols - 4
+        if state['step'] == 'result':
+            put(row, 2, '\033[1;37mNew calibration (min..max, dead zone):')
+            for label, lo, hi, flat in state['result']:
+                row += 1
+                put(row, 4, '%-10s %6d..%-6d %d' % (label[:10], lo, hi, flat))
+            row += 2
+        compact = len(state['axes']) > 3
+        for axis in state['axes']:
+            if row > self.rows - 6:
+                break
+            info = axis_text(axis, state['degrees'])
+            put(row, 3, '\033[1;36m' + axis['label'])
+            put(row, max(3, cols - len(info)), '\033[1;37m' + info)
+            line = ''.join('\033[%sm%s' % cell for cell in bar_cells(axis['kind'], axis['frac'], axis['seen'], width))
+            for r in range(1 if compact else 2):
+                put(row + 1 + r, 3, line)
+            row += 2 if compact else 3
+        if state['buttons'] and state['step'] == 'buttons':
+            # Os numeros dos botoes (verdes depois de testados), em ate duas
+            # linhas de cols - 2.
+            lines, line, used = [], [], 0
+            for i, (pressed, tested) in enumerate(state['buttons']):
+                color = '30;42' if pressed else '1;32' if tested else '1;30'
+                n = str(i + 1)
+                if line and used + 1 + len(n) > cols - 2:
+                    lines.append(line)
+                    line, used = [], 0
+                used += len(n) + (1 if line else 0)
+                line.append('\033[%sm%s\033[0m' % (color, n))
+            lines.append(line)
+            for k, marks in enumerate(lines[-2:]):
+                put(self.rows - 3 + k, 2, ' '.join(marks))
+        if state['step'] == 'ff' and state['ff']:
+            names = ' '.join(('\033[30;43m%s\033[0m' if i == state['ff']['phase'] else '\033[1;30m%s\033[0m')
+                             % ff_label(p, m) for i, (p, m) in enumerate(state['ff']['phases']))
+            put(self.rows - 4, 2, names)
+        if state['hold'] > 0:
+            n = round(state['hold'] * (cols - 10))
+            put(self.rows - 1, 2, '\033[1;33mHOLD \033[30;43m%s\033[0m' % (' ' * n))
+        put(self.rows, 2, '\033[1;30m' + '   '.join('%s: %s' % k for k in state['keys']))
+        self.write(''.join(out))
+
+
+def wrap_text(lines, width):
+    out = []
+    for line in lines:
+        words, cur = line.split(), ''
+        for word in words:
+            if cur and len(cur) + 1 + len(word) > width:
+                out.append(cur)
+                cur = word
+            else:
+                cur = (cur + ' ' + word).strip()
+        out.append(cur)
+    return out
+
+
+def axis_text(axis, degrees):
+    """O valor de um eixo para a tela: graus do volante, % do pedal."""
+    f = axis['frac']
+    if axis['kind'] == 'wheel':
+        side = 'LEFT' if f < -0.01 else 'RIGHT' if f > 0.01 else 'CENTER'
+        if degrees:
+            return '%d° %s' % (round(abs(f) * degrees / 2), side)
+        return '%d%% %s' % (round(abs(f) * 100), side)
+    if axis['kind'] == 'pedal':
+        return '%d%%' % round(f * 100)
+    return '%+d%%' % round(f * 100)
+
+
+def ff_label(phase, moved):
+    if phase == 'shake':
+        return 'SHAKE'
+    return {-1: 'PULL <', 1: 'PULL >'}.get(moved, 'PULL')
+
+
+def wheel_degrees(path):
+    """O giro total do volante, de batente a batente (o `range` do driver
+    Logitech), ou None."""
+    try:
+        with open('/sys/class/input/%s/device/device/range' % os.path.basename(path)) as f:
+            return int(f.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def make_axes_screen():
+    """A tela da calibracao de eixos: a da interface grafica do Setup
+    (fliperos-setup/gui/wheelscreen.py) quando o Setup esta nela, senao o
+    terminal."""
+    if os.environ.get('FLIPEROS_CALIBRATE_GUI') == '1':
+        sys.path.insert(0, os.environ.get('FLIPEROS_GUI_DIR', '/usr/local/lib/fliperos-setup/gui'))
+        try:
+            import wheelscreen
+            return wheelscreen.WheelScreen()
+        except Exception as error:  # sem pygame ou sem video: o terminal
+            print('fliperos-calibrate: graphical screen unavailable (%s)' % error, file=sys.stderr)
+    return Screen()
 
 
 def make_screen():
@@ -489,82 +809,209 @@ def apply_guncon(path, xr, yr):
         dev.close()
 
 
-def bar(value, lo, hi, width=20):
-    if hi <= lo:
-        return '-' * width
-    n = max(0, min(width, round(width * (value - lo) / (hi - lo))))
-    return '#' * n + '-' * (width - n)
+class AxesSession:
+    """A calibracao de eixos (volante, pedais, analogico) que as duas telas
+    desenham, a do terminal (Screen.axes) e a grafica (wheelscreen.py): os
+    eixos ao vivo, o curso visto, os botoes testados e o segurar para
+    avancar."""
+
+    STEPS = {
+        'move': (['Turn the wheel lock to lock and push each pedal all the way.'],
+                 ['Move every axis to its limits: sticks all around, triggers and pedals all the way.'],
+                 [('HOLD A BUTTON', 'NEXT'), ('ESC', 'CANCEL')]),
+        'rest': (['Now release the pedals. The wheel can stay where it is.'],
+                 ['Now let go of everything: sticks, triggers and pedals at rest.'],
+                 [('HOLD A BUTTON', 'NEXT'), ('ESC', 'CANCEL')]),
+        'result': (['Hold a button to save this calibration.'], ['Hold a button to save this calibration.'],
+                   [('HOLD', 'SAVE'), ('ESC', 'DISCARD')]),
+        'nomove': (['No axis moved enough. Nothing was saved.'], ['No axis moved enough. Nothing was saved.'],
+                   [('HOLD', 'BACK')]),
+        'buttons': (['Saved! Now press every button: each one lights up where it is.'],
+                    ['Saved! Now press every button: each one lights up where it is.'],
+                    [('HOLD A BUTTON', 'NEXT'), ('ESC', 'DONE')]),
+        'ff': (['Force feedback test: hold the wheel lightly.'],
+               ['Vibration test.'],
+               [('TAP', 'AGAIN'), ('HOLD', 'DONE')]),
+    }
+
+    def __init__(self, dev):
+        self.dev = dev
+        self.name = dev.name.decode(errors='replace')
+        self.wheel = dev.is_wheel()
+        self.axes = dev.analog_axes()
+        self.info = {a: dev.absinfo(a) for a in self.axes}
+        self.cur = {a: self.info[a][0] for a in self.axes}
+        self.seen = {a: [self.cur[a], self.cur[a]] for a in self.axes}
+        self.kind, self.rest_end = {}, {}
+        for a in self.axes:
+            value, lo, hi = self.info[a][:3]
+            self.kind[a] = axis_kind(a, lo, hi, value, self.wheel)
+            self.rest_end[a] = lo if value - lo <= hi - value else hi
+        self.buttons = dev.buttons()
+        self.pressed = {}
+        self.tested = set()
+        self.hat = [0, 0] if ABS_HAT0X in dev.abs else None
+        self.armed = True
+        self.degrees = wheel_degrees(dev.path) if self.wheel else None
+        self.layout = button_layout(dev.ident, dev.name, self.buttons, self.wheel)
+
+    def pump(self, timeout):
+        """Le o controle. 'next' quando um botao ficou segurado HOLD s, 'tap'
+        num toque curto. Depois de um 'next', so vale outro com tudo solto."""
+        out = None
+        if select.select([self.dev.fd], [], [], timeout)[0]:
+            for etype, code, value in self.dev.events():
+                if etype == EV_ABS and code in self.cur:
+                    self.cur[code] = value
+                    self.seen[code] = [min(self.seen[code][0], value), max(self.seen[code][1], value)]
+                elif etype == EV_ABS and self.hat is not None and code in (ABS_HAT0X, ABS_HAT0Y):
+                    self.hat[code - ABS_HAT0X] = value
+                elif etype == EV_KEY and code in self.buttons:
+                    if value == 1:
+                        self.pressed[code] = time.monotonic()
+                        self.tested.add(code)
+                    elif value == 0:
+                        start = self.pressed.pop(code, None)
+                        if start is not None and self.armed and time.monotonic() - start < HOLD:
+                            out = 'tap'
+        if not self.pressed:
+            self.armed = True
+        if self.armed and self.hold() >= 1:
+            self.armed = False
+            out = 'next'
+        return out
+
+    def hold(self):
+        if not self.pressed or not self.armed:
+            return 0.0
+        return min(1.0, (time.monotonic() - min(self.pressed.values())) / HOLD)
+
+    def fraction(self, a, value=None):
+        lo, hi = self.info[a][1:3]
+        return axis_fraction(self.kind[a], self.cur[a] if value is None else value, lo, hi, self.rest_end[a])
+
+    def result(self):
+        out = {}
+        for a in self.axes:
+            cal = axis_calibration(self.seen[a][0], self.seen[a][1], self.cur[a], self.info[a][1],
+                                   self.info[a][2], wheel=self.kind[a] == 'wheel')
+            if cal:
+                out[a] = cal
+        return out
+
+    def state(self, step, result=None, ff=None):
+        text, other, keys = self.STEPS[step]
+        return {
+            'name': self.name, 'step': step, 'wheel': self.wheel, 'degrees': self.degrees,
+            'text': text if self.wheel else other, 'keys': keys, 'hold': self.hold(),
+            'axes': [{'code': a, 'kind': self.kind[a], 'label': axis_label(self.kind[a], a),
+                      'frac': self.fraction(a),
+                      'seen': tuple(sorted((self.fraction(a, self.seen[a][0]), self.fraction(a, self.seen[a][1]))))}
+                     for a in self.axes],
+            'buttons': [(code in self.pressed, code in self.tested) for code in self.buttons],
+            'layout': {'family': self.layout[0], 'symbols': self.layout[1], 'slots': self.layout[2]},
+            'hat': tuple(self.hat) if self.hat is not None else None,
+            'result': [(axis_label(self.kind[a], a), lo, hi, flat) for a, (lo, hi, flat) in sorted((result or {}).items())],
+            'ff': ff,
+        }
+
+
+def run_step(screen, session, step, result=None):
+    """Um passo da calibracao: 'next' (segurou um botao, ou Enter) ou
+    'cancel' (Esc no teclado)."""
+    screen.flush()
+    session.armed = not session.pressed
+    while True:
+        k = screen.key()
+        if k == '\033':
+            return 'cancel'
+        if k in ('\n', '\r'):
+            return 'next'
+        if session.pump(1 / 30) == 'next':
+            return 'next'
+        screen.axes(session.state(step, result))
+
+
+def run_ff(screen, session):
+    """O teste do force feedback: puxa para um lado, para o outro e treme
+    (num joypad, so a vibracao). Um toque repete; segurar ou Esc termina."""
+    dev = session.dev
+    kinds = dev.ff_kinds()
+    phases = [p for p in FF_TEST if p[0] in kinds]
+    if not phases:
+        return
+    moved = [0] * len(phases)
+    x = ABS_X if ABS_X in session.cur else None
+    span = (session.info[x][2] - session.info[x][1]) if x is not None else 1
+    current = {'i': -1, 'eid': None, 'until': 0, 'x0': 0}
+
+    def start(i):
+        name, effect, ms = phases[i]
+        current.update(i=i, until=time.monotonic() + ms / 1000, x0=session.cur.get(x, 0))
+        try:
+            current['eid'] = dev.ff_play(ff_effect(*effect) if effect else dev.shake_effect(ms))
+        except OSError as error:
+            print('fliperos-calibrate: force feedback failed (%s)' % error, file=sys.stderr)
+            current['eid'] = None
+
+    def stop():
+        if current['eid'] is not None:
+            dev.ff_stop(current['eid'])
+            current['eid'] = None
+        i = current['i']
+        if i >= 0 and phases[i][0] == 'pull' and x is not None:
+            delta = session.cur[x] - current['x0']
+            moved[i] = (delta > 0) - (delta < 0) if abs(delta) > span * 0.01 else 0
+
+    screen.flush()
+    session.armed = not session.pressed
+    start(0)
+    try:
+        while True:
+            k = screen.key()
+            if k in ('\033', '\n', '\r'):
+                return
+            event = session.pump(1 / 30)
+            if event == 'next':
+                return
+            if current['i'] >= 0 and time.monotonic() >= current['until']:
+                stop()
+                current['i'] = current['i'] + 1 if current['i'] + 1 < len(phases) else -1
+                if current['i'] >= 0:
+                    start(current['i'])
+            elif event == 'tap' and current['i'] < 0:
+                start(0)
+            screen.axes(session.state('ff', ff={'phase': current['i'],
+                                                'phases': [(p[0], m) for p, m in zip(phases, moved)]}))
+    finally:
+        stop()
 
 
 def calibrate_axes(path):
-    dev = Device(path)
-    screen = Screen()
+    dev = Device(path, write=True)
     try:
-        axes = dev.analog_axes()
-        info = {a: dev.absinfo(a) for a in axes}
-        cur = {a: info[a][0] for a in axes}
-        seen = {a: [cur[a], cur[a]] for a in axes}
-
-        def table(title, *lines):
-            screen.write('\033[?25l\033[0m\033[2J')
-            screen.at(1, 2, '\033[1;35m%s\033[0m' % title)
-            for i, line in enumerate(lines):
-                screen.at(2 + i, 2, line)
-            top = 3 + len(lines)
-            for i, a in enumerate(axes):
-                screen.at(top + i, 2, '%-8s %7d  [%s]  %7d .. %-7d' % (
-                    ABS_NAMES.get(a, a), cur[a], bar(cur[a], info[a][1], info[a][2]), seen[a][0], seen[a][1]))
-
-        def follow(title, *lines):
-            """Acompanha os eixos ate um botao do controle ou o Enter."""
-            last = 0
-            while True:
-                k = screen.key()
-                if k == '\033':
-                    raise Cancelled()
-                if k in ('\n', '\r'):
-                    return
-                if select.select([dev.fd], [], [], 0.05)[0]:
-                    for etype, code, value in dev.events():
-                        if etype == EV_ABS and code in cur:
-                            cur[code] = value
-                            seen[code][0] = min(seen[code][0], value)
-                            seen[code][1] = max(seen[code][1], value)
-                        elif etype == EV_KEY and value == 1:
-                            return
-                if time.monotonic() - last > 0.1:
-                    table(title, *lines)
-                    last = time.monotonic()
-
-        name = dev.name.decode(errors='replace')
-        follow('Calibrate: %s' % name, 'Turn the wheel (or the stick) fully to both sides and press',
-               'each pedal all the way. Then press any button, or Enter. Esc cancels.')
-        time.sleep(0.4)
-        dev.events()
-        follow('Calibrate: %s' % name, 'Now leave everything at rest: wheel centered, pedals',
-               'released, stick released. Then press any button, or Enter.')
-        result = {}
-        for a in axes:
-            cal = axis_calibration(seen[a][0], seen[a][1], cur[a], info[a][1], info[a][2])
-            if cal:
-                result[a] = cal
-        screen.write('\033[0m\033[2J')
+        session = AxesSession(dev)
+        screen = make_axes_screen()
+    except BaseException:
+        dev.close()
+        raise
+    try:
+        for step in ('move', 'rest'):
+            if run_step(screen, session, step) != 'next':
+                return 1
+        result = session.result()
         if not result:
-            screen.at(2, 2, 'No axis moved enough. Nothing was saved. Press Enter.')
-            wait_enter(screen, dev)
+            run_step(screen, session, 'nomove')
             return 1
-        screen.at(2, 2, 'New calibration (min .. max, dead zone):')
-        for i, (a, (lo, hi, flat)) in enumerate(sorted(result.items())):
-            screen.at(4 + i, 4, '%-8s %7d .. %-7d %d' % (ABS_NAMES.get(a, a), lo, hi, flat))
-        screen.at(6 + len(result), 2, 'Enter or a button saves. Esc discards.')
-        dev.events()
-        if not confirm(screen, dev):
+        if run_step(screen, session, 'result', result) != 'next':
             return 1
-        write_axes_conf(AXES_CONF, dev.ident, name, result)
+        write_axes_conf(AXES_CONF, dev.ident, session.name, result)
         apply(path)
+        # Ja salvo: os botoes e o force feedback sao so testes.
+        if session.buttons and run_step(screen, session, 'buttons') != 'next':
+            return 0
+        run_ff(screen, session)
         return 0
-    except Cancelled:
-        return 1
     finally:
         screen.restore()
         dev.close()

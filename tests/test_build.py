@@ -779,6 +779,23 @@ class PadKeysTests(unittest.TestCase):
         self.assertEqual(sent[2:], [(P.KEY_DOWN, 1), (P.KEY_DOWN, 0), (P.KEY_DOWN, 1)])
         self.assertLessEqual(keys.timeout(2.25, 0.5), P.REPEAT_DELAY)
 
+    def test_wheel_axes_are_not_arrows(self):
+        # Driving Force Pro (2026-11-16): sem mola o volante fica fora do
+        # centro e o acelerador solto descansa em 255; as setas seguravam
+        # sozinhas e o menu do Setup descia. No volante so o hat anda.
+        P = self.P
+        self.assertTrue(P.is_wheel(b'Logitech Logitech Driving Force Pro', set()))
+        self.assertTrue(P.is_wheel(b'Some Pad', {P.FF_AUTOCENTER}))
+        self.assertFalse(P.is_wheel(b'Microsoft X-Box 360 pad', {0x50, 0x51, 0x60}))
+        m = P.Mapper({P.ABS_X: (0, 16383), P.ABS_Y: (0, 255)}, wheel=True)
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_X, 14860), [])
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_Y, 255), [])
+        self.assertEqual(m.event(P.EV_ABS, P.ABS_HAT0X, 1), [(P.KEY_RIGHT, 1)])
+        self.assertEqual(m.event(P.EV_KEY, 0x120, 1), [(P.KEY_ENTER, 1)])
+        # Um joypad continua andando pelo analogico.
+        pad = P.Mapper({P.ABS_X: (-32768, 32767)})
+        self.assertEqual(pad.event(P.EV_ABS, P.ABS_X, 30000), [(P.KEY_RIGHT, 1)])
+
     def test_only_controllers_are_read(self):
         P = self.P
         self.assertTrue(P.is_pad(b'Xbox pad', {0x130, 0x131, 0x13b}))
@@ -1144,6 +1161,193 @@ class CalibrateTests(unittest.TestCase):
         self.assertEqual(self.C.EVIOCGID, 0x80084502)
         self.assertEqual(self.C.eviocsabs(0), 0x401845c0)
         self.assertEqual(self.C.eviocgabs(1), 0x80184541)
+        # O force feedback: EVIOCSFF com o struct ff_effect de 48 bytes.
+        self.assertEqual(self.C.EVIOCSFF, 0x40304580)
+        self.assertEqual(self.C.EVIOCRMFF, 0x40044581)
+
+    def test_wheel_center_is_the_middle_of_travel(self):
+        # Gabinete de um usuario (2026-11-16, Driving Force Pro sem mola): o
+        # repouso ficou em 1655 e 14860, onde a mao largou o volante. O centro
+        # do volante e o meio do curso de batente a batente, sem zona morta.
+        self.assertEqual(self.C.axis_calibration(62, 16383, 1655, 0, 16383, wheel=True), (62, 16383, 0))
+        self.assertEqual(self.C.axis_calibration(62, 16383, 14860, 0, 16383, wheel=True), (62, 16383, 0))
+        # Um eixo de outro controle largado a 30% do curso: o meio, nao uma
+        # faixa em volta do repouso que cortava um lado (0..9800).
+        self.assertEqual(self.C.axis_calibration(0, 16383, 4900, 0, 16383), (0, 16383, 164))
+        # O analogico com mola segue simetrico em volta do repouso.
+        self.assertEqual(self.C.axis_calibration(62, 16383, 8196, 0, 16383), (62, 16330, 163))
+        self.assertEqual(self.C.axis_kind(0, 0, 16383, 8129, True), 'wheel')
+        self.assertEqual(self.C.axis_kind(1, 0, 255, 255, True), 'pedal')
+        self.assertEqual(self.C.axis_kind(0, -32768, 32767, 120, False), 'center')
+        self.assertEqual(self.C.axis_fraction('pedal', 70, 0, 255, 255), (255 - 70) / 255)
+        self.assertEqual(self.C.axis_fraction('wheel', 0, 0, 16383, 0), -1.0)
+
+    def test_arrows_do_not_cancel_the_calibration(self):
+        # Girar o volante com o controle como teclado ligado mandava ESC [ D,
+        # e o ESC da seta cancelava ("sai do nada"). So um Esc sozinho cancela.
+        read = self.C.read_key
+        for data in (b'\x1b[D', b'\x1b[B\x1b[C', b'\x1bOA', b'\x1b[1;5C'):
+            self.assertEqual(read(data), '', data)
+        self.assertEqual(read(b'\x1b'), '\033')
+        self.assertEqual(read(b'\r'), '\n')
+        self.assertEqual(read(b'\x1b[B\n'), '\n')
+        self.assertEqual(read(b'q'), 'q')
+        # O Setup desliga o controle como teclado enquanto o calibrador roda.
+        screens = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
+        body = screens[screens.index('screen_calibrate() {'):]
+        body = body[:body.index('\n}\n')]
+        self.assertLess(body.index('padkeys_off'), body.index('"$CALIBRATE" axes'))
+        self.assertLess(body.index('"$CALIBRATE" axes'), body.index('padkeys_on'))
+        self.assertIn('FLIPEROS_CALIBRATE_GUI=$gui', body)
+        self.assertIn('gui-background', body)
+
+    def test_force_feedback_effect(self):
+        C = self.C
+        buf = C.ff_effect(C.FF_CONSTANT, 700, -0x5000)
+        self.assertEqual(len(buf), 48)
+        kind, eid, direction, _b, _i, length, delay = struct.unpack_from('<HhHHHHH', buf)
+        self.assertEqual((kind, eid, direction, length, delay), (C.FF_CONSTANT, -1, 0x4000, 700, 0))
+        self.assertEqual(struct.unpack_from('<h', buf, 16)[0], -0x5000)
+        sine = C.ff_effect(C.FF_PERIODIC, 900, 0x4000, period=60)
+        self.assertEqual(struct.unpack_from('<HHh', sine, 16), (C.FF_SINE, 60, 0x4000))
+        rumble = C.ff_effect(C.FF_RUMBLE, 900, strong=0xA000, weak=0x6000)
+        self.assertEqual(struct.unpack_from('<HH', rumble, 16), (0xA000, 0x6000))
+
+    def test_button_layout_follows_the_controller(self):
+        C = self.C
+        dfp = list(range(0x120, 0x12e))
+        family, symbols, slots = C.button_layout((0x046d, 0xc298), b'Logitech Logitech Driving Force Pro', dfp, True)
+        self.assertEqual((family, symbols), ('wheel', 'ps'))
+        self.assertEqual(slots[:4], ['cross', 'square', 'circle', 'triangle'])
+        self.assertEqual(slots[-2:], ['gear_up', 'gear_down'])
+        # Outro volante: os mesmos lugares, com o numero do botao.
+        family, symbols, slots = C.button_layout((0x044f, 0xb66e), b'Thrustmaster T300RS', list(range(0x120, 0x130)), True)
+        self.assertEqual((family, symbols, slots[0], slots[-1]), ('wheel', 'numbers', 'cross', None))
+        xbox = [0x130, 0x131, 0x133, 0x134, 0x136, 0x137, 0x13a, 0x13b, 0x13c, 0x13d, 0x13e]
+        self.assertEqual(C.button_layout((0x045e, 0x028e), b'Microsoft X-Box 360 pad', xbox, False)[:2], ('pad', 'xbox'))
+        self.assertEqual(C.button_layout((0x054c, 0x05c4), b'Sony Interactive Entertainment Wireless Controller',
+                                         xbox, False)[:2], ('pad', 'ps'))
+        self.assertEqual(C.button_layout((0x0079, 0x0006), b'DragonRise Generic USB Joystick',
+                                         list(range(0x120, 0x12a)), False), ('grid', 'numbers', [None] * 10))
+
+    def test_axes_session_hold_to_continue_and_button_test(self):
+        # Um toque acende o botao (o teste); segurar HOLD segundos avanca.
+        import types
+        from unittest import mock
+        C = self.C
+        r, w = os.pipe()
+        try:
+            events = []
+            dev = types.SimpleNamespace(
+                name=b'Logitech Logitech Driving Force Pro', path='/dev/input/event6', ident=(0x046d, 0xc298),
+                fd=r, abs={0, 1, 5, 0x10, 0x11}, is_wheel=lambda: True, analog_axes=lambda: [0, 1, 5],
+                absinfo=lambda a: {0: [8129, 0, 16383, 0, 0, 0], 1: [255, 0, 255, 0, 0, 0],
+                                   5: [255, 0, 255, 0, 0, 0]}[a],
+                buttons=lambda: list(range(0x120, 0x12e)))
+
+            def feed(*evs):
+                events.extend(evs)
+                os.write(w, b'x')
+
+            def read_events():
+                os.read(r, 64)
+                out = events[:]
+                events.clear()
+                return out
+            dev.events = read_events
+            with mock.patch.object(C, 'wheel_degrees', return_value=900), mock.patch.object(C, 'HOLD', 0.05):
+                s = C.AxesSession(dev)
+                self.assertEqual(s.kind, {0: 'wheel', 1: 'pedal', 5: 'pedal'})
+                feed((C.EV_ABS, 0, 0), (C.EV_ABS, 0, 16383), (C.EV_ABS, 1, 0), (C.EV_ABS, 1, 255))
+                self.assertIsNone(s.pump(0.01))
+                feed((C.EV_KEY, 0x122, 1))
+                self.assertIsNone(s.pump(0.01))
+                feed((C.EV_KEY, 0x122, 0))
+                self.assertEqual(s.pump(0.01), 'tap')
+                feed((C.EV_KEY, 0x120, 1))
+                s.pump(0.01)
+                time.sleep(0.06)
+                self.assertEqual(s.pump(0.01), 'next')
+                # Ainda segurado: nao avanca de novo ate soltar.
+                time.sleep(0.06)
+                self.assertIsNone(s.pump(0.01))
+                feed((C.EV_KEY, 0x120, 0))
+                self.assertIsNone(s.pump(0.01))
+                state = s.state('buttons')
+                self.assertEqual(state['buttons'][0], (False, True))
+                self.assertEqual(state['buttons'][2], (False, True))
+                self.assertEqual(state['layout']['slots'][0], 'cross')
+                self.assertEqual(s.result()[0], (0, 16383, 0))
+                self.assertEqual(s.result()[1], (0, 255, 0))
+                axes = {a['code']: a for a in state['axes']}
+                self.assertEqual(axes[0]['seen'], (-1.0, 1.0))
+                self.assertEqual(axes[1]['seen'], (0.0, 1.0))
+        finally:
+            os.close(r)
+            os.close(w)
+
+    def test_text_screen_fits_40_columns(self):
+        # O console de 320x240 tem 40x30: as linhas de 60 colunas quebravam.
+        C = self.C
+        screen = C.Screen.__new__(C.Screen)
+        screen.out, screen.cols, screen.rows = io.StringIO(), 40, 30
+        axes = [{'code': 0, 'kind': 'wheel', 'label': 'WHEEL', 'frac': -0.5, 'seen': (-0.9, 0.8)},
+                {'code': 1, 'kind': 'pedal', 'label': 'PEDAL Y', 'frac': 0.7, 'seen': (0.0, 1.0)}]
+        base = {'name': 'Logitech Logitech Driving Force Pro', 'wheel': True, 'degrees': 900, 'hold': 0.5,
+                'axes': axes, 'buttons': [(i == 2, i < 4) for i in range(14)], 'hat': (0, 0), 'ff': None,
+                'result': [('WHEEL', 0, 16383, 0)], 'text': C.AxesSession.STEPS['move'][0],
+                'keys': C.AxesSession.STEPS['move'][2]}
+        for step in ('move', 'result', 'buttons'):
+            screen.drawn, screen.last_step = 0, None
+            screen.out = io.StringIO()
+            screen.axes(dict(base, step=step))
+            for row, col, text in re.findall(r'\x1b\[(\d+);(\d+)H([^\x1b]*(?:\x1b\[[0-9;]*m[^\x1b]*)*)',
+                                             screen.out.getvalue()):
+                plain = re.sub(r'\x1b\[[0-9;]*m', '', text)
+                self.assertLessEqual(int(col) + len(plain) - 1, 40, (step, row, plain))
+
+    def test_wheel_screen_draws_every_step(self):
+        # A tela grafica (gui/wheelscreen.py), deitada e em pe: o volante, os
+        # pedais, a tela dos botoes de cada familia e o force feedback.
+        try:
+            import pygame  # noqa: F401
+        except ImportError:
+            self.skipTest('pygame')
+        script = r'''
+import os, sys
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+sys.path.insert(0, sys.argv[1])
+import pygame, wheelscreen, theme as T
+pygame.display.init(); pygame.display.set_mode((1, 1))
+screen = wheelscreen.WheelScreen(window=False)
+screen.fixed_time = 3.0
+slots = ["cross", "square", "circle", "triangle", "r1", "l1", "r2", "l2", "select", "start", "r3", "l3",
+         "gear_up", "gear_down"]
+axes = [{"code": 0, "kind": "wheel", "label": "WHEEL", "frac": -0.5, "seen": (-0.9, 0.8)},
+        {"code": 1, "kind": "pedal", "label": "PEDAL Y", "frac": 0.7, "seen": (0.0, 1.0)},
+        {"code": 5, "kind": "pedal", "label": "PEDAL RZ", "frac": 0.0, "seen": (0.0, 0.5)}]
+layouts = [("wheel", "ps", slots), ("wheel", "numbers", slots + [None]), ("pad", "xbox",
+           ["south", "east", "north", "west", "tl", "tr", "select", "start", "mode", "thumbl", "thumbr"]),
+           ("grid", "numbers", [None] * 10)]
+for family, symbols, sl in layouts:
+    for step in ("move", "rest", "result", "nomove", "buttons", "ff"):
+        state = {"name": "Logitech Logitech Driving Force Pro", "step": step, "wheel": family == "wheel",
+                 "degrees": 900, "text": ["Some text for the step."], "keys": [("HOLD", "NEXT")], "hold": 0.4,
+                 "axes": axes, "buttons": [(i == 1, i < 3) for i in range(len(sl))], "hat": (-1, 0),
+                 "layout": {"family": family, "symbols": symbols, "slots": sl},
+                 "result": [("WHEEL", 0, 16383, 0)],
+                 "ff": {"phase": 1, "phases": [("pull", -1), ("pull", 0), ("shake", 0)]}}
+        frame = screen.render(state)
+        assert frame.get_size() == (T.WIDTH, T.HEIGHT), frame.get_size()
+assert wheelscreen.plain_name("Logitech Logitech Driving Force Pro") == "Logitech Driving Force Pro"
+print("ok", T.WIDTH, T.HEIGHT)
+'''
+        for orientation, size in (('horizontal', '320 240'), ('vertical-cw', '240 320')):
+            env = dict(os.environ, FLIPEROS_GUI_ORIENTATION=orientation, FLIPEROS_GUI_BG='stars')
+            out = subprocess.run([sys.executable, '-c', script, str(ROOT / 'fliperos-setup/gui')],
+                                 capture_output=True, text=True, env=env, timeout=120)
+            self.assertEqual(out.returncode, 0, out.stderr[-2000:])
+            self.assertIn('ok ' + size, out.stdout)
 
     def test_wired_into_the_setup_and_udev(self):
         rules = (ROOT / 'config/99-fliperos-input.rules').read_text()

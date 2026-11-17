@@ -7036,12 +7036,23 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p>The rest of the controls: calibrating a wheel, pedals or an analog stick, joysticks on the parallel port, fixes for USB devices that arrive wrong, and how the emulators see a controller through SDL.</p>
 <h2 id="Wheels-and-quirks-calibrate-wheel-pedals-or-analog-stick">Calibrate wheel, pedals or analog stick</h2>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/calibration.webp" width="480" alt="Choosing the wheel or pedals to calibrate"></p>
-<p><strong>Setup &gt; Joysticks &gt; Calibrate wheel, pedals or analog stick.</strong> Pick the device; its axes show live.</p>
+<p><strong>Setup &gt; Joysticks &gt; Calibrate wheel, pedals or analog stick.</strong> Pick the device. In the graphical Setup it is drawn over the menu's background: the wheel turns with yours (in degrees, when the driver says how far it turns), the pedals fill up, and a yellow mark shows how far each one has gone.</p>
 <ol>
-<li>Turn the wheel from end to end, and press each pedal all the way.</li>
-<li>Leave everything at rest.</li>
+<li>Turn the wheel lock to lock and push each pedal all the way.</li>
+<li>Release the pedals.</li>
+<li>Hold a button to save.</li>
+<li>Press every button: each one lights up where it is on a drawing of the controller (the wheel, a joypad, or rows of buttons for a panel) and turns green once it worked.</li>
+<li>Force feedback: the wheel pulls to one side, then the other, then shakes (a joypad only vibrates). Tap a button to play it again.</li>
 </ol>
-<p>An axis that rests in the middle (a wheel, an analog stick) gets a range centred on its rest position, so the centre gives 0 and both sides reach the end, with a 1% dead zone. A pedal keeps the range it showed. The calibration is reapplied every time the device is plugged in.</p>
+<p>Hold any button of the controller for one second to go on; a short tap only lights the button. Esc on the keyboard cancels.</p>
+<h3 id="Wheels-and-quirks-how-it-works">How it works</h3>
+<ul>
+<li><strong>Wheel:</strong> the travel from lock to lock, centred in the middle of it, with no dead zone. A wheel without a centring spring stays wherever the hand leaves it, so its resting point is not used.</li>
+<li><strong>Analog stick:</strong> a range centred on where it rests, so the centre gives 0 and both sides reach the end, with a 1% dead zone.</li>
+<li><strong>Pedal:</strong> the range it showed.</li>
+<li>The calibration is reapplied every time the device is plugged in.</li>
+<li>While it runs, the controller stops working as a keyboard for the menus: turning the wheel used to send arrow keys, and the calibration took them as Esc and closed. In the menus a wheel moves only with its d-pad and buttons.</li>
+</ul>
 <h2 id="Wheels-and-quirks-lpt-joysticks">LPT joysticks</h2>
 <p><strong>Setup &gt; Joysticks &gt; LPT joysticks</strong>: joysticks and pads on the <strong>parallel port</strong>, through the kernel's own drivers.</p>
 <table>
@@ -7114,7 +7125,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p>SDL reads the mappings when a program opens: a controller connected for the first time with RetroArch open works correctly after reopening it.</p>
 <h3 id="Wheels-and-quirks-retroarchs-joypad-driver">RetroArch's joypad driver</h3>
 <p>RetroArch can use <code>udev</code> (the default, showing each button's real number in its menu) or <code>sdl2</code> (<strong>Drivers &gt; Input</strong>), where the same mappings as the other emulators apply. Its menu always names the buttons after the RetroPad's (A, B, X, Y…); with an arcade core open, <strong>Quick Menu &gt; Controls</strong> shows the game's names.</p>
-<h2 id="Wheels-and-quirks-how-it-works">How it works</h2>
+<h2 id="Wheels-and-quirks-how-it-works_1">How it works</h2>
 <ul>
 <li><strong>Calibration:</strong> <code>config/fliperos-calibrate axes</code>, saved to <code>/etc/fliperos/calibration.conf</code> (one line per axis) and reapplied by udev on every connection.</li>
 <li><strong>LPT:</strong> <code>/etc/modprobe.d/fliperos-lpt.conf</code> has the module options and <code>blacklist lp</code> (the printer driver would claim the port), and <code>/etc/modules-load.d/fliperos-lpt.conf</code> loads it at boot. The kernel finds the port itself (<code>parport_pc</code>). The screen is <code>screens/lpt.sh</code>.</li>

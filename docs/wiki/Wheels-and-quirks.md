@@ -4,12 +4,23 @@ The rest of the controls: calibrating a wheel, pedals or an analog stick, joysti
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/calibration.webp" width="480" alt="Choosing the wheel or pedals to calibrate">
 
-**Setup > Joysticks > Calibrate wheel, pedals or analog stick.** Pick the device; its axes show live.
+**Setup > Joysticks > Calibrate wheel, pedals or analog stick.** Pick the device. In the graphical Setup it is drawn over the menu's background: the wheel turns with yours (in degrees, when the driver says how far it turns), the pedals fill up, and a yellow mark shows how far each one has gone.
 
-1. Turn the wheel from end to end, and press each pedal all the way.
-2. Leave everything at rest.
+1. Turn the wheel lock to lock and push each pedal all the way.
+2. Release the pedals.
+3. Hold a button to save.
+4. Press every button: each one lights up where it is on a drawing of the controller (the wheel, a joypad, or rows of buttons for a panel) and turns green once it worked.
+5. Force feedback: the wheel pulls to one side, then the other, then shakes (a joypad only vibrates). Tap a button to play it again.
 
-An axis that rests in the middle (a wheel, an analog stick) gets a range centred on its rest position, so the centre gives 0 and both sides reach the end, with a 1% dead zone. A pedal keeps the range it showed. The calibration is reapplied every time the device is plugged in.
+Hold any button of the controller for one second to go on; a short tap only lights the button. Esc on the keyboard cancels.
+
+### How it works
+
+- **Wheel:** the travel from lock to lock, centred in the middle of it, with no dead zone. A wheel without a centring spring stays wherever the hand leaves it, so its resting point is not used.
+- **Analog stick:** a range centred on where it rests, so the centre gives 0 and both sides reach the end, with a 1% dead zone.
+- **Pedal:** the range it showed.
+- The calibration is reapplied every time the device is plugged in.
+- While it runs, the controller stops working as a keyboard for the menus: turning the wheel used to send arrow keys, and the calibration took them as Esc and closed. In the menus a wheel moves only with its d-pad and buttons.
 
 ## LPT joysticks
 

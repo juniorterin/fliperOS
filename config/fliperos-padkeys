@@ -26,6 +26,7 @@ import errno
 import fcntl
 import glob
 import os
+import re
 import select
 import struct
 import time
@@ -102,6 +103,18 @@ BTN_LEFT = 0x110
 
 def is_pad(name, keys):
     return name != NAME and BTN_LEFT not in keys and bool(keys.intersection(PAD_BUTTONS))
+
+
+# Volante: tem o centramento do force feedback, ou o nome diz. Nele so o
+# direcional (hat) e os botoes andam pelo menu: o volante sem mola fica fora
+# do centro e o pedal solto descansa numa ponta, e as setas seguravam sozinhas
+# (o menu do Setup descia sem ninguem tocar; visto num Driving Force Pro).
+EV_FF, FF_AUTOCENTER = 0x15, 0x61
+WHEEL_NAME = re.compile(rb'wheel|racing|driving|steering|formula', re.I)
+
+
+def is_wheel(name, ff):
+    return FF_AUTOCENTER in ff or bool(WHEEL_NAME.search(name))
 
 
 # ── O Button mapping (Setup > Joysticks) ────────────────────────────
@@ -192,10 +205,12 @@ class Mapper:
     """Eventos de um controle -> [(tecla, 1 apertou / 0 soltou)]; buttons e
     {codigo: tecla} (o do Button mapping, ou BUTTONS)."""
 
-    def __init__(self, ranges, buttons=None):
+    def __init__(self, ranges, buttons=None, wheel=False):
         self.ranges = ranges  # eixo -> (minimo, maximo), do EVIOCGABS
         self.held = {}        # eixo -> tecla que ele segura agora
         self.buttons = buttons or BUTTONS
+        # O volante (is_wheel): so o hat; o giro e os pedais ficam de fora.
+        self.axes = {a: k for a, k in AXES.items() if a in (ABS_HAT0X, ABS_HAT0Y)} if wheel else AXES
 
     def direction(self, axis, value):
         if axis in (ABS_HAT0X, ABS_HAT0Y):
@@ -217,8 +232,8 @@ class Mapper:
         if etype == EV_KEY and code in self.buttons:
             # 2 e a repeticao do proprio controle: a nossa vem de Keys.
             return [(self.buttons[code], value)] if value in (0, 1) else []
-        if etype == EV_ABS and code in AXES:
-            negative, positive = AXES[code]
+        if etype == EV_ABS and code in self.axes:
+            negative, positive = self.axes[code]
             new = {-1: negative, 0: None, 1: positive}[self.direction(code, value)]
             old = self.held.get(code)
             if new == old:
@@ -330,9 +345,11 @@ class Pad:
         try:
             name = bytearray(256)
             fcntl.ioctl(self.fd, EVIOCGNAME, name)
+            name = bytes(name).split(b'\0')[0]
             keys = bits(self.fd, EV_KEY, 0x300)
-            if not is_pad(bytes(name).split(b'\0')[0], keys):
+            if not is_pad(name, keys):
                 raise ValueError('nao e controle')
+            wheel = is_wheel(name, bits(self.fd, EV_FF, 0x80))
             ranges = {}
             for axis in bits(self.fd, EV_ABS, 0x40) & {ABS_X, ABS_Y}:
                 info = bytearray(24)
@@ -345,7 +362,7 @@ class Pad:
         except (OSError, ValueError):
             os.close(self.fd)
             raise
-        self.mapper = Mapper(ranges, mapped_buttons(keys, device_port(path), ids, players))
+        self.mapper = Mapper(ranges, mapped_buttons(keys, device_port(path), ids, players), wheel)
 
     def read(self):
         """Eventos pendentes; OSError quando o controle foi desligado."""

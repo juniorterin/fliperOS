@@ -627,7 +627,9 @@ screen_calibrate_guns() {
 
 # screen_calibrate axes escolhe o volante, pedal ou analogico e roda o
 # calibrador, que desenha a propria tela. A pistola tem a sua
-# (screen_calibrate_guns).
+# (screen_calibrate_guns). O controle como teclado (padkeys) fica desligado
+# enquanto ele roda: girar o volante virava seta (ESC [ D), o calibrador lia o
+# ESC como cancelar e saia sozinho (gabinete de um usuario, 2026-11-16).
 screen_calibrate() {
   local found=() entries=() line path name dev title="Calibration"
   mapfile -t found < <("$CALIBRATE" list axes 2> /dev/null)
@@ -644,15 +646,28 @@ screen_calibrate() {
   else
     dev=$(ui_menu "$title" "Which one?" "" "${entries[@]}") || return 0
   fi
-  ui_yesno "$title" "Move every axis to its limits (wheel to both sides, each pedal all the way), then leave everything at rest. The values show live on the screen." \
+  ui_yesno "$title" "Move every axis to its limits (wheel lock to lock, each pedal all the way), then release the pedals. Hold any button of the controller to go on. Then a test of the buttons and of the force feedback." \
     || return 0
   ui_clear
-  if ui_text "$CALIBRATE" axes "$dev" < /dev/tty > /dev/tty 2>&1; then
-    ui_palette > /dev/tty
+  # Na interface grafica, a tela do calibrador e a dela (gui/wheelscreen.py),
+  # em pe se o monitor esta, com o fundo animado que o menu sorteou.
+  local gui=0 bg=""
+  if ui_gui_alive; then
+    gui=1
+    bg=$(cat "$(dirname "$UI_GUI_DIR")/gui-background" 2> /dev/null)
+  fi
+  padkeys_off
+  local rc=0
+  FLIPEROS_CALIBRATE_GUI=$gui FLIPEROS_GUI_DIR=$SETUP_DIR/gui FLIPEROS_GUI_BG=$bg \
+    FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
+    ui_text "$CALIBRATE" axes "$dev" < /dev/tty > /dev/tty 2>&1 || rc=1
+  padkeys_on
+  ui_palette > /dev/tty
+  ui_flush_input
+  if ((rc == 0)); then
     log_info "calibracao axes salva: $dev"
     ui_msg "$title" "Calibration saved. It is applied again every time the controller is connected."
   else
-    ui_palette > /dev/tty
     ui_msg "$title" "Nothing was saved."
   fi
   ui_flush_input
