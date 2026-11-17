@@ -12042,9 +12042,11 @@ class TerminalThemeTests(unittest.TestCase):
 class EmulatorMenuTests(unittest.TestCase):
     """Emuladores no menu do LXDE: saem do desktop pelo fliperos-launch."""
 
-    # So os de jogos (Game;): o Desktop Resolution fica em Preferencias.
+    # So os de jogos (Game;): o Desktop Resolution fica em Preferencias. O
+    # PortProton e um programa do desktop, como o Steam: abre ali mesmo
+    # (test_portproton_on_the_desktop).
     APPS = sorted(p for p in (ROOT / 'config/applications').glob('fliperos-*.desktop')
-                  if 'Categories=Game;' in p.read_text())
+                  if 'Categories=Game;' in p.read_text() and p.stem != 'fliperos-portproton')
     # O que mostra o atalho (TryExec): o binario do emulador; o do Model 2 e
     # o lancador, que avisa quando falta o Wine (Setup > Games > Extras) ou o
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
@@ -13114,6 +13116,38 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('portproton) echo "Wine and Proton made for games: runs Windows custom games."', extras)
         self.assertIn('portproton) echo "PortProton runs the Windows games of Setup > Games > Custom games', extras)
         self.assertTrue((ROOT / 'fliperos-setup/gui/icons/portproton.png').is_file())
+
+    def test_portproton_on_the_desktop(self):
+        """Instalado, o PortProton aparece no desktop: no menu (Jogos), pelo
+        TryExec do start.sh na home, tambem para quem ja o tinha, e com o
+        atalho na area de trabalho de quem o instala agora."""
+        entry = (ROOT / 'config/applications/fliperos-portproton.desktop').read_text()
+        self.assertIn('Exec=/opt/fliperos/bin/fliperos-portproton gui %f', entry)
+        self.assertIn('TryExec=/home/fliperos/PortProton/data/scripts/start.sh', entry)
+        self.assertIn('Icon=/usr/local/share/pixmaps/fliperos-portproton.png', entry)
+        self.assertIn('Categories=Game;', entry)
+        self.assertTrue((ROOT / 'config/icons/fliperos-portproton.png').is_file())
+        tool = (ROOT / 'config/fliperos-portproton').read_text()
+        install = tool.split('\ncmd_install() {')[1].split('\n}\n')[0]
+        self.assertLess(install.index('desktop_icon'), install.index('say 100 "PortProton installed"'))
+        self.assertIn('  gui) shift; cmd_gui "$@" ;;', tool)
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / 'PortProton/data/scripts').mkdir(parents=True)
+            (home / 'PortProton/data/tmp/libs_v5').mkdir(parents=True)
+            start = home / 'PortProton/data/scripts/start.sh'
+            start.write_text('echo "start $*" > "$HOME/ran"\n')
+            env = dict(os.environ, FLIPEROS_PORTPROTON_HOME=str(home), FLIPEROS_USER=subprocess.run(['id', '-un'], capture_output=True, text=True).stdout.strip(),
+                       FLIPEROS_PORTPROTON_CURL=tmp + '/none')
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-portproton'), 'gui'], env=env,
+                                 capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertEqual((home / 'ran').read_text().strip(), 'start')
+            shutil.rmtree(home / 'PortProton/data/tmp')
+            out = subprocess.run(['bash', str(ROOT / 'config/fliperos-portproton'), 'gui'], env=env,
+                                 capture_output=True, text=True)
+            self.assertNotEqual(out.returncode, 0)
+            self.assertIn('Setup > Games > Extras > PortProton', out.stderr)
 
     def test_wine_staging_from_winehq_in_place_of_wine(self):
         branch = EXTRAS.split('\n    wine-staging)\n')[1].split(';;')[0]

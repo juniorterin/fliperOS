@@ -10,6 +10,7 @@
 #   fliperos-portproton versions               "VALOR|rotulo" de cada Wine
 #   fliperos-portproton edit-db EXE VAR=VALOR  grava o EXE.ppdb
 #   fliperos-portproton run EXE                abre o jogo (no X dele)
+#   fliperos-portproton gui [EXE]              a janela do PortProton (desktop)
 #
 # O instalador oficial so funciona com janelas (yad): aqui os scripts do
 # PortWINE vao direto para ~/PortProton/data, numa versao fixa (commit e
@@ -133,6 +134,7 @@ cmd_install() {
   wait "$watcher" 2> /dev/null
   rm -rf "$tmp"
   cmd_check || fail "PortProton did not finish its first download (details in the log)"
+  desktop_icon
   say 100 "PortProton installed"
 }
 
@@ -183,6 +185,25 @@ cmd_run() {
   as_player bash "$START" cli --launch "$exe"
 }
 
+# cmd_gui [EXE]: a janela do PortProton (o menu do desktop, Jogos >
+# PortProton, e o atalho na area de trabalho), ou a de um .exe aberto por ele.
+cmd_gui() {
+  local exe
+  cmd_check || fail "PortProton is not installed (Setup > Games > Extras > PortProton)"
+  [[ -n ${1:-} ]] && exe=$(readlink -f "$1")
+  as_player bash "$START" ${exe:+"$exe"}
+}
+
+# desktop_icon: o atalho na area de trabalho do jogador, como o do instalador
+# oficial (o menu do desktop ja o traz pelo TryExec do
+# config/applications/fliperos-portproton.desktop).
+DESKTOP_ENTRY=${FLIPEROS_PORTPROTON_DESKTOP:-/usr/local/share/applications/fliperos-portproton.desktop}
+desktop_icon() {
+  [[ -f $DESKTOP_ENTRY ]] || return 0
+  as_player sh -c 'mkdir -p "$HOME/Desktop" && cp "$1" "$HOME/Desktop/portproton.desktop" &&
+    chmod 755 "$HOME/Desktop/portproton.desktop"' sh "$DESKTOP_ENTRY" >&2 || true
+}
+
 for arg in "$@"; do
   [[ $arg == --progress ]] && progress=1
 done
@@ -192,8 +213,9 @@ case ${1:-} in
   versions) cmd_versions ;;
   edit-db) shift; cmd_edit_db "$@" ;;
   run) shift; cmd_run "$@" ;;
+  gui) shift; cmd_gui "$@" ;;
   *)
-    sed -n '7,11p' "$0" | sed 's/^# *//' >&2
+    sed -n '7,12p' "$0" | sed 's/^# *//' >&2
     exit 1
     ;;
 esac

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PortProton
+GenericName=Windows games (Wine and Proton)
+Comment=Run Windows games and launchers with Wine and Proton builds made for games
+Exec=/opt/fliperos/bin/fliperos-portproton gui %f
+TryExec=/home/fliperos/PortProton/data/scripts/start.sh
+Icon=/usr/local/share/pixmaps/fliperos-portproton.png
+Terminal=false
+Categories=Game;
+MimeType=application/x-ms-dos-executable;application/x-msi;

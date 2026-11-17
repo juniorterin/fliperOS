@@ -88,7 +88,7 @@ Programs left out of the ISO, so it fits in a single GitHub file, installed over
 | --- | --- |
 | **Wine** | The Windows emulators of Fightcade 2, and Windows games ([Emulators](Windows-games.md)) |
 | **Wine Staging** | The newest Wine, with game fixes not in Wine yet |
-| **PortProton** | Wine and Proton builds made for games, for the Windows games in Custom games; about 3 GB ([Custom games](Custom-games.md#windows-games-portproton)) |
+| **PortProton** | Wine and Proton builds made for games, for the Windows games in Custom games and on the desktop (menu Games > PortProton, plus an icon); about 3 GB ([Custom games](Custom-games.md#windows-games-portproton)) |
 | **Steam** | Steam games, inside the desktop |
 | **Heroic** | GOG, Epic and Amazon games, inside the desktop |
 | **Pixelcade** | The LED/LCD marquee software (closed source) ([Pixelcade](Pixelcade.md)) |

@@ -44,7 +44,7 @@ extras_hint() {
 
 extras_done() {
   case $1 in
-    portproton) echo "Windows custom games open in it from now on." ;;
+    portproton) echo "On the desktop it is in the menu (Games > PortProton) and has an icon. Windows custom games open in it from now on." ;;
     zedmd) echo "If the display stays on its logo, its firmware is older than 5.1: update it (FliperOS wiki, Frontends page)." ;;
   esac
 }
