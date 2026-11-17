@@ -8060,9 +8060,16 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertIn('cgTestPanel(row)', test)
         panel = js.split('function cgTestPanel(')[1].split('\n}\n')[0]
         self.assertIn('t("cg_test_keys")', panel)
-        self.assertIn('"/api/customgames/capture?kind=" + kind', panel)
+        self.assertIn('cgCaptureArt(row, kind, say)', panel)
         self.assertIn('capture("snap")', panel)
         self.assertIn('capture("video")', panel)
+        # A captura, num lugar so, e a bandeja da arte (escolher um arquivo, ou capturar com o jogo do teste na tela).
+        self.assertIn('"/api/customgames/capture?kind=" + kind', js.split('async function cgCaptureArt(')[1].split('\n}\n')[0])
+        cards = js.split('function cgArtCards(')[1].split('\n}\n')[0]
+        self.assertIn('st.fps.program === cg.testApp', cards)
+        self.assertIn('class: "cg-tray"', cards)
+        self.assertIn('cgCaptureArt(row, capKind', cards)
+        self.assertIn('out.art = pkg ? cgArtCards(row, changed) : cgArt(row, changed);', js)
 
     def test_package_cards_read_the_zips(self):
         # Os cartoes: o fliperos-customgame packages (JSON) e a midia de

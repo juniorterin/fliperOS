@@ -544,14 +544,14 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-mode select { flex: 0 0 auto; width: auto; }
 .cg-mode input { flex: 1; min-width: 90px; }
 .cg-mode > input[hidden] { display: none; }
-:where(.sub, .cg-dialog) .cg-ctl { width: 100%; text-align: left; padding: 6px 8px; font-size: 13px; font-weight: 500; background: transparent;
+:where(.sub, .cg-dialog, .cg-area) .cg-ctl { width: 100%; text-align: left; padding: 6px 8px; font-size: 13px; font-weight: 500; background: transparent;
   color: var(--fg); border: 1px solid transparent; border-radius: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-:where(.sub, .cg-dialog) .cg-ctl:hover { background: var(--raise); border-color: var(--hair); }
+:where(.sub, .cg-dialog, .cg-area) .cg-ctl:hover { background: var(--raise); border-color: var(--hair); }
 .cg-art { display: flex; gap: 6px; flex-wrap: wrap; }
 .cg-slot { display: inline-flex; align-items: center; gap: 2px; }
-:where(.sub, .cg-dialog) .cg-artbtn { display: inline-flex; align-items: center; gap: 6px; max-width: 150px; padding: 5px 8px; font-size: 12px;
+:where(.sub, .cg-dialog, .cg-area) .cg-artbtn { display: inline-flex; align-items: center; gap: 6px; max-width: 150px; padding: 5px 8px; font-size: 12px;
   font-weight: 500; background: transparent; color: var(--dim); border: 1px dashed var(--hair); border-radius: 10px; overflow: hidden; }
-:where(.sub, .cg-dialog) .cg-artbtn.on { border-style: solid; border-color: var(--green); color: var(--fg); }
+:where(.sub, .cg-dialog, .cg-area) .cg-artbtn.on { border-style: solid; border-color: var(--green); color: var(--fg); }
 .cg-artbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cg-artbtn img { width: 44px; height: 33px; object-fit: cover; border-radius: 4px; }
 /* Tirar a arte (o X): do tamanho do botao dela, sem moldura; numa tela de
@@ -561,7 +561,7 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-slot .icon-btn.small svg.g { width: 10px; height: 10px; }
 @media (hover: none) { .cg-slot .icon-btn.small { width: 30px; height: 30px; } }
 /* O que veio com a pasta do jogo (a estrutura do pacote). */
-:where(.sub, .cg-dialog) .cg-artbtn.on.found { border-color: var(--purple); }
+:where(.sub, .cg-dialog, .cg-area) .cg-artbtn.on.found { border-color: var(--purple); }
 .cg-chip { font-size: 12px; white-space: nowrap; }
 .cg-artwine { display: grid; gap: 6px; }
 /* O exe e o runner (PortProton, Wine, Wine Staging) do jogo do Windows, um embaixo do outro. */
@@ -590,7 +590,7 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
   .cg-table td.num { grid-column: 1 / -1; width: auto; font-weight: 650; color: var(--pink); }
   .cg-table td.num::before { display: none; }
   .cg-table :is(.c-name, .c-folder, .c-run, .c-category, .c-art, .c-act) { grid-column: 1 / -1; }
-  .cg-table :is(input, select), :where(.sub) .cg-ctl { background: var(--raise); border-color: var(--hair); }
+  .cg-table :is(input, select), :where(.sub, .cg-area) .cg-ctl { background: var(--raise); border-color: var(--hair); }
   .cg-table tr.cg-none { display: block; }
   .cg-default { width: 100%; margin-right: 0; }
 }
@@ -615,3 +615,37 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-field > span { font-size: 12.5px; color: var(--dim); }
 .cg-f-name, .cg-f-folder, .cg-f-run, .cg-f-category, .cg-f-art, .cg-f-controls, .cg-f-text, .cg-one .cg-ppnote { grid-column: 1 / -1; }
 @media (max-width: 520px) { .cg-one { grid-template-columns: minmax(0, 1fr); } }
+
+/* Criar pacote: a arte em cartoes, imagem e video lado a lado, e a bandeja
+   (escolher um arquivo, ou capturar o jogo em teste). */
+.cg-artcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cg-artcards > .cg-artfile { align-self: center; }
+.cg-acard { position: relative; min-width: 0; }
+.cg-abtn { display: grid; width: 100%; padding: 0; overflow: hidden; border: 1px dashed var(--line); border-radius: 14px; background: var(--surface);
+  color: var(--fg); font-weight: 500; text-align: left; cursor: pointer; transition: border-color .15s, transform .15s; }
+.cg-abtn:hover { border-color: var(--purple); transform: translateY(-1px); }
+.cg-acard.on .cg-abtn { border-style: solid; border-color: rgba(80, 250, 123, .45); }
+.cg-acard.found .cg-abtn { border-color: var(--purple); }
+.cg-apreview { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; overflow: hidden; background: var(--bg-deep); }
+.cg-acard.logo .cg-apreview, .cg-acard.text .cg-apreview { aspect-ratio: 16 / 5; }
+.cg-apreview > img, .cg-apreview > video { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.cg-acard.logo .cg-apreview > img { box-sizing: border-box; padding: 8px; object-fit: contain; image-rendering: auto; }
+.cg-apreview > svg { width: 30px; height: 30px; color: var(--dim); opacity: .75; }
+.cg-acard.on .cg-apreview > svg { color: var(--green); }
+.cg-aprog { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--fg); }
+.cg-ainfo { display: grid; gap: 1px; min-width: 0; padding: 9px 12px 10px; }
+.cg-ainfo b { font-size: 13.5px; font-weight: 650; }
+.cg-ainfo small { overflow: hidden; font-size: 12px; color: var(--dim); text-overflow: ellipsis; white-space: nowrap; }
+.cg-adrop { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0;
+  border-radius: 8px; background: rgba(11, 11, 18, .82); color: var(--fg); cursor: pointer; }
+.cg-adrop:hover { color: var(--bad); }
+.cg-adrop svg.g { width: 10px; height: 10px; }
+.cg-tray { position: absolute; z-index: 30; top: calc(100% - 6px); left: 0; right: 0; display: grid; gap: 4px; min-width: 250px; padding: 6px;
+  border: 1px solid var(--hair); border-radius: 14px; background: var(--raise); box-shadow: 0 14px 34px rgba(0, 0, 0, .55); }
+.cg-tray-item { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: 10px; padding: 9px 10px; border: 0;
+  border-radius: 10px; background: transparent; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.cg-tray-item:hover:not(:disabled), .cg-tray-item:focus-visible { background: var(--surface); }
+.cg-tray-item:disabled { opacity: .55; cursor: default; }
+.cg-tray-item svg { width: 18px; height: 18px; }
+.cg-tray-item b { display: block; font-size: 13.5px; font-weight: 650; }
+.cg-tray-item small { display: block; font-size: 12px; line-height: 1.35; color: var(--dim); }

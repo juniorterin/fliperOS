@@ -295,16 +295,16 @@ body[data-area="system"] .subtabs-bar, .area[data-area="system"] { max-width: va
 /* Com :where, estas regras gerais valem menos que qualquer classe: o azulejo
    do Filtro de ROMs ou o botao de apagar dos Arquivos ficam com o estilo
    deles. */
-:where(.sub) :is(h1, h2, h3) { margin: 0 0 12px; font-weight: 650; }
-:where(.sub) h2 { font: 11px/1.5 var(--px); color: var(--pink); letter-spacing: .02em; }
-:where(.sub) h3 { font-size: 13px; color: var(--purple); margin-top: 18px; }
+:where(.sub, .cg-area) :is(h1, h2, h3) { margin: 0 0 12px; font-weight: 650; }
+:where(.sub, .cg-area) h2 { font: 11px/1.5 var(--px); color: var(--pink); letter-spacing: .02em; }
+:where(.sub, .cg-area) h3 { font-size: 13px; color: var(--purple); margin-top: 18px; }
 .big { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .error { color: var(--red); min-height: 1.2em; }
-:where(.sub) :is(button, select, input, textarea) { font: inherit; color: var(--fg); background: var(--bg-deep);
+:where(.sub, .cg-area) :is(button, select, input, textarea) { font: inherit; color: var(--fg); background: var(--bg-deep);
   border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; }
-:where(.sub) button { cursor: pointer; background: var(--purple); color: #191a21; border-color: var(--purple); font-weight: 650; }
-:where(.sub) button:where(.ghost) { background: transparent; color: var(--fg); border-color: var(--line); font-weight: 500; }
-:where(.sub) input:is([type="checkbox"], [type="range"]) { padding: 0; accent-color: var(--pink); }
+:where(.sub, .cg-area) button { cursor: pointer; background: var(--purple); color: #191a21; border-color: var(--purple); font-weight: 650; }
+:where(.sub, .cg-area) button:where(.ghost) { background: transparent; color: var(--fg); border-color: var(--line); font-weight: 500; }
+:where(.sub, .cg-area) input:is([type="checkbox"], [type="range"]) { padding: 0; accent-color: var(--pink); }
 /* Respiro: mais espaco dentro dos cartoes e entre o que vai neles. */
 .sub .card { padding: 22px 24px; border-radius: 18px; }
 .sub .card > * + * { margin-top: 14px; }

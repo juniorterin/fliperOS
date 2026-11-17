@@ -353,7 +353,7 @@ function cgDialog() {
 }
 
 function cgField(name, control) {
-  return el("label", { class: "cg-field cg-f-" + name }, el("span", {}, t("cg_f_" + name)), control);
+  return el(name === "art" ? "div" : "label", { class: "cg-field cg-f-" + name }, el("span", {}, t("cg_f_" + name)), control);
 }
 
 // ── Adicionar um jogo: a tabela com uma linha, num dialogo ──
@@ -819,6 +819,7 @@ async function cgTest(button) {
     const out = await res.json().catch(() => ({}));
     if (!res.ok) { status.replaceChildren(el("span", { class: "error" }, out.error || res.statusText)); return; }
     status.replaceChildren(el("span", {}, t("cg_test_opening").replace("%s", row.name)));
+    cg.testApp = out.app;
     // Ate 2 minutos: um jogo do Windows pode demorar (o PortProton).
     for (let i = 0; i < 60; i++) {
       await sleep(2000);
@@ -835,6 +836,136 @@ async function cgTest(button) {
   }
 }
 
+// Captura a tela do gabinete (a foto, ou 10 segundos de video) para a imagem
+// ou o video do pacote: o servidor guarda na espera e devolve o id. say(texto)
+// conta o andamento; say(null, erro), a falha. A arte nova, ou null.
+async function cgCaptureArt(row, kind, say) {
+  let timer = 0;
+  if (kind === "video") {
+    let left = CG_CAPTURE_SECONDS;
+    say(t("cg_cap_recording").replace("%n", left));
+    timer = setInterval(() => {
+      left = Math.max(0, left - 1);
+      say(left ? t("cg_cap_recording").replace("%n", left) : t("cg_cap_encoding"));
+    }, 1000);
+  } else say(t("cg_cap_taking"));
+  try {
+    const res = await api("/api/customgames/capture?kind=" + kind, { method: "POST", body: "{}" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { say(null, data.error || res.statusText); return null; }
+    const key = kind === "snap" ? "snap" : "video";
+    row[key] = { id: data.id, name: data.name, url: cgStagedUrl(data.id) };
+    say(t(kind === "snap" ? "cg_cap_photo_ok" : "cg_cap_video_ok"));
+    return row[key];
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+// Sobe um arquivo para a espera do servidor e o poe na arte da linha (a
+// previa pelo navegador; o texto, lido aqui). false: nao subiu.
+async function cgStage(row, key, kind, file, onProgress) {
+  const out = await cgPostFile("/api/customgames/stage?kind=" + kind + "&name=" + encodeURIComponent(file.name), file, onProgress, true);
+  if (out.status !== 200) {
+    toast(t("cg_art_too_big").replace("%s", file.name) + (out.data.error ? " " + out.data.error : ""), "bad");
+    row[key] = null;
+    return false;
+  }
+  row[key] = { id: out.data.id, name: file.name, url: key === "text" ? "" : URL.createObjectURL(file) };
+  if (key === "text") row[key].value = await file.text().catch(() => "");
+  return true;
+}
+
+// Criar pacote: a arte em cartoes. A imagem e o video, lado a lado, abrem uma
+// bandeja (escolher um arquivo, ou capturar a tela do jogo em teste no
+// gabinete); o logotipo e o texto escolhem o arquivo direto.
+function cgArtCards(row, changed) {
+  const box = el("div", { class: "cg-artcards" });
+  const redraw = () => { changed(false); box.replaceWith(cgArtCards(row, changed)); cgCreatePreview(); };
+  const card = (key, accept, kind, glyph, tray) => {
+    const current = row[key];
+    const input = el("input", { type: "file", accept, hidden: "" });
+    const preview = el("div", { class: "cg-apreview" });
+    if (current && current.url && key === "video") {
+      const video = el("video", { src: current.url, muted: "", loop: "", playsinline: "", preload: "metadata", "aria-hidden": "true" });
+      video.muted = true;
+      preview.addEventListener("mouseenter", () => video.play().catch(() => {}));
+      preview.addEventListener("mouseleave", () => video.pause());
+      preview.append(video);
+    } else if (current && current.url && key !== "text") preview.append(el("img", { src: current.url, alt: "" }));
+    else preview.append(icon(current ? "g-check" : glyph));
+    const name = el("small", { title: current && current.path ? t("cg_from_folder") + ": " + current.path : "" },
+      current ? current.name : t("cg_art_empty_" + key));
+    const open = el("button", { type: "button", class: "cg-abtn", "aria-haspopup": tray ? "menu" : "false" }, preview,
+      el("span", { class: "cg-ainfo" }, el("b", {}, t("cg_f_" + key)), name));
+    const wrap = el("div", { class: "cg-acard " + key + (current ? " on" : "") + (current && current.path ? " found" : "") }, open, input);
+    if (current) {
+      const drop = el("button", { type: "button", class: "cg-adrop", title: t("cg_remove"), "aria-label": t("cg_remove") + ": " + t("cg_f_" + key) },
+        icon("g-close"));
+      drop.addEventListener("click", () => { row[key] = null; redraw(); });
+      wrap.append(drop);
+    }
+    const progress = (text) => preview.replaceChildren(el("span", { class: "cg-aprog" }, text));
+    input.addEventListener("change", async () => {
+      const file = input.files[0];
+      input.value = "";
+      if (!file) return;
+      progress("0%");
+      await cgStage(row, key, kind, file, (frac) => progress(Math.round(frac * 100) + "%"));
+      redraw();
+    });
+    if (!tray) { open.addEventListener("click", () => input.click()); return wrap; }
+    open.addEventListener("click", () => {
+      const was = wrap.querySelector(".cg-tray");
+      document.querySelectorAll(".cg-tray").forEach((n) => n.remove());
+      if (was) return;
+      const capKind = key === "snap" ? "snap" : "video";
+      const item = (glyph2, title, hint) => el("button", { type: "button", role: "menuitem", class: "cg-tray-item" }, icon(glyph2),
+        el("span", {}, el("b", {}, title), el("small", {}, hint)));
+      const file = item("g-upload", t("cg_art_pick"), t("cg_art_pick_" + key));
+      const cap = item(key === "snap" ? "g-camera" : "g-play", t("cg_art_capture"), t("cg_art_checking"));
+      cap.disabled = true;
+      const menu = el("div", { class: "cg-tray", role: "menu" }, file, cap);
+      wrap.append(menu);
+      const close = () => {
+        menu.remove();
+        document.removeEventListener("pointerdown", outside, true);
+        document.removeEventListener("keydown", esc, true);
+      };
+      const outside = (ev) => { if (!wrap.contains(ev.target)) close(); };
+      const esc = (ev) => { if (ev.key === "Escape") close(); };
+      document.addEventListener("pointerdown", outside, true);
+      document.addEventListener("keydown", esc, true);
+      // Capturar so com o jogo do teste na tela (o /api/status diz qual programa roda).
+      api("/api/status").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((st) => {
+        const live = !!cg.testApp && !!st.fps && st.fps.program === cg.testApp;
+        cap.disabled = !live;
+        cap.querySelector("small").textContent = live ? t("cg_art_cap_" + key) : t("cg_art_need_test");
+      });
+      file.addEventListener("click", () => { close(); input.click(); });
+      cap.addEventListener("click", async () => {
+        close();
+        progress("…");
+        await cgCaptureArt(row, capKind, (text, error) => { if (error) toast(error, "bad"); else if (text) progress(text); });
+        redraw();
+      });
+      file.focus();
+    });
+    return wrap;
+  };
+  box.append(card("snap", ".png,.jpg,.jpeg,.webp,.gif", "snap", "g-camera", true),
+    card("video", ".mp4,.mkv,.webm,.avi,.mov,.flv", "video", "g-play", true),
+    card("logo", ".png,.jpg,.jpeg,.webp", "logo", "g-star", false), card("text", ".txt", "text", "g-list", false));
+  // O JOGO.key e o JOGO.ppdb que vieram com a pasta: so a marca (e tirar).
+  for (const key of ["key", "ppdb"].filter((k) => row[k])) {
+    const drop = el("button", { type: "button", class: "icon-btn small", "aria-label": t("cg_remove") + ": " + row[key].name }, icon("g-close"));
+    drop.addEventListener("click", () => { row[key] = null; redraw(); });
+    box.append(el("span", { class: "cg-slot cg-artfile" }, el("span", { class: "tag on cg-chip", title: t("cg_from_folder") + ": " + row[key].path },
+      t("cg_f_" + key)), drop));
+  }
+  return box;
+}
+
 // O jogo aberto no teste: o aviso das teclas e a captura da tela do gabinete,
 // a foto e 10 segundos de video, que vao para a imagem e o video do pacote.
 function cgTestPanel(row) {
@@ -844,37 +975,24 @@ function cgTestPanel(row) {
   const video = el("button", { type: "button", class: "btn small ghost" }, icon("g-play"), t("cg_cap_video"));
   const close = el("button", { type: "button", class: "btn small ghost" }, icon("g-close"), t("cg_test_close"));
   const busy = (on) => { photo.disabled = on; video.disabled = on; };
-  // A foto sai na hora; o video leva 10 s (a contagem) e o tempo de codificar.
   const capture = async (kind) => {
     busy(true);
-    let timer = 0;
-    if (kind === "video") {
-      let left = CG_CAPTURE_SECONDS;
-      msg.textContent = t("cg_cap_recording").replace("%n", left);
-      timer = setInterval(() => {
-        left = Math.max(0, left - 1);
-        msg.textContent = left ? t("cg_cap_recording").replace("%n", left) : t("cg_cap_encoding");
-      }, 1000);
-    } else msg.textContent = t("cg_cap_taking");
+    const say = (text, error) => msg.replaceChildren(el("span", { class: error ? "error" : "" }, error || text || ""));
     try {
-      const res = await api("/api/customgames/capture?kind=" + kind, { method: "POST", body: "{}" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { msg.replaceChildren(el("span", { class: "error" }, data.error || res.statusText)); return; }
-      const url = cgStagedUrl(data.id);
-      row[kind === "snap" ? "snap" : "video"] = { id: data.id, name: data.name, url };
-      msg.replaceChildren(el("span", { class: "ok" }, t(kind === "snap" ? "cg_cap_photo_ok" : "cg_cap_video_ok")));
-      const thumb = kind === "snap" ? el("img", { src: url, alt: "" })
-        : el("video", { src: url, controls: "", loop: "", muted: "", playsinline: "", preload: "metadata" });
+      const got = await cgCaptureArt(row, kind, say);
+      if (!got) return;
+      const thumb = kind === "snap" ? el("img", { src: got.url, alt: "" })
+        : el("video", { src: got.url, controls: "", loop: "", muted: "", playsinline: "", preload: "metadata" });
       shots.append(el("figure", { class: "cg-capshot " + kind }, thumb));
       cgCreateDraw();
     } finally {
-      clearInterval(timer);
       busy(false);
     }
   };
   photo.addEventListener("click", () => capture("snap").catch(() => busy(false)));
   video.addEventListener("click", () => capture("video").catch(() => busy(false)));
   close.addEventListener("click", async () => {
+    cg.testApp = "";
     await api("/api/close", { method: "POST", body: "{}" });
     msg.textContent = "";
   });
@@ -1262,7 +1380,7 @@ function cgControls(row, { redraw, editing, package: pkg } = {}) {
   out.players = select("players", [["", t("cg_any")], ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.buttons = select("buttons", [["", t("cg_any")], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.controls = cgControlsButton(row, changed);
-  out.art = cgArt(row, changed);
+  out.art = pkg ? cgArtCards(row, changed) : cgArt(row, changed);
   if (row.platform === "windows" && (row.runner || "portproton") === "portproton" && cg.info && cg.info.wine &&
       cg.info.wine.length && !editing && !pkg) {
     out.art = el("div", { class: "cg-artwine" }, out.art, select("wine", [["", t("cg_wine_default")], ...cg.info.wine.map((w) => [w.value, w.label])], false));

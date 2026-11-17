@@ -89,6 +89,10 @@ SHOTS = [
     ("custom-previa-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-create-preview"),
     ("custom-arte-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-table-art"),
     ("custom-estrutura-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-structure"),
+    ("area-custom-criar-pc", "#customgames", 1440, 900, 1, False, True, "cg-tab-create"),
+    ("area-custom-criar-celular", "#customgames", 390, 844, 2, True, True, "cg-tab-create"),
+    ("area-custom-bandeja-pc", "#customgames", 1440, 900, 1, False, False, "cg-tray"),
+    ("area-custom-jogos-pc", "#customgames", 1440, 900, 1, False, True, ""),
     ("custom-teste-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-test-panel"),
     ("custom-teste-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-test-panel"),
     ("custom-estrutura-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-structure"),
@@ -667,6 +671,11 @@ def main():
             # A estrutura do pacote aberta (na aba Criar pacote).
             browser.js("cgShowTab('create'); cg.el.structure.open = true; cg.el.structure.scrollIntoView({block: 'start'})")
             browser.wait(1)
+        elif action == "cg-tray":
+            # A arte do Criar pacote: a bandeja da imagem aberta (sem teste: capturar desligado).
+            browser.js("cgShowTab('create'); const c = document.querySelector('.cg-acard.snap .cg-abtn');"
+                       " c.scrollIntoView({block: 'center'}); c.click()")
+            browser.wait(1.2)
         elif action == "cg-test-panel":
             # O jogo aberto no teste: o aviso das teclas e a captura (com uma foto ja tirada).
             browser.js("cgShowTab('create'); Object.assign(cg.createRow, {name: 'Street Fighter 4'});"
