@@ -7216,6 +7216,95 @@ class PanningTests(unittest.TestCase):
         self.assertLess(lxde.index('fliperos-panning'), lxde.index('exec startlxde'))
 
 
+class OsdX11Tests(unittest.TestCase):
+    """config/fliperos-osd-x11: a OSD por cima de um jogo no X que a camada
+    nao alcanca (as contas, sem X)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_script('osd_x11', 'config/fliperos-osd-x11')
+
+    def test_beat_only_without_a_live_layer(self):
+        m = self.m
+        self.assertEqual(m.beat_line(42, 'custom_pc_kof z'), '42 - custom_pc_kof_z - 0\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            fps = Path(tmp) / 'fliperos-fps'
+            self.assertFalse(m.layer_alive(str(fps), 42))
+            # A camada de outro programa vivo (este teste), agora: fica quieto.
+            fps.write_text('%d 59.9 flycast - 0\n' % os.getpid())
+            self.assertTrue(m.layer_alive(str(fps), 42))
+            # Velho (a camada parou) ou de um programa que ja fechou: grava ele.
+            self.assertFalse(m.layer_alive(str(fps), 42, now=time.time() + m.FPS_FRESH + 1))
+            fps.write_text('999999999 59.9 flycast - 0\n')
+            self.assertFalse(m.layer_alive(str(fps), 42))
+            # O proprio batimento nao conta como camada.
+            m.write_beat(str(fps), os.getpid(), 'custom_pc_kof_z')
+            self.assertEqual(fps.read_text(), '%d - custom_pc_kof_z - 0\n' % os.getpid())
+            self.assertFalse(m.layer_alive(str(fps), os.getpid()))
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ['fliperos-fps'])
+        # A OSD le o batimento como um programa na tela, sem FPS.
+        osd = load_script('osd_for_x11', 'config/fliperos-osd')
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / '1000'
+            run.mkdir()
+            (run / 'fliperos-fps').write_text(m.beat_line(os.getpid(), 'custom_pc_kof_z'))
+            old = osd.RUN_USER
+            osd.RUN_USER = tmp
+            try:
+                screen = osd.on_screen()
+            finally:
+                osd.RUN_USER = old
+        self.assertEqual((screen['pid'], screen['fps'], screen['program'], screen['core']),
+                         (os.getpid(), None, 'custom_pc_kof_z', ''))
+
+    def test_reads_the_osd_file(self):
+        m = self.m
+        pixels = bytes(range(256)) * (m.WIDTH * m.HEIGHT * 4 // 256)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'screen'
+            self.assertIsNone(m.read_screen(str(path)))
+            path.write_bytes(m.HEADER.pack(m.MAGIC, 8, 1, m.WIDTH, m.HEIGHT) + pixels)
+            self.assertEqual(m.read_screen(str(path)), (8, True, pixels))
+            # No meio de uma gravacao (seq impar): espera a proxima volta.
+            path.write_bytes(m.HEADER.pack(m.MAGIC, 9, 1, m.WIDTH, m.HEIGHT) + pixels)
+            self.assertIsNone(m.read_screen(str(path)))
+            path.write_bytes(m.HEADER.pack(m.MAGIC, 10, 0, m.WIDTH, m.HEIGHT))
+            self.assertEqual(m.read_screen(str(path)), (10, False, b''))
+            path.write_bytes(m.HEADER.pack(0, 10, 1, m.WIDTH, m.HEIGHT) + pixels)
+            self.assertIsNone(m.read_screen(str(path)))
+
+    def test_scales_and_cuts_the_transparent_part(self):
+        m = self.m
+        rgba = bytearray(m.WIDTH * m.HEIGHT * 4)
+        # Um retangulo opaco de 10x2 em (20, 5), vermelho.
+        for y in (5, 6):
+            for x in range(20, 30):
+                rgba[(y * m.WIDTH + x) * 4:(y * m.WIDTH + x) * 4 + 4] = b'\xff\x00\x00\xff'
+        rgba = bytes(rgba)
+        self.assertEqual(m.to_bgrx(b'\x01\x02\x03\x04'), bytearray(b'\x03\x02\x01\x04'))
+        # 640x480 (o 240p hack): cada pixel vira 2x2; a forma so o retangulo.
+        self.assertEqual(m.shape_rects(rgba, 640, 480), [(40, 10, 20, 2), (40, 12, 20, 2)])
+        self.assertEqual(m.shape_rects(rgba, 320, 240), [(20, 5, 10, 1), (20, 6, 10, 1)])
+        big = m.scale(m.to_bgrx(rgba), 640, 480)
+        self.assertEqual(len(big), 640 * 480 * 4)
+        px = lambda x, y: big[(y * 640 + x) * 4:(y * 640 + x) * 4 + 4]
+        self.assertEqual(px(40, 10), b'\x00\x00\xff\xff')
+        self.assertEqual(px(59, 13), b'\x00\x00\xff\xff')
+        self.assertEqual(px(60, 13), b'\x00\x00\x00\x00')
+        # Um modo que nao e multiplo (a super resolucao, 384x224...): o mais perto.
+        self.assertEqual(len(m.scale(m.to_bgrx(rgba), 384, 224)), 384 * 224 * 4)
+        self.assertEqual(m.shape_rects(bytes(len(rgba)), 640, 240), [])
+
+    def test_starts_with_each_x_game(self):
+        client = (ROOT / 'config/fliperos-x11-client').read_text()
+        line = 'FLIPEROS_GAME_PID=$PPID env -u LD_PRELOAD "$osd_x11" < /dev/null > /dev/null 2>&1 &'
+        self.assertIn(line, client)
+        # No X do jogo, antes do Switchres; nao no passo do --scale.
+        self.assertLess(client.index(line), client.index('exec /usr/local/bin/switchres'))
+        self.assertGreater(client.index(line), client.index('if [[ ${1:-} == --scale ]]'))
+        self.assertRegex(ROOTFS, r' fliperos-osd-x11[ \w\\\n-]*; do')
+
+
 class DeflickerTests(unittest.TestCase):
     """O filtro de flicker do entrelacado: a camada de OpenGL (config/fliperos-deflicker.c)
     no LD_PRELOAD dos emuladores, o picom com o mesmo filtro no desktop e o

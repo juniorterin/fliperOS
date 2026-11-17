@@ -40,6 +40,14 @@ if command -v openbox > /dev/null; then
     sleep 0.1
   done
 fi
+# A OSD por cima de um jogo que a camada nao alcanca (config/fliperos-osd-x11:
+# o que desenha pelo X sem OpenGL, como o MUGEN e o Fightcade, e os jogos do
+# PortProton, cujo container tira a camada). Com a camada viva, ele fica quieto.
+# O pid e o do xinit (o Quit da OSD o fecha, e o X leva o jogo junto).
+osd_x11=${FLIPEROS_OSD_X11:-/opt/fliperos/bin/fliperos-osd-x11}
+if [[ -x $osd_x11 ]]; then
+  FLIPEROS_GAME_PID=$PPID env -u LD_PRELOAD "$osd_x11" < /dev/null > /dev/null 2>&1 &
+fi
 # A tabela de gama da calibracao de cor (Setup > Video Setup > Colour
 # calibration): o Xorg abre com a dele, linear.
 color=${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}

@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""A OSD do FliperOS por cima de um jogo no X que a camada nao alcanca.
+
+A OSD (config/fliperos-osd) desenha uma imagem de 320x240 em
+/run/fliperos-osd/screen, e quem a poe na tela e a camada das trocas de quadro
+(config/fliperos-deflicker.c no OpenGL, config/fliperos-vkfps.c no Vulkan).
+Um jogo que desenha pelo X sem OpenGL (o MUGEN em RenderMode = System, o
+Fightcade) nao tem troca de quadro para ela, e o container do PortProton tira
+a camada de todo jogo dele (o LD_PRELOAD trocado, o /run/user privado): a OSD
+nao abria. Este programa, um por X de jogo (config/fliperos-x11-client), faz o
+papel da camada nesses casos:
+
+  - sem uma camada gravando o FPS (o $XDG_RUNTIME_DIR/fliperos-fps de outro
+    programa, novo), grava ele o arquivo a cada segundo: "pid - programa - 0",
+    com o pid do xinit do jogo (FLIPEROS_GAME_PID; o Quit da OSD o fecha) e o
+    nome do programa (FLIPEROS_DEFLICKER_APP), e a OSD passa a abrir;
+  - com a imagem visivel, mostra-a numa janela sem moldura (override-redirect)
+    por cima de tudo, esticada para a tela inteira como na camada. O que e
+    transparente na imagem fica vazado pela extensao Shape do X: o jogo aparece
+    em volta do menu sem compositor. O translucido sai opaco;
+  - a janela nao recebe clique nem tecla (a forma de entrada e vazia): os
+    controles a OSD ja toma pelo evdev.
+
+Com uma camada viva (um jogo em OpenGL ou Vulkan neste X), fica escondido e nao
+grava nada. Sai junto com o X (a conexao cai) ou com o xinit.
+
+    fliperos-osd-x11
+
+Variaveis: FLIPEROS_OSD_DIR (a pasta do screen), FLIPEROS_FPS_FILE,
+FLIPEROS_GAME_PID, FLIPEROS_DEFLICKER_APP.
+"""
+import ctypes
+import os
+import re
+import struct
+import sys
+import time
+from array import array
+
+OSD_DIR = os.environ.get("FLIPEROS_OSD_DIR", "/run/fliperos-osd")
+MAGIC = 0x44534F46  # "FOSD", o do fliperos-osd
+HEADER = struct.Struct("<5I")  # magic, seq, visible, largura, altura
+WIDTH, HEIGHT = 320, 240
+# A OSD aceita um FPS de ate FPS_FRESH segundos (config/fliperos-osd).
+FPS_FRESH = 3.0
+BEAT = 1.0
+POLL = 0.04
+RAISE = 1.0
+
+
+def fps_path():
+    file = os.environ.get("FLIPEROS_FPS_FILE")
+    if file:
+        return file
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    return os.path.join(runtime, "fliperos-fps") if runtime else None
+
+
+def layer_alive(path, own_pid, now=None):
+    """Uma camada de outro programa gravou o FPS ha pouco (o programa existe)?"""
+    if not path:
+        return False
+    try:
+        age = (now if now is not None else time.time()) - os.path.getmtime(path)
+        with open(path, encoding="utf-8", errors="replace") as f:
+            fields = f.read().split()
+    except OSError:
+        return False
+    if age > FPS_FRESH or not fields or not fields[0].isdigit() or int(fields[0]) == own_pid:
+        return False
+    return os.path.exists("/proc/" + fields[0])
+
+
+def beat_line(pid, app):
+    """A linha do FPS sem FPS ("-"): a OSD le pid, fps, programa, core."""
+    app = re.sub(r"\s+", "_", app or "x11") or "x11"
+    return "%d - %s - 0\n" % (pid, app)
+
+
+def write_beat(path, pid, app):
+    if not path:
+        return
+    tmp = "%s.%d" % (path, os.getpid())
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(beat_line(pid, app))
+        os.rename(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def read_screen(path):
+    """(seq, visivel, pixels RGBA) do arquivo da OSD; None sem ele, com outro
+    formato ou no meio de uma gravacao (seq impar)."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(HEADER.size)
+            if len(head) < HEADER.size:
+                return None
+            magic, seq, visible, width, height = HEADER.unpack(head)
+            if magic != MAGIC or width != WIDTH or height != HEIGHT or seq & 1:
+                return None
+            if not visible:
+                return seq, False, b""
+            pixels = f.read(WIDTH * HEIGHT * 4)
+            f.seek(4)
+            again = struct.unpack("<I", f.read(4))[0]
+    except OSError:
+        return None
+    if again != seq or len(pixels) < WIDTH * HEIGHT * 4:
+        return None
+    return seq, True, pixels
+
+
+def to_bgrx(rgba):
+    """RGBA para a ordem do X em 24 bits (0x00RRGGBB em little-endian)."""
+    out = bytearray(rgba)
+    out[0::4], out[2::4] = out[2::4], out[0::4]
+    return out
+
+
+def scale(bgrx, dw, dh):
+    """A imagem de 320x240 esticada para dw x dh, pelo pixel mais perto."""
+    src = array("I")
+    src.frombytes(bytes(bgrx))
+    cols = [x * WIDTH // dw for x in range(dw)]
+    rows = {}
+    out = []
+    for y in range(dh):
+        sy = y * HEIGHT // dh
+        if sy not in rows:
+            line = src[sy * WIDTH:(sy + 1) * WIDTH]
+            rows[sy] = array("I", map(line.__getitem__, cols)).tobytes()
+        out.append(rows[sy])
+    return b"".join(out)
+
+
+def shape_rects(rgba, dw, dh):
+    """Os retangulos (x, y, largura, altura) da tela de dw x dh onde a imagem
+    nao e transparente: as sequencias de alfa nao zero de cada linha."""
+    alpha = bytes(rgba[3::4])
+    rects = []
+    for sy in range(HEIGHT):
+        y0, y1 = sy * dh // HEIGHT, (sy + 1) * dh // HEIGHT
+        if y1 <= y0:
+            continue
+        for m in re.finditer(rb"[^\x00]+", alpha[sy * WIDTH:(sy + 1) * WIDTH]):
+            x0, x1 = m.start() * dw // WIDTH, m.end() * dw // WIDTH
+            if x1 > x0:
+                rects.append((x0, y0, x1 - x0, y1 - y0))
+    return rects
+
+
+# ── O X (libX11 e libXext por ctypes: nada a instalar) ──
+
+class XSetWindowAttributes(ctypes.Structure):
+    _fields_ = [("background_pixmap", ctypes.c_ulong), ("background_pixel", ctypes.c_ulong),
+                ("border_pixmap", ctypes.c_ulong), ("border_pixel", ctypes.c_ulong),
+                ("bit_gravity", ctypes.c_int), ("win_gravity", ctypes.c_int), ("backing_store", ctypes.c_int),
+                ("backing_planes", ctypes.c_ulong), ("backing_pixel", ctypes.c_ulong), ("save_under", ctypes.c_int),
+                ("event_mask", ctypes.c_long), ("do_not_propagate_mask", ctypes.c_long),
+                ("override_redirect", ctypes.c_int), ("colormap", ctypes.c_ulong), ("cursor", ctypes.c_ulong)]
+
+
+class XRectangle(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort), ("height", ctypes.c_ushort)]
+
+
+CW_BACK_PIXEL = 1 << 1
+CW_OVERRIDE_REDIRECT = 1 << 9
+INPUT_OUTPUT = 1
+Z_PIXMAP = 2
+SHAPE_BOUNDING, SHAPE_INPUT = 0, 2
+SHAPE_SET = 0
+
+
+class Overlay:
+    def __init__(self):
+        x11 = ctypes.CDLL("libX11.so.6")
+        ext = ctypes.CDLL("libXext.so.6")
+        vp, ul, ui, i = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_uint, ctypes.c_int
+        x11.XOpenDisplay.restype, x11.XOpenDisplay.argtypes = vp, [ctypes.c_char_p]
+        x11.XDefaultScreen.restype, x11.XDefaultScreen.argtypes = i, [vp]
+        x11.XRootWindow.restype, x11.XRootWindow.argtypes = ul, [vp, i]
+        x11.XDefaultVisual.restype, x11.XDefaultVisual.argtypes = vp, [vp, i]
+        x11.XDefaultDepth.restype, x11.XDefaultDepth.argtypes = i, [vp, i]
+        x11.XDefaultGC.restype, x11.XDefaultGC.argtypes = vp, [vp, i]
+        x11.XCreateWindow.restype = ul
+        x11.XCreateWindow.argtypes = [vp, ul, i, i, ui, ui, ui, i, ui, vp, ul, ctypes.POINTER(XSetWindowAttributes)]
+        x11.XGetGeometry.restype = i
+        x11.XGetGeometry.argtypes = [vp, ul, ctypes.POINTER(ul), ctypes.POINTER(i), ctypes.POINTER(i),
+                                     ctypes.POINTER(ui), ctypes.POINTER(ui), ctypes.POINTER(ui), ctypes.POINTER(ui)]
+        x11.XMoveResizeWindow.argtypes = [vp, ul, i, i, ui, ui]
+        x11.XMapRaised.argtypes = [vp, ul]
+        x11.XRaiseWindow.argtypes = [vp, ul]
+        x11.XUnmapWindow.argtypes = [vp, ul]
+        x11.XFlush.argtypes = [vp]
+        x11.XSync.argtypes = [vp, i]
+        x11.XCreateImage.restype = vp
+        x11.XCreateImage.argtypes = [vp, vp, ui, i, i, ctypes.c_char_p, ui, ui, i, i]
+        x11.XPutImage.argtypes = [vp, ul, vp, vp, i, i, i, i, ui, ui]
+        x11.XFree.argtypes = [vp]
+        x11.XStoreName.argtypes = [vp, ul, ctypes.c_char_p]
+        ext.XShapeCombineRectangles.argtypes = [vp, ul, i, i, i, ctypes.POINTER(XRectangle), i, i, i]
+        self.x11, self.ext = x11, ext
+        self.dpy = x11.XOpenDisplay(None)
+        if not self.dpy:
+            raise OSError("no X display")
+        self.screen = x11.XDefaultScreen(self.dpy)
+        self.root = x11.XRootWindow(self.dpy, self.screen)
+        if x11.XDefaultDepth(self.dpy, self.screen) not in (24, 32):
+            raise OSError("the X screen is not 24-bit")
+        self.size = self.root_size()
+        attrs = XSetWindowAttributes(background_pixel=0, override_redirect=1)
+        self.win = x11.XCreateWindow(self.dpy, self.root, 0, 0, self.size[0], self.size[1], 0, 0, INPUT_OUTPUT, None,
+                                     CW_BACK_PIXEL | CW_OVERRIDE_REDIRECT, ctypes.byref(attrs))
+        x11.XStoreName(self.dpy, self.win, b"fliperos-osd")
+        # Nada de clique nem foco: a forma de entrada vazia.
+        ext.XShapeCombineRectangles(self.dpy, self.win, SHAPE_INPUT, 0, 0, None, 0, SHAPE_SET, 0)
+        self.gc = x11.XDefaultGC(self.dpy, self.screen)
+        self.mapped = False
+
+    def root_size(self):
+        """A tela de agora (muda a cada modo do Switchres ou xrandr --scale)."""
+        root, x, y = ctypes.c_ulong(), ctypes.c_int(), ctypes.c_int()
+        w, h, b, d = ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint()
+        self.x11.XGetGeometry(self.dpy, self.root, ctypes.byref(root), ctypes.byref(x), ctypes.byref(y),
+                              ctypes.byref(w), ctypes.byref(h), ctypes.byref(b), ctypes.byref(d))
+        return max(1, w.value), max(1, h.value)
+
+    def show(self, rgba):
+        x11 = self.x11
+        self.size = dw, dh = self.root_size()
+        rects = shape_rects(rgba, dw, dh)
+        data = scale(to_bgrx(rgba), dw, dh)
+        x11.XMoveResizeWindow(self.dpy, self.win, 0, 0, dw, dh)
+        arr = (XRectangle * max(1, len(rects)))(*[XRectangle(*r) for r in rects])
+        self.ext.XShapeCombineRectangles(self.dpy, self.win, SHAPE_BOUNDING, 0, 0, arr, len(rects), SHAPE_SET, 0)
+        if not self.mapped:
+            x11.XMapRaised(self.dpy, self.win)
+            self.mapped = True
+        else:
+            x11.XRaiseWindow(self.dpy, self.win)
+        buf = ctypes.create_string_buffer(data, len(data))
+        image = x11.XCreateImage(self.dpy, x11.XDefaultVisual(self.dpy, self.screen),
+                                 x11.XDefaultDepth(self.dpy, self.screen), Z_PIXMAP, 0, buf, dw, dh, 32, dw * 4)
+        if image:
+            x11.XPutImage(self.dpy, self.win, self.gc, image, 0, 0, 0, 0, dw, dh)
+            # So a estrutura: os pixels sao do buf (o XDestroyImage os liberaria).
+            x11.XFree(image)
+        x11.XSync(self.dpy, 0)
+
+    def raise_(self):
+        if self.mapped:
+            self.x11.XRaiseWindow(self.dpy, self.win)
+            self.x11.XFlush(self.dpy)
+
+    def hide(self):
+        if self.mapped:
+            self.x11.XUnmapWindow(self.dpy, self.win)
+            self.x11.XFlush(self.dpy)
+            self.mapped = False
+
+
+def main():
+    try:
+        overlay = Overlay()
+    except OSError as exc:
+        print("fliperos-osd-x11: %s" % exc, file=sys.stderr)
+        return 0
+    own = os.environ.get("FLIPEROS_GAME_PID", "")
+    own_pid = int(own) if own.isdigit() else os.getppid()
+    app = os.environ.get("FLIPEROS_DEFLICKER_APP", "")
+    fps = fps_path()
+    screen = os.path.join(OSD_DIR, "screen")
+    shown_seq, shown_size, last_beat, last_raise = None, None, 0.0, 0.0
+    while True:
+        # O X caindo, o Xlib fecha o programa; o xinit saindo, sai aqui.
+        if not os.path.exists("/proc/%d" % own_pid):
+            return 0
+        now = time.time()
+        if layer_alive(fps, own_pid, now):
+            overlay.hide()
+            shown_seq = None
+            time.sleep(0.5)
+            continue
+        if now - last_beat >= BEAT:
+            write_beat(fps, own_pid, app)
+            last_beat = now
+        state = read_screen(screen)
+        if state and state[1]:
+            if state[0] != shown_seq or overlay.root_size() != shown_size:
+                overlay.show(state[2])
+                shown_seq, shown_size, last_raise = state[0], overlay.size, now
+            elif now - last_raise >= RAISE:
+                overlay.raise_()
+                last_raise = now
+        elif state is not None or not os.path.exists(screen):
+            overlay.hide()
+            shown_seq = None
+        time.sleep(POLL)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(0)
