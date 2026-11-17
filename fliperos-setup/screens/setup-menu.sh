@@ -1024,17 +1024,20 @@ screen_custom_create_area() {
 # Os seletores do filtro de ROMs (lib/romclean.sh): a mesma lista de
 # controles e os desenhos de jogadores e botoes.
 
-# screen_custom_pick_mode NOME ATUAL: imprime o modo (240p, 480i ou
-# LARGURAxALTURA@HZ). Status 1: Esc.
+# screen_custom_pick_mode NOME ATUAL: imprime o modo (240p, 240p hack, 480i
+# ou LARGURAxALTURA@HZ). Status 1: Esc.
 screen_custom_pick_mode() {
   local title="Video mode" choice current=${2:-640x480@60}
   case $(customgames_mode_label "$current") in
     240p) choice=240p ;;
+    240p-hack) choice=240p-hack ;;
     480i) choice=480i ;;
     *) choice=custom ;;
   esac
   choice=$(ui_radio "$title" "Video mode of $1: the resolution and refresh rate it opens in." "$choice" \
-    "240p|240p (640x240)" "480i|480i (640x480, interlaced on a 15 kHz monitor)" \
+    "240p|240p (640x240)" \
+    "240p-hack|240p hack (Mugen, the game sees 640x480)" \
+    "480i|480i (640x480, interlaced on a 15 kHz monitor)" \
     "custom|Other (width x height @ Hz)") || return 1
   if [[ $choice == custom ]]; then
     while true; do

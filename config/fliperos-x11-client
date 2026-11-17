@@ -4,6 +4,22 @@
 # emulador nele.
 set -euo pipefail
 connector=$(sed -n 's/^connector=//p' /etc/fliperos/fliperos.conf 2> /dev/null)
+# --scale LxA programa...: o passo que o Switchres abre ja no modo do jogo
+# (FLIPEROS_X11_SCREEN, abaixo): a tela do X fica maior que o modo (xrandr
+# --scale) e o tubo continua nele; o picom com vsync por cima (o MUGEN em
+# RenderMode = System desenha pelo X, sem OpenGL, e sem compositor rasgava a
+# imagem no tubo: visto no gabinete, sumiu com ele); depois, o programa. Um
+# picom que ja esta na tela (o filtro do fliperos-desktop-deflicker) fica.
+if [[ ${1:-} == --scale ]]; then
+  output=$connector
+  [[ -n $output ]] || output=$(xrandr --current 2> /dev/null | awk '$2 == "connected" { print $1; exit }')
+  [[ -z $output ]] || xrandr --output "$output" --scale "$2" > /dev/null 2>&1 || true
+  if command -v picom > /dev/null && ! pgrep -u "$(id -u)" -x picom > /dev/null 2>&1; then
+    env -u LD_PRELOAD picom --backend glx --vsync < /dev/null > /dev/null 2>&1 &
+  fi
+  shift 2
+  exec "$@"
+fi
 # Com cursor (fliperos-x11-run): a seta normal fora das janelas, nao o "X"
 # do Xorg sem gerenciador de janelas.
 if [[ ${FLIPEROS_X11_CURSOR:-0} == 1 ]]; then
@@ -82,6 +98,20 @@ case $picom in
     emulator_command="env FLIPEROS_VK_FPS=1 $emulator_command"
     ;;
 esac
+# Uma tela maior que o modo (fliperos-x11-run --mode 640x240@60/640x480, o
+# "240p hack" dos jogos custom): o Wine do PortProton (Proton) so oferece ao
+# jogo os modos do tamanho da tela ou menores, e um jogo que so abre em
+# 640x480 (o MUGEN em tela cheia) fechava com erro em 240p. A tela do X fica
+# com o tamanho pedido, reduzida no modo do Switchres (640x480 em 640x240:
+# metade das linhas, 240p de verdade no tubo, sem entrelacar). Visto no
+# gabinete com o KOF Zillion (MUGEN 1.0). A conta usa a largura do modo de
+# verdade (a super resolucao de uma placa sem dotclock baixo).
+if [[ ${FLIPEROS_X11_SCREEN:-} =~ ^([0-9]+)x([0-9]+)$ ]]; then
+  scale=$(awk -v w="${FLIPEROS_RES_W:-0}" -v h="${FLIPEROS_RES_H:-0}" \
+    -v sw="${BASH_REMATCH[1]}" -v sh="${BASH_REMATCH[2]}" \
+    'BEGIN { if (w > 0 && h > 0 && sw > 0 && sh > 0) printf "%gx%g", sw / w, sh / h }')
+  [[ -z $scale || $scale == 1x1 ]] || emulator_command="$(printf '%q' "$0") --scale $scale $emulator_command"
+fi
 # O stdin e o /dev/null: o programa roda fora do grupo da frente do tty1 (o
 # xinit -keeptty), e um que le o terminal leva SIGTTIN e fica parado, tela
 # preta e sem som (o Ikemen GO do KOF Final Attack, visto no gabinete).

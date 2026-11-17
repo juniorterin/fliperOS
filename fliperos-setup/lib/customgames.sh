@@ -30,8 +30,11 @@ CUSTOM_GAMES_GAMES=${CUSTOM_GAMES_GAMES:-$(dirname "$ROMS_DIR")/games}
 CUSTOM_GAMES_SQUASH=${CUSTOM_GAMES_SQUASH:-1}
 # O Wine no comando (o do fliperos-x11-client): a camada de 32 bits.
 CUSTOM_GAMES_WINE_RE='(^|[[:space:]/;&(])wine(64)?([[:space:]]|$)|\.[eE][xX][eE]([[:space:]"]|$)'
-# As resolucoes da lista: 240p e 480i (a 15 kHz, entrelacado pelo Switchres).
-CUSTOM_GAMES_MODES="240p|640x240@60 480i|640x480@60"
+# As resolucoes da lista: 240p, 240p-hack e 480i (a 15 kHz, entrelacado pelo
+# Switchres). 240p-hack ("240p hack (Mugen)"): 240p no tubo, com o jogo vendo
+# uma tela de 640x480 (fliperos-x11-run --mode MODO/TELA), para o jogo do
+# Windows que so abre em 640x480 (o MUGEN em tela cheia).
+CUSTOM_GAMES_MODES="240p|640x240@60 240p-hack|640x240@60/640x480 480i|640x480@60"
 
 # customgames_valid_name TEXTO: serve de nome de grupo ou de entrada (vira
 # nome de pasta ou de arquivo e item de lista).
@@ -44,14 +47,14 @@ customgames_valid_command() {
   [[ -n ${1//[[:space:]]/} && $1 != *$'\n'* ]]
 }
 
-# customgames_mode 240p|480i|LARGURAxALTURA@HZ imprime o modo do
+# customgames_mode 240p|240p-hack|480i|LARGURAxALTURA@HZ[/LxA] imprime o modo do
 # fliperos-x11-run. Status 1: invalido.
 customgames_mode() {
   local pair
   for pair in $CUSTOM_GAMES_MODES; do
     [[ $1 == "${pair%%|*}" ]] && { printf '%s\n' "${pair#*|}"; return 0; }
   done
-  [[ $1 =~ ^[1-9][0-9]{1,3}x[1-9][0-9]{1,3}@[1-9][0-9]{0,2}(\.[0-9]+)?$ ]] || return 1
+  [[ $1 =~ ^[1-9][0-9]{1,3}x[1-9][0-9]{1,3}@[1-9][0-9]{0,2}(\.[0-9]+)?(/[1-9][0-9]{1,3}x[1-9][0-9]{1,3})?$ ]] || return 1
   printf '%s\n' "$1"
 }
 
@@ -906,6 +909,7 @@ customgames_describe() {
     customgames_out pending "${f[@]}"
   done < <(customgames_pending)
   customgames_out mode 240p "$(customgames_mode 240p)"
+  customgames_out mode 240p-hack "$(customgames_mode 240p-hack)"
   customgames_out mode 480i "$(customgames_mode 480i)"
   IFS='|' read -ra f <<< "$CUSTOM_GAMES_GENRES"
   for value in "${f[@]}"; do
@@ -969,7 +973,7 @@ customgames_row_errors() {
     echo "name|$R_NAME is already in $R_GROUP."
   fi
   [[ -z $R_MODE ]] || customgames_mode "$R_MODE" > /dev/null ||
-    echo "mode|Invalid video mode: use 240p, 480i or WIDTHxHEIGHT@HZ (e.g. 320x240@60)."
+    echo "mode|Invalid video mode: use 240p, 240p-hack, 480i or WIDTHxHEIGHT@HZ (e.g. 320x240@60)."
   [[ -n $package && $R_PLATFORM == command ]] && echo "platform|A package is a Windows or a Linux game."
   case $R_PLATFORM in
     command)

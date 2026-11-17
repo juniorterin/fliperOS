@@ -2,7 +2,7 @@
 # Abre um programa num Xorg so para ele, num modo de video criado pelo
 # Switchres (fliperos-x11-client) no monitor escolhido no Setup:
 #
-#   fliperos-x11-run [--mode LARGURAxALTURA@HZ] [--app NOME] [--wine] programa [argumentos]
+#   fliperos-x11-run [--mode LARGURAxALTURA@HZ[/LARGURAxALTURA]] [--app NOME] [--wine] programa [argumentos]
 #
 # Sem --mode, o modo vem de /etc/fliperos/emulator-modes.conf (um para
 # monitor de 15 kHz, outro para 25/31 kHz e LCD) ou, fora da tabela,
@@ -110,11 +110,19 @@ if [[ -z $mode ]]; then
   fi
 fi
 [[ -n $mode ]] || mode=320x240@60
-if [[ ! $mode =~ ^([0-9]+)x([0-9]+)@([0-9.]+)$ ]]; then
-  echo "Invalid mode: $mode (use WIDTHxHEIGHT@HZ, e.g. 640x240@60)" >&2
+# /LARGURAxALTURA no fim: a tela que o programa ve, maior que o modo e
+# reduzida nele (o "240p hack" dos jogos custom, 640x240@60/640x480: um jogo
+# do Windows que so abre em 640x480 sai em 240p; o fliperos-x11-client).
+if [[ ! $mode =~ ^([0-9]+)x([0-9]+)@([0-9.]+)(/([0-9]+)x([0-9]+))?$ ]]; then
+  echo "Invalid mode: $mode (use WIDTHxHEIGHT@HZ, e.g. 640x240@60, or 640x240@60/640x480)" >&2
   exit 2
 fi
 export FLIPEROS_RES_W=${BASH_REMATCH[1]} FLIPEROS_RES_H=${BASH_REMATCH[2]} FLIPEROS_RES_HZ=${BASH_REMATCH[3]}
+if [[ -n ${BASH_REMATCH[4]} ]]; then
+  export FLIPEROS_X11_SCREEN=${BASH_REMATCH[5]}x${BASH_REMATCH[6]}
+else
+  unset FLIPEROS_X11_SCREEN
+fi
 
 # Placa sem dotclock baixo (Intel, NVIDIA: o Setup grava dotclock_min no
 # switchres.ini). O Switchres dobraria a largura ate passar do minimo, e o

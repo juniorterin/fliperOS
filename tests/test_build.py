@@ -7307,12 +7307,13 @@ class DeflickerTests(unittest.TestCase):
             # Sem openbox, xsetroot nem xprop no PATH: so o que o script usa.
             bin_dir = tmp / 'bin'
             bin_dir.mkdir()
-            for tool in ('bash', 'sed', 'basename', 'cat', 'grep', 'seq', 'sleep'):
+            for tool in ('bash', 'sed', 'basename', 'cat', 'grep', 'seq', 'sleep', 'awk'):
                 if shutil.which(tool):
                     (bin_dir / tool).symlink_to(shutil.which(tool))
             env = dict(os.environ, FLIPEROS_DEFLICKER_LIB=str(tmp / 'l64.so'), FLIPEROS_DEFLICKER_LIB32=str(tmp / 'l32.so'),
                        FLIPEROS_DESKTOP_DEFLICKER=str(tmp / 'picom'), FLIPEROS_COLOR='/nonexistent', PATH=str(bin_dir),
-                       FLIPEROS_RES_W='640', FLIPEROS_RES_H='480', FLIPEROS_RES_HZ='60', **(extra or {}))
+                       FLIPEROS_RES_W='640', FLIPEROS_RES_H='480', FLIPEROS_RES_HZ='60')
+            env.update(extra or {})
             out = subprocess.run(['bash', str(tmp / 'client'), *args], capture_output=True, text=True, env=env).stdout
             time.sleep(0.2)
             launch = out.split('LAUNCH=', 1)[1].strip() if 'LAUNCH=' in out else ''
@@ -7337,6 +7338,39 @@ class DeflickerTests(unittest.TestCase):
         launch, picom = self.client_launch(['fightcade'])
         self.assertNotIn('LD_PRELOAD', launch)
         self.assertTrue(picom)
+
+    def test_screen_bigger_than_the_mode_scales_down(self):
+        # O 240p hack (FLIPEROS_X11_SCREEN do fliperos-x11-run): o Switchres
+        # abre o proprio client com --scale antes do jogo, e so com a tela pedida.
+        launch = self.client_launch(['wine', 'k.exe'], extra={'FLIPEROS_RES_H': '240', 'FLIPEROS_X11_SCREEN': '640x480'})[0]
+        self.assertTrue(launch.startswith('client --scale 1x2 env FLIPEROS_VK_FPS=1 '), launch)
+        self.assertNotIn('--scale', self.client_launch(['wine', 'k.exe'], extra={'FLIPEROS_RES_H': '240'})[0])
+        launch = self.client_launch(['myprog'], extra={'FLIPEROS_RES_W': '2560', 'FLIPEROS_RES_H': '240',
+                                                       'FLIPEROS_X11_SCREEN': '640x480'})[0]
+        self.assertTrue(launch.startswith('client --scale 0.25x2 '), launch)
+        # O passo: xrandr --scale na saida do Setup, o picom com vsync (sem a
+        # camada) e o programa.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            for tool in ('xrandr', 'picom'):
+                (bin_dir / tool).write_text('#!/bin/sh\necho "%s $* PRELOAD=${LD_PRELOAD:-}" >> %s/log\n' % (tool, tmp))
+                (bin_dir / tool).chmod(0o755)
+            (bin_dir / 'pgrep').write_text('#!/bin/sh\nexit 1\n')
+            (bin_dir / 'pgrep').chmod(0o755)
+            (tmp / 'fliperos.conf').write_text('connector=VGA-1\n')
+            client = (ROOT / 'config/fliperos-x11-client').read_text().replace('/etc/fliperos/fliperos.conf',
+                                                                               str(tmp / 'fliperos.conf'))
+            (tmp / 'client').write_text(client)
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), LD_PRELOAD='')
+            out = subprocess.run(['bash', str(tmp / 'client'), '--scale', '1x2', 'echo', 'GAME'],
+                                 capture_output=True, text=True, env=env).stdout
+            time.sleep(0.3)
+            self.assertEqual(out.strip(), 'GAME')
+            log = (tmp / 'log').read_text()
+            self.assertIn('xrandr --output VGA-1 --scale 1x2', log)
+            self.assertIn('picom --backend glx --vsync PRELOAD=\n', log)
 
     def test_the_32_bit_layer_is_built_where_wine_is(self):
         build = (ROOT / 'config/fliperos-deflicker-build').read_text()
@@ -12497,7 +12531,8 @@ class EmulatorModeTests(unittest.TestCase):
             (bin_dir / 'xinit').write_text('#!/bin/bash\necho "MODE=$FLIPEROS_RES_W $FLIPEROS_RES_H $FLIPEROS_RES_HZ"\n'
                                            'echo "ARGS=$*"\necho "APP=$FLIPEROS_DEFLICKER_APP"\n'
                                            'echo "WINE=${FLIPEROS_USES_WINE:-}"\n'
-                                           'echo "PRELOAD=${LD_PRELOAD:-}"\n')
+                                           'echo "PRELOAD=${LD_PRELOAD:-}"\n'
+                                           'echo "SCREEN=${FLIPEROS_X11_SCREEN:-}"\n')
             for prog in ('flycast', 'dolphin-emu', 'pcsx2', 'pcsx2x6', 'myprog', 'supermodel', 'hypseus',
                          'fightcade', 'sm2-emu', 'duckstation', 'openbor'):
                 (bin_dir / prog).write_text('#!/bin/sh\n')
@@ -12793,6 +12828,16 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('MODE=320 240 60', self.run_x11(['myprog']).stdout)
         r = self.run_x11(['--mode', '640x240', 'myprog'])
         self.assertEqual(r.returncode, 2)
+        self.assertIn('SCREEN=\n', out)
+        # MODO/TELA (o 240p hack dos jogos custom): o modo do tubo e a tela
+        # que o programa ve, para o fliperos-x11-client reduzir.
+        out = self.run_x11(['--mode', '640x240@60/640x480', 'myprog']).stdout
+        self.assertIn('MODE=640 240 60', out)
+        self.assertIn('SCREEN=640x480\n', out)
+        self.assertEqual(self.run_x11(['--mode', '640x240@60/640', 'myprog']).returncode, 2)
+        # Uma tela herdada de outro jogo nao passa para o seguinte.
+        out = self.run_x11(['--mode', '640x240@60', 'myprog'], extra={'FLIPEROS_X11_SCREEN': '640x480'}).stdout
+        self.assertIn('SCREEN=\n', out)
 
     def test_mouse_cursor_only_for_emulators_with_a_mouse_interface(self):
         self.assertNotIn('-nocursor', self.run_x11(['dolphin-emu']).stdout)

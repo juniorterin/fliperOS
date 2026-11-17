@@ -1141,8 +1141,9 @@ function cgControls(row, { redraw, editing, package: pkg } = {}) {
       out.run = el("div", {}, out.run, list);
     }
   }
-  // O modo: 240p, 480i ou outro (o campo LxA@Hz aparece).
-  const modes = ((cg.info && cg.info.modes) || [{ label: "240p" }, { label: "480i" }]).map((m) => [m.label, m.label]);
+  // O modo: 240p, 240p hack (Mugen), 480i ou outro (o campo LxA@Hz aparece).
+  const modes = ((cg.info && cg.info.modes) || [{ label: "240p" }, { label: "480i" }])
+    .map((m) => [m.label, m.label === "240p-hack" ? t("cg_mode_hack") : m.label]);
   const mode = select("mode", [...modes, ["other", t("cg_mode_other")]], true);
   out.mode = row.mode === "other" ? el("div", { class: "cg-mode" }, mode, text("modeOther", t("cg_ph_mode"), "code-in")) : mode;
   // A categoria do catver.ini: o genero e as categorias dele.

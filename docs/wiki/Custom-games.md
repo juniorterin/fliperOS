@@ -48,7 +48,7 @@ Then, with the controller:
    - Windows: pick the `.exe` inside the folder. The first time, the Setup offers to download PortProton (about 3 GB, see [below](#windows-games-portproton)). Then choose which Wine runs it; keep the first one unless the game fails with it.
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
 7. **Picture, video and text** (optional): pick each file, or type the text. Without them the game gets samples, which you can replace later.
-8. **Video mode**: 240p, 480i or another resolution and refresh rate.
+8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.
 9. **Category, controls, buttons, players**: what the frontend shows and filters by.
 10. The Setup writes `~/roms/custom-packages/<game>.fliperos-customgame.zip` and asks whether to **install it now**. Say yes and pick the group (or a new one, for example *PC games*; each group is a system in the frontends): the game folder is copied to `~/games/<group>/<game>` and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.
 11. Open the frontend: the game is in the system of its group.
@@ -184,7 +184,7 @@ players=2
 | `platform` | `windows` or `native` (required) |
 | `exe` | Windows: the `.exe`, relative to the game folder |
 | `command` | Linux: the command line, run inside the game folder |
-| `mode` | `240p` (640x240), `480i` (640x480) or `WIDTHxHEIGHT@HZ`, for example `384x224@59.6` (without it, 480i) |
+| `mode` | `240p` (640x240), `240p-hack` (640x240 on the tube, the game sees 640x480), `480i` (640x480) or `WIDTHxHEIGHT@HZ`, for example `384x224@59.6` (without it, 480i) |
 | `category` | a category of MAME's catver.ini, `Genre / Subgenre` |
 | `controls` | one or more, separated by commas: `joy8 joy4 joy2 twin trackball spinner paddle positional analog pedal lightgun keyboard mahjong` |
 | `buttons` | 0 to 8 |
@@ -269,7 +269,9 @@ Several buttons can send the same key (player 1 and player 2 button 1 on `LEFTCT
 
 ## Video mode, flicker filter and on-screen menu
 
-Each game opens in its own Xorg, in its video mode (`fliperos-x11-run --mode`): 240p, 480i (interlaced on a 15 kHz monitor) or any `WIDTHxHEIGHT@HZ`. Switchres makes the mode for the monitor chosen in the Setup.
+Each game opens in its own Xorg, in its video mode (`fliperos-x11-run --mode`): 240p, 240p hack, 480i (interlaced on a 15 kHz monitor) or any `WIDTHxHEIGHT@HZ`. Switchres makes the mode for the monitor chosen in the Setup.
+
+**240p hack (Mugen)** is for a Windows game that only opens full screen at 640x480, like M.U.G.E.N with `GameWidth = 640` and `GameHeight = 480`: in plain 240p it shows a white screen with "Error detected" (`mugen.log`: `trying 640x480x16 mode ... failed`), because the Wine of PortProton only offers modes up to the size of the screen. With the hack the tube stays at 640x240 (true 240p, no flicker), the X screen is 640x480 scaled down to it (`xrandr --scale 1x2`, mode `640x240@60/640x480` in the `.cfg`), and picom with vsync stops the tearing of games that draw through X without OpenGL (M.U.G.E.N with `RenderMode = System`). A game that opens at 320x240 or 640x240 by itself stays in plain 240p or `320x240@60`.
 
 Each game has its own row in **Video Setup > Interlaced hacks** (only the flicker filter: the mode is the game's), and the level chosen in the on-screen menu during the game stays with that game. Its name for the filter, the menu and the log is `custom_` plus the group and the name in lower case, with `_` for everything else: *PC games* / *Metal Slug X* is `custom_pc_games_metal_slug_x`, and its log is `/opt/fliperos/logs/custom_pc_games_metal_slug_x.log`.
 

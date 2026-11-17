@@ -114,7 +114,7 @@ Those files are found in the opened zip (pick the folder that holds `GAME/` and 
 | Type | Windows, Linux or Command |
 | Folder | Typed, or picked in the cabinet's folders |
 | Executable / command | The `.exe` files found in the folder (installers left out), or the Linux programs; a command is typed |
-| Video mode | 240p, 480i, or another (`WIDTHxHEIGHT@HZ`) |
+| Video mode | 240p, 240p hack (Mugen: 640x240 on the tube, the game sees 640x480), 480i, or another (`WIDTHxHEIGHT@HZ`) |
 | Category | MAME's categories (`catver.ini`) |
 | Players, Buttons | A list |
 | Controls | The 13 kinds, picked in a window |

@@ -4145,6 +4145,14 @@ class CustomGamesTests(Base):
                          ["G|A|384x224@59.6|echo a", "G|B|640x480@60|echo b"])
         self.assertEqual(self.env.out("customgames_mode_label 640x480@60; customgames_mode_label 384x224@59.6",
                                       self.e).split(), ["480i", "384x224@59.6"])
+        # 240p hack (Mugen): 240p no tubo, o jogo ve 640x480 (MODO/TELA).
+        self.assertEqual(self.env.out("customgames_mode 240p-hack", self.e).strip(), "640x240@60/640x480")
+        self.assertEqual(self.env.out("customgames_mode_label 640x240@60/640x480", self.e).strip(), "240p-hack")
+        self.assertEqual(self.env.out("customgames_mode 320x240@60/640x480", self.e).strip(), "320x240@60/640x480")
+        for bad in ("640x240@60/", "640x240@60/640", "640x240@60/x480"):
+            self.assertEqual(self.env.run("customgames_mode '%s'" % bad, self.e).returncode, 1, bad)
+        self.env.out("customgames_save G H 240p-hack 'wine k.exe'", self.e)
+        self.assertIn("G|H|640x240@60/640x480|wine k.exe", self.env.out("customgames_list", self.e).splitlines())
 
     def test_edit_moves_and_delete_removes_the_empty_group(self):
         self.env.out("customgames_save Old A 240p 'echo a'", self.e)
