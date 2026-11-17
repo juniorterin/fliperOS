@@ -71,14 +71,37 @@ The panel doesn't need the tube. From a phone, open **Setup > Video** and pick t
 
 ## Custom games
 
-**Setup > Games > Custom games**: the games that are not a ROM (PC games for Windows or Linux, scripts, your own emulators), in groups that are systems in the frontends. The same as on the cabinet ([Custom games](Custom-games.md)), with a table to add many at once.
+**Setup > Games > Custom games**: the games that are not a ROM (PC games for Windows or Linux, scripts, your own emulators), in groups that are systems in the frontends. The same as on the cabinet ([Custom games](Custom-games.md)), in three tabs (the one you used last opens again):
 
-- **The games:** each group with its games, each with its picture: **Open** on the cabinet, **Edit** (video mode, category, players, buttons, controls, picture, video, text; the name, group and command too for a command), **Make a package**, **Delete**.
+| Tab | What it has |
+|---|---|
+| **Games** | the groups and their games, **Add a game**, **Add many games** (the table), **New group**, the packed game folders |
+| **Install packages** | the packages in `~/roms/custom-packages`, with how many are waiting in the tab's name |
+| **Create package** | a Windows or Linux game in a folder becomes a package in that folder |
+
+**Games:**
+
+- **The games:** each group with its games, each with its picture: **Open** on the cabinet, **Edit** (video mode, category, players, buttons, controls, picture, video, text; the name, group and command too for a command), **Make a package** (into `~/roms/custom-packages`), **Delete**.
+- **Delete the group:** the bin at the end of the group's title. It says first what goes with it (its games, the other files in its folder), then asks whether the game folders and the packages in the group's folder go too; kept packages go to `~/roms/custom-packages`.
 - **Add a game:** a group, a name, the type (**Windows**, **Linux** or **Command**), the folder, the `.exe` or the command, the mode and the rest, in one window.
-- **New packages** and **Install a package (.zip)**: the zip goes to `~/roms/custom/GROUP` and installs.
 - **Packed game folders:** pack a game folder into squashfs, or unpack it.
 
+**Install packages:** every zip of `~/roms/custom-packages` (on the network, `\\fliperos\roms\custom-packages`), as cards like the frontend shows a game: the picture, the video (with the cursor, or a touch on the picture), the name running when it doesn't fit, the type, video mode, players, controls and buttons as icons, the category and the text scrolling slowly. Ten cards per page, with a search (name or category), a filter by state and by type, and the order (name, newest, biggest, new first); the filter and the order stay in the browser.
+
+A new package has a group list (the last group used comes chosen) and **Install**; a changed one installs over the game in its group; an installed one says where, with **Install again** and **Delete the package**; one with problems lists every problem, each on its own line (a missing `.cfg` or game folder, no `exe=` or `command=`, files outside the structure...). **Install all** puts the new ones in one group. After installing, a question offers to delete the package (the game stays). **Send packages** uploads zips into the folder: a package is always named `GAME.fliperos-customgame.zip`, and a file with another name is refused before sending, with the name it should have.
+
+**Create package:** the form of **Add a game** without the group, with **Package structure** (the files of a package, as an example with Street Fighter 4, and what goes in its `.cfg`). Next to **Create the package**:
+
+- **Preview** shows the card the frontend will show, beside the form, and follows what you change.
+- **Test on the cabinet** opens the game there, from its folder, without installing it (`~/roms/custom/.test`, hidden from the frontends). When the game shows on the screen, a note says what to do if it doesn't take the controller: the on-screen menu opens by itself on Controller configuration, and the key map made there goes into the package. Not seen in 2 minutes: the page points to its log.
+
+**Create the package** checks the row, asks before replacing a zip of the same name, packs it, and opens **Install packages** with the new card marked.
+
 Windows and Linux games are **copied** to `~/games/GROUP/NAME` and packed in squashfs, like an installed package: the folder can be on a USB disk, in `~/games` after sending it in **Files**, or on the network share. The first Windows game offers to download PortProton (about 3 GB).
+
+A folder laid out like a package fills the row by itself when you pick it (or import its parent folder): the picture, video and text (`GAME.jpg`, `GAME.mp4`, `GAME.txt`), the controller map (`GAME.key`), PortProton's settings (`GAME.ppdb`) and what `GAME.cfg` says (the `.exe` or command, the mode, the category, players, buttons and controls).
+
+Those files are found in the opened zip (pick the folder that holds `GAME/` and the `GAME.*` files), next to the game folder, or as a picture or video with the game's name inside it ([the rules](Custom-games.md#a-folder-with-the-packages-structure)). They show in the **Art** column with a purple border (*From the game folder*) and are copied from the cabinet when the row is saved, without uploading.
 
 ### Adding many games
 
@@ -126,7 +149,7 @@ Starts and stops a temporary internet address to the panel, for someone helping 
 - The Setup tree (`config/web/setup.js`) has the ids of the Setup's menus; a test checks the two match. Settings go through the same functions as the Setup's screens: `fliperos-setup --settings` lists them and `--setting KEY VALUE` changes one (`settings_list` in `lib/system.sh`). `--setup-items` says which items this cabinet has; `--quirks`, `--folders`, `--frontends`, `--bluetooth`, `--system-update` and `--attract-romlist` do the rest without a screen.
 - The on-screen menu profiles are the lines of `/etc/fliperos/osd-profiles.conf` (`scope<TAB>key<TAB>value`, the file `fliperos-osd` writes); deleting one rewrites the file without its lines. The menu sounds are `move.wav` and `select.wav` in `/opt/fliperos/sounds/menu`: a file sent is checked (a RIFF/WAVE file, 2 MB at most) and belongs to the player, like the ones sent over the network.
 - **Open on the cabinet** writes the request to `fliperos-web-launch`, like a game: `fliperos-tty1` runs `fliperos-setup --screen NAME` (only the names in `screens/panel.sh`), and the video screens end like Video Setup (Xorg and the kernel line again).
-- Custom games go through `fliperos-setup --customgames` (`lib/customgames.sh`): `describe`, `check`, `bulk` (one row per game, with an `@row N ok|fail` line each), `edit`, `delete`, `media`, `install`, `pack`, `squash`. A folder is copied by `fliperos-customgame add`, and `fliperos-customgame scan` finds the games of a folder. The art of a row waits in `/var/cache/fliperos-web/stage` until the game is saved (a day at most).
+- Custom games go through `fliperos-setup --customgames` (`lib/customgames.sh`): `describe`, `check`, `bulk` (one row per game, with an `@row N ok|fail` line each), `edit`, `delete`, `group-info`, `group-delete`, `media`, `install`, `install-all`, `package-delete`, `check-create`, `create`, `test`, `pack`, `squash`. The cards come from `fliperos-customgame packages` (JSON), and their pictures, videos and texts are read straight from the zips (`/api/customgames/package-media`, only inside `~/roms/custom-packages`). A folder is copied by `fliperos-customgame add`, and `fliperos-customgame scan` finds the games of a folder and what came with each one in the package's structure; that art, `.key` and `.ppdb` go to the Setup by their path on the cabinet (`/api/customgames/art` shows the picture's thumbnail). The art of a row waits in `/var/cache/fliperos-web/stage` until the game is saved (a day at most).
 - The terminal is a login shell in a pseudo-terminal (`setsid -c`, so Ctrl+C and job control work), at normal priority. The page talks to it over a WebSocket (`/api/terminal`) that only the panel's own page can open, after the login. The screen is drawn by [xterm.js](https://xtermjs.org) 5.5.0 with its fit addon (MIT), shipped inside the panel.
 - RetroAchievements and Cloud backup call the same programs as the Setup: `lib/cheevos.sh` and `config/fliperos-cloud`.
 

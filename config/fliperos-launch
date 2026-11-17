@@ -8,11 +8,13 @@
 #
 #   fliperos-launch retroarch|groovymame|flycast|pcsx2|pcsx2x6|duckstation|supermodel|dolphin|openbor|model2|sm2emu|fightcade|kof
 #   fliperos-launch --mode 640x240@60 programa [argumentos]   (qualquer programa)
+#   fliperos-launch custom ~/roms/custom/GRUPO/NOME.sh        (um jogo custom)
 set -euo pipefail
 
 usage() {
   echo "Usage: fliperos-launch retroarch|groovymame|flycast|pcsx2|pcsx2x6|duckstation|supermodel|dolphin|openbor|model2|sm2emu|fightcade|kof" >&2
   echo "       fliperos-launch --mode WIDTHxHEIGHT@HZ program [arguments]" >&2
+  echo "       fliperos-launch custom GAME.sh" >&2
   exit 2
 }
 
@@ -114,6 +116,18 @@ case ${1:-} in
     [[ $# -ge 3 ]] || usage
     label=$(basename -- "$3")
     run=("$x11" --mode "$2" "${@:3}")
+    ;;
+  # Um jogo custom (o submenu Games > Custom games, lib/customgames.sh
+  # customgames_desktop): o comando da ultima linha do NOME.sh dele, o
+  # fliperos-x11-run no modo do jogo. Um .sh feito a mao, sem ela, abre pelo
+  # sh em 640x480i.
+  custom)
+    [[ $# -ge 2 && -f $2 ]] || usage
+    label=$(basename -- "$2" .sh)
+    line=$(grep -m1 '^exec ' -- "$2" || true)
+    run=()
+    [[ -n $line ]] && eval "run=(${line#exec })"
+    [[ ${run[0]:-} == "$x11" ]] || run=("$x11" --mode 640x480@60 /bin/sh "$2")
     ;;
   *) usage ;;
 esac

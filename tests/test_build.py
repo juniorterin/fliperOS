@@ -7431,13 +7431,21 @@ class WebSetupBase(unittest.TestCase):
             '  describe) printf "group\\tPC games\\t1\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
             'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
             'mode\\t240p\\t640x240@60\\ngenre\\tShooter\\nsub\\tShooter / Gallery\\ngenre\\tMaze\\n'
-            'control\\tjoy8\\t8-way joystick\\nportproton\\t0\\ngames\\t/h/games\\nfree\\t1000\\n" ;;\n'
+            'control\\tjoy8\\t8-way joystick\\nportproton\\t0\\ngames\\t/h/games\\nfree\\t1000\\n'
+            'packages\\t/h/roms/custom-packages\\nlastgroup\\tPC games\\n" ;;\n'
+            '  check-create) cp "$3" TMP/create-check.rows; echo "error|1|exe|Pick the .exe."\n'
+            '    printf "out=/h/roms/custom-packages/MSX.fliperos-customgame.zip\\nexists=1\\nbytes=5\\nfree=99\\n" ;;\n'
+            '  create) cp "$3" TMP/create.rows; echo "$4" > TMP/create.flag; echo "@step 50 Packing"; sleep 1 ;;\n'
+            '  test) grep -q "^\x1fbad" "$3" && { echo "Pick the .exe."; exit 1; }\n'
+            '    printf "app=custom_test_msx\\n/opt/fliperos/bin/fliperos-x11-run\\n--mode\\n640x480@60\\n'
+            '/opt/fliperos/bin/fliperos-customgame\\nrun\\n/h/roms/custom/.test/MSX.cfg\\n" ;;\n'
             '  check) cp "$3" TMP/check.rows; echo "error|2|exe|Pick the .exe."; echo bytes=10; echo free=99 ;;\n'
             '  bulk) cp "$3" TMP/bulk.rows; echo "$4" > TMP/bulk.flag; echo "@step 10 Adding"; echo "@row 1 ok"\n'
             '    echo "@row 2 fail Pang is already in PC games"; sleep 1; echo "@fail Adding|1 of 2 games were not added"\n'
             '    exit 1 ;;\n'
             '  edit) [ "$4" = name=Nope ] && exit 2; exit 0 ;;\n'
-            '  install|pack|squash|install-all) echo "@step 50 Working"; sleep 2 ;;\n'
+            '  group-info) [ "$3" = Nope ] && exit 2; printf "games=2\\nfolders=1\\npackages=1\\nothers=1\\nother=manual.pdf\\n" ;;\n'
+            '  install|pack|squash|install-all|group-delete) echo "@step 50 Working"; sleep 2 ;;\n'
             'esac\nexit 0\n'.replace('TMP', str(tmp)))
         setup.chmod(0o755)
         (tmp / 'roms/custom').mkdir(parents=True)
@@ -7520,6 +7528,7 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual(info['genres'], [{'name': 'Shooter', 'subs': ['Shooter / Gallery']}, {'name': 'Maze', 'subs': []}])
         self.assertEqual(info['controls'], [{'value': 'joy8', 'label': '8-way joystick'}])
         self.assertEqual((info['portproton'], info['games_dir'], info['free']), (False, '/h/games', 1000))
+        self.assertEqual((info['packages_dir'], info['last_group']), ('/h/roms/custom-packages', 'PC games'))
 
     def test_scan_finds_the_games_of_a_folder(self):
         import urllib.parse
@@ -7548,7 +7557,7 @@ class WebCustomGamesTests(WebSetupBase):
                                  'free': 99})
         lines = (self.dir / 'check.rows').read_text().splitlines()
         first, second = (l.split('\x1f') for l in lines)
-        self.assertEqual(len(first), 16)
+        self.assertEqual(len(first), 18)
         self.assertEqual(first[:5], ['PC games', 'Metal Slug X', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
         self.assertEqual(first[5], 'line one line two')
         self.assertEqual(first[11], str(self.dir / 'stage' / staged['id']))
@@ -7590,18 +7599,189 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual(ok('media', {'group': 'PC games', 'name': 'Pang', 'video': staged, 'text_string': 'Hi'}), 200)
         self.assertIn('--customgames media PC games Pang --video %s --text-string Hi' % (self.dir / 'stage' / staged),
                       log.read_text())
-        # Um pacote so de ~/roms/custom.
+        # Um pacote so da pasta dos pacotes (~/roms/custom-packages).
         outside = self.dir / 'X.fliperos-customgame.zip'
         outside.write_bytes(b'PK')
         self.assertEqual(ok('install', {'zip': str(outside), 'group': 'G'}), 400)
-        zip_ = self.dir / 'roms/custom/Z.fliperos-customgame.zip'
+        (self.dir / 'roms/custom-packages').mkdir(exist_ok=True)
+        old = self.dir / 'roms/custom/Old.fliperos-customgame.zip'
+        old.write_bytes(b'PK')
+        self.assertEqual(ok('install', {'zip': str(old), 'group': 'G'}), 400)
+        zip_ = self.dir / 'roms/custom-packages/Z.fliperos-customgame.zip'
         zip_.write_bytes(b'PK')
         status, task = self.call('POST', '/api/customgames/install', {'zip': str(zip_), 'group': 'G', 'replace': True})
         self.assertEqual(status, 200)
         self.wait_task(task['id'])
         self.assertIn('--customgames install %s G replace' % zip_, log.read_text())
+        # Apagar o pacote depois de instalar: so os da pasta dos pacotes.
+        self.assertEqual(ok('package-delete', {'zip': str(old)}), 400)
+        self.assertEqual(ok('package-delete', {'zip': str(zip_)}), 200)
+        self.assertIn('--customgames package-delete %s\n' % zip_, log.read_text())
         self.assertEqual(ok('squash', {'folder': str(self.dir / 'src'), 'action': 'crush'}), 400)
         self.assertEqual(ok('nonsense', {}), 404)
+
+    def test_create_a_package(self):
+        # Criar pacote: a linha (sem grupo) conferida pelo Setup e, depois,
+        # uma tarefa; o zip vai para a pasta dos pacotes.
+        row = {'name': 'MSX', 'platform': 'windows', 'folder': str(self.dir / 'src/Metal_Slug_X'), 'exe': 'MSX.exe'}
+        staged = lambda: sorted(p.name for p in (self.dir / 'stage').glob('rows-*'))
+        before = staged()
+        status, check = self.call('POST', '/api/customgames/check-create', {'row': row})
+        self.assertEqual(status, 200)
+        self.assertEqual(check, {'errors': [{'field': 'exe', 'error': 'Pick the .exe.'}],
+                                 'out': '/h/roms/custom-packages/MSX.fliperos-customgame.zip', 'exists': True,
+                                 'bytes': 5, 'free': 99})
+        fields = (self.dir / 'create-check.rows').read_text().rstrip('\n').split('\x1f')
+        self.assertEqual(fields[1:5], ['MSX', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
+        self.assertEqual(staged(), before)        # o arquivo da conferencia nao fica
+        status, task = self.call('POST', '/api/customgames/create', {'row': row, 'replace': True})
+        self.assertEqual(status, 200)
+        self.wait_task(task['id'])
+        self.assertEqual((self.dir / 'create.flag').read_text().strip(), 'replace')
+        self.assertEqual(self.call('POST', '/api/customgames/create', {'row': 'x'})[0], 400)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        # As tres abas, e o Criar pacote abre o Instalar pacotes com o zip feito.
+        self.assertIn('const CG_TABS = ["games", "install", "create"];', js)
+        self.assertIn('cg.highlight = data.out;', js)
+        self.assertIn('cgShowTab("install");', js)
+        # Depois de instalar, a pergunta de apagar o pacote.
+        install = js.split('async function cgInstallPackage(')[1].split('\n}\n')[0]
+        self.assertLess(install.index('"/api/customgames/install"'), install.index('t("cg_pkg_delete_ask")'))
+
+    def test_test_a_game_from_the_create_tab(self):
+        # Testar: o Setup prepara o jogo da pasta e devolve o comando; o
+        # painel o manda ao tty1 e devolve o app (a pagina espera o FPS dele).
+        row = {'name': 'MSX', 'platform': 'windows', 'folder': str(self.dir / 'src/Metal_Slug_X'), 'exe': 'MSX.exe'}
+        status, data = self.call('POST', '/api/customgames/test', {'row': row})
+        self.assertEqual(status, 200)
+        self.assertEqual(data['app'], 'custom_test_msx')
+        request = (self.dir / 'run' / str(os.getuid()) / 'fliperos-web-launch').read_text().splitlines()
+        self.assertEqual(request[1:], ['/opt/fliperos/bin/fliperos-x11-run', '--mode', '640x480@60',
+                                       '/opt/fliperos/bin/fliperos-customgame', 'run', '/h/roms/custom/.test/MSX.cfg'])
+        status, data = self.call('POST', '/api/customgames/test', {'row': dict(row, name='bad')})
+        self.assertEqual((status, data['error']), (400, 'Pick the .exe.'))
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        test = js.split('async function cgTest(')[1].split('\n}\n')[0]
+        self.assertIn('s.fps && s.fps.program === out.app', test)
+        self.assertIn('t("cg_test_keys")', test)
+
+    def test_package_cards_read_the_zips(self):
+        # Os cartoes: o fliperos-customgame packages (JSON) e a midia de
+        # dentro do zip (a imagem, o texto), so da pasta dos pacotes.
+        import urllib.parse
+        import zipfile
+        folder = self.dir / 'roms/custom-packages'
+        folder.mkdir(exist_ok=True)
+        zip_ = folder / 'Cards.fliperos-customgame.zip'
+        with zipfile.ZipFile(zip_, 'w') as zf:
+            zf.writestr('Cards.cfg', 'name=Cards\nplatform=native\ncommand=./cards\nplayers=2\ncontrols=joy8\n')
+            zf.writestr('Cards/cards', '#!/bin/sh\n')
+            zf.writestr('Cards.png', b'PNGDATA')
+            zf.writestr('Cards.txt', 'About cards.')
+        status, data = self.call('GET', '/api/customgames/packages')
+        self.assertEqual(status, 200)
+        card = [p for p in data['packages'] if p['file'] == zip_.name][0]
+        self.assertEqual((card['state'], card['name'], card['players'], card['mode']), ('new', 'Cards', '2', '640x480@60'))
+        self.assertEqual(card['media'], {'snap': 'Cards.png', 'texto': 'Cards.txt'})
+        media = lambda member, zp=zip_: self.call('GET', '/api/customgames/package-media?zip=%s&member=%s'
+                                                  % (urllib.parse.quote(str(zp)), urllib.parse.quote(member)))
+        self.assertEqual(media('Cards.png'), (200, b'PNGDATA'))
+        self.assertEqual(media('Cards.txt')[1], b'About cards.')
+        self.assertEqual(media('Cards.cfg')[0], 404)
+        self.assertEqual(media('Nope.png')[0], 404)
+        outside = self.dir / 'Cards.zip'
+        outside.write_bytes(zip_.read_bytes())
+        self.assertEqual(media('Cards.png', outside)[0], 404)
+        zip_.unlink()
+        # A arte de uma pasta (a previa do Criar pacote): imagem, video ou texto.
+        art = self.dir / 'pkgart'
+        art.mkdir(exist_ok=True)
+        (art / 'v.mp4').write_bytes(b'MP4')
+        call = lambda q: self.call('GET', '/api/customgames/art?' + q)
+        self.assertEqual(call('kind=video&path=' + urllib.parse.quote(str(art / 'v.mp4'))), (200, b'MP4'))
+        self.assertEqual(call('kind=snap&path=' + urllib.parse.quote(str(art / 'v.mp4')))[0], 404)
+        self.assertEqual(call('kind=key&path=' + urllib.parse.quote(str(art / 'v.mp4')))[0], 404)
+
+    def test_delete_a_whole_group(self):
+        # O que vai junto, para a pergunta; depois uma tarefa.
+        status, info = self.call('POST', '/api/customgames/group-info', {'name': 'PC games'})
+        self.assertEqual(status, 200)
+        self.assertEqual((info['games'], info['folders'], info['packages'], info['other']), ('2', '1', '1', 'manual.pdf'))
+        self.assertEqual(self.call('POST', '/api/customgames/group-info', {'name': 'Nope'})[0], 400)
+        status, task = self.call('POST', '/api/customgames/group-delete', {'name': 'PC games', 'all': True})
+        self.assertEqual(status, 200)
+        self.wait_task(task['id'])
+        self.assertIn('--customgames group-delete PC games all\n', (self.dir / 'setup.log').read_text())
+        self.assertEqual(self.call('POST', '/api/customgames/group-delete', {})[0], 400)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('del.addEventListener("click", () => cgDeleteGroup(g.name)', js)
+        self.assertIn('cgTask("/api/customgames/group-delete", { name, all })', js)
+
+    def test_files_that_came_with_the_folder_go_by_their_path(self):
+        # A estrutura do pacote numa pasta: a arte, o .key e o .ppdb vao pelo
+        # caminho no gabinete (sem subir), conferidos pela extensao.
+        src = self.dir / 'pkgdir'
+        (src / 'MSX').mkdir(parents=True)
+        for name, data in (('MSX.jpg', b'JPG'), ('MSX.key', b'p1_b1=Z\n'), ('MSX.ppdb', b'x'), ('MSX.mp4', b'MP4')):
+            (src / name).write_bytes(data)
+        rows = [{'group': 'G', 'name': 'MSX', 'platform': 'windows', 'folder': str(src / 'MSX'), 'exe': 'a.exe',
+                 'snap': str(src / 'MSX.jpg'), 'video': str(src / 'MSX.mp4'), 'key': str(src / 'MSX.key'),
+                 'ppdb': str(src / 'MSX.ppdb')},
+                {'group': 'G', 'name': 'B', 'platform': 'windows', 'snap': str(src / 'MSX.key'),
+                 'key': str(src / 'MSX.jpg'), 'ppdb': '0123456789abcdef.png'}]
+        self.assertEqual(self.call('POST', '/api/customgames/check', {'rows': rows})[0], 200)
+        first, second = ((self.dir / 'check.rows').read_text().splitlines()[i].split('\x1f') for i in (0, 1))
+        self.assertEqual((first[11], first[12], first[16], first[17]),
+                         tuple(str(src / n) for n in ('MSX.jpg', 'MSX.mp4', 'MSX.key', 'MSX.ppdb')))
+        # Uma extensao de outro tipo (ou um id da espera no .ppdb): o caminho que nao existe.
+        for value in (second[11], second[16], second[17]):
+            self.assertTrue(value.startswith(str(self.dir / 'stage' / 'missing-')), value)
+        # A miniatura da imagem: so imagem.
+        import urllib.parse
+        status, data = self.call('GET', '/api/customgames/art?path=' + urllib.parse.quote(str(src / 'MSX.jpg')))
+        self.assertEqual((status, data), (200, b'JPG'))
+        self.assertEqual(self.call('GET', '/api/customgames/art?path=' + urllib.parse.quote(str(src / 'MSX.key')))[0], 404)
+        self.assertEqual(self.call('GET', '/api/customgames/art?path=relative.png')[0], 404)
+        # O scan de verdade (config/fliperos-customgame) devolve o que achou.
+        status, one = self.call('GET', '/api/customgames/scan?one=1&path=' + urllib.parse.quote(str(src)))
+        self.assertEqual((one['path'], one['snap'], one['key'], one['where']),
+                         (str(src / 'MSX'), str(src / 'MSX.jpg'), str(src / 'MSX.key'), 'package'))
+
+    def test_the_page_holds_the_package_name_and_structure(self):
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('const CG_SUFFIX = ".fliperos-customgame.zip";', js)
+        self.assertIn('if (!file.name.toLowerCase().endsWith(CG_SUFFIX)) {', js)
+        # A arvore: os seis arquivos e a pasta, com um texto para cada um.
+        self.assertIn('[["cfg", ".cfg"], ["jpg", ".jpg"], ["mp4", ".mp4"], ["txt", ".txt"], ["key", ".key"], ["ppdb", ".ppdb"]]', js)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_tree_cfg', 'cg_tree_jpg', 'cg_tree_mp4', 'cg_tree_txt', 'cg_tree_key', 'cg_tree_ppdb',
+                    'cg_tree_folder', 'cg_structure', 'cg_zip_name', 'cg_group_delete', 'cg_found', 'cg_example',
+                    'cg_cfg_example'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+        # O cfg do exemplo (Street Fighter 4) e aceito pelo instalador, e
+        # cada chave dele tem a explicacao.
+        pairs = re.findall(r'\["(\w+)", ("[^"]*"|CG_EXAMPLE)\]', js.split('const CG_EXAMPLE_CFG = ')[1].split(';')[0])
+        cfg = {k: ('Street Fighter 4' if v == 'CG_EXAMPLE' else v.strip('"')) for k, v in pairs}
+        self.assertIn('const CG_EXAMPLE = "Street Fighter 4";', js)
+        tool = SourceFileLoader('fliperos_customgame', str(ROOT / 'config/fliperos-customgame')).load_module()
+        checked = tool.check_cfg(cfg, 'Street Fighter 4', {cfg['exe']})
+        self.assertEqual((checked['platform'], checked['mode'], checked['controls']), ('windows', '640x480@60', 'joy8'))
+        keys = re.search(r'const CG_CFG_KEYS = \[([^\]]*)\]', js).group(1)
+        for key in list(cfg) + ['command']:
+            self.assertIn('"%s"' % key, keys)
+            self.assertEqual(len(re.findall(r'(?<!\w)cg_cfg_%s: ' % key, text)), 2, key)
+        # A linha leva o id da arte subida, ou o caminho da que veio com a pasta.
+        self.assertIn('const cgArtRef = (art) => (art ? art.id || art.path || "" : "");', js)
+        # Cada problema que o verificador acha tem o texto dele, nas duas
+        # linguas (a lista do Instalar pacotes os traduz pelo codigo).
+        codes = re.findall(r'"(\w+)"', js.split('const CG_PROBLEM_CODES = [')[1].split('];')[0])
+        tool = (ROOT / 'config/fliperos-customgame').read_text()
+        for code in codes:
+            self.assertEqual(len(re.findall(r'(?<!\w)cg_pb_%s: ' % code, text)), 2, code)
+        raised = set(re.findall(r'raise Bad\(.*?, "(\w+)"(?=, |\))', tool))
+        self.assertTrue({"not_zip", "unsafe", "encrypted"} <= raised)
+        for code in set(re.findall(r'bad\("(\w+)"', tool)) | raised | {"misnamed"}:
+            self.assertIn(code, codes)
 
 
 class WebSetupTests(WebSetupBase):
@@ -13217,7 +13397,8 @@ class NewEmulatorBuildTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-squashgames" "$root/opt/fliperos/bin/fliperos-squashgames"', ROOTFS)
         self.assertIn('multi-user.target.wants/fliperos-squashgames.service"', ROOTFS)
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
-        self.assertIn('"+squash|Pack a game folder (squashfs)"', menu)
+        # O item da tela Packed game folders (screen_squash_games).
+        self.assertIn('entries+=("+pack|Pack a game folder" "return|Return")', menu)
         self.assertIn('run_with_progress "Packing $(basename "$folder")" "" squashgames_run pack "$folder"', menu)
 
     def test_image_is_slimmed_before_the_squashfs(self):
@@ -19406,6 +19587,60 @@ class OsdTests(unittest.TestCase):
             osd.RUN_USER = old
         # A OSD nao toma o teclado virtual do gamekeys.
         self.assertIn('GAME_KEYS_NAME) and self.is_keyboard(keys)', (ROOT / 'config/fliperos-osd').read_text())
+
+    def test_a_custom_game_without_keys_opens_the_controller_configuration(self):
+        # O .key quase nunca vem pronto (a pessoa o faz pela OSD): um jogo
+        # custom sem ele abre a OSD sozinha no Controller configuration, uma
+        # vez por jogo aberto, depois de AUTO_KEYS_DELAY s na tela.
+        osd = self.osd
+        buttons = load_script('fliperos_buttons_osd_auto', 'config/fliperos-buttons')
+        keyfile = Path(self.tmp.name) / 'New.key'
+        service = object.__new__(osd.Service)
+        service.keys_since = service.keys_asked = None
+        service.gamekeys = lambda screen: {'folder': '/run/user/1000/fliperos-gamekeys', 'keyfile': str(keyfile),
+                                           'buttons': buttons}
+        allowed = [True]
+        service.allowed = lambda screen: allowed[0]
+        clock = [100.0]
+        saved = osd.time.monotonic
+        osd.time.monotonic = lambda: clock[0]
+        try:
+            screen = {'program': 'custom_pc_games_new', 'pid': 42, 'core': ''}
+            self.assertFalse(service.auto_keys(screen))           # acabou de aparecer
+            clock[0] += osd.AUTO_KEYS_DELAY / 2
+            self.assertFalse(service.auto_keys(screen))
+            clock[0] += osd.AUTO_KEYS_DELAY
+            self.assertTrue(service.auto_keys(screen))
+            self.assertFalse(service.auto_keys(screen))           # uma vez por jogo aberto
+            # Aberto de novo (outro pid), ja com o .key (um Save, mesmo vazio): nao.
+            keyfile.write_text(buttons.gamekeys_text({}))
+            again = dict(screen, pid=43)
+            service.auto_keys(again)
+            clock[0] += osd.AUTO_KEYS_DELAY + 1
+            self.assertFalse(service.auto_keys(again))
+            keyfile.unlink()
+            # Um emulador, o frontend, ou a OSD desligada (modo comercial...): nao.
+            for other in ({'program': 'retroarch', 'pid': 50}, {'program': 'python3', 'pid': 51}):
+                service.auto_keys(other)
+                clock[0] += osd.AUTO_KEYS_DELAY + 1
+                self.assertFalse(service.auto_keys(other), other)
+            allowed[0] = False
+            service.auto_keys(dict(screen, pid=60))
+            clock[0] += osd.AUTO_KEYS_DELAY + 1
+            self.assertFalse(service.auto_keys(dict(screen, pid=60)))
+        finally:
+            osd.time.monotonic = saved
+        # O menu aberto direto no teclado: Back fecha (nao volta ao principal).
+        gamekeys = service.gamekeys(screen)
+        menu = osd.Menu(screen, self.MODE, osd.Worker(), None, gamekeys)
+        menu.open_keys()
+        menu.direct = True
+        self.assertEqual(menu.title(), 'CONTROLLER')
+        menu.key(osd.KEY_ESC)
+        self.assertTrue(menu.closing)
+        source = (ROOT / 'config/fliperos-osd').read_text()
+        self.assertIn('elif self.auto_keys(screen):\n                self.open_menu(page="keys")', source)
+        self.assertIn('if page == "keys" and menu.gamekeys:\n            menu.open_keys()\n            menu.direct = True', source)
 
     def test_controller_configuration_fits_any_frame(self):
         # O teclado e desenhado no quadro do jogo, como o menu: cabe em todos,

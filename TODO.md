@@ -67,7 +67,8 @@ Feito em 2026-11-07 e testado só no Docker:
   - no tubo, ler as teclas;
   - com o painel, capturar um botão e o jogo receber a tecla;
   - um controle lido pelo HIDAPI calado com a OSD aberta;
-  - um painel que se diz teclado (I-PAC): o jogo recebe a tecla nova e também a original.
+  - um painel que se diz teclado (I-PAC): o jogo recebe a tecla nova e também a original;
+  - um jogo custom sem `.key` abrindo a OSD sozinha no teclado 2 s depois de aparecer (uma vez por jogo aberto), e o Save vazio parando de perguntar.
 - **PortProton**: a instalação sem janelas (scripts fixos, primeiro download num Xvfb, o curl por https) e o `.ppdb` deram certo num container Ubuntu 24.04 (~3 GB). Nenhum jogo abriu ainda. Falta:
   - instalar pelo Setup num gabinete;
   - abrir um `.exe` de verdade em 640x240 e 480i;
@@ -85,6 +86,11 @@ As fases 5a (leitura), 5b (controle) e 5c (a tela ao vivo e o marquee para o OBS
   - "Abrir no gabinete" de uma tela de vídeo (a Geometria) e de uma de controle (o Button mapping), voltando ao frontend no fim;
   - a tabela com uma pasta de jogo do Windows e uma do Linux copiadas para `~/games` e compactadas, abrindo pelo frontend;
   - Importar de uma pasta num disco USB, e Colar de uma planilha copiada do Google Planilhas no celular;
+  - uma pasta com a estrutura do pacote (o zip aberto: `JOGO/`, `JOGO.jpg`, `JOGO.mp4`, `JOGO.key`, `JOGO.ppdb`...) preenchendo a linha sozinha, com a miniatura da imagem, e o Create package do Setup pulando o `.exe` e o Wine com o `JOGO.cfg`;
+  - Apagar o grupo (painel e Setup) com um jogo instalado de um pacote, mantendo e apagando as pastas, e um jogo aberto segurando a pasta (o Retry);
+  - as areas Install games / Create package no Setup e as abas do painel, com zips de verdade em `~/roms/custom-packages` (os de antes movidos pelo update), os cartoes com video tocando no celular, e a pergunta de apagar o pacote;
+  - o Testar do Criar pacote com um jogo do Windows (PortProton demorando) e um do Linux, o aviso das teclas e o `.key` do teste indo no pacote;
+  - o submenu Games > Custom games do LXDE abrindo um jogo e voltando ao desktop;
   - Bluetooth (procurar e parear pelo painel), Quirks e Pastas mudados de longe.
 
 ## Bugs

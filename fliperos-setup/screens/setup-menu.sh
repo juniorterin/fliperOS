@@ -689,27 +689,28 @@ screen_bootmedia() {
 # ── Custom games ─────────────────────────────────────────────────
 # lib/customgames.sh: programas que nao sao ROM, em grupos que os frontends
 # mostram como sistemas. Os grupos em azulejos, com quantos jogos cada um
-# tem; dentro de um grupo, os jogos e os pacotes para instalar nele.
+# tem, e duas areas separadas: Install games (os pacotes da pasta deles,
+# ~/roms/custom-packages, o grupo perguntado ao instalar) e Create package
+# (o pacote vai para essa pasta).
 
 screen_custom_games() {
-  local title="Custom games" choice last="" group n new waiting
+  local title="Custom games" choice last="" group n
   local -a tiles groups pending
+  customgames_packages_migrate
+  customgames_packages_dir
   while true; do
     mapfile -t pending < <(customgames_pending_ok)
     mapfile -t groups < <(customgames_groups)
     tiles=()
     for group in "${groups[@]}"; do
       n=$(customgames_count "$group")
-      new=0
-      for waiting in "${pending[@]}"; do
-        [[ $(cut -d'|' -f2 <<< "$waiting") == "$group" ]] && ((new++))
-      done
-      tiles+=("group:$group|$group ($n games$( ((new)) && echo ", $new new"))|$group|games|$n,$new|The games of $group, and packages to install in it.")
+      tiles+=("group:$group|$group ($n games)|$group|games|$n,0|The games of $group.")
     done
-    tiles+=("+group|Add a group|Add group|action|+ GROUP|A group is a system in the frontends (PC games...).")
-    ((${#pending[@]})) &&
-      tiles+=("+new|New games (${#pending[@]})|New games|text|${#pending[@]} NEW|Packages put in ~/roms/custom, ready to install.")
-    tiles+=("+squash|Packed game folders|Packed|action|FOLDERS|Game folders kept in one compressed file (squashfs)."
+    n=${#pending[@]}
+    tiles+=("+group|Add a group|Add group|action|+ GROUP|A group is a system in the frontends (PC games...)."
+      "+install|Install games$( ((n)) && echo " ($n new)")|Install games|text|$( ((n)) && echo "$n NEW" || echo "PACKAGES")|The packages in ~/roms/custom-packages."
+      "+create|Create package|Create package|action|NEW ZIP|A GAME.fliperos-customgame.zip from a game folder."
+      "+squash|Packed game folders|Packed|action|FOLDERS|Game folders kept in one compressed file (squashfs)."
       "return|Return|Return|action|BACK|")
     choice=$(UI_BOARD_ENTER=OPEN ui_board "$title" \
       "Games that are not a ROM, in groups. The frontends show each group as a system." \
@@ -722,7 +723,8 @@ screen_custom_games() {
         last=group:$group
         screen_custom_group "$group"
         ;;
-      +new) screen_custom_pending "" ;;
+      +install) screen_custom_install_area ;;
+      +create) screen_custom_create_area ;;
       +squash) screen_squash_games ;;
       group:*) screen_custom_group "${choice#group:}" ;;
     esac
@@ -743,57 +745,81 @@ screen_custom_group_new() {
 }
 
 # screen_custom_group_pick TEXTO [PADRAO]: um grupo que existe ou um novo;
-# imprime o nome. Status 1: desistiu.
+# imprime o nome. Sem PADRAO, o ultimo grupo usado. Status 1: desistiu.
 screen_custom_group_pick() {
-  local title="Custom games" choice g
+  local title="Custom games" choice g default
   local -a groups entries=()
   mapfile -t groups < <(customgames_groups)
   ((${#groups[@]})) || { screen_custom_group_new; return; }
   for g in "${groups[@]}"; do entries+=("$g|$g"); done
   entries+=("+new|New group")
-  choice=$(UI_STYLE=list ui_menu "$title" "$1" "${2:-${groups[0]}}" "${entries[@]}") || return 1
+  default=${2:-$(customgames_last_group)}
+  choice=$(UI_STYLE=list ui_menu "$title" "$1" "${default:-${groups[0]}}" "${entries[@]}") || return 1
   [[ $choice == +new ]] && { screen_custom_group_new; return; }
   printf '%s\n' "$choice"
 }
 
 # screen_custom_group GRUPO: os jogos do grupo em azulejos (a imagem de
-# cada um), e adicionar, criar um pacote e instalar todos os pacotes dele.
+# cada um), um jogo pelo comando e apagar o grupo. Os pacotes ficam nas
+# areas Install games e Create package.
 screen_custom_group() {
-  local group=$1 title="Custom games: $1" choice last="" name label short snap n row
-  local -a tiles mine names all
+  local group=$1 title="Custom games: $1" choice last="" name label short snap
+  local -a tiles names
   while true; do
     [[ -d $CUSTOM_GAMES_DIR/$group ]] || return 0
-    # Os pacotes para este grupo: os da pasta dele (o "instalar todos") e os
-    # de ~/roms/custom, que entram nele pelo Add games.
-    mapfile -t all < <(customgames_pending_ok "$group")
-    mine=()
-    for row in "${all[@]}"; do
-      [[ $(cut -d'|' -f2 <<< "$row") == "$group" ]] && mine+=("$row")
-    done
-    n=${#all[@]}
     mapfile -t names < <(customgames_list | awk -F'|' -v g="$group" '$1 == g { print $2 }')
-    tiles=("+add|Add games$( ((n)) && echo " ($n new)")|Add games|text|$( ((n)) && echo "$n NEW" || echo "+ GAME")|Install a package, or add a game by its command."
-      "+create|Create package|Package|action|NEW ZIP|Make a GAME.fliperos-customgame.zip from a game folder.")
-    ((${#mine[@]})) &&
-      tiles+=("+all|Install all (${#mine[@]})|All new|text|${#mine[@]} PACKAGES|Install every package in ~/roms/custom/$group.")
+    tiles=("+command|Add by its command|By command|action|+ GAME|A game or program opened by a command line (no package).")
     for name in "${names[@]}"; do
       label=$(customgames_kind_label "$group" "$name")
       snap=$(customgames_snap "$group" "$name") || snap=""
       short=${label/Windows/Win}
       tiles+=("game:$name|$name ($label)|$name|image|$snap;${short/Command/Cmd}|$name: $label.")
     done
-    tiles+=("return|Return|Return|action|BACK|")
+    tiles+=("+delete|Delete group|Delete group|action|DELETE|Delete $group and its games."
+      "return|Return|Return|action|BACK|")
     choice=$(UI_BOARD_ENTER=OPEN ui_board "$title" "${#names[@]} games in $group, a system in the frontends." "$last" \
       "${tiles[@]}") || return 0
     last=$choice
     case $choice in
       return) return 0 ;;
-      +add) screen_custom_add "$group" ;;
-      +create) screen_custom_package_create "$group" ;;
-      +all) screen_custom_install_all "$group" "${mine[@]}" ;;
+      +command) screen_custom_game_edit "" "" "$group" ;;
+      +delete) screen_custom_group_delete "$group" && return 0 ;;
       game:*) screen_custom_game "$group" "${choice#game:}" ;;
     esac
   done
+}
+
+# screen_custom_group_delete GRUPO: pergunta e apaga o grupo inteiro
+# (customgames_group_delete): o que vai junto (as pastas dos jogos, os
+# pacotes da pasta dele, outros arquivos) e dito antes. Status 1: desistiu
+# ou nao deu.
+screen_custom_group_delete() {
+  local group=$1 title="Delete group" info games folders packages others other text choice keep="" both=""
+  info=$(customgames_group_info "$group")
+  games=$(sed -n 's/^games=//p' <<< "$info")
+  folders=$(sed -n 's/^folders=//p' <<< "$info")
+  packages=$(sed -n 's/^packages=//p' <<< "$info")
+  others=$(sed -n 's/^others=//p' <<< "$info")
+  other=$(sed -n 's/^other=//p' <<< "$info")
+  text="Delete the group $group and its $games game$( ((games == 1)) || echo s)?"
+  ((others)) && text+=" Also deleted from its folder: $other$( ((others > 5)) && echo " and $((others - 5)) more")."
+  if ((folders || packages)); then
+    ((folders)) && keep="the game folders" both="the game folders"
+    ((packages)) && keep+="${keep:+ and }the packages (moved to ~/roms/custom-packages)" both+="${both:+ and }the packages"
+    choice=$(ui_menu "$title" "$text" keep "keep|Delete it, keep $keep" "wipe|Delete it with $both" "return|Cancel") ||
+      return 1
+    [[ $choice == return ]] && return 1
+    if [[ $choice == wipe ]]; then choice=all; else choice=""; fi
+  else
+    ui_yesno "$title" "$text" no || return 1
+    choice=""
+  fi
+  if ! run_with_progress "Deleting $group" "" customgames_group_delete "$group" "$choice"; then
+    screen_custom_games_refresh
+    return 1
+  fi
+  screen_custom_games_refresh
+  return 0
 }
 
 # screen_custom_game GRUPO NOME: o que fazer com um jogo.
@@ -830,47 +856,82 @@ screen_custom_game() {
   esac
 }
 
-# screen_custom_add GRUPO: os pacotes para instalar no grupo (os da pasta
-# dele e os de ~/roms/custom, que entram nele sem perguntar), ou um jogo
-# pelo comando.
-screen_custom_add() {
-  local group=$1 title="Add games" choice zip g name platform state why row
-  local -a entries rows
+# screen_custom_install_area: a area Install games, os pacotes da pasta
+# deles (~/roms/custom-packages): os novos para instalar (o grupo
+# perguntado), os que mudaram desde a instalacao, os ja instalados (com o
+# grupo: instalar de novo ou apagar o zip) e os que nao servem (o motivo).
+screen_custom_install_area() {
+  local title="Install games" choice last="" zip g name platform state why codes row n
+  local -a entries rows problems
   while true; do
-    mapfile -t rows < <(customgames_pending "$group")
+    mapfile -t rows < <(customgames_pending)
     entries=()
+    n=0
     for row in "${rows[@]}"; do
-      IFS='|' read -r zip g name platform state why <<< "$row"
+      IFS='|' read -r zip g name platform state why codes <<< "$row"
       case $state in
-        bad) entries+=("bad:$zip|$(basename "$zip") (cannot install)") ;;
-        update) entries+=("$zip|$name (${platform^}, replaces the one in $group)") ;;
-        *) entries+=("$zip|$name (${platform^} game)") ;;
+        new) entries+=("$zip|$name (${platform^} game)") && ((n++)) ;;
+        update) entries+=("$zip|$name (${platform^}, newer than the one in $g)") && ((n++)) ;;
+        installed) entries+=("$zip|$name (installed in $g)") ;;
+        *) entries+=("$zip|$(basename "$zip") (cannot install)") ;;
       esac
     done
-    entries+=("+command|By its command (no package)" "return|Return")
+    ((n > 1)) && entries+=("+all|Install all new ($n)")
+    entries+=("return|Return")
     choice=$(UI_STYLE=list ui_menu "$title" \
-      "Put GAME.fliperos-customgame.zip in ~/roms/custom (the network share \\\\fliperos\\roms\\custom) and pick it here." \
-      "" "${entries[@]}") || return 0
+      "Put GAME.fliperos-customgame.zip in ~/roms/custom-packages (the network share \\\\fliperos\\roms\\custom-packages), or make one in Create package." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
     case $choice in
       return) return 0 ;;
-      +command)
-        screen_custom_game_edit "" "" "$group"
-        return 0
+      +all) screen_custom_install_all ;;
+      *)
+        row=$(printf '%s\n' "${rows[@]}" | awk -F'|' -v z="$choice" '$1 == z' | head -n 1)
+        IFS='|' read -r zip g name platform state why codes <<< "$row"
+        case $state in
+          new)
+            g=$(screen_custom_group_pick "Which group for $name? Each group is a system in the frontends.") || continue
+            screen_custom_install "$zip" "$g"
+            ;;
+          update) screen_custom_install "$zip" "$g" ;;
+          installed) screen_custom_package_installed "$zip" "$name" "$g" ;;
+          *)
+            # Cada problema numa linha (o que falta, o que sobra, o cfg).
+            mapfile -t problems < <(printf '%s\n' "$why" | sed 's/; /\n/g' | sed 's/^/  - /')
+            ui_msg "$title" "$(ui_bad "$(basename "$zip") cannot be installed:")" "${problems[@]}"
+            choice=$(ui_menu "$title" "Fix the package and put it back, or delete $(basename "$zip")." keep \
+              "keep|Keep it" "delpkg|Delete the file") || continue
+            [[ $choice == delpkg ]] && customgames_package_delete "$zip"
+            ;;
+        esac
         ;;
-      bad:*)
-        why=$(printf '%s\n' "${rows[@]}" | awk -F'|' -v z="${choice#bad:}" '$1 == z { print $6 }')
-        ui_msg "$title" "$(ui_bad "$(basename "${choice#bad:}") is not a FliperOS game package.")" "" "$why"
-        ;;
-      *) screen_custom_install "$choice" "$group" && return 0 ;;
     esac
   done
 }
 
-# screen_custom_install ZIP GRUPO [ask]: confere, pergunta e instala um
-# pacote (ja existindo o jogo, pergunta se troca). Com ask, so pergunta
-# antes (o "instalar todos"). Status 1: nao instalou.
+# screen_custom_package_installed ZIP NOME GRUPO: um pacote ja instalado:
+# instalar de novo (por cima) ou apagar o zip (o jogo fica).
+screen_custom_package_installed() {
+  local zip=$1 name=$2 group=$3 title="Install games" choice
+  choice=$(ui_menu "$title" "$name is installed in $group from $(basename "$zip")." return \
+    "reinstall|Install it again (what it saved in its folder is lost)" \
+    "delpkg|Delete the package (the game stays installed)" "return|Return") || return 0
+  case $choice in
+    reinstall) screen_custom_install "$zip" "$group" ;;
+    delpkg)
+      ui_yesno "$title" "Delete $(basename "$zip")? $name stays installed in $group." no || return 0
+      customgames_package_delete "$zip" || ui_msg "$title" "$(ui_bad "Could not delete $(basename "$zip").")"
+      ;;
+  esac
+}
+
+# screen_custom_install ZIP GRUPO [noask|nopre]: confere, pergunta e instala
+# um pacote (ja existindo o jogo, pergunta se troca) e, no fim, pergunta se
+# o zip sai. Com noask, nao pergunta antes nem depois (o "instalar todos"
+# pergunta uma vez no fim); com nopre, so depois (o Create package ja
+# perguntou). Status 1: nao instalou.
 screen_custom_install() {
-  local zip=$1 group=$2 title="Add games" info name platform bytes replace="" rc
+  local zip=$1 group=$2 title="Install games" info name platform bytes replace="" rc
   info=$(customgames_tool inspect "$zip" 2>&1) || {
     ui_msg "$title" "$(ui_bad "$(basename "$zip") is not a FliperOS game package.")" "" "$info"
     return 1
@@ -887,64 +948,73 @@ screen_custom_install() {
     ui_yesno "$title" "$name is already in $group. Install the package over it? What the game saved in its folder is lost." no ||
       return 1
     replace=replace
-  elif [[ ${3:-} != noask ]]; then
+  elif [[ -z ${3:-} ]]; then
     ui_yesno "$title" "Install $name (${platform^} game, $((bytes / 1048576)) MB) in $group?" yes || return 1
   fi
   run_with_progress "Adding $name" "" customgames_install "$zip" "$group" $replace
   rc=$?
   screen_custom_games_refresh
-  ((rc == 0))
+  ((rc == 0)) || return 1
+  if [[ ${3:-} != noask ]] &&
+    ui_yesno "$title" "$name is installed in $group. Delete the package $(basename "$zip")? Keep it to install the game again or copy it to another FliperOS." no; then
+    customgames_package_delete "$zip" || ui_msg "$title" "$(ui_bad "Could not delete $(basename "$zip").")"
+  fi
+  return 0
 }
 
-# screen_custom_install_all GRUPO LINHA...: os pacotes da pasta do grupo,
-# um depois do outro (sem perguntar cada um).
+# screen_custom_install_all: os pacotes novos num grupo so (perguntado uma
+# vez) e os que mudaram no grupo deles, um depois do outro; no fim, se os
+# zips instalados saem.
 screen_custom_install_all() {
-  local group=$1 row zip done=0 total
-  shift
-  total=$#
-  ui_yesno "Install all" "Install the $total packages of ~/roms/custom/$group?" yes || return 0
-  for row in "$@"; do
-    zip=${row%%|*}
-    screen_custom_install "$zip" "$group" noask && ((done++))
+  local title="Install all" row zip g state group done=0 total
+  local -a rows installed=()
+  mapfile -t rows < <(customgames_pending_ok)
+  total=${#rows[@]}
+  ((total)) || return 0
+  group=$(screen_custom_group_pick "Install the $total new packages in which group?") || return 0
+  for row in "${rows[@]}"; do
+    IFS='|' read -r zip g _ _ state _ <<< "$row"
+    [[ $state == update ]] || g=$group
+    if screen_custom_install "$zip" "$g" noask; then
+      ((done++))
+      installed+=("$zip")
+    fi
   done
-  ui_msg "Install all" "$done of $total packages installed in $group."
+  ((done)) || { ui_msg "$title" "No package was installed."; return 0; }
+  if ui_yesno "$title" "$done of $total packages installed. Delete the $done installed packages from ~/roms/custom-packages?" no; then
+    for zip in "${installed[@]}"; do
+      customgames_package_delete "$zip"
+    done
+  fi
 }
 
-# screen_custom_pending: todos os pacotes que faltam instalar. Os de
-# ~/roms/custom (sem grupo) perguntam o grupo; os de ~/roms/custom/GRUPO
-# entram nele.
-screen_custom_pending() {
-  local title="New games" choice zip group name platform state why row
-  local -a rows entries
+# screen_custom_create_area: a area Create package: de uma pasta de jogo,
+# ou de um jogo ja instalado (com o que ele tem agora). O zip vai para
+# ~/roms/custom-packages e aparece no Install games.
+screen_custom_create_area() {
+  local title="Create package" choice group name
+  local -a entries
   while true; do
-    mapfile -t rows < <(customgames_pending_ok)
-    ((${#rows[@]})) || return 0
-    entries=()
-    for row in "${rows[@]}"; do
-      IFS='|' read -r zip group name platform state why <<< "$row"
-      entries+=("$zip|$name (${platform^}, ${group:-no group yet})")
-    done
-    entries+=("+all|Install all" "return|Return")
-    choice=$(UI_STYLE=list ui_menu "$title" "Packages waiting in ~/roms/custom. The ones in a group folder go to that group." \
-      "" "${entries[@]}") || return 0
+    choice=$(ui_menu "$title" "A GAME.fliperos-customgame.zip in ~/roms/custom-packages, to install here or on another FliperOS." \
+      fromfolder "fromfolder|From a game folder" "fromgame|From an installed game" "return|Return") || return 0
     case $choice in
       return) return 0 ;;
-      +all)
-        for row in "${rows[@]}"; do
-          IFS='|' read -r zip group name _ <<< "$row"
-          if [[ -z $group ]]; then
-            group=$(screen_custom_group_pick "Which group for $name?") || continue
-          fi
-          screen_custom_install "$zip" "$group" noask
-        done
-        ;;
-      *)
-        row=$(printf '%s\n' "${rows[@]}" | awk -F'|' -v z="$choice" '$1 == z')
-        IFS='|' read -r zip group name _ <<< "$row"
-        if [[ -z $group ]]; then
-          group=$(screen_custom_group_pick "Which group for $name? Each group is a system in the frontends.") || continue
+      fromfolder) screen_custom_package_create "" ;;
+      fromgame)
+        entries=()
+        while IFS='|' read -r group name _; do
+          case $(customgames_platform "$group" "$name") in
+            windows | native) entries+=("$group/$name|$name ($group)") ;;
+          esac
+        done < <(customgames_list)
+        if ((${#entries[@]} == 0)); then
+          ui_msg "$title" "No Windows or Linux game is installed yet: make the first package from its folder."
+          continue
         fi
-        screen_custom_install "$zip" "$group"
+        choice=$(UI_STYLE=list ui_menu "$title" "Which game? The package takes what it has now (settings, art, controller map)." \
+          "" "${entries[@]}" "return|Return") || continue
+        [[ $choice == return ]] && continue
+        screen_custom_package_create "${choice%%/*}" "${choice#*/}"
         ;;
     esac
   done
@@ -957,7 +1027,7 @@ screen_custom_pending() {
 # screen_custom_pick_mode NOME ATUAL: imprime o modo (240p, 480i ou
 # LARGURAxALTURA@HZ). Status 1: Esc.
 screen_custom_pick_mode() {
-  local title="Video mode" choice current=${2:-640x240@60}
+  local title="Video mode" choice current=${2:-640x480@60}
   case $(customgames_mode_label "$current") in
     240p) choice=240p ;;
     480i) choice=480i ;;
@@ -1099,7 +1169,7 @@ customgames_browse() {
 # pacote de um jogo ja instalado (comeca com o que ele tem).
 screen_custom_package_create() {
   local group=$1 from=${2:-} title="Create package" name="" platform=native folder="" exe="" cmd="" snap="" video=""
-  local text="" text_string="" mode=640x240@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
+  local text="" text_string="" mode=640x480@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
   local out base value rel
   local -a args
   if [[ -n $from ]]; then
@@ -1138,16 +1208,26 @@ screen_custom_package_create() {
     # 3. A pasta do jogo.
     folder=$(customgames_browse "Open the folder of $name (everything the game needs), then Use this folder." dir) ||
       return 0
-    # 4. O que abre o jogo.
+    # O que veio com a pasta, na estrutura do pacote (o zip aberto, ou
+    # JOGO.jpg, JOGO.mp4, JOGO.txt, JOGO.key e JOGO.ppdb ao lado dela): a
+    # pasta do jogo de dentro, e a arte ja preenchida no passo 5.
+    customgames_found "$folder"
+    folder=$CG_FOUND_FOLDER snap=$CG_FOUND_SNAP video=$CG_FOUND_VIDEO text=$CG_FOUND_TEXT key=$CG_FOUND_KEY
+    # 4. O que abre o jogo (o .exe do JOGO.cfg, se veio um).
     if [[ $platform == windows ]]; then
-      while true; do
+      exe=$CG_FOUND_EXE
+      while [[ -z $exe ]]; do
         exe=$(customgames_browse "The .exe that opens $name, inside its folder." file .exe .bat) || return 0
         [[ $exe == "$folder"/* ]] && break
         ui_msg "$title" "$(ui_bad "The .exe must be inside the game folder:")" "$folder"
+        exe=""
       done
       exe=${exe#"$folder"/}
-      # As configuracoes do PortProton do jogo (o Wine dele) no .ppdb.
-      if screen_portproton_need; then
+      # As configuracoes do PortProton do jogo (o Wine dele) no .ppdb: o
+      # JOGO.ppdb que veio com a pasta, ou feito agora.
+      if [[ -n $CG_FOUND_PPDB ]]; then
+        ppdb=$CG_FOUND_PPDB
+      elif screen_portproton_need; then
         screen_portproton_ppdb "$folder/$exe" || return 0
         ppdb=$PORTPROTON_PPDB
       else
@@ -1201,11 +1281,10 @@ screen_custom_package_create() {
   controls=$(screen_custom_pick_controls "$controls") || controls=""
   buttons=$(screen_custom_pick_count buttons "$buttons") || buttons=""
   players=$(screen_custom_pick_count players "$players") || players=""
-  # 8. O pacote, na pasta do grupo.
-  base=$(printf '%s' "$name" | sed 's/[^A-Za-z0-9 ._()&+,-]\{1,\}/_/g')
-  out=$CUSTOM_GAMES_DIR/$group/$base.fliperos-customgame.zip
+  # 8. O pacote, na pasta dos pacotes (aparece no Install games).
+  out=$(customgames_package_out "$name")
   if [[ -e $out ]]; then
-    ui_yesno "$title" "$(basename "$out") already exists in $group. Replace it?" no || return 0
+    ui_yesno "$title" "$(basename "$out") already exists in ~/roms/custom-packages. Replace it?" no || return 0
   fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder" --mode "$mode")
   [[ $platform == windows ]] && args+=(--exe "$exe") || args+=(--command "$cmd")
@@ -1213,16 +1292,16 @@ screen_custom_package_create() {
     [[ -n ${!value} ]] && args+=("--$value" "${!value}")
   done
   [[ -n $text_string ]] && args+=(--text-string "$text_string")
-  mkdir -p "$CUSTOM_GAMES_DIR/$group" && chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_DIR" "$CUSTOM_GAMES_DIR/$group" 2> /dev/null
   run_with_progress "Packing $name" "" customgames_pack_run "${args[@]}" || return 0
   if [[ -n $from ]]; then
-    ui_msg "$title" "$name is packed:" "  ~/roms/custom/$group/$(basename "$out")" "" \
-      "Copy it to another FliperOS (into its ~/roms/custom) and install it in Custom games."
+    ui_msg "$title" "$name is packed:" "  ~/roms/custom-packages/$(basename "$out")" "" \
+      "Copy it to another FliperOS (into its ~/roms/custom-packages) and install it in Install games."
     return 0
   fi
-  ui_yesno "$title" "$(basename "$out") is ready in $group. Install $name here now? The game folder is copied to ~/games/$group." yes ||
+  ui_yesno "$title" "$(basename "$out") is ready in ~/roms/custom-packages. Install $name here now? The game folder is copied to ~/games." yes ||
     return 0
-  screen_custom_install "$out" "$group" noask
+  group=$(screen_custom_group_pick "Which group for $name? Each group is a system in the frontends.") || return 0
+  screen_custom_install "$out" "$group" nopre
 }
 
 # screen_squash_games: as pastas de jogo guardadas em squashfs
@@ -1298,7 +1377,7 @@ screen_custom_game_edit() {
     ui_msg "$title" "The command cannot be empty."
   done
   # A resolucao: 240p, 480i ou uma escolhida.
-  choice=$(screen_custom_pick_mode "$name" "${mode:-640x240@60}") || return 0
+  choice=$(screen_custom_pick_mode "$name" "${mode:-640x480@60}") || return 0
   if ! customgames_save "$group" "$name" "$choice" "$cmd" "$old_group" "$old_name"; then
     ui_msg "$title" "$(ui_bad "Could not save $name.")" "" "Details in /var/log/fliperos-setup.log."
     return 0
@@ -1323,6 +1402,8 @@ screen_custom_game_edit() {
 screen_custom_games_refresh() {
   ui_info "Custom games" "Putting the games in the frontend..."
   frontends_configure "$(launcher_current)"
+  # E no menu do desktop (Games > Custom games).
+  customgames_desktop
 }
 
 # screen_frontend_custom [NOME]: cadastra um frontend da pessoa (rotulo e

@@ -1,13 +1,19 @@
 // Sistema > Setup > Jogos > Jogos custom (o Setup > Games > Custom games do
-// gabinete): os grupos e os jogos, os pacotes novos, as pastas compactadas e
-// a tabela para cadastrar muitos jogos de uma vez (texto e dropdowns, linhas
-// novas, importar de uma pasta, colar de uma planilha, duplicar, a arte de
-// cada linha). Tudo pelo fliperos-setup --customgames (config/fliperos-web,
+// gabinete), em tres abas: Jogos (os grupos e os jogos, a tabela para
+// cadastrar muitos de uma vez e as pastas compactadas), Instalar pacotes (os
+// JOGO.fliperos-customgame.zip da pasta deles, ~/roms/custom-packages, o
+// grupo escolhido ao instalar) e Criar pacote (o zip vai para essa pasta).
+// Tudo pelo fliperos-setup --customgames (config/fliperos-web,
 // /api/customgames): um jogo so e a tabela com uma linha.
 "use strict";
 
-const cg = { info: null, rows: [], seq: 0, el: null, busy: false, defaultGroup: "" };
+const cg = { info: null, rows: [], seq: 0, el: null, busy: false, defaultGroup: "", installGroup: "", tab: "games",
+  createRow: null, highlight: "" };
 const CG_DRAFT = "fliperos-cg-draft";
+const CG_TAB = "fliperos-cg-tab";
+const CG_TABS = ["games", "install", "create"];
+// O nome de todo pacote (config/fliperos-customgame SUFFIX).
+const CG_SUFFIX = ".fliperos-customgame.zip";
 // As colunas da tabela, na ordem; o rotulo de cada uma tambem vai em cada
 // celula (no celular a linha vira um cartao).
 const CG_COLUMNS = ["group", "name", "platform", "folder", "run", "mode", "category", "players", "buttons", "controls", "art"];
@@ -31,37 +37,93 @@ async function customGamesPage(box) {
   group.addEventListener("click", () => cgNewGroup().then((name) => name && cgLoad()));
   const bulk = el("a", { class: "btn ghost small", href: "#cg-bulk" }, t("cg_bulk"));
   bulk.addEventListener("click", (ev) => { ev.preventDefault(); $("cg-bulk").scrollIntoView({ behavior: "smooth" }); });
-  const zipInput = el("input", { type: "file", accept: ".zip", hidden: "" });
-  zipInput.addEventListener("change", () => { const f = zipInput.files[0]; zipInput.value = ""; if (f) cgInstallZip(f); });
-  const zip = el("button", { type: "button", class: "btn ghost small" }, t("cg_install_zip"));
-  zip.addEventListener("click", () => zipInput.click());
+  try { if (CG_TABS.includes(localStorage.getItem(CG_TAB))) cg.tab = localStorage.getItem(CG_TAB); } catch (e) { /* sem armazenamento */ }
   cg.el = {
+    tabs: el("nav", { class: "subtabs", role: "tablist" }),
     list: el("div", { class: "cg-list" }),
-    pending: el("section", { class: "cg-sec", hidden: "" }),
     packed: el("section", { class: "cg-sec" }),
     bulk: el("section", { class: "cg-sec cg-bulk", id: "cg-bulk" }),
+    install: el("div", { class: "cg-pane" }),
+    create: el("div", { class: "cg-pane" }),
+  };
+  cg.el.panes = {
+    games: el("div", { class: "cg-pane" }, el("div", { class: "cg-bar" }, add, bulk, group), cg.el.list, cg.el.bulk, cg.el.packed),
+    install: cg.el.install,
+    create: cg.el.create,
   };
   box.append(el("div", { class: "cg-head" }, el("h2", {}, t("cg_title")), el("p", { class: "lead" }, t("cg_intro")),
-    el("div", { class: "cg-bar" }, add, bulk, group, zip, zipInput)),
-  cg.el.list, cg.el.pending, cg.el.bulk, cg.el.packed);
+    el("div", { class: "subtabs-bar cg-tabs" }, cg.el.tabs)),
+  ...CG_TABS.map((k) => cg.el.panes[k]));
   cgDraftLoad();
+  cgShowTab(cg.tab);
   await cgLoad();
+}
+
+// As abas: Jogos, Instalar pacotes (com quantos ha para instalar) e Criar
+// pacote. A escolhida fica no navegador.
+function cgShowTab(tab) {
+  cg.tab = CG_TABS.includes(tab) ? tab : "games";
+  try { localStorage.setItem(CG_TAB, cg.tab); } catch (e) { /* sem armazenamento */ }
+  const waiting = (cg.packages || []).filter((p) => p.state === "new" || p.state === "update").length;
+  cg.el.tabs.replaceChildren(...CG_TABS.map((k) => {
+    const label = k === "install" && waiting ? t("cg_tab_install") + " (" + waiting + ")" : t("cg_tab_" + k);
+    const a = el("a", { href: "#", role: "tab", class: cg.tab === k ? "on" : "", "aria-selected": String(cg.tab === k) }, label);
+    a.addEventListener("click", (ev) => { ev.preventDefault(); cgShowTab(k); });
+    return a;
+  }));
+  for (const k of CG_TABS) cg.el.panes[k].hidden = k !== cg.tab;
+}
+
+// A estrutura do pacote, sempre a mesma: JOGO.fliperos-customgame.zip com
+// JOGO.cfg, a arte, o .key, o .ppdb e a pasta JOGO/, num exemplo (o Street
+// Fighter 4), com o cfg dele e o que cada chave e. A mesma estrutura numa
+// pasta (o zip aberto) preenche a arte sozinha ao escolher a pasta.
+const CG_EXAMPLE = "Street Fighter 4";
+// O cfg do exemplo (as chaves do config/fliperos-customgame check_cfg).
+const CG_EXAMPLE_CFG = [["name", CG_EXAMPLE], ["platform", "windows"], ["exe", "StreetFighterIV.exe"], ["mode", "480i"],
+  ["category", "Fighter / Versus"], ["controls", "joy8"], ["buttons", "6"], ["players", "2"]];
+const CG_CFG_KEYS = ["name", "platform", "exe", "command", "mode", "category", "controls", "buttons", "players"];
+
+function cgStructure() {
+  const rows = [["cfg", ".cfg"], ["jpg", ".jpg"], ["mp4", ".mp4"], ["txt", ".txt"], ["key", ".key"], ["ppdb", ".ppdb"]];
+  const game = CG_EXAMPLE;
+  const line = (branch, file, what) => el("div", {}, el("span", { class: "dim" }, branch), el("code", {}, file), el("span", {}, what));
+  return el("details", { class: "cg-structure" },
+    el("summary", {}, t("cg_structure"), " ", el("code", {}, t("cg_game_word") + CG_SUFFIX)),
+    el("div", { class: "cg-structure-grid" },
+      el("div", {}, el("h5", {}, t("cg_example")),
+        el("div", { class: "cg-tree" }, el("div", {}, el("code", { class: "cg-zip" }, game + CG_SUFFIX)),
+          ...rows.map(([k, ext]) => line("├─ ", game + ext, t("cg_tree_" + k))),
+          line("└─ ", game + "/", t("cg_tree_folder")))),
+      el("div", {}, el("h5", {}, t("cg_cfg_example").replace("%s", game + ".cfg")),
+        el("pre", { class: "cg-cfg" }, CG_EXAMPLE_CFG.map(([k, v]) => k + "=" + v).join("\n")),
+        el("dl", { class: "cg-cfg-keys" }, ...CG_CFG_KEYS.flatMap((k) => [el("dt", {}, el("code", {}, k)),
+          el("dd", {}, t("cg_cfg_" + k).replace("%s", game + "/"))])))),
+    el("p", { class: "dim" }, t("cg_structure_note")));
 }
 
 async function cgLoad() {
   if (!cg.el) return;
+  // O describe do Setup (que tambem move os pacotes de antes para a pasta
+  // deles) e, depois, os cartoes dos pacotes.
   const res = await api("/api/customgames");
   const info = await res.json().catch(() => ({}));
   if (!res.ok) {
     cg.el.list.replaceChildren(el("p", { class: "error" }, info.error || res.statusText));
     return;
   }
+  const pres = await api("/api/customgames/packages");
+  cg.packages = pres.ok ? ((await pres.json().catch(() => ({}))).packages || []) : [];
   cg.info = info;
   if (!cg.defaultGroup || !cgGroups().includes(cg.defaultGroup)) cg.defaultGroup = cgGroups()[0] || "";
+  // O grupo de quem instala: o ultimo usado (o Setup tambem o lembra).
+  if (!cg.installGroup || !cgGroups().includes(cg.installGroup)) cg.installGroup = info.last_group || cg.defaultGroup;
   cgRenderList();
-  cgRenderPending();
+  cgRenderInstall();
+  cgRenderCreate();
   cgRenderPacked();
   cgRenderBulk();
+  cgShowTab(cg.tab);
 }
 
 // Os grupos que existem e os que as linhas da tabela ja criam.
@@ -99,10 +161,39 @@ function cgRenderList() {
   }
   cg.el.list.replaceChildren(...groups.map((g) => {
     const mine = games.filter((x) => x.group === g.name);
+    const del = el("button", { type: "button", class: "icon-btn small cg-gdel", title: t("cg_group_delete"),
+      "aria-label": t("cg_group_delete") + ": " + g.name }, icon("g-trash"));
+    del.addEventListener("click", () => cgDeleteGroup(g.name).catch(() => {}));
     return el("section", { class: "cg-group" },
-      el("h4", {}, icon("px-games"), g.name, el("span", { class: "dim" }, mine.length === 1 ? t("cg_game_1") : t("cg_games_n").replace("%n", mine.length))),
-      el("div", { class: "cg-tiles" }, ...mine.map(cgTile)));
+      el("h4", {}, icon("px-games"), g.name, el("span", { class: "dim" }, mine.length === 1 ? t("cg_game_1") : t("cg_games_n").replace("%n", mine.length)), del),
+      mine.length ? el("div", { class: "cg-tiles" }, ...mine.map(cgTile)) : el("p", { class: "dim cg-empty" }, t("cg_group_empty")));
   }));
+}
+
+// Apagar o grupo inteiro: o Setup diz antes o que vai junto (as pastas dos
+// jogos, os pacotes da pasta dele, outros arquivos); as pastas e os pacotes
+// so saem se a pessoa disser (os pacotes mantidos voltam a ~/roms/custom).
+async function cgDeleteGroup(name) {
+  const res = await api("/api/customgames/group-info", { method: "POST", body: JSON.stringify({ name }) });
+  const info = await res.json().catch(() => ({}));
+  if (!res.ok) { toast(info.error || res.statusText, "bad"); return; }
+  const n = (key) => parseInt(info[key] || "0", 10) || 0;
+  const games = n("games"), folders = n("folders"), packages = n("packages"), others = n("others");
+  let text = t(games === 0 ? "cg_gdel_ask_0" : games === 1 ? "cg_gdel_ask_1" : "cg_gdel_ask").replace("%s", name).replace("%n", games);
+  if (others) text += " " + t("cg_gdel_others").replace("%s", (info.other || "") + (others > 5 ? " (+" + (others - 5) + ")" : ""));
+  if (!(await ask({ title: t("cg_group_delete") + ": " + name, text, yes: t("cg_delete"), danger: true }))) return;
+  let all = false;
+  if (folders || packages) {
+    const what = [folders ? t("cg_gdel_folders") : "", packages ? t("cg_gdel_packages") : ""].filter(Boolean).join(t("cg_and"));
+    all = await ask({ title: t("cg_group_delete") + ": " + name,
+      text: t("cg_gdel_all_ask").replace("%s", what) + (packages ? " " + t("cg_gdel_pkg_note") : ""),
+      yes: t("cg_gdel_all"), no: t("cg_gdel_keep"), danger: true });
+  }
+  const task = await cgTask("/api/customgames/group-delete", { name, all });
+  if (task && task.rc === 0) {
+    if (cg.defaultGroup === name) cg.defaultGroup = "";
+    toast(t("cg_deleted").replace("%s", name), "ok");
+  }
 }
 
 function cgTile(game) {
@@ -146,9 +237,11 @@ async function cgDelete(game) {
   cgLoad().catch(() => {});
 }
 
+// O pacote de um jogo instalado: vai para ~/roms/custom-packages (a aba
+// Instalar pacotes o mostra).
 async function cgPack(game) {
   const task = await cgTask("/api/customgames/pack", { group: game.group, name: game.name });
-  if (task && task.rc === 0) toast(t("cg_packaged").replace("%s", game.group), "ok");
+  if (task && task.rc === 0) toast(t("cg_packaged").replace("%s", game.name), "ok");
 }
 
 // cgTask: uma tarefa de jogos custom (instalar, empacotar...), esperada.
@@ -192,6 +285,7 @@ async function cgEdit(game) {
       const media = {};
       if (row.snap && row.snap.id) media.snap = row.snap.id;
       if (row.video && row.video.id) media.video = row.video.id;
+      if (row.text && row.text.id) media.text = row.text.id;
       if (text.value.trim()) media.text_string = text.value.trim().replace(/\n/g, "\\n");
       if (Object.keys(media).length) {
         const r = await api("/api/customgames/media", { method: "POST", body: JSON.stringify(Object.assign({
@@ -210,7 +304,7 @@ async function cgEdit(game) {
 }
 
 function cgRowFromGame(game) {
-  const mode = game.mode || "640x240@60";
+  const mode = game.mode || "640x480@60";
   const known = (cg.info.modes || []).find((m) => m.value === mode);
   return cgNewRow({ group: game.group, name: game.name, platform: game.platform, command: game.command, exe: game.exe,
     folder: game.folder, mode: known ? known.label : "other", modeOther: known ? "" : mode, category: game.category,
@@ -274,58 +368,483 @@ function cgAddOne() {
   dlg.showModal();
 }
 
-// ── Os pacotes novos ──
+// ── A aba Instalar pacotes ──
+// Os pacotes de ~/roms/custom-packages (o compartilhamento \\fliperos\roms):
+// os novos com o grupo para escolher (o ultimo usado ja marcado), os que
+// mudaram desde a instalacao, os instalados (com o grupo) e os que nao
+// servem. Depois de instalar, pergunta se o zip sai.
 
-function cgRenderPending() {
-  const rows = (cg.info.pending || []).filter((p) => p.state !== "bad" || p.zip);
-  cg.el.pending.hidden = !rows.length;
-  if (!rows.length) return;
-  const good = rows.filter((p) => p.state !== "bad");
-  const all = el("button", { type: "button", class: "btn ghost small" }, icon("px-install"), t("cg_install_all"));
-  all.hidden = good.length < 2;
-  all.addEventListener("click", async () => {
-    for (const p of good) if (!(await cgInstallPending(p, p.group || cg.defaultGroup, true))) break;
-  });
-  cg.el.pending.replaceChildren(el("h4", {}, icon("px-install"), t("cg_pending"), all), el("div", { class: "nics" }, ...rows.map((p) => {
-    if (p.state === "bad") {
-      return el("div", { class: "nic-row" }, icon("px-cancel"), el("b", {}, p.zip.split("/").pop()),
-        el("span", { class: "tag off" }, t("cg_bad_zip")), el("span", { class: "dim" }, p.why));
-    }
-    const group = p.group ? el("span", { class: "tag" }, p.group) : cgGroupSelect(cg.defaultGroup, () => {});
-    const go = el("button", { type: "button", class: "btn small" }, t("cg_install"));
-    go.addEventListener("click", () => cgInstallPending(p, p.group || group.value));
-    return el("div", { class: "nic-row" }, icon("px-games"), el("b", {}, p.name), el("span", { class: "dim" }, t("cg_" + p.platform)),
-      p.state === "update" ? el("span", { class: "tag off" }, t("cg_update")) : "", group, go);
-  })));
+const cgBaseName = (p) => p.zip.split("/").pop();
+// Os cartoes por pagina, e o filtro e a ordem (ficam no navegador).
+const CG_PAGE = 10;
+const CG_VIEW = "fliperos-cg-packages-view";
+const CG_SORTS = ["name", "newest", "size", "state"];
+const CG_STATE_ORDER = { new: 0, update: 1, bad: 2, installed: 3 };
+
+function cgView() {
+  if (!cg.view) {
+    cg.view = { query: "", state: "", platform: "", sort: "name", page: 0 };
+    try { Object.assign(cg.view, JSON.parse(localStorage.getItem(CG_VIEW) || "{}"), { query: "", page: 0 }); } catch (e) { /* sem armazenamento */ }
+  }
+  return cg.view;
 }
 
-async function cgInstallPending(p, group, quiet) {
-  if (!group) { toast(t("cg_zip_group"), "bad"); return false; }
+function cgViewSave() {
+  const v = cgView();
+  try { localStorage.setItem(CG_VIEW, JSON.stringify({ state: v.state, platform: v.platform, sort: v.sort })); } catch (e) { /* sem armazenamento */ }
+}
+
+function cgRenderInstall() {
+  const box = cg.el.install;
+  const rows = cg.packages || [];
+  const folder = cg.info.packages_dir || "~/roms/custom-packages";
+  const zipInput = el("input", { type: "file", accept: ".zip", multiple: "", hidden: "" });
+  zipInput.addEventListener("change", async () => {
+    const files = [...zipInput.files];
+    zipInput.value = "";
+    for (const f of files) await cgUploadZip(f);
+    cgLoad().catch(() => {});
+  });
+  const send = el("button", { type: "button", class: "btn small", title: t("cg_zip_name_rule") }, icon("g-upload"), t("cg_send_zip"));
+  send.addEventListener("click", () => zipInput.click());
+  const fresh = rows.filter((p) => p.state === "new" || p.state === "update");
+  const bar = el("div", { class: "cg-bar" }, send, zipInput);
+  if (fresh.length > 1) {
+    const allGroup = cgGroupSelect(cg.installGroup, (value) => { cg.installGroup = value; });
+    const all = el("button", { type: "button", class: "btn ghost small" }, icon("px-install"),
+      t("cg_install_all_new").replace("%n", fresh.length));
+    all.addEventListener("click", () => cgInstallAll(fresh, allGroup.value).catch(() => {}));
+    bar.append(el("span", { class: "cg-allgroup" }, all, el("span", { class: "dim" }, t("cg_in_group")), allGroup));
+  }
+  // O filtro e a ordem: feitos uma vez (a busca nao perde o cursor).
+  if (!cg.el.pkgTools) {
+    const v = cgView();
+    const search = el("input", { type: "search", placeholder: t("cg_pkg_search"), "aria-label": t("cg_pkg_search"), value: v.query });
+    search.addEventListener("input", () => { v.query = search.value; v.page = 0; cgDrawPackages(); });
+    const pick = (key, options) => {
+      const s = el("select", { "aria-label": t("cg_pkg_" + key) }, ...options.map(([value, label]) => el("option", { value }, label)));
+      s.value = v[key];
+      s.addEventListener("change", () => { v[key] = s.value; v.page = 0; cgViewSave(); cgDrawPackages(); });
+      return s;
+    };
+    cg.el.pkgTools = el("div", { class: "cg-pkgtools" }, search,
+      pick("state", [["", t("cg_pkg_all")], ...["new", "update", "installed", "bad"].map((s) => [s, t("cg_pkg_state_" + s)])]),
+      pick("platform", [["", t("cg_pkg_all_types")], ["windows", t("cg_windows")], ["native", t("cg_native")]]),
+      pick("sort", CG_SORTS.map((s) => [s, t("cg_pkg_sort_" + s)])));
+    cg.el.pkgGrid = el("div", { class: "cg-cards" });
+    cg.el.pkgPager = el("nav", { class: "cg-pager", "aria-label": t("cg_pkg_pages") });
+  }
+  box.replaceChildren(el("p", { class: "dim cg-folder" }, t("cg_packages_where").replace("%s", folder)), bar,
+    ...(rows.length ? [cg.el.pkgTools, cg.el.pkgGrid, cg.el.pkgPager] : [el("p", { class: "dim cg-empty" }, t("cg_packages_none"))]));
+  // O zip que acabou de chegar (Criar pacote, Enviar): a pagina dele.
+  if (cg.highlight) {
+    const v = cgView();
+    Object.assign(v, { query: "", state: "", platform: "" });
+    const list = cgPackagesShown();
+    const at = list.findIndex((p) => p.zip === cg.highlight);
+    if (at >= 0) v.page = Math.floor(at / CG_PAGE);
+  }
+  cgDrawPackages();
+  if (cg.highlight) {
+    const card = box.querySelector('[data-zip="' + CSS.escape(cg.highlight) + '"]');
+    cg.highlight = "";
+    if (card) { card.classList.add("flash"); card.scrollIntoView({ behavior: "smooth", block: "center" }); }
+  }
+}
+
+// Os pacotes que o filtro deixa, na ordem escolhida.
+function cgPackagesShown() {
+  const v = cgView();
+  const q = v.query.trim().toLowerCase();
+  const list = (cg.packages || []).filter((p) => (!v.state || p.state === v.state) && (!v.platform || p.platform === v.platform) &&
+    (!q || [p.name, p.file, p.category, p.group].some((s) => (s || "").toLowerCase().includes(q))));
+  const by = {
+    name: (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    newest: (a, b) => b.mtime - a.mtime,
+    size: (a, b) => (b.bytes || b.size) - (a.bytes || a.size),
+    state: (a, b) => (CG_STATE_ORDER[a.state] - CG_STATE_ORDER[b.state]) || a.name.localeCompare(b.name),
+  }[v.sort] || (() => 0);
+  return list.sort(by);
+}
+
+function cgDrawPackages() {
+  const v = cgView();
+  const list = cgPackagesShown();
+  const pages = Math.max(1, Math.ceil(list.length / CG_PAGE));
+  v.page = Math.min(v.page, pages - 1);
+  const shown = list.slice(v.page * CG_PAGE, (v.page + 1) * CG_PAGE);
+  cg.el.pkgGrid.replaceChildren(...(shown.length ? shown.map(cgPackageCard) : [el("p", { class: "dim cg-empty" }, t("cg_pkg_none_match"))]));
+  const go = (page) => { v.page = page; cgDrawPackages(); cg.el.pkgTools.scrollIntoView({ behavior: "smooth", block: "nearest" }); };
+  const button = (label, page, on, aria) => {
+    const b = el("button", { type: "button", class: "cg-page" + (on ? " on" : ""), "aria-label": aria || label }, label);
+    if (page < 0 || page >= pages || on) b.disabled = true;
+    else b.addEventListener("click", () => go(page));
+    return b;
+  };
+  cg.el.pkgPager.hidden = pages < 2 && list.length <= CG_PAGE;
+  cg.el.pkgPager.replaceChildren(button("‹", v.page - 1, false, t("cg_pkg_prev")),
+    ...Array.from({ length: pages }, (_, i) => button(String(i + 1), i, i === v.page)),
+    button("›", v.page + 1, false, t("cg_pkg_next")),
+    el("span", { class: "dim" }, list.length ? t("cg_pkg_range").replace("%a", v.page * CG_PAGE + 1)
+      .replace("%b", v.page * CG_PAGE + shown.length).replace("%n", list.length) : ""));
+}
+
+// O cartao de um pacote: o cartao do jogo (como no frontend) com o estado,
+// os problemas e as acoes.
+function cgPackageCard(p) {
+  const media = (kind) => (p.media && p.media[kind] ? "/api/customgames/package-media?zip=" + encodeURIComponent(p.zip) +
+    "&member=" + encodeURIComponent(p.media[kind]) : "");
+  const actions = [];
+  let tag;
+  if (p.state === "bad") {
+    const n = (p.problems || []).length;
+    tag = { cls: "bad", text: n === 1 ? t("cg_problem_1") : t("cg_problems_n").replace("%n", n) };
+    actions.push(cgPkgButton("cg_file_delete", () => cgDeletePackage(p), "ghost"));
+  } else if (p.state === "installed") {
+    tag = { cls: "on", text: t("cg_installed_in").replace("%s", p.group) };
+    actions.push(cgPkgButton("cg_install_again", () => cgInstallPackage(p, p.group, { replace: true })),
+      cgPkgButton("cg_pkg_delete", () => cgDeletePackage(p), "ghost"));
+  } else if (p.state === "update") {
+    tag = { cls: "warn", text: t("cg_newer_than").replace("%s", p.group) };
+    actions.push(cgPkgButton("cg_install", () => cgInstallPackage(p, p.group, { replace: true }), "small"));
+  } else {
+    tag = { cls: "new", text: t("cg_pkg_state_new") };
+    const group = cgGroupSelect(cg.installGroup, (value) => { cg.installGroup = value; });
+    actions.push(group, cgPkgButton("cg_install", () => cgInstallPackage(p, group.value), "small"));
+  }
+  const card = cgCard({ name: p.name, file: p.file, platform: p.platform, mode: p.mode, category: p.category, controls: p.controls,
+    buttons: p.buttons, players: p.players, snap: media("snap"), video: media("preview"), text: media("texto"),
+    size: p.bytes || p.size, key: p.key, ppdb: p.ppdb, tag, problems: p.state === "bad" ? cgProblems(p) : [] }, actions);
+  card.dataset.zip = p.zip;
+  return card;
+}
+
+// cgCard: um jogo como o frontend o mostra: a imagem e, com o cursor (ou um
+// toque), o video; o nome correndo quando nao cabe; o tipo, o modo, os
+// jogadores, o controle e os botoes em icones; a categoria; o texto rolando
+// devagar quando e maior que o espaco. info.text: o endereco do .txt, ou o
+// proprio texto em info.textValue. Serve a lista de pacotes e a previa do
+// Criar pacote.
+function cgCard(info, actions = []) {
+  const name = info.name || info.file || "?";
+  const art = el("div", { class: "cg-cmedia" });
+  const initials = () => el("div", { class: "cg-noimg" }, name.slice(0, 2).toUpperCase());
+  if (info.snap) {
+    const img = el("img", { alt: "", loading: "lazy", src: info.snap });
+    img.addEventListener("error", () => img.replaceWith(initials()));
+    art.append(img);
+  } else art.append(initials());
+  const card = el("article", { class: "cg-card", tabindex: "-1" });
+  if (info.video) {
+    const video = el("video", { loop: "", playsinline: "", preload: "none", src: info.video, "aria-hidden": "true" });
+    video.muted = true;
+    const play = () => { video.muted = true; video.play().then(() => art.classList.add("playing")).catch(() => {}); };
+    const stop = () => { video.pause(); art.classList.remove("playing"); };
+    card.addEventListener("mouseenter", play);
+    card.addEventListener("mouseleave", stop);
+    card.addEventListener("focusin", play);
+    card.addEventListener("focusout", (ev) => { if (!card.contains(ev.relatedTarget)) stop(); });
+    art.addEventListener("click", () => (art.classList.contains("playing") ? stop() : play()));
+    art.append(video, el("span", { class: "cg-cplay", title: t("cg_f_video") }, icon("g-play")));
+    art.classList.add("has-video");
+  }
+  if (info.tag) art.append(el("span", { class: "cg-ctag " + info.tag.cls }, info.tag.text));
+  // O nome: corre de um lado a outro quando nao cabe (como no frontend).
+  const title = el("span", {}, name);
+  const head = el("h5", { class: "cg-cname", title: info.file ? name + " · " + info.file : name }, title);
+  requestAnimationFrame(() => {
+    const extra = title.scrollWidth - head.clientWidth;
+    if (extra > 4) { head.classList.add("run"); head.style.setProperty("--run", -extra + "px"); head.style.setProperty("--run-s", Math.max(4, extra / 25) + "s"); }
+  });
+  const facts = el("div", { class: "cg-cfacts" });
+  if (info.platform) facts.append(el("span", { class: "tag" }, t("cg_" + info.platform)));
+  if (info.mode) facts.append(el("span", { class: "tag" }, cgModeLabel(info.mode)));
+  const ctrl = controlIcons({ control: info.controls || "", players: info.players || "", buttons: info.buttons || "" });
+  if (ctrl) facts.append(ctrl);
+  if (info.key) facts.append(el("span", { class: "tag on", title: t("cg_tree_key") }, ".key"));
+  if (info.ppdb) facts.append(el("span", { class: "tag on", title: t("cg_tree_ppdb") }, ".ppdb"));
+  const body = el("div", { class: "cg-cbody" }, head, facts);
+  if (info.category) body.append(el("div", { class: "cg-ccat" }, info.category));
+  // O texto: rola de cima a baixo, devagar, quando nao cabe.
+  if (info.text || info.textValue) {
+    const inner = el("div", {});
+    const box = el("div", { class: "cg-ctext" }, inner);
+    const show = (text) => {
+      inner.textContent = text.trim();
+      requestAnimationFrame(() => {
+        const extra = inner.scrollHeight - box.clientHeight;
+        box.classList.toggle("roll", extra > 4);
+        if (extra > 4) { box.style.setProperty("--roll", -extra + "px"); box.style.setProperty("--roll-s", Math.max(6, extra / 8) + "s"); }
+      });
+    };
+    if (info.textValue) show(info.textValue);
+    else fetch(info.text, { headers: { "X-FliperOS": "1" } }).then((r) => (r.ok ? r.text() : "")).then(show).catch(() => {});
+    body.append(box);
+  }
+  if (info.problems && info.problems.length) body.append(el("ul", { class: "cg-problems" }, ...info.problems.map((text) => el("li", {}, text))));
+  if (info.size) body.append(el("div", { class: "cg-csize dim" }, bytes(info.size)));
+  card.append(art, body);
+  if (actions.length) card.append(el("div", { class: "cg-cact" }, ...actions));
+  return card;
+}
+
+// Os problemas de um pacote que nao serve, um por linha, traduzidos pelos
+// codigos (config/fliperos-customgame); um codigo sem texto aqui mostra o
+// motivo em ingles do verificador.
+const CG_PROBLEM_CODES = ["not_zip", "unsafe", "encrypted", "misnamed", "cfg_missing", "cfg_many", "cfg_text", "folder_missing",
+  "stranger", "strangers_more", "two_files", "name_missing", "name_bad", "platform_missing", "platform_bad", "exe_missing",
+  "exe_not_found", "command_missing", "mode_bad", "category_long", "controls_bad", "buttons_bad", "players_bad"];
+
+function cgProblems(p) {
+  const base = p.name || cgBaseName(p).replace(/\.fliperos-customgame\.zip$|\.zip$/i, "");
+  return (p.problems || []).map(({ code, arg, text }) =>
+    (CG_PROBLEM_CODES.includes(code) ? t("cg_pb_" + code).split("%s").join(arg).split("%g").join(base) : text || code));
+}
+
+function cgPkgButton(label, fn, kind) {
+  const b = el("button", { type: "button", class: "btn " + (kind === "small" ? "small" : "ghost small") }, t(label));
+  b.addEventListener("click", () => fn().catch(() => {}));
+  return b;
+}
+
+// Instala um pacote no grupo; o que ja esta nele pergunta se troca. quiet:
+// sem perguntar antes nem depois (o "instalar todos" pergunta no fim).
+async function cgInstallPackage(p, group, { replace = false, quiet = false } = {}) {
+  if (!group || group === "+new") { toast(t("cg_zip_group"), "bad"); return false; }
+  const there = (cg.info.games || []).some((g) => g.group === group && g.name === p.name);
+  if (there && !replace) {
+    if (!(await ask({ title: p.name, text: t("cg_replace_ask").replace("%s", p.name).replace("%s", group), yes: t("cg_install"), danger: true }))) {
+      return false;
+    }
+    replace = true;
+  }
   let pp = false;
   if (p.platform === "windows" && !cg.info.portproton) {
     pp = await ask({ title: "PortProton", text: t("cg_pp"), yes: t("cg_pp_install"), no: t("cg_cancel") });
-  } else if (!quiet && !(await ask({ title: p.name, text: t("cg_install") + ": " + p.name + " → " + group, yes: t("cg_install") }))) {
+  } else if (!quiet && !there && !(await ask({ title: p.name, text: t("cg_install") + ": " + p.name + " → " + group, yes: t("cg_install") }))) {
     return false;
   }
-  const task = await cgTask("/api/customgames/install", { zip: p.zip, group, replace: p.state === "update", portproton: pp });
-  return !!task && task.rc === 0;
+  const task = await cgTask("/api/customgames/install", { zip: p.zip, group, replace, portproton: pp });
+  const ok = !!task && task.rc === 0;
+  if (ok) cg.installGroup = group;
+  if (ok && !quiet && (await ask({ title: p.name, text: t("cg_pkg_delete_ask").replace("%s", cgBaseName(p)).replace("%s", group),
+    yes: t("cg_pkg_delete"), no: t("cg_pkg_keep") }))) {
+    await cgDeletePackage(p, true);
+  }
+  return ok;
 }
 
-// Instalar um pacote (.zip): sobe para ~/roms/custom/GRUPO e instala.
-async function cgInstallZip(file) {
-  let group = cg.defaultGroup;
-  if (!group) group = await cgNewGroup();
-  if (!group) return;
+async function cgInstallAll(rows, group) {
+  if (!group || group === "+new") { toast(t("cg_zip_group"), "bad"); return; }
+  if (!(await ask({ title: t("cg_install_all_new").replace("%n", rows.length),
+    text: t("cg_install_all_ask").replace("%n", rows.length).replace("%s", group), yes: t("cg_install") }))) return;
+  const done = [];
+  for (const p of rows) {
+    if (await cgInstallPackage(p, p.state === "update" ? p.group : group, { replace: p.state === "update", quiet: true })) done.push(p);
+  }
+  if (done.length && (await ask({ title: t("cg_install_all_new").replace("%n", rows.length),
+    text: t("cg_pkg_delete_all_ask").replace("%n", done.length), yes: t("cg_pkg_delete"), no: t("cg_pkg_keep") }))) {
+    for (const p of done) await cgDeletePackage(p, true);
+  }
+  cgLoad().catch(() => {});
+}
+
+// Apaga o zip da pasta dos pacotes (o jogo instalado dele fica). sure: sem
+// perguntar (a pergunta ja foi feita).
+async function cgDeletePackage(p, sure) {
+  if (!sure && !(await ask({ title: cgBaseName(p), text: t("cg_pkg_delete_one").replace("%s", cgBaseName(p)),
+    yes: t("cg_pkg_delete"), danger: true }))) return;
+  const res = await api("/api/customgames/package-delete", { method: "POST", body: JSON.stringify({ zip: p.zip }) });
+  toast(res.ok ? t("cg_deleted").replace("%s", cgBaseName(p)) : (await res.json().catch(() => ({}))).error || res.statusText,
+    res.ok ? "ok" : "bad");
+  cgLoad().catch(() => {});
+}
+
+// Enviar um pacote: so JOGO.fliperos-customgame.zip, para a pasta dos
+// pacotes; ele aparece na lista para instalar. Outro nome volta com a regra.
+async function cgUploadZip(file) {
+  if (!file.name.toLowerCase().endsWith(CG_SUFFIX)) {
+    const stem = file.name.replace(/\.zip$/i, "").replace(/\.fliperos-customgame$/i, "") || t("cg_game_word");
+    toast(t("cg_zip_name").replace("%s", file.name).replace("%s", stem + CG_SUFFIX), "bad");
+    return false;
+  }
   toast(t("cg_uploading").replace("%s", file.name));
-  const status = await cgPostFile("/api/upload?root=roms&path=" + encodeURIComponent("custom/" + group) + "&name=" +
-    encodeURIComponent(file.name) + "&overwrite=1", file);
-  if (status !== 200) return toast(file.name + ": " + (status || "network error"), "bad");
-  await cgLoad();
-  const pending = (cg.info.pending || []).find((p) => p.zip.endsWith("/custom/" + group + "/" + file.name));
-  if (!pending) return toast(file.name + ": " + t("cg_bad_zip"), "bad");
-  if (pending.state === "bad") return toast(file.name + ": " + pending.why, "bad");
-  toast(t("cg_zip_sent").replace("%s", file.name));
-  await cgInstallPending(pending, group, true);
+  const status = await cgPostFile("/api/upload?root=roms&path=custom-packages&name=" + encodeURIComponent(file.name) +
+    "&overwrite=1", file);
+  if (status !== 200) { toast(file.name + ": " + (status || "network error"), "bad"); return false; }
+  toast(t("cg_zip_sent").replace("%s", file.name), "ok");
+  cg.highlight = (cg.info.packages_dir || "") + "/" + file.name;
+  return true;
+}
+
+// ── A aba Criar pacote ──
+// Um jogo do Windows ou do Linux numa pasta (a mesma linha de Adicionar um
+// jogo, sem grupo): o zip vai para ~/roms/custom-packages e aparece na aba
+// Instalar pacotes. A pasta com a estrutura do pacote preenche o resto.
+
+const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "category", "players", "buttons", "controls", "art"];
+
+function cgRenderCreate() {
+  const box = cg.el.create;
+  if (!cg.createRow) cg.createRow = cgNewRow({ platform: "windows" });
+  if (!box.dataset.built) {
+    box.dataset.built = "1";
+    cg.el.structure = cgStructure();
+    cg.el.createForm = el("div", { class: "cg-one cg-create" });
+    cg.el.createStatus = el("div", { class: "cg-status", role: "status" });
+    cg.el.createIntro = el("p", { class: "dim cg-folder" });
+    const go = el("button", { type: "button", class: "btn" }, icon("px-add"), t("cg_create_go"));
+    go.addEventListener("click", () => cgCreate(go).catch(() => {}));
+    const clear = el("button", { type: "button", class: "btn ghost" }, t("cg_create_clear"));
+    clear.addEventListener("click", () => {
+      cg.createRow = cgNewRow({ platform: "windows" });
+      cg.el.createStatus.replaceChildren();
+      cgCreateDraw();
+    });
+    // Previa: o cartao como o frontend vai mostrar o jogo; Testar: o jogo
+    // aberto no gabinete, da pasta dele, antes de empacotar.
+    const preview = el("button", { type: "button", class: "btn ghost", "aria-pressed": "false" }, icon("g-grid"), t("cg_preview"));
+    preview.addEventListener("click", () => {
+      cg.el.createPreview.hidden = !cg.el.createPreview.hidden;
+      preview.setAttribute("aria-pressed", String(!cg.el.createPreview.hidden));
+      cgCreatePreview();
+      if (!cg.el.createPreview.hidden) cg.el.createPreview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    const test = el("button", { type: "button", class: "btn ghost" }, icon("g-play"), t("cg_test"));
+    test.addEventListener("click", () => cgTest(test).catch(() => {}));
+    cg.el.createPreview = el("div", { class: "cg-preview", hidden: "" });
+    box.append(cg.el.createIntro, cg.el.structure, el("div", { class: "cg-create-wrap" }, cg.el.createForm, cg.el.createPreview),
+      cg.el.createStatus, el("div", { class: "cg-create-foot" }, clear, preview, test, go));
+    // Sem jogo nem pacote nenhum, a estrutura ja aberta.
+    cg.el.structure.open = !(cg.info.games || []).length && !(cg.info.pending || []).length;
+  }
+  cg.el.createIntro.textContent = t("cg_create_intro").replace("%s", cg.info.packages_dir || "~/roms/custom-packages");
+  cgCreateDraw();
+}
+
+function cgCreateDraw() {
+  const row = cg.createRow;
+  if (row.platform === "command") row.platform = "windows";
+  const ctl = cgControls(row, { redraw: cgCreateDraw, package: true });
+  cg.el.createForm.replaceChildren(...CG_CREATE_FIELDS.map((f) => {
+    const field = cgField(f, ctl[f]);
+    const err = cgFieldError(row, f);
+    if (err) {
+      field.classList.add("bad");
+      field.append(el("small", { class: "cg-err" }, err));
+    }
+    return field;
+  }));
+  // A previa acompanha o que muda no formulario (um campo de texto, ao sair dele).
+  if (!cg.el.createForm.dataset.watch) {
+    cg.el.createForm.dataset.watch = "1";
+    cg.el.createForm.addEventListener("change", () => cgCreatePreview());
+  }
+  cgCreatePreview();
+}
+
+// O cartao da previa: o que a linha tem agora, como o frontend mostraria.
+function cgCreatePreview() {
+  const box = cg.el.createPreview;
+  if (!box || box.hidden) return;
+  const row = cg.createRow;
+  const modeLabel = row.mode === "other" ? row.modeOther : row.mode;
+  const mode = (((cg.info && cg.info.modes) || []).find((m) => m.label === modeLabel) || { value: modeLabel }).value;
+  const card = cgCard({ name: row.name.trim() || t("cg_ph_name"), platform: row.platform, mode, category: row.category,
+    controls: row.controls.join(","), buttons: row.buttons, players: row.players,
+    snap: row.snap ? row.snap.url || "" : "", video: row.video ? row.video.url || "" : "",
+    text: row.text && !row.text.value ? row.text.url || "" : "", textValue: row.text ? row.text.value || "" : "",
+    key: !!row.key, ppdb: !!row.ppdb && row.platform === "windows", tag: { cls: "new", text: t("cg_preview") } });
+  box.replaceChildren(el("h5", {}, t("cg_preview_title")), card, el("p", { class: "dim" }, t("cg_preview_note")));
+}
+
+// Testar: o jogo aberto no gabinete da pasta dele, sem instalar. Quando ele
+// aparece na tela (o FPS da camada com o nome dele), o aviso das teclas: um
+// jogo que nao aceita o controle ganha o mapa pelo menu na tela, que abre
+// sozinho, e o mapa vai no pacote.
+async function cgTest(button) {
+  const row = cg.createRow;
+  const status = cg.el.createStatus;
+  if (cg.busy) return;
+  cg.busy = true;
+  button.disabled = true;
+  try {
+    const payload = cgPayload(row);
+    const check = await api("/api/customgames/check-create", { method: "POST", body: JSON.stringify({ row: payload }) });
+    const data = await check.json().catch(() => ({}));
+    row.errors = {};
+    for (const e of data.errors || []) row.errors[e.field] = e.error;
+    cgCreateDraw();
+    if ((data.errors || []).length) { status.replaceChildren(el("span", { class: "error" }, t("cg_errors"))); return; }
+    if (!(await ask({ title: t("cg_test"), text: t("cg_test_ask").replace("%s", row.name), yes: t("cg_test") }))) return;
+    const res = await api("/api/customgames/test", { method: "POST", body: JSON.stringify({ row: payload }) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { status.replaceChildren(el("span", { class: "error" }, out.error || res.statusText)); return; }
+    status.replaceChildren(el("span", {}, t("cg_test_opening").replace("%s", row.name)));
+    // Ate 2 minutos: um jogo do Windows pode demorar (o PortProton).
+    for (let i = 0; i < 60; i++) {
+      await sleep(2000);
+      const s = await api("/api/status").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+      if (s.fps && s.fps.program === out.app) {
+        status.replaceChildren(el("span", { class: "ok" }, t("cg_test_open").replace("%s", row.name)));
+        await ask({ title: t("cg_test_open").replace("%s", row.name), text: t("cg_test_keys"), yes: "OK", no: t("cg_test_close") })
+          .then((ok) => (ok ? null : api("/api/close", { method: "POST", body: "{}" })));
+        return;
+      }
+    }
+    status.replaceChildren(el("span", { class: "error" }, t("cg_test_none").replace("%s", row.name).replace("%s", out.app)));
+  } finally {
+    cg.busy = false;
+    button.disabled = false;
+  }
+}
+
+async function cgCreate(button) {
+  const row = cg.createRow;
+  const status = cg.el.createStatus;
+  if (cg.busy) return;
+  cg.busy = true;
+  button.disabled = true;
+  try {
+    const payload = cgPayload(row);
+    const res = await api("/api/customgames/check-create", { method: "POST", body: JSON.stringify({ row: payload }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { status.textContent = data.error || res.statusText; return; }
+    row.errors = {};
+    for (const e of data.errors || []) row.errors[e.field] = e.error;
+    cgCreateDraw();
+    if ((data.errors || []).length) { status.replaceChildren(el("span", { class: "error" }, t("cg_errors"))); return; }
+    if (data.bytes + (64 << 20) > data.free) {
+      status.replaceChildren(el("span", { class: "error" }, t("cg_space_low").replace("%s", bytes(data.bytes)).replace("%s", bytes(data.free))));
+      return;
+    }
+    const zip = data.out.split("/").pop();
+    let replace = false;
+    if (data.exists) {
+      if (!(await ask({ title: row.name, text: t("cg_create_exists").replace("%s", zip), yes: t("cg_create_replace"), danger: true }))) return;
+      replace = true;
+    }
+    const bar = meter(0);
+    const step = el("span", {}, t("cg_creating").replace("%s", zip));
+    status.replaceChildren(step, bar);
+    cg.highlight = data.out;
+    const task = await cgTask("/api/customgames/create", { row: payload, replace }, (tk) => {
+      bar.firstChild.style.width = (tk.pct || 0) + "%";
+      if (tk.step) step.textContent = tk.step;
+    });
+    if (task && task.rc === 0) {
+      status.replaceChildren(el("span", { class: "ok" }, t("cg_created").replace("%s", zip)));
+      toast(t("cg_created").replace("%s", zip), "ok");
+      cg.createRow = cgNewRow({ platform: "windows" });
+      cgShowTab("install");
+    } else {
+      cg.highlight = "";
+      status.replaceChildren(el("span", { class: "error" }, (task && (task.error || task.last)) || t("task_fail")));
+    }
+  } finally {
+    cg.busy = false;
+    button.disabled = false;
+  }
 }
 
 // cgPostFile: um arquivo como corpo do pedido (o fetch nao da o progresso:
@@ -371,9 +890,47 @@ function cgRenderPacked() {
 // ── A tabela ──
 
 function cgNewRow(values) {
-  return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "240p",
-    modeOther: "", category: "", players: "", buttons: "", controls: [], snap: null, video: null, wine: "", exes: [], programs: [],
-    errors: {}, state: "", error: "" }, values || {});
+  return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "480i",
+    modeOther: "", category: "", players: "", buttons: "", controls: [], snap: null, video: null, text: null, key: null, ppdb: null,
+    wine: "", exes: [], programs: [], errors: {}, state: "", error: "" }, values || {});
+}
+
+// A arte de uma linha: {id} subida pela pessoa, ou {path} a que veio com a
+// pasta do jogo (fica no gabinete; a miniatura vem dele).
+const cgArtUrl = (path, kind) => "/api/customgames/art?path=" + encodeURIComponent(path) + (kind ? "&kind=" + kind : "");
+const cgBase = (path) => path.split("/").pop();
+
+// cgFound: o que veio com a pasta (a estrutura do pacote: JOGO.jpg, .mp4,
+// .txt, .key, .ppdb e o JOGO.cfg) na linha. O que a pessoa subiu fica; o que
+// veio de outra pasta antes sai.
+function cgFound(row, found) {
+  if (found.path) row.folder = found.path;
+  for (const key of ["snap", "video", "text"]) {
+    if (row[key] && row[key].id) continue;
+    const path = found[key] || "";
+    row[key] = path ? { path, name: cgBase(path), url: cgArtUrl(path, key === "snap" ? "" : key) } : null;
+  }
+  for (const key of ["key", "ppdb"]) row[key] = found[key] ? { path: found[key], name: cgBase(found[key]) } : null;
+  const cfg = found.cfg || {};
+  if (cfg.mode) {
+    const known = ((cg.info && cg.info.modes) || []).find((m) => m.value === cfg.mode);
+    if (known) { row.mode = known.label; row.modeOther = ""; } else { row.mode = "other"; row.modeOther = cfg.mode; }
+  }
+  if (cfg.category && !row.category) row.category = cfg.category;
+  if (cfg.players && !row.players) row.players = cfg.players;
+  if (cfg.buttons && !row.buttons) row.buttons = cfg.buttons;
+  if (cfg.controls && !row.controls.length) row.controls = cfg.controls.split(",");
+  // O exe= (ou command=) do JOGO.cfg vence o que o scan adivinhou.
+  if (found.cfg_run && row.platform !== "command") {
+    row.platform = found.platform;
+    if (found.platform === "windows") row.exe = found.exe; else row.command = found.command;
+  }
+}
+
+// O que veio com a pasta, para a mensagem: "imagem, video, .key".
+function cgFoundList(row) {
+  return [["snap", "cg_f_snap"], ["video", "cg_f_video"], ["text", "cg_f_text"], ["key", "cg_f_key"], ["ppdb", "cg_f_ppdb"]]
+    .filter(([k]) => row[k] && row[k].path).map(([, label]) => t(label).toLowerCase());
 }
 
 function cgDraftLoad() {
@@ -381,7 +938,13 @@ function cgDraftLoad() {
     const saved = JSON.parse(localStorage.getItem(CG_DRAFT) || "null");
     if (saved && Array.isArray(saved.rows)) {
       cg.rows = saved.rows.map((r) => cgNewRow(Object.assign({}, r, { id: undefined, state: "", error: "", errors: {} })));
-      cg.rows.forEach((r) => { r.id = ++cg.seq; if (r.snap) r.snap.url = ""; });
+      cg.rows.forEach((r) => {
+        r.id = ++cg.seq;
+        // Os enderecos do navegador (blob:) nao voltam: a arte da pasta, sim.
+        for (const k of ["snap", "video", "text"]) {
+          if (r[k]) r[k].url = r[k].path ? cgArtUrl(r[k].path, k === "snap" ? "" : k) : "";
+        }
+      });
       cg.defaultGroup = saved.group || "";
     }
   } catch (e) { /* sem armazenamento */ }
@@ -392,7 +955,7 @@ function cgDraftSave() {
     const rows = cg.rows.map((r) => {
       const out = Object.assign({}, r);
       delete out.errors; delete out.state; delete out.error;
-      if (out.snap) out.snap = { id: out.snap.id, name: out.snap.name };
+      if (out.snap) out.snap = { id: out.snap.id, path: out.snap.path, name: out.snap.name };
       return out;
     });
     if (rows.length) localStorage.setItem(CG_DRAFT, JSON.stringify({ rows, group: cg.defaultGroup }));
@@ -485,7 +1048,7 @@ function cgTableRow(row, index) {
   const dup = el("button", { type: "button", class: "icon-btn small", title: t("cg_dup"), "aria-label": t("cg_dup") }, icon("g-copy"));
   dup.addEventListener("click", () => {
     const copy = cgNewRow(Object.assign({}, row, { id: undefined, name: "", folder: row.platform === "command" ? "" : row.folder,
-      snap: null, video: null, errors: {}, state: "", error: "", controls: row.controls.slice() }));
+      snap: null, video: null, text: null, errors: {}, state: "", error: "", controls: row.controls.slice() }));
     copy.id = ++cg.seq;
     cg.rows.splice(index + 1, 0, copy);
     cgTableDraw();
@@ -513,14 +1076,14 @@ function cgTableRow(row, index) {
 
 // O erro do Setup cai na coluna dela (exe e command sao a mesma coluna).
 function cgFieldError(row, column) {
-  const map = { run: ["exe", "command"], art: ["snap", "video", "text"], group: ["group"], name: ["name"], platform: ["platform"],
+  const map = { run: ["exe", "command"], art: ["snap", "video", "text", "key", "ppdb"], group: ["group"], name: ["name"], platform: ["platform"],
     folder: ["folder"], mode: ["mode"], category: ["category"], players: ["players"], buttons: ["buttons"], controls: ["controls"] };
   return (map[column] || []).map((f) => row.errors[f]).filter(Boolean).join(" ");
 }
 
 // cgControls: os campos de uma linha (na tabela ou num dialogo). Mudar o tipo
 // ou a pasta redesenha (o executavel depende deles).
-function cgControls(row, { redraw, editing } = {}) {
+function cgControls(row, { redraw, editing, package: pkg } = {}) {
   const changed = (structural) => {
     row.state = "";
     row.error = "";
@@ -544,8 +1107,9 @@ function cgControls(row, { redraw, editing } = {}) {
   const out = {};
   out.group = cgGroupSelect(row.group, (value) => { row.group = value; changed(false); });
   out.name = text("name", t("cg_ph_name"));
+  // Um pacote (Criar pacote) e so do Windows ou do Linux.
   out.platform = editing ? el("span", { class: "tag" }, t("cg_" + row.platform))
-    : select("platform", CG_PLATFORMS.map((p) => [p, t("cg_" + p)]), true);
+    : select("platform", CG_PLATFORMS.filter((p) => !pkg || p !== "command").map((p) => [p, t("cg_" + p)]), true);
   // A pasta: digitada ou escolhida no dialogo; ao mudar, o scan acha os
   // executaveis (e o nome, se ainda nao tem).
   const folder = text("folder", t("cg_ph_folder"), "code-in");
@@ -595,7 +1159,7 @@ function cgControls(row, { redraw, editing } = {}) {
   out.buttons = select("buttons", [["", t("cg_any")], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.controls = cgControlsButton(row, changed);
   out.art = cgArt(row, changed);
-  if (row.platform === "windows" && cg.info && cg.info.wine && cg.info.wine.length && !editing) {
+  if (row.platform === "windows" && cg.info && cg.info.wine && cg.info.wine.length && !editing && !pkg) {
     out.art = el("div", { class: "cg-artwine" }, out.art, select("wine", [["", t("cg_wine_default")], ...cg.info.wine.map((w) => [w.value, w.label])], false));
   }
   return out;
@@ -629,16 +1193,19 @@ function cgControlsButton(row, changed) {
   return button;
 }
 
-// A arte da linha: a imagem e o video sobem na hora para a espera do
-// servidor; a linha guarda o id.
+// A arte da linha: a imagem, o video e o texto sobem na hora para a espera
+// do servidor (a linha guarda o id), ou vieram com a pasta do jogo (o
+// caminho; marcados "da pasta"). O .key e o .ppdb so vem da pasta.
 function cgArt(row, changed) {
   const box = el("div", { class: "cg-art" });
   const slot = (key, accept, kind, glyph) => {
     const input = el("input", { type: "file", accept, hidden: "" });
     const current = row[key];
-    const button = el("button", { type: "button", class: "cg-artbtn" + (current ? " on" : ""), title: t("cg_f_" + (key === "snap" ? "snap" : "video")) });
+    const label = t("cg_f_" + key);
+    const button = el("button", { type: "button", class: "cg-artbtn" + (current ? " on" : "") + (current && current.path ? " found" : ""),
+      title: current && current.path ? t("cg_from_folder") + ": " + current.path : label });
     if (current && current.url && key === "snap") button.append(el("img", { src: current.url, alt: "" }));
-    else button.append(icon(glyph), el("span", {}, current ? current.name : t("cg_f_" + (key === "snap" ? "snap" : "video"))));
+    else button.append(icon(glyph), el("span", {}, current ? current.name : label));
     button.addEventListener("click", () => input.click());
     input.addEventListener("change", async () => {
       const file = input.files[0];
@@ -653,7 +1220,10 @@ function cgArt(row, changed) {
         toast(t("cg_art_too_big").replace("%s", file.name) + (out.data.error ? " " + out.data.error : ""), "bad");
         row[key] = null;
       } else {
-        row[key] = { id: out.data.id, name: file.name, url: key === "snap" ? URL.createObjectURL(file) : "" };
+        // A previa (Criar pacote) mostra a imagem e o video pelo navegador, e
+        // o texto lido aqui mesmo.
+        row[key] = { id: out.data.id, name: file.name, url: key === "text" ? "" : URL.createObjectURL(file) };
+        if (key === "text") row[key].value = await file.text().catch(() => "");
       }
       changed(false);
       const fresh = cgArt(row, changed);
@@ -667,12 +1237,21 @@ function cgArt(row, changed) {
     }
     return el("span", { class: "cg-slot" }, ...parts);
   };
-  box.append(slot("snap", ".png,.jpg,.jpeg,.webp,.gif", "snap", "g-camera"), slot("video", ".mp4,.mkv,.webm,.avi,.mov,.flv", "video", "g-play"));
+  // O JOGO.key e o JOGO.ppdb que vieram com a pasta: so a marca (e tirar).
+  const chip = (key) => {
+    const drop = el("button", { type: "button", class: "icon-btn small", "aria-label": t("cg_remove") + ": " + row[key].name }, icon("g-close"));
+    drop.addEventListener("click", () => { row[key] = null; changed(false); box.replaceWith(cgArt(row, changed)); });
+    return el("span", { class: "cg-slot" }, el("span", { class: "tag on cg-chip", title: t("cg_from_folder") + ": " + row[key].path },
+      t("cg_f_" + key)), drop);
+  };
+  box.append(slot("snap", ".png,.jpg,.jpeg,.webp,.gif", "snap", "g-camera"), slot("video", ".mp4,.mkv,.webm,.avi,.mov,.flv", "video", "g-play"),
+    slot("text", ".txt", "text", "g-list"), ...["key", "ppdb"].filter((k) => row[k]).map(chip));
   return box;
 }
 
-// cgScanRow: os executaveis da pasta (e o tipo e o nome, quando faltam).
-async function cgScanRow(row, redraw) {
+// cgScanRow: os executaveis da pasta (e o tipo e o nome, quando faltam), e o
+// que veio com ela na estrutura do pacote (a arte, o .key, o .ppdb, o cfg).
+async function cgScanRow(row, redraw, quiet) {
   if (!row.folder || !row.folder.startsWith("/")) return;
   const res = await api("/api/customgames/scan?one=1&path=" + encodeURIComponent(row.folder));
   if (!res.ok) return;
@@ -683,9 +1262,12 @@ async function cgScanRow(row, redraw) {
   if (found.platform && row.platform !== "command" && !row.exe && !row.command) row.platform = found.platform;
   if (row.platform === "windows" && !row.exes.includes(row.exe)) row.exe = row.exes[0] || "";
   if (row.platform === "native" && !row.command && found.command) row.command = found.command;
+  cgFound(row, found);
   row.errors = {};
   cgDraftSave();
   if (redraw) redraw();
+  const got = cgFoundList(row);
+  if (got.length && !quiet) toast(t("cg_found").replace("%s", got.join(", ")), "ok");
 }
 
 function cgPortProtonNote(rows, id) {
@@ -710,12 +1292,17 @@ async function cgImport() {
   }
   // A linha vazia do comeco sai.
   cg.rows = cg.rows.filter((r) => r.name || r.folder || r.command);
+  let art = 0;
   for (const g of games) {
-    cg.rows.push(cgNewRow({ group: cg.defaultGroup, name: g.name, platform: g.platform || "windows", folder: g.path, exe: g.exe,
-      command: g.command, exes: g.exes || [], programs: g.programs || [] }));
+    const row = cgNewRow({ group: cg.defaultGroup, name: g.name, platform: g.platform || "windows", folder: g.path, exe: g.exe,
+      command: g.command, exes: g.exes || [], programs: g.programs || [] });
+    cgFound(row, g);
+    if (cgFoundList(row).length) art++;
+    cg.rows.push(row);
   }
   cgTableDraw();
-  toast(t("cg_import_found").replace("%n", games.length).replace("%s", folder), "ok");
+  toast(t("cg_import_found").replace("%n", games.length).replace("%s", folder) +
+    (art ? " " + t("cg_import_art").replace("%n", art) : ""), "ok");
 }
 
 // Colar de uma planilha: as linhas (tabs) viram linhas da tabela; um
@@ -781,7 +1368,7 @@ function cgPaste(text) {
   cgTableDraw();
   toast(t("cg_pasted").replace("%n", added), added ? "ok" : "bad");
   // As pastas coladas: os executaveis delas.
-  cg.rows.filter((r) => r.folder && !r.exes.length && !r.programs.length).forEach((r) => cgScanRow(r, cgTableDraw).catch(() => {}));
+  cg.rows.filter((r) => r.folder && !r.exes.length && !r.programs.length).forEach((r) => cgScanRow(r, cgTableDraw, true).catch(() => {}));
   return added > 0;
 }
 
@@ -793,8 +1380,12 @@ function cgPayload(row) {
   return { group: row.group, name: row.name.trim(), platform: row.platform, folder: row.platform === "command" ? "" : row.folder.trim(),
     exe: row.platform === "windows" ? row.exe : "", command: row.platform === "windows" ? "" : row.command, mode: cgRowMode(row),
     category: row.category, controls: row.controls.join(","), buttons: row.buttons, players: row.players,
-    snap: row.snap ? row.snap.id : "", video: row.video ? row.video.id : "", wine: row.platform === "windows" ? row.wine : "" };
+    snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), wine: row.platform === "windows" ? row.wine : "",
+    key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "" };
 }
+
+// O id da arte subida, ou o caminho da que veio com a pasta.
+const cgArtRef = (art) => (art ? art.id || art.path || "" : "");
 
 // cgCheck: os erros de cada linha pelo Setup (nada e gravado). true: tudo
 // certo e cabe no disco.

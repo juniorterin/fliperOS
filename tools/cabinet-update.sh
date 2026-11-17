@@ -349,6 +349,10 @@ echo "== Kernel line (boot straight to Plymouth)"
   # Os scripts dos jogos personalizados com o nome proprio do filtro de
   # flicker (o --app do fliperos-x11-run): os de antes abriam como "bash".
   customgames_refresh
+  # Os pacotes vivem numa pasta so (~/roms/custom-packages): os soltos em
+  # ~/roms/custom e nas pastas dos grupos vao para ela.
+  customgames_packages_migrate
+  customgames_packages_dir
   # E a imagem, o video, o texto e o logotipo de exemplo dos que ainda nao
   # tem (os postos antes delas; so os tipos que faltam).
   customgames_media_all

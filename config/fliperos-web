@@ -146,6 +146,7 @@ import termios
 import threading
 import time
 import urllib.request
+import zipfile
 import zlib
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -2651,7 +2652,7 @@ def menu_sounds():
 # caminho. Os jogos de uma pasta sao copiados para ~/games/GRUPO/NOME.
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
-                     "buttons", "players", "snap", "video", "text", "text_string", "wine")
+                     "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb")
 CUSTOMGAME_ROWS = 500
 CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 # A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
@@ -2659,7 +2660,14 @@ CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 STAGE_KINDS = {"snap": (("png", "jpg", "jpeg", "webp", "gif"), 32 << 20),
                "video": (("mp4", "mkv", "webm", "avi", "mov", "flv"), 4 << 30),
                "text": (("txt",), 1 << 20)}
+# O que veio com a pasta do jogo (a estrutura do pacote: o scan acha) vai
+# pelo caminho no gabinete, sem subir: a arte e o JOGO.key e o JOGO.ppdb.
+FOUND_KINDS = dict(STAGE_KINDS, key=(("key",), 1 << 20), ppdb=(("ppdb",), 1 << 20))
 STAGE_HOURS = 24
+# O tipo de cada arte de um jogo custom (a de dentro de um pacote, a de uma
+# pasta), para a pagina mostrar.
+CUSTOMGAME_MEDIA_TYPES = dict(MEDIA_TYPES, **{".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
+                                               ".flv": "video/x-flv"})
 
 
 def stage_dir():
@@ -2693,6 +2701,20 @@ def stage_path(token):
     return path if os.path.isfile(path) else None
 
 
+def found_path(kind, value):
+    """Um arquivo do gabinete que veio com a pasta de um jogo (a arte, o
+    .key, o .ppdb), conferido: o caminho absoluto, a extensao do tipo e o
+    tamanho; ou None."""
+    exts, limit = FOUND_KINDS.get(kind, ((), 0))
+    path = os.path.normpath(str(value or ""))
+    if not path.startswith("/") or "\0" in path or path.rsplit(".", 1)[-1].lower() not in exts:
+        return None
+    try:
+        return path if os.path.isfile(path) and os.path.getsize(path) <= limit else None
+    except OSError:
+        return None
+
+
 def customgame_field(value, limit=1024):
     """Um campo de uma linha da tabela: texto de uma linha so, sem os
     caracteres de controle (o 0x1f separa os campos no arquivo)."""
@@ -2701,9 +2723,10 @@ def customgame_field(value, limit=1024):
 
 def customgame_rows_file(rows):
     """O arquivo da tabela para o Setup (um jogo por linha, campos separados
-    por 0x1f), com a arte trocada pelo caminho na pasta de espera. Uma arte
-    que nao esta mais la vira um caminho que nao existe: o Setup diz que
-    falta. None: a tabela nao serve."""
+    por 0x1f), com a arte trocada pelo caminho na pasta de espera, ou pelo
+    do gabinete (a que veio com a pasta do jogo; o .key e o .ppdb so assim).
+    Uma arte que nao esta mais la vira um caminho que nao existe: o Setup diz
+    que falta. None: a tabela nao serve."""
     if not isinstance(rows, list) or not rows or len(rows) > CUSTOMGAME_ROWS:
         return None
     lines = []
@@ -2713,8 +2736,10 @@ def customgame_rows_file(rows):
         fields = []
         for key in CUSTOMGAME_FIELDS:
             value = customgame_field(row.get(key), 4096 if key == "text_string" else 1024)
-            if key in ("snap", "video", "text") and value:
-                value = stage_path(value) or os.path.join(stage_dir(), "missing-" + re.sub(r"\W", "", value)[:32])
+            if key in ("snap", "video", "text", "key", "ppdb") and value:
+                found = found_path(key, value) if value.startswith("/") else None
+                staged = stage_path(value) if key in STAGE_KINDS else None
+                value = found or staged or os.path.join(stage_dir(), "missing-" + re.sub(r"\W", "", value)[:32])
             elif key == "folder" and value:
                 value = os.path.normpath(value)
             fields.append(value)
@@ -2731,7 +2756,7 @@ def customgames_info():
     os pacotes esperando e as escolhas dos dropdowns."""
     out = setup_out("--customgames", "describe", timeout=120)
     info = {"groups": [], "games": [], "pending": [], "modes": [], "genres": [], "controls": [], "squash": [],
-            "wine": [], "portproton": False, "games_dir": "", "free": 0}
+            "wine": [], "portproton": False, "games_dir": "", "free": 0, "packages_dir": "", "last_group": ""}
     for line in out.splitlines():
         f = line.split("\t")
         kind, rest = f[0], f[1:]
@@ -2741,7 +2766,9 @@ def customgames_info():
             info["games"].append(dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
                                            "players", "command", "exe", "folder", "package"), rest)))
         elif kind == "pending" and len(rest) >= 5:
-            info["pending"].append(dict(zip(("zip", "group", "name", "platform", "state", "why"), rest + [""])))
+            # bad: why (os textos) e codes (codigo=argumento;..., que a pagina traduz).
+            info["pending"].append(dict(zip(("zip", "group", "name", "platform", "state", "why", "codes"),
+                                            rest + ["", ""])))
         elif kind == "mode" and len(rest) == 2:
             info["modes"].append({"label": rest[0], "value": rest[1]})
         elif kind == "genre" and rest:
@@ -2760,7 +2787,32 @@ def customgames_info():
             info["games_dir"] = rest[0]
         elif kind == "free" and rest and rest[0].isdigit():
             info["free"] = int(rest[0])
+        elif kind == "packages" and rest:
+            info["packages_dir"] = rest[0]
+        elif kind == "lastgroup" and rest:
+            info["last_group"] = rest[0]
     return info
+
+
+def customgame_packages_dir():
+    """A pasta dos pacotes (a lista do Instalar pacotes, onde o Criar pacote
+    os poe)."""
+    return os.path.join(player_home(), "roms", "custom-packages")
+
+
+def customgames_create_check(path):
+    """fliperos-setup --customgames check-create: os erros da linha do pacote
+    a criar, o zip que sera feito (e se ja existe), o tamanho e o livre."""
+    out = setup_out("--customgames", "check-create", path, timeout=300)
+    errors, values = [], key_values(out)
+    for line in out.splitlines():
+        if line.startswith("error|"):
+            parts = line.split("|", 3)
+            if len(parts) == 4:
+                errors.append({"field": parts[2], "error": parts[3]})
+    number = lambda key: int(values.get(key, "0")) if values.get(key, "0").isdigit() else 0
+    return {"errors": errors, "out": values.get("out", ""), "exists": values.get("exists") == "1",
+            "bytes": number("bytes"), "free": number("free")}
 
 
 def customgames_check(path):
@@ -3281,16 +3333,21 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob: %s %s; "
                          "connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'" % (ADB_ORIGIN, THUMBS_URL))
 
-    def send_inline(self, path, ctype, cache, frame="DENY"):
+    def send_inline(self, path, ctype, cache, frame="DENY", member=None):
         """Um arquivo para a pagina mostrar, em pedacos: o ETag (304 quando o
         navegador ja o tem), o cache pedido e Range (o Safari do iPhone so
-        toca video assim)."""
+        toca video assim). member: um arquivo de dentro do zip PATH (a midia
+        de um pacote de jogo custom)."""
         try:
             st = os.stat(path)
-        except OSError:
+            if member is not None:
+                with zipfile.ZipFile(path) as zf:
+                    info = zf.getinfo(member)
+        except (OSError, KeyError, zipfile.BadZipFile):
             return self.send(404, {"error": "not found"})
-        size = st.st_size
-        etag = '"%x-%x"' % (int(st.st_mtime), size)
+        size = st.st_size if member is None else info.file_size
+        etag = '"%x-%x"' % (int(st.st_mtime), size) if member is None else \
+            '"%x-%x-%x"' % (int(st.st_mtime), st.st_size, info.header_offset)
         if self.headers.get("If-None-Match") == etag:
             self.send_response(304)
             self.send_header("ETag", etag)
@@ -3324,7 +3381,8 @@ class Handler(BaseHTTPRequestHandler):
         self.guard_headers(frame)
         self.end_headers()
         try:
-            with open(path, "rb") as f:
+            archive = zipfile.ZipFile(path) if member is not None else None
+            with (archive.open(member) if archive else open(path, "rb")) as f:
                 f.seek(start)
                 left = end - start + 1
                 while left > 0:
@@ -3333,7 +3391,9 @@ class Handler(BaseHTTPRequestHandler):
                         break
                     self.wfile.write(chunk)
                     left -= len(chunk)
-        except OSError:
+            if archive:
+                archive.close()
+        except (OSError, zipfile.BadZipFile):
             pass
         return None
 
@@ -3468,7 +3528,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"settings": settings()})
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
-        if url.path in ("/api/customgames", "/api/customgames/scan"):
+        if url.path in ("/api/customgames", "/api/customgames/scan", "/api/customgames/art", "/api/customgames/packages",
+                        "/api/customgames/package-media"):
             return self.customgames_get(url)
         if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
             return self.setup_get(url)
@@ -4562,6 +4623,34 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.loads(done.stdout))
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 return self.send(500, {"error": str(exc)})
+        if url.path == "/api/customgames/art":
+            # A arte que veio com a pasta do jogo (o scan a achou), pelo
+            # caminho no gabinete: a miniatura e a previa do Criar pacote
+            # (kind snap, video ou text; so as extensoes de cada um).
+            kind = (query.get("kind") or ["snap"])[0]
+            path = found_path(kind, (query.get("path") or [""])[0]) if kind in STAGE_KINDS else None
+            if not path:
+                return self.send(404, {"error": "no such file"})
+            return self.send_inline(path, CUSTOMGAME_MEDIA_TYPES.get(os.path.splitext(path)[1].lower(), "application/octet-stream"),
+                                    MEDIA_CACHE)
+        if url.path == "/api/customgames/packages":
+            # Os cartoes do Instalar pacotes: tudo de cada pacote da pasta deles.
+            argv = ["python3", CUSTOMGAME_TOOL, "--roms", os.path.join(player_home(), "roms", "custom"),
+                    "--packages", customgame_packages_dir(), "packages"]
+            try:
+                done = subprocess.run(argv, capture_output=True, text=True, timeout=120)
+                return self.send(200, json.loads(done.stdout))
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                return self.send(500, {"error": str(exc)})
+        if url.path == "/api/customgames/package-media":
+            # A imagem, o video ou o texto de dentro de um pacote (o cartao).
+            path = (query.get("zip") or [""])[0]
+            member = (query.get("member") or [""])[0]
+            ext = os.path.splitext(member)[1].lower()
+            if not path.lower().endswith(".zip") or not os.path.isfile(path) or not inside(path, customgame_packages_dir()) \
+                    or ext not in CUSTOMGAME_MEDIA_TYPES:
+                return self.send(404, {"error": "no such media"})
+            return self.send_inline(path, CUSTOMGAME_MEDIA_TYPES[ext], MEDIA_CACHE, member=member)
         try:
             return self.send(200, customgames_info())
         except (OSError, subprocess.SubprocessError) as exc:
@@ -4573,6 +4662,49 @@ class Handler(BaseHTTPRequestHandler):
             return self.customgame_stage(parse_qs(url.query))
         data = self.body(4 << 20)
         tasks = self.panel.tasks
+        if action in ("check-create", "create"):
+            # Criar pacote: uma linha como as da tabela (sem grupo); o zip vai
+            # para a pasta dos pacotes.
+            path = customgame_rows_file([data.get("row")]) if isinstance(data.get("row"), dict) else None
+            if not path:
+                return self.send(400, {"error": "row: the game to pack"})
+            if action == "check-create":
+                try:
+                    return self.send(200, customgames_create_check(path))
+                except (OSError, subprocess.SubprocessError) as exc:
+                    return self.send(500, {"error": str(exc)})
+                finally:
+                    os.unlink(path)
+            argv = [SETUP, "--customgames", "create", path] + (["replace"] if data.get("replace") else [])
+            task = tasks.start("Package of %s" % customgame_field(data["row"].get("name"), 80), argv, "customgames")
+            if not task:
+                os.unlink(path)
+                return self.send(409, {"error": "another custom games task is running"})
+            return self.send(200, task.info())
+        if action == "test":
+            # Testar (Criar pacote): o jogo da linha aberto no gabinete, da
+            # pasta dele, sem instalar; a pagina espera o FPS do app voltar.
+            path = customgame_rows_file([data.get("row")]) if isinstance(data.get("row"), dict) else None
+            if not path:
+                return self.send(400, {"error": "row: the game to test"})
+            try:
+                done = subprocess.run([SETUP, "--customgames", "test", path], capture_output=True, text=True, timeout=60)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            finally:
+                os.unlink(path)
+            lines = done.stdout.splitlines()
+            if done.returncode != 0 or not lines or not lines[0].startswith("app="):
+                return self.send(400, {"error": (done.stdout.strip() or done.stderr.strip())[-300:] or "the game cannot be tested"})
+            argv = lines[1:]
+            if not argv or argv[0] != os.path.join(BIN, "fliperos-x11-run"):
+                return self.send(500, {"error": "unexpected command from the Setup"})
+            return self.send(200, dict(self.panel.launch(argv), app=lines[0][4:]))
+        if action == "package-delete":
+            path = str(data.get("zip", ""))
+            if not path.lower().endswith(".zip") or not os.path.isfile(path) or not inside(path, customgame_packages_dir()):
+                return self.send(400, {"error": "no such package in ~/roms/custom-packages"})
+            return self.setup_call(["--customgames", "package-delete", path])
         if action in ("check", "bulk"):
             path = customgame_rows_file(data.get("rows"))
             if not path:
@@ -4604,6 +4736,10 @@ class Handler(BaseHTTPRequestHandler):
                                    timeout=180)
         if action == "group":
             return self.setup_call(["--customgames", "group", name])
+        if action == "group-info":
+            # O que apagar o grupo leva (os jogos, as pastas, os pacotes, os
+            # outros arquivos da pasta dele), para a pergunta.
+            return self.setup_answer(["--customgames", "group-info", name], {}, timeout=60)
         if action == "media":
             args = []
             for key, opt in (("snap", "--snap"), ("video", "--video"), ("text", "--text")):
@@ -4623,14 +4759,20 @@ class Handler(BaseHTTPRequestHandler):
                 title = "Install the packages of %s" % group
             else:
                 path = str(data.get("zip", ""))
-                roms = os.path.join(player_home(), "roms", "custom")
-                if not path.endswith(CUSTOMGAME_SUFFIX) or not os.path.isfile(path) or not inside(path, roms):
-                    return self.send(400, {"error": "no such package in ~/roms/custom"})
+                if not path.endswith(CUSTOMGAME_SUFFIX) or not os.path.isfile(path) or \
+                        not inside(path, customgame_packages_dir()):
+                    return self.send(400, {"error": "no such package in ~/roms/custom-packages"})
                 argv = [SETUP, "--customgames", "install", path, group] + \
                     (["replace"] if data.get("replace") else []) + (["--portproton"] if data.get("portproton") else [])
                 title = "Install %s" % os.path.basename(path)[:-len(CUSTOMGAME_SUFFIX)]
         elif action == "pack":
             argv, title = [SETUP, "--customgames", "pack", group, name], "Package of %s" % name
+        elif action == "group-delete":
+            # Uma tarefa: as pastas dos jogos (squashfs) podem demorar.
+            if not name:
+                return self.send(400, {"error": "which group?"})
+            argv = [SETUP, "--customgames", "group-delete", name] + (["all"] if data.get("all") else [])
+            title = "Delete the group %s" % name
         elif action == "squash":
             folder = os.path.normpath(str(data.get("folder", "")))
             if data.get("action") not in ("pack", "unpack") or not folder.startswith("/") or not os.path.isdir(folder):

@@ -14,11 +14,14 @@
 # .sh. Nos frontends a pasta e o sistema "custom/GRUPO" (scraper_detect),
 # aberto com o sh.
 #
-# Os pacotes (JOGO.fliperos-customgame.zip) postos em ~/roms/custom ou em
-# ~/roms/custom/GRUPO aparecem em Custom games para instalar; o zip fica onde
-# estava, e o cfg do jogo instalado o anota (nao volta a lista).
+# Os pacotes (JOGO.fliperos-customgame.zip) ficam numa pasta so,
+# ~/roms/custom-packages: o Install games os lista (os instalados tambem,
+# com o grupo) e pergunta o grupo ao instalar; o Create package grava nela.
+# Depois de instalar, a pessoa escolhe se o zip fica (o cfg do jogo o anota)
+# ou sai.
 
 CUSTOM_GAMES_DIR=${CUSTOM_GAMES_DIR:-$ROMS_DIR/custom}
+CUSTOM_GAMES_PACKAGES=${CUSTOM_GAMES_PACKAGES:-$ROMS_DIR/custom-packages}
 CUSTOM_GAMES_RUN=${CUSTOM_GAMES_RUN:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-x11-run}
 CUSTOM_GAMES_TOOL=${CUSTOM_GAMES_TOOL:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-customgame}
 # As pastas dos jogos dos pacotes: ~/games/GRUPO/NOME.
@@ -287,7 +290,7 @@ customgames_entry() {
   mode=$(customgames_cfg_field "$cfg" mode)
   platform=$(customgames_cfg_field "$cfg" platform)
   cmd=$(customgames_cfg_field "$cfg" command)
-  mode=$(customgames_mode "$mode") || return 1
+  mode=$(customgames_mode "${mode:-480i}") || return 1
   [[ $platform == windows || ($platform == command && $cmd =~ $CUSTOM_GAMES_WINE_RE) ]] && wine=" --wine"
   {
     echo '#!/bin/sh'
@@ -335,13 +338,20 @@ customgames_save() {
 
 # customgames_delete GRUPO NOME [folder] apaga a entrada (e o grupo, se ficou
 # vazio) e as midias de exemplo dela; a de um pacote, todas (o zip as traz de
-# novo). Com folder, tambem a pasta do jogo (e o squashfs dela).
+# novo). Com folder, tambem a pasta do jogo (e o squashfs dela), antes de
+# tudo: em uso (o jogo aberto), status 1 e nada sai (da para tentar de novo).
 customgames_delete() {
-  local cfg folder="" package=""
+  local cfg folder="" package="" rc
   cfg=$(customgames_cfg "$1" "$2")
   if [[ -f $cfg ]]; then
     folder=$(customgames_cfg_field "$cfg" folder)
     package=$(customgames_cfg_field "$cfg" package)
+  fi
+  if [[ ${3:-} == folder && -n $folder ]]; then
+    customgames_remove_folder "$folder"
+    rc=$?
+    # 2: a pasta fica fora de ~/games (nao e do FliperOS): so a entrada sai.
+    ((rc == 1)) && return 1
   fi
   rm -f "$(customgames_file "$1" "$2")" "$cfg" "${cfg%.cfg}.key" || return 1
   if [[ -n $package ]]; then
@@ -352,19 +362,19 @@ customgames_delete() {
   else
     customgames_media_drop "$1" "$2"
   fi
-  [[ ${3:-} == folder && -n $folder ]] && customgames_remove_folder "$folder"
   rmdir "$CUSTOM_GAMES_DIR/$1" 2> /dev/null
   log_info "jogo personalizado apagado: $1 / $2${3:+ (com a pasta $folder)}"
   return 0
 }
 
 # customgames_remove_folder PASTA apaga a pasta de um jogo instalado (so
-# dentro de ~/games), empacotada ou nao, e a do grupo se ficou vazia.
+# dentro de ~/games), empacotada ou nao, e a do grupo se ficou vazia. Status
+# 1: nao saiu (o squashfs em uso); 2: fora de ~/games (fica).
 customgames_remove_folder() {
   local folder base
   base=$(realpath -m -- "$CUSTOM_GAMES_GAMES") || return 1
   folder=$(realpath -m -s -- "$1") || return 1
-  [[ $folder == "$base"/*/* && $folder != */.* ]] || { log_warn "pasta fora de $base: $1"; return 1; }
+  [[ $folder == "$base"/*/* && $folder != */.* ]] || { log_warn "pasta fora de $base: $1"; return 2; }
   if [[ -e $folder.squashfs || -n $(squashgames_list | awk -F'|' -v f="$folder" '$1 == f') ]]; then
     "$SQUASHGAMES_CMD" remove "$folder" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1 || return 1
   fi
@@ -373,24 +383,226 @@ customgames_remove_folder() {
   return 0
 }
 
+# ── Apagar um grupo inteiro ──
+# Antes o grupo so saia quando o ultimo jogo saia, e so se a pasta
+# ~/roms/custom/GRUPO ficasse vazia (um pacote ou outro arquivo la o
+# segurava); um grupo vazio nao saia nunca.
+
+# customgames_group_own NOME: um arquivo da pasta do grupo que e do FliperOS
+# ou do sistema (as entradas, os .tmp de uma gravacao cortada, o lixo que o
+# Windows e o macOS deixam pelo compartilhamento).
+customgames_group_own() {
+  local low=${1,,}
+  case $low in
+    *.sh | *.cfg | *.key | *.tmp | *.new | *.part | thumbs.db | desktop.ini | .ds_store | ._* | .directory) return 0 ;;
+  esac
+  return 1
+}
+
+# customgames_group_info GRUPO: o que apagar o grupo leva, em CHAVE=VALOR:
+# games= (os jogos), folders= (os que tem a pasta em ~/games), packages= (os
+# .fliperos-customgame.zip da pasta dele), others= (quantos arquivos de outro
+# tipo) e other= (os nomes dos primeiros, separados por " / ").
+customgames_group_info() {
+  local group=$1 dir g name file base games=0 folders=0 packages=0 others=0 other=""
+  dir=$CUSTOM_GAMES_DIR/$group
+  while IFS='|' read -r g name _; do
+    [[ $g == "$group" ]] || continue
+    ((games++))
+    [[ -n $(customgames_cfg_field "$(customgames_cfg "$group" "$name")" folder) ]] && ((folders++))
+  done < <(customgames_list)
+  while IFS= read -r -d '' file; do
+    base=${file##*/}
+    if [[ ${base,,} == *.fliperos-customgame.zip && -f $file ]]; then
+      ((packages++))
+    elif ! customgames_group_own "$base"; then
+      ((others++))
+      ((others <= 5)) && other+="${other:+ / }$base"
+    fi
+  done < <(find -H "$dir" -mindepth 1 -maxdepth 1 -print0 2> /dev/null | LC_ALL=C sort -z)
+  printf 'games=%s\nfolders=%s\npackages=%s\nothers=%s\nother=%s\n' "$games" "$folders" "$packages" "$others" "$other"
+}
+
+# customgames_package_keep ZIP: um pacote fora da pasta deles (o de um grupo
+# que vai sair, os de antes dela) vai para ~/roms/custom-packages e imprime
+# onde ficou. Ja havendo um com esse nome la: o mesmo arquivo sai (imprime o
+# de la), outro ganha "(GRUPO)" no nome (GRUPO: a pasta de onde veio).
+customgames_package_keep() {
+  local zip=$1 group base stem dest n=2
+  group=${zip%/*}
+  group=${group##*/}
+  base=${zip##*/}
+  stem=${base:0:${#base}-24}
+  customgames_packages_dir
+  dest=$CUSTOM_GAMES_PACKAGES/$base
+  if [[ -e $dest ]]; then
+    cmp -s -- "$zip" "$dest" && { rm -f -- "$zip"; printf '%s\n' "$dest"; return 0; }
+    dest="$CUSTOM_GAMES_PACKAGES/$stem ($group).fliperos-customgame.zip"
+    while [[ -e $dest ]]; do
+      dest="$CUSTOM_GAMES_PACKAGES/$stem ($group $n).fliperos-customgame.zip"
+      ((n++))
+    done
+  fi
+  mv -- "$zip" "$dest" && chown "$FLIPEROS_USER:" "$dest" 2> /dev/null
+  printf '%s\n' "$dest"
+  return 0
+}
+
+# customgames_packages_dir: a pasta dos pacotes, criada (do jogador: aparece
+# no compartilhamento \\fliperos\roms).
+customgames_packages_dir() {
+  [[ -d $CUSTOM_GAMES_PACKAGES ]] && return 0
+  mkdir -p "$CUSTOM_GAMES_PACKAGES" 2> /dev/null &&
+    chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_PACKAGES" 2> /dev/null
+  return 0
+}
+
+# customgames_packages_migrate: os pacotes de antes da pasta deles (soltos em
+# ~/roms/custom e nas pastas dos grupos) vao para ~/roms/custom-packages, e o
+# cfg do jogo instalado de um deles passa a apontar o zip no lugar novo (o
+# mv guarda o tamanho e a data: ele continua instalado). O System Update e a
+# tela Custom games chamam; sem pacote fora do lugar, nada muda.
+customgames_packages_migrate() {
+  local zip dest cfg
+  local -a zips=()
+  [[ -d $CUSTOM_GAMES_DIR ]] || return 0
+  mapfile -d '' -t zips < <(find -H "$CUSTOM_GAMES_DIR" -mindepth 1 -maxdepth 2 -type f \
+    -iname '*.fliperos-customgame.zip' -not -path '*/.*' -print0 2> /dev/null)
+  ((${#zips[@]})) || return 0
+  for zip in "${zips[@]}"; do
+    dest=$(customgames_package_keep "$zip")
+    for cfg in "$CUSTOM_GAMES_DIR"/*/*.cfg; do
+      [[ -f $cfg && $(customgames_cfg_field "$cfg" package) == "$zip" ]] || continue
+      customgames_cfg_set "$cfg" package "$dest"
+    done
+    log_info "pacote movido para a pasta dos pacotes: $zip -> $dest"
+  done
+  return 0
+}
+
+# customgames_package_delete ZIP: apaga um pacote da pasta deles (o jogo
+# instalado dele fica; o cfg deixa de apontar o zip). Status 2: o ZIP nao e
+# um pacote da pasta.
+customgames_package_delete() {
+  local zip=$1 base real cfg
+  base=$(realpath -m -- "$CUSTOM_GAMES_PACKAGES") || return 2
+  real=$(realpath -m -s -- "$zip") || return 2
+  [[ $real == "$base"/* && ${real,,} == *.zip && -f $real ]] || return 2
+  rm -f -- "$real" || return 1
+  for cfg in "$CUSTOM_GAMES_DIR"/*/*.cfg; do
+    [[ -f $cfg && $(customgames_cfg_field "$cfg" package) == "$real" ]] || continue
+    customgames_cfg_set "$cfg" package "" && customgames_cfg_set "$cfg" package_stamp ""
+  done
+  log_info "pacote apagado: $real"
+  return 0
+}
+
+# O ultimo grupo em que um pacote foi instalado: o Install games o traz
+# marcado na proxima vez.
+customgames_last_group_file() {
+  printf '%s/.config/fliperos/customgame-last-group\n' "$(dirname "$ROMS_DIR")"
+}
+
+# customgames_last_group: o ultimo grupo usado que ainda existe (ou nada).
+customgames_last_group() {
+  local group
+  group=$(head -n 1 "$(customgames_last_group_file)" 2> /dev/null)
+  [[ -n $group && -d $CUSTOM_GAMES_DIR/$group ]] && printf '%s\n' "$group"
+  return 0
+}
+
+customgames_last_group_set() {
+  local file
+  file=$(customgames_last_group_file)
+  mkdir -p "$(dirname "$file")" 2> /dev/null && printf '%s\n' "$1" > "$file" 2> /dev/null &&
+    chown "$FLIPEROS_USER:" "$(dirname "$file")" "$file" 2> /dev/null
+  return 0
+}
+
+# customgames_group_delete GRUPO [all]: apaga cada jogo do grupo (como o
+# Delete de um jogo), a pasta ~/roms/custom/GRUPO com o que sobrou nela e as
+# pastas vazias das midias e de ~/games. Um pacote que esteja na pasta do
+# grupo vai para ~/roms/custom-packages; com all, ele e as pastas dos jogos
+# (e as midias que a pessoa pos) saem tambem. Os pacotes da pasta deles
+# ficam sempre. Com os eventos da tela de progresso. Status 1: a pasta de
+# algum jogo nao saiu (o jogo aberto): o grupo fica, com ele.
+customgames_group_delete() {
+  local group=$1 all=${2:-} dir g name zip kind n=0 total
+  local -a names=()
+  dir=$CUSTOM_GAMES_DIR/$group
+  customgames_valid_name "$group" && [[ -d $dir ]] || return 2
+  while IFS='|' read -r g name _; do
+    [[ $g == "$group" ]] && names+=("$name")
+  done < <(customgames_list)
+  total=${#names[@]}
+  for name in "${names[@]}"; do
+    ev_step $((90 * n / (total ? total : 1))) "Deleting $name"
+    ((n++))
+    if ! customgames_delete "$group" "$name" "$([[ $all == all ]] && echo folder)"; then
+      ev_fail "could not delete the folder of $name: close the game and try again"
+      return 1
+    fi
+  done
+  ev_step 92 "Deleting the group $group"
+  if [[ -d $dir ]]; then
+    while IFS= read -r -d '' zip; do
+      if [[ $all == all ]]; then rm -f -- "$zip"; else customgames_package_keep "$zip" > /dev/null; fi
+    done < <(find -H "$dir" -mindepth 1 -maxdepth 1 -type f -iname '*.fliperos-customgame.zip' -print0 2> /dev/null)
+    # Um link (a pasta do grupo em outro disco) sai so ele.
+    rm -rf -- "$dir"
+  fi
+  for kind in $CUSTOM_GAMES_MEDIA_TYPES; do
+    if [[ $all == all ]]; then
+      rm -rf -- "$CUSTOM_GAMES_MEDIA/$kind/custom/$group"
+    else
+      rmdir -- "$CUSTOM_GAMES_MEDIA/$kind/custom/$group" 2> /dev/null
+    fi
+  done
+  rmdir -- "$CUSTOM_GAMES_GAMES/$group" 2> /dev/null
+  log_info "grupo de jogos personalizados apagado: $group ($total jogos${all:+, com as pastas e os pacotes})"
+  ev_step 100 "$group deleted"
+  return 0
+}
+
 # ── Os pacotes ──
 
 # customgames_tool COMANDO...: o config/fliperos-customgame com as pastas
 # daqui (as dos testes tambem).
 customgames_tool() {
-  python3 "$CUSTOM_GAMES_TOOL" --roms "$CUSTOM_GAMES_DIR" --games "$CUSTOM_GAMES_GAMES" --media "$CUSTOM_GAMES_MEDIA" "$@"
+  python3 "$CUSTOM_GAMES_TOOL" --roms "$CUSTOM_GAMES_DIR" --games "$CUSTOM_GAMES_GAMES" --media "$CUSTOM_GAMES_MEDIA" \
+    --packages "$CUSTOM_GAMES_PACKAGES" "$@"
 }
 
-# customgames_pending [GRUPO]: os pacotes que faltam instalar,
-# "ZIP|GRUPO|NOME|PLATAFORMA|ESTADO|MOTIVO" (fliperos-customgame pending);
-# com GRUPO, so os da pasta dele e os de ~/roms/custom (entram nele).
-customgames_pending() {
-  local line
-  [[ -d $CUSTOM_GAMES_DIR ]] || return 0
+# customgames_found PASTA: o que veio com a pasta de um jogo na estrutura do
+# pacote (fliperos-customgame found) em CG_FOUND_FOLDER (a pasta do jogo: a
+# de dentro, quando PASTA e o zip aberto), CG_FOUND_SNAP, CG_FOUND_VIDEO,
+# CG_FOUND_TEXT, CG_FOUND_KEY, CG_FOUND_PPDB e CG_FOUND_EXE (o exe= do
+# JOGO.cfg, dentro da pasta do jogo).
+customgames_found() {
+  local line key value
+  CG_FOUND_FOLDER=$1 CG_FOUND_SNAP="" CG_FOUND_VIDEO="" CG_FOUND_TEXT="" CG_FOUND_KEY="" CG_FOUND_PPDB=""
+  CG_FOUND_EXE=""
   while IFS= read -r line; do
-    IFS='|' read -r _ g _ <<< "$line"
-    [[ -z ${1:-} || -z $g || $g == "$1" ]] && printf '%s\n' "$line"
-  done < <(customgames_tool pending 2>> "${FLIPEROS_LOG:-/dev/null}")
+    key=${line%%=*} value=${line#*=}
+    case $key in
+      folder) [[ -d $value ]] && CG_FOUND_FOLDER=$value ;;
+      snap) CG_FOUND_SNAP=$value ;;
+      video) CG_FOUND_VIDEO=$value ;;
+      text) CG_FOUND_TEXT=$value ;;
+      key) CG_FOUND_KEY=$value ;;
+      ppdb) CG_FOUND_PPDB=$value ;;
+      cfg_exe) CG_FOUND_EXE=$value ;;
+    esac
+  done < <(customgames_tool found "$1" 2>> "${FLIPEROS_LOG:-/dev/null}")
+  return 0
+}
+
+# customgames_pending: os pacotes de ~/roms/custom-packages,
+# "ZIP|GRUPO|NOME|PLATAFORMA|ESTADO|MOTIVO" (fliperos-customgame pending:
+# ESTADO new, update, installed, com GRUPO, ou bad).
+customgames_pending() {
+  [[ -d $CUSTOM_GAMES_PACKAGES ]] || return 0
+  customgames_tool pending 2>> "${FLIPEROS_LOG:-/dev/null}"
   return 0
 }
 
@@ -447,6 +659,7 @@ customgames_install() {
   customgames_media "$group" "$name"
   # 75 a 99: as etapas do empacotamento; uma falha so avisa.
   customgames_squash "$(customgames_cfg_field "$cfg" folder)" 75 99
+  customgames_last_group_set "$group"
   ev_step 100 "$name installed"
   log_info "pacote instalado: $zip em $group / $name"
   return 0
@@ -499,10 +712,10 @@ portproton_run_install() {
   ev_step 100 "PortProton installed"
 }
 
-# customgames_pending_ok [GRUPO]: os pacotes que dao para instalar (sem os
-# "bad").
+# customgames_pending_ok: os pacotes por instalar (new) e os que mudaram
+# desde a instalacao (update).
 customgames_pending_ok() {
-  customgames_pending "$@" | awk -F'|' '$5 != "bad"'
+  customgames_pending | awk -F'|' '$5 == "new" || $5 == "update"'
 }
 
 # customgames_kind_label GRUPO NOME: "Windows 240p", "Linux 480i",
@@ -632,6 +845,8 @@ customgames_refresh() {
     [[ -n $mode && -n $cmd ]] || continue
     customgames_save "$group" "$name" "$mode" "$cmd" > /dev/null || log_warn "jogo personalizado nao regravado: $group / $name"
   done < <(customgames_list)
+  # E o submenu Games > Custom games do desktop.
+  customgames_desktop
   return 0
 }
 
@@ -645,9 +860,11 @@ customgames_refresh() {
 # As linhas da tabela (check e bulk) vem num arquivo, uma por jogo, com os
 # campos separados pelo caractere 0x1f (o tab juntaria campos vazios no read):
 #   grupo nome plataforma pasta exe comando modo categoria controles botoes
-#   jogadores imagem video texto texto_digitado wine
+#   jogadores imagem video texto texto_digitado wine key ppdb
 # plataforma windows, native ou command; imagem/video/texto sao caminhos de
-# arquivos (o painel os sobe antes); wine e o PW_WINE_USE do PortProton.
+# arquivos (o painel os sobe antes, ou sao os que vieram com a pasta, na
+# estrutura do pacote); wine e o PW_WINE_USE do PortProton; key e ppdb, o
+# JOGO.key e o JOGO.ppdb que vieram com a pasta.
 
 CUSTOM_GAMES_SEP=$'\x1f'
 
@@ -665,6 +882,9 @@ customgames_out() {
 customgames_describe() {
   local group name cfg file platform mode cmd line value label
   local -a f
+  # Os pacotes de antes da pasta deles vao para ela (uma vez).
+  customgames_packages_migrate
+  customgames_packages_dir
   while IFS= read -r group; do
     customgames_out group "$group" "$(customgames_count "$group")"
   done < <(customgames_groups)
@@ -710,6 +930,8 @@ customgames_describe() {
   fi
   customgames_out games "$CUSTOM_GAMES_GAMES"
   customgames_out free "$(customgames_free "$CUSTOM_GAMES_GAMES")"
+  customgames_out packages "$CUSTOM_GAMES_PACKAGES"
+  customgames_out lastgroup "$(customgames_last_group)"
   return 0
 }
 
@@ -728,23 +950,27 @@ customgames_row_fields() {
   R_GROUP=${f[0]:-} R_NAME=${f[1]:-} R_PLATFORM=${f[2]:-} R_FOLDER=${f[3]:-} R_EXE=${f[4]:-}
   R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
   R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
-  R_WINE=${f[15]:-}
+  R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-}
 }
 
-# customgames_row_errors: o que esta errado na linha de R_* (uma linha
-# "CAMPO|MOTIVO" por erro; nada se ela serve). Nao grava nada.
+# customgames_row_errors [package]: o que esta errado na linha de R_* (uma
+# linha "CAMPO|MOTIVO" por erro; nada se ela serve). Com package, a linha e
+# a de um pacote a criar (Create package do painel): sem grupo, so Windows
+# ou Linux. Nao grava nada.
 customgames_row_errors() {
-  local c exe real dest controls
+  local c exe real dest controls package=${1:-}
   controls=" $(romclean_options controls | cut -d'|' -f1 | tr '\n' ' ') "
-  customgames_valid_name "$R_GROUP" || echo "group|The group cannot be empty, start with a dot or have / or |."
+  [[ -n $package ]] || customgames_valid_name "$R_GROUP" ||
+    echo "group|The group cannot be empty, start with a dot or have / or |."
   if ! customgames_valid_name "$R_NAME"; then
     echo "name|The name cannot be empty, start with a dot or have / or |."
-  elif customgames_valid_name "$R_GROUP" &&
+  elif [[ -z $package ]] && customgames_valid_name "$R_GROUP" &&
     [[ -e $(customgames_file "$R_GROUP" "$R_NAME") || -e $(customgames_cfg "$R_GROUP" "$R_NAME") ]]; then
     echo "name|$R_NAME is already in $R_GROUP."
   fi
   [[ -z $R_MODE ]] || customgames_mode "$R_MODE" > /dev/null ||
     echo "mode|Invalid video mode: use 240p, 480i or WIDTHxHEIGHT@HZ (e.g. 320x240@60)."
+  [[ -n $package && $R_PLATFORM == command ]] && echo "platform|A package is a Windows or a Linux game."
   case $R_PLATFORM in
     command)
       customgames_valid_command "$R_COMMAND" || echo "command|The command cannot be empty."
@@ -755,7 +981,7 @@ customgames_row_errors() {
       else
         real=$(realpath -- "$R_FOLDER")
         dest=$(realpath -m -- "$CUSTOM_GAMES_GAMES/$R_GROUP/$R_NAME")
-        if [[ $real == "$dest" || $real == "$dest"/* || $dest == "$real"/* ]]; then
+        if [[ -z $package ]] && [[ $real == "$dest" || $real == "$dest"/* || $dest == "$real"/* ]]; then
           echo "folder|The game folder cannot be copied into itself: pick the folder of this game only."
         fi
         if [[ $R_PLATFORM == windows ]]; then
@@ -779,6 +1005,8 @@ customgames_row_errors() {
   [[ -z $R_SNAP || -f $R_SNAP ]] || echo "snap|The picture was not found: send it again."
   [[ -z $R_VIDEO || -f $R_VIDEO ]] || echo "video|The video was not found: send it again."
   [[ -z $R_TEXT || -f $R_TEXT ]] || echo "text|The text file was not found: send it again."
+  [[ -z ${R_KEY:-} || -f $R_KEY ]] || echo "key|The .key file was not found: pick the folder again."
+  [[ -z ${R_PPDB:-} || -f $R_PPDB ]] || echo "ppdb|The .ppdb file was not found: pick the folder again."
   return 0
 }
 
@@ -849,7 +1077,7 @@ customgames_add_row() {
   local start=$1 end=$2 mode err folder rc copy_end
   local -a args
   R_WHY=""
-  mode=$(customgames_mode "${R_MODE:-240p}") || { R_WHY="invalid video mode"; return 1; }
+  mode=$(customgames_mode "${R_MODE:-480i}") || { R_WHY="invalid video mode"; return 1; }
   customgames_row_media
   case $R_PLATFORM in
     command)
@@ -860,6 +1088,9 @@ customgames_add_row() {
     windows | native)
       args=(--group "$R_GROUP" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
       if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
+      # O JOGO.key e o JOGO.ppdb que vieram com a pasta (a estrutura do pacote).
+      [[ -n ${R_KEY:-} ]] && args+=(--key "$R_KEY")
+      [[ -n ${R_PPDB:-} && $R_PLATFORM == windows ]] && args+=(--ppdb "$R_PPDB")
       [[ -n $R_CATEGORY ]] && args+=(--category "$R_CATEGORY")
       [[ -n $R_CONTROLS ]] && args+=(--controls "$R_CONTROLS")
       [[ -n $R_BUTTONS ]] && args+=(--buttons "$R_BUTTONS")
@@ -896,9 +1127,94 @@ customgames_add_row() {
   return 0
 }
 
-# customgames_refresh_frontends: os grupos nos frontends (como no Setup).
+# customgames_refresh_frontends: os grupos nos frontends (como no Setup) e os
+# jogos no menu do desktop.
 customgames_refresh_frontends() {
   frontends_configure "$(launcher_current)" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1
+  customgames_desktop
+  return 0
+}
+
+# ── O menu do desktop (LXDE): Games > Custom games ──
+# Uma entrada por jogo em ~/.local/share/applications (fliperos-APP.desktop,
+# a categoria X-FliperOS-Custom) e o submenu Custom games dentro de Games
+# (~/.config/menus/applications-merged). A entrada abre pelo fliperos-launch
+# custom: o desktop fecha, o jogo abre no modo dele e o desktop volta.
+CUSTOM_GAMES_APPS=${CUSTOM_GAMES_APPS:-$(dirname "$ROMS_DIR")/.local/share/applications}
+CUSTOM_GAMES_MENUS=${CUSTOM_GAMES_MENUS:-$(dirname "$ROMS_DIR")/.config/menus/applications-merged}
+CUSTOM_GAMES_DIRECTORIES=${CUSTOM_GAMES_DIRECTORIES:-$(dirname "$ROMS_DIR")/.local/share/desktop-directories}
+CUSTOM_GAMES_LAUNCH=${CUSTOM_GAMES_LAUNCH:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-launch}
+
+# customgames_home_dir PASTA: cria a pasta (dentro da home) e as que faltam
+# acima dela, do jogador.
+customgames_home_dir() {
+  local dir=$1 home
+  local -a made=()
+  home=$(dirname "$ROMS_DIR")
+  while [[ ! -d $dir && $dir == "$home"/* ]]; do
+    made+=("$dir")
+    dir=$(dirname "$dir")
+  done
+  mkdir -p "$1" 2> /dev/null || return 1
+  ((${#made[@]})) && chown "$FLIPEROS_USER:" "${made[@]}" 2> /dev/null
+  return 0
+}
+
+# customgames_desktop_arg TEXTO: um argumento do Exec= entre aspas (o
+# padrao das entradas do desktop: \ " ` $ com barra, % dobrado).
+customgames_desktop_arg() {
+  local s=$1
+  s=${s//\\/\\\\} s=${s//\"/\\\"} s=${s//\`/\\\`} s=${s//\$/\\\$} s=${s//%/%%}
+  printf '"%s"' "$s"
+}
+
+# customgames_desktop: refaz as entradas do menu e o submenu (sem jogo
+# nenhum, o submenu sai).
+customgames_desktop() {
+  local group name entry icon app n=0 menu=$CUSTOM_GAMES_MENUS/fliperos-custom-games.menu
+  local directory=$CUSTOM_GAMES_DIRECTORIES/fliperos-custom-games.directory
+  rm -f "$CUSTOM_GAMES_APPS"/fliperos-custom_*.desktop 2> /dev/null
+  while IFS='|' read -r group name _; do
+    [[ -n $name ]] || continue
+    ((n++ == 0)) && { customgames_home_dir "$CUSTOM_GAMES_APPS" || return 0; }
+    icon=$(customgames_snap "$group" "$name") || icon=applications-games
+    app=$(customgames_app "$group" "$name")
+    entry=$CUSTOM_GAMES_APPS/fliperos-$app.desktop
+    {
+      echo "[Desktop Entry]"
+      echo "Type=Application"
+      printf 'Name=%s\n' "$name"
+      printf 'Comment=%s, a custom game. Opens on the CRT; the desktop comes back when it closes\n' "$group"
+      printf 'Exec=%s custom %s\n' "$CUSTOM_GAMES_LAUNCH" "$(customgames_desktop_arg "$(customgames_file "$group" "$name")")"
+      printf 'Icon=%s\n' "$icon"
+      echo "Terminal=false"
+      echo "Categories=Game;X-FliperOS-Custom;"
+    } > "$entry"
+    chown "$FLIPEROS_USER:" "$entry" 2> /dev/null
+  done < <(customgames_list)
+  if ((n == 0)); then
+    rm -f "$menu" "$directory"
+    return 0
+  fi
+  customgames_home_dir "$CUSTOM_GAMES_MENUS" && cat > "$menu" << 'EOF'
+<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">
+<!-- FliperOS: Games > Custom games (Setup > Games > Custom games). -->
+<Menu>
+  <Name>Applications</Name>
+  <Menu>
+    <Name>Games</Name>
+    <Menu>
+      <Name>Custom games</Name>
+      <Directory>fliperos-custom-games.directory</Directory>
+      <Include><Category>X-FliperOS-Custom</Category></Include>
+    </Menu>
+    <Exclude><Category>X-FliperOS-Custom</Category></Exclude>
+  </Menu>
+</Menu>
+EOF
+  customgames_home_dir "$CUSTOM_GAMES_DIRECTORIES" && printf '%s\n' "[Desktop Entry]" "Type=Directory" "Name=Custom games" \
+    "Icon=applications-games" > "$directory"
+  chown "$FLIPEROS_USER:" "$menu" "$directory" 2> /dev/null
   return 0
 }
 
@@ -989,7 +1305,7 @@ customgames_edit() {
   fi
   R_CATEGORY=${info[category]-} R_CONTROLS=${info[controls]-} R_BUTTONS=${info[buttons]-} R_PLAYERS=${info[players]-}
   R_GROUP=$new_group R_NAME=$new_name R_PLATFORM=command R_COMMAND=x R_MODE="" R_FOLDER="" R_EXE=""
-  R_SNAP="" R_VIDEO="" R_TEXT=""
+  R_SNAP="" R_VIDEO="" R_TEXT="" R_KEY="" R_PPDB=""
   # As informacoes conferidas como as da tabela (o nome novo, se mudou).
   if [[ $new_group/$new_name != "$group/$name" ]]; then
     [[ $platform == command ]] || return 2
@@ -1029,8 +1345,7 @@ customgames_pack_game() {
   [[ $platform == windows || $platform == native ]] || { ev_fail "only Windows and Linux games are packed"; return 2; }
   folder=$(customgames_cfg_field "$cfg" folder)
   exe=$(customgames_cfg_field "$cfg" exe)
-  base=$(printf '%s' "$name" | sed 's/[^A-Za-z0-9 ._()&+,-]\{1,\}/_/g')
-  out=$CUSTOM_GAMES_DIR/$group/$base.fliperos-customgame.zip
+  out=$(customgames_package_out "$name")
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder"
     --mode "$(customgames_cfg_field "$cfg" mode)")
   if [[ $platform == windows ]]; then args+=(--exe "$exe"); else args+=(--command "$(customgames_cfg_field "$cfg" command)"); fi
@@ -1052,13 +1367,123 @@ customgames_pack_game() {
   customgames_pack_run "${args[@]}"
 }
 
-# customgames_install_all GRUPO: os pacotes da pasta do grupo e os de
-# ~/roms/custom sem grupo (entram nele), um depois do outro; o que ja existe
-# e trocado (o painel ja mostrou "update").
+# ── Criar um pacote pelo painel (a area Criar pacote) ──
+# Uma linha como as da tabela (customgames_row_fields), sem grupo: o pacote
+# vai para a pasta dos pacotes e aparece no Install games.
+
+# customgames_create_check ARQUIVO: "error|1|CAMPO|MOTIVO" de cada erro,
+# out= (o zip que sera feito), exists= (1: ja ha um com esse nome), bytes=
+# (a pasta do jogo) e free= (o livre na pasta dos pacotes). Nao grava nada.
+customgames_create_check() {
+  local file=$1 line err out size
+  [[ -f $file ]] || return 2
+  IFS= read -r line < "$file" || [[ -n $line ]] || return 2
+  customgames_row_fields "$line"
+  while IFS= read -r err; do
+    [[ -n $err ]] && printf 'error|1|%s\n' "$err"
+  done < <(customgames_row_errors package)
+  out=""
+  customgames_valid_name "$R_NAME" && out=$(customgames_package_out "$R_NAME")
+  size=0
+  [[ -d $R_FOLDER ]] && size=$(du -sb -- "$R_FOLDER" 2> /dev/null | cut -f1)
+  printf 'out=%s\nexists=%d\nbytes=%s\nfree=%s\n' "$out" "$([[ -n $out && -e $out ]] && echo 1 || echo 0)" \
+    "${size:-0}" "$(customgames_free "$CUSTOM_GAMES_PACKAGES")"
+}
+
+# customgames_test ARQUIVO: o jogo da linha (o Testar do Criar pacote)
+# aberto sem instalar, da pasta dele: o cfg em ~/roms/custom/.test/NOME.cfg
+# (uma pasta escondida: nao e grupo nem sistema) e, na saida, app= (o nome
+# para o filtro, a OSD e o log) e o comando do fliperos-x11-run, uma palavra
+# por linha (o painel o manda ao tty1). O NOME.key de la, que o menu na tela
+# faz durante o teste, vai no pacote. Status 1, com o motivo: a linha nao
+# serve.
+customgames_test() {
+  local file=$1 line why dir cfg mode app real
+  local -a pairs argv
+  [[ -f $file ]] || return 2
+  IFS= read -r line < "$file" || [[ -n $line ]] || return 2
+  customgames_row_fields "$line"
+  why=$(customgames_row_errors package | head -n 1)
+  [[ -z $why ]] || { printf '%s\n' "${why#*|}"; return 1; }
+  dir=$CUSTOM_GAMES_DIR/.test
+  mkdir -p "$dir" && chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_DIR" "$dir" 2> /dev/null
+  cfg=$dir/$R_NAME.cfg
+  mode=$(customgames_mode "${R_MODE:-480i}")
+  real=$(realpath -- "$R_FOLDER")
+  pairs=("format=1" "name=$R_NAME" "platform=$R_PLATFORM" "mode=$mode" "folder=$real")
+  if [[ $R_PLATFORM == windows ]]; then pairs+=("exe=$R_EXE"); else pairs+=("command=$R_COMMAND"); fi
+  customgames_cfg_write "$cfg" "${pairs[@]}" || { echo "could not write $cfg"; return 1; }
+  # O .key que veio com a pasta comeca o teste (o menu na tela o mostra).
+  [[ -n ${R_KEY:-} && -f $R_KEY && ! -f $dir/$R_NAME.key ]] && cp -- "$R_KEY" "$dir/$R_NAME.key" &&
+    chown "$FLIPEROS_USER:" "$dir/$R_NAME.key" 2> /dev/null
+  app=$(customgames_app .test "$R_NAME")
+  argv=("$CUSTOM_GAMES_RUN" --mode "$mode" --app "$app")
+  [[ $R_PLATFORM == windows ]] && argv+=(--wine)
+  argv+=("$CUSTOM_GAMES_TOOL" run "$cfg")
+  log_info "jogo custom testado pelo painel: $R_NAME ($real)"
+  printf 'app=%s\n' "$app"
+  printf '%s\n' "${argv[@]}"
+}
+
+# customgames_test_key NOME: o .key que o teste do NOME fez (ou nada).
+customgames_test_key() {
+  [[ -f $CUSTOM_GAMES_DIR/.test/$1.key ]] && printf '%s\n' "$CUSTOM_GAMES_DIR/.test/$1.key"
+  return 0
+}
+
+# customgames_create ARQUIVO [replace]: o pacote da linha, com os eventos da
+# tela de progresso (o .key do teste, se a pasta nao trouxe um, vai junto;
+# o teste sai depois). Status 3: ja ha um pacote com esse nome (sem replace).
+customgames_create() {
+  local file=$1 replace=${2:-} line out why mode key var
+  local -a args
+  [[ -f $file ]] || return 2
+  IFS= read -r line < "$file" || [[ -n $line ]] || return 2
+  customgames_row_fields "$line"
+  ev_step 0 "Checking ${R_NAME:-the game}"
+  why=$(customgames_row_errors package | head -n 1)
+  [[ -z $why ]] || { ev_fail "${why#*|}"; return 1; }
+  out=$(customgames_package_out "$R_NAME")
+  if [[ -e $out && $replace != replace ]]; then
+    ev_fail "$(basename "$out") already exists in ~/roms/custom-packages"
+    return 3
+  fi
+  mode=$(customgames_mode "${R_MODE:-480i}")
+  [[ -n ${R_KEY:-} ]] || R_KEY=$(customgames_test_key "$R_NAME")
+  args=(--out "$out" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
+  if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
+  for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players SNAP:snap VIDEO:video TEXT:text \
+    KEY:key PPDB:ppdb TEXT_STRING:text-string; do
+    var=R_${key%%:*}
+    [[ -n ${!var:-} ]] || continue
+    [[ $key == PPDB:ppdb && $R_PLATFORM != windows ]] && continue
+    args+=("--${key#*:}" "${!var}")
+  done
+  customgames_tool pack "${args[@]}" --progress 0 100 2>> "${FLIPEROS_LOG:-/dev/null}"
+  [[ -f $out ]] || return 1
+  rm -f -- "$CUSTOM_GAMES_DIR/.test/$R_NAME.cfg" "$CUSTOM_GAMES_DIR/.test/$R_NAME.key"
+  rmdir -- "$CUSTOM_GAMES_DIR/.test" 2> /dev/null
+  log_info "pacote criado pelo painel: $out"
+  return 0
+}
+
+# customgames_package_out NOME: o zip do pacote de NOME, na pasta dos
+# pacotes (o nome do arquivo sem os caracteres que um disco do Windows
+# recusa); a pasta e criada.
+customgames_package_out() {
+  local base
+  base=$(printf '%s' "$1" | sed 's/[^A-Za-z0-9 ._()&+,-]\{1,\}/_/g')
+  customgames_packages_dir
+  printf '%s/%s.fliperos-customgame.zip\n' "$CUSTOM_GAMES_PACKAGES" "$base"
+}
+
+# customgames_install_all GRUPO: os pacotes novos da pasta dos pacotes no
+# GRUPO, um depois do outro; os que mudaram desde a instalacao (update)
+# trocam o jogo no grupo onde ele esta.
 customgames_install_all() {
   local group=$1 row zip g state n=0 ok=0 total
   local -a rows
-  mapfile -t rows < <(customgames_pending_ok "$group")
+  mapfile -t rows < <(customgames_pending_ok)
   total=${#rows[@]}
   ((total)) || { ev_step 100 "Nothing to install"; return 0; }
   for row in "${rows[@]}"; do
@@ -1076,8 +1501,10 @@ customgames_install_all() {
 
 # customgames_cli SUBCOMANDO...: o fliperos-setup --customgames.
 #   describe | check ARQ | bulk ARQ [--portproton] | edit CHAVE=VALOR... |
-#   delete GRUPO NOME [folder] | group NOME | media GRUPO NOME --snap ARQ... |
+#   delete GRUPO NOME [folder] | group NOME | group-info NOME |
+#   group-delete NOME [all] | media GRUPO NOME --snap ARQ... |
 #   install ZIP GRUPO [replace] [--portproton] | install-all GRUPO |
+#   package-delete ZIP | check-create ARQ | create ARQ [replace] | test ARQ |
 #   pack GRUPO NOME | squash pack|unpack PASTA | portproton
 # Status 2: subcomando ou argumento que nao serve.
 customgames_cli() {
@@ -1098,6 +1525,25 @@ customgames_cli() {
       customgames_valid_name "${1:-}" || return 2
       mkdir -p "$CUSTOM_GAMES_DIR/$1" && chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_DIR" "$CUSTOM_GAMES_DIR/$1" 2> /dev/null
       customgames_media_dirs "$1"
+      ;;
+    group-info)
+      customgames_valid_name "${1:-}" && [[ -d $CUSTOM_GAMES_DIR/$1 ]] || return 2
+      customgames_group_info "$1"
+      ;;
+    package-delete) customgames_package_delete "${1:-}" ;;
+    check-create) customgames_create_check "${1:-}" ;;
+    test) customgames_test "${1:-}" ;;
+    create)
+      [[ -z ${2:-} || $2 == replace ]] || return 2
+      customgames_create "${1:-}" "${2:-}"
+      ;;
+    group-delete)
+      customgames_valid_name "${1:-}" && [[ -d $CUSTOM_GAMES_DIR/$1 ]] || return 2
+      [[ -z ${2:-} || $2 == all ]] || return 2
+      customgames_group_delete "$1" "${2:-}"
+      rc=$?
+      customgames_refresh_frontends
+      return $rc
       ;;
     media)
       customgames_valid_name "${1:-}" && customgames_valid_name "${2:-}" && [[ -e $(customgames_file "$1" "$2") ]] || return 2

@@ -82,6 +82,15 @@ SHOTS = [
     ("custom-adicionar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-add"),
     ("custom-adicionar-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-add"),
     ("custom-tabela-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-table-view"),
+    ("custom-instalar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-tab-install"),
+    ("custom-instalar-celular", "#system/setup/games/custom", 390, 844, 2, True, True, "cg-tab-install"),
+    ("custom-criar-pc", "#system/setup/games/custom", 1440, 900, 1, False, True, "cg-tab-create"),
+    ("custom-criar-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-tab-create"),
+    ("custom-previa-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-create-preview"),
+    ("custom-arte-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-table-art"),
+    ("custom-estrutura-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-structure"),
+    ("custom-estrutura-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-structure"),
+    ("custom-apagar-grupo-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-group-delete"),
 ]
 
 # Os jogos custom de exemplo: grupo, nome, plataforma, modo, cena.
@@ -94,7 +103,10 @@ CUSTOM_GAMES = [("PC games", "Metal Slug X", "windows", "640x240@60", "shooter")
 CUSTOM_TABLE = """[
  {group: "PC games", name: "Street Racer 98", platform: "windows", folder: "/media/fliperos/USB/Street Racer 98",
   exes: ["Racer.exe", "Setup/config.exe"], exe: "Racer.exe", mode: "240p", category: "Driving / Race", players: "2",
-  buttons: "4", controls: ["joy8", "pedal"]},
+  buttons: "4", controls: ["joy8", "pedal"],
+  video: {path: "/media/fliperos/USB/Street Racer 98.mp4", name: "Street Racer 98.mp4"},
+  key: {path: "/media/fliperos/USB/Street Racer 98.key", name: "Street Racer 98.key"},
+  ppdb: {path: "/media/fliperos/USB/Street Racer 98.ppdb", name: "Street Racer 98.ppdb"}},
  {group: "PC games", name: "Tyrian 2000", platform: "windows", folder: "/media/fliperos/USB/Tyrian2000",
   exes: ["tyrian.exe"], exe: "tyrian.exe", mode: "other", modeOther: "320x200@70", category: "Shooter / Flying Vertical",
   players: "1", buttons: "3", controls: ["joy8"]},
@@ -276,7 +288,49 @@ def demo(tmp):
         describe.append("\t".join(("game", group, name, platform, mode, "", "joy8", "2", "2",
                                    "wine pang.exe" if platform == "command" else "./CaveStory.x86_64" if platform == "native" else "",
                                    "MetalSlugX.exe" if platform == "windows" else "", "/home/fliperos/games/%s/%s" % (group, name), "")))
-    describe += ["pending\t/home/fliperos/roms/custom/Tetris DX.fliperos-customgame.zip\t\tTetris DX\twindows\tnew\t",
+    # Os cartoes do Instalar pacotes: zips de verdade em ~/roms/custom-packages
+    # (o fliperos-customgame packages os le): novos com imagem e texto, um
+    # instalado, um com o nome errado e um sem a pasta do jogo.
+    import zipfile
+    pkgdir = os.path.join(home, "roms", "custom-packages")
+    os.makedirs(pkgdir, exist_ok=True)
+    blurb = ("Street fighters from around the world meet again. Pick a fighter, learn the special moves and the "
+             "Ultra combos, and beat the tournament. Six buttons, two players side by side on the cabinet.")
+    for base, cfg, kind, extra in (
+            ("Street Fighter 4", "platform=windows\nexe=StreetFighterIV.exe\nmode=480i\ncategory=Fighter / Versus\n"
+             "controls=joy8\nbuttons=6\nplayers=2\n", "racing", {"txt": blurb, "key": "p1_b1=Z\n"}),
+            ("Tetris DX", "platform=windows\nexe=tetris.exe\nmode=240p\ncategory=Puzzle / Drop\ncontrols=joy4\n"
+             "buttons=2\nplayers=1\n", "platform", {"txt": "Blocks fall; make lines."}),
+            ("Cave Story", "platform=native\ncommand=./CaveStory.x86_64\nmode=240p\ncategory=Platform / Run Jump\n"
+             "controls=joy8\nbuttons=2\nplayers=1\n", "platform", {})):
+        path = os.path.join(pkgdir, base + ".fliperos-customgame.zip")
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr(base + ".cfg", "name=%s\n%s" % (base, cfg))
+            zf.writestr(base + ".png", scene(kind, len(base)))
+            zf.writestr(base + "/" + (cfg.split("exe=")[1].split("\n")[0] if "exe=" in cfg else "CaveStory.x86_64"), "MZ")
+            for ext, data in extra.items():
+                zf.writestr(base + "." + ext, data)
+    # O Cave Story ja instalado dele (o cfg aponta o zip, com o tamanho e a data).
+    cave = os.path.join(pkgdir, "Cave Story.fliperos-customgame.zip")
+    st = os.stat(cave)
+    write(os.path.join(home, "roms", "custom", "PC games", "Cave Story.cfg"),
+          "name=Cave Story\nplatform=native\npackage=%s\npackage_stamp=%d:%d\n" % (cave, st.st_size, int(st.st_mtime)))
+    with zipfile.ZipFile(os.path.join(pkgdir, "Pang.zip"), "w") as zf:
+        zf.writestr("Pang.cfg", "name=Pang\nplatform=native\n")
+        zf.writestr("Pang/pang", "#!/bin/sh\n")
+    with zipfile.ZipFile(os.path.join(pkgdir, "Metal Slug X.fliperos-customgame.zip"), "w") as zf:
+        zf.writestr("Metal Slug X.cfg", "platform=windows\n")
+        zf.writestr("readme.txt", "x")
+    # Os pacotes de ~/roms/custom-packages (a aba Instalar pacotes): novos, um
+    # que mudou, um instalado e um que nao serve.
+    pkgs = "/home/fliperos/roms/custom-packages/"
+    describe += ["pending\t%sStreet Fighter 4.fliperos-customgame.zip\t\tStreet Fighter 4\twindows\tnew\t" % pkgs,
+                 "pending\t%sTetris DX.fliperos-customgame.zip\t\tTetris DX\twindows\tnew\t" % pkgs,
+                 "pending\t%sCave Story.fliperos-customgame.zip\tPC games\tCave Story\tnative\tupdate\t" % pkgs,
+                 "pending\t%sMetal Slug X.fliperos-customgame.zip\tPC games\tMetal Slug X\twindows\tinstalled\t" % pkgs,
+                 "pending\t%sPang.zip\t\tPang\twindows\tbad\trename it to Pang.fliperos-customgame.zip "
+                 "(packages always end in .fliperos-customgame.zip)" % pkgs,
+                 "packages\t/home/fliperos/roms/custom-packages", "lastgroup\tPC games",
                  "mode\t240p\t640x240@60", "mode\t480i\t640x480@60"]
     for genre, subs in (("Driving", ("Race", "Motorcycle")), ("Fighter", ("Versus", "2.5D")), ("Platform", ("Run Jump",)),
                         ("Puzzle", ("Drop", "Match")), ("Shooter", ("Flying Vertical", "Gallery", "Scrolling"))):
@@ -340,7 +394,8 @@ def demo(tmp):
           "  --wifi) case \"$2\" in status) echo 'eth0|ethernet|unavailable||'; echo 'wlan0|wifi|connected|Casa|192.168.1.241' ;;\n"
           "    scan) echo 'wlan0|Casa|82|WPA2'; echo 'wlan0|Vizinho 5G|41|WPA2'; echo 'wlan0|Cafe|20|' ;; esac ;;\n"
           "  --whatsnew) printf 'This is FliperOS 0.24, update 66.\\n\\nUpdates installed:\\n- 34. Web panel redesign\\n' ;;\n"
-          "  --customgames) case \"$2\" in describe) cat %s/customgames ;; check) echo bytes=1288490188; echo free=196494753792 ;; esac ;;\n"
+          "  --customgames) case \"$2\" in describe) cat %s/customgames ;; check) echo bytes=1288490188; echo free=196494753792 ;;\n"
+          "    group-info) printf 'games=3\\nfolders=2\\npackages=1\\nothers=1\\nother=manual.pdf\\n' ;; esac ;;\n"
           "  --setup-items) printf 'item|driver|1\\ninfo|driver|radeon (tested on the CRT) or amdgpu (with Vulkan).\\n"
           "item|bluetooth|1\\nitem|romlist|1\\ninfo|buttons|Player 1: arcade panel (V-USB Mame Panel). Player 2: 8BitDo Pro 2.\\n"
           "info|lpt|\\n' ;;\n"
@@ -404,6 +459,7 @@ def demo(tmp):
         port = s.getsockname()[1]
     env = dict(os.environ, FLIPEROS_SHADOW=os.path.join(tmp, "shadow"), FLIPEROS_WEB_STATIC=os.path.join(ROOT, "config/web"),
                FLIPEROS_WEB_GUI=os.path.join(ROOT, "fliperos-setup/gui"), FLIPEROS_HOME=home, FLIPEROS_USER="root",
+               FLIPEROS_CUSTOMGAME=os.path.join(ROOT, "config/fliperos-customgame"),
                FLIPEROS_SETUP=setup, FLIPEROS_RUN_USER=os.path.join(tmp, "run"), FLIPEROS_CONF=os.path.join(tmp, "fliperos.conf"),
                FLIPEROS_VIDEO_CHECK=check, FLIPEROS_BUTTONS_TOOL=buttons, FLIPEROS_STREAM=stream,
                FLIPEROS_UPDATE_TOOL=update, FLIPEROS_WEB_STAGE=os.path.join(tmp, "stage"),
@@ -570,12 +626,46 @@ def main():
         elif action in ("cg-table", "cg-table-view"):
             # A tabela com linhas de exemplo (as de "Importar de uma pasta" e
             # uma com os erros que o Setup devolve).
-            browser.js("cg.rows = %s.map((r) => cgNewRow(r)); cgTableDraw();"
+            browser.js("cgShowTab('games'); cg.rows = %s.map((r) => cgNewRow(r)); cgTableDraw();"
                        " document.getElementById('cg-status').textContent = t('cg_errors');%s"
                        % (CUSTOM_TABLE, " document.getElementById('cg-table').scrollIntoView();" if action == "cg-table-view" else ""))
             browser.wait(1.5)
         elif action == "cg-add":
-            browser.js("cgAddOne()")
+            browser.js("cgShowTab('games'); cgAddOne()")
+            browser.wait(1.5)
+        elif action in ("cg-tab-install", "cg-tab-create"):
+            # As abas Instalar pacotes e Criar pacote (a de criar com a
+            # estrutura do pacote aberta).
+            browser.js("cgShowTab(%s);%s" % (json.dumps(action[7:]),
+                       " cg.el.structure.open = true;" if action == "cg-tab-create" else ""))
+            browser.wait(1)
+        elif action == "cg-create-preview":
+            # O Criar pacote preenchido, com a previa aberta ao lado.
+            browser.js("cgShowTab('create'); Object.assign(cg.createRow, {name: 'Street Fighter 4', platform: 'windows',"
+                       " folder: '/media/fliperos/USB/Street Fighter 4', exe: 'StreetFighterIV.exe', exes: ['StreetFighterIV.exe'],"
+                       " mode: '480i', category: 'Fighter / Versus', players: '2', buttons: '6', controls: ['joy8'],"
+                       " snap: {path: '/x/sf4.png', name: 'Street Fighter 4.png', url: 'icon-512.png'},"
+                       " text: {path: '/x/sf4.txt', name: 'Street Fighter 4.txt', url: '', value: 'Street fighters from around"
+                       " the world meet again. Pick a fighter, learn the special moves and the Ultra combos, and beat the"
+                       " tournament. Six buttons, two players side by side on the cabinet.'},"
+                       " key: {path: '/x/sf4.key', name: 'Street Fighter 4.key'}});"
+                       " cg.el.createPreview.hidden = false; cgCreateDraw();"
+                       " document.querySelector('.cg-create-foot').scrollIntoView({block: 'end'});")
+            browser.wait(1.5)
+        elif action == "cg-table-art":
+            # A tabela rolada ate a coluna da arte (a que veio com a pasta).
+            browser.js("cgShowTab('games'); cg.rows = %s.map((r) => cgNewRow(r)); cgTableDraw();"
+                       " const w = document.querySelector('.cg-table-wrap'); w.scrollIntoView(); w.scrollLeft = 99999;"
+                       % CUSTOM_TABLE)
+            browser.wait(1.5)
+        elif action == "cg-structure":
+            # A estrutura do pacote aberta (na aba Criar pacote).
+            browser.js("cgShowTab('create'); cg.el.structure.open = true; cg.el.structure.scrollIntoView({block: 'start'})")
+            browser.wait(1)
+        elif action == "cg-group-delete":
+            # A pergunta de apagar o grupo PC games (o que vai junto). void: a
+            # pergunta espera um clique, e o js() esperaria a promessa.
+            browser.js("cgShowTab('games'); void cgDeleteGroup('PC games')")
             browser.wait(1.5)
         elif action.startswith("obs-"):
             browser.js("obsPick(%s); document.getElementById('ovl-on').click()" % json.dumps(action[4:]) if action == "obs-marquee"

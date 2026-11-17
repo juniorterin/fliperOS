@@ -200,6 +200,11 @@ OSK_ROWS = (
 OSK_BUTTONS = (("clear", "Clear"), ("save", "Save"), ("back", "Back"))
 # Quanto o Enter numa tecla espera o botao do controle.
 CAPTURE_SECONDS = 5
+# Um jogo custom sem o .key (o mapa ainda nao foi feito: quase sempre, a
+# pessoa o faz aqui): a OSD abre sozinha no Controller configuration, uma vez
+# por jogo aberto, quando o jogo ja esta na tela ha AUTO_KEYS_DELAY segundos.
+# Save, mesmo sem tecla nenhuma, grava o .key: o jogo nao pede mais.
+AUTO_KEYS_DELAY = 2.0
 # Os controles do .key, na ordem do buttons.map, e o nome curto de cada um
 # na linha de baixo do teclado ("Z: P1 B3, P2 B3").
 CONTROL_ORDER = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "start", "coin")
@@ -872,6 +877,9 @@ class Menu:
         # pergunta ao gamekeys e chama capture_done).
         self.gamekeys = gamekeys if is_game(self.screen) else None
         self.osk = None
+        # direct: a OSD abriu sozinha no Controller configuration (um jogo
+        # custom sem o .key); Back nele fecha o menu.
+        self.direct = False
         self.capture_request = None
         self.after = None
         self.stack = []
@@ -1349,7 +1357,7 @@ class Menu:
     def back(self):
         if self.page["name"] == "geometry":
             self.leave_geometry()
-        if len(self.stack) == 1:
+        if len(self.stack) == 1 or (self.direct and self.page["name"] == "keys"):
             self.close()
             return
         self.stack.pop()
@@ -2125,6 +2133,10 @@ class Service:
         self.profile_seen = None
         self.profile_polled = 0.0
         self.profile_applied = {}
+        # O Controller configuration que abre sozinho (auto_keys): o jogo
+        # custom (pid) e desde quando esta na tela, e o ultimo ja perguntado.
+        self.keys_since = None
+        self.keys_asked = None
         # O Emulator menu: a tecla de cada emulador (o fliperos-buttons) e o
         # teclado virtual por onde ela sai, criado aqui, antes de qualquer
         # jogo: o X e o SDL de cada um ja o conhecem.
@@ -2320,7 +2332,26 @@ class Service:
         self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"]))
 
     # O menu.
-    def open_menu(self):
+    def auto_keys(self, screen):
+        """Um jogo custom sem o .key na tela ha AUTO_KEYS_DELAY s: True uma vez
+        por jogo aberto (o pid), e o servico abre o Controller configuration."""
+        if not screen or not is_game(screen) or not screen.get("program", "").startswith("custom_"):
+            return False
+        pid, now = screen.get("pid"), time.monotonic()
+        if pid == self.keys_asked:
+            return False
+        if not self.keys_since or self.keys_since[0] != pid:
+            self.keys_since = (pid, now)
+            return False
+        if now - self.keys_since[1] < AUTO_KEYS_DELAY:
+            return False
+        self.keys_asked = pid
+        gamekeys = self.gamekeys(screen)
+        return bool(gamekeys) and not os.path.exists(gamekeys["keyfile"]) and self.allowed(screen)
+
+    def open_menu(self, page=None):
+        """O menu na tela; page="keys": direto no Controller configuration
+        (auto_keys)."""
         screen = on_screen()
         if not self.allowed(screen):
             return
@@ -2339,6 +2370,10 @@ class Service:
             self.painter = Painter()
         gamekeys = self.gamekeys(screen)
         menu = Menu(screen, current_mode(), self.worker, self.emulator_key(screen), gamekeys)
+        if page == "keys" and menu.gamekeys:
+            menu.open_keys()
+            menu.direct = True
+            menu.status = "NO KEYS YET"
         pressed = []
         inputs = Inputs(self.padkeys, lambda key, value: pressed.append(key) if value else None)
         last = time.monotonic()
@@ -2491,6 +2526,8 @@ class Service:
                 self.open_menu()
             elif self.hotkey and self.hotkey.stdout.fileno() in ready and self.hotkey_fired():
                 self.open_menu()
+            elif self.auto_keys(screen):
+                self.open_menu(page="keys")
 
     def stop(self, *_):
         self.running = False

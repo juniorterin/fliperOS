@@ -1933,7 +1933,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>PortProton</strong></td>
-<td>Wine and Proton builds made for games, for the Windows games in Custom games; about 3 GB (<a href="#Custom-games-windows-games-portproton">Custom games</a>)</td>
+<td>Wine and Proton builds made for games, for the Windows games in Custom games and on the desktop (menu Games &gt; PortProton, plus an icon); about 3 GB (<a href="#Custom-games-windows-games-portproton">Custom games</a>)</td>
 </tr>
 <tr>
 <td><strong>Steam</strong></td>
@@ -2226,7 +2226,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>Controller configuration</strong></td>
-<td>In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard (<a href="#Custom-games-the-controller-as-a-keyboard">Custom games</a>)</td>
+<td>In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard (<a href="#Custom-games-the-controller-as-a-keyboard">Custom games</a>). A custom game with no key map yet opens the menu by itself on this page</td>
 </tr>
 <tr>
 <td><strong>Close</strong></td>
@@ -4942,7 +4942,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <h2 id="Adding-games-custom-games">Custom games</h2>
 <p>A game or program that is not a ROM (a PC game for Windows or Linux, your own emulator, a script) goes in <strong>Setup &gt; Games &gt; Custom games</strong>, in groups the frontends show as systems. There are three ways:</p>
 <ul>
-<li><strong>Install a package</strong>: put <code>&lt;game&gt;.fliperos-customgame.zip</code> in <code>~/roms/custom</code> (or in a group folder) and install it from the Setup.</li>
+<li><strong>Install a package</strong>: put <code>&lt;game&gt;.fliperos-customgame.zip</code> in <code>~/roms/custom-packages</code> and install it from <strong>Install games</strong> (the group is asked then).</li>
 <li><strong>Create a package</strong> from a game folder, step by step, with the picture, video, text, video mode and controller map.</li>
 <li><strong>By its command</strong>: a name, a command line and the video mode.</li>
 </ul>
@@ -4960,7 +4960,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <p>See also: <a href="#ROMs">ROMs, BIOS and artwork</a>, <a href="#Frontends">Frontends</a>, <a href="#Emulators">Emulators</a>.</p>
 <h1 id="Custom-games">Custom games</h1>
 <p>A <strong>custom game</strong> is a game or program that is not a ROM of one of FliperOS's emulators: a PC game for Windows or Linux, an emulator you brought with one game, a script. FliperOS shows custom games in the frontends like any other system, opens them in a 15 kHz video mode, and gives them the flicker filter and the on-screen menu.</p>
-<p>Everything is in <strong>Setup &gt; Games &gt; Custom games</strong>. There are three ways to add a game:</p>
+<p>Everything is in <strong>Setup &gt; Games &gt; Custom games</strong>. Packages have two areas of their own, <strong>Install games</strong> and <strong>Create package</strong>, and every package lives in one folder, <code>~/roms/custom-packages</code> (the network share <code>\\fliperos\roms\custom-packages</code>). There are three ways to add a game:</p>
 <table>
 <thead>
 <tr>
@@ -4970,20 +4970,20 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 </thead>
 <tbody>
 <tr>
-<td><strong>Install a package</strong> (<code>&lt;game&gt;.fliperos-customgame.zip</code>)</td>
+<td><strong>Install games</strong>: a package (always named <code>&lt;game&gt;.fliperos-customgame.zip</code>, <a href="#Custom-games-the-package-format">structure below</a>)</td>
 <td>someone made the package, on their FliperOS or by hand</td>
 </tr>
 <tr>
-<td><strong>Create a package</strong> from a game folder</td>
+<td><strong>Create package</strong> from a game folder</td>
 <td>the game is on the cabinet, a USB stick or the network, and you want it complete (picture, video, text, controller map) and easy to copy to another FliperOS</td>
 </tr>
 <tr>
-<td><strong>By its command</strong></td>
+<td><strong>By its command</strong> (inside a group)</td>
 <td>quick: a group, a name, a command line and the video mode</td>
 </tr>
 </tbody>
 </table>
-<p>The <a href="#Web-panel-System-custom-games">web panel</a> has the same page in <strong>System &gt; Setup &gt; Games &gt; Custom games</strong>, plus a table to add many games at once: rows typed or picked in lists, imported from a folder (one subfolder per game) or pasted from a spreadsheet. There, a Windows or Linux game in a folder is copied to <code>~/games/GROUP/NAME</code>, like an installed package.</p>
+<p>The <a href="#Web-panel-System-custom-games">web panel</a> has the same page in <strong>System &gt; Setup &gt; Games &gt; Custom games</strong>, in three tabs: <strong>Games</strong> (with a table to add many games at once: rows typed or picked in lists, imported from a folder or pasted from a spreadsheet), <strong>Install packages</strong> and <strong>Create package</strong>. There, a Windows or Linux game in a folder is copied to <code>~/games/GROUP/NAME</code>, like an installed package. A folder laid out like a package (see <a href="#Custom-games-a-folder-with-the-packages-structure">A folder with the package's structure</a>) brings its picture, video, text, controller map and PortProton settings by itself, there and in <strong>Create package</strong> on the cabinet.</p>
 <h2 id="Custom-games-contents">Contents</h2>
 <ul>
 <li><a href="#Custom-games-step-by-step-adding-your-game-from-the-cabinet">Step by step: adding your game from the cabinet</a></li>
@@ -5013,37 +5013,36 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <p>Then, with the controller:</p>
 <ol>
 <li><strong>Setup &gt; Games &gt; Custom games.</strong></li>
-<li>Open a group, or <strong>Add group</strong> for a new one (for example <em>PC games</em>). Each group is a system in the frontends.</li>
-<li>Inside the group, choose <strong>Package</strong>.</li>
+<li>Choose <strong>Create package</strong>, then <strong>From a game folder</strong>. The group comes later, when the package is installed.</li>
 <li><strong>Name</strong>: how the frontend shows the game.</li>
 <li><strong>Windows or Linux</strong>: a Windows game is a <code>.exe</code>; a Linux one is a program or a command.</li>
-<li><strong>The game folder</strong>: open it in the folder picker and choose <em>Use this folder</em>. Everything the game needs must be inside it.</li>
+<li><strong>The game folder</strong>: open it in the folder picker and choose <em>Use this folder</em>. Everything the game needs must be inside it. If the folder has the <a href="#Custom-games-a-folder-with-the-packages-structure">package's structure</a> (<code>&lt;game&gt;.jpg</code>, <code>&lt;game&gt;.mp4</code>, <code>&lt;game&gt;.txt</code>, <code>&lt;game&gt;.key</code>, <code>&lt;game&gt;.ppdb</code> or <code>&lt;game&gt;.cfg</code> next to the folder <code>&lt;game&gt;</code>), those files are picked by themselves: steps 6 and 7 come already filled.</li>
 <li><strong>What opens the game</strong>:</li>
 <li>Windows: pick the <code>.exe</code> inside the folder. The first time, the Setup offers to download PortProton (about 3 GB, see <a href="#Custom-games-windows-games-portproton">below</a>). Then choose which Wine runs it; keep the first one unless the game fails with it.</li>
 <li>Linux: type the command, run inside the game folder (for example <code>./game.x86_64 -fullscreen</code>), or press <em>Browse</em> to pick the program and the Setup writes <code>./&lt;program&gt;</code> for you.</li>
 <li><strong>Picture, video and text</strong> (optional): pick each file, or type the text. Without them the game gets samples, which you can replace later.</li>
 <li><strong>Video mode</strong>: 240p, 480i or another resolution and refresh rate.</li>
 <li><strong>Category, controls, buttons, players</strong>: what the frontend shows and filters by.</li>
-<li>The Setup writes <code>~/roms/custom/&lt;group&gt;/&lt;game&gt;.fliperos-customgame.zip</code> and asks whether to <strong>install it now</strong>. Say yes: the game folder is copied to <code>~/games/&lt;group&gt;/&lt;game&gt;</code> and packed.</li>
+<li>The Setup writes <code>~/roms/custom-packages/&lt;game&gt;.fliperos-customgame.zip</code> and asks whether to <strong>install it now</strong>. Say yes and pick the group (or a new one, for example <em>PC games</em>; each group is a system in the frontends): the game folder is copied to <code>~/games/&lt;group&gt;/&lt;game&gt;</code> and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.</li>
 <li>Open the frontend: the game is in the system of its group.</li>
-<li><strong>If the game only takes the keyboard</strong>, open the on-screen menu during the game (by default Start + Down held for a second), choose <strong>Controller configuration</strong> and give each key a button (see <a href="#Custom-games-the-controller-as-a-keyboard">below</a>). Save.</li>
+<li><strong>The first time the game opens</strong>, without a <code>&lt;game&gt;.key</code>, the on-screen menu opens by itself on <strong>Controller configuration</strong>: give each key the game uses a button (see <a href="#Custom-games-the-controller-as-a-keyboard">below</a>) and Save. A game that takes the joystick by itself: Save with no key marked, and it doesn't ask again.</li>
 </ol>
-<p>The zip stays in the group folder: copy it to another FliperOS (into its <code>~/roms/custom</code>) to install the same game there, complete, with its controller map.</p>
-<p>To add a game quickly instead, step 3 is <strong>Add games &gt; By its command</strong> (see <a href="#Custom-games-adding-a-game-by-its-command">below</a>).</p>
+<p>A kept zip stays in <code>~/roms/custom-packages</code>: copy it to another FliperOS (into its <code>~/roms/custom-packages</code>) to install the same game there, complete, with its controller map.</p>
+<p>To add a game quickly instead, open a group and choose <strong>Add by its command</strong> (see <a href="#Custom-games-adding-a-game-by-its-command">below</a>).</p>
 <h2 id="Custom-games-the-screens">The screens</h2>
 <p><strong>Setup &gt; Games &gt; Custom games</strong> shows tiles:</p>
 <ul>
-<li>one tile per <strong>group</strong>, with its number of games; packages waiting to be installed in that group show in green (<em>2 NEW</em>);</li>
+<li>one tile per <strong>group</strong>, with its number of games;</li>
 <li><strong>Add group</strong>: a new group;</li>
-<li><strong>New games</strong>: every package waiting to be installed (only when there is one);</li>
+<li><strong>Install games</strong>: the packages in <code>~/roms/custom-packages</code> (<em>2 NEW</em> when some are waiting), see <a href="#Custom-games-installing-a-package">Installing a package</a>;</li>
+<li><strong>Create package</strong>: a package from a game folder or from an installed game, see <a href="#Custom-games-creating-a-package">Creating a package</a>;</li>
 <li><strong>Packed</strong>: the game folders kept in squashfs.</li>
 </ul>
 <p>Inside a group:</p>
 <ul>
-<li><strong>Add games</strong>: the packages of this group and the ones in <code>~/roms/custom</code>, and <em>By its command</em>;</li>
-<li><strong>Package</strong>: creates a package from a game folder;</li>
-<li><strong>All new</strong>: installs every package in <code>~/roms/custom/&lt;group&gt;</code> (only when there is one);</li>
-<li>one tile per <strong>game</strong>, with its picture and the kind of game and video mode (<em>WIN 240P</em>, <em>LINUX 480I</em>, <em>CMD 240P</em>).</li>
+<li><strong>Add by its command</strong>: a game or program opened by a command line;</li>
+<li>one tile per <strong>game</strong>, with its picture and the kind of game and video mode (<em>WIN 240P</em>, <em>LINUX 480I</em>, <em>CMD 240P</em>);</li>
+<li><strong>Delete group</strong>: the whole group (see <a href="#Custom-games-groups">Groups</a>).</li>
 </ul>
 <p>A game tile opens:</p>
 <ul>
@@ -5054,31 +5053,50 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 </ul>
 <p>A name that doesn't fit its tile runs from side to side when the tile is under the cursor. Without the graphical Setup (<code>ui=text</code>) the same screens are menus.</p>
 <h2 id="Custom-games-groups">Groups</h2>
-<p>A group is a folder, <code>~/roms/custom/&lt;group&gt;</code>, and a system in every frontend (the FliperOS frontend, Attract-Mode Plus, ES-DE, Pegasus). Group and game names can't be empty, start with a dot, or have <code>/</code> or <code>|</code>. A group with no games left is removed.</p>
+<p>A group is a folder, <code>~/roms/custom/&lt;group&gt;</code>, and a system in every frontend (the FliperOS frontend, Attract-Mode Plus, ES-DE, Pegasus). Group and game names can't be empty, start with a dot, or have <code>/</code> or <code>|</code>. Deleting the last game of a group removes the group when nothing else is left in its folder.</p>
+<p><strong>Delete group</strong> (inside the group; in the web panel, the bin next to the group's name) removes the whole group, even an empty one or one whose folder holds other files:</p>
+<ol>
+<li>It says first what goes: its games, and the other files in its folder by name (a misnamed zip, a manual...).</li>
+<li>When some game has a game folder in <code>~/games</code>, or the group's folder holds packages, it asks whether those go too:</li>
+<li><strong>Keep</strong>: the game folders stay in <code>~/games/&lt;group&gt;</code>, and the packages go to <code>~/roms/custom-packages</code>, where they show in <strong>Install games</strong> (a zip of the same name already there: the same file is dropped, a different one gets <code>(&lt;group&gt;)</code> in its name). The packages already in <code>~/roms/custom-packages</code> always stay.</li>
+<li><strong>Delete them too</strong>: the game folders (with what the games saved), the packages and the media you put in <code>~/media/&lt;kind&gt;/custom/&lt;group&gt;</code> go as well.</li>
+<li>Each game goes as with its own <strong>Delete</strong>, then the folder <code>~/roms/custom/&lt;group&gt;</code> with whatever was left in it, and the empty media folders. The frontends are updated.</li>
+</ol>
+<p>A game folder in use (the game open) stops it before anything of that game is deleted: close the game and choose <em>Retry</em>.</p>
 <h2 id="Custom-games-installing-a-package">Installing a package</h2>
-<p>Put the zip in one of two places (from the cabinet, the network share <code>\\fliperos\roms\custom</code>, or the web panel):</p>
+<p>Every package lives in one folder, <code>~/roms/custom-packages</code>. Put the zip there from a PC (the network share <code>\\fliperos\roms\custom-packages</code>), from a USB stick, or with the web panel (<strong>Install packages &gt; Send packages</strong>). <strong>Create package</strong> writes there too.</p>
+<p>Then open <strong>Setup &gt; Games &gt; Custom games &gt; Install games</strong>. The list shows every package of the folder:</p>
 <table>
 <thead>
 <tr>
-<th>Where</th>
-<th>Group</th>
+<th>In the list</th>
+<th>What choosing it does</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>~/roms/custom/&lt;group&gt;/&lt;game&gt;.fliperos-customgame.zip</code></td>
-<td>that group, no question</td>
+<td><code>Name (Windows game)</code></td>
+<td>asks the group (the last one used comes marked, or a new group), installs it, then asks whether to delete the package</td>
 </tr>
 <tr>
-<td><code>~/roms/custom/&lt;game&gt;.fliperos-customgame.zip</code></td>
-<td>asked when installing from <em>New games</em>; from a group's <em>Add games</em>, that group</td>
+<td><code>Name (Windows, newer than the one in &lt;group&gt;)</code></td>
+<td>the zip changed since it was installed: installs it over the game in its group</td>
+</tr>
+<tr>
+<td><code>Name (installed in &lt;group&gt;)</code></td>
+<td>install it again, or delete the package (the game stays installed)</td>
+</tr>
+<tr>
+<td><code>file.zip (cannot install)</code></td>
+<td>says why, and offers to delete the file</td>
 </tr>
 </tbody>
 </table>
-<p>Then open <strong>Setup &gt; Games &gt; Custom games</strong>: the group shows <em>N NEW</em>. Choose the package in <strong>Add games</strong> or <strong>New games</strong>, or every package of the group with <strong>All new</strong>.</p>
+<p><strong>Install all new</strong> puts every new package in one group (asked once), installs the newer ones over their games, and at the end asks whether to delete the installed packages.</p>
+<p>Zips from before this folder existed (loose in <code>~/roms/custom</code> or in the group folders) move to <code>~/roms/custom-packages</code> by themselves, when the System Update runs or Custom games opens; a game installed from one stays installed.</p>
 <p>What installing does:</p>
 <ol>
-<li>Checks the zip. A zip with an absolute path, a <code>..</code>, a link, an encrypted file or a file that isn't one of the <a href="#Custom-games-the-package-format">package's</a> is refused, with the reason, and nothing is written. A bad zip shows in the list as <em>(cannot install)</em>.</li>
+<li>Checks the zip. A zip with an absolute path, a <code>..</code>, a link, an encrypted file or a file that isn't one of the <a href="#Custom-games-the-package-format">package's</a> is refused, with the reason, and nothing is written. A bad zip shows in the list as <em>(cannot install)</em>. So does a real package with another name (<code>Pang.zip</code>): the reason says the name it must have (<code>Pang.fliperos-customgame.zip</code>). Any other zip in those folders is left alone.</li>
 <li>Checks there is room for the game.</li>
 <li>For a Windows game, offers PortProton if it isn't installed.</li>
 <li>Copies the game folder to <code>~/games/&lt;group&gt;/&lt;name&gt;</code>. A Linux program loses its executable bit in a zip made on Windows: the Setup gives it back to every file that starts like a Linux program (ELF or <code>#!</code>).</li>
@@ -5087,18 +5105,28 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <li>Packs the game folder in <a href="#Custom-games-packing-a-game-folder-squashfs">squashfs</a>. If that fails (no room, for example), the folder stays loose and the game opens the same.</li>
 <li>Updates the frontends.</li>
 </ol>
-<p><strong>The zip stays where it was.</strong> The installed game notes it, with its size and date, so it leaves the list of packages to install. If you replace it with a different zip of the same name, it shows up again (<em>replaces the one in …</em>); installing it puts the new game over the old one, and what the old one saved in its folder is lost. Deleting the game brings the zip back to the list.</p>
+<p><strong>After installing, you choose whether the zip stays.</strong> A kept zip shows as <em>installed in …</em>: the installed game notes it, with its size and date. If you replace it with a different zip of the same name, it shows as newer; installing it puts the new game over the old one, and what the old one saved in its folder is lost. Deleting the game makes the zip new again. A deleted zip doesn't touch the game.</p>
 <h2 id="Custom-games-creating-a-package">Creating a package</h2>
-<p><strong>Package</strong> (inside a group) is the step-by-step of the <a href="#Custom-games-step-by-step-adding-your-game-from-the-cabinet">first section</a>. Some details:</p>
+<p><strong>Create package</strong> has two ways: <strong>From a game folder</strong> is the step-by-step of the <a href="#Custom-games-step-by-step-adding-your-game-from-the-cabinet">first section</a>, and <strong>From an installed game</strong> packs a Windows or Linux game already in a group, with what it has now (the same as <strong>Make a package of it</strong> on the game). The web panel's <strong>Create package</strong> tab is the same form, without the group. Some details:</p>
 <ul>
 <li>Every file picker of the assistant opens where the previous one stopped (the game folder, then the picture's folder...), and the next package starts there too (<code>~/.config/fliperos/customgame-last-dir</code>). The first time it starts at <code>~/games</code>, the plugged disks or the home.</li>
+<li>A game folder with the <a href="#Custom-games-a-folder-with-the-packages-structure">package's structure</a> fills the picture, the video, the text, the <code>.key</code> and the <code>.ppdb</code> by itself, and the <code>.exe</code> when its <code>&lt;game&gt;.cfg</code> names one (the <code>.exe</code> and Wine questions are skipped then). Picking the opened zip uses the game folder inside it.</li>
 <li>The <code>.exe</code> and the Linux program must be inside the game folder: the package stores the path relative to it.</li>
 <li>The text can be a <code>.txt</code> or typed on the on-screen keyboard.</li>
-<li>The zip is <code>~/roms/custom/&lt;group&gt;/&lt;name&gt;.fliperos-customgame.zip</code>. Pictures, videos and files that are already compressed are stored as they are; the rest is compressed.</li>
+<li>The zip is <code>~/roms/custom-packages/&lt;name&gt;.fliperos-customgame.zip</code>, and shows in <strong>Install games</strong>; one with that name already there is replaced only if you say so. Pictures, videos and files that are already compressed are stored as they are; the rest is compressed.</li>
 <li><strong>Make a package of it</strong> on an installed game starts from what it has: its settings, its media (not the samples), its <code>.key</code> and its <code>.ppdb</code>.</li>
 </ul>
 <h2 id="Custom-games-the-package-format">The package format</h2>
-<p><code>&lt;game&gt;.fliperos-customgame.zip</code>:</p>
+<p>A package is always named <code>&lt;game&gt;.fliperos-customgame.zip</code>, and always has this structure:</p>
+<pre><code>&lt;game&gt;.fliperos-customgame.zip
+├─ &lt;game&gt;.cfg    the settings (required)
+├─ &lt;game&gt;.jpg    the picture (.png, .webp... too)
+├─ &lt;game&gt;.mp4    the video
+├─ &lt;game&gt;.txt    the text the frontend shows
+├─ &lt;game&gt;.key    controller → keyboard (optional: the on-screen menu makes it the first time)
+├─ &lt;game&gt;.ppdb   PortProton's settings (Windows games)
+└─ &lt;game&gt;/       the game's files (packed in squashfs when installed)
+</code></pre>
 <table>
 <thead>
 <tr>
@@ -5166,11 +5194,11 @@ players=2
 <tbody>
 <tr>
 <td><code>name</code></td>
-<td>the name in the frontend (without it, the file name)</td>
+<td>the name in the frontend (required)</td>
 </tr>
 <tr>
 <td><code>platform</code></td>
-<td><code>windows</code> or <code>native</code></td>
+<td><code>windows</code> or <code>native</code> (required)</td>
 </tr>
 <tr>
 <td><code>exe</code></td>
@@ -5182,7 +5210,7 @@ players=2
 </tr>
 <tr>
 <td><code>mode</code></td>
-<td><code>240p</code> (640x240), <code>480i</code> (640x480) or <code>WIDTHxHEIGHT@HZ</code>, for example <code>384x224@59.6</code> (without it, 240p)</td>
+<td><code>240p</code> (640x240), <code>480i</code> (640x480) or <code>WIDTHxHEIGHT@HZ</code>, for example <code>384x224@59.6</code> (without it, 480i)</td>
 </tr>
 <tr>
 <td><code>category</code></td>
@@ -5203,9 +5231,40 @@ players=2
 </tbody>
 </table>
 <p>An installed game's <code>.cfg</code> also has <code>folder=</code> (the game folder), <code>package=</code> and <code>package_stamp=</code> (the zip it came from, its size and date).</p>
+<p><strong>The minimum</strong> is the folder <code>&lt;game&gt;/</code> with the game's files and <code>&lt;game&gt;.cfg</code> with <code>name=</code>, <code>platform=</code> and <code>exe=</code> (Windows) or <code>command=</code> (Linux). Everything else is optional; without <code>mode=</code> the game opens in 640x480i.</p>
 <p>Making a package by hand: put the game folder and a <code>.cfg</code> like the one above side by side, add the optional files with the same name, and zip them.</p>
+<p><strong>Checking a package.</strong> The list of packages shows every problem a package has at once, each on its own line: a missing <code>&lt;game&gt;.cfg</code> or game folder, a <code>.cfg</code> without <code>name=</code>, <code>platform=</code>, <code>exe=</code> or <code>command=</code>, an <code>.exe</code> that is not in the folder, files outside the structure, a wrong video mode, controls, buttons or players, a wrong name. An absolute path, a <code>..</code>, a link, a special file or a password stops the check at once: such a zip is never opened further.</p>
+<h3 id="Custom-games-a-folder-with-the-packages-structure">A folder with the package's structure</h3>
+<p>The same files loose in a folder (the zip opened, or kept that way on a disk) are recognized when you choose the folder, in <strong>Package</strong> on the cabinet and in the web panel (one game, or <strong>Import from a folder</strong>). The folder you choose can be:</p>
+<table>
+<thead>
+<tr>
+<th>You choose</th>
+<th>The game folder</th>
+<th>The other files</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the opened zip: a folder with <code>&lt;game&gt;/</code> and <code>&lt;game&gt;.cfg</code> (or only <code>&lt;game&gt;.*</code> files around <code>&lt;game&gt;/</code>)</td>
+<td><code>&lt;game&gt;/</code> inside it</td>
+<td>next to <code>&lt;game&gt;/</code></td>
+</tr>
+<tr>
+<td>the game folder itself</td>
+<td>that folder</td>
+<td>next to it, with its name (<code>Metal Slug X/</code> and <code>Metal Slug X.jpg</code>)</td>
+</tr>
+<tr>
+<td>the game folder, without files next to it</td>
+<td>that folder</td>
+<td>a picture or video inside it with the game's name, or named <code>snap</code>, <code>screenshot</code>, <code>cover</code>, <code>title</code>, <code>preview</code>, <code>video</code>, <code>trailer</code>, <code>gameplay</code>...</td>
+</tr>
+</tbody>
+</table>
+<p>Names are compared without case, spaces or <code>_</code> (<code>Metal_Slug_X.jpg</code> goes with <code>Metal Slug X/</code>). The <code>&lt;game&gt;.cfg</code> counts only when it is a FliperOS one (<code>platform=windows</code> or <code>native</code>); a game's own <code>.cfg</code> is left alone. What it says fills the <code>.exe</code> or the command, the video mode, the category, the players, the buttons and the controls.</p>
 <h2 id="Custom-games-adding-a-game-by-its-command">Adding a game by its command</h2>
-<p><strong>Add games &gt; By its command</strong> asks for a name, the command (as you would type it in a terminal, for example <code>wine ~/games/pang/pang.exe</code>) and the video mode. The command runs from the home folder. It is the quickest way for a script or an emulator you installed yourself, but it has no package: copying it means copying the folder and the entry by hand.</p>
+<p><strong>Add by its command</strong> (inside a group) asks for a name, the command (as you would type it in a terminal, for example <code>wine ~/games/pang/pang.exe</code>) and the video mode. The command runs from the home folder. It is the quickest way for a script or an emulator you installed yourself, but it has no package: copying it means copying the folder and the entry by hand.</p>
 <p>A <code>.sh</code> you put in a group folder by hand also shows up in the frontends.</p>
 <h2 id="Custom-games-windows-games-portproton">Windows games: PortProton</h2>
 <p>Windows games in a package run in <strong>PortProton</strong>, a launcher of Wine and Proton builds made for games. It is not in the image. You can install it ahead in <strong>Setup &gt; Games &gt; Extras &gt; PortProton</strong> (choosing it again puts back the version of your FliperOS), or let the Setup offer it the first time a Windows package is created or installed. Either way:</p>
@@ -5233,7 +5292,8 @@ p2_b1=LEFTCTRL
 <p>Each line is a player and a command of <strong>Joysticks &gt; Button mapping</strong>: <code>up down left right</code>, <code>b1</code> to <code>b8</code> (the panel's buttons, in its order), <code>start</code> and <code>coin</code>. Because the map talks about <em>player 1 button 1</em> and not about a controller's button number, the same package works on any panel, with any controller.</p>
 <p>The keys are Linux's names: the letters and digits, <code>F1</code> to <code>F12</code>, <code>ESC TAB ENTER SPACE BACKSPACE</code>, <code>UP DOWN LEFT RIGHT</code>, <code>LEFTCTRL RIGHTCTRL LEFTALT RIGHTALT LEFTSHIFT RIGHTSHIFT CAPSLOCK</code>, <code>INSERT DELETE HOME END PAGEUP PAGEDOWN PAUSE</code>, <code>MINUS EQUAL LEFTBRACE RIGHTBRACE BACKSLASH SEMICOLON APOSTROPHE GRAVE COMMA DOT SLASH</code>, and the keypad's <code>KP0</code> to <code>KP9</code>, <code>KPENTER KPPLUS KPMINUS KPASTERISK KPSLASH KPDOT</code>.</p>
 <h3 id="Custom-games-setting-it-up-on-the-screen">Setting it up on the screen</h3>
-<p>Open the <strong>on-screen menu</strong> during the game (by default Start + Down held for a second; Frontend controls &gt; OSD MENU changes it). A custom game has <strong>Controller configuration</strong> in place of <em>Emulator menu</em>:</p>
+<p>The <code>.key</code> rarely comes ready: you make it here. A custom game with no <code>.key</code> opens the on-screen menu by itself, straight on Controller configuration, two seconds after the game shows (once each time the game opens; <em>NO KEYS YET</em> in the corner). <strong>Save</strong> writes the <code>.key</code>, even with no key marked, and then the game stops asking; <strong>Back</strong> closes the menu without saving, and it asks again next time.</p>
+<p>Any other time, open the <strong>on-screen menu</strong> during the game (by default Start + Down held for a second; Frontend controls &gt; OSD MENU changes it). A custom game has <strong>Controller configuration</strong> in place of <em>Emulator menu</em>:</p>
 <ul>
 <li>A keyboard on the screen. The keys that already have a button are lit.</li>
 <li>Move to a key and press Enter: it turns yellow and waits 5 seconds for a button. Press the controller button that should send it.</li>
@@ -5299,6 +5359,7 @@ p2_b1=LEFTCTRL
 <p>At boot, <code>fliperos-squashgames.service</code> mounts every packed folder again, before the frontend and the network share. Choosing a packed folder in <strong>Packed</strong> unpacks it back into a normal folder, with what the game saved. To copy a packed game to another computer, unpack it first, or make a package of it.</p>
 <p>Close the game before packing, unpacking or deleting it. Packing and unpacking need free space about the size of the folder. Only folders inside the home can be packed, not hidden ones and not a path through a link. The list is <code>/etc/fliperos/squashgames.list</code>.</p>
 <h2 id="Custom-games-opening-a-custom-game-from-another-frontend">Opening a custom game from another frontend</h2>
+<p><strong>On the desktop</strong> (LXDE), the menu's <strong>Games</strong> has a <strong>Custom games</strong> submenu with every custom game, with its picture as the icon. Choosing one closes the desktop, opens the game on the CRT in its video mode (<code>fliperos-launch custom &lt;name&gt;.sh</code>) and brings the desktop back when it closes. The Setup, the web panel and the System Update keep the submenu up to date (<code>~/.local/share/applications/fliperos-custom_*.desktop</code> and <code>~/.config/menus/applications-merged/fliperos-custom-games.menu</code>).</p>
 <p>The FliperOS frontend, Attract-Mode Plus, ES-DE and Pegasus already list each group as a system: the Setup writes their configuration. For any other frontend, or a launcher of your own, the command that opens an installed custom game is its script:</p>
 <pre><code>/bin/sh &quot;/home/fliperos/roms/custom/&lt;group&gt;/&lt;name&gt;.sh&quot;
 </code></pre>
@@ -5337,7 +5398,11 @@ p2_b1=LEFTCTRL
 </tr>
 <tr>
 <td>packages</td>
-<td><code>~/roms/custom/*.fliperos-customgame.zip</code>, <code>~/roms/custom/&lt;group&gt;/*.fliperos-customgame.zip</code></td>
+<td><code>~/roms/custom-packages/*.fliperos-customgame.zip</code> (the share <code>\\fliperos\roms\custom-packages</code>)</td>
+</tr>
+<tr>
+<td>last group a package went to</td>
+<td><code>~/.config/fliperos/customgame-last-group</code></td>
 </tr>
 <tr>
 <td>installed game folders</td>
@@ -5384,7 +5449,7 @@ p2_b1=LEFTCTRL
 <tbody>
 <tr>
 <td><code>fliperos-customgame</code></td>
-<td><code>inspect ZIP</code> (checks a package and prints its <code>.cfg</code>), <code>pending</code> (the packages waiting), <code>install ZIP --group G</code> (installs one), <code>pack</code> (makes one), <code>run CFG</code> (opens a game)</td>
+<td><code>inspect ZIP</code> (checks a package and prints its <code>.cfg</code>), <code>pending</code> (the packages waiting), <code>install ZIP --group G</code> (installs one), <code>pack</code> (makes one), <code>add</code> (copies a game folder, the web panel), <code>scan</code> and <code>found</code> (the games of a folder and what came with them in the package's structure), <code>run CFG</code> (opens a game)</td>
 </tr>
 <tr>
 <td><code>fliperos-portproton</code></td>
@@ -34551,14 +34616,47 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <h3 id="Web-panel-System-no-picture-after-a-monitor-change">No picture after a monitor change?</h3>
 <p>The panel doesn't need the tube. From a phone, open <strong>Setup &gt; Video</strong> and pick the right monitor or resolution, or press <strong>Back to the previous monitor</strong>: it brings back the monitor and resolution from before the last change, made here or in <strong>Setup &gt; Video Setup</strong>. Pressed again, it goes back to the new one.</p>
 <h2 id="Web-panel-System-custom-games">Custom games</h2>
-<p><strong>Setup &gt; Games &gt; Custom games</strong>: the games that are not a ROM (PC games for Windows or Linux, scripts, your own emulators), in groups that are systems in the frontends. The same as on the cabinet (<a href="#Custom-games">Custom games</a>), with a table to add many at once.</p>
+<p><strong>Setup &gt; Games &gt; Custom games</strong>: the games that are not a ROM (PC games for Windows or Linux, scripts, your own emulators), in groups that are systems in the frontends. The same as on the cabinet (<a href="#Custom-games">Custom games</a>), in three tabs (the one you used last opens again):</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>What it has</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Games</strong></td>
+<td>the groups and their games, <strong>Add a game</strong>, <strong>Add many games</strong> (the table), <strong>New group</strong>, the packed game folders</td>
+</tr>
+<tr>
+<td><strong>Install packages</strong></td>
+<td>the packages in <code>~/roms/custom-packages</code>, with how many are waiting in the tab's name</td>
+</tr>
+<tr>
+<td><strong>Create package</strong></td>
+<td>a Windows or Linux game in a folder becomes a package in that folder</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Games:</strong></p>
 <ul>
-<li><strong>The games:</strong> each group with its games, each with its picture: <strong>Open</strong> on the cabinet, <strong>Edit</strong> (video mode, category, players, buttons, controls, picture, video, text; the name, group and command too for a command), <strong>Make a package</strong>, <strong>Delete</strong>.</li>
+<li><strong>The games:</strong> each group with its games, each with its picture: <strong>Open</strong> on the cabinet, <strong>Edit</strong> (video mode, category, players, buttons, controls, picture, video, text; the name, group and command too for a command), <strong>Make a package</strong> (into <code>~/roms/custom-packages</code>), <strong>Delete</strong>.</li>
+<li><strong>Delete the group:</strong> the bin at the end of the group's title. It says first what goes with it (its games, the other files in its folder), then asks whether the game folders and the packages in the group's folder go too; kept packages go to <code>~/roms/custom-packages</code>.</li>
 <li><strong>Add a game:</strong> a group, a name, the type (<strong>Windows</strong>, <strong>Linux</strong> or <strong>Command</strong>), the folder, the <code>.exe</code> or the command, the mode and the rest, in one window.</li>
-<li><strong>New packages</strong> and <strong>Install a package (.zip)</strong>: the zip goes to <code>~/roms/custom/GROUP</code> and installs.</li>
 <li><strong>Packed game folders:</strong> pack a game folder into squashfs, or unpack it.</li>
 </ul>
+<p><strong>Install packages:</strong> every zip of <code>~/roms/custom-packages</code> (on the network, <code>\\fliperos\roms\custom-packages</code>), as cards like the frontend shows a game: the picture, the video (with the cursor, or a touch on the picture), the name running when it doesn't fit, the type, video mode, players, controls and buttons as icons, the category and the text scrolling slowly. Ten cards per page, with a search (name or category), a filter by state and by type, and the order (name, newest, biggest, new first); the filter and the order stay in the browser.</p>
+<p>A new package has a group list (the last group used comes chosen) and <strong>Install</strong>; a changed one installs over the game in its group; an installed one says where, with <strong>Install again</strong> and <strong>Delete the package</strong>; one with problems lists every problem, each on its own line (a missing <code>.cfg</code> or game folder, no <code>exe=</code> or <code>command=</code>, files outside the structure...). <strong>Install all</strong> puts the new ones in one group. After installing, a question offers to delete the package (the game stays). <strong>Send packages</strong> uploads zips into the folder: a package is always named <code>GAME.fliperos-customgame.zip</code>, and a file with another name is refused before sending, with the name it should have.</p>
+<p><strong>Create package:</strong> the form of <strong>Add a game</strong> without the group, with <strong>Package structure</strong> (the files of a package, as an example with Street Fighter 4, and what goes in its <code>.cfg</code>). Next to <strong>Create the package</strong>:</p>
+<ul>
+<li><strong>Preview</strong> shows the card the frontend will show, beside the form, and follows what you change.</li>
+<li><strong>Test on the cabinet</strong> opens the game there, from its folder, without installing it (<code>~/roms/custom/.test</code>, hidden from the frontends). When the game shows on the screen, a note says what to do if it doesn't take the controller: the on-screen menu opens by itself on Controller configuration, and the key map made there goes into the package. Not seen in 2 minutes: the page points to its log.</li>
+</ul>
+<p><strong>Create the package</strong> checks the row, asks before replacing a zip of the same name, packs it, and opens <strong>Install packages</strong> with the new card marked.</p>
 <p>Windows and Linux games are <strong>copied</strong> to <code>~/games/GROUP/NAME</code> and packed in squashfs, like an installed package: the folder can be on a USB disk, in <code>~/games</code> after sending it in <strong>Files</strong>, or on the network share. The first Windows game offers to download PortProton (about 3 GB).</p>
+<p>A folder laid out like a package fills the row by itself when you pick it (or import its parent folder): the picture, video and text (<code>GAME.jpg</code>, <code>GAME.mp4</code>, <code>GAME.txt</code>), the controller map (<code>GAME.key</code>), PortProton's settings (<code>GAME.ppdb</code>) and what <code>GAME.cfg</code> says (the <code>.exe</code> or command, the mode, the category, players, buttons and controls).</p>
+<p>Those files are found in the opened zip (pick the folder that holds <code>GAME/</code> and the <code>GAME.*</code> files), next to the game folder, or as a picture or video with the game's name inside it (<a href="#Custom-games-a-folder-with-the-packages-structure">the rules</a>). They show in the <strong>Art</strong> column with a purple border (<em>From the game folder</em>) and are copied from the cabinet when the row is saved, without uploading.</p>
 <h3 id="Web-panel-System-adding-many-games">Adding many games</h3>
 <p><strong>Add many games</strong> is a table, one game per row:</p>
 <table>
@@ -34632,7 +34730,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li>The Setup tree (<code>config/web/setup.js</code>) has the ids of the Setup's menus; a test checks the two match. Settings go through the same functions as the Setup's screens: <code>fliperos-setup --settings</code> lists them and <code>--setting KEY VALUE</code> changes one (<code>settings_list</code> in <code>lib/system.sh</code>). <code>--setup-items</code> says which items this cabinet has; <code>--quirks</code>, <code>--folders</code>, <code>--frontends</code>, <code>--bluetooth</code>, <code>--system-update</code> and <code>--attract-romlist</code> do the rest without a screen.</li>
 <li>The on-screen menu profiles are the lines of <code>/etc/fliperos/osd-profiles.conf</code> (<code>scope&lt;TAB&gt;key&lt;TAB&gt;value</code>, the file <code>fliperos-osd</code> writes); deleting one rewrites the file without its lines. The menu sounds are <code>move.wav</code> and <code>select.wav</code> in <code>/opt/fliperos/sounds/menu</code>: a file sent is checked (a RIFF/WAVE file, 2 MB at most) and belongs to the player, like the ones sent over the network.</li>
 <li><strong>Open on the cabinet</strong> writes the request to <code>fliperos-web-launch</code>, like a game: <code>fliperos-tty1</code> runs <code>fliperos-setup --screen NAME</code> (only the names in <code>screens/panel.sh</code>), and the video screens end like Video Setup (Xorg and the kernel line again).</li>
-<li>Custom games go through <code>fliperos-setup --customgames</code> (<code>lib/customgames.sh</code>): <code>describe</code>, <code>check</code>, <code>bulk</code> (one row per game, with an <code>@row N ok|fail</code> line each), <code>edit</code>, <code>delete</code>, <code>media</code>, <code>install</code>, <code>pack</code>, <code>squash</code>. A folder is copied by <code>fliperos-customgame add</code>, and <code>fliperos-customgame scan</code> finds the games of a folder. The art of a row waits in <code>/var/cache/fliperos-web/stage</code> until the game is saved (a day at most).</li>
+<li>Custom games go through <code>fliperos-setup --customgames</code> (<code>lib/customgames.sh</code>): <code>describe</code>, <code>check</code>, <code>bulk</code> (one row per game, with an <code>@row N ok|fail</code> line each), <code>edit</code>, <code>delete</code>, <code>group-info</code>, <code>group-delete</code>, <code>media</code>, <code>install</code>, <code>install-all</code>, <code>package-delete</code>, <code>check-create</code>, <code>create</code>, <code>test</code>, <code>pack</code>, <code>squash</code>. The cards come from <code>fliperos-customgame packages</code> (JSON), and their pictures, videos and texts are read straight from the zips (<code>/api/customgames/package-media</code>, only inside <code>~/roms/custom-packages</code>). A folder is copied by <code>fliperos-customgame add</code>, and <code>fliperos-customgame scan</code> finds the games of a folder and what came with each one in the package's structure; that art, <code>.key</code> and <code>.ppdb</code> go to the Setup by their path on the cabinet (<code>/api/customgames/art</code> shows the picture's thumbnail). The art of a row waits in <code>/var/cache/fliperos-web/stage</code> until the game is saved (a day at most).</li>
 <li>The terminal is a login shell in a pseudo-terminal (<code>setsid -c</code>, so Ctrl+C and job control work), at normal priority. The page talks to it over a WebSocket (<code>/api/terminal</code>) that only the panel's own page can open, after the login. The screen is drawn by <a href="https://xtermjs.org">xterm.js</a> 5.5.0 with its fit addon (MIT), shipped inside the panel.</li>
 <li>RetroAchievements and Cloud backup call the same programs as the Setup: <code>lib/cheevos.sh</code> and <code>config/fliperos-cloud</code>.</li>
 </ul>

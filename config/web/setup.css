@@ -331,6 +331,112 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-sec .nic-row + .nic-row { border-top: 1px solid var(--hair); }
 .cg-sec .nic-row select { max-width: 180px; }
 .cg-sec > p.dim { margin: 0 4px 12px; font-size: 13px; }
+/* As abas da pagina (Jogos, Instalar pacotes, Criar pacote). */
+.cg-tabs { margin: 0 0 22px; }
+.cg-folder { margin: 0 0 14px; font-size: 13px; max-width: 80ch; }
+/* Instalar pacotes: um pacote por linha, as acoes no fim. */
+.cg-packages { padding: 6px 16px; border-radius: 14px; background: var(--surface); }
+.cg-pkg { padding: 8px 0; }
+.cg-pkg + .cg-pkg { border-top: 1px solid var(--hair); }
+.cg-pkg > b { min-width: 0; overflow-wrap: anywhere; }
+.cg-pkg-act { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+.cg-pkg-act select { max-width: 180px; }
+.cg-pkg .cg-problems { flex-basis: 100%; margin: 2px 0 0; padding-left: 38px; font-size: 13px; color: var(--muted); }
+.cg-pkg .cg-problems li { margin: 2px 0; overflow-wrap: anywhere; }
+.cg-pkg .cg-problems li::marker { color: var(--bad); }
+.cg-pkg.flash { animation: row-flash 2.4s ease-out; }
+.cg-allgroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cg-allgroup select { max-width: 180px; }
+/* Instalar pacotes: o filtro, os cartoes (como o frontend mostra o jogo) e
+   as paginas de 10. */
+.cg-pkgtools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.cg-pkgtools input[type=search] { flex: 1 1 220px; min-width: 0; }
+.cg-pkgtools select { flex: 0 1 auto; max-width: 100%; }
+.cg-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 16px; }
+.cg-card { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; border-radius: 14px;
+  background: var(--surface); outline: none; }
+.cg-card.flash { animation: row-flash 2.4s ease-out; }
+.cg-cmedia { position: relative; aspect-ratio: 4 / 3; overflow: hidden; display: grid; background: var(--bg-deep); }
+.cg-cmedia > img, .cg-cmedia > video, .cg-cmedia > .cg-noimg { grid-area: 1 / 1; width: 100%; height: 100%; }
+.cg-cmedia > img, .cg-cmedia > video { object-fit: cover; image-rendering: pixelated; }
+.cg-cmedia > video { opacity: 0; transition: opacity .25s; }
+.cg-cmedia.playing > video { opacity: 1; }
+.cg-cmedia.has-video { cursor: pointer; }
+.cg-cplay { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: 50%; background: rgba(11, 11, 18, .78); transition: opacity .2s; }
+.cg-cplay svg.g { width: 11px; height: 11px; }
+.cg-cmedia.playing .cg-cplay { opacity: 0; }
+.cg-ctag { position: absolute; left: 8px; top: 8px; max-width: calc(100% - 16px); padding: 3px 8px; border-radius: 8px;
+  font-size: 11.5px; font-weight: 700; background: rgba(11, 11, 18, .82); color: var(--fg); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.cg-ctag.new { color: var(--green); } .cg-ctag.warn { color: var(--yellow); } .cg-ctag.on { color: var(--cyan); }
+.cg-ctag.bad { color: var(--bad); }
+.cg-cbody { display: grid; gap: 7px; padding: 10px 12px 12px; min-width: 0; }
+/* O nome que nao cabe corre de um lado a outro, como no frontend. */
+.cg-cname { margin: 0; overflow: hidden; white-space: nowrap; font-size: 15px; font-weight: 700; }
+.cg-cname > span { display: inline-block; }
+.cg-cname.run > span { animation: cg-run var(--run-s, 6s) ease-in-out infinite alternate; }
+@keyframes cg-run { 0%, 15% { transform: none; } 85%, 100% { transform: translateX(var(--run, 0)); } }
+.cg-cfacts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.cg-cfacts .tag { font-size: 11.5px; }
+.cg-cfacts .ctrl { gap: 8px; }
+.cg-ccat { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+/* O texto rola devagar de cima a baixo quando nao cabe (para com o cursor). */
+.cg-ctext { height: 4.8em; overflow: hidden; font-size: 12.5px; line-height: 1.2; color: var(--dim); white-space: pre-line;
+  -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); }
+.cg-ctext.roll > div { animation: cg-roll var(--roll-s, 10s) linear infinite alternate; }
+.cg-ctext.roll:hover > div { animation-play-state: paused; }
+@keyframes cg-roll { 0%, 10% { transform: none; } 90%, 100% { transform: translateY(var(--roll, 0)); } }
+.cg-card .cg-problems { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); }
+.cg-card .cg-problems li { margin: 2px 0; overflow-wrap: anywhere; }
+.cg-card .cg-problems li::marker { color: var(--bad); }
+.cg-csize { font-size: 12px; }
+.cg-cact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding: 0 12px 12px; }
+.cg-cact select { flex: 1 1 120px; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .cg-cname.run > span, .cg-ctext.roll > div { animation: none; } }
+.cg-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 16px 0 4px; }
+.cg-page { min-width: 34px; height: 34px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
+  color: var(--fg); font-weight: 600; cursor: pointer; }
+.cg-page.on { border-color: var(--pink); color: var(--pink); cursor: default; }
+.cg-page:disabled:not(.on) { opacity: .35; cursor: default; }
+.cg-pager > .dim { margin-left: 6px; font-size: 13px; }
+/* Criar pacote: a previa ao lado do formulario (embaixo, no celular). */
+.cg-create-wrap { display: grid; grid-template-columns: minmax(0, 760px); gap: 20px; align-items: start; }
+.cg-create-wrap:has(> .cg-preview:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); }
+@media (max-width: 900px) { .cg-create-wrap:has(> .cg-preview:not([hidden])) { grid-template-columns: minmax(0, 1fr); } }
+.cg-preview { position: sticky; top: 12px; display: grid; gap: 8px; margin-top: 14px; }
+.cg-preview > h5 { margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.cg-preview > p { margin: 0; font-size: 12.5px; }
+/* Criar pacote: o formulario de um jogo, fora de um dialogo. */
+.cg-create { max-width: 760px; margin-top: 14px; }
+.cg-create-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 760px; }
+.cg-pane .cg-structure { margin: 0 0 4px; }
+/* Apagar o grupo: a lixeira no fim do titulo dele. */
+.cg-group h4 .cg-gdel { margin-left: auto; border: 0; background: none; color: var(--dim); }
+.cg-group h4 .cg-gdel:hover { background: var(--raise); color: var(--bad); }
+.cg-group h4 .cg-gdel svg.g { width: 13px; height: 13px; }
+/* A estrutura do pacote: a arvore do JOGO.fliperos-customgame.zip. */
+.cg-structure { margin: -12px 0 26px; padding: 10px 14px; border-radius: 14px; background: var(--surface); font-size: 13px; }
+.cg-structure summary { cursor: pointer; color: var(--muted); }
+.cg-structure code { font-size: 12.5px; color: var(--fg); overflow-wrap: anywhere; }
+.cg-structure-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 6px 28px; margin-top: 10px; }
+.cg-structure h5 { margin: 4px 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.cg-cfg { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--bg-deep); font-size: 12.5px; line-height: 1.6;
+  overflow-x: auto; color: var(--fg); }
+.cg-cfg-keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; }
+.cg-cfg-keys dd { margin: 0; min-width: 0; color: var(--dim); }
+.cg-tree { display: grid; gap: 3px; margin: 0 0 6px; }
+.cg-tree > div { display: flex; gap: 8px; align-items: baseline; }
+.cg-tree > div > span:first-child { flex: none; white-space: pre; }
+.cg-tree > div > code { flex: none; }
+.cg-tree > div > span:last-child { min-width: 0; color: var(--dim); }
+.cg-tree .cg-zip { color: var(--green); }
+/* No celular, o que cada arquivo e vai para a linha de baixo do nome. */
+@media (max-width: 520px) {
+  .cg-tree > div { flex-wrap: wrap; row-gap: 0; }
+  .cg-tree > div > span:last-child { flex-basis: 100%; padding-left: 2.6em; font-size: 12.5px; }
+}
+.cg-structure > p { margin: 6px 0 2px; max-width: 72ch; }
 
 /* A tabela: rola de lado dentro dela (a pagina nao). Campos sem borda, que
    aparecem ao passar o mouse ou ao digitar. */
@@ -349,7 +455,7 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-table .c-group { min-width: 130px; } .cg-table .c-name { min-width: 170px; } .cg-table .c-platform { min-width: 124px; }
 .cg-table .c-folder { min-width: 220px; } .cg-table .c-run { min-width: 190px; } .cg-table .c-mode { min-width: 120px; }
 .cg-table .c-category { min-width: 170px; } .cg-table .c-players, .cg-table .c-buttons { min-width: 64px; }
-.cg-table .c-controls { min-width: 120px; } .cg-table .c-art { min-width: 170px; }
+.cg-table .c-controls { min-width: 120px; } .cg-table .c-art { min-width: 250px; }
 .cg-table .c-act { white-space: nowrap; }
 .cg-table .c-act .icon-btn { display: inline-grid; margin-right: 4px; border: 0; background: none; }
 .cg-table .c-act .icon-btn:hover { background: var(--raise); }
@@ -372,6 +478,15 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 :where(.sub, .cg-dialog) .cg-artbtn.on { border-style: solid; border-color: var(--green); color: var(--fg); }
 .cg-artbtn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cg-artbtn img { width: 44px; height: 33px; object-fit: cover; border-radius: 4px; }
+/* Tirar a arte (o X): do tamanho do botao dela, sem moldura; numa tela de
+   toque, um pouco maior para o dedo, com o mesmo X pequeno. */
+.cg-slot .icon-btn.small { width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--dim); }
+.cg-slot .icon-btn.small:hover { background: var(--raise); color: var(--bad); }
+.cg-slot .icon-btn.small svg.g { width: 10px; height: 10px; }
+@media (hover: none) { .cg-slot .icon-btn.small { width: 30px; height: 30px; } }
+/* O que veio com a pasta do jogo (a estrutura do pacote). */
+:where(.sub, .cg-dialog) .cg-artbtn.on.found { border-color: var(--purple); }
+.cg-chip { font-size: 12px; white-space: nowrap; }
 .cg-artwine { display: grid; gap: 6px; }
 .cg-status { margin: 12px 0 4px; min-height: 1.4em; }
 .cg-status .ok { color: var(--green); } .cg-status .error { color: var(--bad); }
@@ -405,7 +520,7 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 /* Os dialogos dos jogos custom (fora de .sub: os campos ganham o estilo aqui). */
 .cg-dialog { width: min(760px, calc(100% - 24px)); max-height: calc(100dvh - 40px); overflow: auto; }
 .cg-pop { width: min(520px, calc(100% - 24px)); }
-:is(.cg-dialog, .cg-pop, .pick) :is(select, textarea, input:not([type=checkbox]):not([type=file])) { width: 100%; min-width: 0; height: auto;
+:is(.cg-dialog, .cg-pop, .pick, .cg-create) :is(select, textarea, input:not([type=checkbox]):not([type=file])) { width: 100%; min-width: 0; height: auto;
   margin: 0; padding: 9px 12px; font: inherit; color: var(--fg); background: var(--deep); border: 1px solid var(--line); border-radius: 10px; }
 :is(.cg-dialog, .cg-pop) input[type=checkbox] { width: auto; height: auto; margin: 0; accent-color: var(--pink); }
 :is(.cg-dialog, .cg-pop) .chips button { padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent;

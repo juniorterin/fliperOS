@@ -19,7 +19,7 @@ Under the title, on every page, a small line shows the resolution, the two frequ
 | --- | --- |
 | **Configuration** | The picture settings below, and the profile they are saved to |
 | **Emulator menu** | Closes this menu and opens the emulator's own: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the SM2-Emu overlay. Only in an emulator that has one |
-| **Controller configuration** | In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard ([Custom games](Custom-games.md#the-controller-as-a-keyboard)) |
+| **Controller configuration** | In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard ([Custom games](Custom-games.md#the-controller-as-a-keyboard)). A custom game with no key map yet opens the menu by itself on this page |
 | **Close** | Closes this menu, putting back what wasn't saved |
 | **Quit** | Closes the game, like the frontend's Exit game shortcut |
 

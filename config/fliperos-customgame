@@ -6,10 +6,17 @@
       base=, bytes= (o tamanho da pasta do jogo), media= (snap,preview,texto),
       key= e ppdb= (0 ou 1). Status 1 com o motivo no stderr: o zip nao serve
   fliperos-customgame pending
-      os pacotes postos em ~/roms/custom e em ~/roms/custom/GRUPO que ainda
-      nao foram instalados: "ZIP|GRUPO|NOME|PLATAFORMA|ESTADO|MOTIVO", ESTADO
-      new, update (ja ha um jogo com esse nome no grupo, ou o zip mudou desde
-      a instalacao) ou bad (MOTIVO diz por que)
+      os pacotes da pasta deles, ~/roms/custom-packages (--packages):
+      "ZIP|GRUPO|NOME|PLATAFORMA|ESTADO|MOTIVO|CODIGOS", ESTADO new (para
+      instalar), update (instalado dele, mas o zip mudou desde entao),
+      installed (GRUPO: onde esta) ou bad: MOTIVO diz todos os problemas
+      achados (o que falta, o que sobra, o cfg), separados por "; ", e
+      CODIGOS os mesmos como codigo=argumento;... (o painel os traduz). Um
+      pacote com outro nome (JOGO.zip) aparece como bad, com o nome que ele
+      deve ter
+  fliperos-customgame packages
+      os mesmos pacotes em JSON, para os cartoes do painel: o estado, o
+      grupo, o cfg, os tamanhos, a midia dentro do zip e os problemas
   fliperos-customgame install ZIP --group GRUPO [--replace] [--progress [INICIO FIM]]
       a pasta do jogo em ~/games/GRUPO/NOME, a midia em ~/media, o NOME.cfg e
       o NOME.key em ~/roms/custom/GRUPO (o NOME.sh o Setup grava). Status 3:
@@ -20,26 +27,41 @@
   fliperos-customgame add --group GRUPO --name NOME --platform windows|native
                           --folder PASTA (--exe ARQUIVO | --command COMANDO) [...]
       um jogo de uma pasta (o painel web): a pasta copiada para
-      ~/games/GRUPO/NOME, a midia e o NOME.cfg (sem package=). Status 3: o
-      jogo ja existe (sem --replace)
+      ~/games/GRUPO/NOME, a midia, o NOME.cfg (sem package=) e, com --key e
+      --ppdb, o NOME.key e o .ppdb ao lado do .exe. Status 3: o jogo ja
+      existe (sem --replace)
   fliperos-customgame media --group GRUPO --name NOME [--snap|--video|--text ARQ] [--text-string T]
       troca a arte de um jogo (a de exemplo deixa de ser)
   fliperos-customgame scan PASTA [--one]
       JSON dos jogos das subpastas (ou da propria pasta, com --one): o nome,
-      o tamanho, os .exe e os programas do Linux em ordem de chance
+      o tamanho, os .exe e os programas do Linux em ordem de chance, e o que
+      veio com a pasta na estrutura do pacote (a imagem, o video, o texto, o
+      .key, o .ppdb e o que o JOGO.cfg diz)
+  fliperos-customgame found PASTA
+      o mesmo, sem procurar os executaveis, em linhas CHAVE=VALOR (o Create
+      package do Setup): folder= (a pasta do jogo), snap=, video=, text=,
+      key=, ppdb= e as chaves do cfg que servem
   fliperos-customgame run ARQUIVO.cfg
       abre o jogo (o NOME.sh o chama pelo fliperos-x11-run): o comando dentro
       da pasta do jogo, o .exe pelo PortProton, e o mapa do controle para o
       teclado (NOME.key) enquanto ele roda
 
-O pacote, JOGO.fliperos-customgame.zip, tem JOGO.cfg (obrigatorio),
-JOGO.jpg/.png/.webp (a miniatura), JOGO.mp4 (o video), JOGO.txt (o texto),
-JOGO.key (o mapa do controle para o teclado), JOGO.ppdb (o do PortProton, nos
-de Windows) e a pasta JOGO/ com os arquivos. Um zip com tudo isso dentro de
-uma pasta so (feito clicando na pasta) tambem vale.
+Os pacotes ficam numa pasta so, ~/roms/custom-packages (no compartilhamento
+roms da rede): o Install games os lista e o Create package grava nela. O
+grupo e escolhido ao instalar.
+
+O pacote, sempre com o nome JOGO.fliperos-customgame.zip, tem JOGO.cfg
+(obrigatorio), JOGO.jpg/.png/.webp (a miniatura), JOGO.mp4 (o video),
+JOGO.txt (o texto), JOGO.key (o mapa do controle para o teclado), JOGO.ppdb
+(o do PortProton, nos de Windows) e a pasta JOGO/ com os arquivos (vira
+squashfs ao instalar). Um zip com tudo isso dentro de uma pasta so (feito
+clicando na pasta) tambem vale. A mesma estrutura solta numa pasta (o zip
+aberto) e reconhecida pelo scan e pelo found.
 
 O cfg: linhas CHAVE=VALOR (format, name, platform, exe ou command, mode,
-category, controls, buttons, players). O instalado ganha folder=, package= e
+category, controls, buttons, players). O minimo de um pacote: a pasta JOGO/
+com os arquivos e o JOGO.cfg com name=, platform= e exe= (Windows) ou
+command= (Linux); sem mode=, o jogo abre em 640x480i. O instalado ganha folder=, package= e
 package_stamp= (o tamanho e a data do zip: o mesmo zip nao volta a lista; um
 zip trocado, sim). As linhas do .key: pN_CONTROLE=TECLA (CONTROLE como no
 buttons.map: up down left right b1..b8 start coin; TECLA como no evdev, sem o
@@ -81,6 +103,8 @@ CONTROLS = {"joy8": "joystick (8-way)", "joy4": "joystick (4-way)", "joy2": "joy
             "positional": "positional", "analog": "analog stick", "pedal": "pedal", "lightgun": "lightgun",
             "keyboard": "keyboard", "mahjong": "mahjong"}
 MODES = {"240p": "640x240@60", "480i": "640x480@60"}
+# O modo de um jogo custom que nao diz o dele (mode= no cfg): 640x480i.
+DEFAULT_MODE = "640x480@60"
 MODE_RE = re.compile(r"^[1-9][0-9]{1,3}x[1-9][0-9]{1,3}@[1-9][0-9]{0,2}(\.[0-9]+)?$")
 # Os controles de um jogador no .key (os do buttons.map).
 KEY_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "start", "coin")
@@ -96,7 +120,22 @@ CHUNK = 1 << 20
 
 
 class Bad(Exception):
-    """O pacote nao serve (a mensagem diz por que, em ingles: vai para a tela)."""
+    """O pacote nao serve. problems: [(codigo, argumento, texto)] de cada
+    problema achado (o painel traduz pelo codigo; o texto, em ingles, vai
+    para a tela do Setup); a mensagem e os textos juntos. looks: o zip parece
+    um pacote (tem um .cfg), mesmo com problemas."""
+
+    def __init__(self, message="", code="other", arg="", problems=None, looks=False):
+        self.problems = problems or [(code, arg, message)]
+        self.looks = looks
+        super().__init__(message or "; ".join(text for _, _, text in self.problems))
+
+
+def codes_of(problems):
+    """Os codigos de uma lista de problemas numa linha so (o campo CODIGOS do
+    pending): codigo=argumento separados por ;."""
+    clean = lambda s: re.sub(r"[|;\n\r]", "/", str(s))
+    return ";".join("%s=%s" % (code, clean(arg)) if arg != "" else code for code, arg, _ in problems)
 
 
 def player_home():
@@ -204,48 +243,59 @@ def key_lines(text):
     return out
 
 
-def check_cfg(cfg, base, game_files):
+def check_cfg(cfg, base, game_files, problems=None):
     """O cfg do pacote conferido e normalizado. game_files: os caminhos dos
-    arquivos da pasta do jogo (relativos a ela)."""
+    arquivos da pasta do jogo (relativos a ela). Todos os problemas vao para
+    problems (com ela, a conferencia segue; sem ela, Bad com todos no fim)."""
+    found = [] if problems is None else problems
+    bad = lambda code, arg, text: found.append((code, arg, text))
+    # O minimo do cfg: name, platform e exe (Windows) ou command (Linux).
     out = {"format": FORMAT}
-    name = cfg.get("name") or base
-    if not valid_name(name):
-        raise Bad("invalid game name in %s.cfg: %r" % (base, name))
-    out["name"] = name
+    name = cfg.get("name", "")
+    if not name.strip():
+        bad("name_missing", "", "%s.cfg: no name= (the name in the frontend)" % base)
+    elif not valid_name(name):
+        bad("name_bad", name, "invalid game name in %s.cfg: %r" % (base, name))
+    out["name"] = name or base
     platform = cfg.get("platform", "").lower()
-    if platform not in PLATFORMS:
-        raise Bad("%s.cfg: platform must be windows or native, not %r" % (base, platform))
+    if not platform:
+        bad("platform_missing", "", "%s.cfg: no platform= (windows or native)" % base)
+    elif platform not in PLATFORMS:
+        bad("platform_bad", platform, "%s.cfg: platform must be windows or native, not %r" % (base, platform))
     out["platform"] = platform
     if platform == "windows":
         exe = rel_path(cfg.get("exe", ""))
         if not exe:
-            raise Bad("%s.cfg: no exe= (the .exe inside the folder %s)" % (base, base))
-        if exe not in game_files:
-            raise Bad("%s.cfg: %s is not in the folder %s" % (base, exe, base))
+            bad("exe_missing", "", "%s.cfg: no exe= (the .exe inside the folder %s)" % (base, base))
+        elif game_files and exe not in game_files:
+            bad("exe_not_found", exe, "%s.cfg: %s is not in the folder %s" % (base, exe, base))
         out["exe"] = exe
-    else:
+    elif platform == "native":
         command = cfg.get("command", "")
         if not command.strip():
-            raise Bad("%s.cfg: no command= (what opens the game, run in its folder)" % base)
+            bad("command_missing", "", "%s.cfg: no command= (what opens the game, run in its folder)" % base)
         out["command"] = command
-    mode = mode_of(cfg.get("mode") or "240p")
+    mode = mode_of(cfg.get("mode") or DEFAULT_MODE)
     if not mode:
-        raise Bad("%s.cfg: invalid mode %r (240p, 480i or WIDTHxHEIGHT@HZ)" % (base, cfg.get("mode")))
+        bad("mode_bad", cfg.get("mode"), "%s.cfg: invalid mode %r (240p, 480i or WIDTHxHEIGHT@HZ)" % (base, cfg.get("mode")))
     out["mode"] = mode
     category = cfg.get("category", "")
     if len(category) > 80:
-        raise Bad("%s.cfg: category too long" % base)
+        bad("category_long", "", "%s.cfg: category too long" % base)
     out["category"] = category
     controls = [c.strip().lower() for c in cfg.get("controls", "").split(",") if c.strip()]
     wrong = [c for c in controls if c not in CONTROLS]
     if wrong:
-        raise Bad("%s.cfg: unknown controls %s (use %s)" % (base, ",".join(wrong), ",".join(CONTROLS)))
+        bad("controls_bad", ",".join(wrong),
+            "%s.cfg: unknown controls %s (use %s)" % (base, ",".join(wrong), ",".join(CONTROLS)))
     out["controls"] = ",".join(dict.fromkeys(controls))
     for key, low in (("buttons", 0), ("players", 1)):
         value = cfg.get(key, "")
         if value and not (value.isdigit() and low <= int(value) <= 8):
-            raise Bad("%s.cfg: %s must be %d to 8" % (base, key, low))
+            bad(key + "_bad", value, "%s.cfg: %s must be %d to 8" % (base, key, low))
         out[key] = value
+    if found and problems is None:
+        raise Bad(problems=found, looks=True)
     return out
 
 
@@ -266,72 +316,102 @@ class Package:
         try:
             self.zf = zipfile.ZipFile(path)
         except (OSError, zipfile.BadZipFile) as exc:
-            raise Bad("not a zip file: %s" % exc)
+            raise Bad("not a zip file: %s" % exc, "not_zip")
+        # O que poe o gabinete em risco para tudo na hora; o resto (o que
+        # falta, o que sobra, o cfg) e juntado: a lista mostra tudo de uma vez.
         entries = []
         for info in self.zf.infolist():
             name = info.filename.replace("\\", "/")
             if name.startswith("/") or re.match(r"^[A-Za-z]:", name):
-                raise Bad("absolute path in the zip: %s" % info.filename)
+                raise Bad("absolute path in the zip: %s" % info.filename, "unsafe", info.filename)
             parts = name.rstrip("/").split("/")
             if ".." in parts:
-                raise Bad("'..' in the zip: %s" % info.filename)
+                raise Bad("'..' in the zip: %s" % info.filename, "unsafe", info.filename)
             if info.flag_bits & 1:
-                raise Bad("the zip is encrypted: %s" % info.filename)
+                raise Bad("the zip is encrypted: %s" % info.filename, "encrypted", info.filename)
             kind = stat.S_IFMT(info.external_attr >> 16) if info.create_system == 3 else 0
             if kind == stat.S_IFLNK:
-                raise Bad("link in the zip: %s" % info.filename)
+                raise Bad("link in the zip: %s" % info.filename, "unsafe", info.filename)
             if kind not in (0, stat.S_IFREG, stat.S_IFDIR):
-                raise Bad("special file in the zip: %s" % info.filename)
+                raise Bad("special file in the zip: %s" % info.filename, "unsafe", info.filename)
             if name.startswith("__MACOSX/") or parts[-1] in (".DS_Store", "Thumbs.db", "desktop.ini"):
                 continue
             entries.append((name, info))
+        problems = []
+        bad = lambda code, arg, text: problems.append((code, arg, text))
         # O cfg no topo; ou tudo dentro de uma pasta so (o zip da pasta).
         prefix = ""
-        if not [n for n, _ in entries if "/" not in n and n.lower().endswith(".cfg")]:
-            tops = {n.split("/")[0] for n, _ in entries}
-            if len(tops) == 1:
-                prefix = tops.pop() + "/"
+        tops = {n.split("/")[0] for n, _ in entries}
+        if not [n for n, _ in entries if "/" not in n and n.lower().endswith(".cfg")] and len(tops) == 1 and \
+                any("/" in n for n, _ in entries):
+            only = next(iter(tops))
+            if [n for n, _ in entries if n.lower().endswith(".cfg") and n.count("/") == 1 and n.startswith(only + "/")]:
+                prefix = only + "/"
         cfgs = [n[len(prefix):] for n, _ in entries
                 if n.startswith(prefix) and "/" not in n[len(prefix):] and n.lower().endswith(".cfg")]
-        if len(cfgs) != 1:
-            raise Bad("the package needs one GAME.cfg next to the folder GAME (found %d)" % len(cfgs))
-        self.base = cfgs[0][:-4]
+        looks = bool(cfgs)
+        if len(cfgs) == 1:
+            self.base = cfgs[0][:-4]
+        else:
+            # Sem o cfg: o nome pela pasta do jogo (a unica do zip) ou pelo zip.
+            dirs = sorted({n[len(prefix):].split("/")[0] for n, _ in entries
+                           if n.startswith(prefix) and "/" in n[len(prefix):]})
+            stem = os.path.basename(path)
+            stem = stem[:-len(SUFFIX)] if stem.lower().endswith(SUFFIX) else stem.rsplit(".", 1)[0]
+            self.base = dirs[0] if len(dirs) == 1 else stem
+            if not cfgs:
+                bad("cfg_missing", self.base + ".cfg", "%s.cfg is missing (the settings: platform, exe or command...)"
+                    % self.base)
+            else:
+                bad("cfg_many", len(cfgs), "the package needs one GAME.cfg, it has %d" % len(cfgs))
         if not valid_name(self.base):
-            raise Bad("invalid package name: %r" % self.base)
+            raise Bad("invalid package name: %r" % self.base, "name_bad", self.base)
         self.files = {}          # caminho dentro da pasta do jogo -> ZipInfo
         self.extra = {}          # cfg, key, ppdb, snap, preview, texto -> (ZipInfo, extensao)
         folder = self.base + "/"
+        strangers = []
         for name, info in entries:
-            if not name.startswith(prefix):
-                raise Bad("unexpected file in the zip: %s" % info.filename)
-            rel = name[len(prefix):]
+            rel = name[len(prefix):] if name.startswith(prefix) else None
             if rel in ("", folder):
                 continue
-            if rel.startswith(folder):
+            if rel is not None and rel.startswith(folder):
                 inner = rel[len(folder):]
                 if not info.is_dir() and not name.endswith("/"):
                     self.files[inner] = info
                 continue
-            if "/" in rel.rstrip("/") or rel.endswith("/"):
-                raise Bad("unexpected folder in the zip: %s (the game goes in %s)" % (info.filename, folder))
+            if rel is None or "/" in rel.rstrip("/") or rel.endswith("/"):
+                if rel is None or not name.endswith("/"):
+                    strangers.append(info.filename)
+                continue
             stem, dot, ext = rel.rpartition(".")
             ext = ext.lower()
-            if not dot or stem != self.base:
-                raise Bad("unexpected file in the zip: %s (files are named %s.*)" % (info.filename, self.base))
             kind = {"cfg": "cfg", "key": "key", "ppdb": "ppdb", "txt": "texto"}.get(ext)
             kind = kind or ("snap" if ext in IMAGE_EXTS else "preview" if ext in VIDEO_EXTS else None)
-            if not kind:
-                raise Bad("unexpected file in the zip: %s" % info.filename)
+            if not dot or stem != self.base or not kind:
+                if not (kind == "cfg" and len(cfgs) > 1):
+                    strangers.append(info.filename)
+                continue
             if kind in self.extra:
-                raise Bad("two %s files in the zip (%s)" % (kind, info.filename))
+                bad("two_files", kind, "two %s files in the zip (%s)" % (kind, info.filename))
+                continue
             self.extra[kind] = (info, ext)
+        for name in strangers[:5]:
+            bad("stranger", name, "unexpected file in the zip: %s (the files are %s.* and the folder %s)"
+                % (name, self.base, folder))
+        if len(strangers) > 5:
+            bad("strangers_more", len(strangers) - 5, "and %d more unexpected files" % (len(strangers) - 5))
         if not self.files:
-            raise Bad("the folder %s is missing or empty in the zip" % folder)
-        try:
-            raw = self.read("cfg").decode("utf-8")
-        except UnicodeDecodeError:
-            raise Bad("%s.cfg is not text (UTF-8)" % self.base)
-        self.cfg = check_cfg(parse_cfg(raw), self.base, self.files)
+            bad("folder_missing", folder, "the folder %s is missing or empty in the zip" % folder)
+        self.cfg = {}
+        if "cfg" in self.extra:
+            try:
+                raw = self.read("cfg").decode("utf-8")
+            except UnicodeDecodeError:
+                bad("cfg_text", self.base + ".cfg", "%s.cfg is not text (UTF-8)" % self.base)
+            else:
+                self.cfg = check_cfg(parse_cfg(raw), self.base, self.files, problems)
+        if problems:
+            raise Bad(problems=problems, looks=looks)
         self.bytes = sum(i.file_size for i in self.files.values())
 
     def read(self, kind):
@@ -350,28 +430,20 @@ class Package:
 
 # ── A lista dos que faltam instalar ──
 
-def packages(roms):
-    """(zip, grupo) dos pacotes em roms e em roms/GRUPO."""
+def packages(folder, misnamed=False):
+    """Os pacotes da pasta deles (~/roms/custom-packages), em ordem; com
+    misnamed, os outros .zip de la (um pacote com o nome errado, ou um zip
+    qualquer)."""
     out = []
     try:
-        names = sorted(os.listdir(roms), key=str.lower)
+        names = sorted(os.listdir(folder), key=str.lower)
     except OSError:
         return out
     for n in names:
-        path = os.path.join(roms, n)
-        if n.lower().endswith(SUFFIX) and os.path.isfile(path):
-            out.append((path, ""))
-    for n in names:
-        path = os.path.join(roms, n)
-        if n.startswith(".") or not os.path.isdir(path):
-            continue
-        try:
-            inner = sorted(os.listdir(path), key=str.lower)
-        except OSError:
-            continue
-        for m in inner:
-            if m.lower().endswith(SUFFIX) and os.path.isfile(os.path.join(path, m)):
-                out.append((os.path.join(path, m), n))
+        low = n.lower()
+        path = os.path.join(folder, n)
+        if low.endswith(".zip") and low.endswith(SUFFIX) != misnamed and not n.startswith(".") and os.path.isfile(path):
+            out.append(path)
     return out
 
 
@@ -396,22 +468,92 @@ def installed(roms):
 
 def cmd_pending(args):
     done = installed(args.roms)
-    for path, group in packages(args.roms):
+    for path in packages(args.packages):
         try:
             current = stamp(path)
         except OSError:
             continue
-        if done.get(path, ("",))[0] == current:
-            continue
+        stamped, group, name = done.get(path, ("", "", ""))
         try:
             pkg = Package(path)
         except Bad as exc:
-            print("|".join((path, group, os.path.basename(path)[:-len(SUFFIX)], "", "bad", str(exc).replace("|", "/"))))
+            print_bad(path, os.path.basename(path)[:-len(SUFFIX)], exc.problems)
             continue
-        name = pkg.cfg["name"]
-        exists = path in done or (group and os.path.exists(os.path.join(args.roms, group, name + ".sh")))
-        print("|".join((path, group, name, pkg.cfg["platform"], "update" if exists else "new", "")))
+        # Instalado dele: installed (o mesmo zip) ou update (o zip mudou).
+        state = ("installed" if stamped == current else "update") if group else "new"
+        print("|".join((path, group, name or pkg.cfg["name"], pkg.cfg["platform"], state, "", "")))
+    # Um pacote com outro nome (Pang.zip): a lista diz o nome certo, e os
+    # outros problemas dele. Um zip sem .cfg nenhum fica de fora (pode ser de
+    # outra coisa).
+    for path in packages(args.packages, misnamed=True):
+        stem = os.path.basename(path).rsplit(".", 1)[0]
+        stem = stem[:-len(".fliperos-customgame")] if stem.lower().endswith(".fliperos-customgame") else stem
+        rename = ("misnamed", stem + SUFFIX, "rename it to %s%s (packages always end in %s)" % (stem, SUFFIX, SUFFIX))
+        try:
+            pkg = Package(path)
+        except Bad as exc:
+            if exc.looks:
+                print_bad(path, stem, [rename] + exc.problems)
+            continue
+        print_bad(path, pkg.cfg["name"], [rename], pkg.cfg["platform"])
     return 0
+
+
+def package_info(path, done):
+    """Tudo de um pacote para os cartoes do painel (Instalar pacotes): o
+    estado, o grupo, o cfg, os tamanhos, os arquivos de midia dentro do zip
+    (o painel os mostra) e os problemas. None: um .zip que nao e pacote."""
+    st = os.stat(path)
+    base = os.path.basename(path)
+    misnamed = not base.lower().endswith(SUFFIX)
+    stem = base.rsplit(".", 1)[0]
+    stem = stem[:-len(".fliperos-customgame")] if stem.lower().endswith(".fliperos-customgame") else stem
+    if not misnamed:
+        stem = base[:-len(SUFFIX)]
+    row = {"zip": path, "file": base, "size": st.st_size, "mtime": int(st.st_mtime), "state": "", "group": "",
+           "name": stem, "platform": "", "mode": "", "category": "", "controls": "", "buttons": "", "players": "",
+           "bytes": 0, "media": {}, "key": False, "ppdb": False, "problems": []}
+    problems = []
+    if misnamed:
+        problems.append(("misnamed", stem + SUFFIX, "rename it to %s%s (packages always end in %s)" % (stem, SUFFIX, SUFFIX)))
+    try:
+        pkg = Package(path)
+    except Bad as exc:
+        if misnamed and not exc.looks:
+            return None
+        problems += exc.problems
+    else:
+        row.update({k: pkg.cfg.get(k, "") for k in ("name", "platform", "mode", "category", "controls", "buttons", "players")})
+        row.update(bytes=pkg.bytes, key="key" in pkg.extra, ppdb="ppdb" in pkg.extra,
+                   media={kind: pkg.extra[kind][0].filename for kind, _ in MEDIA if kind in pkg.extra})
+        stamped, group, name = done.get(path, ("", "", ""))
+        row["state"] = ("installed" if stamped == stamp(path) else "update") if group else "new"
+        row["group"] = group
+    if problems:
+        row["state"] = "bad"
+        row["problems"] = [{"code": c, "arg": str(a), "text": t} for c, a, t in problems]
+    return row
+
+
+def cmd_packages(args):
+    done = installed(args.roms)
+    rows = []
+    for path in packages(args.packages) + packages(args.packages, misnamed=True):
+        try:
+            row = package_info(path, done)
+        except OSError:
+            continue
+        if row:
+            rows.append(row)
+    print(json.dumps({"folder": args.packages, "packages": rows}))
+    return 0
+
+
+def print_bad(path, name, problems, platform=""):
+    """A linha de um pacote que nao serve: o MOTIVO (os textos) e os
+    CODIGOS (codigo=argumento;...), que o painel traduz."""
+    why = "; ".join(text for _, _, text in problems)
+    print("|".join((path, "", name, platform, "bad", why.replace("|", "/"), codes_of(problems))))
 
 
 def cmd_inspect(args):
@@ -530,6 +672,19 @@ def media_files(snap=None, video=None, text=None):
             raise Bad("not a %s file: %s" % ({"snap": "picture", "preview": "video", "texto": "text"}[kind], path))
         out.append((kind, ext, path))
     return out
+
+
+def side_text(path, kind):
+    """O conteudo de um .key ou .ppdb solto (o de uma pasta na estrutura do
+    pacote), conferido; None sem ele."""
+    if not path:
+        return None
+    if not path.lower().endswith("." + kind) or not os.path.isfile(path):
+        raise Bad("not a .%s file: %s" % (kind, path))
+    if os.path.getsize(path) > (1 << 20):
+        raise Bad("%s is too big" % path)
+    with open(path, "rb") as f:
+        return f.read()
 
 
 def put_text(media, group, name, text):
@@ -786,6 +941,8 @@ def cmd_add(args):
                 raise Bad("no command (what opens the game, run in its folder)")
         cfg = check_cfg(cfg, name, rels)
         media = media_files(args.snap, args.video, args.text)
+        keys = side_text(args.key, "key")
+        ppdb = side_text(args.ppdb, "ppdb") if args.platform == "windows" else None
         size = sum(os.path.getsize(p) for p, _ in files)
         if free_bytes(args.games) < size + (64 << 20):
             raise Bad("not enough free space: the game needs %d MB" % (size >> 20))
@@ -797,6 +954,9 @@ def cmd_add(args):
         progress.step(0.01, "Copying %s" % name)
         try:
             copy_tree(source, tmp, Progress(progress.on, progress.pct(0.01), progress.pct(0.95)))
+            if ppdb is not None:
+                # O do PortProton ao lado do .exe, como o de um pacote.
+                write_file(os.path.join(tmp, *(cfg["exe"] + ".ppdb").split("/")), ppdb)
             give_tree(tmp)
             if os.path.lexists(folder):
                 shutil.rmtree(folder)
@@ -810,6 +970,9 @@ def cmd_add(args):
         if args.text_string:
             put_text(args.media, group, name, args.text_string)
         write_file(os.path.join(gdir, name + ".cfg"), cfg_text(dict(cfg, folder=folder)))
+        if keys is not None:
+            lines = key_lines(keys.decode("utf-8", "replace"))
+            write_file(os.path.join(gdir, name + ".key"), "\n".join(KEY_HEADER + lines) + "\n")
     except (Bad, OSError) as exc:
         if progress.on:
             print("@fail Copying|%s" % exc, flush=True)
@@ -870,7 +1033,169 @@ def rank(rels, folder_name, sizes):
     return sorted(rels, key=score)
 
 
+# ── A estrutura do pacote numa pasta (o zip aberto) ──
+# A pasta JOGO/ (os arquivos do jogo) ao lado de JOGO.cfg, JOGO.jpg,
+# JOGO.mp4, JOGO.txt, JOGO.key e JOGO.ppdb. A pessoa pode escolher a pasta de
+# cima (o zip aberto) ou a do jogo (os outros ficam ao lado dela); a imagem e
+# o video com o nome do jogo dentro da pasta dele (ou snap.png, cover.jpg,
+# trailer.mp4...) tambem servem. O painel e o Setup preenchem a arte com eles.
+
+SIDE_KINDS = (("cfg", ("cfg",)), ("snap", IMAGE_EXTS), ("preview", VIDEO_EXTS), ("texto", ("txt",)),
+              ("key", ("key",)), ("ppdb", ("ppdb",)))
+# Os nomes de arte comuns dentro da pasta do jogo (comparados sem caixa,
+# espacos ou _).
+INNER_ART = {"snap": ("snap", "screenshot", "screen", "cover", "thumbnail", "thumb", "title", "boxart"),
+             "preview": ("preview", "video", "trailer", "gameplay", "snap", "intro")}
+JUNK = {"thumbs.db", "desktop.ini", ".ds_store"}
+
+
+def plain_files(folder):
+    """{nome: caminho} dos arquivos comuns (sem atalhos) da pasta."""
+    out = {}
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return out
+    for n in names:
+        path = os.path.join(folder, n)
+        if not n.startswith(".") and os.path.isfile(path) and not os.path.islink(path):
+            out[n] = path
+    return out
+
+
+def side_files(files, base):
+    """{tipo: caminho} dos BASE.* entre os arquivos (o nome comparado sem
+    caixa, espacos ou _; entre dois, a ordem das extensoes decide)."""
+    want = simple(base)
+    by_ext = {}
+    for n, path in sorted(files.items()):
+        stem, dot, ext = n.rpartition(".")
+        if dot and want and simple(stem) == want:
+            by_ext.setdefault(ext.lower(), path)
+    out = {}
+    for kind, exts in SIDE_KINDS:
+        for ext in exts:
+            if ext in by_ext:
+                out[kind] = by_ext[ext]
+                break
+    return out
+
+
+def our_cfg(path):
+    """O cfg de um jogo custom (platform windows ou native), ou None."""
+    try:
+        if os.path.getsize(path) > (1 << 20):
+            return None
+        cfg = read_cfg(path)
+    except OSError:
+        return None
+    return cfg if cfg.get("platform", "").lower() in PLATFORMS else None
+
+
+def unpacked(folder):
+    """(pasta do jogo, arquivos ao lado) quando FOLDER e o zip aberto: uma
+    subpasta JOGO com JOGO.cfg do FliperOS, ou a unica subpasta com so os
+    JOGO.* em volta. None se nao e."""
+    files = plain_files(folder)
+    try:
+        dirs = sorted(d for d in os.listdir(folder) if not d.startswith(".")
+                      and os.path.isdir(os.path.join(folder, d)) and not os.path.islink(os.path.join(folder, d)))
+    except OSError:
+        return None
+    for d in dirs:
+        side = side_files(files, d)
+        if "cfg" in side and our_cfg(side["cfg"]) is not None:
+            return os.path.join(folder, d), side
+    if len(dirs) == 1:
+        side = side_files(files, dirs[0])
+        loose = [n for n, p in files.items() if p not in side.values() and n.lower() not in JUNK]
+        if side and not loose:
+            return os.path.join(folder, dirs[0]), side
+    return None
+
+
+def layout(folder):
+    """A pasta do jogo e o que veio com ela: {"folder", "snap", "video",
+    "text", "key", "ppdb", "cfg"} (caminhos; cfg sao as chaves do JOGO.cfg
+    que servem) e "where": package (o zip aberto), beside (ao lado da pasta),
+    inside (so a arte de dentro dela) ou "" (nada)."""
+    folder = os.path.realpath(folder)
+    found = unpacked(folder)
+    where = "package" if found else ""
+    if found:
+        game, side = found
+    else:
+        game = folder
+        side = side_files(plain_files(os.path.dirname(folder)), os.path.basename(folder)) \
+            if os.path.dirname(folder) != folder else {}
+        if "cfg" in side and our_cfg(side["cfg"]) is None:
+            del side["cfg"]
+        where = "beside" if side else ""
+    out = {"folder": game, "where": where, "snap": side.get("snap", ""), "video": side.get("preview", ""),
+           "text": side.get("texto", ""), "key": side.get("key", ""), "ppdb": side.get("ppdb", ""), "cfg": {}}
+    # A arte de dentro da pasta do jogo: com o nome dele, ou um nome comum.
+    inner = plain_files(game)
+    base = os.path.basename(game)
+    for key, kind in (("snap", "snap"), ("video", "preview")):
+        if out[key]:
+            continue
+        exts = dict(MEDIA)[kind]
+        names = (simple(base),) + INNER_ART[kind]
+        for want in names:
+            hit = sorted(p for n, p in inner.items() if "." in n and n.rsplit(".", 1)[1].lower() in exts
+                         and simple(n.rsplit(".", 1)[0]) == want)
+            if hit:
+                out[key] = hit[0]
+                out["where"] = out["where"] or "inside"
+                break
+    if side.get("cfg"):
+        out["cfg"] = cfg_hints(our_cfg(side["cfg"]) or {}, game)
+    return out
+
+
+def cfg_hints(cfg, game):
+    """As chaves do JOGO.cfg que valem para a pasta GAME (as erradas saem)."""
+    out = {}
+    if valid_name(cfg.get("name", "")):
+        out["name"] = cfg["name"]
+    platform = cfg.get("platform", "").lower()
+    if platform in PLATFORMS:
+        out["platform"] = platform
+    exe = rel_path(cfg.get("exe", ""))
+    if platform == "windows" and exe and os.path.isfile(os.path.join(game, *exe.split("/"))):
+        out["exe"] = exe
+    if platform == "native" and cfg.get("command", "").strip():
+        out["command"] = cfg["command"].strip()
+    mode = mode_of(cfg.get("mode", ""))
+    if mode:
+        out["mode"] = mode
+    if cfg.get("category") and len(cfg["category"]) <= 80:
+        out["category"] = cfg["category"]
+    controls = [c.strip().lower() for c in cfg.get("controls", "").split(",") if c.strip().lower() in CONTROLS]
+    if controls:
+        out["controls"] = ",".join(dict.fromkeys(controls))
+    for key, low in (("buttons", 0), ("players", 1)):
+        value = cfg.get(key, "")
+        if value.isdigit() and low <= int(value) <= 8:
+            out[key] = value
+    return out
+
+
+def cmd_found(args):
+    if not os.path.isdir(args.folder):
+        print("not a folder: %s" % args.folder, file=sys.stderr)
+        return 1
+    found = layout(args.folder)
+    for key in ("folder", "where", "snap", "video", "text", "key", "ppdb"):
+        print("%s=%s" % (key, found[key]))
+    for key, value in found["cfg"].items():
+        print("cfg_%s=%s" % (key, value))
+    return 0
+
+
 def scan_folder(folder):
+    found = layout(folder)
+    folder = found["folder"]
     exes, programs, sizes = [], [], {}
     total = count = 0
     for top, dirs, names in os.walk(folder):
@@ -915,6 +1240,23 @@ def scan_folder(folder):
            "exe": exes[0] if exes else "", "command": ""}
     if not exes and programs:
         row["command"] = "./" + programs[0].replace(" ", "\\ ")
+    # O que veio com a pasta (a estrutura do pacote): a arte, o .key, o
+    # .ppdb e o que o JOGO.cfg diz vencem o que o scan adivinhou.
+    hints = found["cfg"]
+    for key in ("snap", "video", "text", "key", "ppdb", "where"):
+        row[key] = found[key]
+    row["cfg"] = {k: v for k, v in hints.items() if k in ("mode", "category", "controls", "buttons", "players")}
+    if hints.get("name"):
+        row["name"] = hints["name"]
+    # cfg_run: o exe= (ou command=) veio do JOGO.cfg (a pagina o poe por
+    # cima do que a linha tinha).
+    row["cfg_run"] = False
+    if hints.get("platform") == "windows" and hints.get("exe"):
+        row.update(platform="windows", exe=hints["exe"], command="", cfg_run=True)
+        if hints["exe"] not in row["exes"]:
+            row["exes"] = [hints["exe"]] + row["exes"][:39]
+    elif hints.get("platform") == "native" and hints.get("command"):
+        row.update(platform="native", command=hints["command"], exe="", cfg_run=True)
     return row
 
 
@@ -1034,6 +1376,8 @@ def main():
     p.add_argument("--roms", default=ENV("FLIPEROS_CUSTOMGAME_ROMS", os.path.join(home, "roms", "custom")))
     p.add_argument("--games", default=ENV("FLIPEROS_CUSTOMGAME_GAMES", os.path.join(home, "games")))
     p.add_argument("--media", default=ENV("FLIPEROS_CUSTOMGAME_MEDIA", os.path.join(home, "media")))
+    # A pasta dos pacotes (a lista do Install games, onde o Create package os poe).
+    p.add_argument("--packages", default=ENV("FLIPEROS_CUSTOMGAME_PACKAGES", os.path.join(home, "roms", "custom-packages")))
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("inspect")
     s.add_argument("zip")
@@ -1050,7 +1394,7 @@ def main():
     s.add_argument("--folder", required=True)
     s.add_argument("--exe")
     s.add_argument("--command")
-    s.add_argument("--mode", default="640x240@60")
+    s.add_argument("--mode", default=DEFAULT_MODE)
     for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--progress", nargs="*", type=int)
@@ -1061,8 +1405,8 @@ def main():
     s.add_argument("--folder", required=True)
     s.add_argument("--exe")
     s.add_argument("--command")
-    s.add_argument("--mode", default="640x240@60")
-    for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string"):
+    s.add_argument("--mode", default=DEFAULT_MODE)
+    for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--replace", action="store_true")
     s.add_argument("--progress", nargs="*", type=int)
@@ -1074,6 +1418,9 @@ def main():
     s = sub.add_parser("scan")
     s.add_argument("folder")
     s.add_argument("--one", action="store_true")
+    s = sub.add_parser("found")
+    s.add_argument("folder")
+    sub.add_parser("packages")
     s = sub.add_parser("run")
     s.add_argument("cfg")
     args = p.parse_args()
@@ -1082,7 +1429,7 @@ def main():
         if value is not None and len(value) not in (0, 2):
             p.error("--progress takes no value or START END")
     return {"inspect": cmd_inspect, "pending": cmd_pending, "install": cmd_install, "pack": cmd_pack,
-            "add": cmd_add, "media": cmd_media, "scan": cmd_scan, "run": cmd_run}[args.cmd](args)
+            "add": cmd_add, "media": cmd_media, "scan": cmd_scan, "found": cmd_found, "packages": cmd_packages, "run": cmd_run}[args.cmd](args)
 
 
 if __name__ == "__main__":
