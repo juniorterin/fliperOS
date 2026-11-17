@@ -2,6 +2,46 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.25
+
+**Custom games are the heart of this ISO**: any game that isn't a ROM (a Windows game through PortProton, a Linux game, a PC port, a homebrew) joins the cabinet like a system of its own, with its picture, video, text and controls in the FliperOS frontend. A game travels as one file, `GAME.fliperos-customgame.zip`, holding the game folder, the art, the video mode, the controls, buttons and players, the controller-to-keyboard map and PortProton's settings. Install it from Setup > Games > Custom games or from the web panel, which also makes packages (with a preview of the frontend card and a test run on the cabinet before packing), installs them from cards like the frontend's, and adds many games at once in a table. A PC game that only takes the keyboard gets Controller configuration in the on-screen menu: you choose which button sends each key. Also in this ISO: the wheel calibration redone (it closed by itself as soon as the wheel turned) with a new graphical screen that tests the pedals, every button in its real place and the force feedback; achievements on screen and in the frontend; game shortcuts for the emulator menu and exit; the whole Setup in the web panel, redesigned; faster cloud backup with Google sign-in; and the graphical Setup menu, which the 0.24 image had lost. Cabinets already installed get all of this from the Setup's own update (updates 67 to 77).
+
+**System changes:**
+
+- **Custom game packages** (updates 73, 74 and 77): `config/fliperos-customgame` packs, checks and installs `GAME.fliperos-customgame.zip` (the game folder, `GAME.cfg` with name, platform, exe or command, video mode, category, controls, buttons and players, `GAME.jpg`, `GAME.mp4`, `GAME.txt`, the `GAME.key` controller-to-keyboard map and PortProton's `GAME.ppdb`). Packages live in `~/roms/custom-packages` (older ones move there in the System Update); the check lists every problem of a package at once, and the minimum is the folder and a `.cfg` with name, platform and exe or command (without a mode the game opens in 640x480i). A folder already laid out like a package fills in the art, `.key`, `.ppdb` and `.cfg` by itself
+- **Setup > Games > Custom games** (updates 73 and 77): the groups as tiles with their game count, the games with their pictures, **Install games** (the group is asked, the last one comes marked, and the package can go once installed), **Create package**, **Delete group** (an empty group could never go before) and All new; the submenu Games > Custom games in the desktop menu
+- **Custom games in the web panel** (updates 74 and 77): the tabs Games, Install packages (cards with picture, video, scrolling text and control icons, 10 per page, with search, filter and order, the media read from inside the zip) and Create package (card preview, Test on the cabinet: the game opens from its folder without installing, and the `.key` made in the test goes into the package); the package structure and an example shown in the panel; many games at once in a table (typed, picked in lists, imported from a folder or pasted from a spreadsheet, each wrong cell marked with the reason)
+- **Controller configuration** (update 73): the on-screen menu of a custom game has a keyboard on the screen where each button gets a key, for PC games without joystick support; a game without a `.key` opens it by itself
+- **PortProton** (updates 73, 76 and 77): Windows packages run in PortProton, downloaded (about 3 GB) the first time one is created or installed, or from Setup > Games > Extras > PortProton; the desktop menu has Games > PortProton and the installation puts a shortcut on the desktop
+- **Wheel, pedals and analog stick** (update 77): the calibration closed by itself as soon as the wheel turned (the controller-as-keyboard sent arrow keys and the calibrator took their Esc as cancel). The controller-as-keyboard is off while it runs, only a lone Esc cancels, and a wheel's centre is the middle of its travel (a wheel without a spring stays wherever the hand leaves it). In the graphical Setup, a new screen over the menu's background: the wheel turns with yours in degrees, the pedals fill up, then every button lights up in its real place on a drawing of the controller (a wheel, a joypad, or rows for a panel), then the force feedback pulls both ways and shakes. Hold a button to go on. In the menus a wheel moves only with its d-pad and buttons
+- **Achievements** (updates 68 to 70): each unlocked achievement shows over the game for 5 seconds in a bar like the volume one (RetroArch, Dolphin, PCSX2, DuckStation, Flycast; the emulators' own notices are off), and on the Pixelcade/ZeDMD marquee; the frontend shows a trophy with how many you have (3/24) and the game menu lists them all; disc games use RetroAchievements' RAHasher
+- **Game shortcuts** (updates 68 and 69): coin + Start held for a second closes the game, coin + button 1 opens the emulator's own menu, Start + Down the on-screen menu; buttons of several players can be joined, and Frontend controls changes them
+- **On-screen menu** (updates 67 to 69): legible in any game size, profiles (default, resolution, emulator, core, game), a Scanlines page live in the game, a GunCon 2 page, the video mode and the game's FPS under the title, following the game live
+- **Web panel** (updates 74 and 75): System > Setup is the whole Setup of the cabinet, as a list of settings like a phone's (search over every setting, one row per setting); what needs the tube or a controller in hand has Open on the cabinet. New there: Folders, custom frontends, Quirks, Bluetooth, the controller light, System Update, the OSD profiles and the menu sounds
+- **Cloud backup** (updates 67 and 74): Sign in with Google with a QR code, every setting and what you leave behind in the backup, one pass to send and one to receive (much faster), and its progress in the web panel and the Setup
+- **Frontend** (updates 69 and 72): game counts on the system strip, button 1 opens a system at once, the lists read in the background, a controller connected while it is open moves in the list
+- **Desktop** (updates 67 and 68): the controller is the mouse, with the Onboard on-screen keyboard docked at the bottom in text fields; the controller light (DualSense, DualShock 4, 8BitDo Ultimate 2) turns FliperOS purple
+- Arcade memory with unlocked content (Tekken 3, Tekken Tag, Soul Edge, SF EX, UMK3, Naomi and Atomiswave games...) comes with the system, also for games that already had their own memory (updates 67 and 69)
+- GunCon 2 calibration works again after a bad one (update 71)
+- The Setup's graphical menu is back: the 0.24 image always opened the text menu (update 67)
+
+**Package changes:**
+
+- `fliperos-flycast` 2.7.20261031-1fliperos4: its achievement notices go to the FliperOS bar (patch 0006)
+- `fliperos-rahasher` 1.8.4-1fliperos1 (new): RetroAchievements' hasher for disc games
+- Onboard on-screen keyboard settings for the desktop
+
+**fliperos-setup changes:**
+
+- `lib/customgames.sh` and `screens/setup-menu.sh`: Custom games with groups, Install games, Create package and Delete group
+- `screens/joysticks.sh`: the controller-as-keyboard off during the wheel calibration, which uses the new `gui/wheelscreen.py` in the graphical Setup
+- `lib/extras.sh`: PortProton in the Extras
+
+**Tool changes:**
+
+- `tools/cabinet-update.sh` moves the custom game packages to `~/roms/custom-packages`
+- `tools/web-shots.py`: the custom games screens of the web panel
+
 ## 0.24
 
 **Bluetooth controllers, and a Button mapping for joypads too**: Setup > Joysticks > Bluetooth pairs, connects and forgets controllers, and Button mapping now starts from the connected controllers, asks the player, and maps an arcade panel or JAMMA board (1 to 8 buttons) or a joypad (recognised like in Batocera), then the buttons that accept and go back in the menus. The frontend's controls get a JOYPAD column and a guide drawn with the buttons of ten consoles. Also in this ISO, everything the updates 64 to 66 brought since 0.23: the FliperOS version chooser (go back to an earlier update or forward to a newer one), Midway 2D games in 320x240 at 59 Hz, the power button closing GroovyMAME at once, RetroAchievements for every emulator, cloud backup of scores and saves, the cabinet choice in the web panel, and updates that no longer stop on a repository added by hand. Cabinets already installed get all of this from the Setup's own update (updates 64 to 66).

@@ -6,7 +6,7 @@ The media is **installation-only** and follows the GroovyArcade flow: a boot men
 
 The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the cabinet, and a text menu made with [Gum](https://github.com/charmbracelet/gum) over SSH, both in the **Dracula** theme and drawn for the tube.
 
-> In development: 0.24 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT, and updates keep coming between versions.
+> In development: 0.25 is tested in a VM (QEMU) and on a cabinet with a 15 kHz CRT, and updates keep coming between versions.
 
 [![Telegram group](https://img.shields.io/badge/Telegram-join%20the%20group-26A5E4?logo=telegram&logoColor=white)](https://t.me/fliperos15khz) Questions, photos of your cabinet and help from other users. Each release is posted there with pictures and how the new features work.
 

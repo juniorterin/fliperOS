@@ -8393,7 +8393,7 @@ class WebPanelTests(unittest.TestCase):
                          'if [ "$1 $2" = "--wifi scan" ]; then echo "wlan0|Casa|80|WPA2"; fi\n'
                          'if [ "$1 $2" = "--wifi connect" ]; then read -r p; echo "wifi $p" >> %s/secret.log; fi\n'
                          'if [ "$1" = --password ]; then read -r p; [ ${#p} -lt 4 ] && exit 2; echo "password $p" >> %s/secret.log; fi\n'
-                         'if [ "$1" = --whatsnew ]; then echo "This is FliperOS 0.24, update 66."; fi\n'
+                         'if [ "$1" = --whatsnew ]; then echo "This is FliperOS 0.25, update 77."; fi\n'
                          # RetroAchievements: a senha chega pela entrada padrao.
                          'if [ "$1" = --cheevos ]; then\n'
                          '  case "$2" in\n'
@@ -9743,7 +9743,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('password nova senha\n', secret.read_text())
         self.assertNotIn('nova senha', self.volume_log.read_text())
         text = json.loads(self.request('GET', '/api/whatsnew', cookie=cookie)[2])['text']
-        self.assertIn('update 66', text)
+        self.assertIn('update 77', text)
 
     def test_version_list_and_change(self):
         # Setup > System > FliperOS version pelo painel: a lista e o goto como
@@ -16671,7 +16671,7 @@ class DocsTests(unittest.TestCase):
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
             self.assertLessEqual(self.top_pages(), linked)
             self.assertLessEqual(linked, self.pages())
-            for needed in ('dd if=fliperos-0.24.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
+            for needed in ('dd if=fliperos-0.25.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
                            'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
                 self.assertIn(needed, readme)
         # O passo a passo tem os mesmos passos numerados nas duas linguas.
