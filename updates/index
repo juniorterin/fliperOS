@@ -81,3 +81,4 @@
 78	f089a7143e9bc8f82a9ea1d6cbe8787eda4b5efd	0f1f0a92e0d465691ca0414169f04b94454bf8d767fea8100ce96fb427015120	no	Custom games: 240p hack, Windows game runner, OSD over X games
 79	57a93c47c3415cc6e67b20961af817a593e074a6	0f8ca11b19a5479ed507561f08b45557ea9c991743626421aa9fc8c045f1b0eb	no	No false video card question, custom games leave nothing running, games fill super resolution cards
 80	8b470fd2be4f5d5b75a0d1ad60cdbcc521e4b62b	5df31bd08c2c30cbd6e00ade3de9e49649f3b892b2a2463c10588aa587db0d16	no	Model 2 emulator is now Keisho (new address, rebuilt with your settings)
+81	86c49568275fc803631c7ab1fb3dc25deee69e22	4c5145307af9096f0623d16403d4a1cbfa069a5f33e9ef2264bea64bd8b6473e	no	Cloud backup keeps your custom folders
