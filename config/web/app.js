@@ -1,5 +1,6 @@
-// O painel web do FliperOS (config/fliperos-web): o login, as quatro areas
-// (Frontend, Ao vivo, Biblioteca, Sistema; o endereco e #area/aba) e o
+// O painel web do FliperOS (config/fliperos-web): o login, as cinco areas
+// (Frontend, Ao vivo, Biblioteca, Jogos custom, Sistema; o endereco e
+// #area/aba) e o
 // /api/status a cada segundo, parado com a aba escondida. Ingles ou portugues
 // pelo idioma do navegador (o botao troca; a escolha fica no localStorage).
 "use strict";
@@ -10,6 +11,8 @@ const AREAS = {
   live: { icon: "px-video", subs: [["watch", "px-video"], ["obs", "px-outputs"]] },
   library: { icon: "px-games", subs: [["overview", "px-games"], ["install", "px-emulators"], ["downloads", "px-torrent"],
     ["romfilter", "px-filter"], ["art", "px-scraper"], ["files", "px-dest"]] },
+  // Os jogos custom, a mesma pagina de Sistema > Setup > Jogos (customgames.js).
+  customgames: { icon: "px-customgames", subs: [] },
   system: { icon: "px-setup", subs: [["status", "px-chip"], ["logs", "px-romlist"], ["setup", "px-setup"],
     ["achievements", "px-achievements"], ["cloud", "px-cloud"],
     ["terminal", "px-shell"], ["lab", "px-lab"]] },
@@ -208,6 +211,7 @@ function showPage(hash) {
   else if (page === "lab") loadLab().catch(() => {});
   else if (page === "romfilter") { if (!rf.loaded) loadRomFilter("").catch(() => {}); }
   else if (page === "logs") loadLogs().catch(() => {});
+  else if (page === "customgames") cgMount($("cg-area")).catch(() => {});
   else if (page === "terminal" && termFit) requestAnimationFrame(() => termFit.fit());
   if (a === "live") {
     loadLive().catch(() => {});

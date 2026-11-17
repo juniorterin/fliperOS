@@ -92,7 +92,7 @@ const SETUP_TREE = [
 // Setup, fliperos-setup/gui/theme.py): ao lado de cada item na busca.
 const SETUP_ICON = { monitor: "px-video", geometry_reset: "px-reset", monitors: "px-outputs", driver: "px-chip",
   lowdot: "px-outputs", osd: "px-layout", card: "px-system", volume: "px-audio", test: "px-audio", sounds: "px-audio",
-  wifi: "px-network", live: "px-outputs", extras: "px-freeroms", custom: "px-games", folders: "px-dest",
+  wifi: "px-network", live: "px-outputs", extras: "px-freeroms", custom: "px-customgames", folders: "px-dest",
   downloader: "px-install", cleaner: "px-filter", update: "px-reset", version: "px-reset", whatsnew: "px-romlist",
   splash: "px-video", other: "px-setup" };
 // Os grupos do --settings, para um ajuste novo que nenhum item pega (ele vai
@@ -374,7 +374,8 @@ const SETUP_PAGES = { custom: (box) => customGamesPage(box), version: versionPag
 async function setupPage(group, item) {
   const box = $("setup-page");
   // Os jogos custom guardam a tabela: voltar a pagina so le a lista de novo.
-  if (item.page === "custom" && box.dataset.page === "custom") return cgLoad();
+  // A mesma pagina da area Jogos custom: a ultima que a abriu fica com ela.
+  if (item.page === "custom" && box.dataset.page === "custom") return cgMount(box);
   box.dataset.page = item.page;
   box.replaceChildren(el("a", { class: "back show", href: "#system/setup/" + group.id }, icon("g-back"), t("sg_" + group.id)));
   return SETUP_PAGES[item.page](box);

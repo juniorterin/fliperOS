@@ -299,6 +299,8 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 
 /* ── Jogos custom ── */
 .cg-head .lead { margin-bottom: 14px; }
+/* Na area Jogos custom o titulo e a frase ja estao no topo da pagina. */
+.cg-area .cg-head > h2, .cg-area .cg-head > .lead { display: none; }
 .cg-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
 .cg-bar svg.g { width: 12px; height: 12px; }
 .cg-list, .cg-sec { margin-top: 26px; }

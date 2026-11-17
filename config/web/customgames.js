@@ -1,5 +1,5 @@
-// Sistema > Setup > Jogos > Jogos custom (o Setup > Games > Custom games do
-// gabinete), em tres abas: Jogos (os grupos e os jogos, a tabela para
+// A area Jogos custom e Sistema > Setup > Jogos > Jogos custom (o Setup >
+// Games > Custom games do gabinete), em tres abas: Jogos (os grupos e os jogos, a tabela para
 // cadastrar muitos de uma vez e as pastas compactadas), Instalar pacotes (os
 // JOGO.fliperos-customgame.zip da pasta deles, ~/roms/custom-packages, o
 // grupo escolhido ao instalar) e Criar pacote (o zip vai para essa pasta).
@@ -7,7 +7,7 @@
 // /api/customgames): um jogo so e a tabela com uma linha.
 "use strict";
 
-const cg = { info: null, rows: [], seq: 0, el: null, busy: false, defaultGroup: "", installGroup: "", tab: "games",
+const cg = { root: null, info: null, rows: [], seq: 0, el: null, busy: false, defaultGroup: "", installGroup: "", tab: "games",
   createRow: null, highlight: "" };
 const CG_DRAFT = "fliperos-cg-draft";
 const CG_TAB = "fliperos-cg-tab";
@@ -30,7 +30,20 @@ const CG_PASTE_ORDER = ["name", "group", "platform", "folder", "run", "mode", "c
 
 // ── A pagina ──
 
+// A pagina e uma so (a tabela e o rascunho ficam nela) e mora na caixa de
+// quem a abriu por ultimo: a area Jogos custom (#customgames) ou Sistema >
+// Setup > Jogos > Jogos custom. Ja feita, ela so muda de caixa e le de novo.
+async function cgMount(box) {
+  if (!cg.root) return customGamesPage(box);
+  if (cg.root.parentNode !== box) box.append(cg.root);
+  return cgLoad();
+}
+
 async function customGamesPage(box) {
+  if (cg.root) return cgMount(box);
+  cg.root = el("div", { class: "cg-root" });
+  box.append(cg.root);
+  box = cg.root;
   const add = el("button", { type: "button", class: "btn small" }, icon("g-plus"), t("cg_add"));
   add.addEventListener("click", () => cgAddOne());
   const group = el("button", { type: "button", class: "btn ghost small" }, t("cg_new_group"));

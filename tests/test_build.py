@@ -9268,7 +9268,7 @@ class WebPanelTests(unittest.TestCase):
         index = (ROOT / 'config/web/index.html').read_text()
         for nav in ('<nav class="nav"', '<nav class="bottomnav"'):
             part = index[index.index(nav):index.index('</nav>', index.index(nav))]
-            self.assertEqual(re.findall(r'data-area="([a-z]+)"', part), ['frontend', 'live', 'library', 'system'])
+            self.assertEqual(re.findall(r'data-area="([a-z]+)"', part), ['frontend', 'live', 'library', 'customgames', 'system'])
         self.assertIn('<div class="sub grid" data-sub="downloads">', index)
         self.assertIn('aria-labelledby="h-dl">', index)
         self.assertIn('<ul id="tasks" class="tasks"></ul>', index)

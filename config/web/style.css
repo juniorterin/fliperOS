@@ -753,9 +753,9 @@ button.danger { color: var(--red); border-color: var(--red); margin-top: 10px; }
   .subtabs-bar { margin: 0 0 18px; }
   .subtabs { gap: 20px; }
   .subtabs a { font-size: 14px; }
-  .bottomnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
+  .bottomnav { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
     padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); background: rgb(20,21,28); border-top: 1px solid var(--line); }
-  .bottomnav a { display: grid; justify-items: center; gap: 4px; font-size: 11.5px; font-weight: 650; color: var(--dim); padding: 4px 0;
+  .bottomnav a { display: grid; justify-items: center; gap: 4px; font-size: 11px; text-align: center; line-height: 1.15; font-weight: 650; color: var(--dim); padding: 4px 0;
     border-radius: 12px; text-decoration: none; }
   .bottomnav a svg { width: 28px; height: 28px; opacity: .75; }
   .bottomnav a[aria-current="page"] { color: var(--fg); background: rgba(255,121,198,.14); }

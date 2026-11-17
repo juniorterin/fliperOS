@@ -37,7 +37,7 @@
 </section>
 
 <div id="app" class="app" hidden>
-  <!-- A barra lateral (PC): as quatro areas, o gabinete e a conta. -->
+  <!-- A barra lateral (PC): as cinco areas, o gabinete e a conta. -->
   <aside class="side">
     <div class="brand"><svg class="px"><use href="icons.svg#px-frontend"/></svg><span>Fliper<b>OS</b></span></div>
     <div class="rainbow thin"></div>
@@ -45,6 +45,7 @@
       <a href="#frontend" data-area="frontend"><svg class="px"><use href="icons.svg#px-frontend"/></svg><span><b data-t="area_frontend"></b><small data-t="area_frontend_sub"></small></span></a>
       <a href="#live" data-area="live"><svg class="px"><use href="icons.svg#px-video"/></svg><span><b data-t="area_live"></b><small data-t="area_live_sub"></small></span></a>
       <a href="#library" data-area="library"><svg class="px"><use href="icons.svg#px-games"/></svg><span><b data-t="area_library"></b><small data-t="area_library_sub"></small></span></a>
+      <a href="#customgames" data-area="customgames"><svg class="px"><use href="icons.svg#px-customgames"/></svg><span><b data-t="area_customgames"></b><small data-t="area_customgames_sub"></small></span></a>
       <a href="#system" data-area="system"><svg class="px"><use href="icons.svg#px-setup"/></svg><span><b data-t="area_system"></b><small data-t="area_system_sub"></small></span></a>
     </nav>
     <div class="side-foot">
@@ -630,6 +631,13 @@
       </div>
     </div>
 
+    <!-- ===== Jogos custom: a mesma pagina de Sistema > Setup > Jogos > Jogos
+         custom (customgames.js), numa area propria; ela vai para a caixa de
+         quem a abriu por ultimo (cgMount). ===== -->
+    <div class="area" data-area="customgames">
+      <div id="cg-area" class="cg-area"></div>
+    </div>
+
     <!-- ===== Sistema ===== -->
     <div class="area" data-area="system">
       <!-- A area inteira no mesmo desenho (setup.css): superficies sem
@@ -772,6 +780,7 @@
     <a href="#frontend" data-area="frontend"><svg class="px"><use href="icons.svg#px-frontend"/></svg><span data-t="area_frontend"></span></a>
     <a href="#live" data-area="live"><svg class="px"><use href="icons.svg#px-video"/></svg><span data-t="area_live"></span></a>
     <a href="#library" data-area="library"><svg class="px"><use href="icons.svg#px-games"/></svg><span data-t="area_library"></span></a>
+    <a href="#customgames" data-area="customgames"><svg class="px"><use href="icons.svg#px-customgames"/></svg><span data-t="area_customgames"></span></a>
     <a href="#system" data-area="system"><svg class="px"><use href="icons.svg#px-setup"/></svg><span data-t="area_system"></span></a>
   </nav>
 </div>
