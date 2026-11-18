@@ -9459,6 +9459,9 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('api("/api/hardware")', system)
         self.assertIn('api("/api/report")', system)
         self.assertIn('await copyText(await res.text(), null);', system)
+        # O rotulo de uma linha nao encolhe a letras soltas ("Ca/ch/e") ao lado de um valor comprido.
+        self.assertIn('el("span", { class: "hw-label" }, label)', system)
+        self.assertRegex((ROOT / 'config/web/setup.css').read_text(), r'\.st-kv > \.hw-label \{ flex: none;')
         app = (ROOT / 'config/web/app.js').read_text()
         self.assertIn('else if (page === "status") hwLoad().catch(() => {});', app)
         texts = (ROOT / 'config/web/text.js').read_text()

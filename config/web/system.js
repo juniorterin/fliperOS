@@ -330,7 +330,7 @@ setInterval(banner, 5000);
 // som (e qual saida esta em uso), os aparelhos ligados e o PCI com os
 // enderecos. Lido ao abrir a aba. O botao copia o relatorio inteiro (/api/report).
 let hwData = null;
-const hwKv = (label, value) => el("div", { class: "st-kv" }, el("span", {}, label), el("span", { class: "val wrap" }, value));
+const hwKv = (label, value) => el("div", { class: "st-kv" }, el("span", { class: "hw-label" }, label), el("span", { class: "val wrap" }, value));
 const hwSet = (box, rows) => box.replaceChildren(...(rows.length ? rows : [el("span", { class: "dim" }, t("hw_none"))]));
 const hwJoin = (...parts) => parts.filter((x) => x !== "" && x != null).join(" ");
 

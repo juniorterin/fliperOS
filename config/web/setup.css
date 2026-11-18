@@ -261,6 +261,8 @@ select.fld { -webkit-appearance: auto; appearance: auto; }
 .st-kv .val.wrap { white-space: normal; overflow-wrap: anywhere; }
 .st-card .st-nic + .st-nic { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair); }
 .hw-part { padding-left: 12px; font-size: 13px; overflow-wrap: anywhere; }
+/* O rotulo nao encolhe a letras soltas ("Ca/ch/e") quando o valor e comprido: o valor e que quebra. */
+.st-kv > .hw-label { flex: none; max-width: 55%; min-width: 0; overflow-wrap: break-word; }
 .hw-tags { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .st-pci .st-more { margin-top: 0; }
 .st-pci td.mono { font: 13px/1.4 ui-monospace, "JetBrains Mono", monospace; white-space: nowrap; }
