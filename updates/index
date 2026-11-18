@@ -85,3 +85,4 @@
 82	65dd151e7c252c3c1b5d03c8c43d3c06284eee90	6be7bc2a32fe4bce24a767a19c5292b374cd2c7143692b4de8b2379c522ec49f	no	Quiet update: the ps1, custom and custom-packages folders exist from the first login, Custom games has its own area in the web panel
 83	0cb3a2826e204b59908700b5910260b126d40a9b	5d4d2e9f68725a2deca633b6cff305db8b27c1845d957b8e262f8ba661b24638	no	Keisho runs Model 2 and Model 3 with Vulkan or OpenGL; Supermodel removed
 84	3507756fdaa9d55663cb589e6892fe1cf83716f9	bad0cc501d40490a1f949757f8ed0d055afac05c3f839f191ddcfc086edba996	no	Custom games hide the joystick when keys are mapped; haptic feedback on gamepads; hourly cloud backup
+85	422a84a13f1edcfcfa53a085d94e038a9ab8d44a	bbe7c9d13feedd333e9106cf904f69e561dbda51e2cf66220bff87d7ebd13b13	no	A second or external disk, a smoother frontend, the whole hardware in the web panel, Wii in 4:3
