@@ -24,8 +24,11 @@ HEROIC_SHA256="f89eed7e0eb900fbe3051edfedbe7532db14328241cbf8c1fb766462dfc0b849"
 HEROIC_URL="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/download/v${HEROIC_VERSION}/Heroic-${HEROIC_VERSION}-linux-amd64.deb"
 # O OpenGL de 32 bits vai junto do Wine: o Direct3D do Wine desenha por ele,
 # e sem ele o FBNeo do Fightcade para em "Couldn't initialise DirectX9
-# Alternate video output".
-WINE_PACKAGES="wine wine64 wine32:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386"
+# Alternate video output". A XRandR de 32 bits tambem: o Wine a carrega na
+# hora, e sem ela um jogo de 32 bits nao troca de modo (o FBNeo do Fightcade
+# em tela cheia: "Problem setting '384x224x32bpp' display mode", o Wine devolve
+# -2), porque so os processos de 64 bits achavam o XRandR.
+WINE_PACKAGES="wine wine64 wine32:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386 libxrandr2:i386"
 # O Wine Staging: o Wine mais novo da WineHQ (a versao de desenvolvimento, nova
 # a cada duas semanas) com os patches que ainda nao entraram no Wine. O pacote
 # dela troca o Wine do Ubuntu (Conflicts/Replaces: wine) e poe o /usr/bin/wine,
@@ -34,7 +37,7 @@ WINE_PACKAGES="wine wine64 wine32:i386 libgl1:i386 libgl1-mesa-dri:i386 libglx-m
 WINEHQ_KEY=${FLIPEROS_WINEHQ_KEY:-/usr/local/share/fliperos/winehq-archive.asc}
 WINEHQ_URL="https://dl.winehq.org/wine-builds/ubuntu"
 UPDATE_TOOL=${FLIPEROS_UPDATE_TOOL:-/opt/fliperos/bin/fliperos-update}
-WINE_STAGING_PACKAGES="winehq-staging libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386"
+WINE_STAGING_PACKAGES="winehq-staging libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386 libxrandr2:i386"
 wine_staging_bin=${FLIPEROS_WINE_STAGING:-/opt/wine-staging/bin/wine}
 # O PortProton (Wine e Proton feitos para jogos), o dos jogos custom do
 # Windows: o config/fliperos-portproton o instala na home do jogador (~3 GB).

@@ -12571,6 +12571,13 @@ class FightcadeTests(unittest.TestCase):
         for text in (EXTRAS, (ROOT / 'tools/cabinet-update.sh').read_text()):
             self.assertIn('libgl1:i386 libgl1-mesa-dri:i386 libglx-mesa0:i386', text)
         self.assertIn('wine wine64 wine32:i386 libgl1:i386', EXTRAS)
+        # A XRandR de 32 bits: sem ela o Wine de 32 bits nao troca de modo (o FBNeo
+        # do Fightcade em tela cheia, "Problem setting '384x224x32bpp' display
+        # mode"), e nos Wine que ja estao instalados ela chega pelo update.
+        for line in re.findall(r'^WINE(?:_STAGING)?_PACKAGES="([^"]*)"', EXTRAS, re.M):
+            self.assertIn('libxrandr2:i386', line.split())
+        self.assertRegex((ROOT / 'tools/cabinet-update.sh').read_text(),
+                         r'\(\(wine32\)\) && packages\+=\(libxrandr2:i386\)')
         # O Wine nao vem na imagem: o download do Fightcade o instala antes.
         helper = (ROOT / 'config/fliperos-fightcade').read_text()
         fetch = helper.split('\nfetch() {')[1].split('\n}\n')[0]

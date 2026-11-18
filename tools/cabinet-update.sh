@@ -182,6 +182,10 @@ dpkg -s wine32:i386 > /dev/null 2>&1 && packages+=(libgl1:i386 libgl1-mesa-dri:i
 wine32=0
 { dpkg -s wine32:i386 || dpkg -s wine-staging-i386:i386; } > /dev/null 2>&1 && wine32=1
 ((wine32)) && packages+=(gcc-multilib libdrm-dev:i386)
+# E a XRandR de 32 bits: sem ela um jogo de 32 bits no Wine (o FBNeo do
+# Fightcade) nao troca de modo e a tela cheia dava "Problem setting ... display
+# mode" (config/fliperos-extras).
+((wine32)) && packages+=(libxrandr2:i386)
 # So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
 # apt-get segura a trava dos pacotes, e quem estivesse instalando um
 # frontend pelo Setup naquela hora recebia "Impossivel criar acesso
