@@ -19502,6 +19502,58 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertIn('0:btn_a', (tmp / 'flycast' / ('SDL_' + name.replace('/', '-').replace(':', '-') + '_arcade.cfg')).read_text())
             self.assertEqual((tmp / 'buttons.map').read_text(), (tmp / 'map').read_text())
 
+    def test_save_wires_the_ctrlr_into_mame_ini(self):
+        # O ctrlr so vale se o mame.ini o chama. O mame.ini do -createconfig
+        # tem o ctrlr vazio e o joystickprovider em auto; antes so o Setup (em
+        # texto) ligava as duas linhas, e um gabinete que gravou o Button
+        # mapping pelo painel web, pelo menu grafico ou pela atualizacao ficava
+        # com os controles padrao do MAME, nao os 6 botoes do painel
+        # (2026-11-18, o Ultra Street Fighter II).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            name = 'vusb.wikidot.com/project:mamepanel V-USB Mame Panel 32'
+            (tmp / 'map').write_text('1 up 0 -a1 %s\n1 b1 0 b0 %s\n' % (name, name))
+            env = dict(os.environ, FLIPEROS_RA_BUTTONS=str(tmp / 'ra' / 'buttons.cfg'),
+                       FLIPEROS_MAME_CTRLR=str(tmp / 'ctrlr' / 'fliperos.cfg'),
+                       FLIPEROS_MAME_INI=str(tmp / 'mame' / 'mame.ini'),
+                       FLIPEROS_FLYCAST_MAPPINGS=str(tmp / 'flycast'), FLIPEROS_SDL_USER_DB=str(tmp / 'sdl-user.txt'),
+                       FLIPEROS_OPENBOR_SAVES=str(tmp / 'Saves'), FLIPEROS_OPENBOR3_SAVES=str(tmp / 'v3' / 'Saves'),
+                       FLIPEROS_BUTTONS_MAP=str(tmp / 'buttons.map'), FLIPEROS_CONTROLLERS=str(tmp / 'nada'),
+                       FLIPEROS_HYPSEUS_INI=str(tmp / 'hypseus' / 'hypinput.ini'),
+                       FLIPEROS_DOLPHIN_DIR=str(tmp / 'dolphin'),
+                       FLIPEROS_FLYCAST_DOJO_MAPPINGS=str(tmp / 'dojo' / 'mappings'))
+            (tmp / 'dojo').mkdir()
+            (tmp / 'mame').mkdir()
+
+            def save():
+                subprocess.run(['python3', str(ROOT / 'config/fliperos-buttons'), 'save', str(tmp / 'map')],
+                               env=env, check=True, capture_output=True, timeout=30)
+
+            # Sem o mame.ini (GroovyMAME fora da imagem): o save nao o cria.
+            save()
+            self.assertFalse((tmp / 'mame' / 'mame.ini').exists())
+            # O -createconfig: as duas chaves la, vazia e em auto, com o resto intacto.
+            ini = tmp / 'mame' / 'mame.ini'
+            ini.write_text('rompath                   /home/fliperos/roms/mame\n'
+                           'ctrlr                     \n'
+                           'mouse                     0\n'
+                           'joystickprovider          auto\n')
+            save()
+            self.assertEqual(ini.read_text(), 'rompath                   /home/fliperos/roms/mame\n'
+                                              'ctrlr                     fliperos\n'
+                                              'mouse                     0\n'
+                                              'joystickprovider          sdljoy\n')
+            # Ja ligado: nada muda (nem o arquivo e regravado).
+            before = ini.stat().st_mtime_ns
+            save()
+            self.assertEqual(ini.stat().st_mtime_ns, before)
+            # Um mame.ini sem as chaves (muito antigo): vao no fim.
+            ini.write_text('rompath                   /home/fliperos/roms/mame\n')
+            save()
+            self.assertEqual(ini.read_text(), 'rompath                   /home/fliperos/roms/mame\n'
+                                              'ctrlr                     fliperos\n'
+                                              'joystickprovider          sdljoy\n')
+
     def test_keyboard_preset_is_the_mame_layout(self):
         # Encoder que se diz teclado (I-PAC): as teclas padrao do MAME em
         # todos os emuladores, sem apertar nada.

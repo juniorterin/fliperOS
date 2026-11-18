@@ -72,7 +72,7 @@ vao na numeracao dele, que conta os hats.
 
 GroovyMAME: um ctrlr (~/.mame/ctrlr/fliperos.cfg) com os JOYCODE de cada
 jogador, e no mame.ini "ctrlr fliperos" e "joystickprovider sdljoy" (o
-Setup grava): no sdljoy o MAME numera os botoes como o SDL, na ordem do
+save grava, de onde vier: Setup, painel web, atualizacao): no sdljoy o MAME numera os botoes como o SDL, na ordem do
 aparelho; no sdlgame (o padrao) ele os ve pelo mapeamento de game
 controller (A, B, X, Y...), que num painel nao segue a ordem.
 
@@ -157,6 +157,7 @@ from xml.sax.saxutils import escape
 
 RA_BUTTONS = os.environ.get('FLIPEROS_RA_BUTTONS', '/etc/fliperos/retroarch/buttons.cfg')
 MAME_CTRLR = os.environ.get('FLIPEROS_MAME_CTRLR', '/home/fliperos/.mame/ctrlr/fliperos.cfg')
+MAME_INI = os.environ.get('FLIPEROS_MAME_INI', '/etc/fliperos/mame/mame.ini')
 SDL_USER_DB = os.environ.get('FLIPEROS_SDL_USER_DB', '/var/lib/fliperos/gamecontrollerdb-user.txt')
 FLYCAST_MAPPINGS = os.environ.get('FLIPEROS_FLYCAST_MAPPINGS', '/home/fliperos/.config/flycast/mappings')
 OPENBOR_SAVES = os.environ.get('FLIPEROS_OPENBOR_SAVES', '/opt/fliperos/roms/openbor/Saves')
@@ -682,6 +683,44 @@ def write(path, text, owner=None):
             os.chown(path, owner, owner)
         except OSError:
             pass
+
+
+def mame_ini_wire(path=None):
+    """Liga o ctrlr ao mame.ini do GroovyMAME: "ctrlr fliperos" e
+    "joystickprovider sdljoy". O ctrlr so vale se o mame.ini o chama, e o
+    -createconfig que faz o mame.ini deixa o ctrlr vazio e o joystickprovider
+    em auto: sem estas duas linhas o MAME usa os controles padrao dele, nao os
+    do Button mapping (os 6 botoes do painel). Quem grava os botoes chega aqui
+    pelo save, de onde vier (o Setup, o painel web, o hotplug de um controle,
+    a atualizacao do sistema), entao e aqui que as linhas ficam certas. Sem o
+    mame.ini (o GroovyMAME fora da imagem) nao ha o que ligar. Devolve True
+    quando mudou o arquivo."""
+    path = path or MAME_INI
+    try:
+        with open(path, encoding='utf-8') as f:
+            lines = f.read().split('\n')
+    except OSError:
+        return False
+    changed = False
+    for key, value in (('ctrlr', 'fliperos'), ('joystickprovider', 'sdljoy')):
+        for i, line in enumerate(lines):
+            parts = line.split()
+            if parts and parts[0] == key:
+                if parts[1:] != [value]:
+                    lines[i] = '%-25s %s' % (key, value)
+                    changed = True
+                break
+        else:
+            # Sem a chave: no fim, antes da quebra de linha final.
+            lines.insert(len(lines) - 1 if lines and lines[-1] == '' else len(lines), '%-25s %s' % (key, value))
+            changed = True
+    if not changed:
+        return False
+    try:
+        write(path, '\n'.join(lines), USER_ID)
+    except OSError:
+        return False
+    return True
 
 
 def write_bytes(path, data, owner=None):
@@ -1757,6 +1796,8 @@ def cmd_save(args):
             os.remove(path)
     table = read_games(GAME_BUTTONS) if layouts else {}
     write(MAME_CTRLR, mame_cfg(players, names, layouts, table), USER_ID)
+    if mame_ini_wire():
+        print(MAME_INI)
     hypseus_save(players)
     attract = attract_save(players, devices, kinds)
     if attract:
