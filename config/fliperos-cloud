@@ -10,7 +10,7 @@
 #                                           webdav  url user pass      sftp  host port user pass
 #                                           mega    user pass          dropbox  token (o JSON do rclone; o Google Drive so por "google start")
 #   fliperos-cloud forget                 tira o remoto (o que esta na nuvem fica la)
-#   fliperos-cloud auto on|off            sincroniza sozinho ao fechar cada jogo
+#   fliperos-cloud auto on|off            sincroniza sozinho ao fechar cada jogo (ligado por padrao)
 #   fliperos-cloud what LISTA             o que sincronizar: hiscores,saves,config
 #                                         (config e tudo o que se configura e se usa: os
 #                                         emuladores, os frontends, os jogos jogados e os
@@ -280,6 +280,12 @@ copy_run() {
 }
 
 state_get() { sed -n "s/^$1=//p" "$STATE" 2> /dev/null | tail -1; }
+# O automatico vem ligado: so fica desligado se a pessoa o desligou.
+auto_get() {
+  local v
+  v=$(state_get auto)
+  echo "${v:-on}"
+}
 state_set() {
   local tmp
   mkdir -p "${STATE%/*}"
@@ -436,7 +442,7 @@ cmd_sync() {
 cmd_watch() {
   local pid=$1 now groups last_config
   [[ $pid =~ ^[0-9]+$ ]] || return 2
-  [[ $(state_get auto) == on ]] && installed && [[ -n $(remote_kind) ]] || return 0
+  [[ $(auto_get) == on ]] && installed && [[ -n $(remote_kind) ]] || return 0
   # Um vigia por jogo: o fliperos-kms-run e o fliperos-x11-run de um mesmo
   # jogo (o GroovyMAME passa pelos dois) tem o mesmo PID.
   # (global: o trap do EXIT roda depois da funcao)
@@ -678,7 +684,7 @@ google_revoke() {
 case ${1:-} in
   status)
     printf 'installed=%s\nremote=%s\nauto=%s\nwhat=%s\nlast=%s\nresult=%s\n' "$(installed && echo 1 || echo 0)" \
-      "$(remote_kind)" "$(state_get auto || echo off)" "$(state_get what)" "$(state_get last)" "$(state_get result)"
+      "$(remote_kind)" "$(auto_get)" "$(state_get what)" "$(state_get last)" "$(state_get result)"
     printf 'device=%s\naccount=%s\n' "$(google_client > /dev/null && echo 1 || echo 0)" "$(state_get account)"
     ;;
   remote) cmd_remote "${2:-}" ;;
@@ -704,7 +710,7 @@ case ${1:-} in
     # Ao sair do Setup: com o automatico ligado e as configuracoes na lista,
     # envia as configuracoes agora (sem esperar o dia do vigia). O intervalo
     # de 2 minutos entre passadas continua valendo.
-    [[ $(state_get auto) == on ]] && installed && [[ -n $(remote_kind) ]] || exit 0
+    [[ $(auto_get) == on ]] && installed && [[ -n $(remote_kind) ]] || exit 0
     state_get what | grep -qE '(^|,)config(,|$)' || [[ -z $(state_get what) ]] || exit 0
     cmd_sync push config auto > /dev/null
     ;;
