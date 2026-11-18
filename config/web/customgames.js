@@ -439,6 +439,23 @@ function cgRenderInstall() {
   });
   const send = el("button", { type: "button", class: "btn small", title: t("cg_zip_name_rule") }, icon("g-upload"), t("cg_send_zip"));
   send.addEventListener("click", () => zipInput.click());
+  const drop = el("div", { class: "cg-drop", tabindex: "0", role: "button", title: t("cg_zip_name_rule") },
+    icon("g-upload"), el("strong", {}, t("cg_drop_title")), el("span", { class: "dim" }, t("cg_drop_sub")));
+  drop.addEventListener("click", () => zipInput.click());
+  drop.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); zipInput.click(); } });
+  let depth = 0;
+  drop.addEventListener("dragenter", (ev) => { ev.preventDefault(); depth++; drop.classList.add("over"); });
+  drop.addEventListener("dragover", (ev) => { ev.preventDefault(); });
+  drop.addEventListener("dragleave", () => { if (--depth <= 0) { depth = 0; drop.classList.remove("over"); } });
+  drop.addEventListener("drop", async (ev) => {
+    ev.preventDefault();
+    depth = 0;
+    drop.classList.remove("over");
+    const files = [...(ev.dataTransfer ? ev.dataTransfer.files : [])];
+    for (const f of files) await cgUploadZip(f);
+    cgLoad().catch(() => {});
+  });
+  if (!cg.el.progress) cg.el.progress = el("div", { class: "cg-progress" });
   const fresh = rows.filter((p) => p.state === "new" || p.state === "update");
   const bar = el("div", { class: "cg-bar" }, send, zipInput);
   if (fresh.length > 1) {
@@ -466,7 +483,7 @@ function cgRenderInstall() {
     cg.el.pkgGrid = el("div", { class: "cg-cards" });
     cg.el.pkgPager = el("nav", { class: "cg-pager", "aria-label": t("cg_pkg_pages") });
   }
-  box.replaceChildren(el("p", { class: "dim cg-folder" }, t("cg_packages_where").replace("%s", folder)), bar,
+  box.replaceChildren(el("p", { class: "dim cg-folder" }, t("cg_packages_where").replace("%s", folder)), drop, cg.el.progress, bar,
     ...(rows.length ? [cg.el.pkgTools, cg.el.pkgGrid, cg.el.pkgPager] : [el("p", { class: "dim cg-empty" }, t("cg_packages_none"))]));
   // O zip que acabou de chegar (Criar pacote, Enviar): a pagina dele.
   if (cg.highlight) {
@@ -645,6 +662,28 @@ function cgPkgButton(label, fn, kind) {
   return b;
 }
 
+// Uma linha de progresso (envio ou instalacao, PortProton incluido) no painel
+// da aba Instalar pacotes: barra + texto; end() deixa o resultado e some.
+function cgProgress(label) {
+  const bar = meter(0);
+  const text = el("span", { class: "dim" }, "");
+  const row = el("div", { class: "cg-prow" }, el("div", { class: "cg-pname" }, label), bar, text);
+  if (!cg.el.progress) cg.el.progress = el("div", { class: "cg-progress" });
+  cg.el.progress.append(row);
+  return {
+    set(pct, msg) {
+      bar.firstChild.style.width = Math.max(0, Math.min(100, pct || 0)) + "%";
+      if (msg != null) text.textContent = msg;
+    },
+    end(ok, msg) {
+      bar.firstChild.style.width = "100%";
+      row.classList.add(ok ? "ok" : "bad");
+      text.textContent = msg || "";
+      setTimeout(() => row.remove(), ok ? 4000 : 12000);
+    },
+  };
+}
+
 // Instala um pacote no grupo; o que ja esta nele pergunta se troca. quiet:
 // sem perguntar antes nem depois (o "instalar todos" pergunta no fim).
 async function cgInstallPackage(p, group, { replace = false, quiet = false } = {}) {
@@ -662,8 +701,12 @@ async function cgInstallPackage(p, group, { replace = false, quiet = false } = {
   } else if (!quiet && !there && !(await ask({ title: p.name, text: t("cg_install") + ": " + p.name + " → " + group, yes: t("cg_install") }))) {
     return false;
   }
-  const task = await cgTask("/api/customgames/install", { zip: p.zip, group, replace, portproton: pp });
+  const prog = cgProgress(t("cg_installing").replace("%s", p.name));
+  prog.set(0, "…");
+  const task = await cgTask("/api/customgames/install", { zip: p.zip, group, replace, portproton: pp },
+    (tk) => prog.set(tk.pct || 0, (tk.step || "") + (tk.pct ? " · " + Math.round(tk.pct) + "%" : "")));
   const ok = !!task && task.rc === 0;
+  prog.end(ok, ok ? t("cg_installed_ok").replace("%s", p.name) : (task && (task.error || task.last)) || t("task_fail"));
   if (ok) cg.installGroup = group;
   if (ok && !quiet && (await ask({ title: p.name, text: t("cg_pkg_delete_ask").replace("%s", cgBaseName(p)).replace("%s", group),
     yes: t("cg_pkg_delete"), no: t("cg_pkg_keep") }))) {
@@ -706,10 +749,16 @@ async function cgUploadZip(file) {
     toast(t("cg_zip_name").replace("%s", file.name).replace("%s", stem + CG_SUFFIX), "bad");
     return false;
   }
-  toast(t("cg_uploading").replace("%s", file.name));
+  const prog = cgProgress(t("cg_uploading").replace("%s", file.name));
+  prog.set(0, "0%");
   const status = await cgPostFile("/api/upload?root=roms&path=custom-packages&name=" + encodeURIComponent(file.name) +
-    "&overwrite=1", file);
-  if (status !== 200) { toast(file.name + ": " + (status || "network error"), "bad"); return false; }
+    "&overwrite=1", file, (frac) => prog.set(frac * 100, Math.round(frac * 100) + "%"));
+  if (status !== 200) {
+    prog.end(false, String(status || "network error"));
+    toast(file.name + ": " + (status || "network error"), "bad");
+    return false;
+  }
+  prog.end(true, t("cg_zip_sent").replace("%s", file.name));
   toast(t("cg_zip_sent").replace("%s", file.name), "ok");
   cg.highlight = (cg.info.packages_dir || "") + "/" + file.name;
   return true;

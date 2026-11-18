@@ -649,3 +649,13 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-tray-item svg { width: 18px; height: 18px; }
 .cg-tray-item b { display: block; font-size: 13.5px; font-weight: 650; }
 .cg-tray-item small { display: block; font-size: 12px; line-height: 1.35; color: var(--dim); }
+
+.cg-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px 16px; margin-bottom: 14px; border: 2px dashed var(--border, #555); border-radius: 10px; cursor: pointer; text-align: center; transition: background .15s, border-color .15s; }
+.cg-drop svg.g { width: 22px; height: 22px; }
+.cg-drop:hover, .cg-drop:focus-visible, .cg-drop.over { border-color: var(--green); background: var(--bg-deep); outline: none; }
+.cg-progress:empty { display: none; }
+.cg-progress { display: grid; gap: 8px; margin-bottom: 14px; }
+.cg-prow { padding: 8px 10px; border-radius: 8px; background: var(--bg-deep); }
+.cg-prow .meter { margin: 4px 0; }
+.cg-prow.bad .meter > div { background: var(--red); }
+.cg-pname { font-weight: 700; overflow-wrap: anywhere; }

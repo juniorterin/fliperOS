@@ -255,6 +255,7 @@ Object.assign(TEXT.en, {
   cg_readonly: "Name and group of a Windows or Linux game stay (the game folder has them): make a package and install it again to change them.",
   cg_folder_title: "Choose a folder", cg_use_folder: "Use this folder", cg_up: "Up", cg_places: "Disks and folders",
   cg_zip_group: "Group of the package", cg_zip_sent: "%s sent: installing…",
+  cg_drop_title: "Drop packages here", cg_drop_sub: "or click to choose (.fliperos-customgame.zip)", cg_installing: "Installing %s", cg_installed_ok: "%s installed",
 });
 
 Object.assign(TEXT.en, {
@@ -544,6 +545,7 @@ Object.assign(TEXT.pt, {
   cg_readonly: "O nome e o grupo de um jogo do Windows ou do Linux ficam (a pasta do jogo leva eles): faça um pacote e instale de novo para trocar.",
   cg_folder_title: "Escolher uma pasta", cg_use_folder: "Usar esta pasta", cg_up: "Subir", cg_places: "Discos e pastas",
   cg_zip_group: "Grupo do pacote", cg_zip_sent: "%s enviado: instalando…",
+  cg_drop_title: "Solte os pacotes aqui", cg_drop_sub: "ou clique para escolher (.fliperos-customgame.zip)", cg_installing: "Instalando %s", cg_installed_ok: "%s instalado",
 });
 
 Object.assign(TEXT.pt, {
