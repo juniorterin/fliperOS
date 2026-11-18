@@ -7516,6 +7516,74 @@ class DeflickerTests(unittest.TestCase):
         self.assertNotIn('LD_PRELOAD', launch)
         self.assertTrue(picom)
 
+    def renderer_picks(self, driver, device='0x0000', icd=(), conf='', env=None):
+        """O que o config/fliperos-wine-renderer escolhe para uma placa de mentira (sysfs e os ICDs do Vulkan)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            card = tmp / 'drm/card0'
+            (card / 'device').mkdir(parents=True)
+            (tmp / 'drm/card0-VGA-1').mkdir()
+            (tmp / 'drm/card0-VGA-1/status').write_text('connected\n')
+            (tmp / 'drm/card1-HDMI-A-1').mkdir()
+            (tmp / 'drm/card1-HDMI-A-1/status').write_text('disconnected\n')
+            (tmp / 'drivers' / driver).mkdir(parents=True)
+            (card / 'device/driver').symlink_to(tmp / 'drivers' / driver)
+            (card / 'device/device').write_text(device + '\n')
+            (tmp / 'icd').mkdir()
+            for name in icd:
+                (tmp / 'icd' / name).write_text('{}')
+            (tmp / 'fliperos.conf').write_text(conf)
+            e = dict(os.environ, FLIPEROS_DRM_SYSFS=str(tmp / 'drm'), FLIPEROS_VULKAN_ICD_DIR=str(tmp / 'icd'),
+                     FLIPEROS_CONF=str(tmp / 'fliperos.conf'))
+            e.pop('FLIPEROS_WINE_RENDERER', None)
+            e.update(env or {})
+            return subprocess.run(['bash', str(ROOT / 'config/fliperos-wine-renderer')], capture_output=True, text=True,
+                                  env=e).stdout.strip()
+
+    def test_wine_renderer_follows_the_gpu_driver(self):
+        # PortProton e os Wine: Vulkan (DXVK e VKD3D) onde a placa tem, OpenGL (WineD3D) onde nao.
+        self.assertEqual(self.renderer_picks('amdgpu', icd=['radeon_icd.x86_64.json']), 'vulkan')
+        self.assertEqual(self.renderer_picks('amdgpu'), 'opengl')                   # sem o Mesa Vulkan
+        self.assertEqual(self.renderer_picks('radeon', icd=['radeon_icd.x86_64.json']), 'opengl')   # o radeon nao tem Vulkan
+        self.assertEqual(self.renderer_picks('nvidia', icd=['nvidia_icd.json']), 'vulkan')
+        self.assertEqual(self.renderer_picks('nouveau', icd=['nvidia_icd.json']), 'opengl')
+        # Intel: so da Broadwell (id 0x1600) em diante; Ironlake, Ivy Bridge e Haswell ficam no OpenGL.
+        self.assertEqual(self.renderer_picks('i915', '0x0042', icd=['intel_icd.x86_64.json']), 'opengl')
+        self.assertEqual(self.renderer_picks('i915', '0x0166', icd=['intel_icd.x86_64.json']), 'opengl')
+        self.assertEqual(self.renderer_picks('i915', '0x0412', icd=['intel_icd.x86_64.json']), 'opengl')
+        self.assertEqual(self.renderer_picks('i915', '0x1912', icd=['intel_icd.x86_64.json']), 'vulkan')
+        self.assertEqual(self.renderer_picks('i915', '0x1912'), 'opengl')
+        self.assertEqual(self.renderer_picks('vfio-pci', icd=['radeon_icd.x86_64.json']), 'opengl')
+        # A pessoa pode forcar um dos dois (fliperos.conf ou o ambiente); auto segue o driver.
+        self.assertEqual(self.renderer_picks('radeon', conf='wine_renderer=vulkan\n'), 'vulkan')
+        self.assertEqual(self.renderer_picks('amdgpu', icd=['radeon_icd.x86_64.json'], conf='wine_renderer=opengl\n'), 'opengl')
+        self.assertEqual(self.renderer_picks('amdgpu', icd=['radeon_icd.x86_64.json'], conf='wine_renderer=auto\n'), 'vulkan')
+        self.assertEqual(self.renderer_picks('radeon', env={'FLIPEROS_WINE_RENDERER': 'vulkan'}), 'vulkan')
+        # O seletor vai na imagem junto dos outros.
+        self.assertRegex(ROOTFS, r' fliperos-wine-renderer[^\n]*; do')
+
+    def test_wine_games_pick_dxvk_or_wined3d_by_the_gpu(self):
+        # O fliperos-x11-client poe as sobreposicoes de DLL do Wine: o DXVK e o VKD3D do prefixo no Vulkan
+        # (n,b: sem eles, o proprio Wine), o WineD3D no OpenGL (b); so em jogo do Wine.
+        with tempfile.TemporaryDirectory() as tmp:
+            picker = Path(tmp) / 'renderer'
+            for answer in ('vulkan', 'opengl'):
+                picker.write_text('#!/bin/sh\necho %s\n' % answer)
+                picker.chmod(0o755)
+                extra = {'FLIPEROS_WINE_RENDERER_BIN': str(picker)}
+                launch = self.client_launch(['bash', '-c', 'wine ~/games/pang/pang.exe'], extra=extra)[0]
+                dll = 'n\\,b' if answer == 'vulkan' else 'b'      # (o printf %q escapa a virgula)
+                self.assertIn('env WINEDLLOVERRIDES=dxgi\\,d3d9\\,d3d10core\\,d3d11\\,d3d12=%s ' % dll, launch)
+                # Um emulador comum (sem Wine) fica como estava.
+                self.assertNotIn('WINEDLLOVERRIDES', self.client_launch(['flycast', 'game.zip'], extra=extra)[0])
+            # O que a pessoa ja pos no WINEDLLOVERRIDES vai junto; a sala do Fightcade leva o padrao dela.
+            launch = self.client_launch(['wine', 'a.exe'], extra=dict(extra, WINEDLLOVERRIDES='winemenubuilder.exe=d'))[0]
+            self.assertIn('WINEDLLOVERRIDES=winemenubuilder.exe=d\\;dxgi', launch)
+            self.assertIn('WINEDLLOVERRIDES=mscoree\\,mshtml=\\;dxgi', self.client_launch(['fightcade'], extra=extra)[0])
+            # Sem o seletor instalado (a imagem de antes), nada muda.
+            self.assertNotIn('WINEDLLOVERRIDES', self.client_launch(['wine', 'a.exe'], extra={
+                'FLIPEROS_WINE_RENDERER_BIN': str(Path(tmp) / 'none')})[0])
+
     def test_screen_bigger_than_the_mode_scales_down(self):
         # O 240p hack (FLIPEROS_X11_SCREEN do fliperos-x11-run): o Switchres
         # abre o proprio client com --scale antes do jogo, e so com a tela pedida.

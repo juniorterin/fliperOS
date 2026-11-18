@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# O renderizador dos jogos do Windows (PortProton, Wine e Wine Staging), pelo
+# driver da placa de video que tem o CRT:
+#
+#   fliperos-wine-renderer     imprime "vulkan" (DXVK e VKD3D-Proton) ou
+#                              "opengl" (o WineD3D do Wine, sem Vulkan)
+#
+#   amdgpu   vulkan (o radv), se o Mesa Vulkan esta instalado;
+#   radeon   opengl: o radeon nao tem Vulkan;
+#   nvidia   vulkan (o driver proprietario traz o dele); o nouveau, opengl;
+#   i915/xe  vulkan so da Broadwell (Gen8, id 0x1600) em diante e com o
+#            Mesa Vulkan: Ironlake, Sandy Bridge, Ivy Bridge e Haswell
+#            ficam no OpenGL;
+#   outro    opengl.
+#
+# O que a pessoa escolheu no Setup (Video Setup > video driver: radeon ou
+# amdgpu) e o que o kernel carregou na placa: o driver da placa ligada ao
+# CRT e o que vale. wine_renderer=vulkan|opengl no fliperos.conf (ou
+# FLIPEROS_WINE_RENDERER) forca um dos dois; auto (o padrao) segue o driver.
+# Quem usa: o fliperos-x11-client (as sobreposicoes de DLL do Wine) e o
+# fliperos-customgame (o PW_VULKAN_USE do PortProton).
+set -u
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+sysfs=${FLIPEROS_DRM_SYSFS:-/sys/class/drm}
+icd_dir=${FLIPEROS_VULKAN_ICD_DIR:-/usr/share/vulkan/icd.d}
+
+choice=${FLIPEROS_WINE_RENDERER:-}
+if [[ -z $choice && -f $conf ]]; then
+  choice=$(sed -n 's/^wine_renderer=//p' "$conf" 2> /dev/null | tail -n 1)
+fi
+case $choice in
+  vulkan | opengl)
+    echo "$choice"
+    exit 0
+    ;;
+esac
+
+# O driver do kernel da placa ligada ao CRT (a primeira saida conectada).
+driver="" device=""
+for status in "$sysfs"/card[0-9]*-*/status; do
+  [[ $(cat "$status" 2> /dev/null) == connected ]] || continue
+  card=${status%/status}
+  card=${card##*/}
+  link=$(readlink -f "$sysfs/${card%%-*}/device/driver" 2> /dev/null) || link=""
+  driver=${link##*/}
+  device=$(cat "$sysfs/${card%%-*}/device/device" 2> /dev/null) || device=""
+  break
+done
+
+# O Mesa (ou o driver da NVIDIA) tem o Vulkan dessa placa instalado?
+has_icd() {
+  local f
+  for f in "$icd_dir"/$1; do
+    [[ -f $f ]] && return 0
+  done
+  return 1
+}
+
+renderer=opengl
+case $driver in
+  amdgpu) has_icd 'radeon_icd*.json' && renderer=vulkan ;;
+  nvidia) has_icd 'nvidia_icd*.json' && renderer=vulkan ;;
+  i915 | xe)
+    if has_icd 'intel_icd*.json' && [[ $device =~ ^0x[0-9a-fA-F]{4}$ ]] && ((device >= 0x1600)); then
+      renderer=vulkan
+    fi
+    ;;
+esac
+echo "$renderer"

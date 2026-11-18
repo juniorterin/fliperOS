@@ -4370,6 +4370,65 @@ class CustomGamesTests(Base):
                             cfg="name=Bad\nplatform=windows\nexe=bin/pang.exe\nrunner=dosbox\n")
         self.assertIn("runner_bad", self.env.out("customgames_pending", dict(e, Z=str(bad))))
 
+    def test_portproton_renders_with_opengl_or_vulkan_by_the_gpu_driver(self):
+        # O PW_VULKAN_USE do .ppdb de cada .exe segue a placa do CRT (fliperos-wine-renderer): sem Vulkan
+        # (radeon, nouveau, Intel antiga) vai para 0 (WineD3D, OpenGL), com Vulkan para 2 (DXVK e
+        # VKD3D); um Vulkan que o pacote ja pediu (1 ou 6) fica, e so grava quando o valor muda.
+        media, games, e = self.pkg_env()
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip")
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(zip_)))
+        cfg = self.roms / "custom" / "PC" / "Pang.cfg"
+        exe = games / "PC" / "Pang" / "bin" / "pang.exe"
+        tools = self.env.dir / "pp"
+        (tools / "bin").mkdir(parents=True)
+        pp = tools / "bin" / "fliperos-portproton"
+        pp.write_text('#!/bin/sh\n[ "$1" = check ] && exit 0\necho "$*" >> %s/calls\n'
+                      '[ "$1" = edit-db ] && printf "export %%s\\n" "$3" > "$2.ppdb"\nexit 0\n' % tools)
+        pp.chmod(0o755)
+        picker = tools / "renderer"
+
+        def run(answer, ppdb=None):
+            picker.write_text("#!/bin/sh\necho %s\n" % answer)
+            picker.chmod(0o755)
+            (tools / "calls").unlink(missing_ok=True)
+            Path(str(exe) + ".ppdb").unlink(missing_ok=True)
+            if ppdb is not None:
+                Path(str(exe) + ".ppdb").write_text(ppdb)
+            env = dict(os.environ, FLIPEROS_CUSTOMGAME_KEYS="off", FLIPEROS_USER="nobody-here", FLIPEROS_BIN=str(tools / "bin"),
+                       FLIPEROS_WINE_RENDERER_BIN=str(picker))
+            r = subprocess.run(["python3", e["CUSTOM_GAMES_TOOL"], "run", str(cfg)], capture_output=True, text=True, env=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            calls = (tools / "calls").read_text().splitlines() if (tools / "calls").exists() else []
+            return [c.split()[0] + (" " + c.split()[-1] if c.startswith("edit-db") else "") for c in calls], r.stderr
+
+        # Sem Vulkan: o OpenGL (0); com ele ja certo, nada e gravado.
+        calls, err = run("opengl")
+        self.assertEqual(calls, ["edit-db PW_VULKAN_USE=0", "run"])
+        self.assertIn("PW_VULKAN_USE=0 (opengl)", err)
+        self.assertEqual(run("opengl", "export PW_VULKAN_USE=0\n")[0], ["run"])
+        # Um Vulkan do pacote vai para o OpenGL numa placa sem Vulkan.
+        self.assertEqual(run("opengl", "export PW_VULKAN_USE=2\n")[0], ["edit-db PW_VULKAN_USE=0", "run"])
+        # Com Vulkan: o DXVK e o VKD3D estaveis (2); o 1 e o 6 do pacote ficam; o 0 de antes (outra placa) muda.
+        self.assertEqual(run("vulkan")[0], ["edit-db PW_VULKAN_USE=2", "run"])
+        self.assertEqual(run("vulkan", "export PW_VULKAN_USE=6\n")[0], ["run"])
+        self.assertEqual(run("vulkan", "PW_VULKAN_USE=1\n")[0], ["run"])
+        self.assertEqual(run("vulkan", "export PW_VULKAN_USE=0\n")[0], ["edit-db PW_VULKAN_USE=2", "run"])
+        # Sem o seletor (a imagem de antes) ou com uma resposta estranha, o .ppdb nao e tocado.
+        self.assertEqual(run("", "export PW_WINE_USE=WINE_LG\n")[0], ["run"])
+        # O Wine do sistema nao passa por aqui (o x11-client poe as sobreposicoes de DLL).
+        text = re.sub(r"(?m)^runner=.*\n", "", cfg.read_text()) + "runner=wine\n"
+        cfg.write_text(text)
+        wine = tools / "wine"
+        wine.write_text('#!/bin/sh\necho wine "$@" >> %s/calls\n' % tools)
+        wine.chmod(0o755)
+        (tools / "calls").unlink(missing_ok=True)
+        picker.write_text("#!/bin/sh\necho opengl\n")
+        env = dict(os.environ, FLIPEROS_CUSTOMGAME_KEYS="off", FLIPEROS_USER="nobody-here", FLIPEROS_BIN=str(tools / "bin"),
+                   FLIPEROS_WINE_RENDERER_BIN=str(picker), PATH="%s:%s" % (tools, os.environ["PATH"]))
+        subprocess.run(["python3", e["CUSTOM_GAMES_TOOL"], "run", str(cfg)], capture_output=True, text=True, env=env)
+        self.assertEqual((tools / "calls").read_text().split()[0], "wine")
+        self.assertNotIn("edit-db", (tools / "calls").read_text())
+
     def test_a_bad_zip_is_refused_and_nothing_is_written(self):
         media, games, e = self.pkg_env()
         custom = self.roms / "custom"

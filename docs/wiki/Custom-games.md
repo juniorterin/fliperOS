@@ -249,6 +249,17 @@ Without PortProton (you said no, or it failed), a Windows package can still be i
 | Wine | the system's Wine | Setup > Games > Extras > Wine |
 | Wine Staging | the newest Wine from WineHQ, with fixes not in Wine yet (it takes the place of Wine) | Setup > Games > Extras > Wine Staging |
 
+**OpenGL or Vulkan.** Whatever runs the game, it draws with **Vulkan** (DXVK for Direct3D 9 to 11, VKD3D-Proton for 12) or with **OpenGL** (Wine's own WineD3D) according to the driver of the video card that has the CRT, the one you chose in Video Setup:
+
+| Driver of the CRT's card | Renders with |
+|---|---|
+| **amdgpu** | Vulkan (when Mesa's Vulkan is installed) |
+| **radeon** | OpenGL: the radeon driver has no Vulkan |
+| **NVIDIA** (proprietary) | Vulkan; with nouveau, OpenGL |
+| **Intel** | Vulkan from Broadwell on (device id 0x1600 and later); Ironlake, Sandy Bridge, Ivy Bridge and Haswell use OpenGL |
+
+PortProton gets it as `PW_VULKAN_USE` in the game's `.ppdb` (0 = OpenGL, 2 = DXVK and VKD3D-Proton): a card without Vulkan always goes to 0, and with Vulkan a game that has no Vulkan choice goes to 2 (a 1 or a 6 that a package brings stays). It is written only when the value changes. Wine and Wine Staging (and the Fightcade room) get it from the DLL overrides FliperOS sets when the game opens: with Vulkan, the DXVK and VKD3D-Proton DLLs of the prefix are used when it has them; with OpenGL, Wine's own are, even if the prefix has DXVK. `wine_renderer=vulkan` or `wine_renderer=opengl` in `fliperos.conf` forces one of them (`auto`, the default, follows the driver).
+
 Some games only open, or run better, with one of them. The `.ppdb` only goes with PortProton. When the game's runner isn't installed on a cabinet, the game opens with the first of the others that is (PortProton, then Wine, then Wine Staging), and the game's log says so.
 
 ## The controller as a keyboard
