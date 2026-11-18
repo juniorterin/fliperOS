@@ -3282,10 +3282,38 @@ def logo_source(name):
     return got if isinstance(got, pygame.Surface) else None
 
 
+_group_icons = {}        # pasta do grupo -> (quando foi lido, nome do icone ou None)
+GROUP_ICON_TTL = 4.0     # segundos entre uma leitura e outra do GRUPO/.icon
+
+
+def group_icon(cat):
+    """O desenho que a pessoa escolheu para um grupo de jogos custom (o
+    GRUPO/.icon: Setup, painel web), ou None. Lido de tempos em tempos: o
+    azulejo o pede a cada quadro."""
+    folder = cat.get("folder") or ""
+    if not str(cat.get("key", "")).startswith("custom/") or not folder:
+        return None
+    now = time.monotonic()
+    seen = _group_icons.get(folder)
+    if seen is None or now - seen[0] > GROUP_ICON_TTL:
+        name = None
+        try:
+            with open(os.path.join(folder, ".icon"), encoding="utf-8") as f:
+                name = f.readline().strip()
+        except OSError:
+            pass
+        _group_icons[folder] = seen = (now, name if name and re.fullmatch(r"[a-z0-9-]{1,24}", name) and name in T.ICONS else None)
+    return seen[1]
+
+
 def system_icon(cat):
-    """O icone do programa da pasta (os de gui/icons)."""
+    """O icone do programa da pasta (os de gui/icons); o de um grupo de jogos
+    custom e o que a pessoa escolheu."""
     if cat.get("key") == "@arcade":
         return "frontend"         # (o joystick do FliperOS, nao o logo de um frontend)
+    chosen = group_icon(cat)
+    if chosen:
+        return chosen
     exe = (cat.get("exe", "") + " " + cat.get("args", "")).lower()
     for name in ("groovymame", "flycast", "pcsx2x6", "pcsx2", "dolphin", "model2", "openbor", "retroarch", "fightcade"):
         if name in exe:

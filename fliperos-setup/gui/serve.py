@@ -114,8 +114,10 @@ class Server:
         if kind == "screens":
             return tuple((flags(data) + [False, False])[:2])
         if kind == "games":
-            n, _, new = data.partition(",")
-            return (int(n) if n.isdigit() else 0, int(new) if new.isdigit() else 0)
+            # "jogos,novos[,icone]": o desenho que a pessoa escolheu para o grupo.
+            n, _, rest = data.partition(",")
+            new, _, icon = rest.partition(",")
+            return (int(n) if n.isdigit() else 0, int(new) if new.isdigit() else 0, icon.strip())
         if kind == "image":
             path, _, label = data.rpartition(";")
             return (path, label.upper())

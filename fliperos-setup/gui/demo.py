@@ -329,8 +329,8 @@ def customgames():
     # Setup > Games > Custom games: os grupos com quantos jogos tem (e os
     # pacotes novos de cada um, em verde).
     return FilterBoard("Custom games", [
-        ("group:PC games", "PC games", "games", (12, 2), "The games of PC games, and packages to install in it."),
-        ("group:Linux", "Linux", "games", (3, 0), "The games of Linux, and packages to install in it."),
+        ("group:PC games", "PC games", "games", (12, 2, "desktop"), "The games of PC games, and packages to install in it."),
+        ("group:Linux", "Linux", "games", (3, 0, "chip"), "The games of Linux, and packages to install in it."),
         ("group:Beat em ups of the nineties", "Beat em ups of the nineties", "games", (1, 0),
          "The games of Beat em ups of the nineties."),
         ("+group", "Add group", "action", "+ GROUP", "A group is a system in the frontends (PC games...)."),

@@ -398,7 +398,7 @@ customgames_remove_folder() {
 customgames_group_own() {
   local low=${1,,}
   case $low in
-    *.sh | *.cfg | *.key | *.tmp | *.new | *.part | thumbs.db | desktop.ini | .ds_store | ._* | .directory) return 0 ;;
+    *.sh | *.cfg | *.key | *.tmp | *.new | *.part | thumbs.db | desktop.ini | .ds_store | ._* | .directory | .icon) return 0 ;;
   esac
   return 1
 }
@@ -802,6 +802,50 @@ customgames_groups() {
   return 0
 }
 
+# ── O icone de cada grupo ──
+# GRUPO/.icon guarda o nome de um desenho (os de gui/theme.py, os mesmos
+# px-NOME do painel web): o azulejo do grupo no Setup, o cabecalho dele no
+# painel e o azulejo dele na tira do frontend o mostram. Sem o arquivo, o
+# grupo fica com o desenho padrao. "nome|rotulo", na ordem do seletor.
+CUSTOM_GAMES_ICONS=(
+  "games|Gamepad" "customgames|Game box" "arcade|Arcade cabinet" "pad|Joypad" "joysticks|Joystick" "guncon|Light gun"
+  "axes|Wheel" "keyboard|Keyboard" "emulators|Emulator" "video|Monitor" "audio|Sound" "disk|Disk" "chip|Chip"
+  "desktop|Desktop PC" "network|Network" "cloud|Cloud" "lab|Lab flask" "physical|Disc" "achievements|Trophy"
+)
+
+# customgames_icon_valid NOME: um dos desenhos da lista.
+customgames_icon_valid() {
+  local entry
+  for entry in "${CUSTOM_GAMES_ICONS[@]}"; do
+    [[ ${entry%%|*} == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# customgames_group_icon GRUPO imprime o desenho escolhido (nada: o padrao).
+customgames_group_icon() {
+  local icon
+  icon=$(head -n 1 "$CUSTOM_GAMES_DIR/$1/.icon" 2> /dev/null | tr -d '[:space:]')
+  customgames_icon_valid "$icon" && printf '%s\n' "$icon"
+  return 0
+}
+
+# customgames_group_icon_set GRUPO [ICONE] grava o desenho do grupo (sem ICONE
+# o grupo volta ao padrao). Status 2: grupo ou desenho que nao serve.
+customgames_group_icon_set() {
+  local group=$1 icon=${2:-} file
+  customgames_valid_name "$group" && [[ -d $CUSTOM_GAMES_DIR/$group ]] || return 2
+  file=$CUSTOM_GAMES_DIR/$group/.icon
+  if [[ -z $icon ]]; then
+    rm -f -- "$file"
+    return 0
+  fi
+  customgames_icon_valid "$icon" || return 2
+  printf '%s\n' "$icon" > "$file.new" && mv -f "$file.new" "$file" || return 1
+  chown "$FLIPEROS_USER:" "$file" 2> /dev/null
+  return 0
+}
+
 # customgames_list imprime "grupo|nome|modo|comando" de cada entrada. Um .sh
 # posto a mao, sem o cabecalho, aparece com o modo e o comando vazios.
 customgames_list() {
@@ -895,7 +939,7 @@ customgames_describe() {
   customgames_packages_migrate
   customgames_packages_dir
   while IFS= read -r group; do
-    customgames_out group "$group" "$(customgames_count "$group")"
+    customgames_out group "$group" "$(customgames_count "$group")" "$(customgames_group_icon "$group")"
   done < <(customgames_groups)
   while IFS='|' read -r group name _; do
     cfg=$(customgames_cfg "$group" "$name")
@@ -929,6 +973,9 @@ customgames_describe() {
   while IFS='|' read -r value label; do
     customgames_out control "$value" "$label"
   done < <(romclean_options controls)
+  for value in "${CUSTOM_GAMES_ICONS[@]}"; do
+    customgames_out icon "${value%%|*}" "${value#*|}"
+  done
   while IFS='|' read -r value line label; do
     customgames_out squash "$value" "$line" "$label"
   done < <(squashgames_list 2> /dev/null)
@@ -1531,7 +1578,7 @@ customgames_install_all() {
 # customgames_cli SUBCOMANDO...: o fliperos-setup --customgames.
 #   describe | check ARQ | bulk ARQ [--portproton] | edit CHAVE=VALOR... |
 #   delete GRUPO NOME [folder] | group NOME | group-info NOME |
-#   group-delete NOME [all] | media GRUPO NOME --snap ARQ... |
+#   group-icon GRUPO [ICONE] | group-delete NOME [all] | media GRUPO NOME --snap ARQ... |
 #   install ZIP GRUPO [replace] [--portproton] | install-all GRUPO |
 #   package-delete ZIP | check-create ARQ | create ARQ [replace] | test ARQ |
 #   pack GRUPO NOME | squash pack|unpack PASTA | portproton
@@ -1559,6 +1606,7 @@ customgames_cli() {
       customgames_valid_name "${1:-}" && [[ -d $CUSTOM_GAMES_DIR/$1 ]] || return 2
       customgames_group_info "$1"
       ;;
+    group-icon) customgames_group_icon_set "${1:-}" "${2:-}" ;;
     package-delete) customgames_package_delete "${1:-}" ;;
     check-create) customgames_create_check "${1:-}" ;;
     test) customgames_test "${1:-}" ;;

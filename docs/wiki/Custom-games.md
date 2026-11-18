@@ -72,6 +72,7 @@ Inside a group:
 
 - **Add by its command**: a game or program opened by a command line;
 - one tile per **game**, with its picture and the kind of game and video mode (*WIN 240P*, *LINUX 480I*, *CMD 240P*);
+- **Group icon**: the drawing of the group (see [Groups](#groups));
 - **Delete group**: the whole group (see [Groups](#groups)).
 
 A game tile opens:
@@ -86,6 +87,8 @@ A name that doesn't fit its tile runs from side to side when the tile is under t
 ## Groups
 
 A group is a folder, `~/roms/custom/<group>`, and a system in every frontend (the FliperOS frontend, Attract-Mode Plus, ES-DE, Pegasus). Group and game names can't be empty, start with a dot, or have `/` or `|`. Deleting the last game of a group removes the group when nothing else is left in its folder.
+
+**Group icon** (inside the group; in the web panel, the drawing at the start of the group's title) picks one of 19 drawings (gamepad, game box, arcade cabinet, joypad, joystick, light gun, wheel, keyboard, emulator, monitor, sound, disk, chip, desktop PC, network, cloud, lab flask, disc, trophy). The group's tile in the Setup, its title in the web panel and its tile in the frontend's ribbon (when the group has no logo of its own) show it. The choice is the line in `~/roms/custom/<group>/.icon`; without it the group keeps the default drawing.
 
 **Delete group** (inside the group; in the web panel, the bin next to the group's name) removes the whole group, even an empty one or one whose folder holds other files:
 

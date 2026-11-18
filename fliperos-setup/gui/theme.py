@@ -1524,6 +1524,8 @@ for _alias, _name in {
     # novo, o jogo pelo comando, as informacoes (o modo, a categoria, os
     # controles, os jogadores) e a midia do pacote (imagem, video, texto).
     "+create": "chds", "+package": "chds", "+all": "install", "+group": "addfolder", "+command": "edit",
+    # O desenho do grupo (Custom games > grupo > Group icon).
+    "+icon": "arcade",
     "+delete": "remove", "wipe": "remove",
     # As areas Install games e Create package (os pacotes de ~/roms/custom-packages).
     "+install": "install", "reinstall": "install", "delpkg": "remove", "fromfolder": "addfolder", "fromgame": "games",

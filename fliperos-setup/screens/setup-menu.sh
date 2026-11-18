@@ -704,7 +704,7 @@ screen_custom_games() {
     tiles=()
     for group in "${groups[@]}"; do
       n=$(customgames_count "$group")
-      tiles+=("group:$group|$group ($n games)|$group|games|$n,0|The games of $group.")
+      tiles+=("group:$group|$group ($n games)|$group|games|$n,0,$(customgames_group_icon "$group")|The games of $group.")
     done
     n=${#pending[@]}
     tiles+=("+group|Add a group|Add group|action|+ GROUP|A group is a system in the frontends (PC games...)."
@@ -775,18 +775,33 @@ screen_custom_group() {
       short=${label/Windows/Win}
       tiles+=("game:$name|$name ($label)|$name|image|$snap;${short/Command/Cmd}|$name: $label.")
     done
-    tiles+=("+delete|Delete group|Delete group|action|DELETE|Delete $group and its games."
+    tiles+=("+icon|Group icon|Group icon|action|PICK|The drawing of $group in the Setup, the web panel and the frontend ribbon."
+      "+delete|Delete group|Delete group|action|DELETE|Delete $group and its games."
       "return|Return|Return|action|BACK|")
     choice=$(UI_BOARD_ENTER=OPEN ui_board "$title" "${#names[@]} games in $group, a system in the frontends." "$last" \
       "${tiles[@]}") || return 0
     last=$choice
     case $choice in
       return) return 0 ;;
+      +icon) screen_custom_group_icon "$group" ;;
       +command) screen_custom_game_edit "" "" "$group" ;;
       +delete) screen_custom_group_delete "$group" && return 0 ;;
       game:*) screen_custom_game "$group" "${choice#game:}" ;;
     esac
   done
+}
+
+# screen_custom_group_icon GRUPO: o desenho do grupo, num carrossel com cada
+# um (o valor e o nome do icone, que o carrossel desenha). "none": o padrao.
+screen_custom_group_icon() {
+  local group=$1 title="Group icon" choice current entry
+  local -a entries=("none|No icon (the default)")
+  current=$(customgames_group_icon "$group")
+  for entry in "${CUSTOM_GAMES_ICONS[@]}"; do entries+=("$entry"); done
+  choice=$(ui_menu "$title" "The drawing of $group: its tile here and in the web panel, and in the frontend's ribbon." \
+    "${current:-none}" "${entries[@]}") || return 0
+  [[ $choice == none ]] && choice=""
+  customgames_group_icon_set "$group" "$choice"
 }
 
 # screen_custom_group_delete GRUPO: pergunta e apaga o grupo inteiro

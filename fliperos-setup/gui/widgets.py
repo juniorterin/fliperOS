@@ -1735,11 +1735,16 @@ def mini(surf, kind, data, x, y):
         pygame.draw.rect(surf, T.CYAN if wide else T.LINE, (x + 8, y + 3, 24, 16), 0 if wide else 1)
         pygame.draw.rect(surf, T.CYAN if tall else T.LINE, (x + 50, y, 16, 20), 0 if tall else 1)
     elif kind == "games":
-        # Os jogos de um grupo (Custom games) e, embaixo, os pacotes novos.
-        n, new = data
+        # Os jogos de um grupo (Custom games) e, embaixo, os pacotes novos; no
+        # canto, o desenho que a pessoa escolheu para o grupo.
+        n, new = data[0], data[1]
+        icon = data[2] if len(data) > 2 else ""
         text(surf, "%d GAME%s" % (n, "" if n == 1 else "S"), T.FG, x, y + (1 if new else 5))
         if new:
             text(surf, "%d NEW" % new, T.GREEN, x, y + 11)
+        img = T.icon(icon, 1) if icon else None
+        if img:
+            surf.blit(img, (x + 68, y + 2))
     elif kind == "image":
         # A imagem do jogo (ou um quadro vazio) e o rotulo em duas linhas.
         path, label = data

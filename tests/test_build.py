@@ -5473,6 +5473,29 @@ class FrontendDataTests(unittest.TestCase):
                              ('1989', 'Mitchell Corporation', 'Puzzle / Pang'))
             self.assertEqual(self.fd.web.custom_info(system, {'Name': 'Odd', 'file': 'Odd.sh'}), {})
 
+    def test_a_custom_group_shows_the_icon_the_person_chose_in_the_ribbon(self):
+        # GRUPO/.icon (Setup > Custom games > grupo > Group icon, ou o painel): o azulejo do grupo na tira
+        # do frontend desenha esse icone; nome que nao e de um desenho, ou de outro sistema, nao vale.
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        import feview
+        with tempfile.TemporaryDirectory() as tmp:
+            cat = {'key': 'custom/PC games', 'name': 'PC games', 'folder': tmp, 'exe': '/bin/sh', 'args': ''}
+            self.assertIsNone(feview.group_icon(cat))
+            (Path(tmp) / '.icon').write_text('pad\n')
+            feview._group_icons.clear()
+            self.assertEqual(feview.system_icon(cat), 'pad')
+            (Path(tmp) / '.icon').write_text('../x\n')
+            feview._group_icons.clear()
+            self.assertIsNone(feview.group_icon(cat))
+            (Path(tmp) / '.icon').write_text('pad\n')
+            feview._group_icons.clear()
+            self.assertIsNone(feview.group_icon({'key': 'mame', 'folder': tmp}))
+
     def test_icons_rise_when_the_year_and_maker_line_is_empty(self):
         # A lista (e a tela cheia e a grade com logo): sem ano nem fabricante a
         # linha dos dois some e os icones ocupam o lugar dela.
@@ -7786,7 +7809,8 @@ class WebSetupBase(unittest.TestCase):
             '  *) exit 0 ;;\n'
             'esac\n'
             'case "$2" in\n'
-            '  describe) printf "group\\tPC games\\t1\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
+            '  group-icon) echo "$3|$4" > TMP/group-icon.flag; [ "$4" = bad ] && exit 2; exit 0 ;;\n'
+            '  describe) printf "group\\tPC games\\t1\\tpad\\nicon\\tgames\\tGamepad\\nicon\\tpad\\tJoypad\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
             'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
             'mode\\t240p\\t640x240@60\\ngenre\\tShooter\\nsub\\tShooter / Gallery\\ngenre\\tMaze\\n'
             'control\\tjoy8\\t8-way joystick\\nportproton\\t0\\ngames\\t/h/games\\nfree\\t1000\\n'
@@ -7882,7 +7906,8 @@ class WebCustomGamesTests(WebSetupBase):
     def test_describe_is_json_with_the_choices(self):
         status, info = self.call('GET', '/api/customgames')
         self.assertEqual(status, 200)
-        self.assertEqual(info['groups'], [{'name': 'PC games', 'count': 1}])
+        self.assertEqual(info['groups'], [{'name': 'PC games', 'count': 1, 'icon': 'pad'}])
+        self.assertEqual(info['icons'], [{'value': 'games', 'label': 'Gamepad'}, {'value': 'pad', 'label': 'Joypad'}])
         game = info['games'][0]
         self.assertEqual((game['name'], game['platform'], game['mode'], game['players'], game['command']),
                          ('Pang', 'command', '640x240@60', '2', 'wine pang.exe'))
@@ -7891,6 +7916,32 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual(info['controls'], [{'value': 'joy8', 'label': '8-way joystick'}])
         self.assertEqual((info['portproton'], info['games_dir'], info['free']), (False, '/h/games', 1000))
         self.assertEqual((info['packages_dir'], info['last_group']), ('/h/roms/custom-packages', 'PC games'))
+
+    def test_the_group_icon_is_chosen_in_the_panel(self):
+        # O desenho do grupo: o painel o manda ao Setup (group-icon GRUPO ICONE); vazio volta ao padrao;
+        # um desenho que o Setup recusa e um 400. A cabeca de cada grupo e o botao que abre a escolha.
+        flag = self.dir / 'group-icon.flag'
+        self.assertEqual(self.call('POST', '/api/customgames/group-icon', {'name': 'PC games', 'icon': 'arcade'})[0], 200)
+        self.assertEqual(flag.read_text().strip(), 'PC games|arcade')
+        self.assertEqual(self.call('POST', '/api/customgames/group-icon', {'name': 'PC games', 'icon': ''})[0], 200)
+        self.assertEqual(flag.read_text().strip(), 'PC games|')
+        self.assertEqual(self.call('POST', '/api/customgames/group-icon', {'name': 'PC games', 'icon': 'bad'})[0], 400)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('el("h4", {}, cgGroupIconButton(g), g.name,', js)
+        self.assertIn('"/api/customgames/group-icon"', js)
+        self.assertIn('icon("px-" + (g.icon || "games"))', js)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_group_icon', 'cg_group_icon_title', 'cg_icon_default', 'cg_group_icon_note'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+        # Todo desenho da lista existe no painel (px-NOME) e no Setup (theme.ICONS).
+        names = re.findall(r'"(\w+)\|[^"|]+"', (ROOT / 'fliperos-setup/lib/customgames.sh').read_text().split(
+            'CUSTOM_GAMES_ICONS=(')[1].split('\n)')[0])
+        self.assertEqual(len(names), 19)
+        sprites = (ROOT / 'config/web/icons.svg').read_text()
+        theme = (ROOT / 'fliperos-setup/gui/theme.py').read_text()
+        for name in names:
+            self.assertIn('id="px-%s"' % name, sprites, name)
+            self.assertRegex(theme, r'(?m)^    "%s": """' % name)
 
     def test_scan_finds_the_games_of_a_folder(self):
         import urllib.parse

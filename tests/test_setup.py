@@ -4665,7 +4665,7 @@ class CustomGamesTests(Base):
         # A tela de cima: os grupos e as duas areas, cada uma no seu azulejo.
         top = body("screen_custom_games")
         self.assertIn("UI_BOARD_ENTER=OPEN ui_board", top)
-        self.assertIn('|games|$n,0|', top)
+        self.assertIn('|games|$n,0,$(customgames_group_icon "$group")|', top)
         self.assertIn("+install) screen_custom_install_area ;;", top)
         self.assertIn("+create) screen_custom_create_area ;;", top)
         self.assertLess(top.index("customgames_packages_migrate"), top.index("while true"))
@@ -4905,12 +4905,50 @@ class CustomGamesTests(Base):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("year=2001\ndeveloper=Me\n", (self.roms / "custom" / "Tools" / "Clock2.cfg").read_text())
 
+    def test_a_group_has_the_icon_the_person_chose(self):
+        """GRUPO/.icon: o desenho do grupo (Setup, painel, frontend). So os da
+        lista valem; sem ele o grupo fica com o padrao; o arquivo nao conta
+        como "outro arquivo" ao apagar o grupo."""
+        media, games, e = self.pkg_env()
+        self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'", e)
+        group = self.roms / "custom" / "PC games"
+        self.assertEqual(self.env.out("customgames_group_icon 'PC games'", e).strip(), "")
+        r = self.env.run("customgames_cli group-icon 'PC games' pad", e)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((group / ".icon").read_text(), "pad\n")
+        self.assertEqual(self.env.out("customgames_group_icon 'PC games'", e).strip(), "pad")
+        # Um nome que nao e da lista, ou um grupo que nao existe: 2, e o que havia fica.
+        self.assertEqual(self.env.run("customgames_cli group-icon 'PC games' ../etc", e).returncode, 2)
+        self.assertEqual(self.env.run("customgames_cli group-icon Nope pad", e).returncode, 2)
+        self.assertEqual((group / ".icon").read_text(), "pad\n")
+        # O describe: o desenho na linha do grupo e a lista de desenhos.
+        rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
+        self.assertIn(["group", "PC games", "1", "pad"], rows)
+        icons = [r[1:] for r in rows if r[0] == "icon"]
+        self.assertEqual(icons[0], ["games", "Gamepad"])
+        self.assertIn(["pad", "Joypad"], icons)
+        self.assertEqual(len(icons), 19)
+        # Um arquivo .icon com lixo e ignorado.
+        (group / ".icon").write_text("not an icon\n")
+        self.assertEqual(self.env.out("customgames_group_icon 'PC games'", e).strip(), "")
+        # O arquivo e do FliperOS: apagar o grupo nao o conta como arquivo de outro tipo.
+        self.env.run("customgames_cli group-icon 'PC games' arcade", e)
+        info = self.env.out("customgames_group_info 'PC games'", e)
+        self.assertIn("others=0\n", info)
+        # Sem desenho (vazio): o grupo volta ao padrao.
+        self.env.run("customgames_cli group-icon 'PC games'", e)
+        self.assertFalse((group / ".icon").exists())
+        # O azulejo do Setup leva o desenho no fim do dado e a tela tem o item.
+        menu = (ROOT / "fliperos-setup/screens/setup-menu.sh").read_text()
+        self.assertIn('games|$n,0,$(customgames_group_icon "$group")|', menu)
+        self.assertIn("+icon) screen_custom_group_icon", menu)
+
     def test_panel_describe_lists_the_games_and_the_choices(self):
         media, games, e = self.pkg_env()
         self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'; "
                      "customgames_cfg_set \"$(customgames_cfg 'PC games' Pang)\" players 2", e)
         rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
-        self.assertIn(["group", "PC games", "1"], rows)
+        self.assertIn(["group", "PC games", "1", ""], rows)
         game = [r for r in rows if r[0] == "game"][0]
         self.assertEqual(game[:5] + [game[8], game[9]],
                          ["game", "PC games", "Pang", "command", "640x480@60", "2", "wine pang.exe"])

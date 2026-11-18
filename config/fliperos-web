@@ -3224,13 +3224,16 @@ def customgames_info():
     """fliperos-setup --customgames describe como JSON: os grupos, os jogos,
     os pacotes esperando e as escolhas dos dropdowns."""
     out = setup_out("--customgames", "describe", timeout=120)
-    info = {"groups": [], "games": [], "pending": [], "modes": [], "genres": [], "controls": [], "squash": [],
+    info = {"groups": [], "games": [], "pending": [], "modes": [], "genres": [], "controls": [], "icons": [], "squash": [],
             "wine": [], "portproton": False, "games_dir": "", "free": 0, "packages_dir": "", "last_group": ""}
     for line in out.splitlines():
         f = line.split("\t")
         kind, rest = f[0], f[1:]
         if kind == "group" and len(rest) >= 2:
-            info["groups"].append({"name": rest[0], "count": int(rest[1]) if rest[1].isdigit() else 0})
+            info["groups"].append({"name": rest[0], "count": int(rest[1]) if rest[1].isdigit() else 0,
+                                   "icon": rest[2] if len(rest) > 2 else ""})
+        elif kind == "icon" and len(rest) == 2:
+            info["icons"].append({"value": rest[0], "label": rest[1]})
         elif kind == "game" and len(rest) >= 12:
             info["games"].append(dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
                                            "players", "command", "exe", "folder", "package", "runner", "year",
@@ -5235,6 +5238,9 @@ class Handler(BaseHTTPRequestHandler):
                                    timeout=180)
         if action == "group":
             return self.setup_call(["--customgames", "group", name])
+        if action == "group-icon":
+            # O desenho do grupo (GRUPO/.icon); vazio: o padrao.
+            return self.setup_call(["--customgames", "group-icon", name, customgame_field(data.get("icon"), 40)])
         if action == "group-info":
             # O que apagar o grupo leva (os jogos, as pastas, os pacotes, os
             # outros arquivos da pasta dele), para a pergunta.

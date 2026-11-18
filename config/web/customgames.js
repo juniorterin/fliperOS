@@ -195,9 +195,41 @@ function cgRenderList() {
       "aria-label": t("cg_group_delete") + ": " + g.name }, icon("g-trash"));
     del.addEventListener("click", () => cgDeleteGroup(g.name).catch(() => {}));
     return el("section", { class: "cg-group" },
-      el("h4", {}, icon("px-games"), g.name, el("span", { class: "dim" }, mine.length === 1 ? t("cg_game_1") : t("cg_games_n").replace("%n", mine.length)), del),
+      el("h4", {}, cgGroupIconButton(g), g.name, el("span", { class: "dim" }, mine.length === 1 ? t("cg_game_1") : t("cg_games_n").replace("%n", mine.length)), del),
       mine.length ? el("div", { class: "cg-tiles" }, ...mine.map(cgTile)) : el("p", { class: "dim cg-empty" }, t("cg_group_empty")));
   }));
+}
+
+// O desenho do grupo: o da cabeca da secao (o padrao e o gamepad), o mesmo do
+// azulejo dele no Setup e na tira do frontend (GRUPO/.icon); clicar abre a
+// escolha.
+function cgGroupIconButton(g) {
+  const b = el("button", { type: "button", class: "icon-btn small cg-gicon", title: t("cg_group_icon"),
+    "aria-label": t("cg_group_icon") + ": " + g.name }, icon("px-" + (g.icon || "games")));
+  b.addEventListener("click", () => cgPickGroupIcon(g).catch(() => {}));
+  return b;
+}
+
+async function cgPickGroupIcon(g) {
+  const dlg = cgDialog();
+  const choices = [{ value: "", label: t("cg_icon_default") }, ...((cg.info && cg.info.icons) || [])];
+  const grid = el("div", { class: "cg-icons" }, ...choices.map((c) => {
+    const on = (g.icon || "") === c.value;
+    const b = el("button", { type: "button", class: "cg-icon" + (on ? " on" : ""), title: c.label, "aria-pressed": String(on) },
+      icon("px-" + (c.value || "games")), el("small", {}, c.label));
+    b.addEventListener("click", async () => {
+      const res = await api("/api/customgames/group-icon", { method: "POST", body: JSON.stringify({ name: g.name, icon: c.value }) });
+      if (!res.ok) { toast((await res.json().catch(() => ({}))).error || res.statusText, "bad"); return; }
+      dlg.close();
+      cgLoad().catch(() => {});
+    });
+    return b;
+  }));
+  const cancel = el("button", { type: "button", class: "btn ghost" }, t("cg_cancel"));
+  cancel.addEventListener("click", () => dlg.close());
+  dlg.replaceChildren(el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, t("cg_group_icon_title").replace("%s", g.name)),
+    el("p", { class: "dim" }, t("cg_group_icon_note")), grid, el("footer", {}, cancel)));
+  dlg.showModal();
 }
 
 // Apagar o grupo inteiro: o Setup diz antes o que vai junto (as pastas dos

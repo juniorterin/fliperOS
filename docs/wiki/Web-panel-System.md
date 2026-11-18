@@ -92,6 +92,7 @@ The panel doesn't need the tube. From a phone, open **Setup > Video** and pick t
 **Games:**
 
 - **The games:** each group with its games, each with its picture: **Open** on the cabinet, **Edit** (video mode, category, players, buttons, controls, picture, video, text; the name, group and command too for a command), **Make a package** (into `~/roms/custom-packages`), **Delete**.
+- **Group icon:** the drawing at the start of the group's title; click it to pick one of 19 (also shown in the Setup tile and the frontend's ribbon).
 - **Delete the group:** the bin at the end of the group's title. It says first what goes with it (its games, the other files in its folder), then asks whether the game folders and the packages in the group's folder go too; kept packages go to `~/roms/custom-packages`.
 - **Add a game:** a group, a name, the type (**Windows**, **Linux** or **Command**), the folder, the `.exe` or the command, the mode and the rest, in one window.
 - **Packed game folders:** pack a game folder into squashfs, or unpack it.
