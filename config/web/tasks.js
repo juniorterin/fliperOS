@@ -34,7 +34,7 @@ function backgroundRow(b) {
     detail = parts.join(" · ");
   }
   const item = el("li", { class: "task" + (goOn ? "" : " running") },
-    el("div", { class: "task-head" }, icon(goOn ? "g-warn" : "g-refresh", "task-icon"),
+    el("div", { class: "task-head" }, (goOn ? icon("g-warn", "task-icon") : el("span", { class: "spinner sm task-spin", "aria-hidden": "true" })),
       el("strong", {}, name), el("span", { class: "task-state" }, state)));
   item.append(meter(b.pct || 0));
   if (detail) item.append(el("div", { class: "dim task-detail" }, detail));
@@ -81,7 +81,7 @@ async function loadTasks() {
     const done = !task.running, ok = done && task.rc === 0;
     const state = task.running ? (task.pct != null ? task.pct + "%" : "…") : ok ? t("task_ok") : t("task_fail") + " (" + task.rc + ")";
     const item = el("li", { class: "task" + (task.running ? " running" : ok ? " ok" : " fail") },
-      el("div", { class: "task-head" }, icon(task.running ? "g-refresh" : ok ? "g-check" : "g-warn", "task-icon"),
+      el("div", { class: "task-head" }, (task.running ? el("span", { class: "spinner sm task-spin", "aria-hidden": "true" }) : icon(ok ? "g-check" : "g-warn", "task-icon")),
         el("strong", {}, task.name), el("span", { class: "task-state" }, state)));
     if (task.running) item.append(meter(task.pct || 0));
     const detail = task.error || task.step || task.last;

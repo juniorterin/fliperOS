@@ -95,8 +95,23 @@ cmd_check() {
 apt_install() {
   export DEBIAN_FRONTEND=noninteractive
   grep -qx i386 < <(dpkg --print-foreign-architectures) || dpkg --add-architecture i386 || return 1
+  ((progress)) && printf '@pct 3\n'
   apt-get update -q >&2 || return 1
-  apt-get install -y -q --no-install-recommends "$@" >&2
+  ((progress)) && printf '@pct 5\n'
+  # O andamento do apt (Status-Fd): o download vai de 5 a 12 % e a instalacao
+  # dos pacotes de 12 a 20 %, para a barra nao ficar parada nos minutos do apt.
+  local rc
+  if ((progress)); then
+    apt-get install -y -q --no-install-recommends -o APT::Status-Fd=3 "$@" >&2 3> >(
+      awk -F: '$1 == "dlstatus" || $1 == "pmstatus" {
+        p = ($1 == "dlstatus") ? 5 + int($3 * 7 / 100) : 12 + int($3 * 8 / 100)
+        if (p != last) { print "@pct " p; fflush(); last = p }
+      }')
+  else
+    apt-get install -y -q --no-install-recommends "$@" >&2
+  fi
+  rc=$?
+  return "$rc"
 }
 
 cmd_install() {
