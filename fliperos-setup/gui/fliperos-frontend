@@ -465,6 +465,9 @@ class Frontend:
         self.ahead_wake = threading.Event()
         if not self.shot:
             threading.Thread(target=self.prefetch_work, daemon=True).start()
+            # Os icones do Arcadeflow (genero, controle, botoes) recortados
+            # antes de aparecerem: o primeiro de cada genero parava o quadro.
+            threading.Thread(target=feview.warm_icons, args=(self,), daemon=True).start()
         # O video do jogo (fevideo.py); no --shot, sem video.
         self.player = fevideo.Player()
         # Os da grade, um por miniatura (fevideo.Grid).

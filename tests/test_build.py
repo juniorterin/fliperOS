@@ -5814,6 +5814,63 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'sengoku2')
         self.assertEqual([fd.first_letter(g) for g in games[:1] + [{'Name': '1944', 'Title': '1944'}]], ['S', '#'])
 
+    def test_media_lookup_lists_each_folder_once(self):
+        # Procurar a arte de um jogo era um stat por nome, extensao e tipo (ate 18); a grade de um sistema novo
+        # parava 0,15 s na primeira vez. Agora a pasta e listada uma vez e guardada ate a data dela mudar.
+        web = self.fd.web
+        with tempfile.TemporaryDirectory() as tmp:
+            old = web.player_home
+            web.player_home = lambda: tmp
+            try:
+                folder = Path(tmp) / 'media/snap/mame'
+                folder.mkdir(parents=True)
+                (folder / 'sf2.png').write_bytes(b'x')
+                web._media_listing.clear()
+                self.assertEqual(web.media_file('mame', ['sf2ua', 'sf2'], 'snap', ('.png', '.jpg')), str(folder / 'sf2.png'))
+                self.assertIsNone(web.media_file('mame', ['kof98'], 'snap', ('.png', '.jpg')))
+                self.assertEqual(sorted(web._media_listing[str(folder)][1]), ['sf2.png'])
+                # Um arquivo novo muda a data da pasta: achado, sem reiniciar nada.
+                (folder / 'kof98.jpg').write_bytes(b'x')
+                os.utime(folder, (time.time() + 5, time.time() + 5))
+                self.assertEqual(web.media_file('mame', ['kof98'], 'snap', ('.png', '.jpg')), str(folder / 'kof98.jpg'))
+                # Um nome sem pasta, um nome com caminho ou escondido: nada.
+                self.assertIsNone(web.media_file('mame', ['../sf2', '.sf2', ''], 'snap', ('.png',)))
+                self.assertIsNone(web.media_file('nope', ['sf2'], 'snap', ('.png',)))
+                # O arquivo que sumiu depois da listagem (um diretorio com o nome): so conta se for arquivo.
+                (folder / 'dir.png').mkdir()
+                os.utime(folder, (time.time() + 9, time.time() + 9))
+                self.assertIsNone(web.media_file('mame', ['dir'], 'snap', ('.png',)))
+            finally:
+                web.player_home = old
+
+    def test_the_arcadeflow_icons_are_cut_once_before_they_show(self):
+        # O recorte de cada icone (ler o PNG e achar a parte solida, ~3 ms) fica guardado e uma thread o faz na
+        # abertura: o primeiro de cada genero novo nao para o quadro.
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        import types
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        import feview
+        fe = types.SimpleNamespace(media={})
+        feview.warm_icons(fe)
+        keys = [k for k in fe.media if k[0] == 'afsrc']
+        self.assertGreater(len(keys), 50)
+        self.assertTrue(any(k[1] == 'category' for k in keys))
+        self.assertFalse(any(k[1].startswith('overlay') for k in keys))
+        # O icone pedido nasce do recorte guardado: sem ler o PNG de novo, no tamanho e na cor pedidos.
+        kind, name = next((k[1], k[2]) for k in keys if fe.media[k] is not None)
+        img = feview.af_icon(fe, kind, name, 12, (255, 0, 0))
+        self.assertEqual(img.get_height(), 12)
+        self.assertIs(fe.media[('afsrc', kind, name)], fe.media[('afsrc', kind, name)])
+        before = dict(fe.media)
+        feview.af_icon(fe, kind, name, 12, (255, 0, 0))
+        self.assertEqual(fe.media, before)
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('threading.Thread(target=feview.warm_icons, args=(self,), daemon=True).start()', src)
+
     def test_the_first_press_after_attract_mode_counts(self):
         # Parado um minuto, o cursor salta para um jogo sorteado (modo atracao). O primeiro toque so acordava o
         # frontend e era preciso apertar de novo: agora ele volta ao jogo onde a pessoa estava e vale ali.

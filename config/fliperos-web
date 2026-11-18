@@ -1443,14 +1443,40 @@ def media_dir(kind, key):
     return os.path.join(player_home(), "media", kind, *parts)
 
 
+_media_listing = {}      # pasta -> (data da pasta, os nomes que ela tem)
+
+
+def media_names(base):
+    """Os nomes de uma pasta de midia, listados uma vez e guardados ate a data
+    da pasta mudar (um arquivo novo a muda). Procurar um arquivo por jogo, por
+    extensao e por tipo, com um stat cada (ate 18 por jogo e tipo), levava
+    ~5 ms por jogo na primeira vez que ele aparecia na tela do frontend: a
+    grade de um sistema novo parava 0,15 s."""
+    try:
+        mtime = os.stat(base).st_mtime
+    except OSError:
+        return frozenset()
+    seen = _media_listing.get(base)
+    if seen is None or seen[0] != mtime:
+        try:
+            names = frozenset(os.listdir(base))
+        except OSError:
+            names = frozenset()
+        _media_listing[base] = seen = (mtime, names)
+    return seen[1]
+
+
 def media_file(key, names, kind, exts):
     """O arquivo de midia do jogo: o primeiro dos nomes (o do set, depois o
     do pai) que tem um arquivo, na ordem das extensoes."""
     base = media_dir(kind, key)
+    have = media_names(base)
     for name in names:
         if not name or name != os.path.basename(name) or name.startswith("."):
             continue
         for ext in exts:
+            if name + ext not in have:
+                continue
             path = os.path.join(base, name + ext)
             if os.path.isfile(path):
                 return path

@@ -523,28 +523,60 @@ def af_path(fe, kind, name):
     return base if os.path.isfile(base) else None
 
 
+def af_source(fe, kind, name):
+    """O icone recortado do quadro transparente (so a parte solida: a sombra
+    suave dos icones grandes do Arcadeflow ocupa o quadro inteiro), no tamanho
+    original e sem cor. Ler o PNG e achar o recorte e o que custa (3 ms): fica
+    guardado e a thread de aquecimento (warm_icons) o faz antes de o icone
+    aparecer."""
+    key = ("afsrc", kind, name)
+    if key in fe.media:
+        return fe.media[key]
+    path = af_path(fe, kind, name)
+    src = None
+    if path:
+        try:
+            src = pygame.image.load(path)
+            src = src.convert_alpha() if pygame.display.get_surface() else src
+            rect = src.get_bounding_rect(min_alpha=180)
+            src = src.subsurface(rect).copy() if rect.w and rect.h else None
+        except (pygame.error, OSError, ValueError):
+            src = None
+    fe.media[key] = src
+    return src
+
+
+def warm_icons(fe):
+    """Em segundo plano, na abertura: o recorte de todos os icones do Arcadeflow
+    (os de genero, controle e botoes), para a primeira vez que um genero novo
+    aparece na lista nao parar o quadro (visto no gabinete: 30 a 45 ms)."""
+    try:
+        for kind in sorted(os.listdir(METAPICS)):
+            folder = os.path.join(METAPICS, kind)
+            if kind.startswith("overlay") or not os.path.isdir(folder):
+                continue
+            for entry in sorted(os.listdir(folder)):
+                if entry.endswith(".png"):
+                    af_source(fe, kind, entry[:-4])
+    except (OSError, RuntimeError):
+        pass
+
+
 def af_icon(fe, kind, name, h, color):
     """O icone, recortado do quadro transparente e na cor pedida, com h
     pixels de altura (os pequenos ficam nitidos, sem suavizar)."""
     key = ("af", kind, name, h, color)
     if key in fe.media:
         return fe.media[key]
-    path = af_path(fe, kind, name)
+    src = af_source(fe, kind, name)
     img = None
-    if path:
+    if src is not None:
         try:
-            src = pygame.image.load(path)
-            src = src.convert_alpha() if pygame.display.get_surface() else src
-            # So a parte solida: a sombra suave dos icones grandes do
-            # Arcadeflow ocupa o quadro inteiro.
-            rect = src.get_bounding_rect(min_alpha=180)
-            if rect.w and rect.h:
-                src = src.subsurface(rect).copy()
-                w = max(1, round(src.get_width() * h / src.get_height()))
-                small = src.get_height() <= 2 * h
-                img = (pygame.transform.scale if small else pygame.transform.smoothscale)(src, (min(w, 4 * h), h))
-                img.fill(color + (255,), special_flags=pygame.BLEND_RGBA_MULT)
-        except (pygame.error, OSError, ValueError):
+            w = max(1, round(src.get_width() * h / src.get_height()))
+            small = src.get_height() <= 2 * h
+            img = (pygame.transform.scale if small else pygame.transform.smoothscale)(src, (min(w, 4 * h), h))
+            img.fill(color + (255,), special_flags=pygame.BLEND_RGBA_MULT)
+        except (pygame.error, ValueError):
             img = None
     fe.media[key] = img
     return img
