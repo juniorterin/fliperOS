@@ -5850,6 +5850,62 @@ class PowerNowTests(Base):
         for name in ("main-menu.sh", "amd-driver.sh", "latency.sh", "patches.sh"):
             self.assertNotRegex((SETUP / "screens" / name).read_text(), r"\bsystemctl (reboot|poweroff)\b", name)
 
+    def test_the_install_end_does_not_need_the_removed_stick(self):
+        # O sistema ao vivo roda da midia: tirada, o que nao estava na memoria da erro de leitura no
+        # terminal. O fim da instalacao desmonta e sincroniza o disco novo e le os programas do reinicio
+        # ANTES de pedir para tirar a midia; sem o systemctl, o reinicio vai direto ao kernel (sysrq).
+        calls = self.env.dir / "calls"
+        sysrq = self.env.dir / "sysrq"
+        for name in ("systemctl", "sleep", "stty", "kbd_mode", "rm", "mountpoint"):
+            self.env.stub(name, 'echo "%s $*" >> %s' % (name, calls))
+        r = self.env.run("""
+            source %s/screens/install-progress.sh
+            install_unmount() { echo unmount >> %s; }; recovery_umount() { echo recovery >> %s; }
+            sync() { echo sync >> %s; }
+            speak() { echo "speak" >> %s; }
+            ui_msg() { echo "msg-remove-the-stick" >> %s; }
+            ui_yesno() { echo "ask-reboot" >> %s; return 1; }
+            unset -f sleep
+            screen_install_done
+        """ % (SETUP, calls, calls, calls, calls, calls, calls))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = calls.read_text().splitlines()
+        # Desmontou, sincronizou e leu os programas antes de falar e de pedir a midia (o stty e o kbd_mode
+        # leem /dev/tty, que o teste nao tem; o corpo do screen_power_warm os chama).
+        self.assertLess(lines.index("unmount"), lines.index("speak"))
+        self.assertLess(lines.index("sync"), lines.index("msg-remove-the-stick"))
+        warm_body = (SETUP / "screens" / "install-progress.sh").read_text().split("screen_power_warm() {")[1].split("\n}\n")[0]
+        for command in ("stty -a < /dev/tty", "kbd_mode < /dev/tty"):
+            self.assertIn(command, warm_body)
+        for warm in ("systemctl --version", "sleep 0", "rm -f /nonexistent-fliperos-warm"):
+            self.assertIn(warm, lines)
+            self.assertLess(lines.index(warm), lines.index("msg-remove-the-stick"), warm)
+        # O pedido ao kernel: s (sync), u (remount ro) e b (reboot) ou o (desligar), so com o bash.
+        r = self.env.run("""
+            source %s/screens/install-progress.sh
+            log_info() { :; }
+            screen_power_hard reboot
+            screen_power_hard poweroff
+        """ % SETUP, {"SYSRQ_TRIGGER": str(sysrq), "SYSRQ_ENABLE": str(self.env.dir / "sysrq-enable")})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(sysrq.read_text().split(), ["s", "u", "b", "s", "u", "o"])
+        self.assertEqual((self.env.dir / "sysrq-enable").read_text().strip(), "1")
+        # systemctl que falha (a midia saiu): o kernel decide; que funciona: so ele.
+        failing = self.env.dir / "calls2"
+        self.env.stub("systemctl", 'echo "systemctl $*" >> %s; exit 126' % failing)
+        self.env.stub("sleep", 'echo "sleep $*" >> %s' % failing)
+        sysrq.unlink()
+        r = self.env.run("""
+            source %s/screens/install-progress.sh
+            install_unmount() { :; }; recovery_umount() { :; }; sync() { :; }; restore_terminal() { :; }
+            log_info() { :; }
+            unset -f sleep
+            screen_power_now reboot
+        """ % SETUP, {"SYSRQ_TRIGGER": str(sysrq), "SYSRQ_ENABLE": str(self.env.dir / "sysrq-enable")})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(failing.read_text().splitlines(), ["systemctl reboot", "sleep 60"])
+        self.assertEqual(sysrq.read_text().split(), ["s", "u", "b"])
+
     def test_session_gets_10_seconds_to_stop(self):
         self.assertIn("TimeoutStopSec=10s", (ROOT / "config" / "fliperos-session-stop.conf").read_text())
         rootfs = (ROOT / "fliperos-rootfs.sh").read_text()

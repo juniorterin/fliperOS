@@ -107,7 +107,7 @@ The media's menu (gasetup's `isomainmenu`): **Install to HD/SSD**, **Recovery Mo
    **My drive is not listed (details)** shows everything Linux sees (`lsblk`, the controllers and the kernel messages): an HD/SSD that doesn't even show there is hidden before Linux, almost always by the BIOS SATA mode set to RAID/Intel RST (switch to AHCI) or by Intel VMD.
 4. **WARNING** — model, path and size of the disk that will be erased; *No* goes back to the disk choice. If the disk already has FliperOS, the warning suggests Recovery Mode.
 5. **Installing FliperOS** — a single screen, with the target disk, a **real** progress bar (the system copy comes from the `unsquashfs` percentage, like gasetup's `dialog --gauge`), the step and short messages. Command output goes to `/var/log/fliperos-setup.log`. On error: step, error, **View log / Retry / Return**.
-6. **Installation completed successfully. Remove the installation CD/DVD/USB.** — and **Reboot now?**
+6. **Installation completed successfully. Remove the installation CD/DVD/USB.** — and **Reboot now?** The live system runs from the installation media, so before this message the Setup already unmounts and syncs the new disk and reads the programs the reboot needs into memory; take the stick out and answer *Yes* without errors on the screen. If `systemctl` still can't run, the reboot goes straight to the kernel (sysrq), which needs no program.
 
 Partitioning: GPT, a 1 MiB BIOS boot partition, a 1 GiB FAT32 ESP, the rest in ext4. The new partitions have their old signatures wiped and the BIOS boot one is zeroed (a leftover file system from the previous disk there made `limine bios-install` refuse; it also runs with `--force`).
 

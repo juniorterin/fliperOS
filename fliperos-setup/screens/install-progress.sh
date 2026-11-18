@@ -34,6 +34,15 @@ screen_install() {
 }
 
 screen_install_done() {
+  # O sistema roda da propria midia de instalacao: depois que a pessoa a tira,
+  # um programa que nao esteja na memoria da erro de leitura (Input/output
+  # error) no terminal. Por isso o que o fim precisa vai antes do aviso: o
+  # disco novo desmontado e sincronizado, e os programas do reinicio lidos
+  # uma vez (na memoria, rodam sem a midia).
+  install_unmount
+  recovery_umount
+  sync
+  screen_power_warm
   speak "Installation completed successfully. Remove the installation disc or USB drive."
   ui_msg "Installation complete" "Installation completed successfully." "" \
     "Remove the installation CD/DVD/USB."
@@ -60,6 +69,38 @@ screen_power_now() {
   log_info "desligando: $1"
   restore_terminal
   trap - EXIT
-  systemctl "$1" >> "$FLIPEROS_LOG" 2>&1
+  # Sem o systemctl (a midia do sistema ao vivo foi tirada e ele nao estava na
+  # memoria), o pedido vai direto ao kernel, so com o que o proprio bash faz.
+  systemctl "$1" >> "$FLIPEROS_LOG" 2>&1 || screen_power_hard "$1"
   exec sleep 60
+}
+
+# screen_power_warm: roda uma vez, de graca, cada programa que o reinicio usa
+# depois da midia tirada (o systemctl, o sleep, o stty, o sync, o rm...): na
+# memoria, eles abrem sem a midia.
+screen_power_warm() {
+  systemctl --version > /dev/null 2>&1
+  sleep 0 > /dev/null 2>&1
+  sync
+  stty -a < /dev/tty > /dev/null 2>&1
+  kbd_mode < /dev/tty > /dev/null 2>&1
+  rm -f /nonexistent-fliperos-warm
+  mountpoint -q / > /dev/null 2>&1
+  return 0
+}
+
+# screen_power_hard reboot|poweroff: o pedido direto ao kernel (sysrq), sem
+# nenhum programa: o disco novo ja esta desmontado e sincronizado, e o sistema
+# ao vivo nao guarda nada. So o bash: o echo e um comando dele.
+screen_power_hard() {
+  log_info "desligando direto pelo kernel: $1"
+  echo 1 > "${SYSRQ_ENABLE:-/proc/sys/kernel/sysrq}" 2> /dev/null
+  echo s >> "${SYSRQ_TRIGGER:-/proc/sysrq-trigger}" 2> /dev/null
+  echo u >> "${SYSRQ_TRIGGER:-/proc/sysrq-trigger}" 2> /dev/null
+  if [[ $1 == poweroff ]]; then
+    echo o >> "${SYSRQ_TRIGGER:-/proc/sysrq-trigger}" 2> /dev/null
+  else
+    echo b >> "${SYSRQ_TRIGGER:-/proc/sysrq-trigger}" 2> /dev/null
+  fi
+  return 0
 }
