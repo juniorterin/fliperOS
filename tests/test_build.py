@@ -1738,7 +1738,7 @@ class RomFoldersTests(unittest.TestCase):
             for kind in ('snap', 'preview', 'logo', 'box', 'marquee', 'dmd', 'texto'):
                 names = sorted(p.name for p in (tmp / 'media' / kind).iterdir())
                 self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'mame', 'model2', 'model3',
-                                         'namco2x6', 'naomi', 'naomi2', 'ps2', 'retroarch'], kind)
+                                         'namco2x6', 'naomi', 'naomi2', 'ps1', 'ps2', 'retroarch'], kind)
                 self.assertEqual([p.name for p in (tmp / 'media' / kind / 'retroarch').iterdir()], ['mame2010'], kind)
             self.assertTrue((tmp / 'media/preview/model2').is_symlink())
             self.assertEqual(list((tmp / 'disk').iterdir()), [])
