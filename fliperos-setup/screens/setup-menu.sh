@@ -227,6 +227,7 @@ screen_setup_system() {
       "latency|Latency|Standard or low latency mode, and a check of this computer." \
       "services|Services|SSH, network share, Wi-Fi: at boot, after boot or off." \
       "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
+      "storage|Storage|Use a second or external disk for the ROMs, BIOS, art, saves and downloads." \
       "password|Password|The password of the fliperos user: login, SSH and network share." \
       "cabinetname|Cabinet name|The name the other cabinets see in party and link play." \
       "update|System Update|Download and install the updates of all packages." \
@@ -242,6 +243,7 @@ screen_setup_system() {
       latency) screen_latency ;;
       services) screen_services ;;
       quirks) screen_quirks ;;
+      storage) screen_storage ;;
       password) screen_password ;;
       cabinetname) screen_cabinet_name ;;
       update) screen_need_internet "System Update" && screen_update ;;
@@ -254,6 +256,85 @@ screen_setup_system() {
       return) return 0 ;;
     esac
   done
+}
+
+# screen_storage (Setup > System > Storage): os discos secundarios (um HD
+# externo, outro disco) com a pasta "fliperos" e a estrutura do FliperOS
+# dentro (lib/storage.sh). Escolher um deixa usar tudo nele (as ROMs, a BIOS,
+# a arte, os saves e o que se baixa; o disco principal segue como esta, com o
+# que ja tinha ao lado) ou voltar ao disco principal.
+screen_storage() {
+  local title="Storage" line mount label fs total free usable state last="" choice what
+  local -a entries
+  while true; do
+    entries=()
+    while IFS='|' read -r mount label fs total free usable state; do
+      [[ -n $mount ]] || continue
+      what="$label ($fs, $(human_size "$total"), $(human_size "$free") free)"
+      case $state in
+        all) what+=" - in use" ;;
+        some) what+=" - partly in use" ;;
+      esac
+      ((usable)) || what+=" - not usable"
+      entries+=("$mount|$what")
+    done < <(storage_list)
+    if ((${#entries[@]} == 0)); then
+      ui_msg "$title" "No second or external disk is connected." "" \
+        "Connect a disk of $((STORAGE_MIN_BYTES / 1000000000)) GB or more: it gets a fliperos folder with the" \
+        "whole folder structure, ready for ROMs, art and saves."
+      return 0
+    fi
+    entries+=("unuse|Back to the main disk" "return|Return")
+    choice=$(UI_STYLE=list ui_menu "$title" "A second disk keeps the ROMs, BIOS, art, saves and downloads, next to the main one." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      return) return 0 ;;
+      unuse)
+        ui_yesno "$title" "Go back to the main disk for the ROMs, BIOS, art and saves? Nothing is deleted from the second disk." yes || continue
+        if line=$(storage_cli unuse); then
+          ui_msg "$title" "The main disk is back." "" "What the second disk has stays in its fliperos folder."
+        else
+          ui_msg "$title" "$(ui_bad "$line")"
+        fi
+        ;;
+      *) screen_storage_disk "$choice" ;;
+    esac
+  done
+}
+
+# screen_storage_disk MONTAGEM: um disco: usar para tudo, so preparar a
+# estrutura, ou ver o que ele tem.
+screen_storage_disk() {
+  local mount=$1 title="Storage" choice line state label
+  label=${mount##*/}
+  state=$(storage_state "$mount")
+  choice=$(ui_menu_hints "$title: $label" "" use \
+    "use|Use $label|The ROMs, BIOS, art, saves and downloads go to $label/fliperos. What is on the main disk stays there (old- folders)." \
+    "prepare|Only prepare the folders|Make $label/fliperos with the whole folder structure and change nothing else." \
+    "return|Return|Back to the disks.") || return 0
+  case $choice in
+    use | prepare)
+      if ! storage_usable "$mount"; then
+        ui_msg "$title" "$(ui_bad "$STORAGE_ERROR")"
+        return 0
+      fi
+      if [[ $choice == use ]]; then
+        ui_yesno "$title" "Use $label for the ROMs, BIOS, art, saves and downloads? The folders in your home are kept beside, as old-." yes || return 0
+      fi
+      if line=$(storage_cli "$choice" "$mount"); then
+        if [[ $choice == use ]]; then
+          ui_msg "$title" "$label is in use." "" "ROMs, BIOS, art, saves and downloads now go to $label/fliperos." \
+            "$(sed -n 's/^kept=/The folder of before stays in /p' <<< "$line" | head -n 1)"
+        else
+          ui_msg "$title" "$label/fliperos is ready: the whole folder structure is there."
+        fi
+      else
+        ui_msg "$title" "$(ui_bad "$line")"
+      fi
+      ;;
+  esac
+  return 0
 }
 
 # screen_oscr_firmware (Setup > System > Cartridge reader): grava no Open

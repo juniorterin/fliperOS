@@ -1526,6 +1526,8 @@ for _alias, _name in {
     "+create": "chds", "+package": "chds", "+all": "install", "+group": "addfolder", "+command": "edit",
     # O desenho do grupo (Custom games > grupo > Group icon).
     "+icon": "arcade",
+    # Setup > System > Storage: o disco secundario; a tela dele: usar, so preparar.
+    "storage": "disk", "prepare": "addfolder", "unuse": "reset",
     "+delete": "remove", "wipe": "remove",
     # As areas Install games e Create package (os pacotes de ~/roms/custom-packages).
     "+install": "install", "reinstall": "install", "delpkg": "remove", "fromfolder": "addfolder", "fromgame": "games",

@@ -1,4 +1,4 @@
-**Setup > System** has the rest of the cabinet: latency, services, USB fixes, the password, the cabinet's name, updates, debug mode, lab mode, the cartridge reader's firmware and the boot splash.
+**Setup > System** has the rest of the cabinet: latency, services, USB fixes, a second disk (Storage), the password, the cabinet's name, updates, debug mode, lab mode, the cartridge reader's firmware and the boot splash.
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/system.webp" width="480" alt="Setup > System">
 
@@ -7,6 +7,7 @@
 | **Latency** | Standard or low latency mode, and a check of this computer | [Latency](Latency.md) |
 | **Services** | SSH, network share, Wi-Fi and the others: at boot, after boot or off | Below |
 | **Quirks (USB device fixes)** | Kernel fixes for a USB device read wrong: encoders, guns, disks | [Controls](Wheels-and-quirks.md#quirks-usb-device-fixes) |
+| **Storage** | Use a second or external disk for the ROMs, BIOS, art, saves and downloads | [Below](#storage-a-second-or-external-disk) |
 | **Password** | The password of the `fliperos` user | Below |
 | **Cabinet name** | The name other cabinets see in party and link play | Below |
 | **System Update** | Download and install the updates of all Ubuntu packages | [Updates and versions](Updates-and-versions.md#system-update-ubuntu-packages) |
@@ -42,6 +43,18 @@ Not in the table:
 
 - the Downloader's Transmission, which only starts when a download is asked for;
 - the Pixelcade and the ZeDMD, which start when the device is plugged in.
+
+## Storage: a second or external disk
+
+A data disk that is plugged in (a USB hard disk, an SSD, another internal disk of 8 GB or more) is mounted by itself in `/media/fliperos/<label>`, and gets a **`fliperos` folder with the whole folder structure** of the cabinet inside it: `roms` (one folder per emulator and per RetroArch core), `bios`, `media` (one folder per type of art), `nvram` and `save`. Only the folders are made: nothing on the main disk changes, and a small stick, a read-only disk or a CD is left alone. `storage_auto=off` in `fliperos.conf` turns this off.
+
+**Setup > System > Storage** lists the disks (label, type, size, free space, and *in use* when the cabinet already uses it). Pick one:
+
+- **Use it:** the five folders in the home of the cabinet become links to the disk's `fliperos` folders (the same as **Games > Folders**, for the five at once). From then on everything the Downloader, the Scraper and the art packs download, and the saves and the nvram, go to the second disk, next to the main one. What was in the home before stays beside, as `~/old-roms`, `~/old-bios`…, nothing is lost or copied. Put your ROMs, saves and art straight in the disk's folders (on a PC, or by the network share) and the frontends see them.
+- **Only prepare the folders:** makes the structure and changes nothing else.
+- **Back to the main disk:** the folders of the home are the main disk's again (the `old-` ones come back); nothing is deleted from the second disk.
+
+The same screen opens from the web panel (**System > Setup > System > Storage**, *Open on the cabinet*). `fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse` does it from a terminal.
 
 ## Password
 

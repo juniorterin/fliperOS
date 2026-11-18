@@ -16766,6 +16766,39 @@ class AutomountTests(unittest.TestCase):
         self.assertIn('ENV{ID_FS_LABEL}=="", \\\n  ENV{ID_MODEL}=="?*", TEST=="/etc/fliperos/installed"', rules)
         self.assertIn('ENV{ID_FS_LABEL}="$env{ID_MODEL}_$env{ID_PART_ENTRY_NUMBER}"', rules)
 
+    def test_a_new_data_disk_gets_the_fliperos_folder(self):
+        # Montado, um disco de dados pede ao Setup a pasta "fliperos" com a estrutura (--storage prepare), so
+        # nas montagens de /media/fliperos e a menos que storage_auto=off no fliperos.conf.
+        dev = next((d for d in ('/dev/loop0', '/dev/sda', '/dev/vda') if Path(d).is_block_device()), None)
+        if dev is None:
+            self.skipTest('no block device')
+        for auto, expect in (('', True), ('storage_auto=on\n', True), ('storage_auto=off\n', False)):
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp = Path(tmp)
+                for d in ('bin', 'etc', 'media/fliperos/BIGDISK'):
+                    (tmp / d).mkdir(parents=True)
+                (tmp / 'etc/installed').write_text('')
+                (tmp / 'etc/fliperos.conf').write_text(auto)
+                target, count, calls = tmp / 'media/fliperos/BIGDISK', tmp / 'count', tmp / 'calls'
+                fakes = {
+                    'lsblk': 'case "$*" in *FSTYPE*) echo ext4;; *PARTTYPE*) echo 0x83;; esac',
+                    'findmnt': '[ -f %s ] && echo %s; touch %s' % (count, target, count),
+                    'udevadm': 'echo ID_FS_LABEL=BIGDISK', 'blkid': 'echo BIGDISK', 'runuser': 'true',
+                }
+                for name, body in fakes.items():
+                    (tmp / 'bin' / name).write_text('#!/bin/bash\n%s\n' % body)
+                    (tmp / 'bin' / name).chmod(0o755)
+                setup = tmp / 'setup'
+                setup.write_text('#!/bin/sh\necho "$*" >> %s\n' % calls)
+                setup.chmod(0o755)
+                env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']), FLIPEROS_ETC=str(tmp / 'etc'),
+                           FLIPEROS_MEDIA_ROOT=str(tmp / 'media'), FLIPEROS_SETUP=str(setup))
+                subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
+                if expect:
+                    self.assertEqual(calls.read_text().strip(), '--storage prepare %s' % target, auto)
+                else:
+                    self.assertFalse(calls.exists(), auto)
+
     def test_skips_what_is_not_a_data_disk(self):
         self.assertEqual(self.mount(installed=False), '')
         self.assertEqual(self.mount(mounted='/boot/efi'), '')

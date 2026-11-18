@@ -73,6 +73,7 @@ const SETUP_TREE = [
     { id: "latency", keys: ["latency"], cabinet: "latency" },
     { id: "services", keys: ["service."], title: true },
     { id: "quirks", box: "quirks", title: true },
+    { id: "storage", cabinet: "storage" },
     { id: "password", box: "password" },
     { id: "cabinetname", keys: ["cabinet_name"] },
     { id: "update", box: "update", sec: "updates" },
@@ -95,7 +96,7 @@ const SETUP_ICON = { monitor: "px-video", geometry_reset: "px-reset", monitors: 
   lowdot: "px-outputs", osd: "px-layout", card: "px-system", volume: "px-audio", test: "px-audio", sounds: "px-audio",
   wifi: "px-network", live: "px-outputs", extras: "px-freeroms", custom: "px-customgames", folders: "px-dest",
   downloader: "px-install", cleaner: "px-filter", update: "px-reset", version: "px-reset", whatsnew: "px-romlist",
-  splash: "px-video", other: "px-setup" };
+  splash: "px-video", storage: "px-disk", other: "px-setup" };
 // Os grupos do --settings, para um ajuste novo que nenhum item pega (ele vai
 // para "Outros ajustes" do grupo dele: nada some).
 const SETUP_ROW_GROUP = { Video: "video", Colour: "video", Scanlines: "video", "Interlaced hacks": "video",

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos", "cloud"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "storage", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos", "cloud"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -10672,6 +10672,117 @@ class NetShareTests(Base):
     def test_in_the_image(self):
         self.assertIn("cifs-utils smbclient", (ROOT / "fliperos-mkiso.sh").read_text())
         self.assertIn("cifs-utils smbclient", (ROOT / "tools/cabinet-update.sh").read_text())
+
+
+class StorageTests(Base):
+    """Setup > System > Storage (lib/storage.sh): um disco secundario com a pasta
+    "fliperos" e a estrutura do FliperOS dentro, ligado aos jogos pelas custom
+    folders (lib/folders.sh)."""
+
+    def setUp(self):
+        super().setUp()
+        self.home = self.env.dir / "home"
+        self.media = self.env.dir / "media"
+        self.disk = self.media / "BIGDISK"
+        for d in (self.home / "roms" / "mame", self.home / "bios", self.home / "media", self.disk):
+            d.mkdir(parents=True)
+        (self.home / "roms" / "mame" / "sf2.zip").write_text("mine")
+        self.vars = {"FOLDERS_HOME": str(self.home), "STORAGE_MOUNTS": str(self.media), "FOLDERS_MOUNTS": str(self.media),
+                     "FOLDERS_SCRIPT": str(ROOT / "config/fliperos-roms")}
+        self.fake_disks(size=500_000_000_000, avail=400_000_000_000)
+        self.skip = "folders_cli_refresh() { :; }\n"
+
+    def fake_disks(self, size, avail, fstype="ext4"):
+        # Todas as pastas de /media/... sao montagens; o df e o findmnt dizem o que o teste quer.
+        self.env.stub("mountpoint", 'for last; do :; done; case "$last" in %s/*) exit 0;; esac; exit 1' % self.media)
+        self.env.stub("df", 'case "$*" in *size*) echo Size; echo %d;; *avail*) echo Avail; echo %d;; esac' % (size, avail))
+        self.env.stub("findmnt", "echo %s" % fstype)
+
+    def test_the_list_says_which_disks_serve_and_whether_they_are_in_use(self):
+        rows = [l.split("|") for l in self.env.out(self.skip + "storage_list", self.vars).splitlines()]
+        self.assertEqual(rows, [[str(self.disk), "BIGDISK", "ext4", "500000000000", "400000000000", "1", "none"]])
+        # Um disco pequeno (um pendrive) nao serve, e a estrutura nao e criada nele.
+        self.fake_disks(size=4_000_000_000, avail=3_000_000_000)
+        rows = [l.split("|") for l in self.env.out(self.skip + "storage_list", self.vars).splitlines()]
+        self.assertEqual(rows[0][5], "0")
+        r = self.env.run(self.skip + 'storage_cli prepare "%s"' % self.disk, self.vars)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("smaller than 8 GB", r.stdout)
+        self.assertFalse((self.disk / "fliperos").exists())
+        # Um disco de CD ou uma imagem de somente leitura tambem nao.
+        self.fake_disks(size=500_000_000_000, avail=0, fstype="iso9660")
+        r = self.env.run(self.skip + 'storage_cli prepare "%s"' % self.disk, self.vars)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("iso9660", r.stdout)
+
+    def test_prepare_makes_the_whole_structure_and_changes_nothing_in_home(self):
+        r = self.env.run(self.skip + 'storage_cli prepare "%s"' % self.disk, self.vars)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        base = self.disk / "fliperos"
+        for kind in ("roms", "bios", "media", "nvram", "save"):
+            self.assertTrue((base / kind).is_dir(), kind)
+        # O que o fliperos-roms cria: uma pasta por emulador (com o _info.txt) e por tipo de arte.
+        self.assertTrue((base / "roms" / "mame").is_dir())
+        self.assertTrue((base / "roms" / "retroarch").is_dir())
+        self.assertTrue((base / "media" / "snap").is_dir())
+        # ~ nao muda: as pastas de la seguem pastas comuns, com o que tinham.
+        self.assertFalse((self.home / "roms").is_symlink())
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        # De novo e de graca (nada some, nada duplica).
+        (base / "roms" / "mame" / "keep.zip").write_text("x")
+        self.assertEqual(self.env.run(self.skip + 'storage_cli prepare "%s"' % self.disk, self.vars).returncode, 0)
+        self.assertTrue((base / "roms" / "mame" / "keep.zip").exists())
+
+    def test_use_links_the_five_folders_and_unuse_brings_them_back(self):
+        r = self.env.run(self.skip + 'storage_cli use "%s"' % self.disk, self.vars)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        base = self.disk / "fliperos"
+        for kind in ("roms", "bios", "media"):
+            self.assertEqual(os.readlink(self.home / kind), str(base / kind), kind)
+        # Uma pasta guardada ao lado (old-) com o que ja havia; o aviso diz qual.
+        self.assertEqual((self.home / "old-roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertIn("kept=~/old-roms", r.stdout)
+        for kind in ("nvram", "save"):      # (nao havia a pasta de antes: o link nasce igual)
+            self.assertEqual(os.readlink(self.home / kind), str(base / kind), kind)
+        rows = [l.split("|") for l in self.env.out(self.skip + "storage_list", self.vars).splitlines()]
+        self.assertEqual(rows[0][6], "all")
+        # Tudo o que o FliperOS baixa vai agora para o disco (o link e a pasta).
+        (self.home / "roms" / "mame" / "new.zip").write_text("downloaded")
+        self.assertEqual((base / "roms" / "mame" / "new.zip").read_text(), "downloaded")
+        # De novo: nada muda; "Back to the main disk" devolve as pastas e nada sai do disco.
+        self.assertEqual(self.env.run(self.skip + 'storage_cli use "%s"' % self.disk, self.vars).returncode, 0)
+        r = self.env.run(self.skip + "storage_cli unuse", self.vars)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((self.home / "roms").is_symlink())
+        self.assertEqual((self.home / "roms" / "mame" / "sf2.zip").read_text(), "mine")
+        self.assertEqual((base / "roms" / "mame" / "new.zip").read_text(), "downloaded")
+
+    def test_unuse_leaves_other_custom_folders_alone_and_the_cli_refuses_strangers(self):
+        other = self.env.dir / "elsewhere" / "roms"
+        other.mkdir(parents=True)
+        self.env.out('folders_link roms "%s"' % other, self.vars)
+        self.assertEqual(self.env.run(self.skip + "storage_cli unuse", self.vars).returncode, 0)
+        self.assertEqual(os.readlink(self.home / "roms"), str(other))     # a custom folder da pessoa fica
+        for bad in ('"/etc"', '"%s/../x"' % self.media, '""'):
+            self.assertEqual(self.env.run(self.skip + "storage_cli use %s" % bad, self.vars).returncode, 2, bad)
+        # Uma pasta de /media que nao serve (nao e gravavel): recusada com o motivo, nao como pedido errado.
+        self.assertEqual(self.env.run(self.skip + 'storage_cli use "%s/NOPE"' % self.media, self.vars).returncode, 1)
+        self.assertEqual(self.env.run(self.skip + "storage_cli bogus", self.vars).returncode, 2)
+
+    def test_the_screen_the_panel_item_and_the_automount_are_wired(self):
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        system = menu.split("screen_setup_system() {")[1].split("\n}\n")[0]
+        self.assertIn('"storage|Storage|', system)
+        self.assertIn("storage) screen_storage ;;", system)
+        self.assertIn("screen_storage() {", menu)
+        panel = (SETUP / "screens" / "panel.sh").read_text()
+        self.assertIn("oscr storage\"", panel)
+        self.assertIn("storage) screen_storage ;;", panel)
+        web = (ROOT / "config/fliperos-web").read_text()
+        self.assertIn('latency oscr storage"', web)
+        self.assertIn('{ id: "storage", cabinet: "storage" }', (ROOT / "config/web/setup.js").read_text())
+        self.assertIn('"$setup" --storage prepare "$new_target"', (ROOT / "config/fliperos-automount").read_text())
+        self.assertIn("--storage)\n      storage_cli", (SETUP / "fliperos-setup").read_text())
 
 
 class FoldersTests(Base):
