@@ -192,10 +192,10 @@ function cgRenderList() {
   cg.el.list.replaceChildren(...groups.map((g) => {
     const mine = games.filter((x) => x.group === g.name);
     const del = el("button", { type: "button", class: "icon-btn small cg-gdel", title: t("cg_group_delete"),
-      "aria-label": t("cg_group_delete") + ": " + g.name }, icon("g-trash"));
+      "aria-label": t("cg_group_delete") + ": " + g.name }, icon("px-remove"));
     del.addEventListener("click", () => cgDeleteGroup(g.name).catch(() => {}));
     const logo = el("button", { type: "button", class: "icon-btn small", title: t("cg_group_logo"),
-      "aria-label": t("cg_group_logo") + ": " + g.name }, icon("g-upload"));
+      "aria-label": t("cg_group_logo") + ": " + g.name }, icon("px-video"));
     logo.addEventListener("click", () => cgGroupLogo(g).catch(() => {}));
     const rename = el("button", { type: "button", class: "icon-btn small", title: t("cg_group_rename"),
       "aria-label": t("cg_group_rename") + ": " + g.name }, icon("px-edit"));

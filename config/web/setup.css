@@ -398,10 +398,8 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-group h4 .cg-gtools { display: flex; gap: 2px; margin-left: auto; }
 .cg-group h4 .cg-gtools .icon-btn { border: 0; background: none; color: var(--dim); margin-left: 0; }
 .cg-group h4 .cg-gtools .icon-btn:hover { background: var(--raise); color: var(--text); }
-.cg-group h4 .cg-gtools .cg-gdel:hover { color: var(--bad); }
-/* Os tres botoes na mesma medida: o glifo de 12 em 13 px e o lapis de 16 em 16 px (1:1, o mesmo do
-   Editar do jogo). O h4 esconde os desenhos px (os que enfeitavam o titulo): o lapis volta aqui. */
-.cg-group h4 .cg-gtools svg.g { width: 13px; height: 13px; }
+/* Os tres botoes (logotipo, renomear, apagar) sao desenhos px coloridos de 16 px (1:1, nitidos), como o
+   Editar do jogo. O h4 esconde os desenhos px (os que enfeitavam o titulo): eles voltam aqui. */
 .cg-group h4 .cg-gtools svg.px { display: block; width: 16px; height: 16px; }
 .cg-glogo { height: 14px; width: auto; max-width: 96px; object-fit: contain; vertical-align: middle; }
 .cg-logo-now, .cg-logo-preview { display: grid; place-items: center; min-height: 64px; margin: 10px 0; padding: 10px;
@@ -440,10 +438,6 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-create { max-width: 760px; margin-top: 14px; }
 .cg-create-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 760px; }
 .cg-pane .cg-structure { margin: 0 0 4px; }
-/* Apagar o grupo: a lixeira no fim do titulo dele. */
-.cg-group h4 .cg-gdel { margin-left: auto; border: 0; background: none; color: var(--dim); }
-.cg-group h4 .cg-gdel:hover { background: var(--raise); color: var(--bad); }
-.cg-group h4 .cg-gdel svg.g { width: 13px; height: 13px; }
 /* A estrutura do pacote: o zip aberto, cada arquivo com a cor do seu tipo e
    se e obrigatorio, e o cfg de exemplo ao lado. */
 .cg-structure { margin: -12px 0 26px; overflow: hidden; border: 1px solid var(--hair); border-radius: 16px; background: var(--surface); font-size: 13px; }
