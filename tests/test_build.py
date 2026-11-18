@@ -9511,6 +9511,23 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(s['volume'], {'percent': 42, 'muted': True})
         self.assertGreater(s['memory']['total'], 0)
 
+    def test_status_with_the_osd_beat_of_a_game_without_a_layer(self):
+        # O Fightcade (e o MUGEN) nao tem camada: quem grava o arquivo e o
+        # fliperos-osd-x11, com "-" no lugar do FPS. O float("-") derrubava o
+        # /api/status inteiro: o painel nao via o jogo nem a tela ao vivo.
+        cookie = self.login()
+        osd = SourceFileLoader('fliperos_osd_x11_beat', str(ROOT / 'config/fliperos-osd-x11')).load_module()
+        (Path(self.tmp.name) / 'run/1000/fliperos-fps').write_text(osd.beat_line(os.getpid(), 'fightcade'))
+        status, _, data = self.request('GET', '/api/status', cookie=cookie)
+        self.assertEqual(status, 200)
+        s = json.loads(data)
+        self.assertEqual(s['fps'], {'pid': os.getpid(), 'fps': None, 'program': 'fightcade', 'core': None,
+                                    'filtering': False})
+        # A pagina mostra "--" em vez de quebrar em null.toFixed.
+        js = (ROOT / 'config/web/cabinet.js').read_text()
+        self.assertIn('const rate = fps && typeof fps.fps === "number" ? fps.fps : null;', js)
+        self.assertNotIn('fps.fps.toFixed', js)
+
     def test_the_hardware_parsers_and_the_machine_report(self):
         # Sistema > Status: a placa-mae, a CPU com o socket, o PCI com os
         # enderecos, o som, os discos e os aparelhos ligados; o relatorio junta

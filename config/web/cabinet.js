@@ -511,12 +511,14 @@ function renderCabinet(s) {
   marquee(online ? cabGame : null);
   mqPaint(online ? cabGame : null);
   const fps = s && s.fps;
-  led($("fps-led"), fps ? fps.fps.toFixed(1).padStart(4, " ") : " --");
-  $("fps-led").className = "led " + (!fps ? "" : fps.fps >= 58 ? "good" : fps.fps >= 45 ? "warn" : "bad");
+  // Sem camada no jogo (o Fightcade, o MUGEN) o painel sabe o programa mas nao o FPS: fps.fps vem null.
+  const rate = fps && typeof fps.fps === "number" ? fps.fps : null;
+  led($("fps-led"), rate !== null ? rate.toFixed(1).padStart(4, " ") : " --");
+  $("fps-led").className = "led " + (rate === null ? "" : rate >= 58 ? "good" : rate >= 45 ? "warn" : "bad");
   $("fps-note").textContent = fps && fps.filtering ? t("filtering") : "";
-  $("mini-fps").textContent = fps ? fps.fps.toFixed(1) + " FPS" : "";
+  $("mini-fps").textContent = rate !== null ? rate.toFixed(1) + " FPS" : "";
   if (online) {
-    fpsHistory.push(fps ? fps.fps : null);
+    fpsHistory.push(rate);
     while (fpsHistory.length > 60) fpsHistory.shift();
     if (area === "frontend") drawFps();
     renderVolume(s.volume);

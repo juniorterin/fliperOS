@@ -984,7 +984,8 @@ def wifi():
 
 def fps():
     """O FPS gravado pela camada (fliperos-deflicker.c) de um programa ainda
-    aberto: o arquivo mais novo de /run/user/*/fliperos-fps."""
+    aberto: o arquivo mais novo de /run/user/*/fliperos-fps. "fps" e None
+    quando quem gravou foi o fliperos-osd-x11, que so diz qual programa abriu."""
     best = None
     for path in glob.glob(os.path.join(RUN_USER, "*/fliperos-fps")):
         try:
@@ -992,9 +993,16 @@ def fps():
             fields = read(path).split()
         except OSError:
             continue
-        if len(fields) < 5 or age > 3 or not os.path.exists(os.path.join(PROC, fields[0])):
+        if len(fields) < 5 or age > 3 or not fields[0].isdigit() or not os.path.exists(os.path.join(PROC, fields[0])):
             continue
-        row = {"pid": int(fields[0]), "fps": float(fields[1]), "program": fields[2],
+        # Sem camada no jogo (o Fightcade, o MUGEN: fliperos-osd-x11) o campo e
+        # "-": o programa esta aberto e o painel o mostra, sem o numero do FPS.
+        # Um float("-") aqui derrubava o /api/status inteiro enquanto durasse.
+        try:
+            rate = float(fields[1])
+        except ValueError:
+            rate = None
+        row = {"pid": int(fields[0]), "fps": rate, "program": fields[2],
                "core": None if fields[3] == "-" else fields[3], "filtering": fields[4] == "1"}
         if best is None or age < best[0]:
             best = (age, row)
