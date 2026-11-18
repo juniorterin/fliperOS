@@ -7846,6 +7846,36 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-customgame" "$root/opt/fliperos/bin/fliperos-customgame"',
                       ROOTFS)
 
+    def test_portproton_custom_games_get_the_picom_filter(self):
+        # O container do PortProton (pressure-vessel) troca o LD_PRELOAD: a camada
+        # nunca chega ao jogo (visto no gabinete com o MARVEL Cosmic Invasion em
+        # 854x480i: o wineserver com LD_PRELOAD vazio, sem filtro). Um jogo custom
+        # do Windows com o runner padrao (ou portproton) fica no picom; o Wine do
+        # sistema e o Staging seguem com a camada, e o que nao e do Windows tambem.
+        wine = {'FLIPEROS_USES_WINE': '1'}
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / 'Game with spaces.cfg'
+
+            def launch_of(text, extra=wine):
+                cfg.write_text(text)
+                return self.client_launch(['fliperos-customgame', 'run', str(cfg)], extra=extra)
+
+            for text in ('platform=windows\nexe=Game.exe\n', 'platform=windows\nrunner=portproton\nexe=g.exe\n',
+                         'platform=windows\nrunner=portproton'):
+                launch, picom = launch_of(text)
+                self.assertTrue(picom, text)
+                self.assertNotIn('LD_PRELOAD', launch, text)
+            for text in ('platform=windows\nrunner=wine\n', 'platform=windows\nrunner=wine-staging\n',
+                         'platform=native\ncommand=./game\n', 'platform=command\ncommand=wine a.exe\n', ''):
+                launch, picom = launch_of(text)
+                self.assertFalse(picom, text)
+                self.assertIn('LD_PRELOAD=l64.so:l32.so ', launch, text)
+            # Sem o --wine (FLIPEROS_USES_WINE) o cfg nem e lido.
+            self.assertFalse(launch_of('platform=windows\n', extra={})[1])
+        # O nome do jogo vai ao filtro do picom (deflicker_NOME= do fliperos.conf).
+        client = (ROOT / 'config/fliperos-x11-client').read_text()
+        self.assertIn('--app "${FLIPEROS_DEFLICKER_APP:-$(basename -- "$1")}" --watch', client)
+
     def run_x11(self, args, conf, lib=True, flycast_rend=None):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)

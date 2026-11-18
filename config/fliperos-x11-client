@@ -88,6 +88,26 @@ fi
 case $(basename -- "$1") in
   fightcade*) picom=1 ;;
   wine* | *.exe) [[ -f $deflicker32 ]] || picom=1 ;;
+  # Um jogo custom do Windows pelo PortProton (o runner padrao, sem a linha
+  # runner= no cfg: DEFAULT_RUNNER do fliperos-customgame): o container dele
+  # (pressure-vessel) troca o LD_PRELOAD e o jogo nunca carrega a camada,
+  # nem a de 64 nem a de 32 bits (visto no gabinete com o MARVEL Cosmic
+  # Invasion em 854x480i: o wineserver com LD_PRELOAD vazio e a camada
+  # mapeada so no bash do PortProton). Ali o filtro e o do picom, como no
+  # Fightcade. O Wine do sistema e o Staging (runner=wine, wine-staging)
+  # seguem com a camada: o processo deles herda o LD_PRELOAD.
+  fliperos-customgame)
+    if [[ ${FLIPEROS_USES_WINE:-} == 1 && ${2:-} == run && -f ${3:-} ]]; then
+      platform="" runner=""
+      while IFS= read -r line || [[ -n $line ]]; do
+        case $line in
+          platform=*) platform=${line#platform=} ;;
+          runner=*) runner=${line#runner=} ;;
+        esac
+      done < "$3"
+      if [[ $platform == windows && ( -z $runner || $runner == portproton ) ]]; then picom=1; fi
+    fi
+    ;;
 esac
 case $picom in
   1)
