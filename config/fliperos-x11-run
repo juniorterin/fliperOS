@@ -247,6 +247,18 @@ case $name in
     # gravacoes de entrada nao servem entre NKit e imagem normal), uma janela
     # que o painel nao sabe fechar: o jogo ficava parado nela.
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface SkipNKitWarning True 2> /dev/null || true
+    # Um jogo de Wii em 4:3: o AspectRatio 3 acima estica a imagem do Dolphin
+    # na janela inteira do tubo, e o Wii nasce com a TV em 16:9 (IPL.AR do
+    # SYSCONF dele): a imagem de 16:9 sairia espremida no 4:3 do tubo. O
+    # SYSCONF existe depois do primeiro jogo de Wii; wii_aspect=16:9 no
+    # fliperos.conf deixa como o Dolphin faz.
+    wii_sysconf=${FLIPEROS_WII_SYSCONF:-/opt/fliperos/bin/fliperos-wii-sysconf}
+    if [[ -x $wii_sysconf ]]; then
+      wii_ar=0
+      [[ $(sed -n 's/^wii_aspect=//p' "$CONF" 2> /dev/null | tail -n 1) == 16:9 ]] && wii_ar=1
+      "$wii_sysconf" --file "${FLIPEROS_WII_SYSCONF_FILE:-$HOME/.local/share/dolphin-emu/Wii/shared2/sys/SYSCONF}" \
+        set IPL.AR "$wii_ar" 2> /dev/null || true
+    fi
     cheevos_ini dolphin "${gfx%/*}/RetroAchievements.ini"
     # As conquistas na saida (o dolphin-emu.log abaixo), para a barra da OSD
     # (fliperos-cheevos watch): o Dolphin so as escreve com o log

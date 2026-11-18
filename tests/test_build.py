@@ -13434,6 +13434,60 @@ class EmulatorModeTests(unittest.TestCase):
         self.assertIn('MODE=640 240 57.524', out)
         self.assertIn('MODE=496 384 57.524', self.run_x11(['fliperos-model3'], frequency='31k').stdout)
 
+    @staticmethod
+    def fake_sysconf(ar=1):
+        """Um SYSCONF de mentira no formato do Wii: SCv0, o numero de itens, os enderecos e, em cada um, o
+        byte (tipo nos 3 bits de cima, tamanho do nome - 1 nos de baixo), o nome e o dado."""
+        import struct
+        entries = [('IPL.LNG', 3, bytes([1])), ('IPL.AR', 3, bytes([ar])), ('IPL.NIK', 1, b'\x00\x04nick'),
+                   ('IPL.PGS', 7, bytes([0]))]
+        body, offsets, pos = b'', [], 6 + 2 * len(entries)
+        for name, kind, data in entries:
+            offsets.append(pos + len(body))
+            body += bytes([(kind << 5) | (len(name) - 1)]) + name.encode() + data
+        blob = b'SCv0' + struct.pack('>H', len(entries)) + struct.pack('>4H', *offsets) + body
+        return blob + b'\x00' * (4096 - len(blob))
+
+    def test_dolphin_wii_games_are_4_by_3(self):
+        # O Wii nasce em 16:9 (IPL.AR=1 no SYSCONF) e o AspectRatio 3 estica a imagem na janela do tubo:
+        # espremido. O fliperos-x11-run poe a TV do Wii em 4:3 (IPL.AR=0) antes de abrir o Dolphin.
+        tool = ROOT / 'config/fliperos-wii-sysconf'
+        with tempfile.TemporaryDirectory() as tmp:
+            sysconf = Path(tmp) / 'SYSCONF'
+            sysconf.write_bytes(self.fake_sysconf(1))
+            before = sysconf.read_bytes()
+            run = lambda *a: subprocess.run(['python3', str(tool), '--file', str(sysconf), *a], capture_output=True, text=True)
+            self.assertEqual(run('get', 'IPL.AR').stdout.strip(), '1')
+            self.assertEqual(run('set', 'IPL.AR', '0').returncode, 0)
+            self.assertEqual(run('get', 'IPL.AR').stdout.strip(), '0')
+            after = sysconf.read_bytes()
+            self.assertEqual(len(after), len(before))
+            self.assertEqual(sum(a != b for a, b in zip(before, after)), 1)      # so o byte do aspecto muda
+            self.assertEqual(run('get', 'IPL.LNG').stdout.strip(), '1')
+            # Sem a chave, de outro tipo (um texto), sem o arquivo, um arquivo que nao e SYSCONF, ou uso errado.
+            self.assertEqual(run('get', 'IPL.XXX').returncode, 1)
+            self.assertEqual(run('set', 'IPL.NIK', '0').returncode, 1)
+            self.assertEqual(subprocess.run(['python3', str(tool), '--file', str(Path(tmp) / 'none'), 'set', 'IPL.AR', '0']).returncode, 1)
+            (Path(tmp) / 'junk').write_bytes(b'not a sysconf at all')
+            self.assertEqual(subprocess.run(['python3', str(tool), '--file', str(Path(tmp) / 'junk'), 'get', 'IPL.AR']).returncode, 1)
+            self.assertEqual(run('set', 'IPL.AR', '300').returncode, 2)
+            self.assertEqual(run('bogus').returncode, 2)
+            # O fliperos-x11-run o chama antes do Dolphin (wii_aspect=16:9 deixa como o Dolphin faz).
+            sysconf.write_bytes(self.fake_sysconf(1))
+            extra = {'FLIPEROS_WII_SYSCONF': str(tool), 'FLIPEROS_WII_SYSCONF_FILE': str(sysconf),
+                     'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set')}
+            home = Path(tmp) / 'home'
+            home.mkdir()
+            self.run_x11(['dolphin-emu', '-e', 'game.iso'], home=home, extra=extra)
+            self.assertEqual(run('get', 'IPL.AR').stdout.strip(), '0')
+            self.run_x11(['dolphin-emu', '-e', 'game.iso'], home=home, extra=extra, conf='wii_aspect=16:9\n')
+            self.assertEqual(run('get', 'IPL.AR').stdout.strip(), '1')
+            # Sem o SYSCONF (o Dolphin ainda nao abriu um jogo de Wii), nada quebra e nada e criado.
+            sysconf.unlink()
+            self.assertEqual(self.run_x11(['dolphin-emu', '-e', 'game.iso'], home=home, extra=extra).returncode, 0)
+            self.assertFalse(sysconf.exists())
+        self.assertRegex(ROOTFS, r' fliperos-wii-sysconf[^\n]*; do')
+
     def test_stretched_200_percent_at_640x240(self):
         # 640x240 tem pixels 8:3; para o 4:3 encher o tubo, cada emulador estica
         # a imagem para a largura toda (o "200%").

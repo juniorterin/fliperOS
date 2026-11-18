@@ -6,6 +6,7 @@ Its games go in `~/roms/dolphin` (`.iso`, `.rvz`, `.wbfs`). It is compiled from 
 
 - It opens in its own Xorg at **640x240** on a 15 kHz tube, stretched to fill it (`AspectRatio=3`), or interlaced with **Interlaced hacks**.
 - On amdgpu it runs in **Vulkan**.
+- **Wii games are 4:3.** Dolphin starts the Wii with a 16:9 TV (`IPL.AR` in the Wii's `SYSCONF`), and the picture, stretched to the whole 640x240 window of the tube, would come out squeezed. Each time Dolphin opens, FliperOS sets the Wii's TV to 4:3 (`fliperos-wii-sysconf`). The `SYSCONF` is created the first time a Wii game opens, so a brand-new cabinet shows that first game as Dolphin makes it; from the second on it is 4:3. `wii_aspect=16:9` in `fliperos.conf` leaves the Wii as it is for a widescreen monitor.
 - An **NKit** image (`.nkit.iso`) opens without Dolphin's "NKit Warning" window (it would wait for a click the panel can't give): FliperOS sets `SkipNKitWarning` each time. Savestates and input recordings are still not shared between an NKit image and a normal one.
 - It has no menu of its own for the panel, so **coin + button 1** opens the FliperOS [on-screen menu](On-screen-menu.md).
 - **Net play** between cabinets, with FliperOS's patch ([Linked cabinets](Net-play.md#dolphin-net-play)), and [RetroAchievements](RetroAchievements.md).
