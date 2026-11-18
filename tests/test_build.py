@@ -5814,6 +5814,40 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'sengoku2')
         self.assertEqual([fd.first_letter(g) for g in games[:1] + [{'Name': '1944', 'Title': '1944'}]], ['S', '#'])
 
+    def test_the_first_press_after_attract_mode_counts(self):
+        # Parado um minuto, o cursor salta para um jogo sorteado (modo atracao). O primeiro toque so acordava o
+        # frontend e era preciso apertar de novo: agora ele volta ao jogo onde a pessoa estava e vale ali.
+        import types
+        fm = self.frontend_module()
+        games = [{'Name': n, 'Title': n.upper(), '_system': {'key': 'mame'}} for n in ('aa', 'bb', 'cc', 'dd')]
+        fe = types.SimpleNamespace(rows=[(g, 0, None) for g in games], cursor=2, overlay=None, letter_mode=None,
+                                   last_input=0.0, attract_next=None, attract_home=None,
+                                   fd=types.SimpleNamespace(group_item=lambda extra: False))
+        fm.Frontend.attract_tick(fe, 30.0)                 # menos de um minuto: nada acontece
+        self.assertEqual((fe.cursor, fe.attract_next, fe.attract_home), (2, None, None))
+        fm.Frontend.attract_tick(fe, 100.0)
+        self.assertNotEqual(fe.cursor, 2)
+        self.assertEqual(fe.attract_home, (2, games[2]))
+        fm.Frontend.attract_tick(fe, 140.0)                # o proximo sorteio nao troca o "de onde saiu"
+        self.assertEqual(fe.attract_home, (2, games[2]))
+        fm.Frontend.attract_restore(fe)
+        self.assertEqual(fe.cursor, 2)
+        self.assertIsNone(fe.attract_home)
+        # A lista mudou no meio (outra ordem): volta pelo jogo, nao pelo numero.
+        fe.attract_next = None
+        fm.Frontend.attract_tick(fe, 300.0)
+        fe.rows = [(games[3], 0, None), (games[2], 0, None), (games[0], 0, None)]
+        fm.Frontend.attract_restore(fe)
+        self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'cc')
+        # Um menu aberto segura o modo atracao e esquece o "de onde saiu".
+        fe.attract_home, fe.attract_next, fe.overlay = (1, games[1]), 5.0, 'menu'
+        fm.Frontend.attract_tick(fe, 400.0)
+        self.assertEqual((fe.attract_next, fe.attract_home), (None, None))
+        # O laco principal nao descarta mais o que o toque faz.
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('self.attract_restore()', src)
+        self.assertNotIn('acts = [a for a in acts if a == "quit"]', src)
+
     def test_recent_and_favourites_groups_on_top_of_the_list(self):
         # No alto da lista, RECENT e FAVOURITES: um cabecalho (sem jogo) que
         # abre e fecha, e so aparece quando tem jogos.

@@ -106,8 +106,9 @@ PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/flipero
 IDLE_SECONDS = float(os.environ.get("FLIPEROS_IDLE_SECONDS", "30"))
 # O modo atracao: ATTRACT_SECONDS sem apertar nenhum botao e o cursor vai para
 # um jogo sorteado da lista (com o video dele), e troca de jogo a cada
-# ATTRACT_STEP segundos. O primeiro toque so acorda o frontend, no jogo em que
-# parou, sem fazer o que o botao faz. 0 desliga.
+# ATTRACT_STEP segundos. O primeiro toque volta ao jogo onde a pessoa estava e
+# faz o que o botao faz (antes ele so acordava o frontend e era preciso apertar
+# duas vezes). 0 desliga.
 ATTRACT_SECONDS = float(os.environ.get("FLIPEROS_ATTRACT_SECONDS", "60"))
 ATTRACT_STEP = max(1.0, float(os.environ.get("FLIPEROS_ATTRACT_STEP", "30")))
 # Os botoes do atalho do painel, segurados juntos por EXIT_HOLD segundos
@@ -803,16 +804,38 @@ class Frontend:
         no meio de algo."""
         if (not ATTRACT_SECONDS or now - self.last_input < ATTRACT_SECONDS
                 or self.overlay not in (None, "guide") or self.letter_mode):
-            self.attract_next = None
+            self.attract_next = self.attract_home = None
             return
         if self.attract_next is not None and now < self.attract_next:
             return
+        if self.attract_next is None:
+            # De onde a pessoa saiu: o primeiro toque volta para la.
+            game = self.rows[self.cursor][0] if self.cursor < len(self.rows) else None
+            self.attract_home = (self.cursor, game)
         self.attract_next = now + ATTRACT_STEP
         picks = [i for i, (g, level, extra) in enumerate(self.rows)
                  if not level and g is not None and not self.fd.group_item(extra) and i != self.cursor]
         if picks:
             self.overlay = None
             self.cursor = random.choice(picks)
+
+    def attract_restore(self):
+        """O modo atracao acabou com um toque: o cursor volta para onde a
+        pessoa estava antes do sorteio (o jogo, ou a linha se a lista mudou) e
+        o toque vale ali. Antes ele so acordava o frontend, no jogo sorteado, e
+        era preciso apertar de novo."""
+        home, self.attract_home = getattr(self, "attract_home", None), None
+        if not home:
+            return
+        cursor, game = home
+        if game is not None:
+            for i, (g, _level, _extra) in enumerate(self.rows):
+                if g is game or (g is not None and g.get("Name") == game.get("Name")
+                                 and g.get("_system") is game.get("_system")):
+                    self.cursor = i
+                    return
+        if cursor < len(self.rows):
+            self.cursor = cursor
 
     def switch_category(self, step):
         """Um sistema para o lado na tira: so os azulejos andam. A lista troca
@@ -2787,7 +2810,7 @@ class Frontend:
                 self.pg.image.save(self.back, "%s-%d.png" % (self.shot, i))
             return 0
         self.last_input, self.idle = time.monotonic(), False
-        self.attract_next = None
+        self.attract_next = self.attract_home = None
         # O marquee abre no logotipo do sistema em que o frontend abriu (as
         # trocas o mandam em switch_category).
         self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
@@ -2797,10 +2820,10 @@ class Frontend:
             woke = bool(acts) and self.attract_next is not None
             self.marquee_idle(now, bool(acts) or bool(self.input.down))
             if woke:
-                # O modo atracao passava os jogos: o toque so acorda, no jogo
-                # em que parou (o quit, que vem do sistema, ainda vale).
+                # O modo atracao passava os jogos: o toque volta ao jogo onde a
+                # pessoa estava e vale ali, no primeiro aperto.
                 self.attract_next = None
-                acts = [a for a in acts if a == "quit"]
+                self.attract_restore()
             for a in acts:
                 r = self.act(a)
                 if r == "quit":
