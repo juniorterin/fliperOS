@@ -4,7 +4,11 @@
 # commit dele e o push. Os gabinetes perguntam no proximo boot com rede
 # (config/fliperos-update) e aplicam os updates sempre em ordem.
 #
-#   tools/make-update.sh "Title shown on the cabinet" [--reboot]
+#   tools/make-update.sh "Title shown on the cabinet" [--reboot] [--no-telegram]
+#
+# --no-telegram publica sem o aviso no grupo: o commit do index leva [skip ci],
+# que o GitHub respeita, e nem o texto do Telegram nem as notas em portugues
+# sao exigidos. Postar depois: Actions > Telegram, versao update-NNN.
 #
 # O commit atual tem de estar no origin/main (o gabinete o baixa do
 # GitHub). Passos extras so deste update vao em updates/NNNN.sh, no mesmo
@@ -20,10 +24,17 @@ die() {
   echo "make-update: $*" >&2
   exit 1
 }
-title=${1:?Uso: tools/make-update.sh "titulo" [--reboot]}
+title=${1:?Uso: tools/make-update.sh "titulo" [--reboot] [--no-telegram]}
 [[ $title != *$'\t'* ]] || die "the title cannot have a tab"
 reboot=no
-[[ ${2:-} == --reboot ]] && reboot=yes
+telegram=yes
+for flag in "${@:2}"; do
+  case $flag in
+    --reboot) reboot=yes ;;
+    --no-telegram) telegram=no ;;
+    *) die "unknown option: $flag" ;;
+  esac
+done
 git=$(type -P git)
 
 [[ -z $("$git" status --porcelain --untracked-files=no) ]] || die "commit the changes first"
@@ -44,7 +55,8 @@ notes=$(printf 'updates/notes/%04d.md' "$n")
 # O Telegram recebe as notas em portugues e em ingles; o
 # docs/telegram/update-NNNN.md, quando existe, ja traz os dois.
 pt_notes=$(printf 'updates/notes/pt-BR/%04d.md' "$n")
-[[ -f $(printf 'docs/telegram/update-%04d.md' "$n") ]] || "$git" cat-file -e "$commit:$pt_notes" 2> /dev/null ||
+[[ $telegram == no || -f $(printf 'docs/telegram/update-%04d.md' "$n") ]] ||
+  "$git" cat-file -e "$commit:$pt_notes" 2> /dev/null ||
   die "write $pt_notes (the same notes in Portuguese, for the Telegram group) and commit it first"
 
 # O treehash da arvore que o gabinete baixa (o git archive do commit, como
@@ -70,12 +82,14 @@ PY
 printf '%d\t%s\t%s\t%s\t%s\n' "$n" "$commit" "$tree" "$reboot" "$title" >> updates/index
 # O push posta o update no grupo do Telegram (.github/workflows/telegram.yml):
 # o texto tem de passar antes, ou o update sai sem o aviso.
-if ! python3 tools/telegram-post.py --dry-run --update "$n" > /dev/null; then
+if [[ $telegram == yes ]] && ! python3 tools/telegram-post.py --dry-run --update "$n" > /dev/null; then
   "$git" checkout -q -- updates/index
   die "the Telegram text of update $n does not pass (python3 tools/telegram-post.py --dry-run --update $n)"
 fi
 printf 'Update %d: %s\n\nPublica o commit %s como o update %d (updates/index).\n' \
   "$n" "$title" "${commit:0:7}" "$n" > "$tmp/msg"
+# --no-telegram: o [skip ci] faz o GitHub nao rodar o workflow do push.
+[[ $telegram == yes ]] || printf '\nSem o Telegram (--no-telegram): [skip ci]\n' >> "$tmp/msg"
 "$git" add updates/index
 "$git" commit -q -F "$tmp/msg"
 "$git" push -q origin main

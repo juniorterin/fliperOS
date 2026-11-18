@@ -8409,20 +8409,20 @@ class WebCustomGamesTests(WebSetupBase):
         text = (ROOT / 'config/web/setup-text.js').read_text()
         for key in ('cg_group_rename', 'cg_rename_title', 'cg_rename_note', 'cg_rename_go', 'cg_rename_bad', 'cg_renamed'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
-        # Os botoes da cabeca do grupo: o renomear usa o mesmo lapis (px-edit) do Editar do jogo, nitido em 16 px, e
-        # os outros dois os glifos g- em 13 px. O CSS do h4 esconde os desenhos px (os que enfeitavam o titulo: o botao
-        # aparecia como um quadrado vazio) e o lapis volta ali. O g-edit, um contorno fino de 12x12 que ficava
-        # serrilhado a 18 px, saiu do sprite.
+        # Os botoes da cabeca do grupo (logotipo, renomear, apagar) sao os tres desenhos px coloridos, de 16 px (1:1,
+        # nitidos): a TV, o lapis do Editar do jogo e a lixeira vermelha. Misturar um lapis colorido com dois glifos de
+        # uma cor so ficava torto, e o contorno g-edit de 12x12 saia serrilhado a 18 px (saiu do sprite). O CSS do h4
+        # esconde os desenhos px (os que enfeitavam o titulo: o botao aparecia como um quadrado vazio): eles voltam ali.
         sprites = (ROOT / 'config/web/icons.svg').read_text()
-        for name in ('g-upload', 'px-edit', 'g-trash'):
+        for name in ('px-video', 'px-edit', 'px-remove'):
             self.assertIn('id="%s"' % name, sprites, name)
         self.assertNotIn('id="g-edit"', sprites)
         self.assertNotIn('"edit": """', (ROOT / 'tools/web-icons.py').read_text())
-        self.assertIn('"aria-label": t("cg_group_rename") + ": " + g.name }, icon("px-edit"))', js)
+        tools = js.split('const del = el("button"')[1].split('return el("section"')[0]
+        self.assertEqual(re.findall(r'icon\("([\w-]+)"\)', tools), ['px-remove', 'px-video', 'px-edit'])
         css = (ROOT / 'config/web/setup.css').read_text()
         self.assertIn('.cg-group h4 svg.px, .cg-sec h4 svg.px { display: none; }', css)
         self.assertIn('.cg-group h4 .cg-gtools svg.px { display: block; width: 16px; height: 16px; }', css)
-        self.assertIn('.cg-group h4 .cg-gtools svg.g { width: 13px; height: 13px; }', css)
 
     def test_the_marquee_logo_of_a_group_follows_the_uploaded_one(self):
         # /api/marquee/logo desenha o logotipo do grupo que a pessoa subiu (o do syslogo, com o mesmo nome) e, com
@@ -18523,7 +18523,11 @@ class TelegramTests(unittest.TestCase):
         # Chamado pelo Release (o evento e o push da tag), posta a versao.
         self.assertIn("if: inputs.version == ''", workflow)
         self.assertIn("if: inputs.version != ''", workflow)
-        self.assertIn('telegram-post.py --dry-run --update', (ROOT / 'tools/make-update.sh').read_text())
+        script = (ROOT / 'tools/make-update.sh').read_text()
+        self.assertIn('telegram-post.py --dry-run --update', script)
+        # Sem o Telegram: o commit do index leva [skip ci], que o GitHub respeita.
+        self.assertIn('--no-telegram) telegram=no', script)
+        self.assertIn('[skip ci]', script)
 
     def test_markdown_becomes_telegram_html(self):
         html = self.post.markup('**Bold** and `a<b` & [site](https://x.org/?a=1&b=2)\n- item\n- `**no**`')
