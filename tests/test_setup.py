@@ -5911,6 +5911,88 @@ class ButtonPlayersTests(Base):
         self.assertIn("menu [Which player is Panel?] [2] 1|Player 1 2|Player 2 3|Player 3 return|Return", calls)
 
 
+class HapticEventsTests(Base):
+    """Setup > Joysticks > Haptic events: haptic_CHAVE= por evento, haptic= de forca."""
+
+    def tool(self):
+        d = self.env.dir
+        (d / "haptic").write_text('#!/bin/sh\nif [ "$1" = presets ]; then printf "tick|Dry click\\nselect|Tap\\nback|Two\\n'
+                                  'open|Up\\nclose|Down\\nstep|Full\\nheartbeat|Beats\\n"; exit 0; fi\n'
+                                  'echo "$*" >> "%s/haptic.calls"\n' % d)
+        (d / "haptic").chmod(0o755)
+        return {"HAPTIC": str(d / "haptic")}
+
+    def conf(self):
+        return (self.env.etc / "fliperos.conf").read_text()
+
+    def test_defaults_match_each_event(self):
+        env = self.tool()
+        got = dict(l.split("=") for l in self.env.out(
+            'for k in move enter back system open close; do echo "$k=$(haptic_get $k)"; done', env).split())
+        self.assertEqual(got, {"move": "tick", "enter": "select", "back": "back", "system": "step",
+                               "open": "open", "close": "close"})
+
+    def test_a_preset_is_saved_played_and_the_default_clears_it(self):
+        env = self.tool()
+        self.env.out("haptic_set move heartbeat", env)
+        self.assertIn("haptic_move=heartbeat", self.conf())
+        self.assertEqual((self.env.dir / "haptic.calls").read_text(), "heartbeat\n")
+        self.assertEqual(self.env.out("haptic_get move", env).strip(), "heartbeat")
+        self.env.out("haptic_set move off", env)
+        self.assertEqual(self.env.out("haptic_get move", env).strip(), "off")
+        self.env.out("haptic_set move tick", env)
+        self.assertNotIn("haptic_move", self.conf())
+        # Evento ou preset que nao existem: 2, e nada gravado.
+        self.assertEqual(self.env.run("haptic_set nope tick", env).returncode, 2)
+        self.assertEqual(self.env.run("haptic_set move nope", env).returncode, 2)
+        self.assertNotIn("haptic_", self.conf())
+
+    def test_strength(self):
+        self.assertEqual(self.env.out("haptic_strength_get").strip(), "on")
+        self.env.out("haptic_strength_set high")
+        self.assertIn("haptic=high", self.conf())
+        self.env.out("haptic_strength_set on")
+        self.assertNotIn("haptic=", self.conf())
+        self.assertEqual(self.env.run("haptic_strength_set loud").returncode, 2)
+
+    def test_the_web_panel_lists_and_sets_them(self):
+        env = self.tool()
+        rows = [l.split("|") for l in self.env.out("settings_list", env).splitlines() if l.startswith("haptic")]
+        keys = [r[0] for r in rows]
+        self.assertEqual(keys, ["haptic", "haptic.move", "haptic.enter", "haptic.back", "haptic.system",
+                                "haptic.open", "haptic.close"])
+        move = rows[1]
+        self.assertEqual((move[1], move[3], move[4]), ("Joysticks", "choice", "tick"))
+        self.assertIn("heartbeat=heartbeat: Beats", move[5])
+        self.assertTrue(move[5].startswith("off=Off;"))
+        self.env.out("settings_set haptic.enter heartbeat", env)
+        self.assertIn("haptic_enter=heartbeat", self.conf())
+        self.assertEqual(self.env.run("settings_set haptic.enter nope", env).returncode, 2)
+
+    def test_the_setup_screen_offers_events_then_presets(self):
+        env = self.tool()
+        log = self.env.dir / "menu"
+        self.env.out("""
+            source %s/screens/joysticks.sh
+            ui_menu_hints() {
+              # Chamado em $(...): o contador fica num arquivo, nao numa variavel.
+              printf '%%s\\n' "$*" >> %s
+              case $(wc -l < %s.n) in
+                0) echo haptic-move ;; 1) echo haptic-heartbeat ;; *) echo return ;;
+              esac
+              echo x >> %s.n
+            }
+            : > %s.n
+            screen_haptic
+        """ % (SETUP, log, log, log, log), env)
+        text = log.read_text()
+        self.assertIn("haptic-strength|Strength: on", text)
+        self.assertIn("haptic-system|Moving through systems: step", text)
+        self.assertIn("haptic-off|Off|", text)
+        self.assertIn("haptic-tick|tick (default)|Dry click", text)
+        self.assertIn("haptic_move=heartbeat", self.conf())
+
+
 class PadColorTests(Base):
     """Setup > Joysticks > Controller light: padcolor= e os controles ligados na hora."""
 

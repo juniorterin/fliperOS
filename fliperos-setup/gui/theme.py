@@ -290,6 +290,26 @@ ICONS.update({
 ................
 ................
 """,
+    # A vibracao dos controles (Joysticks > Haptic events): o joypad com as
+    # ondas dos lados.
+    "haptic": """
+................
+................
+..PPPPPPPPPPPP..
+.KPPPPPPPPPPPPK.
+K.PPFPPPPPPRPP.K
+K.PFFFPPPPGPYP.K
+K.PPFPPPPPCPPP.K
+.KPPPPPPPPPPPPK.
+..PPPPPPPPPPPP..
+..PPPP....PPPP..
+..PPP......PPP..
+...P........P...
+................
+................
+................
+................
+""",
     "padcolor": """
 ................
 ......YYYY......
@@ -1479,7 +1499,7 @@ for _alias, _name in {
     "list": "romlist", "log": "romlist", "details": "romlist", "files": "romlist", "data": "romlist",
     "order": "romlist", "whatsnew": "romlist", "version": "reset", "latest": "install", "all": "install", "artpack": "scraper", "biospack": "chip",
     # Latency, LPT joysticks, Recovery, Cleaner e Video Setup.
-    "low": "latency", "ideal": "freeroms", "standard": "setup", "db9": "lpt", "gamecon": "lpt",
+    "low": "latency", "high": "latency", "ideal": "freeroms", "standard": "setup", "db9": "lpt", "gamecon": "lpt",
     "turbografx": "lpt", "bootloader": "system", "chdcleaner": "chds", "romcleaner": "filter",
     # O menu da GunCon 2 (Joysticks): o flash da tela e a recarga.
     "flash": "guncon", "pulse": "guncon", "hold": "guncon", "reload": "guncon",
@@ -1544,6 +1564,14 @@ ICONS["monitor"] = ICONS["video"]
 for _alias, _name in {"pair": "bluetooth", "pairall": "bluetooth", "devices": "joysticks", "connect": "ok",
                       "disconnect": "power", "map": "buttons"}.items():
     ICONS[_alias] = ICONS[_name]
+# Joysticks > Haptic events: a forca, cada evento e cada preset (haptic-NOME,
+# os nomes de config/fliperos-haptic presets; testado em HapticTests).
+for _name in ("strength", "off", "move", "enter", "back", "system", "open", "close", "tick", "step", "select",
+              "start", "end", "error", "coin", "left-motor", "right-motor", "both-motors", "alternate",
+              "thump", "buzz", "purr", "heartbeat", "engine-rev", "engine-idle", "ramp-up", "ramp-down",
+              "wave", "machine-gun", "pulse-train", "knock-knock", "explosion", "sword-clash", "earthquake",
+              "sonar-ping", "notification", "success", "fail", "warning", "sos", "rain"):
+    ICONS["haptic-" + _name] = ICONS["haptic"]
 for _name, _rows in ICONS.items():
     assert [len(r) for r in _rows.split()] == [16] * 16, _name
 ICONS["terminal"] = ICONS["shell"]

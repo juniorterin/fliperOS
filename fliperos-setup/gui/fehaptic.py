@@ -135,19 +135,85 @@ PRESETS = {
 ALL = dict(PATTERNS, **PRESETS)
 
 
-def plan_of(event):
-    return ALL.get(event, ())
+# Os eventos que a pessoa escolhe o preset (Setup > Joysticks > Haptic events):
+# o evento que o codigo dispara -> a chave haptic_CHAVE do fliperos.conf, o
+# rotulo e o padrao (o preset que mais combina). Valor "off": sem vibracao.
+EVENT_KEYS = {
+    "tick": ("move", "Moving through items", "tick", "Menu and frontend: each item you pass."),
+    "select": ("enter", "Entering an item", "select", "Menu and frontend: accepting an item."),
+    "back": ("back", "Going back", "back", "Menu and frontend: leaving a screen."),
+    "step": ("system", "Moving through systems", "step", "Frontend: changing system or tab."),
+    "open": ("open", "Entering the frontend", "open", "A frontend opens (FliperOS, ES-DE, AttractPlus, Pegasus)."),
+    "close": ("close", "Leaving the frontend", "close", "A frontend closes."),
+}
+
+# Uma dica de cada preset (a tela de escolha).
+HINTS = {
+    "tick": "Short dry click", "step": "Fuller click", "select": "Firm tap", "back": "Two clicks",
+    "open": "Rises, light to firm", "close": "Falls, firm to light", "start": "Rises, ends in a thump",
+    "end": "Thump with two fading echoes", "error": "Three hard knocks", "coin": "Sharp click and a thud",
+    "left-motor": "Only the big left motor", "right-motor": "Only the small right motor",
+    "both-motors": "Both motors together", "alternate": "Left and right in turn",
+    "thump": "One heavy thump", "buzz": "One sharp buzz", "purr": "Long soft rumble",
+    "heartbeat": "Two beats, twice", "engine-rev": "Engine revving up", "engine-idle": "Engine idling",
+    "ramp-up": "Grows steadily", "ramp-down": "Fades steadily", "wave": "Swells and ebbs",
+    "machine-gun": "Ten fast shots", "pulse-train": "Six even pulses", "knock-knock": "Two double knocks",
+    "explosion": "Blast with a long tail", "sword-clash": "Sharp hit, ringing out",
+    "earthquake": "Long rumble with jolts", "sonar-ping": "Ping with fading echoes",
+    "notification": "Two blips and a tap", "success": "Three rising taps", "fail": "Three falling thuds",
+    "warning": "Two alarms and a long one", "sos": "Morse S O S", "rain": "Light patter",
+}
 
 
-def steps(event, scale=1.0):
+def _conf_value(key):
+    """haptic_CHAVE do fliperos.conf, lido de novo se o arquivo mudou (o menu e
+    o frontend ficam abertos enquanto a pessoa escolhe)."""
+    try:
+        stamp = os.stat(CONF).st_mtime_ns
+    except OSError:
+        return ""
+    if _CONF_CACHE.get("stamp") != stamp or time.monotonic() - _CONF_CACHE.get("at", 0) > 5:
+        values = {}
+        try:
+            with open(CONF) as f:
+                for line in f:
+                    if line.startswith("haptic_") and "=" in line:
+                        k, v = line.split("=", 1)
+                        values[k.strip()] = v.strip().lower()
+        except OSError:
+            pass
+        _CONF_CACHE.update(stamp=stamp, at=time.monotonic(), values=values)
+    return _CONF_CACHE["values"].get(key, "")
+
+
+_CONF_CACHE = {}
+
+
+def chosen(event):
+    """O preset que toca neste evento: o escolhido no Setup (haptic_CHAVE),
+    "off" para nenhum, ou o do proprio evento."""
+    meta = EVENT_KEYS.get(event)
+    if not meta:
+        return event
+    value = _conf_value("haptic_" + meta[0])
+    return value if value == "off" or value in ALL else event
+
+
+def plan_of(event, raw=False):
+    """Os passos do evento; raw: o preset com este nome, sem a escolha do Setup
+    (a previa e a demonstracao)."""
+    return ALL.get(event if raw else chosen(event), ())
+
+
+def steps(event, scale=1.0, raw=False):
     """Os passos de um padrao na forca de scale (a forca nunca passa do
     maximo); evento desconhecido, nenhum."""
     return [(d, ms, min(0xffff, int(s * scale)), min(0xffff, int(w * scale)))
-            for d, ms, s, w in plan_of(event)]
+            for d, ms, s, w in plan_of(event, raw)]
 
 
-def duration(event):
-    return max((d + ms for d, ms, _s, _w in plan_of(event)), default=0) / 1000.0
+def duration(event, raw=False):
+    return max((d + ms for d, ms, _s, _w in plan_of(event, raw)), default=0) / 1000.0
 
 
 def classify(program, last):
@@ -212,11 +278,11 @@ class Pad:
             os.close(self.fd)
             raise
 
-    def play(self, event, scale=1.0, now=None):
+    def play(self, event, scale=1.0, now=None, raw=False):
         """Toca o padrao (o que tocava antes para). Devolve False se foi
         engolido pelo intervalo minimo ou nao ha o que tocar."""
         now = time.monotonic() if now is None else now
-        plan = steps(event, scale)
+        plan = steps(event, scale, raw)
         if not plan or now - self.last < MIN_GAP:
             return False
         self.last = now
@@ -260,7 +326,7 @@ def pads(root="/dev/input"):
     return found
 
 
-def play_all(event, wait=True, only=None, scale=None):
+def play_all(event, wait=True, only=None, scale=None, raw=False):
     """Toca event em todos os controles (only: so os de nome com esse texto);
     com wait, segura os controles abertos ate acabar (fechar apaga os efeitos
     no kernel). Devolve quantos."""
@@ -274,9 +340,9 @@ def play_all(event, wait=True, only=None, scale=None):
             if p not in keep:
                 p.close()
         found = keep
-    n = sum(1 for p in found if p.play(event, scale))
+    n = sum(1 for p in found if p.play(event, scale, raw=raw))
     if wait and n:
-        time.sleep(duration(event) + 0.05)
+        time.sleep(duration(event, raw) + 0.05)
     for p in found:
         p.close()
     return n
@@ -330,7 +396,7 @@ class Buzzer:
 
 # O que cada acao do frontend (feinput.FUNCTIONS) faz sentir.
 ACTION_EVENT = {"up": "tick", "down": "tick", "left": "step", "right": "step", "b1": "select",
-                "start": "select", "b2": "back", "tab": "step", "coin": "coin"}
+                "start": "select", "b2": "back", "tab": "select", "coin": "coin"}
 
 
 def action_event(action):

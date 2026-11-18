@@ -196,6 +196,14 @@ settings_list() {
   [[ ";$opts;" == *";$value="* || $value == off ]] || opts="$value=#$value;$opts"
   printf 'padcolor|Joysticks|Controller light|choice|%s|%s;off=Off|The light colour of DualSense, DualShock 4 and 8BitDo Ultimate 2 (an 8BitDo on Bluetooth saves it once plugged in by USB cable). Off: the controller keeps its own.\n' \
     "$value" "$opts"
+  # ── Joysticks > Haptic events (lib/buttons.sh) ──
+  printf 'haptic|Joysticks|Haptic strength|choice|%s|low=Low;on=On;high=High;off=Off|The force of every vibration of modern controllers (low is half, high one and a half; off silences every event, also game start and end).\n' \
+    "$(haptic_strength_get)"
+  opts="off=Off;$(haptic_presets | awk -F'|' '{ print $1 "|" $1 ": " $2 }' | settings_opts)"
+  while IFS='|' read -r key label _ help; do
+    printf 'haptic.%s|Joysticks|Haptic: %s|choice|%s|%s|%s Picking a preset plays it on the connected controllers.\n' \
+      "$key" "$label" "$(haptic_get "$key")" "$opts" "$help"
+  done < <(haptic_events)
   # ── A tela ao vivo (config/fliperos-stream) e o marquee para o OBS ──
   if [[ -x $STREAM_GO2RTC ]]; then
     printf 'stream_audio|Live screen|Live screen sound|choice|%s|off=Off;on=On|A copy of the sound for the live screen (an ALSA loopback on the card clock). Games opened after the change get it.\n' \
@@ -403,6 +411,12 @@ settings_set() {
       ;;
     padcolor)
       padcolor_set "$value" || return 2
+      ;;
+    haptic)
+      haptic_strength_set "$value" || return 2
+      ;;
+    haptic.*)
+      haptic_set "${key#haptic.}" "$value" || return 2
       ;;
     gun.reset)
       gun_reset

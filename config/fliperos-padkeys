@@ -94,7 +94,7 @@ KEYS = sorted(set(BUTTONS.values()))
 REPEAT = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PAGEUP, KEY_PAGEDOWN}
 # O que cada tecla faz sentir (gui/fehaptic.py PATTERNS).
 HAPTIC_KEYS = {KEY_UP: 'tick', KEY_DOWN: 'tick', KEY_LEFT: 'tick', KEY_RIGHT: 'tick', KEY_SPACE: 'tick',
-               KEY_PAGEUP: 'step', KEY_PAGEDOWN: 'step', KEY_ENTER: 'select', KEY_ESC: 'back'}
+               KEY_PAGEUP: 'tick', KEY_PAGEDOWN: 'tick', KEY_ENTER: 'select', KEY_ESC: 'back'}
 # Mais lento que o teclado: num modo entrelacado o menu redesenha devagar.
 # Um toque rapido no direcional anda um item so; a repeticao so comeca
 # depois de meio segundo segurando.

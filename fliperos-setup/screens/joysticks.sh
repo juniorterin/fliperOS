@@ -21,6 +21,7 @@ screen_joysticks() {
       "guncon|GunCon 2 (light gun)|Calibration, screen flash and how the gun reads dark parts." \
       "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
       "padcolor|Controller light: $(padcolor_name)|Light colour of DualSense, DualShock 4 and 8BitDo Ultimate 2." \
+      "haptic|Haptic events|Controller vibration: a preset per event." \
       "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
@@ -31,6 +32,7 @@ screen_joysticks() {
       guncon) screen_guncon ;;
       axes) screen_calibrate axes ;;
       padcolor) screen_padcolor ;;
+      haptic) screen_haptic ;;
       lpt) screen_lpt ;;
       return) return 0 ;;
     esac
@@ -77,6 +79,58 @@ screen_padcolor() {
   [[ ${PADCOLOR_PROFILE:-0} == 1 ]] && ui_msg "$title" \
     "The 8BitDo had no profile, so it got profile 1 with this colour and its buttons as they are. Press its profile button once to use it."
   return 0
+}
+
+# screen_haptic: a vibracao dos controles modernos (lib/buttons.sh, config/
+# fliperos-haptic): a forca geral e o preset de cada evento do menu e dos
+# frontends. Escolher um preset o toca nos controles ligados.
+screen_haptic() {
+  local title="Haptic events" choice last="" key label default hint
+  local -a entries
+  while true; do
+    entries=("haptic-strength|Strength: $(haptic_strength_get)|Overall force: low, on, high or off (off silences every event, also game start and end).")
+    while IFS='|' read -r key label default hint; do
+      entries+=("haptic-$key|$label: $(haptic_label "$(haptic_get "$key")")|$hint")
+    done < <(haptic_events)
+    entries+=("return|Return|Back to Joysticks.")
+    choice=$(ui_menu_hints "$title" \
+      "Vibration needs a controller with rumble (Xbox, 8BitDo, DualSense...). Pick an event, then a preset: it plays at once." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      return) return 0 ;;
+      haptic-strength) screen_haptic_strength ;;
+      haptic-*) screen_haptic_event "${choice#haptic-}" ;;
+    esac
+  done
+}
+
+# screen_haptic_strength: haptic= (on e o padrao).
+screen_haptic_strength() {
+  local choice
+  choice=$(ui_menu_hints "Haptic strength" "Half, normal or one and a half times the force of every vibration." \
+    "$(haptic_strength_get)" \
+    "low|Low|Half the force." \
+    "on|On|The normal force." \
+    "high|High|One and a half times the force." \
+    "off|Off|No vibration at all.") || return 0
+  haptic_strength_set "$choice"
+}
+
+# screen_haptic_event CHAVE: os presets para este evento ("off" e os que o
+# fliperos-haptic conhece, cada um com a dica).
+screen_haptic_event() {
+  local key=$1 label name hint default choice
+  local -a entries=()
+  while IFS='|' read -r name label default hint; do
+    [[ $name == "$key" ]] && break
+  done < <(haptic_events)
+  entries+=("haptic-off|Off|No vibration for this event.")
+  while IFS='|' read -r name hint; do
+    entries+=("haptic-$name|$name$([[ $name == "$default" ]] && echo ' (default)')|${hint:-A preset.}")
+  done < <(haptic_presets)
+  choice=$(ui_menu_hints "$label" "Pick the vibration for this event." "haptic-$(haptic_get "$key")" "${entries[@]}") || return 0
+  haptic_set "$key" "${choice#haptic-}"
 }
 
 # screen_guncon: tudo da GunCon 2 num menu (lib/buttons.sh): a calibracao, o

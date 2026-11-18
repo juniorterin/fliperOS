@@ -66,6 +66,7 @@ const SETUP_TREE = [
     { id: "guncon", keys: ["gun_flash", "gun.", "gun_offscreen_reload"], cabinet: "guncon", title: true },
     { id: "axes", cabinet: "axes" },
     { id: "padcolor", keys: ["padcolor"] },
+    { id: "haptic", keys: ["haptic", "haptic."] },
     { id: "lpt", cabinet: "lpt", info: "lpt" },
   ] },
   { id: "system", icon: "px-system", items: [

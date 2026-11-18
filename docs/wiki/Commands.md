@@ -45,6 +45,7 @@ See [Updates and versions](Updates-and-versions.md).
 | `fliperos-buttons players` | How many players are mapped and connected |
 | `fliperos-bluetooth status\|power on\|off\|devices\|pair MAC\|connect MAC\|disconnect MAC\|remove MAC` | Bluetooth controllers ([Bluetooth](Bluetooth.md)) |
 | `fliperos-padcolor list\|all` | Controller lights ([Controller light](Controller-light.md)) |
+| `fliperos-haptic list\|demo\|NAME [--pad TEXT]` | Controller vibration presets ([Haptic events](Haptic-events.md)) |
 | `fliperos-versus watch mame\|retroarch\|model2 GAME` | Prints a fight's wins and characters as they change ([Versus score](Versus-score.md)) |
 | `fliperos-versus fetch` | Downloads Fightcade's score detectors again |
 | `fliperos-outputs installed\|hotr\|fetch-hotr\|fetch-qmamehook` | Game output tools ([DIY hardware](DIY-hardware.md)) |

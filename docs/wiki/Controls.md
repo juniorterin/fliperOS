@@ -7,6 +7,7 @@ Controllers on FliperOS: arcade panels, joypads, Bluetooth pads, light guns, whe
 | [Button mapping](Button-mapping.md) | Each controller's player and buttons, arcade panel or joypad, the keyboard encoder, Buttons layout for 1 to 5-button games |
 | [Bluetooth](Bluetooth.md) | Pairing wireless controllers |
 | [Controller light](Controller-light.md) | The colour of DualSense, DualShock 4 and 8BitDo lights, the Ultimate 2 roulette |
+| [Haptic events](Haptic-events.md) | Vibration of modern controllers: a preset for each menu and frontend event |
 | [Light guns](Light-guns.md) | The GunCon 2: driver, calibration, several guns, the screen flash, the gun in each emulator |
 | [Wheels, LPT and quirks](Wheels-and-quirks.md) | Calibrating a wheel or pedals, parallel port joysticks, USB quirks, controllers in SDL |
 | [Frontend controls](Frontend-controls.md) | The frontend's buttons, and the shortcuts to quit a game or open its menu |
@@ -21,6 +22,7 @@ Controllers on FliperOS: arcade panels, joypads, Bluetooth pads, light guns, whe
 | **GunCon 2** | Calibrate, screen flash, settings ([Light guns](Light-guns.md)) |
 | **Calibrate wheel, pedals or analog stick** | ([Wheels, LPT and quirks](Wheels-and-quirks.md)) |
 | **Controller light** | ([Controller light](Controller-light.md)) |
+| **Haptic events** | ([Haptic events](Haptic-events.md)) |
 | **LPT joysticks** | ([Wheels, LPT and quirks](Wheels-and-quirks.md#lpt-joysticks)) |
 
 USB fixes are in **Setup > System > Quirks** ([Wheels, LPT and quirks](Wheels-and-quirks.md#quirks-usb-device-fixes)).

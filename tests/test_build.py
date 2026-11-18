@@ -22982,6 +22982,37 @@ class HapticTests(unittest.TestCase):
         tool = (ROOT / 'config/fliperos-haptic').read_text()
         self.assertIn('argv[0] == "demo"', tool)
 
+    def test_events_use_the_preset_chosen_in_the_setup(self):
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('haptic_move=heartbeat\nhaptic_enter=off\nhaptic_back=nope\n')
+        self.fh.CONF = str(conf)
+        self.fh._CONF_CACHE.clear()
+        self.addCleanup(setattr, self.fh, 'CONF', '/etc/fliperos/fliperos.conf')
+        self.addCleanup(self.fh._CONF_CACHE.clear)
+        self.assertEqual(self.fh.chosen('tick'), 'heartbeat')       # move
+        self.assertEqual(self.fh.chosen('select'), 'off')           # enter
+        self.assertEqual(self.fh.chosen('back'), 'back')            # preset que nao existe: o padrao
+        self.assertEqual(self.fh.chosen('step'), 'step')            # sem escolha: o padrao
+        self.assertEqual(self.fh.chosen('start'), 'start')          # fora da lista: nao muda
+        self.assertEqual(self.fh.steps('select'), [])               # off: sem passos
+        self.assertEqual(self.fh.steps('tick'), self.fh.steps('heartbeat', raw=True))
+        # A previa toca o preset com o nome, sem a escolha.
+        self.assertEqual(self.fh.steps('tick', raw=True), self.fh.steps('tick', 1.0, True))
+        self.assertNotEqual(self.fh.steps('tick', raw=True), self.fh.steps('tick'))
+
+    def test_every_event_default_and_preset_is_in_the_setup(self):
+        shell = (ROOT / 'fliperos-setup/lib/buttons.sh').read_text()
+        theme = (ROOT / 'fliperos-setup/gui/theme.py').read_text()
+        for event, (key, _label, default, _help) in self.fh.EVENT_KEYS.items():
+            self.assertIn('"%s|' % key, shell)
+            self.assertIn('|%s|' % default, shell)
+            self.assertIn(default, self.fh.ALL)
+        # Cada preset tem o icone do menu (haptic-NOME no theme.py) e uma dica.
+        for name in self.fh.ALL:
+            self.assertIn('"%s"' % name, theme, name)
+        for name in list(self.fh.PRESETS) + list(self.fh.PATTERNS):
+            self.assertIn(name, self.fh.HINTS)
+
     def test_open_rises_and_close_falls(self):
         power = lambda e: [s + w for _d, _m, s, w in self.fh.PATTERNS[e]]
         self.assertEqual(power('open'), sorted(power('open')))

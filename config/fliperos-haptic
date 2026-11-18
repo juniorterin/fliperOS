@@ -79,6 +79,11 @@ def main(argv):
         print("Presets: " + ", ".join(fehaptic.PRESETS))
         print("Pads: " + (", ".join(p.name.decode(errors="replace") for p in fehaptic.pads()) or "none"))
         return 0
+    if argv[0] == "presets":
+        # "nome|dica", um por linha: a escolha do Setup > Joysticks > Haptic events.
+        for name in fehaptic.ALL:
+            print("%s|%s" % (name, fehaptic.HINTS.get(name, "")))
+        return 0
     if argv[0] == "demo":
         # Cada preset com o nome na tela, para sentir um de cada vez.
         names = argv[1:] or list(fehaptic.PRESETS)
@@ -87,13 +92,13 @@ def main(argv):
                 print("unknown: %s" % name, file=sys.stderr)
                 continue
             print("%-14s" % name, flush=True)
-            fehaptic.play_all(name, only=only, scale=1.0)
+            fehaptic.play_all(name, only=only, scale=1.0, raw=True)
             time.sleep(0.9)
         return 0
     if argv[0] not in fehaptic.ALL:
         print("fliperos-haptic: unknown %s (try: fliperos-haptic list)" % argv[0], file=sys.stderr)
         return 2
-    fehaptic.play_all(argv[0], only=only)
+    fehaptic.play_all(argv[0], only=only, raw=True)
     return 0
 
 

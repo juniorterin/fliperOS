@@ -489,3 +489,95 @@ padcolor_set() {
   log_info "Controller light: $color"
   return 0
 }
+
+# A vibracao dos controles (config/fliperos-haptic, gui/fehaptic.py): haptic=
+# (on, low, high, off) e, por evento, haptic_CHAVE= com o preset a tocar ("off":
+# nenhum; sem a chave, o padrao do evento).
+HAPTIC=${HAPTIC:-/opt/fliperos/bin/fliperos-haptic}
+
+# haptic_events: chave|Rotulo|preset padrao|dica. As chaves e os padroes sao os
+# de EVENT_KEYS em gui/fehaptic.py.
+haptic_events() {
+  printf '%s\n' \
+    "move|Moving through items|tick|Menu and frontend: each item you pass." \
+    "enter|Entering an item|select|Menu and frontend: accepting an item." \
+    "back|Going back|back|Menu and frontend: leaving a screen." \
+    "system|Moving through systems|step|Frontend: changing system or tab." \
+    "open|Entering the frontend|open|A frontend opens (FliperOS, ES-DE, AttractPlus, Pegasus)." \
+    "close|Leaving the frontend|close|A frontend closes."
+}
+
+# haptic_presets: nome|dica de cada preset que o fliperos-haptic conhece (sem
+# ele, so os padroes dos eventos).
+haptic_presets() {
+  local default
+  if [[ -x $HAPTIC ]] && "$HAPTIC" presets 2> /dev/null; then
+    return 0
+  fi
+  while IFS='|' read -r _ _ default _; do
+    printf '%s|\n' "$default"
+  done < <(haptic_events)
+}
+
+# haptic_default CHAVE: o preset padrao do evento.
+haptic_default() {
+  local key label default
+  while IFS='|' read -r key label default _; do
+    [[ $key == "$1" ]] && { echo "$default"; return 0; }
+  done < <(haptic_events)
+  return 1
+}
+
+# haptic_get CHAVE: o preset de agora (o escolhido, off, ou o padrao).
+haptic_get() {
+  local value
+  value=$(conf_get "haptic_$1" 2> /dev/null)
+  value=${value,,}
+  if [[ $value == off ]] || { [[ -n $value ]] && haptic_presets | cut -d'|' -f1 | grep -qxF -- "$value"; }; then
+    echo "$value"
+  else
+    haptic_default "$1"
+  fi
+}
+
+# haptic_set CHAVE PRESET: grava (o padrao apaga a chave) e toca o preset para
+# a pessoa sentir. 2 se a chave ou o preset nao existem.
+haptic_set() {
+  local key=$1 value=${2,,}
+  haptic_default "$key" > /dev/null || return 2
+  [[ $value == off ]] || haptic_presets | cut -d'|' -f1 | grep -qxF -- "$value" || return 2
+  if [[ $value == "$(haptic_default "$key")" ]]; then
+    conf_unset "haptic_$key"
+  else
+    conf_set "haptic_$key" "$value"
+  fi
+  log_info "Haptic $key: $value"
+  [[ $value == off || ! -x $HAPTIC ]] || "$HAPTIC" "$value" > /dev/null 2>&1 || true
+  return 0
+}
+
+# haptic_strength_get / _set: a forca geral (haptic=; on e o padrao).
+haptic_strength_get() {
+  local value
+  value=$(conf_get haptic 2> /dev/null)
+  value=${value,,}
+  case $value in
+    low | high | off) echo "$value" ;;
+    *) echo on ;;
+  esac
+}
+
+haptic_strength_set() {
+  case $1 in
+    on) conf_unset haptic ;;
+    low | high | off) conf_set haptic "$1" ;;
+    *) return 2 ;;
+  esac
+  log_info "Haptic strength: $1"
+  return 0
+}
+
+# haptic_label PRESET: o nome na tela ("off" vira Off).
+haptic_label() {
+  [[ $1 == off ]] && echo Off || echo "$1"
+}

@@ -68,6 +68,7 @@
   - [Button mapping](Button-mapping.md)
   - [Bluetooth](Bluetooth.md)
   - [Controller light](Controller-light.md)
+  - [Haptic events](Haptic-events.md)
   - [Light guns](Light-guns.md)
   - [Wheels, LPT and quirks](Wheels-and-quirks.md)
 
