@@ -585,7 +585,9 @@ def parse_lsblk(text):
         for p in d.get("children") or []:
             parts.append(part(p))
             parts.extend(part(c) for c in p.get("children") or [])
-        disks.append({"name": name, "model": (d.get("model") or "").strip(), "vendor": (d.get("vendor") or "").strip(),
+        # "ATA" e o que o SATA poe de fabricante: nao diz nada.
+        vendor = (d.get("vendor") or "").strip()
+        disks.append({"name": name, "model": (d.get("model") or "").strip(), "vendor": "" if vendor == "ATA" else vendor,
                       "size": int(d.get("size") or 0), "tran": d.get("tran") or "",
                       "kind": "ssd" if str(d.get("rota")) in ("0", "False", "false") else "hdd",
                       "removable": str(d.get("rm")) in ("1", "True", "true"), "parts": parts})
@@ -694,9 +696,11 @@ def hw_cpu():
         designation = designation or c.get("Socket Designation", "")
         speed = speed or c.get("Max Speed", "")
         model = model or c.get("Version", "")
+    # O clock maximo: o do lscpu, ou o que a BIOS diz ("Max Speed: 4000 MHz").
+    max_mhz = (lscpu.get("CPU max MHz") or "").split(".")[0] or (re.match(r"(\d+)\s*MHz", speed) or [0, ""])[1]
     return {"model": model.strip(), "vendor": lscpu.get("Vendor ID", ""), "sockets": lscpu.get("Socket(s)", ""),
             "cores_per_socket": lscpu.get("Core(s) per socket", ""), "threads_per_core": lscpu.get("Thread(s) per core", ""),
-            "threads": os.cpu_count() or 0, "max_mhz": (lscpu.get("CPU max MHz") or "").split(".")[0],
+            "threads": os.cpu_count() or 0, "max_mhz": max_mhz,
             "socket": socket_type, "socket_designation": designation, "max_speed": speed,
             "family": " / ".join(x for x in (lscpu.get("CPU family"), lscpu.get("Model"), lscpu.get("Stepping")) if x),
             "cache": {k: lscpu[k] for k in ("L1d cache", "L1i cache", "L2 cache", "L3 cache") if lscpu.get(k)}}
@@ -708,8 +712,9 @@ def hw_memory():
         size = m.get("Size", "")
         if not size or size.lower().startswith(("no module", "not installed", "unknown")):
             continue
+        speed = m.get("Configured Memory Speed") or m.get("Speed", "")
         modules.append({"locator": m.get("Locator", ""), "size": size, "type": m.get("Type", ""),
-                        "speed": m.get("Configured Memory Speed") or m.get("Speed", ""), "maker": m.get("Manufacturer", ""),
+                        "speed": "" if speed.lower() == "unknown" else speed, "maker": m.get("Manufacturer", ""),
                         "part": m.get("Part Number", "")})
     return modules
 
@@ -821,7 +826,8 @@ def report_text(hw, status, setup_rows, packages):
     kv("BIOS", " ".join(x for x in (board.get("bios_vendor"), board.get("bios_version"), board.get("bios_date")) if x))
     lines += ["", "## CPU", ""]
     kv("Model", cpu.get("model"))
-    kv("Socket", " ".join(x for x in (cpu.get("socket"), "(%s)" % cpu["socket_designation"] if cpu.get("socket_designation") else "") if x))
+    kv("Socket", "%s (%s)" % (cpu["socket"], cpu["socket_designation"]) if cpu.get("socket") and cpu.get("socket_designation")
+       else cpu.get("socket") or cpu.get("socket_designation"))
     kv("Sockets / cores per socket / threads per core", " / ".join(str(cpu.get(k) or "?") for k in ("sockets", "cores_per_socket", "threads_per_core")))
     kv("Threads", cpu.get("threads"))
     kv("Max clock", "%s MHz" % cpu["max_mhz"] if cpu.get("max_mhz") else "")
@@ -872,7 +878,7 @@ def report_text(hw, status, setup_rows, packages):
         kv("Network %s" % n["name"], "%s, driver %s %s" % (n["kind"], n["driver"], n["address"]))
     kv("Bluetooth adapter", "yes" if hw.get("bluetooth") else "")
     if setup_rows:
-        lines += ["", "## Setup settings", ""]
+        lines += ["", "## Setup settings"]
         group = None
         for r in setup_rows:
             if r["group"] != group:

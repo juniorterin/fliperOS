@@ -9146,6 +9146,7 @@ class WebPanelTests(unittest.TestCase):
                                                           'tran': 'usb', 'rota': True, 'rm': True}]}))
         self.assertEqual([(d['name'], d['model'], d['kind'], d['tran'], d['removable']) for d in disks],
                          [('sda', 'KINGSTON SA400S3', 'ssd', 'sata', False), ('sdb', 'Flash', 'hdd', 'usb', True)])
+        self.assertEqual(disks[0]['vendor'], '')          # "ATA" nao diz nada
         self.assertEqual([p['mount'] for p in disks[0]['parts']], ['/boot/efi', '/'])
         self.assertEqual(web.parse_aplay('card 0: PCH [HDA Intel PCH], device 0: ALC892 Analog [ALC892 Analog]\n'
                                          'card 0: PCH [HDA Intel PCH], device 3: HDMI 0 [HDMI 0]\n'),
