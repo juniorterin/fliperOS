@@ -344,6 +344,19 @@ async function showLog() {
 }
 $("log-name").addEventListener("change", showLog);
 $("log-refresh").addEventListener("click", showLog);
+// Copiar o log: as ultimas linhas que o servidor entrega (2000, bem mais que
+// as 300 da tela), com o nome do log em cima, para colar num pedido de ajuda.
+$("log-copy").addEventListener("click", async () => {
+  const name = $("log-name").value;
+  if (!name) return;
+  let text = $("log-text").textContent;
+  try {
+    const res = await api("/api/log?name=" + encodeURIComponent(name) + "&lines=2000");
+    if (res.ok) text = (await res.json()).text || text;
+  } catch (e) { /* fica o que esta na tela */ }
+  if (!text) { toast(t("log_copy_empty"), "bad"); return; }
+  await copyText("# " + name + "\n" + text, null);
+});
 
 // ── As listas de ajustes ─────────────────────────────────────────
 // A area Sistema inteira usa as mesmas pecas: uma secao (um rotulo pequeno

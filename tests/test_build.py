@@ -9131,6 +9131,18 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(text.splitlines(), ['line %d' % i for i in range(480, 500)])
         for name in ('../secret.log', '/etc/passwd', 'secret.log'):
             self.assertEqual(self.request('GET', '/api/log?name=' + name, cookie=cookie)[0], 404, name)
+        # Copiar o log: o botao ao lado do Atualizar pede ate 2000 linhas (o servidor corta ai).
+        index = (ROOT / 'config/web/index.html').read_text()
+        self.assertIn('<button id="log-refresh" class="btn-text" type="button" data-t="refresh"></button>\n'
+                      '              <button id="log-copy" class="btn-text" type="button" data-t="log_copy"></button>', index)
+        system = (ROOT / 'config/web/system.js').read_text()
+        self.assertIn('"/api/log?name=" + encodeURIComponent(name) + "&lines=2000"', system)
+        self.assertIn('await copyText("# " + name + "\\n" + text, null);', system)
+        texts = (ROOT / 'config/web/text.js').read_text()
+        for key in ('log_copy', 'log_copy_empty'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, texts)), 2, key)
+        many = json.loads(self.request('GET', '/api/log?name=retroarch.log&lines=5000', cookie=cookie)[2])['text']
+        self.assertLessEqual(len(many.splitlines()), 2000)
         # O OpenBOR escreve o log na pasta dele (o 4 e o 3.0, cada um na sua).
         openbor = Path(self.tmp.name) / 'roms/openbor'
         own = [openbor / 'Logs/OpenBorLog.txt', openbor / 'v3/Logs/OpenBorLog.txt']
