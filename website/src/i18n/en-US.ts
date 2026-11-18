@@ -98,7 +98,7 @@ const enUS = {
     telegram: 'Join the Telegram group',
   },
   hero: {
-    eyebrow: 'fliperos 0.25 · in development',
+    eyebrow: 'fliperos 0.26 · in development',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Built for CRT.',
     description:
@@ -321,6 +321,7 @@ const enUS = {
     current: 'Current',
     all: 'All releases on GitHub',
     notes: {
+      '0.26': ['One disk for everything: a second or external disk holds the ROMs, saves and art', 'Keisho runs Model 2 and Model 3', 'A smoother frontend, and the whole hardware in the web panel'],
       '0.25': ['Custom games: Windows and PC games packed in one file', 'Install, create and test packages from the web panel', 'A new wheel screen with pedals, buttons and force feedback'],
       '0.24': ['Bluetooth controllers, paired from the Setup', 'Arcade panel or joypad in the Button mapping', 'A guide with the buttons of ten consoles'],
       '0.23': ['CDs and DVDs from a drive, played or ripped', 'Cartridges from the Open Source Cartridge Reader', 'Boot straight from the disc'],
@@ -385,7 +386,7 @@ const enUS = {
       { id: 'pc', title: 'An ordinary 64-bit PC', text: '2 cores and 4 GB of RAM play up to PlayStation 1; 4 cores and 16 GB play everything in the image.' },
       { id: 'network', title: 'Open over the network', text: 'Copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot.' },
       { id: 'updates', title: 'Updates at boot', text: 'Updates come over the network and show what they change before asking. No new ISO needed.' },
-      { id: 'status', title: 'Still in development', text: 'Version 0.25. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
+      { id: 'status', title: 'Still in development', text: 'Version 0.26. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
     ],
     cta: 'Full requirements',
   },

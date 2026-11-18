@@ -2,6 +2,42 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.26
+
+**One disk for everything, Keisho for Model 2 and Model 3, and a smoother frontend**: a second or external data disk gets the whole FliperOS folder structure and can hold the ROMs, BIOS, art, saves and downloads; Keisho (the former SM2-Emu) runs Model 2 and Model 3 and Supermodel is gone; the frontend no longer stalls when switching systems; and the web panel shows all of the machine's hardware with a report to copy. Cabinets already installed get all of this from updates 78 to 85.
+
+**System changes:**
+
+- **Storage** (update 85): a data disk you plug in (8 GB or more, writable) gets a `fliperos` folder with `roms` (one folder per emulator and per RetroArch core), `bios`, `media` (one folder per type of art), `nvram` and `save`; Setup > System > Storage lists the disks and **Use** links the five folders of the home to the disk's (what was there stays beside, as `old-roms`…), so everything the Downloader, the Scraper and the art packs download, and the saves, go to the second disk; **Back to the main disk** undoes it. `storage_auto=off` in `fliperos.conf` turns the automatic folders off. The web panel opens the same screen on the cabinet
+- **Keisho** (updates 80 and 83): the Model 2 emulator SM2-Emu is now Keisho (github.com/Keisho-Emu/Keisho) and also runs Model 3, so Supermodel is gone; it comes as a package (no more building on the cabinet), uses Vulkan with the amdgpu driver and OpenGL with the others, and has the game outputs patch (gun recoil, ammo, life, round wins, credits) built in. Model 3 memory files stay (Keisho reads Supermodel's format); the link games Scud Race, Daytona USA 2 and Dirt Devils go through Keisho (not raced there yet)
+- **Frontend** (update 85): switching systems no longer stalls and the frame rate is smoother (the emulators' files, the art and the system icons are read in the background); the first button after the cabinet sat idle works (the attract mode swallowed it); with no year and no developer the list's icons rise into the empty line
+- **Custom games** (updates 78, 79, 83, 84 and 85): the video mode "240p hack" (a game that only runs at 640x480 sees it, the tube gets 240p); a Windows game opens with PortProton, Wine or Wine Staging and uses Vulkan or OpenGL by the video card's driver (`wine_renderer=` forces one); year, developer, logo and a group icon you choose; nothing stays running after a game; a game with its controller mapped to keys opens without seeing the joystick; "Take a photo" and "Record 10 s" in Test on the cabinet put the picture and video in the package; the web panel shows the link to download a finished package, and Custom games is an area of its own in it
+- **Video cards that only do super resolution** (update 79): OpenBOR, Ikemen GO and MUGEN games fill the wide mode, and a game that doesn't fill the screen shows a "VIDEO CARD WARNING" on the on-screen menu; the "Video card changed" question no longer shows up falsely after a boot
+- **On-screen menu** (updates 78 and 84): opens over the games that draw through X without OpenGL (Mugen, Fightcade) and over every PortProton game; saving a created or cleared controller map says the game may need a restart
+- **Web panel** (updates 82, 84 and 85): System opens on Setup; Status shows the whole hardware (motherboard, CPU and socket, PCI addresses, the sound output in use, sound cards, disks, connected devices) with **Copy full report** for a help request (no IP or MAC addresses); Logs has Copy log; Send packages has a drag-and-drop area with the progress of the upload and of the install
+- **Haptic feedback** (updates 84 and 85): modern gamepads vibrate in the Setup menu, in the frontend and when a frontend or game opens, closes or fails to start, with a preset per event in Setup > Joysticks > Haptic events; it vibrates only when the action happens
+- **Cloud backup** (updates 81, 84 and 85): custom folders go with the settings; the automatic sync is on by default, every hour and on shutdown, and leaving the Setup sends the settings at once; the first sync shows a progress bar in the Setup and in the web panel
+- **Dolphin** (update 85): Wii games open in 4:3 (`wii_aspect=16:9` in `fliperos.conf` for the wide picture) and NKit images open without the "NKit Warning"
+- **Desktop and installer** (update 85): the Onboard on-screen keyboard only opens by itself with the joystick; taking the stick out and restarting at the end of the installation no longer prints an error
+- The `ps1`, `custom` and `custom-packages` folders of `~/roms` exist from the first login (update 82)
+
+**Package changes:**
+
+- `fliperos-keisho` 0.9.63.20261116-1fliperos1 (new): Model 2 and Model 3, with the GunCon 2 aim patch
+- `fliperos-supermodel` removed
+
+**fliperos-setup changes:**
+
+- `lib/storage.sh` (new) and `screens/setup-menu.sh`: Setup > System > Storage; `fliperos-setup --storage list|prepare|use|unuse`
+- `lib/customgames.sh`, `screens/setup-menu.sh` and `config/fliperos-customgame`: year, developer, logo and group icon; the Windows game runner and its renderer (`config/fliperos-wine-renderer`, new)
+- `gui/feview.py`, `gui/felink.py`, `gui/fedata.py` and `gui/fliperos-frontend`: the background reads and the attract mode that no longer swallows the first press
+- `screens/install-progress.sh`: unmounts the install medium before the restart
+
+**Tool changes:**
+
+- `tools/styleguide.py` (new): makes `docs/styleguide/index.html`, a page for developers with the colours, type, icons and components of the web panel and the Setup, and an audit of what is off the standard
+- `tools/publish-changed-packages.sh`: publishes only the `.deb` files that changed
+
 ## 0.25
 
 **Custom games are the heart of this ISO**: any game that isn't a ROM (a Windows game through PortProton, a Linux game, a PC port, a homebrew) joins the cabinet like a system of its own, with its picture, video, text and controls in the FliperOS frontend. A game travels as one file, `GAME.fliperos-customgame.zip`, holding the game folder, the art, the video mode, the controls, buttons and players, the controller-to-keyboard map and PortProton's settings. Install it from Setup > Games > Custom games or from the web panel, which also makes packages (with a preview of the frontend card and a test run on the cabinet before packing), installs them from cards like the frontend's, and adds many games at once in a table. A PC game that only takes the keyboard gets Controller configuration in the on-screen menu: you choose which button sends each key. Also in this ISO: the wheel calibration redone (it closed by itself as soon as the wheel turned) with a new graphical screen that tests the pedals, every button in its real place and the force feedback; achievements on screen and in the frontend; game shortcuts for the emulator menu and exit; the whole Setup in the web panel, redesigned; faster cloud backup with Google sign-in; and the graphical Setup menu, which the 0.24 image had lost. Cabinets already installed get all of this from the Setup's own update (updates 67 to 77).
