@@ -7619,10 +7619,14 @@ class DeflickerTests(unittest.TestCase):
         self.assertNotIn('LD_PRELOAD', launch)
         self.assertTrue(picom)
 
-    def renderer_picks(self, driver, device='0x0000', icd=(), conf='', env=None):
-        """O que o config/fliperos-wine-renderer escolhe para uma placa de mentira (sysfs e os ICDs do Vulkan)."""
+    def renderer_picks(self, driver, device='0x0000', icd=(), conf='', env=None, lib32=()):
+        """O que o config/fliperos-wine-renderer escolhe para uma placa de mentira (sysfs, os ICDs do Vulkan e
+        as bibliotecas de 32 bits que existem; sem lib32, nem o libvulkan de 32 bits do Wine)."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
+            (tmp / 'lib32').mkdir()
+            for name in lib32:
+                (tmp / 'lib32' / name).write_text('')
             card = tmp / 'drm/card0'
             (card / 'device').mkdir(parents=True)
             (tmp / 'drm/card0-VGA-1').mkdir()
@@ -7637,7 +7641,7 @@ class DeflickerTests(unittest.TestCase):
                 (tmp / 'icd' / name).write_text('{}')
             (tmp / 'fliperos.conf').write_text(conf)
             e = dict(os.environ, FLIPEROS_DRM_SYSFS=str(tmp / 'drm'), FLIPEROS_VULKAN_ICD_DIR=str(tmp / 'icd'),
-                     FLIPEROS_CONF=str(tmp / 'fliperos.conf'))
+                     FLIPEROS_CONF=str(tmp / 'fliperos.conf'), FLIPEROS_LIB32_DIR=str(tmp / 'lib32'))
             e.pop('FLIPEROS_WINE_RENDERER', None)
             e.update(env or {})
             return subprocess.run(['bash', str(ROOT / 'config/fliperos-wine-renderer')], capture_output=True, text=True,
@@ -7664,6 +7668,31 @@ class DeflickerTests(unittest.TestCase):
         self.assertEqual(self.renderer_picks('radeon', env={'FLIPEROS_WINE_RENDERER': 'vulkan'}), 'vulkan')
         # O seletor vai na imagem junto dos outros.
         self.assertRegex(ROOTFS, r' fliperos-wine-renderer[^\n]*; do')
+
+    def test_wine_renderer_needs_the_32_bit_vulkan_driver(self):
+        # Um .exe de 32 bits (quase todos) no DXVK so acha a placa pelo driver do Mesa de 32 bits
+        # (mesa-vulkan-drivers:i386). Com o libvulkan de 32 bits do Wine/PortProton e sem o driver, o jogo
+        # abria e fechava sozinho (o Darkula, numa R7 240 no radv): vai para o OpenGL ate o pacote chegar.
+        radeon, intel = ['radeon_icd.x86_64.json'], ['intel_icd.x86_64.json']
+        self.assertEqual(self.renderer_picks('amdgpu', icd=radeon, lib32=['libvulkan.so.1']), 'opengl')
+        self.assertEqual(self.renderer_picks('amdgpu', icd=radeon, lib32=['libvulkan.so.1', 'libvulkan_radeon.so']),
+                         'vulkan')
+        self.assertEqual(self.renderer_picks('i915', '0x1912', icd=intel, lib32=['libvulkan.so.1']), 'opengl')
+        self.assertEqual(self.renderer_picks('i915', '0x1912', icd=intel,
+                                             lib32=['libvulkan.so.1', 'libvulkan_intel.so']), 'vulkan')
+        # Sem o Wine de 32 bits (sem o libvulkan de 32 bits), so o de 64 bits conta.
+        self.assertEqual(self.renderer_picks('amdgpu', icd=radeon), 'vulkan')
+        # O driver proprietario da NVIDIA traz o dele; a escolha da pessoa continua valendo.
+        self.assertEqual(self.renderer_picks('nvidia', icd=['nvidia_icd.json'], lib32=['libvulkan.so.1']), 'vulkan')
+        self.assertEqual(self.renderer_picks('amdgpu', icd=radeon, lib32=['libvulkan.so.1'],
+                                             conf='wine_renderer=vulkan\n'), 'vulkan')
+        # O pacote chega com o Wine (Extras), o PortProton e o update dos que ja tem um deles.
+        update = (ROOT / 'tools/cabinet-update.sh').read_text()
+        self.assertRegex(update, r'\(\(wine32\)\) \|\| dpkg -s libvulkan1:i386; \} > /dev/null 2>&1 && '
+                                 r'packages\+=\(mesa-vulkan-drivers:i386\)')
+        for line in re.findall(r'^WINE(?:_STAGING)?_PACKAGES="([^"]*)"', EXTRAS, re.M):
+            self.assertIn('mesa-vulkan-drivers:i386', line.split())
+        self.assertIn('mesa-vulkan-drivers:i386', (ROOT / 'config/fliperos-portproton').read_text())
 
     def test_wine_games_pick_dxvk_or_wined3d_by_the_gpu(self):
         # O fliperos-x11-client poe as sobreposicoes de DLL do Wine: o DXVK e o VKD3D do prefixo no Vulkan

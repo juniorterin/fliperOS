@@ -186,6 +186,11 @@ wine32=0
 # Fightcade) nao troca de modo e a tela cheia dava "Problem setting ... display
 # mode" (config/fliperos-extras).
 ((wine32)) && packages+=(libxrandr2:i386)
+# E o Vulkan de 32 bits do Mesa, onde ha Wine ou PortProton (o libvulkan1:i386
+# dele): o DXVK de um jogo de 32 bits so acha a placa por ele. Sem o pacote o
+# Darkula (GameMaker, 32 bits) abria e fechava sozinho numa placa com radv, e
+# o fliperos-wine-renderer manda esses jogos para o OpenGL enquanto ele falta.
+{ ((wine32)) || dpkg -s libvulkan1:i386; } > /dev/null 2>&1 && packages+=(mesa-vulkan-drivers:i386)
 # So mexe no apt se falta algum pacote ou se o repositorio local mudou: o
 # apt-get segura a trava dos pacotes, e quem estivesse instalando um
 # frontend pelo Setup naquela hora recebia "Impossivel criar acesso

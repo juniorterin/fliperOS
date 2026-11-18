@@ -56,12 +56,23 @@ has_icd() {
   return 1
 }
 
+# E o de 32 bits? A maioria dos .exe e de 32 bits e o DXVK deles carrega o
+# Vulkan de 32 bits: com o libvulkan de 32 bits do Wine/PortProton instalado e
+# sem o driver do Mesa de 32 bits (mesa-vulkan-drivers:i386), nao ha
+# dispositivo Vulkan e o jogo fecha sozinho logo depois de abrir (visto no
+# Darkula, um .exe de 32 bits com GameMaker, numa R7 240). Sem ele, o OpenGL.
+lib32=${FLIPEROS_LIB32_DIR:-/usr/lib/i386-linux-gnu}
+has_lib32() {
+  [[ -e $lib32/libvulkan.so.1 ]] || return 0
+  [[ -e $lib32/$1 ]]
+}
+
 renderer=opengl
 case $driver in
-  amdgpu) has_icd 'radeon_icd*.json' && renderer=vulkan ;;
+  amdgpu) has_icd 'radeon_icd*.json' && has_lib32 libvulkan_radeon.so && renderer=vulkan ;;
   nvidia) has_icd 'nvidia_icd*.json' && renderer=vulkan ;;
   i915 | xe)
-    if has_icd 'intel_icd*.json' && [[ $device =~ ^0x[0-9a-fA-F]{4}$ ]] && ((device >= 0x1600)); then
+    if has_icd 'intel_icd*.json' && has_lib32 libvulkan_intel.so && [[ $device =~ ^0x[0-9a-fA-F]{4}$ ]] && ((device >= 0x1600)); then
       renderer=vulkan
     fi
     ;;
