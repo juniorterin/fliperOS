@@ -12515,6 +12515,38 @@ class FightcadeTests(unittest.TestCase):
             self.assertIn('MouseSensitivity = 50\n', dojo.split('[input]')[1])
             self.assertTrue((tmp / 'fc/emulator/flycast/mappings/SDL_Pad_arcade.cfg').is_file())
 
+    def test_dojo_gets_the_arcade_bios_of_the_system(self):
+        # O Dojo le naomi.zip e awbios.zip de data/ e o pacote nao as traz: o
+        # "Test game" parava em "cannot load BIOS naomi.zip". As do sistema
+        # (~/bios/dc) vao para la, so as que faltam.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            bios = tmp / 'bios-dc'
+            bios.mkdir()
+            for name in ('naomi.zip', 'awbios.zip', 'dc_boot.bin', 'naomigd.zip'):
+                (bios / name).write_text('system-' + name)
+            data = tmp / 'fc/emulator/flycast/data'
+            # Uma que ja esta la (a pessoa pos, ou o cliente baixou) fica como esta.
+            (data / 'awbios.zip').write_text('fightcade-awbios')
+            self.session(tmp, [self.CLIENT], FLIPEROS_FLYCAST_BIOS=str(bios))
+            self.assertEqual((data / 'naomi.zip').read_text(), 'system-naomi.zip')
+            self.assertEqual((data / 'dc_boot.bin').read_text(), 'system-dc_boot.bin')
+            self.assertEqual((data / 'awbios.zip').read_text(), 'fightcade-awbios')
+            # Copia, nao link: o que o Fightcade gravar nunca chega a ~/bios/dc.
+            self.assertFalse((data / 'naomi.zip').is_symlink())
+            # So as que o Dojo le; as que o sistema nao tem nao aparecem.
+            self.assertFalse((data / 'naomigd.zip').exists())
+            self.assertFalse((data / 'naomi2.zip').exists())
+            # A memoria dos jogos que ja estava la segue.
+            self.assertEqual((data / 'kofxi.zip.nvmem').read_text(), 'fc-nvmem')
+            # Sem a pasta de BIOS do sistema, abre do mesmo jeito.
+            (data / 'naomi.zip').unlink()
+            run = self.session(tmp, [self.CLIENT], FLIPEROS_FLYCAST_BIOS=str(tmp / 'nada'))
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertFalse((data / 'naomi.zip').exists())
+
     def test_window_shortcuts(self):
         rc = ElementTree.parse(ROOT / 'config/openbox-fightcade.xml').getroot()
         ns = {'ob': 'http://openbox.org/3.4/rc'}

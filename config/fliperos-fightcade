@@ -44,6 +44,7 @@ switchres_ini=${SWITCHRES_INI:-/etc/switchres.ini}
 flycast_maps=${FLIPEROS_FLYCAST_MAPPINGS:-/home/fliperos/.config/flycast/mappings}
 extras=${FLIPEROS_EXTRAS:-/opt/fliperos/bin/fliperos-extras}
 flycast_cfg=${FLIPEROS_FLYCAST_CFG:-/home/fliperos/.config/flycast/emu.cfg}
+flycast_bios=${FLIPEROS_FLYCAST_BIOS:-/home/fliperos/bios/dc}
 flycast_nvram=${FLIPEROS_FLYCAST_NVRAM:-/home/fliperos/nvram/flycast}
 ini_set=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
 escquit=${FLIPEROS_ESCQUIT:-/opt/fliperos/bin/fliperos-escquit}
@@ -498,6 +499,22 @@ flycast_sync() {
   return 0
 }
 
+# flycast_bios_copy DATA: o Dojo le as BIOS dos arcades de data/ (../data/naomi.zip
+# na lista dele) e o pacote nao as traz: sem elas o "Test game" abre o
+# emulador, que para em "cannot load BIOS naomi.zip" e fecha sem jogo. As que o
+# sistema ja tem em ~/bios/dc vao para la, como copia e so as que faltam: o que
+# a pessoa pos em data/ (ou o cliente baixou) fica, e a ~/bios/dc nunca e
+# regravada pelo Fightcade.
+flycast_bios_copy() {
+  local data=$1 name
+  [[ -d $data ]] || return 0
+  for name in naomi.zip naomi2.zip awbios.zip dc_boot.bin; do
+    [[ -e $data/$name || ! -f $flycast_bios/$name ]] && continue
+    cp -- "$flycast_bios/$name" "$data/$name" 2> /dev/null
+  done
+  return 0
+}
+
 # fbneo_buttons INI: os botoes do Setup no FBNeo (ou FBA) de INI: o preset
 # config/presets/fliperos.ini (fliperos-buttons fbneo, na versao do ini) e,
 # para cada jogador do mapa, nPlayerDefaultControls 15 (o preset) apontando
@@ -597,6 +614,7 @@ emulators_setup() {
     fi
     once fightcade-flycast && cfg_set "$ini.cfg" fullscreen yes
     flycast_sync "$ini.cfg"
+    flycast_bios_copy "$(dirname "$ini")/data"
   fi
   return 0
 }
