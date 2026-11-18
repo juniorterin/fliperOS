@@ -106,7 +106,7 @@ A new package has a group list (the last group used comes chosen) and **Install*
 - **Test on the cabinet** opens the game there, from its folder, without installing it (`~/roms/custom/.test`, hidden from the frontends). When the game shows on the screen, a panel says what to do if it doesn't take the controller (the on-screen menu opens by itself on Controller configuration, and the key map made there goes into the package) and offers **Take a photo** and **Record 10 s**: they capture the cabinet's screen while you play, and the photo and the video become the package's picture and video (they replace the ones above; a 640x240 screen comes out in 4:3). The video needs `ffmpeg` on the cabinet. Not seen in 2 minutes: the page points to its log.
 - The **logo** (`<game>.logo.png`) is the fourth art slot, next to the picture, the video and the text.
 
-**Create the package** checks the row, asks before replacing a zip of the same name, packs it, and opens **Install packages** with the new card marked.
+**Create the package** checks the row, asks before replacing a zip of the same name and packs it. When it is ready, the page shows a **Download** button with the zip's link (and **See it in Install packages**); the form goes back to empty. Every good package card in **Install packages** has the same **Download** button, and **Make a package of it** on an installed game opens a window with it too: download the zip to copy it to another FliperOS.
 
 Windows and Linux games are **copied** to `~/games/GROUP/NAME` and packed in squashfs, like an installed package: the folder can be on a USB disk, in `~/games` after sending it in **Files**, or on the network share. The first Windows game offers to download PortProton (about 3 GB).
 

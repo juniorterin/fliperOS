@@ -273,7 +273,37 @@ async function cgDelete(game) {
 // Instalar pacotes o mostra).
 async function cgPack(game) {
   const task = await cgTask("/api/customgames/pack", { group: game.group, name: game.name });
-  if (task && task.rc === 0) toast(t("cg_packaged").replace("%s", game.name), "ok");
+  if (task && task.rc === 0) {
+    toast(t("cg_packaged").replace("%s", game.name), "ok");
+    cgPackReady(cgZipOf(game.name), game.name);
+  }
+}
+
+// O nome do zip de um jogo na pasta dos pacotes (lib/customgames.sh
+// customgames_package_out: o que o disco do Windows recusa vira "_").
+const cgZipOf = (name) => name.replace(/[^A-Za-z0-9 ._()&+,-]+/g, "_") + CG_SUFFIX;
+// O endereco para baixar um pacote da pasta ~/roms/custom-packages (o
+// /api/download com a raiz roms).
+const cgDownloadUrl = (zip) => "/api/download?root=roms&path=" + encodeURIComponent("custom-packages/" + zip);
+
+// cgDownloadButton: o botao Baixar de um pacote feito, para levar o zip a
+// outro FliperOS (a pasta dele, ~/roms/custom-packages).
+function cgDownloadButton(zip) {
+  return el("a", { class: "btn small", href: cgDownloadUrl(zip), download: zip }, icon("px-install"), t("cg_download"));
+}
+
+// cgPackReady: o pacote ficou pronto (o de um jogo instalado): o dialogo com
+// o link para baixar e o caminho dele no gabinete.
+function cgPackReady(zip, name) {
+  const dlg = cgDialog();
+  const close = el("button", { type: "button", class: "btn ghost" }, t("ok"));
+  close.addEventListener("click", () => dlg.close());
+  const list = el("button", { type: "button", class: "btn ghost" }, t("cg_open_install"));
+  list.addEventListener("click", () => { dlg.close(); cgShowTab("install"); });
+  dlg.replaceChildren(el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, t("cg_pack_ready").replace("%s", name)),
+    el("p", { class: "dim" }, t("cg_pack_where").replace("%s", zip)),
+    el("p", {}, cgDownloadButton(zip)), el("footer", {}, list, close)));
+  dlg.showModal();
 }
 
 // cgTask: uma tarefa de jogos custom (instalar, empacotar...), esperada.
@@ -563,6 +593,8 @@ function cgPackageCard(p) {
     const group = cgGroupSelect(cg.installGroup, (value) => { cg.installGroup = value; });
     actions.push(group, cgPkgButton("cg_install", () => cgInstallPackage(p, group.value), "small"));
   }
+  // O zip de um pacote que serve se baixa daqui, para levar a outro FliperOS.
+  if (p.state !== "bad") actions.push(cgDownloadButton(p.file));
   const card = cgCard({ name: p.name, file: p.file, platform: p.platform, mode: p.mode, category: p.category, controls: p.controls,
     year: p.year, developer: p.developer, buttons: p.buttons, players: p.players, snap: media("snap"), logo: media("logo"), video: media("preview"), text: media("texto"),
     size: p.bytes || p.size, key: p.key, ppdb: p.ppdb, tag, problems: p.state === "bad" ? cgProblems(p) : [] }, actions);
@@ -1091,10 +1123,14 @@ async function cgCreate(button) {
       if (tk.step) step.textContent = tk.step;
     });
     if (task && task.rc === 0) {
-      status.replaceChildren(el("span", { class: "ok" }, t("cg_created").replace("%s", zip)));
-      toast(t("cg_created").replace("%s", zip), "ok");
+      // O pacote pronto: o link para baixar o zip (e para ver na lista de
+      // pacotes), no lugar de pular de aba; a tela de criar volta limpa.
+      const list = el("button", { type: "button", class: "btn ghost small" }, t("cg_open_install"));
+      list.addEventListener("click", () => cgShowTab("install"));
       cg.createRow = cgNewRow({ platform: "windows" });
-      cgShowTab("install");
+      cgCreateDraw();
+      status.replaceChildren(el("span", { class: "ok" }, t("cg_created_dl").replace("%s", zip)), " ", cgDownloadButton(zip), " ", list);
+      toast(t("cg_created").replace("%s", zip), "ok");
     } else {
       cg.highlight = "";
       status.replaceChildren(el("span", { class: "error" }, (task && (task.error || task.last)) || t("task_fail")));

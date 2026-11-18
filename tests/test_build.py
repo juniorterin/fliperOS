@@ -8066,6 +8066,20 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertIn('const CG_TABS = ["games", "install", "create"];', js)
         self.assertIn('cg.highlight = data.out;', js)
         self.assertIn('cgShowTab("install");', js)
+        # O pacote pronto mostra o link para baixar o zip (/api/download, a raiz roms), em vez de pular de
+        # aba; o mesmo no dialogo do pacote de um jogo instalado e em cada cartao da lista de pacotes.
+        self.assertIn('const cgDownloadUrl = (zip) => "/api/download?root=roms&path=" + encodeURIComponent("custom-packages/" + zip);', js)
+        create = js.split('async function cgCreate(')[1].split('\n}\n')[0]
+        self.assertIn('cgDownloadButton(zip)', create)
+        self.assertNotIn('cgShowTab("install");\n    } else {', create)
+        self.assertIn('cgPackReady(cgZipOf(game.name), game.name);', js)
+        self.assertIn('if (p.state !== "bad") actions.push(cgDownloadButton(p.file));', js)
+        self.assertEqual(js.count('el("a", { class: "btn small", href: cgDownloadUrl(zip), download: zip }'), 1)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_created_dl', 'cg_download', 'cg_open_install', 'cg_pack_ready', 'cg_pack_where'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+        # O servidor entrega o zip da pasta dos pacotes (roms/custom-packages) como arquivo.
+        self.assertEqual(self.call('GET', '/api/download?root=roms&path=custom-packages/nothing.zip')[0], 404)
         # Depois de instalar, a pergunta de apagar o pacote.
         install = js.split('async function cgInstallPackage(')[1].split('\n}\n')[0]
         self.assertLess(install.index('"/api/customgames/install"'), install.index('t("cg_pkg_delete_ask")'))
