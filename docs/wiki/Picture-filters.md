@@ -106,7 +106,7 @@ PROGRAM is the command name in `emulator-modes.conf`, or the RetroArch core with
 | Keisho (Model 2 and 3) | 640x240 at 57.524 Hz | 496x384 at 57.524 Hz, interlaced |
 | GroovyMAME | `interlace 0` in `mame.ini` | `interlace 1`: each game's own interlaced mode |
 | RetroArch cores | `interlace 0` in the core's `switchres.ini` | `interlace 1` |
-| Desktop, Fightcade | — | picom, with or without the filter |
+| Desktop, Fightcade, custom Windows games on PortProton | — | picom, with or without the filter |
 
 The core files are `~/.config/retroarch/config/<Core>/<Core>.switchres.ini`, written without the `# FliperOS` header so updates leave them alone.
 
@@ -124,6 +124,7 @@ The level comes from the first of these that is set:
 - **Vulkan** (PCSX2, Dolphin, DuckStation and Flycast on amdgpu): the implicit layer `config/fliperos-vkfps.c`, on with `FLIPEROS_VK_FPS=1`, does the same before each present. It allocates nothing until the first filtered frame. Tested on lavapipe with the Khronos validation layers (`tools/vkfps-test.sh`) and on the R7 240 with RADV.
 - **Desktop:** LXDE draws without OpenGL, so it gets the same weights from **picom** with a window shader (`config/fliperos-desktop-deflicker --watch`, at `deflicker_desktop=`). It checks the mode every 2 seconds and runs only while the screen is interlaced. Ubuntu's own picom autostart is hidden by a `picom.desktop` with `Hidden=true` in `/etc/fliperos/xdg`.
 - **Wine:** most Windows programs are 32-bit. Installing Wine from the Extras also builds both layers for 32 bits (`/usr/local/lib/fliperos/i386/`), and `fliperos-x11-client` puts both in `LD_PRELOAD` for a `wine` or `.exe` command; the loader skips the one of the wrong kind. Programs that still can't take a layer (the Fightcade lobby, which is Electron, or Wine without the 32-bit layer) get picom over their whole Xorg, without the on-screen menu.
+- **PortProton:** its container (pressure-vessel) replaces `LD_PRELOAD`, so no layer ever reaches a game it opens. For a custom Windows game whose `.cfg` has no `runner=` (PortProton is the default) or `runner=portproton`, `fliperos-x11-client` starts picom instead, with the game's own `deflicker_custom_...=` level. Games on the system Wine or Wine Staging keep the layers.
 
 For testing: `FLIPEROS_DEFLICKER=off|light|medium|strong` overrides the level, `FLIPEROS_DEFLICKER_FORCE=1` filters in any mode, `FLIPEROS_DEFLICKER_DEBUG=1` prints what it picked, and `tools/deflicker-test.sh` checks the result on a software Xvfb.
 
