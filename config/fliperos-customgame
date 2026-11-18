@@ -28,7 +28,10 @@
                           --folder PASTA (--exe ARQUIVO | --command COMANDO) [...]
       um jogo de uma pasta (o painel web): a pasta copiada para
       ~/games/GRUPO/NOME, a midia, o NOME.cfg (sem package=) e, com --key e
-      --ppdb, o NOME.key e o .ppdb ao lado do .exe. Status 3: o jogo ja
+      --ppdb, o NOME.key e o .ppdb ao lado do .exe. Com --joystick (o jogo
+      ja aceita o joystick) o NOME.key fica vazio, so com o cabecalho: sem
+      mapa do controle para o teclado, e o menu na tela nao pergunta (vale
+      tambem no pack, no lugar de qualquer --key). Status 3: o jogo ja
       existe (sem --replace)
   fliperos-customgame media --group GRUPO --name NOME [--snap|--video|--text|--logo ARQ] [--text-string T]
       troca a arte de um jogo (a de exemplo deixa de ser)
@@ -837,9 +840,11 @@ def cmd_pack(args):
         rels = {r for _, r in files}
         cfg = check_cfg(cfg, base, rels)
         extras = []
+        # --joystick: o jogo ja aceita o joystick, o pacote leva um .key vazio (escrito abaixo) no lugar de
+        # qualquer --key.
         for opt, kind, exts in ((args.snap, "snap", IMAGE_EXTS), (args.video, "preview", VIDEO_EXTS),
                                 (args.text, "texto", ("txt",)), (args.logo, "logo", LOGO_EXTS),
-                                (args.key, "key", ("key",)), (args.ppdb, "ppdb", ("ppdb",))):
+                                (None if args.joystick else args.key, "key", ("key",)), (args.ppdb, "ppdb", ("ppdb",))):
             if not opt:
                 continue
             ext = opt.rsplit(".", 1)[-1].lower() if kind in ("snap", "preview", "logo") else exts[0]
@@ -861,6 +866,8 @@ def cmd_pack(args):
                 zf.writestr(base + ".cfg", cfg_text(cfg), zipfile.ZIP_DEFLATED)
                 if args.text_string:
                     zf.writestr(base + ".txt", args.text_string.replace("\\n", "\n") + "\n", zipfile.ZIP_DEFLATED)
+                if args.joystick:
+                    zf.writestr(base + ".key", "\n".join(KEY_HEADER) + "\n", zipfile.ZIP_DEFLATED)
                 for path, arc in extras + [(p, base + "/" + r) for p, r in files]:
                     ext = path.rsplit(".", 1)[-1].lower() if "." in os.path.basename(path) else ""
                     method = zipfile.ZIP_STORED if ext in STORED_EXTS else zipfile.ZIP_DEFLATED
@@ -985,7 +992,8 @@ def cmd_add(args):
                 raise Bad("no command (what opens the game, run in its folder)")
         cfg = check_cfg(cfg, name, rels)
         media = media_files(args.snap, args.video, args.text, args.logo)
-        keys = side_text(args.key, "key")
+        # --joystick: o jogo ja aceita o joystick; o .key fica vazio (so o cabecalho), no lugar de qualquer --key.
+        keys = b"" if args.joystick else side_text(args.key, "key")
         ppdb = side_text(args.ppdb, "ppdb") if args.platform == "windows" else None
         size = sum(os.path.getsize(p) for p, _ in files)
         if free_bytes(args.games) < size + (64 << 20):
@@ -1668,6 +1676,7 @@ def main():
     for opt in ("category", "controls", "buttons", "players", "year", "developer", "snap", "video", "text", "text-string",
                 "logo", "key", "ppdb"):
         s.add_argument("--" + opt)
+    s.add_argument("--joystick", action="store_true")
     s.add_argument("--progress", nargs="*", type=int)
     s = sub.add_parser("add")
     s.add_argument("--group", required=True)
@@ -1681,6 +1690,7 @@ def main():
     for opt in ("category", "controls", "buttons", "players", "year", "developer", "snap", "video", "text", "text-string",
                 "logo", "key", "ppdb"):
         s.add_argument("--" + opt)
+    s.add_argument("--joystick", action="store_true")
     s.add_argument("--replace", action="store_true")
     s.add_argument("--progress", nargs="*", type=int)
     s = sub.add_parser("media")

@@ -12,7 +12,7 @@ const cg = { root: null, info: null, rows: [], seq: 0, el: null, busy: false, de
 const CG_DRAFT = "fliperos-cg-draft";
 const CG_TAB = "fliperos-cg-tab";
 const CG_TABS = ["games", "install", "create"];
-const CG_CAPTURE_SECONDS = 10;
+const CG_CAPTURE_SECONDS = 30;
 // O nome de todo pacote (config/fliperos-customgame SUFFIX).
 const CG_SUFFIX = ".fliperos-customgame.zip";
 // As colunas da tabela, na ordem; o rotulo de cada uma tambem vai em cada
@@ -838,7 +838,7 @@ async function cgUploadZip(file) {
 // jogo, sem grupo): o zip vai para ~/roms/custom-packages e aparece na aba
 // Instalar pacotes. A pasta com a estrutura do pacote preenche o resto.
 
-const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "art"];
+const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "joystick", "art"];
 
 function cgRenderCreate() {
   const box = cg.el.create;
@@ -910,8 +910,14 @@ function cgCreatePreview() {
     year: row.year.trim(), developer: row.developer.trim(), controls: row.controls.join(","), buttons: row.buttons, players: row.players,
     snap: row.snap ? row.snap.url || "" : "", logo: row.logo ? row.logo.url || "" : "", video: row.video ? row.video.url || "" : "",
     text: row.text && !row.text.value ? row.text.url || "" : "", textValue: row.text ? row.text.value || "" : "",
-    key: !!row.key, ppdb: !!row.ppdb && row.platform === "windows", tag: { cls: "new", text: t("cg_preview") } });
+    key: !!row.key || !!row.joystick, ppdb: !!row.ppdb && row.platform === "windows", tag: { cls: "new", text: t("cg_preview") } });
   box.replaceChildren(el("h5", {}, t("cg_preview_title")), card, el("p", { class: "dim" }, t("cg_preview_note")));
+}
+
+// Fechar no gabinete: o jogo do teste (abrindo ou aberto) e o X dele fecham.
+async function cgTestClose() {
+  cg.testApp = "";
+  await api("/api/customgames/test-close", { method: "POST", body: "{}" }).catch(() => {});
 }
 
 // Testar: o jogo aberto no gabinete da pasta dele, sem instalar. Quando ele
@@ -936,25 +942,47 @@ async function cgTest(button) {
     const res = await api("/api/customgames/test", { method: "POST", body: JSON.stringify({ row: payload }) });
     const out = await res.json().catch(() => ({}));
     if (!res.ok) { status.replaceChildren(el("span", { class: "error" }, out.error || res.statusText)); return; }
-    status.replaceChildren(el("span", {}, t("cg_test_opening").replace("%s", row.name)));
+    // Enquanto abre: o botao de fechar no gabinete (o jogo pode nao abrir, ou abrir e cair).
+    const stopButton = el("button", { type: "button", class: "btn small ghost" }, icon("g-close"), t("cg_test_close"));
+    let cancelled = false;
+    stopButton.addEventListener("click", async () => {
+      cancelled = true;
+      stopButton.disabled = true;
+      await cgTestClose();
+      status.replaceChildren(el("span", {}, t("cg_test_closed")));
+    });
+    status.replaceChildren(el("span", {}, t("cg_test_opening").replace("%s", row.name)), " ", stopButton);
     cg.testApp = out.app;
-    // Ate 2 minutos: um jogo do Windows pode demorar (o PortProton).
+    // Ate 2 minutos: um jogo do Windows pode demorar (o PortProton). Para antes se o jogo abriu e
+    // fechou (o fim do log dele vai na tela), e mostra o painel do teste se ele roda ha um tempo
+    // sem aparecer no FPS (um programa sem OpenGL).
+    let running = 0;
     for (let i = 0; i < 60; i++) {
       await sleep(2000);
+      if (cancelled) return;
       const s = await api("/api/status").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
-      if (s.fps && s.fps.program === out.app) {
+      const st = await api("/api/customgames/test-state?app=" + encodeURIComponent(out.app)).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+      if (cancelled) return;
+      if ((s.fps && s.fps.program === out.app) || (st.state === "running" && ++running >= 8)) {
         status.replaceChildren(cgTestPanel(row));
         return;
       }
+      if (st.state === "ended") {
+        cg.testApp = "";
+        status.replaceChildren(el("span", { class: "error" }, t("cg_test_ended").replace("%s", row.name).replace("%s", st.log || out.app + ".log")),
+          (st.tail || []).length ? el("pre", { class: "cg-testlog" }, st.tail.join("\n")) : "");
+        return;
+      }
     }
-    status.replaceChildren(el("span", { class: "error" }, t("cg_test_none").replace("%s", row.name).replace("%s", out.app)));
+    status.replaceChildren(el("span", { class: "error" }, t("cg_test_none").replace("%s", row.name).replace("%s", out.app)), " ", stopButton);
+    stopButton.disabled = false;
   } finally {
     cg.busy = false;
     button.disabled = false;
   }
 }
 
-// Captura a tela do gabinete (a foto, ou 10 segundos de video) para a imagem
+// Captura a tela do gabinete (a foto, ou 30 segundos de video a 60 quadros e com som) para a imagem
 // ou o video do pacote: o servidor guarda na espera e devolve o id. say(texto)
 // conta o andamento; say(null, erro), a falha. A arte nova, ou null.
 async function cgCaptureArt(row, kind, say) {
@@ -973,7 +1001,7 @@ async function cgCaptureArt(row, kind, say) {
     if (!res.ok) { say(null, data.error || res.statusText); return null; }
     const key = kind === "snap" ? "snap" : "video";
     row[key] = { id: data.id, name: data.name, url: cgStagedUrl(data.id) };
-    say(t(kind === "snap" ? "cg_cap_photo_ok" : "cg_cap_video_ok"));
+    say(t(kind === "snap" ? "cg_cap_photo_ok" : data.sound ? "cg_cap_video_ok" : "cg_cap_video_nosound"));
     return row[key];
   } finally {
     clearInterval(timer);
@@ -1085,7 +1113,7 @@ function cgArtCards(row, changed) {
 }
 
 // O jogo aberto no teste: o aviso das teclas e a captura da tela do gabinete,
-// a foto e 10 segundos de video, que vao para a imagem e o video do pacote.
+// a foto e 30 segundos de video, que vao para a imagem e o video do pacote.
 function cgTestPanel(row) {
   const msg = el("span", { class: "cg-capmsg", role: "status" });
   const shots = el("div", { class: "cg-capshots" });
@@ -1110,8 +1138,7 @@ function cgTestPanel(row) {
   photo.addEventListener("click", () => capture("snap").catch(() => busy(false)));
   video.addEventListener("click", () => capture("video").catch(() => busy(false)));
   close.addEventListener("click", async () => {
-    cg.testApp = "";
-    await api("/api/close", { method: "POST", body: "{}" });
+    await cgTestClose();
     msg.textContent = "";
   });
   return el("div", { class: "cg-testbar" },
@@ -1217,7 +1244,7 @@ function cgRenderPacked() {
 
 function cgNewRow(values) {
   return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "480i",
-    modeOther: "", category: "", year: "", developer: "", players: "", buttons: "", controls: [], snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
+    modeOther: "", category: "", year: "", developer: "", players: "", buttons: "", controls: [], joystick: false, snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
     wine: "", runner: "portproton", exes: [], programs: [], errors: {}, state: "", error: "" }, values || {});
 }
 
@@ -1511,6 +1538,14 @@ function cgControls(row, { redraw, editing, package: pkg } = {}) {
   out.players = select("players", [["", t("cg_any")], ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.buttons = select("buttons", [["", t("cg_any")], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.controls = cgControlsButton(row, changed);
+  // O jogo ja aceita o joystick (Criar pacote): o pacote leva um .key vazio, sem mapa do controle para o
+  // teclado, e o menu na tela nao abre pedindo um (vale no lugar do .key que veio com a pasta).
+  if (pkg) {
+    const box = el("input", { type: "checkbox", "aria-label": t("cg_f_joystick") });
+    box.checked = !!row.joystick;
+    box.addEventListener("change", () => { row.joystick = box.checked; changed(false); });
+    out.joystick = el("div", { class: "cg-joystick" }, box, el("small", { class: "dim" }, t("cg_joystick_hint")));
+  }
   out.art = pkg ? cgArtCards(row, changed) : cgArt(row, changed);
   if (row.platform === "windows" && (row.runner || "portproton") === "portproton" && cg.info && cg.info.wine &&
       cg.info.wine.length && !editing && !pkg) {
@@ -1739,6 +1774,7 @@ function cgPayload(row) {
     year: row.year.trim(), developer: row.developer.trim(),
     snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), logo: cgArtRef(row.logo), wine: row.platform === "windows" ? row.wine : "",
     key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "",
+    joystick: row.platform !== "command" && row.joystick ? "1" : "",
     runner: row.platform === "windows" ? row.runner || "portproton" : "" };
 }
 

@@ -16,6 +16,7 @@
 #   fliperos-stream installed              status 0 se o go2rtc e o ffmpeg estao la
 #   fliperos-stream encoder                vaapi ou x264 (o que a placa faz)
 #   fliperos-stream capture FPS SAIDA      o ffmpeg que o go2rtc abre (RTSP em SAIDA)
+#   fliperos-stream record SEG SAIDA [FPS] grava SEG segundos da tela e do som num .mp4
 #   fliperos-stream config                 o go2rtc.yaml
 #   fliperos-stream daemon                 o servico (fliperos-stream.service)
 #   fliperos-stream status                 installed=, active=, encoder=, audio=
@@ -275,6 +276,53 @@ capture() {
   exec "$ffmpeg" "${args[@]}"
 }
 
+# record SEGUNDOS SAIDA [FPS]: a tela de agora (e o som) gravados em SAIDA, um
+# .mp4 de H.264 e AAC, com a mesma captura da transmissao (grab: o kmsgrab, a
+# 640x480 e os pixels nitidos). O video do frontend e o do pacote de um jogo
+# (Criar pacote > Testar). Sempre tem uma faixa de som, porque o frontend
+# manda o som do video a uma segunda saida do ffmpeg e, sem faixa, o ffmpeg
+# desistia e o video nunca tocava. A faixa e o som do jogo (o loopback) quando
+# o som da tela ao vivo esta ligado (Setup > Audio Setup) e o jogo abriu
+# depois de ligar; senao, silencio. A primeira linha da saida diz qual:
+# sound=1 ou sound=0.
+# Qualidade: x264 superfast, crf 20 (o jogo roda junto, e o 640x480 comprime
+# bem). Os quadros por segundo sao fixos (o jogo mais lento repete quadros) e
+# o fim e pela contagem de quadros: SEGUNDOS x FPS.
+record() {
+  local seconds=${1:-30} out=${2:-} fps=${3:-60} gpid rc
+  local -a args
+  [[ $seconds =~ ^[0-9]+$ ]] && ((seconds >= 1 && seconds <= 300)) || fail "seconds 1 to 300"
+  [[ $fps =~ ^[0-9]+$ ]] && ((fps >= 5 && fps <= 60)) || fail "frame rate 5 to 60"
+  [[ -n $out ]] || fail "no output"
+  [[ -f $dropmaster ]] || fail "$dropmaster is missing: the capture could take the screen from X and the menu"
+  vpp > /dev/null
+  exec 3< <(grab "$fps" "$$")
+  gpid=$!
+  args=(-hide_banner -loglevel error -nostdin -y -fflags nobuffer)
+  args+=(-f rawvideo -pix_fmt bgr0 -video_size "$SIZE" -framerate "$fps" -use_wallclock_as_timestamps 1 -i pipe:3)
+  if audio_on; then
+    args+=(-thread_queue_size 1024 -f alsa -ac 2 -ar 48000 -i "plug:fliperos_loopcap")
+    echo sound=1
+  else
+    args+=(-f lavfi -i "anullsrc=r=48000:cl=stereo")
+    echo sound=0
+  fi
+  args+=(-map 0:v -map 1:a -vf "format=yuv420p"
+    -c:v libx264 -preset superfast -crf 20 -profile:v high -r "$fps" -g "$fps"
+    -af "asetpts=N/SR/TB+STARTPTS" -c:a aac -b:a 128k -ar 48000 -ac 2
+    -frames:v $((seconds * fps)) -shortest -movflags +faststart "$out")
+  "$ffmpeg" "${args[@]}"
+  rc=$?
+  # A captura para com o gravador (o grab sai quando o pai sai; o fd fechado
+  # faz o ffmpeg dele parar no proximo quadro).
+  exec 3<&-
+  kill "$gpid" 2> /dev/null
+  if ((rc != 0)) && [[ -s $run/grab.err ]]; then
+    grep -v -e '^[[:space:]]*$' -e '^ERROR: ld.so:' "$run/grab.err" | head -n 1 | cut -c1-200 >&2
+  fi
+  return $rc
+}
+
 # config: o go2rtc.yaml. A API e o RTSP so no proprio gabinete; o WebRTC na
 # rede local, sem STUN de fora (o painel e da rede local), so por TCP: o que
 # o Wi-Fi perde volta reenviado em vez de parar a imagem ate o keyframe. Um
@@ -330,6 +378,10 @@ case ${1:-} in
     ;;
   encoder) encoder ;;
   capture) capture "${@:2}" ;;
+  record)
+    record "${@:2}"
+    exit $?
+    ;;
   config) config > /dev/null ;;
   status) status ;;
   daemon)

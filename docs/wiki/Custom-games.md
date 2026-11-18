@@ -49,7 +49,7 @@ Then, with the controller:
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
 7. **Picture, logo, video and text** (optional): pick each file (the logo is a `.png`, `.jpg` or `.webp`; it travels in the package as `<game>.logo.png` or `.logo.jpg`), or type the text. Without them the game gets samples, which you can replace later.
 8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.
-9. **Category, controls, buttons, players, year, developer**: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line.
+9. **Category, controls, buttons, players, year, developer**: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line. Then **Does the game already work with the joystick?** (asked when the game has no `.key` yet): say yes and the package carries an empty `<game>.key`, so the on-screen menu does not ask for a controller map (the same as the *Joystick* box in the web panel).
 10. The Setup writes `~/roms/custom-packages/<game>.fliperos-customgame.zip` and asks whether to **install it now**. Say yes and pick the group (or a new one, for example *PC games*; each group is a system in the frontends): the game folder is copied to `~/games/<group>/<game>` and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.
 11. Open the frontend: the game is in the system of its group.
 12. **The first time the game opens**, without a `<game>.key`, the on-screen menu opens by itself on **Controller configuration**: give each key the game uses a button (see [below](#the-controller-as-a-keyboard)) and Save. A game that takes the joystick by itself: Save with no key marked, and it doesn't ask again.
@@ -284,7 +284,7 @@ The keys are Linux's names: the letters and digits, `F1` to `F12`, `ESC TAB ENTE
 
 ### Setting it up on the screen
 
-The `.key` rarely comes ready: you make it here. A custom game with no `.key` opens the on-screen menu by itself, straight on Controller configuration, two seconds after the game shows (once each time the game opens; *NO KEYS YET* in the corner). **Save** writes the `.key`, even with no key marked, and then the game stops asking; **Back** closes the menu without saving, and it asks again next time.
+The `.key` rarely comes ready: you make it here. A custom game with no `.key` opens the on-screen menu by itself, straight on Controller configuration, two seconds after the game shows (once each time the game opens; *NO KEYS YET* in the corner). **Save** writes the `.key`, even with no key marked, and then the game stops asking; **Back** closes the menu without saving, and it asks again next time. A package made with **Joystick** ticked (web panel) or *yes* to "Does the game already work with the joystick?" (Setup) carries that empty `.key` from the start, so a game that takes the joystick by itself never asks.
 
 Any other time, open the **on-screen menu** during the game (by default Start + Down held for a second; Frontend controls > OSD MENU changes it). A custom game has **Controller configuration** in place of *Emulator menu*:
 

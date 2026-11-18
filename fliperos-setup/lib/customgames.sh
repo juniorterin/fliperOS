@@ -913,11 +913,13 @@ customgames_refresh() {
 # As linhas da tabela (check e bulk) vem num arquivo, uma por jogo, com os
 # campos separados pelo caractere 0x1f (o tab juntaria campos vazios no read):
 #   grupo nome plataforma pasta exe comando modo categoria controles botoes
-#   jogadores imagem video texto texto_digitado wine key ppdb
+#   jogadores imagem video texto texto_digitado wine key ppdb runner logo ano
+#   desenvolvedora joystick
 # plataforma windows, native ou command; imagem/video/texto sao caminhos de
 # arquivos (o painel os sobe antes, ou sao os que vieram com a pasta, na
 # estrutura do pacote); wine e o PW_WINE_USE do PortProton; key e ppdb, o
-# JOGO.key e o JOGO.ppdb que vieram com a pasta.
+# JOGO.key e o JOGO.ppdb que vieram com a pasta; joystick 1: o jogo ja aceita
+# o joystick, o .key do jogo (ou do pacote) fica vazio e vale no lugar do key.
 
 CUSTOM_GAMES_SEP=$'\x1f'
 
@@ -1010,7 +1012,7 @@ customgames_row_fields() {
   R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
   R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
   R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-} R_RUNNER=${f[18]:-} R_LOGO=${f[19]:-}
-  R_YEAR=${f[20]:-} R_DEVELOPER=${f[21]:-}
+  R_YEAR=${f[20]:-} R_DEVELOPER=${f[21]:-} R_JOYSTICK=${f[22]:-}
 }
 
 # customgames_row_errors [package]: o que esta errado na linha de R_* (uma
@@ -1056,6 +1058,8 @@ customgames_row_errors() {
       ;;
     *) echo "platform|The type is Windows, Linux or Command." ;;
   esac
+  # Uma linha colada de um .cfg ("command=groovymame ..."): o bash recusa (command=( e uma atribuicao).
+  [[ $R_COMMAND != command=* ]] || echo "command|The command starts with \"command=\": type only what runs the game, without that."
   ((${#R_CATEGORY} <= 80)) || echo "category|The category is too long."
   for c in ${R_CONTROLS//,/ }; do
     [[ $controls == *" $c "* ]] || echo "controls|Unknown control: $c"
@@ -1159,8 +1163,9 @@ customgames_add_row() {
       args=(--group "$R_GROUP" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
       if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
       [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
-      # O JOGO.key e o JOGO.ppdb que vieram com a pasta (a estrutura do pacote).
-      [[ -n ${R_KEY:-} ]] && args+=(--key "$R_KEY")
+      # O JOGO.key e o JOGO.ppdb que vieram com a pasta (a estrutura do pacote);
+      # com o joystick ja habilitado no jogo, o .key fica vazio.
+      if [[ ${R_JOYSTICK:-} == 1 ]]; then args+=(--joystick); elif [[ -n ${R_KEY:-} ]]; then args+=(--key "$R_KEY"); fi
       [[ -n ${R_PPDB:-} && $R_PLATFORM == windows ]] && args+=(--ppdb "$R_PPDB")
       [[ -n $R_CATEGORY ]] && args+=(--category "$R_CATEGORY")
       [[ -n $R_CONTROLS ]] && args+=(--controls "$R_CONTROLS")
@@ -1488,9 +1493,15 @@ customgames_test() {
   pairs=("format=1" "name=$R_NAME" "platform=$R_PLATFORM" "mode=$mode" "folder=$real")
   if [[ $R_PLATFORM == windows ]]; then pairs+=("exe=$R_EXE" "runner=${R_RUNNER:-}"); else pairs+=("command=$R_COMMAND"); fi
   customgames_cfg_write "$cfg" "${pairs[@]}" || { echo "could not write $cfg"; return 1; }
-  # O .key que veio com a pasta comeca o teste (o menu na tela o mostra).
-  [[ -n ${R_KEY:-} && -f $R_KEY && ! -f $dir/$R_NAME.key ]] && cp -- "$R_KEY" "$dir/$R_NAME.key" &&
-    chown "$FLIPEROS_USER:" "$dir/$R_NAME.key" 2> /dev/null
+  # O .key que veio com a pasta comeca o teste (o menu na tela o mostra). Com o
+  # joystick ja habilitado no jogo, o .key do teste e vazio: o menu na tela nao
+  # abre sozinho pedindo o mapa do controle, como no jogo do pacote.
+  if [[ ${R_JOYSTICK:-} == 1 ]]; then
+    : > "$dir/$R_NAME.key" && chown "$FLIPEROS_USER:" "$dir/$R_NAME.key" 2> /dev/null
+  else
+    [[ -n ${R_KEY:-} && -f $R_KEY && ! -f $dir/$R_NAME.key ]] && cp -- "$R_KEY" "$dir/$R_NAME.key" &&
+      chown "$FLIPEROS_USER:" "$dir/$R_NAME.key" 2> /dev/null
+  fi
   app=$(customgames_app .test "$R_NAME")
   argv=("$CUSTOM_GAMES_RUN" --mode "$mode" --app "$app")
   [[ $R_PLATFORM == windows ]] && argv+=(--wine)
@@ -1524,8 +1535,14 @@ customgames_create() {
     return 3
   fi
   mode=$(customgames_mode "${R_MODE:-480i}")
-  [[ -n ${R_KEY:-} ]] || R_KEY=$(customgames_test_key "$R_NAME")
+  # O joystick ja habilitado no jogo: o .key do pacote e vazio (o da pasta e o do teste ficam de fora).
+  if [[ ${R_JOYSTICK:-} == 1 ]]; then
+    R_KEY=""
+  else
+    [[ -n ${R_KEY:-} ]] || R_KEY=$(customgames_test_key "$R_NAME")
+  fi
   args=(--out "$out" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
+  [[ ${R_JOYSTICK:-} == 1 ]] && args+=(--joystick)
   if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
   [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
   for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players YEAR:year DEVELOPER:developer SNAP:snap VIDEO:video TEXT:text LOGO:logo \

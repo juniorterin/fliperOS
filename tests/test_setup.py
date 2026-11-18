@@ -4804,7 +4804,7 @@ class CustomGamesTests(Base):
         """O arquivo da tabela: um jogo por linha, os campos separados por 0x1f."""
         fields = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
                   "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
-                  "year", "developer")
+                  "year", "developer", "joystick")
         path = self.env.dir / "rows"
         path.write_text("".join("\x1f".join(r.get(f, "") for f in fields) + "\n" for r in rows))
         return path
@@ -5265,6 +5265,70 @@ class CustomGamesTests(Base):
         bad = self.panel_rows([{"name": "X", "platform": "windows", "folder": str(game)}])
         r = self.env.run('customgames_cli test "$F"', dict(e, F=str(bad)))
         self.assertEqual((r.returncode, r.stdout.strip()), (1, "Pick the .exe that opens the game, inside its folder."))
+
+    def test_a_game_that_already_has_the_joystick_gets_an_empty_key(self):
+        # Criar pacote > Joystick: o jogo ja aceita o joystick, entao o pacote leva um .key vazio (so o
+        # cabecalho): o menu na tela nao abre sozinho pedindo o mapa do controle, e o controle nao e
+        # escondido do jogo. Vale no lugar do .key da pasta e do que o teste fez; o teste e a tabela tambem.
+        import zipfile
+        media, games, e = self.pkg_env()
+        x, game = self.package_folder()          # a pasta traz um .key com mapa
+        mapped = lambda text: [l for l in text.splitlines() if re.match(r"^p\d+_\w+=\S+$", l)]
+        folder_key = str(x / "Metal Slug X.key")
+        row = {"name": "MSX", "platform": "windows", "folder": str(game), "exe": "bin/msx.exe", "key": folder_key,
+               "joystick": "1"}
+        rows = self.panel_rows([row])
+        # Testar: o .key do teste e vazio (a OSD nao abre pedindo o mapa).
+        self.env.out('customgames_cli test "$F"', dict(e, F=str(rows)))
+        test = self.roms / "custom" / ".test"
+        self.assertTrue((test / "MSX.key").is_file())
+        self.assertEqual(mapped((test / "MSX.key").read_text()), [])
+        # Criar: o .key do pacote e vazio, nao o da pasta nem o do teste.
+        (test / "MSX.key").write_text("p1_b1=Z\n")
+        self.env.out('customgames_cli create "$F"', dict(e, F=str(rows)))
+        zip_ = self.roms / "custom-packages" / "MSX.fliperos-customgame.zip"
+        with zipfile.ZipFile(zip_) as zf:
+            key = zf.read("MSX.key").decode()
+        self.assertTrue(key.startswith("# FliperOS: controller to keyboard"))
+        self.assertEqual(mapped(key), [])
+        # Instalado, o .key existe e esta vazio (o OSD so abre sozinho sem o arquivo; o controle fica com o jogo).
+        self.env.out('customgames_install "$Z" PC', dict(e, Z=str(zip_)))
+        installed = self.roms / "custom" / "PC" / "MSX.key"
+        self.assertTrue(installed.is_file())
+        self.assertEqual(mapped(installed.read_text()), [])
+        # Sem o joystick marcado, o .key da pasta vai como sempre.
+        rows = self.panel_rows([dict(row, joystick="")])
+        self.env.out('customgames_cli create "$F" replace', dict(e, F=str(rows)))
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertEqual(mapped(zf.read("MSX.key").decode()), ["p1_b1=LEFTCTRL", "p1_start=ENTER"])
+        # A tabela (add): o .key do jogo instalado tambem fica vazio.
+        rows = self.panel_rows([dict(row, group="PC games", name="Table")])
+        self.env.out('customgames_cli bulk "$F"', dict(e, F=str(rows)))
+        key = self.roms / "custom" / "PC games" / "Table.key"
+        self.assertTrue(key.is_file())
+        self.assertEqual(mapped(key.read_text()), [])
+        # O pack direto: --joystick no lugar de --key, e sem as duas o pacote nao tem .key.
+        tool = ["python3", str(ROOT / "config/fliperos-customgame")]
+        env = dict(os.environ, FLIPEROS_USER="nobody-here")
+        common = ["pack", "--name", "Pang", "--platform", "native", "--folder", str(game), "--command", "./x"]
+        for extra, expected in (([], None), (["--key", folder_key, "--joystick"], []), (["--key", folder_key], ["p1_b1=LEFTCTRL", "p1_start=ENTER"])):
+            out = self.env.dir / ("Pang%s.fliperos-customgame.zip" % len(extra))
+            r = subprocess.run(tool + common + ["--out", str(out)] + extra, capture_output=True, text=True, env=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            with zipfile.ZipFile(out) as zf:
+                self.assertEqual(None if "Pang.key" not in zf.namelist() else mapped(zf.read("Pang.key").decode()), expected)
+
+    def test_a_command_pasted_from_a_cfg_is_refused(self):
+        # Uma linha colada de um .cfg ("command=groovymame ..."): o bash recusa (command=( e uma atribuicao)
+        # e o jogo do teste caia na hora; a conferencia avisa antes.
+        media, games, e = self.pkg_env()
+        x, game = self.package_folder()
+        rows = self.panel_rows([
+            {"group": "G", "name": "A", "platform": "native", "folder": str(game), "command": "command=groovymame hsf2"},
+            {"group": "G", "name": "B", "platform": "native", "folder": str(game), "command": "groovymame hsf2"}])
+        out = self.env.out('customgames_cli check "$F"', dict(e, F=str(rows)))
+        self.assertIn('error|1|command|The command starts with "command=":', out)
+        self.assertNotIn("error|2|command", out)
 
     def test_the_list_shows_every_problem_of_a_package(self):
         # A conferencia junta tudo (o que falta, o que sobra, o cfg): a lista

@@ -1311,7 +1311,7 @@ customgames_browse() {
 screen_custom_package_create() {
   local group=$1 from=${2:-} title="Create package" name="" platform=native folder="" exe="" cmd="" snap="" video=""
   local text="" text_string="" mode=640x480@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
-  local year="" developer="" logo=""
+  local year="" developer="" logo="" joystick=0
   local out base value rel runner=portproton
   local -a args
   if [[ -n $from ]]; then
@@ -1442,6 +1442,13 @@ screen_custom_package_create() {
   players=$(screen_custom_pick_count players "$players") || players=""
   year=$(screen_custom_pick_year "$year") || year=""
   developer=$(screen_custom_pick_developer "$developer") || developer=""
+  # O joystick: um jogo que ja o aceita vai com um .key vazio (sem mapa do
+  # controle para o teclado, e o menu na tela nao pergunta por um). Com um .key
+  # (o da pasta, ou o do jogo instalado) nao pergunta: o pacote leva esse.
+  joystick=0
+  if [[ -z $key ]] && ui_yesno "$title" "Does $name already work with the joystick? If so, the package gets an empty .key: no controller-to-keyboard map, and the on-screen menu does not ask for one." no; then
+    joystick=1
+  fi
   # 8. O pacote, na pasta dos pacotes (aparece no Install games).
   out=$(customgames_package_out "$name")
   if [[ -e $out ]]; then
@@ -1453,6 +1460,7 @@ screen_custom_package_create() {
     [[ -n ${!value} ]] && args+=("--$value" "${!value}")
   done
   [[ -n $text_string ]] && args+=(--text-string "$text_string")
+  ((joystick)) && args+=(--joystick)
   run_with_progress "Packing $name" "" customgames_pack_run "${args[@]}" || return 0
   if [[ -n $from ]]; then
     ui_msg "$title" "$name is packed:" "  ~/roms/custom-packages/$(basename "$out")" "" \

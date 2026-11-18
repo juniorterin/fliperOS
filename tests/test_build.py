@@ -5774,6 +5774,45 @@ class FrontendDataTests(unittest.TestCase):
             fevideo.FFMPEG = old
         self.assertIn('.mp4', self.fd.VIDEO_EXTS)
 
+    def test_video_without_a_sound_track_still_plays(self):
+        # O ffmpeg desiste de tudo quando a saida do ALSA fica sem faixa de som ("Output file does not
+        # contain any stream", saida 234; visto no gabinete com um video mudo, o que o painel gravava):
+        # sem nenhum quadro com o som pedido, o video abre de novo so com a imagem.
+        import fevideo
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / 'ffmpeg'
+            log = Path(tmp) / 'runs'
+            fake.write_text('#!/bin/sh\necho "$*" >> %s\nfor a; do [ "$a" = alsa ] && exit 234; done\n'
+                            'head -c 72 /dev/zero\nsleep 3\n' % log)
+            fake.chmod(0o755)
+            old = fevideo.FFMPEG
+            fevideo.FFMPEG = str(fake)
+            try:
+                silent = fevideo.Video('/x.mp4', 4, 2)
+                for _ in range(100):
+                    if silent.count >= 3:
+                        break
+                    time.sleep(0.05)
+                self.assertEqual(silent.count, 3)
+                self.assertFalse(silent.sound)
+                silent.stop()
+                runs = log.read_text().splitlines()
+                self.assertEqual(len(runs), 2)
+                self.assertIn('-f alsa', runs[0])
+                self.assertNotIn('alsa', runs[1])
+                # Na grade (sem som) e uma abertura so.
+                log.unlink()
+                grid = fevideo.Video('/x.mp4', 4, 2, sound=False, paced=True)
+                for _ in range(100):
+                    if grid.count:
+                        break
+                    time.sleep(0.05)
+                grid.stop()
+                self.assertEqual(len(log.read_text().splitlines()), 1)
+            finally:
+                fevideo.FFMPEG = old
+
     def test_clones_under_their_parent(self):
         fd = self.fd
         games = [{'Name': 'samsho5', 'Title': 'Samurai Shodown V / Samurai Spirits Zero (NGM-2700, set 1)'},
@@ -8013,7 +8052,9 @@ class WebSetupBase(unittest.TestCase):
                    FLIPEROS_CUSTOMGAME=str(ROOT / 'config/fliperos-customgame'),
                    FLIPEROS_TTY1=str(tmp / 'installed-fliperos-tty1'),
                    FLIPEROS_OSD_PROFILES=str(tmp / 'osd-profiles.conf'), FLIPEROS_MENU_SOUNDS=str(tmp / 'sounds'),
-                   FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'))
+                   FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'),
+                   FLIPEROS_LOGS=str(tmp / 'logs'))
+        (tmp / 'logs').mkdir()
         (tmp / 'installed-fliperos-tty1').write_text('#!/bin/bash\n')
         # O ffmpeg falso da captura: o que chega pelo stdin vira o arquivo (o ultimo argumento).
         (tmp / 'ffmpeg').write_text('#!/bin/sh\nfor a; do out=$a; done\ncat > "$out"\n')
@@ -8137,11 +8178,11 @@ class WebCustomGamesTests(WebSetupBase):
         return thread
 
     def test_capture_a_photo_and_a_video_of_the_game_under_test(self):
-        # Criar pacote > Testar: a foto e 10 s de video da tela do gabinete vao
+        # Criar pacote > Testar: a foto e o video (30 s, 60 quadros, com som) da tela do gabinete vao
         # para a pasta de espera; os ids entram na imagem e no video do pacote.
         self.assertEqual(self.call('POST', '/api/customgames/capture?kind=gif')[0], 400)
         self.assertEqual(self.call('POST', '/api/customgames/capture')[0], 400)
-        # A foto: 12x4 e largo demais (3:1), cada linha se repete ate ficar 4:3 (x2 aqui).
+        # A foto: 12x4 e largo demais (3:1), ganha linhas ate ficar em 4:3 exatos (12x9).
         thread = self.layer_answers(1.5)
         status, photo = self.call('POST', '/api/customgames/capture?kind=snap')
         thread.join()
@@ -8150,7 +8191,7 @@ class WebCustomGamesTests(WebSetupBase):
         staged = (self.dir / 'stage' / photo['id']).read_bytes()
         self.assertEqual(staged[:8], b'\x89PNG\r\n\x1a\n')
         import struct
-        self.assertEqual(struct.unpack('>II', staged[16:24]), (12, 8))
+        self.assertEqual(struct.unpack('>II', staged[16:24]), (12, 9))
         # A previa da pagina le a mesma arte pelo id (e so pelos ids da espera).
         status, data = self.call('GET', '/api/customgames/staged?id=' + photo['id'])
         self.assertEqual((status, data[:4]), (200, b'\x89PNG'))
@@ -8165,6 +8206,8 @@ class WebCustomGamesTests(WebSetupBase):
         raw = (self.dir / 'stage' / video['id']).read_bytes()
         self.assertEqual(len(raw) % (12 * 4 * 3), 0)
         self.assertGreaterEqual(len(raw) // (12 * 4 * 3), 3)
+        # Sem o som da tela ao vivo ligado, o arquivo tem uma faixa muda e a pagina e avisada.
+        self.assertEqual((video['seconds'], video['sound']), (1, False))
         # Os ids valem como a arte do pacote (o mesmo que o stage da).
         rows = [{'group': 'PC games', 'name': 'Pang', 'platform': 'windows', 'snap': photo['id'], 'video': video['id']}]
         self.assertEqual(self.call('POST', '/api/customgames/check', {'rows': rows})[0], 200)
@@ -8175,6 +8218,112 @@ class WebCustomGamesTests(WebSetupBase):
         status, none = self.call('POST', '/api/customgames/capture?kind=video')
         self.assertEqual(status, 503, none)
         self.assertEqual(sorted(p.name for p in (self.dir / 'stage').iterdir()), before)
+
+    def test_a_test_that_closes_by_itself_shows_its_log_and_can_be_closed_on_the_cabinet(self):
+        # Criar pacote > Testar: o jogo abria e caia na hora (o comando com um "command=" colado) e a
+        # pagina esperava 2 minutos com o botao preso. Agora ela pergunta o estado do teste (abrindo,
+        # aberto, fechou com o fim do log) e tem o botao Fechar no gabinete, mesmo enquanto abre.
+        app = 'custom_test_msx'
+        self.assertEqual(self.call('GET', '/api/customgames/test-state?app=../x')[0], 400)
+        self.assertEqual(self.call('GET', '/api/customgames/test-state')[0], 400)
+        # Ainda sem log: abrindo.
+        self.assertEqual(self.call('GET', '/api/customgames/test-state?app=' + app)[1], {'state': 'starting'})
+        # O log de um jogo que caiu: fechou, com o fim do log sem o barulho do xkbcomp e do servidor X.
+        (self.dir / 'logs' / (app + '.log')).write_text(
+            '> Warning:          Could not resolve keysym XF86Sos\nErrors from xkbcomp are not fatal to the X server\n'
+            "bash: -c: line 1: syntax error near unexpected token `;'\n"
+            'Switchres: Calculating best video mode for 384x224@59.599998 orientation: normal\n'
+            'Process exited with value 1\nxinit: connection to X server lost\n'
+            'waiting for X server to shut down XIO:  fatal IO error 4 on X server ":0"\n'
+            '      after 1149 requests (1149 known processed) with 0 events remaining.\n'
+            '(II) Server terminated successfully (0). Closing log file.\n')
+        status, state = self.call('GET', '/api/customgames/test-state?app=' + app)
+        self.assertEqual((status, state['state'], state['log']), (200, 'ended', app + '.log'))
+        self.assertEqual(state['tail'], ["bash: -c: line 1: syntax error near unexpected token `;'",
+                                         'Switchres: Calculating best video mode for 384x224@59.599998 orientation: normal',
+                                         'Process exited with value 1'])
+        # Com um processo do teste (o cfg dele fica em ~/roms/custom/.test): aberto; Fechar no gabinete o encerra,
+        # com os filhos dele.
+        proc = subprocess.Popen(['python3', '-c', 'import subprocess,sys,time; subprocess.Popen(["sleep", "60"]); time.sleep(60)',
+                                 '/h/roms/custom/.test/MSX.cfg'])
+        try:
+            for _ in range(50):
+                if self.call('GET', '/api/customgames/test-state?app=' + app)[1]['state'] == 'running':
+                    break
+                time.sleep(0.1)
+            self.assertEqual(self.call('GET', '/api/customgames/test-state?app=' + app)[1], {'state': 'running'})
+            for _ in range(50):          # o filho (o sleep) tem de ter nascido
+                if subprocess.run(['pgrep', '-P', str(proc.pid)], capture_output=True).returncode == 0:
+                    break
+                time.sleep(0.1)
+            status, closed = self.call('POST', '/api/customgames/test-close', {})
+            self.assertEqual(status, 200)
+            self.assertGreaterEqual(closed['closed'], 2)
+            proc.wait(timeout=15)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+        self.assertEqual(self.call('POST', '/api/customgames/test-close', {})[1], {'closed': 0})
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        test = js.split('async function cgTest(')[1].split('\n}\n')[0]
+        self.assertIn('t("cg_test_close")', test)                 # o botao ja enquanto abre
+        self.assertIn('"/api/customgames/test-state?app="', test)
+        self.assertIn('st.state === "ended"', test)
+        self.assertIn('"/api/customgames/test-close"', js.split('async function cgTestClose(')[1].split('\n}\n')[0])
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        self.assertIn('cg_test_close: "Close on cabinet"', text)
+        self.assertIn('cg_test_close: "Fechar no gabinete"', text)
+
+    def test_the_video_is_recorded_by_the_screen_capture_with_sound(self):
+        # O video do pacote (e do frontend): 30 s a 60 quadros e com som, pelo fliperos-stream record (a
+        # captura da tela ao vivo); se ele nao grava, pelos quadros da camada. A resposta diz se o som do
+        # jogo entrou (o som da tela ao vivo ligado); senao o arquivo tem uma faixa muda, que o frontend
+        # toca (o ffmpeg dele desistia de um video sem faixa de som).
+        web = SourceFileLoader('fliperos_web_rec', str(ROOT / 'config/fliperos-web')).load_module()
+        self.assertEqual((web.CAPTURE_SECONDS, web.CAPTURE_FPS), (30, 60))
+        # A imagem sai sempre em 4:3 exatos (como o tubo mostra): 640x240 ganha linhas, 320x224 e 1280x1024
+        # ganham colunas, 1280x720 (16:9) ganha linhas; um quadro em pe (monitor girado) fica como veio.
+        for size, expected in (((640, 240), (640, 480)), ((640, 480), (640, 480)), ((320, 240), (320, 240)),
+                               ((384, 240), (384, 288)), ((256, 224), (299, 224)), ((1280, 720), (1280, 960)),
+                               ((1280, 1024), (1365, 1024)), ((2560, 240), (2560, 1920)), ((240, 320), (240, 320))):
+            self.assertEqual(web.aspect_size(*size), expected, size)
+        # O vizinho mais proximo: linhas e colunas repetidas, sem misturar os pixels.
+        a, b, c, d = (bytes([n]) * 3 for n in (1, 2, 3, 4))
+        self.assertEqual(web.fit_rows([a + b, c + d], 2, 2, 3, 2), [a + a + b, c + c + d])
+        self.assertEqual(web.fit_rows([a + b], 2, 1, 2, 3), [a + b] * 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            stream = Path(tmp) / 'fliperos-stream'
+            stream.write_text('#!/bin/sh\necho "$*" > %s/args\necho sound=1\necho fake > "$3"\n' % tmp)
+            stream.chmod(0o755)
+            out = Path(tmp) / 'v.mp4'
+            old = web.STREAM, web.grab_frame
+            web.STREAM = str(stream)
+            web.grab_frame = lambda *a, **k: None
+            try:
+                self.assertEqual(web.record_video(str(out)), (True, None))
+                self.assertEqual((Path(tmp) / 'args').read_text().split(), ['record', '30', str(out), '60'])
+                stream.write_text('#!/bin/sh\necho sound=0\necho fake > "$3"\n')
+                self.assertEqual(web.record_video(str(out)), (False, None))
+                # Nao grava: cai nos quadros da camada, e o motivo da captura vai junto.
+                stream.write_text('#!/bin/sh\necho "no framebuffer" >&2\nexit 1\n')
+                out.unlink()
+                sound, why = web.record_video(str(out))
+                self.assertFalse(sound)
+                self.assertIn('nothing to capture', why)
+                self.assertIn('no framebuffer', why)
+            finally:
+                web.STREAM, web.grab_frame = old
+        script = (ROOT / 'config/fliperos-stream').read_text()
+        record = script.split('\nrecord() {')[1].split('\n}\n')[0]
+        self.assertIn('exec 3< <(grab "$fps" "$$")', record)
+        self.assertIn('-f alsa -ac 2 -ar 48000 -i "plug:fliperos_loopcap"', record)
+        self.assertIn('anullsrc', record)        # sem o loopback, uma faixa muda (o frontend precisa de uma)
+        self.assertIn('-c:a aac', record)
+        self.assertIn('-frames:v $((seconds * fps)) -shortest', record)
+        self.assertIn('  record)\n    record "${@:2}"', script)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('const CG_CAPTURE_SECONDS = 30;', js)
+        self.assertIn('data.sound ? "cg_cap_video_ok" : "cg_cap_video_nosound"', js)
 
     def test_art_waits_in_the_stage_and_rows_go_to_the_setup(self):
         # A arte: so as extensoes de cada tipo.
@@ -8194,9 +8343,9 @@ class WebCustomGamesTests(WebSetupBase):
                                  'free': 99})
         lines = (self.dir / 'check.rows').read_text().splitlines()
         first, second = (l.split('\x1f') for l in lines)
-        # O runner (PortProton, Wine, Wine Staging), o logotipo, o ano e a desenvolvedora, o ultimo campo.
-        self.assertEqual(len(first), 22)
-        self.assertEqual(first[19:], ['', '', ''])
+        # O runner (PortProton, Wine, Wine Staging), o logotipo, o ano, a desenvolvedora e o joystick (o ultimo campo).
+        self.assertEqual(len(first), 23)
+        self.assertEqual(first[19:], ['', '', '', ''])
         self.assertEqual(first[:5], ['PC games', 'Metal Slug X', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
         self.assertEqual(first[5], 'line one line two')
         self.assertEqual(first[11], str(self.dir / 'stage' / staged['id']))
@@ -8207,6 +8356,14 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual([p.name for p in (self.dir / 'stage').glob('rows-*')], [])
         self.assertEqual(self.call('POST', '/api/customgames/check', {'rows': []})[0], 400)
         self.assertEqual(self.call('POST', '/api/customgames/check', {'rows': 'x'})[0], 400)
+        # O joystick ja habilitado (Criar pacote): "1" (ou true) vai ao Setup, qualquer outra coisa e vazio.
+        for given, sent in (('1', '1'), (True, '1'), ('', ''), (False, ''), ('0', ''), ('yes', '')):
+            rows = [{'group': 'PC games', 'name': 'Pang', 'platform': 'windows', 'joystick': given}]
+            self.call('POST', '/api/customgames/check', {'rows': rows})
+            self.assertEqual((self.dir / 'check.rows').read_text().splitlines()[0].split('\x1f')[22], sent, given)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('joystick: row.platform !== "command" && row.joystick ? "1" : ""', js)
+        self.assertIn('"controls", "joystick", "art"]', js)
 
     def test_bulk_is_a_task_with_a_result_per_row(self):
         rows = [{'group': 'G', 'name': 'A', 'platform': 'command', 'command': 'a'},

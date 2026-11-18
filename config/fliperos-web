@@ -1973,37 +1973,111 @@ def grab_frame(source=None, wait=3.0):
 
 
 # ── Foto e video do jogo no teste (Criar pacote) ───────────────────
-# Um jogo de 15 kHz de 640x240 sai esticado (8:3) numa imagem: as linhas se
-# repetem ate ficar em 4:3, como o frontend mostra.
+# A imagem sai sempre em 4:3, como a tela do gabinete mostra: um jogo de 15 kHz
+# de 640x240 (8:3), de 320x224 ou 256x224, ou um que desenha em 16:9, vem do
+# quadro com outra proporcao, e o tubo o estica para 4:3 (aspect_size).
 FFMPEG = ENV("FLIPEROS_FFMPEG", "ffmpeg")
-CAPTURE_SECONDS = int(ENV("FLIPEROS_CAPTURE_SECONDS", "10"))
+# O video do pacote (e do frontend): 30 s a 60 quadros por segundo, com som.
+CAPTURE_SECONDS = int(ENV("FLIPEROS_CAPTURE_SECONDS", "30"))
+CAPTURE_FPS = int(ENV("FLIPEROS_CAPTURE_FPS", "60"))
 
 
-def aspect_rows(width, height):
-    """Quantas vezes cada linha se repete para a imagem ficar em 4:3 (1: ja
-    esta, ou e quase)."""
-    return max(1, round(width * 0.75 / height)) if height and width / height > 2 else 1
+def aspect_size(width, height):
+    """O tamanho de um quadro de WIDTH x HEIGHT em 4:3 exatos: mais largo que
+    4:3 (640x240, 1280x720) ganha linhas, mais estreito (320x224, 256x224,
+    1280x1024) ganha colunas. Um quadro em pe (o monitor girado) fica como veio."""
+    if not width or not height or height > width:
+        return width, height
+    if width * 3 > height * 4:
+        return width, round(width * 3 / 4)
+    return round(height * 4 / 3), height
 
 
-def record_video(out, seconds=CAPTURE_SECONDS, grab=None, clock=time.monotonic):
-    """Grava SECONDS segundos da tela em OUT (H.264 em .mp4): os quadros da
-    camada (ou do X) vao para o ffmpeg, que da o tempo de cada um pela hora
-    em que chegou (a taxa e a que o jogo deixa tirar). (quadros, None) ou
-    (0, o motivo)."""
-    grab = grab or grab_frame
+def fit_rows(rows, width, height, out_w, out_h):
+    """As linhas RGB de um quadro WIDTH x HEIGHT no tamanho OUT_W x OUT_H, no
+    vizinho mais proximo (linhas e colunas repetidas, sem suavizar: os pixels
+    ficam nitidos, como na tela)."""
+    if (out_w, out_h) == (width, height):
+        return rows
+    xs = None if out_w == width else [min(width - 1, x * width // out_w) for x in range(out_w)]
+    made = {}
+    out = []
+    for y in range(out_h):
+        src = min(height - 1, y * height // out_h)
+        if src not in made:
+            row = rows[src]
+            made[src] = row if xs is None else b"".join(row[3 * x:3 * x + 3] for x in xs)
+        out.append(made[src])
+    return out
+
+
+def live_sound():
+    """O som da tela ao vivo esta ligado (Setup > Audio Setup) e o loopback do
+    ALSA aberto: so assim o som do jogo tem de onde ser gravado."""
+    return read_conf().get("stream_audio") == "on" and bool(
+        re.search(r"\[FliperOSLoop\s*\]", read(os.path.join(PROC, "asound/cards"))))
+
+
+def record_video(out, seconds=CAPTURE_SECONDS, grab=None, clock=time.monotonic, fps=CAPTURE_FPS):
+    """Grava SECONDS segundos da tela em OUT (.mp4, H.264 e AAC, FPS quadros
+    por segundo): pelo fliperos-stream record (o kmsgrab, a mesma captura da
+    tela ao vivo, que da os 60 quadros e o som do jogo) e, sem ele ou se ele
+    nao gravar, pelos quadros da camada OpenGL (ou do X), que a taxa e a que o
+    jogo deixa tirar. (som, None) ou (False, o motivo): som e se o arquivo tem
+    o som do jogo (senao tem uma faixa muda: o frontend precisa de uma faixa
+    de som)."""
+    from_stream = None
+    if grab is None and os.access(STREAM, os.X_OK):
+        sound, from_stream = record_with_stream(out, seconds, fps)
+        if not from_stream:
+            return sound, None
+        try:
+            os.unlink(out)
+        except OSError:
+            pass
+    sound, why = record_from_frames(out, seconds, fps, grab or grab_frame, clock)
+    if why and from_stream:
+        why = "%s (the screen capture said: %s)" % (why, from_stream)
+    return sound, why
+
+
+def record_with_stream(out, seconds, fps):
+    """O fliperos-stream record. (som, None) ou (False, o motivo)."""
+    try:
+        run = subprocess.run([STREAM, "record", str(seconds), out, str(fps)], capture_output=True, text=True,
+                             errors="replace", timeout=seconds + 90)
+    except subprocess.TimeoutExpired:
+        return False, "the recording took too long"
+    except OSError as exc:
+        return False, str(exc)
+    if run.returncode == 0 and os.path.isfile(out) and os.path.getsize(out) > 0:
+        return "sound=1" in run.stdout.split(), None
+    return False, (run.stderr.strip() or "fliperos-stream could not record")[-300:]
+
+
+def record_from_frames(out, seconds, fps, grab, clock):
+    """record_video pelos quadros da camada: eles vao para o ffmpeg, que da o
+    tempo de cada um pela hora em que chegou; o som e o do loopback, ou uma
+    faixa muda."""
     first = grab()
     if not first:
-        return 0, "nothing to capture: the text console, or a program without OpenGL"
+        return False, "nothing to capture: the text console, or a program without OpenGL"
     width, height, rows, source = first
-    repeat = aspect_rows(width, height)
+    out_w, out_h = aspect_size(width, height)
+    sound = live_sound()
     cmd = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-           "-video_size", "%dx%d" % (width, height), "-use_wallclock_as_timestamps", "1", "-i", "-",
-           "-vf", "scale=iw:ih*%d:flags=neighbor,crop=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" % repeat,
-           "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-movflags", "+faststart", "-an", out]
+           "-video_size", "%dx%d" % (width, height), "-use_wallclock_as_timestamps", "1", "-i", "-"]
+    cmd += (["-f", "alsa", "-ac", "2", "-ar", "48000", "-i", "plug:fliperos_loopcap"] if sound
+            else ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"])
+    cmd += ["-map", "0:v", "-map", "1:a",
+            "-vf", "scale=%d:%d:flags=neighbor,setsar=1,crop=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" % (out_w, out_h),
+            "-r", str(fps), "-c:v", "libx264", "-preset", "superfast", "-crf", "20", "-g", str(fps),
+            "-af", "asetpts=N/SR/TB+STARTPTS", "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+            "-shortest", "-movflags", "+faststart", out]
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     except OSError:
-        return 0, "ffmpeg is not installed on the cabinet"
+        return False, "ffmpeg is not installed on the cabinet"
     frames = 0
     end = clock() + seconds
     try:
@@ -2026,13 +2100,13 @@ def record_video(out, seconds=CAPTURE_SECONDS, grab=None, clock=time.monotonic):
         proc.wait(timeout=120)
     except subprocess.TimeoutExpired:
         proc.kill()
-        return 0, "ffmpeg took too long to encode the video"
+        return False, "ffmpeg took too long to encode the video"
     if proc.returncode != 0 or not os.path.isfile(out) or os.path.getsize(out) == 0:
-        return 0, err[-300:] or "ffmpeg could not make the video"
+        return False, err[-300:] or "ffmpeg could not make the video"
     if frames < 3:
         os.unlink(out)
-        return 0, "the screen did not change enough to record (%d frame%s)" % (frames, "" if frames == 1 else "s")
-    return frames, None
+        return False, "the screen did not change enough to record (%d frame%s)" % (frames, "" if frames == 1 else "s")
+    return sound, None
 
 
 def version():
@@ -3146,7 +3220,7 @@ def menu_sounds():
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
                      "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
-                     "year", "developer")
+                     "year", "developer", "joystick")
 CUSTOMGAME_ROWS = 500
 CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 # A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
@@ -3210,6 +3284,44 @@ def found_path(kind, value):
         return None
 
 
+# O cfg de um jogo em teste (Criar pacote > Testar) fica na pasta escondida
+# ~/roms/custom/.test: quem tem esse caminho na linha de comando e do teste
+# (o fliperos-x11-run, o xinit, o jogo), e os filhos deles tambem.
+CUSTOMGAME_TEST_MARK = "/roms/custom/.test/"
+
+
+def customgame_test_pids():
+    """Os processos do jogo em teste e os filhos deles."""
+    parents, found = {}, set()
+    for pid, uid, name, args in processes():
+        if any(CUSTOMGAME_TEST_MARK in a for a in args):
+            found.add(pid)
+        try:
+            parents[pid] = int(read(os.path.join(PROC, str(pid), "stat")).rsplit(")", 1)[1].split()[1])
+        except (IndexError, ValueError):
+            continue
+    grew = True
+    while grew:
+        grew = False
+        for pid, parent in parents.items():
+            if parent in found and pid not in found:
+                found.add(pid)
+                grew = True
+    return sorted(found)
+
+
+# O que o log de um programa tem de barulho (o xkbcomp e o servidor X) e nao diz por que o jogo fechou.
+LOG_NOISE = re.compile(r"^(> Warning:|Errors from xkbcomp|The XKEYBOARD keymap compiler|\(\S\S\) |xinit:|waiting for X server|"
+                       r"\s+after \d+ requests|\s*$)")
+
+
+def customgame_log_tail(path, lines=10):
+    """O fim do log de um programa sem o barulho do X: o que ajuda a ver por
+    que o jogo em teste fechou logo depois de abrir."""
+    keep = [l.rstrip()[:240] for l in read(path)[-30000:].splitlines() if not LOG_NOISE.match(l)]
+    return keep[-lines:]
+
+
 def customgame_field(value, limit=1024):
     """Um campo de uma linha da tabela: texto de uma linha so, sem os
     caracteres de controle (o 0x1f separa os campos no arquivo)."""
@@ -3237,6 +3349,9 @@ def customgame_rows_file(rows):
                 value = found or staged or os.path.join(stage_dir(), "missing-" + re.sub(r"\W", "", value)[:32])
             elif key == "folder" and value:
                 value = os.path.normpath(value)
+            elif key == "joystick":
+                # O jogo ja aceita o joystick: o pacote leva um .key vazio.
+                value = "1" if value.lower() in ("1", "true") else ""
             fields.append(value)
         lines.append("\x1f".join(fields))
     os.makedirs(stage_dir(), exist_ok=True)
@@ -3694,6 +3809,8 @@ class Panel:
         # O que volta depois de um jogo aberto daqui, para o proximo pedido
         # feito com ele ainda na tela (sem fliperos-session no meio).
         self.last_back = "menu"
+        # O ultimo teste do Criar pacote: (app, hora do pedido), para dizer se ele ja abriu e fechou.
+        self.test_launch = None
         self.media = MediaIndex()
         # O jogo aberto, por processo (identify), e o ultimo pedido de Jogar.
         self.found = {}
@@ -4046,7 +4163,7 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
         if url.path in ("/api/customgames", "/api/customgames/scan", "/api/customgames/art", "/api/customgames/staged", "/api/customgames/packages",
-                        "/api/customgames/package-media"):
+                        "/api/customgames/package-media", "/api/customgames/test-state"):
             return self.customgames_get(url)
         if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
             return self.setup_get(url)
@@ -5140,6 +5257,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.loads(done.stdout))
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 return self.send(500, {"error": str(exc)})
+        if url.path == "/api/customgames/test-state":
+            # Criar pacote > Testar: o jogo do teste esta abrindo (starting), aberto
+            # (running) ou ja fechou (ended, com o fim do log dele)? Ele abriu quando o
+            # log do app e mais novo que o pedido; fechou quando abriu e nao ha mais
+            # processo dele.
+            app = (query.get("app") or [""])[0]
+            if not re.fullmatch(r"custom_test_[a-z0-9_]{1,80}", app):
+                return self.send(400, {"error": "app: the name of the test"})
+            launched = self.panel.test_launch
+            since = launched[1] if launched and launched[0] == app else 0
+            log = os.path.join(LOGS, app + ".log")
+            try:
+                opened = os.path.getmtime(log) >= since - 1
+            except OSError:
+                opened = False
+            if customgame_test_pids():
+                return self.send(200, {"state": "running"})
+            if not opened:
+                return self.send(200, {"state": "starting"})
+            return self.send(200, {"state": "ended", "log": os.path.basename(log), "tail": customgame_log_tail(log)})
         if url.path == "/api/customgames/staged":
             # A arte guardada na pasta de espera (a foto e o video capturados),
             # para a previa: so os ids que o stage e o capture deram.
@@ -5226,7 +5363,14 @@ class Handler(BaseHTTPRequestHandler):
             argv = lines[1:]
             if not argv or argv[0] != os.path.join(BIN, "fliperos-x11-run"):
                 return self.send(500, {"error": "unexpected command from the Setup"})
+            self.panel.test_launch = (lines[0][4:], time.time())
             return self.send(200, dict(self.panel.launch(argv), app=lines[0][4:]))
+        if action == "test-close":
+            # Fechar no gabinete: o jogo do teste (e o X dele) fecha, abrindo ou
+            # aberto, e o que estava na tela antes volta.
+            pids = customgame_test_pids()
+            stop(pids)
+            return self.send(200, {"closed": len(pids)})
         if action == "package-delete":
             path = str(data.get("zip", ""))
             if not path.lower().endswith(".zip") or not os.path.isfile(path) or not inside(path, customgame_packages_dir()):
@@ -5320,10 +5464,12 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(200, task.info())
 
     def customgame_capture(self, query):
-        """Criar pacote > Testar: a foto (kind=snap) ou 10 segundos de video
-        (kind=video) do que o gabinete mostra agora, guardados na pasta de
-        espera como o que a pessoa subiria; o id volta, como no stage (a
-        pagina o poe na imagem ou no video do pacote)."""
+        """Criar pacote > Testar: a foto (kind=snap) ou 30 segundos de video a
+        60 quadros por segundo e com som (kind=video) do que o gabinete mostra
+        agora, guardados na pasta de espera como o que a pessoa subiria; o id
+        volta, como no stage (a pagina o poe na imagem ou no video do pacote).
+        No video, sound diz se o som do jogo foi gravado (o som da tela ao
+        vivo ligado); senao o arquivo tem uma faixa muda."""
         kind = (query.get("kind") or [""])[0]
         if kind not in ("snap", "video"):
             return self.send(400, {"error": "kind: snap or video"})
@@ -5338,10 +5484,9 @@ class Handler(BaseHTTPRequestHandler):
             if not frame:
                 return self.send(503, {"error": "nothing to capture: the text console, or a program without OpenGL"})
             width, height, rows, _ = frame
-            repeat = aspect_rows(width, height)
-            if repeat > 1:
-                rows = [row for row in rows for _ in range(repeat)]
-                height *= repeat
+            out_w, out_h = aspect_size(width, height)
+            rows = fit_rows(rows, width, height, out_w, out_h)
+            width, height = out_w, out_h
             with open(path, "wb") as f:
                 f.write(png(width, height, rows))
         else:
@@ -5349,14 +5494,15 @@ class Handler(BaseHTTPRequestHandler):
             if not self.panel.capture_lock.acquire(blocking=False):
                 return self.send(409, {"error": "a video is already being recorded"})
             try:
-                frames, why = record_video(path + ".part.mp4", seconds)
+                sound, why = record_video(path + ".part.mp4", seconds)
             finally:
                 self.panel.capture_lock.release()
             if why:
                 return self.send(503, {"error": why})
             os.replace(path + ".part.mp4", path)
         size = os.path.getsize(path)
-        return self.send(200, {"id": token, "name": "capture." + token.rsplit(".", 1)[1], "size": size})
+        return self.send(200, {"id": token, "name": "capture." + token.rsplit(".", 1)[1], "size": size,
+                               "seconds": seconds if kind == "video" else 0, "sound": bool(kind == "video" and sound)})
 
     def customgame_stage(self, query):
         """A arte de uma linha da tabela (ou do Editar), antes de gravar o

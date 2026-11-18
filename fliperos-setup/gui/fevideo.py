@@ -32,11 +32,19 @@ class Video:
         self.alive = True
         self.paced = paced
         self.paused = False
-        vf = ("scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,fps=30" % (w, h, w, h))
-        cmd = [FFMPEG, "-nostdin", "-loglevel", "quiet", "-threads", "1"] + ([] if paced else ["-re"]) + [
-               "-stream_loop", "-1"] + (["-ss", "%.3f" % start] if start > 0 else []) + ["-i", path, "-map", "0:v:0", "-filter_threads", "1", "-vf", vf,
+        self.start = start
+        self.sound = sound and not paced
+        if not self.launch(self.sound):
+            return
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def launch(self, sound):
+        """Abre o ffmpeg (com o som no ALSA, ou sem). False: nao abriu."""
+        vf = ("scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,fps=30" % (self.w, self.h, self.w, self.h))
+        cmd = [FFMPEG, "-nostdin", "-loglevel", "quiet", "-threads", "1"] + ([] if self.paced else ["-re"]) + [
+               "-stream_loop", "-1"] + (["-ss", "%.3f" % self.start] if self.start > 0 else []) + ["-i", self.path, "-map", "0:v:0", "-filter_threads", "1", "-vf", vf,
                "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]
-        if sound and not paced:
+        if sound:
             cmd += ["-map", "0:a:0?", "-f", "alsa", os.environ.get("FLIPEROS_VIDEO_AUDIO", "default")]
         try:
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -44,8 +52,8 @@ class Video:
         except OSError:
             self.proc = None
             self.alive = False
-            return
-        threading.Thread(target=self.read, daemon=True).start()
+            return False
+        return True
 
     def read(self):
         size = self.w * self.h * 3
@@ -60,6 +68,16 @@ class Video:
                 continue
             data = out.read(size)
             if not data or len(data) < size:
+                # Nenhum quadro, com o som pedido: um video sem faixa de som
+                # deixa a segunda saida do ffmpeg (o ALSA) sem nenhum stream, e
+                # ele desiste de tudo ("Output file does not contain any
+                # stream"; visto no gabinete com o video gravado pelo painel,
+                # que era mudo). Abre de novo so com a imagem.
+                if not self.count and self.sound and self.alive:
+                    self.sound = False
+                    if self.launch(False):
+                        out = self.proc.stdout
+                        continue
                 break
             self.frame = data
             self.count += 1

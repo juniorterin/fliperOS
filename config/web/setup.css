@@ -635,7 +635,10 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-one { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .cg-field { display: grid; gap: 4px; min-width: 0; }
 .cg-field > span { font-size: 12.5px; color: var(--dim); }
-.cg-f-name, .cg-f-folder, .cg-f-run, .cg-f-category, .cg-f-art, .cg-f-controls, .cg-f-text, .cg-one .cg-ppnote { grid-column: 1 / -1; }
+.cg-f-name, .cg-f-folder, .cg-f-run, .cg-f-category, .cg-f-art, .cg-f-controls, .cg-f-joystick, .cg-f-text, .cg-one .cg-ppnote { grid-column: 1 / -1; }
+.cg-testlog { margin: 6px 0 0; padding: 8px 10px; max-height: 180px; overflow: auto; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; border: 1px solid rgba(255, 110, 110, .35); border-radius: 6px; background: rgba(0, 0, 0, .25); }
+.cg-joystick { display: flex; align-items: flex-start; gap: 10px; }
+.cg-joystick input { width: auto; flex: none; margin-top: 2px; }
 @media (max-width: 520px) { .cg-one { grid-template-columns: minmax(0, 1fr); } }
 
 /* Criar pacote: a arte em cartoes, imagem e video lado a lado, e a bandeja
