@@ -1,12 +1,12 @@
 'use client';
 
-import { ArrowDown, Download } from 'lucide-react';
+import { ArrowDown, BookText, Download } from 'lucide-react';
 import Image from 'next/image';
 import { CrtMonitor } from '@/components/CrtMonitor';
 import { ScreenCarousel } from '@/components/ScreenCarousel';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Media } from '@/lib/media';
-import { HERO_SHOTS } from '@/lib/site';
+import { HERO_SHOTS, LINKS } from '@/lib/site';
 
 // slides: as telas de HERO_SHOTS que têm arquivo em public/screenshots.
 export function Hero({ slides, downloadUrl }: { slides: Media[]; downloadUrl: string }) {
@@ -58,6 +58,17 @@ export function Hero({ slides, downloadUrl }: { slides: Media[]; downloadUrl: st
             >
               {h.ctaFeatures}
               <ArrowDown className="size-4" aria-hidden="true" />
+            </a>
+            {/* A wiki do projeto, ao lado de "Explore features". */}
+            <a
+              href={LINKS.docs}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-bg/60 px-6 py-3.5 font-semibold text-fg transition hover:border-green/70 hover:text-green"
+            >
+              <BookText className="size-4" aria-hidden="true" />
+              {h.ctaWiki}
+              <span className="sr-only">{t.a11y.external}</span>
             </a>
           </div>
         </div>

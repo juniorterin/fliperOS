@@ -17378,6 +17378,26 @@ class DocsTests(unittest.TestCase):
         self.assertIn("name.endsWith('.iso')", github)
         self.assertIn('releases/latest/download/fliperos-', site)
 
+    def test_site_has_a_wiki_button_in_the_hero_and_above_github_in_the_sidebar(self):
+        # A wiki do projeto: na primeira pagina, ao lado de "Explore features", e na barra lateral (e no menu do
+        # celular), logo acima do botao do GitHub.
+        src = ROOT / 'website/src'
+        site = (src / 'lib/site.ts').read_text()
+        self.assertIn('docs: `${REPO_URL}/wiki`', site)
+        hero = (src / 'sections/Hero.tsx').read_text()
+        self.assertLess(hero.index('{h.ctaFeatures}'), hero.index('href={LINKS.docs}'))
+        self.assertIn('{h.ctaWiki}', hero)
+        header = (src / 'components/Header.tsx').read_text()
+        side = header.split('<aside')[1].split('</aside>')[0]
+        self.assertLess(side.index('href={LINKS.docs}'), side.index('href={readmeUrl(locale)}'))
+        self.assertLess(side.index('{t.nav.wiki}'), side.index('{t.nav.viewOnGithub}'))
+        mobile = header.split('id="mobile-nav"')[1]
+        self.assertLess(mobile.index('href={LINKS.docs}'), mobile.index('href={readmeUrl(locale)}'))
+        for lang in ('en-US', 'pt-BR'):
+            text = (src / 'i18n' / (lang + '.ts')).read_text(encoding='utf-8')
+            self.assertRegex(text, r"\n    wiki: '[^']+',\n    viewOnGithub:")
+            self.assertRegex(text, r"\n    ctaWiki: '[^']+',")
+
     def test_site_support_section_has_no_secrets_and_no_mailto(self):
         src = ROOT / 'website/src'
         for path in src.rglob('*.ts*'):

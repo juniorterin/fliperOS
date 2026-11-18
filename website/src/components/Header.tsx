@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, Menu, Send, X } from 'lucide-react';
+import { BookOpen, BookText, Menu, Send, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { localePath, pagePath } from '@/i18n';
@@ -94,6 +94,17 @@ export function Header() {
         <div>
           <LanguageSwitch />
         </div>
+        {/* A wiki do projeto, logo acima do GitHub. */}
+        <a
+          href={LINKS.docs}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-green/60 bg-green/10 px-3.5 py-2 text-sm font-medium text-fg transition hover:border-green hover:bg-green/20 hover:shadow-[0_0_20px_-6px] hover:shadow-green"
+        >
+          <BookText className="size-4" aria-hidden="true" />
+          {t.nav.wiki}
+          <span className="sr-only">{t.a11y.external}</span>
+        </a>
         <a
           href={readmeUrl(locale)}
           target="_blank"
@@ -191,10 +202,20 @@ export function Header() {
           </li>
         </ul>
         <a
+          href={LINKS.docs}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-green/60 bg-green/10 px-4 py-3 font-medium text-fg"
+        >
+          <BookText className="size-4" aria-hidden="true" />
+          {t.nav.wiki}
+          <span className="sr-only">{t.a11y.external}</span>
+        </a>
+        <a
           href={readmeUrl(locale)}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-purple px-4 py-3 font-medium text-bg-deeper"
+          className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-purple px-4 py-3 font-medium text-bg-deeper"
         >
           <GithubIcon className="size-4" />
           {t.nav.viewOnGithub}

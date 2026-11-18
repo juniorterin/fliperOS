@@ -96,6 +96,7 @@ const ptBR: Messages = {
       cards: 'Placas de vídeo',
     },
     guide: 'Guia de instruções',
+    wiki: 'Wiki do projeto',
     viewOnGithub: 'Ver no GitHub',
     telegram: 'Entrar no grupo do Telegram',
   },
@@ -107,6 +108,7 @@ const ptBR: Messages = {
       'FliperOS é uma distribuição Linux baseada em Ubuntu criada para transformar PCs em máquinas arcade, com suporte nativo a CRT, 15 kHz, Switchres, emuladores e frontends prontos para jogar.',
     ctaDownload: 'Baixar',
     ctaFeatures: 'Conheça os recursos',
+    ctaWiki: 'Wiki',
     screenPlaceholderTitle: 'Screenshot real pendente',
     screenPlaceholderHint: 'Coloque a imagem em',
     carousel: {

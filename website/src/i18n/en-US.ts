@@ -93,6 +93,7 @@ const enUS = {
       cards: 'Video cards',
     },
     guide: 'Instruction guide',
+    wiki: 'Project wiki',
     viewOnGithub: 'View on GitHub',
     telegram: 'Join the Telegram group',
   },
@@ -104,6 +105,7 @@ const enUS = {
       'FliperOS is an Ubuntu-based Linux distribution built to turn PCs into arcade machines, with native CRT, 15 kHz and Switchres support, emulators and frontends ready to play.',
     ctaDownload: 'Download',
     ctaFeatures: 'Explore features',
+    ctaWiki: 'Wiki',
     screenPlaceholderTitle: 'Real screenshot pending',
     screenPlaceholderHint: 'Place the image at',
     carousel: {
