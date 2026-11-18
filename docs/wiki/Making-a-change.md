@@ -45,6 +45,12 @@ docker run --rm -v "${PWD}:/w:ro" -w /w fliperos-ssh sh tools/cabinet-push.sh 19
 
 A change that only works after a file is generated (an EDID, the initramfs, a `modprobe.d` file) needs a step that generates it on the machines that already have that setting, like `boot_apply` in `tools/cabinet-update.sh`. Installing the new scripts is not enough. See [Publishing updates](Publishing-updates.md#a-change-that-needs-a-generated-file).
 
+## Style guide
+
+`docs/styleguide/index.html` is a page only for the people who work on FliperOS: open it in a browser (it uses the web panel's own stylesheets, by relative path). It shows the colour tokens of the web panel and of the Setup's theme side by side, the type and radius scales, every icon of the sprite, the components (buttons, tags, chips, setting rows, meter, cards, toast, fields) rendered by the real CSS, the rules (two languages, an icon for every menu item, text that doesn't fit runs) and an **audit**: loose colours, font sizes and radii that are not on the scale, tokens with the same value, and a panel colour that is not the Setup's colour.
+
+Run `python3 tools/styleguide.py` (in the tests image, `docker run --rm -v "$(pwd -W):/w" -w /w fliperos-tests-pil python3 tools/styleguide.py`) after changing `config/web/*.css`, `config/web/icons.svg` or `fliperos-setup/gui/theme.py`, and commit the new page. `StyleguideTests` checks that the page lists every token and icon.
+
 ## Finishing
 
 1. Document it on the page of its subject, not on an index page ([Build and tests](Build-and-tests.md#writing-the-wiki) has the rules).

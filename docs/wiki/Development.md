@@ -16,6 +16,7 @@ FliperOS is built on Windows with Docker, from one repository: the ISO build scr
 | Release a new version | [Making a release](Making-a-release.md) |
 | Find what a variable or an option does | [Variables](Variables.md) |
 | Change the 15 kHz kernel | [15 kHz kernel](Kernel-15-kHz.md) |
+| Check the look of the interfaces: colours, type, components, what is off the standard | [Style guide](Making-a-change.md#style-guide): `tools/styleguide.py` makes `docs/styleguide/index.html` |
 
 ## Pages
 

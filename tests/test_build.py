@@ -17599,6 +17599,64 @@ class DocsTests(unittest.TestCase):
             self.assertNotIn('href="%s/%s"' % (self.URL, page), html)
 
 
+class StyleguideTests(unittest.TestCase):
+    """tools/styleguide.py: a pagina do styleguide so para quem desenvolve
+    (docs/styleguide/index.html), lida do CSS do painel, do tema do Setup e dos icones."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.sg = SourceFileLoader('fliperos_styleguide', str(ROOT / 'tools/styleguide.py')).load_module()
+
+    def test_the_page_shows_every_token_colour_icon_and_the_real_stylesheets(self):
+        page = self.sg.build()
+        css = (ROOT / 'config/web/style.css').read_text()
+        for name, value in self.sg.root_tokens(css):
+            self.assertIn(name, page)
+            if value.strip().startswith('#'):
+                self.assertIn(value.strip(), page)
+        theme = self.sg.theme_colors((ROOT / 'fliperos-setup/gui/theme.py').read_text())
+        for name in ('PINK', 'PURPLE', 'CYAN', 'GREEN', 'BG_DEEP', 'COMMENT'):
+            self.assertIn(name, theme)
+            self.assertIn('>%s<' % name, page)
+        sprite = (ROOT / 'config/web/icons.svg').read_text()
+        for icon in re.findall(r'<symbol id="((?:px|g)-[\w-]+)"', sprite):
+            self.assertIn('icons.svg#%s"' % icon, page)
+        # Os CSS que ele mostra sao os do painel, por caminho relativo (o arquivo abre no navegador).
+        for sheet in re.findall(r'href="\.\./\.\./(config/web/[\w.]+)"', page):
+            self.assertTrue((ROOT / sheet).is_file(), sheet)
+        for title in ('Buttons', 'Setting rows', 'Meter', 'Audit', 'Rules', 'Two languages', 'Every menu item has an icon'):
+            self.assertIn(title, page)
+        # Os componentes de amostra usam classes que existem nos .css.
+        sheets = ''.join((ROOT / 'config/web' / f).read_text() for f in self.sg.CSS_FILES if (ROOT / 'config/web' / f).is_file())
+        for cls in ('btn', 'tag', 'st-chip', 'st-meter', 'srow', 'slist', 'st-card', 'toast', 'sel', 'fld'):
+            self.assertIn('.' + cls, sheets, cls)
+
+    def test_the_audit_finds_what_is_not_the_standard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'config/web').mkdir(parents=True)
+            (root / 'fliperos-setup/gui').mkdir(parents=True)
+            (root / 'config/web/style.css').write_text(
+                ':root {\n  --a: #112233;\n  --b: #112233;\n  --pink: #ff79c6;\n  --r: 16px;\n}\n'
+                '.x { color: #abcdef; font-size: 13px; border-radius: 7px; }\n'
+                '.y { color: var(--a); font-size: 17px; border-radius: 8px; }\n')
+            (root / 'config/web/icons.svg').write_text('<svg><symbol id="px-games"></symbol><symbol id="g-play"></symbol></svg>')
+            (root / 'fliperos-setup/gui/theme.py').write_text('PINK = (0xFF, 0x79, 0xC7)\nBG_DEEP = (0x19, 0x1A, 0x21)\n')
+            page = self.sg.build(str(root))
+            self.assertIn('<code>--a</code> and <code>--b</code> are both <code>#112233</code>', page)
+            self.assertIn('<td>style.css</td><td>1</td><td>1</td><td>17</td><td>7</td>', page)     # cor solta, token, letra e raio fora
+            self.assertIn('<code>--pink</code> #ff79c6 &ne; <code>PINK</code> #ff79c7', page)         # a mesma cor, valores diferentes
+            self.assertIn('1 pixel icons, 1 glyphs', page)
+
+    def test_the_page_is_in_the_repo_and_linked_from_the_wiki(self):
+        page = ROOT / 'docs/styleguide/index.html'
+        self.assertTrue(page.is_file())
+        self.assertIn('FliperOS style guide', page.read_text())
+        dev = (ROOT / 'docs/wiki/Development.md').read_text()
+        self.assertIn('tools/styleguide.py', dev)
+        self.assertIn('docs/styleguide/index.html', dev)
+
+
 class ReleaseTests(unittest.TestCase):
     """Toda ISO nova vai para os Releases do GitHub com o changelog da versao,
     no formato dos releases do GroovyArcade (tools/release-publish.sh)."""
