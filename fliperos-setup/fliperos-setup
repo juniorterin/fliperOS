@@ -600,6 +600,7 @@ main() {
     ((SETUP_MENU_LOOP == 1)) && screen_cheevos_resume
     screen_main_menu
     rc=$?
+    cloud_push_settings
   fi
   ((rc == SETUP_EXIT_SHELL)) && return 0
   return "$rc"

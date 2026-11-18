@@ -26,6 +26,16 @@ cloud_run() {
   fi
 }
 
+# cloud_push_settings: ao sair do menu, com o automatico ligado, as
+# configuracoes (e as custom folders) vao para a nuvem em segundo plano.
+cloud_push_settings() {
+  [[ -x $CLOUD_TOOL ]] || return 0
+  if command -v setsid > /dev/null 2>&1; then
+    setsid -f bash -c "$(declare -f cloud_run); CLOUD_TOOL='$CLOUD_TOOL' FLIPEROS_USER='$FLIPEROS_USER' CLOUD_HOME='$CLOUD_HOME' cloud_run settings" > /dev/null 2>&1 < /dev/null
+  fi
+  return 0
+}
+
 # cloud_status CHAVE: um campo do "fliperos-cloud status" (installed, remote,
 # auto, what, last, result).
 cloud_status() {
