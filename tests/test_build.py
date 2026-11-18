@@ -16887,6 +16887,50 @@ class GuiWaitingTests(unittest.TestCase):
         screen.deadline -= 3
         self.assertEqual(screen.tick(), ("timeout", None))
 
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_first_sync_wait_draws_a_progress_bar(self):
+        # A primeira sincronizacao com a nuvem: uma barra em blocos (a mesma da tela de progresso) com a
+        # porcentagem, que anda com o rclone; sem "@bar", a espera e a de antes.
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import widgets
+        pygame.font.init()
+        drawn = []
+        original = widgets.centered
+        widgets.centered = lambda surf, s, *a, **k: drawn.append(s)
+        self.addCleanup(setattr, widgets, "centered", original)
+        ctx = {"status": "", "version": ""}
+        surf = pygame.Surface((320, 240), pygame.SRCALPHA)
+        widgets.Waiting("Sign in with Google", [("First sync running for 0:03.", None)], 3, 42).draw(surf, ctx)
+        self.assertIn("42%", drawn)
+        self.assertTrue(any(s.startswith("WAITING") for s in drawn))
+        # A barra pinta blocos (42% de 24 = 10 acesos); sem a porcentagem, nenhum "%".
+        drawn.clear()
+        widgets.Waiting("Sign in with Google", [("x", None)], 3).draw(surf, ctx)
+        self.assertFalse([s for s in drawn if s.endswith("%")])
+        # O Setup manda "@bar PCT" e o serve.py o tira das linhas.
+        serve = (self.GUI / "serve.py").read_text()
+        self.assertIn('re.fullmatch(r"@bar (\\d{1,3})", arg)', serve)
+        self.assertIn("W.Waiting(plain(a[0]), self.lines(rest), int(a[1]), pct)", serve)
+
+    def test_the_first_sync_screen_has_a_bar_in_the_gui_and_in_text(self):
+        menu = (ROOT / "fliperos-setup/screens/setup-menu.sh").read_text()
+        body = menu[menu.index("screen_cloud_google() {"):]
+        body = body[:body.index("\n}\n")]
+        self.assertIn('"First sync running for $(printf \'%d:%02d\' $((elapsed / 60)) $((elapsed % 60)))." "@bar $pct"', body)
+        self.assertIn("[[ $pct =~ ^[0-9]{1,3}$ ]] || pct=0", body)
+        # Sem a interface grafica, a barra de texto.
+        out = subprocess.run(['bash', '-c', 'source "$1"/lib/ui.sh; ui_text_bar 42; echo; ui_text_bar 100 4; echo; ui_text_bar 250 4; echo',
+                              'x', str(ROOT / 'fliperos-setup')], capture_output=True, text=True).stdout.splitlines()
+        self.assertEqual(out, ['[' + '█' * 10 + '░' * 14 + ']  42%', '[████] 100%', '[████] 100%'])
+        # O painel web tambem desenha a barra desde o comeco (em 0 ate o primeiro numero).
+        js = (ROOT / "config/web/system.js").read_text()
+        self.assertIn('Number(s.pct)) : 0;', js)
+        self.assertIn('stMeter(pct, ""));', js)
+
     def test_google_sign_in_uses_the_wait_without_a_countdown(self):
         menu = (ROOT / "fliperos-setup/screens/setup-menu.sh").read_text()
         body = menu[menu.index("screen_cloud_google() {"):]

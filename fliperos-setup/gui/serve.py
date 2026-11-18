@@ -411,7 +411,15 @@ class Server:
             return {"select": 0, "timeout": 124}.get(action, 1), ""
         if cmd == "wait":
             # titulo, segundos (o intervalo da pergunta, nao um prazo), linhas.
-            screen = W.Waiting(plain(a[0]), self.lines(a[2:]), int(a[1]))
+            # Uma linha "@bar PCT" e a barra (a primeira sincronizacao da nuvem).
+            pct, rest = None, []
+            for arg in a[2:]:
+                found = re.fullmatch(r"@bar (\d{1,3})", arg)
+                if found:
+                    pct = int(found.group(1))
+                else:
+                    rest.append(arg)
+            screen = W.Waiting(plain(a[0]), self.lines(rest), int(a[1]), pct)
             action, _ = self.ask(screen, cmd)
             return {"select": 0, "timeout": 124}.get(action, 1), ""
         if cmd == "qr":

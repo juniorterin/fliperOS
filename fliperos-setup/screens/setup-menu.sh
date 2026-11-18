@@ -159,8 +159,11 @@ screen_cloud_google() {
         ((synced_at)) || synced_at=$SECONDS
         elapsed=$((SECONDS - synced_at))
         pct=$(sed -n 's/^pct=//p' <<< "$out")
+        # A barra anda com o rclone (o pct do fliperos-cloud); sem o primeiro
+        # numero ainda, ela fica em 0.
+        [[ $pct =~ ^[0-9]{1,3}$ ]] || pct=0
         ui_wait "$title" 3 "Connected as ${account:-Google Drive}." "" \
-          "First sync running for $(printf '%d:%02d' $((elapsed / 60)) $((elapsed % 60)))$([[ $pct =~ ^[0-9]+$ ]] && echo " ($pct%)")."
+          "First sync running for $(printf '%d:%02d' $((elapsed / 60)) $((elapsed % 60)))." "@bar $pct"
         rc=$?
         ;;
       *)

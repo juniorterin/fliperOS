@@ -947,19 +947,38 @@ ui_timed_confirm() {
   esac
 }
 
+# ui_text_bar PORCENTO [LARGURA]: uma barra de texto, "[█████░░░░░]  45%"
+# (LARGURA, 24 por padrao, so dos blocos).
+ui_text_bar() {
+  local pct=${1:-0} width=${2:-24} full
+  ((pct > 100)) && pct=100
+  full=$((width * pct / 100))
+  printf '[%s%s] %3d%%' "$(printf '%*s' "$full" '' | sed 's/ /█/g')" "$(printf '%*s' $((width - full)) '' | sed 's/ /░/g')" "$pct"
+}
+
 # ui_wait TITULO SEGUNDOS TEXTO...: a tela de uma espera sem prazo (quem
 # chama pergunta o estado a cada SEGUNDOS e desenha de novo). Sem contagem
 # regressiva: os SEGUNDOS sao so o intervalo da pergunta, e uma contagem que
 # recomeca a cada volta parece um prazo que nunca acaba. 124 = passou o
 # intervalo, 0 = Enter, 1 = Esc.
 ui_wait() {
-  local title=$1 seconds=$2 key rc
+  local title=$1 seconds=$2 key rc arg
+  local -a lines=()
   shift 2
+  # Uma linha "@bar PCT" e uma barra de progresso (a interface grafica a
+  # desenha em blocos; no texto, aqui).
   if ui_gui_alive; then
     ui_gui_call wait "$title" "$seconds" "$@"
     return
   fi
-  ui_screen "$title" "$@" "" "$(ui_dim "Esc: stop waiting")"
+  for arg in "$@"; do
+    if [[ $arg =~ ^@bar\ ([0-9]{1,3})$ ]]; then
+      lines+=("$(ui_text_bar "${BASH_REMATCH[1]}")")
+    else
+      lines+=("$arg")
+    fi
+  done
+  ui_screen "$title" "${lines[@]}" "" "$(ui_dim "Esc: stop waiting")"
   IFS= read -rsn1 -t "$seconds" key < /dev/tty
   rc=$?
   ((rc > 128)) && return 124

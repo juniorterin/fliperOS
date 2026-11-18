@@ -2199,8 +2199,11 @@ class Waiting(Timed):
     Setup pergunta o estado; a tela nao mostra contagem (ela recomecaria a
     cada volta), so o WAITING com os pontos andando. Esc desiste."""
 
-    def __init__(self, title, lines, seconds):
+    def __init__(self, title, lines, seconds, pct=None):
         super().__init__(title, lines, "", seconds)
+        # Uma espera que sabe quanto ja andou (a primeira sincronizacao com a
+        # nuvem) mostra a barra: "@bar PCT" numa linha do ui_wait.
+        self.pct = pct
 
     def key(self, k):
         return ("back", None) if k == "esc" else None
@@ -2217,6 +2220,16 @@ class Waiting(Timed):
     def draw(self, surf, ctx):
         frame(surf, ctx, self.title, [("ESC", "BACK")])
         y = body(surf, self.lines, 34)
+        if self.pct is not None:
+            # A barra em blocos de Progress: 24, uma cor do arco-iris a cada 4.
+            pct = max(0, min(100, self.pct))
+            cell = min(12, (T.SAFE_W + 2) // 24)
+            x, by = (T.WIDTH - 24 * cell + 2) // 2, y + 8
+            full = round(pct * 24 / 100)
+            for i in range(24):
+                pygame.draw.rect(surf, RAINBOW[i // 4] if i < full else T.LINE, (x + i * cell, by, cell - 2, 12))
+            centered(surf, "%d%%" % pct, T.YELLOW, by + 18)
+            y = by + 20
         centered(surf, "WAITING" + "." * (int(time.monotonic()) % 4), T.COMMENT, y + 6)
 
 

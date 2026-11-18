@@ -8,7 +8,7 @@ It is in **Setup > Cloud backup** on the cabinet, and in **System > Cloud backup
 
 1. Open **Cloud backup**. The first time it installs **rclone**, a small download.
 2. Choose where the files go.
-3. Sign in (below). The first sync starts by itself.
+3. Sign in (below). The first sync starts by itself, with a **progress bar** (the percentage of files sent, from rclone's own count) on the Setup screen, on the tube and in the graphical menu, and on the web panel's Cloud page.
 
 | Cloud | How you sign in |
 | --- | --- |
