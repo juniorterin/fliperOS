@@ -953,6 +953,11 @@ def custom_info(system, entry):
     controls = [CUSTOM_CONTROLS[c] for c in cfg.get("controls", "").split(",") if c in CUSTOM_CONTROLS]
     if controls:
         out["Control"] = ", ".join(controls)
+    # O ano e a desenvolvedora: o que o frontend mostra ao lado do titulo.
+    if re.match(r"^(19|20)[0-9]{2}$", cfg.get("year", "")):
+        out["Year"] = cfg["year"]
+    if cfg.get("developer"):
+        out["Manufacturer"] = cfg["developer"]
     return out
 
 
@@ -2729,7 +2734,8 @@ def menu_sounds():
 # caminho. Os jogos de uma pasta sao copiados para ~/games/GRUPO/NOME.
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
-                     "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo")
+                     "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
+                     "year", "developer")
 CUSTOMGAME_ROWS = 500
 CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 # A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
@@ -2842,7 +2848,8 @@ def customgames_info():
             info["groups"].append({"name": rest[0], "count": int(rest[1]) if rest[1].isdigit() else 0})
         elif kind == "game" and len(rest) >= 12:
             info["games"].append(dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
-                                           "players", "command", "exe", "folder", "package", "runner"), rest)))
+                                           "players", "command", "exe", "folder", "package", "runner", "year",
+                                           "developer"), rest + ["", ""])))
         elif kind == "pending" and len(rest) >= 5:
             # bad: why (os textos) e codes (codigo=argumento;..., que a pagina traduz).
             info["pending"].append(dict(zip(("zip", "group", "name", "platform", "state", "why", "codes"),
@@ -4816,7 +4823,8 @@ class Handler(BaseHTTPRequestHandler):
         name = customgame_field(data.get("name"), 255)
         if action == "edit":
             args = ["group=" + group, "name=" + name]
-            for key in ("new_group", "new_name", "command", "mode", "category", "controls", "buttons", "players"):
+            for key in ("new_group", "new_name", "command", "mode", "category", "controls", "buttons", "players",
+                        "year", "developer"):
                 if key in data:
                     args.append("%s=%s" % (key, customgame_field(data[key])))
             return self.setup_call(["--customgames", "edit"] + args, timeout=180)

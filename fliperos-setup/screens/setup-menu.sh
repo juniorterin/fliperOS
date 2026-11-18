@@ -1082,6 +1082,31 @@ screen_custom_pick_controls() {
   UI_STYLE=controls ui_checklist "Controls" "Mark the controls the game uses." "$1" "${options[@]}"
 }
 
+# screen_custom_pick_year ATUAL: o ano do jogo (quatro digitos) ou nada.
+# Status 1: Esc.
+screen_custom_pick_year() {
+  local value
+  while true; do
+    value=$(ui_input "Year" "The year the game came out, four digits (the frontend shows it next to the name). Empty: none." "${1:-}") ||
+      return 1
+    [[ -z $value || $value =~ ^(19|20)[0-9]{2}$ ]] && break
+    ui_msg "Year" "$(ui_bad "Four digits, from 1900 to 2099.")"
+  done
+  printf '%s\n' "$value"
+}
+
+# screen_custom_pick_developer ATUAL: quem fez o jogo (ate 80 letras) ou nada.
+# Status 1: Esc.
+screen_custom_pick_developer() {
+  local value
+  while true; do
+    value=$(ui_input "Developer" "Who made the game (the frontend shows it next to the year). Empty: none." "${1:-}") || return 1
+    ((${#value} <= 80)) && break
+    ui_msg "Developer" "$(ui_bad "At most 80 characters.")"
+  done
+  printf '%s\n' "$value"
+}
+
 # screen_custom_pick_count players|buttons ATUAL
 screen_custom_pick_count() {
   local -a options=()
@@ -1098,7 +1123,8 @@ screen_custom_pick_count() {
 }
 
 # screen_custom_game_info GRUPO NOME: o modo de video e o que o frontend
-# mostra e filtra (categoria, controles, botoes, jogadores), no cfg.
+# mostra e filtra (categoria, ano, desenvolvedora, controles, botoes,
+# jogadores), no cfg.
 screen_custom_game_info() {
   local group=$1 name=$2 title="$2" cfg choice last="" value
   cfg=$(customgames_cfg "$group" "$name")
@@ -1107,6 +1133,8 @@ screen_custom_game_info() {
     choice=$(ui_menu "$title" "What the frontend shows and filters, and the video mode." "$last" \
       "mode|Video mode: $(customgames_mode_label "$(customgames_cfg_field "$cfg" mode)")" \
       "category|Category: $(customgames_cfg_field "$cfg" category)" \
+      "year|Year: $(customgames_cfg_field "$cfg" year)" \
+      "developer|Developer: $(customgames_cfg_field "$cfg" developer)" \
       "controls|Controls: $(customgames_cfg_field "$cfg" controls)" \
       "buttons|Buttons: $(customgames_cfg_field "$cfg" buttons)" \
       "players|Players: $(customgames_cfg_field "$cfg" players)" \
@@ -1120,6 +1148,8 @@ screen_custom_game_info() {
         ;;
       category) value=$(screen_custom_pick_category "$(customgames_cfg_field "$cfg" category)") && customgames_cfg_set "$cfg" category "$value" ;;
       controls) value=$(screen_custom_pick_controls "$(customgames_cfg_field "$cfg" controls)") && customgames_cfg_set "$cfg" controls "$value" ;;
+      year) value=$(screen_custom_pick_year "$(customgames_cfg_field "$cfg" year)") && customgames_cfg_set "$cfg" year "$value" ;;
+      developer) value=$(screen_custom_pick_developer "$(customgames_cfg_field "$cfg" developer)") && customgames_cfg_set "$cfg" developer "$value" ;;
       buttons | players) value=$(screen_custom_pick_count "$choice" "$(customgames_cfg_field "$cfg" "$choice")") && customgames_cfg_set "$cfg" "$choice" "$value" ;;
     esac
   done
@@ -1182,6 +1212,7 @@ customgames_browse() {
 screen_custom_package_create() {
   local group=$1 from=${2:-} title="Create package" name="" platform=native folder="" exe="" cmd="" snap="" video=""
   local text="" text_string="" mode=640x480@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
+  local year="" developer=""
   local out base value rel runner=portproton
   local -a args
   if [[ -n $from ]]; then
@@ -1198,6 +1229,8 @@ screen_custom_package_create() {
     controls=$(customgames_cfg_field "$cfg" controls)
     buttons=$(customgames_cfg_field "$cfg" buttons)
     players=$(customgames_cfg_field "$cfg" players)
+    year=$(customgames_cfg_field "$cfg" year)
+    developer=$(customgames_cfg_field "$cfg" developer)
     [[ -f ${cfg%.cfg}.key ]] && key=${cfg%.cfg}.key
     [[ -n $exe && -f $folder/$exe.ppdb ]] && ppdb=$folder/$exe.ppdb
     snap=$(customgames_snap "$group" "$from") || snap=""
@@ -1227,6 +1260,7 @@ screen_custom_package_create() {
     # pasta do jogo de dentro, e a arte ja preenchida no passo 5.
     customgames_found "$folder"
     folder=$CG_FOUND_FOLDER snap=$CG_FOUND_SNAP video=$CG_FOUND_VIDEO text=$CG_FOUND_TEXT key=$CG_FOUND_KEY
+    year=$CG_FOUND_YEAR developer=$CG_FOUND_DEVELOPER
     # 4. O que abre o jogo (o .exe do JOGO.cfg, se veio um).
     if [[ $platform == windows ]]; then
       exe=$CG_FOUND_EXE
@@ -1301,6 +1335,8 @@ screen_custom_package_create() {
   controls=$(screen_custom_pick_controls "$controls") || controls=""
   buttons=$(screen_custom_pick_count buttons "$buttons") || buttons=""
   players=$(screen_custom_pick_count players "$players") || players=""
+  year=$(screen_custom_pick_year "$year") || year=""
+  developer=$(screen_custom_pick_developer "$developer") || developer=""
   # 8. O pacote, na pasta dos pacotes (aparece no Install games).
   out=$(customgames_package_out "$name")
   if [[ -e $out ]]; then
@@ -1308,7 +1344,7 @@ screen_custom_package_create() {
   fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder" --mode "$mode")
   [[ $platform == windows ]] && args+=(--exe "$exe" --runner "$runner") || args+=(--command "$cmd")
-  for value in category controls buttons players snap video text key ppdb; do
+  for value in category controls buttons players year developer snap video text key ppdb; do
     [[ -n ${!value} ]] && args+=("--$value" "${!value}")
   done
   [[ -n $text_string ]] && args+=(--text-string "$text_string")

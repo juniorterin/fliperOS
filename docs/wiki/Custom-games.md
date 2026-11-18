@@ -49,7 +49,7 @@ Then, with the controller:
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
 7. **Picture, video and text** (optional): pick each file, or type the text. Without them the game gets samples, which you can replace later.
 8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.
-9. **Category, controls, buttons, players**: what the frontend shows and filters by.
+9. **Category, controls, buttons, players, year, developer**: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line.
 10. The Setup writes `~/roms/custom-packages/<game>.fliperos-customgame.zip` and asks whether to **install it now**. Say yes and pick the group (or a new one, for example *PC games*; each group is a system in the frontends): the game folder is copied to `~/games/<group>/<game>` and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.
 11. Open the frontend: the game is in the system of its group.
 12. **The first time the game opens**, without a `<game>.key`, the on-screen menu opens by itself on **Controller configuration**: give each key the game uses a button (see [below](#the-controller-as-a-keyboard)) and Save. A game that takes the joystick by itself: Save with no key marked, and it doesn't ask again.
@@ -76,7 +76,7 @@ Inside a group:
 
 A game tile opens:
 
-- **Information and video mode**: the video mode, the category, the controls, the buttons and the players;
+- **Information and video mode**: the video mode, the category, the year, the developer, the controls, the buttons and the players;
 - **Make a package of it** (an installed package): a new zip with what the game has now;
 - **Edit name and command** (a game added by its command);
 - **Delete**. For an installed package you choose between keeping the game folder or deleting it too, with what the game saved in it.
@@ -178,6 +178,8 @@ category=Shooter / Walking
 controls=joy8
 buttons=3
 players=2
+year=1999
+developer=Nazca Corporation
 ```
 
 | Key | Value |
@@ -192,6 +194,8 @@ players=2
 | `controls` | one or more, separated by commas: `joy8 joy4 joy2 twin trackball spinner paddle positional analog pedal lightgun keyboard mahjong` |
 | `buttons` | 0 to 8 |
 | `players` | 1 to 8 |
+| `year` | four digits (1900 to 2099); the frontend shows it next to the name |
+| `developer` | who made the game, up to 80 characters; the frontend shows it after the year |
 
 An installed game's `.cfg` also has `folder=` (the game folder), `package=` and `package_stamp=` (the zip it came from, its size and date).
 
@@ -306,7 +310,7 @@ The frontends look for the media in `~/media/<kind>/custom/<group>/<name>.<ext>`
 
 A game without a kind gets a **sample** with its name and random colours, so it already shows with art: a picture, a 4-second video, a text that says which file to replace, and a logo. A sample is only made for a kind the game has in no format, so your own `.jpg` is never hidden behind a sample `.png`. The samples are noted with their checksums in `~/media/.custom-samples`: a sample you replaced counts as yours. Renaming a game takes your media along and makes new samples; deleting it removes its samples. A package's media is removed with the game (the zip brings it back).
 
-The FliperOS frontend shows the `.txt` as the game's description, and the category, controls, buttons and players from the `.cfg` (what you change in its *Classify* screen wins). The Scraper skips the custom groups.
+The FliperOS frontend shows the `.txt` as the game's description, and the category, year, developer, controls, buttons and players from the `.cfg` (what you change in its *Classify* screen wins). The Scraper skips the custom groups.
 
 ## Packing a game folder (squashfs)
 

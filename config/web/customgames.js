@@ -17,7 +17,7 @@ const CG_CAPTURE_SECONDS = 10;
 const CG_SUFFIX = ".fliperos-customgame.zip";
 // As colunas da tabela, na ordem; o rotulo de cada uma tambem vai em cada
 // celula (no celular a linha vira um cartao).
-const CG_COLUMNS = ["group", "name", "platform", "folder", "run", "mode", "category", "players", "buttons", "controls", "art"];
+const CG_COLUMNS = ["group", "name", "platform", "folder", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "art"];
 const CG_PLATFORMS = ["windows", "native", "command"];
 // Colar de uma planilha: os nomes das colunas que o cabecalho pode ter.
 const CG_PASTE_NAMES = {
@@ -26,6 +26,7 @@ const CG_PASTE_NAMES = {
   run: ["executable", "executavel", "executável", "exe", "command", "comando", "executable or command", "executável ou comando"],
   mode: ["mode", "modo", "video", "vídeo", "resolution", "resolução"], category: ["category", "categoria", "genre", "gênero"],
   players: ["players", "jogadores"], buttons: ["buttons", "botoes", "botões"], controls: ["controls", "controles"],
+  year: ["year", "ano"], developer: ["developer", "desenvolvedora", "desenvolvedor", "maker", "fabricante", "studio", "estudio", "estúdio"],
 };
 const CG_PASTE_ORDER = ["name", "group", "platform", "folder", "run", "mode", "category", "players", "buttons", "controls"];
 
@@ -95,8 +96,8 @@ function cgShowTab(tab) {
 const CG_EXAMPLE = "Street Fighter 4";
 // O cfg do exemplo (as chaves do config/fliperos-customgame check_cfg).
 const CG_EXAMPLE_CFG = [["name", CG_EXAMPLE], ["platform", "windows"], ["exe", "StreetFighterIV.exe"], ["mode", "480i"],
-  ["category", "Fighter / Versus"], ["controls", "joy8"], ["buttons", "6"], ["players", "2"]];
-const CG_CFG_KEYS = ["name", "platform", "exe", "command", "mode", "category", "controls", "buttons", "players"];
+  ["category", "Fighter / Versus"], ["controls", "joy8"], ["buttons", "6"], ["players", "2"], ["year", "2008"], ["developer", "Capcom"]];
+const CG_CFG_KEYS = ["name", "platform", "exe", "command", "mode", "category", "controls", "buttons", "players", "year", "developer"];
 
 // Os arquivos do pacote: [rotulo, classe (a cor), chave do texto, extensao no
 // nome, obrigatorio].
@@ -294,8 +295,8 @@ async function cgEdit(game) {
   const command = game.platform === "command";
   const dlg = cgDialog();
   const ctl = cgControls(row, { dialog: true, editing: game });
-  const fields = command ? ["name", "group", "run", "mode", "category", "players", "buttons", "controls", "art"]
-    : ["mode", "category", "players", "buttons", "controls", "art"];
+  const fields = command ? ["name", "group", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "art"]
+    : ["mode", "category", "year", "developer", "players", "buttons", "controls", "art"];
   const text = el("textarea", { rows: "3", placeholder: t("cg_ph_text"), "aria-label": t("cg_f_text") });
   const save = el("button", { type: "submit", class: "btn" }, icon("px-save"), t("cg_save"));
   const cancel = el("button", { type: "button", class: "btn ghost" }, t("cg_cancel"));
@@ -309,7 +310,7 @@ async function cgEdit(game) {
     save.disabled = true;
     try {
       const body = { group: game.group, name: game.name, mode: cgRowMode(row), category: row.category, players: row.players,
-        buttons: row.buttons, controls: row.controls.join(",") };
+        buttons: row.buttons, controls: row.controls.join(","), year: row.year.trim(), developer: row.developer.trim() };
       if (command) Object.assign(body, { new_group: row.group, new_name: row.name.trim(), command: row.command });
       const res = await api("/api/customgames/edit", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) { toast((await res.json().catch(() => ({}))).error || res.statusText, "bad"); return; }
@@ -340,7 +341,8 @@ function cgRowFromGame(game) {
   const known = (cg.info.modes || []).find((m) => m.value === mode);
   return cgNewRow({ group: game.group, name: game.name, platform: game.platform, command: game.command, exe: game.exe,
     folder: game.folder, mode: known ? known.label : "other", modeOther: known ? "" : mode, category: game.category,
-    players: game.players, buttons: game.buttons, controls: (game.controls || "").split(",").filter(Boolean) });
+    players: game.players, buttons: game.buttons, controls: (game.controls || "").split(",").filter(Boolean),
+    year: game.year || "", developer: game.developer || "" });
 }
 
 let cgDialogEl = null;
@@ -365,7 +367,7 @@ function cgAddOne() {
   const body = el("div", { class: "cg-one" });
   const draw = () => {
     const ctl = cgControls(row, { dialog: true, redraw: draw });
-    body.replaceChildren(...["group", "name", "platform", "folder", "run", "mode", "category", "players", "buttons", "controls", "art"]
+    body.replaceChildren(...["group", "name", "platform", "folder", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "art"]
       .filter((f) => !(f === "folder" && row.platform === "command")).map((f) => {
         const field = cgField(f, ctl[f]);
         const err = cgFieldError(row, f);
@@ -562,7 +564,7 @@ function cgPackageCard(p) {
     actions.push(group, cgPkgButton("cg_install", () => cgInstallPackage(p, group.value), "small"));
   }
   const card = cgCard({ name: p.name, file: p.file, platform: p.platform, mode: p.mode, category: p.category, controls: p.controls,
-    buttons: p.buttons, players: p.players, snap: media("snap"), logo: media("logo"), video: media("preview"), text: media("texto"),
+    year: p.year, developer: p.developer, buttons: p.buttons, players: p.players, snap: media("snap"), logo: media("logo"), video: media("preview"), text: media("texto"),
     size: p.bytes || p.size, key: p.key, ppdb: p.ppdb, tag, problems: p.state === "bad" ? cgProblems(p) : [] }, actions);
   card.dataset.zip = p.zip;
   return card;
@@ -619,6 +621,8 @@ function cgCard(info, actions = []) {
   if (info.key) facts.append(el("span", { class: "tag on", title: t("cg_tree_key") }, ".key"));
   if (info.ppdb) facts.append(el("span", { class: "tag on", title: t("cg_tree_ppdb") }, ".ppdb"));
   const body = el("div", { class: "cg-cbody" }, head, facts);
+  const made = [info.year, info.developer].filter(Boolean).join(" ");
+  if (made) body.append(el("div", { class: "cg-cmade" }, made));
   if (info.category) body.append(el("div", { class: "cg-ccat" }, info.category));
   // O texto: rola de cima a baixo, devagar, quando nao cabe.
   if (info.text || info.textValue) {
@@ -648,7 +652,8 @@ function cgCard(info, actions = []) {
 // motivo em ingles do verificador.
 const CG_PROBLEM_CODES = ["not_zip", "unsafe", "encrypted", "misnamed", "cfg_missing", "cfg_many", "cfg_text", "folder_missing",
   "stranger", "strangers_more", "two_files", "name_missing", "name_bad", "platform_missing", "platform_bad", "exe_missing",
-  "exe_not_found", "command_missing", "mode_bad", "category_long", "controls_bad", "buttons_bad", "players_bad", "runner_bad"];
+  "exe_not_found", "command_missing", "mode_bad", "category_long", "controls_bad", "buttons_bad", "players_bad", "runner_bad",
+  "year_bad", "developer_long"];
 
 function cgProblems(p) {
   const base = p.name || cgBaseName(p).replace(/\.fliperos-customgame\.zip$|\.zip$/i, "");
@@ -769,7 +774,7 @@ async function cgUploadZip(file) {
 // jogo, sem grupo): o zip vai para ~/roms/custom-packages e aparece na aba
 // Instalar pacotes. A pasta com a estrutura do pacote preenche o resto.
 
-const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "category", "players", "buttons", "controls", "art"];
+const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "art"];
 
 function cgRenderCreate() {
   const box = cg.el.create;
@@ -838,7 +843,7 @@ function cgCreatePreview() {
   const modeLabel = row.mode === "other" ? row.modeOther : row.mode;
   const mode = (((cg.info && cg.info.modes) || []).find((m) => m.label === modeLabel) || { value: modeLabel }).value;
   const card = cgCard({ name: row.name.trim() || t("cg_ph_name"), platform: row.platform, mode, category: row.category,
-    controls: row.controls.join(","), buttons: row.buttons, players: row.players,
+    year: row.year.trim(), developer: row.developer.trim(), controls: row.controls.join(","), buttons: row.buttons, players: row.players,
     snap: row.snap ? row.snap.url || "" : "", logo: row.logo ? row.logo.url || "" : "", video: row.video ? row.video.url || "" : "",
     text: row.text && !row.text.value ? row.text.url || "" : "", textValue: row.text ? row.text.value || "" : "",
     key: !!row.key, ppdb: !!row.ppdb && row.platform === "windows", tag: { cls: "new", text: t("cg_preview") } });
@@ -1144,7 +1149,7 @@ function cgRenderPacked() {
 
 function cgNewRow(values) {
   return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "480i",
-    modeOther: "", category: "", players: "", buttons: "", controls: [], snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
+    modeOther: "", category: "", year: "", developer: "", players: "", buttons: "", controls: [], snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
     wine: "", runner: "portproton", exes: [], programs: [], errors: {}, state: "", error: "" }, values || {});
 }
 
@@ -1173,6 +1178,8 @@ function cgFound(row, found) {
   }
   if (cfg.runner) row.runner = cfg.runner;
   if (cfg.category && !row.category) row.category = cfg.category;
+  if (cfg.year && !row.year) row.year = cfg.year;
+  if (cfg.developer && !row.developer) row.developer = cfg.developer;
   if (cfg.players && !row.players) row.players = cfg.players;
   if (cfg.buttons && !row.buttons) row.buttons = cfg.buttons;
   if (cfg.controls && !row.controls.length) row.controls = cfg.controls.split(",");
@@ -1333,7 +1340,8 @@ function cgTableRow(row, index) {
 // O erro do Setup cai na coluna dela (exe e command sao a mesma coluna).
 function cgFieldError(row, column) {
   const map = { run: ["exe", "command"], art: ["snap", "logo", "video", "text", "key", "ppdb"], group: ["group"], name: ["name"], platform: ["platform"],
-    folder: ["folder"], mode: ["mode"], category: ["category"], players: ["players"], buttons: ["buttons"], controls: ["controls"] };
+    folder: ["folder"], mode: ["mode"], category: ["category"], year: ["year"], developer: ["developer"], players: ["players"],
+    buttons: ["buttons"], controls: ["controls"] };
   return (map[column] || []).map((f) => row.errors[f]).filter(Boolean).join(" ");
 }
 
@@ -1426,6 +1434,12 @@ function cgControls(row, { redraw, editing, package: pkg } = {}) {
   category.value = row.category || "";
   category.addEventListener("change", () => { row.category = category.value; changed(false); });
   out.category = category;
+  // O ano e a desenvolvedora: o frontend os mostra ao lado do nome do jogo.
+  out.year = text("year", "1993", "cg-year");
+  out.year.setAttribute("inputmode", "numeric");
+  out.year.setAttribute("maxlength", "4");
+  out.developer = text("developer", t("cg_ph_developer"));
+  out.developer.setAttribute("maxlength", "80");
   out.players = select("players", [["", t("cg_any")], ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.buttons = select("buttons", [["", t("cg_any")], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.controls = cgControlsButton(row, changed);
@@ -1628,7 +1642,8 @@ function cgPaste(text) {
     let platform = platformOf(v.platform);
     if (!platform) platform = /\.(exe|bat)$/i.test(v.run || "") ? "windows" : v.folder ? "native" : "command";
     const row = cgNewRow({ group: v.group || cg.defaultGroup, name: v.name || "", platform, folder: platform === "command" ? "" : v.folder || "",
-      category: v.category || "", players: /^[1-8]$/.test(v.players || "") ? v.players : "",
+      category: v.category || "", year: /^(19|20)\d\d$/.test((v.year || "").trim()) ? v.year.trim() : "",
+      developer: (v.developer || "").trim().slice(0, 80), players: /^[1-8]$/.test(v.players || "") ? v.players : "",
       buttons: /^[0-8]$/.test(v.buttons || "") ? v.buttons : "",
       controls: (v.controls || "").split(/[,; ]+/).map((c) => c.toLowerCase()).filter((c) => controls.includes(c)) });
     if (platform === "windows") row.exe = v.run || ""; else row.command = v.run || "";
@@ -1653,6 +1668,7 @@ function cgPayload(row) {
   return { group: row.group, name: row.name.trim(), platform: row.platform, folder: row.platform === "command" ? "" : row.folder.trim(),
     exe: row.platform === "windows" ? row.exe : "", command: row.platform === "windows" ? "" : row.command, mode: cgRowMode(row),
     category: row.category, controls: row.controls.join(","), buttons: row.buttons, players: row.players,
+    year: row.year.trim(), developer: row.developer.trim(),
     snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), logo: cgArtRef(row.logo), wine: row.platform === "windows" ? row.wine : "",
     key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "",
     runner: row.platform === "windows" ? row.runner || "portproton" : "" };

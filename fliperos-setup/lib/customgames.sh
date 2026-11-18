@@ -233,7 +233,7 @@ customgames_field() {
 # ── O cfg de cada entrada ──
 # NOME.cfg ao lado do NOME.sh: linhas CHAVE=VALOR (as do
 # config/fliperos-customgame: format, name, platform, exe ou command, mode,
-# category, controls, buttons, players; o de um pacote, folder= e package=).
+# category, controls, buttons, players, year, developer; o de um pacote, folder= e package=).
 
 customgames_cfg() {
   printf '%s/%s/%s.cfg\n' "$CUSTOM_GAMES_DIR" "$1" "$2"
@@ -325,7 +325,7 @@ customgames_save() {
   [[ -n $old_name ]] && old=$(customgames_cfg "$old_group" "$old_name")
   mkdir -p "$dir" || return 1
   chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_DIR" "$dir" 2> /dev/null
-  for key in category controls buttons players; do
+  for key in category controls buttons players year developer; do
     keep+=("$key=$(customgames_cfg_field "$old" "$key")")
   done
   customgames_cfg_write "$cfg" "format=1" "name=$name" "platform=command" "command=$cmd" "mode=$mode" "${keep[@]}" ||
@@ -585,7 +585,7 @@ customgames_tool() {
 customgames_found() {
   local line key value
   CG_FOUND_FOLDER=$1 CG_FOUND_SNAP="" CG_FOUND_VIDEO="" CG_FOUND_TEXT="" CG_FOUND_KEY="" CG_FOUND_PPDB=""
-  CG_FOUND_EXE="" CG_FOUND_RUNNER=""
+  CG_FOUND_EXE="" CG_FOUND_RUNNER="" CG_FOUND_YEAR="" CG_FOUND_DEVELOPER=""
   while IFS= read -r line; do
     key=${line%%=*} value=${line#*=}
     case $key in
@@ -597,6 +597,8 @@ customgames_found() {
       ppdb) CG_FOUND_PPDB=$value ;;
       cfg_exe) CG_FOUND_EXE=$value ;;
       cfg_runner) CG_FOUND_RUNNER=$value ;;
+      cfg_year) CG_FOUND_YEAR=$value ;;
+      cfg_developer) CG_FOUND_DEVELOPER=$value ;;
     esac
   done < <(customgames_tool found "$1" 2>> "${FLIPEROS_LOG:-/dev/null}")
   return 0
@@ -905,7 +907,8 @@ customgames_describe() {
       "$(customgames_cfg_field "$cfg" controls)" "$(customgames_cfg_field "$cfg" buttons)" \
       "$(customgames_cfg_field "$cfg" players)" "$cmd" "$(customgames_cfg_field "$cfg" exe)" \
       "$(customgames_cfg_field "$cfg" folder)" "$(customgames_cfg_field "$cfg" package)" \
-      "$(customgames_cfg_field "$cfg" runner)"
+      "$(customgames_cfg_field "$cfg" runner)" "$(customgames_cfg_field "$cfg" year)" \
+      "$(customgames_cfg_field "$cfg" developer)"
   done < <(customgames_list)
   while IFS= read -r line; do
     IFS='|' read -ra f <<< "$line"
@@ -958,6 +961,7 @@ customgames_row_fields() {
   R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
   R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
   R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-} R_RUNNER=${f[18]:-} R_LOGO=${f[19]:-}
+  R_YEAR=${f[20]:-} R_DEVELOPER=${f[21]:-}
 }
 
 # customgames_row_errors [package]: o que esta errado na linha de R_* (uma
@@ -1009,6 +1013,8 @@ customgames_row_errors() {
   done
   [[ -z $R_BUTTONS || $R_BUTTONS =~ ^[0-8]$ ]] || echo "buttons|Buttons: 0 to 8."
   [[ -z $R_PLAYERS || $R_PLAYERS =~ ^[1-8]$ ]] || echo "players|Players: 1 to 8."
+  [[ -z ${R_YEAR:-} || $R_YEAR =~ ^(19|20)[0-9]{2}$ ]] || echo "year|Year: four digits (1900 to 2099)."
+  ((${#R_DEVELOPER} <= 80)) || echo "developer|The developer is too long."
   [[ -z $R_SNAP || -f $R_SNAP ]] || echo "snap|The picture was not found: send it again."
   [[ -z $R_VIDEO || -f $R_VIDEO ]] || echo "video|The video was not found: send it again."
   [[ -z $R_TEXT || -f $R_TEXT ]] || echo "text|The text file was not found: send it again."
@@ -1057,7 +1063,9 @@ customgames_set_info() {
   customgames_cfg_set "$cfg" category "$R_CATEGORY" &&
     customgames_cfg_set "$cfg" controls "$R_CONTROLS" &&
     customgames_cfg_set "$cfg" buttons "$R_BUTTONS" &&
-    customgames_cfg_set "$cfg" players "$R_PLAYERS"
+    customgames_cfg_set "$cfg" players "$R_PLAYERS" &&
+    customgames_cfg_set "$cfg" year "${R_YEAR:-}" &&
+    customgames_cfg_set "$cfg" developer "${R_DEVELOPER:-}"
 }
 
 # customgames_media_set GRUPO NOME [--snap ARQ] [--video ARQ] [--text ARQ]
@@ -1109,6 +1117,8 @@ customgames_add_row() {
       [[ -n $R_CONTROLS ]] && args+=(--controls "$R_CONTROLS")
       [[ -n $R_BUTTONS ]] && args+=(--buttons "$R_BUTTONS")
       [[ -n $R_PLAYERS ]] && args+=(--players "$R_PLAYERS")
+      [[ -n ${R_YEAR:-} ]] && args+=(--year "$R_YEAR")
+      [[ -n ${R_DEVELOPER:-} ]] && args+=(--developer "$R_DEVELOPER")
       # A copia ate 85% da faixa; o squashfs no resto.
       copy_end=$((start + (end - start) * 85 / 100))
       customgames_media_dirs "$R_GROUP"
@@ -1304,7 +1314,7 @@ customgames_edit() {
       new_name) new_name=$value ;;
       command) cmd=$value have_cmd=1 ;;
       mode) mode=$value have_mode=1 ;;
-      category | controls | buttons | players) info[$key]=$value ;;
+      category | controls | buttons | players | year | developer) info[$key]=$value ;;
       *) return 2 ;;
     esac
   done
@@ -1318,6 +1328,7 @@ customgames_edit() {
     mode=$(customgames_mode "$mode") || return 2
   fi
   R_CATEGORY=${info[category]-} R_CONTROLS=${info[controls]-} R_BUTTONS=${info[buttons]-} R_PLAYERS=${info[players]-}
+  R_YEAR=${info[year]-} R_DEVELOPER=${info[developer]-}
   R_GROUP=$new_group R_NAME=$new_name R_PLATFORM=command R_COMMAND=x R_MODE="" R_FOLDER="" R_EXE=""
   R_SNAP="" R_VIDEO="" R_TEXT="" R_LOGO="" R_KEY="" R_PPDB=""
   # As informacoes conferidas como as da tabela (o nome novo, se mudou).
@@ -1325,7 +1336,7 @@ customgames_edit() {
     [[ $platform == command ]] || return 2
     customgames_row_errors | grep -q '^\(group\|name\)|' && return 2
   fi
-  customgames_row_errors | grep -q '^\(category\|controls\|buttons\|players\)|' && return 2
+  customgames_row_errors | grep -q '^\(category\|controls\|buttons\|players\|year\|developer\)|' && return 2
   cfg=$(customgames_cfg "$group" "$name")
   if [[ $platform == command ]]; then
     ((have_cmd)) || cmd=$(customgames_cfg_field "$cfg" command)
@@ -1339,7 +1350,7 @@ customgames_edit() {
   elif ((have_mode)); then
     customgames_cfg_set "$cfg" mode "$mode" && customgames_entry "$group" "$name" || return 1
   fi
-  for key in category controls buttons players; do
+  for key in category controls buttons players year developer; do
     [[ -n ${info[$key]+set} ]] && { customgames_cfg_set "$cfg" "$key" "${info[$key]}" || return 1; }
   done
   customgames_media "$group" "$name"
@@ -1364,7 +1375,7 @@ customgames_pack_game() {
     --mode "$(customgames_cfg_field "$cfg" mode)")
   if [[ $platform == windows ]]; then args+=(--exe "$exe"); else args+=(--command "$(customgames_cfg_field "$cfg" command)"); fi
   [[ $platform == windows && -n $(customgames_cfg_field "$cfg" runner) ]] && args+=(--runner "$(customgames_cfg_field "$cfg" runner)")
-  for value in category controls buttons players; do
+  for value in category controls buttons players year developer; do
     [[ -n $(customgames_cfg_field "$cfg" "$value") ]] && args+=("--$value" "$(customgames_cfg_field "$cfg" "$value")")
   done
   [[ -f ${cfg%.cfg}.key ]] && args+=(--key "${cfg%.cfg}.key")
@@ -1468,7 +1479,7 @@ customgames_create() {
   args=(--out "$out" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
   if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
   [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
-  for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players SNAP:snap VIDEO:video TEXT:text LOGO:logo \
+  for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players YEAR:year DEVELOPER:developer SNAP:snap VIDEO:video TEXT:text LOGO:logo \
     KEY:key PPDB:ppdb TEXT_STRING:text-string; do
     var=R_${key%%:*}
     [[ -n ${!var:-} ]] || continue

@@ -5458,6 +5458,21 @@ class FrontendDataTests(unittest.TestCase):
             flt = fd.web.parse_filters(text)[0]
             self.assertEqual(fd.has_games(games, flt), bool(fd.apply_filter(games, flt)), text)
 
+    def test_a_custom_game_shows_its_year_and_developer(self):
+        # O ano e a desenvolvedora do .cfg viram Year e Manufacturer, os campos
+        # que a lista do frontend junta ao lado do nome; um ano que nao e de
+        # quatro digitos fica de fora.
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / 'Pang.cfg').write_text(
+                'name=Pang\nplatform=command\nyear=1989\ndeveloper=Mitchell Corporation\ncategory=Puzzle / Pang\n')
+            (folder / 'Odd.cfg').write_text('name=Odd\nplatform=command\nyear=89\n')
+            system = {'folder': str(folder), 'key': 'custom/PC games'}
+            info = self.fd.web.custom_info(system, {'Name': 'Pang', 'file': 'Pang.sh'})
+            self.assertEqual((info['Year'], info['Manufacturer'], info['Category']),
+                             ('1989', 'Mitchell Corporation', 'Puzzle / Pang'))
+            self.assertEqual(self.fd.web.custom_info(system, {'Name': 'Odd', 'file': 'Odd.sh'}), {})
+
     def test_control_filter(self):
         # O 5 > CONTROL: o campo Control da romlist nas familias do
         # fliperos-romclean; so os tipos que algum jogo tem.
@@ -7948,9 +7963,9 @@ class WebCustomGamesTests(WebSetupBase):
                                  'free': 99})
         lines = (self.dir / 'check.rows').read_text().splitlines()
         first, second = (l.split('\x1f') for l in lines)
-        # O runner (PortProton, Wine, Wine Staging) e depois dele o logotipo, o ultimo campo.
-        self.assertEqual(len(first), 20)
-        self.assertEqual(first[19], '')
+        # O runner (PortProton, Wine, Wine Staging), o logotipo, o ano e a desenvolvedora, o ultimo campo.
+        self.assertEqual(len(first), 22)
+        self.assertEqual(first[19:], ['', '', ''])
         self.assertEqual(first[:5], ['PC games', 'Metal Slug X', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
         self.assertEqual(first[5], 'line one line two')
         self.assertEqual(first[11], str(self.dir / 'stage' / staged['id']))

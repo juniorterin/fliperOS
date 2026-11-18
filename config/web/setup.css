@@ -383,6 +383,7 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-cfacts .tag { font-size: 11.5px; }
 .cg-cfacts .ctrl { gap: 8px; }
 .cg-ccat { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.cg-cmade { font-size: 12.5px; color: var(--accent, var(--muted)); overflow-wrap: anywhere; }
 /* O texto rola devagar de cima a baixo quando nao cabe (para com o cursor). */
 .cg-ctext { height: 4.8em; overflow: hidden; font-size: 12.5px; line-height: 1.2; color: var(--dim); white-space: pre-line;
   -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent); }
@@ -529,6 +530,7 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-table .c-group { min-width: 130px; } .cg-table .c-name { min-width: 170px; } .cg-table .c-platform { min-width: 124px; }
 .cg-table .c-folder { min-width: 220px; } .cg-table .c-run { min-width: 190px; } .cg-table .c-mode { min-width: 120px; }
 .cg-table .c-category { min-width: 170px; } .cg-table .c-players, .cg-table .c-buttons { min-width: 64px; }
+.cg-table .c-year { min-width: 72px; } .cg-table .c-developer { min-width: 140px; }
 .cg-table .c-controls { min-width: 120px; } .cg-table .c-art { min-width: 250px; }
 .cg-table .c-act { white-space: nowrap; }
 .cg-table .c-act .icon-btn { display: inline-grid; margin-right: 4px; border: 0; background: none; }

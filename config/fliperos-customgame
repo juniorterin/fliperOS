@@ -63,7 +63,8 @@ clicando na pasta) tambem vale. A mesma estrutura solta numa pasta (o zip
 aberto) e reconhecida pelo scan e pelo found.
 
 O cfg: linhas CHAVE=VALOR (format, name, platform, exe ou command, mode,
-category, controls, buttons, players). O minimo de um pacote: a pasta JOGO/
+category, controls, buttons, players, year, developer; o ano e a desenvolvedora
+aparecem na lista e na pagina do jogo no frontend). O minimo de um pacote: a pasta JOGO/
 com os arquivos e o JOGO.cfg com name=, platform= e exe= (Windows) ou
 command= (Linux); sem mode=, o jogo abre em 640x480i. O instalado ganha folder=, package= e
 package_stamp= (o tamanho e a data do zip: o mesmo zip nao volta a lista; um
@@ -129,7 +130,11 @@ KEY_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6
 KEY_LINE = re.compile(r"^p([1-8])_(%s)=([A-Z0-9_]{1,24})$" % "|".join(KEY_CONTROLS))
 # A ordem das chaves no cfg gravado.
 CFG_ORDER = ("format", "name", "platform", "exe", "runner", "command", "mode", "category", "controls", "buttons", "players",
-             "folder", "package", "package_stamp")
+             "year", "developer", "folder", "package", "package_stamp")
+# O ano (quatro digitos) e a desenvolvedora (um texto curto) de um jogo: o
+# frontend os mostra na lista e na pagina dele (Year e Manufacturer).
+YEAR_RE = re.compile(r"^(19|20)[0-9]{2}$")
+DEVELOPER_MAX = 80
 # O que ja vem comprimido vai no zip sem comprimir de novo (o pacote feito no
 # gabinete: o video, as imagens e os arquivos dos jogos que ja sao zip).
 STORED_EXTS = {"zip", "7z", "rar", "gz", "xz", "bz2", "zst", "cab", "jpg", "jpeg", "png", "webp", "gif",
@@ -317,6 +322,14 @@ def check_cfg(cfg, base, game_files, problems=None):
         if value and not (value.isdigit() and low <= int(value) <= 8):
             bad(key + "_bad", value, "%s.cfg: %s must be %d to 8" % (base, key, low))
         out[key] = value
+    year = cfg.get("year", "").strip()
+    if year and not YEAR_RE.match(year):
+        bad("year_bad", year, "%s.cfg: year must be four digits (1900 to 2099), not %r" % (base, year))
+    out["year"] = year
+    developer = " ".join(cfg.get("developer", "").split())
+    if len(developer) > DEVELOPER_MAX:
+        bad("developer_long", "", "%s.cfg: developer too long" % base)
+    out["developer"] = developer
     if found and problems is None:
         raise Bad(problems=found, looks=True)
     return out
@@ -538,7 +551,7 @@ def package_info(path, done):
         stem = base[:-len(SUFFIX)]
     row = {"zip": path, "file": base, "size": st.st_size, "mtime": int(st.st_mtime), "state": "", "group": "",
            "name": stem, "platform": "", "mode": "", "category": "", "controls": "", "buttons": "", "players": "",
-           "bytes": 0, "media": {}, "key": False, "ppdb": False, "problems": []}
+           "year": "", "developer": "", "bytes": 0, "media": {}, "key": False, "ppdb": False, "problems": []}
     problems = []
     if misnamed:
         problems.append(("misnamed", stem + SUFFIX, "rename it to %s%s (packages always end in %s)" % (stem, SUFFIX, SUFFIX)))
@@ -549,7 +562,8 @@ def package_info(path, done):
             return None
         problems += exc.problems
     else:
-        row.update({k: pkg.cfg.get(k, "") for k in ("name", "platform", "mode", "category", "controls", "buttons", "players")})
+        row.update({k: pkg.cfg.get(k, "") for k in ("name", "platform", "mode", "category", "controls", "buttons", "players",
+                                                    "year", "developer")})
         row.update(bytes=pkg.bytes, key="key" in pkg.extra, ppdb="ppdb" in pkg.extra,
                    media={kind: pkg.extra[kind][0].filename for kind, _ in MEDIA if kind in pkg.extra})
         stamped, group, name = done.get(path, ("", "", ""))
@@ -810,7 +824,8 @@ def cmd_pack(args):
             raise Bad("the folder %s is empty" % folder)
         base = re.sub(r"[^A-Za-z0-9 ._()&'+,-]+", "_", args.name).strip(" .") or "game"
         cfg = {"name": args.name, "platform": args.platform, "mode": args.mode, "category": args.category or "",
-               "controls": args.controls or "", "buttons": args.buttons or "", "players": args.players or ""}
+               "controls": args.controls or "", "buttons": args.buttons or "", "players": args.players or "",
+               "year": args.year or "", "developer": args.developer or ""}
         if args.platform == "windows":
             exe = os.path.realpath(os.path.join(folder, args.exe or ""))
             if not exe.startswith(folder + os.sep) or not os.path.isfile(exe):
@@ -956,7 +971,8 @@ def cmd_add(args):
         if not files:
             raise Bad("the folder %s is empty" % args.folder)
         cfg = {"name": name, "platform": args.platform, "mode": args.mode, "category": args.category or "",
-               "controls": args.controls or "", "buttons": args.buttons or "", "players": args.players or ""}
+               "controls": args.controls or "", "buttons": args.buttons or "", "players": args.players or "",
+               "year": args.year or "", "developer": args.developer or ""}
         rels = {r for _, r in files}
         if args.platform == "windows":
             cfg["exe"] = rel_path(args.exe or "")
@@ -1215,6 +1231,11 @@ def cfg_hints(cfg, game):
         value = cfg.get(key, "")
         if value.isdigit() and low <= int(value) <= 8:
             out[key] = value
+    if YEAR_RE.match(cfg.get("year", "").strip()):
+        out["year"] = cfg["year"].strip()
+    developer = " ".join(cfg.get("developer", "").split())
+    if developer and len(developer) <= DEVELOPER_MAX:
+        out["developer"] = developer
     return out
 
 
@@ -1282,7 +1303,8 @@ def scan_folder(folder):
     hints = found["cfg"]
     for key in ("snap", "video", "text", "logo", "key", "ppdb", "where"):
         row[key] = found[key]
-    row["cfg"] = {k: v for k, v in hints.items() if k in ("mode", "runner", "category", "controls", "buttons", "players")}
+    row["cfg"] = {k: v for k, v in hints.items()
+                  if k in ("mode", "runner", "category", "controls", "buttons", "players", "year", "developer")}
     if hints.get("name"):
         row["name"] = hints["name"]
     # cfg_run: o exe= (ou command=) veio do JOGO.cfg (a pagina o poe por
@@ -1584,7 +1606,8 @@ def main():
     s.add_argument("--runner", choices=RUNNERS)
     s.add_argument("--command")
     s.add_argument("--mode", default=DEFAULT_MODE)
-    for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string", "logo", "key", "ppdb"):
+    for opt in ("category", "controls", "buttons", "players", "year", "developer", "snap", "video", "text", "text-string",
+                "logo", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--progress", nargs="*", type=int)
     s = sub.add_parser("add")
@@ -1596,7 +1619,8 @@ def main():
     s.add_argument("--runner", choices=RUNNERS)
     s.add_argument("--command")
     s.add_argument("--mode", default=DEFAULT_MODE)
-    for opt in ("category", "controls", "buttons", "players", "snap", "video", "text", "text-string", "logo", "key", "ppdb"):
+    for opt in ("category", "controls", "buttons", "players", "year", "developer", "snap", "video", "text", "text-string",
+                "logo", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--replace", action="store_true")
     s.add_argument("--progress", nargs="*", type=int)

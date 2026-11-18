@@ -4462,6 +4462,48 @@ class CustomGamesTests(Base):
                          dict(e, O=str(out), S=str(src)))
         self.assertIn("@fail", r.stdout)
 
+    def test_a_package_carries_the_year_and_developer(self):
+        # O ano e a desenvolvedora vao no cfg do pacote, voltam instalados e na
+        # lista dos pacotes (JSON); um ano que nao e de quatro digitos e um
+        # problema do pacote, e a pasta solta traz os dois do JOGO.cfg.
+        import zipfile
+        media, games, e = self.pkg_env()
+        tool = str(ROOT / "config/fliperos-customgame")
+        src = self.env.dir / "src" / "Pang"
+        src.mkdir(parents=True)
+        (src / "pang").write_text("#!/bin/sh\n")
+        out = self.roms / "custom-packages" / "Pang.fliperos-customgame.zip"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run(["python3", tool, "pack", "--out", str(out), "--name", "Pang", "--platform", "native",
+                            "--folder", str(src), "--command", "./pang", "--year", "1989",
+                            "--developer", "Mitchell  Corporation"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with zipfile.ZipFile(out) as zf:
+            cfg = zf.read("Pang.cfg").decode()
+        self.assertIn("year=1989\ndeveloper=Mitchell Corporation\n", cfg)
+        inspected = subprocess.run(["python3", tool, "inspect", str(out)], capture_output=True, text=True).stdout
+        self.assertIn("year=1989\n", inspected)
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(out)))
+        self.assertIn("year=1989\ndeveloper=Mitchell Corporation\n", (self.roms / "custom" / "PC" / "Pang.cfg").read_text())
+        # Um ano ruim no JOGO.cfg e um problema (year_bad); a desenvolvedora longa, outro.
+        bad = self.make_pkg(self.roms / "custom-packages" / "Bad.fliperos-customgame.zip", base="Bad",
+                            cfg="name=Bad\nplatform=windows\nexe=bin/pang.exe\nyear=89\ndeveloper=%s\n" % ("x" * 81))
+        r = subprocess.run(["python3", tool, "inspect", str(bad)], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("year must be four digits", r.stderr)
+        self.assertIn("developer too long", r.stderr)
+        # A pasta solta com o JOGO.cfg: o found os devolve (cfg_year, cfg_developer).
+        loose = self.env.dir / "loose"
+        (loose / "Foo").mkdir(parents=True)
+        (loose / "Foo" / "Foo.exe").write_bytes(b"MZ")
+        (loose / "Foo.cfg").write_text("name=Foo\nplatform=windows\nexe=Foo.exe\nyear=2004\ndeveloper=Studio X\n")
+        found = subprocess.run(["python3", tool, "found", str(loose / "Foo")], capture_output=True, text=True).stdout
+        self.assertIn("cfg_year=2004\n", found)
+        self.assertIn("cfg_developer=Studio X\n", found)
+        # O Setup (Create package) le os dois do found.
+        self.assertEqual(self.env.out("customgames_found \"$D\"; echo \"$CG_FOUND_YEAR|$CG_FOUND_DEVELOPER\"",
+                                      dict(e, D=str(loose / "Foo"))).strip(), "2004|Studio X")
+
     def test_a_package_logo_installs_packs_and_is_found(self):
         # JOGO.logo.png: o logotipo vai para ~/media/logo/custom/GRUPO/JOGO.png
         # (no lugar do de exemplo), volta ao empacotar e a pasta solta o acha.
@@ -4665,7 +4707,8 @@ class CustomGamesTests(Base):
     def panel_rows(self, rows):
         """O arquivo da tabela: um jogo por linha, os campos separados por 0x1f."""
         fields = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
-                  "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo")
+                  "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
+                  "year", "developer")
         path = self.env.dir / "rows"
         path.write_text("".join("\x1f".join(r.get(f, "") for f in fields) + "\n" for r in rows))
         return path
@@ -4781,6 +4824,49 @@ class CustomGamesTests(Base):
                          if (media / ".custom-samples").exists() else "")
         # O comando: o modo digitado.
         self.assertIn("# mode: 320x240@60\n", (self.roms / "custom" / "Tools" / "Clock.sh").read_text())
+
+    def test_year_and_developer_go_from_the_row_to_the_cfg_and_the_package(self):
+        """O ano e a desenvolvedora (a lista do frontend os mostra): a tabela,
+        o Edit, o describe e o pacote de um jogo instalado os levam, e um ano
+        que nao e de quatro digitos e um erro da coluna dele."""
+        media, games, e = self.pkg_env()
+        src = self.panel_sources()
+        script = 'customgames_refresh_frontends() { :; }; customgames_cli %s'
+        rows = self.panel_rows([
+            {"group": "PC games", "name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"),
+             "exe": "MetalSlugX.exe", "year": "1999", "developer": "Nazca Corporation"},
+            {"group": "PC games", "name": "Bad year", "platform": "command", "command": "echo", "year": "99"},
+            {"group": "PC games", "name": "Long maker", "platform": "command", "command": "echo",
+             "developer": "x" * 81}])
+        out = self.env.out('customgames_check "$F"', dict(e, F=str(rows))).splitlines()
+        errors = {tuple(l.split("|", 3)[1:3]) for l in out if l.startswith("error|")}
+        self.assertEqual(errors, {("2", "year"), ("3", "developer")})
+        good = self.panel_rows([
+            {"group": "PC games", "name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"),
+             "exe": "MetalSlugX.exe", "year": "1999", "developer": "Nazca Corporation"},
+            {"group": "Tools", "name": "Clock", "platform": "command", "command": "xclock", "year": "2001",
+             "developer": "Me"}])
+        r = self.env.run(script % 'bulk "$F"', dict(e, F=str(good)))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        cfg = (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text()
+        self.assertIn("year=1999\ndeveloper=Nazca Corporation\n", cfg)
+        self.assertIn("year=2001\ndeveloper=Me\n", (self.roms / "custom" / "Tools" / "Clock.cfg").read_text())
+        # O describe: o ano e a desenvolvedora no fim da linha do jogo.
+        rows_ = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
+        game = [r for r in rows_ if r[:3] == ["game", "PC games", "Metal Slug X"]][0]
+        self.assertEqual(game[-2:], ["1999", "Nazca Corporation"])
+        # O Edit muda e tira; um ano ruim e recusado (2).
+        self.assertEqual(self.env.run(script % "edit group='PC games' name='Metal Slug X' year=2003 developer=SNK", e).returncode, 0)
+        cfg = (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text()
+        self.assertIn("year=2003\ndeveloper=SNK\n", cfg)
+        self.assertEqual(self.env.run(script % "edit group='PC games' name='Metal Slug X' year=abc", e).returncode, 2)
+        self.assertEqual(self.env.run(script % "edit group='PC games' name='Metal Slug X' year=", e).returncode, 0)
+        self.assertNotIn("year=", (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text())
+        self.assertIn("developer=SNK\n", (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text())
+        # Um jogo de comando que muda de nome leva os dois junto.
+        r = self.env.run(script % "edit group=Tools name=Clock new_name=Clock2", e)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("year=2001\ndeveloper=Me\n", (self.roms / "custom" / "Tools" / "Clock2.cfg").read_text())
 
     def test_panel_describe_lists_the_games_and_the_choices(self):
         media, games, e = self.pkg_env()
