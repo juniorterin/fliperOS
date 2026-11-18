@@ -13155,6 +13155,8 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertRegex(gfx, r'\[Hardware\]\nVSync = True\n')
             main = (Path(home) / '.config/dolphin-emu/Dolphin.ini').read_text()
             self.assertRegex(main, r'\[Interface\]\nOnScreenDisplayMessages = False\n')
+            # Um .nkit.iso (Tatsunoko vs. Capcom) nao abre o aviso "NKit Warning" do Dolphin.
+            self.assertRegex(main, r'(?m)^SkipNKitWarning = True$')
         # Nem os avisos do PCSX2 na tela.
         _, ini = DeflickerTests().run_x11(['pcsx2'], '')
         self.assertRegex(ini, r'\[EmuCore/GS\][^\[]*OsdMessagesPos = 0\n')

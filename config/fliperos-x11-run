@@ -243,6 +243,10 @@ case $name in
     "$iniset" "$gfx" Hardware VSync True 2> /dev/null || true
     # Sem os avisos do emulador na tela ao abrir o jogo.
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface OnScreenDisplayMessages False 2> /dev/null || true
+    # Uma imagem .nkit.iso abre o aviso "NKit Warning" do Dolphin (savestates e
+    # gravacoes de entrada nao servem entre NKit e imagem normal), uma janela
+    # que o painel nao sabe fechar: o jogo ficava parado nela.
+    "$iniset" "${gfx%/*}/Dolphin.ini" Interface SkipNKitWarning True 2> /dev/null || true
     cheevos_ini dolphin "${gfx%/*}/RetroAchievements.ini"
     # As conquistas na saida (o dolphin-emu.log abaixo), para a barra da OSD
     # (fliperos-cheevos watch): o Dolphin so as escreve com o log
