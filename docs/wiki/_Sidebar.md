@@ -82,6 +82,7 @@
 - [Multiple monitors](Multiple-Monitors.md)
 - [DIY hardware](DIY-hardware.md)
 - [Latency](Latency.md)
+  - [CPU and speed](CPU-and-speed.md)
 
 **Network**
 

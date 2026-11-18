@@ -24,7 +24,7 @@ Keisho **comes in the image**, as a FliperOS package that the updates keep curre
 
 **Game outputs:** it publishes the lamps, the recoil, ammunition and life of the gun games (Model 2 and Model 3), the round wins of the Model 2 fighting games (for the [versus score](Versus-score.md)) and the credits, on TCP port 8000 ([DIY hardware](DIY-hardware.md#model-2-game-outputs)).
 
-**Speed:** Model 1 and 2 run on one CPU core; FliperOS's speed work on the geometry coprocessors is part of the emulator since 0.9.41 (on the cabinet's i3-540: 0.93× to 2.34× on The House of the Dead, 0.71× to 1.65× on Last Bronx, 0.85× to 2.84× on Fighting Vipers). Model 3's PowerPC runs through a JIT, and each frame is drawn on a second thread. Model 3 in Keisho has not been timed on the cabinet's i3-540 yet (Supermodel needed its PowerPC slowed to 75 MHz there).
+**Speed:** Model 1 and 2 run on one CPU core; FliperOS's speed work on the geometry coprocessors is part of the emulator since 0.9.41 (on the cabinet's i3-540: 0.93× to 2.34× on The House of the Dead, 0.71× to 1.65× on Last Bronx, 0.85× to 2.84× on Fighting Vipers). Model 3's PowerPC runs through a JIT, and each frame is drawn on a second thread. Model 3 in Keisho has not been timed on the cabinet's i3-540 yet (Supermodel needed its PowerPC slowed to 75 MHz there). On a Core i7-870 (2.93 GHz) Fighting Vipers 2 holds 57.5 Hz in light scenes and dips to 48 to 52 Hz in heavy ones, because the PowerPC and the sound boards share one thread: [CPU and speed](CPU-and-speed.md) has the timing and the Turbo Boost setting.
 
 ## Coming from Supermodel
 

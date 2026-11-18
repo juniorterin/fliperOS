@@ -110,6 +110,7 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 | [Multiple monitors](Multiple-Monitors.md) | Two or three arcade monitors on one card: the Setup, the multi-screen games in GroovyMAME (Darius, Punch-Out!!) and Flycast (F355 Challenge), how it works |
 | [DIY hardware](DIY-hardware.md) | Open-source projects to build with an Arduino, a Raspberry Pi Pico or an ESP32: control panel encoders, spinner, light gun, LED display, button lights, the cartridge reader |
 | [Latency](Latency.md) | The Standard and Low latency modes, what each tweak does, recommended hardware, how to measure |
+| [CPU and speed](CPU-and-speed.md) | Why one fast core sets the speed, where a Model 3 frame goes, Turbo Boost in the BIOS and how to tell it is on, reading the CPU use of a game |
 
 ## Network
 

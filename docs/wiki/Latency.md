@@ -51,7 +51,7 @@ FliperOS applies the tweaks GroovyArcade already makes and adds others, in two m
 
 The "Everything" tier follows the *Moderate* level of the [PCSX2 requirements](https://pcsx2.net/docs/setup/requirements), the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD RX and newer, recent NVIDIA) need a converter: see [Converters](Converters.md).
 
-**The CPU's speed decides more than its cores.** For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing.
+**The CPU's speed decides more than its cores.** For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing. Whether the processor reaches its Turbo clock matters too, and the board's firmware can have it off: see [CPU and speed](CPU-and-speed.md).
 
 **Checking the machine:** Setup > System > Latency shows the CPU, cores, clock, instruction level, memory, GPU and analog outputs, and **Check this computer** compares them with the Low latency mode minimum (`lib/hardware.sh`: x86-64-v3, 4 threads, 3.0 GHz, 4 GB). Choosing Low latency on a machine below that asks for confirmation.
 

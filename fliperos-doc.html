@@ -5072,7 +5072,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <li>Linux: type the command, run inside the game folder (for example <code>./game.x86_64 -fullscreen</code>), or press <em>Browse</em> to pick the program and the Setup writes <code>./&lt;program&gt;</code> for you.</li>
 <li><strong>Picture, logo, video and text</strong> (optional): pick each file (the logo is a <code>.png</code>, <code>.jpg</code> or <code>.webp</code>; it travels in the package as <code>&lt;game&gt;.logo.png</code> or <code>.logo.jpg</code>), or type the text. Without them the game gets samples, which you can replace later.</li>
 <li><strong>Video mode</strong>: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.</li>
-<li><strong>Category, controls, buttons, players, year, developer</strong>: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line.</li>
+<li><strong>Category, controls, buttons, players, year, developer</strong>: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line. Then <strong>Does the game already work with the joystick?</strong> (asked when the game has no <code>.key</code> yet): say yes and the package carries an empty <code>&lt;game&gt;.key</code>, so the on-screen menu does not ask for a controller map (the same as the <em>Joystick</em> box in the web panel).</li>
 <li>The Setup writes <code>~/roms/custom-packages/&lt;game&gt;.fliperos-customgame.zip</code> and asks whether to <strong>install it now</strong>. Say yes and pick the group (or a new one, for example <em>PC games</em>; each group is a system in the frontends): the game folder is copied to <code>~/games/&lt;group&gt;/&lt;game&gt;</code> and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.</li>
 <li>Open the frontend: the game is in the system of its group.</li>
 <li><strong>The first time the game opens</strong>, without a <code>&lt;game&gt;.key</code>, the on-screen menu opens by itself on <strong>Controller configuration</strong>: give each key the game uses a button (see <a href="#Custom-games-the-controller-as-a-keyboard">below</a>) and Save. A game that takes the joystick by itself: Save with no key marked, and it doesn't ask again.</li>
@@ -5420,7 +5420,7 @@ p2_b1=LEFTCTRL
 <p>Each line is a player and a command of <strong>Joysticks &gt; Button mapping</strong>: <code>up down left right</code>, <code>b1</code> to <code>b8</code> (the panel's buttons, in its order), <code>start</code> and <code>coin</code>. Because the map talks about <em>player 1 button 1</em> and not about a controller's button number, the same package works on any panel, with any controller.</p>
 <p>The keys are Linux's names: the letters and digits, <code>F1</code> to <code>F12</code>, <code>ESC TAB ENTER SPACE BACKSPACE</code>, <code>UP DOWN LEFT RIGHT</code>, <code>LEFTCTRL RIGHTCTRL LEFTALT RIGHTALT LEFTSHIFT RIGHTSHIFT CAPSLOCK</code>, <code>INSERT DELETE HOME END PAGEUP PAGEDOWN PAUSE</code>, <code>MINUS EQUAL LEFTBRACE RIGHTBRACE BACKSLASH SEMICOLON APOSTROPHE GRAVE COMMA DOT SLASH</code>, and the keypad's <code>KP0</code> to <code>KP9</code>, <code>KPENTER KPPLUS KPMINUS KPASTERISK KPSLASH KPDOT</code>.</p>
 <h3 id="Custom-games-setting-it-up-on-the-screen">Setting it up on the screen</h3>
-<p>The <code>.key</code> rarely comes ready: you make it here. A custom game with no <code>.key</code> opens the on-screen menu by itself, straight on Controller configuration, two seconds after the game shows (once each time the game opens; <em>NO KEYS YET</em> in the corner). <strong>Save</strong> writes the <code>.key</code>, even with no key marked, and then the game stops asking; <strong>Back</strong> closes the menu without saving, and it asks again next time.</p>
+<p>The <code>.key</code> rarely comes ready: you make it here. A custom game with no <code>.key</code> opens the on-screen menu by itself, straight on Controller configuration, two seconds after the game shows (once each time the game opens; <em>NO KEYS YET</em> in the corner). <strong>Save</strong> writes the <code>.key</code>, even with no key marked, and then the game stops asking; <strong>Back</strong> closes the menu without saving, and it asks again next time. A package made with <strong>Joystick</strong> ticked (web panel) or <em>yes</em> to "Does the game already work with the joystick?" (Setup) carries that empty <code>.key</code> from the start, so a game that takes the joystick by itself never asks.</p>
 <p>Any other time, open the <strong>on-screen menu</strong> during the game (by default Start + Down held for a second; Frontend controls &gt; OSD MENU changes it). A custom game has <strong>Controller configuration</strong> in place of <em>Emulator menu</em>:</p>
 <ul>
 <li>A keyboard on the screen. The keys that already have a button are lit.</li>
@@ -6277,7 +6277,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <p><strong>Controls:</strong> a gamepad is read by button position, with the keyboard live beside it (5 and 6 insert coins, 1 and 2 start, the arrows and Z X C V are player 1). The panel's <a href="#Button-mapping">button mapping</a> is the same for Model 2 and Model 3. <strong>F9</strong> quits; <strong>F10</strong> is the emulator's own settings menu, readable at 640x240. <strong>coin + button 1</strong> opens it too.</p>
 <p><strong>Video: Vulkan or OpenGL.</strong> Like Flycast and Dolphin, Keisho follows the video card's driver: <strong>Vulkan</strong> on <code>amdgpu</code>, <strong>OpenGL</strong> on the others (<code>radeon</code> has no Vulkan). The first launch writes <code>graphics_backend</code> to <code>keisho.ini</code>, and switching the driver in <strong>Setup &gt; Video Setup</strong> switches it again. A choice made in F10 stays. If the card has no Vulkan, Keisho falls back to OpenGL by itself. It needs OpenGL 4.3 or Vulkan 1.3.</p>
 <p><strong>Game outputs:</strong> it publishes the lamps, the recoil, ammunition and life of the gun games (Model 2 and Model 3), the round wins of the Model 2 fighting games (for the <a href="#Versus-score">versus score</a>) and the credits, on TCP port 8000 (<a href="#DIY-hardware-model-2-game-outputs">DIY hardware</a>).</p>
-<p><strong>Speed:</strong> Model 1 and 2 run on one CPU core; FliperOS's speed work on the geometry coprocessors is part of the emulator since 0.9.41 (on the cabinet's i3-540: 0.93× to 2.34× on The House of the Dead, 0.71× to 1.65× on Last Bronx, 0.85× to 2.84× on Fighting Vipers). Model 3's PowerPC runs through a JIT, and each frame is drawn on a second thread. Model 3 in Keisho has not been timed on the cabinet's i3-540 yet (Supermodel needed its PowerPC slowed to 75 MHz there).</p>
+<p><strong>Speed:</strong> Model 1 and 2 run on one CPU core; FliperOS's speed work on the geometry coprocessors is part of the emulator since 0.9.41 (on the cabinet's i3-540: 0.93× to 2.34× on The House of the Dead, 0.71× to 1.65× on Last Bronx, 0.85× to 2.84× on Fighting Vipers). Model 3's PowerPC runs through a JIT, and each frame is drawn on a second thread. Model 3 in Keisho has not been timed on the cabinet's i3-540 yet (Supermodel needed its PowerPC slowed to 75 MHz there). On a Core i7-870 (2.93 GHz) Fighting Vipers 2 holds 57.5 Hz in light scenes and dips to 48 to 52 Hz in heavy ones, because the PowerPC and the sound boards share one thread: <a href="#CPU-and-speed">CPU and speed</a> has the timing and the Turbo Boost setting.</p>
 <h2 id="Sega-Model-2-and-3-coming-from-supermodel">Coming from Supermodel</h2>
 <p>The update to Keisho removes the Supermodel package once Keisho is installed. The <code>&lt;set&gt;.nv</code> files in <code>~/nvram/model3</code> stay: Keisho reads Supermodel's NVRAM format, so high scores, settings and link roles carry over. The frontend screen <strong>Supermodel</strong> is now <strong>Model 3</strong>: its play counts move with it, and favourites stay. A frontend that still has the old <code>supermodel</code> command opens the game in Keisho.</p>
 <h2 id="Sega-Model-2-and-3-how-it-works">How it works</h2>
@@ -6404,7 +6404,7 @@ media=DVD
 <p>Drop a folder with the <code>.gz</code> files (<code>NM00019 TE51 DVD0 (DVD-ROM).iso.gz</code>, <code>NM00019 TE51, Ver.B4 a026051314505a.bin.gz</code>...) in <code>~/roms/namco2x6</code>, with any name. The frontend lists the game (Tekken 5) with its versions as clones (a version is a disc and a dongle of the same code; the newest is the parent, and a disc or dongle with no pair is left out). Choosing one extracts what it needs with a progress bar in the middle of the screen (B cancels): the disc and the <code>boot.elf</code> (from the proverb project, downloaded once and kept) into a folder of the game, the dongle into <code>~/save/namco2x6</code> (a copy as it came stays in <code>originals</code>), and a <code>.acgame</code> ready to run. Then the <code>.gz</code> files used are deleted and the game opens; a disc or dongle that other versions use stays extracted for them. It needs free space for the whole disc (about twice the <code>.gz</code>). A copy that stopped short is not extracted (FILE INCOMPLETE: COPY IT AGAIN) and loses nothing. A CD image whose sectors carry the 8-byte CD subheader in front, which the fork refuses, is put back in place while extracting; the bytes missing from such an image stay missing, so for a CD game the MAME CHD is the better copy.</p>
 <p>The hard disk games (media HDD: Battle Gear 3, Zoids Infinity, Cobra, Time Crisis 4, Taiko 12 to 14...) come in the same folders: the archive.org item has their <code>(HDD).img.gz</code> image next to the dongles, so a version is a dongle and that image (a game with a single disc or image pairs every dongle with it; otherwise a dongle takes the disc whose code matches, ignoring hyphens, <code>DVD0</code> and <code>HDD0</code>). The image is written sparse, so the zeros do not take the disk. A disc or tool disc with no pair, and the games whose names give no hint (Dragon Chronicle Online), are left out. The hard disk games have not been run in PCSX2x6 here.</p>
 <h2 id="Namco-246-256-what-was-tested-and-what-went-wrong">What was tested, and what went wrong</h2>
-<p>Tested on a cabinet on 2026-11-05 and 06: i7 870 (2.93 GHz, turbo off in the firmware), R7 240 (RADV, Vulkan), 6 GB DDR3 in two unmatched sticks (2 GB DDR3-1066 and 4 GB DDR3-1333).</p>
+<p>Tested on a cabinet on 2026-11-05 and 06: i7 870 (2.93 GHz, Turbo Boost off in the firmware: see <a href="#CPU-and-speed">CPU and speed</a>), R7 240 (RADV, Vulkan), 6 GB DDR3 in two unmatched sticks (2 GB DDR3-1066 and 4 GB DDR3-1333).</p>
 <table>
 <thead>
 <tr>
@@ -34198,7 +34198,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tbody>
 </table>
 <p>The "Everything" tier follows the <em>Moderate</em> level of the <a href="https://pcsx2.net/docs/setup/requirements">PCSX2 requirements</a>, the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD RX and newer, recent NVIDIA) need a converter: see <a href="#Converters">Converters</a>.</p>
-<p><strong>The CPU's speed decides more than its cores.</strong> For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing.</p>
+<p><strong>The CPU's speed decides more than its cores.</strong> For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing. Whether the processor reaches its Turbo clock matters too, and the board's firmware can have it off: see <a href="#CPU-and-speed">CPU and speed</a>.</p>
 <p><strong>Checking the machine:</strong> Setup &gt; System &gt; Latency shows the CPU, cores, clock, instruction level, memory, GPU and analog outputs, and <strong>Check this computer</strong> compares them with the Low latency mode minimum (<code>lib/hardware.sh</code>: x86-64-v3, 4 threads, 3.0 GHz, 4 GB). Choosing Low latency on a machine below that asks for confirmation.</p>
 <h3 id="Latency-small-machines">Small machines</h3>
 <p>A cabinet doesn't need a tower. GroovyArcade <a href="https://gitlab.com/groovyarcade/support/-/wikis/2-Pre-Requisites-and-Installation/2.2-Hardware-Examples">benchmarked these</a> with GroovyMAME, listed from fastest to slowest; its page has the results, photos and manuals. None has been tried on FliperOS. Check that the outputs suit your monitor: many of them have DisplayPort or a bridged VGA (<a href="#Video-cards-AMD">Video cards</a>).</p>
@@ -34294,6 +34294,198 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p>The test cabinet uses an Atheros AR9271. Of the TP-Link TL-WN722N, only <strong>version 1</strong> has an Atheros chip.</p>
 <h2 id="Latency-measuring">Measuring</h2>
 <p>The only reliable comparison is measuring, on the same cabinet, the same game and the same emulator version. Film the button and the screen together with a phone in 240 fps slow motion (~4 ms per video frame), 20 to 30 presses per configuration, and count the video frames between the button going down and the picture reacting.</p>
+<h1 id="CPU-and-speed">CPU and speed</h1>
+<p>How fast a game runs on FliperOS depends mostly on <strong>one CPU core</strong>: how quick it is, not how many there are. This page shows how the cabinet's processor is used, how to tell when it is the limit, and the firmware switch that most often holds it back: <strong>Turbo Boost</strong> (AMD: Core Performance Boost), which can be left off in the firmware.</p>
+<h2 id="CPU-and-speed-one-fast-core">One fast core</h2>
+<p>An emulator puts the work that sets the speed on one thread: the game's own processor, its coprocessors and the sound chips. The other cores take the drawing, the audio and the video driver, which are lighter. A game that is too heavy shows it as one thread at about 100% of a core and the rest nearly idle.</p>
+<p>Measured on a cabinet with a Core i7-870 (2.93 GHz, 4 cores, 8 threads) and a Radeon R7 240:</p>
+<table>
+<thead>
+<tr>
+<th>Game</th>
+<th>Emulator</th>
+<th>The busiest thread</th>
+<th>What it showed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fighting Vipers 2 (Model 3)</td>
+<td>Keisho</td>
+<td>The main thread: 98-99% of a core in the slow scenes, about 45% in the light ones</td>
+<td>57.5 Hz in light scenes, 48 to 52 Hz in heavy ones</td>
+</tr>
+<tr>
+<td>Tekken 5 fights (Namco 256)</td>
+<td>PCSX2x6</td>
+<td>The emulated processor: 99.9% of a core. The vector unit: 84-89%</td>
+<td>FPS dips in fights</td>
+</tr>
+</tbody>
+</table>
+<p>The video card was far from its limit in both. On Fighting Vipers 2 the 3D drawing took 1.8 ms of each frame.</p>
+<h3 id="CPU-and-speed-where-a-model-3-frame-goes">Where a Model 3 frame goes</h3>
+<p>The Model 2 and Model 3 boards run at <strong>57.524 Hz</strong>, so a frame has <strong>17.38 ms</strong>. Keisho's own timing (<code>--profile</code>, Turbo off, 60 seconds without the speed limiter: about 4000 frames of Fighting Vipers 2 from boot on, with a coin and start pressed at frame 700):</p>
+<table>
+<thead>
+<tr>
+<th>Part of the frame</th>
+<th>Average</th>
+<th>Slow frames (95th percentile)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The game's PowerPC processor</td>
+<td>8.4 ms</td>
+<td>13.2 ms</td>
+</tr>
+<tr>
+<td>The sound boards (two SCSP chips and the MPEG music board)</td>
+<td>5.3 ms</td>
+<td>5.8 ms</td>
+</tr>
+<tr>
+<td>The two together (<code>run_frame</code>, one thread)</td>
+<td>14.0 ms</td>
+<td>19.2 ms</td>
+</tr>
+<tr>
+<td>The 3D drawing on the video card</td>
+<td>1.8 ms</td>
+<td>3.9 ms</td>
+</tr>
+</tbody>
+</table>
+<p>Light frames fit in the 17.38 ms. In a heavy scene the processor alone takes 13 ms, the sound adds its 5 or 6 ms and the frame comes out at about 20 ms: 49 frames a second instead of 57.5. The sound costs the same in every frame, so it is the part that does not shrink when the scene is easy.</p>
+<h2 id="CPU-and-speed-turbo-boost">Turbo Boost</h2>
+<p><strong>Turbo Boost</strong> lets a core run above its rated clock while few cores are busy. It is a firmware setting. With it off, the cabinet runs at the rated clock all the time: an i7-870 stays at 2933 MHz, and it has 3600 MHz to give.</p>
+<table>
+<thead>
+<tr>
+<th>Cores awake</th>
+<th>Clock of the i7-870</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Turbo off in the firmware</td>
+<td>2933 MHz</td>
+</tr>
+<tr>
+<td>3 or 4</td>
+<td>3200 MHz</td>
+</tr>
+<tr>
+<td>2</td>
+<td>3467 MHz</td>
+</tr>
+<tr>
+<td>1</td>
+<td>3600 MHz</td>
+</tr>
+</tbody>
+</table>
+<p>A game wakes more cores than the one that matters: the audio, the drawing and the video driver run on their own threads and wake now and then. With Turbo on, the clock in a game sat between 3.2 and 3.5 GHz, not at the 3.6 GHz of a single busy core.</p>
+<p>On the i7-870, with Turbo on: 3372 MHz measured under one busy thread, and temperatures of 63 to 74 °C while a game ran. In Fighting Vipers 2 the heavy scenes still dipped to 48 to 52 Hz, so on this processor Turbo alone did not hold 57.5 Hz everywhere. It was not a controlled comparison (the scenes were not the same), and the clock gain here is 9 to 19%.</p>
+<h3 id="CPU-and-speed-turning-it-on">Turning it on</h3>
+<p>Open the BIOS (the key at power on: Del, F2 or F10, depending on the board) and look in the CPU or performance pages for <strong>Intel Turbo Boost Technology</strong> (also called Turbo Mode) or, on AMD, <strong>Core Performance Boost</strong>. Set it to Enabled, and keep <strong>Enhanced Intel SpeedStep</strong> (EIST) on. The names change from board to board.</p>
+<p><strong>Linux can't turn it on for you</strong> on a board where the firmware has it off. On the i7-870 board, clearing the processor's "turbo disable" bit and asking for the turbo state from the system left the clock at the rated 2933 MHz. Only the firmware setting changed it.</p>
+<p><strong>Cooling matters.</strong> A processor at a higher clock makes more heat. A PS2 test in a closed arcade cabinet reached 94 to 98 °C and slowed down to 1.2 GHz, and the same machine outside the cabinet stayed at 62 to 67 °C (<a href="#Namco-246-256">PlayStation 2 and Namco 246/256</a>). After turning Turbo on, play for a while with the cabinet closed and read the temperatures (below).</p>
+<h3 id="CPU-and-speed-how-to-tell-if-turbo-is-on">How to tell if Turbo is on</h3>
+<p>On the i7-870, with the firmware setting off and then on:</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Turbo off</th>
+<th>Turbo on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>grep -m1 -o -w ida /proc/cpuinfo</code> (Intel)</td>
+<td>prints nothing</td>
+<td>prints <code>ida</code></td>
+</tr>
+<tr>
+<td><code>ls /sys/devices/system/cpu/cpu0/cpufreq</code></td>
+<td>no such folder</td>
+<td>the folder exists (driver <code>acpi-cpufreq</code>)</td>
+</tr>
+<tr>
+<td><code>cat /sys/devices/system/cpu/cpufreq/boost</code></td>
+<td>no such file</td>
+<td><code>1</code></td>
+</tr>
+<tr>
+<td><code>grep MHz /proc/cpuinfo</code></td>
+<td>2926 on every core, always</td>
+<td>the measured clock of each core, changing</td>
+</tr>
+</tbody>
+</table>
+<p>With Turbo off the system has no frequency control at all: the <code>performance</code> governor of the <a href="#Latency">Latency</a> modes has nothing to act on, and the clock is fixed.</p>
+<p>To read the temperatures: <code>cat /sys/class/hwmon/hwmon*/temp*_input</code> (thousandths of a degree). On the i7-870 the processor's own limits are 83 °C (high) and 99 °C (critical).</p>
+<h3 id="CPU-and-speed-what-the-setup-shows">What the Setup shows</h3>
+<p><strong>Setup &gt; System &gt; Latency</strong> shows the <strong>Max clock</strong> of this computer and checks it against the 3.0 GHz of the Low latency mode. It reads the clock the driver reports as the highest. On the i7-870 that is <strong>2.9 GHz even with Turbo on</strong>: the driver lists the turbo state as the rated clock plus 1 MHz (2934 MHz) and doesn't give the real 3.2 to 3.6 GHz. Read the real clock in a game with <code>grep MHz /proc/cpuinfo</code>.</p>
+<h2 id="CPU-and-speed-reading-how-much-a-game-uses">Reading how much a game uses</h2>
+<ul>
+<li><strong>The rate of Keisho.</strong> The window title carries it (<code>Fighting Vipers 2 [Vulkan] - 57.5 Hz</code>), averaged over the last second. <strong>F8</strong> shows it on the screen. A game at full speed reads 57.5 Hz, or up to 57.8 Hz when the audio is pulling it back (the sync can move the speed by 0.5%). Under 57 Hz the machine is behind.</li>
+<li><strong>Without touching the game, from another computer.</strong> The title can be read from the cabinet's X session: <code>DISPLAY=:0 xprop -id $(DISPLAY=:0 xwininfo -root -tree | awk '/Keisho/ {print $1; exit}') WM_NAME</code>.</li>
+<li><strong>The thread that limits it.</strong> <code>top -H -p PID</code> lists the threads. One at about 100% and the others low means the game is bound by one core.</li>
+<li><strong>The time of each part.</strong> From the console, outside the desktop: <code>fliperos-x11-run fliperos-model3 fvipers2o --profile 60 --no-throttle --no-vsync --coin-at 700</code>. The game runs for 60 seconds without the speed limiter, then the log (<code>/opt/fliperos/logs/fliperos-model3.log</code>) gets a table with the time of each part of the frame, the average rate (how much room there is) and the 95th and 99th percentile of the frame times (what the slow scenes cost). It needs no input: it inserts a coin and presses start at frame 700.</li>
+</ul>
+<h2 id="CPU-and-speed-what-did-not-help">What did not help</h2>
+<ul>
+<li><strong>Pinning the emulator to one logical CPU per physical core</strong>, so that none of its threads shares a core with a hyperthread: 66.7 fps against 67.1, with the same slow scenes.</li>
+<li><strong>Turning on Turbo from Linux</strong> on a board that has it off in the firmware, as above.</li>
+<li><strong>More cores.</strong> Keisho's author reports that moving a Model 2 coprocessor to its own thread made it slower, and the speed depends on the one fast core.</li>
+</ul>
+<h2 id="CPU-and-speed-what-does-help">What does help</h2>
+<p>A faster core, which in practice means a newer processor: a recent core does more in each clock cycle than a 2009 design at the same GHz. The <a href="#Latency-recommended-hardware">recommended hardware</a> table lists what the heavy emulators (Model 3, PS2, Dreamcast) ask for. Next come Turbo Boost, with the cabinet cooled, and the <code>performance</code> governor.</p>
+<h2 id="CPU-and-speed-problems">Problems</h2>
+<table>
+<thead>
+<tr>
+<th>What was seen</th>
+<th>Likely cause</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A game is slow only in busy scenes, and one thread of the game sits at about 100%</td>
+<td>The processor is the limit</td>
+<td>Turn Turbo on, then a faster processor</td>
+</tr>
+<tr>
+<td><code>/proc/cpuinfo</code> shows the same MHz on every core, and there is no <code>cpufreq</code> folder</td>
+<td>The firmware has Turbo and frequency scaling off</td>
+<td>Turn them on in the BIOS</td>
+</tr>
+<tr>
+<td>The clock falls to 1.2 GHz in a long session</td>
+<td>The processor is too hot and slows itself down</td>
+<td>Clean the cooler, add airflow to the cabinet</td>
+</tr>
+<tr>
+<td><strong>Setup &gt; System &gt; Latency</strong> shows 2.9 GHz with Turbo on</td>
+<td>The driver doesn't report the turbo clock of this processor</td>
+<td>Nothing to fix: read the clock in a game</td>
+</tr>
+</tbody>
+</table>
+<h2 id="CPU-and-speed-how-it-works">How it works</h2>
+<ul>
+<li><strong>The frame pacer.</strong> Keisho holds the machine to its own 57.5245 Hz against real time, not the display's refresh (<code>src/osd/frame_pacer.cpp</code>). A frame that falls more than four periods behind is not made up for: the debt is written off. The rate in the title is the number of frames in the last second.</li>
+<li><strong>The audio sync.</strong> The speed is nudged by up to 0.5% to keep the audio queue at its target, so a steady 57.8 Hz means the queue is running short, not that the game is fast.</li>
+<li><strong>The names in <code>--profile</code>.</strong> <code>cpu_i960</code> is the game's main processor on any board (the PowerPC on Model 3), <code>cpu_sound</code> the sound boards, <code>m3_build</code> the frame build that Keisho does on a second thread. <code>run_frame</code> is the sum of the processor stages on the main thread.</li>
+<li><strong>The governor.</strong> <code>fliperos-session</code> sets <code>performance</code> while a session runs (the frontend and the games it opens) and puts the system's own governor back afterwards (<a href="#Latency">Latency</a>).</li>
+<li><strong>The build.</strong> The package <code>fliperos-keisho</code> is built for the generic x86-64 baseline (no <code>SM2_TUNE</code>), with link-time optimisation, so the compiler doesn't use the newer instructions of a given processor.</li>
+<li><strong>Where the Setup reads the clock.</strong> <code>hw_cpu_max_mhz</code> in <code>fliperos-setup/lib/hardware.sh</code> reads <code>cpufreq/cpuinfo_max_freq</code>, and the highest <code>cpu MHz</code> of <code>/proc/cpuinfo</code> when there is no cpufreq.</li>
+</ul>
+<p>See also: <a href="#Latency">Latency</a>, <a href="#Sega-Model-2-and-3">Sega Model 2 and 3</a>, <a href="#Namco-246-256">PlayStation 2 and Namco 246/256</a>.</p>
 <h1 id="Web-panel">Web panel</h1>
 <p><strong>The cabinet from your phone or PC.</strong> Open <strong>http://fliperos.local</strong> in a browser on the same network (or the cabinet's IP) and sign in with the <code>fliperos</code> user. There is nothing to install on the phone or the computer.</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/web/phone-en.webp" width="320" alt="The web panel on a phone"></p>
@@ -34866,7 +35058,8 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p><strong>Create package:</strong> the form of <strong>Add a game</strong> without the group, with <strong>Package structure</strong> (the files of a package, as an example with Street Fighter 4, and what goes in its <code>.cfg</code>). Next to <strong>Create the package</strong>:</p>
 <ul>
 <li><strong>Preview</strong> shows the card the frontend will show, beside the form, and follows what you change.</li>
-<li><strong>Test on the cabinet</strong> opens the game there, from its folder, without installing it (<code>~/roms/custom/.test</code>, hidden from the frontends). When the game shows on the screen, a panel says what to do if it doesn't take the controller (the on-screen menu opens by itself on Controller configuration, and the key map made there goes into the package) and offers <strong>Take a photo</strong> and <strong>Record 10 s</strong>: they capture the cabinet's screen while you play, and the photo and the video become the package's picture and video (they replace the ones above; a 640x240 screen comes out in 4:3). The video needs <code>ffmpeg</code> on the cabinet. Not seen in 2 minutes: the page points to its log.</li>
+<li><strong>Joystick</strong>: tick it when the game already works with the joystick. The package then carries an <strong>empty</strong> <code>&lt;game&gt;.key</code> (no controller-to-keyboard map), so the on-screen menu does not open by itself asking for one and the controller is not hidden from the game. It replaces the <code>.key</code> that came with the folder, and the test opens the game with that empty <code>.key</code> too.</li>
+<li><strong>Test on the cabinet</strong> opens the game there, from its folder, without installing it (<code>~/roms/custom/.test</code>, hidden from the frontends). When the game shows on the screen, a panel says what to do if it doesn't take the controller (the on-screen menu opens by itself on Controller configuration, and the key map made there goes into the package) and offers <strong>Take a photo</strong> and <strong>Record 30 s</strong>: they capture the cabinet's screen while you play, and the photo and the video become the package's picture and video (they replace the ones above). Both always come out in 4:3, whatever the game's own resolution (a 640x240 or 320x224 screen, or a 16:9 game, is stretched to 4:3 the way the CRT shows it). The video is 30 seconds at 60 frames per second, H.264 with AAC sound (640x480, from the same screen capture as the <a href="#Web-panel-Live">Live screen</a>), and the frontend plays it. The game's sound is recorded when <strong>Live screen sound</strong> is on (Setup &gt; Audio Setup) and the game was opened after turning it on; otherwise the video has a silent track and the page says so. The video needs <code>ffmpeg</code> on the cabinet. While the game opens, and while it runs, the page has <strong>Close on cabinet</strong>, which closes the test game (and its X) and brings back what was on the screen. A game that opens and closes by itself (a wrong command, for example) is noticed in seconds: the page shows the end of its log. A command that starts with <code>command=</code> (a <code>.cfg</code> line pasted whole) is refused by the check. Not seen in 2 minutes: the page points to its log.</li>
 <li>The <strong>logo</strong> (<code>&lt;game&gt;.logo.png</code>) is the fourth art slot, next to the picture, the video and the text.</li>
 </ul>
 <p><strong>Create the package</strong> checks the row, asks before replacing a zip of the same name and packs it. When it is ready, the page shows a <strong>Download</strong> button with the zip's link (and <strong>See it in Install packages</strong>); the form goes back to empty. Every good package card in <strong>Install packages</strong> has the same <strong>Download</strong> button, and <strong>Make a package of it</strong> on an installed game opens a window with it too: download the zip to copy it to another FliperOS.</p>
