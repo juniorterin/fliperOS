@@ -428,6 +428,7 @@ Pessoas que ajudaram o FliperOS com código, testes no próprio hardware ou idei
   <tr>
     <td align="center"><a href="https://github.com/ultimatevga-dot"><img src="https://github.com/ultimatevga-dot.png?size=128" width="64" alt=""><br><sub>ultimatevga-dot</sub></a></td>
     <td align="center"><a href="https://github.com/theblackk62"><img src="https://github.com/theblackk62.png?size=128" width="64" alt=""><br><sub>theblackk62</sub></a></td>
+    <td align="center"><a href="https://github.com/neo-tokio"><img src="https://github.com/neo-tokio.png?size=128" width="64" alt=""><br><sub>neo-tokio</sub></a></td>
   </tr>
 </table>
 

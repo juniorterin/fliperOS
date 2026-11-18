@@ -43,6 +43,7 @@ export const AUTHOR = { name: 'juniorterin', url: 'https://github.com/juniorteri
 export const CONTRIBUTORS = [
   { name: 'ultimatevga-dot', url: 'https://github.com/ultimatevga-dot' },
   { name: 'theblackk62', url: 'https://github.com/theblackk62' },
+  { name: 'neo-tokio', url: 'https://github.com/neo-tokio' },
 ] as const;
 
 export const FLIPEROS_VERSION = '0.26';
