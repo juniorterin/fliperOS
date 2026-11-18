@@ -47,7 +47,7 @@ Then, with the controller:
 6. **What opens the game**:
    - Windows: pick the `.exe` inside the folder, then **what runs it**: PortProton (the default), Wine or Wine Staging. If the game doesn't open or runs badly with one, make the package again with another (see [Windows games: PortProton, Wine or Wine Staging](#windows-games-portproton)). With PortProton, the first time the Setup offers to download it (about 3 GB); then choose which of its Wine builds runs the game; keep the first one unless the game fails with it.
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
-7. **Picture, video and text** (optional): pick each file, or type the text. Without them the game gets samples, which you can replace later.
+7. **Picture, logo, video and text** (optional): pick each file (the logo is a `.png`, `.jpg` or `.webp`; it travels in the package as `<game>.logo.png` or `.logo.jpg`), or type the text. Without them the game gets samples, which you can replace later.
 8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.
 9. **Category, controls, buttons, players, year, developer**: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line.
 10. The Setup writes `~/roms/custom-packages/<game>.fliperos-customgame.zip` and asks whether to **install it now**. Say yes and pick the group (or a new one, for example *PC games*; each group is a system in the frontends): the game folder is copied to `~/games/<group>/<game>` and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.
@@ -146,7 +146,7 @@ A package is always named `<game>.fliperos-customgame.zip`, and always has this 
 <game>.fliperos-customgame.zip
 ├─ <game>.cfg    the settings (required)
 ├─ <game>.jpg    the picture (.png, .webp... too)
-├─ <game>.logo.png   the logo over the picture (a .png with a transparent background; .webp too)
+├─ <game>.logo.png   the logo over the picture (a .png with a transparent background; <game>.logo.jpg or .webp too)
 ├─ <game>.mp4    the video
 ├─ <game>.txt    the text the frontend shows
 ├─ <game>.key    controller → keyboard (optional: the on-screen menu makes it the first time)

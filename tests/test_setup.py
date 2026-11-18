@@ -4504,6 +4504,43 @@ class CustomGamesTests(Base):
         self.assertEqual(self.env.out("customgames_found \"$D\"; echo \"$CG_FOUND_YEAR|$CG_FOUND_DEVELOPER\"",
                                       dict(e, D=str(loose / "Foo"))).strip(), "2004|Studio X")
 
+    def test_a_jpg_logo_goes_through_the_setup_wizard_the_pack_and_the_install(self):
+        # JOGO.logo.jpg: o assistente Create package acha o logotipo da pasta,
+        # tem um passo para escolher um, o pacote de um jogo instalado o leva,
+        # e instalado ele vale no lugar do de exemplo.
+        import zipfile
+        media, games, e = self.pkg_env()
+        tool = str(ROOT / "config/fliperos-customgame")
+        loose = self.env.dir / "loose"
+        (loose / "Foo").mkdir(parents=True)
+        (loose / "Foo" / "foo").write_text("#!/bin/sh\n")
+        (loose / "Foo.logo.jpg").write_bytes(b"jpglogo")
+        self.assertEqual(self.env.out("customgames_found \"$D\"; echo \"$CG_FOUND_LOGO\"", dict(e, D=str(loose / "Foo"))).strip(),
+                         str(loose / "Foo.logo.jpg"))
+        out = self.roms / "custom-packages" / "Foo.fliperos-customgame.zip"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run(["python3", tool, "pack", "--out", str(out), "--name", "Foo", "--platform", "native",
+                            "--folder", str(loose / "Foo"), "--command", "./foo", "--logo", str(loose / "Foo.logo.jpg")],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with zipfile.ZipFile(out) as zf:
+            self.assertEqual(zf.read("Foo.logo.jpg"), b"jpglogo")
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(out)))
+        self.assertEqual((media / "logo/custom/PC/Foo.jpg").read_bytes(), b"jpglogo")
+        # O pacote de um jogo instalado o leva de volta.
+        out.unlink()
+        self.env.out("customgames_pack_game PC Foo", e)
+        with zipfile.ZipFile(out) as zf:
+            self.assertEqual(zf.read("Foo.logo.jpg"), b"jpglogo")
+        # O assistente: o passo do logotipo, a pasta e o jogo instalado.
+        menu = (ROOT / "fliperos-setup/screens/setup-menu.sh").read_text()
+        wizard = menu.split("screen_custom_package_create() {")[1].split("\n}\n")[0]
+        self.assertIn('"logo|Logo: ${logo:+$(basename "$logo")}${logo:-none}"', wizard)
+        self.assertIn("logo) value=$(customgames_browse", wizard)
+        self.assertIn("logo=$CG_FOUND_LOGO", wizard)
+        self.assertIn("for value in category controls buttons players year developer snap logo video text key ppdb; do", wizard)
+        self.assertIn('$CUSTOM_GAMES_MEDIA/logo/custom/$group/$from.$value', wizard)
+
     def test_a_package_logo_installs_packs_and_is_found(self):
         # JOGO.logo.png: o logotipo vai para ~/media/logo/custom/GRUPO/JOGO.png
         # (no lugar do de exemplo), volta ao empacotar e a pasta solta o acha.

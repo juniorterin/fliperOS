@@ -1212,7 +1212,7 @@ customgames_browse() {
 screen_custom_package_create() {
   local group=$1 from=${2:-} title="Create package" name="" platform=native folder="" exe="" cmd="" snap="" video=""
   local text="" text_string="" mode=640x480@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
-  local year="" developer=""
+  local year="" developer="" logo=""
   local out base value rel runner=portproton
   local -a args
   if [[ -n $from ]]; then
@@ -1238,8 +1238,12 @@ screen_custom_package_create() {
       [[ -f $CUSTOM_GAMES_MEDIA/preview/custom/$group/$from.$value ]] && video=$CUSTOM_GAMES_MEDIA/preview/custom/$group/$from.$value
     done
     [[ -f $CUSTOM_GAMES_MEDIA/texto/custom/$group/$from.txt ]] && text=$CUSTOM_GAMES_MEDIA/texto/custom/$group/$from.txt
+    # O logotipo (png, jpg ou webp) do jogo instalado.
+    for value in $(customgames_media_exts logo); do
+      [[ -f $CUSTOM_GAMES_MEDIA/logo/custom/$group/$from.$value ]] && logo=$CUSTOM_GAMES_MEDIA/logo/custom/$group/$from.$value
+    done
     # As de exemplo nao vao no pacote: quem instala ganha as suas.
-    for value in snap video text; do
+    for value in snap video text logo; do
       customgames_media_sample "${!value}" && printf -v "$value" '%s' ""
     done
   else
@@ -1260,7 +1264,7 @@ screen_custom_package_create() {
     # pasta do jogo de dentro, e a arte ja preenchida no passo 5.
     customgames_found "$folder"
     folder=$CG_FOUND_FOLDER snap=$CG_FOUND_SNAP video=$CG_FOUND_VIDEO text=$CG_FOUND_TEXT key=$CG_FOUND_KEY
-    year=$CG_FOUND_YEAR developer=$CG_FOUND_DEVELOPER
+    year=$CG_FOUND_YEAR developer=$CG_FOUND_DEVELOPER logo=$CG_FOUND_LOGO
     # 4. O que abre o jogo (o .exe do JOGO.cfg, se veio um).
     if [[ $platform == windows ]]; then
       exe=$CG_FOUND_EXE
@@ -1307,16 +1311,18 @@ screen_custom_package_create() {
       done
     fi
   fi
-  # 5. A imagem, o video e o texto (todos opcionais).
+  # 5. A imagem, o logotipo, o video e o texto (todos opcionais).
   while true; do
-    choice=$(ui_menu "$title" "Picture, video and text of $name (optional: without them the game gets samples)." next \
+    choice=$(ui_menu "$title" "Picture, logo, video and text of $name (optional: without them the game gets samples)." next \
       "snap|Picture: ${snap:+$(basename "$snap")}${snap:-none}" \
+      "logo|Logo: ${logo:+$(basename "$logo")}${logo:-none}" \
       "video|Video: ${video:+$(basename "$video")}${video:-none}" \
       "text|Text: $([[ -n $text_string ]] && echo typed || echo "${text:+$(basename "$text")}${text:-none}")" \
       "next|Next") || return 0
     case $choice in
       next) break ;;
       snap) value=$(customgames_browse "A picture of $name (.png, .jpg, .webp)." file .png .jpg .jpeg .webp .gif) && snap=$value ;;
+      logo) value=$(customgames_browse "The logo of $name (.png with a transparent background, .jpg or .webp)." file .png .jpg .jpeg .webp) && logo=$value ;;
       video) value=$(customgames_browse "A video of $name (.mp4, .mkv, .webm)." file .mp4 .mkv .webm .avi .mov .flv) && video=$value ;;
       text)
         choice=$(ui_menu "$title" "The text the frontend shows about $name." file "file|Pick a .txt file" "type|Type it" \
@@ -1344,7 +1350,7 @@ screen_custom_package_create() {
   fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder" --mode "$mode")
   [[ $platform == windows ]] && args+=(--exe "$exe" --runner "$runner") || args+=(--command "$cmd")
-  for value in category controls buttons players year developer snap video text key ppdb; do
+  for value in category controls buttons players year developer snap logo video text key ppdb; do
     [[ -n ${!value} ]] && args+=("--$value" "${!value}")
   done
   [[ -n $text_string ]] && args+=(--text-string "$text_string")

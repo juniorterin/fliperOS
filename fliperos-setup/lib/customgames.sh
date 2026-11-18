@@ -579,18 +579,20 @@ customgames_tool() {
 
 # customgames_found PASTA: o que veio com a pasta de um jogo na estrutura do
 # pacote (fliperos-customgame found) em CG_FOUND_FOLDER (a pasta do jogo: a
-# de dentro, quando PASTA e o zip aberto), CG_FOUND_SNAP, CG_FOUND_VIDEO,
-# CG_FOUND_TEXT, CG_FOUND_KEY, CG_FOUND_PPDB, CG_FOUND_EXE e CG_FOUND_RUNNER (o exe= e o runner= do
-# JOGO.cfg, dentro da pasta do jogo).
+# de dentro, quando PASTA e o zip aberto), CG_FOUND_SNAP, CG_FOUND_LOGO (o
+# JOGO.logo.png, .jpg ou .webp), CG_FOUND_VIDEO, CG_FOUND_TEXT, CG_FOUND_KEY,
+# CG_FOUND_PPDB, CG_FOUND_YEAR, CG_FOUND_DEVELOPER, CG_FOUND_EXE e CG_FOUND_RUNNER
+# (o exe= e o runner= do JOGO.cfg, dentro da pasta do jogo).
 customgames_found() {
   local line key value
   CG_FOUND_FOLDER=$1 CG_FOUND_SNAP="" CG_FOUND_VIDEO="" CG_FOUND_TEXT="" CG_FOUND_KEY="" CG_FOUND_PPDB=""
-  CG_FOUND_EXE="" CG_FOUND_RUNNER="" CG_FOUND_YEAR="" CG_FOUND_DEVELOPER=""
+  CG_FOUND_EXE="" CG_FOUND_RUNNER="" CG_FOUND_YEAR="" CG_FOUND_DEVELOPER="" CG_FOUND_LOGO=""
   while IFS= read -r line; do
     key=${line%%=*} value=${line#*=}
     case $key in
       folder) [[ -d $value ]] && CG_FOUND_FOLDER=$value ;;
       snap) CG_FOUND_SNAP=$value ;;
+      logo) CG_FOUND_LOGO=$value ;;
       video) CG_FOUND_VIDEO=$value ;;
       text) CG_FOUND_TEXT=$value ;;
       key) CG_FOUND_KEY=$value ;;
