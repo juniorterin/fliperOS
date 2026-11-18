@@ -97,9 +97,10 @@ What the arcade games remember without power: dip settings, credits, the scores 
 **Unlocked arcade memory.** FliperOS comes with the memory of several games with their hidden content already unlocked:
 
 - in GroovyMAME: Tekken 3, Tekken Tag, Soul Edge, Dead or Alive++, Street Fighter EX and EX2, Rival Schools, Star Gladiator 2, Tech Romancer, Ultimate MK3 and MK II;
+- in the MAME 2010 core of RetroArch: the same games, except MK II (that version of MAME lays its memory out differently) and the Naomi ones. MAME 2010 keeps a game's whole memory in one `<set>.nv` file, so only the games whose file is byte for byte the one of the current MAME come over;
 - in Flycast: the Naomi and Atomiswave games Fightcade 2 brings (KOF XI, Marvel vs. Capcom 2, Power Stone 2, NeoGeo Battle Coliseum…), plus Cannon Spike and Faster than Speed.
 
-Each one is copied only once, and only if the game has no memory of its own yet: what you have played stays, and a game you reset by deleting its folder does not come back. To use an unlock file of your own, close the game and put it in the emulator's folder with the name that emulator writes: `~/nvram/mame/tekken3/at28c16`, `~/nvram/flycast/kofxi.zip.nvmem`.
+Each one is copied only once, and only if the game has no memory of its own yet: what you have played stays, and a game you reset by deleting its folder does not come back. To use an unlock file of your own, close the game and put it in the emulator's folder with the name that emulator writes: `~/nvram/mame/tekken3/at28c16`, `~/nvram/retroarch/mame2010/tekken3.nv`, `~/nvram/flycast/kofxi.zip.nvmem`.
 
 ### `~/save`
 

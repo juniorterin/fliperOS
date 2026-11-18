@@ -1536,6 +1536,12 @@ class RomFoldersTests(unittest.TestCase):
             (bundled / 'flycast').mkdir()
             for name in ('kofxi.zip.nvmem', 'kofxi.zip.nvmem2', 'mvsc2.zip.eeprom'):
                 (bundled / 'flycast' / name).write_text('unlocked')
+            # O MAME 2010 e um <set>.nv por jogo, em retroarch/mame2010.
+            (bundled / 'retroarch/mame2010').mkdir(parents=True)
+            for name in ('tekken3.nv', 'sfa3.nv'):
+                (bundled / 'retroarch/mame2010' / name).write_text('unlocked')
+            (home / 'nvram/retroarch/mame2010').mkdir(parents=True)
+            (home / 'nvram/retroarch/mame2010/sfa3.nv').write_text('mine')
             # Jogados antes: a propria vai para .own, a destravada entra
             # inteira (sem arquivo de outra origem ao lado).
             (home / 'nvram/mame/sf2').mkdir(parents=True)
@@ -1562,16 +1568,28 @@ class RomFoldersTests(unittest.TestCase):
             self.assertFalse((home / 'nvram/flycast/kofxi.zip.eeprom').exists())
             self.assertEqual((home / 'nvram/flycast/.own/kofxi.zip.nvmem').read_text(), 'mine')
             self.assertEqual((home / 'nvram/flycast/.own/kofxi.zip.eeprom').read_text(), 'mine')
+            # MAME 2010: o jogo sem memoria recebe a destravada; o que ja tinha vai para .own.
+            core = home / 'nvram/retroarch/mame2010'
+            self.assertEqual((core / 'tekken3.nv').read_text(), 'unlocked')
+            self.assertEqual((core / 'sfa3.nv').read_text(), 'unlocked')
+            self.assertEqual((core / '.own/sfa3.nv').read_text(), 'mine')
+            self.assertFalse((core / '.own/tekken3.nv').exists())
+            # O caminho em que o core grava e o link para essa pasta.
+            self.assertEqual(os.readlink(home / 'save/retroarch/MAME 2010/mame2010/nvram'), str(core))
             # Jogado de novo depois: o que o jogo gravou fica.
             (home / 'nvram/flycast/kofxi.zip.nvmem').write_text('played')
+            (core / 'tekken3.nv').write_text('played')
             login()
             self.assertEqual((home / 'nvram/flycast/kofxi.zip.nvmem').read_text(), 'played')
+            self.assertEqual((core / 'tekken3.nv').read_text(), 'played')
             # Apagado para comecar do zero: nao volta.
             shutil.rmtree(home / 'nvram/mame/tekken3')
             (home / 'nvram/flycast/mvsc2.zip.eeprom').unlink()
+            (core / 'sfa3.nv').unlink()
             login()
             self.assertFalse((home / 'nvram/mame/tekken3').exists())
             self.assertFalse((home / 'nvram/flycast/mvsc2.zip.eeprom').exists())
+            self.assertFalse((core / 'sfa3.nv').exists())
             # Um jogo que uma imagem nova trouxer entra.
             (bundled / 'flycast/ngbc.zip.nvmem').write_text('unlocked')
             login()
@@ -1583,6 +1601,25 @@ class RomFoldersTests(unittest.TestCase):
         self.assertTrue((nv / 'flycast/kofxi.zip.nvmem2').is_file())
         self.assertFalse(list(nv.glob('flycast/*.net')))
         self.assertIn('archive.org/details/nvram', (nv / 'SOURCES.md').read_text())
+
+    def test_nvram_of_the_image_for_mame_2010_is_the_same_bytes(self):
+        # O MAME 2010 (0.139) junta a memoria de um jogo no <set>.nv. Um jogo
+        # so entra se o arquivo dele e byte a byte o do MAME atual: o at28c16
+        # (2080 bytes), o eeprom do CPS2 (93C46, 128) e o CMOS do umk3 (49152).
+        # O mk2 (16 KB aqui, 32 KB no 0.139, com paginas) e o Naomi (varios
+        # arquivos) ficam de fora, e o sfex2u/mvsc2u nao existem no 0.139.
+        nv = ROOT / 'config/nvram'
+        source = {'sfa3': ('eeprom', 128), 'umk3': ('nvram', 49152)}
+        source.update({s: ('at28c16', 2080) for s in (
+            'doapp', 'kikaioh', 'rvschool', 'rvschoola', 'sfex', 'sfex2', 'soulclbr', 'souledge',
+            'stargld2', 'tekken3', 'tektagt')})
+        have = sorted(p.name for p in (nv / 'retroarch/mame2010').iterdir())
+        self.assertEqual(have, sorted(s + '.nv' for s in source))
+        for game, (name, size) in source.items():
+            data = (nv / 'mame' / game / name).read_bytes()
+            self.assertEqual(len(data), size, game)
+            self.assertEqual((nv / 'retroarch/mame2010' / (game + '.nv')).read_bytes(), data, game)
+        self.assertIn('retroarch/mame2010', (nv / 'SOURCES.md').read_text())
 
     def test_nvram_of_before_moves_inside_a_custom_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1622,6 +1659,7 @@ class RomFoldersTests(unittest.TestCase):
             # A memoria que vem na imagem, para o fliperos-roms copiar.
             self.assertTrue((root / 'usr/share/fliperos/nvram/mame/tekken3/at28c16').is_file())
             self.assertTrue((root / 'usr/share/fliperos/nvram/flycast/kofxi.zip.nvmem').is_file())
+            self.assertTrue((root / 'usr/share/fliperos/nvram/retroarch/mame2010/tekken3.nv').is_file())
 
     def test_ps1_and_custom_folders_exist_from_the_start(self):
         # A ~/roms/ps1 existe mesmo sem o DuckStation (baixado no Setup), e as

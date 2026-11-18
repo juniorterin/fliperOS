@@ -322,6 +322,9 @@ done
 # volta; um que uma versao nova da imagem trouxer entra no login seguinte. (O
 # .bundled era a lista da regra antiga, que nao trocava a propria: cada jogo
 # dela passa uma vez pela regra nova.)
+# O MAME 2010 (core do RetroArch, MAME 0.139) guarda tudo de um jogo num
+# <set>.nv so, em vez da pasta do MAME atual: retroarch/mame2010 traz os jogos
+# cujo arquivo e byte a byte o mesmo (config/nvram/SOURCES.md).
 nvram_bundled=${FLIPEROS_NVRAM_BUNDLED:-/usr/share/fliperos/nvram}
 # same_files PASTA_A PASTA_B NOME...: os arquivos NOME sao iguais nas duas.
 same_files() {
@@ -331,7 +334,7 @@ same_files() {
     cmp -s -- "$a/$name" "$b/$name" || return 1
   done
 }
-for emu in mame flycast; do
+for emu in mame flycast retroarch/mame2010; do
   [[ -d $nvram_bundled/$emu && -d $nvram/$emu ]] || continue
   done_list=$nvram/$emu/.unlocked
   own=$nvram/$emu/.own

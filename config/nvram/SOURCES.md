@@ -18,3 +18,17 @@ its own yet.
   are from the
   [Flycast wiki](https://github.com/TheArcadeStriker/flycast-wiki/wiki/Savedata-and-Extras-for-NAOMI-Atomiswave-games),
   which Fightcade does not cover.
+- `retroarch/mame2010/<set>.nv` — the RetroArch core MAME 2010 (MAME 0.139),
+  which keeps everything a game remembers in one `<set>.nv` file instead of
+  the folder of the current MAME. Each file here is the one in `mame/<set>/`,
+  byte for byte, and only for the games where that is true in the 0.139
+  source (libretro/mame2010-libretro): a game with one AT28C16 chip
+  (`mame/<set>/at28c16`, 2080 bytes: tekken3, tektagt, soulclbr, souledge,
+  stargld2, sfex, sfex2, rvschool, rvschoola, kikaioh, doapp), the CPS2 93C46
+  EEPROM (`sfa3`, 128 bytes) and the Wolf-unit CMOS (`umk3`, 49152 bytes). Left
+  out: `mk2` (16384 bytes here, a 32768-byte file in 0.139 with its own CMOS
+  pages: the layout is not proven the same), the Naomi games (several files
+  here, one in 0.139) and `sfex2u`/`mvsc2u` (not sets in 0.139). The
+  clones of a set (`sfa3u`, `tekken3a`…) have no file, as in the current MAME.
+  Not run in the core: the bytes were compared against its source, not loaded
+  in a game.
