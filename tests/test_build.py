@@ -5713,6 +5713,11 @@ class FrontendDataTests(unittest.TestCase):
         old = fd.web.games, fd.PRELOAD_REST
         fd.web.games, fd.PRELOAD_REST = games, 0
         self.addCleanup(lambda: setattr(fd.web, 'games', old[0]) or setattr(fd, 'PRELOAD_REST', old[1]))
+        # A arte de cada sistema (a pasta de cada tipo) e listada na pre-carga, nao no primeiro quadro.
+        listed = []
+        old_names = fd.web.media_names
+        fd.web.media_names = lambda base: listed.append(base) or frozenset()
+        self.addCleanup(setattr, fd.web, 'media_names', old_names)
         lib = fd.Library.__new__(fd.Library)
         lib.lock, lib.count_lock = threading.Lock(), threading.Lock()
         lib.cache, lib.epoch, lib.counts = {}, 0, fd.load_counts()
@@ -5728,6 +5733,8 @@ class FrontendDataTests(unittest.TestCase):
             time.sleep(0.01)
         self.assertFalse(lib.preloading)
         self.assertEqual(sorted(reads), ['fbneo', 'mame'])
+        self.assertEqual(sorted(os.path.relpath(p, str(tmp)) for p in listed if p.endswith('/mame')),
+                         sorted('media/%s/mame' % k for k in fd.MEDIA_KINDS))
         self.assertEqual([g['Name'] for g in lib.cache['@arcade']][:2], ['fbneo0', 'fbneo1'])
         self.assertIs(lib.cache['@arcade'][3], lib.cache['mame'][0])
         # Gravado no cache: o frontend aberto de novo ja tem os numeros.

@@ -60,6 +60,8 @@ COUNTS = "frontend-counts.json"
 # A pre-leitura das listas (Library.preload) descansa entre uma e outra: a
 # tela segue lisa enquanto ela le.
 PRELOAD_REST = 0.05
+# Os tipos de arte que a lista de um sistema mostra (a pre-carga lista a pasta de cada um).
+MEDIA_KINDS = ("snap", "box", "marquee", "logo", "preview")
 
 
 def load_web():
@@ -439,6 +441,11 @@ class Library:
                         self.games(cat)
                         if count:
                             self.set_count(cat["key"], count(cat))
+                        # A arte do sistema: a pasta de cada tipo listada aqui,
+                        # nao no primeiro quadro da lista dele (a troca de sistema
+                        # parava ate 0,15 s listando milhares de arquivos).
+                        for kind in MEDIA_KINDS:
+                            web.media_names(web.media_dir(kind, cat["key"]))
                     except Exception:  # uma pasta fora (o disco saiu): fica para a proxima
                         pass
                     time.sleep(PRELOAD_REST)
