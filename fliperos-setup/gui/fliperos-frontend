@@ -501,6 +501,11 @@ class Frontend:
         # comando dos jogos de link. Sem cabo, ele fica desligado.
         import felink
         self.felink = felink
+        # Os binarios dos emuladores (se tem os patches do FliperOS) sao lidos
+        # em segundo plano, ja na abertura: ler um de centenas de MB no meio de
+        # um quadro parava a tela na troca de sistema.
+        felink.NONBLOCKING = True
+        felink.warm_scans()
         self.link = felink.Link(fedata.web.player_home(), wire=None if self.shot else False)
         self.link_game = None      # o jogo da festa (a sala e a copia dos arquivos)
         self.link_sig = ()         # o que a rede mostra, para refazer a lista quando muda

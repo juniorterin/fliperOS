@@ -1175,6 +1175,59 @@ class CabinetNameTests(unittest.TestCase):
         self.assertEqual(host.snapshot()["members"][1]["name"], "A VERY LONG")
 
 
+class BinaryScanTests(unittest.TestCase):
+    """felink.binary_has le o binario de um emulador (dezenas ou centenas de
+    MB) para saber se ele tem o patch do FliperOS. No frontend, no meio de um
+    quadro, isso parava a tela por 0,3 s ou mais na troca de sistema: com
+    NONBLOCKING a leitura vai para uma thread."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.addCleanup(setattr, felink, "NONBLOCKING", felink.NONBLOCKING)
+        felink._patched.clear()
+        felink._scanning.clear()
+        self.path = os.path.join(self.tmp.name, "dolphin-emu")
+        with open(self.path, "wb") as f:
+            f.write(b"\0" * (3 << 20) + b"netplay_players" + b"\0" * 100)
+
+    def test_blocking_by_default_reads_at_once(self):
+        felink.NONBLOCKING = False
+        self.assertTrue(felink.binary_has(self.path, b"netplay_players"))
+        self.assertFalse(felink.binary_has(self.path, b"no-such-option"))
+        self.assertFalse(felink.binary_has(os.path.join(self.tmp.name, "missing"), b"x"))
+
+    def test_nonblocking_answers_no_until_the_thread_has_read_it(self):
+        felink.NONBLOCKING = True
+        first = felink.binary_has(self.path, b"netplay_players")
+        # Quem pergunta nao espera: "nao" ate a thread acabar, e depois o que o binario tem.
+        deadline = time.time() + 10
+        while time.time() < deadline and not felink.binary_has(self.path, b"netplay_players"):
+            time.sleep(0.01)
+        self.assertTrue(felink.binary_has(self.path, b"netplay_players"))
+        self.assertFalse(first and not felink._patched)       # (so conta o que a thread gravou)
+        self.assertEqual(len(felink._scanning), 0)
+        # Uma opcao que o binario nao tem: "nao", certo, sem ler de novo.
+        self.assertFalse(felink.binary_has(self.path, b"other"))
+        deadline = time.time() + 10
+        while time.time() < deadline and felink._scanning:
+            time.sleep(0.01)
+        self.assertEqual(len(felink._scanning), 0)
+        self.assertIn((self.path, os.stat(self.path).st_mtime, b"other"), felink._patched)
+
+    def test_the_frontend_warms_the_scans_when_it_opens(self):
+        src = (ROOT / "fliperos-setup/gui/fliperos-frontend").read_text()
+        self.assertIn("felink.NONBLOCKING = True\n        felink.warm_scans()", src)
+        warmed = []
+        saved = [felink.dolphin_netplay, felink.flycast_party, felink.flycast_lockstep, felink.mame_lockstep]
+        self.addCleanup(lambda: [setattr(felink, n, f) for n, f in zip(
+            ("dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep"), saved)])
+        for name in ("dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep"):
+            setattr(felink, name, lambda n=name: warmed.append(n))
+        felink.warm_scans()
+        self.assertEqual(warmed, ["dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep"])
+
+
 class NetplayTests(unittest.TestCase):
     SETS = frozenset({"xmen", "sf2"})
 

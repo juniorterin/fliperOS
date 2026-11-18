@@ -884,25 +884,59 @@ def netplay_core(system_key):
 
 
 _patched = {}
+_scanning = set()
+# O frontend desenha a 60 quadros por segundo: ler um binario de dezenas ou
+# centenas de MB no meio de um quadro (o Dolphin, o Flycast, o GroovyMAME, na
+# primeira vez que um jogo deles aparece na lista: a troca de sistema) parava a
+# tela por 0,3 s ou mais. Com NONBLOCKING (ligado pelo frontend), a leitura vai
+# para uma thread, a pergunta responde "nao" ate ela acabar e o aquecimento
+# (warm_scans, na abertura) ja a deixa pronta antes de alguem trocar de sistema.
+NONBLOCKING = False
 
 
-def binary_has(path, needle):
-    """O binario tem o texto (a opcao de um patch do FliperOS)? Lido uma vez
-    por arquivo e data."""
+def _scan(key, path, needle):
+    found, tail = False, b""
     try:
-        key = (path, os.stat(path).st_mtime, needle)
-    except OSError:
-        return False
-    if key not in _patched:
-        found, tail = False, b""
         with open(path, "rb") as f:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 if needle in tail + chunk:
                     found = True
                     break
                 tail = chunk[-32:]
-        _patched[key] = found
-    return _patched[key]
+    except OSError:
+        pass
+    _patched[key] = found
+    _scanning.discard(key)
+    return found
+
+
+def binary_has(path, needle):
+    """O binario tem o texto (a opcao de um patch do FliperOS)? Lido uma vez
+    por arquivo e data; com NONBLOCKING, lido em segundo plano (False ate ele
+    terminar)."""
+    try:
+        key = (path, os.stat(path).st_mtime, needle)
+    except OSError:
+        return False
+    if key in _patched:
+        return _patched[key]
+    if not NONBLOCKING:
+        return _scan(key, path, needle)
+    if key not in _scanning:
+        _scanning.add(key)
+        threading.Thread(target=_scan, args=(key, path, needle), daemon=True).start()
+    return False
+
+
+def warm_scans():
+    """Pergunta de uma vez o que o frontend vai perguntar a cada jogo (se o
+    Dolphin, o Flycast e o GroovyMAME instalados tem os patches do FliperOS),
+    em segundo plano, para a troca de sistema nao esperar a leitura."""
+    for ask in (dolphin_netplay, flycast_party, flycast_lockstep, mame_lockstep):
+        try:
+            ask()
+        except OSError:
+            pass
 
 
 def dolphin_netplay(path=None):
