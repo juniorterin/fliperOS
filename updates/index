@@ -87,3 +87,4 @@
 84	3507756fdaa9d55663cb589e6892fe1cf83716f9	bad0cc501d40490a1f949757f8ed0d055afac05c3f839f191ddcfc086edba996	no	Custom games hide the joystick when keys are mapped; haptic feedback on gamepads; hourly cloud backup
 85	422a84a13f1edcfcfa53a085d94e038a9ab8d44a	bbe7c9d13feedd333e9106cf904f69e561dbda51e2cf66220bff87d7ebd13b13	no	A second or external disk, a smoother frontend, the whole hardware in the web panel, Wii in 4:3
 86	bee52975e0dd4d58ff7d52ee1e64fb78515cbf3f	1bfef5c020333d8d6331e94db4bb4a2f7ff4b8d3850d5d4a1cbb00456f5012fa	no	Fightcade's Naomi games and 32-bit Wine fixes, the flicker filter in PortProton games, a menu that stays visible, custom game group logos and renaming
+87	bd672d573de1deeb60a1441011b43644e3d08362	203e7ba49b334ccf938369700907a9d4215be05f024ef0e162d61a0a3241c63a	no	Unlocked arcade memory for the MAME 2010 core, and sharp group buttons in the web panel's custom games
