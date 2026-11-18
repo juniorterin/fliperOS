@@ -1,0 +1,20 @@
+# Ao desligar ou reiniciar, o backup na nuvem (fliperos-cloud backup). Nao faz
+# nada no boot: o trabalho e o ExecStop. Com o After= ele para antes da rede
+# e do DNS, que o envio ainda usa. O limite de 3 minutos impede que uma nuvem
+# lenta segure o desligamento.
+[Unit]
+Description=FliperOS: cloud backup when powering off
+ConditionPathExists=/etc/fliperos/installed
+After=NetworkManager.service wpa_supplicant.service systemd-resolved.service local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=fliperos
+Environment=HOME=/home/fliperos
+ExecStart=/bin/true
+ExecStop=/opt/fliperos/bin/fliperos-cloud backup
+TimeoutStopSec=3min
+
+[Install]
+WantedBy=multi-user.target

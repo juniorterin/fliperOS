@@ -753,6 +753,15 @@ for unit in fliperos-update-check.service fliperos-update-shutdown.service; do
 done
 ln -sfn /etc/systemd/system/fliperos-update-shutdown.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-update-shutdown.service"
+# O backup na nuvem de hora em hora e ao desligar (config/fliperos-cloud
+# backup; so age com o automatico ligado e uma conta configurada).
+for unit in fliperos-cloud-backup.service fliperos-cloud-backup.timer fliperos-cloud-shutdown.service; do
+  install -Dm644 "$src/config/$unit" "$root/etc/systemd/system/$unit"
+done
+ln -sfn /etc/systemd/system/fliperos-cloud-backup.timer \
+  "$root/etc/systemd/system/timers.target.wants/fliperos-cloud-backup.timer"
+ln -sfn /etc/systemd/system/fliperos-cloud-shutdown.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-cloud-shutdown.service"
 # O compartilhamento (o smbd e o nmbd, que sozinho levava uns 13 s no boot)
 # sobe depois da primeira tela ate a pessoa mudar.
 if ! grep -q '^samba=' "$root/etc/fliperos/services.conf" 2> /dev/null; then

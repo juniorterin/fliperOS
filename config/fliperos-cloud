@@ -18,7 +18,8 @@
 #                                         os controles, a GunCon, os perfis da OSD, as
 #                                         custom folders...)
 #   fliperos-cloud sync [push|pull|both]  agora (o padrao e both: os dois lados, o mais novo vence)
-#   fliperos-cloud settings               (ao sair do Setup) com o automatico ligado, envia ja as configuracoes
+#   fliperos-cloud backup [hourly]        o envio de hora em hora (hourly: nao no meio de um jogo) e o de ao desligar
+#   fliperos-cloud settings             (ao sair do Setup) com o automatico ligado, envia ja as configuracoes
 #   fliperos-cloud watch PID              (fliperos-kms-run/x11-run) espera o jogo fechar e, com o
 #                                         automatico ligado, sincroniza os hi-scores e os saves; as
 #                                         configuracoes uma vez por dia
@@ -280,9 +281,16 @@ copy_run() {
 }
 
 state_get() { sed -n "s/^$1=//p" "$STATE" 2> /dev/null | tail -1; }
-# O automatico vem ligado: so fica desligado se a pessoa o desligou.
+# O automatico vem ligado. Uma vez (auto_v2), tambem para quem o tinha
+# deixado desligado antes de ele virar o padrao; depois disso, so fica
+# desligado se a pessoa o desligar (o "auto on|off" grava o auto_v2).
 auto_get() {
   local v
+  if [[ -z $(state_get auto_v2) ]]; then
+    state_set auto on 2> /dev/null && state_set auto_v2 1 2> /dev/null
+    echo on
+    return 0
+  fi
   v=$(state_get auto)
   echo "${v:-on}"
 }
@@ -699,6 +707,7 @@ case ${1:-} in
   auto)
     [[ ${2:-} == on || ${2:-} == off ]] || exit 2
     state_set auto "$2"
+    state_set auto_v2 1
     ;;
   what)
     [[ ${2:-} =~ ^((hiscores|saves|config)(,(hiscores|saves|config))*)?$ ]] || exit 2
@@ -706,6 +715,27 @@ case ${1:-} in
     ;;
   sync) cmd_sync "${2:-both}" "${3:-}" ;;
   watch) cmd_watch "${2:-}" ;;
+  backup)
+    # O backup de hora em hora (fliperos-cloud-backup.timer) e o de ao
+    # desligar (fliperos-cloud-shutdown.service): so enviam, de todos os
+    # grupos. Com o automatico desligado, nada.
+    [[ $(auto_get) == on ]] && installed && [[ -n $(remote_kind) ]] || exit 0
+    uid=$(id -u)
+    if [[ -z ${XDG_RUNTIME_DIR:-} && -d /run/user/$uid ]]; then
+      export XDG_RUNTIME_DIR=/run/user/$uid
+    fi
+    groups=$(state_get what)
+    groups=${groups:-hiscores,saves,config}
+    [[ $groups == none ]] && exit 0
+    if [[ ${2:-} == hourly ]]; then
+      # No meio de um jogo nao: o rclone competiria pelo disco e pela CPU
+      # (o vigia do jogo sincroniza ao fechar). Tenta de novo na proxima hora.
+      compgen -G "${XDG_RUNTIME_DIR:-/tmp}/fliperos-cloud-watch-*" > /dev/null && exit 0
+      cmd_sync push "$groups" auto > /dev/null
+    else
+      cmd_sync push "$groups" > /dev/null
+    fi
+    ;;
   settings)
     # Ao sair do Setup: com o automatico ligado e as configuracoes na lista,
     # envia as configuracoes agora (sem esperar o dia do vigia). O intervalo

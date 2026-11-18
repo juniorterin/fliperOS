@@ -1,0 +1,16 @@
+# O backup na nuvem de hora em hora (fliperos-cloud-backup.timer): so envia,
+# e so com a sincronizacao automatica ligada e uma conta configurada. Como o
+# jogador (o rclone.conf e dele), com prioridade baixa para nao pesar no jogo.
+[Unit]
+Description=FliperOS: hourly cloud backup
+ConditionPathExists=/etc/fliperos/installed
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=fliperos
+Environment=HOME=/home/fliperos
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+ExecStart=/opt/fliperos/bin/fliperos-cloud backup hourly

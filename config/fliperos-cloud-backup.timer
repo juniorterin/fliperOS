@@ -1,0 +1,13 @@
+# Uma vez por hora, 15 minutos depois do boot a primeira. Se o gabinete
+# estava desligado na hora marcada, nao recupera: o proximo e na hora seguinte.
+[Unit]
+Description=FliperOS: hourly cloud backup
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Unit=fliperos-cloud-backup.service
+
+[Install]
+WantedBy=timers.target

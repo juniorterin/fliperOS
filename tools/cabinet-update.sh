@@ -286,6 +286,9 @@ systemctl try-restart fliperos-stream.service 2> /dev/null || true
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.
 glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true
+# O backup na nuvem de hora em hora e ao desligar: as unidades novas ja
+# valem sem reiniciar.
+systemctl start fliperos-cloud-backup.timer fliperos-cloud-shutdown.service 2> /dev/null || true
 
 echo "== Terminals: Alacritty only"
 # O metapacote lxde depende do lxterminal: os componentes dele (a mesma lista
