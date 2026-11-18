@@ -254,6 +254,16 @@ select.fld { -webkit-appearance: auto; appearance: auto; }
 .st-list:empty { display: none; }
 .st-list + .st-list { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--hair); }
 .st-nic { display: grid; gap: 2px; }
+/* O hardware: a maquina, os discos, o som, os aparelhos ligados e o PCI. */
+.st-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
+.st-machine, .st-storage, .st-sound, .st-devices { grid-column: span 6; }
+.st-pci { grid-column: span 12; }
+.st-kv .val.wrap { white-space: normal; overflow-wrap: anywhere; }
+.st-card .st-nic + .st-nic { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hair); }
+.hw-part { padding-left: 12px; font-size: 13px; overflow-wrap: anywhere; }
+.hw-tags { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.st-pci .st-more { margin-top: 0; }
+.st-pci td.mono { font: 13px/1.4 ui-monospace, "JetBrains Mono", monospace; white-space: nowrap; }
 @media (max-width: 1180px) {
   .st-cpu { grid-column: span 12; }
   .st-mem, .st-gpu-card, .st-temps, .st-net { grid-column: span 6; }

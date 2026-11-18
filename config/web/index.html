@@ -646,6 +646,12 @@
            nucleos em VU, a memoria, a GPU, as temperaturas, os discos e a
            rede (system.js, renderStatus). -->
       <div class="sub" data-sub="status">
+        <!-- Copiar o relatorio da maquina (hardware, todos os ajustes do
+             Setup, fliperos.conf e pacotes) para colar num pedido de ajuda. -->
+        <div class="st-actions">
+          <button id="hw-copy" class="btn small" type="button"><svg class="g"><use href="icons.svg#g-copy"/></svg><span data-t="hw_copy"></span></button>
+          <span id="hw-note" class="dim" role="status" data-t="hw_copy_note"></span>
+        </div>
         <div class="st-dash">
           <section class="st-card st-tube" aria-labelledby="h-video">
             <h3 id="h-video" data-t="st_tube"></h3>
@@ -690,6 +696,27 @@
             <h3 id="h-net" data-t="st_disknet"></h3>
             <div id="disks" class="st-list"></div>
             <div id="network" class="st-list"></div>
+          </section>
+          <!-- O hardware (/api/hardware, system.js hwLoad): so lido ao abrir. -->
+          <section class="st-card st-machine" aria-labelledby="h-machine">
+            <h3 id="h-machine" data-t="hw_machine"></h3>
+            <div id="hw-machine" class="st-list"></div>
+          </section>
+          <section class="st-card st-storage" aria-labelledby="h-storage">
+            <h3 id="h-storage" data-t="hw_storage"></h3>
+            <div id="hw-storage" class="st-list"></div>
+          </section>
+          <section class="st-card st-sound" aria-labelledby="h-sound">
+            <h3 id="h-sound" data-t="hw_sound"></h3>
+            <div id="hw-sound" class="st-list"></div>
+          </section>
+          <section class="st-card st-devices" aria-labelledby="h-devices">
+            <h3 id="h-devices" data-t="hw_devices"></h3>
+            <div id="hw-devices" class="st-list"></div>
+          </section>
+          <section class="st-card st-pci" aria-labelledby="h-pci">
+            <h3 id="h-pci" data-t="hw_pci"></h3>
+            <div id="hw-pci"></div>
           </section>
         </div>
       </div>

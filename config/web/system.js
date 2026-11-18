@@ -325,6 +325,89 @@ document.addEventListener("animationend", (event) => {
 });
 setInterval(banner, 5000);
 
+// ── O hardware (Status) ──────────────────────────────────────────
+// /api/hardware: a placa-mae, a CPU (com o socket), a memoria, os discos, o
+// som (e qual saida esta em uso), os aparelhos ligados e o PCI com os
+// enderecos. Lido ao abrir a aba. O botao copia o relatorio inteiro (/api/report).
+let hwData = null;
+const hwKv = (label, value) => el("div", { class: "st-kv" }, el("span", {}, label), el("span", { class: "val wrap" }, value));
+const hwSet = (box, rows) => box.replaceChildren(...(rows.length ? rows : [el("span", { class: "dim" }, t("hw_none"))]));
+const hwJoin = (...parts) => parts.filter((x) => x !== "" && x != null).join(" ");
+
+async function hwLoad() {
+  const res = await api("/api/hardware");
+  if (!res.ok) return;
+  hwData = await res.json();
+  hwRender();
+}
+
+function hwRender() {
+  const d = hwData;
+  if (!d || d.error) return;
+  const b = d.board || {}, c = d.cpu || {};
+  const rows = [];
+  const board = hwJoin(b.vendor, b.name, b.version);
+  if (board) rows.push(hwKv(t("hw_board"), board));
+  const system = hwJoin(b.system_vendor, b.product);
+  if (system && system !== board) rows.push(hwKv(t("hw_system"), system));
+  if (b.bios_version) rows.push(hwKv("BIOS", hwJoin(b.bios_vendor, b.bios_version, b.bios_date)));
+  if (c.model) rows.push(hwKv("CPU", c.model));
+  if (c.socket || c.socket_designation) rows.push(hwKv(t("hw_socket"), hwJoin(c.socket, c.socket_designation && "(" + c.socket_designation + ")")));
+  rows.push(hwKv(t("hw_cores"), hwJoin((c.sockets || "?") + " × " + (c.cores_per_socket || "?") + " " + t("hw_cores_word"), "· " + c.threads + " " + t("hw_threads"),
+    c.max_mhz ? "· " + c.max_mhz + " MHz" : "")));
+  const cache = Object.entries(c.cache || {}).map(([k, v]) => k + " " + v).join(", ");
+  if (cache) rows.push(hwKv("Cache", cache));
+  (d.memory || []).forEach((m) => rows.push(hwKv(t("hw_ram") + (m.locator ? " " + m.locator : ""), hwJoin(m.size, m.type, m.speed, m.maker))));
+  if (d.kernel) rows.push(hwKv(t("hw_kernel"), hwJoin(d.kernel.os, d.kernel.release)));
+  hwSet($("hw-machine"), rows);
+
+  hwSet($("hw-storage"), (d.storage || []).map((disk) => el("div", { class: "st-nic" },
+    hwKv(hwJoin(disk.vendor, disk.model) || disk.name, bytes(disk.size)),
+    el("div", { class: "dim" }, hwJoin("/dev/" + disk.name, "·", (disk.tran || "?").toUpperCase(), disk.kind.toUpperCase(), disk.removable ? "· " + t("hw_removable") : "")),
+    ...disk.parts.map((p) => el("div", { class: "dim hw-part" }, hwJoin(p.name, bytes(p.size), p.fstype, p.label, p.mount && "→ " + p.mount))))));
+
+  const sound = (d.sound && d.sound.cards) || [];
+  hwSet($("hw-sound"), sound.map((card) => el("div", { class: "st-nic" },
+    el("div", { class: "st-kv" }, el("b", {}, card.name),
+      el("span", { class: "hw-tags" },
+        card.selected ? el("span", { class: "st-chip drv" }, t("hw_output_chosen")) : "",
+        card.playing ? el("span", { class: "st-chip b15" }, t("hw_playing")) : "")),
+    el("div", { class: "dim" }, hwJoin("card " + card.index, "·", card.driver, "·", card.bus.toUpperCase(), card.address)),
+    ...card.devices.map((x) => el("div", { class: "dim hw-part" }, "hw:" + card.index + "," + x.device + " · " + x.name)))));
+
+  const devices = [];
+  const group = (title, items) => { if (items.length) devices.push(el("div", { class: "st-nic" }, el("b", {}, title), ...items)); };
+  group(t("hw_monitors"), (d.monitors || []).map((m) => hwKv(m.connector, hwJoin(m.maker, m.name, m.year && "(" + m.year + ")", m.mode))));
+  group(t("hw_input"), (d.input || []).map((i) => hwKv(i.name, hwJoin(i.kind, "·", i.bus, i.ids))));
+  group("USB", (d.usb || []).map((u) => hwKv(u.name || u.ids, u.ids)));
+  group(t("hw_network"), (d.network || []).map((n) => hwKv(n.name, hwJoin(n.kind, "·", n.driver, n.address))));
+  if (d.bluetooth) group("Bluetooth", [hwKv(t("hw_adapter"), t("hw_present"))]);
+  hwSet($("hw-devices"), devices);
+
+  const pci = d.pci || [];
+  const table = el("table", {}, el("thead", {}, el("tr", {}, ...["hw_addr", "hw_class", "hw_device", "hw_driver"].map((k) => el("th", {}, t(k))))),
+    el("tbody", {}, ...pci.map((p) => el("tr", {}, el("td", { class: "mono" }, p.slot), el("td", {}, p.class),
+      el("td", {}, hwJoin(p.vendor, p.device), el("small", { class: "dim" }, " [" + p.ids + "]")), el("td", {}, p.driver || "-")))));
+  $("hw-pci").replaceChildren(pci.length ? el("details", { class: "st-more", open: "" },
+    el("summary", {}, icon("g-chevd"), el("span", {}, t("hw_pci_count").replace("%n", pci.length))),
+    el("div", { class: "table-wrap" }, table)) : el("span", { class: "dim" }, t("hw_none")));
+}
+
+// Copiar o relatorio: o hardware e todos os ajustes do Setup num texto so.
+$("hw-copy").addEventListener("click", async () => {
+  const button = $("hw-copy");
+  button.disabled = true;
+  try {
+    const res = await api("/api/report");
+    if (!res.ok) { toast(t("hw_copy_fail"), "bad"); return; }
+    await copyText(await res.text(), null);
+  } catch (e) {
+    toast(t("hw_copy_fail"), "bad");
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function loadLogs() {
   const res = await api("/api/logs");
   const data = await res.json();

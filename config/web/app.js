@@ -119,6 +119,7 @@ function switchLang() {
   translate();
   showPage(area + (sub ? "/" + sub : ""));
   if (lastStatus) render(lastStatus);
+  if (hwData) hwRender();
   renderSystems();
   renderChips();
   renderRails();
@@ -212,6 +213,7 @@ function showPage(hash) {
   else if (page === "lab") loadLab().catch(() => {});
   else if (page === "romfilter") { if (!rf.loaded) loadRomFilter("").catch(() => {}); }
   else if (page === "logs") loadLogs().catch(() => {});
+  else if (page === "status") hwLoad().catch(() => {});
   else if (page === "customgames") cgMount($("cg-area")).catch(() => {});
   else if (page === "terminal" && termFit) requestAnimationFrame(() => termFit.fit());
   if (a === "live") {

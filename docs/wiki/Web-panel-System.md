@@ -22,6 +22,16 @@ Refreshed every second:
 - **Temperatures:** each sensor as a bar up to the part's limit (yellow near it, red at it).
 - **Disks and network:** each mounted disk, each interface with its IPs, the traffic and the Wi-Fi signal.
 
+Read once when the tab opens (not every second):
+
+- **Machine:** the motherboard and BIOS, the CPU with its **socket** and cores, the memory modules (size, type, speed, maker) and the kernel.
+- **Storage devices:** each disk with its model, size, connection (SATA, NVMe, USB), SSD or HDD, and its partitions.
+- **Sound:** each sound card with its bus address (PCI or USB) and outputs; the one **chosen in Setup > Audio** is marked *output in use*, and a card that is playing now says so.
+- **Connected hardware:** the monitors (name, maker and year from the EDID, current mode), controllers, keyboards and mice, USB devices, network adapters and Bluetooth.
+- **PCI devices:** every device with its **address** (`0000:01:00.0`), type, name, ids and driver.
+
+**Copy full report**, at the top, copies all of this as one Markdown text, plus the video in use, **every Setup setting** with its value, `fliperos.conf` (without passwords or tokens), and the versions of the FliperOS packages, the kernel and Mesa. Paste it into a help request. It has no IP or MAC addresses.
+
 ## Processes and logs
 
 The processes using the most CPU, and the logs: those of `/opt/fliperos/logs` (each emulator and frontend, the cloud backup, OpenBOR, DuckStation…), the Setup's and the updates'. The first place to look when a game doesn't open.

@@ -20,6 +20,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/login   {"user", "password"}   GET /api/me   POST /api/logout
     GET  /api/cabinets  este gabinete e os outros FliperOS da rede (Avahi), sem login
     GET  /api/status  o estado inteiro (o painel pede a cada 2 s)
+    GET  /api/hardware  a placa-mae, a CPU, a memoria, o PCI com os enderecos, o som,
+                      os discos, os aparelhos USB e de entrada, os monitores
+    GET  /api/report  o relatorio da maquina em Markdown (hardware + todos os
+                      ajustes do Setup + fliperos.conf sem senhas + pacotes)
     GET  /api/logs    os logs    GET /api/log?name=NOME&lines=N
     POST /api/volume  {"action": "up"|"down"|"mute"} ou {"set": 0..100}
     GET  /api/systems as pastas com jogos
@@ -515,6 +519,381 @@ def gpus():
                 row["watts"] = round(power / 1e6, 1)
         rows.append(row)
     return rows
+
+
+# ── O hardware da maquina (Sistema > Status) ──────────────────────
+# O que a placa-mae, a CPU, a memoria, o PCI, o som, os discos e os aparelhos
+# ligados dizem de si: a pagina Status os mostra e o botao "Copiar relatorio"
+# os junta a todos os ajustes do Setup num texto so, para colar num pedido de
+# ajuda. Cada leitura que falta (um comando que nao existe, uma permissao)
+# deixa a parte vazia: nenhuma derruba as outras.
+DMI = ENV("FLIPEROS_DMI", os.path.join(SYS, "class/dmi/id"))
+PATCH_LEVEL = ENV("FLIPEROS_UPDATE_LEVEL", "/etc/fliperos/patch-level")
+SECRET_KEY = re.compile(r"pass|token|secret|api_?key|auth|cookie|credential", re.I)
+PCI_SLOT = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
+CHASSIS = {"3": "Desktop", "4": "Low profile desktop", "6": "Mini tower", "7": "Tower", "8": "Portable", "9": "Laptop",
+           "10": "Notebook", "13": "All in one", "15": "Space-saving", "16": "Lunch box", "23": "Rack mount",
+           "31": "Convertible", "35": "Mini PC", "36": "Stick PC"}
+
+
+def cmd_out(argv, timeout=8):
+    """A saida de um comando, ou "" se ele nao existe, falha ou demora."""
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, errors="replace", timeout=timeout).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def parse_lspci(text):
+    """lspci -D -nn -vmm -k: um aparelho por bloco; o endereco, a classe, o
+    fabricante, o modelo, os ids (fabricante:modelo) e o driver em uso."""
+    rows = []
+    for block in re.split(r"\n\s*\n", text.strip()):
+        f = {}
+        for line in block.splitlines():
+            key, sep, value = line.partition(":")
+            if sep:
+                f[key.strip()] = value.strip()
+        if not PCI_SLOT.match(f.get("Slot", "")):
+            continue
+        tail = re.compile(r"\s*\[([0-9a-f]{4})\]$")
+        ids = [(tail.search(f.get(k, "")) or [None, ""])[1] for k in ("Vendor", "Device")]
+        rows.append({"slot": f["Slot"], "class": tail.sub("", f.get("Class", "")), "vendor": tail.sub("", f.get("Vendor", "")),
+                     "device": tail.sub("", f.get("Device", "")), "ids": ":".join(ids) if all(ids) else "",
+                     "subsystem": " ".join(x for x in (tail.sub("", f.get("SVendor", "")), tail.sub("", f.get("SDevice", ""))) if x),
+                     "driver": f.get("Driver", ""), "module": f.get("Module", ""), "rev": f.get("Rev", "")})
+    return rows
+
+
+def parse_lsblk(text):
+    """lsblk -J -b: os discos (nao os loop, ram e zram) com o modelo, o
+    tamanho, a ligacao (sata, nvme, usb), se gira e as particoes."""
+    try:
+        tree = json.loads(text or "{}").get("blockdevices") or []
+    except ValueError:
+        return []
+    disks = []
+    for d in tree:
+        name = d.get("name") or ""
+        if d.get("type") != "disk" or re.match(r"(loop|ram|zram|sr|fd)", name):
+            continue
+
+        def part(p):
+            return {"name": p.get("name") or "", "size": int(p.get("size") or 0), "fstype": p.get("fstype") or "",
+                    "label": p.get("label") or "", "mount": p.get("mountpoint") or ""}
+        parts = []
+        for p in d.get("children") or []:
+            parts.append(part(p))
+            parts.extend(part(c) for c in p.get("children") or [])
+        disks.append({"name": name, "model": (d.get("model") or "").strip(), "vendor": (d.get("vendor") or "").strip(),
+                      "size": int(d.get("size") or 0), "tran": d.get("tran") or "",
+                      "kind": "ssd" if str(d.get("rota")) in ("0", "False", "false") else "hdd",
+                      "removable": str(d.get("rm")) in ("1", "True", "true"), "parts": parts})
+    return disks
+
+
+def parse_aplay(text):
+    """aplay -l: {placa: [(dispositivo, nome)]}."""
+    out = {}
+    for m in re.finditer(r"^card (\d+): [^\[]*\[[^\]]*\], device (\d+): [^\[]*\[([^\]]*)\]", text, re.M):
+        out.setdefault(int(m.group(1)), []).append((int(m.group(2)), m.group(3)))
+    return out
+
+
+def parse_lsusb(text):
+    """lsusb: os aparelhos USB, sem os hubs raiz (1d6b) dos controladores."""
+    rows = []
+    for m in re.finditer(r"^Bus (\d+) Device (\d+): ID ([0-9a-f]{4}):([0-9a-f]{4}) ?(.*)$", text, re.M):
+        if m.group(3) == "1d6b":
+            continue
+        rows.append({"bus": m.group(1), "device": m.group(2), "ids": m.group(3) + ":" + m.group(4), "name": m.group(5).strip()})
+    return rows
+
+
+INPUT_SKIP = re.compile(r"power button|sleep button|video bus|pc speaker|^hda |^hdmi|lid switch|fliperos|uinput|virtual", re.I)
+INPUT_BUS = {"0003": "USB", "0005": "Bluetooth", "0011": "PS/2", "0010": "ISA", "0019": "Host"}
+
+
+def parse_inputs(text):
+    """/proc/bus/input/devices: os controles, teclados e mouses de verdade
+    (sem os botoes da placa nem os virtuais que o FliperOS cria)."""
+    rows = []
+    for block in re.split(r"\n\s*\n", text.strip()):
+        f = {}
+        for line in block.splitlines():
+            key, _, value = line.partition(": ")
+            f[key.strip()] = value.strip()
+        name = re.sub(r"^Name=", "", f.get("N", "")).strip('"')
+        ident = dict(re.findall(r"(Bus|Vendor|Product)=([0-9a-f]{4})", f.get("I", "")))
+        handlers = f.get("H", "").replace("Handlers=", "").split()
+        if not name or INPUT_SKIP.search(name) or ident.get("Bus") == "0006":
+            continue
+        kind = "joystick" if any(h.startswith("js") for h in handlers) else "mouse" if any(
+            h.startswith("mouse") for h in handlers) else "keyboard" if "kbd" in handlers else "other"
+        rows.append({"name": name, "bus": INPUT_BUS.get(ident.get("Bus", ""), ident.get("Bus", "")),
+                     "ids": "%s:%s" % (ident.get("Vendor", "????"), ident.get("Product", "????")), "kind": kind})
+    return rows
+
+
+def parse_dmidecode(text, title):
+    """dmidecode: os blocos com esse titulo ("Processor Information",
+    "Memory Device") como {campo: valor}."""
+    out = []
+    for block in re.split(r"\n\s*\n", text):
+        # A primeira linha de cada bloco e "Handle 0x0004, DMI type 4, 48 bytes".
+        lines = [l for l in block.strip("\n").splitlines() if not l.startswith("Handle ")]
+        if not lines or lines[0].strip() != title:
+            continue
+        row = {}
+        for line in lines[1:]:
+            key, sep, value = line.strip().partition(":")
+            if sep:
+                row[key.strip()] = value.strip()
+        out.append(row)
+    return out
+
+
+def edid_info(data):
+    """O que o EDID de um monitor diz: o nome, o fabricante (3 letras), o
+    ano, o tamanho em cm e se a entrada e digital."""
+    if len(data) < 128 or data[:8] != b"\x00\xff\xff\xff\xff\xff\xff\x00":
+        return {}
+    code = (data[8] << 8) | data[9]
+    maker = "".join(chr(64 + ((code >> s) & 31)) for s in (10, 5, 0))
+    name = ""
+    for off in (54, 72, 90, 108):
+        block = data[off:off + 18]
+        if block[:4] == b"\x00\x00\x00\xfc":
+            name = block[5:18].split(b"\n")[0].decode("ascii", "replace").strip()
+    return {"name": name, "maker": maker, "year": 1990 + data[17] if data[17] else 0,
+            "size_cm": [data[21], data[22]] if data[21] and data[22] else [], "digital": bool(data[20] & 0x80)}
+
+
+def hw_board():
+    def dmi(name):
+        return read(os.path.join(DMI, name)).strip()
+    chassis = dmi("chassis_type")
+    return {"vendor": dmi("board_vendor"), "name": dmi("board_name"), "version": dmi("board_version"),
+            "system_vendor": dmi("sys_vendor"), "product": dmi("product_name"), "product_version": dmi("product_version"),
+            "bios_vendor": dmi("bios_vendor"), "bios_version": dmi("bios_version"), "bios_date": dmi("bios_date"),
+            "chassis": CHASSIS.get(chassis, chassis)}
+
+
+def hw_cpu():
+    lscpu = {}
+    for line in cmd_out(["lscpu"]).splitlines():
+        key, sep, value = line.partition(":")
+        if sep:
+            lscpu[key.strip()] = value.strip()
+    model = lscpu.get("Model name") or (re.search(r"^model name\s*:\s*(.+)$", read(os.path.join(PROC, "cpuinfo")), re.M) or [0, ""])[1]
+    socket_type, designation, speed = "", "", ""
+    for c in parse_dmidecode(cmd_out(["dmidecode", "-t", "processor"]), "Processor Information"):
+        upgrade = c.get("Upgrade", "")
+        if upgrade and upgrade.lower() not in ("other", "unknown", "none"):
+            socket_type = upgrade
+        designation = designation or c.get("Socket Designation", "")
+        speed = speed or c.get("Max Speed", "")
+        model = model or c.get("Version", "")
+    return {"model": model.strip(), "vendor": lscpu.get("Vendor ID", ""), "sockets": lscpu.get("Socket(s)", ""),
+            "cores_per_socket": lscpu.get("Core(s) per socket", ""), "threads_per_core": lscpu.get("Thread(s) per core", ""),
+            "threads": os.cpu_count() or 0, "max_mhz": (lscpu.get("CPU max MHz") or "").split(".")[0],
+            "socket": socket_type, "socket_designation": designation, "max_speed": speed,
+            "family": " / ".join(x for x in (lscpu.get("CPU family"), lscpu.get("Model"), lscpu.get("Stepping")) if x),
+            "cache": {k: lscpu[k] for k in ("L1d cache", "L1i cache", "L2 cache", "L3 cache") if lscpu.get(k)}}
+
+
+def hw_memory():
+    modules = []
+    for m in parse_dmidecode(cmd_out(["dmidecode", "-t", "memory"]), "Memory Device"):
+        size = m.get("Size", "")
+        if not size or size.lower().startswith(("no module", "not installed", "unknown")):
+            continue
+        modules.append({"locator": m.get("Locator", ""), "size": size, "type": m.get("Type", ""),
+                        "speed": m.get("Configured Memory Speed") or m.get("Speed", ""), "maker": m.get("Manufacturer", ""),
+                        "part": m.get("Part Number", "")})
+    return modules
+
+
+def hw_sound():
+    """As placas de som (o /proc/asound/cards e o aplay -l), de onde cada uma
+    liga (PCI ou USB), a que o Setup escolheu (alsa= no fliperos.conf, "placa,
+    dispositivo") e as que tocam agora."""
+    conf = read_conf()
+    chosen = (conf.get("alsa") or "0,0").split(",")
+    chosen_card = int(chosen[0]) if chosen[0].isdigit() else 0
+    devices = parse_aplay(cmd_out(["aplay", "-l"]))
+    playing = set()
+    for path in glob.glob(os.path.join(PROC, "asound/card[0-9]*/pcm*p/sub*/status")):
+        if read(path).startswith("state: RUNNING"):
+            playing.add(int(re.search(r"card(\d+)", path).group(1)))
+    cards = []
+    for m in re.finditer(r"^\s*(\d+) \[([^\]]*)\]:\s*(\S+)\s*-\s*(.*)$", read(os.path.join(PROC, "asound/cards")), re.M):
+        index = int(m.group(1))
+        real = os.path.realpath(os.path.join(SYS, "class/sound/card%d/device" % index))
+        slot = os.path.basename(real)
+        cards.append({"index": index, "id": m.group(2).strip(), "driver": m.group(3), "name": m.group(4).strip(),
+                      "bus": "pci" if PCI_SLOT.match(slot) else "usb" if "/usb" in real else "other",
+                      "address": slot, "devices": [{"device": d, "name": n} for d, n in devices.get(index, [])],
+                      "selected": index == chosen_card, "playing": index in playing})
+    return {"cards": cards, "chosen": "%d,%s" % (chosen_card, chosen[1] if len(chosen) > 1 else "0")}
+
+
+def hw_monitors():
+    rows = []
+    for path in sorted(glob.glob(os.path.join(SYS, "class/drm/card[0-9]*-*"))):
+        if read(os.path.join(path, "status")).strip() != "connected":
+            continue
+        try:
+            with open(os.path.join(path, "edid"), "rb") as f:
+                edid = edid_info(f.read())
+        except OSError:
+            edid = {}
+        modes = read(os.path.join(path, "modes")).split()
+        rows.append(dict(edid, connector=os.path.basename(path), mode=modes[0] if modes else ""))
+    return rows
+
+
+def hw_network():
+    rows = []
+    for path in sorted(glob.glob(os.path.join(SYS, "class/net/*"))):
+        real = os.path.realpath(path)
+        name = os.path.basename(path)
+        if name == "lo" or "/virtual/" in real:
+            continue
+        dev = os.path.realpath(os.path.join(path, "device"))
+        rows.append({"name": name, "kind": "wifi" if os.path.isdir(os.path.join(path, "wireless")) else "ethernet",
+                     "driver": os.path.basename(os.path.realpath(os.path.join(path, "device/driver"))),
+                     "address": os.path.basename(dev) if os.path.isdir(dev) else ""})
+    return rows
+
+
+def hardware():
+    return {"board": hw_board(), "cpu": hw_cpu(), "memory": hw_memory(),
+            "pci": parse_lspci(cmd_out(["lspci", "-D", "-nn", "-vmm", "-k"])), "sound": hw_sound(),
+            "storage": parse_lsblk(cmd_out(["lsblk", "-J", "-b", "-o", "NAME,TYPE,SIZE,MODEL,VENDOR,TRAN,ROTA,RM,FSTYPE,LABEL,MOUNTPOINT"])),
+            "usb": parse_lsusb(cmd_out(["lsusb"])), "input": parse_inputs(read(os.path.join(PROC, "bus/input/devices"))),
+            "monitors": hw_monitors(), "network": hw_network(),
+            "bluetooth": bool(glob.glob(os.path.join(SYS, "class/bluetooth/hci*"))),
+            "kernel": {"release": os.uname().release, "cmdline": read(os.path.join(PROC, "cmdline")).strip(),
+                       "os": (re.search(r'^PRETTY_NAME="?([^"\n]*)', read("/etc/os-release"), re.M) or [0, ""])[1]}}
+
+
+def read_conf():
+    """O fliperos.conf como {chave: valor}."""
+    out = {}
+    for line in read(CONF).splitlines():
+        if line.strip() and not line.startswith("#") and "=" in line:
+            key, _, value = line.partition("=")
+            out[key.strip()] = value.strip()
+    return out
+
+
+def human_bytes(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1000 or unit == "TB":
+            return ("%d %s" % (n, unit)) if unit == "B" else ("%.1f %s" % (n, unit)).replace(".0 ", " ")
+        n /= 1000.0
+
+
+def report_text(hw, status, setup_rows, packages):
+    """O relatorio da maquina em Markdown, para colar num pedido de ajuda:
+    a versao, o hardware (placa-mae, CPU, memoria, PCI com os enderecos, som,
+    discos, USB, controles, monitores, rede), o video em uso, todos os ajustes
+    do Setup, o fliperos.conf (sem senhas) e os pacotes. Sem enderecos IP nem
+    MAC."""
+    board, cpu = hw.get("board") or {}, hw.get("cpu") or {}
+    lines = ["# FliperOS machine report", ""]
+
+    def kv(label, value):
+        if value not in ("", None, [], {}):
+            lines.append("- **%s:** %s" % (label, value))
+    lines += ["## FliperOS", ""]
+    kv("Setup version", status.get("version"))
+    kv("Update level", status.get("level"))
+    kv("Operating system", (hw.get("kernel") or {}).get("os"))
+    kv("Kernel", (hw.get("kernel") or {}).get("release"))
+    kv("Uptime", "%d min" % (status["uptime"] // 60) if status.get("uptime") else "")
+    kv("Kernel command line", "`%s`" % (hw.get("kernel") or {}).get("cmdline", "") if (hw.get("kernel") or {}).get("cmdline") else "")
+    lines += ["", "## Machine", ""]
+    kv("Motherboard", " ".join(x for x in (board.get("vendor"), board.get("name"), board.get("version")) if x))
+    kv("System", " ".join(x for x in (board.get("system_vendor"), board.get("product"), board.get("product_version")) if x))
+    kv("Chassis", board.get("chassis"))
+    kv("BIOS", " ".join(x for x in (board.get("bios_vendor"), board.get("bios_version"), board.get("bios_date")) if x))
+    lines += ["", "## CPU", ""]
+    kv("Model", cpu.get("model"))
+    kv("Socket", " ".join(x for x in (cpu.get("socket"), "(%s)" % cpu["socket_designation"] if cpu.get("socket_designation") else "") if x))
+    kv("Sockets / cores per socket / threads per core", " / ".join(str(cpu.get(k) or "?") for k in ("sockets", "cores_per_socket", "threads_per_core")))
+    kv("Threads", cpu.get("threads"))
+    kv("Max clock", "%s MHz" % cpu["max_mhz"] if cpu.get("max_mhz") else "")
+    kv("Family / model / stepping", cpu.get("family"))
+    kv("Cache", ", ".join("%s %s" % (k, v) for k, v in (cpu.get("cache") or {}).items()))
+    mem = status.get("memory") or {}
+    lines += ["", "## Memory", ""]
+    kv("Total", human_bytes(mem["total"]) if mem.get("total") else "")
+    kv("Swap", human_bytes(mem["swap_total"]) if mem.get("swap_total") else "")
+    for m in hw.get("memory") or []:
+        kv(m.get("locator") or "Module", " ".join(x for x in (m.get("size"), m.get("type"), m.get("speed"), m.get("maker"), m.get("part")) if x))
+    lines += ["", "## PCI devices", "", "```"]
+    for d in hw.get("pci") or []:
+        lines.append("%s  %s: %s %s [%s]%s" % (d["slot"], d["class"], d["vendor"], d["device"], d["ids"],
+                                               "  driver=%s" % d["driver"] if d["driver"] else ""))
+    lines += ["```", "", "## Video", ""]
+    for g in status.get("gpus") or []:
+        kv("GPU %s" % g.get("card", ""), "%s (%s) driver %s" % (g.get("name") or "?", g.get("slot") or "?", g.get("driver") or "?"))
+    video = status.get("video") or {}
+    for o in video.get("outputs") or []:
+        if o.get("active"):
+            kv("Output %s" % o.get("connector"), "%sx%s @ %.2f Hz, %.2f kHz%s; modeline: `%s`" % (
+                o.get("width"), o.get("height"), float(o.get("vertical_hz") or 0), float(o.get("horizontal_khz") or 0),
+                ", interlaced" if o.get("interlaced") else "", o.get("modeline")))
+    for k, v in (video.get("wanted") or {}).items():
+        kv("Asked in Video Setup: %s" % k, v)
+    for m in hw.get("monitors") or []:
+        kv("Monitor on %s" % m.get("connector"), " ".join(x for x in (m.get("maker"), m.get("name"), "(%s)" % m["year"] if m.get("year") else "",
+                                                                      m.get("mode")) if x))
+    lines += ["", "## Sound", ""]
+    for c in (hw.get("sound") or {}).get("cards") or []:
+        kv("Card %d" % c["index"], "%s (%s, %s %s)%s%s; outputs: %s" % (
+            c["name"], c["driver"], c["bus"], c["address"], " [SELECTED IN SETUP]" if c["selected"] else "",
+            " [playing]" if c["playing"] else "", ", ".join("%d: %s" % (d["device"], d["name"]) for d in c["devices"]) or "-"))
+    lines += ["", "## Storage", ""]
+    for d in hw.get("storage") or []:
+        kv(d["name"], "%s %s, %s, %s%s" % (d["vendor"], d["model"], human_bytes(d["size"]), (d["tran"] or "?") + " " + d["kind"],
+                                           ", removable" if d["removable"] else ""))
+        for p in d["parts"]:
+            lines.append("  - %s %s %s %s%s" % (p["name"], human_bytes(p["size"]), p["fstype"] or "-", p["label"],
+                                                " mounted on %s" % p["mount"] if p["mount"] else ""))
+    lines += ["", "## Connected devices", ""]
+    for u in hw.get("usb") or []:
+        kv("USB %s" % u["ids"], u["name"])
+    for i in hw.get("input") or []:
+        kv("Input (%s, %s) %s" % (i["kind"], i["bus"], i["ids"]), i["name"])
+    for n in hw.get("network") or []:
+        kv("Network %s" % n["name"], "%s, driver %s %s" % (n["kind"], n["driver"], n["address"]))
+    kv("Bluetooth adapter", "yes" if hw.get("bluetooth") else "")
+    if setup_rows:
+        lines += ["", "## Setup settings", ""]
+        group = None
+        for r in setup_rows:
+            if r["group"] != group:
+                group = r["group"]
+                lines += ["", "**%s**" % group, ""]
+            value = r.get("value", "")
+            for o in r.get("options") or []:
+                if o.get("value") == value:
+                    value = "%s (%s)" % (value, o.get("label"))
+            if r["type"] != "action" and not SECRET_KEY.search(r["key"]):
+                lines.append("- %s = %s" % (r["label"], value if value != "" else "(empty)"))
+    lines += ["", "## fliperos.conf", "", "```"]
+    lines += ["%s=%s" % (k, v) for k, v in sorted(read_conf().items()) if not SECRET_KEY.search(k)]
+    lines += ["```", "", "## Packages", "", "```"] + packages + ["```", ""]
+    return "\n".join(lines)
+
+
+def report_packages():
+    out = cmd_out(["dpkg-query", "-W", "-f", "${Package} ${Version}\n", "fliperos-*", "libgl1-mesa-dri", "mesa-vulkan-drivers",
+                   "xserver-xorg-core", "linux-image-*"])
+    return sorted(line for line in out.splitlines() if line.strip())
 
 
 _video_check = None
@@ -3261,6 +3640,7 @@ class Panel:
         self.wifi = Cached(10, wifi)
         self.volume = Cached(2, volume)
         self.disks = Cached(10, disks)
+        self.hardware = Cached(60, hardware)
         self.systems = Cached(60, systems)
         self.gameinfo = GameInfo()
         self.filters = Cached(600, setup_filters)
@@ -3533,6 +3913,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"user": user})
         if url.path == "/api/status":
             return self.send(200, self.panel.status())
+        if url.path == "/api/hardware":
+            return self.send(200, self.panel.hardware.get())
+        if url.path == "/api/report":
+            # O relatorio da maquina em Markdown (o botao Copiar relatorio).
+            hw = self.panel.hardware.get()
+            if not isinstance(hw, dict) or "error" in hw:
+                return self.send(500, hw if isinstance(hw, dict) else {"error": "hardware"})
+            uptime = read(os.path.join(PROC, "uptime")).split()
+            try:
+                rows = settings()
+            except (OSError, subprocess.SubprocessError):
+                rows = []
+            info = {"version": version(), "level": read(PATCH_LEVEL).strip(), "uptime": float(uptime[0]) if uptime else None,
+                    "memory": memory(), "gpus": self.panel.gpus.get(), "video": self.panel.video.get()}
+            text = report_text(hw, info, rows, report_packages())
+            return self.send(200, text.encode(), ctype="text/plain; charset=utf-8")
         if url.path == "/api/logs":
             return self.send(200, {"logs": sorted(log_names())})
         if url.path == "/api/log":

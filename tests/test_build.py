@@ -9123,6 +9123,117 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(s['volume'], {'percent': 42, 'muted': True})
         self.assertGreater(s['memory']['total'], 0)
 
+    def test_the_hardware_parsers_and_the_machine_report(self):
+        # Sistema > Status: a placa-mae, a CPU com o socket, o PCI com os
+        # enderecos, o som, os discos e os aparelhos ligados; o relatorio junta
+        # tudo aos ajustes do Setup num texto, sem senhas nem IP/MAC.
+        web = SourceFileLoader('fliperos_web_hw', str(ROOT / 'config/fliperos-web')).load_module()
+        pci = web.parse_lspci(
+            'Slot:\t0000:00:02.0\nClass:\tVGA compatible controller [0300]\nVendor:\tIntel Corporation [8086]\n'
+            'Device:\tHD Graphics 630 [5912]\nSVendor:\tGigabyte [1458]\nSDevice:\tDevice [d000]\nRev:\t04\nDriver:\ti915\n'
+            'Module:\ti915\n\n'
+            'Slot:\t0000:01:00.0\nClass:\tAudio device [0403]\nVendor:\tNVIDIA Corporation [10de]\nDevice:\tGP107GL [0fb9]\n')
+        self.assertEqual([p['slot'] for p in pci], ['0000:00:02.0', '0000:01:00.0'])
+        self.assertEqual((pci[0]['class'], pci[0]['ids'], pci[0]['driver'], pci[0]['subsystem']),
+                         ('VGA compatible controller', '8086:5912', 'i915', 'Gigabyte Device'))
+        self.assertEqual(pci[1]['driver'], '')
+        disks = web.parse_lsblk(json.dumps({'blockdevices': [
+            {'name': 'sda', 'type': 'disk', 'size': 240057409536, 'model': 'KINGSTON SA400S3', 'vendor': 'ATA     ',
+             'tran': 'sata', 'rota': False, 'rm': False, 'children': [
+                 {'name': 'sda1', 'type': 'part', 'size': 536870912, 'fstype': 'vfat', 'label': 'ESP', 'mountpoint': '/boot/efi'},
+                 {'name': 'sda2', 'type': 'part', 'size': 239000000000, 'fstype': 'ext4', 'mountpoint': '/'}]},
+            {'name': 'loop0', 'type': 'loop', 'size': 1}, {'name': 'sdb', 'type': 'disk', 'size': 8000000000, 'model': 'Flash',
+                                                          'tran': 'usb', 'rota': True, 'rm': True}]}))
+        self.assertEqual([(d['name'], d['model'], d['kind'], d['tran'], d['removable']) for d in disks],
+                         [('sda', 'KINGSTON SA400S3', 'ssd', 'sata', False), ('sdb', 'Flash', 'hdd', 'usb', True)])
+        self.assertEqual([p['mount'] for p in disks[0]['parts']], ['/boot/efi', '/'])
+        self.assertEqual(web.parse_aplay('card 0: PCH [HDA Intel PCH], device 0: ALC892 Analog [ALC892 Analog]\n'
+                                         'card 0: PCH [HDA Intel PCH], device 3: HDMI 0 [HDMI 0]\n'),
+                         {0: [(0, 'ALC892 Analog'), (3, 'HDMI 0')]})
+        self.assertEqual(web.parse_lsusb('Bus 001 Device 002: ID 8087:0024 Intel Corp. Hub\n'
+                                         'Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub\n'
+                                         'Bus 003 Device 004: ID 16c0:05e1 Free shared USB VID\n'),
+                         [{'bus': '001', 'device': '002', 'ids': '8087:0024', 'name': 'Intel Corp. Hub'},
+                          {'bus': '003', 'device': '004', 'ids': '16c0:05e1', 'name': 'Free shared USB VID'}])
+        inputs = web.parse_inputs(
+            'I: Bus=0003 Vendor=16c0 Product=05e1 Version=0110\nN: Name="V-USB Mame Panel"\nH: Handlers=js0 event7\n\n'
+            'I: Bus=0019 Vendor=0000 Product=0001 Version=0000\nN: Name="Power Button"\nH: Handlers=kbd event0\n\n'
+            'I: Bus=0003 Vendor=046d Product=c31c Version=0110\nN: Name="Logitech USB Keyboard"\nH: Handlers=sysrq kbd event3\n\n'
+            'I: Bus=0003 Vendor=0000 Product=0000 Version=0000\nN: Name="fliperos-gamekeys"\nH: Handlers=kbd event9\n')
+        self.assertEqual([(i['name'], i['kind'], i['bus'], i['ids']) for i in inputs],
+                         [('V-USB Mame Panel', 'joystick', 'USB', '16c0:05e1'),
+                          ('Logitech USB Keyboard', 'keyboard', 'USB', '046d:c31c')])
+        proc = web.parse_dmidecode('Handle 0x0004\nProcessor Information\n\tSocket Designation: AM4\n\tUpgrade: Socket AM4\n'
+                                   '\tMax Speed: 4200 MHz\n\nHandle 0x0005\nMemory Device\n\tSize: 8 GB\n\tType: DDR4\n',
+                                   'Processor Information')
+        self.assertEqual((proc[0]['Upgrade'], proc[0]['Socket Designation']), ('Socket AM4', 'AM4'))
+        # O EDID: fabricante (3 letras), nome do monitor, ano, tamanho e entrada digital.
+        edid = bytearray(128)
+        edid[:8] = b'\x00\xff\xff\xff\xff\xff\xff\x00'
+        edid[8], edid[9] = 0x10, 0xAC          # DEL (Dell)
+        edid[17], edid[20], edid[21], edid[22] = 23, 0x80, 34, 27
+        edid[54:72] = b'\x00\x00\x00\xfc\x00DELL U2412M\n '
+        info = web.edid_info(bytes(edid))
+        self.assertEqual((info['maker'], info['name'], info['year'], info['size_cm'], info['digital']),
+                         ('DEL', 'DELL U2412M', 2013, [34, 27], True))
+        self.assertEqual(web.edid_info(b'junk'), {})
+        # O relatorio: tudo num Markdown, os ajustes do Setup sem os segredos.
+        hw = {'board': {'vendor': 'ASUSTeK', 'name': 'PRIME B450M-A', 'bios_version': '3801', 'chassis': 'Desktop'},
+              'cpu': {'model': 'AMD Ryzen 5 3600', 'socket': 'Socket AM4', 'socket_designation': 'AM4', 'sockets': '1',
+                      'cores_per_socket': '6', 'threads_per_core': '2', 'threads': 12, 'max_mhz': '4208', 'cache': {'L3 cache': '32 MiB'}},
+              'memory': [{'locator': 'DIMM_A1', 'size': '8 GB', 'type': 'DDR4', 'speed': '2666 MT/s', 'maker': 'Kingston'}],
+              'pci': pci, 'sound': {'cards': [{'index': 0, 'id': 'PCH', 'driver': 'HDA-Intel', 'name': 'HDA Intel PCH', 'bus': 'pci',
+                                               'address': '0000:00:1f.3', 'selected': True, 'playing': False,
+                                               'devices': [{'device': 0, 'name': 'ALC892 Analog'}]}], 'chosen': '0,0'},
+              'storage': disks, 'usb': [], 'input': inputs, 'monitors': [dict(info, connector='card0-VGA-1', mode='640x480')],
+              'network': [{'name': 'enp3s0', 'kind': 'ethernet', 'driver': 'r8169', 'address': '0000:03:00.0'}], 'bluetooth': False,
+              'kernel': {'release': '6.18.54-15khz.2', 'cmdline': 'root=UUID=x quiet', 'os': 'Ubuntu 24.04'}}
+        settings = [{'key': 'monitor', 'group': 'Video', 'label': 'Monitor type', 'type': 'choice', 'value': 'generic_15',
+                     'options': [{'value': 'generic_15', 'label': 'Generic 15 kHz'}]},
+                    {'key': 'cheevos.token', 'group': 'Achievements', 'label': 'Token', 'type': 'text', 'value': 'SECRET'}]
+        status = {'version': '2.3', 'level': '84', 'uptime': 3600.0, 'memory': {'total': 16 * 10 ** 9},
+                  'gpus': [{'card': 'card0', 'slot': '0000:00:02.0', 'driver': 'i915', 'name': 'Intel HD Graphics 630'}],
+                  'video': {'outputs': [{'connector': 'VGA-1', 'active': True, 'width': 640, 'height': 480,
+                                         'vertical_hz': 60.0, 'horizontal_khz': 15.73, 'interlaced': True, 'modeline': 'M'}],
+                            'wanted': {'monitor': 'generic_15'}}}
+        text = web.report_text(hw, status, settings, ['fliperos-dolphin 2609-1'])
+        for line in ('# FliperOS machine report', '- **Update level:** 84', '- **Motherboard:** ASUSTeK PRIME B450M-A',
+                     '- **Socket:** Socket AM4 (AM4)', '- **DIMM_A1:** 8 GB DDR4 2666 MT/s Kingston',
+                     '0000:00:02.0  VGA compatible controller: Intel Corporation HD Graphics 630 [8086:5912]  driver=i915',
+                     '[SELECTED IN SETUP]', '- **Monitor on card0-VGA-1:** DEL DELL U2412M (2013) 640x480',
+                     '- Monitor type = generic_15 (Generic 15 kHz)', 'fliperos-dolphin 2609-1', '- **Total:** 16 GB'):
+            self.assertIn(line, text)
+        self.assertNotIn('SECRET', text)
+        self.assertNotRegex(text, r'\d+\.\d+\.\d+\.\d+ ')
+        self.assertEqual(web.human_bytes(240057409536), '240.1 GB')
+        # As rotas pedem o login.
+        self.assertEqual(self.request('GET', '/api/hardware')[0], 401)
+        self.assertEqual(self.request('GET', '/api/report')[0], 401)
+        cookie = self.login()
+        status_code, _, body = self.request('GET', '/api/hardware', cookie=cookie)
+        self.assertEqual(status_code, 200)
+        self.assertEqual(sorted(json.loads(body)), ['bluetooth', 'board', 'cpu', 'input', 'kernel', 'memory', 'monitors',
+                                                    'network', 'pci', 'sound', 'storage', 'usb'])
+        status_code, _, body = self.request('GET', '/api/report', cookie=cookie)
+        self.assertEqual(status_code, 200)
+        self.assertTrue(body.startswith(b'# FliperOS machine report'))
+        self.assertIn('text/plain', self.last_headers['Content-Type'])
+
+    def test_status_page_shows_the_hardware_and_copies_the_report(self):
+        index = (ROOT / 'config/web/index.html').read_text()
+        for ident in ('hw-copy', 'hw-machine', 'hw-storage', 'hw-sound', 'hw-devices', 'hw-pci'):
+            self.assertIn('id="%s"' % ident, index)
+        system = (ROOT / 'config/web/system.js').read_text()
+        self.assertIn('api("/api/hardware")', system)
+        self.assertIn('api("/api/report")', system)
+        self.assertIn('await copyText(await res.text(), null);', system)
+        app = (ROOT / 'config/web/app.js').read_text()
+        self.assertIn('else if (page === "status") hwLoad().catch(() => {});', app)
+        texts = (ROOT / 'config/web/text.js').read_text()
+        keys = set(re.findall(r'(?<![\w.])(hw_\w+)', system + index)) - {'hw_copy_note'} | {'hw_copy_note'}
+        for key in sorted(keys):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, texts)), 2, key)
+
     def test_logs_only_from_the_list(self):
         cookie = self.login()
         logs = json.loads(self.request('GET', '/api/logs', cookie=cookie)[2])['logs']
