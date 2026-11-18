@@ -25,7 +25,7 @@ The menu on the left (at the bottom on a phone) has four areas, each with its ta
 | **Frontend** | The cabinet drawing, now playing, the marquee preview, the games | [Frontend area](Web-panel-Frontend.md) |
 | **Live** | Watch, OBS | [Live area](Web-panel-Live.md) |
 | **Library** | Overview, Install, Downloads, ROM filter, Art, Files | [Library area](Web-panel-Library.md) |
-| **System** | Status, Processes and logs, the whole Setup (with custom games), RetroAchievements, Cloud backup, Terminal, Lab mode | [System area](Web-panel-System.md) |
+| **System** | The whole Setup (with custom games, the tab it opens on), Status, Processes and logs, RetroAchievements, Cloud backup, Terminal, Lab mode | [System area](Web-panel-System.md) |
 
 Each area and tab has its own address (`#live`, `#library`…), and the browser remembers the last one. The top bar has **EN/PT** (the page follows the browser's language), the cabinet picker, and **Reboot** and **Power off**.
 

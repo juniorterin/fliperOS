@@ -4,9 +4,9 @@ The **System** area of the [web panel](Web-panel.md): the cabinet's status and l
 
 | Tab | What it has |
 | --- | --- |
+| **Setup** (the first tab, the one **System** opens) | The whole Setup of the cabinet, in the same order, and custom games |
 | **Status** | The video mode, CPU, GPU, temperatures, memory, disks, network |
 | **Processes and logs** | What uses the CPU, and every FliperOS log |
-| **Setup** | The whole Setup of the cabinet, in the same order, and custom games |
 | **RetroAchievements** | The account, achievements on/off, hardcore, the Web API Key |
 | **Cloud backup** | The cloud account and syncing |
 | **Terminal** | The cabinet's shell in the browser |

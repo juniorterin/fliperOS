@@ -9389,7 +9389,9 @@ class WebPanelTests(unittest.TestCase):
         areas = app[app.index('const AREAS = {'):app.index('};', app.index('const AREAS = {'))]
         self.assertEqual(re.findall(r'\["([a-z]+)", "px-', areas),
                          ['watch', 'obs', 'overview', 'install', 'downloads', 'romfilter', 'art', 'files',
-                          'status', 'logs', 'setup', 'achievements', 'cloud', 'terminal', 'lab'])
+                          'setup', 'status', 'logs', 'achievements', 'cloud', 'terminal', 'lab'])
+        # Sistema abre no Setup (a primeira aba), nao no Status.
+        self.assertIn('const subs = AREAS[a].subs.map(([n]) => n);\n  return [a, subs.includes(s) ? s : subs[0] || ""];', app)
         self.assertIn('status: "system/status"', app)
         self.assertIn('downloads: "library/downloads"', app)
         # Os scripts, em ordem (as globais de um valem nos outros), e o app.js por ultimo.

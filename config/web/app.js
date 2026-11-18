@@ -13,7 +13,8 @@ const AREAS = {
     ["romfilter", "px-filter"], ["art", "px-scraper"], ["files", "px-dest"]] },
   // Os jogos custom, a mesma pagina de Sistema > Setup > Jogos (customgames.js).
   customgames: { icon: "px-customgames", subs: [] },
-  system: { icon: "px-setup", subs: [["status", "px-chip"], ["logs", "px-romlist"], ["setup", "px-setup"],
+  // O Setup e a primeira aba (e a que a area abre): e por ele que se mexe no gabinete.
+  system: { icon: "px-setup", subs: [["setup", "px-setup"], ["status", "px-chip"], ["logs", "px-romlist"],
     ["achievements", "px-achievements"], ["cloud", "px-cloud"],
     ["terminal", "px-shell"], ["lab", "px-lab"]] },
 };

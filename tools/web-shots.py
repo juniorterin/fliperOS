@@ -46,7 +46,7 @@ SHOTS = [
     ("tarefas-pc", "#library", 1440, 900, 1, False, False, "tasks"),
     ("biblioteca-celular", "#library", 390, 844, 2, True, False, ""),
     ("downloads-pc", "#library/downloads", 1440, 900, 1, False, False, ""),
-    ("status-pc", "#system", 1440, 900, 1, False, True, ""),
+    ("status-pc", "#system/status", 1440, 900, 1, False, True, ""),
     ("status-celular", "#system/status", 390, 844, 2, True, True, ""),
     ("logs-pc", "#system/logs", 1440, 900, 1, False, False, ""),
     ("aovivo-pc", "#live/obs", 1440, 900, 1, False, False, ""),
