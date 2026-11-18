@@ -1,6 +1,9 @@
 # O teclado na tela do desktop: o Onboard (config/fliperos-lxde o abre e
 # config/fliperos-deskpad o liga ao controle). Abre sozinho quando um campo de
-# texto ganha o foco (auto-show, pelo AT-SPI) e sai quando o foco sai;
+# texto ganha o foco (auto-show, pelo AT-SPI) e sai quando o foco sai, mas so
+# para quem usa o controle: o auto-show nasce desligado e o deskpad o liga
+# enquanto chegam comandos do controle (com um teclado ou mouse de verdade, o
+# teclado na tela nao abre; o botao 3 do controle o abre a qualquer hora);
 # encaixado embaixo, com as teclas na proporcao do layout (a altura do encaixe
 # segue a tela, no fliperos-lxde). Escuro, sem dicas e minimizado ao abrir.
 # Os eventos pelo GTK e as teclas pelo XTest: os cliques do controle chegam
@@ -14,7 +17,7 @@ start-minimized=true
 show-tooltips=false
 
 [org.onboard.auto-show]
-enabled=true
+enabled=false
 
 [org.onboard.keyboard]
 input-event-source='GTK'

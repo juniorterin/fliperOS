@@ -22689,10 +22689,53 @@ class DeskpadTests(unittest.TestCase):
         desk.key(dp.KEY_ESC, 1, 3.0)
         self.assertEqual(self.calls, [('button', 3, True)])
 
+    def test_the_keyboard_only_opens_by_itself_for_the_controller(self):
+        # O Onboard abre sozinho num campo de texto (auto-show); com teclado ou mouse de verdade isso
+        # atrapalha. Desligado, o deskpad o liga enquanto chegam comandos do controle (um botao, o
+        # analogico fora da zona morta) e o desliga ACTIVE segundos depois do ultimo.
+        dp = self.dp
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / 'gsettings'
+            fake.write_text('#!/bin/sh\necho "$*" >> %s/log\n' % tmp)
+            fake.chmod(0o755)
+            dp.AutoShow.GSETTINGS = str(fake)
+            auto = dp.AutoShow()
+            written = lambda: (Path(tmp) / 'log').read_text().splitlines() if (Path(tmp) / 'log').exists() else []
+            wait = lambda n: [time.sleep(0.05) for _ in range(40) if len(written()) < n]
+            desk = self.dp.Desk(self.desk.x, self.desk.osk, auto)
+            auto.set(False)                                  # ao abrir: desligado, uma vez so
+            auto.set(False)
+            wait(1)
+            self.assertEqual(written(), ['set org.onboard.auto-show enabled false'])
+            desk.tick(0.1, 1.0)                              # sem comando: continua desligado
+            desk.analog(dp.ABS_X, 0.0, 1.0)                  # o analogico na zona morta nao conta
+            time.sleep(0.2)
+            self.assertEqual(len(written()), 1)
+            desk.key(dp.KEY_ENTER, 1, 2.0)                   # um botao liga
+            wait(2)
+            self.assertEqual(written()[1], 'set org.onboard.auto-show enabled true')
+            desk.key(dp.KEY_ENTER, 0, 2.1)
+            desk.analog(dp.ABS_X, 0.8, 5.0)                  # o analogico fora da zona morta mantem ligado
+            desk.tick(0.1, 10.0)
+            time.sleep(0.2)
+            self.assertEqual(len(written()), 2)
+            desk.tick(0.1, 5.0 + dp.AutoShow.ACTIVE + 0.1)   # ACTIVE segundos sem comando: desliga
+            wait(3)
+            self.assertEqual(written()[2], 'set org.onboard.auto-show enabled false')
+            desk.analog(dp.ABS_X, 0.0, 30.0)
+            desk.tick(0.1, 31.0)
+            time.sleep(0.2)
+            self.assertEqual(len(written()), 3)
+        # Aberto pelo main com o auto-show desligado de saida.
+        source = (ROOT / 'config/fliperos-deskpad').read_text()
+        self.assertIn('autoshow = AutoShow()\n    autoshow.set(False)\n    desk = Desk(x, osk, autoshow)', source)
+        self.assertIn('desk.analog(code, stick(value, low, high), now)', source)
+
     def test_onboard_settings_and_dbus(self):
         from unittest import mock
         override = (ROOT / 'config/fliperos-onboard.gschema.override').read_text()
-        for line in ("[org.onboard.auto-show]\nenabled=true", "docking-enabled=true", "keep-aspect-ratio=true",
+        # O auto-show nasce desligado: o deskpad o liga so enquanto chegam comandos do controle.
+        for line in ("[org.onboard.auto-show]\nenabled=false", "docking-enabled=true", "keep-aspect-ratio=true",
                      "docking-aspect-change-range=[1.0, 1.0]", "input-event-source='GTK'", "key-synth='XTest'",
                      "start-minimized=true", "use-system-defaults=false"):
             self.assertIn(line, override)

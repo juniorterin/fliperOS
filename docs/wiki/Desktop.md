@@ -49,7 +49,7 @@ On the desktop, the first controller is the mouse:
 | Back button (button 2) | Right click |
 | Button 3 | Opens and closes the **on-screen keyboard** |
 
-The on-screen keyboard (Onboard) also opens by itself when a text field gets the focus, and types into it. A window in full screen (a game, a video) pauses the controller-mouse.
+The on-screen keyboard (Onboard) also opens by itself when a text field gets the focus, and types into it, but **only while you are using the controller**: it turns that on with a button press or the stick (and off again 15 seconds after the last one), so with a real keyboard or mouse in your hand it never pops up. Button 3 opens it at any time. A window in full screen (a game, a video) pauses the controller-mouse.
 
 Every text field of the graphical Setup has an on-screen keyboard too: Enter on the field opens it.
 

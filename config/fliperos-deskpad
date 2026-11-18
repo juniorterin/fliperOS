@@ -264,14 +264,52 @@ class Onboard:
         self.call('Hide')
 
 
+class AutoShow:
+    """O auto-show do Onboard (org.onboard.auto-show enabled): ele abre o
+    teclado sozinho quando um campo de texto ganha o foco. So deve abrir para
+    quem esta no controle: com um teclado fisico ou um mouse na mao, ele
+    atrapalha. Fica desligado (o padrao do config/fliperos-onboard.gschema.override)
+    e este liga enquanto chegam comandos do controle (um botao, o analogico
+    fora da zona morta), ACTIVE segundos depois do ultimo; passado esse tempo,
+    desliga de novo. O Onboard le a chave ao vivo, sem reiniciar."""
+
+    ACTIVE = 15.0
+    GSETTINGS = os.environ.get('FLIPEROS_GSETTINGS', 'gsettings')
+
+    def __init__(self):
+        self.on = None             # o que gravamos por ultimo (None: ainda nada)
+        self.last = None           # quando o controle foi usado
+
+    def set(self, on):
+        if on == self.on:
+            return
+        self.on = on
+        try:
+            subprocess.Popen([self.GSETTINGS, 'set', 'org.onboard.auto-show', 'enabled', 'true' if on else 'false'],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+
+    def pad(self, now):
+        """Chegou um comando do controle."""
+        self.last = now
+        self.set(True)
+
+    def tick(self, now):
+        """Passou o tempo sem comando do controle: desliga."""
+        if self.last is None or now - self.last >= self.ACTIVE:
+            self.set(False)
+
+
 # ── O laco ─────────────────────────────────────────────────────────
 
 class Desk:
     """O que cada botao faz (sem os aparelhos: os testes chamam key() e
     tick() direto)."""
 
-    def __init__(self, x, osk):
+    def __init__(self, x, osk, autoshow=None):
         self.x, self.osk = x, osk
+        self.autoshow = autoshow
         self.pointer = Pointer()
         self.down = set()          # botoes do X apertados agora
 
@@ -293,6 +331,8 @@ class Desk:
     def key(self, key, pressed, now, analog=False):
         """Uma tecla do Mapper do padkeys (1 apertou, 0 soltou). analog: a
         seta veio do analogico, que ja anda pelo eixo."""
+        if self.autoshow is not None and pressed:
+            self.autoshow.pad(now)
         if key in ARROWS:
             if analog:
                 return
@@ -316,13 +356,19 @@ class Desk:
         elif key in (KEY_PAGEUP, KEY_PAGEDOWN) and pressed:
             self.x.scroll(-3 if key == KEY_PAGEUP else 3)
 
-    def analog(self, axis, value):
+    def analog(self, axis, value, now=None):
+        # O analogico fora da zona morta e comando do controle (um que descalibrou
+        # e treme perto do centro nao conta).
+        if self.autoshow is not None and value and now is not None:
+            self.autoshow.pad(now)
         if axis in (ABS_X, ABS_Y):
             self.pointer.analog[axis] = value
         elif axis == ABS_RY:
             self.pointer.scroll_axis = value
 
     def tick(self, dt, now):
+        if self.autoshow is not None:
+            self.autoshow.tick(now)
         dx, dy, lines = self.pointer.step(dt, self.x.width(), now)
         self.x.move(dx, dy)
         if lines:
@@ -358,7 +404,11 @@ def main():
     if x.d is None and not x.xdotool:
         sys.exit('fliperos-deskpad: no X connection (python3-xlib) and no xdotool')
     osk = Onboard()
-    desk = Desk(x, osk)
+    # O teclado na tela so abre sozinho para quem usa o controle: desligado
+    # ate o primeiro comando dele (e de novo depois de AutoShow.ACTIVE s sem).
+    autoshow = AutoShow()
+    autoshow.set(False)
+    desk = Desk(x, osk, autoshow)
     pads, ranges = {}, {}
     scanned, checked, paused = 0.0, 0.0, False
     last = time.monotonic()
@@ -417,7 +467,7 @@ def main():
             for etype, code, value in events:
                 if etype == EV_ABS and code in ranges.get(path, {}):
                     low, high = ranges[path][code]
-                    desk.analog(code, stick(value, low, high))
+                    desk.analog(code, stick(value, low, high), now)
                 for key, pressed in pad.mapper.event(etype, code, value):
                     desk.key(key, pressed, now, analog=etype == EV_ABS and code in (ABS_X, ABS_Y))
         dt, last = now - last, now
