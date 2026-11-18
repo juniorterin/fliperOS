@@ -10802,6 +10802,33 @@ class WebPanelTests(unittest.TestCase):
         self.assertEqual(web.game_file('groovymame', ['groovymame', '-inipath', '/etc/mame', 'sf2']), 'sf2')
         self.assertIsNone(web.game_file('groovymame', ['groovymame']))
 
+    def test_fightcade_emulators_are_the_game_on_screen(self):
+        # O painel (a tela ao vivo, "Jogando agora", Fechar o jogo) nao via o
+        # Flycast Dojo do Fightcade: o processo e o flycast.elf (o AppImage) e o
+        # flycast-dojo de dentro dele, e a lista so tinha "flycast".
+        web = SourceFileLoader('fliperos_web_fc', str(ROOT / 'config/fliperos-web')).load_module()
+        fc = '/opt/fliperos/fightcade/emulator'
+        dojo = ['/tmp/appimage_extracted_x/usr/bin/flycast-dojo', '-config', 'dojo:GameEntry=mvsc2', '-config',
+                'dojo:TestGame=yes']
+        with tempfile.TemporaryDirectory() as tmp:
+            for pid, args in ((10, [fc + '/fbneo/fcadefbneo.exe', 'sf2ce']),
+                              (11, ['/opt/fliperos/fightcade/fc2-electron/fc2-electron', '--no-sandbox'])):
+                (Path(tmp) / str(pid)).mkdir()
+                (Path(tmp) / str(pid) / 'cmdline').write_text('\0'.join(args) + '\0')
+            web.PROC = tmp
+            found = web.running()
+        # O FBNeo no Wine: o set e o jogo; a sala (o Electron) nao e jogo nem frontend.
+        self.assertEqual((found['game']['program'], found['game']['file']), ('fcadefbneo.exe', 'sf2ce'))
+        self.assertIsNone(found['frontend'])
+        for exe in ('flycast-dojo', 'flycast.elf', 'fcadesnes9x.exe', 'ggpofba-ng.exe', 'fcv39.exe'):
+            self.assertIn(web.program_name([fc + '/' + exe]), web.EMULATORS)
+        self.assertEqual(web.game_file('flycast-dojo', dojo), 'mvsc2')
+        self.assertEqual(web.game_file('fcadefbneo.exe', ['fcadefbneo.exe', 'quark:served,sf2ce,1.2.3.4,7000,0,1']),
+                         'sf2ce')
+        self.assertEqual(web.game_file('fcv39.exe', ['fcv39.exe', 'kof98']), 'kof98')
+        # O que ja era: o Flycast do sistema segue como esta.
+        self.assertEqual(web.game_file('flycast', ['flycast', '-config', 'x:y=1', '/roms/naomi/mvsc2.zip']), 'mvsc2.zip')
+
     def test_custom_games_open_and_carry_their_cfg(self):
         # Um jogo custom abre pelo sh com o NOME.sh (o frontend e o painel
         # mostravam "cannot open"); so um .sh de ~/roms/custom/GRUPO. A
