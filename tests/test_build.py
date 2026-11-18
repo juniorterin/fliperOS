@@ -10335,6 +10335,31 @@ class WebPanelTests(unittest.TestCase):
             self.assertEqual(sorted(tool.descendants(10, proc)), [11, 12])
             self.assertEqual(tool.descendants(13, proc), [])
 
+    def test_custom_game_with_key_map_does_not_see_the_pad(self):
+        # Um jogo com o controle mapeado para o teclado (.key) nao ve o
+        # controle: com um conectado ele largava o teclado. Sem o .key, ve.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            game = tmp / 'game'
+            game.mkdir()
+            script = game / 'run.sh'
+            script.write_text('#!/bin/sh\necho "${SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT:-visible}" > "$OUT"\n')
+            script.chmod(0o755)
+            cfg = tmp / 'Pad.cfg'
+            cfg.write_text('format=1\nname=Pad\nplatform=native\ncommand=./run.sh\nfolder=%s\n' % game)
+            env = dict(os.environ, OUT=str(tmp / 'out'), FLIPEROS_CUSTOMGAME_KEYS='off', FLIPEROS_BIN=str(tmp / 'nobin'))
+            env.pop('SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT', None)
+
+            def run():
+                subprocess.run(['python3', str(ROOT / 'config/fliperos-customgame'), 'run', str(cfg)], env=env,
+                               timeout=30, check=True)
+                return (tmp / 'out').read_text().strip()
+            self.assertEqual(run(), 'visible')
+            (tmp / 'Pad.key').write_text('# so comentario\n')
+            self.assertEqual(run(), 'visible')
+            (tmp / 'Pad.key').write_text('p1_b1=LEFTCTRL\n')
+            self.assertEqual(run(), '0x0000/0x0000')
+
 
 def fightcade_package(path, files=None):
     """Um pacote como o do Fightcade para Linux: tudo dentro de Fightcade/."""
