@@ -23178,6 +23178,10 @@ class HapticTests(unittest.TestCase):
                       (ROOT / 'fliperos-rootfs.sh').read_text())
         # O menu do Setup (padkeys) e o frontend usam o mesmo modulo.
         self.assertIn('HAPTIC_KEYS', (ROOT / 'config/fliperos-padkeys').read_text())
+        # Segurar o botao nao vibra: o menu so vibra no toque, e o frontend so quando a lista andou.
+        self.assertIn('if value == 1 and current[0]:', (ROOT / 'config/fliperos-padkeys').read_text())
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('if self.cursor != before:\n                        self.input.feel(["up"]', frontend)
         self.assertIn('fehaptic.Buzzer()', (ROOT / 'fliperos-setup/gui/feinput.py').read_text())
 
 

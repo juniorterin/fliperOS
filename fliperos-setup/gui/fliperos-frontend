@@ -2740,7 +2740,6 @@ class Frontend:
                 elif now >= self.repeat[a]:
                     self.repeat[a] = now + 0.12
                     self.overlay_act(a)
-                    self.input.feel([a], self.input.buzzer and self.input.buzzer.pad)
                 continue
             step = 1 if a == "down" else -1
             if self.letter_mode:
@@ -2762,8 +2761,11 @@ class Frontend:
                 n = int(self.acc)
                 if n:
                     self.acc -= n
+                    before = self.cursor
                     self.move(step * n * (COLS if self.mode == "flow" else 1), wrap=False)
-                    self.input.feel(["up"], self.input.buzzer and self.input.buzzer.pad)   # segurando: um tique por passo
+                    # Segurando: um tique so quando a lista andou (no fim dela, nada).
+                    if self.cursor != before:
+                        self.input.feel(["up"], self.input.buzzer and self.input.buzzer.pad)
         for a, gap in (("left", 0.5), ("right", 0.5), ("b3", 0.18), ("b6", 0.18)):
             held = self.input.held(a)
             if held is None or self.overlay:

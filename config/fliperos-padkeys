@@ -425,7 +425,9 @@ def main():
 
     def emit(key, value):
         os.write(out, EVENT.pack(0, 0, EV_KEY, key, value) + EVENT.pack(0, 0, EV_SYN, 0, 0))
-        if value in (1, 2) and current[0]:
+        # So o toque (1): a repeticao (2) nao e uma acao do controle, e o menu
+        # pode nem andar com ela; vibrar segurando, sem a tela mudar, so incomoda.
+        if value == 1 and current[0]:
             current[0].feel(key)
 
     keys = Keys(emit)
