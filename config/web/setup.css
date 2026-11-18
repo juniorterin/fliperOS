@@ -395,14 +395,6 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-cfacts .tag { font-size: 11.5px; }
 .cg-cfacts .ctrl { gap: 8px; }
 .cg-ccat { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
-.cg-gicon { vertical-align: middle; }
-.cg-gicon:hover { background: var(--raise); }
-.cg-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 12px 0; }
-.cg-icon { display: grid; justify-items: center; gap: 6px; padding: 10px 6px; border: 1px solid var(--hair); border-radius: 10px;
-  background: var(--surface); color: var(--text); cursor: pointer; }
-.cg-icon svg { width: 28px; height: 28px; }
-.cg-icon small { color: var(--muted); font-size: 12px; text-align: center; }
-.cg-icon:hover, .cg-icon.on { border-color: var(--green); background: var(--raise); }
 .cg-group h4 .cg-gtools { display: flex; gap: 2px; margin-left: auto; }
 .cg-group h4 .cg-gtools .icon-btn { border: 0; background: none; color: var(--dim); margin-left: 0; }
 .cg-group h4 .cg-gtools .icon-btn:hover { background: var(--raise); color: var(--text); }

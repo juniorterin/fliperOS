@@ -8296,9 +8296,10 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual((info['portproton'], info['games_dir'], info['free']), (False, '/h/games', 1000))
         self.assertEqual((info['packages_dir'], info['last_group']), ('/h/roms/custom-packages', 'PC games'))
 
-    def test_the_group_icon_is_chosen_in_the_panel(self):
-        # O desenho do grupo: o painel o manda ao Setup (group-icon GRUPO ICONE); vazio volta ao padrao;
-        # um desenho que o Setup recusa e um 400. A cabeca de cada grupo e o botao que abre a escolha.
+    def test_the_group_icon_is_gone_from_the_panel_but_the_api_stays(self):
+        # O logotipo do grupo tomou o lugar do desenho: a cabeca do grupo nao tem mais o botao do icone (um quadrado
+        # vazio, porque o CSS esconde os desenhos px da cabeca) nem a escolha dele. A API ainda manda o desenho ao
+        # Setup (group-icon GRUPO ICONE); vazio volta ao padrao; um desenho que o Setup recusa e um 400.
         flag = self.dir / 'group-icon.flag'
         self.assertEqual(self.call('POST', '/api/customgames/group-icon', {'name': 'PC games', 'icon': 'arcade'})[0], 200)
         self.assertEqual(flag.read_text().strip(), 'PC games|arcade')
@@ -8306,12 +8307,15 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual(flag.read_text().strip(), 'PC games|')
         self.assertEqual(self.call('POST', '/api/customgames/group-icon', {'name': 'PC games', 'icon': 'bad'})[0], 400)
         js = (ROOT / 'config/web/customgames.js').read_text()
-        self.assertIn('el("h4", {}, cgGroupIconButton(g), g.name,', js)
-        self.assertIn('"/api/customgames/group-icon"', js)
-        self.assertIn('icon("px-" + (g.icon || "games"))', js)
+        self.assertIn('el("h4", {}, g.name,', js)
+        for gone in ('cgGroupIconButton', 'cgPickGroupIcon', 'cg-gicon', 'cg-icons', '"/api/customgames/group-icon"'):
+            self.assertNotIn(gone, js, gone)
+        css = (ROOT / 'config/web/setup.css').read_text()
+        for gone in ('.cg-gicon', '.cg-icons', '.cg-icon '):
+            self.assertNotIn(gone, css, gone)
         text = (ROOT / 'config/web/setup-text.js').read_text()
         for key in ('cg_group_icon', 'cg_group_icon_title', 'cg_icon_default', 'cg_group_icon_note'):
-            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 0, key)
         # Todo desenho da lista existe no painel (px-NOME) e no Setup (theme.ICONS).
         names = re.findall(r'"(\w+)\|[^"|]+"', (ROOT / 'fliperos-setup/lib/customgames.sh').read_text().split(
             'CUSTOM_GAMES_ICONS=(')[1].split('\n)')[0])
@@ -8367,10 +8371,15 @@ class WebCustomGamesTests(WebSetupBase):
         text = (ROOT / 'config/web/setup-text.js').read_text()
         for key in ('cg_group_rename', 'cg_rename_title', 'cg_rename_note', 'cg_rename_go', 'cg_rename_bad', 'cg_renamed'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
-        # Os botoes da cabeca do grupo usam desenhos que existem no painel.
+        # Os botoes da cabeca do grupo usam desenhos g- (os px- sao escondidos ali pelo CSS: o botao de renomear
+        # aparecia como um quadrado vazio) que existem no painel.
         sprites = (ROOT / 'config/web/icons.svg').read_text()
-        for name in ('g-upload', 'g-trash', 'px-edit'):
+        for name in ('g-upload', 'g-edit', 'g-trash'):
             self.assertIn('id="%s"' % name, sprites, name)
+        self.assertIn('"aria-label": t("cg_group_rename") + ": " + g.name }, icon("g-edit"))', js)
+        tools = js.split('const del = el("button"')[1].split('return el("section"')[0]
+        for glyph in re.findall(r'icon\("([\w-]+)"\)', tools):
+            self.assertTrue(glyph.startswith('g-'), glyph)
 
     def test_the_marquee_logo_of_a_group_follows_the_uploaded_one(self):
         # /api/marquee/logo desenha o logotipo do grupo que a pessoa subiu (o do syslogo, com o mesmo nome) e, com
