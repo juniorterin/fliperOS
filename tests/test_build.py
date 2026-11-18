@@ -12559,6 +12559,29 @@ class FightcadeTests(unittest.TestCase):
             self.assertIn('MouseSensitivity = 50\n', dojo.split('[input]')[1])
             self.assertTrue((tmp / 'fc/emulator/flycast/mappings/SDL_Pad_arcade.cfg').is_file())
 
+    def test_the_room_opens_with_the_32_bit_layer_for_the_wine_emulators(self):
+        # O FBNeo, o FBA e o SNES9x (32 bits, no Wine) herdam a camada pelo
+        # cliente: ela grava o FPS que o painel web mostra. So o comando que abre
+        # a sala a recebe (o Fightcade2.sh grava o ambiente que viu em tmp/fc/env).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fightcade_package(tmp / 'pkg.tar.gz')
+            self.assertEqual(self.fetch(tmp).returncode, 0)
+            layer = tmp / 'libfliperos-deflicker.so'
+            layer.write_text('ELF')
+            run = self.session(tmp, [self.CLIENT], FLIPEROS_DEFLICKER_LIB32=str(layer))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            seen = (tmp / 'fc/env').read_text().splitlines()
+            self.assertIn('LD_PRELOAD=%s' % layer, seen)
+            # O que ja estava no LD_PRELOAD vai junto, depois dela.
+            run = self.session(tmp, [self.CLIENT], FLIPEROS_DEFLICKER_LIB32=str(layer), LD_PRELOAD='/x/outra.so')
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn('LD_PRELOAD=%s:/x/outra.so' % layer, (tmp / 'fc/env').read_text().splitlines())
+            # Sem a camada compilada (o Wine sem os pacotes de 32 bits), a sala abre sem ela.
+            run = self.session(tmp, [self.CLIENT], FLIPEROS_DEFLICKER_LIB32=str(tmp / 'nao-existe.so'))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertFalse([l for l in (tmp / 'fc/env').read_text().splitlines() if l.startswith('LD_PRELOAD=')])
+
     def test_dojo_gets_the_arcade_bios_of_the_system(self):
         # O Dojo le naomi.zip e awbios.zip de data/ e o pacote nao as traz: o
         # "Test game" parava em "cannot load BIOS naomi.zip". As do sistema

@@ -51,6 +51,7 @@ escquit=${FLIPEROS_ESCQUIT:-/opt/fliperos/bin/fliperos-escquit}
 buttons=${FLIPEROS_BUTTONS:-/opt/fliperos/bin/fliperos-buttons}
 buttons_map=${FLIPEROS_BUTTONS_MAP:-/etc/fliperos/buttons.map}
 mame=${FIGHTCADE_MAME:-groovymame}
+layer32=${FLIPEROS_DEFLICKER_LIB32:-/usr/local/lib/fliperos/i386/libfliperos-deflicker.so}
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 # say PORCENTAGEM TEXTO: uma etapa para a tela de progresso do Setup
@@ -631,7 +632,20 @@ done
 
 # O Fightcade2.sh prepara a configuracao do FBNeo, registra o fcade:// (por
 # onde o cliente abre os emuladores), deixa o cliente em segundo plano e sai.
-./Fightcade2.sh "--force-device-scale-factor=$scale" "$@"
+# A camada de 32 bits do FliperOS (config/fliperos-deflicker.c, compilada com o
+# Wine) no ambiente de quem abre a sala, so neste comando (o laco abaixo nao a
+# recebe): o FBNeo, o FBA e o SNES9x, de 32 bits no Wine, a herdam pelo cliente
+# (o fcade), e ela grava o FPS que o painel web e a OSD mostram, e traz a OSD
+# por cima do jogo. Os processos de 64 bits (o Electron da sala, o Flycast, que
+# tem a camada do Vulkan por conta propria) ignoram uma biblioteca de 32 bits,
+# com um aviso do ld.so no log de cada um. Ela so filtra em modo entrelacado, e
+# os emuladores abrem em modos progressivos. Sem ela compilada, a sala abre
+# igual, so sem o FPS do FBNeo.
+if [[ -f $layer32 ]]; then
+  LD_PRELOAD="$layer32${LD_PRELOAD:+:$LD_PRELOAD}" ./Fightcade2.sh "--force-device-scale-factor=$scale" "$@"
+else
+  ./Fightcade2.sh "--force-device-scale-factor=$scale" "$@"
+fi
 
 # Esc na sala (nenhum emulador aberto) fecha o Fightcade
 # (config/fliperos-escquit): o SIGTERM dele para este script, que fecha o
