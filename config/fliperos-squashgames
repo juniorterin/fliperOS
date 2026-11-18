@@ -11,6 +11,7 @@
 #   fliperos-squashgames remove PASTA               apaga o jogo: a pasta, o arquivo e a camada gravavel
 #   fliperos-squashgames mount-all | umount-all     as da lista (fliperos-squashgames.service)
 #   fliperos-squashgames list                       PASTA|montada (0 ou 1)|tamanho do arquivo
+#   fliperos-squashgames rename-dir PASTA NOVA      a pasta de um grupo muda de nome, com as pastas empacotadas dentro
 #
 # Como root (montar pede root): o Setup e o servico do boot. So pastas dentro
 # da home do jogador (FLIPEROS_USER), sem atalhos no caminho. A lista e
@@ -226,6 +227,43 @@ cmd_list() {
   done < "$LIST"
 }
 
+# cmd_rename_dir PASTA NOVA: a pasta que tem os jogos de um grupo
+# (~/games/GRUPO) muda de nome, com as pastas em squashfs dentro: cada uma se
+# desmonta, a pasta anda (o PASTA.squashfs e a camada gravavel ficam ao lado
+# da pasta do jogo, dentro dela), a lista passa a ter os caminhos novos e elas
+# sao montadas de novo. Falhando, as que se desmontaram voltam e nada muda.
+cmd_rename_dir() {
+  local old new folder target
+  local -a inside=() down=()
+  old=$(folder_ok "${1:-}") || fail "not a folder inside $home: ${1:-}"
+  new=$(folder_ok "${2:-}") || fail "not a folder inside $home: ${2:-}"
+  [[ -d $old && ! -e $new ]] || fail "$old is not a folder, or $new already exists"
+  if [[ -f $LIST ]]; then
+    while IFS= read -r folder; do
+      [[ $folder == "$old"/* ]] && inside+=("$folder")
+    done < "$LIST"
+  fi
+  for folder in "${inside[@]}"; do
+    if do_umount "$folder"; then
+      down+=("$folder")
+    else
+      for folder in "${down[@]}"; do do_mount "$folder"; done
+      fail "a game of the group is open (close it and try again)"
+    fi
+  done
+  if ! mv -- "$old" "$new"; then
+    for folder in "${down[@]}"; do do_mount "$folder"; done
+    fail "could not move $old"
+  fi
+  for folder in "${inside[@]}"; do
+    target=$new/${folder#"$old"/}
+    list_remove "$folder"
+    list_add "$target"
+    do_mount "$target" || echo "fliperos-squashgames: could not mount $target" >&2
+  done
+  say 100 "$(basename -- "$old") renamed"
+}
+
 cmd_mount_all() {
   local folder rc=0
   [[ -f $LIST ]] || return 0
@@ -250,17 +288,18 @@ cmd_umount_all() {
 
 [[ ${3:-} == --progress ]] && progress=1
 case ${1:-} in
-  pack | unpack | remove | mount-all | umount-all)
+  pack | unpack | remove | rename-dir | mount-all | umount-all)
     ((EUID == 0)) || fail "${1} needs root (Setup > Games > Custom games)"
     ;;&
   pack) cmd_pack "${2:-}" ;;
   unpack) cmd_unpack "${2:-}" ;;
   remove) cmd_remove "${2:-}" ;;
+  rename-dir) cmd_rename_dir "${2:-}" "${3:-}" ;;
   mount-all) cmd_mount_all ;;
   umount-all) cmd_umount_all ;;
   list) cmd_list ;;
   *)
-    sed -n '9,13p' "$0" | sed 's/^# *//' >&2
+    sed -n '9,14p' "$0" | sed 's/^# *//' >&2
     exit 1
     ;;
 esac

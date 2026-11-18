@@ -403,6 +403,16 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-icon svg { width: 28px; height: 28px; }
 .cg-icon small { color: var(--muted); font-size: 12px; text-align: center; }
 .cg-icon:hover, .cg-icon.on { border-color: var(--green); background: var(--raise); }
+.cg-group h4 .cg-gtools { display: flex; gap: 2px; margin-left: auto; }
+.cg-group h4 .cg-gtools .icon-btn { border: 0; background: none; color: var(--dim); margin-left: 0; }
+.cg-group h4 .cg-gtools .icon-btn:hover { background: var(--raise); color: var(--text); }
+.cg-group h4 .cg-gtools .cg-gdel:hover { color: var(--bad); }
+.cg-glogo { height: 14px; width: auto; max-width: 96px; object-fit: contain; vertical-align: middle; }
+.cg-logo-now, .cg-logo-preview { display: grid; place-items: center; min-height: 64px; margin: 10px 0; padding: 10px;
+  border-radius: 10px; background: var(--bg); }
+.cg-logo-now img, .cg-logo-preview img { max-height: 48px; max-width: 100%; }
+.cg-logo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.cg-logo-select { flex: 1 1 220px; min-width: 0; }
 .cg-cmade { font-size: 12.5px; color: var(--accent, var(--muted)); overflow-wrap: anywhere; }
 /* O texto rola devagar de cima a baixo quando nao cabe (para com o cursor). */
 .cg-ctext { height: 4.8em; overflow: hidden; font-size: 12.5px; line-height: 1.2; color: var(--dim); white-space: pre-line;

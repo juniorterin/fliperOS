@@ -398,7 +398,7 @@ customgames_remove_folder() {
 customgames_group_own() {
   local low=${1,,}
   case $low in
-    *.sh | *.cfg | *.key | *.tmp | *.new | *.part | thumbs.db | desktop.ini | .ds_store | ._* | .directory | .icon) return 0 ;;
+    *.sh | *.cfg | *.key | *.tmp | *.new | *.part | thumbs.db | desktop.ini | .ds_store | ._* | .directory | .icon | .logo.png) return 0 ;;
   esac
   return 1
 }
@@ -846,6 +846,185 @@ customgames_group_icon_set() {
   return 0
 }
 
+# ── O logotipo de cada grupo ──
+# GRUPO/.logo.png: o logotipo de uma cor so que o marquee e a tira do frontend
+# mostram do grupo, como o dos sistemas (config/fliperos-syslogo desenha o do
+# grupo no lugar do da fonte, com o mesmo nome, na cor de quem o pede). Ou e o
+# desenho de uma imagem da pessoa (so o desenho conta: o canal alfa, ou o que
+# difere do fundo), ou e um dos logotipos que o FliperOS ja tem (a lista do
+# syslogo), para quem nao quer subir o seu.
+CUSTOM_GAMES_SYSLOGO=${CUSTOM_GAMES_SYSLOGO:-${FLIPEROS_BIN:-/opt/fliperos/bin}/fliperos-syslogo}
+
+# customgames_logo_list imprime "nome<TAB>rotulo" de cada logotipo da lista.
+customgames_logo_list() {
+  [[ -f $CUSTOM_GAMES_SYSLOGO ]] || return 0
+  python3 "$CUSTOM_GAMES_SYSLOGO" list 2> /dev/null
+  return 0
+}
+
+# customgames_group_logo GRUPO: o grupo tem o logotipo (status 0).
+customgames_group_logo() {
+  [[ -f $CUSTOM_GAMES_DIR/$1/.logo.png ]]
+}
+
+# customgames_group_logo_set GRUPO [IMAGEM | system:NOME] grava o logotipo do
+# grupo: o desenho da IMAGEM (um arquivo) ou o logotipo NOME da lista; sem o
+# segundo, o grupo fica sem logotipo (o icone volta). Status 2: o grupo, o
+# arquivo ou o nome nao servem; 1: a imagem nao abre ou nao tem desenho.
+customgames_group_logo_set() {
+  local group=$1 source=${2:-} file tmp
+  customgames_valid_name "$group" && [[ -d $CUSTOM_GAMES_DIR/$group ]] || return 2
+  file=$CUSTOM_GAMES_DIR/$group/.logo.png
+  if [[ -z $source ]]; then
+    rm -f -- "$file"
+    return 0
+  fi
+  [[ -f $CUSTOM_GAMES_SYSLOGO ]] || return 1
+  tmp=$file.new
+  if [[ $source == system:* ]]; then
+    [[ -n ${source#system:} ]] || return 2
+    python3 "$CUSTOM_GAMES_SYSLOGO" copy "${source#system:}" "$tmp" > /dev/null 2>&1 || { rm -f "$tmp"; return 2; }
+  else
+    [[ -f $source ]] || return 2
+    python3 "$CUSTOM_GAMES_SYSLOGO" import "$source" "$tmp" > /dev/null 2>> "${FLIPEROS_LOG:-/dev/null}" ||
+      { rm -f "$tmp"; return 1; }
+  fi
+  mv -f "$tmp" "$file" || return 1
+  chmod 644 "$file"
+  chown "$FLIPEROS_USER:" "$file" 2> /dev/null
+  log_info "logotipo do grupo $group: ${source##*/}"
+  return 0
+}
+
+# ── Renomear um grupo ──
+# O nome do grupo e a pasta ~/roms/custom/GRUPO, a chave do sistema nos
+# frontends, a pasta ~/games/GRUPO dos jogos instalados, as midias em
+# ~/media/TIPO/custom/GRUPO, o nome do filtro de flicker e da OSD de cada jogo
+# (custom_GRUPO_NOME) e os favoritos e as partidas do frontend do FliperOS:
+# tudo vai junto, o logotipo e o icone do grupo tambem (estao na pasta dele).
+
+# customgames_move_dir ANTES DEPOIS: mv que serve a troca so de maiusculas num
+# disco que nao as distingue (a pasta de DEPOIS ja e a de ANTES).
+customgames_move_dir() {
+  if [[ -e $2 ]]; then
+    mv -- "$1" "$1.rename.$$" && mv -- "$1.rename.$$" "$2"
+  else
+    mv -- "$1" "$2"
+  fi
+}
+
+# customgames_games_move ANTES DEPOIS: a pasta ~/games/GRUPO muda de nome. Com
+# pastas em squashfs dentro, o ajudante as desmonta, move e monta de novo (um
+# jogo aberto segura a pasta: status 1 e nada muda).
+customgames_games_move() {
+  if [[ -n $(squashgames_list 2> /dev/null | awk -F'|' -v d="$1/" 'index($1, d) == 1 { print; exit }') ]]; then
+    "$SQUASHGAMES_CMD" rename-dir "$1" "$2" >> "${FLIPEROS_LOG:-/dev/null}" 2>&1
+  else
+    customgames_move_dir "$1" "$2"
+  fi
+}
+
+# customgames_app_move APP_ANTES APP_NOVO: o filtro de flicker e o perfil da
+# OSD de um jogo seguem o nome novo (customgames_app muda com o grupo).
+customgames_app_move() {
+  local prefix value profiles=${FLIPEROS_OSD_PROFILES:-/etc/fliperos/osd-profiles.conf}
+  [[ $1 == "$2" ]] && return 0
+  for prefix in deflicker_ deflicker_level_ mode480_; do
+    if value=$(conf_get "$prefix$1" 2> /dev/null); then
+      conf_set "$prefix$2" "$value" && conf_unset "$prefix$1"
+    fi
+  done
+  [[ -f $profiles ]] && sed -i -e "s/^emu:$1\t/emu:$2\t/" -e "s#^game:$1/#game:$2/#" "$profiles"
+  return 0
+}
+
+# customgames_group_running GRUPO: um jogo do grupo esta aberto (o executor
+# tem o cfg dele na linha de comando: "fliperos-customgame run .../GRUPO/X.cfg").
+customgames_group_running() {
+  local pid cmd
+  command -v pgrep > /dev/null || return 1
+  for pid in $(pgrep -f fliperos-customgame 2> /dev/null); do
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2> /dev/null)
+    [[ $cmd == *" run $CUSTOM_GAMES_DIR/$1/"* ]] && return 0
+  done
+  return 1
+}
+
+# customgames_group_rename GRUPO NOVO: o grupo passa a se chamar NOVO.
+# Status 2: um dos nomes nao serve ou o grupo nao existe; 3: ja ha um grupo
+# com o nome novo; 4: ~/games/NOVO tem outra coisa; 1: nao deu (um jogo do
+# grupo esta aberto: a pasta dele nao pode andar, e o squashfs dele seria
+# remontado por cima da camada que o jogo usa); em 3, 4 e 1 nada mudou.
+customgames_group_rename() {
+  local old=$1 new=$2 games=$CUSTOM_GAMES_GAMES home g name cfg folder kind src dst file
+  local -a names=()
+  customgames_valid_name "$old" && customgames_valid_name "$new" && [[ -d $CUSTOM_GAMES_DIR/$old ]] || return 2
+  [[ $old == "$new" ]] && return 0
+  [[ -e $CUSTOM_GAMES_DIR/$new && ! $CUSTOM_GAMES_DIR/$new -ef $CUSTOM_GAMES_DIR/$old ]] && return 3
+  customgames_group_running "$old" && return 1
+  while IFS='|' read -r g name _; do
+    [[ $g == "$old" ]] && names+=("$name")
+  done < <(customgames_list)
+  # As pastas dos jogos instalados: a primeira coisa, porque e a que pode falhar.
+  if [[ -d $games/$old ]]; then
+    rmdir -- "$games/$new" 2> /dev/null
+    [[ -e $games/$new && ! $games/$new -ef $games/$old ]] && return 4
+    customgames_games_move "$games/$old" "$games/$new" || return 1
+  fi
+  if ! customgames_move_dir "$CUSTOM_GAMES_DIR/$old" "$CUSTOM_GAMES_DIR/$new"; then
+    [[ -d $games/$new ]] && customgames_games_move "$games/$new" "$games/$old"
+    return 1
+  fi
+  # As midias de exemplo trazem o nome antigo escrito: saem, e as de verdade
+  # (as da pessoa) vao para a pasta nova, onde as de exemplo sao refeitas.
+  for name in "${names[@]}"; do
+    customgames_media_drop "$old" "$name"
+  done
+  for kind in $CUSTOM_GAMES_MEDIA_TYPES; do
+    src=$CUSTOM_GAMES_MEDIA/$kind/custom/$old dst=$CUSTOM_GAMES_MEDIA/$kind/custom/$new
+    [[ -d $src ]] || continue
+    if [[ -e $dst && ! $dst -ef $src ]]; then
+      find "$src" -mindepth 1 -maxdepth 1 -exec mv -n -t "$dst" {} + 2> /dev/null
+      rmdir -- "$src" 2> /dev/null
+    else
+      customgames_move_dir "$src" "$dst"
+    fi
+  done
+  # O cfg de cada jogo (a pasta dele em ~/games), o script (o nome do filtro) e
+  # os ajustes que levam esse nome.
+  for name in "${names[@]}"; do
+    cfg=$(customgames_cfg "$new" "$name")
+    if [[ -f $cfg ]]; then
+      folder=$(customgames_cfg_field "$cfg" folder)
+      [[ $folder == "$games/$old/"* ]] && customgames_cfg_set "$cfg" folder "$games/$new/${folder#"$games/$old/"}"
+      customgames_entry "$new" "$name" || log_warn "jogo personalizado nao regravado: $new / $name"
+    fi
+    customgames_app_move "$(customgames_app "$old" "$name")" "$(customgames_app "$new" "$name")"
+    customgames_media "$new" "$name"
+  done
+  customgames_media_dirs "$new"
+  # O frontend do FliperOS: favoritos (a chave do sistema) e partidas.
+  home=$(dirname "$ROMS_DIR")
+  file=$home/.config/fliperos/favourites
+  if [[ -f $file ]]; then
+    OLD="custom/$old" NEW="custom/$new" awk -F'\t' 'BEGIN { OFS = "\t" } $1 == ENVIRON["OLD"] { $1 = ENVIRON["NEW"] } { print }' \
+      "$file" > "$file.new" && cat "$file.new" > "$file"
+    rm -f "$file.new"
+  fi
+  src=$home/.local/share/fliperos/stats/$old dst=$home/.local/share/fliperos/stats/$new
+  [[ -d $src && ! -e $dst ]] && mv -- "$src" "$dst"
+  rm -f -- "$home/.local/share/fliperos/lists/$old.txt"
+  [[ $(customgames_last_group_peek) == "$old" ]] && customgames_last_group_set "$new"
+  log_info "grupo de jogos personalizados renomeado: $old -> $new (${#names[@]} jogos)"
+  return 0
+}
+
+# customgames_last_group_peek: o ultimo grupo usado, mesmo se ja nao existe.
+customgames_last_group_peek() {
+  head -n 1 "$(customgames_last_group_file)" 2> /dev/null
+  return 0
+}
+
 # customgames_list imprime "grupo|nome|modo|comando" de cada entrada. Um .sh
 # posto a mao, sem o cabecalho, aparece com o modo e o comando vazios.
 customgames_list() {
@@ -941,7 +1120,7 @@ customgames_describe() {
   customgames_packages_migrate
   customgames_packages_dir
   while IFS= read -r group; do
-    customgames_out group "$group" "$(customgames_count "$group")" "$(customgames_group_icon "$group")"
+    customgames_out group "$group" "$(customgames_count "$group")" "$(customgames_group_icon "$group")"       "$(customgames_group_logo "$group" && echo 1)"
   done < <(customgames_groups)
   while IFS='|' read -r group name _; do
     cfg=$(customgames_cfg "$group" "$name")
@@ -978,6 +1157,9 @@ customgames_describe() {
   for value in "${CUSTOM_GAMES_ICONS[@]}"; do
     customgames_out icon "${value%%|*}" "${value#*|}"
   done
+  while IFS=$'	' read -r value label; do
+    customgames_out logo "$value" "$label"
+  done < <(customgames_logo_list)
   while IFS='|' read -r value line label; do
     customgames_out squash "$value" "$line" "$label"
   done < <(squashgames_list 2> /dev/null)
@@ -1595,7 +1777,8 @@ customgames_install_all() {
 # customgames_cli SUBCOMANDO...: o fliperos-setup --customgames.
 #   describe | check ARQ | bulk ARQ [--portproton] | edit CHAVE=VALOR... |
 #   delete GRUPO NOME [folder] | group NOME | group-info NOME |
-#   group-icon GRUPO [ICONE] | group-delete NOME [all] | media GRUPO NOME --snap ARQ... |
+#   group-icon GRUPO [ICONE] | group-logo GRUPO [IMAGEM | system:NOME] | group-rename GRUPO NOVO |
+#   group-delete NOME [all] | media GRUPO NOME --snap ARQ... |
 #   install ZIP GRUPO [replace] [--portproton] | install-all GRUPO |
 #   package-delete ZIP | check-create ARQ | create ARQ [replace] | test ARQ |
 #   pack GRUPO NOME | squash pack|unpack PASTA | portproton
@@ -1624,6 +1807,13 @@ customgames_cli() {
       customgames_group_info "$1"
       ;;
     group-icon) customgames_group_icon_set "${1:-}" "${2:-}" ;;
+    group-logo) customgames_group_logo_set "${1:-}" "${2:-}" ;;
+    group-rename)
+      customgames_group_rename "${1:-}" "${2:-}"
+      rc=$?
+      ((rc == 0)) && customgames_refresh_frontends
+      return $rc
+      ;;
     package-delete) customgames_package_delete "${1:-}" ;;
     check-create) customgames_create_check "${1:-}" ;;
     test) customgames_test "${1:-}" ;;

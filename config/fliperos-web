@@ -2663,17 +2663,27 @@ class LogoCache:
         self.lock = threading.Lock()
         self.items = collections.OrderedDict()
 
-    def get(self, name):
+    def get(self, name, system=False):
+        """O logotipo de name. Um grupo de jogos custom com logotipo (o que a
+        pessoa subiu) vale no lugar do da fonte, e a data dele entra na chave:
+        trocar o logotipo muda a imagem. system: so o da lista, nunca o de um
+        grupo com o mesmo nome (a previa de quem escolhe um da lista)."""
         if not re.fullmatch(r"[^\x00-\x1f\x7f]{1,80}", name or ""):
             return None
+        custom = os.path.join(player_home(), "roms", "custom")
+        try:
+            stamp = 0 if system or "/" in name else os.stat(os.path.join(custom, name, ".logo.png")).st_mtime_ns
+        except OSError:
+            stamp = 0
+        key = (name, stamp, system)
         with self.lock:
-            if name in self.items:
-                return self.items[name]
+            if key in self.items:
+                return self.items[key]
         fd, path = tempfile.mkstemp(suffix=".png")
         os.close(fd)
         data = None
         try:
-            env = dict(os.environ, ATTRACT_DIR=attract_dir())
+            env = dict(os.environ, ATTRACT_DIR=attract_dir(), FLIPEROS_CUSTOM_DIR="/nonexistent" if system else custom)
             rc = subprocess.run([SYSLOGO, "png", name, path, "96", "8BE9FD"], capture_output=True, timeout=20,
                                 env=env).returncode
             if rc == 0:
@@ -2687,7 +2697,7 @@ class LogoCache:
             except OSError:
                 pass
         with self.lock:
-            self.items[name] = data
+            self.items[key] = data
             while len(self.items) > 100:
                 self.items.popitem(last=False)
         return data
@@ -3385,16 +3395,18 @@ def customgames_info():
     """fliperos-setup --customgames describe como JSON: os grupos, os jogos,
     os pacotes esperando e as escolhas dos dropdowns."""
     out = setup_out("--customgames", "describe", timeout=120)
-    info = {"groups": [], "games": [], "pending": [], "modes": [], "genres": [], "controls": [], "icons": [], "squash": [],
+    info = {"groups": [], "games": [], "pending": [], "modes": [], "genres": [], "controls": [], "icons": [], "logos": [], "squash": [],
             "wine": [], "portproton": False, "games_dir": "", "free": 0, "packages_dir": "", "last_group": ""}
     for line in out.splitlines():
         f = line.split("\t")
         kind, rest = f[0], f[1:]
         if kind == "group" and len(rest) >= 2:
             info["groups"].append({"name": rest[0], "count": int(rest[1]) if rest[1].isdigit() else 0,
-                                   "icon": rest[2] if len(rest) > 2 else ""})
+                                   "icon": rest[2] if len(rest) > 2 else "", "logo": len(rest) > 3 and rest[3] == "1"})
         elif kind == "icon" and len(rest) == 2:
             info["icons"].append({"value": rest[0], "label": rest[1]})
+        elif kind == "logo" and len(rest) == 2:
+            info["logos"].append({"value": rest[0], "label": rest[1]})
         elif kind == "game" and len(rest) >= 12:
             info["games"].append(dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
                                            "players", "command", "exe", "folder", "package", "runner", "year",
@@ -4293,7 +4305,8 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/overlay":
             return self.send(200, overlay_paths(overlay_key()))
         if url.path == "/api/marquee/logo":
-            return self.system_logo((parse_qs(url.query).get("name") or [""])[0])
+            query = parse_qs(url.query)
+            return self.system_logo((query.get("name") or [""])[0], (query.get("system") or [""])[0] == "1")
         if url.path == "/api/marquee/idle":
             return self.idle_animation()
         if url.path == "/api/marquee/state":
@@ -4990,8 +5003,8 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             watch.leave()
 
-    def system_logo(self, name):
-        data = self.panel.logos.get(name)
+    def system_logo(self, name, system=False):
+        data = self.panel.logos.get(name, system)
         if not data:
             return self.send(404, {"error": "no logo for this system"})
         return self.send(200, data, "image/png")
@@ -5431,6 +5444,30 @@ class Handler(BaseHTTPRequestHandler):
         if action == "group-icon":
             # O desenho do grupo (GRUPO/.icon); vazio: o padrao.
             return self.setup_call(["--customgames", "group-icon", name, customgame_field(data.get("icon"), 40)])
+        if action == "group-logo":
+            # O logotipo do grupo (GRUPO/.logo.png, de uma cor so como os dos
+            # sistemas): a imagem que a pessoa subiu (logo, o id do stage) ou
+            # um da lista (system); sem os dois, o grupo fica sem logotipo.
+            source = ""
+            if data.get("logo"):
+                source = stage_path(data["logo"])
+                if not source:
+                    return self.send(400, {"error": "the image was not found: send it again"})
+            elif data.get("system"):
+                source = "system:" + customgame_field(data["system"], 120)
+            return self.setup_answer(["--customgames", "group-logo", name, source],
+                                     {1: (400, "that image has no drawing to use as a logo: try a PNG with a transparent "
+                                               "background, or a dark logo on a light background")}, timeout=120)
+        if action == "group-rename":
+            # Renomear o grupo: a pasta, as midias, os jogos instalados e o que
+            # vai com o nome (o Setup refaz os frontends).
+            new = customgame_field(data.get("new_name"), 255)
+            if not name or not new:
+                return self.send(400, {"error": "the group and its new name"})
+            return self.setup_answer(["--customgames", "group-rename", name, new],
+                                     {3: (409, "a group with that name already exists"),
+                                      4: (409, "the folder ~/games/%s already has something in it" % new),
+                                      1: (409, "a game of the group is open: close it and try again")}, timeout=300)
         if action == "group-info":
             # O que apagar o grupo leva (os jogos, as pastas, os pacotes, os
             # outros arquivos da pasta dele), para a pergunta.

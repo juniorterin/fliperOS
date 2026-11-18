@@ -1525,7 +1525,7 @@ for _alias, _name in {
     # controles, os jogadores) e a midia do pacote (imagem, video, texto).
     "+create": "chds", "+package": "chds", "+all": "install", "+group": "addfolder", "+command": "edit",
     # O desenho do grupo (Custom games > grupo > Group icon).
-    "+icon": "arcade",
+    "+icon": "arcade", "+logo": "video", "+rename": "edit",
     # Setup > System > Storage: o disco secundario; a tela dele: usar, so preparar.
     "storage": "disk", "prepare": "addfolder", "unuse": "reset",
     "+delete": "remove", "wipe": "remove",

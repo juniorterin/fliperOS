@@ -194,8 +194,16 @@ function cgRenderList() {
     const del = el("button", { type: "button", class: "icon-btn small cg-gdel", title: t("cg_group_delete"),
       "aria-label": t("cg_group_delete") + ": " + g.name }, icon("g-trash"));
     del.addEventListener("click", () => cgDeleteGroup(g.name).catch(() => {}));
+    const logo = el("button", { type: "button", class: "icon-btn small", title: t("cg_group_logo"),
+      "aria-label": t("cg_group_logo") + ": " + g.name }, icon("g-upload"));
+    logo.addEventListener("click", () => cgGroupLogo(g).catch(() => {}));
+    const rename = el("button", { type: "button", class: "icon-btn small", title: t("cg_group_rename"),
+      "aria-label": t("cg_group_rename") + ": " + g.name }, icon("px-edit"));
+    rename.addEventListener("click", () => cgRenameGroup(g).catch(() => {}));
     return el("section", { class: "cg-group" },
-      el("h4", {}, cgGroupIconButton(g), g.name, el("span", { class: "dim" }, mine.length === 1 ? t("cg_game_1") : t("cg_games_n").replace("%n", mine.length)), del),
+      el("h4", {}, cgGroupIconButton(g), g.name, g.logo ? el("img", { class: "cg-glogo", src: cgGroupLogoUrl(g.name), alt: "" }) : "",
+        el("span", { class: "dim" }, mine.length === 1 ? t("cg_game_1") : t("cg_games_n").replace("%n", mine.length)),
+        el("span", { class: "cg-gtools" }, logo, rename, del)),
       mine.length ? el("div", { class: "cg-tiles" }, ...mine.map(cgTile)) : el("p", { class: "dim cg-empty" }, t("cg_group_empty")));
   }));
 }
@@ -230,6 +238,91 @@ async function cgPickGroupIcon(g) {
   dlg.replaceChildren(el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, t("cg_group_icon_title").replace("%s", g.name)),
     el("p", { class: "dim" }, t("cg_group_icon_note")), grid, el("footer", {}, cancel)));
   dlg.showModal();
+}
+
+// O logotipo do grupo (GRUPO/.logo.png): de uma cor so, como o dos sistemas, o
+// que o marquee e a tira do frontend mostram. O painel o desenha pelo mesmo
+// caminho do marquee (/api/marquee/logo); o numero no fim e para o navegador
+// pedir de novo quando a pessoa troca o logotipo.
+let cgLogoStamp = Date.now();
+const cgGroupLogoUrl = (name) => "/api/marquee/logo?name=" + encodeURIComponent(name) + "&v=" + cgLogoStamp;
+
+// Escolher o logotipo: subir uma imagem (so o desenho dela conta), ou um dos
+// que o FliperOS ja tem, numa lista com a previa; ou tirar o logotipo.
+async function cgGroupLogo(g) {
+  const dlg = cgDialog();
+  const logos = (cg.info && cg.info.logos) || [];
+  const save = async (body) => {
+    const res = await api("/api/customgames/group-logo", { method: "POST", body: JSON.stringify(Object.assign({ name: g.name }, body)) });
+    if (!res.ok) { toast((await res.json().catch(() => ({}))).error || res.statusText, "bad"); return; }
+    cgLogoStamp = Date.now();
+    dlg.close();
+    cgLoad().catch(() => {});
+  };
+  const now = el("div", { class: "cg-logo-now" },
+    g.logo ? el("img", { src: cgGroupLogoUrl(g.name), alt: "" }) : el("span", { class: "dim" }, t("cg_logo_none")));
+  const file = el("input", { type: "file", accept: "image/png,image/jpeg,image/webp", hidden: "" });
+  const upload = el("button", { type: "button", class: "btn" }, icon("g-upload"), t("cg_logo_upload"));
+  upload.addEventListener("click", () => file.click());
+  file.addEventListener("change", async () => {
+    const picked = file.files && file.files[0];
+    if (!picked) return;
+    upload.disabled = true;
+    const out = await cgPostFile("/api/customgames/stage?kind=logo&name=" + encodeURIComponent(picked.name), picked, null, true);
+    upload.disabled = false;
+    if (out.status !== 200) { toast(t("cg_art_too_big").replace("%s", picked.name) + (out.data.error ? " " + out.data.error : ""), "bad"); return; }
+    await save({ logo: out.data.id });
+  });
+  const select = el("select", { class: "cg-logo-select", "aria-label": t("cg_logo_pick") },
+    el("option", { value: "" }, t("cg_logo_pick")), ...logos.map((l) => el("option", { value: l.value }, l.label)));
+  const preview = el("div", { class: "cg-logo-preview", hidden: "" });
+  const use = el("button", { type: "button", class: "btn", disabled: "" }, t("cg_logo_use"));
+  select.addEventListener("change", () => {
+    use.disabled = !select.value;
+    preview.hidden = !select.value;
+    preview.replaceChildren(...(select.value ? [el("img", { src: "/api/marquee/logo?system=1&name=" + encodeURIComponent(select.value), alt: "" })] : []));
+  });
+  use.addEventListener("click", () => save({ system: select.value }));
+  const remove = el("button", { type: "button", class: "btn ghost" }, icon("g-trash"), t("cg_logo_remove"));
+  remove.addEventListener("click", () => save({}));
+  const cancel = el("button", { type: "button", class: "btn ghost" }, t("cg_cancel"));
+  cancel.addEventListener("click", () => dlg.close());
+  dlg.replaceChildren(el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, t("cg_group_logo_title").replace("%s", g.name)),
+    el("p", { class: "dim" }, t("cg_group_logo_note")), now,
+    el("div", { class: "cg-logo-row" }, upload, file),
+    el("p", { class: "dim" }, t("cg_logo_or")),
+    el("div", { class: "cg-logo-row" }, select, use), preview,
+    el("footer", {}, ...(g.logo ? [remove] : []), cancel)));
+  dlg.showModal();
+}
+
+// Renomear o grupo: a pasta, as midias, os jogos instalados e o que vai com o
+// nome vao junto (o Setup faz tudo e refaz os frontends).
+async function cgRenameGroup(g) {
+  const dlg = cgDialog();
+  const input = el("input", { type: "text", value: g.name, maxlength: "255", autocomplete: "off", spellcheck: "false", "aria-label": t("cg_group_rename") });
+  const go = el("button", { type: "submit", class: "btn" }, t("cg_rename_go"));
+  const cancel = el("button", { type: "button", class: "btn ghost" }, t("cg_cancel"));
+  cancel.addEventListener("click", () => dlg.close());
+  const form = el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, t("cg_rename_title").replace("%s", g.name)),
+    el("p", { class: "dim" }, t("cg_rename_note")), input, el("footer", {}, go, cancel));
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = input.value.trim();
+    if (!name || name === g.name) { dlg.close(); return; }
+    if (/[/|]/.test(name) || name.startsWith(".")) { toast(t("cg_rename_bad"), "bad"); return; }
+    go.disabled = true;
+    const res = await api("/api/customgames/group-rename", { method: "POST", body: JSON.stringify({ name: g.name, new_name: name }) });
+    go.disabled = false;
+    if (!res.ok) { toast((await res.json().catch(() => ({}))).error || res.statusText, "bad"); return; }
+    dlg.close();
+    toast(t("cg_renamed").replace("%s", g.name).replace("%s", name));
+    cgLoad().catch(() => {});
+  });
+  dlg.replaceChildren(form);
+  dlg.showModal();
+  input.focus();
+  input.select();
 }
 
 // Apagar o grupo inteiro: o Setup diz antes o que vai junto (as pastas dos

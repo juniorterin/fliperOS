@@ -3229,12 +3229,48 @@ _fitted = {}         # (nome, largura, altura) -> surface no tamanho do azulejo
 FITTED_MAX = 400
 
 
-def logo_file(name):
+# O logotipo que a pessoa subiu para um grupo de jogos custom (GRUPO/.logo.png,
+# Setup ou painel web) vale no lugar do da fonte: o fliperos-syslogo o desenha
+# pelo nome do grupo. Trocar ou tirar o logotipo muda a data do arquivo, e ela
+# entra na chave de cada cache (a da memoria e a do disco): o azulejo muda sem
+# abrir o frontend de novo.
+CUSTOM_ROMS = os.environ.get("FLIPEROS_CUSTOM_DIR") or os.path.join(os.path.expanduser("~"), "roms", "custom")
+GROUP_LOGO_TTL = 4.0     # segundos entre uma leitura e outra da data do GRUPO/.logo.png
+_group_logo_seen = {}    # nome -> (quando foi lida, a data do arquivo ou 0)
+
+
+def group_logo_stamp(name):
+    """A data (ns) do logotipo do grupo `name`, ou 0 sem ele. Lida de tempos em
+    tempos: o azulejo pede o logotipo a cada quadro."""
+    now = time.monotonic()
+    seen = _group_logo_seen.get(name)
+    if seen is None or now - seen[0] > GROUP_LOGO_TTL:
+        stamp = 0
+        if name and "/" not in name and "\\" not in name and not name.startswith("."):
+            try:
+                stamp = os.stat(os.path.join(CUSTOM_ROMS, name, ".logo.png")).st_mtime_ns
+            except OSError:
+                stamp = 0
+        _group_logo_seen[name] = seen = (now, stamp)
+    return seen[1]
+
+
+def logo_key(name):
+    """A chave dos caches do logotipo de name: o nome, e com o logotipo que a
+    pessoa subiu para o grupo, a data dele."""
+    stamp = group_logo_stamp(name)
+    return "%s#%d" % (name, stamp) if stamp else name
+
+
+def logo_file(name, stamp=0):
     """O PNG do logotipo do sistema (branco-Dracula, SYSLOGO_HEIGHT de altura),
-    feito pelo fliperos-syslogo na primeira vez; None sem logotipo."""
+    feito pelo fliperos-syslogo na primeira vez; None sem logotipo. stamp: a
+    data do logotipo do grupo (os que ficaram para tras saem do disco)."""
+    import glob
     import subprocess
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "_"
-    path = os.path.join(SYSLOGO_CACHE, "%s-%d.png" % (safe, SYSLOGO_HEIGHT))
+    base = "%s-%d" % (safe, SYSLOGO_HEIGHT)
+    path = os.path.join(SYSLOGO_CACHE, "%s%s.png" % (base, "-%d" % stamp if stamp else ""))
     if os.path.isfile(path):
         return path
     # O temporario termina em .png: o fliperos-syslogo (Pillow) escolhe o
@@ -3244,12 +3280,18 @@ def logo_file(name):
         os.makedirs(SYSLOGO_CACHE, exist_ok=True)
         r = subprocess.run([SYSLOGO, "png", name, tmp, str(SYSLOGO_HEIGHT), "f8f8f2"],
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           timeout=20)
+                           timeout=20, env=dict(os.environ, FLIPEROS_CUSTOM_DIR=CUSTOM_ROMS))
     except (OSError, subprocess.SubprocessError):
         return None
     if r.returncode != 0 or not os.path.isfile(tmp):
         return None
     os.replace(tmp, path)
+    for old in glob.glob(glob.escape(os.path.join(SYSLOGO_CACHE, base)) + "-*.png"):
+        if old != path:
+            try:
+                os.unlink(old)
+            except OSError:
+                pass
     return path
 
 
@@ -3259,7 +3301,7 @@ def system_logo(name, w, h):
     got = logo_source(name)
     if got is None:
         return None
-    key = (name, w, h)
+    key = (logo_key(name), w, h)
     if key not in _fitted:
         k = min(w / got.get_width(), h / got.get_height())
         size = (max(1, round(got.get_width() * k)), max(1, round(got.get_height() * k)))
@@ -3295,19 +3337,21 @@ def ribbon_icon(cat, name, size):
 def logo_source(name):
     """O logotipo do sistema no tamanho em que foi feito (para a proporcao), ou
     None (ainda sendo feito, ou sem logotipo). Na primeira vez, comeca a faze-lo."""
-    got = _logos.get(name)
-    if got is None and name not in _logos:
-        _logos[name] = "..."
+    stamp = group_logo_stamp(name)
+    key = "%s#%d" % (name, stamp) if stamp else name
+    got = _logos.get(key)
+    if got is None and key not in _logos:
+        _logos[key] = "..."
 
         def work():
-            path = logo_file(name)
+            path = logo_file(name, stamp)
             surf = None
             if path:
                 try:
                     surf = pygame.image.load(path)
                 except (pygame.error, OSError):
                     surf = None
-            _logos[name] = surf
+            _logos[key] = surf
         import threading
         threading.Thread(target=work, daemon=True).start()
         return None

@@ -860,6 +860,8 @@ screen_custom_group() {
       tiles+=("game:$name|$name ($label)|$name|image|$snap;${short/Command/Cmd}|$name: $label.")
     done
     tiles+=("+icon|Group icon|Group icon|action|PICK|The drawing of $group in the Setup, the web panel and the frontend ribbon."
+      "+logo|Group logo|Group logo|action|$(customgames_group_logo "$group" && echo SET || echo PICK)|The one-colour logo of $group on the marquee and in the ribbon."
+      "+rename|Rename group|Rename|action|RENAME|Another name for $group; its games go with it."
       "+delete|Delete group|Delete group|action|DELETE|Delete $group and its games."
       "return|Return|Return|action|BACK|")
     choice=$(UI_BOARD_ENTER=OPEN ui_board "$title" "${#names[@]} games in $group, a system in the frontends." "$last" \
@@ -868,6 +870,10 @@ screen_custom_group() {
     case $choice in
       return) return 0 ;;
       +icon) screen_custom_group_icon "$group" ;;
+      +logo) screen_custom_group_logo "$group" ;;
+      +rename)
+        screen_custom_group_rename "$group" && group=$CUSTOM_GROUP_RENAMED title="Custom games: $CUSTOM_GROUP_RENAMED"
+        ;;
       +command) screen_custom_game_edit "" "" "$group" ;;
       +delete) screen_custom_group_delete "$group" && return 0 ;;
       game:*) screen_custom_game "$group" "${choice#game:}" ;;
@@ -886,6 +892,65 @@ screen_custom_group_icon() {
     "${current:-none}" "${entries[@]}") || return 0
   [[ $choice == none ]] && choice=""
   customgames_group_icon_set "$group" "$choice"
+}
+
+# screen_custom_group_logo GRUPO: o logotipo de uma cor so do grupo (o do
+# marquee e o da tira do frontend, como o dos sistemas): um dos que o FliperOS
+# ja tem, ou o desenho de uma imagem da pessoa (o painel web a sobe pelo
+# navegador; aqui, o caminho dela).
+screen_custom_group_logo() {
+  local group=$1 title="Group logo" choice key file rc
+  local -a entries=("list|One of the logos we have" "file|An image of mine") logos
+  customgames_group_logo "$group" && entries+=("none|Remove the logo")
+  entries+=("return|Return")
+  choice=$(ui_menu "$title" "The one-colour logo of $group on the marquee and in the frontend's ribbon, like the logos of the systems." \
+    list "${entries[@]}") || return 0
+  case $choice in
+    list)
+      mapfile -t logos < <(customgames_logo_list | awk -F'\t' '{ print $1 "|" $2 }')
+      if ((${#logos[@]} == 0)); then
+        ui_msg "$title" "This system has no list of logos."
+        return 0
+      fi
+      key=$(UI_STYLE=list ui_menu "$title" "Pick the logo of $group." "${logos[0]%%|*}" "${logos[@]}") || return 0
+      customgames_group_logo_set "$group" "system:$key" || ui_msg "$title" "That logo could not be used."
+      ;;
+    file)
+      file=$(ui_input "$title" "Path of the image (PNG, JPG, WebP...). Only its drawing is used, in one colour: a dark logo on white or one with a transparent background works.") ||
+        return 0
+      [[ $file == "~/"* ]] && file=$(dirname "$ROMS_DIR")/${file#"~/"}
+      customgames_group_logo_set "$group" "$file"
+      rc=$?
+      ((rc == 2)) && ui_msg "$title" "There is no image at $file."
+      ((rc == 1)) && ui_msg "$title" "That image has no drawing to use as a logo, or it could not be read."
+      ;;
+    none) customgames_group_logo_set "$group" "" ;;
+  esac
+  return 0
+}
+
+# screen_custom_group_rename GRUPO: pede outro nome e renomeia o grupo (a
+# pasta, as midias, os jogos instalados e o que vai com o nome); o nome novo
+# fica em CUSTOM_GROUP_RENAMED. Status 1: desistiu ou nao deu.
+screen_custom_group_rename() {
+  local group=$1 title="Rename group" new rc
+  while true; do
+    new=$(ui_input "$title" "New name for $group. Its games, pictures and settings go with it." "$group") || return 1
+    [[ $new == "$group" ]] && return 1
+    customgames_valid_name "$new" && break
+    ui_msg "$title" "The name cannot be empty, start with a dot or have / or |."
+  done
+  ui_info "$title" "Renaming $group to $new..."
+  customgames_group_rename "$group" "$new"
+  rc=$?
+  case $rc in
+    0) screen_custom_games_refresh ;;
+    3) ui_msg "$title" "There is already a group called $new." ;;
+    4) ui_msg "$title" "The folder ~/games/$new already has something in it." ;;
+    *) ui_msg "$title" "$group could not be renamed: close its games and try again." ;;
+  esac
+  ((rc == 0)) || return 1
+  CUSTOM_GROUP_RENAMED=$new
 }
 
 # screen_custom_group_delete GRUPO: pergunta e apaga o grupo inteiro

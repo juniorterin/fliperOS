@@ -20,6 +20,14 @@
 # mesmo que o tema faz com o nome da tela (fliperos-arcadeflow systems
 # acrescenta os nomes das telas do FliperOS aos apelidos).
 #
+# O logotipo de um grupo de jogos custom (Setup > Games > Custom games > Group
+# logo, ou o painel web) e o que a pessoa subiu: GRUPO/.logo.png em
+# ~/roms/custom. Vale no lugar do da fonte, com o mesmo nome, e e de uma cor so
+# como os dos sistemas: so o desenho conta (o canal alfa, ou, numa imagem sem
+# transparencia, o que difere do fundo), pintado da cor de quem o pede (o
+# branco do frontend, o ciano do marquee). `import` faz esse PNG da imagem da
+# pessoa (qualquer uma que o Pillow abra: PNG, JPG, WebP, GIF, BMP).
+#
 # A animacao da troca de sistema: o logotipo entra deslizando pelo lado de
 # onde a lista anda (e o de antes sai para o outro, como a tela do frontend
 # em feview.SLIDE) e pisca duas vezes. Fica o ultimo quadro aceso.
@@ -27,6 +35,9 @@
 #   fliperos-syslogo find NOME                     U+XXXX do sistema (status 1 sem logotipo)
 #   fliperos-syslogo png NOME ARQUIVO [ALTURA [RRGGBB]]   o logotipo, branco (ou da cor) em fundo transparente
 #   fliperos-syslogo export PASTA [ALTURA]         o de todos os sistemas, um PNG por nome
+#   fliperos-syslogo import IMAGEM ARQUIVO         o desenho de uma imagem da pessoa: branco em fundo transparente (status 1: sem desenho)
+#   fliperos-syslogo list                          "nome<TAB>rotulo" de cada logotipo da lista, para escolher o do grupo
+#   fliperos-syslogo copy NOME ARQUIVO [ALTURA]    o logotipo da lista, branco (o do grupo custom escolhido na lista)
 #   fliperos-syslogo gif NOME ARQUIVO [ANTERIOR [PASSO [LARGURAxALTURA]]]
 #                                                  a animacao num GIF (o Pixelcade so mostra arquivos)
 import os
@@ -42,6 +53,9 @@ ATTRACT = os.environ.get('ATTRACT_DIR', '/home/fliperos/.attract')
 THEME = os.path.join(ATTRACT, 'layouts', 'Arcadeflow')
 BUNDLED = os.environ.get('FLIPEROS_SYSLOGO_DATA', '/usr/local/share/fliperos/syslogo')
 ALIASES = os.environ.get('FLIPEROS_SYSLOGO_ALIASES', '/var/lib/fliperos/syslogo-aliases')
+CUSTOM = os.environ.get('FLIPEROS_CUSTOM_DIR', '/home/fliperos/roms/custom')
+GROUP_LOGO = '.logo.png'
+GROUP_LOGO_MAX = 400          # a altura em que o logotipo do grupo fica guardado
 FONT = 'font_Roboto-Allcaps-EXT4X.ttf'
 FIRST = 0xE900
 COLOR = (139, 233, 253)       # o do marquee do sistema (fliperos-dmd COLOR['system'])
@@ -108,6 +122,68 @@ def lookup(name, theme=None):
     return None
 
 
+def group_logo(name):
+    """O logotipo que a pessoa subiu para o grupo de jogos custom `name`
+    (GRUPO/.logo.png), ou None."""
+    if not name or '/' in name or '\\' in name or name.startswith('.') or '\n' in name:
+        return None
+    path = os.path.join(CUSTOM, name, GROUP_LOGO)
+    return path if os.path.isfile(path) else None
+
+
+def mask_of(img):
+    """So o desenho de uma imagem, num canal L recortado (255 = tinta), ou None
+    se nao ha desenho. Com transparencia de verdade, e o canal alfa; sem, o que
+    difere do fundo (o da borda, o que mais se repete): um desenho escuro em
+    fundo claro e um claro em fundo escuro valem igual."""
+    from PIL import ImageChops, ImageOps
+    img = img.convert('RGBA')
+    if max(img.size) > 1600:
+        k = 1600 / max(img.size)
+        img = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), Image.LANCZOS)
+    alpha = img.getchannel('A')
+    clear = sum(alpha.histogram()[:128])
+    if clear > 0.02 * img.width * img.height:
+        mask = alpha
+    else:
+        rgb = Image.new('RGB', img.size, (0, 0, 0))
+        rgb.paste(img.convert('RGB'), mask=alpha)
+        small = rgb.copy()
+        small.thumbnail((256, 256))
+        w, h = small.size
+        edge = ([small.getpixel((x, 0)) for x in range(w)] + [small.getpixel((x, h - 1)) for x in range(w)] +
+                [small.getpixel((0, y)) for y in range(h)] + [small.getpixel((w - 1, y)) for y in range(h)])
+        back = max(set(edge), key=edge.count)
+        r, g, b = ImageChops.difference(rgb, Image.new('RGB', rgb.size, back)).split()
+        mask = ImageOps.autocontrast(ImageChops.lighter(ImageChops.lighter(r, g), b))
+        # O ruido do JPEG fica de fora; o resto sobe a escala toda.
+        mask = mask.point(lambda v: 0 if v < 28 else min(255, (v - 28) * 255 // 200))
+    box = mask.point(lambda v: 255 if v > 24 else 0).getbbox()
+    if not box:
+        return None
+    return mask.crop(box)
+
+
+def import_logo(src, dest):
+    """Grava em dest o desenho da imagem src (branco, fundo transparente, ate
+    GROUP_LOGO_MAX de altura). False: a imagem nao abre ou nao tem desenho."""
+    try:
+        with Image.open(src) as opened:
+            opened.load()
+            mask = mask_of(opened)
+    except (OSError, ValueError, Image.DecompressionBombError):
+        return False
+    if mask is None:
+        return False
+    if mask.height > GROUP_LOGO_MAX:
+        k = GROUP_LOGO_MAX / mask.height
+        mask = mask.resize((max(1, round(mask.width * k)), GROUP_LOGO_MAX), Image.LANCZOS)
+    out = Image.new('RGBA', mask.size, (255, 255, 255, 255))
+    out.putalpha(mask)
+    out.save(dest, format='PNG')
+    return True
+
+
 def font(size):
     folder = theme_dir()
     for path in (os.path.join(folder, 'fonts', FONT), os.path.join(folder, FONT)):
@@ -116,31 +192,66 @@ def font(size):
     raise OSError('no logo font in ' + folder)
 
 
-def render(name, height=None, color=(255, 255, 255)):
+def render(name, height=None, color=(255, 255, 255), groups=True):
     """O logotipo recortado (RGBA, so o desenho) com a altura pedida (ou o
     tamanho em que a fonte o desenha); None sem tema, sem sistema ou sem
-    desenho."""
+    desenho. groups=False: so o da fonte, nunca o de um grupo custom de mesmo
+    nome (a lista para escolher um logotipo)."""
     if Image is None:
         return None
-    cp = lookup(name)
-    if cp is None:
-        return None
-    try:
-        face = font(200)
-    except OSError:
-        return None
-    canvas = Image.new('L', (2400, 400), 0)
-    ImageDraw.Draw(canvas).text((20, 20), chr(cp), font=face, fill=255)
-    box = canvas.getbbox()
-    if not box:
-        return None
-    alpha = canvas.crop(box)
+    alpha = None
+    own = group_logo(name) if groups else None
+    if own:
+        # O do grupo de jogos custom (o que a pessoa subiu) vale no lugar do da fonte.
+        try:
+            with Image.open(own) as opened:
+                opened.load()
+                alpha = mask_of(opened)
+        except (OSError, ValueError, Image.DecompressionBombError):
+            alpha = None
+    if alpha is None:
+        cp = lookup(name)
+        if cp is None:
+            return None
+        try:
+            face = font(200)
+        except OSError:
+            return None
+        canvas = Image.new('L', (2400, 400), 0)
+        ImageDraw.Draw(canvas).text((20, 20), chr(cp), font=face, fill=255)
+        box = canvas.getbbox()
+        if not box:
+            return None
+        alpha = canvas.crop(box)
     if height and height != alpha.height:
         width = max(1, round(alpha.width * height / alpha.height))
         alpha = alpha.resize((width, height), Image.LANCZOS)
     img = Image.new('RGBA', alpha.size, color + (255,))
     img.putalpha(alpha)
     return img
+
+
+def catalog():
+    """[(nome, rotulo)] de cada logotipo da lista (o de cada caractere da fonte
+    uma vez so), na ordem do data_systems.txt: o que a pessoa pode escolher
+    para o grupo dela no lugar de subir o seu."""
+    names = {}
+    try:
+        with open(os.path.join(theme_dir(), 'data_systems.txt'), encoding='utf-8') as f:
+            for line in f.read().split('\n'):
+                fields = line.rstrip('\r').split(',')
+                if len(fields) > 11 and fields[0] != 'null':
+                    names.setdefault(fields[0].strip().lower(), fields[11] if fields[11] != 'null' else fields[0])
+    except OSError:
+        return []
+    out, seen = [], set()
+    for key, label in names.items():
+        cp = lookup(key)
+        if cp is None or cp in seen or render(key, 8, groups=False) is None:
+            continue
+        seen.add(cp)
+        out.append((key, label.strip()))
+    return out
 
 
 def fitted(name, w, h, color=COLOR):
@@ -209,6 +320,9 @@ def main(argv):
         return 1
     cmd, args = (argv[1] if len(argv) > 1 else ''), argv[2:]
     if cmd == 'find' and len(args) == 1:
+        if group_logo(args[0]) and render(args[0], 8) is not None:     # o que a pessoa subiu para o grupo
+            print('group')
+            return 0
         cp = lookup(args[0])
         if cp is None or render(args[0], 8) is None:      # no data_systems.txt e com desenho na fonte
             return 1
@@ -223,28 +337,36 @@ def main(argv):
             return 1
         img.save(args[1])
         return 0
+    if cmd == 'import' and len(args) == 2:
+        tmp = args[1] + '.tmp.png'
+        if not import_logo(args[0], tmp):
+            return 1
+        os.replace(tmp, args[1])
+        return 0
+    if cmd == 'list' and not args:
+        rows = catalog()
+        for key, label in rows:
+            print('%s\t%s' % (key, label))
+        return 0 if rows else 1
+    if cmd == 'copy' and 2 <= len(args) <= 3:
+        # O logotipo de um sistema da lista, branco, para o arquivo (o logotipo
+        # de um grupo custom escolhido na lista).
+        img = render(args[0], int(args[2]) if len(args) == 3 and args[2].isdigit() else GROUP_LOGO_MAX,
+                     groups=False)
+        if img is None:
+            return 1
+        img.save(args[1], format='PNG')
+        return 0
     if cmd == 'export' and len(args) in (1, 2):
         os.makedirs(args[0], exist_ok=True)
-        done = set()
-        names = {}
-        try:
-            with open(os.path.join(theme_dir(), 'data_systems.txt'), encoding='utf-8') as f:
-                for line in f.read().split('\n'):
-                    fields = line.rstrip('\r').split(',')
-                    if len(fields) > 11 and fields[0] != 'null':
-                        names.setdefault(fields[0].strip().lower(), fields[11] if fields[11] != 'null' else fields[0])
-        except OSError:
-            return 1
-        for key, label in names.items():
-            cp = lookup(key)
-            if cp in done:
-                continue
-            img = render(key, int(args[1]) if len(args) == 2 else None)
+        done = 0
+        for key, label in catalog():
+            img = render(key, int(args[1]) if len(args) == 2 else None, groups=False)
             if img is None:
                 continue
-            done.add(cp)
+            done += 1
             img.save(os.path.join(args[0], safe(label) + '.png'))
-        print('%d logos' % len(done))
+        print('%d logos' % done)
         return 0 if done else 1
     if cmd == 'gif' and 2 <= len(args) <= 5:
         size = (128, 32)
@@ -260,6 +382,7 @@ def main(argv):
         write_gif(args[1], anim)
         return 0
     sys.stderr.write('usage: fliperos-syslogo find NAME | png NAME FILE [HEIGHT [RRGGBB]] | export DIR [HEIGHT]\n'
+                     '       fliperos-syslogo import IMAGE FILE | list | copy NAME FILE [HEIGHT]\n'
                      '       fliperos-syslogo gif NAME FILE [PREVIOUS [STEP [WIDTHxHEIGHT]]]\n')
     return 2
 

@@ -73,6 +73,8 @@ Inside a group:
 - **Add by its command**: a game or program opened by a command line;
 - one tile per **game**, with its picture and the kind of game and video mode (*WIN 240P*, *LINUX 480I*, *CMD 240P*);
 - **Group icon**: the drawing of the group (see [Groups](#groups));
+- **Group logo**: a one-colour logo for the marquee and the frontend's ribbon (see [Groups](#groups));
+- **Rename group**: another name for the group, with everything that goes with it (see [Groups](#groups));
 - **Delete group**: the whole group (see [Groups](#groups)).
 
 A game tile opens:
@@ -89,6 +91,15 @@ A name that doesn't fit its tile runs from side to side when the tile is under t
 A group is a folder, `~/roms/custom/<group>`, and a system in every frontend (the FliperOS frontend, Attract-Mode Plus, ES-DE, Pegasus). Group and game names can't be empty, start with a dot, or have `/` or `|`. Deleting the last game of a group removes the group when nothing else is left in its folder.
 
 **Group icon** (inside the group; in the web panel, the drawing at the start of the group's title) picks one of 19 drawings (gamepad, game box, arcade cabinet, joypad, joystick, light gun, wheel, keyboard, emulator, monitor, sound, disk, chip, desktop PC, network, cloud, lab flask, disc, trophy). The group's tile in the Setup, its title in the web panel and its tile in the frontend's ribbon (when the group has no logo of its own) show it. The choice is the line in `~/roms/custom/<group>/.icon`; without it the group keeps the default drawing.
+
+**Group logo** (inside the group; in the web panel, the upload arrow next to the group's name) gives the group a logo like the ones the systems have: **one colour**, shown on the marquee (Pixelcade and ZeDMD slide it in and blink it twice when you move to the group in the frontend), in the frontend's ribbon and at the top of the group's list. The frontend paints it in its own white and the marquee in its cyan, so only the **drawing** of the image counts, not its colours:
+
+- **Upload an image** (web panel) or give its path (Setup): PNG, JPG or WebP. With a transparent background, the opaque part is the drawing; with no transparency, whatever differs from the background is, so a dark logo on white and a light one on black both work. An image with nothing to draw (one flat colour) is refused and the group keeps what it had;
+- **Pick one of the logos we already have** (a list with a preview, in the Setup and in the web panel): the same ones the systems use, for when you don't want to upload yours. A logo of a system that has the same name as the group never wins over the one you chose for the group.
+
+The result is the file `~/roms/custom/<group>/.logo.png`, white on a transparent background, at most 400 pixels high. With a logo, the frontend's ribbon shows it instead of the icon; **Remove the logo** brings the icon back. Changing it shows in the frontend within a few seconds, without restarting it.
+
+**Rename group** (inside the group; in the web panel, the pencil next to the group's name) changes the name of the group and takes along everything that carries it: the folder `~/roms/custom/<group>` (with the icon and the logo), the group's game folders in `~/games` (the packed ones, in squashfs, are unmounted, moved and mounted again), the pictures, videos and texts in `~/media/<kind>/custom/<group>` (the sample ones are made again with the new name), each game's script and settings, the flicker filter, the OSD profile of each game, and the frontend's favourites and play counts of the group. It refuses a name that another group already has, or a `~/games/<name>` folder that has something else in it, and it stops with nothing changed when a game of the group is open. The frontends are updated at the end.
 
 **Delete group** (inside the group; in the web panel, the bin next to the group's name) removes the whole group, even an empty one or one whose folder holds other files:
 

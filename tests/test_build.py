@@ -5496,6 +5496,65 @@ class FrontendDataTests(unittest.TestCase):
             feview._group_icons.clear()
             self.assertIsNone(feview.group_icon({'key': 'mame', 'folder': tmp}))
 
+    def test_a_custom_group_logo_that_changes_makes_a_new_ribbon_logo(self):
+        # O logotipo que a pessoa subiu para o grupo (GRUPO/.logo.png) entra na chave de cada cache pela data
+        # do arquivo: trocar ou tirar o logotipo muda o azulejo sem abrir o frontend de novo, e o arquivo do
+        # disco de antes sai. O syslogo sabe onde ficam os grupos (FLIPEROS_CUSTOM_DIR).
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        with tempfile.TemporaryDirectory() as tmp:
+            custom = Path(tmp) / 'custom'
+            (custom / 'PC games').mkdir(parents=True)
+            tool = Path(tmp) / 'syslogo'
+            tool.write_text('#!/bin/sh\nprintf "%s" "$FLIPEROS_CUSTOM_DIR" > "$3"\n')
+            tool.chmod(0o755)
+            old = feview.SYSLOGO, feview.SYSLOGO_CACHE, feview.CUSTOM_ROMS
+            feview.SYSLOGO, feview.SYSLOGO_CACHE, feview.CUSTOM_ROMS = str(tool), str(Path(tmp) / 'cache'), str(custom)
+            feview._group_logo_seen.clear()
+            try:
+                self.assertEqual(feview.group_logo_stamp('PC games'), 0)
+                self.assertEqual(feview.logo_key('PC games'), 'PC games')
+                plain = feview.logo_file('PC games')
+                self.assertTrue(plain.endswith('/PC_games-48.png'))
+                logo = custom / 'PC games' / '.logo.png'
+                logo.write_bytes(b'x')
+                os.utime(logo, ns=(5 * 10 ** 9, 5 * 10 ** 9))
+                feview._group_logo_seen.clear()
+                self.assertEqual(feview.group_logo_stamp('PC games'), 5 * 10 ** 9)
+                self.assertEqual(feview.logo_key('PC games'), 'PC games#5000000000')
+                first = feview.logo_file('PC games', 5 * 10 ** 9)
+                self.assertTrue(first.endswith('/PC_games-48-5000000000.png'))
+                self.assertEqual(Path(first).read_text(), str(custom))
+                # Outro logotipo (outra data): o arquivo de antes sai; o sem data, do sistema, fica.
+                os.utime(logo, ns=(9 * 10 ** 9, 9 * 10 ** 9))
+                feview._group_logo_seen.clear()
+                second = feview.logo_file('PC games', feview.group_logo_stamp('PC games'))
+                self.assertTrue(second.endswith('/PC_games-48-9000000000.png'))
+                self.assertFalse(Path(first).exists())
+                self.assertTrue(Path(plain).exists())
+                # A data e lida de tempos em tempos (o azulejo a pede a cada quadro).
+                logo.unlink()
+                self.assertEqual(feview.group_logo_stamp('PC games'), 9 * 10 ** 9)
+                feview._group_logo_seen.clear()
+                self.assertEqual(feview.group_logo_stamp('PC games'), 0)
+                for name in ('../x', '.hidden', 'a/b', ''):
+                    self.assertEqual(feview.group_logo_stamp(name), 0, name)
+            finally:
+                feview.SYSLOGO, feview.SYSLOGO_CACHE, feview.CUSTOM_ROMS = old
+                feview._group_logo_seen.clear()
+        src = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        self.assertIn('key = (logo_key(name), w, h)', src)
+        self.assertIn('path = logo_file(name, stamp)', src)
+
     def test_icons_rise_when_the_year_and_maker_line_is_empty(self):
         # A lista (e a tela cheia e a grade com logo): sem ano nem fabricante a
         # linha dos dois some e os icones ocupam o lugar dela.
@@ -8125,7 +8184,9 @@ class WebSetupBase(unittest.TestCase):
             'esac\n'
             'case "$2" in\n'
             '  group-icon) echo "$3|$4" > TMP/group-icon.flag; [ "$4" = bad ] && exit 2; exit 0 ;;\n'
-            '  describe) printf "group\\tPC games\\t1\\tpad\\nicon\\tgames\\tGamepad\\nicon\\tpad\\tJoypad\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
+            '  group-logo) echo "$3|$4" > TMP/group-logo.flag; case "$4" in *bad) exit 1 ;; esac; exit 0 ;;\n'
+            '  group-rename) echo "$3|$4" > TMP/group-rename.flag; [ "$4" = dup ] && exit 3; [ "$4" = busy ] && exit 1; exit 0 ;;\n'
+            '  describe) printf "group\\tPC games\\t1\\tpad\\t1\\nicon\\tgames\\tGamepad\\nicon\\tpad\\tJoypad\\nlogo\\tnaomi\\tNaomi\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
             'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
             'mode\\t240p\\t640x240@60\\ngenre\\tShooter\\nsub\\tShooter / Gallery\\ngenre\\tMaze\\n'
             'control\\tjoy8\\t8-way joystick\\nportproton\\t0\\ngames\\t/h/games\\nfree\\t1000\\n'
@@ -8223,8 +8284,9 @@ class WebCustomGamesTests(WebSetupBase):
     def test_describe_is_json_with_the_choices(self):
         status, info = self.call('GET', '/api/customgames')
         self.assertEqual(status, 200)
-        self.assertEqual(info['groups'], [{'name': 'PC games', 'count': 1, 'icon': 'pad'}])
+        self.assertEqual(info['groups'], [{'name': 'PC games', 'count': 1, 'icon': 'pad', 'logo': True}])
         self.assertEqual(info['icons'], [{'value': 'games', 'label': 'Gamepad'}, {'value': 'pad', 'label': 'Joypad'}])
+        self.assertEqual(info['logos'], [{'value': 'naomi', 'label': 'Naomi'}])
         game = info['games'][0]
         self.assertEqual((game['name'], game['platform'], game['mode'], game['players'], game['command']),
                          ('Pang', 'command', '640x240@60', '2', 'wine pang.exe'))
@@ -8259,6 +8321,66 @@ class WebCustomGamesTests(WebSetupBase):
         for name in names:
             self.assertIn('id="px-%s"' % name, sprites, name)
             self.assertRegex(theme, r'(?m)^    "%s": """' % name)
+
+    def test_the_group_logo_is_uploaded_or_picked_from_the_list_in_the_panel(self):
+        # O logotipo do grupo (de uma cor so, como o dos sistemas): a imagem subida antes (o id do stage) ou um
+        # da lista; sem os dois, tira o logotipo. O Setup recusando a imagem (sem desenho) e um 400.
+        flag = self.dir / 'group-logo.flag'
+        status, staged = self.call('POST', '/api/customgames/stage?kind=logo&name=mine.png', b'\x89PNG fake')
+        self.assertEqual(status, 200, staged)
+        self.assertEqual(self.call('POST', '/api/customgames/group-logo', {'name': 'PC games', 'logo': staged['id']})[0], 200)
+        self.assertEqual(flag.read_text().strip().split('|')[0], 'PC games')
+        self.assertTrue(flag.read_text().strip().split('|')[1].endswith(staged['id']))
+        self.assertEqual(self.call('POST', '/api/customgames/group-logo', {'name': 'PC games', 'system': 'naomi'})[0], 200)
+        self.assertEqual(flag.read_text().strip(), 'PC games|system:naomi')
+        self.assertEqual(self.call('POST', '/api/customgames/group-logo', {'name': 'PC games'})[0], 200)
+        self.assertEqual(flag.read_text().strip(), 'PC games|')
+        self.assertEqual(self.call('POST', '/api/customgames/group-logo', {'name': 'PC games', 'logo': '0123456789abcdef.png'})[0], 400)
+        self.assertEqual(self.call('POST', '/api/customgames/group-logo', {'name': 'PC games', 'system': 'bad'})[0], 400)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('"/api/customgames/group-logo"', js)
+        self.assertIn('"/api/customgames/stage?kind=logo&name="', js)
+        self.assertIn('"/api/marquee/logo?system=1&name="', js)
+        self.assertIn('el("select", { class: "cg-logo-select"', js)
+        self.assertIn('icon("g-upload")', js)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_group_logo', 'cg_group_logo_title', 'cg_group_logo_note', 'cg_logo_none', 'cg_logo_upload', 'cg_logo_or',
+                    'cg_logo_pick', 'cg_logo_use', 'cg_logo_remove'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+
+    def test_a_group_is_renamed_in_the_panel(self):
+        # O painel manda o nome de antes e o novo ao Setup (group-rename GRUPO NOVO); um nome que ja existe e um 409,
+        # um jogo aberto (o Setup nao conseguiu mover a pasta) tambem; sem o nome novo, 400.
+        flag = self.dir / 'group-rename.flag'
+        self.assertEqual(self.call('POST', '/api/customgames/group-rename', {'name': 'PC games', 'new_name': 'Windows'})[0], 200)
+        self.assertEqual(flag.read_text().strip(), 'PC games|Windows')
+        status, out = self.call('POST', '/api/customgames/group-rename', {'name': 'PC games', 'new_name': 'dup'})
+        self.assertEqual(status, 409)
+        self.assertIn('already exists', out['error'])
+        status, out = self.call('POST', '/api/customgames/group-rename', {'name': 'PC games', 'new_name': 'busy'})
+        self.assertEqual(status, 409)
+        self.assertIn('is open', out['error'])
+        self.assertEqual(self.call('POST', '/api/customgames/group-rename', {'name': 'PC games', 'new_name': ''})[0], 400)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('"/api/customgames/group-rename"', js)
+        self.assertIn('el("span", { class: "cg-gtools" }, logo, rename, del)', js)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_group_rename', 'cg_rename_title', 'cg_rename_note', 'cg_rename_go', 'cg_rename_bad', 'cg_renamed'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+        # Os botoes da cabeca do grupo usam desenhos que existem no painel.
+        sprites = (ROOT / 'config/web/icons.svg').read_text()
+        for name in ('g-upload', 'g-trash', 'px-edit'):
+            self.assertIn('id="%s"' % name, sprites, name)
+
+    def test_the_marquee_logo_of_a_group_follows_the_uploaded_one(self):
+        # /api/marquee/logo desenha o logotipo do grupo que a pessoa subiu (o do syslogo, com o mesmo nome) e, com
+        # system=1, so o da lista; o cache muda quando o arquivo muda.
+        src = (ROOT / 'config/fliperos-web').read_text()
+        cache = src.split('class LogoCache:')[1].split('\nclass ')[0]
+        self.assertIn('def get(self, name, system=False):', cache)
+        self.assertIn('".logo.png"', cache)
+        self.assertIn('key = (name, stamp, system)', cache)
+        self.assertIn('FLIPEROS_CUSTOM_DIR="/nonexistent" if system else custom', cache)
 
     def test_scan_finds_the_games_of_a_folder(self):
         import urllib.parse
@@ -14685,6 +14807,62 @@ class NewEmulatorBuildTests(unittest.TestCase):
                                           **(env or {})))
             return run.returncode, run.stdout.replace(str(tmp), 'TMP'), run.stderr.replace(str(tmp), 'TMP')
 
+    def test_squashgames_renames_a_group_folder_with_its_packed_games(self):
+        # rename-dir PASTA NOVA (Custom games > Rename group): a pasta ~/games/GRUPO anda com o .squashfs e a
+        # camada gravavel ao lado de cada jogo, a lista passa a ter os caminhos novos e eles sao montados de
+        # novo; um jogo aberto (nao desmonta) ou um destino que ja existe: nada muda. mount e umount falsos.
+        if os.geteuid() != 0:
+            self.skipTest('root')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            games = tmp / 'home/games'
+            (games / 'PC games/Pang').mkdir(parents=True)
+            (games / 'PC games/Pang.squashfs').write_bytes(b'img')
+            (games / 'PC games/.Pang.squashfs-data/upper').mkdir(parents=True)
+            (games / 'PC games/Loose').mkdir()
+            (tmp / 'bin').mkdir()
+            log, state = tmp / 'mounts.log', tmp / 'mounted'
+            for name, body in (('mount', 'echo "mount $*" >> %s\nexit 0\n' % log),
+                               ('umount', 'echo "umount $*" >> %s\n[ -e %s ] && exit 1\nexit 0\n' % (log, state)),
+                               ('mountpoint', '[ -e %s ] && exit 0\nexit 1\n' % state)):
+                (tmp / 'bin' / name).write_text('#!/bin/sh\n' + body)
+                (tmp / 'bin' / name).chmod(0o755)
+            (tmp / 'list').write_text('%s/home/games/PC games/Pang\n%s/home/games/Other/Tetris\n' % (tmp, tmp))
+            env = dict(os.environ, PATH='%s:%s' % (tmp / 'bin', os.environ['PATH']), FLIPEROS_SQUASH_HOME=str(tmp / 'home'),
+                       FLIPEROS_SQUASH_LIST=str(tmp / 'list'), FLIPEROS_SQUASH_RUN=str(tmp / 'run'))
+            run = lambda old, new: subprocess.run(['bash', str(ROOT / 'config/fliperos-squashgames'), 'rename-dir',
+                                                   str(games / old), str(games / new)], capture_output=True, text=True, env=env)
+            # Um jogo aberto segura a pasta: o ajudante nao consegue desmontar e nada muda.
+            state.write_text('')
+            r = run('PC games', 'Windows')
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn('is open', r.stderr)
+            self.assertTrue((games / 'PC games/Pang.squashfs').exists())
+            self.assertFalse((games / 'Windows').exists())
+            self.assertEqual((tmp / 'list').read_text().splitlines()[0], '%s/home/games/PC games/Pang' % tmp)
+            state.unlink()
+            # Um destino que ja existe, ou fora da home: recusado antes de desmontar.
+            (games / 'Taken').mkdir()
+            self.assertNotEqual(run('PC games', 'Taken').returncode, 0)
+            self.assertNotEqual(subprocess.run(['bash', str(ROOT / 'config/fliperos-squashgames'), 'rename-dir',
+                                                str(games / 'PC games'), '/etc/x'], capture_output=True, env=env).returncode, 0)
+            self.assertTrue((games / 'PC games/Pang.squashfs').exists())
+            # Livre: a pasta anda inteira (o .squashfs, a camada e o que nao e squashfs), a lista passa a ter
+            # o caminho novo (a do outro grupo fica) e o jogo e montado no lugar novo.
+            log.write_text('')
+            r = run('PC games', 'Windows')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertFalse((games / 'PC games').exists())
+            self.assertEqual((games / 'Windows/Pang.squashfs').read_bytes(), b'img')
+            self.assertTrue((games / 'Windows/.Pang.squashfs-data/upper').is_dir())
+            self.assertTrue((games / 'Windows/Loose').is_dir())
+            self.assertEqual(sorted((tmp / 'list').read_text().splitlines()),
+                             ['%s/home/games/Other/Tetris' % tmp, '%s/home/games/Windows/Pang' % tmp])
+            mounts = log.read_text()
+            self.assertIn('mount -t squashfs -o loop,ro,nodev,nosuid -- %s/home/games/Windows/Pang.squashfs' % tmp, mounts)
+            self.assertIn('upperdir=%s/home/games/Windows/.Pang.squashfs-data/upper' % tmp, mounts)
+            self.assertIn('-- %s/home/games/Windows/Pang' % tmp, mounts)
+
     def test_squashgames_helper(self):
         # A lista (montada ou nao, o tamanho do arquivo); montar e com root.
         self.assertEqual(self.squash('list')[:2], (0, 'TMP/home/games/pang|0|?\n'))
@@ -17050,6 +17228,99 @@ class SysLogoTests(unittest.TestCase):
         times = [f.info['duration'] for f in ImageSequence.Iterator(Image.open(gif))]
         self.assertGreaterEqual(times[-1], 60000)
         self.assertLess(max(times[:-1]), 1000)
+
+    def drawing(self, background, ink, mode='RGB', fmt='PNG'):
+        """Uma imagem da pessoa: um circulo e uma barra (ink) em background."""
+        from PIL import Image, ImageDraw
+        img = Image.new(mode, (300, 120), background)
+        draw = ImageDraw.Draw(img)
+        draw.ellipse((20, 20, 100, 100), fill=ink)
+        draw.rectangle((130, 40, 280, 80), fill=ink)
+        path = self.tmp / ('art.' + fmt.lower())
+        img.save(path, format=fmt)
+        return path
+
+    def test_a_group_logo_keeps_only_the_drawing_in_one_colour(self):
+        # O logotipo de um grupo de jogos custom e o desenho da imagem da pessoa: o canal alfa quando ha
+        # transparencia, senao o que difere do fundo (escuro em claro e claro em escuro valem igual), branco em
+        # fundo transparente; uma imagem lisa nao tem desenho.
+        from PIL import Image
+        for background, ink, mode, fmt in (((255, 255, 255), (20, 20, 60), 'RGB', 'JPEG'),
+                                           ((0, 0, 0), (240, 200, 40), 'RGB', 'PNG'),
+                                           ((0, 0, 0, 0), (200, 30, 30, 255), 'RGBA', 'PNG')):
+            out = self.tmp / 'out.png'
+            self.assertTrue(self.mod.import_logo(str(self.drawing(background, ink, mode, fmt)), str(out)), (mode, fmt))
+            img = Image.open(out)
+            self.assertEqual(img.mode, 'RGBA')
+            self.assertEqual(img.size, (261, 81))           # recortado no desenho
+            inside, outside = img.getpixel((10, 40)), img.getpixel((120, 5))
+            self.assertEqual(inside[:3], (255, 255, 255))   # a tinta, branca (a cor quem pede pinta)
+            self.assertGreater(inside[3], 240)
+            self.assertLess(outside[3], 20)                 # o resto, transparente
+        flat = self.tmp / 'flat.png'
+        Image.new('RGB', (50, 50), (9, 9, 9)).save(flat)
+        self.assertFalse(self.mod.import_logo(str(flat), str(self.tmp / 'none.png')))
+        self.assertFalse((self.tmp / 'none.png').exists())
+        (self.tmp / 'broken.png').write_bytes(b'not an image')
+        self.assertFalse(self.mod.import_logo(str(self.tmp / 'broken.png'), str(self.tmp / 'none.png')))
+        # Grande demais para guardar: fica na altura maxima, na mesma proporcao.
+        big = Image.new('RGB', (2000, 1000), (255, 255, 255))
+        big.paste((0, 0, 0), (100, 100, 1900, 900))
+        big.save(self.tmp / 'big.png')
+        self.assertTrue(self.mod.import_logo(str(self.tmp / 'big.png'), str(out)))
+        size = Image.open(out).size
+        self.assertEqual(size[1], self.mod.GROUP_LOGO_MAX)
+        self.assertAlmostEqual(size[0], 900, delta=4)
+
+    def test_the_logo_of_a_custom_group_wins_over_the_font_one_with_the_same_name(self):
+        # GRUPO/.logo.png (o que a pessoa subiu) vale no lugar do da fonte, na cor de quem pede (o branco do
+        # frontend, o ciano do marquee); groups=False ignora o dela (a lista para escolher um logotipo).
+        custom = self.tmp / 'custom'
+        (custom / 'Naomi').mkdir(parents=True)
+        (custom / 'PC games').mkdir()
+        self.mod.CUSTOM = str(custom)
+        self.assertIsNone(self.mod.group_logo('PC games'))
+        self.assertIsNone(self.mod.render('PC games', 20))
+        self.assertTrue(self.mod.import_logo(str(self.drawing((255, 255, 255), (0, 0, 0))), str(custom / 'PC games/.logo.png')))
+        self.assertEqual(self.mod.group_logo('PC games'), str(custom / 'PC games/.logo.png'))
+        img = self.mod.render('PC games', 20, (139, 233, 253))
+        self.assertEqual(img.height, 20)
+        self.assertEqual(img.getpixel((2, 10))[:3], (139, 233, 253))
+        # Um grupo com o nome de um sistema da lista: o logotipo dele vence; sem ele, o da fonte.
+        font_logo = self.mod.render('Naomi', 20)
+        self.assertTrue(self.mod.import_logo(str(self.drawing((255, 255, 255), (0, 0, 0))), str(custom / 'Naomi/.logo.png')))
+        own = self.mod.render('Naomi', 20)
+        self.assertNotEqual(own.size, font_logo.size)
+        self.assertEqual(self.mod.render('Naomi', 20, groups=False).size, font_logo.size)
+        # Nomes que saem da pasta ou escondidos nao valem; um .logo.png quebrado cai no da fonte.
+        for name in ('../x', 'a/b', '.hidden', '', 'a\\b'):
+            self.assertIsNone(self.mod.group_logo(name), name)
+        (custom / 'Naomi/.logo.png').write_bytes(b'broken')
+        self.assertEqual(self.mod.render('Naomi', 20).size, font_logo.size)
+
+    def test_the_logos_we_already_have_are_listed_and_copied(self):
+        # list: o logotipo de cada sistema da lista uma vez so (nome e rotulo); copy: o dele, branco, para um
+        # arquivo (o logotipo do grupo escolhido na lista), mesmo com um grupo de mesmo nome com o seu.
+        from PIL import Image
+        self.assertEqual(self.mod.catalog(), [('naomi', 'Naomi')])
+        out = self.tmp / 'copy.png'
+        custom = self.tmp / 'custom'
+        (custom / 'naomi').mkdir(parents=True)
+        self.mod.CUSTOM = str(custom)
+        self.assertTrue(self.mod.import_logo(str(self.drawing((255, 255, 255), (0, 0, 0))), str(custom / 'naomi/.logo.png')))
+        env = dict(os.environ, ATTRACT_DIR=str(self.tmp), FLIPEROS_CUSTOM_DIR=str(custom))
+        run = lambda *a: subprocess.run([sys.executable, str(ROOT / 'config/fliperos-syslogo'), *a], env=env,
+                                        capture_output=True, text=True, timeout=60)
+        # Sem a fonte do tema na pasta de teste nao ha desenho: o ramo "sem logotipo" da linha de comando.
+        self.assertEqual(run('copy', 'naomi', str(out)).returncode, 1)
+        self.assertEqual(self.mod.main(['syslogo', 'copy', 'naomi', str(out)]), 0)
+        self.assertEqual(Image.open(out).height, self.mod.GROUP_LOGO_MAX)
+        self.assertEqual(self.mod.main(['syslogo', 'copy', 'nope nope', str(out)]), 1)
+        self.assertEqual(self.mod.main(['syslogo', 'import', str(self.drawing((0, 0, 0), (255, 255, 255))), str(out)]), 0)
+        self.assertEqual(Image.open(out).size, (261, 81))
+        self.assertEqual(self.mod.main(['syslogo', 'import', str(self.tmp / 'broken.png'), str(out)]), 1)
+        # find diz de onde vem o logotipo do grupo.
+        self.assertEqual(self.mod.main(['syslogo', 'find', 'naomi']), 0)
 
     def test_command_line(self):
         env = dict(os.environ, ATTRACT_DIR=str(self.tmp))

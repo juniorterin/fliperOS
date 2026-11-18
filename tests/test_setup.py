@@ -4982,7 +4982,7 @@ class CustomGamesTests(Base):
         self.assertEqual((group / ".icon").read_text(), "pad\n")
         # O describe: o desenho na linha do grupo e a lista de desenhos.
         rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
-        self.assertIn(["group", "PC games", "1", "pad"], rows)
+        self.assertIn(["group", "PC games", "1", "pad", ""], rows)
         icons = [r[1:] for r in rows if r[0] == "icon"]
         self.assertEqual(icons[0], ["games", "Gamepad"])
         self.assertIn(["pad", "Joypad"], icons)
@@ -5002,12 +5002,229 @@ class CustomGamesTests(Base):
         self.assertIn('games|$n,0,$(customgames_group_icon "$group")|', menu)
         self.assertIn("+icon) screen_custom_group_icon", menu)
 
+    def fake_syslogo(self):
+        """Um fliperos-syslogo de mentira: list, copy (o logotipo da lista) e import (o desenho da imagem da
+        pessoa; "blank" e uma imagem sem desenho)."""
+        path = self.env.dir / "syslogo.py"
+        path.write_text(
+            "import sys\n"
+            "cmd, args = sys.argv[1], sys.argv[2:]\n"
+            "if cmd == 'list':\n"
+            "    print('naomi\\tNaomi')\n"
+            "    print('acorn atom\\tAcorn Atom')\n"
+            "elif cmd == 'copy':\n"
+            "    if args[0] == 'nope':\n"
+            "        sys.exit(1)\n"
+            "    open(args[1], 'w').write('system:' + args[0])\n"
+            "elif cmd == 'import':\n"
+            "    data = open(args[0]).read()\n"
+            "    if data == 'blank':\n"
+            "        sys.exit(1)\n"
+            "    open(args[1], 'w').write('imported:' + data)\n")
+        return path
+
+    def test_a_group_has_a_logo_uploaded_or_picked_from_the_list(self):
+        """GRUPO/.logo.png: o logotipo de uma cor so do grupo (o marquee e a tira do frontend, como o dos
+        sistemas). Ou o desenho de uma imagem da pessoa, ou um dos que o FliperOS ja tem; sem imagem sem
+        desenho, e o que havia fica; o arquivo nao conta como "outro arquivo" ao apagar o grupo."""
+        media, games, e = self.pkg_env()
+        e = dict(e, CUSTOM_GAMES_SYSLOGO=str(self.fake_syslogo()))
+        self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'", e)
+        group = self.roms / "custom" / "PC games"
+        self.assertEqual(self.env.run("customgames_group_logo 'PC games'", e).returncode, 1)
+        # A lista de logotipos vai no describe, e a linha do grupo diz se ele tem o seu.
+        rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
+        self.assertIn(["logo", "naomi", "Naomi"], rows)
+        self.assertIn(["logo", "acorn atom", "Acorn Atom"], rows)
+        self.assertIn(["group", "PC games", "1", "", ""], rows)
+        # Um da lista.
+        r = self.env.run("customgames_cli group-logo 'PC games' system:naomi", e)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((group / ".logo.png").read_text(), "system:naomi")
+        self.assertEqual(self.env.run("customgames_group_logo 'PC games'", e).returncode, 0)
+        rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
+        self.assertIn(["group", "PC games", "1", "", "1"], rows)
+        # Uma imagem da pessoa (o desenho dela).
+        img = self.env.dir / "mine.png"
+        img.write_text("ink")
+        r = self.env.run("customgames_cli group-logo 'PC games' \"$Z\"", dict(e, Z=str(img)))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((group / ".logo.png").read_text(), "imported:ink")
+        # Sem desenho (1), sem esse logotipo da lista, sem o arquivo, sem o grupo (2): o que havia fica.
+        img.write_text("blank")
+        self.assertEqual(self.env.run("customgames_cli group-logo 'PC games' \"$Z\"", dict(e, Z=str(img))).returncode, 1)
+        self.assertEqual(self.env.run("customgames_cli group-logo 'PC games' system:nope", e).returncode, 2)
+        self.assertEqual(self.env.run("customgames_cli group-logo 'PC games' system:", e).returncode, 2)
+        self.assertEqual(self.env.run("customgames_cli group-logo 'PC games' /no/such/file.png", e).returncode, 2)
+        self.assertEqual(self.env.run("customgames_cli group-logo Nope system:naomi", e).returncode, 2)
+        self.assertEqual((group / ".logo.png").read_text(), "imported:ink")
+        self.assertEqual(sorted(p.name for p in group.iterdir() if p.name.startswith(".")), [".logo.png"])
+        # Do FliperOS: apagar o grupo nao o conta como arquivo de outro tipo.
+        self.assertIn("others=0\n", self.env.out("customgames_group_info 'PC games'", e))
+        # Tirar o logotipo: o icone volta.
+        self.assertEqual(self.env.run("customgames_cli group-logo 'PC games'", e).returncode, 0)
+        self.assertFalse((group / ".logo.png").exists())
+        # A tela do Setup e o painel o oferecem.
+        menu = (ROOT / "fliperos-setup/screens/setup-menu.sh").read_text()
+        self.assertIn("+logo) screen_custom_group_logo", menu)
+        self.assertIn("customgames_group_logo_set \"$group\" \"system:$key\"", menu)
+
+    def test_a_group_is_renamed_with_everything_that_goes_with_its_name(self):
+        """Renomear o grupo: a pasta, o icone e o logotipo dele, o cfg e o script de cada jogo (o nome do
+        filtro e da OSD muda), a pasta em ~/games, as midias da pessoa (as de exemplo sao refeitas), os
+        ajustes com o nome velho, os favoritos e as partidas do frontend e o ultimo grupo usado."""
+        media, games, e = self.pkg_env()
+        home = self.env.dir
+        profiles = home / "osd-profiles.conf"
+        e = dict(e, FLIPEROS_OSD_PROFILES=str(profiles))
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip",
+                             extra={"Pang.jpg": b"jpg", "Pang.key": "p1_b1=Z\n"})
+        self.env.out("customgames_install \"$Z\" 'PC games'", dict(e, Z=str(zip_)))
+        self.env.out("customgames_save 'PC games' Tetris 480i './tetris -f'", e)
+        old = self.roms / "custom" / "PC games"
+        new = self.roms / "custom" / "Windows games"
+        (old / ".icon").write_text("pad\n")
+        (old / ".logo.png").write_text("logo")
+        (media / "snap/custom/PC games/Tetris.jpg").write_bytes(b"mine")
+        self.env.out("conf_set deflicker_custom_pc_games_pang light; conf_set mode480_custom_pc_games_pang filter; "
+                     "conf_set deflicker_level_custom_pc_games_pang light", e)
+        profiles.write_text("emu:custom_pc_games_pang\tvolume\t5\ngame:custom_pc_games_pang/Pang\tfilter\tlight\n"
+                            "emu:flycast\tvolume\t7\n")
+        fav = home / ".config/fliperos/favourites"
+        fav.parent.mkdir(parents=True, exist_ok=True)
+        fav.write_text("custom/PC games\tPang\nmame\tsf2\ncustom/PC games Plus\tOther\n")
+        stats = home / ".local/share/fliperos/stats/PC games"
+        stats.mkdir(parents=True)
+        (stats / "Pang.stat").write_text("3\n120\n")
+        lists = home / ".local/share/fliperos/lists"
+        lists.mkdir(parents=True)
+        (lists / "PC games.txt").write_text("old list")
+        self.assertEqual(self.env.out("customgames_last_group", e).strip(), "PC games")
+        folder = games / "PC games" / "Pang"
+        self.assertTrue(folder.is_dir())
+
+        script = 'customgames_refresh_frontends() { echo REFRESH; }; customgames_cli group-rename %s'
+        r = self.env.run(script % "'PC games' 'Windows games'", e)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("REFRESH", r.stdout)
+        # A pasta do grupo, com o icone e o logotipo, e a dos jogos.
+        self.assertFalse(old.exists())
+        self.assertEqual((new / ".icon").read_text(), "pad\n")
+        self.assertEqual((new / ".logo.png").read_text(), "logo")
+        self.assertFalse((games / "PC games").exists())
+        self.assertEqual((games / "Windows games" / "Pang" / "bin/pang.exe").read_bytes(), b"MZ")
+        self.assertEqual(self.env.out("customgames_groups", e).splitlines(), ["Windows games"])
+        # O cfg do jogo instalado aponta a pasta nova (e o pacote, o mesmo); o script, o filtro novo.
+        cfg = (new / "Pang.cfg").read_text()
+        self.assertIn("folder=%s\n" % (games / "Windows games" / "Pang"), cfg)
+        self.assertIn("package=%s\n" % zip_, cfg)
+        self.assertNotIn("PC games", cfg)
+        self.assertIn("--app custom_windows_games_pang ", (new / "Pang.sh").read_text())
+        self.assertIn("--app custom_windows_games_tetris ", (new / "Tetris.sh").read_text())
+        self.assertEqual((new / "Pang.key").read_text().splitlines()[-1], "p1_b1=Z")
+        # As midias: a da pessoa vai junto; a de exemplo de cada jogo e refeita com o grupo novo.
+        self.assertEqual((media / "snap/custom/Windows games/Tetris.jpg").read_bytes(), b"mine")
+        self.assertEqual((media / "snap/custom/Windows games/Pang.jpg").read_bytes(), b"jpg")
+        self.assertFalse((media / "snap/custom/PC games").exists())
+        self.assertTrue((media / "logo/custom/Windows games/Pang.png").exists())
+        # O filtro de flicker e a OSD de cada jogo seguem o nome novo.
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("deflicker_custom_windows_games_pang=light\n", conf)
+        self.assertIn("mode480_custom_windows_games_pang=filter\n", conf)
+        self.assertIn("deflicker_level_custom_windows_games_pang=light\n", conf)
+        self.assertNotIn("custom_pc_games", conf)
+        self.assertEqual(profiles.read_text().splitlines(),
+                         ["emu:custom_windows_games_pang\tvolume\t5", "game:custom_windows_games_pang/Pang\tfilter\tlight",
+                          "emu:flycast\tvolume\t7"])
+        # O frontend do FliperOS: os favoritos do grupo (so os dele) e as partidas; a lista velha sai.
+        self.assertEqual(fav.read_text().splitlines(), ["custom/Windows games\tPang", "mame\tsf2", "custom/PC games Plus\tOther"])
+        self.assertEqual((home / ".local/share/fliperos/stats/Windows games/Pang.stat").read_text(), "3\n120\n")
+        self.assertFalse((lists / "PC games.txt").exists())
+        self.assertEqual(self.env.out("customgames_last_group", e).strip(), "Windows games")
+
+    def test_renaming_a_group_refuses_what_would_overwrite_or_break(self):
+        media, games, e = self.pkg_env()
+        self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'; customgames_save Linux Tetris 480i './t'", e)
+        script = 'customgames_refresh_frontends() { echo REFRESH; }; customgames_cli group-rename %s'
+        # Um nome que nao serve, um grupo que nao existe: 2. Um grupo com esse nome: 3. O mesmo nome: nada a fazer.
+        self.assertEqual(self.env.run(script % "'PC games' ''", e).returncode, 2)
+        self.assertEqual(self.env.run(script % "'PC games' 'a/b'", e).returncode, 2)
+        self.assertEqual(self.env.run(script % "'PC games' '.hidden'", e).returncode, 2)
+        self.assertEqual(self.env.run(script % "Nope Other", e).returncode, 2)
+        r = self.env.run(script % "'PC games' Linux", e)
+        self.assertEqual(r.returncode, 3)
+        self.assertNotIn("REFRESH", r.stdout)
+        self.assertEqual(self.env.run(script % "'PC games' 'PC games'", e).returncode, 0)
+        # ~/games/NOVO ja com outra coisa: 4, e nada mudou (a pasta do grupo continua onde estava).
+        (games / "Windows" / "Other").mkdir(parents=True)
+        (games / "PC games" / "Pang").mkdir(parents=True)
+        self.assertEqual(self.env.run(script % "'PC games' Windows", e).returncode, 4)
+        self.assertTrue((self.roms / "custom" / "PC games" / "Pang.sh").exists())
+        self.assertTrue((games / "PC games" / "Pang").is_dir())
+        # Uma pasta ~/games/NOVO vazia nao atrapalha.
+        (games / "Windows" / "Other").rmdir()
+        self.assertEqual(self.env.run(script % "'PC games' Windows", e).returncode, 0)
+        self.assertTrue((games / "Windows" / "Pang").is_dir())
+        self.assertTrue((self.roms / "custom" / "Windows" / "Pang.sh").exists())
+        # Um jogo do grupo aberto (o executor com o cfg dele na linha de comando): 1, e nada muda; fechado, vai.
+        if shutil.which("pgrep"):
+            cfg = self.roms / "custom" / "Windows" / "Pang.cfg"
+            game = subprocess.Popen(["python3", "-c", "import time; time.sleep(60)", "fliperos-customgame", "run", str(cfg)])
+            self.addCleanup(game.kill)
+            time.sleep(0.5)
+            r = self.env.run(script % "Windows Again", e)
+            self.assertEqual(r.returncode, 1)
+            self.assertNotIn("REFRESH", r.stdout)
+            self.assertTrue((self.roms / "custom" / "Windows" / "Pang.sh").exists())
+            self.assertTrue((games / "Windows" / "Pang").is_dir())
+            self.assertFalse((self.roms / "custom" / "Again").exists())
+            game.kill()
+            game.wait()
+            self.assertEqual(self.env.run(script % "Windows Again", e).returncode, 0)
+            self.assertTrue((self.roms / "custom" / "Again" / "Pang.sh").exists())
+
+    def test_renaming_a_group_with_packed_folders_goes_through_the_squashfs_helper(self):
+        """As pastas em squashfs de ~/games/GRUPO se desmontam, andam e montam de novo (fliperos-squashgames
+        rename-dir): quem as move e o ajudante, nao o mv."""
+        media, games, e = self.pkg_env()
+        helper = self.env.dir / "squash.sh"
+        helper.write_text('#!/bin/bash\necho "$*" >> "%s/helper.log"\n'
+                          'if [ "$1" = list ]; then echo "%s/PC games/Pang|1|10M"; exit 0; fi\n'
+                          'if [ "$1" = rename-dir ]; then mv "$2" "$3"; exit 0; fi\nexit 1\n' % (self.env.dir, games))
+        helper.chmod(0o755)
+        e = dict(e, SQUASHGAMES_CMD=str(helper))
+        self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'", e)
+        (games / "PC games" / "Pang").mkdir(parents=True)
+        r = self.env.run("customgames_group_rename 'PC games' Windows", e)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        log = (self.env.dir / "helper.log").read_text().splitlines()
+        self.assertIn("rename-dir %s %s" % (games / "PC games", games / "Windows"), log)
+        # O ajudante falhando (um jogo aberto): o grupo fica como estava.
+        helper.write_text('#!/bin/bash\nif [ "$1" = list ]; then echo "%s/Windows/Pang|1|10M"; exit 0; fi\nexit 1\n' % games)
+        r = self.env.run("customgames_group_rename Windows Again", e)
+        self.assertEqual(r.returncode, 1)
+        self.assertTrue((self.roms / "custom" / "Windows" / "Pang.sh").exists())
+        self.assertFalse((self.roms / "custom" / "Again").exists())
+
+    def test_the_squashfs_helper_renames_a_group_folder_with_its_packed_games(self):
+        """fliperos-squashgames rename-dir: desmonta, move a pasta (o .squashfs e a camada ficam ao lado) e
+        passa os caminhos da lista; so como root e so dentro da home."""
+        src = (ROOT / "config/fliperos-squashgames").read_text()
+        self.assertIn("rename-dir) cmd_rename_dir", src)
+        self.assertIn("pack | unpack | remove | rename-dir | mount-all | umount-all)", src)
+        body = src.split("cmd_rename_dir() {")[1].split("\ncmd_mount_all()")[0]
+        for step in ('do_umount "$folder"', 'mv -- "$old" "$new"', 'list_remove "$folder"', 'list_add "$target"',
+                     'do_mount "$target"'):
+            self.assertIn(step, body)
+        # Falhar desmontando ou movendo: as que se desmontaram voltam.
+        self.assertEqual(body.count('for folder in "${down[@]}"; do do_mount "$folder"; done'), 2)
+
     def test_panel_describe_lists_the_games_and_the_choices(self):
         media, games, e = self.pkg_env()
         self.env.out("customgames_save 'PC games' Pang 480i 'wine pang.exe'; "
                      "customgames_cfg_set \"$(customgames_cfg 'PC games' Pang)\" players 2", e)
         rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
-        self.assertIn(["group", "PC games", "1", ""], rows)
+        self.assertIn(["group", "PC games", "1", "", ""], rows)
         game = [r for r in rows if r[0] == "game"][0]
         self.assertEqual(game[:5] + [game[8], game[9]],
                          ["game", "PC games", "Pang", "command", "640x480@60", "2", "wine pang.exe"])
