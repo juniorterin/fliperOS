@@ -198,7 +198,7 @@ function cgRenderList() {
       "aria-label": t("cg_group_logo") + ": " + g.name }, icon("g-upload"));
     logo.addEventListener("click", () => cgGroupLogo(g).catch(() => {}));
     const rename = el("button", { type: "button", class: "icon-btn small", title: t("cg_group_rename"),
-      "aria-label": t("cg_group_rename") + ": " + g.name }, icon("g-edit"));
+      "aria-label": t("cg_group_rename") + ": " + g.name }, icon("px-edit"));
     rename.addEventListener("click", () => cgRenameGroup(g).catch(() => {}));
     return el("section", { class: "cg-group" },
       el("h4", {}, g.name, g.logo ? el("img", { class: "cg-glogo", src: cgGroupLogoUrl(g.name), alt: "" }) : "",

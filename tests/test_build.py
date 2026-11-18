@@ -8409,15 +8409,20 @@ class WebCustomGamesTests(WebSetupBase):
         text = (ROOT / 'config/web/setup-text.js').read_text()
         for key in ('cg_group_rename', 'cg_rename_title', 'cg_rename_note', 'cg_rename_go', 'cg_rename_bad', 'cg_renamed'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
-        # Os botoes da cabeca do grupo usam desenhos g- (os px- sao escondidos ali pelo CSS: o botao de renomear
-        # aparecia como um quadrado vazio) que existem no painel.
+        # Os botoes da cabeca do grupo: o renomear usa o mesmo lapis (px-edit) do Editar do jogo, nitido em 16 px, e
+        # os outros dois os glifos g- em 13 px. O CSS do h4 esconde os desenhos px (os que enfeitavam o titulo: o botao
+        # aparecia como um quadrado vazio) e o lapis volta ali. O g-edit, um contorno fino de 12x12 que ficava
+        # serrilhado a 18 px, saiu do sprite.
         sprites = (ROOT / 'config/web/icons.svg').read_text()
-        for name in ('g-upload', 'g-edit', 'g-trash'):
+        for name in ('g-upload', 'px-edit', 'g-trash'):
             self.assertIn('id="%s"' % name, sprites, name)
-        self.assertIn('"aria-label": t("cg_group_rename") + ": " + g.name }, icon("g-edit"))', js)
-        tools = js.split('const del = el("button"')[1].split('return el("section"')[0]
-        for glyph in re.findall(r'icon\("([\w-]+)"\)', tools):
-            self.assertTrue(glyph.startswith('g-'), glyph)
+        self.assertNotIn('id="g-edit"', sprites)
+        self.assertNotIn('"edit": """', (ROOT / 'tools/web-icons.py').read_text())
+        self.assertIn('"aria-label": t("cg_group_rename") + ": " + g.name }, icon("px-edit"))', js)
+        css = (ROOT / 'config/web/setup.css').read_text()
+        self.assertIn('.cg-group h4 svg.px, .cg-sec h4 svg.px { display: none; }', css)
+        self.assertIn('.cg-group h4 .cg-gtools svg.px { display: block; width: 16px; height: 16px; }', css)
+        self.assertIn('.cg-group h4 .cg-gtools svg.g { width: 13px; height: 13px; }', css)
 
     def test_the_marquee_logo_of_a_group_follows_the_uploaded_one(self):
         # /api/marquee/logo desenha o logotipo do grupo que a pessoa subiu (o do syslogo, com o mesmo nome) e, com
