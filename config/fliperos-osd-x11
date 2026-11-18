@@ -171,6 +171,10 @@ class XRectangle(ctypes.Structure):
 
 CW_BACK_PIXEL = 1 << 1
 CW_OVERRIDE_REDIRECT = 1 << 9
+CW_EVENT_MASK = 1 << 11
+EXPOSURE_MASK = 1 << 15
+EXPOSE = 12
+XEVENT_SIZE = 192  # o union XEvent: 24 longs
 INPUT_OUTPUT = 1
 Z_PIXMAP = 2
 SHAPE_BOUNDING, SHAPE_INPUT = 0, 2
@@ -202,6 +206,8 @@ class Overlay:
         x11.XCreateImage.restype = vp
         x11.XCreateImage.argtypes = [vp, vp, ui, i, i, ctypes.c_char_p, ui, ui, i, i]
         x11.XPutImage.argtypes = [vp, ul, vp, vp, i, i, i, i, ui, ui]
+        x11.XPending.restype, x11.XPending.argtypes = i, [vp]
+        x11.XNextEvent.argtypes = [vp, vp]
         x11.XFree.argtypes = [vp]
         x11.XStoreName.argtypes = [vp, ul, ctypes.c_char_p]
         ext.XShapeCombineRectangles.argtypes = [vp, ul, i, i, i, ctypes.POINTER(XRectangle), i, i, i]
@@ -214,14 +220,19 @@ class Overlay:
         if x11.XDefaultDepth(self.dpy, self.screen) not in (24, 32):
             raise OSError("the X screen is not 24-bit")
         self.size = self.root_size()
-        attrs = XSetWindowAttributes(background_pixel=0, override_redirect=1)
+        # O Expose: um compositor que entra ou sai (o picom do filtro, que fecha
+        # e abre a cada troca de nivel) faz o servidor limpar a janela na cor de
+        # fundo, e so quem a repinta a traz de volta (exposed, abaixo).
+        attrs = XSetWindowAttributes(background_pixel=0, override_redirect=1, event_mask=EXPOSURE_MASK)
         self.win = x11.XCreateWindow(self.dpy, self.root, 0, 0, self.size[0], self.size[1], 0, 0, INPUT_OUTPUT, None,
-                                     CW_BACK_PIXEL | CW_OVERRIDE_REDIRECT, ctypes.byref(attrs))
+                                     CW_BACK_PIXEL | CW_OVERRIDE_REDIRECT | CW_EVENT_MASK, ctypes.byref(attrs))
         x11.XStoreName(self.dpy, self.win, b"fliperos-osd")
         # Nada de clique nem foco: a forma de entrada vazia.
         ext.XShapeCombineRectangles(self.dpy, self.win, SHAPE_INPUT, 0, 0, None, 0, SHAPE_SET, 0)
         self.gc = x11.XDefaultGC(self.dpy, self.screen)
         self.mapped = False
+        # A ultima imagem posta (pixels, largura, altura), para repintar.
+        self.shown = None
 
     def root_size(self):
         """A tela de agora (muda a cada modo do Switchres ou xrandr --scale)."""
@@ -244,6 +255,15 @@ class Overlay:
             self.mapped = True
         else:
             x11.XRaiseWindow(self.dpy, self.win)
+        self.shown = (data, dw, dh)
+        self.paint()
+
+    def paint(self):
+        """Poe a ultima imagem na janela."""
+        if not self.shown:
+            return
+        x11 = self.x11
+        data, dw, dh = self.shown
         buf = ctypes.create_string_buffer(data, len(data))
         image = x11.XCreateImage(self.dpy, x11.XDefaultVisual(self.dpy, self.screen),
                                  x11.XDefaultDepth(self.dpy, self.screen), Z_PIXMAP, 0, buf, dw, dh, 32, dw * 4)
@@ -252,6 +272,22 @@ class Overlay:
             # So a estrutura: os pixels sao do buf (o XDestroyImage os liberaria).
             x11.XFree(image)
         x11.XSync(self.dpy, 0)
+
+    def exposed(self):
+        """O X pediu para repintar a janela (Expose): ela foi limpa, como quando
+        o picom do filtro reinicia na troca de nivel (o menu ficava todo preto
+        ate mudar de novo). Repinta com a ultima imagem; True se repintou."""
+        x11 = self.x11
+        hit = False
+        event = ctypes.create_string_buffer(XEVENT_SIZE)
+        while x11.XPending(self.dpy):
+            x11.XNextEvent(self.dpy, ctypes.addressof(event))
+            if struct.unpack_from("i", event, 0)[0] == EXPOSE:
+                hit = True
+        if hit and self.mapped and self.shown:
+            self.paint()
+            return True
+        return False
 
     def raise_(self):
         if self.mapped:
@@ -282,6 +318,7 @@ def main():
         if not os.path.exists("/proc/%d" % own_pid):
             return 0
         now = time.time()
+        overlay.exposed()
         if layer_alive(fps, own_pid, now):
             overlay.hide()
             shown_seq = None

@@ -7486,6 +7486,57 @@ class OsdX11Tests(unittest.TestCase):
         self.assertEqual(len(m.scale(m.to_bgrx(rgba), 384, 224)), 384 * 224 * 4)
         self.assertEqual(m.shape_rects(bytes(len(rgba)), 640, 240), [])
 
+    def test_repaints_when_the_x_server_clears_the_window(self):
+        # O picom do filtro fecha e abre a cada troca de nivel (o menu da OSD, Interlaced
+        # filter): o servidor limpa a janela redirecionada e manda Expose, e a OSD ficava
+        # toda preta ate o menu mudar de novo (visto no gabinete: o centro da janela
+        # (0, 0, 0) depois do reinicio). Repinta com a ultima imagem.
+        import ctypes
+        import struct
+        m = self.m
+
+        class FakeX:
+            def __init__(self):
+                self.queue, self.calls = [], []
+
+            def XPending(self, dpy):
+                return len(self.queue)
+
+            def XNextEvent(self, dpy, addr):
+                ctypes.memmove(addr, struct.pack('i', self.queue.pop(0)), 4)
+
+            def __getattr__(self, name):
+                return lambda *args: self.calls.append(name) or 1
+
+        def overlay(mapped=True, shown=(b'\x00' * 16, 2, 2)):
+            o = object.__new__(m.Overlay)
+            o.x11, o.dpy, o.screen, o.win, o.gc = FakeX(), None, 0, 1, None
+            o.mapped, o.shown = mapped, shown
+            return o
+
+        o = overlay()
+        self.assertFalse(o.exposed())
+        self.assertNotIn('XPutImage', o.x11.calls)
+        # Varios eventos de uma vez (so um Expose basta): repinta uma vez e esvazia a fila.
+        o.x11.queue = [22, m.EXPOSE, m.EXPOSE]
+        self.assertTrue(o.exposed())
+        self.assertEqual(o.x11.calls.count('XPutImage'), 1)
+        self.assertEqual(o.x11.queue, [])
+        # Outros eventos nao repintam; janela escondida ou sem imagem tambem nao.
+        o = overlay()
+        o.x11.queue = [2, 22]
+        self.assertFalse(o.exposed())
+        self.assertNotIn('XPutImage', o.x11.calls)
+        for other in (overlay(mapped=False), overlay(shown=None)):
+            other.x11.queue = [m.EXPOSE]
+            self.assertFalse(other.exposed())
+            self.assertNotIn('XPutImage', other.x11.calls)
+        # A janela pede o Expose, e o laco principal o trata a cada volta.
+        source = (ROOT / 'config/fliperos-osd-x11').read_text()
+        self.assertIn('event_mask=EXPOSURE_MASK', source)
+        self.assertIn('CW_BACK_PIXEL | CW_OVERRIDE_REDIRECT | CW_EVENT_MASK', source)
+        self.assertIn('        overlay.exposed()\n        if layer_alive(', source)
+
     def test_starts_with_each_x_game(self):
         client = (ROOT / 'config/fliperos-x11-client').read_text()
         line = 'FLIPEROS_GAME_PID=$PPID env -u LD_PRELOAD "$osd_x11" < /dev/null > /dev/null 2>&1 &'
