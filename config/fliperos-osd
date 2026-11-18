@@ -226,6 +226,8 @@ OSK_ROWS = (
 OSK_BUTTONS = (("clear", "Clear"), ("save", "Save"), ("back", "Back"))
 # Quanto o Enter numa tecla espera o botao do controle.
 CAPTURE_SECONDS = 5
+# Depois de criar ou zerar o mapa: o jogo so troca de controle ao abrir.
+KEYS_RESTART_NOTICE = "MAY NEED A GAME RESTART"
 # Um jogo custom sem o .key (o mapa ainda nao foi feito: quase sempre, a
 # pessoa o faz aqui): a OSD abre sozinha no Controller configuration, uma vez
 # por jogo aberto, quando o jogo ja esta na tela ha AUTO_KEYS_DELAY segundos.
@@ -1033,7 +1035,7 @@ class Menu:
         names = {code: name for name, code in buttons.GAME_KEYS.items()}
         current = buttons.read_gamekeys(self.gamekeys["keyfile"])
         self.osk = {"map": {pc: names[code] for pc, code in current.items() if code in names},
-                    "row": 1, "col": 1, "button": 1, "changed": False}
+                    "row": 1, "col": 1, "button": 1, "changed": False, "had": bool(current), "notice": ""}
         self.open_page("keys")
 
     def osk_rows(self):
@@ -1116,6 +1118,10 @@ class Menu:
         buttons.gamekeys_call(self.gamekeys["folder"], "reload")
         self.osk["changed"] = False
         self.status = "SAVED"
+        # Criar ou zerar o mapa muda o que o jogo ve (um .key com teclas
+        # esconde o controle dele ao abrir, o launcher o le so na partida).
+        if bool(self.osk["map"]) != self.osk["had"]:
+            self.osk["notice"] = KEYS_RESTART_NOTICE
 
     def leave(self, what):
         """Emulator menu ou Quit: a OSD fecha (o que nao foi salvo volta) e o
@@ -1614,6 +1620,8 @@ class Painter:
         elif current:
             names = [control_name(pc) for pc in menu.osk_bound(current)]
             line, color = "%s: %s" % (label, ", ".join(names) if names else "NOT SET"), t.CYAN if names else t.COMMENT
+        elif osk.get("notice"):
+            line, color = osk["notice"], t.YELLOW
         else:
             line, color = "%d BUTTONS SET" % len(osk["map"]), t.COMMENT
         tiny.text(surface, tiny.fit(line, width - 12), color, x + 6, top + 1)

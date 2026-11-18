@@ -20062,10 +20062,18 @@ class OsdTests(unittest.TestCase):
         self.assertEqual([l for l in keyfile.read_text().splitlines() if not l.startswith('#')], ['p1_b2=X'])
         self.assertEqual(calls, [('/run/user/1000/fliperos-gamekeys', 'reload')])
         self.assertEqual(menu.status, 'SAVED')
+        self.assertEqual(menu.osk['notice'], '')     # tinha mapa e ficou com mapa: nada muda
         # Clear all e Back: sai sem gravar.
         menu.key(osd.KEY_LEFT)
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.osk['map'], {})
+        # Zerar e salvar muda o que o jogo ve: a OSD avisa que ele pode precisar reabrir.
+        menu.key(osd.KEY_RIGHT)
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.osk['notice'], osd.KEYS_RESTART_NOTICE)
+        self.assertNotIn('p1_b2', keyfile.read_text())
+        keyfile.write_text('p1_b2=X\n')
+        menu.key(osd.KEY_LEFT)
         menu.key(osd.KEY_ESC)
         self.assertEqual(menu.title(), 'FLIPEROS')
         self.assertIn('p1_b2=X', keyfile.read_text())
