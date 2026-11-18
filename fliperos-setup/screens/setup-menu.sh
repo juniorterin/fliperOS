@@ -227,7 +227,7 @@ screen_setup_system() {
       "latency|Latency|Standard or low latency mode, and a check of this computer." \
       "services|Services|SSH, network share, Wi-Fi: at boot, after boot or off." \
       "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
-      "storage|Storage|Use a second or external disk for the ROMs, BIOS, art, saves and downloads." \
+      "storage|Storage|A second or external disk: ROMs, BIOS, art, saves, downloads." \
       "password|Password|The password of the fliperos user: login, SSH and network share." \
       "cabinetname|Cabinet name|The name the other cabinets see in party and link play." \
       "update|System Update|Download and install the updates of all packages." \
@@ -310,8 +310,8 @@ screen_storage_disk() {
   label=${mount##*/}
   state=$(storage_state "$mount")
   choice=$(ui_menu_hints "$title: $label" "" use \
-    "use|Use $label|The ROMs, BIOS, art, saves and downloads go to $label/fliperos. What is on the main disk stays there (old- folders)." \
-    "prepare|Only prepare the folders|Make $label/fliperos with the whole folder structure and change nothing else." \
+    "use|Use $label|Use $label/fliperos for ROMs, art, saves and downloads." \
+    "prepare|Only prepare the folders|Only make the folders in $label/fliperos." \
     "return|Return|Back to the disks.") || return 0
   case $choice in
     use | prepare)

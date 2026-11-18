@@ -10371,7 +10371,7 @@ class SetupGroupsTests(Base):
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
-        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update", "version",
+        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "storage", "password", "cabinetname", "update", "version",
                                                         "whatsnew", "debug", "lab", "oscr", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)

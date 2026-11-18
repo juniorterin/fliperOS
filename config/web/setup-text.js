@@ -91,7 +91,7 @@ Object.assign(TEXT.en, {
   si_lab: "Lab mode", sih_lab: "Remote help: a temporary internet address to this cabinet.",
   si_oscr: "Cartridge reader (OSCR)", sih_oscr: "The firmware that lets the frontend read cartridges over USB.",
   sic_oscr: "The reader must be plugged into the cabinet by USB.",
-  si_storage: "Storage", sih_storage: "Use a second or external disk for the ROMs, BIOS, art, saves and downloads.",
+  si_storage: "Storage", sih_storage: "A second or external disk: ROMs, BIOS, art, saves, downloads.",
   sic_storage: "The disks are the ones plugged into the cabinet; each gets a fliperos folder with the whole structure.",
   si_splash: "Splash screen", sih_splash: "The boot screen theme, with a preview.",
   si_power: "Power", sih_power: "Restart or turn off the cabinet.",
