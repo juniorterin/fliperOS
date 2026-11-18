@@ -1216,8 +1216,12 @@ def draw_list(fe, ui, now):
             # Sem logo, o titulo numa linha: o que nao cabe corre em circulo.
             ticker(s, text_img(fe.fd.short_title(game).upper(), T.YELLOW), px, y, pw, now)
             y += 12
-        W.text(s, fit(facts_line(game), pw), T.YELLOW, px, y)
-        y += 12
+        # Sem ano e sem fabricante (um jogo custom sem os dois, um arquivo que
+        # a lista nao conhece) a linha fica vazia: os icones sobem para ela.
+        facts = facts_line(game)
+        if facts:
+            W.text(s, fit(facts, pw), T.YELLOW, px, y)
+            y += 12
     with part(fe, ui, "icons") as s:
         # Os icones numa fileira so: o genero, os jogadores, o controle e os botoes.
         strip = icon_strip(fe, s, game, px, y, SX + SW)
@@ -1425,8 +1429,11 @@ def list_info_vertical(fe, ui, game, box, now):
     ficha. O nome do jogo ja esta na lista."""
     x, y, w, h = box
     bottom = y + h
-    ticker(ui, text_img(facts_line(game).upper(), T.YELLOW), x, y + 1, w, now)
-    y += 14
+    # Sem ano e sem fabricante a linha fica vazia: os icones sobem para ela.
+    facts = facts_line(game)
+    if facts:
+        ticker(ui, text_img(facts.upper(), T.YELLOW), x, y + 1, w, now)
+        y += 14
     # Os icones, dois por linha.
     cell = (w - 6) // 2
     rows = icon_rows(fe, game, 12)
@@ -1766,14 +1773,18 @@ def draw_full(fe, ui, back, now):
                    SX, y, right - SX, now)
         else:
             s.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
-        W.text(s, fit(facts_line(game), right - SX), T.CYAN, SX, y + 12)
+        facts = facts_line(game)
+        if facts:
+            W.text(s, fit(facts, right - SX), T.CYAN, SX, y + 12)
+    # Sem ano e sem fabricante os icones sobem para a linha vazia.
+    iy = y + 24 if facts_line(game) else y + 13
     with part(fe, ui, "icons") as s:
-        icon_line(fe, s, game, SX, y + 24, right, 12)
+        icon_line(fe, s, game, SX, iy, right, 12)
         lit = link_mark(fe, game)
         if lit is not None:
             # O link, no fim da linha dos icones (os gabinetes da festa ficam nas
             # miniaturas): o globo, aceso se alguem joga.
-            globe_icon(s, right - 8, y + 30, 6, lit)
+            globe_icon(s, right - 8, iy + 6, 6, lit)
 
 
 def full_thumb(fe, ui, i, tx, y, tw, th):
@@ -1956,15 +1967,18 @@ def draw_flow(fe, ui, now):
             ticker(s, text_img(facts_line(g).upper(), T.CYAN), facts_x, y + 2, facts_w, now)
         else:
             W.text(s, fit(facts_line(g), facts_w), T.CYAN, facts_x, y + 2)
+    # Com o logo e sem ano nem fabricante, a linha do lado do logo fica vazia:
+    # os icones sobem para ela.
+    up = 11 if logo and not facts_line(g) else 0
     with part(fe, ui, "icons") as s:
         if commercial:
             bx, by = SX + SW - COIN_W, HH - COIN_H - 8
             rows = icon_rows(fe, g, 12)
-            icon_line(fe, s, g, tx, y + 13, bx - 4, 12, rows[:2])
-            icon_line(fe, s, g, tx, y + 26, bx - 4, 12, rows[2:])
+            icon_line(fe, s, g, tx, y + 13 - up, bx - 4, 12, rows[:2])
+            icon_line(fe, s, g, tx, y + 26 - up, bx - 4, 12, rows[2:])
             coin_box(fe, s, bx, by, now)
         else:
-            icon_line(fe, s, g, tx, y + 14, right, 12)
+            icon_line(fe, s, g, tx, y + 14 - up, right, 12)
 
 
 def flow_thumb(fe, ui, i, x, y, tw, th):

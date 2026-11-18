@@ -5473,6 +5473,20 @@ class FrontendDataTests(unittest.TestCase):
                              ('1989', 'Mitchell Corporation', 'Puzzle / Pang'))
             self.assertEqual(self.fd.web.custom_info(system, {'Name': 'Odd', 'file': 'Odd.sh'}), {})
 
+    def test_icons_rise_when_the_year_and_maker_line_is_empty(self):
+        # A lista (e a tela cheia e a grade com logo): sem ano nem fabricante a
+        # linha dos dois some e os icones ocupam o lugar dela.
+        view = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        draw = view.split('def draw_list(')[1].split('\ndef ')[0]
+        self.assertIn('facts = facts_line(game)\n        if facts:\n            W.text(s, fit(facts, pw), T.YELLOW, px, y)\n'
+                      '            y += 12\n', draw)
+        vertical = view.split('def list_info_vertical(')[1].split('\ndef ')[0]
+        self.assertIn('if facts:\n        ticker(ui, text_img(facts.upper(), T.YELLOW), x, y + 1, w, now)\n        y += 14', vertical)
+        full = view.split('def draw_full(')[1].split('\ndef ')[0]
+        self.assertIn('iy = y + 24 if facts_line(game) else y + 13', full)
+        flow = view.split('def draw_flow(')[1].split('\ndef ')[0]
+        self.assertIn('up = 11 if logo and not facts_line(g) else 0', flow)
+
     def test_control_filter(self):
         # O 5 > CONTROL: o campo Control da romlist nas familias do
         # fliperos-romclean; so os tipos que algum jogo tem.
