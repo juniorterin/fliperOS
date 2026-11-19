@@ -449,7 +449,7 @@ const enUS = {
       },
       kicker: 'ROMs, downloads and BIOS',
       title: 'Only the games your cabinet can play.',
-      intro: 'FliperOS ships no games. It helps you fill the cabinet with what fits its panel and screen: a filter for MAME romsets, a downloader that takes only the games that pass, the BIOS they need and the art for the frontend.',
+      intro: 'FliperOS ships no games. It helps you fill the cabinet with what fits its panel and screen: a filter for MAME romsets, a downloader that takes only the games that pass, the BIOS they need and the art for the frontend. And if your disk is already laid out the Batocera way, FliperOS accepts its folder structure.',
       rows: [
         { shot: 'anim/romfilter', title: 'MAME ROM filter', text: 'Start from a preset, then set players, buttons, controls, screen, resolution, years, clones and region. The number of games and the size change with every tile.', points: ['Players', 'Buttons', 'Controls', 'Years', 'Clones'] },
         { shot: 'gui/filter-controls', title: 'Your panel’s controls', text: 'Mark what the panel has, a trackball, a spinner, a wheel, a light gun, and only the games it can play stay.', points: [] },
@@ -457,6 +457,7 @@ const enUS = {
         { shot: 'gui/downloader-magnet-browser', title: 'Find the link in the browser', text: 'The Setup opens a browser: copy the magnet link of the romset and it comes back to the menu by itself.', points: [] },
         { shot: 'anim/bios', title: 'Download BIOS', text: 'The BIOS each ROM folder needs, downloaded file by file and checked by its hash. The Setup checks again each time the menu opens.', points: [] },
         { shot: 'frontend/list-more-2', title: 'Scraper', text: 'Covers, screenshots, videos, logos and descriptions for every system, from a site with your login or from art packs, only for the games you have.', points: [] },
+        { shot: '', title: 'Accepts the Batocera folder structure', text: 'Already have a disk or stick set up for Batocera? FliperOS accepts its folder structure: each console folder in batocera/roms becomes a system in the frontend, read in place, with nothing copied and nothing written inside the console folders. You choose the core for each console, and the disk’s bios, saves, media and snap folders are linked to FliperOS’s own. It lives in Setup > Games > Folders > External storage > Batocera filesystem, and a new disk with that structure makes the frontend ask once what to do.', points: ['batocera/roms', 'No copying', 'One core per console'] },
         { shot: '', title: 'Copy from any PC', text: 'The roms, bios, media and config folders are shared with Samba: copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot, so you can even hand the cabinet to an AI assistant and have it set everything up the way you want.', points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'] },
       ],
     },

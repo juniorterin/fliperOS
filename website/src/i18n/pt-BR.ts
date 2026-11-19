@@ -450,7 +450,7 @@ const ptBR: Messages = {
       },
       kicker: 'ROMs, downloads e BIOS',
       title: 'Só os jogos que o seu gabinete consegue jogar.',
-      intro: 'O FliperOS não traz jogos. Ele ajuda a encher o gabinete com o que cabe no painel e na tela dele: um filtro para romsets do MAME, um downloader que pega só os jogos que passam, as BIOS que eles pedem e a arte para o frontend.',
+      intro: 'O FliperOS não traz jogos. Ele ajuda a encher o gabinete com o que cabe no painel e na tela dele: um filtro para romsets do MAME, um downloader que pega só os jogos que passam, as BIOS que eles pedem e a arte para o frontend. E se o seu disco já está organizado do jeito do Batocera, o FliperOS aceita a estrutura de pastas dele.',
       rows: [
         { shot: 'anim/romfilter', title: 'Filtro de ROMs do MAME', text: 'Comece de um preset e ajuste jogadores, botões, controles, tela, resolução, anos, clones e região. O número de jogos e o tamanho mudam a cada quadro.', points: ['Jogadores', 'Botões', 'Controles', 'Anos', 'Clones'] },
         { shot: 'gui/filter-controls', title: 'Os controles do seu painel', text: 'Marque o que o painel tem, trackball, spinner, volante, pistola, e só ficam os jogos que ele consegue jogar.', points: [] },
@@ -458,6 +458,7 @@ const ptBR: Messages = {
         { shot: 'gui/downloader-magnet-browser', title: 'Ache o link no navegador', text: 'O Setup abre um navegador: copie o link magnet do romset e ele volta sozinho para o menu.', points: [] },
         { shot: 'anim/bios', title: 'Download BIOS', text: 'As BIOS que cada pasta de ROMs pede, baixadas arquivo por arquivo e conferidas pelo hash. O Setup confere de novo cada vez que o menu abre.', points: [] },
         { shot: 'frontend/list-more-2', title: 'Scraper', text: 'Capas, screenshots, vídeos, logos e descrições para todos os sistemas, de um site com o seu login ou de pacotes de arte, só para os jogos que você tem.', points: [] },
+        { shot: '', title: 'Aceita a estrutura de pastas do Batocera', text: 'Já tem um disco ou pendrive montado para o Batocera? O FliperOS aceita a estrutura de pastas dele: cada pasta de console em batocera/roms vira um sistema no frontend, lida no próprio lugar, sem copiar nada e sem escrever dentro das pastas dos consoles. Você escolhe o core de cada console, e as pastas bios, saves, media e snap do disco são ligadas às do FliperOS. Fica em Setup > Games > Folders > External storage > Batocera filesystem, e um disco novo com essa estrutura faz o frontend perguntar uma vez o que fazer.', points: ['batocera/roms', 'Sem copiar', 'Um core por console'] },
         { shot: '', title: 'Copie de qualquer PC', text: 'As pastas roms, bios, media e config são compartilhadas via Samba: copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot, então dá até para entregar o gabinete a um assistente de IA e deixar que ele configure tudo do jeito que você quiser.', points: ['Samba', 'SSH', 'roms', 'bios', 'media', 'config'] },
       ],
     },
