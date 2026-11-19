@@ -16,6 +16,7 @@ QMamehook has no icon of its own and keeps its initial.
 | `doflinx.png` | DOFLinx, the avatar of its GitHub organization |
 | `hotr.png` | Hook Of The Reaper, `hotr.6bolt.com/hotrIcon32.ico` |
 | `ledspicer.png` | LEDSpicer, the logo of its README |
+| `batocera.png` | Batocera, the avatar of its GitHub organization (github.com/batocera-linux), the joystick on the gradient triangle; the item and the card of the Batocera filesystem (Setup > Games > Folders > External storage) |
 
 The emulators and frontends use the icons of the website
 (`website/public/icons`, which lists their sources), scaled down the same

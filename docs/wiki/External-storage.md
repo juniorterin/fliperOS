@@ -44,6 +44,8 @@ The first time a disk like that is plugged in (identified by the UUID of its fil
 
 ## Batocera filesystem
 
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/fliperos-setup/gui/icons/batocera.png" width="64" alt="Batocera">
+
 A disk that was set up for Batocera keeps the games by **console**, not by emulator: `batocera/roms/snes`, `megadrive`, `psx`, `atomiswave`... (the folder can also be `userdata` or the disk itself). FliperOS has one folder per emulator and per RetroArch core, so the two don't line up by themselves. The Batocera filesystem fixes that by reading the disk where it is and letting you **choose what opens each console**.
 
 **External storage > Batocera filesystem** lists the disks that have such folders. Pick one:

@@ -13774,6 +13774,21 @@ class BatoceraTests(Base):
         self.disk.rename(self.media / "BATOCERA.off")
         self.assertEqual(self.ok("folders_cli shown roms/custom-packages").strip(), "~/roms/custom-packages (the disk BATOCERA is off)")
 
+    def test_the_batocera_logo_is_the_icon_of_the_item_and_of_the_card(self):
+        import struct
+        png = (SETUP / "gui/icons/batocera.png").read_bytes()
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", png[16:24]), (64, 64))          # os outros icones: 64 px
+        theme = (SETUP / "gui/theme.py").read_text()
+        # Um desenho de ICONS ganharia da imagem: "batocera" nao pode ter apelido nem desenho.
+        self.assertNotIn('"batocera":', theme)
+        self.assertIn('"batocera|Batocera filesystem|', (SETUP / "screens/storage.sh").read_text())
+        self.assertIn("`batocera.png`", (SETUP / "gui/icons/README.md").read_text())    # a fonte, como a dos outros
+        view = (SETUP / "gui/feview.py").read_text()
+        draw = view.split("def draw_storage(")[1].split("\ndef draw_letter(")[0]
+        self.assertIn('emu_icon(ui, cx - W.width(title) // 2 - 14, py + 14, "batocera")', draw)
+        self.assertEqual(draw.count('logo("BATOCERA'), 2)                       # o pedido e o resultado
+
     def test_a_roms_folder_with_many_consoles_is_not_one_console(self):
         self.assertEqual(self.env.out('folders_looks_like_systems "%s"' % (self.root / "roms"), self.vars).strip(), "5")
         self.assertEqual(self.env.run('folders_looks_like_systems "%s"' % (self.root / "roms" / "snes"), self.vars).returncode, 1)

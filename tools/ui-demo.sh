@@ -212,6 +212,13 @@ EOF
 
 demo_folders() { demo_external; screen_folders; }
 demo_external_hub() { demo_external; screen_external_storage; }
+# O mesmo menu, com o azulejo do Batocera filesystem ja escolhido (o harness nao fotografa uma troca de selecao).
+demo_external_hub_batocera() {
+  demo_external
+  eval "$(declare -f ui_menu_hints | sed '1s/ui_menu_hints/ui_menu_hints_real/')"
+  ui_menu_hints() { ui_menu_hints_real "$1" "$2" batocera "${@:4}"; }
+  screen_external_storage
+}
 # Formatar: a confirmacao, a escolha do formato e a ultima chance, sem formatar nada.
 demo_format() {
   demo_external

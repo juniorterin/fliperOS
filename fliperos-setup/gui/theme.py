@@ -1591,9 +1591,10 @@ for _alias, _name in {
     "+icon": "arcade", "+logo": "video", "+rename": "edit",
     # Setup > Games > Folders: os atalhos de pasta e o armazenamento externo
     # (o disco secundario; a tela dele: usar, so preparar, formatar em ext4 ou
-    # exFAT; o Batocera filesystem: o core de cada console, o melhor para todos).
+    # exFAT; o Batocera filesystem: o core de cada console, o melhor para todos; o
+    # item "batocera" usa o logo do Batocera, gui/icons/batocera.png).
     "shortcuts": "link", "external": "disk", "storage": "disk", "prepare": "addfolder", "unuse": "reset",
-    "format": "remove", "ext4": "disk", "exfat": "disk", "batocera": "dest", "cores": "emulators", "best": "ok",
+    "format": "remove", "ext4": "disk", "exfat": "disk", "cores": "emulators", "best": "ok",
     "+delete": "remove", "wipe": "remove",
     # As areas Install games e Create package (os pacotes de ~/roms/custom-packages).
     "+install": "install", "reinstall": "install", "delpkg": "remove", "fromfolder": "addfolder", "fromgame": "games",

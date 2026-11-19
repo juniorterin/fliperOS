@@ -4243,10 +4243,16 @@ def draw_storage(fe, ui, now):
     disk = "%s - %s - %s" % (offer["label"], offer["fs"], festorage.human(offer["total"]))
     where = festorage.WHERE
     batocera = festorage.kind_of(offer) == "batocera"
+
+    def logo(title):
+        # O logo do Batocera (gui/icons/batocera.png) ao lado do titulo: o disco e um Batocera filesystem.
+        emu_icon(ui, cx - W.width(title) // 2 - 14, py + 14, "batocera")
+
     if stage == "ask" and batocera:
         # Um disco com um Batocera filesystem (lib/batocera.sh): usa as roms
         # (um sistema por console, com o core padrao) e as pastas irmas.
         n = offer.get("consoles", "0")
+        logo("BATOCERA FILESYSTEM")
         W.centered(ui, "BATOCERA FILESYSTEM", T.YELLOW, py + 10)
         tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
         tiny.centered(ui, "USE ITS ROMS, BIOS, SAVES AND ART?", T.COMMENT, cx, py + 40)
@@ -4272,6 +4278,7 @@ def draw_storage(fe, ui, now):
     elif stage == "done":
         ok, lines = ov["result"]
         if ok and batocera:
+            logo("BATOCERA IN USE")
             W.centered(ui, "BATOCERA IN USE", T.GREEN, py + 10)
             tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
             tiny.centered(ui, "ITS CONSOLES, BIOS, SAVES AND ART", T.COMMENT, cx, py + 40)
