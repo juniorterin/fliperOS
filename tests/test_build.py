@@ -18124,15 +18124,25 @@ class FrontendPopupMotionTests(unittest.TestCase):
 
     def test_each_pressed_tile_has_its_own_animation(self):
         fv = self.fv
-        # PLAY: o cartao se aproxima e some; so depois vem o lancamento.
+        # PLAY: o cartao fica quieto e nitido (nada de ampliar nem de apagar) e a
+        # tela inteira apaga ate o preto, a tempo do lancamento.
         play = self.fe(act=("play", 5.0))
-        self.assertEqual(fv.popup_motion(play, 5.0), (1.0, 1.0, 1.0))
-        s_play, a_play, _ = fv.popup_motion(play, 5.0 + fv.POP_ACT["play"])
-        self.assertGreater(s_play, 1.1)
-        self.assertAlmostEqual(a_play, 0.0, places=6)
-        # O "+" se aproxima mais ainda (mergulha na pagina).
+        for age in (0.0, 0.1, fv.POP_ACT["play"]):
+            self.assertEqual(fv.popup_motion(play, 5.0 + age), (1.0, 1.0, 1.0), age)
+        self.assertEqual(fv.popup_fade(play, 5.0), 0)
+        self.assertEqual(fv.popup_fade(play, 5.0 + 0.08), 0)
+        mid = fv.popup_fade(play, 5.0 + 0.19)
+        self.assertTrue(0 < mid < 255, mid)
+        self.assertEqual(fv.popup_fade(play, 5.0 + fv.POP_ACT["play"] + 0.001), 255)
+        # So o PLAY apaga a tela: os outros azulejos e o menu parado, nao.
+        for ov in ({"act": ("more", 5.0)}, {"act": ("fav", 5.0, True)}, {}):
+            self.assertEqual(fv.popup_fade(self.fe(**ov), 5.3), 0, ov)
+        # Nos prints (fe.shot) nada apaga.
+        play.shot = "x"
+        self.assertEqual(fv.popup_fade(play, 6.0), 0)
+        # O "+" se aproxima (mergulha na pagina) e some.
         s_more, a_more, _ = fv.popup_motion(self.fe(act=("more", 5.0)), 5.0 + fv.POP_ACT["more"])
-        self.assertGreater(s_more, s_play)
+        self.assertGreater(s_more, 1.3)
         self.assertAlmostEqual(a_more, 0.0, places=6)
         # A estrela: o cartao fica enquanto ela explode e so no fim encolhe e apaga.
         fav = self.fe(act=("fav", 5.0, True))
@@ -18179,7 +18189,7 @@ class FrontendPopupMotionTests(unittest.TestCase):
 
     def test_each_of_the_three_icons_has_its_own_idle_animation(self):
         # Direto no icone (o brilho do azulejo ja muda com o tempo e esconderia a
-        # falta dele): o PLAY (triangulo e anel), a estrela (bate, balanca e
+        # falta dele): o triangulo do PLAY (respira), a estrela (bate, balanca e
         # brilha) e o "+" (meia volta) mudam com o relogio; sem relogio, parados.
         fv, pg = self.fv, self.pg
 
@@ -18190,10 +18200,30 @@ class FrontendPopupMotionTests(unittest.TestCase):
         for kind, (t1, t2) in {"play": (0.0, 0.2), "fav": (0.0, 0.4), "more": (0.1, 1.0)}.items():
             self.assertNotEqual(icon(kind, t1), icon(kind, t2), kind)
             self.assertEqual(icon(kind, None), icon(kind, None), kind)
-        # Apertados, cada um faz a sua: o triangulo voa, a estrela volta de
+        # Apertados, cada um faz a sua: o triangulo desliza, a estrela volta de
         # pequena, o "+" da meia volta.
         for kind, act in {"play": ("play", 0.2), "fav": ("fav", 0.1, True), "more": ("more", 0.2)}.items():
             self.assertNotEqual(icon(kind, None, act=act), icon(kind, None), kind)
+
+    def test_the_pressed_play_blinks_green_twice_without_growing_anything(self):
+        fv, pg = self.fv, self.pg
+        # Duas fases acesas e duas apagadas nos primeiros 0,14 s; depois, nenhuma.
+        lit = [fv.play_flash(i / 1000) for i in range(0, 200, 5)]
+        runs = [lit[i] for i in range(len(lit)) if i == 0 or lit[i] != lit[i - 1]]
+        self.assertEqual(runs, [True, False, True, False])
+        self.assertFalse(fv.play_flash(0.14))
+        # O azulejo acende em verde cheio (sem escala: o k fica em 1) e some o brilho
+        # branco e o anel de antes.
+        def tile(age):
+            surf = pg.Surface((320, 240), pg.SRCALPHA)
+            spark = pg.Surface((320, 240), pg.SRCALPHA)
+            fv.popup_tile(surf, spark, self.TILES[0], (100, 100, 52), True, 0.0, None, 1.0, 1.0, ("play", age))
+            return surf, spark
+        surf, spark = tile(0.0)
+        self.assertEqual(tuple(surf.get_at((104, 104)))[:3], tuple(fv.T.GREEN))
+        self.assertEqual(spark.get_bounding_rect(1).size, (0, 0))
+        off, _ = tile(0.05)
+        self.assertNotEqual(tuple(off.get_at((104, 104)))[:3], tuple(fv.T.GREEN))
 
     def test_the_selected_tile_animates_and_the_others_stand_still(self):
         # Os outros dois azulejos ficam parados enquanto o escolhido se mexe.

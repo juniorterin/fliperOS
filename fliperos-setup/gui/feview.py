@@ -2603,11 +2603,28 @@ def pop_time(kind):
     return POP_ACT.get(kind, POP_OUT)
 
 
+def play_flash(age):
+    """O PLAY apertado pisca duas vezes (verde cheio, apagado, verde cheio,
+    apagado) nos primeiros 0,14 s: True nas fases acesas."""
+    return age < 0.14 and int(age / 0.035) % 2 == 0
+
+
+def popup_fade(fe, now):
+    """O preto por cima de tudo (0 a 255) com o PLAY apertado: o cartao fica
+    quieto e nitido e a tela inteira apaga ate o preto, a tempo do jogo abrir
+    (o corte para o emulador, que comeca preto, nao se nota)."""
+    act = (fe.ov or {}).get("act")
+    if getattr(fe, "shot", None) or not act or act[0] != "play":
+        return 0
+    return round(255 * smooth01((now - act[1] - 0.08) / (POP_ACT["play"] - 0.08)))
+
+
 def popup_motion(fe, now):
     """(escala, opacidade, escuro) do cartao do menu do jogo e do fundo atras
     dele (escuro: 0 a 1 da cor de 160): abrindo, o cartao cresce de 78% com um
-    leve estouro; apertado, o PLAY o aproxima e some, o "+" o aproxima mais, e
-    o favoritar e o Esc o encolhem e apagam no fim."""
+    leve estouro; apertado, o "+" o aproxima e o faz sumir, e o favoritar e o
+    Esc o encolhem e apagam no fim. O PLAY nao mexe nele (popup_fade apaga a
+    tela)."""
     ov = fe.ov
     if getattr(fe, "shot", None) or not ov:
         return 1.0, 1.0, 1.0
@@ -2621,7 +2638,7 @@ def popup_motion(fe, now):
         kind, age = act[0], now - act[1]
         p = clamp01(age / pop_time(kind))
         if kind == "play":
-            scale, alpha = 1 + 0.16 * out_cubic(p), 1 - clamp01((p - 0.35) / 0.65)
+            pass
         elif kind == "more":
             scale, alpha = 1 + 0.45 * p * p, 1 - clamp01((p - 0.3) / 0.7)
         else:
@@ -2668,28 +2685,25 @@ def page_fx(fe, top, now):
     return scale_fade(top, top.get_rect(), 1.08 - 0.08 * out_cubic(p), clamp01(p / 0.7))
 
 
-def pulse_ring(ui, cx, cy, color, now, period=1.3, r0=12, r1=24):
-    """Um anel que nasce no icone, abre e some (o azulejo escolhido respira)."""
-    p = (now % period) / period
-    r = round(r0 + (r1 - r0) * out_cubic(p))
-    layer = pygame.Surface((2 * r1 + 4, 2 * r1 + 4), pygame.SRCALPHA)
-    pygame.draw.circle(layer, tuple(color) + (round(150 * (1 - p)),), (r1 + 2, r1 + 2), r, 1)
-    ui.blit(layer, (cx - r1 - 2, cy - r1 - 2))
-
-
 def popup_icon(ui, kind, cx, cy, on, lit=False, net=False, now=None, act=None):
     """O icone de um azulejo do menu do jogo (net: os controles, no lugar do
-    globo). now: o relogio do azulejo escolhido, que anima (o PLAY empurra o
-    triangulo e solta um anel, a estrela bate e balanca, o "+" da meia volta);
-    act = (azulejo, idade[, favoritou]) quando ele acabou de ser apertado."""
+    globo). now: o relogio do azulejo escolhido, que anima (o triangulo do PLAY
+    respira, a estrela bate e balanca, o "+" da meia volta); act = (azulejo,
+    idade[, favoritou]) quando ele acabou de ser apertado."""
     if kind == "play":
-        dx = 0
+        dx, color = 0, T.GREEN if on else T.COMMENT
         if act and act[0] == "play":
-            dx = round(14 * out_cubic(act[1] / POP_ACT["play"]))
+            # Apertado: o triangulo desliza 6 px e, nas fases acesas, fica escuro
+            # sobre o verde cheio do azulejo (popup_tile).
+            dx = round(6 * out_cubic(act[1] / 0.2))
+            if play_flash(act[1]):
+                color = T.SPACE
         elif on and now is not None:
-            pulse_ring(ui, cx, cy, T.GREEN, now)
-            dx = round(3 * (0.5 + 0.5 * math.sin(now * 9)))
-        play_icon(ui, cx + dx, cy, T.GREEN if on else T.COMMENT)
+            # Parado, ele respira: do verde para um verde claro, sem sair do
+            # lugar (um pixel que anda de um lado a outro treme no tubo).
+            k = 0.85 * (0.5 + 0.5 * math.sin(now * 5))
+            color = tuple(round(a + (b - a) * k) for a, b in zip(T.GREEN, (210, 255, 225)))
+        play_icon(ui, cx + dx, cy, color)
     elif kind in ("link", "join", "new", "closed"):
         if net:
             pads_icon(ui, cx, cy, lit or on)
@@ -2753,6 +2767,10 @@ def popup_tile(ui, spark, tile, rect, on, now, idle, k=1.0, alpha=1.0, act=None)
     local = (pad, pad, size, size)
     tile_frame(cell, local, on, now)
     pygame.draw.rect(cell, T.PINK if on else T.LINE, local, 2 if on else 1)
+    if act and act[0] == "play" and play_flash(act[1]):
+        # O PLAY apertado acende: verde cheio e a borda branca, sem ampliar nada.
+        cell.fill(T.GREEN, (pad + 2, pad + 2, size - 4, size - 4))
+        pygame.draw.rect(cell, T.FG, local, 2)
     popup_icon(cell, tile["kind"], pad + size // 2, pad + size // 2, on, tile.get("lit", False),
                tile.get("net", False), idle, act)
     cx, cy = x + size // 2, y + size // 2
@@ -2766,8 +2784,11 @@ def popup_tile(ui, spark, tile, rect, on, now, idle, k=1.0, alpha=1.0, act=None)
 
 
 def popup_spark(layer, kind, cx, cy, size, act):
-    """O que sai do azulejo apertado: o anel do PLAY (verde, com um clarao) e do
-    "+" (ciano), e as faiscas da estrela que favoritou."""
+    """O que sai do azulejo apertado: o anel do "+" (ciano) e as faiscas da
+    estrela que favoritou. O PLAY nao solta nada: ele acende (popup_tile) e a
+    tela apaga (popup_fade)."""
+    if kind == "play":
+        return
     age = act[1]
     if kind == "fav":
         p = clamp01(age / 0.5)
@@ -2779,10 +2800,8 @@ def popup_spark(layer, kind, cx, cy, size, act):
                            (round(cx + d * math.cos(ang)) - s // 2, round(cy + d * math.sin(ang)) - s // 2, s, s))
         return
     p = clamp01(age / POP_ACT[kind])
-    pygame.draw.circle(layer, tuple(T.GREEN if kind == "play" else T.CYAN) + (round(210 * (1 - p)),), (cx, cy),
+    pygame.draw.circle(layer, tuple(T.CYAN) + (round(210 * (1 - p)),), (cx, cy),
                        round(14 + 34 * out_cubic(p)), max(1, round(4 * (1 - p))))
-    if kind == "play" and age < 0.12:
-        layer.fill((255, 255, 255, round(130 * (1 - age / 0.12))), (cx - size // 2, cy - size // 2, size, size))
 
 
 def draw_popup(fe, ui, now):
@@ -2844,11 +2863,9 @@ def draw_popup(fe, ui, now):
                 act = ("fav", clock - burst[0], burst[1])
             if act:
                 a = act[1]
-                if act[0] == "play":
-                    k *= 1 - 0.1 * math.sin(math.pi * clamp01(a / 0.1)) + 0.3 * out_cubic(a / POP_ACT["play"])
-                elif act[0] == "fav":
+                if act[0] == "fav":
                     k *= 1 + 0.2 * math.sin(math.pi * clamp01(a / 0.3))
-                else:
+                elif act[0] == "more":
                     k *= 1 + 0.25 * out_cubic(a / POP_ACT["more"])
         popup_tile(ui, spark, tile, (x, ty, size), on, now, clock if on and not still else None, k, alpha, act)
     ui.blit(spark, (0, 0))
@@ -4842,6 +4859,9 @@ def draw(fe, now):
         elif o in ("exitkey", "exitpad"):
             draw_capture(fe, top, t)
         back.blit(top, (0, 0))
+        fade = popup_fade(fe, now) if o == "popup" else 0
+        if fade:
+            dim(back, fade)        # o PLAY apertado: a tela apaga ate o preto
     if fe.toast and now < fe.toast[1]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_toast(top, fe.toast[0])
