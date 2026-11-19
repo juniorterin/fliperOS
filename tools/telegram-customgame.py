@@ -35,6 +35,7 @@ import argparse
 import collections
 import html
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -402,6 +403,20 @@ class Telegram:
                                               parse_mode='HTML'))
 
 
+class PrintOnly(Telegram):
+    """O --no-post: ler o pacote e de verdade (a Bot API e o MTProto), mas nada vai ao grupo; o post sai no log."""
+
+    def message(self, chat, text, thread=None, reply=None):
+        print('[mensagem] topico=%s resposta=%s\n%s\n' % (thread, reply, text))
+
+    def album(self, chat, items, caption_text, thread=None, reply=None):
+        print('[album] topico=%s resposta=%s: %s\n%s\n' % (
+            thread, reply, ', '.join('%s %s (%d bytes)' % (kind, name, len(data)) for kind, name, data in items), caption_text))
+
+    def document(self, chat, file_id, caption_text, thread=None):
+        print('[arquivo] topico=%s file_id=%s...\n%s\n' % (thread, file_id[:12], caption_text))
+
+
 # ── O MTProto (so quando o pacote e grande demais para a Bot API) ──
 
 class TelethonSource:
@@ -414,14 +429,22 @@ class TelethonSource:
         import asyncio
         from telethon import TelegramClient
         from telethon.sessions import StringSession
-        self.loop = asyncio.new_event_loop()
-        self.client = TelegramClient(StringSession(), int(api_id), api_hash, loop=self.loop)
-        self.loop.run_until_complete(self.client.start(bot_token=token))
-        message = self.loop.run_until_complete(self.client.get_messages(chat, ids=message_id))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self.client = TelegramClient(StringSession(), int(api_id), api_hash, loop=loop)
+        # O laco que o proprio cliente usa: e nele que o start() e o disconnect() rodam.
+        self.loop = getattr(self.client, 'loop', None) or loop
+        self.run(self.client.start(bot_token=token))
+        message = self.run(self.client.get_messages(chat, ids=message_id))
         if not message or not message.document:
             raise PostError('the message %s has no file the bot can read' % message_id)
         self.document = message.document
         self.size = self.document.size
+
+    def run(self, value):
+        """O resultado de uma chamada do Telethon. O start() e o disconnect() rodam o laco sozinhos quando ele
+        nao esta rodando (e devolvem o resultado, nao uma corrotina); as outras chamadas sao corrotinas."""
+        return self.loop.run_until_complete(value) if inspect.isawaitable(value) else value
 
     def fetch(self, offset, length):
         async def read():
@@ -433,9 +456,10 @@ class TelethonSource:
 
     def close(self):
         try:
-            self.loop.run_until_complete(self.client.disconnect())
+            self.run(self.client.disconnect())
         finally:
-            self.loop.close()
+            if not self.loop.is_closed():
+                self.loop.close()
 
 
 def telethon_source(env, chat, message_id):
@@ -570,6 +594,7 @@ def main():
     parser.add_argument('--payload-env', help='a variavel de ambiente com o JSON do pacote mandado ao grupo')
     parser.add_argument('--payload-file', help='o mesmo, num arquivo')
     parser.add_argument('--dry-run', action='store_true', help='confere o pedido e nao fala com o Telegram')
+    parser.add_argument('--no-post', action='store_true', help='le o pacote de verdade, mas so mostra o post no log (nada vai ao grupo)')
     args = parser.parse_args()
     if args.zip:
         preview(args.zip, args.out)
@@ -592,7 +617,7 @@ def main():
             print('::warning::no TELEGRAM_BOT_TOKEN: nothing was posted')
         return 0
     try:
-        result = post_package(Telegram(token), payload, dict(os.environ), load_tool())
+        result = post_package((PrintOnly if args.no_post else Telegram)(token), payload, dict(os.environ), load_tool())
     except PostError as exc:
         print(exc, file=sys.stderr)
         return 1

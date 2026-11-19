@@ -25,6 +25,10 @@ on:
         description: 'So conferir o pedido, sem falar com o Telegram'
         type: boolean
         default: false
+      no_post:
+        description: 'Ler o pacote de verdade (Bot API e MTProto), mas so mostrar o post no log: nada vai ao grupo'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,6 +58,7 @@ jobs:
           # O pedido vai por variavel de ambiente, nunca dentro do script: o nome do arquivo e de quem mandou nao viram comando.
           PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || inputs.payload }}
           DRY_RUN: ${{ inputs.dry_run }}
+          NO_POST: ${{ inputs.no_post }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
@@ -62,4 +67,5 @@ jobs:
         run: |
           args=(--payload-env PAYLOAD)
           [[ $DRY_RUN == true ]] && args+=(--dry-run)
+          [[ $NO_POST == true ]] && args+=(--no-post)
           python3 tools/telegram-customgame.py "${args[@]}"

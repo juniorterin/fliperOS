@@ -19036,6 +19036,87 @@ class TelegramCustomGameTests(unittest.TestCase):
         # Cada pedaco vem uma vez so (fica guardado).
         self.assertEqual(sorted(fetches), sorted(set(fetches)))
 
+    def test_the_telethon_source_works_with_the_way_telethon_really_behaves(self):
+        # O Telethon de verdade: start() e disconnect() rodam o laco sozinhos quando ele nao esta rodando e devolvem o
+        # resultado (nao uma corrotina; o primeiro teste real falhou aqui com "An asyncio.Future, a coroutine or an
+        # awaitable is required"); get_messages e uma corrotina e iter_download um iterador assincrono.
+        import asyncio
+        import types
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'big.zip', game=os.urandom(3 << 20)).read_bytes()
+        seen = {}
+
+        class Doc:
+            size = len(data)
+
+        class Message:
+            document = Doc()
+
+        class Client:
+            def __init__(self, session, api_id, api_hash, loop=None):
+                self.loop = loop
+                seen.update(api_id=api_id, api_hash=api_hash)
+
+            def start(self, bot_token=None):
+                self.loop.run_until_complete(asyncio.sleep(0))
+                seen['token'] = bot_token
+                return self                                  # o cliente, nao uma corrotina
+
+            async def get_messages(self, chat, ids=None):
+                seen.update(chat=chat, ids=ids)
+                return Message()
+
+            def iter_download(self, document, offset=0, request_size=0, limit=None):
+                async def chunks():
+                    yield data[offset:offset + request_size]
+                seen.setdefault('offsets', []).append(offset)
+                return chunks()
+
+            def disconnect(self):
+                seen['closed'] = True                        # tambem sincrono
+
+        telethon = types.ModuleType('telethon')
+        telethon.TelegramClient = Client
+        sessions = types.ModuleType('telethon.sessions')
+        sessions.StringSession = type('StringSession', (), {})
+        saved = {k: sys.modules.get(k) for k in ('telethon', 'telethon.sessions')}
+        sys.modules.update({'telethon': telethon, 'telethon.sessions': sessions})
+        try:
+            env = {'TELEGRAM_BOT_TOKEN': '1:tok', 'TELEGRAM_API_ID': '123', 'TELEGRAM_API_HASH': 'abc'}
+            tg = self.Fake()
+            out = []
+            result = self.bot.post_package(tg, self.payload(file_size=600 << 20), env, self.tool, out=out.append)
+        finally:
+            for key, module in saved.items():
+                if module is None:
+                    sys.modules.pop(key, None)
+                else:
+                    sys.modules[key] = module
+        self.assertEqual(result, 'posted: Street Fighter 4')
+        self.assertEqual((seen['token'], seen['api_id'], seen['api_hash'], seen['chat'], seen['ids']), ('1:tok', 123, 'abc', '@fliperos15khz', 55))
+        self.assertTrue(seen['closed'])
+        self.assertTrue(all(o % self.bot.BLOCK == 0 for o in seen['offsets']))
+        self.assertLess(len(seen['offsets']) * self.bot.BLOCK, len(data))          # nao leu o zip inteiro
+        self.assertEqual([c[0] for c in tg.calls], ['album', 'message', 'document', 'message'])
+
+    def test_no_post_reads_the_package_but_sends_nothing_to_the_group(self):
+        posted = []
+        fake = self.bot.PrintOnly('1:tok')
+        fake.call = lambda *a, **k: posted.append(a)          # qualquer chamada de rede apareceria aqui
+        import contextlib
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            fake.message('-100', 'dados', 578, 55)
+            fake.album('-100', [('photo', 'snap.png', b'x' * 10)], 'legenda', 578)
+            fake.document('-100', 'BQACAgEAAyEFAAMBBVUx', 'arquivo', 578)
+        self.assertEqual(posted, [])
+        shown = buffer.getvalue()
+        for part in ('[mensagem] topico=578 resposta=55', 'dados', '[album]', 'photo snap.png (10 bytes)', '[arquivo] topico=578', 'BQACAgEAAyEF...'):
+            self.assertIn(part, shown)
+        workflow = (ROOT / '.github/workflows/telegram-customgame.yml').read_text(encoding='utf-8')
+        self.assertIn('no_post:', workflow)
+        self.assertIn('[[ $NO_POST == true ]] && args+=(--no-post)', workflow)
+
     def test_the_preview_prints_the_post_and_saves_the_art(self):
         with tempfile.TemporaryDirectory() as tmp:
             zip_ = self.make_zip(Path(tmp) / 'Street Fighter 4.fliperos-customgame.zip')
