@@ -18053,6 +18053,21 @@ class GuiVsyncTests(unittest.TestCase):
             theme.request_vsync()
             self.assertEqual(os.environ['SDL_RENDER_VSYNC'], '0')
 
+    def test_the_frontend_does_not_pass_its_vsync_request_to_the_games(self):
+        # O SDL_RENDER_VSYNC vale para quem o herda: os emuladores decidem o
+        # vsync deles (alguns o desligam de proposito), entao o ambiente do
+        # jogo (game_env) nao o leva.
+        import ast
+        from unittest import mock
+        source = (self.GUI / 'fliperos-frontend').read_text()
+        func = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == 'game_env')
+        scope = {'os': os}
+        exec(compile(ast.Module(body=[func], type_ignores=[]), 'game_env', 'exec'), scope)
+        with mock.patch.dict(os.environ, {'SDL_RENDER_VSYNC': '1', 'HOME': '/home/x'}, clear=True):
+            got = scope['game_env']()
+        self.assertNotIn('SDL_RENDER_VSYNC', got)
+        self.assertEqual(got['HOME'], '/home/x')
+
     def test_every_gui_program_that_opens_the_video_asks_for_vsync_first(self):
         opened = []
         for path in sorted(self.GUI.iterdir()):

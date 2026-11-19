@@ -124,7 +124,7 @@ These are read by the preloaded libraries and the commands that draw over a game
 | `FLIPEROS_GUI_KEYS` | `fliperos-setup/gui/serve.py` | The keys the GUI presses, in order |
 | `FLIPEROS_GUI_SHOTS` | `fliperos-setup/gui/serve.py` | A folder where each screen is saved as a PNG |
 | `FLIPEROS_GUI_BG` | `fliperos-setup/gui/background.py` | Fixes the GUI's background instead of picking one |
-| `SDL_RENDER_VSYNC` | `fliperos-setup/gui/theme.py` | The Setup and the frontend set it to `1` (vsync) unless it is already set; `0` turns vsync off, to compare |
+| `SDL_RENDER_VSYNC` | `fliperos-setup/gui/theme.py` | The Setup and the frontend set it to `1` (vsync) unless it is already set; `0` turns vsync off, to compare. The frontend does not pass it on to the games |
 | `FE_EMU_PORT`, `FE_EMU_SIZE` | `tools/fe-emulator/run.sh` | The frontend emulator's browser port (`6080`) and screen size (`960x720`) |
 | `MSYS_NO_PATHCONV` | Git Bash | `1` stops Git Bash rewriting the paths of a Docker mount |
 

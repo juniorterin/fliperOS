@@ -207,8 +207,11 @@ def custom_app(script):
 def game_env():
     """O ambiente do jogo: sem o SDL do KMS que a sessao deu ao frontend
     (FLIPEROS_FRONTEND_SDL, config/fliperos-session). Os emuladores abrem com o
-    SDL de sempre; o GroovyMAME poe o do KMS ele mesmo."""
+    SDL de sempre; o GroovyMAME poe o do KMS ele mesmo. Tambem sem o pedido
+    de vsync do frontend (SDL_RENDER_VSYNC, theme.request_vsync): e dele, cada
+    emulador decide o vsync que usa."""
     env = dict(os.environ)
+    env.pop("SDL_RENDER_VSYNC", None)
     sdl = env.pop("FLIPEROS_FRONTEND_SDL", "")
     if sdl:
         rest = [p for p in env.get("LD_LIBRARY_PATH", "").split(":") if p and p != sdl]
