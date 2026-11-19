@@ -55,6 +55,11 @@ taca), uma imagem nova a cada 1/CHEEVO_FPS s.
 
 Pelo mesmo arquivo (open, close, up, down, left, right, enter, esc) o menu tambem
 anda sem controle: os testes e o SSH.
+
+Abrir uma pagina que le o Setup ou faz contas (Colour, Scanlines, Geometry, GunCon
+2) e os botoes Save e Back to the defaults demoram um pouco: o menu os faz a
+parte e, passados SPIN_DELAY segundos, desenha um aro pequeno girando no canto do
+titulo (Painter.spinner) ate acabar. As teclas esperam a pagina abrir.
 """
 import fcntl
 import glob
@@ -149,6 +154,14 @@ GEOMETRY_POLL = 1.0
 # Com o menu aberto: de quantos em quantos segundos a linha da resolucao e do
 # FPS e relida.
 LIVE_POLL = 1.0
+# O indicador de espera (um aro de 8x8 com um cometa, o da barra das conquistas
+# em ponto pequeno) no canto do titulo: aparece quando abrir uma pagina ou um
+# botao (Save, Back to the defaults...) passa de SPIN_DELAY segundos, para o que
+# e rapido nao piscar, e gira SPIN_FPS passos por segundo. Os pixels do aro, em
+# volta, a partir do canto de cima.
+SPIN_DELAY, SPIN_FPS = 0.25, 16
+SPINNER_RING = ((2, 0), (3, 0), (4, 0), (5, 0), (6, 1), (7, 2), (7, 3), (7, 4), (7, 5), (6, 6),
+                (5, 7), (4, 7), (3, 7), (2, 7), (1, 6), (0, 5), (0, 4), (0, 3), (0, 2), (1, 1))
 # Os perfis da OSD (Save profile as, no alto da Configuration): o Save grava os
 # ajustes feitos para tudo (default.cfg), so para a resolucao, o emulador, o
 # core ou o jogo. Uma linha por ajuste: "escopo<TAB>chave<TAB>valor", o escopo
@@ -810,11 +823,15 @@ class Row:
     """Uma linha: kind number (minimo, maximo, passo), choice (options), page ou
     action (Enter). change(valor) aplica."""
 
-    def __init__(self, kind, label, value=None, low=0, high=0, step=1, options=(), pretty=str, change=None, action=None):
+    def __init__(self, kind, label, value=None, low=0, high=0, step=1, options=(), pretty=str, change=None, action=None,
+                 slow=False):
         self.kind, self.label, self.value = kind, label, value
         self.low, self.high, self.step = low, high, step
         self.options, self.pretty, self.change, self.action = options, pretty, change, action
         self.previous = None
+        # slow: o Enter demora (le o Setup, faz contas): roda a parte, com o
+        # indicador de espera na tela (Menu.run_slow).
+        self.slow = slow
 
     def text(self):
         if self.kind == "action" and self.value:
@@ -921,6 +938,16 @@ class Menu:
         self.profile = self.profiles.chosen(self.scopes)
         # chave -> [valor de antes, valor novo] dos ajustes ainda nao salvos.
         self.pending = {}
+        # A espera: threaded (o servico liga) faz os Enter lentos (Row.slow)
+        # em outra thread, para o menu seguir desenhando o indicador; opening
+        # e essa thread, tasks as chaves dos botoes na fila do Worker
+        # (put_task), wait_since desde quando se espera e spin o passo do
+        # indicador (None: escondido, a espera e curta ou nao ha).
+        self.threaded = False
+        self.opening = None
+        self.tasks = set()
+        self.wait_since = None
+        self.spin = None
         self.open_page("main")
 
     # O que aparece.
@@ -962,6 +989,58 @@ class Menu:
 
     def profile_label(self, kind):
         return kind + ".cfg"
+
+    # ── A espera ──
+    def run_slow(self, action):
+        """O Enter de uma linha lenta: em outra thread (threaded), com as
+        teclas paradas ate acabar (elas cairiam na pagina de antes); sem
+        threaded (os testes, o --shot), na hora."""
+        if not self.threaded:
+            action()
+            return
+
+        def work():
+            try:
+                action()
+            except Exception as exc:  # uma pagina que nao abre nao derruba o servico
+                print("fliperos-osd: %s" % exc, file=sys.stderr, flush=True)
+                self.status = "COULD NOT OPEN"
+            finally:
+                self.opening = None
+                self.dirty = True
+        self.opening = threading.Thread(target=work, daemon=True)
+        self.opening.start()
+
+    def put_task(self, key, action):
+        """worker.put de um botao (Save, Back to the defaults): o indicador de
+        espera vale ate ele acabar. A mesma chave pedida de novo toma o lugar da
+        que esperava, e a chave sai no fim da que rodou."""
+        def run():
+            try:
+                action()
+            finally:
+                self.tasks.discard(key)
+                self.dirty = True
+        self.tasks.add(key)
+        self.worker.put(key, run)
+
+    def waiting(self):
+        return self.opening is not None or bool(self.tasks)
+
+    def tick(self, now):
+        """O passo do indicador de espera de agora; desenha de novo quando muda
+        (aparece depois de SPIN_DELAY, some quando a espera acaba)."""
+        if not self.waiting():
+            self.wait_since = None
+            step = None
+        else:
+            if self.wait_since is None:
+                self.wait_since = now
+            elapsed = now - self.wait_since
+            step = int(elapsed * SPIN_FPS) % len(SPINNER_RING) if elapsed >= SPIN_DELAY else None
+        if step != self.spin:
+            self.spin = step
+            self.dirty = True
 
     def rows_main(self):
         """A Configuration e os botoes: Emulator menu (o do proprio emulador,
@@ -1007,14 +1086,14 @@ class Menu:
         conf = read_conf()
         if conf.get("frequency", "") == "31k":
             # A pagina das scanlines: ligar e cada ajuste, na hora.
-            rows.append(Row("page", "Scanlines", action=self.open_scanlines))
+            rows.append(Row("page", "Scanlines", action=self.open_scanlines, slow=True))
         if conf.get("monitor", "") != "lcd" and self.mode:
-            rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry")))
-        rows.append(Row("page", "Colour", action=self.open_colour))
+            rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry"), slow=True))
+        rows.append(Row("page", "Colour", action=self.open_colour, slow=True))
         # A GunCon 2 ligada: os ajustes dela com o jogo aberto, para acertar a
         # mira e o flash atirando (Setup > Joysticks > GunCon 2).
         if guncon_present():
-            rows.append(Row("page", "GunCon 2", action=self.open_guncon))
+            rows.append(Row("page", "GunCon 2", action=self.open_guncon, slow=True))
         # Na base, lado a lado: Save (grava no perfil) e Back.
         buttons = Row("buttons", "Save|Back", "save", options=[("save", "Save"), ("back", "Back")])
         buttons.action = lambda: self.save_profile() if buttons.value == "save" else self.back()
@@ -1167,7 +1246,7 @@ class Menu:
             if self.page["name"] == "scanlines":
                 self.page["rows"] = self.rows_scanlines()
             self.dirty = True
-        self.worker.put("scanlines-reset", apply)
+        self.put_task("scanlines-reset", apply)
 
     def open_guncon(self):
         self.worker.wait()
@@ -1340,7 +1419,7 @@ class Menu:
         self.worker.wait()
         self.status = "SAVING"
         self.dirty = True
-        self.worker.put("geometry-save", apply)
+        self.put_task("geometry-save", apply)
 
     def reset_geometry(self):
         """Esta resolucao volta a seguir o crt_range de todas: na placa e no Setup."""
@@ -1362,7 +1441,7 @@ class Menu:
         self.worker.wait()
         self.status = "SAVING"
         self.dirty = True
-        self.worker.put("geometry-save", apply)
+        self.put_task("geometry-save", apply)
 
     def reset_guncon(self):
         def apply():
@@ -1371,7 +1450,7 @@ class Menu:
                 self.page["rows"] = self.rows_guncon()
             self.status = "DEFAULT"
             self.dirty = True
-        self.worker.put("guncon-reset", apply)
+        self.put_task("guncon-reset", apply)
 
     def reset_colour(self):
         def apply():
@@ -1379,7 +1458,7 @@ class Menu:
             if self.page["name"] == "colour":
                 self.page["rows"] = self.rows_colour()
             self.dirty = True
-        self.worker.put("colour-reset", apply)
+        self.put_task("colour-reset", apply)
 
     def leave_geometry(self):
         if self.geometry:
@@ -1405,6 +1484,9 @@ class Menu:
 
     def key(self, key):
         """Uma tecla do menu (os codigos do evdev)."""
+        if self.opening is not None:
+            # Uma pagina abrindo: a tecla cairia na de antes.
+            return
         page = self.page
         rows = page["rows"]
         if page["name"] == "keys":
@@ -1424,7 +1506,10 @@ class Menu:
         elif key == KEY_ENTER:
             row = rows[page["cursor"]]
             if row.action:
-                row.action()
+                if row.slow:
+                    self.run_slow(row.action)
+                else:
+                    row.action()
             elif row.kind in ("number", "choice"):
                 pass
             self.dirty = True
@@ -1683,6 +1768,12 @@ class Painter:
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
         pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
         import tiny
+        # O indicador de espera: o aro de 8x8 no canto do titulo, e o que fica
+        # a direita dele (o perfil, o aviso) cede o lugar.
+        waiting = menu.spin is not None
+        if waiting:
+            self.spinner(surface, x + width - 6 - 8, y + 4, menu.spin)
+        avail, edge = width - (12 if waiting else 0), x + width - 6 - (12 if waiting else 0)
         main = page["name"] == "main"
         if main:
             # FliperOS, o OS em outra cor; a direita, o perfil escolhido.
@@ -1691,10 +1782,10 @@ class Painter:
             title_w = self.font.size("FliperOS")[0]
             label = menu.profile_label(menu.profile)
             image = self.font.render(label, False, t.CYAN)
-            if image.get_width() + title_w + 18 <= width:
-                surface.blit(image, (x + width - 6 - image.get_width(), y + 5))
+            if image.get_width() + title_w + 18 <= avail:
+                surface.blit(image, (edge - image.get_width(), y + 5))
             else:
-                tiny.text(surface, tiny.fit(label, width - title_w - 18), t.CYAN, x + width - 6, y + 6, right=True)
+                tiny.text(surface, tiny.fit(label, avail - title_w - 18), t.CYAN, edge, y + 6, right=True)
         else:
             self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
             title_w = self.font.size(menu.title())[0]
@@ -1707,10 +1798,10 @@ class Painter:
                 tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 15, right=True)
         elif menu.status:
             status = self.font.render(menu.status, False, t.CYAN)
-            if status.get_width() + title_w + 18 <= width:
-                surface.blit(status, (x + width - 6 - status.get_width(), y + 5))
+            if status.get_width() + title_w + 18 <= avail:
+                surface.blit(status, (edge - status.get_width(), y + 5))
             else:
-                tiny.text(surface, tiny.fit(menu.status, width // 2), t.CYAN, x + width - 6, y + 6, right=True)
+                tiny.text(surface, tiny.fit(menu.status, avail // 2), t.CYAN, edge, y + 6, right=True)
         top = y + head - 1
         gapped = False
         for i, row in enumerate(shown):
@@ -1951,6 +2042,15 @@ class Painter:
     # O icone e a cor (do tema) de cada botao.
     BUTTON_ICONS = {"save": ("save", "GREEN"), "close": ("close", "RED"), "back": ("back", "PINK"),
                     "emulator": ("menu", "CYAN"), "quit": ("quit", "ORANGE"), "clear": ("close", "ORANGE")}
+
+    def spinner(self, surface, x, y, step):
+        """O indicador de espera: o aro de 8x8 com a cabeca do cometa no
+        pixel step (branca, rosa, roxa e o azul do resto, como a conquista)."""
+        t = self.theme
+        n = len(SPINNER_RING)
+        for i, (px, py) in enumerate(SPINNER_RING):
+            color = ring_color(t, (step - i) % n * 360 / n)
+            surface.fill(color + (255,), (x + px, y + py, 1, 1))
 
     def icon(self, surface, name, x, y, color):
         for j, line in enumerate(self.ICONS[name]):
@@ -2426,6 +2526,9 @@ class Service:
             self.painter = Painter()
         gamekeys = self.gamekeys(screen)
         menu = Menu(screen, current_mode(), self.worker, self.emulator_key(screen), gamekeys)
+        # O que demora para abrir roda a parte, e o menu segue desenhando o
+        # indicador de espera.
+        menu.threaded = True
         if page == "keys" and menu.gamekeys:
             menu.open_keys()
             menu.direct = True
@@ -2464,6 +2567,9 @@ class Service:
                 if not current or current["pid"] != screen["pid"] or refused(screen):
                     menu.close()
                     break
+                # Esperar uma pagina abrir nao e ficar parado.
+                if menu.waiting():
+                    last = now
                 if now - last > IDLE_CLOSE:
                     menu.close()
                     break
@@ -2472,10 +2578,14 @@ class Service:
                 if now - polled >= LIVE_POLL:
                     polled = now
                     menu.live(current_mode(), current.get("fps"))
+                menu.tick(now)
                 if menu.dirty:
                     menu.dirty = False
                     self.screen_file.show(self.painter.rgba(menu))
                 timeout = inputs.keys.timeout(now, 0.1)
+                if menu.waiting():
+                    # O aro gira: um passo a cada 1/SPIN_FPS s.
+                    timeout = min(timeout, 1.0 / SPIN_FPS)
                 ready = select.select(inputs.fds() + [self.control], [], [], timeout)[0]
                 inputs.read(ready)
                 if self.control in ready:
@@ -2618,6 +2728,10 @@ def shot(page, path):
         mode = {"clock": 6700, "h": [fw, fw + 16, fw + 48, fw + 96], "v": [fh, fh + 3, fh + 6, fh + 20],
                 "interlace": False}
     menu = Menu({"program": "pcsx2", "core": "", "fps": 59.9}, mode, Worker(), emulator_key=1)
+    # FLIPEROS_OSD_SHOT_SPIN=N: o indicador de espera no passo N do aro.
+    spin = os.environ.get("FLIPEROS_OSD_SHOT_SPIN", "")
+    if spin.isdigit():
+        menu.spin = int(spin) % len(SPINNER_RING)
     painter.theme.set_orientation(read_conf().get("orientation", ""))
     if page in ("volume", "mute"):
         canvas = painter.fit(lambda: painter.volume_bar(60, page == "mute"), mode)

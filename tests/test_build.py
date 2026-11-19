@@ -22295,6 +22295,210 @@ class OsdTests(unittest.TestCase):
             self.assertLessEqual(box.right, w, frame)
             self.assertLessEqual(box.bottom, h, frame)
 
+    def slow_setup(self, matching):
+        """O Setup do teste so responde aos pedidos que casam com matching
+        depois do gate (o Event que o teste solta)."""
+        gate = threading.Event()
+        real = self.fake_run
+
+        def slow(args, timeout=30, env=None):
+            if matching(args):
+                gate.wait(10)
+            return real(args, timeout, env)
+        self.osd.run = slow
+        self.addCleanup(gate.set)
+        return gate
+
+    def test_a_slow_page_opens_apart_and_shows_the_wait_indicator(self):
+        # Colour, Scanlines, Geometry e GunCon 2 leem o Setup ou fazem contas:
+        # o Enter nao trava o menu. As teclas esperam a pagina abrir; passados
+        # SPIN_DELAY segundos aparece o aro, que gira, e some com a pagina aberta.
+        osd = self.osd
+        gate = self.slow_setup(lambda args: args[1:] == ['--settings'])
+        menu, _ = self.config()
+        menu.threaded = True
+        at = self.labels(menu).index('Colour')
+        menu.page['cursor'] = at
+        menu.key(osd.KEY_ENTER)
+        thread = menu.opening
+        self.assertIsNotNone(thread)
+        self.assertTrue(menu.waiting())
+        # A tecla durante a abertura nao cai na pagina de antes.
+        menu.key(osd.KEY_DOWN)
+        menu.key(osd.KEY_ESC)
+        self.assertEqual((menu.page['name'], menu.page['cursor']), ('config', at))
+        # Curta, a espera nao pisca o aro.
+        menu.tick(100.0)
+        menu.tick(100.0 + osd.SPIN_DELAY - 0.01)
+        self.assertIsNone(menu.spin)
+        menu.dirty = False
+        menu.tick(100.0 + osd.SPIN_DELAY + 0.5 / osd.SPIN_FPS)
+        first = menu.spin
+        self.assertIsNotNone(first)
+        self.assertTrue(menu.dirty)
+        menu.tick(100.0 + osd.SPIN_DELAY + 1.5 / osd.SPIN_FPS)
+        self.assertEqual(menu.spin, (first + 1) % len(osd.SPINNER_RING))
+        gate.set()
+        thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(menu.waiting())
+        self.assertEqual(menu.page['name'], 'colour')
+        menu.dirty = False
+        menu.tick(101.0)
+        self.assertIsNone(menu.spin)
+        self.assertTrue(menu.dirty)
+        # Aberta a pagina, as teclas voltam.
+        menu.key(osd.KEY_DOWN)
+        self.assertEqual(menu.page['cursor'], 1)
+
+    def test_a_page_that_fails_to_open_does_not_hold_the_menu(self):
+        osd = self.osd
+
+        def boom(args, timeout=30, env=None):
+            if args[1:] == ['--settings']:
+                raise OSError('no setup')
+            return self.fake_run(args, timeout, env)
+        osd.run = boom
+        menu, _ = self.config()
+        menu.threaded = True
+        menu.page['cursor'] = self.labels(menu).index('Colour')
+        import contextlib
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            menu.key(osd.KEY_ENTER)
+            end = time.monotonic() + 10
+            while menu.waiting() and time.monotonic() < end:
+                time.sleep(0.01)
+        self.assertFalse(menu.waiting())
+        self.assertIn('no setup', errors.getvalue())
+        self.assertEqual((menu.page['name'], menu.status), ('config', 'COULD NOT OPEN'))
+        # Sem o servico (os testes, o --shot) a pagina abre na hora, sem thread.
+        osd.run = self.fake_run
+        menu, _ = self.config()
+        menu.page['cursor'] = self.labels(menu).index('Colour')
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual((menu.opening, menu.page['name']), (None, 'colour'))
+
+    def test_a_button_in_the_queue_shows_the_wait_indicator_until_it_ends(self):
+        # Back to the defaults (e o Save e o Use the default da geometria) vai
+        # para a fila do Worker: o aro vale ate acabar, e as teclas seguem.
+        osd = self.osd
+        gate = self.slow_setup(lambda args: args[1:3] == ['--setting', 'color.reset'])
+        menu, worker = self.config()
+        menu.open_colour()
+        at = self.labels(menu).index('Back to the defaults')
+        menu.page['cursor'] = at
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.tasks, {'colour-reset'})
+        self.assertTrue(menu.waiting())
+        menu.tick(10.0)
+        menu.tick(10.0 + osd.SPIN_DELAY)
+        self.assertIsNotNone(menu.spin)
+        menu.key(osd.KEY_UP)
+        self.assertEqual(menu.page['cursor'], at - 1)
+        gate.set()
+        worker.wait()
+        self.assertFalse(menu.waiting())
+        menu.tick(20.0)
+        self.assertIsNone(menu.spin)
+        # Um ajuste de seta (segurar a seta) nao mostra o aro: so os botoes.
+        menu.page['cursor'] = 0
+        menu.key(osd.KEY_RIGHT)
+        self.assertEqual(menu.tasks, set())
+
+    def test_wait_indicator_ring_is_one_closed_loop_of_8x8(self):
+        ring = self.osd.SPINNER_RING
+        self.assertEqual(len(set(ring)), len(ring))
+        for x, y in ring:
+            self.assertTrue(0 <= x < 8 and 0 <= y < 8, (x, y))
+        # Cada pixel encosta no seguinte, e o ultimo no primeiro: o cometa nao pula.
+        for (ax, ay), (bx, by) in zip(ring, ring[1:] + ring[:1]):
+            self.assertEqual(max(abs(ax - bx), abs(ay - by)), 1, ((ax, ay), (bx, by)))
+
+    def test_wait_indicator_is_drawn_small_in_the_title_corner_in_any_frame(self):
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        os.environ['FLIPEROS_GUI'] = str(ROOT / 'fliperos-setup/gui')
+        self.osd.GUI = os.environ['FLIPEROS_GUI']
+        painter = self.osd.Painter()
+        theme = painter.theme
+        for frame in ((320, 240), (256, 224), (200, 160)):
+            mode = {'clock': 6700, 'h': [frame[0], 0, 0, frame[0] + 64], 'v': [frame[1], 0, 0, frame[1] + 20],
+                    'interlace': False}
+            menu, _ = self.menu(mode=mode)
+            menu.open_page('config')
+            painter.size = frame if frame != (320, 240) else None
+            try:
+                plain = painter.panel(menu)
+                menu.spin = 3
+                ring = painter.panel(menu)
+            finally:
+                painter.size = None
+            w, h = ring.get_size()
+            changed = [(x, y) for y in range(h) for x in range(w) if plain.get_at((x, y)) != ring.get_at((x, y))]
+            # Os pixels do aro, e so eles: nada do resto do menu muda.
+            self.assertEqual(len(changed), len(self.osd.SPINNER_RING), frame)
+            xs, ys = [x for x, _ in changed], [y for _, y in changed]
+            self.assertEqual((max(xs) - min(xs), max(ys) - min(ys)), (7, 7), frame)
+            # No canto de cima e da direita do painel, na linha do titulo.
+            box = plain.get_bounding_rect()
+            self.assertLessEqual(max(xs), box.right - 1, frame)
+            self.assertGreater(min(xs), box.centerx, frame)
+            self.assertLess(max(ys) - box.top, 14, frame)
+            # A cabeca do cometa e branca.
+            head = self.osd.SPINNER_RING[3]
+            self.assertEqual(ring.get_at((min(xs) + head[0], min(ys) + head[1]))[:3], theme.FG, frame)
+
+    def test_wait_indicator_makes_room_for_the_profile_and_the_status(self):
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        os.environ['FLIPEROS_GUI'] = str(ROOT / 'fliperos-setup/gui')
+        self.osd.GUI = os.environ['FLIPEROS_GUI']
+        painter = self.osd.Painter()
+        theme = painter.theme
+        ring = set(self.osd.SPINNER_RING)
+        # O perfil escolhido (a direita do FliperOS, o mais longo) e o aviso
+        # (sem a linha da resolucao ele fica na do titulo) cedem o canto ao aro,
+        # num quadro largo e num estreito: na caixa de 8x8 so ha o aro e o fundo.
+        for frame in ((320, 240), (200, 160)):
+            mode = {'clock': 6700, 'h': [frame[0], 0, 0, frame[0] + 64], 'v': [frame[1], 0, 0, frame[1] + 20],
+                    'interlace': False}
+            for page, status, no_mode in (('main', '', False), ('config', 'SAVED', True)):
+                if no_mode:
+                    menu = self.osd.Menu({'program': 'pcsx2', 'core': ''}, None, self.osd.Worker())
+                else:
+                    menu, _ = self.menu(mode=mode)
+                menu.profile = 'resolution' if page == 'main' else 'default'
+                if page != 'main':
+                    menu.open_page(page)
+                menu.status = status
+                menu.spin = 5
+                painter.size = frame if frame != (320, 240) else None
+                try:
+                    surface = painter.panel(menu)
+                finally:
+                    painter.size = None
+                box = surface.get_bounding_rect()
+                x0, y0 = box.right - 6 - 8, box.top + 4
+                for py in range(8):
+                    for px in range(8):
+                        if (px, py) in ring:
+                            continue
+                        got = surface.get_at((x0 + px, y0 + py))
+                        self.assertEqual((got[:3], got[3]), (theme.BG_DEEP, 232), (frame, page, px, py))
+
+    def test_service_runs_the_menu_with_the_wait_indicator(self):
+        source = (ROOT / 'config/fliperos-osd').read_text()
+        self.assertIn('menu.threaded = True', source)
+        self.assertIn('menu.tick(now)', source)
+        # O laco acorda a cada passo do aro e nao fecha o menu esperando uma pagina.
+        self.assertIn('timeout = min(timeout, 1.0 / SPIN_FPS)', source)
+        self.assertIn('if menu.waiting():\n                    last = now', source)
+        for label in ('Scanlines', 'Geometry', 'Colour', 'GunCon 2'):
+            self.assertRegex(source, r'Row\("page", "%s", action=[^\n]*slow=True\)' % label)
+
     def test_mode_line_under_the_title(self):
         # Embaixo de FliperOS, em letra menor: a resolucao, as frequencias e o FPS.
         self.assertEqual(self.osd.mode_line(self.MODE, 59.94), '640x480i 15.69kHz 60.00Hz  59.9 FPS')
