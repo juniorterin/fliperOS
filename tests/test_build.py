@@ -18993,7 +18993,7 @@ class TelegramCustomGameTests(unittest.TestCase):
         out = []
         env = {}
         result = self.bot.post_package(tg, self.payload(file_size=600 << 20), env, self.tool,
-                                       mtproto=lambda e, chat, message: (asked.append(('open', chat, message)), source)[1],
+                                       mtproto=lambda e, chat, message, *rest: (asked.append(('open', chat, message)), source)[1],
                                        out=out.append)
         self.assertEqual(result, 'posted: Street Fighter 4')
         self.assertEqual(asked[0], ('open', '@fliperos15khz', 55))
@@ -19014,7 +19014,7 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertEqual(tg.calls[1][2], 'FILE1')
         # Um erro do MTProto (rede, chaves) tambem nao perde o arquivo.
 
-        def broken(env, chat, message):
+        def broken(env, chat, message, *rest):
             raise RuntimeError('bad api hash')
         tg = self.Fake()
         self.bot.post_package(tg, self.payload(file_size=600 << 20), {}, self.tool, mtproto=broken, out=lambda *_: None)
@@ -19064,9 +19064,10 @@ class TelegramCustomGameTests(unittest.TestCase):
 
             async def get_messages(self, chat, ids=None):
                 seen.update(chat=chat, ids=ids)
-                return Message()
+                return None if seen.get('hide_message') else Message()
 
-            def iter_download(self, document, offset=0, request_size=0, limit=None):
+            def iter_download(self, document, offset=0, request_size=0, limit=None, file_size=None):
+                seen['file_size'] = file_size
                 async def chunks():
                     yield data[offset:offset + request_size]
                 seen.setdefault('offsets', []).append(offset)
@@ -19079,25 +19080,47 @@ class TelegramCustomGameTests(unittest.TestCase):
         telethon.TelegramClient = Client
         sessions = types.ModuleType('telethon.sessions')
         sessions.StringSession = type('StringSession', (), {})
-        saved = {k: sys.modules.get(k) for k in ('telethon', 'telethon.sessions')}
-        sys.modules.update({'telethon': telethon, 'telethon.sessions': sessions})
+        utils = types.ModuleType('telethon.utils')
+
+        def resolve_bot_file_id(file_id):
+            seen['resolved'] = file_id
+            return Doc()                                     # como o Telethon: um Document com size=0
+
+        utils.resolve_bot_file_id = resolve_bot_file_id
+        Doc.size = len(data)
+        telethon.utils = utils
+        saved = {k: sys.modules.get(k) for k in ('telethon', 'telethon.sessions', 'telethon.utils')}
+        sys.modules.update({'telethon': telethon, 'telethon.sessions': sessions, 'telethon.utils': utils})
+        env = {'TELEGRAM_BOT_TOKEN': '1:tok', 'TELEGRAM_API_ID': '123', 'TELEGRAM_API_HASH': 'abc'}
+        small = self.bot.BOT_DOWNLOAD_MAX
         try:
-            env = {'TELEGRAM_BOT_TOKEN': '1:tok', 'TELEGRAM_API_ID': '123', 'TELEGRAM_API_HASH': 'abc'}
             tg = self.Fake()
-            out = []
-            result = self.bot.post_package(tg, self.payload(file_size=600 << 20), env, self.tool, out=out.append)
+            result = self.bot.post_package(tg, self.payload(file_size=600 << 20), env, self.tool, out=lambda *_: None)
+            first = dict(seen)
+            # Um bot nem sempre acha a mensagem por id (o teste real): o arquivo vem do file_id, e o tamanho, do pedido.
+            seen.clear()
+            seen['hide_message'] = True
+            self.bot.BOT_DOWNLOAD_MAX = 1 << 20              # o zip de mentira tem 3 MB: grande para o robo
+            tg2 = self.Fake()
+            result2 = self.bot.post_package(tg2, self.payload(file_size=len(data)), env, self.tool, out=lambda *_: None)
         finally:
+            self.bot.BOT_DOWNLOAD_MAX = small
             for key, module in saved.items():
                 if module is None:
                     sys.modules.pop(key, None)
                 else:
                     sys.modules[key] = module
         self.assertEqual(result, 'posted: Street Fighter 4')
-        self.assertEqual((seen['token'], seen['api_id'], seen['api_hash'], seen['chat'], seen['ids']), ('1:tok', 123, 'abc', '@fliperos15khz', 55))
-        self.assertTrue(seen['closed'])
-        self.assertTrue(all(o % self.bot.BLOCK == 0 for o in seen['offsets']))
-        self.assertLess(len(seen['offsets']) * self.bot.BLOCK, len(data))          # nao leu o zip inteiro
+        self.assertEqual((first['token'], first['api_id'], first['api_hash'], first['chat'], first['ids']), ('1:tok', 123, 'abc', '@fliperos15khz', 55))
+        self.assertTrue(first['closed'])
+        self.assertNotIn('resolved', first)                  # a mensagem bastou
+        self.assertTrue(all(o % self.bot.BLOCK == 0 for o in first['offsets']))
+        self.assertLess(len(first['offsets']) * self.bot.BLOCK, len(data))          # nao leu o zip inteiro
         self.assertEqual([c[0] for c in tg.calls], ['album', 'message', 'document', 'message'])
+        self.assertEqual(result2, 'posted: Street Fighter 4')
+        self.assertEqual(seen['resolved'], 'FILE1')
+        self.assertEqual(seen['file_size'], len(data))
+        self.assertEqual([c[0] for c in tg2.calls], ['album', 'message', 'document', 'message'])
 
     def test_no_post_reads_the_package_but_sends_nothing_to_the_group(self):
         posted = []

@@ -425,7 +425,7 @@ class TelethonSource:
     arquivo inteiro. Precisa do pacote telethon e de TELEGRAM_API_ID e
     TELEGRAM_API_HASH."""
 
-    def __init__(self, token, api_id, api_hash, chat, message_id):
+    def __init__(self, token, api_id, api_hash, chat, message_id, file_id='', file_size=0):
         import asyncio
         from telethon import TelegramClient
         from telethon.sessions import StringSession
@@ -435,11 +435,25 @@ class TelethonSource:
         # O laco que o proprio cliente usa: e nele que o start() e o disconnect() rodam.
         self.loop = getattr(self.client, 'loop', None) or loop
         self.run(self.client.start(bot_token=token))
-        message = self.run(self.client.get_messages(chat, ids=message_id))
-        if not message or not message.document:
+        # O arquivo da mensagem do grupo; um bot nem sempre consegue buscar uma mensagem por id (o teste real
+        # voltou sem a mensagem), e entao o arquivo vem do file_id da Bot API, que e do mesmo bot.
+        self.document, self.size = None, 0
+        try:
+            message = self.run(self.client.get_messages(chat, ids=message_id))
+        except Exception as exc:    # RPCError do Telethon
+            print('get_messages(%s, %s) failed: %s' % (chat, message_id, exc))
+            message = None
+        found = getattr(message, 'document', None) if message else None
+        if found is not None:
+            self.document, self.size = found, found.size
+            print('MTProto: the file came from the message %s' % message_id)
+        elif file_id:
+            from telethon import utils
+            self.document, self.size = utils.resolve_bot_file_id(file_id), int(file_size or 0)
+            print('MTProto: the message %s was not readable (%s); the file came from its file_id'
+                  % (message_id, type(message).__name__))
+        if self.document is None or not self.size:
             raise PostError('the message %s has no file the bot can read' % message_id)
-        self.document = message.document
-        self.size = self.document.size
 
     def run(self, value):
         """O resultado de uma chamada do Telethon. O start() e o disconnect() rodam o laco sozinhos quando ele
@@ -449,7 +463,8 @@ class TelethonSource:
     def fetch(self, offset, length):
         async def read():
             out = b''
-            async for chunk in self.client.iter_download(self.document, offset=offset, request_size=BLOCK, limit=1):
+            async for chunk in self.client.iter_download(self.document, offset=offset, request_size=BLOCK, limit=1,
+                                                         file_size=self.size):
                 out += chunk
             return out[:length]
         return self.loop.run_until_complete(read())
@@ -462,12 +477,13 @@ class TelethonSource:
                 self.loop.close()
 
 
-def telethon_source(env, chat, message_id):
+def telethon_source(env, chat, message_id, file_id='', file_size=0):
     """Uma fonte MTProto, ou None sem as chaves (ou sem o telethon)."""
     if not (env.get('TELEGRAM_API_ID') and env.get('TELEGRAM_API_HASH')):
         return None
     try:
-        return TelethonSource(env['TELEGRAM_BOT_TOKEN'], env['TELEGRAM_API_ID'], env['TELEGRAM_API_HASH'], chat, message_id)
+        return TelethonSource(env['TELEGRAM_BOT_TOKEN'], env['TELEGRAM_API_ID'], env['TELEGRAM_API_HASH'], chat, message_id,
+                              file_id, file_size)
     except ImportError:
         print('telethon is not installed: big packages cannot be read', file=sys.stderr)
         return None
@@ -506,7 +522,7 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
             ref = '@' + ref if ref and not ref.startswith('@') else ref or (wanted if wanted.startswith('@') else None) or \
                 (int(chat_id) if chat_id else None)
             try:
-                source = mtproto(env, ref, message_id)
+                source = mtproto(env, ref, message_id, file_id, size)
             except Exception as exc:    # o Telethon: sem rede, mensagem que o bot nao acha, chaves erradas...
                 out('could not open the file by MTProto: %s' % exc)
                 source = None
