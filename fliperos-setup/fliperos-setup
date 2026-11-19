@@ -34,7 +34,7 @@
 #   --scraper ... e --bios ... (o Scraper e o Download BIOS do painel web),
 #   --bootgame, --geometry, --wifi status|scan|connect, --password (na
 #   entrada), --whatsnew, --customgames ..., --setup-items, --quirks ...,
-#   --folders ..., --storage list|prepare|use|unuse (o disco secundario),
+#   --folders ..., --storage list|prepare|use|unuse|offer|answer (o disco secundario),
 #   --frontends ..., --bluetooth ..., --system-update,
 #   --attract-romlist (o painel web)
 #

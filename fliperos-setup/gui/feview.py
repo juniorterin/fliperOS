@@ -3961,6 +3961,58 @@ def draw_exit(fe, ui, now):
     W.button(ui, "NO", WW // 2 + 50, py + 40, fe.ov["sel"] == 1)
 
 
+def draw_storage(fe, ui, now):
+    """O disco novo (gui/festorage.py): a pergunta SIM/NAO se vira o armazenamento, o
+    Setup ligando as pastas ("work"), o resultado ("done") e, depois do NAO
+    ("later"), o texto de onde mudar quando a pessoa quiser."""
+    import festorage
+    ov = fe.ov
+    stage, offer = ov["stage"], ov["offer"]
+    pw, ph = min(290, WW - 6), 124
+    px, py = (WW - pw) // 2, (HH - ph) // 2
+    cx = WW // 2
+    card(ui, (px, py, pw, ph))
+    disk = "%s - %s - %s" % (offer["label"], offer["fs"], festorage.human(offer["total"]))
+    where = festorage.WHERE
+    if stage == "ask":
+        W.centered(ui, "NEW DISK", T.YELLOW, py + 10)
+        tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
+        tiny.centered(ui, "USE IT FOR THE ROMS, BIOS, ART, SAVES", T.COMMENT, cx, py + 40)
+        tiny.centered(ui, "AND DOWNLOADS OF FliperOS?", T.COMMENT, cx, py + 48)
+        tiny.centered(ui, "NOTHING IS DELETED: THE FOLDERS YOU HAVE NOW", T.ORANGE, cx, py + 62)
+        tiny.centered(ui, "STAY IN YOUR HOME AS OLD-ROMS, OLD-BIOS...", T.ORANGE, cx, py + 70)
+        W.button(ui, "YES", cx - 50, py + 90, ov["sel"] == 0)
+        W.button(ui, "NO", cx + 50, py + 90, ov["sel"] == 1)
+    elif stage == "work":
+        W.centered(ui, "SETTING UP" + "." * (int(now * 3) % 4), T.FG, py + 38)
+        tiny.centered(ui, tiny.fit(disk, pw - 16), T.COMMENT, cx, py + 58)
+        tiny.centered(ui, "PLEASE WAIT", T.COMMENT, cx, py + 72)
+    elif stage == "done":
+        ok, lines = ov["result"]
+        if ok:
+            W.centered(ui, "DISK IN USE", T.GREEN, py + 10)
+            tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
+            tiny.centered(ui, "ROMS, BIOS, ART, SAVES AND DOWNLOADS", T.COMMENT, cx, py + 40)
+            tiny.centered(ui, "NOW GO TO THIS DISK", T.COMMENT, cx, py + 48)
+            tiny.centered(ui, "THE FOLDERS OF BEFORE STAY IN YOUR HOME", T.ORANGE, cx, py + 62)
+            tiny.centered(ui, "TO CHANGE IT: " + where[0], T.COMMENT, cx, py + 76)
+        else:
+            W.centered(ui, "COULD NOT USE IT", T.RED, py + 10)
+            tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
+            tiny.centered(ui, tiny.fit(lines[0] if lines else "DETAILS IN THE SETUP LOG", pw - 16), T.ORANGE, cx,
+                          py + 44)
+            tiny.centered(ui, "TRY AGAIN IN " + where[0], T.COMMENT, cx, py + 62)
+        W.button(ui, "OK", cx, py + 90, True)
+    else:
+        W.centered(ui, "ALL RIGHT", T.FG, py + 10)
+        tiny.centered(ui, tiny.fit(disk, pw - 16), T.COMMENT, cx, py + 26)
+        tiny.centered(ui, "THE DISK STAYS AS IT IS. IF YOU CHANGE", T.COMMENT, cx, py + 40)
+        tiny.centered(ui, "YOUR MIND, YOU CAN USE IT LATER IN:", T.COMMENT, cx, py + 48)
+        W.centered(ui, where[0], T.YELLOW, py + 62)
+        tiny.centered(ui, where[1], T.COMMENT, cx, py + 76)
+        W.button(ui, "OK", cx, py + 90, True)
+
+
 def draw_letter(ui, letter):
     size = 80
     x, y = (WW - size) // 2, (HH - size) // 2 + 6
@@ -4555,6 +4607,8 @@ def draw(fe, now):
             draw_exit(fe, top, t)
         elif o == "delete":
             draw_delete(fe, top, t)
+        elif o == "storage":
+            draw_storage(fe, top, t)
         elif o in ("exitkey", "exitpad"):
             draw_capture(fe, top, t)
         back.blit(top, (0, 0))

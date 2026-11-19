@@ -54,7 +54,9 @@ A data disk that is plugged in (a USB hard disk, an SSD, another internal disk o
 - **Only prepare the folders:** makes the structure and changes nothing else.
 - **Back to the main disk:** the folders of the home are the main disk's again (the `old-` ones come back); nothing is deleted from the second disk.
 
-The same screen opens from the web panel (**System > Setup > System > Storage**, *Open on the cabinet*). `fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse` does it from a terminal.
+**The question:** the first time a disk like that is plugged in (identified by the UUID of its file system), the FliperOS frontend asks, **once**, whether to use it for the ROMs, BIOS, art, saves and downloads (**YES** / **NO**; **NO** is the one selected and back on the panel is a NO). A button pressed in the first second is ignored, so someone already pressing a button in the list does not turn the disk on by mistake. **YES** is the same as *Use it* above. **NO** shows where to change it later (**Setup > System > Storage**, also in the web panel) and the disk never asks again; it stays in the Setup list. A disk already in use is not offered, and neither is one that does not serve (a small stick). While a game is open, or any frontend menu, the question waits for the frontend to be free; it does not appear in the commercial mode. How it works: `fliperos-automount` runs `fliperos-setup --storage offer MOUNT` after making the folders, which writes the disk in `/var/lib/fliperos/storage/offer`; the frontend (`gui/festorage.py`) reads that file and sends the answer with `--storage answer MOUNT yes|no`, which keeps the UUID in `/var/lib/fliperos/storage/answered`.
+
+The same screen opens from the web panel (**System > Setup > System > Storage**, *Open on the cabinet*). `fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse|offer MOUNT|answer MOUNT yes|no` does it from a terminal.
 
 ## Password
 

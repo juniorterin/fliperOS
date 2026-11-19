@@ -17744,7 +17744,9 @@ class AutomountTests(unittest.TestCase):
                            FLIPEROS_MEDIA_ROOT=str(tmp / 'media'), FLIPEROS_SETUP=str(setup))
                 subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
                 if expect:
-                    self.assertEqual(calls.read_text().strip(), '--storage prepare %s' % target, auto)
+                    # Pronta a estrutura, o disco vai para a fila do frontend (a pergunta de se vira o armazenamento).
+                    self.assertEqual(calls.read_text().splitlines(),
+                                     ['--storage prepare %s' % target, '--storage offer %s' % target], auto)
                 else:
                     self.assertFalse(calls.exists(), auto)
 

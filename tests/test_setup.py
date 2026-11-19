@@ -11182,15 +11182,17 @@ class StorageTests(Base):
             d.mkdir(parents=True)
         (self.home / "roms" / "mame" / "sf2.zip").write_text("mine")
         self.vars = {"FOLDERS_HOME": str(self.home), "STORAGE_MOUNTS": str(self.media), "FOLDERS_MOUNTS": str(self.media),
-                     "FOLDERS_SCRIPT": str(ROOT / "config/fliperos-roms")}
+                     "FOLDERS_SCRIPT": str(ROOT / "config/fliperos-roms"), "STORAGE_STATE": str(self.env.dir / "state")}
         self.fake_disks(size=500_000_000_000, avail=400_000_000_000)
         self.skip = "folders_cli_refresh() { :; }\n"
 
     def fake_disks(self, size, avail, fstype="ext4"):
-        # Todas as pastas de /media/... sao montagens; o df e o findmnt dizem o que o teste quer.
+        # Todas as pastas de /media/... sao montagens; o df e o findmnt dizem o que o teste quer (o UUID de
+        # cada disco e UUID-<nome da pasta>).
         self.env.stub("mountpoint", 'for last; do :; done; case "$last" in %s/*) exit 0;; esac; exit 1' % self.media)
         self.env.stub("df", 'case "$*" in *size*) echo Size; echo %d;; *avail*) echo Avail; echo %d;; esac' % (size, avail))
-        self.env.stub("findmnt", "echo %s" % fstype)
+        self.env.stub("findmnt", 'for last; do :; done; case "$*" in *UUID*) echo "UUID-${last##*/}";; *) echo %s;; esac'
+                      % fstype)
 
     def test_the_list_says_which_disks_serve_and_whether_they_are_in_use(self):
         rows = [l.split("|") for l in self.env.out(self.skip + "storage_list", self.vars).splitlines()]
@@ -11263,6 +11265,89 @@ class StorageTests(Base):
         self.assertEqual(self.env.run(self.skip + 'storage_cli use "%s/NOPE"' % self.media, self.vars).returncode, 1)
         self.assertEqual(self.env.run(self.skip + "storage_cli bogus", self.vars).returncode, 2)
 
+    def queue(self, name):
+        f = self.env.dir / "state" / name
+        return f.read_text().splitlines() if f.exists() else []
+
+    def run_cli(self, command):
+        return self.env.run(self.skip + command, self.vars)
+
+    def test_a_new_disk_is_offered_once_and_the_answer_is_remembered(self):
+        # O fliperos-automount anota o disco que serve; o frontend le a fila (legivel por todos) e pergunta.
+        r = self.run_cli('storage_cli offer "%s"' % self.disk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.queue("offer"), ["%s|BIGDISK|ext4|500000000000|UUID-BIGDISK" % self.disk])
+        self.assertEqual(oct((self.env.dir / "state" / "offer").stat().st_mode & 0o777), "0o644")
+        # Ligado de novo antes da resposta: a mesma linha, sem repetir.
+        self.run_cli('storage_cli offer "%s"' % self.disk)
+        self.assertEqual(len(self.queue("offer")), 1)
+        # NAO: nada muda em ~, o disco fica registrado e nunca mais e oferecido.
+        r = self.run_cli('storage_cli answer "%s" no' % self.disk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(self.queue("offer"), [])
+        self.assertEqual(self.queue("answered"), ["UUID-BIGDISK"])
+        self.assertFalse((self.home / "roms").is_symlink())
+        self.assertEqual(self.run_cli('storage_cli offer "%s"' % self.disk).returncode, 1)
+        self.assertEqual(self.queue("offer"), [])
+        # Continua em Setup > System > Storage para quando a pessoa quiser.
+        self.assertEqual(self.run_cli('storage_cli use "%s"' % self.disk).returncode, 0)
+        self.assertEqual(os.readlink(self.home / "roms"), str(self.disk / "fliperos" / "roms"))
+
+    def test_yes_uses_the_disk_and_a_disk_in_use_is_not_offered(self):
+        self.run_cli('storage_cli offer "%s"' % self.disk)
+        r = self.run_cli('storage_cli answer "%s" yes' % self.disk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for kind in ("roms", "bios", "media", "nvram", "save"):
+            self.assertEqual(os.readlink(self.home / kind), str(self.disk / "fliperos" / kind), kind)
+        self.assertEqual(self.queue("offer"), [])
+        self.assertEqual(self.queue("answered"), ["UUID-BIGDISK"])
+        # Em uso, e depois de voltar ao disco principal, ele ja foi respondido: nunca mais.
+        self.assertEqual(self.run_cli('storage_cli offer "%s"' % self.disk).returncode, 1)
+        self.assertEqual(self.run_cli("storage_cli unuse").returncode, 0)
+        self.assertEqual(self.run_cli('storage_cli offer "%s"' % self.disk).returncode, 1)
+        self.assertEqual(self.queue("offer"), [])
+
+    def test_using_the_disk_in_the_setup_takes_it_off_the_queue(self):
+        self.run_cli('storage_cli offer "%s"' % self.disk)
+        self.assertEqual(self.run_cli('storage_cli use "%s"' % self.disk).returncode, 0)
+        self.assertEqual(self.queue("offer"), [])
+        self.assertEqual(self.queue("answered"), ["UUID-BIGDISK"])
+
+    def test_only_the_answered_disk_leaves_the_queue_and_a_disk_that_does_not_serve_is_not_offered(self):
+        other = self.media / "OTHER"
+        other.mkdir()
+        self.run_cli('storage_cli offer "%s"' % self.disk)
+        self.run_cli('storage_cli offer "%s"' % other)
+        self.assertEqual([l.split("|")[1] for l in self.queue("offer")], ["BIGDISK", "OTHER"])
+        self.run_cli('storage_cli answer "%s" no' % self.disk)
+        self.assertEqual([l.split("|")[1] for l in self.queue("offer")], ["OTHER"])
+        self.run_cli('storage_cli answer "%s" no' % other)
+        self.assertEqual(self.queue("offer"), [])
+        # Um disco pequeno (um pendrive) nao serve: nada a perguntar.
+        stick = self.media / "STICK"
+        stick.mkdir()
+        self.fake_disks(size=4_000_000_000, avail=3_000_000_000)
+        self.assertEqual(self.run_cli('storage_cli offer "%s"' % stick).returncode, 1)
+        self.assertEqual(self.queue("offer"), [])
+        self.assertEqual(self.queue("answered"), ["UUID-BIGDISK", "UUID-OTHER"])
+
+    def test_yes_that_fails_says_why_and_does_not_ask_again(self):
+        self.run_cli('storage_cli offer "%s"' % self.disk)
+        self.fake_disks(size=4_000_000_000, avail=3_000_000_000)      # o disco encolheu (outro no lugar)
+        r = self.run_cli('storage_cli answer "%s" yes' % self.disk)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("smaller than 8 GB", r.stdout)
+        self.assertEqual(self.queue("offer"), [])
+        self.assertEqual(self.queue("answered"), ["UUID-BIGDISK"])
+        self.assertFalse((self.home / "roms").is_symlink())
+
+    def test_offer_and_answer_refuse_strangers_and_wrong_answers(self):
+        for bad in ('offer "/etc"', 'offer "%s/../x"' % self.media, 'offer ""', 'answer "/etc" yes',
+                    'answer "%s" maybe' % self.disk, 'answer "%s"' % self.disk):
+            self.assertEqual(self.run_cli("storage_cli %s" % bad).returncode, 2, bad)
+        self.assertEqual(self.queue("offer"), [])
+        self.assertEqual(self.queue("answered"), [])
+
     def test_the_screen_the_panel_item_and_the_automount_are_wired(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         system = menu.split("screen_setup_system() {")[1].split("\n}\n")[0]
@@ -11275,8 +11360,106 @@ class StorageTests(Base):
         web = (ROOT / "config/fliperos-web").read_text()
         self.assertIn('latency oscr storage"', web)
         self.assertIn('{ id: "storage", cabinet: "storage" }', (ROOT / "config/web/setup.js").read_text())
-        self.assertIn('"$setup" --storage prepare "$new_target"', (ROOT / "config/fliperos-automount").read_text())
+        automount = (ROOT / "config/fliperos-automount").read_text()
+        self.assertIn('"$setup" --storage prepare "$new_target"', automount)
+        self.assertIn('"$setup" --storage offer "$new_target"', automount)
         self.assertIn("--storage)\n      storage_cli", (SETUP / "fliperos-setup").read_text())
+
+
+class StorageOfferTests(unittest.TestCase):
+    """A pergunta do disco novo no frontend (gui/festorage.py e o dialogo do
+    frontend): le a fila do fliperos-automount, pergunta uma vez e diz onde mudar
+    depois."""
+
+    def setUp(self):
+        import importlib.util
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("festorage", SETUP / "gui/festorage.py")
+        self.fs = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.fs)
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.mounted = {"/media/fliperos/BIG", "/media/fliperos/OTHER"}
+        patch = mock.patch("os.path.ismount", side_effect=lambda p: p in self.mounted)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.offers = self.fs.Offers(str(self.tmp))
+
+    def queue(self, *lines):
+        (self.tmp / "offer").write_text("".join(l + "\n" for l in lines))
+
+    def test_the_queue_lists_the_disks_that_are_still_plugged_in(self):
+        self.offers.read()
+        self.assertIsNone(self.offers.first())          # sem fila
+        self.queue("/media/fliperos/GONE|GONE|ext4|500000000000|u0", "lixo",
+                   "/media/fliperos/BIG|BIG|exfat|1000204886016|u1", "/media/fliperos/OTHER|OTHER|ext4|250059350016|u2")
+        self.offers.read()
+        self.assertEqual([i["label"] for i in self.offers.items], ["BIG", "OTHER"])
+        self.assertEqual(self.offers.first(), {"mount": "/media/fliperos/BIG", "label": "BIG", "fs": "exfat",
+                                               "total": "1000204886016", "id": "u1"})
+
+    def test_it_reads_the_file_at_most_every_few_seconds(self):
+        self.offers.refresh(100.0)
+        self.queue("/media/fliperos/BIG|BIG|exfat|1000204886016|u1")
+        self.offers.refresh(101.0)
+        self.assertIsNone(self.offers.first())
+        self.offers.refresh(104.0)
+        self.assertEqual(self.offers.first()["label"], "BIG")
+
+    def test_an_answered_disk_does_not_come_back_while_the_setup_is_still_writing_it_down(self):
+        self.queue("/media/fliperos/BIG|BIG|exfat|1000204886016|u1", "/media/fliperos/OTHER|OTHER|ext4|250059350016|u2")
+        self.offers.read()
+        self.offers.done("/media/fliperos/BIG")
+        self.assertEqual([i["label"] for i in self.offers.items], ["OTHER"])
+        self.offers.read()                              # o Setup ainda nao tirou da fila
+        self.assertEqual([i["label"] for i in self.offers.items], ["OTHER"])
+        # Outro disco no mesmo lugar (outro UUID) e outra pergunta.
+        self.queue("/media/fliperos/BIG|BIG|ext4|500000000000|u9")
+        self.offers.read()
+        self.assertEqual(self.offers.first()["id"], "u9")
+
+    def test_sizes_read_like_the_box_of_the_disk(self):
+        self.assertEqual(self.fs.human("1000204886016"), "1.0 TB")
+        self.assertEqual(self.fs.human("500107862016"), "500 GB")
+        self.assertEqual(self.fs.human("8000000000"), "8 GB")
+        self.assertEqual(self.fs.human("?"), "?")
+
+    def fake_setup(self, out, code):
+        script = self.tmp / "setup"
+        script.write_text('#!/bin/sh\necho "$*" > "%s"\nprintf "%s"\nexit %d\n' % (self.tmp / "args", out, code))
+        script.chmod(0o755)
+        self.fs.SETUP = str(script)
+
+    def test_the_answer_goes_to_the_setup_and_its_reason_comes_back(self):
+        from unittest import mock
+        with mock.patch("os.geteuid", return_value=0):
+            self.fake_setup("kept=~/old-roms\\n", 0)
+            self.assertEqual(self.fs.answer("/media/fliperos/BIG", True), (True, []))
+            self.assertEqual((self.tmp / "args").read_text().strip(), "--storage answer /media/fliperos/BIG yes")
+            self.fake_setup("The disk is smaller than 8 GB.\\n", 1)
+            self.assertEqual(self.fs.answer("/media/fliperos/BIG", False), (False, ["The disk is smaller than 8 GB."]))
+            self.assertEqual((self.tmp / "args").read_text().strip(), "--storage answer /media/fliperos/BIG no")
+            self.fs.SETUP = str(self.tmp / "missing")
+            self.assertEqual(self.fs.answer("/media/fliperos/BIG", True), (False, ["COULD NOT RUN THE SETUP"]))
+
+    def test_the_frontend_asks_when_it_is_free_and_says_where_to_change_after_a_no(self):
+        frontend = (SETUP / "gui/fliperos-frontend").read_text()
+        self.assertIn("self.storage_tick(now)", frontend)
+        self.assertIn('if o == "storage":\n            return self.storage_act(a)', frontend)
+        tick = frontend.split("def storage_tick(")[1].split("def storage_act(")[0]
+        # So com o frontend livre: nenhum menu, a tira fechada, fora do modo comercial.
+        self.assertIn("if o or self.picking or self.shot or self.commercial:", tick)
+        self.assertIn('"sel": 1', tick)                  # o NAO vem escolhido
+        act = frontend.split("def storage_act(")[1].split("def media_watch(")[0]
+        self.assertIn("STORAGE_GUARD", act)              # o aperto de quem ja apertava o botao nao responde
+        self.assertIn('ov["stage"] = "later"', act)      # o NAO mostra onde mudar
+        self.assertIn("target=self.fst.answer, args=(mount, False)", act)
+        view = (SETUP / "gui/feview.py").read_text()
+        self.assertIn('elif o == "storage":\n            draw_storage(fe, top, t)', view)
+        draw = view.split("def draw_storage(")[1].split("\ndef draw_letter(")[0]
+        self.assertIn("where[0]", draw)
+        self.assertEqual(self.fs.WHERE[0], "SETUP > SYSTEM > STORAGE")
+        self.assertIn("NOPASSWD: /usr/local/bin/fliperos-setup", (ROOT / "fliperos-rootfs.sh").read_text())
 
 
 class FoldersTests(Base):

@@ -140,6 +140,10 @@ COIN_MINUTES = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 45, 50, 60)
 # A midia fisica: o estado dos drives e lido a cada MEDIA_POLL segundos; o
 # READING fica ao menos MEDIA_MIN_LOAD na tela (um disco ja lido nao pisca).
 MEDIA_POLL, MEDIA_MIN_LOAD = 2.0, 0.6
+# O disco novo (storage_tick): o aperto que chega nos primeiros STORAGE_GUARD
+# segundos da pergunta e do resultado e ignorado (quem apertava o botao 1 num
+# jogo nao liga o disco sem querer).
+STORAGE_GUARD = 0.9
 
 
 def evdev_keys(pg):
@@ -305,6 +309,7 @@ class Frontend:
         import febios
         import feharvest
         import femedia
+        import festorage
         import fevideo
         import feview
         import tiny
@@ -494,6 +499,10 @@ class Frontend:
         # do scrape. A checagem automatica sai daqui tambem (o frontend abre
         # antes do menu do Setup); so olha de novo se as pastas mudaram.
         self.bios = febios.BiosStatus()
+        # O disco novo (festorage.py): a fila que o fliperos-automount deixa e a
+        # pergunta de se vira o armazenamento (storage_tick).
+        self.fst = festorage
+        self.storage = festorage.Offers()
         if not self.shot:
             febios.start_check()
             self.harvest.external = self.harvest.follow()
@@ -1144,6 +1153,8 @@ class Frontend:
             return None
         if o == "controls":
             return self.controls_act(a)
+        if o == "storage":
+            return self.storage_act(a)
         if o in ("lobby", "transfer"):
             return self.link_act(a)
         if o.startswith("media"):
@@ -2155,6 +2166,58 @@ class Frontend:
             else:
                 self.say("COULD NOT EXTRACT THE GAME", 4)
 
+    # ── O disco novo (gui/festorage.py) ──
+    def storage_tick(self, now):
+        """Um disco novo na fila do fliperos-automount: com o frontend livre (nenhum
+        menu aberto, a tira fechada, o modo comercial desligado) pergunta uma
+        vez se a pessoa quer usa-lo para tudo; o Setup ligando o disco (a
+        thread da resposta) acaba aqui, no resultado."""
+        o, ov = self.overlay, self.ov
+        if o == "storage":
+            if ov["stage"] == "work" and ov.get("result") is not None:
+                ov["stage"], ov["since"] = "done", time.monotonic()
+            return
+        if o or self.picking or self.shot or self.commercial:
+            return
+        self.storage.refresh(now)
+        offer = self.storage.first()
+        if offer:
+            self.overlay = "storage"
+            self.ov = {"stage": "ask", "sel": 1, "offer": offer, "since": time.monotonic()}
+
+    def storage_act(self, a):
+        """A pergunta do disco novo: SIM (o Setup liga as cinco pastas dele) ou
+        NAO (so um texto de onde mudar depois); o botao 2 e o NAO. O NAO vem
+        escolhido, e a pergunta so e respondida uma vez: o Setup registra o
+        disco."""
+        ov = self.ov
+        if time.monotonic() - ov["since"] < STORAGE_GUARD:
+            return None
+        if ov["stage"] == "ask":
+            if a in ("left", "right", "up", "down"):
+                ov["sel"] ^= 1
+            elif a in ("b1", "b2"):
+                mount = ov["offer"]["mount"]
+                yes = a == "b1" and ov["sel"] == 0
+                self.storage.done(mount)
+                ov["since"] = time.monotonic()
+                if yes:
+                    ov["stage"], ov["result"] = "work", None
+
+                    def work():
+                        try:
+                            ov["result"] = self.fst.answer(mount, True)
+                        except Exception:  # sem resposta o quadro ficaria preso em SETTING UP
+                            ov["result"] = (False, [])
+
+                    threading.Thread(target=work, daemon=True).start()
+                else:
+                    ov["stage"] = "later"
+                    threading.Thread(target=self.fst.answer, args=(mount, False), daemon=True).start()
+        elif ov["stage"] in ("later", "done") and a in ("b1", "b2", "tab"):
+            self.overlay = None
+        return None
+
     # ── A midia fisica (gui/femedia.py) ──
     def media_watch(self):
         """Os drives e o estado de cada um, a cada MEDIA_POLL segundos; parado
@@ -2888,6 +2951,7 @@ class Frontend:
                     self.lib.refresh()
             self.auto_scrape(now)
             self.bios.refresh(now)
+            self.storage_tick(now)
             self.unpack_tick()
             self.media_tick(now)
             # O servico do scrape automatico (fliperos-scrape --daemon): o
