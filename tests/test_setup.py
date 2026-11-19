@@ -4563,6 +4563,183 @@ class CustomGamesTests(Base):
         self.assertEqual(self.env.out("customgames_found \"$D\"; echo \"$CG_FOUND_YEAR|$CG_FOUND_DEVELOPER\"",
                                       dict(e, D=str(loose / "Foo"))).strip(), "2004|Studio X")
 
+    def test_the_package_of_an_installed_game_follows_what_changed_after_installing(self):
+        # Baixar o pacote de novo traz as configuracoes e o .key que a pessoa mudou depois de instalar: o
+        # fliperos-customgame synced diz se o zip do jogo ja leva o mesmo; o pack so refaz o que mudou (e
+        # com force, de qualquer jeito), e o jogo passa a ser instalado do zip novo.
+        import zipfile
+        media, games, e = self.pkg_env()
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip",
+                             extra={"Pang.png": b"snap", "Pang.key": "p1_b1=Z\n"})
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(zip_)))
+        cfg = self.roms / "custom" / "PC" / "Pang.cfg"
+        synced = lambda: self.env.run("customgames_tool synced --group PC --name Pang", e).returncode
+        self.assertEqual(synced(), 0)                      # recem instalado: o zip leva o mesmo
+        # Em dia: baixar nao refaz (o zip fica como esta).
+        stamp = zip_.stat().st_mtime_ns
+        self.assertIn("up to date", self.env.out("customgames_pack_game PC Pang", e))
+        self.assertEqual(zip_.stat().st_mtime_ns, stamp)
+        # Uma configuracao mudada depois (o Edit): o zip esta velho; o pack o refaz com ela.
+        self.env.run("customgames_refresh_frontends() { :; }; customgames_cli edit group=PC name=Pang year=1989 category=Puzzle", e)
+        self.assertEqual(synced(), 1)
+        out = self.env.out("customgames_pack_game PC Pang", e)
+        self.assertNotIn("up to date", out)
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertIn("year=1989\n", zf.read("Pang.cfg").decode())
+            self.assertIn("category=Puzzle\n", zf.read("Pang.cfg").decode())
+        self.assertEqual(synced(), 0)
+        # O jogo passa a ser deste zip (em dia): nao volta a lista como novo nem como mais novo.
+        self.assertIn("package_stamp=", cfg.read_text())
+        self.assertEqual(self.env.out("customgames_pending", e), "%s|PC|Pang|windows|installed||\n" % zip_)
+        # O .key que a pessoa fez no menu na tela depois de instalar vai junto.
+        (self.roms / "custom" / "PC" / "Pang.key").write_text("p1_b1=X\np1_start=ENTER\n")
+        self.assertEqual(synced(), 1)
+        self.env.out("customgames_pack_game PC Pang", e)
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertEqual(zf.read("Pang.key").decode().count("p1_"), 2)
+            self.assertIn("p1_b1=X", zf.read("Pang.key").decode())
+        self.assertEqual(synced(), 0)
+        # Sem o .key (a pessoa apagou o mapa), o pacote tambem fica sem.
+        (self.roms / "custom" / "PC" / "Pang.key").unlink()
+        self.assertEqual(synced(), 1)
+        # A arte trocada pela pessoa entra; a de exemplo do Setup nunca conta.
+        self.env.out("customgames_pack_game PC Pang", e)
+        (media / "snap/custom/PC/Pang.png").write_bytes(b"my own picture")
+        self.assertEqual(synced(), 1)
+        self.env.out("customgames_pack_game PC Pang", e)
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertEqual(zf.read("Pang.png"), b"my own picture")
+            self.assertNotIn("Pang.key", zf.namelist())
+        self.assertEqual(synced(), 0)
+        # force refaz mesmo em dia; um status que nao e force e recusado (2).
+        self.assertNotIn("up to date", self.env.out("customgames_pack_game PC Pang force", e))
+        self.assertEqual(self.env.run("customgames_cli pack PC Pang nonsense", e).returncode, 2)
+        # Sem o zip (apagado): nao ha o que comparar, o pack o faz de novo.
+        zip_.unlink()
+        self.assertEqual(synced(), 1)
+        self.env.out("customgames_pack_game PC Pang", e)
+        self.assertTrue(zip_.exists())
+        self.assertEqual(synced(), 0)
+        # Um pacote mais novo com esse nome esperando na pasta (o zip trocado depois de instalar): o pack nao o
+        # troca sem force (status 4, com o motivo); com force, sim.
+        self.env.run("customgames_refresh_frontends() { :; }; customgames_cli edit group=PC name=Pang year=1999", e)
+        self.make_pkg(zip_, extra={"Pang.txt": "a newer package"})
+        r = self.env.run("customgames_pack_game PC Pang", e)
+        self.assertEqual(r.returncode, 4)
+        self.assertIn("is not the package this game was installed from", r.stdout)
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertEqual(zf.read("Pang.txt"), b"a newer package")          # o zip novo ficou como estava
+        self.assertEqual(self.env.run("customgames_cli pack PC Pang force", e).returncode, 0)
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertIn("year=1999\n", zf.read("Pang.cfg").decode())
+        # Um zip de outro jogo com o mesmo nome (o jogo nao foi instalado dele): tambem pede force.
+        (self.roms / "custom" / "PC" / "Pang.cfg").write_text(
+            (self.roms / "custom" / "PC" / "Pang.cfg").read_text().replace("package=%s\n" % zip_, ""))
+        self.assertEqual(self.env.run("customgames_pack_game PC Pang", e).returncode, 4)
+
+    def test_an_installed_game_edits_its_exe_runner_command_and_key_map(self):
+        # O Edit de um jogo instalado (a ficha do painel): o executavel (um arquivo da pasta do jogo) e o runner
+        # do Windows, o comando do Linux e o mapa do controle (apagar, ou o joystick: um .key vazio); o que nao
+        # serve e o status 2 com o motivo na saida, sem mexer em nada.
+        media, games, e = self.pkg_env()
+        script = 'customgames_refresh_frontends() { :; }; customgames_cli edit group=PC name=%s %s'
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip",
+                             files={"bin/pang.exe": b"MZ", "bin/other.exe": b"MZ", "data/levels.dat": b"x"},
+                             extra={"Pang.key": "p1_b1=Z\n"})
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(zip_)))
+        cfg = self.roms / "custom" / "PC" / "Pang.cfg"
+        key = self.roms / "custom" / "PC" / "Pang.key"
+        r = self.env.run(script % ("Pang", "exe=bin/other.exe runner=wine-staging"), e)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        text = cfg.read_text()
+        self.assertIn("exe=bin/other.exe\n", text)
+        self.assertIn("runner=wine-staging\n", text)
+        # Um arquivo que nao esta na pasta, um que sai dela e um runner que nao existe: 2, com o motivo, e nada muda.
+        for bad, why in (("exe=bin/nope.exe", "not in the game folder"), ("exe=../../etc/passwd", "not in the game folder"),
+                         ("exe=", "not in the game folder"), ("runner=nope", "PortProton, Wine or Wine Staging")):
+            r = self.env.run(script % ("Pang", bad), e)
+            self.assertEqual(r.returncode, 2, bad)
+            self.assertIn(why, r.stdout)
+        self.assertEqual(cfg.read_text(), text)
+        # runner vazio volta ao PortProton (a chave sai).
+        self.assertEqual(self.env.run(script % ("Pang", "runner="), e).returncode, 0)
+        self.assertNotIn("runner=", cfg.read_text())
+        # O mapa do controle: o do pacote ficou; joystick = um .key vazio (so o cabecalho); clear o apaga.
+        self.assertIn("p1_b1=Z", key.read_text())
+        self.assertEqual(self.env.run(script % ("Pang", "keys=joystick"), e).returncode, 0)
+        self.assertTrue(key.exists())
+        self.assertNotIn("p1_", key.read_text())
+        self.assertEqual(self.env.run(script % ("Pang", "keys=clear"), e).returncode, 0)
+        self.assertFalse(key.exists())
+        self.assertEqual(self.env.run(script % ("Pang", "keys=whatever"), e).returncode, 2)
+        # Um jogo do Linux: o comando muda (uma linha so, sem "command="); o .exe e o runner nao existem nele.
+        self.make_pkg(self.roms / "custom-packages" / "Cave.fliperos-customgame.zip", base="Cave",
+                      cfg="name=Cave\nplatform=native\ncommand=./cave\n", files={"cave": b"#!/bin/sh\n"})
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(self.roms / "custom-packages" / "Cave.fliperos-customgame.zip")))
+        self.assertEqual(self.env.run(script % ("Cave", "command='./cave -fullscreen'"), e).returncode, 0)
+        self.assertIn("command=./cave -fullscreen\n", (self.roms / "custom" / "PC" / "Cave.cfg").read_text())
+        for bad in ("command=", "command='command=./cave'", "exe=cave", "runner=wine"):
+            self.assertEqual(self.env.run(script % ("Cave", bad), e).returncode, 2, bad)
+        # O describe diz se o jogo tem o mapa do controle.
+        (self.roms / "custom" / "PC" / "Cave.key").write_text("p1_b1=Z\n")
+        rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
+        self.assertEqual([r[-2:] for r in rows if r[:3] == ["game", "PC", "Cave"]], [["1", ""]])
+        self.assertEqual([r[-2:] for r in rows if r[:3] == ["game", "PC", "Pang"]], [["", ""]])
+
+    def test_several_packages_are_created_from_a_table_in_one_task(self):
+        # Criar pacote > varios de uma vez: a conferencia mostra os erros por linha, os zips que ja existem e os
+        # nomes repetidos; a criacao faz um zip por linha com o resultado de cada uma (@row N ok|fail).
+        import zipfile
+        media, games, e = self.pkg_env()
+        src = self.panel_sources()
+        script = 'customgames_cli %s'
+        rows = self.panel_rows([
+            {"name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"), "exe": "MetalSlugX.exe",
+             "players": "2"},
+            {"name": "Cave Story", "platform": "native", "folder": str(src / "Cave Story"), "command": "./CaveStory.x86_64"},
+            {"name": "Broken", "platform": "windows", "folder": str(src / "Metal_Slug_X"), "exe": "nope.exe"},
+            {"name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"), "exe": "MetalSlugX.exe"}])
+        check = self.env.out(script % 'check-packages "$F"', dict(e, F=str(rows)))
+        errors = {tuple(l.split("|", 3)[1:3]) for l in check.splitlines() if l.startswith("error|")}
+        self.assertEqual(errors, {("3", "exe"), ("4", "name")})
+        self.assertIn("bytes=", check)
+        self.assertNotIn("exists|", check)
+        good = self.panel_rows([
+            {"name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"), "exe": "MetalSlugX.exe", "players": "2"},
+            {"name": "Cave Story", "platform": "native", "folder": str(src / "Cave Story"), "command": "./CaveStory.x86_64"}])
+        events = self.env.out(script % 'create-packages "$F"', dict(e, F=str(good))).splitlines()
+        self.assertIn("@row 1 ok", events)
+        self.assertIn("@row 2 ok", events)
+        self.assertEqual(events[-1], "@step 100 2 packages created")
+        folder = self.roms / "custom-packages"
+        names = sorted(p.name for p in folder.glob("*.zip"))
+        self.assertEqual(names, ["Cave Story.fliperos-customgame.zip", "Metal Slug X.fliperos-customgame.zip"])
+        with zipfile.ZipFile(folder / "Metal Slug X.fliperos-customgame.zip") as zf:
+            self.assertIn("players=2\n", zf.read("Metal Slug X.cfg").decode())
+        self.assertEqual(self.env.out("customgames_pending", e).count("|new||"), 2)
+        # Os zips que ja existem: a conferencia os lista; sem replace a linha falha (o status e 1), com replace refaz.
+        check = self.env.out(script % 'check-packages "$F"', dict(e, F=str(good)))
+        self.assertIn("exists|1|Metal Slug X.fliperos-customgame.zip\n", check)
+        self.assertIn("exists|2|Cave Story.fliperos-customgame.zip\n", check)
+        r = self.env.run(script % 'create-packages "$F"', dict(e, F=str(good)))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("@row 1 fail Metal Slug X.fliperos-customgame.zip already exists in ~/roms/custom-packages", r.stdout)
+        self.assertIn("@fail ", r.stdout)
+        self.assertEqual(self.env.run(script % 'create-packages "$F" replace', dict(e, F=str(good))).returncode, 0)
+        # Uma linha com erro falha sozinha, as outras saem.
+        mixed = self.panel_rows([{"name": "Broken", "platform": "windows", "folder": str(src / "Metal_Slug_X"), "exe": "nope.exe"},
+                                 {"name": "Another", "platform": "native", "folder": str(src / "Cave Story"),
+                                  "command": "./CaveStory.x86_64"}])
+        r = self.env.run(script % 'create-packages "$F"', dict(e, F=str(mixed)))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("@row 1 fail Pick the .exe that opens the game", r.stdout)
+        self.assertIn("@row 2 ok", r.stdout)
+        self.assertTrue((folder / "Another.fliperos-customgame.zip").exists())
+        self.assertFalse((folder / "Broken.fliperos-customgame.zip").exists())
+        # Replace so vale para "replace"; sem o arquivo, 2.
+        self.assertEqual(self.env.run(script % 'create-packages "$F" nonsense', dict(e, F=str(good))).returncode, 2)
+        self.assertEqual(self.env.run(script % 'create-packages /nonexistent', e).returncode, 2)
+
     def test_a_jpg_logo_goes_through_the_setup_wizard_the_pack_and_the_install(self):
         # JOGO.logo.jpg: o assistente Create package acha o logotipo da pasta,
         # tem um passo para escolher um, o pacote de um jogo instalado o leva,
@@ -4947,10 +5124,10 @@ class CustomGamesTests(Base):
         cfg = (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text()
         self.assertIn("year=1999\ndeveloper=Nazca Corporation\n", cfg)
         self.assertIn("year=2001\ndeveloper=Me\n", (self.roms / "custom" / "Tools" / "Clock.cfg").read_text())
-        # O describe: o ano e a desenvolvedora no fim da linha do jogo.
+        # O describe: o ano e a desenvolvedora na linha do jogo (depois deles, o .key e o .ppdb).
         rows_ = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
         game = [r for r in rows_ if r[:3] == ["game", "PC games", "Metal Slug X"]][0]
-        self.assertEqual(game[-2:], ["1999", "Nazca Corporation"])
+        self.assertEqual(game[-4:-2], ["1999", "Nazca Corporation"])
         # O Edit muda e tira; um ano ruim e recusado (2).
         self.assertEqual(self.env.run(script % "edit group='PC games' name='Metal Slug X' year=2003 developer=SNK", e).returncode, 0)
         cfg = (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text()

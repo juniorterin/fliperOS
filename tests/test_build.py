@@ -8225,7 +8225,7 @@ class WebSetupBase(unittest.TestCase):
             '  group-logo) echo "$3|$4" > TMP/group-logo.flag; case "$4" in *bad) exit 1 ;; esac; exit 0 ;;\n'
             '  group-rename) echo "$3|$4" > TMP/group-rename.flag; [ "$4" = dup ] && exit 3; [ "$4" = busy ] && exit 1; exit 0 ;;\n'
             '  describe) printf "group\\tPC games\\t1\\tpad\\t1\\nicon\\tgames\\tGamepad\\nicon\\tpad\\tJoypad\\nlogo\\tnaomi\\tNaomi\\ngame\\tPC games\\tPang\\tcommand\\t640x240@60\\tShooter\\t'
-            'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
+            'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\t\\t1999\\tSNK\\t1\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
             'mode\\t240p\\t640x240@60\\ngenre\\tShooter\\nsub\\tShooter / Gallery\\ngenre\\tMaze\\n'
             'control\\tjoy8\\t8-way joystick\\nportproton\\t0\\ngames\\t/h/games\\nfree\\t1000\\n'
             'packages\\t/h/roms/custom-packages\\nlastgroup\\tPC games\\n" ;;\n'
@@ -8239,7 +8239,13 @@ class WebSetupBase(unittest.TestCase):
             '  bulk) cp "$3" TMP/bulk.rows; echo "$4" > TMP/bulk.flag; echo "@step 10 Adding"; echo "@row 1 ok"\n'
             '    echo "@row 2 fail Pang is already in PC games"; sleep 1; echo "@fail Adding|1 of 2 games were not added"\n'
             '    exit 1 ;;\n'
-            '  edit) [ "$4" = name=Nope ] && exit 2; exit 0 ;;\n'
+            '  check-packages) cp "$3" TMP/check-packages.rows; echo "error|2|exe|Pick the .exe."\n'
+            '    echo "exists|1|MSX.fliperos-customgame.zip"; printf "bytes=7\\nfree=99\\n" ;;\n'
+            '  create-packages) cp "$3" TMP/create-packages.rows; echo "$4" > TMP/create-packages.flag; echo "@step 10 Packing"\n'
+            '    echo "@row 1 ok"; echo "@row 2 fail Pang.fliperos-customgame.zip already exists"; sleep 1\n'
+            '    echo "@fail Packing|1 of 2 packages were not created"; exit 1 ;;\n'
+            '  edit) [ "$4" = name=Nope ] && exit 2; [ "$4" = name=Msg ] && { echo "That file is not in the game folder."; exit 2; }\n'
+            '    exit 0 ;;\n'
             '  group-info) [ "$3" = Nope ] && exit 2; printf "games=2\\nfolders=1\\npackages=1\\nothers=1\\nother=manual.pdf\\n" ;;\n'
             '  install|pack|squash|install-all|group-delete) echo "@step 50 Working"; sleep 2 ;;\n'
             'esac\nexit 0\n'.replace('TMP', str(tmp)))
@@ -8328,6 +8334,8 @@ class WebCustomGamesTests(WebSetupBase):
         game = info['games'][0]
         self.assertEqual((game['name'], game['platform'], game['mode'], game['players'], game['command']),
                          ('Pang', 'command', '640x240@60', '2', 'wine pang.exe'))
+        # O ano, a desenvolvedora e se o jogo tem o mapa do controle (.key) e o .ppdb.
+        self.assertEqual((game['year'], game['developer'], game['key'], game['ppdb']), ('1999', 'SNK', True, False))
         self.assertEqual(info['pending'][0]['state'], 'new')
         self.assertEqual(info['genres'], [{'name': 'Shooter', 'subs': ['Shooter / Gallery']}, {'name': 'Maze', 'subs': []}])
         self.assertEqual(info['controls'], [{'value': 'joy8', 'label': '8-way joystick'}])
@@ -8386,8 +8394,8 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertIn('el("select", { class: "cg-logo-select"', js)
         self.assertIn('icon("g-upload")', js)
         text = (ROOT / 'config/web/setup-text.js').read_text()
-        for key in ('cg_group_logo', 'cg_group_logo_title', 'cg_group_logo_note', 'cg_logo_none', 'cg_logo_upload', 'cg_logo_or',
-                    'cg_logo_pick', 'cg_logo_use', 'cg_logo_remove'):
+        for key in ('cg_group_logo', 'cg_group_edit_title', 'cg_group_logo_note', 'cg_logo_none', 'cg_logo_upload', 'cg_logo_or',
+                    'cg_logo_pick', 'cg_logo_use', 'cg_logo_remove', 'cg_logo_changed'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
 
     def test_a_group_is_renamed_in_the_panel(self):
@@ -8405,21 +8413,28 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual(self.call('POST', '/api/customgames/group-rename', {'name': 'PC games', 'new_name': ''})[0], 400)
         js = (ROOT / 'config/web/customgames.js').read_text()
         self.assertIn('"/api/customgames/group-rename"', js)
-        self.assertIn('el("span", { class: "cg-gtools" }, logo, rename, del)', js)
+        self.assertIn('el("span", { class: "cg-gtools" }, edit, del)', js)
         text = (ROOT / 'config/web/setup-text.js').read_text()
-        for key in ('cg_group_rename', 'cg_rename_title', 'cg_rename_note', 'cg_rename_go', 'cg_rename_bad', 'cg_renamed'):
+        for key in ('cg_group_edit', 'cg_group_edit_title', 'cg_group_name', 'cg_rename_note', 'cg_rename_bad', 'cg_renamed'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
-        # Os botoes da cabeca do grupo (logotipo, renomear, apagar) sao os tres desenhos px coloridos, de 16 px (1:1,
-        # nitidos): a TV, o lapis do Editar do jogo e a lixeira vermelha. Misturar um lapis colorido com dois glifos de
-        # uma cor so ficava torto, e o contorno g-edit de 12x12 saia serrilhado a 18 px (saiu do sprite). O CSS do h4
-        # esconde os desenhos px (os que enfeitavam o titulo: o botao aparecia como um quadrado vazio): eles voltam ali.
+        # Editar o grupo e uma ficha so, com o nome e o logotipo: nada se grava antes de Gravar, o nome
+        # (renomear) vem antes do logotipo (que mora na pasta do grupo, ja com o nome novo).
+        edit = js.split('async function cgEditGroup(')[1].split('\n}\n')[0]
+        self.assertIn('t("cg_group_name")', edit)
+        self.assertIn('t("cg_group_logo")', edit)
+        self.assertLess(edit.index('"/api/customgames/group-rename"'), edit.index('"/api/customgames/group-logo"'))
+        self.assertIn('body.logo = change.logo', edit)
+        self.assertNotIn('cgGroupLogo(', js)
+        # Os botoes da cabeca do grupo (editar, apagar) sao os desenhos px coloridos, de 16 px (1:1, nitidos): o
+        # lapis do Editar do jogo e a lixeira vermelha. O CSS do h4 esconde os desenhos px (os que enfeitavam o
+        # titulo: o botao aparecia como um quadrado vazio): eles voltam ali.
         sprites = (ROOT / 'config/web/icons.svg').read_text()
         for name in ('px-video', 'px-edit', 'px-remove'):
             self.assertIn('id="%s"' % name, sprites, name)
         self.assertNotIn('id="g-edit"', sprites)
         self.assertNotIn('"edit": """', (ROOT / 'tools/web-icons.py').read_text())
-        tools = js.split('const del = el("button"')[1].split('return el("section"')[0]
-        self.assertEqual(re.findall(r'icon\("([\w-]+)"\)', tools), ['px-remove', 'px-video', 'px-edit'])
+        tools = js.split('function cgGroupSection(')[1].split('\n}\n')[0]
+        self.assertEqual(re.findall(r'icon\("([\w-]+)"\)', tools), ['px-edit', 'px-remove'])
         css = (ROOT / 'config/web/setup.css').read_text()
         self.assertIn('.cg-group h4 svg.px, .cg-sec h4 svg.px { display: none; }', css)
         self.assertIn('.cg-group h4 .cg-gtools svg.px { display: block; width: 16px; height: 16px; }', css)
@@ -8720,27 +8735,166 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual((self.dir / 'create.flag').read_text().strip(), 'replace')
         self.assertEqual(self.call('POST', '/api/customgames/create', {'row': 'x'})[0], 400)
         js = (ROOT / 'config/web/customgames.js').read_text()
-        # As tres abas, e o Criar pacote abre o Instalar pacotes com o zip feito.
-        self.assertIn('const CG_TABS = ["games", "install", "create"];', js)
-        self.assertIn('cg.highlight = data.out;', js)
-        self.assertIn('cgShowTab("install");', js)
-        # O pacote pronto mostra o link para baixar o zip (/api/download, a raiz roms), em vez de pular de
-        # aba; o mesmo no dialogo do pacote de um jogo instalado e em cada cartao da lista de pacotes.
+        # So duas abas: Jogos (que juntou a instalacao) e Criar pacote.
+        self.assertIn('const CG_TABS = ["games", "create"];', js)
+        self.assertNotIn('"install"', js.split('const CG_TABS = ')[1].split(';')[0])
+        # O pacote feito mostra o link para baixar o zip (/api/download, a raiz roms) e pergunta se instala.
         self.assertIn('const cgDownloadUrl = (zip) => "/api/download?root=roms&path=" + encodeURIComponent("custom-packages/" + zip);', js)
         create = js.split('async function cgCreate(')[1].split('\n}\n')[0]
         self.assertIn('cgDownloadButton(zip)', create)
-        self.assertNotIn('cgShowTab("install");\n    } else {', create)
-        self.assertIn('cgPackReady(cgZipOf(game.name), game.name);', js)
-        self.assertIn('if (p.state !== "bad") actions.push(cgDownloadButton(p.file));', js)
+        self.assertIn('await cgOfferInstall([made]);', create)
         self.assertEqual(js.count('el("a", { class: "btn small", href: cgDownloadUrl(zip), download: zip }'), 1)
+        self.assertIn('href: cgDownloadUrl(p.file), download: p.file', js)        # o zip de um pacote por instalar
         text = (ROOT / 'config/web/setup-text.js').read_text()
-        for key in ('cg_created_dl', 'cg_download', 'cg_open_install', 'cg_pack_ready', 'cg_pack_where'):
+        for key in ('cg_created_dl', 'cg_download', 'cg_offer_title', 'cg_offer_title_1', 'cg_offer_text', 'cg_offer_yes', 'cg_offer_no'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
         # O servidor entrega o zip da pasta dos pacotes (roms/custom-packages) como arquivo.
         self.assertEqual(self.call('GET', '/api/download?root=roms&path=custom-packages/nothing.zip')[0], 404)
-        # Depois de instalar, a pergunta de apagar o pacote.
+        # Depois de instalar, o zip sai se a caixa do envio pede (sem pergunta a cada pacote).
         install = js.split('async function cgInstallPackage(')[1].split('\n}\n')[0]
-        self.assertLess(install.index('"/api/customgames/install"'), install.index('t("cg_pkg_delete_ask")'))
+        self.assertLess(install.index('"/api/customgames/install"'), install.index('await cgDeletePackage(p, true)'))
+        self.assertNotIn('t("cg_pkg_delete_ask")', js)
+        # A pergunta depois de criar: o grupo para escolher e instalar (cada pacote pelo mesmo caminho do Jogos).
+        offer = js.split('async function cgOfferInstall(')[1].split('\n}\n')[0]
+        self.assertIn('cgGroupSelect(cg.installGroup', offer)
+        self.assertIn('await cgInstallPackage(p, wanted, { quiet: true, deleteZip: false });', offer)
+
+    def test_the_games_page_is_one_page_with_upload_filter_and_full_cards(self):
+        # Jogos e Instalar pacotes viraram uma pagina: o envio de um pacote ja o instala, o filtro fica em
+        # cima, e cada jogo e um cartao completo (o do frontend) com Jogar, Editar (uma ficha), Baixar e o menu.
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        for gone in ('cgAddOne', 'cgRenderInstall', 'cgRenderBulk', 'cgSaveTable', 'cgTile(', 'cg-bar', 'cgPackReady', 'defaultGroup'):
+            self.assertNotIn(gone, js, gone)
+        # O envio instala sozinho: sobe para a pasta dos pacotes e instala no grupo escolhido.
+        upload = js.split('async function cgUploadFiles(')[1].split('\n}\n')[0]
+        self.assertLess(upload.index('cgUploadZip(file)'), upload.index('cgInstallPackage(p, p.group || cg.installGroup)'))
+        self.assertIn('cgNewGroup()', upload)                       # sem grupo nenhum, o primeiro nasce ali
+        # O filtro: busca, grupo, estado, tipo e ordem.
+        build = js.split('function cgBuildGames(')[1].split('\n}\n')[0]
+        for part in ('cg.el.fGroup', 'fState', 'fType', 'fSort', 'type: "search"'):
+            self.assertIn(part, build)
+        # O cartao do jogo: o completo e o rodape com o botao principal e os icones.
+        card = js.split('function cgGameCard(')[1].split('\n}\n')[0]
+        for part in ('cgCard(', 'game.key', 'game.ppdb', 'cgGameActions(game, pkg)', 'media.includes("preview")'):
+            self.assertIn(part, card)
+        actions = js.split('function cgGameActions(')[1].split('\n}\n')[0]
+        self.assertEqual(re.findall(r'cgIconButton\("([\w-]+)"', actions), ['px-edit', 'g-download', 'g-more'])
+        self.assertIn('cgEditGame(game)', actions)
+        self.assertIn('cgDownloadGame(game)', actions)
+        self.assertIn('cgMenu(more, items)', actions)
+        css = (ROOT / 'config/web/setup.css').read_text()
+        self.assertIn('.cg-cact .cg-main {', css)
+        self.assertIn('.cg-cact .cg-ibtn {', css)
+        for gone in ('.cg-tile', '.cg-tiles', '.cg-pkg-act'):
+            self.assertNotIn(gone, css, gone)
+        sprites = (ROOT / 'config/web/icons.svg').read_text()
+        for name in ('g-download', 'g-more'):
+            self.assertIn('id="%s"' % name, sprites, name)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_search', 'cg_all_groups', 'cg_state_installed', 'cg_state_new', 'cg_state_update', 'cg_state_bad', 'cg_sort_name',
+                    'cg_sort_year', 'cg_sort_type', 'cg_install_into', 'cg_delete_zip_after', 'cg_incoming', 'cg_update_in', 'cg_pkg_size',
+                    'cg_show_more', 'cg_download_pkg', 'cg_repack', 'cg_more', 'cg_delete_game', 'cg_packing', 'cg_pack_done',
+                    'cg_reinstall_ask', 'cg_newer_pkg'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+
+    def test_a_game_is_edited_after_it_is_installed_and_downloaded_again(self):
+        # A ficha de editar tem o executavel e o runner (Windows), o comando (Linux), o mapa do controle e a arte; o
+        # painel manda tudo ao Setup, que diz na saida o que nao serve (400 com o motivo).
+        log = self.dir / 'setup.log'
+        status, out = self.call('POST', '/api/customgames/edit', {'group': 'PC games', 'name': 'Pang', 'exe': 'game.exe',
+                                                                  'runner': 'wine', 'keys': 'clear', 'command': './x'})
+        self.assertEqual(status, 200, out)
+        line = [l for l in log.read_text().splitlines() if ' edit group=PC games name=Pang ' in l][-1]
+        for part in ('exe=game.exe', 'runner=wine', 'keys=clear', 'command=./x'):
+            self.assertIn(part, line)
+        status, out = self.call('POST', '/api/customgames/edit', {'group': 'PC games', 'name': 'Msg'})
+        self.assertEqual((status, out['error']), (400, 'That file is not in the game folder.'))
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        edit = js.split('async function cgEditGame(')[1].split('\n}\n')[0]
+        self.assertIn('Object.assign(body, { exe: row.exe, runner: row.runner === "portproton" ? "" : row.runner })', edit)
+        self.assertIn('if (kind === "native") body.command = row.command;', edit)
+        self.assertIn('if (keys.value) body.keys = keys.value;', edit)
+        self.assertIn('"/api/customgames/scan?one=1&path="', edit)             # o executavel numa lista da pasta do jogo
+        self.assertIn('runner: kind === "windows"', edit)
+        for key in ('cg_f_keys', 'cg_keys_keep_set', 'cg_keys_keep_none', 'cg_keys_clear', 'cg_keys_joystick', 'cg_keys_hint',
+                    'cg_edit_note', 'cg_edit_note_cmd'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, (ROOT / 'config/web/setup-text.js').read_text())), 2, key)
+        # Baixar o pacote de um jogo instalado o refaz com o que ele tem agora (o Setup so refaz se mudou) e baixa:
+        # a tarefa pack, force so no "refazer".
+        status, task = self.call('POST', '/api/customgames/pack', {'group': 'PC games', 'name': 'Cave Story'})
+        self.assertEqual(status, 200)
+        self.wait_task(task['id'])
+        self.assertIn('--customgames pack PC games Cave Story\n', log.read_text())
+        status, task = self.call('POST', '/api/customgames/pack', {'group': 'PC games', 'name': 'Cave Story', 'force': True})
+        self.wait_task(task['id'])
+        self.assertIn('--customgames pack PC games Cave Story force\n', log.read_text())
+        download = js.split('async function cgDownloadGame(')[1].split('\n}\n')[0]
+        self.assertIn('"/api/customgames/pack", { group: game.group, name: game.name, force: !!force }', download)
+        self.assertLess(download.index('/api/customgames/pack'), download.index('cgDownloadUrl(zip)'))
+        # Um zip com esse nome que nao e o do jogo (um mais novo esperando): a pessoa decide antes de trocar.
+        self.assertLess(download.index('cg_pack_replace_ask'), download.index('/api/customgames/pack'))
+        self.assertEqual(len(re.findall(r'(?<!\w)cg_pack_replace_ask: ', (ROOT / 'config/web/setup-text.js').read_text())), 2)
+        # O cartao carrega o que o Setup disse da arte: so a de verdade (a de exemplo do Setup nao conta).
+        import hashlib
+        media = self.dir / 'media'
+        (media / 'snap/custom/PC games').mkdir(parents=True, exist_ok=True)
+        (media / 'logo/custom/PC games').mkdir(parents=True, exist_ok=True)
+        (media / 'texto/custom/PC games').mkdir(parents=True, exist_ok=True)
+        sample = media / 'texto/custom/PC games/Pang.txt'
+        sample.write_text('Put your text here')
+        (media / 'snap/custom/PC games/Pang.png').write_bytes(b'PNG')
+        (media / 'logo/custom/PC games/Pang.png').write_bytes(b'PNG')
+        (media / '.custom-samples').write_text('%s  %s\n' % (hashlib.sha256(b'Put your text here').hexdigest(), sample))
+        status, info = self.call('GET', '/api/customgames')
+        self.assertEqual(info['games'][0]['media'], ['snap', 'logo'])
+        sample.write_text('Mine')                                           # trocado pela pessoa: passa a ser de verdade
+        status, info = self.call('GET', '/api/customgames')
+        self.assertEqual(info['games'][0]['media'], ['snap', 'texto', 'logo'])
+
+    def test_several_packages_are_created_at_once(self):
+        # Criar pacote > Varios de uma vez: a tabela (sem grupo) conferida pelo Setup (erros por linha, os zips que ja
+        # existem) e uma tarefa com o resultado de cada linha.
+        rows = [{'name': 'MSX', 'platform': 'windows', 'folder': str(self.dir / 'src/Metal_Slug_X'), 'exe': 'MSX.exe'},
+                {'name': 'Pang', 'platform': 'windows', 'folder': str(self.dir / 'src/Metal_Slug_X'), 'exe': 'MSX.exe'}]
+        staged = lambda: sorted(p.name for p in (self.dir / 'stage').glob('rows-*'))
+        before = staged()
+        status, check = self.call('POST', '/api/customgames/check-packages', {'rows': rows})
+        self.assertEqual(status, 200)
+        self.assertEqual(check, {'errors': [{'row': 1, 'field': 'exe', 'error': 'Pick the .exe.'}],
+                                 'exists': [{'row': 0, 'zip': 'MSX.fliperos-customgame.zip'}], 'bytes': 7, 'free': 99})
+        self.assertEqual(len((self.dir / 'check-packages.rows').read_text().splitlines()), 2)
+        self.assertEqual(staged(), before)        # o arquivo da conferencia nao fica
+        status, task = self.call('POST', '/api/customgames/create-packages', {'rows': rows, 'replace': True})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.call('POST', '/api/customgames/create-packages', {'rows': rows})[0], 409)      # uma tarefa por vez
+        info = self.wait_task(task['id'])
+        self.assertEqual(info['rows'], [{'row': 0, 'ok': True, 'error': ''},
+                                        {'row': 1, 'ok': False, 'error': 'Pang.fliperos-customgame.zip already exists'}])
+        self.assertEqual(info['error'], '1 of 2 packages were not created')
+        self.assertEqual((self.dir / 'create-packages.flag').read_text().strip(), 'replace')
+        self.assertEqual(self.call('POST', '/api/customgames/create-packages', {'rows': []})[0], 400)
+        self.assertEqual(self.call('POST', '/api/customgames/check-packages', {'rows': 'x'})[0], 400)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        # A tabela de varios pacotes: os detalhes de cada linha, aplicar a todas, e a pergunta de instalar no fim.
+        self.assertIn('const CG_COLUMNS = ["name", "platform", "folder", "run", "mode"];', js)
+        self.assertIn('"/api/customgames/check-packages"', js)
+        self.assertIn('"/api/customgames/create-packages"', js)
+        many = js.split('async function cgCreateMany(')[1].split('\n}\n')[0]
+        self.assertLess(many.index('await cgCheckMany(true)'), many.index('"/api/customgames/create-packages"'))
+        self.assertLess(many.index('waitTask(data.id'), many.index('await cgOfferInstall('))
+        self.assertIn('function cgApplyAll()', js)
+        self.assertIn('cgCreateMode(cg.createMode)', js)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_mode_one', 'cg_mode_many', 'cg_many_note', 'cg_open_all', 'cg_details', 'cg_apply_all', 'cg_apply_go', 'cg_applied',
+                    'cg_create_many', 'cg_create_many_1', 'cg_creating_many', 'cg_created_n', 'cg_failed_n', 'cg_many_exist',
+                    'cg_row_working', 'cg_row_details_bad'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
+        # A tabela vira cartoes quando a caixa dela e estreita (consulta de contêiner), e a criacao em tabela nao
+        # leva o grupo: so o Windows ou o Linux.
+        css = (ROOT / 'config/web/setup.css').read_text()
+        self.assertIn('.cg-many-box { container-type: inline-size; }', css)
+        self.assertIn('@container (max-width: 940px) {', css)
+        self.assertNotIn('"group", "name", "platform"', js)
 
     def test_test_a_game_from_the_create_tab(self):
         # Testar: o Setup prepara o jogo da pasta e devolve o comando; o
@@ -8770,7 +8924,7 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertIn('st.fps.program === cg.testApp', cards)
         self.assertIn('class: "cg-tray"', cards)
         self.assertIn('cgCaptureArt(row, capKind', cards)
-        self.assertIn('out.art = pkg ? cgArtCards(row, changed) : cgArt(row, changed);', js)
+        self.assertIn('out.art = cards ? cgArtCards(row, changed) : cgArt(row, changed);', js)
 
     def test_package_cards_read_the_zips(self):
         # Os cartoes: o fliperos-customgame packages (JSON) e a midia de
@@ -18684,6 +18838,247 @@ class TelegramTests(unittest.TestCase):
             self.assertEqual(len(re.findall(r'^\s+telegram: ', i18n, re.M)), 3, lang)
             self.assertIn('telegramCta:', i18n)
             self.assertIn('telegramText:', i18n)
+
+
+class TelegramCustomGameTests(unittest.TestCase):
+    """O robo dos pacotes de jogo custom: alguem manda um GAME.fliperos-customgame.zip ao grupo, e ele posta no
+    topico Files um album (imagem, logotipo, video), os dados em portugues e ingles, a descricao e o arquivo
+    (tools/telegram-customgame.py, o Worker e o workflow Telegram custom game)."""
+    SCRIPT = ROOT / 'tools/telegram-customgame.py'
+
+    @classmethod
+    def setUpClass(cls):
+        loader = SourceFileLoader('telegram_customgame', str(cls.SCRIPT))
+        spec = importlib.util.spec_from_loader('telegram_customgame', loader)
+        cls.bot = importlib.util.module_from_spec(spec)
+        loader.exec_module(cls.bot)
+        cls.tool = cls.bot.load_tool()
+
+    @staticmethod
+    def png(width=8, height=6):
+        import zlib
+        raw = b''.join(b'\0' + bytes([40, 120, 220]) * width for _ in range(height))
+
+        def chunk(kind, data):
+            return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+        return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+                + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+
+    def make_zip(self, path, name='Street Fighter 4', game=b'MZ' + b'x' * 2000, cfg=None, art=True):
+        cfg = cfg if cfg is not None else ('name=%s\nplatform=windows\nexe=SF4.exe\nmode=480i\ncategory=Fighter / Versus\n'
+                                           'controls=joy8\nbuttons=6\nplayers=2\nyear=2008\ndeveloper=Capcom\n' % name)
+        with zipfile.ZipFile(path, 'w', zipfile.ZIP_STORED) as zf:
+            zf.writestr(name + '.cfg', cfg)
+            if art:
+                zf.writestr(name + '.png', self.png())
+                zf.writestr(name + '.logo.png', self.png(16, 4))
+                zf.writestr(name + '.mp4', b'\0\0\0\x18ftypmp42' + b'v' * 500)
+                zf.writestr(name + '.txt', 'Street fighters from around the world meet again.\nPick a fighter.\n')
+                zf.writestr(name + '.key', 'p1_b1=Z\np1_start=ENTER\n')
+                zf.writestr(name + '.ppdb', 'export PW_X=1\n')
+            zf.writestr('%s/SF4.exe' % name, game)
+        return Path(path)
+
+    class Fake:
+        """O Telegram de mentira: guarda cada chamada."""
+
+        def __init__(self, data=b''):
+            self.data, self.calls = data, []
+
+        def download(self, file_id):
+            self.calls.append(('download', file_id))
+            return self.data
+
+        def message(self, chat, text, thread=None, reply=None):
+            self.calls.append(('message', chat, text, thread, reply))
+
+        def album(self, chat, items, caption, thread=None, reply=None):
+            self.calls.append(('album', chat, items, caption, thread, reply))
+
+        def document(self, chat, file_id, caption, thread=None):
+            self.calls.append(('document', chat, file_id, caption, thread))
+
+    def payload(self, **over):
+        base = {'chat_id': -1001234, 'chat_username': 'fliperos15khz', 'message_id': 55, 'thread_id': 0, 'file_id': 'FILE1',
+                'file_name': 'Street Fighter 4.fliperos-customgame.zip', 'file_size': 4000, 'from': 'Ana Souza', 'username': 'ana'}
+        return dict(base, **over)
+
+    def test_a_package_becomes_an_album_a_bilingual_post_and_the_file_in_the_files_topic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_ = self.make_zip(Path(tmp) / 'sf4.zip')
+            tg = self.Fake(zip_.read_bytes())
+            out = []
+            result = self.bot.post_package(tg, self.payload(), {'TELEGRAM_FILES_TOPIC': '578'}, self.tool, out=out.append)
+        self.assertEqual(result, 'posted: Street Fighter 4')
+        kinds = [c[0] for c in tg.calls]
+        self.assertEqual(kinds, ['download', 'album', 'message', 'document', 'message'])
+        album, details, document, notice = tg.calls[1], tg.calls[2], tg.calls[3], tg.calls[4]
+        # O album: a imagem, o logotipo e o video, no topico Files, com o nome e uma linha por idioma.
+        self.assertEqual([i[0] for i in album[2]], ['photo', 'photo', 'video'])
+        self.assertEqual(album[4:], (578, None))
+        for part in ('Street Fighter 4', '\U0001F1E7\U0001F1F7', '\U0001F1FA\U0001F1F8', 'Ana Souza (@ana)', 'Fighter / Versus', 'Capcom'):
+            self.assertIn(part, album[3])
+        self.assertLessEqual(len(album[3]), 1024)
+        # Os dados: todos, nos dois idiomas, mais a descricao.
+        text = details[2]
+        self.assertEqual(details[3:], (578, None))
+        self.assertLess(text.index('\U0001F1E7\U0001F1F7'), text.index('\U0001F1FA\U0001F1F8'))
+        for part in ('Modo de vídeo: 480i', 'Video mode: 480i', 'Jogadores: 2', 'Players: 2', 'Botões: 6', 'Buttons: 6', 'joy8',
+                     '2008', 'Capcom', 'sim, 2 teclas', 'yes, 2 keys', 'PortProton (.ppdb): sim', 'PortProton (.ppdb): yes',
+                     'Street fighters from around the world meet again.', 'Pick a fighter.', 'Descrição / Description',
+                     'painel web > Jogos custom', 'web panel > Custom games'):
+            self.assertIn(part, text)
+        self.assertLessEqual(len(text), 4096)
+        # O arquivo vai por file_id para o topico Files; onde o zip foi mandado, um aviso curto e a resposta a ele.
+        self.assertEqual(document[1:3], ('-1001234', 'FILE1'))
+        self.assertEqual(document[4], 578)
+        self.assertIn('Street Fighter 4.fliperos-customgame.zip', document[3])
+        self.assertEqual(notice[3:], (None, 55))
+        self.assertIn('Os dados e o arquivo estão no tópico Arquivos', notice[2])
+        self.assertIn('The details and the file are in the Files topic', notice[2])
+
+    def test_a_zip_sent_in_the_files_topic_gets_the_details_as_a_reply_without_repeating_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tg = self.Fake(self.make_zip(Path(tmp) / 'sf4.zip').read_bytes())
+            self.bot.post_package(tg, self.payload(thread_id=578), {}, self.tool, out=lambda *_: None)
+        self.assertEqual([c[0] for c in tg.calls], ['download', 'album', 'message'])
+        self.assertEqual(tg.calls[1][4:], (578, 55))        # no topico Files, respondendo ao zip
+        self.assertEqual(tg.calls[2][3:], (578, 55))
+        # Sem arte: so o texto, com a legenda e os dados juntos.
+        with tempfile.TemporaryDirectory() as tmp:
+            tg = self.Fake(self.make_zip(Path(tmp) / 'sf4.zip', art=False).read_bytes())
+            self.bot.post_package(tg, self.payload(thread_id=578), {}, self.tool, out=lambda *_: None)
+        self.assertEqual([c[0] for c in tg.calls], ['download', 'message'])
+        self.assertIn('Modo de vídeo: 480i', tg.calls[1][2])
+        self.assertIn('Street Fighter 4', tg.calls[1][2])
+
+    def test_a_file_that_is_not_a_good_package_is_refused_with_its_problems_where_it_was_sent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / 'bad.zip'
+            with zipfile.ZipFile(bad, 'w') as zf:
+                zf.writestr('Street Fighter 4/SF4.exe', b'MZ')
+            tg = self.Fake(bad.read_bytes())
+            result = self.bot.post_package(tg, self.payload(thread_id=12), {}, self.tool, out=lambda *_: None)
+        self.assertTrue(result.startswith('refused'))
+        self.assertEqual([c[0] for c in tg.calls], ['download', 'message'])
+        self.assertEqual(tg.calls[1][3:], (12, 55))
+        self.assertIn('Street Fighter 4.cfg is missing', tg.calls[1][2])
+        self.assertIn('\U0001F1E7\U0001F1F7', tg.calls[1][2])
+        # Outro nome, ou outro grupo: o robo nem olha.
+        for payload, env in ((self.payload(file_name='notes.zip'), {}), (self.payload(), {'TELEGRAM_CHAT_ID': '-100999'})):
+            tg = self.Fake()
+            self.assertTrue(self.bot.post_package(tg, payload, env, self.tool).startswith('skipped'))
+            self.assertEqual(tg.calls, [])
+
+    def test_a_big_package_is_read_by_pieces_without_downloading_the_game(self):
+        # Acima de 20 MB a Bot API nao entrega o arquivo: pelo MTProto o robo le o fim do zip (a lista de arquivos) e
+        # os arquivos pequenos do pacote, nunca a pasta do jogo (aqui 12 MB que nao se comprimem).
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'big.zip', game=os.urandom(12 << 20)).read_bytes()
+        asked = []
+
+        class Source:
+            size = len(data)
+
+            def fetch(self, offset, length):
+                asked.append((offset, length))
+                return data[offset:offset + length]
+
+            def close(self):
+                self.closed = True
+
+        source = Source()
+        tg = self.Fake()
+        out = []
+        env = {}
+        result = self.bot.post_package(tg, self.payload(file_size=600 << 20), env, self.tool,
+                                       mtproto=lambda e, chat, message: (asked.append(('open', chat, message)), source)[1],
+                                       out=out.append)
+        self.assertEqual(result, 'posted: Street Fighter 4')
+        self.assertEqual(asked[0], ('open', '@fliperos15khz', 55))
+        fetched = sum(length for offset, length in asked[1:])
+        self.assertLess(fetched, len(data) // 4, 'the game folder must not be downloaded')
+        self.assertTrue(all(offset % self.bot.BLOCK == 0 for offset, _ in asked[1:]))
+        self.assertTrue(source.closed)
+        self.assertEqual([c[0] for c in tg.calls], ['album', 'message', 'document', 'message'])    # nada baixado pela Bot API
+        self.assertIn('Street Fighter 4', tg.calls[0][3])
+        self.assertIn('%d of %d bytes fetched' % (fetched, len(data)), out[0])
+        # Sem as chaves do MTProto: o arquivo vai assim mesmo, com o aviso de que os detalhes nao deu para ler.
+        tg = self.Fake()
+        result = self.bot.post_package(tg, self.payload(file_size=600 << 20), {}, self.tool, mtproto=lambda *a: None, out=lambda *_: None)
+        self.assertEqual(result, 'posted: Street Fighter 4.fliperos-customgame.zip (details unreadable)')
+        self.assertEqual([c[0] for c in tg.calls], ['message', 'document', 'message'])
+        self.assertIn('Não deu para ler os detalhes', tg.calls[0][2])
+        self.assertIn('could not be read', tg.calls[0][2])
+        self.assertEqual(tg.calls[1][2], 'FILE1')
+        # Um erro do MTProto (rede, chaves) tambem nao perde o arquivo.
+
+        def broken(env, chat, message):
+            raise RuntimeError('bad api hash')
+        tg = self.Fake()
+        self.bot.post_package(tg, self.payload(file_size=600 << 20), {}, self.tool, mtproto=broken, out=lambda *_: None)
+        self.assertEqual([c[0] for c in tg.calls], ['message', 'document', 'message'])
+
+    def test_the_range_file_reads_like_the_zip_it_stands_for(self):
+        data = os.urandom((3 << 20) + 123)
+        fetches = []
+        ranged = self.bot.RangeFile(len(data), lambda offset, length: (fetches.append(offset), data[offset:offset + length])[1])
+        ranged.seek(self.bot.BLOCK - 10)
+        self.assertEqual(ranged.read(100), data[self.bot.BLOCK - 10:self.bot.BLOCK + 90])      # atravessa dois pedacos
+        ranged.seek(-50, 2)
+        self.assertEqual(ranged.read(), data[-50:])
+        ranged.seek(0)
+        self.assertEqual(ranged.read(10), data[:10])
+        self.assertEqual(ranged.tell(), 10)
+        self.assertEqual(ranged.read(1 << 30), data[10:])                                         # o resto, sem passar do fim
+        self.assertEqual(ranged.read(5), b'')
+        # Cada pedaco vem uma vez so (fica guardado).
+        self.assertEqual(sorted(fetches), sorted(set(fetches)))
+
+    def test_the_preview_prints_the_post_and_saves_the_art(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_ = self.make_zip(Path(tmp) / 'Street Fighter 4.fliperos-customgame.zip')
+            result = subprocess.run([sys.executable, str(self.SCRIPT), '--zip', str(zip_), '--out', str(Path(tmp) / 'art')],
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('Modo de vídeo: 480i', result.stdout)
+            self.assertIn('Video mode: 480i', result.stdout)
+            self.assertEqual(sorted(p.name for p in (Path(tmp) / 'art').iterdir()), ['logo.png', 'preview.mp4', 'snap.png'])
+
+    def test_the_worker_hands_the_zip_to_github_and_the_workflow_posts_it(self):
+        worker = (ROOT / 'tools/telegram-translate/worker.js').read_text(encoding='utf-8')
+        self.assertIn("/\\.fliperos-customgame\\.zip$/i", worker)
+        self.assertIn("event_type: 'customgame-zip'", worker)
+        self.assertIn("'https://api.github.com/repos/' + env.GITHUB_REPO + '/dispatches'", worker)
+        self.assertIn('if (await dispatchPackage(env, msg)) return;', worker)
+        for field in ('chat_id', 'chat_username', 'message_id', 'thread_id', 'file_id', 'file_name', 'file_size', 'from', 'username'):
+            self.assertIn(field, worker[worker.index('client_payload'):worker.index('if (!r.ok)')])
+        # O repository_dispatch aceita ate 10 campos no client_payload.
+        self.assertLessEqual(len(re.findall(r'^\s+(\w+)(?::|,\n)', worker[worker.index('client_payload'):worker.index('if (!r.ok)')], re.M)), 10)
+        self.assertIn('GITHUB_REPO = "juniorterin/fliperOS"', (ROOT / 'tools/telegram-translate/wrangler.toml').read_text())
+        workflow = (ROOT / '.github/workflows/telegram-customgame.yml').read_text(encoding='utf-8')
+        self.assertIn('types: [customgame-zip]', workflow)
+        self.assertIn('toJson(github.event.client_payload)', workflow)
+        # O pedido vai por variavel de ambiente, nunca interpolado no script.
+        run = workflow[workflow.index('run: |\n          args='):]
+        self.assertNotIn('${{', run)
+        self.assertIn('python3 tools/telegram-customgame.py "${args[@]}"', run)
+        for secret in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_API_ID', 'TELEGRAM_API_HASH'):
+            self.assertIn('%s: ${{ secrets.%s }}' % (secret, secret), workflow)
+        self.assertIn('group: telegram-customgame', workflow)
+        # O Files e o topico 578 (o mesmo que o tradutor deixa sem traducao).
+        self.assertEqual(self.bot.FILES_TOPIC, 578)
+        self.assertIn('SKIP_TOPICS = "578"', (ROOT / 'tools/telegram-translate/wrangler.toml').read_text())
+        # Sem token ou em dry run, o pedido so e conferido.
+        payload = json.dumps(self.payload())
+        result = subprocess.run([sys.executable, str(self.SCRIPT), '--payload-env', 'PAYLOAD', '--dry-run'],
+                                capture_output=True, text=True, timeout=60, env=dict(os.environ, PAYLOAD=payload))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('dry run: would post Street Fighter 4.fliperos-customgame.zip', result.stdout)
+        result = subprocess.run([sys.executable, str(self.SCRIPT), '--payload-env', 'PAYLOAD'], capture_output=True, text=True,
+                                timeout=60, env=dict({k: v for k, v in os.environ.items() if k != 'TELEGRAM_BOT_TOKEN'}, PAYLOAD='{oops'))
+        self.assertEqual(result.returncode, 1)
 
 
 class SplashTests(unittest.TestCase):

@@ -313,8 +313,6 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-head .lead { margin-bottom: 14px; }
 /* Na area Jogos custom o titulo e a frase ja estao no topo da pagina. */
 .cg-area .cg-head > h2, .cg-area .cg-head > .lead { display: none; }
-.cg-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
-.cg-bar svg.g { width: 12px; height: 12px; }
 .cg-list, .cg-sec { margin-top: 26px; }
 .cg-list { margin-top: 0; }
 .cg-sec h4, .cg-group h4 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 4px 10px;
@@ -324,41 +322,15 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-sec h4 .btn { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .cg-empty { padding: 18px; border-radius: 14px; background: var(--surface); }
 .cg-group + .cg-group { margin-top: 22px; }
-.cg-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 14px; }
-@media (max-width: 520px) { .cg-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
-/* Um jogo: a imagem, o nome e o tipo; as acoes por cima, ao passar o mouse
-   (sempre a vista numa tela de toque). */
-.cg-tile { position: relative; display: grid; min-width: 0; overflow: hidden; border-radius: 12px; background: var(--surface); }
-.cg-tile > b { padding: 9px 11px 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cg-tile > .tag { justify-self: start; margin: 1px 11px 11px; padding: 0; border: 0; border-radius: 0; color: var(--dim); font-size: 12.5px; }
-.cg-snap { aspect-ratio: 4 / 3; overflow: hidden; display: grid; background: var(--bg-deep); }
-.cg-snap img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
 .cg-noimg { display: grid; place-items: center; font: 22px var(--px); color: var(--purple); }
-.cg-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
-.cg-tile:hover .cg-actions, .cg-tile:focus-within .cg-actions { opacity: 1; }
-@media (hover: none) { .cg-actions { opacity: 1; } }
-.cg-actions .icon-btn { width: 30px; height: 30px; border: 0; border-radius: 8px; background: rgba(11, 11, 18, .82); }
-.cg-actions .icon-btn svg.px { width: 18px; height: 18px; }
-.cg-actions .icon-btn svg.g { width: 13px; height: 13px; }
 .cg-sec .nics { padding: 6px 16px; border-radius: 14px; background: var(--surface); }
 .cg-sec .nic-row { padding: 8px 0; }
 .cg-sec .nic-row + .nic-row { border-top: 1px solid var(--hair); }
 .cg-sec .nic-row select { max-width: 180px; }
 .cg-sec > p.dim { margin: 0 4px 12px; font-size: 13px; }
-/* As abas da pagina (Jogos, Instalar pacotes, Criar pacote). */
+/* As abas da pagina (Jogos, Criar pacote). */
 .cg-tabs { margin: 0 0 22px; }
 .cg-folder { margin: 0 0 14px; font-size: 13px; max-width: 80ch; }
-/* Instalar pacotes: um pacote por linha, as acoes no fim. */
-.cg-packages { padding: 6px 16px; border-radius: 14px; background: var(--surface); }
-.cg-pkg { padding: 8px 0; }
-.cg-pkg + .cg-pkg { border-top: 1px solid var(--hair); }
-.cg-pkg > b { min-width: 0; overflow-wrap: anywhere; }
-.cg-pkg-act { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
-.cg-pkg-act select { max-width: 180px; }
-.cg-pkg .cg-problems { flex-basis: 100%; margin: 2px 0 0; padding-left: 38px; font-size: 13px; color: var(--muted); }
-.cg-pkg .cg-problems li { margin: 2px 0; overflow-wrap: anywhere; }
-.cg-pkg .cg-problems li::marker { color: var(--bad); }
-.cg-pkg.flash { animation: row-flash 2.4s ease-out; }
 .cg-allgroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cg-allgroup select { max-width: 180px; }
 /* Instalar pacotes: o filtro, os cartoes (como o frontend mostra o jogo) e
@@ -418,8 +390,29 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-card .cg-problems li { margin: 2px 0; overflow-wrap: anywhere; }
 .cg-card .cg-problems li::marker { color: var(--bad); }
 .cg-csize { font-size: 12px; }
-.cg-cact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding: 0 12px 12px; }
-.cg-cact select { flex: 1 1 120px; min-width: 0; }
+/* O rodape do cartao: uma faixa propria, o botao principal que cresce e os icones (editar, baixar,
+   mais), todos da mesma altura; o grupo de quem instala, quando ha, ocupa a linha de cima. */
+.cg-cact { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding: 10px 12px; border-top: 1px solid var(--hair);
+  background: rgba(255, 255, 255, .025); }
+.cg-cact select { flex: 1 1 100%; min-width: 0; height: 34px; padding: 0 10px; border-radius: 10px; font-size: 13px; }
+.cg-cact .cg-main { flex: 1 1 auto; min-width: 0; height: 34px; padding: 0 14px; border-radius: 10px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.cg-cact .cg-main svg { flex: none; width: 14px; height: 14px; }
+.cg-cact .cg-main svg.g { width: 11px; height: 11px; }
+.cg-cact .cg-main.ghost.bad { color: var(--bad); border-color: rgba(255, 110, 110, .45); }
+.cg-cact .cg-ibtn { flex: none; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--fg); }
+.cg-cact .cg-ibtn:hover, .cg-cact .cg-ibtn:focus-visible { border-color: var(--purple); background: var(--raise); }
+.cg-cact .cg-ibtn svg.px { width: 18px; height: 18px; }
+.cg-cact .cg-ibtn svg.g { width: 14px; height: 14px; }
+/* O menu de "mais" e solto sobre a pagina (o cartao corta o que sai dele). */
+.cg-menu { position: fixed; z-index: 1000; display: grid; min-width: 220px; max-width: min(320px, calc(100vw - 16px)); padding: 6px; border: 1px solid var(--hair);
+  border-radius: 14px; background: var(--raise); box-shadow: 0 14px 34px rgba(0, 0, 0, .55); }
+.cg-menu button { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--fg);
+  font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.cg-menu button:hover, .cg-menu button:focus-visible { background: var(--surface); outline: none; }
+.cg-menu button.bad { color: var(--bad); }
+.cg-menu svg.px { flex: none; width: 18px; height: 18px; }
+.cg-menu svg.g { flex: none; width: 14px; height: 14px; margin: 0 2px; }
 @media (prefers-reduced-motion: reduce) { .cg-cname.run > span, .cg-ctext.roll > div { animation: none; } }
 .cg-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 16px 0 4px; }
 .cg-page { min-width: 34px; height: 34px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
@@ -517,7 +510,7 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-capshot { margin: 0; overflow: hidden; border-radius: 10px; background: var(--bg-deep); }
 .cg-capshot img, .cg-capshot video { display: block; width: 240px; max-width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
 
-/* A pagina: abas em pilulas, grupos com a contagem, tiles que sobem ao passar. */
+/* A pagina: abas em pilulas, grupos com a contagem, cartoes que sobem ao passar. */
 .cg-tabs { border-bottom: 0; }
 .cg-tabs .subtabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--surface); }
 .cg-tabs .subtabs a { margin: 0; padding: 8px 16px; border: 0; border-radius: 10px; }
@@ -525,20 +518,17 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-group h4 { gap: 8px 10px; font-size: 12.5px; color: var(--muted); }
 .cg-group h4::before { content: ""; width: 4px; height: 15px; border-radius: 2px; background: var(--pink); }
 .cg-group h4 .dim { padding: 1px 9px; border-radius: 999px; background: var(--raise); font-size: 12px; }
-.cg-tile { border: 1px solid var(--hair); transition: transform .15s, border-color .15s, box-shadow .15s; }
-.cg-tile:hover, .cg-tile:focus-within { transform: translateY(-2px); border-color: var(--purple); box-shadow: 0 10px 26px rgba(0, 0, 0, .4); }
-.cg-tile > .tag { max-width: calc(100% - 22px); margin: 3px 11px 11px; padding: 1px 9px; overflow: hidden; border-radius: 999px;
-  background: var(--raise); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .cg-empty { padding: 28px 18px; border: 1px dashed var(--hair); border-radius: 14px; background: none; text-align: center; }
-.cg-card { border: 1px solid var(--hair); }
-@media (prefers-reduced-motion: reduce) { .cg-tile { transition: none; } .cg-tile:hover, .cg-tile:focus-within { transform: none; } }
+.cg-card { border: 1px solid var(--hair); transition: transform .15s, border-color .15s, box-shadow .15s; }
+.cg-card:hover, .cg-card:focus-within { transform: translateY(-2px); border-color: var(--purple); box-shadow: 0 10px 26px rgba(0, 0, 0, .4); }
+@media (prefers-reduced-motion: reduce) { .cg-card { transition: none; } .cg-card:hover, .cg-card:focus-within { transform: none; } }
 
 /* A tabela: rola de lado dentro dela (a pagina nao). Campos sem borda, que
    aparecem ao passar o mouse ou ao digitar. */
 .cg-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 12px 0; }
 .cg-default { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; font-size: 13px; color: var(--muted); }
 .cg-table-wrap { overflow-x: auto; border-radius: 14px; background: var(--surface); }
-.cg-table { width: 100%; min-width: 1180px; border-collapse: collapse; }
+.cg-table { width: 100%; min-width: 900px; border-collapse: collapse; }
 .cg-table th { position: sticky; top: 0; padding: 12px 8px 8px; border-bottom: 1px solid var(--hair); background: var(--surface); color: var(--dim);
   text-align: left; white-space: nowrap; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .cg-table td { padding: 6px 8px; vertical-align: top; border-bottom: 1px solid var(--hair); }
@@ -547,12 +537,10 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-table :is(input, select):is(:hover, :focus) { background: var(--raise); border-color: var(--hair); outline: none; }
 .cg-table select option { background: var(--surface); }
 .cg-table .num { width: 32px; color: var(--dim); font-variant-numeric: tabular-nums; }
-.cg-table .c-group { min-width: 130px; } .cg-table .c-name { min-width: 170px; } .cg-table .c-platform { min-width: 124px; }
-.cg-table .c-folder { min-width: 220px; } .cg-table .c-run { min-width: 190px; } .cg-table .c-mode { min-width: 120px; }
-.cg-table .c-category { min-width: 170px; } .cg-table .c-players, .cg-table .c-buttons { min-width: 64px; }
-.cg-table .c-year { min-width: 72px; } .cg-table .c-developer { min-width: 140px; }
-.cg-table .c-controls { min-width: 120px; } .cg-table .c-art { min-width: 250px; }
+.cg-table .c-name { min-width: 170px; } .cg-table .c-platform { min-width: 124px; }
+.cg-table .c-folder { min-width: 230px; } .cg-table .c-run { min-width: 200px; } .cg-table .c-mode { min-width: 130px; }
 .cg-table .c-act { white-space: nowrap; }
+.cg-table .c-act > svg { display: none; }
 .cg-table .c-act .icon-btn { display: inline-grid; margin-right: 4px; border: 0; background: none; }
 .cg-table .c-act .icon-btn:hover { background: var(--raise); }
 .cg-table .c-act .tag, .cg-table .c-act .cg-err { display: block; margin-top: 6px; white-space: normal; max-width: 180px; }
@@ -600,21 +588,36 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .setup:has(#setup-page:not([hidden])) { grid-template-columns: 230px minmax(0, 1fr); }
 @media (max-width: 1040px) { .setup:has(#setup-page:not([hidden])) { grid-template-columns: minmax(0, 1fr); } }
 
-/* No celular: cada linha da tabela e um cartao, com o rotulo em cada campo. */
-@media (max-width: 760px) {
+/* A tabela de varios pacotes: quando nao cabe (a largura da propria caixa, nao a da janela: ao lado do
+   menu do Setup ela e estreita ate num PC), cada linha vira um cartao com o rotulo em cada campo. */
+.cg-many-box { container-type: inline-size; }
+@container (max-width: 940px) {
   .cg-table-wrap { overflow: visible; background: none; }
   .cg-table { min-width: 0; }
   .cg-table thead { display: none; }
   .cg-table tbody { display: grid; gap: 12px; }
-  .cg-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface); }
+  .cg-table tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 12px; border-radius: 14px; background: var(--surface); }
   .cg-table td { display: block; padding: 0; border: 0; min-width: 0 !important; }
   .cg-table td::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 11.5px; color: var(--dim); }
   .cg-table td.num { grid-column: 1 / -1; width: auto; font-weight: 650; color: var(--pink); }
   .cg-table td.num::before { display: none; }
-  .cg-table :is(.c-name, .c-folder, .c-run, .c-category, .c-art, .c-act) { grid-column: 1 / -1; }
+  .cg-table .c-name { grid-column: span 2; } .cg-table .c-platform, .cg-table .c-mode { grid-column: span 1; }
+  .cg-table .c-folder, .cg-table .c-run { grid-column: span 2; }
+  .cg-table .c-act { grid-column: 1 / -1; }
   .cg-table :is(input, select), :where(.sub, .cg-area) .cg-ctl { background: var(--raise); border-color: var(--hair); }
   .cg-table tr.cg-none { display: block; }
-  .cg-default { width: 100%; margin-right: 0; }
+  .cg-table tr.cg-row:has(+ .cg-detail) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .cg-table tr.cg-detail { margin-top: -12px; border-top: 1px dashed var(--hair); border-radius: 0 0 14px 14px; }
+  .cg-detail > td:first-child { display: none; }
+  .cg-detail > td { grid-column: 1 / -1; padding: 4px 0 0; background: none; }
+  .cg-detailgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 560px) {
+  .cg-table tr { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cg-table :is(.c-name, .c-folder, .c-run) { grid-column: 1 / -1; }
+  .cg-table .c-platform, .cg-table .c-mode { grid-column: span 1; }
+  .cg-detailgrid { grid-template-columns: minmax(0, 1fr); }
+  .cg-detailgrid .cg-f-category, .cg-detailgrid .cg-f-developer { grid-column: 1 / -1; }
 }
 
 /* Os dialogos dos jogos custom (fora de .sub: os campos ganham o estilo aqui). */
@@ -637,7 +640,8 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-field > span { font-size: 12.5px; color: var(--dim); }
 .cg-f-name, .cg-f-folder, .cg-f-run, .cg-f-category, .cg-f-art, .cg-f-controls, .cg-f-joystick, .cg-f-text, .cg-one .cg-ppnote { grid-column: 1 / -1; }
 .cg-testlog { margin: 6px 0 0; padding: 8px 10px; max-height: 180px; overflow: auto; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; border: 1px solid rgba(255, 110, 110, .35); border-radius: 6px; background: rgba(0, 0, 0, .25); }
-.cg-joystick { display: flex; align-items: flex-start; gap: 10px; }
+.cg-joystick { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.cg-joystick small { min-width: 0; white-space: normal; line-height: 1.4; }
 .cg-joystick input { width: auto; flex: none; margin-top: 2px; }
 @media (max-width: 520px) { .cg-one { grid-template-columns: minmax(0, 1fr); } }
 
@@ -675,12 +679,76 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-tray-item b { display: block; font-size: 13.5px; font-weight: 650; }
 .cg-tray-item small { display: block; font-size: 12px; line-height: 1.35; color: var(--dim); }
 
-.cg-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px 16px; margin-bottom: 14px; border: 2px dashed var(--border, #555); border-radius: 10px; cursor: pointer; text-align: center; transition: background .15s, border-color .15s; }
+/* O envio de um pacote (que ja se instala) e as opcoes dele. */
+.cg-upload { display: grid; gap: 8px; margin-bottom: 14px; }
+.cg-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 16px; border: 2px dashed var(--border, #555); border-radius: 14px; cursor: pointer; text-align: center; transition: background .15s, border-color .15s; }
 .cg-drop svg.g { width: 22px; height: 22px; }
 .cg-drop:hover, .cg-drop:focus-visible, .cg-drop.over { border-color: var(--green); background: var(--bg-deep); outline: none; }
+.cg-uopts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 0 4px; font-size: 13px; color: var(--muted); }
+.cg-uopt { display: inline-flex; align-items: center; gap: 8px; }
+.cg-uopt select { max-width: 220px; }
+.cg-uopt input[type=checkbox] { width: auto; margin: 0; accent-color: var(--pink); }
+.cg-uhint { flex: 1 1 260px; font-size: 12.5px; }
+/* O progresso fica a vista enquanto a pagina rola ate o cartao do jogo. */
 .cg-progress:empty { display: none; }
-.cg-progress { display: grid; gap: 8px; margin-bottom: 14px; }
-.cg-prow { padding: 8px 10px; border-radius: 8px; background: var(--bg-deep); }
+.cg-progress { position: sticky; top: 8px; z-index: 5; display: grid; gap: 8px; margin-bottom: 14px; }
+.cg-prow { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--hair); background: var(--bg-deep); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
 .cg-prow .meter { margin: 4px 0; }
 .cg-prow.bad .meter > div { background: var(--red); }
 .cg-pname { font-weight: 700; overflow-wrap: anywhere; }
+
+/* O filtro da aba Jogos; "Novo grupo" fica na ponta. */
+.cg-filters .cg-newgroup { margin-left: auto; }
+.cg-filters select { min-width: 0; }
+.cg-more { display: block; margin: 14px auto 0; }
+.cg-incoming { margin-top: 0; }
+.cg-incoming h4 { margin-bottom: 6px; }
+.cg-incoming h4 .dim { padding: 1px 9px; border-radius: 999px; background: var(--raise); font-weight: 500; letter-spacing: 0; font-size: 12px; }
+.cg-incoming h4 .cg-allgroup { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.cg-incoming h4 .cg-allgroup .dim { padding: 0; background: none; }
+.cg-allgroup .btn { margin-left: 0; }
+.cg-incoming > .cg-folder { margin-left: 4px; }
+
+/* A ficha de editar um jogo e a do grupo. */
+.cg-edit { gap: 14px; }
+.cg-edithead { display: flex; align-items: center; gap: 14px; }
+.cg-edithead h3 { margin: 0 0 6px; overflow-wrap: anywhere; }
+.cg-editsnap { flex: none; width: 96px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; image-rendering: pixelated; background: var(--bg-deep); }
+.cg-editnote { margin: 0; max-width: 80ch; font-size: 13px; line-height: 1.45; }
+.cg-f-keys { grid-column: 1 / -1; }
+.cg-keysel { display: grid; gap: 4px; }
+/* O rodape da ficha longa fica a vista ao rolar, na cor do proprio dialogo. */
+.cg-edit footer { position: sticky; bottom: -22px; margin: 0 -22px -22px; padding: 12px 22px 22px; border-top: 1px solid var(--hair); background: var(--card); }
+.cg-dialog .cg-ctl { padding: 9px 12px; font-size: 14px; background: var(--deep); border-color: var(--line); border-radius: 10px; }
+.cg-logo-pending { display: block; margin-top: 6px; font-size: 12px; color: var(--yellow); }
+.cg-logo-now { text-align: center; }
+
+/* Criar pacote: um so, ou varios de uma vez. */
+.cg-modebar { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0 0 18px; padding: 4px; border-radius: 14px; background: var(--surface); }
+.cg-mode-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 0; border-radius: 10px; background: transparent; color: var(--dim);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.cg-mode-btn svg.px { width: 18px; height: 18px; }
+.cg-mode-btn svg.g { width: 13px; height: 13px; }
+.cg-mode-btn:hover { color: var(--fg); }
+.cg-mode-btn.on { background: var(--raise); color: var(--fg); box-shadow: inset 0 0 0 1px rgba(255, 121, 198, .45); }
+.cg-create-many .cg-toolbar .grow { flex: 1; }
+.cg-create-many .cg-toolbar svg.px { width: 16px; height: 16px; }
+.cg-detbtn { position: relative; }
+.cg-detbtn svg.g { transition: transform .2s; }
+.cg-detbtn.on svg.g { transform: rotate(180deg); }
+.cg-detcount { position: absolute; top: 1px; right: 1px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px; background: var(--pink); color: #1b1b24;
+  font: 700 10px/15px system-ui, sans-serif; text-align: center; }
+.cg-detail > td { padding: 4px 8px 14px; border-bottom: 1px solid var(--hair); background: rgba(255, 255, 255, .02); }
+.cg-detailgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cg-detailgrid .cg-f-controls, .cg-detailgrid .cg-f-joystick, .cg-detailgrid .cg-f-art, .cg-detailgrid .cg-f-category { grid-column: 1 / -1; }
+.cg-detailgrid .cg-f-category { grid-column: span 2; }
+.cg-detailgrid .cg-f-developer { grid-column: span 2; }
+.cg-detailgrid :is(select, input:not([type=checkbox]):not([type=file])) { background: var(--raise); border-color: var(--hair); }
+.cg-detail .cg-ctl { background: var(--raise); border-color: var(--hair); }
+.cg-row.working { background: rgba(189, 147, 249, .07); }
+.cg-apply-value { display: grid; gap: 6px; }
+.cg-offer-list { margin: 0; padding-left: 20px; max-height: 160px; overflow: auto; line-height: 1.5; }
+.cg-tbend { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; margin-left: auto; }
+.cg-filters input[type=search] { flex: 1 1 260px; }
+@media (max-width: 760px) { .cg-filters .cg-newgroup { margin-left: 0; } }
+@media (max-width: 520px) { .cg-edithead { align-items: flex-start; } .cg-editsnap { width: 72px; } }

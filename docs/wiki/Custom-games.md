@@ -92,7 +92,7 @@ A group is a folder, `~/roms/custom/<group>`, and a system in every frontend (th
 
 **Group icon** (inside the group, in the Setup; the web panel has no button for it) picks one of 19 drawings (gamepad, game box, arcade cabinet, joypad, joystick, light gun, wheel, keyboard, emulator, monitor, sound, disk, chip, desktop PC, network, cloud, lab flask, disc, trophy). The group's tile in the Setup and its tile in the frontend's ribbon (when the group has no logo of its own) show it. The choice is the line in `~/roms/custom/<group>/.icon`; without it the group keeps the default drawing.
 
-**Group logo** (inside the group; in the web panel, the upload arrow next to the group's name) gives the group a logo like the ones the systems have: **one colour**, shown on the marquee (Pixelcade and ZeDMD slide it in and blink it twice when you move to the group in the frontend), in the frontend's ribbon and at the top of the group's list. The frontend paints it in its own white and the marquee in its cyan, so only the **drawing** of the image counts, not its colours:
+**Group logo** (inside the group; in the web panel, **Edit the group**, the pencil next to its name, with the name and the logo in one window) gives the group a logo like the ones the systems have: **one colour**, shown on the marquee (Pixelcade and ZeDMD slide it in and blink it twice when you move to the group in the frontend), in the frontend's ribbon and at the top of the group's list. The frontend paints it in its own white and the marquee in its cyan, so only the **drawing** of the image counts, not its colours:
 
 - **Upload an image** (web panel) or give its path (Setup): PNG, JPG or WebP. With a transparent background, the opaque part is the drawing; with no transparency, whatever differs from the background is, so a dark logo on white and a light one on black both work. An image with nothing to draw (one flat colour) is refused and the group keeps what it had;
 - **Pick one of the logos we already have** (a list with a preview, in the Setup and in the web panel): the same ones the systems use, for when you don't want to upload yours. A logo of a system that has the same name as the group never wins over the one you chose for the group.
@@ -113,7 +113,7 @@ A game folder in use (the game open) stops it before anything of that game is de
 
 ## Installing a package
 
-Every package lives in one folder, `~/roms/custom-packages`. Put the zip there from a PC (the network share `\\fliperos\roms\custom-packages`), from a USB stick, or with the web panel (**Install packages > Send packages**). **Create package** writes there too.
+Every package lives in one folder, `~/roms/custom-packages`. Put the zip there from a PC (the network share `\\fliperos\roms\custom-packages`), from a USB stick, or with the web panel (**Games**: drop the zip on the dashed area and it installs by itself in the group you choose). **Create package** writes there too, and in the web panel it asks whether to install what it made.
 
 Then open **Setup > Games > Custom games > Install games**. The list shows every package of the folder:
 
@@ -143,7 +143,7 @@ What installing does:
 
 ## Creating a package
 
-**Create package** has two ways: **From a game folder** is the step-by-step of the [first section](#step-by-step-adding-your-game-from-the-cabinet), and **From an installed game** packs a Windows or Linux game already in a group, with what it has now (the same as **Make a package of it** on the game). The web panel's **Create package** tab is the same form, without the group. Some details:
+**Create package** has two ways: **From a game folder** is the step-by-step of the [first section](#step-by-step-adding-your-game-from-the-cabinet), and **From an installed game** packs a Windows or Linux game already in a group, with what it has now (the same as **Make a package of it** on the game: it brings the settings and the `.key` you changed after installing). The web panel's **Create package** tab is the same form, without the group, and can also make **many packages at once** from a table. Some details:
 
 - Every file picker of the assistant opens where the previous one stopped (the game folder, then the picture's folder...), and the next package starts there too (`~/.config/fliperos/customgame-last-dir`). The first time it starts at `~/games`, the plugged disks or the home.
 - A game folder with the [package's structure](#a-folder-with-the-packages-structure) fills the picture, the logo, the video, the text, the `.key` and the `.ppdb` by itself, and the `.exe` when its `<game>.cfg` names one (the `.exe` and Wine questions are skipped then). Picking the opened zip uses the game folder inside it.
@@ -252,7 +252,7 @@ The **`.ppdb`** is PortProton's settings file for one `.exe`, next to it: `mslug
 
 Without PortProton (you said no, or it failed), a Windows package can still be installed: the game opens with the system's Wine (Setup > Games > Extras), if there is one.
 
-**PortProton, Wine or Wine Staging.** Each Windows game says what runs it (`runner=` in its `.cfg`), chosen when the package is created, in the Setup or in the web panel's **Create package** and **Games** table:
+**PortProton, Wine or Wine Staging.** Each Windows game says what runs it (`runner=` in its `.cfg`), chosen when the package is created, in the Setup or in the web panel's **Create package** (one package or the table):
 
 | Runner | What it is | Installed from |
 |---|---|---|
@@ -399,7 +399,7 @@ Changing the video mode or the information in the Setup rewrites the script, so 
 
 | Program | What it does |
 |---|---|
-| `fliperos-customgame` | `inspect ZIP` (checks a package and prints its `.cfg`), `pending` (the packages waiting), `install ZIP --group G` (installs one), `pack` (makes one), `add` (copies a game folder, the web panel), `scan` and `found` (the games of a folder and what came with them in the package's structure), `run CFG` (opens a game; when it ends, closes whatever the game left running: SIGTERM, then SIGKILL 3 s later) |
+| `fliperos-customgame` | `inspect ZIP` (checks a package and prints its `.cfg`), `pending` (the packages waiting), `install ZIP --group G` (installs one), `pack` (makes one), `synced` (is the package of an installed game up to date with its settings, key map and art?), `stamp` (a zip's size and date), `add` (copies a game folder, the web panel), `scan` and `found` (the games of a folder and what came with them in the package's structure), `run CFG` (opens a game; when it ends, closes whatever the game left running: SIGTERM, then SIGKILL 3 s later) |
 | `fliperos-portproton` | `check`, `install` (as root, the Setup), `versions`, `edit-db EXE VAR=VALUE`, `run EXE` |
 | `fliperos-portproton-curl` | the curl of PortProton's downloads, over https |
 | `fliperos-buttons gamekeys KEY` | the controller as a keyboard; its socket `$XDG_RUNTIME_DIR/fliperos-gamekeys/sock` answers the on-screen menu (`reload`, `mute`, `unmute`, `capture SECONDS`) and exits with the game |

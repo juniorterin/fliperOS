@@ -11,3 +11,7 @@ ALLOWED_CHAT = ""
 # topicos sem traducao (ex.: Files/Arquivos): o numero no fim do link do
 # topico (t.me/fliperos15khz/NUMERO), separados por virgula
 SKIP_TOPICS = "578"
+# o repositorio que roda o workflow "Telegram custom game" quando alguem manda um
+# .fliperos-customgame.zip ao grupo (precisa do secret GITHUB_TOKEN; sem ele os
+# pacotes nao sao tratados)
+GITHUB_REPO = "juniorterin/fliperOS"

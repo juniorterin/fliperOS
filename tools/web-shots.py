@@ -77,17 +77,25 @@ SHOTS = [
     ("tg-custom", "#system/setup/games/custom", 1280, 800, 1, False, False, ""),
     ("tg-celular-lista", "#system/setup", 390, 844, 2, True, False, ""),
     ("tg-celular-video", "#system/setup/video", 390, 844, 2, True, False, ""),
-    ("custom-pc", "#system/setup/games/custom", 1440, 900, 1, False, True, "cg-table"),
-    ("custom-celular", "#system/setup/games/custom", 390, 844, 2, True, True, "cg-table"),
-    ("custom-adicionar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-add"),
-    ("custom-adicionar-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-add"),
-    ("custom-tabela-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-table-view"),
-    ("custom-instalar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-tab-install"),
-    ("custom-instalar-celular", "#system/setup/games/custom", 390, 844, 2, True, True, "cg-tab-install"),
+    # A aba Jogos (os cartoes dos jogos e os pacotes por instalar), o menu e a ficha de editar, a do grupo,
+    # e a aba Criar pacote (um, ou varios de uma vez em tabela) com a pergunta de instalar.
+    ("custom-pc", "#system/setup/games/custom", 1440, 900, 1, False, True, "cg-tab-games"),
+    ("custom-celular", "#system/setup/games/custom", 390, 844, 2, True, True, "cg-tab-games"),
+    ("custom-menu-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-menu"),
+    ("custom-editar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-edit"),
+    ("custom-editar-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-edit"),
+    ("custom-grupo-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-group-edit"),
+    ("custom-filtro-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-filter"),
+    ("custom-lote-pc", "#system/setup/games/custom", 1440, 900, 1, False, True, "cg-many"),
+    ("custom-lote-celular", "#system/setup/games/custom", 390, 844, 2, True, True, "cg-many"),
+    ("custom-aplicar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-apply"),
+    ("custom-oferta-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-offer"),
+    ("custom-fluxo-editar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-flow-edit"),
+    ("custom-fluxo-baixar-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-flow-download"),
+    ("custom-fluxo-lote-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-flow-many"),
     ("custom-criar-pc", "#system/setup/games/custom", 1440, 900, 1, False, True, "cg-tab-create"),
     ("custom-criar-celular", "#system/setup/games/custom", 390, 844, 2, True, False, "cg-tab-create"),
     ("custom-previa-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-create-preview"),
-    ("custom-arte-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-table-art"),
     ("custom-estrutura-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-structure"),
     ("area-custom-criar-pc", "#customgames", 1440, 900, 1, False, True, "cg-tab-create"),
     ("area-custom-criar-celular", "#customgames", 390, 844, 2, True, True, "cg-tab-create"),
@@ -104,23 +112,23 @@ CUSTOM_GAMES = [("PC games", "Metal Slug X", "windows", "640x240@60", "shooter")
                 ("PC games", "Cave Story", "native", "640x240@60", "platform"),
                 ("PC games", "Pang Deluxe", "command", "640x480@60", "racing"),
                 ("Homebrew", "Pong 2026", "command", "320x240@60", "")]
-# A tabela de exemplo (o que "Importar de uma pasta" e "Colar" deixariam),
-# com uma linha de erro como o Setup a devolve.
+# A tabela de varios pacotes de exemplo (o que "Importar de uma pasta" e "Colar" deixariam), com os
+# detalhes de uma linha abertos e uma linha de erro como o Setup a devolve.
 CUSTOM_TABLE = """[
- {group: "PC games", name: "Street Racer 98", platform: "windows", folder: "/media/fliperos/USB/Street Racer 98",
+ {name: "Street Racer 98", platform: "windows", folder: "/media/fliperos/USB/Street Racer 98", open: true,
   exes: ["Racer.exe", "Setup/config.exe"], exe: "Racer.exe", mode: "240p", category: "Driving / Race", players: "2",
-  buttons: "4", controls: ["joy8", "pedal"],
+  buttons: "4", controls: ["joy8", "pedal"], year: "1998", developer: "Rival Studio",
   video: {path: "/media/fliperos/USB/Street Racer 98.mp4", name: "Street Racer 98.mp4"},
   key: {path: "/media/fliperos/USB/Street Racer 98.key", name: "Street Racer 98.key"},
   ppdb: {path: "/media/fliperos/USB/Street Racer 98.ppdb", name: "Street Racer 98.ppdb"}},
- {group: "PC games", name: "Tyrian 2000", platform: "windows", folder: "/media/fliperos/USB/Tyrian2000",
+ {name: "Tyrian 2000", platform: "windows", folder: "/media/fliperos/USB/Tyrian2000",
   exes: ["tyrian.exe"], exe: "tyrian.exe", mode: "other", modeOther: "320x200@70", category: "Shooter / Flying Vertical",
   players: "1", buttons: "3", controls: ["joy8"]},
- {group: "Homebrew", name: "Celeste Classic", platform: "native", folder: "/home/fliperos/games/celeste",
+ {name: "Celeste Classic", platform: "native", folder: "/home/fliperos/games/celeste",
   programs: ["celeste.x86_64"], command: "./celeste.x86_64", mode: "240p", category: "Platform / Run Jump",
   players: "1", buttons: "2", controls: ["joy8"]},
- {group: "PC games", name: "Metal Slug X", platform: "windows", folder: "", exe: "", mode: "240p",
-  errors: {name: "Metal Slug X is already in PC games.", folder: "Not a folder: (empty)"}}
+ {name: "Metal Slug X", platform: "windows", folder: "", exe: "", mode: "240p", open: true,
+  errors: {name: "Metal Slug X is twice in the table (row 1).", folder: "Not a folder: (empty)", year: "Year: four digits (1900 to 2099)."}}
 ]"""
 
 
@@ -296,7 +304,9 @@ def demo(tmp):
                 write(os.path.join(home, "media", "logo", "custom", group, name + ".png"), marquee_art(n + 5, 320, 80), "wb")
         describe.append("\t".join(("game", group, name, platform, mode, "", "joy8", "2", "2",
                                    "wine pang.exe" if platform == "command" else "./CaveStory.x86_64" if platform == "native" else "",
-                                   "MetalSlugX.exe" if platform == "windows" else "", "/home/fliperos/games/%s/%s" % (group, name), "")))
+                                   "MetalSlugX.exe" if platform == "windows" else "", "/home/fliperos/games/%s/%s" % (group, name), "", "",
+                                   "1999" if n % 2 == 0 else "", "SNK" if n % 2 == 0 else "", "1" if platform == "windows" else "",
+                                   "1" if platform == "windows" else "")))
     # Os cartoes do Instalar pacotes: zips de verdade em ~/roms/custom-packages
     # (o fliperos-customgame packages os le): novos com imagem e texto, um
     # instalado, um com o nome errado e um sem a pasta do jogo.
@@ -404,6 +414,10 @@ def demo(tmp):
           "    scan) echo 'wlan0|Casa|82|WPA2'; echo 'wlan0|Vizinho 5G|41|WPA2'; echo 'wlan0|Cafe|20|' ;; esac ;;\n"
           "  --whatsnew) printf 'This is FliperOS 0.26, update 85.\\n\\nUpdates installed:\\n- 34. Web panel redesign\\n' ;;\n"
           "  --customgames) case \"$2\" in describe) cat %s/customgames ;; check) echo bytes=1288490188; echo free=196494753792 ;;\n"
+          "    check-packages) echo bytes=1288490188; echo free=196494753792 ;;\n"
+          "    create-packages) echo '@step 40 Packing'; echo '@row 1 ok'; sleep 1; echo '@row 2 ok'; echo '@step 100 2 packages created' ;;\n"
+          "    pack) echo '@step 40 Packing'; sleep 1; echo '@step 100 Done' ;;\n"
+          "    install) echo '@step 100 Installed' ;;\n"
           "    group-info) printf 'games=3\\nfolders=2\\npackages=1\\nothers=1\\nother=manual.pdf\\n' ;; esac ;;\n"
           "  --setup-items) printf 'item|driver|1\\ninfo|driver|radeon (tested on the CRT) or amdgpu (with Vulkan).\\n"
           "item|bluetooth|1\\nitem|romlist|1\\ninfo|buttons|Player 1: arcade panel (V-USB Mame Panel). Player 2: 8BitDo Pro 2.\\n"
@@ -632,25 +646,62 @@ def main():
         elif action == "cabinet":
             browser.js("document.querySelector('#settings .srow.cab-row').click()")
             browser.wait(1)
-        elif action in ("cg-table", "cg-table-view"):
-            # A tabela com linhas de exemplo (as de "Importar de uma pasta" e
-            # uma com os erros que o Setup devolve).
-            browser.js("cgShowTab('games'); cg.rows = %s.map((r) => cgNewRow(r)); cgTableDraw();"
-                       " document.getElementById('cg-status').textContent = t('cg_errors');%s"
-                       % (CUSTOM_TABLE, " document.getElementById('cg-table').scrollIntoView();" if action == "cg-table-view" else ""))
+        elif action in ("cg-many", "cg-apply"):
+            # Criar varios pacotes: a tabela com linhas de exemplo (as de "Importar de uma pasta" e uma com
+            # os erros que o Setup devolve), e o dialogo de aplicar um campo a todas.
+            browser.js("cgShowTab('create'); cgCreateMode('many'); cg.rows = %s.map((r) => cgNewRow(r)); cgTableDraw();"
+                       " cg.el.manyStatus.textContent = t('cg_errors');%s"
+                       % (CUSTOM_TABLE, " void cgApplyAll();" if action == "cg-apply" else ""))
             browser.wait(1.5)
-        elif action == "cg-add":
-            browser.js("cgShowTab('games'); cgAddOne()")
+        elif action == "cg-menu":
+            # O menu de "mais" do cartao de um jogo (instalar de novo, apagar o pacote, apagar o jogo).
+            browser.js("cgShowTab('games'); (() => { const bs = document.querySelectorAll('.cg-more-btn'); bs[bs.length - 2].scrollIntoView({block: 'center'}); })()")
+            browser.wait(1)
+            browser.js("(() => { const bs = document.querySelectorAll('.cg-more-btn'); bs[bs.length - 2].click(); })()")
+            browser.wait(1)
+        elif action == "cg-edit":
+            # A ficha de editar o jogo do Windows (executavel, runner, mapa do controle, arte).
+            browser.js("cgShowTab('games'); void cgEditGame(cg.info.games.find((g) => g.platform === 'windows'))")
+            browser.wait(2)
+        elif action == "cg-flow-edit":
+            # O fluxo de editar: abre a ficha, escolhe apagar o mapa do controle e grava (o aviso de gravado).
+            browser.js("cgShowTab('games'); void cgEditGame(cg.info.games.find((g) => g.platform === 'windows'))")
+            browser.wait(2)
+            browser.js("(() => { const f = document.querySelector('.cg-edit'); f.querySelector('.cg-keysel select').value = 'clear';"
+                       " f.requestSubmit(); })()")
+            browser.wait(2)
+        elif action == "cg-flow-download":
+            # O fluxo de baixar o pacote: a tarefa pack e o download (a barra de progresso no alto da pagina).
+            browser.js("cgShowTab('games'); void cgDownloadGame(cg.info.games.find((g) => g.platform === 'windows'))")
+            browser.wait(2)
+        elif action == "cg-flow-many":
+            # O fluxo de criar varios: confere, cria (a tarefa) e pergunta se instala.
+            browser.js("cgShowTab('create'); cgCreateMode('many'); cg.rows = %s.slice(0, 2).map((r) => cgNewRow(r)); cgTableDraw();"
+                       " void cgCreateMany()" % CUSTOM_TABLE)
+            browser.wait(7)
+        elif action == "cg-group-edit":
+            browser.js("cgShowTab('games'); void cgEditGroup(cg.info.groups[0])")
             browser.wait(1.5)
-        elif action in ("cg-tab-install", "cg-tab-create"):
-            # As abas Instalar pacotes e Criar pacote (a de criar com a
+        elif action == "cg-filter":
+            # O filtro: so os jogos instalados do Windows, e a ordem por ano.
+            browser.js("cgShowTab('games'); Object.assign(cgView(), {state: 'installed', platform: 'windows', sort: 'year'}); cgDrawGames();"
+                       " document.querySelector('.cg-filters').scrollIntoView({block: 'start'})")
+            browser.wait(1)
+        elif action == "cg-offer":
+            # A pergunta depois de criar um pacote: instalar agora, em que grupo.
+            browser.js("cgShowTab('create'); void cgOfferInstall([{name: 'Street Fighter 4', platform: 'windows',"
+                       " file: 'Street Fighter 4.fliperos-customgame.zip'}, {name: 'Tetris DX', platform: 'windows',"
+                       " file: 'Tetris DX.fliperos-customgame.zip'}])")
+            browser.wait(1.5)
+        elif action in ("cg-tab-games", "cg-tab-create"):
+            # As abas Jogos e Criar pacote (a de criar, no modo de um pacote, com a
             # estrutura do pacote aberta).
             browser.js("cgShowTab(%s);%s" % (json.dumps(action[7:]),
-                       " cg.el.structure.open = true;" if action == "cg-tab-create" else ""))
+                       " cgCreateMode('one'); cg.el.structure.open = true;" if action == "cg-tab-create" else ""))
             browser.wait(1)
         elif action == "cg-create-preview":
             # O Criar pacote preenchido, com a previa aberta ao lado.
-            browser.js("cgShowTab('create'); Object.assign(cg.createRow, {name: 'Street Fighter 4', platform: 'windows',"
+            browser.js("cgShowTab('create'); cgCreateMode('one'); Object.assign(cg.createRow, {name: 'Street Fighter 4', platform: 'windows',"
                        " folder: '/media/fliperos/USB/Street Fighter 4', exe: 'StreetFighterIV.exe', exes: ['StreetFighterIV.exe'],"
                        " mode: '480i', category: 'Fighter / Versus', players: '2', buttons: '6', controls: ['joy8'],"
                        " snap: {path: '/x/sf4.png', name: 'Street Fighter 4.png', url: 'icon-512.png'},"
@@ -661,24 +712,18 @@ def main():
                        " cg.el.createPreview.hidden = false; cgCreateDraw();"
                        " document.querySelector('.cg-create-foot').scrollIntoView({block: 'end'});")
             browser.wait(1.5)
-        elif action == "cg-table-art":
-            # A tabela rolada ate a coluna da arte (a que veio com a pasta).
-            browser.js("cgShowTab('games'); cg.rows = %s.map((r) => cgNewRow(r)); cgTableDraw();"
-                       " const w = document.querySelector('.cg-table-wrap'); w.scrollIntoView(); w.scrollLeft = 99999;"
-                       % CUSTOM_TABLE)
-            browser.wait(1.5)
         elif action == "cg-structure":
             # A estrutura do pacote aberta (na aba Criar pacote).
-            browser.js("cgShowTab('create'); cg.el.structure.open = true; cg.el.structure.scrollIntoView({block: 'start'})")
+            browser.js("cgShowTab('create'); cgCreateMode('one'); cg.el.structure.open = true; cg.el.structure.scrollIntoView({block: 'start'})")
             browser.wait(1)
         elif action == "cg-tray":
             # A arte do Criar pacote: a bandeja da imagem aberta (sem teste: capturar desligado).
-            browser.js("cgShowTab('create'); const c = document.querySelector('.cg-acard.snap .cg-abtn');"
+            browser.js("cgShowTab('create'); cgCreateMode('one'); const c = document.querySelector('.cg-acard.snap .cg-abtn');"
                        " c.scrollIntoView({block: 'center'}); c.click()")
             browser.wait(1.2)
         elif action == "cg-test-panel":
             # O jogo aberto no teste: o aviso das teclas e a captura (com uma foto ja tirada).
-            browser.js("cgShowTab('create'); Object.assign(cg.createRow, {name: 'Street Fighter 4'});"
+            browser.js("cgShowTab('create'); cgCreateMode('one'); Object.assign(cg.createRow, {name: 'Street Fighter 4'});"
                        " cg.el.createStatus.replaceChildren(cgTestPanel(cg.createRow));"
                        " (() => { const f = document.createElement('figure'); f.className = 'cg-capshot snap';"
                        " const i = document.createElement('img'); i.src = 'icon-512.png'; f.append(i);"

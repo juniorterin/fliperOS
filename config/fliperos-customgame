@@ -35,6 +35,12 @@
       existe (sem --replace)
   fliperos-customgame media --group GRUPO --name NOME [--snap|--video|--text|--logo ARQ] [--text-string T]
       troca a arte de um jogo (a de exemplo deixa de ser)
+  fliperos-customgame stamp ZIP
+      o tamanho e a data do zip (o package_stamp= do cfg do jogo instalado)
+  fliperos-customgame synced --group GRUPO --name NOME
+      status 0: o pacote do jogo instalado (o package= do cfg) existe e leva o
+      mesmo que o jogo tem agora (as configuracoes, o .key, a arte, o .ppdb);
+      1: o jogo mudou depois (ou nao ha pacote), e o pacote deve ser refeito
   fliperos-customgame scan PASTA [--one]
       JSON dos jogos das subpastas (ou da propria pasta, com --one): o nome,
       o tamanho, os .exe e os programas do Linux em ordem de chance, e o que
@@ -350,10 +356,12 @@ def rel_path(p):
 class Package:
     """Um JOGO.fliperos-customgame.zip conferido."""
 
-    def __init__(self, path):
+    def __init__(self, path, fileobj=None):
+        # fileobj: o zip ja aberto (um arquivo que so se le por pedacos, como o do
+        # Telegram em tools/telegram-customgame.py); path e so o nome dele.
         self.path = path
         try:
-            self.zf = zipfile.ZipFile(path)
+            self.zf = zipfile.ZipFile(fileobj if fileobj is not None else path)
         except (OSError, zipfile.BadZipFile) as exc:
             raise Bad("not a zip file: %s" % exc, "not_zip")
         # O que poe o gabinete em risco para tudo na hora; o resto (o que
@@ -606,6 +614,93 @@ def cmd_inspect(args):
         print(str(exc), file=sys.stderr)
         return 1
     return 0
+
+
+def cmd_stamp(args):
+    """O tamanho e a data de um zip, como o package_stamp= do cfg do jogo."""
+    try:
+        print(stamp(args.zip))
+    except OSError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    return 0
+
+
+# ── O pacote de um jogo instalado, em dia? ──
+
+def file_sha(opener):
+    import hashlib
+    digest = hashlib.sha256()
+    with opener() as src:
+        while True:
+            chunk = src.read(CHUNK)
+            if not chunk:
+                return digest.hexdigest()
+            digest.update(chunk)
+
+
+def is_sample(media, path):
+    """A midia de exemplo que o Setup fez (~/media/.custom-samples: a linha do
+    sha256sum, "HASH  CAMINHO"); a pessoa trocando a imagem, deixa de ser."""
+    try:
+        with open(os.path.join(media, ".custom-samples"), encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return False
+    return "%s  %s" % (file_sha(lambda: open(path, "rb")), path) in lines
+
+
+def real_media(media, kind, group, name):
+    """A midia de verdade (a que a pessoa pos, ou veio do pacote; nao a de
+    exemplo) de um jogo instalado, em ~/media/TIPO/custom/GRUPO, ou None."""
+    for ext in dict(MEDIA)[kind]:
+        path = os.path.join(media, kind, "custom", group, "%s.%s" % (name, ext))
+        if os.path.isfile(path) and not is_sample(media, path):
+            return path
+    return None
+
+
+def package_in_sync(args, group, name):
+    """O pacote de um jogo instalado (o package= do cfg dele) existe e leva o
+    mesmo que o jogo tem agora: as configuracoes (as que a pessoa mudou
+    depois de instalar), o .key (o que ela definiu no menu na tela), a arte e o
+    .ppdb. Os arquivos do jogo nao entram (so mudam jogando). Assim baixar o
+    pacote de um jogo que nada mudou nao o refaz, e um que mudou, sim."""
+    cfgfile = os.path.join(args.roms, group, name + ".cfg")
+    try:
+        cfg = read_cfg(cfgfile)
+        zip_path = cfg.get("package", "")
+        if not zip_path or not os.path.isfile(zip_path) or stamp(zip_path) != cfg.get("package_stamp"):
+            return False
+        pkg = Package(zip_path)
+        if pkg.cfg != check_cfg(cfg, name, set()):
+            return False
+        keyfile = os.path.join(args.roms, group, name + ".key")
+        has_key = os.path.isfile(keyfile)
+        if has_key != ("key" in pkg.extra):
+            return False
+        if has_key and key_lines(open(keyfile, encoding="utf-8", errors="replace").read()) != \
+                key_lines(pkg.read("key").decode("utf-8", "replace")):
+            return False
+        for kind, _ in MEDIA:
+            current = real_media(args.media, kind, group, name)
+            if (current is None) != (kind not in pkg.extra):
+                return False
+            if current and file_sha(lambda: open(current, "rb")) != file_sha(lambda: pkg.zf.open(pkg.extra[kind][0])):
+                return False
+        ppdb = os.path.join(cfg.get("folder", ""), cfg.get("exe", "") + ".ppdb") if cfg.get("platform") == "windows" else ""
+        if ppdb and os.path.isfile(ppdb) != ("ppdb" in pkg.extra):
+            return False
+        if ppdb and os.path.isfile(ppdb) and open(ppdb, "rb").read() != pkg.read("ppdb"):
+            return False
+    except (Bad, OSError, ValueError):
+        return False
+    return True
+
+
+def cmd_synced(args):
+    """Status 0: o pacote do jogo esta em dia (package_in_sync); 1: nao."""
+    return 0 if package_in_sync(args, args.group, args.name) else 1
 
 
 # ── Instalar ──
@@ -1704,6 +1799,11 @@ def main():
     s = sub.add_parser("found")
     s.add_argument("folder")
     sub.add_parser("packages")
+    s = sub.add_parser("stamp")
+    s.add_argument("zip")
+    s = sub.add_parser("synced")
+    s.add_argument("--group", required=True)
+    s.add_argument("--name", required=True)
     s = sub.add_parser("run")
     s.add_argument("cfg")
     args = p.parse_args()
@@ -1712,7 +1812,8 @@ def main():
         if value is not None and len(value) not in (0, 2):
             p.error("--progress takes no value or START END")
     return {"inspect": cmd_inspect, "pending": cmd_pending, "install": cmd_install, "pack": cmd_pack,
-            "add": cmd_add, "media": cmd_media, "scan": cmd_scan, "found": cmd_found, "packages": cmd_packages, "run": cmd_run}[args.cmd](args)
+            "add": cmd_add, "media": cmd_media, "scan": cmd_scan, "found": cmd_found, "packages": cmd_packages,
+            "stamp": cmd_stamp, "synced": cmd_synced, "run": cmd_run}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -3391,6 +3391,47 @@ def customgame_rows_file(rows):
     return path
 
 
+SAMPLE_MAX = 4 << 20
+
+
+def customgame_samples():
+    """~/media/.custom-samples: {caminho: sha256} das midias de exemplo que o
+    Setup fez para os jogos custom (as linhas do sha256sum)."""
+    out = {}
+    try:
+        with open(os.path.join(player_home(), "media", ".custom-samples"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if len(line) > 66 and line[64:66] == "  ":
+                    out[line[66:]] = line[:64]
+    except OSError:
+        pass
+    return out
+
+
+def customgame_media_kinds(group, name, samples):
+    """Os tipos de arte de verdade de um jogo custom instalado (snap, preview,
+    texto, logo): a que a pessoa pos ou veio do pacote, nao a de exemplo que o
+    Setup faz (o cartao mostra so a de verdade; a imagem de exemplo serve de
+    fundo). O video e so o que o navegador toca."""
+    out = []
+    for kind in ("snap", "preview", "texto", "logo"):
+        for ext in MEDIA_EXTS[kind]:
+            path = os.path.join(media_dir(kind, "custom/" + group), name + ext)
+            if not os.path.isfile(path):
+                continue
+            sha = samples.get(path)
+            if sha:
+                try:
+                    if os.path.getsize(path) <= SAMPLE_MAX and hashlib.sha256(open(path, "rb").read()).hexdigest() == sha:
+                        continue
+                except OSError:
+                    continue
+            out.append(kind)
+            break
+    return out
+
+
 def customgames_info():
     """fliperos-setup --customgames describe como JSON: os grupos, os jogos,
     os pacotes esperando e as escolhas dos dropdowns."""
@@ -3408,9 +3449,12 @@ def customgames_info():
         elif kind == "logo" and len(rest) == 2:
             info["logos"].append({"value": rest[0], "label": rest[1]})
         elif kind == "game" and len(rest) >= 12:
-            info["games"].append(dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
-                                           "players", "command", "exe", "folder", "package", "runner", "year",
-                                           "developer"), rest + ["", ""])))
+            # Os dois ultimos: o jogo tem o mapa do controle (.key) e o .ppdb do PortProton.
+            game = dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
+                             "players", "command", "exe", "folder", "package", "runner", "year",
+                             "developer", "key", "ppdb"), rest + [""] * 5))
+            game["key"], game["ppdb"] = game["key"] == "1", game["ppdb"] == "1"
+            info["games"].append(game)
         elif kind == "pending" and len(rest) >= 5:
             # bad: why (os textos) e codes (codigo=argumento;..., que a pagina traduz).
             info["pending"].append(dict(zip(("zip", "group", "name", "platform", "state", "why", "codes"),
@@ -3437,6 +3481,9 @@ def customgames_info():
             info["packages_dir"] = rest[0]
         elif kind == "lastgroup" and rest:
             info["last_group"] = rest[0]
+    samples = customgame_samples()
+    for game in info["games"]:
+        game["media"] = customgame_media_kinds(game["group"], game["name"], samples)
     return info
 
 
@@ -3459,6 +3506,22 @@ def customgames_create_check(path):
     number = lambda key: int(values.get(key, "0")) if values.get(key, "0").isdigit() else 0
     return {"errors": errors, "out": values.get("out", ""), "exists": values.get("exists") == "1",
             "bytes": number("bytes"), "free": number("free")}
+
+
+def customgames_check_packages(path):
+    """fliperos-setup --customgames check-packages: os erros por linha da tabela
+    de pacotes a criar (contadas de 0, como as da pagina), os zips que ja
+    existem (a linha e o nome), o tamanho das pastas e o livre."""
+    out = setup_out("--customgames", "check-packages", path, timeout=600)
+    errors, exists, values = [], [], key_values(out)
+    for line in out.splitlines():
+        parts = line.split("|", 3)
+        if parts[0] == "error" and len(parts) == 4 and parts[1].isdigit():
+            errors.append({"row": int(parts[1]) - 1, "field": parts[2], "error": parts[3]})
+        elif parts[0] == "exists" and len(parts) >= 3 and parts[1].isdigit():
+            exists.append({"row": int(parts[1]) - 1, "zip": parts[2]})
+    number = lambda key: int(values.get(key, "0")) if values.get(key, "0").isdigit() else 0
+    return {"errors": errors, "exists": exists, "bytes": number("bytes"), "free": number("free")}
 
 
 def customgames_check(path):
@@ -5404,6 +5467,26 @@ class Handler(BaseHTTPRequestHandler):
             pids = customgame_test_pids()
             stop(pids)
             return self.send(200, {"closed": len(pids)})
+        if action in ("check-packages", "create-packages"):
+            # Criar pacote > varios de uma vez: a tabela (sem grupo), conferida e depois
+            # uma tarefa com o resultado de cada linha; os zips vao para a pasta dos pacotes.
+            path = customgame_rows_file(data.get("rows"))
+            if not path:
+                return self.send(400, {"error": "rows: a list of 1 to %d games" % CUSTOMGAME_ROWS})
+            if action == "check-packages":
+                try:
+                    return self.send(200, customgames_check_packages(path))
+                except (OSError, subprocess.SubprocessError) as exc:
+                    return self.send(500, {"error": str(exc)})
+                finally:
+                    os.unlink(path)
+            count = len(data["rows"])
+            argv = [SETUP, "--customgames", "create-packages", path] + (["replace"] if data.get("replace") else [])
+            task = tasks.start("Packages: %d package%s" % (count, "" if count == 1 else "s"), argv, "customgames")
+            if not task:
+                os.unlink(path)
+                return self.send(409, {"error": "another custom games task is running"})
+            return self.send(200, task.info())
         if action == "package-delete":
             path = str(data.get("zip", ""))
             if not path.lower().endswith(".zip") or not os.path.isfile(path) or not inside(path, customgame_packages_dir()):
@@ -5430,12 +5513,15 @@ class Handler(BaseHTTPRequestHandler):
         group = customgame_field(data.get("group"), 255)
         name = customgame_field(data.get("name"), 255)
         if action == "edit":
+            # Um jogo instalado mudado: as informacoes e o modo de qualquer um; o executavel, o
+            # runner, o comando e o mapa do controle (keys: clear ou joystick) dos de um pacote.
+            # O Setup diz na saida o que nao serve.
             args = ["group=" + group, "name=" + name]
             for key in ("new_group", "new_name", "command", "mode", "category", "controls", "buttons", "players",
-                        "year", "developer"):
+                        "year", "developer", "exe", "runner", "keys"):
                 if key in data:
                     args.append("%s=%s" % (key, customgame_field(data[key])))
-            return self.setup_call(["--customgames", "edit"] + args, timeout=180)
+            return self.setup_answer(["--customgames", "edit"] + args, {2: (400, "bad request")}, timeout=180)
         if action == "delete":
             return self.setup_call(["--customgames", "delete", group, name] + (["folder"] if data.get("folder") else []),
                                    timeout=180)
@@ -5498,7 +5584,9 @@ class Handler(BaseHTTPRequestHandler):
                     (["replace"] if data.get("replace") else []) + (["--portproton"] if data.get("portproton") else [])
                 title = "Install %s" % os.path.basename(path)[:-len(CUSTOMGAME_SUFFIX)]
         elif action == "pack":
-            argv, title = [SETUP, "--customgames", "pack", group, name], "Package of %s" % name
+            # O pacote do jogo instalado, com o que ele tem agora; em dia, nao e refeito (force refaz).
+            argv, title = [SETUP, "--customgames", "pack", group, name] + (["force"] if data.get("force") else []), \
+                "Package of %s" % name
         elif action == "group-delete":
             # Uma tarefa: as pastas dos jogos (squashfs) podem demorar.
             if not name:

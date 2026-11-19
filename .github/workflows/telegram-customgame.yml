@@ -1,0 +1,65 @@
+# O robo dos pacotes de jogo custom no grupo do Telegram (t.me/fliperos15khz):
+# quando alguem manda um GAME.fliperos-customgame.zip, o Worker
+# (tools/telegram-translate/worker.js) chama este workflow por repository_dispatch,
+# e o tools/telegram-customgame.py abre o pacote e posta no topico Files/Arquivos
+# as imagens, o video, os dados em portugues e em ingles, a descricao e o arquivo.
+#
+# Precisa do secret TELEGRAM_BOT_TOKEN (o mesmo bot do grupo). Para ler pacotes
+# acima de 20 MB (quase todos: levam a pasta do jogo), os secrets TELEGRAM_API_ID e
+# TELEGRAM_API_HASH (https://my.telegram.org); sem eles o post sai com o arquivo e
+# um aviso de que os detalhes nao deu para ler. O destino e a variavel
+# TELEGRAM_CHAT_ID (@fliperos15khz sem ela) e o topico, TELEGRAM_FILES_TOPIC (578).
+# Rodar a mao (Actions > Run workflow) com o JSON do pedido serve para repostar.
+name: Telegram custom game
+
+on:
+  repository_dispatch:
+    types: [customgame-zip]
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'JSON do pacote: chat_id, message_id, thread_id, file_id, file_name, file_size, from, username, chat_username'
+        required: true
+        type: string
+      dry_run:
+        description: 'So conferir o pedido, sem falar com o Telegram'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Um pacote de cada vez (o Telegram limita as mensagens por minuto).
+concurrency:
+  group: telegram-customgame
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Pillow e Telethon
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends python3-pil python3-pip
+          # O Telethon so serve para abrir um pacote grande pelo MTProto (so com TELEGRAM_API_ID).
+          if [[ -n $TELEGRAM_API_ID ]]; then pip install --break-system-packages telethon; fi
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+
+      - name: Postar o pacote
+        env:
+          # O pedido vai por variavel de ambiente, nunca dentro do script: o nome do arquivo e de quem mandou nao viram comando.
+          PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || inputs.payload }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+          TELEGRAM_FILES_TOPIC: ${{ vars.TELEGRAM_FILES_TOPIC }}
+        run: |
+          args=(--payload-env PAYLOAD)
+          [[ $DRY_RUN == true ]] && args+=(--dry-run)
+          python3 tools/telegram-customgame.py "${args[@]}"

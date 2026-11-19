@@ -92,6 +92,12 @@ As fases 5a (leitura), 5b (controle) e 5c (a tela ao vivo e o marquee para o OBS
   - o Testar do Criar pacote com um jogo do Windows (PortProton demorando) e um do Linux, o aviso das teclas e o `.key` do teste indo no pacote;
   - o submenu Games > Custom games do LXDE abrindo um jogo e voltando ao desktop;
   - Bluetooth (procurar e parear pelo painel), Quirks e Pastas mudados de longe.
+- **Jogos custom numa página só no painel** (2026-11-18: Jogos juntou Instalar pacotes; Criar pacote ganhou os vários de uma vez): testado no Docker (os testes, o Setup de verdade, a página no Chromium sem tela), nunca num gabinete. Falta:
+  - enviar um zip grande (centenas de MB) e ele se instalar sozinho no grupo, com a barra andando no alto da página, e "Apagar o pacote depois de instalar" tirando o zip;
+  - editar um jogo do Windows instalado (o `.exe` numa lista da pasta montada em squashfs, o runner, o mapa do controle apagado ou "joystick") e baixar o pacote: o zip tem de levar as mudanças e o `.key` feito na OSD; sem mudar nada, o Baixar não refaz o zip (`fliperos-customgame synced`);
+  - o download do navegador começando sozinho depois da tarefa do pack (um clique sintético: o Safari do iPhone pode recusar);
+  - Criar vários pacotes de uma pasta com uma subpasta por jogo (a tabela virando cartões ao lado do menu do Setup) e a pergunta de instalar no fim;
+  - o robô do Telegram (`tools/telegram-customgame.py`): nunca falou com o Telegram de verdade. Falta o `GITHUB_TOKEN` no Worker, os secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`) e conferir com um zip real no grupo, sobretudo a leitura por pedaços do MTProto (Telethon, `iter_download`) de um pacote de ~500 MB.
 
 ## Bugs
 

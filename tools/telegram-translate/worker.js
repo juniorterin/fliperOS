@@ -6,6 +6,8 @@
 // Variavel opcional: ALLOWED_CHAT (id numerico do grupo; sem ela, qualquer chat).
 // SKIP_TOPICS: topicos sem traducao (o numero no fim do link do topico,
 // t.me/fliperos15khz/NUMERO), separados por virgula.
+// Pacotes de jogo custom (.fliperos-customgame.zip): vao ao GitHub, que posta os
+// dados no topico Files (dispatchPackage, mais abaixo).
 // Deploy e webhook: tools/telegram-translate/README.md.
 
 const MIN_LETTERS = 4;
@@ -48,7 +50,48 @@ async function translate(env, text, source, target) {
   return r.translated_text;
 }
 
+// Um pacote de jogo custom (GAME.fliperos-customgame.zip) mandado ao grupo: o
+// worker so avisa o GitHub (repository_dispatch); quem abre o zip e posta no
+// topico Files e o workflow Telegram custom game (tools/telegram-customgame.py),
+// que roda o tempo que precisar (aqui o limite de CPU e de segundos).
+// Segredos: GITHUB_TOKEN (um token com acesso de escrita ao repositorio, so para
+// o repository_dispatch) e a variavel GITHUB_REPO (dono/repositorio).
+async function dispatchPackage(env, msg) {
+  const doc = msg.document;
+  if (!doc || !/\.fliperos-customgame\.zip$/i.test(doc.file_name || '')) return false;
+  if (msg.from && msg.from.is_bot) return true;
+  if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return true;
+  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return true;
+  const from = msg.from ? [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') : '';
+  const r = await fetch('https://api.github.com/repos/' + env.GITHUB_REPO + '/dispatches', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer ' + env.GITHUB_TOKEN,
+      accept: 'application/vnd.github+json',
+      'user-agent': 'fliperos-telegram-bot',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      event_type: 'customgame-zip',
+      client_payload: {
+        chat_id: msg.chat.id,
+        chat_username: msg.chat.username || '',
+        message_id: msg.message_id,
+        thread_id: msg.is_topic_message ? msg.message_thread_id : 0,
+        file_id: doc.file_id,
+        file_name: doc.file_name,
+        file_size: doc.file_size || 0,
+        from,
+        username: (msg.from && msg.from.username) || '',
+      },
+    }),
+  });
+  if (!r.ok) throw new Error('dispatch ' + r.status + ' ' + await r.text());
+  return true;
+}
+
 async function handle(env, msg) {
+  if (await dispatchPackage(env, msg)) return;
   const text = msg.text || msg.caption || '';
   if (!text || text.startsWith('/') || (msg.from && msg.from.is_bot)) return;
   if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return;

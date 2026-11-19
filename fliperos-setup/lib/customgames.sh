@@ -1114,7 +1114,7 @@ customgames_out() {
 
 # customgames_describe: tudo o que a pagina mostra e os dropdowns dela.
 customgames_describe() {
-  local group name cfg file platform mode cmd line value label
+  local group name cfg file platform mode cmd exe folder line value label
   local -a f
   # Os pacotes de antes da pasta deles vao para ela (uma vez).
   customgames_packages_migrate
@@ -1130,12 +1130,16 @@ customgames_describe() {
     [[ -n $mode ]] || mode=$(customgames_field "$file" mode)
     cmd=$(customgames_cfg_field "$cfg" command)
     [[ -n $cmd ]] || cmd=$(customgames_field "$file" command)
+    exe=$(customgames_cfg_field "$cfg" exe)
+    folder=$(customgames_cfg_field "$cfg" folder)
+    # Os dois ultimos campos: o jogo tem o mapa do controle (.key, o do pacote ou o do menu na tela) e o .ppdb do PortProton.
     customgames_out game "$group" "$name" "$platform" "$mode" "$(customgames_cfg_field "$cfg" category)" \
       "$(customgames_cfg_field "$cfg" controls)" "$(customgames_cfg_field "$cfg" buttons)" \
-      "$(customgames_cfg_field "$cfg" players)" "$cmd" "$(customgames_cfg_field "$cfg" exe)" \
-      "$(customgames_cfg_field "$cfg" folder)" "$(customgames_cfg_field "$cfg" package)" \
+      "$(customgames_cfg_field "$cfg" players)" "$cmd" "$exe" \
+      "$folder" "$(customgames_cfg_field "$cfg" package)" \
       "$(customgames_cfg_field "$cfg" runner)" "$(customgames_cfg_field "$cfg" year)" \
-      "$(customgames_cfg_field "$cfg" developer)"
+      "$(customgames_cfg_field "$cfg" developer)" "$([[ -f ${cfg%.cfg}.key ]] && echo 1)" \
+      "$([[ $platform == windows && -n $exe && -f $folder/$exe.ppdb ]] && echo 1)"
   done < <(customgames_list)
   while IFS= read -r line; do
     IFS='|' read -ra f <<< "$line"
@@ -1534,12 +1538,19 @@ customgames_bulk() {
 
 # customgames_edit CHAVE=VALOR...: um jogo mudado pelo painel (group e name
 # dizem qual). O de um comando muda de nome, grupo, comando e modo (como o
-# Edit do Setup); os outros so o modo e as informacoes (category, controls,
-# buttons, players), como o Information and video mode. Status 2: jogo ou
-# valor que nao serve.
+# Edit do Setup); os de um pacote (Windows e Linux) mudam o modo, as
+# informacoes (category, controls, buttons, players, year, developer), o
+# executavel (exe, so Windows, um arquivo da pasta do jogo), o que o abre
+# (runner: portproton, wine, wine-staging ou vazio, so Windows), o comando
+# (command, so Linux) e o mapa do controle (keys=clear: apaga o .key, e o menu
+# na tela pergunta de novo; keys=joystick: um .key vazio, o jogo ja aceita o
+# joystick). Tudo isso vai no pacote que o painel baixa depois
+# (customgames_pack_game). Status 2: jogo ou valor que nao serve, com o motivo
+# na saida.
 customgames_edit() {
   local pair key value group="" name="" new_group="" new_name="" cmd="" mode="" platform cfg file
-  local have_cmd=0 have_mode=0
+  local exe="" runner="" keys="" folder real base
+  local have_cmd=0 have_mode=0 have_exe=0 have_runner=0
   local -A info=()
   for pair in "$@"; do
     key=${pair%%=*} value=${pair#*=}
@@ -1550,6 +1561,9 @@ customgames_edit() {
       new_name) new_name=$value ;;
       command) cmd=$value have_cmd=1 ;;
       mode) mode=$value have_mode=1 ;;
+      exe) exe=$value have_exe=1 ;;
+      runner) runner=$value have_runner=1 ;;
+      keys) keys=$value ;;
       category | controls | buttons | players | year | developer) info[$key]=$value ;;
       *) return 2 ;;
     esac
@@ -1562,6 +1576,24 @@ customgames_edit() {
   new_group=${new_group:-$group} new_name=${new_name:-$name}
   if ((have_mode)); then
     mode=$(customgames_mode "$mode") || return 2
+  fi
+  case $keys in "" | clear | joystick) ;; *) return 2 ;; esac
+  cfg=$(customgames_cfg "$group" "$name")
+  folder=$(customgames_cfg_field "$cfg" folder)
+  if ((have_exe)); then
+    # So o .exe de um jogo do Windows, um arquivo da pasta dele (a pasta do squashfs montada).
+    if [[ $platform != windows ]]; then echo "Only a Windows game has an .exe."; return 2; fi
+    base=$(realpath -m -- "$folder") real=$(realpath -m -- "$folder/$exe")
+    [[ -n $exe && -n $folder && $real == "$base"/* && -f $real ]] ||
+      { echo "That file is not in the game folder (is the folder unpacked or mounted?)."; return 2; }
+  fi
+  if ((have_runner)); then
+    if [[ $platform != windows ]]; then echo "Only a Windows game has a runner."; return 2; fi
+    case $runner in "" | portproton | wine | wine-staging) ;; *) echo "The runner is PortProton, Wine or Wine Staging."; return 2 ;; esac
+  fi
+  if ((have_cmd)) && [[ $platform == native ]]; then
+    customgames_valid_command "$cmd" && [[ $cmd != command=* ]] ||
+      { echo "The command cannot be empty or start with \"command=\"."; return 2; }
   fi
   R_CATEGORY=${info[category]-} R_CONTROLS=${info[controls]-} R_BUTTONS=${info[buttons]-} R_PLAYERS=${info[players]-}
   R_YEAR=${info[year]-} R_DEVELOPER=${info[developer]-}
@@ -1583,23 +1615,40 @@ customgames_edit() {
     customgames_save "$new_group" "$new_name" "$mode" "$cmd" "$group" "$name" || return 1
     group=$new_group name=$new_name
     cfg=$(customgames_cfg "$group" "$name")
-  elif ((have_mode)); then
-    customgames_cfg_set "$cfg" mode "$mode" && customgames_entry "$group" "$name" || return 1
+  else
+    ((have_exe)) && { customgames_cfg_set "$cfg" exe "$exe" || return 1; }
+    ((have_runner)) && { customgames_cfg_set "$cfg" runner "$runner" || return 1; }
+    ((have_cmd)) && [[ $platform == native ]] && { customgames_cfg_set "$cfg" command "$cmd" || return 1; }
+    if ((have_mode)); then
+      customgames_cfg_set "$cfg" mode "$mode" && customgames_entry "$group" "$name" || return 1
+    fi
   fi
   for key in category controls buttons players year developer; do
     [[ -n ${info[$key]+set} ]] && { customgames_cfg_set "$cfg" "$key" "${info[$key]}" || return 1; }
   done
+  case $keys in
+    clear) rm -f -- "${cfg%.cfg}.key" ;;
+    joystick)
+      printf '%s\n' "# FliperOS: controller to keyboard for this game (on-screen menu > Controller configuration)." \
+        "# PLAYER_CONTROL=KEY; controls up down left right b1..b8 start coin, keys as in evdev." > "${cfg%.cfg}.key" &&
+        chown "$FLIPEROS_USER:" "${cfg%.cfg}.key" 2> /dev/null
+      ;;
+  esac
   customgames_media "$group" "$name"
   customgames_refresh_frontends
   return 0
 }
 
-# customgames_pack_game GRUPO NOME: o pacote de um jogo instalado (o Make a
-# package of it do Setup), com a arte de verdade dele, em
-# ~/roms/custom/GRUPO/NOME.fliperos-customgame.zip; com os eventos de
-# progresso.
+# customgames_pack_game GRUPO NOME [force]: o pacote de um jogo instalado, com
+# o que ele tem agora (as configuracoes que a pessoa mudou depois, o .key do
+# menu na tela e a arte de verdade dele), em
+# ~/roms/custom-packages/NOME.fliperos-customgame.zip, e o cfg do jogo passa a
+# apontar esse zip (instalado dele, em dia). Se o pacote que ele ja tem leva o
+# mesmo (fliperos-customgame synced), nada e refeito, a menos que force. Um zip
+# com esse nome que nao e o dele (um pacote mais novo esperando, ou o de outro
+# jogo) nao e trocado sem force: status 4. Com os eventos de progresso.
 customgames_pack_game() {
-  local group=$1 name=$2 cfg platform folder exe base out value ext
+  local group=$1 name=$2 force=${3:-} cfg platform folder exe base out value ext rc
   local -a args
   cfg=$(customgames_cfg "$group" "$name")
   platform=$(customgames_cfg_field "$cfg" platform)
@@ -1607,6 +1656,19 @@ customgames_pack_game() {
   folder=$(customgames_cfg_field "$cfg" folder)
   exe=$(customgames_cfg_field "$cfg" exe)
   out=$(customgames_package_out "$name")
+  if [[ $force != force ]]; then
+    if [[ $(customgames_cfg_field "$cfg" package) == "$out" ]] && customgames_tool synced --group "$group" --name "$name" 2> /dev/null; then
+      ev_step 100 "The package of $name is up to date"
+      return 0
+    fi
+    # Um zip com esse nome que nao e o deste jogo como foi instalado (um pacote mais novo esperando na pasta, ou o de
+    # outro jogo): o pack nao o troca sem force.
+    if [[ -e $out ]] && [[ $(customgames_cfg_field "$cfg" package) != "$out" ||
+      $(customgames_tool stamp "$out" 2> /dev/null) != "$(customgames_cfg_field "$cfg" package_stamp)" ]]; then
+      ev_fail "$(basename "$out") is already in the packages folder and is not the package this game was installed from (a newer one, or another game's): install it or delete it first, or rebuild with force"
+      return 4
+    fi
+  fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder"
     --mode "$(customgames_cfg_field "$cfg" mode)")
   if [[ $platform == windows ]]; then args+=(--exe "$exe"); else args+=(--command "$(customgames_cfg_field "$cfg" command)"); fi
@@ -1627,6 +1689,11 @@ customgames_pack_game() {
     done
   done
   customgames_pack_run "${args[@]}"
+  rc=$?
+  ((rc == 0)) && [[ -f $out ]] || return "$((rc ? rc : 1))"
+  # O jogo passa a ser instalado deste zip (em dia): o pacote nao volta a lista como novo nem como mais novo.
+  customgames_cfg_set "$cfg" package "$out" && customgames_cfg_set "$cfg" package_stamp "$(customgames_tool stamp "$out")"
+  return 0
 }
 
 # ── Criar um pacote pelo painel (a area Criar pacote) ──
@@ -1703,19 +1770,30 @@ customgames_test_key() {
 # tela de progresso (o .key do teste, se a pasta nao trouxe um, vai junto;
 # o teste sai depois). Status 3: ja ha um pacote com esse nome (sem replace).
 customgames_create() {
-  local file=$1 replace=${2:-} line out why mode key var
-  local -a args
+  local file=$1 replace=${2:-} line why rc
   [[ -f $file ]] || return 2
   IFS= read -r line < "$file" || [[ -n $line ]] || return 2
   customgames_row_fields "$line"
   ev_step 0 "Checking ${R_NAME:-the game}"
   why=$(customgames_row_errors package | head -n 1)
   [[ -z $why ]] || { ev_fail "${why#*|}"; return 1; }
-  out=$(customgames_package_out "$R_NAME")
-  if [[ -e $out && $replace != replace ]]; then
-    ev_fail "$(basename "$out") already exists in ~/roms/custom-packages"
+  customgames_create_args
+  if [[ -e $R_PACK_OUT && $replace != replace ]]; then
+    ev_fail "$(basename "$R_PACK_OUT") already exists in ~/roms/custom-packages"
     return 3
   fi
+  customgames_tool pack "${R_PACK[@]}" --progress 0 100 2>> "${FLIPEROS_LOG:-/dev/null}"
+  rc=$?
+  ((rc == 0)) && [[ -f $R_PACK_OUT ]] || return 1
+  customgames_create_done
+  return 0
+}
+
+# customgames_create_args: as opcoes do fliperos-customgame pack da linha de R_*
+# (ja conferida) em R_PACK, e o zip em R_PACK_OUT.
+customgames_create_args() {
+  local mode key var
+  R_PACK_OUT=$(customgames_package_out "$R_NAME")
   mode=$(customgames_mode "${R_MODE:-480i}")
   # O joystick ja habilitado no jogo: o .key do pacote e vazio (o da pasta e o do teste ficam de fora).
   if [[ ${R_JOYSTICK:-} == 1 ]]; then
@@ -1723,22 +1801,111 @@ customgames_create() {
   else
     [[ -n ${R_KEY:-} ]] || R_KEY=$(customgames_test_key "$R_NAME")
   fi
-  args=(--out "$out" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
-  [[ ${R_JOYSTICK:-} == 1 ]] && args+=(--joystick)
-  if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
-  [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
+  R_PACK=(--out "$R_PACK_OUT" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
+  [[ ${R_JOYSTICK:-} == 1 ]] && R_PACK+=(--joystick)
+  if [[ $R_PLATFORM == windows ]]; then R_PACK+=(--exe "$R_EXE"); else R_PACK+=(--command "$R_COMMAND"); fi
+  [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && R_PACK+=(--runner "$R_RUNNER")
   for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players YEAR:year DEVELOPER:developer SNAP:snap VIDEO:video TEXT:text LOGO:logo \
     KEY:key PPDB:ppdb TEXT_STRING:text-string; do
     var=R_${key%%:*}
     [[ -n ${!var:-} ]] || continue
     [[ $key == PPDB:ppdb && ($R_PLATFORM != windows || ${R_RUNNER:-portproton} != portproton) ]] && continue
-    args+=("--${key#*:}" "${!var}")
+    R_PACK+=("--${key#*:}" "${!var}")
   done
-  customgames_tool pack "${args[@]}" --progress 0 100 2>> "${FLIPEROS_LOG:-/dev/null}"
-  [[ -f $out ]] || return 1
+  return 0
+}
+
+# customgames_create_done: o pacote de R_* esta feito; o teste dele (o cfg e o
+# .key em ~/roms/custom/.test) sai.
+customgames_create_done() {
   rm -f -- "$CUSTOM_GAMES_DIR/.test/$R_NAME.cfg" "$CUSTOM_GAMES_DIR/.test/$R_NAME.key"
   rmdir -- "$CUSTOM_GAMES_DIR/.test" 2> /dev/null
-  log_info "pacote criado pelo painel: $out"
+  log_info "pacote criado pelo painel: $R_PACK_OUT"
+  return 0
+}
+
+# customgames_check_packages ARQUIVO: as linhas de varios pacotes a criar (a
+# tabela do Criar pacote): "error|LINHA|CAMPO|MOTIVO" de cada erro (as linhas
+# contam de 1; dois pacotes com o mesmo nome tambem), "exists|LINHA|ZIP" dos
+# zips que ja existem, bytes= (as pastas dos jogos juntas) e free= (o livre na
+# pasta dos pacotes). Nao grava nada.
+customgames_check_packages() {
+  local file=$1 line n=0 bytes=0 err out size
+  local -A seen=()
+  [[ -f $file ]] || return 2
+  while IFS= read -r line || [[ -n $line ]]; do
+    ((n++))
+    customgames_row_fields "$line"
+    while IFS= read -r err; do
+      [[ -n $err ]] && printf 'error|%d|%s\n' "$n" "$err"
+    done < <(customgames_row_errors package)
+    if customgames_valid_name "$R_NAME"; then
+      out=$(customgames_package_out "$R_NAME")
+      if [[ -n ${seen[$out]:-} ]]; then
+        printf 'error|%d|name|%s is twice in the table (row %s).\n' "$n" "$R_NAME" "${seen[$out]}"
+      else
+        seen[$out]=$n
+      fi
+      [[ -e $out ]] && printf 'exists|%d|%s\n' "$n" "$(basename "$out")"
+    fi
+    if [[ -d $R_FOLDER ]]; then
+      size=$(du -sb -- "$R_FOLDER" 2> /dev/null | cut -f1)
+      bytes=$((bytes + ${size:-0}))
+    fi
+  done < "$file"
+  printf 'bytes=%s\nfree=%s\n' "$bytes" "$(customgames_free "$CUSTOM_GAMES_PACKAGES")"
+}
+
+# customgames_create_bulk ARQUIVO [replace]: o pacote de cada linha da tabela
+# (customgames_row_fields, sem grupo), um depois do outro, com os eventos da
+# tela de progresso e "@row N ok" ou "@row N fail MOTIVO" por linha. Um zip que
+# ja existe so e refeito com replace. Status 1: algum pacote nao saiu.
+customgames_create_bulk() {
+  local file=$1 replace=${2:-} line n=0 total ok=0 a b why err rc packages
+  local -a rows
+  [[ -f $file ]] || return 2
+  mapfile -t rows < "$file"
+  total=${#rows[@]}
+  ((total)) || return 2
+  packages=packages
+  ((total == 1)) && packages=package
+  ev_step 0 "Checking $total $packages"
+  for line in "${rows[@]}"; do
+    ((n++))
+    customgames_row_fields "$line"
+    a=$((95 * (n - 1) / total))
+    b=$((95 * n / total))
+    ev_step "$a" "Packing ${R_NAME:-row $n} ($n of $total)"
+    why=$(customgames_row_errors package | head -n 1)
+    if [[ -n $why ]]; then
+      echo "@row $n fail ${why#*|}"
+      continue
+    fi
+    customgames_create_args
+    if [[ -e $R_PACK_OUT && $replace != replace ]]; then
+      echo "@row $n fail $(basename "$R_PACK_OUT") already exists in ~/roms/custom-packages"
+      continue
+    fi
+    err=$(mktemp)
+    customgames_tool pack "${R_PACK[@]}" --progress "$a" "$b" 2> "$err" | grep -v '^@fail '
+    rc=${PIPESTATUS[0]}
+    if ((rc == 0)) && [[ -f $R_PACK_OUT ]]; then
+      cat "$err" >> "${FLIPEROS_LOG:-/dev/null}"
+      customgames_create_done
+      echo "@row $n ok"
+      ((ok++))
+    else
+      cat "$err" >> "${FLIPEROS_LOG:-/dev/null}"
+      echo "@row $n fail $(tail -n 1 "$err")"
+    fi
+    rm -f "$err"
+  done
+  if ((ok < total)); then
+    ev_step 100 "$ok of $total $packages created"
+    ev_fail "$((total - ok)) of $total $packages $( ((total - ok == 1)) && echo was || echo were) not created"
+    return 1
+  fi
+  ev_step 100 "$total $packages created"
   return 0
 }
 
@@ -1781,7 +1948,8 @@ customgames_install_all() {
 #   group-delete NOME [all] | media GRUPO NOME --snap ARQ... |
 #   install ZIP GRUPO [replace] [--portproton] | install-all GRUPO |
 #   package-delete ZIP | check-create ARQ | create ARQ [replace] | test ARQ |
-#   pack GRUPO NOME | squash pack|unpack PASTA | portproton
+#   check-packages ARQ | create-packages ARQ [replace] (varias linhas) |
+#   pack GRUPO NOME [force] | squash pack|unpack PASTA | portproton
 # Status 2: subcomando ou argumento que nao serve.
 customgames_cli() {
   local sub=${1:-} rc zip group replace pp
@@ -1816,10 +1984,15 @@ customgames_cli() {
       ;;
     package-delete) customgames_package_delete "${1:-}" ;;
     check-create) customgames_create_check "${1:-}" ;;
+    check-packages) customgames_check_packages "${1:-}" ;;
     test) customgames_test "${1:-}" ;;
     create)
       [[ -z ${2:-} || $2 == replace ]] || return 2
       customgames_create "${1:-}" "${2:-}"
+      ;;
+    create-packages)
+      [[ -z ${2:-} || $2 == replace ]] || return 2
+      customgames_create_bulk "${1:-}" "${2:-}"
       ;;
     group-delete)
       customgames_valid_name "${1:-}" && [[ -d $CUSTOM_GAMES_DIR/$1 ]] || return 2
@@ -1855,7 +2028,8 @@ customgames_cli() {
       ;;
     pack)
       customgames_valid_name "${1:-}" && customgames_valid_name "${2:-}" && [[ -f $(customgames_cfg "$1" "$2") ]] || return 2
-      customgames_pack_game "$1" "$2"
+      [[ -z ${3:-} || $3 == force ]] || return 2
+      customgames_pack_game "$1" "$2" "${3:-}"
       ;;
     squash)
       [[ ${1:-} == pack || ${1:-} == unpack ]] && [[ -d ${2:-} ]] || return 2
