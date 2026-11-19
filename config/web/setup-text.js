@@ -342,6 +342,7 @@ Object.assign(TEXT.en, {
   term_lead: "The cabinet shell in the browser, as the fliperos user.",
   m480s_240p: "240p", m480s_filter: "Filter", m480s_pure: "Pure", m480_level_short: "Filter level",
   fo_link_go: "Change", fo_unlink_go: "Undo", tabs_left: "More tabs on the left", tabs_right: "More tabs on the right",
+  chips_left: "More filters on the left", chips_right: "More filters on the right",
 });
 
 Object.assign(TEXT.pt, {
@@ -672,6 +673,7 @@ Object.assign(TEXT.pt, {
   term_lead: "O shell do gabinete no navegador, como o usuário fliperos.",
   m480s_240p: "240p", m480s_filter: "Filtro", m480s_pure: "Puro", m480_level_short: "Nível do filtro",
   fo_link_go: "Trocar", fo_unlink_go: "Desfazer", tabs_left: "Mais abas à esquerda", tabs_right: "Mais abas à direita",
+  chips_left: "Mais filtros à esquerda", chips_right: "Mais filtros à direita",
 });
 
 // O botao de cada acao do --settings (o resto e "Fazer").

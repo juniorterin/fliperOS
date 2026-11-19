@@ -123,13 +123,19 @@
   100% { transform: translateY(52px) scaleX(.2); opacity: 0; } }
 
 /* ── Jogando agora ── */
-.now { display: grid; gap: 18px; }
-/* O Jogando agora e, ao lado direito, a previa do marquee (marqueeview.js);
-   em telas mais estreitas ela desce para baixo dele. */
-.now-top { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-.now-top > * { min-width: 0; }
-.now-top .mq-card { animation: none; }
-@media (max-width: 1500px) { .now-top { grid-template-columns: minmax(0, 1fr); } }
+/* Uma grade so: a esquerda o Jogando agora e, logo abaixo, o volume e o que
+   esta por tras do jogo; a direita, de cima a baixo, a previa do marquee
+   (marqueeview.js). A linha de baixo (1fr) absorve a diferenca de altura, entao
+   nao sobra vao embaixo do Jogando agora nem os cartoes do volume ficam fora de
+   alinhamento com as colunas de cima. Em telas mais estreitas, em fila: o
+   Jogando agora, a previa, o volume. */
+.now { display: grid; gap: 18px; align-items: start; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-rows: auto 1fr; grid-template-areas: "card mq" "mini mq"; }
+.now > .now-card { grid-area: card; } .now > .mini-cards { grid-area: mini; }
+/* A previa estica ate o fim da coluna da esquerda: as duas colunas acabam na mesma linha,
+   com jogo aberto (o Jogando agora cresce) ou sem. */
+.now > .mq-card { grid-area: mq; align-self: stretch; animation: none; }
+@media (max-width: 1500px) { .now { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "card" "mq" "mini"; } }
 .now-card { position: relative; overflow: hidden; padding: 24px; border-radius: 22px; border: 1px solid var(--line);
   background: linear-gradient(155deg, rgba(189,147,249,.16), rgba(33,34,44,.92) 45%), var(--card); animation: rise .5s both; }
 .now-card::after { content: ""; position: absolute; right: -80px; top: -80px; width: 260px; height: 260px; border-radius: 50%; pointer-events: none;
@@ -214,21 +220,52 @@
 .sys.on { border-color: var(--pink); box-shadow: 0 0 0 1px var(--pink), 0 0 24px rgba(255,121,198,.35); }
 .rail .game { flex: 0 0 190px; scroll-snap-align: start; }
 
-.toolbar { position: sticky; top: 0; z-index: 8; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 0;
+/* A barra da vitrine: a busca, os filtros, os clones e a grade/lista, todos da
+   mesma altura (--bar-h), numa linha so. */
+.toolbar { --bar-h: 42px; position: sticky; top: 0; z-index: 8; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 0;
   margin-bottom: 8px; background: linear-gradient(var(--space) 75%, transparent); }
-.search { flex: 1 1 280px; display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 44px; border-radius: 14px;
-  background: var(--card2); border: 1px solid var(--line); color: var(--dim); }
-.search:focus-within { border-color: var(--pink); }
+.search { flex: 1 1 280px; display: flex; align-items: center; gap: 10px; padding: 0 14px; height: var(--bar-h); border-radius: 14px;
+  background: var(--card2); border: 1px solid var(--line); color: var(--dim); transition: border-color .15s, box-shadow .15s; }
+.search:focus-within { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(255,121,198,.16); }
 .search input { flex: 1; min-width: 0; background: none; border: 0; color: var(--fg); font: inherit; outline: none; }
-.search .shown { flex: none; font-size: 12.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
-.fchips { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: 1 1 420px; min-width: 0; }
+.search .shown { flex: none; padding: 3px 9px; border-radius: 999px; background: rgba(139,233,253,.1); font-size: 12px; font-weight: 600;
+  color: var(--cyan); font-variant-numeric: tabular-nums; }
+.search .shown:empty { display: none; }
+/* Os filtros rolam de lado; so a ponta que ainda tem filtros esmaece (data-more,
+   games.js chipsEdges) e a seta pisca devagar nela, como nas abas. O respiro de
+   3 px em cima e embaixo e para o contorno do foco nao ser cortado pela rolagem. */
+.fchips-wrap { position: relative; flex: 1 1 420px; min-width: 0; margin: -3px 0; }
+.fchips { display: flex; flex-wrap: nowrap; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 3px 2px; }
 .fchips::-webkit-scrollbar { display: none; }
-.chip { flex: none; display: inline-flex; gap: 6px; align-items: center; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
-  background: transparent; color: var(--muted); font-weight: 600; font-size: 13.5px; }
+.fchips-wrap[data-more="right"] .fchips { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 56px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 56px), transparent); }
+.fchips-wrap[data-more="left"] .fchips { -webkit-mask-image: linear-gradient(90deg, transparent, #000 56px);
+  mask-image: linear-gradient(90deg, transparent, #000 56px); }
+.fchips-wrap[data-more="both"] .fchips {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 56px, #000 calc(100% - 56px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 56px, #000 calc(100% - 56px), transparent); }
+.chips-more { position: absolute; top: 0; bottom: 0; width: 30px; display: none; place-items: center; border: 0; padding: 0; background: none;
+  color: var(--pink); cursor: pointer; animation: blink-slow 2.8s ease-in-out infinite; }
+.chips-more.l { left: 0; } .chips-more.r { right: 0; }
+.chips-more svg.g { width: 14px; height: 14px; }
+.chips-more.l svg { transform: scaleX(-1); }
+.fchips-wrap[data-more="right"] .chips-more.r, .fchips-wrap[data-more="left"] .chips-more.l,
+.fchips-wrap[data-more="both"] .chips-more { display: grid; }
+.tb-sep { flex: none; width: 1px; height: 24px; background: var(--line); }
+.chip { flex: none; display: inline-flex; gap: 6px; align-items: center; height: var(--bar-h); padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); font-weight: 600; font-size: 13.5px; white-space: nowrap;
+  transition: border-color .15s, background .15s, color .15s; }
 .chip:hover { border-color: var(--purple); color: var(--fg); }
 .chip.on { background: rgba(255,121,198,.18); border-color: var(--pink); color: var(--fg); }
-.seg { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.seg button { width: 42px; height: 40px; border: 0; background: transparent; color: var(--dim); display: grid; place-items: center; padding: 0; }
+.chip:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+/* Os clones sao uma chave, nao mais um filtro: uma caixinha que marca quando esta ligada. */
+#clones-toggle::before { content: ""; flex: none; width: 15px; height: 15px; display: grid; place-items: center; border-radius: 5px;
+  border: 1.5px solid var(--dim); font-size: 10px; line-height: 1; font-weight: 900; color: var(--deep); }
+#clones-toggle.on::before { content: "\2713"; background: var(--pink); border-color: var(--pink); }
+.seg { display: flex; flex: none; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.seg button { width: 44px; height: calc(var(--bar-h) - 2px); border: 0; background: transparent; color: var(--dim); display: grid; place-items: center; padding: 0;
+  transition: background .15s, color .15s; }
+.seg button:hover { color: var(--fg); }
 .seg button.on { background: var(--purple); color: var(--deep); }
 
 .games-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
@@ -352,7 +389,10 @@ span.inl { display: inline-grid; font-size: 9px; }
   .sys { flex-basis: 168px; } .sys .mosaic { height: 96px; }
   .rail .game { flex-basis: 148px; }
   .toolbar { top: 62px; }
-  .fchips { flex-basis: 100%; order: 3; } .search { flex-basis: calc(100% - 100px); } #clones-toggle { order: 2; }
+  /* Duas linhas: a busca com o seletor grade/lista (sobram so 20 px, entao os dois nao caem em linhas
+     separadas); embaixo, os filtros rolando ao lado da chave Clones. */
+  .search { flex-basis: calc(100% - 110px); } .tb-sep { display: none; }
+  .fchips-wrap { flex: 1 1 0; min-width: 140px; order: 2; } #clones-toggle { order: 3; }
   .search .shown { display: none; }
   .games { grid-template-columns: 1fr 1fr; gap: 12px; }
   .game .meta { padding: 8px 10px 10px; } .game .meta b { font-size: 13px; }
@@ -368,6 +408,18 @@ span.inl { display: inline-grid; font-size: 9px; }
 }
 
 .fact-cell > svg.g { width: 26px; height: 26px; color: var(--cyan); grid-row: span 2; margin: 0 1px; }
+/* Uma acao da ficha (Abrir ao ligar o gabinete): na largura toda da grade, mas
+   com o contorno tracejado e um respiro a mais em cima (22 px no total), para
+   nao parecer mais um cartao de fato nem ficar grudada neles. */
+.fact-grid > .fact-action { grid-column: 1 / -1; margin-top: 12px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px;
+  align-items: center; width: 100%; padding: 12px 16px; text-align: left; font: inherit; color: var(--fg); cursor: pointer;
+  border-radius: 14px; border: 1px dashed rgba(255,184,108,.5); background: rgba(255,184,108,.06); transition: border-color .15s, background .15s; }
+.fact-action:hover { border-color: var(--orange); background: rgba(255,184,108,.13); }
+.fact-action:active { transform: translateY(1px); }
+.fact-action:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.fact-action svg.px { grid-row: span 2; width: 30px; height: 30px; }
+.fact-action b { font-size: 14px; }
+.fact-action small { color: var(--dim); font-size: 12.5px; line-height: 1.35; }
 
 /* O gabinete liga ao abrir o Frontend: o letreiro acende e o painel sobe. */
 .area[data-area="frontend"] .cab-body { animation: cab-in .8s cubic-bezier(.2, .8, .2, 1) both; }

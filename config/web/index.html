@@ -130,8 +130,9 @@
           </div>
         </div>
 
+        <!-- Uma grade so (cabinet.css .now): o Jogando agora e o volume na coluna da esquerda,
+             a previa do marquee na da direita, de cima a baixo; em tela estreita, em fila. -->
         <div class="now">
-         <div class="now-top">
           <div class="now-card" id="now-card">
             <div class="eyebrow"><span class="rec"></span><span id="now-eyebrow"></span></div>
             <h2 class="now-title" id="now-title"></h2>
@@ -164,7 +165,6 @@
             <div class="mq-led" id="mq-status" hidden></div>
             <p id="mq-hi-list" class="dim" hidden></p>
           </section>
-         </div>
           <div class="mini-cards">
             <div class="mini volume">
               <div class="mini-head"><svg class="px"><use href="icons.svg#px-audio"/></svg><b data-t="volume"></b><span class="vol-num" id="vol-value">-</span></div>
@@ -203,7 +203,13 @@
       <div class="sec-head" id="games-head"><h2><span id="games-icon"></span><span id="games-system"></span> <span class="count" id="games-count"></span></h2></div>
       <div class="toolbar" id="games-toolbar">
         <label class="search"><svg class="g"><use href="icons.svg#g-search"/></svg><input id="game-search" type="search" data-tp="search" autocomplete="off"><span id="games-shown" class="shown"></span></label>
-        <div class="fchips" id="game-chips" role="group"></div>
+        <!-- Os filtros rolam de lado; a ponta que tem mais esmaece e uma seta pisca devagar (games.js, chipsEdges). -->
+        <div class="fchips-wrap" id="game-chips-wrap">
+          <div class="fchips" id="game-chips" role="group"></div>
+          <button id="chips-left" class="chips-more l" type="button" tabindex="-1" data-ta="chips_left"><svg class="g"><use href="icons.svg#g-chev"/></svg></button>
+          <button id="chips-right" class="chips-more r" type="button" tabindex="-1" data-ta="chips_right"><svg class="g"><use href="icons.svg#g-chev"/></svg></button>
+        </div>
+        <i class="tb-sep" aria-hidden="true"></i>
         <button id="clones-toggle" class="chip" type="button" aria-pressed="false"><span data-t="show_clones"></span></button>
         <div class="seg" role="group"><button id="view-grid" type="button" class="on" data-ta="view_grid"><svg class="g"><use href="icons.svg#g-grid"/></svg></button><button id="view-list" type="button" data-ta="view_list"><svg class="g"><use href="icons.svg#g-list"/></svg></button></div>
       </div>

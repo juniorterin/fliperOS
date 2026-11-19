@@ -154,6 +154,37 @@ function renderChips() {
     });
     return chip;
   }));
+  chipsPending = !chipsShowOn();
+  chipsEdges();
+}
+
+// chipsEdges: que ponta da fila de filtros ainda tem filtros escondidos. So essa
+// esmaece (no fim da rolagem nada fica coberto) e mostra a seta, que rola (como
+// as abas, app.js tabsEdges).
+function chipsEdges() {
+  const box = $("game-chips"), max = box.scrollWidth - box.clientWidth;
+  const left = box.scrollLeft > 4, right = box.scrollLeft < max - 4;
+  $("game-chips-wrap").dataset.more = left && right ? "both" : left ? "left" : right ? "right" : "";
+}
+// chipsShowOn: traz o filtro escolhido para dentro da fila (de modo que nunca fique
+// escondido nem sob o esmaecer). Falso enquanto a barra esta escondida e sem largura.
+let chipsPending = false;
+function chipsShowOn() {
+  const box = $("game-chips"), on = box.querySelector(".chip.on");
+  if (!on || !box.clientWidth) return false;
+  const edge = 64;
+  if (on.offsetLeft < box.scrollLeft + edge) box.scrollLeft = Math.max(0, on.offsetLeft - edge);
+  else if (on.offsetLeft + on.offsetWidth > box.scrollLeft + box.clientWidth - edge) box.scrollLeft = on.offsetLeft + on.offsetWidth - box.clientWidth + edge;
+  return true;
+}
+$("game-chips").addEventListener("scroll", chipsEdges, { passive: true });
+$("chips-left").addEventListener("click", () => $("game-chips").scrollBy({ left: -Math.round($("game-chips").clientWidth * 0.7), behavior: "smooth" }));
+$("chips-right").addEventListener("click", () => $("game-chips").scrollBy({ left: Math.round($("game-chips").clientWidth * 0.7), behavior: "smooth" }));
+// A largura da fila muda com a janela e quando a barra aparece (sem jogos ela fica escondida).
+if (typeof ResizeObserver === "function") {
+  new ResizeObserver(() => { if (chipsPending && chipsShowOn()) chipsPending = false; chipsEdges(); }).observe($("game-chips"));
+} else {
+  window.addEventListener("resize", chipsEdges);
 }
 
 function currentFilter() {
@@ -453,8 +484,8 @@ function openGame(g) {
     icon(g.Favourite ? "g-star" : "g-staro"), t(g.Favourite ? "favourited" : "favourite"));
   fav.addEventListener("click", () => toggleFavourite(g, fav));
   // Este jogo direto ao ligar o gabinete (Setup > Games > Frontend).
-  const boot = el("button", { type: "button", class: "btn ghost small boot-btn" }, icon("px-power"), t("boot_open"));
-  boot.hidden = !g.file;
+  // Uma linha da grade de fatos, na largura toda: o que faz e, embaixo, o que muda.
+  const boot = el("button", { type: "button", class: "fact-action" }, icon("px-power"), el("b", {}, t("boot_open")), el("small", {}, t("boot_note")));
   boot.addEventListener("click", async () => {
     if (!(await ask({ title: t("boot_open"), text: t("boot_ask").replace("%s", gameTitle(g)), yes: t("boot_open") }))) return;
     const res = await api("/api/bootgame", { method: "POST", body: JSON.stringify({ system: system.key, game: g.Name }) });
@@ -475,9 +506,12 @@ function openGame(g) {
     const status = g.Status.toLowerCase();
     facts.append(fact(el("span", { class: "lamp " + status }), t("g_status"), t("lamp_" + status) !== "lamp_" + status ? t("lamp_" + status) : g.Status));
   }
-  if (g.PlayedCount) facts.append(fact("px-latency", t("g_played"), t("g_played_n").replace("%n", g.PlayedCount).replace("%t", duration(g.PlayedTime || 0))));
+  // Uma vez so: "uma vez, 3min" (nao "1 vezes").
+  if (g.PlayedCount) facts.append(fact("px-latency", t("g_played"),
+    t(Number(g.PlayedCount) === 1 ? "g_played_once" : "g_played_n").replace("%n", g.PlayedCount).replace("%t", duration(g.PlayedTime || 0))));
   if (g.CloneOf) facts.append(fact("px-link", t("g_parent"), g.CloneOf));
   facts.append(fact("px-dest", t("g_file"), g.file || g.Name));
+  if (g.file) facts.append(boot);
 
   const gallery = el("div", { class: "gallery" });
   for (const [letter, kind, label] of [["s", "snap", "pic_snap"], ["m", "marquee", "pic_marquee"], ["b", "box", "pic_boxart"], ["l", "logo", "pic_logo"]]) {
@@ -488,7 +522,7 @@ function openGame(g) {
   const body = el("div", { class: "sheet-body" },
     el("h2", { id: "sheet-title" }, gameTitle(g)),
     el("p", { class: "sheet-meta" }, [g.Year, g.Manufacturer].filter(Boolean).join(" · "), " ", systemIcon(system, "inl"), " ", system.name),
-    el("div", { class: "cta" }, play, fav), facts, boot,
+    el("div", { class: "cta" }, play, fav), facts,
     el("h3", {}, t("pictures")), gallery, online, about);
   openSheet(() => [media, body]);
 

@@ -201,6 +201,10 @@ details.more .live-actions { margin: 12px 0 8px; }
    nome do jogo, os pontos por cima (mais finos no ZeDMD, que tem o dobro de
    colunas). Fora do modo previa nada disso aparece. ── */
 .mq-card .mq-pick { display: grid; gap: 6px; margin: 12px 0 4px; color: var(--muted); font-size: 14px; }
+/* O seletor com o tema do painel (fora de .sub ele saia branco, do navegador). */
+.mq-card .mq-pick select { height: 40px; min-width: 0; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);
+  color: var(--fg); font: 15px system-ui; text-overflow: ellipsis; }
+.mq-card .mq-pick select:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 .mq-card .mq-pick select:disabled { opacity: .5; }
 .mq-led { position: relative; width: 100%; aspect-ratio: 4 / 1; overflow: hidden; container-type: inline-size; border-radius: 6px;
   background: #020204; box-shadow: inset 0 0 0 2px #000, 0 0 0 2px #2a2b36, 0 0 22px rgba(255,150,60,.25); }
