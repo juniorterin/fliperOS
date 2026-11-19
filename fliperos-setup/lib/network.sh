@@ -24,6 +24,11 @@ net_hardware() {
     found=1
   done < <(lsusb 2> /dev/null | grep -iE 'wireless|wi-?fi|wlan|802\.11|ralink|realtek.*(rtl8|wlan)|mediatek|atheros|tp-link' |
     sed -E 's/^.*ID [0-9a-fA-F:]+ //')
+  # Adaptador que ainda se mostra como CD-ROM de drivers: o usb-modeswitch o
+  # troca sozinho ao ligar na USB; se continua assim, falta tirar e pôr de novo.
+  if lsusb 2> /dev/null | grep -qiE 'cd-?rom mode'; then
+    echo "This adapter shows up as a driver CD-ROM: unplug it and plug it in again."
+  fi
   ((found)) || echo "No network adapter besides Ethernet was found."
   if rfkill list wifi 2> /dev/null | grep -q 'blocked: yes'; then
     echo "Wi-Fi is switched off (rfkill): check the Wi-Fi key or the BIOS."

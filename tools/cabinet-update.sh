@@ -162,6 +162,9 @@ packages+=(cdrdao mame-tools)
 packages+=(avrdude)
 # Os controles Bluetooth (Setup > Joysticks > Bluetooth, config/fliperos-bluetooth).
 packages+=(bluez)
+# Adaptadores Wi-Fi USB que se apresentam como CD-ROM de drivers (Realtek
+# RTL8188GU 0bda:1a2b e parecidos): o usb-modeswitch os troca para Wi-Fi.
+packages+=(usb-modeswitch usb-modeswitch-data)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
 # repositorio local o tem (o das imagens anteriores nao tem: fica no X).
