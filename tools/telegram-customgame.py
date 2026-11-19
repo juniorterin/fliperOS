@@ -287,8 +287,10 @@ def caption(info, sender):
     return '\n'.join(lines)[:CAPTION_MAX]
 
 
-def details(info, sender):
-    """A mensagem com todos os dados, em portugues e em ingles, e a descricao."""
+def details(info, sender, install=False):
+    """A mensagem com todos os dados, em portugues e em ingles, e a descricao. install: com a dica de como
+    instalar, para quando o arquivo nao vai junto (o zip ja foi mandado no topico Files); senao a dica vai na
+    legenda do arquivo (file_caption), uma vez so."""
     out = ['\U0001F4E6 <b>%s</b>' % e(info['name'])]
     for flag, lang in ((PT, 'pt'), (EN, 'en')):
         out.append('')
@@ -298,18 +300,18 @@ def details(info, sender):
         text = info['text']
         text = text if len(text) <= DESCRIPTION_MAX else text[:DESCRIPTION_MAX].rsplit(' ', 1)[0] + '…'
         out += ['', '<b>%s / %s</b>' % (LABELS['pt']['description'], LABELS['en']['description']), e(text)]
-    out += ['', '%s %s' % (PT, LABELS['pt']['install']), '%s %s' % (EN, LABELS['en']['install'])]
+    if install:
+        out += ['', '%s %s' % (PT, LABELS['pt']['install']), '%s %s' % (EN, LABELS['en']['install'])]
     if sender:
         out += ['', '%s / %s: %s' % (LABELS['pt']['by'], LABELS['en']['by'], e(sender))]
     return '\n'.join(out)[:TEXT_MAX]
 
 
-def file_caption(file_name, size, note=''):
-    """A legenda do arquivo (ate 1024)."""
-    lines = ['\U0001F4E6 <code>%s</code> · %s' % (e(file_name), size_text(size))]
-    if note:
-        lines += ['%s %s' % (PT, LABELS['pt'][note]), '%s %s' % (EN, LABELS['en'][note])]
-    lines += ['%s %s' % (PT, LABELS['pt']['install']), '%s %s' % (EN, LABELS['en']['install'])]
+def file_caption(file_name, size):
+    """A legenda do arquivo (ate 1024): o nome, o tamanho e como instalar. So aqui: a mensagem dos dados (ou o
+    aviso de que nao deu para le-los) nao repete."""
+    lines = ['\U0001F4E6 <code>%s</code> · %s' % (e(file_name), size_text(size)),
+             '%s %s' % (PT, LABELS['pt']['install']), '%s %s' % (EN, LABELS['en']['install'])]
     return '\n'.join(lines)[:CAPTION_MAX]
 
 
@@ -559,7 +561,7 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
     file_id = payload.get('file_id') or ''
     sender = ' '.join(x for x in (str(payload.get('from') or ''), ('(@%s)' % payload['username']) if payload.get('username') else '') if x)
     # O zip: ate 20 MB pela Bot API; acima, pelo MTProto; sem ele, so o arquivo.
-    info, problems, note, source = None, None, '', None
+    info, problems, source = None, None, None
     try:
         if size and size <= BOT_DOWNLOAD_MAX:
             with tempfile.TemporaryDirectory() as tmp:
@@ -575,16 +577,13 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
             except Exception as exc:    # o Telethon: sem rede, mensagem que o bot nao acha, chaves erradas...
                 out('could not open the file by MTProto: %s' % exc)
                 source = None
-            if source is None:
-                note = 'unreadable'
-            else:
+            if source is not None:
                 ranged = RangeFile(source.size, source.fetch)
                 info = read_info(tool, tool.Package(name, fileobj=ranged))
                 out('read %s: %d of %d bytes fetched' % (name, ranged.fetched, source.size))
     except tool.Bad as exc:
         problems = exc.problems
     except PostError as exc:
-        note = 'unreadable'
         out('could not read %s: %s' % (name, exc))
     finally:
         if source is not None:
@@ -609,9 +608,9 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
             items.append(('video', 'preview.%s' % ext, data))
         if items:
             tg.album(chat, items, caption(info, sender), where, reply)
-            tg.message(chat, details(info, sender), where, reply)
+            tg.message(chat, details(info, sender, install=in_files), where, reply)
         else:
-            tg.message(chat, caption(info, sender) + '\n\n' + details(info, '').split('\n', 1)[1], where, reply)
+            tg.message(chat, caption(info, sender) + '\n\n' + details(info, '', install=in_files).split('\n', 1)[1], where, reply)
     else:
         text = '\U0001F4E6 <b>%s</b>' % e(name[:-len(SUFFIX)])
         text += '\n%s %s\n%s %s' % (PT, LABELS['pt']['unreadable'], EN, LABELS['en']['unreadable'])
@@ -619,7 +618,7 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
             text += '\n%s / %s: %s' % (LABELS['pt']['by'], LABELS['en']['by'], e(sender))
         tg.message(chat, text, where, reply)
     if not in_files and file_id:
-        tg.document(chat, file_id, file_caption(name, size, note if not info else ''), topic)
+        tg.document(chat, file_id, file_caption(name, size), topic)
         # Onde o zip foi mandado: um aviso curto de onde estao os dados.
         tg.message(chat, '\U0001F4E6 <b>%s</b>\n%s %s\n%s %s' % (e(name[:-len(SUFFIX)]), PT, LABELS['pt']['see'], EN, LABELS['en']['see']),
                    origin or None, message_id)

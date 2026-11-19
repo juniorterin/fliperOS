@@ -18942,14 +18942,18 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertLess(text.index('\U0001F1E7\U0001F1F7'), text.index('\U0001F1FA\U0001F1F8'))
         for part in ('Modo de vídeo: 480i', 'Video mode: 480i', 'Jogadores: 2', 'Players: 2', 'Botões: 6', 'Buttons: 6', 'joy8',
                      '2008', 'Capcom', 'sim, 2 teclas', 'yes, 2 keys', 'PortProton (.ppdb): sim', 'PortProton (.ppdb): yes',
-                     'Street fighters from around the world meet again.', 'Pick a fighter.', 'Descrição / Description',
-                     'painel web > Jogos custom', 'web panel > Custom games'):
+                     'Street fighters from around the world meet again.', 'Pick a fighter.', 'Descrição / Description'):
             self.assertIn(part, text)
         self.assertLessEqual(len(text), 4096)
+        # Como instalar: uma vez so, na legenda do arquivo (nao repetido na mensagem dos dados).
+        self.assertNotIn('Para instalar', text)
+        self.assertNotIn('To install', text)
         # O arquivo vai por file_id para o topico Files; onde o zip foi mandado, um aviso curto e a resposta a ele.
         self.assertEqual(document[1:3], ('-1001234', 'FILE1'))
         self.assertEqual(document[4], 578)
         self.assertIn('Street Fighter 4.fliperos-customgame.zip', document[3])
+        for part in ('painel web > Jogos custom', 'web panel > Custom games'):
+            self.assertEqual(document[3].count(part), 1)
         self.assertEqual(notice[3:], (None, 55))
         self.assertIn('Os dados e o arquivo estão no tópico Arquivos', notice[2])
         self.assertIn('The details and the file are in the Files topic', notice[2])
@@ -18961,6 +18965,9 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertEqual([c[0] for c in tg.calls], ['download', 'album', 'message'])
         self.assertEqual(tg.calls[1][4:], (578, 55))        # no topico Files, respondendo ao zip
         self.assertEqual(tg.calls[2][3:], (578, 55))
+        # Sem o arquivo junto (ele ja esta ali), a dica de como instalar vai na mensagem dos dados.
+        self.assertEqual(tg.calls[2][2].count('Para instalar'), 1)
+        self.assertEqual(tg.calls[2][2].count('To install'), 1)
         # Sem arte: so o texto, com a legenda e os dados juntos.
         with tempfile.TemporaryDirectory() as tmp:
             tg = self.Fake(self.make_zip(Path(tmp) / 'sf4.zip', art=False).read_bytes())
@@ -19027,6 +19034,9 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertEqual([c[0] for c in tg.calls], ['message', 'document', 'message'])
         self.assertIn('Não deu para ler os detalhes', tg.calls[0][2])
         self.assertIn('could not be read', tg.calls[0][2])
+        # O aviso so na mensagem; a legenda do arquivo tem o nome e como instalar, sem repetir o aviso.
+        self.assertNotIn('Não deu para ler', tg.calls[1][3])
+        self.assertEqual(tg.calls[1][3].count('Para instalar'), 1)
         self.assertEqual(tg.calls[1][2], 'FILE1')
         # Um erro do MTProto (rede, chaves) tambem nao perde o arquivo.
 
