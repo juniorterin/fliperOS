@@ -156,14 +156,62 @@ function cgGroups() {
 }
 
 // Cria o grupo (a pasta dele) e o poe na lista, sem esperar a pagina ler de novo.
-async function cgNewGroup() {
-  const name = await ask({ title: t("cg_new_group"), text: t("cg_group_ask"), input: "" });
-  if (!name) return null;
-  if (!cgValidName(name)) { toast(t("cg_f_group") + ": / | .", "bad"); return null; }
-  const res = await api("/api/customgames/group", { method: "POST", body: JSON.stringify({ name }) });
-  if (!res.ok) { toast((await res.json().catch(() => ({}))).error || res.statusText, "bad"); return null; }
-  if (cg.info && !cgGroups().includes(name)) cg.info.groups.push({ name, count: 0, icon: "", logo: false });
-  return name;
+// A ficha pede o nome e ja deixa escolher o logotipo (subir uma imagem ou um dos
+// que o FliperOS tem); ele so e gravado depois que a pasta existe. Resolve com o
+// nome, ou null se a pessoa desistiu. Tem o proprio dialogo: ela tambem abre de
+// dentro de outra ficha (o grupo de um jogo), que usa o cgDialog.
+function cgNewGroup() {
+  return new Promise((resolve) => {
+    const dlg = el("dialog", { class: "ask cg-dialog" });
+    let answered = false;
+    const finish = (name) => {
+      if (answered) return;
+      answered = true;
+      dlg.close();
+      dlg.remove();
+      resolve(name);
+    };
+    dlg.addEventListener("close", () => finish(null));
+    const name = el("input", { type: "text", value: "", maxlength: "255", autocomplete: "off", spellcheck: "false", "aria-label": t("cg_group_name") });
+    const logo = cgLogoField("");
+    const make = el("button", { type: "submit", class: "btn" }, icon("g-plus"), t("cg_group_create"));
+    const cancel = el("button", { type: "button", class: "btn ghost" }, t("cg_cancel"));
+    cancel.addEventListener("click", () => finish(null));
+    const form = el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, t("cg_new_group")),
+      el("label", { class: "cg-field" }, el("span", {}, t("cg_group_name")), name, el("small", { class: "dim" }, t("cg_group_ask"))),
+      logo.node,
+      el("footer", {}, cancel, make));
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fresh = name.value.trim();
+      if (!fresh) { name.focus(); return; }
+      if (!cgValidName(fresh)) { toast(t("cg_f_group") + ": / | .", "bad"); return; }
+      make.disabled = true;
+      try {
+        const res = await api("/api/customgames/group", { method: "POST", body: JSON.stringify({ name: fresh }) });
+        if (!res.ok) { toast((await res.json().catch(() => ({}))).error || res.statusText, "bad"); return; }
+        let hasLogo = false;
+        if (logo.change) {
+          // O grupo ja existe: se a imagem nao serve, ele fica sem logotipo e a pessoa escolhe outro na ficha dele.
+          const body = { name: fresh };
+          if (logo.change.logo) body.logo = logo.change.logo;
+          else if (logo.change.system) body.system = logo.change.system;
+          const set = await api("/api/customgames/group-logo", { method: "POST", body: JSON.stringify(body) });
+          hasLogo = set.ok;
+          if (!set.ok) toast((await set.json().catch(() => ({}))).error || set.statusText, "bad");
+          cgLogoStamp = Date.now();
+        }
+        if (cg.info && !cgGroups().includes(fresh)) cg.info.groups.push({ name: fresh, count: 0, icon: "", logo: hasLogo });
+        finish(fresh);
+      } finally {
+        make.disabled = false;
+      }
+    });
+    dlg.append(form);
+    document.body.append(dlg);
+    dlg.showModal();
+    name.focus();
+  });
 }
 
 const cgValidName = (s) => !!s && !!s.trim() && !/[/|\n]/.test(s) && !s.startsWith(".");
@@ -354,22 +402,20 @@ function cgGroupSection(g, mine, filtering) {
 let cgLogoStamp = Date.now();
 const cgGroupLogoUrl = (name) => "/api/marquee/logo?name=" + encodeURIComponent(name) + "&v=" + cgLogoStamp;
 
-// Editar o grupo: o nome e o logotipo numa ficha so. O logotipo e uma imagem
-// subida (so o desenho dela conta), um dos que o FliperOS ja tem, numa lista
-// com a previa, ou nenhum; nada e gravado antes de Gravar. Renomear leva a
-// pasta, as midias, os jogos instalados e o que vai com o nome (o Setup faz
-// tudo e refaz os frontends).
-async function cgEditGroup(g) {
-  const dlg = cgDialog();
+// cgLogoField(url): o campo do logotipo de um grupo, o mesmo na ficha de editar e
+// na de grupo novo. O logotipo e uma imagem subida (so o desenho dela conta), um
+// dos que o FliperOS ja tem, numa lista com a previa, ou nenhum. url e o logotipo
+// que o grupo ja tem ("" sem nenhum). Devolve o no e, em .change, o que a pessoa
+// pediu: undefined fica como esta, null tira, {logo: id} sobe, {system} escolhe
+// da lista.
+function cgLogoField(url) {
   const logos = (cg.info && cg.info.logos) || [];
-  // O logotipo pedido: undefined fica como esta, null tira, {logo: id} sobe, {system} escolhe da lista.
   let change;
-  const name = el("input", { type: "text", value: g.name, maxlength: "255", autocomplete: "off", spellcheck: "false", "aria-label": t("cg_group_name") });
   const now = el("div", { class: "cg-logo-now" });
   const remove = el("button", { type: "button", class: "btn ghost small" }, icon("g-trash"), t("cg_logo_remove"));
   const showNow = () => {
     let src = "";
-    if (change === undefined) src = g.logo ? cgGroupLogoUrl(g.name) : "";
+    if (change === undefined) src = url;
     else if (change && change.logo) src = cgStagedUrl(change.logo);
     else if (change && change.system) src = "/api/marquee/logo?system=1&name=" + encodeURIComponent(change.system);
     now.replaceChildren(src ? el("img", { src, alt: "" }) : el("span", { class: "dim" }, t("cg_logo_none")),
@@ -396,16 +442,27 @@ async function cgEditGroup(g) {
   select.addEventListener("change", () => { use.disabled = !select.value; });
   use.addEventListener("click", () => { change = { system: select.value }; showNow(); });
   remove.addEventListener("click", () => { change = null; showNow(); });
+  showNow();
+  const node = el("div", { class: "cg-field" }, el("span", {}, t("cg_group_logo")), el("small", { class: "dim" }, t("cg_group_logo_note")), now,
+    el("div", { class: "cg-logo-row" }, upload, remove, file),
+    el("small", { class: "dim" }, t("cg_logo_or")),
+    el("div", { class: "cg-logo-row" }, select, use));
+  return { node, get change() { return change; } };
+}
+
+// Editar o grupo: o nome e o logotipo numa ficha so; nada e gravado antes de
+// Gravar. Renomear leva a pasta, as midias, os jogos instalados e o que vai com
+// o nome (o Setup faz tudo e refaz os frontends).
+async function cgEditGroup(g) {
+  const dlg = cgDialog();
+  const name = el("input", { type: "text", value: g.name, maxlength: "255", autocomplete: "off", spellcheck: "false", "aria-label": t("cg_group_name") });
+  const logo = cgLogoField(g.logo ? cgGroupLogoUrl(g.name) : "");
   const save = el("button", { type: "submit", class: "btn" }, icon("px-save"), t("cg_save"));
   const cancel = el("button", { type: "button", class: "btn ghost" }, t("cg_cancel"));
   cancel.addEventListener("click", () => dlg.close());
-  showNow();
   const form = el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, t("cg_group_edit_title").replace("%s", g.name)),
     el("label", { class: "cg-field" }, el("span", {}, t("cg_group_name")), name, el("small", { class: "dim" }, t("cg_rename_note"))),
-    el("div", { class: "cg-field" }, el("span", {}, t("cg_group_logo")), el("small", { class: "dim" }, t("cg_group_logo_note")), now,
-      el("div", { class: "cg-logo-row" }, upload, remove, file),
-      el("small", { class: "dim" }, t("cg_logo_or")),
-      el("div", { class: "cg-logo-row" }, select, use)),
+    logo.node,
     el("footer", {}, cancel, save));
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -424,6 +481,7 @@ async function cgEditGroup(g) {
         if (view.group === g.name) { view.group = fresh; cgViewSave(); }
         toast(t("cg_renamed").replace("%s", g.name).replace("%s", fresh));
       }
+      const change = logo.change;
       if (change !== undefined) {
         const body = { name: target };
         if (change && change.logo) body.logo = change.logo;

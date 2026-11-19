@@ -8398,6 +8398,21 @@ class WebCustomGamesTests(WebSetupBase):
                     'cg_logo_pick', 'cg_logo_use', 'cg_logo_remove', 'cg_logo_changed'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)
 
+    def test_a_new_group_can_get_its_logo_when_it_is_named(self):
+        # A ficha do grupo novo pede o nome e ja deixa escolher o logotipo (o mesmo campo da ficha de editar:
+        # subir uma imagem ou um da lista). O grupo nasce primeiro (a pasta), so entao o logotipo e gravado nela.
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        new = js.split('function cgNewGroup(')[1].split('\n}\n')[0]
+        self.assertIn('cgLogoField("")', new)
+        self.assertIn('t("cg_group_name")', new)
+        self.assertLess(new.index('"/api/customgames/group"'), new.index('"/api/customgames/group-logo"'))
+        self.assertIn('body.logo = logo.change.logo', new)
+        self.assertIn('body.system = logo.change.system', new)
+        # Ela abre de dentro de outra ficha (o grupo de um jogo, no cgDialog): tem o proprio dialogo.
+        self.assertNotIn('cgDialog()', new)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        self.assertEqual(len(re.findall(r'(?<!\w)cg_group_create: ', text)), 2)
+
     def test_a_group_is_renamed_in_the_panel(self):
         # O painel manda o nome de antes e o novo ao Setup (group-rename GRUPO NOVO); um nome que ja existe e um 409,
         # um jogo aberto (o Setup nao conseguiu mover a pasta) tambem; sem o nome novo, 400.
@@ -8421,7 +8436,8 @@ class WebCustomGamesTests(WebSetupBase):
         # (renomear) vem antes do logotipo (que mora na pasta do grupo, ja com o nome novo).
         edit = js.split('async function cgEditGroup(')[1].split('\n}\n')[0]
         self.assertIn('t("cg_group_name")', edit)
-        self.assertIn('t("cg_group_logo")', edit)
+        self.assertIn('cgLogoField(', edit)
+        self.assertIn('t("cg_group_logo")', js.split('function cgLogoField(')[1].split('\n}\n')[0])
         self.assertLess(edit.index('"/api/customgames/group-rename"'), edit.index('"/api/customgames/group-logo"'))
         self.assertIn('body.logo = change.logo', edit)
         self.assertNotIn('cgGroupLogo(', js)
