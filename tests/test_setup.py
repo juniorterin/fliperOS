@@ -9065,6 +9065,42 @@ class FrontendsTests(Base):
         settings = (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text()
         self.assertEqual(settings.count('name="MediaDirectory"'), 1)
 
+    def test_link_folders_leave_a_disk_without_symlinks(self):
+        # O ~/media num HD externo em exFAT (Storage) nao guarda link simbolico:
+        # o ln dava "Operation not permitted" e a raspagem com o site falhava em
+        # toda pasta (Could not create the folders in ~/media). As pastas de links
+        # do Skyscraper e do ES-DE vao para o disco de dentro e apontam para ~/media
+        # pelo caminho inteiro; num disco com link elas continuam em ~/media.
+        env, _ = self.frontends_env()
+        media, home = self.env.dir / "media", self.env.dir / "links"
+        env["MEDIA_LINKS_HOME"] = str(home)
+        nolink = 'ln() { [[ ${!#} == "%s"/* ]] && return 1; command ln "$@"; }\n' % media
+        farm = Path(self.env.out(nolink + "scraper_media retroarch/snes9x", env).strip())
+        self.assertEqual(farm, home / ".skyscraper" / "retroarch-snes9x")
+        for sub, kind in (("screenshots", "snap"), ("videos", "preview"), ("wheels", "logo"), ("covers", "box"),
+                          ("marquees", "marquee")):
+            self.assertEqual(os.readlink(farm / sub), "%s/%s/retroarch/snes9x" % (media, kind))
+            self.assertTrue((farm / sub).is_dir(), sub)
+        self.assertFalse((media / ".skyscraper").exists())
+        # O ES-DE le a arte da pasta nova.
+        self.env.out(nolink + "frontends_configure emulationstation", env)
+        settings = (self.env.dir / "es-de" / "settings" / "es_settings.xml").read_text()
+        self.assertIn('<string name="MediaDirectory" value="%s/.es-de" />' % home, settings)
+        self.assertEqual(os.readlink(home / ".es-de" / "mame" / "marquees"), "%s/logo/mame" % media)
+        self.assertFalse((media / ".es-de").exists())
+        # A arte que muda de pasta (media_refolder) acha os links la tambem.
+        (media / "snap" / "arcade").mkdir(parents=True)
+        (media / "snap" / "arcade" / "sf2.png").write_text("tela")
+        (home / ".es-de" / "mame" / "screenshots").unlink()
+        os.symlink("%s/snap/arcade" % media, home / ".es-de" / "mame" / "screenshots")
+        self.env.out(nolink + "media_refolder", env)
+        self.assertEqual(os.readlink(home / ".es-de" / "mame" / "screenshots"), "%s/snap/mame" % media)
+        # Com link simbolico no disco, nada muda: ~/media/.skyscraper, links relativos.
+        env.pop("MEDIA_LINKS_HOME")
+        farm = Path(self.env.out("scraper_media retroarch/snes9x", env).strip())
+        self.assertEqual(farm, media / ".skyscraper" / "retroarch-snes9x")
+        self.assertEqual(os.readlink(farm / "screenshots"), "../../snap/retroarch/snes9x")
+
     def test_attract_mode_screens_get_a_game_list(self):
         # Uma tela sem lista ganha a que o proprio Attract-Mode monta da pasta
         # (--build-romlist, como o usuario); a que ja existe (do Scraper) fica.

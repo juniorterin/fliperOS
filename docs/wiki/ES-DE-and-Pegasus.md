@@ -28,7 +28,7 @@ In a wide-pixel mode (640x240 on a 4:3 tube), ES-DE draws at 320x240 and stretch
 - **Systems:** the Setup writes every games folder to `~/ES-DE/custom_systems/es_systems.xml` (folder, extensions, command, theme). Pick ES-DE again in **Setup > Games > Frontend** whenever a folder gets its first games.
 - **New games** in a folder that is already a system show the next time ES-DE opens, or at once with **Main menu > Utilities > Rescan ROM directory**.
 - **Names:** in the arcade systems (`mame`, `model2`, `model3`, the RetroArch MAME cores) ES-DE shows each MAME set's full name from its own list. Everything else shows the file name until it is scraped: **Setup > Games > Scraper** writes names, descriptions and art to `~/ES-DE/gamelists/<system>/gamelist.xml`. ES-DE's own scraper (**Main menu > Scraper**) works too, and saves to the same places.
-- **Art:** ES-DE reads it from `~/media/.es-de/<system>/<type>`, where each type is a link to the right folder in `~/media`.
+- **Art:** ES-DE reads it from `~/media/.es-de/<system>/<type>`, where each type is a link to the right folder in `~/media`. With `~/media` on a FAT, exFAT or NTFS disk (no links there), the same folders live in `~/.local/share/fliperos/media-links/.es-de` and ES-DE's `MediaDirectory` points there.
 
 | `~/media` folder | ES-DE |
 | --- | --- |

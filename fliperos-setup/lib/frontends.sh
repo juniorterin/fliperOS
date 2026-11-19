@@ -164,9 +164,10 @@ ESDE_MEDIA_LINKS="screenshots:snap videos:preview marquees:logo covers:box"
 
 # frontends_esde: os sistemas em custom_systems/es_systems.xml e, no
 # es_settings.xml, a pasta das ROMs e a da arte (~/media/.es-de, com um
-# link por tipo para a pasta do sistema em ~/media).
+# link por tipo para a pasta do sistema em ~/media; num disco sem link
+# simbolico, media_links_root a poe no disco de dentro).
 frontends_esde() {
-  local key dir platform name exe args exts n=0 systems=()
+  local key dir platform name exe args exts root n=0 systems=()
   mkdir -p "$ESDE_DIR/custom_systems" "$ESDE_DIR/settings"
   {
     printf '<?xml version="1.0"?>\n<!-- Gerado pelo FliperOS Setup (Frontend). -->\n<systemList>\n'
@@ -184,12 +185,13 @@ frontends_esde() {
     done < <(frontends_systems)
     printf '</systemList>\n'
   } > "$ESDE_DIR/custom_systems/es_systems.xml"
+  root=$(media_links_root)
   for key in "${systems[@]}"; do
     # shellcheck disable=SC2086 # um par por palavra
-    media_farm "$MEDIA_DIR/.es-de/${key//\//-}" "$key" $ESDE_MEDIA_LINKS
+    media_farm "$root/.es-de/${key//\//-}" "$key" $ESDE_MEDIA_LINKS
   done
   esde_setting ROMDirectory "$ROMS_DIR"
-  esde_setting MediaDirectory "$MEDIA_DIR/.es-de"
+  esde_setting MediaDirectory "$root/.es-de"
   frontends_esde_240p
   chown -R "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
   log_info "ES-DE: $n sistema(s)"

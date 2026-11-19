@@ -64,23 +64,56 @@ media_system() {
 # relativo por SUBPASTA para a do tipo. Uma SUBPASTA que ja e pasta de
 # verdade fica.
 media_farm() {
-  local farm=$1 key=$2 pair link
+  local farm=$1 key=$2 pair link root=${1%/*/*}
   shift 2
   media_system "$key" || return 1
   mkdir -p "$farm" || return 1
   for pair in "$@"; do
     link="$farm/${pair%%:*}"
     [[ -d $link && ! -L $link ]] && continue
-    ln -sfn "../../${pair#*:}/$key" "$link" || return 1
+    ln -sfn "$(media_farm_target "$root" "${pair#*:}" "$key")" "$link" 2>> "$FLIPEROS_LOG" || return 1
   done
+  # Fora de ~/media, as pastas que o mkdir -p acabou de criar (.local e as
+  # outras, sendo root) tambem sao da pessoa.
+  [[ $root == "$MEDIA_DIR" ]] || chown "$FLIPEROS_USER:" "${root%/*/*/*}" "${root%/*/*}" "${root%/*}" "$root" 2> /dev/null
   chown -h "$FLIPEROS_USER:" "$MEDIA_DIR" "$(dirname "$farm")" "$farm" "$farm"/* 2> /dev/null
   return 0
+}
+
+# media_links_root imprime onde ficam as pastas de links do Skyscraper
+# (.skyscraper) e do ES-DE (.es-de): em ~/media, a nao ser que o disco dela
+# nao guarde link simbolico (FAT, exFAT e NTFS: o HD externo do Storage, onde o
+# ln da "Operation not permitted" e a raspagem nem comecava). Ai ficam no
+# disco de dentro, em MEDIA_LINKS_HOME, com os links apontando para ~/media.
+MEDIA_LINKS_HOME=${MEDIA_LINKS_HOME:-/home/fliperos/.local/share/fliperos/media-links}
+media_links_root() {
+  local probe="$MEDIA_DIR/.link-probe.$$"
+  mkdir -p "$MEDIA_DIR" 2> /dev/null
+  if ln -s . "$probe" 2> /dev/null; then
+    rm -f "$probe"
+    printf '%s\n' "$MEDIA_DIR"
+  else
+    printf '%s\n' "$MEDIA_LINKS_HOME"
+  fi
+}
+
+# media_farm_target RAIZ TIPO CHAVE imprime para onde aponta o link do TIPO
+# (snap, logo...) da CHAVE numa pasta de links de RAIZ (media_links_root):
+# relativo dentro de ~/media, com o caminho inteiro fora dela.
+media_farm_target() {
+  if [[ $1 == "$MEDIA_DIR" ]]; then
+    printf '../../%s/%s\n' "$2" "$3"
+  else
+    printf '%s/%s/%s\n' "$MEDIA_DIR" "$2" "$3"
+  fi
 }
 
 # scraper_media CHAVE imprime a pasta de midia do Skyscraper (-o) para a
 # pasta de jogos.
 scraper_media() {
-  local farm="$MEDIA_DIR/.skyscraper/${1//\//-}"
+  local root farm
+  root=$(media_links_root)
+  farm="$root/.skyscraper/${1//\//-}"
   # shellcheck disable=SC2086 # um par por palavra
   media_farm "$farm" "$1" $SCRAPER_MEDIA_LINKS || return 1
   printf '%s\n' "$farm"
@@ -167,7 +200,7 @@ media_empty() {
 # - Sem pasta de jogos agora (um disco fora), a de plataforma fica para a vez
 #   seguinte. Roda no tools/cabinet-update.sh e a cada abertura do launcher.
 media_refolder() {
-  local t src platform line key dir p main dest target list link sys detected=0
+  local t src platform line key dir p main dest target list link sys root detected=0
   local -a lines=() keys=()
   [[ -d $MEDIA_DIR && -d $ROMS_DIR ]] || return 0
   for t in $MEDIA_TYPES dmd; do
@@ -244,14 +277,16 @@ media_refolder() {
         mv -- "${src%/*}/old-$platform" "${dest%/*}/old-${dest##*/}" 2> /dev/null
       fi
       # Os links do Skyscraper e do ES-DE que apontavam para a de plataforma.
-      for link in "$MEDIA_DIR"/.skyscraper/*/* "$MEDIA_DIR"/.es-de/*/*; do
-        [[ -L $link && $(readlink -- "$link") == "../../$t/$platform" ]] || continue
-        sys=${link%/*}
-        sys=${sys##*/}
-        key=$main
-        [[ $link == "$MEDIA_DIR"/.es-de/* && -e $MEDIA_DIR/$t/${sys/#retroarch-/retroarch/} ]] &&
-          key=${sys/#retroarch-/retroarch/}
-        ln -sfn "../../$t/$key" "$link"
+      for root in "$MEDIA_DIR" "$MEDIA_LINKS_HOME"; do
+        for link in "$root"/.skyscraper/*/* "$root"/.es-de/*/*; do
+          [[ -L $link && $(readlink -- "$link") == "$(media_farm_target "$root" "$t" "$platform")" ]] || continue
+          sys=${link%/*}
+          sys=${sys##*/}
+          key=$main
+          [[ $link == "$root"/.es-de/* && -e $MEDIA_DIR/$t/${sys/#retroarch-/retroarch/} ]] &&
+            key=${sys/#retroarch-/retroarch/}
+          ln -sfn "$(media_farm_target "$root" "$t" "$key")" "$link"
+        done
       done
     done
   done
