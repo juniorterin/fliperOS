@@ -549,6 +549,9 @@ class Frontend:
     # ── Video ──
     def open(self):
         pg = self.pg
+        # O vsync antes de abrir o video: sem ele o SDL troca o quadro no meio
+        # da varredura (theme.request_vsync).
+        self.T.request_vsync()
         pg.display.init()
         size, flags = self.T.MODE, 0
         driver = os.environ.get("SDL_VIDEODRIVER")

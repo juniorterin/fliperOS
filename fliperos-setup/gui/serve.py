@@ -31,6 +31,9 @@ FS, RS, GS = "\x1f", "\x1e", "\x1d"
 MENU_TITLE = "FliperOS"
 MENU_ITEMS = ("frontend", "setup", "desktop", "shell", "power")
 PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
+# Os itens que voltam um nivel (o "Return" e o "Cancel" dos menus): escolhe-los
+# anima como o Esc, nao como entrar num item.
+BACK_VALUES = ("return", "cancel")
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
 # Um rotulo com a explicacao entre parenteses no fim.
 NOTE = re.compile(r"^(.*\S) \(([^()]+)\)$")
@@ -51,6 +54,12 @@ class Server:
         self.buf = b""
         self.ctx = {"status": "", "version": ""}
         self.screen = None      # a tela que esta no video
+        # Como a ultima tela perguntada foi deixada (navfx.IN ao escolher um
+        # item, navfx.OUT no Esc ou num Return), a camada dela no ultimo
+        # quadro e qual tela era: a proxima pergunta anima a passagem.
+        self.went = None
+        self.snapshot = None
+        self.shown = None
         self.parent = os.getppid()  # o Setup: sem ele, o servidor sai
         self.replied = time.monotonic()  # a ultima resposta (a ampulheta)
         self.shots = os.environ.get("FLIPEROS_GUI_SHOTS", "")
@@ -182,13 +191,49 @@ class Server:
             self.app.fixed_time = 3.0
             self.app.save(self.screen, self.ctx, os.path.join(self.shots, "%03d-%s" % (self.count, name)))
 
+    @staticmethod
+    def which(screen):
+        """Qual tela e: a classe e o titulo (o mesmo menu aberto de novo, depois
+        de ligar um item, e a mesma tela)."""
+        return type(screen).__name__, getattr(screen, "title", "")
+
+    def answered(self, screen, result):
+        """Guarda como a tela foi deixada, para a animacao da proxima."""
+        import navfx
+        action, value = (tuple(result) + (None,))[:2]
+        if action == "back" or (action == "select" and value in BACK_VALUES):
+            self.went = navfx.OUT
+        elif action == "select":
+            self.went = navfx.IN
+        else:
+            self.went = None
+        self.shown = self.which(screen)
+        self.snapshot = self.app.ui.copy() if self.went else None
+        return result
+
+    def leaving(self, screen):
+        """(camada da tela que saiu, navfx.IN ou navfx.OUT) quando a passagem
+        para screen se anima: a tela de antes ficou no video, foi deixada
+        entrando ou voltando e esta e outra tela. Senao None: ligar um item e
+        reabrir o mesmo menu, o primeiro menu, os prints."""
+        went, snapshot, shown = self.went, self.snapshot, self.shown
+        self.went = self.snapshot = None
+        if not went or snapshot is None or self.shots or self.app.window is None:
+            return None
+        if shown == self.which(screen):
+            return None
+        return snapshot, went
+
     def ask(self, screen, name):
         """Mostra a tela e espera a resposta dela."""
         app = self.app
+        leaving = self.leaving(screen)
         self.screen = screen
         app.flush()
         self.shot(name)
         self.marquee(screen)
+        if leaving:
+            app.swap(leaving[0], screen, self.ctx, leaving[1])
         redraw = True
         while True:
             # O Setup morto com a tela aberta (o painel web fechando o menu
@@ -199,19 +244,19 @@ class Server:
                 raise SystemExit(0)
             for key in app.keys():
                 if key == "quit":
-                    return ("back", None)
+                    return self.answered(screen, ("back", None))
                 app.beep(key)
                 result = screen.key(key)
                 redraw = True
                 if result:
-                    return result
+                    return self.answered(screen, result)
                 self.marquee(screen)
             tick = getattr(screen, "tick", None)
             result = tick() if tick else None
             if result == "redraw":
                 redraw = True
             elif result:
-                return result
+                return self.answered(screen, result)
             app.show(screen, self.ctx, redraw)
             redraw = False
             app.tick()
@@ -228,6 +273,8 @@ class Server:
     def put(self, screen, name):
         """Mostra a tela e volta na hora (um aviso, o progresso)."""
         self.screen = screen
+        # O que estava no video saiu: a proxima pergunta nao anima a partir dele.
+        self.went = self.snapshot = None
         self.shot(name)
         self.app.show(screen, self.ctx)
 
@@ -473,15 +520,19 @@ class Server:
                 self.app.tick()
             return 1, ""
         if cmd == "suspend":
+            self.went = self.snapshot = None
             self.app.close()
             return 0, ""
         if cmd == "resume":
+            self.went = self.snapshot = None
             if self.app.window is None:
                 self.app.open()
             self.app.show(self.screen, self.ctx)
             return 0, ""
         if cmd == "orient":
-            # A orientacao do monitor mudou em Video Setup: a imagem gira ja.
+            # A orientacao do monitor mudou em Video Setup: a imagem gira ja
+            # (e a camada guardada seria de outro tamanho).
+            self.went = self.snapshot = None
             self.app.set_orientation(a[0])
             self.app.show(self.screen, self.ctx)
             return 0, ""

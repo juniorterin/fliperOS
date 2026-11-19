@@ -67,6 +67,20 @@ def upright(surface):
         return pygame.transform.rotate(surface, 90)
     return surface
 
+
+def request_vsync():
+    """Pede ao SDL o vsync na troca de quadro. Chamar antes de
+    pygame.display.init(): o renderer do flip() nasce no primeiro quadro.
+
+    Sem o pedido ele nasce sem vsync (SDL 2.30, SDL_CreateWindowTexture, flags
+    0) e, no KMS, o SDL troca o quadro com DRM_MODE_PAGE_FLIP_ASYNC, no meio
+    da varredura: tearing. Com SDL_RENDER_VSYNC=1 o swap interval e 1, a troca
+    espera a volta vertical e o flip dura um quadro do monitor (60 por
+    segundo no CRT). Um valor que ja esteja no ambiente vale
+    (SDL_RENDER_VSYNC=0 para comparar)."""
+    os.environ.setdefault("SDL_RENDER_VSYNC", "1")
+
+
 # A fonte de pixel de tudo, sem antialias: a Press Start 2P (8x8), que vai
 # junto do codigo (gui/fonts, com a licenca OFL).
 FONT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "PressStart2P-Regular.ttf")

@@ -50,6 +50,7 @@ def write_level(path, level):
 
 class Preview:
     def __init__(self, level, title):
+        T.request_vsync()
         pygame.display.init()
         pygame.font.init()
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)

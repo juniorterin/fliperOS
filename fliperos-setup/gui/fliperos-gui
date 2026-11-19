@@ -46,6 +46,7 @@ class App:
 
         self.pygame, self.theme, self.background = pygame, theme, background
         self.preview = preview
+        self.headless = headless
         self.queue = list(keys)   # teclas de teste, apertadas antes das de verdade
         self.window = None
         self.open()
@@ -82,6 +83,9 @@ class App:
         No desktop (SDL_VIDEODRIVER=x11, o atalho FliperOS Setup do LXDE),
         uma janela sem borda do tamanho da tela."""
         pygame = self.pygame
+        # O vsync antes de abrir o video: sem ele o SDL troca o quadro no meio
+        # da varredura (theme.request_vsync).
+        self.theme.request_vsync()
         pygame.display.init()
         flags = 0
         size = PREVIEW if self.preview else self.theme.MODE
@@ -247,6 +251,12 @@ class App:
         lado do monitor, como o console (fbcon rotate 1 = horario)."""
         return self.theme.upright(frame)
 
+    def present(self, frame):
+        """O quadro pronto no video. O flip espera a volta vertical (vsync):
+        e ele que marca os 60 quadros por segundo."""
+        self.pygame.transform.scale(self.final(frame), self.size, self.window)
+        self.pygame.display.flip()
+
     def show(self, screen, ctx, redraw=True, busy=False):
         """Um quadro no video. busy: o Setup esta trabalhando, e a ampulheta
         gira no canto."""
@@ -256,8 +266,37 @@ class App:
         if busy:
             import widgets
             widgets.hourglass(frame, self.now)
-        self.pygame.transform.scale(self.final(frame), self.size, self.window)
-        self.pygame.display.flip()
+        self.present(frame)
+
+    def swap(self, old, screen, ctx, direction):
+        """O zoom de entrar (navfx.IN) ou de voltar (navfx.OUT): da camada da
+        interface old (a da tela que sai) ate screen, em navfx.DURATION
+        segundos. O andamento e o do relogio, nao a conta de quadros: um quadro
+        que atrasa nao alarga a animacao. O fundo segue animado por baixo. Nos
+        prints e sem video, nada."""
+        if self.window is None or self.headless or self.fixed_time is not None or old is None:
+            return
+        import navfx
+        pygame = self.pygame
+        mixed = pygame.Surface(old.get_size(), pygame.SRCALPHA)
+        start = time.monotonic()
+        while True:
+            p = (time.monotonic() - start) / navfx.DURATION
+            if p >= 1:
+                return
+            # As teclas apertadas durante o zoom ficam na fila e valem depois.
+            pygame.event.pump()
+            now = time.monotonic() - self.start
+            self.now = now
+            self.ui.fill((0, 0, 0, 0))
+            if isinstance(ctx, dict):
+                ctx["now"] = now
+            screen.draw(self.ui, ctx)
+            navfx.blend(mixed, old, self.ui, p, direction)
+            self.bg.draw(self.back, now)
+            self.back.blit(mixed, (0, 0))
+            self.present(self.back)
+            self.tick()
 
     def tick(self):
         self.clock.tick(FPS)
@@ -297,8 +336,14 @@ def run_demo(app, args):
     redraw = True
     while True:
         for key in app.keys():
-            if key == "quit" or not press(key):
+            if key == "quit":
                 return 0
+            old, depth = app.ui.copy(), len(stack)
+            if not press(key):
+                return 0
+            if len(stack) != depth:
+                import navfx
+                app.swap(old, stack[-1], demo.CONTEXT, navfx.IN if len(stack) > depth else navfx.OUT)
             redraw = True
         tick = getattr(stack[-1], "tick", None)
         if tick and tick() == "redraw":

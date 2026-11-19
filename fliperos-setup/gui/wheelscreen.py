@@ -49,6 +49,7 @@ class WheelScreen:
             self.open()
 
     def open(self):
+        T.request_vsync()
         pygame.display.init()
         size, flags = T.MODE, 0
         if os.environ.get("SDL_VIDEODRIVER", "kmsdrm") == "kmsdrm":

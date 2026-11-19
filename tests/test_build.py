@@ -17852,6 +17852,222 @@ class GuiMenuMarqueeTests(unittest.TestCase):
         self.assertIn('menu_marquee "$choice"', (ROOT / 'fliperos-setup/screens/main-menu.sh').read_text())
 
 
+class GuiZoomTests(unittest.TestCase):
+    """O zoom de entrar e de voltar nos itens do Setup: gui/navfx.py (a conta),
+    App.swap (o tempo, 60 quadros por segundo) e serve.py (quando e para que
+    lado). So a camada da interface anima: o fundo fica vivo por baixo."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    def setUp(self):
+        if not importlib.util.find_spec("pygame"):
+            self.skipTest("sem o pygame")
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import navfx
+        self.pg, self.fx = pygame, navfx
+
+    def layer(self, color=None, box=None):
+        """Uma camada da interface (320x240, com alfa): transparente, com um
+        quadrado opaco no meio quando ha cor."""
+        surf = self.pg.Surface((320, 240), self.pg.SRCALPHA)
+        if color:
+            surf.fill(color, box or (110, 70, 100, 100))
+        return surf
+
+    def pixels(self, surf):
+        return self.pg.image.tostring(surf, "RGBA")
+
+    def test_the_first_and_the_last_frame_are_exactly_the_two_screens(self):
+        old, new = self.layer((255, 0, 0, 255)), self.layer((0, 255, 0, 255), (10, 10, 60, 60))
+        out = self.layer()
+        for direction in (self.fx.IN, self.fx.OUT):
+            self.fx.blend(out, old, new, 0, direction)
+            self.assertEqual(self.pixels(out), self.pixels(old))
+            self.fx.blend(out, old, new, 1, direction)
+            self.assertEqual(self.pixels(out), self.pixels(new))
+
+    def test_entering_comes_closer_and_leaving_moves_away(self):
+        # So a tela que sai (a que chega esta vazia): em p=0,5 o quadrado dela
+        # e maior que o de partida ao entrar e menor ao voltar.
+        old, new, out = self.layer((255, 0, 0, 255)), self.layer(), self.layer()
+        self.fx.blend(out, old, new, 0.5, self.fx.IN)
+        entering = out.get_bounding_rect(1).width
+        self.fx.blend(out, old, new, 0.5, self.fx.OUT)
+        leaving = out.get_bounding_rect(1).width
+        self.assertGreater(entering, 100)
+        self.assertLess(leaving, 100)
+        # E a tela que chega (a velha vazia) faz o inverso: de longe ao entrar,
+        # de perto ao voltar.
+        self.fx.blend(out, new, old, 0.5, self.fx.IN)
+        arriving = out.get_bounding_rect(1).width
+        self.fx.blend(out, new, old, 0.5, self.fx.OUT)
+        returning = out.get_bounding_rect(1).width
+        self.assertLess(arriving, 100)
+        self.assertGreater(returning, 100)
+
+    def test_the_background_is_not_part_of_it(self):
+        # A camada fica transparente fora do desenho em todo o caminho: o fundo
+        # animado aparece por baixo, sem ser congelado nem escurecido.
+        old, new, out = self.layer((255, 0, 0, 255)), self.layer((0, 255, 0, 255)), self.layer()
+        for direction in (self.fx.IN, self.fx.OUT):
+            for i in range(19):
+                self.fx.blend(out, old, new, i / 18, direction)
+                for corner in ((0, 0), (319, 0), (0, 239), (319, 239)):
+                    self.assertEqual(out.get_at(corner).a, 0, (direction, i, corner))
+
+    def test_it_lasts_a_third_of_a_second_which_is_18_frames_at_60(self):
+        self.assertAlmostEqual(self.fx.DURATION, 0.30)
+        self.assertEqual(round(self.fx.DURATION * 60), 18)
+
+    def app(self):
+        import types
+        from importlib.machinery import SourceFileLoader
+        from unittest import mock
+        mod = SourceFileLoader('fliperos_gui_app', str(self.GUI / 'fliperos-gui')).load_module()
+        app = mod.App(False, True, 'stars')
+        return mod, app, mock, types
+
+    def test_swap_follows_the_clock_at_60_frames_per_second(self):
+        # O andamento e o do relogio: dura DURATION mesmo se um quadro atrasa,
+        # e o laco e o de 60 por segundo (o flip espera o vsync e o tick(60)
+        # segura onde ele nao espera).
+        import demo
+        mod, app, mock, _ = self.app()
+        self.assertEqual(mod.FPS, 60)
+        app.headless = False
+        old = app.ui.copy()
+        with mock.patch.object(app.pygame.display, 'flip') as flip:
+            start = time.monotonic()
+            app.swap(old, demo.system(), dict(demo.CONTEXT), self.fx.IN)
+            elapsed = time.monotonic() - start
+        self.assertGreaterEqual(elapsed, self.fx.DURATION)
+        self.assertLess(elapsed, self.fx.DURATION + 0.25)
+        # 18 quadros a 60 por segundo; um pouco menos numa maquina carregada.
+        # O teto prova que o laco e segurado em 60 (sem o tick, centenas).
+        self.assertGreaterEqual(flip.call_count, 10)
+        self.assertLessEqual(flip.call_count, 22)
+
+    def test_swap_does_nothing_in_the_screenshots_and_without_video(self):
+        import demo
+        mod, app, mock, _ = self.app()
+        old = app.ui.copy()
+        with mock.patch.object(app.pygame.display, 'flip') as flip:
+            app.swap(old, demo.system(), dict(demo.CONTEXT), self.fx.IN)        # headless
+            app.headless = False
+            app.fixed_time = 3.0
+            app.swap(old, demo.system(), dict(demo.CONTEXT), self.fx.IN)        # print
+            app.fixed_time = None
+            app.window = None
+            app.swap(old, demo.system(), dict(demo.CONTEXT), self.fx.IN)        # sem video
+        self.assertEqual(flip.call_count, 0)
+
+    def server(self):
+        import types
+        import serve
+        import widgets
+        srv = types.SimpleNamespace(
+            W=widgets, shots='', went=None, snapshot=None, shown=None, ctx={},
+            app=types.SimpleNamespace(window=object(), ui=self.layer((255, 0, 0, 255)), show=lambda *a: None),
+            shot=lambda name: None)
+        srv.which = serve.Server.which
+        srv.answered = lambda screen, result: serve.Server.answered(srv, screen, result)
+        srv.leaving = lambda screen: serve.Server.leaving(srv, screen)
+        return serve, widgets, srv
+
+    def test_the_server_animates_in_after_an_item_and_out_after_back_or_return(self):
+        serve, widgets, srv = self.server()
+        setup = widgets.Menu("Setup", [("video", "Video Setup", ""), ("return", "Return", "")])
+        video = widgets.Menu("Video Setup", [("monitor", "Monitor Type", ""), ("return", "Return", "")])
+        # Escolher um item: entrar.
+        self.assertEqual(srv.answered(setup, ("select", "video")), ("select", "video"))
+        found = srv.leaving(video)
+        self.assertEqual(found[1], self.fx.IN)
+        self.assertEqual(self.pixels(found[0]), self.pixels(srv.app.ui))
+        # Uma vez so: a tela seguinte, sem ter sido deixada, nao anima.
+        self.assertIsNone(srv.leaving(video))
+        # O Esc, o item Return e o Cancel: voltar.
+        for result in (("back", None), ("select", "return"), ("select", "cancel")):
+            srv.answered(video, result)
+            self.assertEqual(srv.leaving(setup)[1], self.fx.OUT, result)
+
+    def test_the_server_does_not_animate_the_same_screen_or_a_notice_in_between(self):
+        serve, widgets, srv = self.server()
+        system = widgets.Menu("System", [("debug", "Debug mode (off)", ""), ("return", "Return", "")])
+        # Ligar um item reabre o mesmo menu: nada.
+        srv.answered(system, ("select", "debug"))
+        self.assertIsNone(srv.leaving(widgets.Menu("System", [("debug", "Debug mode (on)", "")])))
+        # Um aviso (put) entre as duas telas: a de antes ja saiu do video.
+        srv.answered(system, ("select", "update"))
+        serve.Server.put(srv, widgets.Message("Updating", []), "msg")
+        self.assertIsNone(srv.leaving(widgets.Menu("Setup", [("video", "Video Setup", "")])))
+        # Uma lista que muda sozinha (watch) ou o tempo que acaba: nada.
+        for result in (("refresh", "x"), ("timeout", None)):
+            srv.answered(system, result)
+            self.assertIsNone(srv.leaving(widgets.Menu("Setup", [("video", "Video Setup", "")])), result)
+
+    def test_the_server_does_not_animate_the_screenshots(self):
+        serve, widgets, srv = self.server()
+        srv.answered(widgets.Menu("Setup", [("video", "Video", "")]), ("select", "video"))
+        srv.shots = "/tmp/shots"
+        self.assertIsNone(srv.leaving(widgets.Menu("Video Setup", [("monitor", "Monitor", "")])))
+
+    def test_the_server_plays_it_before_the_screen_waits_for_a_key(self):
+        text = (self.GUI / "serve.py").read_text()
+        ask = text[text.index("    def ask(self, screen, name):"):text.index("    def busy(self):")]
+        self.assertIn("leaving = self.leaving(screen)", ask)
+        self.assertLess(ask.index("app.swap(leaving[0], screen, self.ctx, leaving[1])"), ask.index("while True:"))
+        # Todo jeito de deixar a tela passa por answered().
+        self.assertNotRegex(ask, r"return result\b")
+        self.assertNotIn('return ("back", None)', ask)
+
+
+class GuiVsyncTests(unittest.TestCase):
+    """O Setup e o frontend pedem vsync ao abrir o video. Sem o pedido o SDL
+    2.30 cria o renderer do flip() sem vsync e, no KMS, troca o quadro com
+    DRM_MODE_PAGE_FLIP_ASYNC, no meio da varredura: tearing."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    def theme(self):
+        # O theme.py so usa o pygame nas funcoes: o de mentira basta (como em
+        # GuiMenuIconTests), e o teste roda numa imagem sem pygame.
+        saved = sys.modules.get('pygame')
+        sys.modules['pygame'] = type(sys)('pygame')
+        try:
+            return SourceFileLoader('fliperos_theme_vsync', str(self.GUI / 'theme.py')).load_module()
+        finally:
+            del sys.modules['pygame']
+            if saved:
+                sys.modules['pygame'] = saved
+
+    def test_request_vsync_sets_the_sdl_hint_and_keeps_a_value_already_there(self):
+        from unittest import mock
+        theme = self.theme()
+        with mock.patch.dict(os.environ):
+            os.environ.pop('SDL_RENDER_VSYNC', None)
+            theme.request_vsync()
+            self.assertEqual(os.environ['SDL_RENDER_VSYNC'], '1')
+            os.environ['SDL_RENDER_VSYNC'] = '0'
+            theme.request_vsync()
+            self.assertEqual(os.environ['SDL_RENDER_VSYNC'], '0')
+
+    def test_every_gui_program_that_opens_the_video_asks_for_vsync_first(self):
+        opened = []
+        for path in sorted(self.GUI.iterdir()):
+            if not path.is_file() or path.suffix in ('.png', '.ttf', '.json', '.pyc'):
+                continue
+            text = path.read_text(errors='replace')
+            if 'display.set_mode(' not in text:
+                continue
+            opened.append(path.name)
+            self.assertIn('request_vsync()', text, '%s opens the video without vsync' % path.name)
+            self.assertLess(text.index('request_vsync()'), text.index('display.init('), path.name)
+        self.assertEqual(opened, ['color-calibrate.py', 'flicker-preview.py', 'fliperos-frontend', 'fliperos-gui',
+                                  'gunscreen.py', 'scanline-preview.py', 'wheelscreen.py'])
+
+
 class GuiMenuIconTests(unittest.TestCase):
     """Todo item de menu do Setup tem um icone (gui/theme.py ou gui/icons):
     sem ele, o carrossel mostra so a inicial do rotulo."""

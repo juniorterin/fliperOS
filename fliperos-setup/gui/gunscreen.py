@@ -23,6 +23,7 @@ class GunScreen:
     rows, cols = T.HEIGHT, T.WIDTH
 
     def __init__(self):
+        T.request_vsync()
         pygame.display.init()
         pygame.font.init()
         size, flags = T.MODE, 0

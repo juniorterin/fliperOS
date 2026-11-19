@@ -38,6 +38,7 @@ fliperos-setup/
     │     febios.py (BIOS box)  feharvest.py (automatic scrape)  fevideo.py (videos)
     ├── fliperos-scrape   "Scrape the games" and the Auto scrape service
     ├── theme.py widgets.py background.py  the look shared by the Setup and the frontend
+    ├── navfx.py          the zoom when entering an item or going back
     ├── color-calibrate.py scanline-preview.py flicker-preview.py gunscreen.py  test screens
     ├── custom-media.py drmmaster.py serve.py tiny.py  helpers
     └── icons/ fonts/ link-profiles.json

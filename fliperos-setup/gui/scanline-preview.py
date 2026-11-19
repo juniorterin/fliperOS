@@ -69,6 +69,7 @@ class Preview:
         self.on = True
         self.pick = 0
         self.frame = 0
+        T.request_vsync()
         pygame.display.init()
         pygame.font.init()
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)

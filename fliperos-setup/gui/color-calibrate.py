@@ -65,6 +65,7 @@ class Calibrator:
         self.pattern = 0
         self.hidden = False
         self.dirty = True
+        T.request_vsync()
         pygame.display.init()
         pygame.font.init()
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
