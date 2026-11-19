@@ -195,10 +195,10 @@ def arrow(surf, cx, cy, d, color, size=6):
     pygame.draw.polygon(surf, color, pts)
 
 
-def star(surf, cx, cy, color, r=7, outline=False):
+def star(surf, cx, cy, color, r=7, outline=False, rot=0.0):
     pts = []
     for i in range(10):
-        a = -math.pi / 2 + i * math.pi / 5
+        a = -math.pi / 2 + rot + i * math.pi / 5
         rr = r if i % 2 == 0 else r * 0.45
         pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
     pygame.draw.polygon(surf, color, pts, 1 if outline else 0)
@@ -208,9 +208,18 @@ def play_icon(surf, cx, cy, c):
     pygame.draw.polygon(surf, c, [(cx - 7, cy - 10), (cx - 7, cy + 10), (cx + 10, cy)])
 
 
-def plus_icon(surf, cx, cy, c):
-    surf.fill(c, (cx - 2, cy - 10, 5, 21))
-    surf.fill(c, (cx - 10, cy - 2, 21, 5))
+def plus_icon(surf, cx, cy, c, ang=0.0):
+    """O "+" (5 de grossura, 21 de ponta a ponta); ang (radianos) o gira em
+    torno do centro. Em 0 e nas voltas de um quarto e o desenho de quadrados,
+    sem borda serrilhada."""
+    if abs(math.sin(2 * ang)) < 0.02:
+        surf.fill(c, (cx - 2, cy - 10, 5, 21))
+        surf.fill(c, (cx - 10, cy - 2, 21, 5))
+        return
+    w, n = 2.5, 10.5
+    cross = [(-w, -n), (w, -n), (w, -w), (n, -w), (n, w), (w, w), (w, n), (-w, n), (-w, w), (-n, w), (-n, -w), (-w, -w)]
+    s, k = math.sin(ang), math.cos(ang)
+    pygame.draw.polygon(surf, c, [(cx + 0.5 + x * k - y * s, cy + 0.5 + x * s + y * k) for x, y in cross])
 
 
 # O link: um globo de linhas verdes (apagado quando ninguem joga o jogo em
@@ -2556,10 +2565,131 @@ def button_hint(ui, x, y, items):
 LINK_KINDS = ("link", "join", "new", "closed")
 
 
-def popup_icon(ui, kind, cx, cy, on, lit=False, net=False):
-    """O icone de um azulejo do menu do jogo (net: os controles, no lugar do globo)."""
+# ── O menu do jogo: o movimento ─────────────────────────────────────
+# Tudo e conta do relogio (fe.abs_now, o time.monotonic do laco) e do que o
+# frontend marcou em fe.ov: "t0" (a hora em que abriu), "act" = (azulejo, hora
+# [, favoritou]) do azulejo apertado (a animacao toca e so depois vem o efeito:
+# jogar, fechar, abrir o "+") e "burst" = (hora, favoritou), o 4 (so a estrela).
+# Nos prints (fe.shot) fica tudo parado.
+POP_IN = 0.24              # o menu abre ao escolher o jogo
+POP_OUT = 0.12             # e fecha (Esc, e o fim do favoritar)
+POP_ACT = {"play": 0.30, "more": 0.26, "fav": 0.55}   # do aperto ao efeito
+PAGE_IN = 0.20             # a pagina "+" entra
+STAGGER = 0.035            # um azulejo depois do outro, ao abrir
+TILE_PAD = 12              # a folga em volta do azulejo (o que cresce nao e cortado)
+
+
+def clamp01(x):
+    return max(0.0, min(1.0, x))
+
+
+def out_cubic(p):
+    """Rapido no comeco e freando no fim."""
+    return 1 - (1 - clamp01(p)) ** 3
+
+
+def out_back(p, s=1.70158):
+    """Passa um pouco do destino e volta (0 em p=0, 1 em p=1)."""
+    p = clamp01(p) - 1
+    return 1 + p * p * ((s + 1) * p + s)
+
+
+def smooth01(p):
+    p = clamp01(p)
+    return p * p * (3 - 2 * p)
+
+
+def pop_time(kind):
+    return POP_ACT.get(kind, POP_OUT)
+
+
+def popup_motion(fe, now):
+    """(escala, opacidade, escuro) do cartao do menu do jogo e do fundo atras
+    dele (escuro: 0 a 1 da cor de 160): abrindo, o cartao cresce de 78% com um
+    leve estouro; apertado, o PLAY o aproxima e some, o "+" o aproxima mais, e
+    o favoritar e o Esc o encolhem e apagam no fim."""
+    ov = fe.ov
+    if getattr(fe, "shot", None) or not ov:
+        return 1.0, 1.0, 1.0
+    scale, alpha, dark = 1.0, 1.0, 1.0
+    t0 = ov.get("t0")
+    if t0 is not None and now - t0 < POP_IN:
+        p = (now - t0) / POP_IN
+        scale, alpha, dark = 0.78 + 0.22 * out_back(p), clamp01(p / 0.45), clamp01(p)
+    act = ov.get("act")
+    if act:
+        kind, age = act[0], now - act[1]
+        p = clamp01(age / pop_time(kind))
+        if kind == "play":
+            scale, alpha = 1 + 0.16 * out_cubic(p), 1 - clamp01((p - 0.35) / 0.65)
+        elif kind == "more":
+            scale, alpha = 1 + 0.45 * p * p, 1 - clamp01((p - 0.3) / 0.7)
+        else:
+            q = clamp01((age - (pop_time(kind) - POP_OUT)) / POP_OUT)
+            scale, alpha, dark = 1 - 0.1 * q, 1 - q, 1 - q
+    return scale, alpha, dark
+
+
+def popup_dim(fe, now):
+    """O escurecimento atras do menu do jogo (160 quando aberto)."""
+    return round(160 * popup_motion(fe, now)[2])
+
+
+def scale_fade(top, box, scale, alpha):
+    """A parte box de top (uma camada com alfa), no tamanho scale e a opacidade
+    alpha, centrada no mesmo lugar; devolve a camada nova (ou a propria, parada)."""
+    if abs(scale - 1) < 0.004 and alpha >= 1.0:
+        return top
+    box = pygame.Rect(box).clip(top.get_rect())
+    crop = top.subsurface(box).copy()
+    if abs(scale - 1) >= 0.004:
+        crop = pygame.transform.smoothscale(
+            crop, (max(1, round(box.w * scale)), max(1, round(box.h * scale))))
+    if alpha < 1.0:
+        crop.set_alpha(round(255 * clamp01(alpha)))
+    out = pygame.Surface(top.get_size(), pygame.SRCALPHA)
+    out.blit(crop, (box.centerx - crop.get_width() // 2, box.centery - crop.get_height() // 2))
+    return out
+
+
+def popup_fx(fe, top, rect, now):
+    """O cartao do menu do jogo (rect) com o movimento de agora. A margem
+    deixa passar o anel e as faiscas, que saem do cartao."""
+    scale, alpha, _ = popup_motion(fe, now)
+    return scale_fade(top, pygame.Rect(rect).inflate(88, 88), scale, alpha)
+
+
+def page_fx(fe, top, now):
+    """A pagina "+" entrando: de perto (108%) para o tamanho, aparecendo."""
+    t0 = (fe.ov or {}).get("t0")
+    if t0 is None or getattr(fe, "shot", None) or now - t0 >= PAGE_IN:
+        return top
+    p = (now - t0) / PAGE_IN
+    return scale_fade(top, top.get_rect(), 1.08 - 0.08 * out_cubic(p), clamp01(p / 0.7))
+
+
+def pulse_ring(ui, cx, cy, color, now, period=1.3, r0=12, r1=24):
+    """Um anel que nasce no icone, abre e some (o azulejo escolhido respira)."""
+    p = (now % period) / period
+    r = round(r0 + (r1 - r0) * out_cubic(p))
+    layer = pygame.Surface((2 * r1 + 4, 2 * r1 + 4), pygame.SRCALPHA)
+    pygame.draw.circle(layer, tuple(color) + (round(150 * (1 - p)),), (r1 + 2, r1 + 2), r, 1)
+    ui.blit(layer, (cx - r1 - 2, cy - r1 - 2))
+
+
+def popup_icon(ui, kind, cx, cy, on, lit=False, net=False, now=None, act=None):
+    """O icone de um azulejo do menu do jogo (net: os controles, no lugar do
+    globo). now: o relogio do azulejo escolhido, que anima (o PLAY empurra o
+    triangulo e solta um anel, a estrela bate e balanca, o "+" da meia volta);
+    act = (azulejo, idade[, favoritou]) quando ele acabou de ser apertado."""
     if kind == "play":
-        play_icon(ui, cx, cy, T.GREEN if on else T.COMMENT)
+        dx = 0
+        if act and act[0] == "play":
+            dx = round(14 * out_cubic(act[1] / POP_ACT["play"]))
+        elif on and now is not None:
+            pulse_ring(ui, cx, cy, T.GREEN, now)
+            dx = round(3 * (0.5 + 0.5 * math.sin(now * 9)))
+        play_icon(ui, cx + dx, cy, T.GREEN if on else T.COMMENT)
     elif kind in ("link", "join", "new", "closed"):
         if net:
             pads_icon(ui, cx, cy, lit or on)
@@ -2571,11 +2701,34 @@ def popup_icon(ui, kind, cx, cy, on, lit=False, net=False):
     elif kind == "net":
         pads_icon(ui, cx, cy, on)
     elif kind == "fav":
-        star(ui, cx, cy, T.YELLOW if on else T.COMMENT, 11, outline=False)
+        r, rot, color = 11.0, 0.0, T.YELLOW if on else T.COMMENT
+        if act and act[0] == "fav":
+            p = clamp01(act[1] / 0.45)
+            if len(act) > 2 and act[2]:
+                # Favoritou: a estrela volta de pequena, gira e passa do tamanho.
+                r, rot = 11 * (0.25 + 0.75 * out_back(p, 3.2)), -1.2 * (1 - out_cubic(p))
+            else:
+                # Tirou: ela encolhe e apaga.
+                r = 11 * (1 - 0.25 * out_cubic(p))
+                color = tuple(round(a + (b - a) * p) for a, b in zip(T.YELLOW, T.COMMENT))
+        elif on and now is not None:
+            # Bate duas vezes por segundo e meio, balancando; o brilho pisca.
+            r, rot = 11 * (1 + 0.16 * abs(math.sin(now * 4.1)) ** 8), 0.18 * math.sin(now * 2.3)
+        star(ui, cx, cy, color, r, outline=False, rot=rot)
+        if on and now is not None and not act and (now % 1.6) < 0.3:
+            g = round(4 * math.sin(math.pi * (now % 1.6) / 0.3))
+            pygame.draw.line(ui, T.FG, (cx + 9 - g, cy - 9), (cx + 9 + g, cy - 9))
+            pygame.draw.line(ui, T.FG, (cx + 9, cy - 9 - g), (cx + 9, cy - 9 + g))
     elif kind == "cheevos":
         trophy_icon(ui, cx, cy, 2, None if on else T.COMMENT)
     else:
-        plus_icon(ui, cx, cy, T.CYAN if on else T.COMMENT)
+        ang = 0.0
+        if act and act[0] == "more":
+            ang = math.pi * clamp01(act[1] / POP_ACT["more"]) ** 2
+        elif on and now is not None:
+            # Uma meia volta de um quarto a cada 1,8 s (o "+" cai no lugar).
+            ang = (math.pi / 2) * smooth01((now % 1.8) / 0.55)
+        plus_icon(ui, cx, cy, T.CYAN if on else T.COMMENT, ang)
 
 
 def trophy_icon(ui, cx, cy, scale=1, color=None):
@@ -2589,11 +2742,55 @@ def trophy_icon(ui, cx, cy, scale=1, color=None):
                 ui.fill(color or T.ICON_COLORS[c], (x0 + i * scale, y0 + j * scale, scale, scale))
 
 
+def popup_tile(ui, spark, tile, rect, on, now, idle, k=1.0, alpha=1.0, act=None):
+    """Um azulejo do menu do jogo, desenhado numa folha propria (com folga) para
+    poder crescer, encolher e aparecer: k a escala, alpha a opacidade, idle o
+    relogio que anima o icone do escolhido e act o aperto (ver popup_icon).
+    O que sai dele (anel, faiscas) vai em spark, por cima de tudo."""
+    x, y, size = rect
+    pad = TILE_PAD
+    cell = pygame.Surface((size + 2 * pad, size + 2 * pad), pygame.SRCALPHA)
+    local = (pad, pad, size, size)
+    tile_frame(cell, local, on, now)
+    pygame.draw.rect(cell, T.PINK if on else T.LINE, local, 2 if on else 1)
+    popup_icon(cell, tile["kind"], pad + size // 2, pad + size // 2, on, tile.get("lit", False),
+               tile.get("net", False), idle, act)
+    cx, cy = x + size // 2, y + size // 2
+    if abs(k - 1) >= 0.01:
+        cell = pygame.transform.smoothscale(cell, (round(cell.get_width() * k), round(cell.get_height() * k)))
+    if alpha < 1.0:
+        cell.set_alpha(round(255 * clamp01(alpha)))
+    ui.blit(cell, (cx - cell.get_width() // 2, cy - cell.get_height() // 2))
+    if act:
+        popup_spark(spark, tile["kind"], cx, cy, size, act)
+
+
+def popup_spark(layer, kind, cx, cy, size, act):
+    """O que sai do azulejo apertado: o anel do PLAY (verde, com um clarao) e do
+    "+" (ciano), e as faiscas da estrela que favoritou."""
+    age = act[1]
+    if kind == "fav":
+        p = clamp01(age / 0.5)
+        if len(act) > 2 and act[2] and p < 1:
+            d, s = 8 + 24 * out_cubic(p), 3 if p < 0.5 else 2
+            for j in range(8):
+                ang = j * math.pi / 4 + 0.4
+                layer.fill(tuple(T.YELLOW) + (round(255 * (1 - p)),),
+                           (round(cx + d * math.cos(ang)) - s // 2, round(cy + d * math.sin(ang)) - s // 2, s, s))
+        return
+    p = clamp01(age / POP_ACT[kind])
+    pygame.draw.circle(layer, tuple(T.GREEN if kind == "play" else T.CYAN) + (round(210 * (1 - p)),), (cx, cy),
+                       round(14 + 34 * out_cubic(p)), max(1, round(4 * (1 - p))))
+    if kind == "play" and age < 0.12:
+        layer.fill((255, 255, 255, round(130 * (1 - age / 0.12))), (cx - size // 2, cy - size // 2, size, size))
+
+
 def draw_popup(fe, ui, now):
     """O menu do jogo: os azulejos (jogar, o link se o jogo tem, os favoritos e
     o "+") com o nome do escolhido embaixo. Um jogo de link ainda mostra, sob o
     nome, os gabinetes da festa: acesos os que estao nela e o aro rosa no lugar
-    deste."""
+    deste. Devolve o retangulo do cartao (o movimento de abrir e fechar, em
+    popup_fx, e dele)."""
     g = fe.game()
     tiles = fe.popup_tiles() if hasattr(fe, "popup_tiles") else [
         {"kind": "play", "label": "PLAY"},
@@ -2618,12 +2815,43 @@ def draw_popup(fe, ui, now):
     W.text(ui, fit(fe.fd.short_title(g), pw - 16), T.YELLOW, px + 8, py + 8)
     tx0 = px + (pw - (n * size + (n - 1) * gap)) // 2
     ty = py + 24
+    # O relogio do movimento (fe.abs_now); nos prints e sem ele, tudo parado.
+    clock = getattr(fe, "abs_now", None)
+    still = clock is None or bool(getattr(fe, "shot", None))
+    ov = fe.ov
+    seen = ov.get("_seen")
+    if seen is None or seen[0] != sel:
+        # A escolha mudou: o azulejo novo da um pulinho (na primeira vez, nao).
+        ov["_seen"] = seen = (sel, -9.0 if seen is None else (clock or 0.0))
+    spark = pygame.Surface(ui.get_size(), pygame.SRCALPHA)
     for i, tile in enumerate(tiles):
         x = tx0 + i * (size + gap)
         on = i == sel
-        tile_frame(ui, (x, ty, size, size), on, now)
-        pygame.draw.rect(ui, T.PINK if on else T.LINE, (x, ty, size, size), 2 if on else 1)
-        popup_icon(ui, tile["kind"], x + size // 2, ty + size // 2, on, tile.get("lit", False), tile.get("net", False))
+        k, alpha, act = 1.0, 1.0, None
+        if not still:
+            t0 = ov.get("t0")
+            if t0 is not None:
+                # Abrindo: os azulejos entram um depois do outro, com um estouro.
+                e = out_back((clock - t0 - STAGGER * i) / 0.18)
+                k, alpha = 0.45 + 0.55 * e, clamp01(e * 1.6)
+            if on:
+                k *= 1 + 0.14 * math.sin(math.pi * clamp01((clock - seen[1]) / 0.18))
+            pressed = ov.get("act") if on else None
+            burst = ov.get("burst") if tile["kind"] == "fav" else None
+            if pressed and pressed[0] in POP_ACT:
+                act = (pressed[0], clock - pressed[1]) + tuple(pressed[2:])
+            elif burst and clock - burst[0] < 0.5:
+                act = ("fav", clock - burst[0], burst[1])
+            if act:
+                a = act[1]
+                if act[0] == "play":
+                    k *= 1 - 0.1 * math.sin(math.pi * clamp01(a / 0.1)) + 0.3 * out_cubic(a / POP_ACT["play"])
+                elif act[0] == "fav":
+                    k *= 1 + 0.2 * math.sin(math.pi * clamp01(a / 0.3))
+                else:
+                    k *= 1 + 0.25 * out_cubic(a / POP_ACT["more"])
+        popup_tile(ui, spark, tile, (x, ty, size), on, now, clock if on and not still else None, k, alpha, act)
+    ui.blit(spark, (0, 0))
     label = tiles[sel]["label"]
     ui.blit(W.big(label, 1, W.LABEL), (px + (pw - W.width(label)) // 2, ty + size + 10 + drop))
     blink = int(now * 2.5) % 2 == 0
@@ -2657,6 +2885,7 @@ def draw_popup(fe, ui, now):
         if host:
             # De quem e a party ou o link (o nome do gabinete que abriu).
             tiny.centered(ui, tiny.fit("HOST " + host, pw - 16), T.COMMENT, px + pw // 2, ty + size + 43 + drop)
+    return px, py, pw, ph
 
 
 def draw_lobby(fe, ui, now):
@@ -4558,7 +4787,7 @@ def draw(fe, now):
         if o in ("more", "classify", "rename", "controls"):
             fe.bg.draw(back, t)
         else:
-            dim(back, 160 if o != "guide" else 175)
+            dim(back, popup_dim(fe, now) if o == "popup" else 160 if o != "guide" else 175)
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         if o.startswith("media") and getattr(fe, "strip", None) is not None:
             # O cartao por cima da fileira de onde veio (a tira apagada atras).
@@ -4580,9 +4809,10 @@ def draw(fe, now):
         elif o == "mediacarts":
             draw_media_carts(fe, top, t)
         elif o == "popup" and fe.rows:
-            draw_popup(fe, top, t)
+            top = popup_fx(fe, top, draw_popup(fe, top, t), now)
         elif o == "more":
             draw_more(fe, top, t)
+            top = page_fx(fe, top, now)
         elif o == "cheevos":
             draw_cheevos(fe, top, t)
         elif o == "filter":

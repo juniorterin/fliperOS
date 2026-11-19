@@ -423,6 +423,7 @@ class Frontend:
         self.top = 0
         self.overlay = "guide"     # o guia dos controles ao abrir
         self.ov = {}               # o estado do que esta por cima
+        self.launching = False     # o PLAY terminou de animar: o laco lanca o jogo
         # A primeira vez que o frontend abre: antes do guia, o Frontend
         # controls, para o usuario dizer o que cada botao faz.
         self.controls_seen = cfg.get("controls_seen") is True
@@ -961,6 +962,10 @@ class Frontend:
     def act(self, a):
         if a == "quit":
             return "quit"
+        if a == "go":
+            # O PLAY do menu do jogo terminou de animar (popup_act_done).
+            self.overlay = None
+            return "launch"
         if a == "coin" and self.commercial and self.overlay != "exitpad":
             # A ficha vale em qualquer tela, ate com um menu aberto.
             self.insert_coin()
@@ -1059,7 +1064,8 @@ class Frontend:
                 pid = clones[1] if self.fd.elsewhere(clones) and clones != "elsewhere" else None
                 tiles = self.popup_tiles() if pid else []
                 sel = next((k for k, t in enumerate(tiles) if (t.get("party") or {}).get("party") == pid), 0)
-                self.overlay, self.ov = "popup", {"sel": sel}
+                # t0: a hora em que abriu (o cartao cresce e os azulejos entram, feview.popup_motion).
+                self.overlay, self.ov = "popup", {"sel": sel, "t0": time.monotonic()}
         elif a == "b2":
             # Num clone aberto, fecha o grupo (na tela cheia e na grade, volta ao pai);
             # senao, pergunta se sai. No modo comercial (quiosque) o cliente
@@ -1111,12 +1117,14 @@ class Frontend:
         self.remember()
 
     def toggle_fav(self):
+        """Favorita o jogo ou tira dos favoritos; devolve se agora e favorito."""
         g = self.game()
         if g:
             on = self.lib.set_favourite(g, g.get("Favourite") != "1")
             self.say("ADDED TO FAVOURITES" if on else "REMOVED FROM FAVOURITES")
             if self.mode == "list":
                 self.rebuild(keep=g["Name"])      # o grupo FAVOURITES acompanha
+            return on
 
     def say(self, text, seconds=1.6):
         self.toast = (text, time.monotonic() + seconds)
@@ -1170,12 +1178,17 @@ class Frontend:
                 self.ov["cancel"].set()
             return None
         if a == "b2" and o not in ("rename", "exitkey", "exitpad"):
+            if o == "popup" and not getattr(self, "shot", None):
+                # O Esc no menu do jogo: ele encolhe e some (POP_OUT) antes de fechar.
+                if not self.ov.get("act"):
+                    self.ov["act"] = ("back", time.monotonic())
+                return None
             self.overlay = {"more": "popup", "cheevos": "popup", "classify": "options"}.get(o)
             if self.overlay == "popup":
                 # De volta no azulejo de onde veio (o "+" ou o trofeu).
                 tiles = self.popup_tiles()
                 back = next((i for i, t in enumerate(tiles) if t["kind"] == o), len(tiles) - 1)
-                self.ov = {"sel": back}
+                self.ov = {"sel": back, "t0": time.monotonic()}
             elif self.overlay == "options":
                 self.ov = {"sel": 0}
             return None
@@ -1188,6 +1201,11 @@ class Frontend:
                 self.overlay = None
             return None
         if o == "popup":
+            # Animado (fora dos prints): o azulejo apertado toca a animacao dele e
+            # so depois vem o efeito (popup_act_done); ate la, sem tecla (<= 0,55 s).
+            animated = not getattr(self, "shot", None)
+            if animated and self.ov.get("act"):
+                return None
             tiles = self.popup_tiles()
             tile = tiles[self.ov["sel"] % len(tiles)]
             # Num azulejo de net play com mais de um controle aqui, para baixo vai
@@ -1205,17 +1223,29 @@ class Frontend:
             elif a in ("left", "right"):
                 self.ov["sel"] = (self.ov["sel"] + (1 if a == "right" else -1)) % len(tiles)
             elif a == "b4":
-                self.toggle_fav()
+                on = self.toggle_fav()
+                if animated:
+                    self.ov["burst"] = (time.monotonic(), bool(on))    # so a estrela (o menu fica)
             elif a == "b1":
                 kind = tile["kind"]
+                now = time.monotonic()
                 if kind == "play":
+                    if animated:
+                        self.ov["act"] = ("play", now)
+                        return None
                     self.overlay = None
                     return "launch"
                 if kind == "fav":
-                    self.toggle_fav()
-                    self.overlay = None
+                    on = self.toggle_fav()
+                    if animated:
+                        self.ov["act"] = ("fav", now, bool(on))
+                    else:
+                        self.overlay = None
                 elif kind == "more":
-                    self.open_more()
+                    if animated:
+                        self.ov["act"] = ("more", now)
+                    else:
+                        self.open_more()
                 elif kind == "cheevos":
                     self.open_cheevos()
                 elif kind in ("link", "new"):
@@ -1710,7 +1740,8 @@ class Frontend:
     def open_more(self):
         g = self.game()
         self.overlay = "more"
-        self.ov = {"game": g, "info": None, "loading": False, "scroll": 0}
+        # t0: a hora em que abriu (a pagina entra de perto, feview.page_fx).
+        self.ov = {"game": g, "info": None, "loading": False, "scroll": 0, "t0": time.monotonic()}
         system = g["_system"]
         if not system["arcade"]:
             return
@@ -2816,10 +2847,27 @@ class Frontend:
             return None
 
     # ── O laco ──
+    def popup_act_done(self, now):
+        """O azulejo apertado do menu do jogo acabou de animar (feview.POP_ACT):
+        agora vem o efeito. O PLAY deixa o cartao apagado na tela e pede ao laco
+        o lancamento (launching: o "go" de act); o favoritar e o Esc fecham o
+        menu; o "+" abre a pagina."""
+        kind, start = self.ov["act"][:2]
+        if now - start < self.view.pop_time(kind):
+            return
+        if kind == "play":
+            self.launching = True
+        elif kind == "more":
+            self.open_more()
+        else:
+            self.overlay = None
+
     def tick(self, now):
         """As repeticoes segurando, a aceleracao e o modo letra."""
         dt = min(0.1, now - getattr(self, "last_tick", now))
         self.last_tick = now
+        if self.overlay == "popup" and self.ov.get("act"):
+            self.popup_act_done(now)
         if self.picking and self.strip is None and now - self.pick_at >= PICK_WAIT:
             self.pick_category()
         if self.overlay and self.overlay not in ("filter", "classify", "rename", "more"):
@@ -2894,6 +2942,11 @@ class Frontend:
         while True:
             now = time.monotonic()
             acts = self.input.poll()
+            if self.launching:
+                # O PLAY do menu do jogo acabou de animar: lanca pelo mesmo
+                # caminho de um botao (o bloco "launch" abaixo).
+                self.launching = False
+                acts = list(acts) + ["go"]
             woke = bool(acts) and self.attract_next is not None
             self.marquee_idle(now, bool(acts) or bool(self.input.down))
             if woke:

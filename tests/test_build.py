@@ -18083,6 +18083,228 @@ class GuiVsyncTests(unittest.TestCase):
                                   'gunscreen.py', 'scanline-preview.py', 'wheelscreen.py'])
 
 
+class FrontendPopupMotionTests(unittest.TestCase):
+    """O menu do jogo do frontend (o que abre ao escolher o jogo, com PLAY, a
+    estrela dos favoritos e o "+"): abre com movimento, os tres azulejos animam
+    enquanto escolhidos e apertar um toca a animacao dele antes do efeito (jogar,
+    favoritar, abrir a pagina "+"). Tudo e conta do relogio: 60 quadros por
+    segundo sem depender de quantos quadros saem."""
+    GUI = ROOT / "fliperos-setup/gui"
+    TILES = [{"kind": "play", "label": "PLAY"}, {"kind": "fav", "label": "FAVOURITE"},
+             {"kind": "more", "label": "MORE"}]
+
+    def setUp(self):
+        if not importlib.util.find_spec("pygame"):
+            self.skipTest("sem o pygame")
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import feview
+        pygame.font.init()
+        self.pg, self.fv = pygame, feview
+
+    def fe(self, **ov):
+        import types
+        return types.SimpleNamespace(ov=ov, shot=None)
+
+    def test_it_opens_growing_and_fading_in_and_ends_at_rest(self):
+        fv = self.fv
+        fe = self.fe(t0=10.0)
+        scale, alpha, dark = fv.popup_motion(fe, 10.0)
+        self.assertAlmostEqual(scale, 0.78, 2)
+        self.assertEqual((alpha, dark), (0.0, 0.0))
+        mid = fv.popup_motion(fe, 10.0 + fv.POP_IN / 2)
+        self.assertTrue(0.78 < mid[0] and 0 < mid[1] <= 1 and 0 < mid[2] < 1, mid)
+        self.assertEqual(fv.popup_motion(fe, 10.0 + fv.POP_IN), (1.0, 1.0, 1.0))
+        self.assertEqual((fv.popup_dim(fe, 10.0), fv.popup_dim(fe, 11.0)), (0, 160))
+        fe.shot = "x"          # os prints: parado
+        self.assertEqual(fv.popup_motion(fe, 10.0), (1.0, 1.0, 1.0))
+
+    def test_each_pressed_tile_has_its_own_animation(self):
+        fv = self.fv
+        # PLAY: o cartao se aproxima e some; so depois vem o lancamento.
+        play = self.fe(act=("play", 5.0))
+        self.assertEqual(fv.popup_motion(play, 5.0), (1.0, 1.0, 1.0))
+        s_play, a_play, _ = fv.popup_motion(play, 5.0 + fv.POP_ACT["play"])
+        self.assertGreater(s_play, 1.1)
+        self.assertAlmostEqual(a_play, 0.0, places=6)
+        # O "+" se aproxima mais ainda (mergulha na pagina).
+        s_more, a_more, _ = fv.popup_motion(self.fe(act=("more", 5.0)), 5.0 + fv.POP_ACT["more"])
+        self.assertGreater(s_more, s_play)
+        self.assertAlmostEqual(a_more, 0.0, places=6)
+        # A estrela: o cartao fica enquanto ela explode e so no fim encolhe e apaga.
+        fav = self.fe(act=("fav", 5.0, True))
+        self.assertEqual(fv.popup_motion(fav, 5.0 + 0.3), (1.0, 1.0, 1.0))
+        scale, alpha, dark = fv.popup_motion(fav, 5.0 + fv.POP_ACT["fav"])
+        self.assertAlmostEqual(scale, 0.9, places=6)
+        self.assertAlmostEqual(alpha, 0.0, places=6)
+        self.assertAlmostEqual(dark, 0.0, places=6)
+        # O Esc: encolhe e some em POP_OUT.
+        _, alpha, dark = fv.popup_motion(self.fe(act=("back", 5.0)), 5.0 + fv.POP_OUT)
+        self.assertAlmostEqual(alpha, 0.0, places=6)
+        self.assertAlmostEqual(dark, 0.0, places=6)
+        # O lancamento atrasa pouco: o jogador sente o aperto, nao a espera.
+        self.assertLessEqual(fv.POP_ACT["play"], 0.35)
+        self.assertLessEqual(fv.POP_ACT["fav"], 0.6)
+
+    def test_scale_fade_keeps_the_background_transparent_and_the_centre(self):
+        fv, pg = self.fv, self.pg
+        top = pg.Surface((320, 240), pg.SRCALPHA)
+        top.fill((255, 0, 0, 255), (110, 80, 100, 60))
+        self.assertIs(fv.scale_fade(top, top.get_rect(), 1.0, 1.0), top)
+        out = fv.scale_fade(top, top.get_rect(), 1.3, 0.5)
+        box = out.get_bounding_rect(1)
+        self.assertGreater(box.w, 100)
+        self.assertLessEqual(abs(box.centerx - 160), 1)
+        self.assertLessEqual(abs(out.get_at((160, 110)).a - 128), 2)
+        self.assertEqual(out.get_at((0, 0)).a, 0)
+
+    def draw(self, sel, now, **ov):
+        import types
+        fv, pg = self.fv, self.pg
+        fe = types.SimpleNamespace(
+            game=lambda: {"Name": "sfa3", "Title": "Street Fighter Alpha 3"}, popup_tiles=lambda: self.TILES,
+            fd=types.SimpleNamespace(short_title=lambda g: g["Title"]), ov=dict(sel=sel, **ov), shot=None,
+            abs_now=now)
+        ui = pg.Surface((320, 240), pg.SRCALPHA)
+        rect = fv.draw_popup(fe, ui, now)
+        return ui, rect
+
+    def tile_pixels(self, ui, rect, i):
+        px, py, pw, ph = rect
+        x = px + (pw - 180) // 2 + i * 64
+        return self.pg.image.tostring(ui.subsurface((x - 6, py + 24 - 6, 64, 64)), "RGBA")
+
+    def test_each_of_the_three_icons_has_its_own_idle_animation(self):
+        # Direto no icone (o brilho do azulejo ja muda com o tempo e esconderia a
+        # falta dele): o PLAY (triangulo e anel), a estrela (bate, balanca e
+        # brilha) e o "+" (meia volta) mudam com o relogio; sem relogio, parados.
+        fv, pg = self.fv, self.pg
+
+        def icon(kind, now, **kw):
+            surf = pg.Surface((64, 64), pg.SRCALPHA)
+            fv.popup_icon(surf, kind, 32, 32, True, now=now, **kw)
+            return pg.image.tostring(surf, "RGBA")
+        for kind, (t1, t2) in {"play": (0.0, 0.2), "fav": (0.0, 0.4), "more": (0.1, 1.0)}.items():
+            self.assertNotEqual(icon(kind, t1), icon(kind, t2), kind)
+            self.assertEqual(icon(kind, None), icon(kind, None), kind)
+        # Apertados, cada um faz a sua: o triangulo voa, a estrela volta de
+        # pequena, o "+" da meia volta.
+        for kind, act in {"play": ("play", 0.2), "fav": ("fav", 0.1, True), "more": ("more", 0.2)}.items():
+            self.assertNotEqual(icon(kind, None, act=act), icon(kind, None), kind)
+
+    def test_the_selected_tile_animates_and_the_others_stand_still(self):
+        # Os outros dois azulejos ficam parados enquanto o escolhido se mexe.
+        for sel in (0, 1, 2):
+            a, rect = self.draw(sel, 100.2 + 1.8 * 50, t0=0.0)
+            b, _ = self.draw(sel, 100.45 + 1.8 * 50, t0=0.0)
+            for i in range(3):
+                same = self.tile_pixels(a, rect, i) == self.tile_pixels(b, rect, i)
+                self.assertEqual(same, i != sel, (sel, i))
+
+    def test_the_menu_draws_in_every_state_inside_the_screen(self):
+        # Abrindo, parado, os tres apertos, o 4 e o Esc: nenhum estado quebra o
+        # desenho e o cartao (que o movimento escala) fica no lugar de sempre.
+        rects = set()
+        for ov in ({"t0": 50.0}, {}, {"act": ("play", 50.0)}, {"act": ("more", 50.0)},
+                   {"act": ("fav", 50.0, True)}, {"act": ("fav", 50.0, False)}, {"burst": (50.0, True)},
+                   {"act": ("back", 50.0)}):
+            for sel in (0, 1, 2):
+                for age in (0.0, 0.05, 0.15, 0.3):
+                    ui, rect = self.draw(sel, 50.0 + age, **ov)
+                    rects.add(rect)
+                    self.assertTrue(self.pg.Rect(0, 0, 320, 240).contains(self.pg.Rect(rect)), (ov, sel, age))
+        self.assertEqual(len(rects), 1)
+
+    def frontend(self):
+        import types
+        fm = FrontendDataTests.frontend_module()
+        calls = []
+        fe = types.SimpleNamespace(overlay="popup", ov={"sel": 0}, shot=None, launching=False, view=self.fv,
+                                   popup_tiles=lambda: self.TILES, calls=calls)
+        fe.toggle_fav = lambda: calls.append("fav") or True
+        fe.open_more = lambda: (calls.append("more"), setattr(fe, "overlay", "more"))
+        for name in ("act", "overlay_act", "popup_act_done"):
+            setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
+        return fe
+
+    def test_play_animates_first_and_the_loop_launches_after(self):
+        fv, fe = self.fv, self.frontend()
+        self.assertIsNone(fe.overlay_act("b1"))
+        kind, start = fe.ov["act"]
+        self.assertEqual((kind, fe.overlay), ("play", "popup"))
+        # Durante a animacao nenhuma tecla vale (ate 0,3 s).
+        fe.overlay_act("right")
+        fe.overlay_act("b2")
+        self.assertEqual((fe.ov["sel"], fe.ov["act"][0]), (0, "play"))
+        fe.popup_act_done(start + 0.1)
+        self.assertFalse(fe.launching)
+        fe.popup_act_done(start + fv.POP_ACT["play"] + 0.01)
+        self.assertEqual((fe.launching, fe.overlay), (True, "popup"))
+        # O laco manda o "go": o mesmo caminho do botao (bloco "launch").
+        self.assertEqual(fe.act("go"), "launch")
+        self.assertIsNone(fe.overlay)
+
+    def test_favourite_bursts_then_the_menu_closes_and_the_fourth_button_keeps_it_open(self):
+        fv, fe = self.fv, self.frontend()
+        fe.ov = {"sel": 1}
+        fe.overlay_act("b1")
+        self.assertEqual(fe.calls, ["fav"])
+        kind, start, on = fe.ov["act"]
+        self.assertEqual((kind, on), ("fav", True))
+        fe.popup_act_done(start + 0.3)
+        self.assertEqual(fe.overlay, "popup")
+        fe.popup_act_done(start + fv.POP_ACT["fav"] + 0.01)
+        self.assertIsNone(fe.overlay)
+        # O botao 4: favorita e so a estrela explode; o menu fica aberto.
+        fe.overlay, fe.ov = "popup", {"sel": 0}
+        fe.overlay_act("b4")
+        self.assertEqual((fe.calls, fe.overlay, fe.ov["burst"][1]), (["fav", "fav"], "popup", True))
+        self.assertNotIn("act", fe.ov)
+
+    def test_the_plus_spins_then_opens_its_page_and_escape_shrinks_the_menu(self):
+        fv, fe = self.fv, self.frontend()
+        fe.ov = {"sel": 2}
+        fe.overlay_act("b1")
+        start = fe.ov["act"][1]
+        self.assertEqual((fe.ov["act"][0], fe.calls), ("more", []))
+        fe.popup_act_done(start + fv.POP_ACT["more"] + 0.01)
+        self.assertEqual((fe.overlay, fe.calls), ("more", ["more"]))
+        fe.overlay, fe.ov = "popup", {"sel": 0}
+        fe.overlay_act("b2")
+        self.assertEqual((fe.overlay, fe.ov["act"][0]), ("popup", "back"))
+        fe.popup_act_done(fe.ov["act"][1] + fv.POP_OUT + 0.01)
+        self.assertIsNone(fe.overlay)
+
+    def test_without_animation_the_prints_keep_the_old_immediate_behaviour(self):
+        fe = self.frontend()
+        fe.shot = "x"
+        self.assertEqual(fe.overlay_act("b1"), "launch")
+        self.assertIsNone(fe.overlay)
+        fe.overlay, fe.ov = "popup", {"sel": 1}
+        fe.overlay_act("b1")
+        self.assertEqual((fe.overlay, fe.calls), (None, ["fav"]))
+        fe.overlay, fe.ov = "popup", {"sel": 2}
+        fe.overlay_act("b1")
+        self.assertEqual((fe.overlay, fe.calls), ("more", ["fav", "more"]))
+        fe.overlay, fe.ov = "popup", {"sel": 0}
+        fe.overlay_act("b2")
+        self.assertIsNone(fe.overlay)
+
+    def test_every_place_that_opens_the_menu_or_the_plus_marks_the_time(self):
+        text = (self.GUI / "fliperos-frontend").read_text()
+        opens = re.findall(r'"popup", \{"sel": [^}]*\}|self\.ov = \{"sel": back[^}]*\}|self\.ov = \{"game": g, "info"[^}]*\}', text)
+        self.assertEqual(len(opens), 3, opens)
+        for found in opens:
+            self.assertIn('"t0": time.monotonic()', found)
+        # O laco lanca o jogo pelo mesmo bloco do botao, depois da animacao.
+        run = text[text.index("    def run(self, keys=()):"):]
+        self.assertLess(run.index("if self.launching:"), run.index("for a in acts:"))
+        self.assertIn('acts = list(acts) + ["go"]', run)
+
+
 class GuiMenuIconTests(unittest.TestCase):
     """Todo item de menu do Setup tem um icone (gui/theme.py ou gui/icons):
     sem ele, o carrossel mostra so a inicial do rotulo."""

@@ -76,6 +76,8 @@ A game missing some art (screenshot, cover, marquee, logo or video) gets it scra
 | **ACHIEVEMENTS** (a trophy) | The game's achievements, the ones you have first ([RetroAchievements](RetroAchievements.md#in-the-game-list)) |
 | **+** | The game's information, in two pages |
 
+The menu moves, at 60 frames a second by the clock. It opens with the card growing and the tiles coming in one after the other. The chosen tile is alive: the **PLAY** triangle pushes forward with a ring pulsing out of it, the **star** beats, rocks and glints, and the **+** turns a quarter turn every second or so. Pressing a tile plays its own animation before it does its job: **PLAY** flashes, throws a ring and zooms the card away, and the game starts 0.3 s later; **FAVOURITE** bursts into sparks and the menu closes (button 4 bursts the star and keeps the menu open); the **+** spins and dives into its page, which comes in from close up; **button 2** shrinks the menu away. No key counts during those fractions of a second. The screenshots (`--shot`) skip all of it.
+
 The **+** page has the cover, year, genre, players and control, the player 1 buttons drawn on the panel where **Buttons layout** puts them, and the description. A blinking arrow leads to the second page: the pictures, maker, series, screen, status, set, rating and the rest of the arcade-history.com text.
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/list-more.webp" width="480" alt="The game's information page">
