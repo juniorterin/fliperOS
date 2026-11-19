@@ -692,7 +692,8 @@ async function cgEditGame(game) {
     } catch (e) { /* a pasta nao esta montada: o executavel fica como esta */ }
   }
   if (kind === "windows" && row.exe && !row.exes.includes(row.exe)) row.exes.unshift(row.exe);
-  const ctl = cgControls(row, { dialog: true, editing: game, runner: kind === "windows" });
+  // A arte em cartoes, como no Criar pacote: escolher o arquivo ou capturar a tela do jogo aberto no gabinete.
+  const ctl = cgControls(row, { dialog: true, editing: game, runner: kind === "windows", cards: true });
   const fields = kind === "command" ? ["name", "group", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "art"]
     : ["run", "mode", "category", "year", "developer", "players", "buttons", "controls", "keys", "art"];
   if (kind === "command") fields.splice(fields.indexOf("controls") + 1, 0, "keys");
@@ -706,13 +707,44 @@ async function cgEditGame(game) {
   cancel.addEventListener("click", () => dlg.close());
   const snap = el("img", { class: "cg-editsnap", alt: "", src: mediaUrl("custom/" + game.group, game.name, "snap") });
   snap.addEventListener("error", () => snap.remove());
+  // Prévia e Testar no gabinete, como no Criar pacote: o cartao como o frontend mostra o jogo com o que esta no formulario,
+  // e o jogo instalado aberto no gabinete (como esta gravado) com a captura da foto e do video dele para a arte.
+  const system = "custom/" + game.group;
+  const media = game.media || [];
+  const before = { snap: mediaUrl(system, game.name, "snap"), logo: media.includes("logo") ? mediaUrl(system, game.name, "logo") : "",
+    video: media.includes("preview") ? mediaUrl(system, game.name, "preview") : "",
+    text: media.includes("texto") ? mediaUrl(system, game.name, "texto") : "", key: game.key, ppdb: game.ppdb };
+  const previewBox = el("div", { class: "cg-preview", hidden: "" });
+  const drawPreview = () => {
+    if (previewBox.hidden) return;
+    previewBox.replaceChildren(el("h5", {}, t("cg_preview_title")), cgPreviewCard(row, before), el("p", { class: "dim" }, t("cg_preview_note")));
+  };
+  const preview = el("button", { type: "button", class: "btn ghost", "aria-pressed": "false" }, icon("g-grid"), t("cg_preview"));
+  preview.addEventListener("click", () => {
+    previewBox.hidden = !previewBox.hidden;
+    preview.setAttribute("aria-pressed", String(!previewBox.hidden));
+    drawPreview();
+    if (!previewBox.hidden) previewBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  const testStatus = el("div", { class: "cg-create-status", role: "status" });
+  const test = el("button", { type: "button", class: "btn ghost" }, icon("g-play"), t("cg_test"));
+  const refreshArt = () => {
+    const now = form.querySelector(".cg-artcards");
+    if (now) now.replaceWith(cgArtCards(row, () => {}));
+    drawPreview();
+  };
+  test.addEventListener("click", () => cgEditTest(game, row, test, testStatus, refreshArt).catch(() => { test.disabled = false; }));
+  // Fechar o formulario fecha o jogo que ele abriu (se ainda e o da tela).
+  dlg.addEventListener("close", () => { cgEditClose().catch(() => {}); }, { once: true });
   const form = el("form", { class: "cg-form cg-edit" },
     el("header", { class: "cg-edithead" }, snap, el("div", {}, el("h3", {}, t("cg_edit_title").replace("%s", game.name)),
       el("div", { class: "cg-cfacts" }, el("span", { class: "tag" }, t("cg_" + (CG_PLATFORMS.includes(kind) ? kind : "script")).replace(/ \(.*/, "")),
         el("span", { class: "tag" }, game.group)))),
     el("p", { class: "dim cg-editnote" }, t(kind === "command" ? "cg_edit_note_cmd" : "cg_edit_note")),
     el("div", { class: "cg-one" }, ...fields.map((f) => cgField(f, ctl[f])), cgField("text", text)),
-    el("footer", {}, cancel, save));
+    previewBox, testStatus,
+    el("footer", {}, preview, test, cancel, save));
+  form.addEventListener("change", () => drawPreview());
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     save.disabled = true;
@@ -745,6 +777,56 @@ async function cgEditGame(game) {
   });
   dlg.replaceChildren(form);
   dlg.showModal();
+}
+
+// Editar > Testar no gabinete: o jogo instalado aberto como esta gravado (o mesmo caminho do Jogar). Quando ele aparece na
+// tela (o FPS da camada com o app dele), o painel do teste: a foto e os 30 s de video do que o gabinete mostra, que vao para a
+// imagem e o video do jogo ao Salvar, e o botao de fechar. Mudancas ainda nao salvas nao valem no teste.
+async function cgEditTest(game, row, button, status, redraw) {
+  if (!(await ask({ title: t("cg_test"), text: t("cg_edit_test_ask").replace("%s", game.name), yes: t("cg_test") }))) return;
+  button.disabled = true;
+  try {
+    const res = await api("/api/launch", { method: "POST", body: JSON.stringify({ system: "custom/" + game.group, game: game.name }) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.app) { status.replaceChildren(el("span", { class: "error" }, out.error || res.statusText)); return; }
+    cg.editApp = cg.testApp = out.app;
+    // Enquanto abre: fechar no gabinete (o jogo pode nao abrir, ou abrir e cair).
+    const stopButton = el("button", { type: "button", class: "btn small ghost" }, icon("g-close"), t("cg_test_close"));
+    stopButton.addEventListener("click", async () => {
+      stopButton.disabled = true;
+      await cgEditClose(true);
+      status.replaceChildren(el("span", {}, t("cg_test_closed")));
+    });
+    status.replaceChildren(el("span", {}, t("cg_test_opening").replace("%s", game.name)), " ", stopButton);
+    // Ate 2 minutos: um jogo do Windows pode demorar (o PortProton).
+    for (let i = 0; i < 60; i++) {
+      await sleep(2000);
+      if (cg.editApp !== out.app) return;
+      const s = await api("/api/status").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+      if (cg.editApp !== out.app) return;
+      if (s.fps && s.fps.program === out.app) {
+        status.replaceChildren(cgTestPanel(row, { redraw, close: () => cgEditClose(true), note: "cg_edit_test_note" }));
+        return;
+      }
+    }
+    status.replaceChildren(el("span", { class: "error" }, t("cg_test_none").replace("%s", game.name).replace("%s", out.app + ".log")), " ", stopButton);
+    stopButton.disabled = false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Fecha o jogo que o Editar abriu. Sem force, so se ele ainda e o da tela (quem abriu outro jogo no gabinete nao perde o dele
+// ao fechar o formulario).
+async function cgEditClose(force) {
+  const app = cg.editApp;
+  cg.editApp = cg.testApp = "";
+  if (!app) return;
+  if (!force) {
+    const s = await api("/api/status").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    if (!s.fps || s.fps.program !== app) return;
+  }
+  await api("/api/close", { method: "POST", body: "{}" }).catch(() => {});
 }
 
 function cgRowFromGame(game) {
@@ -1153,15 +1235,21 @@ function cgCreateDraw() {
 function cgCreatePreview() {
   const box = cg.el.createPreview;
   if (!box || box.hidden) return;
-  const row = cg.createRow;
+  box.replaceChildren(el("h5", {}, t("cg_preview_title")), cgPreviewCard(cg.createRow), el("p", { class: "dim" }, t("cg_preview_note")));
+}
+
+// O cartao da previa de uma linha: o que ela tem agora (a arte nova, ou a de antes em fallback, que o Editar passa), como o
+// frontend mostraria. fallback: {snap, logo, video, text} do jogo instalado; key: o jogo tem .key.
+function cgPreviewCard(row, fallback = {}) {
   const modeLabel = row.mode === "other" ? row.modeOther : row.mode;
   const mode = (((cg.info && cg.info.modes) || []).find((m) => m.label === modeLabel) || { value: modeLabel }).value;
-  const card = cgCard({ name: row.name.trim() || t("cg_ph_name"), platform: row.platform, mode, category: row.category,
+  return cgCard({ name: row.name.trim() || t("cg_ph_name"), platform: row.platform, mode, category: row.category,
     year: row.year.trim(), developer: row.developer.trim(), controls: row.controls.join(","), buttons: row.buttons, players: row.players,
-    snap: row.snap ? row.snap.url || "" : "", logo: row.logo ? row.logo.url || "" : "", video: row.video ? row.video.url || "" : "",
-    text: row.text && !row.text.value ? row.text.url || "" : "", textValue: row.text ? row.text.value || "" : "",
-    key: !!row.key || !!row.joystick, ppdb: !!row.ppdb && row.platform === "windows", tag: { cls: "new", text: t("cg_preview") } });
-  box.replaceChildren(el("h5", {}, t("cg_preview_title")), card, el("p", { class: "dim" }, t("cg_preview_note")));
+    snap: row.snap ? row.snap.url || "" : fallback.snap || "", logo: row.logo ? row.logo.url || "" : fallback.logo || "",
+    video: row.video ? row.video.url || "" : fallback.video || "",
+    text: row.text && !row.text.value ? row.text.url || "" : row.text ? "" : fallback.text || "", textValue: row.text ? row.text.value || "" : "",
+    key: !!row.key || !!row.joystick || !!fallback.key, ppdb: !!row.ppdb && row.platform === "windows" || !!fallback.ppdb,
+    tag: { cls: "new", text: t("cg_preview") } });
 }
 
 // Fechar no gabinete: o jogo do teste (abrindo ou aberto) e o X dele fecham.
@@ -1364,7 +1452,9 @@ function cgArtCards(row, changed) {
 
 // O jogo aberto no teste: o aviso das teclas e a captura da tela do gabinete,
 // a foto e 30 segundos de video, que vao para a imagem e o video do pacote.
-function cgTestPanel(row) {
+// opts (o Editar de um jogo instalado): redraw() desenha a arte de novo depois de uma captura, close() fecha o
+// jogo, note e a chave do texto no lugar do aviso das teclas do Criar pacote.
+function cgTestPanel(row, opts = {}) {
   const msg = el("span", { class: "cg-capmsg", role: "status" });
   const shots = el("div", { class: "cg-capshots" });
   const photo = el("button", { type: "button", class: "btn small" }, icon("g-camera"), t("cg_cap_photo"));
@@ -1380,7 +1470,7 @@ function cgTestPanel(row) {
       const thumb = kind === "snap" ? el("img", { src: got.url, alt: "" })
         : el("video", { src: got.url, controls: "", loop: "", muted: "", playsinline: "", preload: "metadata" });
       shots.append(el("figure", { class: "cg-capshot " + kind }, thumb));
-      cgCreateDraw();
+      (opts.redraw || cgCreateDraw)();
     } finally {
       busy(false);
     }
@@ -1388,12 +1478,12 @@ function cgTestPanel(row) {
   photo.addEventListener("click", () => capture("snap").catch(() => busy(false)));
   video.addEventListener("click", () => capture("video").catch(() => busy(false)));
   close.addEventListener("click", async () => {
-    await cgTestClose();
+    await (opts.close || cgTestClose)();
     msg.textContent = "";
   });
   return el("div", { class: "cg-testbar" },
     el("div", { class: "cg-testhead" }, icon("g-check"), el("b", {}, t("cg_test_open").replace("%s", row.name))),
-    el("p", { class: "cg-testnote" }, t("cg_test_keys")),
+    el("p", { class: "cg-testnote" }, t(opts.note || "cg_test_keys")),
     el("p", { class: "cg-capnote dim" }, t("cg_cap_note")),
     el("div", { class: "cg-testact" }, photo, video, close, msg), shots);
 }
@@ -1791,7 +1881,7 @@ function cgGroupSelect(value, onChange) {
 // cgControls: os campos de uma linha (na tabela, na ficha de um jogo ou no Criar
 // pacote). Mudar o tipo ou a pasta redesenha (o executavel depende deles).
 // package: a linha e de um pacote (so Windows ou Linux, com o joystick); cards:
-// a arte em cartoes com a bandeja de captura (so o Criar pacote de um jogo);
+// a arte em cartoes com a bandeja de captura (o Criar pacote de um jogo e o Editar);
 // editing: um jogo instalado (o tipo nao muda); runner: o que o abre aparece
 // mesmo editando.
 function cgControls(row, { redraw, editing, package: pkg, cards, runner } = {}) {
@@ -1902,16 +1992,34 @@ function cgControls(row, { redraw, editing, package: pkg, cards, runner } = {}) 
   return out;
 }
 
-// Os controles: um botao com os escolhidos; abre os 13 em botoes.
+// O icone de cada tipo de controle, os mesmos do cartao e do frontend: o direcional em setas
+// (8, 4 ou 2 direcoes; o duplo, dois), a mira da pistola, o teclado e os eixos (trackball, dial,
+// pedal...). Sem um proprio, os eixos.
+const CG_CONTROL_GLYPH = { lightgun: "px-guncon", keyboard: "px-keyboard", mahjong: "px-buttons", analog: "px-joysticks" };
+const CG_CONTROL_WAYS = { joy8: 8, joy4: 4, joy2: 2 };
+
+function cgControlGlyph(value) {
+  const ways = CG_CONTROL_WAYS[value];
+  if (ways) return arrowPad(ways);
+  if (value === "twin") return el("span", { class: "cg-twin" }, arrowPad(8), arrowPad(8));
+  return icon(CG_CONTROL_GLYPH[value] || "px-axes", "cg-ctlglyph");
+}
+
+// Os controles: um botao com os escolhidos (o icone e o nome de cada um); abre os 13 em botoes
+// com o icone de cada um.
 function cgControlsButton(row, changed) {
   const labels = Object.fromEntries(((cg.info && cg.info.controls) || []).map((c) => [c.value, c.label]));
   const button = el("button", { type: "button", class: "cg-ctl" });
-  const show = () => { button.textContent = row.controls.length ? row.controls.join(", ") : t("cg_controls_none"); };
+  const show = () => {
+    if (!row.controls.length) { button.replaceChildren(t("cg_controls_none")); return; }
+    button.replaceChildren(el("span", { class: "cg-ctlicons" }, ...row.controls.map((c) => cgControlGlyph(c))),
+      el("span", { class: "cg-ctltext" }, row.controls.join(", ")));
+  };
   show();
   button.addEventListener("click", () => {
     const pop = el("dialog", { class: "ask cg-pop" });
-    const chips = el("div", { class: "chips" }, ...Object.entries(labels).map(([value, label]) => {
-      const b = el("button", { type: "button", "aria-pressed": String(row.controls.includes(value)) }, label);
+    const chips = el("div", { class: "chips cg-ctlchips" }, ...Object.entries(labels).map(([value, label]) => {
+      const b = el("button", { type: "button", "aria-pressed": String(row.controls.includes(value)) }, cgControlGlyph(value), label);
       b.addEventListener("click", () => {
         row.controls = row.controls.includes(value) ? row.controls.filter((c) => c !== value) : [...row.controls, value];
         b.setAttribute("aria-pressed", String(row.controls.includes(value)));

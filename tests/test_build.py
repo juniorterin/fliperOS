@@ -8832,6 +8832,35 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertIn('if (keys.value) body.keys = keys.value;', edit)
         self.assertIn('"/api/customgames/scan?one=1&path="', edit)             # o executavel numa lista da pasta do jogo
         self.assertIn('runner: kind === "windows"', edit)
+        # Editar tem o que o Criar pacote tem: a arte em cartoes (escolher ou capturar a tela do jogo aberto), a previa e
+        # o Testar no gabinete (o jogo instalado, pelo Jogar), e fechar o formulario fecha o jogo que ele abriu.
+        self.assertIn('cards: true', edit)
+        self.assertIn('cgPreviewCard(row, before)', edit)
+        self.assertIn('cgEditTest(game, row, test, testStatus, refreshArt)', edit)
+        self.assertIn('dlg.addEventListener("close", () => { cgEditClose().catch(() => {}); }, { once: true });', edit)
+        test_edit = js.split('async function cgEditTest(')[1].split('\n}\n')[0]
+        self.assertIn('"/api/launch"', test_edit)
+        self.assertIn('s.fps.program === out.app', test_edit)
+        self.assertIn('cgTestPanel(row, { redraw, close: () => cgEditClose(true), note: "cg_edit_test_note" })', test_edit)
+        close_edit = js.split('async function cgEditClose(')[1].split('\n}\n')[0]
+        self.assertIn('"/api/close"', close_edit)
+        panel = js.split('function cgTestPanel(')[1].split('\n}\n')[0]
+        self.assertIn('(opts.redraw || cgCreateDraw)()', panel)
+        self.assertIn('await (opts.close || cgTestClose)()', panel)
+        self.assertIn('function cgPreviewCard(row, fallback = {})', js)
+        for key in ('cg_edit_test_ask', 'cg_edit_test_note'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, (ROOT / 'config/web/setup-text.js').read_text())), 2, key)
+        # O seletor de controle: o icone de cada um dos 13 tipos (o direcional em setas, a mira, os eixos, o teclado) nas
+        # opcoes e no botao com os escolhidos, os mesmos do cartao.
+        self.assertIn('const CG_CONTROL_WAYS = { joy8: 8, joy4: 4, joy2: 2 };', js)
+        glyph = js.split('function cgControlGlyph(')[1].split('\n}\n')[0]
+        self.assertIn('arrowPad(ways)', glyph)
+        self.assertIn('value === "twin"', glyph)
+        buttons = js.split('function cgControlsButton(')[1].split('\n}\n')[0]
+        self.assertIn('cgControlGlyph(value), label', buttons)
+        self.assertIn('...row.controls.map((c) => cgControlGlyph(c))', buttons)
+        for icon_name in ('px-guncon', 'px-keyboard', 'px-joysticks', 'px-axes', 'px-buttons'):
+            self.assertIn('id="%s"' % icon_name, (ROOT / 'config/web/icons.svg').read_text(), icon_name)
         for key in ('cg_f_keys', 'cg_keys_keep_set', 'cg_keys_keep_none', 'cg_keys_clear', 'cg_keys_joystick', 'cg_keys_hint',
                     'cg_edit_note', 'cg_edit_note_cmd'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, (ROOT / 'config/web/setup-text.js').read_text())), 2, key)
@@ -8930,7 +8959,7 @@ class WebCustomGamesTests(WebSetupBase):
         # Com o jogo aberto: o painel das teclas e da captura (a foto e os 10 s de video).
         self.assertIn('cgTestPanel(row)', test)
         panel = js.split('function cgTestPanel(')[1].split('\n}\n')[0]
-        self.assertIn('t("cg_test_keys")', panel)
+        self.assertIn('t(opts.note || "cg_test_keys")', panel)          # o aviso das teclas; o Editar poe o dele
         self.assertIn('cgCaptureArt(row, kind, say)', panel)
         self.assertIn('capture("snap")', panel)
         self.assertIn('capture("video")', panel)
@@ -10763,6 +10792,8 @@ class WebPanelTests(unittest.TestCase):
         launch = source.split('if url.path == "/api/launch":')[1].split('if url.path == "/api/bootgame":')[0]
         self.assertLess(launch.index('game_command('), launch.index('panel_command('))
         self.assertLess(launch.index('panel_command('), launch.index('self.panel.launch('))
+        # A pagina espera o jogo custom aparecer na tela pelo app dele (--app do comando).
+        self.assertIn('result = dict(result, app=argv[argv.index("--app") + 1])', launch)
 
     def test_close_game(self):
         import shutil as sh
@@ -10776,6 +10807,26 @@ class WebPanelTests(unittest.TestCase):
             self.assertIsNotNone(game.wait(timeout=10))
         finally:
             game.kill()
+
+    def test_close_game_closes_a_custom_game_that_is_not_an_emulator(self):
+        # Um jogo custom do Windows (Wine/PortProton) nao tem um emulador da lista no nome do processo: o
+        # fliperos-customgame run e o que o painel fecha (Fechar e o Jogar de outro jogo). Os outros comandos dele
+        # (packages, check...) nao sao jogo aberto.
+        cookie = self.login()
+        tool = Path(self.tmp.name) / 'fliperos-customgame'
+        tool.write_text('#!/bin/sh\nsleep 60\n')
+        tool.chmod(0o755)
+        other = subprocess.Popen([str(tool), 'packages'])
+        game = subprocess.Popen([str(tool), 'run', '/h/roms/custom/Grupo 1/Darkula.cfg'])
+        try:
+            time.sleep(0.5)
+            status, _, data = self.request('POST', '/api/close', {}, cookie=cookie)
+            self.assertEqual((status, json.loads(data)), (200, {'closed': 1}))
+            self.assertIsNotNone(game.wait(timeout=10))
+            self.assertIsNone(other.poll())
+        finally:
+            game.kill()
+            other.kill()
 
     def test_files_browse_upload_download_and_delete(self):
         cookie = self.login()

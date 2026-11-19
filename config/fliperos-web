@@ -1797,6 +1797,11 @@ def on_screen():
     for pid, uid, name, args in processes():
         if name in EMULATORS:
             state["games"].append(pid)
+        elif name == "fliperos-customgame" and "run" in args[1:3]:
+            # Um jogo custom (o do Windows roda no Wine/PortProton, que nao esta na lista de emuladores): o
+            # fliperos-customgame run leva o SIGTERM ao jogo e limpa o que sobra. So o "run": os outros
+            # comandos dele (packages, check...) nao sao jogo aberto.
+            state["games"].append(pid)
         elif name in FRONTENDS and name != "fliperos-gui":
             state["frontends"].append(pid)
         elif name == "lxsession":
@@ -4477,7 +4482,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, {"error": "no such game, or this system does not open from the panel"})
             # Para o painel saber de que pasta e o jogo que abrir (identify).
             self.panel.last_launch = (system["key"], str(data.get("game", "")), time.time())
-            return self.send(200, self.panel.launch(argv))
+            result = self.panel.launch(argv)
+            # Um jogo custom: o nome do programa dele (--app), para a pagina esperar ele aparecer na tela (o
+            # Editar, Testar no gabinete) pelo FPS da camada.
+            if "--app" in argv[:-1]:
+                result = dict(result, app=argv[argv.index("--app") + 1])
+            return self.send(200, result)
         if url.path == "/api/bootgame":
             # O jogo que abre direto ao ligar o gabinete (Setup > Games > Frontend).
             data = self.body()

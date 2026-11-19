@@ -633,6 +633,16 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 :is(.cg-dialog, .cg-pop) .chips button { padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
   color: var(--dim); font-size: 13px; }
 :is(.cg-dialog, .cg-pop) .chips button[aria-pressed="true"] { color: var(--fg); border-color: var(--pink); }
+/* Os controles: o icone de cada tipo (o direcional em setas, a mira, os eixos, o teclado) ao lado do nome, nas
+   opcoes e no botao com os escolhidos. */
+.cg-ctlchips button { display: inline-flex; align-items: center; gap: 8px; }
+.cg-ctlchips .rose, .cg-ctl .rose { width: 22px; height: 22px; flex: none; }
+.cg-ctlchips svg.px, .cg-ctl svg.px { width: 20px; height: 20px; flex: none; }
+.cg-twin { display: inline-flex; gap: 2px; flex: none; }
+.cg-twin .rose { width: 18px; height: 18px; }
+.cg-ctl { display: inline-flex; align-items: center; gap: 8px; }
+.cg-ctlicons { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.cg-ctltext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cg-form { display: grid; gap: 12px; }
 .code-in { font: 12.5px ui-monospace, "JetBrains Mono", monospace !important; color: var(--cyan) !important; }
 .cg-one { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
