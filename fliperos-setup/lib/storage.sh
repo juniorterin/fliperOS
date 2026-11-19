@@ -50,7 +50,7 @@ STORAGE_MOUNTS=${STORAGE_MOUNTS:-${FOLDERS_MOUNTS:-/media/$FLIPEROS_USER}}
 # Por que o ultimo pedido foi recusado, em palavras para a tela.
 STORAGE_ERROR=""
 # O rotulo de um disco formatado aqui (11 letras: o maximo do exFAT).
-STORAGE_LABEL=${STORAGE_LABEL:-FLIPEROS-HD}
+STORAGE_LABEL=${STORAGE_LABEL:-FliperOS-HD}
 STORAGE_SQUASH_LIST=${FLIPEROS_SQUASH_LIST:-/etc/fliperos/squashgames.list}
 # A fila do frontend (offer, legivel por todos) e os discos ja respondidos
 # (answered, um UUID por linha).

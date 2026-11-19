@@ -11566,7 +11566,7 @@ class StorageFormatTests(Base):
             e.stub(name, log % name)
         # O umount tira o disco da lista de montados; o udevadm trigger o monta de novo, com o rotulo novo.
         e.stub("umount", 'echo "umount $*" >> "%s"; : > "%s"' % (self.calls, self.mounted))
-        e.stub("udevadm", 'echo "udevadm $*" >> "%s"; case "$1" in trigger) echo "%s/FLIPEROS-HD" > "%s";; esac'
+        e.stub("udevadm", 'echo "udevadm $*" >> "%s"; case "$1" in trigger) echo "%s/FliperOS-HD" > "%s";; esac'
                % (self.calls, self.media, self.mounted))
 
     def run_cli(self, command, **extra):
@@ -11580,19 +11580,19 @@ class StorageFormatTests(Base):
     def test_ext4_erases_the_partition_and_formats_it_with_the_label(self):
         r = self.run_cli('storage_cli format "%s" ext4' % self.disk)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(r.stdout.strip(), "mount=%s/FLIPEROS-HD" % self.media)
+        self.assertEqual(r.stdout.strip(), "mount=%s/FliperOS-HD" % self.media)
         cmds = self.commands()
-        self.assertEqual(cmds[:3], ["umount -- %s" % self.disk, "wipefs -a -- /dev/sdb1", "mkfs.ext4 -F -m 0 -L FLIPEROS-HD /dev/sdb1"])
+        self.assertEqual(cmds[:3], ["umount -- %s" % self.disk, "wipefs -a -- /dev/sdb1", "mkfs.ext4 -F -m 0 -L FliperOS-HD /dev/sdb1"])
         # O disco monta de novo (o udev) e a raiz dele passa a ser da pessoa; so a particao e tocada.
         self.assertIn("udevadm trigger --action=add --name-match=/dev/sdb1", cmds)
-        self.assertIn("chown nobody: %s/FLIPEROS-HD" % self.media, cmds)
+        self.assertIn("chown nobody: %s/FliperOS-HD" % self.media, cmds)
         self.assertEqual([c for c in cmds if "/dev/sdb " in c + " "], [])
 
     def test_exfat_uses_its_own_tool_and_does_not_chown(self):
         r = self.run_cli('storage_cli format "%s" exfat' % self.disk)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         cmds = self.commands()
-        self.assertIn("mkfs.exfat -L FLIPEROS-HD /dev/sdb1", cmds)
+        self.assertIn("mkfs.exfat -L FliperOS-HD /dev/sdb1", cmds)
         self.assertFalse([c for c in cmds if c.startswith("mkfs.ext4") or c.startswith("chown")])
 
     def test_it_refuses_the_disk_of_the_system_and_the_installation_media(self):

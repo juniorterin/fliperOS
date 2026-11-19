@@ -36,7 +36,7 @@ For a disk that has nothing you want, or that Linux can't use as it is. It works
 2. **ext4** or **exFAT**. ext4 is the best for FliperOS: the fastest, and it keeps links and owners; Windows can't open it. exFAT opens on Windows and Mac too, but is slower and has no links, so the art is kept apart (`~/.local/share/fliperos/media-links`).
 3. A last menu, with **Cancel** first and *Yes, erase everything* second.
 
-It refuses a disk the FliperOS folders or a Batocera filesystem are using (stop using it first), a disk with a packed game folder on it, one with RAID, LVM or encryption, a read-only one, and any disk that also holds the system or the installation media. When it is done the disk is called `FLIPEROS-HD`, empty, and the cabinet offers to use it right away.
+It refuses a disk the FliperOS folders or a Batocera filesystem are using (stop using it first), a disk with a packed game folder on it, one with RAID, LVM or encryption, a read-only one, and any disk that also holds the system or the installation media. When it is done the disk is called `FliperOS-HD`, empty, and the cabinet offers to use it right away.
 
 ### The question when a disk is plugged in
 
@@ -67,7 +67,7 @@ Nothing is written inside a console folder. A folder name that FliperOS has no e
 
 - Folder shortcuts: `lib/folders.sh` (`folders_link`, `folders_unlink`, `folders_shown`, `folders_looks_like_systems`) and `screens/folders.sh`; the state is what is on disk, and the list for the cloud backup is `~/.config/fliperos/folders.list`.
 - FliperOS folders: `lib/storage.sh` and `screens/storage.sh`. `fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse|offer MOUNT|answer MOUNT yes|no [batocera]|auto MOUNT|format-info MOUNT|format MOUNT ext4|exfat` does it from a terminal. `fliperos-automount` runs `--storage auto MOUNT` after mounting a disk; the queue is `/var/lib/fliperos/storage/offer` and the answers are in `/var/lib/fliperos/storage/answered` (`UUID`, and `batocera:UUID` for the other question), read and written by `gui/festorage.py`.
-- Format: `storage_format` unmounts, `wipefs -a`, `mkfs.ext4 -F -m 0` or `mkfs.exfat`, and lets `fliperos-automount` mount it again as `FLIPEROS-HD`. `exfatprogs` comes in the image.
+- Format: `storage_format` unmounts, `wipefs -a`, `mkfs.ext4 -F -m 0` or `mkfs.exfat`, and lets `fliperos-automount` mount it again as `FliperOS-HD`. `exfatprogs` comes in the image.
 - Batocera filesystem: `lib/batocera.sh`; the table of console names, the cores and what each console opens is `config/batocera-systems.list` (installed as `/usr/local/share/fliperos/batocera-systems.list`). The choices are `~/.config/fliperos/batocera.list` (`console<TAB>folder<TAB>core`), in the cloud backup. A console is a frontend system with the key `batocera/<name>` (`scraper_detect` and `scraper_attract_emulator`, `lib/scraper.sh`), so ES-DE, Pegasus, Attract-Mode Plus, the FliperOS frontend and the web panel all list it. `fliperos-setup --batocera detect|scan|list|cores|set|unset|auto|use|unuse|extras` does it from a terminal.
 - Where a folder really is: `folders_shown` (and `fliperos-setup --folders shown <folder>`) is the one text every screen and the web panel use for a folder that can be on another disk.
 

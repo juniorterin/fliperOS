@@ -6160,7 +6160,8 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIsNone(fm.missing_emulator([x11, 'someprogram'], installed))
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
-            mark = tmp / 'model2'
+            # O Setup falso cria um arquivo com o nome do emulador (o Model 2 e o Keisho desde o update 83).
+            mark = tmp / 'keisho'
             emulators = tmp / 'fliperos-emulators'
             emulators.write_text('#!/bin/sh\n[ "$1" = installed ] && [ -e %s/"$2" ]\n' % tmp)
             emulators.chmod(0o755)
@@ -19291,7 +19292,8 @@ class TelegramTests(unittest.TestCase):
             messages = self.post.update_messages(number)
             self.assertIn('Atualização %d do FliperOS' % number, messages[0]['text'])
             # Em portugues e em ingles: juntas, ou uma mensagem de cada.
-            self.assertIn('FliperOS update %d:' % number, messages[-1]['text'])
+            # (o texto em varias mensagens, como o do update 88, traz o titulo em ingles na primeira)
+            self.assertTrue(any('FliperOS update %d:' % number in m['text'] for m in messages), number)
             self.assertTrue(self.post.bilingual('\n'.join(m['text'] for m in messages)), number)
             for message in messages:
                 self.assertLessEqual(self.post.visible(message['text']), self.post.TEXT_MAX, number)
