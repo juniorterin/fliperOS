@@ -32,6 +32,7 @@ quiser conferir; @fliperos15khz sem ela), TELEGRAM_FILES_TOPIC (o numero no fim
 do link do topico, t.me/fliperos15khz/NUMERO; 578), TELEGRAM_API_ID,
 TELEGRAM_API_HASH. Toda mensagem vai em portugues e em ingles."""
 import argparse
+import base64
 import collections
 import html
 import importlib.util
@@ -40,6 +41,7 @@ import io
 import json
 import os
 import re
+import struct
 import sys
 import tempfile
 import time
@@ -419,6 +421,47 @@ class PrintOnly(Telegram):
 
 # ── O MTProto (so quando o pacote e grande demais para a Bot API) ──
 
+def decode_file_id(file_id):
+    """O file_id da Bot API (o formato persistente 4 do tdlib) de um documento: (dc, id, access_hash,
+    file_reference). Eles sao do bot (a mesma conta no MTProto), e abrem o arquivo sem a mensagem. O
+    resolve_bot_file_id do Telethon so le o formato velho e devolve None para os de agora. ValueError: nao
+    e o file_id de um documento."""
+    try:
+        raw = base64.urlsafe_b64decode(file_id + '=' * (-len(file_id) % 4))
+    except (ValueError, TypeError) as exc:
+        raise ValueError('not a file_id: %s' % exc) from None
+    data = bytearray()
+    i = 0
+    while i < len(raw):                       # zeros comprimidos: um 0x00 e a quantidade deles
+        if raw[i] == 0 and i + 1 < len(raw):
+            data += b'\0' * raw[i + 1]
+            i += 2
+        else:
+            data.append(raw[i])
+            i += 1
+    data = bytes(data)
+    if len(data) < 26 or data[-1] != 4:
+        raise ValueError('not a persistent file_id of version 4')
+    kind, dc = struct.unpack('<ii', data[:8])
+    if kind & 0xFFFFFF != 5 or not kind & (1 << 25):
+        raise ValueError('not a document with a file reference')
+    pos = 8
+    size = data[pos]
+    pos += 1
+    if size == 254:                           # os bytes do TL: 1 de tamanho, ou 254 e 3 de tamanho
+        size = int.from_bytes(data[pos:pos + 3], 'little')
+        pos += 3
+        pad = -size % 4
+    else:
+        pad = -(1 + size) % 4
+    reference = data[pos:pos + size]
+    pos += size + pad
+    if len(data) < pos + 16:
+        raise ValueError('the file_id is cut short')
+    media_id, access_hash = struct.unpack('<qq', data[pos:pos + 16])
+    return dc, media_id, access_hash, reference
+
+
 class TelethonSource:
     """O arquivo de uma mensagem do grupo lido por pedacos, como bot pelo MTProto
     (Telethon): iter_download entrega a partir de um deslocamento, sem baixar o
@@ -437,7 +480,7 @@ class TelethonSource:
         self.run(self.client.start(bot_token=token))
         # O arquivo da mensagem do grupo; um bot nem sempre consegue buscar uma mensagem por id (o teste real
         # voltou sem a mensagem), e entao o arquivo vem do file_id da Bot API, que e do mesmo bot.
-        self.document, self.size = None, 0
+        self.document, self.size, self.dc_id = None, 0, None
         try:
             message = self.run(self.client.get_messages(chat, ids=message_id))
         except Exception as exc:    # RPCError do Telethon
@@ -448,10 +491,16 @@ class TelethonSource:
             self.document, self.size = found, found.size
             print('MTProto: the file came from the message %s' % message_id)
         elif file_id:
-            from telethon import utils
-            self.document, self.size = utils.resolve_bot_file_id(file_id), int(file_size or 0)
-            print('MTProto: the message %s was not readable (%s); the file came from its file_id'
-                  % (message_id, type(message).__name__))
+            from telethon import types
+            try:
+                dc, media_id, access_hash, reference = decode_file_id(file_id)
+            except ValueError as exc:
+                raise PostError('the file_id cannot be opened by MTProto: %s' % exc) from None
+            self.document = types.InputDocumentFileLocation(id=media_id, access_hash=access_hash, file_reference=reference,
+                                                            thumb_size='')
+            self.size, self.dc_id = int(file_size or 0), dc
+            print('MTProto: the message %s was not readable (%s); the file came from its file_id (dc %d)'
+                  % (message_id, type(message).__name__, dc))
         if self.document is None or not self.size:
             raise PostError('the message %s has no file the bot can read' % message_id)
 
@@ -464,7 +513,7 @@ class TelethonSource:
         async def read():
             out = b''
             async for chunk in self.client.iter_download(self.document, offset=offset, request_size=BLOCK, limit=1,
-                                                         file_size=self.size):
+                                                         file_size=self.size, dc_id=self.dc_id):
                 out += chunk
             return out[:length]
         return self.loop.run_until_complete(read())

@@ -19066,8 +19066,9 @@ class TelegramCustomGameTests(unittest.TestCase):
                 seen.update(chat=chat, ids=ids)
                 return None if seen.get('hide_message') else Message()
 
-            def iter_download(self, document, offset=0, request_size=0, limit=None, file_size=None):
-                seen['file_size'] = file_size
+            def iter_download(self, document, offset=0, request_size=0, limit=None, file_size=None, dc_id=None):
+                seen.update(file_size=file_size, dc_id=dc_id, location=document)
+
                 async def chunks():
                     yield data[offset:offset + request_size]
                 seen.setdefault('offsets', []).append(offset)
@@ -19080,17 +19081,11 @@ class TelegramCustomGameTests(unittest.TestCase):
         telethon.TelegramClient = Client
         sessions = types.ModuleType('telethon.sessions')
         sessions.StringSession = type('StringSession', (), {})
-        utils = types.ModuleType('telethon.utils')
-
-        def resolve_bot_file_id(file_id):
-            seen['resolved'] = file_id
-            return Doc()                                     # como o Telethon: um Document com size=0
-
-        utils.resolve_bot_file_id = resolve_bot_file_id
+        telethon.types = types.ModuleType('telethon.types')
+        telethon.types.InputDocumentFileLocation = lambda **kw: types.SimpleNamespace(**kw)
         Doc.size = len(data)
-        telethon.utils = utils
-        saved = {k: sys.modules.get(k) for k in ('telethon', 'telethon.sessions', 'telethon.utils')}
-        sys.modules.update({'telethon': telethon, 'telethon.sessions': sessions, 'telethon.utils': utils})
+        saved = {k: sys.modules.get(k) for k in ('telethon', 'telethon.sessions')}
+        sys.modules.update({'telethon': telethon, 'telethon.sessions': sessions})
         env = {'TELEGRAM_BOT_TOKEN': '1:tok', 'TELEGRAM_API_ID': '123', 'TELEGRAM_API_HASH': 'abc'}
         small = self.bot.BOT_DOWNLOAD_MAX
         try:
@@ -19102,7 +19097,8 @@ class TelegramCustomGameTests(unittest.TestCase):
             seen['hide_message'] = True
             self.bot.BOT_DOWNLOAD_MAX = 1 << 20              # o zip de mentira tem 3 MB: grande para o robo
             tg2 = self.Fake()
-            result2 = self.bot.post_package(tg2, self.payload(file_size=len(data)), env, self.tool, out=lambda *_: None)
+            result2 = self.bot.post_package(tg2, self.payload(file_size=len(data), file_id=self.REAL_FILE_ID), env, self.tool,
+                                            out=lambda *_: None)
         finally:
             self.bot.BOT_DOWNLOAD_MAX = small
             for key, module in saved.items():
@@ -19118,9 +19114,25 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertLess(len(first['offsets']) * self.bot.BLOCK, len(data))          # nao leu o zip inteiro
         self.assertEqual([c[0] for c in tg.calls], ['album', 'message', 'document', 'message'])
         self.assertEqual(result2, 'posted: Street Fighter 4')
-        self.assertEqual(seen['resolved'], 'FILE1')
+        self.assertEqual((seen['location'].id, seen['location'].access_hash, seen['dc_id']), (5186086766976698855, 6082520486169254474, 1))
+        self.assertEqual(len(seen['location'].file_reference), 33)
         self.assertEqual(seen['file_size'], len(data))
         self.assertEqual([c[0] for c in tg2.calls], ['album', 'message', 'document', 'message'])
+
+    # O file_id que o teste real do grupo trouxe (um zip de 34 MB mandado ao bot).
+    REAL_FILE_ID = 'BQACAgEAAyEFAAMBBVUx_AACBKlq_q9ltP6YWTvWxNncmvBGfVvYpQAC5wkAAnCu-EdKmifVJ3RpVD0E'
+
+    def test_a_bot_api_file_id_opens_the_document_by_mtproto(self):
+        # O resolve_bot_file_id do Telethon devolve None para o file_id de agora (o formato persistente 4 do tdlib);
+        # o decodificador do robo le o data center, o id, o access_hash e o file_reference de um documento.
+        dc, media_id, access_hash, reference = self.bot.decode_file_id(self.REAL_FILE_ID)
+        self.assertEqual((dc, media_id, access_hash), (1, 5186086766976698855, 6082520486169254474))
+        self.assertEqual(len(reference), 33)
+        self.assertEqual(reference[:5].hex(), '0500000001')
+        # Uma foto, um lixo e um id curto demais nao sao documentos.
+        for bad in ('', 'AgADAgADx6oxG', 'not base64 at all!!', self.REAL_FILE_ID[:30]):
+            with self.assertRaises(ValueError, msg=bad):
+                self.bot.decode_file_id(bad)
 
     def test_no_post_reads_the_package_but_sends_nothing_to_the_group(self):
         posted = []
