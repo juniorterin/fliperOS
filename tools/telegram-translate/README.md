@@ -70,7 +70,12 @@ Uma vez só:
    os arquivos mandados, como já precisa para a tradução.
 
 Rodar à mão: *Actions > Telegram custom game > Run workflow*, com o JSON do pedido
-(`chat_id`, `message_id`, `file_id`, `file_name`, `file_size`…). Para ver o post de
+(`chat_id`, `message_id`, `file_id`, `file_name`, `file_size`…). Com **no_post** o robô
+lê o pacote de verdade (Bot API ou MTProto) e só mostra o post no log, sem postar no
+grupo: serve para conferir um pacote grande sem repetir o post. Com **dry_run** só o
+pedido é conferido. (Um bot nem sempre acha uma mensagem do grupo por id pelo MTProto:
+nesse caso o arquivo é aberto pelo `file_id` da Bot API, decodificado por
+`decode_file_id`; o log diz qual caminho foi usado.) Para ver o post de
 um zip do disco sem rede: `python3 tools/telegram-customgame.py --zip JOGO.fliperos-customgame.zip --out pasta`.
 
 Para desligar: `deleteWebhook`. Os posts de versões e updates

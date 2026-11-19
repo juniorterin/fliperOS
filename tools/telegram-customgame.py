@@ -210,7 +210,7 @@ LABELS = {
            'developer': 'Desenvolvedora', 'players': 'Jogadores', 'buttons': 'Botões', 'controls': 'Controles',
            'key': 'Mapa do controle (.key)', 'key_yes': 'sim, %d teclas', 'key_joystick': 'o jogo já aceita o joystick (mapa vazio)',
            'key_no': 'não (o menu na tela pede ao abrir)', 'ppdb': 'PortProton (.ppdb)', 'yes': 'sim', 'no': 'não',
-           'runner': 'Abre com', 'size': 'Tamanho do jogo', 'art': 'Arte', 'art_none': 'nenhuma (ganha de exemplo)',
+           'runner': 'Abre com', 'size': 'Tamanho do jogo', 'size_files': '%s em %d arquivos', 'art': 'Arte', 'art_none': 'nenhuma (ganha de exemplo)',
            'snap': 'imagem', 'logo': 'logotipo', 'preview': 'vídeo', 'text': 'texto', 'description': 'Descrição',
            'by': 'Enviado por', 'install': 'Para instalar: painel web > Jogos custom > Jogos, solte o .zip (ele se instala sozinho), '
                                            'ou ponha na pasta ~/roms/custom-packages do gabinete.',
@@ -221,7 +221,7 @@ LABELS = {
            'developer': 'Developer', 'players': 'Players', 'buttons': 'Buttons', 'controls': 'Controls',
            'key': 'Controller key map (.key)', 'key_yes': 'yes, %d keys', 'key_joystick': 'the game already works with the joystick (empty map)',
            'key_no': 'no (the on-screen menu asks when it opens)', 'ppdb': 'PortProton (.ppdb)', 'yes': 'yes', 'no': 'no',
-           'runner': 'Runs with', 'size': 'Game size', 'art': 'Art', 'art_none': 'none (samples are made)',
+           'runner': 'Runs with', 'size': 'Game size', 'size_files': '%s in %d files', 'art': 'Art', 'art_none': 'none (samples are made)',
            'snap': 'picture', 'logo': 'logo', 'preview': 'video', 'text': 'text', 'description': 'Description',
            'by': 'Sent by', 'install': 'To install: web panel > Custom games > Games, drop the .zip (it installs by itself), '
                                        'or put it in ~/roms/custom-packages on the cabinet.',
@@ -268,7 +268,7 @@ def facts(info, lang):
         out.append((t['key'], t['key_yes'] % len(info['key'])))
     if info['platform'] == 'windows':
         out.append((t['ppdb'], t['yes'] if info['ppdb'] else t['no']))
-    out.append((t['size'], '%s (%d)' % (size_text(info['game_bytes']), info['files'])))
+    out.append((t['size'], t['size_files'] % (size_text(info['game_bytes']), info['files'])))
     art = [t[k] for k in ('snap', 'logo', 'preview') if k in info['art']] + ([t['text']] if info['text'] else [])
     art += ['%s (%s)' % (t[k], t['skipped']) for k in info['skipped']]
     out.append((t['art'], e(', '.join(art)) if art else t['art_none']))
