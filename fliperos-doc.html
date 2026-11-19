@@ -391,8 +391,9 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li>
 <p><em>Emulators &amp; Games</em>: the emulators of the desktop menu, each marked <em>installed</em> or <em>not installed</em>.</p>
 <p>Choose one that is not installed to install it: <strong>Fightcade 2</strong> (downloaded from its site) and <strong>KOF Final Attack</strong> on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with <code>Final Attack.exe</code>, on a USB disk or the network) and it downloads the <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> and Ikemen GO and makes a converted copy. The others come in the image.
-  - <em>Folders</em>: the folders FliperOS uses (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>splashscreen</code>) and the ones inside them: each emulator, each RetroArch core, each type of art.</p>
-<p>Choose one and <em>Link this to another folder</em> to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): <code>~/roms/mame</code> becomes a link to it and the folder used until then is kept as <code>~/roms/old-mame</code>. Each folder can point to a different place. <em>Unlink the custom folder</em> brings the previous one back.
+  - <em>Folders</em>, in two parts:
+- <em>Folder shortcuts</em> (called <em>Link</em> before): the folders FliperOS uses (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>splashscreen</code>) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and <em>Point it to a folder on another disk</em> to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): <code>~/roms/mame</code> becomes a shortcut to it and the folder used until then is kept as <code>~/roms/old-mame</code>. Each folder can point to a different place. <em>Remove the shortcut</em> brings the previous one back.
+- <em>External storage</em>: a whole disk. <em>FliperOS folders</em> makes the folder structure on a second disk and can use it for everything, or format the disk (ext4 or exFAT). <em>Batocera filesystem</em> uses a disk that already keeps its games in Batocera's folders (<code>batocera/roms/snes</code>, <code>megadrive</code>...): each console becomes a system, with the core you choose for it. Plug such a disk in and the frontend asks once whether to use it. More in <a href="docs/wiki/External-storage.md">External storage</a>.
   - <em>Downloader</em>:
 - <em>ROM/CHD MAME torrent</em>: you paste the magnet link of a romset (and one of CHDs) and it downloads, through Transmission, only the games the ROM Cleaner filter chooses, straight into the emulator's folder. The MAME version of the romset must match the emulator;
 - <em>Free games (open-source homebrew)</em>: downloads free homebrew games to the RetroArch folders, so the frontend has something to show.
@@ -1543,7 +1544,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li><strong>Games</strong>: <a href="#Setup-Games">Games Setup</a></li>
 <li>Emulators &amp; Games, Frontend, Extras (<a href="#Setup-Games">Games Setup</a>)</li>
 <li>Custom games (<a href="#Custom-games">Custom games</a>)</li>
-<li>Folders (<a href="#ROMs-custom-folders">ROMs, BIOS and artwork</a>)</li>
+<li>Folders: Folder shortcuts and External storage (a second disk, a Batocera filesystem, formatting) (<a href="#External-storage">External storage</a>)</li>
 <li>Downloader and Download BIOS (<a href="#ROMs">ROMs, BIOS and artwork</a>)</li>
 <li>Cleaner, Scraper, AttractPlus ROM List (<a href="#ROMs">ROMs, BIOS and artwork</a>, <a href="#Scraper">Scraper</a>)</li>
 <li><strong>Joysticks</strong>: <a href="#Controls">Controls</a></li>
@@ -1823,8 +1824,8 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>Folders</strong></td>
-<td>Where ROMs, BIOS and art are; an external disk instead</td>
-<td><a href="#ROMs-custom-folders">ROMs, BIOS and artwork</a></td>
+<td><strong>Folder shortcuts</strong> (send a folder to another disk) and <strong>External storage</strong> (a whole disk: the FliperOS folders, or a Batocera filesystem with a core for each console; format a disk)</td>
+<td><a href="#External-storage">External storage</a></td>
 </tr>
 <tr>
 <td><strong>Downloader</strong></td>
@@ -2014,7 +2015,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </ul>
 <p>See also: <a href="#Emulators">Emulators</a>, <a href="#Frontends">Frontends</a>, <a href="#Adding-games">Adding games</a>.</p>
 <h1 id="Setup-System">System Setup</h1>
-<p><strong>Setup &gt; System</strong> has the rest of the cabinet: latency, services, USB fixes, a second disk (Storage), the password, the cabinet's name, updates, debug mode, lab mode, the cartridge reader's firmware and the boot splash.</p>
+<p><strong>Setup &gt; System</strong> has the rest of the cabinet: latency, services, USB fixes, the password, the cabinet's name, updates, debug mode, lab mode, the cartridge reader's firmware and the boot splash. A second or external disk (it used to be here, as Storage) is now in <strong>Setup &gt; Games &gt; Folders &gt; External storage</strong>: see <a href="#External-storage">External storage</a>.</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/gui/system.webp" width="480" alt="Setup > System"&gt;</p>
 <table>
 <thead>
@@ -2039,11 +2040,6 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <td><strong>Quirks (USB device fixes)</strong></td>
 <td>Kernel fixes for a USB device read wrong: encoders, guns, disks</td>
 <td><a href="#Wheels-and-quirks-quirks-usb-device-fixes">Controls</a></td>
-</tr>
-<tr>
-<td><strong>Storage</strong></td>
-<td>Use a second or external disk for the ROMs, BIOS, art, saves and downloads</td>
-<td><a href="#Setup-System-storage-a-second-or-external-disk">Below</a></td>
 </tr>
 <tr>
 <td><strong>Password</strong></td>
@@ -2156,16 +2152,6 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li>the Downloader's Transmission, which only starts when a download is asked for;</li>
 <li>the Pixelcade and the ZeDMD, which start when the device is plugged in.</li>
 </ul>
-<h2 id="Setup-System-storage-a-second-or-external-disk">Storage: a second or external disk</h2>
-<p>A data disk that is plugged in (a USB hard disk, an SSD, another internal disk of 8 GB or more) is mounted by itself in <code>/media/fliperos/&lt;label&gt;</code>, and gets a <strong><code>fliperos</code> folder with the whole folder structure</strong> of the cabinet inside it: <code>roms</code> (one folder per emulator and per RetroArch core), <code>bios</code>, <code>media</code> (one folder per type of art), <code>nvram</code> and <code>save</code>. Only the folders are made: nothing on the main disk changes, and a small stick, a read-only disk or a CD is left alone. <code>storage_auto=off</code> in <code>fliperos.conf</code> turns this off.</p>
-<p><strong>Setup &gt; System &gt; Storage</strong> lists the disks (label, type, size, free space, and <em>in use</em> when the cabinet already uses it). Pick one:</p>
-<ul>
-<li><strong>Use it:</strong> the five folders in the home of the cabinet become links to the disk's <code>fliperos</code> folders (the same as <strong>Games &gt; Folders</strong>, for the five at once). From then on everything the Downloader, the Scraper and the art packs download, and the saves and the nvram, go to the second disk, next to the main one. What was in the home before stays beside, as <code>~/old-roms</code>, <code>~/old-bios</code>…, nothing is lost or copied. Put your ROMs, saves and art straight in the disk's folders (on a PC, or by the network share) and the frontends see them.</li>
-<li><strong>Only prepare the folders:</strong> makes the structure and changes nothing else.</li>
-<li><strong>Back to the main disk:</strong> the folders of the home are the main disk's again (the <code>old-</code> ones come back); nothing is deleted from the second disk.</li>
-</ul>
-<p><strong>The question:</strong> the first time a disk like that is plugged in (identified by the UUID of its file system), the FliperOS frontend asks, <strong>once</strong>, whether to use it for the ROMs, BIOS, art, saves and downloads (<strong>YES</strong> / <strong>NO</strong>; <strong>NO</strong> is the one selected and back on the panel is a NO). A button pressed in the first second is ignored, so someone already pressing a button in the list does not turn the disk on by mistake. <strong>YES</strong> is the same as <em>Use it</em> above. <strong>NO</strong> shows where to change it later (<strong>Setup &gt; System &gt; Storage</strong>, also in the web panel) and the disk never asks again; it stays in the Setup list. A disk already in use is not offered, and neither is one that does not serve (a small stick). While a game is open, or any frontend menu, the question waits for the frontend to be free; it does not appear in the commercial mode. How it works: <code>fliperos-automount</code> runs <code>fliperos-setup --storage offer MOUNT</code> after making the folders, which writes the disk in <code>/var/lib/fliperos/storage/offer</code>; the frontend (<code>gui/festorage.py</code>) reads that file and sends the answer with <code>--storage answer MOUNT yes|no</code>, which keeps the UUID in <code>/var/lib/fliperos/storage/answered</code>.</p>
-<p>The same screen opens from the web panel (<strong>System &gt; Setup &gt; System &gt; Storage</strong>, <em>Open on the cabinet</em>). <code>fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse|offer MOUNT|answer MOUNT yes|no</code> does it from a terminal.</p>
 <h2 id="Setup-System-password">Password</h2>
 <p>The password of the <code>fliperos</code> user, which is also the login of SSH, <code>sudo</code>, the network share and the web panel. Samba keeps a password of its own, and both change together. The user stays <code>fliperos</code>.</p>
 <p>The default is <code>fliperos</code>. On a network you don't control, change it.</p>
@@ -4425,14 +4411,14 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h3 id="ROMs-splashscreen"><code>~/splashscreen</code></h3>
 <p>The boot splash themes, one folder per theme with its <code>.plymouth</code> file. The bundled ones are copied there and follow new versions while you leave them untouched; to change one, copy its folder with a new name. See <a href="#Setup-System-splash-screen">System Setup</a>.</p>
 <h2 id="ROMs-custom-folders">Custom folders</h2>
-<p><strong>Setup &gt; Games &gt; Folders</strong> shows the whole structure: the folders above and, inside them, each emulator's, each RetroArch core's, each Fightcade emulator's, each BIOS subfolder and each type of art.</p>
-<p>Any of them can have its own <strong>custom folder</strong>: another folder used in its place, for when the ROMs, the art or the BIOS are on another disk (a USB disk, a second drive, mounted by themselves in <code>/media/fliperos/&lt;label&gt;</code>). So the MAME 2010 sets can be on one disk and the Model 2 videos on another.</p>
+<p><strong>Setup &gt; Games &gt; Folders &gt; Folder shortcuts</strong> shows the whole structure: the folders above and, inside them, each emulator's, each RetroArch core's, each Fightcade emulator's, each BIOS subfolder and each type of art.</p>
+<p>Any of them can have a <strong>shortcut</strong> (called <em>Link</em> or <em>custom folder</em> before): another folder used in its place, for when the ROMs, the art or the BIOS are on another disk (a USB disk, a second drive, mounted by themselves in <code>/media/fliperos/&lt;label&gt;</code>). So the MAME 2010 sets can be on one disk and the Model 2 videos on another.</p>
 <ul>
-<li><strong>Link this to another folder:</strong> the folder becomes a link to the chosen one, and the folder used until then is renamed next to it with <code>old-</code> in the name (<code>~/roms/old-mame</code>), with everything in it. Nothing is copied or deleted.</li>
-<li><strong>Change the custom folder</strong> swaps the link of a folder that already has one.</li>
-<li><strong>Unlink the custom folder:</strong> the link goes away and the <code>old-</code> folder gets its name back. Nothing is deleted from the custom folder.</li>
+<li><strong>Point it to a folder on another disk:</strong> the folder becomes a link to the chosen one, and the folder used until then is renamed next to it with <code>old-</code> in the name (<code>~/roms/old-mame</code>), with everything in it. Nothing is copied or deleted.</li>
+<li><strong>Change where it points</strong> swaps the link of a folder that already has one.</li>
+<li><strong>Remove the shortcut:</strong> the link goes away and the <code>old-</code> folder gets its name back. Nothing is deleted from the other disk.</li>
 </ul>
-<p>Each line says whether the folder has a custom folder, or how many folders inside it have one. Everything that looks in the folder (emulators, frontends, the Scraper, the network shares) goes through the link. A disk that isn't connected shows as <em>not found</em>, and that folder is left alone.</p>
+<p>Each line says what the folder keeps, whether it has a shortcut (and where it points), or how many folders inside it have one. Everything that looks in the folder (emulators, frontends, the Scraper, the network shares) goes through the link. A disk that isn't connected shows as <em>not found</em>, and that folder is left alone. The screens and the web panel that tell you where to put something say where the folder really is when it is a shortcut. A whole disk, in the FliperOS structure or in the folders Batocera uses, is in <strong>Folders &gt; External storage</strong>: see <a href="#External-storage">External storage</a>.</p>
 <h2 id="ROMs-free-games">Free games</h2>
 <p><strong>Setup &gt; Games &gt; Downloader &gt; Free games</strong> brings open-source homebrew, so the frontends don't start empty and you can test video, sound and controls: see <a href="#Downloader-free-games">Downloader</a>.</p>
 <h2 id="ROMs-how-it-works">How it works</h2>
@@ -4447,6 +4433,86 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li><code>~/roms/model2</code> is a plain folder; on an installation from the old Wine Model 2 Emulator, where it was a link, the games moved into it.</li>
 </ul>
 <p>See also: <a href="#Adding-games">Adding games</a>, <a href="#Remote-access-the-network-share">Remote access</a>.</p>
+<h1 id="External-storage">External storage</h1>
+<p><strong>Setup &gt; Games &gt; Folders</strong> has two ways to put your games on another disk: <strong>Folder shortcuts</strong>, for one folder at a time, and <strong>External storage</strong>, for a whole disk. External storage has two kinds: the <strong>FliperOS folders</strong> (the structure FliperOS makes on a second disk) and the <strong>Batocera filesystem</strong> (a disk that already keeps its games in the folders Batocera uses). It can also <strong>format</strong> a disk.</p>
+<table>
+<thead>
+<tr>
+<th>You have</th>
+<th>Use</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A new, empty disk</td>
+<td><strong>External storage &gt; FliperOS folders</strong>, then <em>Use it</em> (or <em>Format this disk</em> first)</td>
+<td><a href="#External-storage-fliperos-folders-a-second-disk">Below</a></td>
+</tr>
+<tr>
+<td>A disk with the games in <code>batocera/roms/snes</code>, <code>megadrive</code>, <code>psx</code>...</td>
+<td><strong>External storage &gt; Batocera filesystem</strong></td>
+<td><a href="#External-storage-batocera-filesystem">Below</a></td>
+</tr>
+<tr>
+<td>The games of one system on a disk, in a folder of their own</td>
+<td><strong>Folder shortcuts</strong></td>
+<td><a href="#External-storage-folder-shortcuts">Below</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="External-storage-folder-shortcuts">Folder shortcuts</h2>
+<p>A shortcut sends one FliperOS folder to another disk. It was called <strong>Link</strong> before (<em>Link this to another folder</em>, <em>Unlink the custom folder</em>): the same thing, now with clearer names. Example: <code>~/roms/mame</code> is on the disk of the cabinet, and your external hard disk has the MAME games in <code>HD/mame</code>. In <strong>Folder shortcuts</strong> pick <code>roms</code>, then <code>mame</code>, then <strong>Point it to a folder on another disk</strong> and open <code>HD/mame</code>. From then on the games show up as if they were in <code>~/roms/mame</code>: the frontends, the Downloader, the Scraper and the network share all use them.</p>
+<ul>
+<li>Nothing is copied or deleted. The folder used until then stays beside it, renamed with <code>old-</code> in front (<code>~/roms/old-mame</code>).</li>
+<li><strong>Change where it points</strong> swaps the target. <strong>Remove the shortcut</strong> brings the <code>old-</code> folder back to its name; nothing is deleted from the other disk.</li>
+<li>The list says what each root keeps (<code>roms</code> games, <code>bios</code> BIOS files, <code>media</code> art and videos...) and, for a shortcut, where it points. A disk that is not connected shows as <em>not found</em> and that folder is left alone. <strong>How shortcuts work</strong> on top of the list tells the same with an example.</li>
+<li>Linking a folder of one system to a folder that holds many consoles (<code>snes</code>, <code>megadrive</code>, <code>psx</code>...) asks first: the games would not show up. Use the Batocera filesystem for that.</li>
+</ul>
+<p>The same shortcuts are in the <a href="#Web-panel-System">web panel</a> (<strong>System &gt; Setup &gt; Games &gt; Folders</strong>). Everything that looks in a folder goes through the shortcut, and the screens that tell you where to put something (the custom game packages, for one) say where the folder really is: <code>~/roms/custom-packages (on HD: batocera/roms/custom-packages)</code>, or <em>the disk HD is off</em>.</p>
+<h2 id="External-storage-fliperos-folders-a-second-disk">FliperOS folders: a second disk</h2>
+<p>A data disk that is plugged in (a USB hard disk, an SSD, another internal disk of 8 GB or more) is mounted by itself in <code>/media/fliperos/&lt;label&gt;</code>, and gets a <strong><code>fliperos</code> folder with the whole structure</strong> of the cabinet inside it: <code>roms</code> (one folder per emulator and per RetroArch core), <code>bios</code>, <code>media</code> (one folder per type of art), <code>nvram</code> and <code>save</code>. Only the folders are made: nothing on the main disk changes, and a small stick, a read-only disk or a CD is left alone. <code>storage_auto=off</code> in <code>fliperos.conf</code> turns this off. A disk that already has a Batocera filesystem gets nothing written: see below.</p>
+<p><strong>External storage &gt; FliperOS folders</strong> lists the disks (label, type, size, free space, and <em>in use</em> when the cabinet already uses it). Pick one:</p>
+<ul>
+<li><strong>Use it:</strong> the five folders in the home of the cabinet become shortcuts to the disk's <code>fliperos</code> folders (the same as <strong>Folder shortcuts</strong>, for the five at once). From then on everything the Downloader, the Scraper and the art packs download, and the saves and the nvram, go to the second disk, next to the main one. What was in the home before stays beside, as <code>~/old-roms</code>, <code>~/old-bios</code>…, nothing is lost or copied. Put your ROMs, saves and art straight in the disk's folders (on a PC, or by the network share) and the frontends see them.</li>
+<li><strong>Only prepare the folders:</strong> makes the structure and changes nothing else.</li>
+<li><strong>Format this disk:</strong> erases the disk and makes it new (below).</li>
+<li><strong>Back to the main disk</strong> (on the list): the folders of the home are the main disk's again (the <code>old-</code> ones come back); nothing is deleted from the second disk.</li>
+</ul>
+<h3 id="External-storage-format-this-disk">Format this disk</h3>
+<p>For a disk that has nothing you want, or that Linux can't use as it is. It works on the partition you picked, in three steps, and the first answer is <strong>No</strong>:</p>
+<ol>
+<li>It says what goes: the model, the size, the partition, the type and how much is in use. A disk with a Batocera filesystem says so.</li>
+<li><strong>ext4</strong> or <strong>exFAT</strong>. ext4 is the best for FliperOS: the fastest, and it keeps links and owners; Windows can't open it. exFAT opens on Windows and Mac too, but is slower and has no links, so the art is kept apart (<code>~/.local/share/fliperos/media-links</code>).</li>
+<li>A last menu, with <strong>Cancel</strong> first and <em>Yes, erase everything</em> second.</li>
+</ol>
+<p>It refuses a disk the FliperOS folders or a Batocera filesystem are using (stop using it first), a disk with a packed game folder on it, one with RAID, LVM or encryption, a read-only one, and any disk that also holds the system or the installation media. When it is done the disk is called <code>FLIPEROS-HD</code>, empty, and the cabinet offers to use it right away.</p>
+<h3 id="External-storage-the-question-when-a-disk-is-plugged-in">The question when a disk is plugged in</h3>
+<p>The first time a disk like that is plugged in (identified by the UUID of its file system), the FliperOS frontend asks, <strong>once</strong>, whether to use it for the ROMs, BIOS, art, saves and downloads (<strong>YES</strong> / <strong>NO</strong>; <strong>NO</strong> is the one selected and back on the panel is a NO). A button pressed in the first second is ignored, so someone already pressing a button in the list does not turn the disk on by mistake. <strong>YES</strong> is the same as <em>Use it</em> above. <strong>NO</strong> shows where to change it later (<strong>Setup &gt; Games &gt; Folders &gt; External storage</strong>, also in the web panel) and the disk never asks again. A disk already in use is not offered, and neither is one that does not serve (a small stick). While a game is open, or any frontend menu, the question waits for the frontend to be free; it does not appear in the commercial mode.</p>
+<h2 id="External-storage-batocera-filesystem">Batocera filesystem</h2>
+<p>A disk that was set up for Batocera keeps the games by <strong>console</strong>, not by emulator: <code>batocera/roms/snes</code>, <code>megadrive</code>, <code>psx</code>, <code>atomiswave</code>... (the folder can also be <code>userdata</code> or the disk itself). FliperOS has one folder per emulator and per RetroArch core, so the two don't line up by themselves. The Batocera filesystem fixes that by reading the disk where it is and letting you <strong>choose what opens each console</strong>.</p>
+<p><strong>External storage &gt; Batocera filesystem</strong> lists the disks that have such folders. Pick one:</p>
+<ul>
+<li><strong>Use it (everything it has):</strong></li>
+<li>each console folder FliperOS knows (about a hundred names, from <code>nes</code> and <code>snes</code> to <code>dreamcast</code>, <code>psx</code>, <code>gamecube</code>, <code>mame</code>, <code>neogeo</code>...) becomes a <strong>system of the frontends</strong>, with the core FliperOS prefers for it, working at once. The games are not copied or moved;</li>
+<li>each folder beside <code>roms</code> that has a FliperOS counterpart becomes a shortcut of it: <code>bios</code>, <code>saves</code> (as <code>save</code>), <code>nvram</code>, <code>media</code> and <code>snap</code> (as <code>media/snap</code>). What was in your home stays beside, as <code>old-bios</code>...;</li>
+<li>the <strong>FliperOS folders that Batocera doesn't have</strong> are made beside the consoles and linked: <code>namco2x6</code>, <code>fightcade</code>, <code>hypseus</code> and <code>custom-packages</code>, so the packages of the <a href="#Custom-games">custom games</a> and the Namco games live on the disk too. <code>custom</code> stays on the cabinet: it only holds the launchers the Setup makes.</li>
+<li>A disk that is read only only gets its consoles. A shortcut you made yourself to another place is left as it was.</li>
+<li><strong>Cores of the consoles:</strong> the list of consoles, each with its core. Pick one to choose another core: the RetroArch cores that handle that system, and the standalone emulator when there is one (PCSX2, DuckStation, Flycast, Dolphin, the Sega Model emulator...). The best one is marked, and a core that is not installed says <em>downloads on first use</em>. <strong>Not used</strong> takes the console out of the frontends.</li>
+<li><strong>Best core for all:</strong> gives every console the core FliperOS prefers.</li>
+<li><strong>Stop using it:</strong> the consoles leave the frontends and the shortcuts of the home go back. Nothing is deleted from the disk, and the folders made beside the consoles stay there.</li>
+</ul>
+<p>Nothing is written inside a console folder. A folder name that FliperOS has no emulator for is left out, and the list says how many.</p>
+<p><strong>The question:</strong> when a disk with a Batocera filesystem is plugged in, or the cabinet turns on with it connected, the frontend asks <strong>once</strong> whether to use it (<strong>YES</strong> / <strong>NO</strong>, <strong>NO</strong> selected), in a card that says how many consoles it found. It does not make the <code>fliperos</code> folder on that disk. <strong>YES</strong> is the same as <em>Use it</em> above; <strong>NO</strong> says where to do it later. It is asked once per disk, apart from the question of the FliperOS folders.</p>
+<h2 id="External-storage-how-it-works">How it works</h2>
+<ul>
+<li>Folder shortcuts: <code>lib/folders.sh</code> (<code>folders_link</code>, <code>folders_unlink</code>, <code>folders_shown</code>, <code>folders_looks_like_systems</code>) and <code>screens/folders.sh</code>; the state is what is on disk, and the list for the cloud backup is <code>~/.config/fliperos/folders.list</code>.</li>
+<li>FliperOS folders: <code>lib/storage.sh</code> and <code>screens/storage.sh</code>. <code>fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse|offer MOUNT|answer MOUNT yes|no [batocera]|auto MOUNT|format-info MOUNT|format MOUNT ext4|exfat</code> does it from a terminal. <code>fliperos-automount</code> runs <code>--storage auto MOUNT</code> after mounting a disk; the queue is <code>/var/lib/fliperos/storage/offer</code> and the answers are in <code>/var/lib/fliperos/storage/answered</code> (<code>UUID</code>, and <code>batocera:UUID</code> for the other question), read and written by <code>gui/festorage.py</code>.</li>
+<li>Format: <code>storage_format</code> unmounts, <code>wipefs -a</code>, <code>mkfs.ext4 -F -m 0</code> or <code>mkfs.exfat</code>, and lets <code>fliperos-automount</code> mount it again as <code>FLIPEROS-HD</code>. <code>exfatprogs</code> comes in the image.</li>
+<li>Batocera filesystem: <code>lib/batocera.sh</code>; the table of console names, the cores and what each console opens is <code>config/batocera-systems.list</code> (installed as <code>/usr/local/share/fliperos/batocera-systems.list</code>). The choices are <code>~/.config/fliperos/batocera.list</code> (<code>console&lt;TAB&gt;folder&lt;TAB&gt;core</code>), in the cloud backup. A console is a frontend system with the key <code>batocera/&lt;name&gt;</code> (<code>scraper_detect</code> and <code>scraper_attract_emulator</code>, <code>lib/scraper.sh</code>), so ES-DE, Pegasus, Attract-Mode Plus, the FliperOS frontend and the web panel all list it. <code>fliperos-setup --batocera detect|scan|list|cores|set|unset|auto|use|unuse|extras</code> does it from a terminal.</li>
+<li>Where a folder really is: <code>folders_shown</code> (and <code>fliperos-setup --folders shown &lt;folder&gt;</code>) is the one text every screen and the web panel use for a folder that can be on another disk.</li>
+</ul>
+<p>See also: <a href="#ROMs">ROMs, BIOS and artwork</a>, <a href="#Setup-Games">Games Setup</a>, <a href="#Custom-games">Custom games</a>, <a href="#Web-panel-System">Web panel: System</a>.</p>
 <h1 id="Downloader">Downloader</h1>
 <p><strong>Setup &gt; Games &gt; Downloader</strong> brings games over the internet: a MAME romset by torrent, but <strong>only the games your filter picks</strong>, and free homebrew games. It also has <a href="#BIOS">Download BIOS</a>.</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/downloader.webp" width="480" alt="The Downloader"></p>
@@ -35028,7 +35094,8 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </ul>
 <h3 id="Web-panel-System-folders-quirks-and-the-rest">Folders, quirks and the rest</h3>
 <ul>
-<li><strong>Folders:</strong> each folder of <code>~</code> (and the folders inside them) can be a folder of another disk: <strong>Change</strong> opens the cabinet's folders and disks; <strong>Undo</strong> brings back the one used before. See <a href="#ROMs">ROMs</a>.</li>
+<li><strong>Folders:</strong> each folder of <code>~</code> (and the folders inside them) can have a shortcut to a folder of another disk: <strong>Change</strong> opens the cabinet's folders and disks; <strong>Undo</strong> brings back the one used before. See <a href="#External-storage-folder-shortcuts">External storage</a>.</li>
+<li><strong>External storage</strong> (right after Folders, <em>Open on the cabinet</em>): a whole disk, with the FliperOS folders or a Batocera filesystem, and formatting. It is only done on the cabinet's screen: erasing a disk is not done from a browser. See <a href="#External-storage">External storage</a>. The pages of the panel that name a folder (the packages of the custom games, for one) show where it really is when it is on another disk.</li>
 <li><strong>Custom frontends:</strong> a name and the command that opens it, like the other frontends; edit or delete each one.</li>
 <li><strong>Quirks:</strong> pick a USB device connected now and the fix (one device per player, no GET requests, always poll, UAS off for a disk), or type the code. They count after a restart. See <a href="#Wheels-and-quirks">Wheels and quirks</a>.</li>
 <li><strong>Bluetooth:</strong> turn it on, <strong>Look for controllers</strong> (15 seconds, with the controller in pairing mode), <strong>Pair</strong>. See <a href="#Bluetooth">Bluetooth</a>.</li>
