@@ -3754,7 +3754,7 @@ def draw_controls(fe, ui, now):
                 "IN A GAME THEY OPEN THE EMULATOR'S MENU (HELD 1 S)")
     elif sel == osd_row:
         tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
-                "IN A GAME THEY OPEN THE FLIPEROS OSD MENU (HELD 1 S)")
+                "IN A GAME THEY OPEN THE FliperOS OSD MENU (HELD 1 S)")
     elif sel == guide_row:
         tips = ("LEFT/RIGHT: THE ARCADE PANEL OR A JOYPAD", "THE GUIDE DRAWS ITS BUTTONS")
     elif sel == layout_row and joypad:
@@ -3956,7 +3956,7 @@ def draw_exit(fe, ui, now):
     pw, ph = 220, 74
     px, py = (WW - pw) // 2, (HH - ph) // 2
     card(ui, (px, py, pw, ph))
-    W.centered(ui, "BACK TO THE FLIPEROS MENU?", T.FG, py + 12)
+    W.centered(ui, "BACK TO THE FliperOS MENU?", T.FG, py + 12)
     W.button(ui, "YES", WW // 2 - 50, py + 40, fe.ov["sel"] == 0)
     W.button(ui, "NO", WW // 2 + 50, py + 40, fe.ov["sel"] == 1)
 

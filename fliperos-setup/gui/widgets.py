@@ -93,15 +93,26 @@ def hyphenate(s, w):
 
 def big(s, scale, colors):
     """O texto ampliado, com uma cor por linha de pixels (colors e uma cor
-    ou uma lista, de cima para baixo)."""
+    ou uma lista, de cima para baixo). Num degrade (lista) o OS de FliperOS
+    sai numa cor so, a do nome (T.BRAND_OS); numa cor so (a sombra) nao."""
+    s = T.brand(s)
     mask = pygame.mask.from_surface(T.font().render(s, False, (255, 255, 255)))
     img = mask.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
-    if isinstance(colors, tuple):
+    os_img = None
+    if isinstance(colors, list):
+        spans = [(T.font().size(s[:a])[0], T.font().size(s[:b])[0]) for a, b in T.brand_spans(s)]
+        if spans:
+            os_img = img.copy()
+            os_img.fill(T.BRAND_OS, special_flags=pygame.BLEND_RGBA_MULT)
+    else:
         colors = [colors]
     h = img.get_height()
     for y in range(h):
         color = colors[min(len(colors) - 1, y * len(colors) // h)]
         img.fill(color, (0, y, img.get_width(), 1), pygame.BLEND_RGBA_MULT)
+    if os_img is not None:
+        for x0, x1 in spans:
+            img.blit(os_img, (x0, 0), (x0, 0, x1 - x0, h))
     return pygame.transform.scale(img, (img.get_width() * scale, h * scale))
 
 

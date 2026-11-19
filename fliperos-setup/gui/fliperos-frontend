@@ -2256,7 +2256,7 @@ class Frontend:
         poe a tensao do escolhido, como no menu dele."""
         err = result.get("error")
         if err:
-            self.say({"firmware": "THE OSCR NEEDS THE FLIPEROS FIRMWARE",
+            self.say({"firmware": "THE OSCR NEEDS THE FliperOS FIRMWARE",
                       "noaccess": "NO ACCESS TO THE OSCR"}.get(err, "THE OSCR DID NOT ANSWER"), 3.5)
             if self.boot:
                 self.overlay, self.ov = "medianone", self.none_ov()
@@ -2527,7 +2527,7 @@ class Frontend:
                 fallback = "COULD NOT READ THE CARTRIDGE" if ov.get("oscr") else "COULD NOT RIP THE DISC"
                 self.say({"cancelled": "CANCELLED", "not enough space": "NOT ENOUGH SPACE",
                           "cdrdao is not installed": "THE RIP TOOL IS MISSING",
-                          "firmware": "THE OSCR NEEDS THE FLIPEROS FIRMWARE", "nocart": "NO CARTRIDGE FOUND",
+                          "firmware": "THE OSCR NEEDS THE FliperOS FIRMWARE", "nocart": "NO CARTRIDGE FOUND",
                           "crc": "THE COPY CAME DAMAGED: TRY AGAIN", "noanswer": "THE OSCR DID NOT ANSWER",
                           "error": "THE OSCR STOPPED ON AN ERROR"}.get(err, fallback), 3)
             return

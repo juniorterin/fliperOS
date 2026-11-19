@@ -83,6 +83,12 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .brand { display: flex; align-items: center; gap: 10px; font: 15px var(--px); padding: 0 6px; }
 .brand svg { width: 36px; height: 36px; }
 .brand b { color: var(--pink); font-weight: 400; }
+/* FliperOS, onde o nome e montado por brandNodes (ui.js) ou escrito a mao: o OS em outra
+   cor, e o nome fora do text-transform dos titulos (nunca em caixa alta). Um <bdi>, para nenhuma
+   regra de "span" dos letreiros pegar o nome. */
+.fo { text-transform: none; }
+.fo b { color: var(--pink); font-weight: inherit; }
+.bezel-foot .fo b { color: #8a63c4; }
 .nav { display: grid; gap: 6px; }
 .nav a { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 14px; color: var(--muted);
   text-decoration: none; transition: background .2s; }

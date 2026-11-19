@@ -103,7 +103,7 @@ function mqDrawHiList() {
 // logotipo so aparece parado).
 // Sem jogo aberto e sem evento que desenhe algo (o jogo acabou de fechar e o
 // frontend ainda nao mandou o sistema), fica o ultimo logotipo de sistema, e
-// nao o nome FLIPEROS.
+// nao o nome FliperOS.
 let mqFresh = false, mqLastSys = "";
 function mqDrawLogo(box) {
   const wrap = box.querySelector(".mq-syslogo"), s = mqState;
@@ -231,7 +231,7 @@ function mqWatch() {
 // sem nenhuma, o nome em texto.
 function mqShow(box, urls, title, sub) {
   const img = box.querySelector("img"), name = box.querySelector(".mq-name");
-  name.replaceChildren(el("b", {}, title), sub ? el("small", {}, sub) : "");
+  name.replaceChildren(el("b", {}, ...brandNodes(title)), sub ? el("small", {}, sub) : "");
   let n = 0;
   const next = () => {
     if (n >= urls.length) {
@@ -255,12 +255,12 @@ function mqRun(name) {
   if (!b || name.hidden) return;
   const text = b.textContent;
   b.classList.remove("run");
-  b.replaceChildren(text);
+  b.replaceChildren(...brandNodes(text));
   if (!name.clientWidth || b.scrollWidth <= name.clientWidth * 0.94) return;
   // A volta: o nome entra pela direita (a folga de 92cqw) e sai pela esquerda.
   // O atraso negativo a comeca com o nome ja no lugar, a partir da esquerda.
   const textW = b.scrollWidth, room = name.clientWidth * 0.92, time = Math.max(6, text.length * 0.45);
-  b.replaceChildren(el("span", {}, text));
+  b.replaceChildren(el("span", {}, ...brandNodes(text)));
   b.classList.add("run");
   b.style.setProperty("--time", time + "s");
   b.style.setProperty("--delay", (-time * room / (room + textW)).toFixed(2) + "s");
@@ -292,7 +292,7 @@ function mqPaint(game) {
     box.dataset.device = mq.device;
     box.style.setProperty("--cols", String(dev.cols));
     box.querySelector(".mq-tag").textContent = dev.name + " " + dev.size;
-    mqShow(box, urls, title.replace(/\s*\(.*$/, "").toUpperCase(), sub.toUpperCase());
+    mqShow(box, urls, upperName(title.replace(/\s*\(.*$/, "")), sub.toUpperCase());
     // O jogo abriu ou fechou: o logotipo e a animacao na hora, sem esperar o proximo estado.
     mqDrawState(box);
   });

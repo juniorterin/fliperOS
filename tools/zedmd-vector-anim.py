@@ -168,22 +168,26 @@ def tunnel(cv, t):
 
 # -- O logo: letras de traco, extrudadas ------------------------------------------
 
-WORD = 'FLIPEROS'
+# O nome se escreve FliperOS (F, OS em maiuscula; liper em minuscula): as
+# minusculas tem altura de x 9 (de 5 a 14), l sobe ate o topo, i tem o ponto e p
+# desce 3 abaixo da linha de base.
+WORD = 'FliperOS'
+OS_FROM = 6                       # a partir daqui as letras (O, S) trocam de cor
 GLYPHS = {   # caixa de 14 de altura (y para baixo); a largura de cada letra em WIDTH
     'F': [[(0, 14), (0, 0), (8, 0)], [(0, 7), (6, 7)]],
-    'L': [[(0, 0), (0, 14), (8, 14)]],
-    'I': [[(0, 0), (6, 0)], [(3, 0), (3, 14)], [(0, 14), (6, 14)]],
-    'P': [[(0, 14), (0, 0), (7, 0), (9, 2), (9, 5), (7, 7), (0, 7)]],
-    'E': [[(8, 0), (0, 0), (0, 14), (8, 14)], [(0, 7), (6, 7)]],
-    'R': [[(0, 14), (0, 0), (7, 0), (9, 2), (9, 5), (7, 7), (0, 7)], [(4, 7), (9, 14)]],
+    'l': [[(0, 0), (2, 0), (2, 14)]],
+    'i': [[(2, 1), (2, 2.5)], [(0, 5), (2, 5), (2, 14)]],
+    'p': [[(0, 17), (0, 5), (5, 5), (7, 7), (7, 12), (5, 14), (0, 14)]],
+    'e': [[(0, 9.5), (7, 9.5), (7, 7), (5, 5), (2, 5), (0, 7), (0, 12), (2, 14), (5, 14), (7, 12)]],
+    'r': [[(0, 14), (0, 5)], [(0, 8), (2, 5), (5, 5)]],
     'O': [[(2, 0), (7, 0), (9, 2), (9, 12), (7, 14), (2, 14), (0, 12), (0, 2), (2, 0)]],
     'S': [[(9, 2), (7, 0), (2, 0), (0, 2), (0, 5), (2, 7), (7, 7), (9, 9), (9, 12), (7, 14), (2, 14), (0, 12)]],
 }
-WIDTH = {'F': 8, 'L': 8, 'I': 6, 'P': 9, 'E': 8, 'R': 9, 'O': 9, 'S': 9}
+WIDTH = {'F': 8, 'l': 3, 'i': 3, 'p': 8, 'e': 8, 'r': 6, 'O': 9, 'S': 9}
 GAP = 6
 DEPTH = 3.5                       # meia espessura da extrusao
 CAM = 320.0
-LOGO_Y = 10.5                     # linha do centro do logo; a grade fica abaixo dele
+LOGO_Y = 10.0                     # linha do centro do logo; a grade fica abaixo dele
 HORIZON = 22
 
 T_LOGO = 2.55
@@ -261,7 +265,7 @@ class Word:
         ax, ay = CX + a3[:, 0] * ka, LOGO_Y + a3[:, 1] * ka
         bx, by = CX + b3[:, 0] * kb, LOGO_Y + b3[:, 1] * kb
         # cores: Fliper = frente ciano e fundo magenta; OS ao contrario; a varredura troca
-        swap = (self.let >= 6) ^ (np.abs((ax + bx) / 2 - p['scan']) < 8.5 if p['scan'] is not None else False)
+        swap = (self.let >= OS_FROM) ^ (np.abs((ax + bx) / 2 - p['scan']) < 8.5 if p['scan'] is not None else False)
         front = np.where(swap, 1, 0)
         color = np.where(self.role == 0, front, 1 - front)
         order = np.argsort((a3[:, 2] + b3[:, 2]) / 2)

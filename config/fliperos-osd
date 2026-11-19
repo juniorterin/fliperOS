@@ -938,7 +938,7 @@ class Menu:
         if name == "geometry" and self.geometry and self.geometry.key:
             # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
             return "GEOMETRY " + self.geometry.key
-        return {"main": "FLIPEROS", "config": "CONFIGURATION", "colour": "COLOUR", "geometry": "GEOMETRY",
+        return {"main": "FliperOS", "config": "CONFIGURATION", "colour": "COLOUR", "geometry": "GEOMETRY",
                 "guncon": "GUNCON 2", "scanlines": "SCANLINES", "keys": "CONTROLLER"}.get(name, "")
 
     def rows_of(self, name):

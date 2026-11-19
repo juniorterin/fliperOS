@@ -5,8 +5,9 @@
 # deslocadas, separacao de cor, ruido) e uma linha de varredura. 3 s em laco, sem
 # emenda. Pixel a pixel, sem suavizacao: cada pixel e um LED. So numpy + Pillow.
 #
-#   marquee-fliperos.gif       o logotipo padrao: um coqueiro balancando e FLIPEROS
-#                              (a previa do painel web sem jogo nem sistema)
+#   marquee-fliperos.gif       o logotipo padrao: um coqueiro balancando e FliperOS, o
+#                              OS com o cromado invertido (a previa do painel web sem
+#                              jogo nem sistema)
 #   marquee-menu-ITEM.gif      os 5 itens do menu do FliperOS (fliperos-pixelcade
 #                              menu ITEM): frontend (joystick), setup (engrenagens),
 #                              desktop (monitor), shell (terminal), power (energia)
@@ -84,6 +85,13 @@ GLYPHS = {
     'R': [[(0, 14), (0, 0), (7, 0), (9, 2), (9, 5), (7, 7), (0, 7)], [(4, 7), (9, 14)]],
     'O': [[(2, 0), (7, 0), (9, 2), (9, 12), (7, 14), (2, 14), (0, 12), (0, 2), (2, 0)]],
     'S': [[(9, 2), (7, 0), (2, 0), (0, 2), (0, 5), (2, 7), (7, 7), (9, 9), (9, 12), (7, 14), (2, 14), (0, 12)]],
+    # As minusculas de FliperOS (o nome nunca vai em caixa alta): altura de x 9
+    # (de 5 a 14), o l sobe ate o topo, o i tem o ponto e o p desce 3 abaixo da base.
+    'l': [[(0, 0), (2, 0), (2, 14)]],
+    'i': [[(2, 1), (2, 2.5)], [(0, 5), (2, 5), (2, 14)]],
+    'p': [[(0, 17), (0, 5), (5, 5), (7, 7), (7, 12), (5, 14), (0, 14)]],
+    'e': [[(0, 9.5), (7, 9.5), (7, 7), (5, 5), (2, 5), (0, 7), (0, 12), (2, 14), (5, 14), (7, 12)]],
+    'r': [[(0, 14), (0, 5)], [(0, 8), (2, 5), (5, 5)]],
     'N': [[(0, 14), (0, 0), (9, 14), (9, 0)]],
     'T': [[(0, 0), (9, 0)], [(4.5, 0), (4.5, 14)]],
     'D': [[(0, 0), (6, 0), (9, 3), (9, 11), (6, 14), (0, 14), (0, 0)]],
@@ -93,29 +101,56 @@ GLYPHS = {
     'W': [[(0, 0), (2.5, 14), (5.5, 5), (8.5, 14), (11, 0)]],
 }
 WIDTH = {'F': 8, 'L': 8, 'I': 6, 'P': 9, 'E': 8, 'R': 9, 'O': 9, 'S': 9,
+         'l': 3, 'i': 3, 'p': 8, 'e': 8, 'r': 6,
          'N': 9, 'T': 9, 'D': 9, 'U': 9, 'K': 9, 'H': 9, 'W': 11}
-SCALE, GAP, TEXT_Y = 0.8, 4, 9
+GAP = 4
 AREA = (38, 126)                          # onde a palavra cabe (a esquerda e do desenho)
+BRAND = 'FliperOS'                        # o nome: o OS tem outra cor (cromado invertido)
+# O tamanho do texto: scale (o glifo e de 14 de altura), y (o topo), scan (quanto a linha
+# de varredura desce) e rows (onde os glitches cortam). O nome vai maior que as palavras do
+# menu: com traco de 2 pixels as minusculas (altura de x 9) so se leem a partir daqui.
+STYLE = {None: dict(scale=0.8, y=9, scan=18, rows=12),
+         BRAND: dict(scale=1.0, y=8, scan=21, rows=15)}
+
+
+def style(word):
+    return STYLE.get(word, STYLE[None])
 
 
 def word_width(word):
-    return sum(WIDTH[ch] for ch in word) * SCALE + GAP * (len(word) - 1) + 1
+    return sum(WIDTH[ch] for ch in word) * style(word)['scale'] + GAP * (len(word) - 1) + 1
 
 
 def word_mask(word, x0):
     mask = np.zeros((H, W), bool)
+    st = style(word)
     x = x0
     for ch in word:
         for path in GLYPHS[ch]:
             for (ax, ay), (bx, by) in zip(path, path[1:]):
-                line(mask, x + ax * SCALE, TEXT_Y + ay * SCALE, x + bx * SCALE, TEXT_Y + by * SCALE, brush=2)
-        x += WIDTH[ch] * SCALE + GAP
+                line(mask, x + ax * st['scale'], st['y'] + ay * st['scale'],
+                     x + bx * st['scale'], st['y'] + by * st['scale'], brush=2)
+        x += WIDTH[ch] * st['scale'] + GAP
     return mask
 
 
-def chrome(y):
-    """O cromado: ciano em cima, branco no meio, magenta embaixo."""
-    k = (y - TEXT_Y) / (14 * SCALE + 1)
+def os_start(word, x0):
+    """A coluna em que o OS de FliperOS comeca (no meio da folga antes do O); None
+    nas outras palavras."""
+    if word != BRAND:
+        return None
+    x = x0
+    for ch in word[:-2]:
+        x += WIDTH[ch] * style(word)['scale'] + GAP
+    return x - GAP / 2
+
+
+def chrome(y, st, os=False):
+    """O cromado: ciano em cima, branco no meio, magenta embaixo; o OS ao contrario
+    (magenta em cima, ciano embaixo)."""
+    k = max(0.0, min(1.0, (y - st['y']) / (14 * st['scale'] + 1)))
+    if os:
+        k = 1 - k
     return mix(CYAN, WHITE, k * 2) if k < 0.5 else mix(WHITE, MAGENTA, (k - 0.5) * 2)
 
 
@@ -297,7 +332,7 @@ def power(frame, t):
 
 # A palavra e o desenho de cada animacao.
 ANIMS = {
-    "marquee-fliperos": ("FLIPEROS", palm, 40),
+    "marquee-fliperos": (BRAND, palm, None),
     "marquee-menu-frontend": ("FRONTEND", joystick, None),
     "marquee-menu-setup": ("SETUP", gears, None),
     "marquee-menu-desktop": ("DESKTOP", desktop, None),
@@ -310,7 +345,7 @@ ANIMS = {
 GLITCHES = [(17, 4), (43, 3), (61, 5)]    # (quadro inicial, quantos quadros)
 
 
-def glitch(frame, mask, x0, i, rnd):
+def glitch(frame, mask, x0, i, rnd, st):
     on = [g for g in GLITCHES if g[0] <= i < g[0] + g[1]]
     if not on:
         return frame
@@ -324,7 +359,7 @@ def glitch(frame, mask, x0, i, rnd):
     out[shifted_r & ~mask] = MAGENTA
     # fatias deslocadas (poucas e curtas: a palavra continua legivel)
     for _ in range(rnd.randint(1, 2)):
-        y0 = rnd.randrange(TEXT_Y - 1, TEXT_Y + 12)
+        y0 = rnd.randrange(st['y'] - 1, st['y'] + st['rows'])
         h = rnd.randint(1, 2)
         dx = rnd.choice((-1, 1)) * rnd.randint(2, 4)
         out[y0:y0 + h, region] = np.roll(out[y0:y0 + h, region], dx, axis=1)
@@ -335,16 +370,16 @@ def glitch(frame, mask, x0, i, rnd):
     return out
 
 
-def frame_at(i, mask, x0, painter):
+def frame_at(i, mask, x0, painter, st, os_x=None):
     t = i / FPS
     frame = np.zeros((H, W, 3), np.uint8)
     sun(frame)
     painter(frame, t)
     ys, xs = np.nonzero(mask)
     for y, x in zip(ys, xs):
-        frame[y, x] = chrome(y)
+        frame[y, x] = chrome(y, st, os_x is not None and x >= os_x)
     # a linha de varredura descendo pelo texto (2 voltas no laco)
-    sy = TEXT_Y - 2 + int((t * 2 / 3.0 % 1.0) * 18)
+    sy = st['y'] - 2 + int((t * 2 / 3.0 % 1.0) * st['scan'])
     if 0 <= sy < H:
         row = frame[sy, x0 - 2:]
         lit = row.sum(1) > 0
@@ -354,7 +389,7 @@ def frame_at(i, mask, x0, painter):
     frame[H - 2, x0 - 2:W - 2] = PURPLE
     if (i // 3) % 2:
         frame[H - 2, x0 - 2 + (i * 3) % (W - x0)] = CYAN
-    return glitch(frame, mask, x0, i, random.Random(i * 7919))
+    return glitch(frame, mask, x0, i, random.Random(i * 7919), st)
 
 
 def palettize(frames):
@@ -390,7 +425,8 @@ def render(name):
     if x0 is None:                        # a palavra no meio da area dela
         x0 = int(AREA[0] + (AREA[1] - AREA[0] - word_width(word)) // 2)
     mask = word_mask(word, x0)
-    return [frame_at(i, mask, x0, painter) for i in range(N)]
+    os_x = os_start(word, x0)
+    return [frame_at(i, mask, x0, painter, style(word), os_x) for i in range(N)]
 
 
 def main(argv):

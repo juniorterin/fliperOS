@@ -7,6 +7,7 @@
 # erro.
 
 import os
+import re
 
 import pygame
 
@@ -70,6 +71,54 @@ def upright(surface):
 # junto do codigo (gui/fonts, com a licenca OFL).
 FONT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "PressStart2P-Regular.ttf")
 
+# O nome do produto se escreve FliperOS, com o OS em outra cor, e nunca em caixa alta (o que
+# o upper() dos titulos e rotulos faz). brand() poe o nome certo no texto e a fonte abaixo
+# pinta o OS (BRAND_OS: roxo, ou rosa onde o texto ja e roxo). A Press Start 2P tem largura
+# fixa: trocar a caixa alta por FliperOS nao muda a medida de nada.
+BRAND = "FliperOS"
+BRAND_OS = PURPLE
+# Nome de maquina, de pasta ou de usuario (fliperos.local, \\fliperos\roms, fliperos@ip) nao e o nome.
+_BRAND_UPPER = re.compile(r"\bFLIPEROS\b(?![\\/@]|\.\w)")
+
+
+def brand(s):
+    return _BRAND_UPPER.sub(BRAND, s)
+
+
+def brand_os(color):
+    """A cor do OS num texto da cor dada."""
+    return BRAND_OS if tuple(color)[:3] != BRAND_OS else PINK
+
+
+def brand_spans(s):
+    """Onde ficam os OS de FliperOS em s (ja passado por brand()): (de, ate), em
+    caracteres."""
+    return [(m.start() + 6, m.end()) for m in re.finditer(BRAND, s)]
+
+
+def _brand_font(path, size):
+    """A Press Start 2P que escreve o nome certo em todo texto da interface. A classe
+    nasce aqui, e nao no modulo, porque este arquivo so usa o pygame nas funcoes (o teste
+    dos icones o le sem pygame)."""
+
+    class BrandFont(pygame.font.Font):
+        def render(self, text, antialias, color, *args, **kwargs):
+            text = brand(text)
+            img = super().render(text, antialias, color, *args, **kwargs)
+            spans = brand_spans(text)
+            if not spans:
+                return img
+            # Sem antialias a imagem e de 8 bits (uma cor so na paleta): o OS entra numa de 32.
+            out = pygame.Surface(img.get_size(), pygame.SRCALPHA)
+            out.blit(img, (0, 0))
+            for start, end in spans:
+                os_img = super().render(text[start:end], antialias, brand_os(color))
+                out.blit(os_img, (self.size(text[:start])[0], 0))
+            return out
+
+    return BrandFont(path, size)
+
+
 _font = None
 
 
@@ -78,7 +127,7 @@ def font():
     if _font is None:
         if not os.path.isfile(FONT_FILE):
             raise SystemExit("fliperos-gui: font not found: " + FONT_FILE)
-        _font = pygame.font.Font(FONT_FILE, 8)
+        _font = _brand_font(FONT_FILE, 8)
     return _font
 
 

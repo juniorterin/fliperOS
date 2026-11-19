@@ -51,6 +51,13 @@ const GLYPHS: Record<string, string[]> = {
   X: ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
   Y: ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
   Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  // As minusculas do nome FliperOS (o unico texto que as tem): altura de x 5 sobre a mesma linha de
+  // base das maiusculas, o l sobe ate o topo, o i tem o ponto e o p desce uma linha (8 linhas).
+  l: ['##.', '.#.', '.#.', '.#.', '.#.', '.#.', '.##'],
+  i: ['.#.', '...', '##.', '.#.', '.#.', '.#.', '.##'],
+  p: ['.....', '.....', '####.', '#...#', '#...#', '#...#', '####.', '#....'],
+  e: ['.....', '.....', '.###.', '#...#', '#####', '#....', '.####'],
+  r: ['....', '....', '#.##', '##..', '#...', '#...', '#...'],
   '0': ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
   '1': ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
   '2': ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
@@ -76,8 +83,23 @@ const GLYPHS: Record<string, string[]> = {
 type Rgb = [number, number, number];
 type Frame = (Rgb | null)[];
 
+// Tudo em maiusculas, menos o nome: FliperOS se escreve assim, nunca em caixa alta.
 function normalize(text: string) {
-  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\bFLIPEROS\b/g, 'FliperOS');
+}
+
+// As posicoes (em caracteres do texto normalizado) do OS de FliperOS: ele sai em outra cor.
+function osIndexes(text: string) {
+  const out = new Set<number>();
+  for (const m of normalize(text).matchAll(/FliperOS/g)) {
+    out.add((m.index ?? 0) + 6);
+    out.add((m.index ?? 0) + 7);
+  }
+  return out;
 }
 
 function glyph(ch: string) {
@@ -177,9 +199,12 @@ function buildScenes(script: LedScript): Scene[] {
   const speed = 42;
 
   const brandW = textWidth(script.brand, 2);
+  const brandOs = osIndexes(script.brand);
   scenes.push({
     duration: (COLS + brandW) / speed,
-    draw: (f, t) => drawText(f, script.brand, COLS - t * speed, 9, 2, (x) => hsl((x * 4 + t * 140) % 360)),
+    // O arco-iris que anda; o OS do nome, meia volta de matiz adiante.
+    draw: (f, t) =>
+      drawText(f, script.brand, COLS - t * speed, 9, 2, (x, _y, i) => hsl((x * 4 + t * 140 + (brandOs.has(i) ? 180 : 0)) % 360)),
   });
 
   for (const game of script.games) {

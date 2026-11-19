@@ -163,7 +163,7 @@ function crtShow() {
   tag.hidden = !["shot", "snap", "video"].includes(mode);
   if (mode === "shot") tag.textContent = t("crt_shot").replace("%s", shotAge());
   else tag.textContent = t("crt_art");
-  $("crt-attract-text").textContent = mode === "attract" && cabFront ? frontName(cabFront.program).toUpperCase() : "INSERT COIN";
+  $("crt-attract-text").replaceChildren(...brandNodes(mode === "attract" && cabFront ? upperName(frontName(cabFront.program)) : "INSERT COIN"));
 }
 
 // Uma imagem nova na tela do tubo aparece aos poucos.
@@ -357,14 +357,14 @@ function marquee(game) {
   }
   box.hidden = !!url;
   const title = game ? game.title || game.name || game.file || game.program : cabFront ? frontName(cabFront.program) : "FliperOS";
-  const text = title.replace(/\s*\(.*$/, "").toUpperCase();
+  const text = upperName(title.replace(/\s*\(.*$/, ""));
   box.lastChild.textContent = game ? [game.manufacturer, game.year].filter(Boolean).join(" · ").toUpperCase() : "";
   // Mede de novo so quando o nome (ou se ele aparece) muda: o status chega a
   // cada poucos segundos e a rolagem nao pode recomecar.
   const key = text + "|" + box.hidden;
   if (box.dataset.key !== key) {
     box.dataset.key = key;
-    box.firstChild.textContent = text;
+    box.firstChild.replaceChildren(...brandNodes(text));
     document.fonts.ready.then(() => requestAnimationFrame(() => cabRun(box)));
   }
 }

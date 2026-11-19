@@ -43,6 +43,15 @@ function el(tag, attrs, ...children) {
   return node;
 }
 
+// O nome do produto se escreve FliperOS, com o OS em outra cor, e nunca em caixa alta. O
+// toUpperCase() dos letreiros nao pode passar por cima dele (upperName) e o texto que o
+// leva se monta com brandNodes: o nome vira <bdi class="fo">Fliper<b>OS</b></bdi>.
+const upperName = (s) => String(s).toUpperCase().replace(/\bFLIPEROS\b(?![\\/@]|\.\w)/g, "FliperOS");
+function brandNodes(s) {
+  return String(s).split(/(FliperOS)/).filter(Boolean)
+    .map((part) => part === "FliperOS" ? el("bdi", { class: "fo" }, "Fliper", el("b", {}, "OS")) : part);
+}
+
 // Um icone do sprite: "px-NOME" (os do Setup, coloridos) ou "g-NOME" (os
 // glifos, na cor do texto).
 function icon(name, cls) {

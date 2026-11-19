@@ -10388,10 +10388,10 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('document.fonts.ready.then(() => requestAnimationFrame(() => runTitle(title)));', obs)
         self.assertIn('.title.run span', (web / 'overlay.css').read_text())
         # Sem jogo e sem evento que desenhe (o jogo acabou de fechar), fica o
-        # ultimo logotipo de sistema, e nao o nome FLIPEROS.
+        # ultimo logotipo de sistema, e nao o nome FliperOS.
         self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus", "menu"].includes(s.event);',
                       view)
-        # O padrao sem jogo (antes o nome FLIPEROS em texto): o logotipo animado,
+        # O padrao sem jogo (antes o nome FliperOS em texto): o logotipo animado,
         # servido como arquivo do painel (sem login, como o resto da pagina).
         self.assertIn('urls.push({ url: "marquee-fliperos.gif", logo: false })', view)
         from PIL import Image
@@ -21386,7 +21386,7 @@ class OsdTests(unittest.TestCase):
         keyfile.write_text('p1_b2=X\n')
         menu.key(osd.KEY_LEFT)
         menu.key(osd.KEY_ESC)
-        self.assertEqual(menu.title(), 'FLIPEROS')
+        self.assertEqual(menu.title(), 'FliperOS')
         self.assertIn('p1_b2=X', keyfile.read_text())
         # O servico acha o gamekeys pelo uid da camada e o arquivo current.
         service = object.__new__(osd.Service)
@@ -21520,7 +21520,7 @@ class OsdTests(unittest.TestCase):
         menu.page['cursor'] = len(menu.page['rows']) - 1
         menu.key(osd.KEY_RIGHT)
         menu.key(osd.KEY_ENTER)
-        self.assertEqual(menu.title(), 'FLIPEROS')
+        self.assertEqual(menu.title(), 'FliperOS')
         # Emulator menu e Quit fecham a OSD e dizem ao servico o que fazer.
         for cursor, after in ((1, 'emulator'), (2, None), (3, 'quit')):
             menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
@@ -21679,7 +21679,7 @@ class OsdTests(unittest.TestCase):
             self.assertLessEqual(box.bottom, h, frame)
 
     def test_mode_line_under_the_title(self):
-        # Embaixo de FLIPEROS, em letra menor: a resolucao, as frequencias e o FPS.
+        # Embaixo de FliperOS, em letra menor: a resolucao, as frequencias e o FPS.
         self.assertEqual(self.osd.mode_line(self.MODE, 59.94), '640x480i 15.69kHz 60.00Hz  59.9 FPS')
         self.assertEqual(self.osd.mode_line(None, 30.0), '30.0 FPS')
         self.assertEqual(self.osd.mode_line(self.MODE), '640x480i 15.69kHz 60.00Hz')
@@ -21955,7 +21955,7 @@ class OsdTests(unittest.TestCase):
 
     def test_geometry_page_says_which_resolution_it_adjusts(self):
         menu, _ = self.menu()
-        self.assertEqual(menu.title(), 'FLIPEROS')
+        self.assertEqual(menu.title(), 'FliperOS')
         menu.open_page('geometry')
         self.assertEqual(menu.title(), 'GEOMETRY 640x480i')
         self.assertEqual(self.labels(menu),
@@ -23176,7 +23176,7 @@ class PhysicalMediaTests(unittest.TestCase):
         answers.append({'error': 'firmware'})
         fe.act('b1')
         settle()
-        self.assertEqual((fe.overlay, fe.said[-1]), (None, 'THE OSCR NEEDS THE FLIPEROS FIRMWARE'))
+        self.assertEqual((fe.overlay, fe.said[-1]), (None, 'THE OSCR NEEDS THE FliperOS FIRMWARE'))
         # O boot pelo OSCR: a tela pede o cartucho; o botao 1 o poe e ele e lido.
         fe.boot = 'oscr'
         fe.overlay, fe.ov = 'medianone', fe.none_ov()
@@ -24537,6 +24537,119 @@ class HapticTests(unittest.TestCase):
         frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         self.assertIn('if self.cursor != before:\n                        self.input.feel(["up"]', frontend)
         self.assertIn('fehaptic.Buzzer()', (ROOT / 'fliperos-setup/gui/feinput.py').read_text())
+
+
+class BrandSpellingTests(unittest.TestCase):
+    """O nome se escreve FliperOS, nunca FLIPEROS, e onde ele e desenhado o OS tem outra cor.
+    Nao sao o nome: as variaveis FLIPEROS_*, os comandos fliperos-* e o token FLIPEROS do
+    protocolo serial do OSCR (o firmware ja gravado responde por ele)."""
+
+    SHOUT = re.compile(r'(?<![A-Za-z0-9_])FLIPEROS(?![A-Za-z0-9_])')
+    SKIP = {'.git', 'node_modules', '__pycache__', 'third-party'}
+
+    def test_no_source_file_shouts_the_name(self):
+        found = []
+        files = [p for p in ROOT.iterdir() if p.is_file() and p.suffix in ('.md', '.sh', '.py', '.html', '.yml')]
+        for base in ('config', 'fliperos-setup', 'tools', 'docs', 'website/src', 'packaging', 'updates'):
+            files += [p for p in (ROOT / base).rglob('*') if p.is_file()]
+        for path in files:
+            rel = path.relative_to(ROOT)
+            if self.SKIP & set(rel.parts) or rel.as_posix() == 'fliperos-setup/gui/femedia.py':   # o protocolo do OSCR
+                continue
+            data = path.read_bytes()
+            if b'\0' in data[:4096]:
+                continue
+            for n, line in enumerate(data.decode('utf-8', 'ignore').splitlines(), 1):
+                if self.SHOUT.search(line):
+                    found.append('%s:%d' % (rel.as_posix(), n))
+        self.assertEqual(found, [], 'escreva FliperOS (o OS em outra cor onde for desenhado), nunca FLIPEROS')
+
+    def test_the_small_font_spells_the_name_and_paints_the_os(self):
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        import tiny
+        self.assertEqual(tiny.upper('the fliperos menu'), 'THE FliperOS MENU')
+        self.assertEqual(tiny.upper('FliperOS ok'), 'FliperOS OK')
+        # Variavel, nome de maquina e pasta nao sao o nome.
+        self.assertEqual(tiny.upper('FLIPEROS_HOME fliperos.local \\\\fliperos\\roms'),
+                         'FLIPEROS_HOME FLIPEROS.LOCAL \\\\FLIPEROS\\ROMS')
+        self.assertTrue(all(ch in tiny.GLYPHS for ch in 'liper'))
+        self.assertEqual(tiny.width('FliperOS'), tiny.width('FLIPEROS'))
+
+        class Surface:
+            def __init__(self):
+                self.fills = []
+
+            def fill(self, color, rect):
+                self.fills.append((tuple(color), rect))
+
+        surf = Surface()
+        tiny.text(surf, 'fliperos', (1, 2, 3), 0, 0)
+        self.assertEqual({c for c, r in surf.fills if r[0] < 6 * 4}, {(1, 2, 3)})
+        self.assertEqual({c for c, r in surf.fills if r[0] >= 6 * 4}, {tiny.BRAND_OS})
+
+    def test_pygame_text_spells_the_name_and_paints_the_os(self):
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        import theme as T
+        import widgets as W
+        self.assertEqual(T.brand('BACK TO THE FLIPEROS MENU?'), 'BACK TO THE FliperOS MENU?')
+        self.assertEqual(T.brand('FLIPEROS_HOME fliperos.local'), 'FLIPEROS_HOME fliperos.local')
+        self.assertEqual(T.font().size('FLIPEROS'), T.font().size('FliperOS'))
+        split = T.font().size('Fliper')[0]
+
+        def colors(img, x0, x1):
+            return {tuple(img.get_at((x, y)))[:3] for x in range(x0, x1) for y in range(img.get_height())
+                    if img.get_at((x, y))[3]}
+
+        # Texto de uma cor: o OS sai em outra.
+        img = T.font().render('FLIPEROS', False, T.FG)
+        self.assertEqual((colors(img, 0, split), colors(img, split, img.get_width())), ({T.FG}, {T.BRAND_OS}))
+        # O titulo em degrade (o letreiro do Setup): o nome tem varias cores e o OS uma so; a sombra, nenhuma extra.
+        title = W.big('FLIPEROS', 1, W.MARQUEE)
+        self.assertGreater(len(colors(title, 0, split)), 1)
+        self.assertEqual(colors(title, split, title.get_width()), {T.BRAND_OS})
+        shadow = W.big('FLIPEROS', 1, (0x40, 0x20, 0x70))
+        self.assertEqual(colors(shadow, 0, shadow.get_width()), {(0x40, 0x20, 0x70)})
+
+    def test_the_dmd_animations_spell_the_name(self):
+        # tools/zedmd-vector-anim.py e tools/marquee-logo-anim.py desenham o nome com as
+        # minusculas (liper) no mesmo traco, e o OS em outra cor.
+        vector = (ROOT / 'tools/zedmd-vector-anim.py').read_text()
+        marquee = (ROOT / 'tools/marquee-logo-anim.py').read_text()
+        self.assertIn("WORD = 'FliperOS'", vector)
+        self.assertIn('OS_FROM = 6', vector)
+        self.assertIn("BRAND = 'FliperOS'", marquee)
+        self.assertIn('"marquee-fliperos": (BRAND, palm, None)', marquee)
+        self.assertIn('chrome(y, st, os_x is not None and x >= os_x)', marquee)
+        for ch in 'liper':
+            self.assertIn("    '%s': [[" % ch, vector)
+            self.assertIn("    '%s': [[" % ch, marquee)
+            self.assertRegex(vector, r"WIDTH = \{[^}]*'%s': \d" % ch)
+            self.assertRegex(marquee, r"WIDTH = \{[^}]*'%s': \d" % ch)
+        self.assertNotIn('FLIPEROS', vector + marquee)
+
+    def test_the_web_panel_spells_the_name(self):
+        web = ROOT / 'config/web'
+        index, ui = (web / 'index.html').read_text(), (web / 'ui.js').read_text()
+        # O login, o letreiro do gabinete e o rodape do tubo: o nome com o OS em outra cor.
+        self.assertEqual(index.count('<bdi class="fo">Fliper<b>OS</b></bdi>'), 3)
+        self.assertIn('.fo b { color: var(--pink);', (web / 'style.css').read_text())
+        # A caixa alta dos letreiros nao pode virar FLIPEROS, e o texto leva o OS em outra cor.
+        self.assertIn('const upperName = ', ui)
+        self.assertIn('function brandNodes(s)', ui)
+        self.assertNotIn('(?<', ui)        # sem lookbehind: o Safari antigo do tablet nao le o script
+        cabinet, view = (web / 'cabinet.js').read_text(), (web / 'marqueeview.js').read_text()
+        self.assertIn('upperName(title.replace(', cabinet)
+        self.assertIn('brandNodes(text)', cabinet)
+        self.assertIn('upperName(frontName(cabFront.program))', cabinet)
+        self.assertIn('upperName(title.replace(', view)
+        self.assertIn('el("b", {}, ...brandNodes(title))', view)
+        self.assertIn('el("h3", {}, ...brandNodes(title))', (web / 'system.js').read_text())
 
 
 if __name__ == '__main__':

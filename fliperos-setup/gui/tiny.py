@@ -1,6 +1,22 @@
 # Uma fonte de pixel de 3x5 (4x6 com o espaco) para legendas pequenas na tela
 # de 320x240, onde a Press Start 2P (8x8) e grande demais. Maiusculas,
 # algarismos e alguns sinais; o que ela nao tem sai como "?".
+#
+# O nome do produto se escreve FliperOS (nunca em caixa alta), com o OS em outra cor:
+# e a unica palavra com minusculas (l, i, p, e, r, la embaixo na tabela); o resto
+# do texto vai em maiusculas, e o upper() de fora nao passa por cima do nome.
+
+import re
+
+BRAND = "FliperOS"
+BRAND_OS = (0xBD, 0x93, 0xF9)      # o roxo do theme.PURPLE (esta fonte nao importa o theme)
+_BRAND_UPPER = re.compile(r"\bFLIPEROS\b(?![\\/@]|\.\w)")     # fliperos.local, \\fliperos\roms: nao e o nome
+
+
+def upper(s):
+    """s em maiusculas, menos o nome: FliperOS fica FliperOS."""
+    return _BRAND_UPPER.sub(BRAND, s.upper())
+
 
 GLYPHS = {
     "A": "010101111101101", "B": "110101110101110", "C": "011100100100011", "D": "110101101101110",
@@ -21,6 +37,9 @@ GLYPHS = {
     # As teclas do teclado da OSD (Controller configuration).
     "[": "110100100100110", "]": "011001001001011", "\\": "100100010001001", ";": "000010000010100",
     "`": "100010000000000",
+    # As minusculas do nome FliperOS (altura de x 4, o l sobe ate o topo e o i tem o ponto).
+    "l": "110010010010011", "i": "010000010010010", "p": "000110101110100",
+    "e": "000011111100011", "r": "000110100100100",
 }
 
 
@@ -29,16 +48,20 @@ def width(s):
 
 
 def text(surf, s, color, x, y, right=False):
-    """Escreve s (em maiusculas) em (x, y); devolve a largura."""
-    s = s.upper()
+    """Escreve s (em maiusculas) em (x, y); devolve a largura. O OS de FliperOS sai
+    em outra cor."""
+    s = upper(s)
     if right:
         x -= width(s)
+    os_chars = {k for m in re.finditer(BRAND, s) for k in (m.end() - 2, m.end() - 1)}
+    os_color = BRAND_OS if tuple(color)[:3] != BRAND_OS else (0xFF, 0x79, 0xC6)
     for i, ch in enumerate(s):
         bits = GLYPHS.get(ch, GLYPHS["?"])
+        paint = os_color if i in os_chars else color
         for r in range(5):
             for c in range(3):
                 if bits[r * 3 + c] == "1":
-                    surf.fill(color, (x + i * 4 + c, y + r, 1, 1))
+                    surf.fill(paint, (x + i * 4 + c, y + r, 1, 1))
     return width(s)
 
 
@@ -48,7 +71,7 @@ def centered(surf, s, color, cx, y):
 
 def fit(s, w):
     """s cortado para caber em w pixels."""
-    s = s.upper()
+    s = upper(s)
     if width(s) <= w:
         return s
     while s and width(s + "..") > w:

@@ -448,7 +448,7 @@ $("log-copy").addEventListener("click", async () => {
 
 function uiSection(title, rows, note, attrs) {
   const sec = el("section", Object.assign({ class: "ssec" }, attrs || {}));
-  if (title) sec.append(el("h3", {}, title));
+  if (title) sec.append(el("h3", {}, ...brandNodes(title)));
   sec.append(el("div", { class: "slist" }, ...rows));
   if (note) sec.append(el("p", { class: "ssec-note" }, note));
   return sec;

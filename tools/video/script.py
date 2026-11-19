@@ -16,14 +16,14 @@ else:
 WEB_START, WEB_END = EV["start"], EV["end"]
 
 CARDS = {
-    "intro": ("FLIPEROS", "Arcade Linux feito para CRT", "Arcade Linux built for CRT", None),
+    "intro": ("FliperOS", "Arcade Linux feito para CRT", "Arcade Linux built for CRT", None),
     "c1": ("INSTALAÇÃO", "Do pendrive ao disco", "From the USB stick to the disk", "1"),
     "c2": ("PRIMEIRO BOOT", "O sistema instalado", "The installed system", "2"),
     "c3": ("SETUP", "Tudo configurado no próprio gabinete", "Everything set up on the cabinet itself", "3"),
     "c4": ("BAIXAR JOGOS", "Romsets filtrados, links magnet e BIOS", "Filtered romsets, magnet links and BIOS", "4"),
     "c5": ("FRONTEND", "As suas listas de jogos, com vídeo", "Your game lists, with video", "5"),
     "c6": ("PAINEL WEB", "O gabinete pelo tablet ou celular", "The cabinet from a tablet or phone", "6"),
-    "outro": ("FLIPEROS", "fliperos.juniorter.in  ·  github.com/juniorterin/fliperOS",
+    "outro": ("FliperOS", "fliperos.juniorter.in  ·  github.com/juniorterin/fliperOS",
               "Grátis e de código aberto  ·  Free and open source", None),
 }
 

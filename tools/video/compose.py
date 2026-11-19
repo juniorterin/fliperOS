@@ -51,6 +51,21 @@ def background():
     return ImageChops.add(im, glow)
 
 
+def brand_text(d, xy, s, font, fill, os_fill):
+    """s centrado em xy; o OS de FliperOS em outra cor (o nome nunca vai em caixa
+    alta). A Press Start 2P tem largura fixa, entao as partes se emendam."""
+    parts = []
+    for i, piece in enumerate(s.split("FliperOS")):
+        if i:
+            parts += [("Fliper", fill), ("OS", os_fill)]
+        if piece:
+            parts.append((piece, fill))
+    x = xy[0] - d.textlength(s, font=font) / 2
+    for text, color in parts:
+        d.text((x, xy[1]), text, fill=color, font=font, anchor="lm")
+        x += d.textlength(text, font=font)
+
+
 def bezel(screen, radius=26, pad=40):
     """O gabinete em volta da tela: plastico escuro, a borda do tubo e o
     furo (transparente) onde a imagem entra."""
@@ -64,7 +79,7 @@ def bezel(screen, radius=26, pad=40):
     d.rounded_rectangle((x - 14, y - 14, x + w + 14, y + h + 14), 18, fill=(10, 10, 14, 255))
     d.rectangle((x, y, x + w - 1, y + h - 1), fill=(0, 0, 0, 0))
     f = ImageFont.truetype(PIXEL, 14)
-    d.text((x + w // 2, y + h + pad // 2 + 2), "FLIPEROS", fill=(98, 114, 164, 255), font=f, anchor="mm")
+    brand_text(d, (x + w // 2, y + h + pad // 2 + 2), "FliperOS", f, (98, 114, 164, 255), PURPLE + (255,))
     d.ellipse((x + w + pad - 30, y + h + pad // 2 - 4, x + w + pad - 22, y + h + pad // 2 + 4), fill=GREEN + (255,))
     return im
 
@@ -111,8 +126,8 @@ def card(path, big, pt, en, number=None, logo=True):
     else:
         y += 24
     f = ImageFont.truetype(PIXEL, 56)
-    d.text((WW // 2 + 4, y + 4), big, fill=(70, 40, 110), font=f, anchor="mm")
-    d.text((WW // 2, y), big, fill=FG, font=f, anchor="mm")
+    brand_text(d, (WW // 2 + 4, y + 4), big, f, (70, 40, 110), (70, 40, 110))
+    brand_text(d, (WW // 2, y), big, f, FG, PURPLE)
     tw = d.textlength(big, font=f)
     rainbow(d, int(WW // 2 - tw // 2), y + 44, int(tw))
     y += 120
