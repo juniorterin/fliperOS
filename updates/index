@@ -90,3 +90,4 @@
 87	bd672d573de1deeb60a1441011b43644e3d08362	203e7ba49b334ccf938369700907a9d4215be05f024ef0e162d61a0a3241c63a	no	Unlocked arcade memory for the MAME 2010 core, and sharp group buttons in the web panel's custom games
 88	ff63f1cf253d009de4ef231fa7ce7d414841b607	286107e5f3ad540cdb72b62247c38a6176b2a0a407924df46fdc0cf16707210c	no	USB Wi-Fi adapters that start as a CD-ROM, a Games page with editing for custom games, FliperOS spelled FliperOS, and a loading ring in the on-screen menu
 89	210d4b6ad67b95ca7ce28b456d480f2172662b65	b0395b405a4a9faf7428d5a2885d538287acf15e55ea3fee94f7c585524cab15	no	Games > Folders redone, Batocera filesystem and disk formatting, a one-time question for a new disk, and animations in the Setup and the game menu
+90	0a3c7a1d7384f496875bdc9b396f799f399ee78d	8f405a01e6d45e265b1cbb2bdb2878133f9ee28b9d95f040998aae2a4cc88eb5	no	Link and party in the game menu come alive, and the game page (the plus) plays its parts one after the other
