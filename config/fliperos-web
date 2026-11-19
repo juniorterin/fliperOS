@@ -1440,6 +1440,29 @@ def custom_command(system, argv):
     return path.endswith(".sh") and os.path.dirname(os.path.dirname(path)) == root and os.path.isfile(path)
 
 
+def panel_command(argv):
+    """O comando que o painel manda ao fliperos-tty1. O tty1 so abre um dos
+    lancadores do FliperOS (fliperos-x11-run/kms-run) e ignora o resto, e o
+    jogo custom do game_command e o /bin/sh NOME.sh do frontend: o que o
+    painel manda e o comando da linha exec do proprio NOME.sh. None: o .sh nao
+    tem essa linha (ou ela nao e de um lancador)."""
+    if not (len(argv) == 2 and argv[0] == "/bin/sh" and argv[1].endswith(".sh")):
+        return argv
+    try:
+        with open(argv[1], encoding="utf-8", errors="replace") as f:
+            lines = f.read(8192).splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        if line.startswith("exec "):
+            try:
+                words = shlex.split(line[5:])
+            except ValueError:
+                return None
+            return words if words and words[0] in LAUNCHERS else None
+    return None
+
+
 # ── A midia dos jogos ──────────────────────────────────────────────
 # ~/media/TIPO/PASTA/NOME.ext, o que o scraper e os pacotes de arte gravam:
 # snap, box (capa ou flyer), logo, marquee, preview (o video) e texto (a
@@ -4449,6 +4472,7 @@ class Handler(BaseHTTPRequestHandler):
             data = self.body()
             system = self.panel.system(str(data.get("system", "")))
             argv = game_command(system, str(data.get("game", ""))) if system else None
+            argv = panel_command(argv) if argv else None
             if not argv:
                 return self.send(400, {"error": "no such game, or this system does not open from the panel"})
             # Para o painel saber de que pasta e o jogo que abrir (identify).

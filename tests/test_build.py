@@ -10735,6 +10735,35 @@ class WebPanelTests(unittest.TestCase):
                      {'system': 'shell', 'game': 'vf4.zip'}, {'system': 'naomi'}):
             self.assertEqual(self.request('POST', '/api/launch', body, cookie=cookie)[0], 400, body)
 
+    def test_launch_of_a_custom_game_sends_the_exec_line_of_its_script(self):
+        # O tty1 so abre um pedido que comeca no fliperos-x11-run/kms-run e ignora o resto ("Ignoring an unknown
+        # request from the web panel"): o /bin/sh NOME.sh que o frontend abre nao serve ao painel, que manda o
+        # comando da linha exec do proprio NOME.sh (grupo com espaco no nome, como "Grupo 1", incluido).
+        web = SourceFileLoader('fliperos_web', str(ROOT / 'config/fliperos-web')).load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            group = Path(tmp) / 'Grupo 1'
+            group.mkdir()
+            script = group / 'Ultra Street Fighter 2.sh'
+            script.write_text('#!/bin/sh\n# FliperOS custom game\n# mode: 384x224@59.6\n'
+                              'exec /opt/fliperos/bin/fliperos-x11-run --mode 384x224@59.6 --app custom_grupo_1_ultra_street_fighter_2'
+                              ' /opt/fliperos/bin/fliperos-customgame run /h/roms/custom/Grupo\\ 1/Ultra\\ Street\\ Fighter\\ 2.cfg\n')
+            self.assertEqual(web.panel_command(['/bin/sh', str(script)]),
+                             ['/opt/fliperos/bin/fliperos-x11-run', '--mode', '384x224@59.6', '--app',
+                              'custom_grupo_1_ultra_street_fighter_2', '/opt/fliperos/bin/fliperos-customgame', 'run',
+                              '/h/roms/custom/Grupo 1/Ultra Street Fighter 2.cfg'])
+            # Um jogo que ja e de um lancador segue como esta; um .sh sem linha exec, ou com outro programa, nao abre.
+            self.assertEqual(web.panel_command(['/opt/fliperos/bin/fliperos-x11-run', 'flycast', 'x.zip']),
+                             ['/opt/fliperos/bin/fliperos-x11-run', 'flycast', 'x.zip'])
+            script.write_text('#!/bin/sh\necho hi\n')
+            self.assertIsNone(web.panel_command(['/bin/sh', str(script)]))
+            script.write_text('#!/bin/sh\nexec /bin/rm -rf x\n')
+            self.assertIsNone(web.panel_command(['/bin/sh', str(script)]))
+            self.assertIsNone(web.panel_command(['/bin/sh', str(group / 'missing.sh')]))
+        source = (ROOT / 'config/fliperos-web').read_text()
+        launch = source.split('if url.path == "/api/launch":')[1].split('if url.path == "/api/bootgame":')[0]
+        self.assertLess(launch.index('game_command('), launch.index('panel_command('))
+        self.assertLess(launch.index('panel_command('), launch.index('self.panel.launch('))
+
     def test_close_game(self):
         import shutil as sh
         cookie = self.login()
