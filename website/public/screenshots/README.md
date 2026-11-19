@@ -18,6 +18,11 @@ ffmpeg -ss 87 -t 11 -i .shots/video/clips/s5_frontend.mkv -an -vf fps=12 \
   -c:v libwebp_anim -lossless 0 -quality 55 -loop 0 anim/frontend-grid.webp
 ```
 
+`anim/frontend-menu.webp` and `anim/frontend-page.webp` (the game menu with link and party, and the
++ page) are rendered by `tools/video/frontend_motion.py`: the real frontend, with a fake game
+library and a fake network, a virtual clock and the player's keys, at 320x240 and 25 fps (the
+steps of the motion are 0.07 s long, so they need more than the 12 fps of the others).
+
 `anim/netplay-{en,pt}.webp` and `anim/ssf2tb-{en,pt}.webp` are the illustrations of the
 Linked cabinets page: Japanese candy cabinets in pixel art (as in the isometric room of the
 home) joined by network cables on the floor, 1200x900, with the

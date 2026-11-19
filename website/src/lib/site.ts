@@ -230,6 +230,10 @@ export const PAGE_SHOTS: Record<PageSlug, string[]> = {
 // Telas usadas só nos blocos das páginas de detalhe.
 const ROW_ONLY_SHOTS = [
   'anim/frontend-systems',
+  // O menu do jogo num jogo de link e de party, e a pagina "+": o frontend de verdade
+  // com a rede de mentira (tools/video/frontend_motion.py).
+  'anim/frontend-menu',
+  'anim/frontend-page',
   'anim/setup-colour',
   'anim/setup-latency',
   'gui/checklist',
