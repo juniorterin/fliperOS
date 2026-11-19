@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
         "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
-        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "storage", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos", "cloud"]
+        "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "storage", "batocera", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos", "cloud"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
 BOOT_SILENT = "loglevel=3 rd.udev.log_level=3 udev.log_level=3 vt.global_cursor_default=0"
@@ -13295,6 +13295,228 @@ class BluetoothScreenTests(Base):
         self.assertIn("hints 8BitDo Pro 2 [Connected.] disconnect|Disconnect|", calls)
         self.assertIn("remove E4:17:D8:00:11:22", bt)
         self.assertTrue(d.exists())
+
+
+class BatoceraTests(Base):
+    """Setup > Games > Folders > External storage > Batocera filesystem
+    (lib/batocera.sh): cada pasta de console do Batocera vira um sistema dos
+    frontends, com o core escolhido, lido no disco."""
+
+    def setUp(self):
+        super().setUp()
+        d = self.env.dir
+        self.home = d / "home"
+        self.media = d / "media"
+        self.disk = self.media / "BATOCERA"
+        self.root = self.disk / "batocera"
+        self.info = d / "info"
+        self.cores = d / "cores"
+        for p in (self.home / "roms" / "mame", self.home / "bios", self.info, self.cores):
+            p.mkdir(parents=True)
+        # Um HD como o do caso de 2026-11-19: um console por pasta, jogos em .zip e o que o Batocera poe ao lado.
+        for name in ("snes", "megadrive", "psx", "atomiswave", "atari2600", "zzz-unknown"):
+            (self.root / "roms" / name).mkdir(parents=True)
+        snes = self.root / "roms" / "snes"
+        (snes / "mario.zip").write_text("x")
+        (snes / "zelda.sfc").write_text("x")
+        (snes / "gamelist.xml").write_text("<gameList/>")
+        (snes / "images").mkdir()
+        (snes / "images" / "mario.png").write_text("x")
+        (self.root / "roms" / "atomiswave" / "kofxi.zip").write_text("x")
+        (self.root / "bios").mkdir()
+        (self.root / "saves").mkdir()
+        self.core("snes9x", "super_nes", "Snes9x", "smc|sfc|swc")
+        self.core("bsnes", "super_nes", "bsnes", "smc|sfc")
+        self.core("genesis_plus_gx", "mega_drive", "Genesis Plus GX", "mdx|md|smd|gen|bin")
+        (self.cores / "snes9x_libretro.so").write_text("")
+        self.env.stub("mountpoint", 'for last; do :; done; case "$last" in %s/*) exit 0;; esac; exit 1' % self.media)
+        self.vars = {"FOLDERS_HOME": str(self.home), "FOLDERS_MOUNTS": str(self.media), "STORAGE_MOUNTS": str(self.media),
+                     "FOLDERS_SCRIPT": str(ROOT / "config/fliperos-roms"),
+                     "BATOCERA_TABLE": str(ROOT / "config/batocera-systems.list"),
+                     "BATOCERA_LIST": str(self.home / ".config/fliperos/batocera.list"),
+                     "RA_INFO_DIR": str(self.info), "RA_CORES_DIR": str(self.cores), "ROMS_DIR": str(self.home / "roms"),
+                     "FLIPEROS_BIN": "/opt/fliperos/bin"}
+
+    def core(self, name, systemid, corename, exts):
+        (self.info / (name + "_libretro.info")).write_text(
+            'display_name = "%s"\ncorename = "%s"\nsystemid = "%s"\nsystemname = "%s"\nsupported_extensions = "%s"\n'
+            % (corename, corename, systemid, systemid, exts))
+
+    def cli(self, command):
+        return self.env.run("folders_cli_refresh() { :; }\n" + command, self.vars)
+
+    def ok(self, command):
+        r = self.cli(command)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return r.stdout
+
+    def listed(self):
+        out = self.env.out("batocera_list_read", self.vars)
+        return {l.split("\t")[0]: l.split("\t")[1:] for l in out.splitlines()}
+
+    def test_the_table_names_only_things_fliperos_can_open(self):
+        # Todo "padrao" e "tambem" de fliperos/config/batocera-systems.list abre alguma coisa: uma pasta de emulador
+        # do FliperOS ou um core do RetroArch; e o nome de cada linha e unico.
+        rows = [l.split("|") for l in (ROOT / "config/batocera-systems.list").read_text().splitlines()
+                if l.strip() and not l.startswith("#")]
+        self.assertGreater(len(rows), 90)
+        self.assertEqual(len({r[0] for r in rows}), len(rows))
+        fixed = {"mame", "ps1", "ps2", "dolphin", "dreamcast", "naomi", "naomi2", "atomiswave", "model2", "model3", "openbor"}
+        for r in rows:
+            self.assertEqual(len(r), 5, r)
+            for choice in [r[3]] + [c for c in r[4].split(",") if c]:
+                self.assertTrue(choice.startswith("retroarch/") or choice in fixed, "%s: %s" % (r[0], choice))
+            self.assertTrue(self.env.run('scraper_attract_emulator "%s"' % r[3], self.vars).stdout.strip(), r[0])
+
+    def test_detect_finds_the_batocera_folder_and_not_the_fliperos_tree(self):
+        self.assertEqual(self.env.out('batocera_detect "%s"' % self.disk, self.vars).strip(), str(self.root))
+        # A arvore do FliperOS (mame, naomi, atomiswave e retroarch) e Batocera nem de longe.
+        other = self.media / "OTHER"
+        for n in ("mame", "naomi", "atomiswave", "retroarch"):
+            (other / "fliperos" / "roms" / n).mkdir(parents=True)
+        self.assertEqual(self.env.run('batocera_detect "%s"' % other, self.vars).returncode, 1)
+        # Dois consoles so nao bastam.
+        few = self.media / "FEW"
+        for n in ("snes", "psx"):
+            (few / "batocera" / "roms" / n).mkdir(parents=True)
+        self.assertEqual(self.env.run('batocera_detect "%s"' % few, self.vars).returncode, 1)
+        # Sem a pasta batocera/: a roms/ na raiz do disco tambem.
+        flat = self.media / "FLAT"
+        for n in ("snes", "psx", "gba"):
+            (flat / "roms" / n).mkdir(parents=True)
+        self.assertEqual(self.env.out('batocera_detect "%s"' % flat, self.vars).strip(), str(flat))
+
+    def test_scan_lists_the_known_consoles_and_counts_only_games(self):
+        rows = {r[0]: r for r in (l.split("|") for l in self.env.out('batocera_scan "%s"' % self.disk, self.vars).splitlines())}
+        self.assertEqual(sorted(rows), ["atari2600", "atomiswave", "megadrive", "psx", "snes"])
+        # O .zip e o .sfc contam; o gamelist.xml e a pasta images/ do Batocera nao.
+        self.assertEqual(rows["snes"][1:], ["Super Nintendo", str(self.root / "roms" / "snes"), "2", "", "retroarch/snes9x"])
+        self.assertEqual(rows["atomiswave"][3], "1")
+        self.assertEqual(rows["megadrive"][3], "0")
+        self.assertEqual(self.env.out('batocera_unknown "%s"' % self.disk, self.vars).strip(), "1")
+
+    def test_auto_gives_each_console_its_core_and_every_frontend_opens_it(self):
+        self.assertEqual(self.ok('batocera_cli auto "%s"' % self.disk).strip(), "5")
+        listed = self.listed()
+        self.assertEqual(listed["snes"], [str(self.root / "roms" / "snes"), "retroarch/snes9x"])
+        self.assertEqual(listed["psx"][1], "retroarch/pcsx_rearmed")
+        self.assertEqual(listed["atomiswave"][1], "atomiswave")
+        name, exe, args, exts = self.env.out("scraper_attract_emulator batocera/snes", self.vars).strip().split("|")
+        self.assertEqual(name, "Super Nintendo (Snes9x)")
+        self.assertEqual(exe, "/opt/fliperos/bin/fliperos-kms-run")
+        self.assertEqual(args, 'retroarch -L %s/snes9x_libretro.so "[romfilename]"' % self.cores)
+        # As extensoes do .info e os .zip/.7z do Batocera.
+        self.assertEqual(exts, ".smc;.sfc;.swc;.zip;.7z")
+        # Um console de emulador fixo abre pelo emulador dele.
+        self.assertTrue(self.env.out("scraper_attract_emulator batocera/atomiswave", self.vars).startswith("Sammy Atomiswave (Atomiswave)|"))
+        # Cada console com jogos e um sistema (frontends_systems e scraper_detect): nome, pasta, plataforma, jogos.
+        found = [l for l in self.env.out("scraper_detect", self.vars).splitlines() if l.startswith("batocera/")]
+        self.assertEqual(found, ["batocera/atomiswave|%s|atomiswave|1" % (self.root / "roms" / "atomiswave"),
+                                 "batocera/snes|%s|snes|2" % (self.root / "roms" / "snes")])
+        # De novo: nao troca a escolha de quem ja escolheu, so "reset" volta ao padrao.
+        self.ok('batocera_cli set snes "%s" retroarch/bsnes' % (self.root / "roms" / "snes"))
+        self.assertEqual(self.ok('batocera_cli auto "%s"' % self.disk).strip(), "0")
+        self.assertEqual(self.listed()["snes"][1], "retroarch/bsnes")
+        self.assertEqual(self.ok('batocera_cli auto "%s" reset' % self.disk).strip(), "5")
+        self.assertEqual(self.listed()["snes"][1], "retroarch/snes9x")
+
+    def test_the_choice_is_changed_resolved_and_removed(self):
+        self.ok('batocera_cli auto "%s"' % self.disk)
+        snes = str(self.root / "roms" / "snes")
+        self.ok('batocera_cli set snes "%s" retroarch/bsnes' % snes)
+        self.assertEqual(self.env.out("batocera_resolve batocera/snes", self.vars).strip(), "retroarch/bsnes")
+        self.assertEqual(self.env.out("batocera_resolve retroarch/snes9x", self.vars).strip(), "retroarch/snes9x")
+        # Uma escolha que nao abre nada, um console fora da tabela e uma pasta que nao existe: recusados.
+        self.assertEqual(self.cli('batocera_cli set snes "%s" batocera/snes' % snes).returncode, 1)
+        self.assertEqual(self.cli('batocera_cli set snes "%s/nope" retroarch/bsnes' % snes).returncode, 1)
+        self.assertEqual(self.cli('batocera_cli set zzz-unknown "%s" retroarch/bsnes' % snes).returncode, 2)
+        self.ok("batocera_cli unset snes")
+        self.assertNotIn("snes", self.listed())
+        self.assertEqual(self.env.run("batocera_resolve batocera/snes", self.vars).returncode, 1)
+        # Os pedidos de fora de /media/fliperos sao recusados como pedido errado.
+        for bad in ('"/etc"', '"%s/../x"' % self.media, '""'):
+            self.assertEqual(self.cli("batocera_cli use %s" % bad).returncode, 2, bad)
+
+    def test_cores_lists_the_default_first_and_says_what_downloads(self):
+        rows = [l.split("|") for l in self.env.out("batocera_cores snes", self.vars).splitlines()]
+        self.assertEqual(rows[0], ["retroarch/snes9x", "Snes9x", "installed", "1"])
+        self.assertIn(["retroarch/bsnes", "bsnes", "download", "0"], rows)
+        # Um core sem .info e sem o arquivo nao aparece (mesen-s, snes9x2010).
+        self.assertEqual([r[0] for r in rows], ["retroarch/snes9x", "retroarch/bsnes"])
+        rows = [l.split("|") for l in self.env.out("batocera_cores megadrive", self.vars).splitlines()]
+        self.assertEqual(rows[0], ["retroarch/genesis_plus_gx", "Genesis Plus GX", "download", "1"])
+        rows = [l.split("|") for l in self.env.out("batocera_cores atomiswave", self.vars).splitlines()]
+        self.assertEqual(rows[0], ["atomiswave", "Atomiswave", "emulator", "1"])
+
+    def test_the_fliperos_only_folders_come_from_the_table_and_the_script(self):
+        # As pastas fixas do fliperos-roms que nenhum console da tabela abre; o custom (os .sh do gabinete) fica de fora.
+        self.assertEqual(self.env.out("batocera_extras", self.vars).split(),
+                         ["namco2x6", "hypseus", "fightcade", "custom-packages"])
+
+    def test_use_links_the_siblings_and_the_fliperos_only_folders_and_unuse_undoes_it(self):
+        out = self.ok('batocera_cli use "%s"' % self.disk)
+        self.assertIn("systems=5", out)
+        self.assertIn("linked=bios,save", out)
+        self.assertIn("extras=namco2x6,hypseus,fightcade,custom-packages", out)
+        self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
+        self.assertEqual(os.readlink(self.home / "save"), str(self.root / "saves"))
+        self.assertTrue((self.home / "old-bios").is_dir())
+        for name in ("namco2x6", "hypseus", "fightcade", "custom-packages"):
+            self.assertEqual(os.readlink(self.home / "roms" / name), str(self.root / "roms" / name), name)
+        self.assertFalse((self.home / "roms" / "custom").is_symlink())      # os .sh do gabinete ficam nele
+        self.assertTrue((self.root / "roms" / "custom-packages" / "_info.txt").exists())
+        # Nada e escrito dentro de uma pasta de console do Batocera.
+        self.assertEqual(sorted(p.name for p in (self.root / "roms" / "snes").iterdir()),
+                         ["gamelist.xml", "images", "mario.zip", "zelda.sfc"])
+        for p in (self.root / "roms").iterdir():
+            if p.name in ("snes", "megadrive", "psx", "atomiswave", "atari2600", "zzz-unknown"):
+                self.assertFalse((p / "_info.txt").exists(), p.name)
+        self.assertEqual(len(self.listed()), 5)
+        self.assertEqual(self.env.run('batocera_in_use "%s"' % self.disk, self.vars).returncode, 0)
+        # De novo: nada muda.
+        self.assertIn("extras=namco2x6", self.ok('batocera_cli use "%s"' % self.disk))
+        self.ok('batocera_cli unuse "%s"' % self.disk)
+        self.assertFalse((self.home / "bios").is_symlink())
+        self.assertTrue((self.home / "bios").is_dir())
+        self.assertFalse((self.home / "roms" / "namco2x6").is_symlink())
+        self.assertEqual(self.listed(), {})
+        self.assertEqual(self.env.run('batocera_in_use "%s"' % self.disk, self.vars).returncode, 1)
+        # Nada sai do disco.
+        self.assertTrue((self.root / "roms" / "snes" / "mario.zip").exists())
+        self.assertTrue((self.root / "roms" / "custom-packages").is_dir())
+
+    def test_a_shortcut_the_person_made_elsewhere_is_kept(self):
+        other = self.env.dir / "elsewhere"
+        (other / "bios").mkdir(parents=True)
+        (other / "roms").mkdir()
+        self.env.out('folders_link bios "%s"; folders_link roms "%s"' % (other / "bios", other / "roms"), self.vars)
+        out = self.ok('batocera_cli use "%s"' % self.disk)
+        self.assertIn("skipped=bios already points to", out)
+        self.assertEqual(os.readlink(self.home / "bios"), str(other / "bios"))
+        # Com ~/roms em outro disco, nada de pasta do FliperOS dentro do Batocera nem do outro disco.
+        self.assertIn("skipped=roms/namco2x6 ~/roms is already on another disk", out)
+        self.assertFalse((self.root / "roms" / "namco2x6").exists())
+        self.assertFalse((other / "roms" / "namco2x6").is_symlink())    # (o fliperos-roms cria a dele, comum, la)
+
+    def test_shown_says_where_the_folder_really_is(self):
+        self.assertEqual(self.env.out("folders_shown roms/custom-packages", self.vars).strip(), "~/roms/custom-packages")
+        self.ok('batocera_cli use "%s"' % self.disk)
+        self.assertEqual(self.env.out("folders_shown roms/custom-packages", self.vars).strip(),
+                         "~/roms/custom-packages (on BATOCERA: batocera/roms/custom-packages)")
+        self.assertEqual(self.env.out("batocera_shown snes", self.vars).strip(), "on BATOCERA: batocera/roms/snes")
+        # Com o disco desligado, o texto diz isso (e a pasta nao some sem aviso).
+        self.disk.rename(self.media / "BATOCERA.off")
+        self.assertEqual(self.env.out("folders_shown roms/custom-packages", self.vars).strip(),
+                         "~/roms/custom-packages (the disk BATOCERA is off)")
+
+    def test_a_roms_folder_with_many_consoles_is_not_one_console(self):
+        self.assertEqual(self.env.out('folders_looks_like_systems "%s"' % (self.root / "roms"), self.vars).strip(), "5")
+        self.assertEqual(self.env.run('folders_looks_like_systems "%s"' % (self.root / "roms" / "snes"), self.vars).returncode, 1)
+        # Muitas subpastas que nao sao consoles (CHDs do MAME) nao avisam.
+        mame = self.env.dir / "chds"
+        for n in range(20):
+            (mame / ("game%d" % n)).mkdir(parents=True)
+        self.assertEqual(self.env.run('folders_looks_like_systems "%s"' % mame, self.vars).returncode, 1)
 
 
 if __name__ == "__main__":

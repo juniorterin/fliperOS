@@ -311,6 +311,9 @@ install -Dm755 "$src/config/fliperos-fbneo" "$root/opt/fliperos/bin/fliperos-fbn
 # e os jogos de pistola dos consoles.
 install -Dm755 "$src/config/fliperos-lightgun" "$root/opt/fliperos/bin/fliperos-lightgun"
 install -Dm644 "$src/config/lightgun-games.tsv" "$root/usr/local/share/fliperos/lightgun-games.tsv"
+# Setup > Games > Folders > External storage > Batocera filesystem: os consoles
+# do Batocera (o nome da pasta de roms/ dele) e o que o FliperOS abre em cada um.
+install -Dm644 "$src/config/batocera-systems.list" "$root/usr/local/share/fliperos/batocera-systems.list"
 # Setup > Games > Downloader > Free games: homebrew de codigo aberto para as pastas de ~/roms.
 install -Dm755 "$src/config/fliperos-freeroms" "$root/opt/fliperos/bin/fliperos-freeroms"
 # Setup > Games > Scraper > progetto-SNAPS: as capturas dos jogos de arcade.

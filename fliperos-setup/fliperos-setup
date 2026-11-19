@@ -34,7 +34,8 @@
 #   --scraper ... e --bios ... (o Scraper e o Download BIOS do painel web),
 #   --bootgame, --geometry, --wifi status|scan|connect, --password (na
 #   entrada), --whatsnew, --customgames ..., --setup-items, --quirks ...,
-#   --folders ..., --storage list|prepare|use|unuse|offer|answer (o disco secundario),
+#   --folders ..., --storage list|prepare|use|unuse|offer|answer|auto|format (o disco secundario),
+#   --batocera detect|scan|list|cores|set|unset|auto|use|unuse (o Batocera filesystem, lib/batocera.sh),
 #   --frontends ..., --bluetooth ..., --system-update,
 #   --attract-romlist (o painel web)
 #
@@ -115,6 +116,8 @@ source "$SETUP_DIR/lib/splash.sh"
 source "$SETUP_DIR/lib/folders.sh"
 # shellcheck source=lib/storage.sh
 source "$SETUP_DIR/lib/storage.sh"
+# shellcheck source=lib/batocera.sh
+source "$SETUP_DIR/lib/batocera.sh"
 # shellcheck source=lib/extras.sh
 source "$SETUP_DIR/lib/extras.sh"
 # shellcheck source=lib/cloud.sh
@@ -394,6 +397,10 @@ main() {
       ;;
     --storage)
       storage_cli "${@:2}"
+      return
+      ;;
+    --batocera)
+      batocera_cli "${@:2}"
       return
       ;;
     --frontends)

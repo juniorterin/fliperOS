@@ -72,13 +72,13 @@ folders_old() {
 folders_description() {
   local info
   case $1 in
-    roms) echo "The games: one folder per emulator and one per RetroArch core." ;;
-    bios) echo "The BIOS files of RetroArch and of the other emulators." ;;
-    media) echo "The art and texts the frontends show, one folder per type." ;;
-    nvram) echo "The arcade memory games keep without power, one folder per emulator and core." ;;
-    save) echo "The saves and states, one folder per emulator." ;;
+    roms) echo "Your games: one folder per emulator (roms/mame, roms/dreamcast) and one per RetroArch core (roms/retroarch/snes9x)." ;;
+    bios) echo "The BIOS files the emulators ask for (RetroArch, Flycast, PCSX2...)." ;;
+    media) echo "The art the frontends show (snap, titles, logos, videos), one folder per type." ;;
+    nvram) echo "What the arcade games keep without power, one folder per emulator and core." ;;
+    save) echo "Your saves and save states, one folder per emulator." ;;
     splashscreen) echo "The boot splash themes." ;;
-    roms/retroarch) echo "The games of RetroArch: one folder per core." ;;
+    roms/retroarch) echo "The games of RetroArch: one folder per core (roms/retroarch/snes9x for the Super Nintendo)." ;;
     media/*/retroarch) echo "The art of the RetroArch games: one folder per core, as in ~/roms/retroarch." ;;
     *)
       info=$FOLDERS_HOME/$1/_info.txt
@@ -86,6 +86,80 @@ folders_description() {
       ;;
   esac
   return 0
+}
+
+# folders_purpose PASTA: duas ou tres palavras do que a raiz guarda, para a
+# linha dela na lista (so as raizes; as outras imprimem nada).
+folders_purpose() {
+  case $1 in
+    roms) echo "games" ;;
+    bios) echo "BIOS files" ;;
+    media) echo "art and videos" ;;
+    nvram) echo "arcade memory" ;;
+    save) echo "saves and states" ;;
+    splashscreen) echo "boot themes" ;;
+  esac
+  return 0
+}
+
+# folders_mount_label ALVO: o disco de um caminho de /media/fliperos/DISCO/...
+# (so o nome do disco); vazio para um caminho de outro lugar.
+folders_mount_label() {
+  local rest
+  [[ $1 == "$FOLDERS_MOUNTS"/* ]] || return 0
+  rest=${1#"$FOLDERS_MOUNTS"/}
+  printf '%s\n' "${rest%%/*}"
+}
+
+# folders_shown PASTA: como a pasta aparece nas telas e no painel. Uma pasta
+# comum e o caminho dela ("~/roms/custom-packages"); um atalho diz onde ela
+# esta de verdade ("~/roms/custom-packages (on HD: batocera/roms/custom-
+# packages)") e, com o disco desligado, que ele esta desligado. Todo texto que
+# manda a pessoa a uma pasta do FliperOS usa esta, nunca o caminho escrito.
+folders_shown() {
+  local rel=$1 target disk rest
+  case $(folders_state "$rel") in
+    custom | offline)
+      target=$(folders_target "$rel") || { printf '~/%s\n' "$rel"; return 0; }
+      disk=$(folders_mount_label "$target")
+      if [[ -n $disk ]]; then
+        rest=${target#"$FOLDERS_MOUNTS/$disk"}
+        rest=${rest#/}
+        if [[ $(folders_state "$rel") == offline ]]; then
+          printf '~/%s (the disk %s is off)\n' "$rel" "$disk"
+        elif [[ -n $rest ]]; then
+          printf '~/%s (on %s: %s)\n' "$rel" "$disk" "$rest"
+        else
+          printf '~/%s (on %s)\n' "$rel" "$disk"
+        fi
+      elif [[ $(folders_state "$rel") == offline ]]; then
+        printf '~/%s (%s is not there)\n' "$rel" "${target/#$FOLDERS_HOME/\~}"
+      else
+        printf '~/%s (on %s)\n' "$rel" "${target/#$FOLDERS_HOME/\~}"
+      fi
+      ;;
+    *) printf '~/%s\n' "$rel" ;;
+  esac
+  return 0
+}
+
+# folders_looks_like_systems ALVO: a pasta tem cara de um Batocera filesystem
+# ou de uma raiz de ROMs com varios consoles dentro (e nao de um console so)?
+# Para avisar antes de fazer dela o atalho de uma pasta de um sistema so
+# (lib/batocera.sh tem a tabela de nomes). So conta nome de console: uma pasta
+# de MAME com muitas subpastas de CHD nao e um aviso. Imprime quantos consoles
+# achou, em status 0; 1 quando tem cara de uma pasta de um sistema so.
+folders_looks_like_systems() {
+  local dir=$1 sub n=0
+  [[ -d $dir ]] || return 1
+  declare -F batocera_known > /dev/null || return 1
+  for sub in "$dir"/*/; do
+    [[ -d $sub ]] || continue
+    sub=${sub%/}
+    batocera_known "${sub##*/}" && n=$((n + 1))
+  done
+  ((n >= 3)) || return 1
+  echo "$n"
 }
 
 # folders_state PASTA imprime como a pasta esta agora:

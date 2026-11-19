@@ -1,0 +1,112 @@
+# Os consoles do Batocera filesystem (Setup > Games > Folders > External storage
+# > Batocera filesystem, lib/batocera.sh): o NOME da pasta em roms/ do Batocera,
+# que e o do console e nao o do core, e o que o FliperOS abre nele.
+#
+#   nome|rotulo|plataforma|padrao|tambem
+#
+# nome        a pasta do Batocera (batocera/roms/<nome>).
+# rotulo      o nome nas telas e nos frontends.
+# plataforma  a do Skyscraper (lib/scraper.sh), para a arte e o tema.
+# padrao      o que abre sem a pessoa escolher: "retroarch/<core>" ou uma pasta
+#             de emulador do FliperOS (ps1, ps2, dolphin, dreamcast, naomi...).
+#             Os cores que vem na imagem (fceumm, snes9x, genesis_plus_gx, mgba,
+#             pcsx_rearmed, mame2010, fbneo) sao preferidos: abrem sem baixar.
+# tambem      outras escolhas (separadas por virgula), alem dos cores do
+#             RetroArch que o .info diz serem do mesmo sistema.
+#
+# Um nome fora desta lista aparece como "sem emulador no FliperOS" e e ignorado.
+# As pastas de emulador do FliperOS que nenhum nome daqui abre (namco2x6,
+# fightcade, custom-packages...) ganham uma pasta propria no disco.
+nes|Nintendo NES|nes|retroarch/fceumm|retroarch/nestopia,retroarch/mesen
+fds|Famicom Disk System|fds|retroarch/fceumm|retroarch/nestopia,retroarch/mesen
+snes|Super Nintendo|snes|retroarch/snes9x|retroarch/bsnes,retroarch/mesen-s,retroarch/snes9x2010
+sfc|Super Famicom|snes|retroarch/snes9x|retroarch/bsnes,retroarch/mesen-s
+satellaview|Satellaview|snes|retroarch/snes9x|retroarch/bsnes
+sufami|Sufami Turbo|snes|retroarch/snes9x|retroarch/bsnes
+n64|Nintendo 64|n64|retroarch/mupen64plus_next|retroarch/parallel_n64
+gb|Game Boy|gb|retroarch/mgba|retroarch/gambatte,retroarch/sameboy
+gbc|Game Boy Color|gbc|retroarch/mgba|retroarch/gambatte,retroarch/sameboy
+sgb|Super Game Boy|gb|retroarch/mgba|retroarch/sameboy
+gb2players|Game Boy (2 players)|gb|retroarch/tgbdual|retroarch/mgba
+gbc2players|Game Boy Color (2 players)|gbc|retroarch/tgbdual|retroarch/mgba
+gba|Game Boy Advance|gba|retroarch/mgba|retroarch/vba_next,retroarch/gpsp
+nds|Nintendo DS|nds|retroarch/melonds|retroarch/desmume
+3ds|Nintendo 3DS|3ds|retroarch/citra|
+gamecube|Nintendo GameCube|gc|dolphin|
+wii|Nintendo Wii|wii|dolphin|
+virtualboy|Virtual Boy|virtualboy|retroarch/mednafen_vb|
+pokemini|Pokemon Mini|pokemini|retroarch/pokemini|
+sg1000|Sega SG-1000|sg1000|retroarch/genesis_plus_gx|retroarch/gearsystem,retroarch/smsplus
+mastersystem|Sega Master System|mastersystem|retroarch/genesis_plus_gx|retroarch/picodrive,retroarch/smsplus,retroarch/gearsystem
+gamegear|Sega Game Gear|gamegear|retroarch/genesis_plus_gx|retroarch/smsplus,retroarch/gearsystem
+megadrive|Sega Mega Drive|megadrive|retroarch/genesis_plus_gx|retroarch/picodrive
+genesis|Sega Genesis|megadrive|retroarch/genesis_plus_gx|retroarch/picodrive
+segacd|Sega CD|segacd|retroarch/genesis_plus_gx|retroarch/picodrive
+sega32x|Sega 32X|sega32x|retroarch/picodrive|
+saturn|Sega Saturn|saturn|retroarch/mednafen_saturn|retroarch/yabasanshiro,retroarch/kronos
+dreamcast|Sega Dreamcast|dreamcast|dreamcast|retroarch/flycast
+naomi|Sega Naomi|naomi|naomi|retroarch/flycast
+naomi2|Sega Naomi 2|naomi2|naomi2|
+atomiswave|Sammy Atomiswave|atomiswave|atomiswave|retroarch/flycast
+model2|Sega Model 2|arcade|model2|
+model3|Sega Model 3|arcade|model3|
+psx|Sony PlayStation|psx|retroarch/pcsx_rearmed|ps1,retroarch/mednafen_psx_hw,retroarch/mednafen_psx
+ps2|Sony PlayStation 2|ps2|ps2|
+psp|Sony PSP|psp|retroarch/ppsspp|
+atari2600|Atari 2600|atari2600|retroarch/stella|retroarch/stella2014
+atari5200|Atari 5200|atari5200|retroarch/atari800|
+atari7800|Atari 7800|atari7800|retroarch/prosystem|
+atari800|Atari 800 and XL|atari800|retroarch/atari800|
+atarilynx|Atari Lynx|atarilynx|retroarch/handy|retroarch/mednafen_lynx
+lynx|Atari Lynx|atarilynx|retroarch/handy|retroarch/mednafen_lynx
+atarijaguar|Atari Jaguar|atarijaguar|retroarch/virtualjaguar|
+jaguar|Atari Jaguar|atarijaguar|retroarch/virtualjaguar|
+atarist|Atari ST|atarist|retroarch/hatari|
+pcengine|NEC PC Engine|pcengine|retroarch/mednafen_pce_fast|retroarch/mednafen_pce
+pcenginecd|NEC PC Engine CD|pcenginecd|retroarch/mednafen_pce_fast|retroarch/mednafen_pce
+tg16|NEC TurboGrafx-16|pcengine|retroarch/mednafen_pce_fast|retroarch/mednafen_pce
+tg16cd|NEC TurboGrafx-CD|pcenginecd|retroarch/mednafen_pce_fast|retroarch/mednafen_pce
+supergrafx|NEC SuperGrafx|pcengine|retroarch/mednafen_supergrafx|retroarch/mednafen_pce
+pcfx|NEC PC-FX|pcfx|retroarch/mednafen_pcfx|
+neogeo|SNK Neo Geo|neogeo|retroarch/fbneo|retroarch/mame2010
+neogeocd|SNK Neo Geo CD|neogeocd|retroarch/fbneo|retroarch/neocd
+ngp|SNK Neo Geo Pocket|ngp|retroarch/mednafen_ngp|retroarch/race
+ngpc|SNK Neo Geo Pocket Color|ngpc|retroarch/mednafen_ngp|retroarch/race
+mame|Arcade (MAME)|arcade|mame|retroarch/mame2010,retroarch/mame2003_plus
+fbneo|Arcade (FinalBurn Neo)|fba|retroarch/fbneo|retroarch/mame2010
+cps1|Capcom CPS-1|arcade|retroarch/fbneo|retroarch/mame2010
+cps2|Capcom CPS-2|arcade|retroarch/fbneo|retroarch/mame2010
+cps3|Capcom CPS-3|arcade|retroarch/fbneo|retroarch/mame2010
+openbor|OpenBOR|openbor|openbor|
+3do|3DO|3do|retroarch/opera|
+cdi|Philips CD-i|cdi|retroarch/same_cdi|
+amiga500|Commodore Amiga 500|amiga|retroarch/puae|retroarch/uae4arm
+amiga1200|Commodore Amiga 1200|amiga|retroarch/puae|retroarch/uae4arm
+amigacd32|Commodore Amiga CD32|amiga|retroarch/puae|
+amiga|Commodore Amiga|amiga|retroarch/puae|retroarch/uae4arm
+amigacdtv|Commodore Amiga CDTV|amiga|retroarch/puae|
+c64|Commodore 64|c64|retroarch/vice_x64|retroarch/vice_x64sc
+c128|Commodore 128|c128|retroarch/vice_x128|
+c20|Commodore VIC-20|vic20|retroarch/vice_xvic|
+plus4|Commodore Plus/4|plus4|retroarch/vice_xplus4|
+zxspectrum|Sinclair ZX Spectrum|zxspectrum|retroarch/fuse|
+zx81|Sinclair ZX81|zx81|retroarch/81|
+amstradcpc|Amstrad CPC|amstradcpc|retroarch/cap32|retroarch/crocods
+msx1|MSX|msx|retroarch/bluemsx|retroarch/fmsx
+msx2|MSX2|msx2|retroarch/bluemsx|retroarch/fmsx
+msxturbor|MSX turbo R|msx2|retroarch/bluemsx|
+colecovision|ColecoVision|coleco|retroarch/bluemsx|retroarch/gearcoleco
+intellivision|Mattel Intellivision|intellivision|retroarch/freeintv|
+vectrex|GCE Vectrex|vectrex|retroarch/vecx|
+o2em|Magnavox Odyssey 2|videopac|retroarch/o2em|
+megaduck|Mega Duck|megaduck|retroarch/sameduck|
+supervision|Watara Supervision|supervision|retroarch/potator|
+channelf|Fairchild Channel F|channelf|retroarch/freechaf|
+wswan|Bandai WonderSwan|wonderswan|retroarch/mednafen_wswan|
+wswanc|Bandai WonderSwan Color|wonderswancolor|retroarch/mednafen_wswan|
+scummvm|ScummVM|scummvm|retroarch/scummvm|
+dos|MS-DOS|pc|retroarch/dosbox_pure|retroarch/dosbox_svn
+pc88|NEC PC-88|pc88|retroarch/quasi88|
+pc98|NEC PC-98|pc98|retroarch/np2kai|
+x68000|Sharp X68000|x68000|retroarch/px68k|
+x1|Sharp X1|x1|retroarch/x1|

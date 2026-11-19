@@ -503,6 +503,10 @@ scraper_detect() {
     count=$(find -H "$dir" -maxdepth 1 -type f -name '*.sh' 2> /dev/null | wc -l)
     ((count > 0)) && printf 'custom/%s|%s|ports|%s\n' "${dir##*/}" "$dir" "$count"
   done
+  # Os consoles de um Batocera filesystem (Setup > Games > Folders > External
+  # storage, lib/batocera.sh): um sistema cada, com o core escolhido, lido na
+  # pasta do disco (nada em ~/roms).
+  declare -F batocera_detect_systems > /dev/null && batocera_detect_systems
   return 0
 }
 
@@ -585,6 +589,10 @@ scraper_attract_emulator() {
     custom/*)
       # Custom games (lib/customgames.sh): cada .sh abre o seu programa.
       echo "${key#custom/}|/bin/sh|\"[romfilename]\"|.sh"
+      ;;
+    # Um console do Batocera filesystem: o que a pessoa escolheu para ele.
+    batocera/*)
+      declare -F batocera_emulator > /dev/null && batocera_emulator "$key"
       ;;
     *) return 1 ;;
   esac
