@@ -11211,6 +11211,17 @@ class StorageTests(Base):
         self.assertEqual(r.returncode, 1)
         self.assertIn("iso9660", r.stdout)
 
+    def test_the_uuid_shortcut_of_an_unlabeled_disk_is_not_a_second_disk(self):
+        # config/fliperos-automount deixa /media/fliperos/<UUID> -> <nome> para o disco sem rotulo: o mesmo
+        # disco, que a lista mostrava duas vezes (a segunda "sem uso").
+        (self.media / "5E2C-4AEF").symlink_to("BIGDISK")
+        rows = [l.split("|") for l in self.env.out(self.skip + "storage_list", self.vars).splitlines()]
+        self.assertEqual([r[0] for r in rows], [str(self.disk)])
+        # Um link para outro lugar e do usuario: segue na lista.
+        (self.media / "ELSEWHERE").symlink_to(self.env.dir)
+        rows = [l.split("|") for l in self.env.out(self.skip + "storage_list", self.vars).splitlines()]
+        self.assertEqual([r[0] for r in rows], [str(self.disk), str(self.media / "ELSEWHERE")])
+
     def test_prepare_makes_the_whole_structure_and_changes_nothing_in_home(self):
         r = self.env.run(self.skip + 'storage_cli prepare "%s"' % self.disk, self.vars)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

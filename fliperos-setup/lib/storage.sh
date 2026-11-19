@@ -50,6 +50,10 @@ storage_mounts() {
   local dir
   for dir in "$STORAGE_MOUNTS"/*/; do
     dir=${dir%/}
+    # O atalho para a pasta ao lado (o /media/fliperos/<UUID> do disco sem
+    # rotulo, config/fliperos-automount) e o mesmo disco: aparecia duas vezes,
+    # a segunda "sem uso".
+    [[ -L $dir && $(readlink -- "$dir") != */* ]] && continue
     [[ -d $dir ]] && mountpoint -q -- "$dir" 2> /dev/null && printf '%s\n' "$dir"
   done
   return 0
