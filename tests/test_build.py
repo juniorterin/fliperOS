@@ -18124,22 +18124,11 @@ class FrontendPopupMotionTests(unittest.TestCase):
 
     def test_each_pressed_tile_has_its_own_animation(self):
         fv = self.fv
-        # PLAY: o cartao fica quieto e nitido (nada de ampliar nem de apagar) e a
-        # tela inteira apaga ate o preto, a tempo do lancamento.
+        # PLAY: o cartao fica quieto e nitido (nada de ampliar nem de apagar); quem
+        # desliga a tela e o popup_tvoff (teste abaixo).
         play = self.fe(act=("play", 5.0))
         for age in (0.0, 0.1, fv.POP_ACT["play"]):
             self.assertEqual(fv.popup_motion(play, 5.0 + age), (1.0, 1.0, 1.0), age)
-        self.assertEqual(fv.popup_fade(play, 5.0), 0)
-        self.assertEqual(fv.popup_fade(play, 5.0 + 0.08), 0)
-        mid = fv.popup_fade(play, 5.0 + 0.19)
-        self.assertTrue(0 < mid < 255, mid)
-        self.assertEqual(fv.popup_fade(play, 5.0 + fv.POP_ACT["play"] + 0.001), 255)
-        # So o PLAY apaga a tela: os outros azulejos e o menu parado, nao.
-        for ov in ({"act": ("more", 5.0)}, {"act": ("fav", 5.0, True)}, {}):
-            self.assertEqual(fv.popup_fade(self.fe(**ov), 5.3), 0, ov)
-        # Nos prints (fe.shot) nada apaga.
-        play.shot = "x"
-        self.assertEqual(fv.popup_fade(play, 6.0), 0)
         # O "+" se aproxima (mergulha na pagina) e some.
         s_more, a_more, _ = fv.popup_motion(self.fe(act=("more", 5.0)), 5.0 + fv.POP_ACT["more"])
         self.assertGreater(s_more, 1.3)
@@ -18205,15 +18194,73 @@ class FrontendPopupMotionTests(unittest.TestCase):
         for kind, act in {"play": ("play", 0.2), "fav": ("fav", 0.1, True), "more": ("more", 0.2)}.items():
             self.assertNotEqual(icon(kind, None, act=act), icon(kind, None), kind)
 
-    def test_the_pressed_play_blinks_green_twice_without_growing_anything(self):
+    def tv(self, age, **ov):
+        """O quadro do menu (um bloco vermelho no meio) depois do popup_tvoff, `age` s apos o aperto."""
+        import types
+        pg = self.pg
+        back = pg.Surface((320, 240))
+        back.fill((200, 40, 40))
+        fe = types.SimpleNamespace(ov=ov or {"act": ("play", 5.0)}, shot=None)
+        self.fv.popup_tvoff(fe, back, 5.0 + age)
+        return back, fe
+
+    def rows_lit(self, back):
+        """As linhas (de cima para baixo) que tem algum pixel que nao e o preto da tela."""
+        black = tuple(self.fv.T.SPACE)
+        return [y for y in range(240) if any(tuple(back.get_at((x, y)))[:3] != black for x in range(0, 320, 4))]
+
+    def test_the_pressed_play_turns_the_screen_off_like_a_tube_tv(self):
+        fv = self.fv
+        # Nos primeiros TV_HOLD s a imagem fica inteira (so o azulejo pisca).
+        back, _ = self.tv(0.05)
+        self.assertEqual(self.rows_lit(back), list(range(240)))
+        # Depois ela se achata para o meio, so em linhas inteiras (nitido), cada vez mais fina...
+        sizes = []
+        for age in (0.09, 0.12, 0.15, 0.18, 0.205):
+            back, _ = self.tv(age)
+            rows = self.rows_lit(back)
+            self.assertEqual(rows, list(range(rows[0], rows[-1] + 1)), age)
+            self.assertLessEqual(abs((rows[0] + rows[-1]) // 2 - 119), 1, age)       # centrada
+            sizes.append(len(rows))
+        self.assertEqual(sizes, sorted(sizes, reverse=True))
+        self.assertLess(sizes[-1], 40)
+        # ... ate a linha clara, que encolhe de lado a lado num ponto ...
+        widths = []
+        for age in (0.22, 0.25, 0.28):
+            back, _ = self.tv(age)
+            lit = [(x, y) for y in range(240) for x in range(320) if tuple(back.get_at((x, y)))[:3] == (255, 255, 255)]
+            self.assertEqual(sorted({y for _, y in lit}), [119, 120, 121], age)
+            widths.append(len({x for x, _ in lit}))
+        self.assertEqual(widths, sorted(widths, reverse=True))
+        self.assertLessEqual(widths[-1], 140)       # menos da metade da tela aos 0,28 s
+        # ... e preto em POP_ACT["play"], quando o jogo abre.
+        for age in (fv.POP_ACT["play"], fv.POP_ACT["play"] + 0.05):
+            back, _ = self.tv(age)
+            self.assertEqual(self.rows_lit(back), [], age)
+        self.assertLess(fv.TV_HOLD, fv.TV_LINE)
+        self.assertLess(fv.TV_LINE, fv.POP_ACT["play"])
+
+    def test_only_the_pressed_play_turns_the_screen_off(self):
+        # O "+", a estrela, o Esc, o menu parado e os prints (fe.shot) deixam a tela como esta.
+        for ov in ({"act": ("more", 5.0)}, {"act": ("fav", 5.0, True)}, {"act": ("back", 5.0)}, {"sel": 0}):
+            back, _ = self.tv(0.25, **ov)
+            self.assertEqual(self.rows_lit(back), list(range(240)), ov)
+        import types
+        back = self.pg.Surface((320, 240))
+        back.fill((200, 40, 40))
+        self.fv.popup_tvoff(types.SimpleNamespace(ov={"act": ("play", 5.0)}, shot="x"), back, 6.0)
+        self.assertEqual(self.rows_lit(back), list(range(240)))
+
+    def test_the_pressed_play_blinks_green_once_and_stays_lit_without_growing_anything(self):
         fv, pg = self.fv, self.pg
-        # Duas fases acesas e duas apagadas nos primeiros 0,14 s; depois, nenhuma.
-        lit = [fv.play_flash(i / 1000) for i in range(0, 200, 5)]
+        # Acende, apaga um instante e acende de novo, e fica aceso enquanto a tela desliga.
+        lit = [fv.play_flash(i / 1000) for i in range(0, 300, 5)]
         runs = [lit[i] for i in range(len(lit)) if i == 0 or lit[i] != lit[i - 1]]
-        self.assertEqual(runs, [True, False, True, False])
-        self.assertFalse(fv.play_flash(0.14))
-        # O azulejo acende em verde cheio (sem escala: o k fica em 1) e some o brilho
-        # branco e o anel de antes.
+        self.assertEqual(runs, [True, False, True])
+        self.assertTrue(fv.play_flash(0.0) and fv.play_flash(fv.TV_HOLD) and fv.play_flash(0.3))
+        self.assertFalse(fv.play_flash(0.05))
+        # O azulejo acende em verde cheio (sem escala: o k fica em 1), sem o brilho
+        # branco nem o anel das versoes de antes.
         def tile(age):
             surf = pg.Surface((320, 240), pg.SRCALPHA)
             spark = pg.Surface((320, 240), pg.SRCALPHA)
@@ -18224,6 +18271,8 @@ class FrontendPopupMotionTests(unittest.TestCase):
         self.assertEqual(spark.get_bounding_rect(1).size, (0, 0))
         off, _ = tile(0.05)
         self.assertNotEqual(tuple(off.get_at((104, 104)))[:3], tuple(fv.T.GREEN))
+        again, _ = tile(0.1)
+        self.assertEqual(tuple(again.get_at((104, 104)))[:3], tuple(fv.T.GREEN))
 
     def test_the_selected_tile_animates_and_the_others_stand_still(self):
         # Os outros dois azulejos ficam parados enquanto o escolhido se mexe.

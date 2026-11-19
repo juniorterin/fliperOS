@@ -2603,28 +2603,50 @@ def pop_time(kind):
     return POP_ACT.get(kind, POP_OUT)
 
 
+TV_HOLD, TV_LINE = 0.07, 0.21     # o PLAY apertado: a TV so comeca a desligar em 0,07 s; a linha encolhe a partir de 0,21 s
+
+
 def play_flash(age):
-    """O PLAY apertado pisca duas vezes (verde cheio, apagado, verde cheio,
-    apagado) nos primeiros 0,14 s: True nas fases acesas."""
-    return age < 0.14 and int(age / 0.035) % 2 == 0
+    """O PLAY apertado acende em verde cheio (0,035 s), apaga um instante
+    (0,035 s) e acende de novo, e assim fica enquanto a tela desliga: True nas
+    fases acesas."""
+    return age < 0.035 or age >= TV_HOLD
 
 
-def popup_fade(fe, now):
-    """O preto por cima de tudo (0 a 255) com o PLAY apertado: o cartao fica
-    quieto e nitido e a tela inteira apaga ate o preto, a tempo do jogo abrir
-    (o corte para o emulador, que comeca preto, nao se nota)."""
+def popup_tvoff(fe, back, now):
+    """O PLAY apertado desliga a tela como uma TV de tubo, em passos nitidos
+    (a imagem e redimensionada sem suavizar): depois de TV_HOLD a imagem se
+    achata numa linha clara (ate TV_LINE), a linha encolhe num ponto e tudo
+    fica preto em POP_ACT["play"], quando o jogo abre (o corte para o
+    emulador, que comeca preto, nao se nota). Troca o quadro em back, e e a
+    ultima coisa desenhada."""
     act = (fe.ov or {}).get("act")
     if getattr(fe, "shot", None) or not act or act[0] != "play":
-        return 0
-    return round(255 * smooth01((now - act[1] - 0.08) / (POP_ACT["play"] - 0.08)))
+        return
+    age = now - act[1]
+    if age < TV_HOLD:
+        return
+    w, h = back.get_size()
+    frame = back.copy()
+    back.fill(T.SPACE)
+    if age < TV_LINE:
+        p = (age - TV_HOLD) / (TV_LINE - TV_HOLD)
+        rows = max(3, round(h * (1 - p * p)))
+        squashed = pygame.transform.scale(frame, (w, rows))
+        squashed.fill((round(200 * p ** 3),) * 3, special_flags=pygame.BLEND_RGB_ADD)
+        back.blit(squashed, (0, (h - rows) // 2))
+    elif age < POP_ACT["play"] - 0.001:
+        q = (age - TV_LINE) / (POP_ACT["play"] - TV_LINE)
+        length = max(4, round(w * (1 - q * q)))
+        back.fill((255, 255, 255), ((w - length) // 2, h // 2 - 1, length, 3))
 
 
 def popup_motion(fe, now):
     """(escala, opacidade, escuro) do cartao do menu do jogo e do fundo atras
     dele (escuro: 0 a 1 da cor de 160): abrindo, o cartao cresce de 78% com um
     leve estouro; apertado, o "+" o aproxima e o faz sumir, e o favoritar e o
-    Esc o encolhem e apagam no fim. O PLAY nao mexe nele (popup_fade apaga a
-    tela)."""
+    Esc o encolhem e apagam no fim. O PLAY nao mexe nele (popup_tvoff desliga
+    a tela)."""
     ov = fe.ov
     if getattr(fe, "shot", None) or not ov:
         return 1.0, 1.0, 1.0
@@ -2786,7 +2808,7 @@ def popup_tile(ui, spark, tile, rect, on, now, idle, k=1.0, alpha=1.0, act=None)
 def popup_spark(layer, kind, cx, cy, size, act):
     """O que sai do azulejo apertado: o anel do "+" (ciano) e as faiscas da
     estrela que favoritou. O PLAY nao solta nada: ele acende (popup_tile) e a
-    tela apaga (popup_fade)."""
+    tela desliga (popup_tvoff)."""
     if kind == "play":
         return
     age = act[1]
@@ -4859,9 +4881,6 @@ def draw(fe, now):
         elif o in ("exitkey", "exitpad"):
             draw_capture(fe, top, t)
         back.blit(top, (0, 0))
-        fade = popup_fade(fe, now) if o == "popup" else 0
-        if fade:
-            dim(back, fade)        # o PLAY apertado: a tela apaga ate o preto
     if fe.toast and now < fe.toast[1]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_toast(top, fe.toast[0])
@@ -4871,3 +4890,5 @@ def draw(fe, now):
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_notice(top, notice[0], notice[1], now)
         back.blit(top, (0, 0))
+    if o == "popup":
+        popup_tvoff(fe, back, now)     # o PLAY apertado: a tela desliga como uma TV (por ultimo)
