@@ -34,16 +34,18 @@ esac
 runuser -u "$user" -- udisksctl mount --no-user-interaction -b "$dev" || exit
 
 # Um disco de dados novo (um HD externo, outro disco) ganha a pasta "fliperos"
-# com a estrutura de pastas do FliperOS dentro (Setup > System > Storage, que
-# a liga aos jogos quando a pessoa quiser). So cria: nada em ~ muda, e um
-# pendrive pequeno, um disco so de leitura ou de outro tipo fica como esta.
-# Pronta a estrutura, o disco vai para a fila do frontend (--storage offer),
-# que pergunta uma vez se a pessoa quer usa-lo para tudo.
+# com a estrutura de pastas do FliperOS dentro (Setup > Games > Folders >
+# External storage, que a liga aos jogos quando a pessoa quiser). So cria:
+# nada em ~ muda, e um pendrive pequeno, um disco so de leitura ou de outro
+# tipo fica como esta. Pronta a estrutura, o disco vai para a fila do frontend,
+# que pergunta uma vez se a pessoa quer usa-lo para tudo. Um disco que ja tem
+# um Batocera filesystem (batocera/roms/<console>...) nao ganha a pasta: nada
+# e escrito nele; so a pergunta de usar o Batocera filesystem, tambem uma vez.
+# Tudo isso e o --storage auto (lib/storage.sh).
 setup=${FLIPEROS_SETUP:-/usr/local/bin/fliperos-setup}
 new_target=$(findmnt -rno TARGET -S "$dev" 2> /dev/null | head -n1)
 if [[ -x $setup && $new_target == "$media/$user"/* && $(sed -n 's/^storage_auto=//p' "$ETC/fliperos.conf" 2> /dev/null | tail -n 1) != off ]]; then
-  "$setup" --storage prepare "$new_target" > /dev/null 2>&1 &&
-    "$setup" --storage offer "$new_target" > /dev/null 2>&1 || true
+  "$setup" --storage auto "$new_target" > /dev/null 2>&1 || true
 fi
 
 # O disco sem rotulo fica com o nome do modelo (99-fliperos-disks.rules);

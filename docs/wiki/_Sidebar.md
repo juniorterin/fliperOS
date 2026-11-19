@@ -40,6 +40,7 @@
 **Games**
 
 - [ROMs, BIOS and artwork](ROMs.md)
+  - [External storage](External-storage.md)
   - [Downloader](Downloader.md)
   - [BIOS](BIOS.md)
   - [ROM Cleaner](ROM-Cleaner.md)

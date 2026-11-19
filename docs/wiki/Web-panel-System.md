@@ -69,7 +69,8 @@ A colour slider saves while it moves, so the game on screen changes with it; the
 
 ### Folders, quirks and the rest
 
-- **Folders:** each folder of `~` (and the folders inside them) can be a folder of another disk: **Change** opens the cabinet's folders and disks; **Undo** brings back the one used before. See [ROMs](ROMs.md).
+- **Folders:** each folder of `~` (and the folders inside them) can have a shortcut to a folder of another disk: **Change** opens the cabinet's folders and disks; **Undo** brings back the one used before. See [External storage](External-storage.md#folder-shortcuts).
+- **External storage** (right after Folders, *Open on the cabinet*): a whole disk, with the FliperOS folders or a Batocera filesystem, and formatting. It is only done on the cabinet's screen: erasing a disk is not done from a browser. See [External storage](External-storage.md). The pages of the panel that name a folder (the packages of the custom games, for one) show where it really is when it is on another disk.
 - **Custom frontends:** a name and the command that opens it, like the other frontends; edit or delete each one.
 - **Quirks:** pick a USB device connected now and the fix (one device per player, no GET requests, always poll, UAS off for a disk), or type the code. They count after a restart. See [Wheels and quirks](Wheels-and-quirks.md).
 - **Bluetooth:** turn it on, **Look for controllers** (15 seconds, with the controller in pairing mode), **Pair**. See [Bluetooth](Bluetooth.md).

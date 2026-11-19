@@ -1,5 +1,6 @@
 # shellcheck shell=bash
-# Setup > System > Storage: um disco secundario (um HD externo, um SSD ou
+# Setup > Games > Folders > External storage > FliperOS folders: um disco
+# secundario (um HD externo, um SSD ou
 # outro disco interno, montado sozinho pelo fliperos-automount em
 # /media/fliperos/ROTULO) com a estrutura de pastas do FliperOS dentro de
 # uma pasta "fliperos" dele:
@@ -20,15 +21,23 @@
 #   fliperos-setup --storage use MONTAGEM      cria e liga as cinco pastas
 #   fliperos-setup --storage unuse             devolve as cinco pastas ao disco principal
 #   fliperos-setup --storage offer MONTAGEM    anota o disco para o frontend perguntar (abaixo)
-#   fliperos-setup --storage answer MONTAGEM yes|no   a resposta do frontend
+#   fliperos-setup --storage answer MONTAGEM yes|no [batocera]   a resposta do frontend
+#   fliperos-setup --storage auto MONTAGEM     o que o fliperos-automount faz com um disco novo
+#   fliperos-setup --storage format MONTAGEM ext4|exfat   apaga a particao e a formata
 #
-# O disco novo: o fliperos-automount chama --storage offer para o disco que
-# serve e ainda nao esta em uso; o frontend (gui/festorage.py) le a fila em
-# STORAGE_STATE/offer e pergunta, uma vez so por disco, se a pessoa quer usar
-# o disco para tudo. A resposta (--storage answer: "yes" liga como "use", "no"
-# so registra) guarda o disco em STORAGE_STATE/answered, pelo UUID do sistema
-# de arquivos: ele nao pergunta mais, e o disco segue em Setup > System >
-# Storage para quando a pessoa quiser.
+# O disco novo: o fliperos-automount chama --storage auto, que poe o disco que
+# serve e ainda nao esta em uso na fila (offer); o frontend (gui/festorage.py)
+# le a fila em STORAGE_STATE/offer e pergunta, uma vez so por disco, se a
+# pessoa quer usa-lo para tudo. A resposta (--storage answer: "yes" liga como
+# "use", "no" so registra) guarda o disco em STORAGE_STATE/answered, pelo UUID
+# do sistema de arquivos: ele nao pergunta mais, e o disco segue em Setup >
+# Games > Folders > External storage para quando a pessoa quiser.
+#
+# Um disco com um Batocera filesystem (lib/batocera.sh) nao ganha a pasta
+# "fliperos" (nada e escrito nele sem a pessoa pedir): a oferta e do tipo
+# "batocera" ("MONTAGEM|ROTULO|FS|TOTAL|ID|batocera|CONSOLES"), e a resposta
+# "yes" liga o Batocera filesystem (batocera_use). O ID dela e "batocera:UUID":
+# quem ja respondeu a pergunta do FliperOS para o mesmo disco recebe esta, uma vez.
 #
 # PODE: 1 se o disco serve (gravavel, de arquivos de verdade, com no minimo
 # STORAGE_MIN_BYTES: 8 GB; um pendrive pequeno nao ganha pasta); ESTADO: all
@@ -40,6 +49,9 @@ STORAGE_MIN_BYTES=${STORAGE_MIN_BYTES:-8000000000}
 STORAGE_MOUNTS=${STORAGE_MOUNTS:-${FOLDERS_MOUNTS:-/media/$FLIPEROS_USER}}
 # Por que o ultimo pedido foi recusado, em palavras para a tela.
 STORAGE_ERROR=""
+# O rotulo de um disco formatado aqui (11 letras: o maximo do exFAT).
+STORAGE_LABEL=${STORAGE_LABEL:-FLIPEROS-HD}
+STORAGE_SQUASH_LIST=${FLIPEROS_SQUASH_LIST:-/etc/fliperos/squashgames.list}
 # A fila do frontend (offer, legivel por todos) e os discos ja respondidos
 # (answered, um UUID por linha).
 STORAGE_STATE=${STORAGE_STATE:-/var/lib/fliperos/storage}
@@ -220,11 +232,14 @@ storage_unoffer() {
   return 0
 }
 
-# storage_settle MONTAGEM guarda o disco como respondido (o frontend nao
-# pergunta mais dele) e o tira da fila. Nunca falha: e so um registro.
+# storage_settle MONTAGEM [batocera] guarda o disco como respondido (o
+# frontend nao pergunta mais dele) e o tira da fila. Com "batocera", e a
+# pergunta do Batocera filesystem (outra chave: batocera:UUID). Nunca falha:
+# e so um registro.
 storage_settle() {
   local id
   id=$(storage_id "$1")
+  [[ ${2:-} == batocera ]] && id="batocera:$id"
   if mkdir -p "$STORAGE_STATE" 2> /dev/null && ! storage_answered "$id"; then
     printf '%s\n' "$id" >> "$STORAGE_STATE/answered" 2> /dev/null
   fi
@@ -253,11 +268,62 @@ storage_offer() {
   return 0
 }
 
-# storage_answer MONTAGEM yes|no: a resposta do frontend. "yes" liga o disco
-# (storage_use); com "no" so fica registrado. Dos dois jeitos o disco nao
-# pergunta de novo.
+# storage_fs_ok MONTAGEM: o sistema de arquivos pode guardar jogos (nao e um
+# CD, uma imagem ou a memoria)? Um disco so de leitura serve para ler.
+storage_fs_ok() {
+  case $(findmnt -rno FSTYPE -T "$1" 2> /dev/null | head -n 1) in
+    iso9660 | udf | squashfs | overlay | tmpfs | ramfs) return 1 ;;
+  esac
+  return 0
+}
+
+# storage_offer_batocera MONTAGEM poe o Batocera filesystem do disco na fila do
+# frontend ("MONTAGEM|ROTULO|FS|TOTAL|ID|batocera|CONSOLES") se o disco tem um,
+# ainda nao esta ligado e a pergunta nunca foi respondida. Status 1: nada a
+# perguntar.
+storage_offer_batocera() {
+  local mount=$1 id fs n
+  batocera_detect "$mount" > /dev/null || return 1
+  storage_fs_ok "$mount" || return 1
+  batocera_in_use "$mount" && return 1
+  id="batocera:$(storage_id "$mount")"
+  storage_answered "$id" && return 1
+  mkdir -p "$STORAGE_STATE" 2> /dev/null || return 1
+  chmod 755 "$STORAGE_STATE" 2> /dev/null
+  storage_unoffer "$mount"
+  fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+  n=$(batocera_known_count "$mount")
+  printf '%s|%s|%s|%s|%s|batocera|%s\n' "$mount" "${mount##*/}" "${fs:-?}" "$(storage_size_of "$mount" size)" "$id" "$n" \
+    >> "$STORAGE_STATE/offer" || return 1
+  chmod 644 "$STORAGE_STATE/offer" 2> /dev/null
+  log_info "Storage: $mount tem um Batocera filesystem e espera a resposta do frontend"
+  return 0
+}
+
+# storage_auto MONTAGEM: o que o fliperos-automount faz com um disco montado: o
+# que tem um Batocera filesystem nao ganha nada (so a pergunta do frontend);
+# os outros ganham a estrutura do FliperOS e a pergunta de uso.
+storage_auto() {
+  local mount=$1
+  if batocera_detect "$mount" > /dev/null; then
+    storage_offer_batocera "$mount"
+    return
+  fi
+  storage_prepare "$mount" && storage_offer "$mount"
+}
+
+# storage_answer MONTAGEM yes|no [batocera]: a resposta do frontend. "yes" liga
+# o disco (storage_use, ou batocera_use no tipo batocera); com "no" so fica
+# registrado. Dos dois jeitos o disco nao pergunta de novo.
 storage_answer() {
   local mount=$1 rc=0
+  if [[ ${3:-} == batocera ]]; then
+    if [[ $2 == yes ]]; then
+      batocera_use "$mount" > /dev/null || { STORAGE_ERROR=$BATOCERA_ERROR; rc=1; }
+    fi
+    storage_settle "$mount" batocera
+    return "$rc"
+  fi
   if [[ $2 == yes ]]; then
     storage_use "$mount" || rc=$?
   fi
@@ -265,9 +331,150 @@ storage_answer() {
   return "$rc"
 }
 
+# ── Formatar ─────────────────────────────────────────────────────
+# storage_device MONTAGEM imprime o dispositivo da particao montada (/dev/sdb1).
+storage_device() {
+  findmnt -rno SOURCE -T "$1" 2> /dev/null | head -n 1
+}
+
+# storage_parent_disk DISPOSITIVO: o disco inteiro de uma particao (/dev/sdb1
+# -> /dev/sdb); um disco sem particao e ele mesmo.
+storage_parent_disk() {
+  local parent
+  parent=$(lsblk -no PKNAME "$1" 2> /dev/null | head -n 1)
+  if [[ -n $parent ]]; then
+    printf '/dev/%s\n' "$parent"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
+# storage_system_disks imprime os discos do sistema: o de /, o de /boot e da
+# ESP e o da midia de instalacao.
+storage_system_disks() {
+  local where src
+  for where in / /boot /boot/efi /cdrom "${LIVE_MEDIUM:-/run/live/medium}"; do
+    src=$(findmnt -rno SOURCE -T "$where" 2> /dev/null | head -n 1)
+    [[ $src == /dev/* ]] || continue
+    storage_parent_disk "$src"
+  done | sort -u
+}
+
+# storage_format_check MONTAGEM: a particao pode ser formatada? (Status 0.) O
+# motivo da recusa fica em STORAGE_ERROR, em palavras para a tela.
+storage_format_check() {
+  local mount=$1 dev disk type sys
+  STORAGE_ERROR=""
+  mountpoint -q -- "$mount" 2> /dev/null || { STORAGE_ERROR="$mount is not a mounted disk."; return 1; }
+  dev=$(storage_device "$mount")
+  type=$([[ $dev == /dev/* ]] && lsblk -rno TYPE "$dev" 2> /dev/null | head -n 1)
+  case $type in
+    part | disk) ;;
+    *) STORAGE_ERROR="The disk behind ${mount##*/} could not be found."; return 1 ;;
+  esac
+  disk=$(storage_parent_disk "$dev")
+  while IFS= read -r sys; do
+    if [[ $sys == "$disk" ]]; then
+      STORAGE_ERROR="This disk also has the FliperOS system or the installation media: it can't be formatted here."
+      return 1
+    fi
+  done < <(storage_system_disks)
+  if [[ $(storage_state "$mount") != none ]]; then
+    STORAGE_ERROR="The FliperOS folders are using this disk. Choose Back to the main disk first."
+    return 1
+  fi
+  if declare -F batocera_in_use > /dev/null && batocera_in_use "$mount"; then
+    STORAGE_ERROR="The Batocera filesystem of this disk is in use. Stop using it first."
+    return 1
+  fi
+  if grep -qF -- "$mount/" "$STORAGE_SQUASH_LIST" 2> /dev/null; then
+    STORAGE_ERROR="A packed game folder (Custom games) lives on this disk. Unpack it first."
+    return 1
+  fi
+  if [[ $(lsblk -rno RO "$dev" 2> /dev/null | head -n 1) == 1 ]]; then
+    STORAGE_ERROR="This disk is read only."
+    return 1
+  fi
+  if disk_has_holders "$disk"; then
+    STORAGE_ERROR="Something else (RAID, LVM, encryption) is using this disk."
+    return 1
+  fi
+  return 0
+}
+
+# storage_format_info MONTAGEM imprime "MODELO|TOTAL|ROTULO|FS|USADO|DISPOSITIVO|BATOCERA":
+# o que a tela de confirmacao diz do que vai ser apagado.
+storage_format_info() {
+  local mount=$1 dev disk model total avail fs batocera=0
+  dev=$(storage_device "$mount")
+  disk=$(storage_parent_disk "$dev")
+  model=$(lsblk -dno MODEL "$disk" 2> /dev/null | sed 's/ *$//' | head -n 1)
+  total=$(storage_size_of "$mount" size)
+  avail=$(storage_size_of "$mount" avail)
+  fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+  batocera_detect "$mount" > /dev/null && batocera=1
+  [[ $total =~ ^[0-9]+$ && $avail =~ ^[0-9]+$ ]] || { total=0; avail=0; }
+  printf '%s|%s|%s|%s|%s|%s|%d\n' "${model:-Unknown disk}" "$total" "${mount##*/}" "${fs:-?}" "$((total - avail))" "$dev" "$batocera"
+}
+
+# storage_format MONTAGEM ext4|exfat: apaga a particao do disco e a formata.
+# Desmonta, limpa a assinatura antiga, cria o sistema de arquivos e deixa o
+# fliperos-automount montar de novo. Imprime "mount=NOVA-MONTAGEM". Status 1: o
+# motivo em STORAGE_ERROR.
+storage_format() {
+  local mount=$1 fs=${2:-} dev tool newmount i
+  STORAGE_ERROR=""
+  case $fs in
+    ext4) tool=mkfs.ext4 ;;
+    exfat) tool=mkfs.exfat ;;
+    *) STORAGE_ERROR="Unknown format: ${fs:-none}."; return 1 ;;
+  esac
+  if ! command -v "$tool" > /dev/null 2>&1; then
+    STORAGE_ERROR="$tool is not installed. System Update brings it."
+    return 1
+  fi
+  storage_format_check "$mount" || return 1
+  dev=$(storage_device "$mount")
+  log_info "Storage: formatando $dev ($mount) como $fs"
+  if ! umount -- "$mount" 2>> "$FLIPEROS_LOG"; then
+    STORAGE_ERROR="Could not unmount ${mount##*/} (is a game or a file open on it?)."
+    return 1
+  fi
+  if ! wipefs -a -- "$dev" >> "$FLIPEROS_LOG" 2>&1; then
+    STORAGE_ERROR="Could not erase the old file system (details in the log)."
+    return 1
+  fi
+  if [[ $fs == ext4 ]]; then
+    "$tool" -F -m 0 -L "$STORAGE_LABEL" "$dev" >> "$FLIPEROS_LOG" 2>&1
+  else
+    "$tool" -L "$STORAGE_LABEL" "$dev" >> "$FLIPEROS_LOG" 2>&1
+  fi || { STORAGE_ERROR="Could not format the disk (details in the log)."; return 1; }
+  udevadm settle 2>> "$FLIPEROS_LOG"
+  # O fliperos-automount monta de novo (e prepara a estrutura): o udev avisa.
+  udevadm trigger --action=add --name-match="$dev" 2>> "$FLIPEROS_LOG"
+  for ((i = 0; i < 30; i++)); do
+    newmount=$(findmnt -rno TARGET -S "$dev" 2> /dev/null | head -n 1)
+    [[ -n $newmount ]] && break
+    sleep 1
+  done
+  if [[ -z $newmount ]] && id "$FLIPEROS_USER" > /dev/null 2>&1; then
+    runuser -u "$FLIPEROS_USER" -- udisksctl mount --no-user-interaction -b "$dev" >> "$FLIPEROS_LOG" 2>&1
+    newmount=$(findmnt -rno TARGET -S "$dev" 2> /dev/null | head -n 1)
+  fi
+  if [[ $newmount != "$STORAGE_MOUNTS"/* ]]; then
+    STORAGE_ERROR="The disk was formatted, but did not mount again. Unplug it and plug it back."
+    return 1
+  fi
+  # Um disco de Linux guarda o dono: a raiz dele passa a ser da pessoa.
+  [[ $fs == ext4 ]] && chown "$FLIPEROS_USER:" "$newmount" 2> /dev/null
+  printf 'mount=%s\n' "$newmount"
+  return 0
+}
+
 # storage_cli list|prepare MONTAGEM|use MONTAGEM|unuse|offer MONTAGEM|answer
-# MONTAGEM yes|no: o fliperos-setup --storage. Status 2: pedido errado; 1: nao
-# deu (o motivo na saida).
+# MONTAGEM yes|no [batocera]|auto MONTAGEM|format-info MONTAGEM|format MONTAGEM
+# ext4|exfat: o fliperos-setup --storage. Status 2: pedido errado; 1: nao deu
+# (o motivo na saida).
 storage_cli() {
   local mount
   case ${1:-} in
@@ -277,12 +484,36 @@ storage_cli() {
       [[ $mount == "$STORAGE_MOUNTS"/* && $mount != *..* ]] && mountpoint -q -- "$mount" 2> /dev/null || return 2
       storage_offer "$mount" || return 1
       ;;
+    auto)
+      mount=${2:-}
+      [[ $mount == "$STORAGE_MOUNTS"/* && $mount != *..* ]] && mountpoint -q -- "$mount" 2> /dev/null || return 2
+      storage_auto "$mount" || return 1
+      ;;
     answer)
       mount=${2:-}
       [[ ${3:-} == yes || ${3:-} == no ]] || return 2
+      [[ -z ${4:-} || ${4:-} == batocera ]] || return 2
       [[ $mount == "$STORAGE_MOUNTS"/* && $mount != *..* ]] && mountpoint -q -- "$mount" 2> /dev/null || return 2
-      if ! storage_answer "$mount" "$3"; then
+      if ! storage_answer "$mount" "$3" "${4:-}"; then
         echo "${STORAGE_ERROR:-Could not use the disk (details in the log).}"
+        return 1
+      fi
+      ;;
+    format-info)
+      mount=${2:-}
+      [[ $mount == "$STORAGE_MOUNTS"/* && $mount != *..* ]] && mountpoint -q -- "$mount" 2> /dev/null || return 2
+      if ! storage_format_check "$mount"; then
+        echo "$STORAGE_ERROR"
+        return 1
+      fi
+      storage_format_info "$mount"
+      ;;
+    format)
+      mount=${2:-}
+      [[ ${3:-} == ext4 || ${3:-} == exfat ]] || return 2
+      [[ $mount == "$STORAGE_MOUNTS"/* && $mount != *..* ]] && mountpoint -q -- "$mount" 2> /dev/null || return 2
+      if ! storage_format "$mount" "$3"; then
+        echo "${STORAGE_ERROR:-Could not format the disk (details in the log).}"
         return 1
       fi
       ;;

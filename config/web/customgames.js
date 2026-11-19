@@ -10,6 +10,10 @@
 
 const cg = { root: null, info: null, packages: [], rows: [], seq: 0, el: null, busy: false, installGroup: "", tab: "games",
   createMode: "one", createRow: null, highlight: "", shown: {}, manyBusy: false };
+// A pasta dos pacotes nos textos: onde ela esta de verdade quando e um atalho
+// para outro disco (o Setup diz, lib/folders.sh); packages_dir segue sendo o
+// caminho para achar os arquivos.
+const cgPackagesWhere = () => (cg.info && (cg.info.packages_shown || cg.info.packages_dir)) || "~/roms/custom-packages";
 const CG_DRAFT = "fliperos-cg-draft";
 const CG_TAB = "fliperos-cg-tab";
 const CG_TABS = ["games", "create"];
@@ -370,7 +374,7 @@ function cgDrawIncoming(incoming) {
     all.addEventListener("click", () => cgInstallAll(fresh, group.value).catch(() => {}));
     head.append(el("span", { class: "cg-allgroup" }, el("span", { class: "dim" }, t("cg_in_group")), group, all));
   }
-  box.replaceChildren(head, el("p", { class: "dim cg-folder" }, t("cg_incoming_note").replace("%s", cg.info.packages_dir || "~/roms/custom-packages")),
+  box.replaceChildren(head, el("p", { class: "dim cg-folder" }, t("cg_incoming_note").replace("%s", cgPackagesWhere())),
     el("div", { class: "cg-cards" }, ...incoming.map(cgPackageCard)));
 }
 
@@ -518,7 +522,7 @@ async function cgDeleteGroup(name) {
   if (folders || packages) {
     const what = [folders ? t("cg_gdel_folders") : "", packages ? t("cg_gdel_packages") : ""].filter(Boolean).join(t("cg_and"));
     all = await ask({ title: t("cg_group_delete") + ": " + name,
-      text: t("cg_gdel_all_ask").replace("%s", what) + (packages ? " " + t("cg_gdel_pkg_note") : ""),
+      text: t("cg_gdel_all_ask").replace("%s", what) + (packages ? " " + t("cg_gdel_pkg_note").replace("%s", cgPackagesWhere()) : ""),
       yes: t("cg_gdel_all"), no: t("cg_gdel_keep"), danger: true });
   }
   const task = await cgTask("/api/customgames/group-delete", { name, all });
@@ -1204,7 +1208,7 @@ function cgRenderCreate() {
     // Sem jogo nem pacote nenhum, a estrutura ja aberta.
     cg.el.structure.open = !(cg.info.games || []).length && !(cg.info.pending || []).length;
   }
-  cg.el.createIntro.textContent = t("cg_create_intro").replace("%s", cg.info.packages_dir || "~/roms/custom-packages");
+  cg.el.createIntro.textContent = t("cg_create_intro").replace("%s", cgPackagesWhere());
   cgCreateMode(cg.createMode);
   cgCreateDraw();
   cgRenderMany();
@@ -1618,7 +1622,7 @@ function cgBuildMany() {
   cg.el.manyGo.addEventListener("click", () => cgCreateMany().catch(() => {}));
   cg.el.table = el("table", { class: "cg-table cg-many" });
   cg.el.manyStatus = el("div", { class: "cg-status", role: "status" });
-  box.replaceChildren(el("p", { class: "dim cg-folder" }, t("cg_many_note")),
+  box.replaceChildren(el("p", { class: "dim cg-folder" }, t("cg_many_note").replace("%s", cgPackagesWhere())),
     el("div", { class: "cg-toolbar" }, add, importBtn, pasteBtn, applyBtn, el("span", { class: "cg-tbend" }, open, clear)),
     el("div", { class: "cg-many-box" }, el("div", { class: "cg-table-wrap" }, cg.el.table)), cg.el.manyStatus,
     el("div", { class: "cg-foot" }, el("span", { class: "dim" }, t("cg_draft")), el("span", { class: "grow" }), cg.el.manyCheck, cg.el.manyGo));

@@ -8,7 +8,7 @@
 | **Frontend** | What starts when the computer turns on | Below |
 | **Extras** | Wine, PortProton, Steam, Heroic, Pixelcade, ZeDMD, game output tools, the live screen | Below |
 | **Custom games** | PC games, scripts and your own emulators, as frontend systems | [Custom games](Custom-games.md) |
-| **Folders** | Where ROMs, BIOS and art are; an external disk instead | [ROMs, BIOS and artwork](ROMs.md#custom-folders) |
+| **Folders** | **Folder shortcuts** (send a folder to another disk) and **External storage** (a whole disk: the FliperOS folders, or a Batocera filesystem with a core for each console; format a disk) | [External storage](External-storage.md) |
 | **Downloader** | MAME ROM/CHD sets by torrent, free homebrew games, the BIOS your games lack | [ROMs, BIOS and artwork](Downloader.md) |
 | **Cleaner** | Filter a MAME romset: only the games you want, for each emulator | [ROMs, BIOS and artwork](ROM-Cleaner.md) |
 | **Scraper** | Covers, screenshots, logos and videos of the games | [Scraper](Scraper.md) |

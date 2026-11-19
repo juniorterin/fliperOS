@@ -586,9 +586,9 @@ quirks_cli() {
   esac
 }
 
-# folders_cli list [PASTA] | link PASTA ALVO | unlink PASTA (Setup > Games >
-# Folders). list: "pasta|estado|alvo|tem pastas dentro|descricao" das raizes,
-# ou das pastas de dentro da PASTA. link e unlink imprimem o motivo de uma
+# folders_cli list [PASTA] | link PASTA ALVO | unlink PASTA | shown PASTA (Setup >
+# Games > Folders). list: "pasta|estado|alvo|tem pastas dentro|descricao" das
+# raizes, ou das pastas de dentro da PASTA. link e unlink imprimem o motivo de uma
 # recusa (status 1) e, com as pastas de jogos ou de arte, refazem o frontend.
 # cloud-export e cloud-restore: a lista das custom folders do backup na nuvem
 # (lib/folders.sh); cloud-restore imprime "restored=PASTA" de cada uma.
@@ -627,6 +627,12 @@ folders_cli() {
       fi
       ((rc == 2)) && echo "new=1"
       folders_cli_refresh "$2"
+      ;;
+    shown)
+      # Como a pasta aparece nos textos: o caminho, e onde ela esta de verdade
+      # quando e um atalho para outro disco (folders_shown).
+      folders_known "${2:-}" || return 2
+      folders_shown "$2"
       ;;
     cloud-export)
       # O backup na nuvem (config/fliperos-cloud), antes de cada passada.

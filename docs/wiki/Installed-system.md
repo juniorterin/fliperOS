@@ -67,7 +67,7 @@ The items come in the order you set up a cabinet. A balloon under the list says 
 - **Games**: [Games Setup](Setup-Games.md)
   - Emulators & Games, Frontend, Extras ([Games Setup](Setup-Games.md))
   - Custom games ([Custom games](Custom-games.md))
-  - Folders ([ROMs, BIOS and artwork](ROMs.md#custom-folders))
+  - Folders: Folder shortcuts and External storage (a second disk, a Batocera filesystem, formatting) ([External storage](External-storage.md))
   - Downloader and Download BIOS ([ROMs, BIOS and artwork](ROMs.md))
   - Cleaner, Scraper, AttractPlus ROM List ([ROMs, BIOS and artwork](ROMs.md), [Scraper](Scraper.md))
 - **Joysticks**: [Controls](Controls.md)

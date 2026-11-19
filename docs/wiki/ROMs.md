@@ -116,15 +116,15 @@ The boot splash themes, one folder per theme with its `.plymouth` file. The bund
 
 ## Custom folders
 
-**Setup > Games > Folders** shows the whole structure: the folders above and, inside them, each emulator's, each RetroArch core's, each Fightcade emulator's, each BIOS subfolder and each type of art.
+**Setup > Games > Folders > Folder shortcuts** shows the whole structure: the folders above and, inside them, each emulator's, each RetroArch core's, each Fightcade emulator's, each BIOS subfolder and each type of art.
 
-Any of them can have its own **custom folder**: another folder used in its place, for when the ROMs, the art or the BIOS are on another disk (a USB disk, a second drive, mounted by themselves in `/media/fliperos/<label>`). So the MAME 2010 sets can be on one disk and the Model 2 videos on another.
+Any of them can have a **shortcut** (called *Link* or *custom folder* before): another folder used in its place, for when the ROMs, the art or the BIOS are on another disk (a USB disk, a second drive, mounted by themselves in `/media/fliperos/<label>`). So the MAME 2010 sets can be on one disk and the Model 2 videos on another.
 
-- **Link this to another folder:** the folder becomes a link to the chosen one, and the folder used until then is renamed next to it with `old-` in the name (`~/roms/old-mame`), with everything in it. Nothing is copied or deleted.
-- **Change the custom folder** swaps the link of a folder that already has one.
-- **Unlink the custom folder:** the link goes away and the `old-` folder gets its name back. Nothing is deleted from the custom folder.
+- **Point it to a folder on another disk:** the folder becomes a link to the chosen one, and the folder used until then is renamed next to it with `old-` in the name (`~/roms/old-mame`), with everything in it. Nothing is copied or deleted.
+- **Change where it points** swaps the link of a folder that already has one.
+- **Remove the shortcut:** the link goes away and the `old-` folder gets its name back. Nothing is deleted from the other disk.
 
-Each line says whether the folder has a custom folder, or how many folders inside it have one. Everything that looks in the folder (emulators, frontends, the Scraper, the network shares) goes through the link. A disk that isn't connected shows as *not found*, and that folder is left alone.
+Each line says what the folder keeps, whether it has a shortcut (and where it points), or how many folders inside it have one. Everything that looks in the folder (emulators, frontends, the Scraper, the network shares) goes through the link. A disk that isn't connected shows as *not found*, and that folder is left alone. The screens and the web panel that tell you where to put something say where the folder really is when it is a shortcut. A whole disk, in the FliperOS structure or in the folders Batocera uses, is in **Folders > External storage**: see [External storage](External-storage.md).
 
 ## Free games
 

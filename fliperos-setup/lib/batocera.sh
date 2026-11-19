@@ -332,6 +332,19 @@ batocera_scan() {
   return 0
 }
 
+# batocera_known_count MONTAGEM imprime quantas pastas de console da tabela o
+# disco tem (so conta pastas: nao abre nenhuma, serve para a pergunta do disco novo).
+batocera_known_count() {
+  local root sub n=0
+  root=$(batocera_detect "$1") || { echo 0; return 1; }
+  for sub in "$root/roms"/*/; do
+    [[ -d $sub ]] || continue
+    sub=${sub%/}
+    batocera_known "${sub##*/}" && n=$((n + 1))
+  done
+  printf '%d\n' "$n"
+}
+
 # batocera_unknown MONTAGEM imprime quantas pastas de roms/ a tabela nao tem.
 batocera_unknown() {
   local root sub n=0
@@ -587,6 +600,8 @@ batocera_cli() {
         echo "${BATOCERA_ERROR:-Could not use the disk (details in the log).}"
         return 1
       fi
+      # Quem usa o disco ja decidiu: o frontend nao pergunta dele.
+      declare -F storage_settle > /dev/null && storage_settle "$mount" batocera
       ;;
     unuse)
       if ! batocera_unuse "$mount"; then

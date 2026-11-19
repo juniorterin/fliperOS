@@ -1,13 +1,19 @@
 """O disco novo que o frontend pergunta se vira o armazenamento do FliperOS.
 
 Quem anota o disco e o fliperos-automount, como root, ao montar um disco que serve
-(fliperos-setup --storage offer, lib/storage.sh), em /var/lib/fliperos/storage/offer,
+(fliperos-setup --storage auto, lib/storage.sh), em /var/lib/fliperos/storage/offer,
 legivel por todos: uma linha "MONTAGEM|ROTULO|FS|TOTAL|ID" por disco ainda sem
 resposta. O frontend so le a fila (um arquivo, a cada poucos segundos), pergunta
 uma vez e manda a resposta ao Setup (--storage answer MONTAGEM yes|no), que liga
 o disco (yes) e registra o UUID dele: o mesmo disco nao pergunta de novo.
+
+Um disco que ja tem um Batocera filesystem (lib/batocera.sh) entra na fila com
+mais dois campos, "MONTAGEM|ROTULO|FS|TOTAL|ID|batocera|CONSOLES", e a pergunta
+e a do Batocera filesystem: o "yes" usa as roms (um sistema por console, com o
+core padrao) e as pastas irmas dele (--storage answer MONTAGEM yes batocera).
 """
 import os
+import re
 import subprocess
 import time
 
@@ -16,7 +22,9 @@ SETUP = os.environ.get("FLIPEROS_SETUP_BIN", "/usr/local/bin/fliperos-setup")
 EVERY = 3.0
 
 # Onde mudar depois, no texto de quem disse que nao (duas linhas de tela).
-WHERE = ("SETUP > SYSTEM > STORAGE", "ALSO IN THE WEB PANEL: SYSTEM > SETUP")
+WHERE = ("SETUP > GAMES > FOLDERS", "> EXTERNAL STORAGE. ALSO IN THE WEB PANEL")
+# O caminho inteiro, numa linha so (a fonte pequena tem 4 px por letra).
+WHERE_FULL = "SETUP > GAMES > FOLDERS > EXTERNAL STORAGE"
 
 
 def human(size):
@@ -60,8 +68,13 @@ class Offers:
             if len(parts) < 5 or not os.path.ismount(parts[0]):
                 continue
             mount, label, fs, total, ident = parts[:5]
-            if ident not in self.answered:
-                items.append({"mount": mount, "label": label, "fs": fs, "total": total, "id": ident})
+            if ident in self.answered:
+                continue
+            item = {"mount": mount, "label": label, "fs": fs, "total": total, "id": ident}
+            if len(parts) > 5 and parts[5] == "batocera":
+                item["kind"] = "batocera"
+                item["consoles"] = parts[6] if len(parts) > 6 and parts[6].isdigit() else "0"
+            items.append(item)
         self.items = items
 
     def first(self):
@@ -74,15 +87,24 @@ class Offers:
         self.items = [i for i in self.items if i["mount"] != mount]
 
 
-def answer(mount, yes, timeout=300):
+def kind_of(offer):
+    """O tipo da pergunta: "fliperos" (a estrutura do FliperOS no disco) ou
+    "batocera" (um Batocera filesystem)."""
+    return offer.get("kind", "fliperos")
+
+
+def answer(mount, yes, kind="fliperos", timeout=300):
     """A resposta ao Setup, como root (a regra do sudoers do usuario). Devolve
     (deu certo, linhas de aviso): o motivo, se nao deu."""
     cmd = [SETUP, "--storage", "answer", mount, "yes" if yes else "no"]
+    if kind == "batocera":
+        cmd.append("batocera")
     if os.geteuid() != 0 and os.path.exists("/usr/bin/sudo"):
         cmd = ["sudo", "-n"] + cmd
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired):
         return False, ["COULD NOT RUN THE SETUP"]
-    lines = [l.strip() for l in r.stdout.splitlines() if l.strip() and not l.startswith("kept=")]
+    # O que o Setup conta de bom (kept=, linked=, systems=...) nao e aviso.
+    lines = [l.strip() for l in r.stdout.splitlines() if l.strip() and not re.match(r"^[a-z]+=", l.strip())]
     return r.returncode == 0, lines

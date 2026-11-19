@@ -1178,6 +1178,9 @@ customgames_describe() {
   customgames_out games "$CUSTOM_GAMES_GAMES"
   customgames_out free "$(customgames_free "$CUSTOM_GAMES_GAMES")"
   customgames_out packages "$CUSTOM_GAMES_PACKAGES"
+  # O texto para a pessoa: onde a pasta esta de verdade quando e um atalho para
+  # outro disco (folders_shown); o painel mostra este, e usa o de cima para achar os arquivos.
+  customgames_out packages_shown "$(folders_shown_path "$CUSTOM_GAMES_PACKAGES")"
   customgames_out lastgroup "$(customgames_last_group)"
   return 0
 }
@@ -1779,7 +1782,7 @@ customgames_create() {
   [[ -z $why ]] || { ev_fail "${why#*|}"; return 1; }
   customgames_create_args
   if [[ -e $R_PACK_OUT && $replace != replace ]]; then
-    ev_fail "$(basename "$R_PACK_OUT") already exists in ~/roms/custom-packages"
+    ev_fail "$(basename "$R_PACK_OUT") already exists in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES")"
     return 3
   fi
   customgames_tool pack "${R_PACK[@]}" --progress 0 100 2>> "${FLIPEROS_LOG:-/dev/null}"
@@ -1883,7 +1886,7 @@ customgames_create_bulk() {
     fi
     customgames_create_args
     if [[ -e $R_PACK_OUT && $replace != replace ]]; then
-      echo "@row $n fail $(basename "$R_PACK_OUT") already exists in ~/roms/custom-packages"
+      echo "@row $n fail $(basename "$R_PACK_OUT") already exists in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES")"
       continue
     fi
     err=$(mktemp)

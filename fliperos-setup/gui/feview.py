@@ -4242,7 +4242,21 @@ def draw_storage(fe, ui, now):
     card(ui, (px, py, pw, ph))
     disk = "%s - %s - %s" % (offer["label"], offer["fs"], festorage.human(offer["total"]))
     where = festorage.WHERE
-    if stage == "ask":
+    batocera = festorage.kind_of(offer) == "batocera"
+    if stage == "ask" and batocera:
+        # Um disco com um Batocera filesystem (lib/batocera.sh): usa as roms
+        # (um sistema por console, com o core padrao) e as pastas irmas.
+        n = offer.get("consoles", "0")
+        W.centered(ui, "BATOCERA FILESYSTEM", T.YELLOW, py + 10)
+        tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
+        tiny.centered(ui, "USE ITS ROMS, BIOS, SAVES AND ART?", T.COMMENT, cx, py + 40)
+        tiny.centered(ui, ("%s CONSOLES, EACH WITH A CORE YOU CAN CHANGE" % n) if n not in ("0", "1")
+                      else "EACH CONSOLE GETS A CORE YOU CAN CHANGE", T.COMMENT, cx, py + 48)
+        tiny.centered(ui, "NOTHING IS COPIED OR DELETED. A FEW NEW", T.ORANGE, cx, py + 62)
+        tiny.centered(ui, "FOLDERS ARE ADDED FOR FliperOS SYSTEMS", T.ORANGE, cx, py + 70)
+        W.button(ui, "YES", cx - 50, py + 90, ov["sel"] == 0)
+        W.button(ui, "NO", cx + 50, py + 90, ov["sel"] == 1)
+    elif stage == "ask":
         W.centered(ui, "NEW DISK", T.YELLOW, py + 10)
         tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
         tiny.centered(ui, "USE IT FOR THE ROMS, BIOS, ART, SAVES", T.COMMENT, cx, py + 40)
@@ -4257,19 +4271,26 @@ def draw_storage(fe, ui, now):
         tiny.centered(ui, "PLEASE WAIT", T.COMMENT, cx, py + 72)
     elif stage == "done":
         ok, lines = ov["result"]
-        if ok:
+        if ok and batocera:
+            W.centered(ui, "BATOCERA IN USE", T.GREEN, py + 10)
+            tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
+            tiny.centered(ui, "ITS CONSOLES, BIOS, SAVES AND ART", T.COMMENT, cx, py + 40)
+            tiny.centered(ui, "ARE NOW USED BY FliperOS", T.COMMENT, cx, py + 48)
+            tiny.centered(ui, "THE FOLDERS OF BEFORE STAY IN YOUR HOME", T.ORANGE, cx, py + 62)
+            tiny.centered(ui, "THE CORES: " + festorage.WHERE_FULL, T.COMMENT, cx, py + 76)
+        elif ok:
             W.centered(ui, "DISK IN USE", T.GREEN, py + 10)
             tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
             tiny.centered(ui, "ROMS, BIOS, ART, SAVES AND DOWNLOADS", T.COMMENT, cx, py + 40)
             tiny.centered(ui, "NOW GO TO THIS DISK", T.COMMENT, cx, py + 48)
             tiny.centered(ui, "THE FOLDERS OF BEFORE STAY IN YOUR HOME", T.ORANGE, cx, py + 62)
-            tiny.centered(ui, "TO CHANGE IT: " + where[0], T.COMMENT, cx, py + 76)
+            tiny.centered(ui, "TO CHANGE IT: " + festorage.WHERE_FULL, T.COMMENT, cx, py + 76)
         else:
             W.centered(ui, "COULD NOT USE IT", T.RED, py + 10)
             tiny.centered(ui, tiny.fit(disk, pw - 16), T.FG, cx, py + 26)
             tiny.centered(ui, tiny.fit(lines[0] if lines else "DETAILS IN THE SETUP LOG", pw - 16), T.ORANGE, cx,
                           py + 44)
-            tiny.centered(ui, "TRY AGAIN IN " + where[0], T.COMMENT, cx, py + 62)
+            tiny.centered(ui, "TRY AGAIN IN " + festorage.WHERE_FULL, T.COMMENT, cx, py + 62)
         W.button(ui, "OK", cx, py + 90, True)
     else:
         W.centered(ui, "ALL RIGHT", T.FG, py + 10)

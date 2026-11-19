@@ -24,6 +24,8 @@ name=$1 screen=$2 keys=${3:-}
 mkdir -p "/out/$name"
 rm -f "/out/$name"/*.png
 export FLIPEROS_UI=gui FLIPEROS_GUI_HEADLESS=1 FLIPEROS_GUI_BG=stars
+# Um sistema instalado (sem boot=live): na midia de instalacao o Setup so usa texto.
+export DEMO_CMDLINE=${DEMO_CMDLINE:-quiet splash}
 export FLIPEROS_GUI_KEYS="$keys" FLIPEROS_GUI_SHOTS="/out/$name"
 export UI_GUI_DIR=/tmp/fliperos-gui UI_GUI_BIN=/w/fliperos-setup/gui/fliperos-gui
 # Sem aspas: TELA pode trazer os argumentos da funcao.

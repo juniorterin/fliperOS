@@ -150,6 +150,98 @@ demo_colour() {
   screen_colour
 }
 
+# Setup > Games > Folders > External storage: um HD externo com um Batocera
+# filesystem (batocera/roms/<console>, bios, saves) e outro, comum, de 500 GB;
+# em ~ uma pasta de ROMs com um atalho para o primeiro.
+demo_external() {
+  local media=$FAKE/media home=$FAKE/home name n
+  FOLDERS_HOME=$home FOLDERS_MOUNTS=$media STORAGE_MOUNTS=$media STORAGE_STATE=$FAKE/state FOLDERS_SCRIPT=$FAKE/none
+  BATOCERA_TABLE=$SRC/config/batocera-systems.list BATOCERA_LIST=$home/.config/fliperos/batocera.list
+  RA_INFO_DIR=$FAKE/info RA_CORES_DIR=$FAKE/cores ROMS_DIR=$home/roms CUSTOM_GAMES_PACKAGES=$home/roms/custom-packages
+  mkdir -p "$home/roms/mame" "$home/bios" "$home/media" "$FAKE/info" "$FAKE/cores" "$media/TOSHIBA" "$home/.config/fliperos"
+  for name in snes megadrive psx atomiswave naomi gba n64 mame dreamcast neogeo atari2600 pcengine; do
+    mkdir -p "$media/BATOCERA/batocera/roms/$name"
+    for n in 1 2 3; do : > "$media/BATOCERA/batocera/roms/$name/game$n.zip"; done
+  done
+  mkdir -p "$media/BATOCERA/batocera/roms/zzz-unknown" "$media/BATOCERA/batocera/bios" "$media/BATOCERA/batocera/saves"
+  printf 'display_name = "%s"\ncorename = "%s"\nsystemid = "%s"\nsupported_extensions = "%s"\n' \
+    Snes9x Snes9x super_nes "smc|sfc" > "$FAKE/info/snes9x_libretro.info"
+  printf 'display_name = "%s"\ncorename = "%s"\nsystemid = "%s"\nsupported_extensions = "%s"\n' \
+    bsnes bsnes super_nes "smc|sfc" > "$FAKE/info/bsnes_libretro.info"
+  printf 'display_name = "%s"\ncorename = "%s"\nsystemid = "%s"\nsupported_extensions = "%s"\n' \
+    "Genesis Plus GX" "Genesis Plus GX" mega_drive "md|bin" > "$FAKE/info/genesis_plus_gx_libretro.info"
+  # Os cores que a tabela prefere para os consoles da demonstracao.
+  while IFS='|' read -r name corename sysid exts; do
+    printf 'display_name = "%s"\ncorename = "%s"\nsystemid = "%s"\nsupported_extensions = "%s"\n' \
+      "$corename" "$corename" "$sysid" "$exts" > "$FAKE/info/${name}_libretro.info"
+  done << 'EOF'
+stella|Stella|atari_2600|a26|bin
+mgba|mGBA|game_boy_advance|gba|gb
+pcsx_rearmed|PCSX-ReARMed|playstation|cue|bin|chd
+mupen64plus_next|Mupen64Plus-Next|nintendo_64|n64|z64
+mednafen_pce_fast|Beetle PCE Fast|pc_engine|pce|chd
+fbneo|FinalBurn Neo|neogeo|zip
+EOF
+  : > "$FAKE/cores/snes9x_libretro.so"
+  : > "$FAKE/cores/genesis_plus_gx_libretro.so"
+  cat > "$FAKE/bin/mountpoint" << 'EOF'
+#!/bin/bash
+for last; do :; done
+case "$last" in /tmp/fliperos-demo.*/media/*) exit 0 ;; esac
+exit 1
+EOF
+  cat > "$FAKE/bin/df" << 'EOF'
+#!/bin/bash
+for last; do :; done
+size=500107862016
+case "$last" in */BATOCERA) size=1000204886016 ;; esac
+case "$*" in *size*) echo Size; echo "$size" ;; *avail*) echo Avail; echo "$((size * 6 / 10))" ;; esac
+EOF
+  cat > "$FAKE/bin/findmnt" << 'EOF'
+#!/bin/bash
+for last; do :; done
+case "$*" in
+  *UUID*) echo "UUID-${last##*/}" ;;
+  *FSTYPE*) case "$last" in */BATOCERA) echo ntfs ;; *) echo exfat ;; esac ;;
+esac
+EOF
+  chmod +x "$FAKE/bin/mountpoint" "$FAKE/bin/df" "$FAKE/bin/findmnt"
+  folders_cli_refresh() { :; }
+  frontends_configure() { :; }
+}
+
+demo_folders() { demo_external; screen_folders; }
+demo_external_hub() { demo_external; screen_external_storage; }
+# Formatar: a confirmacao, a escolha do formato e a ultima chance, sem formatar nada.
+demo_format() {
+  demo_external
+  storage_cli() {
+    case $1 in
+      format-info) echo "WD Elements 25A2|1000204886016|TOSHIBA|exfat|612345678901|/dev/sdb1|0" ;;
+      *) echo "demo: nothing is formatted" ;;
+    esac
+  }
+  screen_storage_format "$FAKE/media/TOSHIBA"
+}
+demo_storage() { demo_external; screen_storage; }
+demo_batocera() { demo_external; screen_batocera; }
+# O Batocera filesystem ja ligado: os consoles com o core de cada um.
+demo_batocera_used() {
+  demo_external
+  batocera_use "$FAKE/media/BATOCERA" > /dev/null
+  screen_batocera_disk "$FAKE/media/BATOCERA"
+}
+demo_cores() {
+  demo_external
+  batocera_use "$FAKE/media/BATOCERA" > /dev/null
+  screen_batocera_consoles "$FAKE/media/BATOCERA"
+}
+demo_shortcuts() {
+  demo_external
+  folders_link roms/mame "$FAKE/media/TOSHIBA" > /dev/null 2>&1
+  screen_folders_shortcuts
+}
+
 case ${1:-} in
   mode480) demo_mode480 ;;
   colour) demo_colour ;;

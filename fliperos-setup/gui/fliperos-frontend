@@ -2213,6 +2213,10 @@ class Frontend:
         if o == "storage":
             if ov["stage"] == "work" and ov.get("result") is not None:
                 ov["stage"], ov["since"] = "done", time.monotonic()
+                # Os consoles de um Batocera filesystem (e as pastas que o disco novo
+                # trouxe) sao sistemas que a lista ainda nao conhece: ela os le agora.
+                if ov["result"][0] and not self.lib.refreshing:
+                    self.lib.refresh()
             return
         if o or self.picking or self.shot or self.commercial:
             return
@@ -2235,6 +2239,7 @@ class Frontend:
                 ov["sel"] ^= 1
             elif a in ("b1", "b2"):
                 mount = ov["offer"]["mount"]
+                kind = self.fst.kind_of(ov["offer"])
                 yes = a == "b1" and ov["sel"] == 0
                 self.storage.done(mount)
                 ov["since"] = time.monotonic()
@@ -2243,14 +2248,14 @@ class Frontend:
 
                     def work():
                         try:
-                            ov["result"] = self.fst.answer(mount, True)
+                            ov["result"] = self.fst.answer(mount, True, kind)
                         except Exception:  # sem resposta o quadro ficaria preso em SETTING UP
                             ov["result"] = (False, [])
 
                     threading.Thread(target=work, daemon=True).start()
                 else:
                     ov["stage"] = "later"
-                    threading.Thread(target=self.fst.answer, args=(mount, False), daemon=True).start()
+                    threading.Thread(target=self.fst.answer, args=(mount, False, kind), daemon=True).start()
         elif ov["stage"] in ("later", "done") and a in ("b1", "b2", "tab"):
             self.overlay = None
         return None

@@ -1589,8 +1589,11 @@ for _alias, _name in {
     "+create": "chds", "+package": "chds", "+all": "install", "+group": "addfolder", "+command": "edit",
     # O desenho do grupo (Custom games > grupo > Group icon).
     "+icon": "arcade", "+logo": "video", "+rename": "edit",
-    # Setup > System > Storage: o disco secundario; a tela dele: usar, so preparar.
-    "storage": "disk", "prepare": "addfolder", "unuse": "reset",
+    # Setup > Games > Folders: os atalhos de pasta e o armazenamento externo
+    # (o disco secundario; a tela dele: usar, so preparar, formatar em ext4 ou
+    # exFAT; o Batocera filesystem: o core de cada console, o melhor para todos).
+    "shortcuts": "link", "external": "disk", "storage": "disk", "prepare": "addfolder", "unuse": "reset",
+    "format": "remove", "ext4": "disk", "exfat": "disk", "batocera": "dest", "cores": "emulators", "best": "ok",
     "+delete": "remove", "wipe": "remove",
     # As areas Install games e Create package (os pacotes de ~/roms/custom-packages).
     "+install": "install", "reinstall": "install", "delpkg": "remove", "fromfolder": "addfolder", "fromgame": "games",

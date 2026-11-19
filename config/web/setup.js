@@ -54,6 +54,10 @@ const SETUP_TREE = [
     { id: "extras", link: "#library/install" },
     { id: "custom", page: "custom" },
     { id: "folders", box: "folders", title: true },
+    // External storage (Folders > External storage no Setup): o disco inteiro,
+    // a estrutura do FliperOS, o Batocera filesystem e formatar; so na tela do
+    // gabinete (apagar um disco nao se faz do navegador).
+    { id: "storage", cabinet: "storage", extra: true },
     { id: "downloader", link: "#library/downloads" },
     { id: "cleaner", link: "#library/romfilter" },
     { id: "scraper", link: "#library/art" },
@@ -73,7 +77,6 @@ const SETUP_TREE = [
     { id: "latency", keys: ["latency"], cabinet: "latency" },
     { id: "services", keys: ["service."], title: true },
     { id: "quirks", box: "quirks", title: true },
-    { id: "storage", cabinet: "storage" },
     { id: "password", box: "password" },
     { id: "cabinetname", keys: ["cabinet_name"] },
     { id: "update", box: "update", sec: "updates" },

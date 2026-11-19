@@ -8228,7 +8228,8 @@ class WebSetupBase(unittest.TestCase):
             'joy8\\t2\\t2\\twine pang.exe\\t\\t\\t\\t\\t1999\\tSNK\\t1\\t\\npending\\t/r/Z.fliperos-customgame.zip\\t\\tZ\\twindows\\tnew\\t\\n'
             'mode\\t240p\\t640x240@60\\ngenre\\tShooter\\nsub\\tShooter / Gallery\\ngenre\\tMaze\\n'
             'control\\tjoy8\\t8-way joystick\\nportproton\\t0\\ngames\\t/h/games\\nfree\\t1000\\n'
-            'packages\\t/h/roms/custom-packages\\nlastgroup\\tPC games\\n" ;;\n'
+            'packages\\t/h/roms/custom-packages\\npackages_shown\\t~/roms/custom-packages (on BIGDISK: batocera/roms/custom-packages)\\n'
+            'lastgroup\\tPC games\\n" ;;\n'
             '  check-create) cp "$3" TMP/create-check.rows; echo "error|1|exe|Pick the .exe."\n'
             '    printf "out=/h/roms/custom-packages/MSX.fliperos-customgame.zip\\nexists=1\\nbytes=5\\nfree=99\\n" ;;\n'
             '  create) cp "$3" TMP/create.rows; echo "$4" > TMP/create.flag; echo "@step 50 Packing"; sleep 1 ;;\n'
@@ -8341,6 +8342,9 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertEqual(info['controls'], [{'value': 'joy8', 'label': '8-way joystick'}])
         self.assertEqual((info['portproton'], info['games_dir'], info['free']), (False, '/h/games', 1000))
         self.assertEqual((info['packages_dir'], info['last_group']), ('/h/roms/custom-packages', 'PC games'))
+        # Com a pasta dos pacotes num atalho para outro disco, o painel mostra onde ela esta de verdade; o caminho de
+        # sempre (packages_dir) segue servindo para achar os arquivos.
+        self.assertEqual(info['packages_shown'], '~/roms/custom-packages (on BIGDISK: batocera/roms/custom-packages)')
 
     def test_the_group_icon_is_gone_from_the_panel_but_the_api_stays(self):
         # O logotipo do grupo tomou o lugar do desenho: a cabeca do grupo nao tem mais o botao do icone (um quadrado

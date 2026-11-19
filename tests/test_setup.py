@@ -4723,7 +4723,7 @@ class CustomGamesTests(Base):
         self.assertIn("exists|2|Cave Story.fliperos-customgame.zip\n", check)
         r = self.env.run(script % 'create-packages "$F"', dict(e, F=str(good)))
         self.assertEqual(r.returncode, 1)
-        self.assertIn("@row 1 fail Metal Slug X.fliperos-customgame.zip already exists in ~/roms/custom-packages", r.stdout)
+        self.assertIn("@row 1 fail Metal Slug X.fliperos-customgame.zip already exists in ", r.stdout)
         self.assertIn("@fail ", r.stdout)
         self.assertEqual(self.env.run(script % 'create-packages "$F" replace', dict(e, F=str(good))).returncode, 0)
         # Uma linha com erro falha sozinha, as outras saem.
@@ -6173,13 +6173,15 @@ class FolderListsTests(unittest.TestCase):
         self.assertEqual(self.env_height("UI_LIST_FIXED=1 ui_list_height 2"), self.env_height("ui_list_height 99"))
         self.assertEqual(self.env_height("ui_list_height 2"), "2")
         screens = {
-            "folders.sh": ['choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Folders in $FOLDERS_HOME',
+            "folders.sh": ['choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Formerly called Link. Send a folder to another disk',
                            'choice=$(UI_STYLE=list ui_menu "$title" "${text:+$text'],
+            "storage.sh": ['choice=$(UI_STYLE=list ui_menu "$title" \\\n      "A second disk keeps',
+                           'choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Disks with the games in Batocera folders'],
             "rom-cleaner.sh": ['share=$(UI_STYLE=list ui_menu "$title" "Which shared folder'],
             "mediapacks.sh": ['folders=$(UI_STYLE=list ui_menu "$title" "Which games is it for?"'],
             "setup-menu.sh": ['choice=$(UI_STYLE=list ui_menu "$title" "The game opens straight',
                               'choice=$(UI_STYLE=list ui_menu "$title" "$1" "${default:-${groups[0]}}"',
-                              'choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Put GAME.fliperos-customgame.zip in ~/roms/custom-packages'],
+                              'choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Put GAME.fliperos-customgame.zip in $(folders_shown_path'],
         }
         for name, calls in screens.items():
             text = (SETUP / "screens" / name).read_text()
@@ -10865,7 +10867,8 @@ class SetupGroupsTests(Base):
         # Na ordem de por jogos no gabinete.
         self.assertEqual(order["screen_setup_games"], ["emulators", "frontend", "extras", "custom", "folders", "downloader", "cleaner",
                                                        "scraper", "romlist", "return"])
-        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "storage", "password", "cabinetname", "update", "version",
+        # O Storage saiu de System: e Games > Folders > External storage.
+        self.assertEqual(order["screen_setup_system"], ["latency", "services", "quirks", "password", "cabinetname", "update", "version",
                                                         "whatsnew", "debug", "lab", "oscr", "splash", "return"])
         self.assertIn("games) screen_setup_games ;;", menu)
         self.assertIn("system) screen_setup_system ;;", menu)
@@ -11362,18 +11365,27 @@ class StorageTests(Base):
     def test_the_screen_the_panel_item_and_the_automount_are_wired(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         system = menu.split("screen_setup_system() {")[1].split("\n}\n")[0]
-        self.assertIn('"storage|Storage|', system)
-        self.assertIn("storage) screen_storage ;;", system)
-        self.assertIn("screen_storage() {", menu)
+        # O Storage mora em Games > Folders > External storage (screens/storage.sh), nao mais em System.
+        self.assertNotIn('"storage|', system)
+        self.assertNotIn("screen_storage", menu)
+        folders = (SETUP / "screens" / "folders.sh").read_text()
+        self.assertIn('"external|External storage|', folders)
+        self.assertIn("external) screen_external_storage ;;", folders)
+        storage = (SETUP / "screens" / "storage.sh").read_text()
+        self.assertIn("screen_storage() {", storage)
+        self.assertIn("storage) screen_storage ;;", storage)
+        self.assertIn('source "$SETUP_DIR/screens/storage.sh"', (SETUP / "fliperos-setup").read_text())
         panel = (SETUP / "screens" / "panel.sh").read_text()
         self.assertIn("oscr storage\"", panel)
-        self.assertIn("storage) screen_storage ;;", panel)
+        self.assertIn("storage) screen_external_storage ;;", panel)
         web = (ROOT / "config/fliperos-web").read_text()
         self.assertIn('latency oscr storage"', web)
-        self.assertIn('{ id: "storage", cabinet: "storage" }', (ROOT / "config/web/setup.js").read_text())
+        setup_js = (ROOT / "config/web/setup.js").read_text()
+        self.assertIn('{ id: "storage", cabinet: "storage", extra: true }', setup_js)
+        games = setup_js.split('{ id: "games"')[1].split('{ id: "joysticks"')[0]
+        self.assertIn('id: "storage"', games)
         automount = (ROOT / "config/fliperos-automount").read_text()
-        self.assertIn('"$setup" --storage prepare "$new_target"', automount)
-        self.assertIn('"$setup" --storage offer "$new_target"', automount)
+        self.assertIn('"$setup" --storage auto "$new_target"', automount)
         self.assertIn("--storage)\n      storage_cli", (SETUP / "fliperos-setup").read_text())
 
 
@@ -11453,6 +11465,36 @@ class StorageOfferTests(unittest.TestCase):
             self.fs.SETUP = str(self.tmp / "missing")
             self.assertEqual(self.fs.answer("/media/fliperos/BIG", True), (False, ["COULD NOT RUN THE SETUP"]))
 
+    def test_a_batocera_filesystem_is_asked_with_its_own_kind_and_answered_the_same_way(self):
+        from unittest import mock
+        self.queue("/media/fliperos/BIG|BIG|ntfs|1000204886016|batocera:u1|batocera|285", "/media/fliperos/OTHER|OTHER|ext4|250059350016|u2")
+        self.offers.read()
+        big, other = self.offers.items
+        self.assertEqual(big, {"mount": "/media/fliperos/BIG", "label": "BIG", "fs": "ntfs", "total": "1000204886016",
+                               "id": "batocera:u1", "kind": "batocera", "consoles": "285"})
+        self.assertEqual(self.fs.kind_of(big), "batocera")
+        self.assertEqual(self.fs.kind_of(other), "fliperos")        # sem o campo: a pergunta de sempre
+        self.assertNotIn("kind", other)
+        # Um numero de consoles estragado vira 0, nunca estoura.
+        self.queue("/media/fliperos/BIG|BIG|ntfs|1000204886016|batocera:u1|batocera|x")
+        self.offers.read()
+        self.assertEqual(self.offers.first()["consoles"], "0")
+        with mock.patch("os.geteuid", return_value=0):
+            self.fake_setup("systems=285\\nlinked=bios,save\\nextras=namco2x6\\nkept=~/old-bios\\n", 0)
+            self.assertEqual(self.fs.answer("/media/fliperos/BIG", True, "batocera"), (True, []))
+            self.assertEqual((self.tmp / "args").read_text().strip(), "--storage answer /media/fliperos/BIG yes batocera")
+            self.assertEqual(self.fs.answer("/media/fliperos/BIG", False, "batocera"), (True, []))
+            self.assertEqual((self.tmp / "args").read_text().strip(), "--storage answer /media/fliperos/BIG no batocera")
+            self.fake_setup("No Batocera folders on BIG.\\n", 1)
+            self.assertEqual(self.fs.answer("/media/fliperos/BIG", True, "batocera"), (False, ["No Batocera folders on BIG."]))
+        # O cartao do frontend: o texto do Batocera filesystem e os caminhos cabem nos 290 px da fonte pequena (4 px por letra).
+        view = (SETUP / "gui/feview.py").read_text()
+        draw = view.split("def draw_storage(")[1].split("\ndef draw_letter(")[0]
+        for text in ("BATOCERA FILESYSTEM", "USE ITS ROMS, BIOS, SAVES AND ART?", "NOTHING IS COPIED OR DELETED. A FEW NEW",
+                     "FOLDERS ARE ADDED FOR FliperOS SYSTEMS", "THE FOLDERS OF BEFORE STAY IN YOUR HOME"):
+            self.assertIn(text, draw)
+            self.assertLessEqual(len(text) * 4 - 1, 290 - 16, text)
+
     def test_the_frontend_asks_when_it_is_free_and_says_where_to_change_after_a_no(self):
         frontend = (SETUP / "gui/fliperos-frontend").read_text()
         self.assertIn("self.storage_tick(now)", frontend)
@@ -11464,13 +11506,152 @@ class StorageOfferTests(unittest.TestCase):
         act = frontend.split("def storage_act(")[1].split("def media_watch(")[0]
         self.assertIn("STORAGE_GUARD", act)              # o aperto de quem ja apertava o botao nao responde
         self.assertIn('ov["stage"] = "later"', act)      # o NAO mostra onde mudar
-        self.assertIn("target=self.fst.answer, args=(mount, False)", act)
+        self.assertIn("target=self.fst.answer, args=(mount, False, kind)", act)
+        # Depois do SIM, a lista le os sistemas de novo: os consoles do Batocera filesystem sao sistemas novos.
+        self.assertIn("if ov[\"result\"][0] and not self.lib.refreshing:\n                    self.lib.refresh()", tick)
+        self.assertIn("kind = self.fst.kind_of(ov[\"offer\"])", act)
         view = (SETUP / "gui/feview.py").read_text()
         self.assertIn('elif o == "storage":\n            draw_storage(fe, top, t)', view)
         draw = view.split("def draw_storage(")[1].split("\ndef draw_letter(")[0]
         self.assertIn("where[0]", draw)
-        self.assertEqual(self.fs.WHERE[0], "SETUP > SYSTEM > STORAGE")
+        # Onde mudar depois: Setup > Games > Folders > External storage (cabe numa linha da fonte pequena).
+        self.assertEqual(self.fs.WHERE[0], "SETUP > GAMES > FOLDERS")
+        self.assertEqual(self.fs.WHERE_FULL, "SETUP > GAMES > FOLDERS > EXTERNAL STORAGE")
+        self.assertLess(len("THE CORES: " + self.fs.WHERE_FULL) * 4, 290 - 16)
         self.assertIn("NOPASSWD: /usr/local/bin/fliperos-setup", (ROOT / "fliperos-rootfs.sh").read_text())
+
+
+class StorageFormatTests(Base):
+    """Formatar um disco (lib/storage.sh: storage_format): apaga a particao do disco escolhido, so com
+    binarios falsos aqui. Recusa o disco do sistema, o que o FliperOS ou o Batocera usa, e o que nao monta."""
+
+    def setUp(self):
+        super().setUp()
+        d = self.env.dir
+        self.media = d / "media"
+        self.disk = self.media / "BIGDISK"
+        self.disk.mkdir(parents=True)
+        self.calls = d / "calls"
+        self.mounted = d / "mounted"
+        self.mounted.write_text("%s\n" % self.disk)
+        self.root_source = d / "root-source"
+        self.root_source.write_text("/dev/nvme0n1p2\n")
+        self.vars = {"STORAGE_MOUNTS": str(self.media), "FOLDERS_MOUNTS": str(self.media), "FOLDERS_HOME": str(d / "home"),
+                     "STORAGE_STATE": str(d / "state"), "FLIPEROS_SQUASH_LIST": str(d / "squash.list"),
+                     "SYS_BLOCK": str(d / "sys-block"), "FLIPEROS_USER": "nobody"}
+        log = 'echo "%s $*" >> "%s"' % ("%s", self.calls)
+        e = self.env
+        e.stub("mountpoint", 'for last; do :; done; grep -qxF "$last" "%s"' % self.mounted)
+        e.stub("findmnt", r'''
+            args="$*"; last=${args##* }
+            case "$args" in
+              *"SOURCE -T /"|*"SOURCE -T /boot"|*"SOURCE -T /boot/efi"|*"SOURCE -T /cdrom"|*"SOURCE -T /run/live/medium")
+                case "$last" in /) cat "%(root)s";; *) echo /dev/nvme0n1p1;; esac ;;
+              *"SOURCE -T "*) grep -qxF "$last" "%(mounted)s" && echo /dev/sdb1 ;;
+              *"TARGET -S /dev/sdb1") head -n 1 "%(mounted)s" ;;
+              *UUID*) echo "UUID-${last##*/}" ;;
+              *) echo ntfs ;;
+            esac''' % {"root": self.root_source, "mounted": self.mounted})
+        e.stub("lsblk", r'''
+            case "$*" in
+              *"PKNAME /dev/sdb1") echo sdb ;;
+              *"PKNAME /dev/nvme0n1p2"|*"PKNAME /dev/nvme0n1p1") echo nvme0n1 ;;
+              *"PKNAME /dev/sdb2") echo sdb ;;
+              *"TYPE /dev/sdb1") echo part ;;
+              *"RO /dev/sdb1") echo 0 ;;
+              *"MODEL /dev/sdb") echo "WD Elements   " ;;
+            esac''')
+        e.stub("df", 'case "$*" in *size*) echo Size; echo 1000000000000;; *avail*) echo Avail; echo 400000000000;; esac')
+        for name in ("wipefs", "mkfs.ext4", "mkfs.exfat", "udevadm", "chown"):
+            e.stub(name, log % name)
+        # O umount tira o disco da lista de montados; o udevadm trigger o monta de novo, com o rotulo novo.
+        e.stub("umount", 'echo "umount $*" >> "%s"; : > "%s"' % (self.calls, self.mounted))
+        e.stub("udevadm", 'echo "udevadm $*" >> "%s"; case "$1" in trigger) echo "%s/FLIPEROS-HD" > "%s";; esac'
+               % (self.calls, self.media, self.mounted))
+
+    def run_cli(self, command, **extra):
+        v = dict(self.vars)
+        v.update(extra)
+        return self.env.run(command, v)
+
+    def commands(self):
+        return self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def test_ext4_erases_the_partition_and_formats_it_with_the_label(self):
+        r = self.run_cli('storage_cli format "%s" ext4' % self.disk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(r.stdout.strip(), "mount=%s/FLIPEROS-HD" % self.media)
+        cmds = self.commands()
+        self.assertEqual(cmds[:3], ["umount -- %s" % self.disk, "wipefs -a -- /dev/sdb1", "mkfs.ext4 -F -m 0 -L FLIPEROS-HD /dev/sdb1"])
+        # O disco monta de novo (o udev) e a raiz dele passa a ser da pessoa; so a particao e tocada.
+        self.assertIn("udevadm trigger --action=add --name-match=/dev/sdb1", cmds)
+        self.assertIn("chown nobody: %s/FLIPEROS-HD" % self.media, cmds)
+        self.assertEqual([c for c in cmds if "/dev/sdb " in c + " "], [])
+
+    def test_exfat_uses_its_own_tool_and_does_not_chown(self):
+        r = self.run_cli('storage_cli format "%s" exfat' % self.disk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        cmds = self.commands()
+        self.assertIn("mkfs.exfat -L FLIPEROS-HD /dev/sdb1", cmds)
+        self.assertFalse([c for c in cmds if c.startswith("mkfs.ext4") or c.startswith("chown")])
+
+    def test_it_refuses_the_disk_of_the_system_and_the_installation_media(self):
+        self.root_source.write_text("/dev/sdb2\n")          # a raiz do sistema no mesmo disco da particao
+        r = self.run_cli('storage_cli format "%s" ext4' % self.disk)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("FliperOS system", r.stdout)
+        self.assertEqual(self.commands(), [])               # nada foi tocado
+
+    def test_it_refuses_a_disk_the_fliperos_folders_or_the_batocera_filesystem_use(self):
+        for override, reason in (("storage_state() { echo all; }", "The FliperOS folders are using this disk"),
+                                 ("batocera_in_use() { return 0; }", "Batocera filesystem of this disk is in use")):
+            r = self.run_cli("%s\nstorage_cli format \"%s\" ext4" % (override, self.disk))
+            self.assertEqual(r.returncode, 1, override)
+            self.assertIn(reason, r.stdout)
+        # Um disco com uma pasta empacotada (squashfs) dentro tambem fica.
+        (self.env.dir / "squash.list").write_text("%s/games/pc\n" % self.disk)
+        r = self.run_cli('storage_cli format "%s" ext4' % self.disk)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("packed game folder", r.stdout)
+        self.assertEqual(self.commands(), [])
+
+    def test_it_refuses_a_disk_with_something_on_top_of_it(self):
+        holders = self.env.dir / "sys-block" / "sdb" / "sdb1" / "holders"
+        holders.mkdir(parents=True)
+        (holders / "dm-0").mkdir()
+        r = self.run_cli('storage_cli format "%s" ext4' % self.disk)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("RAID, LVM, encryption", r.stdout)
+        self.assertEqual(self.commands(), [])
+
+    def test_a_busy_disk_stops_before_anything_is_erased(self):
+        self.env.stub("umount", 'echo "umount $*" >> "%s"; exit 32' % self.calls)
+        r = self.run_cli('storage_cli format "%s" ext4' % self.disk)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Could not unmount", r.stdout)
+        self.assertEqual(self.commands(), ["umount -- %s" % self.disk])
+
+    def test_the_image_and_the_update_bring_the_exfat_tool(self):
+        # O ext4 vem do e2fsprogs; o exFAT precisa do exfatprogs, na imagem nova e nos gabinetes que ja existem (o update).
+        self.assertRegex((ROOT / "fliperos-mkiso.sh").read_text(), r"e2fsprogs dosfstools exfatprogs parted")
+        self.assertIn("packages+=(exfatprogs)", (ROOT / "tools/cabinet-update.sh").read_text())
+
+    def test_a_missing_tool_a_wrong_format_and_a_stranger_are_refused(self):
+        (self.env.bin / "mkfs.exfat").unlink()
+        r = self.run_cli('storage_cli format "%s" exfat' % self.disk)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("mkfs.exfat is not installed", r.stdout)
+        for bad in ('"%s" ntfs' % self.disk, '"%s"' % self.disk, '"/etc" ext4', '"%s/../x" ext4' % self.media):
+            self.assertEqual(self.run_cli("storage_cli format %s" % bad).returncode, 2, bad)
+        self.assertEqual(self.commands(), [])
+
+    def test_the_confirmation_says_what_is_going_to_be_erased(self):
+        info = self.run_cli('storage_cli format-info "%s"' % self.disk).stdout.strip()
+        # modelo|total|rotulo|fs|usado|dispositivo|tem Batocera
+        self.assertEqual(info, "WD Elements|1000000000000|BIGDISK|ntfs|600000000000|/dev/sdb1|0")
+        r = self.run_cli('storage_state() { echo all; }\nstorage_cli format-info "%s"' % self.disk)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("FliperOS folders are using this disk", r.stdout)
 
 
 class FoldersTests(Base):
@@ -13509,6 +13690,90 @@ class BatoceraTests(Base):
         self.assertEqual(self.env.out("folders_shown roms/custom-packages", self.vars).strip(),
                          "~/roms/custom-packages (the disk BATOCERA is off)")
 
+    def fake_disk(self):
+        self.env.stub("df", 'case "$*" in *size*) echo Size; echo 1000000000000;; *avail*) echo Avail; echo 400000000000;; esac')
+        self.env.stub("findmnt", 'for last; do :; done; case "$*" in *UUID*) echo "UUID-${last##*/}";; *) echo ntfs;; esac')
+        self.vars["STORAGE_STATE"] = str(self.env.dir / "state")
+        self.vars["FOLDERS_SCRIPT"] = str(self.env.dir / "nothing")     # sem o fliperos-roms: so o que o teste olha
+
+    def queue(self, name="offer"):
+        f = self.env.dir / "state" / name
+        return f.read_text().splitlines() if f.exists() else []
+
+    def test_the_automount_leaves_a_batocera_disk_alone_and_asks_once(self):
+        self.fake_disk()
+        r = self.cli('storage_cli auto "%s"' % self.disk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        # Nada e escrito no disco do usuario (nem a pasta fliperos/), e a pergunta e a do Batocera filesystem.
+        self.assertFalse((self.disk / "fliperos").exists())
+        self.assertEqual(self.queue(), ["%s|BATOCERA|ntfs|1000000000000|batocera:UUID-BATOCERA|batocera|5" % self.disk])
+        # Uma so vez por disco: o "no" (e o "yes") registram a chave batocera:UUID.
+        self.assertEqual(self.cli('storage_cli answer "%s" no batocera' % self.disk).returncode, 0)
+        self.assertEqual(self.queue(), [])
+        self.assertEqual(self.queue("answered"), ["batocera:UUID-BATOCERA"])
+        self.assertEqual(self.cli('storage_cli auto "%s"' % self.disk).returncode, 1)
+        self.assertEqual(self.queue(), [])
+        self.assertEqual(self.listed(), {})                              # o "no" nao liga nada
+
+    def test_yes_uses_the_whole_batocera_filesystem_and_the_disk_is_not_asked_again(self):
+        self.fake_disk()
+        self.cli('storage_cli auto "%s"' % self.disk)
+        r = self.cli('storage_cli answer "%s" yes batocera' % self.disk)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(len(self.listed()), 5)
+        self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
+        self.assertEqual(self.queue("answered"), ["batocera:UUID-BATOCERA"])
+        self.assertEqual(self.queue(), [])
+        # Usar pelo Setup (batocera_cli use) tambem registra: o frontend nao pergunta depois.
+        self.disk2 = self.media / "OTHERBAT"
+        for n in ("snes", "psx", "gba"):
+            (self.disk2 / "batocera" / "roms" / n).mkdir(parents=True)
+        self.cli('storage_cli auto "%s"' % self.disk2)
+        self.assertEqual(len(self.queue()), 1)
+        self.ok('batocera_cli use "%s"' % self.disk2)
+        self.assertEqual(self.queue(), [])
+        self.assertIn("batocera:UUID-OTHERBAT", self.queue("answered"))
+
+    def test_a_disk_that_answered_the_fliperos_question_is_still_asked_about_batocera(self):
+        self.fake_disk()
+        (self.env.dir / "state").mkdir()
+        (self.env.dir / "state" / "answered").write_text("UUID-BATOCERA\n")
+        self.assertEqual(self.cli('storage_cli auto "%s"' % self.disk).returncode, 0)
+        self.assertEqual(len(self.queue()), 1)
+        # Ja ligado, nao pergunta.
+        self.ok('batocera_cli use "%s"' % self.disk)
+        self.assertEqual(self.cli('storage_cli auto "%s"' % self.disk).returncode, 1)
+
+    def test_a_plain_disk_still_gets_the_fliperos_structure_and_the_old_question(self):
+        self.fake_disk()
+        self.vars["FOLDERS_SCRIPT"] = str(ROOT / "config/fliperos-roms")
+        plain = self.media / "PLAIN"
+        plain.mkdir()
+        self.env.stub("df", 'case "$*" in *size*) echo Size; echo 500000000000;; *avail*) echo Avail; echo 400000000000;; esac')
+        self.env.stub("findmnt", 'for last; do :; done; case "$*" in *UUID*) echo "UUID-${last##*/}";; *) echo ext4;; esac')
+        r = self.cli('storage_cli auto "%s"' % plain)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((plain / "fliperos" / "roms").is_dir())
+        self.assertEqual(self.queue(), ["%s|PLAIN|ext4|500000000000|UUID-PLAIN" % plain])      # a linha de sempre, sem o tipo
+        self.assertEqual(self.cli('storage_cli answer "%s" yes extra' % plain).returncode, 2)
+
+    def test_the_screens_and_the_panel_say_where_the_packages_folder_really_is(self):
+        self.ok('batocera_cli use "%s"' % self.disk)
+        where = "~/roms/custom-packages (on BATOCERA: batocera/roms/custom-packages)"
+        # O que o Setup mostra (as telas), o que o painel pede (--folders shown) e o que ele recebe no estado.
+        self.assertEqual(self.ok("folders_cli shown roms/custom-packages").strip(), where)
+        self.assertEqual(self.env.out('folders_shown_path "%s"' % (self.home / "roms" / "custom-packages"), self.vars).strip(), where)
+        self.assertEqual(self.env.out('folders_shown_path "/mnt/outside/pkg"', self.vars).strip(), "/mnt/outside/pkg")
+        self.assertEqual(self.cli("folders_cli shown /etc").returncode, 2)
+        lib = (SETUP / "lib" / "customgames.sh").read_text()
+        self.assertIn('customgames_out packages_shown "$(folders_shown_path "$CUSTOM_GAMES_PACKAGES")"', lib)
+        # O mesmo caminho de sempre dentro dela: os arquivos acham-se pelo atalho (o painel compara os caminhos resolvidos).
+        (self.home / "roms" / "custom-packages" / "Pang.fliperos-customgame.zip").write_text("zip")
+        self.assertTrue((self.root / "roms" / "custom-packages" / "Pang.fliperos-customgame.zip").exists())
+        # Com o disco desligado o texto diz isso, em vez de mostrar uma pasta vazia sem aviso.
+        self.disk.rename(self.media / "BATOCERA.off")
+        self.assertEqual(self.ok("folders_cli shown roms/custom-packages").strip(), "~/roms/custom-packages (the disk BATOCERA is off)")
+
     def test_a_roms_folder_with_many_consoles_is_not_one_console(self):
         self.assertEqual(self.env.out('folders_looks_like_systems "%s"' % (self.root / "roms"), self.vars).strip(), "5")
         self.assertEqual(self.env.run('folders_looks_like_systems "%s"' % (self.root / "roms" / "snes"), self.vars).returncode, 1)
@@ -13517,6 +13782,42 @@ class BatoceraTests(Base):
         for n in range(20):
             (mame / ("game%d" % n)).mkdir(parents=True)
         self.assertEqual(self.env.run('folders_looks_like_systems "%s"' % mame, self.vars).returncode, 1)
+
+
+class FolderReferencesTests(unittest.TestCase):
+    """Todo texto que manda a pessoa a uma pasta do FliperOS (a dos pacotes dos custom games, as dos sistemas que so o
+    FliperOS tem) diz onde ela esta de verdade: com a pasta num atalho para outro disco (Batocera filesystem, Folder
+    shortcuts), o caminho escrito fixo mandaria a pessoa ao lugar errado. O caminho vem de folders_shown (lib/folders.sh)."""
+
+    LITERALS = ("~/roms/custom-packages", "~/roms/namco2x6", "~/roms/fightcade", "~/roms/hypseus")
+    # O valor de reserva do painel e do servidor, para quando o Setup ainda nao respondeu.
+    ALLOWED = ('"~/roms/custom-packages"',)
+
+    def test_no_text_for_the_person_names_those_folders_by_a_fixed_path(self):
+        files = (sorted((SETUP / "screens").glob("*.sh")) + [SETUP / "lib" / "customgames.sh", ROOT / "config/fliperos-web"] +
+                 sorted((ROOT / "config/web").glob("*.js")))
+        found = {}
+        for path in files:
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if line.strip().startswith(("#", "//")):
+                    continue
+                for literal in self.LITERALS:
+                    if literal in line and not any(a in line for a in self.ALLOWED):
+                        found.setdefault(path.name, []).append(number)
+        self.assertEqual(found, {}, "say it with folders_shown (Setup) or packages_shown (panel), not by the path")
+
+    def test_the_panel_uses_the_text_the_setup_sends(self):
+        js = (ROOT / "config/web/customgames.js").read_text(encoding="utf-8")
+        self.assertIn("cg.info.packages_shown || cg.info.packages_dir", js)
+        for key in ("cg_incoming_note", "cg_create_intro", "cg_gdel_pkg_note", "cg_many_note"):
+            self.assertIn('t("%s").replace("%%s", cgPackagesWhere())' % key, js, key)
+        text = (ROOT / "config/web/setup-text.js").read_text(encoding="utf-8")
+        for key in ("cg_gdel_pkg_note", "cg_many_note"):
+            for line in text.splitlines():
+                if line.strip().startswith(key + ":") or (" %s:" % key) in line:
+                    self.assertIn("%s", line, key)
+        web = (ROOT / "config/fliperos-web").read_text(encoding="utf-8")
+        self.assertEqual(web.count('"no such package in %s" % customgame_packages_shown()'), 2)
 
 
 if __name__ == "__main__":

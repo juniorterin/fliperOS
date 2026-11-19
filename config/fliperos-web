@@ -3465,7 +3465,8 @@ def customgames_info():
     os pacotes esperando e as escolhas dos dropdowns."""
     out = setup_out("--customgames", "describe", timeout=120)
     info = {"groups": [], "games": [], "pending": [], "modes": [], "genres": [], "controls": [], "icons": [], "logos": [], "squash": [],
-            "wine": [], "portproton": False, "games_dir": "", "free": 0, "packages_dir": "", "last_group": ""}
+            "wine": [], "portproton": False, "games_dir": "", "free": 0, "packages_dir": "", "packages_shown": "",
+            "last_group": ""}
     for line in out.splitlines():
         f = line.split("\t")
         kind, rest = f[0], f[1:]
@@ -3507,6 +3508,9 @@ def customgames_info():
             info["free"] = int(rest[0])
         elif kind == "packages" and rest:
             info["packages_dir"] = rest[0]
+        elif kind == "packages_shown" and rest:
+            # So o texto: onde a pasta esta de verdade quando e um atalho para outro disco.
+            info["packages_shown"] = rest[0]
         elif kind == "lastgroup" and rest:
             info["last_group"] = rest[0]
     samples = customgame_samples()
@@ -3517,8 +3521,20 @@ def customgames_info():
 
 def customgame_packages_dir():
     """A pasta dos pacotes (a lista do Instalar pacotes, onde o Criar pacote
-    os poe)."""
+    os poe). Pode ser um atalho para outro disco (Setup > Games > Folders): os
+    caminhos de dentro dela se comparam resolvidos (inside)."""
     return os.path.join(player_home(), "roms", "custom-packages")
+
+
+def customgame_packages_shown():
+    """A pasta dos pacotes como a pessoa a le nas mensagens: onde ela esta de
+    verdade quando e um atalho para outro disco (fliperos-setup --folders shown,
+    lib/folders.sh), o mesmo texto do Setup."""
+    try:
+        text = setup_out("--folders", "shown", "roms/custom-packages", timeout=30).strip()
+    except (OSError, subprocess.SubprocessError):
+        text = ""
+    return text or "~/roms/custom-packages"
 
 
 def customgames_create_check(path):
@@ -5524,7 +5540,7 @@ class Handler(BaseHTTPRequestHandler):
         if action == "package-delete":
             path = str(data.get("zip", ""))
             if not path.lower().endswith(".zip") or not os.path.isfile(path) or not inside(path, customgame_packages_dir()):
-                return self.send(400, {"error": "no such package in ~/roms/custom-packages"})
+                return self.send(400, {"error": "no such package in %s" % customgame_packages_shown()})
             return self.setup_call(["--customgames", "package-delete", path])
         if action in ("check", "bulk"):
             path = customgame_rows_file(data.get("rows"))
@@ -5613,7 +5629,7 @@ class Handler(BaseHTTPRequestHandler):
                 path = str(data.get("zip", ""))
                 if not path.endswith(CUSTOMGAME_SUFFIX) or not os.path.isfile(path) or \
                         not inside(path, customgame_packages_dir()):
-                    return self.send(400, {"error": "no such package in ~/roms/custom-packages"})
+                    return self.send(400, {"error": "no such package in %s" % customgame_packages_shown()})
                 argv = [SETUP, "--customgames", "install", path, group] + \
                     (["replace"] if data.get("replace") else []) + (["--portproton"] if data.get("portproton") else [])
                 title = "Install %s" % os.path.basename(path)[:-len(CUSTOMGAME_SUFFIX)]

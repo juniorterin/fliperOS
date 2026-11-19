@@ -195,7 +195,7 @@ screen_setup_games() {
       "frontend|Frontend|The game list that starts when the computer turns on." \
       "extras|Extras|Wine, PortProton, Steam, Heroic, Pixelcade, ZeDMD, game outputs." \
       "custom|Custom games|PC games, scripts and your own emulators, as frontend systems." \
-      "folders|Folders|Where ROMs, BIOS and art are; use an external disk instead." \
+      "folders|Folders|Shortcuts to other disks, and external storage." \
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
       "cleaner|Cleaner|Filter a MAME romset: only the games you want, per emulator." \
       "scraper|Scraper|Download covers, screenshots, logos and videos of the games." \
@@ -227,7 +227,6 @@ screen_setup_system() {
       "latency|Latency|Standard or low latency mode, and a check of this computer." \
       "services|Services|SSH, network share, Wi-Fi: at boot, after boot or off." \
       "quirks|Quirks (USB device fixes)|Kernel fixes for a USB device read wrong: encoders, guns, disks." \
-      "storage|Storage|A second or external disk: ROMs, BIOS, art, saves, downloads." \
       "password|Password|The password of the fliperos user: login, SSH and network share." \
       "cabinetname|Cabinet name|The name the other cabinets see in party and link play." \
       "update|System Update|Download and install the updates of all packages." \
@@ -243,7 +242,6 @@ screen_setup_system() {
       latency) screen_latency ;;
       services) screen_services ;;
       quirks) screen_quirks ;;
-      storage) screen_storage ;;
       password) screen_password ;;
       cabinetname) screen_cabinet_name ;;
       update) screen_need_internet "System Update" && screen_update ;;
@@ -256,85 +254,6 @@ screen_setup_system() {
       return) return 0 ;;
     esac
   done
-}
-
-# screen_storage (Setup > System > Storage): os discos secundarios (um HD
-# externo, outro disco) com a pasta "fliperos" e a estrutura do FliperOS
-# dentro (lib/storage.sh). Escolher um deixa usar tudo nele (as ROMs, a BIOS,
-# a arte, os saves e o que se baixa; o disco principal segue como esta, com o
-# que ja tinha ao lado) ou voltar ao disco principal.
-screen_storage() {
-  local title="Storage" line mount label fs total free usable state last="" choice what
-  local -a entries
-  while true; do
-    entries=()
-    while IFS='|' read -r mount label fs total free usable state; do
-      [[ -n $mount ]] || continue
-      what="$label ($fs, $(human_size "$total"), $(human_size "$free") free)"
-      case $state in
-        all) what+=" - in use" ;;
-        some) what+=" - partly in use" ;;
-      esac
-      ((usable)) || what+=" - not usable"
-      entries+=("$mount|$what")
-    done < <(storage_list)
-    if ((${#entries[@]} == 0)); then
-      ui_msg "$title" "No second or external disk is connected." "" \
-        "Connect a disk of $((STORAGE_MIN_BYTES / 1000000000)) GB or more: it gets a fliperos folder with the" \
-        "whole folder structure, ready for ROMs, art and saves."
-      return 0
-    fi
-    entries+=("unuse|Back to the main disk" "return|Return")
-    choice=$(UI_STYLE=list ui_menu "$title" "A second disk keeps the ROMs, BIOS, art, saves and downloads, next to the main one." \
-      "$last" "${entries[@]}") || return 0
-    last=$choice
-    case $choice in
-      return) return 0 ;;
-      unuse)
-        ui_yesno "$title" "Go back to the main disk for the ROMs, BIOS, art and saves? Nothing is deleted from the second disk." yes || continue
-        if line=$(storage_cli unuse); then
-          ui_msg "$title" "The main disk is back." "" "What the second disk has stays in its fliperos folder."
-        else
-          ui_msg "$title" "$(ui_bad "$line")"
-        fi
-        ;;
-      *) screen_storage_disk "$choice" ;;
-    esac
-  done
-}
-
-# screen_storage_disk MONTAGEM: um disco: usar para tudo, so preparar a
-# estrutura, ou ver o que ele tem.
-screen_storage_disk() {
-  local mount=$1 title="Storage" choice line state label
-  label=${mount##*/}
-  state=$(storage_state "$mount")
-  choice=$(ui_menu_hints "$title: $label" "" use \
-    "use|Use $label|Use $label/fliperos for ROMs, art, saves and downloads." \
-    "prepare|Only prepare the folders|Only make the folders in $label/fliperos." \
-    "return|Return|Back to the disks.") || return 0
-  case $choice in
-    use | prepare)
-      if ! storage_usable "$mount"; then
-        ui_msg "$title" "$(ui_bad "$STORAGE_ERROR")"
-        return 0
-      fi
-      if [[ $choice == use ]]; then
-        ui_yesno "$title" "Use $label for the ROMs, BIOS, art, saves and downloads? The folders in your home are kept beside, as old-." yes || return 0
-      fi
-      if line=$(storage_cli "$choice" "$mount"); then
-        if [[ $choice == use ]]; then
-          ui_msg "$title" "$label is in use." "" "ROMs, BIOS, art, saves and downloads now go to $label/fliperos." \
-            "$(sed -n 's/^kept=/The folder of before stays in /p' <<< "$line" | head -n 1)"
-        else
-          ui_msg "$title" "$label/fliperos is ready: the whole folder structure is there."
-        fi
-      else
-        ui_msg "$title" "$(ui_bad "$line")"
-      fi
-      ;;
-  esac
-  return 0
 }
 
 # screen_oscr_firmware (Setup > System > Cartridge reader): grava no Open
@@ -792,7 +711,7 @@ screen_custom_games() {
     done
     n=${#pending[@]}
     tiles+=("+group|Add a group|Add group|action|+ GROUP|A group is a system in the frontends (PC games...)."
-      "+install|Install games$( ((n)) && echo " ($n new)")|Install games|text|$( ((n)) && echo "$n NEW" || echo "PACKAGES")|The packages in ~/roms/custom-packages."
+      "+install|Install games$( ((n)) && echo " ($n new)")|Install games|text|$( ((n)) && echo "$n NEW" || echo "PACKAGES")|The packages waiting to be installed."
       "+create|Create package|Create package|action|NEW ZIP|A GAME.fliperos-customgame.zip from a game folder."
       "+squash|Packed game folders|Packed|action|FOLDERS|Game folders kept in one compressed file (squashfs)."
       "return|Return|Return|action|BACK|")
@@ -969,7 +888,7 @@ screen_custom_group_delete() {
   ((others)) && text+=" Also deleted from its folder: $other$( ((others > 5)) && echo " and $((others - 5)) more")."
   if ((folders || packages)); then
     ((folders)) && keep="the game folders" both="the game folders"
-    ((packages)) && keep+="${keep:+ and }the packages (moved to ~/roms/custom-packages)" both+="${both:+ and }the packages"
+    ((packages)) && keep+="${keep:+ and }the packages (moved to $(folders_shown_path "$CUSTOM_GAMES_PACKAGES"))" both+="${both:+ and }the packages"
     choice=$(ui_menu "$title" "$text" keep "keep|Delete it, keep $keep" "wipe|Delete it with $both" "return|Cancel") ||
       return 1
     [[ $choice == return ]] && return 1
@@ -1043,7 +962,7 @@ screen_custom_install_area() {
     ((n > 1)) && entries+=("+all|Install all new ($n)")
     entries+=("return|Return")
     choice=$(UI_STYLE=list ui_menu "$title" \
-      "Put GAME.fliperos-customgame.zip in ~/roms/custom-packages (the network share \\\\fliperos\\roms\\custom-packages), or make one in Create package." \
+      "Put GAME.fliperos-customgame.zip in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES") (the network share \\\\fliperos\\roms\\custom-packages), or make one in Create package." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     case $choice in
@@ -1145,7 +1064,7 @@ screen_custom_install_all() {
     fi
   done
   ((done)) || { ui_msg "$title" "No package was installed."; return 0; }
-  if ui_yesno "$title" "$done of $total packages installed. Delete the $done installed packages from ~/roms/custom-packages?" no; then
+  if ui_yesno "$title" "$done of $total packages installed. Delete the $done installed packages from $(folders_shown_path "$CUSTOM_GAMES_PACKAGES")?" no; then
     for zip in "${installed[@]}"; do
       customgames_package_delete "$zip"
     done
@@ -1159,7 +1078,7 @@ screen_custom_create_area() {
   local title="Create package" choice group name
   local -a entries
   while true; do
-    choice=$(ui_menu "$title" "A GAME.fliperos-customgame.zip in ~/roms/custom-packages, to install here or on another FliperOS." \
+    choice=$(ui_menu "$title" "A GAME.fliperos-customgame.zip in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES"), to install here or on another FliperOS." \
       fromfolder "fromfolder|From a game folder" "fromgame|From an installed game" "return|Return") || return 0
     case $choice in
       return) return 0 ;;
@@ -1517,7 +1436,7 @@ screen_custom_package_create() {
   # 8. O pacote, na pasta dos pacotes (aparece no Install games).
   out=$(customgames_package_out "$name")
   if [[ -e $out ]]; then
-    ui_yesno "$title" "$(basename "$out") already exists in ~/roms/custom-packages. Replace it?" no || return 0
+    ui_yesno "$title" "$(basename "$out") already exists in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES"). Replace it?" no || return 0
   fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder" --mode "$mode")
   [[ $platform == windows ]] && args+=(--exe "$exe" --runner "$runner") || args+=(--command "$cmd")
@@ -1528,11 +1447,11 @@ screen_custom_package_create() {
   ((joystick)) && args+=(--joystick)
   run_with_progress "Packing $name" "" customgames_pack_run "${args[@]}" || return 0
   if [[ -n $from ]]; then
-    ui_msg "$title" "$name is packed:" "  ~/roms/custom-packages/$(basename "$out")" "" \
-      "Copy it to another FliperOS (into its ~/roms/custom-packages) and install it in Install games."
+    ui_msg "$title" "$name is packed:" "  $(basename "$out")" "in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES")" "" \
+      "Copy it to another FliperOS and install it there, in Install games."
     return 0
   fi
-  ui_yesno "$title" "$(basename "$out") is ready in ~/roms/custom-packages. Install $name here now? The game folder is copied to ~/games." yes ||
+  ui_yesno "$title" "$(basename "$out") is ready in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES"). Install $name here now? The game folder is copied to ~/games." yes ||
     return 0
   group=$(screen_custom_group_pick "Which group for $name? Each group is a system in the frontends.") || return 0
   screen_custom_install "$out" "$group" nopre

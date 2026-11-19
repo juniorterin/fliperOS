@@ -53,7 +53,7 @@ screen_from_panel() {
     lpt) screen_lpt ;;
     latency) screen_latency ;;
     oscr) screen_oscr_firmware ;;
-    storage) screen_storage ;;
+    storage) screen_external_storage ;;
   esac
   case $name in
     geometry | resolution | monitors | outputs | driver | lowdot | firmware) video_setup_leave "$before" ;;

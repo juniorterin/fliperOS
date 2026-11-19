@@ -143,6 +143,18 @@ folders_shown() {
   return 0
 }
 
+# folders_shown_path CAMINHO: o mesmo texto de folders_shown para um caminho
+# completo (/home/fliperos/roms/custom-packages); um caminho de fora de ~ sai
+# como veio.
+folders_shown_path() {
+  local rel=${1#"$FOLDERS_HOME"/}
+  if [[ $rel != "$1" && -n $rel ]] && folders_known "$rel"; then
+    folders_shown "$rel"
+  else
+    printf '%s\n' "${1/#$FOLDERS_HOME/\~}"
+  fi
+}
+
 # folders_looks_like_systems ALVO: a pasta tem cara de um Batocera filesystem
 # ou de uma raiz de ROMs com varios consoles dentro (e nao de um console so)?
 # Para avisar antes de fazer dela o atalho de uma pasta de um sistema so
