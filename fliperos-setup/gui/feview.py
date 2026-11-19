@@ -204,8 +204,10 @@ def star(surf, cx, cy, color, r=7, outline=False, rot=0.0):
     pygame.draw.polygon(surf, color, pts, 1 if outline else 0)
 
 
-def play_icon(surf, cx, cy, c):
-    pygame.draw.polygon(surf, c, [(cx - 7, cy - 10), (cx - 7, cy + 10), (cx + 10, cy)])
+def play_icon(surf, cx, cy, c, s=1.0):
+    """O triangulo do PLAY; s o amplia ou encolhe em torno de (cx, cy), em pixels inteiros."""
+    pygame.draw.polygon(surf, c, [(cx - round(7 * s), cy - round(10 * s)), (cx - round(7 * s), cy + round(10 * s)),
+                                  (cx + round(10 * s), cy)])
 
 
 def plus_icon(surf, cx, cy, c, ang=0.0):
@@ -322,38 +324,50 @@ def link_badge(fe, ui, g, x, y, w, h):
         cabinet_row(ui, x + 3, y + h - 9, party["used"], party["max"] or 1, w=5, h=7, gap=1)
 
 
-def cabinet_icon(surf, x, y, w, h, lit):
-    """Um gabinetezinho: a tela e o painel (aceso: verde e ciano)."""
-    c = T.GREEN if lit else T.LINE
+GLINT = (210, 255, 225)          # o verde claro do brilho (a onda dos gabinetes, o pulso do PLAY)
+
+
+def cabinet_icon(surf, x, y, w, h, lit, hit=False):
+    """Um gabinetezinho: a tela e o painel (aceso: verde e ciano). hit: a onda
+    de energia passa por ele (mais claro; o apagado acende fraquinho)."""
+    if lit:
+        c, screen = (GLINT, (255, 255, 255)) if hit else (T.GREEN, T.CYAN)
+    else:
+        c, screen = (T.COMMENT, T.LINE) if hit else (T.LINE, T.BG_DEEP)
     pygame.draw.rect(surf, c, (x, y, w, h), 1)
-    surf.fill(T.CYAN if lit else T.BG_DEEP, (x + 1, y + 1, w - 2, h // 2 - 1))
+    surf.fill(screen, (x + 1, y + 1, w - 2, h // 2 - 1))
     pygame.draw.line(surf, c, (x + 1, y + h // 2 + 1), (x + w - 2, y + h // 2 + 1))
     surf.fill(c, (x + w // 2, y + h // 2 + 3, 1, 1))
 
 
-def cabinet_row(surf, x, y, filled, total, you=None, w=5, h=8, gap=1):
+def cabinet_row(surf, x, y, filled, total, you=None, w=5, h=8, gap=1, clock=None):
     """Os gabinetes de um link, da esquerda: `filled` acesos, o resto apagado;
-    `you` (de 0) leva o aro rosa: o lugar deste gabinete. Devolve onde acaba."""
+    `you` (de 0) leva o aro rosa: o lugar deste gabinete. clock (o relogio do
+    menu do jogo): uma onda de energia corre pela fileira, ate pelas vagas
+    vazias. Devolve onde acaba."""
+    wave = (clock * 7) % (total + 5) if clock is not None else None
     for i in range(total):
-        cabinet_icon(surf, x + i * (w + gap), y, w, h, i < filled)
+        cabinet_icon(surf, x + i * (w + gap), y, w, h, i < filled, wave is not None and 0 <= wave - i < 1.6)
     if you is not None:
         pygame.draw.rect(surf, T.PINK, (x + you * (w + gap) - 2, y - 2, w + 4, h + 4), 1)
     return x + total * (w + gap) - gap
 
 
-def person_icon(surf, x, y, lit, color=None):
-    """Um jogador (10x12): a cabeca e os ombros; aceso, verde."""
+def person_icon(surf, x, y, lit, color=None, dy=0):
+    """Um jogador (10x12): a cabeca e os ombros; aceso, verde. dy o sobe ou desce."""
     c = color or (T.GREEN if lit else T.LINE)
-    pygame.draw.circle(surf, c, (x + 5, y + 3), 3)
-    surf.fill(c, (x + 1, y + 7, 9, 5))
+    pygame.draw.circle(surf, c, (x + 5, y + 3 + dy), 3)
+    surf.fill(c, (x + 1, y + 7 + dy, 9, 5))
 
 
-def slots_row(surf, x, y, used, total, ring=None, step=14):
+def slots_row(surf, x, y, used, total, ring=None, step=14, clock=None):
     """Os jogadores de um jogo de net play: `used` acesos (os ja ocupados) e o
     resto apagado; ring = (primeiro, quantos), de 1, leva o aro rosa: os
-    lugares deste gabinete (um por controle). Devolve onde acaba."""
+    lugares deste gabinete (um por controle). clock (o relogio do menu do
+    jogo): os acesos levantam um pixel em onda (ola). Devolve onde acaba."""
     for i in range(total):
-        person_icon(surf, x + i * step, y, i < used)
+        up = clock is not None and i < used and math.sin(2 * math.pi * (clock / 1.2 - i * 0.18)) > 0.55
+        person_icon(surf, x + i * step, y, i < used, dy=-1 if up else 0)
     if ring:
         first, take = ring
         # 2 pixels livres dos quatro lados (o boneco ocupa x+1..x+9, y..y+11).
@@ -807,16 +821,22 @@ def facts_line(game):
     return " ".join(parts)
 
 
-def stars(surf, x, y, rate, r=5):
+def stars(surf, x, y, rate, r=5, fx=None):
+    """As cinco estrelas da nota. fx: acendem da esquerda para a direita,
+    cada uma branca por um instante e depois amarela (a meia por ultimo)."""
     n = max(0.0, min(5.0, rate / 20.0))
     for i in range(5):
         cx = x + r + i * (2 * r + 4)
         star(surf, cx, y + r, T.LINE, r)
+        age = fx_age(fx, 0.2 + i * STAR_GAP)
+        if age < 0:
+            continue
+        color = (255, 255, 255) if age < 0.05 else T.YELLOW
         if n >= i + 1:
-            star(surf, cx, y + r, T.YELLOW, r)
+            star(surf, cx, y + r, color, r)
         elif n > i:
             half = pygame.Surface((2 * r + 2, 2 * r + 2), pygame.SRCALPHA)
-            star(half, r + 1, r + 1, T.YELLOW, r)
+            star(half, r + 1, r + 1, color, r)
             surf.blit(half, (cx - r - 1, y - 1), (0, 0, r + 1, 2 * r + 2))
 
 
@@ -2157,19 +2177,22 @@ def ellipse(ui, color, cx, cy, rx, ry, width=0):
     pygame.draw.ellipse(ui, color, (cx - rx, cy - ry, 2 * rx, 2 * ry), width)
 
 
-def button3d(ui, cx, cy, r, color):
+def button3d(ui, cx, cy, r, color, lift=None):
     """O botao do painel em perspectiva, visto um pouco de cima: o aro preto
     no painel, o lado do botao (um cilindro mais escuro) e o topo, com o
-    brilho. (cx, cy) e o centro do topo."""
+    brilho. (cx, cy) e o centro do topo. lift: a altura do lado (LIFT; menor,
+    o botao esta apertado)."""
+    lift = LIFT if lift is None else lift
     ry = round(r * FLAT)
-    # O aro, no painel, um pouco maior e abaixo do topo.
-    ellipse(ui, (0x10, 0x10, 0x16), cx, cy + LIFT + 1, r + 4, ry + 3)
-    ellipse(ui, T.LINE, cx, cy + LIFT + 1, r + 4, ry + 3, 1)
+    # O aro, no painel, um pouco maior e abaixo do topo (apertado, o topo desce
+    # e o aro fica onde estava: cy + lift + 1 dos dois jeitos).
+    ellipse(ui, (0x10, 0x10, 0x16), cx, cy + lift + 1, r + 4, ry + 3)
+    ellipse(ui, T.LINE, cx, cy + lift + 1, r + 4, ry + 3, 1)
     # O lado: a elipse de baixo e o retangulo ate o topo.
     side = shade(color, 0.5)
-    ellipse(ui, shade(color, 0.35), cx, cy + LIFT, r, ry)
-    ui.fill(side, (cx - r, cy, 2 * r, LIFT))
-    pygame.draw.line(ui, shade(color, 0.7), (cx - r + 2, cy + 1), (cx - r + 2, cy + LIFT))
+    ellipse(ui, shade(color, 0.35), cx, cy + lift, r, ry)
+    ui.fill(side, (cx - r, cy, 2 * r, lift))
+    pygame.draw.line(ui, shade(color, 0.7), (cx - r + 2, cy + 1), (cx - r + 2, cy + lift))
     # O topo e o brilho do lado da luz (em cima, a esquerda).
     ellipse(ui, color, cx, cy, r, ry)
     ellipse(ui, shade(color, 1.35), cx - r // 3, cy - ry // 3, r // 2, max(1, ry // 3))
@@ -2573,8 +2596,11 @@ LINK_KINDS = ("link", "join", "new", "closed")
 # Nos prints (fe.shot) fica tudo parado.
 POP_IN = 0.24              # o menu abre ao escolher o jogo
 POP_OUT = 0.12             # e fecha (Esc, e o fim do favoritar)
-POP_ACT = {"play": 0.30, "more": 0.26, "fav": 0.55}   # do aperto ao efeito
-PAGE_IN = 0.20             # a pagina "+" entra
+# Do aperto ao efeito. Os azulejos do link e do party (LINK_KINDS) piscam em
+# verde como o PLAY e o efeito (a sala, o JOIN) vem depois; o STARTED/FULL nao
+# tem efeito: treme, avisa e o menu fica.
+POP_ACT = {"play": 0.30, "more": 0.26, "fav": 0.55, "link": 0.30, "new": 0.30, "join": 0.30, "closed": 0.30}
+PRESS_FLASH = ("play", "link", "new", "join")      # os azulejos que acendem em verde cheio ao apertar
 STAGGER = 0.035            # um azulejo depois do outro, ao abrir
 TILE_PAD = 12              # a folga em volta do azulejo (o que cresce nao e cortado)
 
@@ -2659,8 +2685,8 @@ def popup_motion(fe, now):
     if act:
         kind, age = act[0], now - act[1]
         p = clamp01(age / pop_time(kind))
-        if kind == "play":
-            pass
+        if kind in ("play", "closed"):
+            pass                # o STARTED/FULL nao fecha o menu: so o azulejo treme
         elif kind == "more":
             scale, alpha = 1 + 0.45 * p * p, 1 - clamp01((p - 0.3) / 0.7)
         else:
@@ -2698,22 +2724,135 @@ def popup_fx(fe, top, rect, now):
     return scale_fade(top, pygame.Rect(rect).inflate(88, 88), scale, alpha)
 
 
-def page_fx(fe, top, now):
-    """A pagina "+" entrando: de perto (108%) para o tamanho, aparecendo."""
-    t0 = (fe.ov or {}).get("t0")
-    if t0 is None or getattr(fe, "shot", None) or now - t0 >= PAGE_IN:
-        return top
-    p = (now - t0) / PAGE_IN
-    return scale_fade(top, top.get_rect(), 1.08 - 0.08 * out_cubic(p), clamp01(p / 0.7))
+# ── Os icones do menu em movimento (o escolhido) ─────────────────────
+# So cor em passos, pixels inteiros e desenho: nada de brilho translucido nem
+# de escala suave sobre o pixel-art (o tubo borra).
+TAU = 2 * math.pi
+GLOBE_SPIN = (0.87, 1.31)      # rad/s do globo (ninguem na festa / com festa)
+NODES = ((0.0, 0.35), (2.3, -0.45), (4.2, 0.1))    # (longitude, latitude) dos tres nos do globo
+_spin_globes = {}
+
+
+def lerp_color(a, b, k):
+    k = clamp01(k)
+    return tuple(round(x + (y - x) * k) for x, y in zip(a[:3], b[:3]))
+
+
+def play_pulse(now):
+    """(escala, cor) do triangulo do PLAY parado: a cada 1,8 s cresce em tres
+    passos inteiros (100, 110, 120%), acende no pico e volta."""
+    steps = (1.0, 1.1, 1.2, 1.1, 1.0)
+    i = int((now % 1.8) / 0.07)
+    s = steps[i] if i < len(steps) else 1.0
+    return s, lerp_color(T.GREEN, GLINT, 0.9 if s >= 1.2 else 0.45 if s > 1.0 else 0.0)
+
+
+def globe_spin(ui, cx, cy, r, color, lit, ang):
+    """O globo grande do popup (o mesmo desenho do globe_icon: 4 vezes e
+    reduzido) com os meridianos girando: dois meridianos a 90 graus, de modo
+    que a imagem se repete a cada quarto de volta (10 quadros em cache)."""
+    step = int((ang % (math.pi / 2)) / (math.pi / 2) * 10)
+    key = (r, tuple(color), bool(lit), step)
+    img = _spin_globes.get(key)
+    if img is None:
+        k, size = 4, 2 * r + 1
+        big = pygame.Surface((size * k, size * k), pygame.SRCALPHA)
+        o, R, w = size * k / 2, r * k + k / 2 - 1, k
+        if lit:
+            pygame.draw.circle(big, (*color[:3], 60), (o, o), R)
+        pygame.draw.circle(big, color, (o, o), R, w)
+        a = step * (math.pi / 2) / 10
+        for lon in (0, math.pi / 2):
+            hw = abs(math.sin(a + lon)) * R
+            if hw >= 2:
+                pygame.draw.ellipse(big, color, (o - hw, o - R, 2 * hw, 2 * R), w)
+            else:
+                pygame.draw.line(big, color, (o, o - R), (o, o + R), w)
+        pygame.draw.line(big, color, (o - R, o), (o + R, o), w)
+        for dy in (-0.5, 0.5):
+            pygame.draw.line(big, color, (o - R * 0.84, o + dy * R), (o + R * 0.84, o + dy * R), w)
+        img = _spin_globes[key] = pygame.transform.smoothscale(big, (size, size))
+    ui.blit(img, (cx - img.get_width() // 2, cy - img.get_height() // 2))
+
+
+def globe_nodes(ui, cx, cy, ang, big, color, R=8):
+    """Tres nos na esfera, que giram com ela; os indices em `big` ficam brancos e maiores."""
+    for i, (lon, lat) in enumerate(NODES):
+        a = lon + ang
+        if math.cos(a) < 0:
+            continue
+        px, py = round(cx + R * math.cos(lat) * math.sin(a)), round(cy - R * math.sin(lat))
+        if i in big:
+            ui.fill((255, 255, 255), (px - 1, py - 1, 3, 3))
+        else:
+            ui.fill(color, (px, py, 2, 2))
+
+
+def plus_mark(ui, x, y, now, dark, size=7):
+    """O "+" verde do NEW: pulsa do verde para o verde claro (escuro na fase acesa do aperto)."""
+    col = T.SPACE if dark else lerp_color(T.GREEN, GLINT, 0.5 - 0.5 * math.cos(TAU * now / 1.2))
+    ui.fill(col, (x, y + size // 2 - 1, size, 2))
+    ui.fill(col, (x + size // 2 - 1, y, 2, size))
+
+
+def link_shake(act):
+    """O STARTED/FULL apertado treme (2 pixels, em passos de 0,06 s) e fica onde estava."""
+    return (2, -2, 2, -1, 0)[min(4, int(act[1] / 0.06))] if act and act[0] == "closed" else 0
+
+
+def link_globe(ui, kind, cx, cy, lit, now, act, dark):
+    """O botao do link: o globo gira (mais rapido com festa), os nos orbitam e
+    piscam um de cada vez; apertado, da uma volta rapida com os tres brancos."""
+    c = T.SPACE if dark else (T.GREEN if lit else GREEN_MID)
+    ang = 0.6 if kind == "closed" else now * GLOBE_SPIN[1 if lit else 0]
+    if act and kind != "closed":
+        ang += TAU * out_cubic(act[1] / 0.4)
+    globe_spin(ui, cx, cy, 10, c, lit, ang)
+    if lit and not dark:
+        if kind == "closed":
+            big = {0, 1, 2} if int(now / 0.9) % 2 == 0 else set()
+        elif act:
+            big = {0, 1, 2}
+        else:
+            big = {int(now / 0.4) % 3}
+        globe_nodes(ui, cx, cy, ang, big, c)
+
+
+def pad_icon(ui, x, y, c):
+    """Um controle (13x9): o contorno, a cruzeta e dois botoes."""
+    pygame.draw.rect(ui, c, (x, y, 13, 9), 1)
+    ui.fill(c, (x + 3, y + 4, 3, 1))
+    ui.fill(c, (x + 4, y + 3, 1, 3))
+    ui.fill(c, (x + 8, y + 3, 2, 2))
+    ui.fill(c, (x + 10, y + 5, 2, 2))
+
+
+def link_pads(ui, kind, cx, cy, lit, now, act, dark):
+    """O botao do party: dois controles ligados por um fio e, embaixo, quatro
+    vagas que enchem uma a uma (o STARTED/FULL ja esta cheio; apertado, enche)."""
+    c = T.SPACE if dark else (T.CYAN if lit or kind == "new" else lerp_color(T.CYAN, T.LINE, 0.4))
+    wire = T.SPACE if dark else (T.GREEN if lit else GREEN_DIM)
+    pad_icon(ui, cx - 17, cy - 3, c)
+    pad_icon(ui, cx + 4, cy - 11, c)
+    pygame.draw.lines(ui, wire, False, [(cx - 4, cy + 1), (cx, cy + 1), (cx, cy - 7), (cx + 4, cy - 7)])
+    n = 4 if act or kind == "closed" else int(now / 0.45) % 5
+    dim = kind == "closed" and not act and int(now / 0.9) % 2 == 1      # cheio: as vagas piscam devagar
+    for i in range(4):
+        x = cx - 14 + i * 8
+        full = lerp_color(T.GREEN, T.LINE, 0.5) if dim else T.GREEN
+        col = T.SPACE if dark else (full if i < n else T.LINE)
+        pygame.draw.circle(ui, col, (x + 2, cy + 10), 2)
+        ui.fill(col, (x, cy + 13, 5, 3))
 
 
 def popup_icon(ui, kind, cx, cy, on, lit=False, net=False, now=None, act=None):
     """O icone de um azulejo do menu do jogo (net: os controles, no lugar do
     globo). now: o relogio do azulejo escolhido, que anima (o triangulo do PLAY
-    respira, a estrela bate e balanca, o "+" da meia volta); act = (azulejo,
-    idade[, favoritou]) quando ele acabou de ser apertado."""
+    pulsa em degraus, a estrela bate e balanca, o "+" da meia volta, o globo do
+    link gira, as vagas do party enchem); act = (azulejo, idade[, favoritou])
+    quando ele acabou de ser apertado."""
     if kind == "play":
-        dx, color = 0, T.GREEN if on else T.COMMENT
+        dx, color, s = 0, T.GREEN if on else T.COMMENT, 1.0
         if act and act[0] == "play":
             # Apertado: o triangulo desliza 6 px e, nas fases acesas, fica escuro
             # sobre o verde cheio do azulejo (popup_tile).
@@ -2721,19 +2860,30 @@ def popup_icon(ui, kind, cx, cy, on, lit=False, net=False, now=None, act=None):
             if play_flash(act[1]):
                 color = T.SPACE
         elif on and now is not None:
-            # Parado, ele respira: do verde para um verde claro, sem sair do
-            # lugar (um pixel que anda de um lado a outro treme no tubo).
-            k = 0.85 * (0.5 + 0.5 * math.sin(now * 5))
-            color = tuple(round(a + (b - a) * k) for a, b in zip(T.GREEN, (210, 255, 225)))
-        play_icon(ui, cx + dx, cy, color)
-    elif kind in ("link", "join", "new", "closed"):
-        if net:
-            pads_icon(ui, cx, cy, lit or on)
+            # Parado, ele pulsa em degraus inteiros, de dentro para fora e sem
+            # sair do lugar (um pixel que anda de um lado a outro treme no tubo).
+            s, color = play_pulse(now)
+        play_icon(ui, cx + dx, cy, color, s)
+    elif kind in LINK_KINDS:
+        if on and now is not None:
+            # O azulejo escolhido anima; apertado, pisca em verde (popup_tile) e o
+            # icone fica escuro nas fases acesas; o STARTED/FULL treme.
+            dark = bool(act and act[0] in PRESS_FLASH and play_flash(act[1]))
+            cx += link_shake(act)
+            if net:
+                link_pads(ui, kind, cx, cy, lit, now, act, dark)
+            else:
+                link_globe(ui, kind, cx, cy, lit, now, act, dark)
+            if kind == "new":
+                plus_mark(ui, cx + (6 if net else 4), cy + 4, now, dark)
         else:
-            globe_icon(ui, cx, cy, 10, lit, GREEN_MID if on else GREEN_DIM)
-        if kind == "new":
-            ui.fill(T.GREEN, (cx + 4, cy + 6, 7, 2))
-            ui.fill(T.GREEN, (cx + 6, cy + 4, 2, 7))
+            if net:
+                pads_icon(ui, cx, cy, lit or on)
+            else:
+                globe_icon(ui, cx, cy, 10, lit, GREEN_MID if on else GREEN_DIM)
+            if kind == "new":
+                ui.fill(T.GREEN, (cx + 4, cy + 6, 7, 2))
+                ui.fill(T.GREEN, (cx + 6, cy + 4, 2, 7))
     elif kind == "net":
         pads_icon(ui, cx, cy, on)
     elif kind == "fav":
@@ -2789,10 +2939,13 @@ def popup_tile(ui, spark, tile, rect, on, now, idle, k=1.0, alpha=1.0, act=None)
     local = (pad, pad, size, size)
     tile_frame(cell, local, on, now)
     pygame.draw.rect(cell, T.PINK if on else T.LINE, local, 2 if on else 1)
-    if act and act[0] == "play" and play_flash(act[1]):
-        # O PLAY apertado acende: verde cheio e a borda branca, sem ampliar nada.
+    if act and act[0] in PRESS_FLASH and play_flash(act[1]):
+        # O PLAY (e o link e o party) apertado acende: verde cheio e a borda
+        # branca, sem ampliar nada.
         cell.fill(T.GREEN, (pad + 2, pad + 2, size - 4, size - 4))
         pygame.draw.rect(cell, T.FG, local, 2)
+    elif act and act[0] == "closed" and int(act[1] / 0.06) % 2 == 0:
+        pygame.draw.rect(cell, T.ORANGE, local, 2)       # sem lugar: a borda avisa, laranja
     popup_icon(cell, tile["kind"], pad + size // 2, pad + size // 2, on, tile.get("lit", False),
                tile.get("net", False), idle, act)
     cx, cy = x + size // 2, y + size // 2
@@ -2808,8 +2961,8 @@ def popup_tile(ui, spark, tile, rect, on, now, idle, k=1.0, alpha=1.0, act=None)
 def popup_spark(layer, kind, cx, cy, size, act):
     """O que sai do azulejo apertado: o anel do "+" (ciano) e as faiscas da
     estrela que favoritou. O PLAY nao solta nada: ele acende (popup_tile) e a
-    tela desliga (popup_tvoff)."""
-    if kind == "play":
+    tela desliga (popup_tvoff); o link e o party tambem so acendem."""
+    if kind == "play" or kind in LINK_KINDS:
         return
     age = act[1]
     if kind == "fav":
@@ -2913,14 +3066,15 @@ def draw_popup(fe, ui, now):
             first = used + 1 if kind == "join" else 1
             width = total * 14 - 4
             slots_row(ui, px + (pw - width) // 2, ty + size + 24 + drop, lit, total,
-                      None if kind == "closed" else (first, take))
+                      None if kind == "closed" else (first, take), clock=None if still else clock)
             if row and blink:
                 sx = px + (pw - width) // 2
                 arrow(ui, sx - 12, ty + size + 30 + drop, (-1, 0), T.PINK, 4)
                 arrow(ui, sx + width + 11, ty + size + 30 + drop, (1, 0), T.PINK, 4)
         else:
             width = total * 11 - 3
-            cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3)
+            cabinet_row(ui, px + (pw - width) // 2, ty + size + 26, filled, total, you=you, w=8, h=12, gap=3,
+                        clock=None if still else clock)
         if host:
             # De quem e a party ou o link (o nome do gabinete que abriu).
             tiny.centered(ui, tiny.fit("HOST " + host, pw - 16), T.COMMENT, px + pw // 2, ty + size + 43 + drop)
@@ -3109,20 +3263,92 @@ def is_clone(fe, game):
     return bool(game.get("CloneOf") or (fe.rows and fe.rows[fe.cursor][1]))
 
 
-def more_rows(ui, rows, x, y, right, lw, now, small=False):
+# ── A pagina "+" em movimento ───────────────────────────────────────
+# Os componentes de cada pagina entram um depois do outro, em passos nitidos
+# (cor cheia, pixels inteiros): os dados digitados, os botoes do painel
+# descendo, a capa e as fotos ligando como TV de tubo, as estrelas, o texto
+# linha a linha. fx = (relogio, inicio da pagina) (None: parado, tudo no
+# lugar, como nos prints). fe.ov: "pt" (quando os componentes comecam; a troca
+# de pagina o poe depois do deslize), "slide" = (de, para, hora, rolagem de
+# quem sai) e "scroll_t" (a ultima rolagem do texto). Cada vez que uma pagina
+# aparece, ela anima de novo.
+PAGE_SLIDE = 0.16          # a troca entre as duas paginas
+ROW_GAP, ROW_REVEAL, LABEL_FLASH = 0.08, 0.16, 0.06     # dados: um a cada 0,08 s; o valor aparece em 0,16 s
+PRESS_GAP = 0.12           # painel: um botao a cada 0,12 s
+TV_START, TV_GAP, TV_ON = 0.06, 0.14, 0.34     # capa e fotos: comeca, uma depois da outra, liga em 0,34 s
+STAR_GAP, LINE_GAP = 0.11, 0.07
+SETTLED = 1e9              # a idade de um componente parado: ja terminou
+
+
+def fx_age(fx, delay=0.0):
+    """Os segundos desde que o componente comecou (SETTLED sem fx)."""
+    return SETTLED if not fx else fx[0] - fx[1] - delay
+
+
+def more_rows(ui, rows, x, y, right, lw, now, small=False, fx=None):
     """Linhas "ROTULO valor" da pagina do jogo (small: o rotulo na fonte
     pequena e a linha mais baixa); o valor que nao cabe vira letreiro.
-    Devolve o y de baixo."""
+    fx: cada linha entra depois da outra: o rotulo acende em rosa e o valor
+    aparece de 4 em 4 pixels, com um cursor de bloco. Devolve o y de baixo."""
+    span = right - x - lw
+    n = 0
     for label, value in rows:
         if not value:
             continue
-        if T.VERTICAL or small:
-            tiny.text(ui, label, T.COMMENT, x, y + 2)
-        else:
-            W.text(ui, label, T.COMMENT, x, y)
-        marquee(ui, str(value), T.FG, x + lw, y, right - x - lw, now)
+        age = fx_age(fx, 0.05 + n * ROW_GAP)
+        n += 1
+        if age >= 0:
+            color = T.PINK if age < LABEL_FLASH else T.COMMENT
+            if T.VERTICAL or small:
+                tiny.text(ui, label, color, x, y + 2)
+            else:
+                W.text(ui, label, color, x, y)
+            reveal = clamp01((age - 0.03) / ROW_REVEAL)
+            if reveal >= 1:
+                marquee(ui, str(value), T.FG, x + lw, y, span, now)
+            elif reveal > 0:
+                shown = min(span, math.ceil(reveal * min(W.width(str(value).upper()), span) / 4) * 4)
+                old = ui.get_clip()
+                ui.set_clip(pygame.Rect(x + lw, y - 2, shown, 14).clip(old))
+                marquee(ui, str(value), T.FG, x + lw, y, span, now)
+                ui.set_clip(old)
+                ui.fill(T.FG, (x + lw + shown, y, 4, 8))
         y += 11 if small else 13
     return y
+
+
+def tv_on(surf, img, x, y, w, h, age):
+    """A imagem img, centrada em (x, y, w, h), ligando como uma TV de tubo
+    (o inverso do PLAY que desliga a tela): um ponto, uma linha que abre para
+    os lados e a imagem que abre para cima e para baixo, em linhas inteiras
+    e com um clarao que apaga. age < 0: ainda desligada."""
+    if not img or age < 0:
+        return
+    if age >= TV_ON:
+        blit_center(surf, img, x, y, w, h)
+        return
+    p = age / TV_ON
+    iw, ih = img.get_size()
+    cx, cy = x + w // 2, y + h // 2
+    if p < 0.22:
+        surf.fill((255, 255, 255), (cx - 1, cy - 1, 3, 3))
+    elif p < 0.52:
+        length = max(4, round(iw * out_cubic((p - 0.22) / 0.30) / 4) * 4)
+        surf.fill((255, 255, 255), (cx - length // 2, cy - 1, length, 3))
+    else:
+        q = out_cubic((p - 0.52) / 0.48)
+        rows = max(3, round(ih * q))
+        squashed = pygame.transform.scale(img, (iw, rows))
+        squashed.fill((round(190 * (1 - q) ** 2),) * 3, special_flags=pygame.BLEND_RGB_ADD)
+        surf.blit(squashed, (cx - iw // 2, cy - rows // 2))
+
+
+def tv_border(age, color):
+    """A borda da imagem que liga: some ate ela abrir e pisca em branco duas vezes."""
+    done = age - TV_ON
+    if done < 0:
+        return None
+    return T.FG if (done < 0.04 or 0.08 <= done < 0.12) else color
 
 
 def button_panel(fe, g, info):
@@ -3143,27 +3369,38 @@ def button_panel(fe, g, info):
     return cells
 
 
-def draw_button_panel(ui, cells, x, y, w):
+def draw_button_panel(ui, cells, x, y, w, fx=None):
     """Os botoes no painel como no guia dos controles: os seis juntos, em
     perspectiva, o do jogo na cor dele e a posicao livre apagada; a funcao
     fora, em cima (a fileira de cima) ou embaixo, com a linha e a seta.
-    Devolve a altura."""
+    fx: os botoes descem um por vez, na ordem dos numeros (apagados, brancos
+    ao apertar, na cor deles ao subir) e o nome de cada um sai de 3 em 3
+    pixels. Devolve a altura."""
     r, step = 8, 21
     ry = round(r * FLAT)
     bx0 = x + (w - 2 * step) // 2
     by0 = y + 22
+    order = sorted(c["button"] for c in cells if c)
     for i, cell in enumerate(cells):
         col, row = i % 3, i // 3
         cx = bx0 + col * step
         cy = by0 + row * 22 - (2 if col == 1 else 0)
-        color = T.LINE
+        color, age = T.LINE, SETTLED
         if cell:
             try:
                 color = tuple(pygame.Color(cell["color"].lower()))[:3] if cell["color"] else T.PURPLE
             except ValueError:
                 color = T.PURPLE
-        button3d(ui, cx, cy, r, color)
-        if not cell:
+            age = fx_age(fx, 0.12 + order.index(cell["button"]) * PRESS_GAP)
+            if age < 0:
+                color = T.LINE
+            elif age < 0.04:
+                color = (255, 255, 255)
+        if cell and 0 <= age < 0.09:
+            button3d(ui, cx, cy + 3, r, color, lift=1)       # desce: o topo 3 px, o lado so 1
+        else:
+            button3d(ui, cx, cy, r, color)
+        if not cell or age < 0.09:
             continue
         text = (cell["label"] or str(cell["button"])).upper()
         text = tiny.fit(text, 70)
@@ -3177,15 +3414,25 @@ def draw_button_panel(ui, cells, x, y, w):
             ty, y0, y1, d = by0 - 16 - out, by0 - 9 - out, top, (0, 1)
         else:
             ty, y0, y1, d = bottom + 9 + out, bottom + 7 + out, bottom, (0, -1)
-        tiny.text(ui, text, T.FG, tx, ty)
+        reveal = clamp01((age - 0.09) / 0.16)
+        if reveal >= 1:
+            tiny.text(ui, text, T.FG, tx, ty)
+        else:
+            old = ui.get_clip()
+            ui.set_clip(pygame.Rect(tx, ty - 1, min(tw + 1, math.ceil(reveal * tw / 3) * 3), 9).clip(old))
+            tiny.text(ui, text, T.FG, tx, ty)
+            ui.set_clip(old)
         pygame.draw.line(ui, T.COMMENT, (cx, y0), (cx, y1 - d[1] * 2))
         arrow(ui, cx, y1, d, T.COMMENT, 2)
     return 78
 
 
-def text_box(fe, ui, box, parts, empty):
+def text_box(fe, ui, box, parts, empty, fx=None, delay=0.2, scroll=None):
     """A caixa de texto rolavel: parts sao (cor, texto); o titulo de uma
-    secao vem em rosa."""
+    secao vem em rosa. fx: as linhas aparecem uma depois da outra (a partir
+    de delay; o titulo da secao pisca em branco ao entrar) e a barra de
+    rolagem acende por um instante quando o texto rola. scroll: a rolagem
+    de quem esta saindo da tela (sem tocar na de agora)."""
     x, y, w, h = box
     W.block(ui, box, T.BG_DEEP, None)
     pygame.draw.rect(ui, T.LINE, box, 1)
@@ -3194,12 +3441,17 @@ def text_box(fe, ui, box, parts, empty):
         for para in text.split("\n"):
             lines.extend((color, line) for line in (W.wrap(para, w - 20) if para.strip() else [""]))
     shown = max(1, (h - 8) // 11 - 1)
-    top = min(fe.ov.get("scroll", 0), max(0, len(lines) - shown))
-    fe.ov["scroll"] = top
+    top = min(fe.ov.get("scroll", 0) if scroll is None else scroll, max(0, len(lines) - shown))
+    if scroll is None:
+        fe.ov["scroll"] = top
     for i, (color, line) in enumerate(lines[top:top + shown]):
-        W.text(ui, line, color, x + 6, y + 5 + i * 11)
+        age = fx_age(fx, delay + i * LINE_GAP)
+        if age < 0:
+            continue
+        W.text(ui, line, T.FG if color == T.PINK and age < 0.08 else color, x + 6, y + 5 + i * 11)
     if len(lines) > shown:
-        W.scrollbar(ui, x + w - 7, y + 4, h - 8, top, shown, len(lines))
+        lit = fx and fx[0] - fe.ov.get("scroll_t", -9.0) < 0.25
+        W.scrollbar(ui, x + w - 7, y + 4, h - 8, top, shown, len(lines), T.FG if lit else None)
 
 
 def page_arrow(ui, now, side):
@@ -3211,12 +3463,44 @@ def page_arrow(ui, now, side):
 
 
 def draw_more(fe, ui, now):
-    """A pagina do jogo (o "+"): na 1, a capa, os dados, os botoes no painel
+    """A pagina do jogo (o "+") com o movimento de agora: os componentes
+    entram um depois do outro (more_page) e a troca de pagina desliza em
+    passos de 8 pixels: a que sai vai para um lado e a outra entra pelo
+    outro, com o titulo no lugar; os componentes dela so comecam quando ela
+    assenta. Parado nos prints (fe.shot) e sem relogio."""
+    ov = fe.ov
+    page = ov.get("page", 0)
+    clock = getattr(fe, "abs_now", None)
+    if clock is None or getattr(fe, "shot", None):
+        return more_page(fe, ui, now, page, None)
+    fx = (clock, ov.get("pt", ov.get("t0", clock)))
+    slide = ov.get("slide")
+    if not slide or clock - slide[2] >= PAGE_SLIDE:
+        return more_page(fe, ui, now, page, fx)
+    src, dst, t0, src_scroll = slide
+    old, new = pygame.Surface((WW, HH), pygame.SRCALPHA), pygame.Surface((WW, HH), pygame.SRCALPHA)
+    more_page(fe, old, now, src, None, scroll=src_scroll, arrows=False)
+    more_page(fe, new, now, dst, fx, arrows=False)
+    p = (clock - t0) / PAGE_SLIDE
+    d = round(WW * out_cubic(p) / 8) * 8
+    sign = 1 if dst > src else -1               # +1: o conteudo vai para a esquerda
+    ui.blit(new, (0, 0), (0, 0, WW, 31))        # o titulo fica
+    clip = ui.get_clip()
+    ui.set_clip(pygame.Rect(0, 31, WW, HH - 31).clip(clip))
+    ui.blit(old, (-sign * d, 0))
+    ui.blit(new, (sign * (WW - d), 0))
+    ui.set_clip(clip)
+    # A seta de onde veio da um tranco de 3 pixels no sentido do aperto.
+    nudge = round(3 * (1 - clamp01(p / 0.6)))
+    arrow(ui, (WW - 5 + nudge) if src < dst else (5 - nudge), HH // 2, (1 if src < dst else -1, 0), T.PINK, 5)
+
+
+def more_page(fe, ui, now, page, fx, scroll=None, arrows=True):
+    """Uma pagina do jogo (o "+"): na 1, a capa, os dados, os botoes no painel
     e a descricao; na 2 (a direita), as fotos, mais dados e as secoes do
-    arcade-history."""
+    arcade-history. fx: ver fx_age; scroll: a rolagem de quem esta saindo."""
     g = fe.ov["game"]
     info = fe.ov.get("info") or {}
-    page = fe.ov.get("page", 0)
     W.frame(ui, {}, fit(fe.fd.short_title(g), 240) or "Game", [])
     y0 = 34
     lw = 34 if T.VERTICAL else 62       # a coluna dos rotulos
@@ -3225,18 +3509,21 @@ def draw_more(fe, ui, now):
     if page == 0:
         bw, bh = (60, 82) if T.VERTICAL else (84, 122)
         W.block(ui, (SX, y0, bw, bh), T.BG_DEEP, T.PURPLE)
-        blit_center(ui, image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 6, bh - 6), SX, y0, bw, bh)
-        pygame.draw.rect(ui, T.PINK, (SX, y0, bw, bh), 2)
+        cover = fx_age(fx, TV_START)
+        tv_on(ui, image(fe, media(fe, g, "box") or media(fe, g, "snap"), bw - 6, bh - 6), SX, y0, bw, bh, cover)
+        border = tv_border(cover, T.PINK)
+        if border:
+            pygame.draw.rect(ui, border, (SX, y0, bw, bh), 2)
         x = SX + bw + 10
         y = more_rows(ui, [
             ("YEAR", " ".join(p for p in (info.get("year") or g.get("Year"),
                                           info.get("manufacturer") or g.get("Manufacturer")) if p)),
             ("GENRE", info.get("genre") or g.get("Category")),
             ("PLAYERS", info.get("nplayers") or g.get("Players")),
-            ("CONTROL", info.get("input_controls") or g.get("Control"))], x, y0 + 2, right, lw, now)
+            ("CONTROL", info.get("input_controls") or g.get("Control"))], x, y0 + 2, right, lw, now, fx=fx)
         cells = button_panel(fe, g, info)
         if cells:
-            y += 2 + draw_button_panel(ui, cells, x, y + 2, min(right - x, 180))
+            y += 2 + draw_button_panel(ui, cells, x, y + 2, min(right - x, 180), fx=fx)
         ty = max(y0 + bh, y) + 8
         box = (SX, ty, right - SX, HH - 12 - ty)
         if fe.ov.get("loading"):
@@ -3246,8 +3533,9 @@ def draw_more(fe, ui, now):
         else:
             empty = "Not in the Arcade Database." if g["_system"]["arcade"] else \
                 "No information yet. Tab > Scrape this game brings it."
-            text_box(fe, ui, box, [(T.FG, description)] if description else [], empty)
-        page_arrow(ui, now, 1)
+            text_box(fe, ui, box, [(T.FG, description)] if description else [], empty, fx=fx, scroll=scroll)
+        if arrows:
+            page_arrow(ui, now, 1)
         return
     # Pagina 2: as fotos que o jogo tem, lado a lado.
     pics = [p for p in (media(fe, g, k) for k in ("snap", "marquee", "box", "logo")) if p][:3]
@@ -3257,7 +3545,7 @@ def draw_more(fe, ui, now):
         for i, path in enumerate(pics):
             px = SX + i * (pw + 6)
             W.block(ui, (px, y0, pw, ph), T.BG_DEEP, None)
-            blit_center(ui, image(fe, path, pw - 4, ph - 4), px, y0, pw, ph)
+            tv_on(ui, image(fe, path, pw - 4, ph - 4), px, y0, pw, ph, fx_age(fx, TV_START + i * TV_GAP))
             pygame.draw.rect(ui, T.LINE, (px, y0, pw, ph), 1)
         y0 += ph + 8
     parent = g.get("CloneOf")
@@ -3267,21 +3555,23 @@ def draw_more(fe, ui, now):
         ("SCREEN", ", ".join(p for p in (info.get("screen_resolution"), info.get("screen_orientation")) if p)),
         ("STATUS", info.get("status") or g.get("Status")),
         ("LANGUAGE", info.get("languages")),
-        ("SET", g["Name"] + (" (clone of %s)" % parent if parent else ""))], SX, y0, right, 40, now, small=True)
+        ("SET", g["Name"] + (" (clone of %s)" % parent if parent else ""))], SX, y0, right, 40, now, small=True, fx=fx)
     if info.get("rate"):
         tiny.text(ui, "RATING", T.COMMENT, SX, y + 3)
-        stars(ui, SX + 40, y, float(info["rate"]), 4)
+        stars(ui, SX + 40, y, float(info["rate"]), 4, fx=fx)
         y += 11
     parts = []
     for title, body in sections:
         parts += [(T.PINK, title.upper()), (T.FG, body)]
     ty = y + 6
     if HH - 12 - ty >= 30:
-        text_box(fe, ui, (SX, ty, right - SX, HH - 12 - ty), parts, "Nothing more about this game.")
+        text_box(fe, ui, (SX, ty, right - SX, HH - 12 - ty), parts, "Nothing more about this game.", fx=fx,
+                 delay=0.95, scroll=scroll)
     source = (info.get("history_copyright_short") or "").upper()
     if source:
         tiny.text(ui, tiny.fit(source, SW - 20), T.COMMENT, right - 4, HH - 9, right=True)
-    page_arrow(ui, now, -1)
+    if arrows:
+        page_arrow(ui, now, -1)
 
 
 CHEEVO_ROW = 21             # a altura de uma conquista na lista (titulo e descricao)
@@ -4879,7 +5169,6 @@ def draw(fe, now):
             top = popup_fx(fe, top, draw_popup(fe, top, t), now)
         elif o == "more":
             draw_more(fe, top, t)
-            top = page_fx(fe, top, now)
         elif o == "cheevos":
             draw_cheevos(fe, top, t)
         elif o == "filter":

@@ -233,13 +233,14 @@ class Animated:
         return "redraw"
 
 
-def scrollbar(surf, x, y, h, top, shown, total):
+def scrollbar(surf, x, y, h, top, shown, total, color=None):
     """A barra de rolagem de uma lista que nao cabe: o trilho de h pixels
-    com o canto em (x, y) e, nele, o pedaco que esta a vista."""
+    com o canto em (x, y) e, nele, o pedaco que esta a vista (color: a cor
+    dele, rosa sem ela)."""
     pygame.draw.rect(surf, T.LINE, (x, y, 4, h))
     size = max(6, h * shown // total)
     pos = y + (h - size) * top // max(1, total - shown)
-    pygame.draw.rect(surf, T.PINK, (x, pos, 4, size))
+    pygame.draw.rect(surf, color or T.PINK, (x, pos, 4, size))
 
 
 LAST_FRAME = []                # o ultimo frame() (landscape o redesenha em pe)

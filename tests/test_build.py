@@ -18389,6 +18389,463 @@ class FrontendPopupMotionTests(unittest.TestCase):
         self.assertIn('acts = list(acts) + ["go"]', run)
 
 
+class FrontendPlusPageMotionTests(unittest.TestCase):
+    """A pagina "+" do frontend em movimento: os componentes de cada pagina entram
+    um depois do outro (dados digitados, botoes do painel descendo, capa e fotos
+    ligando como TV de tubo, estrelas, texto linha a linha) e a troca de pagina
+    desliza. Cada componente, no fim, e igual ao desenho parado dos prints
+    (fx=None): o movimento so enfeita o caminho."""
+    GUI = ROOT / "fliperos-setup/gui"
+    ROWS = [("YEAR", "1994 CAPCOM"), ("GENRE", "FIGHTER / VERSUS"), ("PLAYERS", "2P"), ("CONTROL", "JOYSTICK (8-WAY)")]
+
+    def setUp(self):
+        if not importlib.util.find_spec("pygame"):
+            self.skipTest("sem o pygame")
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import feview
+        pygame.font.init()
+        self.pg, self.fv = pygame, feview
+
+    def lit(self, surf):
+        return self.pg.mask.from_surface(surf, 1).count()
+
+    def raw(self, surf):
+        return self.pg.image.tostring(surf, "RGBA")
+
+    def has(self, surf, color):
+        w, h = surf.get_size()
+        return any(tuple(surf.get_at((x, y)))[:3] == tuple(color)[:3] for y in range(h) for x in range(w))
+
+    def ink(self, surf, color):
+        """Quantos pixels sao exatamente da cor (o texto sobre um fundo opaco nao muda a area acesa)."""
+        w, h = surf.get_size()
+        return sum(1 for y in range(h) for x in range(w) if tuple(surf.get_at((x, y)))[:3] == tuple(color)[:3])
+
+    def rows(self, age=None, small=False):
+        ui = self.pg.Surface((320, 240), self.pg.SRCALPHA)
+        self.fv.more_rows(ui, self.ROWS, 100, 40, 300, 62, 0.0, small=small, fx=None if age is None else (100.0 + age, 100.0))
+        return ui
+
+    def test_the_data_rows_type_in_one_after_the_other(self):
+        fv = self.fv
+        self.assertEqual(self.lit(self.rows(0.0)), 0)       # a primeira linha so entra em 0,05 s
+        counts = [self.lit(self.rows(age)) for age in (0.07, 0.12, 0.2, 0.3, 0.45, 0.7, 1.2)]
+        self.assertEqual(counts, sorted(counts))
+        self.assertGreater(counts[-1], counts[0])
+        # O rotulo acende em rosa um instante e depois fica no cinza azulado.
+        self.assertTrue(self.has(self.rows(0.07), fv.T.PINK))
+        self.assertFalse(self.has(self.rows(0.5), fv.T.PINK))
+        # No fim e igual ao desenho parado; sem fx, o de sempre.
+        self.assertEqual(self.raw(self.rows(5.0)), self.raw(self.rows(None)))
+        self.assertEqual(self.raw(self.rows(5.0, small=True)), self.raw(self.rows(None, small=True)))
+        # Cada linha entra depois da anterior: a de baixo ainda nao existe quando a de cima ja tem valor.
+        early = self.rows(0.13)
+        self.assertTrue(early.subsurface((100, 38, 200, 12)).get_bounding_rect(1).size != (0, 0))
+        self.assertEqual(early.subsurface((100, 38 + 13 * 3, 200, 12)).get_bounding_rect(1).size, (0, 0))
+        self.assertEqual(fv.more_rows(self.pg.Surface((320, 240), self.pg.SRCALPHA), self.ROWS, 100, 40, 300, 62, 0.0,
+                                      fx=(1.0, 1.0)), 40 + 13 * 4)
+
+    CELLS = [{"button": n, "color": c, "label": name} for n, (c, name) in
+             enumerate((("blue", "LIGHT PUNCH"), ("white", "MIDDLE PUNCH"), ("red", "STRONG PUNCH"),
+                        ("blue", "LIGHT KICK"), ("white", "MIDDLE KICK"), ("red", "STRONG KICK")), 1)]
+
+    def panel(self, age=None):
+        ui = self.pg.Surface((320, 240), self.pg.SRCALPHA)
+        self.fv.draw_button_panel(ui, self.CELLS, 100, 40, 180, fx=None if age is None else (100.0 + age, 100.0))
+        return ui
+
+    def test_the_panel_buttons_press_one_by_one_and_end_as_the_still_panel(self):
+        fv = self.fv
+        self.assertEqual(self.raw(self.panel(5.0)), self.raw(self.panel(None)))
+        # O primeiro (o centro dele em (169, 62)) desce, branco, e sobe na cor dele; o ultimo (211, 84) espera.
+        self.assertEqual(tuple(self.panel(0.14).get_at((169, 65)))[:3], (255, 255, 255))
+        self.assertEqual(tuple(self.panel(0.30).get_at((169, 62)))[:3], (0, 0, 255))
+        self.assertEqual(tuple(self.panel(0.30).get_at((211, 84)))[:3], tuple(fv.T.LINE))
+        self.assertEqual(tuple(self.panel(5.0).get_at((211, 84)))[:3], (255, 0, 0))
+        # O nome so sai depois do botao subir, de 3 em 3 pixels.
+        names = [self.lit(self.panel(age).subsurface((100, 40, 180, 22))) for age in (0.3, 0.36, 0.42, 0.6, 1.5)]
+        self.assertEqual(names, sorted(names))
+        self.assertLess(names[0], names[-1])
+        # Sem fx e o painel de sempre: o botao so desce de verdade com o relogio.
+        self.assertEqual(fv.draw_button_panel(self.pg.Surface((320, 240), self.pg.SRCALPHA), self.CELLS, 100, 40, 180), 78)
+
+    def tv(self, age):
+        ui = self.pg.Surface((100, 100))
+        ui.fill((0, 0, 0))
+        img = self.pg.Surface((40, 60))
+        img.fill((200, 40, 40))
+        self.fv.tv_on(ui, img, 10, 10, 80, 80, age)
+        return ui
+
+    def span(self, ui):
+        rows = [y for y in range(100) if any(tuple(ui.get_at((x, y)))[:3] != (0, 0, 0) for x in range(100))]
+        return (rows[0], rows[-1]) if rows else None
+
+    def test_the_cover_switches_on_like_a_tube_tv_in_whole_rows(self):
+        fv = self.fv
+        self.assertIsNone(self.span(self.tv(-0.01)))
+        # Um ponto de 3x3 no meio, depois uma linha clara de 3 linhas, depois a imagem abrindo, centrada.
+        dot = self.tv(0.05)
+        self.assertEqual((self.span(dot), sum(1 for x in range(100) for y in range(100) if tuple(dot.get_at((x, y)))[:3] == (255, 255, 255))),
+                         ((49, 51), 9))
+        line = self.tv(0.15)
+        self.assertEqual(self.span(line), (49, 51))
+        self.assertGreater(sum(1 for x in range(100) if tuple(line.get_at((x, 50)))[:3] == (255, 255, 255)), 20)
+        sizes = []
+        for age in (0.22, 0.25, 0.28, 0.31, 0.33):
+            lo, hi = self.span(self.tv(age))
+            self.assertLessEqual(abs((lo + hi) // 2 - 50), 1, age)
+            sizes.append(hi - lo)
+        self.assertEqual(sizes, sorted(sizes))
+        # Ligada, e o desenho de antes (a imagem inteira, centrada).
+        done = self.pg.Surface((100, 100))
+        done.fill((0, 0, 0))
+        img = self.pg.Surface((40, 60))
+        img.fill((200, 40, 40))
+        fv.blit_center(done, img, 10, 10, 80, 80)
+        self.assertEqual(self.raw(self.tv(fv.TV_ON)), self.raw(done))
+        self.assertEqual(self.raw(self.tv(fv.SETTLED)), self.raw(done))
+        fv.tv_on(done, None, 10, 10, 80, 80, 0.1)       # sem imagem nao desenha nada (nem quebra)
+
+    def test_the_border_of_the_cover_waits_for_the_picture_then_blinks_white_twice(self):
+        fv = self.fv
+        self.assertIsNone(fv.tv_border(fv.TV_ON - 0.01, fv.T.PINK))
+        self.assertEqual([fv.tv_border(fv.TV_ON + d, fv.T.PINK) for d in (0.02, 0.06, 0.09, 0.14)],
+                         [fv.T.FG, fv.T.PINK, fv.T.FG, fv.T.PINK])
+        self.assertEqual(fv.tv_border(fv.SETTLED, fv.T.PINK), fv.T.PINK)
+
+    def stars(self, age=None):
+        ui = self.pg.Surface((100, 30), self.pg.SRCALPHA)
+        self.fv.stars(ui, 5, 5, 70.0, 4, fx=None if age is None else (10.0 + age, 10.0))
+        return ui
+
+    def test_the_stars_light_up_left_to_right_white_then_yellow(self):
+        fv = self.fv
+        rgb = lambda ui, x: tuple(ui.get_at((x, 9)))[:3]       # o meio de cada estrela: 9, 21, 33, 45, 57
+        self.assertEqual(rgb(self.stars(0.22), 9), (255, 255, 255))
+        self.assertEqual(rgb(self.stars(0.30), 9), tuple(fv.T.YELLOW))
+        self.assertEqual(rgb(self.stars(0.30), 21), tuple(fv.T.LINE))        # a segunda ainda nao
+        self.assertEqual(rgb(self.stars(0.56), 33), tuple(fv.T.YELLOW))
+        # Nota 70: tres estrelas e meia; a quinta fica apagada. No fim, igual ao parado.
+        self.assertEqual(rgb(self.stars(5.0), 57), tuple(fv.T.LINE))
+        self.assertEqual(self.raw(self.stars(5.0)), self.raw(self.stars(None)))
+
+    LONG = ("Ryu waits on the dock while the crowd cheers. " * 8).strip()
+
+    def text(self, age=None, scroll_t=None, scroll=0):
+        import types
+        fe = types.SimpleNamespace(ov={"scroll": scroll} if scroll_t is None else {"scroll": scroll, "scroll_t": scroll_t})
+        ui = self.pg.Surface((240, 90), self.pg.SRCALPHA)
+        self.fv.text_box(fe, ui, (10, 10, 200, 60), [(self.fv.T.PINK, "TECHNICAL"), (self.fv.T.FG, self.LONG)], "-",
+                         fx=None if age is None else (50.0 + age, 50.0))
+        return ui
+
+    def test_the_text_comes_in_line_by_line_and_the_scrollbar_lights_up_when_it_scrolls(self):
+        fv = self.fv
+        box = lambda ui: ui.subsurface((12, 12, 180, 56))
+        counts = [self.ink(box(self.text(age)), fv.T.FG) for age in (0.0, 0.25, 0.32, 0.45, 1.5)]
+        self.assertEqual(counts, sorted(counts))
+        self.assertEqual(counts[0], 0)
+        self.assertLess(counts[1], counts[-1])
+        self.assertEqual(self.raw(self.text(5.0)), self.raw(self.text(None)))
+        # O titulo da secao pisca em branco ao entrar e fica rosa.
+        self.assertFalse(self.has(box(self.text(0.21)), fv.T.PINK))
+        self.assertTrue(self.has(box(self.text(0.5)), fv.T.PINK))
+        # A barra de rolagem (o pedaco a vista, rosa) acende por 0,25 s depois de rolar.
+        thumb = lambda ui: tuple(ui.get_at((10 + 200 - 6, 10 + 5)))[:3]
+        self.assertEqual(thumb(self.text(2.0, scroll_t=51.9)), tuple(fv.T.FG))
+        self.assertEqual(thumb(self.text(2.0, scroll_t=50.0)), tuple(fv.T.PINK))
+        self.assertEqual(thumb(self.text(None)), tuple(fv.T.PINK))
+        # A pagina que sai guarda a rolagem dela sem mexer na de agora.
+        import types
+        fe = types.SimpleNamespace(ov={"scroll": 0})
+        ui = self.pg.Surface((240, 90), self.pg.SRCALPHA)
+        fv.text_box(fe, ui, (10, 10, 200, 60), [(fv.T.FG, self.LONG)], "-", scroll=2)
+        self.assertEqual(fe.ov["scroll"], 0)
+
+    def page(self, clock, **ov):
+        import types
+        web = types.SimpleNamespace(history_parts=lambda text: ("A short description of the game.", [("Trivia", "A line.")]),
+                                    button_panel=lambda info: [], PANEL_SIZE=6, button_layout=lambda count: list(range(1, count + 1)))
+        base = {"game": {"Name": "sfa3", "Title": "Street Fighter Alpha 3", "_system": {"key": "mame", "arcade": True}},
+                "info": {"rate": 60}, "page": 0, "scroll": 0, "t0": 100.0}
+        base.update(ov)
+        fe = types.SimpleNamespace(ov=base, shot=None, abs_now=clock, media={}, ready={},
+                                   lib=types.SimpleNamespace(media=lambda g, k: None),
+                                   fd=types.SimpleNamespace(short_title=lambda g: g["Title"], web=web))
+        ui = self.pg.Surface((320, 240), self.pg.SRCALPHA)
+        self.fv.draw_more(fe, ui, 0.0)
+        return ui, fe
+
+    def test_the_page_fills_in_when_it_opens_and_matches_the_print_when_settled(self):
+        fv = self.fv
+        counts = [self.ink(self.page(100.0 + age)[0], fv.T.FG) for age in (0.0, 0.3, 0.8, 1.5)]
+        self.assertEqual(counts, sorted(counts))
+        self.assertLess(counts[0], counts[-1])
+        import types
+        shot = self.page(105.0)[1]
+        shot.shot = "x"
+        still = self.pg.Surface((320, 240), self.pg.SRCALPHA)
+        fv.draw_more(shot, still, 0.0)
+        self.assertEqual(self.raw(self.page(105.0)[0]), self.raw(still))
+
+    def test_switching_pages_slides_in_steps_of_8_pixels_and_the_title_stays(self):
+        fv = self.fv
+        slide = (0, 1, 200.0, 0)
+        pt = 200.0 + fv.PAGE_SLIDE
+        # No inicio e a pagina que saia; no meio, ela vai para a esquerda de 8 em 8 e a outra entra pela direita.
+        first, fe = self.page(200.0, page=1, slide=slide, pt=pt)
+        old = self.page(200.0 + fv.PAGE_SLIDE * 5, page=0)[0]          # a pagina 1 do jeito que estava (parada)
+        # (menos as bordas, onde fica a seta: parada na pagina e com o tranco no deslize)
+        self.assertEqual(self.raw(first.subsurface((8, 31, 296, 209))), self.raw(old.subsurface((8, 31, 296, 209))))
+        mid, _ = self.page(200.0 + fv.PAGE_SLIDE / 3, page=1, slide=slide, pt=pt)
+        d = round(320 * fv.out_cubic(1 / 3) / 8) * 8
+        self.assertTrue(0 < d < 320 and d % 8 == 0, d)
+        self.assertEqual(self.raw(mid.subsurface((0, 31, 320 - d - 16, 209))),
+                         self.raw(old.subsurface((d, 31, 320 - d - 16, 209))))
+        # O titulo nao desliza: igual ao da pagina nova.
+        new = self.page(200.0 + fv.PAGE_SLIDE * 5, page=1, slide=slide, pt=pt - 5)[0]
+        self.assertEqual(self.raw(mid.subsurface((0, 0, 320, 31))), self.raw(new.subsurface((0, 0, 320, 31))))
+        # Passado o deslize, e a pagina nova de sempre (os componentes comecam em pt).
+        end = self.page(pt + 0.001, page=1, slide=slide, pt=pt)[0]
+        self.assertEqual(self.raw(end), self.raw(self.page(pt + 0.001, page=1, pt=pt)[0]))
+        # E a pagina que entra ainda esta vazia quando chega: os componentes so comecam depois.
+        self.assertLess(self.ink(end, fv.T.FG), self.ink(self.page(pt + 2.0, page=1, pt=pt)[0], fv.T.FG))
+
+    def frontend(self, page=0, shot=None):
+        import types
+        fm = FrontendDataTests.frontend_module()
+        fe = types.SimpleNamespace(overlay="more", ov={"game": {}, "page": page, "scroll": 0}, shot=shot, view=self.fv,
+                                   toggle_fav=lambda: True)
+        fe.overlay_act = types.MethodType(fm.Frontend.overlay_act, fe)
+        return fe
+
+    def test_the_arrows_of_the_page_slide_and_replay_it_every_time_a_page_comes_back(self):
+        fv, fe = self.fv, self.frontend()
+        fe.overlay_act("right")
+        src, dst, start, scroll = fe.ov["slide"]
+        self.assertEqual((src, dst, fe.ov["page"], scroll), (0, 1, 1, 0))
+        self.assertAlmostEqual(fe.ov["pt"], start + fv.PAGE_SLIDE, places=6)
+        # Rolou o texto: a pagina que sai leva a rolagem, a que entra comeca do alto, a barra acende.
+        fe.overlay_act("down")
+        fe.overlay_act("down")
+        self.assertEqual(fe.ov["scroll"], 2)
+        self.assertIn("scroll_t", fe.ov)
+        fe.overlay_act("left")
+        self.assertEqual((fe.ov["slide"][:2], fe.ov["slide"][3], fe.ov["scroll"], fe.ov["page"]), ((1, 0), 2, 0, 0))
+        again = fe.ov["pt"]
+        fe.overlay_act("left")                      # ja esta na 1: nao troca, nao recomeca
+        self.assertEqual(fe.ov["pt"], again)
+        fe.overlay_act("right")                     # voltar na 2 anima de novo
+        self.assertGreater(fe.ov["pt"], again)
+        # Nos prints a pagina so troca.
+        still = self.frontend(shot="x")
+        still.overlay_act("right")
+        self.assertEqual((still.ov["page"], "slide" in still.ov, "pt" in still.ov), (1, False, False))
+
+
+class FrontendLinkMotionTests(unittest.TestCase):
+    """O menu do jogo num jogo de link ou de party: o PLAY pulsa em degraus, o
+    globo do link gira, as vagas do party enchem, as fileiras de gabinetes e de
+    jogadores animam, e apertar um azulejo toca a animacao antes do efeito."""
+    GUI = ROOT / "fliperos-setup/gui"
+    TILES = [{"kind": "play", "label": "PLAY"}, {"kind": "join", "label": "JOIN LINK", "lit": True, "net": False,
+                                                 "party": {"party": "p", "used": 2, "max": 8, "host": "A"}},
+             {"kind": "fav", "label": "FAVOURITE"}, {"kind": "more", "label": "MORE"}]
+
+    def setUp(self):
+        if not importlib.util.find_spec("pygame"):
+            self.skipTest("sem o pygame")
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import feview
+        pygame.font.init()
+        self.pg, self.fv = pygame, feview
+
+    def draw(self, sel, now, **ov):
+        import types
+        fe = types.SimpleNamespace(
+            game=lambda: {"Name": "daytona", "Title": "Daytona USA"}, popup_tiles=lambda: self.TILES,
+            fd=types.SimpleNamespace(short_title=lambda g: g["Title"]), ov=dict(sel=sel, **ov), shot=None,
+            abs_now=now)
+        ui = self.pg.Surface((320, 240), self.pg.SRCALPHA)
+        rect = self.fv.draw_popup(fe, ui, now)
+        return ui, rect
+
+    def icon(self, kind, now, lit=False, net=False, act=None):
+        surf = self.pg.Surface((64, 64), self.pg.SRCALPHA)
+        self.fv.popup_icon(surf, kind, 32, 32, True, lit=lit, net=net, now=now, act=act)
+        return surf
+
+    def raw(self, surf):
+        return self.pg.image.tostring(surf, "RGBA")
+
+    LINK = (("link", False), ("join", True), ("new", False), ("closed", True))
+
+    def test_the_play_triangle_pulses_in_whole_steps_and_comes_back(self):
+        fv = self.fv
+        scales = [fv.play_pulse(i * 0.07)[0] for i in range(7)]
+        self.assertEqual(scales, [1.0, 1.1, 1.2, 1.1, 1.0, 1.0, 1.0])
+        self.assertEqual(fv.play_pulse(1.8), fv.play_pulse(0.0))
+        self.assertEqual(fv.play_pulse(0.0)[1], tuple(fv.T.GREEN))
+        peak, mid = fv.play_pulse(0.14)[1], fv.play_pulse(0.07)[1]
+        self.assertGreater(sum(peak), sum(mid))
+        self.assertGreater(sum(mid), sum(fv.T.GREEN))
+        widths = []
+        for s in (1.0, 1.1, 1.2):
+            surf = self.pg.Surface((64, 64), self.pg.SRCALPHA)
+            fv.play_icon(surf, 32, 32, fv.T.GREEN, s)
+            box = surf.get_bounding_rect(1)
+            widths.append(box.w)
+            self.assertLessEqual(abs(box.centery - 32), 1)
+        self.assertEqual(widths, sorted(widths))
+        self.assertLess(widths[0], widths[-1])
+
+    def test_every_link_and_party_icon_moves_while_selected_and_is_the_old_still_one_otherwise(self):
+        fv, pg = self.fv, self.pg
+        for net in (False, True):
+            for kind, lit in self.LINK:
+                # Escolhido, anima (quase todo quadro muda alguma coisa em 1,8 s) ...
+                frames = {self.raw(self.icon(kind, t / 10.0, lit, net)) for t in range(0, 36)}
+                # (o STARTED/FULL fica parado e so pisca, devagar: dois estados)
+                self.assertGreater(len(frames), 1 if kind == "closed" else 3, (kind, net))
+                # ... e sem o relogio (outros azulejos) e o desenho parado de antes.
+                still = pg.Surface((64, 64), pg.SRCALPHA)
+                surf = pg.Surface((64, 64), pg.SRCALPHA)
+                fv.popup_icon(surf, kind, 32, 32, False, lit=lit, net=net, now=None)
+                if net:
+                    fv.pads_icon(still, 32, 32, lit)
+                else:
+                    fv.globe_icon(still, 32, 32, 10, lit, fv.GREEN_DIM)
+                if kind == "new":
+                    still.fill(fv.T.GREEN, (36, 38, 7, 2))
+                    still.fill(fv.T.GREEN, (38, 36, 2, 7))
+                self.assertEqual(self.raw(surf), self.raw(still), (kind, net))
+
+    def test_pressed_link_and_party_tiles_flash_green_and_the_started_one_shakes_and_warns(self):
+        fv, pg = self.fv, self.pg
+        for net in (False, True):
+            for kind in ("link", "join", "new"):
+                dark = self.icon(kind, 0.3, kind == "join", net, act=(kind, 0.0))
+                colors = {tuple(dark.get_at((x, y)))[:3] for x in range(64) for y in range(64) if dark.get_at((x, y)).a}
+                self.assertTrue(all(max(c) <= 0x14 for c in colors), (kind, net, colors))     # escuro sobre o verde cheio
+                self.assertNotEqual(self.raw(dark), self.raw(self.icon(kind, 0.3, kind == "join", net, act=(kind, 0.05))))
+            # O STARTED/FULL treme dois pixels para cada lado (o aperto nao pisca o azulejo).
+            left = [self.icon("closed", 0.3, True, net, act=("closed", age)).get_bounding_rect(1).x for age in (0.0, 0.07, 0.3)]
+            self.assertEqual((left[0] - left[2], left[1] - left[2]), (2, -2))
+        # O azulejo: verde cheio com a borda branca nas fases acesas (como o PLAY) e o STARTED, borda laranja.
+        def tile(kind, age):
+            surf = pg.Surface((320, 240), pg.SRCALPHA)
+            spark = pg.Surface((320, 240), pg.SRCALPHA)
+            fv.popup_tile(surf, spark, {"kind": kind, "label": "X", "lit": True}, (100, 100, 52), True, 0.0, 0.3, 1.0, 1.0, (kind, age))
+            return surf, spark
+        for kind in ("link", "new", "join"):
+            lit, spark = tile(kind, 0.0)
+            self.assertEqual(tuple(lit.get_at((104, 104)))[:3], tuple(fv.T.GREEN), kind)
+            self.assertEqual(spark.get_bounding_rect(1).size, (0, 0))
+            self.assertNotEqual(tuple(tile(kind, 0.05)[0].get_at((104, 104)))[:3], tuple(fv.T.GREEN))
+        warn, _ = tile("closed", 0.0)
+        self.assertEqual(tuple(warn.get_at((100, 125)))[:3], tuple(fv.T.ORANGE))
+        self.assertNotEqual(tuple(tile("closed", 0.07)[0].get_at((100, 125)))[:3], tuple(fv.T.ORANGE))
+        # E o cartao: o link some no fim do aperto como o favoritar; o STARTED nao mexe no menu.
+        link = types_ns(ov={"act": ("join", 5.0)})
+        _, alpha, _ = fv.popup_motion(link, 5.0 + fv.POP_ACT["join"])
+        self.assertAlmostEqual(alpha, 0.0, places=6)
+        for age in (0.0, 0.15, fv.POP_ACT["closed"]):
+            self.assertEqual(fv.popup_motion(types_ns(ov={"act": ("closed", 5.0)}), 5.0 + age), (1.0, 1.0, 1.0))
+
+    def test_the_cabinet_row_runs_an_energy_wave_and_the_players_row_waves(self):
+        fv, pg = self.fv, self.pg
+        def cab(clock):
+            ui = pg.Surface((120, 40), pg.SRCALPHA)
+            fv.cabinet_row(ui, 5, 10, 2, 8, you=2, w=8, h=12, gap=3, clock=clock)
+            return ui
+        self.assertEqual(self.raw(cab(None)), self.raw(cab(None)))
+        waves = {self.raw(cab(t / 10.0)) for t in range(0, 20)}
+        self.assertGreater(len(waves), 5)
+        # A onda passa pelas vagas vazias tambem: as bordas delas ficam mais claras (6 = o seis).
+        slot = lambda ui: tuple(ui.get_at((5 + 6 * 11, 10)))[:3]
+        self.assertEqual(slot(cab(None)), tuple(fv.T.LINE))
+        self.assertEqual(slot(cab(6.5 / 7)), tuple(fv.T.COMMENT))
+        def slots(clock):
+            ui = pg.Surface((90, 30), pg.SRCALPHA)
+            fv.slots_row(ui, 5, 10, 2, 4, (3, 2), clock=clock)
+            return ui
+        # O primeiro jogador levanta um pixel quando a onda chega nele (a cabeca sobe 1).
+        top = lambda ui: ui.subsurface((5, 5, 10, 14)).get_bounding_rect(1).y
+        self.assertEqual(top(slots(None)) - top(slots(0.3)), 1)
+        self.assertEqual(top(slots(None)), top(slots(0.9)))
+        self.assertEqual(self.raw(slots(None)), self.raw(slots(None)))
+
+    def test_the_menu_draws_the_animated_link_rows_in_every_state_inside_the_screen(self):
+        rects = {}
+        for ov in ({"t0": 50.0}, {}, {"act": ("join", 50.0)}, {"act": ("closed", 50.0)}):
+            for age in (0.0, 0.07, 0.2, 0.4):
+                for sel in range(4):
+                    ui, rect = self.draw(sel, 50.0 + age, **ov)
+                    rects.setdefault(sel, set()).add(rect)
+                    self.assertTrue(self.pg.Rect(0, 0, 320, 240).contains(self.pg.Rect(rect)), (ov, sel, age))
+        # O cartao de cada azulejo e sempre o mesmo (o do link e mais alto: tem a fileira dos gabinetes).
+        self.assertEqual([len(r) for r in rects.values()], [1, 1, 1, 1])
+        self.assertGreater(list(rects[1])[0][3], list(rects[0])[0][3])
+
+    def frontend_link(self, tile):
+        import types
+        fm = FrontendDataTests.frontend_module()
+        calls = []
+        fe = types.SimpleNamespace(overlay="popup", ov={"sel": 0}, shot=None, view=self.fv, calls=calls,
+                                   popup_tiles=lambda: [{"kind": "play", "label": "PLAY"}, tile],
+                                   link_host=lambda take=None: calls.append(("host", take)),
+                                   link_join=lambda party, take=None: calls.append(("join", party["party"], take)),
+                                   say=lambda text, secs=0: calls.append(("say", text)))
+        for name in ("overlay_act", "popup_act_done", "popup_link_effect"):
+            setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
+        fe.ov["sel"] = 1
+        return fe
+
+    def test_a_link_or_party_tile_animates_first_and_the_effect_comes_after(self):
+        fv = self.fv
+        for kind, expect in (("link", ("host", 2)), ("new", ("host", 2)), ("join", ("join", "p", 2))):
+            fe = self.frontend_link({"kind": kind, "label": "X", "take": 2, "party": {"party": "p"}})
+            self.assertIsNone(fe.overlay_act("b1"))
+            self.assertEqual((fe.ov["act"][0], fe.calls), (kind, []))
+            start = fe.ov["act"][1]
+            fe.overlay_act("left")                                  # durante o aperto nenhuma tecla vale
+            self.assertEqual(fe.ov["sel"], 1)
+            fe.popup_act_done(start + 0.1)
+            self.assertEqual(fe.calls, [])
+            fe.popup_act_done(start + fv.POP_ACT[kind] + 0.01)
+            self.assertEqual(fe.calls, [expect], kind)
+            self.assertNotIn("act", fe.ov)
+
+    def test_a_started_tile_warns_after_the_shake_and_leaves_the_menu_open(self):
+        fv = self.fv
+        fe = self.frontend_link({"kind": "closed", "label": "STARTED"})
+        fe.overlay_act("b1")
+        start = fe.ov["act"][1]
+        fe.popup_act_done(start + fv.POP_ACT["closed"] + 0.01)
+        self.assertEqual((fe.calls, fe.overlay, "act" in fe.ov), ([("say", "STARTED")], "popup", False))
+
+    def test_without_animation_the_prints_keep_the_old_immediate_link_behaviour(self):
+        fe = self.frontend_link({"kind": "join", "label": "X", "take": 1, "party": {"party": "p"}})
+        fe.shot = "x"
+        fe.overlay_act("b1")
+        self.assertEqual((fe.calls, "act" in fe.ov), ([("join", "p", 1)], False))
+
+
+def types_ns(**kw):
+    import types
+    kw.setdefault("shot", None)
+    return types.SimpleNamespace(**kw)
+
+
 class GuiMenuIconTests(unittest.TestCase):
     """Todo item de menu do Setup tem um icone (gui/theme.py ou gui/icons):
     sem ele, o carrossel mostra so a inicial do rotulo."""

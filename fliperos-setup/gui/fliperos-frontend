@@ -1248,10 +1248,13 @@ class Frontend:
                         self.open_more()
                 elif kind == "cheevos":
                     self.open_cheevos()
-                elif kind in ("link", "new"):
-                    self.link_host(tile.get("take"))
-                elif kind == "join":
-                    self.link_join(tile["party"], tile.get("take"))
+                elif kind in ("link", "new", "join", "closed"):
+                    if animated:
+                        # O aperto toca antes do efeito (popup_act_done): pisca em
+                        # verde, e o STARTED/FULL treme e avisa sem fechar o menu.
+                        self.ov["act"], self.ov["act_tile"] = (kind, now), tile
+                    else:
+                        self.popup_link_effect(kind, tile)
                 else:
                     self.say(tile["label"])
             return None
@@ -1269,12 +1272,21 @@ class Frontend:
                 self.toggle_fav()
             return None
         if o == "more":
+            animated = not getattr(self, "shot", None)
             if a in ("up", "down"):
                 self.ov["scroll"] = max(0, self.ov.get("scroll", 0) + (1 if a == "down" else -1))
+                if animated:
+                    self.ov["scroll_t"] = time.monotonic()      # a barra de rolagem acende
             elif a in ("left", "right"):
                 # A pagina 2 (fotos e mais dados) fica a direita.
                 page = 1 if a == "right" else 0
                 if page != self.ov.get("page", 0):
+                    if animated:
+                        # A pagina de agora sai deslizando, a outra entra, e os
+                        # componentes dela comecam de novo quando ela assenta.
+                        now = time.monotonic()
+                        self.ov["slide"] = (self.ov.get("page", 0), page, now, self.ov.get("scroll", 0))
+                        self.ov["pt"] = now + self.view.PAGE_SLIDE
                     self.ov["page"], self.ov["scroll"] = page, 0
             elif a == "b1":
                 self.overlay = None
@@ -1740,7 +1752,8 @@ class Frontend:
     def open_more(self):
         g = self.game()
         self.overlay = "more"
-        # t0: a hora em que abriu (a pagina entra de perto, feview.page_fx).
+        # t0: a hora em que abriu (os componentes da pagina entram um depois do
+        # outro, feview.draw_more).
         self.ov = {"game": g, "info": None, "loading": False, "scroll": 0, "t0": time.monotonic()}
         system = g["_system"]
         if not system["arcade"]:
@@ -2852,11 +2865,22 @@ class Frontend:
             return None
 
     # ── O laco ──
+    def popup_link_effect(self, kind, tile):
+        """O efeito de um azulejo do link ou do party: abrir a festa (LINK PLAY,
+        NEW), entrar nela (JOIN) ou, sem lugar (STARTED, FULL), so avisar."""
+        if kind in ("link", "new"):
+            self.link_host(tile.get("take"))
+        elif kind == "join":
+            self.link_join(tile["party"], tile.get("take"))
+        else:
+            self.say(tile["label"])
+
     def popup_act_done(self, now):
         """O azulejo apertado do menu do jogo acabou de animar (feview.POP_ACT):
         agora vem o efeito. O PLAY deixa o cartao apagado na tela e pede ao laco
         o lancamento (launching: o "go" de act); o favoritar e o Esc fecham o
-        menu; o "+" abre a pagina."""
+        menu; o "+" abre a pagina; o link e o party abrem a sala ou entram nela,
+        e o STARTED/FULL so avisa (o menu fica)."""
         kind, start = self.ov["act"][:2]
         if now - start < self.view.pop_time(kind):
             return
@@ -2864,6 +2888,11 @@ class Frontend:
             self.launching = True
         elif kind == "more":
             self.open_more()
+        elif kind in ("link", "new", "join", "closed"):
+            tile = self.ov.pop("act_tile", None)
+            self.ov.pop("act", None)
+            if tile:
+                self.popup_link_effect(kind, tile)
         else:
             self.overlay = None
 

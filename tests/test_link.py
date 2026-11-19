@@ -684,9 +684,13 @@ class FrontendLinkTests(unittest.TestCase):
                                    rows=[], game=lambda: fe.rows[fe.cursor][0], parties_open=set(),
                                    party_order=self.fm.Frontend.party_order,
                                    # Sem conquistas: o menu do jogo pergunta ao feview (b0afbd1).
-                                   view=types.SimpleNamespace(cheevos_of=lambda fe, g: None))
+                                   view=types.SimpleNamespace(cheevos_of=lambda fe, g: None),
+                                   # Parado, como nos prints: o aperto de um azulejo age na hora (a animacao de
+                                   # antes do efeito tem os testes dela, FrontendPopupMotionTests).
+                                   shot="x")
         fe.rebuild = lambda keep=None: self.fm.Frontend.rebuild(fe, keep)
-        for name in ("popup_tiles", "link_profile", "overlay_act", "link_host", "link_join", "link_parties", "act"):
+        for name in ("popup_tiles", "link_profile", "overlay_act", "link_host", "link_join", "link_parties", "act",
+                     "popup_link_effect"):
             setattr(fe, name, lambda *a, name=name: getattr(self.fm.Frontend, name)(fe, *a))
         return fe
 
