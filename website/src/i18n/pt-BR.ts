@@ -113,7 +113,6 @@ const ptBR: Messages = {
     open: 'Abrir o {network}',
     opened: 'Texto copiado. Cole no {network}.',
     count: '{n} de {max} caracteres',
-    long: 'Maior que o ideal para o {network}',
     tooLong: 'Passou do limite do {network}',
     updated: 'Textos atualizados até o update {n}',
     close: 'Fechar',

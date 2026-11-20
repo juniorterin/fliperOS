@@ -59,7 +59,7 @@ export function ShareDialog({ open, onClose }: { open: boolean; onClose: () => v
   const spec = NETWORKS[network];
   const text = draft ?? shareText(network, lang);
   const size = shareLength(network, text);
-  const level = size > spec.max ? 'over' : size > spec.ideal ? 'long' : 'ok';
+  const over = size > spec.max;
 
   const choose = (next: { network?: ShareNetwork; lang?: Locale }) => {
     if (next.network) setNetwork(next.network);
@@ -80,7 +80,9 @@ export function ShareDialog({ open, onClose }: { open: boolean; onClose: () => v
     // só deixa abrir a janela dentro do clique.
     window.open(spec.open(text, shareUrl(lang)), '_blank', 'noopener,noreferrer');
     track('share_open', { network, language: lang });
-    if (spec.intent === 'text') {
+    // Um texto longo no endereço da rede pode ser cortado: ele também vai
+    // para a área de transferência, para colar se faltar um pedaço.
+    if (spec.intent === 'text' && size <= 1500) {
       setStatus(null);
       return;
     }
@@ -93,7 +95,7 @@ export function ShareDialog({ open, onClose }: { open: boolean; onClose: () => v
       active ? 'border-purple bg-purple/15 text-fg' : 'border-line text-muted hover:border-purple/60 hover:text-fg'
     }`;
 
-  const counterClass = level === 'over' ? 'text-red' : level === 'long' ? 'text-yellow' : 'text-comment';
+  const counterClass = over ? 'text-red' : 'text-comment';
 
   return (
     <dialog
@@ -152,8 +154,7 @@ export function ShareDialog({ open, onClose }: { open: boolean; onClose: () => v
           />
           <p className={`font-mono text-xs ${counterClass}`}>
             {fill(s.count, { n: size, max: spec.max })}
-            {level === 'long' ? ` · ${fill(s.long, { network: spec.name })}` : null}
-            {level === 'over' ? ` · ${fill(s.tooLong, { network: spec.name })}` : null}
+            {over ? ` · ${fill(s.tooLong, { network: spec.name })}` : null}
           </p>
         </div>
 

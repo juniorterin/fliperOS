@@ -110,7 +110,6 @@ const enUS = {
     open: 'Open {network}',
     opened: 'Text copied. Paste it in {network}.',
     count: '{n} of {max} characters',
-    long: 'Longer than ideal for {network}',
     tooLong: 'Over the {network} limit',
     updated: 'Texts updated for update {n}',
     close: 'Close',

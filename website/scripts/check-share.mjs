@@ -13,14 +13,14 @@ const data = JSON.parse(readFileSync(path.join(root, 'src/lib/share-texts.json')
 const shareTs = readFileSync(path.join(root, 'src/lib/share.ts'), 'utf8');
 
 const limits = {};
-for (const m of shareTs.matchAll(/^ {2}(\w+): \{\n\s*name: '[^']+',\n\s*max: (\d+),\n\s*ideal: (\d+),/gm)) {
-  limits[m[1]] = { max: Number(m[2]), ideal: Number(m[3]) };
+for (const m of shareTs.matchAll(/^ {2}(\w+): \{\n\s*name: '[^']+',\n\s*max: (\d+),/gm)) {
+  limits[m[1]] = { max: Number(m[2]) };
 }
 const networks = /SHARE_NETWORKS = \[([^\]]+)\]/.exec(shareTs)[1].match(/'(\w+)'/g).map((n) => n.slice(1, -1));
 
 const problems = [];
-const length = (network, text) =>
-  Array.from(network === 'x' ? text.replace(/https?:\/\/\S+/g, 'x'.repeat(23)) : text).length;
+// A mesma conta de shareLength em src/lib/share.ts (um emoji conta como 2).
+const length = (network, text) => (network === 'x' ? text.replace(/https?:\/\/\S+/g, 'x'.repeat(23)) : text).length;
 
 for (const locale of ['en-US', 'pt-BR']) {
   for (const network of networks) {
@@ -32,10 +32,12 @@ for (const locale of ['en-US', 'pt-BR']) {
     }
     const text = lines.join('\n').replaceAll('{url}', 'https://fliperos.juniorter.in/en').replaceAll('{version}', '0.27');
     const size = length(network, text);
-    const { max, ideal } = limits[network];
+    const { max } = limits[network];
+    const min = Math.ceil(max * 0.95);
+    console.log(`${where.padEnd(18)} ${String(size).padStart(5)} / ${max}`);
     if (!lines.join('\n').includes('{url}')) problems.push(`${where}: falta o {url}`);
     if (size > max) problems.push(`${where}: ${size} caracteres, o limite é ${max}`);
-    else if (size > ideal) problems.push(`${where}: ${size} caracteres, o ideal é até ${ideal}`);
+    else if (size < min) problems.push(`${where}: ${size} caracteres, tem de ocupar o máximo da rede (de ${min} a ${max})`);
     if (/\{\w+\}/.test(text)) problems.push(`${where}: marcador desconhecido ${text.match(/\{\w+\}/)[0]}`);
   }
 }

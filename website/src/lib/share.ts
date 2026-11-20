@@ -9,11 +9,10 @@ export type ShareNetwork = (typeof SHARE_NETWORKS)[number];
 
 type NetworkSpec = {
   name: string;
-  // Limite de caracteres da rede, e o tamanho a partir do qual o texto perde
-  // força (o modal mostra o contador contra o limite). scripts/check-share.mjs
-  // lê esta tabela: mudou aqui, vale lá.
+  // O limite de caracteres da rede: os textos ocupam de 95% dele até ele
+  // inteiro (o modal mostra o contador, e scripts/check-share.mjs confere).
+  // A checagem lê esta tabela: mudou aqui, vale lá.
   max: number;
-  ideal: number;
   // Como a rede recebe o texto: "text" abre a caixa de post já com ele,
   // "url" só aceita o link (o texto vai para a área de transferência e o
   // usuário cola), "none" não tem endereço de compartilhar (Instagram).
@@ -26,35 +25,30 @@ export const NETWORKS: Record<ShareNetwork, NetworkSpec> = {
   x: {
     name: 'X',
     max: 280,
-    ideal: 280,
     intent: 'text',
     open: (text) => `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
   },
   instagram: {
     name: 'Instagram',
     max: 2200,
-    ideal: 900,
     intent: 'none',
     open: () => 'https://www.instagram.com/',
   },
   facebook: {
     name: 'Facebook',
     max: 3000,
-    ideal: 700,
     intent: 'url',
     open: (_text, url) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
   },
   linkedin: {
     name: 'LinkedIn',
     max: 3000,
-    ideal: 1500,
     intent: 'url',
     open: (_text, url) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
   },
   telegram: {
     name: 'Telegram',
     max: 4096,
-    ideal: 1000,
     intent: 'text',
     // O Telegram junta o link ao texto: o {url} do texto sai daqui.
     open: (text, url) =>
@@ -67,10 +61,11 @@ export const SHARE_UPDATE: number = data.update;
 
 const TEXTS = data.texts as Record<Locale, Record<ShareNetwork, string[]>>;
 
-// Quanto o texto pesa na rede: o X conta cada link como 23 caracteres.
+// Quanto o texto pesa na rede: o X conta cada link como 23 caracteres. Um
+// emoji conta como 2 (length em UTF-16), a conta mais cautelosa das redes.
 export function shareLength(network: ShareNetwork, text: string): number {
   const counted = network === 'x' ? text.replace(/https?:\/\/\S+/g, 'x'.repeat(23)) : text;
-  return Array.from(counted).length;
+  return counted.length;
 }
 
 // O endereço que vai no texto: a home do site no idioma do texto.
