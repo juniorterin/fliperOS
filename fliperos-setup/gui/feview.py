@@ -1850,9 +1850,11 @@ def wheel_geom():
     """A roda: o tamanho do logo do meio, a folga do arco, o espaco entre os logos, onde fica o
     do meio (xc, cy) e onde a roda comeca (left, para o resto da tela caber)."""
     bw = min(88, int(SW * (0.38 if T.VERTICAL else 0.30)))
-    dx = max(4, round(bw * 0.115))
+    dx = max(4, round(bw * 0.13))
     xc = SX + SW - round(bw * 0.3) - 4 * dx - 2
-    return {"bw": bw, "bh": round(bw * 0.43), "dx": dx, "step": round(HH / 6), "cy": HH // 2 + 2, "xc": xc,
+    # O arco corre pela altura toda da tela: os cinco logos bem espalhados, o primeiro e o ultimo
+    # perto das bordas (dentro da margem segura), em vez de juntos no meio.
+    return {"bw": bw, "bh": round(bw * 0.43), "dx": dx, "step": round(HH * 0.205), "cy": HH // 2, "xc": xc,
             "left": xc - bw // 2 - 6}
 
 
