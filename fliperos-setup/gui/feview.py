@@ -4,11 +4,14 @@
 # do Tab, o Classify, o Rename e a pergunta de sair). draw(fe, agora) desenha
 # em fe.back, a tela logica de 320x240.
 
+import colorsys
 import contextlib
 import math
 import os
+import random
 import re
 import time
+import zlib
 
 import pygame
 
@@ -23,7 +26,6 @@ WW, HH = T.WIDTH, T.HEIGHT
 # ── Imagens ────────────────────────────────────────────────────────
 
 LIST_W, LIST_SH = 174, 74  # a lista do modo lista e a altura da imagem dela
-THUMB = (56, 42)           # as miniaturas da tela cheia
 GRID_COLS = 3              # a grade (o COLS do fliperos-frontend)
 PRELOAD_ROWS = 3           # fileiras da grade com o video pronto, antes e depois
 
@@ -101,8 +103,8 @@ def wanted(fe, game):
         _, (_, _, pw, ph) = list_geom()
         out += [(shot, pw - 4, ph - 4, "cover"), (logo, min(pw - 8, 200), 28, "fit")]
     elif fe.mode == "full":
-        right = SX + SW - THUMB[0] - 8
-        out += [(shot, WW, HH, "cover"), (shot, THUMB[0] - 2, THUMB[1] - 2, "cover"),
+        right = wheel_geom()["left"] - 8
+        out += [(shot, WW, HH, "cover"), (logo, WHEEL_SRC[0], WHEEL_SRC[1], "fit"),
                 (logo, min(200, right - SX), 44, "fit")]
     else:
         snap = media(fe, game, "snap")
@@ -1703,15 +1705,6 @@ def full_shade(fe):
     return fe.media[key]
 
 
-def thumb_dim(fe):
-    key = ("thumb_dim",)
-    if key not in fe.media:
-        dim_ = pygame.Surface((THUMB[0] - 2, THUMB[1] - 2), pygame.SRCALPHA)
-        dim_.fill(T.SPACE + (115,))
-        remember(fe, key, dim_)
-    return fe.media[key]
-
-
 def full_picture(fe, i):
     """O fundo da tela cheia para o jogo da linha i: o do escolhido e o
     video com o som (o Player); o dos outros, o video mudo ja aberto
@@ -1793,34 +1786,22 @@ def draw_full(fe, ui, back, now):
             coin_box(fe, s, SX, 34, now)
         if fe.scraping is game:
             looking(s, SX, 38 + COIN_H if fe.commercial else 36)
-    # A lista na direita: quatro miniaturas empilhadas, a do jogo escolhido
-    # acesa, com uma seta em cima e embaixo enquanto ha mais jogos para
-    # aquele lado. A coluna e a moldura rosa deslizam ate o lugar novo.
-    (tw, th), gap, n = THUMB, 4, (5 if T.VERTICAL else 4)
-    step = th + gap
-    tx = SX + SW - tw
-    ty = 38
-    top = max(0, min(fe.cursor - 1, len(fe.rows) - n))
+    # A roda de logos na lateral direita: cinco logos numa linha vertical
+    # arqueada, o do meio (o escolhido) o maior e o mais perto do centro da
+    # tela. Ela gira ate o jogo novo (a mesma conta da coluna de antes).
+    geo = wheel_geom()
     now = fe.abs_now
-    ftop = ease(fe, "full_top", top, now)
-    fsel = ease(fe, "full_sel", fe.cursor, now)
+    pos = ease(fe, "full_sel", fe.cursor, now, speed=12.0, reach=6)
     with part(fe, ui, "chrome") as s:
-        arrow(s, tx + tw // 2, ty - 7, (0, -1), T.PINK if top > 0 else T.LINE, 5)
-    ui.set_clip((tx - 2, ty - 1, tw + 6, n * step - gap + 4))
-    first = int(math.floor(ftop))
-    for i in range(max(0, first), min(len(fe.rows), first + n + 1)):
-        y = round(ty + (i - ftop) * step)
-        with part(fe, ui, "thumb", i - first) as s:
-            full_thumb(fe, s, i, tx, y, tw, th)
-    with part(fe, ui, "chrome") as s:
-        y = round(ty + (fsel - ftop) * step)
-        pygame.draw.rect(s, T.PINK, (tx, y, tw, th), 2)
-    ui.set_clip(None)
-    more = top + n < len(fe.rows)
-    with part(fe, ui, "chrome") as s:
-        arrow(s, tx + tw // 2, ty + n * step + 3, (0, 1), T.PINK if more else T.LINE, 5)
-    # O jogo escolhido, embaixo a esquerda (fora da coluna).
-    right = tx - 8
+        s.blit(wheel_shade(fe, geo), (0, 0))
+    first = int(math.floor(pos)) - 3
+    items = [(i, i - pos) for i in range(first, first + 8) if 0 <= i < len(fe.rows) and abs(i - pos) < WHEEL_REACH]
+    # Os de fora primeiro: o do meio fica por cima.
+    for n, (i, d) in enumerate(sorted(items, key=lambda it: -abs(it[1]))):
+        with part(fe, ui, "thumb", n) as s:
+            wheel_item(fe, s, i, d, geo)
+    # O jogo escolhido, embaixo a esquerda (fora da roda).
+    right = geo["left"] - 8
     clone = is_clone(fe, game)
     logo = None if clone else image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
     if logo:
@@ -1828,12 +1809,10 @@ def draw_full(fe, ui, back, now):
             s.blit(logo, (SX, HH - 62 - logo.get_height()))
     y = HH - 56
     with part(fe, ui, "text") as s:
-        if clone:
-            # O clone: o logo seria o do pai; o nome completo dele, correndo.
-            ticker(s, text_img((game.get("Title") or game["Name"]).upper(), T.YELLOW, big=True),
-                   SX, y, right - SX, now)
-        else:
-            s.blit(W.big(fit(fe.fd.short_title(game), right - SX), 1, W.LABEL), (SX, y))
+        # O clone: o logo seria o do pai, e o nome completo dele; o titulo que
+        # nao cabe (a roda deixa menos largura) corre, nunca cortado.
+        title = (game.get("Title") or game["Name"]) if clone else fe.fd.short_title(game)
+        ticker(s, text_img(title.upper(), T.YELLOW, big=True), SX, y, right - SX, now)
         facts = facts_line(game)
         if facts:
             W.text(s, fit(facts, right - SX), T.CYAN, SX, y + 12)
@@ -1843,34 +1822,357 @@ def draw_full(fe, ui, back, now):
         icon_line(fe, s, game, SX, iy, right, 12)
         lit = link_mark(fe, game)
         if lit is not None:
-            # O link, no fim da linha dos icones (os gabinetes da festa ficam nas
-            # miniaturas): o globo, aceso se alguem joga.
+            # O link, no fim da linha dos icones (os gabinetes da festa ficam nos
+            # logos): o globo, aceso se alguem joga.
             globe_icon(s, right - 8, iy + 6, 6, lit)
 
 
-def full_thumb(fe, ui, i, tx, y, tw, th):
-    """A miniatura do jogo da linha i na coluna da tela cheia."""
-    g = fe.rows[i][0]
-    on = i == fe.cursor
-    W.block(ui, (tx, y, tw, th), T.BG_DEEP, T.LINE)
-    thumb = image(fe, media(fe, g, "snap") or media(fe, g, "box"), tw - 2, th - 2, "cover")
-    if thumb:
-        ui.blit(thumb, (tx + 1, y + 1))
-        if not on:
-            ui.blit(thumb_dim(fe), (tx + 1, y + 1))
+# ── A roda de logos da tela cheia ───────────────────────────────────
+# No lugar da coluna de miniaturas: logos numa linha vertical arqueada, como a
+# roda de um frontend de arcade colada na lateral direita. O escolhido fica no
+# meio, o maior e o mais perto do centro da tela; os outros se afastam em
+# arco ("(") e encolhem, inclinados como na base de um cone (a ponta de fora
+# mais longe, em perspectiva), e o primeiro e o ultimo somem num degrade. O jogo
+# sem logo vira um cartao 4:3 com o titulo numa fonte suave (nao pixelada) e
+# cores sorteadas pelo nome (as mesmas toda vez).
+WHEEL_SRC = (192, 96)        # o logo lido (ou o cartao) antes de ir para a roda
+WHEEL_REACH = 2.6            # o logo some a esta distancia (em jogos) do escolhido
+WHEEL_FONT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "DejaVuSans-Bold.ttf")
+WHEEL_CACHE = 160            # logos inclinados guardados
+_card_fonts = {}
+
+
+def sign(x):
+    return (x > 0) - (x < 0)
+
+
+def wheel_geom():
+    """A roda: o tamanho do logo do meio, a folga do arco, o espaco entre os logos, onde fica o
+    do meio (xc, cy) e onde a roda comeca (left, para o resto da tela caber)."""
+    bw = min(88, int(SW * (0.38 if T.VERTICAL else 0.30)))
+    dx = max(4, round(bw * 0.115))
+    xc = SX + SW - round(bw * 0.3) - 4 * dx - 2
+    return {"bw": bw, "bh": round(bw * 0.43), "dx": dx, "step": round(HH / 6), "cy": HH // 2 + 2, "xc": xc,
+            "left": xc - bw // 2 - 6}
+
+
+def wheel_cache(fe):
+    cache = getattr(fe, "wheel", None)
+    if cache is None:
+        cache = fe.wheel = {}
+    return cache
+
+
+def wheel_keep(cache, key, value):
+    cache[key] = value
+    while len(cache) > WHEEL_CACHE:
+        del cache[next(iter(cache))]
+    return value
+
+
+def wheel_shade(fe, geo):
+    """O escuro atras da roda, da esquerda para a direita, para o logo nao se perder sobre a imagem do jogo."""
+    cache = wheel_cache(fe)
+    key = ("shade", geo["left"], WW, HH)
+    if key not in cache:
+        band = pygame.Surface((WW, HH), pygame.SRCALPHA)
+        for x in range(WW):
+            a = round(155 * clamp01((x - (geo["left"] - 20)) / 70))
+            if a:
+                band.fill(T.SPACE + (a,), (x, 0, 1, HH))
+        cache[key] = band
+    return cache[key]
+
+
+def rgba(surf):
+    """A imagem em 32 bits com alfa (a PNG de paleta, sem tela aberta, vem em 8)."""
+    if surf.get_bitsize() == 32 and surf.get_flags() & pygame.SRCALPHA:
+        return surf
+    out = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+    out.blit(surf, (0, 0))
+    return out
+
+
+def card_font(size):
+    font = _card_fonts.get(size)
+    if font is None:
+        try:
+            font = pygame.font.Font(WHEEL_FONT, size)
+        except (pygame.error, OSError):
+            font = pygame.font.Font(None, size + 6)
+        _card_fonts[size] = font
+    return font
+
+
+def card_colors(key):
+    """As cores do cartao de um jogo, sorteadas pelo nome (sempre as mesmas): fundo em degrade,
+    moldura da cor oposta e o texto claro."""
+    digest = zlib.crc32(key.encode("utf-8"))
+    rng = random.Random(digest)
+    hue = (digest % 360) / 360.0
+    s, v = rng.uniform(0.62, 0.92), rng.uniform(0.62, 0.90)
+
+    def hsv(h, sat, val):
+        return tuple(round(c * 255) for c in colorsys.hsv_to_rgb(h % 1.0, sat, val))
+    return (hsv(hue, s, v), hsv(hue + rng.uniform(0.05, 0.14), s, v * 0.50), hsv(hue + 0.5, rng.uniform(0.30, 0.55), 1.0))
+
+
+def text_card(title, key):
+    """O jogo sem logo: um cartao 4:3 com o titulo quebrado em linhas, numa fonte suave (TTF) no maior
+    tamanho que cabe, sobre cores sorteadas pelo nome."""
+    cw, ch = 128, 96
+    top, bottom, accent = card_colors(key)
+    card = pygame.Surface((cw, ch), pygame.SRCALPHA)
+    for y in range(ch):
+        k = y / (ch - 1)
+        card.fill(tuple(round(a + (b - a) * k) for a, b in zip(top, bottom)), (0, y, cw, 1))
+    mask = pygame.Surface((cw, ch), pygame.SRCALPHA)
+    pygame.draw.rect(mask, (255, 255, 255, 255), (0, 0, cw, ch), border_radius=10)
+    card.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    pygame.draw.rect(card, accent, (2, 2, cw - 4, ch - 4), 3, border_radius=8)
+    inner_w, inner_h = cw - 18, ch - 16
+    lines, font = [title], card_font(8)
+    for size in range(24, 7, -1):
+        font = card_font(size)
+        lines, line = [], ""
+        for word in title.split():
+            trial = (line + " " + word).strip()
+            if font.size(trial)[0] <= inner_w or not line:
+                line = trial
+            else:
+                lines.append(line)
+                line = word
+        lines.append(line)
+        step = font.get_linesize()
+        if all(font.size(t)[0] <= inner_w for t in lines) and step * len(lines) <= inner_h:
+            break
+    step = font.get_linesize()
+    y = (ch - step * len(lines)) // 2
+    for text_line in lines:
+        img = font.render(text_line, True, (255, 255, 255))
+        card.blit(img, ((cw - img.get_width()) // 2, y))
+        y += step
+    return card
+
+
+def wheel_source(fe, game):
+    """(imagem, eh_cartao) do jogo na roda: o logo (lido uma vez, pelo image) ou o cartao de texto."""
+    path = media(fe, game, "logo")
+    img = image(fe, path, WHEEL_SRC[0], WHEEL_SRC[1], "fit") if path else None
+    if img is not None:
+        return rgba(img), False
+    cache = wheel_cache(fe)
+    key = ("card", game["_system"]["key"], game["Name"])
+    if key not in cache:
+        wheel_keep(cache, key, text_card(fe.fd.short_title(game), game["Name"]))
+    return cache[key], True
+
+
+def wheel_warp(img, w, h, tilt):
+    """O logo em w x h inclinado tilt graus em torno do eixo horizontal (positivo: a ponta de baixo
+    mais longe): a largura cai de uma ponta a outra, em faixas de 2 linhas."""
+    base = pygame.transform.smoothscale(img, (w, h))
+    if abs(tilt) < 1:
+        return base
+    k = 0.30 * math.sin(math.radians(min(abs(tilt), 60)))
+    out = pygame.Surface((w, h), pygame.SRCALPHA)
+    for y in range(0, h, 2):
+        t = (y + 1) / max(1, h - 1)
+        wc = max(2, round(w * (1 - k * (t if tilt > 0 else 1 - t))))
+        band = base.subsurface((0, y, w, min(2, h - y)))
+        out.blit(pygame.transform.smoothscale(band, (wc, band.get_height())), ((w - wc) // 2, y))
+    return out
+
+
+def wheel_fade(surf, outer_top, strength):
+    """O degrade: a ponta de fora do logo (a de cima nos de cima, a de baixo nos de baixo) some aos poucos."""
+    if strength <= 0.01:
+        return
+    w, h = surf.get_size()
+    grad = pygame.Surface((w, h), pygame.SRCALPHA)
+    for i in range(h):
+        u = i / max(1, h - 1)
+        u = u if outer_top else 1 - u
+        grad.fill((255, 255, 255, round(255 * (1 - strength * (1 - u) ** 1.3))), (0, i, w, 1))
+    surf.blit(grad, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+
+def wheel_alpha(a):
+    """Quanto do logo aparece a a jogos do escolhido: cheio no meio, e some no primeiro e no ultimo."""
+    if a <= 1:
+        return 1 - 0.08 * a
+    if a <= 2:
+        return 0.92 - 0.40 * (a - 1)
+    return max(0.0, 0.52 * (1 - (a - 2) / 0.5))
+
+
+def stack_badge(ui, clones, right, bottom):
+    """O selo do pai com clones: dois quadradinhos empilhados e quantas versoes ele tem (o pai e os clones)."""
+    if not clones:
+        return
+    label = str(len(clones) + 1)
+    w = tiny.width(label) + 14
+    x, y = right - w, bottom - 10
+    ui.fill(T.BG_DEEP, (x, y, w, 10))
+    pygame.draw.rect(ui, T.PINK, (x, y, w, 10), 1)
+    pygame.draw.rect(ui, T.CYAN, (x + 4, y + 3, 4, 4), 1)
+    pygame.draw.rect(ui, T.CYAN, (x + 2, y + 2, 4, 4), 1)
+    tiny.text(ui, label, T.FG, x + 11, y + 2)
+
+
+def wheel_item(fe, ui, i, d, geo):
+    """O logo (ou o cartao) do jogo da linha i, a d jogos do escolhido (negativo: antes dele)."""
+    game = fe.rows[i][0]
+    src, card = wheel_source(fe, game)
+    a, sg = abs(d), sign(d)
+    sc = 1 - 0.20 * a
+    x, y = geo["xc"] + geo["dx"] * d * d, geo["cy"] + geo["step"] * d
+    tilt = sg * min(38.0, 19.0 * a)
+    box_h = geo["bh"] * (1.4 if card else 1.0)
+    box_w = box_h * 4 / 3 if card else geo["bw"]
+    iw, ih = src.get_size()
+    k = min(box_w * sc / iw, box_h * sc / ih)
+    w = max(6, round(iw * k))
+    h = max(6, round(ih * k * math.cos(math.radians(abs(tilt)) * 0.55)))
+    strength = round(clamp01((a - 1.2) / 1.0) * 0.8 * 8) / 8
+    cache = wheel_cache(fe)
+    key = ("pic", game["Name"], id(src), w, h, round(tilt), strength)
+    pic = cache.get(key)
+    if pic is None:
+        pic = wheel_warp(src, w, h, tilt)
+        wheel_fade(pic, d < 0, strength)
+        wheel_keep(cache, key, pic)
+    pic.set_alpha(round(255 * wheel_alpha(a)))
+    left, top = round(x - w / 2), round(y - h / 2)
+    ui.blit(pic, (left, top))
+    if a < 1.5:
+        stack_badge(ui, fe.rows[i][2], left + w, top + h)
+    if i == fe.cursor and a < 0.5:
+        fe.sel_rect = pygame.Rect(left, top, w, h)         # de onde a dialog dos clones cresce
+
+
+# ── A dialog dos clones (tela cheia e grade) ────────────────────────
+# O pai com clones aparece uma vez so na grade e na tela cheia; o 1 abre uma
+# dialog com todas as versoes (a linha MAIN SET e uma por clone, como o [+] da
+# lista): ela cresce da miniatura (ou do logo) dele num contorno de cinco
+# passos e o conteudo entra no fim. Escolher pisca a linha (como o PLAY), a
+# dialog encolhe de volta e abre o menu do jogo da versao; fechar toca o
+# mesmo ao contrario, mais depressa.
+CLONES_OPEN, CLONES_CLOSE, CLONES_FLASH = 0.20, 0.12, 0.14
+CLONES_HEAD, CLONES_ROW, CLONES_FOOT = 30, 14, 16
+
+
+def clones_rows_max():
+    """Quantas versoes cabem na dialog (as de mais rolam)."""
+    return max(3, (HH - 2 * (T.SAFE_Y + 4) - CLONES_HEAD - CLONES_FOOT) // CLONES_ROW)
+
+
+def clones_pos(ov, now):
+    """A moldura da linha escolhida: desliza em 0,04 s, so ela (o nome fica na linha dele)."""
+    return ov["prev"] + (ov["sel"] - ov["prev"]) * clamp01((now - ov["sel_t"]) / 0.04)
+
+
+def clones_geom(fe, ov):
+    """O retangulo do cartao, guardado: a largura segue o titulo e as linhas que cabem."""
+    geom = ov.get("geom")
+    if geom is None:
+        rows = ov["rows"]
+        shown = min(len(rows), clones_rows_max())
+        h = CLONES_HEAD + shown * CLONES_ROW + CLONES_FOOT
+        title = fe.fd.short_title(rows[0][1]).upper()
+        widest = max([W.width(title)] + [W.width(label) for label, _ in rows if W.width(label) <= 210])
+        w = max(208, min(SW - 8, widest + 24))
+        geom = ov["geom"] = (pygame.Rect((WW - w) // 2, (HH - h) // 2 - 4, w, h), shown)
+    return geom
+
+
+def clones_progress(fe, ov):
+    """(u, fechando): u de 0 (fechada) a 1 (aberta). Escolhida uma versao, a dialog fecha depois do
+    pisca; o Esc fecha logo."""
+    if getattr(fe, "shot", None):
+        return 1.0, False
+    now, t0 = fe.abs_now, ov["t0"]
+    close = ov.get("close_t") or (ov["pick_t"] + CLONES_FLASH if ov.get("pick_t") else None)
+    if close is None or now < close:
+        return clamp01((now - t0) / CLONES_OPEN), False
+    u0 = clamp01((close - t0) / CLONES_OPEN)
+    return u0 * (1 - clamp01((now - close) / CLONES_CLOSE)), True
+
+
+def clones_dim(fe, now):
+    """O escurecimento atras da dialog (160 aberta); escolhida a versao, fica ate o menu do jogo
+    abrir (ele continua dali)."""
+    ov = fe.ov
+    if getattr(fe, "shot", None) or not ov:
+        return 160
+    u, closing = clones_progress(fe, ov)
+    return 160 if closing and ov.get("pick_t") else round(160 * clamp01(u * 1.4))
+
+
+def clones_layer(fe, ov, t):
+    """O cartao inteiro, no lugar final, numa camada com alfa."""
+    layer = pygame.Surface((WW, HH), pygame.SRCALPHA)
+    rect, shown = clones_geom(fe, ov)
+    rows, sel = ov["rows"], ov["sel"]
+    card(layer, rect)
+    title = fe.fd.short_title(rows[0][1]).upper()
+    start = max(0.0, fe.abs_now - ov["t0"] - 0.5)
+    ticker(layer, text_img(title, T.YELLOW), rect.x + 8, rect.y + 8, rect.w - 16, start)
+    tiny.text(layer, "%d VERSIONS" % len(rows), T.COMMENT, rect.x + 8, rect.y + 20)
+    # A janela das linhas: a escolhida sempre dentro dela.
+    top = max(0, min(ov.get("top", 0), len(rows) - shown))
+    if sel < top:
+        top = sel
+    elif sel >= top + shown:
+        top = sel - shown + 1
+    ov["top"] = top
+    lit = False
+    if ov.get("pick_t") and not getattr(fe, "shot", None):
+        age = fe.abs_now - ov["pick_t"]
+        lit = age < 0.035 or age >= 0.07              # acende, apaga, acende: o aperto do PLAY
+    # Primeiro a moldura (por baixo, em pixels inteiros), depois cada nome na linha dele.
+    frame_y = rect.y + CLONES_HEAD + round((clones_pos(ov, fe.abs_now) - top) * CLONES_ROW)
+    frame = (rect.x + 6, frame_y, rect.w - 12, 12)
+    if lit:
+        layer.fill(T.PINK, frame)
+        pygame.draw.rect(layer, (255, 255, 255), frame, 1)
     else:
-        # No clone, o texto comeca embaixo do selo.
-        top = 11 if fe.rows[i][1] else 5
-        for j, line in enumerate(W.wrap(fe.fd.short_title(g).upper(), tw - 6)[:4 if top == 5 else 3]):
-            tiny.text(ui, tiny.fit(line, tw - 6), T.FG if on else T.COMMENT, tx + 3, y + top + j * 8)
-    pygame.draw.rect(ui, T.LINE, (tx, y, tw, th), 1)
-    clone = fe.rows[i][1]
-    if clone:
-        clone_badge(ui, tx + tw - 1, y + 1)
-    if g.get("Favourite") == "1":
-        # No clone a estrela vai para a esquerda: a direita e do selo.
-        star(ui, tx + 6 if clone else tx + tw - 6, y + 6, T.YELLOW, 4)
-    link_badge(fe, ui, g, tx + 1, y + 1, tw - 2, th - 2)
+        tile_frame(layer, frame, True, t)
+        pygame.draw.rect(layer, T.PINK, frame, 1)
+    x, room = rect.x + 12, rect.w - 24 - (6 if len(rows) > shown else 0)
+    for k in range(top, top + shown):
+        y = rect.y + CLONES_HEAD + (k - top) * CLONES_ROW
+        label = rows[k][0]
+        if k == sel:
+            wait = max(0.0, fe.abs_now - max(ov["t0"], ov["sel_t"]) - 0.5)
+            ticker(layer, text_img(label, T.SPACE if lit else T.FG), x, y + 2, room, wait)
+        else:
+            W.text(layer, fit(label, room), T.CYAN, x, y + 2)
+    if len(rows) > shown:
+        W.scrollbar(layer, rect.right - 8, rect.y + CLONES_HEAD, shown * CLONES_ROW - 2, top, shown, len(rows))
+    foot = rect.bottom - 12
+    tiny.text(layer, "1: SELECT   2: BACK", T.COMMENT, rect.x + 8, foot)
+    count = "%d/%d" % (sel + 1, len(rows))
+    tiny.text(layer, count, T.COMMENT, rect.right - 8 - tiny.width(count), foot)
+    return layer
+
+
+def draw_clones(fe, ui, t):
+    """A dialog: o contorno cresce da miniatura (ou do logo) do pai ate o cartao em cinco passos, e o
+    conteudo entra no fim; fechar e o mesmo ao contrario."""
+    ov = fe.ov
+    u, closing = clones_progress(fe, ov)
+    if u <= 0:
+        return
+    if u >= 1:
+        ui.blit(clones_layer(fe, ov, t), (0, 0))
+        return
+    rect = clones_geom(fe, ov)[0]
+    origin = pygame.Rect(ov["origin"]) if ov.get("origin") else pygame.Rect(0, 0, 0, 0).move(rect.center).inflate(40, 30)
+    q = max(1, math.ceil(u * 5 - 1e-6)) / 5
+    box = pygame.Rect(round(origin.x + (rect.x - origin.x) * q), round(origin.y + (rect.y - origin.y) * q),
+                      round(origin.w + (rect.w - origin.w) * q), round(origin.h + (rect.h - origin.h) * q))
+    card(ui, box)
 
 
 def grid_image(fe, g, w, h):
@@ -1976,6 +2278,7 @@ def draw_flow(fe, ui, now):
         fx = round(x0 + fcol * (tw + gap))
         fy = round(y0 + (frow - ftop) * step_y)
         pygame.draw.rect(s, T.PINK, (fx - 2, fy - 2, tw + 4, th + 4), 2)
+        fe.sel_rect = pygame.Rect(fx, fy, tw, th)      # de onde a dialog dos clones cresce
     ui.set_clip(None)
     with part(fe, ui, "chrome") as s:
         # No canto, a barra de rolagem com uma seta pequena em cima e embaixo.
@@ -2063,6 +2366,8 @@ def flow_thumb(fe, ui, i, x, y, tw, th):
         # No clone a estrela vai para a esquerda: a direita e do selo.
         star(ui, x + 6 if clone else x + tw - 6, y + 6, T.YELLOW, 4)
     link_badge(fe, ui, g, x + 1, y + 1, tw - 2, th - 2)
+    # O pai com clones: o selo com quantas versoes ele tem (o 1 abre a dialog).
+    stack_badge(ui, fe.rows[i][2], x + tw - 1, y + th - 1)
     if fe.scraping is g:
         looking(ui, x + 2, y + th - 12, tw - 4)
 
@@ -2680,7 +2985,8 @@ def popup_motion(fe, now):
     t0 = ov.get("t0")
     if t0 is not None and now - t0 < POP_IN:
         p = (now - t0) / POP_IN
-        scale, alpha, dark = 0.78 + 0.22 * out_back(p), clamp01(p / 0.45), clamp01(p)
+        # Vindo da dialog dos clones (keep_dim): o escurecimento continua (160), sem piscar.
+        scale, alpha, dark = 0.78 + 0.22 * out_back(p), clamp01(p / 0.45), 1.0 if ov.get("keep_dim") else clamp01(p)
     act = ov.get("act")
     if act:
         kind, age = act[0], now - act[1]
@@ -5425,7 +5731,8 @@ def draw(fe, now):
         if o in ("more", "classify", "rename", "controls"):
             fe.bg.draw(back, t)
         else:
-            dim(back, popup_dim(fe, now) if o == "popup" else 160 if o != "guide" else 175)
+            dim(back, popup_dim(fe, now) if o == "popup" else clones_dim(fe, now) if o == "clones"
+                else 160 if o != "guide" else 175)
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         if o.startswith("media") and getattr(fe, "strip", None) is not None:
             # O cartao por cima da fileira de onde veio (a tira apagada atras).
@@ -5448,6 +5755,8 @@ def draw(fe, now):
             draw_media_carts(fe, top, t)
         elif o == "popup" and fe.rows:
             top = popup_fx(fe, top, draw_popup(fe, top, t), now)
+        elif o == "clones":
+            draw_clones(fe, top, t)
         elif o == "more":
             draw_more(fe, top, t)
         elif o == "cheevos":

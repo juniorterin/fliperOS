@@ -6,14 +6,15 @@
 # (gui/feinput.py).
 #
 # Tres modos: lista (os jogos a esquerda, a midia e as informacoes a
-# direita), tela cheia (a imagem do jogo no fundo) e grade (as capas, como o
-# Arcadeflow). O Start troca o modo.
+# direita), tela cheia (a imagem do jogo no fundo e, na direita, a roda de
+# logos) e grade (as capas, como o Arcadeflow). O Start troca o modo.
 #
 #   cima/baixo    os jogos (segurando acelera; com 3 s, de letra em letra)
 #   esquerda/dir. a romlist (na grade: anda nela e troca so com o jogo
 #                 encostado na lateral)
-#   1  o menu do jogo (Jogar, Favoritar, +); na lista, num jogo com clones,
-#      abre e fecha os clones
+#   1  o menu do jogo (Jogar, Favoritar, +); num jogo com clones, na lista
+#      abre e fecha os clones e, na tela cheia e na grade (onde os clones
+#      ficam agrupados no pai), abre a dialog com todas as versoes
 #   2  volta       3/6  pagina acima/abaixo   4  favorito   5  filtros
 #   Tab  classificar, renomear, scrape do jogo; e as opcoes do frontend
 #
@@ -458,6 +459,10 @@ class Frontend:
         self.overlay = "guide"     # o guia dos controles ao abrir
         self.ov = {}               # o estado do que esta por cima
         self.launching = False     # o PLAY terminou de animar: o laco lanca o jogo
+        # A versao (um clone) escolhida na dialog da tela cheia e da grade: o
+        # menu do jogo, o "+" e o PLAY valem para ela, nao para o pai da linha;
+        # tick() a larga quando nada mais a usa (game()).
+        self.version = None
         # A primeira vez que o frontend abre: antes do guia, o Frontend
         # controls, para o usuario dizer o que cada botao faz.
         self.controls_seen = cfg.get("controls_seen") is True
@@ -672,12 +677,9 @@ class Frontend:
         return games
 
     def count_of(self, games):
-        """O numero de jogos da tira: as linhas da lista, como o contador
-        embaixo dela. Na tela cheia e na grade os clones tem linha propria
-        (com Show clones); no modo lista ficam debaixo do pai, e contam so
-        os pais."""
-        if self.show_clones and self.mode != "list":
-            return len(games)
+        """O numero de jogos da tira: os pais (os clones ficam debaixo do pai
+        na lista e agrupados nele na tela cheia e na grade, onde abrem numa
+        dialog), como o contador embaixo da lista."""
         return len(self.fd.tree(games))
 
     def list_count(self, cat):
@@ -704,8 +706,9 @@ class Frontend:
 
     def rebuild(self, keep=None):
         """As linhas da tela: (jogo, nivel, clones). Na lista os clones ficam
-        debaixo do pai (abertos ou nao); na tela cheia e na grade, sempre logo
-        depois dele (com o selo CLONE)."""
+        debaixo do pai (abertos ou nao); na tela cheia e na grade ficam
+        agrupados nele: uma linha so, com a lista dos clones, que o 1 abre numa
+        dialog (open_clones)."""
         games = self.filtered()
         # A linha onde o cursor esta agora: se for um jogo dentro de um grupo,
         # o cursor volta a ele la (e nao a linha dele na lista).
@@ -723,7 +726,6 @@ class Frontend:
                     rows.extend((c, 1, game) for c in clones)
             else:
                 rows.append((game, 0, clones))
-                rows.extend((c, 1, game) for c in clones or ())
         # Na lista, no alto, os grupos RECENT (os ultimos jogados) e FAVOURITES:
         # um cabecalho que abre e fecha, e os jogos dele quando aberto.
         if self.mode == "list":
@@ -767,16 +769,27 @@ class Frontend:
             if found:
                 self.cursor = min(found, key=lambda i: (rows[i][2] != old, abs(i - self.cursor) if rows[i][1] else -1))
             else:
-                # Um clone com o pai fechado na lista: o pai abre e ele aparece.
                 g = next((g for g in games if g["Name"] == keep), None)
                 parent = g.get("CloneOf") if g else None
                 if parent and self.mode == "list" and self.show_clones and parent not in self.opened:
+                    # Um clone com o pai fechado na lista: o pai abre e ele aparece.
                     self.opened.add(parent)
                     return self.rebuild(keep)
+                if parent and self.mode != "list":
+                    # Na tela cheia e na grade o clone esta dentro do pai: a linha do pai.
+                    self.cursor = next((i for i, (g0, _, extra) in enumerate(rows)
+                                        if g0 is not None and g0["Name"] == parent and isinstance(extra, list)),
+                                       self.cursor)
         self.cursor = max(0, min(self.cursor, len(rows) - 1))
 
     def game(self):
-        return self.rows[self.cursor][0] if self.rows else None
+        """O jogo do cursor; com uma versao escolhida na dialog dos clones
+        (self.version), a versao dele (o menu, o "+" e o PLAY valem para ela)."""
+        row = self.rows[self.cursor][0] if self.rows else None
+        version = getattr(self, "version", None)
+        if version is not None and row is not None and row["Name"] in (version["Name"], version.get("CloneOf")):
+            return version
+        return row
 
     def remember(self):
         g = self.game()
@@ -1090,6 +1103,10 @@ class Frontend:
                 self.rebuild()
                 if key in self.parties_open:
                     self.cursor += 1
+            elif self.mode != "list" and self.show_clones and isinstance(clones, list) and clones and not self.locked():
+                # Tela cheia e grade: os clones estao agrupados no pai; o 1 abre a
+                # dialog com todas as versoes (a lista faz isso abrindo o [+]).
+                self.open_clones(g, clones)
             elif self.locked():
                 # O modo comercial sem tempo: escolher um jogo, so com ficha.
                 self.nag()
@@ -1200,6 +1217,8 @@ class Frontend:
         # Escolhendo a tecla ou o botao de um atalho, cada aperto e a escolha.
         if self.overlay in ("exitkey", "exitpad") or (self.overlay == "controls" and self.ov.get("wait")):
             return
+        if self.overlay == "clones" and (self.ov.get("pick_t") or self.ov.get("close_t")):
+            return                  # o aperto pisca e a dialog fecha: a tecla nao vale
         if self.overlay == "popup":
             if self.ov.get("act"):
                 return              # o azulejo apertado ainda anima: a tecla nao vale
@@ -1407,6 +1426,59 @@ class Frontend:
     def option_count(self):
         return OPT_COIN + 1 if self.commercial else OPT_COIN
 
+    # ── A dialog dos clones (tela cheia e grade) ──
+    def open_clones(self, g, clones):
+        """O jogo pai com clones, na tela cheia ou na grade: a dialog com todas as
+        versoes (MAIN SET e uma linha por clone, o mesmo que a lista mostra ao
+        abrir o [+]) cresce da miniatura (ou do logo) dele."""
+        rows = [("MAIN SET", g)] + [(self.fd.variant(c, g).upper(), c) for c in clones]
+        origin = getattr(self, "sel_rect", None)
+        self.overlay = "clones"
+        self.ov = {"rows": rows, "sel": 0, "prev": 0.0, "sel_t": -9.0, "t0": time.monotonic(),
+                   "origin": tuple(origin) if origin else None}
+
+    def clones_act(self, a):
+        """Cima/baixo andam nas versoes, o 1 escolhe (pisca, a dialog fecha e abre o
+        menu do jogo da versao), o 2 fecha."""
+        ov = self.ov
+        n = len(ov["rows"])
+        animated = not getattr(self, "shot", None)
+        if animated and (ov.get("pick_t") or ov.get("close_t")):
+            return None            # o aperto pisca e a dialog fecha: a tecla nao vale
+        now = time.monotonic()
+        if a in ("up", "down"):
+            ov["prev"], ov["sel_t"] = self.view.clones_pos(ov, now), now
+            ov["sel"] = (ov["sel"] + (1 if a == "down" else -1)) % n
+        elif a in ("b3", "b6"):
+            ov["prev"], ov["sel_t"] = self.view.clones_pos(ov, now), now
+            ov["sel"] = max(0, min(n - 1, ov["sel"] + (-5 if a == "b3" else 5)))
+        elif a == "b1":
+            self.version = ov["rows"][ov["sel"]][1]
+            if animated:
+                ov["pick_t"] = now
+            else:
+                self.clones_done(now)
+        elif a == "b2":
+            if animated:
+                ov["close_t"] = now
+            else:
+                self.overlay = None
+        return None
+
+    def clones_done(self, now):
+        """A versao escolhida: o menu do jogo dela (PLAY, estrela, +), com o mesmo escurecimento."""
+        self.overlay, self.ov = "popup", {"sel": 0, "t0": now, "keep_dim": True}
+
+    def clones_tick(self, now):
+        """O aperto pisca (CLONES_FLASH) e a dialog fecha (CLONES_CLOSE) antes do menu do jogo
+        abrir; o Esc so fecha."""
+        ov, view = self.ov, self.view
+        if ov.get("pick_t"):
+            if now >= ov["pick_t"] + view.CLONES_FLASH + view.CLONES_CLOSE:
+                self.clones_done(now)
+        elif ov.get("close_t") and now >= ov["close_t"] + view.CLONES_CLOSE:
+            self.overlay = None
+
     def overlay_act(self, a):
         o = self.overlay
         if o == "guide":
@@ -1421,6 +1493,8 @@ class Frontend:
             return self.sndpick_act(a)
         if o == "storage":
             return self.storage_act(a)
+        if o == "clones":
+            return self.clones_act(a)
         if o in ("lobby", "transfer"):
             return self.link_act(a)
         if o.startswith("media"):
@@ -3166,6 +3240,10 @@ class Frontend:
         self.last_tick = now
         if self.overlay == "popup" and self.ov.get("act"):
             self.popup_act_done(now)
+        if self.overlay == "clones":
+            self.clones_tick(now)
+        if getattr(self, "version", None) is not None and not self.overlay and not self.launching:
+            self.version = None       # nada mais usa a versao escolhida: volta ao jogo da linha
         if self.picking and self.strip is None and now - self.pick_at >= PICK_WAIT:
             self.pick_category()
         if self.overlay and self.overlay not in ("filter", "classify", "rename", "more", "sndpick"):

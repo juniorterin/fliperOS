@@ -5933,7 +5933,8 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual(fd.short_title(games[0]), 'Samurai Shodown V')
 
         # Trocar de modo para no mesmo jogo, tambem num clone (na lista ele
-        # fica debaixo do pai, que abre; na grade a posicao dele muda).
+        # fica debaixo do pai, que abre; na grade e na tela cheia o clone esta
+        # agrupado no pai: a linha do pai).
         from importlib.machinery import SourceFileLoader
         import types
         loader = SourceFileLoader('fliperos_frontend_test', str(ROOT / 'fliperos-setup/gui/fliperos-frontend'))
@@ -5946,7 +5947,10 @@ class FrontendDataTests(unittest.TestCase):
         rebuild = frontend.Frontend.rebuild
         fe.rebuild = lambda keep=None: rebuild(fe, keep)
         rebuild(fe, keep='samsho5b')
-        self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'samsho5b')
+        self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'samsho5')
+        fe.mode = 'full'
+        rebuild(fe, keep='samsho5b')
+        self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'samsho5')
         fe.mode = 'list'
         rebuild(fe, keep='samsho5b')
         self.assertEqual(fe.rows[fe.cursor][0]['Name'], 'samsho5b')
@@ -6081,6 +6085,238 @@ class FrontendDataTests(unittest.TestCase):
         fe.mode = 'flow'
         rebuild(fe)
         self.assertEqual([g['Name'] for g, _, _ in fe.rows], ['aa', 'bb', 'cc'])
+
+    def test_the_grid_and_full_screen_group_the_clones_in_the_parent(self):
+        # Na lista os clones ficam debaixo do pai; na grade e na tela cheia ficam agrupados nele: uma linha so,
+        # com a lista dos clones, que o 1 abre numa dialog (a lista abre o [+]).
+        import types
+        fm = self.frontend_module()
+        games = [{'Name': 'samsho5', 'Title': 'Samurai Shodown V (set 1)'},
+                 {'Name': 'samsho5a', 'Title': 'Samurai Shodown V (set 2)', 'CloneOf': 'samsho5'},
+                 {'Name': 'samsho5b', 'Title': 'Samurai Shodown V (bootleg)', 'CloneOf': 'samsho5'},
+                 {'Name': 'sengoku2', 'Title': 'Sengoku 2'}]
+        fe = types.SimpleNamespace(fd=self.fd, show_clones=True, opened=set(), cursor=0, mode='flow', rows=[],
+                                   groups_open=set(), lib=types.SimpleNamespace(recent=lambda g: []),
+                                   filtered=lambda: games)
+        rebuild = fm.Frontend.rebuild
+        for mode in ('flow', 'full'):
+            fe.mode = mode
+            rebuild(fe)
+            self.assertEqual([(g['Name'], level, [c['Name'] for c in extra]) for g, level, extra in fe.rows],
+                             [('samsho5', 0, ['samsho5a', 'samsho5b']), ('sengoku2', 0, [])])
+            # O contador da tira conta os pais, em qualquer modo.
+            self.assertEqual(fm.Frontend.count_of(fe, games), 2)
+        # Sem "Show clones": so os pais, e nada de dialog.
+        fe.show_clones = False
+        rebuild(fe)
+        self.assertEqual([(g['Name'], extra) for g, _, extra in fe.rows], [('samsho5', []), ('sengoku2', [])])
+        # A lista segue com os clones debaixo do pai.
+        fe.show_clones, fe.mode, fe.opened = True, 'list', {'samsho5'}
+        rebuild(fe)
+        self.assertEqual([g['Name'] for g, _, _ in fe.rows], ['samsho5', 'samsho5', 'samsho5a', 'samsho5b', 'sengoku2'])
+
+    def test_the_clones_dialog_picks_the_version_for_the_game_menu(self):
+        # O 1 num pai com clones, na tela cheia e na grade, abre a dialog com todas as versoes; escolher uma abre o
+        # menu do jogo dela (o PLAY, a estrela e o "+" valem para a versao); o 2 so fecha.
+        try:
+            import feview
+        except ImportError:
+            self.skipTest('pygame')
+        import types
+        fm = self.frontend_module()
+        F = fm.Frontend
+        parent = {'Name': 'sf2', 'Title': 'Street Fighter II (World 910522)', '_system': {'key': 'mame'}}
+        clones = [{'Name': 'sf2u', 'Title': 'Street Fighter II (USA 910522)', 'CloneOf': 'sf2', '_system': {'key': 'mame'}},
+                  {'Name': 'sf2j', 'Title': 'Street Fighter II (Japan 910522)', 'CloneOf': 'sf2', '_system': {'key': 'mame'}}]
+        other = {'Name': 'sfa', 'Title': 'Street Fighter Alpha', '_system': {'key': 'mame'}}
+        opened = []
+        fe = types.SimpleNamespace(
+            fd=self.fd, view=feview, rows=[(parent, 0, clones), (other, 0, [])], cursor=0, mode='full', show_clones=True,
+            overlay=None, ov={}, version=None, shot=None, commercial=False, picking=False, letter_mode=None,
+            ribbon_until=0.0, launching=False, locked=lambda: False, sel_rect=feview.pygame.Rect(200, 100, 80, 30))
+        fe.open_clones = lambda g, c: (opened.append((g['Name'], [x['Name'] for x in c])), F.open_clones(fe, g, c))
+        fe.clones_done = lambda now: F.clones_done(fe, now)
+        # O 1 no pai com clones abre a dialog (na lista abre o [+]); no jogo sem clones, o menu do jogo.
+        F.act(fe, 'b1')
+        self.assertEqual(opened, [('sf2', ['sf2u', 'sf2j'])])
+        self.assertEqual(fe.overlay, 'clones')
+        self.assertEqual([label for label, _ in fe.ov['rows']], ['MAIN SET', 'USA 910522', 'JAPAN 910522'])
+        self.assertEqual(fe.ov['origin'], (200, 100, 80, 30))       # a dialog cresce do logo dele
+        fe.overlay, fe.ov = None, {}
+        fe.cursor = 1
+        F.act(fe, 'b1')
+        self.assertEqual((fe.overlay, len(opened)), ('popup', 1))
+        fe.overlay, fe.ov, fe.cursor = None, {}, 0
+        # Cima e baixo andam nas versoes (dando a volta); o 1 escolhe; sem animacao (os prints) tudo na hora.
+        F.open_clones(fe, parent, clones)
+        fe.shot = 'x'
+        F.clones_act(fe, 'up')
+        self.assertEqual(fe.ov['sel'], 2)
+        F.clones_act(fe, 'down')
+        F.clones_act(fe, 'down')
+        self.assertEqual(fe.ov['sel'], 1)
+        F.clones_act(fe, 'b1')
+        self.assertEqual((fe.overlay, fe.ov['keep_dim']), ('popup', True))
+        self.assertEqual(F.game(fe)['Name'], 'sf2u')                # o menu, o "+" e o PLAY valem para o clone
+        fe.cursor = 1
+        self.assertEqual(F.game(fe)['Name'], 'sfa')                 # outro jogo: a versao nao vale
+        fe.cursor = 0
+        # Animado: o aperto pisca, as teclas nao valem, a dialog fecha e so entao abre o menu.
+        fe.overlay, fe.ov, fe.version, fe.shot = None, {}, None, None
+        F.open_clones(fe, parent, clones)
+        F.clones_act(fe, 'down')
+        F.clones_act(fe, 'b1')
+        self.assertIn('pick_t', fe.ov)
+        sel = fe.ov['sel']
+        F.clones_act(fe, 'down')
+        self.assertEqual(fe.ov['sel'], sel)
+        pick = fe.ov['pick_t']
+        F.clones_tick(fe, pick + feview.CLONES_FLASH)
+        self.assertEqual(fe.overlay, 'clones')
+        F.clones_tick(fe, pick + feview.CLONES_FLASH + feview.CLONES_CLOSE + 0.01)
+        self.assertEqual(fe.overlay, 'popup')
+        self.assertEqual(F.game(fe)['Name'], 'sf2u')
+        # O 2 fecha a dialog sem escolher nada.
+        fe.overlay, fe.ov, fe.version = None, {}, None
+        F.open_clones(fe, parent, clones)
+        F.clones_act(fe, 'b2')
+        close = fe.ov['close_t']
+        F.clones_tick(fe, close + feview.CLONES_CLOSE + 0.01)
+        self.assertIsNone(fe.overlay)
+        self.assertEqual(F.game(fe)['Name'], 'sf2')
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('self.open_clones(g, clones)', src)
+        self.assertIn('self.version = None       # nada mais usa a versao escolhida', src)
+
+    def test_the_full_screen_wheel_of_logos(self):
+        # A tela cheia: no lugar da coluna de miniaturas, uma roda de logos na lateral direita (arqueada, os de fora
+        # inclinados e sumindo); o jogo sem logo vira um cartao 4:3 com o titulo numa fonte suave e cores sorteadas
+        # pelo nome.
+        try:
+            import feview
+        except ImportError:
+            self.skipTest('pygame')
+        import types
+        pygame = feview.pygame
+        pygame.init()
+        names = ['aa', 'bb', 'cc', 'dd', 'ee', 'ff', 'gg']
+        games = [{'Name': n, 'Title': 'Game %s Of The Long Title' % n.upper(), '_system': {'key': 'mame'}} for n in names]
+        logos = {}
+        fe = types.SimpleNamespace(media={}, ready={}, fd=self.fd, rows=[(g, 0, []) for g in games], cursor=3,
+                                   lib=types.SimpleNamespace(media=lambda g, kind: logos.get(g['Name']) if kind == 'logo' else None))
+        geo = feview.wheel_geom()
+        # A roda cabe na tela segura e deixa o resto dela (o logo e o titulo de baixo) a esquerda.
+        self.assertLessEqual(geo['xc'] + geo['dx'] * 4 + geo['bw'] * 0.6 / 2, feview.SX + feview.SW + 1)
+        self.assertGreater(geo['left'], feview.WW // 2)
+        seen = {}
+        for i, d in ((1, -2), (2, -1), (3, 0), (4, 1), (5, 2)):
+            ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+            feview.wheel_item(fe, ui, i, d, geo)
+            box = ui.get_bounding_rect()
+            seen[d] = box
+            self.assertGreater(box.width, 10)
+            self.assertGreaterEqual(box.left, geo['left'] - 4)
+            self.assertLessEqual(box.right, feview.SX + feview.SW + 2)
+            self.assertTrue(0 <= box.top and box.bottom <= feview.HH)
+        # O do meio e o maior e o mais perto do centro da tela ("("); os de fora afastam-se e encolhem.
+        self.assertTrue(seen[0].width >= seen[1].width >= seen[2].width)
+        self.assertTrue(seen[0].left < seen[1].left < seen[2].left)
+        self.assertTrue(seen[-2].top < seen[-1].top < seen[0].top < seen[1].top < seen[2].top)
+        self.assertEqual(fe.sel_rect.size, (seen[0].width, seen[0].height))
+        # O primeiro e o ultimo somem: o do meio cheio, o de fora so um pouco, e nada depois de 2,5 jogos.
+        self.assertEqual(feview.wheel_alpha(0), 1.0)
+        self.assertTrue(1.0 > feview.wheel_alpha(1) > feview.wheel_alpha(2) > feview.wheel_alpha(2.4) > 0)
+        self.assertEqual(feview.wheel_alpha(2.5), 0.0)
+        # Sem logo: o cartao 4:3, e as cores sao as do nome (as mesmas toda vez, diferentes de um jogo a outro).
+        card = feview.text_card('Cyberbots: Fullmetal Madness', 'cybots')
+        self.assertEqual(card.get_size(), (128, 96))
+        self.assertEqual(feview.card_colors('cybots'), feview.card_colors('cybots'))
+        self.assertNotEqual(feview.card_colors('cybots'), feview.card_colors('strider'))
+        self.assertEqual(feview.wheel_source(fe, games[0])[1], True)
+        # Com o logo: a imagem dele (cabe em 192x96), e nao o cartao.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / 'logo.png')
+            image = pygame.Surface((400, 150), pygame.SRCALPHA)
+            image.fill((200, 30, 30, 255))
+            pygame.image.save(image, path)
+            logos['bb'] = path
+            fe.media.clear()
+            src, is_card = feview.wheel_source(fe, games[1])
+            self.assertFalse(is_card)
+            self.assertLessEqual(src.get_width(), feview.WHEEL_SRC[0])
+            self.assertLessEqual(src.get_height(), feview.WHEEL_SRC[1])
+        # A fonte do cartao vai com o FliperOS (nao pixelada) e a licenca dela junto.
+        fonts = ROOT / 'fliperos-setup/gui/fonts'
+        self.assertEqual((fonts / 'DejaVuSans-Bold.ttf').read_bytes()[:4], b'\x00\x01\x00\x00')
+        self.assertIn('Bitstream', (fonts / 'DejaVu-LICENSE.txt').read_text())
+        self.assertEqual(feview.WHEEL_FONT, str(fonts / 'DejaVuSans-Bold.ttf'))
+        # Os logos do meio e o de baixo a esquerda vem da thread que adianta as imagens.
+        self.assertIn((None, feview.WHEEL_SRC[0], feview.WHEEL_SRC[1], 'fit'),
+                      [(None,) + key[1:] for key in feview.wanted(types.SimpleNamespace(
+                          mode='full', media={}, lib=types.SimpleNamespace(media=lambda g, kind: '/x/' + kind + '.png'),
+                          ready={}), games[0])])
+
+    def test_the_clones_dialog_grows_from_the_thumbnail(self):
+        # A dialog cresce da miniatura (ou do logo) num contorno de cinco passos, o conteudo entra no fim; escolher
+        # pisca e fecha de volta, mantendo o escurecimento ate o menu do jogo abrir; fechar e o mesmo ao contrario.
+        try:
+            import feview
+        except ImportError:
+            self.skipTest('pygame')
+        import types
+        pygame = feview.pygame
+        pygame.init()
+        rows = [('MAIN SET', {'Name': 'a', 'Title': 'Alpha (World)'})] + [
+            ('CLONE %d' % n, {'Name': 'a%d' % n, 'Title': 'Alpha (set %d)' % n, 'CloneOf': 'a'}) for n in range(1, 6)]
+        fe = types.SimpleNamespace(fd=self.fd, shot=None, abs_now=100.0, ov={})
+        fe.ov = {'rows': rows, 'sel': 0, 'prev': 0.0, 'sel_t': -9.0, 't0': 100.0, 'origin': (150, 60, 80, 40)}
+        self.assertEqual(feview.clones_progress(fe, fe.ov), (0.0, False))
+        self.assertEqual(feview.clones_dim(fe, 100.0), 0)
+        fe.abs_now = 100.0 + feview.CLONES_OPEN / 2
+        u, closing = feview.clones_progress(fe, fe.ov)
+        self.assertTrue(0 < u < 1 and not closing)
+        ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.draw_clones(fe, ui, 0.0)
+        frame = ui.get_bounding_rect()                              # so o contorno, entre a miniatura e o cartao
+        self.assertTrue(frame.width < feview.clones_geom(fe, fe.ov)[0].width)
+        fe.abs_now = 100.0 + feview.CLONES_OPEN
+        self.assertEqual(feview.clones_progress(fe, fe.ov), (1.0, False))
+        ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.draw_clones(fe, ui, 0.0)
+        card = feview.clones_geom(fe, fe.ov)[0]
+        self.assertTrue(ui.get_bounding_rect().inflate(2, 2).contains(card.inflate(-2, -2)))
+        self.assertTrue(feview.SX <= card.left and card.right <= feview.SX + feview.SW)
+        self.assertEqual(feview.clones_dim(fe, fe.abs_now), 160)
+        # Escolhida a versao: pisca (acende, apaga, acende), fecha e o escurecimento fica (o menu continua dele).
+        fe.ov['pick_t'] = 100.5
+        fe.abs_now = 100.5 + feview.CLONES_FLASH / 2
+        self.assertEqual(feview.clones_progress(fe, fe.ov), (1.0, False))
+        fe.abs_now = 100.5 + feview.CLONES_FLASH + feview.CLONES_CLOSE / 2
+        u, closing = feview.clones_progress(fe, fe.ov)
+        self.assertTrue(0 < u < 1 and closing)
+        self.assertEqual(feview.clones_dim(fe, fe.abs_now), 160)
+        fe.abs_now = 100.5 + feview.CLONES_FLASH + feview.CLONES_CLOSE
+        self.assertEqual(feview.clones_progress(fe, fe.ov)[0], 0.0)
+        # O Esc fecha sem segurar o escurecimento.
+        fe.ov.pop('pick_t')
+        fe.ov['close_t'] = 101.0
+        fe.abs_now = 101.0 + feview.CLONES_CLOSE / 2
+        self.assertLess(feview.clones_dim(fe, fe.abs_now), 160)
+        # O menu do jogo que vem depois nao pisca o escurecimento.
+        popup = types.SimpleNamespace(shot=None, ov={'t0': 200.0, 'keep_dim': True})
+        self.assertEqual(feview.popup_motion(popup, 200.05)[2], 1.0)
+        popup.ov = {'t0': 200.0}
+        self.assertLess(feview.popup_motion(popup, 200.05)[2], 1.0)
+        # Muitas versoes: a dialog mostra uma janela delas, com a escolhida sempre dentro.
+        many = [('V%d' % n, {'Name': 'v%d' % n, 'Title': 'Beta (v%d)' % n, 'CloneOf': 'b'}) for n in range(40)]
+        fe.ov = {'rows': many, 'sel': 30, 'prev': 30.0, 'sel_t': -9.0, 't0': 0.0, 'origin': None}
+        fe.abs_now = 5.0
+        ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.draw_clones(fe, ui, 0.0)
+        rect, shown = feview.clones_geom(fe, fe.ov)
+        self.assertEqual(shown, feview.clones_rows_max())
+        self.assertTrue(fe.ov['top'] <= 30 < fe.ov['top'] + shown)
+        self.assertTrue(feview.T.SAFE_Y <= rect.top and rect.bottom <= feview.HH - feview.T.SAFE_Y)
 
     @staticmethod
     def frontend_module():

@@ -25,14 +25,16 @@ Each system remembers where the cursor was, also after the frontend closes or th
 | View | What it shows |
 | --- | --- |
 | **List** | The games on the left; the picture, logo and information on the right |
-| **Full screen** | The game's video or picture behind, the name and information in front, and the list as four thumbnails on the right |
+| **Full screen** | The game's video or picture behind, the name and information in front, and on the right a vertical wheel of logos: five at a time on an arch, the chosen one in the middle (the biggest, closest to the centre of the screen), the others tilted in perspective and smaller, the first and the last fading out. A game with no logo gets a 4:3 card with its title in a smooth (not pixelated) font, in colours picked from its name |
 | **Grid** | Three thumbnails a row, two rows, each playing its video, silent except the chosen one |
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-full.webp" width="320" alt="Full screen view"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/frontend-grid.webp" width="320" alt="Grid view">
 
 ### Clones
 
-A game with clones has a **+** on its left in the list: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg). In full screen and in the grid the clones come right after their parent, with a **CLONE** badge; button 2 on a clone goes back to the parent.
+A game with clones has a **+** on its left in the list: button 1 unfolds the clones under it, each with what differs in its name (the region, the set, bootleg).
+
+In full screen and in the grid the clones are grouped in their parent: it shows once, with a badge (two small squares and how many versions it has). Button 1 on it opens a dialog with all the versions, **MAIN SET** and one line per clone, the same ones the list shows when the **+** opens. The dialog grows from the thumbnail (or the logo) in five steps; up and down move through the versions (a long list scrolls, and a name that doesn't fit rolls), button 1 chooses one and button 2 closes it. Choosing blinks the line and opens the game's menu (PLAY, star, +) for that version, so PLAY, the star and the **+** are the chosen version's.
 
 **Tab > SHOW CLONES** turns the clones off and on.
 
@@ -172,6 +174,7 @@ With **Setup > Video Setup > Monitor Orientation** on a vertical setting, the fr
 
 - In the list, the 3:4 picture goes at the top right with the logo over its bottom edge, the information in the column on its left, and ten rows of games below.
 - The grid has three rows of 3:4 thumbnails.
+- In full screen the wheel of logos stays on the right and the name and information take the room on its left.
 - Text that doesn't fit rolls.
 
 ## Controllers
@@ -191,6 +194,7 @@ A controller connected while the frontend is open moves in the list at once. A B
 - **Automatic scrape:** while the frontend is open, it fetches in the background, one game at a time, what each game lacks: arcade information, screenshot, flyer, marquee and logo from the Arcade Database; console cover and screenshot from libretro-thumbnails; videos and missing logos from the art packs of [Scraper](Scraper.md), file by file. It pauses during a game, tries a game once every 30 days (`~/.local/share/fliperos/scrape-state.json`), and also runs as the *Auto scrape* service when the frontend is closed.
 - **Attract mode:** after a minute without a button the cursor jumps to a random game (and to another every 30 s). The first button you press takes the cursor back to the game you were on and does its job right there: one press is enough. `FLIPEROS_ATTRACT_SECONDS` (0 turns it off) and `FLIPEROS_ATTRACT_STEP` change the two times; `FLIPEROS_IDLE_SECONDS` the marquee's.
 - **Sounds and music:** `fesound.py`, shared with the Setup. The six sounds are the Setup's too, in `~/.config/fliperos/sounds.json` (`{"move": {"file": "", "volume": 60}, ...}`; an empty file is the default, `off` is silence); the rest is the `sounds` of `frontend.json` (`{"music": {"source": "", "volume": 40, "pause": false}, "preview": 100}`). The six sounds are loaded into pygame's mixer; **OPEN GAME** is played by a separate `aplay`, because the mixer closes before a game opens. The music is `pygame.mixer.music` (MP3, OGG, FLAC and WAV; a format the mixer cannot read goes through `ffmpeg`). The preview volume is the `volume` filter of the `ffmpeg` that plays the video, so changing it reopens the video once you stop pressing. The preview's sound goes through ALSA's queue, and with Live screen sound (`fliperos_tee`, a 16384-frame buffer) it only starts once the queue is full, so it is about 320 ms behind the picture. When it opens, and after each game, the frontend writes 0.65 s of silence to the `default` PCM and reads `snd_pcm_delay` (`fesound.py alsa-latency` shows the same number), and the picture of a video with sound waits that long (`fevideo.SYNC`) before it is shown, so picture and sound come out together. There is nothing to set.
+- **The wheel of logos and the clones dialog:** `feview.py` (`draw_full`, `wheel_item`, `draw_clones`). The logos are read once at up to 192x96 (the same loader and cache as the pictures, `wanted()` loads the neighbours ahead); each one is tilted by `wheel_warp` (rows of two lines, the width falling from one end to the other) and faded by `wheel_fade`, and kept by its size and tilt. The text card is `text_card`, in `fonts/DejaVuSans-Bold.ttf` (shipped with its licence, `fonts/DejaVu-LICENSE.txt`), the colours from the CRC of the game's name (`card_colors`). In full screen and in the grid `rebuild` makes one row per parent with the list of its clones; the dialog is the `clones` overlay (`open_clones`, `clones_act` and `clones_tick` in `fliperos-frontend`), and the chosen version is `self.version`, which `game()` returns while the game menu, the **+** or the launch uses it.
 - **Power button:** the frontend tells `fliperos-powerkey` which process is the game through `FLIPEROS_POWERKEY=games:FILE` (`$XDG_RUNTIME_DIR/fliperos-frontend.game`), since its other children (the video player, the scraper) are not games.
 - **A missing emulator** is installed by `fliperos-setup --emulator-ensure`.
 
