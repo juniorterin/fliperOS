@@ -23,8 +23,29 @@
 #    jogos de varias telas ligados (multiscreen= do fliperos.conf), a
 #    pasta screens no inipath (o numscreens dos jogos de 2 ou 3 telas,
 #    config/fliperos-mame-screens) e cada janela na saida da sua tela.
-real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
-inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
+#
+# O mesmo arquivo e o comando hbgroovymame (o HBMAME com o Switchres, do pacote
+# fliperos-hbgroovymame): o nome com que e chamado decide. Ele tem o binario,
+# a pasta de jogos (~/roms/hbmame), o hbmame.ini e o ~/.hbmame dele, e segue
+# tudo o mais daqui (KMS ou X, o som, a pistola, as saidas); o hbmame.ini sai
+# do mame.ini do sistema, entao o que o Setup grava (monitor, formato da tela,
+# latencia, botoes) vale para os dois, com as pastas do paths.ini do pacote.
+me=${0##*/}
+if [[ $me == hbgroovymame ]]; then
+  real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/hbgroovymame}
+  inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/hbmame}
+  share=${FLIPEROS_HBGROOVYMAME_SHARE:-/usr/local/share/hbgroovymame}
+  mameini=${FLIPEROS_MAME_SYSTEM_INI:-/etc/fliperos/mame}
+  userdir=$HOME/.hbmame
+  cfgdir=${FLIPEROS_MAME_CFG_DIR:-$userdir/cfg}
+else
+  real=${FLIPEROS_GROOVYMAME_BIN:-/usr/local/libexec/groovymame}
+  inidir=${FLIPEROS_MAME_INI_DIR:-/etc/fliperos/mame}
+  share=/usr/local/share/groovymame
+  mameini=""
+  userdir=$HOME/.mame
+  cfgdir=${FLIPEROS_MAME_CFG_DIR:-$userdir/cfg}
+fi
 x11run=${FLIPEROS_X11_RUN:-/opt/fliperos/bin/fliperos-x11-run}
 kmsrun=${FLIPEROS_KMS_RUN_BIN:-/opt/fliperos/bin/fliperos-kms-run}
 kmssdl=${FLIPEROS_SDL2_KMS:-/usr/local/lib/fliperos/sdl2-kms}
@@ -32,6 +53,41 @@ color=${FLIPEROS_COLOR:-/usr/local/bin/fliperos-color}
 conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
 screens_gen=${FLIPEROS_MAME_SCREENS:-/opt/fliperos/bin/fliperos-mame-screens}
 multiscreen=${FLIPEROS_MULTISCREEN:-/opt/fliperos/bin/fliperos-multiscreen}
+
+# hb_ini: o hbmame.ini do hbgroovymame: o mame.ini do sistema com as pastas do
+# paths.ini do pacote por cima (a linha de cada chave troca; as que o
+# mame.ini nao tem vao no fim), refeito quando um dos dois e mais novo. O
+# ui.ini dele (as cores e a arte da lista) nasce do da pasta mame, com as
+# pastas hbmame, e depois e dele: o MAME o regrava. Sem o paths.ini (o pacote
+# nao esta aqui), nada.
+hb_ini() {
+  local from=/dev/null paths=$share/paths.ini to=$inidir/hbmame.ini
+  [[ -f $paths ]] || return 0
+  [[ -f $mameini/mame.ini ]] && from=$mameini/mame.ini
+  if [[ -s $to && $to -nt $paths && ( $from == /dev/null || $to -nt $from ) ]]; then
+    return 0
+  fi
+  mkdir -p "$inidir" 2> /dev/null || return 0
+  awk -v inipath="$inidir;$mameini" '
+    NR == FNR {
+      if ($0 ~ /^[[:space:]]*(#|$)/) next
+      key = $1
+      sub(/^[[:space:]]*[^[:space:]]+[[:space:]]+/, "")
+      want[key] = $0
+      order[++n] = key
+      next
+    }
+    $1 == "inipath" { printf "%-25s %s\n", "inipath", inipath; next }
+    ($1 in want) && !($1 in done) { printf "%-25s %s\n", $1, want[$1]; done[$1] = 1; next }
+    { print }
+    END { for (i = 1; i <= n; i++) if (!(order[i] in done)) printf "%-25s %s\n", order[i], want[order[i]] }
+  ' "$paths" "$from" > "$to.new" 2> /dev/null && mv -f "$to.new" "$to" || rm -f "$to.new"
+  if [[ ! -f $inidir/ui.ini && -f $mameini/ui.ini ]]; then
+    sed -e 's#/media/\([a-z]*\)/mame\([/;[:space:]]\|$\)#/media/\1/hbmame\2#g' -e 's#\.mame/ui#.hbmame/ui#g' \
+      "$mameini/ui.ini" > "$inidir/ui.ini" 2> /dev/null || rm -f "$inidir/ui.ini"
+  fi
+  return 0
+}
 
 # opens_video ARGUMENTOS: o comando abre a tela (um jogo ou a lista do MAME)?
 opens_video() {
@@ -99,6 +155,9 @@ fi
 
 # As saidas na ordem das telas dos jogos (screens= do fliperos.conf).
 inipath=$inidir
+# O hbgroovymame le o hbmame.ini dele e, depois, o ui.ini e os .ini por driver
+# da pasta do mame (a Midway em 320x240).
+[[ $me == hbgroovymame ]] && hb_ini && inipath="$inidir;$mameini"
 restore_primary=""
 IFS=, read -r -a outputs <<< "$(sed -n 's/^screens=//p' "$conf" 2> /dev/null | tail -1)"
 # Setup > Video Setup > Multiple Monitors > Multi-Screen Games: Off deixa tudo no monitor 1.
@@ -106,7 +165,7 @@ grep -q '^multiscreen=off' "$conf" 2> /dev/null && outputs=()
 if ((${#outputs[@]} > 1)) && opens_video "$@"; then
   # Feitos pelo Setup; refeitos aqui se o GroovyMAME ou o numero de monitores
   # mudou (sem nada a fazer, sai na hora).
-  "$screens_gen" "${#outputs[@]}" > /dev/null || true
+  [[ $me == hbgroovymame ]] || "$screens_gen" "${#outputs[@]}" > /dev/null || true
   [[ -d $inidir/screens ]] && inipath="$inidir;$inidir/screens"
   if [[ -n ${DISPLAY:-} ]] && command -v xrandr > /dev/null; then
     # As saidas ligadas do X, na ordem do XRandR. O Switchres acha a tela
@@ -160,14 +219,13 @@ game=${*: -1}
 if opens_video "$@" && [[ $game != -* && " $* " != *" -plugin "* && -x $versus && -x $panel ]] &&
   "$panel" panel && "$versus" has mame "${game##*/}"; then
   set -- -plugin hiscore,fliperos-versus \
-    -pluginspath "/usr/local/share/groovymame/plugins;$plugins;$HOME/.mame/plugins" "$@"
+    -pluginspath "$share/plugins;$plugins;$userdir/plugins" "$@"
 fi
 # O som pelo "default" do ALSA (config/fliperos-sdl-audio.c): o dmix, a
 # placa do Setup e a tela ao vivo. Sem a biblioteca, o MAME abria o hw: da
 # placa direto e gravava essa saida no cfg de cada jogo; esses sound_map
 # saem uma vez (o MAME grava o default no lugar ao fechar o jogo).
 sdlaudio=${FLIPEROS_SDL_AUDIO:-/usr/local/lib/fliperos/libfliperos-sdl-audio.so}
-cfgdir=${FLIPEROS_MAME_CFG_DIR:-$HOME/.mame/cfg}
 if opens_video "$@" && [[ -f $sdlaudio ]]; then
   export LD_PRELOAD="${LD_PRELOAD:+$LD_PRELOAD:}$sdlaudio"
   if [[ -d $cfgdir && ! -e $cfgdir/.fliperos-sound-default ]]; then

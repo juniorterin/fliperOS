@@ -34,6 +34,7 @@ One folder per emulator, and one per **RetroArch core** in `~/roms/retroarch/<co
 | Folder | What goes in it | Opens in |
 | --- | --- | --- |
 | `mame` | MAME sets (`.zip`, `.7z`) and their CHD folders | GroovyMAME |
+| `hbmame` | HBMAME sets (arcade hacks and homebrews), `.zip`/`.7z` and CHD folders | HBMAME (`hbgroovymame`), installed when its first game is opened ([GroovyMAME](GroovyMAME.md#hbmame-hbgroovymame)) |
 | `naomi`, `naomi2`, `atomiswave` | MAME sets of these systems, one system per folder | Flycast |
 | `model2` | MAME sets of Model 2 | Keisho |
 | `model3` | MAME sets of Model 3 | Keisho |
@@ -59,7 +60,8 @@ RetroArch's *system* folder: the loose files in it and the subfolders the cores 
 | `~/bios` itself | The RetroArch cores (`scph5501.bin`…) |
 | `~/bios/dc` | Flycast and its core: `dc_boot.bin`, `dc_flash.bin`, `naomi.zip`, `awbios.zip`… |
 | `~/bios/ps2` | PCSX2 |
-| `~/bios/mame` | GroovyMAME's BIOS and devices: `neogeo.zip`, `qsound.zip`… (they also work from `~/roms/mame`) |
+| `~/bios/mame` | GroovyMAME's BIOS and devices: `neogeo.zip`, `qsound.zip`… (they also work from `~/roms/mame`, and HBMAME reads them too) |
+| `~/bios/hbmame` | HBMAME's own BIOS and devices, if they differ from MAME's |
 
 A BIOS left in a games folder shows up as a game in the frontend, so keep them here.
 

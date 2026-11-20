@@ -1,0 +1,2521 @@
+diff --git a/scripts/extlib.lua b/scripts/extlib.lua
+index 6d80717e..02af1224 100644
+--- a/scripts/extlib.lua
++++ b/scripts/extlib.lua
+@@ -20,6 +20,7 @@ local extlibs = {
+ 	glm        = { "glm",       "3rdparty/glm" },
+ 	rapidjson  = { "rapidjson", "3rdparty/rapidjson/include" },
+ 	pugixml    = { "pugixml",   "3rdparty/pugixml/src" },
++	switchres  = { "switchres", "3rdparty/switchres" },
+ }
+ 
+ -- system lib options
+diff --git a/scripts/src/3rdparty.lua b/scripts/src/3rdparty.lua
+index 0c4d8d77..b78da129 100644
+--- a/scripts/src/3rdparty.lua
++++ b/scripts/src/3rdparty.lua
+@@ -850,6 +850,27 @@ links {
+ end
+ 
+ 
++--------------------------------------------------
++-- lz4 library objects
++--------------------------------------------------
++
++project "lz4"
++	uuid "88b89ceb-8382-4d44-860f-75b8fa6823ad"
++	kind "StaticLib"
++
++files {
++		MAME_DIR .. "3rdparty/lz4/lz4.c",
++		MAME_DIR .. "3rdparty/lz4/lz4file.c",
++		MAME_DIR .. "3rdparty/lz4/lz4frame.c",
++		MAME_DIR .. "3rdparty/lz4/lz4hc.c",
++		MAME_DIR .. "3rdparty/lz4/xxhash.c"
++	}
++
++buildoptions_c {
++		"-Wno-bad-function-cast"
++	}
++
++
+ --------------------------------------------------
+ -- lib7z library objects
+ --------------------------------------------------
+@@ -1711,10 +1732,8 @@ end
+ 
+ 	if _OPTIONS["targetos"]=="windows" then
+ 		defines {
+-			"PA_USE_DS=1",
+ 			"PA_USE_WASAPI=1",
+ 			"PA_USE_WDMKS=1",
+-			"PA_USE_WMME=1",
+ 		}
+ 		includedirs {
+ 			MAME_DIR .. "3rdparty/portaudio/src/os/win",
+@@ -1727,12 +1746,9 @@ end
+ 			MAME_DIR .. "3rdparty/portaudio/src/os/win/pa_win_waveformat.c",
+ 			MAME_DIR .. "3rdparty/portaudio/src/os/win/pa_win_hostapis.c",
+ 			MAME_DIR .. "3rdparty/portaudio/src/os/win/pa_win_coinitialize.c",
+-			MAME_DIR .. "3rdparty/portaudio/src/hostapi/dsound/pa_win_ds.c",
+-			MAME_DIR .. "3rdparty/portaudio/src/hostapi/dsound/pa_win_ds_dynlink.c",
+ 			MAME_DIR .. "3rdparty/portaudio/src/os/win/pa_win_hostapis.c",
+ 			MAME_DIR .. "3rdparty/portaudio/src/hostapi/wasapi/pa_win_wasapi.c",
+ 			MAME_DIR .. "3rdparty/portaudio/src/hostapi/wdmks/pa_win_wdmks.c",
+-			MAME_DIR .. "3rdparty/portaudio/src/hostapi/wmme/pa_win_wmme.c",
+ 			MAME_DIR .. "3rdparty/portaudio/src/common/pa_ringbuffer.c",
+ 		}
+ 
+@@ -2178,3 +2194,81 @@ project "asmjit"
+ 		MAME_DIR .. "3rdparty/asmjit/asmjit/x86/x86rapass_p.h",
+ 	}
+ end
++
++
++--------------------------------------------------
++-- switchres library
++--------------------------------------------------
++
++project "switchres"
++	uuid "556720c2-c830-4c5f-bb6c-ec89eface072"
++	kind "StaticLib"
++
++files {
++	MAME_DIR .. "3rdparty/switchres/switchres.cpp",
++	MAME_DIR .. "3rdparty/switchres/switchres.h",
++	MAME_DIR .. "3rdparty/switchres/modeline.cpp",
++	MAME_DIR .. "3rdparty/switchres/modeline.h",
++	MAME_DIR .. "3rdparty/switchres/monitor.cpp",
++	MAME_DIR .. "3rdparty/switchres/monitor.h",
++	MAME_DIR .. "3rdparty/switchres/display.cpp",
++	MAME_DIR .. "3rdparty/switchres/display.h",
++	MAME_DIR .. "3rdparty/switchres/custom_video.cpp",
++	MAME_DIR .. "3rdparty/switchres/custom_video.h",
++	MAME_DIR .. "3rdparty/switchres/log.cpp",
++	MAME_DIR .. "3rdparty/switchres/log.h",
++}
++
++if _OPTIONS["targetos"]=="windows" then
++	files {
++		MAME_DIR .. "3rdparty/switchres/display_windows.cpp",
++		MAME_DIR .. "3rdparty/switchres/display_windows.h",
++		MAME_DIR .. "3rdparty/switchres/resync_windows.cpp",
++		MAME_DIR .. "3rdparty/switchres/resync_windows.h",
++		MAME_DIR .. "3rdparty/switchres/custom_video_adl.cpp",
++		MAME_DIR .. "3rdparty/switchres/custom_video_adl.h",
++		MAME_DIR .. "3rdparty/switchres/custom_video_ati.cpp",
++		MAME_DIR .. "3rdparty/switchres/custom_video_ati.h",
++		MAME_DIR .. "3rdparty/switchres/custom_video_ati_family.cpp",
++		MAME_DIR .. "3rdparty/switchres/custom_video_pstrip.cpp",
++		MAME_DIR .. "3rdparty/switchres/custom_video_pstrip.h",
++	}
++end
++
++if _OPTIONS["targetos"]=="linux" then
++	files {
++		MAME_DIR .. "3rdparty/switchres/display_linux.cpp",
++		MAME_DIR .. "3rdparty/switchres/display_linux.h",
++		MAME_DIR .. "3rdparty/switchres/display_sdl2.cpp",
++		MAME_DIR .. "3rdparty/switchres/display_sdl2.h",
++		MAME_DIR .. "3rdparty/switchres/custom_video_xrandr.cpp",
++		MAME_DIR .. "3rdparty/switchres/custom_video_xrandr.h",
++		MAME_DIR .. "3rdparty/switchres/custom_video_drmkms.cpp",
++		MAME_DIR .. "3rdparty/switchres/custom_video_drmkms.h",
++	}
++
++	defines {
++		"SR_WITH_XRANDR",
++		"SR_WITH_KMSDRM",
++		"SR_WITH_SDL2",
++	}
++
++	buildoptions {
++		backtick("pkg-config --cflags libdrm"),
++		backtick("pkg-config --cflags sdl2"),
++	}
++
++	links {
++		"Xrandr",
++	}
++
++	local str = backtick("pkg-config --libs libdrm")
++	addlibfromstring(str)
++	addoptionsfromstring(str)
++end
++
++if _OPTIONS["gcc"]~=nil and string.find(_OPTIONS["gcc"], "clang") then
++	buildoptions {
++		"-Wno-unused-private-field",
++	}
++end
+diff --git a/scripts/src/emu.lua b/scripts/src/emu.lua
+index f3eed922..10d79669 100644
+--- a/scripts/src/emu.lua
++++ b/scripts/src/emu.lua
+@@ -155,6 +155,8 @@ files {
+ 	MAME_DIR .. "src/emu/emuopts.h",
+ 	MAME_DIR .. "src/emu/emupal.cpp",
+ 	MAME_DIR .. "src/emu/emupal.h",
++	MAME_DIR .. "src/emu/emusync.cpp",
++	MAME_DIR .. "src/emu/emusync.h",
+ 	MAME_DIR .. "src/emu/fileio.cpp",
+ 	MAME_DIR .. "src/emu/fileio.h",
+ 	MAME_DIR .. "src/emu/http.h",
+diff --git a/scripts/src/main.lua b/scripts/src/main.lua
+index df7fe24c..e643d608 100644
+--- a/scripts/src/main.lua
++++ b/scripts/src/main.lua
+@@ -209,6 +209,7 @@ end
+ 		"bgfx",
+ 		"bimg",
+ 		"bx",
++		"switchres",
+ 		"ocore_" .. _OPTIONS["osd"],
+ 	}
+ 
+diff --git a/scripts/src/osd/modules.lua b/scripts/src/osd/modules.lua
+index e2f660f4..2fc3dadb 100644
+--- a/scripts/src/osd/modules.lua
++++ b/scripts/src/osd/modules.lua
+@@ -100,6 +100,7 @@ function osdmodulesbuild()
+ 		MAME_DIR .. "src/osd/modules/input/input_dinput.cpp",
+ 		MAME_DIR .. "src/osd/modules/input/input_dinput.h",
+ 		MAME_DIR .. "src/osd/modules/input/input_mac.cpp",
++		MAME_DIR .. "src/osd/modules/input/input_mister.cpp",
+ 		MAME_DIR .. "src/osd/modules/input/input_module.h",
+ 		MAME_DIR .. "src/osd/modules/input/input_none.cpp",
+ 		MAME_DIR .. "src/osd/modules/input/input_rawinput.cpp",
+@@ -148,6 +149,7 @@ function osdmodulesbuild()
+ 		MAME_DIR .. "src/osd/modules/render/drawsdl.cpp",
+ 		MAME_DIR .. "src/osd/modules/render/drawsdl3accel.cpp",
+ 		MAME_DIR .. "src/osd/modules/render/drawsdl3soft.cpp",
++		MAME_DIR .. "src/osd/modules/render/drawnogpu.cpp",
+ 		MAME_DIR .. "src/osd/modules/render/render_module.h",
+ 		MAME_DIR .. "src/osd/modules/sound/coreaudio_sound.cpp",
+ 		MAME_DIR .. "src/osd/modules/sound/direct_sound.cpp",
+@@ -156,6 +158,7 @@ function osdmodulesbuild()
+ 		MAME_DIR .. "src/osd/modules/sound/mmdevice_helpers.h",
+ 		MAME_DIR .. "src/osd/modules/sound/none.cpp",
+ 		MAME_DIR .. "src/osd/modules/sound/pa_sound.cpp",
++		MAME_DIR .. "src/osd/modules/sound/part_sound.cpp",
+ 		MAME_DIR .. "src/osd/modules/sound/pulse_sound.cpp",
+ 		MAME_DIR .. "src/osd/modules/sound/pipewire_sound.cpp",
+ 		MAME_DIR .. "src/osd/modules/sound/sdl_sound.cpp",
+@@ -164,6 +167,7 @@ function osdmodulesbuild()
+ 		MAME_DIR .. "src/osd/modules/sound/sound_module.h",
+ 		MAME_DIR .. "src/osd/modules/sound/wasapi_sound.cpp",
+ 		MAME_DIR .. "src/osd/modules/sound/xaudio2_sound.cpp",
++		MAME_DIR .. "src/osd/modules/switchres/switchres_module.cpp",
+ 	}
+ 	includedirs {
+ 		MAME_DIR .. "src/osd",
+@@ -579,6 +583,10 @@ function osdmodulestargetconf()
+ 		end
+ 	end
+ 
++	links {
++			"lz4",
++		}
++
+ 	if _OPTIONS["targetos"]=="windows" or _OPTIONS["targetos"]=="winui" or _OPTIONS["targetos"]=="messui" then
+ 		links {
+ 			"gdi32",
+@@ -586,6 +594,7 @@ function osdmodulestargetconf()
+ 			"dxguid",
+ 			"oleaut32",
+ 			"winmm",
++			"hid",
+ 		}
+ 	elseif _OPTIONS["targetos"]=="macosx" then
+ 		links {
+diff --git a/scripts/src/osd/sdl.lua b/scripts/src/osd/sdl.lua
+index be0b373e..3f0ba2f9 100644
+--- a/scripts/src/osd/sdl.lua
++++ b/scripts/src/osd/sdl.lua
+@@ -53,6 +53,12 @@ function maintargetosdoptions(_target,_subtarget)
+ 		addoptionsfromstring(str)
+ 	end
+ 
++	if BASE_TARGETOS=="unix" and _OPTIONS["targetos"]=="linux" then
++		local str = backtick("pkg-config --libs libdrm")
++		addlibfromstring(str)
++		addoptionsfromstring(str)
++	end
++
+ 	if _OPTIONS["targetos"]=="windows" then
+ 		if _OPTIONS["USE_LIBSDL"]~="1" then
+ 			configuration { "mingw*"}
+@@ -390,6 +396,14 @@ project ("osd_" .. _OPTIONS["osd"])
+ 		MAME_DIR .. "src/osd/sdl/window.h",
+ 	}
+ 
++	if _OPTIONS["targetos"]=="linux" then
++		files {
++			MAME_DIR .. "src/osd/modules/emusync/emusync_linux.cpp",
++			MAME_DIR .. "src/osd/modules/render/drawkmsraw.cpp",
++		}
++	end
++
++
+ project ("ocore_" .. _OPTIONS["osd"])
+ 	uuid (os.uuid("ocore_" .. _OPTIONS["osd"]))
+ 	kind (LIBTYPE)
+diff --git a/scripts/src/osd/sdl_cfg.lua b/scripts/src/osd/sdl_cfg.lua
+index 4a2fe820..7315a06e 100644
+--- a/scripts/src/osd/sdl_cfg.lua
++++ b/scripts/src/osd/sdl_cfg.lua
+@@ -135,6 +135,10 @@ if _OPTIONS["targetos"]=="windows" then
+ 
+ 	configuration { }
+ 
++elseif _OPTIONS["targetos"]=="linux" then
++	buildoptions {
++		backtick("pkg-config --cflags libdrm"),
++	}
+ elseif _OPTIONS["targetos"]=="macosx" then
+ 	defines {
+ 		"SDLMAME_MACOSX",
+diff --git a/src/emu/emufwd.h b/src/emu/emufwd.h
+index 356e71ff..e2853561 100644
+--- a/src/emu/emufwd.h
++++ b/src/emu/emufwd.h
+@@ -266,4 +266,7 @@ class validity_checker;
+ // declared in video.h
+ class video_manager;
+ 
++// declared in emusync.h
++class emusync;
++
+ #endif // MAME_EMU_EMUFWD_H
+diff --git a/src/emu/emuopts.cpp b/src/emu/emuopts.cpp
+index a8879b8b..462bf552 100644
+--- a/src/emu/emuopts.cpp
++++ b/src/emu/emuopts.cpp
+@@ -96,7 +96,15 @@ const options_entry emu_options::s_option_entries[] =
+ 	{ OPTION_SLEEP,                                      "1",         core_options::option_type::BOOLEAN,    "enable sleeping, which gives time back to other applications when idle" },
+ 	{ OPTION_SPEED "(0.1-100)",                          "1.0",       core_options::option_type::FLOAT,      "controls the speed of gameplay, relative to realtime; smaller numbers are slower" },
+ 	{ OPTION_REFRESHSPEED ";rs",                         "0",         core_options::option_type::BOOLEAN,    "automatically adjust emulation speed to keep the emulated refresh rate slower than the host screen" },
+-	{ OPTION_LOWLATENCY ";lolat",                        "0",         core_options::option_type::BOOLEAN,    "draws new frame before throttling to reduce input latency" },
++	{ OPTION_SYNCREFRESH ";srf",                         "0",         core_options::option_type::BOOLEAN,    "enable using the start of VBLANK for throttling instead of the game time" },
++	{ OPTION_SYNCAUDIO ";sau",                           "1",         core_options::option_type::BOOLEAN,    "enable audio resampling to stay synchronized with video" },
++	{ OPTION_LOWLATENCY ";lolat",                        "1",         core_options::option_type::BOOLEAN,    "draws new frame before throttling to reduce input latency" },
++	{ OPTION_AUTOFRAMEDELAY ";afd",                      "1",         core_options::option_type::BOOLEAN,    "enable automatic framedelay if framedelay is set to 0" },
++	{ OPTION_FRAMEDELAY ";fd",                           "0",         core_options::option_type::INTEGER,    "delays the start of each frame to minimize input lag (0-9)"},
++	{ OPTION_FD_MARGIN "(0.0-10.0)",                     "1.0",       core_options::option_type::FLOAT,      "for frame delay margin, reserve this many milliseconds for vblank etc"},
++	{ OPTION_VSYNC_OFFSET,                               "0",         core_options::option_type::INTEGER,    "offset vsync position by this many lines to prevent tearing with frame_delay and high-resolution displays" },
++	{ OPTION_BLACK_FRAME_INSERTION ";bfi",               "0",         core_options::option_type::INTEGER,    "number of black frames to insert after each normal frame, intended to reduce motion blur on 120+ Hz monitors" },
++	{ OPTION_TEARBAR ";tb",                              "1",         core_options::option_type::BOOLEAN,    "show tear bar" },
+ 
+ 	// render options
+ 	{ nullptr,                                           nullptr,     core_options::option_type::HEADER,     "CORE RENDER OPTIONS" },
+@@ -132,6 +140,7 @@ const options_entry emu_options::s_option_entries[] =
+ 	{ OPTION_CONTRAST "(0.1-2.0)",                       "1.0",       core_options::option_type::FLOAT,      "default game screen contrast correction" },
+ 	{ OPTION_GAMMA "(0.1-3.0)",                          "1.0",       core_options::option_type::FLOAT,      "default game screen gamma correction" },
+ 	{ OPTION_PAUSE_BRIGHTNESS "(0.0-1.0)",               "0.65",      core_options::option_type::FLOAT,      "amount to scale the screen brightness when paused" },
++	{ OPTION_BFI_BRIGHTNESS "(0.0-1.0)",                 "0.0",       core_options::option_type::FLOAT,      "dimmed brightness for black frame insertion" },
+ 	{ OPTION_EFFECT,                                     "none",      core_options::option_type::STRING,     "name of a PNG file to use for visual effects, or 'none'" },
+ 
+ 	// vector options
+@@ -187,6 +196,8 @@ const options_entry emu_options::s_option_entries[] =
+ 	{ OPTION_UPDATEINPAUSE,                              "0",         core_options::option_type::BOOLEAN,    "keep calling video updates while in pause" },
+ 	{ OPTION_DEBUGSCRIPT,                                nullptr,     core_options::option_type::PATH,       "script for debugger" },
+ 	{ OPTION_DEBUGLOG,                                   "0",         core_options::option_type::BOOLEAN,    "write debug console output to debug.log" },
++	{ OPTION_EMUSYNCLOG,                                 "0",         core_options::option_type::BOOLEAN,    "output emusync logging information" },
++	{ OPTION_EMUSYNCSERIAL,                              nullptr,     core_options::option_type::STRING,     "send emusync messages on this serial port" },
+ 
+ 	// comm options
+ 	{ nullptr,                                           nullptr,     core_options::option_type::HEADER,     "CORE COMM OPTIONS" },
+diff --git a/src/emu/emuopts.h b/src/emu/emuopts.h
+index af8ff513..d2d226ea 100644
+--- a/src/emu/emuopts.h
++++ b/src/emu/emuopts.h
+@@ -80,7 +80,15 @@
+ #define OPTION_SLEEP                "sleep"
+ #define OPTION_SPEED                "speed"
+ #define OPTION_REFRESHSPEED         "refreshspeed"
++#define OPTION_SYNCREFRESH          "syncrefresh"
++#define OPTION_SYNCAUDIO            "syncaudio"
+ #define OPTION_LOWLATENCY           "lowlatency"
++#define OPTION_AUTOFRAMEDELAY       "autoframedelay"
++#define OPTION_FRAMEDELAY           "framedelay"
++#define OPTION_FD_MARGIN            "fd_margin"
++#define OPTION_VSYNC_OFFSET         "vsync_offset"
++#define OPTION_BLACK_FRAME_INSERTION "black_frame_insertion"
++#define OPTION_TEARBAR              "tearbar"
+ 
+ // core render options
+ #define OPTION_KEEPASPECT           "keepaspect"
+@@ -112,6 +120,7 @@
+ #define OPTION_CONTRAST             "contrast"
+ #define OPTION_GAMMA                "gamma"
+ #define OPTION_PAUSE_BRIGHTNESS     "pause_brightness"
++#define OPTION_BFI_BRIGHTNESS       "bfi_brightness"
+ #define OPTION_EFFECT               "effect"
+ 
+ // core vector options
+@@ -162,6 +171,8 @@
+ #define OPTION_UPDATEINPAUSE        "update_in_pause"
+ #define OPTION_DEBUGSCRIPT          "debugscript"
+ #define OPTION_DEBUGLOG             "debuglog"
++#define OPTION_EMUSYNCLOG           "emusynclog"
++#define OPTION_EMUSYNCSERIAL        "emusyncserial"
+ 
+ // core misc options
+ #define OPTION_DRC                  "drc"
+@@ -365,7 +376,15 @@ public:
+ 	bool sleep() const { return m_sleep; }
+ 	float speed() const { return float_value(OPTION_SPEED); }
+ 	bool refresh_speed() const { return m_refresh_speed; }
++	bool sync_refresh() const { return bool_value(OPTION_SYNCREFRESH); }
++	bool sync_audio() const { return bool_value(OPTION_SYNCAUDIO); }
+ 	bool low_latency() const { return bool_value(OPTION_LOWLATENCY); }
++	bool auto_frame_delay() const { return bool_value(OPTION_AUTOFRAMEDELAY); }
++	int frame_delay() const { return int_value(OPTION_FRAMEDELAY); }
++	float fd_margin() const { return float_value(OPTION_FD_MARGIN); }
++	int vsync_offset() const { return int_value(OPTION_VSYNC_OFFSET); }
++	int black_frame_insertion() const { return int_value(OPTION_BLACK_FRAME_INSERTION); }
++	bool tearbar() const { return bool_value(OPTION_TEARBAR); }
+ 
+ 	// core render options
+ 	bool keep_aspect() const { return bool_value(OPTION_KEEPASPECT); }
+@@ -397,6 +416,7 @@ public:
+ 	float contrast() const { return float_value(OPTION_CONTRAST); }
+ 	float gamma() const { return float_value(OPTION_GAMMA); }
+ 	float pause_brightness() const { return float_value(OPTION_PAUSE_BRIGHTNESS); }
++	float bfi_brightness() const { return float_value(OPTION_BFI_BRIGHTNESS); }
+ 	const char *effect() const { return value(OPTION_EFFECT); }
+ 
+ 	// core vector options
+@@ -445,6 +465,8 @@ public:
+ 	const char *debug_script() const { return value(OPTION_DEBUGSCRIPT); }
+ 	bool update_in_pause() const { return bool_value(OPTION_UPDATEINPAUSE); }
+ 	bool debuglog() const { return bool_value(OPTION_DEBUGLOG); }
++	bool emusynclog() const { return bool_value(OPTION_EMUSYNCLOG); }
++	const char* emusyncserial() const { return value(OPTION_EMUSYNCSERIAL); }
+ 
+ 	// core misc options
+ 	bool drc() const { return bool_value(OPTION_DRC); }
+diff --git a/src/emu/machine.cpp b/src/emu/machine.cpp
+index bf451940..8cd9119f 100644
+--- a/src/emu/machine.cpp
++++ b/src/emu/machine.cpp
+@@ -17,6 +17,7 @@
+ #include "debugger.h"
+ #include "dirtc.h"
+ #include "emuopts.h"
++#include "emusync.h"
+ #include "fileio.h"
+ #include "http.h"
+ #include "image.h"
+@@ -183,6 +184,9 @@ void running_machine::start()
+ 	// allocate a soft_reset timer
+ 	m_soft_reset_timer = m_scheduler.timer_alloc(timer_expired_delegate(FUNC(running_machine::soft_reset), this));
+ 
++	// raster sync manager
++	m_sync = std::make_unique<emusync>(*this);
++
+ 	// init the OSD layer
+ 	m_manager.osd().init(*this);
+ 
+diff --git a/src/emu/machine.h b/src/emu/machine.h
+index e7e9c433..1b624006 100644
+--- a/src/emu/machine.h
++++ b/src/emu/machine.h
+@@ -140,6 +140,7 @@ public:
+ 	debug_view_manager &debug_view() const { assert(m_debug_view != nullptr); return *m_debug_view; }
+ 	debugger_manager &debugger() const { assert(m_debugger != nullptr); return *m_debugger; }
+ 	natural_keyboard &natkeyboard() noexcept { assert(m_natkeyboard != nullptr); return *m_natkeyboard; }
++	emusync &sync() const { assert(m_sync != nullptr); return *m_sync; }
+ 	machine_phase phase() const { return m_current_phase; }
+ 	bool paused() const { return m_paused || (m_current_phase != machine_phase::RUNNING); }
+ 	bool exit_pending() const { return m_exit_pending; }
+@@ -288,6 +289,7 @@ private:
+ 	std::unique_ptr<rom_load_manager> m_rom_load;      // internal data from romload.cpp
+ 	std::unique_ptr<debugger_manager> m_debugger;      // internal data from debugger.cpp
+ 	std::unique_ptr<natural_keyboard> m_natkeyboard;   // internal data from natkeyboard.cpp
++	std::unique_ptr<emusync> m_sync;                   // internal data from emusync.cpp
+ 
+ 	// system state
+ 	machine_phase           m_current_phase;        // current execution phase
+diff --git a/src/emu/render.cpp b/src/emu/render.cpp
+index b2a55665..868c23fe 100644
+--- a/src/emu/render.cpp
++++ b/src/emu/render.cpp
+@@ -416,6 +416,7 @@ void render_texture::set_bitmap(bitmap_t &bitmap, const rectangle &sbounds, text
+ 	m_bitmap = &bitmap;
+ 	m_sbounds = sbounds;
+ 	m_format = format;
++	m_curseq++;
+ 
+ 	// invalidate all scaled versions
+ 	for (auto & elem : m_scaled)
+@@ -473,7 +474,7 @@ void render_texture::get_scaled(u32 dwidth, u32 dheight, render_texinfo &texinfo
+ 		texinfo.width_margin = m_sbounds.left();
+ 		texinfo.height = sheight;
+ 		// palette will be set later
+-		texinfo.seqid = ++m_curseq;
++		texinfo.seqid = m_curseq;
+ 	}
+ 	else
+ 	{
+@@ -528,7 +529,7 @@ void render_texture::get_scaled(u32 dwidth, u32 dheight, render_texinfo &texinfo
+ 		texinfo.width = dwidth;
+ 		texinfo.height = dheight;
+ 		// palette will be set later
+-		texinfo.seqid = scaled->seqid;
++		texinfo.seqid = m_curseq;
+ 	}
+ }
+ 
+@@ -945,6 +946,7 @@ render_target::render_target(render_manager &manager, render_container *ui, T &&
+ 	, m_keepaspect(false)
+ 	, m_int_overscan(false)
+ 	, m_pixel_aspect(0.0f)
++	, m_integer_aspect(1.0f)
+ 	, m_int_scale_x(0)
+ 	, m_int_scale_y(0)
+ 	, m_max_refresh(0)
+@@ -1035,6 +1037,18 @@ bool render_target::is_ui_target() const
+ 	return (this == &m_manager.ui_target());
+ }
+ 
++//-------------------------------------------------
++//  is_ui_rotated - return true if UI is rotated
++//-------------------------------------------------
++bool render_target::is_ui_rotated() const
++{
++	int orient = orientation_add(orientation(), manager().ui_container().orientation());
++
++	if (orient & ORIENTATION_SWAP_XY)
++		return true;
++	else
++		return false;
++}
+ 
+ //-------------------------------------------------
+ //  index - return the index of this target
+@@ -1045,6 +1059,44 @@ int render_target::index() const
+ 	return m_manager.m_targetlist.indexof(*this);
+ }
+ 
++//-------------------------------------------------
++//  texel_width - width of UI pixel after scaling
++//  in 0-1 coordinate range
++//-------------------------------------------------
++
++float render_target::texel_width() const
++{
++		float tw;
++
++		if (is_ui_rotated())
++			tw  = 1.0f / height();
++		else
++		{
++			tw  = 1.0f / width();
++			tw = tw / integer_aspect();
++		}
++		return tw;
++}
++
++//-------------------------------------------------
++//  texel_height - height of UI pixel after scaling
++//  in 0-1 coordinate range
++//-------------------------------------------------
++
++float render_target::texel_height() const
++{
++		float th;
++
++		if (is_ui_rotated())
++		{
++			th = 1.0f / width();
++			th = th * integer_aspect();
++		}
++		else
++			th = 1.0f / height();
++
++		return th;
++}
+ 
+ //-------------------------------------------------
+ //  set_bounds - set the bounds and pixel aspect
+@@ -1553,7 +1605,7 @@ void render_target::compute_visible_area(s32 target_width, s32 target_height, fl
+ 						continue;
+ 
+ 					// score the result
+-					float new_diff = fabsf(aspect_ratio * (a / b) - (ab / bb));
++					float new_diff = fabsf(aspect_ratio - (a / b) / (ab / bb));
+ 
+ 					if (new_diff <= diff)
+ 					{
+@@ -3506,9 +3558,16 @@ float render_manager::ui_aspect(render_target &target)
+ 	{
+ 		float pixel_aspect = target.pixel_aspect();
+ 
++		if (pixel_aspect < 1.0F)
++			pixel_aspect = 1.0F / roundf(1.0F / pixel_aspect);
++		else
++			pixel_aspect = roundf(pixel_aspect);
++
+ 		if (orient & ORIENTATION_SWAP_XY)
+ 			pixel_aspect = 1.0F / pixel_aspect;
+ 
++		m_ui_target->set_integer_aspect(pixel_aspect);
++
+ 		return aspect / pixel_aspect;
+ 	}
+ 
+diff --git a/src/emu/render.h b/src/emu/render.h
+index f8f84324..88530fec 100644
+--- a/src/emu/render.h
++++ b/src/emu/render.h
+@@ -506,6 +506,7 @@ public:
+ 	u32 width() const { return m_width; }
+ 	u32 height() const { return m_height; }
+ 	float pixel_aspect() const { return m_pixel_aspect; }
++	float integer_aspect() const { return m_integer_aspect; }
+ 	bool keepaspect() const { return m_keepaspect; }
+ 	int scale_mode() const { return m_scale_mode; }
+ 	float max_update_rate() const { return m_max_refresh; }
+@@ -517,6 +518,9 @@ public:
+ 	bool hidden() const { return ((m_flags & RENDER_CREATE_HIDDEN) != 0); }
+ 	bool is_ui_target() const;
+ 	int index() const;
++	float texel_width() const;
++	float texel_height() const;
++	bool is_ui_rotated() const;
+ 
+ 	// setters
+ 	void set_bounds(s32 width, s32 height, float pixel_aspect = 0);
+@@ -527,6 +531,7 @@ public:
+ 	void set_transform_container(bool transform_container) { m_transform_container = transform_container; }
+ 	void set_keepaspect(bool keepaspect) { m_keepaspect = keepaspect; }
+ 	void set_scale_mode(int scale_mode) { m_scale_mode = scale_mode; }
++	void set_integer_aspect(float aspect) { m_integer_aspect = aspect; }
+ 
+ 	// pointer input handling
+ 	void pointer_updated(osd::ui_event_handler::pointer type, u16 ptrid, u16 device, s32 x, s32 y, u32 buttons, u32 pressed, u32 released, s16 clicks);
+@@ -638,6 +643,7 @@ private:
+ 	bool                    m_keepaspect;               // constrain aspect ratio
+ 	bool                    m_int_overscan;             // allow overscan on integer scaled targets
+ 	float                   m_pixel_aspect;             // aspect ratio of individual pixels
++	float                   m_integer_aspect;           // aspect ratio of individual pixels rounded to integers
+ 	int                     m_scale_mode;               // type of scale to apply
+ 	int                     m_int_scale_x;              // horizontal integer scale factor
+ 	int                     m_int_scale_y;              // vertical integer scale factor
+diff --git a/src/emu/rendutil.cpp b/src/emu/rendutil.cpp
+index 5d09061a..2476d315 100644
+--- a/src/emu/rendutil.cpp
++++ b/src/emu/rendutil.cpp
+@@ -137,6 +137,7 @@ struct jpeg_setjmp_error_mgr : public jpeg_error_mgr
+ ***************************************************************************/
+ 
+ /* utilities */
++static void resample_argb_bitmap_integer(u32 *dest, u32 drowpixels, u32 dwidth, u32 dheight, const u32 *source, u32 srowpixels, u32 swidth, u32 sheight, const render_color &color, u32 dx, u32 dy) noexcept;
+ static void resample_argb_bitmap_average(u32 *dest, u32 drowpixels, u32 dwidth, u32 dheight, const u32 *source, u32 srowpixels, u32 swidth, u32 sheight, const render_color &color, u32 dx, u32 dy) noexcept;
+ static void resample_argb_bitmap_bilinear(u32 *dest, u32 drowpixels, u32 dwidth, u32 dheight, const u32 *source, u32 srowpixels, u32 swidth, u32 sheight, const render_color &color, u32 dx, u32 dy) noexcept;
+ static bool copy_png_alpha_to_bitmap(bitmap_argb32 &bitmap, const util::png_info &png) noexcept;
+@@ -172,7 +173,68 @@ void render_resample_argb_bitmap_hq(bitmap_argb32 &dest, bitmap_argb32 &source,
+ 	if (dx > 0x1000 || dy > 0x1000 || force)
+ 		resample_argb_bitmap_average(&dest.pix(0), dest.rowpixels(), dwidth, dheight, sbase, source.rowpixels(), swidth, sheight, color, dx, dy);
+ 	else
+-		resample_argb_bitmap_bilinear(&dest.pix(0), dest.rowpixels(), dwidth, dheight, sbase, source.rowpixels(), swidth, sheight, color, dx, dy);
++	{
++		dx = ceil(float(swidth << 12) / dwidth);
++		dy = ceil(float(sheight << 12) / dheight);
++
++		if (dwidth % swidth == 0 && dheight % sheight == 0)
++			resample_argb_bitmap_integer(&dest.pix(0), dest.rowpixels(), dwidth, dheight, sbase, source.rowpixels(), swidth, sheight, color, dx, dy);
++		else
++			resample_argb_bitmap_bilinear(&dest.pix(0), dest.rowpixels(), dwidth, dheight, sbase, source.rowpixels(), swidth, sheight, color, dx, dy);
++	}
++}
++
++
++/*-------------------------------------------------
++    resample_argb_bitmap_integer - resample a texture
++    by performing simple blitting
++-------------------------------------------------*/
++
++static void resample_argb_bitmap_integer(u32 *dest, u32 drowpixels, u32 dwidth, u32 dheight, const u32 *source, u32 srowpixels, u32 swidth, u32 sheight, const render_color &color, u32 dx, u32 dy) noexcept
++{
++	u32 r, g, b, a;
++	u32 x, y;
++
++	/* precompute premultiplied R/G/B/A factors */
++	r = color.r * color.a * 256.0f;
++	g = color.g * color.a * 256.0f;
++	b = color.b * color.a * 256.0f;
++	a = color.a * 256.0f;
++
++	/* loop over the target vertically */
++	for (y = 0; y < dheight; y++)
++	{
++		u32 cury = y * dy;
++
++		/* loop over the target horizontally */
++		for (x = 0; x < dwidth; x++)
++		{
++			u32 sumr, sumg, sumb, suma;
++			u32 curx = x * dx;
++
++			/* fetch the source pixel */
++			rgb_t pix = source[(cury >> 12) * srowpixels + (curx >> 12)];
++
++			/* apply scaling */
++			suma = pix.a() * a / 256;
++			sumr = pix.r() * r / 256;
++			sumg = pix.g() * g / 256;
++			sumb = pix.b() * b / 256;
++
++			/* if we're translucent, add in the destination pixel contribution */
++			if (a < 256)
++			{
++				rgb_t dpix = dest[y * drowpixels + x];
++				suma += dpix.a() * (256 - a);
++				sumr += dpix.r() * (256 - a);
++				sumg += dpix.g() * (256 - a);
++				sumb += dpix.b() * (256 - a);
++			}
++
++			/* store the target pixel, dividing the RGBA values by the overall scale factor */
++			dest[y * drowpixels + x] = rgb_t(suma, sumr, sumg, sumb);
++		}
++	}
+ }
+ 
+ 
+diff --git a/src/emu/video.cpp b/src/emu/video.cpp
+index e33111eb..f7b9911d 100644
+--- a/src/emu/video.cpp
++++ b/src/emu/video.cpp
+@@ -14,6 +14,7 @@
+ #include "crsshair.h"
+ #include "debugger.h"
+ #include "emuopts.h"
++#include "emusync.h"
+ #include "fileio.h"
+ #include "main.h"
+ #include "output.h"
+@@ -28,6 +29,7 @@
+ #include "xmlfile.h"
+ 
+ #include "osdepend.h"
++#include <switchres/switchres.h>
+ 
+ #include "rendersw.hxx"
+ 
+@@ -64,7 +66,7 @@ const bool video_manager::s_skiptable[FRAMESKIP_LEVELS][FRAMESKIP_LEVELS] =
+ 	{ false, true , true , true , true , true , true , true , true , true , true , true  }
+ };
+ 
+-
++int video_manager::s_fd_speeds[FD_BINS] = { 0,0,0,0,0,0,0,0,0,0 };
+ 
+ //**************************************************************************
+ //  VIDEO MANAGER
+@@ -222,7 +224,7 @@ void video_manager::frame_update(bool from_debugger)
+ 	bool anything_changed = update_screens && finish_screen_updates();
+ 
+ 	// update inputs and draw the user interface
+-	machine().osd().input_update(true);
++	//machine().osd().input_update(true);
+ 	anything_changed = emulator_info::draw_user_interface(machine()) || anything_changed;
+ 
+ 	// let plugins draw over the UI
+@@ -231,11 +233,14 @@ void video_manager::frame_update(bool from_debugger)
+ 	// if none of the screens changed and we haven't skipped too many frames in a row,
+ 	// mark this frame as skipped to prevent throttling; this helps for games that
+ 	// don't update their screen at the monitor refresh rate
+-	if (!anything_changed && !m_auto_frameskip && (m_frameskip_level == 0) && (m_empty_skip_count++ < 3))
++	if (!machine().sync().sync_refresh() && !anything_changed && !m_auto_frameskip && (m_frameskip_level == 0) && (m_empty_skip_count++ < 3))
+ 		skipped_it = true;
+ 	else
+ 		m_empty_skip_count = 0;
+ 
++	if (phase > machine_phase::INIT)
++		machine().sound().update(0, machine().sync().audio_throttle_target());
++
+ 	// if we're throttling, synchronize before rendering
+ 	attotime current_time = machine().time();
+ 	if (!from_debugger && phase > machine_phase::INIT && !m_low_latency && effective_throttle())
+@@ -247,11 +252,30 @@ void video_manager::frame_update(bool from_debugger)
+ 		machine().osd().update(!from_debugger && skipped_it);
+ 	}
+ 
++	// manage black frame insertion
++	if (machine().options().black_frame_insertion() && machine().options().sync_refresh())
++	{
++		if (phase == machine_phase::RUNNING && (!machine().paused() || machine().options().update_in_pause()))
++		{
++			render_container *container = &machine().render().ui_container();
++			int alpha = (1.0f - machine().options().bfi_brightness()) * 255.0f;
++			container->add_rect(0, 0, 1, 1, rgb_t(alpha,0x00,0x00,0x00), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++			for (int i = 0; i < machine().options().black_frame_insertion(); i++)
++			{
++				update_throttle(current_time);
++				machine().osd().update(!from_debugger && skipped_it);
++			}
++		}
++	}
++
+ 	// we synchronize after rendering instead of before, if low latency mode is enabled
+ 	if (!from_debugger && phase > machine_phase::INIT && m_low_latency && effective_throttle())
+ 		update_throttle(current_time);
+ 
+-	machine().osd().input_update(false);
++	machine().sync().serial_collect();
++	machine().sync().serial_write(machine().sync().POLL_INPUT);
++
++	machine().osd().input_update(true);
+ 	emulator_info::periodic_check();
+ 
+ 	if (!from_debugger)
+@@ -308,6 +332,11 @@ std::string video_manager::speed_text()
+ 	else
+ 		util::stream_format(str, "skip %d/%d", effective_frameskip(), MAX_FRAMESKIP);
+ 
++	if (machine().sync().auto_framedelay() && machine().sync().framedelay() == 0)
++		util::stream_format(str, " fd %.3f", machine().sync().current_framedelay() * 10);
++	else
++		util::stream_format(str, " fd %d", machine().sync().framedelay());
++
+ 	// append the speed for all cases except paused
+ 	if (!paused)
+ 		util::stream_format(str, " %3d%%", int(100 * m_speed_percent + 0.5));
+@@ -520,6 +549,23 @@ void video_manager::exit()
+ 		osd_ticks_t tps = osd_ticks_per_second();
+ 		double final_real_time = (double)m_overall_real_seconds + (double)m_overall_real_ticks / (double)tps;
+ 		double final_emu_time = m_overall_emutime.as_double();
++
++		if (!m_throttled)
++		{
++			int i;
++			float sum = 0;
++
++			osd_printf_info("Frame delay/percentage:");
++
++			for (i = 0; i < FD_BINS; i++)
++                sum += s_fd_speeds[i];
++
++			for (i = 0; i < FD_BINS; i++)
++				if (s_fd_speeds[i])
++					osd_printf_info(" %d/%.2f%%", i, (float) s_fd_speeds[i] / sum * 100.f);
++			osd_printf_info("\n");
++		}
++
+ 		osd_printf_info("Average speed: %.2f%% (%d seconds)\n", 100 * final_emu_time / final_real_time, (m_overall_emutime + attotime(0, ATTOSECONDS_PER_SECOND / 2)).seconds());
+ 	}
+ }
+@@ -712,6 +758,10 @@ void video_manager::update_throttle(attotime emutime)
+ 
+ */
+ 
++	// if we're only syncing to the refresh, bail now
++	if (machine().sync().handle_throttle())
++		return;
++
+ 	// outer scope so we can break out in case of a resync
+ 	while (1)
+ 	{
+@@ -978,6 +1028,14 @@ void video_manager::recompute_speed(const attotime &emutime)
+ 		osd_ticks_t tps = osd_ticks_per_second();
+ 		m_speed_percent = delta_emutime.as_double() * (double)tps / (double)delta_realtime;
+ 
++		// log speed for frame delay statistic
++		if (!m_throttled)
++		{
++			int bin = (float) FD_BINS - 10.f/m_speed_percent;
++			bin = bin > (FD_BINS - 1) ? (FD_BINS - 1) : bin < 0 ? 0 : bin;
++			s_fd_speeds[bin]++;
++		}
++
+ 		// remember the last times
+ 		m_speed_last_realtime = realtime;
+ 		m_speed_last_emutime = emutime;
+diff --git a/src/emu/video.h b/src/emu/video.h
+index af9048cf..9d270828 100644
+--- a/src/emu/video.h
++++ b/src/emu/video.h
+@@ -26,6 +26,7 @@
+ constexpr int FRAMESKIP_LEVELS = 12;
+ constexpr int MAX_FRAMESKIP = FRAMESKIP_LEVELS - 2;
+ 
++constexpr int FD_BINS = 10;
+ 
+ //**************************************************************************
+ //  TYPE DEFINITIONS
+@@ -162,6 +163,9 @@ private:
+ 	// movie recordings
+ 	std::vector<movie_recording::ptr> m_movie_recordings;
+ 
++	// frame delay statistics
++	static int          s_fd_speeds[FD_BINS];
++
+ 	static const bool   s_skiptable[FRAMESKIP_LEVELS][FRAMESKIP_LEVELS];
+ 
+ 	static const attoseconds_t ATTOSECONDS_PER_SPEED_UPDATE = ATTOSECONDS_PER_SECOND / 4;
+diff --git a/src/frontend/mame/ui/confswitch.cpp b/src/frontend/mame/ui/confswitch.cpp
+index ca19a0f4..833e2002 100644
+--- a/src/frontend/mame/ui/confswitch.cpp
++++ b/src/frontend/mame/ui/confswitch.cpp
+@@ -13,6 +13,8 @@
+ 
+ #include "uiinput.h"
+ 
++#include "rendutil.h"
++
+ #include <algorithm>
+ #include <bit>
+ #include <cstring>
+@@ -424,13 +426,21 @@ void menu_settings_dip_switches::custom_render(uint32_t flags, void *selectedref
+ 			unsigned const cnt(group.switch_count());
+ 			ui().draw_outlined_box(
+ 					container(),
+-					switchleft, liney, switchleft + (m_single_width * cnt), switchbottom,
++					switchleft,
++					liney,
++					switchleft + (m_single_width * cnt),
++					switchbottom,
+ 					ui().colors().background_color());
++
+ 			for (unsigned i = 1; cnt > i; ++i)
+ 			{
+-				container().add_line(
+-						switchleft + (m_single_width * i), liney, switchleft + (m_single_width * i), switchbottom,
+-						UI_LINE_WIDTH, ui().colors().text_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++				container().add_rect(
++						switchleft + (m_single_width * i) + machine().render().ui_target().texel_width() / 2.0F,
++						liney + machine().render().ui_target().texel_height(),
++						switchleft + (m_single_width * i) - machine().render().ui_target().texel_width() / 2.0F,
++						switchbottom - machine().render().ui_target().texel_height(),
++						ui().colors().border_color(),
++						PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ 			}
+ 
+ 			// compute top and bottom for on and off positions
+diff --git a/src/frontend/mame/ui/info.cpp b/src/frontend/mame/ui/info.cpp
+index 561c0ff1..4e38a99f 100644
+--- a/src/frontend/mame/ui/info.cpp
++++ b/src/frontend/mame/ui/info.cpp
+@@ -22,6 +22,7 @@
+ #include "screen.h"
+ #include "softlist.h"
+ #include "speaker.h"
++#include "osdepend.h"
+ 
+ #include "util/unicode.h"
+ 
+@@ -595,6 +596,7 @@ std::string machine_info::game_info_string() const
+ 		buf << _("None\n");
+ 	else
+ 	{
++		int i = 0;
+ 		for (device_video_output_interface &screen : scriter)
+ 		{
+ 			const u32 rate = u32(screen.frame_period().as_hz() * 1'000'000 + 0.5);
+@@ -624,6 +626,9 @@ std::string machine_info::game_info_string() const
+ 			util::stream_format(buf,
+ 					(scrcount > 1) ? _("%1$s: %2$s\n") : _("%2$s\n"),
+ 					string_format(_("Screen '%1$s'"), screen.device().tag()), detail);
++
++			// display Switchres information
++			buf << _(m_machine.osd().switchres_mode(i++));
+ 		}
+ 	}
+ 
+diff --git a/src/frontend/mame/ui/menu.cpp b/src/frontend/mame/ui/menu.cpp
+index 1cb817ad..0b6a84f1 100644
+--- a/src/frontend/mame/ui/menu.cpp
++++ b/src/frontend/mame/ui/menu.cpp
+@@ -812,7 +812,15 @@ void menu::draw(uint32_t flags)
+ 			else if (pitem.type() == menu_item_type::SEPARATOR)
+ 			{
+ 				// if we're just a divider, draw a line
+-				container().add_line(visible_left, line_y0 + 0.5F * line_height(), visible_left + visible_width, line_y0 + 0.5F * line_height(), UI_LINE_WIDTH, ui().colors().border_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++				rgb_t color = ui().colors().border_color();
++				color.set_a(color.a() / 2);
++				container().add_rect(
++						x1 + machine().render().ui_target().texel_width() * 3.0F,
++						line_y0 + 0.5F * line_height() + machine().render().ui_target().texel_height() / 2.0F,
++						x2 - machine().render().ui_target().texel_width() * 3.0F,
++						line_y0 + 0.5F * line_height() - machine().render().ui_target().texel_height() / 2.0F,
++						color,
++						PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ 			}
+ 			else if (pitem.subtext().empty())
+ 			{
+@@ -820,9 +828,27 @@ void menu::draw(uint32_t flags)
+ 				bool const item_deemphasize(pitem.flags() & FLAG_DEEMPHASIZE);
+ 				if (pitem.flags() & FLAG_UI_HEADING)
+ 				{
++
+ 					float heading_width = get_string_width(itemtext);
+-					container().add_line(visible_left, line_y0 + 0.5F * line_height(), visible_left + ((visible_width - heading_width) / 2) - lr_border(), line_y0 + 0.5F * line_height(), UI_LINE_WIDTH, ui().colors().border_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+-					container().add_line(visible_left + visible_width - ((visible_width - heading_width) / 2) + lr_border(), line_y0 + 0.5F * line_height(), visible_left + visible_width, line_y0 + 0.5F * line_height(), UI_LINE_WIDTH, ui().colors().border_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++
++					// draw ui heading lines with 50% alpha
++					rgb_t color = ui().colors().border_color();
++					color.set_a(color.a() / 2);
++					container().add_rect(
++							x1 + machine().render().ui_target().texel_width() * 3.0F,
++							line_y0 + 0.5F * line_height() + machine().render().ui_target().texel_height() / 2.0F,
++							visible_left + ((visible_width - heading_width) / 2) - lr_border(),
++							line_y0 + 0.5F * line_height() - machine().render().ui_target().texel_height() / 2.0F,
++							color,
++							PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++
++					container().add_rect(
++							visible_left + visible_width - ((visible_width - heading_width) / 2) + lr_border(),
++							line_y0 + 0.5F * line_height() + machine().render().ui_target().texel_height() / 2.0F,
++							x2 - machine().render().ui_target().texel_width() * 3.0F,
++							line_y0 + 0.5F * line_height() - machine().render().ui_target().texel_height() / 2.0F,
++							color,
++							PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ 				}
+ 				ui().draw_text_full(
+ 						target(),
+@@ -974,7 +1000,7 @@ void menu::recompute_metrics(uint32_t width, uint32_t height, float aspect)
+ 	float const ui_line_height = ui().get_line_height(target());
+ 
+ 	// force whole pixels for line height, gutters and borders
+-	m_line_height = std::floor(ui_line_height * float(height)) / float(height);
++	m_line_height = std::round(ui_line_height * float(height)) / float(height);
+ 	m_gutter_width = std::floor(0.5F * ui_line_height * aspect * float(width)) / float(width);
+ 	m_tb_border = std::floor(ui().box_tb_border() * float(height)) / float(height);
+ 	m_lr_border = std::floor(ui().box_lr_border() * aspect * float(width)) / float(width);
+@@ -1949,7 +1975,11 @@ void menu::activate_menu(render_target &target)
+ 
+ bool menu::check_metrics()
+ {
+-	std::pair<uint32_t, uint32_t> const uisize(target().width(), target().height());
++	std::pair<uint32_t, uint32_t> uisize(target().width(), target().height());
++
++	if (target().is_ui_rotated())
++		std::swap(uisize.first, uisize.second);
++
+ 	float const aspect = machine().render().ui_aspect(target());
+ 	if ((uisize == m_last_size) && (std::fabs(1.0F - (aspect / m_last_aspect)) < 1e-6F))
+ 		return false;
+@@ -2032,6 +2062,7 @@ bool menu::do_handle()
+ 	machine().osd().check_osd_inputs();
+ 
+ 	// recompute metrics if necessary
++
+ 	if (check_metrics())
+ 		need_update = true;
+ 
+diff --git a/src/frontend/mame/ui/moptions.cpp b/src/frontend/mame/ui/moptions.cpp
+index ebc38eab..d6406a6e 100644
+--- a/src/frontend/mame/ui/moptions.cpp
++++ b/src/frontend/mame/ui/moptions.cpp
+@@ -53,7 +53,7 @@ const options_entry ui_options::s_option_entries[] =
+ 	// UI options
+ 	{ nullptr,                              nullptr,            option_type::HEADER,     "UI OPTIONS" },
+ 	{ OPTION_INFOS_SIZE "(0.20-1.00)",      "0.75",             option_type::FLOAT,      "UI right panel infos text size (0.20 - 1.00)" },
+-	{ OPTION_FONT_ROWS "(25-40)",           "30",               option_type::INTEGER,    "UI font lines per screen (25 - 40)" },
++	{ OPTION_FONT_ROWS "(20-40)",           "30",               option_type::INTEGER,    "UI font lines per screen (20 - 40)" },
+ 	{ OPTION_UI_BORDER_COLOR,               "ffffffff",         option_type::STRING,     "UI border color (ARGB)" },
+ 	{ OPTION_UI_BACKGROUND_COLOR,           "ef101030",         option_type::STRING,     "UI background color (ARGB)" },
+ 	{ OPTION_UI_CLONE_COLOR,                "ff808080",         option_type::STRING,     "UI clone color (ARGB)" },
+diff --git a/src/frontend/mame/ui/sliders.cpp b/src/frontend/mame/ui/sliders.cpp
+index a616d44c..0a60980c 100644
+--- a/src/frontend/mame/ui/sliders.cpp
++++ b/src/frontend/mame/ui/sliders.cpp
+@@ -13,6 +13,7 @@
+ 
+ #include "ui/slider.h"
+ #include "ui/ui.h"
++#include "rendutil.h"
+ 
+ #include "input.h"
+ 
+@@ -323,16 +324,59 @@ void menu_sliders::custom_render(uint32_t flags, void *selectedref, float top, f
+ 		default_x = bar_left + bar_width * default_percentage;
+ 		current_x = bar_left + bar_width * percentage;
+ 
++		if (machine().render().ui_target().is_ui_rotated())
++		{
++			default_x = std::floor(default_x * machine().render().ui_target().height()) / machine().render().ui_target().height();
++			current_x = std::floor(current_x * machine().render().ui_target().height()) / machine().render().ui_target().height();
++		}
++		else
++		{
++			default_x = std::floor(default_x * machine().render().ui_target().width()) / machine().render().ui_target().width();
++			current_x = std::floor(current_x * machine().render().ui_target().width()) / machine().render().ui_target().width();
++		}
++
+ 		// fill in the percentage
+-		container().add_rect(bar_left, bar_top, current_x, bar_bottom, ui().colors().slider_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++		container().add_rect(
++				bar_left,
++				bar_top,
++				current_x,
++				bar_bottom,
++				ui().colors().slider_color(),
++				PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ 
+ 		// draw the top and bottom lines
+-		container().add_line(bar_left, bar_top, bar_left + bar_width, bar_top, UI_LINE_WIDTH, ui().colors().border_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+-		container().add_line(bar_left, bar_bottom, bar_left + bar_width, bar_bottom, UI_LINE_WIDTH, ui().colors().border_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++		container().add_rect(
++				bar_left,
++				bar_top,
++				bar_left + bar_width,
++				bar_top + machine().render().ui_target().texel_height(),
++				ui().colors().border_color(),
++				PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++
++		container().add_rect(
++				bar_left,
++				bar_bottom,
++				bar_left + bar_width,
++				bar_bottom - machine().render().ui_target().texel_height(),
++				ui().colors().border_color(),
++				PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ 
+ 		// draw default marker
+-		container().add_line(default_x, bar_area_top, default_x, bar_top, UI_LINE_WIDTH, ui().colors().border_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+-		container().add_line(default_x, bar_bottom, default_x, bar_area_top + bar_area_height, UI_LINE_WIDTH, ui().colors().border_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++		container().add_rect(
++				default_x,
++				bar_area_top,
++				default_x - machine().render().ui_target().texel_width(),
++				bar_top,
++				ui().colors().border_color(),
++				PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++
++		container().add_rect(
++				default_x,
++				bar_bottom,
++				default_x - machine().render().ui_target().texel_width(),
++				bar_area_top + bar_area_height,
++				ui().colors().border_color(),
++				PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ 
+ 		// draw the actual text
+ 		draw_text_normal(
+diff --git a/src/frontend/mame/ui/submenu.cpp b/src/frontend/mame/ui/submenu.cpp
+index 5cec17a7..1d30c783 100644
+--- a/src/frontend/mame/ui/submenu.cpp
++++ b/src/frontend/mame/ui/submenu.cpp
+@@ -126,7 +126,6 @@ std::vector<submenu::option> submenu::video_options()
+ 			{ option_type::OSD,  N_("Video Mode"),                              OSDOPTION_VIDEO },
+ 			{ option_type::OSD,  N_("Number Of Screens"),                       OSDOPTION_NUMSCREENS },
+ #if defined(UI_WINDOWS)
+-			{ option_type::OSD,  N_("Triple Buffering"),                        WINOPTION_TRIPLEBUFFER },
+ 			{ option_type::OSD,  N_("HLSL"),                                    WINOPTION_HLSL_ENABLE },
+ #endif
+ 			{ option_type::OSD,  N_("GLSL"),                                    OSDOPTION_GL_GLSL },
+@@ -135,7 +134,7 @@ std::vector<submenu::option> submenu::video_options()
+ 			{ option_type::OSD,  N_("Window Mode"),                             OSDOPTION_WINDOW },
+ 			{ option_type::EMU,  N_("Enforce Aspect Ratio"),                    OPTION_KEEPASPECT },
+ 			{ option_type::OSD,  N_("Start Out Maximized"),                     OSDOPTION_MAXIMIZE },
+-			{ option_type::OSD,  N_("Synchronized Refresh"),                    OSDOPTION_SYNCREFRESH },
++			{ option_type::EMU,  N_("Synchronized Refresh"),                    OPTION_SYNCREFRESH },
+ 			{ option_type::OSD,  N_("Wait Vertical Sync"),                      OSDOPTION_WAITVSYNC } };
+ }
+ 
+@@ -277,7 +276,7 @@ bool submenu::handle(event const *ev)
+ 				if (ev->iptkey == IPT_UI_CLEAR)
+ 					sm_option.options->set_value(sm_option.name, sm_option.entry->default_value(), OPTION_PRIORITY_CMDLINE);
+ 				else
+-					sm_option.options->set_value(sm_option.name, sm_option.entry->bool_value() ? 0 : 1, OPTION_PRIORITY_CMDLINE);
++					sm_option.options->set_value(sm_option.name, sm_option.entry->bool_value() ? false : true, OPTION_PRIORITY_CMDLINE);
+ 				break;
+ 			case core_options::option_type::INTEGER:
+ 				if (ev->iptkey == IPT_UI_LEFT || ev->iptkey == IPT_UI_RIGHT)
+diff --git a/src/frontend/mame/ui/textbox.cpp b/src/frontend/mame/ui/textbox.cpp
+index ed398b0b..c33ce1cb 100644
+--- a/src/frontend/mame/ui/textbox.cpp
++++ b/src/frontend/mame/ui/textbox.cpp
+@@ -15,6 +15,8 @@
+ 
+ #include "uiinput.h"
+ 
++#include "rendutil.h"
++
+ #include <string_view>
+ #include <utility>
+ 
+@@ -407,11 +409,16 @@ void menu_textbox::draw(uint32_t flags)
+ 			m_top_line ? (m_top_line + 1) : 0, text_lines,
+ 			effective_left, m_visible_top + (m_top_line ? line_height() : 0.0F));
+ 
+-	// add visual separator before the "return to prevous menu" item
+-	container().add_line(
+-			x1, separator + (0.5F * line_height()),
+-			x2, separator + (0.5F * line_height()),
+-			UI_LINE_WIDTH, ui().colors().text_color(), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++	// draw separator with 50% alpha
++	rgb_t color = ui().colors().border_color();
++	color.set_a(color.a() / 2);
++	container().add_rect(
++			x1 + machine().render().ui_target().texel_width() * 3.0F,
++			separator + 0.5F * line_height() + machine().render().ui_target().texel_height() / 2.0F,
++			x2 - machine().render().ui_target().texel_width() * 3.0F,
++			separator + 0.5F * line_height() - machine().render().ui_target().texel_height() / 2.0F,
++			color,
++			PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ 
+ 	float const line_y0 = m_visible_top + float(m_window_lines + 1) * line_height();
+ 	float const line_y1 = line_y0 + line_height();
+diff --git a/src/frontend/mame/ui/ui.cpp b/src/frontend/mame/ui/ui.cpp
+index bf04ed92..c97384df 100644
+--- a/src/frontend/mame/ui/ui.cpp
++++ b/src/frontend/mame/ui/ui.cpp
+@@ -34,8 +34,10 @@
+ #include "drivenum.h"
+ #include "fileio.h"
+ #include "input.h"
++#include "emusync.h"
+ #include "natkeyboard.h"
+ #include "render.h"
++#include "rendutil.h"
+ #include "cheat.h"
+ #include "rendfont.h"
+ #include "rendlay.h"
+@@ -50,6 +52,7 @@
+ // FIXME: allow OSD module headers to be included in a less ugly way
+ #include "../osd/modules/lib/osdlib.h"
+ #include "../osd/modules/lib/osdobj_common.h"
++#include "config.h"
+ 
+ #include "ioprocsstream.h"
+ 
+@@ -754,7 +757,7 @@ void mame_ui_manager::display_startup_screens(bool first_time)
+ 				warning_text = machine_info().game_info_string();
+ 			if (!warning_text.empty())
+ 			{
+-				warning_text.append(_("\n\nPress any key to continue"));
++				warning_text.append(_("\nPress any key to continue"));
+ 				set_handler(ui_callback_type::MODAL, handler_callback_func(handler_messagebox_anykey));
+ 			}
+ 			break;
+@@ -980,6 +983,10 @@ bool mame_ui_manager::update_and_render(render_target &target)
+ 	else
+ 		m_popup_text_end = 0;
+ 
++	// draw tear bar
++	if (show_fps_counter() && machine().options().tearbar())
++		draw_tear_bar(*target.ui_container());
++
+ 	// display the internal pointers
+ 	bool const pointer_update = m_pointers_changed;
+ 	m_pointers_changed = false;
+@@ -1040,12 +1047,17 @@ float mame_ui_manager::get_line_height(render_target &target, float scale)
+ {
+ 	int32_t const raw_font_pixel_height = get_font()->pixel_height();
+ 	float target_pixel_height = target.height();
++	float target_pixel_width = target.width();
++
++	if (target.is_ui_rotated())
++		std::swap(target_pixel_height, target_pixel_width);
+ 
+ 	// compute the font pixel height at the nominal size
+ 	float const one_to_one_line_height = float(raw_font_pixel_height) / target_pixel_height;
+ 
+ 	// determine the scale factor
+-	float scale_factor = target_font_height() * scale / one_to_one_line_height;
++	float scale_factor = std::min(target_pixel_height / float(raw_font_pixel_height) / options().font_rows(),
++								target_pixel_width / float(raw_font_pixel_height) / options().font_rows());
+ 
+ 	// if our font is small-ish, do integral scaling
+ 	if (raw_font_pixel_height < 24)
+@@ -1061,6 +1073,10 @@ float mame_ui_manager::get_line_height(render_target &target, float scale)
+ 			// otherwise, just ensure an integral scale factor
+ 			scale_factor = floorf(scale_factor);
+ 		}
++
++		// correct scale by pixel_aspect for integer factors in both axes
++		float pixel_aspect = std::max(target.integer_aspect(), 1.0F);
++		scale_factor *= pixel_aspect;
+ 	}
+ 	else
+ 	{
+@@ -1121,10 +1137,13 @@ void mame_ui_manager::draw_outlined_box(render_container &container, float x0, f
+ void mame_ui_manager::draw_outlined_box(render_container &container, float x0, float y0, float x1, float y1, rgb_t fgcolor, rgb_t bgcolor)
+ {
+ 	container.add_rect(x0, y0, x1, y1, bgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+-	container.add_line(x0, y0, x1, y0, UI_LINE_WIDTH, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+-	container.add_line(x1, y0, x1, y1, UI_LINE_WIDTH, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+-	container.add_line(x1, y1, x0, y1, UI_LINE_WIDTH, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+-	container.add_line(x0, y1, x0, y0, UI_LINE_WIDTH, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++
++	float tw = machine().render().ui_target().texel_width();
++	float th = machine().render().ui_target().texel_height();
++	container.add_rect(x0, y0, x1, y0 + th, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++	container.add_rect(x1, y0 + th, x1 - tw, y1 - th, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++	container.add_rect(x1, y1, x0, y1 - th, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
++	container.add_rect(x0, y1 - th, x0 + tw, y0 + th, fgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+ }
+ 
+ 
+@@ -1296,6 +1315,34 @@ void mame_ui_manager::draw_message_window(render_target &target, std::string_vie
+ }
+ 
+ 
++//-------------------------------------------------
++//  draw_tear_bar - draw a tear test scrolling bar
++//-------------------------------------------------
++
++void mame_ui_manager::draw_tear_bar(render_container &container)
++{
++	static int i = 0;
++	bool scan_swapped = machine().osd().scan_swapped();
++	render_target &target = machine().render().ui_target();
++
++	bool ui_rotated = (target.orientation() & machine_flags::MASK_ORIENTATION) & ORIENTATION_SWAP_XY? true : false;
++	bool co_rotated = (container.orientation() & machine_flags::MASK_ORIENTATION) & ORIENTATION_SWAP_XY? true : false;
++
++	// draw vertical bar at current x position
++	int width = scan_swapped? target.height() : target.width();
++	double pos = (double)i / width;
++
++	if (scan_swapped ^ ui_rotated ^ co_rotated)
++		container.add_rect(0, pos, 1, pos + 1.0 / 64.0, 0xff00ff00, PRIMFLAG_BLENDMODE(BLENDMODE_NONE));
++	else
++		container.add_rect(pos, 0, pos + 1.0 / 64.0, 1, 0xff00ff00, PRIMFLAG_BLENDMODE(BLENDMODE_NONE));
++
++	// increase bar x position
++	i += std::max(1, width / 256);
++	i %= width;
++}
++
++
+ //-------------------------------------------------
+ //  show_fps_temp - show the FPS counter for
+ //  a specific period of time
+@@ -2042,6 +2089,12 @@ std::vector<ui::menu_item> mame_ui_manager::slider_init(running_machine &machine
+ 				slider_alloc(util::string_format(_("%1$s Channel %d Volume"), snd.device().tag(), channel), -960, 0, 120, 10, std::bind(&mame_ui_manager::slider_devvol_chan, this, &snd, channel, _1, _2));
+ 	}
+ 
++	// add sync sliders
++	slider_alloc(_("Frame Delay"), 0, machine.options().frame_delay(), 9, 1, std::bind(&mame_ui_manager::slider_framedelay, this, _1, _2));
++	slider_alloc(_("Frame Delay Margin"), 0, floor(machine.options().fd_margin() * 1000.0 + 0.5), 10000, 10, std::bind(&mame_ui_manager::slider_fd_margin, this, _1, _2));
++	slider_alloc(_("V-Sync Offset"), -1024, machine.options().vsync_offset(), 1024, 1, std::bind(&mame_ui_manager::slider_vsync_offset, this, _1, _2));
++
++
+ 	// add analog adjusters
+ 	for (auto &port : machine.ioport().ports())
+ 	{
+@@ -2062,7 +2115,7 @@ std::vector<ui::menu_item> mame_ui_manager::slider_init(running_machine &machine
+ 		for (device_execute_interface &exec : execute_interface_enumerator(machine.root_device()))
+ 		{
+ 			std::string str = string_format(_("Overclock CPU %1$s"), exec.device().tag());
+-			slider_alloc(std::move(str), 100, 1000, 4000, 10, std::bind(&mame_ui_manager::slider_overclock, this, std::ref(exec.device()), _1, _2));
++			slider_alloc(std::move(str), 100, 1000, 4000, 1, std::bind(&mame_ui_manager::slider_overclock, this, std::ref(exec.device()), _1, _2));
+ 		}
+ 		for (device_sound_interface &snd : sound_interface_enumerator(machine.root_device()))
+ 		{
+@@ -2070,7 +2123,7 @@ std::vector<ui::menu_item> mame_ui_manager::slider_init(running_machine &machine
+ 			if (!snd.device().interface(exec) && snd.device().unscaled_clock() != 0)
+ 			{
+ 				std::string str = string_format(_("Overclock %1$s sound"), snd.device().tag());
+-				slider_alloc(std::move(str), 100, 1000, 4000, 10, std::bind(&mame_ui_manager::slider_overclock, this, std::ref(snd.device()), _1, _2));
++				slider_alloc(std::move(str), 100, 1000, 4000, 1, std::bind(&mame_ui_manager::slider_overclock, this, std::ref(snd.device()), _1, _2));
+ 			}
+ 		}
+ 	}
+@@ -2149,6 +2202,11 @@ std::vector<ui::menu_item> mame_ui_manager::slider_init(running_machine &machine
+ 		}
+ 	}
+ 
++	// add geometry sliders
++	slider_alloc(_("CRT H size"), 500, floor(downcast<osd_options &>(machine.options()).h_size() * 1000.0 + 0.5), 2000, 10, std::bind(&mame_ui_manager::slider_h_size, this, _1, _2));
++	slider_alloc(_("CRT H shift"), -64, downcast<osd_options &>(machine.options()).h_shift(), 64, 1, std::bind(&mame_ui_manager::slider_h_shift, this, _1, _2));
++	slider_alloc(_("CRT V shift"), -64, downcast<osd_options &>(machine.options()).v_shift(), 64, 1, std::bind(&mame_ui_manager::slider_v_shift, this, _1, _2));
++
+ #ifdef MAME_DEBUG
+ 	// add crosshair adjusters
+ 	for (auto &port : machine.ioport().ports())
+@@ -2255,6 +2313,103 @@ int32_t mame_ui_manager::slider_devvol_chan(device_sound_interface *snd, int cha
+ }
+ 
+ 
++//-------------------------------------------------
++//  slider_framedelay - global frame delay slider
++//  callback
++//-------------------------------------------------
++
++int32_t mame_ui_manager::slider_framedelay(std::string *str, int32_t newval)
++{
++	if (newval != SLIDER_NOCHANGE)
++		machine().sync().set_framedelay(newval);
++	if (str)
++		*str = string_format(_("%1$3d"), machine().sync().framedelay());
++	return machine().sync().framedelay();
++}
++
++
++//--------------------------------------------------
++//  slider_fd_margin - global fd_margin slider
++//  callback
++//--------------------------------------------------
++
++int32_t mame_ui_manager::slider_fd_margin(std::string *str, int32_t newval)
++{
++	if (newval != SLIDER_NOCHANGE)
++	{
++		float fval = (float)newval * 0.001f;
++		machine().sync().set_fd_margin(fval);
++	}
++
++	if (str)
++		*str = string_format(_("%.2f"), (float)machine().sync().fd_margin_in_ms());
++	return floor(machine().sync().fd_margin_in_ms() * 1000.0 + 0.5);
++}
++
++
++//--------------------------------------------------
++//  slider_vsync_offset - global vsync_offset slider
++//  callback
++//--------------------------------------------------
++
++int32_t mame_ui_manager::slider_vsync_offset(std::string *str, int32_t newval)
++{
++	if (newval != SLIDER_NOCHANGE)
++		machine().sync().set_vsync_offset(newval);
++	if (str)
++		*str = string_format(_("%1$3d"), machine().sync().vsync_offset());
++	return machine().sync().vsync_offset();
++}
++
++
++//--------------------------------------------------
++//  slider_h_size - global h_size slider
++//  callback
++//--------------------------------------------------
++
++int32_t mame_ui_manager::slider_h_size(std::string *str, int32_t newval)
++{
++	if (newval != SLIDER_NOCHANGE)
++	{
++		float fval = (float)newval * 0.001f;
++		machine().options().set_value(OSDOPTION_H_SIZE, fval, OPTION_PRIORITY_CMDLINE);
++	}
++
++	if (str)
++		*str = string_format(_("%1.2f"), downcast<osd_options &>(machine().options()).h_size());
++	return floor(downcast<osd_options &>(machine().options()).h_size() * 1000.0 + 0.5);
++}
++
++
++//--------------------------------------------------
++//  slider_h_shift - global h_shift slider
++//  callback
++//--------------------------------------------------
++
++int32_t mame_ui_manager::slider_h_shift(std::string *str, int32_t newval)
++{
++	if (newval != SLIDER_NOCHANGE)
++		machine().options().set_value(OSDOPTION_H_SHIFT, newval, OPTION_PRIORITY_CMDLINE);
++	if (str)
++		*str = string_format(_("%1$3d"), downcast<osd_options &>(machine().options()).h_shift());
++	return downcast<osd_options &>(machine().options()).h_shift();
++}
++
++
++//--------------------------------------------------
++//  slider_v_shift - global v_shift slider
++//  callback
++//--------------------------------------------------
++
++int32_t mame_ui_manager::slider_v_shift(std::string *str, int32_t newval)
++{
++	if (newval != SLIDER_NOCHANGE)
++		machine().options().set_value(OSDOPTION_V_SHIFT, newval, OPTION_PRIORITY_CMDLINE);
++	if (str)
++		*str = string_format(_("%1$3d"), downcast<osd_options &>(machine().options()).v_shift());
++	return downcast<osd_options &>(machine().options()).v_shift();
++}
++
+ 
+ //-------------------------------------------------
+ //  slider_adjuster - analog adjuster slider
+@@ -2311,6 +2466,7 @@ int32_t mame_ui_manager::slider_overclock(device_t &device, std::string *str, in
+ 
+ 	int32_t curval = floor(device.clock_scale() * 1000.0 + 0.5);
+ 	if (str)
++
+ 	{
+ 		if (curval % 10)
+ 			*str = string_format(_("%1$.1f%%"), float(curval) * 0.1F);
+diff --git a/src/frontend/mame/ui/ui.h b/src/frontend/mame/ui/ui.h
+index d61c687a..e667b842 100644
+--- a/src/frontend/mame/ui/ui.h
++++ b/src/frontend/mame/ui/ui.h
+@@ -187,6 +187,7 @@ public:
+ 	void draw_text_box(render_target &target, std::string_view text, ui::text_layout::text_justify justify, float xpos, float ypos, rgb_t backcolor);
+ 	void draw_text_box(render_target &target, ui::text_layout &layout, float xpos, float ypos, rgb_t backcolor);
+ 	void draw_message_window(render_target &target, std::string_view text);
++	void draw_tear_bar(render_container &container);
+ 
+ 	// load/save options to file
+ 	void load_ui_options();
+@@ -344,6 +345,7 @@ private:
+ 	void activate_menu();
+ 	void frame_update();
+ 	void exit();
++
+ 	void increase_frameskip();
+ 	void decrease_frameskip();
+ 	void config_load_warnings(config_type cfg_type, config_level cfg_level, util::xml::data_node const *parentnode);
+@@ -358,6 +360,9 @@ private:
+ 	int32_t slider_volume(std::string *str, int32_t newval);
+ 	int32_t slider_devvol(device_sound_interface *snd, std::string *str, int32_t newval);
+ 	int32_t slider_devvol_chan(device_sound_interface *snd, int channel, std::string *str, int32_t newval);
++	int32_t slider_framedelay(std::string *str, int32_t newval);
++	int32_t slider_fd_margin(std::string *str, int32_t newval);
++	int32_t slider_vsync_offset(std::string *str, int32_t newval);
+ 	int32_t slider_adjuster(ioport_field &field, std::string *str, int32_t newval);
+ 	int32_t slider_speed(std::string *str, int32_t newval);
+ 	int32_t slider_overclock(device_t &device, std::string *str, int32_t newval);
+@@ -379,6 +384,9 @@ private:
+ 	int32_t slider_beam_dot_size(device_video_output_interface &screen, std::string *str, int32_t newval);
+ 	int32_t slider_beam_intensity_weight(device_video_output_interface &screen, std::string *str, int32_t newval);
+ 	std::string slider_get_screen_desc(device_video_output_interface &screen);
++	int32_t slider_h_size(std::string *str, int32_t newval);
++	int32_t slider_h_shift(std::string *str, int32_t newval);
++	int32_t slider_v_shift(std::string *str, int32_t newval);
+ 
+ 	// Slider persistence functions
+ 	void sliders_load(config_type cfg_type, config_level cfg_level, util::xml::data_node const *parentnode); // Slider save
+diff --git a/src/osd/modules/input/input_common.cpp b/src/osd/modules/input/input_common.cpp
+index 4b7de2b9..3bfd405f 100644
+--- a/src/osd/modules/input/input_common.cpp
++++ b/src/osd/modules/input/input_common.cpp
+@@ -28,7 +28,7 @@
+ #define KEY_TRANS_WIN32(disc, virtual)
+ #endif
+ 
+-#if defined(OSD_SDL) || defined(SDLMAME_WIN32)
++#if defined(OSD_SDL) || defined(SDLMAME_WIN32) || defined(MISTER_INPUT)
+ #ifdef SDLMAME_SDL3
+ #include <SDL3/SDL.h>
+ #else
+diff --git a/src/osd/modules/input/input_common.h b/src/osd/modules/input/input_common.h
+index 4b4ec708..0dcfec5a 100644
+--- a/src/osd/modules/input/input_common.h
++++ b/src/osd/modules/input/input_common.h
+@@ -29,6 +29,7 @@
+ #include <queue>
+ #include <span>
+ 
++#define MISTER_INPUT 1
+ 
+ //============================================================
+ //  device_info
+@@ -182,7 +183,7 @@ struct key_trans_entry
+ {
+ 	input_item_id   mame_key;
+ 
+-#if defined(OSD_SDL) || defined(SDLMAME_WIN32)
++#if defined(OSD_SDL) || defined(SDLMAME_WIN32) || defined(MISTER_INPUT)
+ 	int             sdl_scancode;
+ #endif
+ #if defined(OSD_WINDOWS) || defined(SDLMAME_WIN32)
+diff --git a/src/osd/modules/input/input_wincommon.h b/src/osd/modules/input/input_wincommon.h
+index 35a49ea6..73f681db 100644
+--- a/src/osd/modules/input/input_wincommon.h
++++ b/src/osd/modules/input/input_wincommon.h
+@@ -37,6 +37,14 @@ struct mouse_state
+ 	BYTE    rgbButtons[8];
+ };
+ 
++// state information for a joystick
++struct joystick_state
++{
++	int32_t axes[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
++	BYTE	buttons[32];
++	BYTE	hats[4] = { 0x00, 0x00, 0x00, 0x00 };
++};
++
+ } // namespace osd
+ 
+ #endif // MAME_OSD_INPUT_INPUT_WINCOMMON_H
+diff --git a/src/osd/modules/lib/osdobj_common.cpp b/src/osd/modules/lib/osdobj_common.cpp
+index 8bc9f9dd..ee329ef3 100644
+--- a/src/osd/modules/lib/osdobj_common.cpp
++++ b/src/osd/modules/lib/osdobj_common.cpp
+@@ -75,7 +75,7 @@ const options_entry osd_options::s_option_entries[] =
+ 	{ OSDOPTION_WINDOW ";w",                     "1",              core_options::option_type::BOOLEAN,   "enable window mode; otherwise, full screen mode is assumed" }, //messui
+ 	{ OSDOPTION_MAXIMIZE ";max",                 "1",              core_options::option_type::BOOLEAN,   "default to maximized windows" },
+ 	{ OSDOPTION_WAITVSYNC ";vs",                 "0",              core_options::option_type::BOOLEAN,   "enable waiting for the start of VBLANK before flipping screens (reduces tearing effects)" },
+-	{ OSDOPTION_SYNCREFRESH ";srf",              "0",              core_options::option_type::BOOLEAN,   "enable using the start of VBLANK for throttling instead of the game time" },
++	{ OSDOPTION_SYNC_MODE "(0-4)",               "2",              core_options::option_type::INTEGER,   "sync mode"},
+ 	{ OSD_MONITOR_PROVIDER,                      OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "monitor discovery method: " },
+ 
+ 	// per-window options
+@@ -107,7 +107,54 @@ const options_entry osd_options::s_option_entries[] =
+ 
+ 	// full screen options
+ 	{ nullptr,                                   nullptr,          core_options::option_type::HEADER,    "OSD FULL SCREEN OPTIONS" },
+-	{ OSDOPTION_SWITCHRES,                       "0",              core_options::option_type::BOOLEAN,   "enable resolution switching" },
++	{ OSDOPTION_SWITCHRES,                       "1",              core_options::option_type::BOOLEAN,   "enable resolution switching" },
++	{ OSDOPTION_SWITCHRES_INI,                   "0",              core_options::option_type::BOOLEAN,   "read configuration from switchres.ini" },
++	{ OSDOPTION_SWITCHRES_BACKEND,               OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Switchres backend to use (adl, ati, powerstrip, xrandr, drmkms)" },
++	{ OSDOPTION_MODE_SETTING,                    "0",              core_options::option_type::BOOLEAN,   "force resolution switching through Switchres backend" },
++	{ OSDOPTION_MODELINE_GENERATION ";ml",       "1",              core_options::option_type::BOOLEAN,   "Automatic generation of modelines based on the specified monitor type" },
++	{ OSDOPTION_MONITOR ";m",                    "generic_15",     core_options::option_type::STRING,    "Monitor type, e.g.: generic_15, arcade_15, lcd, custom, etc." },
++	{ OSDOPTION_INTERLACE ";in",                 "1",              core_options::option_type::BOOLEAN,   "Enable interlaced scanning when necessary" },
++	{ OSDOPTION_DOUBLESCAN ";ds",                "0",              core_options::option_type::BOOLEAN,   "Enable double scanning when necessary (unsupported by some backends/gpus)" },
++	{ OSDOPTION_SUPER_WIDTH ";cs",               "2560",           core_options::option_type::INTEGER,   "Automatically apply -unevenstretchx if resolution width is equal or greater than this value" },
++	{ OSDOPTION_CHANGERES ";cr",                 "1",              core_options::option_type::BOOLEAN,   "Enable dynamic in-game video mode switching" },
++	{ OSDOPTION_LOCK_SYSTEM_MODES ";lsm",        "1",              core_options::option_type::BOOLEAN,   "Lock system (non-custom) video modes, only use modes created by us" },
++	{ OSDOPTION_LOCK_UNSUPPORTED_MODES ";lum",   "1",              core_options::option_type::BOOLEAN,   "Lock video modes reported as unsupported by your monitor's EDID" },
++	{ OSDOPTION_REFRESH_DONT_CARE ";rdc",        "0",              core_options::option_type::BOOLEAN,   "Ignore video mode's refresh reported by OS when checking ranges" },
++	{ OSDOPTION_DOTCLOCK_MIN ";dcm",             "0",              core_options::option_type::FLOAT,     "Lowest pixel clock supported by video card, in MHz, default is 0" },
++	{ OSDOPTION_H_SIZE,                          "1",              core_options::option_type::FLOAT,     "Apply horizontal size correction to calculated mode"},
++	{ OSDOPTION_H_SHIFT,                         "0",              core_options::option_type::INTEGER,   "Apply horizontal shift correction to calculated mode"},
++	{ OSDOPTION_V_SHIFT,                         "0",              core_options::option_type::INTEGER,   "Apply vertical shift correction to calculated mode"},
++	{ OSDOPTION_V_SHIFT_CORRECT,                 "0",              core_options::option_type::INTEGER,   "Apply vertical shift correction for multi-standard consumer CRT TVs"},
++	{ OSDOPTION_PIXEL_PRECISION,                 "1",              core_options::option_type::BOOLEAN,   "Calculate horizontal values with 1-pixel precision to improve horizontal centering" },
++	{ OSDOPTION_SYNC_REFRESH_TOLERANCE ";srt",   "2.0",            core_options::option_type::FLOAT,     "Maximum refresh difference, in Hz, allowed in order to synchronize" },
++	{ OSDOPTION_INTERLACE_FORCE_EVEN,            "0",              core_options::option_type::BOOLEAN,   "Calculate all vertical values of interlaced modes as even numbers. Required by AMD APU hardware on Linux" },
++	{ OSDOPTION_AUTOSYNC,                        "1",              core_options::option_type::BOOLEAN,   "automatically enable syncrefresh if refresh difference is below syncrefresh_tolerance" },
++	{ OSDOPTION_VBLANK_THREAD ";vbt",            "0",              core_options::option_type::BOOLEAN,   "use thread + wait for vblank mechanic to synchronize vertical retrace, use only if defaults don't work" },
++	{ OSDOPTION_AUTOFILTER,                      "1",              core_options::option_type::BOOLEAN,   "automatically set bilinear filtering with fractional stretching or interlaced " },
++	{ OSDOPTION_AUTOSTRETCH,                     "1",              core_options::option_type::BOOLEAN,   "automatically set scaling mode (integer or fractional) based on the selected video mode " },
++	{ OSDOPTION_SCALE_PROPORTIONAL,              "1",              core_options::option_type::BOOLEAN,   "Scale both axes by the same factor, when integer scaling is applied" },
++	{ OSDOPTION_DRI_DEVICE,                      OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Force drm video card for vsync (card0, card1, etc.) or auto for automatic." },
++	{ OSDOPTION_SCREEN_COMPOSITING,              "0",              core_options::option_type::BOOLEAN,   "Readjust relative screen positions of a multi-display setup after mode switching (Linux)" },
++	{ OSDOPTION_SCREEN_REORDERING,               "0",              core_options::option_type::BOOLEAN,   "Reallocates desktop multiple screens stacked vertically, so super-resolutions fit (Linux)" },
++	{ OSDOPTION_ALLOW_HW_REFRESH,                "0",              core_options::option_type::BOOLEAN,   "Allow on-the-fly mode addition (Windows)" },
++	{ OSDOPTION_MODELINE ";mode",                OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Use custom defined modeline" },
++	{ OSDOPTION_PS_TIMING ";pst",                OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Use custom Powertrip timing string" },
++	{ OSDOPTION_LCD_RANGE ";lcd",                OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom LCD range, VfreqMin-VfreqMax, in Hz, e.g.: 55.50-61.00" },
++	{ OSDOPTION_CRT_RANGE "0",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range, see documentation for details." },
++	{ OSDOPTION_CRT_RANGE "1",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "2",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "3",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "4",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "5",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "6",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "7",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "8",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_CRT_RANGE "9",                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "Add custom CRT range" },
++	{ OSDOPTION_MISTER_IP,                       "0.0.0.0",        core_options::option_type::STRING,    "nogpu device ip address" },
++	{ OSDOPTION_MISTER_COMPRESSION,              OSDOPTVAL_NONE,   core_options::option_type::STRING,    "nogpu device frame compression algorithm (none, lz4)" },
++	{ OSDOPTION_MISTER_WINDOW,                   "0",              core_options::option_type::BOOLEAN,   "nogpu show client window (affects performace)" },
++	{ OSDOPTION_MISTER_FD_MARGIN,                "1.5",            core_options::option_type::FLOAT,     "nogpu security margin for automatic frame delay, in ms."},
++	{ OSDOPTION_MISTER_INTERLACED_FB,            "1",              core_options::option_type::BOOLEAN,   "nogpu blit odd/even lines separately."},
+ 
+ 	{ nullptr,                                   nullptr,          core_options::option_type::HEADER,    "OSD ACCELERATED VIDEO OPTIONS" },
+ 	{ OSDOPTION_FILTER ";glfilter;flt",          "0",              core_options::option_type::BOOLEAN,   "use bilinear filtering when scaling emulated video" }, // MESSUI
+@@ -147,6 +194,10 @@ const options_entry osd_options::s_option_entries[] =
+ 	{ OSDOPTION_SOUND,                           OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "sound output method: " },
+ 	{ OSDOPTION_AUDIO_LATENCY ";alat(0.0-50.0)", "0.0",            core_options::option_type::FLOAT,     "audio latency, 0 for default (increase to reduce glitches, decrease for responsiveness)" },
+ 
++	{ nullptr,                                   nullptr,          core_options::option_type::HEADER,    "PORTAUDIO OPTIONS" },
++	{ OSDOPTION_PART_API,                        OSDOPTVAL_NONE,   core_options::option_type::STRING,    "PART API" },
++	{ OSDOPTION_PART_DEVICE,                     OSDOPTVAL_NONE,   core_options::option_type::STRING,    "PART device" },
++
+ 	{ nullptr,                                   nullptr,          core_options::option_type::HEADER,    "OSD MIDI OPTIONS" },
+ 	{ OSDOPTION_MIDI_PROVIDER,                   OSDOPTVAL_AUTO,   core_options::option_type::STRING,    "MIDI I/O method: " },
+ 
+@@ -229,6 +280,7 @@ void osd_common_t::register_options()
+ #endif
+ #if defined(OSD_WINDOWS)
+ 	REGISTER_MODULE(m_mod_man, RENDERER_D3D); // this is only built for OSD=windows, there's no dummy stub
++	REGISTER_MODULE(m_mod_man, RENDERER_D3D11);
+ #endif
+ #if defined(OSD_WINDOWS) || defined(SDLMAME_WIN32)
+ 	REGISTER_MODULE(m_mod_man, RENDERER_BGFX); // try BGFX before GDI on windows to get DirectX 10/11 acceleration
+@@ -253,7 +305,10 @@ void osd_common_t::register_options()
+ #endif
+ #endif
+ 	REGISTER_MODULE(m_mod_man, RENDERER_NONE);
+-
++	REGISTER_MODULE(m_mod_man, RENDERER_MISTER);
++#if !defined(OSD_WINDOWS) && !defined(SDLMAME_WIN32) && !defined(SDLMAME_MACOSX)
++	REGISTER_MODULE(m_mod_man, RENDERER_KMSRAW);
++#endif
+ 	REGISTER_MODULE(m_mod_man, SOUND_WASAPI);
+ 	REGISTER_MODULE(m_mod_man, SOUND_XAUDIO2);
+ 	REGISTER_MODULE(m_mod_man, SOUND_COREAUDIO);
+@@ -265,6 +320,7 @@ void osd_common_t::register_options()
+ #endif
+ #ifndef NO_USE_PORTAUDIO
+ 	REGISTER_MODULE(m_mod_man, SOUND_PORTAUDIO);
++	REGISTER_MODULE(m_mod_man, SOUND_PART);
+ #endif
+ #ifndef NO_USE_PULSEAUDIO
+ 	REGISTER_MODULE(m_mod_man, SOUND_PULSEAUDIO);
+@@ -309,6 +365,7 @@ void osd_common_t::register_options()
+ 	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_RAWINPUT);
+ 	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_DINPUT);
+ 	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_WIN32);
++	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_MISTER);
+ 	REGISTER_MODULE(m_mod_man, KEYBOARD_NONE);
+ 
+ #if defined(OSD_SDL)
+@@ -320,6 +377,7 @@ void osd_common_t::register_options()
+ 	REGISTER_MODULE(m_mod_man, MOUSEINPUT_RAWINPUT);
+ 	REGISTER_MODULE(m_mod_man, MOUSEINPUT_DINPUT);
+ 	REGISTER_MODULE(m_mod_man, MOUSEINPUT_WIN32);
++	REGISTER_MODULE(m_mod_man, MOUSEINPUT_MISTER);
+ 	REGISTER_MODULE(m_mod_man, MOUSE_NONE);
+ 
+ #if defined(OSD_SDL)
+@@ -344,6 +402,8 @@ void osd_common_t::register_options()
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_WINHYBRID);
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_DINPUT);
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_XINPUT);
++	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_RAWINPUT);
++	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_MISTER);
+ #if !defined(OSD_SDL) && defined(USE_SDL_JOYSTICK)
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_SDLJOY);
+ #endif
+@@ -729,6 +789,9 @@ void osd_common_t::init_subsystems()
+ 
+ 	// various modules depend on having a window handle
+ 	m_render = &select_module_options<render_module>(OSD_RENDERER_PROVIDER);
++
++	m_switchres.init(machine());
++
+ 	if (!video_init())
+ 	{
+ 		video_exit();
+@@ -800,6 +863,7 @@ void osd_common_t::poll_input_modules(bool relative_reset)
+ void osd_common_t::exit_subsystems()
+ {
+ 	video_exit();
++	m_switchres.exit();
+ }
+ 
+ void osd_common_t::video_exit()
+diff --git a/src/osd/modules/lib/osdobj_common.h b/src/osd/modules/lib/osdobj_common.h
+index 246c2e94..a7e40ac6 100644
+--- a/src/osd/modules/lib/osdobj_common.h
++++ b/src/osd/modules/lib/osdobj_common.h
+@@ -16,6 +16,7 @@
+ #include "osdepend.h"
+ 
+ #include "modules/osdmodule.h"
++#include "modules/switchres/switchres_module.h"
+ 
+ #include "emuopts.h"
+ 
+@@ -56,7 +57,7 @@
+ #define OSDOPTION_WINDOW                "window"
+ #define OSDOPTION_MAXIMIZE              "maximize"
+ #define OSDOPTION_WAITVSYNC             "waitvsync"
+-#define OSDOPTION_SYNCREFRESH           "syncrefresh"
++#define OSDOPTION_SYNC_MODE             "sync_mode"
+ 
+ #define OSDOPTION_SCREEN                "screen"
+ #define OSDOPTION_ASPECT                "aspect"
+@@ -80,6 +81,9 @@
+ #define OSDOPTION_SOUND                 "sound"
+ #define OSDOPTION_AUDIO_LATENCY         "audio_latency"
+ 
++#define OSDOPTION_PART_API              "part_api"
++#define OSDOPTION_PART_DEVICE           "part_device"
++
+ #define OSDOPTION_MIDI_PROVIDER         "midiprovider"
+ 
+ #define OSDOPTION_NETWORK_PROVIDER      "networkprovider"
+@@ -93,6 +97,45 @@
+ #define OSDOPTION_BGFX_LUT              "bgfx_lut"
+ #define OSDOPTION_BGFX_AVI_NAME         "bgfx_avi_name"
+ 
++#define OSDOPTION_SWITCHRES_INI         "switchres_ini"
++#define OSDOPTION_SWITCHRES_BACKEND     "switchres_backend"
++#define OSDOPTION_MODE_SETTING          "modesetting"
++#define OSDOPTION_MODELINE_GENERATION   "modeline_generation"
++#define OSDOPTION_MONITOR               "monitor"
++#define OSDOPTION_INTERLACE             "interlace"
++#define OSDOPTION_DOUBLESCAN            "doublescan"
++#define OSDOPTION_SUPER_WIDTH           "super_width"
++#define OSDOPTION_CHANGERES             "changeres"
++#define OSDOPTION_LOCK_SYSTEM_MODES     "lock_system_modes"
++#define OSDOPTION_LOCK_UNSUPPORTED_MODES "lock_unsupported_modes"
++#define OSDOPTION_REFRESH_DONT_CARE     "refresh_dont_care"
++#define OSDOPTION_DOTCLOCK_MIN          "dotclock_min"
++#define OSDOPTION_H_SIZE                "h_size"
++#define OSDOPTION_H_SHIFT               "h_shift"
++#define OSDOPTION_V_SHIFT               "v_shift"
++#define OSDOPTION_V_SHIFT_CORRECT       "v_shift_correct"
++#define OSDOPTION_PIXEL_PRECISION       "pixel_precision"
++#define OSDOPTION_SYNC_REFRESH_TOLERANCE "sync_refresh_tolerance"
++#define OSDOPTION_INTERLACE_FORCE_EVEN  "interlace_force_even"
++#define OSDOPTION_AUTOSYNC              "autosync"
++#define OSDOPTION_VBLANK_THREAD         "vblank_thread"
++#define OSDOPTION_AUTOFILTER            "autofilter"
++#define OSDOPTION_AUTOSTRETCH           "autostretch"
++#define OSDOPTION_SCALE_PROPORTIONAL    "scale_proportional"
++#define OSDOPTION_DRI_DEVICE            "dri_device"
++#define OSDOPTION_SCREEN_COMPOSITING    "screen_compositing"
++#define OSDOPTION_SCREEN_REORDERING     "screen_reordering"
++#define OSDOPTION_ALLOW_HW_REFRESH      "allow_hw_refresh"
++#define OSDOPTION_MODELINE              "modeline"
++#define OSDOPTION_PS_TIMING             "ps_timing"
++#define OSDOPTION_LCD_RANGE             "lcd_range"
++#define OSDOPTION_CRT_RANGE             "crt_range"
++#define OSDOPTION_MISTER_IP             "mister_ip"
++#define OSDOPTION_MISTER_COMPRESSION    "mister_compression"
++#define OSDOPTION_MISTER_WINDOW         "mister_window"
++#define OSDOPTION_MISTER_FD_MARGIN      "mister_fd_margin"
++#define OSDOPTION_MISTER_INTERLACED_FB  "mister_interlaced_fb"
++
+ #define OSDOPTVAL_AUTO                  "auto"
+ #define OSDOPTVAL_NONE                  "none"
+ 
+@@ -129,7 +172,7 @@ public:
+ 	bool window() const { return bool_value(OSDOPTION_WINDOW); }
+ 	bool maximize() const { return bool_value(OSDOPTION_MAXIMIZE); }
+ 	bool wait_vsync() const { return bool_value(OSDOPTION_WAITVSYNC); }
+-	bool sync_refresh() const { return bool_value(OSDOPTION_SYNCREFRESH); }
++	int sync_mode() const { return int_value(OSDOPTION_SYNC_MODE); }
+ 
+ 	// per-window options
+ 	const char *screen() const { return value(OSDOPTION_SCREEN); }
+@@ -143,6 +186,44 @@ public:
+ 
+ 	// full screen options
+ 	bool switch_res() const { return bool_value(OSDOPTION_SWITCHRES); }
++	bool switchres_ini() const { return bool_value(OSDOPTION_SWITCHRES_INI); }
++	const char *switchres_backend() const { return value(OSDOPTION_SWITCHRES_BACKEND); }
++	bool mode_setting() const { return bool_value(OSDOPTION_MODE_SETTING); }
++	bool modeline_generation() const { return bool_value(OSDOPTION_MODELINE_GENERATION); }
++	const char *monitor() const { return value(OSDOPTION_MONITOR); }
++	bool doublescan() const { return bool_value(OSDOPTION_DOUBLESCAN); }
++	bool interlace() const { return bool_value(OSDOPTION_INTERLACE); }
++	int super_width() const { return int_value(OSDOPTION_SUPER_WIDTH); }
++	bool changeres() const { return int_value(OSDOPTION_CHANGERES); }
++	bool lock_system_modes() const { return bool_value(OSDOPTION_LOCK_SYSTEM_MODES); }
++	bool lock_unsupported_modes() const { return bool_value(OSDOPTION_LOCK_UNSUPPORTED_MODES); }
++	bool refresh_dont_care() const { return bool_value(OSDOPTION_REFRESH_DONT_CARE); }
++	float dotclock_min() const { return float_value(OSDOPTION_DOTCLOCK_MIN); }
++	float h_size() const { return float_value(OSDOPTION_H_SIZE); }
++	int h_shift() const { return int_value(OSDOPTION_H_SHIFT); }
++	int v_shift() const { return int_value(OSDOPTION_V_SHIFT); }
++	int v_shift_correct() const { return int_value(OSDOPTION_V_SHIFT_CORRECT); }
++	bool pixel_precision() const { return bool_value(OSDOPTION_PIXEL_PRECISION); }
++	float sync_refresh_tolerance() const { return float_value(OSDOPTION_SYNC_REFRESH_TOLERANCE); }
++	bool interlace_force_even() const { return bool_value(OSDOPTION_INTERLACE_FORCE_EVEN); }
++	bool autosync() const { return bool_value(OSDOPTION_AUTOSYNC); }
++	bool vblank_thread() const { return bool_value(OSDOPTION_VBLANK_THREAD); }
++	bool autofilter() const { return bool_value(OSDOPTION_AUTOFILTER); }
++	bool autostretch() const { return bool_value(OSDOPTION_AUTOSTRETCH); }
++	bool scale_proportional() const { return bool_value(OSDOPTION_SCALE_PROPORTIONAL); }
++	const char *dri_device() const { return value(OSDOPTION_DRI_DEVICE); }
++	bool screen_compositing() const { return bool_value(OSDOPTION_SCREEN_COMPOSITING); }
++	bool screen_reordering() const { return bool_value(OSDOPTION_SCREEN_REORDERING); }
++	bool allow_hw_refresh() const { return bool_value(OSDOPTION_ALLOW_HW_REFRESH); }
++	const char *modeline() const { return value(OSDOPTION_MODELINE); }
++	const char *ps_timing() const { return value(OSDOPTION_PS_TIMING); }
++	const char *lcd_range() const { return value(OSDOPTION_LCD_RANGE); }
++	const char *crt_range(int index) const { return value(util::string_format("%s%d", OSDOPTION_CRT_RANGE, index)); }
++	const char *mister_ip() const { return value(OSDOPTION_MISTER_IP); }
++	const char *mister_compression() const { return value(OSDOPTION_MISTER_COMPRESSION); }
++	bool mister_window() const { return bool_value(OSDOPTION_MISTER_WINDOW); }
++	float mister_fd_margin() const { return float_value(OSDOPTION_MISTER_FD_MARGIN); }
++	bool mister_interlaced_fb() const { return bool_value(OSDOPTION_MISTER_INTERLACED_FB); }
+ 
+ 	// accelerated video options
+ 	bool filter() const { return bool_value(OSDOPTION_FILTER); }
+@@ -161,6 +242,8 @@ public:
+ 	// sound options
+ 	const char *sound() const { return value(OSDOPTION_SOUND); }
+ 	float audio_latency() const { return float_value(OSDOPTION_AUDIO_LATENCY); }
++	const char *part_api() const { return value(OSDOPTION_PART_API); }
++	const char *part_device() const { return value(OSDOPTION_PART_DEVICE); }
+ 
+ 	// BGFX specific options
+ 	const char *bgfx_path() const { return value(OSDOPTION_BGFX_PATH); }
+@@ -246,11 +329,15 @@ public:
+ 	virtual std::unique_ptr<osd::network_device> open_network_device(int id, osd::network_handler &handler) override;
+ 	virtual std::vector<osd::network_device_info> list_network_devices() override;
+ 
++	virtual const char *switchres_mode(int i) override { return m_switchres.display_mode_to_txt(i); }
++	virtual bool scan_swapped() override { return m_switchres.scan_swapped(); }
++
+ 	// FIXME: everything below seems to be osd specific and not part of
+ 	//        this INTERFACE but part of the osd IMPLEMENTATION
+ 
+ 	// getters
+ 	running_machine &machine() const { assert(m_machine != nullptr); return *m_machine; }
++	switchres_module *switchres() { return &m_switchres; }
+ 
+ 	virtual void debugger_update();
+ 
+@@ -326,6 +413,7 @@ protected:
+ 	monitor_module* m_monitor_module;
+ 	std::unique_ptr<osd_watchdog> m_watchdog;
+ 	std::vector<ui::menu_item> m_sliders;
++	switchres_module m_switchres;
+ 
+ private:
+ 	std::unordered_map<std::string, std::string> m_option_descs;
+diff --git a/src/osd/modules/monitor/monitor_sdl.cpp b/src/osd/modules/monitor/monitor_sdl.cpp
+index d96654a4..9b380875 100644
+--- a/src/osd/modules/monitor/monitor_sdl.cpp
++++ b/src/osd/modules/monitor/monitor_sdl.cpp
+@@ -128,7 +128,14 @@ protected:
+ 			int num_displays = 0;
+ 			const auto displays = SDL_GetDisplays(&num_displays);
+ #else
+-			int num_displays = SDL_GetNumVideoDisplays();
++			// SDL2 doesn't get the number of displays correctly on a multi-gpu setup
++			// It only gets the number of displays of the first reported gpu
++			// Do this in order to have access to any screen from the kmsraw renderer
++			int num_displays;
++			if (strcmp(options.video(), "kmsraw") == 0)
++				num_displays = MAX_VIDEO_WINDOWS;
++			else
++				num_displays = SDL_GetNumVideoDisplays();
+ #endif
+ 			for (i = 0; i < num_displays; i++)
+ 			{
+diff --git a/src/osd/modules/osdwindow.cpp b/src/osd/modules/osdwindow.cpp
+index 0492396f..4449d775 100644
+--- a/src/osd/modules/osdwindow.cpp
++++ b/src/osd/modules/osdwindow.cpp
+@@ -35,6 +35,7 @@ osd_window::osd_window(
+ 	m_renderprovider(renderprovider),
+ 	m_monitor(std::move(monitor)),
+ 	m_renderer(nullptr),
++	m_sync(machine.sync()),
+ 	m_title(
+ 			util::string_format(
+ 				(video_config.numscreens > 1)
+diff --git a/src/osd/modules/osdwindow.h b/src/osd/modules/osdwindow.h
+index 340261bb..06ae6fd7 100644
+--- a/src/osd/modules/osdwindow.h
++++ b/src/osd/modules/osdwindow.h
+@@ -37,6 +37,7 @@ class render_module;
+ class render_primitive_list;
+ 
+ class osd_renderer;
++class emusync;
+ 
+ 
+ class osd_window_config
+@@ -81,6 +82,8 @@ public:
+ 	osd_monitor_info *monitor() const { return m_monitor.get(); }
+ 	std::shared_ptr<osd_monitor_info> monitor_from_rect(const osd_rect *proposed) const;
+ 
++	emusync &sync() const { return m_sync; }
++
+ 	void create_target();
+ 	void destroy();
+ 
+@@ -186,6 +189,7 @@ private:
+ 	render_module                       &m_renderprovider;
+ 	std::shared_ptr<osd_monitor_info>   m_monitor;
+ 	std::unique_ptr<osd_renderer>       m_renderer;
++	emusync                             &m_sync;
+ 	const std::string                   m_title;
+ };
+ 
+@@ -376,6 +380,7 @@ public:
+ 	virtual void record() { }
+ 	virtual void toggle_fsfx() { }
+ 	virtual bool sliders_dirty() { return m_sliders_dirty; }
++	virtual int restart() { return 0; }
+ 
+ protected:
+ 	virtual void build_slider_list() { }
+@@ -413,14 +418,13 @@ struct osd_video_config
+ 	// hardware options
+ 	int                 waitvsync;                  // spin until vsync
+ 	int                 syncrefresh;                // sync only to refresh rate
++	int                 sync_mode;                  // sync refresh mode (0-3)
+ 	int                 switchres;                  // switch resolutions
++	int                 framedelay;					// frame delay
+ 
+ 	// d3d, accel, opengl
+ 	int                 filter;                     // enable filtering
+ 
+-	// d3d
+-	int                 triplebuf;                  // triple buffer
+-
+ 	//============================================================
+ 	// SDL - options
+ 	//============================================================
+diff --git a/src/osd/modules/render/draw13.cpp b/src/osd/modules/render/draw13.cpp
+index 5ed8008b..359a8526 100644
+--- a/src/osd/modules/render/draw13.cpp
++++ b/src/osd/modules/render/draw13.cpp
+@@ -19,6 +19,7 @@
+ // OSD headers
+ #include "sdlopts.h"
+ #include "window.h"
++#include "modules/monitor/monitor_common.h"
+ 
+ // lib/util
+ #include "options.h"
+@@ -26,6 +27,7 @@
+ // emu
+ #include "emucore.h"
+ #include "render.h"
++#include "emusync.h"
+ 
+ // standard SDL headers
+ #include <SDL2/SDL.h>
+@@ -162,6 +164,9 @@ public:
+ 		destroy_all_textures();
+ 		SDL_DestroyRenderer(m_sdl_renderer);
+ 		m_sdl_renderer = nullptr;
++
++		// destroy vblank thread
++		m_sync.osd_deinit();
+ 	}
+ 
+ 	virtual int create() override;
+@@ -203,6 +208,9 @@ private:
+ 	// Stats
+ 	int64_t         m_last_blit_time;
+ 	int64_t         m_last_blit_pixels;
++
++	// emusync manager
++	emusync         &m_sync;
+ };
+ 
+ 
+@@ -252,6 +260,7 @@ renderer_sdl2::renderer_sdl2(
+ 	, m_blit_dim(0, 0)
+ 	, m_last_blit_time(0)
+ 	, m_last_blit_pixels(0)
++	, m_sync(window.sync())
+ {
+ 	for (int i = 0; i < 30; i++)
+ 	{
+@@ -458,8 +467,15 @@ int renderer_sdl2::create()
+ 		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+ 	}
+ 
++	bool handle_vsync = false;
++	if (window().index() == 0)
++	{
++		if (m_sync.osd_init(window().monitor()->oshandle(), nullptr, nullptr))
++			handle_vsync = m_sync.sync_refresh();
++	}
++
+ 	if (video_config.waitvsync)
+-		m_sdl_renderer = SDL_CreateRenderer(dynamic_cast<sdl_window_info &>(window()).platform_window(), -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
++		m_sdl_renderer = SDL_CreateRenderer(dynamic_cast<sdl_window_info &>(window()).platform_window(), -1, (handle_vsync? 0 : SDL_RENDERER_PRESENTVSYNC) | SDL_RENDERER_ACCELERATED);
+ 	else
+ 		m_sdl_renderer = SDL_CreateRenderer(dynamic_cast<sdl_window_info &>(window()).platform_window(), -1, SDL_RENDERER_ACCELERATED);
+ 
+@@ -607,11 +623,15 @@ int renderer_sdl2::draw(int update)
+ 
+ 	window().m_primlist->release_lock();
+ 
++	m_sync.predraw_sync();
++
+ 	m_last_blit_pixels = blit_pixels;
+ 	m_last_blit_time = -osd_ticks();
+ 	SDL_RenderPresent(m_sdl_renderer);
+ 	m_last_blit_time += osd_ticks();
+ 
++	m_sync.postdraw_sync();
++
+ 	return 0;
+ }
+ 
+diff --git a/src/osd/modules/render/drawbgfx.cpp b/src/osd/modules/render/drawbgfx.cpp
+index 136258e6..aff2d616 100644
+--- a/src/osd/modules/render/drawbgfx.cpp
++++ b/src/osd/modules/render/drawbgfx.cpp
+@@ -32,12 +32,14 @@
+ #include "config.h"
+ #include "render.h"
+ #include "rendutil.h"
++#include "emusync.h"
+ 
+ // util
+ #include "util/xmlfile.h"
+ 
+ // OSD
+ #include "modules/lib/osdobj_common.h"
++#include "modules/monitor/monitor_common.h"
+ #include "window.h"
+ 
+ #include <bx/math.h>
+@@ -639,6 +641,8 @@ renderer_bgfx::renderer_bgfx(osd_window &window, parent_module &parent)
+ 	, m_avi_target(nullptr)
+ 	, m_load_sub(parent.subscribe_load(&renderer_bgfx::load_config, this))
+ 	, m_save_sub(parent.subscribe_save(&renderer_bgfx::save_config, this))
++	, m_sync(window.sync())
++	, m_handle_vsync(false)
+ {
+ 	// load settings if recreated after fullscreen toggle
+ 	util::xml::data_node *windownode = m_module().persistent_settings().get_child("window");
+@@ -689,6 +693,9 @@ renderer_bgfx::~renderer_bgfx()
+ 		m_avi_data.reset();
+ 		m_avi_view.reset();
+ 	}
++
++	// destroy vblank thread
++	m_sync.osd_deinit();
+ }
+ 
+ 
+@@ -764,6 +771,9 @@ int renderer_bgfx::create()
+ 	memset(m_white, 0xff, sizeof(uint32_t) * 16 * 16);
+ 	m_texinfo.push_back(rectangle_packer::packable_rectangle(WHITE_HASH, PRIMFLAG_TEXFORMAT(TEXFORMAT_ARGB32), 16, 16, 16, nullptr, m_white));
+ 
++	if (window().index() == 0)
++		m_sync.osd_init(window().monitor()->oshandle(), nullptr, nullptr);
++
+ 	return 0;
+ }
+ 
+@@ -1389,7 +1399,9 @@ int renderer_bgfx::draw(int update)
+ 
+ 	if (window().index() == osd_common_t::window_list().size() - 1)
+ 	{
++		m_sync.predraw_sync();
+ 		bgfx::frame();
++		m_sync.postdraw_sync();
+ 	}
+ 
+ 	return 0;
+@@ -1425,12 +1437,15 @@ void renderer_bgfx::add_audio_to_recording(const int16_t *buffer, int samples_th
+ 
+ bool renderer_bgfx::update_dimensions()
+ {
+-	if (m_dimensions != m_new_dimensions)
++	bool new_handle_vsync = m_sync.handle_throttle();
++
++	if (m_dimensions != m_new_dimensions || m_handle_vsync != new_handle_vsync)
+ 	{
+ 		m_dimensions = m_new_dimensions;
++		m_handle_vsync = new_handle_vsync;
+ 		if (window().index() == 0)
+ 		{
+-			bgfx::reset(m_dimensions.width(), m_dimensions.height(), video_config.waitvsync ? BGFX_RESET_VSYNC : BGFX_RESET_NONE);
++			bgfx::reset(m_dimensions.width(), m_dimensions.height(), video_config.waitvsync && !m_handle_vsync ? BGFX_RESET_VSYNC : BGFX_RESET_NONE);
+ 			bgfx::setViewFrameBuffer(s_current_view, BGFX_INVALID_HANDLE);
+ 		}
+ 		else
+diff --git a/src/osd/modules/render/drawbgfx.h b/src/osd/modules/render/drawbgfx.h
+index 27f84eda..9cc07a5a 100644
+--- a/src/osd/modules/render/drawbgfx.h
++++ b/src/osd/modules/render/drawbgfx.h
+@@ -163,6 +163,10 @@ private:
+ 	static const uint32_t WHITE_HASH;
+ 
+ 	static uint32_t s_current_view;
++
++	// emusync manager
++	emusync &m_sync;
++	bool m_handle_vsync;
+ };
+ 
+ #endif // MAME_RENDER_DRAWBGFX_H
+diff --git a/src/osd/modules/render/drawogl.cpp b/src/osd/modules/render/drawogl.cpp
+index 4b313149..1286ffec 100644
+--- a/src/osd/modules/render/drawogl.cpp
++++ b/src/osd/modules/render/drawogl.cpp
+@@ -24,6 +24,7 @@
+ // OSD common headers
+ #include "modules/lib/osdlib.h"
+ #include "modules/lib/osdobj_common.h"
++#include "modules/monitor/monitor_common.h"
+ #include "modules/opengl/gl_shader_mgr.h"
+ #include "osdcomm.h"
+ 
+@@ -44,6 +45,7 @@ typedef uint64_t HashT;
+ #include "emucore.h"
+ #include "emuopts.h"
+ #include "render.h"
++#include "emusync.h"
+ 
+ 
+ #if !defined(OSD_WINDOWS) && !defined(OSD_MAC)
+@@ -66,6 +68,7 @@ typedef uint64_t HashT;
+ #include <utility>
+ 
+ 
++
+ #if defined(SDLMAME_MACOSX) || defined(OSD_MAC)
+ 
+ #include <cstring>
+@@ -277,6 +280,7 @@ public:
+ 		, m_last_vofs(0.0f)
+ 		, m_surf_w(0)
+ 		, m_surf_h(0)
++		, m_sync(window.sync())
+ 	{
+ 		for (int i=0; i < HASH_SIZE + OVERFLOW_SIZE; i++)
+ 			m_texhash[i] = nullptr;
+@@ -289,6 +293,9 @@ public:
+ 	{
+ 		// free the memory in the window
+ 		destroy_all_textures();
++
++		// destroy vblank thread
++		m_sync.osd_deinit();
+ 	}
+ 
+ 	virtual int create() override;
+@@ -434,6 +441,9 @@ private:
+ 	PFNGLFRAMEBUFFERTEXTURE2DEXTPROC   m_glFramebufferTexture2D   = nullptr;
+ 
+ 	static bool     s_shown_video_info;
++
++	// emusync manager
++	emusync         &m_sync;
+ };
+ 
+ 
+@@ -556,6 +566,7 @@ static int glsl_shader_feature = glsl_shader_info::FEAT_PLAIN; // FIXME: why is
+ 
+ bool renderer_ogl::s_shown_video_info = false;
+ 
++
+ //============================================================
+ // Load the OGL function addresses
+ //============================================================
+@@ -765,6 +776,14 @@ int renderer_ogl::create()
+ 	}
+ 	m_gl_context->set_swap_interval(video_config.waitvsync ? 1 : 0);
+ 
++	if (window().index() == 0)
++	{
++		if (m_sync.osd_init(window().monitor()->oshandle(), nullptr, nullptr))
++			if (m_sync.sync_refresh())
++				m_gl_context->set_swap_interval(0);
++	}
++
++
+ 	m_blittimer = 0;
+ 	m_surf_w = 0;
+ 	m_surf_h = 0;
+@@ -1497,7 +1516,9 @@ int renderer_ogl::draw(const int update)
+ 	window().m_primlist->release_lock();
+ 	m_init_context = 0;
+ 
++	if (window().index() == 0) m_sync.predraw_sync();
+ 	m_gl_context->swap_buffer();
++	if (window().index() == 0) m_sync.postdraw_sync();
+ 
+ 	return 0;
+ }
+diff --git a/src/osd/osdepend.h b/src/osd/osdepend.h
+index a8163291..cce32c95 100644
+--- a/src/osd/osdepend.h
++++ b/src/osd/osdepend.h
+@@ -115,6 +115,10 @@ public:
+ 	virtual std::unique_ptr<osd::network_device> open_network_device(int id, osd::network_handler &handler) = 0;
+ 	virtual std::vector<osd::network_device_info> list_network_devices() = 0;
+ 
++	// switchres interface
++	virtual const char *switchres_mode(int i) = 0;
++	virtual bool scan_swapped() = 0;
++
+ protected:
+ 	virtual ~osd_interface() { }
+ };
+diff --git a/src/osd/sdl/osdsdl.cpp b/src/osd/sdl/osdsdl.cpp
+index 0072a50d..549869be 100644
+--- a/src/osd/sdl/osdsdl.cpp
++++ b/src/osd/sdl/osdsdl.cpp
+@@ -131,6 +131,8 @@ void osd_sdl_info()
+ 	{
+ 		osd_printf_verbose("\t%-20s\n", SDL_GetAudioDriver(i));
+ 	}
++
++	SDL_ShowCursor(SDL_DISABLE);
+ }
+ 
+ 
+@@ -247,6 +249,10 @@ void sdl_osd_interface::init(running_machine &machine)
+ 	}
+ #endif
+ 
++	stemp = options().video();
++	if(strcmp(stemp, "kmsraw") == 0)
++		SDL_SetHint(SDL_HINT_KMSDRM_REQUIRE_DRM_MASTER, "0");
++
+ 	/* get number of processors */
+ 	stemp = options().numprocessors();
+ 
+@@ -800,9 +806,6 @@ void sdl_osd_interface::check_osd_inputs()
+ 	auto &inp = machine().ui_input();
+ 	if (inp.pressed(IPT_OSD_1) && !(machine().debug_flags & DEBUG_FLAG_OSD_ENABLED))
+ 	{
+-		// destroy the renderers first so that the render module can bounce if it depends on having a window handle
+-		for (auto it = osd_common_t::window_list().rbegin(); osd_common_t::window_list().rend() != it; ++it)
+-			(*it)->renderer_reset();
+ 		for (auto const &curwin : osd_common_t::window_list())
+ 			dynamic_cast<sdl_window_info &>(*curwin).toggle_full_screen();
+ 	}
+diff --git a/src/osd/sdl/osdsdl.h b/src/osd/sdl/osdsdl.h
+index 74730f69..7fe2ab38 100644
+--- a/src/osd/sdl/osdsdl.h
++++ b/src/osd/sdl/osdsdl.h
+@@ -152,12 +152,17 @@ public:
+ 	// input overridables
+ 	virtual void customize_input_type_list(std::vector<input_type_entry> &typelist) override;
+ 
++	// video overridables
++	virtual void add_audio_to_recording(const int16_t *buffer, int samples_this_frame) override;
++
+ 	virtual bool video_init() override;
+ 	virtual bool window_init() override;
+ 
+ 	virtual void video_exit() override;
+ 	virtual void window_exit() override;
+ 
++	void extract_video_config();
++
+ 	// SDL-specific
+ 	virtual bool has_focus() const override { return bool(m_focus_window); }
+ 	void release_keys();
+@@ -182,7 +187,6 @@ private:
+ 
+ 	virtual void osd_exit() override;
+ 
+-	void extract_video_config();
+ 	void output_oslog(const char *buffer);
+ 
+ 	void process_window_event(SDL_Event const &event);
+diff --git a/src/osd/sdl/video.cpp b/src/osd/sdl/video.cpp
+index 1ee78890..d68185aa 100644
+--- a/src/osd/sdl/video.cpp
++++ b/src/osd/sdl/video.cpp
+@@ -145,11 +145,8 @@ void sdl_osd_interface::extract_video_config()
+ 	video_config.centerv       = options().centerv();
+ 	video_config.waitvsync     = options().wait_vsync();
+ 	video_config.syncrefresh   = options().sync_refresh();
+-	if (!video_config.waitvsync && video_config.syncrefresh)
+-	{
+-		osd_printf_warning("-syncrefresh specified without -waitvsync. Reverting to -nosyncrefresh\n");
+-		video_config.syncrefresh = 0;
+-	}
++	video_config.sync_mode     = options().sync_mode();
++	video_config.framedelay    = options().frame_delay();
+ 
+ 	if (video_config.prescale < 1 || video_config.prescale > 20)
+ 	{
+diff --git a/src/osd/sdl/window.cpp b/src/osd/sdl/window.cpp
+index 0e395fd1..f8f1f3f1 100644
+--- a/src/osd/sdl/window.cpp
++++ b/src/osd/sdl/window.cpp
+@@ -11,6 +11,7 @@
+ // MAME headers
+ #include "emu.h"
+ #include "emuopts.h"
++#include "emusync.h"
+ #include "render.h"
+ #include "screen.h"
+ #include "ui/uimain.h"
+@@ -110,6 +111,14 @@ bool sdl_osd_interface::window_init()
+ }
+ 
+ 
++void sdl_osd_interface::add_audio_to_recording(const int16_t *buffer, int samples_this_frame)
++{
++	auto const &window = osd_common_t::window_list().front(); // We only record on the first window
++	if (window)
++		window->renderer().add_audio_to_recording(buffer, samples_this_frame);
++}
++
++
+ //============================================================
+ //  sdlwindow_exit
+ //  (main thread)
+@@ -212,27 +221,24 @@ void sdl_window_info::toggle_full_screen()
+ 		m_windowed_dim = get_size();
+ 	}
+ 
+-	// kill off the drawers
+-	renderer_reset();
+-	bool is_osx = false;
+-#ifdef SDLMAME_MACOSX
+-	// FIXME: This is weird behaviour and certainly a bug in SDL
+-	is_osx = true;
+-#endif
+-	if (fullscreen() && (video_config.switchres || is_osx))
+-	{
+-		SDL_SetWindowFullscreen(platform_window(), 0);
+-		SDL_SetWindowDisplayMode(platform_window(), &m_original_mode);
+-		SDL_SetWindowFullscreen(platform_window(), SDL_WINDOW_FULLSCREEN);
+-	}
+-	SDL_DestroyWindow(platform_window());
+-	set_platform_window(nullptr);
+-	downcast<sdl_osd_interface &>(machine().osd()).release_keys();
+-
+ 	// toggle the window mode
+ 	set_fullscreen(!fullscreen());
+ 
+-	complete_create();
++	SDL_SetWindowFullscreen(platform_window(), fullscreen() ? SDL_WINDOW_FULLSCREEN : 0);
++	SDL_SetWindowBordered(platform_window(), fullscreen() ? SDL_FALSE : SDL_TRUE);
++	SDL_SetWindowResizable(platform_window(), fullscreen() ? SDL_FALSE : SDL_TRUE);
++
++	if (fullscreen() && downcast<sdl_options &>(machine().options()).mode_setting())
++	{
++		if (m_display_manager)
++			downcast<sdl_osd_interface&>(machine().osd()).switchres()->set_mode(index(), monitor(), target(), &m_win_config);
++	}
++
++	if (!fullscreen())
++	{
++		osd_dim temp = m_windowed_dim.width() > 0 ? m_windowed_dim : get_min_bounds(keepaspect());
++		resize(temp.width(), temp.height());
++	}
+ }
+ 
+ void sdl_window_info::modify_prescale(int dir)
+@@ -297,7 +303,8 @@ void sdl_window_info::update_cursor_state()
+ 			capture_pointer();
+ 		}
+ 
+-		SDL_SetCursor(nullptr); // Force an update in case the underlying driver has changed visibility
++		// Disable this. This call may take up to one frame period to complete on kms
++		//SDL_SetCursor(nullptr); // Force an update in case the underlying driver has changed visibility
+ 	}
+ #endif
+ }
+@@ -629,6 +636,13 @@ void sdl_window_info::complete_destroy()
+ 	}
+ 
+ 	renderer_reset();
++
++	if (m_display_manager)
++	{
++		downcast<sdl_osd_interface&>(machine().osd()).switchres()->delete_display(index());
++		m_display_manager = nullptr;
++	}
++
+ 	SDL_DestroyWindow(platform_window());
+ 	set_platform_window(nullptr);
+ 	downcast<sdl_osd_interface &>(machine().osd()).release_keys();
+@@ -718,9 +732,20 @@ void sdl_window_info::update()
+ 	// adjust the cursor state
+ 	update_cursor_state();
+ 
++	// Update fullscreen state for raster based throttling
++	machine().sync().set_fullscreen(fullscreen());
++
+ 	// if we're visible and running and not in the middle of a resize, draw
+ 	if (target() != nullptr)
+ 	{
++		// check if geometry has changed
++		if (this->m_fullscreen && video_config.switchres && downcast<sdl_osd_interface&>(machine().osd()).switchres()->check_geometry_change(index()))
++		{
++			toggle_full_screen();
++			downcast<sdl_osd_interface&>(machine().osd()).switchres()->adjust_mode(index());
++			toggle_full_screen();
++		}
++
+ 		int tempwidth, tempheight;
+ 
+ 		// see if the games video mode has changed
+@@ -736,13 +761,28 @@ void sdl_window_info::update()
+ 			}
+ 			else if (video_config.switchres)
+ 			{
+-				osd_dim tmp = this->pick_best_mode();
+-				resize(tmp.width(), tmp.height());
++				// check if we need to change the video mode
++				if (downcast<sdl_options &>(machine().options()).changeres())
++					if (m_display_manager) downcast<sdl_osd_interface&>(machine().osd()).switchres()->check_resolution_change(index(), monitor(), target(), &m_win_config);
++
++				if (!downcast<sdl_options &>(machine().options()).mode_setting())
++				{
++					SDL_DisplayMode mode = {};
++					mode.w = m_win_config.width;
++					mode.h = m_win_config.height;
++					mode.refresh_rate = m_win_config.refresh;
++					SDL_SetWindowDisplayMode(platform_window(), &mode);
++				}
+ 			}
+ 		}
+ 
++		// check if frame delay has changed
++		int new_frame_delay = machine().sync().framedelay();
++		if (new_frame_delay != video_config.framedelay)
++			video_config.framedelay = new_frame_delay;
++
+ 		osd_ticks_t event_wait_ticks;
+-		if (video_config.waitvsync && video_config.syncrefresh)
++		if (video_config.syncrefresh)
+ 			event_wait_ticks = osd_ticks_per_second(); // block at most a second
+ 		else
+ 			event_wait_ticks = 0;
+@@ -796,16 +836,13 @@ void sdl_window_info::update()
+ int sdl_window_info::complete_create()
+ {
+ 	osd_dim temp(0,0);
++	bool mode_setting = downcast<sdl_options &>(machine().options()).mode_setting();
+ 
+ 	// clear out original mode. Needed on OSX
+ 	if (fullscreen())
+ 	{
+ 		// default to the current mode exactly
+ 		temp = monitor()->position_size().dim();
+-
+-		// if we're allowed to switch resolutions, override with something better
+-		if (video_config.switchres)
+-			temp = pick_best_mode();
+ 	}
+ 	else if (m_windowed_dim.width() > 0)
+ 	{
+@@ -845,9 +882,9 @@ int sdl_window_info::complete_create()
+ 	m_extra_flags |= (fullscreen() ?
+ 			SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_FULLSCREEN : SDL_WINDOW_RESIZABLE);
+ 
+-#if defined(SDLMAME_WIN32)
++//#if defined(SDLMAME_WIN32)
+ 	SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
+-#endif
++//#endif
+ 
+ 	// get monitor work area for centering
+ 	osd_rect work = monitor()->usuable_position_size();
+@@ -935,12 +972,21 @@ int sdl_window_info::complete_create()
+ 		//SDL_GetCurrentDisplayMode(window().monitor()->handle, &mode);
+ 		SDL_GetWindowDisplayMode(platform_window(), &mode);
+ 		m_original_mode = mode;
+-		mode.w = temp.width();
+-		mode.h = temp.height();
+-		if (m_win_config.refresh)
+-			mode.refresh_rate = m_win_config.refresh;
+ 
+-		SDL_SetWindowDisplayMode(platform_window(), &mode);    // Try to set mode
++		// add the switchres display manager
++		m_display_manager = downcast<sdl_osd_interface&>(machine().osd()).switchres()->add_display(index(), monitor(), &m_win_config);
++		downcast <sdl_osd_interface&>(machine().osd()).switchres()->init_display(index(), monitor(), &m_win_config, target(), sdlwindow);
++		temp = osd_dim(m_win_config.width, m_win_config.height);
++
++		if (!mode_setting)
++		{
++			mode.w = temp.width();
++			mode.h = temp.height();
++			if (m_win_config.refresh)
++				mode.refresh_rate = m_win_config.refresh;
++
++			SDL_SetWindowDisplayMode(platform_window(), &mode);    // Try to set mode
++		}
+ #ifndef SDLMAME_WIN32
+ 		/* FIXME: Warp the mouse to 0,0 in case a virtual desktop resolution
+ 		 * is in place after the mode switch - which will most likely be the case
+diff --git a/src/osd/sdl/window.h b/src/osd/sdl/window.h
+index 5f55419a..23e49382 100644
+--- a/src/osd/sdl/window.h
++++ b/src/osd/sdl/window.h
+@@ -32,6 +32,8 @@ typedef uintptr_t HashT;
+ 
+ #define OSDWORK_CALLBACK(name)  void *name(void *param, int threadid)
+ 
++class display_manager;
++
+ class sdl_window_info : public osd_window_t<SDL_Window*>
+ {
+ public:
+@@ -129,6 +131,8 @@ private:
+ 	bool m_mouse_inside;
+ 	std::vector<pointer_dev_info> m_ptrdev_info;
+ 	std::vector<sdl_pointer_info> m_active_pointers;
++
++	display_manager *   m_display_manager = 0;
+ };
+ 
+ #endif // MAME_OSD_SDL_WINDOW_H

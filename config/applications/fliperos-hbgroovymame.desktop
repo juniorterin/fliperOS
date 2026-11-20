@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=HBMAME
+GenericName=Arcade hacks and homebrews
+Comment=HBMAME with Switchres. Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch hbgroovymame
+TryExec=/usr/local/libexec/hbgroovymame
+Icon=/usr/local/share/pixmaps/fliperos-groovymame.png
+Terminal=false
+Categories=Game;Emulator;

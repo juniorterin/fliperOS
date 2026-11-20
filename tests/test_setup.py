@@ -10444,6 +10444,45 @@ class RomCleanerTests(Base):
         self.assertIn('[[ -w $folder && $mode != downloader ]] && writable=1', screen)
         self.assertIn("source \"$SETUP_DIR/lib/netshare.sh\"", (SETUP / "fliperos-setup").read_text())
 
+    def test_hbmame_romlist_reads_the_hbmame_xml_when_it_is_installed(self):
+        # A pasta hbmame tem hacks e homebrews que o -listxml do GroovyMAME nao conhece: com o hbgroovymame
+        # instalado, o nome de cada jogo sai do -listxml dele; sem ele, so o nome do arquivo.
+        roms, info = self.env.dir / "home-roms", self.env.dir / "info"
+        (roms / "hbmame").mkdir(parents=True)
+        for name in ("mslug.zip", "sf2hf.zip"):
+            (roms / "hbmame" / name).write_text("x")
+        info.mkdir()
+        hbxml = self.env.dir / "hbxml.xml"
+        hbxml.write_text('<mame build="0.289.6"><machine name="mslug"><description>Metal Slug (HB)</description>'
+                         '<year>1996</year></machine><machine name="sf2hf"><description>Street Fighter II: Hyper '
+                         'Fighting (hack)</description><year>2024</year></machine></mame>')
+        self.env.stub("hbgroovymame", 'case "$1" in -listxml) echo x >> "%s/hb.calls"; cat "%s" ;; esac'
+                      % (self.env.dir, hbxml))
+        binary = self.env.dir / "hb-real"
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
+        (self.env.dir / "hb.version").write_text("0.289.6\n")
+        env = dict(self.vars, ROMS_DIR=str(roms), RA_INFO_DIR=str(info), ATTRACT_DIR=str(self.env.dir / "none"),
+                   MEDIA_DIR=str(self.env.dir / "media"), FLIPEROS_USER="ninguem",
+                   FLIPEROS_LISTS=str(self.env.dir / "lists-hb"), HBGROOVYMAME=str(self.env.bin / "hbgroovymame"),
+                   HBGROOVYMAME_BIN=str(binary), HBGROOVYMAME_VERSION_FILE=str(self.env.dir / "hb.version"))
+        script = """
+            mapfile -t s < <(frontends_romlist_systems)
+            printf '%s\\n' "${s[@]}"
+            frontends_romlist "$ROMCLEAN_CACHE.result" "${s[@]}" > /dev/null
+        """
+        self.assertEqual(self.env.out(script, env).splitlines(), ["hbmame|%s/hbmame|arcade|2|HBMAME" % roms])
+        lines = (self.env.dir / "lists-hb" / "HBMAME.txt").read_text().splitlines()
+        titles = {line.split(";")[0]: line.split(";")[1] for line in lines[1:]}
+        self.assertEqual(titles, {"mslug": "Metal Slug (HB)", "sf2hf": "Street Fighter II: Hyper Fighting (hack)"})
+        self.assertTrue((self.env.dir / "cache" / "romclean-hbgroovymame-0.289.6.json").is_file())
+        # Sem o pacote, o que o XML do GroovyMAME nao conhece fica com o nome do arquivo.
+        env["HBGROOVYMAME_BIN"] = str(self.env.dir / "nao-instalado")
+        self.env.out(script, env)
+        lines = (self.env.dir / "lists-hb" / "HBMAME.txt").read_text().splitlines()
+        self.assertEqual({line.split(";")[0]: line.split(";")[1] for line in lines[1:]},
+                         {"mslug": "Metal Slug", "sf2hf": "sf2hf"})
+
     def test_attract_romlist_gets_the_real_names_and_the_clones(self):
         # Setup > Games > AttractPlus ROM List: o nome do -listxml no lugar do nome do
         # arquivo, os clones de um romset merged (so no MAME, que abre pelo
@@ -10883,6 +10922,29 @@ class RomCleanerTests(Base):
                          ["arcade", "Model 2|/opt/fliperos/bin/fliperos-x11-run|fliperos-model2 [name]|.zip"])
         self.assertEqual(self.env.run("scraper_arcade dreamcast").returncode, 1)
         self.assertEqual(self.env.run("scraper_arcade model2").returncode, 0)
+
+    def test_hbmame_folder_is_an_arcade_system_that_opens_in_hbgroovymame(self):
+        # A pasta hbmame (o pacote opcional fliperos-hbgroovymame, baixado quando chega o primeiro jogo): um
+        # sistema de arcade com o comando hbgroovymame, ao lado do mame do GroovyMAME.
+        self.assertEqual(self.env.out("scraper_platform hbmame; scraper_attract_emulator hbmame").splitlines(),
+                         ["arcade", "HBMAME|/opt/fliperos/bin/fliperos-x11-run|hbgroovymame [name]|.zip;.7z"])
+        self.assertEqual(self.env.run("scraper_arcade hbmame").returncode, 0)
+
+    def test_hbgroovymame_game_list_comes_from_its_own_xml_only_when_installed(self):
+        # O -listxml do HBMAME (os hacks e homebrews) so entra na lista da pasta hbmame com o programa instalado.
+        binary = self.env.dir / "hbgroovymame"
+        version = self.env.dir / "hbgroovymame.version"
+        env = {"HBGROOVYMAME_BIN": str(binary), "HBGROOVYMAME_VERSION_FILE": str(version)}
+        self.assertEqual(self.env.run("hbgroovymame_installed", env).returncode, 1)
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
+        version.write_text("0.289.6\n")
+        self.assertEqual(self.env.run("hbgroovymame_installed", env).returncode, 0)
+        self.assertEqual(self.env.out("hbgroovymame_version", env).strip(), "0.289.6")
+        self.assertIn('[[ $key == hbmame ]] && hbgroovymame_installed && xml=hb',
+                      (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
+        self.assertIn('--hb-xml-command "$HBGROOVYMAME -listxml"',
+                      (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
 
 
 class ReloadTests(Base):

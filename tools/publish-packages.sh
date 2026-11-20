@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Publica os .deb do repositorio da ISO (packaging/build-deb.sh --list-iso) no
+# Publica os .deb do repositorio da ISO (packaging/build-deb.sh --list-iso) e os
+# opcionais (--list-optional, fora da ISO) no
 # release "packages" do GitHub e reescreve a updates/packages.list com a
 # versao e o sha256 de cada um: e por ela que um gabinete atualizado so pela
 # rede chega aos mesmos pacotes da ISO (updates/packages-sync.sh, chamado pelo
@@ -58,7 +59,7 @@ publish() {
   rows+=("$(printf '%s\t%s\t%s\t%s' "$name" "$version" "$sum" "${when:-installed}")")
 }
 
-for recipe in $(bash packaging/build-deb.sh --list-iso); do
+for recipe in $(bash packaging/build-deb.sh --list-iso) $(bash packaging/build-deb.sh --list-optional); do
   # shellcheck source=/dev/null
   version=$(PKG_VERSION="" PKG_REVISION="" && . "packaging/packages/$recipe.sh" && echo "$PKG_VERSION-$PKG_REVISION")
   deb=$dir/${recipe}_${version}_amd64.deb
@@ -78,7 +79,7 @@ done
 # As receitas sob demanda (compiladas no gabinete pelo Setup) nao vao na
 # ISO nem na lista, mas o .deb pronto fica no release como copia: se o
 # upstream sair do ar, ainda ha o que instalar. So se o .deb existe aqui.
-for recipe in $(bash packaging/build-deb.sh --list | grep -vxFf <(bash packaging/build-deb.sh --list-iso)); do
+for recipe in $(bash packaging/build-deb.sh --list | grep -vxFf <(bash packaging/build-deb.sh --list-iso; bash packaging/build-deb.sh --list-optional)); do
   version=$(PKG_VERSION="" PKG_REVISION="" && . "packaging/packages/$recipe.sh" && echo "$PKG_VERSION-$PKG_REVISION")
   deb=$dir/${recipe}_${version}_amd64.deb
   file=${deb##*/}

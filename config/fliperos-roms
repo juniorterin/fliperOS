@@ -53,6 +53,11 @@ folder() {
 }
 
 folder "$roms/mame" "GroovyMAME: ROM sets (.zip/.7z, without unzipping) and CHD folders."
+# O hbgroovymame (HBMAME com o Switchres, o pacote fliperos-hbgroovymame) usa a
+# pasta hbmame, como o GroovyMAME usa a mame. A pasta existe desde a
+# instalacao, com ou sem o programa: o primeiro jogo que chega nela o instala
+# ao ser aberto (Setup > Games > Emulators & Games, tipo package).
+folder "$roms/hbmame" "hbgroovymame (HBMAME, the MAME of arcade hacks and homebrews, with Switchres): ROM sets (.zip/.7z, without unzipping) and CHD folders. The first time you open a game from here, HBMAME is downloaded and installed. Its BIOS sets go in ~/bios/hbmame (or ~/bios/mame)."
 folder "$roms/ps2" "PCSX2 (PlayStation 2): .iso .chd .cso .bin/.cue. The BIOS goes in ~/bios/ps2."
 # O DuckStation nao vem na imagem (Setup > Games > Emulators & Games): a pasta
 # so com ele instalado, senao seria uma segunda pasta de PS1 ao lado da do
@@ -186,6 +191,7 @@ merge_old "$bios/namco246" "$bios/namco2x6"
 merge_old "$bios/namco256" "$bios/namco2x6"
 folder "$bios/namco2x6" "PCSX2x6: the Namco System 246, 256 and Super 256 arcade BIOS: 256.BIN, with its .nvm and .mec, serves all three boards."
 folder "$bios/mame" "GroovyMAME: BIOS and device sets (neogeo.zip, qsound.zip...). They also work from ~/roms/mame."
+folder "$bios/hbmame" "hbgroovymame (HBMAME): BIOS and device sets (neogeo.zip, qsound.zip...). The ones in ~/bios/mame also work for it, and they also work from ~/roms/hbmame."
 
 # link_dir LINK PASTA faz de LINK um link para PASTA. Se LINK era uma pasta,
 # o que tem nela vai para PASTA (sem sobrescrever) antes; se sobrar algo,
@@ -268,6 +274,7 @@ fi
 [[ -L $mame_home/nvram && $(readlink -- "$mame_home/nvram") == "$nvram" ]] && rm -f -- "$mame_home/nvram"
 folder "$nvram" "Arcade memory kept without power (dip settings, credits, scores, what a game has unlocked): one folder per emulator and RetroArch core, as in ~/roms."
 folder "$nvram/mame" "GroovyMAME: one folder per game set. To start a game from zero, delete its folder."
+folder "$nvram/hbmame" "hbgroovymame (HBMAME): one folder per game set. To start a game from zero, delete its folder."
 folder "$nvram/flycast" "Flycast: Naomi and Atomiswave memory (<set>.zip.nvmem, .nvmem2, .eeprom) and the Dreamcast memory cards (vmu_save_*.bin)."
 folder "$nvram/model2" "Keisho (Sega Model 2): the NVRAM and EEPROM of each game, and its save states in states/."
 merge_old "$nvram/namco246" "$nvram/namco2x6"
@@ -283,6 +290,7 @@ folder "$nvram/retroarch/fbneo" "RetroArch, core fbneo: the memory of its games.
 folder "$save" "What you save while you play, one folder per emulator: RetroArch saves and states, MAME states, PlayStation 2 memory cards."
 folder "$save/retroarch" "RetroArch: the game saves (.srm) and the save states (.state), also the MAME 2010 settings."
 folder "$save/mame" "GroovyMAME: the save states (F7 saves, F8 loads), one folder per game set."
+folder "$save/hbmame" "hbgroovymame (HBMAME): the save states (F7 saves, F8 loads), one folder per game set."
 folder "$save/ps2" "PCSX2: the memory cards (.ps2) and their folders."
 merge_old "$save/namco246" "$save/namco2x6"
 merge_old "$save/namco256" "$save/namco2x6"
@@ -411,6 +419,7 @@ cfglink() {
 }
 cfglink retroarch "$HOME/.config/retroarch"
 cfglink groovymame "$etc/mame"
+cfglink hbgroovymame "$etc/hbmame"
 cfglink flycast "$HOME/.config/flycast"
 cfglink pcsx2 "$HOME/.config/PCSX2"
 cfglink pcsx2x6 "$HOME/.config/PCSX2x6"

@@ -20,6 +20,7 @@ The emulators FliperOS ships or installs, the systems they run and the video mod
 | Emulator | Systems | Comes | Video at 15 kHz |
 | --- | --- | --- | --- |
 | [GroovyMAME](GroovyMAME.md) | Arcade | In the image | Each game's own mode |
+| [HBMAME](GroovyMAME.md#hbmame-hbgroovymame) | Arcade hacks and homebrews (`~/roms/hbmame`) | Downloads itself when you open its first game | Each game's own mode |
 | [RetroArch](RetroArch.md) | Consoles and arcade, through its cores | In the image | Each game's own mode |
 | [Flycast](Flycast.md) | Dreamcast, Naomi, Naomi 2, Atomiswave | In the image | 640x240 |
 | [PCSX2](Namco-246-256.md#pcsx2-playstation-2) | PlayStation 2 | In the image | 640x240 |

@@ -362,7 +362,7 @@ PY
 # (scraper_libretro_platform); so entra o que o FliperOS sabe abrir.
 scraper_platform() {
   case $1 in
-    mame) echo arcade ;;
+    mame | hbmame) echo arcade ;;
     dreamcast) echo dreamcast ;;
     # Os arcades do Flycast, uma pasta por sistema (MAME ROM Cleaner).
     naomi | naomi2 | atomiswave) echo "$1" ;;
@@ -547,6 +547,10 @@ scraper_attract_emulator() {
   case $key in
     mame)
       echo "MAME|$FLIPEROS_BIN/fliperos-x11-run|groovymame [name]|.zip;.7z" ;;
+    # A pasta hbmame: o HBMAME com o Switchres, instalado quando chega o
+    # primeiro jogo (fliperos-emulators, tipo package). O nome sai "HBMAME".
+    hbmame)
+      echo "HBMAME|$FLIPEROS_BIN/fliperos-x11-run|hbgroovymame [name]|.zip;.7z" ;;
     dreamcast)
       echo "Flycast|$FLIPEROS_BIN/fliperos-x11-run|flycast \"[romfilename]\"|.gdi;.cdi;.chd;.cue;.zip;.7z" ;;
     naomi)
@@ -823,7 +827,7 @@ scraper_attract_default_filters() {
 # as dos cores de arcade do RetroArch (MAME 20xx, HBMAME, FBNeo, FB Alpha).
 scraper_arcade() {
   case $1 in
-    mame | naomi | naomi2 | atomiswave | model2 | model3) return 0 ;;
+    mame | hbmame | naomi | naomi2 | atomiswave | model2 | model3) return 0 ;;
     retroarch/*) [[ $(scraper_core_info "${1#retroarch/}" systemid) =~ ^(mame|hbmame|fb_alpha)$ ]] ;;
     *) return 1 ;;
   esac

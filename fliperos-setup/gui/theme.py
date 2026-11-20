@@ -1697,7 +1697,7 @@ _icons = {}
 # gui/icons/VALOR.png (as fontes estao no README de la).
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
 # Os valores que usam a imagem de outro: o MAME 2010 e MAME; o Wine Staging e Wine.
-IMAGES = {"mame2010": "groovymame", "mame": "groovymame", "wine-staging": "wine"}
+IMAGES = {"mame2010": "groovymame", "mame": "groovymame", "hbmame": "groovymame", "wine-staging": "wine"}
 
 
 def guess(title, value, label):

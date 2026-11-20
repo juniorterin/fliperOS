@@ -286,6 +286,13 @@ install -Dm755 "$src/config/fliperos-groovymame" "$gm"
 install -Dm755 "$src/config/fliperos-groovymame-quiet" "$root/opt/fliperos/bin/fliperos-groovymame-quiet"
 [[ -f $root/usr/local/libexec/groovymame ]] &&
   python3 "$src/config/fliperos-groovymame-quiet" "$root/usr/local/libexec/groovymame" > /dev/null
+# hbgroovymame: o mesmo atalho com outro nome (o nome decide, o HBMAME com o
+# Switchres do pacote opcional fliperos-hbgroovymame): o comando vem com o
+# sistema, o binario so quando a pessoa o instala. Num update, o "Initializing..."
+# sai do binario novo, se ja esta aqui.
+install -Dm755 "$src/config/fliperos-groovymame" "$root/usr/local/bin/hbgroovymame"
+[[ -f $root/usr/local/libexec/hbgroovymame ]] &&
+  python3 "$src/config/fliperos-groovymame-quiet" "$root/usr/local/libexec/hbgroovymame" > /dev/null
 # Jogos de 2 ou 3 telas com mais de um monitor: o numscreens de cada um, do
 # XML do GroovyMAME (Setup > Video Setup > Multiple Monitors).
 install -Dm755 "$src/config/fliperos-mame-screens" "$root/opt/fliperos/bin/fliperos-mame-screens"
@@ -463,6 +470,8 @@ sed -i -E 's/^(modesetting[[:space:]]+)0[[:space:]]*$/\11/' "$root/etc/fliperos/
 # portaudio do MAME abre o hw: da placa): volta ao sdl do config/mame.ini.
 sed -i -E 's/^(sound[[:space:]]+)portaudio[[:space:]]*$/\1sdl/' "$root/etc/fliperos/mame/mame.ini"
 chown -R 1000:1000 "$root/etc/fliperos/mame" 2> /dev/null || true
+# A pasta do hbmame.ini (o pacote opcional hbgroovymame a cria; o comando o refaz).
+[[ ! -d $root/etc/fliperos/hbmame ]] || chown -R 1000:1000 "$root/etc/fliperos/hbmame" 2> /dev/null || true
 install -Dm644 "$src/config/retroarch.cfg" "$root/etc/fliperos/retroarch/retroarch.cfg"
 install -Dm644 "$src/config/retroarch-gl.cfg" "$root/etc/fliperos/retroarch/retroarch-gl.cfg"
 install -Dm644 "$src/config/retroarch-vulkan.cfg" "$root/etc/fliperos/retroarch/retroarch-vulkan.cfg"

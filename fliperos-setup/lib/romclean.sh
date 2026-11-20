@@ -615,6 +615,22 @@ groovymame_version() {
   "$GROOVYMAME" -version 2> /dev/null | awk 'NR == 1 { print $1; exit }'
 }
 
+# O hbgroovymame (o HBMAME com o Switchres, o pacote fliperos-hbgroovymame): o
+# -listxml dele, com o cache da versao dele, para a lista de jogos da pasta
+# hbmame (frontends_romlist). So com ele instalado.
+HBGROOVYMAME=${HBGROOVYMAME:-hbgroovymame}
+HBGROOVYMAME_BIN=${HBGROOVYMAME_BIN:-/usr/local/libexec/hbgroovymame}
+HBGROOVYMAME_VERSION_FILE=${HBGROOVYMAME_VERSION_FILE:-/usr/local/share/fliperos/emulator-versions.d/hbgroovymame}
+
+hbgroovymame_installed() {
+  [[ -x $HBGROOVYMAME_BIN ]]
+}
+
+# hbgroovymame_version imprime a versao do hbgroovymame instalado (0.289.6).
+hbgroovymame_version() {
+  head -n 1 "$HBGROOVYMAME_VERSION_FILE" 2> /dev/null
+}
+
 # romclean_scan ORIGEM ALVO XML DESTINO PLANO FILTRO... le o XML do alvo (o
 # -listxml do GroovyMAME, o do core mame2010 ou o arquivo XML) e escreve o
 # plano; imprime o resumo do fliperos-romclean (chave=valor).

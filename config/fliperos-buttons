@@ -2339,7 +2339,7 @@ def combo_held(combo, now):
 # Model 2 e no Model 3 (a key_overlay do keisho.ini, F10 de fabrica). Quem nao
 # tem menu (Dolphin, OpenBOR, Hypseus, o KOF do Ikemen, o Fightcade) usa o
 # menu na tela do FliperOS (config/fliperos-osd).
-MENU_KEYS = {'retroarch': 'F1', 'groovymame': 'TAB', 'mame': 'TAB', 'flycast': 'TAB', 'pcsx2': 'ESCAPE',
+MENU_KEYS = {'retroarch': 'F1', 'groovymame': 'TAB', 'hbgroovymame': 'TAB', 'mame': 'TAB', 'flycast': 'TAB', 'pcsx2': 'ESCAPE',
              'pcsx2-qt': 'ESCAPE', 'pcsx2x6': 'ESCAPE', 'duckstation': 'ESCAPE', 'duckstation-qt': 'ESCAPE',
              'fliperos-model2': 'sm2', 'fliperos-model3': 'sm2', 'keisho': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2',
              'model3': 'sm2'}

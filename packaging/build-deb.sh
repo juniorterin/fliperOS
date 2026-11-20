@@ -9,12 +9,17 @@
 #  Uso: bash packaging/build-deb.sh [--output DIR] [--skip-existing] <pacote>...
 #       bash packaging/build-deb.sh --list       todas as receitas
 #       bash packaging/build-deb.sh --list-iso   as que vao no repositorio da ISO
+#       bash packaging/build-deb.sh --list-optional   as opcionais (abaixo)
 #
 #  --skip-existing: um pacote cujo .deb (nome, versao e revisao) ja esta no
 #  OUTPUT fica como esta (a CI poe la os ja publicados no release "packages").
 #
 #  Uma receita com PKG_ON_DEMAND=1 nao vai para a ISO: o Setup a compila no
 #  gabinete quando a pessoa escolhe o programa (config/fliperos-frontend-build).
+#
+#  Uma receita com PKG_OPTIONAL=1 tambem nao vai para a ISO, mas e compilada
+#  aqui e publicada pronta (updates/packages.list, QUANDO "installed"): o Setup
+#  a baixa quando a pessoa a pede (o hbgroovymame, que leva horas para compilar).
 #
 #  Precisa rodar no MESMO Ubuntu da ISO (24.04): o binario linka contra as
 #  libs da imagem, e o Depends e calculado com dpkg-shlibdeps a partir do que
@@ -59,7 +64,15 @@ list_recipes() {
 list_iso() {
   for recipe in "$RECIPES"/*.sh; do
     [[ -f "$recipe" ]] || continue
-    grep -q '^PKG_ON_DEMAND=1' "$recipe" || basename "$recipe" .sh
+    grep -q '^PKG_ON_DEMAND=1\|^PKG_OPTIONAL=1' "$recipe" || basename "$recipe" .sh
+  done
+}
+
+# list_optional: as compiladas e publicadas aqui, mas fora da ISO.
+list_optional() {
+  for recipe in "$RECIPES"/*.sh; do
+    [[ -f "$recipe" ]] || continue
+    ! grep -q '^PKG_OPTIONAL=1' "$recipe" || basename "$recipe" .sh
   done
 }
 
@@ -70,6 +83,7 @@ while [[ $# -gt 0 ]]; do
     --skip-existing) SKIP_EXISTING=1; shift ;;
     --list)   list_recipes; exit 0 ;;
     --list-iso) list_iso; exit 0 ;;
+    --list-optional) list_optional; exit 0 ;;
     -*)       err "Opcao desconhecida: $1" ;;
     *)        TARGETS+=("$1"); shift ;;
   esac
@@ -93,7 +107,7 @@ build_one() {
   # Cada receita define estas variaveis e a funcao pkg_build().
   PKG_NAME=""; PKG_VERSION=""; PKG_REVISION="1"; PKG_SUMMARY=""
   PKG_DESCRIPTION=""; PKG_SECTION="games"; PKG_HOMEPAGE=""
-  PKG_BUILD_DEPS=""; PKG_RUNTIME_EXTRA=""; PKG_SHLIB_TARGETS=""; PKG_ON_DEMAND=""
+  PKG_BUILD_DEPS=""; PKG_RUNTIME_EXTRA=""; PKG_SHLIB_TARGETS=""; PKG_ON_DEMAND=""; PKG_OPTIONAL=""
   PKG_UPSTREAM=""; PKG_COMMIT_VAR=""; PKG_EDGE_TAGS=""; PKG_EDGE_RELEASE=""
   unset -f pkg_build 2>/dev/null || true
   # shellcheck disable=SC1090

@@ -8,7 +8,8 @@
 #   tools/publish-changed-packages.sh                 so mostra o estado
 #   tools/publish-changed-packages.sh --run [--bump] [NOME...]
 #
-# Estado de cada receita (packaging/packages/NOME.sh, as do --list-iso):
+# Estado de cada receita (packaging/packages/NOME.sh, as do --list-iso e do
+# --list-optional):
 #   em dia        a versao da receita e a da lista, e nada dela mudou
 #   versao nova   PKG_VERSION/PKG_REVISION diferente da lista: compila
 #   pacote novo   ainda fora da lista: compila (entra como "installed")
@@ -53,9 +54,9 @@ while (($#)); do
   shift
 done
 
-mapfile -t iso < <(bash packaging/build-deb.sh --list-iso)
+mapfile -t iso < <(bash packaging/build-deb.sh --list-iso; bash packaging/build-deb.sh --list-optional)
 for name in "${names[@]}"; do
-  printf '%s\n' "${iso[@]}" | grep -qx "$name" || die "$name is not an ISO recipe (bash packaging/build-deb.sh --list-iso)"
+  printf '%s\n' "${iso[@]}" | grep -qx "$name" || die "$name is not an ISO or optional recipe (bash packaging/build-deb.sh --list-iso, --list-optional)"
 done
 named=${#names[@]}
 ((named)) || names=("${iso[@]}")

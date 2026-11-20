@@ -27,7 +27,8 @@ placa, de joystick e 6 botoes, ate aos de volante.
   fliperos-romclean options [dados]
   fliperos-romclean romlist (--xml ARQUIVO|- | --xml-command COMANDO)
                             [--cache ARQUIVO] [--alt-xml ARQUIVO
-                            --alt-cache ARQUIVO] [--catver ARQUIVO]
+                            --alt-cache ARQUIVO] [--hb-xml-command COMANDO
+                            --hb-cache ARQUIVO] [--catver ARQUIVO]
                             --system "EMULADOR|PASTA|XML|CLONES[|FLYCAST]"...
                             --out PASTA [--combined NOME] [--progress]
                             [--result ARQUIVO]
@@ -1121,7 +1122,8 @@ def cmd_romlist(args):
     """As romlists do Attract-Mode das pastas de arcade, com o titulo, o ano,
     o fabricante e os controles de cada jogo do XML. Cada --system e
     "EMULADOR|PASTA|XML|CLONES": o XML que vale primeiro (main, o de
-    --xml/--xml-command; alt, o de --alt-xml) e, com CLONES 1, os clones
+    --xml/--xml-command; alt, o de --alt-xml; hb, o de --hb-xml-command) e,
+    com CLONES 1, os clones
     que nao tem arquivo proprio (num romset merged eles estao no zip do pai;
     so o emulador que abre o jogo pelo nome os acha). FLYCAST (naomi,
     naomi2 ou atomiswave) deixa so os sets daquele sistema, pela BIOS da
@@ -1132,9 +1134,9 @@ def cmd_romlist(args):
         parts = spec.split('|')
         if len(parts) == 4:
             parts.append('')
-        if (len(parts) != 5 or parts[2] not in ('main', 'alt') or not parts[0]
+        if (len(parts) != 5 or parts[2] not in ('main', 'alt', 'hb') or not parts[0]
                 or parts[4] not in ('',) + FLYCAST_SYSTEMS):
-            sys.exit('use --system "EMULATOR|FOLDER|main or alt|0 or 1[|%s]"' % '|'.join(FLYCAST_SYSTEMS))
+            sys.exit('use --system "EMULATOR|FOLDER|main, alt or hb|0 or 1[|%s]"' % '|'.join(FLYCAST_SYSTEMS))
         systems.append(parts)
     progress = args.progress
     sources = {}
@@ -1146,6 +1148,14 @@ def cmd_romlist(args):
         if progress:
             print('@step 30 Reading the MAME 2010 game list', flush=True)
         sources['alt'] = load_machines(argparse.Namespace(xml=args.alt_xml, xml_command=None, cache=args.alt_cache))
+    # O hbgroovymame (a pasta hbmame): o -listxml do HBMAME, que tem os hacks e
+    # homebrews que o do GroovyMAME nao conhece; o main fica de reserva (os
+    # sets do MAME que ele tambem traz). Sem o comando, a lista usa o main.
+    if args.hb_xml_command and any(s[2] == 'hb' for s in systems):
+        if progress:
+            print('@step 35 Reading the HBMAME game list', flush=True)
+        sources['hb'] = load_machines(argparse.Namespace(xml=None, xml_command=args.hb_xml_command,
+                                                         cache=args.hb_cache))
     # Os botoes de verdade: os do Controls.dat e, nos jogos do Flycast, os da
     # tabela dele (o XML da a Naomi e Atomiswave o painel generico de 6
     # botoes; o NeoGeo Battle Coliseum tem 5).
@@ -1319,6 +1329,8 @@ def main():
     p.add_argument('--cache')
     p.add_argument('--alt-xml')
     p.add_argument('--alt-cache')
+    p.add_argument('--hb-xml-command')
+    p.add_argument('--hb-cache')
     p.add_argument('--catver')
     p.add_argument('--controls-xml', '--controls-file', dest='controls_xml')
     p.add_argument('--flycast-controls')

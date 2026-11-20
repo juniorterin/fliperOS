@@ -225,7 +225,7 @@ def classify(program, last):
     if name in ("fliperos-frontend", "attractplus", "attract", "emulationstation", "es-de",
                 "pegasus", "pegasus-fe") or name.startswith("custom-"):
         return "frontend"
-    if name in ("groovymame", "fliperos-model2"):
+    if name in ("groovymame", "hbgroovymame", "fliperos-model2"):
         return "" if last.startswith("-") else "game"
     return "game" if os.path.isfile(last) else ""
 

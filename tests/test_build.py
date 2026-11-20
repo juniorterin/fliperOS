@@ -1382,7 +1382,7 @@ class RomFoldersTests(unittest.TestCase):
             for _ in range(2):  # a segunda rodada nao muda nada
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             roms = tmp / 'roms'
-            for emu in ('mame', 'ps2', 'namco2x6', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
+            for emu in ('mame', 'hbmame', 'ps2', 'namco2x6', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
                         'openbor/Paks', 'hypseus', 'fightcade', 'fightcade/fbneo', 'fightcade/flycast',
                         'fightcade/snes9x', 'fightcade/fc1'):
                 self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
@@ -1775,8 +1775,8 @@ class RomFoldersTests(unittest.TestCase):
             run()
             for kind in ('snap', 'preview', 'logo', 'box', 'marquee', 'dmd', 'texto'):
                 names = sorted(p.name for p in (tmp / 'media' / kind).iterdir())
-                self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'mame', 'model2', 'model3',
-                                         'namco2x6', 'naomi', 'naomi2', 'ps1', 'ps2', 'retroarch'], kind)
+                self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'hbmame', 'mame', 'model2',
+                                         'model3', 'namco2x6', 'naomi', 'naomi2', 'ps1', 'ps2', 'retroarch'], kind)
                 self.assertEqual([p.name for p in (tmp / 'media' / kind / 'retroarch').iterdir()], ['mame2010'], kind)
             self.assertTrue((tmp / 'media/preview/model2').is_symlink())
             self.assertEqual(list((tmp / 'disk').iterdir()), [])
@@ -2551,6 +2551,195 @@ class GroovyMameTests(unittest.TestCase):
             self.assertEqual((root / 'usr/local/libexec/groovymame').read_bytes(), b'\x7fELF binario compilado')
             self.assertEqual((root / 'usr/local/bin/groovymame').read_text(),
                              (ROOT / 'config/fliperos-groovymame').read_text())
+
+
+class HbGroovymameTests(unittest.TestCase):
+    """hbgroovymame: o HBMAME com o Switchres. O pacote e opcional (nao vai na ISO): o Setup o baixa pronto
+    quando chega um jogo na pasta hbmame; o comando e o config/fliperos-groovymame com outro nome."""
+
+    PATHS = ROOT / 'packaging/assets/hbgroovymame/paths.ini'
+
+    def run_wrapper(self, tmp, *args, name='hbgroovymame', share=True):
+        tmp = Path(tmp)
+        for d in ('hb', 'mame', 'share', 'home'):
+            (tmp / d).mkdir(exist_ok=True)
+        wrapper = tmp / name
+        wrapper.write_bytes((ROOT / 'config/fliperos-groovymame').read_bytes())
+        wrapper.chmod(0o755)
+        fake = tmp / 'real'
+        fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        fake.chmod(0o755)
+        if not (tmp / 'mame/mame.ini').exists():
+            (tmp / 'mame/mame.ini').write_text(
+                'homepath                  $HOME/.mame\nrompath                   /home/fliperos/roms/mame\n'
+                'monitor                   arcade_15\naspect                    4:3\nlowlatency                1\n'
+                'inipath                   /etc/fliperos/mame\nctrlr                     fliperos\n')
+            (tmp / 'mame/ui.ini').write_text(
+                'ui_text_color             fff8f8f2\nui_path                   $HOME/.mame/ui\n'
+                'covers_directory          /home/fliperos/media/box/mame\n'
+                'logos_directory           /home/fliperos/media/logo/mame\n')
+        if share and not (tmp / 'share/paths.ini').exists():
+            (tmp / 'share/paths.ini').write_bytes(self.PATHS.read_bytes())
+        env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR=str(tmp / 'hb'),
+                   FLIPEROS_HBGROOVYMAME_SHARE=str(tmp / 'share'), FLIPEROS_MAME_SYSTEM_INI=str(tmp / 'mame'),
+                   FLIPEROS_CONF=str(tmp / 'fliperos.conf'), DISPLAY=':0', HOME=str(tmp / 'home'))
+        for key in ('FLIPEROS_KMS_RUN', 'FLIPEROS_GROOVYMAME_X11', 'LD_PRELOAD'):
+            env.pop(key, None)
+        return subprocess.run(['bash', str(wrapper), *args], env=env, capture_output=True, text=True,
+                              timeout=60, check=True).stdout.split('\n')[:-1]
+
+    def test_the_command_builds_its_ini_from_the_system_one(self):
+        # O que o Setup grava no mame.ini (monitor, formato, latencia, botoes) vale para os dois; as pastas
+        # (rompath, nvram, estados...) sao as do paths.ini, na pasta hbmame.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            out = self.run_wrapper(tmp, 'sf2hf')
+            self.assertEqual(out, ['-inipath', '%s;%s' % (tmp / 'hb', tmp / 'mame'), 'sf2hf'])
+            ini = (tmp / 'hb/hbmame.ini').read_text()
+            self.assertRegex(ini, r'(?m)^monitor\s+arcade_15$')
+            self.assertRegex(ini, r'(?m)^aspect\s+4:3$')
+            self.assertRegex(ini, r'(?m)^ctrlr\s+fliperos$')
+            self.assertRegex(ini, r'(?m)^rompath\s+/home/fliperos/roms/hbmame;/home/fliperos/bios/hbmame;'
+                                  r'/home/fliperos/bios/mame$')
+            self.assertRegex(ini, r'(?m)^homepath\s+\$HOME/\.hbmame$')
+            self.assertRegex(ini, r'(?m)^nvram_directory\s+\$HOME/nvram/hbmame$')
+            self.assertRegex(ini, r'(?m)^state_directory\s+\$HOME/save/hbmame$')
+            self.assertRegex(ini, r'(?m)^ctrlrpath\s+\$HOME/\.mame/ctrlr;')
+            self.assertNotIn('roms/mame', ini)
+            self.assertEqual(len(re.findall(r'(?m)^rompath\s', ini)), 1)
+            self.assertRegex(ini, r'(?m)^inipath\s+%s;%s$' % (re.escape(str(tmp / 'hb')), re.escape(str(tmp / 'mame'))))
+            # A lista de jogos le a arte da pasta hbmame; o ui.ini nasce do da pasta mame.
+            ui = (tmp / 'hb/ui.ini').read_text()
+            self.assertIn('/media/box/hbmame', ui)
+            self.assertIn('/media/logo/hbmame', ui)
+            self.assertIn('$HOME/.hbmame/ui', ui)
+            self.assertNotRegex(ui, r'/media/[a-z]+/mame(\s|$)')
+            self.assertIn('ui_text_color             fff8f8f2', ui)
+            # O ini ja em dia nao e refeito (o que se escreveu nele fica); um mame.ini mais novo o refaz.
+            (tmp / 'hb/hbmame.ini').write_text(ini + '# mine\n')
+            (tmp / 'hb/ui.ini').write_text(ui + '# mine\n')
+            self.run_wrapper(tmp, 'sf2hf')
+            self.assertIn('# mine', (tmp / 'hb/hbmame.ini').read_text())
+            later = (tmp / 'hb/hbmame.ini').stat().st_mtime + 10
+            (tmp / 'mame/mame.ini').write_text((tmp / 'mame/mame.ini').read_text().replace('arcade_15', 'arcade_31'))
+            os.utime(tmp / 'mame/mame.ini', (later, later))
+            self.run_wrapper(tmp, 'sf2hf')
+            again = (tmp / 'hb/hbmame.ini').read_text()
+            self.assertNotIn('# mine', again)
+            self.assertRegex(again, r'(?m)^monitor\s+arcade_31$')
+            self.assertIn('# mine', (tmp / 'hb/ui.ini').read_text())
+
+    def test_without_the_package_or_as_groovymame_nothing_is_made(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.run_wrapper(tmp, 'sf2', share=False)
+            self.assertFalse((tmp / 'hb/hbmame.ini').exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            out = self.run_wrapper(tmp, 'sf2', name='groovymame')
+            self.assertEqual(out, ['-inipath', str(tmp / 'hb'), 'sf2'])
+            self.assertFalse((tmp / 'hb/hbmame.ini').exists())
+
+    def test_the_game_list_xml_does_not_open_the_screen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            out = self.run_wrapper(tmp, '-listxml')
+            self.assertEqual(out[:2], ['-inipath', '%s;%s' % (tmp / 'hb', tmp / 'mame')])
+            self.assertEqual(out[2], '-listxml')
+
+    @unittest.skipUnless(shutil.which('curl') and shutil.which('sha256sum'), 'curl and sha256sum')
+    def test_the_package_is_downloaded_by_the_list_and_installed(self):
+        import hashlib
+        label = 'HBMAME with Switchres (arcade hacks and homebrews)'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            release, cache, bindir = tmp / 'release', tmp / 'cache', tmp / 'bin'
+            release.mkdir()
+            bindir.mkdir()
+            deb = release / 'fliperos-hbgroovymame_0.289.6-1fliperos1_amd64.deb'
+            deb.write_bytes(b'not a real package\n' * 100)
+            digest = hashlib.sha256(deb.read_bytes()).hexdigest()
+            (tmp / 'list').write_text(
+                '# a list\nfliperos-groovymame\t0.289.222f-1fliperos2\t%s\tinstalled\n'
+                'fliperos-hbgroovymame\t0.289.6-1fliperos1\t%s\tinstalled\n' % ('0' * 64, digest))
+            apt = bindir / 'apt-get'
+            apt.write_text('#!/bin/sh\necho "$@" >> "%s"\n' % (tmp / 'apt.log'))
+            apt.chmod(0o755)
+            env = dict(os.environ, PATH='%s:%s' % (bindir, os.environ['PATH']),
+                       FLIPEROS_PACKAGES_LIST_URL='file://%s' % (tmp / 'list'),
+                       FLIPEROS_PACKAGES_URL='file://%s' % release, FLIPEROS_PACKAGES_CACHE=str(cache),
+                       FLIPEROS_EMULATORS_ROOT=str(tmp / 'root'), FLIPEROS_HOME=str(tmp / 'home'))
+
+            def install(*extra):
+                return subprocess.run(['bash', str(ROOT / 'config/fliperos-emulators'), 'install', 'hbgroovymame',
+                                       *extra], capture_output=True, text=True, env=env, timeout=120)
+            run = install('--progress')
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn('@step 5 Downloading %s' % label, run.stdout)
+            self.assertIn('@step 100 %s installed' % label, run.stdout)
+            self.assertEqual((cache / deb.name).read_bytes(), deb.read_bytes())
+            self.assertIn('install %s' % (cache / deb.name), (tmp / 'apt.log').read_text())
+            # Ja baixado e conferido: nao baixa de novo.
+            deb.write_bytes(b'changed on the release\n')
+            run = install()
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(len((tmp / 'apt.log').read_text().splitlines()), 2)
+            # O que nao confere com o sha256 da lista nao se instala.
+            for f in cache.iterdir():
+                f.unlink()
+            (tmp / 'apt.log').unlink()
+            run = install('--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail %s|fliperos-hbgroovymame_0.289.6-1fliperos1_amd64.deb does not match the sha256 '
+                          'of the list' % label, run.stdout)
+            self.assertFalse((tmp / 'apt.log').exists())
+            self.assertEqual(list(cache.iterdir()), [])
+            # Sem a linha na lista (ainda nao publicado): avisa.
+            (tmp / 'list').write_text('# a list\n')
+            run = install('--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('is not published yet', run.stdout)
+
+    def test_the_recipe_the_patches_and_the_wiring(self):
+        recipe = (ROOT / 'packaging/packages/fliperos-hbgroovymame.sh').read_text()
+        self.assertRegex(recipe, r'(?m)^PKG_OPTIONAL=1$')
+        self.assertNotRegex(recipe, r'(?m)^PKG_ON_DEMAND=')
+        for var in ('HBMAME_COMMIT', 'GROOVYMAME_COMMIT'):
+            self.assertRegex(recipe, r'(?m)^%s="[0-9a-f]{40}"$' % var)
+        self.assertIn('TARGET=hbmame', recipe)
+        self.assertIn('/usr/local/libexec/hbgroovymame', recipe)
+        patches = sorted((ROOT / 'packaging/patches/hbgroovymame').glob('*.patch'))
+        self.assertEqual([p.name[:4] for p in patches], ['0001', '0002'])
+        for patch in patches:
+            self.assertNotIn(b'\r', patch.read_bytes(), patch.name)
+        files = (ROOT / 'packaging/patches/hbgroovymame/groovymame-files.txt').read_text().split()
+        self.assertTrue(any(f.startswith('3rdparty/switchres/') for f in files))
+        self.assertIn('src/emu/emusync.cpp', files)
+        self.assertFalse([f for f in files if f.startswith('3rdparty/emusync/')])
+        # O comando vem com o sistema (o mesmo arquivo, outro nome); o binario, so com o pacote.
+        self.assertIn('install -Dm755 "$src/config/fliperos-groovymame" "$root/usr/local/bin/hbgroovymame"', ROOTFS)
+        desktop = (ROOT / 'config/applications/fliperos-hbgroovymame.desktop').read_text()
+        self.assertIn('TryExec=/usr/local/libexec/hbgroovymame', desktop)
+        self.assertIn('Exec=/opt/fliperos/bin/fliperos-launch hbgroovymame', desktop)
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('"hbgroovymame": "hbgroovymame"', frontend)
+        self.assertIn('hbgroovymame', (ROOT / 'config/fliperos-x11-run').read_text())
+
+    def test_the_folders_exist_before_the_program_does(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            info = tmp / 'info'
+            info.mkdir()
+            env = dict(os.environ, FLIPEROS_ROMS=str(tmp / 'roms'), FLIPEROS_BIOS=str(tmp / 'bios'),
+                       FLIPEROS_MEDIA=str(tmp / 'media'), FLIPEROS_NVRAM=str(tmp / 'nvram'),
+                       FLIPEROS_SAVE=str(tmp / 'save'), FLIPEROS_CORE_INFO=str(info),
+                       FLIPEROS_CONFIG_LINKS=str(tmp / 'config'), FLIPEROS_ETC=str(tmp / 'etc'),
+                       FLIPEROS_SPLASH=str(tmp / 'splash'), HOME=str(tmp))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertTrue((tmp / 'roms/hbmame/_info.txt').is_file())
+            self.assertIn('HBMAME is downloaded', (tmp / 'roms/hbmame/_info.txt').read_text())
+            for folder in ('bios/hbmame', 'nvram/hbmame', 'save/hbmame', 'media/snap/hbmame', 'media/logo/hbmame'):
+                self.assertTrue((tmp / folder).is_dir(), folder)
 
 
 class RomCleanTests(unittest.TestCase):
@@ -12766,9 +12955,14 @@ class PackagesSyncTests(unittest.TestCase):
     def test_the_list_follows_the_iso_recipes_and_the_update_uses_it(self):
         recipes = subprocess.run(['bash', str(ROOT / 'packaging/build-deb.sh'), '--list-iso'],
                                  capture_output=True, text=True, check=True).stdout.split()
+        optional = subprocess.run(['bash', str(ROOT / 'packaging/build-deb.sh'), '--list-optional'],
+                                  capture_output=True, text=True, check=True).stdout.split()
         rows = [line.split('\t') for line in (ROOT / 'updates/packages.list').read_text().splitlines()
                 if line and not line.startswith('#')]
-        self.assertEqual(sorted(r[0] for r in rows), sorted(recipes))
+        names = sorted(r[0] for r in rows)
+        # Uma linha por receita da ISO, e as opcionais so depois de publicadas.
+        self.assertEqual([n for n in names if n not in optional], sorted(recipes))
+        self.assertTrue(set(names) <= set(recipes) | set(optional))
         for name, version, sum_, when in rows:
             text = (ROOT / ('packaging/packages/%s.sh' % name)).read_text()
             want = '%s-%s' % (re.search(r'^PKG_VERSION="(.+)"', text, re.M).group(1),
@@ -12776,6 +12970,9 @@ class PackagesSyncTests(unittest.TestCase):
             self.assertEqual(version, want, name)
             self.assertRegex(sum_, r'^[0-9a-f]{64}$')
             self.assertIn(when, ('always', 'installed'))
+            if name in optional:
+                # Nenhum gabinete a ganha sozinho: so quem a instalou sobe de versao.
+                self.assertEqual(when, 'installed', name)
         update = (ROOT / 'tools/cabinet-update.sh').read_text()
         self.assertIn('done < <(bash "$src/updates/packages-sync.sh" "$src/updates/packages.list")', update)
         self.assertIn('packages+=(ffmpeg mesa-va-drivers)', update)
@@ -14349,7 +14546,7 @@ class EmulatorMenuTests(unittest.TestCase):
     # emulador (o usuario copia), e o Fightcade aparece depois de baixado
     # pelo Setup.
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/keisho',
-               'model3': '/usr/local/bin/keisho',
+               'model3': '/usr/local/bin/keisho', 'hbgroovymame': '/usr/local/libexec/hbgroovymame',
                'fightcade': '/opt/fliperos/fightcade/fightcade',
                'kof': '/home/fliperos/roms/ikemen/kof-final-attack/Ikemen_GO_Linux'}
 
@@ -14358,7 +14555,7 @@ class EmulatorMenuTests(unittest.TestCase):
 
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
-        self.assertEqual(names, {'retroarch', 'groovymame', 'flycast', 'pcsx2', 'pcsx2x6', 'model3',
+        self.assertEqual(names, {'retroarch', 'groovymame', 'hbgroovymame', 'flycast', 'pcsx2', 'pcsx2x6', 'model3',
                                  'dolphin', 'openbor', 'model2', 'fightcade', 'duckstation', 'kof'})
 
     def test_entries_go_through_the_launcher(self):
@@ -19583,7 +19780,10 @@ class OnDemandFrontendTests(unittest.TestCase):
                'fliperos-keisho', 'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-rahasher', 'fliperos-retroarch',
                'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
-        self.assertEqual(sorted(self.list_recipes('--list')), sorted(iso + self.ON_DEMAND))
+        # O hbgroovymame e opcional: compilado e publicado, fora da ISO e da compilacao no gabinete.
+        self.assertEqual(self.list_recipes('--list-optional'), ['fliperos-hbgroovymame'])
+        self.assertEqual(sorted(self.list_recipes('--list')),
+                         sorted(iso + self.ON_DEMAND + ('fliperos-hbgroovymame',)))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
 
     def test_the_session_table_fetches_them_instead_of_installing_a_package(self):
@@ -21445,7 +21645,7 @@ class EmulatorsMenuTests(unittest.TestCase):
                 (tmp / path).chmod(0o755)
             rows = [r.split('|') for r in self.run_cmd('fliperos-emulators', 'list', env=env).stdout.splitlines()]
             # Os do menu do desktop (config/applications), na ordem dele, e o KOF.
-            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'flycast', 'pcsx2', 'pcsx2x6',
+            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'hbgroovymame', 'flycast', 'pcsx2', 'pcsx2x6',
                                                     'dolphin', 'openbor', 'keisho', 'fightcade',
                                                     'duckstation', 'kof'])
             state = {r[0]: (r[1], r[2]) for r in rows}
@@ -21455,11 +21655,12 @@ class EmulatorsMenuTests(unittest.TestCase):
             self.assertEqual(state['fightcade'], ('0', 'fetch'))
             self.assertEqual(state['duckstation'], ('0', 'fetch'))
             self.assertEqual(state['kof'], ('0', 'source'))
+            self.assertEqual(state['hbgroovymame'], ('0', 'package'))
             self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'keisho', env=env).returncode, 0)
             self.assertEqual(self.run_cmd('fliperos-emulators', 'installed', 'kof', env=env).returncode, 1)
         # O arquivo que diz "instalado" e o TryExec do atalho do desktop.
         script = (ROOT / 'config/fliperos-emulators').read_text()
-        for name in ('retroarch', 'groovymame', 'flycast', 'pcsx2', 'dolphin', 'openbor', 'fightcade',
+        for name in ('retroarch', 'groovymame', 'hbgroovymame', 'flycast', 'pcsx2', 'dolphin', 'openbor', 'fightcade',
                      'duckstation'):
             tryexec = re.search(r'(?m)^TryExec=(.+)$',
                                 (ROOT / 'config/applications' / ('fliperos-%s.desktop' % name)).read_text()).group(1)

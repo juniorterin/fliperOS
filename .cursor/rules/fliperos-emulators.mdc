@@ -24,6 +24,20 @@ alwaysApply: false
 - Para calcular um modeline sem mexer na tela: `switchres W H R -c -m generic_15 -a 4:3`.
 - Lockstep de rede (dois gabinetes): plugin Lua (TCP) e patch C++ (UDP).
 
+## hbgroovymame (HBMAME com o Switchres)
+- Pacote **opcional** `fliperos-hbgroovymame` (`PKG_OPTIONAL=1`: compilado e publicado, fora da ISO; linha
+  `installed` em `updates/packages.list`). Fonte: tag `tag2896` do HBMAME + os arquivos novos do GroovyMAME
+  (Switchres, emusync, lz4) + o diff dele portado (`packaging/patches/hbgroovymame`); sem o patch de
+  lockstep nem a sincronia de audio. Binario em `/usr/local/libexec/hbgroovymame`.
+- O comando e o MESMO arquivo `config/fliperos-groovymame`, instalado como `/usr/local/bin/hbgroovymame`: o
+  nome decide. Pasta de jogos `~/roms/hbmame` (existe desde a instalacao), `~/.hbmame`, `~/nvram/hbmame`,
+  `~/save/hbmame`, `~/bios/hbmame`, arte em `~/media/<tipo>/hbmame`. O `hbmame.ini` e feito a cada jogo do
+  `mame.ini` do sistema + `paths.ini` do pacote (`hb_ini`), entao o que o Setup grava vale para os dois.
+- Instala sozinho: o frontend abre um jogo da pasta, `EMULATOR_OF` acha o emulador faltando e
+  `fliperos-emulators install hbgroovymame` (tipo `package`) baixa o .deb do release `packages` pela
+  `updates/packages.list`, confere o sha256 e instala com o apt.
+- Nomes dos jogos: `fliperos-romclean romlist` com `--hb-xml-command` (o `-listxml` dele, cache por versao).
+
 ## RetroArch
 - Pacote `fliperos-retroarch` (commit fixado, patches em `packaging/patches/retroarch`). Padrões:
   `glcore` + áudio `sdl2`, fallback `gl` em placas GL 2.x; **Vulkan em amdgpu** com o patch

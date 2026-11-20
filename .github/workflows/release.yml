@@ -111,6 +111,7 @@ jobs:
             mkdir -p "$OUT/packages"
             grep -v '^#' updates/packages.list | while read -r name version sum when; do
               [ -n "$name" ] || continue
+              case " $recipes " in *" $name "*) ;; *) continue ;; esac
               deb="${name}_${version}_amd64.deb"
               if gh release download packages -R "$GITHUB_REPOSITORY" -p "$deb" -D "$OUT/packages" --skip-existing; then
                 echo "$sum  $OUT/packages/$deb" | sha256sum -c --quiet - || rm -f "$OUT/packages/$deb"

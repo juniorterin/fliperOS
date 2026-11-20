@@ -803,7 +803,7 @@ watch() {
     # O placar de uma partida versus, se o jogo esta na tabela
     # (config/fliperos-versus): ele mesmo sai quando o jogo fecha.
     case ${3:-} in
-      groovymame) source=mame ;;
+      groovymame | hbgroovymame) source=mame ;;
       retroarch) source=retroarch ;;
       fliperos-model2 | keisho | sm2-emu) source=model2 ;;
       *) source="" ;;
@@ -1035,6 +1035,10 @@ launch() {
   (($# >= 2)) || return 0
   last=${*: -1}
   case $prog in
+    hbgroovymame)
+      [[ $last == -* ]] && return 0
+      sys=hbmame
+      ;;
     groovymame | fliperos-model2)
       [[ $last == -* ]] && return 0
       sys=mame
@@ -1067,7 +1071,7 @@ now() {
     ((${#args[@]} >= 2)) || continue
     last=${args[-1]}
     case ${args[0]##*/} in
-      groovymame | fliperos-model2) [[ $last != -* ]] || continue ;;
+      groovymame | hbgroovymame | fliperos-model2) [[ $last != -* ]] || continue ;;
       *) [[ $last == "$roms"/* && -f $last ]] || continue ;;
     esac
     PIXELCADE_GAME_PID=${dir#/proc/} launch "${args[@]}"

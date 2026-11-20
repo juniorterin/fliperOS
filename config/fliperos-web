@@ -206,7 +206,7 @@ GUI = ENV("FLIPEROS_WEB_GUI", "/usr/local/lib/fliperos-setup/gui")
 # Os emuladores do Fightcade (FBNeo, FBA, SNES9x no Wine; o Flycast Dojo, que e um
 # AppImage: o flycast.elf e o flycast-dojo de dentro dele) tambem sao "o jogo".
 FIGHTCADE_EMULATORS = ("fcadefbneo.exe", "fcv39.exe", "ggpofba-ng.exe", "fcadesnes9x.exe", "flycast.elf", "flycast-dojo")
-EMULATORS = ("retroarch", "groovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "pcsx2x6", "duckstation", "duckstation-qt",
+EMULATORS = ("retroarch", "groovymame", "hbgroovymame", "mame", "flycast", "pcsx2", "pcsx2-qt", "pcsx2x6", "duckstation", "duckstation-qt",
              "dolphin-emu", "keisho", "sm2-emu", "hypseus", "singe", "openbor") + FIGHTCADE_EMULATORS
 FRONTENDS = ("attractplus", "attract", "emulationstation", "es-de", "pegasus-fe", "fliperos-gui",
              "fliperos-frontend")
@@ -1045,7 +1045,7 @@ def game_file(name, args):
     files = [a for a in args[1:] if not a.startswith("-") and "." in os.path.basename(a)]
     if files:
         return os.path.basename(files[-1])
-    if name in ("groovymame", "mame", "fliperos-model2", "fliperos-model3", "fcadefbneo.exe", "fcv39.exe",
+    if name in ("groovymame", "hbgroovymame", "mame", "fliperos-model2", "fliperos-model3", "fcadefbneo.exe", "fcv39.exe",
                 "ggpofba-ng.exe") and len(args) > 1 and not args[-1].startswith("-") and not args[-2].startswith("-"):
         return args[-1]
     return None

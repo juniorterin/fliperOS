@@ -307,6 +307,7 @@ frontends_system_names() {
     title=""
     case $key in
       mame) systems=mame ;;
+      hbmame) systems="hbmame|arcade" ;;
       model2) systems="sega model 2" ;;
       model3) systems="sega model 3" ;;
       naomi2) systems="naomi 2" ;;
@@ -742,6 +743,9 @@ frontends_romlist() {
     fi
     xml=main
     [[ $key == retroarch/mame2010 && -f $MAME2010_XML ]] && xml=alt
+    # O HBMAME (a pasta hbmame, quando o hbgroovymame esta instalado): o XML dele
+    # tem os hacks e homebrews, que o do GroovyMAME nao conhece.
+    [[ $key == hbmame ]] && hbgroovymame_installed && xml=hb
     # Naomi, Naomi 2 e Atomiswave: so os jogos daquele sistema, pela BIOS
     # (as tres pastas podem ser a mesma, com o romset inteiro do Flycast).
     flycast=
@@ -752,6 +756,11 @@ frontends_romlist() {
   scraper_attract_display "$ATTRACT_ROMLIST_ALL"
   mapfile -t source < <(romclean_xml_args groovymame)
   [[ -f $MAME2010_XML ]] && source+=(--alt-xml "$MAME2010_XML" --alt-cache "$ROMCLEAN_CACHE/romclean-mame2010.json")
+  if hbgroovymame_installed; then
+    source+=(--hb-xml-command "$HBGROOVYMAME -listxml")
+    [[ -n $(hbgroovymame_version) ]] &&
+      source+=(--hb-cache "$ROMCLEAN_CACHE/romclean-hbgroovymame-$(hbgroovymame_version).json")
+  fi
   catver=$(romclean_data_find catver.ini "$ROMS_DIR/mame") && source+=(--catver "$catver")
   # Os botoes de verdade de cada jogo (o Controls.dat e a tabela do Flycast,
   # como no ROM Cleaner): o XML da o painel generico a Naomi e Atomiswave.
