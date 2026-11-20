@@ -26831,7 +26831,12 @@ class FesoundTests(unittest.TestCase):
         # O som de abrir toca fora do mixer, que fecha antes do jogo.
         self.assertLess(frontend.index('self.sfx.play_outside("open")'), frontend.index('pg.mixer.quit()'))
         # O nome da faixa que comeca aparece na barra; o volume do video de preview vai ao ffmpeg.
-        self.assertIn('self.nowplaying = (title, now)', frontend)
+        # A barra nasce na hora de agora: voltando de um jogo o `now` do laco e o de antes dele (minutos
+        # atras) e ela nasceria ja expirada (ou aparecia so um instante).
+        self.assertIn('self.nowplaying = (title, None)', frontend)
+        self.assertIn('playing = fe.nowplaying = (playing[0], time.monotonic())', (self.GUI / 'feview.py').read_text())
+        self.assertIn('self.launch()\n                    # O jogo durou minutos: o relogio do laco, lido antes dele, e velho.\n'
+                      '                    now = self.last_input = time.monotonic()', frontend)
         # A trilha so espera o video de preview com som se PAUSE MUSIC estiver ligado (padrao: desligado).
         self.assertIn('self.music.hold(self.snd.music_pause() and bool(video and video.sound', frontend)
         self.assertIn('self.toggle_music_pause()', frontend)

@@ -5493,11 +5493,15 @@ def draw(fe, now):
         draw_notice(top, notice[0], notice[1], now)
         back.blit(top, (0, 0))
     playing = getattr(fe, "nowplaying", None)
+    if playing and playing[1] is None:
+        # A barra conta daqui, do primeiro quadro que a mostra, e depois do que
+        # este quadro leu: o primeiro depois de um jogo e lento e nao gasta a barra.
+        playing = fe.nowplaying = (playing[0], time.monotonic())
     if playing and now - playing[1] < music_seconds(playing[0]) + MUSIC_LEAVE:
         # Acima do aviso de party, quando os dois aparecem juntos.
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         shift = 30 if notice and now < notice[2] else 0
-        draw_music_bar(top, playing[0], now - playing[1], HH - 50 - shift)
+        draw_music_bar(top, playing[0], max(0.0, now - playing[1]), HH - 50 - shift)
         back.blit(top, (0, 0))
     if o == "popup":
         popup_tvoff(fe, back, now)     # o PLAY apertado: a tela desliga como uma TV (por ultimo)

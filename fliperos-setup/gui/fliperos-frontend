@@ -1224,7 +1224,11 @@ class Frontend:
         self.music.hold(self.snd.music_pause() and bool(video and video.sound and video.alive and video.count))
         title = self.music.tick()
         if title:
-            self.nowplaying = (title, now)
+            # Sem hora: a barra conta do primeiro quadro que a desenha (feview.draw).
+            # O `now` do laco nao serve: voltando de um jogo ele e o de antes dele
+            # (minutos atras), e o primeiro quadro depois do jogo e lento (as
+            # imagens sao lidas de novo): a barra nasceria expirada ou so piscaria.
+            self.nowplaying = (title, None)
         if self.overlay != self.last_overlay:
             if self.overlay in ALERT_OVERLAYS:
                 self.sfx.play("alert")
@@ -3270,7 +3274,8 @@ class Frontend:
                     return 0
                 if r == "launch":
                     self.launch()
-                    self.last_input = time.monotonic()
+                    # O jogo durou minutos: o relogio do laco, lido antes dele, e velho.
+                    now = self.last_input = time.monotonic()
                     # O jogo fechou: o marquee volta ao logotipo do sistema (o
                     # "end" do vigia do jogo nem sempre chega, e um atrasado
                     # acha o estado ja trocado e nao mexe nele).
