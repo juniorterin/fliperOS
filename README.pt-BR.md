@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Doar com Stripe" src="https://img.shields.io/badge/doar-com%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/juniorterin/fliperOS/releases/latest"><img alt="Versão mais recente" src="https://img.shields.io/github/v/release/juniorterin/fliperOS?label=vers%C3%A3o&style=for-the-badge&color=ff79c6&labelColor=282a36"></a>
   <a href="https://github.com/juniorterin/fliperOS/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/juniorterin/fliperOS/total?label=downloads&style=for-the-badge&color=50fa7b&labelColor=282a36"></a>
   <a href="https://github.com/juniorterin/fliperOS/stargazers"><img alt="Estrelas" src="https://img.shields.io/github/stars/juniorterin/fliperOS?label=estrelas&style=for-the-badge&color=f1fa8c&labelColor=282a36"></a>
