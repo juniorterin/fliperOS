@@ -15,6 +15,19 @@
 UI_TITLE=${UI_TITLE:-FliperOS}
 # A versao ao lado do titulo. Vem do fliperos-setup, que cada update troca.
 UI_VERSION=${UI_VERSION-${FLIPEROS_SETUP_VERSION:-}}
+
+# ui_version_label: a versao e, depois da virgula, o numero do update aplicado
+# ("0.27, u98"); sem update aplicado, so a versao.
+ui_version_label() {
+  local level
+  [[ -n $UI_VERSION ]] || return 0
+  level=$(cat "${FLIPEROS_ETC:-/etc/fliperos}/patch-level" 2> /dev/null) || level=0
+  if [[ $level =~ ^[0-9]+$ ]] && ((level > 0)); then
+    printf '%s, u%s' "$UI_VERSION" "$level"
+  else
+    printf '%s' "$UI_VERSION"
+  fi
+}
 UI_STATUS=""
 UI_ROWS=30
 UI_COLS=80
@@ -179,7 +192,7 @@ ui_gui_start() {
 ui_gui_call() {
   local IFS=$'\x1f' cmd=$1 reply="" part fd
   shift
-  set -- "$cmd" "$(ui_status_short)" "$UI_VERSION" "$@"
+  set -- "$cmd" "$(ui_status_short)" "$(ui_version_label)" "$@"
   # Os FIFOs abertos para ler e escrever nao travam a abertura, e a espera
   # olha o servidor a cada segundo: se ele morrer no meio de uma tela, o
   # Setup nao fica parado para sempre (a tela volta como Esc).
@@ -514,7 +527,7 @@ UI_TOPBAR_ROWS=2
 ui_topbar() {
   ui_gui_alive && return 0
   local title=" $UI_TITLE" version="" left right="" line2="" space
-  [[ $UI_TITLE == FliperOS && -n $UI_VERSION ]] && version=" $UI_VERSION"
+  [[ $UI_TITLE == FliperOS && -n $UI_VERSION ]] && version=" $(ui_version_label)"
   left=$title$version
   UI_TOPBAR_ROWS=2
   if [[ -n $UI_STATUS ]]; then
