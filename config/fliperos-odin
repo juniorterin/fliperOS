@@ -112,6 +112,45 @@ if [[ -x $iniset ]]; then
   fi
 fi
 
+# O direcional do painel (o hat do controle, h0.x) em tudo que o Odin deixa so no
+# teclado: o manche, o volante, a barra e a mira dos jogos ligam o eixo ao analogico
+# do joypad (pad:leftx) e as setas, e o direcional do painel nao mexia em nada.
+# Cada "_left/_right/_up/_down = key:X" ganha o pad:dpLADO, uma vez por jogo
+# (.fliperos-dpad guarda os que ja foram: quem tirar no menu do Odin fica sem), e
+# so onde o jogo nao usa esse lado do direcional em outro comando (o primeiro
+# comando de cada lado, o do jogador 1; o direcional e de um so).
+if [[ -f $ini ]]; then
+  done_file=$data/.fliperos-dpad
+  tmp=$(mktemp "$ini.XXXXXX" 2> /dev/null) || tmp=""
+  if [[ -n $tmp ]]; then
+    touch "$done_file" 2> /dev/null || true
+    if awk -v done_file="$done_file" '
+      BEGIN { while ((getline line < done_file) > 0) seen[line] = 1 }
+      FNR == 1 { pass++ }
+      /^\[.*\]$/ { sec = $0 }
+      pass == 1 {
+        if (match($0, /pad:dp(left|right|up|down)/)) used[sec, substr($0, RSTART + 6, RLENGTH - 6)] = 1
+        if (sec ~ /^\[controls\./) all[sec] = 1
+        next
+      }
+      /^\[.*\]$/ { print; next }
+      {
+        if (sec ~ /^\[controls\./ && !(sec in seen) &&
+            match($0, /^# ?[a-z0-9_]+_(left|right|up|down) = key:[^,]+$/)) {
+          line = substr($0, 3)
+          dir = line; sub(/ = .*/, "", dir); sub(/.*_/, "", dir)
+          if (!((sec, dir) in used)) { used[sec, dir] = 1; print line ", pad:dp" dir; next }
+        }
+        print
+      }
+      END { for (s in all) print s >> done_file }
+    ' "$ini" "$ini" > "$tmp" 2> /dev/null && [[ -s $tmp ]]; then
+      cat "$tmp" > "$ini"
+    fi
+    rm -f "$tmp"
+  fi
+fi
+
 opts=()
 [[ $given == *" -R "* ]] || opts+=(-R "$roms")
 [[ $given == *" -B "* ]] || opts+=(-B "$bios")

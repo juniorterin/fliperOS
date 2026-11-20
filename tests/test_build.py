@@ -2807,6 +2807,31 @@ class OdinTests(unittest.TestCase):
             self.assertTrue((home / 'nvram/odin').is_dir())
             self.assertTrue((home / 'save/odin').is_dir())
 
+    def test_the_panel_dpad_drives_what_odin_leaves_on_the_keyboard(self):
+        # Os jogos ligam o manche/volante ao analogico (pad:leftx) e as setas; o
+        # direcional do painel (o hat) nao mexia em nada: ganha o pad:dpLADO,
+        # uma vez, no primeiro comando de cada lado e so onde o lado esta livre.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.run_wrapper(tmp, 'airtrix')
+            ini = tmp / 'data/odin/odin.ini'
+            ini.write_text(ini.read_text() + (
+                '[controls.pharrier]\n# stick_h_left = key:Left\n# stick_h_right = key:Right\n'
+                '[controls.braveff]\n# 1p_sight_x_left = key:Left\n# 2p_sight_x_left = key:D\n'
+                '[controls.airtrix]\n# left = key:X, pad:dpleft\n# yaw_left = key:Left\n'
+                '[controls.smashdrv]\n# wheel_left = key:Left\n'))
+            self.run_wrapper(tmp, 'airtrix')
+            text = ini.read_text()
+            self.assertIn('\nstick_h_left = key:Left, pad:dpleft\n', text)
+            self.assertIn('\nstick_h_right = key:Right, pad:dpright\n', text)
+            self.assertIn('\n1p_sight_x_left = key:Left, pad:dpleft\n', text)
+            self.assertIn('\n# 2p_sight_x_left = key:D\n', text)
+            self.assertIn('\n# yaw_left = key:Left\n', text)
+            # Quem tira o pad:dp no menu do Odin fica sem: o jogo ja foi feito.
+            ini.write_text(text.replace('stick_h_left = key:Left, pad:dpleft', 'stick_h_left = key:Left'))
+            self.run_wrapper(tmp, 'airtrix')
+            self.assertIn('\nstick_h_left = key:Left\n', ini.read_text())
+
     def test_what_the_person_changes_in_the_odin_menu_stays(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
