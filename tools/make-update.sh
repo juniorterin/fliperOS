@@ -59,6 +59,16 @@ pt_notes=$(printf 'updates/notes/pt-BR/%04d.md' "$n")
   "$git" cat-file -e "$commit:$pt_notes" 2> /dev/null ||
   die "write $pt_notes (the same notes in Portuguese, for the Telegram group) and commit it first"
 
+# Os textos do botao Compartilhar do site (website/src/lib/share-texts.json)
+# contam a novidade de cada update: o "update" do arquivo tem de ser este N,
+# depois de reler os textos e pôr a novidade nova (website/scripts/check-share.mjs).
+if command -v node > /dev/null; then
+  SHARE_EXPECT_UPDATE=$n node website/scripts/check-share.mjs ||
+    die "update the share texts (website/src/lib/share-texts.json) for update $n and commit them first"
+else
+  echo "make-update: node not found, skipping the share texts check (update $n)" >&2
+fi
+
 # O treehash da arvore que o gabinete baixa (o git archive do commit, como
 # o tar do GitHub), pela mesma funcao do fliperos-update. Sem o autocrlf:
 # no Windows ele poria CRLF onde o .gitattributes nao fixa LF, e o hash nao

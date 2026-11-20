@@ -1,0 +1,120 @@
+{
+  "_": "Os textos do botão Compartilhar. Cada texto é uma lista de linhas. {url} vira o endereço do site no idioma do texto e {version} a versão atual (FLIPEROS_VERSION). Depois de CADA update novo: reler os textos, pôr a novidade no lugar da antiga e subir o número abaixo (scripts/check-share.mjs compara com updates/index; tools/make-update.sh roda a checagem). Os limites de tamanho de cada rede estão em src/lib/share.ts.",
+  "update": 96,
+  "texts": {
+    "en-US": {
+      "x": [
+        "FliperOS {version}: free, open-source arcade Linux built for CRT. True 15 kHz on AMD, Switchres, GroovyMAME, RetroArch, Flycast and more, with a web panel to control the cabinet from your phone. New: Odin (Sega Hikaru) and HBMAME.",
+        "{url} #retrogaming #CRT #arcade"
+      ],
+      "instagram": [
+        "🕹️ Your PC becomes an arcade machine for a real CRT.",
+        "",
+        "FliperOS {version} is free, open-source Linux (Ubuntu 24.04) made for 15 kHz tubes: true 240p, Switchres, GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2 and Model 2/3, with a setup menu drawn for the tube and a web panel to run the cabinet from your phone.",
+        "",
+        "New: Odin (Sega Hikaru and Gaelco 3D) and HBMAME with Switchres, both installed by themselves when you open their first game.",
+        "",
+        "Install it from a USB stick. No games or BIOS inside; the Setup fetches the BIOS your games need.",
+        "",
+        "{url}",
+        "",
+        "#crt #retrogaming #arcade #mame #15khz #switchres #opensource #linux #arcadecabinet #retrogames"
+      ],
+      "facebook": [
+        "FliperOS {version} is out: a free, open-source Linux that turns a PC into an arcade machine for a real CRT monitor.",
+        "",
+        "It has a 15 kHz kernel and Switchres, so AMD cards draw a true 240p picture on the tube, plus GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2 and Model 2/3 emulators ready to play. A web panel on your phone picks the game and shows the cabinet live.",
+        "",
+        "New in the latest updates: Odin (Sega Hikaru and Gaelco 3D), HBMAME with Switchres, menu sounds and music, and the game lists now show the clones inside HBMAME zips.",
+        "",
+        "Download, install guide and wiki: {url}"
+      ],
+      "linkedin": [
+        "I’m building FliperOS, a free and open-source Linux distribution (Ubuntu 24.04) that turns a PC into an arcade cabinet for CRT monitors. Version {version} is out.",
+        "",
+        "What it solves: playing arcade games on a real 15 kHz tube normally means hours of kernel patches, modelines and emulator configs. FliperOS ships all of it ready:",
+        "• a Linux 6.18 kernel with the 15 kHz patches and Switchres, so AMD cards output a true 240p signal (Intel and NVIDIA work too, with super resolutions)",
+        "• GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2, Keisho (Model 2/3) and more, each started with the right video mode",
+        "• a setup menu drawn for the tube itself, and a web panel to control the cabinet from a phone: pick a game, watch it live, put the screen in OBS",
+        "• party play between linked cabinets over the local network",
+        "",
+        "Latest: Odin (Sega Hikaru and Gaelco 3D) and HBMAME with Switchres, both installed on demand the first time you open one of their games.",
+        "",
+        "It ships no games and no BIOS. Source, releases and docs are open, and feedback and contributions are welcome: {url}",
+        "",
+        "#opensource #linux #retrogaming #embedded #emulation"
+      ],
+      "telegram": [
+        "🕹️ FliperOS {version}: arcade Linux built for CRT",
+        "",
+        "Free, open-source, Ubuntu 24.04 with a 15 kHz kernel and Switchres. Install from a USB stick and play on a real tube.",
+        "",
+        "• AMD cards output a true 240p picture natively (Intel and NVIDIA work too)",
+        "• GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2, Keisho (Model 2/3), DuckStation and more",
+        "• a setup menu drawn for the tube and a web panel to control the cabinet from your phone",
+        "• party play between cabinets, light guns, Pixelcade and ZeDMD displays",
+        "",
+        "New: Odin (Sega Hikaru and Gaelco 3D) and HBMAME with Switchres, installed by themselves when you open their first game.",
+        "",
+        "{url}"
+      ]
+    },
+    "pt-BR": {
+      "x": [
+        "FliperOS {version}: Linux arcade gratuito e aberto, feito para CRT. 15 kHz real em AMD, Switchres, GroovyMAME, RetroArch, Flycast e mais, com painel web para controlar o gabinete pelo celular. Novo: Odin (Sega Hikaru) e HBMAME.",
+        "{url} #retrogaming #CRT #arcade"
+      ],
+      "instagram": [
+        "🕹️ O seu PC vira um gabinete de arcade para um CRT de verdade.",
+        "",
+        "O FliperOS {version} é um Linux gratuito e de código aberto (Ubuntu 24.04) feito para tubos de 15 kHz: 240p de verdade, Switchres, GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2 e Model 2/3, com um menu de configuração desenhado para o tubo e um painel web para controlar o gabinete pelo celular.",
+        "",
+        "Novo: Odin (Sega Hikaru e Gaelco 3D) e HBMAME com Switchres, os dois se instalam sozinhos quando você abre o primeiro jogo deles.",
+        "",
+        "Instala por pendrive. Não vem com jogos nem BIOS; o Setup baixa as BIOS que os seus jogos pedem.",
+        "",
+        "{url}",
+        "",
+        "#crt #retrogaming #arcade #mame #15khz #switchres #opensource #linux #fliperama #retrogames"
+      ],
+      "facebook": [
+        "Saiu o FliperOS {version}: um Linux gratuito e de código aberto que transforma um PC em um gabinete de arcade para monitor CRT de verdade.",
+        "",
+        "Ele traz kernel de 15 kHz e Switchres, então placas AMD desenham 240p de verdade no tubo, e os emuladores GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2 e Model 2/3 já vêm prontos para jogar. Um painel web no celular escolhe o jogo e mostra o gabinete ao vivo.",
+        "",
+        "Novidades dos últimos updates: Odin (Sega Hikaru e Gaelco 3D), HBMAME com Switchres, sons de menu e músicas, e as listas de jogos agora mostram os clones que vêm dentro dos zips do HBMAME.",
+        "",
+        "Download, guia de instalação e wiki: {url}"
+      ],
+      "linkedin": [
+        "Estou construindo o FliperOS, uma distribuição Linux gratuita e de código aberto (Ubuntu 24.04) que transforma um PC em um gabinete de arcade para monitores CRT. A versão {version} já saiu.",
+        "",
+        "O problema que ele resolve: jogar arcade em um tubo de 15 kHz de verdade costuma custar horas de patches de kernel, modelines e configuração de emuladores. O FliperOS entrega tudo pronto:",
+        "• kernel Linux 6.18 com os patches de 15 kHz e Switchres, para que placas AMD gerem um sinal 240p de verdade (Intel e NVIDIA também funcionam, com super resoluções)",
+        "• GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2, Keisho (Model 2/3) e mais, cada um aberto com o modo de vídeo certo",
+        "• um menu de configuração desenhado para o próprio tubo e um painel web para controlar o gabinete pelo celular: escolher o jogo, assistir ao vivo, colocar a tela no OBS",
+        "• partida em grupo entre gabinetes ligados na rede local",
+        "",
+        "Novidade: Odin (Sega Hikaru e Gaelco 3D) e HBMAME com Switchres, os dois instalados sob demanda na primeira vez que você abre um jogo deles.",
+        "",
+        "Não vem com jogos nem BIOS. Código, releases e documentação são abertos, e feedback e contribuições são bem-vindos: {url}",
+        "",
+        "#opensource #linux #retrogaming #embarcados #emulacao"
+      ],
+      "telegram": [
+        "🕹️ FliperOS {version}: Linux arcade feito para CRT",
+        "",
+        "Gratuito, de código aberto, Ubuntu 24.04 com kernel de 15 kHz e Switchres. Instala por pendrive e joga em um tubo de verdade.",
+        "",
+        "• placas AMD geram 240p de verdade nativamente (Intel e NVIDIA também funcionam)",
+        "• GroovyMAME, RetroArch, Flycast, Dolphin, PCSX2, Keisho (Model 2/3), DuckStation e mais",
+        "• menu de configuração desenhado para o tubo e painel web para controlar o gabinete pelo celular",
+        "• partida em grupo entre gabinetes, pistolas de luz, displays Pixelcade e ZeDMD",
+        "",
+        "Novo: Odin (Sega Hikaru e Gaelco 3D) e HBMAME com Switchres, que se instalam sozinhos quando você abre o primeiro jogo deles.",
+        "",
+        "{url}"
+      ]
+    }
+  }
+}

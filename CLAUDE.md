@@ -67,3 +67,10 @@ eles até existir o update 40.
     um modprobe.d) precisa de um passo no update que o gere nas máquinas que já
     têm a configuração (como o `boot_apply` do `tools/cabinet-update.sh`):
     instalar os arquivos novos não basta.
+11. O botão Compartilhar do site tem um texto por rede e idioma em
+    `website/src/lib/share-texts.json`. A cada update novo (`tools/make-update.sh`),
+    antes de publicar: releia os textos, ponha a novidade nova no lugar da antiga
+    (e a versão, se saiu release) e suba o campo `update` para o número do update.
+    `node website/scripts/check-share.mjs` confere (o make-update.sh roda ele) e
+    também os limites de tamanho de cada rede (X 280, etc.), que ficam em
+    `website/src/lib/share.ts`.

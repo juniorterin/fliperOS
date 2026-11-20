@@ -9,6 +9,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "i18n:check": "node scripts/check-i18n.mjs",
+    "share:check": "node scripts/check-share.mjs",
     "media:check": "node scripts/check-media.mjs"
   },
   "dependencies": {

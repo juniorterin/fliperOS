@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, BookText, Menu, Send, X } from 'lucide-react';
+import { BookOpen, BookText, Menu, Send, Share2, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { localePath, pagePath } from '@/i18n';
@@ -9,12 +9,14 @@ import { guideUrl, LINKS, PAGE_SLUGS, readmeUrl } from '@/lib/site';
 import { GithubIcon } from './GithubIcon';
 import { LanguageSwitch } from './LanguageSwitch';
 import { LogoMark, Wordmark } from './Logo';
+import { ShareDialog } from './ShareDialog';
 
 export function Header() {
   const { t, locale } = useI18n();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   // A home e uma linha por página de detalhe; a ativa é a do endereço atual.
   const nav = [
@@ -94,6 +96,15 @@ export function Header() {
         <div>
           <LanguageSwitch />
         </div>
+        {/* Compartilhe, logo acima da wiki: abre o modal com os textos por rede. */}
+        <button
+          type="button"
+          onClick={() => setShareOpen(true)}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-pink/60 bg-pink/10 px-3.5 py-2 text-sm font-medium text-fg transition hover:border-pink hover:bg-pink/20 hover:shadow-[0_0_20px_-6px] hover:shadow-pink"
+        >
+          <Share2 className="size-4" aria-hidden="true" />
+          {t.nav.share}
+        </button>
         {/* A wiki do projeto, logo acima do GitHub. */}
         <a
           href={LINKS.docs}
@@ -201,11 +212,22 @@ export function Header() {
             </a>
           </li>
         </ul>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setShareOpen(true);
+          }}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-pink/60 bg-pink/10 px-4 py-3 font-medium text-fg"
+        >
+          <Share2 className="size-4" aria-hidden="true" />
+          {t.nav.share}
+        </button>
         <a
           href={LINKS.docs}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-green/60 bg-green/10 px-4 py-3 font-medium text-fg"
+          className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-green/60 bg-green/10 px-4 py-3 font-medium text-fg"
         >
           <BookText className="size-4" aria-hidden="true" />
           {t.nav.wiki}
@@ -233,6 +255,7 @@ export function Header() {
         </a>
       </nav>
     </header>
+    <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
     </>
   );
 }
