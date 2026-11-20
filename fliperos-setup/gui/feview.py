@@ -2135,9 +2135,13 @@ STICK_CAM = (math.radians(40), math.radians(8))
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 
 
+STICK_FOOT = 43                     # a linha da camada onde a base do balltop termina
+
+
 def stick_pos():
-    """O canto de baixo a direita, dentro da margem segura."""
-    return SX + SW - STICK_SIZE[0] + 3, HH - T.SAFE_Y - STICK_SIZE[1] + 4
+    """O canto de baixo a direita, com a base do balltop na mesma linha de baixo dos icones do jogo (a fileira deles, em
+    draw_full, vai de HH - 32 a HH - 20)."""
+    return SX + SW - STICK_SIZE[0] + 3, HH - 20 - STICK_FOOT
 
 
 def _ellipse(surf, color, cx, cy, rx, ry, width=0):

@@ -6321,6 +6321,14 @@ class FrontendDataTests(unittest.TestCase):
         self.assertTrue(x + size[0] <= feview.SX + feview.SW + 3 and y + size[1] <= feview.HH - feview.T.SAFE_Y + 4)
         self.assertGreater(x, feview.WW // 2)
         self.assertGreater(y, feview.HH // 2)
+        # A base dele fica na mesma linha de baixo dos icones do jogo (a fileira deles termina em HH - 20).
+        base = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        base.blit(feview.stick_draw(0.0), (x, y))
+        self.assertLessEqual(abs(base.get_bounding_rect().bottom - (feview.HH - 20)), 1)
+        import inspect
+        text = inspect.getsource(feview.draw_full)
+        self.assertIn('y = HH - 56', text)
+        self.assertIn('iy = y + 24 if facts_line(game) else y + 13', text)       # os icones: de y + 24 a y + 36 = HH - 20
         rest = feview.stick_draw(0.0)
         self.assertEqual(rest.get_size(), size)
         self.assertLessEqual(rest.get_bounding_rect().height, 36)
