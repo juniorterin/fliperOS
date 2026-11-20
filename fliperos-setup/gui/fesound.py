@@ -2,8 +2,10 @@
 # Os sons do FliperOS: os seis eventos (o cursor andando, entrar, voltar,
 # abrir o jogo, fechar o jogo e o dialogo de alerta) e a trilha do frontend.
 # O mesmo codigo serve o Setup (Audio > Menu sounds) e o frontend (Tab >
-# Frontend options > Frontend sounds): cada um tem o seu conjunto de arquivos
-# e de volumes, e eles tem de ser espelho um do outro.
+# Frontend options > Frontend sounds), e os seis eventos sao os mesmos nos dois:
+# o arquivo e o volume de cada um ficam em ~/.config/fliperos/sounds.json (Shared),
+# mudar num lugar muda no outro. A trilha, o volume dela e o do preview sao so do
+# frontend.
 #
 # Os arquivos ficam em ~/media/fliperos-sounds (a trilha, em music/); os
 # padrao (gui/sounds/*.wav, feitos por tools/make-default-sounds.py) sao
@@ -13,6 +15,7 @@
 # Como programa (o shell do Setup usa):
 #   fesound.py seed                  copia os sons padrao para a pasta
 #   fesound.py status menu           uma linha por evento: id, rotulo, arquivo, volume
+#   fesound.py set EVENTO file|volume VALOR   grava o arquivo ("" padrao, off) ou o volume
 #   fesound.py menu-env              as GUM_SOUND_MOVE/SELECT, no volume de cada um
 #   fesound.py play menu EVENTO      toca um evento do menu (aplay, em segundo plano)
 #   fesound.py play-file ARQ [VOL]   toca um arquivo qualquer
@@ -21,6 +24,7 @@
 
 import array
 import hashlib
+import json
 import os
 import random
 import re
@@ -180,39 +184,141 @@ def read_conf(path=None):
     return values
 
 
-class Menu:
-    """Os sons do menu do Setup: menu_sound_EVENTO (o arquivo, "off" ou vazio)
-    e menu_sound_EVENTO_volume no fliperos.conf; menu_sounds=off desliga tudo."""
+def shared_file():
+    """O arquivo dos seis eventos, o mesmo do Setup e do frontend. O Setup roda
+    como root: passa o do usuario do gabinete em FLIPEROS_SOUNDS_FILE."""
+    return os.environ.get("FLIPEROS_SOUNDS_FILE") or os.path.join(os.path.expanduser("~"), ".config", "fliperos",
+                                                                    "sounds.json")
 
-    scope = "menu"
-    menu = True
 
-    def __init__(self, values=None):
-        self.values = read_conf() if values is None else values
+class Shared:
+    """Os seis eventos, o mesmo conjunto no Setup (Audio > Menu sounds) e no
+    frontend (Tab > Frontend sounds): o arquivo e o volume de cada um, em
+    ~/.config/fliperos/sounds.json, {"move": {"file": "", "volume": 60}, ...}
+    (file vazio: o padrao; "off": mudo). O que um muda o outro ve. O Setup grava
+    como root e deixa o arquivo do usuario do gabinete, para o frontend poder
+    gravar tambem. menu_sounds=off no fliperos.conf cala os dois."""
+
+    scope = "shared"
+    menu = True         # o move.wav e o select.wav de antes ainda valem como padrao
+
+    def __init__(self, path=None, conf=None, legacy=None):
+        """legacy: o "sounds" do frontend.json de antes (so entra da primeira vez)."""
+        self.path = path or shared_file()
+        self.conf = read_conf() if conf is None else conf
+        data = self.load()
+        if data is None:
+            data = self.migrate(legacy)
+            self.data = data
+            if data:
+                self.save()
+        self.data = data
+
+    def load(self):
+        """O arquivo: o dicionario, ou None se ainda nao existe (a primeira vez)."""
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def migrate(self, legacy):
+        """O que a pessoa ja tinha escolhido antes de os dois serem um conjunto
+        so: no Setup (menu_sound_* do fliperos.conf) e no frontend (o "sounds"
+        do frontend.json); o do frontend vale mais."""
+        legacy = legacy if isinstance(legacy, dict) else {}
+        data = {}
+        for event in EVENTS:
+            old = legacy.get(event) if isinstance(legacy.get(event), dict) else {}
+            item = {}
+            file = old.get("file") or self.conf.get("menu_sound_" + event, "")
+            if isinstance(file, str) and file:
+                item["file"] = file
+            volume = old.get("volume", self.conf.get("menu_sound_%s_volume" % event))
+            if volume is not None:
+                item["volume"] = clamp(volume, DEFAULT_VOLUME[event])
+            if item:
+                data[event] = item
+        return data
+
+    def save(self):
+        """Grava o arquivo inteiro, de uma vez. Com o root (o Setup), a pasta e o
+        arquivo ficam do dono da pasta de cima. False se nao deu (um disco so de
+        leitura): a escolha vale ate fechar."""
+        try:
+            folder = os.path.dirname(self.path)
+            make_dirs(folder)
+            tmp = "%s.%d.tmp" % (self.path, os.getpid())
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, indent=1, sort_keys=True)
+            _own(tmp, folder)
+            os.replace(tmp, self.path)
+            return True
+        except OSError:
+            return False
 
     def enabled(self):
-        return self.values.get("menu_sounds") != "off"
+        return self.conf.get("menu_sounds") != "off"
+
+    def entry(self, event):
+        item = self.data.get(event)
+        return item if isinstance(item, dict) else {}
 
     def file(self, event):
-        return self.values.get("menu_sound_" + event, "")
+        value = self.entry(event).get("file", "")
+        return value if isinstance(value, str) else ""
 
     def volume(self, event):
-        return clamp(self.values.get("menu_sound_%s_volume" % event), DEFAULT_VOLUME[event])
+        return clamp(self.entry(event).get("volume"), DEFAULT_VOLUME[event])
+
+    def set_file(self, event, value):
+        item = self.data.get(event)
+        if not isinstance(item, dict):
+            item = self.data[event] = {}
+        item["file"] = value
+        return self.save()
+
+    def set_volume(self, event, value):
+        item = self.data.get(event)
+        if not isinstance(item, dict):
+            item = self.data[event] = {}
+        item["volume"] = clamp(value, DEFAULT_VOLUME[event])
+        return self.save()
 
 
 class Frontend:
-    """Os sons do frontend: o "sounds" do frontend.json, {"move": {"file": "",
-    "volume": 60}, ..., "music": {"source": "", "volume": 40}, "preview":
-    100}. Guarda o proprio dicionario: quem muda (o frontend) grava depois."""
+    """Os sons do frontend: os seis eventos sao os do Setup (Shared, o mesmo
+    arquivo); o resto e do frontend, o "sounds" do frontend.json,
+    {"music": {"source": "", "volume": 40, "pause": false}, "preview": 100}.
+    Guarda o proprio dicionario: quem muda (o frontend) grava depois."""
 
     scope = "frontend"
-    menu = False
+    menu = True
 
-    def __init__(self, data=None):
+    def __init__(self, data=None, shared=None):
         self.data = data if isinstance(data, dict) else {}
+        # Os eventos moravam aqui, antes de serem os do Setup tambem: o que a
+        # pessoa tinha escolhido passa para o arquivo comum (so da primeira vez).
+        old = {event: self.data.pop(event) for event in EVENTS if isinstance(self.data.get(event), dict)}
+        self.shared = shared or Shared(legacy=old)
 
     def enabled(self):
-        return True
+        return self.shared.enabled()
+
+    def file(self, event):
+        return self.shared.file(event)
+
+    def volume(self, event):
+        return self.shared.volume(event)
+
+    def set_file(self, event, value):
+        self.shared.set_file(event, value)
+
+    def set_volume(self, event, value):
+        self.shared.set_volume(event, value)
 
     def entry(self, event):
         """O dicionario do evento (so para ler: um evento sem nada fica fora)."""
@@ -225,19 +331,6 @@ class Frontend:
         if not isinstance(item, dict):
             item = self.data[event] = {}
         return item
-
-    def file(self, event):
-        value = self.entry(event).get("file", "")
-        return value if isinstance(value, str) else ""
-
-    def volume(self, event):
-        return clamp(self.entry(event).get("volume"), DEFAULT_VOLUME[event])
-
-    def set_file(self, event, value):
-        self.writable(event)["file"] = value
-
-    def set_volume(self, event, value):
-        self.writable(event)["volume"] = clamp(value, DEFAULT_VOLUME[event])
 
     def music_source(self):
         value = self.entry("music").get("source", "")
@@ -355,7 +448,7 @@ def gum_env(settings=None):
     """As variaveis do gum (GUM_SOUND_MOVE e GUM_SOUND_SELECT, o "enter"),
     uma "NOME=arquivo" por linha: o gum toca o arquivo como esta, entao ja vai
     no volume do evento."""
-    settings = settings or Menu()
+    settings = settings or Shared()
     lines = []
     if settings.enabled():
         for event, name in (("move", "GUM_SOUND_MOVE"), ("enter", "GUM_SOUND_SELECT")):
@@ -759,16 +852,21 @@ def main(argv):
         seed()
         return 0
     if cmd == "status" and len(argv) >= 2 and argv[1] == "menu":
-        settings = Menu()
+        settings = Shared()
         for event in EVENTS:
             print("%s\t%s\t%s\t%d" % (event, LABELS[event], describe(settings.file(event)), settings.volume(event)))
         return 0
+    if cmd == "set" and len(argv) == 4 and argv[1] in EVENTS and argv[2] in ("file", "volume"):
+        settings = Shared()
+        if argv[2] == "file":
+            return 0 if settings.set_file(argv[1], argv[3]) else 1
+        return 0 if settings.set_volume(argv[1], argv[3]) else 1
     if cmd == "menu-env":
         for line in gum_env():
             print(line)
         return 0
     if cmd == "play" and len(argv) >= 3 and argv[1] == "menu" and argv[2] in EVENTS:
-        settings = Menu()
+        settings = Shared()
         if settings.enabled():
             play_file(resolve(argv[2], settings.file(argv[2]), True), settings.volume(argv[2]))
         return 0

@@ -157,10 +157,10 @@ class App:
         som."""
         import fesound
         if self.bank is None:
-            self.bank = fesound.Bank(self.pygame, fesound.Menu())
+            self.bank = fesound.Bank(self.pygame, fesound.Shared())
             self.bank.usable = self.audio_opens()
         else:
-            self.bank.settings = fesound.Menu()
+            self.bank.settings = fesound.Shared()
         try:
             self.bank.reload()
         except Exception:

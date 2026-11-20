@@ -153,7 +153,7 @@ ui_gui_start() {
   LD_PRELOAD=$preload FLIPEROS_DEFLICKER_APP=fliperos-gui \
     FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
     FLIPEROS_GUI_CONSOLE=$console \
-    FLIPEROS_SOUNDS_DIR=$(sounds_dir) FLIPEROS_CONF=$FLIPEROS_CONF \
+    FLIPEROS_SOUNDS_DIR=$(sounds_dir) FLIPEROS_SOUNDS_FILE=$(sounds_file) FLIPEROS_CONF=$FLIPEROS_CONF \
     SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-$driver} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
     "$UI_GUI_BIN" --serve "$UI_GUI_DIR" < /dev/null >> "$FLIPEROS_LOG" 2>&1 &
   UI_GUI_PID=$!

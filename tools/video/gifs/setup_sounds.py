@@ -29,7 +29,7 @@ def sounds(close="default, 90%"):
         ("snd-alert", "Alert dialog: default, 90%", "Plays when an alert or a question opens."),
         ("folder", "Sounds folder", "Where the sound files are, and how to add yours."),
         ("return", "Return", "Back to Audio Setup."),
-    ], "master", "Pick an event, then its sound file and volume.")
+    ], "master", "Pick an event, then its sound and volume. The frontend uses the same ones.")
 
 
 def event(file="default", volume=90):

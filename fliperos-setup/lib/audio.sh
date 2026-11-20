@@ -355,11 +355,12 @@ audio_test() {
 
 # ── Sons do menu ─────────────────────────────────────────────────
 # Seis eventos (o cursor andando, entrar, voltar, abrir o jogo, fechar o jogo e
-# o dialogo de alerta), cada um com o arquivo e o volume dele: menu_sound_EVENTO
-# e menu_sound_EVENTO_volume no fliperos.conf (vazio: o som padrao; off: mudo).
-# Os arquivos ficam em ~/media/fliperos-sounds; o padrao vem em gui/sounds e a
-# primeira vez e copiado para la (gui/fesound.py). O Frontend sounds do
-# frontend e o espelho disto (frontend.json). O gum
+# o dialogo de alerta), cada um com o arquivo e o volume dele (vazio: o som
+# padrao; off: mudo). Sao os mesmos do Frontend sounds do frontend: ficam em
+# ~/.config/fliperos/sounds.json (gui/fesound.py, Shared), que os dois gravam;
+# so o menu_sounds=off do fliperos.conf cala os dois. Os arquivos ficam em
+# ~/media/fliperos-sounds; o padrao vem em gui/sounds e a primeira vez e copiado
+# para la. O gum
 # (packaging/patches/gum/0002-sons-do-menu.patch) toca GUM_SOUND_MOVE quando o
 # cursor anda e GUM_SOUND_SELECT no Enter, so WAV e no volume do proprio
 # arquivo: o fesound entrega o arquivo ja no volume do evento. A interface
@@ -373,11 +374,18 @@ sounds_dir() {
   printf '%s\n' "${FLIPEROS_SOUNDS_DIR:-${FOLDERS_HOME:-/home/${FLIPEROS_USER:-fliperos}}/media/fliperos-sounds}"
 }
 
-# sounds_helper ARGUMENTO...: o gui/fesound.py, com a pasta e o fliperos.conf
-# deste Setup.
+# sounds_file imprime o arquivo dos seis eventos, o mesmo do frontend: o
+# ~/.config/fliperos/sounds.json do usuario do gabinete.
+sounds_file() {
+  printf '%s\n' "${FLIPEROS_SOUNDS_FILE:-${FOLDERS_HOME:-/home/${FLIPEROS_USER:-fliperos}}/.config/fliperos/sounds.json}"
+}
+
+# sounds_helper ARGUMENTO...: o gui/fesound.py, com a pasta, o arquivo dos
+# eventos e o fliperos.conf deste Setup.
 sounds_helper() {
   have python3 && [[ -f $SOUNDS_HELPER ]] || return 1
-  FLIPEROS_SOUNDS_DIR=$(sounds_dir) FLIPEROS_CONF=$FLIPEROS_CONF python3 -I "$SOUNDS_HELPER" "$@"
+  FLIPEROS_SOUNDS_DIR=$(sounds_dir) FLIPEROS_SOUNDS_FILE=$(sounds_file) FLIPEROS_CONF=$FLIPEROS_CONF \
+    python3 -I "$SOUNDS_HELPER" "$@"
 }
 
 # sounds_seed copia os sons padrao para a pasta (so os que faltam).
@@ -425,14 +433,14 @@ menu_sound_valid_event() {
 # (mudo) ou vazio (o padrao).
 menu_sound_set_file() {
   menu_sound_valid_event "$1" || return 1
-  conf_set "menu_sound_$1" "$2"
+  sounds_helper set "$1" file "$2"
 }
 
 # menu_sound_set_volume EVENTO 0-100 grava o volume do evento.
 menu_sound_set_volume() {
   menu_sound_valid_event "$1" || return 1
   [[ $2 =~ ^[0-9]{1,3}$ ]] && (($2 <= 100)) || return 1
-  conf_set "menu_sound_$1_volume" "$((10#$2))"
+  sounds_helper set "$1" volume "$((10#$2))"
 }
 
 # menu_sound_play EVENTO toca o som do evento agora (no volume dele, com o

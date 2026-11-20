@@ -28,8 +28,8 @@ screen_menu_sounds() {
     done < <(menu_sound_rows)
     entries+=("folder|Sounds folder|Where the sound files are, and how to add yours."
       "return|Return|Back to Audio Setup.")
-    choice=$(ui_menu_hints "$title" "Pick an event, then its sound file and volume." "$last" "${entries[@]}") ||
-      return 0
+    choice=$(ui_menu_hints "$title" "Pick an event, then its sound and volume. The frontend uses the same ones." "$last" \
+      "${entries[@]}") || return 0
     last=$choice
     case $choice in
       master)

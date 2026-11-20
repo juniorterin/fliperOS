@@ -9266,8 +9266,9 @@ class MenuSoundsTests(Base):
     def setUp(self):
         super().setUp()
         self.sounds = self.env.dir / "home" / "media" / "fliperos-sounds"
-        self.vars = {"FLIPEROS_SOUNDS_DIR": str(self.sounds), "XDG_CACHE_HOME": str(self.env.dir / "cache"),
-                     "SOUNDS_HELPER": str(SETUP / "gui" / "fesound.py")}
+        self.events = self.env.dir / "home" / ".config" / "fliperos" / "sounds.json"
+        self.vars = {"FLIPEROS_SOUNDS_DIR": str(self.sounds), "FLIPEROS_SOUNDS_FILE": str(self.events),
+                     "XDG_CACHE_HOME": str(self.env.dir / "cache"), "SOUNDS_HELPER": str(SETUP / "gui" / "fesound.py")}
 
     def gum(self):
         script = 'source %s/lib/ui.sh; ui_sounds; echo "$(menu_sounds_label)|${GUM_SOUND_MOVE:-}|${GUM_SOUND_SELECT:-}"'
@@ -9300,10 +9301,12 @@ class MenuSoundsTests(Base):
         mine = self.wav("mine.wav")
         self.env.out('menu_sound_set_file move "%s"; menu_sound_set_volume move 30; menu_sound_set_volume alert 007' % mine,
                      self.vars)
-        conf = (self.env.etc / "fliperos.conf").read_text()
-        self.assertIn("menu_sound_move=%s\n" % mine, conf)
-        self.assertIn("menu_sound_move_volume=30\n", conf)
-        self.assertIn("menu_sound_alert_volume=7\n", conf)
+        # No arquivo comum do Setup e do frontend (nao no fliperos.conf), do dono do ~ (o frontend grava nele).
+        saved = json.loads(self.events.read_text())
+        self.assertEqual(saved["move"], {"file": str(mine), "volume": 30})
+        self.assertEqual(saved["alert"], {"volume": 7})
+        self.assertFalse((self.env.etc / "fliperos.conf").exists() and
+                         "menu_sound_" in (self.env.etc / "fliperos.conf").read_text())
         rows = self.rows()
         self.assertEqual((rows[0], rows[5]), ("move|Browse|mine.wav|30", "alert|Alert dialog|DEFAULT|7"))
         # O arquivo escolhido vai ao gum no volume escolhido (um WAV novo, no cache).
@@ -9334,6 +9337,20 @@ class MenuSoundsTests(Base):
         self.env.out("menu_sounds_set on", self.vars)
         self.assertEqual(self.gum()[0], "on")
         self.assertNotEqual(self.gum()[1], "")
+
+    def test_the_frontend_shares_the_same_six_sounds(self):
+        # Os volumes e os arquivos dos seis eventos sao os mesmos no Setup e no frontend (gui/fesound.py,
+        # Shared): o que o Setup muda o frontend le, e o que o frontend muda o Setup mostra.
+        self.env.out("menu_sound_set_volume enter 45", self.vars)
+        gui = str(SETUP / "gui")
+        script = ("import sys; sys.path.insert(0, %r); import fesound as f; front = f.Frontend({}); "
+                  "print(front.volume('enter')); front.set_volume('back', 15); front.set_file('alert', 'off')") % gui
+        env = dict(os.environ, **self.vars, FLIPEROS_CONF=str(self.env.etc / "fliperos.conf"))
+        shown = subprocess.run(["python3", "-c", script], capture_output=True, text=True, env=env)
+        self.assertEqual((shown.returncode, shown.stdout.strip()), (0, "45"), shown.stderr)
+        rows = {r.split("|")[0]: r.split("|") for r in self.rows()}
+        self.assertEqual((rows["enter"][2:], rows["back"][2:], rows["alert"][2:]),
+                         (["DEFAULT", "45"], ["DEFAULT", "15"], ["OFF", "90"]))
 
     def test_the_default_sounds_are_copied_to_the_media_folder(self):
         self.env.out("sounds_seed", self.vars)

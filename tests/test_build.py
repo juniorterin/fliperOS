@@ -26486,10 +26486,14 @@ class FesoundTests(unittest.TestCase):
         saved = {k: getattr(fesound, k) for k in ('BUNDLED', 'LEGACY', 'CONF')}
         self.addCleanup(lambda: [setattr(fesound, k, v) for k, v in saved.items()])
         self.dir = self.tmp / 'home/media/fliperos-sounds'
-        self.old = {k: os.environ.get(k) for k in ('FLIPEROS_SOUNDS_DIR', 'XDG_CACHE_HOME')}
+        self.shared = self.tmp / 'home/.config/fliperos/sounds.json'
+        self.conf = self.tmp / 'fliperos.conf'
+        self.old = {k: os.environ.get(k) for k in ('FLIPEROS_SOUNDS_DIR', 'FLIPEROS_SOUNDS_FILE', 'XDG_CACHE_HOME')}
         os.environ['FLIPEROS_SOUNDS_DIR'] = str(self.dir)
+        os.environ['FLIPEROS_SOUNDS_FILE'] = str(self.shared)
         os.environ['XDG_CACHE_HOME'] = str(self.tmp / 'cache')
         fesound.LEGACY = str(self.tmp / 'legacy')
+        fesound.CONF = str(self.conf)
         self.addCleanup(self.restore_env)
 
     def restore_env(self):
@@ -26565,23 +26569,32 @@ class FesoundTests(unittest.TestCase):
         self.assertEqual(fs.seed(), 1)
         self.assertEqual((self.dir / 'back.wav').read_bytes(), b'mine')
 
-    def test_settings_of_the_menu_and_of_the_frontend_mirror_each_other(self):
+    def test_the_six_events_are_one_set_shared_by_the_setup_and_the_frontend(self):
         fs = self.fs
-        menu = fs.Menu({'menu_sound_move': 'off', 'menu_sound_enter': '/x/a.wav', 'menu_sound_enter_volume': '35',
-                        'menu_sound_back_volume': 'loud'})
-        self.assertTrue(menu.enabled())
-        self.assertFalse(fs.Menu({'menu_sounds': 'off'}).enabled())
-        self.assertEqual((menu.file('move'), menu.file('enter'), menu.file('back')), ('off', '/x/a.wav', ''))
-        self.assertEqual((menu.volume('enter'), menu.volume('back'), menu.volume('alert')),
-                         (35, fs.DEFAULT_VOLUME['back'], fs.DEFAULT_VOLUME['alert']))
+        setup = fs.Shared()
+        self.assertEqual(setup.path, str(self.shared))
+        self.assertTrue(setup.enabled())
+        self.assertEqual((setup.file('move'), setup.volume('move')), ('', fs.DEFAULT_VOLUME['move']))
         data = {}
         front = fs.Frontend(data)
-        # Ler nao enche o frontend.json de linhas vazias.
+        # Ler nao cria o arquivo nem enche o frontend.json de linhas vazias.
+        self.assertFalse(self.shared.exists())
         self.assertEqual((front.file('move'), front.volume('move'), front.music_source(), front.music_volume(),
                           front.preview_volume()), ('', fs.DEFAULT_VOLUME['move'], '', fs.MUSIC_VOLUME, fs.PREVIEW_VOLUME))
         self.assertEqual(data, {})
+        # O frontend muda um evento: e o do Setup tambem (o mesmo arquivo); e o contrario.
         front.set_file('open', '/x/b.wav')
         front.set_volume('open', 250)
+        self.assertEqual(json.loads(self.shared.read_text()), {'open': {'file': '/x/b.wav', 'volume': 100}})
+        self.assertEqual((fs.Shared().file('open'), fs.Shared().volume('open')), ('/x/b.wav', 100))
+        fs.Shared().set_volume('move', 35)
+        self.assertEqual(fs.Frontend({}).volume('move'), 35)
+        self.assertEqual(data, {})                      # nenhum evento no frontend.json
+        # menu_sounds=off no fliperos.conf cala os dois.
+        self.conf.write_text('menu_sounds=off\n')
+        self.assertFalse(fs.Shared().enabled())
+        self.assertFalse(fs.Frontend({}).enabled())
+        # O resto e so do frontend: a trilha, o volume dela, o PAUSE MUSIC e o volume do preview.
         front.set_music_source('/m/folder')
         front.set_music_volume(-5)
         front.set_preview_volume(33)
@@ -26590,16 +26603,37 @@ class FesoundTests(unittest.TestCase):
         self.assertFalse(fs.Frontend({'music': {'pause': 'yes'}}).music_pause())
         front.set_music_pause(True)
         self.assertTrue(front.music_pause())
-        self.assertEqual(data, {'open': {'file': '/x/b.wav', 'volume': 100},
-                                'music': {'source': '/m/folder', 'volume': 0, 'pause': True}, 'preview': 33})
-        front.set_music_pause(False)
-        self.assertFalse(front.music_pause())
-        front.data['music'].pop('pause')
+        self.assertEqual(data, {'music': {'source': '/m/folder', 'volume': 0, 'pause': True}, 'preview': 33})
         # A sincronia do som do preview e so automatica: nenhuma opcao a mais (nada a ajustar).
         self.assertFalse(hasattr(front, 'preview_sync'))
-        self.assertEqual(fs.Frontend({'move': 'oops', 'music': ['x']}).volume('move'), fs.DEFAULT_VOLUME['move'])
-        for scope in (menu, front):
-            self.assertEqual([e for e in fs.EVENTS if scope.volume(e) is None], [])
+        # Um arquivo quebrado nao derruba: vale o padrao, e o proximo ajuste o grava de novo.
+        self.shared.write_text('{oops')
+        self.assertEqual(fs.Shared().volume('move'), fs.DEFAULT_VOLUME['move'])
+        self.assertTrue(fs.Shared().set_volume('move', 20))
+        self.assertEqual(json.loads(self.shared.read_text()), {'move': {'volume': 20}})
+        self.assertEqual(fs.Frontend({'music': ['x']}).volume('move'), 20)
+
+    def test_what_was_chosen_before_the_set_became_one_moves_over(self):
+        fs = self.fs
+        self.conf.write_text('menu_sound_move=off\nmenu_sound_enter=/x/a.wav\nmenu_sound_enter_volume=35\n'
+                             'menu_sound_back_volume=loud\n')
+        # O frontend.json de antes tinha os eventos dentro: sai deles e vai para o arquivo comum; vale o do frontend.
+        data = {'enter': {'file': '/x/front.wav'}, 'back': {'volume': 20}, 'music': {'source': '/m'}}
+        front = fs.Frontend(data)
+        self.assertEqual(front.file('move'), 'off')                 # o do Setup
+        self.assertEqual(front.file('enter'), '/x/front.wav')       # o do frontend vale mais
+        self.assertEqual(front.volume('enter'), 35)                 # sem volume no frontend: o do Setup
+        self.assertEqual(front.volume('back'), 20)
+        self.assertEqual(data, {'music': {'source': '/m'}})
+        self.assertTrue(self.shared.is_file())
+        # Da proxima vez o arquivo comum manda: o fliperos.conf de antes nao conta mais.
+        self.conf.write_text('menu_sound_move=/y.wav\n')
+        self.assertEqual(fs.Shared().file('move'), 'off')
+        # Sem nada escolhido antes, nao cria arquivo.
+        self.shared.unlink()
+        self.conf.write_text('')
+        fs.Shared()
+        self.assertFalse(self.shared.exists())
 
     def test_the_volume_is_in_the_file_the_gum_and_aplay_play(self):
         import wave
@@ -26614,13 +26648,12 @@ class FesoundTests(unittest.TestCase):
         self.assertEqual(got, (500, -1000, 15000, -16384, 0))
         self.assertEqual(fs.prepared(str(src), 50), out)        # o mesmo arquivo do cache
         # O gum toca so o cursor e o Enter, no volume de cada um; desligado, nada.
-        conf = self.tmp / 'fliperos.conf'
-        conf.write_text('menu_sound_move=%s\nmenu_sound_move_volume=50\nmenu_sound_enter=off\n' % src)
-        env = fs.gum_env(fs.Menu(fs.read_conf(str(conf))))
+        events = self.tmp / 'events.json'
+        events.write_text(json.dumps({'move': {'file': str(src), 'volume': 50}, 'enter': {'file': 'off'}}))
+        env = fs.gum_env(fs.Shared(str(events), {}))
         self.assertEqual([l.split('=')[0] for l in env], ['GUM_SOUND_MOVE'])
         self.assertEqual(env[0].split('=', 1)[1], out)
-        conf.write_text('menu_sounds=off\n')
-        self.assertEqual(fs.gum_env(fs.Menu(fs.read_conf(str(conf)))), [])
+        self.assertEqual(fs.gum_env(fs.Shared(str(events), {'menu_sounds': 'off'})), [])
 
     def test_the_name_of_a_track(self):
         fs = self.fs
