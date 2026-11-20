@@ -103,7 +103,9 @@ def wanted(fe, game):
         _, (_, _, pw, ph) = list_geom()
         out += [(shot, pw - 4, ph - 4, "cover"), (logo, min(pw - 8, 200), 28, "fit")]
     elif fe.mode == "full":
-        out += [(shot, WW, HH, "cover"), (logo, WHEEL_SRC[0], WHEEL_SRC[1], "fit")]
+        right = wheel_geom()["left"] - 8
+        out += [(shot, WW, HH, "cover"), (logo, WHEEL_SRC[0], WHEEL_SRC[1], "fit"),
+                (logo, min(200, right - SX), 44, "fit")]
     else:
         snap = media(fe, game, "snap")
         tile, big, _, _ = grid_geom(fe)
@@ -1809,10 +1811,12 @@ def draw_full(fe, ui, back, now):
                 wheel_item(fe, s, i, d, geo, hide)
     with part(fe, ui, "thumb", geo["n"]) as s:
         draw_stick(fe, s, now, hide)
-    # So o nome, o ano e os icones embaixo a esquerda (fora da roda): o logo do meio
-    # da roda ja e o do jogo.
+    # O nome, o ano e os icones embaixo a esquerda (fora da roda). O logo em cima do nome
+    # so aparece com a roda escondida: com ela a mostra, o logo do meio ja e o do jogo.
     right = geo["left"] - 8
     clone = is_clone(fe, game)
+    with part(fe, ui, "logo") as s:
+        full_logo(fe, s, game, right, hide)
     y = HH - 56
     with part(fe, ui, "text") as s:
         # O clone: o nome completo dele; o titulo que nao cabe (a roda deixa menos
@@ -2096,6 +2100,20 @@ def wheel_item(fe, ui, i, d, geo, hide=0.0):
     ui.blit(pic, (left, top))
     if a < 1.5 and hide < 0.05:
         stack_badge(ui, fe.rows[i][2], left + w, top + h)
+
+
+def full_logo(fe, ui, game, right, hide):
+    """O logo do jogo embaixo a esquerda, em cima do nome: aparece quando a roda some (hide de 0,4 a 1) e some quando ela
+    volta. O clone nao tem (o logo seria o do pai)."""
+    alpha = clamp01((hide - 0.4) / 0.6)
+    if alpha <= 0 or is_clone(fe, game):
+        return
+    logo = image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
+    if logo is None:
+        return
+    logo.set_alpha(round(255 * alpha))
+    ui.blit(logo, (SX, HH - 62 - logo.get_height()))
+    logo.set_alpha(255)
 
 
 def wheel_hide(fe, now):

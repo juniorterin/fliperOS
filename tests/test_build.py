@@ -6275,16 +6275,45 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual((fonts / 'DejaVuSans-Bold.ttf').read_bytes()[:4], b'\x00\x01\x00\x00')
         self.assertIn('Bitstream', (fonts / 'DejaVu-LICENSE.txt').read_text())
         self.assertEqual(feview.WHEEL_FONT, str(fonts / 'DejaVuSans-Bold.ttf'))
-        # O logo da roda vem da thread que adianta as imagens; o logo grande de baixo a esquerda saiu (o do meio da roda
-        # ja e o do jogo).
+        # O logo da roda e o de baixo a esquerda (que so aparece com a roda escondida) vem da thread que adianta as imagens.
         wanted = [(None,) + key[1:] for key in feview.wanted(types.SimpleNamespace(
             mode='full', media={}, lib=types.SimpleNamespace(media=lambda g, kind: '/x/' + kind + '.png'),
             ready={}), games[0])]
         self.assertIn((None, feview.WHEEL_SRC[0], feview.WHEEL_SRC[1], 'fit'), wanted)
-        self.assertEqual(len(wanted), 2)
+        self.assertIn((None, min(200, geo['left'] - 8 - feview.SX), 44, 'fit'), wanted)
         import inspect
-        self.assertNotIn('media(fe, game, "logo")', inspect.getsource(feview.draw_full))
         self.assertNotIn('arrow(', inspect.getsource(feview.draw_full))
+        # O logo de baixo a esquerda, em cima do nome: some com a roda a mostra e aparece quando ela some (hide de 0,4 a 1).
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / 'logo.png')
+            image = pygame.Surface((300, 100), pygame.SRCALPHA)
+            image.fill((200, 30, 30, 255))
+            pygame.image.save(image, path)
+            logos['aa'] = path
+            fe.media.clear()
+            fe.rows[3] = (games[0], 0, [])
+            fe.cursor = 3
+            shown = {}
+            for hide in (0.0, 0.4, 0.7, 1.0):
+                ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+                feview.full_logo(fe, ui, games[0], geo['left'] - 8, hide)
+                box = ui.get_bounding_rect()
+                shown[hide] = (box.width, ui.get_at((box.centerx, box.centery))[3] if box.width else 0)
+            self.assertEqual(shown[0.0][0], 0)
+            self.assertEqual(shown[0.4][0], 0)
+            self.assertTrue(0 < shown[0.7][1] < 200)
+            self.assertGreaterEqual(shown[1.0][1], 250)
+            ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+            feview.full_logo(fe, ui, games[0], geo['left'] - 8, 1.0)
+            self.assertEqual(ui.get_bounding_rect().left, feview.SX)
+            self.assertLess(ui.get_bounding_rect().bottom, feview.HH - 56)            # em cima do nome
+            # Um clone nao tem (o logo seria o do pai).
+            clone = dict(games[0], CloneOf='zz')
+            ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+            feview.full_logo(fe, ui, clone, geo['left'] - 8, 1.0)
+            self.assertEqual(ui.get_bounding_rect().width, 0)
+            logos.pop('aa')
+            fe.media.clear()
 
     def test_the_wheel_hides_after_two_seconds_and_a_ball_top_takes_its_place(self):
         # Parado 2 s, os logos somem (os cartoes viram de lado) e um balltop de arcade aparece no canto de baixo a
