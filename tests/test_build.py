@@ -6226,8 +6226,15 @@ class FrontendDataTests(unittest.TestCase):
         self.assertTrue(seen[0].width >= seen[1].width >= seen[2].width)
         self.assertTrue(seen[0].left < seen[1].left < seen[2].left)
         self.assertTrue(seen[-2].top < seen[-1].top < seen[0].top < seen[1].top < seen[2].top)
-        self.assertLess(seen[1].top, seen[0].bottom)
         self.assertEqual(fe.sel_rect.size, (seen[0].width, seen[0].height))
+        if not feview.T.VERTICAL:
+            # Na tela deitada a roda e grande: o de cima e o de baixo quase tocam o topo e a base da tela.
+            self.assertLessEqual(seen[-2].top, 20)
+            self.assertGreaterEqual(seen[2].bottom, feview.HH - 20)
+            self.assertGreaterEqual(geo['bw'], 100)
+            self.assertGreaterEqual(feview.SX + feview.SW - seen[0].right, 0)
+            # O do meio fica perto da margem direita (o cartao de texto 4:3 e mais estreito que um logo: sobra um pouco).
+            self.assertLessEqual(feview.SX + feview.SW - seen[0].right, 20)
         # Parado, o cartao vira de lado (a altura cai) e desbota; escondido de vez, nao desenha nada. A dialog dos clones
         # segue crescendo do tamanho de antes (sel_rect).
         before = fe.sel_rect.copy()

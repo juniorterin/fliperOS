@@ -1870,10 +1870,12 @@ def wheel_geom():
     geo = _wheel_geoms.get(key)
     if geo is None:
         n = 7 if T.VERTICAL else 5
-        bw = min(88, int(SW * (0.38 if T.VERTICAL else 0.30)))
+        # Na tela deitada a roda e grande: os logos quase tocam o topo e a base da tela (o espaco entre eles vai a
+        # 0,192 da altura); o arco e raso, para o conjunto ficar encostado na direita.
+        bw = min(88, int(SW * 0.38)) if T.VERTICAL else min(108, int(SW * 0.375))
         geo = {"n": n, "half": n // 2, "bw": bw, "bh": round(bw * 0.43), "cy": HH // 2,
-               "arc": (4.8 if n == 7 else 8.0) * bw / 86.0, "sc": 0.12 if n == 7 else 0.16,
-               "pitch": 24.0 if n == 7 else 34.0, "step": (32 if n == 7 else 34) * HH / 240.0}
+               "arc": (3.4 if n == 7 else 4.0) * bw / 86.0, "sc": 0.12 if n == 7 else 0.16,
+               "pitch": 24.0 if n == 7 else 34.0, "step": 32 * HH / 240.0 if n == 7 else HH * 0.192}
         outer = max(wheel_shape(geo, float(d))["x"] + bw * wheel_shape(geo, float(d))["sc"] / 2
                     for d in (-geo["half"], geo["half"]))
         geo["xc"] = SX + SW - outer
