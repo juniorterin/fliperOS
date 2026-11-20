@@ -81,11 +81,20 @@ GOOGLE_RUN=${XDG_RUNTIME_DIR:-/tmp}/fliperos-cloud-google
 # Sem ninguem olhando o estado por tanto tempo (s), a espera desiste.
 GOOGLE_IDLE=${FLIPEROS_GOOGLE_IDLE:-600}
 
+# O hbgroovymame (o HBMAME com o Switchres, pacote opcional) guarda os dados em
+# ~/.hbmame: so entra na nuvem num gabinete que o tem (ou que ja tem a pasta),
+# senao o receber criaria uma ~/.hbmame vazia em todo gabinete.
+HBGROOVYMAME_BIN=${FLIPEROS_HBGROOVYMAME_BIN:-/usr/local/libexec/hbgroovymame}
+hbmame_here() {
+  [[ -d $HOME_DIR/.hbmame || -x $HBGROOVYMAME_BIN ]]
+}
+
 # As pastas de cada grupo: "local<TAB>na nuvem" (o caminho em FliperOS/).
 pairs() {
   case $1 in
     hiscores)
       printf '%s\t%s\n' "$HOME_DIR/.mame/hiscore" hiscores/hiscore "$HOME_DIR/nvram" hiscores/nvram
+      if hbmame_here; then printf '%s\t%s\n' "$HOME_DIR/.hbmame/hiscore" hiscores/hiscore-hbmame; fi
       ;;
     saves) printf '%s\t%s\n' "$HOME_DIR/save" saves ;;
     config)
@@ -114,6 +123,8 @@ pairs() {
         "$HOME_DIR/ES-DE" config/es-de \
         "$HOME_DIR/.config/pegasus-frontend" config/pegasus \
         "$SYSTEM_DOWNLOADER" config/system/downloader
+      # O cfg, as capturas e o resto do hbgroovymame (os recordes vao em hiscores/).
+      if hbmame_here; then printf '%s\t%s\n' "$HOME_DIR/.hbmame" config/hbmame; fi
       ;;
   esac
 }
@@ -131,7 +142,7 @@ EXCLUDES=(cloud.conf google-oauth.conf .google-oauth-tried '*.part' '*.lock'
   'cores/**' 'assets/**' 'thumbnails/**' 'shaders/**' 'overlays/**' 'database/**' 'downloads/**' 'logs/**' '*.log'
   'cache/**' 'Cache/**' 'layouts/**' 'scraped/**' 'snap/**' 'downloaded_media/**' 'themes/**' 'artwork/**'
   'Paks/**' '*.zip' '*.7z' '*.chd' '*.iso'
-  /config/mame/hiscore/** /config/fliperos-data/versus-detectors/** /config/fliperos-data/kof-patch/**
+  /config/mame/hiscore/** /config/hbmame/hiscore/** /config/fliperos-data/versus-detectors/** /config/fliperos-data/kof-patch/**
   '/config/fliperos-data/scrape-*.json')
 
 # As configuracoes do sistema (/etc/fliperos, do root): sobem como estao e,

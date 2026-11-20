@@ -2733,7 +2733,8 @@ class LogoCache:
 
 class HiCache:
     """Os recordes de um jogo do MAME para a previa do marquee: o .hi que o
-    plugin hiscore do GroovyMAME grava (~/.mame/hiscore/JOGO.hi, a cada
+    plugin hiscore do GroovyMAME grava (~/.mame/hiscore/JOGO.hi, ou o do
+    hbgroovymame, em ~/.hbmame/hiscore; a cada
     mudanca da tabela, com 5 s de carencia), decodificado pelo hi2txt (o do
     Pixelcade/ZeDMD, ~/pixelcade/hi2txt). O Java leva um tempo: roda numa
     thread e o pedido recebe o ultimo resultado; so decodifica de novo quando
@@ -2748,10 +2749,17 @@ class HiCache:
         if not re.fullmatch(r"[A-Za-z0-9_]{1,40}", rom or ""):
             return []
         home = player_home()
-        path = os.path.join(home, ".mame", "hiscore", rom + ".hi")
-        try:
-            st = os.stat(path)
-        except OSError:
+        # O do GroovyMAME (~/.mame) e o do hbgroovymame (~/.hbmame): o .hi mais novo do jogo.
+        path, st = None, None
+        for sub in (".mame", ".hbmame"):
+            found = os.path.join(home, sub, "hiscore", rom + ".hi")
+            try:
+                found_st = os.stat(found)
+            except OSError:
+                continue
+            if st is None or found_st.st_mtime_ns > st.st_mtime_ns:
+                path, st = found, found_st
+        if st is None:
             return []
         stamp = (st.st_mtime_ns, st.st_size)
         with self.lock:

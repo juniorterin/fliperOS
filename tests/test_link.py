@@ -1223,13 +1223,15 @@ class BinaryScanTests(unittest.TestCase):
         src = (ROOT / "fliperos-setup/gui/fliperos-frontend").read_text()
         self.assertIn("felink.NONBLOCKING = True\n        felink.warm_scans()", src)
         warmed = []
-        saved = [felink.dolphin_netplay, felink.flycast_party, felink.flycast_lockstep, felink.mame_lockstep]
+        saved = [felink.dolphin_netplay, felink.flycast_party, felink.flycast_lockstep, felink.mame_lockstep,
+                 felink.hbmame_lockstep]
         self.addCleanup(lambda: [setattr(felink, n, f) for n, f in zip(
-            ("dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep"), saved)])
-        for name in ("dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep"):
+            ("dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep", "hbmame_lockstep"), saved)])
+        for name in ("dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep", "hbmame_lockstep"):
             setattr(felink, name, lambda n=name: warmed.append(n))
         felink.warm_scans()
-        self.assertEqual(warmed, ["dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep"])
+        self.assertEqual(warmed, ["dolphin_netplay", "flycast_party", "flycast_lockstep", "mame_lockstep",
+                                  "hbmame_lockstep"])
 
 
 class NetplayTests(unittest.TestCase):
@@ -1412,6 +1414,35 @@ class NetplayTests(unittest.TestCase):
         self.assertIsNone(felink.netplay_profile("mame", "ssf2t", "", 2))
         self.assertIsNone(felink.netplay_profile("model2", "ssf2t", "2", 2))
         self.assertTrue(felink.mame_lockstep(str(ROOT / "packaging/patches/groovymame/0001-lockstep-patch.patch")))
+
+    def test_hbmame_games_get_the_same_lockstep_party_with_the_hbgroovymame_binary(self):
+        # A pasta hbmame (o pacote opcional hbgroovymame): a mesma party, mas quem diz se ha o patch e o
+        # binario dele, nao o do GroovyMAME.
+        path = os.path.join(_ra.name, "hbgroovymame-lockstep")
+        Path(path).write_bytes(b"\0" * 4096 + b"native lockstep: game %s" + b"\0" * 64)
+        self.addCleanup(setattr, felink, "HBGROOVYMAME", felink.HBGROOVYMAME)
+        felink.HBGROOVYMAME = os.path.join(_ra.name, "not-installed")
+        self.assertIsNone(felink.netplay_profile("hbmame", "sf2hf", "2", 2))        # sem o pacote: nada
+        felink.HBGROOVYMAME = path
+        prof = felink.netplay_profile("hbmame", "sf2hf", "2", 2)
+        self.assertEqual((prof["emulator"], prof["min"], prof["max"], prof["players"], prof["port"]),
+                         ("groovymame", 2, 2, 2, 55440))
+        self.assertTrue(prof["netplay"] and prof["lockstep"])
+        self.assertEqual(prof["systems"], ["hbmame"])
+        self.assertEqual(felink.netplay_profile("hbmame", "many", "12", 2)["players"], 10)
+        self.assertIsNone(felink.netplay_profile("hbmame", "pacman", "1", 2))
+        # O do MAME segue com o binario do GroovyMAME: sem o patch nele, nada, mesmo com o do hbgroovymame.
+        self.addCleanup(setattr, felink, "GROOVYMAME", felink.GROOVYMAME)
+        felink.GROOVYMAME = os.path.join(_ra.name, "not-installed")
+        self.assertIsNone(felink.netplay_profile("mame", "ssf2t", "2", 2))
+        # A party do hbgroovymame roda do mesmo jeito: o cfg e a NVRAM dela, antes do nome do jogo.
+        plan = felink.make_plan(prof, [{"number": i, "name": "C%d" % i, "ip": "10.0.0.%d" % i, "take": 1, "first": i}
+                                       for i in (1, 2)])
+        with tempfile.TemporaryDirectory() as home:
+            args = felink.mame_lockstep_args(prof, plan, 2, home)
+            self.assertIn("-cfg_directory", args)
+            self.assertIn("me=2", Path(home, ".cache", "fliperos", "party-mame", "cfg",
+                                       "fliperos-lockstep.ini").read_text())
 
     def test_the_mame_party_runs_from_its_own_folder_on_the_same_clock(self):
         self.patched_groovymame()

@@ -1,14 +1,5 @@
---- a/src/emu/emusync.h
-+++ b/src/emu/emusync.h
-@@ -317,7 +317,7 @@
- 	void log_register_work_items();
- 	void log_dump();
- 
--	asio::io_service  m_io;
-+	asio::io_context  m_io;
- 	asio::serial_port m_serial;
- 	asio::steady_timer m_serial_read_timer;
- 
+diff --git a/src/emu/emusync.cpp b/src/emu/emusync.cpp
+index 33fc3616..7ae17d7e 100644
 --- a/src/emu/emusync.cpp
 +++ b/src/emu/emusync.cpp
 @@ -13,6 +13,7 @@
@@ -19,7 +10,7 @@
  
  #define LOG_VBLANK 0
  
-@@ -50,7 +51,7 @@
+@@ -50,7 +51,7 @@ emusync::emusync(running_machine &machine)
  	, m_vactive_ratio(VACTIVE_RATIO_VGA)
  	, ticks_to_ns(1e9 / osd_ticks_per_second())
  	, sleep_time (1 * osd_ticks_per_second() / 1000.0) // 1 ms
@@ -28,28 +19,37 @@
  	, m_serial(m_io)
  	, m_serial_read_timer(m_io)
  {
+diff --git a/src/emu/emusync.h b/src/emu/emusync.h
+index 829d1886..0376c3b2 100644
+--- a/src/emu/emusync.h
++++ b/src/emu/emusync.h
+@@ -317,7 +317,7 @@ private:
+ 	void log_register_work_items();
+ 	void log_dump();
+ 
+-	asio::io_service  m_io;
++	asio::io_context  m_io;
+ 	asio::serial_port m_serial;
+ 	asio::steady_timer m_serial_read_timer;
+ 
+diff --git a/src/osd/modules/render/drawnogpu.cpp b/src/osd/modules/render/drawnogpu.cpp
+index fa407171..3fbfdd40 100644
 --- a/src/osd/modules/render/drawnogpu.cpp
 +++ b/src/osd/modules/render/drawnogpu.cpp
-@@ -9,6 +9,7 @@
+@@ -9,6 +9,8 @@
  // emu
  #include "emu.h"
  #include "emusync.h"
++#include "sound.h"
 +#include "video.h"
  #include "rendersw.hxx"
  
  #include "render_module.h"
-@@ -937,7 +938,7 @@
- 		// We could send mono audio to the MiSTer and save some bandwidth
- 		// but unfortunately the channel number isn't known at initialization
- 		// time, and we can't reset it later either, yet.
--		uint32_t channels = window().machine().sound().outputs_count();
-+		uint32_t channels = 2; // HBMAME: o som do MiSTer vai sempre em estereo
- 		if (channels == 1)
- 		{
- 			for (int i = samples_this_frame - 1; i >= 0; i--)
+diff --git a/src/osd/modules/switchres/switchres_module.cpp b/src/osd/modules/switchres/switchres_module.cpp
+index bf80927b..07f2c137 100644
 --- a/src/osd/modules/switchres/switchres_module.cpp
 +++ b/src/osd/modules/switchres/switchres_module.cpp
-@@ -282,7 +282,7 @@
+@@ -282,7 +282,7 @@ void switchres_module::get_game_info(display_manager* display, render_target *ta
  	// determine the refresh rate of the primary screen
  	const screen_device *primary_screen = screen_device_enumerator(machine().root_device()).first();
  	if (primary_screen != nullptr)
@@ -58,15 +58,3 @@
  	else
  		set_refresh(display->index(), 60.0);
  }
---- a/src/emu/video.cpp
-+++ b/src/emu/video.cpp
-@@ -238,9 +238,6 @@
- 	else
- 		m_empty_skip_count = 0;
- 
--	if (phase > machine_phase::INIT)
--		machine().sound().update(0, machine().sync().audio_throttle_target());
--
- 	// if we're throttling, synchronize before rendering
- 	attotime current_time = machine().time();
- 	if (!from_debugger && phase > machine_phase::INIT && !m_low_latency && effective_throttle())

@@ -1,0 +1,930 @@
+diff --git a/src/emu/disound.cpp b/src/emu/disound.cpp
+index 6f7d7826..9ec8ecfb 100644
+--- a/src/emu/disound.cpp
++++ b/src/emu/disound.cpp
+@@ -646,7 +646,8 @@ void sound_stream::do_update()
+ 				r.m_resampler->apply(r.m_source->m_output_buffer, db, m_output_buffer.write_sample(), r.m_output, gain, m_samples_to_update);
+ 
+ 			else {
+-				const sample_t *sb = r.m_source->m_output_buffer.ptrs(r.m_output, m_output_buffer.write_sample() - r.m_source->m_output_buffer.sync_sample());
++				s64 off = s64(m_output_buffer.write_sample()) - s64(r.m_source->m_output_buffer.sync_sample());
++				const sample_t *sb = r.m_source->m_output_buffer.ptrs(r.m_output, s32(std::max<s64>(off, 0)));
+ 				for(u32 i = 0; i != m_samples_to_update; i++)
+ 					db[i] += sb[i] * gain;
+ 			}
+diff --git a/src/emu/screen.cpp b/src/emu/screen.cpp
+index b379e3f2..0b842b56 100644
+--- a/src/emu/screen.cpp
++++ b/src/emu/screen.cpp
+@@ -16,6 +16,7 @@
+ #include "main.h"
+ #include "render.h"
+ #include "rendutil.h"
++#include "sound.h"
+ #include "video.h"
+ 
+ #include "png.h"
+@@ -1191,6 +1192,9 @@ TIMER_CALLBACK_MEMBER(screen_device::vblank_end)
+ 	// if this is the primary screen and we need to update now
+ 	if (m_video_attributes & VIDEO_UPDATE_AFTER_VBLANK)
+ 		update_if_primary();
++	// GroovyMAME's audio sync: the other games update the sound a second time per frame, without waiting
++	else if (m_is_primary_screen && machine().phase() > machine_phase::INIT)
++		machine().sound().update(0, 0);
+ 
+ 	// increment the frame number counter
+ 	m_frame_number++;
+diff --git a/src/emu/sound.cpp b/src/emu/sound.cpp
+index 0ad972ca..0821ce0c 100644
+--- a/src/emu/sound.cpp
++++ b/src/emu/sound.cpp
+@@ -16,7 +16,9 @@
+ 
+ #include "config.h"
+ #include "emuopts.h"
++#include "emusync.h"
+ #include "main.h"
++#include "screen.h"
+ #include "speaker.h"
+ #include "video.h"
+ 
+@@ -88,9 +90,10 @@ sound_manager::sound_manager(running_machine &machine) :
+ 	// register global states
+ 	machine.save().save_item(NAME(m_last_sync_time));
+ 
+-	// start the periodic update flushing timer
+-	m_update_timer = machine.scheduler().timer_alloc(timer_expired_delegate(FUNC(sound_manager::update), this));
+-	m_update_timer->adjust(STREAMS_UPDATE_ATTOTIME, 0, STREAMS_UPDATE_ATTOTIME);
++	// the periodic update timer is not used: the update is called once per frame (video_manager::frame_update),
++	// with the real-world time at which the audio has to be sent to the OSD (GroovyMAME's audio sync)
++	// m_update_timer = machine.scheduler().timer_alloc(timer_expired_delegate(FUNC(sound_manager::update), this));
++	// m_update_timer->adjust(STREAMS_UPDATE_ATTOTIME, 0, STREAMS_UPDATE_ATTOTIME);
+ 
+ 	// mark the generation as "just starting, waiting for config loading"
+ 	m_osd_info.m_generation = 0xffff0000;
+@@ -346,59 +349,29 @@ void sound_manager::run_effects()
+ 	std::unique_lock<std::mutex> dlock(m_effects_data_mutex);
+ 	for(;;) {
+ 		m_effects_condition.wait(dlock);
++
++		uint64_t throttle_target = m_effects_throttle_target;
++
+ 		if(m_effects_done)
+ 			return;
+ 
+ 		std::unique_lock<std::mutex> lock(m_effects_mutex);
++#else
++		uint64_t throttle_target = m_effects_throttle_target;
+ #endif
+-		// Copy the data to the effects threads, expanding as needed when -speed is in use
+-		double sf = machine().video().speed_factor();
+-		if(sf == 1000) {
+-			for(auto &si : m_speakers) {
+-				int samples = si.m_buffer.available_samples();
+-				int channels = si.m_buffer.channels();
+-				auto &eb = si.m_effects_buffer;
+-				eb.prepare_space(samples);
+-				if(m_muted)
+-					for(int channel = 0; channel != channels; channel ++)
+-						std::fill(si.m_effects_buffer.ptrw(channel, 0), si.m_effects_buffer.ptrw(channel, 0) + samples, 0);
+-				else
+-					for(int channel = 0; channel != channels; channel ++)
+-						std::copy(si.m_buffer.ptrs(channel, 0), si.m_buffer.ptrs(channel, 0) + samples, eb.ptrw(channel, 0));
+-				eb.commit(samples);
+-			}
+-		} else {
+-			sf /= 1000;
+-			for(auto &si : m_speakers) {
+-				int source_samples = si.m_buffer.available_samples();
+-				int channels = si.m_buffer.channels();
+-				auto &eb = si.m_effects_buffer;
+-				eb.prepare_space(source_samples / sf + 1);
+-				int source_sample_index = 0;
+-				int dest_index = 0;
+-				double phase = si.m_speed_phase;
+-				for(int channel = 0; channel != channels; channel ++) {
+-					const sample_t *src = si.m_buffer.ptrs(channel, 0);
+-					phase = si.m_speed_phase;
+-					if(phase >= 1) {
+-						source_sample_index = int(phase);
+-						phase -= int(phase);
+-					} else
+-						source_sample_index = 0;
+-					sample_t *dest = eb.ptrw(channel, 0);
+-					dest_index = 0;
+-					while(source_sample_index < source_samples) {
+-						dest[dest_index++] = m_muted ? 0.0 : src[source_sample_index];
+-						phase += sf;
+-						if(phase >= 1) {
+-							source_sample_index += int(phase);
+-							phase -= int(phase);
+-						}
+-					}
+-				}
+-				si.m_speed_phase = phase + (source_sample_index - source_samples);
+-				eb.commit(dest_index);
+-			}
++		// Copy the data to the effects threads
++		for(auto &si : m_speakers) {
++			int samples = si.m_buffer.available_samples();
++			int channels = si.m_buffer.channels();
++			auto &eb = si.m_effects_buffer;
++			eb.prepare_space(samples);
++			if(m_muted)
++				for(int channel = 0; channel != channels; channel ++)
++					std::fill(si.m_effects_buffer.ptrw(channel, 0), si.m_effects_buffer.ptrw(channel, 0) + samples, 0);
++			else
++				for(int channel = 0; channel != channels; channel ++)
++					std::copy(si.m_buffer.ptrs(channel, 0), si.m_buffer.ptrs(channel, 0) + samples, eb.ptrw(channel, 0));
++			eb.commit(samples);
+ 		}
+ #ifndef SOUND_DISABLE_THREADING
+ 		dlock.unlock();
+@@ -478,12 +451,33 @@ void sound_manager::run_effects()
+ 		for(auto &si : m_speakers)
+ 			si.m_effects.back().m_buffer.sync();
+ 
++		// GroovyMAME's audio sync: the video retrace (emusync) says when the audio of this frame goes out
++		if (machine().sync().handle_throttle() && machine().options().sync_audio())
++			machine().sync().wait_until_time(throttle_target, 20 * 1e6);
++
+ 		machine().osd().sound_begin_update();
+ 
+-		// Send the result to the osd
++		// Resample streams and send to osd
+ 		for(auto &stream : m_osd_output_streams)
+-			if(stream.m_samples)
+-				machine().osd().sound_stream_sink_update(stream.m_id, stream.m_buffer.data(), stream.m_samples);
++			if(stream.m_samples) {
++				size_t output_frames;
++
++				// -speed, or, with the audio sync, the real rate of the video and of the sound device
++				double rate = 1000.0 / machine().video().speed_factor();
++				double sink_rate = machine().sync().get_sink_rate(stream.m_id);
++
++				if (machine().sync().handle_throttle() && machine().options().sync_audio()) {
++					rate = 1.0 / machine().sync().speed_factor();
++					rate *= sink_rate == 0.0 ? 1.0 : sink_rate / stream.m_rate;
++
++					machine().sync().log("Final audio rate [median(-0.0003:0.0003)]", machine().sync().NOW, rate);
++					machine().sync().log("Stream sink rate", machine().sync().NOW, sink_rate == 0.0 ? stream.m_rate : sink_rate);
++				}
++
++				stream.m_output_resampler.apply(rate, stream.m_buffer.data(), stream.m_samples, stream.m_output_buffer.data(), &output_frames, stream.m_channels);
++
++				machine().osd().sound_stream_sink_update(stream.m_id, stream.m_output_buffer.data(), output_frames);
++			}
+ 
+ 		machine().osd().sound_end_update();
+ #ifndef SOUND_DISABLE_THREADING
+@@ -1989,17 +1983,17 @@ u64 sound_manager::rate_and_time_to_index(attotime time, u32 sample_rate) const
+ 	return time.m_seconds * sample_rate + muldivu_64(time.m_attoseconds, sample_rate, ATTOSECONDS_PER_SECOND);
+ }
+ 
+-void sound_manager::update(s32)
++void sound_manager::update(s32, uint64_t throttle_target)
+ {
+ 	auto profile = g_profiler.start(PROFILER_SOUND);
+ 
+ 	mapping_update();
+-	streams_update();
++	streams_update(throttle_target);
+ 
+ 	m_last_sync_time = machine().time();
+ }
+ 
+-void sound_manager::streams_update()
++void sound_manager::streams_update(uint64_t throttle_target)
+ {
+ 	attotime now = machine().time();
+ 	{
+@@ -2011,6 +2005,7 @@ void sound_manager::streams_update()
+ 
+ 		m_effects_prev_time = m_effects_cur_time;
+ 		m_effects_cur_time = now;
++		m_effects_throttle_target = throttle_target;
+ 
+ 		for(sound_stream *stream : m_ordered_streams)
+ 			stream->update_nodeps();
+diff --git a/src/emu/sound.h b/src/emu/sound.h
+index d454682c..6214debd 100644
+--- a/src/emu/sound.h
++++ b/src/emu/sound.h
+@@ -63,6 +63,7 @@
+ 
+ #include "wavwrite.h"
+ #include "interface/audio.h"
++#include "cosine.h"
+ 
+ #include <string>
+ #include <string_view>
+@@ -208,6 +209,9 @@ public:
+ 	void set_resampler_hq_length(u32 length);
+ 	void set_resampler_hq_phases(u32 phases);
+ 
++	// periodic sound update, called once per frame (GroovyMAME's audio sync)
++	void update(s32, uint64_t);
++
+ private:
+ 	struct effect_step {
+ 		std::unique_ptr<audio_effect> m_effect;
+@@ -286,11 +290,16 @@ private:
+ 
+ 	struct osd_output_stream : public osd_stream {
+ 		u32 m_samples;
++		cosine_resampler m_output_resampler;
+ 		std::vector<s16> m_buffer;
++		std::vector<s16> m_output_buffer;
++
+ 		osd_output_stream(u32 node, std::string &&node_name, u32 channels, u32 rate, bool is_system_default, sound_io_device *dev) :
+ 			osd_stream(node, std::move(node_name), channels, rate, is_system_default, dev),
+ 			m_samples(0),
+-			m_buffer(channels*rate, 0)
++			m_output_resampler(cosine_resampler()),
++			m_buffer(channels*rate, 0),
++			m_output_buffer(channels*rate, 0)
+ 		{ }
+ 	};
+ 
+@@ -315,13 +324,10 @@ private:
+ 	void config_load(config_type cfg_type, config_level cfg_lvl, util::xml::data_node const *parentnode);
+ 	void config_save(config_type cfg_type, util::xml::data_node *parentnode);
+ 
+-	// periodic sound update, called STREAMS_UPDATE_FREQUENCY per second
+-	void update(s32);
+-
+ 	// handle mixing mapping update if needed
+ 	static std::vector<u32> find_channel_mapping(const osd::channel_position &pos, const osd::audio_info::node_info *node);
+ 	void startup_cleanups();
+-	void streams_update();
++	void streams_update(uint64_t);
+ 	template<bool is_output, typename S> void apply_osd_changes(std::vector<S> &streams);
+ 	void osd_information_update();
+ 	void generate_mapping();
+@@ -378,6 +384,9 @@ private:
+ 	bool m_effects_done;
+ 	attotime m_effects_prev_time, m_effects_cur_time;
+ 
++	// Throttle until this (real-world) time, then send to OSD
++	uint64_t m_effects_throttle_target = 0;
++
+ 	float m_master_gain;
+ 
+ 	std::map<std::pair<u32, u32>, std::unique_ptr<audio_resampler>> m_resamplers;
+diff --git a/src/emu/video.cpp b/src/emu/video.cpp
+index f7b9911d..6eef1fb6 100644
+--- a/src/emu/video.cpp
++++ b/src/emu/video.cpp
+@@ -19,6 +19,7 @@
+ #include "main.h"
+ #include "output.h"
+ #include "screen.h"
++#include "sound.h"
+ #include "divo.h"
+ 
+ #include "ui/uimain.h"
+diff --git a/src/osd/modules/sound/pipewire_sound.cpp b/src/osd/modules/sound/pipewire_sound.cpp
+index 2e0c6475..550843fd 100644
+--- a/src/osd/modules/sound/pipewire_sound.cpp
++++ b/src/osd/modules/sound/pipewire_sound.cpp
+@@ -16,6 +16,9 @@
+ #define GNU_SOURCE
+ #include "modules/lib/osdobj_common.h"
+ 
++#include "emu.h"
++#include "emusync.h"
++
+ #include <pipewire/pipewire.h>
+ #include <pipewire/extensions/metadata.h>
+ #include <spa/debug/pod.h>
+@@ -160,6 +163,9 @@ private:
+ 
+ 	void stream_event_param_changed(stream_info *stream, uint32_t id, const spa_pod *param);
+ 	static void s_stream_event_param_changed(void *data, uint32_t id, const spa_pod *param);
++
++	emusync* m_sync;
++	float m_audio_latency;
+ };
+ 
+ // Try to more or less map to speaker.h positions
+@@ -497,8 +503,7 @@ int sound_pipewire::init(osd_interface &osd, osd_options const &options)
+ 	if(!m_core)
+ 		return 1;
+ 
+-	if(options.audio_latency() > 0.0f)
+-		osd_printf_verbose("Sound: %s module does not support audio_latency option\n", name());
++	m_audio_latency = options.audio_latency();
+ 
+ 	pw_core_add_listener(m_core, &m_core_listener, &core_events, this);
+ 
+@@ -513,6 +518,8 @@ int sound_pipewire::init(osd_interface &osd, osd_options const &options)
+ 	sync();
+ 	sync();
+ 
++	m_sync = &downcast<osd_common_t &>(osd).machine().sync();
++
+ 	return 0;
+ }
+ 
+@@ -610,6 +617,7 @@ void sound_pipewire::stream_sink_event_process(stream_info *stream)
+ 		return;
+ 
+ 	spa_buffer *sbuf = buffer->buffer;
++	m_sync->register_sink_samples(stream->m_osdid, buffer->requested);
+ 	stream->m_buffer.get((int16_t *)(sbuf->datas[0].data), buffer->requested);
+ 
+ 	sbuf->datas[0].chunk->offset = 0;
+@@ -681,6 +689,7 @@ uint32_t sound_pipewire::stream_sink_open(uint32_t node, std::string name, uint3
+ 
+ 	uint32_t id = m_stream_current_id++;
+ 	auto &stream = m_streams.emplace(id, stream_info(this, true, id, snode.m_sinks, rate)).first->second;
++	stream.m_buffer.set_latency(m_audio_latency);
+ 
+ 	stream.m_stream = pw_stream_new_simple(pw_thread_loop_get_loop(m_loop),
+ 										   name.c_str(),
+@@ -710,7 +719,7 @@ uint32_t sound_pipewire::stream_sink_open(uint32_t node, std::string name, uint3
+ 	pw_stream_connect(stream.m_stream,
+ 					  PW_DIRECTION_OUTPUT,
+ 					  PW_ID_ANY,
+-					  pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS),
++					  pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS),
+ 					  &params, 1);
+ 
+ 	while(stream.m_wait_stream)
+@@ -763,7 +772,7 @@ uint32_t sound_pipewire::stream_source_open(uint32_t node, std::string name, uin
+ 	pw_stream_connect(stream.m_stream,
+ 					  PW_DIRECTION_INPUT,
+ 					  PW_ID_ANY,
+-					  pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS),
++					  pw_stream_flags(PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS),
+ 					  &params, 1);
+ 
+ 	while(stream.m_wait_stream)
+@@ -804,6 +813,7 @@ void sound_pipewire::stream_close(uint32_t id)
+ 	pw_stream_destroy(stream.m_stream);
+ 	m_streams.erase(si);
+ 	pw_thread_loop_unlock(m_loop);
++	m_sync->unregister_sink(id);
+ }
+ 
+ void sound_pipewire::stream_sink_update(uint32_t id, const int16_t *buffer, int samples_this_frame)
+@@ -814,6 +824,7 @@ void sound_pipewire::stream_sink_update(uint32_t id, const int16_t *buffer, int
+ 		pw_thread_loop_unlock(m_loop);
+ 		return;
+ 	}
++	m_sync->log("PipeWire buffer count before update", m_sync->MIN, (double)si->second.m_buffer.available());
+ 	si->second.m_buffer.push(buffer, samples_this_frame);
+ 	pw_thread_loop_unlock(m_loop);
+ }
+diff --git a/src/osd/modules/sound/sdl_sound.cpp b/src/osd/modules/sound/sdl_sound.cpp
+index dbc7fc1a..a51e9269 100644
+--- a/src/osd/modules/sound/sdl_sound.cpp
++++ b/src/osd/modules/sound/sdl_sound.cpp
+@@ -12,6 +12,9 @@
+ 
+ #include "modules/osdmodule.h"
+ 
++#include "emu.h"
++#include "emusync.h"
++
+ #if (defined(OSD_SDL) || defined(USE_SDL_SOUND)) && !defined(SDLMAME_SDL3)
+ 
+ #include "modules/lib/osdobj_common.h"
+@@ -66,12 +69,15 @@ private:
+ 		uint32_t m_id;
+ 		SDL_AudioDeviceID m_sdl_id;
+ 		abuffer m_buffer;
+-		stream_info(uint32_t id, uint8_t channels, uint32_t rate) : m_id(id), m_sdl_id(0), m_buffer(channels, rate) {}
++		emusync* m_sync;
++		stream_info(uint32_t id, uint8_t channels, uint32_t rate, emusync* emusync) : m_id(id), m_sdl_id(0), m_buffer(channels, rate), m_sync(emusync) {}
+ 	};
+ 
+ 	std::vector<device_info> m_devices;
+ 	uint32_t m_default_sink;
+ 	uint32_t m_stream_next_id;
++	emusync* m_sync;
++	float m_audio_latency;
+ 
+ 	std::map<uint32_t, std::unique_ptr<stream_info>> m_streams;
+ 
+@@ -95,8 +101,7 @@ int sound_sdl::init(osd_interface &osd, const osd_options &options)
+ 	char const *const audio_driver = SDL_GetCurrentAudioDriver();
+ 	osd_printf_verbose("Audio: Driver is %s\n", audio_driver ? audio_driver : "not initialized");
+ 
+-	if(options.audio_latency() > 0.0f)
+-		osd_printf_verbose("Audio: %s module does not support audio_latency option\n", name());
++	m_audio_latency = options.audio_latency();
+ 
+ 	// Capture is not implemented in SDL2, and the enumeration
+ 	// interface is different in SDL3
+@@ -132,6 +137,7 @@ int sound_sdl::init(osd_interface &osd, const osd_options &options)
+ 		SDL_free(def_name);
+ 	}
+ #endif
++	m_sync = &downcast<osd_common_t &>(osd).machine().sync();
+ 	return 0;
+ }
+ 
+@@ -202,7 +208,7 @@ osd::audio_info sound_sdl::get_information()
+ uint32_t sound_sdl::stream_sink_open(uint32_t node, std::string name, uint32_t rate)
+ {
+ 	device_info &dev = m_devices[node-1];
+-	std::unique_ptr<stream_info> stream = std::make_unique<stream_info>(m_stream_next_id ++, dev.m_channels, rate);
++	std::unique_ptr<stream_info> stream = std::make_unique<stream_info>(m_stream_next_id ++, dev.m_channels, rate, m_sync);
+ 
+ 	SDL_AudioSpec dspec, ospec;
+ 	dspec.freq = rate;
+@@ -212,6 +218,7 @@ uint32_t sound_sdl::stream_sink_open(uint32_t node, std::string name, uint32_t r
+ 	dspec.callback = sink_callback;
+ 	dspec.userdata = stream.get();
+ 
++	stream->m_buffer.set_latency(m_audio_latency);
+ 	stream->m_sdl_id = SDL_OpenAudioDevice(dev.m_def ? nullptr : dev.m_name.c_str(), 0, &dspec, &ospec, 0);
+ 	if(!stream->m_sdl_id)
+ 		return 0;
+@@ -228,6 +235,7 @@ void sound_sdl::stream_close(uint32_t id)
+ 		return;
+ 	SDL_CloseAudioDevice(si->second->m_sdl_id);
+ 	m_streams.erase(si);
++	m_sync->unregister_sink(id);
+ }
+ 
+ void sound_sdl::stream_sink_update(uint32_t id, const int16_t *buffer, int samples_this_frame)
+@@ -236,14 +244,17 @@ void sound_sdl::stream_sink_update(uint32_t id, const int16_t *buffer, int sampl
+ 	if(si == m_streams.end())
+ 		return;
+ 	stream_info *stream = si->second.get();
++	uint32_t count = stream->m_buffer.available();
+ 	SDL_LockAudioDevice(stream->m_sdl_id);
+ 	stream->m_buffer.push(buffer, samples_this_frame);
+ 	SDL_UnlockAudioDevice(stream->m_sdl_id);
++	stream->m_sync->log("SDL buffer count before update", stream->m_sync->MIN, (double) count);
+ }
+ 
+ void sound_sdl::sink_callback(void *userdata, uint8_t *data, int len)
+ {
+ 	stream_info *stream = reinterpret_cast<stream_info *>(userdata);
++	stream->m_sync->register_sink_samples(stream->m_id, len / 2 / stream->m_buffer.channels());
+ 	stream->m_buffer.get((int16_t *)data, len / 2 / stream->m_buffer.channels());
+ }
+ 
+diff --git a/src/osd/modules/sound/sound_module.cpp b/src/osd/modules/sound/sound_module.cpp
+index e86ae9c3..e61980cb 100644
+--- a/src/osd/modules/sound/sound_module.cpp
++++ b/src/osd/modules/sound/sound_module.cpp
+@@ -1,204 +1,132 @@
+ // license:BSD-3-Clause
+-// copyright-holders:O. Galibert
++// copyright-holders:O. Galibert, intealls
+ 
+ #include "sound_module.h"
+ 
+-#include <algorithm>
+-#include <cassert>
+-#include <cstring>
+-#include <numeric>
+-#include <utility>
+-
+ 
+ sound_module::~sound_module()
+ {
+ 	// implementing this here forces the vtable and inline virtual member functions to be instantiated
+ }
+ 
+-sound_module::abuffer::abuffer(uint32_t channels, uint32_t rate) noexcept :
+-	m_channels(channels),
++sound_module::abuffer::abuffer(uint32_t channels, int rate) noexcept :
+ 	m_rate(rate),
+-	m_used_buffers(0),
+-	m_max_buffers(8),
+-	m_hindex(0),
+-	m_last_sample(channels, 0)
++	m_channels(channels),
++	m_buffer_min_ct(1e8),
++	m_skip_threshold((20.f / 1000.f) * rate + 0.5f),
++	m_osd_ticks(osd_ticks()),
++	m_skip_threshold_ticks(m_osd_ticks),
++	m_xfade_length(rate * xfade_length / 1000),
++	m_xfade_buf(m_xfade_length * m_channels),
++	m_xfade_total(0),
++	m_xfade_remaining(0)
+ {
+-	clear();
++	m_ab = std::make_unique<buffer<int16_t>>(rate, channels);
+ }
+ 
+-void sound_module::abuffer::set_latency(float latency)
++uint32_t sound_module::abuffer::available()
+ {
+-	// set maximum buffers from latency in 20ms steps (the default of 8 is 0.16s)
+-	m_max_buffers = std::max<uint32_t>(latency + latency / 2.0f, latency + 3);
+-	m_max_buffers = std::clamp(m_max_buffers, 4U, 50U);
++	int count = m_ab->count() / m_channels;
++
++	if (count <= 0)
++		return 0;
++
++	// reserve last sample for underruns, will sustain last sample to reduce crackles
++	return (count - 1);
+ }
+ 
+ void sound_module::abuffer::clear()
+ {
+-	get(m_last_sample.data(), 1);
+-	m_used_buffers = 0;
+-	m_used_buffers_prev = 0;
+-	m_overrun = false;
+-	m_history.fill(0);
+-
+-	m_delta = 0;
+-	m_delta2 = 0;
+-	m_underruns = 0;
+-	m_overruns = 0;
++	// only used from xaudio2 consumer
++	m_ab->increment_playpos(m_ab->count());
++	m_xfade_total = m_xfade_remaining = 0;
++	m_buffer_min_ct = 1e8;
++	m_skip_threshold_ticks = osd_ticks();
+ }
+ 
+-void sound_module::abuffer::get(int16_t *data, uint32_t samples) noexcept
++void sound_module::abuffer::set_latency(float latency)
+ {
+-	m_delta -= samples;
+-	m_delta2 -= samples;
+-	uint32_t pos = 0;
+-	while(pos != samples) {
+-		// on underrun, fill buffer with last sample to prevent audible pop
+-		if(!m_used_buffers) {
+-			m_delta2 += samples - pos;
+-			m_underruns++;
+-			while(pos != samples) {
+-				std::memmove(data, m_last_sample.data(), m_channels * sizeof(int16_t));
+-				data += m_channels;
+-				pos++;
+-			}
+-			break;
+-		}
++	if (latency == 0.f)
++		latency = 20.f;
+ 
+-		auto &buf = m_buffers.front();
+-		if(buf.data.empty()) {
+-			pop_buffer();
+-			continue;
+-		}
+-
+-		uint32_t avail = (buf.data.size() / m_channels) - buf.cpos;
+-		if(avail > (samples - pos)) {
+-			avail = samples - pos;
+-			std::copy_n(buf.data.data() + (buf.cpos * m_channels), avail * m_channels, data);
+-			buf.cpos += avail;
+-			break;
+-		}
+-
+-		std::copy_n(buf.data.data() + (buf.cpos * m_channels), avail * m_channels, data);
+-		pop_buffer();
+-		pos += avail;
+-		data += avail * m_channels;
+-	}
+-	m_internal_get = false;
+-	//printf("%d -%d +%d # %d %d\n", m_used_buffers, m_underruns, m_overruns, m_delta, m_delta2);
++	latency = std::clamp<float>(latency, 0.1f, 100.f);
++	m_skip_threshold = (latency / 1000.f) * m_rate + 0.5f;
+ }
+ 
+-void sound_module::abuffer::flush_buffers(uint32_t remain)
++void sound_module::abuffer::get(int16_t *data, uint32_t samples) noexcept
+ {
+-	assert(remain);
++	int buf_ct = available();
++
++	if (buf_ct >= samples) {
++		m_ab->read(data, samples * m_channels);
++
++		if (m_xfade_remaining > 0) {
++			int offset = m_xfade_total - m_xfade_remaining;
++			int blend_frames = std::min<int>(m_xfade_remaining, samples);
++
++			for (int i = 0; i < blend_frames; i++) {
++				float t = static_cast<float>(offset + i) / static_cast<float>(std::max<int>(1, m_xfade_total));
++
++				for (uint32_t ch = 0; ch < m_channels; ch++) {
++					int idx = i * m_channels + ch;
++					int xf_idx = (offset + i) * m_channels + ch;
++					float old_sample = m_xfade_buf[xf_idx];
++					float new_sample = data[idx];
++					float blend = old_sample * (1.0f - t) + new_sample * t;
++					data[idx] = static_cast<int16_t>(std::clamp(blend, -32768.0f, 32767.0f));
++				}
++			}
+ 
+-	for(uint32_t i = 0; i != m_used_buffers - remain; i++)
+-		m_delta2 -= (m_buffers[i].data.size() / m_channels - m_buffers[i].cpos);
++			m_xfade_remaining -= blend_frames;
++		}
+ 
+-	// number of samples to crossfade (eg. 128 when samplerate is 48000)
+-	const uint32_t samples = std::max(m_rate / 375, 2U);
++		// keep track of the minimum buffer count, skip samples adaptively to respect the audio_latency setting
++		buf_ct -= samples;
+ 
+-	// get crossfade source chunk
+-	if(!m_internal_get || m_last_fade.size() != samples * m_channels) {
+-		m_last_fade.resize(samples * m_channels);
+-		get(m_last_fade.data(), samples);
+-		m_internal_get = true;
+-		m_delta += samples;
+-		m_delta2 += samples;
+-	}
++		if (buf_ct < m_buffer_min_ct)
++			m_buffer_min_ct = buf_ct;
+ 
+-	// flush buffers until [remain] are left
+-	if(m_used_buffers > remain) {
+-		for(uint32_t i = 0; i < remain; i++) {
+-			using std::swap;
+-			swap(m_buffers[i], m_buffers[m_used_buffers + i - remain]);
+-		}
+-		m_used_buffers = remain;
+-	}
++		// if we are below the threshold, reset the counter
++		if (buf_ct < m_skip_threshold)
++			m_skip_threshold_ticks = m_osd_ticks;
+ 
+-	if(!m_used_buffers || samples > (m_buffers[0].data.size() / m_channels - m_buffers[0].cpos))
+-		return;
+-	int16_t *dest = &m_buffers[0].data[m_channels * m_buffers[0].cpos];
++		// if we have been above the set threshold for ~1 second, skip forward
++		if (m_osd_ticks - m_skip_threshold_ticks > osd_ticks_per_second()) {
++			int adjust = m_buffer_min_ct - m_skip_threshold;
+ 
+-	// crossfade into front of buffer to reduce clicks
+-	for(uint32_t i = 0; i < samples; i++) {
+-		int32_t gain_b = (i << 15) / (samples - 1);
+-		int32_t gain_a = 32768 - gain_b;
+-
+-		for(uint32_t ch = 0; ch < m_channels; ch++) {
+-			uint32_t j = i * m_channels + ch;
++			// if adjustment is less than 1/4 millisecond, don't bother
++			if (adjust > m_rate / 4000) {
++				int peeked = m_ab->peek(m_xfade_buf.data(), m_xfade_length * m_channels);
++				m_ab->increment_playpos(adjust * m_channels);
++				m_xfade_total = peeked / m_channels;
++				m_xfade_remaining = m_xfade_total;
++			}
+ 
+-			int32_t mix = (m_last_fade[j] * gain_a + dest[j] * gain_b) >> 15;
+-			dest[j] = static_cast<int16_t>(mix);
++			m_skip_threshold_ticks = m_osd_ticks;
++			m_buffer_min_ct = 1e8;
+ 		}
+-	}
+-}
+-
+-void sound_module::abuffer::push(const int16_t *data, uint32_t samples)
+-{
+-	m_delta += samples;
+-	m_delta2 += samples;
+-	auto &buf = push_buffer();
+-	buf.cpos = 0;
+-	buf.data.resize(samples * m_channels);
+-	std::copy_n(data, samples * m_channels, buf.data.data());
+-	std::copy_n(data + ((samples - 1) * m_channels), m_channels, m_last_sample.data());
+-
+-	// maximum number of buffers relative to samples
+-	// unless -speed or -refreshspeed is used, this is same as m_max_buffers
+-	const uint32_t max_buffers = std::max(m_max_buffers * m_rate / samples / 50, 4U);
+-
+-	// minimum number of buffers after overrun
+-	// lower limit of 2 prevents buffer underruns with push(this), get, get, push
+-	const uint32_t min_buffers = std::max(max_buffers / 3, 2U);
+-
+-	m_history[m_hindex] = m_used_buffers_prev - m_used_buffers;
+-	m_hindex = (m_hindex + 1) % m_history.size();
+-
+-	if(m_overrun && std::accumulate(m_history.begin(), m_history.end(), 0) >= -2) {
+-		if(m_used_buffers > min_buffers) {
+-			// once it's stabilized after an overrun, reduce buffers to minimum latency
+-			flush_buffers(min_buffers);
+-			m_history.fill(0);
++	} else {
++		m_ab->read(data, buf_ct * m_channels);
++		data += buf_ct * m_channels;
++
++		// sustain last sample instead of just clipping to 0, helps out with crackles
++		for (int i = 0; i < samples - buf_ct; i++) {
++			int16_t* dst = data + i * m_channels;
++			if (!m_ab->peek(dst, m_channels)) {
++				// if completely empty zero fill (will rarely happen)
++				std::fill(dst, dst + (samples - buf_ct - i) * m_channels, 0);
++				break;
++			}
+ 		}
+-		m_overrun = false;
+-	} else if(m_used_buffers > max_buffers) {
+-		// if there are too many buffers, drop some and mark this event as an overrun
+-		flush_buffers(max_buffers);
+-		m_overrun = true;
+-		m_overruns++;
+-	}
+ 
+-	m_used_buffers_prev = m_used_buffers;
+-	//printf("%d -%d +%d # %d %d\n", m_used_buffers, m_underruns, m_overruns, m_delta, m_delta2);
+-}
+-
+-uint32_t sound_module::abuffer::available() const noexcept
+-{
+-	uint32_t result = 0;
+-	for(uint32_t i = 0; m_used_buffers > i; ++i)
+-		result += (m_buffers[i].data.size() / m_channels) - m_buffers[i].cpos;
+-	return result;
+-}
+-
+-inline void sound_module::abuffer::pop_buffer() noexcept
+-{
+-	assert(m_used_buffers);
+-	if(--m_used_buffers) {
+-		auto temp(std::move(m_buffers.front()));
+-		for(uint32_t i = 0; m_used_buffers > i; ++i)
+-			m_buffers[i] = std::move(m_buffers[i + 1]);
+-		m_buffers[m_used_buffers] = std::move(temp);
++		m_skip_threshold_ticks = m_osd_ticks;
+ 	}
+ }
+ 
+-inline sound_module::abuffer::buffer &sound_module::abuffer::push_buffer()
++void sound_module::abuffer::push(const int16_t *data, uint32_t samples)
+ {
+-	if(m_buffers.size() > m_used_buffers) {
+-		return m_buffers[m_used_buffers++];
+-	} else {
+-		assert(m_buffers.size() == m_used_buffers);
+-		++m_used_buffers;
+-		return m_buffers.emplace_back();
+-	}
++	// for determining buffer overflows, take the sample here instead of in the callback
++	m_osd_ticks = osd_ticks();
++
++	m_ab->write(data, samples * m_channels);
+ }
+diff --git a/src/osd/modules/sound/sound_module.h b/src/osd/modules/sound/sound_module.h
+index 8d735b46..d7422e25 100644
+--- a/src/osd/modules/sound/sound_module.h
++++ b/src/osd/modules/sound/sound_module.h
+@@ -7,9 +7,12 @@
+ #pragma once
+ 
+ #include <osdepend.h>
++#include <osdcore.h>
+ 
+-#include <array>
++#include <algorithm>
++#include <atomic>
+ #include <cstdint>
++#include <memory>
+ #include <string>
+ #include <vector>
+ 
+@@ -36,48 +39,111 @@ public:
+ 	virtual void end_update() {}
+ 
+ protected:
+-	class abuffer {
++	class abuffer
++	{
+ 	public:
+-		abuffer(uint32_t channels, uint32_t rate) noexcept;
++		abuffer(uint32_t channels, int rate) noexcept;
+ 		void set_latency(float latency);
+ 		void clear();
+ 		void get(int16_t *data, uint32_t samples) noexcept;
+ 		void push(const int16_t *data, uint32_t samples);
+ 		uint32_t channels() const noexcept { return m_channels; }
+-		uint32_t available() const noexcept;
++		uint32_t available();
+ 
+ 	private:
++		const int xfade_length = 4; // 4 ms
++
++		template<typename T>
+ 		struct buffer {
+-			uint32_t cpos;
+-			std::vector<int16_t> data;
+-
+-			buffer() noexcept = default;
+-			buffer(const buffer &) = default;
+-			buffer(buffer &&) noexcept = default;
+-			buffer &operator=(const buffer &) = default;
+-			buffer &operator=(buffer &&) noexcept = default;
+-		};
++			int m_reserve;
++			int m_capacity;
++			std::vector<T> m_buf;
++			std::atomic<int> m_playpos{0}, m_writepos{0};
++
++			buffer(int rate, int channels)
++				: m_reserve(channels) , m_capacity(rate * channels + m_reserve) , m_buf(m_capacity) { }
++
++			int count() const {
++				int w = m_writepos.load(std::memory_order_acquire);
++				int p = m_playpos.load(std::memory_order_acquire);
++
++				if (w >= p)
++					return w - p;
++				else
++					return m_capacity + w - p;
++			}
++
++			void increment_writepos(int n) {
++				int w = m_writepos.load(std::memory_order_relaxed);
++				w = (w + n) % m_capacity;
++				m_writepos.store(w, std::memory_order_release);
++			}
++
++			void increment_playpos(int n) {
++				int p = m_playpos.load(std::memory_order_relaxed);
++				p = (p + n) % m_capacity;
++				m_playpos.store(p, std::memory_order_release);
++			}
++
++			int write(const T* src, int n) {
++				int available = m_capacity - m_reserve - count();
++				n = std::min(n, available);
++
++				if (n == 0) return 0;
++
++				int w = m_writepos.load(std::memory_order_relaxed);
+ 
+-		void pop_buffer() noexcept;
+-		void flush_buffers(uint32_t remain);
+-		buffer &push_buffer();
++				if (w + n > m_capacity) {
++					int first = m_capacity - w;
++					std::copy(src, src + first, m_buf.begin() + w);
++					std::copy(src + first, src + n, m_buf.begin());
++				} else {
++					std::copy(src, src + n, m_buf.begin() + w);
++				}
++
++				increment_writepos(n);
++				return n;
++			}
++
++			int peek(T* dst, int n) {
++				n = std::min(n, count());
++
++				if (n == 0) return 0;
++
++				int p = m_playpos.load(std::memory_order_relaxed);
++
++				if (p + n > m_capacity) {
++					int first = m_capacity - p;
++					std::copy(m_buf.begin() + p, m_buf.begin() + m_capacity, dst);
++					std::copy(m_buf.begin(), m_buf.begin() + (n - first), dst + first);
++				} else {
++					std::copy(m_buf.begin() + p, m_buf.begin() + (p + n), dst);
++				}
++
++				return n;
++			}
++
++			int read(T* dst, int n) {
++				n = peek(dst, n);
++
++				increment_playpos(n);
++
++				return n;
++			}
++		};
+ 
++		int m_rate;
+ 		uint32_t m_channels;
+-		uint32_t m_rate;
+-		uint32_t m_used_buffers;
+-		uint32_t m_used_buffers_prev;
+-		uint32_t m_max_buffers;
+-		std::array<int32_t, 8> m_history;
+-		uint8_t m_hindex;
+-		bool m_overrun;
+-		bool m_internal_get;
+-		std::vector<int16_t> m_last_fade;
+-		std::vector<int16_t> m_last_sample;
+-		std::vector<buffer> m_buffers;
+-
+-		// statistics
+-		int32_t m_delta, m_delta2;
+-		uint32_t m_underruns, m_overruns;
++		int m_buffer_min_ct;
++		int m_skip_threshold;
++		osd_ticks_t m_osd_ticks;
++		osd_ticks_t m_skip_threshold_ticks;
++		std::unique_ptr<buffer<int16_t>> m_ab;
++
++		int m_xfade_length;
++		std::vector<int16_t> m_xfade_buf;
++		int m_xfade_total;
++		int m_xfade_remaining;
+ 	};
+ };
+ 

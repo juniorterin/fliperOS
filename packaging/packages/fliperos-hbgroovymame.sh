@@ -6,8 +6,11 @@
 # O fonte e o do HBMAME na tag fixada, com os arquivos novos do GroovyMAME da
 # tag gm0289sr222f (o Switchres, o emusync, o lz4: packaging/patches/hbgroovymame/
 # groovymame-files.txt) e o diff dele sobre o MAME 0.289 portado para o codigo
-# do HBMAME (0001), mais o asio novo que o HBMAME traz (0002). Sem o lockstep
-# patch do groovymame: a party de dois a quatro gabinetes e dos jogos do MAME.
+# do HBMAME: o Switchres, o emusync e a interface (0001), o asio novo e os
+# headers que o HBMAME nao traz mais (0002) e a sincronia de audio, com o
+# modulo de som do OSD que mede a placa de som (0003). E o lockstep patch do
+# FliperOS do groovymame (packaging/patches/groovymame, o mesmo arquivo): a
+# party de dois a quatro gabinetes tambem nos jogos da pasta hbmame.
 #
 # Este pacote nao vai na ISO (PKG_OPTIONAL): o Setup o baixa pronto quando
 # chega um jogo na pasta hbmame (config/fliperos-emulators, tipo package), e
@@ -74,7 +77,7 @@ pkg_build() {
   # Os arquivos novos do GroovyMAME (o Switchres, o emusync, o lz4) e depois
   # os patches, na ordem: todos tem de entrar.
   tar -c -C "$gm" -T "$here/groovymame-files.txt" | tar -x -C "$src" || return 1
-  for patch in "$here"/*.patch; do
+  for patch in "$here"/*.patch "$here/../groovymame/0001-lockstep-patch.patch"; do
     git -C "$src" apply "$patch" || return 1
   done
   rm -rf "$gm"

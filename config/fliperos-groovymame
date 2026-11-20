@@ -165,8 +165,13 @@ grep -q '^multiscreen=off' "$conf" 2> /dev/null && outputs=()
 if ((${#outputs[@]} > 1)) && opens_video "$@"; then
   # Feitos pelo Setup; refeitos aqui se o GroovyMAME ou o numero de monitores
   # mudou (sem nada a fazer, sai na hora).
-  [[ $me == hbgroovymame ]] || "$screens_gen" "${#outputs[@]}" > /dev/null || true
-  [[ -d $inidir/screens ]] && inipath="$inidir;$inidir/screens"
+  if [[ $me == hbgroovymame ]]; then
+    # Os jogos de varias telas do HBMAME: o -listxml e a pasta screens dele.
+    FLIPEROS_GROOVYMAME_BIN=$real "$screens_gen" "${#outputs[@]}" "$inidir/screens" > /dev/null || true
+  else
+    "$screens_gen" "${#outputs[@]}" > /dev/null || true
+  fi
+  [[ -d $inidir/screens ]] && inipath="$inipath;$inidir/screens"
   if [[ -n ${DISPLAY:-} ]] && command -v xrandr > /dev/null; then
     # As saidas ligadas do X, na ordem do XRandR. O Switchres acha a tela
     # "screenN" do GroovyMAME por essa ordem; o SDL numera as telas com a

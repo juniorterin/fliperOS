@@ -28,6 +28,9 @@
 
 MM_MAX=3
 MAME_SCREENS=${MAME_SCREENS:-/opt/fliperos/bin/fliperos-mame-screens}
+# O hbgroovymame (HBMAME com o Switchres, o pacote opcional): o binario e a pasta dos .ini de varias telas dele.
+HBGROOVYMAME_BIN=${HBGROOVYMAME_BIN:-/usr/local/libexec/hbgroovymame}
+HBMAME_SCREENS=${HBMAME_SCREENS:-/etc/fliperos/hbmame/screens}
 
 # mm_entry_card ENTRADA: a placa da saida (card1:VGA-1 -> card1; VGA-1 -> a
 # do monitor 1).
@@ -269,11 +272,17 @@ mm_blink() {
 
 # mm_mame_prepare gera os .ini dos jogos de varias telas para o numero de
 # monitores atual. Na primeira vez le o XML inteiro do GroovyMAME (cerca de
-# um minuto); o comando groovymame o refaz sozinho se faltar.
+# um minuto); o comando groovymame o refaz sozinho se faltar. Com o
+# hbgroovymame instalado, o mesmo para o XML dele (a pasta hbmame).
 mm_mame_prepare() {
   local n
   n=$(mm_count)
   ((n > 1)) && mm_games_on || return 0
   [[ -x $MAME_SCREENS ]] || return 0
   run_logged "$MAME_SCREENS" "$n"
+  # O hbgroovymame (o pacote opcional) tem o -listxml e a pasta screens dele.
+  if [[ -x $HBGROOVYMAME_BIN ]]; then
+    run_logged env FLIPEROS_GROOVYMAME_BIN="$HBGROOVYMAME_BIN" "$MAME_SCREENS" "$n" "$HBMAME_SCREENS"
+  fi
+  return 0
 }

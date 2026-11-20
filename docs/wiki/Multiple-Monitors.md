@@ -67,7 +67,7 @@ New monitors only turn on **after a reboot**: the Setup offers it when you leave
 
 | Emulator | Games | Monitors |
 | --- | --- | --- |
-| **GroovyMAME** | Every MAME system with 2 or more screens (Darius, Darius II, The Ninja Warriors, Punch-Out!!, Super Punch-Out!!, Vs. Tennis...) | 2 or 3. With 2 monitors, a 3-screen game opens on the first 2 |
+| **GroovyMAME** (and [HBMAME](GroovyMAME.md#hbmame-hbgroovymame), the same way) | Every MAME system with 2 or more screens (Darius, Darius II, The Ninja Warriors, Punch-Out!!, Super Punch-Out!!, Vs. Tennis...) | 2 or 3. With 2 monitors, a 3-screen game opens on the first 2 |
 | **Flycast** | NAOMI multi-board games: Ferrari F355 Challenge (deluxe, twin, twin 2), Airline Pilots, Sega Strike Fighter | 3 (left, center, right), all analog |
 
 The other emulators (RetroArch, PCSX2, Dolphin, Keisho...) and the frontends stay on monitor 1. It works from any launcher: the frontends, LXDE's **Games** menu, GroovyMAME's own game list and the terminal all go through the same commands.
@@ -84,7 +84,7 @@ The `fliperos.conf` keeps the outputs in the game screen order (`screens=DVI-I-1
 
 **KMS.** RetroArch, Attract-Mode, EmulationStation and Pegasus open on the first connected output, which could be an extra monitor. So `fliperos-kms-run` turns the extra ones off (`fliperos-setup --outputs main`), and every X server (`fliperos-x11-run`, the desktop) turns them back on (`--outputs all`).
 
-**GroovyMAME.** `fliperos-mame-screens` reads GroovyMAME's own `-listxml` and writes one `.ini` with `numscreens` per system with 2 or more screens in `/etc/fliperos/mame/screens` (limited to the number of monitors).
+**GroovyMAME.** `fliperos-mame-screens` reads GroovyMAME's own `-listxml` and writes one `.ini` with `numscreens` per system with 2 or more screens in `/etc/fliperos/mame/screens` (limited to the number of monitors). With HBMAME installed, `hbgroovymame` does the same with HBMAME's own list, which knows the hacks, in `/etc/fliperos/hbmame/screens`.
 
 This takes about a minute the first time and only runs again when the GroovyMAME binary or the number of monitors changes. The `groovymame` command adds that folder to the `-inipath` after the main one, so a user `.ini` in the main folder wins, and sends each window to its output (`-screen0 screen1`...).
 

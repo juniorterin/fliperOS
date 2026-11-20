@@ -73,6 +73,10 @@ PORT_MAME = 55440
 MAME_SYSTEMS = ("mame",)
 MAME_MAX_PLAYERS = 10
 GROOVYMAME = os.environ.get("FLIPEROS_GROOVYMAME_BIN", "/usr/local/libexec/groovymame")
+# O hbgroovymame (o HBMAME com o Switchres, o pacote opcional fliperos-hbgroovymame) leva o mesmo lockstep
+# patch: a party dos jogos da pasta hbmame e a mesma, com o binario dele.
+HBMAME_SYSTEMS = ("hbmame",)
+HBGROOVYMAME = os.environ.get("FLIPEROS_HBGROOVYMAME_BIN", "/usr/local/libexec/hbgroovymame")
 BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
 KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
 RA_CORES = os.environ.get("FLIPEROS_RA_CORES", "/opt/fliperos/retroarch/cores")
@@ -932,7 +936,7 @@ def warm_scans():
     """Pergunta de uma vez o que o frontend vai perguntar a cada jogo (se o
     Dolphin, o Flycast e o GroovyMAME instalados tem os patches do FliperOS),
     em segundo plano, para a troca de sistema nao esperar a leitura."""
-    for ask in (dolphin_netplay, flycast_party, flycast_lockstep, mame_lockstep):
+    for ask in (dolphin_netplay, flycast_party, flycast_lockstep, mame_lockstep, hbmame_lockstep):
         try:
             ask()
         except OSError:
@@ -960,6 +964,12 @@ def mame_lockstep(path=None):
     """O GroovyMAME instalado tem o lockstep patch (o do pacote; o release que
     o mais novo do Setup baixa nao tem)?"""
     return binary_has(path or GROOVYMAME, b"native lockstep: game")
+
+
+def hbmame_lockstep(path=None):
+    """O hbgroovymame instalado tem o lockstep patch (o do pacote)? Sem o
+    pacote (a pasta hbmame ainda sem o programa), nao ha party."""
+    return binary_has(path or HBGROOVYMAME, b"native lockstep: game")
 
 
 def netplay_profile(system_key, name, players, local, sets=None):
@@ -992,8 +1002,10 @@ def netplay_profile(system_key, name, players, local, sets=None):
         return {"id": "netplay", "title": name, "emulator": "flycast", "systems": [system_key], "sets": [name],
                 "min": 2, "max": 2, "players": 2, "take": 1, "fixed": True, "order": "master-first", "step": 6,
                 "port": PORT_GGPO, "netplay": True, "ggpo": True}
-    if (system_key or "").split("/")[0] in MAME_SYSTEMS:
-        if n < 2 or not mame_lockstep():
+    if (system_key or "").split("/")[0] in MAME_SYSTEMS + HBMAME_SYSTEMS:
+        # A pasta mame, no GroovyMAME; a hbmame, no hbgroovymame: cada um com o seu binario.
+        has_lockstep = hbmame_lockstep if (system_key or "").split("/")[0] in HBMAME_SYSTEMS else mame_lockstep
+        if n < 2 or not has_lockstep():
             return None
         # Todos os jogadores do jogo (o lockstep patch nao tem limite: cada
         # gabinete manda so os bits dos seus), ate as portas de jogador do

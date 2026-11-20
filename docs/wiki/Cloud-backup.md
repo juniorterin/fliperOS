@@ -41,7 +41,7 @@ The top of the screen shows the account and the last sync.
 
 | Group | What it carries |
 | --- | --- |
-| **High scores** | MAME's hiscore files and the arcade memory (`~/nvram`) |
+| **High scores** | MAME's hiscore files (`~/.mame/hiscore`, and HBMAME's `~/.hbmame/hiscore` on a cabinet that has it) and the arcade memory (`~/nvram`) |
 | **Saves** | Saves and memory cards (`~/save`) |
 | **Settings** | What you set and what you leave behind: played games, time played, favourites, the emulators' and frontends' settings, button maps, the on-screen menu's profiles |
 

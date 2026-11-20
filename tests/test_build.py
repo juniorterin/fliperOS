@@ -2559,7 +2559,7 @@ class HbGroovymameTests(unittest.TestCase):
 
     PATHS = ROOT / 'packaging/assets/hbgroovymame/paths.ini'
 
-    def run_wrapper(self, tmp, *args, name='hbgroovymame', share=True):
+    def run_wrapper(self, tmp, *args, name='hbgroovymame', share=True, conf=None, env_extra=None):
         tmp = Path(tmp)
         for d in ('hb', 'mame', 'share', 'home'):
             (tmp / d).mkdir(exist_ok=True)
@@ -2583,8 +2583,11 @@ class HbGroovymameTests(unittest.TestCase):
         env = dict(os.environ, FLIPEROS_GROOVYMAME_BIN=str(fake), FLIPEROS_MAME_INI_DIR=str(tmp / 'hb'),
                    FLIPEROS_HBGROOVYMAME_SHARE=str(tmp / 'share'), FLIPEROS_MAME_SYSTEM_INI=str(tmp / 'mame'),
                    FLIPEROS_CONF=str(tmp / 'fliperos.conf'), DISPLAY=':0', HOME=str(tmp / 'home'))
-        for key in ('FLIPEROS_KMS_RUN', 'FLIPEROS_GROOVYMAME_X11', 'LD_PRELOAD'):
+        for key in ('FLIPEROS_KMS_RUN', 'FLIPEROS_GROOVYMAME_X11', 'FLIPEROS_X11_RUN_SESSION', 'LD_PRELOAD'):
             env.pop(key, None)
+        if conf is not None:
+            (tmp / 'fliperos.conf').write_text(conf)
+        env.update(env_extra or {})
         return subprocess.run(['bash', str(wrapper), *args], env=env, capture_output=True, text=True,
                               timeout=60, check=True).stdout.split('\n')[:-1]
 
@@ -2639,6 +2642,33 @@ class HbGroovymameTests(unittest.TestCase):
             out = self.run_wrapper(tmp, 'sf2', name='groovymame')
             self.assertEqual(out, ['-inipath', str(tmp / 'hb'), 'sf2'])
             self.assertFalse((tmp / 'hb/hbmame.ini').exists())
+
+    def test_multi_screen_games_use_the_hbmame_list_and_folder(self):
+        # Dois monitores: o numscreens de cada jogo sai do -listxml do HBMAME (os hacks de jogos de varias telas),
+        # na pasta screens do hbmame, e o GroovyMAME segue com a dele.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            calls = tmp / 'calls'
+            (tmp / 'bin').mkdir()
+            (tmp / 'xrandr.txt').write_text(
+                'DVI-I-1 connected 640x480+0+0 (normal left inverted right x axis y axis) 0mm x 0mm\n'
+                'VGA-1 connected primary 640x480+640+0 (normal left inverted right x axis y axis) 0mm x 0mm\n')
+            for name, body in (('gen', 'echo "gen bin=$FLIPEROS_GROOVYMAME_BIN $*" >> %s; mkdir -p "$2"' % calls),
+                               ('xrandr', '[ "$1" = --query ] && cat %s || echo "xrandr $*" >> %s'
+                                % (tmp / 'xrandr.txt', calls))):
+                (tmp / 'bin' / name).write_text('#!/bin/sh\n%s\n' % body)
+                (tmp / 'bin' / name).chmod(0o755)
+            extra = {'FLIPEROS_MAME_SCREENS': str(tmp / 'bin/gen'), 'PATH': '%s:%s' % (tmp / 'bin', os.environ['PATH'])}
+            out = self.run_wrapper(tmp, 'darius', conf='screens=DVI-I-1,VGA-1\n', env_extra=extra)
+            self.assertEqual(out, ['-inipath', '%s;%s;%s/screens' % (tmp / 'hb', tmp / 'mame', tmp / 'hb'),
+                                   'darius', '-screen0', 'screen0', '-screen1', 'screen1'])
+            self.assertEqual(calls.read_text().splitlines()[0],
+                             'gen bin=%s 2 %s' % (tmp / 'real', tmp / 'hb/screens'))
+            # O GroovyMAME: o gerador sem pasta (a de sempre), e a lista de inipath que ele ja tinha.
+            calls.unlink()
+            out = self.run_wrapper(tmp, 'darius', name='groovymame', conf='screens=DVI-I-1,VGA-1\n', env_extra=extra)
+            self.assertEqual(out[:2], ['-inipath', '%s;%s/screens' % (tmp / 'hb', tmp / 'hb')])
+            self.assertEqual(calls.read_text().splitlines()[0], 'gen bin=%s 2' % (tmp / 'real'))
 
     def test_the_game_list_xml_does_not_open_the_screen(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2709,7 +2739,7 @@ class HbGroovymameTests(unittest.TestCase):
         self.assertIn('TARGET=hbmame', recipe)
         self.assertIn('/usr/local/libexec/hbgroovymame', recipe)
         patches = sorted((ROOT / 'packaging/patches/hbgroovymame').glob('*.patch'))
-        self.assertEqual([p.name[:4] for p in patches], ['0001', '0002'])
+        self.assertEqual([p.name[:4] for p in patches], ['0001', '0002', '0003'])
         for patch in patches:
             self.assertNotIn(b'\r', patch.read_bytes(), patch.name)
         files = (ROOT / 'packaging/patches/hbgroovymame/groovymame-files.txt').read_text().split()
@@ -16548,6 +16578,35 @@ class PixelcadeTests(unittest.TestCase):
         rom.write_text('')
         self.assertIn('text?t=Now%20Playing%20galaga&', self.run_('launch', 'retroarch', str(rom))[2])
 
+    def test_hbmame_games_show_their_own_scores_and_ask_the_pixelweb_as_mame(self):
+        # O hbgroovymame (a pasta hbmame): o recorde e o .hi da pasta dele (~/.hbmame/hiscore), e o pixelweb,
+        # que so conhece os sistemas dele, recebe o jogo como "mame" (a arte do mesmo set).
+        self.install()
+        hi2txt = self.tmp / 'pixelcade/hi2txt'
+        hi2txt.mkdir()
+        (hi2txt / 'hi2txt.jar').write_text('')
+        (hi2txt / 'hi2txt.zip').write_text('')
+        java = self.tmp / 'bin/java'
+        java.write_text('#!/bin/sh\necho "$*" > %s\nprintf "RANK|SCORE|NAME\\n1|19130|DAA\\n\\n"\n'
+                        % (self.tmp / 'java-args'))
+        java.chmod(0o755)
+        hb = self.tmp / 'hbmame/hiscore/galaga.hi'
+        hb.parent.mkdir(parents=True)
+        hb.write_text('x')
+        self.env['HISCORE_DIRS'] = '%s:%s:%s' % (self.tmp / 'mame/hiscore', self.tmp / 'hbmame/hiscore',
+                                                 self.tmp / 'saves')
+        calls = self.run_('launch', 'hbgroovymame', 'galaga')
+        self.assertEqual(calls[2], 'text?t=%231%2019%2C130%20DAA&ss=1&l=1&scroll=true&game=galaga&system=mame'
+                                   '&event=GameStart')
+        self.assertEqual(calls[3], 'arcade/stream/mame/galaga?l=99999&event=GameStart')
+        self.assertEqual((self.tmp / 'java-args').read_text().split()[:4], ['-jar', 'hi2txt.jar', '-r', str(hb)])
+        # Sem o .hi, o nome do jogo; a selecao no frontend tambem vai como mame.
+        hb.unlink()
+        self.assertIn('text?t=Now%20Playing%20dkong&', self.run_('launch', 'hbgroovymame', 'dkong')[2])
+        self.assertEqual(self.run_('select', 'hbmame', 'galaga'), ['arcade/stream/mame/galaga?event=FEScroll'])
+        # O GroovyMAME e o resto seguem com o proprio nome.
+        self.assertEqual(self.run_('launch', 'groovymame', 'digdug'), self.GAME_DIGDUG)
+
     def test_game_end_goes_back_to_the_selection(self):
         self.install()
         self.install_zedmd()
@@ -17798,8 +17857,12 @@ class VersusTests(unittest.TestCase):
                          ['plugin']['name'], 'fliperos-versus')
         gm = (ROOT / 'config/fliperos-groovymame').read_text()
         self.assertIn('"$panel" panel && "$versus" has mame "${game##*/}"; then', gm)
+        # O share e a pasta do usuario sao os do groovymame (/usr/local/share/groovymame, ~/.mame) ou, no
+        # hbgroovymame, os dele (config/fliperos-groovymame, o nome decide).
         self.assertIn('set -- -plugin hiscore,fliperos-versus \\\n'
-                      '    -pluginspath "/usr/local/share/groovymame/plugins;$plugins;$HOME/.mame/plugins" "$@"', gm)
+                      '    -pluginspath "$share/plugins;$plugins;$userdir/plugins" "$@"', gm)
+        self.assertIn('share=/usr/local/share/groovymame\n', gm)
+        self.assertIn('userdir=$HOME/.mame\n', gm)
         kms = (ROOT / 'config/fliperos-kms-run').read_text()
         self.assertIn('"$versus" has retroarch "${game%.*}" "$core"; then', kms)
         # O SM2-Emu publica os rounds: a porta abre para o placar, e o leitor e a fonte "model2".

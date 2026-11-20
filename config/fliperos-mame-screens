@@ -6,6 +6,11 @@
 #
 #   fliperos-mame-screens MONITORES [PASTA]   (padrao: /etc/fliperos/mame/screens)
 #
+# O hbgroovymame (o HBMAME com o Switchres) usa este mesmo programa, com o
+# binario dele em FLIPEROS_GROOVYMAME_BIN e a PASTA /etc/fliperos/hbmame/screens
+# (o comando hbgroovymame, config/fliperos-groovymame): o -listxml do HBMAME
+# conhece os hacks de jogos de varias telas que o do GroovyMAME nao conhece.
+#
 # numscreens e o menor entre as telas do jogo e os monitores: o Darius (3
 # telas) com 2 monitores abre nas 2 primeiras. Os sistemas de varias telas
 # saem do XML do proprio GroovyMAME (-listxml, cerca de um minuto) e ficam em

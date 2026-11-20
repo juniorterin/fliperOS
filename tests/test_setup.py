@@ -2284,6 +2284,17 @@ class MultiMonitorTests(Base):
         self.assertNotIn("multiscreen", self.conf())
         self.env.out("MAME_SCREENS=%s; mm_mame_prepare" % gen)
         self.assertTrue((self.env.dir / "gen.log").exists())
+        # O hbgroovymame (o pacote opcional) tem o XML e a pasta dele: so com ele instalado.
+        self.assertEqual((self.env.dir / "gen.log").read_text(), "gen\n")
+        gen.write_text('#!/bin/sh\necho "gen $* bin=$FLIPEROS_GROOVYMAME_BIN" >> %s\n' % (self.env.dir / "gen.log"))
+        (self.env.dir / "gen.log").unlink()
+        binary = self.env.dir / "hbgroovymame"
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
+        self.env.out("MAME_SCREENS=%s HBGROOVYMAME_BIN=%s HBMAME_SCREENS=/x/hbmame/screens; mm_mame_prepare"
+                     % (gen, binary))
+        lines = (self.env.dir / "gen.log").read_text().splitlines()
+        self.assertEqual(lines, ["gen 2 bin=", "gen 2 /x/hbmame/screens bin=%s" % binary])
 
     def test_cli_and_screen(self):
         entry = (SETUP / "fliperos-setup").read_text()
@@ -7706,6 +7717,40 @@ class CloudTests(unittest.TestCase):
         tool = self.TOOL.read_text()
         self.assertIn("FOLDERS_CLI=${FLIPEROS_CLOUD_FOLDERS:-sudo -n /usr/local/bin/fliperos-setup --folders}", tool)
         self.assertIn("SYSTEM_RESTORE=${FLIPEROS_CLOUD_RESTORE:-sudo -n /usr/local/bin/fliperos-setup --cloud-restore}", tool)
+
+    def test_hbgroovymame_data_goes_to_the_cloud_only_where_it_is_used(self):
+        # O hbgroovymame (o HBMAME com o Switchres, pacote opcional) guarda os recordes em ~/.hbmame/hiscore e o
+        # resto em ~/.hbmame: sobem com os do GroovyMAME, cada um na sua pasta da nuvem. Sem o programa e sem a
+        # pasta, nada: receber nao cria uma ~/.hbmame vazia em todo gabinete.
+        self.env["FLIPEROS_HBGROOVYMAME_BIN"] = str(self.dir / "not-installed")
+        self.run_("remote", "webdav", stdin="url=https://x/dav\nuser=a\npass=b\n")
+        self.assertEqual(self.run_("sync", "both", "hiscores,config").returncode, 0)
+        self.assertFalse((self.home / ".hbmame").exists())
+        self.assertFalse((self.cloud / "FliperOS/hiscores/hiscore-hbmame").exists())
+        (self.home / ".hbmame/hiscore").mkdir(parents=True)
+        (self.home / ".hbmame/hiscore/sf2hf.hi").write_text("hb")
+        (self.home / ".hbmame/cfg").mkdir()
+        (self.home / ".hbmame/cfg/sf2hf.cfg").write_text("<mameconfig/>")
+        (self.home / "nvram/hbmame").mkdir()
+        (self.home / "nvram/hbmame/sf2hf.nv").write_text("hbnv")
+        r = self.run_("sync", "push", "hiscores,config")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        far = self.cloud / "FliperOS"
+        self.assertEqual((far / "hiscores/hiscore-hbmame/sf2hf.hi").read_text(), "hb")
+        self.assertEqual((far / "hiscores/nvram/hbmame/sf2hf.nv").read_text(), "hbnv")
+        self.assertEqual((far / "config/hbmame/cfg/sf2hf.cfg").read_text(), "<mameconfig/>")
+        # Os recordes vao so em hiscores/, e os do GroovyMAME seguem no lugar de sempre.
+        self.assertFalse((far / "config/hbmame/hiscore").exists())
+        self.assertEqual((far / "hiscores/hiscore/sf2.hi").read_text(), "local")
+        # Um gabinete que tem o programa (sem a pasta ainda) a recebe da nuvem.
+        shutil.rmtree(self.home / ".hbmame")
+        (self.dir / "hb-real").write_text("#!/bin/sh\n")
+        (self.dir / "hb-real").chmod(0o755)
+        self.env["FLIPEROS_HBGROOVYMAME_BIN"] = str(self.dir / "hb-real")
+        r = self.run_("sync", "pull", "hiscores,config")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual((self.home / ".hbmame/hiscore/sf2hf.hi").read_text(), "hb")
+        self.assertEqual((self.home / ".hbmame/cfg/sf2hf.cfg").read_text(), "<mameconfig/>")
 
     def test_webdav_account_keeps_the_password_obscured(self):
         self.assertEqual(self.status()["remote"], "")

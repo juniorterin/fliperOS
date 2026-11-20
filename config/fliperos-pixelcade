@@ -72,9 +72,9 @@ idle_gif=${PIXELCADE_IDLE:-/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gi
 # As animacoes dos itens do menu do FliperOS (tools/marquee-logo-anim.py): as
 # mesmas que a previa do painel web desenha, entre os arquivos dele.
 menu_dir=${PIXELCADE_MENU_DIR:-/usr/local/share/fliperos/web}
-# Onde os emuladores gravam os recordes (.hi): o GroovyMAME (plugin hiscore)
-# e os cores de arcade do RetroArch.
-hi_dirs=${HISCORE_DIRS:-/home/fliperos/.mame/hiscore:/opt/fliperos/saves/retroarch}
+# Onde os emuladores gravam os recordes (.hi): o GroovyMAME e o hbgroovymame
+# (plugin hiscore, cada um na sua pasta) e os cores de arcade do RetroArch.
+hi_dirs=${HISCORE_DIRS:-/home/fliperos/.mame/hiscore:/home/fliperos/.hbmame/hiscore:/opt/fliperos/saves/retroarch}
 # Um jogo que fala direto com o painel (Visual Pinball) deixa aqui o pid
 # dele: o pixelweb e o dmdserver soltam a porta ate ele fechar.
 hold_file=${PIXELCADE_HOLD:-/tmp/fliperos-pixelcade.hold}
@@ -653,6 +653,13 @@ rom_of() {
   printf '%s\n' "${name%.*}"
 }
 
+# pc_system SISTEMA: o nome do sistema para o pixelweb, que so conhece os
+# dele: os jogos da pasta hbmame (o hbgroovymame) vao como "mame", a arte do
+# mesmo set; o resto (o ZeDMD, o painel, os recordes) segue com o nome da pasta.
+pc_system() {
+  if [[ $1 == hbmame ]]; then echo mame; else printf '%s\n' "$1"; fi
+}
+
 urlencode() {
   local LC_ALL=C s=$1 out="" c n i
   for ((i = 0; i < ${#s}; i++)); do
@@ -704,7 +711,8 @@ title_of() {
 highscores() {
   local java hi line out="" i rank score name
   local -a dirs head=() cols
-  [[ $1 == mame && -f $dir/hi2txt/hi2txt.jar && -f $dir/hi2txt/hi2txt.zip ]] || return 1
+  [[ $1 == mame || $1 == hbmame ]] || return 1
+  [[ -f $dir/hi2txt/hi2txt.jar && -f $dir/hi2txt/hi2txt.zip ]] || return 1
   java=$(command -v java) || return 1
   IFS=: read -r -a dirs <<< "$hi_dirs"
   hi=$(find "${dirs[@]}" -type f -name "$2.hi" -printf '%T@ %p\n' 2> /dev/null | sort -rn | head -1 | cut -d' ' -f2-)
@@ -768,8 +776,8 @@ game() {
     # A fila do pixelweb vazia: sem isto o texto espera o que estava nela.
     call "console/stream/black"
     sleep 1
-    call "text?t=$(urlencode "$intro")&ss=1&l=1&scroll=true&game=$(urlencode "$2")&system=$(urlencode "$1")&event=GameStart"
-    call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?l=99999&event=GameStart"
+    call "text?t=$(urlencode "$intro")&ss=1&l=1&scroll=true&game=$(urlencode "$2")&system=$(urlencode "$(pc_system "$1")")&event=GameStart"
+    call "arcade/stream/$(urlencode "$(pc_system "$1")")/$(urlencode "$2")?l=99999&event=GameStart"
   fi
   return 0
 }
@@ -849,7 +857,7 @@ versus_score() {
   last=$(cat "$last_file" 2> /dev/null)
   if [[ $last == game:*/* ]]; then
     last=${last#game:}
-    call "arcade/stream/$(urlencode "${last%%/*}")/$(urlencode "${last#*/}")?l=99999&event=GameStart"
+    call "arcade/stream/$(urlencode "$(pc_system "${last%%/*}")")/$(urlencode "${last#*/}")?l=99999&event=GameStart"
   fi
 }
 
@@ -964,7 +972,7 @@ select_game() {
   printf '%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
   zedmd show select "$1" "$2" "${3:-}"
   overlay select "$1" "$2" "${3:-}"
-  call "arcade/stream/$(urlencode "$1")/$(urlencode "$2")?event=FEScroll"
+  call "arcade/stream/$(urlencode "$(pc_system "$1")")/$(urlencode "$2")?event=FEScroll"
 }
 
 # system SISTEMA [TITULO]
