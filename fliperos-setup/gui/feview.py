@@ -4144,15 +4144,14 @@ def draw_option(fe, ui, opt, rect, on, right, now):
 # arquivos, o 4 toca e o 5 volta ao padrao.
 SOUND_ROWS = [("move", "BROWSE"), ("enter", "ENTER"), ("back", "BACK"), ("open", "OPEN GAME"),
               ("close", "CLOSE GAME"), ("alert", "ALERT DIALOG"), ("music", "MUSIC"),
-              ("music_volume", "MUSIC VOLUME"), ("music_pause", "PAUSE MUSIC"), ("preview", "PREVIEW VOLUME"), ("preview_sync", "PREVIEW SYNC")]
+              ("music_volume", "MUSIC VOLUME"), ("music_pause", "PAUSE MUSIC"), ("preview", "PREVIEW VOLUME")]
 SOUND_HINTS = {"move": "WHEN THE CURSOR MOVES", "enter": "WHEN YOU GO INTO SOMETHING",
                "back": "WHEN YOU GO BACK", "open": "WHEN A GAME OPENS", "close": "WHEN THE GAME CLOSES",
                "alert": "WHEN AN ALERT OPENS",
                "music": "A FILE, OR A FOLDER AT RANDOM",
                "music_volume": "HOW LOUD THE MUSIC PLAYS",
                "music_pause": "PAUSE IT WHEN A PREVIEW HAS SOUND",
-               "preview": "SOUND OF THE GAME PREVIEW",
-               "preview_sync": "PICTURE WAITS FOR THE LATE SOUND"}
+               "preview": "SOUND OF THE GAME PREVIEW"}
 
 
 def sound_value(fe, key):
@@ -4170,7 +4169,7 @@ def sound_value(fe, key):
         return ("FOLDER " + name if os.path.isdir(source) else name).upper(), None
     if key == "music_volume":
         return None, fe.snd.music_volume()
-    if key in ("music_pause", "preview_sync"):
+    if key == "music_pause":
         return None, None
     return None, fe.snd.preview_volume()
 
@@ -4204,15 +4203,6 @@ def draw_sounds(fe, ui, now):
         if key == "music_pause":
             paused = fe.snd.music_pause()
             chip(ui, right, y, "ON" if paused else "OFF", paused, on)
-            room = 0
-        elif key == "preview_sync":
-            # O atraso da imagem do preview: o medido no ALSA (AUTO) ou o da pessoa.
-            manual = fe.snd.preview_sync()
-            shown = "AUTO %d MS" % round(fe.sync_auto * 1000) if manual is None else "%d MS" % manual
-            cx = chip(ui, right - 10, y, shown, manual is not None, on)
-            if on:
-                arrow(ui, cx - 5, y + 8, (-1, 0), T.PINK, 3)
-                arrow(ui, right - 4, y + 8, (1, 0), T.PINK, 3)
             room = 0
         elif vol is not None:
             tiny.text(ui, "%d" % vol, T.FG if on else T.COMMENT, right, y + 6, right=True)
@@ -4292,7 +4282,11 @@ def draw_sndpick(fe, ui, now):
 # verde se esvazia nos MUSIC_SECONDS. Cor cheia e pixel inteiro, como as outras
 # animacoes do frontend no tubo (nada de translucido nem de aro fino).
 MUSIC_SECONDS, MUSIC_ENTER, MUSIC_LEAVE, MUSIC_RING = 5.0, 0.45, 0.3, 1.1
-MUSIC_HOLD_START, MUSIC_HOLD_END, MUSIC_MIN_SPEED = 1.0, 0.7, 28.0
+MUSIC_HOLD_START, MUSIC_HOLD_END = 1.0, 0.7
+# O nome que nao cabe corre a MUSIC_SPEED pixels por segundo, e a barra fica o
+# tempo que ele leva (ate MUSIC_MAX_SECONDS). A margem de cada lado, alem da area
+# segura da tela, e de MUSIC_MARGIN pixels.
+MUSIC_SPEED, MUSIC_MAX_SECONDS, MUSIC_MARGIN = 34.0, 16.0, 4
 MUSIC_NOTE = (
     "................", "................", "........KKKK....", "........KKKKK...",
     "........K..KKK..", "........K...KK..", "........K.......", "........K.......",
@@ -4337,17 +4331,49 @@ def ring_pixels(r):
     return _ring_cache[r]
 
 
+def music_metrics():
+    """A geometria da barra: altura, raio do circulo, as margens e a largura do
+    texto. A barra fica dentro da area segura da tela (T.SAFE_X) mais uns
+    pixels: o tubo corta a borda, e a barra nao pode encostar nela."""
+    h, r = 24, 12
+    x0 = T.SAFE_X + MUSIC_MARGIN
+    right_full = WW - x0
+    cx = x0 + r
+    tx = cx + r + 6
+    return h, r, right_full, cx, tx, right_full - 6 - tx
+
+
+def music_right(title):
+    """Onde a barra termina de crescer: logo depois do nome (e do "NOW
+    PLAYING"), se ele e mais curto que a barra inteira; um nome que nao cabe
+    leva a barra ate a margem (e corre)."""
+    _, _, right_full, _, tx, _ = music_metrics()
+    return min(right_full, tx + max(W.width(title.upper()) + 1, tiny.width("NOW PLAYING")) + 6)
+
+
+def music_seconds(title):
+    """Quanto tempo a barra fica: MUSIC_SECONDS; um nome que nao cabe corre
+    (MUSIC_SPEED pixels por segundo) e a barra espera ele chegar ao fim."""
+    travel = W.width(title.upper()) + 1 - music_metrics()[5]
+    if travel <= 0:
+        return MUSIC_SECONDS
+    runs = MUSIC_ENTER + MUSIC_HOLD_START + travel / MUSIC_SPEED + MUSIC_HOLD_END
+    return min(MUSIC_MAX_SECONDS, max(MUSIC_SECONDS, runs))
+
+
 def draw_music_bar(ui, title, age, y):
     """A barra de "NOW PLAYING" age segundos depois de aparecer, com o alto em y."""
-    if age >= MUSIC_SECONDS + MUSIC_LEAVE:
+    seconds = music_seconds(title)
+    if age >= seconds + MUSIC_LEAVE:
         return
-    h, r = 24, 12
-    x0, right_full = 6, WW - 6
-    cx, cy = x0 + r, y + h // 2
+    h, r, _, cx, tx, _ = music_metrics()
+    right_full = music_right(title)       # a barra diminui ate caber o nome
+    aw = right_full - 6 - tx
+    cy = y + h // 2
     if age < MUSIC_ENTER:
         sweep, grow = ease_out(age / 0.2), ease_out((age - 0.15) / 0.3)
-    elif age >= MUSIC_SECONDS:
-        back = (age - MUSIC_SECONDS) / MUSIC_LEAVE
+    elif age >= seconds:
+        back = (age - seconds) / MUSIC_LEAVE
         grow, sweep = 1 - ease_out(back / 0.6), 1 - ease_out((back - 0.5) / 0.5)
     else:
         sweep = grow = 1.0
@@ -4356,8 +4382,6 @@ def draw_music_bar(ui, title, age, y):
         bar = (cx, y, right - cx, h)
         ui.fill(T.BG_DEEP, bar)
         pygame.draw.rect(ui, T.PURPLE, bar, 1)
-        tx = cx + r + 6
-        aw = right_full - 6 - tx
         old = ui.get_clip()
         ui.set_clip(pygame.Rect(tx, y + 1, max(0, min(aw, right - 2 - tx)), h - 2).clip(old))
         tiny.text(ui, "NOW PLAYING", T.PINK, tx, y + 4)
@@ -4365,13 +4389,14 @@ def draw_music_bar(ui, title, age, y):
         travel = img.get_width() - aw
         offset = 0.0
         if travel > 0:
-            room = MUSIC_SECONDS - MUSIC_ENTER - MUSIC_HOLD_START - MUSIC_HOLD_END
-            speed = max(MUSIC_MIN_SPEED, travel / room)
+            # Espera um instante, corre ate o fim e fica nele um instante, tudo dentro do tempo da barra.
+            room = seconds - MUSIC_ENTER - MUSIC_HOLD_START - MUSIC_HOLD_END
+            speed = max(MUSIC_SPEED, travel / room)
             offset = min(travel, max(0.0, age - MUSIC_ENTER - MUSIC_HOLD_START) * speed)
         ui.blit(img, (tx - round(offset), y + 11))
-        left = max(0.0, MUSIC_SECONDS - age)
+        left = max(0.0, seconds - age)
         ui.fill(T.LINE, (tx, y + h - 3, max(0, aw), 1))
-        ui.fill(T.GREEN, (tx, y + h - 3, max(0, round(aw * left / MUSIC_SECONDS)), 1))
+        ui.fill(T.GREEN, (tx, y + h - 3, max(0, round(aw * left / seconds)), 1))
         ui.set_clip(old)
     if sweep <= 0:
         return
@@ -5468,7 +5493,7 @@ def draw(fe, now):
         draw_notice(top, notice[0], notice[1], now)
         back.blit(top, (0, 0))
     playing = getattr(fe, "nowplaying", None)
-    if playing and now - playing[1] < MUSIC_SECONDS + MUSIC_LEAVE:
+    if playing and now - playing[1] < music_seconds(playing[0]) + MUSIC_LEAVE:
         # Acima do aviso de party, quando os dois aparecem juntos.
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         shift = 30 if notice and now < notice[2] else 0

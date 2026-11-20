@@ -242,7 +242,6 @@ def scenario(which, fe, info):
     if which == "sounds":
         go_to("ssf2t")()
         sounds_row = 5 + [k for k, _ in fe.view.FE_OPTIONS].index("sounds")
-        fe.sync_auto = 0.32                       # o que o frontend mede no gabinete com o Live screen sound
         return ([(0.6, key("tab"))] + [(1.3 + 0.09 * i, key("down")) for i in range(sounds_row)] +
                 [(2.8, key("b1")),                                                       # Frontend sounds: BROWSE
                  (3.5, key("down")), (4.0, key("down")),                                  # BACK
@@ -263,9 +262,7 @@ def scenario(which, fe, info):
                  (18.1, key("right")), (19.0, key("right")),                              # liga e desliga
                  (19.7, key("down")),                                                     # PREVIEW VOLUME
                  (20.2, key("left")), (20.4, key("left")), (20.6, key("left")),
-                 (21.3, key("down")),                                                     # PREVIEW SYNC: AUTO 320 MS
-                 (21.9, key("left")), (22.1, key("left")), (22.3, key("left")),           # a imagem espera menos
-                 (23.2, key("b2")), (23.8, key("b2"))]), 25.0                              # volta ao Tab e fecha
+                 (21.4, key("b2")), (22.0, key("b2"))]), 23.2                              # volta ao Tab e fecha
     if which == "music":
         go_to("1944")()
         return [(0.4, now_playing("BurtySounds - Retrowave")),

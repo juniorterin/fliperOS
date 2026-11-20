@@ -19,8 +19,8 @@ VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")
 VOLUME = 100
 # O atraso da imagem do video com som (segundos): o som passa pela fila do ALSA
 # (com o "Live screen sound", ~320 ms) e chega depois da imagem; a imagem espera
-# o mesmo tempo. O frontend poe aqui o que mediu (fesound.alsa_latency) ou o
-# que a pessoa ajustou (Frontend sounds > PREVIEW SYNC). 0: sem atraso.
+# o mesmo tempo. O frontend poe aqui o que mediu (fesound.alsa_latency), sozinho.
+# 0: sem atraso.
 SYNC = 0.0
 
 

@@ -54,8 +54,6 @@ DEFAULT_FILE = {"move": "browse.wav", "enter": "enter.wav", "back": "back.wav", 
                 "close": "close-game.wav", "alert": "alert.wav"}
 DEFAULT_VOLUME = {"move": 60, "enter": 80, "back": 80, "open": 90, "close": 90, "alert": 90}
 MUSIC_VOLUME, PREVIEW_VOLUME = 40, 100
-# O atraso maximo da imagem do video de preview (PREVIEW SYNC), em ms.
-SYNC_MAX = 1000
 # O que se escolhe como som (e como musica).
 EXTS = (".wav", ".ogg", ".mp3", ".flac")
 # A primeira musica da trilha: a de BurtySounds, que a pessoa baixou do
@@ -268,20 +266,6 @@ class Frontend:
     def set_preview_volume(self, value):
         self.data["preview"] = clamp(value, PREVIEW_VOLUME)
 
-    def preview_sync(self):
-        """O atraso da imagem do video de preview, em ms, que a pessoa pos
-        (PREVIEW SYNC); None: automatico (o frontend mede o do ALSA)."""
-        value = self.data.get("preview_sync")
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return None
-        return max(0, min(SYNC_MAX, int(value)))
-
-    def set_preview_sync(self, value):
-        """value em ms, ou None para voltar ao automatico."""
-        if value is None:
-            self.data.pop("preview_sync", None)
-        else:
-            self.data["preview_sync"] = max(0, min(SYNC_MAX, int(value)))
 
 
 # ── Decodificar e mudar o volume (gum e aplay) ────────────────────

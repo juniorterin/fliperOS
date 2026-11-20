@@ -440,10 +440,6 @@ class Frontend:
         self.fs = fesound
         self.snd = fesound.Frontend(cfg.get("sounds"))
         fevideo.VOLUME = self.snd.preview_volume()
-        # O som do preview chega depois da imagem (a fila do ALSA): o atraso medido
-        # (sync_auto, em segundos) ou o que a pessoa pos (PREVIEW SYNC) vai ao fevideo.SYNC.
-        self.sync_auto = 0.0
-        self.apply_sync()
         self.sfx = fesound.Bank(pygame, self.snd)
         self.music = fesound.Music(pygame, self.snd.music_source(), self.snd.music_volume())
         self.nowplaying = None     # (o nome da faixa, quando comecou) para a barra
@@ -1204,6 +1200,13 @@ class Frontend:
         # Escolhendo a tecla ou o botao de um atalho, cada aperto e a escolha.
         if self.overlay in ("exitkey", "exitpad") or (self.overlay == "controls" and self.ov.get("wait")):
             return
+        if self.overlay == "popup":
+            if self.ov.get("act"):
+                return              # o azulejo apertado ainda anima: a tecla nao vale
+            if a == "b1":
+                tiles = self.popup_tiles()
+                if tiles[self.ov["sel"] % len(tiles)]["kind"] == "play":
+                    return          # PLAY: toca so o "Open game" (launch), nao o Enter antes dele
         self.sfx.play(event)
 
     def sound_tick(self, now):
@@ -1239,12 +1242,8 @@ class Frontend:
         elif a in ("left", "right"):
             if key == "music_pause":
                 self.toggle_music_pause()
-            elif key == "preview_sync":
-                self.sound_sync(10 if a == "right" else -10)
             else:
                 self.sound_volume(key, 5 if a == "right" else -5)
-        elif a in ("b3", "b6") and key == "preview_sync":
-            self.sound_sync(50 if a == "b6" else -50)
         elif a == "b1":
             if key in self.fs.EVENTS or key == "music":
                 self.sndpick_open(key)
@@ -1261,32 +1260,17 @@ class Frontend:
             self.overlay, self.ov = "options", {"sel": OPT_SOUNDS}
         return None
 
-    def apply_sync(self):
-        """O atraso da imagem do video de preview: o que a pessoa pos ou o que
-        o ALSA mediu (fevideo.SYNC, em segundos)."""
-        import fevideo
-        manual = self.snd.preview_sync()
-        fevideo.SYNC = self.sync_auto if manual is None else manual / 1000.0
-
     def measure_sync(self):
         """Mede o atraso do som no ALSA (uns 0,65 s escrevendo silencio, numa
-        thread) e o aplica; sem medida, a imagem nao espera."""
+        thread) e a imagem do video de preview espera esse tempo
+        (fevideo.SYNC): o som chega depois dela, e assim os dois saem juntos.
+        Sem medida, a imagem nao espera."""
         def work():
+            import fevideo
             seconds = self.fs.alsa_latency()
             if seconds is not None:
-                self.sync_auto = seconds
-                self.apply_sync()
+                fevideo.SYNC = seconds
         threading.Thread(target=work, daemon=True).start()
-
-    def sound_sync(self, step):
-        """PREVIEW SYNC: mais ou menos step ms de espera da imagem; a partir do
-        automatico, vira o valor da pessoa (o botao 5 volta ao automatico)."""
-        current = self.snd.preview_sync()
-        if current is None:
-            current = round(self.sync_auto * 1000)
-        self.snd.set_preview_sync(current + step)
-        self.apply_sync()
-        self.remember()
 
     def toggle_music_pause(self):
         """PAUSE MUSIC: a trilha espera um video de preview com som (desligado
@@ -1334,9 +1318,6 @@ class Frontend:
             self.music.configure(snd.music_source(), snd.music_volume())
         elif key == "music_pause":
             snd.set_music_pause(False)
-        elif key == "preview_sync":
-            snd.set_preview_sync(None)
-            self.apply_sync()
         elif key == "preview":
             snd.set_preview_volume(fs.PREVIEW_VOLUME)
             self.preview_apply = time.monotonic() + PREVIEW_SETTLE

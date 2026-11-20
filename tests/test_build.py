@@ -26595,18 +26595,8 @@ class FesoundTests(unittest.TestCase):
         front.set_music_pause(False)
         self.assertFalse(front.music_pause())
         front.data['music'].pop('pause')
-        # PREVIEW SYNC: automatico (None) ate a pessoa por um valor, de 0 ao maximo, em ms.
-        self.assertIsNone(front.preview_sync())
-        front.set_preview_sync(320)
-        self.assertEqual(front.preview_sync(), 320)
-        front.set_preview_sync(5000)
-        self.assertEqual(front.preview_sync(), fs.SYNC_MAX)
-        front.set_preview_sync(-5)
-        self.assertEqual(front.preview_sync(), 0)
-        front.set_preview_sync(None)
-        self.assertIsNone(front.preview_sync())
-        self.assertNotIn('preview_sync', data)
-        self.assertIsNone(fs.Frontend({'preview_sync': True}).preview_sync())
+        # A sincronia do som do preview e so automatica: nenhuma opcao a mais (nada a ajustar).
+        self.assertFalse(hasattr(front, 'preview_sync'))
         self.assertEqual(fs.Frontend({'move': 'oops', 'music': ['x']}).volume('move'), fs.DEFAULT_VOLUME['move'])
         for scope in (menu, front):
             self.assertEqual([e for e in fs.EVENTS if scope.volume(e) is None], [])
@@ -26716,6 +26706,57 @@ class FesoundTests(unittest.TestCase):
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
         self.assertIn('((rc == 10 && ${#remote[@]} == 0)) && menu_sound open', tty1)
 
+    @unittest.skipUnless(importlib.util.find_spec('pygame'), 'sem o pygame')
+    def test_the_music_bar_keeps_a_margin_and_a_long_name_runs(self):
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+        import pygame
+        pygame.font.init()
+        import feview
+        theme = feview.T
+        short = 'Neon Drive'
+        long_ = 'Some Artist - A Really Long Track Title That Does Not Fit The Bar At All'
+        # Um nome que cabe fica o tempo de sempre; um que nao cabe fica o tempo de correr, ate um limite.
+        self.assertEqual(feview.music_seconds(short), feview.MUSIC_SECONDS)
+        seconds = feview.music_seconds(long_)
+        self.assertTrue(feview.MUSIC_SECONDS < seconds <= feview.MUSIC_MAX_SECONDS, seconds)
+        self.assertEqual(feview.music_seconds('X' * 400), feview.MUSIC_MAX_SECONDS)
+        # A barra nunca encosta na borda: a area segura da tela (o tubo corta a beirada) de cada lado,
+        # na entrada, parada, correndo e saindo.
+        for title in (short, long_):
+            end = feview.music_seconds(title)
+            for age in (0.1, 0.3, 0.6, 1.0, 2.5, end - 0.2, end + 0.1, end + 0.25):
+                surface = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+                feview.draw_music_bar(surface, title, age, feview.HH - 50)
+                box = surface.get_bounding_rect()
+                if box.width:
+                    self.assertGreaterEqual(box.left, theme.SAFE_X, (title, age))
+                    self.assertLessEqual(box.right, feview.WW - theme.SAFE_X, (title, age))
+
+        def title_row(title, age):
+            surface = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+            y = feview.HH - 50
+            feview.draw_music_bar(surface, title, age, y)
+            _, _, _, _, tx, aw = feview.music_metrics()
+            return pygame.image.tostring(surface.subsurface((tx, y + 11, aw, 9)), 'RGBA')
+
+        # O nome comprido corre (a linha do titulo muda entre dois instantes); o curto fica parado.
+        self.assertNotEqual(title_row(long_, 2.0), title_row(long_, 3.5))
+        self.assertEqual(title_row(short, 2.0), title_row(short, 3.5))
+
+        # Um nome menor que a barra a faz diminuir: ela termina logo depois dele; o comprido, na margem.
+        def right_edge(title):
+            surface = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+            feview.draw_music_bar(surface, title, 2.5, feview.HH - 50)
+            return surface.get_bounding_rect().right
+        self.assertLess(right_edge(short), right_edge(long_) - 60)
+        self.assertEqual(right_edge(long_), feview.music_right(long_))
+        self.assertGreater(right_edge('Hi'), feview.music_metrics()[4])      # nunca menor que o "NOW PLAYING"
+        self.assertLessEqual(feview.music_right('Hi'), feview.music_right(short))
+        # O nome cabe inteiro na barra que diminuiu (a largura do texto mais a folga das duas pontas).
+        _, _, _, _, tx, _ = feview.music_metrics()
+        self.assertGreaterEqual(feview.music_right(short) - tx, feview.W.width(short.upper()) + 6)
+
     def test_the_preview_picture_waits_for_the_late_sound(self):
         # O som do video de preview passa pela fila do ALSA (~320 ms com o Live screen sound) e chega
         # depois da imagem: o quadro mostrado e o mais novo que ja esperou o SYNC.
@@ -26740,10 +26781,10 @@ class FesoundTests(unittest.TestCase):
         fevideo.SYNC = 0.3
         video.sound = False
         self.assertEqual(video.current(), b'latest')
-        # O frontend mede o atraso do ALSA e poe o do ajuste da pessoa por cima.
+        # O frontend mede o atraso do ALSA e a imagem espera esse tempo, sozinho (sem opcao de ajuste).
         frontend = (self.GUI / 'fliperos-frontend').read_text()
-        self.assertIn('fevideo.SYNC = self.sync_auto if manual is None else manual / 1000.0', frontend)
-        self.assertIn('seconds = self.fs.alsa_latency()', frontend)
+        self.assertIn('seconds = self.fs.alsa_latency()\n            if seconds is not None:\n                fevideo.SYNC = seconds', frontend)
+        self.assertNotIn('PREVIEW SYNC', frontend + (self.GUI / 'feview.py').read_text())
         self.assertIn('return self.video.current()', (self.GUI / 'fevideo.py').read_text())
         self.assertIn('def alsa_latency(', (self.GUI / 'fesound.py').read_text())
         # Sem libasound ou sem o PCM, nao ha medida (e a imagem nao espera): nunca derruba.
@@ -26760,8 +26801,7 @@ class FesoundTests(unittest.TestCase):
         for label in fs.LABELS.values():
             self.assertIn('"%s"' % label.upper(), rows)
         # O espelho do Setup: o Frontend sounds mais a trilha, o volume dela e o do video.
-        self.assertEqual(re.findall(r'\("(\w+)", "', rows)[6:],
-                         ['music', 'music_volume', 'music_pause', 'preview', 'preview_sync'])
+        self.assertEqual(re.findall(r'\("(\w+)", "', rows)[6:], ['music', 'music_volume', 'music_pause', 'preview'])
         self.assertIn('("sounds", "FRONTEND SOUNDS")', view)
         self.assertRegex(frontend, r'OPT_CONTROLS, OPT_SOUNDS, OPT_POWER')
         self.assertIn('"sounds": self.snd.data', frontend)
@@ -26786,6 +26826,8 @@ class FesoundTests(unittest.TestCase):
         self.assertIn('self.sfx.play("close")', frontend)
         self.assertIn('ALERT_OVERLAYS = ("exit", "delete", "storage")', frontend)
         self.assertIn('self.sfx_for(a)\n                r = self.act(a)', frontend)
+        # O PLAY do menu do jogo toca so o "Open game" (o do launch), sem o Enter antes dele.
+        self.assertIn('if tiles[self.ov["sel"] % len(tiles)]["kind"] == "play":\n                    return', frontend)
         # O som de abrir toca fora do mixer, que fecha antes do jogo.
         self.assertLess(frontend.index('self.sfx.play_outside("open")'), frontend.index('pg.mixer.quit()'))
         # O nome da faixa que comeca aparece na barra; o volume do video de preview vai ao ffmpeg.
