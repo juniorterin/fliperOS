@@ -7,6 +7,8 @@ The PNGs are scaled down to 128 px. Programs with no icon of their own
 | File | Source |
 | --- | --- |
 | `groovymame.png` | GroovyMAME / MAME, `scripts/resources/windows/mame/mame.ico` (256 px frame) |
+| `hbmame.png` | HBMAME, `scripts/resources/windows/hbmame/hbmame.ico` (the only frame is 32 px, scaled to 128 px without smoothing) |
+| `odin.png` | Odin, `dist/odin.png` (Tovarichtch/Odin), scaled to 128 px |
 | `retroarch.svg` | RetroArch, `media/ico_src/icon.svg` |
 | `flycast.png` | Flycast, `shell/linux/flycast.png` |
 | `pcsx2.png` | PCSX2, `bin/resources/icons/AppIconLarge.png` |
