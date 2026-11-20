@@ -95,3 +95,4 @@
 92	4d4fd2f620f8caa988d3911e7763680a5e63a485	fe8ba45e24c7fe4eed736a207cdabf6a1c35c025f78c2410fec5a63566d3a79d	no	The three songs of the frontend now come with FliperOS
 93	bcf3a01764b8bfb5a6e64e7464b1c50a4226f3bc	885c97e6718265cde8b9fcde62613c5c44fa945801479ba7d66b8b2a0a8ded6c	no	HBMAME with Switchres that installs itself when you open its first game, a full screen with a wheel of logos, clones grouped in a dialog, and music in random order
 94	b48740101f4d4c3a8bf2621d74a725ac72fa774c	ea39d19cd94dd82c855b24df0116f6edf68f3313dff6a7520b35cb82b3fcbf25	no	Odin, the Sega Hikaru and Gaelco 3D emulator, installs itself when you open its first game, and the clones inside HBMAME zips show up in the lists
+95	c1934a63e0b9a359b54edf227caadd980f3b242b	8c03c138d538f8879fec4f3d90bda855d090c4354701ab27b33517dee299a111	no	The main page of the menu shows the number of the installed update next to the version
