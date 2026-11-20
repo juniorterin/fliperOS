@@ -2,6 +2,43 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.27
+
+**Sounds and music, folders and disks, and a Games page for custom games**: the Setup and the frontend share six sounds, each with its own file and volume, and the frontend plays music with a now-playing bar; Folders is now Folder shortcuts and External storage, which can format a disk and use a Batocera filesystem where it is; custom games have one Games page with editing, group logos and renaming; the Setup and the game menu of the frontend are animated; and Fightcade, Wine and PortProton games open where they failed. Cabinets already installed get all of this from updates 86 to 91.
+
+**System changes:**
+
+- **Sounds and music** (update 91): Setup > Audio Setup > Menu sounds has six sounds (the cursor moving, Enter, Back, a game opening, a game closing and an alert dialog), each with a file picked in a file picker (WAV, OGG, MP3 or FLAC, in `~/media/fliperos-sounds`) and a volume of its own. The frontend's Tab > FRONTEND SOUNDS is the same set (change a file or a volume in either place and the other follows) and adds the music: a file, or a subfolder of `music/` played at random, its volume, PAUSE MUSIC (off by default) and the volume of the game preview video. A NOW PLAYING bar slides in when a song starts: it is only as wide as the name needs, stays clear of the screen's edges, and runs a name that does not fit. FliperOS comes with retrowave sounds (soft sine waves with a warm echo); the songs are not in the image (the Pixabay licence does not allow handing them out on their own): they go in `~/media/fliperos-sounds/music`, and the credits are in the README. The sound of a game preview video now comes out together with its picture (the frontend measures the ALSA delay, about 0.3 s with Live screen sound, and the picture waits that long). Opening the frontend, the desktop or the shell plays only the game-open sound, and so does PLAY in a game's menu
+- **Folders and disks** (update 89): Setup > Games > Folders is two things. **Folder shortcuts** (formerly Link) sends one FliperOS folder to another disk, with the list saying what each folder keeps and where a shortcut points; **External storage** is for a whole disk: use a second disk for the ROMs, BIOS, art, saves and downloads (moved here from Setup > System > Storage), **Format this disk** (ext4 or exFAT, asking twice and refusing a disk the system or the FliperOS folders use), and **Batocera filesystem**, which uses a disk that keeps its games the way Batocera does (`batocera/roms/snes`…) where it is, with the core you choose for each console and nothing copied. The frontend asks once, with the Batocera logo, when such a disk is plugged in, and offers a plain new disk for the ROMs, BIOS, art and saves. The screens and the web panel say where a folder really is when it is on another disk. Scraping works with `~/media` on an exFAT, FAT or NTFS disk
+- **Animations in the Setup and the frontend** (updates 89 and 90): entering an item in the Setup zooms in from where you left it, and going back zooms out (0.3 s); the Setup and the frontend ask for vsync (no tearing). The menu of a game (PLAY, the star, the +) opens animated and each tile plays its effect before it acts (PLAY lights green and the picture switches off like a tube TV as the game opens); the button you pick moves also in link and party games (the globe spins, a wave runs along the cabinets, the seats fill), and the game page (the +) plays its parts one after the other. Sharp steps with no blurred scaling. Not seen on a CRT yet
+- **Custom games** (updates 86 to 88): one Games page in the web panel (send a zip into a group, a filter, cards with Open, edit, download and a menu), an installed game edited in one form (mode, information, executable and runner, command, controller map, art, Test on the cabinet), Download rebuilding the package with the settings and the `.key` that changed, Create package making many packages at once in a table; a group has a one-colour logo (uploaded or one of the 322 system logos, on the marquee, the ribbon and the list) and can be renamed with everything that goes with it; Create package > Test records 30 s at 60 frames per second with the game's sound; "Does the game already work with the joystick?" and a Close button in Test on the cabinet; Play and Close in the web panel see a custom game (Windows games included); custom Windows games of 32 bits open on cards that use the Mesa Vulkan driver (OpenGL until the driver is there)
+- **Fightcade and Wine** (update 86): Naomi and Atomiswave games open (Fightcade's Flycast gets the arcade BIOS from `~/bios/dc`); Wine games, Fightcade's FBNeo included, can change the screen mode (`libxrandr2:i386`); the web panel no longer breaks while Fightcade's lobby or an emulator without the FPS layer is open, and shows the frame rate of FBNeo, FBA and SNES9x
+- **Interlaced filter and on-screen menu** (updates 86 and 88): custom Windows games that open through PortProton get the flicker filter (through the compositor, at the level of Video Setup > Interlaced hacks); the on-screen menu no longer goes black when the filter level changes, and a page that takes a moment shows a small ring with a spinning comet instead of staying still
+- **MAME 2010** (update 87): the unlocked arcade memory also comes for the RetroArch arcade core (Tekken 3, Tekken Tag Tournament, Soul Edge, Soul Calibur, Dead or Alive++, Street Fighter EX and EX 2, Street Fighter Alpha 3, Rival Schools, Star Gladiator 2, Kikaioh and Ultimate Mortal Kombat 3)
+- **Button mapping** (update 86): GroovyMAME opens with the panel's six buttons however the mapping was saved
+- **USB Wi-Fi adapters** (update 88): adapters that start as a CD-ROM with their own drivers (the Realtek RTL8188GU and similar) switch to Wi-Fi by themselves (`usb-modeswitch`); not tried yet with a real adapter
+- **Web panel** (updates 86 and 88): Playing now, the marquee preview and the volume sit in one aligned grid, and the Games page's filters fade and scroll at the edge
+- **Frontend** (update 86): a video with no sound track plays anyway
+- FliperOS is written FliperOS everywhere, never in capitals, with the "OS" in another colour where the name is drawn (update 88)
+
+**Package changes:**
+
+- No FliperOS package changed: the `.deb`s are the ones of 0.26. The image gains `exfatprogs` (to format a disk as exFAT) and `usb-modeswitch` with `usb-modeswitch-data`, from Ubuntu
+
+**fliperos-setup changes:**
+
+- `gui/fesound.py` (new), `gui/sounds/` (new), `screens/sounds.sh` (new), `lib/audio.sh`, `gui/fliperos-gui`, `gui/serve.py`, `gui/fliperos-frontend`, `gui/feview.py`, `gui/fevideo.py` and `config/fliperos-tty1`: the sounds, the music and the preview sound in sync
+- `lib/batocera.sh` (new), `screens/storage.sh` (new), `lib/storage.sh`, `lib/folders.sh`, `screens/folders.sh`, `gui/festorage.py` (new) and `config/batocera-systems.list` (new): Folder shortcuts, External storage, Format and the Batocera filesystem
+- `gui/navfx.py` (new), `gui/feview.py`, `gui/theme.py`, `gui/tiny.py` and `gui/fliperos-frontend`: the zoom, vsync and the animated game menu and game page
+- `lib/customgames.sh`, `screens/setup-menu.sh` and `config/fliperos-web`: the Games page, group logos and renaming, Create package and Test on the cabinet
+- `lib/scraper.sh`: the Skyscraper and ES-DE link folders stay on the main disk when `~/media` is on a disk without links
+
+**Tool changes:**
+
+- `tools/make-default-sounds.py` (new): makes the default sounds, `fliperos-setup/gui/sounds/*.wav`
+- `tools/video/frontend_motion.py` (new) and `tools/video/gifs/setup_sounds.py` (new): record the animations of the frontend and the Setup for the site and the Telegram group
+- `tools/make-update.sh`: `--no-telegram` publishes an update without the post in the group
+
 ## 0.26
 
 **One disk for everything, Keisho for Model 2 and Model 3, and a smoother frontend**: a second or external data disk gets the whole FliperOS folder structure and can hold the ROMs, BIOS, art, saves and downloads; Keisho (the former SM2-Emu) runs Model 2 and Model 3 and Supermodel is gone; the frontend no longer stalls when switching systems; and the web panel shows all of the machine's hardware with a report to copy. Cabinets already installed get all of this from updates 78 to 85.

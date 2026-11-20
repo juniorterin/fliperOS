@@ -101,7 +101,7 @@ const ptBR: Messages = {
     telegram: 'Entrar no grupo do Telegram',
   },
   hero: {
-    eyebrow: 'fliperos 0.26 · em desenvolvimento',
+    eyebrow: 'fliperos 0.27 · em desenvolvimento',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Feito para CRT.',
     description:
@@ -324,6 +324,7 @@ const ptBR: Messages = {
     current: 'Atual',
     all: 'Todas as versões no GitHub',
     notes: {
+      '0.27': ['Sons no menu e no frontend, com um arquivo e um volume para cada um, e música com uma barra do que está tocando', 'Atalhos de pasta, discos externos e sistemas de arquivos do Batocera', 'Uma página de Jogos com edição dos jogos custom, e menus animados no Setup e no frontend'],
       '0.26': ['Um disco para tudo: um disco secundário ou externo guarda as ROMs, os saves e a arte', 'O Keisho roda o Model 2 e o Model 3', 'Um frontend mais suave, e todo o hardware no painel web'],
       '0.25': ['Jogos custom: jogos de Windows e PC num arquivo só', 'Instalar, criar e testar pacotes pelo painel web', 'Tela nova do volante com pedais, botões e force feedback'],
       '0.24': ['Controles Bluetooth, pareados pelo Setup', 'Painel de arcade ou joypad no Button mapping', 'Um guia com os botões de dez videogames'],
@@ -389,7 +390,7 @@ const ptBR: Messages = {
       { id: 'pc', title: 'Um PC 64 bits comum', text: '2 núcleos e 4 GB de RAM rodam até PlayStation 1; 4 núcleos e 16 GB rodam tudo o que vem na imagem.' },
       { id: 'network', title: 'Aberto pela rede', text: 'Copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot.' },
       { id: 'updates', title: 'Updates no boot', text: 'Os updates chegam pela rede e mostram o que mudam antes de perguntar. Não precisa de ISO nova.' },
-      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.26. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
+      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.27. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
     ],
     cta: 'Requisitos completos',
   },
