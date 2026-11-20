@@ -9,7 +9,7 @@
 // som depois de um clique). Sair da pagina para a transmissao: o ffmpeg do
 // gabinete so roda enquanto alguem assiste.
 
-let live = null, liveStats = null, liveStatus = null, liveObsPath = "", liveError = "", liveNoVaapi = false;
+let live = null, liveStats = null, liveStatus = null, liveObsPath = "", liveError = "", liveNoVaapi = false, liveBooting = false;
 
 // O endereco da tela para o OBS, montado pelas escolhas do cartao: quadros,
 // formato (4:3 como no tubo ou esticado), som; o tamanho e o que digitar no
@@ -59,11 +59,35 @@ function liveIdle() {
   const ready = s.installed && s.active;
   $("live-idle").hidden = !!live;
   $("live-play").hidden = !ready;
+  // Instalada mas desligada: o botao para ligar o servico fica no proprio palco.
+  $("live-power").hidden = !(s.installed && !s.active) || liveBooting;
   // Depois de uma tentativa que falhou, o porque fica no palco ate a proxima.
-  $("live-idle-text").textContent = !s.installed ? t("live_not_installed") : !s.active ? t("live_off_note")
+  $("live-idle-text").textContent = liveBooting ? t("live_booting") : !s.installed ? t("live_not_installed") : !s.active ? t("live_off_note")
     : liveError || t("live_ready").replace("%e", s.encoder === "vaapi" ? t("live_hw") : "x264");
   $("live-idle").classList.toggle("bad", !!liveError && !live);
   $("live-start").hidden = !!live || !ready;
+}
+
+// Liga ou desliga o servico (Setup > System > Services > Live screen). Ligado,
+// espera o go2rtc subir (ate ~15 s) antes de mostrar o botao de assistir.
+async function liveService(on) {
+  if (!on) liveStop();
+  liveBooting = on;
+  liveIdle();
+  const r = await api("/api/settings", { method: "POST",
+    body: JSON.stringify({ key: "service.stream", value: on ? "boot" : "off" }) });
+  if (!r.ok) {
+    liveBooting = false;
+    toast((await r.json().catch(() => ({}))).error || r.statusText, "bad");
+    return loadLive().catch(() => {});
+  }
+  for (let i = 0; i < (on ? 8 : 1); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try { await loadLive(); } catch (e) { /* tenta de novo */ }
+    if (!on || (liveStatus && liveStatus.active)) break;
+  }
+  liveBooting = false;
+  liveIdle();
 }
 
 async function loadLive() {
@@ -93,12 +117,7 @@ async function loadLive() {
     // Ligar ou desligar o servico (Setup > System > Services > Live screen).
     const svc = el("button", { type: "button", class: s.active ? "btn ghost small" : "btn small" }, icon("g-power"),
       t(s.active ? "live_turn_off" : "live_turn_on"));
-    svc.addEventListener("click", async () => {
-      if (s.active) liveStop();
-      await api("/api/settings", { method: "POST",
-        body: JSON.stringify({ key: "service.stream", value: s.active ? "off" : "boot" }) });
-      setTimeout(() => loadLive().catch(() => {}), 2500);
-    });
+    svc.addEventListener("click", () => liveService(!s.active));
     // O som: a copia no loopback do ALSA (Settings > Live screen sound).
     const sound = el("button", { type: "button", class: "btn ghost small" }, icon(s.audio ? "g-mute" : "g-volume"),
       t(s.audio ? "live_sound_off" : "live_sound_on"));
@@ -323,6 +342,7 @@ function liveStop(keepNote) {
 
 $("live-start").addEventListener("click", () => liveStart());
 $("live-play").addEventListener("click", () => liveStart());
+$("live-power").addEventListener("click", () => liveService(true));
 $("live-stop").addEventListener("click", () => liveStop());
 $("live-fps").addEventListener("change", () => { if (live) liveStart(); });
 obsSaved();
