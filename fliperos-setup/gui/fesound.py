@@ -60,9 +60,6 @@ DEFAULT_VOLUME = {"move": 60, "enter": 80, "back": 80, "open": 90, "close": 90, 
 MUSIC_VOLUME, PREVIEW_VOLUME = 40, 100
 # O que se escolhe como som (e como musica).
 EXTS = (".wav", ".ogg", ".mp3", ".flac")
-# A primeira musica da trilha: a de BurtySounds, que a pessoa baixou do
-# Pixabay (Pixabay Content License) e pos em music/. Nao vem no repositorio.
-DEFAULT_TRACK = "BurtySounds - Retrowave.mp3"
 # Um som de evento maior que isso (ou que nao e WAV) e decodificado pelo ffmpeg
 # antes, so os primeiros EVENT_SECONDS: o mixer guarda o som todo na memoria.
 EVENT_MAX_BYTES, EVENT_SECONDS = 2 * 1024 * 1024, 10
@@ -399,6 +396,14 @@ class Frontend:
     def set_music_volume(self, value):
         self.writable("music")["volume"] = clamp(value, MUSIC_VOLUME)
 
+    def music_last(self):
+        """O nome da ultima faixa que tocou: a proxima abertura do frontend nao comeca por ela."""
+        value = self.entry("music").get("last", "")
+        return value if isinstance(value, str) else ""
+
+    def set_music_last(self, name):
+        self.writable("music")["last"] = name
+
     def set_preview_volume(self, value):
         self.data["preview"] = clamp(value, PREVIEW_VOLUME)
 
@@ -571,23 +576,21 @@ def music_files(folder):
 
 def music_plan(source):
     """O que tocar: (as faixas, a primeira ou None). source: "" = a pasta
-    music, com a BurtySounds primeiro; "off" nada; um arquivo, so ele; uma
-    pasta, as faixas dela sorteadas."""
+    music; "off" nada; um arquivo, so ele; uma pasta, as faixas dela. Sem
+    arquivo escolhido todas sao sorteadas, a primeira tambem (nao ha mais uma
+    que abre sempre: a trilha comeca por uma ao acaso, que nao e a ultima que
+    tocou na vez anterior, Music.last)."""
     if source == "off":
         return [], None
     if source and os.path.isfile(source):
         return [source], source
     folder = source if source and os.path.isdir(source) else music_dir()
-    files = music_files(folder)
-    first = None
-    if not source or folder == music_dir():
-        first = next((f for f in files if os.path.basename(f) == DEFAULT_TRACK), None)
-    return files, first
+    return music_files(folder), None
 
 
 def pick_next(files, last, first=None, rng=random):
-    """A proxima faixa: a primeira pedida (so na abertura) e, depois, uma
-    sorteada que nao e a que acabou de tocar."""
+    """A proxima faixa: a primeira pedida (um arquivo so, na abertura) e,
+    depois, uma sorteada que nao e a que acabou de tocar."""
     if first:
         return first
     if not files:
@@ -764,19 +767,22 @@ class Music:
     pasta sorteada ou a pasta padrao), passa para a proxima sozinha e conta o
     nome de cada uma que comeca (tick)."""
 
-    def __init__(self, pygame, source="", volume=MUSIC_VOLUME):
+    def __init__(self, pygame, source="", volume=MUSIC_VOLUME, last=None):
         self.pg = pygame
         self.source, self.volume = source, volume
         self.files, self.first = [], None
         self.current, self.last = None, None
+        self.last_name = last    # o nome da ultima que tocou (da vez anterior): a abertura sorteia outra
         self.held = False        # parada de proposito (um video com som, um jogo)
         self.failed = set()
         self.usable = True
-        self.rng = random.Random()
+        self.rng = random.Random()    # semeado pelo sistema: cada abertura, uma ordem
         self.plan()
 
     def plan(self):
         self.files, self.first = music_plan(self.source)
+        if self.last_name and self.last is None:
+            self.last = next((f for f in self.files if os.path.basename(f) == self.last_name), None)
 
     def configure(self, source, volume):
         """Fonte ou volume novos: o volume vale na hora; a fonte, desde o

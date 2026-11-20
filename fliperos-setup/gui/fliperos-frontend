@@ -442,7 +442,8 @@ class Frontend:
         self.snd = fesound.Frontend(cfg.get("sounds"))
         fevideo.VOLUME = self.snd.preview_volume()
         self.sfx = fesound.Bank(pygame, self.snd)
-        self.music = fesound.Music(pygame, self.snd.music_source(), self.snd.music_volume())
+        # A trilha comeca por uma faixa ao acaso, que nao e a ultima que tocou na vez anterior.
+        self.music = fesound.Music(pygame, self.snd.music_source(), self.snd.music_volume(), self.snd.music_last())
         self.nowplaying = None     # (o nome da faixa, quando comecou) para a barra
         self.preview_apply = None  # quando reabrir o video com o volume novo
         self.last_overlay = None
@@ -1251,6 +1252,10 @@ class Frontend:
             # (minutos atras), e o primeiro quadro depois do jogo e lento (as
             # imagens sao lidas de novo): a barra nasceria expirada ou so piscaria.
             self.nowplaying = (title, None)
+            # A faixa que comecou fica gravada: a proxima abertura do frontend sorteia outra.
+            if self.music.current and not self.shot:
+                self.snd.set_music_last(os.path.basename(self.music.current))
+                self.remember()
         if self.overlay != self.last_overlay:
             if self.overlay in ALERT_OVERLAYS:
                 self.sfx.play("alert")

@@ -27058,7 +27058,6 @@ class FesoundTests(unittest.TestCase):
         songs = sorted(p.name for p in (self.GUI / 'sounds/music').glob('*.mp3'))
         self.assertEqual(songs, ['BurtySounds - Retrowave.mp3', 'Kaazoom - Looking For A Way Back.mp3',
                                  'Musinova - Information Flow.mp3'])
-        self.assertIn(fs.DEFAULT_TRACK, songs)
         for name in songs:
             head = (self.GUI / 'sounds/music' / name).read_bytes()[:3]
             self.assertTrue(head == b'ID3' or (head[0] == 0xFF and head[1] & 0xE0 == 0xE0), name)
@@ -27187,21 +27186,22 @@ class FesoundTests(unittest.TestCase):
         fs = self.fs
         music = self.dir / 'music'
         (music / 'Mix').mkdir(parents=True)
-        for name in ('zzz.mp3', 'aaa.OGG', fs.DEFAULT_TRACK, 'notes.txt', '.hidden.mp3'):
+        retrowave = 'BurtySounds - Retrowave.mp3'
+        for name in ('zzz.mp3', 'aaa.OGG', retrowave, 'notes.txt', '.hidden.mp3'):
             (music / name).write_bytes(b'x')
         (music / 'Mix' / 'one.mp3').write_bytes(b'x')
         (music / 'Mix' / 'two.flac').write_bytes(b'x')
-        # O padrao: a pasta music, com a da BurtySounds primeiro; as outras sorteadas.
+        # O padrao: a pasta music, todas sorteadas (nenhuma abre sempre: a primeira tambem e ao acaso).
         files, first = fs.music_plan('')
-        self.assertEqual(Path(first).name, fs.DEFAULT_TRACK)
-        self.assertEqual(sorted(Path(f).name for f in files), sorted(['aaa.OGG', fs.DEFAULT_TRACK, 'zzz.mp3']))
+        self.assertIsNone(first)
+        self.assertEqual(sorted(Path(f).name for f in files), sorted(['aaa.OGG', retrowave, 'zzz.mp3']))
         # Uma subpasta: so as faixas dela (sem ordem especial); um arquivo: so ele; off: nada.
         files, first = fs.music_plan(str(music / 'Mix'))
         self.assertEqual((sorted(Path(f).name for f in files), first), (['one.mp3', 'two.flac'], None))
         self.assertEqual(fs.music_plan(str(music / 'zzz.mp3')), ([str(music / 'zzz.mp3')], str(music / 'zzz.mp3')))
         self.assertEqual(fs.music_plan('off'), ([], None))
         # Uma pasta que sumiu volta ao padrao.
-        self.assertEqual(fs.music_plan(str(music / 'gone'))[1], str(music / fs.DEFAULT_TRACK))
+        self.assertEqual(fs.music_plan(str(music / 'gone')), fs.music_plan(''))
         # A proxima faixa sorteada nunca e a que acabou de tocar.
         pool = ['a', 'b', 'c']
         import random
@@ -27211,6 +27211,44 @@ class FesoundTests(unittest.TestCase):
             self.assertNotEqual(fs.pick_next(pool, 'a', None, rng), 'a')
         self.assertEqual(fs.pick_next(['only'], 'only'), 'only')
         self.assertIsNone(fs.pick_next([], None))
+
+    def test_the_soundtrack_starts_at_random_and_never_with_the_last_song(self):
+        # Entrar no frontend tocava sempre a mesma musica (a BurtySounds abria a trilha). Agora a primeira e ao acaso,
+        # e a que tocou por ultimo (gravada no frontend.json) nao abre a vez seguinte.
+        fs = self.fs
+        music = self.dir / 'music'
+        music.mkdir(parents=True, exist_ok=True)
+        names = ['BurtySounds - Retrowave.mp3', 'Musinova - Information Flow.mp3', 'Kaazoom - Looking For A Way Back.mp3']
+        for name in names:
+            (music / name).write_bytes(b'x')
+
+        def opening(last=None):
+            player = fs.Music(None, '', 40, last)
+            pool = [f for f in player.files if f not in player.failed]
+            self.assertIsNone(player.first)
+            return Path(fs.pick_next(pool, player.last, None, player.rng)).name
+        # Sem a ultima, todas abrem a trilha alguma vez; nenhuma abre sempre.
+        self.assertEqual({opening() for _ in range(200)}, set(names))
+        # Com a ultima (a Retrowave), ela nunca abre, e as outras duas se revezam.
+        seen = {opening(names[0]) for _ in range(200)}
+        self.assertEqual(seen, set(names[1:]))
+        # Um nome que sumiu da pasta (ou lixo no arquivo) nao atrapalha: sorteia entre todas.
+        self.assertEqual({opening('gone.mp3') for _ in range(200)}, set(names))
+        # So uma faixa: ela abre mesmo sendo a ultima.
+        (music / names[1]).unlink()
+        (music / names[2]).unlink()
+        self.assertEqual({opening(names[0]) for _ in range(5)}, {names[0]})
+        # A ultima fica no "sounds" do frontend.json (um nome de arquivo) e o frontend a grava a cada faixa nova.
+        data = {}
+        front = fs.Frontend(data, shared=fs.Shared())
+        self.assertEqual(front.music_last(), '')
+        front.set_music_last(names[0])
+        self.assertEqual(data['music']['last'], names[0])
+        self.assertEqual(fs.Frontend(data, shared=fs.Shared()).music_last(), names[0])
+        self.assertEqual(fs.Frontend({'music': {'last': 5}}, shared=fs.Shared()).music_last(), '')
+        src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('self.snd.music_source(), self.snd.music_volume(), self.snd.music_last())', src)
+        self.assertIn('self.snd.set_music_last(os.path.basename(self.music.current))', src)
 
     def test_opening_the_frontend_the_desktop_or_the_shell_plays_only_open_game(self):
         # O Enter do Setup nao toca por cima do "Open game" (fliperos-tty1) nos tres itens que saem do menu.
