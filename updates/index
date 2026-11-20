@@ -96,3 +96,4 @@
 93	bcf3a01764b8bfb5a6e64e7464b1c50a4226f3bc	885c97e6718265cde8b9fcde62613c5c44fa945801479ba7d66b8b2a0a8ded6c	no	HBMAME with Switchres that installs itself when you open its first game, a full screen with a wheel of logos, clones grouped in a dialog, and music in random order
 94	b48740101f4d4c3a8bf2621d74a725ac72fa774c	ea39d19cd94dd82c855b24df0116f6edf68f3313dff6a7520b35cb82b3fcbf25	no	Odin, the Sega Hikaru and Gaelco 3D emulator, installs itself when you open its first game, and the clones inside HBMAME zips show up in the lists
 95	c1934a63e0b9a359b54edf227caadd980f3b242b	8c03c138d538f8879fec4f3d90bda855d090c4354701ab27b33517dee299a111	no	The main page of the menu shows the number of the installed update next to the version
+96	7cd838af08149159ff179f414b0344729f3622f6	741fe89fecf258780c537a7e0146d2c58b7a449c4eab710686dfd19c08c80453	no	The Live screen page of the web panel has a Turn on button right on the screen when the live screen is installed but off
