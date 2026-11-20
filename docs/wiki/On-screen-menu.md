@@ -20,7 +20,8 @@ Under the title, on every page, a small line shows the resolution, the two frequ
 | **Configuration** | The picture settings below, and the profile they are saved to |
 | **Emulator menu** | Closes this menu and opens the emulator's own: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the Keisho overlay. Only in an emulator that has one |
 | **Controller configuration** | In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard ([Custom games](Custom-games.md#the-controller-as-a-keyboard)). A custom game with no key map yet opens the menu by itself on this page |
-| **Close** | Closes this menu, putting back what wasn't saved |
+| **Media capture** | In a game: records the game's art for the frontend, as the scraper would. **Thumbnail** takes a picture of the screen (`~/media/snap/<folder>/<game>.png`, always 4:3). **Preview video (30 s)** records 30 seconds at 60 fps with the game's sound (`~/media/preview/<folder>/<game>.mp4`; the sound needs the live screen's sound on, otherwise the file has a silent track). The menu closes first so it is not in the picture, a blue bar says "Recording 30 s", then "saved" (or why it failed), and the menu shortcut stays off while it records. The game is found in the frontend's lists the same way the web panel finds it; a program that is in no games folder has no capture |
+| **Close OSD menu** | Closes this menu, putting back what wasn't saved |
 | **Quit** | Closes the game, like the frontend's Exit game shortcut |
 
 Over a frontend there is no Emulator menu nor Quit.

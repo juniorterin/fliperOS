@@ -1562,6 +1562,34 @@ class MediaIndex:
                        if any(n and n in self.names(kind, key) for n in names))
 
 
+def match_game(game, rows, last=None):
+    """(a pasta, a linha do jogo) de um processo aberto (game: o program, o
+    file e o command do running()), entre as pastas ROWS (systems()): a pasta
+    de jogos que aparece no comando (o caminho da ROM ou o -rompath; a mais
+    longa ganha), senao a do programa com esse set; o ultimo Jogar do painel
+    (last: chave, _, hora) desempata. (None, None) se nao achar."""
+    file = game.get("file") or ""
+    command = game["command"] + " "
+    hits = [s for s in rows if s["folder"]
+            and re.search(re.escape(s["folder"].rstrip("/")) + r"(/|;|\s)", command)]
+    if not hits and file:
+        hits = [s for s in rows if game["program"] in (s["exe"] + " " + s["args"])]
+    if last and time.time() - last[2] < 300:
+        hits.sort(key=lambda s: s["key"] != last[0])
+    else:
+        hits.sort(key=lambda s: -len(s["folder"]))
+    for system in hits:
+        stem = file
+        for ext in system["extensions"]:
+            if stem.lower().endswith(ext):
+                stem = stem[:-len(ext)]
+                break
+        entry = game_entry(system, stem) or game_entry(system, file)
+        if entry:
+            return system, entry
+    return None, None
+
+
 def system_icon(system):
     """O icone do programa da pasta (gui/icons/NOME.png), a mesma regra do
     system_icon() do frontend (gui/feview.py); None: so o nome."""
@@ -2064,6 +2092,20 @@ def live_sound():
     ALSA aberto: so assim o som do jogo tem de onde ser gravado."""
     return read_conf().get("stream_audio") == "on" and bool(
         re.search(r"\[FliperOSLoop\s*\]", read(os.path.join(PROC, "asound/cards"))))
+
+
+def capture_snap(out):
+    """A foto do que o gabinete mostra agora em OUT (.png, em 4:3 exatos).
+    None se deu certo; senao o motivo."""
+    frame = grab_frame()
+    if not frame:
+        return "nothing to capture: the text console, or a program without OpenGL"
+    width, height, rows, _ = frame
+    out_w, out_h = aspect_size(width, height)
+    rows = fit_rows(rows, width, height, out_w, out_h)
+    with open(out, "wb") as f:
+        f.write(png(out_w, out_h, rows))
+    return None
 
 
 def record_video(out, seconds=CAPTURE_SECONDS, grab=None, clock=time.monotonic, fps=CAPTURE_FPS):
@@ -4014,33 +4056,15 @@ class Panel:
             return self.found[key]
         rows = self.systems.get()
         rows = rows if isinstance(rows, list) else []
-        file = game.get("file") or ""
-        command = game["command"] + " "
-        hits = [s for s in rows if s["folder"]
-                and re.search(re.escape(s["folder"].rstrip("/")) + r"(/|;|\s)", command)]
-        if not hits and file:
-            hits = [s for s in rows if game["program"] in (s["exe"] + " " + s["args"])]
-        last = self.last_launch
-        if last and time.time() - last[2] < 300:
-            hits.sort(key=lambda s: s["key"] != last[0])
-        else:
-            hits.sort(key=lambda s: -len(s["folder"]))
         out = {}
-        for system in hits:
-            stem = file
-            for ext in system["extensions"]:
-                if stem.lower().endswith(ext):
-                    stem = stem[:-len(ext)]
-                    break
-            entry = game_entry(system, stem) or game_entry(system, file)
-            if entry:
-                out = {"system": system["key"], "system_name": system["name"], "icon": system_icon(system),
-                       "name": entry["Name"], "title": entry.get("Title") or entry["Name"],
-                       "art": self.media.art(system["key"], entry)}
-                out.update({k.lower(): entry[k] for k in ("Year", "Manufacturer", "Category", "Players", "Buttons",
-                                                         "Control", "CloneOf", "PlayedCount", "PlayedTime")
-                            if entry.get(k)})
-                break
+        system, entry = match_game(game, rows, self.last_launch)
+        if entry:
+            out = {"system": system["key"], "system_name": system["name"], "icon": system_icon(system),
+                   "name": entry["Name"], "title": entry.get("Title") or entry["Name"],
+                   "art": self.media.art(system["key"], entry)}
+            out.update({k.lower(): entry[k] for k in ("Year", "Manufacturer", "Category", "Players", "Buttons",
+                                                     "Control", "CloneOf", "PlayedCount", "PlayedTime")
+                        if entry.get(k)})
         if len(self.found) > 50:
             self.found.clear()
         if rows:
@@ -5683,15 +5707,9 @@ class Handler(BaseHTTPRequestHandler):
         path = os.path.join(folder, token)
         if kind == "snap":
             with self.panel.launch_lock:
-                frame = grab_frame()
-            if not frame:
-                return self.send(503, {"error": "nothing to capture: the text console, or a program without OpenGL"})
-            width, height, rows, _ = frame
-            out_w, out_h = aspect_size(width, height)
-            rows = fit_rows(rows, width, height, out_w, out_h)
-            width, height = out_w, out_h
-            with open(path, "wb") as f:
-                f.write(png(width, height, rows))
+                why = capture_snap(path)
+            if why:
+                return self.send(503, {"error": why})
         else:
             seconds = CAPTURE_SECONDS
             if not self.panel.capture_lock.acquire(blocking=False):

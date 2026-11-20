@@ -18,7 +18,7 @@ ou num programa que elas nao alcancam, nada abre e os controles ficam com ele.
 
 A pagina principal tem a Configuration (o perfil, o filtro do entrelacado, as
 scanlines, a geometria, as cores, a GunCon 2 e o Save) e os botoes Emulator
-menu, Close e Quit. O volume nao entra no menu nem nos perfis: ele e das
+menu, Media capture, Close OSD menu e Quit. O volume nao entra no menu nem nos perfis: ele e das
 teclas de volume (a barra abaixo) e do painel web. Embaixo do titulo, em
 todas as paginas e enquanto o menu esta aberto: a resolucao, as frequencias e
 o FPS do jogo, relidos a cada LIVE_POLL segundos (um jogo que troca de
@@ -60,6 +60,16 @@ Abrir uma pagina que le o Setup ou faz contas (Colour, Scanlines, Geometry, GunC
 2) e os botoes Save e Back to the defaults demoram um pouco: o menu os faz a
 parte e, passados SPIN_DELAY segundos, desenha um aro pequeno girando no canto do
 titulo (Painter.spinner) ate acabar. As teclas esperam a pagina abrir.
+
+Num jogo, o Media capture (icone de camera) grava a midia dele para o frontend,
+a mesma que o scraper poria: o Thumbnail e a foto da tela em
+~/media/snap/PASTA/JOGO.png, e o Preview video (30 s) o video de 30 s, a 60
+quadros e com o som, em ~/media/preview/PASTA/JOGO.mp4. A pasta e o jogo saem do
+comando do processo, pela mesma busca do painel web (fliperos-web match_game);
+o que o painel ja sabe fazer (grab_frame, record_video) e dele. A OSD fecha
+primeiro, para o menu nao sair na imagem, e o servico captura depois; um aviso
+(a barra azul, kind "capture") diz que comecou a gravar, que acabou ou que falhou,
+e o atalho da OSD fica parado enquanto grava.
 """
 import fcntl
 import glob
@@ -70,6 +80,7 @@ import json
 import math
 import os
 import pwd
+import queue
 import re
 import select
 import signal
@@ -146,6 +157,34 @@ WARNING_ICON = """
 ................
 """
 MINI_WARNING = ("...OO...", "...OO...", "..OFFO..", "..OFFO..", ".OOFFOO.", ".OOOOOO.", "OOOFFOOO", "OOOOOOOO")
+# O Media capture (Thumbnail e Preview video): o servico grava no ~/media do
+# jogo, e a barra azul avisa (a mesma dos avisos, com a camera no circulo, por
+# CAPTURE_NOTICE_SECONDS). MEDIA_SECONDS e o video; CAPTURE_SETTLE o tempo que a
+# camada leva para tirar o menu do quadro antes de gravar.
+WEB = os.environ.get("FLIPEROS_WEB_MODULE", BIN + "/fliperos-web")
+MEDIA_SECONDS = 30
+CAPTURE_SETTLE = 0.6
+CAPTURE_NOTICE_SECONDS = 3.0
+CAPTURE_HEADS = ("MEDIA CAPTURE", "CAPTURE")
+CAMERA_ICON = """
+................
+................
+....CCCC........
+...CCCCCC....Y..
+.CCCCCCCCCCCCC..
+.CCCCCCCCCCCCC..
+.CCCCFFFFCCCCC..
+.CCCFDDDDFCCCC..
+.CCFDDFFDDFCCC..
+.CCFDDFFDDFCCC..
+.CCCFDDDDFCCCC..
+.CCCCFFFFCCCCC..
+.CCCCCCCCCCCCC..
+.CCCCCCCCCCCCC..
+................
+................
+"""
+MINI_CAMERA = ("..CCC...", ".CCCCCCC", "CCCCCCCC", "CCFFFFCC", "CFDDDDFC", "CFDDDDFC", "CCFFFFCC", "CCCCCCCC")
 # Quanto tempo o menu espera soltarem o atalho antes de tomar os controles.
 RELEASE_WAIT = 3.0
 FPS_FRESH = 3.0
@@ -271,6 +310,82 @@ def load_buttons():
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
     return module
+
+
+def load_web():
+    """O config/fliperos-web como modulo: a busca do jogo aberto na lista dos
+    sistemas, a foto e o video da tela (o frontend faz o mesmo, gui/fedata.py)."""
+    loader = importlib.machinery.SourceFileLoader("fliperos_web", WEB)
+    spec = importlib.util.spec_from_loader("fliperos_web", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def capture_target(screen):
+    """O jogo aberto como a midia dele e guardada: {"system": a chave da pasta
+    (mame, retroarch/fbneo, custom/GRUPO...), "name": o set ou o arquivo sem a
+    extensao, "title"}, pela busca do painel web; None se o jogo nao esta em
+    nenhuma lista (um programa fora das pastas de jogos)."""
+    try:
+        web = load_web()
+        with open("/proc/%d/cmdline" % screen["pid"], "rb") as f:
+            args = [a.decode("utf-8", "replace") for a in f.read().split(b"\0") if a]
+        if not args:
+            return None
+        name = web.program_name(args)
+        if name.startswith("python") and len(args) > 1:
+            name = os.path.basename(args[1])
+        game = {"program": name, "file": web.game_file(name, args), "command": " ".join(args)[:400]}
+        system, entry = web.match_game(game, web.systems())
+    except (OSError, KeyError, TypeError, ValueError, subprocess.SubprocessError, AttributeError) as exc:
+        print("fliperos-osd: media capture: %s" % exc, file=sys.stderr, flush=True)
+        return None
+    if not entry:
+        return None
+    return {"system": system["key"], "name": entry["Name"], "title": entry.get("Title") or entry["Name"]}
+
+
+def make_dirs(path, uid, gid):
+    """O caminho todo, cada pasta nova da pessoa (o servico roda como root, e o
+    ~/media e dela)."""
+    missing = []
+    while path and not os.path.isdir(path):
+        missing.append(path)
+        path = os.path.dirname(path)
+    for folder in reversed(missing):
+        os.mkdir(folder)
+        os.chown(folder, uid, gid)
+
+
+def save_media(web, screen, target, kind):
+    """Tira a foto (kind "snap") ou grava o video de MEDIA_SECONDS s (kind
+    "video") do jogo e poe em ~/media/snap|preview/PASTA/JOGO.png|mp4, da
+    pessoa. None se deu certo; senao o motivo."""
+    ext = ".png" if kind == "snap" else ".mp4"
+    folder = web.media_dir("snap" if kind == "snap" else "preview", target["system"])
+    path = os.path.join(folder, target["name"] + ext)
+    # O arquivo parcial fica escondido (a lista de midia ignora o que comeca com ponto).
+    part = os.path.join(folder, "." + target["name"] + ".part" + ext)
+    try:
+        user = pwd.getpwuid(screen["uid"])
+        make_dirs(folder, user.pw_uid, user.pw_gid)
+        if kind == "snap":
+            why = web.capture_snap(part)
+        else:
+            why = web.record_video(part, MEDIA_SECONDS)[1]
+        if why:
+            return why
+        os.chown(part, user.pw_uid, user.pw_gid)
+        os.replace(part, path)
+    except (OSError, KeyError) as exc:
+        return str(exc)
+    finally:
+        try:
+            os.unlink(part)
+        except OSError:
+            pass
+    return None
 
 
 def load_padkeys():
@@ -927,6 +1042,9 @@ class Menu:
         # custom sem o .key); Back nele fecha o menu.
         self.direct = False
         self.capture_request = None
+        # O jogo do Media capture ({"system", "name", "title"}) e o que fazer
+        # depois de fechar: "snap" ou "video" (o servico grava).
+        self.capture_target = None
         self.after = None
         self.stack = []
         self.geometry = None
@@ -966,7 +1084,8 @@ class Menu:
             # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
             return "GEOMETRY " + self.geometry.key
         return {"main": "FliperOS", "config": "CONFIGURATION", "colour": "COLOUR", "geometry": "GEOMETRY",
-                "guncon": "GUNCON 2", "scanlines": "SCANLINES", "keys": "CONTROLLER"}.get(name, "")
+                "guncon": "GUNCON 2", "scanlines": "SCANLINES", "keys": "CONTROLLER",
+                "capture": "MEDIA CAPTURE"}.get(name, "")
 
     def rows_of(self, name):
         return getattr(self, "rows_" + name)()
@@ -1047,7 +1166,9 @@ class Menu:
         quando ele tem um), Close e Quit (so num jogo). O volume nao: e das
         teclas de volume e do painel web."""
         rows = []
-        rows.append(Row("page", "Configuration", action=lambda: self.open_page("config")))
+        row = Row("page", "Configuration", action=lambda: self.open_page("config"))
+        row.icon = ("gear", "GRAY")
+        rows.append(row)
         # Itens do menu, cada um com o icone dele (Painter.ICONS e a cor do tema).
         items = []
         if self.emulator_key is not None:
@@ -1055,13 +1176,43 @@ class Menu:
         elif self.gamekeys:
             # Um jogo custom: o controle como teclado (os jogos sem joystick).
             items.append(("Controller configuration", ("pad", "CYAN"), self.open_keys))
-        items.append(("Close", ("close", "RED"), self.close))
+        if is_game(self.screen):
+            # A foto e o video do jogo para o frontend; achar o jogo na lista
+            # leva um instante (o Setup), por isso o Enter e lento.
+            items.append(("Media capture", ("camera", "GREEN"), self.open_capture))
+        items.append(("Close OSD menu", ("close", "RED"), self.close))
         if is_game(self.screen):
             items.append(("Quit", ("quit", "ORANGE"), lambda: self.leave("quit")))
         for label, icon, action in items:
-            row = Row("action", label, action=action)
+            row = Row("page" if label == "Media capture" else "action", label, action=action,
+                      slow=label == "Media capture")
             row.icon = icon
             rows.append(row)
+        return rows
+
+    # ── Media capture ──
+    def open_capture(self):
+        """Acha o jogo aberto na lista (capture_target); se achou, a pagina com
+        a foto e o video, e o jogo no canto do titulo."""
+        target = capture_target(self.screen)
+        if not target:
+            self.status = "GAME NOT IN THE LISTS"
+            self.dirty = True
+            return
+        self.capture_target = target
+        self.open_page("capture")
+        self.status = target["title"].upper()
+
+    def rows_capture(self):
+        """Thumbnail (a foto) e Preview video (30 s): cada um fecha a OSD, e o
+        servico grava (Service.start_capture)."""
+        rows = []
+        for label, kind, icon in (("Thumbnail", "snap", "camera"),
+                                  ("Preview video (%d s)" % MEDIA_SECONDS, "video", "film")):
+            row = Row("action", label, action=lambda kind=kind: self.leave(kind))
+            row.icon = (icon, "CYAN")
+            rows.append(row)
+        rows.append(Row("action", "Back", action=self.back))
         return rows
 
     def rows_config(self):
@@ -1203,8 +1354,9 @@ class Menu:
             self.osk["notice"] = KEYS_RESTART_NOTICE
 
     def leave(self, what):
-        """Emulator menu ou Quit: a OSD fecha (o que nao foi salvo volta) e o
-        servico aperta a tecla do menu do emulador ou fecha o jogo."""
+        """Emulator menu, Quit ou a captura (snap, video): a OSD fecha (o que
+        nao foi salvo volta) e o servico aperta a tecla do menu do emulador,
+        fecha o jogo ou grava a midia."""
         self.after = what
         self.close()
 
@@ -1516,6 +1668,11 @@ class Menu:
 
 
 # ── O desenho ──────────────────────────────────────────────────────
+
+def bar_seconds(kind):
+    """Quanto tempo a barra de kind (cheevo, notice, capture) fica na tela."""
+    return CAPTURE_NOTICE_SECONDS if kind == "capture" else NOTICE_SECONDS if kind == "notice" else CHEEVO_SECONDS
+
 
 def ease_out(f):
     """0..1 que desacelera no fim (a barra saindo do circulo)."""
@@ -1901,8 +2058,9 @@ class Painter:
         kind="notice", a de um aviso: laranja, o triangulo e NOTICE_SECONDS."""
         pg, t = self.pg, self.theme
         import tiny
-        notice = kind == "notice"
-        seconds = NOTICE_SECONDS if notice else CHEEVO_SECONDS
+        notice = kind in ("notice", "capture")
+        seconds = bar_seconds(kind)
+        accent = t.CYAN if kind == "capture" else t.ORANGE
         W, H = self.area()
         surface = pg.Surface((W, H), pg.SRCALPHA)
         if now >= seconds + CHEEVO_LEAVE:
@@ -1927,14 +2085,15 @@ class Painter:
         if right - round(cx) > 2:
             bar = pg.Rect(round(cx), y0, right - round(cx), height)
             pg.draw.rect(surface, t.BG_DEEP + (232,), bar)
-            pg.draw.rect(surface, (t.ORANGE if notice else t.PURPLE) + (255,), bar, 1)
+            pg.draw.rect(surface, (accent if notice else t.PURPLE) + (255,), bar, 1)
             tx = round(cx + rx) + (4 if small else 6)
             aw = right_full - 6 - tx
             clip = pg.Rect(tx, y0 + 1, max(0, min(aw, right - 2 - tx)), height - 2)
             surface.set_clip(clip)
-            heads = NOTICE_HEADS if notice else ("ACHIEVEMENT UNLOCKED", "ACHIEVEMENT", "UNLOCKED")
+            heads = (CAPTURE_HEADS if kind == "capture" else NOTICE_HEADS if notice
+                     else ("ACHIEVEMENT UNLOCKED", "ACHIEVEMENT", "UNLOCKED"))
             head = next((h for h in heads if tiny.width(h) <= aw), tiny.fit(heads[-1], max(0, aw)))
-            tiny.text(surface, head, t.ORANGE if notice else t.PINK, tx, y0 + (2 if small else 4))
+            tiny.text(surface, head, accent if notice else t.PINK, tx, y0 + (2 if small else 4))
             if small:
                 image = pg.Surface((tiny.width(title) + 1, 6), pg.SRCALPHA)
                 tiny.text(image, title, t.FG, 0, 0)
@@ -1953,7 +2112,7 @@ class Painter:
             left = max(0.0, seconds - now)
             ly = y0 + height - 3
             surface.fill(t.LINE + (255,), (tx, ly, max(0, aw), 1))
-            surface.fill((t.ORANGE if notice else t.GREEN) + (255,), (tx, ly, max(0, round(aw * left / seconds)), 1))
+            surface.fill((accent if notice else t.GREEN) + (255,), (tx, ly, max(0, round(aw * left / seconds)), 1))
             surface.set_clip(None)
         self.achievement_badge(surface, (cx, cy, rx, height / 2, par, small), now, sweep, kind)
         return surface
@@ -1997,6 +2156,8 @@ class Painter:
                 continue
             if kind == "notice":
                 color = t.ORANGE
+            elif kind == "capture":
+                color = t.CYAN
             else:
                 color = t.PINK if sweep < 1 else ring_color(t, (head - ang) % 360)
             surface.fill(color + (255,), (px, py, 1, 1))
@@ -2004,6 +2165,8 @@ class Painter:
             return
         if kind == "notice":
             icon = MINI_WARNING if small else WARNING_ICON.strip("\n").split("\n")
+        elif kind == "capture":
+            icon = MINI_CAMERA if small else CAMERA_ICON.strip("\n").split("\n")
         else:
             icon = MINI_TROPHY if small else t.ICONS["achievements"].strip("\n").split("\n")
         n = len(icon)
@@ -2038,6 +2201,11 @@ class Painter:
         "quit": ("...##...", ".#.##.#.", "#..##..#", "#......#", "#......#", ".#....#.", "..####..", "........"),
         # Um controle (Controller configuration): a cruz e dois botoes.
         "pad": ("........", ".######.", "#.#####.", "...#.#.#", "#.#####.", "#.####.#", ".#....#.", "........"),
+        # Uma camera (Media capture, Thumbnail) e uma tira de filme (Preview video).
+        "camera": ("........", "..###...", "########", "###..###", "##.##.##", "##.##.##", "###..###", "########"),
+        "film": ("########", "#.#..#.#", "########", "#......#", "#......#", "########", "#.#..#.#", "########"),
+        # Uma engrenagem (Configuration).
+        "gear": ("...##...", "#.####.#", ".######.", "###..###", "###..###", ".######.", "#.####.#", "...##..."),
     }
     # O icone e a cor (do tema) de cada botao.
     BUTTON_ICONS = {"save": ("save", "GREEN"), "close": ("close", "RED"), "back": ("back", "PINK"),
@@ -2271,6 +2439,11 @@ class Service:
         self.cheevo_queue = []
         self.cheevo = None
         self.cheevo_polled = 0.0
+        # O Media capture: os avisos da thread que grava (queue: ela escreve,
+        # o laco le) e se uma captura esta rodando (o atalho da OSD fica parado
+        # para o menu nao sair no video).
+        self.capture_notes = queue.SimpleQueue()
+        self.capturing = False
         # (programa, resolucao) cuja geometria ja foi posta, e quando se olhou.
         self.geometry_seen = None
         self.geometry_polled = 0.0
@@ -2319,7 +2492,7 @@ class Service:
     # O atalho.
     def allowed(self, screen):
         conf = read_conf()
-        if conf.get("osd") == "off" or not screen or os.path.exists(SETUP_FLAG):
+        if conf.get("osd") == "off" or not screen or os.path.exists(SETUP_FLAG) or self.capturing:
             return False
         return not commercial(screen["uid"])
 
@@ -2450,6 +2623,8 @@ class Service:
         self.cheevo_queue += take_achievements()
         # Os avisos (fliperos-gpufit) na mesma fila, com o tipo no fim.
         self.cheevo_queue += [(when, title, "notice") for when, title in take_achievements(NOTICES_DIR)]
+        while not self.capture_notes.empty():
+            self.cheevo_queue.append((time.time(), self.capture_notes.get(), "capture"))
         self.cheevo_queue.sort(key=lambda item: item[0])
         old = time.time() - CHEEVO_STALE
         self.cheevo_queue = [item for item in self.cheevo_queue if item[0] >= old]
@@ -2474,15 +2649,13 @@ class Service:
             return
         cheevo["last"] = now
         elapsed = now - cheevo["start"]
-        notice = cheevo.get("kind") == "notice"
-        if elapsed >= (NOTICE_SECONDS if notice else CHEEVO_SECONDS) + CHEEVO_LEAVE:
+        kind = cheevo.get("kind") or "cheevo"
+        if elapsed >= bar_seconds(kind) + CHEEVO_LEAVE:
             self.cheevo = None
             self.screen_file.hide()
             return
-        if notice:
-            self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"], "notice"))
-        else:
-            self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"]))
+        extra = () if kind == "cheevo" else (kind,)
+        self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"], *extra))
 
     # O menu.
     def auto_keys(self, screen):
@@ -2514,8 +2687,8 @@ class Service:
         # inteira, depois do menu.
         if self.cheevo is not None:
             item = (self.cheevo["born"], self.cheevo["title"])
-            if self.cheevo.get("kind") == "notice":
-                item += ("notice",)
+            if self.cheevo.get("kind") in ("notice", "capture"):
+                item += (self.cheevo["kind"],)
             self.cheevo_queue.insert(0, item)
             self.cheevo = None
         try:
@@ -2610,6 +2783,34 @@ class Service:
             self.press_emulator_key(menu.emulator_key)
         elif menu.after == "quit":
             self.quit_game(screen)
+        elif menu.after in ("snap", "video") and menu.capture_target:
+            self.start_capture(screen, menu.capture_target, menu.after)
+
+    # O Media capture.
+    def start_capture(self, screen, target, kind):
+        """Grava a foto ou o video do jogo numa thread (o laco segue: o volume,
+        as conquistas, o jogo). O atalho da OSD para ate acabar."""
+        self.capturing = True
+        threading.Thread(target=self.capture_media, args=(screen, target, kind), daemon=True).start()
+
+    def capture_media(self, screen, target, kind):
+        try:
+            # A camada tira o menu do quadro antes da foto.
+            time.sleep(CAPTURE_SETTLE)
+            web = load_web()
+            if kind == "video":
+                # Avisa que vai gravar e espera a barra sair: ela nao entra no video.
+                self.capture_notes.put("Recording %d s" % MEDIA_SECONDS)
+                time.sleep(CAPTURE_NOTICE_SECONDS + CHEEVO_LEAVE + 1.0)
+            why = save_media(web, screen, target, kind)
+        except Exception as exc:  # uma captura que falha nao derruba o servico
+            why = str(exc)
+        self.capturing = False
+        if why:
+            print("fliperos-osd: media capture %s of %s: %s" % (kind, target["name"], why), file=sys.stderr, flush=True)
+            self.capture_notes.put("Capture failed: %s" % why[:60])
+        else:
+            self.capture_notes.put("%s saved" % ("Thumbnail" if kind == "snap" else "Preview video"))
 
     def gamekeys(self, screen):
         """O mapa do controle de um jogo custom (custom_GRUPO_NOME, o --app
@@ -2761,9 +2962,16 @@ def shot(page, path):
         title = os.environ.get("FLIPEROS_OSD_SHOT_TITLE", "Hungry Wolf : Beat Kim Dong Hwan with Rock Howard")
         when = float(os.environ.get("FLIPEROS_OSD_SHOT_TIME", "2.6"))
         canvas = painter.fit(lambda: painter.achievement_bar(title, when), mode)
+    elif page == "capture-bar":
+        # O aviso do Media capture (FLIPEROS_OSD_SHOT_TITLE, FLIPEROS_OSD_SHOT_TIME).
+        title = os.environ.get("FLIPEROS_OSD_SHOT_TITLE", "Preview video saved")
+        when = float(os.environ.get("FLIPEROS_OSD_SHOT_TIME", "1.5"))
+        canvas = painter.fit(lambda: painter.achievement_bar(title, when, "capture"), mode)
     else:
         if page != "main":
             menu.open_page(page)
+            if page == "capture":
+                menu.status = "STREET FIGHTER II TURBO"
         canvas = painter.fit(lambda: painter.panel(menu), mode)
     frame = Painter.frame_size(mode)
     view = layer_view(pg, canvas, frame)

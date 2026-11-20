@@ -23875,7 +23875,8 @@ class OsdTests(unittest.TestCase):
         gamekeys = {'folder': '/run/user/1000/fliperos-gamekeys', 'keyfile': str(keyfile), 'buttons': buttons}
         screen = {'program': 'custom_pc_games_pang', 'core': ''}
         menu = osd.Menu(screen, self.MODE, osd.Worker(), None, gamekeys)
-        self.assertEqual(self.labels(menu), ['Configuration', 'Controller configuration', 'Close', 'Quit'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Controller configuration', 'Media capture',
+                                             'Close OSD menu', 'Quit'])
         self.assertEqual(menu.page['rows'][1].icon, ('pad', 'CYAN'))
         # Sobre o frontend, nao; sem o gamekeys, nao.
         self.assertNotIn('Controller configuration',
@@ -24051,14 +24052,14 @@ class OsdTests(unittest.TestCase):
         # volume.
         osd = self.osd
         menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Configuration', 'Close', 'Quit'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Media capture', 'Close OSD menu', 'Quit'])
         menu = osd.Menu({'program': 'retroarch', 'core': 'fbneo'}, self.MODE, osd.Worker(), emulator_key=59)
-        self.assertEqual(self.labels(menu), ['Configuration', 'Emulator menu', 'Close', 'Quit'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Emulator menu', 'Media capture', 'Close OSD menu', 'Quit'])
         self.assertEqual([getattr(r, 'icon', None) for r in menu.page['rows']],
-                         [None, ('menu', 'CYAN'), ('close', 'RED'), ('quit', 'ORANGE')])
-        self.assertEqual({r.kind for r in menu.page['rows'][1:]}, {'action'})
+                         [('gear', 'GRAY'), ('menu', 'CYAN'), ('camera', 'GREEN'), ('close', 'RED'), ('quit', 'ORANGE')])
+        self.assertEqual([r.kind for r in menu.page['rows'][1:]], ['action', 'page', 'action', 'action'])
         menu = osd.Menu({'program': 'python3', 'core': ''}, self.MODE, osd.Worker(), emulator_key=59)
-        self.assertEqual(self.labels(menu), ['Configuration', 'Close'])
+        self.assertEqual(self.labels(menu), ['Configuration', 'Close OSD menu'])
         self.assertFalse([c for c in self.calls if '--volume' in c])
         # Configuration abre a pagina; o Back dela volta.
         menu, _ = self.menu()
@@ -24069,7 +24070,7 @@ class OsdTests(unittest.TestCase):
         menu.key(osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'FliperOS')
         # Emulator menu e Quit fecham a OSD e dizem ao servico o que fazer.
-        for cursor, after in ((1, 'emulator'), (2, None), (3, 'quit')):
+        for cursor, after in ((1, 'emulator'), (3, None), (4, 'quit')):
             menu = osd.Menu({'program': 'flycast', 'core': ''}, self.MODE, osd.Worker(), emulator_key=15)
             menu.page['cursor'] = cursor
             menu.key(osd.KEY_ENTER)
@@ -24083,8 +24084,140 @@ class OsdTests(unittest.TestCase):
             surface = painter.panel(menu)
             colours = {tuple(surface.get_at((x, y))[:3]) for x in range(surface.get_width())
                        for y in range(surface.get_height())}
-            for name in ('CYAN', 'RED', 'ORANGE'):
+            for name in ('CYAN', 'RED', 'ORANGE', 'GREEN', 'GRAY'):
                 self.assertIn(getattr(painter.theme, name), colours)
+
+    def test_media_capture_page_and_target(self):
+        # Media capture (icone de camera): achar o jogo aberto na lista abre a
+        # pagina com Thumbnail e Preview video (30 s); cada um fecha a OSD e diz
+        # ao servico o que gravar. Um jogo que nao esta em lista nao abre a pagina.
+        osd = self.osd
+        osd.capture_target = lambda screen: None
+        menu = osd.Menu({'program': 'groovymame', 'core': ''}, self.MODE, osd.Worker())
+        menu.page['cursor'] = 1
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual((menu.title(), menu.status), ('FliperOS', 'GAME NOT IN THE LISTS'))
+        osd.capture_target = lambda screen: {'system': 'mame', 'name': 'ssf2t', 'title': 'Super Street Fighter II Turbo'}
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual((menu.title(), menu.status), ('MEDIA CAPTURE', 'SUPER STREET FIGHTER II TURBO'))
+        self.assertEqual(self.labels(menu), ['Thumbnail', 'Preview video (30 s)', 'Back'])
+        self.assertEqual([r.icon for r in menu.page['rows'][:2]], [('camera', 'CYAN'), ('film', 'CYAN')])
+        for cursor, after in ((0, 'snap'), (1, 'video')):
+            menu.page['cursor'] = cursor
+            menu.key(osd.KEY_ENTER)
+            self.assertEqual((menu.closing, menu.after, menu.capture_target['name']), (True, after, 'ssf2t'))
+            menu.closing, menu.after = False, None
+        menu.page['cursor'] = 2
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.title(), 'FliperOS')
+        # Sobre o frontend, nao ha Media capture.
+        self.assertNotIn('Media capture', self.labels(osd.Menu({'program': 'python3', 'core': ''}, self.MODE, osd.Worker())))
+        # O desenho: a camera do item, as duas paginas e a barra azul do aviso.
+        if importlib.util.find_spec('pygame'):
+            os.environ['SDL_VIDEODRIVER'] = 'dummy'
+            osd.GUI = str(ROOT / 'fliperos-setup/gui')
+            painter = osd.Painter()
+            for kind, seconds in (('capture', osd.CAPTURE_NOTICE_SECONDS), ('notice', osd.NOTICE_SECONDS)):
+                self.assertEqual(osd.bar_seconds(kind), seconds)
+            bar = painter.achievement_bar('Thumbnail saved', 1.5, 'capture')
+            colours = {tuple(bar.get_at((x, y))[:3]) for x in range(bar.get_width()) for y in range(bar.get_height())}
+            self.assertIn(painter.theme.CYAN, colours)
+            self.assertNotIn(painter.theme.ORANGE, colours)
+            self.assertEqual(painter.achievement_bar('x', osd.CAPTURE_NOTICE_SECONDS + 0.4, 'capture').get_bounding_rect().width, 0)
+
+    def test_media_capture_finds_the_game_and_saves_into_its_media_folder(self):
+        # capture_target: o processo aberto (o /proc/PID/cmdline) na lista dos
+        # sistemas, pela busca do painel web. save_media: ~/media/snap|preview/
+        # PASTA/JOGO.png|mp4, da pessoa, por um arquivo parcial escondido.
+        osd = self.osd
+        home = Path(self.tmp.name) / 'home'
+        rom = home / 'roms' / 'mame' / 'ssf2t.zip'
+        rom.parent.mkdir(parents=True)
+        rom.write_bytes(b'')
+        sleeper = subprocess.Popen(['sh', '-c', 'sleep 30', str(rom)])
+        self.addCleanup(sleeper.kill)
+        calls = []
+
+        class Web:
+            @staticmethod
+            def program_name(args):
+                return 'groovymame'
+
+            @staticmethod
+            def game_file(name, args):
+                return 'ssf2t.zip'
+
+            @staticmethod
+            def systems():
+                return [{'key': 'mame'}]
+
+            @staticmethod
+            def match_game(game, rows):
+                calls.append(game)
+                return {'key': 'mame'}, {'Name': 'ssf2t', 'Title': 'Super Street Fighter II Turbo'}
+
+            @staticmethod
+            def media_dir(kind, key):
+                return str(home / 'media' / kind / key)
+
+            @staticmethod
+            def capture_snap(out):
+                Path(out).write_bytes(b'PNG')
+
+            @staticmethod
+            def record_video(out, seconds):
+                calls.append(('video', seconds))
+                Path(out).write_bytes(b'MP4')
+                return True, None
+
+        osd.load_web = lambda: Web
+        target = osd.capture_target({'pid': sleeper.pid})
+        self.assertEqual(target, {'system': 'mame', 'name': 'ssf2t', 'title': 'Super Street Fighter II Turbo'})
+        self.assertEqual(calls[0]['program'], 'groovymame')
+        self.assertIn(str(rom), calls[0]['command'])
+        self.assertIsNone(osd.capture_target({'pid': 2 ** 22 + 5}))
+        screen = {'uid': os.getuid()}
+        self.assertIsNone(osd.save_media(Web, screen, target, 'snap'))
+        self.assertEqual((home / 'media/snap/mame/ssf2t.png').read_bytes(), b'PNG')
+        self.assertIsNone(osd.save_media(Web, screen, target, 'video'))
+        self.assertEqual((home / 'media/preview/mame/ssf2t.mp4').read_bytes(), b'MP4')
+        self.assertEqual(calls[-1], ('video', 30))
+        self.assertEqual(sorted(p.name for p in (home / 'media/preview/mame').iterdir()), ['ssf2t.mp4'])
+        # Uma captura que falha deixa o arquivo de antes e diz o motivo.
+        Web.capture_snap = staticmethod(lambda out: 'nothing to capture')
+        self.assertEqual(osd.save_media(Web, screen, target, 'snap'), 'nothing to capture')
+        self.assertEqual((home / 'media/snap/mame/ssf2t.png').read_bytes(), b'PNG')
+
+    def test_media_capture_runs_off_the_loop_and_holds_the_shortcut(self):
+        # O servico grava numa thread: o atalho da OSD fica parado ate acabar, e
+        # os avisos (vai gravar, salvo, falhou) vao para a barra azul.
+        osd = self.osd
+        service = object.__new__(osd.Service)
+        service.capture_notes = osd.queue.SimpleQueue()
+        service.capturing = False
+        osd.CAPTURE_SETTLE = 0
+        osd.CAPTURE_NOTICE_SECONDS, osd.CHEEVO_LEAVE = 0, 0
+        osd.load_web = lambda: None
+        target = {'system': 'mame', 'name': 'ssf2t', 'title': 'SSF2T'}
+        results = iter([None, 'the screen did not change'])
+        osd.save_media = lambda web, screen, target, kind: next(results)
+
+        def notes():
+            out = []
+            while not service.capture_notes.empty():
+                out.append(service.capture_notes.get())
+            return out
+        sleep = osd.time.sleep
+        osd.time.sleep = lambda s: None
+        try:
+            service.capturing = True
+            self.assertFalse(service.allowed({'uid': 1000}))
+            service.capture_media({}, target, 'snap')
+            self.assertEqual((service.capturing, notes()), (False, ['Thumbnail saved']))
+            service.capture_media({}, target, 'video')
+            self.assertEqual(notes(), ['Recording 30 s', 'Capture failed: the screen did not change'])
+        finally:
+            osd.time.sleep = sleep
 
     def test_service_presses_the_emulator_key_or_quits_the_game(self):
         # O servico: a tecla do menu de cada emulador pelo fliperos-buttons; o
@@ -24543,7 +24676,7 @@ class OsdTests(unittest.TestCase):
         menu.page['cursor'] = filter_row
         menu.key(osd.KEY_LEFT)                      # light -> off
         menu.back()
-        menu.page['cursor'] = self.labels(menu).index('Close')
+        menu.page['cursor'] = self.labels(menu).index('Close OSD menu')
         self.assertEqual(menu.page['rows'][menu.page['cursor']].icon, ('close', 'RED'))
         menu.key(osd.KEY_ENTER)
         worker.wait()
@@ -25090,6 +25223,7 @@ class OsdTests(unittest.TestCase):
         self.assertEqual(service.cheevo_queue, [(Clock.now, 'Three')])
         # Uma que esperou demais nao aparece mais.
         Clock.now += self.osd.CHEEVO_STALE + 1
+        service.capture_notes = self.osd.queue.SimpleQueue()
         service.collect_achievements()
         self.assertEqual(service.cheevo_queue, [])
 
@@ -25139,6 +25273,7 @@ class OsdTests(unittest.TestCase):
         service.painter = painter
         service.bar_until = 0.0
         service.cheevo, service.cheevo_polled, service.cheevo_queue = None, 0.0, []
+        service.capture_notes = self.osd.queue.SimpleQueue()
         service.screen_file = self.osd.Screen(str(Path(self.tmp.name) / 'screen'))
         service.collect_achievements()
         self.assertEqual([item[1:] for item in service.cheevo_queue], [('Pang asks for 640x480', 'notice')])
