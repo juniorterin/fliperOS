@@ -6553,6 +6553,27 @@ class EmulatorsTests(Base):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("@fail", r.stdout)
 
+    def test_ensure_downloads_the_optional_package_like_a_download(self):
+        # O hbgroovymame (tipo package): o primeiro jogo da pasta hbmame o instala pelo fliperos-emulators install
+        # (o .deb pronto), nunca pelo apt do repositorio da imagem nem compilando (o edge): a receita leva horas.
+        d = self.env.dir
+        (d / "emus").write_text(
+            '#!/bin/sh\nd=%s\ncase $1 in\n'
+            '  list) echo "hbgroovymame|0|package|HBMAME with Switchres" ;;\n'
+            '  installed) [ -e "$d/have-$2" ] ;;\n'
+            '  install) echo "install $2 $3" >> $d/calls; : > "$d/have-$2"; echo "@step 100 installed" ;;\n'
+            '  edge-available) echo "edge-available $2" >> $d/calls; exit 0 ;;\n'
+            '  edge) echo "edge $2" >> $d/calls ;;\n'
+            'esac\n' % d)
+        (d / "emus").chmod(0o755)
+        (d / "calls").write_text("")
+        env = {"EMULATORS_CMD": str(d / "emus")}
+        stubs = ('apt-cache() { echo "apt-cache $*" >> %s/calls; return 0; }\napt-get() { :; }\n'
+                 'update_install_package() { echo "pkg $1" >> %s/calls; }\n' % (d, d))
+        out = self.env.out(stubs + "emulators_ensure hbgroovymame", env)
+        self.assertEqual((d / "calls").read_text().splitlines(), ["install hbgroovymame --progress"])
+        self.assertIn("@step 100 hbgroovymame installed", out)
+
     def test_list_field_and_install(self):
         d = self.env.dir
         (d / "emus").write_text('#!/bin/sh\nif [ "$1" = list ]; then\n'
@@ -13840,17 +13861,17 @@ class BatoceraTests(Base):
     def test_the_fliperos_only_folders_come_from_the_table_and_the_script(self):
         # As pastas fixas do fliperos-roms que nenhum console da tabela abre; o custom (os .sh do gabinete) fica de fora.
         self.assertEqual(self.env.out("batocera_extras", self.vars).split(),
-                         ["namco2x6", "hypseus", "fightcade", "custom-packages"])
+                         ["hbmame", "namco2x6", "hypseus", "fightcade", "custom-packages"])
 
     def test_use_links_the_siblings_and_the_fliperos_only_folders_and_unuse_undoes_it(self):
         out = self.ok('batocera_cli use "%s"' % self.disk)
         self.assertIn("systems=5", out)
         self.assertIn("linked=bios,save", out)
-        self.assertIn("extras=namco2x6,hypseus,fightcade,custom-packages", out)
+        self.assertIn("extras=hbmame,namco2x6,hypseus,fightcade,custom-packages", out)
         self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
         self.assertEqual(os.readlink(self.home / "save"), str(self.root / "saves"))
         self.assertTrue((self.home / "old-bios").is_dir())
-        for name in ("namco2x6", "hypseus", "fightcade", "custom-packages"):
+        for name in ("hbmame", "namco2x6", "hypseus", "fightcade", "custom-packages"):
             self.assertEqual(os.readlink(self.home / "roms" / name), str(self.root / "roms" / name), name)
         self.assertFalse((self.home / "roms" / "custom").is_symlink())      # os .sh do gabinete ficam nele
         self.assertTrue((self.root / "roms" / "custom-packages" / "_info.txt").exists())
@@ -13863,7 +13884,7 @@ class BatoceraTests(Base):
         self.assertEqual(len(self.listed()), 5)
         self.assertEqual(self.env.run('batocera_in_use "%s"' % self.disk, self.vars).returncode, 0)
         # De novo: nada muda.
-        self.assertIn("extras=namco2x6", self.ok('batocera_cli use "%s"' % self.disk))
+        self.assertIn("extras=hbmame,namco2x6", self.ok('batocera_cli use "%s"' % self.disk))
         self.ok('batocera_cli unuse "%s"' % self.disk)
         self.assertFalse((self.home / "bios").is_symlink())
         self.assertTrue((self.home / "bios").is_dir())

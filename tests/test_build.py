@@ -6823,6 +6823,11 @@ class FrontendDataTests(unittest.TestCase):
                          'duckstation')
         self.assertEqual(fm.missing_emulator(['/opt/fliperos/bin/fliperos-kms-run', '/opt/fliperos/fightcade/fightcade'],
                                              installed), 'fightcade')
+        # Um jogo da pasta hbmame (o pacote opcional hbgroovymame): sem o programa, o Setup o instala antes.
+        self.assertEqual(fm.missing_emulator([x11, 'hbgroovymame', 'sf2hf'], installed), 'hbgroovymame')
+        have.add('hbgroovymame')
+        self.assertIsNone(fm.missing_emulator([x11, 'hbgroovymame', 'sf2hf'], installed))
+        have.discard('hbgroovymame')
         self.assertIsNone(fm.missing_emulator(['/bin/sh', 'game.sh'], installed))
         self.assertIsNone(fm.missing_emulator([x11, 'someprogram'], installed))
         with tempfile.TemporaryDirectory() as tmp:
