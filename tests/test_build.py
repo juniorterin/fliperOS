@@ -2963,7 +2963,7 @@ class OdinTests(unittest.TestCase):
         self.assertIn('"odin": "odin"', frontend)
         modes = (ROOT / 'config/fliperos-emulator-modes.conf').read_text()
         for name in ('fliperos-odin', 'odin'):
-            self.assertRegex(modes, r'(?m)^%s +320x240@60 +640x480@60$' % name)
+            self.assertRegex(modes, r'(?m)^%s +640x480@60 +640x480@60$' % name)
         self.assertIn('fliperos-odin | odin) ;;', (ROOT / 'config/fliperos-x11-run').read_text())
 
     def test_the_folders_exist_before_the_program_does(self):
