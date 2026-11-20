@@ -1,12 +1,14 @@
 """Grava telas do Setup grafico (fliperos-setup/gui) seguindo um roteiro, em
-tempo virtual: 30 quadros por segundo, 320x240, sem perda (FFV1). O relogio
-de todo o processo (time.monotonic) e o do video, entao as animacoes (o
-fundo, o carrossel, as contagens) andam como no gabinete.
+tempo virtual: 30 quadros por segundo (GUI_REC_FPS muda), 320x240, sem perda
+(FFV1). O relogio de todo o processo (time.monotonic) e o do video, entao as
+animacoes (o fundo, o carrossel, as contagens) andam como no gabinete.
 
     python3 gui_rec.py SAIDA.mkv CENA.py
 
 A cena define script(R); R tem push, replace, pop, key, keys, wait, type,
-bg, boot, black e ctx.
+bg, boot, black, ctx e zoom. Com R.zoom = True, push (entrar) e pop (voltar)
+tocam o zoom do Setup (navfx, o mesmo de App.swap em fliperos-gui) em vez de
+trocar a tela de uma vez; replace nunca anima.
 """
 import os
 import subprocess
@@ -15,7 +17,7 @@ import time
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-FPS = 30
+FPS = int(os.environ.get("GUI_REC_FPS", "30"))
 VT = [1000.0]
 time.monotonic = lambda: VT[0]
 sys.path.insert(0, "/g")
@@ -41,6 +43,7 @@ class Recorder:
         self.stack = []
         self.ctx = dict(demo.CONTEXT)
         self.mode = "screen"          # screen, boot, black
+        self.zoom = False             # push e pop tocam o zoom do Setup
         self.t0 = VT[0]
         self.frames = 0
         self.enc = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -52,8 +55,11 @@ class Recorder:
 
     # ── O roteiro ──
     def push(self, screen, wait=0.0):
+        old = self.ui.copy()
         self.stack.append(screen)
         self.mode = "screen"
+        if self.zoom:
+            self.swap(old, "IN")
         self.wait(wait)
 
     def replace(self, screen, wait=0.0):
@@ -62,8 +68,32 @@ class Recorder:
         self.wait(wait)
 
     def pop(self, wait=0.0):
+        old = self.ui.copy()
         self.stack.pop()
+        if self.zoom and self.stack:
+            self.swap(old, "OUT")
         self.wait(wait)
+
+    def swap(self, old, direction):
+        """O zoom de entrar ("IN") ou de voltar ("OUT"), como App.swap de
+        fliperos-gui: so a camada da interface anima, do quadro old (a tela que
+        sai) ate a de cima da pilha, em navfx.DURATION segundos, e o fundo segue
+        vivo por baixo. O andamento e o do relogio (aqui, o virtual)."""
+        import navfx
+        mixed = pygame.Surface(old.get_size(), pygame.SRCALPHA)
+        start = VT[0]
+        while (VT[0] - start) / navfx.DURATION < 1:
+            p = (VT[0] - start) / navfx.DURATION
+            now = VT[0] - self.t0
+            self.ui.fill((0, 0, 0, 0))
+            self.ctx["now"] = now
+            self.stack[-1].draw(self.ui, self.ctx)
+            navfx.blend(mixed, old, self.ui, p, navfx.IN if direction == "IN" else navfx.OUT)
+            self.bgobj.draw(self.back, now)
+            self.back.blit(mixed, (0, 0))
+            self.enc.stdin.write(pygame.image.tostring(self.back, "RGB"))
+            self.frames += 1
+            VT[0] += 1.0 / FPS
 
     def key(self, k, wait=0.35):
         if self.stack:

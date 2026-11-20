@@ -96,13 +96,18 @@ web() {
 # verdade grava sozinho: uma cena por arquivo de tools/video/gifs, no mesmo
 # formato das cenas do video (TIMELINE), e a saida em .shots/video/gifs.
 gifs() {
-  [ -f "$work/demo.tar" ] || { echo "No $work/demo.tar: run 'render.sh library IP' first." >&2; exit 1; }
   mkdir -p "$work/gifs"
   for scene in tools/video/gifs/*.py; do
     name=$(basename "$scene" .py)
     [ -z "$arg" ] || [ "$arg" = "$name" ] || continue
     echo "== $name"
-    run fliperos-video bash /t/rig.sh /t/fe_rec.py "/v/gifs/$name.mkv" "/t/gifs/$name.py"
+    if grep -q '^def script' "$scene"; then
+      # As do Setup (def script): gui_rec.py, a 50 quadros por segundo (o zoom do Setup dura 0,3 s).
+      run -e GUI_REC_FPS=50 fliperos-video python3 /t/gui_rec.py "/v/gifs/$name.mkv" "/t/gifs/$name.py"
+    else
+      [ -f "$work/demo.tar" ] || { echo "No $work/demo.tar: run 'render.sh library IP' first." >&2; exit 1; }
+      run fliperos-video bash /t/rig.sh /t/fe_rec.py "/v/gifs/$name.mkv" "/t/gifs/$name.py"
+    fi
   done
 }
 
