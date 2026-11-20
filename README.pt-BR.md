@@ -5,12 +5,12 @@
 <h1 align="center">FliperOS 0.27</h1>
 
 <p align="center">
-  <b>Arcade Linux. Feito para CRT.</b><br>
-  Ubuntu 24.04 para gabinetes de fliperama com tubo de 15 kHz, configurado no próprio gabinete.
+  <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Doar com Stripe" src="https://img.shields.io/badge/doar-com%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
 </p>
 
 <p align="center">
-  <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Doar com Stripe" src="https://img.shields.io/badge/doar-com%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
+  <b>Arcade Linux. Feito para CRT.</b><br>
+  Ubuntu 24.04 para gabinetes de fliperama com tubo de 15 kHz, configurado no próprio gabinete.
 </p>
 
 <p align="center">

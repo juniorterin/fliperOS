@@ -5,12 +5,12 @@
 <h1 align="center">FliperOS 0.27</h1>
 
 <p align="center">
-  <b>Arcade Linux. Built for CRT.</b><br>
-  Ubuntu 24.04 for arcade cabinets with a 15 kHz tube, set up from the cabinet itself.
+  <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Donate with Stripe" src="https://img.shields.io/badge/donate-with%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
 </p>
 
 <p align="center">
-  <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Donate with Stripe" src="https://img.shields.io/badge/donate-with%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
+  <b>Arcade Linux. Built for CRT.</b><br>
+  Ubuntu 24.04 for arcade cabinets with a 15 kHz tube, set up from the cabinet itself.
 </p>
 
 <p align="center">
