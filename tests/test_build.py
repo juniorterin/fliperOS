@@ -22364,6 +22364,276 @@ class EmulatorsMenuTests(unittest.TestCase):
         self.assertIn('source "$SETUP_DIR/lib/emulators.sh"', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
 
 
+class ControllerPlayersTests(unittest.TestCase):
+    """config/fliperos-buttons: o player, o visual, um botao e o encoder de teclado de
+    cada controle, um de cada vez (Setup > Joysticks > Controllers / Arcade panel).
+    Quem toma um player ocupado nao troca com ele: o outro fica sem player, com o
+    mapa guardado no armazem de perfis (buttons-bt.map, por GUID)."""
+
+    G0 = '03000000aaaa0000'.ljust(32, '0')
+    G1 = '03000000bbbb0000'.ljust(32, '0')
+    GBT = '0500000000000000cccc'.ljust(32, '0')
+
+    def setUp(self):
+        self.rc = load_script('buttons', 'config/fliperos-buttons')
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = str(Path(self.tmp.name) / 'buttons.map')
+        self.bt = str(Path(self.tmp.name) / 'buttons-bt.map')
+        self.old_bt = self.rc.BT_MAP
+        self.rc.BT_MAP = self.bt
+        self.addCleanup(setattr, self.rc, 'BT_MAP', self.old_bt)
+        # sdl_devices: (guid, nome, botoes, eixos, repouso, codigos ABS, todos, caminho).
+        # 0 e 1 com fio (um painel e um stick), 2 Bluetooth.
+        self.devices = {i: (guid, name, 8, 4, (), None, None, '')
+                        for i, (guid, name) in enumerate(((self.G0, 'Panel'), (self.G1, 'Stick'), (self.GBT, '8BitDo')))}
+
+    def write(self, text, bt=''):
+        Path(self.path).write_text(text)
+        Path(self.bt).write_text(bt)
+
+    def model(self):
+        return self.rc.Model(self.path)
+
+    def apply(self, action):
+        model = self.model()
+        result = action(model, self.devices)
+        model.save(self.path)
+        return result
+
+    PANEL = ('1 kind 0 arcade Panel\n1 up 0 h0.1 Panel\n1 down 0 h0.4 Panel\n1 left 0 h0.8 Panel\n1 right 0 h0.2 Panel\n'
+             '1 b1 0 b0 Panel\n1 b2 0 b1 Panel\n1 start 0 b8 Panel\n1 coin 0 b9 Panel\n')
+    STICK = ('2 kind 1 arcade Stick\n2 up 1 h0.1 Stick\n2 b1 1 b0 Stick\n')
+
+    def test_taking_a_player_leaves_the_other_without_one(self):
+        self.write(self.PANEL + self.STICK)
+        self.apply(lambda m, d: self.rc.set_player(m, d, 1, 1))
+        players, names = self.rc.read_map(self.path)
+        self.assertEqual(sorted(players), [1])
+        self.assertEqual(players[1]['b1'], (1, 'b0'))
+        self.assertEqual(names[1], 'Stick')
+        # O Panel nao se perdeu: o mapa dele esta guardado, por GUID, sem player.
+        profiles = self.rc.read_bt_profiles(self.bt)
+        kind, binds, name = profiles[self.G0.ljust(32, '0')]
+        self.assertEqual((kind, binds['b2'], binds['start'], name), ('arcade', 'b1', 'b8', 'Panel'))
+        # E volta para o player 2 sem mapear de novo.
+        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 2))
+        players, names = self.rc.read_map(self.path)
+        self.assertEqual(sorted(players), [1, 2])
+        self.assertEqual(players[2]['b2'], (0, 'b1'))
+        self.assertEqual(names[0], 'Panel')
+
+    def test_a_controller_can_have_no_player_and_keeps_its_visual(self):
+        self.write(self.PANEL + '1 visual 0 arcade3 Panel\n')
+        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 0))
+        self.assertEqual(self.rc.read_map(self.path)[0], {})
+        guid = self.G0.ljust(32, '0')
+        self.assertEqual(self.rc.read_profile_meta(self.bt)[guid]['visual'], 'arcade3')
+        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 4))
+        self.assertEqual(self.rc.read_visuals(self.path), {4: 'arcade3'})
+        # Mesmo player de novo: nada muda.
+        before = Path(self.path).read_text()
+        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 4))
+        self.assertEqual(Path(self.path).read_text(), before)
+
+    def test_a_controller_without_a_map_gets_no_player(self):
+        self.write(self.PANEL)
+        with self.assertRaises(ValueError) as e:
+            self.apply(lambda m, d: self.rc.set_player(m, d, 1, 2))
+        self.assertEqual(str(e.exception), 'unmapped')
+        with self.assertRaises(ValueError):
+            self.apply(lambda m, d: self.rc.set_player(m, d, 7, 2))
+        with self.assertRaises(ValueError):
+            self.apply(lambda m, d: self.rc.set_player(m, d, 0, -1))      # automatico: so Bluetooth
+
+    def test_the_visual_says_what_is_left_to_map(self):
+        self.write(self.PANEL)
+        # O visual guarda-se na linha do jogador e na memoria do aparelho.
+        self.assertEqual(self.apply(lambda m, d: self.rc.set_visual(m, d, 0, 'arcade2')), 'none')
+        self.assertEqual(self.rc.read_visuals(self.path), {1: 'arcade2'})
+        # Mais botoes que os mapeados: os que faltam; menos: nada (sobram no mapa).
+        self.assertEqual(self.apply(lambda m, d: self.rc.set_visual(m, d, 0, 'arcade4')), 'buttons b3 b4')
+        self.assertEqual(self.apply(lambda m, d: self.rc.set_visual(m, d, 0, 'arcade1')), 'none')
+        # De painel para joypad: tudo de novo. Sem mapa: tambem.
+        self.assertEqual(self.apply(lambda m, d: self.rc.set_visual(m, d, 0, 'pad:snes')), 'all')
+        self.assertEqual(self.apply(lambda m, d: self.rc.set_visual(m, d, 1, 'arcade6')), 'all')
+        self.assertEqual(self.rc.read_profile_meta(self.bt)[self.G1.ljust(32, '0')]['visual'], 'arcade6')
+        with self.assertRaises(ValueError):
+            self.apply(lambda m, d: self.rc.set_visual(m, d, 0, 'pad:atari'))
+        # Os joypads sao os do guia do frontend (gui/fepads.py: PADS).
+        fepads = (ROOT / 'fliperos-setup/gui/fepads.py').read_text()
+        pads = re.findall(r'\("(\w+)", "', fepads.split('PADS = (', 1)[1].split('\n)\n', 1)[0])
+        self.assertEqual(list(self.rc.PAD_VISUALS), pads)
+
+    def test_a_visual_that_is_not_set_is_worked_out(self):
+        d = self.rc.default_visual
+        self.assertEqual(d('arcade', {'b1': 'b0', 'b3': 'b2'}), 'arcade3')
+        self.assertEqual(d('arcade', {'b5': 'b4'}), 'arcade6')
+        self.assertEqual(d('arcade', {'b7': 'b6'}), 'arcade8')
+        self.assertEqual(d('arcade', {}), 'arcade6')
+        self.assertEqual(d('pad', {}), 'pad:playstation')
+        self.assertEqual(d('pad', {}, 'xbox'), 'pad:xbox')
+        self.assertEqual(d('pad', {}, 'nintendo'), 'pad:snes')
+
+    def test_one_button_changes_and_a_used_one_is_refused(self):
+        self.write(self.PANEL)
+        self.apply(lambda m, d: self.rc.set_button(m, d, 0, 'b2', 'b5'))
+        self.assertEqual(self.rc.read_map(self.path)[0][1]['b2'], (0, 'b5'))
+        with self.assertRaises(ValueError) as e:
+            self.apply(lambda m, d: self.rc.set_button(m, d, 0, 'b2', 'b0'))
+        self.assertEqual(str(e.exception), 'used:b1')
+        # Sem player, o botao muda no mapa guardado.
+        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 0))
+        self.apply(lambda m, d: self.rc.set_button(m, d, 0, 'start', 'b12'))
+        self.assertEqual(self.rc.read_bt_profiles(self.bt)[self.G0][1]['start'], 'b12')
+
+    def test_a_new_mapping_keeps_the_player_and_the_visual(self):
+        self.write(self.PANEL + '1 visual 0 arcade4 Panel\n' + self.STICK)
+        new = '1 kind 0 arcade Panel\n1 up 0 h0.1 Panel\n1 b1 0 b3 Panel\n'
+        self.apply(lambda m, d: self.rc.store(m, d, new, '1', 0, self.G0))
+        players, _ = self.rc.read_map(self.path)
+        self.assertEqual(sorted(players), [1, 2])
+        self.assertEqual(players[1]['b1'], (0, 'b3'))
+        self.assertNotIn('start', players[1])
+        self.assertEqual(self.rc.read_visuals(self.path)[1], 'arcade4')
+        # Mapear o painel como joypad larga o visual de painel.
+        pad = '1 kind 0 pad Panel\n1 b4 0 b0 Panel\n'
+        self.apply(lambda m, d: self.rc.store(m, d, pad, '1', 0, self.G0))
+        self.assertNotIn(1, self.rc.read_visuals(self.path))
+        # Mapeado sem player: o mapa vai guardado, o do player 2 continua la.
+        self.apply(lambda m, d: self.rc.store(m, d, new, '-', 0, self.G0))
+        self.assertEqual(sorted(self.rc.read_map(self.path)[0]), [2])
+        self.assertEqual(self.rc.read_bt_profiles(self.bt)[self.G0.ljust(32, '0')][1]['b1'], 'b3')
+        # Dar o player de outro: o outro fica sem.
+        self.apply(lambda m, d: self.rc.store(m, d, new, '2', 0, self.G0))
+        players, _ = self.rc.read_map(self.path)
+        self.assertEqual({p: next(iter(b.values()))[0] for p, b in players.items()}, {2: 0})
+        self.assertIn(self.G1.ljust(32, '0'), self.rc.read_bt_profiles(self.bt))
+
+    def test_the_encoder_gives_p1_and_p2_without_mapping(self):
+        self.write(self.PANEL + self.STICK)
+        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'd209:0301', 'Ultimarc I-PAC2', True))
+        players, names = self.rc.read_map(self.path)
+        self.assertEqual(sorted(players), [1, 2])
+        self.assertEqual(players[1]['b1'], (-1, 'k:LCONTROL'))
+        self.assertEqual(players[2]['up'], (-1, 'k:R'))
+        self.assertEqual(self.rc.read_kbds(self.path), {1: ('d209:0301', 'Ultimarc I-PAC2'), 2: ('d209:0301', 'Ultimarc I-PAC2')})
+        self.assertEqual(self.rc.read_visuals(self.path), {1: 'arcade6', 2: 'arcade6'})
+        # Quem era P1 e P2 ficou sem player, com o mapa guardado.
+        profiles = self.rc.read_bt_profiles(self.bt)
+        self.assertEqual({p[2] for p in profiles.values()}, {'Panel', 'Stick'})
+        # Um joypad que toma o P1 deixa o encoder so com o P2.
+        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 1))
+        self.assertEqual(sorted(self.rc.read_kbds(self.path)), [2])
+        self.assertEqual(self.rc.read_map(self.path)[0][1]['up'], (0, 'h0.1'))
+        # Desligar tira so os jogadores do encoder: o joystick fica como esta.
+        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'd209:0301', 'Ultimarc I-PAC2', False))
+        players, _ = self.rc.read_map(self.path)
+        self.assertEqual(sorted(players), [1])
+        self.assertEqual(self.rc.read_kbds(self.path), {})
+        # Um mapa de teclado de antes (sem dono) tambem sai ao ligar um encoder.
+        self.write('1 up -1 k:UP Keyboard\n2 up -1 k:R Keyboard\n')
+        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'd209:0301', 'Encoder', True))
+        self.assertEqual(self.rc.read_kbds(self.path)[1], ('d209:0301', 'Encoder'))
+
+    def test_the_encoder_is_active_only_while_it_is_plugged(self):
+        rc = self.rc
+        self.write('1 kbd -1 d209:0301 I-PAC\n1 up -1 k:UP Keyboard\n2 kbd -1 d209:0301 I-PAC\n2 up -1 k:R Keyboard\n'
+                   '3 up 0 h0.1 Pad\n')
+        players, _ = rc.read_map(self.path)
+        kbds = rc.read_kbds(self.path)
+        self.assertEqual(rc.active_players(players, 1, kbds, {'d209:0301'}), {1: True, 2: True, 3: True})
+        self.assertEqual(rc.active_players(players, 1, kbds, set()), {1: False, 2: False, 3: True})
+        # Sem dono (o mapa de antes), conta sempre.
+        self.assertEqual(rc.active_players(players, 0), {1: True, 2: True, 3: False})
+        t = Path(self.tmp.name) / 'devices'
+        t.write_text(
+            'I: Bus=0011 Vendor=0001 Product=0001 Version=ab41\nN: Name="AT keyboard"\nH: Handlers=sysrq kbd event3 leds\n\n'
+            'I: Bus=0003 Vendor=D209 Product=0301 Version=0110\nN: Name="Ultimarc I-PAC2"\nH: Handlers=sysrq kbd event7 leds\n\n'
+            'I: Bus=0003 Vendor=d209 Product=0301 Version=0110\nN: Name="Ultimarc I-PAC2 Consumer Control"\n'
+            'H: Handlers=kbd event8\n\n'
+            'I: Bus=0003 Vendor=046d Product=c52b Version=0111\nN: Name="Logitech USB Receiver"\nH: Handlers=mouse0 event9\n\n'
+            'I: Bus=0003 Vendor=0079 Product=0006 Version=0110\nN: Name="Pad"\nH: Handlers=kbd event6 js0\n\n'
+            'I: Bus=0006 Vendor=0000 Product=0000 Version=0000\nN: Name="fliperos-padkeys"\nH: Handlers=sysrq kbd event12\n\n')
+        self.assertEqual(rc.connected_keyboards(str(t)), [('d209:0301', 'Ultimarc I-PAC2')])
+        self.assertEqual(rc.connected_keyboards(str(t) + 'x'), [])
+
+    def test_a_bluetooth_controller_takes_the_player_it_was_given(self):
+        rc = self.rc
+        guid = self.GBT.ljust(32, '0')
+        profiles = {guid: ('pad', {'b4': 'b0'}, '8BitDo')}
+        players = {1: {'up': (0, 'h0.1')}, 3: {'up': (1, 'h0.1')}}
+        names, kinds, autos, visuals = {0: 'Panel', 1: 'Stick'}, {}, {}, {}
+        dev = {0: self.devices[0], 1: self.devices[1], 2: self.devices[2]}
+        # Sem escolha: o primeiro livre (o 2), como sempre.
+        rc.resolve_bluetooth(players, names, kinds, autos, dev, profiles, {}, visuals)
+        self.assertEqual(autos, {2: guid})
+        # Com o 5: ele; com o 3 (de um com fio): o primeiro livre; "none": nenhum.
+        for want, expected in (('5', {5: guid}), ('3', {2: guid}), ('none', {}), ('4', {4: guid})):
+            for p in list(autos):
+                players.pop(p)
+            autos.clear()
+            visuals.clear()
+            meta = {guid: {'player': want, 'visual': 'pad:xbox'}}
+            rc.resolve_bluetooth(players, names, kinds, autos, dev, profiles, meta, visuals)
+            self.assertEqual(autos, expected, want)
+            self.assertEqual(visuals, {p: 'pad:xbox' for p in expected}, want)
+
+    def test_set_player_of_a_bluetooth_controller_writes_its_preference(self):
+        guid = self.GBT.ljust(32, '0')
+        self.write(self.PANEL, '%s kind pad 8BitDo\n%s b4 b0 8BitDo\n' % (guid, guid))
+        self.apply(lambda m, d: self.rc.set_player(m, d, 2, 1))
+        # O player 1 era do Panel: ele ficou sem, e o 8BitDo tem a preferencia pelo 1.
+        self.assertEqual(self.rc.read_profile_meta(self.bt)[guid]['player'], '1')
+        self.assertEqual(self.rc.read_map(self.path)[0], {})
+        self.assertIn(self.G0.ljust(32, '0'), self.rc.read_bt_profiles(self.bt))
+        self.apply(lambda m, d: self.rc.set_player(m, d, 2, 0))
+        self.assertEqual(self.rc.read_profile_meta(self.bt)[guid]['player'], 'none')
+        self.apply(lambda m, d: self.rc.set_player(m, d, 2, -1))
+        self.assertNotIn('player', self.rc.read_profile_meta(self.bt).get(guid, {}))
+        # A linha de preferencia nao estraga o perfil.
+        self.assertEqual(self.rc.read_bt_profiles(self.bt)[guid][1], {'b4': 'b0'})
+
+    def test_the_map_keeps_the_visual_and_the_owner_of_the_encoder(self):
+        rc = self.rc
+        text = rc.map_text({1: {'up': (-1, 'k:UP')}, 2: {'b4': (0, 'b0')}}, {-1: 'Keyboard', 0: 'Pad'},
+                           {2: 'pad'}, None, None, {2: 'pad:snes', 1: 'arcade6'}, {1: ('d209:0301', 'I-PAC')})
+        self.assertEqual(text.splitlines(), [
+            '1 kbd -1 d209:0301 I-PAC', '1 visual -1 arcade6 Keyboard', '1 up -1 k:UP Keyboard',
+            '2 kind 0 pad Pad', '2 visual 0 pad:snes Pad', '2 b4 0 b0 Pad'])
+        Path(self.path).write_text(text)
+        self.assertEqual(rc.read_visuals(self.path), {1: 'arcade6', 2: 'pad:snes'})
+        self.assertEqual(rc.read_kbds(self.path), {1: ('d209:0301', 'I-PAC')})
+        self.assertEqual(rc.read_kinds(self.path), {2: 'pad'})
+        players, _ = rc.read_map(self.path)
+        self.assertEqual(sorted(players), [1, 2])
+
+    def test_the_list_has_the_player_the_visual_and_the_keyboards(self):
+        import argparse
+        import contextlib
+        rc = self.rc
+        self.write(self.PANEL + '1 visual 0 arcade6 Panel\n3 kbd -1 d209:0301 I-PAC\n3 up -1 k:UP Keyboard\n',
+                   '%s kind pad Stick\n%s b4 b0 Stick\n%s visual pad:xbox\n' % ((self.G1.ljust(32, '0'),) * 3))
+        t = Path(self.tmp.name) / 'devices'
+        t.write_text('I: Bus=0003 Vendor=d209 Product=0301 Version=0110\nN: Name="I-PAC"\nH: Handlers=kbd event7\n\n')
+        old_dev, old_input = rc.sdl_devices, rc.INPUT_DEVICES
+        rc.sdl_devices, rc.INPUT_DEVICES = (lambda: dict(self.devices)), str(t)
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                rc.cmd_list(argparse.Namespace(map=self.path))
+        finally:
+            rc.sdl_devices, rc.INPUT_DEVICES = old_dev, old_input
+        lines = out.getvalue().splitlines()
+        self.assertEqual(lines, [
+            '0|%s|Panel|usb|1|arcade6|1' % self.G0.ljust(32, '0'),
+            # Sem player mas com mapa guardado (e o visual escolhido).
+            '1|%s|Stick|usb||pad:xbox|1' % self.G1.ljust(32, '0'),
+            # Bluetooth sem perfil: nada mapeado.
+            '2|%s|8BitDo|bluetooth|||0' % self.GBT.ljust(32, '0'),
+            '-1|kb:d209:0301|I-PAC|keyboard|3||1'])
+
+
 class ButtonMappingTests(unittest.TestCase):
     """config/fliperos-buttons: os botoes de cada jogador no RetroArch e no GroovyMAME."""
 

@@ -84,6 +84,15 @@ buttons_next_player() {
 # buttons_list: os controles ligados, "INDICE|GUID|NOME|usb ou
 # bluetooth|JOGADOR" (fliperos-buttons list; o jogador do mapa agora).
 buttons_list() {
+  "$BUTTONS" list "$BUTTONS_MAP" 2>> "$FLIPEROS_LOG" | awk -F'|' '$1 ~ /^[0-9]+$/ { print $1 "|" $2 "|" $3 "|" $4 "|" $5 }'
+}
+
+# buttons_devices: os dispositivos da lista Controllers / Arcade panel, "INDICE|GUID|
+# NOME|usb, bluetooth ou keyboard|JOGADOR|VISUAL|MAPA" (fliperos-buttons list): os
+# joysticks e os teclados USB (INDICE -1, GUID kb:VID:PID). JOGADOR vazio: sem
+# player ("1+2" num encoder de teclado ligado); VISUAL o desenho do controle no guia do
+# frontend; MAPA 1 se ele tem mapa, num player ou guardado.
+buttons_devices() {
   "$BUTTONS" list "$BUTTONS_MAP" 2>> "$FLIPEROS_LOG"
 }
 
