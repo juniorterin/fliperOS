@@ -354,6 +354,9 @@ bios_arcade_dest() {
   case $1 in
     mame) printf '%s\n' "$BIOS_ROOT/mame" ;;
     naomi | naomi2 | atomiswave) printf '%s\n' "$BIOS_ROOT/dc" ;;
+    # O Odin (Hikaru: hikaru.zip, mie.zip; Gaelco: tms320c31.zip) acha os sets
+    # compartilhados na ~/bios/odin (o fliperos-odin passa -B).
+    odin) printf '%s\n' "$BIOS_ROOT/odin" ;;
     # O core FBNeo procura tambem na system/fbneo.
     retroarch/fbneo) printf '%s\n' "$BIOS_ROOT/fbneo" ;;
     # Os outros cores de MAME so as acham junto dos jogos.

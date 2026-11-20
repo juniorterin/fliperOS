@@ -8720,6 +8720,12 @@ class ScraperTests(Base):
                 ("ps2", "scph39001.bin", "ps2/scph39001.bin")):
             self.assertEqual(wants.get((key, name)), str(bios / dest), (key, name))
 
+    def test_bios_arcade_dest_of_odin_is_bios_odin(self):
+        # O Odin acha o hikaru.zip e o mie.zip na ~/bios/odin (o fliperos-odin
+        # passa -B): o Download BIOS tem de pedir os sets dos jogos dela la.
+        env = {"BIOS_ROOT": "/b"}
+        self.assertEqual(self.env.out('bios_arcade_dest odin /r/odin', env), "/b/odin\n")
+
     def test_bios_plan_asks_every_flycast_bios_for_any_flycast_game(self):
         # Um jogo de Naomi que a lista do MAME nao conhece (aqui nem ha
         # GroovyMAME) ja pede todas as BIOS do Flycast em ~/bios/dc, uma vez
