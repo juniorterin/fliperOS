@@ -263,7 +263,7 @@ const enUS = {
       { id: 'vga', label: 'DP/HDMI to VGA' },
       { id: 'atom15', label: 'ATOM-15 firmware' },
       { id: 'groovymame', label: 'GroovyMAME' },
-      { id: 'hbmame', label: 'HBMAME' },
+      { id: 'hbmame', label: 'HBGroovyMAME (HBMAME + Switchres)' },
       { id: 'retroarch', label: 'RetroArch' },
       { id: 'flycast', label: 'Flycast' },
       { id: 'model2', label: 'Keisho' },

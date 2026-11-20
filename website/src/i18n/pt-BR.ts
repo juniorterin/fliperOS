@@ -264,7 +264,7 @@ const ptBR: Messages = {
       { id: 'vga', label: 'DP/HDMI para VGA' },
       { id: 'atom15', label: 'Firmware ATOM-15' },
       { id: 'groovymame', label: 'GroovyMAME' },
-      { id: 'hbmame', label: 'HBMAME' },
+      { id: 'hbmame', label: 'HBGroovyMAME (HBMAME + Switchres)' },
       { id: 'retroarch', label: 'RetroArch' },
       { id: 'flycast', label: 'Flycast' },
       { id: 'model2', label: 'Keisho' },
