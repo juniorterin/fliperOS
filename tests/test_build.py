@@ -6324,8 +6324,8 @@ class FrontendDataTests(unittest.TestCase):
         rest = feview.stick_draw(0.0)
         self.assertEqual(rest.get_size(), size)
         self.assertLessEqual(rest.get_bounding_rect().height, 36)
-        # A haste gira em torno do pivo: para cima a bola sobe, vai para a direita e encolhe; para baixo desce, vai para a
-        # esquerda e cresce (a haste nao so estica e encolhe).
+        # A haste gira em torno do pivo: para cima a bola sobe e encolhe; para baixo desce e cresce, e o curso e quase todo
+        # na vertical (o lado so um pouco: a bola nao anda na diagonal) com a haste torcendo de leve.
 
         def ball(lean):
             surf = feview.stick_draw(lean)
@@ -6334,10 +6334,12 @@ class FrontendDataTests(unittest.TestCase):
             self.assertTrue(box)
             return max(box, key=lambda r: r.width * r.height)
         up, mid, down = ball(-1.0), ball(0.0), ball(1.0)
-        self.assertLess(up.centery, mid.centery)
-        self.assertLess(mid.centery, down.centery)
-        self.assertGreater(up.centerx, mid.centerx)
-        self.assertLess(down.centerx, mid.centerx)
+        self.assertGreaterEqual(mid.centery - up.centery, 3)
+        self.assertGreaterEqual(down.centery - mid.centery, 5)
+        self.assertLessEqual(abs(up.centerx - mid.centerx), 2)
+        self.assertLessEqual(abs(down.centerx - mid.centerx), 2)
+        self.assertLessEqual(abs(up.centerx - mid.centerx), (mid.centery - up.centery) // 2)
+        self.assertLessEqual(abs(down.centerx - mid.centerx), (down.centery - mid.centery) // 2)
         self.assertLess(up.width, mid.width)
         self.assertLess(mid.width, down.width)
         # O movimento: 0,09 s ate o fim do curso (com um pequeno excesso), segura e volta ao centro com um balanco.

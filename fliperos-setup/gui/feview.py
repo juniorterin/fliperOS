@@ -2129,7 +2129,9 @@ STICK_SHAFT = ((139, 233, 253), (230, 250, 255), (50, 120, 140))         # o cor
 STICK_INK = (22, 22, 34)
 STICK_WAIT = (0.35, 2.0)            # a espera sorteada entre os movimentos (s)
 STICK_MOVE = 0.45                   # a duracao de um movimento (s)
-STICK_CAM = (math.radians(32), math.radians(30))         # elevacao e giro da camera
+# A elevacao (a camera de cima, que da o curso na vertical) e o giro (o lado: so um pouco, para a haste torcer de leve
+# e a bola nao andar na diagonal).
+STICK_CAM = (math.radians(40), math.radians(8))
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 
 
