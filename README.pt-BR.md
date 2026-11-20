@@ -440,7 +440,7 @@ As músicas que tocam no [frontend do FliperOS](https://github.com/juniorterin/f
 - **Information Flow (Liquid Jungle Breakbeat Drum And Bass)**, de Musinova: [pixabay.com/music/drum-n-bass-information-flow-…-358432](https://pixabay.com/music/drum-n-bass-information-flow-liquid-jungle-breakbeat-drum-and-bass-358432/)
 - **Looking For A Way Back - 1970s Glam Rock**, de kaazoom: [pixabay.com/music/rock-looking-for-a-way-back-…-355935](https://pixabay.com/music/rock-looking-for-a-way-back-1970s-glam-rock-355935/)
 
-Os arquivos das músicas não estão neste repositório, porque essa licença não deixa distribuí-los sozinhos: eles vão em `~/media/fliperos-sounds/music`. Os sons do menu e do frontend que o FliperOS traz são feitos por [`tools/make-default-sounds.py`](tools/make-default-sounds.py).
+As músicas vêm com o FliperOS, distribuídas com a autorização dos autores, e são copiadas para `~/media/fliperos-sounds/music` na primeira vez (uma que você apagar não volta). Os sons do menu e do frontend que o FliperOS traz são feitos por [`tools/make-default-sounds.py`](tools/make-default-sounds.py).
 
 <p align="center">
   <img src="website/public/fliperos-logo.png" width="101" alt="Logo do FliperOS: um gabinete de fliperama em pixel art numa pequena sala isométrica">

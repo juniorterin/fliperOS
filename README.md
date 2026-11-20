@@ -441,7 +441,7 @@ The songs that play in the [FliperOS frontend](https://github.com/juniorterin/fl
 - **Information Flow (Liquid Jungle Breakbeat Drum And Bass)**, by Musinova: [pixabay.com/music/drum-n-bass-information-flow-…-358432](https://pixabay.com/music/drum-n-bass-information-flow-liquid-jungle-breakbeat-drum-and-bass-358432/)
 - **Looking For A Way Back - 1970s Glam Rock**, by kaazoom: [pixabay.com/music/rock-looking-for-a-way-back-…-355935](https://pixabay.com/music/rock-looking-for-a-way-back-1970s-glam-rock-355935/)
 
-The song files are not in this repository, because that licence does not allow handing them out on their own: they go in `~/media/fliperos-sounds/music`. The menu and frontend sounds that FliperOS comes with are made by [`tools/make-default-sounds.py`](tools/make-default-sounds.py).
+The songs come with FliperOS, distributed with the authors' authorization, and are copied to `~/media/fliperos-sounds/music` the first time (a song you delete does not come back). The menu and frontend sounds that FliperOS comes with are made by [`tools/make-default-sounds.py`](tools/make-default-sounds.py).
 
 <p align="center">
   <img src="website/public/fliperos-logo.png" width="101" alt="FliperOS logo: a pixel-art arcade cabinet in a small isometric room">

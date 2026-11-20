@@ -9356,11 +9356,16 @@ class MenuSoundsTests(Base):
         self.env.out("sounds_seed", self.vars)
         self.assertEqual(sorted(p.name for p in self.sounds.glob("*.wav")),
                          ["alert.wav", "back.wav", "browse.wav", "close-game.wav", "enter.wav", "open-game.wav"])
-        self.assertTrue((self.sounds / "music").is_dir())
-        # O que a pessoa trocou fica como esta.
+        # As tres musicas que vem no FliperOS, na pasta music (o Setup, como root, deixa tudo do usuario).
+        self.assertEqual(sorted(p.name for p in (self.sounds / "music").iterdir()),
+                         ["BurtySounds - Retrowave.mp3", "Kaazoom - Looking For A Way Back.mp3",
+                          "Musinova - Information Flow.mp3"])
+        # O que a pessoa trocou fica como esta, e uma musica que ela apagou nao volta.
         (self.sounds / "back.wav").write_bytes(b"mine")
+        (self.sounds / "music" / "Kaazoom - Looking For A Way Back.mp3").unlink()
         self.env.out("sounds_seed", self.vars)
         self.assertEqual((self.sounds / "back.wav").read_bytes(), b"mine")
+        self.assertFalse((self.sounds / "music" / "Kaazoom - Looking For A Way Back.mp3").exists())
 
     def test_in_the_audio_setup(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()

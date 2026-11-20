@@ -129,6 +129,49 @@ def seed():
             copied += 1
         except OSError:
             break
+    return copied + seed_music()
+
+
+def seed_music():
+    """As musicas que vem no FliperOS (BUNDLED/music: as tres do Pixabay, com a
+    autorizacao de distribuir) vao para a pasta music, cada uma so uma vez: o
+    nome de cada uma que ja foi copiada fica em ~/.config/fliperos/music-seeded,
+    e uma que a pessoa apagou depois nao volta. Uma que ja esta la (o que a pessoa
+    pos) so entra na lista. Devolve quantas copiou."""
+    source = os.path.join(BUNDLED, "music")
+    try:
+        names = sorted(n for n in os.listdir(source) if n.lower().endswith(EXTS) and not n.startswith("."))
+    except OSError:
+        return 0
+    marker = os.path.join(os.path.dirname(shared_file()), "music-seeded")
+    try:
+        with open(marker, encoding="utf-8") as f:
+            done = {line.rstrip("\n") for line in f}
+    except OSError:
+        done = set()
+    todo = [n for n in names if n not in done]
+    if not todo:
+        return 0
+    copied = 0
+    for name in todo:
+        dst = os.path.join(music_dir(), name)
+        try:
+            if not os.path.exists(dst):
+                shutil.copyfile(os.path.join(source, name), dst)
+                _own(dst, music_dir())
+                copied += 1
+        except OSError:
+            break                   # sem lugar ou so de leitura: tenta de novo na proxima vez
+        done.add(name)
+    try:
+        make_dirs(os.path.dirname(marker))
+        tmp = "%s.%d.tmp" % (marker, os.getpid())
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("".join(n + "\n" for n in sorted(done)))
+        _own(tmp, os.path.dirname(marker))
+        os.replace(tmp, marker)
+    except OSError:
+        pass
     return copied
 
 

@@ -26561,13 +26561,66 @@ class FesoundTests(unittest.TestCase):
 
     def test_seed_copies_what_is_missing_and_never_overwrites(self):
         fs = self.fs
-        self.assertEqual(fs.seed(), 6)
+        songs = sorted(p.name for p in (self.GUI / 'sounds/music').glob('*.mp3'))
+        self.assertEqual(fs.seed(), 6 + len(songs))
         self.assertTrue((self.dir / 'music').is_dir())
         self.assertEqual(sorted(p.name for p in self.dir.glob('*.wav')), sorted(fs.DEFAULT_FILE.values()))
+        self.assertEqual(sorted(p.name for p in (self.dir / 'music').iterdir()), songs)
         (self.dir / 'back.wav').write_bytes(b'mine')
         (self.dir / 'alert.wav').unlink()
         self.assertEqual(fs.seed(), 1)
         self.assertEqual((self.dir / 'back.wav').read_bytes(), b'mine')
+
+    def test_the_songs_that_come_with_the_system_are_copied_once_each(self):
+        fs = self.fs
+        bundled = self.tmp / 'bundled'
+        (bundled / 'music').mkdir(parents=True)
+        for name in ('A - One.mp3', 'B - Two.ogg', 'readme.txt', '.hidden.mp3'):
+            (bundled / 'music' / name).write_bytes(b'x' + name.encode())
+        fs.BUNDLED = str(bundled)                           # (o setUp devolve o de verdade)
+        marker = self.shared.parent / 'music-seeded'
+        music = self.dir / 'music'
+        self.assertEqual(fs.seed(), 2)
+        self.assertEqual(sorted(p.name for p in music.iterdir()), ['A - One.mp3', 'B - Two.ogg'])
+        self.assertEqual(marker.read_text(), 'A - One.mp3\nB - Two.ogg\n')
+        # Uma que a pessoa apagou nao volta, e uma que ela trocou fica como esta.
+        (music / 'A - One.mp3').unlink()
+        (music / 'B - Two.ogg').write_bytes(b'mine')
+        self.assertEqual(fs.seed(), 0)
+        self.assertFalse((music / 'A - One.mp3').exists())
+        self.assertEqual((music / 'B - Two.ogg').read_bytes(), b'mine')
+        # Uma que ja estava la (a pessoa tinha posto) so entra na lista, sem ser trocada.
+        (bundled / 'music' / 'C - Three.mp3').write_bytes(b'c')
+        (music / 'C - Three.mp3').write_bytes(b'mine too')
+        self.assertEqual(fs.seed(), 0)
+        self.assertEqual((music / 'C - Three.mp3').read_bytes(), b'mine too')
+        self.assertIn('C - Three.mp3\n', marker.read_text())
+        # Uma musica nova de uma versao nova vem.
+        (bundled / 'music' / 'D - Four.mp3').write_bytes(b'd')
+        self.assertEqual(fs.seed(), 1)
+        self.assertEqual((music / 'D - Four.mp3').read_bytes(), b'd')
+        # Sem musicas no sistema: nada a copiar.
+        fs.BUNDLED = str(self.tmp / 'nothing')
+        self.assertEqual(fs.seed_music(), 0)
+
+    def test_the_three_songs_ship_with_their_credits(self):
+        # Vem na imagem e nos updates (fliperos-setup/gui/sounds/music), com a autorizacao de distribuir: o
+        # nome de cada uma e o que a barra mostra, e os tres artistas tem credito no README (en e pt-BR).
+        fs = self.fs
+        songs = sorted(p.name for p in (self.GUI / 'sounds/music').glob('*.mp3'))
+        self.assertEqual(songs, ['BurtySounds - Retrowave.mp3', 'Kaazoom - Looking For A Way Back.mp3',
+                                 'Musinova - Information Flow.mp3'])
+        self.assertIn(fs.DEFAULT_TRACK, songs)
+        for name in songs:
+            head = (self.GUI / 'sounds/music' / name).read_bytes()[:3]
+            self.assertTrue(head == b'ID3' or (head[0] == 0xFF and head[1] & 0xE0 == 0xE0), name)
+        for readme in ('README.md', 'README.pt-BR.md'):
+            text = (ROOT / readme).read_text(encoding='utf-8')
+            for artist, track_id in (('BurtySounds', '181955'), ('Musinova', '358432'), ('kaazoom', '355935')):
+                self.assertIn(artist, text, readme)
+                self.assertIn(track_id, text, readme)
+            self.assertNotIn('not in this repository', text)
+            self.assertNotIn('não estão neste repositório', text)
 
     def test_the_six_events_are_one_set_shared_by_the_setup_and_the_frontend(self):
         fs = self.fs
