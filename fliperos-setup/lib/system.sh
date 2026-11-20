@@ -177,8 +177,8 @@ settings_list() {
   fi
   printf 'mame_latency|Audio|MAME audio latency|number|%s|0..50:0.5|GroovyMAME audio latency (0 = default). Lower responds faster; raise it if the sound crackles.\n' \
     "$(audio_mame_latency)"
-  printf 'menu_sounds|Audio|Menu sounds|choice|%s|on=On;off=Off|The WAV files in sounds/menu, when there are any.\n' \
-    "$(menu_sounds_state | sed 's/missing/off/')"
+  printf 'menu_sounds|Audio|Menu sounds|choice|%s|on=On;off=Off|All the menu sounds on or off. Each event has its own sound and volume, in the Setup (Audio > Menu sounds).\n' \
+    "$(menu_sounds_state)"
   printf 'audio.test|Audio|Test sound|action|||A voice on the cabinet speakers: if it is heard, the sound card is the right one.\n'
   # ── GunCon 2 (Setup > Joysticks > GunCon 2), menos a calibracao (os alvos na tela) ──
   printf 'gun_flash|GunCon 2|Screen flash|choice|%s|pulse=Pulse (two light frames on each shot);hold=Hold (light while the trigger is held);off=Off|A CRT gun only finds its aim where the screen is lit: the flash lights it on a shot, so dark parts hit and off screen reloads. Counts at once, even in a game that is open.\n' \

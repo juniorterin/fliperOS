@@ -11,19 +11,32 @@ The sound and the network of the cabinet: **Setup > Audio Setup** and **Setup > 
 | **AlsaMixer** | Every control of the sound card, one by one |
 | **MAME audio latency** | GroovyMAME's sound buffer, 0.0 to 50.0 (0 is MAME's default). Lower responds faster; raise it if the sound crackles |
 | **Test sound** | Plays a sound to check the speakers |
-| **Menu sounds** | A sound when the cursor moves and another on Enter, with your own WAV files |
+| **Menu sounds** | The sound and the volume of each menu event: browsing, Enter, Back, a game opening and closing, and alerts |
 
 There is no sound server: every emulator plays straight into ALSA, in KMS or in X, so this volume and this card count for all of them.
 
 ### Menu sounds
 
-Like the select screen of a game: one sound as the cursor moves through the menus, another on Enter. FliperOS ships no game sounds, so they are yours:
+Like the select screen of a game. **Menu sounds** lists six events, each with its own sound file and its own volume:
 
-1. Put `move.wav` and `select.wav` in `/opt/fliperos/sounds/menu`. Over the network it is the `FliperOS` share, folder `sounds/menu`.
-2. With one of them there, the sounds turn on by themselves.
-3. **Menu sounds** in Audio Setup turns them off and on.
+| Event | Plays when |
+| --- | --- |
+| **Browse** | The cursor moves through a list |
+| **Enter** | You go into something: Enter, a menu, a choice |
+| **Back** | You go back: Esc, Return, a menu that closes |
+| **Open game** | The menu opens the frontend, the desktop or a game |
+| **Close game** | It closes and you are back in the menu |
+| **Alert dialog** | A message or a question opens |
 
-A new sound cuts the one still playing, and the Enter sound keeps going after the menu closes.
+FliperOS comes with a set for all six, so the menu has sound from the start: retrowave sounds made of soft sine waves and a warm echo (a short tick for the cursor, two rising or falling notes for Enter and Back, an arpeggio that opens or closes for the games, a bell for the alert). To change an event, open it:
+
+- **Sound file** opens the file picker (the same one as the rest of the Setup), starting in `~/media/fliperos-sounds`. Pick a WAV, OGG, MP3 or FLAC; it plays at once.
+- **Volume** is from 0 to 100, for this event only.
+- **Play** plays it with that volume. **Use the default** brings the FliperOS sound back, and **No sound** keeps the event quiet.
+
+The first item, **Sounds**, turns every menu sound off and on, and **Sounds folder** shows where the files are. The sounds FliperOS comes with are copied there the first time, so you can see them and replace them; a file you replace stays as you left it. Short sounds (under a second) work best: a longer file is cut after 10 seconds. A new sound cuts the one still playing.
+
+The **Frontend sounds** of the [FliperOS frontend](FliperOS-frontend.md#sounds-and-music) are the same list with their own files and volumes, plus the music. The `move.wav` and `select.wav` that older versions read from `/opt/fliperos/sounds/menu` still stand in for **Browse** and **Enter** until you pick others.
 
 ### How it works
 
@@ -31,7 +44,7 @@ A new sound cuts the one still playing, and the Enter sound keeps going after th
 - RetroArch uses `audio_driver = alsa`, GroovyMAME `sound sdl` on the ALSA `default` (through `libfliperos-sdl-audio.so`), and the SDL emulators `SDL_AUDIODRIVER=alsa`.
 - MAME audio latency is `audio_latency` in `mame.ini` (GroovyArcade's "Audio Latency MAME").
 - The HDA codec stays always on (`options snd_hda_intel power_save=0`). With the Ubuntu kernel's 1 s power saving it went silent and popped in the speakers each time it turned back on.
-- Menu sounds are FliperOS's Gum patch `patches/gum/0002-sons-do-menu.patch` in the text menu, and the graphical menu itself; `menu_sounds=` in `fliperos.conf`.
+- Menu sounds are `fliperos-setup/gui/fesound.py` (the frontend uses it too). Each event is `menu_sound_EVENT` (a file, `off`, or empty for the default) and `menu_sound_EVENT_volume` in `fliperos.conf`, and `menu_sounds=off` silences all of them. The graphical menu (`fliperos-gui`) plays the six itself, through pygame's mixer, each at its volume. The text menu has only Gum's own two, through FliperOS's patch `patches/gum/0002-sons-do-menu.patch` (`GUM_SOUND_MOVE` and `GUM_SOUND_SELECT`, played with `aplay`): the Setup hands it a copy of the file already at the event's volume, kept in `~/.cache/fliperos/sounds`. Open and close game are played by `fliperos-tty1` around what the menu opens. The default sounds are `fliperos-setup/gui/sounds/*.wav`, made by `tools/make-default-sounds.py`.
 
 ## Network Setup
 

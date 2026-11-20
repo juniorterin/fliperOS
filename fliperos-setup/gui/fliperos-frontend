@@ -89,8 +89,16 @@ COLS = 3                     # as colunas da grade (o GRID_COLS do feview.py)
 
 # As linhas do Tab: 0 a 4 do jogo, e as do frontend (os minutos por ficha so
 # com o modo comercial ligado). A ordem e a do feview.FE_OPTIONS.
-(OPT_MODE, OPT_TRANSITION, OPT_CLONES, OPT_HIDDEN, OPT_CONTROLS, OPT_POWER, OPT_COMMERCIAL,
- OPT_COIN) = range(5, 13)
+(OPT_MODE, OPT_TRANSITION, OPT_CLONES, OPT_HIDDEN, OPT_CONTROLS, OPT_SOUNDS, OPT_POWER, OPT_COMMERCIAL,
+ OPT_COIN) = range(5, 14)
+# O som de cada botao (Tab > Frontend options > Frontend sounds): o cursor
+# andando, entrar e voltar. O que abre uma pergunta toca o alerta.
+SOUND_OF = {"up": "move", "down": "move", "left": "move", "right": "move", "b3": "move", "b6": "move",
+            "b1": "enter", "start": "enter", "tab": "enter", "b4": "enter", "b5": "enter", "b2": "back"}
+ALERT_OVERLAYS = ("exit", "delete", "storage")
+# Mexer no volume do video de preview reabre o ffmpeg dele: so depois de
+# PREVIEW_SETTLE segundos sem mexer.
+PREVIEW_SETTLE = 0.6
 
 # O atalho que fecha o jogo e as fichas do modo comercial, lidos junto com o
 # jogo (config/fliperos-buttons hotkey).
@@ -270,6 +278,12 @@ def tree(pid):
     return found
 
 
+def path_inside(path, root):
+    """O caminho e a pasta root ou esta dentro dela (os atalhos resolvidos)."""
+    path, root = os.path.realpath(path), os.path.realpath(root)
+    return path == root or path.startswith(root.rstrip(os.sep) + os.sep)
+
+
 def load_config():
     try:
         with open(CONFIG, encoding="utf-8") as f:
@@ -419,6 +433,30 @@ class Frontend:
         self.coin_minutes = cfg.get("coin_minutes") if cfg.get("coin_minutes") in COIN_MINUTES else 5
         self.credit_until = float(cfg.get("credit_until") or 0)
         self.coin_at = 0.0         # a ultima ficha (o relogio aparece piscando)
+        # Tab > Frontend options > Frontend sounds (gui/fesound.py): os seis
+        # eventos (o espelho do Setup > Audio > Menu sounds), a trilha com o
+        # aviso do nome de cada faixa e o volume do video de preview.
+        import fesound
+        self.fs = fesound
+        self.snd = fesound.Frontend(cfg.get("sounds"))
+        fevideo.VOLUME = self.snd.preview_volume()
+        # O som do preview chega depois da imagem (a fila do ALSA): o atraso medido
+        # (sync_auto, em segundos) ou o que a pessoa pos (PREVIEW SYNC) vai ao fevideo.SYNC.
+        self.sync_auto = 0.0
+        self.apply_sync()
+        self.sfx = fesound.Bank(pygame, self.snd)
+        self.music = fesound.Music(pygame, self.snd.music_source(), self.snd.music_volume())
+        self.nowplaying = None     # (o nome da faixa, quando comecou) para a barra
+        self.preview_apply = None  # quando reabrir o video com o volume novo
+        self.last_overlay = None
+        if self.shot or os.environ.get("FLIPEROS_FE_NOSOUND"):
+            self.sfx.usable = self.music.usable = False
+        else:
+            fesound.seed()
+            self.sfx.usable = self.music.usable = fesound.audio_opens(pygame)
+            self.sfx.reload()
+            if self.sfx.usable:
+                self.measure_sync()
         self.cursor = 0
         self.top = 0
         self.overlay = "guide"     # o guia dos controles ao abrir
@@ -757,7 +795,7 @@ class Frontend:
                      "controls": self.input.binds, "panel_layout": self.panel_layout,
                      "guide": self.guide_kind, "joypad_layout": self.joypad_layout,
                      "controls_seen": self.controls_seen, "transitions": self.transitions,
-                     "media_emulators": self.media_emus})
+                     "media_emulators": self.media_emus, "sounds": self.snd.data})
 
     def keep_position(self):
         """O jogo onde o cursor esta, anotado para a game list de agora: ao
@@ -1150,11 +1188,236 @@ class Frontend:
         self.nag_at = time.monotonic()
         self.say("INSERT COIN")
         self.buzz("error")
+        self.sfx.play("alert")
 
     def buzz(self, event):
         """Um toque de retorno (gui/fehaptic.py) no controle em uso."""
         if self.input.buzzer:
             self.input.buzzer.feel(event)
+
+    # ── Sons e trilha (Tab > Frontend options > Frontend sounds) ──
+    def sfx_for(self, a):
+        """O som do botao apertado: o cursor andando, entrar, voltar."""
+        event = SOUND_OF.get(a)
+        if not event:
+            return
+        # Escolhendo a tecla ou o botao de um atalho, cada aperto e a escolha.
+        if self.overlay in ("exitkey", "exitpad") or (self.overlay == "controls" and self.ov.get("wait")):
+            return
+        self.sfx.play(event)
+
+    def sound_tick(self, now):
+        """Chamado a cada quadro: a trilha (a proxima faixa e a barra com o
+        nome dela), o volume novo do video de preview e o alerta das
+        perguntas que abrem."""
+        if self.preview_apply and now >= self.preview_apply:
+            self.preview_apply = None
+            import fevideo
+            fevideo.VOLUME = self.snd.preview_volume()
+            self.player.restart()
+        # PAUSE MUSIC ligado: um video de preview com som toca, a trilha espera
+        # (desligado, que e o padrao, as duas tocam juntas).
+        video = self.player.video
+        self.music.hold(self.snd.music_pause() and bool(video and video.sound and video.alive and video.count))
+        title = self.music.tick()
+        if title:
+            self.nowplaying = (title, now)
+        if self.overlay != self.last_overlay:
+            if self.overlay in ALERT_OVERLAYS:
+                self.sfx.play("alert")
+            self.last_overlay = self.overlay
+
+    def sounds_act(self, a):
+        """Frontend sounds: cima e baixo escolhem a linha, esquerda e direita
+        mudam o volume, o botao 1 abre o seletor de arquivos (nas linhas de
+        volume, toca), o 4 toca e o 5 volta ao padrao."""
+        rows = self.view.SOUND_ROWS
+        sel = self.ov["sel"]
+        key = rows[sel][0]
+        if a in ("up", "down"):
+            self.ov["sel"] = (sel + (1 if a == "down" else -1)) % len(rows)
+        elif a in ("left", "right"):
+            if key == "music_pause":
+                self.toggle_music_pause()
+            elif key == "preview_sync":
+                self.sound_sync(10 if a == "right" else -10)
+            else:
+                self.sound_volume(key, 5 if a == "right" else -5)
+        elif a in ("b3", "b6") and key == "preview_sync":
+            self.sound_sync(50 if a == "b6" else -50)
+        elif a == "b1":
+            if key in self.fs.EVENTS or key == "music":
+                self.sndpick_open(key)
+            elif key == "music_pause":
+                self.toggle_music_pause()
+            else:
+                self.sound_test(key)
+        elif a == "b4":
+            self.sound_test(key)
+        elif a == "b5":
+            self.sound_reset(key)
+        elif a in ("b2", "tab"):
+            self.remember()
+            self.overlay, self.ov = "options", {"sel": OPT_SOUNDS}
+        return None
+
+    def apply_sync(self):
+        """O atraso da imagem do video de preview: o que a pessoa pos ou o que
+        o ALSA mediu (fevideo.SYNC, em segundos)."""
+        import fevideo
+        manual = self.snd.preview_sync()
+        fevideo.SYNC = self.sync_auto if manual is None else manual / 1000.0
+
+    def measure_sync(self):
+        """Mede o atraso do som no ALSA (uns 0,65 s escrevendo silencio, numa
+        thread) e o aplica; sem medida, a imagem nao espera."""
+        def work():
+            seconds = self.fs.alsa_latency()
+            if seconds is not None:
+                self.sync_auto = seconds
+                self.apply_sync()
+        threading.Thread(target=work, daemon=True).start()
+
+    def sound_sync(self, step):
+        """PREVIEW SYNC: mais ou menos step ms de espera da imagem; a partir do
+        automatico, vira o valor da pessoa (o botao 5 volta ao automatico)."""
+        current = self.snd.preview_sync()
+        if current is None:
+            current = round(self.sync_auto * 1000)
+        self.snd.set_preview_sync(current + step)
+        self.apply_sync()
+        self.remember()
+
+    def toggle_music_pause(self):
+        """PAUSE MUSIC: a trilha espera um video de preview com som (desligado
+        por padrao). Desligando, a que esperava continua (sound_tick)."""
+        self.snd.set_music_pause(not self.snd.music_pause())
+        self.remember()
+
+    def sound_test(self, key):
+        """Toca o som da linha, no volume dela (a trilha ja toca por baixo)."""
+        if key in self.fs.EVENTS:
+            self.sfx.play(key)
+
+    def sound_volume(self, key, step):
+        """O volume da linha mais step (0 a 100). O de um evento toca em
+        seguida, para ouvir; o da trilha vale na hora; o do video de preview
+        reabre o video quando para de mexer."""
+        snd = self.snd
+        if key in self.fs.EVENTS:
+            snd.set_volume(key, snd.volume(key) + step)
+            self.sfx.reload_one(key)
+            self.sfx.play(key)
+        elif key == "music_volume":
+            snd.set_music_volume(snd.music_volume() + step)
+            self.music.configure(snd.music_source(), snd.music_volume())
+        elif key == "preview":
+            snd.set_preview_volume(snd.preview_volume() + step)
+            self.preview_apply = time.monotonic() + PREVIEW_SETTLE
+        else:
+            return
+        self.remember()
+
+    def sound_reset(self, key):
+        """A linha de volta ao padrao: o som do FliperOS e o volume dele."""
+        fs, snd = self.fs, self.snd
+        if key in fs.EVENTS:
+            snd.set_file(key, "")
+            snd.set_volume(key, fs.DEFAULT_VOLUME[key])
+            self.sfx.reload_one(key)
+            self.sfx.play(key)
+        elif key == "music":
+            snd.set_music_source("")
+            self.music.configure("", snd.music_volume())
+        elif key == "music_volume":
+            snd.set_music_volume(fs.MUSIC_VOLUME)
+            self.music.configure(snd.music_source(), snd.music_volume())
+        elif key == "music_pause":
+            snd.set_music_pause(False)
+        elif key == "preview_sync":
+            snd.set_preview_sync(None)
+            self.apply_sync()
+        elif key == "preview":
+            snd.set_preview_volume(fs.PREVIEW_VOLUME)
+            self.preview_apply = time.monotonic() + PREVIEW_SETTLE
+        self.remember()
+
+    def sndpick_open(self, target):
+        """O seletor de arquivos de um evento (ou da trilha), na pasta do som
+        de agora, ou em ~/media/fliperos-sounds (a trilha, em music)."""
+        fs = self.fs
+        fs.seed()
+        music = target == "music"
+        current = self.snd.music_source() if music else self.snd.file(target)
+        start = fs.music_dir() if music else fs.sounds_dir()
+        if current and current != "off":
+            folder = current if os.path.isdir(current) else os.path.dirname(current)
+            if os.path.isdir(folder) and path_inside(folder, fs.sounds_dir()):
+                start = folder
+        self.overlay, self.ov = "sndpick", {"for": target, "dir": start, "sel": 0, "entries": []}
+        self.sndpick_build(select=current)
+
+    def sndpick_build(self, select=None):
+        """As linhas da pasta de agora: o padrao e o mudo, USE THIS FOLDER (na
+        trilha), a pasta de cima, as pastas e os arquivos de som. (tipo, nome,
+        valor): o valor e o que vai para o frontend.json."""
+        fs, ov = self.fs, self.ov
+        folder, music = ov["dir"], ov["for"] == "music"
+        root = fs.sounds_dir()
+        entries = [("default", "DEFAULT (THE MUSIC FOLDER)" if music else "DEFAULT SOUND", ""),
+                   ("off", "NO MUSIC" if music else "NO SOUND", "off")]
+        if music and path_inside(folder, fs.music_dir()):
+            entries.append(("use", "USE THIS FOLDER", folder))
+        if os.path.realpath(folder) != os.path.realpath(root):
+            entries.append(("up", "..", os.path.dirname(folder.rstrip(os.sep))))
+        try:
+            names = sorted(os.listdir(folder), key=str.lower)
+        except OSError:
+            names = []
+        paths = [(n, os.path.join(folder, n)) for n in names if not n.startswith(".")]
+        entries += [("dir", n + "/", p) for n, p in paths if os.path.isdir(p)]
+        entries += [("file", n, p) for n, p in paths if n.lower().endswith(fs.EXTS) and os.path.isfile(p)]
+        ov["entries"] = entries
+        ov["sel"] = next((i for i, e in enumerate(entries) if select and e[2] == select), 0)
+
+    def sndpick_apply(self, value):
+        """A escolha do seletor: grava, aplica e volta ao Frontend sounds."""
+        target = self.ov["for"]
+        if target == "music":
+            self.snd.set_music_source(value)
+            self.music.configure(value, self.snd.music_volume())
+        else:
+            self.snd.set_file(target, value)
+            self.sfx.reload_one(target)
+            self.sfx.play(target)
+        self.remember()
+        self.overlay, self.ov = "sounds", {"sel": [k for k, _ in self.view.SOUND_ROWS].index(target)}
+
+    def sndpick_act(self, a):
+        ov = self.ov
+        entries = ov["entries"]
+        sel = ov["sel"]
+        if a in ("up", "down"):
+            ov["sel"] = (sel + (1 if a == "down" else -1)) % len(entries)
+        elif a in ("b3", "b6"):
+            ov["sel"] = max(0, min(len(entries) - 1, sel + (-8 if a == "b3" else 8)))
+        elif a == "b1":
+            kind, _, value = entries[sel]
+            if kind == "dir":
+                ov["dir"] = value
+                self.sndpick_build()
+            elif kind == "up":
+                came, ov["dir"] = ov["dir"], value
+                self.sndpick_build(select=came)
+            else:
+                self.sndpick_apply(value)
+        elif a == "b4":
+            kind, _, value = entries[sel]
+            if kind == "file" and ov["for"] != "music":
+                self.sfx.play_file(value, self.snd.volume(ov["for"]))
+        elif a in ("b2", "tab"):
+            self.overlay, self.ov = "sounds", {"sel": [k for k, _ in self.view.SOUND_ROWS].index(ov["for"])}
+        return None
 
     def option_count(self):
         return OPT_COIN + 1 if self.commercial else OPT_COIN
@@ -1167,6 +1430,10 @@ class Frontend:
             return None
         if o == "controls":
             return self.controls_act(a)
+        if o == "sounds":
+            return self.sounds_act(a)
+        if o == "sndpick":
+            return self.sndpick_act(a)
         if o == "storage":
             return self.storage_act(a)
         if o in ("lobby", "transfer"):
@@ -1366,6 +1633,8 @@ class Frontend:
                 self.overlay, self.ov = "hidden", {"sel": 0, "rows": self.lib.hidden_games()}
             elif sel == OPT_CONTROLS and a == "b1":
                 self.overlay, self.ov = "controls", {"sel": CONTROLS_FIRST, "col": 0, "wait": None}
+            elif sel == OPT_SOUNDS and a == "b1":
+                self.overlay, self.ov = "sounds", {"sel": 0}
             elif a == "b1" and sel == 3 and self.game():
                 g = self.game()
                 self.lib.set_hidden(g["_system"]["key"], g["Name"], True)
@@ -2704,6 +2973,7 @@ class Frontend:
         if not argv:
             self.say("CANNOT OPEN THIS GAME")
             self.buzz("error")
+            self.sfx.play("alert")
             return
         if self.locked():
             self.nag()
@@ -2718,7 +2988,10 @@ class Frontend:
             return
         self.remember()
         pg = self.pg
-        # O video, o som, os controles (e a rede) ficam para o jogo.
+        # O video, o som, os controles (e a rede) ficam para o jogo. O som de
+        # abrir toca num aplay a parte, que segue depois de o mixer fechar.
+        self.sfx.play_outside("open")
+        self.music.stop()
         self.player.stop()
         self.grid.stop()
         self.harvest.paused = True
@@ -2742,6 +3015,12 @@ class Frontend:
         self.media.clear()
         self.repeat.clear()
         pg.event.clear()
+        # O jogo fechou: o mixer foi fechado para ele, abre de novo, o som de
+        # fechar toca e a trilha volta (com a faixa seguinte, no sound_tick).
+        self.sfx.reload()
+        self.sfx.play("close")
+        if self.sfx.usable:
+            self.measure_sync()        # a configuracao do som pode ter mudado
         if ended:
             self.say(ended, 3)
 
@@ -2904,7 +3183,7 @@ class Frontend:
             self.popup_act_done(now)
         if self.picking and self.strip is None and now - self.pick_at >= PICK_WAIT:
             self.pick_category()
-        if self.overlay and self.overlay not in ("filter", "classify", "rename", "more"):
+        if self.overlay and self.overlay not in ("filter", "classify", "rename", "more", "sndpick"):
             return
         # O modo letra acaba com LETTER_IDLE segundos sem mexer.
         if (self.letter_mode and self.input.held("up") is None and self.input.held("down") is None
@@ -2921,6 +3200,7 @@ class Frontend:
                     self.repeat[a] = now + FIRST
                 elif now >= self.repeat[a]:
                     self.repeat[a] = now + 0.12
+                    self.sfx.play("move")
                     self.overlay_act(a)
                 continue
             step = 1 if a == "down" else -1
@@ -2931,11 +3211,13 @@ class Frontend:
                 if lheld >= FIRST and now >= self.repeat.get(a, 0):
                     rate = LRATE0 if lheld < LSPEEDUP else min(LRATE1, LRATE0 + (lheld - LSPEEDUP) * 9)
                     self.letter_jump(step, wrap=False)
+                    self.sfx.play("move")
                     self.repeat[a] = now + 1.0 / rate
             elif held >= LETTERS:
                 # 3 s segurando: entra no modo letra, que ja comeca andando.
                 self.letter_mode = {"press": now - FIRST, "last": now}
                 self.letter_jump(step, wrap=False)
+                self.sfx.play("move")
                 self.repeat[a] = now + 1.0 / LRATE0
             elif held >= FIRST:
                 k = min(1.0, (held - FIRST) / (LETTERS - FIRST))
@@ -2948,12 +3230,14 @@ class Frontend:
                     # Segurando: um tique so quando a lista andou (no fim dela, nada).
                     if self.cursor != before:
                         self.input.feel(["up"], self.input.buzzer and self.input.buzzer.pad)
+                        self.sfx.play("move")
         for a, gap in (("left", 0.5), ("right", 0.5), ("b3", 0.18), ("b6", 0.18)):
             held = self.input.held(a)
             if held is None or self.overlay:
                 continue
             if held >= gap and now >= self.repeat.get(a, 0):
                 self.repeat[a] = now + (0.35 if a in ("left", "right") else 0.15)
+                self.sfx_for(a)
                 self.act(a)
 
     def run(self, keys=()):
@@ -2989,6 +3273,7 @@ class Frontend:
                 self.attract_next = None
                 self.attract_restore()
             for a in acts:
+                self.sfx_for(a)
                 r = self.act(a)
                 if r == "quit":
                     self.remember()
@@ -3011,6 +3296,7 @@ class Frontend:
                     self.marquee_logo((self.category() or {}).get("name", ""), "", 1)
             self.attract_tick(now)
             self.tick(now)
+            self.sound_tick(now)
             self.link_tick(now)
             self.capture_tick(now)
             # O tempo do modo comercial acabou aqui no frontend.

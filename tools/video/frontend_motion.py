@@ -11,6 +11,10 @@ teclas sao as do frontend (fe.act), de modo que o que se ve e o que o gabinete f
          pisca em verde e o STARTED que treme       -> frontend-menu.webp
   more   a pagina "+": os componentes entrando, a troca de pagina que desliza e o replay
          ao voltar                                  -> frontend-page.webp
+  sounds Tab > FRONTEND SOUNDS: os seis sons, o volume de cada um, o seletor de arquivos, a trilha
+         (uma pasta de musicas) e o volume do video de preview     -> frontend-sounds.webp
+  music  a barra NOW PLAYING que entra quando uma faixa comeca, como a das conquistas, com o
+         nome que corre quando nao cabe                            -> frontend-music.webp
   --sheet  tambem grava a folha de contato (NOME-folha.png) para conferir os quadros
 
 Cada WebP e animado, 320x240, 25 quadros por segundo (os passos de 0,07 s do movimento
@@ -21,6 +25,7 @@ import importlib.util
 import json
 import lzma
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -115,6 +120,21 @@ def build(which, home):
     os.environ["FLIPEROS_RA_CORES"], os.environ["FLIPEROS_RA_INFO"] = str(home / "cores"), str(home / "info")
     (home / "net.json").write_text(json.dumps({"table": NET}))
     os.environ["FLIPEROS_LINK_FAKE"] = str(home / "net.json")
+    # Os sons e a trilha (Tab > Frontend sounds): a pasta fliperos-sounds com os sons padrao, uns
+    # outros e musicas (vazias: a gravacao e sem som).
+    os.environ["FLIPEROS_SOUNDS_DIR"] = str(home / "media" / "fliperos-sounds")
+    import fesound
+    fesound.seed()
+    sounds, music = Path(fesound.sounds_dir()), Path(fesound.music_dir())
+    for name in ("coin.wav", "laser.wav", "power-up.wav"):
+        shutil.copyfile(sounds / "enter.wav", sounds / name)
+    for name in ("BurtySounds - Retrowave.mp3", "Night Drive.mp3", "Neon Skyline.ogg"):
+        (music / name).write_bytes(b"x")
+    for folder, names in (("Synthwave", ("Outrun.mp3", "Chrome Sunset.mp3", "Grid Runner.mp3")),
+                          ("Arcade classics", ("Insert Coin.mp3", "High Score.mp3"))):
+        (music / folder).mkdir()
+        for name in names:
+            (music / folder / name).write_bytes(b"x")
     import fedata
     systems = [{"key": key, "folder": str(home / "roms" / key), "platform": "arcade", "name": name,
                 "exe": "/x/fliperos-x11-run", "args": "x [name]", "extensions": [".zip"], "arcade": True}
@@ -202,6 +222,56 @@ def scenario(which, fe, info):
                 (7.30, key("down")), (7.70, key("down")), (8.10, key("down")),                       # rola o texto
                 (8.90, key("left")), (10.50, key("right")),                                          # voltar anima de novo
                 (12.30, key("b2")), (13.20, key("b2"))], 14.0
+    def now_playing(title):
+        # O que o laco faz quando a trilha comeca uma faixa (sound_tick): a barra entra agora.
+        return lambda: setattr(fe, "nowplaying", (title, time.monotonic()))
+
+    def step_to(name):
+        # Um aperto de baixo (ou de cima) em direcao a linha do seletor que comeca com NAME; agendado
+        # varias vezes, anda ate la e para.
+        def step():
+            entries = fe.ov.get("entries") or []
+            want = next((i for i, e in enumerate(entries) if e[1].lower().startswith(name.lower())), None)
+            if want is not None and fe.ov["sel"] != want:
+                fe.act("down" if want > fe.ov["sel"] else "up")
+        return step
+
+    def walk(name, start, count=9, gap=0.14):
+        return [(start + gap * i, step_to(name)) for i in range(count)]
+
+    if which == "sounds":
+        go_to("ssf2t")()
+        sounds_row = 5 + [k for k, _ in fe.view.FE_OPTIONS].index("sounds")
+        fe.sync_auto = 0.32                       # o que o frontend mede no gabinete com o Live screen sound
+        return ([(0.6, key("tab"))] + [(1.3 + 0.09 * i, key("down")) for i in range(sounds_row)] +
+                [(2.8, key("b1")),                                                       # Frontend sounds: BROWSE
+                 (3.5, key("down")), (4.0, key("down")),                                  # BACK
+                 (4.5, key("right")), (4.7, key("right")), (4.9, key("right")),           # mais alto
+                 (5.5, key("down")),                                                      # OPEN GAME
+                 (6.0, key("left")), (6.2, key("left")), (6.4, key("left")),              # mais baixo
+                 (6.9, key("down")), (7.5, key("b1"))] +                                  # CLOSE GAME: o seletor
+                walk("laser", 8.0) +
+                [(9.6, key("b1")),                                                        # escolhe laser.wav
+                 (10.3, key("down")), (10.8, key("down")), (11.3, key("b1"))] +           # MUSIC: o seletor
+                walk("synthwave", 11.8) +
+                [(13.4, key("b1"))] +                                                     # entra na pasta
+                walk("use this", 13.9, 5) +
+                [(14.9, key("b1")), (15.1, now_playing("Synthwave - Outrun")),           # USE THIS FOLDER
+                 (15.8, key("down")),                                                     # MUSIC VOLUME
+                 (16.3, key("right")), (16.5, key("right")), (16.7, key("right")), (16.9, key("right")),
+                 (17.5, key("down")),                                                     # PAUSE MUSIC: desligado por padrao
+                 (18.1, key("right")), (19.0, key("right")),                              # liga e desliga
+                 (19.7, key("down")),                                                     # PREVIEW VOLUME
+                 (20.2, key("left")), (20.4, key("left")), (20.6, key("left")),
+                 (21.3, key("down")),                                                     # PREVIEW SYNC: AUTO 320 MS
+                 (21.9, key("left")), (22.1, key("left")), (22.3, key("left")),           # a imagem espera menos
+                 (23.2, key("b2")), (23.8, key("b2"))]), 25.0                              # volta ao Tab e fecha
+    if which == "music":
+        go_to("1944")()
+        return [(0.4, now_playing("BurtySounds - Retrowave")),
+                (1.6, key("down")), (2.3, key("down")), (3.0, key("down")), (3.7, key("down")),
+                (6.4, now_playing("Neon Skyline - A Very Long Track Title That Needs To Run")),
+                (7.5, key("down")), (8.2, key("down")), (8.9, key("up")), (9.6, key("up"))], 13.0
     fe.link_join = lambda party, take=None: setattr(fe, "overlay", None)      # entrar na sala nao e o assunto
     fe.link_host = lambda take=None: setattr(fe, "overlay", None)
     return [(0.0, go_to("daytona")), (0.5, key("b1")),             # abre o menu: o PLAY pulsa
@@ -240,7 +310,7 @@ def record(which, out, sheet):
 
     def image(surface):
         return Image.frombytes("RGB", surface.get_size(), pygame.image.tostring(surface, "RGB"))
-    name = {"menu": "frontend-menu", "more": "frontend-page"}[which]
+    name = {"menu": "frontend-menu", "more": "frontend-page", "sounds": "frontend-sounds", "music": "frontend-music"}[which]
     shown = [image(s) for s in frames[::2]]
     shown[0].save(out / (name + ".webp"), save_all=True, append_images=shown[1:], duration=1000 // (FPS // 2), loop=0,
                   quality=92, method=6)
@@ -255,12 +325,12 @@ def record(which, out, sheet):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 2 or args[1] not in ("menu", "more", "all"):
+    if len(args) != 2 or args[1] not in ("menu", "more", "sounds", "music", "all"):
         sys.exit(__doc__)
     out = Path(args[0])
     out.mkdir(parents=True, exist_ok=True)
     if args[1] == "all":
-        for which in ("menu", "more"):         # um frontend por processo (o modulo guarda o estado)
+        for which in ("menu", "more", "sounds", "music"):         # um frontend por processo (o modulo guarda o estado)
             subprocess.run([sys.executable, "-I", __file__, str(out), which] + [a for a in sys.argv[1:] if a.startswith("--")],
                            check=True)
         return

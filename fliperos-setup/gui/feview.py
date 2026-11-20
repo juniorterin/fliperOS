@@ -4098,7 +4098,7 @@ def chip(ui, right, y, text, lit, on):
 # fliperos-frontend, na mesma ordem); os minutos por ficha so com o modo
 # comercial ligado.
 FE_OPTIONS = [("mode", "VIEW"), ("transition", "TRANSITION"), ("clones", "SHOW CLONES"), ("hidden", "HIDDEN GAMES"),
-              ("controls", "FRONTEND CONTROLS"), ("power", "POWER CLOSES GAME"),
+              ("controls", "FRONTEND CONTROLS"), ("sounds", "FRONTEND SOUNDS"), ("power", "POWER CLOSES GAME"),
               ("commercial", "COMMERCIAL MODE"), ("coin", "MINUTES PER COIN")]
 
 
@@ -4124,7 +4124,7 @@ def draw_option(fe, ui, opt, rect, on, right, now):
         chip(ui, right, y, "ON" if fe.show_clones else "OFF", fe.show_clones, on)
     elif what == "hidden":
         tiny.text(ui, "%d  >" % len(fe.lib.hidden()), T.PINK if on else T.COMMENT, right, y + 6, right=True)
-    elif what == "controls":
+    elif what in ("controls", "sounds"):
         tiny.text(ui, ">", T.PINK if on else T.COMMENT, right, y + 6, right=True)
     elif what == "power":
         chip(ui, right, y, "ON" if fe.power_exit else "OFF", fe.power_exit, on)
@@ -4135,6 +4135,262 @@ def draw_option(fe, ui, opt, rect, on, right, now):
         if on:
             arrow(ui, cx - 5, y + 8, (-1, 0), T.PINK, 3)
             arrow(ui, right - 3, y + 8, (1, 0), T.PINK, 3)
+
+
+# ── Tab > Frontend options > Frontend sounds ────────────────────────
+# Os seis eventos (os de gui/fesound.py: o mesmo conjunto do Setup > Audio >
+# Menu sounds), a trilha, o volume dela e o do video de preview dos jogos.
+# Esquerda e direita mudam o volume da linha, o botao 1 abre o seletor de
+# arquivos, o 4 toca e o 5 volta ao padrao.
+SOUND_ROWS = [("move", "BROWSE"), ("enter", "ENTER"), ("back", "BACK"), ("open", "OPEN GAME"),
+              ("close", "CLOSE GAME"), ("alert", "ALERT DIALOG"), ("music", "MUSIC"),
+              ("music_volume", "MUSIC VOLUME"), ("music_pause", "PAUSE MUSIC"), ("preview", "PREVIEW VOLUME"), ("preview_sync", "PREVIEW SYNC")]
+SOUND_HINTS = {"move": "WHEN THE CURSOR MOVES", "enter": "WHEN YOU GO INTO SOMETHING",
+               "back": "WHEN YOU GO BACK", "open": "WHEN A GAME OPENS", "close": "WHEN THE GAME CLOSES",
+               "alert": "WHEN AN ALERT OPENS",
+               "music": "A FILE, OR A FOLDER AT RANDOM",
+               "music_volume": "HOW LOUD THE MUSIC PLAYS",
+               "music_pause": "PAUSE IT WHEN A PREVIEW HAS SOUND",
+               "preview": "SOUND OF THE GAME PREVIEW",
+               "preview_sync": "PICTURE WAITS FOR THE LATE SOUND"}
+
+
+def sound_value(fe, key):
+    """(o texto, o volume) de uma linha do Frontend sounds; None no que nao tem."""
+    fs = fe.fs
+    if key in fs.EVENTS:
+        return fs.describe(fe.snd.file(key)).upper(), fe.snd.volume(key)
+    if key == "music":
+        source = fe.snd.music_source()
+        if source == "off":
+            return "OFF", None
+        if not source:
+            return "DEFAULT (THE MUSIC FOLDER)", None
+        name = os.path.basename(source.rstrip("/"))
+        return ("FOLDER " + name if os.path.isdir(source) else name).upper(), None
+    if key == "music_volume":
+        return None, fe.snd.music_volume()
+    if key in ("music_pause", "preview_sync"):
+        return None, None
+    return None, fe.snd.preview_volume()
+
+
+def volume_bar(ui, x, y, w, vol, on):
+    """O volume: a barra com o que esta cheio em verde, e o numero."""
+    ui.fill(T.LINE, (x, y + 5, w, 4))
+    ui.fill(T.GREEN if on else T.PURPLE, (x, y + 5, round(w * vol / 100), 4))
+
+
+def draw_sounds(fe, ui, now):
+    pw, ph = min(290, WW - 6), 226
+    px, py = (WW - pw) // 2, max(4, (HH - ph) // 2)
+    sel = fe.ov["sel"]
+    card(ui, (px, py, pw, ph))
+    ui.blit(W.big("FRONTEND SOUNDS", 1, W.LABEL), (px + 10, py + 7))
+    label_w = 112
+    avail = pw - 16 - label_w - 16
+    bar_w = max(24, avail * 3 // 10)
+    y = py + 21
+    for i, (key, label) in enumerate(SOUND_ROWS):
+        on = i == sel
+        rect = (px + 8, y, pw - 16, 14)
+        tile_frame(ui, rect, on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, rect, 2 if on else 1)
+        W.text(ui, label, T.FG if on else T.COMMENT, px + 14, y + 3)
+        text, vol = sound_value(fe, key)
+        vx = px + 8 + label_w + 6
+        right = px + pw - 14
+        color = T.CYAN if on else T.LINE
+        if key == "music_pause":
+            paused = fe.snd.music_pause()
+            chip(ui, right, y, "ON" if paused else "OFF", paused, on)
+            room = 0
+        elif key == "preview_sync":
+            # O atraso da imagem do preview: o medido no ALSA (AUTO) ou o da pessoa.
+            manual = fe.snd.preview_sync()
+            shown = "AUTO %d MS" % round(fe.sync_auto * 1000) if manual is None else "%d MS" % manual
+            cx = chip(ui, right - 10, y, shown, manual is not None, on)
+            if on:
+                arrow(ui, cx - 5, y + 8, (-1, 0), T.PINK, 3)
+                arrow(ui, right - 4, y + 8, (1, 0), T.PINK, 3)
+            room = 0
+        elif vol is not None:
+            tiny.text(ui, "%d" % vol, T.FG if on else T.COMMENT, right, y + 6, right=True)
+            bx = right - 14 - bar_w
+            volume_bar(ui, bx, y, bar_w, vol, on)
+            if on:
+                arrow(ui, bx - 5, y + 8, (-1, 0), T.PINK, 3)
+                arrow(ui, bx + bar_w + 5, y + 8, (1, 0), T.PINK, 3)
+            room = bx - 12 - vx
+        else:
+            room = right - vx
+        if text:
+            if on:
+                ticker(ui, tiny_img(text, color), vx, y + 5, room, now)
+            else:
+                tiny.text(ui, tiny.fit(text, room), color, vx, y + 6)
+        y += 15
+    hint = SOUND_HINTS[SOUND_ROWS[sel][0]]
+    ticker(ui, text_img(hint, T.YELLOW), px + 12, py + 21 + 15 * len(SOUND_ROWS) + 4, pw - 24, now)
+    tiny.centered(ui, "LEFT/RIGHT VOLUME   B1 CHOOSE FILE", T.COMMENT, px + pw // 2, py + ph - 22)
+    tiny.centered(ui, "B4 PLAY   B5 DEFAULT   B2 BACK", T.COMMENT, px + pw // 2, py + ph - 14)
+
+
+def tiny_img(s, color):
+    """O texto pequeno numa surface (para o ticker)."""
+    surf = pygame.Surface((tiny.width(s) + 1, 7), pygame.SRCALPHA)
+    tiny.text(surf, s, color, 0, 0)
+    return surf
+
+
+def draw_sndpick(fe, ui, now):
+    """O seletor de arquivos do Frontend sounds: o padrao e o mudo no alto,
+    depois as pastas e os arquivos de som (so os da pasta fliperos-sounds para
+    baixo). Na trilha, USE THIS FOLDER toca todas as faixas da pasta, sorteadas."""
+    ov = fe.ov
+    pw, ph = min(290, WW - 6), 214
+    px, py = (WW - pw) // 2, max(4, (HH - ph) // 2)
+    card(ui, (px, py, pw, ph))
+    music = ov["for"] == "music"
+    ui.blit(W.big("CHOOSE THE MUSIC" if music else "CHOOSE A SOUND", 1, W.LABEL), (px + 10, py + 8))
+    root = fe.fs.sounds_dir()
+    rel = os.path.relpath(ov["dir"], os.path.dirname(root)) if ov["dir"].startswith(root) else ov["dir"]
+    ticker(ui, tiny_img(rel.upper().replace(os.sep, "/"), T.CYAN), px + 10, py + 21, pw - 20, now)
+    entries, sel = ov["entries"], ov["sel"]
+    shown = (ph - 56) // 15
+    top = max(0, min(sel - shown // 2, len(entries) - shown))
+    for i in range(top, min(len(entries), top + shown)):
+        kind, name, _ = entries[i]
+        y = py + 32 + (i - top) * 15
+        on = i == sel
+        tile_frame(ui, (px + 8, y, pw - 16, 14), on, now)
+        pygame.draw.rect(ui, T.PINK if on else T.LINE, (px + 8, y, pw - 16, 14), 2 if on else 1)
+        color = {"default": T.CYAN, "off": T.ORANGE, "use": T.GREEN, "up": T.COMMENT,
+                 "dir": T.YELLOW}.get(kind, T.FG if on else T.COMMENT)
+        if kind == "dir":
+            pygame.draw.rect(ui, T.YELLOW, (px + 14, y + 4, 4, 2))
+            pygame.draw.rect(ui, T.YELLOW, (px + 14, y + 5, 11, 6))
+        elif kind == "file":
+            ui.fill(T.PINK, (px + 20, y + 3, 1, 7))
+            ui.fill(T.PINK, (px + 16, y + 8, 5, 3))
+            ui.fill(T.PINK, (px + 20, y + 3, 3, 1))
+        room = pw - 16 - 28 - 8
+        if on:
+            ticker(ui, text_img(name.upper(), color), px + 30, y + 3, room, now)
+        else:
+            W.text(ui, fit(name, room), color if kind != "file" else T.COMMENT, px + 30, y + 3)
+    if len(entries) > shown:
+        W.scrollbar(ui, px + pw - 6, py + 32, shown * 15 - 1, top, shown, len(entries))
+    tiny.centered(ui, "B1 OPEN/CHOOSE   B4 PLAY   B2 CANCEL" if not music else "B1 OPEN/CHOOSE   B2 CANCEL",
+                  T.COMMENT, px + pw // 2, py + ph - 10)
+
+
+# ── A barra da musica ───────────────────────────────────────────────
+# Quando uma faixa comeca, uma barra no estilo da das conquistas do
+# RetroAchievements (config/fliperos-osd): o aro se desenha em volta do circulo
+# com uma nota, a barra sai dele, o nome da faixa corre se nao cabe, e a linha
+# verde se esvazia nos MUSIC_SECONDS. Cor cheia e pixel inteiro, como as outras
+# animacoes do frontend no tubo (nada de translucido nem de aro fino).
+MUSIC_SECONDS, MUSIC_ENTER, MUSIC_LEAVE, MUSIC_RING = 5.0, 0.45, 0.3, 1.1
+MUSIC_HOLD_START, MUSIC_HOLD_END, MUSIC_MIN_SPEED = 1.0, 0.7, 28.0
+MUSIC_NOTE = (
+    "................", "................", "........KKKK....", "........KKKKK...",
+    "........K..KKK..", "........K...KK..", "........K.......", "........K.......",
+    "........K.......", "........K.......", "....KKK.K.......", "...KKKKKK.......",
+    "...KKKKKK.......", "....KKK.........", "................", "................")
+_ring_cache = {}
+
+
+def ease_out(f):
+    f = max(0.0, min(1.0, f))
+    return 1 - (1 - f) ** 3
+
+
+def lerp_color(a, b, f):
+    f = max(0.0, min(1.0, f))
+    return tuple(round(a[i] + (b[i] - a[i]) * f) for i in range(3))
+
+
+def ring_color(behind):
+    """A cor do aro a behind graus atras da cabeca do cometa: branco, rosa,
+    roxo e o azul do resto do aro (como a barra das conquistas)."""
+    if behind < 15:
+        return lerp_color(T.FG, T.PINK, behind / 15)
+    if behind < 110:
+        return lerp_color(T.PINK, T.PURPLE, (behind - 15) / 95)
+    if behind < 230:
+        return lerp_color(T.PURPLE, T.COMMENT, (behind - 110) / 120)
+    return T.COMMENT
+
+
+def ring_pixels(r):
+    """Os pixels do aro (2,5 de grossura) de um circulo de raio r com o centro
+    na origem, com o angulo de cada um."""
+    if r not in _ring_cache:
+        ring, inner = [], r - 2.5
+        for py in range(-r, r):
+            for px in range(-r, r):
+                d = math.hypot(px + 0.5, py + 0.5)
+                if inner <= d < r:
+                    ring.append((px, py, math.degrees(math.atan2(py + 0.5, px + 0.5))))
+        _ring_cache[r] = ring
+    return _ring_cache[r]
+
+
+def draw_music_bar(ui, title, age, y):
+    """A barra de "NOW PLAYING" age segundos depois de aparecer, com o alto em y."""
+    if age >= MUSIC_SECONDS + MUSIC_LEAVE:
+        return
+    h, r = 24, 12
+    x0, right_full = 6, WW - 6
+    cx, cy = x0 + r, y + h // 2
+    if age < MUSIC_ENTER:
+        sweep, grow = ease_out(age / 0.2), ease_out((age - 0.15) / 0.3)
+    elif age >= MUSIC_SECONDS:
+        back = (age - MUSIC_SECONDS) / MUSIC_LEAVE
+        grow, sweep = 1 - ease_out(back / 0.6), 1 - ease_out((back - 0.5) / 0.5)
+    else:
+        sweep = grow = 1.0
+    right = round(cx + (right_full - cx) * grow)
+    if right - cx > 2:
+        bar = (cx, y, right - cx, h)
+        ui.fill(T.BG_DEEP, bar)
+        pygame.draw.rect(ui, T.PURPLE, bar, 1)
+        tx = cx + r + 6
+        aw = right_full - 6 - tx
+        old = ui.get_clip()
+        ui.set_clip(pygame.Rect(tx, y + 1, max(0, min(aw, right - 2 - tx)), h - 2).clip(old))
+        tiny.text(ui, "NOW PLAYING", T.PINK, tx, y + 4)
+        img = text_img(title.upper(), T.FG)
+        travel = img.get_width() - aw
+        offset = 0.0
+        if travel > 0:
+            room = MUSIC_SECONDS - MUSIC_ENTER - MUSIC_HOLD_START - MUSIC_HOLD_END
+            speed = max(MUSIC_MIN_SPEED, travel / room)
+            offset = min(travel, max(0.0, age - MUSIC_ENTER - MUSIC_HOLD_START) * speed)
+        ui.blit(img, (tx - round(offset), y + 11))
+        left = max(0.0, MUSIC_SECONDS - age)
+        ui.fill(T.LINE, (tx, y + h - 3, max(0, aw), 1))
+        ui.fill(T.GREEN, (tx, y + h - 3, max(0, round(aw * left / MUSIC_SECONDS)), 1))
+        ui.set_clip(old)
+    if sweep <= 0:
+        return
+    pygame.draw.circle(ui, T.BG_DEEP, (cx, cy), r)
+    head = (-90 + 360 * age / MUSIC_RING) % 360
+    for px, py, ang in ring_pixels(r):
+        if ((ang + 90) % 360) / 360 > sweep:
+            continue
+        color = T.PINK if sweep < 1 else ring_color((head - ang) % 360)
+        ui.fill(color, (cx + px, cy + py, 1, 1))
+    if sweep < 1:
+        return
+    glint = (age - MUSIC_ENTER) * 40 - 4
+    for j, line in enumerate(MUSIC_NOTE):
+        for i, c in enumerate(line):
+            if c == ".":
+                continue
+            color = T.FG if abs((i + j) / 2 - glint) < 1.2 else T.PINK
+            ui.fill(color, (cx - 8 + i, cy - 8 + j, 1, 1))
 
 
 def draw_hidden(fe, ui, now):
@@ -5185,6 +5441,10 @@ def draw(fe, now):
             draw_hidden(fe, top, t)
         elif o == "controls":
             draw_controls(fe, top, t)
+        elif o == "sounds":
+            draw_sounds(fe, top, t)
+        elif o == "sndpick":
+            draw_sndpick(fe, top, t)
         elif o == "classify":
             draw_classify(fe, top, t)
         elif o == "rename":
@@ -5206,6 +5466,13 @@ def draw(fe, now):
     if notice and now < notice[2]:
         top = pygame.Surface((WW, HH), pygame.SRCALPHA)
         draw_notice(top, notice[0], notice[1], now)
+        back.blit(top, (0, 0))
+    playing = getattr(fe, "nowplaying", None)
+    if playing and now - playing[1] < MUSIC_SECONDS + MUSIC_LEAVE:
+        # Acima do aviso de party, quando os dois aparecem juntos.
+        top = pygame.Surface((WW, HH), pygame.SRCALPHA)
+        shift = 30 if notice and now < notice[2] else 0
+        draw_music_bar(top, playing[0], now - playing[1], HH - 50 - shift)
         back.blit(top, (0, 0))
     if o == "popup":
         popup_tvoff(fe, back, now)     # o PLAY apertado: a tela desliga como uma TV (por ultimo)

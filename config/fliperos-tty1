@@ -16,6 +16,15 @@ ETC=${FLIPEROS_ETC:-/etc/fliperos}
 BIN=${FLIPEROS_BIN:-/opt/fliperos/bin}
 REQUEST=${FLIPEROS_LAUNCH_REQUEST:-/run/fliperos/launch}
 PLYMOUTH_PID=${FLIPEROS_PLYMOUTH_PID:-/run/plymouth/pid}
+SOUNDS_HELPER=${FLIPEROS_SOUNDS_HELPER:-/usr/local/lib/fliperos-setup/gui/fesound.py}
+
+# menu_sound EVENTO: o som do menu do Setup (Audio > Menu sounds), o de abrir e
+# o de fechar o que o menu abre (o frontend, o desktop, um jogo). O fesound
+# toca com o aplay, em segundo plano, e volta na hora.
+menu_sound() {
+  [[ -f $SOUNDS_HELPER ]] && python3 -I "$SOUNDS_HELPER" play menu "$1" > /dev/null 2>&1
+  return 0
+}
 # Este arquivo quando o tty1 subiu: o bash segue com o codigo que leu, e um
 # update feito com um jogo ou o frontend na tela troca o arquivo sem reiniciar
 # o tty1. O laco do menu ve a troca e continua no novo (tty1_reload).
@@ -113,7 +122,11 @@ menu() {
     printf '\e[H\e[2J\e[?25l'
     # O painel web fechou o menu para abrir um jogo: o laco o abre.
     [[ ${#remote[@]} -eq 0 && -s $WEB_LAUNCH ]] && continue
-    ((rc == 20)) || return 0
+    if ((rc != 20)); then
+      # Exit to shell (10): o mesmo "Open game" do frontend e do desktop.
+      ((rc == 10 && ${#remote[@]} == 0)) && menu_sound open
+      return 0
+    fi
     name=$(cat "$REQUEST" 2> /dev/null)
     # O navegador do Downloader (Setup > Games > Downloader): o Setup volta
     # depois, na tela do magnet link.
@@ -125,7 +138,9 @@ menu() {
       continue
     fi
     [[ $name == default ]] && name=""
+    menu_sound open
     "$BIN/fliperos-session" ${name:+"$name"}
+    menu_sound close
   done
 }
 

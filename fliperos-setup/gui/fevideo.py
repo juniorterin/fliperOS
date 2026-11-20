@@ -4,6 +4,7 @@
 # (default, o mesmo dmix dos jogos). O frontend pega o ultimo quadro a cada
 # desenho. Sem o ffmpeg, nada: fica a imagem.
 
+import collections
 import os
 import shutil
 import subprocess
@@ -12,6 +13,15 @@ import time
 
 FFMPEG = os.environ.get("FLIPEROS_FFMPEG", "ffmpeg")
 VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")
+# O volume do som do video (0 a 100): o do Frontend sounds (Tab > Frontend
+# options); o frontend o poe aqui. O ffmpeg o aplica na saida do ALSA (filtro
+# volume); 0 deixa o video mudo, sem abrir o ALSA.
+VOLUME = 100
+# O atraso da imagem do video com som (segundos): o som passa pela fila do ALSA
+# (com o "Live screen sound", ~320 ms) e chega depois da imagem; a imagem espera
+# o mesmo tempo. O frontend poe aqui o que mediu (fesound.alsa_latency) ou o
+# que a pessoa ajustou (Frontend sounds > PREVIEW SYNC). 0: sem atraso.
+SYNC = 0.0
 
 
 def available():
@@ -28,12 +38,14 @@ class Video:
         start: comeca nesse ponto (s), o quadro em que a copia muda parou."""
         self.path, self.w, self.h = path, w, h
         self.frame = None          # o ultimo quadro (bytes RGB)
+        self.queue = collections.deque(maxlen=90)    # (chegada, quadro) esperando o SYNC
+        self.shown = None          # o quadro que ja esperou
         self.count = 0             # quantos quadros ja chegaram
         self.alive = True
         self.paced = paced
         self.paused = False
         self.start = start
-        self.sound = sound and not paced
+        self.sound = sound and not paced and VOLUME > 0
         if not self.launch(self.sound):
             return
         threading.Thread(target=self.read, daemon=True).start()
@@ -45,7 +57,8 @@ class Video:
                "-stream_loop", "-1"] + (["-ss", "%.3f" % self.start] if self.start > 0 else []) + ["-i", self.path, "-map", "0:v:0", "-filter_threads", "1", "-vf", vf,
                "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"]
         if sound:
-            cmd += ["-map", "0:a:0?", "-f", "alsa", os.environ.get("FLIPEROS_VIDEO_AUDIO", "default")]
+            cmd += ["-map", "0:a:0?"] + (["-af", "volume=%.2f" % (VOLUME / 100.0)] if VOLUME < 100 else []) + [
+                "-f", "alsa", os.environ.get("FLIPEROS_VIDEO_AUDIO", "default")]
         try:
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                          stdin=subprocess.DEVNULL)
@@ -80,6 +93,8 @@ class Video:
                         continue
                 break
             self.frame = data
+            if self.sound and SYNC > 0:
+                self.queue.append((time.monotonic(), data))
             self.count += 1
             if self.paced and not self.paused:     # (pulando o preto, sem esperar)
                 due += 1 / 30
@@ -89,6 +104,18 @@ class Video:
                 else:
                     due = time.monotonic()
         self.alive = False
+
+    def current(self):
+        """O quadro a mostrar: o ultimo, ou, num video com som, o que ja
+        esperou SYNC segundos (o som chega esse tempo depois da imagem). None
+        enquanto o primeiro ainda espera."""
+        if not (self.sound and SYNC > 0):
+            self.queue.clear()
+            return self.frame
+        now = time.monotonic()
+        while self.queue and now - self.queue[0][0] >= SYNC:
+            self.shown = self.queue.popleft()[1]
+        return self.shown
 
     def stop(self):
         self.alive = False
@@ -138,13 +165,20 @@ class Player:
         if key and self.video is None and now - self.since >= self.DELAY:
             self.video = Video(path, w, h, start=start)
         if self.video and self.video.frame:
-            return self.video.frame
+            return self.video.current()
         return None
 
     def stop(self):
         self.want = None
         if self.video:
             self.video.stop()
+            self.video = None
+
+    def restart(self):
+        """O video de agora abre de novo, com o volume novo (o ffmpeg nao
+        muda o volume andando). Fecha fora do desenho, como na troca de jogo."""
+        if self.video:
+            threading.Thread(target=self.video.stop, daemon=True).start()
             self.video = None
 
 

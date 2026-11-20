@@ -354,31 +354,50 @@ audio_test() {
 }
 
 # ── Sons do menu ─────────────────────────────────────────────────
-# O gum do FliperOS (packaging/patches/gum/0002-sons-do-menu.patch) toca
-# GUM_SOUND_MOVE quando o cursor anda e GUM_SOUND_SELECT no Enter. Os sons
-# sao da pessoa (o FliperOS nao traz sons de jogo): move.wav e select.wav
-# nesta pasta, que na rede e o compartilhamento FliperOS, sounds/menu.
-MENU_SOUNDS_DIR=${MENU_SOUNDS_DIR:-/opt/fliperos/sounds/menu}
+# Seis eventos (o cursor andando, entrar, voltar, abrir o jogo, fechar o jogo e
+# o dialogo de alerta), cada um com o arquivo e o volume dele: menu_sound_EVENTO
+# e menu_sound_EVENTO_volume no fliperos.conf (vazio: o som padrao; off: mudo).
+# Os arquivos ficam em ~/media/fliperos-sounds; o padrao vem em gui/sounds e a
+# primeira vez e copiado para la (gui/fesound.py). O Frontend sounds do
+# frontend e o espelho disto (frontend.json). O gum
+# (packaging/patches/gum/0002-sons-do-menu.patch) toca GUM_SOUND_MOVE quando o
+# cursor anda e GUM_SOUND_SELECT no Enter, so WAV e no volume do proprio
+# arquivo: o fesound entrega o arquivo ja no volume do evento. A interface
+# grafica (gui/fliperos-gui) toca os seis sozinha.
+SOUNDS_HELPER=${SOUNDS_HELPER:-${SETUP_DIR:-/usr/local/lib/fliperos-setup}/gui/fesound.py}
+MENU_SOUND_EVENTS="move enter back open close alert"
 
-# menu_sounds_state imprime on, off ou missing (nem move.wav nem select.wav
-# na pasta). Com os arquivos la, liga sozinho; o Setup desliga.
+# sounds_dir imprime a pasta dos sons: ~/media/fliperos-sounds do usuario do
+# gabinete (o Setup roda como root).
+sounds_dir() {
+  printf '%s\n' "${FLIPEROS_SOUNDS_DIR:-${FOLDERS_HOME:-/home/${FLIPEROS_USER:-fliperos}}/media/fliperos-sounds}"
+}
+
+# sounds_helper ARGUMENTO...: o gui/fesound.py, com a pasta e o fliperos.conf
+# deste Setup.
+sounds_helper() {
+  have python3 && [[ -f $SOUNDS_HELPER ]] || return 1
+  FLIPEROS_SOUNDS_DIR=$(sounds_dir) FLIPEROS_CONF=$FLIPEROS_CONF python3 -I "$SOUNDS_HELPER" "$@"
+}
+
+# sounds_seed copia os sons padrao para a pasta (so os que faltam).
+sounds_seed() {
+  sounds_helper seed 2> /dev/null
+  return 0
+}
+
+# menu_sounds_state imprime on ou off: o interruptor de todos os sons do menu.
 menu_sounds_state() {
-  if [[ ! -f $MENU_SOUNDS_DIR/move.wav && ! -f $MENU_SOUNDS_DIR/select.wav ]]; then
-    echo missing
-  elif [[ $(conf_get menu_sounds) == off ]]; then
+  if [[ $(conf_get menu_sounds) == off ]]; then
     echo off
   else
     echo on
   fi
 }
 
-# menu_sounds_label imprime o estado para o menu: on, off ou "no sound
-# files".
+# menu_sounds_label imprime o estado para o menu: on ou off.
 menu_sounds_label() {
-  local state
-  state=$(menu_sounds_state)
-  [[ $state == missing ]] && state="no sound files"
-  printf '%s\n' "$state"
+  menu_sounds_state
 }
 
 # menu_sounds_set on|off liga ou desliga os sons do menu.
@@ -386,11 +405,47 @@ menu_sounds_set() {
   conf_set menu_sounds "$1"
 }
 
-# menu_sounds_env imprime as variaveis do gum dos sons que existem, uma por
-# linha (GUM_SOUND_MOVE=...), se os sons estiverem ligados.
+# menu_sound_rows imprime uma linha por evento: id|Rotulo|arquivo|volume. O
+# arquivo e o nome, DEFAULT ou OFF.
+menu_sound_rows() {
+  sounds_helper status menu 2> /dev/null | tr '\t' '|'
+}
+
+# menu_sound_row EVENTO imprime a linha do evento (menu_sound_rows).
+menu_sound_row() {
+  menu_sound_rows | awk -F'|' -v e="$1" '$1 == e'
+}
+
+# menu_sound_valid_event EVENTO: e um dos seis?
+menu_sound_valid_event() {
+  [[ " $MENU_SOUND_EVENTS " == *" $1 "* ]]
+}
+
+# menu_sound_set_file EVENTO ARQUIVO grava o som do evento: um arquivo, off
+# (mudo) ou vazio (o padrao).
+menu_sound_set_file() {
+  menu_sound_valid_event "$1" || return 1
+  conf_set "menu_sound_$1" "$2"
+}
+
+# menu_sound_set_volume EVENTO 0-100 grava o volume do evento.
+menu_sound_set_volume() {
+  menu_sound_valid_event "$1" || return 1
+  [[ $2 =~ ^[0-9]{1,3}$ ]] && (($2 <= 100)) || return 1
+  conf_set "menu_sound_$1_volume" "$((10#$2))"
+}
+
+# menu_sound_play EVENTO toca o som do evento agora (no volume dele, com o
+# aplay, sem esperar). Mudo com os sons do menu desligados.
+menu_sound_play() {
+  menu_sound_valid_event "$1" || return 1
+  sounds_helper play menu "$1" 2> /dev/null
+  return 0
+}
+
+# menu_sounds_env imprime as variaveis do gum (GUM_SOUND_MOVE=...), uma por
+# linha, no volume de cada evento; nada com os sons desligados.
 menu_sounds_env() {
-  [[ $(menu_sounds_state) == on ]] || return 0
-  [[ -f $MENU_SOUNDS_DIR/move.wav ]] && echo "GUM_SOUND_MOVE=$MENU_SOUNDS_DIR/move.wav"
-  [[ -f $MENU_SOUNDS_DIR/select.wav ]] && echo "GUM_SOUND_SELECT=$MENU_SOUNDS_DIR/select.wav"
+  sounds_helper menu-env 2> /dev/null
   return 0
 }

@@ -29,6 +29,8 @@ FS, RS, GS = "\x1f", "\x1e", "\x1d"
 # para o fliperos-pixelcade menu, que toca a animacao dele; os submenus nao
 # mandam nada, entao entrar no item a mantem.
 MENU_TITLE = "FliperOS"
+# Os itens do menu principal que saem do Setup para abrir algo.
+LAUNCH_VALUES = ("frontend", "desktop", "shell")
 MENU_ITEMS = ("frontend", "setup", "desktop", "shell", "power")
 PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
 # Os itens que voltam um nivel (o "Return" e o "Cancel" dos menus): escolhe-los
@@ -197,14 +199,25 @@ class Server:
         de ligar um item, e a mesma tela)."""
         return type(screen).__name__, getattr(screen, "title", "")
 
+    def opens_something(self, screen, value):
+        """O item escolhido do menu principal sai do Setup para abrir o
+        frontend, o desktop ou o shell (screens/main-menu.sh)?"""
+        return (isinstance(screen, self.W.Menu) and screen.mode == "menu" and screen.title == MENU_TITLE
+                and value in LAUNCH_VALUES)
+
     def answered(self, screen, result):
         """Guarda como a tela foi deixada, para a animacao da proxima."""
         import navfx
         action, value = (tuple(result) + (None,))[:2]
         if action == "back" or (action == "select" and value in BACK_VALUES):
             self.went = navfx.OUT
+            self.app.play("back")
         elif action == "select":
             self.went = navfx.IN
+            # Abrir o frontend, o desktop ou o shell: quem toca e o "Open game"
+            # (o fliperos-tty1, ao abrir), nao o Enter por cima dele.
+            if not self.opens_something(screen, value):
+                self.app.play("enter")
         else:
             self.went = None
         self.shown = self.which(screen)
@@ -232,6 +245,9 @@ class Server:
         app.flush()
         self.shot(name)
         self.marquee(screen)
+        # Um aviso ou uma pergunta que abre: o som de alerta (Audio > Menu sounds).
+        if isinstance(screen, (self.W.Message, self.W.YesNo)):
+            app.play("alert")
         if leaving:
             app.swap(leaving[0], screen, self.ctx, leaving[1])
         redraw = True
@@ -250,6 +266,8 @@ class Server:
                 redraw = True
                 if result:
                     return self.answered(screen, result)
+                if key == "enter":
+                    app.play("enter")      # um Enter que ficou na tela (um campo, um liga e desliga)
                 self.marquee(screen)
             tick = getattr(screen, "tick", None)
             result = tick() if tick else None
@@ -537,6 +555,11 @@ class Server:
             self.app.show(self.screen, self.ctx)
             return 0, ""
         if cmd == "ping":
+            return 0, ""
+        if cmd == "sounds":
+            # Audio > Menu sounds mudou: o arquivo e o volume dos eventos sao lidos de novo.
+            if not self.app.headless:
+                self.app.load_sounds()
             return 0, ""
         return 2, ""
 

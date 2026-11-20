@@ -750,7 +750,7 @@ const SETTING_HELP_PT = {
   "scanline.reset": "Escuridão, espessura, altura da linha e reforço de volta ao padrão.",
   audio_card: "A placa usada pelo sistema e pelos emuladores. Os jogos abertos depois da troca usam ela.",
   mame_latency: "A latência do áudio do GroovyMAME (0 = padrão). Menor responde mais rápido; aumente se o som estalar.",
-  menu_sounds: "Os arquivos WAV de sounds/menu, quando houver.",
+  menu_sounds: "Todos os sons do menu ligados ou desligados. Cada evento tem o som e o volume dele, no Setup (Audio > Menu sounds).",
   "audio.test": "Uma voz nas caixas do gabinete: se ela é ouvida, a placa de som é a certa.",
   gun_flash: "Uma pistola de CRT só acha a mira onde a tela está acesa: o flash acende a tela no tiro, então as partes escuras acertam e fora da tela recarrega. Vale na hora, até num jogo aberto.",
   "gun.flash_level": "Menor é mais calmo; baixo demais e a pistola não vê.",

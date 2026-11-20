@@ -70,7 +70,7 @@ class App:
         self.ui = pygame.Surface((theme.WIDTH, theme.HEIGHT), pygame.SRCALPHA)
         old = getattr(self, "bg", None)
         self.bg = self.background.pick(self.bg_name or (old.name if old else None))
-        self.sounds = {}
+        self.bank = None
         self.names = {
             pygame.K_UP: "up", pygame.K_DOWN: "down", pygame.K_LEFT: "left", pygame.K_RIGHT: "right",
             pygame.K_RETURN: "enter", pygame.K_KP_ENTER: "enter", pygame.K_ESCAPE: "esc",
@@ -151,19 +151,25 @@ class App:
             os.close(fd)
 
     def load_sounds(self):
-        """Os sons do menu, os mesmos do gum (GUM_SOUND_MOVE/SELECT). Sem
-        audio livre, fica sem som."""
-        if not self.audio_opens():
-            self.sounds = {}
-            return
+        """Os seis sons do menu (gui/fesound.py): o arquivo e o volume de
+        cada evento, do fliperos.conf (Audio > Menu sounds). Chamado de novo
+        quando o Setup os muda (o pedido "sounds"). Sem audio livre, fica sem
+        som."""
+        import fesound
+        if self.bank is None:
+            self.bank = fesound.Bank(self.pygame, fesound.Menu())
+            self.bank.usable = self.audio_opens()
+        else:
+            self.bank.settings = fesound.Menu()
         try:
-            self.pygame.mixer.init()
-            for name in ("move", "select"):
-                path = os.environ.get("GUM_SOUND_" + name.upper(), "")
-                if path and os.path.isfile(path):
-                    self.sounds[name] = self.pygame.mixer.Sound(path)
+            self.bank.reload()
         except Exception:
-            self.sounds = {}
+            self.bank.sounds = {}
+
+    def play(self, event):
+        """Toca o som de um evento do menu (move, enter, back, alert...)."""
+        if self.bank is not None:
+            self.bank.play(event)
 
     def audio_opens(self):
         """O som abre num processo filho antes de abrir aqui. Um asound.conf
@@ -171,37 +177,14 @@ class App:
         "default": sem este teste o menu grafico caia junto e o gabinete
         ficava no menu em texto (visto com o Volume leveler e o som da tela
         ao vivo ligados, 2026-11-08). Assim o menu fica, so sem som."""
-        try:
-            pid = os.fork()
-        except OSError:
-            return True
-        if pid == 0:
-            code = 1
-            try:
-                self.pygame.mixer.init()
-                self.pygame.mixer.quit()
-                code = 0
-            finally:
-                os._exit(code)
-        deadline = time.monotonic() + 3
-        while time.monotonic() < deadline:
-            done, status = os.waitpid(pid, os.WNOHANG)
-            if done:
-                ok = os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
-                if not ok:
-                    print("fliperos-gui: o som nao abriu (status %d): o menu fica sem som" % status,
-                          file=sys.stderr)
-                return ok
-            time.sleep(0.02)
-        os.kill(pid, 9)
-        os.waitpid(pid, 0)
-        print("fliperos-gui: o som nao respondeu: o menu fica sem som", file=sys.stderr)
-        return False
+        import fesound
+        return fesound.audio_opens(self.pygame)
 
     def beep(self, key):
-        name = "select" if key == "enter" else "move" if key in ("up", "down", "left", "right") else ""
-        if name in self.sounds:
-            self.sounds[name].play()
+        """O som do cursor andando; o de entrar e o de voltar vem da resposta
+        da tela (serve.Server.answered)."""
+        if key in ("up", "down", "left", "right"):
+            self.play("move")
 
     def keys(self):
         """As teclas apertadas desde a ultima chamada, pelo nome."""

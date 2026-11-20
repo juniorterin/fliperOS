@@ -65,7 +65,7 @@ A colour slider saves while it moves, so the game on screen changes with it; the
 ### On-screen menu profiles and menu sounds
 
 - **Video > On-screen menu:** the switch, and the profiles saved in the [on-screen menu](On-screen-menu.md) with **Save profile as**: each one with its kind (game, core, emulator, resolution, default) and what it changes. The arrow opens its settings; the **✕** deletes it, and what it changed goes back to the profile below it from the next game. The default profile stays.
-- **Audio > Menu sounds:** the switch and the two sounds of the Setup's menu, **When the cursor moves** (`move.wav`) and **On Enter** (`select.wav`): **Send** a `.wav` (or drop it on the row), play it in the browser, **Replace** or remove it. They are the files of the `sounds/menu` folder of the network share.
+- **Audio > Menu sounds:** the switch and the two sounds of the Setup's menu, **When the cursor moves** (`move.wav`) and **On Enter** (`select.wav`): **Send** a `.wav` (or drop it on the row), play it in the browser, **Replace** or remove it. They are the files of the `sounds/menu` folder of the network share, and they stand in for **Browse** and **Enter** until other sounds are picked in the Setup, where each of the six events also has its own file and volume ([Menu sounds](Setup-Audio-and-Network.md#menu-sounds)).
 
 ### Folders, quirks and the rest
 

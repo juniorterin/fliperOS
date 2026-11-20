@@ -348,7 +348,7 @@ screen_audio() {
       "mixer|AlsaMixer|Every control of the sound card, one by one." \
       "latency|MAME audio latency|Lower responds faster; raise it if the sound crackles." \
       "test|Test sound|Play a sound to check the speakers." \
-      "sounds|Menu sounds ($(menu_sounds_label))|A sound when the cursor moves and on Enter (your own WAVs)." \
+      "sounds|Menu sounds ($(menu_sounds_label))|The sound and volume of each menu event." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
@@ -385,18 +385,7 @@ screen_audio() {
         ui_info "Test sound" "Playing a test sound..."
         audio_test
         ;;
-      sounds)
-        case $(menu_sounds_state) in
-          missing)
-            ui_msg "Menu sounds" \
-              "Put move.wav (cursor) and select.wav (Enter) in $MENU_SOUNDS_DIR: on the network, the FliperOS share, folder sounds/menu." \
-              "" "FliperOS doesn't come with game sounds: use your own, like a game's select screen."
-            ;;
-          on) menu_sounds_set off ;;
-          off) menu_sounds_set on ;;
-        esac
-        ui_sounds
-        ;;
+      sounds) screen_menu_sounds ;;
       return) return 0 ;;
     esac
   done

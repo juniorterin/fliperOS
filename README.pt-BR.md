@@ -432,6 +432,16 @@ Pessoas que ajudaram o FliperOS com código, testes no próprio hardware ou idei
   </tr>
 </table>
 
+## Créditos
+
+As músicas que tocam no [frontend do FliperOS](https://github.com/juniorterin/fliperOS/wiki/FliperOS-frontend#sounds-and-music), do [Pixabay](https://pixabay.com/) sob a [Licença de Conteúdo do Pixabay](https://pixabay.com/service/license-summary/):
+
+- **Retrowave**, de BurtySounds: [pixabay.com/music/synthwave-retrowave-181955](https://pixabay.com/music/synthwave-retrowave-181955/)
+- **Information Flow (Liquid Jungle Breakbeat Drum And Bass)**, de Musinova: [pixabay.com/music/drum-n-bass-information-flow-…-358432](https://pixabay.com/music/drum-n-bass-information-flow-liquid-jungle-breakbeat-drum-and-bass-358432/)
+- **Looking For A Way Back - 1970s Glam Rock**, de kaazoom: [pixabay.com/music/rock-looking-for-a-way-back-…-355935](https://pixabay.com/music/rock-looking-for-a-way-back-1970s-glam-rock-355935/)
+
+Os arquivos das músicas não estão neste repositório, porque essa licença não deixa distribuí-los sozinhos: eles vão em `~/media/fliperos-sounds/music`. Os sons do menu e do frontend que o FliperOS traz são feitos por [`tools/make-default-sounds.py`](tools/make-default-sounds.py).
+
 <p align="center">
   <img src="website/public/fliperos-logo.png" width="101" alt="Logo do FliperOS: um gabinete de fliperama em pixel art numa pequena sala isométrica">
   <br><sub>Gratuito e sem conta: o código e todas as ISOs estão no GitHub.</sub>

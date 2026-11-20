@@ -444,6 +444,14 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
   </tr>
 </table>
 
+<h2 id="credits">Credits</h2>
+<p>The songs that play in the <a href="#FliperOS-frontend-sounds-and-music">FliperOS frontend</a>, from <a href="https://pixabay.com/">Pixabay</a> under the <a href="https://pixabay.com/service/license-summary/">Pixabay Content License</a>:</p>
+<ul>
+<li><strong>Retrowave</strong>, by BurtySounds: <a href="https://pixabay.com/music/synthwave-retrowave-181955/">pixabay.com/music/synthwave-retrowave-181955</a></li>
+<li><strong>Information Flow (Liquid Jungle Breakbeat Drum And Bass)</strong>, by Musinova: <a href="https://pixabay.com/music/drum-n-bass-information-flow-liquid-jungle-breakbeat-drum-and-bass-358432/">pixabay.com/music/drum-n-bass-information-flow-…-358432</a></li>
+<li><strong>Looking For A Way Back - 1970s Glam Rock</strong>, by kaazoom: <a href="https://pixabay.com/music/rock-looking-for-a-way-back-1970s-glam-rock-355935/">pixabay.com/music/rock-looking-for-a-way-back-…-355935</a></li>
+</ul>
+<p>The song files are not in this repository, because that licence does not allow handing them out on their own: they go in <code>~/media/fliperos-sounds/music</code>. The menu and frontend sounds that FliperOS comes with are made by <a href="tools/make-default-sounds.py"><code>tools/make-default-sounds.py</code></a>.</p>
 <p align="center">
   <img src="website/public/fliperos-logo.png" width="101" alt="FliperOS logo: a pixel-art arcade cabinet in a small isometric room">
   <br><sub>Free, with no account: the code and every ISO are on GitHub.</sub>
@@ -1724,26 +1732,62 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>Menu sounds</strong></td>
-<td>A sound when the cursor moves and another on Enter, with your own WAV files</td>
+<td>The sound and the volume of each menu event: browsing, Enter, Back, a game opening and closing, and alerts</td>
 </tr>
 </tbody>
 </table>
 <p>There is no sound server: every emulator plays straight into ALSA, in KMS or in X, so this volume and this card count for all of them.</p>
 <h3 id="Setup-Audio-and-Network-menu-sounds">Menu sounds</h3>
-<p>Like the select screen of a game: one sound as the cursor moves through the menus, another on Enter. FliperOS ships no game sounds, so they are yours:</p>
-<ol>
-<li>Put <code>move.wav</code> and <code>select.wav</code> in <code>/opt/fliperos/sounds/menu</code>. Over the network it is the <code>FliperOS</code> share, folder <code>sounds/menu</code>.</li>
-<li>With one of them there, the sounds turn on by themselves.</li>
-<li><strong>Menu sounds</strong> in Audio Setup turns them off and on.</li>
-</ol>
-<p>A new sound cuts the one still playing, and the Enter sound keeps going after the menu closes.</p>
+<p>Like the select screen of a game. <strong>Menu sounds</strong> lists six events, each with its own sound file and its own volume:</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Plays when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Browse</strong></td>
+<td>The cursor moves through a list</td>
+</tr>
+<tr>
+<td><strong>Enter</strong></td>
+<td>You go into something: Enter, a menu, a choice</td>
+</tr>
+<tr>
+<td><strong>Back</strong></td>
+<td>You go back: Esc, Return, a menu that closes</td>
+</tr>
+<tr>
+<td><strong>Open game</strong></td>
+<td>The menu opens the frontend, the desktop or a game</td>
+</tr>
+<tr>
+<td><strong>Close game</strong></td>
+<td>It closes and you are back in the menu</td>
+</tr>
+<tr>
+<td><strong>Alert dialog</strong></td>
+<td>A message or a question opens</td>
+</tr>
+</tbody>
+</table>
+<p>FliperOS comes with a set for all six, so the menu has sound from the start: retrowave sounds made of soft sine waves and a warm echo (a short tick for the cursor, two rising or falling notes for Enter and Back, an arpeggio that opens or closes for the games, a bell for the alert). To change an event, open it:</p>
+<ul>
+<li><strong>Sound file</strong> opens the file picker (the same one as the rest of the Setup), starting in <code>~/media/fliperos-sounds</code>. Pick a WAV, OGG, MP3 or FLAC; it plays at once.</li>
+<li><strong>Volume</strong> is from 0 to 100, for this event only.</li>
+<li><strong>Play</strong> plays it with that volume. <strong>Use the default</strong> brings the FliperOS sound back, and <strong>No sound</strong> keeps the event quiet.</li>
+</ul>
+<p>The first item, <strong>Sounds</strong>, turns every menu sound off and on, and <strong>Sounds folder</strong> shows where the files are. The sounds FliperOS comes with are copied there the first time, so you can see them and replace them; a file you replace stays as you left it. Short sounds (under a second) work best: a longer file is cut after 10 seconds. A new sound cuts the one still playing.</p>
+<p>The <strong>Frontend sounds</strong> of the <a href="#FliperOS-frontend-sounds-and-music">FliperOS frontend</a> are the same list with their own files and volumes, plus the music. The <code>move.wav</code> and <code>select.wav</code> that older versions read from <code>/opt/fliperos/sounds/menu</code> still stand in for <strong>Browse</strong> and <strong>Enter</strong> until you pick others.</p>
 <h3 id="Setup-Audio-and-Network-how-it-works">How it works</h3>
 <ul>
 <li>The default card is written to <code>/etc/asound.conf</code>. The volume moves <code>Master</code>, <code>Front</code>, <code>Speaker</code> and <code>Headphone</code> and leaves <code>PCM</code> at its maximum, as on GroovyArcade; a card with only <code>PCM</code> uses <code>PCM</code>. It is saved at every change, because cabinets are usually switched off at the wall.</li>
 <li>RetroArch uses <code>audio_driver = alsa</code>, GroovyMAME <code>sound sdl</code> on the ALSA <code>default</code> (through <code>libfliperos-sdl-audio.so</code>), and the SDL emulators <code>SDL_AUDIODRIVER=alsa</code>.</li>
 <li>MAME audio latency is <code>audio_latency</code> in <code>mame.ini</code> (GroovyArcade's "Audio Latency MAME").</li>
 <li>The HDA codec stays always on (<code>options snd_hda_intel power_save=0</code>). With the Ubuntu kernel's 1 s power saving it went silent and popped in the speakers each time it turned back on.</li>
-<li>Menu sounds are FliperOS's Gum patch <code>patches/gum/0002-sons-do-menu.patch</code> in the text menu, and the graphical menu itself; <code>menu_sounds=</code> in <code>fliperos.conf</code>.</li>
+<li>Menu sounds are <code>fliperos-setup/gui/fesound.py</code> (the frontend uses it too). Each event is <code>menu_sound_EVENT</code> (a file, <code>off</code>, or empty for the default) and <code>menu_sound_EVENT_volume</code> in <code>fliperos.conf</code>, and <code>menu_sounds=off</code> silences all of them. The graphical menu (<code>fliperos-gui</code>) plays the six itself, through pygame's mixer, each at its volume. The text menu has only Gum's own two, through FliperOS's patch <code>patches/gum/0002-sons-do-menu.patch</code> (<code>GUM_SOUND_MOVE</code> and <code>GUM_SOUND_SELECT</code>, played with <code>aplay</code>): the Setup hands it a copy of the file already at the event's volume, kept in <code>~/.cache/fliperos/sounds</code>. Open and close game are played by <code>fliperos-tty1</code> around what the menu opens. The default sounds are <code>fliperos-setup/gui/sounds/*.wav</code>, made by <code>tools/make-default-sounds.py</code>.</li>
 </ul>
 <h2 id="Setup-Audio-and-Network-network-setup">Network Setup</h2>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/setup-network.webp" width="480" alt="Setup > Network Setup"&gt;</p>
@@ -3612,6 +3656,10 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <td>What each button does (<a href="#Frontend-controls">Frontend controls</a>)</td>
 </tr>
 <tr>
+<td><strong>FRONTEND SOUNDS</strong></td>
+<td>The six sounds, the music and the volumes (<a href="#FliperOS-frontend-sounds-and-music">below</a>)</td>
+</tr>
+<tr>
 <td><strong>POWER CLOSES GAME</strong></td>
 <td>On (default), the power button closes the open game; off, it does nothing during a game (<a href="#Power-and-volume-buttons">Power and volume buttons</a>)</td>
 </tr>
@@ -3627,6 +3675,46 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </table>
 <p>At the bottom, two boxes show while there is something to say: <strong>BIOS DOWNLOAD</strong> (missing BIOS being downloaded, or some that couldn't be found) and <strong>AUTO SCRAPE</strong> (the art still to fetch, and the torrents' progress).</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/frontend/list-options.webp" width="480" alt="The Tab menu"></p>
+<h2 id="FliperOS-frontend-sounds-and-music">Sounds and music</h2>
+<p><strong>Tab &gt; FRONTEND SOUNDS</strong> mirrors <a href="#Setup-Audio-and-Network-menu-sounds">Setup &gt; Audio &gt; Menu sounds</a>, with its own files and volumes, and adds the music:</p>
+<table>
+<thead>
+<tr>
+<th>Row</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>BROWSE, ENTER, BACK, OPEN GAME, CLOSE GAME, ALERT DIALOG</strong></td>
+<td>The sound of each event. Left and right change its volume (steps of 5), button 1 opens the file picker, button 4 plays it and button 5 brings the default back</td>
+</tr>
+<tr>
+<td><strong>MUSIC</strong></td>
+<td>The soundtrack: one music file, or a folder whose songs all play at random. DEFAULT is the <code>music</code> folder</td>
+</tr>
+<tr>
+<td><strong>MUSIC VOLUME</strong></td>
+<td>How loud the music plays</td>
+</tr>
+<tr>
+<td><strong>PAUSE MUSIC</strong></td>
+<td>ON or OFF (left, right or button 1). With it on, the music waits while a preview video with sound plays. Off by default: the music and the preview play together, and <strong>PREVIEW VOLUME</strong> balances them</td>
+</tr>
+<tr>
+<td><strong>PREVIEW VOLUME</strong></td>
+<td>The sound of the game preview video; 0 mutes it</td>
+</tr>
+<tr>
+<td><strong>PREVIEW SYNC</strong></td>
+<td>How long the preview's picture waits for its sound, which reaches the speakers later than the picture reaches the screen. <strong>AUTO</strong> is what the frontend measured when it opened (about 320 ms with Live screen sound on); left and right change it by 10 ms (buttons 3 and 6 by 50) and button 5 goes back to AUTO</td>
+</tr>
+</tbody>
+</table>
+<p>The file picker starts in <code>~/media/fliperos-sounds</code> and cannot go above it. At its top, <strong>DEFAULT</strong> and <strong>NO SOUND</strong> (or <strong>NO MUSIC</strong>); for the music there is also <strong>USE THIS FOLDER</strong>, which is only offered inside <code>~/media/fliperos-sounds/music</code>, so a folder of songs goes in a subfolder of <code>music</code>. Button 4 plays the sound under the cursor.</p>
+<p><strong>When a song starts</strong>, a bar with its name slides in at the bottom, like an unlocked achievement in a game: a circle with a note and a comet running around it, the title (it runs if it does not fit) and a green line that empties in 5 seconds. The name is the file's ID3 title and artist, or the file name when there is no tag. The music stops when a game opens and goes on with the next song when you are back. It keeps playing under a preview video's sound, unless <strong>PAUSE MUSIC</strong> is on.</p>
+<p><strong>The songs</strong> it was set up with are <em>Retrowave</em> by BurtySounds (<a href="https://pixabay.com/music/synthwave-retrowave-181955/">Pixabay</a>), <em>Information Flow (Liquid Jungle Breakbeat Drum And Bass)</em> by Musinova (<a href="https://pixabay.com/music/drum-n-bass-information-flow-liquid-jungle-breakbeat-drum-and-bass-358432/">Pixabay</a>) and <em>Looking For A Way Back - 1970s Glam Rock</em> by kaazoom (<a href="https://pixabay.com/music/rock-looking-for-a-way-back-1970s-glam-rock-355935/">Pixabay</a>), credited in the README. With <strong>MUSIC</strong> on DEFAULT, <em>Retrowave</em> plays first and then the songs of the <code>music</code> folder follow at random. FliperOS does not ship them, because the Pixabay licence does not allow handing a song out on its own: download them and save them in <code>~/media/fliperos-sounds/music</code> as <code>BurtySounds - Retrowave.mp3</code>, <code>Musinova - Information Flow.mp3</code> and <code>Kaazoom - Looking For A Way Back.mp3</code> (the file name is what the bar shows when there is no ID3 tag). Any other MP3, OGG, FLAC or WAV you put in <code>music</code> joins the random order.</p>
+<p>The sounds FliperOS comes with are copied to <code>~/media/fliperos-sounds</code> the first time, so you can see and replace them.</p>
 <h2 id="FliperOS-frontend-attract-mode">Attract mode</h2>
 <p>After a minute without a button pressed, the cursor jumps to a random game and its video plays; every 30 seconds it jumps to another one. The first press only wakes the frontend, on the game it stopped at.</p>
 <p>After 30 seconds idle, a Pixelcade or ZeDMD marquee plays the FliperOS logo animation (<a href="#Frontends-marquee-and-led-displays">LED displays</a>).</p>
@@ -3653,7 +3741,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>A controller connected while the frontend is open moves in the list at once. A Bluetooth controller gets its player from the Button mapping, and one the mapping doesn't have works like an unmapped one.</p>
 <h2 id="FliperOS-frontend-how-it-works">How it works</h2>
 <ul>
-<li><code>fliperos-setup/gui/fliperos-frontend</code> (Python and pygame), with its modules in the same folder: <code>feview.py</code> (drawing, animations, rolling text), <code>fedata.py</code> (lists, favourites, stats), <code>feinput.py</code> (controls), <code>femedia.py</code> (physical media), <code>fecheevos.py</code> (achievements), <code>felink.py</code> (link and party), <code>fepads.py</code> (joypad drawings), <code>fenamco.py</code> (Namco 246/256 packs), <code>febios.py</code> (the BIOS box), <code>feharvest.py</code> (the automatic scrape), <code>fevideo.py</code> (videos). It is the <code>fliperos</code> row of <code>config/fliperos-sessions.conf</code>.</li>
+<li><code>fliperos-setup/gui/fliperos-frontend</code> (Python and pygame), with its modules in the same folder: <code>feview.py</code> (drawing, animations, rolling text), <code>fedata.py</code> (lists, favourites, stats), <code>feinput.py</code> (controls), <code>femedia.py</code> (physical media), <code>fecheevos.py</code> (achievements), <code>felink.py</code> (link and party), <code>fepads.py</code> (joypad drawings), <code>fenamco.py</code> (Namco 246/256 packs), <code>febios.py</code> (the BIOS box), <code>feharvest.py</code> (the automatic scrape), <code>fevideo.py</code> (videos), <code>fesound.py</code> (sounds and music). It is the <code>fliperos</code> row of <code>config/fliperos-sessions.conf</code>.</li>
 <li><strong>Lists:</strong> FliperOS's own, in <code>~/.local/share/fliperos/lists</code> (Attract-Mode's romlist format; Attract-Mode Plus is optional). Arcade lists carry the name, year, manufacturer, clones and category from MAME's XML (<code>fliperos-romclean romlist</code>). When the frontend opens, and whenever a games folder changes, it asks the Setup to redo them in the background (<code>fliperos-setup --romlists</code>); the first time, GroovyMAME's <code>-listxml</code> is read once (about a minute). The other systems' lists are read in the background, neighbours first, and the game counts are kept in <code>~/.cache/fliperos/frontend-counts.json</code>.</li>
 <li><strong>Favourites</strong> are <code>~/.config/fliperos/favourites</code>, the same file as the web panel's; hidden games <code>~/.config/fliperos/hidden</code>; play statistics (RECENT, Most Played) <code>~/.local/share/fliperos/stats</code>, independent of Attract-Mode. <strong>CLASSIFY</strong> writes <code>~/media/info/&lt;folder&gt;/&lt;set&gt;.user.json</code>. Every option is saved at once in <code>~/.config/fliperos/frontend.json</code> (the transitions as <code>transitions</code>).</li>
 <li><strong>System logos</strong> are drawn with Arcadeflow's logo font and system table, which ship in the image (<code>config/syslogo</code>) with its author's permission, made once and kept in <code>~/.cache/fliperos/syslogo</code>. A system the table doesn't know gets a square tile with the emulator's icon and its name.</li>
@@ -3661,6 +3749,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li><strong>Videos</strong> are <code>~/media/preview/&lt;folder&gt;/&lt;set&gt;.mp4</code>; the videos of the games around the cursor are opened ahead and held on their first frame, so a new one starts at once. The synopsis is the arcade-history text saved by the scrape in <code>~/media/info</code>.</li>
 <li><strong>Automatic scrape:</strong> while the frontend is open, it fetches in the background, one game at a time, what each game lacks: arcade information, screenshot, flyer, marquee and logo from the Arcade Database; console cover and screenshot from libretro-thumbnails; videos and missing logos from the art packs of <a href="#Scraper">Scraper</a>, file by file. It pauses during a game, tries a game once every 30 days (<code>~/.local/share/fliperos/scrape-state.json</code>), and also runs as the <em>Auto scrape</em> service when the frontend is closed.</li>
 <li><strong>Attract mode:</strong> after a minute without a button the cursor jumps to a random game (and to another every 30 s). The first button you press takes the cursor back to the game you were on and does its job right there: one press is enough. <code>FLIPEROS_ATTRACT_SECONDS</code> (0 turns it off) and <code>FLIPEROS_ATTRACT_STEP</code> change the two times; <code>FLIPEROS_IDLE_SECONDS</code> the marquee's.</li>
+<li><strong>Sounds and music:</strong> <code>fesound.py</code>, shared with the Setup. The choices are the <code>sounds</code> of <code>frontend.json</code> (<code>{"move": {"file": "", "volume": 60}, ..., "music": {"source": "", "volume": 40}, "preview": 100}</code>; an empty file is the default, <code>off</code> is silence). The six sounds are loaded into pygame's mixer; <strong>OPEN GAME</strong> is played by a separate <code>aplay</code>, because the mixer closes before a game opens. The music is <code>pygame.mixer.music</code> (MP3, OGG, FLAC and WAV; a format the mixer cannot read goes through <code>ffmpeg</code>). The preview volume is the <code>volume</code> filter of the <code>ffmpeg</code> that plays the video, so changing it reopens the video once you stop pressing. The preview's sound goes through ALSA's queue, and with Live screen sound (<code>fliperos_tee</code>, a 16384-frame buffer) it only starts once the queue is full, so it is about 320 ms behind the picture. When it opens, and after each game, the frontend writes 0.65 s of silence to the <code>default</code> PCM and reads <code>snd_pcm_delay</code> (<code>fesound.py alsa-latency</code> shows the same number), and the picture of a video with sound waits that long (<code>fevideo.SYNC</code>) before it is shown; <strong>PREVIEW SYNC</strong> (<code>preview_sync</code> in <code>frontend.json</code>) overrides it.</li>
 <li><strong>Power button:</strong> the frontend tells <code>fliperos-powerkey</code> which process is the game through <code>FLIPEROS_POWERKEY=games:FILE</code> (<code>$XDG_RUNTIME_DIR/fliperos-frontend.game</code>), since its other children (the video player, the scraper) are not games.</li>
 <li><strong>A missing emulator</strong> is installed by <code>fliperos-setup --emulator-ensure</code>.</li>
 </ul>
@@ -35091,7 +35180,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <h3 id="Web-panel-System-on-screen-menu-profiles-and-menu-sounds">On-screen menu profiles and menu sounds</h3>
 <ul>
 <li><strong>Video &gt; On-screen menu:</strong> the switch, and the profiles saved in the <a href="#On-screen-menu">on-screen menu</a> with <strong>Save profile as</strong>: each one with its kind (game, core, emulator, resolution, default) and what it changes. The arrow opens its settings; the <strong>✕</strong> deletes it, and what it changed goes back to the profile below it from the next game. The default profile stays.</li>
-<li><strong>Audio &gt; Menu sounds:</strong> the switch and the two sounds of the Setup's menu, <strong>When the cursor moves</strong> (<code>move.wav</code>) and <strong>On Enter</strong> (<code>select.wav</code>): <strong>Send</strong> a <code>.wav</code> (or drop it on the row), play it in the browser, <strong>Replace</strong> or remove it. They are the files of the <code>sounds/menu</code> folder of the network share.</li>
+<li><strong>Audio &gt; Menu sounds:</strong> the switch and the two sounds of the Setup's menu, <strong>When the cursor moves</strong> (<code>move.wav</code>) and <strong>On Enter</strong> (<code>select.wav</code>): <strong>Send</strong> a <code>.wav</code> (or drop it on the row), play it in the browser, <strong>Replace</strong> or remove it. They are the files of the <code>sounds/menu</code> folder of the network share, and they stand in for <strong>Browse</strong> and <strong>Enter</strong> until other sounds are picked in the Setup, where each of the six events also has its own file and volume (<a href="#Setup-Audio-and-Network-menu-sounds">Menu sounds</a>).</li>
 </ul>
 <h3 id="Web-panel-System-folders-quirks-and-the-rest">Folders, quirks and the rest</h3>
 <ul>

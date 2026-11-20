@@ -9260,36 +9260,115 @@ class FrontendsTests(Base):
 
 
 class MenuSoundsTests(Base):
-    """Sons do menu (lib/audio.sh e ui_sounds): os WAV da pessoa no gum."""
+    """Sons do menu (lib/audio.sh, screens/sounds.sh e ui_sounds): seis
+    eventos, cada um com o arquivo e o volume dele (gui/fesound.py)."""
 
     def setUp(self):
         super().setUp()
-        self.dir = self.env.dir / "sounds"
-        self.dir.mkdir()
-        self.vars = {"MENU_SOUNDS_DIR": str(self.dir)}
+        self.sounds = self.env.dir / "home" / "media" / "fliperos-sounds"
+        self.vars = {"FLIPEROS_SOUNDS_DIR": str(self.sounds), "XDG_CACHE_HOME": str(self.env.dir / "cache"),
+                     "SOUNDS_HELPER": str(SETUP / "gui" / "fesound.py")}
 
-    def sounds(self):
+    def gum(self):
         script = 'source %s/lib/ui.sh; ui_sounds; echo "$(menu_sounds_label)|${GUM_SOUND_MOVE:-}|${GUM_SOUND_SELECT:-}"'
-        return self.env.out(script % SETUP, self.vars).strip()
+        return self.env.out(script % SETUP, self.vars).strip().split("|")
 
-    def test_on_when_the_files_are_there(self):
-        self.assertEqual(self.sounds(), "no sound files||")
-        (self.dir / "select.wav").write_bytes(b"RIFF")
-        self.assertEqual(self.sounds(), "on||%s/select.wav" % self.dir)
-        (self.dir / "move.wav").write_bytes(b"RIFF")
-        self.assertEqual(self.sounds(), "on|%s/move.wav|%s/select.wav" % (self.dir, self.dir))
+    def rows(self):
+        return self.env.out("menu_sound_rows", self.vars).splitlines()
+
+    def wav(self, name):
+        import wave
+        self.sounds.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(self.sounds / name), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(8000)
+            w.writeframes(bytes(2000))
+        return self.sounds / name
+
+    def test_on_by_default_with_the_sounds_that_come_with_the_system(self):
+        label, move, select = self.gum()
+        self.assertEqual(label, "on")
+        # O gum toca o arquivo como esta: o do padrao, ja no volume do evento (60 e 80).
+        for path in (move, select):
+            self.assertTrue(path.endswith(".wav") and Path(path).is_file(), path)
+        self.assertEqual(self.rows(), ["move|Browse|DEFAULT|60", "enter|Enter|DEFAULT|80", "back|Back|DEFAULT|80",
+                                       "open|Open game|DEFAULT|90", "close|Close game|DEFAULT|90",
+                                       "alert|Alert dialog|DEFAULT|90"])
+
+    def test_a_file_a_volume_the_default_and_off_for_each_event(self):
+        mine = self.wav("mine.wav")
+        self.env.out('menu_sound_set_file move "%s"; menu_sound_set_volume move 30; menu_sound_set_volume alert 007' % mine,
+                     self.vars)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        self.assertIn("menu_sound_move=%s\n" % mine, conf)
+        self.assertIn("menu_sound_move_volume=30\n", conf)
+        self.assertIn("menu_sound_alert_volume=7\n", conf)
+        rows = self.rows()
+        self.assertEqual((rows[0], rows[5]), ("move|Browse|mine.wav|30", "alert|Alert dialog|DEFAULT|7"))
+        # O arquivo escolhido vai ao gum no volume escolhido (um WAV novo, no cache).
+        _, move, _ = self.gum()
+        self.assertNotEqual(move, str(mine))
+        self.assertTrue(Path(move).is_file())
+        # Mudo: o evento fica sem som, os outros seguem.
+        self.env.out("menu_sound_set_file move off", self.vars)
+        self.assertEqual(self.rows()[0], "move|Browse|OFF|30")
+        self.assertEqual(self.gum()[1], "")
+        self.assertNotEqual(self.gum()[2], "")
+        # De volta ao padrao.
+        self.env.out('menu_sound_set_file move ""', self.vars)
+        self.assertEqual(self.rows()[0], "move|Browse|DEFAULT|30")
+
+    def test_only_the_six_events_and_a_volume_from_0_to_100(self):
+        for script in ('menu_sound_set_volume move 101', 'menu_sound_set_volume move abc', 'menu_sound_set_volume move ""',
+                       'menu_sound_set_volume nope 5', 'menu_sound_set_file nope x.wav', 'menu_sound_play nope'):
+            self.assertNotEqual(self.env.run(script, self.vars).returncode, 0, script)
+        self.env.out("menu_sound_set_volume move 100; menu_sound_set_volume move 0; menu_sound_play move", self.vars)
+        self.assertEqual(self.rows()[0], "move|Browse|DEFAULT|0")
+        # Volume zero: o evento nao toca (nada para o gum).
+        self.assertEqual(self.gum()[1], "")
 
     def test_turned_off_in_the_setup(self):
-        (self.dir / "move.wav").write_bytes(b"RIFF")
         self.env.out("menu_sounds_set off", self.vars)
-        self.assertEqual(self.sounds(), "off||")
+        self.assertEqual(self.gum(), ["off", "", ""])
         self.env.out("menu_sounds_set on", self.vars)
-        self.assertEqual(self.sounds(), "on|%s/move.wav|" % self.dir)
+        self.assertEqual(self.gum()[0], "on")
+        self.assertNotEqual(self.gum()[1], "")
+
+    def test_the_default_sounds_are_copied_to_the_media_folder(self):
+        self.env.out("sounds_seed", self.vars)
+        self.assertEqual(sorted(p.name for p in self.sounds.glob("*.wav")),
+                         ["alert.wav", "back.wav", "browse.wav", "close-game.wav", "enter.wav", "open-game.wav"])
+        self.assertTrue((self.sounds / "music").is_dir())
+        # O que a pessoa trocou fica como esta.
+        (self.sounds / "back.wav").write_bytes(b"mine")
+        self.env.out("sounds_seed", self.vars)
+        self.assertEqual((self.sounds / "back.wav").read_bytes(), b"mine")
 
     def test_in_the_audio_setup(self):
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         self.assertIn('"sounds|Menu sounds ($(menu_sounds_label))|', menu)
+        self.assertIn("sounds) screen_menu_sounds ;;", menu)
         self.assertIn("ui_sounds", (SETUP / "lib" / "ui.sh").read_text().split("ui_init() {")[1].split("\n}\n")[0])
+        # A tela: o interruptor, um item por evento, a pasta; cada evento com o arquivo (o seletor de
+        # arquivos), o volume, ouvir, o padrao e mudo.
+        screen = (SETUP / "screens" / "sounds.sh").read_text()
+        for item in ('"master|Sounds ($(menu_sounds_label))|', '"snd-$id|$label: ${file,,}, $volume%|', '"folder|Sounds folder|',
+                     '"file|Sound file|', '"volume|Volume|', '"test|Play|', '"default|Use the default|', '"off|No sound|'):
+            self.assertIn(item, screen)
+        self.assertIn('.wav .ogg .mp3 .flac', screen)
+        self.assertIn('ui_browse "$label"', screen)
+        for call in ('menu_sound_set_file "$event" "$picked"', 'menu_sound_set_volume "$event" "$choice"'):
+            self.assertIn(call, screen)
+
+    def test_every_hint_fits_the_balloon(self):
+        # 2 linhas de 34 colunas (a quebra e por palavra).
+        import textwrap
+        screen = (SETUP / "screens" / "sounds.sh").read_text()
+        hints = re.findall(r'echo "([^"]+)" ;;', screen) + re.findall(r'"[\w$-]+\|[^|"]+\|([^"|]+)"', screen)
+        self.assertGreaterEqual(len(hints), 10)
+        for hint in hints:
+            self.assertLessEqual(len(textwrap.wrap(hint, 34)), 2, hint)
 
 
 class SplashTests(Base):

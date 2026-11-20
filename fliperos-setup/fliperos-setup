@@ -194,6 +194,8 @@ source "$SETUP_DIR/screens/splash.sh"
 source "$SETUP_DIR/screens/folders.sh"
 # shellcheck source=screens/storage.sh
 source "$SETUP_DIR/screens/storage.sh"
+# shellcheck source=screens/sounds.sh
+source "$SETUP_DIR/screens/sounds.sh"
 # shellcheck source=screens/panel.sh
 source "$SETUP_DIR/screens/panel.sh"
 

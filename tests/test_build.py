@@ -26470,5 +26470,342 @@ class BrandSpellingTests(unittest.TestCase):
         self.assertIn('el("h3", {}, ...brandNodes(title))', (web / 'system.js').read_text())
 
 
+class FesoundTests(unittest.TestCase):
+    """Os sons do FliperOS (gui/fesound.py): os seis eventos do Setup > Audio >
+    Menu sounds e do Tab > Frontend options > Frontend sounds, o padrao que vem
+    no sistema, o volume, a trilha e o nome das faixas."""
+    GUI = ROOT / 'fliperos-setup/gui'
+
+    def setUp(self):
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import fesound
+        self.fs = fesound
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        saved = {k: getattr(fesound, k) for k in ('BUNDLED', 'LEGACY', 'CONF')}
+        self.addCleanup(lambda: [setattr(fesound, k, v) for k, v in saved.items()])
+        self.dir = self.tmp / 'home/media/fliperos-sounds'
+        self.old = {k: os.environ.get(k) for k in ('FLIPEROS_SOUNDS_DIR', 'XDG_CACHE_HOME')}
+        os.environ['FLIPEROS_SOUNDS_DIR'] = str(self.dir)
+        os.environ['XDG_CACHE_HOME'] = str(self.tmp / 'cache')
+        fesound.LEGACY = str(self.tmp / 'legacy')
+        self.addCleanup(self.restore_env)
+
+    def restore_env(self):
+        for k, v in self.old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def wav(self, path, samples, rate=22050):
+        import wave
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(path), 'wb') as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(struct.pack('<%dh' % len(samples), *samples))
+        return path
+
+    def test_the_default_sounds_come_with_the_system(self):
+        import wave
+        fs = self.fs
+        self.assertEqual(set(fs.DEFAULT_FILE), set(fs.EVENTS))
+        self.assertEqual(set(fs.LABELS), set(fs.EVENTS))
+        self.assertEqual(set(fs.DEFAULT_VOLUME), set(fs.EVENTS))
+        for event in fs.EVENTS:
+            path = self.GUI / 'sounds' / fs.DEFAULT_FILE[event]
+            with wave.open(str(path), 'rb') as w:
+                self.assertEqual((w.getnchannels(), w.getsampwidth()), (1, 2), path.name)
+                seconds = w.getnframes() / w.getframerate()
+                samples = struct.unpack('<%dh' % w.getnframes(), w.readframes(w.getnframes()))
+            # Curtos: o do cursor, que anda 30 vezes por segundo, nem chega a 0,1 s; os de abrir e
+            # fechar o jogo, com o eco do fim, passam de 1 s mas nao de 2,5.
+            self.assertLess(seconds, 2.5, path.name)
+            self.assertGreater(seconds, 0.02, path.name)
+            if event == 'move':
+                self.assertLess(seconds, 0.1, path.name)
+            # Normalizado, sem estourar.
+            self.assertTrue(20000 < max(abs(s) for s in samples) < 32767, path.name)
+        # O gerador e a documentacao dos sons: o que ele grava e o que o sistema traz.
+        gen = (ROOT / 'tools/make-default-sounds.py').read_text()
+        for name in fs.DEFAULT_FILE.values():
+            self.assertIn('"%s"' % name, gen)
+
+    def test_an_event_plays_the_default_unless_a_file_or_off_is_chosen(self):
+        fs = self.fs
+        self.assertEqual(Path(fs.resolve('move', '')).name, 'browse.wav')     # vem do gui/sounds
+        self.assertIsNone(fs.resolve('move', 'off'))
+        mine = self.wav(self.tmp / 'mine.wav', [1, 2, 3])
+        self.assertEqual(fs.resolve('move', str(mine)), str(mine))
+        # O arquivo que sumiu (o disco saiu) cai no padrao.
+        self.assertEqual(Path(fs.resolve('move', str(self.tmp / 'gone.wav'))).name, 'browse.wav')
+        # Com o padrao copiado para ~/media/fliperos-sounds, e o de la que toca.
+        fs.seed()
+        self.assertEqual(Path(fs.resolve('enter', '')), self.dir / 'enter.wav')
+        self.assertEqual((fs.describe(''), fs.describe('off'), fs.describe('/x/y/boom.wav')), ('DEFAULT', 'OFF', 'boom.wav'))
+
+    def test_the_old_move_and_select_files_still_count_for_the_menu(self):
+        # Quem pos move.wav e select.wav em sounds/menu (o painel web) segue com eles, so no menu.
+        fs = self.fs
+        legacy = self.wav(Path(fs.LEGACY) / 'move.wav', [5, 6])
+        self.assertEqual(fs.resolve('move', '', menu=True), str(legacy))
+        self.assertEqual(Path(fs.resolve('move', '', menu=False)).name, 'browse.wav')
+        self.assertEqual(Path(fs.resolve('enter', '', menu=True)).name, 'enter.wav')    # sem select.wav
+
+    def test_seed_copies_what_is_missing_and_never_overwrites(self):
+        fs = self.fs
+        self.assertEqual(fs.seed(), 6)
+        self.assertTrue((self.dir / 'music').is_dir())
+        self.assertEqual(sorted(p.name for p in self.dir.glob('*.wav')), sorted(fs.DEFAULT_FILE.values()))
+        (self.dir / 'back.wav').write_bytes(b'mine')
+        (self.dir / 'alert.wav').unlink()
+        self.assertEqual(fs.seed(), 1)
+        self.assertEqual((self.dir / 'back.wav').read_bytes(), b'mine')
+
+    def test_settings_of_the_menu_and_of_the_frontend_mirror_each_other(self):
+        fs = self.fs
+        menu = fs.Menu({'menu_sound_move': 'off', 'menu_sound_enter': '/x/a.wav', 'menu_sound_enter_volume': '35',
+                        'menu_sound_back_volume': 'loud'})
+        self.assertTrue(menu.enabled())
+        self.assertFalse(fs.Menu({'menu_sounds': 'off'}).enabled())
+        self.assertEqual((menu.file('move'), menu.file('enter'), menu.file('back')), ('off', '/x/a.wav', ''))
+        self.assertEqual((menu.volume('enter'), menu.volume('back'), menu.volume('alert')),
+                         (35, fs.DEFAULT_VOLUME['back'], fs.DEFAULT_VOLUME['alert']))
+        data = {}
+        front = fs.Frontend(data)
+        # Ler nao enche o frontend.json de linhas vazias.
+        self.assertEqual((front.file('move'), front.volume('move'), front.music_source(), front.music_volume(),
+                          front.preview_volume()), ('', fs.DEFAULT_VOLUME['move'], '', fs.MUSIC_VOLUME, fs.PREVIEW_VOLUME))
+        self.assertEqual(data, {})
+        front.set_file('open', '/x/b.wav')
+        front.set_volume('open', 250)
+        front.set_music_source('/m/folder')
+        front.set_music_volume(-5)
+        front.set_preview_volume(33)
+        # A trilha so espera o video de preview se a pessoa ligar (PAUSE MUSIC): o padrao e desligado.
+        self.assertFalse(front.music_pause())
+        self.assertFalse(fs.Frontend({'music': {'pause': 'yes'}}).music_pause())
+        front.set_music_pause(True)
+        self.assertTrue(front.music_pause())
+        self.assertEqual(data, {'open': {'file': '/x/b.wav', 'volume': 100},
+                                'music': {'source': '/m/folder', 'volume': 0, 'pause': True}, 'preview': 33})
+        front.set_music_pause(False)
+        self.assertFalse(front.music_pause())
+        front.data['music'].pop('pause')
+        # PREVIEW SYNC: automatico (None) ate a pessoa por um valor, de 0 ao maximo, em ms.
+        self.assertIsNone(front.preview_sync())
+        front.set_preview_sync(320)
+        self.assertEqual(front.preview_sync(), 320)
+        front.set_preview_sync(5000)
+        self.assertEqual(front.preview_sync(), fs.SYNC_MAX)
+        front.set_preview_sync(-5)
+        self.assertEqual(front.preview_sync(), 0)
+        front.set_preview_sync(None)
+        self.assertIsNone(front.preview_sync())
+        self.assertNotIn('preview_sync', data)
+        self.assertIsNone(fs.Frontend({'preview_sync': True}).preview_sync())
+        self.assertEqual(fs.Frontend({'move': 'oops', 'music': ['x']}).volume('move'), fs.DEFAULT_VOLUME['move'])
+        for scope in (menu, front):
+            self.assertEqual([e for e in fs.EVENTS if scope.volume(e) is None], [])
+
+    def test_the_volume_is_in_the_file_the_gum_and_aplay_play(self):
+        import wave
+        fs = self.fs
+        src = self.wav(self.tmp / 's.wav', [1000, -2000, 30000, -32768, 0])
+        self.assertEqual(fs.prepared(str(src), 100), str(src))
+        self.assertIsNone(fs.prepared(str(src), 0))
+        out = fs.prepared(str(src), 50)
+        self.assertNotEqual(out, str(src))
+        with wave.open(out, 'rb') as w:
+            got = struct.unpack('<5h', w.readframes(5))
+        self.assertEqual(got, (500, -1000, 15000, -16384, 0))
+        self.assertEqual(fs.prepared(str(src), 50), out)        # o mesmo arquivo do cache
+        # O gum toca so o cursor e o Enter, no volume de cada um; desligado, nada.
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('menu_sound_move=%s\nmenu_sound_move_volume=50\nmenu_sound_enter=off\n' % src)
+        env = fs.gum_env(fs.Menu(fs.read_conf(str(conf))))
+        self.assertEqual([l.split('=')[0] for l in env], ['GUM_SOUND_MOVE'])
+        self.assertEqual(env[0].split('=', 1)[1], out)
+        conf.write_text('menu_sounds=off\n')
+        self.assertEqual(fs.gum_env(fs.Menu(fs.read_conf(str(conf)))), [])
+
+    def test_the_name_of_a_track(self):
+        fs = self.fs
+
+        def mp3(name, frames):
+            body = b''.join(fid + struct.pack('>I', len(text) + 1) + b'\x00\x00' + b'\x03' + text
+                            for fid, text in frames)
+            n = len(body)
+            tag = b'ID3\x03\x00\x00' + bytes([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127]) + body
+            path = self.tmp / name
+            path.write_bytes(tag + b'\xff\xfb\x90\x00' * 4)
+            return str(path)
+
+        self.assertEqual(fs.title_of(mp3('a.mp3', [(b'TIT2', 'Dréams'.encode()), (b'TPE1', b'Neon Band')])),
+                         'Neon Band - Dréams')
+        self.assertEqual(fs.title_of(mp3('b.mp3', [(b'TIT2', b'Only A Title')])), 'Only A Title')
+        # Sem tag: o nome do arquivo. O do Pixabay (tudo minusculo, com tracos e o numero) vira palavras.
+        (self.tmp / 'burtysounds-retrowave-181955.mp3').write_bytes(b'\xff\xfb\x90\x00')
+        self.assertEqual(fs.title_of(str(self.tmp / 'burtysounds-retrowave-181955.mp3')), 'Burtysounds Retrowave')
+        (self.tmp / 'BurtySounds - Retrowave.mp3').write_bytes(b'\xff\xfb\x90\x00')
+        self.assertEqual(fs.title_of(str(self.tmp / 'BurtySounds - Retrowave.mp3')), 'BurtySounds - Retrowave')
+        (self.tmp / 'my_song.ogg').write_bytes(b'OggS')
+        self.assertEqual(fs.title_of(str(self.tmp / 'my_song.ogg')), 'My Song')
+        # Uma tag quebrada nao derruba: cai no nome do arquivo.
+        broken = self.tmp / 'Broken Tag.mp3'
+        broken.write_bytes(b'ID3\x03\x00\x00\x00\x00\x00\x7fTIT2\xff\xff\xff\xff')
+        self.assertEqual(fs.title_of(str(broken)), 'Broken Tag')
+
+    def test_the_soundtrack_plan(self):
+        fs = self.fs
+        music = self.dir / 'music'
+        (music / 'Mix').mkdir(parents=True)
+        for name in ('zzz.mp3', 'aaa.OGG', fs.DEFAULT_TRACK, 'notes.txt', '.hidden.mp3'):
+            (music / name).write_bytes(b'x')
+        (music / 'Mix' / 'one.mp3').write_bytes(b'x')
+        (music / 'Mix' / 'two.flac').write_bytes(b'x')
+        # O padrao: a pasta music, com a da BurtySounds primeiro; as outras sorteadas.
+        files, first = fs.music_plan('')
+        self.assertEqual(Path(first).name, fs.DEFAULT_TRACK)
+        self.assertEqual(sorted(Path(f).name for f in files), sorted(['aaa.OGG', fs.DEFAULT_TRACK, 'zzz.mp3']))
+        # Uma subpasta: so as faixas dela (sem ordem especial); um arquivo: so ele; off: nada.
+        files, first = fs.music_plan(str(music / 'Mix'))
+        self.assertEqual((sorted(Path(f).name for f in files), first), (['one.mp3', 'two.flac'], None))
+        self.assertEqual(fs.music_plan(str(music / 'zzz.mp3')), ([str(music / 'zzz.mp3')], str(music / 'zzz.mp3')))
+        self.assertEqual(fs.music_plan('off'), ([], None))
+        # Uma pasta que sumiu volta ao padrao.
+        self.assertEqual(fs.music_plan(str(music / 'gone'))[1], str(music / fs.DEFAULT_TRACK))
+        # A proxima faixa sorteada nunca e a que acabou de tocar.
+        pool = ['a', 'b', 'c']
+        import random
+        rng = random.Random(1)
+        self.assertEqual(fs.pick_next(pool, 'a', 'first'), 'first')
+        for _ in range(50):
+            self.assertNotEqual(fs.pick_next(pool, 'a', None, rng), 'a')
+        self.assertEqual(fs.pick_next(['only'], 'only'), 'only')
+        self.assertIsNone(fs.pick_next([], None))
+
+    def test_opening_the_frontend_the_desktop_or_the_shell_plays_only_open_game(self):
+        # O Enter do Setup nao toca por cima do "Open game" (fliperos-tty1) nos tres itens que saem do menu.
+        import serve
+
+        class Menu:
+            def __init__(self, title, mode='menu'):
+                self.title, self.mode = title, mode
+
+        server = serve.Server.__new__(serve.Server)
+        server.W = type('W', (), {'Menu': Menu})
+        main = Menu('FliperOS')
+        for value in ('frontend', 'desktop', 'shell'):
+            self.assertTrue(server.opens_something(main, value), value)
+        for value in ('setup', 'achievements', 'power'):
+            self.assertFalse(server.opens_something(main, value), value)
+        # So o menu principal: um item "frontend" de outro menu (Setup > Games) segue com o Enter.
+        self.assertFalse(server.opens_something(Menu('Games'), 'frontend'))
+        self.assertFalse(server.opens_something(Menu('FliperOS', 'radio'), 'frontend'))
+        self.assertFalse(server.opens_something(object(), 'frontend'))
+        text = (self.GUI / 'serve.py').read_text()
+        self.assertIn('if not self.opens_something(screen, value):\n                self.app.play("enter")', text)
+        # Os tres itens sao os do menu principal; o shell tambem toca o "Open game" ao sair para ele.
+        main_menu = (ROOT / 'fliperos-setup/screens/main-menu.sh').read_text()
+        for value in serve.LAUNCH_VALUES:
+            self.assertIn('"%s|' % value, main_menu)
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        self.assertIn('((rc == 10 && ${#remote[@]} == 0)) && menu_sound open', tty1)
+
+    def test_the_preview_picture_waits_for_the_late_sound(self):
+        # O som do video de preview passa pela fila do ALSA (~320 ms com o Live screen sound) e chega
+        # depois da imagem: o quadro mostrado e o mais novo que ja esperou o SYNC.
+        import collections
+        import fevideo
+        saved = fevideo.SYNC
+        self.addCleanup(setattr, fevideo, 'SYNC', saved)
+        video = fevideo.Video.__new__(fevideo.Video)
+        video.sound, video.frame, video.shown = True, b'latest', None
+        video.queue = collections.deque()
+        now = time.monotonic()
+        video.queue.extend([(now - 0.5, b'a'), (now - 0.4, b'b'), (now - 0.1, b'c')])
+        fevideo.SYNC = 0.3
+        self.assertEqual(video.current(), b'b')
+        self.assertEqual(len(video.queue), 1)               # o 'c' ainda espera
+        video.queue.clear()
+        video.queue.append((time.monotonic(), b'd'))
+        self.assertEqual(video.current(), b'b')             # nenhum novo esperou: segue no 'b'
+        # Sem atraso (0) ou sem som (a miniatura muda da grade): o quadro mais novo, direto.
+        fevideo.SYNC = 0.0
+        self.assertEqual(video.current(), b'latest')
+        fevideo.SYNC = 0.3
+        video.sound = False
+        self.assertEqual(video.current(), b'latest')
+        # O frontend mede o atraso do ALSA e poe o do ajuste da pessoa por cima.
+        frontend = (self.GUI / 'fliperos-frontend').read_text()
+        self.assertIn('fevideo.SYNC = self.sync_auto if manual is None else manual / 1000.0', frontend)
+        self.assertIn('seconds = self.fs.alsa_latency()', frontend)
+        self.assertIn('return self.video.current()', (self.GUI / 'fevideo.py').read_text())
+        self.assertIn('def alsa_latency(', (self.GUI / 'fesound.py').read_text())
+        # Sem libasound ou sem o PCM, nao ha medida (e a imagem nao espera): nunca derruba.
+        self.assertIsNone(self.fs.alsa_latency('no-such-pcm'))
+
+    def test_the_setup_and_the_frontend_have_the_same_events_and_the_icon(self):
+        fs = self.fs
+        audio = (ROOT / 'fliperos-setup/lib/audio.sh').read_text()
+        self.assertIn('MENU_SOUND_EVENTS="%s"' % ' '.join(fs.EVENTS), audio)
+        view = (self.GUI / 'feview.py').read_text()
+        frontend = (self.GUI / 'fliperos-frontend').read_text()
+        rows = re.search(r'SOUND_ROWS = \[(.*?)\]\n', view, re.S).group(1)
+        self.assertEqual(re.findall(r'\("(\w+)", "', rows)[:6], list(fs.EVENTS))
+        for label in fs.LABELS.values():
+            self.assertIn('"%s"' % label.upper(), rows)
+        # O espelho do Setup: o Frontend sounds mais a trilha, o volume dela e o do video.
+        self.assertEqual(re.findall(r'\("(\w+)", "', rows)[6:],
+                         ['music', 'music_volume', 'music_pause', 'preview', 'preview_sync'])
+        self.assertIn('("sounds", "FRONTEND SOUNDS")', view)
+        self.assertRegex(frontend, r'OPT_CONTROLS, OPT_SOUNDS, OPT_POWER')
+        self.assertIn('"sounds": self.snd.data', frontend)
+        # O Audio Setup abre a tela nova, e o item tem um icone proprio (nao o do audio).
+        menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
+        self.assertIn('"sounds|Menu sounds ($(menu_sounds_label))|', menu)
+        self.assertIn('sounds) screen_menu_sounds ;;', menu)
+        self.assertIn('source "$SETUP_DIR/screens/sounds.sh"', (ROOT / 'fliperos-setup/fliperos-setup').read_text())
+        theme = (self.GUI / 'theme.py').read_text()
+        self.assertIn('    "sounds": """', theme)
+        self.assertNotIn('"sounds": "audio"', theme)
+        self.assertIn('symbol id="px-sounds"', (ROOT / 'config/web/icons.svg').read_text())
+        for event in fs.EVENTS:
+            self.assertIn('"snd-%s":' % event, theme)
+
+    def test_the_events_are_wired_to_the_things_that_happen(self):
+        frontend = (self.GUI / 'fliperos-frontend').read_text()
+        # O cursor, entrar e voltar (os botoes), abrir e fechar o jogo, o alerta.
+        self.assertIn('"b1": "enter"', frontend)
+        self.assertIn('"b2": "back"', frontend)
+        self.assertIn('self.sfx.play_outside("open")', frontend)
+        self.assertIn('self.sfx.play("close")', frontend)
+        self.assertIn('ALERT_OVERLAYS = ("exit", "delete", "storage")', frontend)
+        self.assertIn('self.sfx_for(a)\n                r = self.act(a)', frontend)
+        # O som de abrir toca fora do mixer, que fecha antes do jogo.
+        self.assertLess(frontend.index('self.sfx.play_outside("open")'), frontend.index('pg.mixer.quit()'))
+        # O nome da faixa que comeca aparece na barra; o volume do video de preview vai ao ffmpeg.
+        self.assertIn('self.nowplaying = (title, now)', frontend)
+        # A trilha so espera o video de preview com som se PAUSE MUSIC estiver ligado (padrao: desligado).
+        self.assertIn('self.music.hold(self.snd.music_pause() and bool(video and video.sound', frontend)
+        self.assertIn('self.toggle_music_pause()', frontend)
+        video = (self.GUI / 'fevideo.py').read_text()
+        self.assertIn('"-af", "volume=%.2f" % (VOLUME / 100.0)', video)
+        self.assertIn('self.sound = sound and not paced and VOLUME > 0', video)
+        gui = (self.GUI / 'fliperos-gui').read_text()
+        serve = (self.GUI / 'serve.py').read_text()
+        self.assertIn('self.app.play("back")', serve)
+        self.assertIn('self.app.play("enter")', serve)
+        self.assertIn('app.play("alert")', serve)
+        self.assertIn('if cmd == "sounds":', serve)
+        self.assertIn('def play(self, event):', gui)
+        tty1 = (ROOT / 'config/fliperos-tty1').read_text()
+        self.assertRegex(tty1, r'menu_sound open\n\s+"\$BIN/fliperos-session" \$\{name:\+"\$name"\}\n\s+menu_sound close')
+
+
 if __name__ == '__main__':
     unittest.main()

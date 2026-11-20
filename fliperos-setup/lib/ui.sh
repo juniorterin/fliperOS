@@ -153,6 +153,7 @@ ui_gui_start() {
   LD_PRELOAD=$preload FLIPEROS_DEFLICKER_APP=fliperos-gui \
     FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
     FLIPEROS_GUI_CONSOLE=$console \
+    FLIPEROS_SOUNDS_DIR=$(sounds_dir) FLIPEROS_CONF=$FLIPEROS_CONF \
     SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-$driver} SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa} \
     "$UI_GUI_BIN" --serve "$UI_GUI_DIR" < /dev/null >> "$FLIPEROS_LOG" 2>&1 &
   UI_GUI_PID=$!
@@ -451,6 +452,9 @@ ui_sounds() {
   while IFS= read -r line; do
     [[ -n $line ]] && export "${line?}"
   done < <(menu_sounds_env)
+  # A interface grafica le o fliperos.conf de novo (ela toca os seis eventos
+  # sozinha: gui/fesound.py).
+  ui_gui_alive && ui_gui_call sounds > /dev/null 2>&1
   return 0
 }
 
