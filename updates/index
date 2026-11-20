@@ -94,3 +94,4 @@
 91	5646ca91bee28654fcd3c8951cec59b1aa3a9cdd	54c34bd96f67f01d6960a79416fd8760975a0d2fce917e15a8a708a4705a32e2	no	Menu and frontend sounds with a file and a volume for each, music with a now-playing bar, and the game preview sound in sync with its picture
 92	4d4fd2f620f8caa988d3911e7763680a5e63a485	fe8ba45e24c7fe4eed736a207cdabf6a1c35c025f78c2410fec5a63566d3a79d	no	The three songs of the frontend now come with FliperOS
 93	bcf3a01764b8bfb5a6e64e7464b1c50a4226f3bc	885c97e6718265cde8b9fcde62613c5c44fa945801479ba7d66b8b2a0a8ded6c	no	HBMAME with Switchres that installs itself when you open its first game, a full screen with a wheel of logos, clones grouped in a dialog, and music in random order
+94	b48740101f4d4c3a8bf2621d74a725ac72fa774c	ea39d19cd94dd82c855b24df0116f6edf68f3313dff6a7520b35cb82b3fcbf25	no	Odin, the Sega Hikaru and Gaelco 3D emulator, installs itself when you open its first game, and the clones inside HBMAME zips show up in the lists
