@@ -2341,7 +2341,7 @@ def combo_held(combo, now):
 # menu na tela do FliperOS (config/fliperos-osd).
 MENU_KEYS = {'retroarch': 'F1', 'groovymame': 'TAB', 'hbgroovymame': 'TAB', 'mame': 'TAB', 'flycast': 'TAB', 'pcsx2': 'ESCAPE',
              'pcsx2-qt': 'ESCAPE', 'pcsx2x6': 'ESCAPE', 'duckstation': 'ESCAPE', 'duckstation-qt': 'ESCAPE',
-             'fliperos-model2': 'sm2', 'fliperos-model3': 'sm2', 'keisho': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2',
+             'fliperos-model2': 'sm2', 'fliperos-model3': 'sm2', 'keisho': 'sm2', 'sm2-emu': 'sm2', 'model2': 'sm2', 'fliperos-odin': 'F10', 'odin': 'F10',
              'model3': 'sm2'}
 # Os nomes das teclas (os do SDL, que o sm2-emu.ini usa) no evdev.
 KEY_CODES = {'ESCAPE': 1, 'TAB': 15, 'BACKSPACE': 14, 'RETURN': 28, 'SPACE': 57, 'PAUSE': 119,

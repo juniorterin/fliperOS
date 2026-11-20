@@ -1697,7 +1697,7 @@ screen_emulators() {
     done < <(emulators_list)
     entries+=("return|Return")
     choice=$(ui_menu "$title" \
-      "Choose one to install it, or to update it when it is installed. HBMAME, Fightcade 2, DuckStation and KOF Final Attack don't come in the image and need the network." \
+      "Choose one to install it, or to update it when it is installed. HBMAME, Odin, Fightcade 2, DuckStation and KOF Final Attack don't come in the image and need the network." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     [[ $choice == return ]] && return 0

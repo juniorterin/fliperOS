@@ -1,4 +1,4 @@
-The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc) and KOF Final Attack on Ikemen GO.
+The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack on Ikemen GO and Odin (Sega Hikaru, Gaelco 3D).
 
 ## Dolphin (GameCube, Wii, Triforce)
 
@@ -55,6 +55,19 @@ Hypseus has no menu of its own (it needs the game's name), so it has no shortcut
 The converted copy goes to `~/roms/ikemen/kof-final-attack` (about 2 GB). The original folder is not changed. **Update** downloads the newest game, patch and Ikemen GO and converts again.
 
 It opens from the desktop menu (**Games > KOF Final Attack**) or with `fliperos-kof`, in its own Xorg at 320x240@60. It is not in the frontends' game lists.
+
+## Odin (Sega Hikaru and Gaelco 3D)
+
+Odin is a low level emulator of the **Sega Hikaru** (Air Trix, Brave Firefighters, Planet Harriers, NASCAR Arcade, Star Wars Racer Arcade, Cyber Troopers Virtual-On Force) and of the **Gaelco 3D** boards (ATV Track, Smashing Drive, Football Power, Radikal Bikers, Speed Up, Surf Planet). Its games go in **`~/roms/odin`**, one MAME set (`.zip` or `.7z`) per game: `airtrix`, `braveff`, `pharrier`, `sgnascar`, `swracer`, `von4`, `atvtrack`, `smashdrv`, `gfootbal`, `radikalb`, `footbpow`, `speedup`, `surfplnt`.
+
+- **It installs itself.** Odin does not come in the image. The `odin` folder exists from the installation; when the first game is in it and you open it in the frontend, a bar installs Odin (a package already built, so it takes the time of a download) and the game opens. By hand: **Setup > Games > Emulators & Games > Odin**. It is a system of its own in every frontend (Odin), with the game names from the GroovyMAME list.
+- **The shared sets** the Hikaru games need, `hikaru.zip` and `mie.zip` (and `tms320c31.zip` for Radikal Bikers, Football Power, Speed Up and Surf Planet), go in `~/bios/odin`; `~/bios/mame` and `~/roms/odin` work too. The other sets (`jvs13551`, `18wheelr`, `srally2`) are optional: without them Odin imitates those boards.
+- **Video.** It needs an OpenGL 4.3 driver (or Vulkan 1.3): an AMD card with the Mesa driver, like the R7 240 or the R9 380, has it; a GPU with only OpenGL 2.1 (Intel Ironlake) does not. On **amdgpu** it draws in **Vulkan**, on the other drivers (radeon, Intel) in OpenGL, chosen the first time it opens and each time the driver changes (Setup > Video Setup); in between, the Renderer you pick in its menu stays. It opens in its own Xorg at **320x240** on a 15 kHz tube, which is the 4:3 picture of the board at half width (Odin keeps the 4:3 and has no stretch option, so 640x240 would only use half the screen); **Interlaced hacks** can make it 640x480 interlaced, and on 25/31 kHz monitors and LCDs it runs at 640x480. It starts in full screen, with the bezel off and VSync on; the first time only, so what you change in its menu stays.
+- **Files.** What the board keeps without power (EEPROM, NVRAM, clock, the Virtual-On card) is in `~/nvram/odin/<game>`, the save states (F2 saves, F4 loads) in `~/save/odin`, and `odin.ini` and `odin.log` in `~/.local/share/odin` (also reachable from the `config` folder).
+- **Controls.** Odin has its own menu (Escape, F10 or Guide) and its own pages for the controls, wheels and light guns; **coin + button 1** opens it. Calibrate the controls of each game the first time, in its test menu (key `0`, or Guide held with R3).
+- **Updates.** A cabinet that has it gets the new version with the system updates. The version is the project's commit of 2026-11-18 (0.1.1 and the Gaelco 3D games).
+
+Odin has not been seen on a CRT yet.
 
 ## How it works
 

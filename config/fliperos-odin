@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Odin (Sega Hikaru e os arcades 3D da Gaelco) pelo FliperOS. Aberto por um
+# frontend, via fliperos-x11-run (que poe o modo de video do CRT). Pelo menu do
+# desktop, o fliperos-launch abre a biblioteca do Odin.
+#
+#   fliperos-odin [jogo] [opcoes do odin]   (o nome do set, sem .zip, ou o caminho do .zip/.7z)
+#
+# O Odin vem no pacote opcional fliperos-odin (/usr/local/bin/odin), baixado
+# quando o primeiro jogo da pasta odin e aberto (config/fliperos-emulators, tipo
+# package). Este comando vem com o sistema, e e ele que liga o Odin as pastas do
+# FliperOS:
+#   ~/roms/odin   os jogos (um set do MAME por jogo: airtrix, braveff, smashdrv...)
+#   ~/bios/odin   os sets compartilhados: hikaru, mie, tms320c31 (ou ~/bios/mame,
+#                 ou a propria ~/roms/odin: a primeira onde estiver o hikaru.zip)
+#   ~/nvram/odin  o que a placa guarda sem energia (EEPROM, NVRAM, relogio, cartoes)
+#   ~/save/odin   os save states (F2 grava, F4 carrega)
+set -euo pipefail
+bin=${FLIPEROS_ODIN_BIN:-/usr/local/bin/odin}
+roms=${FLIPEROS_ODIN_DIR:-$HOME/roms/odin}
+nvram=${FLIPEROS_ODIN_NVRAM:-$HOME/nvram/odin}
+states=${FLIPEROS_ODIN_STATES:-$HOME/save/odin}
+data=${FLIPEROS_ODIN_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/odin}
+iniset=${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}
+if [[ ! -x $bin ]]; then
+  echo "Odin (Sega Hikaru and Gaelco) is not installed. Install it in Setup > Games > Emulators & Games." >&2
+  exit 1
+fi
+
+# O jogo: o nome do set, ou o caminho do arquivo (a pasta dele passa a ser a dos
+# jogos). O resto vai ao Odin como veio.
+game="" args=() given=" " value=0
+for arg in "$@"; do
+  # O valor de uma opcao do Odin (-x 2, -c arquivo) vai com ela e nao e o
+  # jogo; o do -r (o jogo, como o Odin o chama) e o jogo.
+  if ((value == 2)); then
+    game=$arg
+    value=0
+    continue
+  elif ((value)); then
+    args+=("$arg")
+    value=0
+    continue
+  fi
+  case $arg in
+    -r) value=2 ;;
+    -R | -B | -c | -x | -a | -w | -o | -l | -s | -n)
+      args+=("$arg")
+      given+="$arg "
+      value=1
+      ;;
+    -*)
+      args+=("$arg")
+      given+="$arg "
+      ;;
+    *) game=$arg ;;
+  esac
+done
+if [[ -n $game && -e $game && ! -d $game ]]; then
+  roms=$(dirname -- "$game")
+  game=$(basename -- "$game")
+  game=${game%.*}
+fi
+
+# Os sets compartilhados (hikaru, mie): a primeira pasta que tem o hikaru.zip
+# ou o mie.zip; sem nenhuma, a ~/bios/odin, onde o texto da pasta diz para
+# poe-los.
+bios=${FLIPEROS_ODIN_BIOS:-}
+if [[ -z $bios ]]; then
+  for dir in "$HOME/bios/odin" "$HOME/bios/mame" "$roms"; do
+    if [[ -f $dir/hikaru.zip || -f $dir/mie.zip || -f $dir/hikaru.7z || -f $dir/mie.7z ]]; then
+      bios=$dir
+      break
+    fi
+  done
+  bios=${bios:-$HOME/bios/odin}
+fi
+
+mkdir -p "$data" "$nvram" "$states" 2> /dev/null || true
+ini=$data/odin.ini
+# As pastas de dados sao as do FliperOS (a [paths] do odin.ini): o que o menu do
+# Odin muda aqui volta a ser o que o sistema diz na proxima abertura.
+if [[ -x $iniset ]]; then
+  "$iniset" "$ini" paths saves "$nvram"
+  "$iniset" "$ini" paths states "$states"
+  # O padrao do CRT, uma vez so (quem mudar no menu do Odin fica com a escolha):
+  # tela cheia, sem a moldura (preta no tubo, a imagem e 4:3) e o VSync ligado
+  # (sem ele a imagem rasga).
+  if [[ ! -e $data/.fliperos-defaults ]]; then
+    "$iniset" "$ini" display fullscreen on
+    "$iniset" "$ini" display bezel off
+    "$iniset" "$ini" display vsync on
+    : > "$data/.fliperos-defaults"
+  fi
+  # O renderizador pelo driver da placa do CRT, como no Keisho (e o Flycast, o
+  # Dolphin...): Vulkan no amdgpu, OpenGL nos outros (o radeon nao tem Vulkan).
+  # Na primeira abertura e a cada troca de driver; entre elas a escolha do menu
+  # do Odin (page Display, Renderer) fica.
+  drm=${FLIPEROS_DRM_SYSFS:-/sys/class/drm} driver=""
+  for status in "$drm"/card[0-9]*-*/status; do
+    [[ $(cat "$status" 2> /dev/null) == connected ]] || continue
+    card=${status%/status}
+    card=${card##*/}
+    driver=$(readlink -f "$drm/${card%%-*}/device/driver" 2> /dev/null) || driver=""
+    driver=${driver##*/}
+    break
+  done
+  driver=${driver:-none}
+  if [[ $(cat "$data/.fliperos-api" 2> /dev/null) != "$driver" ]]; then
+    if [[ $driver == amdgpu ]]; then api=vulkan; else api=opengl; fi
+    "$iniset" "$ini" display api "$api"
+    printf '%s\n' "$driver" > "$data/.fliperos-api"
+  fi
+fi
+
+opts=()
+[[ $given == *" -R "* ]] || opts+=(-R "$roms")
+[[ $given == *" -B "* ]] || opts+=(-B "$bios")
+[[ $given == *" -f "* ]] || opts+=(-f)
+[[ -z $game ]] || opts+=(-r "$game")
+exec "$bin" "${opts[@]}" "${args[@]}"

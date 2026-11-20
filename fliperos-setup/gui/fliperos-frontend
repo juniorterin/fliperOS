@@ -244,7 +244,7 @@ def missing_core(argv):
 # config/fliperos-emulators.
 EMULATOR_OF = {"groovymame": "groovymame", "hbgroovymame": "hbgroovymame", "flycast": "flycast", "pcsx2": "pcsx2", "pcsx2x6": "pcsx2x6",
                "dolphin-emu": "dolphin", "openbor": "openbor",
-               "fliperos-model2": "keisho", "fliperos-model3": "keisho", "keisho": "keisho", "duckstation": "duckstation", "fightcade": "fightcade",
+               "fliperos-model2": "keisho", "fliperos-model3": "keisho", "keisho": "keisho", "fliperos-odin": "odin", "odin": "odin", "duckstation": "duckstation", "fightcade": "fightcade",
                "retroarch": "retroarch"}
 
 

@@ -12,7 +12,7 @@ The emulators FliperOS ships or installs, the systems they run and the video mod
 | [PlayStation 2 and Namco 246/256](Namco-246-256.md) | PCSX2, and PCSX2x6 for Tekken 5, Soul Calibur II and the other Namco boards |
 | [OpenBOR](OpenBOR.md) | Beat 'em up paks: information from the pak, each pak's own video mode, old paks |
 | [Windows games](Windows-games.md) | Wine, Wine Staging, Steam and Heroic |
-| [More emulators](More-emulators.md) | Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack |
+| [More emulators](More-emulators.md) | Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack, Odin (Sega Hikaru) |
 | [Fightcade 2](Fightcade-2.md) | Online matches |
 
 ## Every emulator
@@ -31,6 +31,7 @@ The emulators FliperOS ships or installs, the systems they run and the video mod
 | [Hypseus Singe](More-emulators.md#hypseus-singe-laserdisc) | Laserdisc | In the image | 640x240 |
 | [DuckStation](More-emulators.md#duckstation-playstation) | PlayStation | Downloaded | 640x240 |
 | [Fightcade 2](Fightcade-2.md) | Online arcade matches | Downloaded | Each game's own mode |
+| [Odin](More-emulators.md#odin-sega-hikaru-and-gaelco-3d) | Sega Hikaru and Gaelco 3D arcades (`~/roms/odin`) | Downloads itself when you open its first game | 320x240 |
 | [KOF Final Attack](More-emulators.md#kof-final-attack-ikemen-go-43) | One game, Ikemen GO | Downloaded or from your copy | 320x240 |
 | [Wine, Wine Staging](Windows-games.md) | Windows games | From the Extras | The game's video mode |
 | [Steam, Heroic](Windows-games.md#steam-and-gog) | PC games | From the Extras | Inside the desktop |

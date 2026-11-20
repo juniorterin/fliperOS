@@ -597,7 +597,7 @@ system_of() {
   [[ $rel != "$1" ]] || { basename -- "$(dirname -- "$1")"; return; }
   folder=${rel%%/*}
   case $folder in
-    mame | naomi | naomi2 | atomiswave | model2 | model3 | fightcade) echo mame ;;
+    mame | naomi | naomi2 | atomiswave | model2 | model3 | odin | fightcade) echo mame ;;
     dolphin) echo nintendo_gamecube ;;
     ps1) echo psx ;;
     retroarch)
@@ -1047,7 +1047,7 @@ launch() {
       [[ $last == -* ]] && return 0
       sys=hbmame
       ;;
-    groovymame | fliperos-model2)
+    groovymame | fliperos-model2 | fliperos-odin | odin)
       [[ $last == -* ]] && return 0
       sys=mame
       ;;
@@ -1079,7 +1079,7 @@ now() {
     ((${#args[@]} >= 2)) || continue
     last=${args[-1]}
     case ${args[0]##*/} in
-      groovymame | hbgroovymame | fliperos-model2) [[ $last != -* ]] || continue ;;
+      groovymame | hbgroovymame | fliperos-model2 | fliperos-odin | odin) [[ $last != -* ]] || continue ;;
       *) [[ $last == "$roms"/* && -f $last ]] || continue ;;
     esac
     PIXELCADE_GAME_PID=${dir#/proc/} launch "${args[@]}"

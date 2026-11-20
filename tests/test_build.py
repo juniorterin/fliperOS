@@ -1382,7 +1382,7 @@ class RomFoldersTests(unittest.TestCase):
             for _ in range(2):  # a segunda rodada nao muda nada
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             roms = tmp / 'roms'
-            for emu in ('mame', 'hbmame', 'ps2', 'namco2x6', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'dolphin',
+            for emu in ('mame', 'hbmame', 'ps2', 'namco2x6', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'odin', 'dolphin',
                         'openbor/Paks', 'hypseus', 'fightcade', 'fightcade/fbneo', 'fightcade/flycast',
                         'fightcade/snes9x', 'fightcade/fc1'):
                 self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
@@ -1776,7 +1776,7 @@ class RomFoldersTests(unittest.TestCase):
             for kind in ('snap', 'preview', 'logo', 'box', 'marquee', 'dmd', 'texto'):
                 names = sorted(p.name for p in (tmp / 'media' / kind).iterdir())
                 self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'hbmame', 'mame', 'model2',
-                                         'model3', 'namco2x6', 'naomi', 'naomi2', 'ps1', 'ps2', 'retroarch'], kind)
+                                         'model3', 'namco2x6', 'naomi', 'naomi2', 'odin', 'ps1', 'ps2', 'retroarch'], kind)
                 self.assertEqual([p.name for p in (tmp / 'media' / kind / 'retroarch').iterdir()], ['mame2010'], kind)
             self.assertTrue((tmp / 'media/preview/model2').is_symlink())
             self.assertEqual(list((tmp / 'disk').iterdir()), [])
@@ -2769,6 +2769,216 @@ class HbGroovymameTests(unittest.TestCase):
             self.assertTrue((tmp / 'roms/hbmame/_info.txt').is_file())
             self.assertIn('HBMAME is downloaded', (tmp / 'roms/hbmame/_info.txt').read_text())
             for folder in ('bios/hbmame', 'nvram/hbmame', 'save/hbmame', 'media/snap/hbmame', 'media/logo/hbmame'):
+                self.assertTrue((tmp / folder).is_dir(), folder)
+
+
+class OdinTests(unittest.TestCase):
+    """Odin (Sega Hikaru e Gaelco 3D): um pacote opcional que se instala ao abrir o primeiro jogo da pasta odin.
+    O comando e o config/fliperos-odin, que vem com o sistema; o programa vem com o pacote."""
+
+    def run_wrapper(self, tmp, *args, installed=True, env_extra=None):
+        tmp = Path(tmp)
+        for d in ('home', 'bin'):
+            (tmp / d).mkdir(exist_ok=True)
+        fake = tmp / 'bin/odin'
+        fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        fake.chmod(0o755)
+        env = dict(os.environ, HOME=str(tmp / 'home'), XDG_DATA_HOME=str(tmp / 'data'),
+                   FLIPEROS_ODIN_BIN=str(fake if installed else tmp / 'bin/missing'),
+                   FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'))
+        env.update(env_extra or {})
+        return subprocess.run(['bash', str(ROOT / 'config/fliperos-odin'), *args], env=env, capture_output=True,
+                              text=True, timeout=60)
+
+    def test_a_game_opens_with_the_folders_of_the_system(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            run = self.run_wrapper(tmp, 'airtrix')
+            self.assertEqual(run.returncode, 0, run.stderr)
+            home = tmp / 'home'
+            # A biblioteca do Odin, o jogo e a tela cheia; os sets compartilhados sem lugar certo: ~/bios/odin.
+            self.assertEqual(run.stdout.split('\n')[:-1],
+                             ['-R', str(home / 'roms/odin'), '-B', str(home / 'bios/odin'), '-f', '-r', 'airtrix'])
+            ini = (tmp / 'data/odin/odin.ini').read_text()
+            self.assertRegex(ini, r'(?m)^saves = %s$' % re.escape(str(home / 'nvram/odin')))
+            self.assertRegex(ini, r'(?m)^states = %s$' % re.escape(str(home / 'save/odin')))
+            for key, value in (('fullscreen', 'on'), ('bezel', 'off'), ('vsync', 'on')):
+                self.assertRegex(ini, r'(?m)^%s = %s$' % (key, value))
+            self.assertTrue((home / 'nvram/odin').is_dir())
+            self.assertTrue((home / 'save/odin').is_dir())
+
+    def test_what_the_person_changes_in_the_odin_menu_stays(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.run_wrapper(tmp, 'airtrix')
+            ini = tmp / 'data/odin/odin.ini'
+            ini.write_text(ini.read_text().replace('bezel = off', 'bezel = image'))
+            self.run_wrapper(tmp, 'airtrix')
+            text = ini.read_text()
+            self.assertIn('bezel = image', text)
+            self.assertNotIn('bezel = off', text)
+            # As pastas, essas, sao as do sistema a cada abertura.
+            ini.write_text(text.replace('saves = %s' % (tmp / 'home/nvram/odin'), 'saves = /somewhere'))
+            self.run_wrapper(tmp, 'airtrix')
+            self.assertIn('saves = %s' % (tmp / 'home/nvram/odin'), ini.read_text())
+            self.assertEqual(ini.read_text().count('saves = '), 1)
+
+    def test_vulkan_on_amdgpu_and_opengl_on_the_other_drivers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            drm = tmp / 'drm'
+
+            def card(driver):
+                # card0 com a saida VGA ligada, e o link do driver como o /sys.
+                (drm / 'card0/device').mkdir(parents=True, exist_ok=True)
+                (drm / 'card0-VGA-1').mkdir(exist_ok=True)
+                (drm / 'card0-VGA-1/status').write_text('connected\n')
+                (tmp / 'drivers' / driver).mkdir(parents=True, exist_ok=True)
+                link = drm / 'card0/device/driver'
+                link.unlink(missing_ok=True)
+                link.symlink_to(tmp / 'drivers' / driver)
+
+            def api():
+                run = self.run_wrapper(tmp, 'airtrix', env_extra={'FLIPEROS_DRM_SYSFS': str(drm)})
+                self.assertEqual(run.returncode, 0, run.stderr)
+                return re.search(r'(?m)^api = (\w+)$', (tmp / 'data/odin/odin.ini').read_text()).group(1)
+            # Sem placa AMD ligada (nenhum card): OpenGL, o padrao do Odin.
+            self.assertEqual(api(), 'opengl')
+            card('amdgpu')
+            self.assertEqual(api(), 'vulkan')
+            # A escolha do menu do Odin fica enquanto o driver e o mesmo.
+            ini = tmp / 'data/odin/odin.ini'
+            ini.write_text(ini.read_text().replace('api = vulkan', 'api = opengl'))
+            self.assertEqual(api(), 'opengl')
+            # O radeon nao tem Vulkan; ao voltar para o amdgpu, Vulkan de novo.
+            card('radeon')
+            ini.write_text(ini.read_text().replace('api = opengl', 'api = vulkan'))
+            self.assertEqual(api(), 'opengl')
+            card('amdgpu')
+            self.assertEqual(api(), 'vulkan')
+
+    def test_the_shared_sets_are_where_they_are(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            home = tmp / 'home'
+            (home / 'bios/mame').mkdir(parents=True)
+            (home / 'bios/mame/hikaru.zip').write_text('x')
+            out = self.run_wrapper(tmp, 'braveff').stdout.split('\n')
+            self.assertEqual(out[2:4], ['-B', str(home / 'bios/mame')])
+            # A pasta do Odin, quando e la que estao; a ~/bios/odin tem a vez antes.
+            (home / 'bios/mame/hikaru.zip').unlink()
+            (home / 'roms/odin').mkdir(parents=True)
+            (home / 'roms/odin/mie.zip').write_text('x')
+            out = self.run_wrapper(tmp, 'braveff').stdout.split('\n')
+            self.assertEqual(out[2:4], ['-B', str(home / 'roms/odin')])
+            (home / 'bios/odin').mkdir(parents=True)
+            (home / 'bios/odin/hikaru.zip').write_text('x')
+            out = self.run_wrapper(tmp, 'braveff').stdout.split('\n')
+            self.assertEqual(out[2:4], ['-B', str(home / 'bios/odin')])
+
+    def test_a_path_gives_the_folder_and_the_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # Um caminho que existe: a pasta dele passa a ser a dos jogos, e o nome do set e o do arquivo.
+            games = tmp / 'arcade'
+            games.mkdir()
+            (games / 'smashdrv.zip').write_text('x')
+            out = self.run_wrapper(tmp, str(games / 'smashdrv.zip')).stdout.split('\n')
+            self.assertEqual(out[:2], ['-R', str(games)])
+            self.assertEqual(out[-3:-1], ['-r', 'smashdrv'])
+            # Um nome de set que nao e arquivo: fica como veio.
+            out = self.run_wrapper(tmp, 'smashdrv').stdout.split('\n')
+            self.assertEqual(out[:2], ['-R', str(tmp / 'home/roms/odin')])
+            self.assertEqual(out[-3:-1], ['-r', 'smashdrv'])
+
+    def test_without_a_game_it_opens_the_library_and_the_options_go_through(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            out = self.run_wrapper(tmp).stdout.split('\n')[:-1]
+            self.assertNotIn('-r', out)
+            self.assertIn('-f', out)
+            # Uma opcao do Odin vai como veio, e o -f dado nao se repete.
+            out = self.run_wrapper(tmp, '-x', '2', '-f', 'atvtrack').stdout.split('\n')[:-1]
+            self.assertEqual(out.count('-f'), 1)
+            self.assertEqual(out[out.index('-r') + 1], 'atvtrack')
+            self.assertEqual(out[out.index('-x') + 1], '2')
+            # O -r do Odin e o jogo, e um -R dado no lugar do da pasta nao se repete.
+            out = self.run_wrapper(tmp, '-R', '/games', '-r', 'braveff').stdout.split('\n')[:-1]
+            self.assertEqual(out.count('-R'), 1)
+            self.assertEqual(out[out.index('-R') + 1], '/games')
+            self.assertEqual(out[out.index('-r') + 1], 'braveff')
+
+    def test_without_the_program_it_says_where_to_install_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self.run_wrapper(Path(tmp), 'airtrix', installed=False)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('Setup > Games > Emulators & Games', run.stderr)
+
+    def test_the_installer_knows_it_as_a_package(self):
+        label = 'Odin (Sega Hikaru and Gaelco 3D arcades)'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            env = dict(os.environ, FLIPEROS_EMULATORS_ROOT=str(tmp / 'root'), FLIPEROS_HOME=str(tmp / 'home'),
+                       FLIPEROS_PACKAGES_LIST_URL='file://%s' % (tmp / 'list'))
+            (tmp / 'list').write_text('# a list\n')
+
+            def emulators(*args):
+                return subprocess.run(['bash', str(ROOT / 'config/fliperos-emulators'), *args], capture_output=True,
+                                      text=True, env=env, timeout=60)
+            self.assertIn('odin|0|package|%s' % label, emulators('list').stdout.splitlines())
+            binary = tmp / 'root/usr/local/bin/odin'
+            binary.parent.mkdir(parents=True)
+            binary.write_text('#!/bin/sh\n')
+            binary.chmod(0o755)
+            self.assertEqual(emulators('installed', 'odin').returncode, 0)
+            version = tmp / 'root/usr/local/share/fliperos/emulator-versions.d/odin'
+            version.parent.mkdir(parents=True)
+            version.write_text('0.1.1.20261118\n')
+            self.assertIn('odin|0.1.1.20261118', emulators('versions').stdout.splitlines())
+            # Sem a linha na lista (ainda nao publicado): avisa, nao compila.
+            binary.unlink()
+            run = emulators('install', 'odin', '--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail %s|%s is not published yet' % (label, label), run.stdout)
+
+    def test_the_recipe_and_the_wiring(self):
+        recipe = (ROOT / 'packaging/packages/fliperos-odin.sh').read_text()
+        self.assertRegex(recipe, r'(?m)^PKG_OPTIONAL=1$')
+        self.assertNotRegex(recipe, r'(?m)^PKG_ON_DEMAND=')
+        self.assertRegex(recipe, r'(?m)^ODIN_COMMIT="[0-9a-f]{40}"$')
+        self.assertRegex(recipe, r'(?m)^PKG_VERSION="[0-9.]+"$')
+        # Um .deb que roda em qualquer CPU, com o SDL3 de dentro (o Ubuntu 24.04 nao o tem).
+        self.assertIn('-DODIN_NATIVE=OFF', recipe)
+        self.assertIn('-DODIN_BUNDLED_LIBS=ON', recipe)
+        self.assertIn('submodule update', recipe)
+        self.assertIn('PKG_SHLIB_TARGETS="usr/local/bin/odin"', recipe)
+        self.assertIn('emulator-versions.d/odin', recipe)
+        # O comando vem com o sistema; o programa, so com o pacote.
+        self.assertIn('install -Dm755 "$src/config/fliperos-odin" "$root/usr/local/bin/fliperos-odin"', ROOTFS)
+        desktop = (ROOT / 'config/applications/fliperos-odin.desktop').read_text()
+        self.assertIn('TryExec=/usr/local/bin/odin', desktop)
+        self.assertIn('Exec=/opt/fliperos/bin/fliperos-launch odin', desktop)
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('"fliperos-odin": "odin"', frontend)
+        self.assertIn('"odin": "odin"', frontend)
+        modes = (ROOT / 'config/fliperos-emulator-modes.conf').read_text()
+        for name in ('fliperos-odin', 'odin'):
+            self.assertRegex(modes, r'(?m)^%s +320x240@60 +640x480@60$' % name)
+        self.assertIn('fliperos-odin | odin) ;;', (ROOT / 'config/fliperos-x11-run').read_text())
+
+    def test_the_folders_exist_before_the_program_does(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            info = tmp / 'info'
+            info.mkdir()
+            env = dict(os.environ, FLIPEROS_ROMS=str(tmp / 'roms'), FLIPEROS_BIOS=str(tmp / 'bios'),
+                       FLIPEROS_MEDIA=str(tmp / 'media'), FLIPEROS_NVRAM=str(tmp / 'nvram'),
+                       FLIPEROS_SAVE=str(tmp / 'save'), FLIPEROS_CORE_INFO=str(info),
+                       FLIPEROS_CONFIG_LINKS=str(tmp / 'config'), FLIPEROS_ETC=str(tmp / 'etc'),
+                       FLIPEROS_SPLASH=str(tmp / 'splash'), HOME=str(tmp))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertIn('Odin is downloaded', (tmp / 'roms/odin/_info.txt').read_text())
+            for folder in ('bios/odin', 'nvram/odin', 'save/odin', 'media/snap/odin', 'media/logo/odin'):
                 self.assertTrue((tmp / folder).is_dir(), folder)
 
 
@@ -6828,6 +7038,12 @@ class FrontendDataTests(unittest.TestCase):
         have.add('hbgroovymame')
         self.assertIsNone(fm.missing_emulator([x11, 'hbgroovymame', 'sf2hf'], installed))
         have.discard('hbgroovymame')
+        # Um jogo da pasta odin (o pacote opcional fliperos-odin): o comando do FliperOS e o proprio programa.
+        self.assertEqual(fm.missing_emulator([x11, 'fliperos-odin', 'airtrix'], installed), 'odin')
+        self.assertEqual(fm.missing_emulator([x11, 'odin', '-r', 'airtrix'], installed), 'odin')
+        have.add('odin')
+        self.assertIsNone(fm.missing_emulator([x11, 'fliperos-odin', 'airtrix'], installed))
+        have.discard('odin')
         self.assertIsNone(fm.missing_emulator(['/bin/sh', 'game.sh'], installed))
         self.assertIsNone(fm.missing_emulator([x11, 'someprogram'], installed))
         with tempfile.TemporaryDirectory() as tmp:
@@ -14591,7 +14807,7 @@ class EmulatorMenuTests(unittest.TestCase):
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
         self.assertEqual(names, {'retroarch', 'groovymame', 'hbgroovymame', 'flycast', 'pcsx2', 'pcsx2x6', 'model3',
-                                 'dolphin', 'openbor', 'model2', 'fightcade', 'duckstation', 'kof'})
+                                 'dolphin', 'openbor', 'model2', 'odin', 'fightcade', 'duckstation', 'kof'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -19848,10 +20064,10 @@ class OnDemandFrontendTests(unittest.TestCase):
                'fliperos-keisho', 'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-rahasher', 'fliperos-retroarch',
                'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
-        # O hbgroovymame e opcional: compilado e publicado, fora da ISO e da compilacao no gabinete.
-        self.assertEqual(self.list_recipes('--list-optional'), ['fliperos-hbgroovymame'])
+        # O hbgroovymame e o odin sao opcionais: compilados e publicados, fora da ISO e da compilacao no gabinete.
+        self.assertEqual(self.list_recipes('--list-optional'), ['fliperos-hbgroovymame', 'fliperos-odin'])
         self.assertEqual(sorted(self.list_recipes('--list')),
-                         sorted(iso + self.ON_DEMAND + ('fliperos-hbgroovymame',)))
+                         sorted(iso + self.ON_DEMAND + ('fliperos-hbgroovymame', 'fliperos-odin')))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
 
     def test_the_session_table_fetches_them_instead_of_installing_a_package(self):

@@ -11008,6 +11008,16 @@ class RomCleanerTests(Base):
                          ["arcade", "HBMAME|/opt/fliperos/bin/fliperos-x11-run|hbgroovymame [name]|.zip;.7z"])
         self.assertEqual(self.env.run("scraper_arcade hbmame").returncode, 0)
 
+    def test_odin_folder_is_an_arcade_system_that_opens_in_odin(self):
+        # A pasta odin (o pacote opcional fliperos-odin, baixado quando chega o primeiro jogo): um sistema de
+        # arcade com o comando do FliperOS, os nomes dos jogos do XML do GroovyMAME (o MAME tem a Hikaru e a
+        # Gaelco) e o nome de logo de Sega Hikaru.
+        self.assertEqual(self.env.out("scraper_platform odin; scraper_attract_emulator odin").splitlines(),
+                         ["arcade", "Odin|/opt/fliperos/bin/fliperos-x11-run|fliperos-odin [name]|.zip;.7z"])
+        self.assertEqual(self.env.run("scraper_arcade odin").returncode, 0)
+        self.assertIn('odin) systems="sega hikaru|hikaru|arcade" ;;',
+                      (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
+
     def test_hbgroovymame_game_list_comes_from_its_own_xml_only_when_installed(self):
         # O -listxml do HBMAME (os hacks e homebrews) so entra na lista da pasta hbmame com o programa instalado.
         binary = self.env.dir / "hbgroovymame"

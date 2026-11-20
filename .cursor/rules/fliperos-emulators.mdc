@@ -1,5 +1,5 @@
 ---
-description: FliperOS — emuladores e frontends (GroovyMAME, RetroArch, Flycast, PCSX2/PCSX2x6, Dolphin, Supermodel, SM2-Emu, Fightcade 2, ROM cleaner). Use ao mexer em lançadores, configs de emuladores ou modos de vídeo por emulador.
+description: FliperOS — emuladores e frontends (GroovyMAME, RetroArch, Flycast, PCSX2/PCSX2x6, Dolphin, Supermodel, Odin, SM2-Emu, Fightcade 2, ROM cleaner). Use ao mexer em lançadores, configs de emuladores ou modos de vídeo por emulador.
 alwaysApply: false
 ---
 
@@ -40,6 +40,18 @@ alwaysApply: false
   `fliperos-emulators install hbgroovymame` (tipo `package`) baixa o .deb do release `packages` pela
   `updates/packages.list`, confere o sha256 e instala com o apt.
 - Nomes dos jogos: `fliperos-romclean romlist` com `--hb-xml-command` (o `-listxml` dele, cache por versao).
+
+## Odin (Sega Hikaru e Gaelco 3D)
+- Pacote **opcional** `fliperos-odin` (`PKG_OPTIONAL=1`, como o hbgroovymame, mas compila em minutos): o Odin do
+  Tovarichtch num commit fixado (`ODIN_COMMIT`, sem release no projeto: commit novo = versao nova, a data no fim
+  do `PKG_VERSION`), `ODIN_NATIVE=OFF`, SDL3/GLEW/jansson de `3rdparty/`. Programa em `/usr/local/bin/odin`, dados em
+  `/usr/local/share/odin`.
+- Comando `config/fliperos-odin` (vem com o sistema; o frontend o abre pelo `fliperos-x11-run`): liga o Odin as pastas
+  do FliperOS com `-R ~/roms/odin -B <bios>` e a `[paths]` do `odin.ini` (saves em `~/nvram/odin`, states em
+  `~/save/odin`); tela cheia, sem moldura e vsync so na primeira vez. Modo no CRT: 320x240@60 (o Odin mantem 4:3 e nao
+  tem stretch: 640x240 usaria so metade da tela), 640x480@60 em 25/31 kHz. Precisa de OpenGL 4.3 (ou Vulkan 1.3): Vulkan no amdgpu, OpenGL nos outros drivers (`display api` no odin.ini, pelo driver, na primeira abertura e a cada troca).
+- Instala sozinho: `EMULATOR_OF` (`fliperos-odin`/`odin`) -> `fliperos-emulators install odin` (tipo `package`).
+- Pasta `~/roms/odin` = sistema `odin` nos frontends (plataforma `arcade`, nomes do XML do GroovyMAME).
 
 ## RetroArch
 - Pacote `fliperos-retroarch` (commit fixado, patches em `packaging/patches/retroarch`). Padrões:

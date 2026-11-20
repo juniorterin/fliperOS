@@ -56,7 +56,7 @@ Set in `packaging/packages/NAME.sh`; `packaging/build-deb.sh` reads them. See [P
 | `PKG_SHLIB_TARGETS` | The binaries (paths inside the package) that `dpkg-shlibdeps` reads to compute `Depends` |
 | `PKG_RUNTIME_EXTRA` | Dependencies added by hand, such as a library opened with `dlopen` |
 | `PKG_ON_DEMAND` | `1`: not in the ISO, built on the cabinet when chosen |
-| `PKG_OPTIONAL` | `1`: not in the ISO either, but built and published like the others (a row `installed` in `updates/packages.list`), and downloaded ready when the person asks for it (`hbgroovymame`) |
+| `PKG_OPTIONAL` | `1`: not in the ISO either, but built and published like the others (a row `installed` in `updates/packages.list`), and downloaded ready when the person asks for it (`hbgroovymame`, `odin`) |
 | `PKG_UPSTREAM` | The project's address, for the newest-version mode |
 | `PKG_COMMIT_VAR` | The recipe variable that holds the commit or tag to build in that mode |
 | `PKG_EDGE_TAGS` | A regex of the stable tags to choose from (Dolphin) |

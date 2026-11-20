@@ -164,7 +164,7 @@ fi
 # modo largo. Numa placa que faz o modo pedido, desfaz o que tinha mudado.
 gpufit=${FLIPEROS_GPUFIT:-/opt/fliperos/bin/fliperos-gpufit}
 case $name in
-  flycast | dolphin-emu | pcsx2 | pcsx2x6 | duckstation | hypseus | singe | fliperos-model2 | fliperos-model3 | keisho | sm2-emu | groovymame | hbgroovymame) ;;
+  flycast | dolphin-emu | pcsx2 | pcsx2x6 | duckstation | hypseus | singe | fliperos-model2 | fliperos-model3 | keisho | sm2-emu | groovymame | hbgroovymame | fliperos-odin | odin) ;;
   *)
     if [[ -x $gpufit ]]; then
       fit=$("$gpufit" launch --program "$name" --app "${app:-$name}" --mode "${requested_w}x$FLIPEROS_RES_H" \

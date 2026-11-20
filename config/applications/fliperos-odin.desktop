@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Odin
+GenericName=Sega Hikaru and Gaelco 3D emulator
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch odin
+TryExec=/usr/local/bin/odin
+Icon=/usr/local/share/pixmaps/odin.png
+Terminal=false
+Categories=Game;Emulator;

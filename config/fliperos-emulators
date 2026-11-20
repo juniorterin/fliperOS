@@ -13,8 +13,8 @@
 #   fliperos-emulators edge-status NOME        o commit do mais novo instalado
 #
 # tipo: image (compilado na imagem: nao se instala depois), package (um .deb
-# pronto, fora da imagem: o hbgroovymame; baixado do release "packages" pela
-# updates/packages.list), fetch (baixado do
+# pronto, fora da imagem: o hbgroovymame e o odin; baixado do release
+# "packages" pela updates/packages.list), fetch (baixado do
 # site de quem o faz: o Fightcade, config/fliperos-fightcade, e o DuckStation,
 # config/fliperos-duckstation) e source (um jogo convertido: config/
 # fliperos-kof; baixado do itch.io, ou da pasta que a pessoa traz, --source
@@ -39,6 +39,7 @@ table() {
 retroarch|image|$root/usr/local/bin/retroarch|RetroArch (consoles and arcade cores)
 groovymame|image|$root/usr/local/bin/groovymame|GroovyMAME (arcade)
 hbgroovymame|package|$root/usr/local/libexec/hbgroovymame|HBMAME with Switchres (arcade hacks and homebrews)
+odin|package|$root/usr/local/bin/odin|Odin (Sega Hikaru and Gaelco 3D arcades)
 flycast|image|$root/usr/local/bin/flycast|Flycast (Dreamcast, Naomi, Atomiswave)
 pcsx2|image|$root/usr/local/bin/pcsx2|PCSX2 (PlayStation 2)
 pcsx2x6|image|$root/usr/local/bin/pcsx2x6|PCSX2x6 (Namco System 246/256)
@@ -124,7 +125,7 @@ emulator_latest() {
       [[ $v =~ ^gm0([0-9]{3}) ]] && echo "0.${BASH_REMATCH[1]}"
       ;;
     # A versao da receita do pacote opcional, a que o update e a lista levam.
-    hbgroovymame) pinned PKG_VERSION "${mkiso_url%/*}/packaging/packages/fliperos-hbgroovymame.sh" ;;
+    hbgroovymame | odin) pinned PKG_VERSION "${mkiso_url%/*}/packaging/packages/fliperos-$1.sh" ;;
     openbor)
       v=$(pinned OPENBOR_COMMIT "${mkiso_url%/*}/packaging/packages/fliperos-openbor.sh")
       [[ -n $v ]] && echo "${v:0:7}"
@@ -171,8 +172,8 @@ as_user() {
 }
 
 # ── Um pacote pronto, fora da imagem ─────────────────────────────
-# O hbgroovymame: o HBMAME leva horas para compilar, entao o .deb vem pronto
-# (packaging/packages/fliperos-hbgroovymame.sh, PKG_OPTIONAL), do release
+# O hbgroovymame (o HBMAME leva horas para compilar) e o odin: o .deb vem
+# pronto (packaging/packages/fliperos-NOME.sh, PKG_OPTIONAL), do release
 # "packages" do GitHub, na versao e com o sha256 da updates/packages.list. Um
 # gabinete que o tem sobe de versao pelos updates (a linha da lista e
 # "installed"); isto e para quem ainda nao o tem, ou quer a versao nova ja.

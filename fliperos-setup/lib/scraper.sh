@@ -362,7 +362,7 @@ PY
 # (scraper_libretro_platform); so entra o que o FliperOS sabe abrir.
 scraper_platform() {
   case $1 in
-    mame | hbmame) echo arcade ;;
+    mame | hbmame | odin) echo arcade ;;
     dreamcast) echo dreamcast ;;
     # Os arcades do Flycast, uma pasta por sistema (MAME ROM Cleaner).
     naomi | naomi2 | atomiswave) echo "$1" ;;
@@ -563,6 +563,10 @@ scraper_attract_emulator() {
       echo "Model 3|$FLIPEROS_BIN/fliperos-x11-run|fliperos-model3 \"[romfilename]\"|.zip" ;;
     model2)
       echo "Model 2|$FLIPEROS_BIN/fliperos-x11-run|fliperos-model2 [name]|.zip" ;;
+    # A pasta odin: o Odin (Sega Hikaru e Gaelco 3D), instalado quando chega o
+    # primeiro jogo (fliperos-emulators, tipo package).
+    odin)
+      echo "Odin|$FLIPEROS_BIN/fliperos-x11-run|fliperos-odin [name]|.zip;.7z" ;;
     ps2)
       echo "PCSX2|$FLIPEROS_BIN/fliperos-x11-run|pcsx2 \"[romfilename]\"|.iso;.chd;.cso;.bin;.gz" ;;
     # O jogo e o .acgame (o fork abre o jogo por ele); a pasta e a imagem
@@ -827,7 +831,7 @@ scraper_attract_default_filters() {
 # as dos cores de arcade do RetroArch (MAME 20xx, HBMAME, FBNeo, FB Alpha).
 scraper_arcade() {
   case $1 in
-    mame | hbmame | naomi | naomi2 | atomiswave | model2 | model3) return 0 ;;
+    mame | hbmame | naomi | naomi2 | atomiswave | model2 | model3 | odin) return 0 ;;
     retroarch/*) [[ $(scraper_core_info "${1#retroarch/}" systemid) =~ ^(mame|hbmame|fb_alpha)$ ]] ;;
     *) return 1 ;;
   esac

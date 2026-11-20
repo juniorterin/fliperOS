@@ -139,6 +139,9 @@ done < <(grep -E '^[^#[:space:]]+[[:space:]]' "$src/config/fliperos-emulator-mod
 # dois nomes, no PATH, para os frontends tambem chamarem.
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model2"
 install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model3"
+# Odin (Sega Hikaru e Gaelco 3D, pacote opcional fliperos-odin): o comando vem
+# com o sistema, o programa so quando a pessoa o instala.
+install -Dm755 "$src/config/fliperos-odin" "$root/usr/local/bin/fliperos-odin"
 # A lista dos jogos do menu do desktop e a mudanca das pastas do SM2-Emu.
 install -Dm755 "$src/config/fliperos-sm2emu" "$root/usr/local/bin/fliperos-sm2emu"
 # Os patches que o SM2-Emu aplicava no fonte compilado no gabinete: agora vem
