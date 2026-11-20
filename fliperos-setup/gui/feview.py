@@ -4264,9 +4264,12 @@ RIBBON_STEP = 112        # entre os centros (o do meio, largo, mais um vao)
 
 def draw_ribbon(fe, ui, now):
     band_y, band_h = 70, 104
-    W.block(ui, (0, band_y, WW, band_h), T.BG_DEEP, None)
+    # Com drives de midia fisica, o mesmo recipiente leva as duas fileiras (a
+    # dos sistemas e, logo abaixo, a PHYSICAL MEDIA), so com a borda de fora.
+    box_h = STRIP_Y + STRIP_H - band_y if getattr(fe, "devices", None) else band_h
+    W.block(ui, (0, band_y, WW, box_h), T.BG_DEEP, None)
     pygame.draw.line(ui, T.PINK, (0, band_y), (WW, band_y))
-    pygame.draw.line(ui, T.PINK, (0, band_y + band_h - 1), (WW, band_y + band_h - 1))
+    pygame.draw.line(ui, T.PINK, (0, band_y + box_h - 1), (WW, band_y + box_h - 1))
     tiny.centered(ui, "GAME LIST", T.COMMENT, WW // 2, band_y + 7)
     n = len(fe.cats)
     # A tira desliza ate a romlist nova: pos corre ate fe.cat_pos (o indice
@@ -5618,10 +5621,7 @@ def draw_media_strip(fe, ui, now):
     if not media and blink:
         arrow(ui, WW // 2, band_y + band_h - 7, (0, 1), T.PINK, 4)
     y0, h = STRIP_Y, STRIP_H
-    W.block(ui, (0, y0, WW, h), T.BG_DEEP, None)
-    edge = T.PINK if media else T.LINE
-    pygame.draw.line(ui, edge, (0, y0), (WW, y0))
-    pygame.draw.line(ui, edge, (0, y0 + h - 1), (WW, y0 + h - 1))
+    # O fundo e a borda de fora sao do recipiente que draw_ribbon desenha.
     tiny.centered(ui, "PHYSICAL MEDIA", T.CYAN if media else T.COMMENT, WW // 2, y0 + 3)
     if media and blink:
         arrow(ui, WW // 2, y0 - 1, (0, -1), T.PINK, 3)
