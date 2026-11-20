@@ -79,6 +79,13 @@ emulators_ensure() {
     ev_fail "$name is still missing after the install"
     return 1
   fi
+  # O HBMAME recem-instalado: o XML dele (o -listxml, guardado no cache) e a lista
+  # de jogos ja saem agora, com os clones do zip do pai e os titulos dos hacks,
+  # e nao so no proximo --romlists. A lista que nao sai nao desfaz a instalacao.
+  if [[ $name == hbgroovymame ]] && declare -F frontends_arcade_resync > /dev/null; then
+    ev_step 90 "Reading the HBMAME game list"
+    FRONTENDS_RESYNC_FULL=1 frontends_arcade_resync > /dev/null 2>&1 || log_info "HBMAME game list not made now"
+  fi
   ev_step 100 "$name installed"
 }
 

@@ -668,6 +668,9 @@ FRONTENDS_ROMLIST_STATE=${FRONTENDS_ROMLIST_STATE:-/var/lib/fliperos/attract-rom
 FRONTENDS_ROMLIST_VERSION=3
 frontends_folder_signature() {
   { printf 'romlist %s\n' "$FRONTENDS_ROMLIST_VERSION"
+    # O HBMAME instalado depois da lista (ou noutra versao): ela ganha os clones e as
+    # informacoes do XML dele, entao o que ele e entra na assinatura.
+    [[ ${1##*/} == hbmame ]] && printf 'hbgroovymame %s\n' "$(hbgroovymame_version 2> /dev/null)"
     find -H "$1" -maxdepth 1 -type f ! -name '.*' -printf '%f\n' 2> /dev/null | LC_ALL=C sort; } | md5sum | cut -c1-32
 }
 
@@ -729,7 +732,7 @@ frontends_arcade_resync() {
 # merged) so entram no MAME: o GroovyMAME abre o jogo pelo nome e acha o
 # clone no zip do pai; os outros emuladores abrem o arquivo.
 frontends_romlist() {
-  local result=$1 line key dir platform count name xml catver controls flycast
+  local result=$1 line key dir platform count name xml catver controls flycast clones
   local -a specs=() source=()
   shift
   ev_step 0 "Preparing Attract-Mode Plus"
@@ -746,11 +749,16 @@ frontends_romlist() {
     # O HBMAME (a pasta hbmame, quando o hbgroovymame esta instalado): o XML dele
     # tem os hacks e homebrews, que o do GroovyMAME nao conhece.
     [[ $key == hbmame ]] && hbgroovymame_installed && xml=hb
+    # Os clones sem arquivo proprio de um romset merged (o zip do pai os traz): no
+    # MAME sempre; no HBMAME so com o XML dele (o do GroovyMAME nao conhece os
+    # hacks que vem dentro do zip, e listaria jogos que o zip nao tem).
+    clones=0
+    [[ $key == mame || $xml == hb ]] && clones=1
     # Naomi, Naomi 2 e Atomiswave: so os jogos daquele sistema, pela BIOS
     # (as tres pastas podem ser a mesma, com o romset inteiro do Flycast).
     flycast=
     [[ $key == naomi || $key == naomi2 || $key == atomiswave ]] && flycast=$key
-    specs+=(--system "$name|$dir|$xml|$([[ $key == mame ]] && echo 1 || echo 0)|$flycast")
+    specs+=(--system "$name|$dir|$xml|$clones|$flycast")
   done
   ((${#specs[@]})) || ev_fail "No arcade folder with games" || return 1
   scraper_attract_display "$ATTRACT_ROMLIST_ALL"

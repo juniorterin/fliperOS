@@ -6569,9 +6569,11 @@ class EmulatorsTests(Base):
         (d / "calls").write_text("")
         env = {"EMULATORS_CMD": str(d / "emus")}
         stubs = ('apt-cache() { echo "apt-cache $*" >> %s/calls; return 0; }\napt-get() { :; }\n'
-                 'update_install_package() { echo "pkg $1" >> %s/calls; }\n' % (d, d))
+                 'update_install_package() { echo "pkg $1" >> %s/calls; }\n'
+                 'frontends_arcade_resync() { echo "resync $FRONTENDS_RESYNC_FULL" >> %s/calls; }\n' % (d, d, d))
         out = self.env.out(stubs + "emulators_ensure hbgroovymame", env)
-        self.assertEqual((d / "calls").read_text().splitlines(), ["install hbgroovymame --progress"])
+        # Instalado, o XML do HBMAME e a lista de jogos (com os clones do zip do pai) saem na hora.
+        self.assertEqual((d / "calls").read_text().splitlines(), ["install hbgroovymame --progress", "resync 1"])
         self.assertIn("@step 100 hbgroovymame installed", out)
 
     def test_list_field_and_install(self):
@@ -10521,7 +10523,9 @@ class RomCleanerTests(Base):
         hbxml = self.env.dir / "hbxml.xml"
         hbxml.write_text('<mame build="0.289.6"><machine name="mslug"><description>Metal Slug (HB)</description>'
                          '<year>1996</year></machine><machine name="sf2hf"><description>Street Fighter II: Hyper '
-                         'Fighting (hack)</description><year>2024</year></machine></mame>')
+                         'Fighting (hack)</description><year>2024</year></machine>'
+                         '<machine name="mslughx" cloneof="mslug"><description>Metal Slug (HB clone)</description>'
+                         '<year>1997</year></machine></mame>')
         self.env.stub("hbgroovymame", 'case "$1" in -listxml) echo x >> "%s/hb.calls"; cat "%s" ;; esac'
                       % (self.env.dir, hbxml))
         binary = self.env.dir / "hb-real"
@@ -10540,8 +10544,16 @@ class RomCleanerTests(Base):
         self.assertEqual(self.env.out(script, env).splitlines(), ["hbmame|%s/hbmame|arcade|2|HBMAME" % roms])
         lines = (self.env.dir / "lists-hb" / "HBMAME.txt").read_text().splitlines()
         titles = {line.split(";")[0]: line.split(";")[1] for line in lines[1:]}
-        self.assertEqual(titles, {"mslug": "Metal Slug (HB)", "sf2hf": "Street Fighter II: Hyper Fighting (hack)"})
+        # O clone que so existe dentro do zip do pai (romset merged) entra, pelo XML do HBMAME.
+        self.assertEqual(titles, {"mslug": "Metal Slug (HB)", "sf2hf": "Street Fighter II: Hyper Fighting (hack)",
+                                  "mslughx": "Metal Slug (HB clone)"})
         self.assertTrue((self.env.dir / "cache" / "romclean-hbgroovymame-0.289.6.json").is_file())
+        # A lista feita antes do pacote (ou de outra versao) fica atrasada: a assinatura da pasta muda.
+        sig = 'frontends_folder_signature "%s/hbmame"' % roms
+        with_pkg = self.env.out(sig, env).strip()
+        env["HBGROOVYMAME_VERSION_FILE"] = str(self.env.dir / "nao-instalado.version")
+        self.assertNotEqual(self.env.out(sig, env).strip(), with_pkg)
+        env["HBGROOVYMAME_VERSION_FILE"] = str(self.env.dir / "hb.version")
         # Sem o pacote, o que o XML do GroovyMAME nao conhece fica com o nome do arquivo.
         env["HBGROOVYMAME_BIN"] = str(self.env.dir / "nao-instalado")
         self.env.out(script, env)

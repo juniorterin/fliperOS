@@ -2513,6 +2513,10 @@ class Frontend:
             if back:
                 # O disco do drive: de volta ao cartao dele (e o jogo abre dali).
                 self.overlay, self.ov = back
+            # O emulador recem-instalado traz o XML dele (o HBMAME: os clones do zip do pai):
+            # as listas ja foram refeitas pelo Setup, o frontend as le de novo.
+            if result is True and not core and not self.lib.refreshing:
+                self.lib.refresh()
             if result is True and back:
                 self.launch(argv, media=True)
             elif result is True:
