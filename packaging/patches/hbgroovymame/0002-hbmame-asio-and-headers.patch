@@ -58,3 +58,15 @@ index bf80927b..07f2c137 100644
  	else
  		set_refresh(display->index(), 60.0);
  }
+diff --git a/src/osd/modules/lib/osdobj_common.cpp b/src/osd/modules/lib/osdobj_common.cpp
+index ee329ef3..a1ffce9b 100644
+--- a/src/osd/modules/lib/osdobj_common.cpp
++++ b/src/osd/modules/lib/osdobj_common.cpp
+@@ -402,7 +402,6 @@ void osd_common_t::register_options()
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_WINHYBRID);
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_DINPUT);
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_XINPUT);
+-	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_RAWINPUT);
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_MISTER);
+ #if !defined(OSD_SDL) && defined(USE_SDL_JOYSTICK)
+ 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_SDLJOY);

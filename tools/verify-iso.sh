@@ -275,6 +275,11 @@ if present usr/local/libexec/groovymame; then
   unsquashfs -cat "$work/filesystem.squashfs" usr/local/bin/groovymame > "$work/f" \
     || fail "missing: /usr/local/bin/groovymame (the shortcut)"
   cmp -s "$src/config/fliperos-groovymame" "$work/f" || fail "/usr/local/bin/groovymame differs from config/fliperos-groovymame"
+  # O hbgroovymame: o mesmo atalho com outro nome (o binario e do pacote opcional, que nao vai na imagem).
+  unsquashfs -cat "$work/filesystem.squashfs" usr/local/bin/hbgroovymame > "$work/f" \
+    || fail "missing: /usr/local/bin/hbgroovymame (the command of the optional HBMAME package)"
+  cmp -s "$src/config/fliperos-groovymame" "$work/f" || fail "/usr/local/bin/hbgroovymame differs from config/fliperos-groovymame"
+  ! present usr/local/libexec/hbgroovymame || fail "the optional HBMAME package is in the image"
   for path in usr/local/share/groovymame/fonts/uismall.bdf usr/local/share/groovymame/plugins/hiscore/init.lua \
     usr/local/share/groovymame/bgfx/chains/default.json usr/local/share/groovymame/hash/nes.xml; do
     has "$path"
