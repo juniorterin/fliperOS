@@ -340,13 +340,22 @@ def arcade_rank(path):
     return (2, path)
 
 
+# A copia de um set do MAME que a pasta de jogos de um emulador de um sistema so
+# prefere: o RetroBIOS tem a pasta do sistema (Sega/Hikaru/hikaru.zip, com o
+# 93c46.ic115 e o x76f100.ic85 que o Odin pede) alem da generica de Arcade (a
+# mesma BIOS de um MAME antigo, sem eles).
+FOLDER_SYSTEM = {'odin': 'Sega/Hikaru'}
+# Muda quando o formato de retrobios.json muda: a lista em cache de antes e refeita.
+RETRO_FORMAT = 2
+
+
 def build_retro_index(progress):
     say(progress, '@step 5 Reading the RetroBIOS list')
     db = json.loads(fetch(RETROBIOS + '/database.json', RB_DATABASE_MAX, timeout=180))
     if not isinstance(db, dict) or db.get('schema_version') != 1 or not isinstance(db.get('files'), dict):
         raise OSError('the RetroBIOS database has a format this version does not know')
     base = db.get('bios_dir') or 'bios'
-    files, by_name, sets = {}, {}, {}
+    files, by_name, sets, systems = {}, {}, {}, {}
     for sha1, f in db['files'].items():
         path, size, name = f.get('path'), f.get('size'), f.get('name')
         # As variantes (.variants/) sao copias com outro hash do mesmo nome.
@@ -357,6 +366,11 @@ def build_retro_index(progress):
         by_name.setdefault(name.lower(), []).append(sha1)
         if path.startswith(base + '/Arcade/') and name.lower().endswith('.zip'):
             sets.setdefault(name.lower()[:-4], []).append(sha1)
+        # Os .zip da pasta de um sistema (bios/Sega/Hikaru/x.zip), para os
+        # emuladores que preferem a copia dele (FOLDER_SYSTEM).
+        parts = path[len(base) + 1:].split('/')
+        if len(parts) == 3 and parts[0] != 'Arcade' and name.lower().endswith('.zip'):
+            systems.setdefault(parts[0] + '/' + parts[1], {})[name.lower()[:-4]] = sha1
     # Pelo nome so quando ele nao e ambiguo (bios.bin tem dezenas); o destino
     # do platforms/retroarch.yml resolve o resto.
     names = {n: l[0] for n, l in by_name.items() if len(l) == 1}
@@ -366,7 +380,8 @@ def build_retro_index(progress):
     except (OSError, urllib.error.URLError) as e:
         print('fliperos-bios: no RetroBIOS destinations (%s)' % e, file=sys.stderr)
         dest = {}
-    index = {'ref': RETROBIOS, 'when': int(time.time()), 'files': files, 'name': names, 'sets': sets, 'dest': dest}
+    index = {'ref': RETROBIOS, 'when': int(time.time()), 'files': files, 'name': names, 'sets': sets, 'dest': dest,
+             'systems': systems, 'format': RETRO_FORMAT}
     write_state('retrobios.json', json.dumps(index, separators=(',', ':')))
     return index
 
@@ -378,7 +393,7 @@ def load_retro_index(refresh, progress):
             old = json.load(f)
     except (OSError, ValueError):
         pass
-    fresh = old and old.get('ref') == RETROBIOS and time.time() - old.get('when', 0) < INDEX_DAYS * 86400
+    fresh = old and old.get('format') == RETRO_FORMAT and old.get('ref') == RETROBIOS and time.time() - old.get('when', 0) < INDEX_DAYS * 86400
     if fresh and not refresh:
         return old
     try:
@@ -390,8 +405,9 @@ def load_retro_index(refresh, progress):
         raise
 
 
-def retro_find(index, kind, name):
-    """[caminho, bytes, endereco, sha1] da BIOS no RetroBIOS, ou None."""
+def retro_find(index, kind, name, folder=None):
+    """[caminho, bytes, endereco, sha1] da BIOS no RetroBIOS, ou None. A pasta
+    de jogos (folder) pode preferir a copia da pasta do sistema (FOLDER_SYSTEM)."""
     low = name.lower()
     tail = low.rsplit('/', 1)[-1]
     if kind == 'fw':
@@ -402,7 +418,7 @@ def retro_find(index, kind, name):
         if tail.endswith('.zip'):
             sums.append(index['sets'].get(tail[:-4]))
     else:
-        sums = [index['sets'].get(low)]
+        sums = [index.get('systems', {}).get(FOLDER_SYSTEM.get(folder), {}).get(low), index['sets'].get(low)]
     for sha1 in sums:
         entry = index['files'].get(sha1) if sha1 else None
         if entry:
@@ -533,7 +549,7 @@ def check(args):
             problems.append('RetroBIOS: %s' % e)
         plan, left = [], []
         for kind, folder, name, dest in todo:
-            hit = retro_find(retro, kind, name) if retro else None
+            hit = retro_find(retro, kind, name, folder) if retro else None
             if hit is None:
                 left.append((kind, folder, name, dest))
             elif hit[1] > FILE_MAX:

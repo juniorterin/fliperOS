@@ -5346,6 +5346,25 @@ class BiosPackTests(unittest.TestCase):
         self.assertEqual((h / 'bios/fbneo/fdsbios.zip').read_bytes(), b'F' * 30)
         self.assertEqual((h / 'bios/fbneo/decocass.zip').read_bytes(), b'E' * 41)
 
+    def test_the_odin_folder_prefers_the_hikaru_system_copy(self):
+        # O hikaru.zip de Arcade/Arcade e o de um MAME antigo (sem o 93c46.ic115 e
+        # o x76f100.ic85 que o Odin pede, "missing; MAME keeps it in hikaru.zip");
+        # o da pasta Sega/Hikaru do RetroBIOS e o completo. So a pasta odin o prefere.
+        h = self.home
+        self.rb_files.update({'bios/Arcade/Arcade/hikaru.zip': b'A' * 50,
+                              'bios/Sega/Hikaru/hikaru.zip': b'H' * 51})
+        self.retrobios()
+        stats = self.check([('set', 'odin', 'hikaru', str(h / 'bios/odin/hikaru.zip')),
+                            ('set', 'mame', 'hikaru', str(h / 'bios/mame/hikaru.zip'))])
+        self.assertEqual(stats['downloaded'], '2')
+        self.assertEqual((h / 'bios/odin/hikaru.zip').read_bytes(), b'H' * 51)
+        self.assertEqual((h / 'bios/mame/hikaru.zip').read_bytes(), b'A' * 50)
+        # A lista em cache de antes (sem as pastas de sistema) e refeita.
+        old = json.loads((self.tmp / 'state/retrobios.json').read_text())
+        del old['format'], old['systems']
+        (self.tmp / 'state/retrobios.json').write_text(json.dumps(old))
+        self.assertIn('Sega/Hikaru', self.bios.load_retro_index(False, False)['systems'])
+
     def test_a_retrobios_file_with_the_wrong_checksum_is_not_kept(self):
         self.retrobios()
         self.bios.load_retro_index(False, False)
