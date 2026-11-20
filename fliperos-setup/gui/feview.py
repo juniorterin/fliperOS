@@ -1816,7 +1816,7 @@ def draw_full(fe, ui, back, now):
     right = geo["left"] - 8
     clone = is_clone(fe, game)
     with part(fe, ui, "logo") as s:
-        full_logo(fe, s, game, right, hide)
+        full_logo(fe, s, game, right, hide, now)
     y = HH - 56
     with part(fe, ui, "text") as s:
         # O clone: o nome completo dele; o titulo que nao cabe (a roda deixa menos
@@ -2102,13 +2102,38 @@ def wheel_item(fe, ui, i, d, geo, hide=0.0):
         stack_badge(ui, fe.rows[i][2], left + w, top + h)
 
 
-def full_logo(fe, ui, game, right, hide):
-    """O logo do jogo embaixo a esquerda, em cima do nome: aparece quando a roda some (hide de 0,4 a 1) e some quando ela
-    volta. O clone nao tem (o logo seria o do pai)."""
-    alpha = clamp01((hide - 0.4) / 0.6)
-    if alpha <= 0 or is_clone(fe, game):
+LOGO_OUT = 0.10                 # o logo de cima do nome some em 0,1 s ao primeiro toque
+
+
+def full_logo(fe, ui, game, right, hide, now=None):
+    """O logo do jogo embaixo a esquerda, em cima do nome: aparece quando a roda some (hide de 0,4 a 1). Ao primeiro toque
+    ele some depressa (LOGO_OUT) e ainda e o do jogo que estava la: o cursor ja andou, mas o logo do jogo seguinte nao
+    aparece trocado, so a roda volta; o do jogo novo vem quando a roda sumir de novo. O clone nao tem (o logo seria o do
+    pai)."""
+    state = getattr(fe, "logo_state", None)
+    if state is None:
+        state = fe.logo_state = {"game": None, "alpha": 0.0, "t": now}
+    dt = 0.0 if now is None or state["t"] is None else max(0.0, min(0.1, now - state["t"]))
+    state["t"] = now
+    shown = state["game"]
+    if shown is not None and shown is not game and shown.get("Name") != game.get("Name"):
+        # O cursor mudou com o logo a mostra: o de antes sai, o novo so depois (com a roda escondida de novo).
+        state["alpha"] = max(0.0, state["alpha"] - (dt / LOGO_OUT if dt else 1.0))
+        if state["alpha"] <= 0:
+            state["game"] = None
+    else:
+        want = clamp01((hide - 0.4) / 0.6)
+        if state["game"] is None and want > 0 and not is_clone(fe, game):
+            state["game"] = game
+        if want >= state["alpha"]:
+            state["alpha"] = want if hide >= state.get("hide", 0.0) else state["alpha"]
+        else:
+            state["alpha"] = max(want, state["alpha"] - (dt / LOGO_OUT if dt else 1.0))
+    state["hide"] = hide
+    shown, alpha = state["game"], state["alpha"]
+    if shown is None or alpha <= 0:
         return
-    logo = image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
+    logo = image(fe, media(fe, shown, "logo"), min(200, right - SX), 44)
     if logo is None:
         return
     logo.set_alpha(round(255 * alpha))

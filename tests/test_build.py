@@ -6308,12 +6308,56 @@ class FrontendDataTests(unittest.TestCase):
             self.assertEqual(ui.get_bounding_rect().left, feview.SX)
             self.assertLess(ui.get_bounding_rect().bottom, feview.HH - 56)            # em cima do nome
             # Um clone nao tem (o logo seria o do pai).
-            clone = dict(games[0], CloneOf='zz')
+            clone = dict(games[0], Name='aa2', CloneOf='aa')
             ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
             feview.full_logo(fe, ui, clone, geo['left'] - 8, 1.0)
             self.assertEqual(ui.get_bounding_rect().width, 0)
-            logos.pop('aa')
+            # Ao primeiro toque o cursor ja anda: o logo de cima do nome some depressa (LOGO_OUT) e ainda e o do jogo que
+            # estava la (nunca o do seguinte, trocado); o do jogo novo so vem quando a roda sumir de novo.
+            blue = pygame.Surface((300, 100), pygame.SRCALPHA)
+            blue.fill((30, 30, 200, 255))
+            pygame.image.save(blue, str(Path(tmp) / 'blue.png'))
+            logos['bb'] = str(Path(tmp) / 'blue.png')
             fe.media.clear()
+            fe.logo_state = None
+            left = geo['left'] - 8
+
+            def frame(game, hide, now):
+                ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+                feview.full_logo(fe, ui, game, left, hide, now)
+                box = ui.get_bounding_rect()
+                if not box.width:
+                    return None
+                r, g, b, a = ui.get_at((box.centerx, box.centery))
+                return ('red' if r > b else 'blue'), a
+            now = 50.0
+            for _ in range(30):                                # a roda sumiu de vez: o logo do jogo A cheio
+                now += 0.02
+                seen = frame(games[0], 1.0, now)
+            self.assertEqual(seen[0], 'red')
+            self.assertGreaterEqual(seen[1], 250)
+            gone_at, hide, colours = None, 1.0, set()
+            for k in range(1, 31):                             # toque: o cursor vai para o B e a roda volta (0,3 s)
+                now += 0.02
+                hide = max(0.0, hide - 0.02 / 0.3)
+                seen = frame(games[1], hide, now)
+                if seen:
+                    colours.add(seen[0])
+                elif gone_at is None:
+                    gone_at = k * 0.02
+            self.assertEqual(colours, {'red'})                 # so o logo do A, nunca o do B
+            self.assertIsNotNone(gone_at)
+            self.assertLessEqual(gone_at, feview.LOGO_OUT + 0.04)
+            for _ in range(30):                                # a roda some de novo no B: o logo do B vem
+                now += 0.02
+                hide = min(1.0, hide + 0.02 / 0.35)
+                seen = frame(games[1], hide, now)
+            self.assertEqual(seen[0], 'blue')
+            self.assertGreaterEqual(seen[1], 250)
+            logos.pop('aa')
+            logos.pop('bb')
+            fe.media.clear()
+            fe.logo_state = None
 
     def test_the_wheel_hides_after_two_seconds_and_a_ball_top_takes_its_place(self):
         # Parado 2 s, os logos somem (os cartoes viram de lado) e um balltop de arcade aparece no canto de baixo a
