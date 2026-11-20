@@ -463,6 +463,9 @@ class Frontend:
         # menu do jogo, o "+" e o PLAY valem para ela, nao para o pai da linha;
         # tick() a larga quando nada mais a usa (game()).
         self.version = None
+        # O ultimo toque no controle (o laco o atualiza): a roda de logos da tela cheia
+        # some depois de 2 s sem ele, e o marquee e o modo atracao contam a partir dele.
+        self.last_input = time.monotonic()
         # A primeira vez que o frontend abre: antes do guia, o Frontend
         # controls, para o usuario dizer o que cada botao faz.
         self.controls_seen = cfg.get("controls_seen") is True

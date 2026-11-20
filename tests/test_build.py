@@ -6205,9 +6205,13 @@ class FrontendDataTests(unittest.TestCase):
         fe = types.SimpleNamespace(media={}, ready={}, fd=self.fd, rows=[(g, 0, []) for g in games], cursor=3,
                                    lib=types.SimpleNamespace(media=lambda g, kind: logos.get(g['Name']) if kind == 'logo' else None))
         geo = feview.wheel_geom()
-        # A roda cabe na tela segura e deixa o resto dela (o logo e o titulo de baixo) a esquerda.
-        self.assertLessEqual(geo['xc'] + geo['dx'] * 4 + geo['bw'] * 0.6 / 2, feview.SX + feview.SW + 1)
-        self.assertGreater(geo['left'], feview.WW // 2)
+        # Cinco logos na tela deitada (sete na em pe); o de fora encosta na margem segura da direita e o resto da
+        # tela (o nome e os icones de baixo) fica a esquerda.
+        self.assertEqual((geo['n'], geo['half']), (7, 3) if feview.T.VERTICAL else (5, 2))
+        outer = max(feview.wheel_shape(geo, float(d))['x'] + geo['bw'] * feview.wheel_shape(geo, float(d))['sc'] / 2
+                    for d in (-geo['half'], geo['half']))
+        self.assertAlmostEqual(geo['xc'] + outer, feview.SX + feview.SW, places=3)
+        self.assertGreater(geo['left'], feview.WW // 3)
         seen = {}
         for i, d in ((1, -2), (2, -1), (3, 0), (4, 1), (5, 2)):
             ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
@@ -6218,15 +6222,29 @@ class FrontendDataTests(unittest.TestCase):
             self.assertGreaterEqual(box.left, geo['left'] - 4)
             self.assertLessEqual(box.right, feview.SX + feview.SW + 2)
             self.assertTrue(0 <= box.top and box.bottom <= feview.HH)
-        # O do meio e o maior e o mais perto do centro da tela ("("); os de fora afastam-se e encolhem.
+        # O do meio e o maior e o mais perto do centro da tela ("("); os de fora afastam-se, encolhem e se sobrepoem.
         self.assertTrue(seen[0].width >= seen[1].width >= seen[2].width)
         self.assertTrue(seen[0].left < seen[1].left < seen[2].left)
         self.assertTrue(seen[-2].top < seen[-1].top < seen[0].top < seen[1].top < seen[2].top)
+        self.assertLess(seen[1].top, seen[0].bottom)
         self.assertEqual(fe.sel_rect.size, (seen[0].width, seen[0].height))
-        # O primeiro e o ultimo somem: o do meio cheio, o de fora so um pouco, e nada depois de 2,5 jogos.
+        # Parado, o cartao vira de lado (a altura cai) e desbota; escondido de vez, nao desenha nada. A dialog dos clones
+        # segue crescendo do tamanho de antes (sel_rect).
+        before = fe.sel_rect.copy()
+        flat = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.wheel_item(fe, flat, 3, 0, geo, 0.6)
+        self.assertLess(flat.get_bounding_rect().height, seen[0].height)
+        self.assertEqual(fe.sel_rect, before)
+        gone = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.wheel_item(fe, gone, 3, 0, geo, 1.0)
+        self.assertEqual(gone.get_bounding_rect().width, 0)
+        # O primeiro e o ultimo somem: o do meio cheio, o de fora so um pouco, e nada depois de 2,5 jogos (3,5 nos sete).
         self.assertEqual(feview.wheel_alpha(0), 1.0)
         self.assertTrue(1.0 > feview.wheel_alpha(1) > feview.wheel_alpha(2) > feview.wheel_alpha(2.4) > 0)
         self.assertEqual(feview.wheel_alpha(2.5), 0.0)
+        self.assertTrue(1.0 > feview.wheel_alpha(1, 7) > feview.wheel_alpha(2, 7) > feview.wheel_alpha(3, 7)
+                        > feview.wheel_alpha(3.4, 7) > 0)
+        self.assertEqual(feview.wheel_alpha(3.5, 7), 0.0)
         # Sem logo: o cartao 4:3, e as cores sao as do nome (as mesmas toda vez, diferentes de um jogo a outro).
         card = feview.text_card('Cyberbots: Fullmetal Madness', 'cybots')
         self.assertEqual(card.get_size(), (128, 96))
@@ -6250,11 +6268,115 @@ class FrontendDataTests(unittest.TestCase):
         self.assertEqual((fonts / 'DejaVuSans-Bold.ttf').read_bytes()[:4], b'\x00\x01\x00\x00')
         self.assertIn('Bitstream', (fonts / 'DejaVu-LICENSE.txt').read_text())
         self.assertEqual(feview.WHEEL_FONT, str(fonts / 'DejaVuSans-Bold.ttf'))
-        # Os logos do meio e o de baixo a esquerda vem da thread que adianta as imagens.
-        self.assertIn((None, feview.WHEEL_SRC[0], feview.WHEEL_SRC[1], 'fit'),
-                      [(None,) + key[1:] for key in feview.wanted(types.SimpleNamespace(
-                          mode='full', media={}, lib=types.SimpleNamespace(media=lambda g, kind: '/x/' + kind + '.png'),
-                          ready={}), games[0])])
+        # O logo da roda vem da thread que adianta as imagens; o logo grande de baixo a esquerda saiu (o do meio da roda
+        # ja e o do jogo).
+        wanted = [(None,) + key[1:] for key in feview.wanted(types.SimpleNamespace(
+            mode='full', media={}, lib=types.SimpleNamespace(media=lambda g, kind: '/x/' + kind + '.png'),
+            ready={}), games[0])]
+        self.assertIn((None, feview.WHEEL_SRC[0], feview.WHEEL_SRC[1], 'fit'), wanted)
+        self.assertEqual(len(wanted), 2)
+        import inspect
+        self.assertNotIn('media(fe, game, "logo")', inspect.getsource(feview.draw_full))
+        self.assertNotIn('arrow(', inspect.getsource(feview.draw_full))
+
+    def test_the_wheel_hides_after_two_seconds_and_a_ball_top_takes_its_place(self):
+        # Parado 2 s, os logos somem (os cartoes viram de lado) e um balltop de arcade aparece no canto de baixo a
+        # direita, em pontilhado; sobe e desce sozinho em tempos sorteados (no maximo 2 s entre um movimento e o outro);
+        # o primeiro toque o tira e traz os logos de volta.
+        try:
+            import feview
+        except ImportError:
+            self.skipTest('pygame')
+        import random
+        import types
+        pygame = feview.pygame
+        pygame.init()
+        fe = types.SimpleNamespace(shot=None, overlay=None, last_input=100.0, wheel={})
+
+        def settle(now, seconds):
+            for _ in range(int(seconds / 0.02)):
+                now += 0.02
+                hide = feview.wheel_hide(fe, now)
+            return now, hide
+        now, hide = settle(100.0, 1.9)
+        self.assertEqual(hide, 0.0)                              # menos de 2 s: os logos a mostra
+        now, hide = settle(now, 0.3)
+        self.assertTrue(0.0 < hide < 1.0 or hide == 0.0)         # passou dos 2 s: comecou a virar
+        now, hide = settle(now, 0.6)
+        self.assertEqual(hide, 1.0)                              # escondida de vez em 0,35 s
+        fe.last_input = now                                      # um toque no controle: voltam em 0,3 s
+        now, hide = settle(now, 0.35)
+        self.assertEqual(hide, 0.0)
+        # Com um menu aberto, ou nos prints, nao somem.
+        fe.last_input = now - 10
+        fe.overlay = 'popup'
+        now, hide = settle(now, 1.0)
+        self.assertEqual(hide, 0.0)
+        fe.overlay, fe.shot = None, 'x'
+        now, hide = settle(now, 1.0)
+        self.assertEqual(hide, 0.0)
+        # O balltop: pequeno (a base redonda e a haste curta) e dentro da margem segura, no canto de baixo a direita.
+        size = feview.STICK_SIZE
+        x, y = feview.stick_pos()
+        self.assertTrue(x + size[0] <= feview.SX + feview.SW + 3 and y + size[1] <= feview.HH - feview.T.SAFE_Y + 4)
+        self.assertGreater(x, feview.WW // 2)
+        self.assertGreater(y, feview.HH // 2)
+        rest = feview.stick_draw(0.0)
+        self.assertEqual(rest.get_size(), size)
+        self.assertLessEqual(rest.get_bounding_rect().height, 36)
+        # A haste gira em torno do pivo: para cima a bola sobe, vai para a direita e encolhe; para baixo desce, vai para a
+        # esquerda e cresce (a haste nao so estica e encolhe).
+
+        def ball(lean):
+            surf = feview.stick_draw(lean)
+            mask = pygame.mask.from_threshold(surf, feview.STICK_BALL[1], (1, 1, 1, 255))
+            box = mask.get_bounding_rects()
+            self.assertTrue(box)
+            return max(box, key=lambda r: r.width * r.height)
+        up, mid, down = ball(-1.0), ball(0.0), ball(1.0)
+        self.assertLess(up.centery, mid.centery)
+        self.assertLess(mid.centery, down.centery)
+        self.assertGreater(up.centerx, mid.centerx)
+        self.assertLess(down.centerx, mid.centerx)
+        self.assertLess(up.width, mid.width)
+        self.assertLess(mid.width, down.width)
+        # O movimento: 0,09 s ate o fim do curso (com um pequeno excesso), segura e volta ao centro com um balanco.
+        self.assertEqual(feview.stick_curve(0.0), 0.0)
+        self.assertAlmostEqual(feview.stick_curve(0.09), 1.12, places=2)
+        self.assertEqual(feview.stick_curve(0.2), 1.0)
+        self.assertLess(min(feview.stick_curve(u / 100) for u in range(30, 46)), 0.0)
+        self.assertEqual(feview.stick_curve(0.46), 0.0)
+        # Os movimentos sorteados: a espera entre um e o outro vai de 0,35 a 2 s, para cima e para baixo.
+        state = {'t0': 0.0, 'schedule': [], 'rng': random.Random(5)}
+        starts, last, directions = [], 0.0, set()
+        for k in range(6000):
+            lean = feview.stick_lean(state, k * 0.01)
+            if lean != 0.0 and last == 0.0:
+                starts.append(k * 0.01)
+            if abs(lean) > 0.9:
+                directions.add(1 if lean > 0 else -1)
+            last = lean
+        self.assertGreaterEqual(len(starts), 15)
+        self.assertEqual(directions, {-1, 1})
+        gaps = [b - a - feview.STICK_MOVE for a, b in zip(starts, starts[1:])]
+        self.assertGreaterEqual(min(gaps), 0.35 - 0.03)
+        self.assertLessEqual(max(gaps), 2.0 + 0.03)
+        self.assertLess(len(state['schedule']), 6)                # so os ultimos ficam guardados
+        # Aparece e some em pontilhado, em quatro passos (nada, 1/4, meio, 3/4, tudo).
+        counts = [feview.stick_dissolve(fe, rest, k / 4).get_bounding_rect().width and sum(
+            1 for yy in range(size[1]) for xx in range(size[0]) if feview.stick_dissolve(fe, rest, k / 4).get_at((xx, yy))[3])
+            for k in range(5)]
+        self.assertEqual(counts[0], 0)
+        self.assertTrue(counts[1] < counts[2] < counts[3] < counts[4])
+        # O balltop so desenha com a roda escondida (a partir de hide 0,5) e recomeca o sorteio a cada vez.
+        ui = pygame.Surface((feview.WW, feview.HH), pygame.SRCALPHA)
+        feview.draw_stick(fe, ui, 50.0, 0.3)
+        self.assertEqual(ui.get_bounding_rect().width, 0)
+        feview.draw_stick(fe, ui, 50.0, 1.0)
+        self.assertGreater(ui.get_bounding_rect().width, 20)
+        self.assertEqual(fe.stick['t0'], 50.0)
+        feview.draw_stick(fe, ui, 51.0, 0.0)
+        self.assertIsNone(fe.stick['t0'])
 
     def test_the_clones_dialog_grows_from_the_thumbnail(self):
         # A dialog cresce da miniatura (ou do logo) num contorno de cinco passos, o conteudo entra no fim; escolher

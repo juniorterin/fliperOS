@@ -103,9 +103,7 @@ def wanted(fe, game):
         _, (_, _, pw, ph) = list_geom()
         out += [(shot, pw - 4, ph - 4, "cover"), (logo, min(pw - 8, 200), 28, "fit")]
     elif fe.mode == "full":
-        right = wheel_geom()["left"] - 8
-        out += [(shot, WW, HH, "cover"), (logo, WHEEL_SRC[0], WHEEL_SRC[1], "fit"),
-                (logo, min(200, right - SX), 44, "fit")]
+        out += [(shot, WW, HH, "cover"), (logo, WHEEL_SRC[0], WHEEL_SRC[1], "fit")]
     else:
         snap = media(fe, game, "snap")
         tile, big, _, _ = grid_geom(fe)
@@ -1786,31 +1784,39 @@ def draw_full(fe, ui, back, now):
             coin_box(fe, s, SX, 34, now)
         if fe.scraping is game:
             looking(s, SX, 38 + COIN_H if fe.commercial else 36)
-    # A roda de logos na lateral direita: cinco logos numa linha vertical
-    # arqueada, o do meio (o escolhido) o maior e o mais perto do centro da
-    # tela. Ela gira ate o jogo novo (a mesma conta da coluna de antes).
+    # A roda de logos na lateral direita (o fichario): o logo do meio (o escolhido) o
+    # maior e o mais perto do centro da tela, os outros inclinados em perspectiva,
+    # menores e sobrepostos. Ela gira ate o jogo novo. Parado, os logos somem (os
+    # cartoes viram de lado) e um balltop de arcade aparece no canto de baixo a
+    # direita; o primeiro toque traz os logos de volta.
     geo = wheel_geom()
     now = fe.abs_now
     pos = ease(fe, "full_sel", fe.cursor, now, speed=12.0, reach=6)
-    with part(fe, ui, "chrome") as s:
-        s.blit(wheel_shade(fe, geo), (0, 0))
-    first = int(math.floor(pos)) - 3
-    items = [(i, i - pos) for i in range(first, first + 8) if 0 <= i < len(fe.rows) and abs(i - pos) < WHEEL_REACH]
-    # Os de fora primeiro: o do meio fica por cima.
-    for n, (i, d) in enumerate(sorted(items, key=lambda it: -abs(it[1]))):
-        with part(fe, ui, "thumb", n) as s:
-            wheel_item(fe, s, i, d, geo)
-    # O jogo escolhido, embaixo a esquerda (fora da roda).
+    hide = wheel_hide(fe, now)
+    if hide < 0.999:
+        shade = wheel_shade(fe, geo)
+        if hide > 0.001:
+            shade = shade.copy()
+            shade.fill((255, 255, 255, round(255 * (1 - hide))), special_flags=pygame.BLEND_RGBA_MULT)
+        with part(fe, ui, "chrome") as s:
+            s.blit(shade, (0, 0))
+        half, first = geo["half"], int(math.floor(pos)) - geo["half"] - 2
+        items = [(i, i - pos) for i in range(first, first + geo["n"] + 5)
+                 if 0 <= i < len(fe.rows) and abs(i - pos) < half + 0.6]
+        # Os de fora primeiro: o do meio fica por cima.
+        for n, (i, d) in enumerate(sorted(items, key=lambda it: -abs(it[1]))):
+            with part(fe, ui, "thumb", n) as s:
+                wheel_item(fe, s, i, d, geo, hide)
+    with part(fe, ui, "thumb", geo["n"]) as s:
+        draw_stick(fe, s, now, hide)
+    # So o nome, o ano e os icones embaixo a esquerda (fora da roda): o logo do meio
+    # da roda ja e o do jogo.
     right = geo["left"] - 8
     clone = is_clone(fe, game)
-    logo = None if clone else image(fe, media(fe, game, "logo"), min(200, right - SX), 44)
-    if logo:
-        with part(fe, ui, "logo") as s:
-            s.blit(logo, (SX, HH - 62 - logo.get_height()))
     y = HH - 56
     with part(fe, ui, "text") as s:
-        # O clone: o logo seria o do pai, e o nome completo dele; o titulo que
-        # nao cabe (a roda deixa menos largura) corre, nunca cortado.
+        # O clone: o nome completo dele; o titulo que nao cabe (a roda deixa menos
+        # largura) corre, nunca cortado.
         title = (game.get("Title") or game["Name"]) if clone else fe.fd.short_title(game)
         ticker(s, text_img(title.upper(), T.YELLOW, big=True), SX, y, right - SX, now)
         facts = facts_line(game)
@@ -1828,34 +1834,52 @@ def draw_full(fe, ui, back, now):
 
 
 # ── A roda de logos da tela cheia ───────────────────────────────────
-# No lugar da coluna de miniaturas: logos numa linha vertical arqueada, como a
-# roda de um frontend de arcade colada na lateral direita. O escolhido fica no
-# meio, o maior e o mais perto do centro da tela; os outros se afastam em
-# arco ("(") e encolhem, inclinados como na base de um cone (a ponta de fora
-# mais longe, em perspectiva), e o primeiro e o ultimo somem num degrade. O jogo
-# sem logo vira um cartao 4:3 com o titulo numa fonte suave (nao pixelada) e
-# cores sorteadas pelo nome (as mesmas toda vez).
+# No lugar da coluna de miniaturas: os logos como cartoes de um fichario giratorio,
+# numa linha vertical na lateral direita. O escolhido fica no meio, o maior e o mais
+# perto do centro da tela; os outros se afastam num arco raso ("("), encolhem e se
+# inclinam em perspectiva (em torno do eixo horizontal: a ponta de fora mais longe),
+# sobrepostos e mais escuros; o primeiro e o ultimo somem num degrade. Sao cinco na
+# tela deitada e sete na em pe. O jogo sem logo vira um cartao 4:3 com o titulo numa
+# fonte suave (nao pixelada) e cores sorteadas pelo nome (as mesmas toda vez).
 WHEEL_SRC = (192, 96)        # o logo lido (ou o cartao) antes de ir para a roda
-WHEEL_REACH = 2.6            # o logo some a esta distancia (em jogos) do escolhido
 WHEEL_FONT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "DejaVuSans-Bold.ttf")
 WHEEL_CACHE = 160            # logos inclinados guardados
+WHEEL_IDLE = 2.0             # segundos sem tocar no controle: os logos somem
+WHEEL_HIDE, WHEEL_SHOW = 0.35, 0.30     # o tempo de sumir e de voltar
 _card_fonts = {}
+_wheel_geoms = {}
 
 
 def sign(x):
     return (x > 0) - (x < 0)
 
 
+def wheel_shape(geo, d):
+    """O logo do lugar d (jogos do escolhido; negativo: antes dele): o desvio em x do arco, o y do centro, a escala, a
+    inclinacao (graus, positivo: a ponta de baixo mais longe) e o quanto escurece."""
+    a, sg = abs(d), sign(d)
+    return {"x": geo["arc"] * d * d, "y": geo["cy"] + geo["step"] * d, "sc": 1.06 - geo["sc"] * a if a else 1.06,
+            "pitch": sg * min(68.0, geo["pitch"] * a), "dark": 1 - 0.30 * min(1.0, a / geo["half"])}
+
+
 def wheel_geom():
-    """A roda: o tamanho do logo do meio, a folga do arco, o espaco entre os logos, onde fica o
-    do meio (xc, cy) e onde a roda comeca (left, para o resto da tela caber)."""
-    bw = min(88, int(SW * (0.38 if T.VERTICAL else 0.30)))
-    dx = max(4, round(bw * 0.13))
-    xc = SX + SW - round(bw * 0.3) - 4 * dx - 2
-    # O arco corre pela altura toda da tela: os cinco logos bem espalhados, o primeiro e o ultimo
-    # perto das bordas (dentro da margem segura), em vez de juntos no meio.
-    return {"bw": bw, "bh": round(bw * 0.43), "dx": dx, "step": round(HH * 0.205), "cy": HH // 2, "xc": xc,
-            "left": xc - bw // 2 - 6}
+    """A roda: cinco logos na tela deitada, sete na em pe; o tamanho do logo do meio, a folga do arco, o espaco entre
+    eles, onde o do meio fica (xc, cy: o de fora encosta na margem segura da direita) e onde a roda comeca (left, para
+    o resto da tela caber)."""
+    key = (SX, SW, WW, HH, T.VERTICAL)
+    geo = _wheel_geoms.get(key)
+    if geo is None:
+        n = 7 if T.VERTICAL else 5
+        bw = min(88, int(SW * (0.38 if T.VERTICAL else 0.30)))
+        geo = {"n": n, "half": n // 2, "bw": bw, "bh": round(bw * 0.43), "cy": HH // 2,
+               "arc": (4.8 if n == 7 else 8.0) * bw / 86.0, "sc": 0.12 if n == 7 else 0.16,
+               "pitch": 24.0 if n == 7 else 34.0, "step": (32 if n == 7 else 34) * HH / 240.0}
+        outer = max(wheel_shape(geo, float(d))["x"] + bw * wheel_shape(geo, float(d))["sc"] / 2
+                    for d in (-geo["half"], geo["half"]))
+        geo["xc"] = SX + SW - outer
+        geo["left"] = round(geo["xc"]) - bw // 2 - 6
+        _wheel_geoms[key] = geo
+    return geo
 
 
 def wheel_cache(fe):
@@ -1999,8 +2023,17 @@ def wheel_fade(surf, outer_top, strength):
     surf.blit(grad, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
 
-def wheel_alpha(a):
-    """Quanto do logo aparece a a jogos do escolhido: cheio no meio, e some no primeiro e no ultimo."""
+def wheel_alpha(a, n=5):
+    """Quanto do logo aparece a a jogos do escolhido: cheio no meio, e some no primeiro e no ultimo (a 2,5 jogos nos cinco,
+    a 3,5 nos sete)."""
+    if n >= 7:
+        if a <= 1:
+            return 1 - 0.06 * a
+        if a <= 2:
+            return 0.94 - 0.20 * (a - 1)
+        if a <= 3:
+            return 0.74 - 0.40 * (a - 2)
+        return max(0.0, 0.34 * (1 - (a - 3) / 0.5))
     if a <= 1:
         return 1 - 0.08 * a
     if a <= 2:
@@ -2022,35 +2055,216 @@ def stack_badge(ui, clones, right, bottom):
     tiny.text(ui, label, T.FG, x + 11, y + 2)
 
 
-def wheel_item(fe, ui, i, d, geo):
-    """O logo (ou o cartao) do jogo da linha i, a d jogos do escolhido (negativo: antes dele)."""
+def wheel_item(fe, ui, i, d, geo, hide=0.0):
+    """O logo (ou o cartao) do jogo da linha i, a d jogos do escolhido (negativo: antes dele). hide, de 0 a 1: os logos
+    somindo (parados), cada cartao vira de lado ate ficar de perfil e desbota."""
     game = fe.rows[i][0]
     src, card = wheel_source(fe, game)
-    a, sg = abs(d), sign(d)
-    sc = 1 - 0.20 * a
-    x, y = geo["xc"] + geo["dx"] * d * d, geo["cy"] + geo["step"] * d
-    tilt = sg * min(38.0, 19.0 * a)
+    a = abs(d)
+    p = wheel_shape(geo, d)
+    x = geo["xc"] + p["x"]
     box_h = geo["bh"] * (1.4 if card else 1.0)
     box_w = box_h * 4 / 3 if card else geo["bw"]
     iw, ih = src.get_size()
-    k = min(box_w * sc / iw, box_h * sc / ih)
+    k = min(box_w * p["sc"] / iw, box_h * p["sc"] / ih)
     w = max(6, round(iw * k))
-    h = max(6, round(ih * k * math.cos(math.radians(abs(tilt)) * 0.55)))
-    strength = round(clamp01((a - 1.2) / 1.0) * 0.8 * 8) / 8
+
+    def tall(pitch):
+        return max(6, round(ih * k * max(0.18, math.cos(math.radians(min(abs(pitch), 85)) * 0.7))))
+    if i == fe.cursor and a < 0.5:
+        fe.sel_rect = pygame.Rect(round(x - w / 2), round(p["y"] - tall(p["pitch"]) / 2), w, tall(p["pitch"]))
+    alpha = (1 - hide ** 1.5) * wheel_alpha(a, geo["n"])
+    if alpha <= 0.01:
+        return
+    pitch = p["pitch"] * (1 - hide) + sign(p["pitch"] or 1) * 84 * hide
+    h = tall(pitch)
+    strength = round(clamp01((a - (geo["half"] - 0.8)) / 1.0) * 0.8 * 8) / 8
     cache = wheel_cache(fe)
-    key = ("pic", game["Name"], id(src), w, h, round(tilt), strength)
+    key = ("pic", game["Name"], id(src), w, h, round(pitch), strength, d < 0, round(p["dark"] * 20))
     pic = cache.get(key)
     if pic is None:
-        pic = wheel_warp(src, w, h, tilt)
+        pic = wheel_warp(src, w, h, pitch)
         wheel_fade(pic, d < 0, strength)
+        if p["dark"] < 0.995:
+            shade = round(255 * p["dark"])
+            pic.fill((shade, shade, shade, 255), special_flags=pygame.BLEND_RGBA_MULT)
         wheel_keep(cache, key, pic)
-    pic.set_alpha(round(255 * wheel_alpha(a)))
-    left, top = round(x - w / 2), round(y - h / 2)
+    pic.set_alpha(round(255 * clamp01(alpha)))
+    left, top = round(x - w / 2), round(p["y"] - h / 2)
     ui.blit(pic, (left, top))
-    if a < 1.5:
+    if a < 1.5 and hide < 0.05:
         stack_badge(ui, fe.rows[i][2], left + w, top + h)
-    if i == fe.cursor and a < 0.5:
-        fe.sel_rect = pygame.Rect(left, top, w, h)         # de onde a dialog dos clones cresce
+
+
+def wheel_hide(fe, now):
+    """Quanto da roda esta escondido, de 0 (a mostra) a 1 (so o balltop): os logos somem depois de WHEEL_IDLE s sem
+    tocar no controle e voltam ao primeiro toque. Com um menu aberto, ou nos prints, ficam a mostra."""
+    last = getattr(fe, "last_input", None)
+    busy = getattr(fe, "shot", None) or getattr(fe, "overlay", None) or last is None
+    target = 0.0 if busy or now - last < WHEEL_IDLE else 1.0
+    state = getattr(fe, "wheel_state", None)
+    if state is None:
+        state = fe.wheel_state = [0.0, now]
+    h, before = state
+    dt = max(0.0, min(0.1, now - before))
+    if target > h:
+        h = min(1.0, h + dt / WHEEL_HIDE)
+    elif target < h:
+        h = max(0.0, h - dt / WHEEL_SHOW)
+    fe.wheel_state = [h, now]
+    return h * h * (3 - 2 * h)
+
+
+# ── O balltop que aparece quando a roda some ────────────────────────
+# Uma alavanca de arcade em pixel-art 16 bits (bola roxa, aro rosa, haste ciano): a base
+# pequena e redonda, a haste curta. Sobe e desce sozinha em tempos sorteados (no maximo
+# 2 s entre um movimento e outro): a haste GIRA em torno do pivo (uma projecao 3D, a
+# camera um pouco de cima e de lado), a bola anda num arco, menor para longe (cima) e
+# maior para perto (baixo). Aparece e some em pontilhado, em quatro passos.
+STICK_SIZE = (56, 44)
+STICK_TILT = 32.0                   # graus de curso da haste
+STICK_PLATE = ((40, 30, 70), (255, 121, 198), (22, 16, 40))              # a face, o aro e a borda
+STICK_BALL = ((90, 50, 140), (189, 147, 249), (222, 190, 255), (250, 236, 255))
+STICK_SHAFT = ((139, 233, 253), (230, 250, 255), (50, 120, 140))         # o corpo, a luz e a sombra
+STICK_INK = (22, 22, 34)
+STICK_WAIT = (0.35, 2.0)            # a espera sorteada entre os movimentos (s)
+STICK_MOVE = 0.45                   # a duracao de um movimento (s)
+STICK_CAM = (math.radians(32), math.radians(30))         # elevacao e giro da camera
+BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
+
+
+def stick_pos():
+    """O canto de baixo a direita, dentro da margem segura."""
+    return SX + SW - STICK_SIZE[0] + 3, HH - T.SAFE_Y - STICK_SIZE[1] + 4
+
+
+def _ellipse(surf, color, cx, cy, rx, ry, width=0):
+    pygame.draw.ellipse(surf, color, (round(cx - rx), round(cy - ry), max(1, round(2 * rx)), max(1, round(2 * ry))), width)
+
+
+def _line(surf, color, a, b, width=1):
+    pygame.draw.line(surf, color, (round(a[0]), round(a[1])), (round(b[0]), round(b[1])), width)
+
+
+def stick_draw(lean):
+    """O balltop numa camada de 56x44, com a inclinacao lean (-1: empurrado para cima, para longe; +1: puxado para baixo,
+    para perto). Tudo em pixels inteiros, sem suavizar; a luz vem de cima a esquerda."""
+    surf = pygame.Surface(STICK_SIZE, pygame.SRCALPHA)
+    cx, by, base_rx = STICK_SIZE[0] // 2, 33, 15
+    ry = max(3, round(base_rx * 0.36))
+    face, rim, edge = STICK_PLATE
+    _ellipse(surf, STICK_INK, cx, by + 4, base_rx + 1, ry + 1)
+    _ellipse(surf, edge, cx, by + 3, base_rx, ry)
+    _ellipse(surf, face, cx, by, base_rx, ry)
+    _ellipse(surf, rim, cx, by, base_rx, ry, 1)
+    for sx in (-10, 10):                                           # os parafusos
+        surf.fill(STICK_INK, (cx + sx - 1, by - 1, 3, 2))
+        surf.fill((235, 238, 250), (cx + sx, by - 1, 1, 1))
+    elev, yaw = STICK_CAM
+    phi = math.radians(-lean * STICK_TILT)
+    length = 16
+    sx = length * math.sin(phi) * math.sin(yaw)
+    sy = length * (math.cos(phi) * math.cos(elev) + math.sin(phi) * math.cos(yaw) * math.sin(elev))
+    scale = 1 - 0.22 * math.sin(phi) * math.cos(yaw)
+    center = (cx + sx, by - 1 - sy)
+    r = 8 * scale
+    _ellipse(surf, edge, cx + sx * 0.5 + 2, by + 1 + ry * 0.3, max(3, r * 0.8), max(1, ry * 0.45))   # a sombra
+    boot_top = (cx + sx * 0.28, by - 4)
+    bw = 7
+    pygame.draw.polygon(surf, (24, 24, 36), [(cx - bw, by + 2), (cx + bw, by + 2), (round(boot_top[0] + 2), round(boot_top[1])),
+                                             (round(boot_top[0] - 2), round(boot_top[1]))])
+    _ellipse(surf, (24, 24, 36), cx, by + 2, bw, 3)
+    _ellipse(surf, (62, 62, 88), cx - 1, by + 1, 4, 1, 1)
+    body, hi, lo = STICK_SHAFT
+    dx, dy = center[0] - boot_top[0], center[1] - boot_top[1]
+    dist = math.hypot(dx, dy) or 1
+    tip = (center[0] - dx / dist * (r - 1), center[1] - dy / dist * (r - 1))
+    _line(surf, STICK_INK, boot_top, tip, 5)
+    _line(surf, lo, boot_top, tip, 3)
+    _line(surf, body, (boot_top[0] - 1, boot_top[1]), (tip[0] - 1, tip[1]), 2)
+    _line(surf, hi, (boot_top[0] - 1, boot_top[1]), (tip[0] - 1, tip[1]), 1)
+    bx, bz, rr = round(center[0]), round(center[1]), max(3, round(r))
+    pal = STICK_BALL
+    pygame.draw.circle(surf, STICK_INK, (bx, bz), rr + 1)
+    pygame.draw.circle(surf, pal[0], (bx, bz), rr)
+    pygame.draw.circle(surf, pal[1], (bx - 1, bz - 1), max(2, rr - 2))
+    pygame.draw.circle(surf, pal[2], (bx - 2, bz - 2), max(2, rr - 5))
+    surf.fill(pal[3], (bx - rr // 2 - 1, bz - rr // 2 - 1, 3, 2))
+    surf.fill((255, 255, 255), (bx - rr // 2, bz - rr // 2 - 1, 1, 1))
+    return surf
+
+
+def stick_curve(u):
+    """A inclinacao de um movimento, u segundos depois de comecar: vai ao fim do curso em 0,09 s com 12% de excesso, segura
+    ate 0,27 s e volta ao centro com um balanco (a mola) ate 0,45 s. 1 = o fim do curso."""
+    if u < 0 or u > STICK_MOVE:
+        return 0.0
+    if u < 0.09:
+        return 1.12 * (1 - (1 - u / 0.09) ** 2)
+    if u < 0.14:
+        return 1.12 - 0.12 * (u - 0.09) / 0.05
+    if u < 0.27:
+        return 1.0
+    if u < 0.34:
+        return 1.0 - 1.18 * (u - 0.27) / 0.07
+    return -0.18 * (1 - (u - 0.34) / 0.11)
+
+
+def stick_lean(state, now):
+    """A inclinacao do balltop agora: os movimentos sao sorteados (a espera entre eles vai de STICK_WAIT[0] a
+    STICK_WAIT[1] s, e a direcao, para cima ou para baixo, cai ao acaso)."""
+    rng, schedule = state["rng"], state["schedule"]
+    while not schedule or schedule[-1][0] + STICK_MOVE < now:
+        begin = schedule[-1][0] + STICK_MOVE if schedule else state["t0"] + 0.2
+        schedule.append((begin + rng.uniform(*STICK_WAIT), rng.choice((-1, 1))))
+    del schedule[:-4]
+    for begin, direction in schedule:
+        if begin <= now <= begin + STICK_MOVE:
+            return direction * stick_curve(now - begin)
+    return 0.0
+
+
+def stick_dissolve(fe, surf, shown):
+    """Aparece (ou some) em pontilhado, como numa tela de 16 bits: shown de 0 a 1, em quatro passos."""
+    step = round(clamp01(shown) * 4)
+    if step >= 4:
+        return surf
+    out = surf.copy()
+    cache = wheel_cache(fe)
+    mask = cache.get(("dither", step))
+    if mask is None:
+        mask = pygame.Surface(STICK_SIZE, pygame.SRCALPHA)
+        mask.fill((255, 255, 255, 0))
+        cut = step * 4
+        for y in range(STICK_SIZE[1]):
+            for x in range(STICK_SIZE[0]):
+                if BAYER[y % 4][x % 4] < cut:
+                    mask.set_at((x, y), (255, 255, 255, 255))
+        cache[("dither", step)] = mask
+    out.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    return out
+
+
+def draw_stick(fe, ui, now, hide):
+    """O balltop no canto de baixo a direita: aparece em pontilhado quando os cartoes ja viraram (hide > 0,5), mexe
+    sozinho, e some ao primeiro toque."""
+    shown = clamp01((hide - 0.5) / 0.5)
+    state = getattr(fe, "stick", None)
+    if state is None:
+        state = fe.stick = {"t0": None, "schedule": [], "rng": random.Random()}
+    if shown <= 0:
+        if hide < 0.5:
+            state["t0"], state["schedule"] = None, []
+        return
+    if state["t0"] is None:
+        state["t0"] = now
+    lean = stick_lean(state, now)
+    cache = wheel_cache(fe)
+    key = ("stick", round(lean * 24))
+    sprite = cache.get(key)
+    if sprite is None:
+        sprite = wheel_keep(cache, key, stick_draw(round(lean * 24) / 24))
+    ui.blit(stick_dissolve(fe, sprite, shown), stick_pos())
 
 
 # ── A dialog dos clones (tela cheia e grade) ────────────────────────
