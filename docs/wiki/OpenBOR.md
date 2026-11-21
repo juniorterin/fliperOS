@@ -2,11 +2,17 @@
 
 ## Where the games go
 
-The games (`.pak`) go in `/opt/fliperos/roms/openbor/Paks` (over the network: `\\fliperos\FliperOS\roms\openbor\Paks`). The **Games > OpenBOR** menu opens OpenBOR's own menu, which lists the paks.
+The games (`.pak`) go in `/opt/fliperos/roms/openbor/Paks` (over the network: `\\fliperos\FliperOS\roms\openbor\Paks`). `~/roms/openbor` is a shortcut to `~/roms/retroarch/anybor`, the folder of the AnyBOR core ([below](#the-anybor-core-in-retroarch)), so the paks, and what the engine keeps next to them (`Saves`, `Logs`, `v3`), live there. A system that still had `~/roms/openbor` as a plain folder gets everything moved into the core's folder at the next login, with nothing overwritten: a file whose name is already in both places stays where it was, and the folder stays a folder until the next login moves the rest. A folder you pointed to another disk ([Folders](Setup-Games.md)) is left alone. The **Games > OpenBOR** menu opens OpenBOR's own engine, which lists the paks.
+
+## The AnyBOR core in RetroArch
+
+ The paks of the frontends open in **AnyBOR**, a libretro core for OpenBOR with 322 engine profiles (OpenBOR 3.0 builds 3020 to 6391, and 4.0 up to 8023-dev) and an automatic choice of the profile for each pak, so old mods and new ones open in the same core. It runs in RetroArch (KMS, each game's mode from the CRT SwitchRes engine), with save states and up to four players.
+
+It is not in the ISO. The first time you open an OpenBOR game, the frontend downloads and installs the `fliperos-anybor` package (about 5 MB, with the bar in the middle of the screen) and the game opens. Without a network, and with no package installed, the game does not open; the engine of **Games > OpenBOR** works without it. The core goes to `/opt/fliperos/retroarch/cores/anybor_libretro.so`. It is built from [retrodiv/AnyBOR-libretro](https://github.com/retrodiv/AnyBOR-libretro) at a pinned commit (`packaging/packages/fliperos-anybor.sh`) and is published like the other optional packages ([Packages](Packages.md)). The core includes OpenBOR 3400 and 3741, whose license forbids selling the code or the binaries: the license texts are in `/usr/share/doc/fliperos-anybor`. To open a pak by hand: `fliperos-kms-run retroarch -L /opt/fliperos/retroarch/cores/anybor_libretro.so "/home/fliperos/roms/openbor/Paks/My Game.pak"`.
 
 ## In the frontends
 
- The paks are also a system of their own, **OpenBOR**, in the FliperOS frontend (and in the web panel, Attract-Mode Plus, ES-DE and Pegasus), one game per `.pak` (any case: `HFFgp32.PAK` counts). Picking one opens that pak straight away, without OpenBOR's menu, in the pak's own video mode (below). The system shows up once `Paks` has a pak; `Saves`, `Logs` and `v3` next to it are not games and stay out.
+ The paks are also a system of their own, **OpenBOR**, in the FliperOS frontend (and in the web panel, Attract-Mode Plus, ES-DE and Pegasus), one game per `.pak` (any case: `HFFgp32.PAK` counts). Picking one opens that pak straight away, without OpenBOR's menu, in the AnyBOR core. The system shows up once `Paks` has a pak; `Saves`, `Logs` and `v3` next to it are not games and stay out.
 
 ## Game information
 
@@ -25,7 +31,7 @@ The rest (the real title, year, developer, genre, description, cover and logo) c
 
 ## Video mode
 
- Each pak opens in its own resolution, adjusted to the monitor (`fliperos-openbor-meta mode`, called by `fliperos-x11-run`):
+ This section is about OpenBOR's own engine (**Games > OpenBOR** and the `openbor` command). In the AnyBOR core, RetroArch's CRT engine sets the mode from what the core reports. Each pak opens in its own resolution, adjusted to the monitor (`fliperos-openbor-meta mode`, called by `fliperos-x11-run`):
 
 | Pak | 15 kHz monitor | 25/31 kHz and LCD |
 |---|---|---|

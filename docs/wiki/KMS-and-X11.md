@@ -37,7 +37,7 @@ Both wrappers are started from the console, as the frontends do. Inside the LXDE
 | RetroArch | KMS | Each game's own mode (CRT SwitchRes) | The same |
 | Flycast, PCSX2, PCSX2x6, DuckStation, Dolphin, Hypseus | X11 | 640x240 | 640x480 |
 | Keisho (Model 2 and 3) | X11 | 640x240 at 57.524 Hz | 496x384 |
-| OpenBOR | X11 | Each pak's own mode ([OpenBOR](OpenBOR.md)) | The same |
+| OpenBOR | KMS (the AnyBOR core in RetroArch; the engine of its own, in Games > OpenBOR, is X11) | Each game's own mode (CRT SwitchRes) | The same |
 | Fightcade 2 | X11 | The lobby at 512x448, each match in its game's mode ([Fightcade 2](Fightcade-2.md)) | |
 | KOF Final Attack | X11 | 320x240 | |
 

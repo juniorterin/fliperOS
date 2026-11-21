@@ -40,6 +40,7 @@ retroarch|image|$root/usr/local/bin/retroarch|RetroArch (consoles and arcade cor
 groovymame|image|$root/usr/local/bin/groovymame|GroovyMAME (arcade)
 hbgroovymame|package|$root/usr/local/libexec/hbgroovymame|HBMAME with Switchres (arcade hacks and homebrews)
 odin|package|$root/usr/local/bin/odin|Odin (Sega Hikaru and Gaelco 3D arcades)
+anybor|package|$root/opt/fliperos/retroarch/cores/anybor_libretro.so|AnyBOR (OpenBOR core for RetroArch)
 flycast|image|$root/usr/local/bin/flycast|Flycast (Dreamcast, Naomi, Atomiswave)
 pcsx2|image|$root/usr/local/bin/pcsx2|PCSX2 (PlayStation 2)
 pcsx2x6|image|$root/usr/local/bin/pcsx2x6|PCSX2x6 (Namco System 246/256)

@@ -27,7 +27,7 @@ The emulators FliperOS ships or installs, the systems they run and the video mod
 | [PCSX2x6](Namco-246-256.md#pcsx2x6-namco-system-246-and-256) | Namco System 246, 256, Super 256 | In the image | 640x240 |
 | [Dolphin](More-emulators.md#dolphin-gamecube-wii-triforce) | GameCube, Wii, Triforce | In the image | 640x240 |
 | [Keisho](Sega-Model-2-and-3.md) | Sega Model 2 and Model 3 | In the image | 640x240 at 57.524 Hz |
-| [OpenBOR](OpenBOR.md) | Beat 'em ups | In the image | Each pak's own mode |
+| [OpenBOR](OpenBOR.md) | Beat 'em ups | Downloaded (the AnyBOR core, when the first pak opens) | The mode of RetroArch's CRT engine |
 | [Hypseus Singe](More-emulators.md#hypseus-singe-laserdisc) | Laserdisc | In the image | 640x240 |
 | [DuckStation](More-emulators.md#duckstation-playstation) | PlayStation | Downloaded | 640x240 |
 | [Fightcade 2](Fightcade-2.md) | Online arcade matches | Downloaded | Each game's own mode |

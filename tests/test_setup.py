@@ -8388,7 +8388,8 @@ class ScraperTests(Base):
         self.assertNotIn("openbor", self.env.out("frontends_systems", env))
         (paks / "HFFgp32.PAK").write_text("pak")
         (paks / "Gunman.pak").write_text("pak")
-        line = '|OpenBOR|/opt/fliperos/bin/fliperos-x11-run|openbor "[romfilename]"|.pak'
+        # Os paks abrem no core AnyBOR do RetroArch (o pacote opcional).
+        line = '|OpenBOR|/opt/fliperos/bin/fliperos-kms-run|retroarch -L /opt/fliperos/retroarch/cores/anybor_libretro.so "[romfilename]"|.pak'
         self.assertIn("openbor|%s|openbor%s" % (paks, line), self.env.out("frontends_systems", env).splitlines())
         self.assertIn("openbor|%s|openbor|2" % paks, self.env.out("scraper_detect", env).splitlines())
 

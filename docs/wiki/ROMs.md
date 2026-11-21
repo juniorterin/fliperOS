@@ -44,7 +44,7 @@ One folder per emulator, and one per **RetroArch core** in `~/roms/retroarch/<co
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `namco2x6` | Namco System 246/256 games | PCSX2x6 ([Emulators](Namco-246-256.md)) |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
-| `openbor/Paks` | OpenBOR games (`.pak`) | OpenBOR |
+| `openbor/Paks` | OpenBOR games (`.pak`). `openbor` is a shortcut to `retroarch/anybor`, the folder of the AnyBOR core | The AnyBOR core of RetroArch, installed when its first game is opened ([OpenBOR](OpenBOR.md)) |
 | `hypseus` | Laserdisc games | Hypseus Singe |
 | `custom` | The groups of [Custom games](Custom-games.md), one folder each (made by the Setup) | Its own program |
 | `custom-packages` | Custom game packages to install (`.fliperos-customgame.zip`, [Custom games](Custom-games.md)) | Install games |

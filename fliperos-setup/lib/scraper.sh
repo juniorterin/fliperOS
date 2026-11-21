@@ -579,11 +579,13 @@ scraper_attract_emulator() {
       echo "DuckStation|$FLIPEROS_BIN/fliperos-x11-run|duckstation \"[romfilename]\"|.cue;.chd;.pbp;.m3u;.iso;.img;.ecm;.mds;.exe;.psexe" ;;
     dolphin)
       echo "Dolphin|$FLIPEROS_BIN/fliperos-x11-run|dolphin-emu -e \"[romfilename]\"|.iso;.gcm;.rvz;.wbfs;.ciso;.gcz;.wad" ;;
-    # Os paks de ~/roms/openbor/Paks (scraper_detect): o comando openbor
-    # (config/fliperos-openbor) abre o pak direto, no 4 ou no 3.0, e o
-    # fliperos-x11-run no modo de video do pak.
+    # Os paks de ~/roms/openbor/Paks (scraper_detect; ~/roms/openbor e um link
+    # para a pasta do core, ~/roms/retroarch/anybor): abrem no core AnyBOR do
+    # RetroArch, que o fliperos-core instala (o pacote opcional fliperos-anybor)
+    # quando o primeiro pak e aberto. O comando openbor (config/fliperos-openbor,
+    # o motor proprio, no menu Games > OpenBOR) segue no sistema.
     openbor)
-      echo "OpenBOR|$FLIPEROS_BIN/fliperos-x11-run|openbor \"[romfilename]\"|.pak" ;;
+      echo "OpenBOR|$FLIPEROS_BIN/fliperos-kms-run|retroarch -L $RA_CORES_DIR/anybor_libretro.so \"[romfilename]\"|.pak" ;;
     retroarch/*)
       core=${key#retroarch/}
       name=$(scraper_core_info "$core" systemname)

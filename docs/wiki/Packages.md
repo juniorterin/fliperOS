@@ -91,7 +91,7 @@ After the push, an update has to carry the new list to the machines: see [Publis
 
 ## Optional packages
 
-A recipe with `PKG_OPTIONAL=1` (`fliperos-hbgroovymame`: HBMAME with Switchres, which takes hours to compile; `fliperos-odin`: the Sega Hikaru and Gaelco 3D emulator) is **not in the ISO** and not built on the cabinet: it is compiled and published like the others (`tools/publish-changed-packages.sh` builds it, and it enters `updates/packages.list` as `installed`, so no cabinet gets it by itself), and the cabinet downloads the finished `.deb`. `bash packaging/build-deb.sh --list-optional` lists them, and the Release workflow leaves them out of the image's repository.
+A recipe with `PKG_OPTIONAL=1` (`fliperos-hbgroovymame`: HBMAME with Switchres, which takes hours to compile; `fliperos-odin`: the Sega Hikaru and Gaelco 3D emulator; `fliperos-anybor`: the AnyBOR core, which opens OpenBOR paks in RetroArch) is **not in the ISO** and not built on the cabinet: it is compiled and published like the others (`tools/publish-changed-packages.sh` builds it, and it enters `updates/packages.list` as `installed`, so no cabinet gets it by itself), and the cabinet downloads the finished `.deb`. `bash packaging/build-deb.sh --list-optional` lists them, and the Release workflow leaves them out of the image's repository.
 
 The Setup installs it when the person asks: **Setup > Games > Emulators & Games**, or the frontend, when a game of its folder is opened and the program is missing (`config/fliperos-emulators install NAME`, kind `package`: it reads the row of the list, downloads the file from the `packages` release, checks the sha256 and installs it with `apt-get`). From then on the cabinet has the package, and the updates raise its version like any other.
 

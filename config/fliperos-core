@@ -16,12 +16,45 @@ fail() {
   exit 1
 }
 
+# Os cores que nao vem do buildbot da libretro, e sim de um pacote do FliperOS
+# (PKG_OPTIONAL, publicado no release "packages"): o AnyBOR, o core do OpenBOR.
+# O Setup instala o .deb (como root, pelo sudo do jogador, o mesmo caminho do
+# frontend para um emulador que falta) e o core aparece na pasta dos cores.
+packaged_core() {
+  case $1 in
+    anybor) return 0 ;;
+  esac
+  return 1
+}
+
+fetch_package() {
+  local setup=${FLIPEROS_SETUP:-/usr/local/bin/fliperos-setup}
+  local -a cmd=("$setup" --emulator-ensure "$1")
+  [[ -x $setup ]] || fail "the installer ($setup) is missing"
+  if [[ $EUID -ne 0 ]]; then
+    command -v sudo > /dev/null 2>&1 || fail "cannot install $1 without root"
+    cmd=(sudo -n "${cmd[@]}")
+  fi
+  # Os eventos @step/@fail do Setup so passam adiante com --progress; sem ele
+  # (os outros frontends), a saida vai para o stderr.
+  if ((progress)); then
+    "${cmd[@]}" < /dev/null
+  else
+    "${cmd[@]}" < /dev/null >&2
+  fi || exit 1
+  [[ -f $cores/${1}_libretro.so ]] || fail "the package did not bring the core"
+}
+
 fetch() {
   name=${1:-}
   [[ ${2:-} == --progress ]] && progress=1
   # So o nome de um core: nada de caminho.
   [[ $name =~ ^[A-Za-z0-9_+.-]+$ ]] || fail "invalid core name"
   [[ -f $cores/${name}_libretro.so ]] && return 0
+  if packaged_core "$name"; then
+    fetch_package "$name"
+    return
+  fi
   mkdir -p "$cores" 2> /dev/null && [[ -w $cores ]] || fail "cannot write to $cores"
   # O download (o zip do buildbot) e a extracao, para um .part na pasta: o
   # .so aparece inteiro ou nao aparece.

@@ -124,7 +124,36 @@ folder "$roms/atomiswave" "Flycast: Sammy Atomiswave (MAME .zip sets). BIOS (awb
 folder "$roms/model3" "Keisho (Sega Model 3): MAME .zip sets."
 folder "$roms/odin" "Odin (Sega Hikaru and the Gaelco 3D arcades): MAME .zip/.7z sets, one per game: airtrix, braveff, pharrier, sgnascar, swracer, von4 (Hikaru); atvtrack, smashdrv, gfootbal, radikalb, footbpow, speedup, surfplnt (Gaelco). The first time you open a game from here, Odin is downloaded and installed. The shared sets hikaru.zip and mie.zip (Hikaru) and tms320c31.zip (some Gaelco games) go in ~/bios/odin, or here."
 folder "$roms/dolphin" "Dolphin: GameCube and Wii (.iso .gcm .rvz .wbfs .ciso)."
-folder "$roms/openbor/Paks" "OpenBOR: .pak games."
+# O OpenBOR roda no core AnyBOR do RetroArch (o pacote opcional fliperos-anybor,
+# instalado ao abrir o primeiro jogo): a pasta dele e ~/roms/retroarch/anybor, e
+# ~/roms/openbor e um link para ela, assim os paks de sempre (e o que o motor
+# proprio guarda ao lado: Saves, Logs, v3...) ficam no mesmo lugar. Uma
+# ~/roms/openbor que ja era pasta (com jogos) vai para a do core, sem
+# sobrescrever nada; se algum arquivo nao saiu (o mesmo nome ja estava la), a
+# pasta fica como esta, com ele, e o proximo login tenta de novo. Uma que ja e
+# um link (a custom folder, Setup > Games > Folders) nao e tocada.
+anybor=$roms/retroarch/anybor
+if [[ -d $roms/openbor && ! -L $roms/openbor ]]; then
+  # Arquivo por arquivo (as pastas Paks, Saves... ja podem existir la), sem
+  # sobrescrever: o que ficar (o mesmo nome nos dois) fica onde estava.
+  if mkdir -p "$anybor" 2> /dev/null; then
+    # Os _info.txt sao nossos (o folder abaixo os refaz): nao seguram a pasta.
+    rm -f -- "$roms/openbor/_info.txt" "$roms/openbor/Paks/_info.txt"
+    while IFS= read -r -d '' file; do
+      mkdir -p -- "$anybor/$(dirname -- "$file")" 2> /dev/null && mv -n -- "$roms/openbor/$file" "$anybor/$file" 2> /dev/null
+    done < <(cd "$roms/openbor" 2> /dev/null && find . -mindepth 1 ! -type d -print0 2> /dev/null)
+    find "$roms/openbor" -mindepth 1 -depth -type d -empty -delete 2> /dev/null
+    rmdir "$roms/openbor" 2> /dev/null
+  fi
+fi
+if [[ ! -e $roms/openbor && ! -L $roms/openbor ]]; then
+  restore "$roms/openbor"
+  [[ -e $roms/openbor || -L $roms/openbor ]] || {
+    mkdir -p "$anybor" 2> /dev/null && ln -s retroarch/anybor "$roms/openbor" 2> /dev/null
+  }
+fi
+[[ $(readlink -- "$roms/openbor" 2> /dev/null) != retroarch/anybor ]] || mkdir -p "$anybor" 2> /dev/null
+folder "$roms/openbor/Paks" "OpenBOR (AnyBOR core): .pak games, in any case (HFFgp32.PAK counts). The first time you open a game from here, the AnyBOR core is downloaded and installed. ~/roms/openbor is a shortcut to ~/roms/retroarch/anybor."
 folder "$roms/hypseus" "Hypseus Singe (laserdisc): roms/, vldp/<game>/ and singe/<game>/."
 # O Model 2 Emulator (Wine) saiu: o Model 2 e o SM2-Emu. Numa instalacao
 # antiga ~/roms/model2 era um link para as ROMs dentro da pasta dele; elas
@@ -243,7 +272,9 @@ for type in snap preview logo box marquee dmd texto; do
     dir=${dir%/}
     name=${dir#"$roms"/}
     case ${name##*/} in old-* | old[0-9]*-*) continue ;; esac
-    case $name in retroarch | fightcade | openbor | hypseus | custom | custom-packages) continue ;; esac
+    # A arte do OpenBOR fica em media/<tipo>/openbor (a chave do sistema), nao
+    # na pasta do core AnyBOR, que so guarda o que o link de ~/roms/openbor mostra.
+    case $name in retroarch | retroarch/anybor | fightcade | openbor | hypseus | custom | custom-packages) continue ;; esac
     restore "$media/$type/$name"
     [[ -e $media/$type/$name || -L $media/$type/$name ]] || mkdir -p "$media/$type/$name" 2> /dev/null
   done

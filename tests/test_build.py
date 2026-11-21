@@ -1397,6 +1397,69 @@ class RomFoldersTests(unittest.TestCase):
             self.assertIn('Arcade (MAME 2010). This is the MAME 3D: MAME 0.139 sets of the PlayStation-based (PSX)',
                           (roms / 'retroarch/mame2010/_info.txt').read_text())
 
+    def test_openbor_folder_is_a_link_to_the_anybor_core_folder(self):
+        # ~/roms/openbor e um link para ~/roms/retroarch/anybor (o core AnyBOR):
+        # a pasta de antes (paks, Saves, Logs, v3) vai para a do core sem
+        # perder nada; um arquivo que nao pode ir (o nome ja esta la) deixa a
+        # pasta como esta; uma custom folder (link) nao e tocada.
+        def run(tmp):
+            env = dict(os.environ, HOME=str(tmp), FLIPEROS_CORE_INFO=str(tmp / 'nada'),
+                       FIGHTCADE_DIR=str(tmp / 'nenhum'))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            old = tmp / 'roms/openbor'
+            (old / 'Paks').mkdir(parents=True)
+            (old / 'v3/Saves').mkdir(parents=True)
+            (old / 'Saves').mkdir()
+            (old / 'Paks/Batman SD.pak').write_text('pak')
+            (old / 'Saves/default.cfg').write_text('cfg')
+            (old / 'v3/Saves/x.cfg').write_text('v3')
+            for _ in range(2):  # a segunda rodada nao muda nada
+                run(tmp)
+                link = tmp / 'roms/openbor'
+                self.assertTrue(link.is_symlink())
+                self.assertEqual(os.readlink(link), 'retroarch/anybor')
+                core = tmp / 'roms/retroarch/anybor'
+                self.assertFalse(core.is_symlink())
+                self.assertEqual((core / 'Paks/Batman SD.pak').read_text(), 'pak')
+                self.assertEqual((core / 'Saves/default.cfg').read_text(), 'cfg')
+                self.assertEqual((core / 'v3/Saves/x.cfg').read_text(), 'v3')
+                self.assertEqual((link / 'Paks/Batman SD.pak').read_text(), 'pak')
+                self.assertTrue((link / 'Paks/_info.txt').is_file())
+        # Sem nada de antes: a pasta nasce ja como link.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            run(tmp)
+            self.assertEqual(os.readlink(tmp / 'roms/openbor'), 'retroarch/anybor')
+            self.assertTrue((tmp / 'roms/retroarch/anybor/Paks/_info.txt').is_file())
+        # O mesmo nome nos dois lugares: nada e sobrescrito e a pasta de antes
+        # fica, com o arquivo que nao saiu.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'roms/openbor/Paks').mkdir(parents=True)
+            (tmp / 'roms/retroarch/anybor/Paks').mkdir(parents=True)
+            (tmp / 'roms/openbor/Paks/A.pak').write_text('old')
+            (tmp / 'roms/openbor/Paks/B.pak').write_text('b')
+            (tmp / 'roms/retroarch/anybor/Paks/A.pak').write_text('new')
+            run(tmp)
+            self.assertFalse((tmp / 'roms/openbor').is_symlink())
+            self.assertEqual((tmp / 'roms/openbor/Paks/A.pak').read_text(), 'old')
+            self.assertEqual((tmp / 'roms/retroarch/anybor/Paks/A.pak').read_text(), 'new')
+            self.assertEqual((tmp / 'roms/retroarch/anybor/Paks/B.pak').read_text(), 'b')
+        # Uma custom folder (Setup > Games > Folders) fica onde aponta.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            disk = tmp / 'disk/openbor'
+            (disk / 'Paks').mkdir(parents=True)
+            (disk / 'Paks/C.pak').write_text('c')
+            (tmp / 'roms').mkdir()
+            (tmp / 'roms/openbor').symlink_to(disk)
+            run(tmp)
+            self.assertEqual(os.readlink(tmp / 'roms/openbor'), str(disk))
+            self.assertEqual((disk / 'Paks/C.pak').read_text(), 'c')
+
     def test_old_model2_emulator_leaves(self):
         # O Model 2 Emulator (Wine) saiu: as ROMs de dentro da pasta dele vao
         # para uma ~/roms/model2 comum, e a pasta dele sai (com o link de
@@ -7260,6 +7323,29 @@ class FrontendDataTests(unittest.TestCase):
             self.assertIn('@fail', run('mesen', '--progress').stdout)     # nao baixou
             self.assertFalse((cores / 'mesen_libretro.so').exists())
             self.assertEqual(run('../x').returncode, 1)
+            # O AnyBOR (o core do OpenBOR) nao vem do buildbot: e um pacote do
+            # FliperOS, que o Setup instala (--emulator-ensure) pelo sudo.
+            fakebin = tmp / 'fakebin'
+            fakebin.mkdir()
+            (fakebin / 'sudo').write_text('#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n')
+            (fakebin / 'sudo').chmod(0o755)
+            setup = tmp / 'setup'
+            setup.write_text('#!/bin/sh\necho "$@" > "%s/setup-args"\necho "@step 50 Installing"\n'
+                             '[ -n "$NOCORE" ] || { mkdir -p "%s"; echo ELF > "%s/anybor_libretro.so"; }\n'
+                             % (tmp, cores, cores))
+            setup.chmod(0o755)
+            penv = dict(env, FLIPEROS_SETUP=str(setup), PATH='%s:%s' % (fakebin, os.environ['PATH']))
+            r = subprocess.run(['bash', str(ROOT / 'config/fliperos-core'), 'fetch', 'anybor', '--progress'],
+                               capture_output=True, text=True, env=penv)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn('@step 50 Installing', r.stdout)
+            self.assertEqual((tmp / 'setup-args').read_text(), '--emulator-ensure anybor\n')
+            self.assertTrue((cores / 'anybor_libretro.so').is_file())
+            (cores / 'anybor_libretro.so').unlink()
+            r = subprocess.run(['bash', str(ROOT / 'config/fliperos-core'), 'fetch', 'anybor', '--progress'],
+                               capture_output=True, text=True, env=dict(penv, NOCORE='1'))
+            self.assertEqual(r.returncode, 1)
+            self.assertIn('@fail anybor|the package did not bring the core', r.stdout)
             # O fliperos-kms-run baixa o core que falta antes de abrir o RetroArch.
             prog = tmp / 'retroarch'
             prog.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
@@ -20692,10 +20778,10 @@ class OnDemandFrontendTests(unittest.TestCase):
                'fliperos-keisho', 'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-rahasher', 'fliperos-retroarch',
                'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
-        # O hbgroovymame e o odin sao opcionais: compilados e publicados, fora da ISO e da compilacao no gabinete.
-        self.assertEqual(self.list_recipes('--list-optional'), ['fliperos-hbgroovymame', 'fliperos-odin'])
+        # O anybor, o hbgroovymame e o odin sao opcionais: compilados e publicados, fora da ISO e da compilacao no gabinete.
+        self.assertEqual(self.list_recipes('--list-optional'), ['fliperos-anybor', 'fliperos-hbgroovymame', 'fliperos-odin'])
         self.assertEqual(sorted(self.list_recipes('--list')),
-                         sorted(iso + self.ON_DEMAND + ('fliperos-hbgroovymame', 'fliperos-odin')))
+                         sorted(iso + self.ON_DEMAND + ('fliperos-anybor', 'fliperos-hbgroovymame', 'fliperos-odin')))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
 
     def test_the_session_table_fetches_them_instead_of_installing_a_package(self):
