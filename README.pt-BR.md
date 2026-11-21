@@ -179,6 +179,8 @@ Abre o menu **FliperOS Setup** (Install to HD/SSD, Recovery Mode, Terminal, Shut
    - **Monitor Orientation**: horizontal, ou vertical para um monitor girado (jogos verticais);
    - **Resolution**: os modos que o seu monitor e a sua placa aceitam (a sugestão serve);
    - **Geometry**: uma grade para centralizar a imagem e acertar o tamanho dela no tubo. Ajuste com as setas e salve com o Enter.
+
+   Logo depois do vídeo vem **Sound: stereo or mono?**: *Stereo* (duas caixas, esquerda e direita separadas) ou *Mono* (uma caixa só: os dois canais misturados e tocados nas duas saídas). Dá para mudar depois em Setup > Audio Setup.
 3. **Automatically Partition**: escolha o disco pelo modelo, tamanho e tipo (USB/NVMe/SATA). Se o seu não aparecer, **My drive is not listed (details)** explica o porquê (quase sempre o modo SATA do passo 4).
 4. **WARNING**: mostra o disco que será **apagado por inteiro**. Confira e confirme (*No* volta para a lista).
 5. **Installing FliperOS**: uma barra de progresso com a etapa atual. Leva alguns minutos.
@@ -349,6 +351,7 @@ Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles,
 - **Audio Setup**: o som.
   - *Default card*: qual placa de som o sistema e todos os emuladores usam;
   - *Volume*: de 0 a 100 (as teclas de volume do teclado também funcionam, em qualquer tela);
+  - *Stereo or mono*: o *Mono* mistura os dois canais e toca o mesmo som nas duas saídas, para um gabinete com uma caixa só (o padrão é estéreo; o instalador também pergunta);
   - *AlsaMixer*: o mixer completo, canal por canal;
   - *MAME audio latency*: de 0.0 a 50.0 (0 = padrão). Mais baixo responde mais rápido; aumente se o som chiar no GroovyMAME;
   - *Test sound*: toca um som para testar as caixas;

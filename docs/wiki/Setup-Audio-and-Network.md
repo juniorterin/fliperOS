@@ -8,6 +8,7 @@ The sound and the network of the cabinet: **Setup > Audio Setup** and **Setup > 
 | --- | --- |
 | **Default card** | The sound card used by the system and every emulator |
 | **Volume** | From 0 to 100. The volume keys of a keyboard or a panel work too ([Power and volume buttons](Power-and-volume-buttons.md#volume-keys)) |
+| **Stereo or mono** | *Stereo* keeps left and right apart; *Mono* mixes both channels (half of each) and plays the same sound on both outputs, for a cabinet with a single speaker. It is `mono` in `fliperos.conf`; the installer asks it right after the video step. Games opened after the change use it |
 | **AlsaMixer** | Every control of the sound card, one by one |
 | **MAME audio latency** | GroovyMAME's sound buffer, 0.0 to 50.0 (0 is MAME's default). Lower responds faster; raise it if the sound crackles |
 | **Test sound** | Plays a sound to check the speakers |
