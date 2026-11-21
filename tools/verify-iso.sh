@@ -203,8 +203,12 @@ if present usr/local/bin/hypseus.bin; then
 fi
 if present usr/local/lib/openbor/OpenBOR; then
   has usr/local/bin/openbor
-  has home/fliperos/roms/openbor/Paks
-  echo "OpenBOR: wrapper and Paks in the collection"
+  # ~/roms/openbor e um atalho para a pasta do core AnyBOR (config/fliperos-roms): os
+  # Paks ficam em ~/roms/retroarch/anybor, que o unsquashfs lista sem seguir o atalho.
+  has home/fliperos/roms/retroarch/anybor/Paks
+  grep -E 'home/fliperos/roms/openbor -> retroarch/anybor' "$work/links.txt" > /dev/null \
+    || fail "/home/fliperos/roms/openbor does not point to retroarch/anybor"
+  echo "OpenBOR: wrapper, Paks and the shortcut to the AnyBOR core folder in the collection"
 fi
 if present usr/local/bin/dolphin-emu; then
   has usr/local/share/pixmaps/dolphin-emu.png
