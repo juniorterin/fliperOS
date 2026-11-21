@@ -2605,6 +2605,35 @@ class AudioTests(Base):
         self.assertIn("defaults.pcm.card 1\n", conf.read_text())
         self.assertIn("defaults.pcm.device 3\n", conf.read_text())
 
+    def test_mono_mixes_both_channels_into_the_default_and_stereo_undoes_it(self):
+        conf = self.env.dir / "asound.conf"
+        env = {"ASOUND_CONF": str(conf)}
+        self.assertEqual(self.env.out("audio_output_mode", env).strip(), "stereo")
+        self.env.out("audio_set_output mono", env)
+        text = conf.read_text()
+        self.assertEqual(self.env.out("audio_output_mode", env).strip(), "mono")
+        self.assertIn("pcm.fliperos_mono {\n    type route\n    slave.pcm \"sysdefault:0\"\n", text)
+        for cell in ("0.0", "0.1", "1.0", "1.1"):
+            self.assertIn("ttable.%s 0.5\n" % cell, text)
+        self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_mono"\n}', text)
+        # Num dispositivo que nao e o 0 (uma HDMI), o dmix dele.
+        self.env.out("conf_set alsa 1,3; audio_write_conf", env)
+        self.assertIn('slave.pcm { type plug slave.pcm "dmix:1,3" }', conf.read_text())
+        self.env.out("audio_set_output stereo", env)
+        self.assertNotIn("fliperos_mono", conf.read_text())
+        self.assertNotIn("pcm.!default", conf.read_text())
+        self.assertEqual(self.env.run("audio_set_output surround", env).returncode, 1)
+
+    def test_mono_goes_through_the_live_screen_copy_when_it_is_on(self):
+        conf = self.env.dir / "asound.conf"
+        env = {"ASOUND_CONF": str(conf)}
+        self.env.out("conf_set stream_audio on; audio_loop_ready() { return 0; }; audio_set_output mono", env)
+        text = conf.read_text()
+        self.assertIn("pcm.fliperos_tee {", text)
+        self.assertIn('pcm.fliperos_mono {\n    type route\n    slave.pcm "fliperos_tee"\n', text)
+        self.assertIn('slave.pcm "fliperos_mono"', text)
+        self.assertNotIn('slave.pcm "fliperos_tee"\n}', text.split("pcm.!default")[1])
+
     def test_volume_leveler_is_gone_and_dropped_where_it_was_on(self):
         # O Volume leveler saiu: com o som da tela ao vivo, o ladspa sobre o
         # fliperos_tee fazia o ALSA abortar todo programa que abre o som (o
@@ -3128,6 +3157,35 @@ class CabinetNameTests(Base):
         fruit = self.name("cabinet_name_py current")
         self.assertEqual(fruit, self.name("cabinet_name_py default"))
         self.assertRegex(fruit, r"^[A-Z]{3,12}$")
+
+    def test_the_install_has_a_sound_step_after_the_video_and_before_the_disk(self):
+        install = (SETUP / "screens" / "install-progress.sh").read_text()
+        body = install.split("screen_install() {")[1].split("\n}\n")[0]
+        self.assertLess(body.index("screen_video_setup"), body.index("screen_install_sound"))
+        self.assertLess(body.index("screen_amd_driver install"), body.index("screen_install_sound"))
+        self.assertLess(body.index("screen_install_sound"), body.index("screen_disk_selection"))
+        # A escolha chega ao disco: o fliperos.conf e o asound.conf da midia sao copiados.
+        lib = (SETUP / "lib" / "install.sh").read_text()
+        self.assertIn('cp -f "$FLIPEROS_CONF" "$target$FLIPEROS_CONF"', lib)
+        self.assertIn('cp -f /etc/asound.conf "$target/etc/asound.conf"', lib)
+
+    def test_the_install_sound_step_saves_mono_and_stereo_and_esc_keeps_the_default(self):
+        conf = self.env.dir / "asound.conf"
+        script = """
+            source %s/screens/install-progress.sh
+            speak() { :; }
+            ui_menu() { %s; }
+            screen_install_sound; echo "rc=$? mode=$(audio_output_mode)"
+        """
+        env = {"ASOUND_CONF": str(conf)}
+        out = self.env.out(script % (SETUP, "echo mono"), env)
+        self.assertIn("mode=mono", out)
+        self.assertIn("fliperos_mono", conf.read_text())
+        out = self.env.out(script % (SETUP, "echo stereo"), env)
+        self.assertIn("mode=stereo", out)
+        self.assertNotIn("fliperos_mono", conf.read_text())
+        out = self.env.out(script % (SETUP, "return 1"), env)
+        self.assertIn("rc=0 mode=stereo", out)
 
     def test_the_install_asks_for_it_before_the_disk(self):
         install = (SETUP / "screens" / "install-progress.sh").read_text()

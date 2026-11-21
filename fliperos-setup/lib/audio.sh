@@ -140,7 +140,7 @@ audio_stream_check() {
 # numa string ("plug:dmix:0,0") nao abre: o ALSA le o ",0" como um segundo
 # argumento do plug; por isso os plugs daqui vao em bloco.
 audio_write_conf() {
-  local current card dev tee=0 cardpcm
+  local current card dev tee=0 cardpcm defslave
   current=$(audio_current)
   card=${current%,*} dev=${current#*,}
   if audio_stream_enabled && audio_loop_ready; then
@@ -208,9 +208,65 @@ pcm.fliperos_tee {
     ttable.1.3 1
 }
 EOF
+    fi
+    # Som mono: o "default" mistura os 2 canais (0,5 de cada um) e toca o mesmo
+    # em esquerda e direita. Sem a copia da tela ao vivo, a saida e o dmix da
+    # placa (o mesmo dos jogos); com ela, o fliperos_tee.
+    if audio_mono_on; then
+      if ((tee)); then
+        defslave='"fliperos_tee"'
+      else
+        defslave=$cardpcm
+      fi
+      cat << EOF
+
+# Mono sound: both channels mixed and played on both speakers.
+pcm.fliperos_mono {
+    type route
+    slave.pcm $defslave
+    slave.channels 2
+    ttable.0.0 0.5
+    ttable.0.1 0.5
+    ttable.1.0 0.5
+    ttable.1.1 0.5
+}
+EOF
+      printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_mono"' '}'
+    elif ((tee)); then
       printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_tee"' '}'
     fi
   } > "$ASOUND_CONF"
+}
+
+# ── Estereo ou mono ──────────────────────────────────────────────
+# Um gabinete com uma caixa so (ou a saida de som numa so caixa) perde metade
+# do que toca em estereo: em mono os 2 canais saem misturados nas duas saidas.
+# Vale para o sistema inteiro (asound.conf); os jogos abertos depois da troca
+# usam o novo.
+audio_mono_on() {
+  [[ $(conf_get mono 2> /dev/null) == on ]]
+}
+
+# audio_output_mode imprime stereo ou mono.
+audio_output_mode() {
+  audio_mono_on && echo mono || echo stereo
+}
+
+# audio_output_label imprime Stereo ou Mono, para o menu.
+audio_output_label() {
+  audio_mono_on && echo Mono || echo Stereo
+}
+
+# audio_set_output stereo|mono: grava e escreve o asound.conf de novo. Status 1
+# para qualquer outro valor.
+audio_set_output() {
+  case $1 in
+    mono) conf_set mono on ;;
+    stereo) conf_set mono off ;;
+    *) return 1 ;;
+  esac
+  audio_write_conf
+  log_info "audio: som $1"
 }
 
 # Controles que fazem o papel de volume. O PCM fica no maximo, como no

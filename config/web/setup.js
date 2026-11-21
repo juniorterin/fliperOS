@@ -39,6 +39,7 @@ const SETUP_TREE = [
   { id: "audio", icon: "px-audio", items: [
     { id: "card", keys: ["audio_card"] },
     { id: "volume", box: "volume" },
+    { id: "mono", keys: ["audio_output"] },
     { id: "mixer", cabinet: "mixer" },
     { id: "latency", label: "mame_latency", keys: ["mame_latency"] },
     { id: "test", keys: ["audio.test"] },

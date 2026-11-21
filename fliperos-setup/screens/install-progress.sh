@@ -11,6 +11,8 @@ screen_install() {
   # Placa AMD que aceita radeon e amdgpu: a pessoa escolhe (sem escolha,
   # a tela nao aparece), se ainda nao escolheu no Video Setup.
   conf_get amd_driver > /dev/null 2>&1 || screen_amd_driver install
+  # Som estereo ou mono, logo depois do video.
+  screen_install_sound
   # O apelido do gabinete para a party e o link (opcional: Esc pula).
   screen_cabinet_name install
   while true; do
@@ -31,6 +33,20 @@ screen_install() {
       esac
     done
   done
+}
+
+# screen_install_sound: a etapa de som do instalador, estereo ou mono. O mono e
+# para o gabinete com uma caixa so, que perderia metade do som em estereo. A
+# escolha vai no fliperos.conf e no asound.conf que a instalacao leva para o
+# disco (install_configure_video e install_configure_user); depois, em Setup >
+# Audio Setup > Stereo or mono. Esc deixa estereo, que e o padrao.
+screen_install_sound() {
+  local choice
+  speak "Now the sound."
+  choice=$(ui_menu "Install to HD/SSD" "Sound: is this a stereo (two speakers) or a mono (one speaker) cabinet? Change it later in Setup > Audio Setup." \
+    "$(audio_output_mode)" "stereo|Stereo (two speakers)" "mono|Mono (one speaker)") || return 0
+  audio_set_output "$choice" || return 0
+  log_info "instalacao: som $choice"
 }
 
 screen_install_done() {

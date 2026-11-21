@@ -175,6 +175,8 @@ settings_list() {
     printf 'audio_card|Audio|Sound card|choice|%s|%s|The card used by the system and the emulators. Games opened after the change use it.\n' \
       "${name/,/_}" "$opts"
   fi
+  printf 'audio_output|Audio|Stereo or mono|choice|%s|stereo=Stereo;mono=Mono|Mono plays the same sound on both speakers: use it with a single speaker. Games opened after the change use it.\n' \
+    "$(audio_output_mode)"
   printf 'mame_latency|Audio|MAME audio latency|number|%s|0..50:0.5|GroovyMAME audio latency (0 = default). Lower responds faster; raise it if the sound crackles.\n' \
     "$(audio_mame_latency)"
   printf 'menu_sounds|Audio|Menu sounds|choice|%s|on=On;off=Off|All the menu sounds on or off. Each event has its own sound and volume, in the Setup (Audio > Menu sounds).\n' \
@@ -399,6 +401,9 @@ settings_set() {
     audio_card)
       [[ $value =~ ^[0-9]+_[0-9]+$ ]] && audio_devices | cut -d"|" -f1 | grep -qxF "${value/_/,}" || return 2
       audio_set_default "${value/_/,}"
+      ;;
+    audio_output)
+      audio_set_output "$value" || return 2
       ;;
     mame_latency)
       audio_set_mame_latency "$value" || return 2

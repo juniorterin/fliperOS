@@ -342,9 +342,10 @@ screen_audio() {
     done
     choice=$(ui_menu_hints "Audio Setup" \
       "$(ui_fields "Default card|$card_label" "Volume|$(audio_volume)% (keyboard volume keys work too)" \
-        "MAME latency|$(audio_mame_latency)")" "$last" \
+        "Sound|$(audio_output_label)" "MAME latency|$(audio_mame_latency)")" "$last" \
       "card|Default card|The sound card used by the system and the emulators." \
       "volume|Volume|From 0 to 100. The keyboard volume keys work too." \
+      "mono|Stereo or mono|Mono plays the same sound on both speakers: use it with a single speaker." \
       "mixer|AlsaMixer|Every control of the sound card, one by one." \
       "latency|MAME audio latency|Lower responds faster; raise it if the sound crackles." \
       "test|Test sound|Play a sound to check the speakers." \
@@ -368,6 +369,11 @@ screen_audio() {
         else
           ui_msg "Volume" "Type a number from 0 to 100."
         fi
+        ;;
+      mono)
+        choice=$(ui_menu "Stereo or mono" "Mono mixes the two channels and plays the same sound on both speakers. Games opened after the change use it." \
+          "$(audio_output_mode)" "stereo|Stereo" "mono|Mono") || continue
+        audio_set_output "$choice"
         ;;
       mixer)
         ui_clear
