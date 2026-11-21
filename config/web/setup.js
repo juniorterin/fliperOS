@@ -65,14 +65,17 @@ const SETUP_TREE = [
     { id: "romlist", box: "romlist" },
   ] },
   { id: "joysticks", icon: "px-joysticks", items: [
-    { id: "buttons", cabinet: "buttons", info: "buttons" },
+    { id: "controllers", cabinet: "controllers", info: "buttons" },
     { id: "bluetooth", box: "bluetooth", cabinet: "bluetooth", when: "bluetooth", title: true },
-    { id: "layout", cabinet: "layout" },
     { id: "guncon", keys: ["gun_flash", "gun.", "gun_offscreen_reload"], cabinet: "guncon", title: true },
     { id: "axes", cabinet: "axes" },
-    { id: "padcolor", keys: ["padcolor"] },
-    { id: "haptic", keys: ["haptic", "haptic."] },
-    { id: "lpt", cabinet: "lpt", info: "lpt" },
+    // No gabinete estes ficam dentro de Controllers / Arcade panel (a posicao dos
+    // botoes dos jogos, a luz e a vibracao dos joypads, o LPT do painel de arcade);
+    // o painel os mostra aqui, cada um no seu lugar de sempre.
+    { id: "layout", cabinet: "layout", extra: true },
+    { id: "padcolor", keys: ["padcolor"], extra: true },
+    { id: "haptic", keys: ["haptic", "haptic."], extra: true },
+    { id: "lpt", cabinet: "lpt", info: "lpt", extra: true },
   ] },
   { id: "system", icon: "px-system", items: [
     { id: "latency", keys: ["latency"], cabinet: "latency" },
@@ -100,7 +103,7 @@ const SETUP_ICON = { monitor: "px-video", geometry_reset: "px-reset", monitors: 
   lowdot: "px-outputs", osd: "px-layout", card: "px-system", volume: "px-audio", mono: "px-audio", test: "px-audio", sounds: "px-audio",
   wifi: "px-network", live: "px-outputs", extras: "px-freeroms", custom: "px-customgames", folders: "px-dest",
   downloader: "px-install", cleaner: "px-filter", update: "px-reset", version: "px-reset", whatsnew: "px-romlist",
-  splash: "px-video", storage: "px-disk", other: "px-setup" };
+  splash: "px-video", storage: "px-disk", controllers: "px-joysticks", other: "px-setup" };
 // Os grupos do --settings, para um ajuste novo que nenhum item pega (ele vai
 // para "Outros ajustes" do grupo dele: nada some).
 const SETUP_ROW_GROUP = { Video: "video", Colour: "video", Scanlines: "video", "Interlaced hacks": "video",

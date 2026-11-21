@@ -679,6 +679,46 @@ ICONS.update({
 ................
 ................
 """,
+    # Controllers / Arcade panel > Test controller: um joypad com os gatilhos (as barras de
+    # cima) e os botoes acesos.
+    "padtest": """
+................
+..GGG......GGG..
+..PPPPPPPPPPPP..
+.PPPPPPPPPPPPPP.
+.PPFPPPPPPPYPPP.
+.PFFFPPPPPCPGPP.
+.PPFPPPPPPPRPPP.
+.PPPPPPPPPPPPPP.
+.PPPPPPPPPPPPPP.
+.PPPP......PPPP.
+.PPP........PPP.
+..P..........P..
+................
+................
+................
+................
+""",
+    # Controllers / Arcade panel > Visual layout: o desenho do controle numa moldura (a bola
+    # do direcional e os botoes coloridos).
+    "visual": """
+................
+................
+................
+.MMMMMMMMMMMMMM.
+.MDDRRDDYYDGGDM.
+.MDRRRRDYYDGGDM.
+.MDRRRRDDDDDDDM.
+.MDDRRDDKKDCCDM.
+.MDDDDDDKKDCCDM.
+.MDDDDDDDDDDDDM.
+.MMMMMMMMMMMMMM.
+................
+................
+................
+................
+................
+""",
     "layout": """
 ................
 ................
@@ -1715,8 +1755,11 @@ ICONS["watch"] = ICONS["install"]
 ICONS["monitor"] = ICONS["video"]
 # Joysticks > Bluetooth (parear um, todos, os pareados, conectar, desconectar)
 # e o controle conhecido do Button mapping (usar o layout ou mapear).
+# Controllers / Arcade panel: a secao, o player, o mapeamento (todos os botoes, um
+# so, os da interface) e o desenho (Visual layout).
 for _alias, _name in {"pair": "bluetooth", "pairall": "bluetooth", "devices": "joysticks", "connect": "ok",
-                      "disconnect": "power", "map": "buttons"}.items():
+                      "disconnect": "power", "map": "buttons", "controllers": "joysticks", "player": "joysticks",
+                      "mapping": "buttons", "one": "edit", "menu": "ok", "lights": "padcolor"}.items():
     ICONS[_alias] = ICONS[_name]
 # Joysticks > Haptic events: a forca, cada evento e cada preset (haptic-NOME,
 # os nomes de config/fliperos-haptic presets; testado em HapticTests).
@@ -1832,6 +1875,17 @@ BBFFFBBB
 BFBFBFBB
 .BBFFBB.
 ..BBBB..
+""",
+    # Um teclado USB (o encoder de arcade) na lista de controles.
+    "keyboard": """
+........
+FFFFFFFF
+FMFMFMFF
+FFFFFFFF
+FMFMFMFF
+FFFFFFFF
+FMMMMMFF
+FFFFFFFF
 """,
 }
 _small = {}

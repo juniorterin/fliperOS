@@ -378,14 +378,26 @@ class Server:
                 # Button mapping: quantos botoes tem o painel, cada numero com
                 # o painel desenhado.
                 tiles = {e[0]: W.panel_tile(int(e[0])) for e in entries if e[0].isdigit()}
+            elif style == "visual":
+                # Visual layout: cada formato de painel com o painel desenhado e cada
+                # joypad com os botoes do videogame ("arcade4", "pad:xbox").
+                for e in entries:
+                    if e[0] in W.SHAPE_LAYOUT:
+                        tiles[e[0]] = W.shape_tile(e[0])
+                    elif e[0].startswith("pad:"):
+                        tiles[e[0]] = W.pad_tile(e[0][4:])
+            elif style == "type":
+                # Type: o painel de arcade ou o joypad, cada um com a ilustracao dele.
+                tiles = {"arcade": W.panel_tile(6), "pad": W.joypad_tile()}
             elif style == "controllers":
-                # Button mapping: a lista dos controles ("P1 nome", "-- BT
-                # nome"); o "BT" vira o icone do sem fio, os outros o do fio.
+                # Controllers / Arcade panel: a lista dos controles ("P1 nome", "-- BT
+                # nome", "P1+2 KB nome"); o "BT" vira o icone do sem fio, o "KB" o do
+                # teclado e os outros o do fio.
                 fixed = []
                 for value, label, hint, installed, blocked in entries:
-                    found = re.match(r"^(P\d+|--)( BT)? (.*)$", label) if value.isdigit() else None
+                    found = re.match(r"^(P\d+(?:\+\d+)?|--)( BT| KB)? (.*)$", label) if value.isdigit() else None
                     if found:
-                        icons[value] = "wireless" if found.group(2) else "wired"
+                        icons[value] = {" BT": "wireless", " KB": "keyboard"}.get(found.group(2), "wired")
                         label = "%s %s" % (found.group(1), found.group(3))
                     fixed.append((value, label, hint, installed, blocked))
                 entries = fixed
@@ -397,6 +409,14 @@ class Server:
                 screen = W.ToggleGrid(title, text, [(v, label, "") for v, label in options], marked, 5, W.control_art)
             elif cmd == "check" and style == "years":
                 screen = W.ToggleGrid(title, text, [(v, label, label[2:]) for v, label in options], marked, 6)
+            elif cmd == "menu" and style == "slots":
+                # Map controllers: as vagas de player em cartoes, duas por linha.
+                screen = W.SlotGrid(title, entries, current)
+                screen.watch = W.joystick_signature
+            elif cmd == "menu" and style in ("visual", "layout", "type"):
+                # Type, Visual layout e Buttons layout: um seletor < desenho > (esquerda e
+                # direita trocam o tipo, o painel, o joypad ou o layout dos botoes).
+                screen = W.Picker(title, entries, current, text, tiles, wide=style == "visual")
             else:
                 screen = W.Menu(title, entries, current, text, cmd, marked, tiles,
                                 vertical=style in ("list", "controllers", "browse"), row_icons=icons,

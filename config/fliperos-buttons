@@ -152,6 +152,7 @@ import os
 import re
 import select
 import struct
+import subprocess
 import sys
 import time
 from xml.sax.saxutils import escape
@@ -277,46 +278,14 @@ def connected_joysticks(path=None):
     return count
 
 
-def connected_keyboards(path=None):
-    """[(VID:PID, nome)] dos teclados USB ligados agora, do /proc/bus/input/devices
-    (os candidatos a encoder de teclado: I-PAC e afins). So o barramento USB (0003)
-    com o handler kbd e sem js nem mouse: o teclado da placa (PS/2) e os teclados
-    virtuais (uinput, como o do fliperos-padkeys) ficam de fora, e as interfaces
-    de um mesmo VID:PID (teclado, midia, sistema) viram um aparelho so."""
-    out = {}
-    try:
-        text = read_text(path or INPUT_DEVICES)
-    except OSError:
-        return []
-    for block in text.split('\n\n'):
-        bus = re.search(r'^I: Bus=([0-9a-fA-F]+) Vendor=([0-9a-fA-F]+) Product=([0-9a-fA-F]+)', block, re.M)
-        name = re.search(r'^N: Name="(.*)"', block, re.M)
-        handlers = re.search(r'^H: Handlers=(.*)$', block, re.M)
-        if not (bus and name and handlers) or int(bus.group(1), 16) != 3:
-            continue
-        words = handlers.group(1).split()
-        if 'kbd' not in words or any(re.fullmatch(r'js\d+|mouse\d+', w) for w in words):
-            continue
-        if re.search(r'(Consumer|System) Control$', name.group(1)):
-            continue
-        vidpid = '%s:%s' % (bus.group(2).lower(), bus.group(3).lower())
-        out.setdefault(vidpid, name.group(1))
-    return list(out.items())
-
-
-def active_players(players, connected, kbds=None, keyboards=None):
+def active_players(players, connected):
     """{jogador: ligado?}. Um jogador de teclado (encoder que se diz teclado) esta
-    sempre ligado, menos o que tem dono (kbds, {jogador: (VID:PID, nome)}): esse so
-    vale com o teclado dele ligado (keyboards, os VID:PID de agora); o de controle,
-    se o aparelho dele existe (o indice do SDL que o mapa guardou e menor que os
-    joysticks ligados)."""
+    sempre ligado; o de controle, se o aparelho dele existe (o indice do SDL que o
+    mapa guardou e menor que os joysticks ligados)."""
     out = {}
     for player, binds in players.items():
         indexes = [index for index, _ in binds.values()]
-        if kbds and keyboards is not None and player in kbds:
-            out[player] = kbds[player][0] in keyboards
-        else:
-            out[player] = all(i < 0 for i in indexes) or all(i < connected for i in indexes if i >= 0)
+        out[player] = all(i < 0 for i in indexes) or all(i < connected for i in indexes if i >= 0)
     return out
 
 
@@ -1806,12 +1775,12 @@ def resolve_wired(players, names, ports, autos, devices):
 
 def cmd_list(args):
     """Os controles ligados para o Setup (Controllers / Arcade panel): "INDICE|GUID|
-    NOME|usb, bluetooth ou keyboard|JOGADOR|VISUAL|MAPA". JOGADOR e o do mapa agora
-    (vazio se nenhum; "1+2" num encoder de teclado), VISUAL o desenho do controle e
-    MAPA 1 se ele tem mapa (num jogador ou guardado sem jogador). Os com fio
-    primeiro, depois os Bluetooth pela ordem de conexao e por fim os teclados USB
-    (INDICE -1, GUID kb:VID:PID); o sensor de movimento de um controle ("(IMU)")
-    nao e um controle."""
+    NOME|usb ou bluetooth|JOGADOR|VISUAL|MAPA". JOGADOR e o do mapa agora (vazio se
+    nenhum), VISUAL o desenho do controle e MAPA 1 se ele tem mapa (num jogador ou
+    guardado sem jogador). Os com fio primeiro, depois os Bluetooth pela ordem de
+    conexao; o sensor de movimento de um controle ("(IMU)") nao e um controle. O
+    encoder de teclado (set-keyboard) nao e um aparelho da lista: e uma opcao do
+    Setup que poe as teclas do MAME no P1 e no P2."""
     devices = {i: d for i, d in sdl_devices().items() if not d[1].endswith('(IMU)')}
     model = Model(args.map)
     owner = {}
@@ -1841,11 +1810,6 @@ def cmd_list(args):
         print('%d|%s|%s|%s|%s|%s|%d' % (index, guid, name.replace('|', '/'),
                                         'bluetooth' if is_bluetooth(guid) else 'usb',
                                         '' if player is None else player, visual or '', 1 if binds else 0))
-    for vidpid, name in connected_keyboards():
-        mine = sorted(p for p, (v, _) in model.kbds.items() if v == vidpid)
-        visual = model.visuals.get(mine[0], '') if mine else ''
-        print('-1|kb:%s|%s|keyboard|%s|%s|%d' % (vidpid, name.replace('|', '/'),
-                                                 '+'.join(str(p) for p in mine), visual, 1 if mine else 0))
     return 0
 
 
@@ -1949,6 +1913,126 @@ def cmd_pcsx2x6(args):
     for path in done:
         print(path)
     sys.exit(0 if done else 1)
+
+
+def odin_players(players, devices):
+    """As linhas "CHAVE=VALOR" do [players.JOGO] do Odin: o controle do jogador 1 e do 2 do mapa
+    (p1/p2 "GUID nome" e p1_path/p2_path, o /dev/input/eventN, para dois iguais com o mesmo GUID).
+    O Odin escolhe sozinho pela ordem em que os controles chegam (os dois primeiros ligados),
+    e ignora o jogador do FliperOS: um jogador sem controle ligado (ou de teclado) sai vazio,
+    e o Odin escolhe por ele."""
+    lines = []
+    for player in (1, 2):
+        device = None
+        for index, _ in (players.get(player) or {}).values():
+            if index >= 0 and index in devices:
+                device = devices[index]
+                break
+        if device:
+            lines.append('p%d=%s %s' % (player, device[0], device[1]))
+            lines.append('p%d_path=%s' % (player, device[7]))
+        else:
+            lines.append('p%d=' % player)
+            lines.append('p%d_path=' % player)
+    return lines
+
+
+def cmd_odin(args):
+    """Os controles dos jogadores 1 e 2 do mapa no formato do Odin (ver odin_players)."""
+    try:
+        players, _ = read_map(args.map)
+    except OSError:
+        players = {}
+    for line in odin_players(players, sdl_devices()):
+        print(line)
+    return 0
+
+
+USB_SYSFS = os.environ.get('FLIPEROS_USB_SYSFS', '/sys/bus/usb/devices')
+INPUT_SYSFS = os.environ.get('FLIPEROS_INPUT_SYSFS', '/sys/class/input')
+
+
+def order_paths(players, devices):
+    """Os /dev/input/eventN dos controles na ordem dos jogadores do mapa (o do player 1
+    primeiro), um por controle."""
+    paths = []
+    for player in sorted(players):
+        for index, _ in players[player].values():
+            path = devices[index][7] if index in devices else ''
+            if path:
+                if path not in paths:
+                    paths.append(path)
+                break
+    return paths
+
+
+def usb_device_of(event_path):
+    """O aparelho USB ("2-2.1") de um /dev/input/eventN, ou None (Bluetooth, virtual)."""
+    real = os.path.realpath(os.path.join(INPUT_SYSFS, os.path.basename(event_path), 'device'))
+    found = re.findall(r'/(\d+-\d+(?:\.\d+)*)(?=/)', real)
+    return found[-1] if found else None
+
+
+def reorder_plan(players, devices, usb_of=usb_device_of):
+    """Os aparelhos USB na ordem em que devem ser religados, ou [] se ja estao na ordem. O Linux
+    numera os controles pela ordem em que o kernel os enxerga, e os emuladores que dao a porta
+    pelo indice do SDL (o Flycast e o Dojo, sem opcao nenhuma para trocar) dao a porta 1 ao
+    primeiro: os controles dos jogadores vem primeiro, na ordem deles, e os outros depois, na ordem
+    de antes. Os que nao sao USB (Bluetooth) ficam onde estao: so a ordem entre os USB conta."""
+    want = order_paths(players, devices)
+    have = [devices[i][7] for i in sorted(devices) if devices[i][7]]
+    sequence = want + [path for path in have if path not in want]
+    wanted = [path for path in sequence if usb_of(path)]
+    present = [path for path in have if usb_of(path)]
+    if len(wanted) < 2 or present == wanted:
+        return []
+    dirs = []
+    for path in wanted:
+        device = usb_of(path)
+        if device not in dirs:
+            dirs.append(device)
+    return dirs
+
+
+def usb_authorize(device, value):
+    try:
+        with open(os.path.join(USB_SYSFS, device, 'authorized'), 'w') as f:
+            f.write(value)
+    except OSError:
+        pass
+
+
+def usb_has_input(device):
+    return bool(glob.glob(os.path.join(USB_SYSFS, device, '*', 'input', 'input*', 'event*')))
+
+
+def cmd_reorder(args):
+    """Religa os controles USB na ordem dos jogadores (ver reorder_plan), na abertura de um jogo
+    (como root, pelo fliperos-setup --pad-order), e regrava o mapa nos emuladores com os indices novos."""
+    try:
+        players, _ = read_map(args.map)
+    except OSError:
+        return 0
+    devices = sdl_devices()
+    dirs = reorder_plan(players, devices) if players and devices else []
+    if not dirs:
+        return 0
+    try:
+        for device in dirs:
+            usb_authorize(device, '0')
+        time.sleep(0.5)
+        for device in dirs:
+            usb_authorize(device, '1')
+            deadline = time.monotonic() + 4
+            while time.monotonic() < deadline and not usb_has_input(device):
+                time.sleep(0.1)
+    finally:
+        for device in dirs:
+            usb_authorize(device, '1')
+    subprocess.run(['udevadm', 'settle', '--timeout=5'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.5)
+    # Os indices mudaram: o mapa e gravado de novo nos emuladores (o mesmo que o Setup faz ao salvar).
+    return cmd_save(argparse.Namespace(map=args.map)) or 0
 
 
 def keyboard_map(players):
@@ -2164,9 +2248,31 @@ def evict(model, devices, player):
     park(model, guid, name, kind, binds, visual)
 
 
+def move_occupant(model, devices, target, new_player):
+    """Quem esta no jogador TARGET vai para NEW_PLAYER (a troca: o jogador que o controle
+    que chegou deixou, ja livre). Sem NEW_PLAYER (o que chegou nao tinha jogador), ou se
+    quem esta e o encoder de teclado (as teclas do MAME sao do P1 e do P2, nao andam),
+    fica sem jogador, com o mapa guardado (evict). Um Bluetooth muda a preferencia: o
+    save o poe la."""
+    if target not in model.players:
+        return
+    if new_player is None or keyboard_player(model, target):
+        evict(model, devices, target)
+        return
+    if target in model.autos:
+        model.meta.setdefault(model.autos[target], {})['player'] = str(new_player)
+        take_player(model, target)
+        return
+    index = next(iter(model.players[target].values()))[0]
+    name = model.names.get(index, '')
+    kind, binds, visual, port = take_player(model, target)
+    place(model, new_player, index, name, kind, binds, visual, port)
+
+
 def set_player(model, devices, index, target):
     """Da ao controle INDICE o jogador TARGET: 1 a 8, 0 nenhum, -1 automatico (so
-    Bluetooth). Quem tinha o jogador fica sem. Levanta ValueError("no-device"
+    Bluetooth). Quem tinha o jogador troca com ele (vai para o que o controle deixou; se
+    o controle nao tinha, fica sem, com o mapa guardado). Levanta ValueError("no-device"
     ou "unmapped": sem mapa nao ha o que pôr num jogador)."""
     if index not in devices:
         raise ValueError('no-device')
@@ -2181,7 +2287,7 @@ def set_player(model, devices, index, target):
             take_player(model, owner)
         if target > 0:
             if target in model.players and target != owner:
-                evict(model, devices, target)
+                move_occupant(model, devices, target, owner)
             meta['player'] = str(target)
         elif target == 0:
             meta['player'] = 'none'
@@ -2204,7 +2310,7 @@ def set_player(model, devices, index, target):
         park(model, guid, name, kind, binds, visual)
         return
     if target in model.players:
-        evict(model, devices, target)
+        move_occupant(model, devices, target, owner)
     place(model, target, index, name, kind, binds, visual, port or port_of(devices[index]))
 
 
@@ -2215,6 +2321,13 @@ def set_visual(model, devices, index, value):
     ficam no mapa e o guia esconde."""
     if not valid_visual(value):
         raise ValueError('bad-visual')
+    if index < 0:
+        # Um encoder de teclado (nao e um joystick do SDL): os jogadores dele, so de painel.
+        if visual_kind(value) != 'arcade':
+            raise ValueError('bad-visual')
+        for player in [p for p in model.players if keyboard_player(model, p)]:
+            model.visuals[player] = value
+        return 'none'
     if index not in devices:
         raise ValueError('no-device')
     guid, name = devices[index][0].lower(), devices[index][1]
@@ -2259,7 +2372,9 @@ def set_button(model, devices, index, control, element):
         binds = profile[1]
     else:
         binds = {c: e for c, (_, e) in model.players[owner].items()}
-    used = [c for c, e in binds.items() if e == element and c != control]
+    # O aceitar e o voltar dos menus sao o mesmo botao de outro comando (nao contam).
+    used = [c for c, e in binds.items() if e == element and c != control and c not in UI_CONTROLS
+            and control not in UI_CONTROLS]
     if used:
         raise ValueError('used:%s' % used[0])
     if owner is not None and not is_bluetooth(guid):
@@ -2277,10 +2392,11 @@ def keyboard_binds(player):
 
 
 def set_keyboard(model, devices, vidpid, name, on):
-    """Liga ou desliga o encoder de teclado VID:PID: ligado, ele e o P1 e o P2 com as
-    teclas padrao do MAME, sem mapear nada (quem era P1 ou P2 fica sem player, com o
-    mapa guardado); desligado, saem so os jogadores dele (os joysticks nao sao
-    tocados). VID:PID "*" desliga todos, tambem o mapa de teclado sem dono."""
+    """Liga ou desliga o encoder de teclado: ligado, ele e o P1 e o P2 com as teclas
+    padrao do MAME em todos os emuladores, sem mapear nada (quem era P1 ou P2 troca
+    de lugar ou fica sem player, com o mapa guardado); desligado, saem so os
+    jogadores de teclado (os joysticks nao sao tocados). VIDPID e so a marca do
+    dono ("mame" no Setup); "*" desliga todos, tambem o mapa de teclado sem marca."""
     for player in [p for p in model.players if keyboard_player(model, p)
                    and (vidpid == '*' or model.kbds.get(p, ('', ''))[0] == vidpid or p not in model.kbds)]:
         take_player(model, player)
@@ -2288,7 +2404,10 @@ def set_keyboard(model, devices, vidpid, name, on):
         return
     for player in range(1, KEYBOARD_PLAYERS + 1):
         if player in model.players:
-            evict(model, devices, player)
+            # Quem estava no lugar vai para o proximo player livre depois do encoder (sem
+            # nenhum livre, fica sem player, com o mapa guardado).
+            free = next((p for p in range(KEYBOARD_PLAYERS + 1, MAX_PLAYERS + 1) if p not in model.players), None)
+            move_occupant(model, devices, player, free)
         place(model, player, KEYBOARD_INDEX, 'Keyboard', 'arcade', keyboard_binds(player), 'arcade6')
         model.kbds[player] = (vidpid, name)
 
@@ -2328,7 +2447,7 @@ def store(model, devices, new, player, index, guid):
         return
     target = int(player)
     if target in model.players:
-        evict(model, devices, target)
+        move_occupant(model, devices, target, owner)
     place(model, target, index, name, kind, binds, visual, port or (port_of(devices[index]) if index in devices else ''))
 
 
@@ -2368,6 +2487,31 @@ def cmd_set_keyboard(args):
 
 def cmd_store(args):
     return run_set(args, lambda m, d: store(m, d, read_text(args.new), args.player, args.index, args.guid))
+
+
+def device_binds(model, devices, index):
+    """{controle: elemento} do mapa do controle INDICE: o do jogador dele (um
+    Bluetooth, o perfil, que e o que o save poe nele) ou, sem jogador, o guardado."""
+    if index not in devices:
+        return {}
+    guid, name = devices[index][0].lower(), devices[index][1]
+    bluetooth = is_bluetooth(guid)
+    owner = bluetooth_owner(model, index, guid) if bluetooth else owner_of(model, index)
+    if owner is not None and not bluetooth:
+        return {c: e for c, (_, e) in model.players[owner].items()}
+    _, profile = profile_of(model, guid, name)
+    if profile:
+        return dict(profile[1])
+    return {c: e for c, (_, e) in model.players[owner].items()} if owner is not None else {}
+
+
+def cmd_binds(args):
+    """"CONTROLE ELEMENTO" de cada comando do mapa do controle INDICE (ver device_binds)."""
+    binds = device_binds(Model(args.map), sdl_devices(), args.index)
+    for control in ALL_CONTROLS:
+        if control in binds:
+            print(control, binds[control])
+    return 0
 
 
 # ── SDL: o proximo comando ──────────────────────────────────────
@@ -2750,8 +2894,7 @@ def cmd_players(args):
     except OSError:
         players = {}
     connected = connected_joysticks()
-    active = active_players(players, connected, read_kbds(args.map),
-                            {vidpid for vidpid, _ in connected_keyboards()})
+    active = active_players(players, connected)
     print('mapped=%d' % len(players))
     print('connected=%d' % connected)
     print('active=%d' % sum(active.values()))
@@ -3332,6 +3475,12 @@ def main():
     p.add_argument('ini', nargs='?', default=PCSX2X6_INI)
     p.add_argument('--map', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
     p.set_defaults(func=cmd_pcsx2x6)
+    p = sub.add_parser('odin')
+    p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_odin)
+    p = sub.add_parser('reorder')
+    p.add_argument('map', nargs='?', default=os.environ.get('FLIPEROS_BUTTONS_MAP', '/etc/fliperos/buttons.map'))
+    p.set_defaults(func=cmd_reorder)
     p = sub.add_parser('keyboard')
     p.add_argument('--players', type=int, choices=range(1, 5), default=2)
     p.set_defaults(func=cmd_keyboard)
@@ -3365,6 +3514,10 @@ def main():
     p.add_argument('index', type=int)
     p.add_argument('guid')
     p.set_defaults(func=cmd_store)
+    p = sub.add_parser('binds')
+    p.add_argument('map', nargs='?', default=default_map)
+    p.add_argument('index', type=int)
+    p.set_defaults(func=cmd_binds)
     p = sub.add_parser('attract')
     p.add_argument('map')
     p.set_defaults(func=cmd_attract)

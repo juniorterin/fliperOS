@@ -484,6 +484,9 @@ class Menu(Animated):
                     self.slide = (time.monotonic(), step)
             else:
                 self.cursor = (self.cursor + step) % n
+                # A linha separadora ("sep", Controllers / Arcade panel) nao se escolhe.
+                if self.entries[self.cursor][0] == "sep":
+                    self.cursor = (self.cursor + step) % n
                 self.slide = (time.monotonic(), step)
         elif k == "pgup":
             self.cursor = max(0, self.cursor - 5)
@@ -744,6 +747,220 @@ class Menu(Animated):
         elif full:
             for i, line in enumerate(wrap(full, T.SAFE_W)[:2]):
                 centered(surf, line, T.CYAN, bottom + 6 + i * 10)
+
+
+class SlotGrid(Animated):
+    """Setup > Joysticks > Controllers / Arcade panel > Map controllers: as vagas de player (Player 1
+    a 8), duas por linha, cada uma um cartao com o selo do player, o desenho do controle (o painel
+    com os botoes ou o joypad) e o nome, que corre inteiro no cartao escolhido. entries: (valor,
+    "P1 [BT] nome", dica); a dica e "CHAVE: texto" (a chave e o visual: arcade6, pad:xbox...; o
+    texto o tipo do controle) e, numa vaga vazia, so o texto."""
+
+    COLS = 2
+    GAP = 4
+    CARD_H = 44
+    # Segurar um botao num cartao vazio por tantos segundos poe aquele controle nesse player.
+    HOLD = 1.2
+    AXIS_PRESS = 0.6
+
+    def __init__(self, title, entries, default=None):
+        self.title = title
+        self.entries = [(e[0], e[1], e[2] if len(e) > 2 else "") for e in entries]
+        self.cursor = 0
+        for i, e in enumerate(self.entries):
+            if e[0] == default:
+                self.cursor = i
+        # watch: como no Menu, uma funcao olhada a cada segundo (joystick_signature).
+        self.watch = None
+        self._watched = (0.0, None)
+        # O controle que esta sendo segurado num cartao vazio, desde quando, e se ja se soltou tudo
+        # uma vez (o botao que abriu a tela nao conta).
+        self.pressing = self.pressed_device
+        self.hold_dev = None
+        self.hold_since = None
+        self.armed = False
+        self.pads = {}
+
+    def pressed_device(self):
+        """O indice do SDL do primeiro controle com algo apertado agora (um botao, uma direcao ou um
+        eixo fora do repouso), ou None. Os eixos de gatilho repousam em -1: o repouso e o da abertura."""
+        try:
+            if not pygame.joystick.get_init():
+                pygame.joystick.init()
+            count = pygame.joystick.get_count()
+        except pygame.error:
+            return None
+        for i in range(count):
+            if i not in self.pads:
+                try:
+                    js = pygame.joystick.Joystick(i)
+                    js.init()
+                except pygame.error:
+                    continue
+                self.pads[i] = (js, [js.get_axis(a) for a in range(js.get_numaxes())])
+            js, rest = self.pads[i]
+            try:
+                if (any(js.get_button(b) for b in range(js.get_numbuttons()))
+                        or any(js.get_hat(h) != (0, 0) for h in range(js.get_numhats()))
+                        or any(abs(js.get_axis(a) - r) > self.AXIS_PRESS for a, r in enumerate(rest))):
+                    return i
+            except pygame.error:
+                continue
+        return None
+
+    def progress(self, now=None):
+        """De 0 a 1: quanto falta para o controle segurado tomar o player do cartao vazio."""
+        if self.hold_since is None:
+            return 0.0
+        return min(1.0, ((now if now is not None else time.monotonic()) - self.hold_since) / self.HOLD)
+
+    @staticmethod
+    def parse(entry):
+        """(player, Bluetooth?, nome, visual ou "", texto) de uma entrada."""
+        value, label, hint = entry
+        found = re.match(r"^P(\d+)( BT)? ?(.*)$", label)
+        player, bt, name = (found.group(1), bool(found.group(2)), found.group(3)) if found else (value, False, label)
+        key = re.match(r"^((?:pad:\w+)|(?:arcade\w+)): (.*)$", hint)
+        return player, bt, name, key.group(1) if key else "", key.group(2) if key else hint
+
+    def key(self, k):
+        n = len(self.entries)
+        if k in ("left", "right"):
+            if self.cursor ^ 1 < n:
+                self.cursor ^= 1
+        elif k in ("up", "down"):
+            self.cursor = (self.cursor + (-self.COLS if k == "up" else self.COLS)) % (n + n % self.COLS)
+            if self.cursor >= n:
+                self.cursor = (self.cursor + self.COLS) % (n + n % self.COLS) if k == "down" else n - 1
+        elif k == "pgup":
+            self.cursor = 0
+        elif k == "pgdn":
+            self.cursor = n - 1
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter":
+            # Um cartao vazio se define segurando um botao (a barra): o Enter nao faz nada nele.
+            if self.parse(self.entries[self.cursor])[3]:
+                return ("select", self.entries[self.cursor][0])
+        return None
+
+    def tick(self):
+        if self.watch:
+            now = time.monotonic()
+            at, seen = self._watched
+            if now - at >= 1.0:
+                current = self.watch()
+                self._watched = (now, current)
+                if at and current != seen:
+                    return ("refresh", self.entries[self.cursor][0])
+        # Segurar um botao num cartao vazio: a barra enche e, cheia, o controle toma o player.
+        entry = self.entries[self.cursor]
+        device = self.pressing() if not self.parse(entry)[3] else None
+        if device is None:
+            self.hold_dev = self.hold_since = None
+            self.armed = True
+        elif self.armed:
+            now = time.monotonic()
+            if device != self.hold_dev:
+                self.hold_dev, self.hold_since = device, now
+            if self.progress(now) >= 1.0:
+                self.hold_dev = self.hold_since = None
+                self.armed = False
+                return ("select", "assign:%s:%d" % (entry[0], device))
+        if self.hold_since is not None:
+            return "redraw"
+        return Animated.tick(self)
+
+    def art(self, surf, visual, x, y, w, h, lit=False):
+        """O desenho minimalista do controle na area (x, y, w, h): o painel de arcade com os botoes do
+        formato, so aneis, na posicao do guia e em escala para caber; o joypad, a cruz e os quatro
+        botoes."""
+        if visual.startswith("pad:"):
+            cy = y + h // 2
+            ink = T.PINK if lit else T.COMMENT
+            cx = x + w // 4 + 1
+            for rect in ((cx - 7, cy - 2, 14, 4), (cx - 2, cy - 7, 4, 14)):
+                pygame.draw.rect(surf, ink, rect, 1)
+            pygame.draw.rect(surf, T.BG_DEEP if not lit else shade(T.PINK, 0.45), (cx - 1, cy - 1, 2, 2))
+            bx = x + w - w // 4 - 1
+            for dx, dy in ((0, -6), (0, 6), (-6, 0), (6, 0)):
+                pygame.draw.circle(surf, ink, (bx + dx, cy + dy), 3, 1)
+            return
+        if visual not in SHAPE_LAYOUT:
+            return
+        import fepads
+        buttons, pts, (r, lift), box = shape_geometry(visual, 1.0)
+        f = min(w / (box[2] - box[0]), h / (box[3] - box[1]))
+        mx, my = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+        neo = {role: color for role, _, _, _, color, _, _ in fepads.NEOGEO} if visual == "arcade4" else {}
+        for n, b in enumerate(buttons):
+            bx, by = round(x + w / 2 + (pts[b][0] - mx) * f), round(y + h / 2 + (pts[b][1] - my) * f)
+            color = neo.get("abcd"[n], PANEL_CAPS[n]) if neo else PANEL_CAPS[n]
+            pygame.draw.circle(surf, color, (bx, by), max(2, round(r * f)), 1)
+
+    @staticmethod
+    def fit(s, room):
+        """O texto em room pixels, cortado com ".." (o do cartao escolhido corre inteiro)."""
+        if width(s) <= room:
+            return s
+        while len(s) > 1 and width(s + "..") > room:
+            s = s[:-1]
+        return s + ".."
+
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("ARROWS", "SELECT"), ("ENTER", "OK"), ("ESC", "BACK")])
+        n = len(self.entries)
+        rows = (n + self.COLS - 1) // self.COLS
+        y0, bottom = CONTENT_Y, footer_y() - 8
+        card_h = min(self.CARD_H, (bottom - y0 - (rows - 1) * self.GAP) // rows)
+        card_w = (T.SAFE_W - 8 - self.GAP) // self.COLS
+        x0 = T.SAFE_X + 4
+        art_w = card_w * 9 // 25
+        for i, entry in enumerate(self.entries):
+            player, bt, name, visual, info = self.parse(entry)
+            x = x0 + (i % self.COLS) * (card_w + self.GAP)
+            y = y0 + (i // self.COLS) * (card_h + self.GAP)
+            on, selected = bool(visual), i == self.cursor
+            fill = shade(T.PINK, 0.45) if selected else T.BG_DEEP
+            pygame.draw.rect(surf, fill, (x, y, card_w, card_h), border_radius=3)
+            pygame.draw.rect(surf, T.PINK if selected else (T.PURPLE if on else T.LINE), (x, y, card_w, card_h),
+                             2 if selected else 1, border_radius=3)
+            if on:
+                self.art(surf, visual, x + 4, y + 4, art_w - 4, card_h - 8, selected)
+            else:
+                # O + grande do cartao vazio: dois tracos de 3 pixels.
+                mx, my, arm = x + art_w // 2, y + card_h // 2, min(10, card_h // 3)
+                ink = T.PINK if selected else T.COMMENT
+                pygame.draw.rect(surf, ink, (mx - arm, my - 1, 2 * arm + 1, 3))
+                pygame.draw.rect(surf, ink, (mx - 1, my - arm, 3, 2 * arm + 1))
+            tx, room = x + art_w + 6, card_w - art_w - 12
+            # A linha de cima: o selo do player (aceso com controle), o tipo e o com fio ou sem fio.
+            pygame.draw.rect(surf, T.PINK if on else T.LINE, (tx, y + 5, 22, 11), border_radius=5)
+            label = "%sP" % player
+            text(surf, label, T.BG_DEEP if on else T.COMMENT, tx + 11 - width(label) // 2, y + 7)
+            if on:
+                if info.endswith("MAME keys"):
+                    text(surf, "KEYS", T.CYAN if selected else T.COMMENT, tx + 28, y + 7)
+                elif info.endswith("Bluetooth") or bt:
+                    surf.blit(T.small_icon("wireless"), (tx + 28, y + 7))
+                else:
+                    surf.blit(T.small_icon("wired"), (tx + 28, y + 7))
+            # A de baixo: o nome, que corre inteiro no cartao escolhido.
+            color = T.SPACE if selected else (T.FG if on else T.COMMENT)
+            if not on and selected:
+                # Segurar um botao por um tempo define o player: o texto pequeno e a barra que enche.
+                import tiny
+                tiny.centered(surf, "HOLD A BUTTON TO SET", T.CYAN, tx + room // 2, y + card_h - 19)
+                pygame.draw.rect(surf, T.LINE, (tx, y + card_h - 10, room, 5), 1)
+                fill = round((room - 2) * self.progress())
+                if fill:
+                    surf.fill(T.PINK, (tx + 1, y + card_h - 9, fill, 3))
+                continue
+            shown = name if on else "empty"
+            if selected:
+                scroll_text(surf, shown, color, tx, y + card_h - 15, room)
+            else:
+                text(surf, self.fit(shown, room), color, tx, y + card_h - 15)
 
 
 class YesNo:
@@ -1166,6 +1383,185 @@ def panel_tile(count):
     return draw
 
 
+# O formato do guia do frontend (feview.PANEL_LAYOUTS) de cada visual de painel do Visual layout.
+# O de 8 botoes desenha o de 6 (o guia so tem os botoes 1 a 6).
+SHAPE_LAYOUT = {"arcade6": "6", "arcade8": "6", "arcade4": "4", "arcade3": "3", "arcade2": "2",
+                "arcade2v": "2v", "arcade1": "1"}
+
+
+def shape_geometry(visual, k):
+    """Os botoes de um formato de painel na escala k (1 = o tamanho do guia do frontend):
+    (lista dos comandos "b1"..., {comando: (x, y)} do centro do topo de cada um a partir do meio
+    do painel, (raio, altura do lado), (esquerda, cima, direita, baixo) do que todos ocupam).
+    O mesmo desenho do guia (feview.panel_slots, com o arco do meio mais alto); o painel de 8 botoes
+    tem o 7 e o 8 no fim de cada fileira (1 2 3 7 em cima, 4 5 6 8 embaixo, como no Button mapping)."""
+    import feview
+    layout = SHAPE_LAYOUT[visual]
+    count = 8 if visual == "arcade8" else feview.PANEL_COUNT[layout]
+    buttons = ["b%d" % n for n in range(1, count + 1)]
+    # O aro escuro de baixo de cada botao (button3d) tem 4 pixels de folga que nao crescem com a
+    # escala: o passo e maior que o do guia e o raio cabe dentro dele, para os aros de dois
+    # botoes lado a lado nunca se encostarem.
+    step = max(8, round(34 * k))
+    r = max(3, min(round(12 * k), step // 2 - 5))
+    lift = max(1, round(feview.LIFT * k))
+    ry = round(r * feview.FLAT)
+    if count == 8:
+        spots = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (3, 0), (3, 1)]
+        pts = {"b%d" % (n + 1): (round((col - 1.5) * step), row * 32 - (3 if col in (1, 2) else 0))
+               for n, (col, row) in enumerate(spots)}
+    else:
+        slots = feview.panel_slots(layout, [1, 2, 3, 4, 5, 6], buttons, step)
+        pts = {b: (dx, dy - raised) for b, (dx, dy, raised, _, _) in slots.items()}
+    minx, maxx = min(p[0] for p in pts.values()), max(p[0] for p in pts.values())
+    miny, maxy = min(p[1] for p in pts.values()), max(p[1] for p in pts.values())
+    return buttons, pts, (r, lift), (minx - r - 4, miny - ry - 4, maxx + r + 4, maxy + lift + ry + 4)
+
+
+def shape_tile(visual):
+    """O icone de um formato de painel (arcade6, arcade4, arcade2v...): so os botoes, como o
+    guia do frontend (feview.draw_guide) os desenha, em perspectiva (feview.button3d) nas
+    posicoes de shape_geometry. Sem o direcional."""
+    def draw(surf, x, y, scale, width=None):
+        import feview
+        size = 16 * scale
+        wide = width or size
+        # So os botoes (sem o direcional): a escala em que cabem no icone, e o desenho no meio dele.
+        box = shape_geometry(visual, 1.0)[3]
+        k = min((wide - 2 * scale) / (box[2] - box[0]), (size * 4 // 5) / (box[3] - box[1]), 1.25)
+        buttons, pts, (r, lift), box = shape_geometry(visual, k)
+        ox = x + wide // 2 - (box[0] + box[2]) // 2
+        oy = y + size // 2 - (box[1] + box[3]) // 2
+        # O 4 em linha e o do Neo Geo MVS: os botoes A, B, C e D nas cores e com as letras dele.
+        neo = {}
+        if visual == "arcade4":
+            import fepads
+            neo = {role: (color, glyph) for role, _, _, _, color, glyph, _ in fepads.NEOGEO}
+        for n, b in enumerate(buttons):
+            cx, cy = ox + pts[b][0], oy + pts[b][1]
+            color, glyph = neo.get("abcd"[n], (PANEL_CAPS[n], "")) if neo else (PANEL_CAPS[n], "")
+            feview.button3d(surf, cx, cy, r, color, lift)
+            if glyph:
+                fepads.letter(surf, cx, cy, glyph, fepads.WHITE, 2 if r >= 12 else 1)
+    return draw
+
+
+class Picker:
+    """Um seletor visual < [desenho] >: o desenho da opcao no meio, uma seta de cada
+    lado, o nome embaixo e a dica; esquerda e direita trocam (dando a volta), Enter
+    escolhe e Esc volta. entries: (valor, rotulo, dica); tiles: {valor: desenho(surf,
+    x, y, escala)}, os mesmos do carrossel (panel_tile, pad_tile, layout_tile). Serve
+    o Visual layout (os paineis e os joypads) e o Buttons layout (por numero de
+    botoes)."""
+
+    SCALE = 5                  # o desenho: 16 x 5 = 80 pixels
+
+    def __init__(self, title, entries, default=None, text="", tiles=None, wide=False):
+        self.title = title
+        self.text = text
+        # wide: a caixa do desenho com o dobro da largura (o Visual layout: um painel de
+        # quatro botoes em linha e um joypad sao largos); os desenhos recebem a largura.
+        self.wide = wide
+        self.entries = [(e[0], e[1], e[2] if len(e) > 2 else "") for e in entries if e[0] != "return"]
+        self.tiles = tiles or {}
+        self.cursor = next((i for i, e in enumerate(self.entries) if e[0] == default), 0)
+
+    def key(self, k):
+        n = len(self.entries)
+        if k in ("left", "up"):
+            self.cursor = (self.cursor - 1) % n
+        elif k in ("right", "down"):
+            self.cursor = (self.cursor + 1) % n
+        elif k == "esc":
+            return ("back", None)
+        elif k == "enter":
+            return ("select", self.entries[self.cursor][0])
+        return None
+
+    @landscape
+    def draw(self, surf, ctx):
+        frame(surf, ctx, self.title, [("< >", "CHANGE"), ("ENTER", "OK"), ("ESC", "BACK")])
+        value, label, hint = self.entries[self.cursor]
+        for i, line in enumerate(wrap(self.text, T.SAFE_W)[:2]):
+            centered(surf, line, T.PINK, 34 + i * 11)
+        size = 16 * self.SCALE
+        box = size + 8
+        boxw = size * 2 + 8 if self.wide else box
+        left, top = (T.WIDTH - boxw) // 2, 58
+        block(surf, (left, top, boxw, box), T.BG_DEEP, T.PURPLE)
+        draw = self.tiles.get(value)
+        if draw:
+            if self.wide:
+                draw(surf, left + 4, top + 4, self.SCALE, boxw - 8)
+            else:
+                draw(surf, left + 4, top + 4, self.SCALE)
+        pygame.draw.rect(surf, T.PINK, (left, top, boxw, box), 2)
+        # As setas dos lados.
+        mid = top + box // 2
+        for side, x in ((-1, left - 26), (1, left + boxw + 26)):
+            pygame.draw.polygon(surf, T.PINK, [(x - 8 * side, mid - 12), (x + 4 * side, mid), (x - 8 * side, mid + 12)])
+        text_label = label.upper()
+        scale = 2 if width(text_label) * 2 <= T.SAFE_W else 1
+        name = big(text_label, scale, LABEL)
+        nx = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(text_label, scale, (0x80, 0x30, 0x60)), (nx + 2, 154))
+        surf.blit(name, (nx, 152))
+        count = len(self.entries)
+        for i in range(count):
+            pygame.draw.rect(surf, T.PINK if i == self.cursor else T.LINE,
+                             (T.WIDTH // 2 - count * 5 + 2 + i * 10, 176, 6, 6))
+        for i, line in enumerate(wrap(hint, T.SAFE_W)[:2]):
+            centered(surf, line, T.CYAN, 190 + i * 11)
+
+
+def joypad_tile():
+    """A ilustracao de um joypad (o tipo "Joypad" do Controllers / Arcade panel): o corpo com
+    as duas empunhaduras, a cruz a esquerda e os quatro botoes coloridos a direita."""
+    def draw(surf, x, y, scale):
+        size = 16 * scale
+        body = pygame.Rect(x + size // 16, y + size * 3 // 10, size * 7 // 8, size * 2 // 5)
+        grip = size // 5
+        for gx in (body.left + size // 16, body.right - size // 16 - grip):
+            pygame.draw.rect(surf, shade(T.PURPLE, 0.35), (gx, body.bottom - size // 10, grip, size // 4),
+                             border_radius=size // 12)
+            pygame.draw.rect(surf, T.PURPLE, (gx, body.bottom - size // 10, grip, size // 4), max(1, scale // 2),
+                             border_radius=size // 12)
+        pygame.draw.rect(surf, shade(T.PURPLE, 0.45), body, border_radius=size // 6)
+        pygame.draw.rect(surf, T.PURPLE, body, max(1, scale // 2), border_radius=size // 6)
+        cx, cy = body.left + size // 4, body.centery
+        arm = max(2, size // 14)
+        pygame.draw.rect(surf, T.FG, (cx - arm * 3 // 2, cy - arm // 2, arm * 3, arm))
+        pygame.draw.rect(surf, T.FG, (cx - arm // 2, cy - arm * 3 // 2, arm, arm * 3))
+        bx, by, d = body.right - size // 4, body.centery, size // 11
+        for (dx, dy), color in (((0, -d), T.YELLOW), ((d, 0), T.RED), ((0, d), T.GREEN), ((-d, 0), T.CYAN)):
+            pygame.draw.circle(surf, color, (bx + dx, by + dy), max(2, size // 22))
+    return draw
+
+
+def pad_tile(kind):
+    """O icone de um joypad no carrossel (Visual layout): os botoes do videogame
+    KIND (gui/fepads.py) desenhados de uma vez e ampliados sem suavizar."""
+    def draw(surf, x, y, scale, width=None):
+        import fepads
+        size = 16 * scale
+        # Os botoes de cada videogame num quadro grande, recortados e reduzidos para
+        # caber na placa (o conjunto do GameCube e bem maior que o do NES).
+        base = pygame.Surface((192, 192), pygame.SRCALPHA)
+        fepads.draw(base, kind, 96, 96)
+        box = base.get_bounding_rect()
+        if not box.w or not box.h:
+            return
+        # Sem a placa em volta: so os botoes, no meio do espaco do icone.
+        plate = pygame.Rect(x, y + size // 10, width or size, size * 4 // 5 if width else size * 3 // 5)
+        # So reduz (o conjunto grande do GameCube): um joypad de poucos botoes (o NES) fica
+        # no tamanho que o guia do frontend o desenha, nao ampliado para encher a caixa.
+        k = min((plate.w - 2 * scale) / box.w, (plate.h - 2 * scale) / box.h, 1.0)
+        w, h = max(1, int(box.w * k)), max(1, int(box.h * k))
+        art = base.subsurface(box) if k == 1.0 else pygame.transform.scale(base.subsurface(box), (w, h))
+        surf.blit(art, (plate.centerx - w // 2, plate.centery - h // 2))
+    return draw
+
+
 class Capture:
     """O Button mapping pedindo um comando: o painel de arcade desenhado (a
     alavanca, os botoes do painel no arco de um Vewlix, Start e a ficha), com
@@ -1207,9 +1603,30 @@ class Capture:
             return "ask"
         return "done" if control in self.done else "todo"
 
+    def keys(self):
+        """A legenda das teclas do rodape."""
+        return [("WAIT", "TO SKIP IT"), ("ESC", "CANCEL")]
+
+    def tilt(self):
+        """O lado para onde a alavanca se inclina: o do comando da vez."""
+        return self.TILT.get(self.asking, (0, 0))
+
+    def footer(self, surf, pulse):
+        """A parte de baixo: o comando pedido em letras grandes, quantos faltam e o tempo."""
+        label = "PRESS " + self.LABELS.get(self.asking, "BUTTON " + self.asking[1:])
+        name = big(label, 2, LABEL)
+        x = (T.WIDTH - name.get_width()) // 2
+        surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, 160))
+        surf.blit(name, (x, 158))
+        centered(surf, "%d OF %d" % (self.number, self.total), T.CYAN, 182)
+        # O tempo que falta para pular o comando, um quadrado por segundo.
+        for i in range(self.seconds):
+            color = T.PINK if i < self.left else T.LINE
+            pygame.draw.rect(surf, color, (T.WIDTH // 2 - self.seconds * 5 + 2 + i * 10, 198, 6, 6))
+
     @landscape
     def draw(self, surf, ctx):
-        frame(surf, ctx, self.title, [("WAIT", "TO SKIP IT"), ("ESC", "CANCEL")])
+        frame(surf, ctx, self.title, self.keys())
         pulse = (math.sin(time.monotonic() * 8) + 1) / 2
         # O tampo: a madeira escura, a borda (T-molding) e a frente do painel.
         x0, y0, w, h = 18, 42, 284, 108
@@ -1243,7 +1660,7 @@ class Capture:
 
         # A alavanca, inclinada para o lado pedido, com uma seta de cada lado.
         cx, cy = 74, 108
-        tilt = self.TILT.get(self.asking, (0, 0))
+        tilt = self.tilt()
         for control, dx, dy in (("up", 0, -1), ("down", 0, 1), ("left", -1, 0), ("right", 1, 0)):
             state = self.state(control)
             for grow, color in ((2 + round(2 * pulse), T.PINK if state == "ask" else None),
@@ -1261,17 +1678,7 @@ class Capture:
         for n in range(1, self.buttons + 1):
             bx, by = panel_spot(n, 154, 88, step, 34)
             arcade_button(surf, bx, by, 12, self.state("b%d" % n), str(n), pulse)
-
-        label = "PRESS " + self.LABELS.get(self.asking, "BUTTON " + self.asking[1:])
-        name = big(label, 2, LABEL)
-        x = (T.WIDTH - name.get_width()) // 2
-        surf.blit(big(label, 2, (0x80, 0x30, 0x60)), (x + 2, 160))
-        surf.blit(name, (x, 158))
-        centered(surf, "%d OF %d" % (self.number, self.total), T.CYAN, 182)
-        # O tempo que falta para pular o comando, um quadrado por segundo.
-        for i in range(self.seconds):
-            color = T.PINK if i < self.left else T.LINE
-            pygame.draw.rect(surf, color, (T.WIDTH // 2 - self.seconds * 5 + 2 + i * 10, 198, 6, 6))
+        self.footer(surf, pulse)
 
 
 class ConfirmCapture:

@@ -8,6 +8,10 @@ set -euo pipefail
 [[ $# -gt 0 ]] || { echo "Usage: fliperos-kms-run program [arguments]" >&2; exit 2; }
 [[ -z "${DISPLAY:-}" ]] || { echo "Run on the console (TTY), outside an X session." >&2; exit 2; }
 command -v "$1" > /dev/null || [[ -x $1 ]] || { echo "Not installed: $1" >&2; exit 127; }
+# Os controles USB na ordem dos players do Setup > Joysticks (config/fliperos-buttons reorder): o Flycast
+# (e o Dojo) dao a porta 1 ao primeiro controle que o Linux lista, sem opcao para trocar. So religa os
+# controles se a ordem esta errada (em geral uma vez depois de ligar o gabinete ou trocar um controle).
+timeout 30 sudo -n "${FLIPEROS_SETUP_BIN:-/usr/local/bin/fliperos-setup}" --pad-order > /dev/null 2>&1 || true
 # 0 se a placa cria um contexto OpenGL 3.2 core no KMS (GBM), o que o driver
 # de video "glcore" do RetroArch pede. Quem responde e o Mesa, pelo eglinfo;
 # sem o eglinfo, ou sem o EGL abrir, nao da para saber e vale o glcore.

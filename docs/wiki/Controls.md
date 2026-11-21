@@ -16,7 +16,7 @@ Controllers on FliperOS: arcade panels, joypads, Bluetooth pads, light guns, whe
 
 | Item | What it does |
 | --- | --- |
-| **Button mapping** | Controller, player, kind, buttons ([Button mapping](Button-mapping.md)) |
+| **Controllers / Arcade panel** | Map controllers (the eight player slots), keyboard encoder, LPT, haptics, lights; controller, player, kind, buttons ([Button mapping](Button-mapping.md)) |
 | **Bluetooth** | Only with a Bluetooth adapter ([Bluetooth](Bluetooth.md)) |
 | **Buttons layout** | Where the buttons of 1 to 5-button games go ([Button mapping](Button-mapping.md#buttons-layout-games-of-1-to-5-buttons)) |
 | **GunCon 2** | Calibrate, screen flash, settings ([Light guns](Light-guns.md)) |

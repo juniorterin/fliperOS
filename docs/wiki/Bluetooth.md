@@ -6,7 +6,7 @@
 
 1. Put the controller in pairing mode (usually a long press of its pairing button, or Share + PS, or the 8BitDo's own pairing button).
 2. **Pair** lists what is in range; pick the controller. Or **Pair automatically** pairs every controller in pairing mode for 30 seconds.
-3. Map it in **Setup > Joysticks > Button mapping**, where it shows with the wireless icon ([Button mapping](Button-mapping.md)).
+3. Map it in **Setup > Joysticks > Controllers / Arcade panel > Map controllers**, where it shows with the wireless icon ([Button mapping](Button-mapping.md)).
 
 A failed pairing is tried once more, after forgetting the device. From then on the controller connects by itself when it is turned on.
 

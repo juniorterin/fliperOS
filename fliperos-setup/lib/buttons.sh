@@ -96,38 +96,134 @@ buttons_devices() {
   "$BUTTONS" list "$BUTTONS_MAP" 2>> "$FLIPEROS_LOG"
 }
 
-# buttons_store NOVO JOGADOR INDICE GUID poe no mapa o controle recem-pego
-# (linhas "JOGADOR CONTROLE INDICE ELEMENTO NOME" em NOVO). Num controle
-# Bluetooth (JOGADOR bt) vira o perfil do aparelho em BUTTONS_BT_MAP, pelo
-# GUID: o jogador dele e a ordem de conexao (fliperos-buttons save). Num
-# fixo, sai o que o mapa tinha desse jogador e desse controle; o outro
-# controle que era desse jogador fica com o numero antigo deste (troca), ou
-# sai do mapa se este nao tinha numero. Os Bluetooth do mapa saem tambem: o
-# save os poe de novo.
+# buttons_run SUBCOMANDO...: o fliperos-buttons sobre o mapa do Setup e o armazem
+# de perfis dele (BUTTONS_BT_MAP). Imprime o que ele diz ("ok", o que falta mapear
+# ou "error=MOTIVO"); o status e o dele.
+buttons_run() {
+  FLIPEROS_BUTTONS_MAP=$BUTTONS_MAP FLIPEROS_BUTTONS_BT_MAP=$BUTTONS_BT_MAP \
+    "$BUTTONS" "$@" 2>> "$FLIPEROS_LOG"
+}
+
+# buttons_store NOVO JOGADOR INDICE GUID poe no mapa o controle recem-pego (linhas
+# "JOGADOR CONTROLE INDICE ELEMENTO NOME" em NOVO): no JOGADOR (um numero), sem
+# jogador ("-": o mapa fica guardado) ou, num Bluetooth (bt), como o perfil do
+# aparelho, pelo GUID (o jogador dele vem do save). Guarda o visual que ele
+# tinha. Quem tinha o jogador fica sem, com o mapa guardado: nao ha troca.
 buttons_store() {
-  local new=$1 player=$2 index=$3 guid=$4 old
-  if [[ $player == bt ]]; then
-    {
-      grep -v -i "^$guid " "$BUTTONS_BT_MAP" 2> /dev/null
-      awk -v g="$guid" '{ name = ""; for (i = 5; i <= NF; i++) name = name (i > 5 ? " " : "") $i
-        print tolower(g), $2, $4, name }' "$new"
-    } > "$BUTTONS_BT_MAP.new" && mv "$BUTTONS_BT_MAP.new" "$BUTTONS_BT_MAP"
-    log_info "botoes: perfil Bluetooth $guid gravado"
+  local new=$1 player=$2 index=$3 guid=$4
+  buttons_run store "$BUTTONS_MAP" "$new" "$player" "$index" "$guid" > /dev/null || return 1
+  log_info "botoes: controle $index ($guid) no jogador $player"
+}
+
+# buttons_apply grava o mapa nos emuladores (buttons_save) depois de mudar o player,
+# o visual ou um botao. Sem mapa (ninguem tem player), nao ha o que gravar.
+buttons_apply() {
+  [[ -s $BUTTONS_MAP ]] || return 0
+  buttons_save "$BUTTONS_MAP"
+}
+
+# buttons_set_player INDICE JOGADOR: o jogador do controle (1 a 8; "-" nenhum; auto,
+# so Bluetooth: o proximo livre). Imprime ok ou error=unmapped (sem mapa nao ha o
+# que pôr num jogador) ou error=no-device. Quem tinha o jogador fica sem.
+buttons_set_player() {
+  buttons_run set-player "$BUTTONS_MAP" "$1" "$2"
+}
+
+# buttons_set_visual INDICE VISUAL: o desenho do controle. Imprime none (nada a
+# mapear), "buttons b3 b4" (os botoes que o painel passou a ter) ou all (de painel
+# para joypad, ou sem mapa).
+buttons_set_visual() {
+  buttons_run set-visual "$BUTTONS_MAP" "$1" "$2"
+}
+
+# buttons_set_button INDICE COMANDO ELEMENTO: troca um comando so. Imprime ok ou
+# error=used:COMANDO (o elemento ja e de outro comando do controle).
+buttons_set_button() {
+  buttons_run set-button "$BUTTONS_MAP" "$1" "$2" "$3"
+}
+
+# buttons_set_keyboard VID:PID on|off NOME: liga ou desliga o encoder de teclado: ligado
+# e o P1 e o P2 nas teclas do MAME; os joysticks nao sao tocados.
+buttons_set_keyboard() {
+  buttons_run set-keyboard "$BUTTONS_MAP" "$1" "$2" --name "$3"
+}
+
+# buttons_keyboard_on: o encoder de teclado esta ligado? Status 0 se o mapa tem jogadores
+# de teclado (as linhas "kbd" do set-keyboard, ou um mapa de antes com teclas k:TECLA).
+buttons_keyboard_on() {
+  [[ -r $BUTTONS_MAP ]] && awk '$2 == "kbd" || $4 ~ /^k:/ { found = 1 } END { exit !found }' "$BUTTONS_MAP"
+}
+
+# buttons_keyboard_visual: o visual do primeiro jogador de teclado (arcade6 sem escolha).
+buttons_keyboard_visual() {
+  local out
+  out=$(awk '$2 == "kbd" && !p { p = $1 } $4 ~ /^k:/ && !p { p = $1 }
+    END { if (p) print p }' "$BUTTONS_MAP" 2> /dev/null)
+  [[ -n $out ]] && awk -v p="$out" '$1 == p && $2 == "visual" { print $4; exit }' "$BUTTONS_MAP"
+  true
+}
+
+# buttons_binds INDICE: "COMANDO ELEMENTO" de cada comando do mapa do controle.
+buttons_binds() {
+  buttons_run binds "$BUTTONS_MAP" "$1"
+}
+
+# O desenho do controle (o Visual layout): os formatos de painel de arcade (que
+# dizem quantos botoes o mapa pede) e os joypads dos videogames (os de
+# gui/fepads.py: o guia do frontend desenha o do player 1). "valor|nome|balao".
+BUTTONS_VISUALS=(
+  "arcade6|6 buttons|Two rows of three: the usual arcade panel."
+  "arcade4|4 in line, MVS style|Four in a row, like a Neo Geo MVS."
+  "arcade3|3 in line|Three buttons in a row."
+  "arcade2|2 in line|Two buttons side by side."
+  "arcade2v|2 stacked|Two buttons, one above the other."
+  "arcade1|1 button|A single button."
+  "arcade8|8 buttons|Two rows of four (the frontend guide draws six)."
+  "pad:playstation|PlayStation|DualShock and DualSense: cross, circle, square, triangle."
+  "pad:xbox|Xbox|A, B, X and Y in colour."
+  "pad:gamecube|GameCube|The big A button, B, X and Y."
+  "pad:snes|Super Nintendo|A, B, X and Y in a diamond."
+  "pad:nes|NES|B and A."
+  "pad:dreamcast|Dreamcast|A, B, X and Y."
+  "pad:saturn|Saturn|Six buttons: A, B, C, X, Y and Z."
+  "pad:megadrive|Mega Drive|Six buttons: A, B, C, X, Y and Z."
+  "pad:neogeo|Neo Geo CD|A, B, C and D."
+  "pad:n64|Nintendo 64|A, B and the four C buttons."
+)
+
+# buttons_visual_field VISUAL CAMPO: o nome (1) ou o balao (2) do visual; o proprio
+# valor se nao existe.
+buttons_visual_field() {
+  local entry
+  for entry in "${BUTTONS_VISUALS[@]}"; do
+    [[ ${entry%%|*} == "$1" ]] || continue
+    entry=${entry#*|}
+    if (($2 == 1)); then printf '%s\n' "${entry%%|*}"; else printf '%s\n' "${entry#*|}"; fi
     return 0
-  fi
-  # O numero que este controle tinha (o jogador fixo com ele).
-  old=$(awk -v i="$index" '$2 == "bt" { auto[$1] = 1 } $3 == i && !($1 in auto) { print $1; exit }' \
-    "$BUTTONS_MAP" 2> /dev/null)
-  {
-    awk -v p="$player" -v i="$index" -v o="$old" '
-      FNR == NR { if ($2 == "bt") auto[$1] = 1; else if ($3 == i) mine[$1] = 1; next }
-      ($1 in auto) || ($1 in mine) { next }
-      $1 == p { if (o == "" || o == p) next; $1 = o }
-      { print }' "$BUTTONS_MAP" "$BUTTONS_MAP" 2> /dev/null
-    awk -v p="$player" '{ $1 = p; print }' "$new"
-  } > "$BUTTONS_MAP.new"
-  mv "$BUTTONS_MAP.new" "$BUTTONS_MAP"
-  log_info "botoes: controle $index no jogador $player${old:+ (era o $old)}"
+  done
+  printf '%s\n' "$1"
+}
+
+# buttons_type_name TIPO: o nome do tipo na tela (arcade, pad; vazio: ainda sem tipo).
+buttons_type_name() {
+  case ${1:-} in
+    arcade) echo "Arcade panel" ;;
+    pad) echo "Joypad" ;;
+    *) echo "not set" ;;
+  esac
+}
+
+# buttons_visual_kind VISUAL: pad (joypad) ou arcade (painel).
+buttons_visual_kind() {
+  [[ $1 == pad:* ]] && echo pad || echo arcade
+}
+
+# buttons_visual_count VISUAL: quantos botoes o painel desenhado tem (de 1 a 8).
+buttons_visual_count() {
+  case $1 in
+    arcade[0-9]*) local n=${1#arcade}; echo "${n%v}" ;;
+    *) echo 6 ;;
+  esac
 }
 
 # buttons_capture SEGUNDOS [SEGURAR [CONTROLE]] espera o proximo comando de
@@ -208,16 +304,6 @@ buttons_players_connected() {
   ((n < 1)) && n=1
   ((n > 4)) && n=4
   printf '%s\n' "$n"
-}
-
-# buttons_keyboard JOGADORES grava, no lugar do controle, as teclas padrao do
-# MAME de cada jogador em todos os emuladores: o encoder que se diz teclado
-# (I-PAC e afins) ja vem nesse layout, e nada precisa ser apertado.
-buttons_keyboard() {
-  "$BUTTONS" keyboard --players "$1" >> "$FLIPEROS_LOG" 2>&1 || return 1
-  ini_set "$MAME_INI" ctrlr fliperos
-  ini_set "$MAME_INI" joystickprovider sdljoy
-  log_info "botoes gravados: teclado no layout do MAME, $1 jogador(es)"
 }
 
 # ── Buttons layout ───────────────────────────────────────────────

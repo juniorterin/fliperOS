@@ -24,7 +24,7 @@
 #
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
-#   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --systems, --downloader status|add|start|remove, --settings, --setting KEY VALUE, --outputs main|all,
+#   --latency-boot, --session-start, --session-end, --volume up|down|mute|get|set N, --systems, --downloader status|add|start|remove, --settings, --setting KEY VALUE, --outputs main|all, --pad-order,
 #   --emulator-ensure NOME (o frontend: instala ou compila o emulador do jogo),
 #   --cloud-restore PASTA (o backup na nuvem: as configuracoes do sistema),
 #   --padkeys on|off, --services-boot, --services-screen, --services-late (lib/services.sh),
@@ -503,6 +503,12 @@ main() {
       ;;
     --outputs)
       mm_outputs "${2:-all}"
+      return 0
+      ;;
+    --pad-order)
+      # Os controles USB na ordem dos players (config/fliperos-buttons reorder), na abertura de um jogo:
+      # o Flycast e o Dojo dao a porta 1 ao primeiro controle que o Linux lista. Sem nada a mudar, nao toca.
+      "${FLIPEROS_BUTTONS:-/opt/fliperos/bin/fliperos-buttons}" reorder > /dev/null 2>&1 || true
       return 0
       ;;
     --padkeys)

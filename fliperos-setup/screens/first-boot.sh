@@ -77,14 +77,15 @@ screen_first_boot_update() {
   exec "$SETUP_DIR/fliperos-setup" "${SETUP_ARGS[@]}"
 }
 
-# screen_first_boot_controls: o Button mapping (Setup > Joysticks), que todos
-# os emuladores e o frontend usam. Um mapa que ja existe fica.
+# screen_first_boot_controls: os controles (Setup > Joysticks > Controllers /
+# Arcade panel), que todos os emuladores e o frontend usam. Um mapa que ja
+# existe fica.
 screen_first_boot_controls() {
   [[ -s $BUTTONS_MAP ]] && return 0
   speak "Now the controls."
-  ui_msg "Welcome to FliperOS" "Now the controls: choose each controller in the list, say which player it is and what it is (arcade panel or joypad), and press each control when asked, so every emulator and the FliperOS frontend know them." "" \
-    "Do it again later in Setup > Joysticks > Button mapping."
-  screen_buttons
+  ui_msg "Welcome to FliperOS" "Now the controls: choose each controller in the list, then its Mapping: pick how it looks (an arcade panel or a joypad) and press each control when asked, so every emulator and the FliperOS frontend know them. Its Player is set there too." "" \
+    "Do it again later in Setup > Joysticks > Controllers / Arcade panel."
+  screen_controllers
 }
 
 # screen_first_boot_live: a tela ao vivo do painel web ja sai instalada e

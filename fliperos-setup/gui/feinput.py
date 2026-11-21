@@ -178,6 +178,31 @@ def interface_roles(path=MAP):
     return out
 
 
+# O desenho do controle no guia (a linha "JOGADOR visual INDICE VALOR NOME" do mapa,
+# escolhida em Setup > Joysticks > Controllers / Arcade panel > Visual layout): o
+# formato do painel de arcade, na chave do feview.PANEL_LAYOUTS (o guia so tem
+# os botoes 1 a 6, entao o de 8 desenha o de 6), ou "pad:VIDEOGAME" (fepads.PADS).
+VISUAL_PANEL = {"arcade1": "1", "arcade2": "2", "arcade2v": "2v", "arcade3": "3", "arcade4": "4",
+                "arcade6": "6", "arcade8": "6"}
+VISUAL_COUNTS = (("arcade1", 1), ("arcade2", 2), ("arcade3", 3), ("arcade4", 4), ("arcade6", 6), ("arcade8", 8))
+
+
+def player_visual(path=None, player=1):
+    """O visual do jogador no mapa ("arcade4", "pad:xbox"...); sem a linha, o do tipo
+    dele (joypad: PlayStation; painel: o formato com o maior botao mapeado, 6 sem
+    botao). None se o jogador nao esta no mapa."""
+    mine = [p for p in read_lines(path or MAP) if len(p) >= 4 and p[0] == str(player)]
+    if not mine:
+        return None
+    for parts in mine:
+        if parts[1] == "visual" and (parts[3] in VISUAL_PANEL or parts[3].startswith("pad:")):
+            return parts[3]
+    if any(p[1] == "kind" and p[3] == "pad" for p in mine):
+        return "pad:playstation"
+    top = max([int(p[1][1:]) for p in mine if len(p[1]) == 2 and p[1][0] == "b" and p[1][1] in "12345678"] or [6])
+    return next((name for name, count in VISUAL_COUNTS if count >= top), "arcade8")
+
+
 def joy_name(role):
     """O papel do joypad na tela: ACCEPT, BACK, SOUTH, L1..."""
     return None if role is None else JOY_NAMES.get(role, role.upper())

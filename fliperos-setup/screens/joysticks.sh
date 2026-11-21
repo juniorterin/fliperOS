@@ -1,8 +1,10 @@
 # shellcheck shell=bash
-# Setup > Joysticks: os botoes do painel ou do joypad (lib/buttons.sh), os
-# controles Bluetooth (screens/bluetooth.sh), o layout dos botoes por numero
-# de botoes do jogo, a calibracao do GunCon 2 e de volante/pedais/analogico
-# (config/fliperos-calibrate) e os joysticks da porta paralela (lpt.sh). Os
+# Setup > Joysticks: os controles e paineis de arcade, um de cada vez (Controllers
+# / Arcade panel: o player, o mapa, o layout dos botoes por numero de botoes do
+# jogo e o visual de cada um, lib/buttons.sh), os controles Bluetooth
+# (screens/bluetooth.sh), a calibracao do GunCon 2 e de volante/pedais/analogico
+# (config/fliperos-calibrate). Os joysticks da porta paralela (lpt.sh), a
+# vibracao e a luz dos joypads ficam dentro de Controllers / Arcade panel. Os
 # quirks USB ficam em System (screen_quirks): valem para qualquer aparelho.
 
 CALIBRATE=${CALIBRATE:-/opt/fliperos/bin/fliperos-calibrate}
@@ -15,25 +17,17 @@ screen_joysticks() {
     bt=()
     bluetooth_present && bt=("bluetooth|Bluetooth|Pair, connect and forget Bluetooth controllers.")
     choice=$(ui_menu_hints "Joysticks" "$(buttons_players_line)" "$last" \
-      "buttons|Button mapping (all emulators)|Arcade panel or joypad: press each control when asked." \
+      "controllers|Controllers / Arcade panel|Player, mapping, buttons layout and visual of each one." \
       "${bt[@]}" \
-      "layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel." \
       "guncon|GunCon 2 (light gun)|Calibration, screen flash and how the gun reads dark parts." \
-      "axes|Calibrate wheel, pedals or analog stick|Set the range and the center of each axis." \
-      "padcolor|Controller light: $(padcolor_name)|Light colour of DualSense, DualShock 4 and 8BitDo Ultimate 2." \
-      "haptic|Haptic events|Controller vibration: a preset per event." \
-      "lpt|LPT joysticks (parallel port)|Arcade sticks and console pads wired to the parallel port." \
+      "axes|Wheels, pedals and analog sticks|Set the range and the center of each axis." \
       "return|Return|Back to Setup.") || return 0
     last=$choice
     case $choice in
-      buttons) screen_buttons ;;
+      controllers) screen_controllers ;;
       bluetooth) screen_bluetooth ;;
-      layout) screen_buttons_layout ;;
       guncon) screen_guncon ;;
       axes) screen_calibrate axes ;;
-      padcolor) screen_padcolor ;;
-      haptic) screen_haptic ;;
-      lpt) screen_lpt ;;
       return) return 0 ;;
     esac
   done
@@ -206,100 +200,483 @@ screen_gun_values() {
   done
 }
 
-# screen_buttons: os controles ligados numa lista; o escolhido diz qual
-# jogador ele e (de 1 ao numero de controles ligados) e o tipo: painel de
-# arcade ou JAMMA (com quantos botoes, de 1 a 8) ou joypad (o mapeador do
-# Batocera). Um controle Bluetooth nao tem numero: os Bluetooth tomam os
-# jogadores livres pela ordem em que conectam (fliperos-buttons). Pego e
-# salvo, volta a lista para o proximo. O encoder que se diz teclado tambem
-# esta na lista.
-screen_buttons() {
-  local title="Button mapping" choice last="" line index guid name bus player text tag rc
+# ── Controllers / Arcade panel ───────────────────────────────────
+
+# screen_controllers: Setup > Joysticks > Controllers / Arcade panel. Um submenu com o que
+# se faz com os controles: mapear os controles (as oito vagas de player, abaixo), o encoder
+# de teclado do MAME (P1 e P2 sem mapear nada), o LPT (painel de arcade na porta paralela),
+# a vibracao e a luz dos joypads.
+screen_controllers() {
+  local title="Controllers / Arcade panel" choice last=""
+  while true; do
+    choice=$(ui_menu_hints "$title" "Set up the controllers and what goes with them." "$last" \
+      "map|Map controllers|Give each player a controller and set it up." \
+      "kbenc|Keyboard encoder: $(buttons_keyboard_on && echo on || echo off)|Players 1 and 2 on a MAME keys USB encoder." \
+      "lpt|Add LPT joysticks|Panels and joysticks on the parallel port." \
+      "haptic|Haptic events|Joypad vibration in the games." \
+      "lights|Lights: $(padcolor_name)|The colour of the joypad lights." \
+      "return|Return|Back to Joysticks.") || return 0
+    last=$choice
+    case $choice in
+      map) screen_controllers_map ;;
+      kbenc) screen_keyboard_encoder ;;
+      lpt) screen_lpt ;;
+      haptic) screen_haptic ;;
+      lights) screen_padcolor ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_controllers_map: Map controllers. Oito vagas, Player 1 a Player 8, duas por linha, cada
+# uma um cartao com o controle que e dela (o desenho dele e o nome; BT: Bluetooth) ou vazia.
+# Ao entrar numa vaga o Setup pede para apertar um botao do controle que sera aquele player
+# (screen_controller_slot): o controle apertado toma a vaga (se ela era de outro, os dois
+# trocam) e abre o menu dele (screen_controller). Com o encoder de teclado ligado, P1 e P2 sao
+# dele. Um teclado USB nao e um controle. A lista se refaz sozinha quando um controle e ligado
+# ou tirado (status 124 da interface). A dica de cada vaga e "VISUAL: tipo, ligacao": o visual
+# e o desenho do cartao.
+screen_controllers_map() {
+  local title="Map controllers" choice last="" text rc p tag hint line kind
+  local index guid name bus player visual mapped
   local -a devices entries
   while true; do
-    mapfile -t devices < <(buttons_list)
+    mapfile -t devices < <(buttons_devices)
     entries=()
-    for line in "${devices[@]}"; do
-      IFS='|' read -r index guid name bus player <<< "$line"
-      [[ $index =~ ^[0-9]+$ ]] || continue
-      # O jogador e o BT na frente: um nome comprido e cortado na lista.
-      tag="--"
-      [[ -n $player ]] && tag="P$player"
-      [[ $bus == bluetooth ]] && tag+=" BT"
-      entries+=("$index|$tag $name")
+    for ((p = 1; p <= 8; p++)); do
+      tag="P$p (empty)"
+      hint="Empty. Press ENTER, then a button on the controller that will be player $p."
+      for line in "${devices[@]}"; do
+        IFS='|' read -r index guid name bus player visual mapped <<< "$line"
+        [[ $player == "$p" ]] || continue
+        tag="P$p"
+        [[ $bus == bluetooth ]] && tag+=" BT"
+        tag+=" $name"
+        kind=$(buttons_type_name "$([[ -n $visual ]] && buttons_visual_kind "$visual")")
+        hint="${visual:+$visual: }$kind, $([[ $bus == bluetooth ]] && echo Bluetooth || echo USB)"
+        break
+      done
+      if [[ $tag == "P$p (empty)" ]] && ((p <= 2)) && buttons_keyboard_on; then
+        tag="P$p Keyboard encoder"
+        hint="$(buttons_keyboard_visual): Arcade panel, MAME keys"
+      fi
+      entries+=("$p|$tag|$hint")
     done
-    if ((${#entries[@]})); then
-      text="Choose a controller to map: ${#entries[@]} connected (P = player, -- = not mapped). Wired ones come first; Bluetooth (BT) ones take the players left, by the order they connect."
-    else
-      text="No controller is connected. Connect one (Bluetooth: Joysticks > Bluetooth) and come back."
-    fi
-    # UI_STYLE=controllers: na interface grafica, a lista com o icone de com
-    # fio ou sem fio (o "BT") em cada controle.
-    # Um controle ligado, pareado ou tirado com a lista na tela: ela se refaz
-    # (status 124, com o item que estava sob o cursor).
+    text="Pick a player and press a button on the controller that will be it."
     rc=0
-    choice=$(UI_STYLE=controllers ui_menu "$title" "$text" "$last" "${entries[@]}" \
-      "keyboard|Keyboard encoder (MAME default keys)" "return|Return") || rc=$?
+    choice=$(UI_STYLE=slots ui_menu_hints "$title" "$text" "$last" "${entries[@]}") || rc=$?
     if ((rc == 124)); then
       last=$choice
       continue
     fi
     ((rc == 0)) || return 0
-    case $choice in
-      return) return 0 ;;
-      keyboard)
-        screen_buttons_keyboard
-        continue
-        ;;
-    esac
     last=$choice
-    for line in "${devices[@]}"; do
-      [[ ${line%%|*} == "$choice" ]] && break
-    done
-    IFS='|' read -r index guid name bus player <<< "$line"
-    screen_buttons_device "$title" "$index" "$guid" "$name" "$bus" "$player" "${#entries[@]}"
+    # "assign:VAGA:INDICE": a GUI viu um controle segurado num cartao vazio (a barra encheu).
+    if [[ $choice == assign:* ]]; then
+      IFS=: read -r _ last index <<< "$choice"
+      screen_controller_slot "$last" "$index"
+    elif [[ $choice =~ ^[0-9]+$ ]]; then
+      screen_controller_slot "$choice"
+    fi
   done
 }
 
-# screen_buttons_device TITULO INDICE GUID NOME BARRAMENTO JOGADOR LIGADOS: o
-# jogador do controle (o Bluetooth nao escolhe), o tipo e os comandos; no
-# fim pergunta se grava (buttons_store e buttons_save).
-screen_buttons_device() {
-  local title=$1 index=$2 guid=$3 name=$4 bus=$5 current=$6 count=$7 player kind nbuttons=0 p map shown
-  local -a entries
-  if [[ $bus == bluetooth ]]; then
-    player=bt
-    shown=${current:-$(buttons_next_player)}
-  else
-    ((count < 1)) && count=1
-    ((count > 8)) && count=8
-    ((current > count)) && count=$current
-    entries=()
-    for ((p = 1; p <= count; p++)); do
-      entries+=("$p|Player $p")
-    done
-    player=$(ui_menu "$title" "Which player is $name?" "${current:-1}" "${entries[@]}" "return|Return") || return 0
-    [[ $player =~ ^[0-9]+$ ]] || return 0
-    shown=$player
+# screen_controller_slot JOGADOR [INDICE]: o Player N. Com INDICE (o controle que a tela das vagas
+# viu segurado ate a barra encher), ele toma a vaga sem perguntar: se a vaga era de outro, os
+# dois trocam, e a lista das vagas se refaz com o cartao dele. So se o controle ainda nao esta
+# pronto (sem mapa ou sem visual) o menu dele abre, para configurar; pronto, fica na lista. Sem INDICE, uma vaga com controle abre o menu dele; uma vazia,
+# no Setup em texto (sem a barra), pede para apertar um botao do controle que sera esse player. Um
+# controle sem mapa nao toma a vaga sem ser configurado: oferece o tipo, o layout e o mapeamento.
+screen_controller_slot() {
+  local n=$1 title="Player $1" line="" index guid name bus player visual mapped got rc=0 found out
+  line=$(buttons_devices | awk -F'|' -v p="$n" '$5 == p { print; exit }')
+  # P1 e P2 do encoder de teclado: o menu dele, nao ha controle para apertar.
+  if [[ -z $line ]] && ((n <= 2)) && buttons_keyboard_on; then
+    screen_keyboard_encoder
+    return 0
   fi
-  kind=$(ui_menu_hints "$title" "$name: what kind of controller is it?" "$([[ $bus == bluetooth ]] && echo pad || echo arcade)" \
-    "arcade|Arcade stick or JAMMA panel|A stick and 1 to 8 buttons, on an encoder or a JAMMA board." \
-    "pad|Joypad (console controller)|Xbox, PlayStation, Nintendo, 8BitDo...: USB or Bluetooth." \
-    "return|Return|Back to the controllers.") || return 0
-  case $kind in
-    arcade)
-      entries=()
-      for ((p = 1; p <= BUTTONS_MAX; p++)); do
-        entries+=("$p|$p button$( ((p > 1)) && echo s)")
-      done
-      # UI_STYLE=panel: na interface grafica, o painel de cada numero desenhado.
-      nbuttons=$(UI_STYLE=panel ui_menu "$title" "How many buttons does it have? Start and Coin do not count." \
-        "$(buttons_panel_count)" "${entries[@]}" "return|Return") || return 0
-      [[ $nbuttons =~ ^[1-8]$ ]] || return 0
+  if [[ ${2:-} =~ ^[0-9]+$ ]]; then
+    index=$2
+  elif [[ -n $line ]]; then
+    screen_controller "$line"
+    return 0
+  elif ui_gui_alive; then
+    # Na interface grafica a vaga vazia se define segurando um botao: nada a fazer aqui.
+    return 0
+  else
+    ui_info "$title" "$(ui_c "$C_PINK" "Press a button on the controller that will be player $n")" "" \
+      "Esc goes back."
+    padkeys_off
+    got=$(ui_capture_wait buttons_capture 600) || rc=$?
+    padkeys_on
+    ui_flush_input
+    ((rc == 0)) || return 0
+    read -r index _ <<< "$got"
+  fi
+  found=$(buttons_devices | awk -F'|' -v i="$index" '$1 == i { print; exit }')
+  if [[ -z $found ]]; then
+    ui_msg "$title" "That controller is not in the list. Try again."
+    return 0
+  fi
+  IFS='|' read -r index guid name bus player visual mapped <<< "$found"
+  if [[ $player != "$n" ]]; then
+    out=$(buttons_set_player "$index" "$n") || true
+    case $out in
+      ok) buttons_apply || ui_msg "$title" "$(ui_bad "Could not save the mapping.")" "Details in $FLIPEROS_LOG." ;;
+      error=unmapped)
+        if ui_yesno "$title" "$name has no mapping yet, and a player needs one. Set it up now?"; then
+          screen_controller_guided "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" "$n"
+        fi
+        ;;
+      *)
+        ui_msg "$title" "$(ui_bad "Could not change the player.")" "Details in $FLIPEROS_LOG."
+        return 0
+        ;;
+    esac
+  fi
+  found=$(buttons_devices | awk -F'|' -v i="$index" -v g="$guid" '$1 == i && $2 == g { print; exit }')
+  [[ -n $found ]] || return 0
+  IFS='|' read -r _ _ _ _ _ visual mapped <<< "$found"
+  # Segurado na barra e ja configurado (mapa e visual): a vaga so muda de cartao, sem entrar nele.
+  [[ -n ${2:-} && $mapped == 1 && -n $visual ]] && return 0
+  screen_controller "$found"
+  return 0
+}
+
+# screen_controller LINHA: o menu de um controle (a linha do buttons_devices): o
+# player, o mapa, o layout dos botoes dos jogos e o visual (o desenho do guia do
+# frontend, se ele for o P1). Cada um muda sozinho, sem passar pelos outros.
+screen_controller() {
+  local line=$1 title choice last="" index guid name bus player visual mapped text shown kind
+  local -a entries
+  IFS='|' read -r index guid name bus player visual mapped <<< "$line"
+  title=$name
+  while true; do
+    # O controle agora (o player e o visual mudam aqui dentro).
+    line=$(buttons_devices | awk -F'|' -v i="$index" -v g="$guid" '$1 == i && $2 == g { print; exit }')
+    if [[ -z $line ]]; then
+      ui_msg "$title" "This controller is not connected any more."
+      return 0
+    fi
+    IFS='|' read -r index guid name bus player visual mapped <<< "$line"
+    shown=${player:-none}
+    entries=()
+    # Na ordem em que se faz: o player, o tipo (painel de arcade ou joypad), o layout
+    # visual desse tipo e so depois o mapeamento.
+    kind=""
+    [[ -n $visual ]] && kind=$(buttons_visual_kind "$visual")
+    entries+=("player|Player: $shown|Which player it is. If it is taken, they swap.")
+    entries+=("type|Type: $(buttons_type_name "$kind")|Arcade panel or joypad. Set it first.")
+    entries+=("visual|Visual layout: $([[ -n $visual ]] && buttons_visual_field "$visual" 1 || echo "not set")|The drawing the frontend guide uses for player 1.")
+    entries+=("mapping|Mapping: $([[ $mapped == 1 ]] && echo done || echo "not mapped")|Press each control when asked, or change just one button.")
+    [[ $kind == pad ]] || entries+=("layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel.")
+    entries+=("padtest|Test controller|See every button, stick and trigger answer live.")
+    text="$([[ $bus == bluetooth ]] && echo "A Bluetooth controller" || echo "A USB controller"). Each item is set on its own."
+    choice=$(ui_menu_hints "$title" "$text" "$last" "${entries[@]}" "return|Return|Back to the controllers.") || return 0
+    last=$choice
+    case $choice in
+      player) screen_controller_player "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" "$mapped" ;;
+      type) screen_controller_type "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" "$mapped" ;;
+      visual) screen_controller_visual "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" "$mapped" ;;
+      mapping) screen_controller_mapping "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" "$mapped" ;;
+      layout) screen_buttons_layout ;;
+      padtest) screen_controller_test "$title" "$index" "$name" "$bus" "$visual" ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_controller_test TITULO INDICE NOME BARRAMENTO VISUAL: o testador do controle
+# (gui/padtest.py): cada botao, direcao, analogico e gatilho acende ao vivo, pelo mapa dele. Um
+# joypad mostra tambem os gatilhos (a barra enche com o eixo) e os analogicos (o ponto anda); um
+# painel, a alavanca e os botoes do formato dele. Sai com o Esc ou segurando o Start. A
+# tela e desenhada pela interface grafica: no Setup em texto (SSH) nao ha o que mostrar.
+screen_controller_test() {
+  local title=$1 index=$2 name=$3 bus=$4 visual=$5 binds bg rc=0
+  if ! ui_gui_alive; then
+    ui_msg "$title" "The controller test is drawn by the graphical Setup, on the monitor." "" \
+      "It is not available in the text Setup."
+    return 0
+  fi
+  [[ -n $visual ]] || visual=$([[ $bus == bluetooth ]] && echo pad:playstation || echo arcade6)
+  binds=$(buttons_binds "$index" 2> /dev/null) || binds=""
+  if [[ -z $binds ]]; then
+    ui_msg "$title" "$name is not mapped yet: the test shows its raw buttons and axes." "" \
+      "Map it for the right buttons, sticks and triggers."
+  fi
+  bg=$(cat "$(dirname "$UI_GUI_DIR")/gui-background" 2> /dev/null)
+  ui_clear
+  padkeys_off
+  FLIPEROS_GUI_BG=$bg FLIPEROS_GUI_ORIENTATION=$(conf_get orientation 2> /dev/null || echo horizontal) \
+    ui_text python3 "$SETUP_DIR/gui/padtest.py" --index "$index" --visual "$visual" --binds "$binds" \
+    --name "$name" < /dev/tty > /dev/tty 2>> "$FLIPEROS_LOG" || rc=1
+  padkeys_on
+  ui_palette > /dev/tty
+  ui_flush_input
+  ((rc == 0)) || ui_msg "$title" "$(ui_bad "The controller test could not open.")" "Details in $FLIPEROS_LOG."
+}
+
+# screen_controller_player TITULO INDICE GUID NOME BARRAMENTO JOGADOR VISUAL MAPA: o
+# player do controle (nenhum ou de 1 a 8; o Bluetooth tambem "Automatic": o proximo
+# livre pela ordem de conexao). Quem tem o player troca com ele (se o controle nao
+# tinha player, o outro fica sem, com o mapa guardado). Um controle sem mapa nao
+# recebe player: oferece mapear.
+screen_controller_player() {
+  local title=$1 index=$2 guid=$3 name=$4 bus=$5 player=$6 visual=$7 mapped=$8 choice out p
+  local -a entries=("-|No player")
+  for ((p = 1; p <= 8; p++)); do
+    entries+=("$p|Player $p")
+  done
+  [[ $bus == bluetooth ]] && entries+=("auto|Automatic: the next free player")
+  choice=$(ui_radio "$title" "Which player is $name? If another controller has it, the two swap (if $name has no player, the other is left with none, its mapping kept)." \
+    "${player:--}" "${entries[@]}") || return 0
+  [[ $choice == "${player:--}" ]] && return 0
+  out=$(buttons_set_player "$index" "$choice") || true
+  case $out in
+    ok)
+      buttons_apply || ui_msg "$title" "$(ui_bad "Could not save the mapping.")" "Details in $FLIPEROS_LOG."
+      case $choice in
+        -) ui_msg "$title" "$name has no player now. Its mapping is kept." ;;
+        auto) ui_msg "$title" "$name takes the next free player when it connects." ;;
+        *) ui_msg "$title" "$name is player $choice. The emulators use it from the next game." ;;
+      esac
       ;;
-    pad) ;;
-    *) return 0 ;;
+    error=unmapped)
+      if ui_yesno "$title" "$name has no mapping yet, and a player needs one. Map it now?"; then
+        # Na ordem: o tipo, o layout visual e so entao o mapeamento (com o player pedido).
+        screen_controller_guided "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" "$choice"
+      fi
+      ;;
+    *) ui_msg "$title" "$(ui_bad "Could not change the player.")" "Details in $FLIPEROS_LOG." ;;
   esac
+}
+
+# screen_controller_guided TITULO INDICE GUID NOME BARRAMENTO JOGADOR VISUAL JOGADOR_NOVO: o
+# controle configurado do comeco, na ordem: o tipo (painel de arcade ou joypad), o layout
+# visual desse tipo e so entao o mapeamento. Cada passo comeca no que o controle ja tem (o
+# Esc em qualquer um para tudo). Usado quando o mapeamento e pedido por outro caminho, como
+# dar um player a um controle que ainda nao tem mapa.
+screen_controller_guided() {
+  local title=$1 index=$2 guid=$3 name=$4 bus=$5 player=$6 visual=$7 want=$8 kind choice
+  kind=arcade
+  if [[ $bus != keyboard ]]; then
+    kind=$(screen_controller_pick_type "$title" "$name" "$bus" "$visual") || return 0
+    [[ $kind == return ]] && return 0
+  fi
+  choice=$(screen_controller_pick_visual "$title" "$name" "$bus" "$visual" "$kind") || return 0
+  [[ $choice == return ]] && return 0
+  buttons_set_visual "$index" "$choice" > /dev/null || true
+  screen_controller_map_all "$title" "$index" "$guid" "$name" "$bus" "$player" "$choice" "$want"
+}
+
+# screen_controller_mapping TITULO INDICE GUID NOME BARRAMENTO JOGADOR VISUAL MAPA: o
+# mapa do controle (para todos os emuladores): todos os botoes, um so, ou os botoes
+# da interface (aceitar e voltar dos menus).
+screen_controller_mapping() {
+  local title=$1 index=$2 guid=$3 name=$4 bus=$5 player=$6 visual=$7 mapped=$8 choice last=""
+  local -a entries
+  while true; do
+    entries=("map|Map all buttons|Press each control when asked.")
+    if ((mapped)); then
+      entries+=("one|Change one button|Pick a control and press its new button."
+        "menu|Menu buttons|The buttons that accept and go back in the menus.")
+    fi
+    choice=$(ui_menu_hints "$title" "$name: the mapping is used by all the emulators." "$last" "${entries[@]}" \
+      "return|Return|Back to the controller.") || return 0
+    last=$choice
+    case $choice in
+      map)
+        screen_controller_map_all "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" ""
+        return 0
+        ;;
+      one) screen_controller_one_button "$title" "$index" "$name" "$player" "$visual" ;;
+      menu) screen_controller_menu_buttons "$title" "$index" "$name" "$player" "$visual" ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_controller_pick_type TITULO NOME BARRAMENTO VISUAL: o tipo do controle, um painel
+# de arcade ou um joypad (um seletor < desenho > na interface grafica); imprime arcade, pad
+# ou return. Comeca no tipo do visual de agora (sem visual, o joypad num Bluetooth).
+screen_controller_pick_type() {
+  local title=$1 name=$2 bus=$3 visual=$4 current=arcade
+  if [[ -n $visual ]]; then
+    current=$(buttons_visual_kind "$visual")
+  elif [[ $bus == bluetooth ]]; then
+    current=pad
+  fi
+  UI_STYLE=type ui_menu_hints "$title" "What is $name: an arcade panel or a joypad?" "$current" \
+    "arcade|Arcade panel|A stick and buttons: an arcade encoder or JAMMA." \
+    "pad|Joypad|A console controller, on USB or Bluetooth." \
+    "return|Return|Back to the controller."
+}
+
+# screen_controller_pick_visual TITULO NOME BARRAMENTO ATUAL [TIPO]: o menu dos visuais do
+# TIPO (arcade: os formatos de painel; pad: os joypads dos videogames; sem TIPO, o do visual
+# de agora); imprime o escolhido. Um teclado so tem os de painel.
+screen_controller_pick_visual() {
+  local title=$1 name=$2 bus=$3 current=$4 kind=${5:-} entry
+  local -a entries=()
+  if [[ -z $kind ]]; then
+    kind=arcade
+    [[ -n $current ]] && kind=$(buttons_visual_kind "$current")
+  fi
+  [[ $bus == keyboard ]] && kind=arcade
+  for entry in "${BUTTONS_VISUALS[@]}"; do
+    [[ $(buttons_visual_kind "${entry%%|*}") == "$kind" ]] && entries+=("$entry")
+  done
+  # O atual so se for do mesmo tipo; senao o primeiro (o painel de 6 botoes, o PlayStation).
+  if [[ -z $current || $(buttons_visual_kind "$current") != "$kind" ]]; then
+    current=${entries[0]%%|*}
+  fi
+  # UI_STYLE=visual: na interface grafica, um seletor < desenho > (esquerda e direita
+  # trocam o painel ou o joypad).
+  UI_STYLE=visual ui_menu_hints "$title" "$name: the frontend guide draws this when it is player 1." \
+    "$current" "${entries[@]}" "return|Return|Back to the controller."
+}
+
+# screen_controller_type TITULO INDICE GUID NOME BARRAMENTO JOGADOR VISUAL MAPA: o tipo do
+# controle, antes do layout e do mapeamento. Mudar o tipo leva direto a escolher o layout
+# visual dele (um painel ou um joypad); o mesmo tipo nao muda nada.
+screen_controller_type() {
+  local title=$1 index=$2 guid=$3 name=$4 bus=$5 player=$6 visual=$7 mapped=$8 kind
+  kind=$(screen_controller_pick_type "$title" "$name" "$bus" "$visual") || return 0
+  [[ $kind == return ]] && return 0
+  if [[ -n $visual && $(buttons_visual_kind "$visual") == "$kind" ]]; then
+    return 0
+  fi
+  screen_controller_visual "$title" "$index" "$guid" "$name" "$bus" "$player" "$visual" "$mapped" "$kind"
+}
+
+# screen_controller_visual TITULO INDICE GUID NOME BARRAMENTO JOGADOR VISUAL MAPA [TIPO]: o
+# visual do controle, entre os do tipo dele (sem tipo ainda, pergunta o tipo antes). Pode
+# faltar mapear: os botoes novos de um painel maior, ou tudo (de painel para joypad);
+# oferece na hora.
+screen_controller_visual() {
+  local title=$1 index=$2 guid=$3 name=$4 bus=$5 player=$6 visual=$7 mapped=$8 kind=${9:-} choice out
+  if [[ -z $kind ]]; then
+    if [[ -n $visual ]]; then
+      kind=$(buttons_visual_kind "$visual")
+    elif [[ $bus == keyboard ]]; then
+      kind=arcade
+    else
+      kind=$(screen_controller_pick_type "$title" "$name" "$bus" "") || return 0
+      [[ $kind == return ]] && return 0
+    fi
+  fi
+  choice=$(screen_controller_pick_visual "$title" "$name" "$bus" "$visual" "$kind") || return 0
+  [[ $choice == return || $choice == "$visual" ]] && return 0
+  out=$(buttons_set_visual "$index" "$choice") || true
+  case $out in
+    error=*)
+      ui_msg "$title" "$(ui_bad "Could not change the visual layout.")" "Details in $FLIPEROS_LOG."
+      return 0
+      ;;
+  esac
+  buttons_apply || true
+  case $out in
+    none) ui_msg "$title" "Saved. The frontend guide draws $(buttons_visual_field "$choice" 1) when $name is player 1." ;;
+    all)
+      if ((mapped)); then
+        ui_yesno "$title" "$(buttons_visual_field "$choice" 1) needs its own mapping. Map $name now?" &&
+          screen_controller_map_all "$title" "$index" "$guid" "$name" "$bus" "$player" "$choice" ""
+      else
+        ui_msg "$title" "Saved. $name has no mapping yet: use Mapping when you are ready."
+      fi
+      ;;
+    buttons*)
+      if ui_yesno "$title" "$(buttons_visual_field "$choice" 1) has buttons the mapping does not: ${out#buttons }. Map them now?"; then
+        screen_controller_map_missing "$title" "$index" "$name" "$player" "$choice" ${out#buttons }
+      fi
+      ;;
+  esac
+}
+
+# screen_keyboard_encoder: o encoder de teclado (I-PAC e afins), que manda as teclas
+# padrao do MAME de dois jogadores. Ligado, ele e o P1 e o P2 em todos os emuladores,
+# sem mapear nada (quem era P1 ou P2 passa para o proximo player livre); desligado,
+# saem so os dois jogadores de teclado. Com ele ligado, tambem escolhe o visual e a
+# posicao dos botoes dos jogos (o visual do P1 e o do guia do frontend).
+screen_keyboard_encoder() {
+  local title="Keyboard encoder" choice last="" on visual out
+  local -a entries
+  while true; do
+    entries=()
+    if buttons_keyboard_on; then
+      on=1
+      visual=$(buttons_keyboard_visual)
+      entries+=("toggle|MAME keyboard encoder: on|On: P1 and P2 use the MAME keys in all emulators.")
+      entries+=("layout|Buttons layout (games of 1 to 5 buttons)|Where the buttons of 1 to 5-button games go on the panel.")
+      entries+=("visual|Visual layout: $(buttons_visual_field "${visual:-arcade6}" 1)|The drawing the frontend guide uses for player 1.")
+    else
+      on=0
+      entries+=("toggle|MAME keyboard encoder: off|Turn it on if the encoder sends the MAME keys.")
+    fi
+    choice=$(ui_menu_hints "$title" "An arcade encoder that acts as a USB keyboard and sends the MAME keys of two players (player 1: arrows, Ctrl, Alt, Space, Shift, Z, X, 1 start, 5 coin). On, nothing needs mapping." \
+      "$last" "${entries[@]}" "return|Return|Back to the controllers.") || return 0
+    last=$choice
+    case $choice in
+      toggle)
+        if ((on)); then
+          out=$(buttons_set_keyboard mame off "Keyboard encoder") || true
+          [[ $out == ok ]] || { ui_msg "$title" "$(ui_bad "Could not turn the encoder off.")" "Details in $FLIPEROS_LOG."; continue; }
+          buttons_apply || true
+          ui_msg "$title" "The encoder is off: players 1 and 2 are free."
+        else
+          out=$(buttons_set_keyboard mame on "Keyboard encoder") || true
+          [[ $out == ok ]] || { ui_msg "$title" "$(ui_bad "Could not turn the encoder on.")" "Details in $FLIPEROS_LOG."; continue; }
+          buttons_apply || ui_msg "$title" "$(ui_bad "Could not save the keys.")" "Details in $FLIPEROS_LOG."
+          ui_msg "$title" "The encoder is on: players 1 and 2 use the MAME keys in all the emulators." "" \
+            "A controller that was player 1 or 2 moved to the next free player."
+        fi
+        ;;
+      layout) screen_buttons_layout ;;
+      visual)
+        choice=$(screen_controller_pick_visual "$title" "The keyboard encoder" keyboard "$visual") || continue
+        [[ $choice == return || $choice == "$visual" ]] && continue
+        out=$(buttons_set_visual -1 "$choice") || true
+        if [[ $out == error=* ]]; then
+          ui_msg "$title" "$(ui_bad "Could not change the visual layout.")" "Details in $FLIPEROS_LOG."
+        else
+          buttons_apply || true
+          ui_msg "$title" "Saved. The frontend guide draws $(buttons_visual_field "$choice" 1) when the encoder is player 1."
+        fi
+        ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_controller_map_all TITULO INDICE GUID NOME BARRAMENTO JOGADOR VISUAL JOGADOR_NOVO:
+# o mapa de todos os botoes do visual do controle (o painel com os botoes dele ou o
+# mapeador de joypad do Batocera), os botoes da interface, e grava. O player e o que
+# ele tem (ou JOGADOR_NOVO, o que a pessoa acabou de pedir); sem player o mapa fica
+# guardado e oferece dar o proximo livre. Um controle sem visual escolhe um antes.
+screen_controller_map_all() {
+  local title=$1 index=$2 guid=$3 name=$4 bus=$5 player=$6 visual=$7 want=$8
+  local kind nbuttons=6 map shown target out next
+  if [[ -z $visual ]]; then
+    # Sem tipo ainda: o tipo (painel ou joypad), depois o layout dele, e so entao o mapeamento.
+    kind=arcade
+    if [[ $bus != keyboard ]]; then
+      kind=$(screen_controller_pick_type "$title" "$name" "$bus" "") || return 0
+      [[ $kind == return ]] && return 0
+    fi
+    visual=$(screen_controller_pick_visual "$title" "$name" "$bus" "" "$kind") || return 0
+    [[ $visual == return ]] && return 0
+    buttons_set_visual "$index" "$visual" > /dev/null || true
+  fi
+  kind=$(buttons_visual_kind "$visual")
+  [[ $kind == arcade ]] && nbuttons=$(buttons_visual_count "$visual")
+  if [[ $bus == bluetooth ]]; then
+    target=bt
+  else
+    target=${want:-${player:--}}
+    [[ $target == auto ]] && target=${player:--}
+  fi
+  shown=${want:-${player:-$(buttons_next_player)}}
+  [[ $shown =~ ^[0-9]+$ ]] || shown=$(buttons_next_player)
   map=$(mktemp)
   BUTTONS_SUMMARY="" BUTTONS_CANCELLED=0
   rm -f "$BUTTONS_CANCEL"
@@ -328,18 +705,156 @@ screen_buttons_device() {
     return 0
   fi
   if ui_yesno "$title" "Save $name for all emulators? Controls mapped: ${BUTTONS_SUMMARY%, }."; then
-    buttons_store "$map" "$player" "$index" "$guid"
-    if buttons_save "$BUTTONS_MAP"; then
-      if [[ $player == bt ]]; then
-        ui_msg "$title" "Saved. It takes the next free player when it connects (now player $shown)."
-      else
-        ui_msg "$title" "Saved as player $player. The emulators use it from the next game."
-      fi
+    if buttons_store "$map" "$target" "$index" "$guid" && { buttons_apply || [[ ! -s $BUTTONS_MAP ]]; }; then
+      case $target in
+        bt) ui_msg "$title" "Saved. It takes the next free player when it connects (now player $shown)." ;;
+        -)
+          next=$(buttons_next_player)
+          if ui_yesno "$title" "Saved without a player. Make $name player $next?"; then
+            out=$(buttons_set_player "$index" "$next") || true
+            [[ $out == ok ]] && buttons_apply
+          fi
+          ;;
+        *) ui_msg "$title" "Saved as player $target. The emulators use it from the next game." ;;
+      esac
     else
       ui_msg "$title" "$(ui_bad "Could not save the mapping.")" "Details in $FLIPEROS_LOG."
     fi
   fi
   rm -f "$map"
+}
+
+# screen_controller_capture_one TITULO JOGADOR INDICE NOME TIPO BOTOES COMANDO: pede um
+# comando so (o painel ou o joypad desenhado) e poe o elemento apertado em
+# CONTROLLER_ELEMENT. Status 1: nada apertado (pulado); 3: o Esc.
+screen_controller_capture_one() {
+  local title=$1 p=$2 index=$3 name=$4 kind=$5 nbuttons=$6 control=$7 got rc=0 label
+  CONTROLLER_ELEMENT=""
+  padkeys_off
+  rm -f "$BUTTONS_CANCEL"
+  if [[ $kind == pad ]]; then
+    label=$(buttons_pad_label "$control" generic)
+    ui_pad_capture "$title" "$p" "$control" 1 generic "$name" ||
+      ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press $label")" "" "Hold any button to skip it, Esc cancels."
+    got=$(ui_capture_wait buttons_capture "$PAD_TIMEOUT" "$PAD_HOLD" "$index") || rc=$?
+  else
+    ui_capture "$title" "$p" "$control" 1 1 8 "$nbuttons" ||
+      ui_info "$title" "$(ui_c "$C_PINK" "Player $p: press ${BUTTON_LABELS[$control]:-$control}")" "" \
+        "Wait 8 seconds to skip it, Esc cancels."
+    got=$(ui_capture_wait buttons_capture 8 "" "$index") || rc=$?
+  fi
+  padkeys_on
+  rm -f "$BUTTONS_CANCEL"
+  ui_flush_input
+  ((rc == 0)) || return "$rc"
+  read -r _ CONTROLLER_ELEMENT _ <<< "$got"
+}
+
+# screen_controller_set_button TITULO INDICE COMANDO: o botao que acabou de ser
+# apertado (CONTROLLER_ELEMENT) no COMANDO do controle; avisa se ja e de outro.
+screen_controller_set_button() {
+  local title=$1 index=$2 control=$3 out label
+  out=$(buttons_set_button "$index" "$control" "$CONTROLLER_ELEMENT") || true
+  case $out in
+    ok) buttons_apply || ui_msg "$title" "$(ui_bad "Could not save the mapping.")" "Details in $FLIPEROS_LOG." ;;
+    error=used:*)
+      label=${BUTTON_LABELS[${out#error=used:}]:-${out#error=used:}}
+      ui_msg "$title" "That button is already $label." "Press another one."
+      ;;
+    *) ui_msg "$title" "$(ui_bad "Could not change the button.")" "Details in $FLIPEROS_LOG." ;;
+  esac
+}
+
+# screen_controller_one_button TITULO INDICE NOME JOGADOR VISUAL: a lista dos comandos
+# do controle com o botao de cada um; o escolhido espera o novo botao.
+screen_controller_one_button() {
+  local title=$1 index=$2 name=$3 player=$4 visual=$5 kind n control element choice last="" rc shown
+  local -A current
+  local -a entries controls
+  kind=$(buttons_visual_kind "$visual")
+  n=$(buttons_visual_count "$visual")
+  shown=${player:-$(buttons_next_player)}
+  while true; do
+    current=()
+    while read -r control element; do
+      current[$control]=$element
+    done < <(buttons_binds "$index")
+    if [[ $kind == pad ]]; then
+      controls=("${PAD_CONTROLS[@]}")
+    else
+      read -r -a controls <<< "$(buttons_arcade_controls "$n")"
+    fi
+    entries=()
+    for control in "${controls[@]}"; do
+      if [[ $kind == pad ]]; then
+        entries+=("$control|${PAD_LABELS[$control]:-$control}: ${current[$control]:-none}")
+      else
+        entries+=("$control|${BUTTON_LABELS[$control]:-$control}: ${current[$control]:-none}")
+      fi
+    done
+    choice=$(ui_menu "$title" "Pick the control to change, then press its new button." "$last" "${entries[@]}" \
+      "return|Return") || return 0
+    [[ $choice == return ]] && return 0
+    last=$choice
+    rc=0
+    screen_controller_capture_one "$title" "$shown" "$index" "$name" "$kind" "$n" "$choice" || rc=$?
+    case $rc in
+      0) screen_controller_set_button "$title" "$index" "$choice" ;;
+      3) ui_msg "$title" "Cancelled: nothing was changed." ;;
+      *) ui_msg "$title" "Nothing was pressed: nothing was changed." ;;
+    esac
+  done
+}
+
+# screen_controller_map_missing TITULO INDICE NOME JOGADOR VISUAL COMANDO...: so os
+# comandos que faltam (os botoes novos de um painel maior), um por vez.
+screen_controller_map_missing() {
+  local title=$1 index=$2 name=$3 player=$4 visual=$5 control rc shown n
+  shift 5
+  n=$(buttons_visual_count "$visual")
+  shown=${player:-$(buttons_next_player)}
+  for control in "$@"; do
+    rc=0
+    screen_controller_capture_one "$title" "$shown" "$index" "$name" arcade "$n" "$control" || rc=$?
+    case $rc in
+      0) screen_controller_set_button "$title" "$index" "$control" ;;
+      3) ui_msg "$title" "Cancelled: the rest was not mapped."; return 0 ;;
+    esac
+  done
+}
+
+# screen_controller_menu_buttons TITULO INDICE NOME JOGADOR VISUAL: o botao de aceitar e o
+# de voltar dos menus (screen_buttons_interface), sem refazer o resto do mapa.
+screen_controller_menu_buttons() {
+  local title=$1 index=$2 name=$3 player=$4 visual=$5 kind shown map control element which changed=0
+  kind=$(buttons_visual_kind "$visual")
+  shown=${player:-$(buttons_next_player)}
+  map=$(mktemp)
+  while read -r control element; do
+    printf '%s %s %s %s %s\n' "$shown" "$control" "$index" "$element" "$name" >> "$map"
+  done < <(buttons_binds "$index")
+  BUTTONS_CANCELLED=0
+  rm -f "$BUTTONS_CANCEL"
+  padkeys_off
+  screen_buttons_interface "$title" "$shown" "$map" "$index" "$name" "$kind"
+  padkeys_on
+  rm -f "$BUTTONS_CANCEL"
+  ui_flush_input
+  if ((BUTTONS_CANCELLED)); then
+    ui_msg "$title" "Cancelled: nothing was changed."
+    rm -f "$map"
+    return 0
+  fi
+  # So o que foi apertado vira linha accept ou cancel no fim do mapa de trabalho.
+  for which in accept cancel; do
+    element=$(awk -v w="$which" '$2 == w { e = $4 } END { print e }' "$map")
+    [[ -n $element ]] || continue
+    CONTROLLER_ELEMENT=$element
+    screen_controller_set_button "$title" "$index" "$which" && changed=1
+  done
+  rm -f "$map"
+  ((changed)) && ui_msg "$title" "Saved. The menus use these buttons from now on."
+  return 0
 }
 
 # screen_buttons_interface TITULO JOGADOR MAPA INDICE NOME TIPO: os botoes da
@@ -521,23 +1036,6 @@ screen_buttons_pad_known() {
   return 0
 }
 
-# screen_buttons_keyboard: o encoder que se diz teclado, no layout do MAME
-# (lib/buttons.sh): so o numero de jogadores, nada a apertar.
-screen_buttons_keyboard() {
-  local title="Button mapping" players
-  players=$(ui_menu "$title" \
-    "The MAME default keys for each player in all emulators (player 1: arrows, Ctrl, Alt, Space, Shift, Z, X, 1 start, 5 coin). How many players?" \
-    "" "1|1 player" "2|2 players" "3|3 players" "4|4 players" "return|Return") || return 0
-  [[ $players == return ]] && return 0
-  ui_info "$title" "Saving the keys for all emulators..."
-  if buttons_keyboard "$players"; then
-    ui_msg "$title" "Saved. The emulators use the MAME keys from the next game." "" \
-      "Players 3 and 4 have keys for the stick and buttons 1 to 3 only, as in MAME."
-  else
-    ui_msg "$title" "$(ui_bad "Could not save the keys.")" "Details in $FLIPEROS_LOG."
-  fi
-}
-
 # screen_buttons_layout: de cada numero de botoes (1 a 5), onde ficam no
 # painel os botoes do jogo (lib/buttons.sh). O painel e o do Button mapping:
 # sem ele nao ha o que arrumar.
@@ -546,7 +1044,7 @@ screen_buttons_layout() {
   local -a order
   if [[ ! -s $BUTTONS_MAP ]]; then
     ui_msg "$title" "The panel is not mapped yet." "" \
-      "Do Button mapping first: the layout moves the buttons mapped there."
+      "Map a controller first (Controllers / Arcade panel): the layout moves the buttons mapped there."
     return 0
   fi
   while true; do
@@ -557,7 +1055,7 @@ screen_buttons_layout() {
     done
     # UI_STYLE=layout: na interface grafica, o painel de cada um como icone.
     choice=$(UI_STYLE=layout ui_menu "$title" \
-      "Where the buttons of a game go on the panel, by how many buttons the game uses. For GroovyMAME, the MAME cores of RetroArch, Model 2 and Model 3." \
+      "Where the buttons of a game go on the panel, by how many buttons the game uses." \
       "$last" "${entries[@]}" "return|Return") || return 0
     [[ $choice == return ]] && return 0
     last=$choice

@@ -1357,9 +1357,12 @@ print("ok", T.WIDTH, T.HEIGHT)
         self.assertIn('"joysticks|Joysticks|', menu)
         screens = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
         # A GunCon 2 tem um menu proprio (screen_guncon), com a calibracao nele.
-        for item in ('guncon|GunCon 2 (light gun)', 'axes|Calibrate wheel', 'lpt|LPT joysticks',
+        for item in ('guncon|GunCon 2 (light gun)', 'axes|Wheels, pedals and analog sticks',
                      '"calibrate|Calibrate|', 'calibrate) screen_calibrate_guns ;;'):
             self.assertIn(item, screens)
+        # O LPT (painel de arcade na porta paralela) fica dentro do Controllers / Arcade panel.
+        self.assertIn('lpt|Add LPT joysticks|', screens)
+        self.assertIn('lpt) screen_lpt ;;', screens)
         # Os quirks valem para qualquer USB (discos tambem): em System.
         self.assertIn('"quirks|Quirks (USB device fixes)|', menu)
         self.assertIn('quirks) screen_quirks ;;', menu)
@@ -2772,6 +2775,73 @@ class HbGroovymameTests(unittest.TestCase):
                 self.assertTrue((tmp / folder).is_dir(), folder)
 
 
+class PadReorderTests(unittest.TestCase):
+    """Os controles USB religados na ordem dos players ao abrir um jogo (fliperos-buttons reorder): o Flycast e o
+    Dojo dao a porta 1 ao primeiro controle que o Linux lista, e o SDL deles vem dentro do executavel."""
+
+    def module(self):
+        loader = importlib.machinery.SourceFileLoader('fliperos_buttons_reorder', str(ROOT / 'config/fliperos-buttons'))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        return mod
+
+    DEVICES = {0: ('g', 'Xbox A', 11, 6, [], None, None, '/dev/input/event8'),
+               1: ('g', 'Xbox B', 11, 6, [], None, None, '/dev/input/event9'),
+               2: ('h', '8BitDo', 15, 6, [], None, None, '/dev/input/event18')}
+    USB = {'/dev/input/event8': '2-2.2', '/dev/input/event9': '2-2.3', '/dev/input/event18': '2-2.1'}
+
+    def test_the_players_come_first_in_their_order(self):
+        mod = self.module()
+        usb = self.USB.get
+        # O 8BitDo (o indice 2 do Linux) e o player 1, o Xbox B o 2: religa o 8BitDo, o Xbox B e por fim o Xbox A.
+        players = {1: {'b1': (2, 'b0')}, 2: {'b1': (1, 'b0')}}
+        self.assertEqual(mod.reorder_plan(players, self.DEVICES, usb), ['2-2.1', '2-2.3', '2-2.2'])
+        # Ja na ordem (o Xbox A e o player 1, o Xbox B o 2, o 8BitDo fora): nada a fazer.
+        players = {1: {'b1': (0, 'b0')}, 2: {'b1': (1, 'b0')}}
+        self.assertEqual(mod.reorder_plan(players, self.DEVICES, usb), [])
+        # Sem mapa, ou com um USB so, nada.
+        self.assertEqual(mod.reorder_plan({}, self.DEVICES, usb), [])
+        self.assertEqual(mod.reorder_plan({1: {'b1': (2, 'b0')}}, {2: self.DEVICES[2]}, usb), [])
+
+    def test_a_bluetooth_pad_stays_where_it_is_and_never_loops(self):
+        mod = self.module()
+        # O player 1 e Bluetooth (sem aparelho USB): so a ordem entre os USB conta, e depois de religar
+        # nao pede de novo (a ordem dos USB ja e a do plano).
+        usb = {k: v for k, v in self.USB.items() if k != '/dev/input/event18'}.get
+        players = {1: {'b1': (2, 'b0')}, 2: {'b1': (1, 'b0')}, 3: {'b1': (0, 'b0')}}
+        self.assertEqual(mod.reorder_plan(players, self.DEVICES, usb), ['2-2.3', '2-2.2'])
+        after = {0: self.DEVICES[2], 1: self.DEVICES[1], 2: self.DEVICES[0]}
+        self.assertEqual(mod.reorder_plan({1: {'b1': (0, 'b0')}, 2: {'b1': (1, 'b0')}, 3: {'b1': (2, 'b0')}}, after, usb), [])
+
+    def test_the_usb_device_comes_from_the_sysfs_path(self):
+        mod = self.module()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            real = tmp / 'devices/pci0000:00/0000:00:1a.7/usb2/2-2/2-2.1/2-2.1:1.0/input/input20'
+            real.mkdir(parents=True)
+            (tmp / 'class/input/event18').mkdir(parents=True)
+            os.symlink(real, tmp / 'class/input/event18/device')
+            virtual = tmp / 'devices/virtual/input/input3'
+            virtual.mkdir(parents=True)
+            (tmp / 'class/input/event3').mkdir(parents=True)
+            os.symlink(virtual, tmp / 'class/input/event3/device')
+            mod.INPUT_SYSFS = str(tmp / 'class/input')
+            self.assertEqual(mod.usb_device_of('/dev/input/event18'), '2-2.1')
+            self.assertIsNone(mod.usb_device_of('/dev/input/event3'))
+            self.assertIsNone(mod.usb_device_of('/dev/input/event99'))
+
+    def test_every_game_launcher_reorders_before_opening(self):
+        for name in ('config/fliperos-x11-run', 'config/fliperos-kms-run'):
+            source = (ROOT / name).read_text()
+            self.assertIn('fliperos-setup}" --pad-order', source, name)
+        setup = (ROOT / 'fliperos-setup/fliperos-setup').read_text()
+        self.assertIn('--pad-order)', setup)
+        self.assertIn('fliperos-buttons}" reorder', setup)
+        # Passa pelo sudo sem senha do fliperos-setup (a unica coisa que o usuario roda como root).
+        self.assertIn('sudo -n', (ROOT / 'config/fliperos-x11-run').read_text())
+
+
 class OdinTests(unittest.TestCase):
     """Odin (Sega Hikaru e Gaelco 3D): um pacote opcional que se instala ao abrir o primeiro jogo da pasta odin.
     O comando e o config/fliperos-odin, que vem com o sistema; o programa vem com o pacote."""
@@ -2806,6 +2876,45 @@ class OdinTests(unittest.TestCase):
                 self.assertRegex(ini, r'(?m)^%s = %s$' % (key, value))
             self.assertTrue((home / 'nvram/odin').is_dir())
             self.assertTrue((home / 'save/odin').is_dir())
+
+    def test_the_controllers_of_player_1_and_2_go_to_the_game(self):
+        # O Odin escolhe os controles pela ordem em que chegam e nao sabe qual e o player 1 do FliperOS: o
+        # fliperos-buttons odin diz o controle de cada jogador e o comando o grava em [players.JOGO], a cada abertura.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            fake = tmp / 'buttons'
+            fake.write_text('#!/bin/sh\n[ "$1" = odin ] || exit 1\n'
+                            'echo "p1=0300f6b6 8BitDo Ultimate 2 Wireless Controller"\necho "p1_path=/dev/input/event18"\n'
+                            'echo "p2="\necho "p2_path="\n')
+            fake.chmod(0o755)
+            run = self.run_wrapper(tmp, 'swracer', env_extra={'FLIPEROS_BUTTONS': str(fake)})
+            self.assertEqual(run.returncode, 0, run.stderr)
+            ini = (tmp / 'data/odin/odin.ini').read_text()
+            section = ini.split('[players.swracer]')[1].split('\n[')[0]
+            self.assertIn('p1 = 0300f6b6 8BitDo Ultimate 2 Wireless Controller', section)
+            self.assertIn('p1_path = /dev/input/event18', section)
+            self.assertRegex(section, r'(?m)^p2 = $')
+            # Sem o fliperos-buttons (ou sem jogo, a biblioteca) o ini fica como estava.
+            tmp2 = tmp / 'other'
+            tmp2.mkdir()
+            run = self.run_wrapper(tmp2, 'swracer', env_extra={'FLIPEROS_BUTTONS': str(tmp2 / 'nao-existe')})
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertNotIn('[players.swracer]', (tmp2 / 'data/odin/odin.ini').read_text())
+
+    def test_odin_gets_the_device_of_each_player_from_the_map(self):
+        loader = importlib.machinery.SourceFileLoader('fliperos_buttons_odin', str(ROOT / 'config/fliperos-buttons'))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        devices = {0: ('guidA', 'Xbox 360 Controller', 11, 6, [], None, None, '/dev/input/event8'),
+                   2: ('guidB', '8BitDo Ultimate 2', 15, 6, [], None, None, '/dev/input/event18')}
+        players = {1: {'b1': (2, 'b0')}, 2: {'b1': (0, 'b0')}}
+        self.assertEqual(mod.odin_players(players, devices),
+                         ['p1=guidB 8BitDo Ultimate 2', 'p1_path=/dev/input/event18',
+                          'p2=guidA Xbox 360 Controller', 'p2_path=/dev/input/event8'])
+        # Jogador sem controle ligado (ou de teclado) sai vazio: o Odin escolhe por ele.
+        self.assertEqual(mod.odin_players({1: {'b1': (-1, 'k:Z')}, 2: {'b1': (5, 'b0')}}, devices),
+                         ['p1=', 'p1_path=', 'p2=', 'p2_path='])
 
     def test_the_panel_dpad_drives_what_odin_leaves_on_the_keyboard(self):
         # Os jogos ligam o manche/volante ao analogico (pad:leftx) e as setas; o
@@ -7799,12 +7908,84 @@ class FrontendDataTests(unittest.TestCase):
         mame = fi.panel_keyboard(pg, [('b1', 0, 'b0')])
         self.assertEqual(mame, {1: 'b1', 2: 'b2', 3: 'b3', 4: 'b4', 5: 'b5', 6: 'b6', 7: 'start', 8: 'coin'})
 
+    def test_player_visual_reads_the_map(self):
+        fi = self.fi
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / 'buttons.map'
+            self.assertIsNone(fi.player_visual(str(path)))
+            # A linha "visual" do jogador manda; sem ela, o do tipo e dos botoes dele.
+            path.write_text('1 kbd -1 d209:0301 I-PAC\n1 visual -1 arcade4 Keyboard\n1 up -1 k:UP Keyboard\n'
+                            '2 kind 0 pad Pad\n2 b4 0 b0 Pad\n3 kind 1 arcade Panel\n3 b1 1 b0 Panel\n3 b3 1 b2 Panel\n'
+                            '4 kind 2 pad Pad\n4 visual 2 pad:xbox Pad\n4 b4 2 b0 Pad\n5 visual 3 arcade99 X\n5 b7 3 b6 X\n')
+            self.assertEqual(fi.player_visual(str(path), 1), 'arcade4')
+            self.assertEqual(fi.player_visual(str(path), 2), 'pad:playstation')
+            self.assertEqual(fi.player_visual(str(path), 3), 'arcade3')
+            self.assertEqual(fi.player_visual(str(path), 4), 'pad:xbox')
+            self.assertEqual(fi.player_visual(str(path), 5), 'arcade8')        # visual que nao existe: pelos botoes
+            self.assertIsNone(fi.player_visual(str(path), 6))
+        # Cada formato de painel do Setup e um do guia (o de 8 desenha o de 6).
+        import feview
+        self.assertEqual(fi.VISUAL_PANEL['arcade8'], '6')
+        for visual, shape in fi.VISUAL_PANEL.items():
+            self.assertIn(shape, feview.PANEL_COUNT, visual)
+
+    def test_the_guide_follows_player_1(self):
+        import types
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        import fepads
+        fi, fm = self.fi, self.frontend_module()
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / 'buttons.map'
+            old = fi.MAP
+            fi.MAP = str(path)
+            try:
+                fe = types.SimpleNamespace(
+                    input=types.SimpleNamespace(stamp=1), fi=fi, fp=fepads, guide_stamp=False, guide_mode='auto',
+                    guide_manual={'kind': 'arcade', 'panel': '2v', 'joypad': 'nes'})
+                sync = lambda force=False: fm.Frontend.sync_guide(fe, force)
+                # Sem mapa: o guia a mao (o de antes).
+                sync()
+                self.assertEqual((fe.guide_kind, fe.panel_layout, fe.joypad_layout, fe.guide_follow),
+                                 ('arcade', '2v', 'nes', None))
+                # O P1 e um joypad do Xbox: o guia o segue.
+                path.write_text('1 kind 0 pad Pad\n1 visual 0 pad:xbox Pad\n1 b4 0 b0 Pad\n')
+                fe.input.stamp = 2
+                sync()
+                self.assertEqual((fe.guide_kind, fe.joypad_layout, fe.guide_follow), ('joypad', 'xbox', 'pad:xbox'))
+                # Mesmo carimbo do mapa: nao le de novo.
+                path.write_text('1 kind 0 arcade Panel\n1 b1 0 b0 Panel\n')
+                sync()
+                self.assertEqual(fe.guide_kind, 'joypad')
+                # O P1 trocou para um painel de 1 botao (sem a linha visual: pelo botao dele):
+                # o guia muda sozinho.
+                fe.input.stamp = 3
+                sync()
+                self.assertEqual((fe.guide_kind, fe.panel_layout, fe.guide_follow), ('arcade', '1', 'arcade1'))
+                path.write_text('1 kind 0 arcade Panel\n1 visual 0 arcade4 Panel\n1 b1 0 b0 Panel\n')
+                fe.input.stamp = 4
+                sync()
+                self.assertEqual((fe.panel_layout, fe.joypad_layout), ('4', 'nes'))
+                # A mao (arcade ou joypad) trava o guia: o P1 nao o muda mais.
+                fe.guide_mode = 'joypad'
+                sync(True)
+                self.assertEqual((fe.guide_kind, fe.joypad_layout, fe.guide_follow), ('joypad', 'nes', None))
+                fe.guide_mode = 'arcade'
+                sync(True)
+                self.assertEqual((fe.guide_kind, fe.panel_layout), ('arcade', '2v'))
+            finally:
+                fi.MAP = old
+
     def test_frontend_controls_screen_and_guide(self):
         # A area Frontend controls no Tab, e o guia desenhado pelo mapa: o
         # botao sem funcao sai do guia.
         src = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         self.assertIn('elif sel == OPT_CONTROLS and a == "b1":', src)
-        self.assertIn('"controls": self.input.binds, "panel_layout": self.panel_layout', src)
+        self.assertIn('"controls": self.input.binds, "panel_layout": self.guide_manual["panel"]', src)
+        self.assertIn('"guide_mode": self.guide_mode', src)
         self.assertIn('held = frozenset(self.input.players_held())', src)
         # A primeira abertura comeca no Frontend controls; ao sair dele, o guia.
         self.assertIn('self.controls_seen = cfg.get("controls_seen") is True', src)
@@ -10067,13 +10248,13 @@ class WebSetupTests(WebSetupBase):
             launch = self.dir / 'run' / str(os.getuid()) / 'fliperos-web-launch'
             if launch.exists():
                 launch.unlink()
-            status, data = self.call('POST', '/api/setup/open', {'screen': 'buttons'})
+            status, data = self.call('POST', '/api/setup/open', {'screen': 'controllers'})
             self.assertEqual((status, data['code']), (409, 'restart'))
             self.assertFalse(launch.exists())
             # O tty1 de agora e o do arquivo: abre.
             before = time.time() - 600
             os.utime(installed, (before, before))
-            self.assertEqual(self.call('POST', '/api/setup/open', {'screen': 'buttons'})[0], 200)
+            self.assertEqual(self.call('POST', '/api/setup/open', {'screen': 'controllers'})[0], 200)
         finally:
             proc.kill()
             proc.wait()
@@ -19058,7 +19239,7 @@ class GuiVsyncTests(unittest.TestCase):
             self.assertIn('request_vsync()', text, '%s opens the video without vsync' % path.name)
             self.assertLess(text.index('request_vsync()'), text.index('display.init('), path.name)
         self.assertEqual(opened, ['color-calibrate.py', 'flicker-preview.py', 'fliperos-frontend', 'fliperos-gui',
-                                  'gunscreen.py', 'scanline-preview.py', 'wheelscreen.py'])
+                                  'gunscreen.py', 'padtest.py', 'scanline-preview.py', 'wheelscreen.py'])
 
 
 class FrontendPopupMotionTests(unittest.TestCase):
@@ -19846,6 +20027,134 @@ class GuiMenuIconTests(unittest.TestCase):
         self.assertEqual(missing, {}, 'draw these in gui/theme.py, or alias them to an existing icon')
 
 
+class SlotGridTests(unittest.TestCase):
+    """Map controllers: as oito vagas de player em cartoes, duas por linha, com o desenho minimalista do controle e o
+    nome que corre no cartao escolhido (gui/widgets.py SlotGrid)."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    ENTRIES = [("1", "P1 8BitDo Ultimate 2 Wireless Controller", "pad:xbox: Joypad, USB"),
+               ("2", "P2 Xbox 360 Controller", "arcade6: Arcade panel, USB"),
+               ("3", "P3 BT Wireless Controller", "pad:playstation: Joypad, Bluetooth"),
+               ("4", "P4 (empty)", "Empty. Press ENTER, then a button on the controller that will be player 4.")] + [
+        (str(n), "P%d (empty)" % n, "Empty.") for n in range(5, 9)]
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_cards_draw_navigate_and_select(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        try:
+            import pygame
+            pygame.init()
+            import theme
+            import widgets
+            grid = widgets.SlotGrid("MAP CONTROLLERS", self.ENTRIES, "2")
+            self.assertEqual(grid.cursor, 1)
+            # Duas por linha: a direita e a esquerda trocam de coluna, cima e baixo de linha (com a volta).
+            grid.key("left")
+            self.assertEqual(grid.cursor, 0)
+            grid.key("right")
+            self.assertEqual(grid.cursor, 1)
+            grid.key("down")
+            self.assertEqual(grid.cursor, 3)
+            for _ in range(2):
+                grid.key("down")
+            self.assertEqual(grid.cursor, 7)
+            grid.key("down")
+            self.assertEqual(grid.cursor, 1)
+            grid.key("up")
+            self.assertEqual(grid.cursor, 7)
+            # Um cartao vazio se define segurando um botao: o Enter nao faz nada nele; num com controle, abre.
+            self.assertIsNone(grid.key("enter"))
+            grid.cursor = 0
+            self.assertEqual(grid.key("enter"), ("select", "1"))
+            grid.cursor = 7
+            self.assertEqual(grid.key("esc"), ("back", None))
+            # A entrada: o player, o Bluetooth, o nome, o visual e o texto.
+            self.assertEqual(widgets.SlotGrid.parse(self.ENTRIES[2]),
+                             ("3", True, "Wireless Controller", "pad:playstation", "Joypad, Bluetooth"))
+            self.assertEqual(widgets.SlotGrid.parse(self.ENTRIES[3])[:4], ("4", False, "(empty)", ""))
+            # Desenha todos os visuais (os paineis e os joypads), com e sem cursor, e uma lista curta.
+            for visual in list(widgets.SHAPE_LAYOUT) + ["pad:xbox", "pad:n64", "pad:snes"]:
+                entries = [("1", "P1 Name", "%s: Arcade panel, USB" % visual)] + self.ENTRIES[3:]
+                for default in ("1", "5"):
+                    surf = pygame.Surface((theme.WIDTH, theme.HEIGHT))
+                    widgets.SlotGrid("MAP CONTROLLERS", entries, default).draw(surf, {"status": ""})
+            # Um refresh quando a lista de controles muda (como no Menu).
+            seen = [1]
+            grid.watch = lambda: seen[0]
+            grid._watched = (0.0, None)
+            self.assertNotIn("refresh", str(grid.tick()))
+            grid._watched = (1.0, 1)
+            seen[0] = 2
+            grid._watched = (grid._watched[0] - 5, 1)
+            self.assertEqual(grid.tick(), ("refresh", "8"))
+        finally:
+            sys.path.remove(str(self.GUI))
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_holding_a_button_on_an_empty_card_fills_the_bar_and_takes_the_player(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        try:
+            import pygame
+            pygame.init()
+            import theme
+            import widgets
+            grid = widgets.SlotGrid("MAP CONTROLLERS", self.ENTRIES, "4")      # o P4, vazio
+            state = {"device": None}
+            grid.pressing = lambda: state["device"]
+            # O botao que abriu a tela nao conta: antes e preciso soltar tudo uma vez.
+            state["device"] = 2
+            grid.tick()
+            self.assertIsNone(grid.hold_since)
+            state["device"] = None
+            grid.tick()
+            self.assertTrue(grid.armed)
+            # Segurando: a barra comeca, enche com o tempo e, cheia, o controle toma o player.
+            state["device"] = 2
+            grid.tick()
+            self.assertEqual(grid.hold_dev, 2)
+            self.assertAlmostEqual(grid.progress(grid.hold_since + grid.HOLD / 2), 0.5)
+            surf = pygame.Surface((theme.WIDTH, theme.HEIGHT))
+            grid.hold_since -= grid.HOLD / 2
+            grid.draw(surf, {"status": ""})
+            grid.hold_since -= grid.HOLD
+            self.assertEqual(grid.tick(), ("select", "assign:4:2"))
+            # Soltar antes zera; outro controle recomeca; um cartao com controle nao usa a barra.
+            grid.armed = True
+            state["device"] = 1
+            grid.tick()
+            self.assertEqual(grid.hold_dev, 1)
+            state["device"] = None
+            grid.tick()
+            self.assertIsNone(grid.hold_since)
+            grid.cursor = 0
+            state["device"] = 2
+            grid.tick()
+            self.assertIsNone(grid.hold_since)
+        finally:
+            sys.path.remove(str(self.GUI))
+
+    def test_the_empty_card_has_a_big_plus_a_small_text_and_a_bar(self):
+        source = (self.GUI / "widgets.py").read_text().split("class SlotGrid")[1].split("class YesNo")[0]
+        self.assertIn('"HOLD A BUTTON TO SET"', source)
+        self.assertIn("pygame.draw.rect(surf, ink, (mx - arm, my - 1, 2 * arm + 1, 3))", source)
+        self.assertIn("assign:%s:%d", source)
+        joysticks = (ROOT / "fliperos-setup/screens/joysticks.sh").read_text()
+        self.assertIn('if [[ $choice == assign:* ]]', joysticks)
+        self.assertIn('screen_controller_slot "$last" "$index"', joysticks)
+
+    def test_the_gui_server_has_the_slots_style_and_the_name_runs_when_selected(self):
+        serve = (ROOT / "fliperos-setup/gui/serve.py").read_text()
+        self.assertIn('style == "slots"', serve)
+        self.assertIn("W.SlotGrid(title, entries, current)", serve)
+        source = (self.GUI / "widgets.py").read_text().split("class SlotGrid")[1].split("class YesNo")[0]
+        self.assertIn("scroll_text(surf, shown, color, tx, y + card_h - 15, room)", source)
+        self.assertIn('"ARROWS"', source)
+
+
 class GuiGridHeaderTests(unittest.TestCase):
     """O cabecalho de uma coluna do ui_grid grafico (52 px): a palavra mais
     larga que a coluna (INTERLACED, de Interlaced hacks) quebra com hifen em
@@ -19870,6 +20179,281 @@ class GuiGridHeaderTests(unittest.TestCase):
         self.assertEqual(widgets.hyphenate("AFTER BOOT", 48), widgets.wrap("AFTER BOOT", 48))
         self.assertIn('"240p|640x240;filter|Interlaced filter;pure|Interlaced pure"',
                       (ROOT / 'fliperos-setup/screens/video-setup.sh').read_text())
+
+
+class GuiPickerTests(unittest.TestCase):
+    """O seletor visual < desenho > (Visual layout e Buttons layout) e a linha separadora
+    da lista Controllers / Arcade panel."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    def widgets(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        # O pad_tile importa o fepads ao desenhar: a pasta fica no caminho ate o fim do teste.
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        import widgets
+        pygame.init()
+        return pygame, widgets
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_picker_cycles_the_drawings_with_left_and_right(self):
+        pygame, w = self.widgets()
+        entries = [("arcade6", "6 buttons", "Two rows of three."), ("pad:xbox", "Xbox", "A, B, X and Y in colour."),
+                   ("pad:n64", "Nintendo 64", ""), ("return", "Return", "Back.")]
+        tiles = {"arcade6": w.panel_tile(6), "pad:xbox": w.pad_tile("xbox"), "pad:n64": w.pad_tile("n64")}
+        picker = w.Picker("Visual layout", entries, "pad:xbox", "The drawing.", tiles)
+        # O "return" nao e uma opcao do seletor (o Esc volta); comeca no atual.
+        self.assertEqual([e[0] for e in picker.entries], ["arcade6", "pad:xbox", "pad:n64"])
+        self.assertEqual(picker.cursor, 1)
+        picker.key("right")
+        self.assertEqual(picker.entries[picker.cursor][0], "pad:n64")
+        picker.key("right")                       # da a volta
+        self.assertEqual(picker.entries[picker.cursor][0], "arcade6")
+        picker.key("left")
+        self.assertEqual(picker.entries[picker.cursor][0], "pad:n64")
+        self.assertEqual(picker.key("enter"), ("select", "pad:n64"))
+        self.assertEqual(picker.key("esc"), ("back", None))
+        # Desenha cada opcao (o painel, os joypads) sem erro.
+        theme = sys.modules["theme"]
+        surf = pygame.Surface((theme.WIDTH, theme.HEIGHT), pygame.SRCALPHA)
+        for _ in entries[:3]:
+            picker.draw(surf, {"version": "0", "status": ""})
+            picker.key("right")
+        # Cada formato de painel do guia tem o desenho (os mesmos do fliperos-buttons).
+        tool = (ROOT / "config/fliperos-buttons").read_text()
+        shapes = set(re.findall(r"'(arcade\w+)'", re.search(r"ARCADE_VISUALS = \(([^)]*)\)", tool).group(1)))
+        self.assertEqual(set(w.SHAPE_LAYOUT), shapes)
+        for shape in shapes:
+            w.shape_tile(shape)(surf, 0, 0, 5)
+        for kind in ("playstation", "xbox", "gamecube", "snes", "nes", "dreamcast", "saturn", "megadrive", "neogeo", "n64"):
+            w.pad_tile(kind)(surf, 0, 0, 5)
+        # O serve.py usa o seletor nos dois estilos.
+        serve = (self.GUI / "serve.py").read_text()
+        self.assertIn('elif cmd == "menu" and style in ("visual", "layout", "type"):', serve)
+        self.assertIn('tiles = {"arcade": W.panel_tile(6), "pad": W.joypad_tile()}', serve)
+        # A ilustracao do joypad do tipo "Joypad" desenha sem erro, em qualquer escala.
+        for scale in (3, 5):
+            w.joypad_tile()(surf, 0, 0, scale)
+        self.assertIn('screen = W.Picker(title, entries, current, text, tiles, wide=style == "visual")', serve)
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_cursor_skips_the_separator_line(self):
+        pygame, w = self.widgets()
+        menu = w.Menu("Controllers", [("0", "P1 Pad"), ("1", "-- Pad"), ("sep", "-------"), ("lpt", "Add LPT"),
+                                      ("return", "Return")], "1", vertical=True)
+        menu.key("down")
+        self.assertEqual(menu.entries[menu.cursor][0], "lpt")
+        menu.key("up")
+        self.assertEqual(menu.entries[menu.cursor][0], "1")
+        # Na ultima linha para cima da volta, e o separador tambem fica de fora.
+        menu.cursor = 3
+        menu.key("up")
+        self.assertEqual(menu.entries[menu.cursor][0], "1")
+
+
+class PadTestScreenTests(unittest.TestCase):
+    """O testador de controle (gui/padtest.py): le o estado pelo mapa e desenha cada formato."""
+    GUI = ROOT / "fliperos-setup/gui"
+
+    class Fake:
+        """Um controle de mentira com as funcoes do pygame Joystick."""
+        def __init__(self, axes=(0,) * 6, buttons=(), hat=(0, 0)):
+            self.axes, self.buttons, self.hat = list(axes), set(buttons), hat
+
+        def get_numaxes(self):
+            return len(self.axes)
+
+        def get_axis(self, n):
+            return self.axes[n]
+
+        def get_numbuttons(self):
+            return 16
+
+        def get_button(self, n):
+            return n in self.buttons
+
+        def get_numhats(self):
+            return 1
+
+        def get_hat(self, n):
+            return self.hat
+
+    BINDS = ("up h0.1\ndown h0.4\nleft h0.8\nright h0.2\nb1 b2\nb2 b3\nb3 b4\nb4 b0\nb5 b1\nb6 b5\nb7 +a2\nb8 +a5\n"
+             "start b7\ncoin b6\nl3 b9\nr3 b10\nhotkey b8\nlsup -a1\nlsleft -a0\nrsup -a4\nrsleft -a3\ncancel b1\n")
+
+    def module(self):
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ["SDL_AUDIODRIVER"] = "dummy"
+        os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+        sys.path.insert(0, str(self.GUI))
+        self.addCleanup(sys.path.remove, str(self.GUI))
+        import pygame
+        pygame.init()
+        import padtest
+        return pygame, padtest
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_state_is_read_through_the_map(self):
+        pygame, pt = self.module()
+        self.assertEqual(pt.parse_binds(self.BINDS)["lsup"], "-a1")
+        self.assertEqual(pt.axis_of("+a2"), (1, 2))
+        self.assertEqual(pt.axis_of("-a10"), (-1, 10))
+        self.assertIsNone(pt.axis_of("b3"))
+        self.assertIsNone(pt.axis_of("h0.1"))
+        # Os gatilhos (eixos 2 e 5) repousam em -1: o repouso e lido ao abrir.
+        js = self.Fake(axes=[0, 0, -1, 0, 0, -1])
+        pad = pt.Pad(js, pt.parse_binds(self.BINDS))
+        state = pad.state()
+        self.assertEqual(state["triggers"], {"L2": 0.0, "R2": 0.0})
+        self.assertEqual((state["left"], state["right"]), ((0.0, 0.0), (0.0, 0.0)))
+        self.assertFalse(any(state["pressed"].values()))
+        # O gatilho direito a 60% (axis 0,2), o esquerdo todo, o analogico esquerdo para cima e a
+        # direita, o direito para baixo, o direcional para cima e dois botoes.
+        js.axes = [0.7, -0.6, 1.0, 0.2, 0.9, 0.2]
+        js.hat = (0, 1)
+        js.buttons = {0, 3, 9}
+        state = pad.state()
+        self.assertAlmostEqual(state["triggers"]["L2"], 1.0)
+        self.assertAlmostEqual(state["triggers"]["R2"], 0.6)
+        self.assertEqual(state["left"], (0.7, -0.6))           # x para a direita, y para cima (negativo)
+        self.assertEqual(state["right"], (0.2, 0.9))
+        for control in ("up", "b4", "b2", "l3"):                # b4: b0, b2: b3 (o mapa), l3: b9
+            self.assertTrue(state["pressed"][control], control)
+        for control in ("down", "left", "b1", "start", "cancel"):
+            self.assertFalse(state["pressed"].get(control, False), control)
+        # Sair e segurar o Start (o botao de voltar dos menus pode nao existir no mapa).
+        self.assertEqual(state["exit"], 0.0)
+        js.buttons = {7}
+        self.assertEqual(pad.state()["exit"], 1.0)
+        self.assertEqual(pt.Pad(js, pt.parse_binds("cancel b1\nstart b7")).state()["exit"], 1.0)
+        js.buttons = {1}
+        self.assertEqual(pad.state()["exit"], 0.0)       # o de voltar nao sai mais
+        self.assertEqual(pt.KEYS, [("HOLD START", "TO EXIT")])
+        # Um eixo no meio (o analogico) vale o proprio valor; o sentido do mapa inverte.
+        flip = pt.Pad(self.Fake(axes=[0.5, 0.5]), pt.parse_binds("lsleft +a0\nlsup +a1\nb4 +a0"))
+        self.assertEqual(flip.stick(True), (-0.5, -0.5))
+        self.assertEqual(flip.value("+a0"), 0.5)
+        self.assertEqual(flip.value("-a0"), 0.0)
+        self.assertEqual(flip.value("k:UP"), 0.0)
+        self.assertEqual(flip.value(None), 0.0)
+        # Sem o mapa do analogico, os eixos 0 e 1 (a esquerda) e 3 e 4 (a direita), e um eixo que
+        # o controle nao tem vale 0.
+        raw = pt.Pad(self.Fake(axes=[0.3, -0.4, 0, 0.1, 0.2]), {})
+        self.assertEqual((raw.stick(True), raw.stick(False)), ((0.3, -0.4), (0.1, 0.2)))
+        self.assertEqual(pt.Pad(self.Fake(axes=[0.3]), {}).stick(True), (0.3, 0.0))
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_every_visual_draws(self):
+        pygame, pt = self.module()
+        import fepads
+        import widgets
+        tool = (ROOT / "config/fliperos-buttons").read_text()
+        shapes = re.findall(r"'(arcade\w+)'", re.search(r"ARCADE_VISUALS = \(([^)]*)\)", tool).group(1))
+        pads = ["pad:" + k for k, _, _ in fepads.PADS]
+        self.assertEqual(sorted(shapes), sorted(widgets.SHAPE_LAYOUT))
+        js = self.Fake(axes=[0.7, -0.6, 1.0, 0.2, 0.9, 0.2], buttons={0, 3, 9, 4}, hat=(1, 1))
+        pad = pt.Pad(js, pt.parse_binds(self.BINDS))
+        for visual in shapes + pads:
+            screen = pt.PadTest(visual, "A very long controller name that has to scroll across the screen", 1, window=False)
+            screen.fixed_time = 2.0
+            frame = screen.render(pad.state(), 0.7)
+            self.assertEqual(frame.get_size(), (pt.T.WIDTH, pt.T.HEIGHT), visual)
+        # Sem mapa nenhum tambem desenha.
+        pt.PadTest("pad:xbox", "", 1, window=False).render(pt.Pad(js, {}).state())
+        # O painel de arcade e o joypad sao esquemas minimalistas (LiveArcade e LiveGamepad), o primeiro com os
+        # botoes do formato escolhido e o segundo com o desenho do videogame.
+        self.assertTrue(issubclass(pt.LiveArcade, pt.LiveGamepad))
+        self.assertIsInstance(pt.PadTest("arcade4", "x", 1, window=False).live, pt.LiveArcade)
+        self.assertEqual(pt.PadTest("arcade4", "x", 1, window=False).live.buttons, 4)
+        self.assertEqual(pt.PadTest("arcade8", "x", 1, window=False).live.buttons, 8)
+        self.assertEqual(pt.PadTest("arcade2v", "x", 1, window=False).live.buttons, 2)
+        # Cada videogame tem o desenho dele (um layout_NOME); um nome que nao e de nenhum usa o do Xbox.
+        for key in pt.PAD_KINDS:
+            live = pt.PadTest("pad:" + key, "x", 1, window=False).live
+            self.assertIsInstance(live, pt.LiveGamepad)
+            self.assertEqual(live.kind, key)
+            self.assertTrue(callable(getattr(live, "layout_" + key)), key)
+        self.assertEqual(pt.LiveGamepad("nao-existe").kind, "xbox")
+        self.assertEqual(sorted(pt.PAD_KINDS), sorted(k for k, _, _ in __import__("fepads").PADS))
+        # O que o esquema acende vem do estado: botoes e direcoes pelo mapa, o gatilho com o valor.
+        state = pad.state()
+        gamepad = pt.PadTest("pad:xbox", "x", 1, window=False).live
+        gamepad.update(state, 0.0)
+        for control in ("b4", "b2", "up", "l3", "b3"):          # b3 (o ombro esquerdo) e o botao 4 do mapa
+            self.assertTrue(gamepad.on(control), control)
+        for control in ("b5", "b1", "down", "start", "coin", "b6", "r3"):
+            self.assertFalse(gamepad.on(control), control)
+        self.assertEqual(gamepad.triggers, {"L2": 1.0, "R2": 0.2})
+        self.assertEqual(gamepad.sticks, {"left": (0.7, -0.6), "right": (0.2, 0.9)})
+        # Sem texto alem de LT, RT, L e R: nada de rotulo nem de porcentagem na fonte do desenho.
+        source = (self.GUI / "padtest.py").read_text().split("class LiveGamepad")[1].split("class PadTest")[0]
+        self.assertNotIn("%d%%", source)
+        self.assertNotIn('"LEFT STICK"', source)
+        for label in ('"LT"', '"RT"', '"L"', '"R"'):
+            self.assertIn(label, source)
+        # As medidas aprovadas no desenho do Xbox, do PlayStation (simbolos redondos, sem achatar), do GameCube
+        # (o A e o feijao do X e do Y) e do Nintendo 64 (os C com triangulos equilateros).
+        self.assertIn("self.diamond(ui, cx + 84, 116,", source)
+        self.assertIn("self.stick(ui, cx - 82, 122, 22", source)
+        self.assertIn('self.pill(ui, cx - 22, 122, 34, 13, self.on("coin"))', source)
+        self.assertTrue(callable(pt.ps_symbol))
+        self.assertTrue(callable(pt.triangle))
+        self.assertIn("self.bean(ui, ax, ay, d, -130, -82", source)
+        self.assertIn("(0.94, -2.41, \"up\")", source)
+        # Cada desenho acende o que o estado manda: o PlayStation, o GameCube e o Nintendo 64 desenham sem erro
+        # com tudo apertado e com tudo solto.
+        everything = {"pressed": {c: True for c in pt.ARCADE_CONTROLS + ("l3", "r3", "cancel")},
+                      "left": (1.0, 1.0), "right": (-1.0, -1.0), "triggers": {"L2": 1.0, "R2": 1.0}, "exit": 1.0}
+        nothing = {"pressed": {}, "left": (0.0, 0.0), "right": (0.0, 0.0), "triggers": {"L2": 0.0, "R2": 0.0}, "exit": 0.0}
+        for key in pt.PAD_KINDS:
+            screen = pt.PadTest("pad:" + key, "x", 1, window=False)
+            screen.fixed_time = 1.0
+            screen.render(everything, 0.5)
+            screen.render(nothing, 0.0)
+        # O N64 acende o C da esquerda e o de baixo pelo stick direito; o Neo Geo move a bolinha pelas direcoes.
+        n64 = pt.LiveGamepad("n64")
+        n64.update({"pressed": {}, "left": (0, 0), "right": (-1.0, 0.0), "triggers": {"L2": 0.0, "R2": 0.0}}, 0.0)
+        self.assertLessEqual(n64.sticks["right"][0], -pt.PRESSED)
+        # O PadCapture (a lista do mapeador) voltou ao que era: o testador nao o usa mais.
+        self.assertFalse(hasattr(widgets.PadCapture, "rows"))
+        # No painel, o que esta apertado acende; os botoes e COIN/START do formato aparecem e a alavanca segue as direcoes.
+        arcade = pt.PadTest("arcade6", "x", 1, window=False).live
+        arcade.update({"pressed": {"up": True, "right": True, "b1": True, "start": True}, "left": (0, 0), "right": (0, 0),
+                       "triggers": {"L2": 0.0, "R2": 0.0}}, 0.0)
+        self.assertEqual((arcade.on("b1"), arcade.on("b2"), arcade.on("up"), arcade.on("start")), (True, False, True, True))
+        for visual in widgets.SHAPE_LAYOUT:
+            screen = pt.PadTest(visual, "x", 1, window=False)
+            screen.fixed_time = 1.0
+            screen.render(everything, 0.5)
+            screen.render(nothing, 0.0)
+        source = (self.GUI / "padtest.py").read_text().split("class LiveArcade")[1].split("class PadTest")[0]
+        self.assertIn("W.shape_geometry(self.visual, 1.25)", source)
+        self.assertIn("fepads.NEOGEO", source)
+        # As direcoes inclinam a alavanca e os botoes descem (a posicao dos botoes e a do guia).
+        buttons, pts, (r, lift), box = widgets.shape_geometry("arcade8", 1.0)
+        self.assertEqual(buttons, ["b%d" % n for n in range(1, 9)])
+        self.assertEqual(len(pts), 8)
+        self.assertLess(box[0], min(p[0] for p in pts.values()))
+
+    @unittest.skipUnless(importlib.util.find_spec("pygame"), "sem o pygame")
+    def test_the_screen_closes_on_escape_or_a_held_back_button_and_a_missing_controller_fails(self):
+        pygame, pt = self.module()
+        self.assertEqual(pt.EXIT_HOLD, 1.5)
+        source = (self.GUI / "padtest.py").read_text()
+        # Esc sai; segurar o Start do controle por EXIT_HOLD tambem (a barra enche).
+        self.assertIn("event.key == pygame.K_ESCAPE", source)
+        self.assertIn("if hold >= EXIT_HOLD:", source)
+        self.assertIn('if state["exit"] >= PRESSED:', source)
+        self.assertEqual(pt.main(["--index", "99"]), 1)
+        self.assertEqual(pt.main(["--index", "-1"]), 1)
+
+    def test_the_setup_runs_it_with_the_python_of_the_system(self):
+        screen = (ROOT / "fliperos-setup/screens/joysticks.sh").read_text()
+        self.assertIn('ui_text python3 "$SETUP_DIR/gui/padtest.py"', screen)
+        self.assertIn("padtest|Test controller|", screen)
+        self.assertTrue((ROOT / "fliperos-setup/gui/padtest.py").is_file())
 
 
 class GuiWaitingTests(unittest.TestCase):
@@ -22405,23 +22989,61 @@ class ControllerPlayersTests(unittest.TestCase):
              '1 b1 0 b0 Panel\n1 b2 0 b1 Panel\n1 start 0 b8 Panel\n1 coin 0 b9 Panel\n')
     STICK = ('2 kind 1 arcade Stick\n2 up 1 h0.1 Stick\n2 b1 1 b0 Stick\n')
 
-    def test_taking_a_player_leaves_the_other_without_one(self):
+    def test_taking_a_player_swaps_with_the_controller_that_had_it(self):
         self.write(self.PANEL + self.STICK)
         self.apply(lambda m, d: self.rc.set_player(m, d, 1, 1))
         players, names = self.rc.read_map(self.path)
+        # O Stick vira o 1 e o Panel o 2: cada um com o mapa dele, nada guardado a parte.
+        self.assertEqual(sorted(players), [1, 2])
+        self.assertEqual(players[1]['b1'], (1, 'b0'))
+        self.assertEqual(players[2]['b2'], (0, 'b1'))
+        self.assertEqual((names[1], names[0]), ('Stick', 'Panel'))
+        self.assertEqual(self.rc.read_bt_profiles(self.bt), {})
+        self.assertEqual(self.rc.read_kinds(self.path), {1: 'arcade', 2: 'arcade'})
+
+    def test_a_controller_without_a_player_leaves_the_one_that_had_it_with_none(self):
+        # Nao ha para onde o outro ir: ele fica sem player, com o mapa guardado, e volta
+        # depois sem mapear de novo.
+        self.write(self.PANEL + self.STICK)
+        self.apply(lambda m, d: self.rc.set_player(m, d, 1, 0))      # o Stick fica sem player
+        self.apply(lambda m, d: self.rc.set_player(m, d, 1, 1))      # e toma o 1 do Panel
+        players, _ = self.rc.read_map(self.path)
         self.assertEqual(sorted(players), [1])
         self.assertEqual(players[1]['b1'], (1, 'b0'))
-        self.assertEqual(names[1], 'Stick')
-        # O Panel nao se perdeu: o mapa dele esta guardado, por GUID, sem player.
-        profiles = self.rc.read_bt_profiles(self.bt)
-        kind, binds, name = profiles[self.G0.ljust(32, '0')]
-        self.assertEqual((kind, binds['b2'], binds['start'], name), ('arcade', 'b1', 'b8', 'Panel'))
-        # E volta para o player 2 sem mapear de novo.
+        profile = self.rc.read_bt_profiles(self.bt)[self.G0]
+        self.assertEqual((profile[0], profile[1]['b2'], profile[1]['start'], profile[2]), ('arcade', 'b1', 'b8', 'Panel'))
         self.apply(lambda m, d: self.rc.set_player(m, d, 0, 2))
         players, names = self.rc.read_map(self.path)
         self.assertEqual(sorted(players), [1, 2])
         self.assertEqual(players[2]['b2'], (0, 'b1'))
         self.assertEqual(names[0], 'Panel')
+
+    def test_a_swap_with_a_bluetooth_controller_changes_its_preference(self):
+        guid = self.GBT
+        # O Panel e o P1; o 8BitDo (Bluetooth) esta no P2. O 8BitDo toma o 1: o Panel vai para o 2.
+        self.write(self.PANEL + '2 bt 2 %s 8BitDo\n2 kind 2 pad 8BitDo\n2 b4 2 b0 8BitDo\n' % guid,
+                   '%s kind pad 8BitDo\n%s b4 b0 8BitDo\n' % (guid, guid))
+        self.apply(lambda m, d: self.rc.set_player(m, d, 2, 1))
+        self.assertEqual(self.rc.read_profile_meta(self.bt)[guid]['player'], '1')
+        players, _ = self.rc.read_map(self.path)
+        self.assertEqual(sorted(players), [2])
+        self.assertEqual(players[2]['b2'], (0, 'b1'))
+        # O Panel toma o 1 de volta: o 8BitDo (que esta no 1 pela preferencia) vai para o 2.
+        self.write(re.sub(r'(?m)^1 ', '2 ', self.PANEL) + '1 bt 2 %s 8BitDo\n1 kind 2 pad 8BitDo\n1 b4 2 b0 8BitDo\n' % guid,
+                   '%s kind pad 8BitDo\n%s b4 b0 8BitDo\n%s player 1\n' % (guid, guid, guid))
+        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 1))
+        self.assertEqual(self.rc.read_profile_meta(self.bt)[guid]['player'], '2')
+        self.assertEqual(self.rc.read_map(self.path)[0][1]['b2'], (0, 'b1'))
+
+    def test_the_encoder_keys_do_not_move_so_a_joypad_taking_p1_replaces_them(self):
+        self.write('1 kbd -1 d209:0301 I-PAC\n1 up -1 k:UP Keyboard\n2 kbd -1 d209:0301 I-PAC\n2 up -1 k:R Keyboard\n'
+                   '3 kind 1 arcade Stick\n3 up 1 h0.1 Stick\n')
+        self.apply(lambda m, d: self.rc.set_player(m, d, 1, 1))
+        players, _ = self.rc.read_map(self.path)
+        # O Stick (que era o 3) tomou o 1; as teclas do MAME do P1 nao vao para o 3: so o P2 fica no encoder.
+        self.assertEqual(sorted(players), [1, 2])
+        self.assertEqual(players[1]['up'], (1, 'h0.1'))
+        self.assertEqual(sorted(self.rc.read_kbds(self.path)), [2])
 
     def test_a_controller_can_have_no_player_and_keeps_its_visual(self):
         self.write(self.PANEL + '1 visual 0 arcade3 Panel\n')
@@ -22512,51 +23134,39 @@ class ControllerPlayersTests(unittest.TestCase):
 
     def test_the_encoder_gives_p1_and_p2_without_mapping(self):
         self.write(self.PANEL + self.STICK)
-        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'd209:0301', 'Ultimarc I-PAC2', True))
+        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'mame', 'Keyboard encoder', True))
         players, names = self.rc.read_map(self.path)
-        self.assertEqual(sorted(players), [1, 2])
+        # O encoder e o P1 e o P2; o Panel (era P1) e o Stick (era P2) vao para o 3 e o 4, com o mapa deles.
+        self.assertEqual(sorted(players), [1, 2, 3, 4])
         self.assertEqual(players[1]['b1'], (-1, 'k:LCONTROL'))
         self.assertEqual(players[2]['up'], (-1, 'k:R'))
-        self.assertEqual(self.rc.read_kbds(self.path), {1: ('d209:0301', 'Ultimarc I-PAC2'), 2: ('d209:0301', 'Ultimarc I-PAC2')})
+        self.assertEqual((players[3]['b2'], players[4]['b1']), ((0, 'b1'), (1, 'b0')))
+        self.assertEqual(self.rc.read_kbds(self.path), {1: ('mame', 'Keyboard encoder'), 2: ('mame', 'Keyboard encoder')})
         self.assertEqual(self.rc.read_visuals(self.path), {1: 'arcade6', 2: 'arcade6'})
-        # Quem era P1 e P2 ficou sem player, com o mapa guardado.
-        profiles = self.rc.read_bt_profiles(self.bt)
-        self.assertEqual({p[2] for p in profiles.values()}, {'Panel', 'Stick'})
-        # Um joypad que toma o P1 deixa o encoder so com o P2.
-        self.apply(lambda m, d: self.rc.set_player(m, d, 0, 1))
+        self.assertEqual(self.rc.read_bt_profiles(self.bt), {})
+        # Os jogadores de teclado estao sempre ligados (nao ha o que detectar), e os de controle seguem os ligados.
+        self.assertEqual(self.rc.active_players(players, 1), {1: True, 2: True, 3: True, 4: False})
+        # Um joypad que toma o P1 deixa o encoder so com o P2 (e o que estava no 1 vai para o lugar dele).
+        self.apply(lambda m, d: self.rc.set_player(m, d, 1, 1))
         self.assertEqual(sorted(self.rc.read_kbds(self.path)), [2])
-        self.assertEqual(self.rc.read_map(self.path)[0][1]['up'], (0, 'h0.1'))
-        # Desligar tira so os jogadores do encoder: o joystick fica como esta.
-        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'd209:0301', 'Ultimarc I-PAC2', False))
+        self.assertEqual(self.rc.read_map(self.path)[0][1]['up'], (1, 'h0.1'))
+        # Desligar tira so os jogadores do encoder: os joysticks ficam como estao.
+        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'mame', 'Keyboard encoder', False))
         players, _ = self.rc.read_map(self.path)
-        self.assertEqual(sorted(players), [1])
+        self.assertFalse([p for p, b in players.items() if any(i < 0 for i, _ in b.values())])
         self.assertEqual(self.rc.read_kbds(self.path), {})
-        # Um mapa de teclado de antes (sem dono) tambem sai ao ligar um encoder.
+        self.assertEqual(sorted(players), [1, 3])        # o Stick no 1 (veio do 4) e o Panel no 3
+        # Um mapa de teclado de antes (sem a marca do encoder) tambem sai ao ligar de novo.
         self.write('1 up -1 k:UP Keyboard\n2 up -1 k:R Keyboard\n')
-        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'd209:0301', 'Encoder', True))
-        self.assertEqual(self.rc.read_kbds(self.path)[1], ('d209:0301', 'Encoder'))
-
-    def test_the_encoder_is_active_only_while_it_is_plugged(self):
-        rc = self.rc
-        self.write('1 kbd -1 d209:0301 I-PAC\n1 up -1 k:UP Keyboard\n2 kbd -1 d209:0301 I-PAC\n2 up -1 k:R Keyboard\n'
-                   '3 up 0 h0.1 Pad\n')
-        players, _ = rc.read_map(self.path)
-        kbds = rc.read_kbds(self.path)
-        self.assertEqual(rc.active_players(players, 1, kbds, {'d209:0301'}), {1: True, 2: True, 3: True})
-        self.assertEqual(rc.active_players(players, 1, kbds, set()), {1: False, 2: False, 3: True})
-        # Sem dono (o mapa de antes), conta sempre.
-        self.assertEqual(rc.active_players(players, 0), {1: True, 2: True, 3: False})
-        t = Path(self.tmp.name) / 'devices'
-        t.write_text(
-            'I: Bus=0011 Vendor=0001 Product=0001 Version=ab41\nN: Name="AT keyboard"\nH: Handlers=sysrq kbd event3 leds\n\n'
-            'I: Bus=0003 Vendor=D209 Product=0301 Version=0110\nN: Name="Ultimarc I-PAC2"\nH: Handlers=sysrq kbd event7 leds\n\n'
-            'I: Bus=0003 Vendor=d209 Product=0301 Version=0110\nN: Name="Ultimarc I-PAC2 Consumer Control"\n'
-            'H: Handlers=kbd event8\n\n'
-            'I: Bus=0003 Vendor=046d Product=c52b Version=0111\nN: Name="Logitech USB Receiver"\nH: Handlers=mouse0 event9\n\n'
-            'I: Bus=0003 Vendor=0079 Product=0006 Version=0110\nN: Name="Pad"\nH: Handlers=kbd event6 js0\n\n'
-            'I: Bus=0006 Vendor=0000 Product=0000 Version=0000\nN: Name="fliperos-padkeys"\nH: Handlers=sysrq kbd event12\n\n')
-        self.assertEqual(rc.connected_keyboards(str(t)), [('d209:0301', 'Ultimarc I-PAC2')])
-        self.assertEqual(rc.connected_keyboards(str(t) + 'x'), [])
+        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'mame', 'Keyboard encoder', True))
+        self.assertEqual(self.rc.read_kbds(self.path)[1], ('mame', 'Keyboard encoder'))
+        # Com os 8 players ocupados nao ha para onde ir: o do P1 e do P2 ficam sem player, mapa guardado.
+        full = ''.join('%d up %d h0.1 Pad%d\n' % (n, n % 2, n) for n in range(1, 9))
+        self.write(full)
+        self.apply(lambda m, d: self.rc.set_keyboard(m, d, 'mame', 'Keyboard encoder', True))
+        players, _ = self.rc.read_map(self.path)
+        self.assertEqual(sorted(players), [1, 2, 3, 4, 5, 6, 7, 8])
+        self.assertEqual([players[1]['up'][0], players[2]['up'][0]], [-1, -1])
 
     def test_a_bluetooth_controller_takes_the_player_it_was_given(self):
         rc = self.rc
@@ -22608,30 +23218,29 @@ class ControllerPlayersTests(unittest.TestCase):
         players, _ = rc.read_map(self.path)
         self.assertEqual(sorted(players), [1, 2])
 
-    def test_the_list_has_the_player_the_visual_and_the_keyboards(self):
+    def test_the_list_has_the_player_and_the_visual_and_no_keyboards(self):
         import argparse
         import contextlib
         rc = self.rc
-        self.write(self.PANEL + '1 visual 0 arcade6 Panel\n3 kbd -1 d209:0301 I-PAC\n3 up -1 k:UP Keyboard\n',
-                   '%s kind pad Stick\n%s b4 b0 Stick\n%s visual pad:xbox\n' % ((self.G1.ljust(32, '0'),) * 3))
-        t = Path(self.tmp.name) / 'devices'
-        t.write_text('I: Bus=0003 Vendor=d209 Product=0301 Version=0110\nN: Name="I-PAC"\nH: Handlers=kbd event7\n\n')
-        old_dev, old_input = rc.sdl_devices, rc.INPUT_DEVICES
-        rc.sdl_devices, rc.INPUT_DEVICES = (lambda: dict(self.devices)), str(t)
+        # Um teclado USB (o HID 0513:0318 do gabinete) nao e um controle: nao entra na lista, mesmo
+        # com o encoder ligado (P3 no mapa).
+        self.write(self.PANEL + '1 visual 0 arcade6 Panel\n3 kbd -1 mame Keyboard encoder\n3 up -1 k:UP Keyboard\n',
+                   '%s kind pad Stick\n%s b4 b0 Stick\n%s visual pad:xbox\n' % ((self.G1,) * 3))
+        old_dev = rc.sdl_devices
+        rc.sdl_devices = lambda: dict(self.devices)
         out = io.StringIO()
         try:
             with contextlib.redirect_stdout(out):
                 rc.cmd_list(argparse.Namespace(map=self.path))
         finally:
-            rc.sdl_devices, rc.INPUT_DEVICES = old_dev, old_input
-        lines = out.getvalue().splitlines()
-        self.assertEqual(lines, [
-            '0|%s|Panel|usb|1|arcade6|1' % self.G0.ljust(32, '0'),
+            rc.sdl_devices = old_dev
+        self.assertEqual(out.getvalue().splitlines(), [
+            '0|%s|Panel|usb|1|arcade6|1' % self.G0,
             # Sem player mas com mapa guardado (e o visual escolhido).
-            '1|%s|Stick|usb||pad:xbox|1' % self.G1.ljust(32, '0'),
+            '1|%s|Stick|usb||pad:xbox|1' % self.G1,
             # Bluetooth sem perfil: nada mapeado.
-            '2|%s|8BitDo|bluetooth|||0' % self.GBT.ljust(32, '0'),
-            '-1|kb:d209:0301|I-PAC|keyboard|3||1'])
+            '2|%s|8BitDo|bluetooth|||0' % self.GBT])
+        self.assertFalse(hasattr(rc, 'connected_keyboards'))
 
 
 class ButtonMappingTests(unittest.TestCase):
@@ -23631,16 +24240,18 @@ class ButtonMappingTests(unittest.TestCase):
             self.assertEqual(config('fbneo', '/roms/fbneo/mslug.zip'), [base])
 
     def test_setup_has_the_buttons_layout(self):
-        # Games antes de Joysticks; Buttons layout abaixo do Button mapping.
+        # Games antes de Joysticks; o Controllers / Arcade panel primeiro, o Bluetooth
+        # depois dele (so com um adaptador), e o Buttons layout dentro de cada controle.
         menu = (ROOT / 'fliperos-setup/screens/setup-menu.sh').read_text()
         self.assertRegex(menu, r'"games\|Games\|[^"]+" \\\n      "joysticks\|Joysticks\|')
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        self.assertRegex(screen, r'"buttons\|Button mapping \(all emulators\)\|[^"]+" \\\n'
+        self.assertRegex(screen, r'"controllers\|Controllers / Arcade panel\|[^"]+" \\\n'
                                  r'      "\$\{bt\[@\]\}" \\\n'
-                                 r'      "layout\|Buttons layout \(games of 1 to 5 buttons\)\|')
-        # O Bluetooth entre os dois, so com um adaptador.
+                                 r'      "guncon\|GunCon 2 \(light gun\)\|')
         self.assertIn('bt=("bluetooth|Bluetooth|', screen)
-        self.assertIn('layout) screen_buttons_layout ;;', screen)
+        self.assertIn('controllers) screen_controllers ;;', screen)
+        # O Buttons layout abre no menu de cada controle (so nos de painel).
+        self.assertIn('layout) screen_buttons_layout ;;', screen.split('screen_controller() {')[1].split('\n}\n')[0])
 
     def test_setup_saves_the_mame_options(self):
         lib = (ROOT / 'fliperos-setup/lib/buttons.sh').read_text()
@@ -23649,12 +24260,16 @@ class ButtonMappingTests(unittest.TestCase):
         self.assertIn('install -Dm755 "$src/config/fliperos-buttons" "$root/opt/fliperos/bin/fliperos-buttons"',
                       ROOTFS)
         screen = (ROOT / 'fliperos-setup/screens/joysticks.sh').read_text()
-        self.assertIn('"buttons|Button mapping (all emulators)|', screen)
-        body = screen.split('screen_buttons_device() {')[1].split('\n}\n')[0]
+        self.assertIn('"controllers|Controllers / Arcade panel|', screen)
+        body = screen.split('screen_controller_map_all() {')[1].split('\n}\n')[0]
         # A captura (painel ou joypad) entre o padkeys_off e o padkeys_on.
         self.assertLess(body.index('padkeys_off'), body.index('screen_buttons_pad "$title"'))
         self.assertLess(body.index('padkeys_off'), body.index('screen_buttons_arcade "$title"'))
         self.assertLess(body.index('screen_buttons_arcade "$title"'), body.index('padkeys_on'))
+        # A captura de um botao so (Mapping > Change one button) tambem.
+        one = screen.split('screen_controller_capture_one() {')[1].split('\n}\n')[0]
+        self.assertLess(one.index('padkeys_off'), one.index('buttons_capture'))
+        self.assertLess(one.index('buttons_capture'), one.index('padkeys_on'))
         for name in ('screen_buttons_arcade', 'screen_buttons_pad'):
             self.assertIn('buttons_capture', screen.split(name + '() {')[1].split('\n}\n')[0])
 

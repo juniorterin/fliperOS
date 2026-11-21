@@ -34,6 +34,10 @@ if [[ $1 == supermodel ]] && ! command -v supermodel > /dev/null; then
 fi
 command -v "$1" > /dev/null || { echo "Not installed: $1" >&2; exit 127; }
 name=$(basename -- "$1")
+# Os controles USB na ordem dos players do Setup > Joysticks (config/fliperos-buttons reorder): o Flycast
+# (e o Dojo) dao a porta 1 ao primeiro controle que o Linux lista, sem opcao para trocar. So religa os
+# controles se a ordem esta errada (em geral uma vez depois de ligar o gabinete ou trocar um controle).
+timeout 30 sudo -n "${FLIPEROS_SETUP_BIN:-/usr/local/bin/fliperos-setup}" --pad-order > /dev/null 2>&1 || true
 # after_game COMANDO...: um vigia que age quando o jogo fecha (a roleta do
 # 8BitDo, o "end" do Pixelcade, o fim do perfil do LEDSpicer, a nuvem), fora
 # da arvore de processos do jogo. O frontend fecha o jogo matando tudo que

@@ -342,15 +342,22 @@ class Frontend:
         # As funcoes de cada botao e tecla (Tab > Frontend options > Frontend controls).
         self.fi = feinput
         self.input = feinput.Input(pygame, feinput.load_binds(pygame, cfg.get("controls")))
-        # O formato do painel, para o guia (feview.PANEL_LAYOUTS).
-        self.panel_layout = cfg.get("panel_layout") if cfg.get("panel_layout") in feview.PANEL_COUNT else "6"
         # O guia: os botoes do painel de arcade ou os de um joypad, e qual
-        # videogame (gui/fepads.py: os botoes de cada um medidos).
+        # videogame (gui/fepads.py: os botoes de cada um medidos). O padrao e
+        # AUTO: o desenho do controle do player 1 (o Visual layout dele no Setup >
+        # Joysticks > Controllers / Arcade panel); arcade ou joypad a mao trava o
+        # guia no que foi escolhido em Frontend controls (guide_manual, o formato
+        # do painel e o videogame de cada um).
         import fepads
         self.fp = fepads
-        self.guide_kind = "joypad" if cfg.get("guide") == "joypad" else "arcade"
         pads = [k for k, _, _ in fepads.PADS]
-        self.joypad_layout = cfg.get("joypad_layout") if cfg.get("joypad_layout") in pads else pads[0]
+        self.guide_manual = {
+            "kind": "joypad" if cfg.get("guide") == "joypad" else "arcade",
+            "panel": cfg.get("panel_layout") if cfg.get("panel_layout") in feview.PANEL_COUNT else "6",
+            "joypad": cfg.get("joypad_layout") if cfg.get("joypad_layout") in pads else pads[0]}
+        self.guide_mode = cfg.get("guide_mode") if cfg.get("guide_mode") in ("auto", "arcade", "joypad") else "auto"
+        self.guide_stamp = False
+        self.sync_guide()
         # A animacao da troca de romlist de cada modo (Tab > Transition;
         # feview.transition confere o nome).
         self.transitions = cfg.get("transitions") if isinstance(cfg.get("transitions"), dict) else {}
@@ -795,6 +802,27 @@ class Frontend:
             return version
         return row
 
+    def sync_guide(self, force=False):
+        """O guia de agora: em AUTO, o do player 1 (feinput.player_visual: o formato
+        do painel ou o videogame do joypad dele), recalculado quando o mapa muda
+        (o Setup trocou o P1 ou o visual dele); senao, o que foi escolhido a mao.
+        Sem mapa ou sem P1, o escolhido a mao. guide_kind, panel_layout e
+        joypad_layout sao os de agora; guide_follow, o visual que o P1 manda
+        (None se o guia nao o segue)."""
+        stamp = self.input.stamp
+        if not force and stamp == self.guide_stamp:
+            return
+        self.guide_stamp = stamp
+        manual = self.guide_manual
+        kind = manual["kind"] if self.guide_mode == "auto" else self.guide_mode
+        panel, joypad, follow = manual["panel"], manual["joypad"], None
+        visual = self.fi.player_visual() if self.guide_mode == "auto" else None
+        if visual and visual.startswith("pad:") and visual[4:] in [k for k, _, _ in self.fp.PADS]:
+            kind, joypad, follow = "joypad", visual[4:], visual
+        elif visual in self.fi.VISUAL_PANEL:
+            kind, panel, follow = "arcade", self.fi.VISUAL_PANEL[visual], visual
+        self.guide_kind, self.panel_layout, self.joypad_layout, self.guide_follow = kind, panel, joypad, follow
+
     def remember(self):
         g = self.game()
         self.keep_position()
@@ -805,8 +833,9 @@ class Frontend:
                      "menu_key": self.menu_key, "menu_combo": self.menu_combo, "shortcuts": 1,
                      "power_exit": self.power_exit, "commercial": self.commercial,
                      "coin_minutes": self.coin_minutes, "credit_until": self.credit_until,
-                     "controls": self.input.binds, "panel_layout": self.panel_layout,
-                     "guide": self.guide_kind, "joypad_layout": self.joypad_layout,
+                     "controls": self.input.binds, "panel_layout": self.guide_manual["panel"],
+                     "guide": self.guide_manual["kind"], "joypad_layout": self.guide_manual["joypad"],
+                     "guide_mode": self.guide_mode,
                      "controls_seen": self.controls_seen, "transitions": self.transitions,
                      "media_emulators": self.media_emus, "sounds": self.snd.data})
 
@@ -1858,18 +1887,30 @@ class Frontend:
                 # A ultima linha: RESET e SAVE lado a lado, comecando no SAVE.
                 ov["col"] = 1
         elif sel == guide_row and a in ("left", "right", "b1"):
-            # O guia: os botoes do painel de arcade ou os de um joypad.
-            self.guide_kind = "arcade" if self.guide_kind == "joypad" else "joypad"
+            # O guia: o do controle do player 1 (AUTO), o painel de arcade ou o
+            # joypad (a mao: trava o guia).
+            modes = ("auto", "arcade", "joypad")
+            step = -1 if a == "left" else 1
+            self.guide_mode = modes[(modes.index(self.guide_mode) + step) % len(modes)]
+            if self.guide_mode != "auto":
+                self.guide_manual["kind"] = self.guide_mode
+            self.sync_guide(True)
             self.remember()
+        elif sel == layout_row and a in ("left", "right", "b1") and self.guide_follow:
+            # Em AUTO o formato e o do controle do player 1 (o Setup o escolhe).
+            self.say("FOLLOWS THE PLAYER 1 CONTROLLER", 2.4)
         elif sel == layout_row and a in ("left", "right", "b1"):
             # O formato do painel ou, com o guia de joypad, o videogame.
             step = -1 if a == "left" else 1
             if self.guide_kind == "joypad":
                 names = [k for k, _, _ in self.fp.PADS]
-                self.joypad_layout = names[(names.index(self.joypad_layout) + step) % len(names)]
+                manual = self.guide_manual
+                manual["joypad"] = names[(names.index(manual["joypad"]) + step) % len(names)]
             else:
                 names = [k for k, _ in self.view.PANEL_LAYOUTS]
-                self.panel_layout = names[(names.index(self.panel_layout) + step) % len(names)]
+                manual = self.guide_manual
+                manual["panel"] = names[(names.index(manual["panel"]) + step) % len(names)]
+            self.sync_guide(True)
             self.remember()
         elif a in ("left", "right") and sel == reset_row:
             ov["col"] = 0 if a == "left" else 1

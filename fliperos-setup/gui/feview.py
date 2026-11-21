@@ -2775,8 +2775,8 @@ def button3d(ui, cx, cy, r, color, lift=None):
 # fileiras, quatro em linha como o do Neo Geo MVS, tres ou dois em linha, ou
 # dois um em cima do outro. O guia so desenha os botoes que ele tem.
 PANEL_LAYOUTS = (("6", "6 BUTTONS"), ("4", "4 IN LINE (MVS)"), ("3", "3 IN LINE"), ("2", "2 IN LINE"),
-                 ("2v", "2 STACKED"))
-PANEL_COUNT = {"6": 6, "4": 4, "3": 3, "2": 2, "2v": 2}
+                 ("2v", "2 STACKED"), ("1", "1 BUTTON"))
+PANEL_COUNT = {"6": 6, "4": 4, "3": 3, "2": 2, "2v": 2, "1": 1}
 
 
 def panel_layout(fe):
@@ -3020,6 +3020,10 @@ def draw_guide(fe, ui):
     direcional sem nenhuma, nem ele). Os dois ficam no meio da janela. Com o
     guia em joypad, a cruz e os botoes do videogame do Joypad layout, com as
     funcoes da coluna JOYPAD."""
+    # Em AUTO o guia e o do controle do player 1: de novo se o mapa mudou.
+    sync = getattr(fe, "sync_guide", None)
+    if sync:
+        sync()
     # Deitado, o direcional a esquerda e os botoes a direita; em pe, o
     # direcional em cima e os botoes embaixo.
     vertical = T.VERTICAL is not None
@@ -5039,6 +5043,10 @@ def draw_controls(fe, ui, now):
     import feinput
     import fepads
     W.frame(ui, {}, "Controls", [])
+    sync = getattr(fe, "sync_guide", None)
+    if sync:
+        sync()
+    follow = getattr(fe, "guide_follow", None)
     ov = fe.ov
     sel, col, wait = ov["sel"], ov["col"], ov.get("wait")
     funcs = feinput.FUNCTIONS
@@ -5129,16 +5137,19 @@ def draw_controls(fe, ui, now):
     combo = "+".join(feinput.combo_names(getattr(fe, "osd_combo", [])))
     key = getattr(fe, "osd_key", None)
     cells(osd_row, y, (combo, None, key[0] if key else None), span=True)
-    # O guia: o painel de arcade ou um joypad (esquerda e direita trocam).
+    # O guia: o do controle do player 1 (AUTO), o painel de arcade ou um joypad
+    # (esquerda e direita trocam).
+    mode = getattr(fe, "guide_mode", "arcade")
     y = label(guide_row, "GUIDE", view_icon, T.CYAN)
-    wide(guide_row, y, "JOYPAD" if joypad else "ARCADE PANEL", arrows=True)
-    # O formato do painel ou o videogame do joypad.
+    wide(guide_row, y, "AUTO: FOLLOWS PLAYER 1" if mode == "auto" else "JOYPAD" if joypad else "ARCADE PANEL",
+         arrows=True)
+    # O formato do painel ou o videogame do joypad (em AUTO, o do player 1: sem setas).
     y = label(layout_row, "JOYPAD LAYOUT" if joypad else "PANEL LAYOUT", view_icon, T.YELLOW)
     if joypad:
         name = dict((k, n) for k, n, _ in fepads.PADS).get(getattr(fe, "joypad_layout", ""), fepads.PADS[0][1])
     else:
         name = dict(PANEL_LAYOUTS)[panel_layout(fe)]
-    wide(layout_row, y, name, arrows=True)
+    wide(layout_row, y, name, arrows=not follow)
     # A ultima linha: RESET e SAVE lado a lado (a coluna escolhe), afastados
     # das funcoes e um do outro, mais altos que as linhas de cima.
     y = y0 + reset_row * rh + BUTTONS_GAP
@@ -5171,7 +5182,10 @@ def draw_controls(fe, ui, now):
         tips = ("SELECT: HOLD THE BUTTONS / PRESS THE KEY   DELETE: OFF",
                 "IN A GAME THEY OPEN THE FliperOS OSD MENU (HELD 1 S)")
     elif sel == guide_row:
-        tips = ("LEFT/RIGHT: THE ARCADE PANEL OR A JOYPAD", "THE GUIDE DRAWS ITS BUTTONS")
+        tips = ("LEFT/RIGHT: AUTO, THE ARCADE PANEL OR A JOYPAD",
+                "AUTO: THE GUIDE FOLLOWS THE PLAYER 1 CONTROLLER" if mode == "auto" else "THE GUIDE DRAWS ITS BUTTONS")
+    elif sel == layout_row and follow:
+        tips = ("THE LAYOUT OF THE PLAYER 1 CONTROLLER", "CHANGE IT IN SETUP > JOYSTICKS > CONTROLLERS")
     elif sel == layout_row and joypad:
         tips = ("LEFT/RIGHT: THE VIDEOGAME OF THE JOYPAD", "THE GUIDE DRAWS ITS BUTTONS")
     elif sel == layout_row:

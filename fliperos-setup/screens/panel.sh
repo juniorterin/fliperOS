@@ -7,7 +7,7 @@
 #
 # PANEL_SCREENS: os nomes que o painel pode pedir (a lista fechada; o
 # config/fliperos-web confere a mesma).
-PANEL_SCREENS="setup geometry resolution monitors colour scanlines outputs driver lowdot firmware mixer buttons layout guncon axes bluetooth lpt latency oscr storage"
+PANEL_SCREENS="setup geometry resolution monitors colour scanlines outputs driver lowdot firmware mixer controllers layout guncon axes bluetooth lpt latency oscr storage"
 
 # panel_screen_known NOME: e um dos nomes da lista.
 panel_screen_known() {
@@ -45,7 +45,7 @@ screen_from_panel() {
     lowdot) screen_low_dotclock_retest ;;
     firmware) screen_atom15 ;;
     mixer) screen_audio_mixer ;;
-    buttons) screen_buttons ;;
+    controllers) screen_controllers ;;
     layout) screen_buttons_layout ;;
     guncon) screen_calibrate_guns ;;
     axes) screen_calibrate ;;

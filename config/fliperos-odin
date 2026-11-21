@@ -151,6 +151,20 @@ if [[ -f $ini ]]; then
   fi
 fi
 
+# Os controles do Setup > Joysticks nos jogadores 1 e 2: o Odin escolhe sozinho pela ordem em
+# que os controles chegam (os dois primeiros ligados) e nao sabe qual e o player 1 do FliperOS,
+# entao um painel ligado antes do joypad ficava com o joypad de fora ("waits, both players have
+# one"). O fliperos-buttons odin diz o controle de cada jogador (GUID, nome e o /dev/input/eventN,
+# que muda a cada boot): vai em p1/p2 e p1_path/p2_path do [players.JOGO], a cada abertura. Quem
+# nao tem controle ligado sai vazio (o Odin escolhe por ele).
+buttons=${FLIPEROS_BUTTONS:-/opt/fliperos/bin/fliperos-buttons}
+if [[ -n $game && -x $iniset && -x $buttons ]]; then
+  while IFS== read -r key value; do
+    [[ $key =~ ^p[12](_path)?$ ]] || continue
+    "$iniset" "$ini" "players.$game" "$key" "$value" || true
+  done < <("$buttons" odin 2> /dev/null || true)
+fi
+
 opts=()
 [[ $given == *" -R "* ]] || opts+=(-R "$roms")
 [[ $given == *" -B "* ]] || opts+=(-B "$bios")

@@ -92,11 +92,12 @@ screen_bluetooth_name() {
   printf '%s\n' "$mac"
 }
 
-# screen_bluetooth_map TITULO TEXTO: diz o resultado e oferece mapear os
-# botoes do controle agora (Button mapping).
+# screen_bluetooth_map TITULO TEXTO: diz o resultado e oferece abrir a lista de
+# controles agora (Controllers / Arcade panel), para dar o player e mapear os
+# botoes do controle.
 screen_bluetooth_map() {
-  if ui_yesno "$1" "$2 It reconnects by itself when its button is pressed."$'\n\n'"Map its buttons now (Button mapping)? A joypad that FliperOS knows takes one press."; then
-    screen_buttons
+  if ui_yesno "$1" "$2 It reconnects by itself when its button is pressed."$'\n\n'"Set it up now (player and mapping)? A joypad that FliperOS knows takes one press."; then
+    screen_controllers
   fi
 }
 
