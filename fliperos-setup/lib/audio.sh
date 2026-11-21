@@ -140,7 +140,7 @@ audio_stream_check() {
 # numa string ("plug:dmix:0,0") nao abre: o ALSA le o ",0" como um segundo
 # argumento do plug; por isso os plugs daqui vao em bloco.
 audio_write_conf() {
-  local current card dev tee=0 cardpcm defslave
+  local current card dev tee=0 cardpcm ttable
   current=$(audio_current)
   card=${current%,*} dev=${current#*,}
   if audio_stream_enabled && audio_loop_ready; then
@@ -152,6 +152,15 @@ audio_write_conf() {
     cardpcm="\"sysdefault:$card\""
   else
     cardpcm="{ type plug slave.pcm \"dmix:$card,$dev\" }"
+  fi
+  # A tabela da copia: cada canal vai para a placa (0, 1) e para o loopback
+  # (2, 3). Em mono, os 2 de entrada saem misturados (0,5 de cada) nas 4 saidas:
+  # a mistura fica na propria tabela, porque um route sobre o fliperos_tee nao
+  # abre (assertion !snd_interval_empty do ALSA; visto no gabinete).
+  if audio_mono_on; then
+    ttable=$'    ttable.0.0 0.5\n    ttable.1.0 0.5\n    ttable.0.1 0.5\n    ttable.1.1 0.5\n    ttable.0.2 0.5\n    ttable.1.2 0.5\n    ttable.0.3 0.5\n    ttable.1.3 0.5'
+  else
+    ttable=$'    ttable.0.0 1\n    ttable.1.1 1\n    ttable.0.2 1\n    ttable.1.3 1'
   fi
   {
     echo "# Gerado pelo fliperos-setup (Setup > Audio Setup)."
@@ -202,28 +211,22 @@ pcm.fliperos_tee {
         bindings.2 { slave b channel 0 }
         bindings.3 { slave b channel 1 }
     }
-    ttable.0.0 1
-    ttable.1.1 1
-    ttable.0.2 1
-    ttable.1.3 1
+$ttable
 }
 EOF
-    fi
-    # Som mono: o "default" mistura os 2 canais (0,5 de cada um) e toca o mesmo
-    # em esquerda e direita. Sem a copia da tela ao vivo, a saida e o dmix da
-    # placa (o mesmo dos jogos); com ela, o fliperos_tee.
-    if audio_mono_on; then
-      if ((tee)); then
-        defslave='"fliperos_tee"'
-      else
-        defslave=$cardpcm
-      fi
+      printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_tee"' '}'
+    elif audio_mono_on; then
+      # Som mono sem a copia: o "default" mistura os 2 canais (0,5 de cada um) e
+      # toca o mesmo em esquerda e direita no dmix da placa (o dos jogos). O
+      # route vai direto na placa, sem um plug dentro dele (com o plug o ALSA
+      # aborta: assertion !snd_interval_empty; medido no gabinete); o plug do
+      # "default" adapta formato e taxa.
       cat << EOF
 
 # Mono sound: both channels mixed and played on both speakers.
 pcm.fliperos_mono {
     type route
-    slave.pcm $defslave
+    slave.pcm $cardpcm
     slave.channels 2
     ttable.0.0 0.5
     ttable.0.1 0.5
@@ -232,8 +235,6 @@ pcm.fliperos_mono {
 }
 EOF
       printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_mono"' '}'
-    elif ((tee)); then
-      printf '%s\n' 'pcm.!default {' '    type plug' '    slave.pcm "fliperos_tee"' '}'
     fi
   } > "$ASOUND_CONF"
 }

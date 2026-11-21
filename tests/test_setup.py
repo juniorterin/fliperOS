@@ -2618,21 +2618,32 @@ class AudioTests(Base):
         self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_mono"\n}', text)
         # Num dispositivo que nao e o 0 (uma HDMI), o dmix dele.
         self.env.out("conf_set alsa 1,3; audio_write_conf", env)
-        self.assertIn('slave.pcm { type plug slave.pcm "dmix:1,3" }', conf.read_text())
+        # (route direto na placa: um plug dentro do route faz o ALSA abortar)
+        self.assertIn('pcm.fliperos_mono {\n    type route\n    slave.pcm { type plug slave.pcm "dmix:1,3" }\n', conf.read_text())
         self.env.out("audio_set_output stereo", env)
         self.assertNotIn("fliperos_mono", conf.read_text())
         self.assertNotIn("pcm.!default", conf.read_text())
         self.assertEqual(self.env.run("audio_set_output surround", env).returncode, 1)
 
-    def test_mono_goes_through_the_live_screen_copy_when_it_is_on(self):
+    def test_mono_with_the_live_screen_copy_mixes_inside_the_tee_not_on_top_of_it(self):
+        # Um route sobre o fliperos_tee nao abre no ALSA (assertion
+        # !snd_interval_empty, visto no gabinete): a mistura fica na tabela do
+        # proprio tee, e o default segue apontando para ele.
         conf = self.env.dir / "asound.conf"
         env = {"ASOUND_CONF": str(conf)}
         self.env.out("conf_set stream_audio on; audio_loop_ready() { return 0; }; audio_set_output mono", env)
         text = conf.read_text()
         self.assertIn("pcm.fliperos_tee {", text)
-        self.assertIn('pcm.fliperos_mono {\n    type route\n    slave.pcm "fliperos_tee"\n', text)
-        self.assertIn('slave.pcm "fliperos_mono"', text)
-        self.assertNotIn('slave.pcm "fliperos_tee"\n}', text.split("pcm.!default")[1])
+        self.assertNotIn("fliperos_mono", text)
+        tee = text.split("pcm.fliperos_tee {")[1].split("\n}\n")[0]
+        for cell in ("0.0", "1.0", "0.1", "1.1", "0.2", "1.2", "0.3", "1.3"):
+            self.assertIn("ttable.%s 0.5\n" % cell, tee + "\n")
+        self.assertIn('pcm.!default {\n    type plug\n    slave.pcm "fliperos_tee"\n}', text)
+        # De volta ao estereo: a tabela de antes, cada canal no seu lado.
+        self.env.out("audio_loop_ready() { return 0; }; audio_set_output stereo", env)
+        tee = conf.read_text().split("pcm.fliperos_tee {")[1].split("\n}\n")[0]
+        self.assertIn("ttable.0.0 1\n    ttable.1.1 1\n    ttable.0.2 1\n    ttable.1.3 1", tee)
+        self.assertNotIn("0.5", tee)
 
     def test_volume_leveler_is_gone_and_dropped_where_it_was_on(self):
         # O Volume leveler saiu: com o som da tela ao vivo, o ladspa sobre o
