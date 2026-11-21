@@ -98,3 +98,4 @@
 95	c1934a63e0b9a359b54edf227caadd980f3b242b	8c03c138d538f8879fec4f3d90bda855d090c4354701ab27b33517dee299a111	no	The main page of the menu shows the number of the installed update next to the version
 96	7cd838af08149159ff179f414b0344729f3622f6	741fe89fecf258780c537a7e0146d2c58b7a449c4eab710686dfd19c08c80453	no	The Live screen page of the web panel has a Turn on button right on the screen when the live screen is installed but off
 97	039d1417754c184db22ee033ddee536fd5e36a18	992715bf1d27c004571324c471e24419e939daf82cdb385105d10e3bcf86a75f	no	The on-screen menu has Media capture: a thumbnail and a 30 s preview video of the game you are playing, saved for the frontend
+98	c2ad0277a924d82f88c660eb0b3007afa6800615	079ae8eb7f900b5612863f86dda8044b21951bd037d1820f952adfc08552ea9e	no	Controllers / Arcade panel: Map controllers with 8 player slots set by holding a button, a live tester for every joypad and panel, and games that follow your players
