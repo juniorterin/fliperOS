@@ -2,6 +2,40 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.28
+
+**Emulators that install themselves, a Map controllers screen, and a new full screen**: HBGroovyMAME (HBMAME with Switchres), Odin (Sega Hikaru and Gaelco 3D) and the AnyBOR core (OpenBOR in RetroArch) are not in the image: each one downloads and installs itself the first time you open one of its games; Setup > Joysticks > Controllers / Arcade panel is now a menu with eight player slots set by holding a button and a live tester for every pad and panel; the frontend's full screen has a wheel of logos and groups the clones; and the on-screen menu captures a picture and a 30 s video of the game. Cabinets already installed get all of this from updates 93 to 99.
+
+**System changes:**
+
+- **Emulators that install themselves** (updates 93, 94 and 99): three systems that do not come in the image. **HBGroovyMAME** is HBMAME with Switchres, in `~/roms/hbmame`: each game opens in its own video mode on the CRT, with the audio kept in step with the video, party play on 2 or more cabinets, multi-screen games and the high scores on the Pixelcade, in the web panel and in the cloud backup; the clones that come inside the zip of their parent show up in the lists. **Odin** runs the Sega Hikaru (Air Trix, Brave Firefighters, Planet Harriers, NASCAR Arcade, Star Wars Racer Arcade, Virtual-On 4) and the Gaelco 3D boards (ATV Track, Smashing Drive, Football Power, Radikal Bikers, Speed Up, Surf Planet), in `~/roms/odin`: Vulkan with the amdgpu driver, OpenGL with the others; 320x240 on a 15 kHz tube (640x480 interlaced with the interlaced hacks), the panel's hat moves the stick, the wheel and the aim, and Download BIOS brings `hikaru.zip` and `mie.zip`. **AnyBOR** is a libretro core for OpenBOR with 322 engine profiles that opens the paks of the OpenBOR system in RetroArch (the engine of Games > OpenBOR stays); `~/roms/openbor` is now a shortcut to `~/roms/retroarch/anybor`, and the games already in it are moved there one file at a time, nothing overwritten. The first time you open a game of one of them, the frontend downloads the package (5 to 50 MB, with the progress bar) and the game opens. The AnyBOR core includes OpenBOR 3400 and 3741, whose license forbids selling the code or the binaries. Tested with test ROMs and three paks, not yet on a CRT
+- **Map controllers** (update 98): Setup > Joysticks > Controllers / Arcade panel is a menu with Map controllers, Keyboard encoder, Add LPT joysticks, Haptic events and Lights. Map controllers has eight player slots, two per line: hold a button on a controller until the bar fills and the card takes it. A card with a controller has its own menu (Player, Type, Visual layout, Mapping, Buttons layout and Test controller), and a controller without a player keeps its mapping. **Test controller** lights every button, direction, stick and trigger live, with a drawing for Xbox, PlayStation, GameCube, Super Nintendo, NES, Dreamcast, Saturn, Mega Drive, Neo Geo CD and Nintendo 64 pads and for the arcade panels. A game opens with the controllers in player order (Flycast and the Flycast Dojo give port 1 to the first one Linux lists, so the USB controllers are replugged by software when they are out of order), and Odin takes player 1 and 2 from the Setup
+- **Stereo or mono** (update 98): Setup > Audio Setup > Stereo or mono; Mono mixes both channels and plays the same sound on both outputs, for a cabinet with a single speaker. The installer asks it right after the video step and the web panel has it under Audio. Audio Setup keeps its icons and shows each item's current value in its hint
+- **Frontend** (updates 93 and 95): the full screen has a wheel of logos on the right (five at a time, seven on a vertical monitor) that turns edge-on after 2 seconds, with the game's logo above its name and a neon ball-top in the corner; in the grid and in full screen the clones are grouped, with a badge saying how many versions a game has and a dialog that lists them; the PHYSICAL MEDIA row sits in its own container; the music starts with a random song each time, never the last one; the main menu shows the number of the update installed next to the version (V0.28, u99)
+- **On-screen menu** (update 97): Media capture, with a camera icon, takes a Thumbnail of the screen and a 30 s Preview video at 60 fps with the game's sound, saved where the frontend looks for the game's art; Configuration has a gear icon and Close is now Close OSD menu
+- **Web panel** (update 96): the Live screen page has a Turn on the live screen button on the stage when the service is installed but off
+- **Website**: a Share button above the Wiki button, with a text for each network (X, Instagram, Facebook, LinkedIn and Telegram) and language, and HBGroovyMAME and Odin among the highlights of the home page
+
+**Package changes:**
+
+- Three optional packages, published in the `packages` release and installed on demand, not in the ISO: `fliperos-hbgroovymame` 0.289.6, `fliperos-odin` 0.1.1 and `fliperos-anybor` 0.2.48 (the core built at a pinned commit). The `.deb`s of the image are the ones of 0.27
+
+**fliperos-setup changes:**
+
+- `gui/padtest.py` (new), `gui/widgets.py`, `gui/theme.py`, `gui/feinput.py`, `screens/joysticks.sh`, `lib/buttons.sh` and `config/fliperos-buttons` (new): Map controllers, the player order and the live tester
+- `gui/feview.py` and `gui/fliperos-frontend`: the wheel of logos, the grouped clones and their dialog, the random music, the update number on the main menu and the PHYSICAL MEDIA row
+- `lib/audio.sh`, `screens/setup-menu.sh`, `screens/install-progress.sh` and `screens/first-boot.sh`: Stereo or mono and the installer's sound step
+- `lib/emulators.sh`, `lib/scraper.sh` and `lib/frontends.sh`: HBGroovyMAME, Odin and AnyBOR as systems of the frontends
+- `config/fliperos-core`, `config/fliperos-emulators` and `config/fliperos-roms`: a package that brings an emulator or a core when its first game opens, and `~/roms/openbor` as a shortcut to the core's folder
+- `config/fliperos-osd`: Media capture
+- `config/fliperos-web` and `config/web/`: the Turn on button of the Live screen and Stereo or mono
+
+**Tool changes:**
+
+- `packaging/packages/fliperos-hbgroovymame.sh`, `fliperos-odin.sh` and `fliperos-anybor.sh` (new): the recipes of the three optional packages; `tools/publish-packages.sh` and `tools/publish-changed-packages.sh` publish them
+- `website/scripts/check-share.mjs` (new): checks the Share texts (the size limit of each network, and that they were reviewed at the latest update); `tools/make-update.sh` runs it
+- `tools/video/gui_rec.py` and `tools/video/gifs/setup_zoom.py`: the Setup's zoom in video
+
 ## 0.27
 
 **Sounds and music, folders and disks, and a Games page for custom games**: the Setup and the frontend share six sounds, each with its own file and volume, and the frontend plays music with a now-playing bar; Folders is now Folder shortcuts and External storage, which can format a disk and use a Batocera filesystem where it is; custom games have one Games page with editing, group logos and renaming; the Setup and the game menu of the frontend are animated; and Fightcade, Wine and PortProton games open where they failed. Cabinets already installed get all of this from updates 86 to 92.

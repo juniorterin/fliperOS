@@ -46,7 +46,7 @@ export const CONTRIBUTORS = [
   { name: 'neo-tokio', url: 'https://github.com/neo-tokio' },
 ] as const;
 
-export const FLIPEROS_VERSION = '0.27';
+export const FLIPEROS_VERSION = '0.28';
 
 // A ISO se chama fliperos-VERSAO.iso. Este endereco baixa o arquivo direto
 // no release mais recente; se o nome mudar, a API (github.ts) manda o certo.
@@ -156,6 +156,7 @@ export const HOME_STRIP = [
 // textos de cada uma estão em whatsNew.notes; um release novo entra aqui e lá,
 // junto com FLIPEROS_VERSION.
 export const RELEASES = [
+  { version: '0.28', date: '2026-11-21' },
   { version: '0.27', date: '2026-11-19' },
   { version: '0.26', date: '2026-11-18' },
   { version: '0.25', date: '2026-11-17' },
