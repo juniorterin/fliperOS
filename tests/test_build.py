@@ -22643,8 +22643,8 @@ class EmulatorsMenuTests(unittest.TestCase):
                 (tmp / path).chmod(0o755)
             rows = [r.split('|') for r in self.run_cmd('fliperos-emulators', 'list', env=env).stdout.splitlines()]
             # Os do menu do desktop (config/applications), na ordem dele, e o KOF.
-            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'hbgroovymame', 'flycast', 'pcsx2', 'pcsx2x6',
-                                                    'dolphin', 'openbor', 'keisho', 'fightcade',
+            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'hbgroovymame', 'odin', 'anybor', 'flycast',
+                                                    'pcsx2', 'pcsx2x6', 'dolphin', 'openbor', 'keisho', 'fightcade',
                                                     'duckstation', 'kof'])
             state = {r[0]: (r[1], r[2]) for r in rows}
             self.assertEqual(state['retroarch'], ('1', 'image'))

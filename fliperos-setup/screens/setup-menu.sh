@@ -343,11 +343,11 @@ screen_audio() {
     # Sem resumo no topo: o valor de cada item vai na dica dele (o balao do
     # cursor). Um texto em cima enche o carrossel e o tira de la (widgets.py).
     choice=$(ui_menu_hints "Audio Setup" "" "$last" \
-      "card|Default card|Now: $card_label. The sound card used by the system and the emulators." \
-      "volume|Volume|Now: $(audio_volume)%. From 0 to 100. The keyboard volume keys work too." \
-      "output|Stereo or mono|Now: $(audio_output_label). Stereo: a speaker on each side. Mono: the same sound on both, for a single speaker." \
+      "card|Default card|Now: $card_label. The sound card in use." \
+      "volume|Volume|Now: $(audio_volume)%. From 0 to 100; the volume keys work too." \
+      "output|Stereo or mono|Now: $(audio_output_label). Mono: one speaker." \
       "mixer|AlsaMixer|Every control of the sound card, one by one." \
-      "latency|MAME audio latency|Now: $(audio_mame_latency). Lower responds faster; raise it if the sound crackles." \
+      "latency|MAME audio latency|Now: $(audio_mame_latency). Lower is faster; raise it if it crackles." \
       "test|Test sound|Play a sound to check the speakers." \
       "sounds|Menu sounds ($(menu_sounds_label))|The sound and volume of each menu event." \
       "return|Return|Back to Setup.") || return 0

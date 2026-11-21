@@ -6763,16 +6763,15 @@ class ButtonPlayersTests(Base):
             screen_joysticks
             buttons_devices() { printf '0|g0|Panel|usb|1|arcade6|1\\n1|g1|Panel|usb|2|arcade6|1\\n2|g2|Pad|usb||pad:xbox|0\\n'; }
             padcolor_name() { echo Purple; }
-            listed=$(mktemp)
-            ui_menu() { echo "menu [$2] [$3] ${*:4}" >> %s; [[ -s $listed ]] && return 1; echo x > "$listed"; echo 1; }
-            screen_controllers
+            ui_menu_hints() { echo "slots [$2] ${*:4}" >> %s; return 1; }
+            screen_controllers_map
         """ % (SETUP, log, log), env)
         calls = log.read_text()
         self.assertIn("hints [Players now: 3 of 3 mapped (controllers connected: 3)]", calls)
-        # A lista: o jogador de cada um na frente do nome.
-        self.assertIn("0|P1 Panel 1|P2 Panel 2|-- Pad sep|", calls)
-        # O menu do controle escolhido (o segundo da lista): o player dele, no balao.
-        self.assertIn("hints [A USB controller. Each item is set on its own.]", calls)
+        # As vagas: o jogador de cada controle na frente do nome, e a vaga sem controle vazia.
+        self.assertIn("1|P1 Panel|", calls)
+        self.assertIn("2|P2 Panel|", calls)
+        self.assertIn("3|P3 (empty)|", calls)
 
 
 class HapticEventsTests(Base):
@@ -14396,13 +14395,13 @@ class BatoceraTests(Base):
     def test_the_fliperos_only_folders_come_from_the_table_and_the_script(self):
         # As pastas fixas do fliperos-roms que nenhum console da tabela abre; o custom (os .sh do gabinete) fica de fora.
         self.assertEqual(self.env.out("batocera_extras", self.vars).split(),
-                         ["hbmame", "namco2x6", "hypseus", "fightcade", "custom-packages"])
+                         ["hbmame", "namco2x6", "odin", "hypseus", "fightcade", "custom-packages"])
 
     def test_use_links_the_siblings_and_the_fliperos_only_folders_and_unuse_undoes_it(self):
         out = self.ok('batocera_cli use "%s"' % self.disk)
         self.assertIn("systems=5", out)
         self.assertIn("linked=bios,save", out)
-        self.assertIn("extras=hbmame,namco2x6,hypseus,fightcade,custom-packages", out)
+        self.assertIn("extras=hbmame,namco2x6,odin,hypseus,fightcade,custom-packages", out)
         self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
         self.assertEqual(os.readlink(self.home / "save"), str(self.root / "saves"))
         self.assertTrue((self.home / "old-bios").is_dir())
