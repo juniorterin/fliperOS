@@ -342,10 +342,10 @@ screen_audio() {
     done
     choice=$(ui_menu_hints "Audio Setup" \
       "$(ui_fields "Default card|$card_label" "Volume|$(audio_volume)% (keyboard volume keys work too)" \
-        "Sound|$(audio_output_label)" "MAME latency|$(audio_mame_latency)")" "$last" \
+        "MAME latency|$(audio_mame_latency)")" "$last" \
       "card|Default card|The sound card used by the system and the emulators." \
       "volume|Volume|From 0 to 100. The keyboard volume keys work too." \
-      "mono|Stereo or mono|Mono plays the same sound on both speakers: use it with a single speaker." \
+      "output|Stereo or mono ($(audio_output_label))|Stereo: a speaker on each side. Mono: the same sound on both, for a single speaker." \
       "mixer|AlsaMixer|Every control of the sound card, one by one." \
       "latency|MAME audio latency|Lower responds faster; raise it if the sound crackles." \
       "test|Test sound|Play a sound to check the speakers." \
@@ -370,11 +370,7 @@ screen_audio() {
           ui_msg "Volume" "Type a number from 0 to 100."
         fi
         ;;
-      mono)
-        choice=$(ui_menu "Stereo or mono" "Mono mixes the two channels and plays the same sound on both speakers. Games opened after the change use it." \
-          "$(audio_output_mode)" "stereo|Stereo" "mono|Mono") || continue
-        audio_set_output "$choice"
-        ;;
+      output) screen_audio_output ;;
       mixer)
         ui_clear
         ui_text alsamixer -c "${current%,*}" < /dev/tty > /dev/tty 2>&1
@@ -392,6 +388,31 @@ screen_audio() {
         audio_test
         ;;
       sounds) screen_menu_sounds ;;
+      return) return 0 ;;
+    esac
+  done
+}
+
+# screen_audio_output: estereo ou mono, um item para cada (cada um com o
+# icone dele, gui/theme.py), com "- current" no que vale agora. Sem texto
+# acima da lista: o resumo longo tira o menu do carrossel (widgets.py), e
+# sem o carrossel ficam sem icones. Vale para os jogos abertos depois.
+screen_audio_output() {
+  local choice mode last
+  mode=$(audio_output_mode)
+  last=$mode
+  while true; do
+    mode=$(audio_output_mode)
+    choice=$(ui_menu_hints "Stereo or mono" "" "$last" \
+      "stereo|Stereo$([[ $mode == stereo ]] && echo " - current")|A speaker on each side: left and right stay apart." \
+      "mono|Mono$([[ $mode == mono ]] && echo " - current")|The same sound on both outputs: use it with a single speaker." \
+      "return|Return|Back to Audio Setup.") || return 0
+    last=$choice
+    case $choice in
+      stereo | mono)
+        audio_set_output "$choice"
+        speak "$(audio_output_label) sound."
+        ;;
       return) return 0 ;;
     esac
   done

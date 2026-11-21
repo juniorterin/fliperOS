@@ -2629,10 +2629,31 @@ class AudioTests(Base):
         # O teste de icones do Setup so le itens de 3 campos ("valor|Rotulo|Dica"):
         # os do submenu (stereo, mono) e o item do painel web ficaram sem icone.
         theme = (SETUP / "gui" / "theme.py").read_text()
+        # Um desenho para cada (duas caixas, uma caixa) e o apelido do item pai.
         for value in ("stereo", "mono"):
-            self.assertIn('"%s": "audio"' % value, theme)
+            body = theme.split('    "%s": """\n' % value)[1].split('""",')[0].splitlines()
+            self.assertEqual(len(body), 16, value)
+            self.assertTrue(all(len(row) == 16 for row in body), value)
+        self.assertIn('"output": "stereo"', theme)
         web = (ROOT / "config" / "web" / "setup.js").read_text()
         self.assertIn('mono: "px-audio"', web)
+
+    def test_audio_setup_keeps_the_carousel_with_its_icons(self):
+        # O menu so e um carrossel (com icones) com ate 5 linhas de texto acima
+        # (widgets.py, Menu.carousel): o cartao e o volume ja ocupam 4 no
+        # gabinete, entao o resumo nao ganha campos, e o estado do Stereo or mono
+        # vai no rotulo. O submenu tambem nao leva texto: um item para cada.
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        audio = menu.split("screen_audio() {")[1].split("\n}\n")[0]
+        fields = audio.split('ui_fields "')[1].split(')" "$last"')[0]
+        self.assertEqual(fields.count("|"), 3, fields)
+        self.assertIn('"output|Stereo or mono ($(audio_output_label))|', audio)
+        sub = menu.split("screen_audio_output() {")[1].split("\n}\n")[0]
+        self.assertIn('ui_menu_hints "Stereo or mono" "" ', sub)
+        for item in ('"stereo|Stereo$(', '"mono|Mono$(', '"return|Return|'):
+            self.assertIn(item, sub)
+        install = (SETUP / "screens" / "install-progress.sh").read_text().split("screen_install_sound() {")[1]
+        self.assertIn('ui_menu_hints "Sound: stereo or mono?"', install)
 
     def test_mono_with_the_live_screen_copy_mixes_inside_the_tee_not_on_top_of_it(self):
         # Um route sobre o fliperos_tee nao abre no ALSA (assertion
@@ -3194,7 +3215,7 @@ class CabinetNameTests(Base):
         script = """
             source %s/screens/install-progress.sh
             speak() { :; }
-            ui_menu() { %s; }
+            ui_menu_hints() { %s; }
             screen_install_sound; echo "rc=$? mode=$(audio_output_mode)"
         """
         env = {"ASOUND_CONF": str(conf)}

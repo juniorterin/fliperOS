@@ -43,8 +43,11 @@ screen_install() {
 screen_install_sound() {
   local choice
   speak "Now the sound."
-  choice=$(ui_menu "Install to HD/SSD" "Sound: is this a stereo (two speakers) or a mono (one speaker) cabinet? Change it later in Setup > Audio Setup." \
-    "$(audio_output_mode)" "stereo|Stereo (two speakers)" "mono|Mono (one speaker)") || return 0
+  # Um item para cada, com dica e sem texto longo: o carrossel (com os icones)
+  # so aparece com ate 5 linhas de texto (gui/widgets.py).
+  choice=$(ui_menu_hints "Sound: stereo or mono?" "Change it later in Setup > Audio Setup." "$(audio_output_mode)" \
+    "stereo|Stereo (two speakers)|A speaker on each side: left and right stay apart." \
+    "mono|Mono (one speaker)|The same sound on both outputs: use it with a single speaker.") || return 0
   audio_set_output "$choice" || return 0
   log_info "instalacao: som $choice"
 }
