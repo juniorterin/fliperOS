@@ -97,7 +97,7 @@ const SETUP_TREE = [
 // Os icones dos itens sem um px-ID proprio (os mesmos do carrossel do
 // Setup, fliperos-setup/gui/theme.py): ao lado de cada item na busca.
 const SETUP_ICON = { monitor: "px-video", geometry_reset: "px-reset", monitors: "px-outputs", driver: "px-chip",
-  lowdot: "px-outputs", osd: "px-layout", card: "px-system", volume: "px-audio", test: "px-audio", sounds: "px-audio",
+  lowdot: "px-outputs", osd: "px-layout", card: "px-system", volume: "px-audio", mono: "px-audio", test: "px-audio", sounds: "px-audio",
   wifi: "px-network", live: "px-outputs", extras: "px-freeroms", custom: "px-customgames", folders: "px-dest",
   downloader: "px-install", cleaner: "px-filter", update: "px-reset", version: "px-reset", whatsnew: "px-romlist",
   splash: "px-video", storage: "px-disk", other: "px-setup" };

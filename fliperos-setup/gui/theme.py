@@ -1596,7 +1596,7 @@ GGGG..KKK...KKK.
 for _alias, _name in {
     "scrape": "scraper", "source": "network", "cleaner": "filter", "folders": "dest", "downloader": "install",
     "extras": "freeroms", "update": "reset", "splash": "video", "geometry_reset": "reset", "monitors": "outputs",
-    "poweroff": "power", "reboot": "reset", "card": "system", "volume": "audio", "mono": "audio", "test": "audio",
+    "poweroff": "power", "reboot": "reset", "card": "system", "volume": "audio", "mono": "audio", "stereo": "audio", "test": "audio",
     "wifi": "network", "hidden": "network", "status": "network",
     # Audio > Menu sounds: o interruptor e um item por evento (screens/sounds.sh).
     "master": "sounds", "snd-move": "up", "snd-enter": "ok", "snd-back": "return", "snd-open": "games",

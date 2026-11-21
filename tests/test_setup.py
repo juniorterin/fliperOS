@@ -2625,6 +2625,15 @@ class AudioTests(Base):
         self.assertNotIn("pcm.!default", conf.read_text())
         self.assertEqual(self.env.run("audio_set_output surround", env).returncode, 1)
 
+    def test_every_stereo_mono_item_has_an_icon_in_the_menu_and_in_the_web_panel(self):
+        # O teste de icones do Setup so le itens de 3 campos ("valor|Rotulo|Dica"):
+        # os do submenu (stereo, mono) e o item do painel web ficaram sem icone.
+        theme = (SETUP / "gui" / "theme.py").read_text()
+        for value in ("stereo", "mono"):
+            self.assertIn('"%s": "audio"' % value, theme)
+        web = (ROOT / "config" / "web" / "setup.js").read_text()
+        self.assertIn('mono: "px-audio"', web)
+
     def test_mono_with_the_live_screen_copy_mixes_inside_the_tee_not_on_top_of_it(self):
         # Um route sobre o fliperos_tee nao abre no ALSA (assertion
         # !snd_interval_empty, visto no gabinete): a mistura fica na tabela do
