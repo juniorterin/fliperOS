@@ -15506,7 +15506,7 @@ class EmulatorModeTests(unittest.TestCase):
                 height = int(line.split()[1].split('x')[1].split('@')[0])
                 # So o Fightcade (a sala de jogos e uma pagina de desktop) e o Odin (a janela
                 # dele tem minimo de 640x480: a 15 kHz abre em 480i).
-                self.assertLessEqual(height, 480 if line.split()[0] in ('fightcade', 'fliperos-odin') else 240, line)
+                self.assertLessEqual(height, 480 if line.split()[0] in ('fightcade', 'fliperos-odin', 'odin') else 240, line)
         out = self.run_x11(['fliperos-model3', 'game.zip']).stdout
         self.assertIn('MODE=640 240 57.524', out)
         self.assertIn('MODE=496 384 57.524', self.run_x11(['fliperos-model3'], frequency='31k').stdout)

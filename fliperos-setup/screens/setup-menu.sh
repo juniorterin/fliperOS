@@ -347,7 +347,7 @@ screen_audio() {
       "volume|Volume|Now: $(audio_volume)%. From 0 to 100; the volume keys work too." \
       "output|Stereo or mono|Now: $(audio_output_label). Mono: one speaker." \
       "mixer|AlsaMixer|Every control of the sound card, one by one." \
-      "latency|MAME audio latency|Now: $(audio_mame_latency). Lower is faster; raise it if it crackles." \
+      "latency|MAME audio latency|Now: $(audio_mame_latency). Lower is faster; higher is safer." \
       "test|Test sound|Play a sound to check the speakers." \
       "sounds|Menu sounds ($(menu_sounds_label))|The sound and volume of each menu event." \
       "return|Return|Back to Setup.") || return 0
