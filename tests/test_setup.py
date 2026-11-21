@@ -2640,14 +2640,17 @@ class AudioTests(Base):
 
     def test_audio_setup_keeps_the_carousel_with_its_icons(self):
         # O menu so e um carrossel (com icones) com ate 5 linhas de texto acima
-        # (widgets.py, Menu.carousel): o cartao e o volume ja ocupam 4 no
-        # gabinete, entao o resumo nao ganha campos, e o estado do Stereo or mono
-        # vai no rotulo. O submenu tambem nao leva texto: um item para cada.
+        # (widgets.py, Menu.carousel): o Audio Setup nao leva resumo no topo, e o
+        # valor de cada item (placa, volume, estereo ou mono, latencia) vai na
+        # dica dele. O submenu tambem nao leva texto: um item para cada.
         menu = (SETUP / "screens" / "setup-menu.sh").read_text()
         audio = menu.split("screen_audio() {")[1].split("\n}\n")[0]
-        fields = audio.split('ui_fields "')[1].split(')" "$last"')[0]
-        self.assertEqual(fields.count("|"), 3, fields)
-        self.assertIn('"output|Stereo or mono ($(audio_output_label))|', audio)
+        self.assertNotIn("ui_fields", audio)
+        self.assertIn('ui_menu_hints "Audio Setup" "" "$last"', audio)
+        for item in ('"card|Default card|Now: $card_label.', '"volume|Volume|Now: $(audio_volume)%.',
+                     '"output|Stereo or mono|Now: $(audio_output_label).',
+                     '"latency|MAME audio latency|Now: $(audio_mame_latency).'):
+            self.assertIn(item, audio)
         sub = menu.split("screen_audio_output() {")[1].split("\n}\n")[0]
         self.assertIn('ui_menu_hints "Stereo or mono" "" ', sub)
         for item in ('"stereo|Stereo$(', '"mono|Mono$(', '"return|Return|'):

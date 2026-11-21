@@ -460,6 +460,8 @@ class Menu(Animated):
         self.top = 0
         # A transicao do carrossel: (inicio, lado) enquanto os icones deslizam.
         self.slide = None
+        # Quando o menu abriu: os textos de cima que correm partem daqui.
+        self.opened = time.monotonic()
         for i, e in enumerate(self.entries):
             if e[0] == default:
                 self.cursor = i
@@ -503,7 +505,14 @@ class Menu(Animated):
         Sem dicas, um texto curto vai no lugar da dica."""
         if not self.text:
             return []
-        lines = flow([self.text])
+        if "\n" in self.text.strip():
+            # Um bloco de linhas (um status, "Rotulo: valor"): uma linha da tela
+            # para cada, sem quebrar; a que nao cabe corre (draw_carousel). Uma
+            # linha quebrada em duas encheria o texto de cima e tiraria o menu do
+            # carrossel (o cartao de som de nome comprido no Audio Setup).
+            lines = [(piece, T.FG) for piece in self.text.split("\n")]
+        else:
+            lines = flow([self.text])
         if any(e[2] for e in self.entries) or len(lines) > 3:
             return lines
         return []
@@ -562,7 +571,11 @@ class Menu(Animated):
         size = 16 * scale + 8
         top = (48 if len(notes) <= 1 else 36 + len(notes) * 10) + extra() // 2
         for i, (line, _) in enumerate(notes):
-            centered(surf, line, T.PINK, 34 + i * 10)
+            if width(line) > T.SAFE_W:
+                # Nao cabe: corre inteira, ida e volta, em vez de quebrar ou cortar.
+                scroll_text(surf, line, T.PINK, T.SAFE_X, 34 + i * 10, T.SAFE_W, since=self.opened)
+            else:
+                centered(surf, line, T.PINK, 34 + i * 10)
 
         # A transicao: a fila de icones desliza ate o novo item parar sob a
         # moldura, em 0,16 s, freando no fim.
@@ -631,9 +644,17 @@ class Menu(Animated):
                 centered(surf, part, T.YELLOW, y + 4 - 5 * (len(parts) - 1) + i * 10)
         hint = hint or ("" if notes else self.text)
         y += 26 if scale == 4 else 22
-        for i, line in enumerate(wrap(hint, T.SAFE_W)[:3]):
+        parts = wrap(hint, T.SAFE_W)
+        if len(parts) > 3:
+            # Mais de 3 linhas: duas quebradas e a terceira leva o resto, que
+            # corre inteiro (a dica nunca e cortada).
+            parts = parts[:2] + [" ".join(parts[2:])]
+        for i, line in enumerate(parts):
             if y + i * 11 <= footer_y() - 12:
-                centered(surf, line, T.CYAN, y + i * 11)
+                if width(line) > T.SAFE_W:
+                    scroll_text(surf, line, T.CYAN, T.SAFE_X, y + i * 11, T.SAFE_W, since=self.opened)
+                else:
+                    centered(surf, line, T.CYAN, y + i * 11)
 
         if scale == 4:
             for i in range(n):
@@ -1380,16 +1401,17 @@ def element_name(element):
     return "AXIS %s%s" % (element[2:], element[0])
 
 
-def scroll_text(surf, s, color, x, y, w):
+def scroll_text(surf, s, color, x, y, w, since=None):
     """Um texto em w pixels: inteiro se cabe; senao ele corre, ida e volta,
-    sem cortar nada para sempre (o nome de um controle comprido)."""
+    sem cortar nada para sempre (o nome de um controle comprido). Com since (um
+    time.monotonic()), a corrida parte dali, parada no comeco do texto."""
     full = width(s)
     if full <= w:
         text(surf, s, color, x, y)
         return
     img = T.font().render(s, False, color)
     travel = full - w
-    t = time.monotonic() * 30 % (2 * travel + 60)
+    t = (time.monotonic() - since if since is not None else time.monotonic()) * 30 % (2 * travel + 60)
     offset = min(travel, max(0, t - 30)) if t < travel + 30 else max(0, travel - (t - travel - 60))
     surf.blit(img, (x, y), (round(offset), 0, w, img.get_height()))
 
