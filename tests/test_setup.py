@@ -2088,6 +2088,23 @@ class XorgTests(Base):
         self.env.out("xorg_generate")
         self.assertNotIn("Modeline", (self.env.etc / "xorg.conf").read_text())
 
+    def test_update_100_redoes_the_xorg_conf_of_a_31khz_cabinet_only(self):
+        script = ROOT / "updates" / "0100.sh"
+        env = {"FLIPEROS_SETUP_LIB": str(SETUP / "lib")}
+        # Um gabinete de 31 kHz com o modo do boot vindo de um EDID: o xorg.conf de antes
+        # (sem modeline) e refeito.
+        (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nmonitor=arcade_31\nfrequency=31k\n")
+        (self.env.etc / "xorg.conf").write_text("Section \"ServerFlags\"\nEndSection\n")
+        result = self.env.run("bash %s" % script, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Modeline "640x480" 25.452', (self.env.etc / "xorg.conf").read_text())
+        # Em 15 kHz o arquivo fica como esta.
+        (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nmonitor=generic_15\nfrequency=15k\n")
+        (self.env.etc / "xorg.conf").write_text("antes\n")
+        result = self.env.run("bash %s" % script, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.env.etc / "xorg.conf").read_text(), "antes\n")
+
     def test_lcd_only_disables_blanking(self):
         (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nmonitor=lcd\n")
         self.env.out("xorg_generate")
