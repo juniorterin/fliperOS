@@ -2073,6 +2073,21 @@ class XorgTests(Base):
         self.assertIn("HorizSync 15.0 - 16.5", text)
         self.assertIn('Option "BlankTime" "0"', text)
 
+    def test_31khz_always_gets_its_mode_even_when_the_boot_mode_comes_from_an_edid(self):
+        # Sem boot_resolution (o modo vem de um EDID, como num conversor para VGA) o X
+        # ficava sem modeline e escolhia um modo fora da faixa do monitor de 31 kHz.
+        for monitor in ("arcade_31", "vesa_480", "pc_31_120"):
+            (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nmonitor=%s\n" % monitor)
+            self.env.out("xorg_generate")
+            text = (self.env.etc / "xorg.conf").read_text()
+            self.assertIn('Modeline "640x480" 25.452', text, monitor)
+            self.assertIn("HorizSync 30.0 - 32.0", text, monitor)
+            self.assertIn('Option "PreferredMode" "640x480"', text, monitor)
+        # Nos outros monitores o EDID continua mandando.
+        (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nmonitor=generic_15\n")
+        self.env.out("xorg_generate")
+        self.assertNotIn("Modeline", (self.env.etc / "xorg.conf").read_text())
+
     def test_lcd_only_disables_blanking(self):
         (self.env.etc / "fliperos.conf").write_text("connector=VGA-1\nmonitor=lcd\n")
         self.env.out("xorg_generate")

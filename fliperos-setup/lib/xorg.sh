@@ -42,6 +42,11 @@ xorg_generate() {
   freq=$(monitor_frequency "$monitor" 2> /dev/null) || freq=""
   mode=$(conf_get boot_resolution 2> /dev/null) || mode=""
   conn=$(conf_get connector 2> /dev/null) || conn=""
+  # 31 kHz tem um modo so (640x480S). Sem boot_resolution (o modo do boot vem de
+  # um EDID, como no conversor DisplayPort/HDMI para VGA) o X ficava sem modeline
+  # e escolhia sozinho um modo do EDID, fora da faixa do monitor ("fora de
+  # frequencia" ao abrir o desktop).
+  [[ -z $mode && $freq == 31k ]] && mode=640x480S
   # Saidas de outra placa: o X as junta como GPU screen (AutoBindGPU), e as
   # secoes daqui so valem para a placa principal, presa pelo BusID.
   while IFS= read -r s; do
