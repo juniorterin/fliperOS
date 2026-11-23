@@ -2668,7 +2668,7 @@ class AudioTests(Base):
             self.assertTrue(all(len(row) == 16 for row in body), value)
         self.assertIn('"output": "stereo"', theme)
         web = (ROOT / "config" / "web" / "setup.js").read_text()
-        self.assertIn('mono: "px-audio"', web)
+        self.assertIn('output: "px-audio"', web)
 
     def test_audio_setup_keeps_the_carousel_with_its_icons(self):
         # O menu so e um carrossel (com icones) com ate 5 linhas de texto acima
