@@ -68,10 +68,10 @@ In development: 0.28 is tested in QEMU and on a 15 kHz CRT cabinet. Full documen
 ## What's included
 
 - 📺 **Video**: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.
-- 🕹️ **Emulators**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho (Model 2 and Model 3), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup > Games > Extras.
-- 🎮 **Frontends**: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen and grid; clones folded under each game; letter-by-letter scrolling), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.
+- 🕹️ **Emulators**: GroovyMAME, RetroArch, Flycast, PCSX2 (and PCSX2x6 for Namco 246/256), Dolphin, Keisho (Model 2 and Model 3), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup > Games > Extras. Three are not in the image and **install themselves when you open the first game**: HBGroovyMAME (HBMAME with Switchres), Odin (Sega Hikaru and Gaelco 3D) and the AnyBOR core (OpenBOR inside RetroArch).
+- 🎮 **Frontends**: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen with a wheel of logos, and grid; clones folded under each game; letter-by-letter scrolling; menu sounds and music), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.
 - 🔫 **Light gun**: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup > Joysticks. Wheels too.
-- ⚙️ **Setup**: video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency.
+- ⚙️ **Setup**: video, geometry, audio (stereo or mono, menu sounds), network, scraper, ROM lists, MAME romset cleaning, controls (Map controllers with eight player slots) and latency.
 - 📁 **Folders** `roms`, `bios`, `media`, `nvram`, `save` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
 - 🔑 **SSH** on from the first boot (`ssh fliperos@fliperos.local`, password `fliperos`). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.
 
@@ -103,7 +103,7 @@ Open **http://fliperos.local** on a phone or PC on the same network (user `flipe
   <img src="website/public/screenshots/web/phone-en.webp" width="173" alt="Web panel on a phone: now playing at 59.6 FPS and the game list with search">
 </p>
 
-At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](https://github.com/juniorterin/fliperOS/wiki/On-screen-menu): Interlaced filter, scanlines, geometry, colour and the GunCon 2, saved per game if you want, plus the emulator's menu and Quit, over the running game.
+At the cabinet, hold **Start and Down** for a second in any game to open the [on-screen menu](https://github.com/juniorterin/fliperOS/wiki/On-screen-menu): Interlaced filter, scanlines, geometry, colour and the GunCon 2, saved per game if you want, plus **Media capture** (a thumbnail of the screen or a 30 s preview video, saved as the game's art), the emulator's menu and Quit, over the running game.
 
 Every page in detail: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
@@ -195,7 +195,7 @@ The **FliperOS Setup** menu opens (Install to HD/SSD, Recovery Mode, Terminal, S
 
 1. The cabinet boots straight to the splash, without text.
 2. **Nothing to choose for what opens at power on**: it is the FliperOS frontend (change it later in Setup > Games > Frontend). A short wizard gets the cabinet ready: **Wi-Fi** (only when the network cable brings no internet and there is a Wi-Fi adapter), **controls** (the Button mapping of step 8) and the **live screen** of the web panel.
-3. When you leave the frontend (Esc), the **FliperOS menu** appears: *Start frontend*, *Setup*, *Start desktop*, *Exit to shell*, *Shutdown / Reboot*. The title shows the cabinet's IP address. Every item is explained in [The menus, item by item](#the-menus-item-by-item).
+3. When you leave the frontend (Esc), the **FliperOS menu** appears: *Start frontend*, *Start desktop*, *RetroAchievements*, *Setup*, *Exit to shell*, *Shutdown / Reboot*. The title shows the cabinet's IP address. Every item is explained in [The menus, item by item](#the-menus-item-by-item).
 4. **Network**: a network cable works by itself. For Wi-Fi: *Setup > Network Setup*, choose the network and type the password. Once connected, the IP appears in the menu title.
 5. **Updates**: at each boot with internet, if there is a FliperOS update, a screen describes it and asks **Apply now** or **Not now**.
 
@@ -208,9 +208,9 @@ The **FliperOS Setup** menu opens (Install to HD/SSD, Recovery Mode, Terminal, S
 
 In the menus, the panel or a gamepad already acts as the keyboard: directions = arrows, button 1 = Enter, button 2 = Esc.
 
-1. *Setup > Joysticks > Button mapping* (the first boot already offers it; this is how to redo it).
-2. For each player, press what it asks for, in order: up, down, left, right, **buttons 1 to 6** in panel order (1 2 3 in the top row, 4 5 6 in the bottom row), **Start** and **Coin**. The first input pressed tells which controller belongs to that player. With nothing pressed for 8 seconds, that input is skipped.
-3. The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus and OpenBOR).
+1. *Setup > Joysticks > Controllers / Arcade panel > Map controllers* (the first boot already offers it; this is how to redo it). It shows eight player slots: **hold a button** on a controller for about a second and it takes the slot.
+2. Open the card of a controller and choose *Map all buttons*: press what it asks for, in order: up, down, left, right, **buttons 1 to 8** in panel order (1 2 3 in the top row, 4 5 6 in the bottom row, and so on), **Start** and **Coin**. With nothing pressed for 8 seconds, that input is skipped. A joypad FliperOS already knows can keep its own layout with nothing to press. *Test controller* lights every button live.
+3. The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus, Odin and OpenBOR).
 4. Light gun (GunCon 2), wheel and pedals have their own calibrators in the same menu, and *Setup > System > Quirks* fixes USB devices that arrive wrong (for example a dual encoder showing up as a single player). See [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 
 <p align="center">
@@ -256,7 +256,10 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube and Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
 | `retroarch/<core>` | Consoles and computers; the `_info.txt` in each folder lists the extensions | RetroArch |
-| `openbor/Paks` | OpenBOR games (`.pak`) | OpenBOR |
+| `hbmame` | HBMAME homebrew and hacks (`.zip`), with their clones | HBGroovyMAME |
+| `odin` | Sega Hikaru and Gaelco 3D sets | Odin |
+| `namco2x6` | Namco System 246 and 256 | PCSX2x6 |
+| `openbor/Paks` | OpenBOR games (`.pak`); `openbor` is a shortcut to `retroarch/anybor` | AnyBOR core in RetroArch |
 
 **BIOS** come by themselves: *Setup > Games > Downloader > Download BIOS* brings the ones your games lack. Ones you bring yourself go in `bios`, never in a games folder: `bios/mame` for MAME (`neogeo.zip`, `qsound.zip`...), `bios/dc` for Flycast (`naomi.zip`, `awbios.zip`, `dc_boot.bin`), `bios/ps2` for PCSX2, and the `bios` folder itself for the RetroArch cores.
 
@@ -317,9 +320,10 @@ The menu that opens when you boot from the USB stick, before installing.
 
 ### FliperOS menu (installed system)
 
-It appears when you leave the frontend (Esc). The title shows the cabinet's name, its IP address and how full the disk is.
+It appears when you leave the frontend (Esc). The title shows the cabinet's name, its IP address and how full the disk is, and next to FliperOS its version and the last update applied (`0.28, u100`).
 
 - **Start frontend**: opens the default launcher (Attract-Mode Plus, for example). When you leave it, you come back to this menu.
+- **RetroAchievements**: signs in to your retroachievements.org account to earn achievements in RetroArch and other emulators.
 - **Setup**: all the settings, explained below.
 - **Start desktop**: opens LXDE, a regular desktop with a mouse, file manager, browser (*Falkon*), torrent client (*Transmission*) and app store. It is the easiest way to organize folders and copy games (step 9). To leave: *Logout* in the desktop menu, which opens a small menu: back to the FliperOS menu, reboot, power off or cancel.
 - **Exit to shell**: a full-screen command line. Type `fliperos-menu` to return to the menu.
@@ -355,17 +359,23 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
   - *AlsaMixer*: the full mixer, channel by channel;
   - *MAME audio latency*: from 0.0 to 50.0 (0 = default). Lower responds faster; raise it if the sound crackles in GroovyMAME;
   - *Test sound*: plays a sound to check the speakers;
-  - *Menu sounds*: turns on and off a sound when the cursor moves and when you press Enter, like a game's select screen. FliperOS doesn't come with game sounds: put your own `move.wav` and `select.wav` in the `sounds/menu` folder of the network share.
+  - *Menu sounds*: six sounds like a game's select screen (the cursor moving, Enter, Back, a game opening, a game closing and an alert), each with its own file and volume. FliperOS comes with a retrowave set; pick another WAV, OGG, MP3 or FLAC in the file picker, or turn them all off. The frontend uses the same six (Tab > Frontend sounds) and adds music with a now-playing bar. See [Audio and Network Setup](https://github.com/juniorterin/fliperOS/wiki/Setup-Audio-and-Network).
 - **Network Setup**: the network cable works by itself; this is for Wi-Fi.
   - *Connect to a Wi-Fi network*: the list of networks with their signal; choose one and type the password;
   - *Connect to a hidden network*: for a network that doesn't appear in the list;
   - *Network status*: the connection and the IP address.
 - **Joysticks**:
-  - *Button mapping (all emulators)*: maps each player's controls once for every emulator (step 8);
-  - *Buttons layout (games of 1 to 5 buttons)*: where the buttons of a game go on the panel, by how many buttons the game uses: a 4-button game as 1 2 on top and 3 4 below, or 1 3 on top and 2 4 below. For GroovyMAME, the MAME cores of RetroArch, Model 2 and Model 3;
-  - *Calibrate GunCon 2 (light gun)*: shoot the top-left and bottom-right targets, then the center one to check;
-  - *Calibrate wheel, pedals or analog stick*: the limits and center of each axis;
-  - *LPT joysticks (parallel port)*: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks). *Joysticks found now* shows what was detected and *Turn off* disables it.
+  - *Controllers / Arcade panel*: a menu for everything about the players' controls (step 8):
+    - *Map controllers*: eight player slots, two per line, each a card with the drawing of its controller. Hold a button on a controller to give it the slot; opening a card sets its player, type (arcade panel or joypad), visual layout, button mapping (once for every emulator), *Buttons layout* (where the buttons of a game of 1 to 5 buttons go on the panel) and a live *Test controller*. Flycast and Odin follow your players too: the USB controllers are put in player order when a game opens;
+    - *Keyboard encoder*: players 1 and 2 on a USB encoder that sends the MAME keys, with nothing to map;
+    - *Add LPT joysticks*: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks);
+    - *Haptic events*: the vibration of the joypads in the games;
+    - *Lights*: the colour of the joypad lights.
+  - *Bluetooth* (only with an adapter): pair, connect and forget Bluetooth controllers;
+  - *GunCon 2 (light gun)*: calibration (shoot the top-left and bottom-right targets, then the center one to check), screen flash and how the gun reads dark parts;
+  - *Wheels, pedals and analog sticks*: the limits and center of each axis.
+
+  See [Button mapping](https://github.com/juniorterin/fliperOS/wiki/Button-mapping).
 - **Games**: what puts games in the cabinet, in the order you use it.
   - *Frontend*: what opens every time the cabinet is turned on: the FliperOS frontend, Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. What isn't installed is installed (or downloaded) from here; ES-DE and Pegasus are built on the cabinet, which needs the network and some time. A choice the video card can't run (ES-DE without OpenGL 3, for example) gets a red X and a question before it opens.
 
@@ -374,7 +384,7 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
   - *Custom games*: PC games, scripts and your own emulators, which the frontends show as systems, installed from packages or made on the cabinet. See [Custom games](https://github.com/juniorterin/fliperOS/wiki/Custom-games).
   - *Emulators & Games*: the emulators of the desktop menu, each marked *installed* or *not installed*.
 
-    Choose one that is not installed to install it: **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. The others come in the image.
+    Choose one that is not installed to install it: **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. **HBGroovyMAME**, **Odin** and the **AnyBOR** core are not in the image either: they install themselves when the first game of their folder (`hbmame`, `odin`, `openbor`) opens, or from here. The others come in the image.
   - *Folders*, in two parts:
     - *Folder shortcuts* (called *Link* before): the folders FliperOS uses (`roms`, `bios`, `media`, `nvram`, `save`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and *Point it to a folder on another disk* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a shortcut to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Remove the shortcut* brings the previous one back.
     - *External storage*: a whole disk. *FliperOS folders* makes the folder structure on a second disk and can use it for everything, or format the disk (ext4 or exFAT). *Batocera filesystem* uses a disk that already keeps its games in Batocera's folders (`batocera/roms/snes`, `megadrive`...): each console becomes a system, with the core you choose for it. Plug such a disk in and the frontend asks once whether to use it. More in [External storage](docs/wiki/External-storage.md).

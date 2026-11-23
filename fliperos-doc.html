@@ -14,6 +14,10 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h1 align="center">FliperOS 0.28</h1>
 
 <p align="center">
+  <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Donate with Stripe" src="https://img.shields.io/badge/donate-with%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
+</p>
+
+<p align="center">
   <b>Arcade Linux. Built for CRT.</b><br>
   Ubuntu 24.04 for arcade cabinets with a 15 kHz tube, set up from the cabinet itself.
 </p>
@@ -70,10 +74,10 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="whats-included">What's included</h2>
 <ul>
 <li>📺 <strong>Video</strong>: 6.18 LTS kernel with the 15 kHz patches, boot at 15, 25 or 31 kHz or LCD, Switchres.</li>
-<li>🕹️ <strong>Emulators</strong>: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho (Model 2 and Model 3), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup &gt; Games &gt; Extras.</li>
-<li>🎮 <strong>Frontends</strong>: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen and grid; clones folded under each game; letter-by-letter scrolling), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.</li>
+<li>🕹️ <strong>Emulators</strong>: GroovyMAME, RetroArch, Flycast, PCSX2 (and PCSX2x6 for Namco 246/256), Dolphin, Keisho (Model 2 and Model 3), Hypseus Singe and OpenBOR; Wine, Steam and Heroic through Setup &gt; Games &gt; Extras. Three are not in the image and <strong>install themselves when you open the first game</strong>: HBGroovyMAME (HBMAME with Switchres), Odin (Sega Hikaru and Gaelco 3D) and the AnyBOR core (OpenBOR inside RetroArch).</li>
+<li>🎮 <strong>Frontends</strong>: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen with a wheel of logos, and grid; clones folded under each game; letter-by-letter scrolling; menu sounds and music), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.</li>
 <li>🔫 <strong>Light gun</strong>: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup &gt; Joysticks. Wheels too.</li>
-<li>⚙️ <strong>Setup</strong>: video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency.</li>
+<li>⚙️ <strong>Setup</strong>: video, geometry, audio (stereo or mono, menu sounds), network, scraper, ROM lists, MAME romset cleaning, controls (Map controllers with eight player slots) and latency.</li>
 <li>📁 <strong>Folders</strong> <code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code> and <code>config</code> in <code>~</code> and over the network (Samba); LXDE desktop with an app store.</li>
 <li>🔑 <strong>SSH</strong> on from the first boot (<code>ssh fliperos@fliperos.local</code>, password <code>fliperos</code>). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.</li>
 </ul>
@@ -104,7 +108,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
   <img src="website/public/screenshots/web/phone-en.webp" width="173" alt="Web panel on a phone: now playing at 59.6 FPS and the game list with search">
 </p>
 
-<p>At the cabinet, hold <strong>Start and Down</strong> for a second in any game to open the <a href="#On-screen-menu">on-screen menu</a>: Interlaced filter, scanlines, geometry, colour and the GunCon 2, saved per game if you want, plus the emulator's menu and Quit, over the running game.</p>
+<p>At the cabinet, hold <strong>Start and Down</strong> for a second in any game to open the <a href="#On-screen-menu">on-screen menu</a>: Interlaced filter, scanlines, geometry, colour and the GunCon 2, saved per game if you want, plus <strong>Media capture</strong> (a thumbnail of the screen or a 30 s preview video, saved as the game's art), the emulator's menu and Quit, over the running game.</p>
 <p>Every page in detail: <a href="#Web-panel">Web panel</a>.</p>
 <h3 id="new-your-controller-on-the-stream">New: your controller on the stream</h3>
 <p>The stick and the buttons light up on your live stream while you press them on the cabinet, like the input displays of fighting game streams. It's a page for an OBS Browser Source, with a transparent background: copy its address from <strong>Live &gt; Controller for OBS</strong> and paste it in OBS.</p>
@@ -166,11 +170,12 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Monitor Orientation</strong>: horizontal, or vertical for a rotated monitor (vertical games);</li>
 <li><strong>Resolution</strong>: the modes your monitor and card accept (the suggestion is fine);</li>
 <li><strong>Geometry</strong>: a grid to center the picture and fit its size on the tube. Use the arrows to adjust and Enter to save.</li>
-<li><strong>Automatically Partition</strong>: choose the disk by model, size and type (USB/NVMe/SATA). If yours isn't listed, <strong>My drive is not listed (details)</strong> explains why (usually the SATA mode, step 4).</li>
-<li><strong>WARNING</strong>: it shows the disk that will be <strong>completely erased</strong>. Check it and confirm (<em>No</em> goes back to the list).</li>
-<li><strong>Installing FliperOS</strong>: a progress bar with the current step. It takes a few minutes.</li>
-<li><strong>Installation completed successfully</strong>: remove the USB stick and choose <strong>Reboot now</strong>. On an <strong>Intel HD</strong>, power off instead: move the cable from the regular monitor to the CRT, then turn the cabinet on.</li>
 </ol>
+<p>Right after the video comes <strong>Sound: stereo or mono?</strong>: <em>Stereo</em> (two speakers, left and right apart) or <em>Mono</em> (one speaker: both channels mixed and played on both outputs). Change it later in Setup &gt; Audio Setup.
+3. <strong>Automatically Partition</strong>: choose the disk by model, size and type (USB/NVMe/SATA). If yours isn't listed, <strong>My drive is not listed (details)</strong> explains why (usually the SATA mode, step 4).
+4. <strong>WARNING</strong>: it shows the disk that will be <strong>completely erased</strong>. Check it and confirm (<em>No</em> goes back to the list).
+5. <strong>Installing FliperOS</strong>: a progress bar with the current step. It takes a few minutes.
+6. <strong>Installation completed successfully</strong>: remove the USB stick and choose <strong>Reboot now</strong>. On an <strong>Intel HD</strong>, power off instead: move the cable from the regular monitor to the CRT, then turn the cabinet on.</p>
 <p align="center">
   <img src="website/public/screenshots/anim/install.webp" width="320" alt="Animation: the installation on the tube, picking the monitor and the disk, then the progress bar">
   <br><sub>The installation on the tube (2x speed).</sub>
@@ -180,7 +185,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <ol>
 <li>The cabinet boots straight to the splash, without text.</li>
 <li><strong>Nothing to choose for what opens at power on</strong>: it is the FliperOS frontend (change it later in Setup &gt; Games &gt; Frontend). A short wizard gets the cabinet ready: <strong>Wi-Fi</strong> (only when the network cable brings no internet and there is a Wi-Fi adapter), <strong>controls</strong> (the Button mapping of step 8) and the <strong>live screen</strong> of the web panel.</li>
-<li>When you leave the frontend (Esc), the <strong>FliperOS menu</strong> appears: <em>Start frontend</em>, <em>Setup</em>, <em>Start desktop</em>, <em>Exit to shell</em>, <em>Shutdown / Reboot</em>. The title shows the cabinet's IP address. Every item is explained in <a href="#the-menus-item-by-item">The menus, item by item</a>.</li>
+<li>When you leave the frontend (Esc), the <strong>FliperOS menu</strong> appears: <em>Start frontend</em>, <em>Start desktop</em>, <em>RetroAchievements</em>, <em>Setup</em>, <em>Exit to shell</em>, <em>Shutdown / Reboot</em>. The title shows the cabinet's IP address. Every item is explained in <a href="#the-menus-item-by-item">The menus, item by item</a>.</li>
 <li><strong>Network</strong>: a network cable works by itself. For Wi-Fi: <em>Setup &gt; Network Setup</em>, choose the network and type the password. Once connected, the IP appears in the menu title.</li>
 <li><strong>Updates</strong>: at each boot with internet, if there is a FliperOS update, a screen describes it and asks <strong>Apply now</strong> or <strong>Not now</strong>.</li>
 </ol>
@@ -192,9 +197,9 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h3 id="8-set-up-the-controls">8. Set up the controls</h3>
 <p>In the menus, the panel or a gamepad already acts as the keyboard: directions = arrows, button 1 = Enter, button 2 = Esc.</p>
 <ol>
-<li><em>Setup &gt; Joysticks &gt; Button mapping</em> (the first boot already offers it; this is how to redo it).</li>
-<li>For each player, press what it asks for, in order: up, down, left, right, <strong>buttons 1 to 6</strong> in panel order (1 2 3 in the top row, 4 5 6 in the bottom row), <strong>Start</strong> and <strong>Coin</strong>. The first input pressed tells which controller belongs to that player. With nothing pressed for 8 seconds, that input is skipped.</li>
-<li>The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus and OpenBOR).</li>
+<li><em>Setup &gt; Joysticks &gt; Controllers / Arcade panel &gt; Map controllers</em> (the first boot already offers it; this is how to redo it). It shows eight player slots: <strong>hold a button</strong> on a controller for about a second and it takes the slot.</li>
+<li>Open the card of a controller and choose <em>Map all buttons</em>: press what it asks for, in order: up, down, left, right, <strong>buttons 1 to 8</strong> in panel order (1 2 3 in the top row, 4 5 6 in the bottom row, and so on), <strong>Start</strong> and <strong>Coin</strong>. With nothing pressed for 8 seconds, that input is skipped. A joypad FliperOS already knows can keep its own layout with nothing to press. <em>Test controller</em> lights every button live.</li>
+<li>The mapping goes to every emulator at once (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus, Odin and OpenBOR).</li>
 <li>Light gun (GunCon 2), wheel and pedals have their own calibrators in the same menu, and <em>Setup &gt; System &gt; Quirks</em> fixes USB devices that arrive wrong (for example a dual encoder showing up as a single player). See <a href="#Controls">Controls</a>.</li>
 </ol>
 <p align="center">
@@ -276,9 +281,24 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <td>RetroArch</td>
 </tr>
 <tr>
+<td><code>hbmame</code></td>
+<td>HBMAME homebrew and hacks (<code>.zip</code>), with their clones</td>
+<td>HBGroovyMAME</td>
+</tr>
+<tr>
+<td><code>odin</code></td>
+<td>Sega Hikaru and Gaelco 3D sets</td>
+<td>Odin</td>
+</tr>
+<tr>
+<td><code>namco2x6</code></td>
+<td>Namco System 246 and 256</td>
+<td>PCSX2x6</td>
+</tr>
+<tr>
 <td><code>openbor/Paks</code></td>
-<td>OpenBOR games (<code>.pak</code>)</td>
-<td>OpenBOR</td>
+<td>OpenBOR games (<code>.pak</code>); <code>openbor</code> is a shortcut to <code>retroarch/anybor</code></td>
+<td>AnyBOR core in RetroArch</td>
 </tr>
 </tbody>
 </table>
@@ -333,9 +353,10 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Shutdown</strong>: power off or reboot.</li>
 </ul>
 <h3 id="fliperos-menu-installed-system">FliperOS menu (installed system)</h3>
-<p>It appears when you leave the frontend (Esc). The title shows the cabinet's name, its IP address and how full the disk is.</p>
+<p>It appears when you leave the frontend (Esc). The title shows the cabinet's name, its IP address and how full the disk is, and next to FliperOS its version and the last update applied (<code>0.28, u100</code>).</p>
 <ul>
 <li><strong>Start frontend</strong>: opens the default launcher (Attract-Mode Plus, for example). When you leave it, you come back to this menu.</li>
+<li><strong>RetroAchievements</strong>: signs in to your retroachievements.org account to earn achievements in RetroArch and other emulators.</li>
 <li><strong>Setup</strong>: all the settings, explained below.</li>
 <li><strong>Start desktop</strong>: opens LXDE, a regular desktop with a mouse, file manager, browser (<em>Falkon</em>), torrent client (<em>Transmission</em>) and app store. It is the easiest way to organize folders and copy games (step 9). To leave: <em>Logout</em> in the desktop menu, which opens a small menu: back to the FliperOS menu, reboot, power off or cancel.</li>
 <li><strong>Exit to shell</strong>: a full-screen command line. Type <code>fliperos-menu</code> to return to the menu.</li>
@@ -367,20 +388,26 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 - <strong>Audio Setup</strong>: the sound.
   - <em>Default card</em>: which sound card the system and every emulator use;
   - <em>Volume</em>: from 0 to 100 (the keyboard's volume keys also work, anywhere);
+  - <em>Stereo or mono</em>: <em>Mono</em> mixes both channels and plays the same sound on both outputs, for a cabinet with a single speaker (the default is stereo; the installer asks it too);
   - <em>AlsaMixer</em>: the full mixer, channel by channel;
   - <em>MAME audio latency</em>: from 0.0 to 50.0 (0 = default). Lower responds faster; raise it if the sound crackles in GroovyMAME;
   - <em>Test sound</em>: plays a sound to check the speakers;
-  - <em>Menu sounds</em>: turns on and off a sound when the cursor moves and when you press Enter, like a game's select screen. FliperOS doesn't come with game sounds: put your own <code>move.wav</code> and <code>select.wav</code> in the <code>sounds/menu</code> folder of the network share.
+  - <em>Menu sounds</em>: six sounds like a game's select screen (the cursor moving, Enter, Back, a game opening, a game closing and an alert), each with its own file and volume. FliperOS comes with a retrowave set; pick another WAV, OGG, MP3 or FLAC in the file picker, or turn them all off. The frontend uses the same six (Tab &gt; Frontend sounds) and adds music with a now-playing bar. See <a href="#Setup-Audio-and-Network">Audio and Network Setup</a>.
 - <strong>Network Setup</strong>: the network cable works by itself; this is for Wi-Fi.
   - <em>Connect to a Wi-Fi network</em>: the list of networks with their signal; choose one and type the password;
   - <em>Connect to a hidden network</em>: for a network that doesn't appear in the list;
   - <em>Network status</em>: the connection and the IP address.
 - <strong>Joysticks</strong>:
-  - <em>Button mapping (all emulators)</em>: maps each player's controls once for every emulator (step 8);
-  - <em>Buttons layout (games of 1 to 5 buttons)</em>: where the buttons of a game go on the panel, by how many buttons the game uses: a 4-button game as 1 2 on top and 3 4 below, or 1 3 on top and 2 4 below. For GroovyMAME, the MAME cores of RetroArch, Model 2 and Model 3;
-  - <em>Calibrate GunCon 2 (light gun)</em>: shoot the top-left and bottom-right targets, then the center one to check;
-  - <em>Calibrate wheel, pedals or analog stick</em>: the limits and center of each axis;
-  - <em>LPT joysticks (parallel port)</em>: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks). <em>Joysticks found now</em> shows what was detected and <em>Turn off</em> disables it.
+  - <em>Controllers / Arcade panel</em>: a menu for everything about the players' controls (step 8):
+    - <em>Map controllers</em>: eight player slots, two per line, each a card with the drawing of its controller. Hold a button on a controller to give it the slot; opening a card sets its player, type (arcade panel or joypad), visual layout, button mapping (once for every emulator), <em>Buttons layout</em> (where the buttons of a game of 1 to 5 buttons go on the panel) and a live <em>Test controller</em>. Flycast and Odin follow your players too: the USB controllers are put in player order when a game opens;
+    - <em>Keyboard encoder</em>: players 1 and 2 on a USB encoder that sends the MAME keys, with nothing to map;
+    - <em>Add LPT joysticks</em>: old controllers on the parallel port: gamepad adapter (NES, SNES, N64, PlayStation), DB9 adapter (Atari, Amiga, Sega) or TurboGraFX interface (up to 7 joysticks);
+    - <em>Haptic events</em>: the vibration of the joypads in the games;
+    - <em>Lights</em>: the colour of the joypad lights.
+  - <em>Bluetooth</em> (only with an adapter): pair, connect and forget Bluetooth controllers;
+  - <em>GunCon 2 (light gun)</em>: calibration (shoot the top-left and bottom-right targets, then the center one to check), screen flash and how the gun reads dark parts;
+  - <em>Wheels, pedals and analog sticks</em>: the limits and center of each axis.</p>
+<p>See <a href="#Button-mapping">Button mapping</a>.
 - <strong>Games</strong>: what puts games in the cabinet, in the order you use it.
   - <em>Frontend</em>: what opens every time the cabinet is turned on: the FliperOS frontend, Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, the LXDE desktop or the FliperOS Setup itself. What isn't installed is installed (or downloaded) from here; ES-DE and Pegasus are built on the cabinet, which needs the network and some time. A choice the video card can't run (ES-DE without OpenGL 3, for example) gets a red X and a question before it opens.</p>
 <pre><code>Choosing a frontend also puts every game folder into it, so choose it again whenever a folder gets its first games. *Add a custom frontend* adds another program by its command, and *Edit or delete a custom frontend* changes or removes it. See [Frontends](#Frontends).
@@ -390,7 +417,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><em>Custom games</em>: PC games, scripts and your own emulators, which the frontends show as systems, installed from packages or made on the cabinet. See <a href="#Custom-games">Custom games</a>.</li>
 <li>
 <p><em>Emulators &amp; Games</em>: the emulators of the desktop menu, each marked <em>installed</em> or <em>not installed</em>.</p>
-<p>Choose one that is not installed to install it: <strong>Fightcade 2</strong> (downloaded from its site) and <strong>KOF Final Attack</strong> on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with <code>Final Attack.exe</code>, on a USB disk or the network) and it downloads the <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> and Ikemen GO and makes a converted copy. The others come in the image.
+<p>Choose one that is not installed to install it: <strong>Fightcade 2</strong> (downloaded from its site) and <strong>KOF Final Attack</strong> on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with <code>Final Attack.exe</code>, on a USB disk or the network) and it downloads the <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> and Ikemen GO and makes a converted copy. <strong>HBGroovyMAME</strong>, <strong>Odin</strong> and the <strong>AnyBOR</strong> core are not in the image either: they install themselves when the first game of their folder (<code>hbmame</code>, <code>odin</code>, <code>openbor</code>) opens, or from here. The others come in the image.
   - <em>Folders</em>, in two parts:
 - <em>Folder shortcuts</em> (called <em>Link</em> before): the folders FliperOS uses (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>splashscreen</code>) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and <em>Point it to a folder on another disk</em> to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): <code>~/roms/mame</code> becomes a shortcut to it and the folder used until then is kept as <code>~/roms/old-mame</code>. Each folder can point to a different place. <em>Remove the shortcut</em> brings the previous one back.
 - <em>External storage</em>: a whole disk. <em>FliperOS folders</em> makes the folder structure on a second disk and can use it for everything, or format the disk (ext4 or exFAT). <em>Batocera filesystem</em> uses a disk that already keeps its games in Batocera's folders (<code>batocera/roms/snes</code>, <code>megadrive</code>...): each console becomes a system, with the core you choose for it. Plug such a disk in and the frontend asks once whether to use it. More in <a href="docs/wiki/External-storage.md">External storage</a>.
@@ -1310,6 +1337,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>Downwards the image only moves while there are blank lines below it (Switchres doesn't go past the <em>front porch</em>); when it stops, the adjustment is the monitor's <strong>V-POS</strong>;
    - <strong>Multiple Monitors</strong>: a second arcade monitor on another analog output (VGA, DVI-I) of the same card, and a third, or one on a second video card or on a digital output through an active VGA converter, as an experimental option, for games with 2 or 3 screens (Darius, The Ninja Warriors and Punch-Out!! in GroovyMAME, F355 Challenge in Flycast), with a switch to turn the multi-screen mode off. See <a href="#Multiple-Monitors">Multiple monitors</a>.
    - <strong>Video driver</strong>, only with an AMD card that works with both drivers (HD 7000, R7/R9 200 and 300): <strong>radeon</strong> or <strong>amdgpu</strong>. A card that does Vulkan with amdgpu comes with amdgpu suggested, for the Vulkan of PCSX2, Dolphin, Flycast and RetroArch; the first boot asks you to confirm the picture. When the card has the choice and it wasn't made in Video Setup, the installation asks it before the disk. See <a href="#Setup-Video-radeon-or-amdgpu">Video Setup</a>.
+   After the video, <strong>Sound: stereo or mono?</strong> asks whether the cabinet has two speakers (<em>Stereo</em>) or one (<em>Mono</em>: both channels mixed on both outputs); Esc keeps stereo. It is written to <code>fliperos.conf</code> and <code>/etc/asound.conf</code>, which the installation copies to the disk (<a href="#Setup-Audio-and-Network">Audio Setup</a>).
 2. <strong>Cabinet name</strong> (optional; empty or Esc skips it): the name the other cabinets on your local network see in party and link play, up to 12 letters. With no name the cabinet gets a fruit or an animal. It can be changed later in Setup &gt; System &gt; Cabinet name. See <a href="#Linked-cabinets">Linked cabinets</a>.
 3. <strong>Automatically Partition</strong> — lists the disks by <strong>model, size, path and bus</strong> (USB/NVMe/SATA). Not listed: the installation media itself, disks under 16 GiB, mounted or in swap, with RAID/LVM/encryption or active dependents — each one with the reason, above the list.</p>
 </li>
@@ -1502,7 +1530,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li><strong>Live screen</strong>: the web panel's live screen is installed and turned on. If it can't download, it stays in <strong>Setup &gt; Games &gt; Extras &gt; Live screen</strong>.</li>
 </ol>
 <h2 id="Installed-system-the-fliperos-menu">The FliperOS menu</h2>
-<p>The title shows the cabinet's name and IP address, the network use and how full the disk is.</p>
+<p>The title shows the cabinet's name and IP address, the network use and how full the disk is. Next to the name of FliperOS comes its version and, after a comma, the number of the last update applied: <code>0.28, u100</code> is version 0.28 with updates up to the 100th (<a href="#Updates-and-versions">Updates and versions</a>). Without an update applied, only the version shows.</p>
 <table>
 <thead>
 <tr>
@@ -1719,6 +1747,10 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <td>From 0 to 100. The volume keys of a keyboard or a panel work too (<a href="#Power-and-volume-buttons-volume-keys">Power and volume buttons</a>)</td>
 </tr>
 <tr>
+<td><strong>Stereo or mono</strong></td>
+<td><em>Stereo</em> keeps left and right apart; <em>Mono</em> mixes both channels (half of each) and plays the same sound on both outputs, for a cabinet with a single speaker. It is <code>mono</code> in <code>fliperos.conf</code>; the installer asks it right after the video step. Games opened after the change use it</td>
+</tr>
+<tr>
 <td><strong>AlsaMixer</strong></td>
 <td>Every control of the sound card, one by one</td>
 </tr>
@@ -1815,6 +1847,8 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </table>
 <p>Once connected, the IP shows in the FliperOS menu's title. Connecting to Wi-Fi also checks for a FliperOS update right away, without waiting for the next boot (<a href="#Updates-and-versions">Updates and versions</a>).</p>
 <p>The network cable needs nothing: it connects by itself.</p>
+<h3 id="Setup-Audio-and-Network-usb-wi-fi-adapters">USB Wi-Fi adapters</h3>
+<p>Some USB adapters (the Realtek RTL8188GU and similar) plug in as a <strong>CD-ROM with their own drivers</strong> and only become Wi-Fi after a switch. FliperOS does it by itself when you plug them in (<code>usb-modeswitch</code>), and updates add it to cabinets installed before. If the adapter still shows as a CD-ROM, <strong>Network status</strong> says so: unplug it and plug it in again.</p>
 <h3 id="Setup-Audio-and-Network-typing-with-the-controller">Typing with the controller</h3>
 <p>The Wi-Fi password, a hidden network's name and every other password in the Setup have an <strong>on-screen keyboard</strong>:</p>
 <ul>
@@ -1831,6 +1865,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <h3 id="Setup-Audio-and-Network-how-it-works_1">How it works</h3>
 <ul>
 <li>NetworkManager runs both the cable and the Wi-Fi (<code>nmcli</code>). The Wi-Fi radio itself is a service you can turn off in <strong>Setup &gt; System &gt; Services</strong> (<a href="#Setup-System-services">System Setup</a>).</li>
+<li>The switch of a USB adapter that shows as a CD-ROM is <code>usb-modeswitch</code> with <code>usb-modeswitch-data</code> (in the image; <code>tools/cabinet-update.sh</code> installs them on older ones). <code>net_hardware</code> in <code>lib/network.sh</code> lists the adapters and warns about one still in CD-ROM mode.</li>
 <li>The first boot offers Wi-Fi only when the cable brings no internet (<a href="#Installed-system-first-boot">Installed system</a>).</li>
 </ul>
 <p>See also: <a href="#Remote-access">Remote access</a>, <a href="#Web-panel">Web panel</a>.</p>
@@ -2305,7 +2340,11 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <td>In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard (<a href="#Custom-games-the-controller-as-a-keyboard">Custom games</a>). A custom game with no key map yet opens the menu by itself on this page</td>
 </tr>
 <tr>
-<td><strong>Close</strong></td>
+<td><strong>Media capture</strong></td>
+<td>In a game: records the game's art for the frontend, as the scraper would. <strong>Thumbnail</strong> takes a picture of the screen (<code>~/media/snap/&lt;folder&gt;/&lt;game&gt;.png</code>, always 4:3). <strong>Preview video (30 s)</strong> records 30 seconds at 60 fps with the game's sound (<code>~/media/preview/&lt;folder&gt;/&lt;game&gt;.mp4</code>; the sound needs the live screen's sound on, otherwise the file has a silent track). The menu closes first so it is not in the picture, a blue bar says "Recording 30 s", then "saved" (or why it failed), and the menu shortcut stays off while it records. The game is found in the frontend's lists the same way the web panel finds it; a program that is in no games folder has no capture</td>
+</tr>
+<tr>
+<td><strong>Close OSD menu</strong></td>
 <td>Closes this menu, putting back what wasn't saved</td>
 </tr>
 <tr>
@@ -3029,7 +3068,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <tbody>
 <tr>
 <td><strong>High scores</strong></td>
-<td>MAME's hiscore files and the arcade memory (<code>~/nvram</code>)</td>
+<td>MAME's hiscore files (<code>~/.mame/hiscore</code>, and HBMAME's <code>~/.hbmame/hiscore</code> on a cabinet that has it) and the arcade memory (<code>~/nvram</code>)</td>
 </tr>
 <tr>
 <td><strong>Saves</strong></td>
@@ -3184,7 +3223,8 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </table>
 <p>The App Store downloads no updates by itself and has no welcome screen: disk and network activity in the middle of a game hurts latency.</p>
 <h3 id="Desktop-emulators-in-the-menu">Emulators in the menu</h3>
-<p><strong>Games</strong> has RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, OpenBOR, Model 2, Model 3 and, once downloaded through the Setup, Fightcade 2, with the projects' own icons.</p>
+<p><strong>Games</strong> has RetroArch, GroovyMAME, HBMAME (HBGroovyMAME), Flycast, PCSX2, PCSX2x6, Dolphin, DuckStation, OpenBOR, Odin, Model 2, Model 3, KOF Final Attack and, once downloaded through the Setup, Fightcade 2, with the projects' own icons. PortProton (Windows games) and Hook Of The Reaper (light guns) have their own entries.</p>
+<p>HBMAME and Odin are optional packages (<a href="#Packages">Packages</a>): they are installed when the first game of their folder opens from a frontend, so open one there first; the desktop entries only run what is already installed.</p>
 <p>None of them runs inside the desktop: choosing one closes the desktop (asking first if there are open windows), the emulator opens on the CRT in its own video mode, and when it closes <strong>the desktop comes back</strong>.</p>
 <p>Model 2 always shows: the first click downloads and builds it (<a href="#Emulators">Emulators</a>). Steam and Heroic (GOG), once installed through <strong>Setup &gt; Games &gt; Extras</strong>, also live in Games, but open inside the desktop itself.</p>
 <h2 id="Desktop-disks">Disks</h2>
@@ -3229,6 +3269,9 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <p>Changes the desktop's resolution <strong>on the fly</strong>. The list is the resolutions of the monitor chosen in Video Setup, plus <strong>Other resolution...</strong> for any <code>WIDTHxHEIGHT@HZ</code>.</p>
 <p>Without a confirmation within 15 seconds, the previous resolution comes back. <strong>Use every time the desktop starts</strong> keeps it for the next time.</p>
 <p>Only the desktop changes: the console, the Setup and the frontends keep the Video Setup resolution. With an LCD monitor, the list is the modes of its EDID.</p>
+<h3 id="Desktop-on-a-31-khz-monitor">On a 31 kHz monitor</h3>
+<p>With a 31 kHz preset the desktop opens at <strong>640x480 and 31.5 kHz</strong>, the one mode of that preset, however the boot mode was chosen (also when it comes from an EDID, as with a DisplayPort or HDMI to VGA converter). Before update 100 such a cabinet could open the desktop with the monitor's "out of frequency" message: the X had no mode of its own and picked one from the EDID that the monitor doesn't take. The update rewrites <code>/etc/X11/xorg.conf.d/10-fliperos.conf</code> on the cabinets already at 31 kHz.</p>
+<p>If the message still shows, send <code>/etc/fliperos/fliperos.conf</code> (the <code>monitor=</code>, <code>frequency=</code>, <code>boot_resolution=</code> and <code>connector=</code> lines) and <code>~/.local/share/xorg/Xorg.0.log</code> to the <a href="https://t.me/fliperos15khz">Telegram group</a>. A mode saved in <strong>Desktop Resolution</strong> that the monitor doesn't take can cause it too: pick another one, or delete <code>~/.config/fliperos/desktop-mode</code>.</p>
 <p>In an interlaced mode, the desktop gets the flicker filter at the Desktop row's level of <strong>Setup &gt; Video Setup &gt; Interlaced hacks</strong> (<a href="#Picture-filters">Interlaced, colour and scanlines</a>).</p>
 <h2 id="Desktop-dracula-theme">Dracula theme</h2>
 <p><a href="https://draculatheme.com">Dracula</a> is the theme of everything FliperOS draws:</p>
@@ -3282,6 +3325,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li>Emulators: the menu entry runs <code>fliperos-launch</code>, which saves the request and closes the desktop; <code>fliperos-session</code> opens the emulator and then the desktop again. GroovyMAME, Model 2 and Fightcade icons come from <code>config/icons</code>; Supermodel gets a FliperOS monogram. An emulator left out of the build (<code>--skip-*</code>) doesn't show.</li>
 <li>The controller-mouse is <code>config/fliperos-deskpad</code> (log <code>/opt/fliperos/logs/deskpad.log</code>); the keyboard is Ubuntu's Onboard, set by <code>config/fliperos-onboard.gschema.override</code>.</li>
 <li>Desktop Resolution is <code>fliperos-resolution</code>: Switchres computes the mode within <code>/etc/switchres.ini</code> (<code>switchres --calc</code>, as for the emulators) and <code>xrandr</code> applies it. The saved mode is <code>~/.config/fliperos/desktop-mode</code>, applied by <code>fliperos-lxde</code>.</li>
+<li>The X configuration is written by <code>xorg_generate</code> (<code>lib/xorg.sh</code>) from <code>fliperos.conf</code>; at <code>frequency=31k</code> it always has the <code>640x480S</code> modeline, with the horizontal range 30-32 kHz. <code>updates/0100.sh</code> redoes it on 31 kHz cabinets.</li>
 <li>Logout (the menu item, the panel button and the end of the session) opens a full-screen menu in the Setup's look: back to the FliperOS menu, reboot, power off or cancel (<code>config/fliperos-logout</code>).</li>
 <li>The theme is installed by <code>fliperos-dracula.sh</code>; Oh My Zsh lives in <code>/usr/local/share/oh-my-zsh</code> and <code>~/.zshrc</code> is <code>config/zshrc</code>. The VT palette is <code>/etc/vtrgb</code> (<code>config/vtrgb-dracula</code>, applied by Ubuntu's <code>setvtrgb.service</code>).</li>
 </ul>
@@ -4307,6 +4351,11 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td>GroovyMAME</td>
 </tr>
 <tr>
+<td><code>hbmame</code></td>
+<td>HBMAME sets (arcade hacks and homebrews), <code>.zip</code>/<code>.7z</code> and CHD folders</td>
+<td>HBMAME (<code>hbgroovymame</code>), installed when its first game is opened (<a href="#GroovyMAME-hbmame-hbgroovymame">GroovyMAME</a>)</td>
+</tr>
+<tr>
 <td><code>naomi</code>, <code>naomi2</code>, <code>atomiswave</code></td>
 <td>MAME sets of these systems, one system per folder</td>
 <td>Flycast</td>
@@ -4320,6 +4369,11 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td><code>model3</code></td>
 <td>MAME sets of Model 3</td>
 <td>Keisho</td>
+</tr>
+<tr>
+<td><code>odin</code></td>
+<td>Sega Hikaru and Gaelco 3D MAME sets, <code>.zip</code>/<code>.7z</code></td>
+<td>Odin, installed when its first game is opened (<a href="#More-emulators-odin-sega-hikaru-and-gaelco-3d">More emulators</a>)</td>
 </tr>
 <tr>
 <td><code>dreamcast</code></td>
@@ -4348,8 +4402,8 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><code>openbor/Paks</code></td>
-<td>OpenBOR games (<code>.pak</code>)</td>
-<td>OpenBOR</td>
+<td>OpenBOR games (<code>.pak</code>). <code>openbor</code> is a shortcut to <code>retroarch/anybor</code>, the folder of the AnyBOR core</td>
+<td>The AnyBOR core of RetroArch, installed when its first game is opened (<a href="#OpenBOR">OpenBOR</a>)</td>
 </tr>
 <tr>
 <td><code>hypseus</code></td>
@@ -4398,7 +4452,11 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><code>~/bios/mame</code></td>
-<td>GroovyMAME's BIOS and devices: <code>neogeo.zip</code>, <code>qsound.zip</code>… (they also work from <code>~/roms/mame</code>)</td>
+<td>GroovyMAME's BIOS and devices: <code>neogeo.zip</code>, <code>qsound.zip</code>… (they also work from <code>~/roms/mame</code>, and HBMAME reads them too)</td>
+</tr>
+<tr>
+<td><code>~/bios/hbmame</code></td>
+<td>HBMAME's own BIOS and devices, if they differ from MAME's</td>
 </tr>
 </tbody>
 </table>
@@ -4895,7 +4953,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <h2 id="ROM-Cleaner-how-it-works">How it works</h2>
 <ul>
 <li>It joins the XML of the romset's MAME version with <code>catver.ini</code> (categories and adult games), <code>nplayers.ini</code> (how two people play) and Controls.dat's <code>controls.xml</code> (the buttons and controls the game really uses). For Naomi, Naomi 2 and Atomiswave the controls and buttons come from Flycast's own game table: MAME's XML gives nearly all of them a generic 8-way joystick and 6 buttons, wheel and gun games included.</li>
-<li><strong>The data files ship in the image</strong>, in <code>/usr/local/share/fliperos/romclean</code> (<code>config/romclean</code>): <code>catver.ini</code> 0.289 from <a href="https://www.progettosnaps.net/catver/">progetto-SNAPS</a>, <code>nplayers.ini</code> 0.288 from <a href="http://nplayers.arcadebelgium.be">NPlayers</a> (CC BY-SA 3.0) and <code>controls.xml</code> 0.141.1 from Controls.dat. To use newer ones, put them <strong>with the romset</strong>: the Setup looks first in its folder, the one above and the <code>folders</code> subfolder, and only then in the system folder. The screen says which ones it found (<em>Data files</em>); without one, its parameters don't show.</li>
+<li><strong>The data files ship in the image</strong>, in <code>/usr/local/share/fliperos/romclean</code> (<code>config/romclean</code>): <code>catver.ini</code> 0.289 from <a href="https://www.progettosnaps.net/catver/">progetto-SNAPS</a>, <code>nplayers.ini</code> 0.278 from <a href="http://nplayers.arcadebelgium.be">NPlayers</a> (CC BY-SA 3.0) and <code>controls.xml</code> 0.141.1 from Controls.dat. To use newer ones, put them <strong>with the romset</strong>: the Setup looks first in its folder, the one above and the <code>folders</code> subfolder, and only then in the system folder. The screen says which ones it found (<em>Data files</em>); without one, its parameters don't show.</li>
 <li>The XML: GroovyMAME's is <code>groovymame -listxml</code>; MAME 2010's ships at <code>/usr/local/share/fliperos/mame2010.xml.xz</code>, pinned by commit and checksum. What was read stays in <code>/var/cache/fliperos</code> (a minute with GroovyMAME's, a second after).</li>
 <li>A set's system (Flycast) is that of the first BIOS in its <code>romof</code> chain. MAME's emulation status doesn't filter Flycast and Keisho. Resolution comes from the XML's <code>pixclock</code>/<code>htotal</code>, or from the lines. Controls cover both the 0.139 types (<code>joy8way</code>, <code>vjoy2way</code>, <code>doublejoy8way</code>) and the current ones (<code>joy</code>, <code>doublejoy</code> with <code>ways</code>).</li>
 <li>Copying: each file arrives as <code>.part</code> and only then gets its name, and what arrives belongs to the owner of the emulator's folder. Moving: Flycast's sets never enter the delete list, so the same romset can be cleaned for Flycast afterwards, except in a MAME 2010 romset, which Flycast can't read.</li>
@@ -5932,7 +5990,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><a href="#More-emulators">More emulators</a></td>
-<td>Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack</td>
+<td>Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack, Odin (Sega Hikaru)</td>
 </tr>
 <tr>
 <td><a href="#Fightcade-2">Fightcade 2</a></td>
@@ -5955,6 +6013,12 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td><a href="#GroovyMAME">GroovyMAME</a></td>
 <td>Arcade</td>
 <td>In the image</td>
+<td>Each game's own mode</td>
+</tr>
+<tr>
+<td><a href="#GroovyMAME-hbmame-hbgroovymame">HBMAME</a></td>
+<td>Arcade hacks and homebrews (<code>~/roms/hbmame</code>)</td>
+<td>Downloads itself when you open its first game</td>
 <td>Each game's own mode</td>
 </tr>
 <tr>
@@ -5996,8 +6060,8 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <tr>
 <td><a href="#OpenBOR">OpenBOR</a></td>
 <td>Beat 'em ups</td>
-<td>In the image</td>
-<td>Each pak's own mode</td>
+<td>Downloaded (the AnyBOR core, when the first pak opens)</td>
+<td>The mode of RetroArch's CRT engine</td>
 </tr>
 <tr>
 <td><a href="#More-emulators-hypseus-singe-laserdisc">Hypseus Singe</a></td>
@@ -6016,6 +6080,12 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td>Online arcade matches</td>
 <td>Downloaded</td>
 <td>Each game's own mode</td>
+</tr>
+<tr>
+<td><a href="#More-emulators-odin-sega-hikaru-and-gaelco-3d">Odin</a></td>
+<td>Sega Hikaru and Gaelco 3D arcades (<code>~/roms/odin</code>)</td>
+<td>Downloads itself when you open its first game</td>
+<td>640x480 (interlaced at 15 kHz)</td>
 </tr>
 <tr>
 <td><a href="#More-emulators-kof-final-attack-ikemen-go-43">KOF Final Attack</a></td>
@@ -6134,8 +6204,8 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 </tr>
 <tr>
 <td>OpenBOR</td>
-<td>X11</td>
-<td>Each pak's own mode (<a href="#OpenBOR">OpenBOR</a>)</td>
+<td>KMS (the AnyBOR core in RetroArch; the engine of its own, in Games &gt; OpenBOR, is X11)</td>
+<td>Each game's own mode (CRT SwitchRes)</td>
 <td>The same</td>
 </tr>
 <tr>
@@ -6253,6 +6323,16 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <h2 id="GroovyMAME-updating-it">Updating it</h2>
 <p>The FliperOS package is GroovyMAME <code>gm0289sr222f</code> (MAME 0.289 with Switchres 2.22f), built with FliperOS's party patch. FliperOS updates bring new packages.</p>
 <p><strong>Setup &gt; Games &gt; Emulators &amp; Games &gt; GroovyMAME &gt; Build the newest</strong> compiles the newest GroovyMAME right on the cabinet, with the same patches. It takes many hours, often a whole night, with 20 GB free; each MAME version changes the romset. <strong>Back to the FliperOS package</strong> returns to the tested one (<a href="#Setup-Games-the-newest-version-of-a-packaged-emulator">Games Setup</a>).</p>
+<h2 id="GroovyMAME-hbmame-hbgroovymame">HBMAME (hbgroovymame)</h2>
+<p>HBMAME is MAME with the <strong>hacks and homebrews of arcade games</strong> (Robbbert's build). FliperOS has it with the same Switchres as GroovyMAME: the <code>hbgroovymame</code> command opens each game in its own mode on the tube. Its games go in <strong><code>~/roms/hbmame</code></strong>, apart from GroovyMAME's <code>~/roms/mame</code>, so nothing mixes: it has its own <code>~/.hbmame</code>, <code>~/nvram/hbmame</code>, <code>~/save/hbmame</code>, <code>~/bios/hbmame</code> and art in <code>~/media/&lt;type&gt;/hbmame</code>.</p>
+<ul>
+<li><strong>It installs itself.</strong> HBMAME does not come in the image. The <code>hbmame</code> folder exists from the installation; when the first game is in it and you open it in the frontend, a bar installs HBMAME (a package already built, so it takes the time of a download) and the game opens. By hand: <strong>Setup &gt; Games &gt; Emulators &amp; Games &gt; HBMAME</strong>.</li>
+<li><strong>It is a system of its own</strong> in every frontend (HBMAME, next to MAME), with the game names from HBMAME's own list, which knows the hacks. Right after the install the Setup reads that list (the <code>-listxml</code> of HBMAME, kept in a cache) and remakes the game list, so the <strong>clones that come inside a merged zip</strong> (<code>ssf2t.zip</code> with its hacks) show up under their parent at once. Before HBMAME is installed only the zip itself is listed, since only HBMAME knows what is inside it.</li>
+<li><strong>It follows the Setup:</strong> the monitor, the picture format, the latency and the Button mapping apply to both, since <code>hbmame.ini</code> is made from the <code>mame.ini</code> the Setup writes.</li>
+<li><strong>BIOS and device sets</strong> (<code>neogeo.zip</code>, <code>qsound.zip</code>…) can stay in <code>~/bios/hbmame</code> or in <code>~/bios/mame</code>.</li>
+<li><strong>Everything GroovyMAME has:</strong> the audio synchronised with the video, <strong>party play</strong> (a game of the <code>hbmame</code> folder for two or more players goes across 2 to 4 cabinets, with HBMAME installed on each), multi-screen games on several monitors (the <code>numscreens</code> of each one comes from HBMAME's own list, in <code>/etc/fliperos/hbmame/screens</code>), the high scores in <code>~/.hbmame/hiscore</code> on the Pixelcade, the web panel and the cloud backup. The Pixelcade shows the scores only of the games its decoder (hi2txt) knows.</li>
+<li><strong>Updates:</strong> a cabinet that has it gets the new version with the system updates, like the other packages. The version is HBMAME 0.289.6, on MAME 0.289.</li>
+</ul>
 <h2 id="GroovyMAME-groovymame-in-x">GroovyMAME in X</h2>
 <p>The <code>groovymame</code> command opens in an Xorg of its own instead of KMS:</p>
 <ul>
@@ -6266,6 +6346,8 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <li><strong>The package:</strong> <code>fliperos-groovymame</code> compiles GroovyMAME from the release's tag (commit <code>953db38</code>) with FliperOS's lockstep patch. The build takes hours, so it happens once, when the package is made; the image and the updates install the same <code>.deb</code>. The binary goes to <code>/usr/local/libexec/groovymame</code>, without the Qt debugger and the tools. Like GroovyArcade's package, it puts the tag's source files in <code>/usr/local/share/groovymame</code>: <code>plugins</code> (<code>hiscore</code>), <code>uismall.bdf</code>, <code>bgfx</code>, <code>artwork</code>, <code>language</code>, <code>ctrlr</code>, <code>keymaps</code> and <code>hash</code>. A build of the newest uses one compiler process per 1.5 GB of free memory; if a patch no longer fits the new code, the package stays.</li>
 <li><strong>The command:</strong> <code>groovymame</code> is <code>config/fliperos-groovymame</code>. It opens through <code>fliperos-kms-run</code> and passes <code>-inipath /etc/fliperos/mame</code> (the release's default is relative to the folder it is opened from): <code>/etc/fliperos/mame/mame.ini</code>, which the Setup writes, is the one that applies. Commands without a screen (<code>-listxml</code>, <code>-verifyroms</code>, <code>-version</code>…) run directly.</li>
 <li><strong>KMS mode switching</strong> needs the SDL2 of the <code>fliperos-sdl2-kms</code> package (<code>/usr/local/lib/fliperos/sdl2-kms</code>, loaded only by GroovyMAME): Ubuntu's SDL2 with GroovyArcade's two KMS patches (<code>packaging/patches/sdl2</code>), so SDL re-reads the connector's modes on every query and puts the original mode back when the window closes. Switchres attaches each mode to the connector (<code>ATTACHMODE</code>, kernel patch 06). <code>SDL_KMSDRM_REQUIRE_DRM_MASTER=0</code> must not be set: with it, SDL undoes Switchres's switch on its next frame.</li>
+<li><strong>hbgroovymame:</strong> the same file, <code>config/fliperos-groovymame</code>, installed twice: the name it is called by decides (<code>/usr/local/bin/hbgroovymame</code>). The package <code>fliperos-hbgroovymame</code> (<code>PKG_OPTIONAL</code>: compiled and published, not in the ISO) brings only the binary (<code>/usr/local/libexec/hbgroovymame</code>), HBMAME's own files (<code>/usr/local/share/hbgroovymame</code>: plugins, bgfx, hash, ctrlr…) and <code>paths.ini</code>. The source is HBMAME's tag <code>tag2896</code>, plus the files GroovyMAME adds (Switchres, emusync, lz4) and its diff over MAME 0.289, ported to HBMAME's code (<code>packaging/patches/hbgroovymame</code>: 0001 the Switchres and emusync port, 0002 the newer asio and the headers HBMAME no longer includes, 0003 the audio synchronisation: <code>sound.cpp</code>, the OSD sound module and SDL that measure the sound card's real rate, and the sound update once per frame). The party's lockstep patch is the very file of GroovyMAME's package (<code>packaging/patches/groovymame</code>), applied to HBMAME too. Each game opens with <code>hb_ini</code>: <code>/etc/fliperos/hbmame/hbmame.ini</code> is the system <code>mame.ini</code> with the folders of <code>paths.ini</code> on top (rebuilt when either is newer), and <code>-inipath</code> lists that folder first and <code>/etc/fliperos/mame</code> after it, so <code>ui.ini</code> and the Midway files are read from there (<code>ui.ini</code> is copied once, with the art folders pointing at <code>hbmame</code>).</li>
+<li><strong>A new HBMAME version:</strong> change <code>HBMAME_TAG</code> and <code>HBMAME_COMMIT</code> in the recipe and apply the patches in order (<code>git apply</code> of <code>0001</code>, <code>0002</code>, <code>0003</code>, then GroovyMAME's lockstep patch). HBMAME merges MAME's development head, so a patch that stops fitting has to be ported by hand, the way these were: <code>0001</code> is GroovyMAME's diff over MAME 0.289 for the Linux files, <code>0002</code> is what HBMAME's code asks differently, and <code>0003</code> repeats GroovyMAME's sound changes in HBMAME's <code>sound.cpp</code>. After a change, raise <code>PKG_REVISION</code>. The check that worked: build, open a game with a zero-filled ROM set made from <code>-listxml</code> (MAME runs it with a checksum warning) under Xvfb with <code>SDL_AUDIODRIVER=dummy</code>, and run two instances with a <code>fliperos-lockstep.ini</code> on one machine.</li>
 <li><strong>Midway:</strong> <code>config/mame-midway.ini</code>, installed as <code>/etc/fliperos/mame/source/&lt;driver&gt;.ini</code>, read after <code>mame.ini</code> only for those drivers.</li>
 <li><strong>Sound:</strong> it preloads <code>libfliperos-sdl-audio.so</code> (<code>config/fliperos-sdl-audio.c</code>), which reports ALSA's <code>default</code> as SDL's default device. SDL 2.30 lists only the <code>hw:</code> devices, and MAME 0.289 saves the chosen one in each game's cfg (<code>sound_map</code>), so it took the card's raw device: no sharing with other programs, not the card picked in the Setup, no sound on the live screen. The old <code>sound_map</code> entries are removed once (<code>.fliperos-sound-default</code>).</li>
 <li><strong><code>mame.ini</code></strong> is made like GroovyArcade's: GroovyMAME's own <code>-createconfig</code>, with <code>config/mame.ini</code> on top (<code>config/fliperos-mame-ini</code>): <code>plugin hiscore</code>, <code>skip_gameinfo 1</code>, <code>video opengl</code>, <code>switchres_ini 1</code>, <code>sound sdl</code>, <code>aspect 4:3</code>, <code>modesetting 1</code>, and the Setup's latency (<code>lowlatency</code>, <code>autoframedelay</code>, <code>framedelay</code>). The UI font stays MAME's own, because GroovyArcade's <code>uismall.bdf</code> was too small on the cabinet.</li>
@@ -6684,9 +6766,12 @@ media=DVD
 <h1 id="OpenBOR">OpenBOR</h1>
 <p><a href="https://github.com/DCurrent/openbor">OpenBOR</a> runs the beat 'em up games made with it: hundreds of fan games and mods, each one a <code>.pak</code> file.</p>
 <h2 id="OpenBOR-where-the-games-go">Where the games go</h2>
-<p>The games (<code>.pak</code>) go in <code>/opt/fliperos/roms/openbor/Paks</code> (over the network: <code>\\fliperos\FliperOS\roms\openbor\Paks</code>). The <strong>Games &gt; OpenBOR</strong> menu opens OpenBOR's own menu, which lists the paks.</p>
+<p>The games (<code>.pak</code>) go in <code>/opt/fliperos/roms/openbor/Paks</code> (over the network: <code>\\fliperos\FliperOS\roms\openbor\Paks</code>). <code>~/roms/openbor</code> is a shortcut to <code>~/roms/retroarch/anybor</code>, the folder of the AnyBOR core (<a href="#OpenBOR-the-anybor-core-in-retroarch">below</a>), so the paks, and what the engine keeps next to them (<code>Saves</code>, <code>Logs</code>, <code>v3</code>), live there. A system that still had <code>~/roms/openbor</code> as a plain folder gets everything moved into the core's folder at the next login, with nothing overwritten: a file whose name is already in both places stays where it was, and the folder stays a folder until the next login moves the rest. A folder you pointed to another disk (<a href="#Setup-Games">Folders</a>) is left alone. The <strong>Games &gt; OpenBOR</strong> menu opens OpenBOR's own engine, which lists the paks.</p>
+<h2 id="OpenBOR-the-anybor-core-in-retroarch">The AnyBOR core in RetroArch</h2>
+<p>The paks of the frontends open in <strong>AnyBOR</strong>, a libretro core for OpenBOR with 322 engine profiles (OpenBOR 3.0 builds 3020 to 6391, and 4.0 up to 8023-dev) and an automatic choice of the profile for each pak, so old mods and new ones open in the same core. It runs in RetroArch (KMS, each game's mode from the CRT SwitchRes engine), with save states and up to four players.</p>
+<p>It is not in the ISO. The first time you open an OpenBOR game, the frontend downloads and installs the <code>fliperos-anybor</code> package (about 5 MB, with the bar in the middle of the screen) and the game opens. Without a network, and with no package installed, the game does not open; the engine of <strong>Games &gt; OpenBOR</strong> works without it. The core goes to <code>/opt/fliperos/retroarch/cores/anybor_libretro.so</code>. It is built from <a href="https://github.com/retrodiv/AnyBOR-libretro">retrodiv/AnyBOR-libretro</a> at a pinned commit (<code>packaging/packages/fliperos-anybor.sh</code>) and is published like the other optional packages (<a href="#Packages">Packages</a>). The core includes OpenBOR 3400 and 3741, whose license forbids selling the code or the binaries: the license texts are in <code>/usr/share/doc/fliperos-anybor</code>. To open a pak by hand: <code>fliperos-kms-run retroarch -L /opt/fliperos/retroarch/cores/anybor_libretro.so "/home/fliperos/roms/openbor/Paks/My Game.pak"</code>.</p>
 <h2 id="OpenBOR-in-the-frontends">In the frontends</h2>
-<p>The paks are also a system of their own, <strong>OpenBOR</strong>, in the FliperOS frontend (and in the web panel, Attract-Mode Plus, ES-DE and Pegasus), one game per <code>.pak</code> (any case: <code>HFFgp32.PAK</code> counts). Picking one opens that pak straight away, without OpenBOR's menu, in the pak's own video mode (below). The system shows up once <code>Paks</code> has a pak; <code>Saves</code>, <code>Logs</code> and <code>v3</code> next to it are not games and stay out.</p>
+<p>The paks are also a system of their own, <strong>OpenBOR</strong>, in the FliperOS frontend (and in the web panel, Attract-Mode Plus, ES-DE and Pegasus), one game per <code>.pak</code> (any case: <code>HFFgp32.PAK</code> counts). Picking one opens that pak straight away, without OpenBOR's menu, in the AnyBOR core. The system shows up once <code>Paks</code> has a pak; <code>Saves</code>, <code>Logs</code> and <code>v3</code> next to it are not games and stay out.</p>
 <h2 id="OpenBOR-game-information">Game information</h2>
 <p>A pak has no record of its name, author or year: it is a package of the game's files. <code>fliperos-openbor-meta</code> (<code>config/fliperos-openbor-meta</code>) reads what is inside each pak (the file table at the end, PAK32 or PAK64) and the frontend shows it:</p>
 <table>
@@ -6718,7 +6803,7 @@ media=DVD
 <p>Until ScreenScraper brings one, the description is made from the pak: <em>An OpenBOR game for 1 player. Mode: Story. Resolution 400x300.</em> ScreenScraper's description replaces it; a description from anywhere else (written by hand, or by the Scraper's own lists) is left alone. An image with almost no colours (the flat backgrounds many paks leave in place of a title) is skipped. The select screen is only a background with "Player Select", so it is not used as a cover. Art already in <code>~/media</code> (from the Scraper, or put there by hand) is never replaced.</p>
 <p>The rest (the real title, year, developer, genre, description, cover and logo) comes from <strong>ScreenScraper</strong> through the Scraper: <strong>Setup &gt; Games &gt; Scraper</strong> (or the web panel's Scraper page) lists OpenBOR with the other folders (Skyscraper's <code>openbor</code> platform, ScreenScraper system 214). After the Scraper runs for OpenBOR, <code>fliperos-openbor-meta</code> takes the title, year, developer, genre, players and description from Skyscraper's cache (<code>~/.skyscraper/cache/openbor</code>) and puts them over what came from the pak. Everything goes in the FliperOS list <code>~/.local/share/fliperos/lists/OpenBOR.txt</code> (the frontend and the web panel read it; Attract-Mode Plus gets a copy) and the description in <code>~/media/texto/openbor/&lt;pak&gt;.txt</code>. The list is rewritten when the frontend opens and when the <code>Paks</code> folder changes (<code>fliperos-setup --romlists</code>). The FliperOS frontend's automatic scrape (Arcade Database, libretro-thumbnails) has no OpenBOR games; ScreenScraper only comes through the Scraper. To see what a pak has: <code>fliperos-openbor-meta info "My Game.pak"</code>.</p>
 <h2 id="OpenBOR-video-mode">Video mode</h2>
-<p>Each pak opens in its own resolution, adjusted to the monitor (<code>fliperos-openbor-meta mode</code>, called by <code>fliperos-x11-run</code>):</p>
+<p>This section is about OpenBOR's own engine (<strong>Games &gt; OpenBOR</strong> and the <code>openbor</code> command). In the AnyBOR core, RetroArch's CRT engine sets the mode from what the core reports. Each pak opens in its own resolution, adjusted to the monitor (<code>fliperos-openbor-meta mode</code>, called by <code>fliperos-x11-run</code>):</p>
 <table>
 <thead>
 <tr>
@@ -6816,7 +6901,7 @@ media=DVD
 </ul>
 <p>See also: <a href="#Custom-games">Custom games</a>, <a href="#Fightcade-2">Fightcade 2</a>, <a href="#Emulators">Emulators</a>.</p>
 <h1 id="More-emulators">More emulators</h1>
-<p>The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc) and KOF Final Attack on Ikemen GO.</p>
+<p>The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack on Ikemen GO and Odin (Sega Hikaru, Gaelco 3D).</p>
 <h2 id="More-emulators-dolphin-gamecube-wii-triforce">Dolphin (GameCube, Wii, Triforce)</h2>
 <p>Its games go in <code>~/roms/dolphin</code> (<code>.iso</code>, <code>.rvz</code>, <code>.wbfs</code>). It is compiled from Dolphin's stable version, as a FliperOS package updated with FliperOS (the official Linux build is a Flatpak, which would bring about 1 GB of runtime); <strong>Build the newest</strong> in <strong>Setup &gt; Games &gt; Emulators &amp; Games</strong> compiles the newest (<a href="#Setup-Games-the-newest-version-of-a-packaged-emulator">Games Setup</a>).</p>
 <ul>
@@ -6876,6 +6961,17 @@ media=DVD
 </ul>
 <p>The converted copy goes to <code>~/roms/ikemen/kof-final-attack</code> (about 2 GB). The original folder is not changed. <strong>Update</strong> downloads the newest game, patch and Ikemen GO and converts again.</p>
 <p>It opens from the desktop menu (<strong>Games &gt; KOF Final Attack</strong>) or with <code>fliperos-kof</code>, in its own Xorg at 320x240@60. It is not in the frontends' game lists.</p>
+<h2 id="More-emulators-odin-sega-hikaru-and-gaelco-3d">Odin (Sega Hikaru and Gaelco 3D)</h2>
+<p>Odin is a low level emulator of the <strong>Sega Hikaru</strong> (Air Trix, Brave Firefighters, Planet Harriers, NASCAR Arcade, Star Wars Racer Arcade, Cyber Troopers Virtual-On Force) and of the <strong>Gaelco 3D</strong> boards (ATV Track, Smashing Drive, Football Power, Radikal Bikers, Speed Up, Surf Planet). Its games go in <strong><code>~/roms/odin</code></strong>, one MAME set (<code>.zip</code> or <code>.7z</code>) per game: <code>airtrix</code>, <code>braveff</code>, <code>pharrier</code>, <code>sgnascar</code>, <code>swracer</code>, <code>von4</code>, <code>atvtrack</code>, <code>smashdrv</code>, <code>gfootbal</code>, <code>radikalb</code>, <code>footbpow</code>, <code>speedup</code>, <code>surfplnt</code>.</p>
+<ul>
+<li><strong>It installs itself.</strong> Odin does not come in the image. The <code>odin</code> folder exists from the installation; when the first game is in it and you open it in the frontend, a bar installs Odin (a package already built, so it takes the time of a download) and the game opens. By hand: <strong>Setup &gt; Games &gt; Emulators &amp; Games &gt; Odin</strong>. It is a system of its own in every frontend (Odin), with the game names from the GroovyMAME list.</li>
+<li><strong>The shared sets</strong> the Hikaru games need, <code>hikaru.zip</code> and <code>mie.zip</code> (and <code>tms320c31.zip</code> for Radikal Bikers, Football Power, Speed Up and Surf Planet), go in <code>~/bios/odin</code>; <code>~/bios/mame</code> and <code>~/roms/odin</code> work too. The other sets (<code>jvs13551</code>, <code>18wheelr</code>, <code>srally2</code>) are optional: without them Odin imitates those boards.</li>
+<li><strong>Video.</strong> It needs an OpenGL 4.3 driver (or Vulkan 1.3): an AMD card with the Mesa driver, like the R7 240 or the R9 380, has it; a GPU with only OpenGL 2.1 (Intel Ironlake) does not. On <strong>amdgpu</strong> it draws in <strong>Vulkan</strong>, on the other drivers (radeon, Intel) in OpenGL, chosen the first time it opens and each time the driver changes (Setup &gt; Video Setup); in between, the Renderer you pick in its menu stays. It opens in its own Xorg at <strong>640x480</strong> (interlaced on a 15 kHz tube, which Switchres sets up): Odin opens a window of at least 640x480 that it cannot shrink, so any smaller mode (320x240) shows only a corner of the picture, and it has no stretch option, so 640x240 would be cut in half too. On 25/31 kHz monitors and LCDs it is 640x480 progressive. Note that the flicker filter (Video Setup) works in OpenGL, not in the Vulkan renderer that amdgpu uses by default. It starts in full screen, with the bezel off and VSync on; the first time only, so what you change in its menu stays.</li>
+<li><strong>Files.</strong> What the board keeps without power (EEPROM, NVRAM, clock, the Virtual-On card) is in <code>~/nvram/odin/&lt;game&gt;</code>, the save states (F2 saves, F4 loads) in <code>~/save/odin</code>, and <code>odin.ini</code> and <code>odin.log</code> in <code>~/.local/share/odin</code> (also reachable from the <code>config</code> folder).</li>
+<li><strong>Controls.</strong> Odin has its own menu (Escape, F10 or Guide) and its own pages for the controls, wheels and light guns; <strong>coin + button 1</strong> opens it. Calibrate the controls of each game the first time, in its test menu (key <code>0</code>, or Guide held with R3).</li>
+<li><strong>Updates.</strong> A cabinet that has it gets the new version with the system updates. The version is the project's commit of 2026-11-18 (0.1.1 and the Gaelco 3D games).</li>
+</ul>
+<p>Odin has not been seen on a CRT yet.</p>
 <h2 id="More-emulators-how-it-works">How it works</h2>
 <ul>
 <li><strong>DuckStation</strong> is unpacked in <code>/opt/duckstation</code> (<code>config/fliperos-duckstation</code>); a <code>~/roms/duckstation</code> or <code>~/roms/psx</code> from before moves to <code>~/roms/ps1</code>, with its art. Its settings are <code>[Cheevos]</code>, <code>AspectRatio</code> and the BIOS path in its <code>settings.ini</code>, written at each launch by <code>fliperos-x11-run</code>; <code>-batch</code> closes it with the game.</li>
@@ -7018,8 +7114,8 @@ media=DVD
 </thead>
 <tbody>
 <tr>
-<td><strong>Button mapping</strong></td>
-<td>Controller, player, kind, buttons (<a href="#Button-mapping">Button mapping</a>)</td>
+<td><strong>Controllers / Arcade panel</strong></td>
+<td>Map controllers (the eight player slots), keyboard encoder, LPT, haptics, lights; controller, player, kind, buttons (<a href="#Button-mapping">Button mapping</a>)</td>
 </tr>
 <tr>
 <td><strong>Bluetooth</strong></td>
@@ -7063,28 +7159,42 @@ media=DVD
 This page used to hold every control. Button mapping is now on <a href="#Button-mapping">Button mapping</a>, the GunCon 2 on <a href="#Light-guns">Light guns</a>, Quirks and SDL on <a href="#Wheels-and-quirks">Wheels, LPT and quirks</a>.</p>
 <p>See also: <a href="#DIY-hardware">DIY hardware</a>, <a href="#Latency">Latency</a>.</p>
 <h1 id="Button-mapping">Button mapping</h1>
-<p><strong>Setup &gt; Joysticks &gt; Button mapping</strong> tells FliperOS which controller belongs to each player and what each button is. Done once, it counts in every emulator, the frontends and the menus. <strong>Buttons layout</strong> then says where the buttons of 1 to 5-button games go on your panel.</p>
-<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-controllers.png" width="480" alt="Button mapping: the connected controllers"></p>
-<h2 id="Button-mapping-mapping-a-controller">Mapping a controller</h2>
-<p>The screen opens on the list of <strong>connected controllers</strong>, each with a wired or wireless icon; it refreshes by itself when a controller is turned on or plugged in. Pick one, then:</p>
+<p><strong>Setup &gt; Joysticks &gt; Controllers / Arcade panel</strong> tells FliperOS which controller belongs to each player and what each button is. Done once, it counts in every emulator, the frontends and the menus. It is a menu with <strong>Map controllers</strong>, <strong>Keyboard encoder</strong>, <strong>Add LPT joysticks</strong>, <strong>Haptic events</strong> and <strong>Lights</strong>.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/update98-controllers-menu.png" width="480" alt="Controllers / Arcade panel: the menu"></p>
+<h2 id="Button-mapping-map-controllers">Map controllers</h2>
+<p>Eight player slots, <strong>Player 1 to 8</strong>, two per line. Each card shows the drawing of its controller (an arcade panel or a joypad), the wired or wireless icon and the name, which scrolls on the selected card. The screen refreshes by itself when a controller is turned on or plugged in.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/update98-map-controllers.png" width="480" alt="Map controllers: the eight player slots"></p>
+<p><strong>Giving a slot a controller:</strong> select an empty card and <strong>hold a button</strong> on the controller that will be that player. The bar fills (about a second) and the card takes the controller; if the slot had another one, the two swap. A controller that is already set up just changes card. One that still needs a mapping or a layout opens its menu to be set up.</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/update98-map-hold.png" width="480" alt="Map controllers: holding a button fills the bar of an empty slot"></p>
+<p><strong>A card with a controller</strong> opens its menu with Enter. Each item is set on its own, in this order:</p>
 <ol>
-<li><strong>The player</strong> it belongs to: P1, P2…</li>
-<li><strong>The kind of controller:</strong></li>
-<li><strong>Arcade stick or JAMMA panel:</strong> a stick and 1 to 8 buttons; then how many buttons it has.</li>
-<li><strong>Joypad</strong> (Xbox, PlayStation, Nintendo, 8BitDo…). One FliperOS already knows can keep its own layout with nothing to press (<strong>Use its layout</strong>), like Batocera; <strong>Map each button</strong> asks for each one.</li>
-<li><strong>Each input:</strong> up, down, left, right, buttons 1 to 6 in panel order (1 2 3 on top, 4 5 6 below), Start and Coin. The panel is drawn as you go: the control being asked blinks, the ones already pressed turn green.</li>
-<li><strong>The menu buttons:</strong> the buttons that accept and go back in the menus.</li>
-</ol>
-<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-kind.png" width="320" alt="Button mapping: arcade panel or joypad"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/0065-setup-padcapture.png" width="320" alt="Button mapping: pressing each joypad button"></p>
-<ul>
-<li>Holding a button skips that input; with nothing pressed for 8 seconds it is skipped too. Esc cancels the whole mapping.</li>
+<li><strong>Player:</strong> which slot it is (or none). If another controller has it, the two swap. A controller with no player keeps its mapping.</li>
+<li><strong>Type:</strong> arcade panel or joypad.</li>
+<li><strong>Visual layout:</strong> the drawing, which also sets the number of buttons of a panel. The layout of player 1 is the one the frontend's controls guide draws by itself (<strong>AUTO</strong> on the Controls page; setting it to ARCADE PANEL or JOYPAD there locks it).</li>
+<li><strong>Mapping:</strong> <strong>Map all buttons</strong> (up, down, left, right, buttons 1 to 8 in panel order, Start, Coin, and then the buttons that accept and go back in the menus), <strong>Change one button</strong>, or <strong>Menu buttons</strong> alone. A joypad FliperOS already knows can keep its own layout with nothing to press, like Batocera.</li>
+<li><strong>Buttons layout</strong> (arcade panels): below.</li>
+<li>
+<p><strong>Test controller:</strong> below.</p>
+</li>
+<li>
+<p>Holding a button skips that input in the mapping; with nothing pressed for 8 seconds it is skipped too. Esc cancels.</p>
+</li>
 <li>Each button does one thing: a button already given to another input is refused, and the screen says which input has it.</li>
 <li>On a panel that shows up as one device for two players (a V-USB board), the first input pressed tells which half belongs to the player.</li>
+</ol>
+<p><strong>The number of players follows the controllers that are connected.</strong> Pull a controller out and its player leaves the count; plug it back and the player returns. The frontend uses this count for party play, and says "1 PLAYER" or "2 PLAYERS" when it changes. Bluetooth controllers take the free player in the order they connect unless you gave them one (<a href="#Bluetooth">Bluetooth</a>).</p>
+<h2 id="Button-mapping-test-controller">Test controller</h2>
+<p>Every button, direction, stick and trigger lights up live, by the controller's own mapping. A joypad has the drawing of the console picked in the Visual layout (Xbox, PlayStation, GameCube, Super Nintendo, NES, Dreamcast, Saturn, Mega Drive, Neo Geo CD, Nintendo 64): the triggers are bars that fill with the travel, the sticks are dots that move and glow when pressed. An arcade panel shows the stick and the buttons of its layout, plus Coin and Start. <strong>Hold Start</strong> to leave (or Esc).</p>
+<p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/update98-test-playstation.png" width="320" alt="Test controller: PlayStation"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/update98-test-n64.png" width="320" alt="Test controller: Nintendo 64">
+<img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/update98-test-arcade6.png" width="320" alt="Test controller: 6-button panel"> <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/telegram/img/update98-test-arcade4.png" width="320" alt="Test controller: Neo Geo MVS panel"></p>
+<h2 id="Button-mapping-games-follow-your-players">Games follow your players</h2>
+<p>Some emulators choose the controller of each player by themselves: <strong>Flycast</strong> (and the Flycast Dojo of Fightcade) give port 1 to the first controller Linux lists, and <strong>Odin</strong> takes the first two that are connected. So that they follow the players you chose, a game opens like this:</p>
+<ul>
+<li><strong>Order of the controllers:</strong> if the USB controllers are not in the order of the players (usually the first game after turning the cabinet on), they are replugged by software, in player order, for a couple of seconds before the game opens. Bluetooth controllers are not reordered.</li>
+<li><strong>Odin</strong> also gets the controller of player 1 and 2 in its own settings (<code>[players.GAME]</code>) every time it opens.</li>
 </ul>
-<p><strong>The order of players:</strong> wired controllers take the first players, in the order of their USB ports; Bluetooth ones take the players left, in the order they connect (<a href="#Bluetooth">Bluetooth</a>).</p>
-<p><strong>The number of players follows the controllers that are connected.</strong> The Joysticks screen says "Players now: 2 of 2 mapped (controllers connected: 2)". Pull a controller out and its player leaves the count; plug it back and the player returns. The frontend uses this count for party play, and says "1 PLAYER" or "2 PLAYERS" when it changes.</p>
 <h2 id="Button-mapping-keyboard-encoder">Keyboard encoder</h2>
-<p><strong>Keyboard encoder (MAME default keys)</strong>, at the end of the list, is for an encoder that types keys (I-PAC and the like) in MAME's layout. Nothing is pressed: it only asks how many players, and every emulator gets MAME's default keys:</p>
+<p><strong>Keyboard encoder</strong>, in the Controllers / Arcade panel menu, is for an encoder that types keys (I-PAC and the like) in MAME's layout. It takes players 1 and 2 (the cards say Keyboard encoder); nothing is pressed, and every emulator gets MAME's default keys:</p>
 <table>
 <thead>
 <tr>
@@ -7131,7 +7241,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li><strong>Hypseus:</strong> the <code>[KEYBOARD]</code> of <code>~/.hypseus/hypinput.ini</code>. <strong>OpenBOR:</strong> each player's keys in <code>Saves/default.cfg</code> and each pak's <code>.cfg</code> (1 attack, 2 jump, 3 special, 4 to 6 the other attacks, coin on Esc). <strong>PCSX2x6:</strong> the <code>[JVS]</code> section (<a href="#Namco-246-256-the-buttons">PlayStation 2 and Namco 246/256</a>).</li>
 <li><strong>Triggers:</strong> an axis resting at one end (an Xbox controller's LT/RT) can only be pressed one way; the capture ignores the release of a trigger held when it started, and saving fixes the direction from the resting position.</li>
 <li><strong>Buttons layout</strong> is <code>/etc/fliperos/buttons.layout</code> (one line per number of buttons: the position of button 1, of button 2…). The button count of each game comes from GroovyMAME's <code>-listxml</code> with the real counts of <code>controls.xml</code> on top (<code>fliperos-romclean buttons</code> writes <code>/var/lib/fliperos/game-buttons.txt</code>); MAME 2010 has its own table, <code>game-buttons-mame2010.txt</code>, and a game whose 0.139 entry lists its board's generic block (Tekken 3) counts as that block, so the punches stay on top and the kicks below. Where it goes: a <code>&lt;system&gt;</code> per game in GroovyMAME's ctrlr (a clone follows its parent), a <code>buttons-N.cfg</code> for RetroArch's MAME cores, a game section in <code>Supermodel.ini</code> by the input type of each game in <code>Games.xml</code>, and <code>/var/lib/fliperos/gamecontrollerdb-model2-N.txt</code> for Keisho, which reads game buttons 1 to 4 from A B X Y and always takes RB as button 4.</li>
-<li>The screen is <code>screens/joysticks.sh</code>, on top of <code>lib/buttons.sh</code>.</li>
+<li>The screens are <code>screens/joysticks.sh</code> (the menu, <code>screen_controllers_map</code> and the slots, <code>screen_controller</code>), on top of <code>lib/buttons.sh</code>; the cards are <code>SlotGrid</code> in <code>gui/widgets.py</code> and the tester is <code>gui/padtest.py</code>. <code>fliperos-buttons set-player|set-visual|set-button|set-keyboard</code> change one thing each; <code>reorder</code> replugs the USB controllers in player order (<code>fliperos-setup --pad-order</code>, called by <code>fliperos-x11-run</code> and <code>fliperos-kms-run</code> before each game); <code>odin</code> prints <code>p1</code>/<code>p2</code> for Odin.</li>
 </ul>
 <p>See also: <a href="#Controls">Controls</a>, <a href="#Frontend-controls">Frontend controls</a>.</p>
 <h1 id="Bluetooth">Bluetooth</h1>
@@ -7141,7 +7251,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <ol>
 <li>Put the controller in pairing mode (usually a long press of its pairing button, or Share + PS, or the 8BitDo's own pairing button).</li>
 <li><strong>Pair</strong> lists what is in range; pick the controller. Or <strong>Pair automatically</strong> pairs every controller in pairing mode for 30 seconds.</li>
-<li>Map it in <strong>Setup &gt; Joysticks &gt; Button mapping</strong>, where it shows with the wireless icon (<a href="#Button-mapping">Button mapping</a>).</li>
+<li>Map it in <strong>Setup &gt; Joysticks &gt; Controllers / Arcade panel &gt; Map controllers</strong>, where it shows with the wireless icon (<a href="#Button-mapping">Button mapping</a>).</li>
 </ol>
 <p>A failed pairing is tried once more, after forgetting the device. From then on the controller connects by itself when it is turned on.</p>
 <h2 id="Bluetooth-the-other-items">The other items</h2>
@@ -33998,7 +34108,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </thead>
 <tbody>
 <tr>
-<td><strong>GroovyMAME</strong></td>
+<td><strong>GroovyMAME</strong> (and <a href="#GroovyMAME-hbmame-hbgroovymame">HBMAME</a>, the same way)</td>
 <td>Every MAME system with 2 or more screens (Darius, Darius II, The Ninja Warriors, Punch-Out!!, Super Punch-Out!!, Vs. Tennis...)</td>
 <td>2 or 3. With 2 monitors, a 3-screen game opens on the first 2</td>
 </tr>
@@ -34016,7 +34126,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <p>The <code>fliperos.conf</code> keeps the outputs in the game screen order (<code>screens=DVI-I-1,VGA-1,DVI-I-2</code>) and the multi-screen switch (<code>multiscreen=off</code> when off).</p>
 <p><strong>X.</strong> Each output of monitor 1's card has its own <code>Monitor</code> section in <code>/etc/X11/xorg.conf.d/10-fliperos.conf</code>, side by side in the game screen order, with monitor 1 as the primary screen: single-screen programs open there. Outputs of a second card come in as a GPU screen (see above).</p>
 <p><strong>KMS.</strong> RetroArch, Attract-Mode, EmulationStation and Pegasus open on the first connected output, which could be an extra monitor. So <code>fliperos-kms-run</code> turns the extra ones off (<code>fliperos-setup --outputs main</code>), and every X server (<code>fliperos-x11-run</code>, the desktop) turns them back on (<code>--outputs all</code>).</p>
-<p><strong>GroovyMAME.</strong> <code>fliperos-mame-screens</code> reads GroovyMAME's own <code>-listxml</code> and writes one <code>.ini</code> with <code>numscreens</code> per system with 2 or more screens in <code>/etc/fliperos/mame/screens</code> (limited to the number of monitors).</p>
+<p><strong>GroovyMAME.</strong> <code>fliperos-mame-screens</code> reads GroovyMAME's own <code>-listxml</code> and writes one <code>.ini</code> with <code>numscreens</code> per system with 2 or more screens in <code>/etc/fliperos/mame/screens</code> (limited to the number of monitors). With HBMAME installed, <code>hbgroovymame</code> does the same with HBMAME's own list, which knows the hacks, in <code>/etc/fliperos/hbmame/screens</code>.</p>
 <p>This takes about a minute the first time and only runs again when the GroovyMAME binary or the number of monitors changes. The <code>groovymame</code> command adds that folder to the <code>-inipath</code> after the main one, so a user <code>.ini</code> in the main folder wins, and sends each window to its output (<code>-screen0 screen1</code>...).</p>
 <p>GroovyMAME's Switchres finds <code>screenN</code> in XRandR order and SDL counts the primary screen first; for both to agree the command makes the first output primary, and on the desktop restores the previous one when GroovyMAME closes. Switchres sets the mode of each game on every monitor.</p>
 <p><strong>Flycast.</strong> Flycast runs each NAOMI board of these games as its own process, with its own window (<code>network:MultiboardSlaves=2</code>): the main board where <code>window:left</code> says and the others one window width to each side.</p>
@@ -35920,7 +36030,7 @@ More players than one cabinet has controls, on 2 to 4 cabinets: RetroArch's net 
 <li><strong>FBNeo uses its own folder only</strong>: <code>~/roms/retroarch/fbneo</code>, with FBNeo's own romset, and only the sets FBNeo knows. The MAME romset in <code>~/roms/mame</code> is not used for it, even for a game that has the same name in both: FBNeo checks each file by its CRC, and some sets of MAME 0.289 have dumps that FBNeo does not take.</li>
 <li><strong>NAOMI, NAOMI 2 and Atomiswave games in Flycast</strong>, through Flycast's GGPO, for any game of two or more players: up to four players (the four controller ports) on two to four cabinets, each cabinet with as many players as it has controls. Guilty Gear Isuka's four players can be 2+2, 2+1+1 or 1+1+1+1. See Flycast GGPO below.</li>
 <li><strong>GameCube and Wii games in Dolphin</strong> (<code>~/roms/dolphin</code>), for any game of two or more players: two to four cabinets, one player each. See Dolphin net play below.</li>
-<li><strong>MAME games in GroovyMAME</strong> (<code>~/roms/mame</code>), for any game of two or more players: every player of the game (up to MAME's ten), on two cabinets or more, up to one per player, each cabinet with as many players as it has controls, all of them on the same frame like an arcade link. Super Street Fighter II Turbo is one player on each of two cabinets. See GroovyMAME lockstep below.</li>
+<li><strong>MAME games in GroovyMAME</strong> (<code>~/roms/mame</code>, and <code>~/roms/hbmame</code> in <a href="#GroovyMAME-hbmame-hbgroovymame">HBMAME</a>, with the same patch), for any game of two or more players: every player of the game (up to MAME's ten), on two cabinets or more, up to one per player, each cabinet with as many players as it has controls, all of them on the same frame like an arcade link. Super Street Fighter II Turbo is one player on each of two cabinets. See GroovyMAME lockstep below.</li>
 </ul>
 <p>Every cabinet of the party needs the same game file.</p>
 <p>In the frontend such a game has a <strong>PARTY PLAY</strong> tile in its menu, with a row of player icons. The lit ones are the players this cabinet takes. The other cabinets see <strong>JOIN PARTY</strong>, with the name of the cabinet that opened it.</p>
@@ -36483,6 +36593,9 @@ tools/publish-changed-packages.sh --run --bump NAME…    # rebuilds the named o
 <li>accepts a package that is not built here if that exact version is already published.</li>
 </ul>
 <p>After the push, an update has to carry the new list to the machines: see <a href="#Publishing-updates">Publishing updates</a> and <a href="#Making-a-release">Making a release</a>.</p>
+<h2 id="Packages-optional-packages">Optional packages</h2>
+<p>A recipe with <code>PKG_OPTIONAL=1</code> (<code>fliperos-hbgroovymame</code>: HBMAME with Switchres, which takes hours to compile; <code>fliperos-odin</code>: the Sega Hikaru and Gaelco 3D emulator; <code>fliperos-anybor</code>: the AnyBOR core, which opens OpenBOR paks in RetroArch) is <strong>not in the ISO</strong> and not built on the cabinet: it is compiled and published like the others (<code>tools/publish-changed-packages.sh</code> builds it, and it enters <code>updates/packages.list</code> as <code>installed</code>, so no cabinet gets it by itself), and the cabinet downloads the finished <code>.deb</code>. <code>bash packaging/build-deb.sh --list-optional</code> lists them, and the Release workflow leaves them out of the image's repository.</p>
+<p>The Setup installs it when the person asks: <strong>Setup &gt; Games &gt; Emulators &amp; Games</strong>, or the frontend, when a game of its folder is opened and the program is missing (<code>config/fliperos-emulators install NAME</code>, kind <code>package</code>: it reads the row of the list, downloads the file from the <code>packages</code> release, checks the sha256 and installs it with <code>apt-get</code>). From then on the cabinet has the package, and the updates raise its version like any other.</p>
 <h2 id="Packages-programs-built-on-demand">Programs built on demand</h2>
 <p>A recipe with <code>PKG_ON_DEMAND=1</code> is not in the ISO and not in the list: the Setup builds the program on the cabinet when someone chooses it (<code>config/fliperos-frontend-build</code>). EmulationStation (ES-DE) and Pegasus are like that. Their <code>.deb</code> is still kept on the release as a copy.</p>
 <h2 id="Packages-the-newest-version-of-a-program">The newest version of a program</h2>
@@ -36977,6 +37090,10 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tr>
 <td><code>PKG_ON_DEMAND</code></td>
 <td><code>1</code>: not in the ISO, built on the cabinet when chosen</td>
+</tr>
+<tr>
+<td><code>PKG_OPTIONAL</code></td>
+<td><code>1</code>: not in the ISO either, but built and published like the others (a row <code>installed</code> in <code>updates/packages.list</code>), and downloaded ready when the person asks for it (<code>hbgroovymame</code>, <code>odin</code>)</td>
 </tr>
 <tr>
 <td><code>PKG_UPSTREAM</code></td>

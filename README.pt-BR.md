@@ -68,10 +68,10 @@ Em desenvolvimento: a 0.28 é testada no QEMU e num gabinete com CRT de 15 kHz. 
 ## O que vem nele
 
 - 📺 **Vídeo**: kernel 6.18 LTS com os patches de 15 kHz, boot em 15, 25 ou 31 kHz ou LCD, Switchres.
-- 🕹️ **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho (Model 2 e Model 3), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Games > Extras.
-- 🎮 **Frontends**: o frontend do próprio FliperOS como padrão (no visual do menu do Setup: lista, tela cheia e grade; clones agrupados sob cada jogo; rolagem de letra em letra), além de Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus (compilados no gabinete na primeira vez que você os escolhe) e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
+- 🕹️ **Emuladores**: GroovyMAME, RetroArch, Flycast, PCSX2 (e o PCSX2x6 para Namco 246/256), Dolphin, Keisho (Model 2 e Model 3), Hypseus Singe e OpenBOR; Wine, Steam e Heroic pelo Setup > Games > Extras. Três não vêm na imagem e **se instalam sozinhos quando você abre o primeiro jogo**: o HBGroovyMAME (HBMAME com Switchres), o Odin (Sega Hikaru e Gaelco 3D) e o core AnyBOR (OpenBOR dentro do RetroArch).
+- 🎮 **Frontends**: o frontend do próprio FliperOS como padrão (no visual do menu do Setup: lista, tela cheia com uma roda de logos e grade; clones agrupados sob cada jogo; rolagem de letra em letra; sons de menu e música), além de Attract-Mode Plus, EmulationStation (ES-DE) e Pegasus (compilados no gabinete na primeira vez que você os escolhe) e Fightcade 2, cujas partidas online rodam na resolução nativa de cada jogo no tubo.
 - 🔫 **Pistola de luz**: GunCon 2 pronta para usar (driver por DKMS), calibrada para o tubo no Setup > Joysticks. Volantes também.
-- ⚙️ **Setup**: vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência.
+- ⚙️ **Setup**: vídeo, geometria, áudio (estéreo ou mono, sons de menu), rede, scraper, listas de ROMs, limpeza de romset do MAME, controles (Map controllers com oito vagas de jogador) e latência.
 - 📁 **Pastas** `roms`, `bios`, `media`, `nvram`, `save` e `config` em `~` e pela rede (Samba); desktop LXDE com loja de aplicativos.
 - 🔑 **SSH** ligado desde o primeiro boot (`ssh fliperos@fliperos.local`, senha `fliperos`). Por baixo dos menus é um Ubuntu comum, então um assistente de IA consegue configurá-lo pelo SSH.
 
@@ -103,7 +103,7 @@ Abra **http://fliperos.local** no celular ou no PC da mesma rede (usuário `flip
   <img src="website/public/screenshots/web/phone-pt.webp" width="173" alt="Painel web no celular: jogando agora a 59,6 FPS e a lista de jogos com busca">
 </p>
 
-No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](https://github.com/juniorterin/fliperOS/wiki/On-screen-menu): filtro do entrelaçado, scanlines, geometria, cores e a GunCon 2, gravados por jogo se você quiser, mais o menu do emulador e Sair, por cima do jogo aberto.
+No gabinete, segure **Start e Baixo** por um segundo em qualquer jogo para abrir o [menu na tela](https://github.com/juniorterin/fliperOS/wiki/On-screen-menu): filtro do entrelaçado, scanlines, geometria, cores e a GunCon 2, gravados por jogo se você quiser, mais a **Captura de mídia** (uma miniatura da tela ou um vídeo de prévia de 30 s, gravados como a arte do jogo), o menu do emulador e Sair, por cima do jogo aberto.
 
 Cada página em detalhe: [Web panel](https://github.com/juniorterin/fliperOS/wiki/Web-panel).
 
@@ -195,7 +195,7 @@ Abre o menu **FliperOS Setup** (Install to HD/SSD, Recovery Mode, Terminal, Shut
 
 1. O gabinete vai direto para o splash, sem texto.
 2. **Nada para escolher no que abre ao ligar**: é o frontend do FliperOS (dá para trocar depois em Setup > Games > Frontend). Um assistente curto deixa o gabinete pronto: **Wi-Fi** (só quando o cabo de rede não traz internet e existe um adaptador Wi-Fi), **controles** (o Button mapping do passo 8) e a **tela ao vivo** do painel web.
-3. Quando você sai do frontend (Esc), aparece o **menu do FliperOS**: *Start frontend*, *Setup*, *Start desktop*, *Exit to shell*, *Shutdown / Reboot*. O título mostra o IP do gabinete. Cada item é explicado em [Os menus, item por item](#os-menus-item-por-item).
+3. Quando você sai do frontend (Esc), aparece o **menu do FliperOS**: *Start frontend*, *Start desktop*, *RetroAchievements*, *Setup*, *Exit to shell*, *Shutdown / Reboot*. O título mostra o IP do gabinete. Cada item é explicado em [Os menus, item por item](#os-menus-item-por-item).
 4. **Rede**: o cabo de rede funciona sozinho. Para Wi-Fi: *Setup > Network Setup*, escolha a rede e digite a senha. Conectado, o IP aparece no título do menu.
 5. **Atualizações**: a cada boot com internet, se houver uma atualização do FliperOS, uma tela diz o que ela traz e pergunta **Apply now** (aplicar agora) ou **Not now** (agora não).
 
@@ -208,9 +208,9 @@ Abre o menu **FliperOS Setup** (Install to HD/SSD, Recovery Mode, Terminal, Shut
 
 Nos menus, o painel ou um controle já funciona como teclado: direcional = setas, botão 1 = Enter, botão 2 = Esc.
 
-1. *Setup > Joysticks > Button mapping* (o primeiro boot já oferece; aqui é como refazer).
-2. Para cada jogador, aperte o que ele pede, nesta ordem: cima, baixo, esquerda, direita, **botões 1 a 6** na ordem do painel (1 2 3 na fileira de cima, 4 5 6 na de baixo), **Start** e **Ficha** (Coin). O primeiro comando apertado diz qual controle é daquele jogador. Sem nada apertado por 8 segundos, aquele comando fica de fora.
-3. O mapeamento vai para todos os emuladores de uma vez (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus e OpenBOR).
+1. *Setup > Joysticks > Controllers / Arcade panel > Map controllers* (o primeiro boot já oferece; aqui é como refazer). Ele mostra oito vagas de jogador: **segure um botão** num controle por cerca de um segundo e ele toma a vaga.
+2. Abra o cartão de um controle e escolha *Map all buttons*: aperte o que ele pede, nesta ordem: cima, baixo, esquerda, direita, **botões 1 a 8** na ordem do painel (1 2 3 na fileira de cima, 4 5 6 na de baixo, e assim por diante), **Start** e **Ficha** (Coin). Sem nada apertado por 8 segundos, aquele comando fica de fora. Um joypad que o FliperOS já conhece pode ficar com o layout dele, sem apertar nada. O *Test controller* acende cada botão ao vivo.
+3. O mapeamento vai para todos os emuladores de uma vez (GroovyMAME, RetroArch, Flycast, PCSX2, Dolphin, Keisho, Hypseus, Odin e OpenBOR).
 4. Pistola de luz (GunCon 2), volante e pedais têm calibradores no mesmo menu, e o *Setup > System > Quirks* corrige aparelhos USB que chegam errados (por exemplo, um encoder duplo que aparece como um jogador só). Veja [Controls](https://github.com/juniorterin/fliperOS/wiki/Controls).
 
 <p align="center">
@@ -256,7 +256,10 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
 | `dolphin` | GameCube e Wii (`.iso`, `.rvz`, `.wbfs`) | Dolphin |
 | `retroarch/<core>` | Consoles e computadores; o `_info.txt` de cada pasta lista as extensões | RetroArch |
-| `openbor/Paks` | Jogos do OpenBOR (`.pak`) | OpenBOR |
+| `hbmame` | Hacks e homebrews do HBMAME (`.zip`), com os clones | HBGroovyMAME |
+| `odin` | Sets de Sega Hikaru e Gaelco 3D | Odin |
+| `namco2x6` | Namco System 246 e 256 | PCSX2x6 |
+| `openbor/Paks` | Jogos do OpenBOR (`.pak`); `openbor` é um atalho para `retroarch/anybor` | Core AnyBOR no RetroArch |
 
 **BIOS** vêm sozinhas: *Setup > Games > Downloader > Download BIOS* traz as que faltam aos seus jogos. As que você mesmo trouxer vão em `bios`, nunca numa pasta de jogos: `bios/mame` para o MAME (`neogeo.zip`, `qsound.zip`...), `bios/dc` para o Flycast (`naomi.zip`, `awbios.zip`, `dc_boot.bin`), `bios/ps2` para o PCSX2 e a própria pasta `bios` para os cores do RetroArch.
 
@@ -317,9 +320,10 @@ O menu que abre quando você dá boot pelo pendrive, antes de instalar.
 
 ### Menu do FliperOS (sistema instalado)
 
-Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete, o IP e quanto do disco está ocupado.
+Aparece quando você sai do frontend (Esc). O título mostra o nome do gabinete, o IP e quanto do disco está ocupado, e ao lado de FliperOS a versão e o último update aplicado (`0.28, u100`).
 
 - **Start frontend**: abre o launcher padrão (o Attract-Mode Plus, por exemplo). Quando você sai dele, volta a este menu.
+- **RetroAchievements**: entra na sua conta do retroachievements.org para ganhar conquistas no RetroArch e em outros emuladores.
 - **Setup**: todas as configurações, explicadas abaixo.
 - **Start desktop**: abre o LXDE, um desktop comum com mouse, gerenciador de arquivos, navegador (*Falkon*), cliente de torrent (*Transmission*) e loja de aplicativos. É o jeito mais fácil de organizar pastas e copiar jogos (passo 9). Para sair: *Logout* no menu do desktop, que abre um menuzinho: voltar ao menu do FliperOS, reiniciar, desligar ou cancelar.
 - **Exit to shell**: uma linha de comando em tela cheia. Digite `fliperos-menu` para voltar ao menu.
@@ -355,17 +359,23 @@ Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles,
   - *AlsaMixer*: o mixer completo, canal por canal;
   - *MAME audio latency*: de 0.0 a 50.0 (0 = padrão). Mais baixo responde mais rápido; aumente se o som chiar no GroovyMAME;
   - *Test sound*: toca um som para testar as caixas;
-  - *Menu sounds*: liga e desliga um som quando o cursor anda e quando você aperta Enter, como na tela de seleção de um jogo. O FliperOS não traz sons de jogos: coloque os seus `move.wav` e `select.wav` na pasta `sounds/menu` do compartilhamento de rede.
+  - *Menu sounds*: seis sons como os da tela de seleção de um jogo (o cursor andando, Enter, Back, um jogo abrindo, um jogo fechando e um alerta), cada um com o seu arquivo e o seu volume. O FliperOS traz um conjunto retrowave; escolha outro WAV, OGG, MP3 ou FLAC no seletor de arquivos, ou desligue todos. O frontend usa os mesmos seis (Tab > Frontend sounds) e acrescenta música com uma barra de "tocando agora". Veja [Audio and Network Setup](https://github.com/juniorterin/fliperOS/wiki/Setup-Audio-and-Network).
 - **Network Setup**: o cabo de rede funciona sozinho; isto é para o Wi-Fi.
   - *Connect to a Wi-Fi network*: a lista de redes com o sinal; escolha uma e digite a senha;
   - *Connect to a hidden network*: para uma rede que não aparece na lista;
   - *Network status*: a conexão e o IP.
 - **Joysticks**:
-  - *Button mapping (all emulators)*: mapeia os comandos de cada jogador uma vez para todos os emuladores (passo 8);
-  - *Buttons layout (games of 1 to 5 buttons)*: onde ficam no painel os botões de um jogo, pelo número de botões que ele usa: um jogo de 4 botões com 1 2 em cima e 3 4 embaixo, ou 1 3 em cima e 2 4 embaixo. Para o GroovyMAME, os cores MAME do RetroArch, o Model 2 e o Model 3;
-  - *Calibrate GunCon 2 (light gun)*: atire no alvo de cima à esquerda e no de baixo à direita, depois no do centro para conferir;
-  - *Calibrate wheel, pedals or analog stick*: os limites e o centro de cada eixo;
-  - *LPT joysticks (parallel port)*: controles antigos na porta paralela: adaptador de gamepad (NES, SNES, N64, PlayStation), adaptador DB9 (Atari, Amiga, Sega) ou interface TurboGraFX (até 7 joysticks). *Joysticks found now* mostra o que foi detectado e *Turn off* desliga.
+  - *Controllers / Arcade panel*: um menu com tudo sobre os controles dos jogadores (passo 8):
+    - *Map controllers*: oito vagas de jogador, duas por linha, cada uma um cartão com o desenho do controle. Segure um botão num controle para dar a vaga a ele; ao abrir um cartão você define o jogador, o tipo (painel de arcade ou joypad), o visual, o mapeamento dos botões (uma vez para todos os emuladores), o *Buttons layout* (onde ficam no painel os botões de um jogo de 1 a 5 botões) e um *Test controller* ao vivo. O Flycast e o Odin também seguem os seus jogadores: os controles USB são postos na ordem dos jogadores quando um jogo abre;
+    - *Keyboard encoder*: os jogadores 1 e 2 num encoder USB que manda as teclas do MAME, sem nada para mapear;
+    - *Add LPT joysticks*: controles antigos na porta paralela: adaptador de gamepad (NES, SNES, N64, PlayStation), adaptador DB9 (Atari, Amiga, Sega) ou interface TurboGraFX (até 7 joysticks);
+    - *Haptic events*: a vibração dos joypads nos jogos;
+    - *Lights*: a cor das luzes dos joypads.
+  - *Bluetooth* (só com um adaptador): emparelha, conecta e esquece controles Bluetooth;
+  - *GunCon 2 (light gun)*: calibração (atire no alvo de cima à esquerda e no de baixo à direita, depois no do centro para conferir), flash da tela e como a pistola lê as partes escuras;
+  - *Wheels, pedals and analog sticks*: os limites e o centro de cada eixo.
+
+  Veja [Button mapping](https://github.com/juniorterin/fliperOS/wiki/Button-mapping).
 - **Games**: o que põe jogos no gabinete, na ordem de uso.
   - *Frontend*: o que abre toda vez que o gabinete liga: o frontend do FliperOS, Attract-Mode Plus, EmulationStation (ES-DE), Pegasus, RetroArch, o desktop LXDE ou o próprio FliperOS Setup. O que não está instalado é instalado (ou baixado) daqui; ES-DE e Pegasus são compilados no gabinete, o que precisa de rede e de algum tempo. Uma escolha que a placa de vídeo não roda (ES-DE sem OpenGL 3, por exemplo) ganha um X vermelho e uma pergunta antes de abrir.
 
@@ -374,7 +384,7 @@ Os itens vêm na ordem de quem arruma um gabinete: imagem, som, rede, controles,
   - *Custom games*: jogos de PC, scripts e emuladores seus, que os frontends mostram como sistemas, instalados de pacotes ou feitos no gabinete. Veja [Custom games](https://github.com/juniorterin/fliperOS/wiki/Custom-games).
   - *Emulators & Games*: os emuladores do menu do desktop, cada um marcado *installed* ou *not installed*.
 
-    Escolha um que não está instalado para instalar: o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. Os outros vêm na imagem.
+    Escolha um que não está instalado para instalar: o **Fightcade 2** (baixado do site dele) e o **KOF Final Attack** no Ikemen GO em 4:3 a 320x240: você aponta a pasta do jogo original (a que tem o `Final Attack.exe`, num pendrive ou na rede) e ele baixa o [patch 4:3](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) e o Ikemen GO e monta uma cópia convertida. O **HBGroovyMAME**, o **Odin** e o core **AnyBOR** também não vêm na imagem: se instalam sozinhos quando o primeiro jogo da pasta deles (`hbmame`, `odin`, `openbor`) abre, ou por aqui. Os outros vêm na imagem.
   - *Downloader*:
     - *ROM/CHD MAME torrent*: você cola o link magnet de um romset (e um de CHDs) e ele baixa, pelo Transmission, só os jogos que o filtro do ROM Cleaner escolhe, direto na pasta do emulador. A versão do MAME do romset precisa ser a do emulador;
     - *Free games (open-source homebrew)*: baixa jogos homebrew livres para as pastas do RetroArch, para o frontend ter o que mostrar.

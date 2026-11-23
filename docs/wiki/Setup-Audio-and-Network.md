@@ -61,6 +61,10 @@ Once connected, the IP shows in the FliperOS menu's title. Connecting to Wi-Fi a
 
 The network cable needs nothing: it connects by itself.
 
+### USB Wi-Fi adapters
+
+Some USB adapters (the Realtek RTL8188GU and similar) plug in as a **CD-ROM with their own drivers** and only become Wi-Fi after a switch. FliperOS does it by itself when you plug them in (`usb-modeswitch`), and updates add it to cabinets installed before. If the adapter still shows as a CD-ROM, **Network status** says so: unplug it and plug it in again.
+
 ### Typing with the controller
 
 The Wi-Fi password, a hidden network's name and every other password in the Setup have an **on-screen keyboard**:
@@ -79,6 +83,7 @@ Everything in the Setup that downloads checks the internet first: the Downloader
 ### How it works
 
 - NetworkManager runs both the cable and the Wi-Fi (`nmcli`). The Wi-Fi radio itself is a service you can turn off in **Setup > System > Services** ([System Setup](Setup-System.md#services)).
+- The switch of a USB adapter that shows as a CD-ROM is `usb-modeswitch` with `usb-modeswitch-data` (in the image; `tools/cabinet-update.sh` installs them on older ones). `net_hardware` in `lib/network.sh` lists the adapters and warns about one still in CD-ROM mode.
 - The first boot offers Wi-Fi only when the cable brings no internet ([Installed system](Installed-system.md#first-boot)).
 
 See also: [Remote access](Remote-access.md), [Web panel](Web-panel.md).

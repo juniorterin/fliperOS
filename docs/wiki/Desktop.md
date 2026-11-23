@@ -22,7 +22,9 @@ The App Store downloads no updates by itself and has no welcome screen: disk and
 
 ### Emulators in the menu
 
-**Games** has RetroArch, GroovyMAME, Flycast, PCSX2, Dolphin, OpenBOR, Model 2, Model 3 and, once downloaded through the Setup, Fightcade 2, with the projects' own icons.
+**Games** has RetroArch, GroovyMAME, HBMAME (HBGroovyMAME), Flycast, PCSX2, PCSX2x6, Dolphin, DuckStation, OpenBOR, Odin, Model 2, Model 3, KOF Final Attack and, once downloaded through the Setup, Fightcade 2, with the projects' own icons. PortProton (Windows games) and Hook Of The Reaper (light guns) have their own entries.
+
+HBMAME and Odin are optional packages ([Packages](Packages.md)): they are installed when the first game of their folder opens from a frontend, so open one there first; the desktop entries only run what is already installed.
 
 None of them runs inside the desktop: choosing one closes the desktop (asking first if there are open windows), the emulator opens on the CRT in its own video mode, and when it closes **the desktop comes back**.
 
@@ -61,6 +63,12 @@ Without a confirmation within 15 seconds, the previous resolution comes back. **
 
 Only the desktop changes: the console, the Setup and the frontends keep the Video Setup resolution. With an LCD monitor, the list is the modes of its EDID.
 
+### On a 31 kHz monitor
+
+With a 31 kHz preset the desktop opens at **640x480 and 31.5 kHz**, the one mode of that preset, however the boot mode was chosen (also when it comes from an EDID, as with a DisplayPort or HDMI to VGA converter). Before update 100 such a cabinet could open the desktop with the monitor's "out of frequency" message: the X had no mode of its own and picked one from the EDID that the monitor doesn't take. The update rewrites `/etc/X11/xorg.conf.d/10-fliperos.conf` on the cabinets already at 31 kHz.
+
+If the message still shows, send `/etc/fliperos/fliperos.conf` (the `monitor=`, `frequency=`, `boot_resolution=` and `connector=` lines) and `~/.local/share/xorg/Xorg.0.log` to the [Telegram group](https://t.me/fliperos15khz). A mode saved in **Desktop Resolution** that the monitor doesn't take can cause it too: pick another one, or delete `~/.config/fliperos/desktop-mode`.
+
 In an interlaced mode, the desktop gets the flicker filter at the Desktop row's level of **Setup > Video Setup > Interlaced hacks** ([Interlaced, colour and scanlines](Picture-filters.md)).
 
 ## Dracula theme
@@ -91,6 +99,7 @@ The Linux console has 16 colours, and the background takes only the first 8. The
 - Emulators: the menu entry runs `fliperos-launch`, which saves the request and closes the desktop; `fliperos-session` opens the emulator and then the desktop again. GroovyMAME, Model 2 and Fightcade icons come from `config/icons`; Supermodel gets a FliperOS monogram. An emulator left out of the build (`--skip-*`) doesn't show.
 - The controller-mouse is `config/fliperos-deskpad` (log `/opt/fliperos/logs/deskpad.log`); the keyboard is Ubuntu's Onboard, set by `config/fliperos-onboard.gschema.override`.
 - Desktop Resolution is `fliperos-resolution`: Switchres computes the mode within `/etc/switchres.ini` (`switchres --calc`, as for the emulators) and `xrandr` applies it. The saved mode is `~/.config/fliperos/desktop-mode`, applied by `fliperos-lxde`.
+- The X configuration is written by `xorg_generate` (`lib/xorg.sh`) from `fliperos.conf`; at `frequency=31k` it always has the `640x480S` modeline, with the horizontal range 30-32 kHz. `updates/0100.sh` redoes it on 31 kHz cabinets.
 - Logout (the menu item, the panel button and the end of the session) opens a full-screen menu in the Setup's look: back to the FliperOS menu, reboot, power off or cancel (`config/fliperos-logout`).
 - The theme is installed by `fliperos-dracula.sh`; Oh My Zsh lives in `/usr/local/share/oh-my-zsh` and `~/.zshrc` is `config/zshrc`. The VT palette is `/etc/vtrgb` (`config/vtrgb-dracula`, applied by Ubuntu's `setvtrgb.service`).
 

@@ -38,7 +38,7 @@ The first boot has nothing to choose about what opens at power on: it is the Fli
 
 ## The FliperOS menu
 
-The title shows the cabinet's name and IP address, the network use and how full the disk is.
+The title shows the cabinet's name and IP address, the network use and how full the disk is. Next to the name of FliperOS comes its version and, after a comma, the number of the last update applied: `0.28, u100` is version 0.28 with updates up to the 100th ([Updates and versions](Updates-and-versions.md)). Without an update applied, only the version shows.
 
 | Item | What it does |
 | --- | --- |
