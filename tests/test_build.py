@@ -9324,8 +9324,11 @@ class DeflickerTests(unittest.TestCase):
             (bin_dir / 'picom').write_text('#!/bin/bash\necho "start ${LD_PRELOAD:-none} $(grep -o "vec3(0[^)]*)" "${@: -1}")" >> %s\n'
                                            'trap \'echo stop >> %s; exit\' TERM\nwhile :; do sleep 0.05; done\n'
                                            % (tmp / 'log', tmp / 'log'))
-            (bin_dir / 'xrandr').write_text('#!/bin/sh\n[ -e %s ] || exit 1\necho "  640x480i $(cat %s)"\n'
-                                            % (mode, mode))
+            size = tmp / 'size'
+            size.write_text('640 x 480')
+            (bin_dir / 'xrandr').write_text('#!/bin/sh\n[ -e %s ] || exit 1\n'
+                                            'echo "Screen 0: minimum 320 x 200, current $(cat %s), maximum 16384 x 16384"\n'
+                                            'echo "  640x480i $(cat %s)"\n' % (mode, size, mode))
             for p in bin_dir.iterdir():
                 p.chmod(0o755)
             app = tmp / 'app'
@@ -9353,6 +9356,13 @@ class DeflickerTests(unittest.TestCase):
                 log_until('stop\n')
                 mode.write_text('Interlace *current')
                 log_until(light)
+                # Um jogo troca o modo depois de o picom subir (640x480 do boot,
+                # 854x480 do jogo): o picom velho desenha so os 640 da esquerda
+                # (visto no gabinete com o MARVEL Cosmic Invasion), entao sobe
+                # outro com a tela nova.
+                before = (tmp / 'log').read_text()
+                size.write_text('854 x 480')
+                log_until(before + light)
                 mode.unlink()
                 self.assertEqual(proc.wait(timeout=5), 0)
                 log_until('stop\n')

@@ -78,6 +78,12 @@ settings() {
     print out }')
   ((color)) || m="1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0"
 
+  # O tamanho da tela do X (a linha "Screen 0: ... current 854 x 480"): o picom
+  # que subiu com a tela de antes da troca de modo de um jogo (640x480 do
+  # boot, 854x480 do jogo) segue desenhando so os 640 da esquerda, e o resto
+  # da tela sai preto (visto no gabinete com o MARVEL Cosmic Invasion). Entra
+  # na chave do --watch: tamanho novo, picom novo.
+  size=$(xrandr --current 2> /dev/null | sed -n '1s/.*current \([0-9]*\) x \([0-9]*\).*/\1x\2/p')
   # O modo da tela: --current, sem sondar o monitor de novo a cada vez. O
   # --shader grava o filtro do nivel em qualquer modo.
   if [[ -z $shader_only && ${FLIPEROS_DEFLICKER_FORCE:-0} != 1 ]] &&
@@ -131,7 +137,7 @@ trap 'exit 0' TERM INT HUP
 while :; do
   # Um picom que fechou sozinho sobe de novo na volta seguinte.
   [[ -z $pid ]] || kill -0 "$pid" 2> /dev/null || pid="" last=""
-  if [[ "$deflick $color $w $m" != "$last" ]]; then
+  if [[ "$deflick $color $w $m $size" != "$last" ]]; then
     if [[ -n $pid ]]; then
       kill "$pid" 2> /dev/null
       wait "$pid" 2> /dev/null
@@ -142,7 +148,7 @@ while :; do
       env -u LD_PRELOAD picom --backend glx --vsync --window-shader-fg "$file" &
       pid=$!
     fi
-    last="$deflick $color $w $m"
+    last="$deflick $color $w $m $size"
   fi
   sleep "${FLIPEROS_DEFLICKER_WATCH:-2}"
   # O X fechou: sai (o trap fecha o picom).
