@@ -2297,20 +2297,24 @@ class GroovyMameTests(unittest.TestCase):
             out, ini = self.run_wrapper(*args, display=None)
             self.assertEqual(out, ['-inipath', ini, *args], args)
 
-    def test_midway_games_in_320x240_at_60hz(self):
-        # Os jogos 2D da Midway (400x254 a 54,7 Hz) esticavam na vertical no
-        # tubo: o ini de cada driver os poe em 320x240p, com faixa de 59-61 Hz.
-        # Sem o switchres_ini 0, o GroovyMAME ignoraria o crt_range daqui.
-        ini = (ROOT / 'config/mame-midway.ini').read_text()
-        for line in ('switchres_ini             0', 'monitor                   custom',
-                     'interlace                 0', 'resolution                320x240',
-                     'crt_range0                15625.00-15750.00,59.00-61.00,'):
-            self.assertIn('\n' + line, ini)
+    def test_midway_games_back_to_their_own_mode(self):
+        # Os jogos 2D da Midway (400x254 a 54,7 Hz) rodavam em 320x240p a 59 Hz
+        # por um ini por driver (update 65); ele saiu (update 101). O
+        # fliperos-rootfs.sh tira o arquivo das maquinas que o tem, so se for o
+        # que o FliperOS instalou: um source/<driver>.ini do usuario fica.
+        self.assertFalse((ROOT / 'config/mame-midway.ini').exists())
         rootfs = (ROOT / 'fliperos-rootfs.sh').read_text()
-        self.assertIn('for driver in midyunit midtunit midwunit midxunit; do\n'
-                      '  install -Dm644 "$src/config/mame-midway.ini" "$root/etc/fliperos/mame/source/$driver.ini"', rootfs)
-        # Antes do chown da pasta: o usuario (e o Setup) escrevem nela.
-        self.assertLess(rootfs.index('mame/source/$driver.ini'), rootfs.index('chown -R 1000:1000 "$root/etc/fliperos/mame"'))
+        self.assertNotIn('install -Dm644 "$src/config/mame-midway.ini"', rootfs)
+        match = re.search(r'(for driver in midyunit midtunit midwunit midxunit; do\n.*?\ndone\n)', rootfs, re.S)
+        self.assertIsNotNone(match)
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'etc/fliperos/mame/source'
+            source.mkdir(parents=True)
+            (source / 'midyunit.ini').write_text('# Jogos 2D da Midway (drivers midyunit...)\nresolution 320x240\n')
+            (source / 'midtunit.ini').write_text('# o meu\nresolution 400x254\n')
+            subprocess.run(['bash', '-c', 'set -euo pipefail; root=$1\n' + match.group(1), 'x', tmp], check=True)
+            self.assertFalse((source / 'midyunit.ini').exists())
+            self.assertTrue((source / 'midtunit.ini').exists())
 
     def test_groovymame_switches_modes_in_x(self):
         # modesetting 1: o Switchres troca o modo de cada jogo (no X, pelo

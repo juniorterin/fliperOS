@@ -156,7 +156,7 @@ fi
 # As saidas na ordem das telas dos jogos (screens= do fliperos.conf).
 inipath=$inidir
 # O hbgroovymame le o hbmame.ini dele e, depois, o ui.ini e os .ini por driver
-# da pasta do mame (a Midway em 320x240).
+# da pasta do mame.
 [[ $me == hbgroovymame ]] && hb_ini && inipath="$inidir;$mameini"
 restore_primary=""
 IFS=, read -r -a outputs <<< "$(sed -n 's/^screens=//p' "$conf" 2> /dev/null | tail -1)"

@@ -5,7 +5,7 @@ The emulators FliperOS ships or installs, the systems they run and the video mod
 | Page | What it covers |
 | --- | --- |
 | [KMS and X11](KMS-and-X11.md) | How each emulator reaches the tube, its video mode, running any program at 640x240, cards without low dotclocks |
-| [GroovyMAME](GroovyMAME.md) | Arcade at native resolution: the Midway games, missing files, the package and building the newest |
+| [GroovyMAME](GroovyMAME.md) | Arcade at native resolution: missing files, the package and building the newest |
 | [RetroArch](RetroArch.md) | The cores, the light gun in every core, the D-pad, video, updating |
 | [Flycast](Flycast.md) | Dreamcast, Naomi, Naomi 2 and Atomiswave |
 | [Sega Model 2 and 3](Sega-Model-2-and-3.md) | Keisho, for both boards, with Vulkan or OpenGL |

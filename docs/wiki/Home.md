@@ -77,7 +77,7 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 | --- | --- |
 | [Emulators](Emulators.md) | Every emulator, what it runs, how it comes and its video mode; what every game gets |
 | [KMS and X11](KMS-and-X11.md) | How each emulator reaches the tube, running any program at 640x240, cards without low dotclocks |
-| [GroovyMAME](GroovyMAME.md) | Arcade at native resolution, the Midway games, missing files, the package, GroovyMAME in X |
+| [GroovyMAME](GroovyMAME.md) | Arcade at native resolution, missing files, the package, GroovyMAME in X |
 | [RetroArch](RetroArch.md) | The cores, the light gun in every core, the D-pad, video, updating |
 | [Flycast](Flycast.md) | Dreamcast, Naomi, Naomi 2 and Atomiswave: folders, BIOS, picture, updating |
 | [Sega Model 2 and 3](Sega-Model-2-and-3.md) | Keisho for both boards: Vulkan or OpenGL, outputs, speed, coming from Supermodel |
