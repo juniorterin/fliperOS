@@ -20,6 +20,31 @@ if [[ ${1:-} == --scale ]]; then
   shift 2
   exec "$@"
 fi
+# --crop LARGURAxALTURA MODOLxMODOA programa...: o "16:9 crop" dos jogos custom
+# (FLIPEROS_X11_CROP, abaixo). A tela do X fica 16:9 (LARGURAxALTURA) e o tubo
+# mostra so o meio dela em 4:3, a altura inteira e a largura de altura*4/3: o
+# xrandr --transform leva cada ponto do tubo ao ponto da tela (escala e
+# deslocamento). Tela maior que o modo, como no --scale. Depois, o mesmo do
+# --scale: o picom com vsync e o programa. FLIPEROS_CROP169=1 vai para o jogo
+# (o fliperos-customgame o diz a OSD).
+if [[ ${1:-} == --crop ]]; then
+  output=$connector
+  [[ -n $output ]] || output=$(xrandr --current 2> /dev/null | awk '$2 == "connected" { print $1; exit }')
+  transform=$(awk -v screen="$2" -v mode="$3" 'BEGIN {
+    split(screen, s, "x"); split(mode, m, "x")
+    if (s[1] <= 0 || s[2] <= 0 || m[1] <= 0 || m[2] <= 0) exit
+    w = s[2] * 4 / 3; if (w > s[1]) w = s[1]
+    printf "%.6f,0,%.4f,0,%.6f,0,0,0,1", w / m[1], (s[1] - w) / 2, s[2] / m[2] }')
+  if [[ -n $output && -n $transform ]] &&
+    xrandr --fb "$2" --output "$output" --transform "$transform" --filter bilinear > /dev/null 2>&1; then
+    export FLIPEROS_CROP169=1
+  fi
+  if command -v picom > /dev/null && ! pgrep -u "$(id -u)" -x picom > /dev/null 2>&1; then
+    env -u LD_PRELOAD picom --backend glx --vsync < /dev/null > /dev/null 2>&1 &
+  fi
+  shift 3
+  exec "$@"
+fi
 # Com cursor (fliperos-x11-run): a seta normal fora das janelas, nao o "X"
 # do Xorg sem gerenciador de janelas.
 if [[ ${FLIPEROS_X11_CURSOR:-0} == 1 ]]; then
@@ -157,7 +182,10 @@ fi
 # metade das linhas, 240p de verdade no tubo, sem entrelacar). Visto no
 # gabinete com o KOF Zillion (MUGEN 1.0). A conta usa a largura do modo de
 # verdade (a super resolucao de uma placa sem dotclock baixo).
-if [[ ${FLIPEROS_X11_SCREEN:-} =~ ^([0-9]+)x([0-9]+)$ ]]; then
+if [[ ${FLIPEROS_X11_CROP:-} == 1 && ${FLIPEROS_X11_SCREEN:-} =~ ^[0-9]+x[0-9]+$ ]]; then
+  # O 16:9 crop (acima, --crop): a tela do X e o modo de verdade.
+  emulator_command="$(printf '%q' "$0") --crop ${FLIPEROS_X11_SCREEN} ${FLIPEROS_RES_W:-0}x${FLIPEROS_RES_H:-0} $emulator_command"
+elif [[ ${FLIPEROS_X11_SCREEN:-} =~ ^([0-9]+)x([0-9]+)$ ]]; then
   scale=$(awk -v w="${FLIPEROS_RES_W:-0}" -v h="${FLIPEROS_RES_H:-0}" \
     -v sw="${BASH_REMATCH[1]}" -v sh="${BASH_REMATCH[2]}" \
     'BEGIN { if (w > 0 && h > 0 && sw > 0 && sh > 0) printf "%gx%g", sw / w, sh / h }')

@@ -29,7 +29,7 @@ const CG_SUFFIX = ".fliperos-customgame.zip";
 // o rotulo de cada uma tambem vai em cada celula (no celular a linha vira um
 // cartao).
 const CG_COLUMNS = ["name", "platform", "folder", "run", "mode"];
-const CG_DETAILS = ["category", "year", "developer", "players", "buttons", "controls", "joystick", "art"];
+const CG_DETAILS = ["crop", "category", "year", "developer", "players", "buttons", "controls", "joystick", "art"];
 const CG_PLATFORMS = ["windows", "native", "command"];
 // Colar de uma planilha: os nomes das colunas que o cabecalho pode ter.
 const CG_PASTE_NAMES = {
@@ -698,8 +698,8 @@ async function cgEditGame(game) {
   if (kind === "windows" && row.exe && !row.exes.includes(row.exe)) row.exes.unshift(row.exe);
   // A arte em cartoes, como no Criar pacote: escolher o arquivo ou capturar a tela do jogo aberto no gabinete.
   const ctl = cgControls(row, { dialog: true, editing: game, runner: kind === "windows", cards: true });
-  const fields = kind === "command" ? ["name", "group", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "art"]
-    : ["run", "mode", "category", "year", "developer", "players", "buttons", "controls", "keys", "art"];
+  const fields = kind === "command" ? ["name", "group", "run", "mode", "crop", "category", "year", "developer", "players", "buttons", "controls", "art"]
+    : ["run", "mode", "crop", "category", "year", "developer", "players", "buttons", "controls", "keys", "art"];
   if (kind === "command") fields.splice(fields.indexOf("controls") + 1, 0, "keys");
   const keys = el("select", { "aria-label": t("cg_f_keys") },
     el("option", { value: "" }, t(game.key ? "cg_keys_keep_set" : "cg_keys_keep_none")),
@@ -754,7 +754,8 @@ async function cgEditGame(game) {
     save.disabled = true;
     try {
       const body = { group: game.group, name: game.name, mode: cgRowMode(row), category: row.category, players: row.players,
-        buttons: row.buttons, controls: row.controls.join(","), year: row.year.trim(), developer: row.developer.trim() };
+        buttons: row.buttons, controls: row.controls.join(","), year: row.year.trim(), developer: row.developer.trim(),
+        crop169: row.crop ? "1" : "0" };
       if (kind === "command") Object.assign(body, { new_group: row.group, new_name: row.name.trim(), command: row.command });
       if (kind === "native") body.command = row.command;
       if (kind === "windows") Object.assign(body, { exe: row.exe, runner: row.runner === "portproton" ? "" : row.runner });
@@ -839,7 +840,7 @@ function cgRowFromGame(game) {
   return cgNewRow({ group: game.group, name: game.name, platform: game.platform, command: game.command, exe: game.exe,
     folder: game.folder, mode: known ? known.label : "other", modeOther: known ? "" : mode, category: game.category,
     players: game.players, buttons: game.buttons, controls: (game.controls || "").split(",").filter(Boolean),
-    year: game.year || "", developer: game.developer || "", runner: game.runner || "portproton" });
+    year: game.year || "", developer: game.developer || "", runner: game.runner || "portproton", crop: !!game.crop });
 }
 
 // ── Os pacotes que faltam instalar ──
@@ -972,7 +973,7 @@ function cgCard(info, actions = []) {
 const CG_PROBLEM_CODES = ["not_zip", "unsafe", "encrypted", "misnamed", "cfg_missing", "cfg_many", "cfg_text", "folder_missing",
   "stranger", "strangers_more", "two_files", "name_missing", "name_bad", "platform_missing", "platform_bad", "exe_missing",
   "exe_not_found", "command_missing", "mode_bad", "category_long", "controls_bad", "buttons_bad", "players_bad", "runner_bad",
-  "year_bad", "developer_long"];
+  "crop169_bad", "year_bad", "developer_long"];
 
 function cgProblems(p) {
   const base = p.name || cgBaseName(p).replace(/\.fliperos-customgame\.zip$|\.zip$/i, "");
@@ -1152,7 +1153,7 @@ function cgField(name, control) {
 // (com a previa e o teste no gabinete) ou varios de uma vez (a tabela, mais
 // abaixo). A pasta com a estrutura do pacote preenche o resto.
 
-const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "category", "year", "developer", "players", "buttons", "controls", "joystick", "art"];
+const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "crop", "category", "year", "developer", "players", "buttons", "controls", "joystick", "art"];
 
 // Um pacote ou varios de uma vez: o seletor em duas pilulas; a escolha fica no navegador.
 function cgCreateMode(mode) {
@@ -1668,7 +1669,7 @@ function cgTableDraw(focusLast) {
 
 // Quantos campos dos detalhes a linha tem preenchidos (o numero no botao).
 function cgDetailsFilled(row) {
-  return [row.category, row.year.trim(), row.developer.trim(), row.players, row.buttons, row.controls.length ? "x" : "",
+  return [row.crop ? "x" : "", row.category, row.year.trim(), row.developer.trim(), row.players, row.buttons, row.controls.length ? "x" : "",
     row.joystick ? "x" : "", row.snap, row.video, row.text, row.logo].filter(Boolean).length;
 }
 
@@ -1738,7 +1739,7 @@ function cgFieldError(row, column) {
 function cgApplyAll() {
   if (!cg.rows.length) { toast(t("cg_rows_none"), "bad"); return; }
   const dlg = cgDialog();
-  const fields = ["mode", "runner", "category", "year", "developer", "players", "buttons", "controls", "joystick"];
+  const fields = ["mode", "crop", "runner", "category", "year", "developer", "players", "buttons", "controls", "joystick"];
   const tmp = cgNewRow({ platform: "windows" });
   const pick = el("select", { "aria-label": t("cg_apply_field") }, ...fields.map((f) => el("option", { value: f }, t("cg_f_" + f))));
   const holder = el("div", { class: "cg-apply-value" });
@@ -1783,7 +1784,7 @@ function cgApplyAll() {
 
 function cgNewRow(values) {
   return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "480i",
-    modeOther: "", category: "", year: "", developer: "", players: "", buttons: "", controls: [], joystick: false, snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
+    modeOther: "", crop: false, category: "", year: "", developer: "", players: "", buttons: "", controls: [], joystick: false, snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
     wine: "", runner: "portproton", exes: [], programs: [], errors: {}, state: "", error: "", open: false }, values || {});
 }
 
@@ -1811,6 +1812,7 @@ function cgFound(row, found) {
     if (known) { row.mode = known.label; row.modeOther = ""; } else { row.mode = "other"; row.modeOther = cfg.mode; }
   }
   if (cfg.runner) row.runner = cfg.runner;
+  if (cfg.crop169 === "1") row.crop = true;
   if (cfg.category && !row.category) row.category = cfg.category;
   if (cfg.year && !row.year) row.year = cfg.year;
   if (cfg.developer && !row.developer) row.developer = cfg.developer;
@@ -1984,6 +1986,14 @@ function cgControls(row, { redraw, editing, package: pkg, cards, runner } = {}) 
   out.players = select("players", [["", t("cg_any")], ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.buttons = select("buttons", [["", t("cg_any")], ...[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => [String(n), String(n)])], false);
   out.controls = cgControlsButton(row, changed);
+  // O 16:9 crop (crop169=1 no cfg): o jogo ve uma tela 16:9 e o tubo mostra o meio dela em 4:3. A caixa traz a
+  // explicacao; vale ao criar o pacote, ao editar um jogo instalado e pela OSD (Video configuration).
+  {
+    const box = el("input", { type: "checkbox", "aria-label": t("cg_f_crop") });
+    box.checked = !!row.crop;
+    box.addEventListener("change", () => { row.crop = box.checked; changed(false); });
+    out.crop = el("div", { class: "cg-joystick cg-crop" }, box, el("small", { class: "dim" }, t("cg_crop_hint")));
+  }
   // O jogo ja aceita o joystick (um pacote a criar): o pacote leva um .key vazio, sem mapa do controle para o
   // teclado, e o menu na tela nao abre pedindo um (vale no lugar do .key que veio com a pasta).
   if (pkg) {
@@ -2227,7 +2237,7 @@ function cgPayload(row) {
     year: row.year.trim(), developer: row.developer.trim(),
     snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), logo: cgArtRef(row.logo), wine: row.platform === "windows" ? row.wine : "",
     key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "",
-    joystick: row.platform !== "command" && row.joystick ? "1" : "",
+    joystick: row.platform !== "command" && row.joystick ? "1" : "", crop: row.crop ? "1" : "",
     runner: row.platform === "windows" ? row.runner || "portproton" : "" };
 }
 

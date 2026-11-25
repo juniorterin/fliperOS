@@ -48,7 +48,7 @@ Then, with the controller:
    - Windows: pick the `.exe` inside the folder, then **what runs it**: PortProton (the default), Wine or Wine Staging. If the game doesn't open or runs badly with one, make the package again with another (see [Windows games: PortProton, Wine or Wine Staging](#windows-games-portproton)). With PortProton, the first time the Setup offers to download it (about 3 GB); then choose which of its Wine builds runs the game; keep the first one unless the game fails with it.
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
 7. **Picture, logo, video and text** (optional): pick each file (the logo is a `.png`, `.jpg` or `.webp`; it travels in the package as `<game>.logo.png` or `.logo.jpg`), or type the text. Without them the game gets samples, which you can replace later.
-8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.
+8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate. Then **16:9 crop**, for a game that only runs in a widescreen picture (see [16:9 crop](#169-crop)).
 9. **Category, controls, buttons, players, year, developer**: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line. Then **Does the game already work with the joystick?** (asked when the game has no `.key` yet): say yes and the package carries an empty `<game>.key`, so the on-screen menu does not ask for a controller map (the same as the *Joystick* box in the web panel).
 10. The Setup writes `~/roms/custom-packages/<game>.fliperos-customgame.zip` and asks whether to **install it now**. Say yes and pick the group (or a new one, for example *PC games*; each group is a system in the frontends): the game folder is copied to `~/games/<group>/<game>` and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.
 11. Open the frontend: the game is in the system of its group.
@@ -297,7 +297,7 @@ The keys are Linux's names: the letters and digits, `F1` to `F12`, `ESC TAB ENTE
 
 The `.key` rarely comes ready: you make it here. A custom game with no `.key` opens the on-screen menu by itself, straight on Controller configuration, two seconds after the game shows (once each time the game opens; *NO KEYS YET* in the corner). **Save** writes the `.key`, even with no key marked, and then the game stops asking; **Back** closes the menu without saving, and it asks again next time. A package made with **Joystick** ticked (web panel) or *yes* to "Does the game already work with the joystick?" (Setup) carries that empty `.key` from the start, so a game that takes the joystick by itself never asks.
 
-Any other time, open the **on-screen menu** during the game (by default Start + Down held for a second; Frontend controls > OSD MENU changes it). A custom game has **Controller configuration** in place of *Emulator menu*:
+Any other time, open the **on-screen menu** during the game (by default Start + Down held for a second; Frontend controls > OSD MENU changes it), go to **Controller configuration** and choose **Joystick to keyboard**:
 
 - A keyboard on the screen. The keys that already have a button are lit.
 - Move to a key and press Enter: it turns yellow and waits 5 seconds for a button. Press the controller button that should send it.
@@ -314,6 +314,15 @@ Several buttons can send the same key (player 1 and player 2 button 1 on `LEFTCT
 Each game opens in its own Xorg, in its video mode (`fliperos-x11-run --mode`): 240p, 240p hack, 480i (interlaced on a 15 kHz monitor) or any `WIDTHxHEIGHT@HZ`. Switchres makes the mode for the monitor chosen in the Setup.
 
 **240p hack (Mugen)** is for a Windows game that only opens full screen at 640x480, like M.U.G.E.N with `GameWidth = 640` and `GameHeight = 480`: in plain 240p it shows a white screen with "Error detected" (`mugen.log`: `trying 640x480x16 mode ... failed`), because the Wine of PortProton only offers modes up to the size of the screen. With the hack the tube stays at 640x240 (true 240p, no flicker), the X screen is 640x480 scaled down to it (`xrandr --scale 1x2`, mode `640x240@60/640x480` in the `.cfg`), and picom with vsync stops the tearing of games that draw through X without OpenGL (M.U.G.E.N with `RenderMode = System`). A game that opens at 320x240 or 640x240 by itself stays in plain 240p or `320x240@60`.
+
+### 16:9 crop
+
+For a game that only runs in a widescreen (16:9) picture. Without it, such a game on a 4:3 tube comes out squeezed or with black bars. With **16:9 crop** on, the game opens in a 16:9 X screen (1280x720, `FLIPEROS_CROP_SCREEN` changes it) and the tube shows only the middle of it, in 4:3: the full height, nothing squeezed, the sides of the picture cut off (`xrandr --transform`, the same mechanism as the 240p hack's scale; the crop wins over the 240p hack when both are set).
+
+- **Where to set it:** the *16:9 crop* box in **Create package** (web panel, one package or the table) with its explanation, *Yes/No* in the Setup's Create package, the game's information in the Setup, the edit window of an installed game, and **Video configuration > 16:9 crop** in the on-screen menu. It is `crop169=1` in the game's `.cfg` and travels in the package.
+- **When it counts:** the X screen is made when the game opens, so a change in the on-screen menu or in the edit window counts the next time the game opens.
+- **On-screen menu:** while the game runs with the crop, the menu and the volume and achievement bars are drawn only in the middle three quarters of the picture, the part the tube shows (so the letters come out a third wider than usual).
+- A card that can't make the bigger screen opens the game without the crop.
 
 Each game has its own row in **Video Setup > Interlaced hacks** (only the flicker filter: the mode is the game's), and the level chosen in the on-screen menu during the game stays with that game. Its name for the filter, the menu and the log is `custom_` plus the group and the name in lower case, with `_` for everything else: *PC games* / *Metal Slug X* is `custom_pc_games_metal_slug_x`, and its log is `/opt/fliperos/logs/custom_pc_games_metal_slug_x.log`.
 

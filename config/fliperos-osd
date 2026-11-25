@@ -439,6 +439,67 @@ def guncon_present():
     return False
 
 
+# ── O 16:9 crop dos jogos custom ──
+# O jogo ve uma tela 16:9 e o tubo mostra so o meio dela, em 4:3: 3/4 da largura
+# (4/3 dividido por 16/9). A camada espalha a imagem da OSD na tela do jogo
+# inteira, entao o menu e desenhado so nos 3/4 do meio dela (Painter.fit).
+CROP_ON = ("1", "on", "yes", "true")
+CROP_VISIBLE = 0.75
+# O arquivo que o fliperos-customgame poe em $XDG_RUNTIME_DIR do jogador, com o
+# pid dele, enquanto o jogo roda com o crop.
+CROP_MARK = "fliperos-crop169"
+
+
+def crop_running(screen):
+    """O jogo da tela abriu com o 16:9 crop (o arquivo do fliperos-customgame, de
+    um processo vivo)."""
+    try:
+        with open(os.path.join(RUN_USER, str(screen["uid"]), CROP_MARK), encoding="utf-8") as f:
+            pid = int(f.readline().strip())
+        return os.path.isdir("/proc/%d" % pid)
+    except (OSError, KeyError, TypeError, ValueError):
+        return False
+
+
+def cfg_value(path, key):
+    """O valor de key num .cfg de chave=valor ("" sem a chave ou sem o arquivo)."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                name, sep, value = line.rstrip("\r\n").partition("=")
+                if sep and name.strip() == key:
+                    return value.strip()
+    except (OSError, TypeError):
+        pass
+    return ""
+
+
+def set_cfg_value(path, key, value):
+    """Poe key=value no .cfg (value vazio tira a linha), de uma vez (pelo .tmp) e
+    com o dono e as permissoes de antes. False se nao deu."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+        before = os.stat(path)
+        kept = [line for line in lines if line.partition("=")[0].strip() != key or "=" not in line]
+        if value:
+            # Depois do mode=, onde o fliperos-customgame a poe; sem ele, no fim.
+            at = next((i + 1 for i, line in enumerate(kept) if line.partition("=")[0].strip() == "mode"), len(kept))
+            kept.insert(at, "%s=%s" % (key, value))
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(kept) + "\n")
+        os.chmod(tmp, before.st_mode & 0o7777)
+        try:
+            os.chown(tmp, before.st_uid, before.st_gid)
+        except OSError:
+            pass
+        os.replace(tmp, path)
+        return True
+    except (OSError, TypeError):
+        return False
+
+
 def on_screen():
     """{"pid", "program", "core", "uid", "runtime"} do programa cuja camada gravou
     o FPS agora ha pouco; None sem nenhum."""
@@ -1037,6 +1098,9 @@ class Menu:
         # dele; capture_request: a tecla que espera o botao (o servico
         # pergunta ao gamekeys e chama capture_done).
         self.gamekeys = gamekeys if is_game(self.screen) else None
+        # O jogo abriu com o 16:9 crop (crop_running do servico): o menu e
+        # desenhado so na parte que o tubo mostra (Painter.crop).
+        self.crop_running = False
         self.osk = None
         # direct: a OSD abriu sozinha no Controller configuration (um jogo
         # custom sem o .key); Back nele fecha o menu.
@@ -1083,8 +1147,8 @@ class Menu:
         if name == "geometry" and self.geometry and self.geometry.key:
             # A geometria e de uma resolucao: qual, fica a vista enquanto se ajusta.
             return "GEOMETRY " + self.geometry.key
-        return {"main": "FliperOS", "config": "CONFIGURATION", "colour": "COLOUR", "geometry": "GEOMETRY",
-                "guncon": "GUNCON 2", "scanlines": "SCANLINES", "keys": "CONTROLLER",
+        return {"main": "FliperOS", "config": "VIDEO CONFIGURATION", "colour": "COLOUR", "geometry": "GEOMETRY",
+                "controller": "CONTROLLER", "guncon": "GUNCON 2", "scanlines": "SCANLINES", "keys": "KEYBOARD",
                 "capture": "MEDIA CAPTURE"}.get(name, "")
 
     def rows_of(self, name):
@@ -1166,16 +1230,17 @@ class Menu:
         quando ele tem um), Close e Quit (so num jogo). O volume nao: e das
         teclas de volume e do painel web."""
         rows = []
-        row = Row("page", "Configuration", action=lambda: self.open_page("config"))
+        row = Row("page", "Video configuration", action=lambda: self.open_page("config"))
         row.icon = ("gear", "GRAY")
         rows.append(row)
         # Itens do menu, cada um com o icone dele (Painter.ICONS e a cor do tema).
         items = []
         if self.emulator_key is not None:
             items.append(("Emulator menu", ("menu", "CYAN"), lambda: self.leave("emulator")))
-        elif self.gamekeys:
-            # Um jogo custom: o controle como teclado (os jogos sem joystick).
-            items.append(("Controller configuration", ("pad", "CYAN"), self.open_keys))
+        if self.controller_items():
+            # A pagina dos controles: a GunCon 2 (ligada) e o controle como
+            # teclado (um jogo custom, para os jogos sem joystick).
+            items.append(("Controller configuration", ("pad", "CYAN"), lambda: self.open_page("controller")))
         if is_game(self.screen):
             # A foto e o video do jogo para o frontend; achar o jogo na lista
             # leva um instante (o Setup), por isso o Enter e lento.
@@ -1184,7 +1249,8 @@ class Menu:
         if is_game(self.screen):
             items.append(("Quit", ("quit", "ORANGE"), lambda: self.leave("quit")))
         for label, icon, action in items:
-            row = Row("page" if label == "Media capture" else "action", label, action=action,
+            row = Row("page" if label in ("Media capture", "Controller configuration") else "action", label,
+                      action=action,
                       slow=label == "Media capture")
             row.icon = icon
             rows.append(row)
@@ -1241,17 +1307,41 @@ class Menu:
         if conf.get("monitor", "") != "lcd" and self.mode:
             rows.append(Row("page", "Geometry", action=lambda: self.open_page("geometry"), slow=True))
         rows.append(Row("page", "Colour", action=self.open_colour, slow=True))
-        # A GunCon 2 ligada: os ajustes dela com o jogo aberto, para acertar a
-        # mira e o flash atirando (Setup > Joysticks > GunCon 2).
-        if guncon_present():
-            rows.append(Row("page", "GunCon 2", action=self.open_guncon, slow=True))
+        # O 16:9 crop de um jogo custom (crop169= no .cfg dele): vale quando o
+        # jogo abre de novo, pois a tela do X dele e feita na abertura.
+        if self.gamekeys and self.cfg_path():
+            rows.append(Row("choice", "16:9 crop", "1" if self.crop_cfg() else "0",
+                            options=[("0", "Off"), ("1", "On")], change=self.set_crop))
         # Na base, lado a lado: Save (grava no perfil) e Back.
         buttons = Row("buttons", "Save|Back", "save", options=[("save", "Save"), ("back", "Back")])
         buttons.action = lambda: self.save_profile() if buttons.value == "save" else self.back()
         rows.append(buttons)
         return rows
 
-    # ── Controller configuration (os jogos custom) ──
+    # ── Controller configuration ──
+    def controller_items(self):
+        """O que a pagina Controller configuration tem: "guncon" (a GunCon 2
+        ligada: os ajustes dela com o jogo aberto, para acertar a mira e o
+        flash atirando; Setup > Joysticks > GunCon 2) e "keys" (um jogo custom
+        com o gamekeys: o controle como teclado)."""
+        items = []
+        if guncon_present():
+            items.append("guncon")
+        if self.gamekeys:
+            items.append("keys")
+        return items
+
+    def rows_controller(self):
+        rows = []
+        for item in self.controller_items():
+            if item == "guncon":
+                rows.append(Row("page", "GunCon 2", action=self.open_guncon, slow=True))
+            else:
+                rows.append(Row("page", "Joystick to keyboard", action=self.open_keys))
+        rows.append(Row("action", "Back", action=self.back))
+        return rows
+
+    # ── Joystick to keyboard (os jogos custom) ──
     # O teclado na tela: Enter numa tecla espera um botao do controle (o
     # gamekeys diz qual, pN_CONTROLE), que passa a mandar essa tecla; o mesmo
     # botao de novo na mesma tecla a limpa. As teclas com botao ficam acesas.
@@ -1536,6 +1626,25 @@ class Menu:
         before = row.previous if row else None
         self.store("level." + program, value, before)
 
+    # ── 16:9 crop (os jogos custom) ──
+    def cfg_path(self):
+        """O .cfg do jogo custom aberto (o .key do gamekeys, ao lado), ou None."""
+        keyfile = (self.gamekeys or {}).get("keyfile") or ""
+        return keyfile[:-4] + ".cfg" if keyfile.endswith(".key") else None
+
+    def crop_cfg(self):
+        """O crop169= do .cfg do jogo: ligado?"""
+        return cfg_value(self.cfg_path(), "crop169").lower() in CROP_ON
+
+    def set_crop(self, value):
+        """Liga ou desliga o 16:9 crop no .cfg do jogo. A tela do X dele e feita
+        quando abre: com o jogo aberto, o aviso diz que vale na proxima vez."""
+        on = value == "1"
+        if not set_cfg_value(self.cfg_path(), "crop169", "1" if on else ""):
+            self.status = "NOT SAVED"
+            return
+        self.status = "REOPEN THE GAME" if on != self.crop_running else ""
+
     def set_geometry(self, index, value):
         geometry = self.geometry
         current = list(geometry.value)
@@ -1726,6 +1835,9 @@ class Painter:
     # desenho e feito no tamanho do quadro (ate 320x240) e espalhado na imagem
     # exatamente nas linhas e colunas que a camada le: todo pixel chega a tela.
     size = None     # (largura, altura) logicos do desenho; None: a tela
+    # O jogo roda com o 16:9 crop: o tubo mostra so o meio (CROP_VISIBLE) da
+    # imagem, entao o desenho vai so nesse meio (o servico poe antes de desenhar).
+    crop = False
 
     def area(self):
         t = self.theme
@@ -1757,6 +1869,12 @@ class Painter:
         pg, t = self.pg, self.theme
         fw, fh = self.frame_size(mode)
         w, h = min(WIDTH, fw), min(HEIGHT, fh)
+        # Com o 16:9 crop (so deitado): o desenho cabe nos 3/4 do meio da imagem
+        # (span colunas, a partir de left), o que o tubo mostra.
+        crop = self.crop and not t.VERTICAL
+        span, left = (round(WIDTH * CROP_VISIBLE), (WIDTH - round(WIDTH * CROP_VISIBLE)) // 2) if crop else (WIDTH, 0)
+        if crop:
+            w = max(1, round(w * CROP_VISIBLE))
         if (w, h) == (WIDTH, HEIGHT):
             self.size = None
             return t.upright(draw())
@@ -1770,9 +1888,22 @@ class Painter:
         for y, src in enumerate(self.sources(h, HEIGHT)):
             rows.blit(small, (0, y), (0, src, w, 1), special_flags=pg.BLEND_RGBA_ADD)
         out = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
-        for x, src in enumerate(self.sources(w, WIDTH)):
-            out.blit(rows, (x, 0), (src, 0, 1, HEIGHT), special_flags=pg.BLEND_RGBA_ADD)
+        for x, src in enumerate(self.sources(w, span)):
+            out.blit(rows, (left + x, 0), (src, 0, 1, HEIGHT), special_flags=pg.BLEND_RGBA_ADD)
         return out
+
+    def title_text(self, surface, title, x, y, room):
+        """O titulo da pagina em rosa: na letra do menu, ou, num quadro estreito
+        onde ela nao cabe (VIDEO CONFIGURATION em 160 colunas), na pequena, que
+        e ajustada ao que sobra. Devolve a largura que ocupou."""
+        import tiny
+        size = self.font.size(title)[0]
+        if size <= room:
+            self.text(surface, title, self.theme.PINK, x, y)
+            return size
+        shown = tiny.fit(title, max(8, room))
+        tiny.text(surface, shown, self.theme.PINK, x, y + 1)
+        return tiny.width(shown)
 
     def row_text(self, surface, label, value, color, value_color, x, top, width):
         """Uma linha do menu: o rotulo a esquerda e o valor a direita. Se nao
@@ -1815,7 +1946,7 @@ class Painter:
         x, y = (W - width) // 2, H - safe_y - height
         pg.draw.rect(surface, t.BG_DEEP + (232,), (x, y, width, height))
         pg.draw.rect(surface, t.PURPLE + (255,), (x, y, width, height), 1)
-        self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
+        self.title_text(surface, menu.title(), x + 6, y + 5, width - 12)
         if sub:
             room = width - 12 - (tiny.width(menu.status) + 8 if menu.status else 0)
             tiny.text(surface, tiny.fit(sub, max(8, room)), t.COMMENT, x + 6, y + 15)
@@ -1944,8 +2075,7 @@ class Painter:
             else:
                 tiny.text(surface, tiny.fit(label, avail - title_w - 18), t.CYAN, edge, y + 6, right=True)
         else:
-            self.text(surface, menu.title(), t.PINK, x + 6, y + 5)
-            title_w = self.font.size(menu.title())[0]
+            title_w = self.title_text(surface, menu.title(), x + 6, y + 5, width - 12)
         if sub:
             # A resolucao com as frequencias e o FPS, na letra pequena; o aviso
             # (SAVED...) a direita dela.
@@ -2246,6 +2376,7 @@ class Painter:
 
     def rgba(self, menu):
         self.theme.set_orientation(read_conf().get("orientation", ""))
+        self.crop = menu.crop_running
         return self.pg.image.tobytes(self.fit(lambda: self.panel(menu), menu.mode), "RGBA")
 
     def bar_rgba(self, percent, muted, mode):
@@ -2606,6 +2737,7 @@ class Service:
             return
         if self.painter is None:
             self.painter = Painter()
+        self.painter.crop = crop_running(on_screen())
         self.screen_file.show(self.painter.bar_rgba(*state, current_mode()))
         self.bar_until = time.monotonic() + BAR_SECONDS
 
@@ -2641,7 +2773,7 @@ class Service:
                 self.painter = Painter()
             self.painter.theme.set_orientation(read_conf().get("orientation", ""))
             self.cheevo = {"title": title, "born": born, "start": now, "last": now, "mode": current_mode(),
-                           "kind": kind[0] if kind else "cheevo"}
+                           "kind": kind[0] if kind else "cheevo", "crop": crop_running(on_screen())}
         cheevo = self.cheevo
         if self.bar_until:
             cheevo["start"] += now - cheevo["last"]
@@ -2655,6 +2787,7 @@ class Service:
             self.screen_file.hide()
             return
         extra = () if kind == "cheevo" else (kind,)
+        self.painter.crop = cheevo.get("crop", False)
         self.screen_file.show(self.painter.achievement_rgba(cheevo["title"], elapsed, cheevo["mode"], *extra))
 
     # O menu.
@@ -2699,6 +2832,7 @@ class Service:
             self.painter = Painter()
         gamekeys = self.gamekeys(screen)
         menu = Menu(screen, current_mode(), self.worker, self.emulator_key(screen), gamekeys)
+        menu.crop_running = crop_running(screen)
         # O que demora para abrir roda a parte, e o menu segue desenhando o
         # indicador de espera.
         menu.threaded = True

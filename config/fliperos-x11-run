@@ -136,6 +136,19 @@ if [[ -n ${BASH_REMATCH[4]} ]]; then
 else
   unset FLIPEROS_X11_SCREEN
 fi
+# O "16:9 crop" de um jogo custom (crop169=1 no .cfg dele, o 3o argumento de
+# "fliperos-customgame run CFG"): o jogo ve uma tela 16:9 (FLIPEROS_CROP_SCREEN,
+# 1280x720) e o tubo mostra so o meio dela, em 4:3, sem espremer a imagem (o
+# fliperos-x11-client faz o recorte, o mesmo xrandr do 240p hack). Tem a mesma
+# tela maior que o modo do 240p hack, e vale no lugar dele.
+unset FLIPEROS_X11_CROP
+if [[ $name == fliperos-customgame && ${2:-} == run && -f ${3:-} ]] &&
+  grep -qiE '^crop169=(1|on|yes|true)[[:space:]]*$' "$3" 2> /dev/null; then
+  crop_screen=${FLIPEROS_CROP_SCREEN:-1280x720}
+  if [[ $crop_screen =~ ^[1-9][0-9]*x[1-9][0-9]*$ ]]; then
+    export FLIPEROS_X11_SCREEN=$crop_screen FLIPEROS_X11_CROP=1
+  fi
+fi
 
 # Placa sem dotclock baixo (Intel, NVIDIA: o Setup grava dotclock_min no
 # switchres.ini). O Switchres dobraria a largura ate passar do minimo, e o

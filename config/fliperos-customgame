@@ -133,12 +133,20 @@ CONTROLS = {"joy8": "joystick (8-way)", "joy4": "joystick (4-way)", "joy2": "joy
 MODES = {"240p": "640x240@60", "240p-hack": "640x240@60/640x480", "480i": "640x480@60"}
 # O modo de um jogo custom que nao diz o dele (mode= no cfg): 640x480i.
 DEFAULT_MODE = "640x480@60"
+# crop169=1 no cfg ("16:9 crop"): o jogo ve uma tela 16:9 (CROP_SCREEN, a que o
+# fliperos-x11-run poe) e o tubo mostra so o meio dela em 4:3, sem espremer a
+# imagem; as pontas ficam de fora. 1/on/yes/true ligam, 0/off/no/false ou nada
+# desligam.
+CROP_ON = ("1", "on", "yes", "true")
+CROP_OFF = ("", "0", "off", "no", "false")
+# O arquivo (em $XDG_RUNTIME_DIR) que diz a OSD que o jogo aberto esta com o crop.
+CROP_MARK = "fliperos-crop169"
 MODE_RE = re.compile(r"^[1-9][0-9]{1,3}x[1-9][0-9]{1,3}@[1-9][0-9]{0,2}(\.[0-9]+)?(/[1-9][0-9]{1,3}x[1-9][0-9]{1,3})?$")
 # Os controles de um jogador no .key (os do buttons.map).
 KEY_CONTROLS = ("up", "down", "left", "right", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "start", "coin")
 KEY_LINE = re.compile(r"^p([1-8])_(%s)=([A-Z0-9_]{1,24})$" % "|".join(KEY_CONTROLS))
 # A ordem das chaves no cfg gravado.
-CFG_ORDER = ("format", "name", "platform", "exe", "runner", "command", "mode", "category", "controls", "buttons", "players",
+CFG_ORDER = ("format", "name", "platform", "exe", "runner", "command", "mode", "crop169", "category", "controls", "buttons", "players",
              "year", "developer", "folder", "package", "package_stamp")
 # O ano (quatro digitos) e a desenvolvedora (um texto curto) de um jogo: o
 # frontend os mostra na lista e na pagina dele (Year e Manufacturer).
@@ -316,6 +324,11 @@ def check_cfg(cfg, base, game_files, problems=None):
     if not mode:
         bad("mode_bad", cfg.get("mode"), "%s.cfg: invalid mode %r (240p, 240p-hack, 480i or WIDTHxHEIGHT@HZ)" % (base, cfg.get("mode")))
     out["mode"] = mode
+    crop = cfg.get("crop169", "").strip().lower()
+    if crop in CROP_ON:
+        out["crop169"] = "1"
+    elif crop not in CROP_OFF:
+        bad("crop169_bad", crop, "%s.cfg: crop169 must be 1 or 0, not %r" % (base, crop))
     category = cfg.get("category", "")
     if len(category) > 80:
         bad("category_long", "", "%s.cfg: category too long" % base)
@@ -561,8 +574,8 @@ def package_info(path, done):
     if not misnamed:
         stem = base[:-len(SUFFIX)]
     row = {"zip": path, "file": base, "size": st.st_size, "mtime": int(st.st_mtime), "state": "", "group": "",
-           "name": stem, "platform": "", "mode": "", "category": "", "controls": "", "buttons": "", "players": "",
-           "year": "", "developer": "", "bytes": 0, "media": {}, "key": False, "ppdb": False, "problems": []}
+           "name": stem, "platform": "", "mode": "", "crop169": "", "category": "", "controls": "", "buttons": "",
+           "players": "", "year": "", "developer": "", "bytes": 0, "media": {}, "key": False, "ppdb": False, "problems": []}
     problems = []
     if misnamed:
         problems.append(("misnamed", stem + SUFFIX, "rename it to %s%s (packages always end in %s)" % (stem, SUFFIX, SUFFIX)))
@@ -573,8 +586,8 @@ def package_info(path, done):
             return None
         problems += exc.problems
     else:
-        row.update({k: pkg.cfg.get(k, "") for k in ("name", "platform", "mode", "category", "controls", "buttons", "players",
-                                                    "year", "developer")})
+        row.update({k: pkg.cfg.get(k, "") for k in ("name", "platform", "mode", "crop169", "category", "controls",
+                                                    "buttons", "players", "year", "developer")})
         row.update(bytes=pkg.bytes, key="key" in pkg.extra, ppdb="ppdb" in pkg.extra,
                    media={kind: pkg.extra[kind][0].filename for kind, _ in MEDIA if kind in pkg.extra})
         stamped, group, name = done.get(path, ("", "", ""))
@@ -923,7 +936,7 @@ def cmd_pack(args):
         base = re.sub(r"[^A-Za-z0-9 ._()&'+,-]+", "_", args.name).strip(" .") or "game"
         cfg = {"name": args.name, "platform": args.platform, "mode": args.mode, "category": args.category or "",
                "controls": args.controls or "", "buttons": args.buttons or "", "players": args.players or "",
-               "year": args.year or "", "developer": args.developer or ""}
+               "year": args.year or "", "developer": args.developer or "", "crop169": "1" if args.crop169 else ""}
         if args.platform == "windows":
             exe = os.path.realpath(os.path.join(folder, args.exe or ""))
             if not exe.startswith(folder + os.sep) or not os.path.isfile(exe):
@@ -1074,7 +1087,7 @@ def cmd_add(args):
             raise Bad("the folder %s is empty" % args.folder)
         cfg = {"name": name, "platform": args.platform, "mode": args.mode, "category": args.category or "",
                "controls": args.controls or "", "buttons": args.buttons or "", "players": args.players or "",
-               "year": args.year or "", "developer": args.developer or ""}
+               "year": args.year or "", "developer": args.developer or "", "crop169": "1" if args.crop169 else ""}
         rels = {r for _, r in files}
         if args.platform == "windows":
             cfg["exe"] = rel_path(args.exe or "")
@@ -1325,6 +1338,8 @@ def cfg_hints(cfg, game):
     mode = mode_of(cfg.get("mode", ""))
     if mode:
         out["mode"] = mode
+    if cfg.get("crop169", "").strip().lower() in CROP_ON:
+        out["crop169"] = "1"
     if cfg.get("category") and len(cfg["category"]) <= 80:
         out["category"] = cfg["category"]
     controls = [c.strip().lower() for c in cfg.get("controls", "").split(",") if c.strip().lower() in CONTROLS]
@@ -1407,7 +1422,7 @@ def scan_folder(folder):
     for key in ("snap", "video", "text", "logo", "key", "ppdb", "where"):
         row[key] = found[key]
     row["cfg"] = {k: v for k, v in hints.items()
-                  if k in ("mode", "runner", "category", "controls", "buttons", "players", "year", "developer")}
+                  if k in ("mode", "crop169", "runner", "category", "controls", "buttons", "players", "year", "developer")}
     if hints.get("name"):
         row["name"] = hints["name"]
     # cfg_run: o exe= (ou command=) veio do JOGO.cfg (a pagina o poe por
@@ -1463,6 +1478,32 @@ def mapper(cfg_path):
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
     except OSError:
         return None
+
+
+def crop_mark():
+    """O jogo abriu com o 16:9 crop (o fliperos-x11-client poe FLIPEROS_CROP169=1
+    quando a tela do X ficou 16:9 e o tubo mostra o meio dela): o arquivo
+    $XDG_RUNTIME_DIR/fliperos-crop169 com o pid deste processo, que a OSD
+    procura para desenhar o menu so na parte que o tubo mostra. Devolve o
+    caminho, ou None sem o crop."""
+    runtime = ENV("XDG_RUNTIME_DIR")
+    if ENV("FLIPEROS_CROP169") != "1" or not runtime:
+        return None
+    path = os.path.join(runtime, CROP_MARK)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("%d\n" % os.getpid())
+    except OSError:
+        return None
+    return path
+
+
+def crop_unmark(path):
+    if path:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 def has_keymap(cfg_path):
@@ -1715,12 +1756,14 @@ def cmd_run(args):
         env = dict(os.environ, **HIDE_PAD_ENV)
     keys = mapper(path)
     become_subreaper()
+    crop = crop_mark()
     try:
         game = subprocess.Popen(argv, cwd=cwd, env=env)
     except OSError as exc:
         print("fliperos-customgame: %s" % exc, file=sys.stderr)
         if keys:
             keys.terminate()
+        crop_unmark(crop)
         return 1
 
     def stop(sig, _frame):
@@ -1738,6 +1781,7 @@ def cmd_run(args):
             keys.wait(3)
         except subprocess.TimeoutExpired:
             keys.kill()
+    crop_unmark(crop)
     end_leftovers()
     return rc
 
@@ -1772,6 +1816,7 @@ def main():
                 "logo", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--joystick", action="store_true")
+    s.add_argument("--crop169", action="store_true")
     s.add_argument("--progress", nargs="*", type=int)
     s = sub.add_parser("add")
     s.add_argument("--group", required=True)
@@ -1786,6 +1831,7 @@ def main():
                 "logo", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--joystick", action="store_true")
+    s.add_argument("--crop169", action="store_true")
     s.add_argument("--replace", action="store_true")
     s.add_argument("--progress", nargs="*", type=int)
     s = sub.add_parser("media")

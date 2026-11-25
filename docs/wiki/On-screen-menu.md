@@ -17,16 +17,18 @@ Under the title, on every page, a small line shows the resolution, the two frequ
 
 | Item | What it does |
 | --- | --- |
-| **Configuration** | The picture settings below, and the profile they are saved to |
+| **Video configuration** | The picture settings below (video only), and the profile they are saved to |
 | **Emulator menu** | Closes this menu and opens the emulator's own: RetroArch's Quick Menu, MAME's, Flycast's, the PCSX2 and DuckStation pause menu, the Keisho overlay. Only in an emulator that has one |
-| **Controller configuration** | In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard ([Custom games](Custom-games.md#the-controller-as-a-keyboard)). A custom game with no key map yet opens the menu by itself on this page |
+| **Controller configuration** | Only controller things, and only when there is something to set: **GunCon 2** (while the light gun is connected) and **Joystick to keyboard** (in a custom game). See [Controller configuration](#controller-configuration) |
 | **Media capture** | In a game: records the game's art for the frontend, as the scraper would. **Thumbnail** takes a picture of the screen (`~/media/snap/<folder>/<game>.png`, always 4:3). **Preview video (30 s)** records 30 seconds at 60 fps with the game's sound (`~/media/preview/<folder>/<game>.mp4`; the sound needs the live screen's sound on, otherwise the file has a silent track). The menu closes first so it is not in the picture, a blue bar says "Recording 30 s", then "saved" (or why it failed), and the menu shortcut stays off while it records. The game is found in the frontend's lists the same way the web panel finds it; a program that is in no games folder has no capture |
 | **Close OSD menu** | Closes this menu, putting back what wasn't saved |
 | **Quit** | Closes the game, like the frontend's Exit game shortcut |
 
 Over a frontend there is no Emulator menu nor Quit.
 
-## Configuration
+## Video configuration
+
+Only video settings: picture, geometry, colour, scanlines and the profile they are saved to. Everything about controllers is in [Controller configuration](#controller-configuration).
 
 | Item | When it shows | What it does |
 | --- | --- | --- |
@@ -36,9 +38,22 @@ Over a frontend there is no Emulator menu nor Quit.
 | **Scanlines** | With a 31 kHz monitor | Opens the Scanlines page |
 | **Geometry** | Not on an LCD | Opens the Geometry page |
 | **Colour** | Always | Opens the Colour page |
-| **GunCon 2** | While a GunCon 2 is connected | Opens the GunCon 2 page |
+| **16:9 crop** | In a custom game | Off or On: the game opens in a 16:9 screen and the tube shows only its middle, in 4:3 (see [16:9 crop](#169-crop)). Saved in the game's `.cfg`, and it counts the next time the game opens (the menu says *REOPEN THE GAME*) |
 
-**Save** and **Back** are at the bottom. Leaving without saving puts everything back.
+**Save** and **Back** are at the bottom. Leaving without saving puts everything back (the 16:9 crop is written at once, not by Save).
+
+## Controller configuration
+
+| Item | When it shows | What it does |
+| --- | --- | --- |
+| **GunCon 2** | While a GunCon 2 is connected | Opens the GunCon 2 page |
+| **Joystick to keyboard** | In a custom game | The keyboard on the screen: which controller button sends which key, for PC games that only take the keyboard ([Custom games](Custom-games.md#the-controller-as-a-keyboard)). A custom game with no key map yet opens the menu by itself straight on this keyboard (**Back** closes the menu) |
+
+The page does not show over a game that has neither. It has its own **Back**.
+
+### 16:9 crop
+
+For a custom game that only runs in a widescreen picture. The game opens in a 16:9 screen (1280x720) and the tube shows only the middle of it, in 4:3: the full height, nothing squeezed, with the sides of the picture cut off. Without it, a 16:9 game on a 4:3 tube comes out squeezed or with black bars. It is set when the package is created, when the game is edited in the web panel, or here. While a game runs with the crop, the menu and the bars are drawn only in the middle three quarters of the screen, the part the tube shows.
 
 ### Profiles
 

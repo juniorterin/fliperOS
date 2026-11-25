@@ -3328,7 +3328,7 @@ def menu_sounds():
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
                      "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
-                     "year", "developer", "joystick")
+                     "year", "developer", "joystick", "crop")
 CUSTOMGAME_ROWS = 500
 CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 # A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
@@ -3457,8 +3457,8 @@ def customgame_rows_file(rows):
                 value = found or staged or os.path.join(stage_dir(), "missing-" + re.sub(r"\W", "", value)[:32])
             elif key == "folder" and value:
                 value = os.path.normpath(value)
-            elif key == "joystick":
-                # O jogo ja aceita o joystick: o pacote leva um .key vazio.
+            elif key in ("joystick", "crop"):
+                # joystick: o jogo ja aceita o joystick (o pacote leva um .key vazio); crop: o 16:9 crop.
                 value = "1" if value.lower() in ("1", "true") else ""
             fields.append(value)
         lines.append("\x1f".join(fields))
@@ -3531,8 +3531,8 @@ def customgames_info():
             # Os dois ultimos: o jogo tem o mapa do controle (.key) e o .ppdb do PortProton.
             game = dict(zip(("group", "name", "platform", "mode", "category", "controls", "buttons",
                              "players", "command", "exe", "folder", "package", "runner", "year",
-                             "developer", "key", "ppdb"), rest + [""] * 5))
-            game["key"], game["ppdb"] = game["key"] == "1", game["ppdb"] == "1"
+                             "developer", "key", "ppdb", "crop"), rest + [""] * 6))
+            game["key"], game["ppdb"], game["crop"] = game["key"] == "1", game["ppdb"] == "1", game["crop"] == "1"
             info["games"].append(game)
         elif kind == "pending" and len(rest) >= 5:
             # bad: why (os textos) e codes (codigo=argumento;..., que a pagina traduz).
@@ -5600,7 +5600,7 @@ class Handler(BaseHTTPRequestHandler):
             # O Setup diz na saida o que nao serve.
             args = ["group=" + group, "name=" + name]
             for key in ("new_group", "new_name", "command", "mode", "category", "controls", "buttons", "players",
-                        "year", "developer", "exe", "runner", "keys"):
+                        "year", "developer", "exe", "runner", "keys", "crop169"):
                 if key in data:
                     args.append("%s=%s" % (key, customgame_field(data[key])))
             return self.setup_answer(["--customgames", "edit"] + args, {2: (400, "bad request")}, timeout=180)

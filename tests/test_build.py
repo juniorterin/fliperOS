@@ -9101,6 +9101,48 @@ class DeflickerTests(unittest.TestCase):
             self.assertIn('xrandr --output VGA-1 --scale 1x2', log)
             self.assertIn('picom --backend glx --vsync PRELOAD=\n', log)
 
+    def test_16_9_crop_shows_the_middle_of_a_wide_screen(self):
+        # O "16:9 crop" (crop169=1 no cfg do jogo custom): o fliperos-x11-run poe a tela
+        # 16:9 (FLIPEROS_X11_SCREEN) e FLIPEROS_X11_CROP, e o client abre o passo --crop:
+        # xrandr --fb 1280x720 e o --transform que leva cada ponto do tubo ao do meio da tela
+        # (a altura inteira, 4/3 dela de largura, deslocado ao centro).
+        launch = self.client_launch(['myprog'], extra={'FLIPEROS_RES_W': '640', 'FLIPEROS_RES_H': '480',
+                                                       'FLIPEROS_X11_SCREEN': '1280x720', 'FLIPEROS_X11_CROP': '1'})[0]
+        self.assertTrue(launch.startswith('client --crop 1280x720 640x480 '), launch)
+        # Sem a tela maior, ou sem o crop, o de antes.
+        self.assertNotIn('--crop', self.client_launch(['myprog'], extra={'FLIPEROS_RES_W': '640', 'FLIPEROS_RES_H': '480',
+                                                                         'FLIPEROS_X11_CROP': '1'})[0])
+        self.assertTrue(self.client_launch(['myprog'], extra={'FLIPEROS_RES_H': '240', 'FLIPEROS_X11_SCREEN': '640x480'})[0]
+                        .startswith('client --scale 1x2 '))
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            bin_dir = tmp / 'bin'
+            bin_dir.mkdir()
+            for tool in ('xrandr', 'picom'):
+                (bin_dir / tool).write_text('#!/bin/sh\necho "%s $*" >> %s/log\n' % (tool, tmp))
+                (bin_dir / tool).chmod(0o755)
+            (bin_dir / 'pgrep').write_text('#!/bin/sh\nexit 1\n')
+            (bin_dir / 'pgrep').chmod(0o755)
+            (tmp / 'fliperos.conf').write_text('connector=VGA-1\n')
+            client = (ROOT / 'config/fliperos-x11-client').read_text().replace('/etc/fliperos/fliperos.conf',
+                                                                               str(tmp / 'fliperos.conf'))
+            (tmp / 'client').write_text(client)
+            env = dict(os.environ, PATH='%s:%s' % (bin_dir, os.environ['PATH']), LD_PRELOAD='')
+            for mode, transform in (('640x480', '1.500000,0,160.0000,0,1.500000,0,0,0,1'),
+                                    ('640x240', '1.500000,0,160.0000,0,3.000000,0,0,0,1')):
+                (tmp / 'log').write_text('')
+                out = subprocess.run(['bash', str(tmp / 'client'), '--crop', '1280x720', mode, 'sh', '-c',
+                                      'echo CROP=$FLIPEROS_CROP169'], capture_output=True, text=True, env=env).stdout
+                time.sleep(0.3)
+                self.assertEqual(out.strip(), 'CROP=1', mode)
+                self.assertIn('xrandr --fb 1280x720 --output VGA-1 --transform %s --filter bilinear' % transform,
+                              (tmp / 'log').read_text(), mode)
+        # O x11-run: so um jogo custom (fliperos-customgame run CFG) com crop169=1 no cfg ganha a tela 16:9.
+        run = (ROOT / 'config/fliperos-x11-run').read_text()
+        self.assertIn("grep -qiE '^crop169=(1|on|yes|true)[[:space:]]*$' \"$3\"", run)
+        self.assertIn('export FLIPEROS_X11_SCREEN=$crop_screen FLIPEROS_X11_CROP=1', run)
+        self.assertIn('crop_screen=${FLIPEROS_CROP_SCREEN:-1280x720}', run)
+
     def test_the_32_bit_layer_is_built_where_wine_is(self):
         build = (ROOT / 'config/fliperos-deflicker-build').read_text()
         self.assertIn('gcc -m32 -O2 -Wall -shared -fPIC', build)
@@ -9876,9 +9918,9 @@ class WebCustomGamesTests(WebSetupBase):
                                  'free': 99})
         lines = (self.dir / 'check.rows').read_text().splitlines()
         first, second = (l.split('\x1f') for l in lines)
-        # O runner (PortProton, Wine, Wine Staging), o logotipo, o ano, a desenvolvedora e o joystick (o ultimo campo).
-        self.assertEqual(len(first), 23)
-        self.assertEqual(first[19:], ['', '', '', ''])
+        # O runner (PortProton, Wine, Wine Staging), o logotipo, o ano, a desenvolvedora, o joystick e o 16:9 crop (o ultimo campo).
+        self.assertEqual(len(first), 24)
+        self.assertEqual(first[19:], ['', '', '', '', ''])
         self.assertEqual(first[:5], ['PC games', 'Metal Slug X', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
         self.assertEqual(first[5], 'line one line two')
         self.assertEqual(first[11], str(self.dir / 'stage' / staged['id']))
@@ -24943,7 +24985,7 @@ class OsdTests(unittest.TestCase):
         gamekeys = {'folder': '/run/user/1000/fliperos-gamekeys', 'keyfile': str(keyfile), 'buttons': buttons}
         screen = {'program': 'custom_pc_games_pang', 'core': ''}
         menu = osd.Menu(screen, self.MODE, osd.Worker(), None, gamekeys)
-        self.assertEqual(self.labels(menu), ['Configuration', 'Controller configuration', 'Media capture',
+        self.assertEqual(self.labels(menu), ['Video configuration', 'Controller configuration', 'Media capture',
                                              'Close OSD menu', 'Quit'])
         self.assertEqual(menu.page['rows'][1].icon, ('pad', 'CYAN'))
         # Sobre o frontend, nao; sem o gamekeys, nao.
@@ -24952,7 +24994,11 @@ class OsdTests(unittest.TestCase):
         self.assertNotIn('Controller configuration', self.labels(osd.Menu(screen, self.MODE, osd.Worker())))
         menu.page['cursor'] = 1
         menu.key(osd.KEY_ENTER)
+        # A pagina dos controles: o teclado fica sob Joystick to keyboard.
         self.assertEqual(menu.title(), 'CONTROLLER')
+        self.assertEqual(self.labels(menu), ['Joystick to keyboard', 'Back'])
+        menu.key(osd.KEY_ENTER)
+        self.assertEqual(menu.title(), 'KEYBOARD')
         self.assertEqual(menu.osk_current(), '1')
         self.assertEqual(menu.osk_bound('Z'), [(1, 'b1')])
         # Ate o X (linha do Z, uma a direita).
@@ -25002,6 +25048,8 @@ class OsdTests(unittest.TestCase):
         keyfile.write_text('p1_b2=X\n')
         menu.key(osd.KEY_LEFT)
         menu.key(osd.KEY_ESC)
+        self.assertEqual(menu.title(), 'CONTROLLER')
+        menu.key(osd.KEY_ESC)
         self.assertEqual(menu.title(), 'FliperOS')
         self.assertIn('p1_b2=X', keyfile.read_text())
         # O servico acha o gamekeys pelo uid da camada e o arquivo current.
@@ -25021,6 +25069,101 @@ class OsdTests(unittest.TestCase):
             osd.RUN_USER = old
         # A OSD nao toma o teclado virtual do gamekeys.
         self.assertIn('GAME_KEYS_NAME) and self.is_keyboard(keys)', (ROOT / 'config/fliperos-osd').read_text())
+
+    def test_crop_169_row_writes_the_game_cfg_and_the_painter_keeps_to_the_middle(self):
+        # Video configuration de um jogo custom: "16:9 crop" (Off/On) grava o
+        # crop169= do .cfg dele (de uma vez, no lugar certo, sem mexer no resto) e
+        # avisa que vale na proxima abertura; sem o jogo custom, sem a linha.
+        osd = self.osd
+        keyfile = Path(self.tmp.name) / 'Pang.key'
+        cfg = Path(self.tmp.name) / 'Pang.cfg'
+        cfg.write_text('# c\nformat=1\nname=Pang\nplatform=windows\nmode=640x480@60\ncategory=Action\n')
+        gamekeys = {'folder': '/x', 'keyfile': str(keyfile), 'buttons': None}
+        screen = {'program': 'custom_pc_games_pang', 'core': ''}
+        menu = osd.Menu(screen, self.MODE, osd.Worker(), None, gamekeys)
+        menu.open_page('config')
+        self.assertEqual(self.labels(menu)[-3:], ['Colour', '16:9 crop', 'Save|Back'])
+        row = menu.page['rows'][self.labels(menu).index('16:9 crop')]
+        self.assertEqual((row.kind, row.text()), ('choice', 'Off'))
+        menu.page['cursor'] = self.labels(menu).index('16:9 crop')
+        menu.key(osd.KEY_RIGHT)
+        self.assertEqual(cfg.read_text().splitlines(),
+                         ['# c', 'format=1', 'name=Pang', 'platform=windows', 'mode=640x480@60', 'crop169=1',
+                          'category=Action'])
+        self.assertEqual(menu.status, 'REOPEN THE GAME')
+        menu.key(osd.KEY_LEFT)
+        self.assertNotIn('crop169', cfg.read_text())
+        self.assertEqual(menu.status, '')
+        # O jogo ja abriu com o crop: desligar e que pede reabrir, ligar de novo nao.
+        menu.crop_running = True
+        menu.key(osd.KEY_RIGHT)
+        self.assertEqual(menu.status, '')
+        menu.key(osd.KEY_LEFT)
+        self.assertEqual(menu.status, 'REOPEN THE GAME')
+        # Sem o jogo custom, sem a linha; o crop169 de um cfg que nao existe nao grava.
+        other, _ = self.config()
+        self.assertNotIn('16:9 crop', self.labels(other))
+        self.assertFalse(osd.set_cfg_value(str(Path(self.tmp.name) / 'none.cfg'), 'crop169', '1'))
+        # O servico acha o crop pelo arquivo do fliperos-customgame (um pid vivo).
+        run_user = Path(self.tmp.name) / 'run2'
+        (run_user / '1000').mkdir(parents=True)
+        old = osd.RUN_USER
+        osd.RUN_USER = str(run_user)
+        try:
+            self.assertFalse(osd.crop_running({'uid': 1000}))
+            (run_user / '1000' / osd.CROP_MARK).write_text('%d\n' % os.getpid())
+            self.assertTrue(osd.crop_running({'uid': 1000}))
+            (run_user / '1000' / osd.CROP_MARK).write_text('4194000\n')
+            self.assertFalse(osd.crop_running({'uid': 1000}))
+        finally:
+            osd.RUN_USER = old
+
+    def test_page_titles_fit_in_tiny_frames(self):
+        # VIDEO CONFIGURATION (19 letras) nao cabe na letra do menu em 160 ou 128
+        # colunas: o titulo passa para a letra pequena, ajustada ao que sobra, e
+        # nunca sai da caixa (nem cortado nem por cima da borda).
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        self.osd.GUI = str(ROOT / 'fliperos-setup/gui')
+        painter = self.osd.Painter()
+        pg = painter.pg
+        surface = pg.Surface((320, 240), pg.SRCALPHA)
+        wide = painter.title_text(surface, 'CONTROLLER', 0, 0, 300)
+        self.assertEqual(wide, painter.font.size('CONTROLLER')[0])
+        for room in (148, 100, 60):
+            used = painter.title_text(surface, 'VIDEO CONFIGURATION', 0, 0, room)
+            self.assertLessEqual(used, max(8, room), room)
+        self.assertLess(painter.title_text(surface, 'VIDEO CONFIGURATION', 0, 0, 100),
+                        painter.font.size('VIDEO CONFIGURATION')[0])
+        for frame in ((160, 144), (128, 96), (160, 120), (240, 160)):
+            mode = {'clock': 3000, 'h': [frame[0], 0, 0, frame[0] + 48], 'v': [frame[1], 0, 0, frame[1] + 20],
+                    'interlace': False}
+            menu, _ = self.config(mode=mode)
+            canvas = painter.fit(lambda: painter.panel(menu), mode)
+            box = canvas.get_bounding_rect()
+            self.assertLessEqual(box.right, 320, frame)
+
+    def test_painter_draws_only_in_the_middle_three_quarters_with_the_crop(self):
+        # O tubo mostra 3/4 do meio da imagem (a tela do jogo e 16:9): o menu
+        # nao pode tocar as pontas (as colunas de fora).
+        if not importlib.util.find_spec('pygame'):
+            self.skipTest('pygame')
+        os.environ['SDL_VIDEODRIVER'] = 'dummy'
+        self.osd.GUI = str(ROOT / 'fliperos-setup/gui')
+        painter = self.osd.Painter()
+        menu, _ = self.menu()
+        full = painter.fit(lambda: painter.panel(menu), menu.mode)
+        painter.crop = True
+        try:
+            cropped = painter.fit(lambda: painter.panel(menu), menu.mode)
+        finally:
+            painter.crop = False
+        self.assertEqual(cropped.get_size(), (320, 240))
+        box = cropped.get_bounding_rect()
+        self.assertGreaterEqual(box.left, 40 - 1)
+        self.assertLessEqual(box.right, 280 + 1)
+        self.assertGreater(full.get_bounding_rect().width, box.width)
 
     def test_a_custom_game_without_keys_opens_the_controller_configuration(self):
         # O .key quase nunca vem pronto (a pessoa o faz pela OSD): um jogo
@@ -25069,7 +25212,7 @@ class OsdTests(unittest.TestCase):
         menu = osd.Menu(screen, self.MODE, osd.Worker(), None, gamekeys)
         menu.open_keys()
         menu.direct = True
-        self.assertEqual(menu.title(), 'CONTROLLER')
+        self.assertEqual(menu.title(), 'KEYBOARD')
         menu.key(osd.KEY_ESC)
         self.assertTrue(menu.closing)
         source = (ROOT / 'config/fliperos-osd').read_text()
@@ -25120,19 +25263,19 @@ class OsdTests(unittest.TestCase):
         # volume.
         osd = self.osd
         menu, _ = self.menu()
-        self.assertEqual(self.labels(menu), ['Configuration', 'Media capture', 'Close OSD menu', 'Quit'])
+        self.assertEqual(self.labels(menu), ['Video configuration', 'Media capture', 'Close OSD menu', 'Quit'])
         menu = osd.Menu({'program': 'retroarch', 'core': 'fbneo'}, self.MODE, osd.Worker(), emulator_key=59)
-        self.assertEqual(self.labels(menu), ['Configuration', 'Emulator menu', 'Media capture', 'Close OSD menu', 'Quit'])
+        self.assertEqual(self.labels(menu), ['Video configuration', 'Emulator menu', 'Media capture', 'Close OSD menu', 'Quit'])
         self.assertEqual([getattr(r, 'icon', None) for r in menu.page['rows']],
                          [('gear', 'GRAY'), ('menu', 'CYAN'), ('camera', 'GREEN'), ('close', 'RED'), ('quit', 'ORANGE')])
         self.assertEqual([r.kind for r in menu.page['rows'][1:]], ['action', 'page', 'action', 'action'])
         menu = osd.Menu({'program': 'python3', 'core': ''}, self.MODE, osd.Worker(), emulator_key=59)
-        self.assertEqual(self.labels(menu), ['Configuration', 'Close OSD menu'])
+        self.assertEqual(self.labels(menu), ['Video configuration', 'Close OSD menu'])
         self.assertFalse([c for c in self.calls if '--volume' in c])
         # Configuration abre a pagina; o Back dela volta.
         menu, _ = self.menu()
         menu.key(osd.KEY_ENTER)
-        self.assertEqual(menu.title(), 'CONFIGURATION')
+        self.assertEqual(menu.title(), 'VIDEO CONFIGURATION')
         menu.page['cursor'] = len(menu.page['rows']) - 1
         menu.key(osd.KEY_RIGHT)
         menu.key(osd.KEY_ENTER)
@@ -25828,15 +25971,24 @@ class OsdTests(unittest.TestCase):
     def test_guncon_page_only_with_the_gun_and_live(self):
         # A pagina da GunCon 2 so com ela ligada (USB 0b9a:016a); cada ajuste
         # vai pelo --setting do Setup, que o passa a pistola na hora.
+        # Sem ela, o menu nao tem Controller configuration; com ela, a pagina
+        # dos controles tem a GunCon 2 (e nao a Configuration).
         menu, _ = self.menu()
+        self.assertNotIn('Controller configuration', self.labels(menu))
+        menu, _ = self.config()
         self.assertNotIn('GunCon 2', self.labels(menu))
         ident = Path(self.osd.SYS_INPUT) / 'input7' / 'id'
         ident.mkdir(parents=True)
         (ident / 'vendor').write_text('0b9a\n')
         (ident / 'product').write_text('016a\n')
         menu, worker = self.config()
-        self.assertEqual(self.labels(menu)[-2:], ['GunCon 2', 'Save|Back'])
-        menu.page['cursor'] = self.labels(menu).index('GunCon 2')
+        self.assertNotIn('GunCon 2', self.labels(menu))
+        self.assertEqual(self.labels(menu)[-1], 'Save|Back')
+        menu, worker = self.menu()
+        self.assertIn('Controller configuration', self.labels(menu))
+        menu.page['cursor'] = self.labels(menu).index('Controller configuration')
+        menu.key(self.osd.KEY_ENTER)
+        self.assertEqual((menu.title(), self.labels(menu)), ('CONTROLLER', ['GunCon 2', 'Back']))
         menu.key(self.osd.KEY_ENTER)
         self.assertEqual(menu.title(), 'GUNCON 2')
         self.assertEqual(self.labels(menu), ['Screen flash', 'Flash brightness (%)', 'Edge band (%)',
@@ -25852,7 +26004,7 @@ class OsdTests(unittest.TestCase):
         worker.wait()
         self.assertIn([self.osd.SETUP, '--setting', 'gun.reset', '1'], self.calls)
         menu.key(self.osd.KEY_ESC)
-        self.assertEqual(menu.title(), 'CONFIGURATION')
+        self.assertEqual(menu.title(), 'CONTROLLER')
         # Outro aparelho no mesmo /sys nao conta.
         (ident / 'product').write_text('0001\n')
         self.assertFalse(self.osd.guncon_present())

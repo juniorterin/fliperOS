@@ -4708,6 +4708,51 @@ class CustomGamesTests(Base):
         self.assertEqual(self.env.out("customgames_found \"$D\"; echo \"$CG_FOUND_YEAR|$CG_FOUND_DEVELOPER\"",
                                       dict(e, D=str(loose / "Foo"))).strip(), "2004|Studio X")
 
+    def test_a_package_carries_the_16_9_crop(self):
+        # crop169=1 (o "16:9 crop") vai no cfg do pacote, volta instalado e na
+        # lista (JSON); 0/off/nada nao escrevem nada; um valor que nao e sim nem
+        # nao e problema do pacote; a pasta solta traz o crop do JOGO.cfg.
+        import zipfile
+        media, games, e = self.pkg_env()
+        tool = str(ROOT / "config/fliperos-customgame")
+        src = self.env.dir / "src" / "Wide"
+        src.mkdir(parents=True)
+        (src / "wide").write_text("#!/bin/sh\n")
+        out = self.roms / "custom-packages" / "Wide.fliperos-customgame.zip"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run(["python3", tool, "pack", "--out", str(out), "--name", "Wide", "--platform", "native",
+                            "--folder", str(src), "--command", "./wide", "--crop169"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with zipfile.ZipFile(out) as zf:
+            self.assertIn("mode=640x480@60\ncrop169=1\n", zf.read("Wide.cfg").decode())
+        inspected = subprocess.run(["python3", tool, "inspect", str(out)], capture_output=True, text=True).stdout
+        self.assertIn("crop169=1\n", inspected)
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(out)))
+        self.assertIn("crop169=1\n", (self.roms / "custom" / "PC" / "Wide.cfg").read_text())
+        # Sem --crop169, nada no cfg.
+        plain = self.roms / "custom-packages" / "Plain.fliperos-customgame.zip"
+        r = subprocess.run(["python3", tool, "pack", "--out", str(plain), "--name", "Plain", "--platform", "native",
+                            "--folder", str(src), "--command", "./wide"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with zipfile.ZipFile(plain) as zf:
+            self.assertNotIn("crop169", zf.read("Plain.cfg").decode())
+        for text, ok in (("crop169=on\n", True), ("crop169=0\n", True), ("crop169=maybe\n", False)):
+            pkg = self.make_pkg(self.roms / "custom-packages" / "C.fliperos-customgame.zip", base="C",
+                                cfg="name=C\nplatform=windows\nexe=bin/pang.exe\n" + text)
+            r = subprocess.run(["python3", tool, "inspect", str(pkg)], capture_output=True, text=True)
+            self.assertEqual(r.returncode == 0, ok, (text, r.stderr))
+            if not ok:
+                self.assertIn("crop169 must be 1 or 0", r.stderr)
+        # A pasta solta com o JOGO.cfg: o found devolve cfg_crop169; o Setup o le.
+        loose = self.env.dir / "loose2"
+        (loose / "Foo").mkdir(parents=True)
+        (loose / "Foo" / "Foo.exe").write_bytes(b"MZ")
+        (loose / "Foo.cfg").write_text("name=Foo\nplatform=windows\nexe=Foo.exe\ncrop169=1\n")
+        found = subprocess.run(["python3", tool, "found", str(loose / "Foo")], capture_output=True, text=True).stdout
+        self.assertIn("cfg_crop169=1\n", found)
+        self.assertEqual(self.env.out("customgames_found \"$D\"; echo \"$CG_FOUND_CROP169\"",
+                                      dict(e, D=str(loose / "Foo"))).strip(), "1")
+
     def test_the_package_of_an_installed_game_follows_what_changed_after_installing(self):
         # Baixar o pacote de novo traz as configuracoes e o .key que a pessoa mudou depois de instalar: o
         # fliperos-customgame synced diz se o zip do jogo ja leva o mesmo; o pack so refaz o que mudou (e
@@ -4828,8 +4873,8 @@ class CustomGamesTests(Base):
         # O describe diz se o jogo tem o mapa do controle.
         (self.roms / "custom" / "PC" / "Cave.key").write_text("p1_b1=Z\n")
         rows = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
-        self.assertEqual([r[-2:] for r in rows if r[:3] == ["game", "PC", "Cave"]], [["1", ""]])
-        self.assertEqual([r[-2:] for r in rows if r[:3] == ["game", "PC", "Pang"]], [["", ""]])
+        self.assertEqual([r[-3:-1] for r in rows if r[:3] == ["game", "PC", "Cave"]], [["1", ""]])
+        self.assertEqual([r[-3:-1] for r in rows if r[:3] == ["game", "PC", "Pang"]], [["", ""]])
 
     def test_several_packages_are_created_from_a_table_in_one_task(self):
         # Criar pacote > varios de uma vez: a conferencia mostra os erros por linha, os zips que ja existem e os
@@ -5272,7 +5317,7 @@ class CustomGamesTests(Base):
         # O describe: o ano e a desenvolvedora na linha do jogo (depois deles, o .key e o .ppdb).
         rows_ = [l.split("\t") for l in self.env.out("customgames_describe", e).splitlines()]
         game = [r for r in rows_ if r[:3] == ["game", "PC games", "Metal Slug X"]][0]
-        self.assertEqual(game[-4:-2], ["1999", "Nazca Corporation"])
+        self.assertEqual(game[-5:-3], ["1999", "Nazca Corporation"])
         # O Edit muda e tira; um ano ruim e recusado (2).
         self.assertEqual(self.env.run(script % "edit group='PC games' name='Metal Slug X' year=2003 developer=SNK", e).returncode, 0)
         cfg = (self.roms / "custom" / "PC games" / "Metal Slug X.cfg").read_text()

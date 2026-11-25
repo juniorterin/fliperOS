@@ -1149,6 +1149,16 @@ screen_custom_pick_mode() {
   customgames_mode "$choice"
 }
 
+# screen_custom_pick_crop NOME ATUAL: o "16:9 crop" (1 ou 0, imprime) com a
+# explicacao dele. Status 1: Esc.
+screen_custom_pick_crop() {
+  local answer
+  answer=$(ui_radio "16:9 crop" "$(customgames_crop_description)" "$([[ ${2:-} == 1 ]] && echo on || echo off)" \
+    "off|Off (the game opens in the normal screen)" \
+    "on|On (the game gets a 16:9 screen, the tube shows its middle in 4:3)") || return 1
+  [[ $answer == on ]] && echo 1 || echo 0
+}
+
 # screen_custom_pick_runner NOME ATUAL: imprime o que roda o jogo do Windows
 # (portproton, wine ou wine-staging). Status 1: Esc.
 screen_custom_pick_runner() {
@@ -1231,6 +1241,7 @@ screen_custom_game_info() {
   while true; do
     choice=$(ui_menu "$title" "What the frontend shows and filters, and the video mode." "$last" \
       "mode|Video mode: $(customgames_mode_label "$(customgames_cfg_field "$cfg" mode)")" \
+      "crop|16:9 crop: $([[ $(customgames_cfg_field "$cfg" crop169) == 1 ]] && echo on || echo off)" \
       "category|Category: $(customgames_cfg_field "$cfg" category)" \
       "year|Year: $(customgames_cfg_field "$cfg" year)" \
       "developer|Developer: $(customgames_cfg_field "$cfg" developer)" \
@@ -1244,6 +1255,10 @@ screen_custom_game_info() {
       mode)
         value=$(screen_custom_pick_mode "$name" "$(customgames_cfg_field "$cfg" mode)") || continue
         customgames_cfg_set "$cfg" mode "$value" && customgames_entry "$group" "$name"
+        ;;
+      crop)
+        value=$(screen_custom_pick_crop "$name" "$(customgames_cfg_field "$cfg" crop169)") || continue
+        customgames_cfg_set "$cfg" crop169 "$([[ $value == 1 ]] && echo 1)"
         ;;
       category) value=$(screen_custom_pick_category "$(customgames_cfg_field "$cfg" category)") && customgames_cfg_set "$cfg" category "$value" ;;
       controls) value=$(screen_custom_pick_controls "$(customgames_cfg_field "$cfg" controls)") && customgames_cfg_set "$cfg" controls "$value" ;;
@@ -1311,7 +1326,7 @@ customgames_browse() {
 screen_custom_package_create() {
   local group=$1 from=${2:-} title="Create package" name="" platform=native folder="" exe="" cmd="" snap="" video=""
   local text="" text_string="" mode=640x480@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
-  local year="" developer="" logo="" joystick=0
+  local year="" developer="" logo="" joystick=0 crop=0
   local out base value rel runner=portproton
   local -a args
   if [[ -n $from ]]; then
@@ -1324,6 +1339,7 @@ screen_custom_package_create() {
     runner=${runner:-portproton}
     cmd=$(customgames_cfg_field "$cfg" command)
     mode=$(customgames_cfg_field "$cfg" mode)
+    [[ $(customgames_cfg_field "$cfg" crop169) == 1 ]] && crop=1
     category=$(customgames_cfg_field "$cfg" category)
     controls=$(customgames_cfg_field "$cfg" controls)
     buttons=$(customgames_cfg_field "$cfg" buttons)
@@ -1364,6 +1380,7 @@ screen_custom_package_create() {
     customgames_found "$folder"
     folder=$CG_FOUND_FOLDER snap=$CG_FOUND_SNAP video=$CG_FOUND_VIDEO text=$CG_FOUND_TEXT key=$CG_FOUND_KEY
     year=$CG_FOUND_YEAR developer=$CG_FOUND_DEVELOPER logo=$CG_FOUND_LOGO
+    [[ $CG_FOUND_CROP169 == 1 ]] && crop=1
     # 4. O que abre o jogo (o .exe do JOGO.cfg, se veio um).
     if [[ $platform == windows ]]; then
       exe=$CG_FOUND_EXE
@@ -1436,6 +1453,7 @@ screen_custom_package_create() {
   done
   # 6 e 7. O modo e as informacoes.
   mode=$(screen_custom_pick_mode "$name" "$mode") || return 0
+  crop=$(screen_custom_pick_crop "$name" "$crop") || return 0
   category=$(screen_custom_pick_category "$category") || category=""
   controls=$(screen_custom_pick_controls "$controls") || controls=""
   buttons=$(screen_custom_pick_count buttons "$buttons") || buttons=""
@@ -1461,6 +1479,7 @@ screen_custom_package_create() {
   done
   [[ -n $text_string ]] && args+=(--text-string "$text_string")
   ((joystick)) && args+=(--joystick)
+  [[ $crop == 1 ]] && args+=(--crop169)
   run_with_progress "Packing $name" "" customgames_pack_run "${args[@]}" || return 0
   if [[ -n $from ]]; then
     ui_msg "$title" "$name is packed:" "  $(basename "$out")" "in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES")" "" \

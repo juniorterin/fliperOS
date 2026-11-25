@@ -58,6 +58,16 @@ customgames_mode() {
   printf '%s\n' "$1"
 }
 
+# customgames_crop_description: o que e o "16:9 crop" (crop169=1 no .cfg do jogo),
+# o texto do Setup e do painel (CG_CROP_DESCRIPTION em setup-text.js traz o mesmo).
+customgames_crop_description() {
+  printf '%s\n' "For games that only run in a widescreen (16:9) picture. The game opens in a 16:9 screen" \
+    "and the tube shows only its middle, in 4:3: the full height, nothing squeezed, and the sides of the" \
+    "picture cut off. Without it, a 16:9 game on a 4:3 tube comes out squeezed or with black bars." \
+    "It can also be turned on or off in the on-screen menu (Video configuration), for the next time the" \
+    "game opens."
+}
+
 # customgames_mode_label MODO: "240p", "480i" ou o proprio modo.
 customgames_mode_label() {
   local pair
@@ -325,7 +335,7 @@ customgames_save() {
   [[ -n $old_name ]] && old=$(customgames_cfg "$old_group" "$old_name")
   mkdir -p "$dir" || return 1
   chown "$FLIPEROS_USER:" "$CUSTOM_GAMES_DIR" "$dir" 2> /dev/null
-  for key in category controls buttons players year developer; do
+  for key in category controls buttons players year developer crop169; do
     keep+=("$key=$(customgames_cfg_field "$old" "$key")")
   done
   customgames_cfg_write "$cfg" "format=1" "name=$name" "platform=command" "command=$cmd" "mode=$mode" "${keep[@]}" ||
@@ -581,12 +591,12 @@ customgames_tool() {
 # pacote (fliperos-customgame found) em CG_FOUND_FOLDER (a pasta do jogo: a
 # de dentro, quando PASTA e o zip aberto), CG_FOUND_SNAP, CG_FOUND_LOGO (o
 # JOGO.logo.png, .jpg ou .webp), CG_FOUND_VIDEO, CG_FOUND_TEXT, CG_FOUND_KEY,
-# CG_FOUND_PPDB, CG_FOUND_YEAR, CG_FOUND_DEVELOPER, CG_FOUND_EXE e CG_FOUND_RUNNER
-# (o exe= e o runner= do JOGO.cfg, dentro da pasta do jogo).
+# CG_FOUND_PPDB, CG_FOUND_YEAR, CG_FOUND_DEVELOPER, CG_FOUND_CROP169, CG_FOUND_EXE e
+# CG_FOUND_RUNNER (o exe= e o runner= do JOGO.cfg, dentro da pasta do jogo).
 customgames_found() {
   local line key value
   CG_FOUND_FOLDER=$1 CG_FOUND_SNAP="" CG_FOUND_VIDEO="" CG_FOUND_TEXT="" CG_FOUND_KEY="" CG_FOUND_PPDB=""
-  CG_FOUND_EXE="" CG_FOUND_RUNNER="" CG_FOUND_YEAR="" CG_FOUND_DEVELOPER="" CG_FOUND_LOGO=""
+  CG_FOUND_EXE="" CG_FOUND_RUNNER="" CG_FOUND_YEAR="" CG_FOUND_DEVELOPER="" CG_FOUND_LOGO="" CG_FOUND_CROP169=""
   while IFS= read -r line; do
     key=${line%%=*} value=${line#*=}
     case $key in
@@ -601,6 +611,7 @@ customgames_found() {
       cfg_runner) CG_FOUND_RUNNER=$value ;;
       cfg_year) CG_FOUND_YEAR=$value ;;
       cfg_developer) CG_FOUND_DEVELOPER=$value ;;
+      cfg_crop169) CG_FOUND_CROP169=$value ;;
     esac
   done < <(customgames_tool found "$1" 2>> "${FLIPEROS_LOG:-/dev/null}")
   return 0
@@ -1093,12 +1104,13 @@ customgames_refresh() {
 # campos separados pelo caractere 0x1f (o tab juntaria campos vazios no read):
 #   grupo nome plataforma pasta exe comando modo categoria controles botoes
 #   jogadores imagem video texto texto_digitado wine key ppdb runner logo ano
-#   desenvolvedora joystick
+#   desenvolvedora joystick crop
 # plataforma windows, native ou command; imagem/video/texto sao caminhos de
 # arquivos (o painel os sobe antes, ou sao os que vieram com a pasta, na
 # estrutura do pacote); wine e o PW_WINE_USE do PortProton; key e ppdb, o
 # JOGO.key e o JOGO.ppdb que vieram com a pasta; joystick 1: o jogo ja aceita
-# o joystick, o .key do jogo (ou do pacote) fica vazio e vale no lugar do key.
+# o joystick, o .key do jogo (ou do pacote) fica vazio e vale no lugar do key;
+# crop 1: o 16:9 crop (crop169=1 no .cfg: o jogo ve uma tela 16:9 e o tubo mostra o meio dela).
 
 CUSTOM_GAMES_SEP=$'\x1f'
 
@@ -1132,14 +1144,16 @@ customgames_describe() {
     [[ -n $cmd ]] || cmd=$(customgames_field "$file" command)
     exe=$(customgames_cfg_field "$cfg" exe)
     folder=$(customgames_cfg_field "$cfg" folder)
-    # Os dois ultimos campos: o jogo tem o mapa do controle (.key, o do pacote ou o do menu na tela) e o .ppdb do PortProton.
+    # Os tres ultimos campos: o jogo tem o mapa do controle (.key, o do pacote ou o do menu na tela), o .ppdb do
+    # PortProton e o 16:9 crop ligado (crop169=1).
     customgames_out game "$group" "$name" "$platform" "$mode" "$(customgames_cfg_field "$cfg" category)" \
       "$(customgames_cfg_field "$cfg" controls)" "$(customgames_cfg_field "$cfg" buttons)" \
       "$(customgames_cfg_field "$cfg" players)" "$cmd" "$exe" \
       "$folder" "$(customgames_cfg_field "$cfg" package)" \
       "$(customgames_cfg_field "$cfg" runner)" "$(customgames_cfg_field "$cfg" year)" \
       "$(customgames_cfg_field "$cfg" developer)" "$([[ -f ${cfg%.cfg}.key ]] && echo 1)" \
-      "$([[ $platform == windows && -n $exe && -f $folder/$exe.ppdb ]] && echo 1)"
+      "$([[ $platform == windows && -n $exe && -f $folder/$exe.ppdb ]] && echo 1)" \
+      "$([[ $(customgames_cfg_field "$cfg" crop169) == 1 ]] && echo 1)"
   done < <(customgames_list)
   while IFS= read -r line; do
     IFS='|' read -ra f <<< "$line"
@@ -1201,7 +1215,7 @@ customgames_row_fields() {
   R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
   R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
   R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-} R_RUNNER=${f[18]:-} R_LOGO=${f[19]:-}
-  R_YEAR=${f[20]:-} R_DEVELOPER=${f[21]:-} R_JOYSTICK=${f[22]:-}
+  R_YEAR=${f[20]:-} R_DEVELOPER=${f[21]:-} R_JOYSTICK=${f[22]:-} R_CROP=${f[23]:-}
 }
 
 # customgames_row_errors [package]: o que esta errado na linha de R_* (uma
@@ -1346,12 +1360,14 @@ customgames_add_row() {
     command)
       customgames_save "$R_GROUP" "$R_NAME" "$mode" "$R_COMMAND" || { R_WHY="could not save $R_NAME"; return 1; }
       customgames_set_info "$R_GROUP" "$R_NAME"
+      [[ ${R_CROP:-} == 1 ]] && customgames_cfg_set "$(customgames_cfg "$R_GROUP" "$R_NAME")" crop169 1
       customgames_media_set "$R_GROUP" "$R_NAME" "${R_MEDIA[@]}"
       ;;
     windows | native)
       args=(--group "$R_GROUP" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
       if [[ $R_PLATFORM == windows ]]; then args+=(--exe "$R_EXE"); else args+=(--command "$R_COMMAND"); fi
       [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && args+=(--runner "$R_RUNNER")
+      [[ ${R_CROP:-} == 1 ]] && args+=(--crop169)
       # O JOGO.key e o JOGO.ppdb que vieram com a pasta (a estrutura do pacote);
       # com o joystick ja habilitado no jogo, o .key fica vazio.
       if [[ ${R_JOYSTICK:-} == 1 ]]; then args+=(--joystick); elif [[ -n ${R_KEY:-} ]]; then args+=(--key "$R_KEY"); fi
@@ -1547,13 +1563,13 @@ customgames_bulk() {
 # (runner: portproton, wine, wine-staging ou vazio, so Windows), o comando
 # (command, so Linux) e o mapa do controle (keys=clear: apaga o .key, e o menu
 # na tela pergunta de novo; keys=joystick: um .key vazio, o jogo ja aceita o
-# joystick). Tudo isso vai no pacote que o painel baixa depois
+# joystick) e o 16:9 crop (crop169=1 liga, 0 desliga). Tudo isso vai no pacote que o painel baixa depois
 # (customgames_pack_game). Status 2: jogo ou valor que nao serve, com o motivo
 # na saida.
 customgames_edit() {
   local pair key value group="" name="" new_group="" new_name="" cmd="" mode="" platform cfg file
-  local exe="" runner="" keys="" folder real base
-  local have_cmd=0 have_mode=0 have_exe=0 have_runner=0
+  local exe="" runner="" keys="" folder real base crop=""
+  local have_cmd=0 have_mode=0 have_exe=0 have_runner=0 have_crop=0
   local -A info=()
   for pair in "$@"; do
     key=${pair%%=*} value=${pair#*=}
@@ -1566,6 +1582,7 @@ customgames_edit() {
       mode) mode=$value have_mode=1 ;;
       exe) exe=$value have_exe=1 ;;
       runner) runner=$value have_runner=1 ;;
+      crop169) crop=$value have_crop=1 ;;
       keys) keys=$value ;;
       category | controls | buttons | players | year | developer) info[$key]=$value ;;
       *) return 2 ;;
@@ -1581,6 +1598,7 @@ customgames_edit() {
     mode=$(customgames_mode "$mode") || return 2
   fi
   case $keys in "" | clear | joystick) ;; *) return 2 ;; esac
+  case $crop in "" | 0 | 1) ;; *) echo "The 16:9 crop is 1 (on) or 0 (off)."; return 2 ;; esac
   cfg=$(customgames_cfg "$group" "$name")
   folder=$(customgames_cfg_field "$cfg" folder)
   if ((have_exe)); then
@@ -1629,6 +1647,7 @@ customgames_edit() {
   for key in category controls buttons players year developer; do
     [[ -n ${info[$key]+set} ]] && { customgames_cfg_set "$cfg" "$key" "${info[$key]}" || return 1; }
   done
+  ((have_crop)) && { customgames_cfg_set "$cfg" crop169 "$([[ $crop == 1 ]] && echo 1)" || return 1; }
   case $keys in
     clear) rm -f -- "${cfg%.cfg}.key" ;;
     joystick)
@@ -1674,6 +1693,7 @@ customgames_pack_game() {
   fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder"
     --mode "$(customgames_cfg_field "$cfg" mode)")
+  [[ $(customgames_cfg_field "$cfg" crop169) == 1 ]] && args+=(--crop169)
   if [[ $platform == windows ]]; then args+=(--exe "$exe"); else args+=(--command "$(customgames_cfg_field "$cfg" command)"); fi
   [[ $platform == windows && -n $(customgames_cfg_field "$cfg" runner) ]] && args+=(--runner "$(customgames_cfg_field "$cfg" runner)")
   for value in category controls buttons players year developer; do
@@ -1743,6 +1763,7 @@ customgames_test() {
   mode=$(customgames_mode "${R_MODE:-480i}")
   real=$(realpath -- "$R_FOLDER")
   pairs=("format=1" "name=$R_NAME" "platform=$R_PLATFORM" "mode=$mode" "folder=$real")
+  [[ ${R_CROP:-} == 1 ]] && pairs+=("crop169=1")
   if [[ $R_PLATFORM == windows ]]; then pairs+=("exe=$R_EXE" "runner=${R_RUNNER:-}"); else pairs+=("command=$R_COMMAND"); fi
   customgames_cfg_write "$cfg" "${pairs[@]}" || { echo "could not write $cfg"; return 1; }
   # O .key que veio com a pasta comeca o teste (o menu na tela o mostra). Com o
@@ -1806,6 +1827,7 @@ customgames_create_args() {
   fi
   R_PACK=(--out "$R_PACK_OUT" --name "$R_NAME" --platform "$R_PLATFORM" --folder "$R_FOLDER" --mode "$mode")
   [[ ${R_JOYSTICK:-} == 1 ]] && R_PACK+=(--joystick)
+  [[ ${R_CROP:-} == 1 ]] && R_PACK+=(--crop169)
   if [[ $R_PLATFORM == windows ]]; then R_PACK+=(--exe "$R_EXE"); else R_PACK+=(--command "$R_COMMAND"); fi
   [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && R_PACK+=(--runner "$R_RUNNER")
   for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players YEAR:year DEVELOPER:developer SNAP:snap VIDEO:video TEXT:text LOGO:logo \
