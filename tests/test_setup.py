@@ -5234,11 +5234,33 @@ class CustomGamesTests(Base):
         self.assertIn("There is no package to install.", out)
         self.assertTrue(out.endswith("status:1\n"), out)
 
+    def test_the_desktop_entry_hands_every_chosen_file_to_the_setup_whole(self):
+        # O Exec como o GIO o le (aspas de shell), com os nomes que um zip baixado tem:
+        # espacos, parenteses, aspas, cifrao. Cada arquivo chega ao Setup como um argumento.
+        import shlex
+        entry = (ROOT / "config/applications/fliperos-customgame-install.desktop").read_text()
+        argv = shlex.split(re.search(r"(?m)^Exec=(.+)$", entry).group(1))
+        self.assertEqual(argv[:2] + argv[-2:], ["sh", "-c", "sh", "%F"])
+        files = ["/home/x/Pang (PC games).fliperos-customgame.zip",
+                 "/mnt/usb/it's $HOME \"q\"; rm -rf x.fliperos-customgame.zip"]
+        self.env.stub("sudo", 'printf "%s\\n" "$@"')
+        r = subprocess.run(argv[:-1] + files, capture_output=True, text=True,
+                           env={"PATH": "%s:/usr/bin:/bin" % self.env.bin, "DISPLAY": ":7", "HOME": "/home/x"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines(), ["/usr/local/bin/fliperos-setup", "--desktop", ":7",
+                                                 "/home/x/.Xauthority", "--install-package"] + files)
+
     def test_the_desktop_double_click_runs_the_setup_install_screen(self):
         # O tipo de arquivo (um zip, glob maior que o *.zip), a entrada que o abre
         # (Terminal=true, o --desktop do atalho do Setup e todos os arquivos
         # escolhidos), o --install-package do Setup e o rootfs que refaz as bases.
         xml = (ROOT / "config/fliperos-customgame.xml").read_text()
+        # Um XML que nao parseia (um "--" num comentario) e ignorado pelo update-mime-database
+        # com um aviso, e o tipo nao existe: o duplo clique segue abrindo o gerenciador de zip.
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml)
+        self.assertEqual(root.tag, "{http://www.freedesktop.org/standards/shared-mime-info}mime-info")
+        self.assertEqual(len(root), 1)
         self.assertIn('<mime-type type="application/x-fliperos-customgame">', xml)
         self.assertIn('<sub-class-of type="application/zip"/>', xml)
         self.assertIn('<glob pattern="*.fliperos-customgame.zip" weight="60"/>', xml)

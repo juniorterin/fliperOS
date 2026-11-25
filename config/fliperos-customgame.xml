@@ -3,7 +3,7 @@
   O tipo de arquivo dos pacotes de jogo custom do FliperOS (JOGO.fliperos-customgame.zip).
   Sem ele o desktop os ve como um zip qualquer e abre o gerenciador de arquivos
   compactados; com ele, o duplo clique abre config/applications/fliperos-customgame-install.desktop,
-  que instala o jogo (fliperos-setup --install-package). Como um zip, o "Abrir com"
+  que instala o jogo (a opcao install-package do fliperos-setup). Como um zip, o "Abrir com"
   continua mostrando os programas de zip. O glob maior vence o *.zip, como o
   .tar.gz vence o .gz. fliperos-rootfs.sh o poe em /usr/share/mime/packages e
   roda o update-mime-database.
