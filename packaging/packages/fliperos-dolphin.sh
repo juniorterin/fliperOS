@@ -9,7 +9,7 @@
 # (~1 GB); sem atualizacao automatica nem estatisticas.
 
 PKG_NAME="fliperos-dolphin"
-PKG_VERSION="2609"
+PKG_VERSION="2609b"
 # O Setup > Emulators & Games compila o Dolphin mais novo no gabinete com esta
 # mesma receita: a tag estavel mais recente do projeto, nao o master
 # (config/fliperos-emulators edge).

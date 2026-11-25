@@ -10,7 +10,7 @@
 
 PKG_NAME="fliperos-rahasher"
 # A tag do RALibretro.
-PKG_VERSION="1.8.4"
+PKG_VERSION="1.8.5"
 PKG_REVISION="1fliperos1"
 PKG_SECTION="games"
 PKG_HOMEPAGE="https://github.com/RetroAchievements/RALibretro"
