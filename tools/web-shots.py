@@ -412,7 +412,7 @@ def demo(tmp):
           "  --geometry) printf 'monitor=generic_15\\nlabel=Generic 15 kHz\\nrange=\\npreset=15625-16200,49.5-65,2.0,4.7,8.0,0.064,0.192,1.024,0,0,192,288,448,576\\n' ;;\n"
           "  --wifi) case \"$2\" in status) echo 'eth0|ethernet|unavailable||'; echo 'wlan0|wifi|connected|Casa|192.168.1.241' ;;\n"
           "    scan) echo 'wlan0|Casa|82|WPA2'; echo 'wlan0|Vizinho 5G|41|WPA2'; echo 'wlan0|Cafe|20|' ;; esac ;;\n"
-          "  --whatsnew) printf 'This is FliperOS 0.28, update 99.\\n\\nUpdates installed:\\n- 34. Web panel redesign\\n' ;;\n"
+          "  --whatsnew) printf 'This is FliperOS 0.29, update 104.\\n\\nUpdates installed:\\n- 34. Web panel redesign\\n' ;;\n"
           "  --customgames) case \"$2\" in describe) cat %s/customgames ;; check) echo bytes=1288490188; echo free=196494753792 ;;\n"
           "    check-packages) echo bytes=1288490188; echo free=196494753792 ;;\n"
           "    create-packages) echo '@step 40 Packing'; echo '@row 1 ok'; sleep 1; echo '@row 2 ok'; echo '@step 100 2 packages created' ;;\n"

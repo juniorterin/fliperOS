@@ -27,10 +27,14 @@ PKG_BUILD_DEPS="build-essential git ca-certificates"
 PKG_SHLIB_TARGETS="usr/local/bin/RAHasher"
 
 pkg_build() {
-  local dir=$SRC/ralibretro
-  git clone -q --depth 1 --branch "$PKG_VERSION" https://github.com/RetroAchievements/RALibretro "$dir" &&
-    git -C "$dir" submodule update -q --init --depth 1 src/miniz src/RAInterface src/rcheevos src/libchdr ||
+  local dir=$SRC/ralibretro sub subs=()
+  git clone -q --depth 1 --branch "$PKG_VERSION" https://github.com/RetroAchievements/RALibretro "$dir" ||
     return 1
+  # So os submodulos que a tag tem: o miniz era um (ate a 1.8.4) e passou para dentro do libchdr (1.8.5).
+  for sub in src/miniz src/RAInterface src/rcheevos src/libchdr; do
+    grep -qx "[[:space:]]*path = $sub" "$dir/.gitmodules" && subs+=("$sub")
+  done
+  git -C "$dir" submodule update -q --init --depth 1 "${subs[@]}" || return 1
   # HAVE_CHD: o libchdr (com o zlib, o lzma e o zstd dele) entra no binario.
   make -C "$dir" -f Makefile.RAHasher HAVE_CHD=1 -j"$(nproc)" > "$SRC/build.log" 2>&1 ||
     { tail -40 "$SRC/build.log"; return 1; }

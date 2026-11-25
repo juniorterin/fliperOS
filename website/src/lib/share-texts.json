@@ -1,10 +1,10 @@
 {
   "_": "Os textos do botão Compartilhar. Cada texto é uma lista de linhas e tem de ocupar o máximo da rede (de 95% do limite até o limite, scripts/check-share.mjs confere). {url} vira o endereço do site no idioma do texto e {version} a versão atual (FLIPEROS_VERSION). Depois de CADA update novo: reler os textos, pôr a novidade no lugar da antiga e subir o número abaixo (o check compara com updates/index; tools/make-update.sh roda a checagem). Os limites de cada rede estão em src/lib/share.ts.",
-  "update": 103,
+  "update": 104,
   "texts": {
     "en-US": {
       "x": [
-        "FliperOS {version}: free, open-source arcade Linux built for CRT. True 15 kHz on AMD, Switchres, GroovyMAME, RetroArch, Flycast and more, with a web panel for your phone. New: OpenBOR in RetroArch (AnyBOR core), installs on demand.",
+        "FliperOS {version}: free, open-source arcade Linux built for CRT. True 15 kHz on AMD, Switchres, GroovyMAME, RetroArch, Flycast and more, with a web panel for your phone. New: Sega Chihiro games in xemu, installs on demand.",
         "{url} #retrogaming #CRT #arcade"
       ],
       "instagram": [
@@ -29,7 +29,7 @@
         "New in the latest updates:",
         "⭐ Odin, the Sega Hikaru and Gaelco 3D emulator, installs itself when you open its first game",
         "⭐ Map controllers: eight player slots, hold a button on a controller to give it a player, plus a live tester for every pad and panel",
-        "⭐ OpenBOR games open in RetroArch with the AnyBOR core (322 engine profiles), installed when you open the first one",
+        "⭐ Sega Chihiro (Virtua Cop 3, House of the Dead 3 and more) opens in xemu, installed when you open the first game",
         "",
         "Install it from a USB stick, with a setup menu drawn for the tube itself. No games or BIOS inside: the Setup downloads the BIOS your games need.",
         "",
@@ -60,7 +60,7 @@
         "",
         "The Setup covers video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency, all driven by the cabinet’s own joystick, and SSH is on from the first boot for anything else. Every release is tested in a virtual machine and on a real 15 kHz cabinet.",
         "",
-        "New in the latest updates: OpenBOR games open in RetroArch with the AnyBOR core, installed on first use; Odin, the Sega Hikaru and Gaelco 3D emulator, which installs itself the same way; Map controllers, eight player slots set by holding a button, with a live tester for every pad; and the update number on the main menu.",
+        "New in the latest updates: Sega Chihiro games open in xemu, installed on first use; Odin, the Sega Hikaru and Gaelco 3D emulator, which installs itself the same way; Map controllers, eight player slots set by holding a button, with a live tester for every pad; and the update number on the main menu.",
         "",
         "It ships no games and no BIOS: the Setup downloads the BIOS that your games need. It is open source, and questions, photos of cabinets and help from other users are in the Telegram group.",
         "",
@@ -83,7 +83,7 @@
         "",
         "How it is built: the image is generated in Docker from a reproducible recipe, the kernel patches and the setup menu are in the repository, and updates are published as numbered steps that a cabinet applies in order from its own network connection. Every release is tested in a virtual machine and on a real 15 kHz cabinet.",
         "",
-        "Latest updates: OpenBOR games in RetroArch with the AnyBOR core, installed the first time you open one; Odin, the Sega Hikaru and Gaelco 3D emulator, which installs itself the same way; Map controllers with eight player slots; and updates delivered over the network, applied in order from the cabinet itself.",
+        "Latest updates: Sega Chihiro games in xemu, installed the first time you open one; Odin, the Sega Hikaru and Gaelco 3D emulator, which installs itself the same way; Map controllers with eight player slots; and updates delivered over the network, applied in order from the cabinet itself.",
         "",
         "It ships no games and no BIOS; the Setup downloads the BIOS your games need. Everything is open: source, releases and docs. Feedback, issues and contributions are welcome, and so are cabinets to test on: {url}",
         "",
@@ -145,7 +145,7 @@
         "",
         "⭐ NEW IN THE LATEST UPDATES",
         "• Odin, the Sega Hikaru and Gaelco 3D emulator, installs itself when you open its first game",
-        "• OpenBOR games open in RetroArch with the AnyBOR core, installed when you open the first one",
+        "• Sega Chihiro games (Virtua Cop 3, House of the Dead 3) open in xemu, installed when you open the first one",
         "• Map controllers: eight player slots, hold a button on a controller to give it a player, and a live tester for every pad and panel",
         "• the main menu shows the update number next to the version",
         "",
@@ -156,7 +156,7 @@
     },
     "pt-BR": {
       "x": [
-        "FliperOS {version}: Linux arcade gratuito e aberto, feito para CRT. 15 kHz real em AMD, Switchres, GroovyMAME, RetroArch, Flycast e mais, com painel web para o celular. Novo: OpenBOR no RetroArch (core AnyBOR), instala sozinho.",
+        "FliperOS {version}: Linux arcade gratuito e aberto, feito para CRT. 15 kHz real em AMD, Switchres, GroovyMAME, RetroArch, Flycast e mais, com painel web para o celular. Novo: jogos de Sega Chihiro no xemu, instala sozinho.",
         "{url} #retrogaming #CRT #arcade"
       ],
       "instagram": [
@@ -180,7 +180,7 @@
         "",
         "Novidades dos últimos updates:",
         "⭐ Odin, o emulador do Sega Hikaru e do Gaelco 3D, se instala sozinho quando você abre o primeiro jogo dele",
-        "⭐ Jogos de OpenBOR abrem no RetroArch com o core AnyBOR, instalado ao abrir o primeiro",
+        "⭐ Jogos de Sega Chihiro (Virtua Cop 3, House of the Dead 3) abrem no xemu, instalado ao abrir o primeiro",
         "⭐ Map controllers: oito vagas de player, segure um botão para dar o player ao controle, e um testador ao vivo",
         "",
         "Instala por pendrive, com um menu de configuração desenhado para o próprio tubo. Não vem com jogos nem BIOS: o Setup baixa as BIOS que os seus jogos pedem.",
@@ -212,7 +212,7 @@
         "",
         "O Setup cobre vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência, tudo pelo joystick do próprio gabinete, e o SSH já vem ligado desde o primeiro boot para o resto. Cada release é testada em máquina virtual e em um gabinete 15 kHz de verdade.",
         "",
-        "Novidades dos últimos updates: jogos de OpenBOR abrem no RetroArch com o core AnyBOR, instalado ao abrir o primeiro; Odin, o emulador do Sega Hikaru e do Gaelco 3D, que se instala do mesmo jeito; Map controllers, oito vagas de player definidas segurando um botão, com um testador ao vivo; e o número do update no menu principal.",
+        "Novidades dos últimos updates: jogos de Sega Chihiro abrem no xemu, instalado ao abrir o primeiro; Odin, o emulador do Sega Hikaru e do Gaelco 3D, que se instala do mesmo jeito; Map controllers, oito vagas de player definidas segurando um botão, com um testador ao vivo; e o número do update no menu principal.",
         "",
         "Não vem com jogos nem BIOS: o Setup baixa as BIOS que os seus jogos pedem. É código aberto, e dúvidas, fotos de gabinetes e ajuda de outros usuários estão no grupo do Telegram.",
         "",
@@ -235,7 +235,7 @@
         "",
         "Como é feito: a imagem é gerada no Docker a partir de uma receita reproduzível, os patches do kernel e o menu de configuração estão no repositório, e os updates saem como passos numerados que o gabinete aplica em ordem pela própria conexão de rede. Cada release é testada em máquina virtual e em um gabinete 15 kHz de verdade.",
         "",
-        "Últimos updates: jogos de OpenBOR no RetroArch com o core AnyBOR, instalado sob demanda; Odin, o emulador do Sega Hikaru e do Gaelco 3D, que se instala igual; Map controllers e oito vagas; e updates entregues pela rede, aplicados em ordem no próprio gabinete.",
+        "Últimos updates: jogos de Sega Chihiro no xemu, instalado sob demanda; Odin, o emulador do Sega Hikaru e do Gaelco 3D, que se instala igual; Map controllers e oito vagas; e updates entregues pela rede, aplicados em ordem no próprio gabinete.",
         "",
         "Não vem com jogos nem BIOS; o Setup baixa as BIOS que os seus jogos pedem. Tudo é aberto: código, releases e documentação. Feedback, issues e contribuições são bem-vindos, e gabinetes para testar também: {url}",
         "",
@@ -297,7 +297,7 @@
         "",
         "⭐ NOVIDADES DOS ÚLTIMOS UPDATES",
         "• Odin, o emulador do Sega Hikaru e do Gaelco 3D, se instala sozinho quando você abre o primeiro jogo dele",
-        "• Jogos de OpenBOR abrem no RetroArch com o core AnyBOR, instalado ao abrir o primeiro",
+        "• Jogos de Sega Chihiro (Virtua Cop 3 e outros) abrem no xemu, instalado ao abrir o primeiro",
         "• Map controllers: oito vagas de player, segure um botão no controle para dar a ele um player, e um testador ao vivo",
         "• o menu principal mostra o número do update ao lado da versão",
         "",

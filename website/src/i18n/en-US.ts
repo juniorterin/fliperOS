@@ -120,7 +120,7 @@ const enUS = {
     },
   },
   hero: {
-    eyebrow: 'fliperos 0.28 · in development',
+    eyebrow: 'fliperos 0.29 · in development',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Built for CRT.',
     description:
@@ -347,6 +347,7 @@ const enUS = {
     current: 'Current',
     all: 'All releases on GitHub',
     notes: {
+      '0.29': ['Sega Chihiro (Virtua Cop 3 and more) with the xemu emulator, installed when you open the first game and prepared from the game disc', 'A Setup at 240p on the desktop, a screen that scrolls with the controller pointer and a double click that installs a custom game', 'Dolphin 2609b, RAHasher 1.8.5 and the boot splash fixed on 31 kHz monitors'],
       '0.28': ['HBGroovyMAME, Odin (Sega Hikaru and Gaelco 3D) and OpenBOR in RetroArch install themselves when you open their first game', 'Map controllers with eight player slots and a live tester for every pad', 'A full screen with a wheel of logos, clones grouped in a dialog, and media capture in the on-screen menu'],
       '0.27': ['Menu and frontend sounds, with a file and a volume for each, and music with a now-playing bar', 'Folder shortcuts, external disks and Batocera filesystems', 'A Games page with editing for custom games, and animated menus in the Setup and the frontend'],
       '0.26': ['One disk for everything: a second or external disk holds the ROMs, saves and art', 'Keisho runs Model 2 and Model 3', 'A smoother frontend, and the whole hardware in the web panel'],
@@ -414,7 +415,7 @@ const enUS = {
       { id: 'pc', title: 'An ordinary 64-bit PC', text: '2 cores and 4 GB of RAM play up to PlayStation 1; 4 cores and 16 GB play everything in the image.' },
       { id: 'network', title: 'Open over the network', text: 'Copy games from any PC to \\\\fliperos\\roms. SSH is on from the first boot.' },
       { id: 'updates', title: 'Updates at boot', text: 'Updates come over the network and show what they change before asking. No new ISO needed.' },
-      { id: 'status', title: 'Still in development', text: 'Version 0.28. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
+      { id: 'status', title: 'Still in development', text: 'Version 0.29. Some features, like the vertical monitor and the LED displays, have not been seen on real hardware yet.' },
     ],
     cta: 'Full requirements',
   },

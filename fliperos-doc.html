@@ -11,7 +11,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
   <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art of a white arcade cabinet in a purple-lit room, a fighting game on its CRT and the PC beside it"></a>
 </p>
 
-<h1 align="center">FliperOS 0.28</h1>
+<h1 align="center">FliperOS 0.29</h1>
 
 <p align="center">
   <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Donate with Stripe" src="https://img.shields.io/badge/donate-with%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
@@ -56,7 +56,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </p>
 
 <p>Ubuntu 24.04 (amd64) for arcade cabinets with a CRT monitor, in the style of GroovyArcade: a <strong>15 kHz kernel</strong>, Switchres, emulators and frontends ready to play, and a setup menu (<code>fliperos-setup</code>) made for the tube's screen. A PC alternative to GroovyArcade, Batocera, Recalbox, ReplayOS and RGB-Pi for 15 kHz arcade CRTs.</p>
-<p>In development: 0.28 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
+<p>In development: 0.29 is tested in QEMU and on a 15 kHz CRT cabinet. Full documentation in the <strong><a href="#Install">wiki</a></strong>. Website: <strong><a href="https://fliperos.juniorter.in">fliperos.juniorter.in</a></strong> (source in <a href="website"><code>website/</code></a>). The <strong><a href="https://t.me/fliperos15khz">Telegram group</a></strong> has questions, photos of cabinets and help from other users; each release is posted there with pictures and how the new features work.</p>
 <table>
   <tr>
     <td align="center" width="33%"><img src="website/public/screenshots/frontend/full.webp" width="240" alt="FliperOS frontend in full screen: Aggressors of Dark Kombat with its video behind and its name, year and controls in front"><br><sub><b>Full screen</b>: the game's video behind, its name and info in front</sub></td>
@@ -132,8 +132,8 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </ul>
 <h3 id="2-download-the-iso">2. Download the ISO</h3>
 <ol>
-<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.28.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
-<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.28.iso</code> on Linux, <code>Get-FileHash fliperos-0.28.iso</code> in Windows PowerShell.</li>
+<li>Open <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a> and download <code>fliperos-0.29.iso</code> from the latest version (what changed is in <a href="CHANGELOG.md">CHANGELOG.md</a>).</li>
+<li>If the release lists a SHA-256, compare it: <code>sha256sum fliperos-0.29.iso</code> on Linux, <code>Get-FileHash fliperos-0.29.iso</code> in Windows PowerShell.</li>
 </ol>
 <h3 id="3-write-the-usb-stick">3. Write the USB stick</h3>
 <p>The ISO must be written <strong>byte for byte</strong>. Programs that rebuild the stick's boot structure break it: <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work.</strong></p>
@@ -143,7 +143,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li><strong>Linux</strong>: find the stick with <code>lsblk</code> (here <code>/dev/sdX</code>; the wrong device erases the wrong disk) and run:</li>
 </ul>
 <p><code>bash
-  sudo dd if=fliperos-0.28.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
+  sudo dd if=fliperos-0.29.iso of=/dev/sdX bs=4M status=progress conv=fsync</code></p>
 <h3 id="4-prepare-the-cabinets-bios">4. Prepare the cabinet's BIOS</h3>
 <p>Enter the BIOS/UEFI setup (usually <strong>Del</strong>, <strong>F2</strong> or <strong>F10</strong> right after power-on) and:</p>
 <ol>
@@ -289,6 +289,11 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <td><code>odin</code></td>
 <td>Sega Hikaru and Gaelco 3D sets</td>
 <td>Odin</td>
+</tr>
+<tr>
+<td><code>chihiro</code></td>
+<td>Sega Chihiro: the game disc (<code>.7z</code>, <code>.cue</code>, <code>.gdi</code>, <code>.chd</code>), converted on first open, or a netboot <code>.bin</code></td>
+<td>xemu</td>
 </tr>
 <tr>
 <td><code>namco2x6</code></td>
@@ -451,7 +456,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <h2 id="build-and-tests">Build and tests</h2>
 <p>Always in Docker (<a href="CLAUDE.md"><code>CLAUDE.md</code></a> explains why).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.28.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.29.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test_setup.py
@@ -1216,7 +1221,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/install.webp" width="480" alt="Installing FliperOS from the boot media"></p>
 <p>Write the ISO <strong>byte for byte</strong> to a USB stick and disable Secure Boot (the 15 kHz kernel is custom and unsigned).</p>
 <p>The ISO uses the <strong>Limine</strong> bootloader and is <strong>hybrid</strong> (<code>xorriso</code> + <code>limine bios-install</code>): the same image boots as a CD and as a USB stick, on BIOS and on UEFI. Writers that rebuild the boot structure break it — <strong>Rufus in its default mode ("ISO image"), Ventoy and UNetbootin don't work</strong>. Use <strong>balenaEtcher</strong>, or Rufus in "DD Image mode", or <code>dd</code>:</p>
-<pre><code class="language-bash">sudo dd if=fliperos-0.28.iso of=/dev/sdX bs=4M status=progress conv=fsync
+<pre><code class="language-bash">sudo dd if=fliperos-0.29.iso of=/dev/sdX bs=4M status=progress conv=fsync
 </code></pre>
 <p>Check <code>/dev/sdX</code> with <code>lsblk</code> first: the wrong device erases the wrong disk.</p>
 <h2 id="Install-boot-menu">Boot menu</h2>
@@ -2328,8 +2333,8 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </thead>
 <tbody>
 <tr>
-<td><strong>Configuration</strong></td>
-<td>The picture settings below, and the profile they are saved to</td>
+<td><strong>Video configuration</strong></td>
+<td>The picture settings below (video only), and the profile they are saved to</td>
 </tr>
 <tr>
 <td><strong>Emulator menu</strong></td>
@@ -2337,7 +2342,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>Controller configuration</strong></td>
-<td>In a custom game, in place of Emulator menu: which controller button sends which key, for PC games that only take the keyboard (<a href="#Custom-games-the-controller-as-a-keyboard">Custom games</a>). A custom game with no key map yet opens the menu by itself on this page</td>
+<td>Only controller things, and only when there is something to set: <strong>GunCon 2</strong> (while the light gun is connected) and <strong>Joystick to keyboard</strong> (in a custom game). See <a href="#On-screen-menu-controller-configuration">Controller configuration</a></td>
 </tr>
 <tr>
 <td><strong>Media capture</strong></td>
@@ -2354,7 +2359,8 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tbody>
 </table>
 <p>Over a frontend there is no Emulator menu nor Quit.</p>
-<h2 id="On-screen-menu-configuration">Configuration</h2>
+<h2 id="On-screen-menu-video-configuration">Video configuration</h2>
+<p>Only video settings: picture, geometry, colour, scanlines and the profile they are saved to. Everything about controllers is in <a href="#On-screen-menu-controller-configuration">Controller configuration</a>.</p>
 <table>
 <thead>
 <tr>
@@ -2395,13 +2401,38 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <td>Opens the Colour page</td>
 </tr>
 <tr>
+<td><strong>16:9 crop</strong></td>
+<td>In a custom game</td>
+<td>Off or On: the game opens in a 16:9 screen and the tube shows only its middle, in 4:3 (see <a href="#On-screen-menu-169-crop">16:9 crop</a>). Saved in the game's <code>.cfg</code>, and it counts the next time the game opens (the menu says <em>REOPEN THE GAME</em>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Save</strong> and <strong>Back</strong> are at the bottom. Leaving without saving puts everything back (the 16:9 crop is written at once, not by Save).</p>
+<h2 id="On-screen-menu-controller-configuration">Controller configuration</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>When it shows</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
 <td><strong>GunCon 2</strong></td>
 <td>While a GunCon 2 is connected</td>
 <td>Opens the GunCon 2 page</td>
 </tr>
+<tr>
+<td><strong>Joystick to keyboard</strong></td>
+<td>In a custom game</td>
+<td>The keyboard on the screen: which controller button sends which key, for PC games that only take the keyboard (<a href="#Custom-games-the-controller-as-a-keyboard">Custom games</a>). A custom game with no key map yet opens the menu by itself straight on this keyboard (<strong>Back</strong> closes the menu)</td>
+</tr>
 </tbody>
 </table>
-<p><strong>Save</strong> and <strong>Back</strong> are at the bottom. Leaving without saving puts everything back.</p>
+<p>The page does not show over a game that has neither. It has its own <strong>Back</strong>.</p>
+<h3 id="On-screen-menu-169-crop">16:9 crop</h3>
+<p>For a custom game that only runs in a widescreen picture. The game opens in a 16:9 screen (1280x720) and the tube shows only the middle of it, in 4:3: the full height, nothing squeezed, with the sides of the picture cut off. Without it, a 16:9 game on a 4:3 tube comes out squeezed or with black bars. It is set when the package is created, when the game is edited in the web panel, or here. While a game runs with the crop, the menu and the bars are drawn only in the middle three quarters of the screen, the part the tube shows.</p>
 <h3 id="On-screen-menu-profiles">Profiles</h3>
 <p><strong>Save profile as</strong> says how far the changes go:</p>
 <table>
@@ -3197,7 +3228,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <tr>
 <td><strong>FliperOS Setup</strong></td>
 <td>Panel, System Tools</td>
-<td>The Setup in a window</td>
+<td>The Setup, on the CRT in 240p and full screen (below)</td>
 </tr>
 <tr>
 <td><strong>Home</strong></td>
@@ -3223,8 +3254,8 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </table>
 <p>The App Store downloads no updates by itself and has no welcome screen: disk and network activity in the middle of a game hurts latency.</p>
 <h3 id="Desktop-emulators-in-the-menu">Emulators in the menu</h3>
-<p><strong>Games</strong> has RetroArch, GroovyMAME, HBMAME (HBGroovyMAME), Flycast, PCSX2, PCSX2x6, Dolphin, DuckStation, OpenBOR, Odin, Model 2, Model 3, KOF Final Attack and, once downloaded through the Setup, Fightcade 2, with the projects' own icons. PortProton (Windows games) and Hook Of The Reaper (light guns) have their own entries.</p>
-<p>HBMAME and Odin are optional packages (<a href="#Packages">Packages</a>): they are installed when the first game of their folder opens from a frontend, so open one there first; the desktop entries only run what is already installed.</p>
+<p><strong>Games</strong> has RetroArch, GroovyMAME, HBMAME (HBGroovyMAME), Flycast, PCSX2, PCSX2x6, Dolphin, DuckStation, OpenBOR, Odin, Sega Chihiro (xemu), Model 2, Model 3, KOF Final Attack and, once downloaded through the Setup, Fightcade 2, with the projects' own icons. PortProton (Windows games) and Hook Of The Reaper (light guns) have their own entries.</p>
+<p>HBMAME, Odin and xemu (Sega Chihiro) are optional packages (<a href="#Packages">Packages</a>): they are installed when the first game of their folder opens from a frontend, so open one there first; the desktop entries only run what is already installed.</p>
 <p>None of them runs inside the desktop: choosing one closes the desktop (asking first if there are open windows), the emulator opens on the CRT in its own video mode, and when it closes <strong>the desktop comes back</strong>.</p>
 <p>Model 2 always shows: the first click downloads and builds it (<a href="#Emulators">Emulators</a>). Steam and Heroic (GOG), once installed through <strong>Setup &gt; Games &gt; Extras</strong>, also live in Games, but open inside the desktop itself.</p>
 <h2 id="Desktop-disks">Disks</h2>
@@ -3263,8 +3294,10 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 </tbody>
 </table>
-<p>The on-screen keyboard (Onboard) also opens by itself when a text field gets the focus, and types into it, but <strong>only while you are using the controller</strong>: it turns that on with a button press or the stick (and off again 15 seconds after the last one), so with a real keyboard or mouse in your hand it never pops up. Button 3 opens it at any time. A window in full screen (a game, a video) pauses the controller-mouse.</p>
+<p>The on-screen keyboard (Onboard) opens by itself <strong>only when you click a text field or a terminal</strong> with the controller, and types into it. Moving the pointer, a window that opens or a terminal that prints never open it (it used to pop up out of nowhere while the pointer moved), and with a real keyboard or mouse in your hand it does not pop up either. A click outside it closes it. The text field is found through accessibility (Onboard turns that on only for the instant of the click) and the terminal, which Alacritty does not report, by the class of the window under the pointer. Button 3 opens and closes it at any time. A window in full screen (a game, a video) pauses the controller-mouse.</p>
 <p>Every text field of the graphical Setup has an on-screen keyboard too: Enter on the field opens it.</p>
+<h2 id="Desktop-the-setup-from-the-desktop">The Setup from the desktop</h2>
+<p><strong>FliperOS Setup</strong> (and the double click on a custom game package, which installs it: <a href="#Custom-games-installing-a-package">Custom games</a>) works like a game: the desktop closes (asking first if there are open windows), the Setup opens on the CRT in 240p and full screen, as in the cabinet's menu, and <strong>the desktop comes back when it closes</strong>. Its main menu has <strong>Exit to desktop</strong> in place of <em>Exit to shell</em>, and no <em>Start desktop</em> (you are on it) or <em>Start frontend</em>; the frontends open from the cabinet's menu. A package install goes straight to the install screen and returns to the desktop at the end.</p>
 <h2 id="Desktop-desktop-resolution">Desktop Resolution</h2>
 <p>Changes the desktop's resolution <strong>on the fly</strong>. The list is the resolutions of the monitor chosen in Video Setup, plus <strong>Other resolution...</strong> for any <code>WIDTHxHEIGHT@HZ</code>.</p>
 <p>Without a confirmation within 15 seconds, the previous resolution comes back. <strong>Use every time the desktop starts</strong> keeps it for the next time.</p>
@@ -3789,7 +3822,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 <li><code>fliperos-setup/gui/fliperos-frontend</code> (Python and pygame), with its modules in the same folder: <code>feview.py</code> (drawing, animations, rolling text), <code>fedata.py</code> (lists, favourites, stats), <code>feinput.py</code> (controls), <code>femedia.py</code> (physical media), <code>fecheevos.py</code> (achievements), <code>felink.py</code> (link and party), <code>fepads.py</code> (joypad drawings), <code>fenamco.py</code> (Namco 246/256 packs), <code>febios.py</code> (the BIOS box), <code>feharvest.py</code> (the automatic scrape), <code>fevideo.py</code> (videos), <code>fesound.py</code> (sounds and music). It is the <code>fliperos</code> row of <code>config/fliperos-sessions.conf</code>.</li>
 <li><strong>Lists:</strong> FliperOS's own, in <code>~/.local/share/fliperos/lists</code> (Attract-Mode's romlist format; Attract-Mode Plus is optional). Arcade lists carry the name, year, manufacturer, clones and category from MAME's XML (<code>fliperos-romclean romlist</code>). When the frontend opens, and whenever a games folder changes, it asks the Setup to redo them in the background (<code>fliperos-setup --romlists</code>); the first time, GroovyMAME's <code>-listxml</code> is read once (about a minute). The other systems' lists are read in the background, neighbours first, and the game counts are kept in <code>~/.cache/fliperos/frontend-counts.json</code>.</li>
 <li><strong>Favourites</strong> are <code>~/.config/fliperos/favourites</code>, the same file as the web panel's; hidden games <code>~/.config/fliperos/hidden</code>; play statistics (RECENT, Most Played) <code>~/.local/share/fliperos/stats</code>, independent of Attract-Mode. <strong>CLASSIFY</strong> writes <code>~/media/info/&lt;folder&gt;/&lt;set&gt;.user.json</code>. Every option is saved at once in <code>~/.config/fliperos/frontend.json</code> (the transitions as <code>transitions</code>).</li>
-<li><strong>System logos</strong> are drawn with Arcadeflow's logo font and system table, which ship in the image (<code>config/syslogo</code>) with its author's permission, made once and kept in <code>~/.cache/fliperos/syslogo</code>. A system the table doesn't know gets a square tile with the emulator's icon and its name.</li>
+<li><strong>System logos</strong> are drawn with Arcadeflow's logo font and system table, which ship in the image (<code>config/syslogo</code>) with its author's permission, made once and kept in <code>~/.cache/fliperos/syslogo</code>. A system the font does not have can bring its own logo as a PNG (white on a transparent background) in <code>config/syslogo/extra/NAME.png</code>, named after the system in lowercase with the rest as <code>-</code>: the Sega Chihiro has <code>sega-chihiro.png</code>, its board's own mark taken from the boot screen (<code>tools/make-chihiro-logo.py</code>). That PNG wins over the font logo of the same name, and over a generic nickname such as "arcade" (without it the Sega Chihiro was drawn as ARCADE); its date goes into the cache name, so a logo made before is replaced by itself. A system with neither gets a square tile with the emulator's icon and its name.</li>
 <li><strong>Icons</strong> are Arcadeflow's, shipped in <code>fliperos-setup/gui/icons/metapics</code>.</li>
 <li><strong>Videos</strong> are <code>~/media/preview/&lt;folder&gt;/&lt;set&gt;.mp4</code>; the videos of the games around the cursor are opened ahead and held on their first frame, so a new one starts at once. The synopsis is the arcade-history text saved by the scrape in <code>~/media/info</code>.</li>
 <li><strong>Automatic scrape:</strong> while the frontend is open, it fetches in the background, one game at a time, what each game lacks: arcade information, screenshot, flyer, marquee and logo from the Arcade Database; console cover and screenshot from libretro-thumbnails; videos and missing logos from the art packs of <a href="#Scraper">Scraper</a>, file by file. It pauses during a game, tries a game once every 30 days (<code>~/.local/share/fliperos/scrape-state.json</code>), and also runs as the <em>Auto scrape</em> service when the frontend is closed.</li>
@@ -4376,6 +4409,11 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td>Odin, installed when its first game is opened (<a href="#More-emulators-odin-sega-hikaru-and-gaelco-3d">More emulators</a>)</td>
 </tr>
 <tr>
+<td><code>chihiro</code></td>
+<td>Sega Chihiro: the game disc (<code>.7z</code> of a TOSEC dump, <code>.cue</code>, <code>.gdi</code>, <code>.chd</code>), converted when first opened, or a netboot <code>.bin</code></td>
+<td>xemu, installed when its first game is opened (<a href="#More-emulators-xemu-sega-chihiro">More emulators</a>)</td>
+</tr>
+<tr>
 <td><code>dreamcast</code></td>
 <td><code>.gdi</code>, <code>.cdi</code>, <code>.chd</code></td>
 <td>Flycast</td>
@@ -4702,6 +4740,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li>The link is added paused, and as soon as the file list arrives it is stopped with no file marked; the list goes through <code>fliperos-romclean</code> (<code>scan --names</code>, <code>chds --names --with</code>), and only the chosen files are marked. From each CHD folder, only the disks those games use come: in a merged collection the parent's folder also holds every other version's disks.</li>
 <li><strong>Transmission</strong> does the download: its own <code>transmission-daemon</code> (<code>fliperos-transmission.service</code>, as the <code>fliperos</code> user, at low CPU and disk priority, RPC only on <code>127.0.0.1:9092</code>; the stock unit is masked). It never starts at boot: the Setup or the panel starts it when a link is added or a download is started, and it quits when its last torrent ends; <code>fliperos-downloader-boot.service</code> resumes one stopped by a power off.</li>
 <li>It is set for speed at each start (<code>fliperos-downloader config</code>): up to 150 peers per torrent and 500 in all, a 64 MB write cache, no speed limit, DHT, PEX, local peer discovery, µTP and UPnP on, and a stalled torrent leaves the queue after 5 minutes. The disk priority is the lowest normal one (best-effort 7), since the "idle" class only wrote while nothing else read the disk, and the frontend's videos read it all the time.</li>
+<li><strong>One set at a time, for a game</strong> (<code>fliperos-downloader fetch-sets --dest DIR SET...</code>): the Sega Chihiro needs the MAME set of each game (a few KB: its key) and asks for just that file when you open the game (<a href="#More-emulators-xemu-sega-chihiro">More emulators</a>). It uses the ROM set link you saved (<code>roms.magnet</code>) or, with none, the one that comes with the image (<code>downloader-magnets</code>, the one this screen suggests; nothing of it is saved; with no link at all it stops with status 3), starts a <code>transmission-daemon</code> of its own (another config folder, another RPC and peer port, no end-of-torrent script), marks only the asked files, moves them to <code>DIR</code> and shuts it down. The filter, the plan, the state and the downloads in progress stay as they are.</li>
 <li>The shipped links are in <code>/usr/local/share/fliperos/downloader-magnets</code>. The state is in <code>/var/lib/fliperos/downloader</code> (<code>config/fliperos-downloader</code>, <code>lib/downloader.sh</code>). Whether a set is still used comes from <code>fliperos-romclean uses</code>.</li>
 <li>Free games: <code>config/fliperos-freeroms</code>, <code>lib/freeroms.sh</code>.</li>
 </ul>
@@ -5212,7 +5251,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <h2 id="Adding-games-custom-games">Custom games</h2>
 <p>A game or program that is not a ROM (a PC game for Windows or Linux, your own emulator, a script) goes in <strong>Setup &gt; Games &gt; Custom games</strong>, in groups the frontends show as systems. There are three ways:</p>
 <ul>
-<li><strong>Install a package</strong>: put <code>&lt;game&gt;.fliperos-customgame.zip</code> in <code>~/roms/custom-packages</code> and install it from <strong>Install games</strong> (the group is asked then).</li>
+<li><strong>Install a package</strong>: put <code>&lt;game&gt;.fliperos-customgame.zip</code> in <code>~/roms/custom-packages</code> and install it from <strong>Install games</strong> (the group is asked then), or double-click the zip on the desktop, wherever it is.</li>
 <li><strong>Create a package</strong> from a game folder, step by step, with the picture, video, text, video mode and controller map.</li>
 <li><strong>By its command</strong>: a name, a command line and the video mode.</li>
 </ul>
@@ -5286,12 +5325,12 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <li>Choose <strong>Create package</strong>, then <strong>From a game folder</strong>. The group comes later, when the package is installed.</li>
 <li><strong>Name</strong>: how the frontend shows the game.</li>
 <li><strong>Windows or Linux</strong>: a Windows game is a <code>.exe</code>; a Linux one is a program or a command.</li>
-<li><strong>The game folder</strong>: open it in the folder picker and choose <em>Use this folder</em>. Everything the game needs must be inside it. If the folder has the <a href="#Custom-games-a-folder-with-the-packages-structure">package's structure</a> (<code>&lt;game&gt;.jpg</code>, <code>&lt;game&gt;.logo.png</code>, <code>&lt;game&gt;.mp4</code>, <code>&lt;game&gt;.txt</code>, <code>&lt;game&gt;.key</code>, <code>&lt;game&gt;.ppdb</code> or <code>&lt;game&gt;.cfg</code> next to the folder <code>&lt;game&gt;</code>), those files are picked by themselves: steps 6 and 7 come already filled.</li>
+<li><strong>The game folder</strong>: open it in the folder picker and choose <em>Use this folder</em>. Everything the game needs must be inside it. If the folder has the <a href="#Custom-games-a-folder-with-the-packages-structure">package's structure</a> (<code>&lt;game&gt;.jpg</code>, <code>&lt;game&gt;.logo.png</code>, <code>&lt;game&gt;.icon.png</code>, <code>&lt;game&gt;.mp4</code>, <code>&lt;game&gt;.txt</code>, <code>&lt;game&gt;.key</code>, <code>&lt;game&gt;.ppdb</code> or <code>&lt;game&gt;.cfg</code> next to the folder <code>&lt;game&gt;</code>), those files are picked by themselves: steps 6 and 7 come already filled.</li>
 <li><strong>What opens the game</strong>:</li>
 <li>Windows: pick the <code>.exe</code> inside the folder, then <strong>what runs it</strong>: PortProton (the default), Wine or Wine Staging. If the game doesn't open or runs badly with one, make the package again with another (see <a href="#Custom-games-windows-games-portproton">Windows games: PortProton, Wine or Wine Staging</a>). With PortProton, the first time the Setup offers to download it (about 3 GB); then choose which of its Wine builds runs the game; keep the first one unless the game fails with it.</li>
 <li>Linux: type the command, run inside the game folder (for example <code>./game.x86_64 -fullscreen</code>), or press <em>Browse</em> to pick the program and the Setup writes <code>./&lt;program&gt;</code> for you.</li>
-<li><strong>Picture, logo, video and text</strong> (optional): pick each file (the logo is a <code>.png</code>, <code>.jpg</code> or <code>.webp</code>; it travels in the package as <code>&lt;game&gt;.logo.png</code> or <code>.logo.jpg</code>), or type the text. Without them the game gets samples, which you can replace later.</li>
-<li><strong>Video mode</strong>: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate.</li>
+<li><strong>Picture, logo, icon, video and text</strong> (optional): pick each file (the logo is a <code>.png</code>, <code>.jpg</code> or <code>.webp</code>; it travels in the package as <code>&lt;game&gt;.logo.png</code> or <code>.logo.jpg</code>), or type the text. The <strong>icon</strong> is the game's icon in the desktop menu (a <code>.png</code>, <code>.jpg</code>, <code>.webp</code> or <code>.ico</code>; it travels as <code>&lt;game&gt;.icon.png</code>); without one, the picture is the icon. Without the others the game gets samples, which you can replace later.</li>
+<li><strong>Video mode</strong>: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate. Then <strong>16:9 crop</strong>, for a game that only runs in a widescreen picture (see <a href="#Custom-games-169-crop">16:9 crop</a>).</li>
 <li><strong>Category, controls, buttons, players, year, developer</strong>: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line. Then <strong>Does the game already work with the joystick?</strong> (asked when the game has no <code>.key</code> yet): say yes and the package carries an empty <code>&lt;game&gt;.key</code>, so the on-screen menu does not ask for a controller map (the same as the <em>Joystick</em> box in the web panel).</li>
 <li>The Setup writes <code>~/roms/custom-packages/&lt;game&gt;.fliperos-customgame.zip</code> and asks whether to <strong>install it now</strong>. Say yes and pick the group (or a new one, for example <em>PC games</em>; each group is a system in the frontends): the game folder is copied to <code>~/games/&lt;group&gt;/&lt;game&gt;</code> and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.</li>
 <li>Open the frontend: the game is in the system of its group.</li>
@@ -5374,6 +5413,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 </tbody>
 </table>
 <p><strong>Install all new</strong> puts every new package in one group (asked once), installs the newer ones over their games, and at the end asks whether to delete the installed packages.</p>
+<p><strong>From the desktop</strong>: double-click a <code>&lt;game&gt;.fliperos-customgame.zip</code> in the file manager (in <code>~/roms/custom-packages</code>, in Downloads, on a USB stick, anywhere) and the install window opens: the same steps as choosing it in <strong>Install games</strong>. The group comes marked as the one the game is already in (or the last one used); a game that is already installed asks whether to install over it. Select several packages and press Enter, and one window installs them all in one group. A package from the packages folder asks at the end whether to delete the zip; one from anywhere else is left where it is. Right-click &gt; <strong>Open with</strong> still lets you open the zip with the archive manager (the type is a zip: <code>application/x-fliperos-customgame</code>).</p>
 <p>Zips from before this folder existed (loose in <code>~/roms/custom</code> or in the group folders) move to <code>~/roms/custom-packages</code> by themselves, when the System Update runs or Custom games opens; a game installed from one stays installed.</p>
 <p>What installing does:</p>
 <ol>
@@ -5403,6 +5443,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 ├─ &lt;game&gt;.cfg    the settings (required)
 ├─ &lt;game&gt;.jpg    the picture (.png, .webp... too)
 ├─ &lt;game&gt;.logo.png   the logo over the picture (a .png with a transparent background; &lt;game&gt;.logo.jpg or .webp too)
+├─ &lt;game&gt;.icon.png   the game's icon in the desktop menu (optional; .jpg, .webp or .ico too)
 ├─ &lt;game&gt;.mp4    the video
 ├─ &lt;game&gt;.txt    the text the frontend shows
 ├─ &lt;game&gt;.key    controller → keyboard (optional: the on-screen menu makes it the first time)
@@ -5437,6 +5478,11 @@ Each frontend opens a game with one command, through FliperOS's wrappers: <code>
 <td><code>&lt;game&gt;.logo.png</code> (or <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code>)</td>
 <td>no</td>
 <td>the logo (wheel): the frontends show it over the picture; installed, it is <code>~/media/logo/custom/&lt;group&gt;/&lt;game&gt;.png</code></td>
+</tr>
+<tr>
+<td><code>&lt;game&gt;.icon.png</code> (or <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code>, <code>.ico</code>)</td>
+<td>no</td>
+<td>the icon of the game in the desktop menu (Games); installed, it is <code>~/media/icon/custom/&lt;group&gt;/&lt;game&gt;.png</code>. Without it, the picture is the icon</td>
 </tr>
 <tr>
 <td><code>&lt;game&gt;.mp4</code>, <code>.mkv</code>, <code>.webm</code>, <code>.avi</code>, <code>.mov</code> or <code>.flv</code></td>
@@ -5650,7 +5696,7 @@ p2_b1=LEFTCTRL
 <p>The keys are Linux's names: the letters and digits, <code>F1</code> to <code>F12</code>, <code>ESC TAB ENTER SPACE BACKSPACE</code>, <code>UP DOWN LEFT RIGHT</code>, <code>LEFTCTRL RIGHTCTRL LEFTALT RIGHTALT LEFTSHIFT RIGHTSHIFT CAPSLOCK</code>, <code>INSERT DELETE HOME END PAGEUP PAGEDOWN PAUSE</code>, <code>MINUS EQUAL LEFTBRACE RIGHTBRACE BACKSLASH SEMICOLON APOSTROPHE GRAVE COMMA DOT SLASH</code>, and the keypad's <code>KP0</code> to <code>KP9</code>, <code>KPENTER KPPLUS KPMINUS KPASTERISK KPSLASH KPDOT</code>.</p>
 <h3 id="Custom-games-setting-it-up-on-the-screen">Setting it up on the screen</h3>
 <p>The <code>.key</code> rarely comes ready: you make it here. A custom game with no <code>.key</code> opens the on-screen menu by itself, straight on Controller configuration, two seconds after the game shows (once each time the game opens; <em>NO KEYS YET</em> in the corner). <strong>Save</strong> writes the <code>.key</code>, even with no key marked, and then the game stops asking; <strong>Back</strong> closes the menu without saving, and it asks again next time. A package made with <strong>Joystick</strong> ticked (web panel) or <em>yes</em> to "Does the game already work with the joystick?" (Setup) carries that empty <code>.key</code> from the start, so a game that takes the joystick by itself never asks.</p>
-<p>Any other time, open the <strong>on-screen menu</strong> during the game (by default Start + Down held for a second; Frontend controls &gt; OSD MENU changes it). A custom game has <strong>Controller configuration</strong> in place of <em>Emulator menu</em>:</p>
+<p>Any other time, open the <strong>on-screen menu</strong> during the game (by default Start + Down held for a second; Frontend controls &gt; OSD MENU changes it), go to <strong>Controller configuration</strong> and choose <strong>Joystick to keyboard</strong>:</p>
 <ul>
 <li>A keyboard on the screen. The keys that already have a button are lit.</li>
 <li>Move to a key and press Enter: it turns yellow and waits 5 seconds for a button. Press the controller button that should send it.</li>
@@ -5663,6 +5709,14 @@ p2_b1=LEFTCTRL
 <h2 id="Custom-games-video-mode-flicker-filter-and-on-screen-menu">Video mode, flicker filter and on-screen menu</h2>
 <p>Each game opens in its own Xorg, in its video mode (<code>fliperos-x11-run --mode</code>): 240p, 240p hack, 480i (interlaced on a 15 kHz monitor) or any <code>WIDTHxHEIGHT@HZ</code>. Switchres makes the mode for the monitor chosen in the Setup.</p>
 <p><strong>240p hack (Mugen)</strong> is for a Windows game that only opens full screen at 640x480, like M.U.G.E.N with <code>GameWidth = 640</code> and <code>GameHeight = 480</code>: in plain 240p it shows a white screen with "Error detected" (<code>mugen.log</code>: <code>trying 640x480x16 mode ... failed</code>), because the Wine of PortProton only offers modes up to the size of the screen. With the hack the tube stays at 640x240 (true 240p, no flicker), the X screen is 640x480 scaled down to it (<code>xrandr --scale 1x2</code>, mode <code>640x240@60/640x480</code> in the <code>.cfg</code>), and picom with vsync stops the tearing of games that draw through X without OpenGL (M.U.G.E.N with <code>RenderMode = System</code>). A game that opens at 320x240 or 640x240 by itself stays in plain 240p or <code>320x240@60</code>.</p>
+<h3 id="Custom-games-169-crop">16:9 crop</h3>
+<p>For a game that only runs in a widescreen (16:9) picture. Without it, such a game on a 4:3 tube comes out squeezed or with black bars. With <strong>16:9 crop</strong> on, the game opens in a 16:9 X screen (1280x720, <code>FLIPEROS_CROP_SCREEN</code> changes it) and the tube shows only the middle of it, in 4:3: the full height, nothing squeezed, the sides of the picture cut off (<code>xrandr --transform</code>, the same mechanism as the 240p hack's scale; the crop wins over the 240p hack when both are set).</p>
+<ul>
+<li><strong>Where to set it:</strong> the <em>16:9 crop</em> box in <strong>Create package</strong> (web panel, one package or the table) with its explanation, <em>Yes/No</em> in the Setup's Create package, the game's information in the Setup, the edit window of an installed game, and <strong>Video configuration &gt; 16:9 crop</strong> in the on-screen menu. It is <code>crop169=1</code> in the game's <code>.cfg</code> and travels in the package.</li>
+<li><strong>When it counts:</strong> the X screen is made when the game opens, so a change in the on-screen menu or in the edit window counts the next time the game opens.</li>
+<li><strong>On-screen menu:</strong> while the game runs with the crop, the menu and the volume and achievement bars are drawn only in the middle three quarters of the picture, the part the tube shows (so the letters come out a third wider than usual).</li>
+<li>A card that can't make the bigger screen opens the game without the crop.</li>
+</ul>
 <p>Each game has its own row in <strong>Video Setup &gt; Interlaced hacks</strong> (only the flicker filter: the mode is the game's), and the level chosen in the on-screen menu during the game stays with that game. Its name for the filter, the menu and the log is <code>custom_</code> plus the group and the name in lower case, with <code>_</code> for everything else: <em>PC games</em> / <em>Metal Slug X</em> is <code>custom_pc_games_metal_slug_x</code>, and its log is <code>/opt/fliperos/logs/custom_pc_games_metal_slug_x.log</code>.</p>
 <p>Windows games are mostly 32-bit: the 32-bit flicker filter and on-screen menu go with them (built when Wine is installed from the Extras), and with DXVK the 32-bit Vulkan layer.</p>
 <p>The frontend's <strong>Emulator menu</strong> shortcut opens the on-screen menu in a custom game (it has no emulator menu of its own). <strong>Exit game</strong> closes it like any other game.</p>
@@ -5698,6 +5752,11 @@ p2_b1=LEFTCTRL
 <td>png, jpg, jpeg, webp, gif</td>
 </tr>
 <tr>
+<td>icon (desktop menu only; optional, never gets a sample)</td>
+<td><code>icon</code></td>
+<td>png, jpg, jpeg, webp, ico</td>
+</tr>
+<tr>
 <td>box, marquee</td>
 <td><code>box</code>, <code>marquee</code></td>
 <td>png, jpg, jpeg, webp, gif</td>
@@ -5717,7 +5776,8 @@ p2_b1=LEFTCTRL
 <p>At boot, <code>fliperos-squashgames.service</code> mounts every packed folder again, before the frontend and the network share. Choosing a packed folder in <strong>Packed</strong> unpacks it back into a normal folder, with what the game saved. To copy a packed game to another computer, unpack it first, or make a package of it.</p>
 <p>Close the game before packing, unpacking or deleting it. Packing and unpacking need free space about the size of the folder. Only folders inside the home can be packed, not hidden ones and not a path through a link. The list is <code>/etc/fliperos/squashgames.list</code>.</p>
 <h2 id="Custom-games-opening-a-custom-game-from-another-frontend">Opening a custom game from another frontend</h2>
-<p><strong>On the desktop</strong> (LXDE), the menu's <strong>Games</strong> has a <strong>Custom games</strong> submenu with every custom game, with its picture as the icon. Choosing one closes the desktop, opens the game on the CRT in its video mode (<code>fliperos-launch custom &lt;name&gt;.sh</code>) and brings the desktop back when it closes. The Setup, the web panel and the System Update keep the submenu up to date (<code>~/.local/share/applications/fliperos-custom_*.desktop</code> and <code>~/.config/menus/applications-merged/fliperos-custom-games.menu</code>).</p>
+<p><strong>On the desktop</strong> (LXDE), the menu's <strong>Games</strong> lists every custom game, once, with its <strong>icon</strong> (the optional <em>Icon</em> field of Create package, and of the game's art in the web panel; without one, its picture). Choosing one closes the desktop, opens the game on the CRT in its video mode (<code>fliperos-launch custom &lt;name&gt;.sh</code>) and brings the desktop back when it closes. The Setup, the web panel and the System Update keep the entries up to date (<code>~/.local/share/applications/fliperos-custom_*.desktop</code>). There is no <em>Custom games</em> submenu any more: it showed each game twice, in Games and inside it, and the update that removes the duplicates deletes it (<code>~/.config/menus/applications-merged/fliperos-custom-games.menu</code>).</p>
+<p><strong>Double click on a package</strong> (on the desktop, in a folder or on a USB stick) installs it: the desktop closes and the Setup opens on the CRT in 240p and full screen, straight to the install screen, as <strong>Install games</strong> does (<a href="#Desktop-the-setup-from-the-desktop">The Setup from the desktop</a>).</p>
 <p>The FliperOS frontend, Attract-Mode Plus, ES-DE and Pegasus already list each group as a system: the Setup writes their configuration. For any other frontend, or a launcher of your own, the command that opens an installed custom game is its script:</p>
 <pre><code>/bin/sh &quot;/home/fliperos/roms/custom/&lt;group&gt;/&lt;name&gt;.sh&quot;
 </code></pre>
@@ -5962,7 +6022,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><a href="#GroovyMAME">GroovyMAME</a></td>
-<td>Arcade at native resolution: the Midway games, missing files, the package and building the newest</td>
+<td>Arcade at native resolution: missing files, the package and building the newest</td>
 </tr>
 <tr>
 <td><a href="#RetroArch">RetroArch</a></td>
@@ -5990,7 +6050,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </tr>
 <tr>
 <td><a href="#More-emulators">More emulators</a></td>
-<td>Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack, Odin (Sega Hikaru)</td>
+<td>Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack, Odin (Sega Hikaru), xemu (Sega Chihiro)</td>
 </tr>
 <tr>
 <td><a href="#Fightcade-2">Fightcade 2</a></td>
@@ -6084,6 +6144,12 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <tr>
 <td><a href="#More-emulators-odin-sega-hikaru-and-gaelco-3d">Odin</a></td>
 <td>Sega Hikaru and Gaelco 3D arcades (<code>~/roms/odin</code>)</td>
+<td>Downloads itself when you open its first game</td>
+<td>640x480 (interlaced at 15 kHz)</td>
+</tr>
+<tr>
+<td><a href="#More-emulators-xemu-sega-chihiro">xemu</a></td>
+<td>Sega Chihiro arcades (<code>~/roms/chihiro</code>)</td>
 <td>Downloads itself when you open its first game</td>
 <td>640x480 (interlaced at 15 kHz)</td>
 </tr>
@@ -6302,7 +6368,6 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/docs/img/wiki/game-groovymame.webp" width="480" alt="Garou: Mark of the Wolves in GroovyMAME, at its native 320x224"></p>
 <h2 id="GroovyMAME-native-resolution">Native resolution</h2>
 <p>GroovyMAME runs in KMS, without Xorg, like GroovyArcade. Switchres makes each game's exact mode and SDL switches to it. On the cabinet: Street Fighter II at <code>384x224@59.64</code> (99.9% speed), The King of Fighters '98 at <code>320x224@59.19</code>.</p>
-<p><strong>Midway 2D games</strong> (Mortal Kombat 1 to 3, NBA Jam, Smash TV, NARC and the others on the Y, T, W and X-unit boards) are 400x254 at 54.7 Hz. Switchres makes that mode, but the tube shows it stretched up and down, so FliperOS runs them in <strong>320x240p at 59 Hz</strong>, the height of the other games; the game itself still runs at 54.7 Hz.</p>
 <p>Interlaced games (more than 240 lines) follow <strong>Setup &gt; Video Setup &gt; Interlaced hacks</strong>: interlaced with the flicker filter by default, or 640x240 (<a href="#Picture-filters">Interlaced, colour and scanlines</a>).</p>
 <h2 id="GroovyMAME-playing">Playing</h2>
 <ul>
@@ -6348,7 +6413,7 @@ This page used to hold every emulator. Running a program at 640x240 is now on <a
 <li><strong>KMS mode switching</strong> needs the SDL2 of the <code>fliperos-sdl2-kms</code> package (<code>/usr/local/lib/fliperos/sdl2-kms</code>, loaded only by GroovyMAME): Ubuntu's SDL2 with GroovyArcade's two KMS patches (<code>packaging/patches/sdl2</code>), so SDL re-reads the connector's modes on every query and puts the original mode back when the window closes. Switchres attaches each mode to the connector (<code>ATTACHMODE</code>, kernel patch 06). <code>SDL_KMSDRM_REQUIRE_DRM_MASTER=0</code> must not be set: with it, SDL undoes Switchres's switch on its next frame.</li>
 <li><strong>hbgroovymame:</strong> the same file, <code>config/fliperos-groovymame</code>, installed twice: the name it is called by decides (<code>/usr/local/bin/hbgroovymame</code>). The package <code>fliperos-hbgroovymame</code> (<code>PKG_OPTIONAL</code>: compiled and published, not in the ISO) brings only the binary (<code>/usr/local/libexec/hbgroovymame</code>), HBMAME's own files (<code>/usr/local/share/hbgroovymame</code>: plugins, bgfx, hash, ctrlr…) and <code>paths.ini</code>. The source is HBMAME's tag <code>tag2896</code>, plus the files GroovyMAME adds (Switchres, emusync, lz4) and its diff over MAME 0.289, ported to HBMAME's code (<code>packaging/patches/hbgroovymame</code>: 0001 the Switchres and emusync port, 0002 the newer asio and the headers HBMAME no longer includes, 0003 the audio synchronisation: <code>sound.cpp</code>, the OSD sound module and SDL that measure the sound card's real rate, and the sound update once per frame). The party's lockstep patch is the very file of GroovyMAME's package (<code>packaging/patches/groovymame</code>), applied to HBMAME too. Each game opens with <code>hb_ini</code>: <code>/etc/fliperos/hbmame/hbmame.ini</code> is the system <code>mame.ini</code> with the folders of <code>paths.ini</code> on top (rebuilt when either is newer), and <code>-inipath</code> lists that folder first and <code>/etc/fliperos/mame</code> after it, so <code>ui.ini</code> and the Midway files are read from there (<code>ui.ini</code> is copied once, with the art folders pointing at <code>hbmame</code>).</li>
 <li><strong>A new HBMAME version:</strong> change <code>HBMAME_TAG</code> and <code>HBMAME_COMMIT</code> in the recipe and apply the patches in order (<code>git apply</code> of <code>0001</code>, <code>0002</code>, <code>0003</code>, then GroovyMAME's lockstep patch). HBMAME merges MAME's development head, so a patch that stops fitting has to be ported by hand, the way these were: <code>0001</code> is GroovyMAME's diff over MAME 0.289 for the Linux files, <code>0002</code> is what HBMAME's code asks differently, and <code>0003</code> repeats GroovyMAME's sound changes in HBMAME's <code>sound.cpp</code>. After a change, raise <code>PKG_REVISION</code>. The check that worked: build, open a game with a zero-filled ROM set made from <code>-listxml</code> (MAME runs it with a checksum warning) under Xvfb with <code>SDL_AUDIODRIVER=dummy</code>, and run two instances with a <code>fliperos-lockstep.ini</code> on one machine.</li>
-<li><strong>Midway:</strong> <code>config/mame-midway.ini</code>, installed as <code>/etc/fliperos/mame/source/&lt;driver&gt;.ini</code>, read after <code>mame.ini</code> only for those drivers.</li>
+<li><strong>Per-driver settings:</strong> GroovyMAME reads <code>/etc/fliperos/mame/source/&lt;driver&gt;.ini</code> after <code>mame.ini</code>, only for the games of that driver. FliperOS ships none: the Midway 2D games (Mortal Kombat 1 to 3, NBA Jam, Smash TV, NARC) open in their own mode, 400x254 at 54.7 Hz, and an update removes the file that update 65 had installed for them (a <code>source</code> file you wrote is kept).</li>
 <li><strong>Sound:</strong> it preloads <code>libfliperos-sdl-audio.so</code> (<code>config/fliperos-sdl-audio.c</code>), which reports ALSA's <code>default</code> as SDL's default device. SDL 2.30 lists only the <code>hw:</code> devices, and MAME 0.289 saves the chosen one in each game's cfg (<code>sound_map</code>), so it took the card's raw device: no sharing with other programs, not the card picked in the Setup, no sound on the live screen. The old <code>sound_map</code> entries are removed once (<code>.fliperos-sound-default</code>).</li>
 <li><strong><code>mame.ini</code></strong> is made like GroovyArcade's: GroovyMAME's own <code>-createconfig</code>, with <code>config/mame.ini</code> on top (<code>config/fliperos-mame-ini</code>): <code>plugin hiscore</code>, <code>skip_gameinfo 1</code>, <code>video opengl</code>, <code>switchres_ini 1</code>, <code>sound sdl</code>, <code>aspect 4:3</code>, <code>modesetting 1</code>, and the Setup's latency (<code>lowlatency</code>, <code>autoframedelay</code>, <code>framedelay</code>). The UI font stays MAME's own, because GroovyArcade's <code>uismall.bdf</code> was too small on the cabinet.</li>
 <li><strong><code>aspect 4:3</code>:</strong> with <code>aspect auto</code>, booting at 640x240 gave 8:3, and Switchres doubled the width of every game. The Setup goes back to <code>auto</code> only for an LCD.</li>
@@ -6901,7 +6966,7 @@ media=DVD
 </ul>
 <p>See also: <a href="#Custom-games">Custom games</a>, <a href="#Fightcade-2">Fightcade 2</a>, <a href="#Emulators">Emulators</a>.</p>
 <h1 id="More-emulators">More emulators</h1>
-<p>The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack on Ikemen GO and Odin (Sega Hikaru, Gaelco 3D).</p>
+<p>The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack on Ikemen GO, Odin (Sega Hikaru, Gaelco 3D) and xemu (Sega Chihiro).</p>
 <h2 id="More-emulators-dolphin-gamecube-wii-triforce">Dolphin (GameCube, Wii, Triforce)</h2>
 <p>Its games go in <code>~/roms/dolphin</code> (<code>.iso</code>, <code>.rvz</code>, <code>.wbfs</code>). It is compiled from Dolphin's stable version, as a FliperOS package updated with FliperOS (the official Linux build is a Flatpak, which would bring about 1 GB of runtime); <strong>Build the newest</strong> in <strong>Setup &gt; Games &gt; Emulators &amp; Games</strong> compiles the newest (<a href="#Setup-Games-the-newest-version-of-a-packaged-emulator">Games Setup</a>).</p>
 <ul>
@@ -6972,6 +7037,20 @@ media=DVD
 <li><strong>Updates.</strong> A cabinet that has it gets the new version with the system updates. The version is the project's commit of 2026-11-18 (0.1.1 and the Gaelco 3D games).</li>
 </ul>
 <p>Odin has not been seen on a CRT yet.</p>
+<h2 id="More-emulators-xemu-sega-chihiro">xemu (Sega Chihiro)</h2>
+<p>The Sega Chihiro is an arcade board built on the original Xbox hardware. FliperOS runs it in <strong>xemu</strong>, the Tovarichtch fork of the Xbox emulator (GPL-2.0), which has the Chihiro board: OutRun 2 and OutRun 2 SP, The House of the Dead III, Virtua Cop 3, Ghost Squad, Crazy Taxi High Roller, Wangan Midnight Maximum Tune 1 and 2, Ollie King and Gundam Battle Operating Simulator. The ALL.net games (the Satellite Terminal ones, with a touchpad) do not work. Its games go in <strong><code>~/roms/chihiro</code></strong>, one <code>.bin</code> per game.</p>
+<ul>
+<li><strong>It installs itself.</strong> xemu does not come in the image. The <code>chihiro</code> folder exists from the installation; when the first game is in it and you open it in the frontend, a bar installs xemu (a package already built) and the game opens. By hand: <strong>Setup &gt; Games &gt; Emulators &amp; Games &gt; xemu</strong>. It is a system of its own in every frontend (Sega Chihiro).</li>
+<li><strong>The games.</strong> xemu only opens a Chihiro <em>netboot</em> image, a <code>.bin</code>, but you do not have to make it: put the <strong>disc</strong> of the game in <code>~/roms/chihiro</code> (the <code>.7z</code> of a TOSEC dump with its <code>.gdi</code>, or a Redump <code>.cue</code> with its tracks, or a <code>.chd</code>) and it shows in the frontend as it is. The first time you open it, a bar (<strong>PREPARING THE GAME</strong>, B cancels) unpacks the disc, finds out which game it is from the product number in its header (<code>GDX-0003B</code> is Virtua Cop 3, set <code>vcop3</code>), looks for that game's key, converts it with the <a href="https://github.com/Tovarichtch/chihiro-netboot">chihiro-netboot</a> tool (MIT, it comes with FliperOS) and keeps the image in <code>~/roms/chihiro/.netboot/</code>. The next openings go straight to the game. A <code>.bin</code> netboot image you already have works as it is. A normal Xbox disc image or a MAME <code>.zip</code> does not.</li>
+<li><strong>The game key</strong> is a small file (<code>317-0354-com.data</code> for Virtua Cop 3) inside the game's MAME set (<code>vcop3.zip</code>; <code>vcop3a.zip</code> and the clones work too, and in a merged romset it is in the parent's zip). It is looked for in <code>~/roms/mame</code>, <code>~/bios/mame</code>, <code>~/bios/chihiro</code> and next to the game. When no folder has it, FliperOS asks the Downloader to fetch <strong>only that file</strong> (<code>fliperos-downloader fetch-sets</code>), from the ROM set link you saved in Setup &gt; Games &gt; Downloader and, if you saved none, from the one that comes with the image (the one that screen suggests); it uses a Transmission of its own for that, so the filter, the plan, the saved links and the downloads in progress are not touched. With no link at all, or with no network, the game does not open and says so (GAME KEY (MAME SET) NOT FOUND, NO NETWORK FOR THE GAME KEY). You can also put the <code>.zip</code> in <code>~/roms/mame</code> yourself.</li>
+<li><strong>Memory and space.</strong> The conversion reads the whole data track (about 1.2 GB) into memory: it needs about 3 GB free (it says NOT ENOUGH MEMORY before starting if there is less) and about 2 GB of space on the disk of the game. It takes a minute or two, once per game. The temporary files go away when it ends, even when it fails.</li>
+<li><strong>The board files</strong> go in <code>~/bios/chihiro</code>, loose (not inside the zip): <code>chihiro_xbox_bios.bin</code> and, beside it, <code>ic10_g24lc64.bin</code>, <code>ic11_24lc024.bin</code>, <code>pc20_g24lc64.bin</code> and <code>fpr21042_m29w160et.bin</code> (what is inside MAME's <code>chihiro.zip</code>). <code>ver1305.bin</code> (the network board firmware, from <code>seganetw.zip</code>) is only needed by the games played over a link (OutRun 2 SP, Gundam). <strong>Setup &gt; Games &gt; Downloader &gt; Download BIOS</strong> brings all of them when there is a game in the folder. No Xbox BIOS or MCPX ROM is needed: the Chihiro BIOS carries its own boot ROM.</li>
+<li><strong>Video.</strong> It needs OpenGL 4.0 or more, or Vulkan: an AMD card with the Mesa driver has it, a GPU with only OpenGL 2.1 (Intel Ironlake) does not. The renderer follows the card's driver, as in Odin: <strong>Vulkan on amdgpu</strong>, OpenGL on the others, chosen the first time and each time the driver changes (what you pick in its menu stays in between). On the cabinet's R7 240 (Oland) the OpenGL renderer <strong>hangs the GPU</strong> in the first frames of the game (<code>ring gfx timeout</code> in the kernel log, then Xorg falls and the screen goes back to the frontend); Vulkan (RADV) runs it. The game is 640x480, so it opens in its own Xorg at <strong>640x480</strong> (interlaced on a 15 kHz tube, where the flicker filter applies; progressive on 25/31 kHz monitors and LCDs), in full screen, 4:3, with no menu bar and VSync on; the first time only, so what you change in its menu stays. The package is built from the fork's <strong>perf-experimental</strong> branch, with its optimizations on by default (CPU boost: native SSE and a wider jump cache; GPU boost: the tuned NV2A; smooth first play: the game's known shaders compile while it boots, so the first minutes do not stutter). The stock <code>main</code> branch of the fork has none of them: on the cabinet's i7-870 Virtua Cop 3 ran badly choppy with it, with one CPU thread of the emulated Xbox at ~93% of a core. The emulator has <strong>sound</strong> through ALSA (the SDL it carries only had PipeWire, which the cabinet does not run: it opened silent).</li>
+<li><strong>Files.</strong> The configuration (<code>xemu.toml</code>), the board EEPROM and the cards are in <code>~/.local/share/xemu-chihiro</code> (also reachable from the <code>config</code> folder); the save states in <code>~/save/chihiro</code>.</li>
+<li><strong>Controls.</strong> xemu keeps each function of a game as a number (a key, a mouse or gun button, a joystick button or axis) and does not read the Setup's button map. FliperOS closes the gap with the keyboard, the way it does for custom games: each time the game opens, <code>fliperos-chihiro-input</code> writes into <code>xemu.toml</code> the key of each function, and <code>fliperos-buttons gamekeys</code> reads your panel or pad from <strong>Setup &gt; Joysticks &gt; Button mapping</strong> and presses those keys through a virtual keyboard while the game runs (it quits with it). The same buttons do the same job in every game: <strong>coin</strong> and <strong>start</strong> of player 1 and 2 (keys <code>5</code>/<code>Enter</code> and <code>6</code>/<code>2</code>), the stick = the arrows (the wheel of OutRun 2 and Maximum Tune, Ollie King's swing and board), <strong>b1</strong> = the gas, the gun's pedal, Crazy Taxi's jump, <strong>b2</strong> = the brake, reload, <strong>b3/b4</strong> = the gears, <strong>b5</strong> = the camera, <strong>b6</strong> = Maximum Tune's intruder, <strong>b7</strong> = the card. Player 2 has <code>b1</code>/<code>b2</code> for the pedal and reload of the two-gun games. The gun's trigger and body button stay on the mouse (the GunCon 2), since a function takes one key. xemu opens its own menu on a right click of the mouse, and the GunCon 2 sends its A/C buttons and the shot off the screen (the "off-screen reload" of the OSD) as a right click, so the system keeps xemu's <strong>Light Gun Mode</strong> on at every opening: in the gun games (Virtua Cop 3, House of the Dead 3, Ghost Squad) the cursor is hidden and the mouse buttons belong to the game, and no shot opens the menu; in the other games the right click still opens it. The map from panel button to key is <code>~/.local/share/xemu-chihiro/chihiro.key</code> (reachable from the <code>config</code> folder): it is made once and is yours to edit, but the key each function listens to is the system's and is set again at every opening. <code>FLIPEROS_CHIHIRO_KEYS=off</code> turns the virtual keyboard off. xemu's own menu opens with F1. The test menu is the key <code>0</code> and the service key <code>9</code> (there is no panel button for them); guns and wheels are calibrated in the game's test menu. Gundam (twin sticks) keeps xemu's own keys.</li>
+<li><strong>Updates.</strong> A cabinet that has it gets the new version with the system updates. The version is the fork's <code>perf-experimental</code> commit <code>98fbd75</code> (2026-10-03).</li>
+</ul>
+<p><strong>Check a disc without converting it:</strong> <code>fliperos-chihiro-prepare inspect DISC</code> prints the product number, the MAME set it maps to and which key files are missing. Virtua Cop 3 has been seen running on the cabinet (the INSERT COIN screen, in Vulkan), not yet on a CRT and not at full speed: the i7-870 is near the least xemu asks for.</p>
 <h2 id="More-emulators-how-it-works">How it works</h2>
 <ul>
 <li><strong>DuckStation</strong> is unpacked in <code>/opt/duckstation</code> (<code>config/fliperos-duckstation</code>); a <code>~/roms/duckstation</code> or <code>~/roms/psx</code> from before moves to <code>~/roms/ps1</code>, with its art. Its settings are <code>[Cheevos]</code>, <code>AspectRatio</code> and the BIOS path in its <code>settings.ini</code>, written at each launch by <code>fliperos-x11-run</code>; <code>-batch</code> closes it with the game.</li>
@@ -7729,7 +7808,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <h2 id="LED-displays-how-it-works">How it works</h2>
 <ul>
 <li>Every game goes through <code>fliperos-kms-run</code> or <code>fliperos-x11-run</code>, which call <code>fliperos-pixelcade launch</code> in the background, so a game never waits for the marquee; the same helper sends the events to the ZeDMD through <code>fliperos-dmd</code>. The frontends' own events come from the Attract-Mode Plus plugin and the ES-DE scripts that FliperOS installs.</li>
-<li>The system logos are characters of Arcadeflow's logo font, drawn by <code>fliperos-syslogo</code> from the font and <code>data_systems.txt</code>, which ship in the image (<code>config/syslogo</code>, installed in <code>/usr/local/share/fliperos/syslogo</code>) with the permission of Arcadeflow's author. <code>fliperos-syslogo export DIR</code> writes every logo as a PNG.</li>
+<li>The system logos are characters of Arcadeflow's logo font, drawn by <code>fliperos-syslogo</code> from the font and <code>data_systems.txt</code>, which ship in the image (<code>config/syslogo</code>, installed in <code>/usr/local/share/fliperos/syslogo</code>) with the permission of Arcadeflow's author. <code>fliperos-syslogo export DIR</code> writes every logo as a PNG. Systems the font does not have (the Sega Chihiro) use a PNG from <code>config/syslogo/extra</code> instead, which the marquee and the frontend find the same way (<code>fliperos-syslogo find</code> answers <code>extra</code>).</li>
 <li>The menu animations are made by <code>tools/marquee-logo-anim.py</code>; the graphical Setup sends each cursor move (<code>fliperos-pixelcade menu ITEM</code>), the text Setup the item you enter.</li>
 <li>Achievements: <code>fliperos-cheevos watch</code> reads each unlock from the emulator's log and calls <code>fliperos-pixelcade achievement</code> (<a href="#RetroAchievements">RetroAchievements</a>).</li>
 </ul>
@@ -34473,14 +34552,15 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <td>same</td>
 </tr>
 <tr>
-<td><strong>Everything</strong> (PS2, Model 3, Dreamcast)</td>
+<td><strong>Everything</strong> (PS2, Model 3, Dreamcast, Sega Chihiro)</td>
 <td>4 physical cores with AVX2 and single-thread PassMark ≥ 2000 (Core i7-7700, Ryzen 5 3600 or newer)</td>
 <td>16 GB, SSD</td>
-<td>same: at CRT resolutions even the R7 240 exceeds PCSX2's minimum (G3D ≥ 600)</td>
+<td>same: at CRT resolutions even the R7 240 exceeds PCSX2's minimum (G3D ≥ 600); Sega Chihiro needs <code>amdgpu</code> with Vulkan (below)</td>
 </tr>
 </tbody>
 </table>
 <p>The "Everything" tier follows the <em>Moderate</em> level of the <a href="https://pcsx2.net/docs/setup/requirements">PCSX2 requirements</a>, the heaviest emulator in the ISO; the stronger GPU PCSX2 asks for at that level is for upscaled resolution, which doesn't exist on a CRT. Cards without analog output (AMD RX and newer, recent NVIDIA) need a converter: see <a href="#Converters">Converters</a>.</p>
+<p><strong>Sega Chihiro asks for more than the rest.</strong> <a href="#More-emulators-xemu-sega-chihiro">xemu</a> emulates the original Xbox, and the video card matters for it even on a CRT: the game is 640x480 (interlaced at 15 kHz), not 240 lines. It needs a GPU with OpenGL 4.0 or Vulkan (an Intel Ironlake, OpenGL 2.1, does not open it). On AMD it runs on Vulkan with <code>amdgpu</code>; on the cabinet's R7 240 the OpenGL renderer hangs the card. The CPU matters too: with the fork's stock branch on the test cabinet, one thread of the emulated Xbox sat at about 93% of a core, so a fast core counts more than many cores (the package uses the faster <code>perf-experimental</code> branch). On the test cabinet (Core i7 870, R7 240) Virtua Cop 3 opens in Vulkan, but not at full speed. The conversion of each disc needs about 3 GB of free memory, once per game. The single-thread 2000 and 4 cores of the "Everything" tier is also what an unofficial xemu guide suggests (xemu's own documentation only asks for OpenGL 4.0), but it has not been measured on FliperOS yet.</p>
 <p><strong>The CPU's speed decides more than its cores.</strong> For arcade games a faster clock is what lets MAME run heavier games. GroovyArcade notes that above 8 cores MAME generally gains nothing. Whether the processor reaches its Turbo clock matters too, and the board's firmware can have it off: see <a href="#CPU-and-speed">CPU and speed</a>.</p>
 <p><strong>Checking the machine:</strong> Setup &gt; System &gt; Latency shows the CPU, cores, clock, instruction level, memory, GPU and analog outputs, and <strong>Check this computer</strong> compares them with the Low latency mode minimum (<code>lib/hardware.sh</code>: x86-64-v3, 4 threads, 3.0 GHz, 4 GB). Choosing Low latency on a machine below that asks for confirmation.</p>
 <h3 id="Latency-small-machines">Small machines</h3>
@@ -36594,7 +36674,7 @@ tools/publish-changed-packages.sh --run --bump NAME…    # rebuilds the named o
 </ul>
 <p>After the push, an update has to carry the new list to the machines: see <a href="#Publishing-updates">Publishing updates</a> and <a href="#Making-a-release">Making a release</a>.</p>
 <h2 id="Packages-optional-packages">Optional packages</h2>
-<p>A recipe with <code>PKG_OPTIONAL=1</code> (<code>fliperos-hbgroovymame</code>: HBMAME with Switchres, which takes hours to compile; <code>fliperos-odin</code>: the Sega Hikaru and Gaelco 3D emulator; <code>fliperos-anybor</code>: the AnyBOR core, which opens OpenBOR paks in RetroArch) is <strong>not in the ISO</strong> and not built on the cabinet: it is compiled and published like the others (<code>tools/publish-changed-packages.sh</code> builds it, and it enters <code>updates/packages.list</code> as <code>installed</code>, so no cabinet gets it by itself), and the cabinet downloads the finished <code>.deb</code>. <code>bash packaging/build-deb.sh --list-optional</code> lists them, and the Release workflow leaves them out of the image's repository.</p>
+<p>A recipe with <code>PKG_OPTIONAL=1</code> (<code>fliperos-hbgroovymame</code>: HBMAME with Switchres, which takes hours to compile; <code>fliperos-odin</code>: the Sega Hikaru and Gaelco 3D emulator; <code>fliperos-xemu-chihiro</code>: xemu with the Sega Chihiro board; <code>fliperos-anybor</code>: the AnyBOR core, which opens OpenBOR paks in RetroArch) is <strong>not in the ISO</strong> and not built on the cabinet: it is compiled and published like the others (<code>tools/publish-changed-packages.sh</code> builds it, and it enters <code>updates/packages.list</code> as <code>installed</code>, so no cabinet gets it by itself), and the cabinet downloads the finished <code>.deb</code>. <code>bash packaging/build-deb.sh --list-optional</code> lists them, and the Release workflow leaves them out of the image's repository.</p>
 <p>The Setup installs it when the person asks: <strong>Setup &gt; Games &gt; Emulators &amp; Games</strong>, or the frontend, when a game of its folder is opened and the program is missing (<code>config/fliperos-emulators install NAME</code>, kind <code>package</code>: it reads the row of the list, downloads the file from the <code>packages</code> release, checks the sha256 and installs it with <code>apt-get</code>). From then on the cabinet has the package, and the updates raise its version like any other.</p>
 <h2 id="Packages-programs-built-on-demand">Programs built on demand</h2>
 <p>A recipe with <code>PKG_ON_DEMAND=1</code> is not in the ISO and not in the list: the Setup builds the program on the cabinet when someone chooses it (<code>config/fliperos-frontend-build</code>). EmulationStation (ES-DE) and Pegasus are like that. Their <code>.deb</code> is still kept on the release as a copy.</p>
@@ -36682,7 +36762,7 @@ tools/publish-changed-packages.sh --run --bump NAME…    # rebuilds the named o
 <h2 id="Build-and-tests-build">Build</h2>
 <p>Always in Docker (<code>CLAUDE.md</code> forbids chroot with the host's <code>/dev</code> on WSL).</p>
 <pre><code class="language-powershell">docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.28.iso
+docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/output&quot; fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.29.iso
 </code></pre>
 <table>
 <thead>
@@ -36729,7 +36809,7 @@ docker run --rm --privileged --mount &quot;type=bind,source=$PWD/output,target=/
 <p>What doesn't exist in Ubuntu 24.04 is downloaded with a pinned version and hash: Limine 11.4.1, Gum 2.0.2 (the <code>.deb</code> stays for the man pages; the binary is built from the same version's source with <code>patches/gum</code>, compiled with Go 1.26.7: ▲/▼ arrows instead of dots in the menus' pagination, the menu sounds and Space toggling in checklists — gum 2.0.2 only knows the key as <code>" "</code>, and its library calls it <code>space</code> —, put in place of <code>/usr/bin/gum</code> with <code>dpkg-divert</code>), AntiMicroX 3.6.1 (official <code>.deb</code> for 24.04), Skyscraper 3.21.0 (Gemba fork, compiled with Qt6).</p>
 <p>Audit of the generated ISO (read-only): checks the boot menu, kernel, setup files, libraries of the compiled programs, EDIDs and BIOS/UEFI boot.</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.28.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/verify-iso.sh /w/output/fliperos-0.29.iso
 </code></pre>
 <h2 id="Build-and-tests-release">Release</h2>
 <p>Every new ISO goes to GitHub <a href="https://github.com/juniorterin/fliperOS/releases">Releases</a>, with the version's changelog, like GroovyArcade's releases (<a href="https://github.com/substring/os/releases">substring/os</a>): the text by area (system, packages, <code>fliperos-setup</code>, tools) and, next to the ISO, the package list.</p>
@@ -36740,16 +36820,16 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -w /w fliperos-vmtest bash tools/ver
 <li>Tag the version and push the tag (the name is the version, without "v"):</li>
 </ol>
 <p><code>powershell
-   git tag 0.28
-   git push origin 0.28</code></p>
+   git tag 0.29
+   git push origin 0.29</code></p>
 <p>Pushing the tag triggers the GitHub Actions <strong>Release</strong> workflow (<code>.github/workflows/release.yml</code>). It checks that the tag is <code>FLIPEROS_VERSION</code> and that <code>CHANGELOG.md</code> has its section, builds the frontends repository (<code>Dockerfile.packages</code>) and generates the ISO with the same <code>Dockerfile.fliperos</code> as the local build.</p>
 <p>Then it publishes through <code>tools/release-publish.sh</code>, with the workflow's own token. The kernel and frontend <code>.deb</code>s stay in the Actions cache, so they only recompile when the version, a patch or a recipe changes. Without the cache, the build takes about 3 hours on a 4-core runner (the limit is 6 h).</p>
 <p>If it fails, <code>fliperos-mkiso.log</code> is kept as a workflow artifact. Run by hand (<em>Actions &gt; Release &gt; Run workflow</em>), it generates the ISO of the current version and keeps it as an artifact for 3 days, without publishing.</p>
-<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.28</code>, <code>git push -f origin 0.28</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
+<p>To redo a version that was just tagged, move the tag and push it again (<code>git tag -f 0.29</code>, <code>git push -f origin 0.29</code>): the build of the old tag that is still running is cancelled, and its release, if it was already published, is replaced.</p>
 <p>To publish an ISO generated here, in the audit container:</p>
 <pre><code class="language-powershell">docker build -t fliperos-vmtest -f tools/Dockerfile.vmtest tools
 docker run -it --rm -v fliperos-gh:/root/.config/gh fliperos-vmtest gh auth login
-docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.28.iso
+docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /w fliperos-vmtest bash tools/release-publish.sh /w/output/fliperos-0.29.iso
 </code></pre>
 <p><code>gh auth login</code> is a one-time step: the login stays in the <code>fliperos-gh</code> volume.</p>
 <p><code>tools/release-publish.sh</code> only publishes what can go public:</p>
@@ -36764,15 +36844,15 @@ docker run --rm -v &quot;${PWD}:/w:ro&quot; -v fliperos-gh:/root/.config/gh -w /
 <p>Switchres opens <code>libX11.so</code>, <code>libXrandr.so</code> and <code>libdrm.so</code> by those unversioned names, which belong to the <code>-dev</code> packages: <code>config/fliperos-dlopen-links</code> scans the binaries in <code>/usr/local</code> and <code>/opt</code> for such names and links them in <code>/usr/local/lib</code> to the installed version, and <code>tools/verify-iso.sh</code> checks the three.</p>
 <p>The packages left with nothing depending on them once the <code>-dev</code> are gone (Qt SVG, sndio, hidapi, OpenAL) are marked as manually installed too, so an <code>apt autoremove</code> on the installed system doesn't take them.</p>
 <p>The apt cache and lists also go, as does the out-of-scope firmware (Mellanox, Marvell Prestera, Qualcomm, QLogic), through a dpkg <code>path-exclude</code> so an update doesn't bring it back. The GPU firmware stays, NVIDIA's included: nouveau needs it to accelerate the newer cards. The squashfs is xz.</p>
-<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.28.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
-<p>Also published: <code>fliperos-0.28.sha256</code> (the whole ISO and each part) and <code>fliperos-0.28-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
+<p>Wine, Steam and Heroic aren't in the image: Setup &gt; Games &gt; Extras installs them (<code>config/fliperos-extras</code>). If the ISO goes over 2 GiB, it is split into 1900 MiB parts (<code>fliperos-0.29.iso.001</code>, <code>.002</code>...), and the release text gets the instructions to join them (<code>copy /b</code> on Windows, <code>cat</code> on Linux).</p>
+<p>Also published: <code>fliperos-0.29.sha256</code> (the whole ISO and each part) and <code>fliperos-0.29-pkglist.txt</code> (package, version and architecture of what's in the image).</p>
 <p><code>--prerelease</code> marks it as a pre-release; <code>--to FOLDER</code> only prepares the files and the text (<code>notes.md</code>), without touching GitHub; <code>--notes VERSION</code> shows the version's text.</p>
 <h3 id="Build-and-tests-telegram-group">Telegram group</h3>
 <p>Each release is also posted in the group <a href="https://t.me/fliperos15khz">t.me/fliperos15khz</a>, with pictures and an explanation of how each new feature works. <code>CHANGELOG.md</code> is the technical list of the GitHub release; the group reads <code>docs/telegram/VERSION.md</code>.</p>
 <p>The file is a list of messages separated by a line with only <code>---</code>. In each one, a line made of <code>!</code>, <code>[]</code> and a path in parentheses, such as <code>(website/public/screenshots/gui/video.webp)</code>, puts a picture (the path starts at the repository root; an animated WebP or a GIF goes as an animation), and the rest is the text, with <code>**bold**</code>, <code>`code`</code>, <code>[links](https://...)</code> and <code>-</code> lists. With a picture, the text is its caption (up to 1024 characters; longer, it goes before the picture as a message); without one, it is a message of up to 4096.</p>
 <p>A picture never goes out stretched. A 15 kHz capture with more than twice as many dots per line as lines (640x240, 2560x240, or 240x640 turned on its side) is a 4:3 picture of wide dots, so the script posts it with the lines doubled at 4:3 (3:4 when vertical), and the dry run prints the size that will be posted.</p>
 <p>Every message is in Portuguese and English: its text has a part starting with a <code>🇧🇷</code> line and another starting with a <code>🇺🇸</code> line, and the script refuses the file without both. The network updates follow the same rule: next to <code>updates/notes/NNNN.md</code> (English, shown on the cabinet), <code>updates/notes/pt-BR/NNNN.md</code> has the same notes in Portuguese, and <code>tools/make-update.sh</code> refuses an update without it (unless <code>docs/telegram/update-NNNN.md</code> exists).</p>
-<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.28   # checks the file and the images, sends nothing (needs python3-pil)
+<pre><code class="language-sh">python3 tools/telegram-post.py --dry-run 0.29   # checks the file and the images, sends nothing (needs python3-pil)
 </code></pre>
 <p>That file is optional: without it, the group gets the version's section of <code>CHANGELOG.md</code> as it is (technical, no pictures), cut into messages of up to 4096 characters. The <strong>Release</strong> workflow checks the text with the dry run before it starts the build, and when the release is published it calls the <strong>Telegram</strong> workflow (<code>.github/workflows/telegram.yml</code>), which runs <code>tools/telegram-post.py</code>. To post again without rebuilding the ISO, run it by hand (<em>Actions &gt; Telegram &gt; Run workflow</em>, with the version; <em>dry run</em> only checks). With the version <code>all</code> it posts every version of the changelog, oldest first (<code>--backfill</code>), which is how the group gets the history. It needs the repository secret <code>TELEGRAM_BOT_TOKEN</code>, the token of a bot created in @BotFather and added to the group as an administrator; without it nothing is posted and the workflow only warns. The destination is the variable <code>TELEGRAM_CHAT_ID</code>, and <code>@fliperos15khz</code> when it is not set. A tag that is moved and redone posts again.</p>
 <p><strong>Custom game packages in the group.</strong> When someone sends a <code>GAME.fliperos-customgame.zip</code> to the group, a bot opens it and posts, in the <strong>Files</strong> topic, an album with the game's picture, logo and video, a message with all its data (video mode, category, year, developer, players, buttons, controls, controller key map, <code>.ppdb</code>, size) and its text, in Portuguese and English, and the file itself. A zip sent in the Files topic gets the data as a reply, without repeating the file; a file that is not a good package gets the list of problems back where it was sent. The translator's Cloudflare Worker (<code>tools/telegram-translate/worker.js</code>) only notices the zip and calls the <strong>Telegram custom game</strong> workflow (<code>.github/workflows/telegram-customgame.yml</code>, <code>repository_dispatch</code> <code>customgame-zip</code>), which runs <code>tools/telegram-customgame.py</code>. A package carries the whole game folder, so it is usually far over the 20 MB the Bot API hands out: with the secrets <code>TELEGRAM_API_ID</code> and <code>TELEGRAM_API_HASH</code> the bot reads it through MTProto (Telethon), fetching only the end of the zip and its few small files, never the game; without them the post goes out with the file and a note that the details could not be read. Setup (a GitHub token for the Worker, the secrets, the Files topic number) is in <code>tools/telegram-translate/README.md</code>. <code>python3 tools/telegram-customgame.py --zip GAME.fliperos-customgame.zip --out DIR</code> prints the post a zip would make and saves its pictures, without the network.</p>
@@ -37912,8 +37992,12 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <td>PortProton, for Windows games</td>
 </tr>
 <tr>
-<td><code>fliperos-downloader status\|start\|pause\|resume\|add\|remove</code></td>
-<td>The ROM/CHD torrent downloader (<a href="#Downloader">Downloader</a>)</td>
+<td><code>fliperos-downloader status\|start\|pause\|resume\|add\|remove\|fetch-sets</code></td>
+<td>The ROM/CHD torrent downloader (<a href="#Downloader">Downloader</a>); <code>fetch-sets</code> brings a few sets for a game</td>
+</tr>
+<tr>
+<td><code>fliperos-chihiro-prepare run\|inspect DISC</code></td>
+<td>Sega Chihiro: turns a disc into the netboot image xemu opens (<a href="#More-emulators-xemu-sega-chihiro">More emulators</a>)</td>
 </tr>
 <tr>
 <td><code>fliperos-bios check --wants FILE</code>, <code>index</code></td>

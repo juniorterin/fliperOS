@@ -2,7 +2,7 @@
   <a href="https://fliperos.juniorter.in"><img src="website/public/art/og-room.png" width="100%" alt="Pixel art de um gabinete de fliperama branco numa sala com luz roxa, um jogo de luta no CRT e o PC ao lado"></a>
 </p>
 
-<h1 align="center">FliperOS 0.28</h1>
+<h1 align="center">FliperOS 0.29</h1>
 
 <p align="center">
   <a href="https://donate.stripe.com/7sYbJ3cetcU17Cm5eM3VC00"><img alt="Doar com Stripe" src="https://img.shields.io/badge/doar-com%20Stripe-635BFF?style=for-the-badge&logo=stripe&logoColor=white&labelColor=282a36"></a>
@@ -48,7 +48,7 @@
 
 Ubuntu 24.04 (amd64) para gabinetes de fliperama com monitor CRT, no estilo do GroovyArcade: **kernel de 15 kHz**, Switchres, emuladores e frontends prontos para jogar e um menu de configuração (`fliperos-setup`) feito para a tela do tubo. Uma alternativa para PC ao GroovyArcade, Batocera, Recalbox, ReplayOS e RGB-Pi para CRTs de fliperama de 15 kHz.
 
-Em desenvolvimento: a 0.28 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)). No **[grupo do Telegram](https://t.me/fliperos15khz)** tem dúvidas, fotos de gabinetes e ajuda de outros usuários; cada release é postado lá, com fotos e a explicação de como as novidades funcionam.
+Em desenvolvimento: a 0.29 é testada no QEMU e num gabinete com CRT de 15 kHz. Documentação completa na **[wiki](https://github.com/juniorterin/fliperOS/wiki)** (em inglês). Site: **[fliperos.juniorter.in](https://fliperos.juniorter.in)** (código em [`website/`](website)). No **[grupo do Telegram](https://t.me/fliperos15khz)** tem dúvidas, fotos de gabinetes e ajuda de outros usuários; cada release é postado lá, com fotos e a explicação de como as novidades funcionam.
 
 <table>
   <tr>
@@ -134,8 +134,8 @@ Este guia vai do gabinete vazio até um jogo na tela. Cada passo diz o que vai a
 
 ### 2. Baixe a ISO
 
-1. Abra os [Releases](https://github.com/juniorterin/fliperOS/releases) e baixe o `fliperos-0.28.iso` da versão mais recente (o que mudou está no [CHANGELOG.md](CHANGELOG.md), em inglês).
-2. Se o release trouxer um SHA-256, confira: `sha256sum fliperos-0.28.iso` no Linux, `Get-FileHash fliperos-0.28.iso` no PowerShell do Windows.
+1. Abra os [Releases](https://github.com/juniorterin/fliperOS/releases) e baixe o `fliperos-0.29.iso` da versão mais recente (o que mudou está no [CHANGELOG.md](CHANGELOG.md), em inglês).
+2. Se o release trouxer um SHA-256, confira: `sha256sum fliperos-0.29.iso` no Linux, `Get-FileHash fliperos-0.29.iso` no PowerShell do Windows.
 
 ### 3. Grave o pendrive
 
@@ -146,7 +146,7 @@ A ISO tem de ser gravada **byte a byte**. Programas que refazem a estrutura de b
 - **Linux**: descubra o pendrive com `lsblk` (aqui `/dev/sdX`; o dispositivo errado apaga o disco errado) e rode:
 
   ```bash
-  sudo dd if=fliperos-0.28.iso of=/dev/sdX bs=4M status=progress conv=fsync
+  sudo dd if=fliperos-0.29.iso of=/dev/sdX bs=4M status=progress conv=fsync
   ```
 
 ### 4. Prepare a BIOS do gabinete
@@ -421,7 +421,7 @@ Sempre no Docker (o [`CLAUDE.md`](CLAUDE.md) explica por quê).
 
 ```powershell
 docker build -f Dockerfile.fliperos -t fliperos-builder .
-docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.28.iso
+docker run --rm --privileged --mount "type=bind,source=$PWD/output,target=/output" fliperos-builder bash /build/fliperos-mkiso.sh --output /output/fliperos-0.29.iso
 
 docker build -t fliperos-tests -f tests/Dockerfile tests
 docker run --rm -v "${PWD}:/w" -w /w fliperos-tests python3 tests/test_setup.py

@@ -22215,7 +22215,7 @@ class DocsTests(unittest.TestCase):
             linked = set(re.findall(re.escape(self.URL) + r'/(%s)' % self.PAGE, readme))
             self.assertLessEqual(self.top_pages(), linked)
             self.assertLessEqual(linked, self.pages())
-            for needed in ('dd if=fliperos-0.28.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
+            for needed in ('dd if=fliperos-0.29.iso', 'fliperos-mkiso.sh', 'tests/test_setup.py',
                            'tools/wiki-publish.sh', 'openbor/Paks', 'Video Setup'):
                 self.assertIn(needed, readme)
         # O passo a passo tem os mesmos passos numerados nas duas linguas.

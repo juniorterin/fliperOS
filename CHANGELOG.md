@@ -2,6 +2,37 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.29
+
+**Sega Chihiro with xemu, and updates 100 to 104**: the Sega Chihiro arcade board (Virtua Cop 3, House of the Dead 3, Ghost Squad, OutRun 2 SP, Crazy Taxi High Roller and others) runs in xemu, which installs itself the first time you open one of its games and prepares the game from its disc; the desktop got a Setup at 240p, a screen that scrolls with the controller pointer and a double click that installs a custom-game package; Dolphin and RAHasher are in their newest releases. This ISO gathers updates 100 to 104; cabinets already installed get everything from the updates.
+
+**System changes:**
+
+- **Sega Chihiro** (update 104): a system for `~/roms/chihiro` with the xemu emulator (the Chihiro build by Tovarichtch, an optional package that is not in the image). A game is its disc (a `.7z` from the TOSEC set, a `.cue`, a `.gdi` or a `.chd`): the first time you open it FliperOS installs the emulator, reads the disc and downloads only that game's key file from the MAME romset, using the link of the Downloader (the one you saved or the one the image ships), and builds the game image with a progress bar. It has its own system logo, video through Vulkan on AMD cards (OpenGL froze the GPU of a Radeon R7 240), sound through ALSA, the emulator's CPU and GPU speed-ups, the buttons of your panel or pad from Setup > Joysticks > Button mapping (coin, start, stick and b1 to b7, the same in every game), and in the gun games the GunCon 2 buttons and a shot off the screen no longer open the emulator's menu. Tried on a cabinet with Virtua Cop 3; the other games use the same code but were not tried.
+- **Frontend** (update 104): PLAY goes straight to the progress bar when the game still needs the emulator, a core, the unpacking of a Namco game or the conversion of a Chihiro disc, instead of turning the TV off and showing the bar afterwards
+- **Desktop** (updates 100 to 104): on a 31 kHz monitor the desktop always gets its 640x480 at 31.5 kHz (an EDID from a DisplayPort or HDMI to VGA converter made the X pick a mode the monitor refuses); the Setup opens at 240p on the tube; the screen scrolls with the controller pointer when a window is bigger than it; double-clicking a `GAME.fliperos-customgame.zip` installs the game, and the package has its own icon; custom games get an optional **Icon** and are listed once in the Games menu; the on-screen keyboard only comes up on a click
+- **Custom games** (updates 102 and 103): windows wider than 640 pixels (854x480, 720x576) are no longer cut off on the right, since the flicker filter restarts when the screen size changes; new **16:9 crop** for games that only run in a widescreen picture
+- **On-screen menu** (update 103): Video configuration and Controller configuration are separate pages; Controller configuration has GunCon 2 and Joystick to keyboard
+- **Boot splash** (update 104): on a 31 kHz monitor the text theme is drawn in the 640x480 that the tube shows, so the title and the bar are no longer cut off
+- **Midway 2D games** (update 101): they go back to GroovyMAME's own mode (400x254 at 54.7 Hz), undoing the forced 320x240p of update 65
+- **Odin** (update 104): cabinets that had the factory 320x240 line now open it at 640x480, since the emulator's window does not go below that
+
+**Package changes:**
+
+- `fliperos-dolphin` 2609b (the net play patch still applies) and `fliperos-rahasher` 1.8.5, both in the `packages` release
+- New optional package, published in the `packages` release and installed on demand, not in the ISO: `fliperos-xemu-chihiro` 0.8.134 (the `perf-experimental` branch of the Chihiro fork, pinned to a commit, with the ALSA audio driver added to its SDL3 by a patch). The other `.deb`s of the image are the ones of 0.28
+
+**fliperos-setup changes:**
+
+- `gui/fliperos-frontend` and `gui/feview.py`: the Sega Chihiro system (its logo, the progress bar of the game's preparation) and PLAY going straight to the bar
+- `screens/setup-menu.sh`, `lib/customgames.sh`, `lib/downloader.sh`, `lib/scraper.sh`, `lib/frontends.sh` and `lib/splash.sh`: the package installer window, the Downloader link used by the Chihiro key, the Chihiro system in the frontends and the 31 kHz splash size
+
+**Tool changes:**
+
+- `packaging/packages/fliperos-xemu-chihiro.sh` and `packaging/patches/xemu-chihiro/` (new): the recipe of the xemu package and its ALSA patch; `fliperos-dolphin.sh` and `fliperos-rahasher.sh` move to their newest releases (the RAHasher recipe now initialises only the submodules the tag has)
+- `config/fliperos-chihiro`, `config/fliperos-chihiro-input` and `config/fliperos-chihiro-prepare` (new): the wrapper that opens xemu, the one that writes the keys of each game and the one that prepares a game from its disc; `config/chihiro/` carries the netboot converter and the table of games
+- `config/fliperos-downloader` (`fetch-sets`) and `config/fliperos-syslogo` (extra logos): the key download and the system logo of the Chihiro
+
 ## 0.28
 
 **Emulators that install themselves, a Map controllers screen, and a new full screen**: HBGroovyMAME (HBMAME with Switchres), Odin (Sega Hikaru and Gaelco 3D) and the AnyBOR core (OpenBOR in RetroArch) are not in the image: each one downloads and installs itself the first time you open one of its games; Setup > Joysticks > Controllers / Arcade panel is now a menu with eight player slots set by holding a button and a live tester for every pad and panel; the frontend's full screen has a wheel of logos and groups the clones; and the on-screen menu captures a picture and a 30 s video of the game. Cabinets already installed get all of this from updates 93 to 99.
