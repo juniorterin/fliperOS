@@ -20,7 +20,9 @@ centenas de MB):
     TELEGRAM_API_HASH (de https://my.telegram.org) o robo entra como bot pelo
     MTProto (pip install telethon) e le so os pedacos que precisa: o fim do zip
     (a lista de arquivos) e os poucos arquivos pequenos do pacote (cfg, imagem,
-    video, texto), nunca a pasta do jogo (RangeFile);
+    video, texto), nunca a pasta do jogo (RangeFile). A sessao do bot fica guardada em
+    TELEGRAM_SESSION_FILE (o workflow a poe no cache) e o login tenta de novo com espera:
+    entrar como bot a cada pacote fazia o Telegram responder 500 (ImportBotAuthorization);
   - sem isso, o post sai assim mesmo, com o nome e o tamanho e o arquivo, e um
     aviso de que os detalhes nao deu para ler.
 O arquivo vai ao topico por file_id (o Telegram reenvia o que ja tem, sem limite
@@ -470,16 +472,30 @@ class TelethonSource:
     arquivo inteiro. Precisa do pacote telethon e de TELEGRAM_API_ID e
     TELEGRAM_API_HASH."""
 
-    def __init__(self, token, api_id, api_hash, chat, message_id, file_id='', file_size=0):
+    # Quanto esperar entre uma tentativa de entrar como bot e a seguinte (segundos). O Telegram responde 500
+    # ("internal issues") ao ImportBotAuthorization quando o mesmo bot entra muito, e as tentativas do Telethon
+    # (1 a 2 s entre elas) acabam antes de ele deixar; esperar mais resolve.
+    LOGIN_WAITS = (10, 20, 40, 60, 90)
+
+    def __init__(self, token, api_id, api_hash, chat, message_id, file_id='', file_size=0, session_file=''):
         import asyncio
         from telethon import TelegramClient
         from telethon.sessions import StringSession
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        self.client = TelegramClient(StringSession(), int(api_id), api_hash, loop=loop)
+        # A sessao da execucao anterior (o workflow a guarda no cache): com ela o bot nao precisa entrar de novo,
+        # que e o que o Telegram recusa quando as execucoes se repetem.
+        self.session_file = session_file
+        saved = ''
+        if session_file:
+            try:
+                saved = Path(session_file).read_text(encoding='utf-8').strip()
+            except OSError:
+                saved = ''
+        self.client = TelegramClient(StringSession(saved) if saved else StringSession(), int(api_id), api_hash, loop=loop)
         # O laco que o proprio cliente usa: e nele que o start() e o disconnect() rodam.
         self.loop = getattr(self.client, 'loop', None) or loop
-        self.run(self.client.start(bot_token=token))
+        self.login(token, bool(saved))
         # O arquivo da mensagem do grupo; um bot nem sempre consegue buscar uma mensagem por id (o teste real
         # voltou sem a mensagem), e entao o arquivo vem do file_id da Bot API, que e do mesmo bot.
         self.document, self.size, self.dc_id = None, 0, None
@@ -505,6 +521,30 @@ class TelethonSource:
                   % (message_id, type(message).__name__, dc))
         if self.document is None or not self.size:
             raise PostError('the message %s has no file the bot can read' % message_id)
+
+    def login(self, token, resumed):
+        """Entra como bot (ou retoma a sessao guardada), tentando de novo com espera quando o Telegram falha; a
+        sessao que funcionou fica guardada para a proxima execucao."""
+        waits = list(self.LOGIN_WAITS)
+        while True:
+            try:
+                self.run(self.client.start(bot_token=token))
+                break
+            except Exception as exc:    # RpcCallFailError, ValueError("Request was unsuccessful"), rede
+                if not waits:
+                    raise
+                wait = waits.pop(0)
+                print('the MTProto login failed (%s: %s); trying again in %d s' % (type(exc).__name__, exc, wait))
+                time.sleep(wait)
+        print('MTProto: %s' % ('session resumed' if resumed else 'logged in as the bot'))
+        if self.session_file:
+            try:
+                string = self.client.session.save()
+                if string:
+                    Path(self.session_file).parent.mkdir(parents=True, exist_ok=True)
+                    Path(self.session_file).write_text(string, encoding='utf-8')
+            except Exception as exc:    # sem a sessao guardada so a proxima execucao entra de novo
+                print('the MTProto session was not saved: %s' % exc)
 
     def run(self, value):
         """O resultado de uma chamada do Telethon. O start() e o disconnect() rodam o laco sozinhos quando ele
@@ -534,7 +574,7 @@ def telethon_source(env, chat, message_id, file_id='', file_size=0):
         return None
     try:
         return TelethonSource(env['TELEGRAM_BOT_TOKEN'], env['TELEGRAM_API_ID'], env['TELEGRAM_API_HASH'], chat, message_id,
-                              file_id, file_size)
+                              file_id, file_size, env.get('TELEGRAM_SESSION_FILE') or '')
     except ImportError:
         print('telethon is not installed: big packages cannot be read', file=sys.stderr)
         return None

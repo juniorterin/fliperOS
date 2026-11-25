@@ -21821,9 +21821,14 @@ class TelegramCustomGameTests(unittest.TestCase):
                 self.loop = loop
                 seen.update(api_id=api_id, api_hash=api_hash)
 
+            session = types.SimpleNamespace(save=lambda: 'SESSION-STRING')
+
             def start(self, bot_token=None):
                 self.loop.run_until_complete(asyncio.sleep(0))
                 seen['token'] = bot_token
+                seen['starts'] = seen.get('starts', 0) + 1
+                if seen.get('fail_starts', 0) >= seen['starts']:
+                    raise RuntimeError('Telegram is having internal issues')
                 return self                                  # o cliente, nao uma corrotina
 
             async def get_messages(self, chat, ids=None):
@@ -21844,7 +21849,8 @@ class TelegramCustomGameTests(unittest.TestCase):
         telethon = types.ModuleType('telethon')
         telethon.TelegramClient = Client
         sessions = types.ModuleType('telethon.sessions')
-        sessions.StringSession = type('StringSession', (), {})
+        sessions.StringSession = type('StringSession', (), {'__init__': lambda self, saved=None: seen.update(resumed=saved),
+                                                              'save': lambda self: 'SESSION-STRING'})
         telethon.types = types.ModuleType('telethon.types')
         telethon.types.InputDocumentFileLocation = lambda **kw: types.SimpleNamespace(**kw)
         Doc.size = len(data)
@@ -21852,10 +21858,36 @@ class TelegramCustomGameTests(unittest.TestCase):
         sys.modules.update({'telethon': telethon, 'telethon.sessions': sessions})
         env = {'TELEGRAM_BOT_TOKEN': '1:tok', 'TELEGRAM_API_ID': '123', 'TELEGRAM_API_HASH': 'abc'}
         small = self.bot.BOT_DOWNLOAD_MAX
+        waits, slept = self.bot.TelethonSource.LOGIN_WAITS, []
+        real_sleep = self.bot.time.sleep
         try:
             tg = self.Fake()
             result = self.bot.post_package(tg, self.payload(file_size=600 << 20), env, self.tool, out=lambda *_: None)
             first = dict(seen)
+            # O Telegram responde 500 ao login do bot (o que derrubou os pacotes grandes no grupo): o robo espera e tenta
+            # de novo, e guarda a sessao que funcionou; a execucao seguinte parte dela, sem entrar outra vez.
+            seen.clear()
+            seen['fail_starts'] = 2
+            self.bot.time.sleep = slept.append
+            session = Path(tempfile.mkdtemp()) / 'cache' / 'session'
+            tg_retry = self.Fake()
+            result_retry = self.bot.post_package(tg_retry, self.payload(file_size=600 << 20),
+                                                 dict(env, TELEGRAM_SESSION_FILE=str(session)), self.tool, out=lambda *_: None)
+            retried = dict(seen)
+            saved_session = session.read_text(encoding='utf-8')
+            seen.clear()
+            self.bot.post_package(self.Fake(), self.payload(file_size=600 << 20), dict(env, TELEGRAM_SESSION_FILE=str(session)),
+                                  self.tool, out=lambda *_: None)
+            resumed = dict(seen)
+            # Sem mais tentativas, o erro sobe (e o robo manda o arquivo com o aviso).
+            seen.clear()
+            seen['fail_starts'] = 99
+            slept.clear()
+            with self.assertRaises(RuntimeError):
+                self.bot.TelethonSource('1:tok', '123', 'abc', '@x', 1)
+            gave_up = list(slept)
+            seen.clear()
+            self.bot.time.sleep = real_sleep
             # Um bot nem sempre acha a mensagem por id (o teste real): o arquivo vem do file_id, e o tamanho, do pedido.
             seen.clear()
             seen['hide_message'] = True
@@ -21865,11 +21897,17 @@ class TelegramCustomGameTests(unittest.TestCase):
                                             out=lambda *_: None)
         finally:
             self.bot.BOT_DOWNLOAD_MAX = small
+            self.bot.time.sleep = real_sleep
             for key, module in saved.items():
                 if module is None:
                     sys.modules.pop(key, None)
                 else:
                     sys.modules[key] = module
+        self.assertEqual(result_retry, 'posted: Street Fighter 4')
+        self.assertEqual((retried['starts'], saved_session), (3, 'SESSION-STRING'))
+        self.assertEqual(resumed['resumed'], 'SESSION-STRING')
+        self.assertEqual(gave_up, list(waits))
+        self.assertEqual([c[0] for c in tg_retry.calls], ['album', 'message', 'document', 'message'])
         self.assertEqual(result, 'posted: Street Fighter 4')
         self.assertEqual((first['token'], first['api_id'], first['api_hash'], first['chat'], first['ids']), ('1:tok', 123, 'abc', '@fliperos15khz', 55))
         self.assertTrue(first['closed'])

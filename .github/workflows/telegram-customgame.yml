@@ -7,7 +7,8 @@
 # Precisa do secret TELEGRAM_BOT_TOKEN (o mesmo bot do grupo). Para ler pacotes
 # acima de 20 MB (quase todos: levam a pasta do jogo), os secrets TELEGRAM_API_ID e
 # TELEGRAM_API_HASH (https://my.telegram.org); sem eles o post sai com o arquivo e
-# um aviso de que os detalhes nao deu para ler. O destino e a variavel
+# um aviso de que os detalhes nao deu para ler. A sessao do bot no MTProto fica no cache do Actions
+# (TELEGRAM_SESSION_FILE) e o login tenta de novo com espera: o Telegram recusa entrar sempre de novo. O destino e a variavel
 # TELEGRAM_CHAT_ID (@fliperos15khz sem ela) e o topico, TELEGRAM_FILES_TOPIC (578).
 # Rodar a mao (Actions > Run workflow) com o JSON do pedido serve para repostar.
 name: Telegram custom game
@@ -53,8 +54,19 @@ jobs:
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
 
+      # A sessao do bot no MTProto fica no cache entre uma execucao e outra: entrar como bot a cada pacote
+      # fazia o Telegram responder 500 ao ImportBotAuthorization (pacotes de 20 MB para cima ficavam sem
+      # os detalhes). Cada execucao guarda a sua e a seguinte parte dela.
+      - name: Sessao do MTProto
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/telegram-session
+          key: telegram-session-${{ github.run_id }}
+          restore-keys: telegram-session-
+
       - name: Postar o pacote
         env:
+          TELEGRAM_SESSION_FILE: ${{ runner.temp }}/telegram-session/session
           # O pedido vai por variavel de ambiente, nunca dentro do script: o nome do arquivo e de quem mandou nao viram comando.
           PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || inputs.payload }}
           DRY_RUN: ${{ inputs.dry_run }}
