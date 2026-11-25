@@ -947,7 +947,7 @@ const ptBR: Messages = {
     kicker: 'Requisitos',
     title: 'O que o seu PC precisa.',
     intro:
-      'O FliperOS roda num PC comum de 64 bits. O mínimo joga até o PlayStation 1 e a maior parte dos arcades; o ideal joga tudo o que vem na imagem, PS2, Model 3 e Dreamcast incluídos, no modo Low latency.',
+      'O FliperOS roda num PC comum de 64 bits. O mínimo joga até o PlayStation 1 e a maior parte dos arcades; o ideal joga tudo o que vem na imagem, PS2, Model 3 e Dreamcast incluídos, no modo Low latency. O Sega Chihiro, no xemu, também entra no ideal e é pesado para o processador e para a placa de vídeo.',
     tiers: [
       {
         id: 'minimum',
@@ -968,12 +968,12 @@ const ptBR: Messages = {
         id: 'ideal',
         title: 'Ideal',
         badge: 'Tudo, em Low latency',
-        text: 'Todos os emuladores da imagem, PS2, Model 3 e Dreamcast incluídos, com o modo Low latency.',
+        text: 'Todos os emuladores da imagem, PS2, Model 3 e Dreamcast incluídos, com o modo Low latency, e o Sega Chihiro no xemu, que se instala depois.',
         rows: [
-          { id: 'cpu', label: 'CPU', value: '4 núcleos físicos com AVX2, PassMark de uma thread 2000 ou mais (Core i7-7700, Ryzen 5 3600 ou mais novo)' },
-          { id: 'memory', label: 'Memória', value: '16 GB de RAM' },
+          { id: 'cpu', label: 'CPU', value: '4 núcleos físicos com AVX2, PassMark de uma thread 2000 ou mais (Core i7-7700, Ryzen 5 3600 ou mais novo). O Sega Chihiro depende de um núcleo rápido: num Core i7 870 o Virtua Cop 3 abre, mas não chega à velocidade cheia.' },
+          { id: 'memory', label: 'Memória', value: '16 GB de RAM (o Sega Chihiro pede uns 3 GB livres só para preparar cada jogo)' },
           { id: 'disk', label: 'Disco', value: 'SSD' },
-          { id: 'gpu', label: 'Vídeo', value: 'AMD GCN 1.0 ou 1.1 com VGA ou DVI-I (HD 7000, R7/R9 200 e 300, como a R7 240): radeon ou amdgpu, com Vulkan' },
+          { id: 'gpu', label: 'Vídeo', value: 'AMD GCN 1.0 ou 1.1 com VGA ou DVI-I (HD 7000, R7/R9 200 e 300, como a R7 240): radeon ou amdgpu, com Vulkan. O Sega Chihiro pede OpenGL 4.0 ou Vulkan e roda em Vulkan no amdgpu: na R7 240 o OpenGL trava a placa, e uma GPU só com OpenGL 2.1 (Intel Ironlake) não abre o xemu.' },
           { id: 'monitor', label: 'Monitor', value: 'Um CRT de arcade de 15 kHz; dois ou três para os jogos de várias telas' },
           { id: 'boot', label: 'Boot', value: 'BIOS ou UEFI com o Secure Boot desligado' },
           { id: 'network', label: 'Rede', value: 'Cabo: a tela ao vivo com som no painel web' },
@@ -982,8 +982,8 @@ const ptBR: Messages = {
     ],
     testedLabel: 'Onde é testado:',
     tested:
-      'O FliperOS é feito num gabinete com Intel Core i7 870, 6 GB de RAM, uma Radeon R7 240 na VGA a 15 kHz e um SSD, uma máquina mais antiga que a ideal.',
-    note: 'No CRT a placa de vídeo pesa pouco: em 240 linhas até a R7 240 passa do que o PCSX2 pede. Placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
+      'O FliperOS é feito num gabinete com Intel Core i7 870, 6 GB de RAM, uma Radeon R7 240 na VGA a 15 kHz e um SSD, uma máquina mais antiga que a ideal. O Sega Chihiro abre nela, em Vulkan, mas ainda não na velocidade cheia.',
+    note: 'No CRT a placa de vídeo pesa pouco: em 240 linhas até a R7 240 passa do que o PCSX2 pede (o Sega Chihiro roda em 640x480 e pede mais). Placas sem saída analógica precisam de um conversor DisplayPort ou HDMI para VGA.',
     checkPath: 'Setup > System > Latency > Check this computer',
     checkText: 'compara o seu PC com estes números.',
     cta: 'Hardware recomendado, na documentação',
