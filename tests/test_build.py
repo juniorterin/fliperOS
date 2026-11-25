@@ -14488,6 +14488,18 @@ class FightcadeTests(unittest.TestCase):
                                capture_output=True, timeout=120)
                 self.assertIn('fightcade-snes9x    %s\n' % new,
                               (root / 'etc/fliperos/emulator-modes.conf').read_text())
+            # O Odin de fabrica antigo (320x240 no 15 kHz: a janela dele tem minimo
+            # de 640x480 e so um quarto da imagem aparecia) passa a 640x480; um
+            # mudado pela pessoa fica.
+            for old, new in (('320x240@60      640x480@60', '640x480@60      640x480@60'),
+                             ('320x240@60      320x240@60', '320x240@60      320x240@60')):
+                (root / 'etc/fliperos/emulator-modes.conf').write_text(
+                    'fliperos-odin       %s\nodin                %s\n' % (old, old))
+                subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                               capture_output=True, timeout=120)
+                table = (root / 'etc/fliperos/emulator-modes.conf').read_text()
+                self.assertIn('fliperos-odin       %s\n' % new, table)
+                self.assertIn('odin                %s\n' % new, table)
             # O programa em si nao vem na imagem.
             self.assertFalse((root / 'opt/fliperos/fightcade').exists())
             self.assertTrue((root / 'usr/local/share/applications/fliperos-fightcade.desktop').is_file())

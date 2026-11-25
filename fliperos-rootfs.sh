@@ -128,6 +128,11 @@ sed -i -E 's/^(supermodel|fliperos-model2|fliperos-model3)( +)496x384@57\.524  4
 sed -i -E -e 's/^fightcade-snes9x    320x240@60      640x480@60$/fightcade-snes9x    256x224@60.0988 640x480@60/' \
   -e 's/^fightcade           640x480@60      640x480@60$/fightcade           512x448@60      640x480@60/' \
   "$root/etc/fliperos/emulator-modes.conf"
+# O Odin (Sega Hikaru, Gaelco 3D) abria em 320x240 no 15 kHz, mas a janela dele
+# tem minimo de 640x480: so aparecia o canto de cima, a esquerda, da imagem (um
+# quarto). Agora 640x480 (entrelacado no tubo). So muda a linha de fabrica.
+sed -i -E 's/^(fliperos-odin|odin)( +)320x240@60      640x480@60$/\1\2640x480@60      640x480@60/' \
+  "$root/etc/fliperos/emulator-modes.conf"
 # Uma tabela de antes de um programa (o Fightcade, o SM2-Emu, o DuckStation)
 # ganha a linha dele, a do config/: sem ela o fliperos-x11-run o abriria em
 # 320x240. A linha que ja existe, mudada pela pessoa ou nao, fica.
