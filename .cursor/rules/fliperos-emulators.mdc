@@ -61,8 +61,17 @@ alwaysApply: false
   de um xemu do Xbox). Nome do emulador no `fliperos-emulators`: `xemu-chihiro` (= o do pacote).
 - Comando `config/fliperos-chihiro` (vem com o sistema; o frontend o abre pelo `fliperos-x11-run`): escreve o `xemu.toml`
   em `~/.local/share/xemu-chihiro` (jogos, BIOS e states nas pastas do FliperOS a cada abertura; tela cheia, sem barra de
-  menu, 4:3 so na primeira) e abre `-config_path ... -full-screen -dvd_path JOGO`. O jogo e uma imagem de netboot `.bin`
-  (ferramenta Tovarichtch/chihiro-netboot), nao um zip do MAME. Modo no CRT: 640x480@60 (entrelacado a 15 kHz).
+  menu, 4:3 so na primeira) e abre `-config_path ... -full-screen -dvd_path IMAGEM`. O xemu so abre a imagem de netboot
+  `.bin` (FATX); o jogo da pasta pode ser o DISCO (.7z do TOSEC, .cue, .gdi, .chd): `config/fliperos-chihiro-prepare`
+  (`/opt/fliperos/bin`) o converte na primeira abertura para `.netboot/NOME.bin` ao lado dele. Modo no CRT: 640x480@60
+  (entrelacado a 15 kHz).
+- Preparo do disco: extrai o .7z, le o numero de produto do cabecalho do disco (GDX-0003B, como o IP.BIN do Dreamcast), acha
+  o set do MAME na tabela `config/chihiro/sets.tsv` (gerada do chihiro.cpp do MAME 0.289) e a chave dele (`.data`/`.pic`
+  dentro do .zip: ~/roms/mame, ~/bios/mame, ~/bios/chihiro, ao lado do jogo; senao `fliperos-downloader fetch-sets`, que
+  usa SO o link do romset que a pessoa salvou e um Transmission proprio, sem tocar no estado). Converte com o
+  `config/chihiro/chihiro-netboot.py` (Tovarichtch, MIT, so os fins de linha mudaram) trocando `load_keys_from_zip` para
+  oferecer todas as chaves. Pico de ~2,2x a trilha de RAM: confere a MemAvailable antes. O frontend mostra a barra
+  (`missing_chihiro_image`/`chihiro_start`, `fliperos-chihiro --prepare`, motivo na 1a palavra: key, network, space, memory).
 - No modo Chihiro o fork NAO usa o MCPX nem o Cerbios: so `chihiro_xbox_bios.bin` (SHA1 b700b004...) e, ao lado dele,
   `ic10_g24lc64.bin`, `ic11_24lc024.bin`, `pc20_g24lc64.bin`, `fpr21042_m29w160et.bin` (e o `ver1305.bin` da placa de
   rede, opcional). O Download BIOS pede os seis pela pasta `chihiro` (`bios_standalone` + `bios_standalone_extra`, o

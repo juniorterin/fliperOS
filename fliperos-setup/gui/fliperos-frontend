@@ -107,6 +107,8 @@ BUTTONS_TOOL = os.environ.get("FLIPEROS_BUTTONS_TOOL", "/opt/fliperos/bin/fliper
 # O core do RetroArch que falta para o jogo, baixado antes de abrir (config/fliperos-core).
 CORE_TOOL = os.environ.get("FLIPEROS_CORE_TOOL", "/opt/fliperos/bin/fliperos-core")
 EMULATORS_TOOL = os.environ.get("FLIPEROS_EMULATORS_TOOL", "/opt/fliperos/bin/fliperos-emulators")
+# A Sega Chihiro: o disco do jogo vira a imagem de netboot que o xemu abre (config/fliperos-chihiro).
+CHIHIRO_TOOL = os.environ.get("FLIPEROS_CHIHIRO_TOOL", "/usr/local/bin/fliperos-chihiro")
 # O marquee (Pixelcade, ZeDMD): o logotipo do sistema ao trocar de romlist.
 PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
 # O protetor de tela do marquee: IDLE_SECONDS sem apertar nenhum botao e o ZeDMD
@@ -263,6 +265,36 @@ def missing_emulator(argv, installed=None):
             except (OSError, subprocess.SubprocessError):
                 return True      # sem como saber: tenta abrir
     return None if installed(name) else name
+
+
+def missing_chihiro_image(argv, needed=None):
+    """O disco (.7z, .cue, .gdi, .chd) de um jogo da Sega Chihiro que ainda nao virou a imagem
+    de netboot que o xemu abre; senao None. needed(caminho): o fliperos-chihiro --prepare-needed."""
+    if game_program(argv) not in ("fliperos-chihiro", "xemu-chihiro"):
+        return None
+    words = argv[1:]
+    while words and words[0] in ("--mode", "--app", "--wine"):
+        words = words[1:] if words[0] == "--wine" else words[2:]
+    args = [w for w in words[1:] if not w.startswith("-")]
+    if not args:
+        return None
+    path = args[-1]
+    if needed is None:
+        def needed(p):
+            try:
+                return subprocess.run([CHIHIRO_TOOL, "--prepare-needed", p], stdin=subprocess.DEVNULL,
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      timeout=10).returncode == 0
+            except (OSError, subprocess.SubprocessError):
+                return False     # sem como saber: tenta abrir
+    return path if needed(path) else None
+
+
+def chihiro_failure(error):
+    """O aviso de quando o preparo do disco falha: a primeira palavra do motivo (fliperos-chihiro-prepare)."""
+    word = (error or "").split(" ", 1)[0]
+    return {"key": "GAME KEY (MAME SET) NOT FOUND", "network": "NO NETWORK FOR THE GAME KEY",
+            "space": "NOT ENOUGH SPACE", "memory": "NOT ENOUGH MEMORY"}.get(word, "COULD NOT PREPARE THE GAME")
 
 
 def tree(pid):
@@ -2498,6 +2530,15 @@ class Frontend:
         self.fetch_start(g, argv, "emulator", "INSTALLING", name, cmd,
                          lambda: missing_emulator(argv) is None, media)
 
+    def chihiro_start(self, g, argv, disc, media=False):
+        """O jogo e o disco de uma Sega Chihiro, e o xemu so abre a imagem de netboot: o preparo
+        (fliperos-chihiro --prepare: tira o disco do .7z, acha ou busca a chave do jogo e converte,
+        so na primeira vez) roda com a barra no centro, como o emulador; B cancela. Depois o
+        jogo abre."""
+        self.fetch_start(g, argv, "chihiro", "PREPARING THE GAME", os.path.basename(disc),
+                         [CHIHIRO_TOOL, "--prepare", disc, "--progress"],
+                         lambda: missing_chihiro_image(argv) is None, media)
+
     def fetch_start(self, g, argv, kind, title, name, cmd, ready, media=False, env=None):
         """Um comando com os eventos @step/@fail na barra do centro; B cancela.
         ready(): o que o comando devia trazer esta aqui."""
@@ -2548,6 +2589,19 @@ class Frontend:
             return
         result, error, g = self.ov["result"], self.ov.get("error", ""), self.ov["game"]
         self.overlay = None
+        if self.ov.get("kind") == "chihiro":
+            back, argv = self.ov.get("back"), self.ov["argv"]
+            if back:
+                self.overlay, self.ov = back
+            if result is True and back:
+                self.launch(argv, media=True)
+            elif result is True:
+                self.launch(argv, g)
+            elif result == "cancel":
+                self.say("PREPARING CANCELLED", 3)
+            else:
+                self.say(chihiro_failure(error), 4)
+            return
         if self.ov.get("kind") in ("core", "emulator"):
             back, argv = self.ov.get("back"), self.ov["argv"]
             core = self.ov.get("kind") == "core"
@@ -3097,6 +3151,10 @@ class Frontend:
         emulator = missing_emulator(argv)
         if emulator:
             self.emulator_start(g, argv, emulator, media)
+            return
+        disc = missing_chihiro_image(argv)
+        if disc:
+            self.chihiro_start(g, argv, disc, media)
             return
         self.remember()
         pg = self.pg

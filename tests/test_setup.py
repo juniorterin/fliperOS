@@ -11561,7 +11561,7 @@ class RomCleanerTests(Base):
         # A pasta chihiro (o pacote opcional fliperos-xemu-chihiro, baixado quando chega o primeiro jogo): um
         # sistema de arcade, com o .bin de netboot como jogo e o nome de logo de Sega Chihiro.
         self.assertEqual(self.env.out("scraper_platform chihiro; scraper_attract_emulator chihiro").splitlines(),
-                         ["arcade", 'Sega Chihiro|/opt/fliperos/bin/fliperos-x11-run|fliperos-chihiro "[romfilename]"|.bin'])
+                         ["arcade", 'Sega Chihiro|/opt/fliperos/bin/fliperos-x11-run|fliperos-chihiro "[romfilename]"|.bin;.7z;.cue;.gdi;.chd'])
         self.assertIn('chihiro) systems="sega chihiro|chihiro|arcade" ;;',
                       (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
 

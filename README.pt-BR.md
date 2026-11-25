@@ -258,7 +258,7 @@ Use só jogos que você tem direito de usar (cópias dos seus originais, ou os j
 | `retroarch/<core>` | Consoles e computadores; o `_info.txt` de cada pasta lista as extensões | RetroArch |
 | `hbmame` | Hacks e homebrews do HBMAME (`.zip`), com os clones | HBGroovyMAME |
 | `odin` | Sets de Sega Hikaru e Gaelco 3D | Odin |
-| `chihiro` | Imagens de netboot da Sega Chihiro (`.bin`) | xemu |
+| `chihiro` | Sega Chihiro: o disco do jogo (`.7z`, `.cue`, `.gdi`, `.chd`), convertido na primeira abertura, ou um `.bin` de netboot | xemu |
 | `namco2x6` | Namco System 246 e 256 | PCSX2x6 |
 | `openbor/Paks` | Jogos do OpenBOR (`.pak`); `openbor` é um atalho para `retroarch/anybor` | Core AnyBOR no RetroArch |
 

@@ -150,6 +150,13 @@ install -Dm755 "$src/config/fliperos-odin" "$root/usr/local/bin/fliperos-odin"
 # Sega Chihiro (o xemu do Tovarichtch, pacote opcional fliperos-xemu-chihiro): o
 # comando vem com o sistema, o programa so quando a pessoa o instala.
 install -Dm755 "$src/config/fliperos-chihiro" "$root/usr/local/bin/fliperos-chihiro"
+# O preparo do disco (o .7z do TOSEC, .cue, .gdi, .chd viram a imagem de netboot que o xemu abre na
+# primeira abertura) e o que ele usa: o chihiro-netboot do Tovarichtch (MIT) e a tabela dos sets
+# da Chihiro do MAME. A chave de cada jogo vem do romset do MAME (fliperos-downloader fetch-sets).
+install -Dm755 "$src/config/fliperos-chihiro-prepare" "$root/opt/fliperos/bin/fliperos-chihiro-prepare"
+rm -rf "$root/usr/local/share/fliperos/chihiro"
+install -d "$root/usr/local/share/fliperos/chihiro"
+install -m644 "$src"/config/chihiro/* "$root/usr/local/share/fliperos/chihiro/"
 # A lista dos jogos do menu do desktop e a mudanca das pastas do SM2-Emu.
 install -Dm755 "$src/config/fliperos-sm2emu" "$root/usr/local/bin/fliperos-sm2emu"
 # Os patches que o SM2-Emu aplicava no fonte compilado no gabinete: agora vem

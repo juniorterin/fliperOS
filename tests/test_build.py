@@ -3184,6 +3184,75 @@ class OdinTests(unittest.TestCase):
                 self.assertTrue((tmp / folder).is_dir(), folder)
 
 
+# O chihiro-netboot de mentira: as mesmas duas funcoes que o fliperos-chihiro-prepare usa do de verdade.
+CHIHIRO_FAKE_TOOL = '''
+import os
+
+
+def load_keys_from_zip(path):
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+    return [(b"12345678", "LOADER", os.path.basename(path))]
+
+
+def convert_game(name, zip_path, disc, output_dir="output", list_mode=False):
+    print("[1/4] Reading security key...")
+    print("[2/4] Extracting disc: x")
+    print("[3/4] Finding game data on disc...")
+    print("[4/4] Decrypting...")
+    os.makedirs(output_dir, exist_ok=True)
+    if os.environ.get("FAKE_NETBOOT_LOG"):
+        with open(os.environ["FAKE_NETBOOT_LOG"], "a") as f:
+            f.write("%s|%s|%s\\n" % (name, os.path.basename(zip_path), os.path.basename(disc)))
+    if os.environ.get("FAKE_NETBOOT_FAIL"):
+        print("  ERROR: No matching key/loader found on disc.")
+        return None
+    out = os.path.join(output_dir, name + ".bin")
+    with open(out, "wb") as f:
+        f.write(b"FATX" + b"\\0" * (2 << 20))
+    return out
+'''
+
+
+def chihiro_disc_header(product='GDX-0003B', version='V3.000', title='VIRTUA COP 3'):
+    """O primeiro setor de um disco da Chihiro (modo 1, 2352 bytes): o cabecalho como o IP.BIN do Dreamcast."""
+    head = (b'SEGA SEGAKATANA ' + b'SEGA ENTERPRISES' + b'E60D GD-ROM1/1  ' + b'J       ' + b'0000000 '
+            + product.ljust(10).encode() + version.ljust(6).encode() + b'20030521        ')
+    data = bytearray(2048)
+    data[:len(head)] = head
+    data[0x80:0x80 + len(title)] = title.encode()
+    sector = bytearray(2352)
+    sector[:12] = bytes([0] + [255] * 10 + [0])
+    sector[15] = 1
+    sector[16:16 + 2048] = data
+    return bytes(sector) + bytes(2352 * 19)
+
+
+def chihiro_make_disc(folder, name='game', **header):
+    """Um disco em GDI de mentira: a trilha 1 com o cabecalho, a 3 com alguns setores."""
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'track01.bin').write_bytes(chihiro_disc_header(**header))
+    (folder / 'track03.bin').write_bytes(bytes(2352 * 8))
+    (folder / (name + '.gdi')).write_text('3\n1 0 4 2352 track01.bin 0\n2 600 0 2352 track02.raw 0\n'
+                                          '3 45000 4 2352 track03.bin 0\n')
+    return folder / (name + '.gdi')
+
+
+def chihiro_prepare_env(tmp, **extra):
+    """O ambiente do fliperos-chihiro-prepare em TMP: a ferramenta de mentira, a tabela de verdade e as pastas."""
+    tmp = Path(tmp)
+    (tmp / 'tools').mkdir(exist_ok=True)
+    (tmp / 'tools/fake-netboot.py').write_text(CHIHIRO_FAKE_TOOL)
+    (tmp / 'keys').mkdir(exist_ok=True)
+    env = dict(os.environ, HOME=str(tmp / 'home'), FLIPEROS_CHIHIRO_NETBOOT=str(tmp / 'tools/fake-netboot.py'),
+               FLIPEROS_CHIHIRO_SETS=str(ROOT / 'config/chihiro/sets.tsv'), FLIPEROS_CHIHIRO_KEYDIRS=str(tmp / 'keys'),
+               FLIPEROS_CHIHIRO_SETS_DIR=str(tmp / 'keys'), FLIPEROS_CHIHIRO_BIOS=str(tmp / 'home/bios/chihiro'),
+               FLIPEROS_CHIHIRO_MEMCHECK='0', FAKE_NETBOOT_LOG=str(tmp / 'netboot.log'),
+               FLIPEROS_DOWNLOADER=str(tmp / 'no-downloader'))
+    env.update(extra)
+    return env
+
+
 class ChihiroTests(unittest.TestCase):
     """Sega Chihiro (o xemu do Tovarichtch): um pacote opcional que se instala ao abrir o primeiro jogo da pasta
     chihiro. O comando e o config/fliperos-chihiro, que vem com o sistema; o programa vem com o pacote."""
@@ -3195,10 +3264,14 @@ class ChihiroTests(unittest.TestCase):
         fake = tmp / 'bin/xemu-chihiro'
         fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
         fake.chmod(0o755)
+        prepare = tmp / 'bin/fliperos-chihiro-prepare'
+        shutil.copy(ROOT / 'config/fliperos-chihiro-prepare', prepare)
+        prepare.chmod(0o755)
         if bios:
             (tmp / 'home/bios/chihiro/chihiro_xbox_bios.bin').write_text('x')
         env = dict(os.environ, HOME=str(tmp / 'home'), XDG_DATA_HOME=str(tmp / 'data'),
                    FLIPEROS_CHIHIRO_BIN=str(fake if installed else tmp / 'bin/missing'),
+                   FLIPEROS_CHIHIRO_PREPARE=str(prepare),
                    FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'))
         env.update(env_extra or {})
         return subprocess.run(['bash', str(ROOT / 'config/fliperos-chihiro'), *args], env=env, capture_output=True,
@@ -3208,7 +3281,7 @@ class ChihiroTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'home/roms/chihiro').mkdir(parents=True)
-            (tmp / 'home/roms/chihiro/ghostsq.bin').write_text('x')
+            (tmp / 'home/roms/chihiro/ghostsq.bin').write_bytes(b'FATX')
             run = self.run_wrapper(tmp, 'ghostsq')
             self.assertEqual(run.returncode, 0, run.stderr)
             home = tmp / 'home'
@@ -3245,7 +3318,7 @@ class ChihiroTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             (tmp / 'elsewhere').mkdir()
-            (tmp / 'elsewhere/vc3.bin').write_text('x')
+            (tmp / 'elsewhere/vc3.bin').write_bytes(b'FATX')
             run = self.run_wrapper(tmp, str(tmp / 'elsewhere/vc3.bin'))
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertIn('-dvd_path\n%s\n' % (tmp / 'elsewhere/vc3.bin'), run.stdout)
@@ -3288,6 +3361,47 @@ class ChihiroTests(unittest.TestCase):
             self.assertEqual(run.returncode, 1)
             self.assertIn('Setup > Games > Emulators & Games', run.stderr)
 
+    def test_a_disc_is_converted_before_the_game_opens_and_only_once(self):
+        # O jogo da pasta e o disco (.gdi, .cue, .7z, .chd): o xemu so abre a imagem de netboot. O comando
+        # converte (a chave esta no .zip do MAME de uma das pastas) e abre a imagem de .netboot/.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            disc = chihiro_make_disc(tmp / 'home/roms/chihiro/vc3', 'Virtua Cop 3 v3.000')
+            env = chihiro_prepare_env(tmp, FLIPEROS_CHIHIRO_KEYDIRS=str(tmp / 'keys'))
+            (tmp / 'keys/vcop3.zip').write_bytes(b'PK')
+            run = self.run_wrapper(tmp, '--prepare-needed', str(disc), env_extra=env)
+            self.assertEqual(run.returncode, 0, run.stderr)          # falta converter
+            run = self.run_wrapper(tmp, str(disc), env_extra=env)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            image = disc.parent / '.netboot/Virtua Cop 3 v3.000.bin'
+            self.assertTrue(image.is_file())
+            self.assertIn('-dvd_path\n%s\n' % image, run.stdout)
+            self.assertEqual((tmp / 'netboot.log').read_text().strip(), 'Virtua Cop 3 v3.000|vcop3.zip|disc.cue')
+            # Agora esta pronto: o frontend nao mostra a barra e uma segunda abertura nao converte de novo.
+            run = self.run_wrapper(tmp, '--prepare-needed', str(disc), env_extra=env)
+            self.assertEqual(run.returncode, 1)
+            self.run_wrapper(tmp, str(disc), env_extra=env)
+            self.assertEqual(len((tmp / 'netboot.log').read_text().splitlines()), 1)
+            # So o nome do jogo (sem a extensao) acha o disco da pasta dos jogos.
+            run = self.run_wrapper(tmp, 'Virtua Cop 3 v3.000', env_extra=dict(env, FLIPEROS_CHIHIRO_DIR=str(disc.parent)))
+            self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_a_disc_that_cannot_be_converted_does_not_open_the_emulator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            disc = chihiro_make_disc(tmp / 'home/roms/chihiro/vc3')
+            run = self.run_wrapper(tmp, str(disc), env_extra=chihiro_prepare_env(tmp))     # sem a chave
+            self.assertEqual(run.returncode, 1)
+            self.assertNotIn('-dvd_path', run.stdout)
+            self.assertIn('game key', run.stderr)
+            self.assertFalse(list((disc.parent / '.netboot').glob('*.bin')))
+            # Um .bin que nao e imagem de netboot (uma trilha de disco) tambem nao abre.
+            track = tmp / 'home/roms/chihiro/track01.bin'
+            track.write_bytes(b'\0' * 4096)
+            run = self.run_wrapper(tmp, str(track), env_extra=chihiro_prepare_env(tmp))
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('not a Sega Chihiro disc or netboot image', run.stderr)
+
     def test_the_installer_knows_it_as_a_package(self):
         label = 'xemu (Sega Chihiro arcades)'
         with tempfile.TemporaryDirectory() as tmp:
@@ -3328,6 +3442,12 @@ class ChihiroTests(unittest.TestCase):
         self.assertIn('emulator-versions.d/xemu-chihiro', recipe)
         # O comando vem com o sistema; o programa, so com o pacote.
         self.assertIn('install -Dm755 "$src/config/fliperos-chihiro" "$root/usr/local/bin/fliperos-chihiro"', ROOTFS)
+        # O preparo do disco, a ferramenta de conversao e a tabela dos sets tambem vem com o sistema (e com os updates).
+        self.assertIn('install -Dm755 "$src/config/fliperos-chihiro-prepare" "$root/opt/fliperos/bin/fliperos-chihiro-prepare"',
+                      ROOTFS)
+        self.assertIn('install -m644 "$src"/config/chihiro/* "$root/usr/local/share/fliperos/chihiro/"', ROOTFS)
+        for name in ('chihiro-netboot.py', 'sets.tsv', 'LICENSE-chihiro-netboot'):
+            self.assertTrue((ROOT / 'config/chihiro' / name).is_file(), name)
         desktop = (ROOT / 'config/applications/fliperos-chihiro.desktop').read_text()
         self.assertIn('TryExec=/usr/local/bin/xemu-chihiro', desktop)
         self.assertIn('Exec=/opt/fliperos/bin/fliperos-launch chihiro', desktop)
@@ -3354,6 +3474,181 @@ class ChihiroTests(unittest.TestCase):
             self.assertIn('xemu is downloaded', (tmp / 'roms/chihiro/_info.txt').read_text())
             for folder in ('bios/chihiro', 'save/chihiro', 'media/snap/chihiro', 'media/logo/chihiro'):
                 self.assertTrue((tmp / folder).is_dir(), folder)
+
+
+class ChihiroPrepareTests(unittest.TestCase):
+    """config/fliperos-chihiro-prepare: o disco de uma Sega Chihiro vira a imagem de netboot do xemu, com a chave do
+    jogo achada nas pastas do MAME ou pedida ao Downloader. A ferramenta de conversao e a de mentira (acima)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.env = chihiro_prepare_env(self.tmp)
+        self.disc = chihiro_make_disc(self.tmp / 'roms/vc3', 'Virtua Cop 3 v3.000')
+
+    def prepare(self, *args, env=None):
+        return subprocess.run(['python3', str(ROOT / 'config/fliperos-chihiro-prepare'), *args], capture_output=True,
+                              text=True, env=env or self.env, timeout=60)
+
+    def test_what_each_file_is(self):
+        netboot = self.tmp / 'a.bin'
+        netboot.write_bytes(b'FATX' + bytes(100))
+        track = self.tmp / 'track.bin'
+        track.write_bytes(bytes(100))
+        for path, kind in ((netboot, 'netboot'), (track, 'unknown'), (self.tmp / 'x.7z', 'disc'),
+                           (self.tmp / 'x.cue', 'disc'), (self.disc, 'disc'), (self.tmp / 'x.chd', 'disc'),
+                           (self.tmp / 'x.txt', 'unknown')):
+            self.assertEqual(self.prepare('kind', str(path)).stdout.strip(), kind, path.name)
+        # Uma imagem pronta abre como esta; um disco ainda nao tem imagem; uma trilha nao e jogo.
+        self.assertEqual(self.prepare('path', str(netboot)).stdout.strip(), str(netboot))
+        self.assertEqual(self.prepare('needed', str(netboot)).returncode, 1)
+        self.assertEqual(self.prepare('path', str(self.disc)).returncode, 1)
+        self.assertEqual(self.prepare('needed', str(self.disc)).returncode, 0)
+        self.assertEqual(self.prepare('needed', str(track)).returncode, 1)
+
+    def test_the_disc_header_says_which_mame_set_has_the_key(self):
+        run = self.prepare('inspect', str(self.disc))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn('product:  GDX-0003B  version V3.000  "VIRTUA COP 3"', run.stdout)
+        self.assertIn('MAME set: vcop3  (key file 317-0354-com.data inside the .zip)', run.stdout)
+        # O vcop3a usa o mesmo arquivo de chave: o .zip dele serve (num romset merged a chave esta no do pai).
+        self.assertIn('zips:     vcop3, vcop3a', run.stdout)
+        self.assertIn('none: the key is missing', run.stdout)
+        (self.tmp / 'keys/vcop3.zip').write_bytes(b'PK')
+        self.assertIn('vcop3.zip', self.prepare('inspect', str(self.disc)).stdout.split('found:')[1])
+        # Outro jogo, outro set (o que a tabela do MAME diz: Ghost Squad, Rev A, e o que veio antes).
+        ghost = chihiro_make_disc(self.tmp / 'roms/gs', 'gs', product='GDX-0012A', title='GHOST SQUAD')
+        run = self.prepare('inspect', str(ghost))
+        self.assertIn('MAME set: ghostsqu', run.stdout)
+        self.assertIn('ghostsqu, ghostsqo', run.stdout)
+
+    def test_the_game_is_converted_once_with_the_key_found(self):
+        (self.tmp / 'keys/vcop3.zip').write_bytes(b'PK')
+        run = self.prepare('run', str(self.disc), '--progress')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        steps = [int(m) for m in re.findall(r'^@step (\d+) ', run.stdout, re.M)]
+        self.assertEqual(steps, sorted(steps))
+        self.assertTrue(run.stdout.rstrip().endswith('@step 100 The game is ready'), run.stdout)
+        image = self.disc.parent / '.netboot/Virtua Cop 3 v3.000.bin'
+        self.assertEqual(image.read_bytes()[:4], b'FATX')
+        # A ferramenta recebeu o nome do disco, o .zip da chave e o .cue com so as trilhas de dados.
+        self.assertEqual((self.tmp / 'netboot.log').read_text().strip(), 'Virtua Cop 3 v3.000|vcop3.zip|disc.cue')
+        # Nada ficou da conversao, e o preparo seguinte ve que ja esta pronto.
+        self.assertEqual(sorted(p.name for p in (self.disc.parent / '.netboot').iterdir()), [image.name])
+        self.assertEqual(self.prepare('needed', str(self.disc)).returncode, 1)
+        self.assertEqual(self.prepare('path', str(self.disc)).stdout.strip(), str(image))
+        again = self.prepare('run', str(self.disc), '--progress')
+        self.assertEqual(again.stdout.strip(), '@step 100 The game is ready')
+        self.assertEqual(len((self.tmp / 'netboot.log').read_text().splitlines()), 1)
+
+    def test_a_chd_of_the_mame_romset_is_a_disc_too_and_its_name_is_the_product(self):
+        # O disco do MAME e o .chd (vcop3/gdx-0003b.chd): nao da para ler o cabecalho sem abri-lo, mas o nome
+        # e o produto, e so as chaves dos sets desse jogo sao procuradas (nao as dos 40 jogos).
+        chd = self.tmp / 'mame/vcop3/gdx-0003b.chd'
+        chd.parent.mkdir(parents=True)
+        chd.write_bytes(b'MComprHD')
+        self.assertEqual(self.prepare('kind', str(chd)).stdout.strip(), 'disc')
+        run = self.prepare('inspect', str(chd))
+        self.assertIn('MAME set: vcop3', run.stdout)
+        self.assertIn('zips:     vcop3, vcop3a', run.stdout)
+        (self.tmp / 'keys/vcop3.zip').write_bytes(b'PK')
+        run = self.prepare('run', str(chd), '--progress')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual((self.tmp / 'netboot.log').read_text().strip(), 'gdx-0003b|vcop3.zip|gdx-0003b.chd')
+        self.assertEqual((chd.parent / '.netboot/gdx-0003b.bin').read_bytes()[:4], b'FATX')
+
+    def test_the_key_of_the_clone_set_is_enough(self):
+        (self.tmp / 'keys/VCOP3A.ZIP').write_bytes(b'PK')
+        run = self.prepare('run', str(self.disc))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual((self.tmp / 'netboot.log').read_text().strip(), 'Virtua Cop 3 v3.000|VCOP3A.ZIP|disc.cue')
+
+    def test_the_key_comes_from_the_downloader_when_no_folder_has_it(self):
+        fake = self.tmp / 'downloader'
+        fake.write_text('#!/bin/sh\necho "$@" > "%s/dl-args"\necho "@step 50 Downloading the game key (1 of 2)"\n'
+                        'mkdir -p "$3"\nprintf PK > "$3/vcop3.zip"\necho "@step 100 1 set file(s) fetched"\n' % self.tmp)
+        fake.chmod(0o755)
+        env = dict(self.env, FLIPEROS_DOWNLOADER=str(fake))
+        run = self.prepare('run', str(self.disc), '--progress', env=env)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual((self.tmp / 'dl-args').read_text().strip(),
+                         'fetch-sets --dest %s --progress vcop3 vcop3a' % (self.tmp / 'keys'))
+        self.assertIn('@step 44 Downloading the game key (1 of 2)', run.stdout)     # 36 + 50 * 0.16
+        self.assertEqual((self.tmp / 'netboot.log').read_text().strip(), 'Virtua Cop 3 v3.000|vcop3.zip|disc.cue')
+
+    def test_no_key_says_what_to_do_in_the_words_the_frontend_knows(self):
+        def failure(script, code):
+            fake = self.tmp / 'dl'
+            fake.write_text('#!/bin/sh\n%s\nexit %d\n' % (script, code))
+            fake.chmod(0o755)
+            run = self.prepare('run', str(self.disc), '--progress', env=dict(self.env, FLIPEROS_DOWNLOADER=str(fake)))
+            self.assertEqual(run.returncode, 1)
+            self.assertFalse(list((self.disc.parent / '.netboot').glob('*')), 'a failed run leaves nothing')
+            return [l for l in run.stdout.splitlines() if l.startswith('@fail')][0]
+        # Sem o link do romset (status 3), e sem o downloader: o jogo ainda nao tem chave.
+        self.assertRegex(failure('echo "@fail ROM set|there is no ROM set link yet"', 3), r'^@fail Sega Chihiro\|key ')
+        self.assertIn('vcop3.zip', failure('true', 3))
+        self.assertRegex(self.prepare('run', str(self.disc), '--progress').stdout, r'@fail Sega Chihiro\|key ')
+        # Sem rede (nenhum par mandou a lista), o aviso e o da rede.
+        self.assertRegex(failure('echo "@fail ROM set|no peer sent the file list in 4 minutes (is the network up?)"', 1),
+                         r'^@fail Sega Chihiro\|network ')
+        # Nenhum dos sets esta no romset (status 4): continua sendo falta de chave.
+        self.assertRegex(failure('echo "@fail ROM set|none of these sets is in your ROM set link"', 4), r'\|key ')
+
+    def test_a_failed_conversion_is_reported_and_leaves_no_image(self):
+        (self.tmp / 'keys/vcop3.zip').write_bytes(b'PK')
+        run = self.prepare('run', str(self.disc), '--progress', env=dict(self.env, FAKE_NETBOOT_FAIL='1'))
+        self.assertEqual(run.returncode, 1)
+        self.assertRegex(run.stdout, r'@fail Sega Chihiro\|key The game could not be converted: No matching key')
+        self.assertEqual(os.listdir(self.disc.parent / '.netboot'), [])
+
+    def test_the_archive_is_unpacked_first_and_the_work_folder_goes_away(self):
+        (self.tmp / 'keys/vcop3.zip').write_bytes(b'PK')
+        fake = self.tmp / '7z'
+        fake.write_text('#!/bin/sh\nif [ "$1" = l ]; then echo "      1000   500  4 files"; exit 0; fi\n'
+                        'for a in "$@"; do case $a in -o*) out=${a#-o};; esac; done\ncp -r "%s"/. "$out"/\n'
+                        % self.disc.parent)
+        fake.chmod(0o755)
+        archive = self.tmp / 'games/Virtua Cop 3 v3.000 (2003)(Sega)(JP)[!].7z'
+        archive.parent.mkdir()
+        archive.write_bytes(b'7z')
+        env = dict(self.env, FLIPEROS_7Z=str(fake))
+        run = self.prepare('run', str(archive), '--progress', env=env)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        image = archive.parent / '.netboot/Virtua Cop 3 v3.000 (2003)(Sega)(JP)[!].bin'
+        self.assertEqual(image.read_bytes()[:4], b'FATX')
+        self.assertEqual(sorted(p.name for p in image.parent.iterdir()), [image.name])
+        self.assertEqual(self.prepare('path', str(archive), env=env).stdout.strip(), str(image))
+        # O .7z sem nada de disco dentro: motivo claro.
+        fake.write_text('#!/bin/sh\nif [ "$1" = l ]; then exit 0; fi\n')
+        other = archive.parent / 'Other.7z'
+        other.write_bytes(b'7z')
+        run = self.prepare('run', str(other), '--progress', env=env)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn('There is no disc image', run.stdout)
+
+    def test_little_memory_stops_before_the_conversion(self):
+        meminfo = self.tmp / 'meminfo'
+        meminfo.write_text('MemTotal: 4000000 kB\nMemAvailable:    1000 kB\n')
+        env = dict(self.env, FLIPEROS_CHIHIRO_MEMCHECK='1', FLIPEROS_CHIHIRO_MEMINFO=str(meminfo))
+        (self.tmp / 'keys/vcop3.zip').write_bytes(b'PK')
+        run = self.prepare('run', str(self.disc), '--progress', env=env)
+        self.assertEqual(run.returncode, 1)
+        self.assertRegex(run.stdout, r'@fail Sega Chihiro\|memory Not enough free memory')
+        self.assertFalse((self.tmp / 'netboot.log').exists())
+
+    def test_the_real_tool_and_table_ship_with_the_system(self):
+        table = (ROOT / 'config/chihiro/sets.tsv').read_text().splitlines()
+        rows = [l.split('\t') for l in table if l and not l.startswith('#')]
+        sets = {r[0]: r for r in rows}
+        self.assertEqual(sets['vcop3'][2:4], ['gdx-0003b', '317-0354-com.data'])
+        self.assertEqual(sets['vcop3a'][1], 'vcop3')
+        self.assertEqual(sets['hotd3'][2], 'gdx-0001')
+        self.assertTrue(all(len(r) == 5 for r in rows))
+        tool = (ROOT / 'config/chihiro/chihiro-netboot.py').read_text()
+        for name in ('def load_keys_from_zip(', 'def convert_game('):
+            self.assertIn(name, tool)             # o que o preparo usa do modulo
+        self.assertIn('MIT License', (ROOT / 'config/chihiro/LICENSE-chihiro-netboot').read_text())
 
 
 class RomCleanTests(unittest.TestCase):
@@ -4770,6 +5065,9 @@ class DownloaderTests(unittest.TestCase):
         'e' * 40: ('Huge', [('Huge/pong.zip', 10 ** 18), ('Huge/mslug.zip', 50)]),
         # Os CHDs na raiz do torrent (sem a pasta de cima).
         LOOSE: ('kinst', [('kinst/kinst.chd', 300), ('outro/outro.chd', 900), ('info.nfo', 1)]),
+        # Os sets da Chihiro no romset (a chave de um jogo): fetch-sets.
+        'f' * 40: ('MAME 0.289 ROMs', [('MAME 0.289 ROMs/' + f, n) for f, n in (
+            ('neogeo.zip', 30), ('vcop3.zip', 50), ('hotd3.zip', 60), ('VCOP3A.zip', 20), ('readme.txt', 1))]),
     }
 
     def serve(self):
@@ -4900,6 +5198,78 @@ class DownloaderTests(unittest.TestCase):
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(b'x' * f['length'])
                     f['done'] = f['length']
+
+    def fetch_sets(self, *names, finish=True):
+        """fetch-sets contra o Transmission falso (FLIPEROS_FETCH_RPC: nada sobe). O falso termina o
+        download quando o comando ja marcou so os arquivos que quer (os outros desmarcados)."""
+        stop = threading.Event()
+
+        def finisher():
+            while not stop.is_set():
+                if any(not f['wanted'] for t in self.torrents.values() for f in t['files']):
+                    self.complete()
+                    return
+                time.sleep(0.05)
+        if finish:
+            threading.Thread(target=finisher, daemon=True).start()
+        try:
+            return self.dl('fetch-sets', '--dest', str(self.tmp / 'sets'), '--progress', *names, check=False,
+                           env=dict(self.env, FLIPEROS_FETCH_RPC=self.url))
+        finally:
+            stop.set()
+
+    def test_fetch_sets_brings_only_the_asked_sets_and_leaves_the_state_alone(self):
+        (self.state / 'roms.magnet').write_text('magnet:?xt=urn:btih:%s&dn=x\n' % ('f' * 40))
+        before = sorted(os.listdir(self.state))
+        run = self.fetch_sets('vcop3', 'vcop3a')
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        # Os dois (o VCOP3A.zip, com a caixa que o torrent tem) e mais nada: o hotd3 e o neogeo nao vieram.
+        self.assertEqual(sorted(p.name for p in (self.tmp / 'sets').iterdir()), ['VCOP3A.zip', 'vcop3.zip'])
+        self.assertEqual((self.tmp / 'sets/vcop3.zip').stat().st_size, 50)
+        self.assertIn('@step 100 2 set file(s) fetched', run.stdout)
+        self.assertRegex(run.stdout, r'@step \d+ Downloading the game key')
+        # So esses arquivos foram marcados (o resto do torrent nunca baixa); o torrent sai com o que baixou.
+        marked = [a for m, a in self.calls if m == 'torrent-set' and 'files-wanted' in a][0]
+        self.assertEqual(marked['files-wanted'], [1, 3])
+        self.assertEqual(sorted(marked['files-unwanted']), [0, 2, 4])
+        self.assertTrue([a for m, a in self.calls if m == 'torrent-remove'][0]['delete-local-data'])
+        self.assertEqual(self.torrents, {})
+        # O estado do Downloader (filtro, links, planos) ficou como estava, e o download-dir foi o proprio da busca.
+        self.assertEqual(sorted(os.listdir(self.state)), before)
+        add = [a for m, a in self.calls if m == 'torrent-add'][0]
+        self.assertNotIn(str(self.staging), add['download-dir'])
+        self.assertIn('fliperos-fetch-', add['download-dir'])
+        self.assertFalse(Path(add['download-dir']).parent.exists(), 'the private folder is removed')
+
+    def test_fetch_sets_needs_the_link_the_person_saved(self):
+        run = self.fetch_sets('vcop3', finish=False)
+        self.assertEqual(run.returncode, 3)
+        self.assertIn('@fail ROM set|there is no ROM set link yet: define it in Setup > Games > Downloader', run.stdout)
+        self.assertEqual(self.calls, [])
+
+    def test_fetch_sets_says_when_the_sets_are_not_in_the_romset(self):
+        # Pela lista que o Downloader ja guardou: nem chama o Transmission.
+        (self.state / 'roms.magnet').write_text('magnet:?xt=urn:btih:%s&dn=x\n' % self.ROMS)
+        (self.state / 'roms.json').write_text(json.dumps({'hash': self.ROMS, 'name': 'x', 'root': 'MAME 0.289 ROMs', 'sets': 2, 'files': [
+            ['MAME 0.289 ROMs/neogeo.zip', 30], ['MAME 0.289 ROMs/mslug.zip', 50]]}))
+        run = self.fetch_sets('vcop3', finish=False)
+        self.assertEqual(run.returncode, 4)
+        self.assertIn('@fail ROM set|none of these sets is in your ROM set link', run.stdout)
+        self.assertEqual(self.calls, [])
+        # Sem a lista guardada, o torrent diz: o Transmission e chamado e o torrent sai de la.
+        (self.state / 'roms.json').unlink()
+        (self.state / 'roms.magnet').write_text('magnet:?xt=urn:btih:%s&dn=x\n' % ('f' * 40))
+        run = self.fetch_sets('nothere', finish=False)
+        self.assertEqual(run.returncode, 4)
+        self.assertEqual(self.torrents, {})
+        self.assertFalse((self.tmp / 'sets').exists())
+
+    def test_fetch_sets_is_in_the_downloader_usage(self):
+        usage = (ROOT / 'config/fliperos-downloader').read_text()
+        self.assertIn('fliperos-downloader fetch-sets --dest PASTA', usage)
+        # Fora do estado e do script de fim do servico: o Transmission da busca e o dela.
+        self.assertIn("'script-torrent-done-enabled': False", usage)
+        self.assertIn("'peer-port-random-on-start': True", usage)
 
     def test_config_keeps_the_user_settings(self):
         (self.tmp / 'cfg').mkdir()
@@ -7409,6 +7779,71 @@ class FrontendDataTests(unittest.TestCase):
         launch = frontend.split('    def launch(self, argv=None, game=None, media=False):')[1].split('    def play(')[0]
         self.assertLess(launch.index('missing_core(argv)'), launch.index('self.remember()'))
         self.assertIn('fe.ov.get("title", "EXTRACTING")', (ROOT / 'fliperos-setup/gui/feview.py').read_text())
+
+    def test_a_chihiro_disc_is_prepared_with_the_bar_before_the_game(self):
+        # O jogo da pasta chihiro e o disco (.7z, .cue, .gdi, .chd): o xemu so abre a imagem de netboot.
+        # Antes de abrir, o frontend mostra a barra do preparo (fliperos-chihiro --prepare) e so entao o jogo abre.
+        import types
+        fm = self.frontend_module()
+        x11 = '/opt/fliperos/bin/fliperos-x11-run'
+        disc = '/r/chihiro/Virtua Cop 3 v3.000 (2003)(Sega)(JP)[!].7z'
+        need = lambda p: p.endswith('.7z')
+        self.assertEqual(fm.missing_chihiro_image([x11, 'fliperos-chihiro', disc], need), disc)
+        self.assertEqual(fm.missing_chihiro_image([x11, '--mode', '640x480@60', 'xemu-chihiro', disc], need), disc)
+        self.assertIsNone(fm.missing_chihiro_image([x11, 'fliperos-chihiro', '/r/chihiro/vc3.bin'], need))
+        self.assertIsNone(fm.missing_chihiro_image([x11, 'fliperos-chihiro'], need))         # sem jogo: a biblioteca
+        self.assertIsNone(fm.missing_chihiro_image([x11, 'flycast', disc], need))
+        self.assertIsNone(fm.missing_chihiro_image(['/bin/sh', 'game.sh'], need))
+        # A primeira palavra do motivo (fliperos-chihiro-prepare) diz o aviso.
+        for error, said in (('key The game key was not found', 'GAME KEY (MAME SET) NOT FOUND'),
+                            ('network The game key could not be fetched', 'NO NETWORK FOR THE GAME KEY'),
+                            ('space Not enough space', 'NOT ENOUGH SPACE'), ('memory Not enough free memory', 'NOT ENOUGH MEMORY'),
+                            ('convert The game could not be converted', 'COULD NOT PREPARE THE GAME'),
+                            ('', 'COULD NOT PREPARE THE GAME')):
+            self.assertEqual(fm.chihiro_failure(error), said)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            mark = tmp / 'prepared'
+            tool = tmp / 'fliperos-chihiro'
+            tool.write_text('#!/bin/sh\ncase $1 in\n  --prepare-needed) [ ! -e "%s" ] ;;\n'
+                            '  --prepare) echo "@step 40 Unpacking the disc"; echo "@step 100 The game is ready"; : > "%s" ;;\n'
+                            'esac\n' % (mark, mark))
+            tool.chmod(0o755)
+            fm.CHIHIRO_TOOL = str(tool)
+            argv = [x11, 'fliperos-chihiro', disc]
+            self.assertEqual(fm.missing_chihiro_image(argv), disc)         # a de verdade: pergunta ao comando
+            opened = []
+            fe = types.SimpleNamespace(overlay=None, ov={}, said=[])
+            fe.say = lambda text, *a: fe.said.append(text)
+            fe.launch = lambda argv, g: opened.append(argv)
+            for name in ('chihiro_start', 'fetch_start', 'unpack_tick'):
+                setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
+            fe.chihiro_start({'Name': 'Virtua Cop 3'}, argv, disc)
+            self.assertEqual((fe.overlay, fe.ov['title']), ('unpack', 'PREPARING THE GAME'))
+            deadline = time.monotonic() + 10
+            while fe.ov.get('result') is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(fe.ov['progress'], (100, 100, 'The game is ready'))
+            fe.unpack_tick()
+            self.assertEqual((fe.overlay, opened, fe.said), (None, [argv], []))
+            self.assertIsNone(fm.missing_chihiro_image(argv))               # pronto: nao mostra a barra de novo
+            # O preparo que falha: o aviso do motivo, e o jogo nao abre.
+            tool.write_text('#!/bin/sh\ncase $1 in\n  --prepare-needed) exit 0 ;;\n'
+                            '  --prepare) echo "@step 20 Looking at the disc"; echo "@fail Sega Chihiro|key The game key was not found"; exit 1 ;;\n'
+                            'esac\n')
+            opened.clear()
+            fe.chihiro_start({'Name': 'Virtua Cop 3'}, argv, disc)
+            deadline = time.monotonic() + 10
+            while fe.ov.get('result') is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            fe.unpack_tick()
+            self.assertEqual((fe.overlay, opened, fe.said), (None, [], ['GAME KEY (MAME SET) NOT FOUND']))
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        launch = frontend.split('    def launch(self, argv=None, game=None, media=False):')[1].split('    def play(')[0]
+        # O emulador primeiro (o preparo nao serve sem ele), a conversao depois, e so entao o jogo abre.
+        self.assertLess(launch.index('missing_emulator(argv)'), launch.index('missing_chihiro_image(argv)'))
+        self.assertLess(launch.index('missing_chihiro_image(argv)'), launch.index('self.remember()'))
+        self.assertIn('[CHIHIRO_TOOL, "--prepare", disc, "--progress"]', frontend)
 
     def test_missing_emulator_is_installed_with_the_bar_before_the_game(self):
         # O emulador do jogo que ainda nao esta aqui (o Model 2 sem compilar, o

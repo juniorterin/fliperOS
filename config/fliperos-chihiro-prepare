@@ -1,0 +1,587 @@
+#!/usr/bin/env python3
+"""Prepara um jogo da Sega Chihiro para o xemu: o disco vira uma imagem de netboot.
+
+O xemu so abre a imagem de netboot (um .bin que comeca com FATX); o que a
+pessoa tem, quase sempre, e o disco do jogo: o .7z de um dump em GDI (TOSEC),
+um .cue com as trilhas (Redump), um .gdi solto ou um .chd do MAME. Quando um
+desses e aberto (pelo frontend, com a barra de andamento; ou pelo
+fliperos-chihiro, sem ela), este programa faz o que falta, uma vez por jogo:
+
+  1. tira o disco do .7z (ou le o .gdi/.cue/.chd onde esta);
+  2. descobre qual jogo e pelo numero de produto do cabecalho do disco
+     (GDX-0003B) e, pela tabela do MAME (chihiro/sets.tsv), qual .zip do MAME
+     tem a chave dele (vcop3.zip: um 317-0354-com.data de 80 bytes);
+  3. procura esse .zip nas pastas de jogos do MAME e, se nao esta, o pede ao
+     Downloader (fliperos-downloader fetch-sets: so esse arquivo, do link do
+     romset que a pessoa definiu; sem link, avisa);
+  4. converte com o chihiro-netboot (Tovarichtch, MIT, vem junto) e deixa a
+     imagem em <pasta do jogo>/.netboot/<nome do disco>.bin.
+
+  fliperos-chihiro-prepare kind DISCO     netboot, disc ou unknown
+  fliperos-chihiro-prepare needed DISCO   status 0 se ainda precisa converter
+  fliperos-chihiro-prepare path DISCO     o .bin que o xemu abre (status 1: ainda nao ha)
+  fliperos-chihiro-prepare run DISCO [--progress]
+  fliperos-chihiro-prepare inspect DISCO  o que o disco e e o que falta, sem converter
+
+Com --progress, as etapas saem no formato da barra do frontend (@step N texto
+e, se falha, @fail Sega Chihiro|motivo); a saida do resto vai para o stderr.
+O motivo traz uma palavra que o frontend entende: key (sem a chave do jogo),
+network, space (disco cheio), memory (pouca RAM) ou, sem palavra, convert.
+"""
+import argparse
+import contextlib
+import importlib.util
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+HOME = os.path.expanduser('~')
+# A pasta da ferramenta de conversao e da tabela dos sets (config/chihiro).
+TOOLS = os.environ.get('FLIPEROS_CHIHIRO_TOOLS', '/usr/local/share/fliperos/chihiro')
+ROMS = os.environ.get('FLIPEROS_CHIHIRO_DIR', os.path.join(HOME, 'roms/chihiro'))
+BIOS = os.environ.get('FLIPEROS_CHIHIRO_BIOS', os.path.join(HOME, 'bios/chihiro'))
+# Onde o Downloader deixa os .zip de chave que busca.
+SETS_DIR = os.environ.get('FLIPEROS_CHIHIRO_SETS_DIR', os.path.join(BIOS, 'sets'))
+NETBOOT = os.environ.get('FLIPEROS_CHIHIRO_NETBOOT', os.path.join(TOOLS, 'chihiro-netboot.py'))
+SETS_TABLE = os.environ.get('FLIPEROS_CHIHIRO_SETS', os.path.join(TOOLS, 'sets.tsv'))
+DOWNLOADER = os.environ.get('FLIPEROS_DOWNLOADER', '/opt/fliperos/bin/fliperos-downloader')
+MEMINFO = os.environ.get('FLIPEROS_CHIHIRO_MEMINFO', '/proc/meminfo')
+SEVENZ = os.environ.get('FLIPEROS_7Z', '')
+LABEL = 'Sega Chihiro'
+# O pico de memoria do chihiro-netboot: ele le a trilha inteira, tira o
+# cabecalho dos setores (outra copia) e, depois, a imagem e a decifrada.
+MEM_FACTOR = 2.2
+MEM_EXTRA = 300 << 20
+
+
+class Fail(Exception):
+    """kind: key, network, space, memory ou convert (a palavra que o frontend entende)."""
+
+    def __init__(self, kind, message):
+        super().__init__(message)
+        self.kind, self.message = kind, message
+
+
+progress_on = False
+
+
+def emit(pct, text):
+    if progress_on:
+        print('@step %d %s' % (max(0, min(100, int(pct))), text), flush=True)
+    else:
+        print(text, file=sys.stderr, flush=True)
+
+
+def human(n):
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024 or unit == 'GB':
+            return ('%d %s' if unit == 'B' else '%.1f %s') % (n, unit)
+        n /= 1024
+
+
+# ── O que o arquivo e ─────────────────────────────────────────────
+
+def is_netboot(path):
+    try:
+        with open(path, 'rb') as f:
+            return f.read(4) == b'FATX'
+    except OSError:
+        return False
+
+
+def kind_of(path):
+    low = path.lower()
+    if low.endswith('.bin'):
+        return 'netboot' if is_netboot(path) else 'unknown'
+    if low.endswith(('.7z', '.cue', '.gdi', '.chd')):
+        return 'disc'
+    return 'unknown'
+
+
+def stem_of(path):
+    return os.path.splitext(os.path.basename(path))[0]
+
+
+def netboot_dir(source):
+    return os.path.join(os.path.dirname(os.path.abspath(source)), '.netboot')
+
+
+def netboot_path(source):
+    return os.path.join(netboot_dir(source), stem_of(source) + '.bin')
+
+
+def converted(source):
+    out = netboot_path(source)
+    try:
+        return os.path.getsize(out) > (1 << 20) and is_netboot(out)
+    except OSError:
+        return False
+
+
+def launch_path(source):
+    """O arquivo que o xemu abre para este jogo, ou None se ainda falta converter."""
+    kind = kind_of(source)
+    if kind == 'netboot':
+        return source
+    if kind == 'disc' and converted(source):
+        return netboot_path(source)
+    return None
+
+
+# ── O disco ───────────────────────────────────────────────────────
+
+def parse_gdi(gdi):
+    """[(numero, lba, tipo, bytes por setor, arquivo)] das trilhas de um .gdi."""
+    base = os.path.dirname(os.path.abspath(gdi))
+    tracks = []
+    with open(gdi, encoding='utf-8', errors='replace') as f:
+        for line in f.read().splitlines()[1:]:
+            m = re.match(r'^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(?:"([^"]+)"|(\S+))\s+\d+\s*$', line)
+            if m:
+                n, lba, typ, sector, quoted, plain = m.groups()
+                tracks.append((int(n), int(lba), int(typ), int(sector), os.path.join(base, quoted or plain)))
+    return tracks
+
+
+def parse_cue(cue):
+    """[(numero, arquivo, bytes por setor)] das trilhas de dados de um .cue."""
+    base = os.path.dirname(os.path.abspath(cue))
+    out, current = [], None
+    with open(cue, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            line = line.strip()
+            if line.upper().startswith('FILE '):
+                current = os.path.join(base, line[5:].rsplit(' ', 1)[0].strip().strip('"'))
+            elif line.upper().startswith('TRACK ') and current:
+                parts = line.split()
+                if len(parts) >= 3 and parts[1].isdigit() and parts[2].upper().startswith('MODE'):
+                    out.append((int(parts[1]), current, 2048 if parts[2].upper().endswith('/2048') else 2352))
+                current = None
+    return out
+
+
+def write_cue(gdi, cue):
+    """O .cue so com as trilhas de dados do .gdi, com o caminho inteiro delas: e o que o
+    chihiro-netboot le (a maior trilha de dados e o jogo). Devolve [(arquivo, setor)]."""
+    data = [(t[4], t[3]) for t in parse_gdi(gdi) if t[2] == 4]
+    with open(cue, 'w', encoding='utf-8') as f:
+        for n, (path, sector) in enumerate(data, 1):
+            f.write('FILE "%s" BINARY\n  TRACK %02d MODE1/%d\n    INDEX 01 00:00:00\n' % (path, n, sector))
+    return data
+
+
+def read_header(path, sector=2352):
+    """O cabecalho do disco (o IP.BIN, como no Dreamcast): produto, versao e titulo; None se nao e um."""
+    try:
+        with open(path, 'rb') as f:
+            raw = f.read(sector * 17)
+    except OSError:
+        return None
+    if sector == 2352:
+        data = b''.join(raw[i * 2352 + 16:i * 2352 + 16 + 2048] for i in range(16))
+    else:
+        data = raw[:2048 * 16]
+    pos = data.find(b'SEGA SEGAKATANA')
+    if pos < 0:
+        return None
+    # Os campos vem preenchidos com espacos (o disco que vi) ou com bytes nulos.
+    text = lambda a, b: data[pos + a:pos + b].decode('ascii', 'replace').strip('\x00 \t\r\n')
+    return {'product': text(0x40, 0x4A).lower(), 'version': text(0x4A, 0x50), 'title': text(0x80, 0x100)}
+
+
+def identify(tracks):
+    """tracks: [(arquivo, setor)]. O cabecalho do primeiro que tem um."""
+    for path, sector in tracks:
+        header = read_header(path, sector)
+        if header:
+            return header
+    return None
+
+
+def product_of(header, disc):
+    """O numero de produto do disco (gdx-0003b): o do cabecalho; num .chd, que nao da para ler sem
+    abrir, o nome do arquivo (o MAME chama o disco pelo produto: vcop3/gdx-0003b.chd)."""
+    if header:
+        return header['product']
+    return stem_of(disc).lower() if disc.lower().endswith('.chd') else ''
+
+
+# ── A tabela do MAME ──────────────────────────────────────────────
+
+def load_sets():
+    rows = []
+    try:
+        with open(SETS_TABLE, encoding='utf-8') as f:
+            for line in f:
+                if not line.strip() or line.startswith('#'):
+                    continue
+                fields = (line.rstrip('\n').split('\t') + [''] * 5)[:5]
+                rows.append({'set': fields[0], 'parent': fields[1], 'discs': [d for d in fields[2].split(',') if d],
+                             'key': fields[3], 'title': fields[4]})
+    except OSError:
+        pass
+    return rows
+
+
+def candidate_sets(product, rows):
+    """Os nomes dos sets do MAME que podem ter a chave do disco, do mais certo ao menos: o do
+    proprio disco, o pai e os que usam o mesmo arquivo de chave (num romset merged a chave
+    de um clone fica no .zip do pai). Sem o disco na tabela (um .chd, um jogo novo), todos."""
+    mine = [r for r in rows if product and product in r['discs']]
+    if not mine:
+        return [r['set'] for r in rows]
+    names = []
+    for r in mine:
+        names += [r['set']] + ([r['parent']] if r['parent'] else [])
+        names += [o['set'] for o in rows if o['key'] == r['key'] and r['key'] and not r['key'].startswith('317-unknown')]
+    return list(dict.fromkeys(names))
+
+
+def key_dirs(source):
+    if os.environ.get('FLIPEROS_CHIHIRO_KEYDIRS'):
+        return [d for d in os.environ['FLIPEROS_CHIHIRO_KEYDIRS'].split(':') if d]
+    return [os.path.dirname(os.path.abspath(source)), SETS_DIR, BIOS, os.path.join(HOME, 'roms/mame'),
+            os.path.join(HOME, 'bios/mame'), os.path.join(HOME, 'bios')]
+
+
+def find_zips(source, names):
+    """Os .zip de chave que ja estao nas pastas (o nome sem ligar a caixa), na ordem dos nomes."""
+    wanted = [n.lower() + '.zip' for n in names]
+    found, seen = {}, set()
+    for d in key_dirs(source):
+        try:
+            listing = {n.lower(): n for n in os.listdir(d)}
+        except OSError:
+            continue
+        for w in wanted:
+            if w in listing:
+                path = os.path.join(d, listing[w])
+                if os.path.isfile(path) and os.path.realpath(path) not in seen:
+                    seen.add(os.path.realpath(path))
+                    found.setdefault(w, path)
+    return [found[w] for w in wanted if w in found]
+
+
+# ── Os passos ─────────────────────────────────────────────────────
+
+def mem_available():
+    try:
+        with open(MEMINFO) as f:
+            for line in f:
+                if line.startswith('MemAvailable:'):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def check_memory(track_size):
+    if os.environ.get('FLIPEROS_CHIHIRO_MEMCHECK') == '0':
+        return
+    have, need = mem_available(), int(track_size * MEM_FACTOR) + MEM_EXTRA
+    if have is not None and have < need:
+        raise Fail('memory', 'Not enough free memory to convert this game: %s free, %s needed. '
+                   'Close what is open, or convert it on the PC.' % (human(have), human(need)))
+
+
+def sevenzip():
+    for name in ([SEVENZ] if SEVENZ else ['7z', '7za', '7zr']):
+        found = shutil.which(name)
+        if found:
+            return found
+    raise Fail('convert', 'The 7z program is not installed (apt install p7zip-full).')
+
+
+def archive_total(sz, source):
+    out = subprocess.run([sz, 'l', source], capture_output=True, text=True).stdout
+    found = re.findall(r'^\s*(\d+)\s+\d+\s+\d+ files?', out, re.M)
+    return int(found[-1]) if found else 0
+
+
+def folder_size(path):
+    total = 0
+    for root, _, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    return total
+
+
+def extract_7z(source, work):
+    sz = sevenzip()
+    total = archive_total(sz, source)
+    free = shutil.disk_usage(work).free
+    if total and free < total + (800 << 20):
+        raise Fail('space', 'Not enough space to unpack the disc: %s free, %s needed.' % (human(free), human(total + (800 << 20))))
+    proc = subprocess.Popen([sz, 'x', '-y', '-bd', '-o' + work, source], stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE, text=True)
+    while proc.poll() is None:
+        done = folder_size(work)
+        if total:
+            emit(5 + 30 * min(done, total) / total, 'Unpacking the disc (%s of %s)' % (human(done), human(total)))
+        else:
+            emit(5, 'Unpacking the disc (%s)' % human(done))
+        time.sleep(1)
+    err = proc.stderr.read()
+    if proc.returncode != 0:
+        raise Fail('space' if 'space' in err.lower() else 'convert', 'The disc could not be unpacked: %s' % (err.strip().splitlines() or ['7z failed'])[-1])
+
+
+def find_disc(work):
+    """O .gdi, .cue ou .chd que o .7z trouxe (o primeiro, em qualquer subpasta)."""
+    found = {}
+    for root, _, files in os.walk(work):
+        for name in sorted(files):
+            ext = os.path.splitext(name)[1].lower()
+            if ext in ('.gdi', '.cue', '.chd'):
+                found.setdefault(ext, os.path.join(root, name))
+    for ext in ('.cue', '.gdi', '.chd'):
+        if ext in found:
+            return found[ext]
+    return None
+
+
+def disc_tracks(disc, work):
+    """(o que a ferramenta le: .cue ou .chd, [(arquivo, setor)] das trilhas de dados, ou [] num .chd)."""
+    low = disc.lower()
+    if low.endswith('.gdi'):
+        cue = os.path.join(work, 'disc.cue')
+        data = write_cue(disc, cue)
+        return cue, data
+    if low.endswith('.cue'):
+        return disc, [(path, sector) for _, path, sector in parse_cue(disc)]
+    return disc, []
+
+
+class Relay:
+    """O stdout do chihiro-netboot: vai para o stderr (o log) e as etapas dele viram @step."""
+
+    STAGES = {'[1/4]': (45, 'Reading the game key'), '[2/4]': (48, 'Reading the disc'),
+              '[3/4]': (70, 'Finding the game on the disc'), '[4/4]': (82, 'Decrypting the game')}
+
+    def __init__(self):
+        self.buffer, self.errors = '', []
+
+    def write(self, text):
+        self.buffer += text
+        while True:
+            m = re.search(r'[\r\n]', self.buffer)
+            if not m:
+                break
+            line, self.buffer = self.buffer[:m.start()], self.buffer[m.end():]
+            self.line(line)
+        return len(text)
+
+    def line(self, line):
+        line = line.rstrip()
+        if not line:
+            return
+        print(line, file=sys.stderr, flush=True)
+        for tag, (pct, text) in self.STAGES.items():
+            if line.startswith(tag):
+                emit(pct, text)
+        if 'ERROR' in line:
+            self.errors.append(line.strip())
+
+    def flush(self):
+        pass
+
+
+def load_tool():
+    spec = importlib.util.spec_from_file_location('chihiro_netboot', NETBOOT)
+    if spec is None or not os.path.isfile(NETBOOT):
+        raise Fail('convert', 'The chihiro-netboot converter is missing (%s).' % NETBOOT)
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as e:  # noqa: BLE001 - um modulo de terceiros que nao carrega
+        raise Fail('convert', 'The chihiro-netboot converter does not start: %s' % e)
+    return mod
+
+
+def fetch_keys(names):
+    """Pede ao Downloader os .zip de chave (so eles, do romset que a pessoa definiu)."""
+    cmd = [DOWNLOADER, 'fetch-sets', '--dest', SETS_DIR, '--progress'] + list(names)
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    except OSError:
+        raise Fail('key', 'The game key (a MAME set file) was not found and the downloader is not available.')
+    reason = ''
+    for line in proc.stdout:
+        if line.startswith('@step '):
+            pct, _, text = line[6:].strip().partition(' ')
+            if pct.isdigit():
+                emit(36 + int(pct) * 0.16, text)
+        elif line.startswith('@fail '):
+            reason = line.strip().partition('|')[2]
+    code = proc.wait()
+    if code == 3:
+        raise Fail('key', 'The game key (a MAME set file such as vcop3.zip) was not found. Put it in ~/roms/mame, '
+                   'or define the ROM set link in Setup > Games > Downloader so it can be fetched.')
+    if code == 4:
+        raise Fail('key', 'None of the sets of this game (%s) is in your ROM set link, so its key cannot be fetched.'
+                   % ', '.join(names[:3]))
+    if code != 0:
+        net = any(w in reason.lower() for w in ('network', 'peer', 'internet', 'connect'))
+        raise Fail('network' if net else 'key', 'The game key could not be fetched: %s' % (reason or 'download failed'))
+
+
+def run(source):
+    kind = kind_of(source)
+    if kind == 'netboot':
+        emit(100, 'The game is ready')
+        return
+    if kind != 'disc':
+        raise Fail('convert', 'This file is not a Sega Chihiro disc or netboot image.')
+    if converted(source):
+        emit(100, 'The game is ready')
+        return
+    outdir = netboot_dir(source)
+    os.makedirs(outdir, exist_ok=True)
+    # O que sobrou de uma conversao que morreu no meio.
+    for old in os.listdir(outdir):
+        path = os.path.join(outdir, old)
+        if old.startswith('work-') and os.path.isdir(path) and time.time() - os.path.getmtime(path) > 6 * 3600:
+            shutil.rmtree(path, ignore_errors=True)
+    work = tempfile.mkdtemp(prefix='work-', dir=outdir)
+    try:
+        emit(2, 'Looking at the disc')
+        if source.lower().endswith('.7z'):
+            extract_7z(source, work)
+            disc = find_disc(work)
+            if not disc:
+                raise Fail('convert', 'There is no disc image (.gdi, .cue or .chd) inside this archive.')
+        else:
+            disc = os.path.abspath(source)
+        reader, tracks = disc_tracks(disc, work)
+        header = identify(tracks)
+        rows = load_sets()
+        names = candidate_sets(product_of(header, disc), rows)
+        sizes = [os.path.getsize(p) for p, _ in tracks if os.path.exists(p)]
+        if sizes:
+            check_memory(max(sizes))
+        elif disc.lower().endswith('.chd'):
+            check_memory(1300 << 20)        # a trilha de dados de um GD-ROM da Chihiro: ~1,2 GB
+        emit(36, 'Looking for the game key%s' % (' (%s)' % header['title'] if header and header['title'] else ''))
+        zips = find_zips(source, names)
+        if not zips:
+            fetch_keys(names)
+            zips = find_zips(source, names)
+        if not zips:
+            raise Fail('key', 'The game key (a MAME set file such as vcop3.zip) was not found. Put it in ~/roms/mame, '
+                       'or define the ROM set link in Setup > Games > Downloader so it can be fetched.')
+        tool = load_tool()
+        candidates = []
+        for z in zips:
+            try:
+                candidates += tool.load_keys_from_zip(z)
+            except (ValueError, OSError, FileNotFoundError):
+                continue
+        if not candidates:
+            raise Fail('key', 'None of the set files (%s) has a game key inside.' % ', '.join(os.path.basename(z) for z in zips))
+        # Todas as chaves de uma vez: a ferramenta fica com a que acha o jogo no disco.
+        tool.load_keys_from_zip = lambda _path: candidates
+        relay = Relay()
+        result = os.path.join(work, 'out')
+        with contextlib.redirect_stdout(relay):
+            made = tool.convert_game(stem_of(source), zips[0], reader, result)
+        relay.flush()
+        if not made or not is_netboot(made):
+            last = relay.errors[-1] if relay.errors else 'the conversion failed'
+            raise Fail('key' if 'key' in last.lower() else 'convert', 'The game could not be converted: %s' % last.replace('ERROR:', '').strip())
+        emit(95, 'Saving the game image')
+        os.replace(made, netboot_path(source))
+        emit(100, 'The game is ready')
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def inspect(source):
+    """O que o disco e e o que falta, sem converter (e sem a chave)."""
+    kind = kind_of(source)
+    print('file:     %s' % source)
+    print('kind:     %s' % kind)
+    if kind == 'netboot':
+        print('ready:    yes (a netboot image)')
+        return 0
+    if kind != 'disc':
+        return 1
+    print('image:    %s (%s)' % (netboot_path(source), 'there' if converted(source) else 'not made yet'))
+    outdir = netboot_dir(source)
+    os.makedirs(outdir, exist_ok=True)
+    work = tempfile.mkdtemp(prefix='work-', dir=outdir)
+    try:
+        if source.lower().endswith('.7z'):
+            extract_7z(source, work)
+            disc = find_disc(work)
+            if not disc:
+                print('disc:     none inside the archive')
+                return 1
+        else:
+            disc = os.path.abspath(source)
+        _, tracks = disc_tracks(disc, work)
+        header = identify(tracks)
+        print('disc:     %s' % os.path.basename(disc))
+        print('tracks:   %s' % ', '.join('%s (%s)' % (os.path.basename(p), human(os.path.getsize(p))) for p, _ in tracks if os.path.exists(p)))
+        if header:
+            print('product:  %s  version %s  "%s"' % (header['product'].upper(), header['version'], header['title']))
+        else:
+            print('product:  no Sega header found')
+        rows = load_sets()
+        product = product_of(header, disc)
+        names = candidate_sets(product, rows)
+        mine = [r for r in rows if product and product in r['discs']]
+        if mine:
+            print('MAME set: %s  (key file %s inside the .zip)' % (mine[0]['set'], mine[0]['key']))
+        print('zips:     %s' % ', '.join(names[:8]) + (' ...' if len(names) > 8 else ''))
+        found = find_zips(source, names)
+        print('found:    %s' % (', '.join(found) if found else 'none: the key is missing'))
+        return 0
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def main():
+    global progress_on
+    parser = argparse.ArgumentParser(prog='fliperos-chihiro-prepare')
+    parser.add_argument('cmd', choices=('kind', 'needed', 'path', 'run', 'inspect'))
+    parser.add_argument('source')
+    parser.add_argument('--progress', action='store_true')
+    args = parser.parse_args()
+    progress_on = args.progress
+    source = args.source
+    if args.cmd == 'kind':
+        print(kind_of(source))
+        return 0
+    if args.cmd == 'needed':
+        return 0 if kind_of(source) == 'disc' and not converted(source) else 1
+    if args.cmd == 'path':
+        found = launch_path(source)
+        if found:
+            print(found)
+            return 0
+        return 1
+    if args.cmd == 'inspect':
+        try:
+            return inspect(source)
+        except Fail as e:
+            print('error:    %s' % e.message, file=sys.stderr)
+            return 1
+    try:
+        run(source)
+    except Fail as e:
+        if progress_on:
+            print('@fail %s|%s %s' % (LABEL, e.kind, e.message), flush=True)
+        print('fliperos-chihiro-prepare: %s' % e.message, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

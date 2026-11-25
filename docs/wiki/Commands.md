@@ -32,7 +32,8 @@ See [Updates and versions](Updates-and-versions.md).
 | `fliperos-customgame inspect\|pending\|install\|pack\|run` | Custom game packages ([Custom games](Custom-games.md)) |
 | `fliperos-squashgames pack\|unpack\|remove DIR`, `list`, `mount-all`, `umount-all` | Packed game folders (squashfs) |
 | `fliperos-portproton check\|install\|versions\|run EXE` | PortProton, for Windows games |
-| `fliperos-downloader status\|start\|pause\|resume\|add\|remove` | The ROM/CHD torrent downloader ([Downloader](Downloader.md)) |
+| `fliperos-downloader status\|start\|pause\|resume\|add\|remove\|fetch-sets` | The ROM/CHD torrent downloader ([Downloader](Downloader.md)); `fetch-sets` brings a few sets for a game |
+| `fliperos-chihiro-prepare run\|inspect DISC` | Sega Chihiro: turns a disc into the netboot image xemu opens ([More emulators](More-emulators.md#xemu-sega-chihiro)) |
 | `fliperos-bios check --wants FILE`, `index` | Download BIOS ([BIOS](BIOS.md)) |
 | `fliperos-romclean scan\|chds\|apply\|options\|romlist\|uses\|buttons` | The MAME ROM Cleaner and its tables ([ROM Cleaner](ROM-Cleaner.md)) |
 | `fliperos-openbor-meta info PAK` | What an OpenBOR pak has ([OpenBOR](OpenBOR.md)) |

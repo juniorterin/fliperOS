@@ -23,6 +23,15 @@ do emulador que o plano diz e tira o torrent da lista.
   fliperos-downloader finish
   fliperos-downloader pause | resume | boot
   fliperos-downloader remove roms|chds [--delete-files]
+  fliperos-downloader fetch-sets --dest PASTA [--progress] [--timeout S] SET...
+
+O fetch-sets e a busca de poucos sets avulsos (a chave de um jogo da Chihiro, por
+exemplo: vcop3.zip), so quando um jogo pede (fliperos-chihiro-prepare). Fica fora de
+tudo acima: usa so o link do romset que a pessoa ja guardou (roms.magnet), sobe um
+Transmission proprio da busca (outra pasta de configuracao, outra porta, sem o
+script de fim) e, quando os arquivos chegam, poe-os em PASTA e o desliga. Nao mexe no
+filtro, no plano nem no que o Downloader ja baixou. Status 3: sem link guardado; 4:
+nenhum dos sets esta no romset.
 
 O estado fica em STATE: o filtro que o Setup grava (filter.scan e
 filter.chds: as opcoes do fliperos-romclean, uma por linha) e, de cada tipo,
@@ -45,6 +54,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -69,6 +79,11 @@ LABEL = {'roms': 'ROMs', 'chds': 'CHDs'}
 MAGNET = re.compile(r'^magnet:\?(.*&)?xt=urn:bt(ih|mh):[0-9a-z]+', re.I)
 # Um .torrent nao passa disto (o do MAME inteiro tem 2 MB).
 TORRENT_MAX = 32 << 20
+# A busca de sets avulsos (fetch-sets): o programa do Transmission que ela sobe e, para os
+# testes, um Transmission ja no ar (sem isto, ela sobe o proprio).
+TRANSMISSION = os.environ.get('FLIPEROS_TRANSMISSION', 'transmission-daemon')
+FETCH_RPC = os.environ.get('FLIPEROS_FETCH_RPC', '')
+SET_EXT = ('.zip', '.7z')
 
 # O transmission-daemon do servico: so responde nesta maquina, sem senha;
 # para de semear quando termina (o arquivo sai da pasta dele) e chama este
@@ -1016,6 +1031,149 @@ def cmd_remove(args):
     print('deleted=%d' % deleted)
 
 
+# ?? Sets avulsos ??????????????????????????????????????????????????
+
+class NoSets(OSError):
+    """Nenhum dos sets pedidos esta no torrent."""
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+
+def private_daemon(tmp):
+    """Um transmission-daemon so desta busca: outra pasta de configuracao, outra porta RPC e
+    outra porta de pares, e sem o script de fim (o do servico mexeria no estado do
+    Downloader). Devolve (processo, endereco da RPC)."""
+    config = os.path.join(tmp, 'config')
+    os.makedirs(config)
+    settings = dict(SETTINGS)
+    settings.update({'rpc-port': free_port(), 'download-dir': os.path.join(tmp, 'dl'),
+                     'script-torrent-done-enabled': False, 'peer-port-random-on-start': True,
+                     'ratio-limit-enabled': False, 'start-added-torrents': False})
+    with open(os.path.join(config, 'settings.json'), 'w', encoding='utf-8') as f:
+        json.dump(settings, f)
+    try:
+        proc = subprocess.Popen([TRANSMISSION, '-f', '-g', config, '--log-level=error'], stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        raise OSError('the download program (transmission-daemon) is not installed')
+    return proc, 'http://127.0.0.1:%d/transmission/rpc' % settings['rpc-port']
+
+
+def pick_sets(files, wanted):
+    """Os indices dos arquivos do torrent que sao os sets pedidos (o nome do arquivo, sem ligar a
+    caixa): de cada um, o de caminho mais curto."""
+    best = {}
+    for i, f in enumerate(files):
+        base = f['name'].rsplit('/', 1)[-1].lower()
+        if base in wanted and (base not in best or f['name'].count('/') < files[best[base]]['name'].count('/')):
+            best[base] = i
+    return sorted(best.values())
+
+
+def cmd_fetch_sets(args):
+    """So os sets pedidos do torrent de ROMs que a pessoa guardou, num Transmission proprio
+    (private_daemon), para PASTA. Nada do estado do Downloader muda."""
+    wanted = {n.lower() + ext for n in args.names for ext in SET_EXT}
+    link = (read_state('roms.magnet') or '').strip()
+    if not link:
+        say(args.progress, '@fail ROM set|there is no ROM set link yet: define it in Setup > Games > Downloader')
+        print('fliperos-downloader: no ROM set link saved (Setup > Games > Downloader)', file=sys.stderr)
+        sys.exit(3)
+    # A lista de arquivos que o Downloader ja guardou: sem nenhum dos sets nela, nem sobe o Transmission.
+    meta = meta_of('roms')
+    if meta and not pick_sets([{'name': name} for name, _ in meta['files']], wanted):
+        say(args.progress, '@fail ROM set|none of these sets is in your ROM set link')
+        sys.exit(4)
+    tmp = tempfile.mkdtemp(prefix='fliperos-fetch-')
+    proc = hash_ = rpc = None
+    try:
+        say(args.progress, '@step 0 Starting the download service')
+        if FETCH_RPC:
+            url = FETCH_RPC
+        else:
+            proc, url = private_daemon(tmp)
+        rpc = Rpc(url)
+        rpc.wait(30)
+        add = {'download-dir': os.path.join(tmp, 'dl')}
+        if MAGNET.match(link):
+            add.update(filename=link, paused=False)
+        else:
+            add.update(metainfo=base64.b64encode(read_torrent(link)).decode(), paused=True)
+        got = rpc.call('torrent-add', **add)
+        added = got.get('torrent-added') or got.get('torrent-duplicate')
+        if not added:
+            raise OSError('Transmission did not take the torrent')
+        hash_ = added['hashString']
+        rpc.call('torrent-set', ids=[hash_], seedRatioMode=UNLIMITED)
+        end = time.monotonic() + args.timeout
+        while True:
+            t = rpc.torrent(hash_, ['files', 'metadataPercentComplete', 'peersConnected'])
+            if t and t.get('files'):
+                break
+            if time.monotonic() > end:
+                raise OSError('no peer sent the file list in %d minutes (is the link alive? is the network up?)'
+                              % max(1, args.timeout // 60))
+            say(args.progress, '@step %d Asking the peers for the file list (%d connected)' % (
+                int(40 * float((t or {}).get('metadataPercentComplete') or 0)), (t or {}).get('peersConnected') or 0))
+            time.sleep(0.5)
+        files = t['files']
+        picked = pick_sets(files, wanted)
+        if not picked:
+            raise NoSets('none of these sets is in your ROM set link')
+        others = [i for i in range(len(files)) if i not in picked]
+        rpc.call('torrent-set', ids=[hash_], **{'files-unwanted': others, 'files-wanted': picked,
+                                                  'priority-high': picked})
+        rpc.call('torrent-start', ids=[hash_])
+        total = sum(files[i]['length'] for i in picked)
+        last, since = -1, time.monotonic()
+        while True:
+            t = rpc.torrent(hash_, ['files', 'peersConnected', 'error', 'errorString'])
+            done = sum(t['files'][i]['bytesCompleted'] for i in picked)
+            if done >= total:
+                break
+            if t.get('error'):
+                raise OSError(t.get('errorString') or 'Transmission reported an error')
+            now = time.monotonic()
+            if done != last:
+                last, since = done, now
+            elif now - since > args.stall:
+                raise OSError('no peer is sending the files (is the link alive?)')
+            say(args.progress, '@step %d Downloading the game key (%s of %s)' % (
+                40 + int(55 * done / max(total, 1)), human(done), human(total)))
+            time.sleep(0.5)
+        os.makedirs(args.dest, exist_ok=True)
+        for i in picked:
+            src = os.path.join(tmp, 'dl', files[i]['name'])
+            if not os.path.isfile(src):
+                raise OSError('the file %s did not arrive' % files[i]['name'])
+            shutil.move(src, os.path.join(args.dest, files[i]['name'].rsplit('/', 1)[-1]))
+        say(args.progress, '@step 100 %d set file(s) fetched' % len(picked))
+    except NoSets as e:
+        say(args.progress, '@fail ROM set|%s' % e)
+        sys.exit(4)
+    except (OSError, ValueError, KeyError) as e:
+        say(args.progress, '@fail ROM set|%s' % e)
+        sys.exit('fliperos-downloader: %s' % e)
+    finally:
+        if rpc is not None and hash_:
+            try:
+                rpc.remove(hash_, delete=True)
+                if proc is not None:
+                    rpc.call('session-close')
+            except OSError:
+                pass
+        if proc is not None:
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     # O Transmission chama o script do fim do torrent sem argumentos.
     by_transmission = len(sys.argv) == 1 and bool(os.environ.get('TR_TORRENT_HASH'))
@@ -1051,6 +1209,13 @@ def main():
     p.add_argument('kind', choices=KINDS)
     p.add_argument('--delete-files', action='store_true')
     p.set_defaults(func=cmd_remove)
+    p = sub.add_parser('fetch-sets')
+    p.add_argument('--dest', required=True)
+    p.add_argument('--progress', action='store_true')
+    p.add_argument('--timeout', type=int, default=240)
+    p.add_argument('--stall', type=int, default=180)
+    p.add_argument('names', nargs='+')
+    p.set_defaults(func=cmd_fetch_sets)
     args = parser.parse_args()
     try:
         args.func(args)

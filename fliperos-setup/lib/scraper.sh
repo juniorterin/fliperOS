@@ -571,9 +571,10 @@ scraper_attract_emulator() {
       echo "Odin|$FLIPEROS_BIN/fliperos-x11-run|fliperos-odin [name]|.zip;.7z" ;;
     # A pasta chihiro: o xemu do Tovarichtch (Sega Chihiro), instalado quando
     # chega o primeiro jogo (fliperos-emulators, tipo package). O jogo e a
-    # imagem de netboot (.bin).
+    # imagem de netboot (.bin) ou o disco dele (.7z do TOSEC, .cue, .gdi, .chd),
+    # que o fliperos-chihiro-prepare converte na primeira abertura.
     chihiro)
-      echo "Sega Chihiro|$FLIPEROS_BIN/fliperos-x11-run|fliperos-chihiro \"[romfilename]\"|.bin" ;;
+      echo "Sega Chihiro|$FLIPEROS_BIN/fliperos-x11-run|fliperos-chihiro \"[romfilename]\"|.bin;.7z;.cue;.gdi;.chd" ;;
     ps2)
       echo "PCSX2|$FLIPEROS_BIN/fliperos-x11-run|pcsx2 \"[romfilename]\"|.iso;.chd;.cso;.bin;.gz" ;;
     # O jogo e o .acgame (o fork abre o jogo por ele); a pasta e a imagem

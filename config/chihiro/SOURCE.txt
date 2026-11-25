@@ -1,0 +1,2 @@
+chihiro-netboot.py e LICENSE-chihiro-netboot: github.com/Tovarichtch/chihiro-netboot, commit 630779f (2026-09-27), MIT; so os fins de linha foram para LF.
+sets.tsv: gerado do src/mame/sega/chihiro.cpp do MAME 0.289 (tag mame0289).
