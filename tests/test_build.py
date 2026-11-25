@@ -20109,9 +20109,10 @@ class AutomountTests(unittest.TestCase):
                            FLIPEROS_MEDIA_ROOT=str(tmp / 'media'), FLIPEROS_SETUP=str(setup))
                 subprocess.run(['bash', str(self.SCRIPT), dev], env=env, check=True, timeout=10)
                 if expect:
-                    # Pronta a estrutura, o disco vai para a fila do frontend (a pergunta de se vira o armazenamento).
-                    self.assertEqual(calls.read_text().splitlines(),
-                                     ['--storage prepare %s' % target, '--storage offer %s' % target], auto)
+                    # Uma chamada so: o --storage auto (lib/storage.sh) cria a estrutura (prepare) e poe o disco na
+                    # fila do frontend (offer, a pergunta de se vira o armazenamento), ou, num disco que ja e um
+                    # Batocera filesystem, so faz a pergunta dele.
+                    self.assertEqual(calls.read_text().splitlines(), ['--storage auto %s' % target], auto)
                 else:
                     self.assertFalse(calls.exists(), auto)
 
@@ -20335,9 +20336,11 @@ class GuiZoomTests(unittest.TestCase):
         import widgets
         srv = types.SimpleNamespace(
             W=widgets, shots='', went=None, snapshot=None, shown=None, ctx={},
-            app=types.SimpleNamespace(window=object(), ui=self.layer((255, 0, 0, 255)), show=lambda *a: None),
+            app=types.SimpleNamespace(window=object(), ui=self.layer((255, 0, 0, 255)), show=lambda *a: None,
+                                      play=lambda *a: None),        # o som do menu (enter/back) nao toca aqui
             shot=lambda name: None)
         srv.which = serve.Server.which
+        srv.opens_something = lambda screen, value: serve.Server.opens_something(srv, screen, value)
         srv.answered = lambda screen, result: serve.Server.answered(srv, screen, result)
         srv.leaving = lambda screen: serve.Server.leaving(srv, screen)
         return serve, widgets, srv
@@ -20751,9 +20754,11 @@ class FrontendPopupMotionTests(unittest.TestCase):
     def test_every_place_that_opens_the_menu_or_the_plus_marks_the_time(self):
         text = (self.GUI / "fliperos-frontend").read_text()
         opens = re.findall(r'"popup", \{"sel": [^}]*\}|self\.ov = \{"sel": back[^}]*\}|self\.ov = \{"game": g, "info"[^}]*\}', text)
-        self.assertEqual(len(opens), 3, opens)
+        # Os quatro lugares: o botao do jogo, o menu depois das versoes (clones_done, que ja recebe o "now" do
+        # laco), a volta do menu e a ficha do jogo.
+        self.assertEqual(len(opens), 4, opens)
         for found in opens:
-            self.assertIn('"t0": time.monotonic()', found)
+            self.assertRegex(found, r'"t0": (time\.monotonic\(\)|now)[,}]')
         # O laco lanca o jogo pelo mesmo bloco do botao, depois da animacao.
         run = text[text.index("    def run(self, keys=()):"):]
         self.assertLess(run.index("if self.launching:"), run.index("for a in acts:"))
@@ -23835,9 +23840,9 @@ class EmulatorsMenuTests(unittest.TestCase):
                 (tmp / path).chmod(0o755)
             rows = [r.split('|') for r in self.run_cmd('fliperos-emulators', 'list', env=env).stdout.splitlines()]
             # Os do menu do desktop (config/applications), na ordem dele, e o KOF.
-            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'hbgroovymame', 'odin', 'anybor', 'flycast',
-                                                    'pcsx2', 'pcsx2x6', 'dolphin', 'openbor', 'keisho', 'fightcade',
-                                                    'duckstation', 'kof'])
+            self.assertEqual([r[0] for r in rows], ['retroarch', 'groovymame', 'hbgroovymame', 'odin', 'xemu-chihiro',
+                                                    'anybor', 'flycast', 'pcsx2', 'pcsx2x6', 'dolphin', 'openbor',
+                                                    'keisho', 'fightcade', 'duckstation', 'kof'])
             state = {r[0]: (r[1], r[2]) for r in rows}
             self.assertEqual(state['retroarch'], ('1', 'image'))
             self.assertEqual(state['flycast'], ('0', 'image'))
