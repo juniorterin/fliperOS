@@ -987,12 +987,23 @@ rm -rf /tmp/ra-info
 # complementar ao GroovyMAME standalone, o caminho principal de arcade).
 # Compilados aqui: no buildbot os cores avulsos sao "nightly" e nao dao
 # para fixar por hash. Depois do repositorio vem o que for para o make.
+# Sem CORE_PIN o core e o HEAD do upstream; CORE_PIN=<sha> compila aquele commit
+# (um core cujo HEAD parou de compilar nao derruba a ISO: o mame2010 de
+# 22/11/2026 trocou pedacos pelo libretro-common e saiu sem o path_default_slash,
+# e o build da 0.29 morreu duas horas depois de comecar).
 build_core() {
-  local repo="$1" name dir mk=""
+  local repo="$1" name dir mk="" pin="${CORE_PIN:-}"
   shift
   name="$(basename "$repo")"
   dir="/tmp/core-${name}"
-  git clone --depth=1 --recursive "https://github.com/${repo}" "$dir"
+  if [[ -n $pin ]]; then
+    rm -rf "$dir" && git init -q "$dir"
+    git -C "$dir" fetch -q --depth 1 "https://github.com/${repo}" "$pin"
+    git -C "$dir" checkout -q FETCH_HEAD
+    git -C "$dir" submodule update -q --init --recursive --depth 1
+  else
+    git clone --depth=1 --recursive "https://github.com/${repo}" "$dir"
+  fi
   if [[ -f "$dir/libretro/Makefile" ]]; then
     dir="$dir/libretro"; mk="Makefile"
   elif [[ -f "$dir/Makefile.libretro" ]]; then
@@ -1029,8 +1040,9 @@ build_core libretro/pcsx_rearmed
 # ("buffer overflow detected") ao iniciar a maquina: nenhum jogo com essa CPU
 # abria (Namco System 12 — Tekken 3, Tekken Tag, Soul Calibur —, System 23,
 # ND-1). ARCHOPTS e a variavel que o Makefile dele deixa para as flags de
-# quem compila.
-build_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE
+# quem compila. Fixo no dff8aad (o de 02/09/2026, o que todas as ISOs ate a 0.28
+# compilaram): os commits de 22/11 do upstream nao compilam (path_default_slash).
+CORE_PIN=dff8aadd1c3f38215af3955746d6e19abe0ddcea build_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE
 # FBNeo: os arcades em que o placar de uma partida versus aparece no LED do
 # gabinete pelo RetroArch (config/fliperos-versus: os detectores do Fightcade
 # descrevem a memoria deste emulador), e o core de arcade com netplay. Sai

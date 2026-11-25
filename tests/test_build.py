@@ -23469,7 +23469,12 @@ class RetroArchConfigTests(unittest.TestCase):
         # aborta o MAME 0.139 ao iniciar uma CPU H8/3002 (Namco System 12).
         body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
         self.assertIn('make -C "$dir" -f "$mk" -j"$(nproc)" "$@"', body)
-        self.assertIn('\nbuild_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE\n', body)
+        self.assertIn(' build_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE\n', body)
+        # O HEAD do mame2010 de 22/11/2026 nao compila (path_default_slash) e matou o build da
+        # 0.29: o core e compilado do commit que as ISOs ate a 0.28 compilaram, fixo por sha.
+        self.assertRegex(body, r'\nCORE_PIN=[0-9a-f]{40} build_core libretro/mame2010-libretro ')
+        self.assertIn('pin="${CORE_PIN:-}"', body)
+        self.assertIn('git -C "$dir" fetch -q --depth 1 "https://github.com/${repo}" "$pin"', body)
         # O FBNeo (o placar versus pelo RetroArch): o makefile do core fica
         # numa subpasta, e o .so vai sem os simbolos.
         self.assertIn('elif [[ -f "$dir/src/burner/libretro/Makefile" ]]; then', body)
