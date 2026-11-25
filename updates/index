@@ -105,3 +105,4 @@
 102	7043fc40eee080f841bbf169ae94d7c8c8affbb2	ceaeebc54036a9f0632effe520e7f0747ef24f1921fcd21fffef2582c85c87c1	no	Windows games wider than 640 pixels no longer come out cut off on the right (the flicker filter restarts with the screen size)
 103	f068ad1992ee7a3930c698540fc4e8109e10e176	df0425544bf83d0d57acb69991f4ad8985652d77c08872426b14b4a3c61dcc6a	no	The on-screen menu has Video configuration and Controller configuration pages, and custom games get a 16:9 crop for widescreen games
 104	8195001b12efd385ae698458495fcc2711d9b0ac	bf53745ee5526214995309e2a49eed44a469c0b20b4b456bf6c2131513b29a90	no	Sega Chihiro with the xemu emulator, the Setup at 240p on the desktop, and Dolphin 2609b and RAHasher 1.8.5
+105	613758c0c6fdb45d434b30eff0cd115752e01821	39cbc899e758f5928218066dd34350ba6dd795e3874fbb39e4a483fb6f58e7e0	no	Packages over 2 GB go in parts: links in the web panel, and a double click on any part, or dropping the parts in the panel, installs the game
