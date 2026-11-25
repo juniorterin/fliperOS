@@ -103,3 +103,4 @@
 100	4f97851e2592642d135c1d12160d1c7f8b71ba7d	db1a4f58e0b8a72dc88b0577982e7ddaf587136ddbcadce2f8196535b9c0b3b7	no	The desktop on a 31 kHz monitor no longer opens out of frequency: the X configuration always gets the 640x480 of 31 kHz, redone on the cabinets already set to 31 kHz
 101	e8d6744a21dea14b498950a5c5fad55385c2667e	125cf7feadc26c2b1eb7cbd00f469434453268a06891bf70a5846fe08cf0cbea	no	Midway games go back to their own video mode (320x240 setting removed)
 102	7043fc40eee080f841bbf169ae94d7c8c8affbb2	ceaeebc54036a9f0632effe520e7f0747ef24f1921fcd21fffef2582c85c87c1	no	Windows games wider than 640 pixels no longer come out cut off on the right (the flicker filter restarts with the screen size)
+103	f068ad1992ee7a3930c698540fc4e8109e10e176	df0425544bf83d0d57acb69991f4ad8985652d77c08872426b14b4a3c61dcc6a	no	The on-screen menu has Video configuration and Controller configuration pages, and custom games get a 16:9 crop for widescreen games
