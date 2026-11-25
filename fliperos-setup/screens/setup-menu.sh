@@ -1054,9 +1054,63 @@ screen_custom_install() {
   rc=$?
   screen_custom_games_refresh
   ((rc == 0)) || return 1
-  if [[ ${3:-} != noask ]] &&
-    ui_yesno "$title" "$name is installed in $group. Delete the package $(basename "$zip")? Keep it to install the game again or copy it to another FliperOS." no; then
-    customgames_package_delete "$zip" || ui_msg "$title" "$(ui_bad "Could not delete $(basename "$zip").")"
+  if [[ ${3:-} != noask ]]; then
+    if ! customgames_package_in_folder "$zip"; then
+      # Um pacote de fora da pasta deles (o duplo clique no desktop): o arquivo
+      # fica onde esta, so se avisa que o jogo entrou.
+      ui_msg "$title" "$name is installed in $group." "" "It is in Games > Custom games in the desktop menu and in the frontends."
+    elif ui_yesno "$title" "$name is installed in $group. Delete the package $(basename "$zip")? Keep it to install the game again or copy it to another FliperOS." no; then
+      customgames_package_delete "$zip" || ui_msg "$title" "$(ui_bad "Could not delete $(basename "$zip").")"
+    fi
+  fi
+  return 0
+}
+
+# screen_install_packages ZIP...: os pacotes que o duplo clique no desktop abriu
+# (config/applications/fliperos-customgame-install.desktop, fliperos-setup
+# --install-package). Um so: o grupo (o do jogo, se ja esta instalado, ou o
+# ultimo usado) e a mesma instalacao do Install games. Varios: um grupo para
+# todos, e no fim, se os da pasta dos pacotes saem. Status 1: nada foi instalado.
+screen_install_packages() {
+  local title="Install games" zip info name group default total ok=0
+  local -a zips=() installed=()
+  for zip in "$@"; do
+    [[ -f $zip ]] && zips+=("$(realpath -- "$zip")")
+  done
+  total=${#zips[@]}
+  if ((total == 0)); then
+    ui_msg "$title" "$(ui_bad "There is no package to install.")" "" "Double-click a GAME.fliperos-customgame.zip."
+    return 1
+  fi
+  for zip in "${zips[@]}"; do
+    if ! info=$(customgames_tool inspect "$zip" 2>&1); then
+      ui_msg "$title" "$(ui_bad "$(basename "$zip") is not a FliperOS game package.")" "" "$info"
+      return 1
+    fi
+  done
+  if ((total == 1)); then
+    zip=${zips[0]}
+    name=$(sed -n 's/^name=//p' <<< "$info")
+    default=$(customgames_installed_group "$name")
+    group=$(screen_custom_group_pick "Which group for $name? Each group is a system in the frontends." "$default") || return 1
+    screen_custom_install "$zip" "$group"
+    return
+  fi
+  group=$(screen_custom_group_pick "Install the $total packages in which group?") || return 1
+  for zip in "${zips[@]}"; do
+    if screen_custom_install "$zip" "$group" noask; then
+      ((ok++))
+      customgames_package_in_folder "$zip" && installed+=("$zip")
+    fi
+  done
+  ((ok)) || { ui_msg "$title" "No package was installed."; return 1; }
+  if ((${#installed[@]})) &&
+    ui_yesno "$title" "$ok of $total packages installed. Delete the ${#installed[@]} from $(folders_shown_path "$CUSTOM_GAMES_PACKAGES")?" no; then
+    for zip in "${installed[@]}"; do
+      customgames_package_delete "$zip"
+    done
+  else
+    ui_msg "$title" "$ok of $total packages installed in $group."
   fi
   return 0
 }

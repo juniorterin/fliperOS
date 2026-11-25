@@ -18,6 +18,9 @@
 #   sudo fliperos-setup --video-setup   abre direto o Video Setup
 #   sudo fliperos-setup --screen NOME   uma tela pedida pelo painel web (screens/panel.sh)
 #   sudo fliperos-setup --latency       abre direto o Setup > System > Latency
+#   sudo fliperos-setup --install-package ZIP...
+#                                       instala pacotes de jogo custom (o duplo clique
+#                                       do desktop; com --desktop DISPLAY antes, numa janela)
 #   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
 #   sudo fliperos-setup --driver-confirm  confirma a imagem do driver de video trocado
 #   sudo fliperos-setup --hw-check      a placa de video trocou: pergunta e refaz o teste de saidas
@@ -208,7 +211,7 @@ SETUP_STAMP=$(setup_stamp)
 SETUP_ARGS=("$@")
 
 usage() {
-  sed -n '8,23p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
+  sed -n '8,26p' "${BASH_SOURCE[0]}" | sed 's/^# *//'
 }
 
 restore_terminal() {
@@ -581,6 +584,14 @@ main() {
     --latency)
       screen_latency
       return 0
+      ;;
+    --install-package)
+      # O duplo clique num JOGO.fliperos-customgame.zip no desktop (a entrada
+      # config/applications/fliperos-customgame-install.desktop): instala os
+      # pacotes pela mesma tela do Install games.
+      shift
+      screen_install_packages "$@"
+      return
       ;;
     --update-check)
       screen_update_check

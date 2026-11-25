@@ -126,6 +126,8 @@ Then open **Setup > Games > Custom games > Install games**. The list shows every
 
 **Install all new** puts every new package in one group (asked once), installs the newer ones over their games, and at the end asks whether to delete the installed packages.
 
+**From the desktop**: double-click a `<game>.fliperos-customgame.zip` in the file manager (in `~/roms/custom-packages`, in Downloads, on a USB stick, anywhere) and the install window opens: the same steps as choosing it in **Install games**. The group comes marked as the one the game is already in (or the last one used); a game that is already installed asks whether to install over it. Select several packages and press Enter, and one window installs them all in one group. A package from the packages folder asks at the end whether to delete the zip; one from anywhere else is left where it is. Right-click > **Open with** still lets you open the zip with the archive manager (the type is a zip: `application/x-fliperos-customgame`).
+
 Zips from before this folder existed (loose in `~/roms/custom` or in the group folders) move to `~/roms/custom-packages` by themselves, when the System Update runs or Custom games opens; a game installed from one stays installed.
 
 What installing does:

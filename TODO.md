@@ -62,7 +62,8 @@ Feito em 2026-11-07 e testado só no Docker:
 - **Pastas de jogo em squashfs** (Custom games > Pack a game folder): empacotar, montar, gravar por cima, desmontar e desempacotar foram testados num container com a home em tmpfs, com lz4 (o kernel do WSL não tem o zstd do squashfs; o do FliperOS tem). Falta num gabinete: um jogo do Wine empacotado abrindo, o serviço montando no boot e o compartilhamento de rede com a pasta montada.
 - **Pacotes de jogo custom** (`JOGO.fliperos-customgame.zip`, 2026-11-14): criar, instalar, os azulejos e o executor foram testados no Docker. Falta num gabinete:
   - um pacote feito no assistente e instalado em outro gabinete;
-  - o jogo aberto pelo frontend (antes os custom davam "CANNOT OPEN THIS GAME") e pelo painel web.
+  - o jogo aberto pelo frontend (antes os custom davam "CANNOT OPEN THIS GAME") e pelo painel web;
+  - o duplo clique num `.fliperos-customgame.zip` no desktop (2026-11-25, `fliperos-setup --install-package`, tipo `application/x-fliperos-customgame`): a lógica e as bases (mime, desktop) foram testadas no Docker, mas o PCManFM nunca abriu um. Ver numa máquina com o update: o duplo clique abre a janela do Setup (e não o gerenciador de zip), um nome com espaço e parênteses chega inteiro, vários zips escolhidos abrem uma janela só, e o `Abrir com` ainda lista o gerenciador de zip.
 - **Controller configuration** (OSD dos jogos custom): o teclado foi conferido em imagem (320x240, 256x224, vertical) e o `gamekeys` pelo socket, sem controle de verdade. Falta:
   - no tubo, ler as teclas;
   - com o painel, capturar um botão e o jogo receber a tecla;

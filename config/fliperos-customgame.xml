@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  O tipo de arquivo dos pacotes de jogo custom do FliperOS (JOGO.fliperos-customgame.zip).
+  Sem ele o desktop os ve como um zip qualquer e abre o gerenciador de arquivos
+  compactados; com ele, o duplo clique abre config/applications/fliperos-customgame-install.desktop,
+  que instala o jogo (fliperos-setup --install-package). Como um zip, o "Abrir com"
+  continua mostrando os programas de zip. O glob maior vence o *.zip, como o
+  .tar.gz vence o .gz. fliperos-rootfs.sh o poe em /usr/share/mime/packages e
+  roda o update-mime-database.
+-->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-fliperos-customgame">
+    <comment>FliperOS custom game package</comment>
+    <comment xml:lang="pt-BR">Pacote de jogo custom do FliperOS</comment>
+    <sub-class-of type="application/zip"/>
+    <generic-icon name="package-x-generic"/>
+    <glob pattern="*.fliperos-customgame.zip" weight="60"/>
+  </mime-type>
+</mime-info>

@@ -76,7 +76,7 @@ Each frontend opens a game with one command, through FliperOS's wrappers: `flipe
 
 A game or program that is not a ROM (a PC game for Windows or Linux, your own emulator, a script) goes in **Setup > Games > Custom games**, in groups the frontends show as systems. There are three ways:
 
-- **Install a package**: put `<game>.fliperos-customgame.zip` in `~/roms/custom-packages` and install it from **Install games** (the group is asked then).
+- **Install a package**: put `<game>.fliperos-customgame.zip` in `~/roms/custom-packages` and install it from **Install games** (the group is asked then), or double-click the zip on the desktop, wherever it is.
 - **Create a package** from a game folder, step by step, with the picture, video, text, video mode and controller map.
 - **By its command**: a name, a command line and the video mode.
 

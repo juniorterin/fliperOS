@@ -5142,6 +5142,137 @@ class CustomGamesTests(Base):
         self.assertEqual(len(list(packages.iterdir())), 2)
         self.assertIn("customgames_packages_migrate", (ROOT / "tools/cabinet-update.sh").read_text())
 
+    # ── O duplo clique num pacote no desktop (fliperos-setup --install-package) ──
+
+    DOOM = dict(base="Doom", cfg="name=Doom\nplatform=native\ncommand=./doom -f\nmode=320x240@60\n",
+                files={"doom": b"\x7fELF...", "doom1.wad": b"wad"})
+
+    def desktop_install(self, zips, delete=True):
+        """screen_install_packages com a tela falsa (todas as perguntas sim, menos
+        a de apagar o pacote, que e delete; o grupo escolhido sempre PC games):
+        devolve a saida, o que o seletor de grupo recebeu (texto|padrao) e o
+        ambiente."""
+        picks = self.env.dir / "picks"
+        picks.write_text("")
+        media, games, e = self.pkg_env()
+        e = dict(e, PICKS=str(picks))
+        script = """
+            source %s/lib/ui.sh
+            source %s/screens/progress.sh
+            source %s/screens/setup-menu.sh
+            ui_msg() { echo "msg:$*"; }
+            ui_bad() { echo "$*"; }
+            ui_yesno() { echo "yesno:$2"; case $2 in *"Delete the "*) return %d ;; esac; return 0; }
+            screen_custom_group_pick() { echo "$1|${2:-}" >> "$PICKS"; echo "PC games"; }
+            run_with_progress() { shift 2; "$@" > /dev/null; }
+            screen_custom_games_refresh() { :; }
+            screen_install_packages %s
+            echo "status:$?"
+        """ % (SETUP, SETUP, SETUP, 0 if delete else 1, " ".join("'%s'" % z for z in zips))
+        r = self.env.run(script, e)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout, picks.read_text().splitlines(), e
+
+    def test_a_package_outside_the_packages_folder_installs_and_stays_where_it_is(self):
+        # O Downloads, um pendrive: o jogo entra (o cfg aponta o zip), o arquivo
+        # fica, e o Setup nao oferece apagar o que nao e da pasta dos pacotes.
+        media, games, e = self.pkg_env()
+        inside = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip")
+        outside = self.make_pkg(self.env.dir / "Downloads" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        in_folder = lambda z: self.env.run('customgames_package_in_folder "$Z"', dict(e, Z=str(z))).returncode
+        self.assertEqual(in_folder(inside), 0)
+        self.assertEqual(in_folder(outside), 1)
+        self.assertEqual(in_folder(self.roms / "custom-packages" / "gone.fliperos-customgame.zip"), 1)
+        self.assertEqual(in_folder(self.roms / "custom-packages" / ".." / "Pang.fliperos-customgame.zip"), 1)
+        out, picks, e = self.desktop_install([outside])
+        self.assertEqual(picks, ["Which group for Doom? Each group is a system in the frontends.|"])
+        self.assertIn("msg:Install games Doom is installed in PC games.", out)
+        self.assertNotIn("yesno:Doom is installed", out)
+        self.assertTrue(out.endswith("status:0\n"), out)
+        self.assertTrue(outside.exists())
+        self.assertIn("package=%s\n" % outside, (self.roms / "custom" / "PC games" / "Doom.cfg").read_text())
+        self.assertTrue((self.env.dir / "games" / "PC games" / "Doom" / "doom").exists())
+        self.assertEqual(self.env.run('customgames_package_delete "$Z"', dict(e, Z=str(outside))).returncode, 2)
+
+    def test_double_click_on_a_package_of_the_folder_asks_before_deleting_it(self):
+        media, games, e = self.pkg_env()
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        # Nao apagar: o jogo entra e o zip fica. Apagar (depois): o zip sai.
+        out, picks, e = self.desktop_install([zip_], delete=False)
+        self.assertIn("yesno:Doom is installed in PC games. Delete the package Doom.fliperos-customgame.zip?", out)
+        self.assertTrue(zip_.exists())
+        self.assertTrue((self.roms / "custom" / "PC games" / "Doom.sh").exists())
+        # De novo, com o jogo ja instalado: o seletor traz o grupo dele e a troca e perguntada.
+        out, picks, e = self.desktop_install([zip_])
+        self.assertEqual(picks, ["Which group for Doom? Each group is a system in the frontends.|PC games"])
+        self.assertIn("yesno:Doom is already in PC games. Install the package over it?", out)
+        self.assertFalse(zip_.exists())
+        self.assertTrue((self.roms / "custom" / "PC games" / "Doom.sh").exists())
+
+    def test_several_packages_chosen_together_open_one_window_and_one_group(self):
+        media, games, e = self.pkg_env()
+        inside = self.make_pkg(self.roms / "custom-packages" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        outside = self.make_pkg(self.env.dir / "Downloads" / "Cave.fliperos-customgame.zip", base="Cave",
+                                cfg="name=Cave\nplatform=native\ncommand=./cave\n", files={"cave": b"#!/bin/sh\n"})
+        out, picks, e = self.desktop_install([outside, inside])
+        self.assertEqual(picks, ["Install the 2 packages in which group?|"])
+        for name in ("Doom", "Cave"):
+            self.assertTrue((self.roms / "custom" / "PC games" / ("%s.sh" % name)).exists(), name)
+        # So o da pasta dos pacotes entra na pergunta de apagar, e so ele sai.
+        self.assertIn("yesno:2 of 2 packages installed. Delete the 1 from", out)
+        self.assertFalse(inside.exists())
+        self.assertTrue(outside.exists())
+
+    def test_double_click_on_something_that_is_not_a_package_says_so(self):
+        bad = self.env.dir / "Downloads" / "Pang.fliperos-customgame.zip"
+        self.make_pkg(bad, cfg="name=Pang\nplatform=windows\nexe=bin/missing.exe\n")
+        out, picks, e = self.desktop_install([bad])
+        self.assertIn("msg:Install games Pang.fliperos-customgame.zip is not a FliperOS game package.", out)
+        self.assertEqual(picks, [])
+        self.assertTrue(out.endswith("status:1\n"), out)
+        out, picks, e = self.desktop_install([self.env.dir / "nothing.fliperos-customgame.zip"])
+        self.assertIn("There is no package to install.", out)
+        self.assertTrue(out.endswith("status:1\n"), out)
+
+    def test_the_desktop_double_click_runs_the_setup_install_screen(self):
+        # O tipo de arquivo (um zip, glob maior que o *.zip), a entrada que o abre
+        # (Terminal=true, o --desktop do atalho do Setup e todos os arquivos
+        # escolhidos), o --install-package do Setup e o rootfs que refaz as bases.
+        xml = (ROOT / "config/fliperos-customgame.xml").read_text()
+        self.assertIn('<mime-type type="application/x-fliperos-customgame">', xml)
+        self.assertIn('<sub-class-of type="application/zip"/>', xml)
+        self.assertIn('<glob pattern="*.fliperos-customgame.zip" weight="60"/>', xml)
+        entry = (ROOT / "config/applications/fliperos-customgame-install.desktop").read_text()
+        self.assertIn("MimeType=application/x-fliperos-customgame;\n", entry)
+        self.assertIn("Terminal=true\n", entry)
+        self.assertIn("NoDisplay=true\n", entry)
+        self.assertIn("""Exec=sh -c 'sudo /usr/local/bin/fliperos-setup --desktop "$DISPLAY" """
+                      """"${XAUTHORITY:-$HOME/.Xauthority}" --install-package "$@"' sh %F\n""", entry)
+        # Fora do menu dos emuladores (Categories=Game; entra no EmulatorMenuTests).
+        self.assertNotIn("Categories=Game;", entry)
+        main = (SETUP / "fliperos-setup").read_text()
+        case = main.split("    --install-package)\n")[1].split("      ;;\n")[0]
+        self.assertIn('screen_install_packages "$@"', case)
+        self.assertLess(case.index("shift"), case.index("screen_install_packages"))
+        # Depois do --desktop (que leva o display), onde a interface grafica ja abriu.
+        self.assertLess(main.index("SETUP_DESKTOP=1"), main.index("    --install-package)"))
+        self.assertLess(main.index("ui_init\n  # Controle como teclado"), main.index("    --install-package)"))
+        # O --help lista a linha nova (as linhas 8 a 26 do cabecalho).
+        header = main.split("\n")[7:26]
+        self.assertTrue(any("--install-package ZIP..." in l for l in header))
+        self.assertIn("--hw-check", header[-1])
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn('install -Dm644 "$src/config/fliperos-customgame.xml" "$root/usr/share/mime/packages/'
+                      'fliperos-customgame.xml"', rootfs)
+        self.assertIn('chroot "$root" update-mime-database /usr/share/mime', rootfs)
+        self.assertIn('chroot "$root" update-desktop-database /usr/local/share/applications', rootfs)
+        # O update das maquinas refaz as bases depois dos pacotes novos tambem.
+        update = (ROOT / "tools/cabinet-update.sh").read_text()
+        self.assertIn("packages+=(shared-mime-info desktop-file-utils)", update)
+        self.assertGreater(update.index("update-mime-database /usr/share/mime"), update.index('"${packages[@]}"'))
+        self.assertIn("update-desktop-database /usr/local/share/applications", update)
+        self.assertIn("shared-mime-info desktop-file-utils", (ROOT / "fliperos-mkiso.sh").read_text())
+
     def test_create_a_package_from_the_panel(self):
         # Criar pacote (o painel): uma linha sem grupo; o zip na pasta dos
         # pacotes, para instalar.

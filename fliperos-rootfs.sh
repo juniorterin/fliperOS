@@ -548,6 +548,24 @@ if [[ -x "$root/usr/bin/glib-compile-schemas" ]] && [[ -d "$root/proc/1" || -n $
   chroot "$root" glib-compile-schemas /usr/share/glib-2.0/schemas || true
 fi
 
+# O duplo clique num JOGO.fliperos-customgame.zip no desktop instala o jogo: o
+# tipo de arquivo dele (glob *.fliperos-customgame.zip, um zip) e a entrada
+# fliperos-customgame-install.desktop (config/applications, ja copiada acima) que
+# o abre. As duas bases tem de ser refeitas, senao o desktop segue vendo um zip
+# qualquer: a de tipos (update-mime-database) e a do que cada entrada abre
+# (update-desktop-database, o mimeinfo.cache de /usr/local/share/applications).
+# So com o sistema em pe: num rootfs sem proc (os testes) nao ha o que rodar, e
+# no update das maquinas e este mesmo passo que as gera.
+install -Dm644 "$src/config/fliperos-customgame.xml" "$root/usr/share/mime/packages/fliperos-customgame.xml"
+if [[ -d "$root/proc/1" || -n ${FLIPEROS_ROOTFS_CHROOT:-} ]]; then
+  if [[ -x "$root/usr/bin/update-mime-database" ]]; then
+    chroot "$root" update-mime-database /usr/share/mime > /dev/null 2>&1 || true
+  fi
+  if [[ -x "$root/usr/bin/update-desktop-database" ]]; then
+    chroot "$root" update-desktop-database /usr/local/share/applications > /dev/null 2>&1 || true
+  fi
+fi
+
 # Xorg sem descanso de tela ate o fliperos-setup gerar a configuracao do
 # monitor (ele reescreve este arquivo).
 mkdir -p "$root/etc/X11/xorg.conf.d"

@@ -494,6 +494,27 @@ customgames_packages_migrate() {
   return 0
 }
 
+# customgames_package_in_folder ZIP: o zip e um arquivo da pasta dos pacotes
+# (~/roms/custom-packages): so desses o Setup oferece apagar. Um pacote de
+# fora (o Downloads, um pendrive) abre pelo duplo clique do desktop e fica
+# onde esta.
+customgames_package_in_folder() {
+  local base real
+  base=$(realpath -m -- "$CUSTOM_GAMES_PACKAGES") || return 1
+  real=$(realpath -m -s -- "$1") || return 1
+  [[ $real == "$base"/* && ${real,,} == *.zip && -f $real ]]
+}
+
+# customgames_installed_group NOME: o grupo em que um jogo com esse nome ja
+# esta instalado (o primeiro). Status 1: em nenhum.
+customgames_installed_group() {
+  local g name
+  while IFS='|' read -r g name _; do
+    [[ $name == "$1" ]] && { printf '%s\n' "$g"; return 0; }
+  done < <(customgames_list)
+  return 1
+}
+
 # customgames_package_delete ZIP: apaga um pacote da pasta deles (o jogo
 # instalado dele fica; o cfg deixa de apontar o zip). Status 2: o ZIP nao e
 # um pacote da pasta.

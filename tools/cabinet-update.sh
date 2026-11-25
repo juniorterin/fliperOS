@@ -168,6 +168,10 @@ packages+=(usb-modeswitch usb-modeswitch-data)
 # Formatar um disco em exFAT (Setup > Games > Folders > External storage,
 # lib/storage.sh): o mkfs.exfat. O ext4 ja vinha (e2fsprogs).
 packages+=(exfatprogs)
+# O duplo clique num JOGO.fliperos-customgame.zip no desktop (config/fliperos-customgame.xml
+# e config/applications/fliperos-customgame-install.desktop): o update-mime-database e o
+# update-desktop-database que o fliperos-rootfs.sh roda.
+packages+=(shared-mime-info desktop-file-utils)
 [[ -f /etc/apt/sources.list.d/fliperos.list ]] && packages+=(fliperos-attractplus)
 # O SDL2 do GroovyMAME no KMS (config/fliperos-groovymame), quando o
 # repositorio local o tem (o das imagens anteriores nao tem: fica no X).
@@ -301,6 +305,11 @@ systemctl try-restart fliperos-stream.service 2> /dev/null || true
 # O override da App Store (fliperos-rootfs.sh) pode ter chegado depois do
 # pacote.
 glib-compile-schemas /usr/share/glib-2.0/schemas 2> /dev/null || true
+# O tipo dos pacotes de jogo custom e o que cada atalho abre: o fliperos-rootfs.sh ja
+# refez as duas bases, mas antes de a desktop-file-utils chegar, se ela faltava. Sem
+# elas o duplo clique em JOGO.fliperos-customgame.zip abria o gerenciador de zip.
+update-mime-database /usr/share/mime > /dev/null 2>&1 || true
+update-desktop-database /usr/local/share/applications > /dev/null 2>&1 || true
 # O backup na nuvem de hora em hora e ao desligar: as unidades novas ja
 # valem sem reiniciar.
 systemctl start fliperos-cloud-backup.timer fliperos-cloud-shutdown.service 2> /dev/null || true

@@ -286,6 +286,8 @@ apt-get update -qq
 # pelo VA-API (sem ele o hwdownload da EPERM); na imagem, a tela ao vivo do
 # primeiro boot nao depende do apt.
 # bluez: os controles Bluetooth (Setup > Joysticks > Bluetooth, config/fliperos-bluetooth).
+# shared-mime-info e desktop-file-utils: o update-mime-database e o update-desktop-database
+# do duplo clique num pacote de jogo custom (fliperos-rootfs.sh, config/fliperos-customgame.xml).
 apt-get install -y --no-install-recommends \
   live-boot live-boot-initramfs-tools \
   locales tzdata systemd systemd-sysv udev sudo bash \
@@ -309,6 +311,7 @@ apt-get install -y --no-install-recommends \
   lxhotkey-gtk lxinput lxrandr lxsession-edit galculator gpicview mousepad xarchiver alacritty \
   gnome-themes-extra gtk2-engines-murrine gtk2-engines-pixbuf librsvg2-common gxmessage \
   htop joy2key qjoypad hwinfo lshw read-edid i2c-tools mc \
+  shared-mime-info desktop-file-utils \
   bluez espeak-ng triggerhappy zsh picom
 
 # O transmission-daemon e o do Setup > Games > Downloader (fliperos-transmission, do
