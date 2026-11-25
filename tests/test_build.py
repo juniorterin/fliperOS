@@ -8244,6 +8244,9 @@ class FrontendDataTests(unittest.TestCase):
             fe = types.SimpleNamespace(overlay=None, ov={}, said=[], fd=types.SimpleNamespace(SETUP=str(setup)))
             fe.say = lambda text, *a: fe.said.append(text)
             fe.launch = lambda argv, g: opened.append(argv)
+            # O emulador recem-instalado pode trazer listas novas (o HBMAME): o frontend as le de novo.
+            refreshed = []
+            fe.lib = types.SimpleNamespace(refreshing=False, refresh=lambda: refreshed.append(True))
             for name in ('emulator_start', 'fetch_start', 'unpack_tick'):
                 setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
             argv = [x11, 'fliperos-model2', 'daytona']
@@ -8262,6 +8265,7 @@ class FrontendDataTests(unittest.TestCase):
             self.assertEqual(fe.ov['progress'], (100, 100, 'done'))
             fe.unpack_tick()
             self.assertEqual((fe.overlay, opened), (None, [argv]))
+            self.assertEqual(refreshed, [True])
         frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
         launch = frontend.split('    def launch(self, argv=None, game=None, media=False):')[1].split('    def play(')[0]
         self.assertLess(launch.index('missing_emulator(argv)'), launch.index('self.remember()'))
@@ -22256,7 +22260,8 @@ class DocsTests(unittest.TestCase):
         self.assertLess(mobile.index('href={LINKS.docs}'), mobile.index('href={readmeUrl(locale)}'))
         for lang in ('en-US', 'pt-BR'):
             text = (src / 'i18n' / (lang + '.ts')).read_text(encoding='utf-8')
-            self.assertRegex(text, r"\n    wiki: '[^']+',\n    viewOnGithub:")
+            # O Compartilhar (share) fica entre a wiki e o GitHub: a wiki continua logo acima do GitHub.
+            self.assertRegex(text, r"\n    wiki: '[^']+',\n(?:    share: '[^']+',\n)?    viewOnGithub:")
             self.assertRegex(text, r"\n    ctaWiki: '[^']+',")
 
     def test_site_support_section_has_no_secrets_and_no_mailto(self):
