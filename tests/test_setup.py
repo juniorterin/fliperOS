@@ -11646,9 +11646,14 @@ class SetupGroupsTests(Base):
         found = []
         for name in self.SCREENS:
             text = (SETUP / "screens" / name).read_text()
-            for call in text.split("ui_menu_hints ")[1:]:
+            for opened in re.finditer(r"ui_menu_hints ", text):
+                call = text[opened.end():]
                 title = call.split('"')[1]
                 body = call.split(") ||")[0]
+                # Os itens montados num array antes da chamada (o menu principal: "${items[@]}"): os da
+                # funcao, do comeco dela ate a chamada.
+                if '"${items[@]}"' in body:
+                    body = text[:opened.start()].rsplit("() {", 1)[-1] + body
                 for value, label, hint in re.findall(r'"([a-z_]+)\|([^|"]+)\|([^"|]+)"', body):
                     found.append((name, title, value, label, hint))
         return found
