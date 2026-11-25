@@ -9697,6 +9697,42 @@ class SplashTests(Base):
             self.assertTrue((theme / ("logo-%s.png" % side)).is_file())
             self.assertTrue((theme / ("throbber-%s-032.png" % side)).is_file())
 
+    def test_boot_screen_stays_in_the_area_a_31khz_tube_shows(self):
+        # O Plymouth recebe as vezes um framebuffer maior (1024x768) que o modo
+        # do tubo de 31 kHz (640x480): o tema de texto monta tudo na area que
+        # o tubo mostra, pelas linhas visible_w/visible_h, que o Setup troca.
+        for base in (self.themes, self.home):
+            d = self.theme(base, "fliperos-text", script="fliperos-text.script")
+            (d / "fliperos-text.script").write_text("// x\nvisible_w = 0;\nvisible_h = 0;\nW = 1;\n")
+        self.theme(self.themes, "other", script="other.script")
+        (self.themes / "default.plymouth").symlink_to(self.themes / "fliperos-text" / "fliperos-text.plymouth")
+        script = self.themes / "fliperos-text" / "fliperos-text.script"
+        # 15 kHz: a janela inteira, nada a refazer.
+        self.env.out("conf_set frequency 15k; conf_set boot_resolution 640x480iS")
+        self.assertEqual(self.env.run("splash_visible_size", self.vars).stdout.strip(), "0 0")
+        self.assertEqual(self.env.run("splash_visible", self.vars).returncode, 1)
+        # 31 kHz: 640x480 (o modo do boot), no tema do boot e na copia; o initramfs muda.
+        self.env.out("conf_set frequency 31k; conf_set boot_resolution 640x480S")
+        self.assertEqual(self.env.run("splash_visible", self.vars).returncode, 0)
+        for base in (self.themes, self.home):
+            text = (base / "fliperos-text" / "fliperos-text.script").read_text()
+            self.assertIn("visible_w = 640;\nvisible_h = 480;\n", text)
+        # Ja esta assim: nada mais a refazer.
+        self.assertEqual(self.env.run("splash_visible", self.vars).returncode, 1)
+        # Um 31 kHz sem boot_resolution (o modo vem de um EDID) segue em 640x480.
+        self.env.out("conf_unset boot_resolution")
+        self.assertEqual(self.env.run("splash_visible_size", self.vars).stdout.strip(), "640 480")
+        # Outro tema fica como esta; de volta ao 15 kHz, a janela inteira.
+        self.assertEqual((self.themes / "other" / "other.script").read_text(), "// script\n")
+        self.env.out("conf_set frequency 15k")
+        self.assertEqual(self.env.run("splash_visible", self.vars).returncode, 0)
+        self.assertIn("visible_w = 0;\nvisible_h = 0;\n", script.read_text())
+        # O tema do repositorio vem com as linhas (0 = a janela inteira) e as usa.
+        theme = SETUP.parent / "config" / "splashscreen" / "fliperos-text" / "fliperos-text.script"
+        text = theme.read_text(encoding="utf-8")
+        self.assertIn("visible_w = 0;\nvisible_h = 0;\n", text)
+        self.assertIn("W = Window.GetWidth();\nH = Window.GetHeight();\nif (visible_w > 0 && W > visible_w)", text)
+
     def test_list_puts_the_home_folder_first(self):
         self.theme(self.bundled, "fliperos", name="FliperOS")
         self.theme(self.home, "fliperos", name="FliperOS changed")

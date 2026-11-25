@@ -22096,6 +22096,26 @@ class SplashTests(unittest.TestCase):
         roms = (ROOT / 'config/fliperos-roms').read_text()
         self.assertIn('splash=${FLIPEROS_SPLASH:-$HOME/splashscreen}', roms)
 
+    def test_rootfs_keeps_the_text_theme_in_the_area_a_31khz_tube_shows(self):
+        # A copia nova do tema (todo update) voltaria as linhas visible_w/h a
+        # 0; o rootfs poe de novo o 640x480 do monitor de 31 kHz, e num de
+        # 15 kHz deixa a janela inteira.
+        for freq, res, want in (('31k', '640x480S', '640;\nvisible_h = 480'), ('31k', '', '640;\nvisible_h = 480'),
+                                ('15k', '640x480iS', '0;\nvisible_h = 0')):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                for d in ('home/fliperos', 'etc/fliperos', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                          'etc/systemd/system'):
+                    (root / d).mkdir(parents=True)
+                (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+                (root / 'etc/fliperos/fliperos.conf').write_text(
+                    'frequency=%s\n%s' % (freq, 'boot_resolution=%s\n' % res if res else ''))
+                subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                               capture_output=True, timeout=120)
+                text = (root / 'usr/share/plymouth/themes/fliperos-text/fliperos-text.script').read_text(
+                    encoding='utf-8')
+                self.assertIn('visible_w = %s;' % want, text, (freq, res))
+
     def test_cabinet_update_rebuilds_initramfs_for_a_new_splash(self):
         script = (ROOT / 'tools/cabinet-update.sh').read_text()
         before = script.index('splash_before=$(splash_sum)')

@@ -84,7 +84,7 @@ splash_current() {
 # splash_stage NOME copia o tema para o Plymouth como NOME/NOME.plymouth,
 # com o ImageDir e o ScriptFile apontando para la.
 splash_stage() {
-  local name=$1 src file dest
+  local name=$1 src file dest vw vh
   src=$(splash_source "$name") || return 1
   file=$(splash_theme_file "$src") || return 1
   dest=$PLYMOUTH_THEMES/$name
@@ -100,6 +100,8 @@ splash_stage() {
   mv -f "$dest.new/.theme" "$dest.new/$name.plymouth"
   # O tema que sabe girar (o do FliperOS) segue o monitor.
   splash_orient_scripts "$dest.new" "$(conf_get orientation 2> /dev/null || echo horizontal)"
+  read -r vw vh <<< "$(splash_visible_size)"
+  splash_visible_scripts "$dest.new" "$vw" "$vh" || true
   chmod -R a+rX "$dest.new"
   rm -rf "$dest"
   mv "$dest.new" "$dest"
@@ -130,6 +132,62 @@ splash_orientation() {
   for dir in "$PLYMOUTH_THEMES"/*/ "$SPLASH_DIR"/*/; do
     [[ -d $dir ]] || continue
     if splash_orient_scripts "${dir%/}" "$o" && [[ $(basename "$dir") == "$current" && $dir == "$PLYMOUTH_THEMES"/* ]]; then
+      changed=0
+    fi
+  done
+  return "$changed"
+}
+
+# splash_visible_size imprime "LARGURA ALTURA" da area que o tubo mostra no
+# splash, ou "0 0" quando o Setup nao a conhece (15 kHz, LCD: a janela do
+# Plymouth). Um monitor de 31 kHz (e o de 25 kHz) tem um modo progressivo so, o
+# do boot_resolution (640x480S): o Plymouth recebe as vezes um framebuffer
+# maior (o 1024x768 do firmware) e o tubo mostra so o canto de cima, a
+# esquerda, dele.
+splash_visible_size() {
+  local freq res
+  freq=$(conf_get frequency 2> /dev/null) || freq=""
+  res=$(conf_get boot_resolution 2> /dev/null) || res=""
+  case $freq in
+    25* | 31*)
+      if [[ $res =~ ^([0-9]+)x([0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+        return 0
+      fi
+      ;;
+  esac
+  if [[ $freq == 31* ]]; then
+    echo "640 480"
+  else
+    echo "0 0"
+  fi
+}
+
+# splash_visible_scripts PASTA LARGURA ALTURA troca as linhas visible_w e
+# visible_h dos .script da pasta que as tem (o tema de texto do FliperOS).
+# Status 0: alguma mudou.
+splash_visible_scripts() {
+  local dir=$1 w=$2 h=$3 f changed=1
+  for f in "$dir"/*.script; do
+    [[ -f $f ]] && grep -q '^visible_w = ' "$f" || continue
+    grep -qx "visible_w = $w;" "$f" && grep -qx "visible_h = $h;" "$f" && continue
+    sed -i -e "s/^visible_w = [0-9]*;/visible_w = $w;/" -e "s/^visible_h = [0-9]*;/visible_h = $h;/" "$f"
+    changed=0
+  done
+  return "$changed"
+}
+
+# splash_visible: o splash do boot na area que o tubo mostra, a do monitor de
+# agora (splash_visible_size), no tema do Plymouth e nas copias de
+# ~/splashscreen. Status 0: o tema do boot mudou e o initramfs precisa ser
+# refeito (o boot_apply o refaz).
+splash_visible() {
+  local w h dir current changed=1
+  read -r w h <<< "$(splash_visible_size)"
+  current=$(splash_current 2> /dev/null)
+  for dir in "$PLYMOUTH_THEMES"/*/ "$SPLASH_DIR"/*/; do
+    [[ -d $dir ]] || continue
+    if splash_visible_scripts "${dir%/}" "$w" "$h" && [[ $(basename "$dir") == "$current" && $dir == "$PLYMOUTH_THEMES"/* ]]; then
       changed=0
     fi
   done

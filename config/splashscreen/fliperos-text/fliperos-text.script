@@ -22,8 +22,22 @@
 Window.SetBackgroundTopColor(0.157, 0.165, 0.212);
 Window.SetBackgroundBottomColor(0.071, 0.075, 0.098);
 
+// A area que o tubo mostra, em pixels, quando o Setup a conhece (lib/splash.sh
+// splash_visible: o monitor de 31 kHz, 640x480; 0 = a janela inteira). O
+// Plymouth as vezes recebe um framebuffer maior que o modo que o CRT recebe
+// (visto num monitor de 31 kHz: a tela de 1024x768 do firmware com o tubo em
+// 640x480): o titulo e a barra ficavam fora, cortados na direita e embaixo.
+// Os dois numeros sao trocados pelo Setup; o tema monta tudo nessa area, no
+// canto de cima, a esquerda, que e o que o tubo mostra.
+visible_w = 0;
+visible_h = 0;
+
 W = Window.GetWidth();
 H = Window.GetHeight();
+if (visible_w > 0 && W > visible_w)
+  W = visible_w;
+if (visible_h > 0 && H > visible_h)
+  H = visible_h;
 py = 1;
 if (W > 2 * H)
   py = 0.5;

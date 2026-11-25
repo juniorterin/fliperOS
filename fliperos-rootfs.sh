@@ -690,6 +690,25 @@ orientation=$(sed -n 's/^orientation=//p' "$root/etc/fliperos/fliperos.conf" 2> 
 if [[ $orientation == vertical-cw || $orientation == vertical-ccw ]]; then
   sed -i "s/^orientation = \"[^\"]*\";/orientation = \"$orientation\";/" "$root"/usr/share/plymouth/themes/*/*.script
 fi
+# O tema de texto na area que o tubo mostra, a mesma conta do Setup (lib/splash.sh
+# splash_visible_size): num monitor de 31 kHz o 640x480 do boot (25 kHz: o
+# modo gravado), porque o Plymouth as vezes recebe um framebuffer maior que o
+# modo do CRT. Sem isso a copia nova do tema desfaria o que o Setup gravou, e o
+# initramfs seria refeito a cada update.
+vis_freq=$(sed -n 's/^frequency=//p' "$root/etc/fliperos/fliperos.conf" 2> /dev/null | tail -1) || vis_freq=""
+vis_res=$(sed -n 's/^boot_resolution=//p' "$root/etc/fliperos/fliperos.conf" 2> /dev/null | tail -1) || vis_res=""
+vis_w=0 vis_h=0
+if [[ $vis_freq == 25* || $vis_freq == 31* ]] && [[ $vis_res =~ ^([0-9]+)x([0-9]+) ]]; then
+  vis_w=${BASH_REMATCH[1]} vis_h=${BASH_REMATCH[2]}
+elif [[ $vis_freq == 31* ]]; then
+  vis_w=640 vis_h=480
+fi
+if ((vis_w > 0)); then
+  for script in "$root"/usr/share/plymouth/themes/*/*.script; do
+    grep -q '^visible_w = ' "$script" 2> /dev/null &&
+      sed -i -e "s/^visible_w = [0-9]*;/visible_w = $vis_w;/" -e "s/^visible_h = [0-9]*;/visible_h = $vis_h;/" "$script"
+  done
+fi
 # JetBrains Mono, a fonte do tema de texto, tambem no initramfs (o hook).
 rm -rf "$root/usr/share/fonts/truetype/fliperos"
 install -Dm644 -t "$root/usr/share/fonts/truetype/fliperos" \

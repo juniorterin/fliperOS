@@ -540,9 +540,11 @@ boot_menu_timeout() {
 # atual (modo de boot, EDID, orientacao e latencia) e atualiza o menu do
 # Limine.
 boot_apply() {
-  local line
+  local line splash_changed=0
   # O EDID do monitor custom segue a resolucao e o crt_range de agora.
   video_custom_active && { custom_edid || true; }
+  # O splash na area que o tubo mostra (31 kHz): so vale no initramfs.
+  splash_visible && splash_changed=1
   line=$(boot_read_cmdline) || line=$BOOT_BASE_CMDLINE
   line=$(boot_compose "$line")
   boot_write_cmdline "$line" || return 1
@@ -551,7 +553,7 @@ boot_apply() {
   # modprobe.d de um driver AMD trocado so valem se estiverem no initramfs; o
   # hook do initramfs tambem chama o fliperos-limine-update.
   if [[ $(conf_get boot_resolution 2> /dev/null) == custom || $(conf_get boot_resolution 2> /dev/null) == "$SUPER240_MODE" ]] ||
-    [[ -f $EDID_DIR/$CUSTOM_EDID || $line == *"edid/$LINK_EDID"* ]] || ((${BOOT_INITRAMFS:-0})); then
+    [[ -f $EDID_DIR/$CUSTOM_EDID || $line == *"edid/$LINK_EDID"* ]] || ((${BOOT_INITRAMFS:-0} || splash_changed)); then
     run_logged update-initramfs -u -k all
   else
     run_logged "$LIMINE_UPDATE"
