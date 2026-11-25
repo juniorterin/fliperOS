@@ -116,7 +116,10 @@ ui_gui_wanted() {
   esac
   # Pelo desktop (o atalho FliperOS Setup do LXDE, --desktop): numa janela.
   ((${SETUP_DESKTOP:-0} == 1)) && [[ -n ${DISPLAY:-} ]] && return 0
-  ((${SETUP_MENU_LOOP:-0} == 1)) && [[ -z ${DISPLAY:-} ]] && compgen -G "${UI_DRI}[0-9]*" > /dev/null
+  # Pedido pelo desktop (--from-desktop): o desktop fechou, e a interface abre
+  # no tubo, como no menu do gabinete.
+  ((${SETUP_MENU_LOOP:-0} == 1 || ${SETUP_FROM_DESKTOP:-0} == 1)) && [[ -z ${DISPLAY:-} ]] &&
+    compgen -G "${UI_DRI}[0-9]*" > /dev/null
 }
 
 # ui_gui_alive: a interface grafica esta no ar? Se ela caiu (um abort do

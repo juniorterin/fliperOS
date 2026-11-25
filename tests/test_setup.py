@@ -4964,7 +4964,7 @@ class CustomGamesTests(Base):
         self.assertIn('"logo|Logo: ${logo:+$(basename "$logo")}${logo:-none}"', wizard)
         self.assertIn("logo) value=$(customgames_browse", wizard)
         self.assertIn("logo=$CG_FOUND_LOGO", wizard)
-        self.assertIn("for value in category controls buttons players year developer snap logo video text key ppdb; do", wizard)
+        self.assertIn("for value in category controls buttons players year developer snap logo icon video text key ppdb; do", wizard)
         self.assertIn('$CUSTOM_GAMES_MEDIA/logo/custom/$group/$from.$value', wizard)
 
     def test_a_package_logo_installs_packs_and_is_found(self):
@@ -5018,6 +5018,99 @@ class CustomGamesTests(Base):
         self.env.out("customgames_cli create \"$F\"", dict(e, F=str(rows)))
         with zipfile.ZipFile(self.roms / "custom-packages" / "Metal Slug X.fliperos-customgame.zip") as zf:
             self.assertEqual(zf.read("Metal Slug X.logo.png"), b"png")
+
+    def test_a_package_icon_is_optional_installs_packs_and_is_found(self):
+        # O icone do jogo no desktop (o campo Icon, opcional): JOGO.icon.png no pacote, em
+        # ~/media/icon/custom/GRUPO/JOGO.png depois de instalado (so o desktop o usa), volta ao
+        # empacotar e a pasta solta o acha. Sem ele, nada muda (o icone e a imagem).
+        import zipfile
+        media, games, e = self.pkg_env()
+        tool = str(ROOT / "config/fliperos-customgame")
+        plain = self.make_pkg(self.roms / "custom-packages" / "Plain.fliperos-customgame.zip", base="Plain")
+        inspected = subprocess.run(["python3", tool, "inspect", str(plain)], capture_output=True, text=True)
+        self.assertNotIn("icon", inspected.stdout.split("media=")[1].splitlines()[0])
+        zip_ = self.make_pkg(self.roms / "custom-packages" / "Pang.fliperos-customgame.zip",
+                             extra={"Pang.png": b"snap", "Pang.icon.ico": b"icon"})
+        inspected = subprocess.run(["python3", tool, "inspect", str(zip_)], capture_output=True, text=True)
+        self.assertEqual(inspected.returncode, 0, inspected.stderr)
+        self.assertIn("media=snap,icon\n", inspected.stdout)
+        self.env.out("customgames_install \"$Z\" PC", dict(e, Z=str(zip_)))
+        self.assertEqual((media / "icon/custom/PC/Pang.ico").read_bytes(), b"icon")
+        self.assertEqual((media / "snap/custom/PC/Pang.png").read_bytes(), b"snap")
+        # O icone do desktop e o dele; sem ele, a imagem.
+        self.assertEqual(self.env.out("customgames_icon PC Pang", e).strip(), str(media / "icon/custom/PC/Pang.ico"))
+        (media / "icon/custom/PC/Pang.ico").unlink()
+        self.assertEqual(self.env.out("customgames_icon PC Pang", e).strip(), str(media / "snap/custom/PC/Pang.png"))
+        (media / "icon/custom/PC/Pang.ico").write_bytes(b"icon")
+        # Dois icones no zip sao um problema do pacote (um por jogo); um nome sem o .icon, tambem.
+        two = self.make_pkg(self.roms / "custom-packages" / "Two.fliperos-customgame.zip", base="Two",
+                            extra={"Two.icon.png": b"a", "Two.icon.webp": b"b"})
+        self.assertIn("two icon files", subprocess.run(["python3", tool, "inspect", str(two)],
+                                                       capture_output=True, text=True).stderr)
+        # O pacote de um jogo instalado leva o icone de volta (e e o mesmo que o jogo tem agora).
+        zip_.unlink()
+        self.env.out("customgames_pack_game PC Pang", e)
+        with zipfile.ZipFile(zip_) as zf:
+            self.assertEqual(zf.read("Pang.icon.ico"), b"icon")
+        # O formato: so as extensoes de icone, e o --icon do pack confere.
+        out = self.roms / "custom-packages" / "Foo.fliperos-customgame.zip"
+        loose = self.env.dir / "loose"
+        (loose / "Foo").mkdir(parents=True)
+        (loose / "Foo" / "foo").write_text("#!/bin/sh\n")
+        (loose / "Foo.icon.png").write_bytes(b"i")
+        bad = loose / "bad.gif"
+        bad.write_bytes(b"g")
+        args = ["python3", tool, "pack", "--out", str(out), "--name", "Foo", "--platform", "native",
+                "--folder", str(loose / "Foo"), "--command", "./foo"]
+        r = subprocess.run(args + ["--icon", str(bad)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("not a icon file", r.stderr)
+        r = subprocess.run(args + ["--icon", str(loose / "Foo.icon.png")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with zipfile.ZipFile(out) as zf:
+            self.assertEqual(zf.read("Foo.icon.png"), b"i")
+        # A pasta solta: o icone ao lado da pasta (JOGO.icon.png) ou icon.png dentro dela (JOGO.png e a imagem).
+        tool_found = lambda: subprocess.run(["python3", tool, "found", str(loose / "Foo")], capture_output=True, text=True).stdout
+        self.assertIn("icon=%s\n" % (loose / "Foo.icon.png"), tool_found())
+        (loose / "Foo.icon.png").unlink()
+        (loose / "Foo" / "Foo.png").write_bytes(b"s")
+        self.assertIn("icon=\n", tool_found())
+        (loose / "Foo" / "icon.ico").write_bytes(b"i")
+        self.assertIn("icon=%s\n" % (loose / "Foo" / "icon.ico"), tool_found())
+        self.assertEqual(self.env.out("customgames_found \"$D\"; echo \"$CG_FOUND_ICON\"", dict(e, D=str(loose / "Foo"))).strip(),
+                         str(loose / "Foo" / "icon.ico"))
+        # A tabela do painel: o icone vai para o --icon do pack, e na linha e o campo 25 (o fim dela).
+        src = self.panel_sources()
+        icon = self.env.dir / "game-icon.png"
+        icon.write_bytes(b"png")
+        rows = self.panel_rows([{"name": "Metal Slug X", "platform": "windows", "folder": str(src / "Metal_Slug_X"),
+                                 "exe": "MetalSlugX.exe", "icon": str(icon)}])
+        self.env.out("customgames_cli create \"$F\"", dict(e, F=str(rows)))
+        with zipfile.ZipFile(self.roms / "custom-packages" / "Metal Slug X.fliperos-customgame.zip") as zf:
+            self.assertEqual(zf.read("Metal Slug X.icon.png"), b"png")
+        lib = (SETUP / "lib" / "customgames.sh").read_text()
+        self.assertIn("R_ICON=${f[24]:-}", lib)
+        self.assertIn('"icon|The icon was not found: send it again."', lib)
+        # O assistente do Setup: o campo Icon (opcional) entre o logotipo e o video.
+        menu = (SETUP / "screens" / "setup-menu.sh").read_text()
+        wizard = menu.split("screen_custom_package_create() {")[1].split("\n}\n")[0]
+        self.assertIn('"icon|Icon: ${icon:+$(basename "$icon")}${icon:-none}"', wizard)
+        self.assertLess(wizard.index('"logo|Logo:'), wizard.index('"icon|Icon:'))
+        self.assertLess(wizard.index('"icon|Icon:'), wizard.index('"video|Video:'))
+        self.assertIn("icon=$CG_FOUND_ICON", wizard)
+        self.assertIn('$CUSTOM_GAMES_MEDIA/icon/custom/$group/$from.$value', wizard)
+        # O painel web: o campo no formulario, a tabela e o servidor.
+        web = (ROOT / "config" / "fliperos-web").read_text()
+        self.assertIn('"year", "developer", "joystick", "crop", "icon")', web)
+        self.assertIn('"icon": (("png", "jpg", "jpeg", "webp", "ico"), 16 << 20)', web)
+        self.assertIn('("icon", "--icon")', web)
+        js = (ROOT / "config" / "web" / "customgames.js").read_text()
+        self.assertIn('card("icon", ".png,.jpg,.jpeg,.webp,.ico", "icon", "g-home", false)', js)
+        self.assertIn('slot("icon", ".png,.jpg,.jpeg,.webp,.ico", "icon", "g-home")', js)
+        self.assertIn("icon: cgArtRef(row.icon)", js)
+        text = (ROOT / "config" / "web" / "setup-text.js").read_text()
+        self.assertEqual(text.count("cg_f_icon:"), 2)
+        self.assertEqual(text.count("cg_art_empty_icon:"), 2)
 
     def test_categories_last_folder_and_labels(self):
         catver = self.env.dir / "catver.ini"
@@ -5236,19 +5329,52 @@ class CustomGamesTests(Base):
 
     def test_the_desktop_entry_hands_every_chosen_file_to_the_setup_whole(self):
         # O Exec como o GIO o le (aspas de shell), com os nomes que um zip baixado tem:
-        # espacos, parenteses, aspas, cifrao. Cada arquivo chega ao Setup como um argumento.
+        # espacos, parenteses, aspas, cifrao. Cada arquivo chega ao Setup como um argumento: o
+        # fliperos-launch os grava, um por linha, no pedido que o fliperos-session abre no tubo.
         import shlex
         entry = (ROOT / "config/applications/fliperos-customgame-install.desktop").read_text()
         argv = shlex.split(re.search(r"(?m)^Exec=(.+)$", entry).group(1))
-        self.assertEqual(argv[:2] + argv[-2:], ["sh", "-c", "sh", "%F"])
+        self.assertEqual(argv, ["/opt/fliperos/bin/fliperos-launch", "setup", "--install-package", "%F"])
         files = ["/home/x/Pang (PC games).fliperos-customgame.zip",
                  "/mnt/usb/it's $HOME \"q\"; rm -rf x.fliperos-customgame.zip"]
-        self.env.stub("sudo", 'printf "%s\\n" "$@"')
-        r = subprocess.run(argv[:-1] + files, capture_output=True, text=True,
-                           env={"PATH": "%s:/usr/bin:/bin" % self.env.bin, "DISPLAY": ":7", "HOME": "/home/x"})
+        run = self.env.dir / "run-install"
+        stub = self.env.dir / "stub-install"
+        run.mkdir()
+        stub.mkdir()
+        for tool in ("openbox", "xprop"):
+            (stub / tool).write_text("#!/bin/sh\nexit 0\n")
+            (stub / tool).chmod(0o755)
+        env = dict(os.environ, XDG_RUNTIME_DIR=str(run), PATH="%s:%s" % (stub, os.environ["PATH"]))
+        env.pop("_LXSESSION_PID", None)
+        r = subprocess.run(["bash", str(ROOT / "config/fliperos-launch"), "setup", "--install-package"] + files, env=env,
+                           capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout.splitlines(), ["/usr/local/bin/fliperos-setup", "--desktop", ":7",
-                                                 "/home/x/.Xauthority", "--install-package"] + files)
+        self.assertEqual((run / "fliperos-next").read_text().splitlines(),
+                         ["sudo", "-n", "/usr/local/bin/fliperos-setup", "--from-desktop", "--install-package"] + files)
+        # O atalho FliperOS Setup: o mesmo pedido, sem pacotes. Nada mais passa pelo pedido.
+        r = subprocess.run(["bash", str(ROOT / "config/fliperos-launch"), "setup"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((run / "fliperos-next").read_text().splitlines(),
+                         ["sudo", "-n", "/usr/local/bin/fliperos-setup", "--from-desktop"])
+        (run / "fliperos-next").unlink()
+        r = subprocess.run(["bash", str(ROOT / "config/fliperos-launch"), "setup", "--shell"], env=env,
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2)
+        self.assertFalse((run / "fliperos-next").exists())
+
+    def test_the_session_runs_the_setup_the_desktop_asked_for_and_nothing_else(self):
+        # O fliperos-session abre so "sudo -n fliperos-setup --from-desktop [--install-package ...]" (como o
+        # painel web: um nome conferido), e o desktop volta depois (o laco do X segue).
+        session = (ROOT / "config/fliperos-session").read_text()
+        case = session.split("        sudo)\n")[1].split("          ;;\n")[0]
+        self.assertIn("${next[2]:-} == /usr/local/bin/fliperos-setup && ${next[3]:-} == --from-desktop", case)
+        self.assertIn("(-z ${next[4]:-} || ${next[4]} == --install-package)", case)
+        self.assertIn('"${next[@]}"', case)
+        self.assertIn('echo "Ignoring an unknown request: ${next[*]}" >&2', case)
+        self.assertLess(session.index("        sudo)\n"), session.index("        *) echo \"Ignoring an unknown request"))
+        launch = (ROOT / "config/fliperos-launch").read_text()
+        self.assertIn('run=(sudo -n /usr/local/bin/fliperos-setup --from-desktop "${@:2}")', launch)
+        self.assertIn('"" | --install-package) ;;', launch)
 
     def test_the_package_type_has_its_own_icon(self):
         # O icone de um tipo de arquivo tem o nome do tipo com "-" no lugar da "/", e o tema o
@@ -5267,7 +5393,7 @@ class CustomGamesTests(Base):
 
     def test_the_desktop_double_click_runs_the_setup_install_screen(self):
         # O tipo de arquivo (um zip, glob maior que o *.zip), a entrada que o abre
-        # (Terminal=true, o --desktop do atalho do Setup e todos os arquivos
+        # (o fliperos-launch setup --install-package com todos os arquivos
         # escolhidos), o --install-package do Setup e o rootfs que refaz as bases.
         xml = (ROOT / "config/fliperos-customgame.xml").read_text()
         # Um XML que nao parseia (um "--" num comentario) e ignorado pelo update-mime-database
@@ -5281,18 +5407,18 @@ class CustomGamesTests(Base):
         self.assertIn('<glob pattern="*.fliperos-customgame.zip" weight="60"/>', xml)
         entry = (ROOT / "config/applications/fliperos-customgame-install.desktop").read_text()
         self.assertIn("MimeType=application/x-fliperos-customgame;\n", entry)
-        self.assertIn("Terminal=true\n", entry)
+        self.assertIn("Terminal=false\n", entry)
         self.assertIn("NoDisplay=true\n", entry)
-        self.assertIn("""Exec=sh -c 'sudo /usr/local/bin/fliperos-setup --desktop "$DISPLAY" """
-                      """"${XAUTHORITY:-$HOME/.Xauthority}" --install-package "$@"' sh %F\n""", entry)
+        self.assertIn("Exec=/opt/fliperos/bin/fliperos-launch setup --install-package %F\n", entry)
         # Fora do menu dos emuladores (Categories=Game; entra no EmulatorMenuTests).
         self.assertNotIn("Categories=Game;", entry)
         main = (SETUP / "fliperos-setup").read_text()
         case = main.split("    --install-package)\n")[1].split("      ;;\n")[0]
         self.assertIn('screen_install_packages "$@"', case)
         self.assertLess(case.index("shift"), case.index("screen_install_packages"))
-        # Depois do --desktop (que leva o display), onde a interface grafica ja abriu.
+        # Depois do --desktop e do --from-desktop, onde a interface grafica ja abriu.
         self.assertLess(main.index("SETUP_DESKTOP=1"), main.index("    --install-package)"))
+        self.assertLess(main.index("SETUP_FROM_DESKTOP=1"), main.index("    --install-package)"))
         self.assertLess(main.index("ui_init\n  # Controle como teclado"), main.index("    --install-package)"))
         # O --help lista a linha nova (as linhas 8 a 26 do cabecalho).
         header = main.split("\n")[7:26]
@@ -5339,7 +5465,7 @@ class CustomGamesTests(Base):
         """O arquivo da tabela: um jogo por linha, os campos separados por 0x1f."""
         fields = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
                   "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
-                  "year", "developer", "joystick")
+                  "year", "developer", "joystick", "crop", "icon")
         path = self.env.dir / "rows"
         path.write_text("".join("\x1f".join(r.get(f, "") for f in fields) + "\n" for r in rows))
         return path
@@ -5936,28 +6062,52 @@ class CustomGamesTests(Base):
         self.assertEqual(tool.count('s.add_argument("--mode", default=DEFAULT_MODE)'), 2)
 
     def test_the_desktop_menu_lists_the_custom_games(self):
-        # O submenu Games > Custom games do LXDE: uma entrada por jogo, pelo
-        # fliperos-launch custom; sem jogo, o submenu sai.
+        # O menu Games do LXDE: uma entrada por jogo, pelo fliperos-launch custom, uma vez so (sem o
+        # submenu Custom games, onde ela aparecia de novo, duplicada).
         media, games, e = self.pkg_env()
         home = self.roms.parent
         self.env.out("customgames_save 'PC games' 'Pang $1 \"DX\"' 240p 'echo pang'; customgames_save Homebrew Pong 480i 'echo'", e)
+        # O submenu das versoes de antes sai quando o menu e refeito.
+        menus = home / ".config/menus/applications-merged"
+        directories = home / ".local/share/desktop-directories"
+        menus.mkdir(parents=True)
+        directories.mkdir(parents=True)
+        (menus / "fliperos-custom-games.menu").write_text("<Menu/>\n")
+        (directories / "fliperos-custom-games.directory").write_text("[Desktop Entry]\n")
         self.env.out("customgames_desktop", e)
+        self.assertFalse((menus / "fliperos-custom-games.menu").exists())
+        self.assertFalse((directories / "fliperos-custom-games.directory").exists())
         apps = sorted(p.name for p in (home / ".local/share/applications").glob("fliperos-custom_*.desktop"))
         self.assertEqual(apps, ["fliperos-custom_homebrew_pong.desktop", "fliperos-custom_pc_games_pang_1_dx.desktop"])
         entry = (home / ".local/share/applications" / apps[1]).read_text()
         self.assertIn("Name=Pang $1 \"DX\"\n", entry)
         self.assertIn('Exec=/opt/fliperos/bin/fliperos-launch custom "%s/PC games/Pang \\$1 \\"DX\\".sh"\n'
                       % (self.roms / "custom"), entry)
-        self.assertIn("Categories=Game;X-FliperOS-Custom;\n", entry)
-        menu = (home / ".config/menus/applications-merged/fliperos-custom-games.menu").read_text()
-        self.assertIn("<Name>Games</Name>", menu)
-        self.assertIn("<Name>Custom games</Name>", menu)
-        self.assertIn("<Include><Category>X-FliperOS-Custom</Category></Include>", menu)
-        self.assertIn("Name=Custom games", (home / ".local/share/desktop-directories/fliperos-custom-games.directory").read_text())
-        # Os grupos e jogos que sairam somem do menu; sem jogo, o submenu sai.
+        self.assertIn("Categories=Game;\n", entry)
+        self.assertNotIn("X-FliperOS-Custom", entry)
+        # Nenhum submenu: o jogo esta em Games e so la.
+        self.assertFalse(menus.exists() and list(menus.iterdir()))
+        self.assertFalse(directories.exists() and list(directories.iterdir()))
+        # O icone: sem imagem nem icone, o do sistema; com a imagem do jogo, ela; o que a pessoa deu (o
+        # campo Icon) vale mais que a imagem.
+        self.assertIn("Icon=applications-games\n", entry)
+        self.assertEqual(self.env.run("customgames_icon Homebrew Pong", e).returncode, 1)
+        snap = media / "snap" / "custom" / "PC games"
+        snap.mkdir(parents=True)
+        (snap / "Pang $1 \"DX\".png").write_bytes(b"png")
+        self.env.out("customgames_desktop", e)
+        entry = (home / ".local/share/applications" / apps[1]).read_text()
+        self.assertIn("Icon=%s/snap/custom/PC games/Pang $1 \"DX\".png\n" % media, entry)
+        icon = media / "icon" / "custom" / "PC games"
+        icon.mkdir(parents=True)
+        (icon / "Pang $1 \"DX\".ico").write_bytes(b"ico")
+        self.env.out("customgames_desktop", e)
+        entry = (home / ".local/share/applications" / apps[1]).read_text()
+        self.assertIn("Icon=%s/icon/custom/PC games/Pang $1 \"DX\".ico\n" % media, entry)
+        (icon / "Pang $1 \"DX\".ico").unlink()
+        # Os grupos e jogos que sairam somem do menu.
         self.env.out("customgames_delete Homebrew Pong; customgames_delete 'PC games' 'Pang $1 \"DX\"'; customgames_desktop", e)
         self.assertEqual(list((home / ".local/share/applications").glob("fliperos-custom_*.desktop")), [])
-        self.assertFalse((home / ".config/menus/applications-merged/fliperos-custom-games.menu").exists())
         # Cada mudanca (o painel, o Setup, o System Update) refaz o menu.
         lib = (SETUP / "lib" / "customgames.sh").read_text()
         self.assertIn("  customgames_desktop\n  return 0\n}", lib.split("customgames_refresh_frontends() {")[1])
@@ -9789,8 +9939,16 @@ class MenuSoundsTests(Base):
         # arquivos), o volume, ouvir, o padrao e mudo.
         screen = (SETUP / "screens" / "sounds.sh").read_text()
         for item in ('"master|Sounds ($(menu_sounds_label))|', '"snd-$id|$label: ${file,,}, $volume%|', '"folder|Sounds folder|',
-                     '"file|Sound file|', '"volume|Volume|', '"test|Play|', '"default|Use the default|', '"off|No sound|'):
+                     '"file|Sound file|', '"volume|Volume|', '"snd-play|Play|', '"snd-default|Use the default|',
+                     '"off|No sound|'):
             self.assertIn(item, screen)
+        # Ouvir o som (Play, Use the default) toca so o som do evento: o clique de entrar do servidor da
+        # interface grafica nao toca por cima (OWN_SOUND_VALUES, gui/serve.py).
+        serve = (SETUP / "gui" / "serve.py").read_text()
+        self.assertIn('OWN_SOUND_VALUES = ("snd-play", "snd-default")', serve)
+        self.assertIn("and value not in OWN_SOUND_VALUES:\n                self.app.play(\"enter\")", serve)
+        self.assertIn("snd-play)\n", screen)
+        self.assertIn("snd-default)\n", screen)
         self.assertIn('.wav .ogg .mp3 .flac', screen)
         self.assertIn('ui_browse "$label"', screen)
         for call in ('menu_sound_set_file "$event" "$picked"', 'menu_sound_set_volume "$event" "$choice"'):

@@ -666,9 +666,9 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-acard.on .cg-abtn { border-style: solid; border-color: rgba(80, 250, 123, .45); }
 .cg-acard.found .cg-abtn { border-color: var(--purple); }
 .cg-apreview { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; overflow: hidden; background: var(--bg-deep); }
-.cg-acard.logo .cg-apreview, .cg-acard.text .cg-apreview { aspect-ratio: 16 / 5; }
+.cg-acard.logo .cg-apreview, .cg-acard.icon .cg-apreview, .cg-acard.text .cg-apreview { aspect-ratio: 16 / 5; }
 .cg-apreview > img, .cg-apreview > video { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
-.cg-acard.logo .cg-apreview > img { box-sizing: border-box; padding: 8px; object-fit: contain; image-rendering: auto; }
+.cg-acard.logo .cg-apreview > img, .cg-acard.icon .cg-apreview > img { box-sizing: border-box; padding: 8px; object-fit: contain; image-rendering: auto; }
 .cg-apreview > svg { width: 30px; height: 30px; color: var(--dim); opacity: .75; }
 .cg-acard.on .cg-apreview > svg { color: var(--green); }
 .cg-aprog { font: 700 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--fg); }

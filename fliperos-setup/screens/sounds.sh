@@ -58,8 +58,8 @@ screen_menu_sound_event() {
     choice=$(ui_menu_hints "$label" "$(ui_fields "Sound|${file,,}" "Volume|$volume%")" "$last" \
       "file|Sound file|Choose a WAV, OGG, MP3 or FLAC from the sounds folder." \
       "volume|Volume|From 0 to 100." \
-      "test|Play|Hear it now, with this volume." \
-      "default|Use the default|The sound FliperOS comes with." \
+      "snd-play|Play|Hear it now, with this volume." \
+      "snd-default|Use the default|The sound FliperOS comes with." \
       "off|No sound|Keep this event quiet." \
       "return|Return|Back to the menu sounds.") || return 0
     last=$choice
@@ -82,14 +82,14 @@ screen_menu_sound_event() {
           ui_msg "Volume" "Type a number from 0 to 100."
         fi
         ;;
-      test)
+      snd-play)
         if [[ $(menu_sounds_state) == off ]]; then
           ui_msg "$label" "The menu sounds are off: turn them on in Menu sounds."
         else
           menu_sound_play "$event"
         fi
         ;;
-      default)
+      snd-default)
         menu_sound_set_file "$event" ""
         ui_sounds
         menu_sound_play "$event"

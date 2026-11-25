@@ -9,12 +9,17 @@
 #   fliperos-launch retroarch|groovymame|hbgroovymame|flycast|pcsx2|pcsx2x6|duckstation|dolphin|openbor|model2|model3|odin|chihiro|fightcade|kof
 #   fliperos-launch --mode 640x240@60 programa [argumentos]   (qualquer programa)
 #   fliperos-launch custom ~/roms/custom/GRUPO/NOME.sh        (um jogo custom)
+#   fliperos-launch setup [--install-package JOGO.fliperos-customgame.zip...]
+#       o Setup (o atalho FliperOS Setup do desktop) ou a instalacao de pacotes
+#       de jogo (o duplo clique num pacote): o desktop fecha, o Setup abre no
+#       tubo como no menu do gabinete (240p, tela cheia) e o desktop volta ao sair
 set -euo pipefail
 
 usage() {
   echo "Usage: fliperos-launch retroarch|groovymame|hbgroovymame|flycast|pcsx2|pcsx2x6|duckstation|dolphin|openbor|model2|model3|odin|chihiro|fightcade|kof" >&2
   echo "       fliperos-launch --mode WIDTHxHEIGHT@HZ program [arguments]" >&2
   echo "       fliperos-launch custom GAME.sh" >&2
+  echo "       fliperos-launch setup [--install-package GAME.fliperos-customgame.zip...]" >&2
   exit 2
 }
 
@@ -77,6 +82,17 @@ case ${1:-} in
     run=()
     [[ -n $line ]] && eval "run=(${line#exec })"
     [[ ${run[0]:-} == "$x11" ]] || run=("$x11" --mode 640x480@60 /bin/sh "$2")
+    ;;
+  # O Setup no tubo (o atalho FliperOS Setup e o duplo clique num pacote de jogo
+  # custom): o fliperos-session o abre com o sudo, como o painel web abre as
+  # telas dele, e so aceita estes argumentos: nada mais passa pelo pedido.
+  setup)
+    label="FliperOS Setup"
+    case ${2:-} in
+      "" | --install-package) ;;
+      *) usage ;;
+    esac
+    run=(sudo -n /usr/local/bin/fliperos-setup --from-desktop "${@:2}")
     ;;
   *) usage ;;
 esac

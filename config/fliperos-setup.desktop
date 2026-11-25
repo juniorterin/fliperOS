@@ -2,14 +2,15 @@
 Type=Application
 Name=FliperOS Setup
 Comment=Video, audio, network, frontend, scraper and system update
-# O Setup na interface grafica, numa janela sem borda do tamanho da tela: o
-# --desktop leva o display (e o Xauthority) que o sudo tira do ambiente. O
-# terminal (Terminal=true) e o caminho de volta para o texto, se a janela
-# nao abrir. O sudo nao pede senha (/etc/sudoers.d/fliperos-setup).
+# O Setup abre no tubo, como no menu do gabinete (240p, tela cheia, sem janela
+# para mover): o fliperos-launch fecha o desktop, o fliperos-session abre o
+# Setup (fliperos-setup --from-desktop; o sudo nao pede senha:
+# /etc/sudoers.d/fliperos-setup) e o desktop volta quando ele sai. No menu dele
+# "Exit to desktop" no lugar de "Exit to shell", e sem "Start desktop".
 # Categories=System poe o atalho em "System Tools" no menu do LXDE, como o
 # gasetup.desktop do GroovyArcade.
-Exec=sh -c 'sudo /usr/local/bin/fliperos-setup --desktop "$DISPLAY" "${XAUTHORITY:-$HOME/.Xauthority}"'
-Terminal=true
+Exec=/opt/fliperos/bin/fliperos-launch setup
+Terminal=false
 Icon=preferences-system
 Categories=System;
 Keywords=fliperos;arcade;crt;setup;

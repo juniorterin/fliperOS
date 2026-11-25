@@ -11,6 +11,9 @@ SETUP_EXIT_LAUNCH=20
 SETUP_MENU_LOOP=${SETUP_MENU_LOOP:-0}
 # 1 com --desktop: aberto pelo atalho do LXDE (a interface grafica numa janela).
 SETUP_DESKTOP=${SETUP_DESKTOP:-0}
+# 1 com --from-desktop: pedido pelo desktop (fliperos-launch setup): ele fechou
+# e volta quando o Setup sai; a interface abre no tubo, em 240p e tela cheia.
+SETUP_FROM_DESKTOP=${SETUP_FROM_DESKTOP:-0}
 # 1 com --remote: o menu aberto pelo SSH (em texto, no terminal de la).
 SETUP_REMOTE=${SETUP_REMOTE:-0}
 
@@ -54,6 +57,7 @@ menu_marquee() {
 
 screen_main_menu() {
   local choice last="" start
+  local -a items
   # Placa AMD no driver que nao e o recomendado: sugere a troca, uma vez so.
   screen_amd_driver_check
   # Versao ou update novo: o changelog dele, uma vez so.
@@ -69,19 +73,34 @@ screen_main_menu() {
     if [[ $(launcher_current) == game && -n $(bootgame_label) ]]; then
       start="frontend|Start $(bootgame_label)|The game that opens at boot (Setup > Games > Frontend)."
     fi
-    choice=$(ui_menu_hints "FliperOS" "" "$last" \
-      "$start" \
-      "desktop|Start desktop|The LXDE desktop, for a mouse and a keyboard." \
-      "achievements|RetroAchievements|Sign in to earn achievements in RetroArch and other emulators." \
-      "setup|Setup|Video, audio, network, controls, games and system." \
-      "shell|Exit to shell|The command line. Type fliperos-menu to come back." \
-      "power|Shutdown / Reboot|Power off or restart the computer.") || continue
+    if ((SETUP_FROM_DESKTOP == 1)); then
+      # Aberto pelo desktop (fliperos-launch setup): ele volta quando o Setup
+      # sai, entao em vez de abrir o desktop (ja se esta nele) ou o shell, sai-se
+      # para o desktop; os frontends abrem pelo menu do gabinete, nao daqui.
+      items=(
+        "achievements|RetroAchievements|Sign in to earn achievements in RetroArch and other emulators."
+        "setup|Setup|Video, audio, network, controls, games and system."
+        "desktop|Exit to desktop|Close the Setup and go back to the desktop."
+        "power|Shutdown / Reboot|Power off or restart the computer.")
+    else
+      items=("$start"
+        "desktop|Start desktop|The LXDE desktop, for a mouse and a keyboard."
+        "achievements|RetroAchievements|Sign in to earn achievements in RetroArch and other emulators."
+        "setup|Setup|Video, audio, network, controls, games and system."
+        "shell|Exit to shell|The command line. Type fliperos-menu to come back."
+        "power|Shutdown / Reboot|Power off or restart the computer.")
+    fi
+    choice=$(ui_menu_hints "FliperOS" "" "$last" "${items[@]}") || continue
     last=$choice
     menu_marquee "$choice"
     case $choice in
       frontend) screen_start_frontend && return "$SETUP_EXIT_LAUNCH" ;;
       setup) screen_setup_menu ;;
-      desktop) screen_start_desktop && return "$SETUP_EXIT_LAUNCH" ;;
+      desktop)
+        # Pedido pelo desktop: sair do Setup e o que o faz voltar.
+        ((SETUP_FROM_DESKTOP == 1)) && return 0
+        screen_start_desktop && return "$SETUP_EXIT_LAUNCH"
+        ;;
       achievements) screen_cheevos ;;
       shell) screen_terminal && return "$SETUP_EXIT_SHELL" ;;
       power) screen_power ;;

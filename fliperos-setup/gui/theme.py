@@ -1677,7 +1677,7 @@ for _alias, _name in {
     "wifi": "network", "hidden": "network", "status": "network",
     # Audio > Menu sounds: o interruptor e um item por evento (screens/sounds.sh).
     "master": "sounds", "snd-move": "up", "snd-enter": "ok", "snd-back": "return", "snd-open": "games",
-    "snd-close": "power", "snd-alert": "alert",
+    "snd-close": "power", "snd-alert": "alert", "snd-play": "audio", "snd-default": "reset",
     # As acoes e os estados.
     "-return": "return", "apply": "ok", "use": "ok", "newfolder": "addfolder", "found": "ok", "on": "ok", "off": "power",
     "delete": "remove", "replace": "edit", "custom": "edit", "rescan": "reset", "retry": "reset",
@@ -1723,7 +1723,7 @@ for _alias, _name in {
     "+install": "install", "reinstall": "install", "delpkg": "remove", "fromfolder": "addfolder", "fromgame": "games",
     "info": "romlist", "mode": "video", "category": "filter", "controls": "joysticks", "players": "joysticks",
     "keep": "remove", "snap": "video", "text": "romlist", "next": "ok", "file": "romlist", "type": "edit",
-    "none": "remove",
+    "none": "remove", "icon": "arcade",
     # Colour calibration: na tela (as barras de cor) ou pelos numeros.
     "calibrate": "colour", "values": "romlist",
     # Scanlines: ligar e desligar, e o ajuste na tela.

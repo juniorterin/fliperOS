@@ -85,7 +85,9 @@ customgames_file() {
 # ~/media/TIPO/custom/GRUPO/NOME.ext, como as dos outros sistemas (a chave do
 # sistema e custom/GRUPO). preview e o video, texto a descricao.
 CUSTOM_GAMES_MEDIA=${CUSTOM_GAMES_MEDIA:-$(dirname "$ROMS_DIR")/media}
-CUSTOM_GAMES_MEDIA_TYPES="snap box logo marquee preview texto"
+# icon e o icone do jogo no menu do desktop (customgames_desktop): opcional, sem
+# amostra, e sem ele vale a imagem (snap).
+CUSTOM_GAMES_MEDIA_TYPES="snap box logo marquee preview texto icon"
 
 # customgames_media_path TIPO GRUPO NOME: o arquivo da midia de exemplo
 # (snap .png, preview .mp4, texto .txt).
@@ -102,6 +104,7 @@ customgames_media_exts() {
     preview) echo "mp4 mkv webm avi mov flv" ;;
     texto) echo "txt" ;;
     logo) echo "png jpg jpeg webp" ;;
+    icon) echo "png jpg jpeg webp ico" ;;
     *) echo "png jpg jpeg webp gif" ;;
   esac
 }
@@ -611,19 +614,22 @@ customgames_tool() {
 # customgames_found PASTA: o que veio com a pasta de um jogo na estrutura do
 # pacote (fliperos-customgame found) em CG_FOUND_FOLDER (a pasta do jogo: a
 # de dentro, quando PASTA e o zip aberto), CG_FOUND_SNAP, CG_FOUND_LOGO (o
-# JOGO.logo.png, .jpg ou .webp), CG_FOUND_VIDEO, CG_FOUND_TEXT, CG_FOUND_KEY,
+# JOGO.logo.png, .jpg ou .webp), CG_FOUND_ICON (o JOGO.icon.png, .jpg, .webp ou .ico),
+# CG_FOUND_VIDEO, CG_FOUND_TEXT, CG_FOUND_KEY,
 # CG_FOUND_PPDB, CG_FOUND_YEAR, CG_FOUND_DEVELOPER, CG_FOUND_CROP169, CG_FOUND_EXE e
 # CG_FOUND_RUNNER (o exe= e o runner= do JOGO.cfg, dentro da pasta do jogo).
 customgames_found() {
   local line key value
   CG_FOUND_FOLDER=$1 CG_FOUND_SNAP="" CG_FOUND_VIDEO="" CG_FOUND_TEXT="" CG_FOUND_KEY="" CG_FOUND_PPDB=""
   CG_FOUND_EXE="" CG_FOUND_RUNNER="" CG_FOUND_YEAR="" CG_FOUND_DEVELOPER="" CG_FOUND_LOGO="" CG_FOUND_CROP169=""
+  CG_FOUND_ICON=""
   while IFS= read -r line; do
     key=${line%%=*} value=${line#*=}
     case $key in
       folder) [[ -d $value ]] && CG_FOUND_FOLDER=$value ;;
       snap) CG_FOUND_SNAP=$value ;;
       logo) CG_FOUND_LOGO=$value ;;
+      icon) CG_FOUND_ICON=$value ;;
       video) CG_FOUND_VIDEO=$value ;;
       text) CG_FOUND_TEXT=$value ;;
       key) CG_FOUND_KEY=$value ;;
@@ -1109,7 +1115,8 @@ customgames_refresh() {
     [[ -n $mode && -n $cmd ]] || continue
     customgames_save "$group" "$name" "$mode" "$cmd" > /dev/null || log_warn "jogo personalizado nao regravado: $group / $name"
   done < <(customgames_list)
-  # E o submenu Games > Custom games do desktop.
+  # E as entradas do menu Games do desktop (e sai o submenu Custom games que as
+  # versoes de antes deixaram).
   customgames_desktop
   return 0
 }
@@ -1125,7 +1132,7 @@ customgames_refresh() {
 # campos separados pelo caractere 0x1f (o tab juntaria campos vazios no read):
 #   grupo nome plataforma pasta exe comando modo categoria controles botoes
 #   jogadores imagem video texto texto_digitado wine key ppdb runner logo ano
-#   desenvolvedora joystick crop
+#   desenvolvedora joystick crop icone
 # plataforma windows, native ou command; imagem/video/texto sao caminhos de
 # arquivos (o painel os sobe antes, ou sao os que vieram com a pasta, na
 # estrutura do pacote); wine e o PW_WINE_USE do PortProton; key e ppdb, o
@@ -1236,7 +1243,7 @@ customgames_row_fields() {
   R_COMMAND=${f[5]:-} R_MODE=${f[6]:-} R_CATEGORY=${f[7]:-} R_CONTROLS=${f[8]:-} R_BUTTONS=${f[9]:-}
   R_PLAYERS=${f[10]:-} R_SNAP=${f[11]:-} R_VIDEO=${f[12]:-} R_TEXT=${f[13]:-} R_TEXT_STRING=${f[14]:-}
   R_WINE=${f[15]:-} R_KEY=${f[16]:-} R_PPDB=${f[17]:-} R_RUNNER=${f[18]:-} R_LOGO=${f[19]:-}
-  R_YEAR=${f[20]:-} R_DEVELOPER=${f[21]:-} R_JOYSTICK=${f[22]:-} R_CROP=${f[23]:-}
+  R_YEAR=${f[20]:-} R_DEVELOPER=${f[21]:-} R_JOYSTICK=${f[22]:-} R_CROP=${f[23]:-} R_ICON=${f[24]:-}
 }
 
 # customgames_row_errors [package]: o que esta errado na linha de R_* (uma
@@ -1296,6 +1303,7 @@ customgames_row_errors() {
   [[ -z $R_VIDEO || -f $R_VIDEO ]] || echo "video|The video was not found: send it again."
   [[ -z $R_TEXT || -f $R_TEXT ]] || echo "text|The text file was not found: send it again."
   [[ -z ${R_LOGO:-} || -f $R_LOGO ]] || echo "logo|The logo was not found: send it again."
+  [[ -z ${R_ICON:-} || -f $R_ICON ]] || echo "icon|The icon was not found: send it again."
   [[ -z ${R_KEY:-} || -f $R_KEY ]] || echo "key|The .key file was not found: pick the folder again."
   [[ -z ${R_PPDB:-} || -f $R_PPDB ]] || echo "ppdb|The .ppdb file was not found: pick the folder again."
   case ${R_RUNNER:-} in
@@ -1346,7 +1354,7 @@ customgames_set_info() {
 }
 
 # customgames_media_set GRUPO NOME [--snap ARQ] [--video ARQ] [--text ARQ]
-# [--logo ARQ] [--text-string TEXTO]: a arte de verdade do jogo (a de exemplo daquele tipo
+# [--logo ARQ] [--icon ARQ] [--text-string TEXTO]: a arte de verdade do jogo (a de exemplo daquele tipo
 # sai).
 customgames_media_set() {
   local group=$1 name=$2
@@ -1364,6 +1372,7 @@ customgames_row_media() {
   [[ -n $R_VIDEO ]] && R_MEDIA+=(--video "$R_VIDEO")
   [[ -n $R_TEXT ]] && R_MEDIA+=(--text "$R_TEXT")
   [[ -n ${R_LOGO:-} ]] && R_MEDIA+=(--logo "$R_LOGO")
+  [[ -n ${R_ICON:-} ]] && R_MEDIA+=(--icon "$R_ICON")
   [[ -n $R_TEXT_STRING ]] && R_MEDIA+=(--text-string "$R_TEXT_STRING")
   return 0
 }
@@ -1439,11 +1448,15 @@ customgames_refresh_frontends() {
   return 0
 }
 
-# ── O menu do desktop (LXDE): Games > Custom games ──
+# ── O menu do desktop (LXDE): Games ──
 # Uma entrada por jogo em ~/.local/share/applications (fliperos-APP.desktop,
-# a categoria X-FliperOS-Custom) e o submenu Custom games dentro de Games
-# (~/.config/menus/applications-merged). A entrada abre pelo fliperos-launch
-# custom: o desktop fecha, o jogo abre no modo dele e o desktop volta.
+# a categoria Game: o LXDE a lista em Games, uma vez so). Nao ha um submenu
+# Custom games: o jogo aparecia em Games e nele (duplicado), e quem nao quer o
+# atalho nao precisa dele. As versoes de antes deixaram o submenu
+# (~/.config/menus/applications-merged/fliperos-custom-games.menu e o
+# .directory), que customgames_desktop apaga. A entrada abre pelo
+# fliperos-launch custom: o desktop fecha, o jogo abre no modo dele e o
+# desktop volta.
 CUSTOM_GAMES_APPS=${CUSTOM_GAMES_APPS:-$(dirname "$ROMS_DIR")/.local/share/applications}
 CUSTOM_GAMES_MENUS=${CUSTOM_GAMES_MENUS:-$(dirname "$ROMS_DIR")/.config/menus/applications-merged}
 CUSTOM_GAMES_DIRECTORIES=${CUSTOM_GAMES_DIRECTORIES:-$(dirname "$ROMS_DIR")/.local/share/desktop-directories}
@@ -1472,16 +1485,28 @@ customgames_desktop_arg() {
   printf '"%s"' "$s"
 }
 
-# customgames_desktop: refaz as entradas do menu e o submenu (sem jogo
-# nenhum, o submenu sai).
+# customgames_icon GRUPO NOME: o icone do jogo no desktop: o que a pessoa deu
+# (o campo Icon do Create package, o JOGO.icon.png do pacote, em
+# ~/media/icon) ou, sem ele, a imagem do jogo. Status 1: nenhum dos dois.
+customgames_icon() {
+  local ext
+  for ext in $(customgames_media_exts icon); do
+    [[ -f $CUSTOM_GAMES_MEDIA/icon/custom/$1/$2.$ext ]] && { printf '%s\n' "$CUSTOM_GAMES_MEDIA/icon/custom/$1/$2.$ext"; return 0; }
+  done
+  customgames_snap "$1" "$2"
+}
+
+# customgames_desktop: refaz as entradas do menu Games, uma por jogo (e apaga o
+# submenu Custom games das versoes de antes).
 customgames_desktop() {
   local group name entry icon app n=0 menu=$CUSTOM_GAMES_MENUS/fliperos-custom-games.menu
   local directory=$CUSTOM_GAMES_DIRECTORIES/fliperos-custom-games.directory
+  rm -f "$menu" "$directory" 2> /dev/null
   rm -f "$CUSTOM_GAMES_APPS"/fliperos-custom_*.desktop 2> /dev/null
   while IFS='|' read -r group name _; do
     [[ -n $name ]] || continue
     ((n++ == 0)) && { customgames_home_dir "$CUSTOM_GAMES_APPS" || return 0; }
-    icon=$(customgames_snap "$group" "$name") || icon=applications-games
+    icon=$(customgames_icon "$group" "$name") || icon=applications-games
     app=$(customgames_app "$group" "$name")
     entry=$CUSTOM_GAMES_APPS/fliperos-$app.desktop
     {
@@ -1492,33 +1517,10 @@ customgames_desktop() {
       printf 'Exec=%s custom %s\n' "$CUSTOM_GAMES_LAUNCH" "$(customgames_desktop_arg "$(customgames_file "$group" "$name")")"
       printf 'Icon=%s\n' "$icon"
       echo "Terminal=false"
-      echo "Categories=Game;X-FliperOS-Custom;"
+      echo "Categories=Game;"
     } > "$entry"
     chown "$FLIPEROS_USER:" "$entry" 2> /dev/null
   done < <(customgames_list)
-  if ((n == 0)); then
-    rm -f "$menu" "$directory"
-    return 0
-  fi
-  customgames_home_dir "$CUSTOM_GAMES_MENUS" && cat > "$menu" << 'EOF'
-<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">
-<!-- FliperOS: Games > Custom games (Setup > Games > Custom games). -->
-<Menu>
-  <Name>Applications</Name>
-  <Menu>
-    <Name>Games</Name>
-    <Menu>
-      <Name>Custom games</Name>
-      <Directory>fliperos-custom-games.directory</Directory>
-      <Include><Category>X-FliperOS-Custom</Category></Include>
-    </Menu>
-    <Exclude><Category>X-FliperOS-Custom</Category></Exclude>
-  </Menu>
-</Menu>
-EOF
-  customgames_home_dir "$CUSTOM_GAMES_DIRECTORIES" && printf '%s\n' "[Desktop Entry]" "Type=Directory" "Name=Custom games" \
-    "Icon=applications-games" > "$directory"
-  chown "$FLIPEROS_USER:" "$menu" "$directory" 2> /dev/null
   return 0
 }
 
@@ -1723,11 +1725,11 @@ customgames_pack_game() {
   [[ -f ${cfg%.cfg}.key ]] && args+=(--key "${cfg%.cfg}.key")
   [[ -n $exe && -f $folder/$exe.ppdb ]] && args+=(--ppdb "$folder/$exe.ppdb")
   # A arte de verdade (as de exemplo nao vao: quem instala ganha as suas).
-  for value in snap preview texto logo; do
+  for value in snap preview texto logo icon; do
     for ext in $(customgames_media_exts "$value"); do
       [[ -f $CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext ]] || continue
       customgames_media_sample "$CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext" && continue
-      case $value in snap) args+=(--snap) ;; preview) args+=(--video) ;; texto) args+=(--text) ;; logo) args+=(--logo) ;; esac
+      case $value in snap) args+=(--snap) ;; preview) args+=(--video) ;; texto) args+=(--text) ;; logo) args+=(--logo) ;; icon) args+=(--icon) ;; esac
       args+=("$CUSTOM_GAMES_MEDIA/$value/custom/$group/$name.$ext")
       break
     done
@@ -1852,7 +1854,7 @@ customgames_create_args() {
   if [[ $R_PLATFORM == windows ]]; then R_PACK+=(--exe "$R_EXE"); else R_PACK+=(--command "$R_COMMAND"); fi
   [[ $R_PLATFORM == windows && -n ${R_RUNNER:-} ]] && R_PACK+=(--runner "$R_RUNNER")
   for key in CATEGORY:category CONTROLS:controls BUTTONS:buttons PLAYERS:players YEAR:year DEVELOPER:developer SNAP:snap VIDEO:video TEXT:text LOGO:logo \
-    KEY:key PPDB:ppdb TEXT_STRING:text-string; do
+    ICON:icon KEY:key PPDB:ppdb TEXT_STRING:text-string; do
     var=R_${key%%:*}
     [[ -n ${!var:-} ]] || continue
     [[ $key == PPDB:ppdb && ($R_PLATFORM != windows || ${R_RUNNER:-portproton} != portproton) ]] && continue
@@ -2052,6 +2054,8 @@ customgames_cli() {
       customgames_valid_name "${1:-}" && customgames_valid_name "${2:-}" && [[ -e $(customgames_file "$1" "$2") ]] || return 2
       customgames_media_set "$@" || return 1
       customgames_media "$1" "$2"
+      # A imagem ou o icone novo vai ao menu do desktop (Games).
+      customgames_desktop
       ;;
     install)
       zip=${1:-} group=${2:-} replace="" pp=""

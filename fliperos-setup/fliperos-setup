@@ -20,10 +20,14 @@
 #   sudo fliperos-setup --latency       abre direto o Setup > System > Latency
 #   sudo fliperos-setup --install-package ZIP...
 #                                       instala pacotes de jogo custom (o duplo clique
-#                                       do desktop; com --desktop DISPLAY antes, numa janela)
+#                                       do desktop; com --from-desktop antes, no tubo)
 #   sudo fliperos-setup --update-check  pergunta pelo update do FliperOS
 #   sudo fliperos-setup --driver-confirm  confirma a imagem do driver de video trocado
 #   sudo fliperos-setup --hw-check      a placa de video trocou: pergunta e refaz o teste de saidas
+#   sudo fliperos-setup --from-desktop [--install-package ZIP...]
+#                                       pedido pelo desktop (fliperos-launch setup): ele
+#                                       fechou, o Setup abre no tubo (240p, tela cheia) e o
+#                                       desktop volta ao sair; "Exit to desktop" no menu
 #
 # Sem tela (servico de boot, sessao de jogo, teclas de volume e monitores
 # extras, ver lib/latency.sh, lib/audio.sh e lib/multimonitor.sh):
@@ -553,6 +557,17 @@ main() {
     [[ -n ${2:-} ]] && export DISPLAY=$2
     [[ -n ${3:-} && -r ${3:-} ]] && export XAUTHORITY=$3
     shift $(($# < 3 ? $# : 3))
+  fi
+  # Pedido pelo desktop (fliperos-launch setup: o atalho FliperOS Setup e o
+  # duplo clique num pacote de jogo): o desktop fechou, e o Setup abre no
+  # tubo como no menu do gabinete (a interface grafica no KMS, em 240p, tela
+  # cheia, sem janela). Ao sair, o fliperos-session abre o desktop de volta,
+  # entao o menu troca "Exit to shell" por "Exit to desktop" e nao oferece
+  # abrir o desktop nem os frontends.
+  if [[ ${1:-} == --from-desktop ]]; then
+    SETUP_FROM_DESKTOP=1
+    SETUP_DESKTOP=1
+    shift
   fi
   # E um menu de gabinete: sai-se dele pelo menu. Ctrl+C no meio de uma
   # instalacao deixaria o disco pela metade.

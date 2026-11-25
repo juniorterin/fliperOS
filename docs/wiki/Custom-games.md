@@ -43,11 +43,11 @@ Then, with the controller:
 2. Choose **Create package**, then **From a game folder**. The group comes later, when the package is installed.
 3. **Name**: how the frontend shows the game.
 4. **Windows or Linux**: a Windows game is a `.exe`; a Linux one is a program or a command.
-5. **The game folder**: open it in the folder picker and choose *Use this folder*. Everything the game needs must be inside it. If the folder has the [package's structure](#a-folder-with-the-packages-structure) (`<game>.jpg`, `<game>.logo.png`, `<game>.mp4`, `<game>.txt`, `<game>.key`, `<game>.ppdb` or `<game>.cfg` next to the folder `<game>`), those files are picked by themselves: steps 6 and 7 come already filled.
+5. **The game folder**: open it in the folder picker and choose *Use this folder*. Everything the game needs must be inside it. If the folder has the [package's structure](#a-folder-with-the-packages-structure) (`<game>.jpg`, `<game>.logo.png`, `<game>.icon.png`, `<game>.mp4`, `<game>.txt`, `<game>.key`, `<game>.ppdb` or `<game>.cfg` next to the folder `<game>`), those files are picked by themselves: steps 6 and 7 come already filled.
 6. **What opens the game**:
    - Windows: pick the `.exe` inside the folder, then **what runs it**: PortProton (the default), Wine or Wine Staging. If the game doesn't open or runs badly with one, make the package again with another (see [Windows games: PortProton, Wine or Wine Staging](#windows-games-portproton)). With PortProton, the first time the Setup offers to download it (about 3 GB); then choose which of its Wine builds runs the game; keep the first one unless the game fails with it.
    - Linux: type the command, run inside the game folder (for example `./game.x86_64 -fullscreen`), or press *Browse* to pick the program and the Setup writes `./<program>` for you.
-7. **Picture, logo, video and text** (optional): pick each file (the logo is a `.png`, `.jpg` or `.webp`; it travels in the package as `<game>.logo.png` or `.logo.jpg`), or type the text. Without them the game gets samples, which you can replace later.
+7. **Picture, logo, icon, video and text** (optional): pick each file (the logo is a `.png`, `.jpg` or `.webp`; it travels in the package as `<game>.logo.png` or `.logo.jpg`), or type the text. The **icon** is the game's icon in the desktop menu (a `.png`, `.jpg`, `.webp` or `.ico`; it travels as `<game>.icon.png`); without one, the picture is the icon. Without the others the game gets samples, which you can replace later.
 8. **Video mode**: 240p, 240p hack (Mugen), 480i or another resolution and refresh rate. Then **16:9 crop**, for a game that only runs in a widescreen picture (see [16:9 crop](#169-crop)).
 9. **Category, controls, buttons, players, year, developer**: what the frontend shows and filters by. The year (four digits) and the developer show next to the game's name in the frontend list; leave them empty and the icons move up into that line. Then **Does the game already work with the joystick?** (asked when the game has no `.key` yet): say yes and the package carries an empty `<game>.key`, so the on-screen menu does not ask for a controller map (the same as the *Joystick* box in the web panel).
 10. The Setup writes `~/roms/custom-packages/<game>.fliperos-customgame.zip` and asks whether to **install it now**. Say yes and pick the group (or a new one, for example *PC games*; each group is a system in the frontends): the game folder is copied to `~/games/<group>/<game>` and packed. At the end it asks whether to delete the package; keep it to install the game again or copy it to another FliperOS.
@@ -163,6 +163,7 @@ A package is always named `<game>.fliperos-customgame.zip`, and always has this 
 ├─ <game>.cfg    the settings (required)
 ├─ <game>.jpg    the picture (.png, .webp... too)
 ├─ <game>.logo.png   the logo over the picture (a .png with a transparent background; <game>.logo.jpg or .webp too)
+├─ <game>.icon.png   the game's icon in the desktop menu (optional; .jpg, .webp or .ico too)
 ├─ <game>.mp4    the video
 ├─ <game>.txt    the text the frontend shows
 ├─ <game>.key    controller → keyboard (optional: the on-screen menu makes it the first time)
@@ -176,6 +177,7 @@ A package is always named `<game>.fliperos-customgame.zip`, and always has this 
 | `<game>/` | yes | the game folder, with all its files |
 | `<game>.png`, `.jpg`, `.jpeg`, `.webp` or `.gif` | no | the picture (snap) |
 | `<game>.logo.png` (or `.jpg`, `.jpeg`, `.webp`) | no | the logo (wheel): the frontends show it over the picture; installed, it is `~/media/logo/custom/<group>/<game>.png` |
+| `<game>.icon.png` (or `.jpg`, `.jpeg`, `.webp`, `.ico`) | no | the icon of the game in the desktop menu (Games); installed, it is `~/media/icon/custom/<group>/<game>.png`. Without it, the picture is the icon |
 | `<game>.mp4`, `.mkv`, `.webm`, `.avi`, `.mov` or `.flv` | no | the video |
 | `<game>.txt` | no | the text the frontend shows |
 | `<game>.key` | no | the [controller map](#the-controller-as-a-keyboard) |
@@ -342,6 +344,7 @@ The frontends look for the media in `~/media/<kind>/custom/<group>/<name>.<ext>`
 | video | `preview` | mp4, mkv, webm, avi, mov, flv |
 | text | `texto` | txt |
 | logo | `logo` | png, jpg, jpeg, webp, gif |
+| icon (desktop menu only; optional, never gets a sample) | `icon` | png, jpg, jpeg, webp, ico |
 | box, marquee | `box`, `marquee` | png, jpg, jpeg, webp, gif |
 
 A game without a kind gets a **sample** with its name and random colours, so it already shows with art: a picture, a 4-second video, a text that says which file to replace, and a logo. A sample is only made for a kind the game has in no format, so your own `.jpg` is never hidden behind a sample `.png`. The samples are noted with their checksums in `~/media/.custom-samples`: a sample you replaced counts as yours. Renaming a game takes your media along and makes new samples; deleting it removes its samples. A package's media is removed with the game (the zip brings it back).
@@ -364,7 +367,9 @@ Close the game before packing, unpacking or deleting it. Packing and unpacking n
 
 ## Opening a custom game from another frontend
 
-**On the desktop** (LXDE), the menu's **Games** has a **Custom games** submenu with every custom game, with its picture as the icon. Choosing one closes the desktop, opens the game on the CRT in its video mode (`fliperos-launch custom <name>.sh`) and brings the desktop back when it closes. The Setup, the web panel and the System Update keep the submenu up to date (`~/.local/share/applications/fliperos-custom_*.desktop` and `~/.config/menus/applications-merged/fliperos-custom-games.menu`).
+**On the desktop** (LXDE), the menu's **Games** lists every custom game, once, with its **icon** (the optional *Icon* field of Create package, and of the game's art in the web panel; without one, its picture). Choosing one closes the desktop, opens the game on the CRT in its video mode (`fliperos-launch custom <name>.sh`) and brings the desktop back when it closes. The Setup, the web panel and the System Update keep the entries up to date (`~/.local/share/applications/fliperos-custom_*.desktop`). There is no *Custom games* submenu any more: it showed each game twice, in Games and inside it, and the update that removes the duplicates deletes it (`~/.config/menus/applications-merged/fliperos-custom-games.menu`).
+
+**Double click on a package** (on the desktop, in a folder or on a USB stick) installs it: the desktop closes and the Setup opens on the CRT in 240p and full screen, straight to the install screen, as **Install games** does ([The Setup from the desktop](Desktop.md#the-setup-from-the-desktop)).
 
 The FliperOS frontend, Attract-Mode Plus, ES-DE and Pegasus already list each group as a system: the Setup writes their configuration. For any other frontend, or a launcher of your own, the command that opens an installed custom game is its script:
 

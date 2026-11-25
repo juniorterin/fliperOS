@@ -12,7 +12,7 @@ The panel at the bottom has the menu, the file manager, the terminal, the tasks,
 | **App Store** | Desktop, panel, System Tools | GNOME Software with Flatpak and Flathub: Ubuntu packages and Flatpak apps. Installing asks for the `fliperos` password |
 | **Falkon** | Internet | The web browser |
 | **Transmission** | Internet | Torrents |
-| **FliperOS Setup** | Panel, System Tools | The Setup in a window |
+| **FliperOS Setup** | Panel, System Tools | The Setup, on the CRT in 240p and full screen (below) |
 | **Home** | Desktop | Your folders: roms, bios, media, config |
 | **Desktop Resolution** | Desktop, Preferences | Changes the desktop's resolution (below) |
 | **AntiMicroX**, **QJoyPad** | Menu | A controller as keyboard and mouse |
@@ -51,9 +51,13 @@ On the desktop, the first controller is the mouse:
 | Back button (button 2) | Right click |
 | Button 3 | Opens and closes the **on-screen keyboard** |
 
-The on-screen keyboard (Onboard) also opens by itself when a text field gets the focus, and types into it, but **only while you are using the controller**: it turns that on with a button press or the stick (and off again 15 seconds after the last one), so with a real keyboard or mouse in your hand it never pops up. Button 3 opens it at any time. A window in full screen (a game, a video) pauses the controller-mouse.
+The on-screen keyboard (Onboard) opens by itself **only when you click a text field or a terminal** with the controller, and types into it. Moving the pointer, a window that opens or a terminal that prints never open it (it used to pop up out of nowhere while the pointer moved), and with a real keyboard or mouse in your hand it does not pop up either. A click outside it closes it. The text field is found through accessibility (Onboard turns that on only for the instant of the click) and the terminal, which Alacritty does not report, by the class of the window under the pointer. Button 3 opens and closes it at any time. A window in full screen (a game, a video) pauses the controller-mouse.
 
 Every text field of the graphical Setup has an on-screen keyboard too: Enter on the field opens it.
+
+## The Setup from the desktop
+
+**FliperOS Setup** (and the double click on a custom game package, which installs it: [Custom games](Custom-games.md#installing-a-package)) works like a game: the desktop closes (asking first if there are open windows), the Setup opens on the CRT in 240p and full screen, as in the cabinet's menu, and **the desktop comes back when it closes**. Its main menu has **Exit to desktop** in place of *Exit to shell*, and no *Start desktop* (you are on it) or *Start frontend*; the frontends open from the cabinet's menu. A package install goes straight to the install screen and returns to the desktop at the end.
 
 ## Desktop Resolution
 

@@ -223,6 +223,19 @@ case $backend in
         /opt/fliperos/bin/fliperos-kms-run | /opt/fliperos/bin/fliperos-x11-run)
           FLIPEROS_POWERKEY=game "${next[@]}"
           ;;
+        # O Setup pedido pelo desktop (fliperos-launch setup: o atalho FliperOS
+        # Setup, o duplo clique num pacote de jogo): no tubo, como o menu do
+        # gabinete, e o desktop volta ao sair. So este comando passa.
+        sudo)
+          if [[ ${next[1]:-} == -n && ${next[2]:-} == /usr/local/bin/fliperos-setup && ${next[3]:-} == --from-desktop &&
+            (-z ${next[4]:-} || ${next[4]} == --install-package) ]]; then
+            "${next[@]}"
+            # O que foi apertado no menu e caiu no console nao vai para o desktop.
+            python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2> /dev/null
+          else
+            echo "Ignoring an unknown request: ${next[*]}" >&2
+          fi
+          ;;
         *) echo "Ignoring an unknown request: ${next[*]}" >&2 ;;
       esac
     done

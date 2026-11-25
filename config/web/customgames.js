@@ -767,6 +767,7 @@ async function cgEditGame(game) {
       if (row.video && row.video.id) media.video = row.video.id;
       if (row.text && row.text.id) media.text = row.text.id;
       if (row.logo && row.logo.id) media.logo = row.logo.id;
+      if (row.icon && row.icon.id) media.icon = row.icon.id;
       if (text.value.trim()) media.text_string = text.value.trim().replace(/\n/g, "\\n");
       if (Object.keys(media).length) {
         const r = await api("/api/customgames/media", { method: "POST", body: JSON.stringify(Object.assign({
@@ -1444,7 +1445,8 @@ function cgArtCards(row, changed) {
   };
   box.append(card("snap", ".png,.jpg,.jpeg,.webp,.gif", "snap", "g-camera", true),
     card("video", ".mp4,.mkv,.webm,.avi,.mov,.flv", "video", "g-play", true),
-    card("logo", ".png,.jpg,.jpeg,.webp", "logo", "g-star", false), card("text", ".txt", "text", "g-list", false));
+    card("logo", ".png,.jpg,.jpeg,.webp", "logo", "g-star", false), card("icon", ".png,.jpg,.jpeg,.webp,.ico", "icon", "g-home", false),
+    card("text", ".txt", "text", "g-list", false));
   // O JOGO.key e o JOGO.ppdb que vieram com a pasta: so a marca (e tirar).
   for (const key of ["key", "ppdb"].filter((k) => row[k])) {
     const drop = el("button", { type: "button", class: "icon-btn small", "aria-label": t("cg_remove") + ": " + row[key].name }, icon("g-close"));
@@ -1670,7 +1672,7 @@ function cgTableDraw(focusLast) {
 // Quantos campos dos detalhes a linha tem preenchidos (o numero no botao).
 function cgDetailsFilled(row) {
   return [row.crop ? "x" : "", row.category, row.year.trim(), row.developer.trim(), row.players, row.buttons, row.controls.length ? "x" : "",
-    row.joystick ? "x" : "", row.snap, row.video, row.text, row.logo].filter(Boolean).length;
+    row.joystick ? "x" : "", row.snap, row.video, row.text, row.logo, row.icon].filter(Boolean).length;
 }
 
 // A linha da tabela, e logo abaixo os detalhes dela quando abertos.
@@ -1684,7 +1686,7 @@ function cgTableRow(row, index) {
   toggle.addEventListener("click", () => { row.open = !row.open; cgTableDraw(); });
   const dup = el("button", { type: "button", class: "icon-btn small", title: t("cg_dup"), "aria-label": t("cg_dup") }, icon("g-copy"));
   dup.addEventListener("click", () => {
-    const copy = cgNewRow(Object.assign({}, row, { id: undefined, name: "", snap: null, video: null, text: null, logo: null, errors: {}, state: "",
+    const copy = cgNewRow(Object.assign({}, row, { id: undefined, name: "", snap: null, video: null, text: null, logo: null, icon: null, errors: {}, state: "",
       error: "", controls: row.controls.slice(), exes: row.exes.slice(), programs: row.programs.slice() }));
     copy.id = ++cg.seq;
     cg.rows.splice(index + 1, 0, copy);
@@ -1727,7 +1729,7 @@ function cgTableRow(row, index) {
 
 // O erro do Setup cai na coluna dela (exe e command sao a mesma coluna).
 function cgFieldError(row, column) {
-  const map = { run: ["exe", "command"], art: ["snap", "logo", "video", "text", "key", "ppdb"], name: ["name"], platform: ["platform"],
+  const map = { run: ["exe", "command"], art: ["snap", "logo", "icon", "video", "text", "key", "ppdb"], name: ["name"], platform: ["platform"],
     folder: ["folder"], mode: ["mode"], category: ["category"], year: ["year"], developer: ["developer"], players: ["players"],
     buttons: ["buttons"], controls: ["controls"] };
   return (map[column] || []).map((f) => row.errors[f]).filter(Boolean).join(" ");
@@ -1784,7 +1786,7 @@ function cgApplyAll() {
 
 function cgNewRow(values) {
   return Object.assign({ id: ++cg.seq, group: "", name: "", platform: "windows", folder: "", exe: "", command: "", mode: "480i",
-    modeOther: "", crop: false, category: "", year: "", developer: "", players: "", buttons: "", controls: [], joystick: false, snap: null, video: null, text: null, logo: null, key: null, ppdb: null,
+    modeOther: "", crop: false, category: "", year: "", developer: "", players: "", buttons: "", controls: [], joystick: false, snap: null, video: null, text: null, logo: null, icon: null, key: null, ppdb: null,
     wine: "", runner: "portproton", exes: [], programs: [], errors: {}, state: "", error: "", open: false }, values || {});
 }
 
@@ -1800,7 +1802,7 @@ const cgStagedUrl = (id) => "/api/customgames/staged?id=" + encodeURIComponent(i
 // veio de outra pasta antes sai.
 function cgFound(row, found) {
   if (found.path) row.folder = found.path;
-  for (const key of ["snap", "video", "text", "logo"]) {
+  for (const key of ["snap", "video", "text", "logo", "icon"]) {
     if (row[key] && row[key].id) continue;
     const path = found[key] || "";
     row[key] = path ? { path, name: cgBase(path), url: cgArtUrl(path, key === "snap" ? "" : key) } : null;
@@ -1828,7 +1830,7 @@ function cgFound(row, found) {
 
 // O que veio com a pasta, para a mensagem: "imagem, video, .key".
 function cgFoundList(row) {
-  return [["snap", "cg_f_snap"], ["logo", "cg_f_logo"], ["video", "cg_f_video"], ["text", "cg_f_text"], ["key", "cg_f_key"], ["ppdb", "cg_f_ppdb"]]
+  return [["snap", "cg_f_snap"], ["logo", "cg_f_logo"], ["icon", "cg_f_icon"], ["video", "cg_f_video"], ["text", "cg_f_text"], ["key", "cg_f_key"], ["ppdb", "cg_f_ppdb"]]
     .filter(([k]) => row[k] && row[k].path).map(([, label]) => t(label).toLowerCase());
 }
 
@@ -1842,7 +1844,7 @@ function cgDraftLoad() {
       cg.rows.forEach((r) => {
         r.id = ++cg.seq;
         // Os enderecos do navegador (blob:) nao voltam: a arte da pasta, sim.
-        for (const k of ["snap", "video", "text", "logo"]) {
+        for (const k of ["snap", "video", "text", "logo", "icon"]) {
           if (r[k]) r[k].url = r[k].path ? cgArtUrl(r[k].path, k === "snap" ? "" : k) : r[k].id && k !== "text" ? cgStagedUrl(r[k].id) : "";
         }
       });
@@ -2104,6 +2106,7 @@ function cgArt(row, changed) {
       t("cg_f_" + key)), drop);
   };
   box.append(slot("snap", ".png,.jpg,.jpeg,.webp,.gif", "snap", "g-camera"), slot("logo", ".png,.jpg,.jpeg,.webp", "logo", "g-star"),
+    slot("icon", ".png,.jpg,.jpeg,.webp,.ico", "icon", "g-home"),
     slot("video", ".mp4,.mkv,.webm,.avi,.mov,.flv", "video", "g-play"),
     slot("text", ".txt", "text", "g-list"), ...["key", "ppdb"].filter((k) => row[k]).map(chip));
   return box;
@@ -2235,7 +2238,7 @@ function cgPayload(row) {
     exe: row.platform === "windows" ? row.exe : "", command: row.platform === "windows" ? "" : row.command, mode: cgRowMode(row),
     category: row.category, controls: row.controls.join(","), buttons: row.buttons, players: row.players,
     year: row.year.trim(), developer: row.developer.trim(),
-    snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), logo: cgArtRef(row.logo), wine: row.platform === "windows" ? row.wine : "",
+    snap: cgArtRef(row.snap), video: cgArtRef(row.video), text: cgArtRef(row.text), logo: cgArtRef(row.logo), icon: cgArtRef(row.icon), wine: row.platform === "windows" ? row.wine : "",
     key: row.platform !== "command" && row.key ? row.key.path : "", ppdb: row.platform === "windows" && row.ppdb ? row.ppdb.path : "",
     joystick: row.platform !== "command" && row.joystick ? "1" : "", crop: row.crop ? "1" : "",
     runner: row.platform === "windows" ? row.runner || "portproton" : "" };

@@ -36,6 +36,10 @@ PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/flipero
 # Os itens que voltam um nivel (o "Return" e o "Cancel" dos menus): escolhe-los
 # anima como o Esc, nao como entrar num item.
 BACK_VALUES = ("return", "cancel")
+# Os itens que tocam o proprio som ao serem escolhidos (Audio > Menu sounds >
+# um evento: "Play" e "Use the default" tocam o som do evento): o clique de
+# entrar nao toca por cima, senao o exemplo sai misturado com o clique.
+OWN_SOUND_VALUES = ("snd-play", "snd-default")
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
 # Um rotulo com a explicacao entre parenteses no fim.
 NOTE = re.compile(r"^(.*\S) \(([^()]+)\)$")
@@ -215,8 +219,9 @@ class Server:
         elif action == "select":
             self.went = navfx.IN
             # Abrir o frontend, o desktop ou o shell: quem toca e o "Open game"
-            # (o fliperos-tty1, ao abrir), nao o Enter por cima dele.
-            if not self.opens_something(screen, value):
+            # (o fliperos-tty1, ao abrir), nao o Enter por cima dele. Ouvir um
+            # som do menu (OWN_SOUND_VALUES): quem toca e o Setup, so o do evento.
+            if not self.opens_something(screen, value) and value not in OWN_SOUND_VALUES:
                 self.app.play("enter")
         else:
             self.went = None

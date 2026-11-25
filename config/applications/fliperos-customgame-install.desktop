@@ -4,13 +4,14 @@ Name=Install custom game
 Comment=Installs a FliperOS custom game package (GAME.fliperos-customgame.zip)
 # O duplo clique num pacote de jogo custom (o tipo application/x-fliperos-customgame,
 # config/fliperos-customgame.xml) instala o jogo: a mesma tela do Setup > Games >
-# Custom games > Install games (o grupo e perguntado), numa janela do X como o
-# atalho FliperOS Setup (config/fliperos-setup.desktop: o --desktop leva o display
-# que o sudo tira do ambiente, e o Terminal=true e o caminho de volta para o texto).
-# %F: varios pacotes escolhidos juntos abrem numa janela so (duas janelas do Setup
-# se atropelariam). Sem entrada no menu: o Abrir com e o duplo clique a acham.
-Exec=sh -c 'sudo /usr/local/bin/fliperos-setup --desktop "$DISPLAY" "${XAUTHORITY:-$HOME/.Xauthority}" --install-package "$@"' sh %F
-Terminal=true
+# Custom games > Install games (o grupo e perguntado), no tubo, em 240p e tela
+# cheia, como o atalho FliperOS Setup (config/fliperos-setup.desktop): o
+# fliperos-launch fecha o desktop, o fliperos-session abre o Setup
+# (fliperos-setup --from-desktop --install-package) e o desktop volta quando ele sai.
+# %F: varios pacotes escolhidos juntos abrem numa vez so (dois Setup se atropelariam).
+# Sem entrada no menu: o Abrir com e o duplo clique a acham.
+Exec=/opt/fliperos/bin/fliperos-launch setup --install-package %F
+Terminal=false
 Icon=applications-games
 NoDisplay=true
 MimeType=application/x-fliperos-customgame;

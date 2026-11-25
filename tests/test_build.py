@@ -497,9 +497,10 @@ class ImageTests(unittest.TestCase):
         self.assertIn('fliperos-setup.desktop', ROOTFS)
         desktop = (ROOT / 'config/fliperos-setup.desktop').read_text()
         self.assertIn('Categories=System;', desktop)
-        # Pelo desktop o Setup abre na interface grafica, numa janela do X.
-        self.assertIn("sudo /usr/local/bin/fliperos-setup --desktop \"$DISPLAY\"", desktop)
-        self.assertIn('Terminal=true', desktop)
+        # Pelo desktop o Setup abre no tubo, como no menu do gabinete (240p, tela cheia): o fliperos-launch
+        # fecha o desktop e o fliperos-session o abre (fliperos-setup --from-desktop) e o traz de volta.
+        self.assertIn("Exec=/opt/fliperos/bin/fliperos-launch setup\n", desktop)
+        self.assertIn('Terminal=false', desktop)
 
     SERVICES_SCREEN = 'sudo -n /usr/local/bin/fliperos-setup --services-screen'
 
@@ -10101,9 +10102,10 @@ class WebCustomGamesTests(WebSetupBase):
                                  'free': 99})
         lines = (self.dir / 'check.rows').read_text().splitlines()
         first, second = (l.split('\x1f') for l in lines)
-        # O runner (PortProton, Wine, Wine Staging), o logotipo, o ano, a desenvolvedora, o joystick e o 16:9 crop (o ultimo campo).
-        self.assertEqual(len(first), 24)
-        self.assertEqual(first[19:], ['', '', '', '', ''])
+        # O runner (PortProton, Wine, Wine Staging), o logotipo, o ano, a desenvolvedora, o joystick, o 16:9 crop e o
+        # icone do jogo no desktop (o ultimo campo).
+        self.assertEqual(len(first), 25)
+        self.assertEqual(first[19:], ['', '', '', '', '', ''])
         self.assertEqual(first[:5], ['PC games', 'Metal Slug X', 'windows', str(self.dir / 'src/Metal_Slug_X'), 'MSX.exe'])
         self.assertEqual(first[5], 'line one line two')
         self.assertEqual(first[11], str(self.dir / 'stage' / staged['id']))
@@ -27885,6 +27887,7 @@ class DeskpadTests(unittest.TestCase):
         loader.exec_module(self.dp)
         self.calls = []
         self.osk_rect, self.where = None, (100, 100)
+        self.terminal = False      # o ponteiro esta numa janela de terminal
         test = self
 
         class FakeX:
@@ -27907,9 +27910,15 @@ class DeskpadTests(unittest.TestCase):
             def pointer(self):
                 return test.where
 
+            def terminal_under_pointer(self):
+                return test.terminal
+
         class FakeOnboard:
             def toggle(self):
                 test.calls.append(('osk', 'toggle'))
+
+            def show(self):
+                test.calls.append(('osk', 'show'))
 
             def hide(self):
                 test.calls.append(('osk', 'hide'))
@@ -27986,6 +27995,90 @@ class DeskpadTests(unittest.TestCase):
         desk.key(dp.KEY_ESC, 1, 3.0)
         self.assertEqual(self.calls, [('button', 3, True)])
 
+    def test_a_click_on_a_terminal_opens_the_keyboard(self):
+        # O Alacritty nao fala AT-SPI: o Onboard nao o ve como campo de texto, e o clique nele abre o teclado
+        # pela classe da janela sob o ponteiro (nao ao andar ate ele).
+        dp, desk = self.dp, self.desk
+        self.terminal = True
+        desk.analog(dp.ABS_X, 0.8, 0.0)
+        desk.tick(0.1, 0.1)
+        self.assertEqual([c for c in self.calls if c[0] == 'osk'], [])
+        desk.analog(dp.ABS_X, 0.0, 0.2)
+        self.calls.clear()
+        desk.key(dp.KEY_ENTER, 1, 1.0)
+        desk.key(dp.KEY_ENTER, 0, 1.1)
+        self.assertEqual(self.calls, [('osk', 'show'), ('button', 1, True), ('button', 1, False)])
+        # O clique direito num terminal nao abre.
+        self.calls.clear()
+        desk.key(dp.KEY_ESC, 1, 2.0)
+        desk.key(dp.KEY_ESC, 0, 2.1)
+        self.assertEqual(self.calls, [('button', 3, True), ('button', 3, False)])
+        # Com o teclado aberto e o ponteiro no terminal (fora do teclado), o clique nao o fecha.
+        self.osk_rect, self.where = (0, 288, 640, 192), (320, 100)
+        self.calls.clear()
+        desk.key(dp.KEY_ENTER, 1, 3.0)
+        desk.key(dp.KEY_ENTER, 0, 3.1)
+        self.assertEqual(self.calls, [('osk', 'show'), ('button', 1, True), ('button', 1, False)])
+        # Dentro do teclado o clique digita, e nada muda, mesmo com a janela do terminal sob ele.
+        self.where = (85, 347)
+        self.calls.clear()
+        desk.key(dp.KEY_ENTER, 1, 4.0)
+        desk.key(dp.KEY_ENTER, 0, 4.1)
+        self.assertEqual(self.calls, [('button', 1, True), ('button', 1, False)])
+        # Fora de um terminal e do teclado, o clique o fecha (como antes).
+        self.terminal, self.where = False, (320, 100)
+        self.calls.clear()
+        desk.key(dp.KEY_ENTER, 1, 5.0)
+        desk.key(dp.KEY_ENTER, 0, 5.1)
+        self.assertEqual(self.calls, [('osk', 'hide'), ('button', 1, True), ('button', 1, False)])
+
+    def test_the_terminal_is_found_by_the_class_of_the_window_under_the_pointer(self):
+        import types
+        dp = self.dp
+
+        class Win:
+            def __init__(self, cls=None, children=()):
+                self.cls, self.children = cls, list(children)
+
+            def get_wm_class(self):
+                return self.cls
+
+            def query_tree(self):
+                return types.SimpleNamespace(children=self.children)
+
+        class Root:
+            child = None
+
+            def query_pointer(self):
+                return types.SimpleNamespace(child=self.child)
+
+        real = dp.X.__new__(dp.X)
+        real.d, real.root = object(), Root()
+        # Sem janela sob o ponteiro, ou uma que nao e terminal: nao.
+        self.assertFalse(real.terminal_under_pointer())
+        real.root.child = Win(('firefox', 'Firefox'))
+        self.assertFalse(real.terminal_under_pointer())
+        # A janela do terminal dentro da moldura do openbox, ou sem moldura.
+        real.root.child = Win(None, [Win(('Alacritty', 'Alacritty'))])
+        self.assertTrue(real.terminal_under_pointer())
+        real.root.child = Win(('xterm', 'XTerm'))
+        self.assertTrue(real.terminal_under_pointer())
+        # O proprio teclado na tela nao conta, e uma janela que sumiu no meio, tambem nao.
+        real.root.child = Win(('onboard', 'Onboard'))
+        self.assertFalse(real.terminal_under_pointer())
+        real.root.child = Win(None, [None])
+        self.assertFalse(real.terminal_under_pointer())
+        # Sem o X (so o xdotool): nunca.
+        real.d = None
+        self.assertFalse(real.terminal_under_pointer())
+        for name in ('alacritty', 'lxterminal', 'xterm'):
+            self.assertIn(name, dp.TERMINAL_CLASSES)
+        # O D-Bus tem o Show ao lado do Hide e do ToggleVisible.
+        from unittest import mock
+        with mock.patch.object(dp.subprocess, 'Popen') as popen:
+            dp.Onboard().show()
+        self.assertEqual(popen.call_args_list[0].args[0][-1], 'org.onboard.Onboard.Keyboard.Show')
+
     def test_the_pointer_move_makes_the_screen_follow(self):
         # No desktop maior que a tela (panning do XRandR) o movimento relativo do XTest deixava o ponteiro
         # sair da area visivel sem a imagem andar (o CRTC ficava parado); um warp de 0,0 depois do
@@ -28015,10 +28108,10 @@ class DeskpadTests(unittest.TestCase):
         real.move(0, 0)
         self.assertEqual(calls, [])
 
-    def test_the_keyboard_only_opens_by_itself_for_the_controller(self):
-        # O Onboard abre sozinho num campo de texto (auto-show); com teclado ou mouse de verdade isso
-        # atrapalha. Desligado, o deskpad o liga enquanto chegam comandos do controle (um botao, o
-        # analogico fora da zona morta) e o desliga ACTIVE segundos depois do ultimo.
+    def test_the_keyboard_only_opens_on_a_click(self):
+        # O Onboard abre sozinho num campo de texto que ganha o foco (auto-show), e isso acontecia sem
+        # clique nenhum: o teclado abria "do nada" com o ponteiro andando pelo controle. Desligado, o
+        # deskpad o liga so no instante de um clique de aceitar (ACTIVE segundos depois do ultimo).
         dp = self.dp
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp) / 'gsettings'
@@ -28033,23 +28126,36 @@ class DeskpadTests(unittest.TestCase):
             auto.set(False)
             wait(1)
             self.assertEqual(written(), ['set org.onboard.auto-show enabled false'])
-            desk.tick(0.1, 1.0)                              # sem comando: continua desligado
-            desk.analog(dp.ABS_X, 0.0, 1.0)                  # o analogico na zona morta nao conta
+            # Mexer o ponteiro (o analogico, o direcional), os outros botoes e o clique direito nao ligam.
+            desk.analog(dp.ABS_X, 0.8, 1.0)
+            desk.tick(0.1, 1.0)
+            desk.key(dp.KEY_DOWN, 1, 1.1)
+            desk.key(dp.KEY_DOWN, 0, 1.2)
+            desk.key(dp.KEY_SPACE, 1, 1.3)
+            desk.key(dp.KEY_SPACE, 0, 1.35)
+            desk.key(dp.KEY_ESC, 1, 1.4)
+            desk.key(dp.KEY_ESC, 0, 1.5)
+            desk.analog(dp.ABS_X, 0.0, 1.6)
+            desk.tick(0.1, 20.0)
             time.sleep(0.2)
             self.assertEqual(len(written()), 1)
-            desk.key(dp.KEY_ENTER, 1, 2.0)                   # um botao liga
-            wait(2)
-            self.assertEqual(written()[1], 'set org.onboard.auto-show enabled true')
-            desk.key(dp.KEY_ENTER, 0, 2.1)
-            desk.analog(dp.ABS_X, 0.8, 5.0)                  # o analogico fora da zona morta mantem ligado
-            desk.tick(0.1, 10.0)
+            # Um clique de aceitar liga ja antes de ele sair (o foco do campo vem com ele).
+            self.calls.clear()
+            desk.key(dp.KEY_ENTER, 1, 30.0)
+            self.assertEqual(written()[1:], ['set org.onboard.auto-show enabled true'])
+            self.assertEqual(self.calls, [('button', 1, True)])
+            desk.key(dp.KEY_ENTER, 0, 30.5)
+            desk.tick(0.1, 30.5 + dp.AutoShow.ACTIVE - 0.1)  # ainda dentro da janela: segue ligado
             time.sleep(0.2)
             self.assertEqual(len(written()), 2)
-            desk.tick(0.1, 5.0 + dp.AutoShow.ACTIVE + 0.1)   # ACTIVE segundos sem comando: desliga
+            desk.tick(0.1, 30.5 + dp.AutoShow.ACTIVE + 0.1)  # passou: desliga
             wait(3)
             self.assertEqual(written()[2], 'set org.onboard.auto-show enabled false')
-            desk.analog(dp.ABS_X, 0.0, 30.0)
-            desk.tick(0.1, 31.0)
+            # Um clique dentro do teclado na tela (digitar) nao liga nada.
+            self.osk_rect, self.where = (0, 288, 640, 192), (85, 347)
+            desk.key(dp.KEY_ENTER, 1, 40.0)
+            desk.key(dp.KEY_ENTER, 0, 40.1)
+            desk.tick(0.1, 50.0)
             time.sleep(0.2)
             self.assertEqual(len(written()), 3)
         # Aberto pelo main com o auto-show desligado de saida.
@@ -29356,7 +29462,34 @@ class FesoundTests(unittest.TestCase):
         self.assertFalse(server.opens_something(Menu('FliperOS', 'radio'), 'frontend'))
         self.assertFalse(server.opens_something(object(), 'frontend'))
         text = (self.GUI / 'serve.py').read_text()
-        self.assertIn('if not self.opens_something(screen, value):\n                self.app.play("enter")', text)
+        self.assertIn('if not self.opens_something(screen, value) and value not in OWN_SOUND_VALUES:\n'
+                      '                self.app.play("enter")', text)
+        # Ouvir o som de exemplo (Audio > Menu sounds > um evento: Play, Use the default) toca so o do
+        # evento: o clique de "entrar" nao sai misturado com ele. Qualquer outro item continua clicando.
+        played = []
+
+        class App:
+            ui = type('UI', (), {'copy': staticmethod(lambda: None)})
+
+            def play(self, event):
+                played.append(event)
+
+        server.app = App()
+        server.which = serve.Server.which
+        # O answered anima a passagem com o navfx (pygame, que a imagem de teste nao tem): um de mentira.
+        import types
+        from unittest import mock
+        with mock.patch.dict(sys.modules, {'navfx': types.SimpleNamespace(IN='in', OUT='out')}):
+            for value, expected in (('snd-play', []), ('snd-default', []), ('file', ['enter']), ('off', ['enter'])):
+                del played[:]
+                serve.Server.answered(server, Menu('Browse'), ('select', value))
+                self.assertEqual(played, expected, value)
+        # Os dois valores existem na tela do Setup e tem icone proprio.
+        sounds = (ROOT / 'fliperos-setup/screens/sounds.sh').read_text()
+        theme_text = (self.GUI / 'theme.py').read_text()
+        for value in serve.OWN_SOUND_VALUES:
+            self.assertIn('"%s|' % value, sounds)
+            self.assertIn('"%s":' % value, theme_text)
         # Os tres itens sao os do menu principal; o shell tambem toca o "Open game" ao sair para ele.
         main_menu = (ROOT / 'fliperos-setup/screens/main-menu.sh').read_text()
         for value in serve.LAUNCH_VALUES:

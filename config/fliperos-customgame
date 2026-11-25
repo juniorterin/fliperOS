@@ -3,7 +3,7 @@
 
   fliperos-customgame inspect ZIP
       confere o pacote e imprime o cfg dele em linhas CHAVE=VALOR, mais
-      base=, bytes= (o tamanho da pasta do jogo), media= (snap,preview,texto,logo),
+      base=, bytes= (o tamanho da pasta do jogo), media= (snap,preview,texto,logo,icon),
       key= e ppdb= (0 ou 1). Status 1 com o motivo no stderr: o zip nao serve
   fliperos-customgame pending
       os pacotes da pasta deles, ~/roms/custom-packages (--packages):
@@ -33,7 +33,7 @@
       mapa do controle para o teclado, e o menu na tela nao pergunta (vale
       tambem no pack, no lugar de qualquer --key). Status 3: o jogo ja
       existe (sem --replace)
-  fliperos-customgame media --group GRUPO --name NOME [--snap|--video|--text|--logo ARQ] [--text-string T]
+  fliperos-customgame media --group GRUPO --name NOME [--snap|--video|--text|--logo|--icon ARQ] [--text-string T]
       troca a arte de um jogo (a de exemplo deixa de ser)
   fliperos-customgame stamp ZIP
       o tamanho e a data do zip (o package_stamp= do cfg do jogo instalado)
@@ -49,7 +49,7 @@
   fliperos-customgame found PASTA
       o mesmo, sem procurar os executaveis, em linhas CHAVE=VALOR (o Create
       package do Setup): folder= (a pasta do jogo), snap=, video=, text=,
-      logo=, key=, ppdb= e as chaves do cfg que servem
+      logo=, icon=, key=, ppdb= e as chaves do cfg que servem
   fliperos-customgame run ARQUIVO.cfg
       abre o jogo (o NOME.sh o chama pelo fliperos-x11-run): o comando dentro
       da pasta do jogo, o .exe pelo PortProton, e o mapa do controle para o
@@ -65,7 +65,8 @@ grupo e escolhido ao instalar.
 
 O pacote, sempre com o nome JOGO.fliperos-customgame.zip, tem JOGO.cfg
 (obrigatorio), JOGO.jpg/.png/.webp (a miniatura), JOGO.mp4 (o video),
-JOGO.txt (o texto), JOGO.logo.png (o logotipo), JOGO.key (o mapa do controle para o teclado), JOGO.ppdb
+JOGO.txt (o texto), JOGO.logo.png (o logotipo), JOGO.icon.png (o icone do jogo no menu do desktop;
+.png, .jpg, .jpeg, .webp ou .ico), JOGO.key (o mapa do controle para o teclado), JOGO.ppdb
 (o do PortProton, nos de Windows) e a pasta JOGO/ com os arquivos (vira
 squashfs ao instalar). Um zip com tudo isso dentro de uma pasta so (feito
 clicando na pasta) tambem vale. A mesma estrutura solta numa pasta (o zip
@@ -109,8 +110,14 @@ IMAGE_EXTS = ("png", "jpg", "jpeg", "webp", "gif")
 VIDEO_EXTS = ("mp4", "mkv", "webm", "avi", "mov", "flv")
 # As midias do pacote e a pasta de ~/media de cada uma (as do fedata.py).
 LOGO_EXTS = ("png", "jpg", "jpeg", "webp")
+# O icone do jogo no desktop (o menu Games do LXDE) e JOGO.icon.png no pacote;
+# instalado, e o icon/ do ~/media (so o desktop o usa; sem ele vale a imagem).
+ICON_EXTS = ("png", "jpg", "jpeg", "webp", "ico")
 # O logotipo (a wheel) e JOGO.logo.png no pacote; instalado, e o logo/ do ~/media.
-MEDIA = (("snap", IMAGE_EXTS), ("preview", VIDEO_EXTS), ("texto", ("txt",)), ("logo", LOGO_EXTS))
+MEDIA = (("snap", IMAGE_EXTS), ("preview", VIDEO_EXTS), ("texto", ("txt",)), ("logo", LOGO_EXTS), ("icon", ICON_EXTS))
+# O que tem um segundo nome no pacote (JOGO.logo.png, JOGO.icon.png): o
+# nome do tipo entre o do jogo e a extensao.
+INFIX_KINDS = (("logo", LOGO_EXTS), ("icon", ICON_EXTS))
 PLATFORMS = ("windows", "native")
 # O que abre um jogo do Windows (runner= no cfg): o PortProton (o padrao, sem a
 # linha), o Wine do sistema ou o Wine Staging (Setup > Games > Extras). Um jogo
@@ -447,9 +454,11 @@ class Package:
             ext = ext.lower()
             kind = {"cfg": "cfg", "key": "key", "ppdb": "ppdb", "txt": "texto"}.get(ext)
             kind = kind or ("snap" if ext in IMAGE_EXTS else "preview" if ext in VIDEO_EXTS else None)
-            # JOGO.logo.png: o logotipo (o nome do jogo nao tem ponto).
-            if dot and ext in LOGO_EXTS and stem == self.base + ".logo":
-                kind, stem = "logo", self.base
+            # JOGO.logo.png e JOGO.icon.png: o logotipo e o icone (o nome do
+            # jogo nao tem ponto).
+            for infix, infix_exts in INFIX_KINDS:
+                if dot and ext in infix_exts and stem == "%s.%s" % (self.base, infix):
+                    kind, stem = infix, self.base
             if not dot or stem != self.base or not kind:
                 if not (kind == "cfg" and len(cfgs) > 1):
                     strangers.append(info.filename)
@@ -812,15 +821,16 @@ def install_media(pkg, args, group, name):
         put_media(args.media, group, name, kind, ext, lambda info=info: pkg.zf.open(info))
 
 
-def media_files(snap=None, video=None, text=None, logo=None):
+def media_files(snap=None, video=None, text=None, logo=None, icon=None):
     """[(tipo, extensao, caminho)] dos arquivos de midia soltos, conferidos."""
     out = []
-    for path, kind in ((snap, "snap"), (video, "preview"), (text, "texto"), (logo, "logo")):
+    for path, kind in ((snap, "snap"), (video, "preview"), (text, "texto"), (logo, "logo"), (icon, "icon")):
         if not path:
             continue
         ext = path.rsplit(".", 1)[-1].lower() if "." in os.path.basename(path) else ""
         if ext not in dict(MEDIA)[kind] or not os.path.isfile(path):
-            raise Bad("not a %s file: %s" % ({"snap": "picture", "preview": "video", "texto": "text", "logo": "logo"}[kind], path))
+            raise Bad("not a %s file: %s" % ({"snap": "picture", "preview": "video", "texto": "text", "logo": "logo",
+                                              "icon": "icon"}[kind], path))
         out.append((kind, ext, path))
     return out
 
@@ -952,13 +962,14 @@ def cmd_pack(args):
         # qualquer --key.
         for opt, kind, exts in ((args.snap, "snap", IMAGE_EXTS), (args.video, "preview", VIDEO_EXTS),
                                 (args.text, "texto", ("txt",)), (args.logo, "logo", LOGO_EXTS),
+                                (args.icon, "icon", ICON_EXTS),
                                 (None if args.joystick else args.key, "key", ("key",)), (args.ppdb, "ppdb", ("ppdb",))):
             if not opt:
                 continue
-            ext = opt.rsplit(".", 1)[-1].lower() if kind in ("snap", "preview", "logo") else exts[0]
+            ext = opt.rsplit(".", 1)[-1].lower() if kind in ("snap", "preview", "logo", "icon") else exts[0]
             if ext not in exts or not os.path.isfile(opt):
                 raise Bad("not a %s file: %s" % (kind, opt))
-            extras.append((opt, "%s%s.%s" % (base, ".logo" if kind == "logo" else "", ext)))
+            extras.append((opt, "%s%s.%s" % (base, ".%s" % kind if kind in ("logo", "icon") else "", ext)))
         out = os.path.abspath(args.out)
         if not out.endswith(SUFFIX):
             raise Bad("the package name must end in %s" % SUFFIX)
@@ -1099,7 +1110,7 @@ def cmd_add(args):
             if not cfg["command"].strip():
                 raise Bad("no command (what opens the game, run in its folder)")
         cfg = check_cfg(cfg, name, rels)
-        media = media_files(args.snap, args.video, args.text, args.logo)
+        media = media_files(args.snap, args.video, args.text, args.logo, args.icon)
         # --joystick: o jogo ja aceita o joystick; o .key fica vazio (so o cabecalho), no lugar de qualquer --key.
         keys = b"" if args.joystick else side_text(args.key, "key")
         ppdb = side_text(args.ppdb, "ppdb") if args.platform == "windows" else None
@@ -1148,7 +1159,7 @@ def cmd_media(args):
     try:
         if not (valid_name(args.group) and valid_name(args.name)):
             raise Bad("invalid group or game name")
-        for kind, ext, path in media_files(args.snap, args.video, args.text, args.logo):
+        for kind, ext, path in media_files(args.snap, args.video, args.text, args.logo, args.icon):
             put_media(args.media, args.group, args.name, kind, ext, lambda path=path: open(path, "rb"))
         if args.text_string:
             put_text(args.media, args.group, args.name, args.text_string)
@@ -1201,12 +1212,14 @@ def rank(rels, folder_name, sizes):
 # trailer.mp4...) tambem servem. O painel e o Setup preenchem a arte com eles.
 
 SIDE_KINDS = (("cfg", ("cfg",)), ("snap", IMAGE_EXTS), ("preview", VIDEO_EXTS), ("texto", ("txt",)),
-              ("logo", tuple("logo." + e for e in LOGO_EXTS)), ("key", ("key",)), ("ppdb", ("ppdb",)))
+              ("logo", tuple("logo." + e for e in LOGO_EXTS)), ("icon", tuple("icon." + e for e in ICON_EXTS)),
+              ("key", ("key",)), ("ppdb", ("ppdb",)))
 # Os nomes de arte comuns dentro da pasta do jogo (comparados sem caixa,
 # espacos ou _).
 INNER_ART = {"snap": ("snap", "screenshot", "screen", "cover", "thumbnail", "thumb", "title", "boxart"),
              "preview": ("preview", "video", "trailer", "gameplay", "snap", "intro"),
-             "logo": ("logo", "wheel", "marquee", "gamelogo")}
+             "logo": ("logo", "wheel", "marquee", "gamelogo"),
+             "icon": ("icon", "gameicon", "appicon")}
 JUNK = {"thumbs.db", "desktop.ini", ".ds_store"}
 
 
@@ -1233,10 +1246,10 @@ def side_files(files, base):
         stem, dot, ext = n.rpartition(".")
         if dot and want and simple(stem) == want:
             by_ext.setdefault(ext.lower(), path)
-        # JOGO.logo.png: o logotipo ao lado do JOGO.cfg.
+        # JOGO.logo.png e JOGO.icon.png: o logotipo e o icone ao lado do JOGO.cfg.
         head, dot2, mid = stem.rpartition(".")
-        if dot and dot2 and mid.lower() == "logo" and want and simple(head) == want:
-            by_ext.setdefault("logo." + ext.lower(), path)
+        if dot and dot2 and mid.lower() in ("logo", "icon") and want and simple(head) == want:
+            by_ext.setdefault("%s.%s" % (mid.lower(), ext.lower()), path)
     out = {}
     for kind, exts in SIDE_KINDS:
         for ext in exts:
@@ -1297,17 +1310,17 @@ def layout(folder):
             del side["cfg"]
         where = "beside" if side else ""
     out = {"folder": game, "where": where, "snap": side.get("snap", ""), "video": side.get("preview", ""),
-           "text": side.get("texto", ""), "logo": side.get("logo", ""), "key": side.get("key", ""),
-           "ppdb": side.get("ppdb", ""), "cfg": {}}
+           "text": side.get("texto", ""), "logo": side.get("logo", ""), "icon": side.get("icon", ""),
+           "key": side.get("key", ""), "ppdb": side.get("ppdb", ""), "cfg": {}}
     # A arte de dentro da pasta do jogo: com o nome dele, ou um nome comum.
     inner = plain_files(game)
     base = os.path.basename(game)
-    for key, kind in (("snap", "snap"), ("video", "preview"), ("logo", "logo")):
+    for key, kind in (("snap", "snap"), ("video", "preview"), ("logo", "logo"), ("icon", "icon")):
         if out[key]:
             continue
         exts = dict(MEDIA)[kind]
-        # O logotipo so pelo nome de logo (JOGO.png dentro da pasta e a imagem).
-        names = ((simple(base),) if kind != "logo" else ()) + INNER_ART[kind]
+        # O logotipo e o icone so pelo nome deles (JOGO.png dentro da pasta e a imagem).
+        names = ((simple(base),) if kind not in ("logo", "icon") else ()) + INNER_ART[kind]
         for want in names:
             hit = sorted(p for n, p in inner.items() if "." in n and n.rsplit(".", 1)[1].lower() in exts
                          and simple(n.rsplit(".", 1)[0]) == want)
@@ -1362,7 +1375,7 @@ def cmd_found(args):
         print("not a folder: %s" % args.folder, file=sys.stderr)
         return 1
     found = layout(args.folder)
-    for key in ("folder", "where", "snap", "video", "text", "logo", "key", "ppdb"):
+    for key in ("folder", "where", "snap", "video", "text", "logo", "icon", "key", "ppdb"):
         print("%s=%s" % (key, found[key]))
     for key, value in found["cfg"].items():
         print("cfg_%s=%s" % (key, value))
@@ -1419,7 +1432,7 @@ def scan_folder(folder):
     # O que veio com a pasta (a estrutura do pacote): a arte, o .key, o
     # .ppdb e o que o JOGO.cfg diz vencem o que o scan adivinhou.
     hints = found["cfg"]
-    for key in ("snap", "video", "text", "logo", "key", "ppdb", "where"):
+    for key in ("snap", "video", "text", "logo", "icon", "key", "ppdb", "where"):
         row[key] = found[key]
     row["cfg"] = {k: v for k, v in hints.items()
                   if k in ("mode", "crop169", "runner", "category", "controls", "buttons", "players", "year", "developer")}
@@ -1813,7 +1826,7 @@ def main():
     s.add_argument("--command")
     s.add_argument("--mode", default=DEFAULT_MODE)
     for opt in ("category", "controls", "buttons", "players", "year", "developer", "snap", "video", "text", "text-string",
-                "logo", "key", "ppdb"):
+                "logo", "icon", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--joystick", action="store_true")
     s.add_argument("--crop169", action="store_true")
@@ -1828,7 +1841,7 @@ def main():
     s.add_argument("--command")
     s.add_argument("--mode", default=DEFAULT_MODE)
     for opt in ("category", "controls", "buttons", "players", "year", "developer", "snap", "video", "text", "text-string",
-                "logo", "key", "ppdb"):
+                "logo", "icon", "key", "ppdb"):
         s.add_argument("--" + opt)
     s.add_argument("--joystick", action="store_true")
     s.add_argument("--crop169", action="store_true")
@@ -1837,7 +1850,7 @@ def main():
     s = sub.add_parser("media")
     s.add_argument("--group", required=True)
     s.add_argument("--name", required=True)
-    for opt in ("snap", "video", "text", "text-string", "logo"):
+    for opt in ("snap", "video", "text", "text-string", "logo", "icon"):
         s.add_argument("--" + opt)
     s = sub.add_parser("scan")
     s.add_argument("folder")

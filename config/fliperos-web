@@ -3328,13 +3328,15 @@ def menu_sounds():
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
                      "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
-                     "year", "developer", "joystick", "crop")
+                     "year", "developer", "joystick", "crop", "icon")
 CUSTOMGAME_ROWS = 500
 CUSTOMGAME_SUFFIX = ".fliperos-customgame.zip"
 # A arte que sobe: as extensoes que os frontends aceitam (fedata.py) e o
 # tamanho maximo de cada tipo.
 STAGE_KINDS = {"snap": (("png", "jpg", "jpeg", "webp", "gif"), 32 << 20),
                "logo": (("png", "jpg", "jpeg", "webp"), 16 << 20),
+               # O icone do jogo no menu do desktop (Games).
+               "icon": (("png", "jpg", "jpeg", "webp", "ico"), 16 << 20),
                "video": (("mp4", "mkv", "webm", "avi", "mov", "flv"), 4 << 30),
                "text": (("txt",), 1 << 20)}
 # O que veio com a pasta do jogo (a estrutura do pacote: o scan acha) vai
@@ -3344,7 +3346,7 @@ STAGE_HOURS = 24
 # O tipo de cada arte de um jogo custom (a de dentro de um pacote, a de uma
 # pasta), para a pagina mostrar.
 CUSTOMGAME_MEDIA_TYPES = dict(MEDIA_TYPES, **{".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
-                                               ".flv": "video/x-flv"})
+                                               ".flv": "video/x-flv", ".ico": "image/x-icon"})
 
 
 def stage_dir():
@@ -3451,7 +3453,7 @@ def customgame_rows_file(rows):
         fields = []
         for key in CUSTOMGAME_FIELDS:
             value = customgame_field(row.get(key), 4096 if key == "text_string" else 1024)
-            if key in ("snap", "video", "text", "logo", "key", "ppdb") and value:
+            if key in ("snap", "video", "text", "logo", "icon", "key", "ppdb") and value:
                 found = found_path(key, value) if value.startswith("/") else None
                 staged = stage_path(value) if key in STAGE_KINDS else None
                 value = found or staged or os.path.join(stage_dir(), "missing-" + re.sub(r"\W", "", value)[:32])
@@ -5642,7 +5644,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.setup_answer(["--customgames", "group-info", name], {}, timeout=60)
         if action == "media":
             args = []
-            for key, opt in (("snap", "--snap"), ("video", "--video"), ("text", "--text"), ("logo", "--logo")):
+            for key, opt in (("snap", "--snap"), ("video", "--video"), ("text", "--text"), ("logo", "--logo"),
+                             ("icon", "--icon")):
                 if data.get(key):
                     path = stage_path(data[key])
                     if not path:

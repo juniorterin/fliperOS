@@ -1058,7 +1058,7 @@ screen_custom_install() {
     if ! customgames_package_in_folder "$zip"; then
       # Um pacote de fora da pasta deles (o duplo clique no desktop): o arquivo
       # fica onde esta, so se avisa que o jogo entrou.
-      ui_msg "$title" "$name is installed in $group." "" "It is in Games > Custom games in the desktop menu and in the frontends."
+      ui_msg "$title" "$name is installed in $group." "" "It is in Games in the desktop menu and in the frontends."
     elif ui_yesno "$title" "$name is installed in $group. Delete the package $(basename "$zip")? Keep it to install the game again or copy it to another FliperOS." no; then
       customgames_package_delete "$zip" || ui_msg "$title" "$(ui_bad "Could not delete $(basename "$zip").")"
     fi
@@ -1380,7 +1380,7 @@ customgames_browse() {
 screen_custom_package_create() {
   local group=$1 from=${2:-} title="Create package" name="" platform=native folder="" exe="" cmd="" snap="" video=""
   local text="" text_string="" mode=640x480@60 category="" controls="" buttons="" players="" key="" ppdb="" cfg choice
-  local year="" developer="" logo="" joystick=0 crop=0
+  local year="" developer="" logo="" icon="" joystick=0 crop=0
   local out base value rel runner=portproton
   local -a args
   if [[ -n $from ]]; then
@@ -1411,6 +1411,10 @@ screen_custom_package_create() {
     for value in $(customgames_media_exts logo); do
       [[ -f $CUSTOM_GAMES_MEDIA/logo/custom/$group/$from.$value ]] && logo=$CUSTOM_GAMES_MEDIA/logo/custom/$group/$from.$value
     done
+    # O icone do jogo no desktop (png, jpg, webp ou ico) do jogo instalado.
+    for value in $(customgames_media_exts icon); do
+      [[ -f $CUSTOM_GAMES_MEDIA/icon/custom/$group/$from.$value ]] && icon=$CUSTOM_GAMES_MEDIA/icon/custom/$group/$from.$value
+    done
     # As de exemplo nao vao no pacote: quem instala ganha as suas.
     for value in snap video text logo; do
       customgames_media_sample "${!value}" && printf -v "$value" '%s' ""
@@ -1433,7 +1437,7 @@ screen_custom_package_create() {
     # pasta do jogo de dentro, e a arte ja preenchida no passo 5.
     customgames_found "$folder"
     folder=$CG_FOUND_FOLDER snap=$CG_FOUND_SNAP video=$CG_FOUND_VIDEO text=$CG_FOUND_TEXT key=$CG_FOUND_KEY
-    year=$CG_FOUND_YEAR developer=$CG_FOUND_DEVELOPER logo=$CG_FOUND_LOGO
+    year=$CG_FOUND_YEAR developer=$CG_FOUND_DEVELOPER logo=$CG_FOUND_LOGO icon=$CG_FOUND_ICON
     [[ $CG_FOUND_CROP169 == 1 ]] && crop=1
     # 4. O que abre o jogo (o .exe do JOGO.cfg, se veio um).
     if [[ $platform == windows ]]; then
@@ -1481,11 +1485,12 @@ screen_custom_package_create() {
       done
     fi
   fi
-  # 5. A imagem, o logotipo, o video e o texto (todos opcionais).
+  # 5. A imagem, o logotipo, o icone do desktop, o video e o texto (todos opcionais).
   while true; do
-    choice=$(ui_menu "$title" "Picture, logo, video and text of $name (optional: without them the game gets samples)." next \
+    choice=$(ui_menu "$title" "Picture, logo, icon, video and text of $name (optional: without them the game gets samples, and the icon is the picture)." next \
       "snap|Picture: ${snap:+$(basename "$snap")}${snap:-none}" \
       "logo|Logo: ${logo:+$(basename "$logo")}${logo:-none}" \
+      "icon|Icon: ${icon:+$(basename "$icon")}${icon:-none}" \
       "video|Video: ${video:+$(basename "$video")}${video:-none}" \
       "text|Text: $([[ -n $text_string ]] && echo typed || echo "${text:+$(basename "$text")}${text:-none}")" \
       "next|Next") || return 0
@@ -1493,6 +1498,15 @@ screen_custom_package_create() {
       next) break ;;
       snap) value=$(customgames_browse "A picture of $name (.png, .jpg, .webp)." file .png .jpg .jpeg .webp .gif) && snap=$value ;;
       logo) value=$(customgames_browse "The logo of $name (.png with a transparent background, .jpg or .webp)." file .png .jpg .jpeg .webp) && logo=$value ;;
+      icon)
+        # O icone do jogo no menu do desktop (Games); sem ele vale a imagem.
+        choice=$(ui_menu "$title" "The icon of $name in the desktop menu (Games). Without one, the picture is the icon." file \
+          "file|Pick an image" "none|No icon (use the picture)") || continue
+        case $choice in
+          file) value=$(customgames_browse "The icon of $name (.png, .jpg, .webp or .ico)." file .png .jpg .jpeg .webp .ico) && icon=$value ;;
+          none) icon="" ;;
+        esac
+        ;;
       video) value=$(customgames_browse "A video of $name (.mp4, .mkv, .webm)." file .mp4 .mkv .webm .avi .mov .flv) && video=$value ;;
       text)
         choice=$(ui_menu "$title" "The text the frontend shows about $name." file "file|Pick a .txt file" "type|Type it" \
@@ -1528,7 +1542,7 @@ screen_custom_package_create() {
   fi
   args=(--out "$out" --name "$name" --platform "$platform" --folder "$folder" --mode "$mode")
   [[ $platform == windows ]] && args+=(--exe "$exe" --runner "$runner") || args+=(--command "$cmd")
-  for value in category controls buttons players year developer snap logo video text key ppdb; do
+  for value in category controls buttons players year developer snap logo icon video text key ppdb; do
     [[ -n ${!value} ]] && args+=("--$value" "${!value}")
   done
   [[ -n $text_string ]] && args+=(--text-string "$text_string")
