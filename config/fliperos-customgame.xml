@@ -7,6 +7,11 @@
   continua mostrando os programas de zip. O glob maior vence o *.zip, como o
   .tar.gz vence o .gz. fliperos-rootfs.sh o poe em /usr/share/mime/packages e
   roda o update-mime-database.
+
+  O segundo tipo e o de uma parte de um pacote dividido (JOGO.fliperos-customgame.zip.001,
+  .002... um pacote maior que o arquivo do plano gratuito do Telegram anda assim): o duplo
+  clique em QUALQUER parte abre o mesmo instalador, que junta as partes da pasta e instala.
+  Nao e um zip (so um pedaco dele), e leva o icone do pacote.
 -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/x-fliperos-customgame">
@@ -15,5 +20,13 @@
     <sub-class-of type="application/zip"/>
     <generic-icon name="package-x-generic"/>
     <glob pattern="*.fliperos-customgame.zip" weight="60"/>
+  </mime-type>
+  <mime-type type="application/x-fliperos-customgame-part">
+    <comment>FliperOS custom game package, one part of a split file</comment>
+    <comment xml:lang="pt-BR">Parte de um pacote de jogo custom do FliperOS (arquivo dividido)</comment>
+    <sub-class-of type="application/octet-stream"/>
+    <icon name="application-x-fliperos-customgame"/>
+    <generic-icon name="package-x-generic"/>
+    <glob pattern="*.fliperos-customgame.zip.[0-9][0-9][0-9]" weight="60"/>
   </mime-type>
 </mime-info>

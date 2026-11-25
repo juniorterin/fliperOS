@@ -29,12 +29,19 @@ O arquivo vai ao topico por file_id (o Telegram reenvia o que ja tem, sem limite
 de tamanho). Se o zip ja foi mandado no proprio topico Files, o robo responde a
 ele com os dados, sem repetir o arquivo.
 
+Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) chega em partes
+(GAME.fliperos-customgame.zip.001, .002..., que o painel web faz): o Worker espera
+as partes, junta e chama o workflow uma vez so, com todas em "parts". O robo le as
+partes como se fossem o zip inteiro (pelo MTProto), faz UM card com os dados e
+responde uma vez a cada parte (post_split_package).
+
 Variaveis: TELEGRAM_BOT_TOKEN (o bot do grupo), TELEGRAM_CHAT_ID (o grupo, se
 quiser conferir; @fliperos15khz sem ela), TELEGRAM_FILES_TOPIC (o numero no fim
 do link do topico, t.me/fliperos15khz/NUMERO; 578), TELEGRAM_API_ID,
 TELEGRAM_API_HASH. Toda mensagem vai em portugues e em ingles."""
 import argparse
 import base64
+import bisect
 import collections
 import html
 import importlib.util
@@ -69,6 +76,11 @@ TEXT_MAX = 4096
 DESCRIPTION_MAX = 1800
 PT, EN = '\U0001F1E7\U0001F1F7', '\U0001F1FA\U0001F1F8'
 BLOCK = 512 * 1024               # o pedaco que o MTProto entrega de cada vez (multiplo de 4096, divide 1 MB)
+MIB = 1 << 20
+# Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) chega em partes, GAME.fliperos-customgame.zip.001,
+# .002... (o painel web as faz: config/fliperos-web, package_parts). O Worker junta as partes e chama o workflow uma vez
+# so, com todas em "parts".
+PART_RE = re.compile(r'^(.+' + re.escape(SUFFIX) + r')\.(\d{3})$', re.I)
 
 
 class PostError(Exception):
@@ -146,6 +158,35 @@ class RangeFile(io.RawIOBase):
         return len(data)
 
 
+class PartsSource:
+    """As partes de um zip lidas como o zip inteiro: fetch(offset, length) do zip vira o fetch de cada parte que o
+    intervalo toca (fetch_part(numero da parte, deslocamento dentro dela, tamanho)). E o que o RangeFile precisa
+    (size, fetch, close). sizes: o tamanho de cada parte, na ordem."""
+
+    def __init__(self, sizes, fetch_part, closer=None):
+        self.sizes, self.fetch_part, self.closer = list(sizes), fetch_part, closer
+        self.starts = [sum(self.sizes[:i]) for i in range(len(self.sizes))]
+        self.size = sum(self.sizes)
+
+    def fetch(self, offset, length):
+        end = min(offset + length, self.size)
+        out = []
+        while offset < end:
+            number = bisect.bisect_right(self.starts, offset) - 1
+            inside = offset - self.starts[number]
+            take = min(end - offset, self.sizes[number] - inside)
+            data = self.fetch_part(number, inside, take)
+            if len(data) != take:
+                raise PostError('part %d came short: %d of %d bytes' % (number + 1, len(data), take))
+            out.append(data)
+            offset += take
+        return b''.join(out)
+
+    def close(self):
+        if self.closer:
+            self.closer()
+
+
 # ── O que o pacote diz ──
 
 def mode_label(tool, mode):
@@ -218,7 +259,16 @@ LABELS = {
                                            'ou ponha na pasta ~/roms/custom-packages do gabinete.',
            'unreadable': 'Não deu para ler os detalhes: o arquivo é grande demais para o robô abrir. O arquivo está aqui.',
            'bad': 'Este arquivo não é um pacote que o FliperOS aceita', 'skipped': 'grande demais para o Telegram',
-           'see': 'Os dados e o arquivo estão no tópico Arquivos'},
+           'see': 'Os dados e o arquivo estão no tópico Arquivos',
+           # O pacote que veio em partes (GAME.fliperos-customgame.zip.001, .002...): um card só e uma resposta por parte.
+           'parts': 'Arquivo dividido', 'parts_value': '%d partes, %s no total',
+           'install_split': 'Para instalar: baixe todas as partes na mesma pasta e dê dois cliques em qualquer uma delas no desktop do '
+                            'gabinete (ele junta e instala), ou solte todas juntas no painel web > Jogos custom > Jogos. Para juntar à mão: '
+                            'Linux e macOS: cat "%s".0* > "%s"; Windows: copy /b com as partes em ordem; ou abra a .001 no 7-Zip.',
+           'part_of': 'Parte %d de %d', 'part_note': 'Parte do pacote %s: os dados e como juntar as partes estão no card.',
+           'split_bad': 'Estas partes não formam um pacote',
+           'split_missing': 'faltam as partes: %s', 'split_sizes': 'as partes, menos a última, têm de ter o mesmo tamanho',
+           'split_extra': 'a numeração tem de ir de 001 a %03d sem repetir'},
     'en': {'kind': 'FliperOS custom game package', 'mode': 'Video mode', 'category': 'Category', 'year': 'Year',
            'developer': 'Developer', 'players': 'Players', 'buttons': 'Buttons', 'controls': 'Controls',
            'key': 'Controller key map (.key)', 'key_yes': 'yes, %d keys', 'key_joystick': 'the game already works with the joystick (empty map)',
@@ -229,7 +279,16 @@ LABELS = {
                                        'or put it in ~/roms/custom-packages on the cabinet.',
            'unreadable': 'The details could not be read: the file is too big for the bot to open. The file is here.',
            'bad': 'This file is not a package FliperOS accepts', 'skipped': 'too big for Telegram',
-           'see': 'The details and the file are in the Files topic'},
+           'see': 'The details and the file are in the Files topic',
+           'parts': 'Split file', 'parts_value': '%d parts, %s in total',
+           'install_split': 'To install: download all the parts into the same folder and double-click any one of them on the cabinet\'s '
+                            'desktop (it joins them and installs), or drop all of them together in the web panel > Custom games > Games. To '
+                            'join them by hand: Linux and macOS: cat "%s".0* > "%s"; Windows: copy /b with the parts in order; or open the '
+                            '.001 in 7-Zip.',
+           'part_of': 'Part %d of %d', 'part_note': 'Part of the package %s: the details and how to join the parts are in the card.',
+           'split_bad': 'These parts do not make a package',
+           'split_missing': 'parts missing: %s', 'split_sizes': 'the parts, except the last one, must have the same size',
+           'split_extra': 'the numbering must run from 001 to %03d without repeating'},
 }
 RUNNERS = {'portproton': 'PortProton', 'wine': 'Wine', 'wine-staging': 'Wine Staging'}
 
@@ -271,7 +330,9 @@ def facts(info, lang):
     if info['platform'] == 'windows':
         out.append((t['ppdb'], t['yes'] if info['ppdb'] else t['no']))
     out.append((t['size'], t['size_files'] % (size_text(info['game_bytes']), info['files'])))
-    art = [t[k] for k in ('snap', 'logo', 'preview') if k in info['art']] + ([t['text']] if info['text'] else [])
+    if info.get('split'):
+        out.append((t['parts'], t['parts_value'] % (info['split']['count'], size_text(info['split']['total']))))
+    art =[t[k] for k in ('snap', 'logo', 'preview') if k in info['art']] + ([t['text']] if info['text'] else [])
     art += ['%s (%s)' % (t[k], t['skipped']) for k in info['skipped']]
     out.append((t['art'], e(', '.join(art)) if art else t['art_none']))
     return out
@@ -303,10 +364,18 @@ def details(info, sender, install=False):
         text = text if len(text) <= DESCRIPTION_MAX else text[:DESCRIPTION_MAX].rsplit(' ', 1)[0] + '…'
         out += ['', '<b>%s / %s</b>' % (LABELS['pt']['description'], LABELS['en']['description']), e(text)]
     if install:
-        out += ['', '%s %s' % (PT, LABELS['pt']['install']), '%s %s' % (EN, LABELS['en']['install'])]
+        out += ['', '%s %s' % (PT, install_hint(info, 'pt')), '%s %s' % (EN, install_hint(info, 'en'))]
     if sender:
         out += ['', '%s / %s: %s' % (LABELS['pt']['by'], LABELS['en']['by'], e(sender))]
     return '\n'.join(out)[:TEXT_MAX]
+
+
+def install_hint(info, lang):
+    """Como instalar: o pacote inteiro (solta o .zip no painel) ou, vindo em partes, juntar as partes antes."""
+    t = LABELS[lang]
+    if info.get('split'):
+        return t['install_split'] % (e(info['split']['base']), e(info['split']['base']))
+    return t['install']
 
 
 def file_caption(file_name, size):
@@ -403,9 +472,9 @@ class Telegram:
             files['f%d' % n] = (name, data)
         return self.call('sendMediaGroup', dict(self.where(chat, thread, reply), media=json.dumps(media)), files)
 
-    def document(self, chat, file_id, caption_text, thread=None):
-        """O arquivo que ja esta no Telegram, de novo, por file_id."""
-        return self.call('sendDocument', dict(self.where(chat, thread, None), document=file_id, caption=caption_text,
+    def document(self, chat, file_id, caption_text, thread=None, reply=None):
+        """O arquivo que ja esta no Telegram, de novo, por file_id (reply: respondendo a uma mensagem)."""
+        return self.call('sendDocument', dict(self.where(chat, thread, reply), document=file_id, caption=caption_text,
                                               parse_mode='HTML'))
 
 
@@ -419,8 +488,8 @@ class PrintOnly(Telegram):
         print('[album] topico=%s resposta=%s: %s\n%s\n' % (
             thread, reply, ', '.join('%s %s (%d bytes)' % (kind, name, len(data)) for kind, name, data in items), caption_text))
 
-    def document(self, chat, file_id, caption_text, thread=None):
-        print('[arquivo] topico=%s file_id=%s...\n%s\n' % (thread, file_id[:12], caption_text))
+    def document(self, chat, file_id, caption_text, thread=None, reply=None):
+        print('[arquivo] topico=%s resposta=%s file_id=%s...\n%s\n' % (thread, reply, file_id[:12], caption_text))
 
 
 # ── O MTProto (so quando o pacote e grande demais para a Bot API) ──
@@ -478,6 +547,11 @@ class TelethonSource:
     LOGIN_WAITS = (10, 20, 40, 60, 90)
 
     def __init__(self, token, api_id, api_hash, chat, message_id, file_id='', file_size=0, session_file=''):
+        self.connect(token, api_id, api_hash, session_file)
+        self.document, self.size, self.dc_id = self.resolve(chat, message_id, file_id, file_size)
+
+    def connect(self, token, api_id, api_hash, session_file):
+        """O cliente do Telethon, ja entrado como bot (ou com a sessao guardada)."""
         import asyncio
         from telethon import TelegramClient
         from telethon.sessions import StringSession
@@ -496,9 +570,12 @@ class TelethonSource:
         # O laco que o proprio cliente usa: e nele que o start() e o disconnect() rodam.
         self.loop = getattr(self.client, 'loop', None) or loop
         self.login(token, bool(saved))
-        # O arquivo da mensagem do grupo; um bot nem sempre consegue buscar uma mensagem por id (o teste real
-        # voltou sem a mensagem), e entao o arquivo vem do file_id da Bot API, que e do mesmo bot.
-        self.document, self.size, self.dc_id = None, 0, None
+
+    def resolve(self, chat, message_id, file_id='', file_size=0):
+        """O arquivo da mensagem do grupo: (documento, tamanho, data center). Um bot nem sempre consegue buscar uma
+        mensagem por id (o teste real voltou sem a mensagem), e entao o arquivo vem do file_id da Bot API, que e do
+        mesmo bot."""
+        document, size, dc_id = None, 0, None
         try:
             message = self.run(self.client.get_messages(chat, ids=message_id))
         except Exception as exc:    # RPCError do Telethon
@@ -506,7 +583,7 @@ class TelethonSource:
             message = None
         found = getattr(message, 'document', None) if message else None
         if found is not None:
-            self.document, self.size = found, found.size
+            document, size = found, found.size
             print('MTProto: the file came from the message %s' % message_id)
         elif file_id:
             from telethon import types
@@ -514,13 +591,14 @@ class TelethonSource:
                 dc, media_id, access_hash, reference = decode_file_id(file_id)
             except ValueError as exc:
                 raise PostError('the file_id cannot be opened by MTProto: %s' % exc) from None
-            self.document = types.InputDocumentFileLocation(id=media_id, access_hash=access_hash, file_reference=reference,
-                                                            thumb_size='')
-            self.size, self.dc_id = int(file_size or 0), dc
+            document = types.InputDocumentFileLocation(id=media_id, access_hash=access_hash, file_reference=reference,
+                                                       thumb_size='')
+            size, dc_id = int(file_size or 0), dc
             print('MTProto: the message %s was not readable (%s); the file came from its file_id (dc %d)'
                   % (message_id, type(message).__name__, dc))
-        if self.document is None or not self.size:
+        if document is None or not size:
             raise PostError('the message %s has no file the bot can read' % message_id)
+        return document, size, dc_id
 
     def login(self, token, resumed):
         """Entra como bot (ou retoma a sessao guardada), tentando de novo com espera quando o Telegram falha; a
@@ -568,6 +646,56 @@ class TelethonSource:
                 self.loop.close()
 
 
+class TelethonParts(TelethonSource):
+    """As partes de um pacote dividido, lidas como o zip inteiro (PartsSource) por um cliente so: o bot entra uma vez e
+    abre uma mensagem por parte. size e fetch(offset, length) sao os do zip inteiro."""
+
+    def __init__(self, token, api_id, api_hash, chat, parts, session_file=''):
+        self.connect(token, api_id, api_hash, session_file)
+        self.documents = [self.resolve(chat, int(p.get('message_id') or 0), p.get('file_id') or '', int(p.get('file_size') or 0))
+                          for p in parts]
+        self.source = PartsSource([size for _, size, _ in self.documents], self.read_part)
+        self.size = self.source.size
+
+    def fetch(self, offset, length):
+        return self.source.fetch(offset, length)
+
+    def read_part(self, number, offset, length):
+        """LENGTH bytes a partir de OFFSET dentro da parte NUMBER (a partir de 0). O Telegram so entrega pedidos que
+        comecam num multiplo de 4096 e nao cruzam um limite de 1 MiB: o intervalo vai em pedidos assim."""
+        document, size, dc_id = self.documents[number]
+        first = offset - offset % 4096
+        pos, chunks = first, []
+
+        async def read(at, request):
+            out = b''
+            async for chunk in self.client.iter_download(document, offset=at, request_size=request, limit=1, file_size=size,
+                                                         dc_id=dc_id):
+                out += chunk
+            return out
+
+        while pos < offset + length:
+            request = min(BLOCK, MIB - pos % MIB)
+            data = self.loop.run_until_complete(read(pos, request))
+            if not data:
+                break
+            chunks.append(data)
+            pos += len(data)
+        return b''.join(chunks)[offset - first:offset - first + length]
+
+
+def telethon_parts_source(env, chat, parts):
+    """Uma fonte MTProto das partes de um pacote dividido, ou None sem as chaves (ou sem o telethon)."""
+    if not (env.get('TELEGRAM_API_ID') and env.get('TELEGRAM_API_HASH')):
+        return None
+    try:
+        return TelethonParts(env['TELEGRAM_BOT_TOKEN'], env['TELEGRAM_API_ID'], env['TELEGRAM_API_HASH'], chat, parts,
+                             env.get('TELEGRAM_SESSION_FILE') or '')
+    except ImportError:
+        print('telethon is not installed: big packages cannot be read', file=sys.stderr)
+        return None
+
+
 def telethon_source(env, chat, message_id, file_id='', file_size=0):
     """Uma fonte MTProto, ou None sem as chaves (ou sem o telethon)."""
     if not (env.get('TELEGRAM_API_ID') and env.get('TELEGRAM_API_HASH')):
@@ -582,10 +710,32 @@ def telethon_source(env, chat, message_id, file_id='', file_size=0):
 
 # ── O post ──
 
-def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
+def post_card(tg, chat, info, sender, where, reply, in_files):
+    """O card de um pacote: o album (imagem, logotipo e video, com a legenda) e a mensagem com os dados. Sem arte, so o
+    texto. Devolve o que o Telegram respondeu a ultima mensagem."""
+    items = []
+    for kind in ('snap', 'logo'):
+        if kind in info['art']:
+            ext, data = info['art'][kind]
+            data = photo_bytes(data, ext)
+            if data:
+                items.append(('photo', '%s.%s' % (kind, 'png' if data[:4] == b'\x89PNG' else 'jpg'), data))
+    if 'preview' in info['art']:
+        ext, data = info['art']['preview']
+        items.append(('video', 'preview.%s' % ext, data))
+    if items:
+        tg.album(chat, items, caption(info, sender), where, reply)
+        return tg.message(chat, details(info, sender, install=in_files), where, reply)
+    return tg.message(chat, caption(info, sender) + '\n\n' + details(info, '', install=in_files).split('\n', 1)[1], where, reply)
+
+
+def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print, mtproto_parts=telethon_parts_source):
     """Trata um zip mandado ao grupo. payload: chat_id, message_id, thread_id,
     file_id, file_name, file_size, from (o nome de quem mandou), username e
-    chat_username. Devolve o que fez (para o log e para os testes)."""
+    chat_username. Um pacote que veio em partes traz tambem "parts" (as partes, que o Worker juntou): post_split_package.
+    Devolve o que fez (para o log e para os testes)."""
+    if payload.get('parts'):
+        return post_split_package(tg, payload, env, tool, mtproto_parts, out)
     name = str(payload.get('file_name') or '')
     if not name.lower().endswith(SUFFIX):
         return 'skipped: not a custom game package'
@@ -636,21 +786,7 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
     reply = message_id if in_files else None
     where = origin if in_files else topic
     if info:
-        items = []
-        for kind in ('snap', 'logo'):
-            if kind in info['art']:
-                ext, data = info['art'][kind]
-                data = photo_bytes(data, ext)
-                if data:
-                    items.append(('photo', '%s.%s' % (kind, 'png' if data[:4] == b'\x89PNG' else 'jpg'), data))
-        if 'preview' in info['art']:
-            ext, data = info['art']['preview']
-            items.append(('video', 'preview.%s' % ext, data))
-        if items:
-            tg.album(chat, items, caption(info, sender), where, reply)
-            tg.message(chat, details(info, sender, install=in_files), where, reply)
-        else:
-            tg.message(chat, caption(info, sender) + '\n\n' + details(info, '', install=in_files).split('\n', 1)[1], where, reply)
+        post_card(tg, chat, info, sender, where, reply, in_files)
     else:
         text = '\U0001F4E6 <b>%s</b>' % e(name[:-len(SUFFIX)])
         text += '\n%s %s\n%s %s' % (PT, LABELS['pt']['unreadable'], EN, LABELS['en']['unreadable'])
@@ -663,6 +799,153 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print):
         tg.message(chat, '\U0001F4E6 <b>%s</b>\n%s %s\n%s %s' % (e(name[:-len(SUFFIX)]), PT, LABELS['pt']['see'], EN, LABELS['en']['see']),
                    origin or None, message_id)
     return 'posted: %s%s' % (info['name'] if info else name, ' (details unreadable)' if not info else '')
+
+
+# ── O pacote que veio em partes ──
+# Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) chega em partes, GAME.fliperos-customgame.zip.001,
+# .002..., que o painel web faz e a pessoa manda ao grupo. O Worker junta as partes e chama o workflow uma vez so. O robo
+# le as partes como o zip inteiro (PartsSource), faz UM card com os dados e responde uma vez a cada parte.
+
+def check_parts(parts):
+    """As partes que o Worker juntou (cada uma com message_id, file_id, file_name e file_size): (nome do pacote, as partes
+    em ordem, problemas). Cada problema e (portugues, ingles): numeracao com furo ou repetida, ou partes de tamanhos
+    diferentes (todas, menos a ultima, tem o mesmo tamanho, e a ultima nao e maior)."""
+    found, base, matched = {}, '', 0
+    for part in parts:
+        match = PART_RE.match(str(part.get('file_name') or ''))
+        if not match:
+            continue
+        base = base or match.group(1)
+        if match.group(1).lower() == base.lower():
+            found[int(match.group(2))] = part
+            matched += 1
+    if not found:
+        return '', [], []
+    count = max(found)
+    problems = []
+    missing = ', '.join('%03d' % n for n in range(1, count + 1) if n not in found)
+    if missing:
+        problems.append((LABELS['pt']['split_missing'] % missing, LABELS['en']['split_missing'] % missing))
+    elif matched != len(found):
+        problems.append((LABELS['pt']['split_extra'] % count, LABELS['en']['split_extra'] % count))
+    else:
+        sizes = [int(found[n].get('file_size') or 0) for n in range(1, count + 1)]
+        if any(size != sizes[0] for size in sizes[:-1]) or sizes[-1] > sizes[0]:
+            problems.append((LABELS['pt']['split_sizes'], LABELS['en']['split_sizes']))
+    return base, [found[n] for n in sorted(found)], problems
+
+
+def part_caption(file_name, size, number, count):
+    """A legenda de uma parte: o nome, o tamanho e que parte ela e, nos dois idiomas."""
+    return '\U0001F4CE <code>%s</code> · %s\n%s %s · %s %s' % (
+        e(file_name), size_text(size), PT, LABELS['pt']['part_of'] % (number, count), EN, LABELS['en']['part_of'] % (number, count))
+
+
+def part_note(title, file_name, size, number, count, link=''):
+    """A resposta a uma parte mandada no topico Files: que parte e, e que os dados estao no card (o nome do pacote leva
+    ao card quando ha o link dele)."""
+    named = '<a href="%s">%s</a>' % (html.escape(link, quote=True), e(title)) if link else '<b>%s</b>' % e(title)
+    return '%s\n%s %s\n%s %s' % (part_caption(file_name, size, number, count), PT, LABELS['pt']['part_note'] % named,
+                                 EN, LABELS['en']['part_note'] % named)
+
+
+def message_link(payload, message_id):
+    """O endereco de uma mensagem do grupo (t.me/NOME/ID, ou t.me/c/ID-DO-CHAT/ID num grupo sem nome); vazio se nao da."""
+    if not message_id:
+        return ''
+    username = str(payload.get('chat_username') or '').lstrip('@')
+    if username:
+        return 'https://t.me/%s/%d' % (username, message_id)
+    chat_id = str(payload.get('chat_id') or '')
+    return 'https://t.me/c/%s/%d' % (chat_id[4:], message_id) if chat_id.startswith('-100') else ''
+
+
+def split_problems_text(base, problems):
+    out = ['⚠️ <code>%s</code>' % e(base), '%s %s:' % (PT, LABELS['pt']['split_bad'])]
+    out += ['• %s' % e(pt) for pt, _ in problems]
+    out += ['%s %s:' % (EN, LABELS['en']['split_bad'])]
+    out += ['• %s' % e(en) for _, en in problems]
+    return '\n'.join(out)[:TEXT_MAX]
+
+
+def message_id_of(result):
+    """O numero da mensagem que o Telegram devolveu (uma mensagem, ou a lista de um album); None se nao veio."""
+    if isinstance(result, list):
+        result = result[0] if result else None
+    return result.get('message_id') if isinstance(result, dict) else None
+
+
+def post_split_package(tg, payload, env, tool, mtproto_parts=None, out=print):
+    """Um pacote que veio em partes: UM card com os dados (o zip das partes juntas, lido pelo MTProto) e uma resposta a
+    cada parte. payload: o de um arquivo (chat_id, thread_id, from, username, chat_username) mais parts, a lista de
+    {message_id, file_id, file_name, file_size} de cada parte, em qualquer ordem. Mandadas no topico Files, o card responde
+    a primeira parte e cada parte ganha a sua resposta; mandadas em outro lugar, o card e as partes (por file_id,
+    respondendo ao card) vao para o Files e a primeira parte ganha o aviso de onde estao."""
+    chat_id = str(payload.get('chat_id', ''))
+    wanted = env.get('TELEGRAM_CHAT_ID') or ''
+    if re.fullmatch(r'-?\d+', wanted) and wanted != chat_id:
+        return 'skipped: another chat'
+    chat = chat_id or wanted or DEFAULT_CHAT
+    base, parts, problems = check_parts(payload.get('parts') or [])
+    if not base:
+        return 'skipped: not a custom game package'
+    topic = int(env.get('TELEGRAM_FILES_TOPIC') or FILES_TOPIC)
+    origin = int(payload.get('thread_id') or 0)
+    first = int(parts[0].get('message_id') or payload.get('message_id') or 0)
+    sender = ' '.join(x for x in (str(payload.get('from') or ''), ('(@%s)' % payload['username']) if payload.get('username') else '') if x)
+    if problems:
+        tg.message(chat, split_problems_text(base, problems), origin or None, first)
+        return 'refused: %d problems' % len(problems)
+    count = len(parts)
+    sizes = [int(p.get('file_size') or 0) for p in parts]
+    title = base[:-len(SUFFIX)]
+    info, bad, source = None, None, None
+    try:
+        if mtproto_parts is not None and all(sizes):
+            ref = payload.get('chat_username')
+            ref = '@' + ref if ref and not ref.startswith('@') else ref or (wanted if wanted.startswith('@') else None) or \
+                (int(chat_id) if chat_id else None)
+            try:
+                source = mtproto_parts(env, ref, parts)
+            except Exception as exc:    # o Telethon: sem rede, mensagem que o bot nao acha, chaves erradas...
+                out('could not open the parts by MTProto: %s' % exc)
+                source = None
+        if source is not None:
+            ranged = RangeFile(source.size, source.fetch)
+            info = read_info(tool, tool.Package(base, fileobj=ranged))
+            out('read %s (%d parts): %d of %d bytes fetched' % (base, count, ranged.fetched, source.size))
+    except tool.Bad as exc:
+        bad = exc.problems
+    except PostError as exc:
+        out('could not read %s: %s' % (base, exc))
+    finally:
+        if source is not None:
+            source.close()
+    if bad:
+        tg.message(chat, problems_text(base, bad, sender), origin or None, first)
+        return 'refused: %d problems' % len(bad)
+    in_files = origin == topic
+    where, reply = (origin, first) if in_files else (topic, None)
+    if info:
+        info['split'] = {'count': count, 'total': sum(sizes), 'base': base}
+        title = info['name']
+        card = message_id_of(post_card(tg, chat, info, sender, where, reply, in_files))
+    else:
+        text = '\U0001F4E6 <b>%s</b>\n%s %s\n%s %s' % (e(title), PT, LABELS['pt']['unreadable'], EN, LABELS['en']['unreadable'])
+        if sender:
+            text += '\n%s / %s: %s' % (LABELS['pt']['by'], LABELS['en']['by'], e(sender))
+        card = message_id_of(tg.message(chat, text, where, reply))
+    link = message_link(payload, card)
+    for number, part in enumerate(parts, 1):
+        name, size = str(part['file_name']), int(part.get('file_size') or 0)
+        if in_files:
+            tg.message(chat, part_note(title, name, size, number, count, link), origin, int(part.get('message_id') or 0) or None)
+        elif part.get('file_id'):
+            tg.document(chat, part['file_id'], part_caption(name, size, number, count), topic, reply=card)
+    if not in_files:
+        tg.message(chat, '\U0001F4E6 <b>%s</b>\n%s %s\n%s %s' % (e(title), PT, LABELS['pt']['see'], EN, LABELS['en']['see']),
+                   origin or None, first)
+    return 'posted: %s (%d parts)%s' % (title, count, '' if info else ' (details unreadable)')
 
 
 def preview(path, folder=None):

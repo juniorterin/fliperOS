@@ -3347,6 +3347,34 @@ STAGE_HOURS = 24
 # pasta), para a pagina mostrar.
 CUSTOMGAME_MEDIA_TYPES = dict(MEDIA_TYPES, **{".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
                                                ".flv": "video/x-flv", ".ico": "image/x-icon"})
+# Um pacote maior que o arquivo que o plano gratuito do Telegram aceita (2 GB, 2000 MiB) vai ao grupo em partes
+# (tools/telegram-customgame.py as junta de volta): partes de 1900 MiB, GAME.fliperos-customgame.zip.001, .002...
+# Elas nao existem em disco: cada link entrega um pedaco do zip que ja esta na pasta. Os dois valores mudam por
+# variavel de ambiente so nos testes.
+TELEGRAM_FILE_LIMIT = int(ENV("FLIPEROS_TELEGRAM_FILE_LIMIT", str(2000 << 20)))
+PACKAGE_PART_SIZE = int(ENV("FLIPEROS_PACKAGE_PART_SIZE", str(1900 << 20)))
+
+
+def package_parts(size, limit=None, part=None):
+    """As partes de um zip de SIZE bytes para o Telegram: [] se cabe num arquivo so (ate LIMIT), senao
+    [(inicio, tamanho)] com PART bytes cada e a ultima com o que sobra. A ultima e sempre menor que as outras (o
+    robo do grupo reconhece o fim do pacote por isso): se SIZE for multiplo de PART, as partes diminuem um pouco."""
+    limit = TELEGRAM_FILE_LIMIT if limit is None else limit
+    part = PACKAGE_PART_SIZE if part is None else part
+    if size <= limit or part <= 0:
+        return []
+    if size % part == 0:
+        part -= (1 << 20) if part > (4 << 20) else 1
+    parts, start = [], 0
+    while start < size:
+        parts.append((start, min(part, size - start)))
+        start += part
+    return parts
+
+
+def package_part_name(zip_name, number):
+    """O nome da parte NUMBER (1, 2...) de um pacote: GAME.fliperos-customgame.zip.001."""
+    return "%s.%03d" % (zip_name, number)
 
 
 def stage_dir():
@@ -4336,7 +4364,8 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as exc:
                 return self.send(500, {"error": str(exc)})
         if url.path in ("/api/customgames", "/api/customgames/scan", "/api/customgames/art", "/api/customgames/staged", "/api/customgames/packages",
-                        "/api/customgames/package-media", "/api/customgames/test-state"):
+                        "/api/customgames/package-media", "/api/customgames/test-state", "/api/customgames/package-parts",
+                        "/api/customgames/package-part"):
             return self.customgames_get(url)
         if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
             return self.setup_get(url)
@@ -5493,6 +5522,30 @@ class Handler(BaseHTTPRequestHandler):
                     or ext not in CUSTOMGAME_MEDIA_TYPES:
                 return self.send(404, {"error": "no such media"})
             return self.send_inline(path, CUSTOMGAME_MEDIA_TYPES[ext], MEDIA_CACHE, member=member)
+        if url.path in ("/api/customgames/package-parts", "/api/customgames/package-part"):
+            # Um pacote grande demais para um arquivo do Telegram: em quantas partes vai (package-parts) e cada
+            # parte para baixar (package-part, um pedaco do zip da pasta dos pacotes).
+            name = (query.get("name") or [""])[0]
+            path = os.path.join(customgame_packages_dir(), name)
+            if os.path.basename(name) != name or not name.lower().endswith(CUSTOMGAME_SUFFIX) or not os.path.isfile(path) \
+                    or not inside(path, customgame_packages_dir()):
+                return self.send(404, {"error": "no such package"})
+            size = os.path.getsize(path)
+            parts = package_parts(size)
+            if url.path == "/api/customgames/package-parts":
+                return self.send(200, {
+                    "name": name, "size": size, "limit": TELEGRAM_FILE_LIMIT, "part_size": parts[0][1] if parts else 0,
+                    "parts": [{"n": n, "file": package_part_name(name, n), "size": length,
+                               "url": "/api/customgames/package-part?name=%s&n=%d" % (quote(name), n)}
+                              for n, (_, length) in enumerate(parts, 1)]})
+            try:
+                number = int((query.get("n") or ["0"])[0])
+            except ValueError:
+                number = 0
+            if not 1 <= number <= len(parts):
+                return self.send(404, {"error": "no such part"})
+            start, length = parts[number - 1]
+            return self.send_slice(path, start, length, package_part_name(name, number))
         try:
             return self.send(200, customgames_info())
         except (OSError, subprocess.SubprocessError) as exc:
@@ -5668,6 +5721,16 @@ class Handler(BaseHTTPRequestHandler):
                 argv = [SETUP, "--customgames", "install", path, group] + \
                     (["replace"] if data.get("replace") else []) + (["--portproton"] if data.get("portproton") else [])
                 title = "Install %s" % os.path.basename(path)[:-len(CUSTOMGAME_SUFFIX)]
+        elif action == "join":
+            # Um pacote enviado em partes (JOGO.fliperos-customgame.zip.001, .002...: as partes ja estao na pasta dos pacotes):
+            # viram o zip e saem. zip: o nome do zip; replace: troca um que ja existe (o Setup devolve 3 sem isso).
+            zip_name = str(data.get("zip", ""))
+            part = os.path.join(customgame_packages_dir(), zip_name + ".001")
+            if os.path.basename(zip_name) != zip_name or not zip_name.lower().endswith(CUSTOMGAME_SUFFIX) \
+                    or not os.path.isfile(part) or not inside(part, customgame_packages_dir()):
+                return self.send(400, {"error": "no parts of %s in %s" % (zip_name, customgame_packages_shown())})
+            argv = [SETUP, "--customgames", "join", part] + (["replace"] if data.get("replace") else [])
+            title = "Join the parts of %s" % zip_name[:-len(CUSTOMGAME_SUFFIX)]
         elif action == "pack":
             # O pacote do jogo instalado, com o que ele tem agora; em dia, nao e refeito (force refaz).
             argv, title = [SETUP, "--customgames", "pack", group, name] + (["force"] if data.get("force") else []), \
@@ -5821,6 +5884,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not chunk:
                     break
                 self.wfile.write(chunk)
+
+    def send_slice(self, path, start, length, name):
+        """Um pedaco do arquivo (LENGTH bytes a partir de START) como um download de nome NAME: uma parte de um
+        pacote grande para o Telegram."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(length))
+        self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + quote(name))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        with open(path, "rb") as f:
+            f.seek(start)
+            left = length
+            while left > 0:
+                chunk = f.read(min(1 << 20, left))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                left -= len(chunk)
 
 
 # Os gabinetes da rede: cada painel se anuncia pelo Avahi (mDNS) como

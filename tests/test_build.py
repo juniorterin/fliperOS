@@ -10482,6 +10482,8 @@ class WebSetupBase(unittest.TestCase):
             '  edit) [ "$4" = name=Nope ] && exit 2; [ "$4" = name=Msg ] && { echo "That file is not in the game folder."; exit 2; }\n'
             '    exit 0 ;;\n'
             '  group-info) [ "$3" = Nope ] && exit 2; printf "games=2\\nfolders=1\\npackages=1\\nothers=1\\nother=manual.pdf\\n" ;;\n'
+            '  join) echo "$3|$4" > TMP/join.flag; echo "@step 50 Joining"\n'
+            '    case "$3" in *Exists*) [ "$4" = replace ] || exit 3 ;; esac ;;\n'
             '  install|pack|squash|install-all|group-delete) echo "@step 50 Working"; sleep 2 ;;\n'
             'esac\nexit 0\n'.replace('TMP', str(tmp)))
         setup.chmod(0o755)
@@ -10503,7 +10505,9 @@ class WebSetupBase(unittest.TestCase):
                    FLIPEROS_TTY1=str(tmp / 'installed-fliperos-tty1'),
                    FLIPEROS_OSD_PROFILES=str(tmp / 'osd-profiles.conf'), FLIPEROS_MENU_SOUNDS=str(tmp / 'sounds'),
                    FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'),
-                   FLIPEROS_LOGS=str(tmp / 'logs'))
+                   FLIPEROS_LOGS=str(tmp / 'logs'),
+                   # O arquivo maximo do Telegram (2 GB) e as partes (1900 MiB), em bytes de brinquedo.
+                   FLIPEROS_TELEGRAM_FILE_LIMIT='1000', FLIPEROS_PACKAGE_PART_SIZE='400')
         (tmp / 'logs').mkdir()
         (tmp / 'installed-fliperos-tty1').write_text('#!/bin/bash\n')
         # O ffmpeg falso da captura: o que chega pelo stdin vira o arquivo (o ultimo argumento).
@@ -10579,6 +10583,136 @@ class WebCustomGamesTests(WebSetupBase):
         # Com a pasta dos pacotes num atalho para outro disco, o painel mostra onde ela esta de verdade; o caminho de
         # sempre (packages_dir) segue servindo para achar os arquivos.
         self.assertEqual(info['packages_shown'], '~/roms/custom-packages (on BIGDISK: batocera/roms/custom-packages)')
+
+    def test_a_package_over_the_telegram_limit_is_offered_in_parts_cut_from_the_zip(self):
+        # Maior que o arquivo do plano gratuito do Telegram (aqui 1000 bytes; de verdade 2 GB): o painel diz em quantas
+        # partes (de 400 bytes aqui, 1900 MiB de verdade) e entrega cada uma, um pedaco do zip que ja esta na pasta.
+        import http.client
+        folder = self.dir / 'roms/custom-packages'
+        folder.mkdir(parents=True, exist_ok=True)
+        data = bytes(range(256)) * 6                                             # 1536 bytes: acima do limite
+        (folder / 'Big.fliperos-customgame.zip').write_bytes(data)
+        (folder / 'Small.fliperos-customgame.zip').write_bytes(b'x' * 100)
+        (folder / 'Exact.fliperos-customgame.zip').write_bytes(b'y' * 1200)      # multiplo da parte: a ultima ainda sai menor
+        (folder / 'notes.txt').write_bytes(b'z' * 5000)
+        for leftover in ('Big.fliperos-customgame.zip', 'Small.fliperos-customgame.zip', 'Exact.fliperos-customgame.zip', 'notes.txt'):
+            self.addCleanup((folder / leftover).unlink)                           # a pasta e dos outros testes da classe tambem
+        status, info = self.call('GET', '/api/customgames/package-parts?name=Big.fliperos-customgame.zip')
+        self.assertEqual(status, 200)
+        self.assertEqual((info['name'], info['size'], info['limit'], info['part_size']), ('Big.fliperos-customgame.zip', 1536, 1000, 400))
+        self.assertEqual([p['size'] for p in info['parts']], [400, 400, 400, 336])
+        self.assertEqual([p['file'] for p in info['parts']], ['Big.fliperos-customgame.zip.%03d' % n for n in (1, 2, 3, 4)])
+        joined = b''
+        for part in info['parts']:
+            status, body = self.call('GET', part['url'])
+            self.assertEqual((status, len(body)), (200, part['size']), part['url'])
+            joined += body
+        self.assertEqual(joined, data)                                           # juntas, e o zip de volta
+        # O download e uma parte com o nome dela.
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=20)
+        conn.request('GET', info['parts'][1]['url'], headers={'Cookie': self.cookie})
+        res = conn.getresponse()
+        res.read()
+        self.assertEqual(res.getheader('Content-Length'), '400')
+        self.assertIn("filename*=UTF-8''Big.fliperos-customgame.zip.002", res.getheader('Content-Disposition'))
+        conn.close()
+        # Cabendo num arquivo so, nao ha partes; num multiplo exato da parte, a ultima sai menor que as outras.
+        self.assertEqual(self.call('GET', '/api/customgames/package-parts?name=Small.fliperos-customgame.zip')[1]['parts'], [])
+        exact = self.call('GET', '/api/customgames/package-parts?name=Exact.fliperos-customgame.zip')[1]['parts']
+        self.assertEqual(sum(p['size'] for p in exact), 1200)
+        self.assertLess(exact[-1]['size'], exact[0]['size'])
+        # So pacotes da pasta deles: outro nome, caminho para fora, parte que nao existe.
+        for path in ('name=notes.txt', 'name=../Big.fliperos-customgame.zip', 'name=Nope.fliperos-customgame.zip', 'name=',
+                     'name=Big.fliperos-customgame.zip&n=9', 'name=Big.fliperos-customgame.zip&n=0', 'name=Big.fliperos-customgame.zip&n=x',
+                     'name=Small.fliperos-customgame.zip&n=1'):
+            url = '/api/customgames/package-part?' + path
+            self.assertEqual(self.call('GET', url)[0], 404, url)
+        self.assertEqual(self.call('GET', '/api/customgames/package-parts?name=notes.txt')[0], 404)
+        # A pagina: depois de criar (um ou varios) e de baixar o pacote de um jogo, as partes com um link cada uma.
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        self.assertIn('"/api/customgames/package-parts?name="', js)
+        self.assertIn('await cgShowParts(status, zip);', js)
+        self.assertIn('for (const r of made) await cgShowParts(status, cgZipOf(r.name.trim()));', js)
+        self.assertIn('const parts = await cgPartsInfo(zip);', js)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_split_title', 'cg_split_how'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)       # ingles e portugues
+        self.assertIn('.cg-parts-list', (ROOT / 'config/web/setup.css').read_text())
+
+    def test_the_parts_sent_to_the_panel_are_joined_by_the_setup(self):
+        # As partes de um pacote dividido (.zip.001, .002...) sobem pelo /api/upload para a pasta dos pacotes; o painel pede ao
+        # Setup (--customgames join) que as junte no zip: uma tarefa, com o status 3 quando o zip ja existe.
+        folder = self.dir / 'roms/custom-packages'
+        folder.mkdir(parents=True, exist_ok=True)
+        for name in ('Big.fliperos-customgame.zip.001', 'Big.fliperos-customgame.zip.002',
+                     'Exists.fliperos-customgame.zip.001', 'Exists.fliperos-customgame.zip.002'):
+            (folder / name).write_bytes(b'x')
+            self.addCleanup((folder / name).unlink)
+        status, up = self.call('POST', '/api/upload?root=roms&path=custom-packages&name=Big.fliperos-customgame.zip.003&overwrite=1',
+                               b'last part')
+        self.assertEqual(status, 200, up)                                      # o envio aceita o nome de uma parte
+        self.addCleanup((folder / 'Big.fliperos-customgame.zip.003').unlink)
+        status, task = self.call('POST', '/api/customgames/join', {'zip': 'Big.fliperos-customgame.zip'})
+        self.assertEqual((status, task['kind']), (200, 'customgames'))
+        info = self.wait_task(task['id'])
+        self.assertEqual(info['rc'], 0)
+        self.assertEqual((self.dir / 'join.flag').read_text().strip(), '%s|' % (folder / 'Big.fliperos-customgame.zip.001'))
+        # Um zip com esse nome ja la: o Setup devolve 3, e com replace troca.
+        status, task = self.call('POST', '/api/customgames/join', {'zip': 'Exists.fliperos-customgame.zip'})
+        self.assertEqual(self.wait_task(task['id'])['rc'], 3)
+        status, task = self.call('POST', '/api/customgames/join', {'zip': 'Exists.fliperos-customgame.zip', 'replace': True})
+        self.assertEqual(self.wait_task(task['id'])['rc'], 0)
+        self.assertEqual((self.dir / 'join.flag').read_text().strip(), '%s|replace' % (folder / 'Exists.fliperos-customgame.zip.001'))
+        # So partes que estao na pasta dos pacotes: sem a .001, outro nome, um caminho para fora.
+        for zip_name in ('Nope.fliperos-customgame.zip', 'Big.zip', '../Big.fliperos-customgame.zip', '', 'notes.txt'):
+            self.assertEqual(self.call('POST', '/api/customgames/join', {'zip': zip_name})[0], 400, zip_name)
+        js = (ROOT / 'config/web/customgames.js').read_text()
+        for needle in ('async function cgUploadParts(set)', '"/api/customgames/join"', 'function cgPartSets(files)',
+                       'jobs.push({ name: set.zip, send: () => cgUploadParts(set) });', 'async function cgSendFile(file)'):
+            self.assertIn(needle, js, needle)
+        self.assertNotIn('accept: ".zip"', js)                                 # o seletor deixa escolher as partes (.001...)
+        text = (ROOT / 'config/web/setup-text.js').read_text()
+        for key in ('cg_parts_missing', 'cg_parts_sizes', 'cg_joining', 'cg_parts_bad'):
+            self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)       # ingles e portugues
+
+    DRIVER_PARTS = r'''
+const fs = require('node:fs');
+const js = fs.readFileSync(process.argv[2], 'utf8');
+const code = js.slice(js.indexOf('const CG_PART_RE'), js.indexOf('// Enviar as partes de um pacote:'));
+const t = (key) => key;
+const make = (names) => names.map(([name, size]) => ({ name, size }));
+const run = new Function('t', code + '; return { cgPartSets, CG_PART_RE };')(t);
+const Z = 'Game.fliperos-customgame.zip.';
+const problems = (list) => [...run.cgPartSets(make(list)).values()].map((s) => [s.zip, s.problems]);
+console.log(JSON.stringify({
+  ok: problems([[Z + '003', 40], [Z + '001', 100], [Z + '002', 100]]),
+  missing: problems([[Z + '001', 100], [Z + '004', 40], [Z + '002', 100]]),
+  sizes: problems([[Z + '001', 100], [Z + '002', 90], [Z + '003', 40]]),
+  biggerLast: problems([[Z + '001', 100], [Z + '002', 120]]),
+  two: problems([[Z + '001', 5], ['Other.fliperos-customgame.zip.001', 5], ['Other.fliperos-customgame.zip.002', 3], [Z + '002', 5]]),
+  notParts: [run.CG_PART_RE.test('Game.fliperos-customgame.zip'), run.CG_PART_RE.test('Game.fliperos-customgame.zip.01'),
+             run.CG_PART_RE.test('GAME.FLIPEROS-CUSTOMGAME.ZIP.007'), run.CG_PART_RE.test('notes.001')],
+}));
+'''
+
+    @unittest.skipUnless(shutil.which('node'), 'node is not installed')
+    def test_the_panel_checks_the_parts_before_uploading_gigabytes(self):
+        # A conferencia do navegador (cgPartSets/cgPartProblems, as funcoes de verdade do customgames.js): numeracao com furo,
+        # tamanhos diferentes, partes de pacotes diferentes escolhidas juntas.
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = Path(tmp) / 'driver.cjs'
+            driver.write_text(self.DRIVER_PARTS, encoding='utf-8')
+            result = subprocess.run(['node', str(driver), str(ROOT / 'config/web/customgames.js')], capture_output=True, text=True,
+                                    timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(out['ok'], [['Game.fliperos-customgame.zip', []]])
+        self.assertEqual(out['missing'], [['Game.fliperos-customgame.zip', ['cg_parts_missing']]])
+        self.assertEqual(out['sizes'], [['Game.fliperos-customgame.zip', ['cg_parts_sizes']]])
+        self.assertEqual(out['biggerLast'], [['Game.fliperos-customgame.zip', ['cg_parts_sizes']]])
+        # Dois pacotes escolhidos juntos: um conjunto de cada, conferido separado (o de Game esta completo, o Other tambem).
+        self.assertEqual(sorted(out['two']), [['Game.fliperos-customgame.zip', []], ['Other.fliperos-customgame.zip', []]])
+        self.assertEqual(out['notParts'], [False, False, True, False])
 
     def test_the_group_icon_is_gone_from_the_panel_but_the_api_stays(self):
         # O logotipo do grupo tomou o lugar do desenho: a cabeca do grupo nao tem mais o botao do icone (um quadrado
@@ -18033,6 +18167,11 @@ class PixelcadeTests(unittest.TestCase):
         rom.write_text('')
         game = subprocess.Popen(['python3', '-c', 'import time; time.sleep(30)', str(rom)])
         self.addCleanup(game.kill)
+        # O processo so mostra os argumentos dele em /proc depois do exec: sob carga o "now" rodava antes e nao achava o jogo.
+        for _ in range(200):
+            if str(rom) in Path('/proc/%d/cmdline' % game.pid).read_text(errors='ignore'):
+                break
+            time.sleep(0.05)
         env['FLIPEROS_USER'] = __import__('pwd').getpwuid(os.getuid()).pw_name
         run('now')
         self.assertEqual(state.read_text().splitlines()[:3], ['event=game', 'system=mame', 'rom=mvsc2'])
@@ -22774,8 +22913,8 @@ class TelegramCustomGameTests(unittest.TestCase):
         def album(self, chat, items, caption, thread=None, reply=None):
             self.calls.append(('album', chat, items, caption, thread, reply))
 
-        def document(self, chat, file_id, caption, thread=None):
-            self.calls.append(('document', chat, file_id, caption, thread))
+        def document(self, chat, file_id, caption, thread=None, reply=None):
+            self.calls.append(('document', chat, file_id, caption, thread, reply))
 
     def payload(self, **over):
         base = {'chat_id': -1001234, 'chat_username': 'fliperos15khz', 'message_id': 55, 'thread_id': 0, 'file_id': 'FILE1',
@@ -23060,6 +23199,263 @@ class TelegramCustomGameTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=bad):
                 self.bot.decode_file_id(bad)
 
+    # ── Pacote em partes (maior que o arquivo do plano gratuito do Telegram: 2 GB) ──
+
+    def split_payload(self, data, count=5, name='Street Fighter 4', thread=578, **over):
+        """O pedido do Worker para um pacote mandado em COUNT partes de mesmo tamanho (a ultima menor): o payload e os
+        bytes de cada parte."""
+        size = -(-len(data) // count) + 1
+        chunks = [data[i:i + size] for i in range(0, len(data), size)]
+        parts = [{'n': n, 'message_id': 100 + n, 'thread_id': thread, 'file_id': 'FILE%d' % n,
+                  'file_name': '%s.fliperos-customgame.zip.%03d' % (name, n), 'file_size': len(chunk)}
+                 for n, chunk in enumerate(chunks, 1)]
+        payload = self.payload(parts=parts, message_id=101, thread_id=thread, file_id='FILE1', file_name=parts[0]['file_name'],
+                               file_size=parts[0]['file_size'], **over)
+        return payload, chunks
+
+    @staticmethod
+    def parts_source(chunks):
+        """O MTProto de mentira: as partes lidas como o zip inteiro."""
+        bot = TelegramCustomGameTests.bot
+        return lambda env, chat, parts: bot.PartsSource([len(c) for c in chunks], lambda n, offset, length: chunks[n][offset:offset + length])
+
+    class FakeIds(Fake):
+        """O Telegram de mentira que devolve o numero de cada mensagem (como o de verdade)."""
+
+        def message(self, chat, text, thread=None, reply=None):
+            super().message(chat, text, thread, reply)
+            return {'message_id': 900 + len(self.calls)}
+
+    def test_the_parts_of_a_zip_read_like_the_zip(self):
+        data = os.urandom((3 << 20) + 123)
+        sizes = [(1 << 20) + 7, (1 << 20) + 7, len(data) - 2 * ((1 << 20) + 7)]
+        chunks, start = [], 0
+        for size in sizes:
+            chunks.append(data[start:start + size])
+            start += size
+        asked = []
+        source = self.bot.PartsSource(sizes, lambda n, offset, length: (asked.append((n, offset, length)), chunks[n][offset:offset + length])[1])
+        self.assertEqual(source.size, len(data))
+        # Um pedido que atravessa as duas primeiras partes e o fim da ultima.
+        self.assertEqual(source.fetch(sizes[0] - 10, 30), data[sizes[0] - 10:sizes[0] + 20])
+        self.assertEqual(asked, [(0, sizes[0] - 10, 10), (1, 0, 20)])
+        self.assertEqual(source.fetch(len(data) - 5, 99), data[-5:])
+        ranged = self.bot.RangeFile(source.size, source.fetch)
+        ranged.seek(-40, 2)
+        self.assertEqual(ranged.read(), data[-40:])
+        ranged.seek(0)
+        self.assertEqual(ranged.read(), data)
+        # Uma parte que o Telegram entrega curta nao vira um zip errado em silencio.
+        short = self.bot.PartsSource([10, 10], lambda n, offset, length: b'x')
+        with self.assertRaises(self.bot.PostError):
+            short.fetch(0, 10)
+
+    def test_five_split_files_sent_to_the_files_topic_get_one_card_and_one_reply_for_each(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()
+        payload, chunks = self.split_payload(data)
+        self.assertEqual(len(chunks), 5)
+        tg, out = self.FakeIds(), []
+        result = self.bot.post_package(tg, payload, {'TELEGRAM_FILES_TOPIC': '578'}, self.tool, out=out.append,
+                                       mtproto_parts=self.parts_source(chunks))
+        self.assertEqual(result, 'posted: Street Fighter 4 (5 parts)')
+        # UM card (o album e a mensagem dos dados) respondendo a primeira parte, e depois uma resposta a cada parte.
+        self.assertEqual([c[0] for c in tg.calls], ['album', 'message'] + ['message'] * 5)
+        album, details = tg.calls[0], tg.calls[1]
+        self.assertEqual((album[4], album[5]), (578, 101))
+        self.assertEqual(details[3:], (578, 101))
+        text = details[2]
+        for part in ('Arquivo dividido: 5 partes', 'Split file: 5 parts', 'Modo de vídeo: 480i', 'Street Fighter 4',
+                     'cat "Street Fighter 4.fliperos-customgame.zip".0* > "Street Fighter 4.fliperos-customgame.zip"', 'copy /b', '7-Zip'):
+            self.assertIn(part, text)
+        self.assertEqual(text.count('Para instalar'), 1)
+        self.assertEqual(text.count('To install'), 1)
+        self.assertLessEqual(len(text), 4096)
+        for number, reply in enumerate(tg.calls[2:], 1):
+            self.assertEqual(reply[3:], (578, 100 + number))                    # no Files, respondendo a propria parte
+            for part in ('Street Fighter 4.fliperos-customgame.zip.%03d' % number, 'Parte %d de 5' % number, 'Part %d of 5' % number,
+                         # o nome do pacote leva ao card (a mensagem dos dados, a segunda do robo)
+                         '<a href="https://t.me/fliperos15khz/902">Street Fighter 4</a>'):
+                self.assertIn(part, reply[2])
+        # Sem o nome publico do grupo o link usa o id do chat; sem nenhum dos dois, o nome do pacote fica sem link.
+        self.assertEqual(self.bot.message_link({'chat_id': -1001234, 'chat_username': ''}, 77), 'https://t.me/c/1234/77')
+        self.assertEqual(self.bot.message_link({'chat_id': 55}, 77), '')
+        self.assertEqual(self.bot.message_link({'chat_username': '@g'}, None), '')
+        # So o fim do zip e os arquivos pequenos foram lidos: o pacote veio das partes, nao baixado pela Bot API.
+        self.assertTrue(out[0].startswith('read Street Fighter 4.fliperos-customgame.zip (5 parts):'), out)
+
+    def test_split_files_sent_somewhere_else_go_to_the_files_topic_as_replies_to_the_card(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()
+        payload, chunks = self.split_payload(data, thread=12)
+        tg = self.FakeIds()
+        result = self.bot.post_package(tg, payload, {'TELEGRAM_FILES_TOPIC': '578'}, self.tool, out=lambda *_: None,
+                                       mtproto_parts=self.parts_source(chunks))
+        self.assertEqual(result, 'posted: Street Fighter 4 (5 parts)')
+        self.assertEqual([c[0] for c in tg.calls], ['album', 'message'] + ['document'] * 5 + ['message'])
+        self.assertEqual((tg.calls[0][4], tg.calls[0][5]), (578, None))                 # o card no Files, sem responder a nada
+        card_id = 902                                                                   # a mensagem dos dados: a segunda chamada
+        for number, doc in enumerate(tg.calls[2:7], 1):
+            self.assertEqual((doc[2], doc[4], doc[5]), ('FILE%d' % number, 578, card_id))    # a parte, por file_id, respondendo ao card
+            self.assertIn('Parte %d de 5' % number, doc[3])
+            self.assertIn('Part %d of 5' % number, doc[3])
+            self.assertNotIn('Para instalar', doc[3])                                   # como instalar so no card
+        # Onde as partes foram mandadas: um aviso curto, respondendo a primeira.
+        notice = tg.calls[-1]
+        self.assertEqual(notice[3:], (12, 101))
+        self.assertIn('Os dados e o arquivo estão no tópico Arquivos', notice[2])
+
+    def test_the_parts_replies_point_at_the_card(self):
+        # O sendDocument das partes responde ao card: o Telegram recebe o reply_parameters com a mensagem dos dados.
+        sent = []
+        tg = self.bot.Telegram('1:tok')
+        tg.call = lambda method, fields, files=None: (sent.append((method, fields)), {'message_id': 1})[1]
+        tg.document('-100', 'FILE2', 'legenda', 578, reply=950)
+        self.assertEqual(sent[0][0], 'sendDocument')
+        self.assertEqual(json.loads(sent[0][1]['reply_parameters'])['message_id'], 950)
+        self.assertEqual(sent[0][1]['message_thread_id'], '578')
+        tg.document('-100', 'FILE3', 'legenda', 578)                                    # sem reply: como era
+        self.assertNotIn('reply_parameters', sent[1][1])
+
+    def test_split_files_with_a_missing_or_odd_part_are_refused_where_they_were_sent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()
+        payload, chunks = self.split_payload(data, thread=12)
+        # Falta a parte 003: nada de album, so a resposta a primeira parte dizendo qual.
+        broken = dict(payload, parts=[p for p in payload['parts'] if p['n'] != 3])
+        tg = self.Fake()
+        result = self.bot.post_package(tg, broken, {}, self.tool, out=lambda *_: None, mtproto_parts=self.parts_source(chunks))
+        self.assertTrue(result.startswith('refused'))
+        self.assertEqual([c[0] for c in tg.calls], ['message'])
+        self.assertEqual(tg.calls[0][3:], (12, 101))
+        for part in ('faltam as partes: 003', 'parts missing: 003', 'Estas partes não formam um pacote', 'These parts do not make a package'):
+            self.assertIn(part, tg.calls[0][2])
+        # Partes de tamanhos diferentes (menos a ultima).
+        odd = json.loads(json.dumps(payload))
+        odd['parts'][1]['file_size'] += 5
+        tg = self.Fake()
+        self.assertTrue(self.bot.post_package(tg, odd, {}, self.tool, out=lambda *_: None).startswith('refused'))
+        self.assertIn('o mesmo tamanho', tg.calls[0][2])
+        self.assertIn('the same size', tg.calls[0][2])
+        # A mesma parte duas vezes.
+        twice = dict(payload, parts=payload['parts'] + [payload['parts'][0]])
+        tg = self.Fake()
+        self.assertTrue(self.bot.post_package(tg, twice, {}, self.tool, out=lambda *_: None).startswith('refused'))
+        self.assertIn('sem repetir', tg.calls[0][2])
+        # Outro grupo: o robo nem olha; um pedido sem partes de pacote tambem nao.
+        tg = self.Fake()
+        self.assertTrue(self.bot.post_package(tg, payload, {'TELEGRAM_CHAT_ID': '-100999'}, self.tool).startswith('skipped'))
+        self.assertTrue(self.bot.post_package(tg, dict(payload, parts=[{'file_name': 'notes.zip.001'}]), {}, self.tool).startswith('skipped'))
+        self.assertEqual(tg.calls, [])
+        # As partes chegam em qualquer ordem: o robo as poe na ordem da numeracao.
+        base, ordered, problems = self.bot.check_parts(list(reversed(payload['parts'])))
+        self.assertEqual((base, [p['n'] for p in ordered], problems), ('Street Fighter 4.fliperos-customgame.zip', [1, 2, 3, 4, 5], []))
+
+    def test_split_files_the_bot_cannot_read_still_get_a_card_and_the_replies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()
+        payload, chunks = self.split_payload(data)
+        # Sem as chaves do MTProto (ou com um erro dele): os dados nao deu para ler, mas as partes ganham as respostas.
+        for opener in (lambda *a: None, lambda *a: (_ for _ in ()).throw(RuntimeError('bad api hash'))):
+            tg = self.FakeIds()
+            result = self.bot.post_package(tg, payload, {}, self.tool, out=lambda *_: None, mtproto_parts=opener)
+            self.assertEqual(result, 'posted: Street Fighter 4 (5 parts) (details unreadable)')
+            self.assertEqual([c[0] for c in tg.calls], ['message'] * 6)
+            self.assertIn('Não deu para ler os detalhes', tg.calls[0][2])
+            self.assertIn('could not be read', tg.calls[0][2])
+        # Um zip que nao serve (sem o .cfg): a lista de problemas, onde foi mandado, sem card.
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / 'bad.zip'
+            with zipfile.ZipFile(bad, 'w') as zf:
+                zf.writestr('Street Fighter 4/SF4.exe', b'MZ' + os.urandom(6000))
+            data = bad.read_bytes()
+        payload, chunks = self.split_payload(data, thread=12)
+        tg = self.Fake()
+        result = self.bot.post_package(tg, payload, {}, self.tool, out=lambda *_: None, mtproto_parts=self.parts_source(chunks))
+        self.assertTrue(result.startswith('refused'))
+        self.assertEqual([c[0] for c in tg.calls], ['message'])
+        self.assertEqual(tg.calls[0][3:], (12, 101))
+        self.assertIn('Street Fighter 4.cfg is missing', tg.calls[0][2])
+
+    def test_the_telethon_parts_source_asks_telegram_only_what_it_accepts(self):
+        # O MTProto exige pedidos que comecam num multiplo de 4096 e nao cruzam um limite de 1 MiB. As partes aqui tem
+        # tamanhos que nao batem com nada disso: o robo tem de ajustar cada pedido e ainda devolver os bytes certos.
+        import asyncio
+        import types
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'big.zip', game=os.urandom(3 << 20)).read_bytes()
+        size = (len(data) // 4) + 12345
+        chunks = [data[i:i + size] for i in range(0, len(data), size)]
+        seen = {'requests': [], 'starts': 0}
+        MIB = 1 << 20
+
+        class Doc:
+            def __init__(self, chunk):
+                self.chunk, self.size = chunk, len(chunk)
+
+        class Message:
+            def __init__(self, doc):
+                self.document = doc
+
+        docs = {100 + n: Doc(c) for n, c in enumerate(chunks, 1)}
+
+        class Client:
+            def __init__(self, session, api_id, api_hash, loop=None):
+                self.loop = loop
+
+            session = types.SimpleNamespace(save=lambda: 'SESSION')
+
+            def start(self, bot_token=None):
+                self.loop.run_until_complete(asyncio.sleep(0))
+                seen['starts'] += 1
+                return self
+
+            async def get_messages(self, chat, ids=None):
+                seen['chat'] = chat
+                return Message(docs[ids])
+
+            def iter_download(self, document, offset=0, request_size=0, limit=None, file_size=None, dc_id=None):
+                seen['requests'].append((offset, request_size))
+                assert offset % 4096 == 0 and request_size % 4096 == 0 and 0 < request_size <= MIB, (offset, request_size)
+                assert offset % MIB + request_size <= MIB, (offset, request_size)
+
+                async def chunks_():
+                    yield document.chunk[offset:offset + request_size]
+                return chunks_()
+
+            def disconnect(self):
+                seen['closed'] = True
+
+        telethon = types.ModuleType('telethon')
+        telethon.TelegramClient = Client
+        sessions = types.ModuleType('telethon.sessions')
+        sessions.StringSession = type('StringSession', (), {'__init__': lambda self, saved=None: None, 'save': lambda self: 'SESSION'})
+        saved = {k: sys.modules.get(k) for k in ('telethon', 'telethon.sessions')}
+        sys.modules.update({'telethon': telethon, 'telethon.sessions': sessions})
+        env = {'TELEGRAM_BOT_TOKEN': '1:tok', 'TELEGRAM_API_ID': '123', 'TELEGRAM_API_HASH': 'abc'}
+        parts = [{'n': n, 'message_id': 100 + n, 'file_id': 'F%d' % n, 'file_size': len(c)} for n, c in enumerate(chunks, 1)]
+        try:
+            source = self.bot.telethon_parts_source(env, '@fliperos15khz', parts)
+            self.assertEqual(source.size, len(data))
+            # Um pedido que cruza a fronteira das partes, outro no meio e o fim do zip (onde ficam os arquivos).
+            for offset, length in ((len(chunks[0]) - 700, 2000), (5000, 70000), (len(data) - 300, 300), (0, 4096)):
+                self.assertEqual(source.fetch(offset, length), data[offset:offset + length], (offset, length))
+            ranged = self.bot.RangeFile(source.size, source.fetch)
+            ranged.seek(0)
+            self.assertEqual(ranged.read(), data)                                      # o zip inteiro, pelas partes
+            source.close()
+            # Sem as chaves, ou sem o Telethon, nao ha fonte.
+            self.assertIsNone(self.bot.telethon_parts_source({}, '@x', parts))
+        finally:
+            for key, module in saved.items():
+                if module is None:
+                    sys.modules.pop(key, None)
+                else:
+                    sys.modules[key] = module
+        self.assertEqual(seen['starts'], 1)                                             # o bot entrou uma vez so, nao uma por parte
+        self.assertEqual(seen['chat'], '@fliperos15khz')
+        self.assertTrue(seen['closed'])
+
     def test_no_post_reads_the_package_but_sends_nothing_to_the_group(self):
         posted = []
         fake = self.bot.PrintOnly('1:tok')
@@ -23094,10 +23490,14 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertIn("event_type: 'customgame-zip'", worker)
         self.assertIn("'https://api.github.com/repos/' + env.GITHUB_REPO + '/dispatches'", worker)
         self.assertIn('if (await dispatchPackage(env, msg)) return;', worker)
+        fields = worker[worker.index('function fileFields'):worker.index('async function dispatchGithub')]
         for field in ('chat_id', 'chat_username', 'message_id', 'thread_id', 'file_id', 'file_name', 'file_size', 'from', 'username'):
-            self.assertIn(field, worker[worker.index('client_payload'):worker.index('if (!r.ok)')])
-        # O repository_dispatch aceita ate 10 campos no client_payload.
-        self.assertLessEqual(len(re.findall(r'^\s+(\w+)(?::|,\n)', worker[worker.index('client_payload'):worker.index('if (!r.ok)')], re.M)), 10)
+            self.assertIn(field, fields)
+        # O repository_dispatch aceita ate 10 campos no client_payload: os 9 do arquivo e, no pacote em partes, "parts".
+        self.assertEqual(len(re.findall(r'^\s+(\w+)(?::|,\n)', fields, re.M)), 9)
+        split = worker[worker.index('await dispatchGithub(env, {'):worker.index('await Promise.all(listed.keys')]
+        self.assertLessEqual(len(re.findall(r'^    (\w+)(?::|,\n)', split, re.M)), 10)
+        self.assertIn('parts: ordered.map', split)
         self.assertIn('GITHUB_REPO = "juniorterin/fliperOS"', (ROOT / 'tools/telegram-translate/wrangler.toml').read_text())
         workflow = (ROOT / '.github/workflows/telegram-customgame.yml').read_text(encoding='utf-8')
         self.assertIn('types: [customgame-zip]', workflow)
@@ -23109,6 +23509,12 @@ class TelegramCustomGameTests(unittest.TestCase):
         for secret in ('TELEGRAM_BOT_TOKEN', 'TELEGRAM_API_ID', 'TELEGRAM_API_HASH'):
             self.assertIn('%s: ${{ secrets.%s }}' % (secret, secret), workflow)
         self.assertIn('group: telegram-customgame', workflow)
+        # As partes de um pacote grande (.zip.001...) esperam no KV PARTS; sem o KV no wrangler.toml, o README diz como criar.
+        self.assertIn('if (await collectPart(env, msg)) return;', worker)
+        self.assertIn('env.PARTS.put(', worker)
+        toml = (ROOT / 'tools/telegram-translate/wrangler.toml').read_text()
+        self.assertIn('binding = "PARTS"', toml)
+        self.assertIn('npx wrangler kv namespace create PARTS', (ROOT / 'tools/telegram-translate/README.md').read_text(encoding='utf-8'))
         # O Files e o topico 578 (o mesmo que o tradutor deixa sem traducao).
         self.assertEqual(self.bot.FILES_TOPIC, 578)
         self.assertIn('SKIP_TOPICS = "578"', (ROOT / 'tools/telegram-translate/wrangler.toml').read_text())
@@ -23121,6 +23527,102 @@ class TelegramCustomGameTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(self.SCRIPT), '--payload-env', 'PAYLOAD'], capture_output=True, text=True,
                                 timeout=60, env=dict({k: v for k, v in os.environ.items() if k != 'TELEGRAM_BOT_TOKEN'}, PAYLOAD='{oops'))
         self.assertEqual(result.returncode, 1)
+
+    DRIVER = r'''
+import fs from 'node:fs';
+const src = fs.readFileSync(process.argv[2], 'utf8');
+const worker = (await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'))).default;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function kvStore() {
+  const store = new Map();
+  return {
+    store,
+    async put(k, v) { store.set(k, v); },
+    async get(k, type) { const v = store.get(k); return v === undefined ? null : type === 'json' ? JSON.parse(v) : v; },
+    async list({ prefix }) { return { keys: [...store.keys()].filter((k) => k.startsWith(prefix)).sort().map((name) => ({ name })) }; },
+    async delete(k) { store.delete(k); },
+  };
+}
+const dispatches = [];
+globalThis.fetch = async (url, init) => { dispatches.push(JSON.parse(init.body)); return { ok: true, text: async () => '' }; };
+function update(name, size, id, user = 7) {
+  return { message: { message_id: id, message_thread_id: 12, is_topic_message: true, chat: { id: -100, username: 'g' },
+    from: { id: user, first_name: 'Ana', username: 'ana' }, document: { file_id: 'F' + id, file_name: name, file_size: size } } };
+}
+async function send(env, body) {
+  const jobs = [];
+  const res = await worker.fetch(new Request('https://x/', { method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 's' },
+    body: JSON.stringify(body) }), env, { waitUntil: (p) => jobs.push(p) });
+  await Promise.all(jobs);
+  await wait(3);
+  return res.status;
+}
+const name = (n) => 'Game.fliperos-customgame.zip.' + String(n).padStart(3, '0');
+const out = {};
+// Cinco partes (a quinta e a menor) fora de ordem: um chamado so, depois da ultima a chegar, com todas em ordem.
+let kv = kvStore();
+let env = { GITHUB_TOKEN: 't', GITHUB_REPO: 'o/r', PARTS: kv, PART_WAIT_MS: 0, WEBHOOK_SECRET: 's' };
+const sizes = { 1: 100, 2: 100, 3: 100, 4: 100, 5: 40 };
+for (const n of [3, 1, 5, 2]) await send(env, update(name(n), sizes[n], 200 + n));
+out.before_last = dispatches.length;
+await send(env, update(name(4), sizes[4], 204));
+out.dispatches = dispatches.slice();
+out.left = [...kv.store.keys()];
+// Faltando uma parte (a 004): nada sai e as partes ficam esperando.
+dispatches.length = 0;
+kv = kvStore();
+env = Object.assign({}, env, { PARTS: kv });
+for (const n of [1, 2, 3, 5]) await send(env, update(name(n), sizes[n], 300 + n));
+out.missing = { dispatches: dispatches.length, kept: kv.store.size };
+// Todas do tamanho cheio (ainda pode vir o fim): espera.
+dispatches.length = 0;
+kv = kvStore();
+env = Object.assign({}, env, { PARTS: kv });
+for (const n of [1, 2, 3]) await send(env, update(name(n), 100, 400 + n));
+out.no_end = dispatches.length;
+// Um zip so segue o caminho de sempre, sem "parts"; sem o KV as partes sao ignoradas.
+dispatches.length = 0;
+await send(env, update('Game.fliperos-customgame.zip', 5000, 500));
+out.single = dispatches.map((d) => ({ keys: Object.keys(d.client_payload).sort(), parts: d.client_payload.parts ?? null }));
+dispatches.length = 0;
+const bare = { GITHUB_TOKEN: 't', GITHUB_REPO: 'o/r', WEBHOOK_SECRET: 's' };
+for (const n of [1, 2]) await send(bare, update(name(n), n === 1 ? 100 : 40, 600 + n));
+out.no_kv = dispatches.length;
+// Os mesmos nomes de outra pessoa nao se misturam com os de Ana.
+dispatches.length = 0;
+kv = kvStore();
+env = Object.assign({}, env, { PARTS: kv });
+await send(env, update(name(1), 100, 701, 7));
+await send(env, update(name(2), 40, 702, 8));
+out.two_people = dispatches.length;
+console.log(JSON.stringify(out));
+'''
+
+    @unittest.skipUnless(shutil.which('node'), 'node is not installed')
+    def test_the_worker_waits_for_every_part_and_calls_github_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            driver = Path(tmp) / 'driver.mjs'
+            driver.write_text(self.DRIVER, encoding='utf-8')
+            result = subprocess.run(['node', str(driver), str(ROOT / 'tools/telegram-translate/worker.js')], capture_output=True,
+                                    text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(out['before_last'], 0)                                  # com a 004 faltando, nada saiu
+        self.assertEqual(len(out['dispatches']), 1)                              # e depois da ultima, um chamado so
+        payload = out['dispatches'][0]['client_payload']
+        self.assertEqual(out['dispatches'][0]['event_type'], 'customgame-zip')
+        self.assertEqual([p['n'] for p in payload['parts']], [1, 2, 3, 4, 5])
+        self.assertEqual([p['file_id'] for p in payload['parts']], ['F%d' % (200 + n) for n in (1, 2, 3, 4, 5)])
+        self.assertEqual(payload['file_name'], 'Game.fliperos-customgame.zip.001')   # os campos de sempre, os da primeira parte
+        self.assertEqual((payload['chat_id'], payload['thread_id'], payload['from'], payload['username']), (-100, 12, 'Ana', 'ana'))
+        self.assertLessEqual(len(payload), 10)
+        self.assertEqual(out['left'], [])                                        # o KV foi esvaziado
+        self.assertEqual(out['missing'], {'dispatches': 0, 'kept': 4})           # uma parte faltando: espera
+        self.assertEqual(out['no_end'], 0)                                       # so partes cheias: ainda pode vir o fim
+        self.assertEqual(out['single'], [{'keys': sorted(['chat_id', 'chat_username', 'message_id', 'thread_id', 'file_id',
+                                                           'file_name', 'file_size', 'from', 'username']), 'parts': None}])
+        self.assertEqual(out['no_kv'], 0)                                        # sem o KV, as partes sao ignoradas
+        self.assertEqual(out['two_people'], 0)                                   # partes de pessoas diferentes nao se juntam
 
 
 class SplashTests(unittest.TestCase):
@@ -23469,7 +23971,12 @@ class RetroArchConfigTests(unittest.TestCase):
         # aborta o MAME 0.139 ao iniciar uma CPU H8/3002 (Namco System 12).
         body = MKISO.split("<< 'RASCRIPT'")[1].split('\nRASCRIPT\n')[0]
         self.assertIn('make -C "$dir" -f "$mk" -j"$(nproc)" "$@"', body)
-        self.assertIn('\nbuild_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE\n', body)
+        self.assertIn(' build_core libretro/mame2010-libretro ARCHOPTS=-U_FORTIFY_SOURCE\n', body)
+        # O HEAD do mame2010 de 22/11/2026 nao compila (path_default_slash) e matou o build da
+        # 0.29: o core e compilado do commit que as ISOs ate a 0.28 compilaram, fixo por sha.
+        self.assertRegex(body, r'\nCORE_PIN=[0-9a-f]{40} build_core libretro/mame2010-libretro ')
+        self.assertIn('pin="${CORE_PIN:-}"', body)
+        self.assertIn('git -C "$dir" fetch -q --depth 1 "https://github.com/${repo}" "$pin"', body)
         # O FBNeo (o placar versus pelo RetroArch): o makefile do core fica
         # numa subpasta, e o .so vai sem os simbolos.
         self.assertIn('elif [[ -f "$dir/src/burner/libretro/Makefile" ]]; then', body)

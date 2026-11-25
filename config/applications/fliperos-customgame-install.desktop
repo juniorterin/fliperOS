@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Install custom game
-Comment=Installs a FliperOS custom game package (GAME.fliperos-customgame.zip)
+Comment=Installs a FliperOS custom game package (GAME.fliperos-customgame.zip, or any part of a split one: .zip.001, .002...)
 # O duplo clique num pacote de jogo custom (o tipo application/x-fliperos-customgame,
 # config/fliperos-customgame.xml) instala o jogo: a mesma tela do Setup > Games >
 # Custom games > Install games (o grupo e perguntado), no tubo, em 240p e tela
@@ -9,9 +9,11 @@ Comment=Installs a FliperOS custom game package (GAME.fliperos-customgame.zip)
 # fliperos-launch fecha o desktop, o fliperos-session abre o Setup
 # (fliperos-setup --from-desktop --install-package) e o desktop volta quando ele sai.
 # %F: varios pacotes escolhidos juntos abrem numa vez so (dois Setup se atropelariam).
+# O segundo tipo e o de uma parte de um pacote dividido (JOGO.fliperos-customgame.zip.001,
+# .002...): qualquer uma delas abre este mesmo instalador, que junta as partes da pasta antes.
 # Sem entrada no menu: o Abrir com e o duplo clique a acham.
 Exec=/opt/fliperos/bin/fliperos-launch setup --install-package %F
 Terminal=false
 Icon=applications-games
 NoDisplay=true
-MimeType=application/x-fliperos-customgame;
+MimeType=application/x-fliperos-customgame;application/x-fliperos-customgame-part;

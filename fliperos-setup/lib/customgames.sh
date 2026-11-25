@@ -508,6 +508,23 @@ customgames_package_in_folder() {
   [[ $real == "$base"/* && ${real,,} == *.zip && -f $real ]]
 }
 
+# customgames_is_part ARQUIVO: e uma parte de um pacote (GAME.fliperos-customgame.zip.001,
+# .002...)? Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) anda em partes
+# (o painel web as faz, e o robo do grupo as le como um pacote so).
+customgames_is_part() {
+  [[ ${1,,} =~ \.fliperos-customgame\.zip\.[0-9]{3}$ ]]
+}
+
+# customgames_join PARTE [replace]: junta as partes de um pacote (a PARTE pode ser qualquer uma
+# delas) no zip da pasta dos pacotes, com os eventos de progresso. As partes que estao na pasta
+# saem depois; as de fora dela (um pendrive) ficam. Status 3: o zip ja existe (sem replace).
+customgames_join() {
+  local part=$1 replace=${2:-}
+  local -a opts=(--remove-parts)
+  [[ $replace == replace ]] && opts+=(--replace)
+  customgames_tool join "$part" "${opts[@]}" --progress 0 100 2>> "${FLIPEROS_LOG:-/dev/null}"
+}
+
 # customgames_installed_group NOME: o grupo em que um jogo com esse nome ja
 # esta instalado (o primeiro). Status 1: em nenhum.
 customgames_installed_group() {
@@ -2075,6 +2092,12 @@ customgames_cli() {
     install-all)
       customgames_valid_name "${1:-}" || return 2
       customgames_install_all "$1"
+      ;;
+    join)
+      # As partes de um pacote (o painel web: o envio de GAME.fliperos-customgame.zip.001, .002...) viram o zip.
+      [[ -f ${1:-} ]] && customgames_is_part "$1" || return 2
+      [[ -z ${2:-} || $2 == replace ]] || return 2
+      customgames_join "$1" "${2:-}"
       ;;
     pack)
       customgames_valid_name "${1:-}" && customgames_valid_name "${2:-}" && [[ -f $(customgames_cfg "$1" "$2") ]] || return 2

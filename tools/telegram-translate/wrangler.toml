@@ -15,3 +15,12 @@ SKIP_TOPICS = "578"
 # .fliperos-customgame.zip ao grupo (precisa do secret GITHUB_TOKEN; sem ele os
 # pacotes nao sao tratados)
 GITHUB_REPO = "juniorterin/fliperOS"
+
+# Pacotes maiores que 2 GB (o arquivo do plano gratuito do Telegram) chegam em partes
+# (JOGO.fliperos-customgame.zip.001, .002...). O KV guarda as partes ate a ultima chegar:
+# so entao o robo e chamado, uma vez, com todas. Crie o KV e ponha o id que ele imprimir
+# (tire o # das tres linhas); sem ele as partes sao ignoradas:
+#   npx wrangler kv namespace create PARTS
+# [[kv_namespaces]]
+# binding = "PARTS"
+# id = "COLE_O_ID_AQUI"

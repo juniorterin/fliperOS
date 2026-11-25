@@ -1066,20 +1066,61 @@ screen_custom_install() {
   return 0
 }
 
+# screen_custom_join PARTE: um pacote que veio em partes (GAME.fliperos-customgame.zip.001, .002...)
+# volta a ser o zip, na pasta dos pacotes (customgames_join), com o andamento na tela; a PARTE e
+# qualquer uma delas. Pergunta antes de trocar um zip que ja esta la. O zip fica em CG_JOINED.
+# Status 1: nao deu (a tela diz o motivo: uma parte que falta, partes de tamanhos diferentes...).
+screen_custom_join() {
+  local part=$1 title="Install games" info out base count rc msg replace=""
+  CG_JOINED=""
+  info=$(customgames_tool parts "$part" 2>&1)
+  rc=$?
+  base=$(sed -n 's/^base=//p' <<< "$info")
+  out=$(sed -n 's/^out=//p' <<< "$info")
+  count=$(sed -n 's/^count=//p' <<< "$info")
+  if ((rc != 0)); then
+    msg=$(sed -n 's/^problem|//p' <<< "$info" | head -n 3)
+    ui_msg "$title" "$(ui_bad "$(basename "$part") is not a complete package.")" "" "${msg:-$info}"
+    return 1
+  fi
+  if [[ -e $out ]]; then
+    ui_yesno "$title" "$base is already in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES"). Join the $count parts over it?" no || return 1
+    replace=replace
+  fi
+  run_with_progress "Joining $count parts" "$base" customgames_join "$part" $replace || return 1
+  [[ -f $out ]] || return 1
+  CG_JOINED=$out
+}
+
 # screen_install_packages ZIP...: os pacotes que o duplo clique no desktop abriu
 # (config/applications/fliperos-customgame-install.desktop, fliperos-setup
 # --install-package). Um so: o grupo (o do jogo, se ja esta instalado, ou o
 # ultimo usado) e a mesma instalacao do Install games. Varios: um grupo para
-# todos, e no fim, se os da pasta dos pacotes saem. Status 1: nada foi instalado.
+# todos, e no fim, se os da pasta dos pacotes saem. Uma parte de um pacote em partes
+# (qualquer uma, .001 ou .003) conta como o pacote: as partes se juntam antes (uma vez
+# por pacote, mesmo com varias escolhidas) e o zip entra como qualquer outro.
+# Status 1: nada foi instalado.
 screen_install_packages() {
-  local title="Install games" zip info name group default total ok=0
-  local -a zips=() installed=()
+  local title="Install games" zip info name group default total ok=0 out seen j
+  local -a zips=() installed=() joined=()
   for zip in "$@"; do
+    if customgames_is_part "$zip"; then
+      [[ -f $zip ]] || continue
+      out=$(customgames_tool parts "$zip" 2> /dev/null | sed -n 's/^out=//p')
+      seen=""
+      for j in "${joined[@]}"; do
+        [[ -n $out && $j == "$out" ]] && seen=1
+      done
+      [[ -n $seen ]] && continue
+      screen_custom_join "$zip" || return 1
+      joined+=("$out")
+      zip=$CG_JOINED
+    fi
     [[ -f $zip ]] && zips+=("$(realpath -- "$zip")")
   done
   total=${#zips[@]}
   if ((total == 0)); then
-    ui_msg "$title" "$(ui_bad "There is no package to install.")" "" "Double-click a GAME.fliperos-customgame.zip."
+    ui_msg "$title" "$(ui_bad "There is no package to install.")" "" "Double-click a GAME.fliperos-customgame.zip, or any part of one (.zip.001, .002...)."
     return 1
   fi
   for zip in "${zips[@]}"; do

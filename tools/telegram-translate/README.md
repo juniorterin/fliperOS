@@ -68,6 +68,24 @@ Uma vez só:
    não deram para ler.
 4. O bot precisa ser administrador do grupo (ou ter o `/setprivacy` desligado) para ver
    os arquivos mandados, como já precisa para a tradução.
+5. **Pacotes em partes (mais de 2 GB).** O plano gratuito do Telegram aceita arquivos de até
+   2 GB. No painel web (Jogos custom > Criar pacote) um pacote maior sai com um link para
+   cada parte (`JOGO.fliperos-customgame.zip.001`, `.002`...; 1900 MiB cada, o painel as
+   corta do zip que já está na pasta). Mande todas ao grupo, em qualquer ordem: o robô as
+   trata como **um pacote só**, com **um card** (álbum e dados) e uma resposta a cada
+   parte. Para isso o Worker precisa de um KV, que guarda as partes até a última chegar
+   (a última é a menor):
+
+       cd tools/telegram-translate
+       npx wrangler kv namespace create PARTS
+
+   Ponha o `id` que ele imprimir no `wrangler.toml` (as três linhas `[[kv_namespaces]]`
+   comentadas no fim) e rode `npx wrangler deploy`. O `GITHUB_TOKEN` é o mesmo.
+   Sem o KV as partes são ignoradas (o log do Worker diz que falta o binding `PARTS`).
+   Se uma parte faltar, nada é postado até ela chegar (o KV esquece o conjunto em dois dias);
+   com partes de tamanhos diferentes, ou numeração com furo ou repetida, o robô responde
+   à primeira parte dizendo o que está errado. O robô lê as partes como se fossem o zip inteiro
+   (MTProto), então este caminho também precisa de `TELEGRAM_API_ID` e `TELEGRAM_API_HASH`.
 
 Rodar à mão: *Actions > Telegram custom game > Run workflow*, com o JSON do pedido
 (`chat_id`, `message_id`, `file_id`, `file_name`, `file_size`…). Com **no_post** o robô

@@ -7,7 +7,8 @@
 // SKIP_TOPICS: topicos sem traducao (o numero no fim do link do topico,
 // t.me/fliperos15khz/NUMERO), separados por virgula.
 // Pacotes de jogo custom (.fliperos-customgame.zip): vao ao GitHub, que posta os
-// dados no topico Files (dispatchPackage, mais abaixo).
+// dados no topico Files (dispatchPackage, mais abaixo). Os que vem em partes (.zip.001,
+// .002...) esperam no KV PARTS ate a ultima e vao juntos (collectPart).
 // Deploy e webhook: tools/telegram-translate/README.md.
 
 const MIN_LETTERS = 4;
@@ -56,13 +57,24 @@ async function translate(env, text, source, target) {
 // que roda o tempo que precisar (aqui o limite de CPU e de segundos).
 // Segredos: GITHUB_TOKEN (um token com acesso de escrita ao repositorio, so para
 // o repository_dispatch) e a variavel GITHUB_REPO (dono/repositorio).
-async function dispatchPackage(env, msg) {
+// O que o workflow precisa saber de um arquivo mandado ao grupo (9 campos: o repository_dispatch aceita ate 10).
+function fileFields(msg) {
   const doc = msg.document;
-  if (!doc || !/\.fliperos-customgame\.zip$/i.test(doc.file_name || '')) return false;
-  if (msg.from && msg.from.is_bot) return true;
-  if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return true;
-  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return true;
   const from = msg.from ? [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') : '';
+  return {
+    chat_id: msg.chat.id,
+    chat_username: msg.chat.username || '',
+    message_id: msg.message_id,
+    thread_id: msg.is_topic_message ? msg.message_thread_id : 0,
+    file_id: doc.file_id,
+    file_name: doc.file_name,
+    file_size: doc.file_size || 0,
+    from,
+    username: (msg.from && msg.from.username) || '',
+  };
+}
+
+async function dispatchGithub(env, clientPayload) {
   const r = await fetch('https://api.github.com/repos/' + env.GITHUB_REPO + '/dispatches', {
     method: 'POST',
     headers: {
@@ -71,27 +83,84 @@ async function dispatchPackage(env, msg) {
       'user-agent': 'fliperos-telegram-bot',
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      event_type: 'customgame-zip',
-      client_payload: {
-        chat_id: msg.chat.id,
-        chat_username: msg.chat.username || '',
-        message_id: msg.message_id,
-        thread_id: msg.is_topic_message ? msg.message_thread_id : 0,
-        file_id: doc.file_id,
-        file_name: doc.file_name,
-        file_size: doc.file_size || 0,
-        from,
-        username: (msg.from && msg.from.username) || '',
-      },
-    }),
+    body: JSON.stringify({ event_type: 'customgame-zip', client_payload: clientPayload }),
   });
   if (!r.ok) throw new Error('dispatch ' + r.status + ' ' + await r.text());
+}
+
+async function dispatchPackage(env, msg) {
+  const doc = msg.document;
+  if (!doc || !/\.fliperos-customgame\.zip$/i.test(doc.file_name || '')) return false;
+  if (msg.from && msg.from.is_bot) return true;
+  if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return true;
+  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return true;
+  await dispatchGithub(env, fileFields(msg));
+  return true;
+}
+
+// Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) chega em partes, GAME.fliperos-customgame.zip.001,
+// .002... (o painel web as faz). Cada parte vira uma chave no KV (binding PARTS); quando as partes 1..k estao todas aqui e
+// a ultima e menor que a primeira (o fim do pacote), quem recebeu a parte que chegou por ultimo chama o GitHub UMA vez, com
+// todas em "parts" (o robo trata como um pacote so). Sem o binding PARTS as partes sao ignoradas.
+const PART_NAME = /^(.+\.fliperos-customgame\.zip)\.(\d{3})$/i;
+const PART_TTL = 172800; // o KV esquece as partes de um pacote que nunca completou, em dois dias
+
+// splitReady: as partes numeradas de 1 a k sem furo (k >= 2) e a ultima menor que a primeira.
+function splitReady(parts) {
+  const ordered = parts.slice().sort((a, b) => a.n - b.n);
+  if (ordered.length < 2 || !ordered.every((p, i) => p.n === i + 1)) return false;
+  return ordered[ordered.length - 1].file_size < ordered[0].file_size;
+}
+
+async function collectPart(env, msg) {
+  const doc = msg.document;
+  const name = doc && PART_NAME.exec(doc.file_name || '');
+  if (!name) return false;
+  if (msg.from && msg.from.is_bot) return true;
+  if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return true;
+  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return true;
+  if (!env.PARTS) {
+    console.error('split package ' + doc.file_name + ': the KV binding PARTS is missing (tools/telegram-translate/README.md)');
+    return true;
+  }
+  const prefix = 'part:' + msg.chat.id + ':' + ((msg.from && msg.from.id) || 0) + ':' + name[1].toLowerCase() + ':';
+  const mine = Object.assign({ n: parseInt(name[2], 10), at: Date.now() }, fileFields(msg));
+  await env.PARTS.put(prefix + name[2], JSON.stringify(mine), { expirationTtl: PART_TTL });
+  // Duas partes que chegam juntas escrevem quase ao mesmo tempo: espera um pouco para ver tudo o que ja foi escrito.
+  await new Promise(resolve => setTimeout(resolve, Number(env.PART_WAIT_MS === undefined ? 3000 : env.PART_WAIT_MS)));
+  const listed = await env.PARTS.list({ prefix });
+  const parts = [];
+  for (const key of listed.keys) {
+    const part = await env.PARTS.get(key.name, 'json');
+    if (part) parts.push(part);
+  }
+  if (!splitReady(parts)) return true;
+  // So a parte que chegou por ultima chama o GitHub (as outras ja saberiam do conjunto incompleto).
+  const last = parts.reduce((a, b) => (b.at > a.at || (b.at === a.at && b.n > a.n) ? b : a));
+  if (last.n !== mine.n || last.at !== mine.at) return true;
+  const ordered = parts.sort((a, b) => a.n - b.n);
+  const first = ordered[0];
+  await dispatchGithub(env, {
+    chat_id: first.chat_id,
+    chat_username: first.chat_username,
+    message_id: first.message_id,
+    thread_id: first.thread_id,
+    file_id: first.file_id,
+    file_name: first.file_name,
+    file_size: first.file_size,
+    from: first.from,
+    username: first.username,
+    parts: ordered.map(p => ({
+      n: p.n, message_id: p.message_id, thread_id: p.thread_id, file_id: p.file_id, file_name: p.file_name, file_size: p.file_size,
+    })),
+  });
+  await Promise.all(listed.keys.map(key => env.PARTS.delete(key.name)));
   return true;
 }
 
 async function handle(env, msg) {
   if (await dispatchPackage(env, msg)) return;
+  if (await collectPart(env, msg)) return;
   const text = msg.text || msg.caption || '';
   if (!text || text.startsWith('/') || (msg.from && msg.from.is_bot)) return;
   if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return;

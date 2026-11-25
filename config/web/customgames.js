@@ -252,7 +252,8 @@ function cgViewSave() {
 // nao perde o cursor) e as caixas onde o resto se desenha.
 function cgBuildGames() {
   const v = cgView();
-  const zipInput = el("input", { type: "file", accept: ".zip", multiple: "", hidden: "" });
+  // Sem accept: alem do .zip ha as partes de um pacote dividido (.zip.001, .002...), que nenhum filtro de extensao cobre.
+  const zipInput = el("input", { type: "file", multiple: "", hidden: "" });
   zipInput.addEventListener("change", () => {
     const files = [...zipInput.files];
     zipInput.value = "";
@@ -660,6 +661,18 @@ async function cgDownloadGame(game, force) {
   prog.end(ok, ok ? t("cg_pack_done").replace("%s", game.name) : (task && (task.error || task.last)) || t("task_fail"));
   if (!ok) return;
   const zip = cgZipOf(game.name);
+  // Grande demais para um arquivo do Telegram: em vez de baixar o zip de uma vez, as partes (e o zip inteiro, se a
+  // pessoa o quiser).
+  const parts = await cgPartsInfo(zip);
+  if (parts) {
+    const dlg = cgDialog();
+    const close = el("button", { type: "button", class: "btn ghost" }, t("close"));
+    close.addEventListener("click", () => dlg.close());
+    dlg.replaceChildren(el("form", { class: "cg-form", method: "dialog" }, el("h3", {}, game.name), cgPartsBlock(parts),
+      el("footer", {}, close, cgDownloadButton(zip))));
+    dlg.showModal();
+    return;
+  }
   const link = el("a", { href: cgDownloadUrl(zip), download: zip, hidden: "" });
   document.body.append(link);
   link.click();
@@ -1072,20 +1085,87 @@ async function cgUploadFiles(files) {
     cg.installGroup = name;
     cgRenderGames();
   }
-  for (const file of files) {
-    if (!(await cgUploadZip(file))) continue;
+  // Os zips, e as partes de cada pacote dividido (.zip.001, .002...: o que o painel faz de um pacote maior que o arquivo do plano
+  // gratuito do Telegram) como um envio so: todas sobem e o gabinete as junta no zip.
+  const sets = cgPartSets(files);
+  const jobs = files.filter((file) => !CG_PART_RE.test(file.name)).map((file) => ({ name: file.name, send: () => cgUploadZip(file) }));
+  for (const set of sets.values()) {
+    if (set.problems.length) {
+      toast(t("cg_parts_bad").replace("%s", set.zip).replace("%s", set.problems.join("; ")), "bad");
+      continue;
+    }
+    jobs.push({ name: set.zip, send: () => cgUploadParts(set) });
+  }
+  for (const job of jobs) {
+    if (!(await job.send())) continue;
     const res = await api("/api/customgames/packages");
     cg.packages = res.ok ? ((await res.json().catch(() => ({}))).packages || []) : cg.packages;
-    const p = cg.packages.find((x) => x.file === file.name);
+    const p = cg.packages.find((x) => x.file === job.name);
     if (!p) continue;
     if (p.state === "bad") {
-      toast(file.name + ": " + cgProblems(p).join(" "), "bad");
+      toast(job.name + ": " + cgProblems(p).join(" "), "bad");
       continue;
     }
     // O mesmo pacote ja instalado (o zip trocado): o jogo e atualizado onde ele esta.
     await cgInstallPackage(p, p.group || cg.installGroup);
   }
   cgLoad().catch(() => {});
+}
+
+// As partes de um pacote dividido entre os FILES: Map do nome do zip (minusculo) para {zip, parts: Map numero -> File, problems}.
+const CG_PART_RE = /^(.+\.fliperos-customgame\.zip)\.(\d{3})$/i;
+
+function cgPartSets(files) {
+  const sets = new Map();
+  for (const file of files) {
+    const m = CG_PART_RE.exec(file.name);
+    if (!m) continue;
+    const key = m[1].toLowerCase();
+    if (!sets.has(key)) sets.set(key, { zip: m[1], parts: new Map() });
+    sets.get(key).parts.set(parseInt(m[2], 10), file);
+  }
+  for (const set of sets.values()) set.problems = cgPartProblems(set);
+  return sets;
+}
+
+// O que esta errado nas partes escolhidas, as mesmas conferencias do gabinete ao juntar (fliperos-customgame join): numeracao
+// com furo, ou partes de tamanhos diferentes (todas, menos a ultima, tem o mesmo tamanho, e a ultima nao e maior). Assim o erro
+// vem antes de subir gigabytes.
+function cgPartProblems(set) {
+  const numbers = [...set.parts.keys()].sort((a, b) => a - b);
+  const last = numbers[numbers.length - 1];
+  const missing = [];
+  for (let n = 1; n <= last; n++) if (!set.parts.has(n)) missing.push(String(n).padStart(3, "0"));
+  if (missing.length) return [t("cg_parts_missing").replace("%s", missing.join(", "))];
+  const sizes = numbers.map((n) => set.parts.get(n).size);
+  if (sizes.slice(0, -1).some((size) => size !== sizes[0]) || sizes[sizes.length - 1] > sizes[0]) return [t("cg_parts_sizes")];
+  return [];
+}
+
+// Enviar as partes de um pacote: cada uma sobe para a pasta dos pacotes e o gabinete as junta no zip (as partes saem). Um zip com
+// esse nome que ja existe pergunta se troca.
+async function cgUploadParts(set) {
+  const files = [...set.parts.entries()].sort((a, b) => a[0] - b[0]).map((entry) => entry[1]);
+  for (const file of files) {
+    if (!(await cgSendFile(file))) return false;
+  }
+  const prog = cgProgress(t("cg_joining").replace("%s", set.zip));
+  prog.set(0, "…");
+  const join = (replace) => cgTask("/api/customgames/join", { zip: set.zip, replace }, (tk) =>
+    prog.set(tk.pct || 0, (tk.step || "") + (tk.pct ? " · " + Math.round(tk.pct) + "%" : "")));
+  let task = await join(false);
+  if (task && task.rc === 3) {
+    // O zip ja esta na pasta: so troca se a pessoa disser (as partes ficam esperando).
+    if (!(await ask({ title: set.zip, text: t("cg_create_exists").replace("%s", set.zip), yes: t("cg_create_replace"), danger: true }))) {
+      prog.end(false, t("cg_cancel"));
+      return false;
+    }
+    task = await join(true);
+  }
+  const ok = !!task && task.rc === 0;
+  prog.end(ok, ok ? t("cg_zip_sent").replace("%s", set.zip) : (task && (task.error || task.last)) || t("task_fail"));
+  if (ok) cg.highlight = (cg.info.packages_dir || "") + "/" + set.zip;
+  return ok;
 }
 
 // Enviar um pacote: so JOGO.fliperos-customgame.zip, para a pasta dos
@@ -1096,6 +1176,11 @@ async function cgUploadZip(file) {
     toast(t("cg_zip_name").replace("%s", file.name).replace("%s", stem + CG_SUFFIX), "bad");
     return false;
   }
+  return cgSendFile(file);
+}
+
+// cgSendFile: um arquivo para a pasta dos pacotes, com a barra de envio (o zip, ou uma parte dele).
+async function cgSendFile(file) {
   const prog = cgProgress(t("cg_uploading").replace("%s", file.name));
   prog.set(0, "0%");
   const status = await cgPostFile("/api/upload?root=roms&path=custom-packages&name=" + encodeURIComponent(file.name) +
@@ -1121,6 +1206,35 @@ const cgDownloadUrl = (zip) => "/api/download?root=roms&path=" + encodeURICompon
 // outro FliperOS (a pasta dele, ~/roms/custom-packages).
 function cgDownloadButton(zip) {
   return el("a", { class: "btn small", href: cgDownloadUrl(zip), download: zip }, icon("px-install"), t("cg_download"));
+}
+
+// Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) vai ao grupo em partes (zip.001, .002...): o
+// painel diz quantas e entrega cada uma, um pedaco do zip que ja esta na pasta (/api/customgames/package-part). O robo do
+// grupo trata as partes como um pacote so. cgPartsInfo: null quando o zip cabe num arquivo so.
+async function cgPartsInfo(zip) {
+  try {
+    const res = await api("/api/customgames/package-parts?name=" + encodeURIComponent(zip));
+    if (!res.ok) return null;
+    const info = await res.json();
+    return info.parts && info.parts.length ? info : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// cgPartsBlock: o aviso, um link por parte e como juntar as partes sem o robo.
+function cgPartsBlock(info) {
+  return el("div", { class: "cg-parts" },
+    el("p", {}, t("cg_split_title").replace("%s", info.name).replace("%s", bytes(info.size)).replace("%n", info.parts.length)),
+    el("ol", { class: "cg-parts-list" }, ...info.parts.map((p) =>
+      el("li", {}, el("a", { href: p.url, download: p.file }, icon("px-install"), p.file), el("span", { class: "dim" }, " · " + bytes(p.size))))),
+    el("p", { class: "dim" }, t("cg_split_how").replace(/%s/g, info.name)));
+}
+
+// cgShowParts: acrescenta em CONTAINER o bloco das partes do pacote, se ele precisar delas.
+async function cgShowParts(container, zip) {
+  const info = await cgPartsInfo(zip);
+  if (info) container.append(cgPartsBlock(info));
 }
 
 // cgTask: uma tarefa de jogos custom (instalar, empacotar...), esperada.
@@ -1535,6 +1649,7 @@ async function cgCreate(button) {
       cgCreateDraw();
       status.replaceChildren(el("span", { class: "ok" }, t("cg_created_dl").replace("%s", zip)), " ", cgDownloadButton(zip));
       toast(t("cg_created").replace("%s", zip), "ok");
+      await cgShowParts(status, zip);
       await cgLoad();
       await cgOfferInstall([made]);
     } else {
@@ -2315,6 +2430,8 @@ async function cgCreateMany() {
     status.replaceChildren(el("span", { class: bad ? "error" : "ok" }, (made.length ? t("cg_created_n").replace("%n", made.length) + " " : "") +
       (bad ? t("cg_failed_n").replace("%n", bad) : "")));
     toast(t("cg_created_n").replace("%n", made.length), bad ? "bad" : "ok");
+    // Os pacotes grandes demais para um arquivo do Telegram: as partes de cada um, para baixar.
+    for (const r of made) await cgShowParts(status, cgZipOf(r.name.trim()));
     cgTableDraw();
     // As que sairam deixam a tabela depois de um instante com o ✓; as outras ficam com o erro.
     if (made.length) {

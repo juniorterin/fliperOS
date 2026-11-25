@@ -5327,6 +5327,180 @@ class CustomGamesTests(Base):
         self.assertIn("There is no package to install.", out)
         self.assertTrue(out.endswith("status:1\n"), out)
 
+    # ── Pacote em partes (maior que o arquivo do plano gratuito do Telegram: GAME.fliperos-customgame.zip.001, .002...) ──
+
+    def split_pkg(self, zip_, folder, count=5):
+        """O zip em COUNT partes de mesmo tamanho (a ultima menor), na FOLDER, como o painel web as faz."""
+        data = zip_.read_bytes()
+        size = -(-len(data) // count) + 1
+        folder.mkdir(parents=True, exist_ok=True)
+        parts = []
+        for number, start in enumerate(range(0, len(data), size), 1):
+            part = folder / ("%s.%03d" % (zip_.name, number))
+            part.write_bytes(data[start:start + size])
+            parts.append(part)
+        self.assertEqual(len(parts), count)
+        return data, parts
+
+    def cg_tool(self, e, *args):
+        """O fliperos-customgame (customgames_tool): (status, saida, erro)."""
+        import shlex
+        r = self.env.run("customgames_tool " + " ".join(shlex.quote(str(a)) for a in args), e)
+        return r.returncode, r.stdout, r.stderr
+
+    def test_the_parts_of_a_package_come_back_as_the_zip_from_any_of_them(self):
+        media, games, e = self.pkg_env()
+        packages = self.roms / "custom-packages"
+        whole = self.make_pkg(self.env.dir / "orig" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        data, parts = self.split_pkg(whole, self.env.dir / "USB")
+        # parts: o conjunto, de qualquer parte, e onde o zip vai.
+        rc, out, err = self.cg_tool(e, "parts", parts[2])
+        self.assertEqual(rc, 0, err)
+        lines = out.splitlines()
+        self.assertEqual(lines[:4], ["base=Doom.fliperos-customgame.zip", "out=%s" % (packages / "Doom.fliperos-customgame.zip"),
+                                     "count=5", "bytes=%d" % len(data)])
+        self.assertEqual([l.split("|")[:2] for l in lines[4:]], [["part", str(n)] for n in range(1, 6)])
+        # join, pela terceira parte: o zip da pasta dos pacotes e o de antes, byte a byte, e as partes de fora ficam.
+        rc, out, err = self.cg_tool(e, "join", parts[2], "--remove-parts", "--progress", 0, 100)
+        self.assertEqual(rc, 0, err)
+        joined = packages / "Doom.fliperos-customgame.zip"
+        self.assertEqual(joined.read_bytes(), data)
+        self.assertIn("@step 0 Checking the parts", out)
+        self.assertIn("out=%s" % joined, out)
+        self.assertTrue(out.rstrip().endswith("@step 100 Doom.fliperos-customgame.zip joined"), out)
+        self.assertTrue(all(p.exists() for p in parts))
+        self.assertEqual([p.name for p in packages.iterdir()], ["Doom.fliperos-customgame.zip"])       # nada .joining
+        self.assertEqual(self.cg_tool(e, "inspect", joined)[0], 0)
+        # Ja existe: o status 3, sem trocar; com --replace troca.
+        joined.write_bytes(b"old")
+        rc, out, err = self.cg_tool(e, "join", parts[0])
+        self.assertEqual((rc, joined.read_bytes()), (3, b"old"))
+        self.assertIn("already in the packages folder", err)
+        self.assertEqual(self.cg_tool(e, "join", parts[4], "--replace")[0], 0)
+        self.assertEqual(joined.read_bytes(), data)
+        # As partes que estao na pasta dos pacotes saem depois de juntadas (so elas).
+        joined.unlink()
+        _, inside = self.split_pkg(whole, packages)
+        self.assertEqual(self.cg_tool(e, "join", inside[1], "--remove-parts")[0], 0)
+        self.assertEqual([p.name for p in packages.iterdir()], ["Doom.fliperos-customgame.zip"])
+        self.assertEqual(joined.read_bytes(), data)
+
+    def test_parts_that_do_not_make_a_package_are_refused_and_leave_nothing_behind(self):
+        media, games, e = self.pkg_env()
+        packages = self.roms / "custom-packages"
+        whole = self.make_pkg(self.env.dir / "orig" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        data, parts = self.split_pkg(whole, self.env.dir / "USB")
+        # Falta a terceira.
+        parts[2].rename(self.env.dir / "gone.003")
+        rc, out, err = self.cg_tool(e, "parts", parts[0])
+        self.assertEqual(rc, 1)
+        self.assertIn("problem|part 003 is missing", out)
+        rc, out, err = self.cg_tool(e, "join", parts[0], "--progress", 0, 100)
+        self.assertEqual(rc, 1)
+        self.assertIn("@fail Joining|part 003 is missing", out)
+        self.assertFalse(packages.exists() and any(packages.iterdir()))
+        (self.env.dir / "gone.003").rename(parts[2])
+        # Faltam a primeira e a segunda.
+        parts[0].rename(self.env.dir / "gone.001")
+        parts[1].rename(self.env.dir / "gone.002")
+        rc, out, err = self.cg_tool(e, "parts", parts[2])
+        self.assertIn("problem|parts 001, 002 are missing", out)
+        (self.env.dir / "gone.001").rename(parts[0])
+        (self.env.dir / "gone.002").rename(parts[1])
+        # Tamanhos diferentes (menos a ultima).
+        parts[1].write_bytes(parts[1].read_bytes() + b"x")
+        rc, out, err = self.cg_tool(e, "join", parts[3])
+        self.assertEqual(rc, 1)
+        self.assertIn("must have the same size", err)
+        parts[1].write_bytes(parts[1].read_bytes()[:-1])
+        # A ultima parte nao veio (a que tem o fim do zip): nao e um zip, e o .joining some.
+        parts[4].rename(self.env.dir / "gone.005")
+        rc, out, err = self.cg_tool(e, "join", parts[0], "--progress", 0, 100)
+        self.assertEqual(rc, 1)
+        self.assertIn("do not make a zip file", err)
+        self.assertIn("@fail Joining|", out)
+        self.assertFalse(packages.exists() and any(packages.iterdir()))
+        # O que nao e parte.
+        rc, out, err = self.cg_tool(e, "parts", whole)
+        self.assertEqual(rc, 1)
+        self.assertIn("is not a part of a package", err)
+        self.assertEqual(self.cg_tool(e, "join", whole)[0], 1)
+
+    def test_double_click_on_any_part_joins_the_parts_and_installs_the_game(self):
+        media, games, e = self.pkg_env()
+        packages = self.roms / "custom-packages"
+        whole = self.make_pkg(self.env.dir / "orig" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        data, parts = self.split_pkg(whole, self.env.dir / "USB")
+        # A segunda parte (nao a .001): o instalador acha as outras na pasta, junta e instala como um zip.
+        out, picks, e = self.desktop_install([parts[1]], delete=False)
+        self.assertEqual(picks, ["Which group for Doom? Each group is a system in the frontends.|"])
+        self.assertTrue(out.endswith("status:0\n"), out)
+        joined = packages / "Doom.fliperos-customgame.zip"
+        self.assertEqual(joined.read_bytes(), data)
+        self.assertTrue((self.env.dir / "games" / "PC games" / "Doom" / "doom").exists())
+        self.assertIn("package=%s\n" % joined, (self.roms / "custom" / "PC games" / "Doom.cfg").read_text())
+        # As partes de fora da pasta (o pendrive) ficam; o zip juntado e da pasta, entao pergunta se sai.
+        self.assertTrue(all(p.exists() for p in parts))
+        self.assertIn("yesno:Doom is installed in PC games. Delete the package Doom.fliperos-customgame.zip?", out)
+        self.assertTrue(joined.exists())
+
+    def test_every_part_chosen_together_joins_once_and_a_whole_package_goes_along(self):
+        media, games, e = self.pkg_env()
+        packages = self.roms / "custom-packages"
+        whole = self.make_pkg(self.env.dir / "orig" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        cave = self.make_pkg(self.env.dir / "Downloads" / "Cave.fliperos-customgame.zip", base="Cave",
+                             cfg="name=Cave\nplatform=native\ncommand=./cave\n", files={"cave": b"#!/bin/sh\n"})
+        data, parts = self.split_pkg(whole, self.env.dir / "USB")
+        # As cinco partes escolhidas juntas (o gerenciador de arquivos passa todas) e outro pacote: um zip so de Doom.
+        out, picks, e = self.desktop_install([cave] + parts)
+        self.assertEqual(picks, ["Install the 2 packages in which group?|"])
+        self.assertNotIn("Join the", out)                                           # nenhuma pergunta de trocar: juntou uma vez so
+        for name in ("Doom", "Cave"):
+            self.assertTrue((self.roms / "custom" / "PC games" / ("%s.sh" % name)).exists(), name)
+        self.assertEqual(len([p for p in packages.iterdir() if p.name.startswith("Doom")]), 0)       # o zip foi apagado depois
+        self.assertTrue(all(p.exists() for p in parts))
+
+    def test_parts_with_one_missing_say_so_and_install_nothing(self):
+        media, games, e = self.pkg_env()
+        whole = self.make_pkg(self.env.dir / "orig" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        data, parts = self.split_pkg(whole, self.env.dir / "USB")
+        parts[2].unlink()
+        out, picks, e = self.desktop_install([parts[1]])
+        self.assertIn("msg:Install games Doom.fliperos-customgame.zip.002 is not a complete package.", out)
+        self.assertIn("part 003 is missing", out)
+        self.assertEqual(picks, [])
+        self.assertTrue(out.endswith("status:1\n"), out)
+        self.assertFalse((self.roms / "custom-packages").exists() and any((self.roms / "custom-packages").iterdir()))
+
+    def test_a_zip_with_the_name_of_the_parts_asks_before_it_is_replaced(self):
+        media, games, e = self.pkg_env()
+        packages = self.roms / "custom-packages"
+        whole = self.make_pkg(self.env.dir / "orig" / "Doom.fliperos-customgame.zip", **self.DOOM)
+        data, parts = self.split_pkg(whole, self.env.dir / "USB")
+        packages.mkdir(parents=True, exist_ok=True)
+        (packages / "Doom.fliperos-customgame.zip").write_bytes(b"old")
+        out, picks, e = self.desktop_install([parts[0]], delete=False)
+        self.assertIn("yesno:Doom.fliperos-customgame.zip is already in", out)
+        self.assertIn("Join the 5 parts over it?", out)
+        self.assertEqual((packages / "Doom.fliperos-customgame.zip").read_bytes(), data)      # a resposta foi sim: trocou
+        self.assertTrue((self.roms / "custom" / "PC games" / "Doom.sh").exists())
+
+    def test_the_join_is_a_setup_command_for_the_panel_and_the_parts_have_a_file_type(self):
+        lib = (SETUP / "lib/customgames.sh").read_text()
+        case = lib.split("    join)\n")[1].split("      ;;\n")[0]
+        self.assertIn("customgames_is_part", case)
+        self.assertIn('customgames_join "$1" "${2:-}"', case)
+        self.assertIn("--remove-parts", lib.split("customgames_join() {")[1].split("\n}\n")[0])
+        media, games, e = self.pkg_env()
+        # customgames_is_part: so o nome de uma parte (tres digitos), qualquer caixa.
+        for name, expected in (("Pang.fliperos-customgame.zip.001", 0), ("PANG.FLIPEROS-CUSTOMGAME.ZIP.017", 0),
+                               ("Pang.fliperos-customgame.zip", 1), ("Pang.fliperos-customgame.zip.01", 1),
+                               ("Pang.fliperos-customgame.zip.0001", 1), ("Pang.zip.001", 1), ("notes.001", 1)):
+            self.assertEqual(self.env.run('customgames_is_part "$N"', dict(e, N=name)).returncode, expected, name)
+        # O comando do Setup que o painel chama: nao e parte, nao existe ou argumento sobrando e 2.
+        for args in ("", "/nope.fliperos-customgame.zip.001", "%s extra" % (self.env.dir / "x.fliperos-customgame.zip.001")):
+            self.assertEqual(self.env.run('customgames_cli join %s' % args, e).returncode, 2, args)
+
     def test_the_desktop_entry_hands_every_chosen_file_to_the_setup_whole(self):
         # O Exec como o GIO o le (aspas de shell), com os nomes que um zip baixado tem:
         # espacos, parenteses, aspas, cifrao. Cada arquivo chega ao Setup como um argumento: o
@@ -5401,12 +5575,25 @@ class CustomGamesTests(Base):
         import xml.etree.ElementTree as ET
         root = ET.fromstring(xml)
         self.assertEqual(root.tag, "{http://www.freedesktop.org/standards/shared-mime-info}mime-info")
-        self.assertEqual(len(root), 1)
+        self.assertEqual(len(root), 2)
         self.assertIn('<mime-type type="application/x-fliperos-customgame">', xml)
         self.assertIn('<sub-class-of type="application/zip"/>', xml)
         self.assertIn('<glob pattern="*.fliperos-customgame.zip" weight="60"/>', xml)
+        # O segundo tipo: qualquer parte de um pacote dividido (.zip.001, .002...) abre o mesmo instalador. Nao e um zip, e leva
+        # o icone do pacote (sem um SVG a mais).
+        ns = {"m": "http://www.freedesktop.org/standards/shared-mime-info"}
+        part = [t for t in root if t.get("type") == "application/x-fliperos-customgame-part"][0]
+        self.assertEqual(part.find("m:glob", ns).get("pattern"), "*.fliperos-customgame.zip.[0-9][0-9][0-9]")
+        self.assertEqual(part.find("m:sub-class-of", ns).get("type"), "application/octet-stream")
+        self.assertEqual(part.find("m:icon", ns).get("name"), "application-x-fliperos-customgame")
+        import fnmatch
+        glob = part.find("m:glob", ns).get("pattern")
+        for name, expected in (("Pang.fliperos-customgame.zip.001", True), ("Pang.fliperos-customgame.zip.042", True),
+                               ("Pang.fliperos-customgame.zip", False), ("Pang.fliperos-customgame.zip.1", False),
+                               ("Pang.fliperos-customgame.zip.abc", False), ("Pang.zip.001", False)):
+            self.assertEqual(fnmatch.fnmatchcase(name, glob), expected, name)
         entry = (ROOT / "config/applications/fliperos-customgame-install.desktop").read_text()
-        self.assertIn("MimeType=application/x-fliperos-customgame;\n", entry)
+        self.assertIn("MimeType=application/x-fliperos-customgame;application/x-fliperos-customgame-part;\n", entry)
         self.assertIn("Terminal=false\n", entry)
         self.assertIn("NoDisplay=true\n", entry)
         self.assertIn("Exec=/opt/fliperos/bin/fliperos-launch setup --install-package %F\n", entry)

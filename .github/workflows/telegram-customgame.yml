@@ -10,6 +10,9 @@
 # um aviso de que os detalhes nao deu para ler. A sessao do bot no MTProto fica no cache do Actions
 # (TELEGRAM_SESSION_FILE) e o login tenta de novo com espera: o Telegram recusa entrar sempre de novo. O destino e a variavel
 # TELEGRAM_CHAT_ID (@fliperos15khz sem ela) e o topico, TELEGRAM_FILES_TOPIC (578).
+# Um pacote em partes (JOGO.fliperos-customgame.zip.001, .002...: o plano gratuito do Telegram aceita arquivos de ate
+# 2 GB) vem num pedido so, com todas as partes em "parts": o Worker as junta no KV e chama este workflow uma vez
+# (tools/telegram-translate/README.md); o robo faz um card so e responde a cada parte.
 # Rodar a mao (Actions > Run workflow) com o JSON do pedido serve para repostar.
 name: Telegram custom game
 

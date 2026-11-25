@@ -922,6 +922,128 @@ KEY_HEADER = ["# FliperOS: controller to keyboard for this game (on-screen menu 
               "# PLAYER_CONTROL=KEY; controls up down left right b1..b8 start coin, keys as in evdev."]
 
 
+# ── Pacotes em partes ──
+# Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) anda em partes, GAME.fliperos-customgame.zip.001,
+# .002... (o painel web as faz, config/fliperos-web; o robo do grupo as le como um pacote so). Aqui elas voltam a ser o zip:
+# a partir de qualquer uma, o duplo clique no desktop e o envio pelo painel.
+
+PART_RE = re.compile(r"^(.+" + re.escape(SUFFIX) + r")\.(\d{3})$", re.I)
+
+
+def part_set(path):
+    """As partes do pacote a que PATH pertence, achadas na pasta dele: (nome do zip, [(numero, caminho, tamanho)] em ordem,
+    problemas em ingles). Bad: PATH nao e uma parte. Os problemas: numeracao com furo, ou partes de tamanhos diferentes (todas,
+    menos a ultima, tem o mesmo tamanho, e a ultima nao e maior); quem nao tem a ultima parte so se sabe ao juntar (o
+    resultado nao e um zip)."""
+    folder, name = os.path.split(os.path.abspath(path))
+    match = PART_RE.match(name)
+    if not match:
+        raise Bad("%s is not a part of a package (parts end in %s.001, .002...)" % (name, SUFFIX))
+    base, found = match.group(1), {}
+    try:
+        names = os.listdir(folder)
+    except OSError as exc:
+        raise Bad("cannot read %s: %s" % (folder, exc))
+    for other in names:
+        m = PART_RE.match(other)
+        full = os.path.join(folder, other)
+        if m and m.group(1).lower() == base.lower() and os.path.isfile(full):
+            found[int(m.group(2))] = full
+    count = max(found)
+    parts = [(n, found[n], os.path.getsize(found[n])) for n in sorted(found)]
+    problems = []
+    missing = [n for n in range(1, count + 1) if n not in found]
+    if missing:
+        problems.append("part%s %s %s missing" % ("s" if len(missing) > 1 else "", ", ".join("%03d" % n for n in missing),
+                                                  "are" if len(missing) > 1 else "is"))
+    else:
+        sizes = [size for _, _, size in parts]
+        if any(size != sizes[0] for size in sizes[:-1]) or sizes[-1] > sizes[0]:
+            problems.append("the parts, except the last one, must have the same size")
+    return base, parts, problems
+
+
+def cmd_parts(args):
+    """parts PARTE: base=, out= (o zip na pasta dos pacotes), count=, bytes=, uma linha "part|N|caminho|tamanho" por parte
+    e uma "problem|texto" por problema. Status 1: com problemas (ou nao e uma parte)."""
+    try:
+        base, parts, problems = part_set(args.part)
+    except Bad as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print("base=%s" % base)
+    print("out=%s" % os.path.join(args.packages, base))
+    print("count=%d" % len(parts))
+    print("bytes=%d" % sum(size for _, _, size in parts))
+    for number, path, size in parts:
+        print("part|%d|%s|%d" % (number, path, size))
+    for text in problems:
+        print("problem|%s" % text)
+    return 1 if problems else 0
+
+
+def cmd_join(args):
+    """join PARTE: as partes viram o zip da pasta dos pacotes (com --progress, os eventos). A parte pode ser qualquer uma delas.
+    --remove-parts: as partes que estao na pasta dos pacotes saem depois (as de fora, um pendrive, ficam). Imprime out=. Status
+    3: o zip ja existe (sem --replace); 1: erro, e nada fica pela metade."""
+    progress = Progress(args.progress is not None, *(args.progress or (0, 100)))
+    progress.step(0, "Checking the parts")
+    tmp = ""
+    try:
+        base, parts, problems = part_set(args.part)
+        if problems:
+            raise Bad("; ".join(problems))
+        total = sum(size for _, _, size in parts)
+        out = os.path.join(args.packages, base)
+        if os.path.exists(out) and not args.replace:
+            print("%s is already in the packages folder" % base, file=sys.stderr)
+            return 3
+        makedirs(args.packages)
+        if free_bytes(args.packages) < total + (64 << 20):
+            raise Bad("not enough free space: joining the parts needs %d MB" % ((total + (64 << 20)) >> 20))
+        tmp = os.path.join(args.packages, ".%s.joining" % base)
+        progress.step(0.02, "Joining %d parts" % len(parts))
+        ticks = Progress(progress.on, progress.pct(0.02), progress.pct(0.97))
+        done = 0
+        with open(tmp, "wb") as dst:
+            for _, path, _ in parts:
+                with open(path, "rb") as src:
+                    while True:
+                        chunk = src.read(CHUNK)
+                        if not chunk:
+                            break
+                        dst.write(chunk)
+                        done += len(chunk)
+                        ticks.tick(done / max(1, total))
+        if not zipfile.is_zipfile(tmp):
+            raise Bad("the parts do not make a zip file: a part may be missing (the last one has the end of the zip) or damaged")
+        os.chmod(tmp, 0o644)
+        give(tmp)
+        os.replace(tmp, out)
+        tmp = ""
+        if args.remove_parts:
+            inside = os.path.realpath(args.packages)
+            for _, path, _ in parts:
+                if os.path.realpath(os.path.dirname(path)) == inside:
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
+    except (Bad, OSError) as exc:
+        if tmp:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        if progress.on:
+            print("@fail Joining|%s" % exc, flush=True)
+        print(str(exc), file=sys.stderr)
+        return 1
+    print("out=%s" % out)
+    progress.step(1, "%s joined" % base)
+    return 0
+
+
 # ── Fazer um pacote ──
 
 def cmd_pack(args):
@@ -1858,6 +1980,13 @@ def main():
     s = sub.add_parser("found")
     s.add_argument("folder")
     sub.add_parser("packages")
+    s = sub.add_parser("parts")
+    s.add_argument("part")
+    s = sub.add_parser("join")
+    s.add_argument("part")
+    s.add_argument("--replace", action="store_true")
+    s.add_argument("--remove-parts", action="store_true")
+    s.add_argument("--progress", nargs="*", type=int)
     s = sub.add_parser("stamp")
     s.add_argument("zip")
     s = sub.add_parser("synced")
@@ -1872,7 +2001,7 @@ def main():
             p.error("--progress takes no value or START END")
     return {"inspect": cmd_inspect, "pending": cmd_pending, "install": cmd_install, "pack": cmd_pack,
             "add": cmd_add, "media": cmd_media, "scan": cmd_scan, "found": cmd_found, "packages": cmd_packages,
-            "stamp": cmd_stamp, "synced": cmd_synced, "run": cmd_run}[args.cmd](args)
+            "parts": cmd_parts, "join": cmd_join, "stamp": cmd_stamp, "synced": cmd_synced, "run": cmd_run}[args.cmd](args)
 
 
 if __name__ == "__main__":
