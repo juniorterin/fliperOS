@@ -20,6 +20,12 @@
 # mesmo que o tema faz com o nome da tela (fliperos-arcadeflow systems
 # acrescenta os nomes das telas do FliperOS aos apelidos).
 #
+# Um sistema que a fonte do tema nao tem (a Sega Chihiro) tem o logotipo num PNG
+# da imagem: config/syslogo/extra/NOME.png (NOME = o nome do sistema em
+# minusculas, o resto "-": sega-chihiro.png), branco em fundo transparente, como
+# o da fonte. Vale na ordem dos nomes do sistema (o proprio, sem parenteses e os
+# apelidos), antes do caractere da tabela do mesmo nome.
+#
 # O logotipo de um grupo de jogos custom (Setup > Games > Custom games > Group
 # logo, ou o painel web) e o que a pessoa subiu: GRUPO/.logo.png em
 # ~/roms/custom. Vale no lugar do da fonte, com o mesmo nome, e e de uma cor so
@@ -58,6 +64,7 @@ GROUP_LOGO = '.logo.png'
 GROUP_LOGO_MAX = 400          # a altura em que o logotipo do grupo fica guardado
 FONT = 'font_Roboto-Allcaps-EXT4X.ttf'
 FIRST = 0xE900
+EXTRA = 'extra'               # a pasta dos logotipos que a fonte do tema nao tem (config/syslogo/extra)
 COLOR = (139, 233, 253)       # o do marquee do sistema (fliperos-dmd COLOR['system'])
 
 # O tempo de cada parte (segundos): a mesma curva da troca de tela do
@@ -111,14 +118,51 @@ def table(theme=None):
     return out
 
 
-def lookup(name, theme=None):
-    """O caractere do sistema (ou None). Alem do nome inteiro, ele sem o que
-    vem entre parenteses ("Arcade (various) (MAME 2010)" -> "Arcade")."""
-    sys_table = table(theme)
+def names_of(name):
+    """Os nomes pelos quais um sistema e procurado, do mais proprio ao apelido: o nome inteiro,
+    ele sem o que vem entre parenteses ("Arcade (various) (MAME 2010)" -> "Arcade") e os
+    sistemas do tema que o Setup grava para a pasta (aliases)."""
     low = ' '.join(name.lower().split())
-    for key in [low, re.sub(r'\s*\(.*$', '', low)] + aliases(name):
+    return [low, re.sub(r'\s*\(.*$', '', low)] + aliases(name)
+
+
+def lookup(name, theme=None):
+    """O caractere do sistema (ou None)."""
+    sys_table = table(theme)
+    for key in names_of(name):
         if key in sys_table and sys_table[key] > FIRST - 1:
             return sys_table[key]
+    return None
+
+
+def slug(name):
+    """O nome do arquivo de um logotipo extra: minusculas, o resto vira "-" ("Sega Chihiro" ->
+    sega-chihiro)."""
+    return re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+
+
+def extra_logo(key):
+    """O PNG do logotipo extra de `key` (config/syslogo/extra/NOME.png, na imagem), ou None."""
+    name = slug(key)
+    if not name:
+        return None
+    path = os.path.join(BUNDLED, EXTRA, name + '.png')
+    return path if os.path.isfile(path) else None
+
+
+def resolve(name):
+    """De onde vem o logotipo do sistema: ('extra', PNG) ou ('font', caractere); None sem
+    logotipo. Os nomes de names_of, em ordem, e vale o primeiro que tem um PNG extra ou um
+    caractere na tabela: um PNG extra com o nome do sistema ganha de um apelido que cai num
+    logotipo generico (a Sega Chihiro tem o seu; sem ele, o apelido "arcade" a chamava de
+    Arcade)."""
+    sys_table = table()
+    for key in names_of(name):
+        own = extra_logo(key)
+        if own:
+            return 'extra', own
+        if key in sys_table and sys_table[key] > FIRST - 1:
+            return 'font', sys_table[key]
     return None
 
 
@@ -210,19 +254,30 @@ def render(name, height=None, color=(255, 255, 255), groups=True):
         except (OSError, ValueError, Image.DecompressionBombError):
             alpha = None
     if alpha is None:
-        cp = lookup(name)
-        if cp is None:
+        found = resolve(name)
+        if found is None:
             return None
-        try:
-            face = font(200)
-        except OSError:
-            return None
-        canvas = Image.new('L', (2400, 400), 0)
-        ImageDraw.Draw(canvas).text((20, 20), chr(cp), font=face, fill=255)
-        box = canvas.getbbox()
-        if not box:
-            return None
-        alpha = canvas.crop(box)
+        if found[0] == 'extra':
+            # Um logotipo que a fonte do tema nao tem (config/syslogo/extra): o PNG, so o desenho.
+            try:
+                with Image.open(found[1]) as opened:
+                    opened.load()
+                    alpha = mask_of(opened)
+            except (OSError, ValueError, Image.DecompressionBombError):
+                return None
+            if alpha is None:
+                return None
+        else:
+            try:
+                face = font(200)
+            except OSError:
+                return None
+            canvas = Image.new('L', (2400, 400), 0)
+            ImageDraw.Draw(canvas).text((20, 20), chr(found[1]), font=face, fill=255)
+            box = canvas.getbbox()
+            if not box:
+                return None
+            alpha = canvas.crop(box)
     if height and height != alpha.height:
         width = max(1, round(alpha.width * height / alpha.height))
         alpha = alpha.resize((width, height), Image.LANCZOS)
@@ -323,10 +378,10 @@ def main(argv):
         if group_logo(args[0]) and render(args[0], 8) is not None:     # o que a pessoa subiu para o grupo
             print('group')
             return 0
-        cp = lookup(args[0])
-        if cp is None or render(args[0], 8) is None:      # no data_systems.txt e com desenho na fonte
+        found = resolve(args[0])
+        if found is None or render(args[0], 8) is None:   # no data_systems.txt (ou PNG extra) e com desenho
             return 1
-        print('U+%X' % cp)
+        print('extra' if found[0] == 'extra' else 'U+%X' % found[1])
         return 0
     if cmd == 'png' and 2 <= len(args) <= 4:
         color = (255, 255, 255)

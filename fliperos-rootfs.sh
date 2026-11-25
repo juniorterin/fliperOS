@@ -272,6 +272,11 @@ install -Dm755 "$src/config/fliperos-syslogo" "$root/opt/fliperos/bin/fliperos-s
 # do tema): o logotipo dos sistemas sem o tema instalado.
 install -Dm644 "$src/config/syslogo/font_Roboto-Allcaps-EXT4X.ttf" "$root/usr/local/share/fliperos/syslogo/font_Roboto-Allcaps-EXT4X.ttf"
 install -Dm644 "$src/config/syslogo/data_systems.txt" "$root/usr/local/share/fliperos/syslogo/data_systems.txt"
+# Os logotipos dos sistemas que a fonte nao tem (a Sega Chihiro): um PNG por sistema, branco em
+# fundo transparente (config/syslogo/extra, lidos pelo fliperos-syslogo e pelo frontend).
+for logo in "$src"/config/syslogo/extra/*.png; do
+  install -Dm644 "$logo" "$root/usr/local/share/fliperos/syslogo/extra/${logo##*/}"
+done
 # A abertura do ZeDMD: a animacao vetorial 3D do logo (tools/zedmd-vector-anim.py).
 install -Dm644 "$src/config/zedmd-fliperos.gif" "$root/usr/local/share/fliperos/pixelcade/zedmd-fliperos.gif"
 install -Dm644 "$src/config/fliperos-zedmd.service" "$root/etc/systemd/system/fliperos-zedmd.service"

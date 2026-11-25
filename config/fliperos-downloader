@@ -27,11 +27,12 @@ do emulador que o plano diz e tira o torrent da lista.
 
 O fetch-sets e a busca de poucos sets avulsos (a chave de um jogo da Chihiro, por
 exemplo: vcop3.zip), so quando um jogo pede (fliperos-chihiro-prepare). Fica fora de
-tudo acima: usa so o link do romset que a pessoa ja guardou (roms.magnet), sobe um
+tudo acima: usa o link do romset que a pessoa ja guardou (roms.magnet) e, sem ele, o que
+vem na imagem (o que o Setup sugere; nada disso vai para o estado), sobe um
 Transmission proprio da busca (outra pasta de configuracao, outra porta, sem o
 script de fim) e, quando os arquivos chegam, poe-os em PASTA e o desliga. Nao mexe no
-filtro, no plano nem no que o Downloader ja baixou. Status 3: sem link guardado; 4:
-nenhum dos sets esta no romset.
+filtro, no plano nem no que o Downloader ja baixou. Status 3: nenhum link (nem guardado,
+nem o da imagem); 4: nenhum dos sets esta no romset.
 
 O estado fica em STATE: o filtro que o Setup grava (filter.scan e
 filter.chds: as opcoes do fliperos-romclean, uma por linha) e, de cada tipo,
@@ -84,6 +85,22 @@ TORRENT_MAX = 32 << 20
 TRANSMISSION = os.environ.get('FLIPEROS_TRANSMISSION', 'transmission-daemon')
 FETCH_RPC = os.environ.get('FLIPEROS_FETCH_RPC', '')
 SET_EXT = ('.zip', '.7z')
+# Os links que vem na imagem (config/fliperos-downloader-magnets, "tipo<TAB>link"): o mesmo que o Setup
+# sugere na tela do Downloader.
+SHIPPED_MAGNETS = os.environ.get('FLIPEROS_DOWNLOADER_MAGNETS', '/usr/local/share/fliperos/downloader-magnets')
+
+
+def shipped_link(kind):
+    """O link de KIND que vem na imagem, ou '' sem ele."""
+    try:
+        with open(SHIPPED_MAGNETS, encoding='utf-8') as f:
+            for line in f:
+                fields = line.rstrip('\n').split('\t')
+                if len(fields) >= 2 and fields[0] == kind and MAGNET.match(fields[1].strip()):
+                    return fields[1].strip()
+    except OSError:
+        pass
+    return ''
 
 # O transmission-daemon do servico: so responde nesta maquina, sem senha;
 # para de semear quando termina (o arquivo sai da pasta dele) e chama este
@@ -1056,11 +1073,23 @@ def private_daemon(tmp):
     with open(os.path.join(config, 'settings.json'), 'w', encoding='utf-8') as f:
         json.dump(settings, f)
     try:
-        proc = subprocess.Popen([TRANSMISSION, '-f', '-g', config, '--log-level=error'], stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL, start_new_session=True)
+        # A saida dele vai para um arquivo da pasta da busca: se o servico nao responde, a mensagem de erro
+        # leva o fim dela.
+        with open(os.path.join(tmp, 'daemon.log'), 'wb') as log:
+            proc = subprocess.Popen([TRANSMISSION, '-f', '-g', config, '--log-level=error'], stdout=log,
+                                    stderr=log, start_new_session=True)
     except OSError:
         raise OSError('the download program (transmission-daemon) is not installed')
     return proc, 'http://127.0.0.1:%d/transmission/rpc' % settings['rpc-port']
+
+
+def daemon_tail(tmp, limit=300):
+    """O fim da saida do transmission-daemon da busca (uma linha so), ou ''."""
+    try:
+        with open(os.path.join(tmp, 'daemon.log'), 'rb') as f:
+            return ' '.join(f.read()[-limit:].decode('utf-8', 'replace').split())
+    except OSError:
+        return ''
 
 
 def pick_sets(files, wanted):
@@ -1074,30 +1103,67 @@ def pick_sets(files, wanted):
     return sorted(best.values())
 
 
+def find_arrived(base, name, length, wait=45, grace=6):
+    """O arquivo `name` (do torrent) em `base`, com o tamanho certo: o de nome inteiro e, se ele nao
+    aparece em `grace` segundos, o NOME.part que o Transmission ainda nao renomeou (ja conferido: so
+    se chega aqui com os bytes completos). Espera ate `wait` segundos; None se nao veio."""
+    final = os.path.join(base, name)
+    start = time.monotonic()
+    while True:
+        waited = time.monotonic() - start
+        for path in ((final,) if waited < grace else (final, final + '.part')):
+            try:
+                if os.path.getsize(path) == length:
+                    return path
+            except OSError:
+                pass
+        if waited > wait:
+            return None
+        time.sleep(0.25)
+
+
+def listing(base, limit=6):
+    """Os arquivos que o Transmission deixou em base (para a mensagem de erro), poucos."""
+    found = []
+    for top, _, names in os.walk(base):
+        for n in names:
+            found.append(os.path.relpath(os.path.join(top, n), base))
+    return ', '.join(sorted(found)[:limit]) or 'nothing'
+
+
 def cmd_fetch_sets(args):
     """So os sets pedidos do torrent de ROMs que a pessoa guardou, num Transmission proprio
     (private_daemon), para PASTA. Nada do estado do Downloader muda."""
     wanted = {n.lower() + ext for n in args.names for ext in SET_EXT}
+    # O link que a pessoa salvou no Downloader; sem ele, o que vem na imagem (o que o Setup sugere): nada e
+    # salvo no estado por isso.
     link = (read_state('roms.magnet') or '').strip()
+    saved = bool(link)
     if not link:
-        say(args.progress, '@fail ROM set|there is no ROM set link yet: define it in Setup > Games > Downloader')
-        print('fliperos-downloader: no ROM set link saved (Setup > Games > Downloader)', file=sys.stderr)
+        link = shipped_link('roms')
+    if not link:
+        say(args.progress, '@fail ROM set|there is no ROM set link: define it in Setup > Games > Downloader')
+        print('fliperos-downloader: no ROM set link (none saved, none with the image): Setup > Games > Downloader',
+              file=sys.stderr)
         sys.exit(3)
-    # A lista de arquivos que o Downloader ja guardou: sem nenhum dos sets nela, nem sobe o Transmission.
-    meta = meta_of('roms')
+    # A lista de arquivos que o Downloader ja guardou (do link salvo): sem nenhum dos sets nela, nem sobe o Transmission.
+    meta = meta_of('roms') if saved else None
     if meta and not pick_sets([{'name': name} for name, _ in meta['files']], wanted):
         say(args.progress, '@fail ROM set|none of these sets is in your ROM set link')
         sys.exit(4)
     tmp = tempfile.mkdtemp(prefix='fliperos-fetch-')
     proc = hash_ = rpc = None
     try:
-        say(args.progress, '@step 0 Starting the download service')
+        say(args.progress, '@step 0 Starting the download service%s' % ('' if saved else ' (the ROM set link that comes with FliperOS)'))
         if FETCH_RPC:
             url = FETCH_RPC
         else:
             proc, url = private_daemon(tmp)
         rpc = Rpc(url)
-        rpc.wait(30)
+        try:
+            rpc.wait(30)
+        except OSError as e:
+            raise OSError('the download service did not start: %s %s' % (e, daemon_tail(tmp)))
         add = {'download-dir': os.path.join(tmp, 'dl')}
         if MAGNET.match(link):
             add.update(filename=link, paused=False)
@@ -1145,11 +1211,18 @@ def cmd_fetch_sets(args):
             say(args.progress, '@step %d Downloading the game key (%s of %s)' % (
                 40 + int(55 * done / max(total, 1)), human(done), human(total)))
             time.sleep(0.5)
-        os.makedirs(args.dest, exist_ok=True)
+        # O Transmission grava NOME.part e so o renomeia um instante depois de o ultimo pedaco ser
+        # conferido (rename-partial-files): o arquivo de nome inteiro pode demorar alguns segundos
+        # depois de os bytes estarem completos.
+        say(args.progress, '@step 96 Checking the downloaded files')
+        arrived = []
         for i in picked:
-            src = os.path.join(tmp, 'dl', files[i]['name'])
-            if not os.path.isfile(src):
-                raise OSError('the file %s did not arrive' % files[i]['name'])
+            src = find_arrived(os.path.join(tmp, 'dl'), files[i]['name'], files[i]['length'])
+            if src is None:
+                raise OSError('the file %s did not arrive (found: %s)' % (files[i]['name'], listing(os.path.join(tmp, 'dl'))))
+            arrived.append((i, src))
+        os.makedirs(args.dest, exist_ok=True)
+        for i, src in arrived:
             shutil.move(src, os.path.join(args.dest, files[i]['name'].rsplit('/', 1)[-1]))
         say(args.progress, '@step 100 %d set file(s) fetched' % len(picked))
     except NoSets as e:

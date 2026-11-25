@@ -51,6 +51,7 @@ SETS_TABLE = os.environ.get('FLIPEROS_CHIHIRO_SETS', os.path.join(TOOLS, 'sets.t
 DOWNLOADER = os.environ.get('FLIPEROS_DOWNLOADER', '/opt/fliperos/bin/fliperos-downloader')
 MEMINFO = os.environ.get('FLIPEROS_CHIHIRO_MEMINFO', '/proc/meminfo')
 SEVENZ = os.environ.get('FLIPEROS_7Z', '')
+LOG = os.environ.get('FLIPEROS_CHIHIRO_LOG', os.path.join(HOME, '.cache/fliperos/chihiro-prepare.log'))
 LABEL = 'Sega Chihiro'
 # O pico de memoria do chihiro-netboot: ele le a trilha inteira, tira o
 # cabecalho dos setores (outra copia) e, depois, a imagem e a decifrada.
@@ -405,12 +406,33 @@ def load_tool():
     return mod
 
 
-def fetch_keys(names):
-    """Pede ao Downloader os .zip de chave (so eles, do romset que a pessoa definiu)."""
-    cmd = [DOWNLOADER, 'fetch-sets', '--dest', SETS_DIR, '--progress'] + list(names)
+def log(text):
+    """Uma linha com a hora no log do preparo (~/.cache/fliperos/chihiro-prepare.log, ate 200 KB): o
+    frontend so mostra uma frase curta, e o motivo de verdade fica aqui."""
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        os.makedirs(os.path.dirname(LOG), exist_ok=True)
+        if os.path.getsize(LOG) > (200 << 10):
+            os.remove(LOG)
     except OSError:
+        pass
+    try:
+        with open(LOG, 'a', encoding='utf-8') as f:
+            f.write('%s %s\n' % (time.strftime('%Y-%m-%d %H:%M:%S'), text))
+    except OSError:
+        pass
+
+
+def fetch_keys(names):
+    """Pede ao Downloader os .zip de chave (so eles, do romset que a pessoa definiu ou, sem ele, o
+    que vem na imagem). O motivo de uma falha: key (sem link, ou o downloader nao existe), notinset
+    (o romset nao tem nenhum dos sets), service (o Transmission nao subiu), network (sem pares) ou
+    fetch (outra coisa; o log diz)."""
+    cmd = [DOWNLOADER, 'fetch-sets', '--dest', SETS_DIR, '--progress'] + list(names)
+    log('fetch-sets %s' % ' '.join(names))
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    except OSError as e:
+        log('fetch-sets did not start: %s' % e)
         raise Fail('key', 'The game key (a MAME set file) was not found and the downloader is not available.')
     reason = ''
     for line in proc.stdout:
@@ -420,16 +442,26 @@ def fetch_keys(names):
                 emit(36 + int(pct) * 0.16, text)
         elif line.startswith('@fail '):
             reason = line.strip().partition('|')[2]
+            log('fetch-sets: %s' % reason)
+        elif line.strip():
+            log('fetch-sets: %s' % line.strip())      # o que o downloader escreveu no erro padrao
     code = proc.wait()
+    log('fetch-sets exit %d' % code)
     if code == 3:
         raise Fail('key', 'The game key (a MAME set file such as vcop3.zip) was not found. Put it in ~/roms/mame, '
                    'or define the ROM set link in Setup > Games > Downloader so it can be fetched.')
     if code == 4:
-        raise Fail('key', 'None of the sets of this game (%s) is in your ROM set link, so its key cannot be fetched.'
+        raise Fail('notinset', 'None of the sets of this game (%s) is in the ROM set link, so its key cannot be fetched.'
                    % ', '.join(names[:3]))
     if code != 0:
-        net = any(w in reason.lower() for w in ('network', 'peer', 'internet', 'connect'))
-        raise Fail('network' if net else 'key', 'The game key could not be fetched: %s' % (reason or 'download failed'))
+        low = reason.lower()
+        if any(w in low for w in ('did not start', 'not installed', 'does not answer')):
+            kind = 'service'
+        elif any(w in low for w in ('network', 'peer', 'internet', 'connect')):
+            kind = 'network'
+        else:
+            kind = 'fetch'
+        raise Fail(kind, 'The game key could not be fetched: %s' % (reason or 'download failed'))
 
 
 def run(source):
@@ -573,9 +605,11 @@ def main():
         except Fail as e:
             print('error:    %s' % e.message, file=sys.stderr)
             return 1
+    log('prepare %s' % os.path.basename(source))
     try:
         run(source)
     except Fail as e:
+        log('FAILED (%s): %s' % (e.kind, e.message))
         if progress_on:
             print('@fail %s|%s %s' % (LABEL, e.kind, e.message), flush=True)
         print('fliperos-chihiro-prepare: %s' % e.message, file=sys.stderr)

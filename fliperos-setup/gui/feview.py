@@ -4393,10 +4393,41 @@ def group_logo_stamp(name):
     return seen[1]
 
 
+# Um sistema que a fonte do tema nao tem (a Sega Chihiro) tem o logotipo num PNG da imagem
+# (config/syslogo/extra/NOME.png, config/fliperos-syslogo): a data dele entra na chave dos
+# caches como a do logotipo do grupo, e o PNG feito antes (o do apelido "arcade", sem o do
+# sistema) deixa de valer sem apagar nada a mao.
+SYSLOGO_DATA = os.environ.get("FLIPEROS_SYSLOGO_DATA", "/usr/local/share/fliperos/syslogo")
+_extra_logo_seen = {}    # nome -> (quando foi lida, a data do PNG extra ou 0)
+
+
+def extra_logo_stamp(name):
+    """A data (ns) do logotipo extra do sistema `name` (SYSLOGO_DATA/extra/NOME.png), ou 0 sem
+    ele. Lida de tempos em tempos, como a do grupo: o azulejo a pede a cada quadro."""
+    now = time.monotonic()
+    seen = _extra_logo_seen.get(name)
+    if seen is None or now - seen[0] > GROUP_LOGO_TTL:
+        stamp = 0
+        slug = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+        if slug:
+            try:
+                stamp = os.stat(os.path.join(SYSLOGO_DATA, "extra", slug + ".png")).st_mtime_ns
+            except OSError:
+                stamp = 0
+        _extra_logo_seen[name] = seen = (now, stamp)
+    return seen[1]
+
+
+def logo_stamp(name):
+    """A data que diferencia o logotipo de name dos feitos antes: o do grupo custom que a pessoa
+    subiu (vale no lugar de tudo) ou o do PNG extra do sistema; 0 sem nenhum dos dois."""
+    return group_logo_stamp(name) or extra_logo_stamp(name)
+
+
 def logo_key(name):
     """A chave dos caches do logotipo de name: o nome, e com o logotipo que a
-    pessoa subiu para o grupo, a data dele."""
-    stamp = group_logo_stamp(name)
+    pessoa subiu para o grupo (ou o PNG extra do sistema), a data dele."""
+    stamp = logo_stamp(name)
     return "%s#%d" % (name, stamp) if stamp else name
 
 
@@ -4475,7 +4506,7 @@ def ribbon_icon(cat, name, size):
 def logo_source(name):
     """O logotipo do sistema no tamanho em que foi feito (para a proporcao), ou
     None (ainda sendo feito, ou sem logotipo). Na primeira vez, comeca a faze-lo."""
-    stamp = group_logo_stamp(name)
+    stamp = logo_stamp(name)
     key = "%s#%d" % (name, stamp) if stamp else name
     got = _logos.get(key)
     if got is None and key not in _logos:

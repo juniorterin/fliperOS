@@ -294,6 +294,8 @@ def chihiro_failure(error):
     """O aviso de quando o preparo do disco falha: a primeira palavra do motivo (fliperos-chihiro-prepare)."""
     word = (error or "").split(" ", 1)[0]
     return {"key": "GAME KEY (MAME SET) NOT FOUND", "network": "NO NETWORK FOR THE GAME KEY",
+            "notinset": "KEY NOT IN THE ROM SET LINK", "service": "DOWNLOAD SERVICE DID NOT START",
+            "fetch": "COULD NOT FETCH THE GAME KEY (SEE THE LOG)",
             "space": "NOT ENOUGH SPACE", "memory": "NOT ENOUGH MEMORY"}.get(word, "COULD NOT PREPARE THE GAME")
 
 

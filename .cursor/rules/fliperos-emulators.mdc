@@ -68,7 +68,8 @@ alwaysApply: false
 - Preparo do disco: extrai o .7z, le o numero de produto do cabecalho do disco (GDX-0003B, como o IP.BIN do Dreamcast), acha
   o set do MAME na tabela `config/chihiro/sets.tsv` (gerada do chihiro.cpp do MAME 0.289) e a chave dele (`.data`/`.pic`
   dentro do .zip: ~/roms/mame, ~/bios/mame, ~/bios/chihiro, ao lado do jogo; senao `fliperos-downloader fetch-sets`, que
-  usa SO o link do romset que a pessoa salvou e um Transmission proprio, sem tocar no estado). Converte com o
+  usa o link do romset que a pessoa salvou ou, sem ele, o que vem na imagem (downloader-magnets), num Transmission
+  proprio, sem tocar no estado; so os .zip pedidos). Converte com o
   `config/chihiro/chihiro-netboot.py` (Tovarichtch, MIT, so os fins de linha mudaram) trocando `load_keys_from_zip` para
   oferecer todas as chaves. Pico de ~2,2x a trilha de RAM: confere a MemAvailable antes. O frontend mostra a barra
   (`missing_chihiro_image`/`chihiro_start`, `fliperos-chihiro --prepare`, motivo na 1a palavra: key, network, space, memory).

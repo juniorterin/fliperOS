@@ -3248,7 +3248,7 @@ def chihiro_prepare_env(tmp, **extra):
                FLIPEROS_CHIHIRO_SETS=str(ROOT / 'config/chihiro/sets.tsv'), FLIPEROS_CHIHIRO_KEYDIRS=str(tmp / 'keys'),
                FLIPEROS_CHIHIRO_SETS_DIR=str(tmp / 'keys'), FLIPEROS_CHIHIRO_BIOS=str(tmp / 'home/bios/chihiro'),
                FLIPEROS_CHIHIRO_MEMCHECK='0', FAKE_NETBOOT_LOG=str(tmp / 'netboot.log'),
-               FLIPEROS_DOWNLOADER=str(tmp / 'no-downloader'))
+               FLIPEROS_DOWNLOADER=str(tmp / 'no-downloader'), FLIPEROS_CHIHIRO_LOG=str(tmp / 'prepare.log'))
     env.update(extra)
     return env
 
@@ -3586,14 +3586,27 @@ class ChihiroPrepareTests(unittest.TestCase):
             self.assertFalse(list((self.disc.parent / '.netboot').glob('*')), 'a failed run leaves nothing')
             return [l for l in run.stdout.splitlines() if l.startswith('@fail')][0]
         # Sem o link do romset (status 3), e sem o downloader: o jogo ainda nao tem chave.
-        self.assertRegex(failure('echo "@fail ROM set|there is no ROM set link yet"', 3), r'^@fail Sega Chihiro\|key ')
+        self.assertRegex(failure('echo "@fail ROM set|there is no ROM set link"', 3), r'^@fail Sega Chihiro\|key ')
         self.assertIn('vcop3.zip', failure('true', 3))
         self.assertRegex(self.prepare('run', str(self.disc), '--progress').stdout, r'@fail Sega Chihiro\|key ')
         # Sem rede (nenhum par mandou a lista), o aviso e o da rede.
         self.assertRegex(failure('echo "@fail ROM set|no peer sent the file list in 4 minutes (is the network up?)"', 1),
                          r'^@fail Sega Chihiro\|network ')
-        # Nenhum dos sets esta no romset (status 4): continua sendo falta de chave.
-        self.assertRegex(failure('echo "@fail ROM set|none of these sets is in your ROM set link"', 4), r'\|key ')
+        # Nenhum dos sets esta no romset (status 4): o aviso diz isso, nao "falta a chave".
+        self.assertRegex(failure('echo "@fail ROM set|none of these sets is in your ROM set link"', 4), r'\|notinset ')
+        # O Transmission da busca nao subiu, ou o arquivo nao chegou depois do download: avisos proprios, e o
+        # motivo de verdade fica no log (~/.cache/fliperos/chihiro-prepare.log), com o que o downloader escreveu
+        # no erro padrao.
+        self.assertRegex(failure('echo "@fail ROM set|the download service did not start: no answer"', 1),
+                         r'\|service ')
+        self.assertRegex(failure('echo "@fail ROM set|the file x.zip did not arrive (found: nothing)"\n'
+                                 'echo "fliperos-downloader: the file x.zip did not arrive" >&2', 1), r'\|fetch ')
+        log = (self.tmp / 'prepare.log').read_text()
+        self.assertIn('fetch-sets vcop3 vcop3a', log)
+        self.assertIn('fetch-sets: the file x.zip did not arrive (found: nothing)', log)
+        self.assertIn('fetch-sets: fliperos-downloader: the file x.zip did not arrive', log)      # o erro padrao tambem
+        self.assertIn('fetch-sets exit 1', log)
+        self.assertIn('FAILED (fetch): The game key could not be fetched', log)
 
     def test_a_failed_conversion_is_reported_and_leaves_no_image(self):
         (self.tmp / 'keys/vcop3.zip').write_bytes(b'PK')
@@ -5173,7 +5186,9 @@ class DownloaderTests(unittest.TestCase):
         self.env = dict(os.environ, FLIPEROS_DOWNLOADER_STATE=str(self.state), FLIPEROS_DOWNLOADER_RPC=self.url,
                         FLIPEROS_DOWNLOADER_DIR=str(self.staging), FLIPEROS_DOWNLOADER_CONFIG=str(self.tmp / 'cfg'),
                         FLIPEROS_ROMCLEAN=str(ROOT / 'config/fliperos-romclean'),
-                        FLIPEROS_MAME_INI=str(self.tmp / 'mame.ini'))
+                        FLIPEROS_MAME_INI=str(self.tmp / 'mame.ini'),
+                        # Sem os links da imagem (o fetch-sets os usa quando nenhum esta salvo).
+                        FLIPEROS_DOWNLOADER_MAGNETS=str(self.tmp / 'magnets-none'))
         self.arcade = self.tmp / 'roms/arcade'
         (self.tmp / 'mame.ini').write_text('rompath                   %s;%s\n' % (self.arcade, self.bios))
         self.filter()
@@ -5199,15 +5214,25 @@ class DownloaderTests(unittest.TestCase):
                     path.write_bytes(b'x' * f['length'])
                     f['done'] = f['length']
 
-    def fetch_sets(self, *names, finish=True):
+    def fetch_sets(self, *names, finish=True, partial=0):
         """fetch-sets contra o Transmission falso (FLIPEROS_FETCH_RPC: nada sobe). O falso termina o
-        download quando o comando ja marcou so os arquivos que quer (os outros desmarcados)."""
+        download quando o comando ja marcou so os arquivos que quer (os outros desmarcados). partial: como o
+        Transmission de verdade, os arquivos ficam como NOME.part, ja com os bytes completos, e so depois
+        desses segundos recebem o nome inteiro."""
         stop = threading.Event()
 
         def finisher():
             while not stop.is_set():
                 if any(not f['wanted'] for t in self.torrents.values() for f in t['files']):
                     self.complete()
+                    if partial:
+                        wanted = [(Path(t['dir']) / f['name']) for t in self.torrents.values() for f in t['files']
+                                  if f['wanted']]
+                        for path in wanted:
+                            path.rename(path.with_name(path.name + '.part'))
+                        time.sleep(partial)
+                        for path in wanted:
+                            path.with_name(path.name + '.part').rename(path)
                     return
                 time.sleep(0.05)
         if finish:
@@ -5241,11 +5266,67 @@ class DownloaderTests(unittest.TestCase):
         self.assertIn('fliperos-fetch-', add['download-dir'])
         self.assertFalse(Path(add['download-dir']).parent.exists(), 'the private folder is removed')
 
-    def test_fetch_sets_needs_the_link_the_person_saved(self):
+    def test_fetch_sets_waits_for_the_part_file_to_get_its_final_name(self):
+        # O Transmission grava NOME.part e so o renomeia um instante depois de os bytes estarem completos: a
+        # primeira versao procurava o nome inteiro na hora e dizia "did not arrive" (e o jogo, "key not found").
+        (self.state / 'roms.magnet').write_text('magnet:?xt=urn:btih:%s&dn=x\n' % ('f' * 40))
+        started = time.monotonic()
+        run = self.fetch_sets('vcop3', partial=1.5)
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        self.assertGreaterEqual(time.monotonic() - started, 1.4)       # esperou o renome
+        self.assertEqual((self.tmp / 'sets/vcop3.zip').stat().st_size, 50)
+        self.assertEqual(os.listdir(self.tmp / 'sets'), ['vcop3.zip'])
+
+    def test_fetch_sets_takes_the_part_file_when_it_never_gets_renamed(self):
+        # Se o nome inteiro nao aparece (alguns segundos), o .part com os bytes todos serve: ja foi conferido.
+        import types
+        loader = SourceFileLoader('fliperos_downloader_probe', str(ROOT / 'config/fliperos-downloader'))
+        mod = types.ModuleType(loader.name)
+        mod.__file__ = loader.path
+        sys.modules[loader.name] = mod
+        loader.exec_module(mod)
+        base = self.tmp / 'dl'
+        (base / 'ROMs').mkdir(parents=True)
+        (base / 'ROMs/a.zip.part').write_bytes(b'x' * 50)
+        (base / 'ROMs/b.zip.part').write_bytes(b'x' * 10)                # incompleto (tamanho diferente)
+        self.assertEqual(mod.find_arrived(str(base), 'ROMs/a.zip', 50, wait=3, grace=0.5),
+                         str(base / 'ROMs/a.zip.part'))
+        self.assertIsNone(mod.find_arrived(str(base), 'ROMs/b.zip', 50, wait=0.6, grace=0.2))
+        (base / 'ROMs/a.zip').write_bytes(b'x' * 50)                      # o nome inteiro tem preferencia
+        self.assertEqual(mod.find_arrived(str(base), 'ROMs/a.zip', 50, wait=3, grace=0), str(base / 'ROMs/a.zip'))
+        self.assertEqual(mod.listing(str(base)), 'ROMs/a.zip, ROMs/a.zip.part, ROMs/b.zip.part')
+
+    def test_fetch_sets_needs_a_link_the_saved_one_or_the_one_that_comes_with_the_image(self):
+        # Nenhum link (nem salvo, nem o da imagem): status 3 e o Transmission nem e chamado.
         run = self.fetch_sets('vcop3', finish=False)
         self.assertEqual(run.returncode, 3)
-        self.assertIn('@fail ROM set|there is no ROM set link yet: define it in Setup > Games > Downloader', run.stdout)
+        self.assertIn('@fail ROM set|there is no ROM set link: define it in Setup > Games > Downloader', run.stdout)
         self.assertEqual(self.calls, [])
+        # So o da imagem (roms<TAB>link; o chds nao serve): a chave vem dele, e nada vai para o estado.
+        shipped = self.tmp / 'magnets-none'
+        shipped.write_text('# links\nchds\tmagnet:?xt=urn:btih:%s&dn=c\nroms\tmagnet:?xt=urn:btih:%s&dn=r\n'
+                           % (self.CHDS, 'f' * 40))
+        before = sorted(os.listdir(self.state))
+        run = self.fetch_sets('vcop3')
+        self.assertEqual(run.returncode, 0, run.stderr + run.stdout)
+        self.assertEqual((self.tmp / 'sets/vcop3.zip').stat().st_size, 50)
+        self.assertIn('(the ROM set link that comes with FliperOS)', run.stdout)
+        self.assertEqual(sorted(os.listdir(self.state)), before)
+        add = [a for m, a in self.calls if m == 'torrent-add'][0]
+        self.assertIn('f' * 40, add['filename'])
+        self.assertNotIn(self.CHDS, add['filename'])
+        # O que a pessoa salvou vale no lugar do da imagem.
+        del self.calls[:]
+        (self.state / 'roms.magnet').write_text('magnet:?xt=urn:btih:%s&dn=x\n' % self.ROMS)
+        (self.tmp / 'sets/vcop3.zip').unlink()
+        run = self.fetch_sets('vcop3', finish=False)
+        add = [a for m, a in self.calls if m == 'torrent-add'][0]
+        self.assertIn(self.ROMS, add['filename'])
+        self.assertNotIn('comes with FliperOS', run.stdout)
+        # Um arquivo de links que nao e valido tambem e "nenhum link".
+        (self.state / 'roms.magnet').unlink()
+        shipped.write_text('roms\tisso nao e um link\n')
+        self.assertEqual(self.fetch_sets('vcop3', finish=False).returncode, 3)
 
     def test_fetch_sets_says_when_the_sets_are_not_in_the_romset(self):
         # Pela lista que o Downloader ja guardou: nem chama o Transmission.
@@ -6785,6 +6866,79 @@ class FrontendDataTests(unittest.TestCase):
         self.assertIn('key = (logo_key(name), w, h)', src)
         self.assertIn('path = logo_file(name, stamp)', src)
 
+    def test_an_extra_system_logo_makes_a_new_ribbon_logo_over_the_old_one(self):
+        # O PNG extra de um sistema (config/syslogo/extra, a Sega Chihiro) entra na chave dos caches pela data do
+        # arquivo, como o do grupo: o logotipo de antes (o do apelido "arcade") deixa de valer sem apagar nada a
+        # mao, e o do grupo custom, quando ha, vale no lugar dele.
+        try:
+            import pygame
+        except ImportError:
+            self.skipTest('pygame')
+        os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+        pygame.init()
+        sys.path.insert(0, str(ROOT / 'fliperos-setup/gui'))
+        try:
+            import feview
+        finally:
+            sys.path.remove(str(ROOT / 'fliperos-setup/gui'))
+        with tempfile.TemporaryDirectory() as tmp:
+            data, custom = Path(tmp) / 'data', Path(tmp) / 'custom'
+            (data / 'extra').mkdir(parents=True)
+            custom.mkdir()
+            tool = Path(tmp) / 'syslogo'
+            tool.write_text('#!/bin/sh\nprintf "%s" "$2" > "$3"\n')
+            tool.chmod(0o755)
+            old = feview.SYSLOGO, feview.SYSLOGO_CACHE, feview.CUSTOM_ROMS, feview.SYSLOGO_DATA
+            feview.SYSLOGO, feview.SYSLOGO_CACHE, feview.CUSTOM_ROMS, feview.SYSLOGO_DATA = (
+                str(tool), str(Path(tmp) / 'cache'), str(custom), str(data))
+            feview._group_logo_seen.clear()
+            feview._extra_logo_seen.clear()
+            try:
+                # Sem o PNG extra: o nome simples (o logotipo do apelido, como antes).
+                self.assertEqual(feview.extra_logo_stamp('Sega Chihiro'), 0)
+                self.assertEqual(feview.logo_key('Sega Chihiro'), 'Sega Chihiro')
+                plain = feview.logo_file('Sega Chihiro')
+                self.assertTrue(plain.endswith('/Sega_Chihiro-48.png'))
+                # O PNG chega (a imagem nova): a chave muda, o arquivo novo nasce e o de antes fica la, sem uso.
+                png = data / 'extra/sega-chihiro.png'
+                png.write_bytes(b'x')
+                os.utime(png, ns=(7 * 10 ** 9, 7 * 10 ** 9))
+                feview._extra_logo_seen.clear()
+                self.assertEqual(feview.extra_logo_stamp('Sega Chihiro'), 7 * 10 ** 9)
+                self.assertEqual(feview.extra_logo_stamp('SEGA  chihiro (JP)'), 0)      # so o nome do sistema, como o arquivo
+                self.assertEqual(feview.logo_key('Sega Chihiro'), 'Sega Chihiro#7000000000')
+                fresh = feview.logo_file('Sega Chihiro', feview.logo_stamp('Sega Chihiro'))
+                self.assertTrue(fresh.endswith('/Sega_Chihiro-48-7000000000.png'))
+                self.assertNotEqual(fresh, plain)
+                # Outro sistema nao muda, e o PNG trocado (outra data) deixa o de antes sair.
+                self.assertEqual(feview.logo_key('Naomi'), 'Naomi')
+                os.utime(png, ns=(9 * 10 ** 9, 9 * 10 ** 9))
+                feview._extra_logo_seen.clear()
+                again = feview.logo_file('Sega Chihiro', feview.logo_stamp('Sega Chihiro'))
+                self.assertTrue(again.endswith('/Sega_Chihiro-48-9000000000.png'))
+                self.assertFalse(Path(fresh).exists())
+                # O logotipo que a pessoa sobe para um grupo de mesmo nome vale no lugar do PNG.
+                (custom / 'Sega Chihiro').mkdir()
+                group = custom / 'Sega Chihiro' / '.logo.png'
+                group.write_bytes(b'x')
+                os.utime(group, ns=(3 * 10 ** 9, 3 * 10 ** 9))
+                feview._group_logo_seen.clear()
+                self.assertEqual(feview.logo_stamp('Sega Chihiro'), 3 * 10 ** 9)
+                # A data e lida de tempos em tempos (o azulejo a pede a cada quadro).
+                png.unlink()
+                self.assertEqual(feview.extra_logo_stamp('Sega Chihiro'), 9 * 10 ** 9)
+                feview._extra_logo_seen.clear()
+                self.assertEqual(feview.extra_logo_stamp('Sega Chihiro'), 0)
+                for name in ('', None, '../x'):
+                    self.assertEqual(feview.extra_logo_stamp(name), 0, name)
+            finally:
+                feview.SYSLOGO, feview.SYSLOGO_CACHE, feview.CUSTOM_ROMS, feview.SYSLOGO_DATA = old
+                feview._group_logo_seen.clear()
+                feview._extra_logo_seen.clear()
+        src = (ROOT / 'fliperos-setup/gui/feview.py').read_text()
+        self.assertIn('stamp = logo_stamp(name)', src)
+        self.assertIn('key = (logo_key(name), w, h)', src)
+
     def test_icons_rise_when_the_year_and_maker_line_is_empty(self):
         # A lista (e a tela cheia e a grade com logo): sem ano nem fabricante a
         # linha dos dois some e os icones ocupam o lugar dela.
@@ -7797,6 +7951,9 @@ class FrontendDataTests(unittest.TestCase):
         # A primeira palavra do motivo (fliperos-chihiro-prepare) diz o aviso.
         for error, said in (('key The game key was not found', 'GAME KEY (MAME SET) NOT FOUND'),
                             ('network The game key could not be fetched', 'NO NETWORK FOR THE GAME KEY'),
+                            ('notinset None of the sets', 'KEY NOT IN THE ROM SET LINK'),
+                            ('service The game key could not be fetched', 'DOWNLOAD SERVICE DID NOT START'),
+                            ('fetch The game key could not be fetched', 'COULD NOT FETCH THE GAME KEY (SEE THE LOG)'),
                             ('space Not enough space', 'NOT ENOUGH SPACE'), ('memory Not enough free memory', 'NOT ENOUGH MEMORY'),
                             ('convert The game could not be converted', 'COULD NOT PREPARE THE GAME'),
                             ('', 'COULD NOT PREPARE THE GAME')):
@@ -19475,6 +19632,78 @@ class SysLogoTests(unittest.TestCase):
         path = self.tmp / ('art.' + fmt.lower())
         img.save(path, format=fmt)
         return path
+
+    def extra_setup(self):
+        """A pasta da imagem com um PNG extra (sega-chihiro.png: um retangulo 40x10) e os apelidos da
+        Sega Chihiro como o Setup os grava (o ultimo cai no logotipo generico, o do Naomi aqui)."""
+        from PIL import Image
+        bundled = self.tmp / 'imagem'
+        (bundled / 'extra').mkdir(parents=True)
+        (bundled / 'data_systems.txt').write_text(self.DATA)
+        # Como o de verdade: o desenho branco num canto de fundo transparente (e recortado no desenho).
+        png = Image.new('RGBA', (60, 20), (0, 0, 0, 0))
+        png.paste(Image.new('RGBA', (40, 10), (255, 255, 255, 255)), (10, 5))
+        png.save(bundled / 'extra/sega-chihiro.png')
+        self.mod.BUNDLED = str(bundled)
+        aliases = self.tmp / 'aliases'
+        aliases.write_text('Sega Chihiro|sega chihiro|chihiro|naomi\nOutro|naomi\n')
+        self.mod.ALIASES = str(aliases)
+        return bundled
+
+    def test_an_extra_png_logo_is_the_logo_of_a_system_the_font_does_not_have(self):
+        # A Sega Chihiro nao tem caractere na fonte: sem o PNG extra, o apelido generico (naomi aqui, arcade
+        # no Setup) a chamava pelo nome de outro sistema. Com o PNG (config/syslogo/extra/sega-chihiro.png),
+        # vale o do proprio nome, antes do apelido; os outros sistemas continuam no caractere da fonte.
+        self.mod.BUNDLED = str(self.tmp / 'nada')
+        aliases = self.tmp / 'aliases'
+        aliases.write_text('Sega Chihiro|sega chihiro|chihiro|naomi\nOutro|naomi\n')
+        self.mod.ALIASES = str(aliases)
+        self.assertEqual(self.mod.resolve('Sega Chihiro'), ('font', ord('N')))      # antes: o logotipo do apelido
+        self.extra_setup()
+        kind, path = self.mod.resolve('Sega Chihiro')
+        self.assertEqual((kind, os.path.basename(path)), ('extra', 'sega-chihiro.png'))
+        self.assertEqual(self.mod.resolve('Outro'), ('font', ord('N')))
+        self.assertEqual(self.mod.resolve('Naomi'), ('font', ord('N')))
+        self.assertIsNone(self.mod.resolve('Nao Existe'))
+        # O nome casa sem ligar a caixa, os espacos e o que vem entre parenteses.
+        self.assertEqual(self.mod.resolve('  SEGA   chihiro (JP) ')[0], 'extra')
+        img = self.mod.render('Sega Chihiro', 20)
+        self.assertEqual(img.size, (80, 20))               # 40x10 do PNG, na altura pedida
+        self.assertEqual(img.getpixel((40, 10)), (255, 255, 255, 255))
+        red = self.mod.render('Sega Chihiro', 10, (255, 0, 0))
+        self.assertEqual(red.getpixel((20, 5)), (255, 0, 0, 255))       # a cor quem pede pinta
+        # find diz "extra" (o Pixelcade e o ZeDMD so animam o que o find acha); o da fonte segue com o U+.
+        out = self.tmp / 'logo.png'
+        self.assertEqual(self.mod.main(['syslogo', 'png', 'Sega Chihiro', str(out), '40', 'f8f8f2']), 0)
+        from PIL import Image
+        self.assertEqual(Image.open(out).size, (160, 40))
+        import contextlib
+        found = io.StringIO()
+        with contextlib.redirect_stdout(found):
+            self.assertEqual(self.mod.main(['syslogo', 'find', 'Sega Chihiro']), 0)
+            self.assertEqual(self.mod.main(['syslogo', 'find', 'Outro']), 0)
+        self.assertEqual(found.getvalue().split(), ['extra', 'U+%X' % ord('N')])
+        # Sem a pasta da imagem o PNG nao vale (o apelido volta); um PNG que nao abre nao derruba nada.
+        (self.tmp / 'imagem/extra/sega-chihiro.png').write_bytes(b'nao e um png')
+        self.assertIsNone(self.mod.render('Sega Chihiro', 20))
+        self.assertEqual(self.mod.main(['syslogo', 'find', 'Sega Chihiro']), 1)
+
+    def test_the_chihiro_logo_ships_with_the_system(self):
+        from PIL import Image
+        path = ROOT / 'config/syslogo/extra/sega-chihiro.png'
+        img = Image.open(path)
+        self.assertEqual(img.mode, 'RGBA')
+        self.assertGreater(img.width / img.height, 3)               # a marca e larga, como os da fonte
+        alpha = img.getchannel('A')
+        self.assertEqual(alpha.getpixel((0, 0)), 0)                 # fundo transparente
+        ink = [p[:3] for p in img.getdata() if p[3] > 250]
+        self.assertTrue(ink and all(c == (255, 255, 255) for c in ink))      # so branco
+        self.assertEqual(self.mod.slug('Sega Chihiro'), path.stem)
+        self.assertIn('for logo in "$src"/config/syslogo/extra/*.png; do', ROOTFS)
+        self.assertIn('"$root/usr/local/share/fliperos/syslogo/extra/${logo##*/}"', ROOTFS)
+        # O nome que o Setup da a pasta (lib/scraper.sh) e o do arquivo: o frontend, o marquee e o PNG se acham.
+        self.assertIn('echo "Sega Chihiro|$FLIPEROS_BIN/fliperos-x11-run|fliperos-chihiro',
+                      (ROOT / 'fliperos-setup/lib/scraper.sh').read_text())
 
     def test_a_group_logo_keeps_only_the_drawing_in_one_colour(self):
         # O logotipo de um grupo de jogos custom e o desenho da imagem da pessoa: o canal alfa quando ha

@@ -54,7 +54,7 @@ Entering an item keeps its animation through the submenus.
 ## How it works
 
 - Every game goes through `fliperos-kms-run` or `fliperos-x11-run`, which call `fliperos-pixelcade launch` in the background, so a game never waits for the marquee; the same helper sends the events to the ZeDMD through `fliperos-dmd`. The frontends' own events come from the Attract-Mode Plus plugin and the ES-DE scripts that FliperOS installs.
-- The system logos are characters of Arcadeflow's logo font, drawn by `fliperos-syslogo` from the font and `data_systems.txt`, which ship in the image (`config/syslogo`, installed in `/usr/local/share/fliperos/syslogo`) with the permission of Arcadeflow's author. `fliperos-syslogo export DIR` writes every logo as a PNG.
+- The system logos are characters of Arcadeflow's logo font, drawn by `fliperos-syslogo` from the font and `data_systems.txt`, which ship in the image (`config/syslogo`, installed in `/usr/local/share/fliperos/syslogo`) with the permission of Arcadeflow's author. `fliperos-syslogo export DIR` writes every logo as a PNG. Systems the font does not have (the Sega Chihiro) use a PNG from `config/syslogo/extra` instead, which the marquee and the frontend find the same way (`fliperos-syslogo find` answers `extra`).
 - The menu animations are made by `tools/marquee-logo-anim.py`; the graphical Setup sends each cursor move (`fliperos-pixelcade menu ITEM`), the text Setup the item you enter.
 - Achievements: `fliperos-cheevos watch` reads each unlock from the emulator's log and calls `fliperos-pixelcade achievement` ([RetroAchievements](RetroAchievements.md)).
 
