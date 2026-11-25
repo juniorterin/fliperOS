@@ -363,6 +363,8 @@ PY
 scraper_platform() {
   case $1 in
     mame | hbmame | odin) echo arcade ;;
+    # A Sega Chihiro: o xemu abre as imagens de netboot (.bin) dos sets do MAME.
+    chihiro) echo arcade ;;
     dreamcast) echo dreamcast ;;
     # Os arcades do Flycast, uma pasta por sistema (MAME ROM Cleaner).
     naomi | naomi2 | atomiswave) echo "$1" ;;
@@ -567,6 +569,11 @@ scraper_attract_emulator() {
     # primeiro jogo (fliperos-emulators, tipo package).
     odin)
       echo "Odin|$FLIPEROS_BIN/fliperos-x11-run|fliperos-odin [name]|.zip;.7z" ;;
+    # A pasta chihiro: o xemu do Tovarichtch (Sega Chihiro), instalado quando
+    # chega o primeiro jogo (fliperos-emulators, tipo package). O jogo e a
+    # imagem de netboot (.bin).
+    chihiro)
+      echo "Sega Chihiro|$FLIPEROS_BIN/fliperos-x11-run|fliperos-chihiro \"[romfilename]\"|.bin" ;;
     ps2)
       echo "PCSX2|$FLIPEROS_BIN/fliperos-x11-run|pcsx2 \"[romfilename]\"|.iso;.chd;.cso;.bin;.gz" ;;
     # O jogo e o .acgame (o fork abre o jogo por ele); a pasta e a imagem

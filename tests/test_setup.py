@@ -11399,6 +11399,31 @@ class RomCleanerTests(Base):
         self.assertIn('odin) systems="sega hikaru|hikaru|arcade" ;;',
                       (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
 
+    def test_chihiro_folder_is_an_arcade_system_that_opens_in_the_xemu_command(self):
+        # A pasta chihiro (o pacote opcional fliperos-xemu-chihiro, baixado quando chega o primeiro jogo): um
+        # sistema de arcade, com o .bin de netboot como jogo e o nome de logo de Sega Chihiro.
+        self.assertEqual(self.env.out("scraper_platform chihiro; scraper_attract_emulator chihiro").splitlines(),
+                         ["arcade", 'Sega Chihiro|/opt/fliperos/bin/fliperos-x11-run|fliperos-chihiro "[romfilename]"|.bin'])
+        self.assertIn('chihiro) systems="sega chihiro|chihiro|arcade" ;;',
+                      (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
+
+    def test_bios_plan_asks_the_chihiro_board_files_and_names_the_eeprom_with_its_extension(self):
+        # O xemu acha as EEPROMs e a flash pelo nome, ao lado da BIOS (chihiro_xbox_bios.bin); o RetroBIOS guarda
+        # o ic10_g24lc64 sem o .bin, entao ele e baixado com o nome que o xemu procura.
+        roms, bios = self.env.dir / "roms", self.env.dir / "bios"
+        (roms / "chihiro").mkdir(parents=True)
+        (roms / "chihiro" / "ghostsq.bin").write_text("g")
+        env = {"ROMS_ROOT": str(roms), "BIOS_ROOT": str(bios), "BIOS_STATE": str(self.env.dir / "bs")}
+        out = self.env.out('w=$(mktemp); bios_plan "$w" > /dev/null; cat "$w"', env)
+        wants = {(r[1], r[2]): os.path.normpath(r[3]) for r in (l.split("\t") for l in out.splitlines())}
+        for name, dest in (("chihiro_xbox_bios.bin", "chihiro/chihiro_xbox_bios.bin"),
+                           ("ic11_24lc024.bin", "chihiro/ic11_24lc024.bin"),
+                           ("pc20_g24lc64.bin", "chihiro/pc20_g24lc64.bin"),
+                           ("fpr21042_m29w160et.bin", "chihiro/fpr21042_m29w160et.bin"),
+                           ("ver1305.bin", "chihiro/ver1305.bin"),
+                           ("ic10_g24lc64", "chihiro/ic10_g24lc64.bin")):
+            self.assertEqual(wants.get(("chihiro", name)), str(bios / dest), name)
+
     def test_hbgroovymame_game_list_comes_from_its_own_xml_only_when_installed(self):
         # O -listxml do HBMAME (os hacks e homebrews) so entra na lista da pasta hbmame com o programa instalado.
         binary = self.env.dir / "hbgroovymame"
@@ -14676,13 +14701,13 @@ class BatoceraTests(Base):
     def test_the_fliperos_only_folders_come_from_the_table_and_the_script(self):
         # As pastas fixas do fliperos-roms que nenhum console da tabela abre; o custom (os .sh do gabinete) fica de fora.
         self.assertEqual(self.env.out("batocera_extras", self.vars).split(),
-                         ["hbmame", "namco2x6", "odin", "hypseus", "fightcade", "custom-packages"])
+                         ["hbmame", "namco2x6", "odin", "chihiro", "hypseus", "fightcade", "custom-packages"])
 
     def test_use_links_the_siblings_and_the_fliperos_only_folders_and_unuse_undoes_it(self):
         out = self.ok('batocera_cli use "%s"' % self.disk)
         self.assertIn("systems=5", out)
         self.assertIn("linked=bios,save", out)
-        self.assertIn("extras=hbmame,namco2x6,odin,hypseus,fightcade,custom-packages", out)
+        self.assertIn("extras=hbmame,namco2x6,odin,chihiro,hypseus,fightcade,custom-packages", out)
         self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
         self.assertEqual(os.readlink(self.home / "save"), str(self.root / "saves"))
         self.assertTrue((self.home / "old-bios").is_dir())

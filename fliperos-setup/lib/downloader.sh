@@ -332,6 +332,11 @@ bios_standalone() {
     # PCSX2x6: a 256.BIN serve a 246 e a 256 (o fork a acha pelo conteudo); a
     # COH-H31000.BIN, a de 2000, travou o Soul Calibur II, entao nao e baixada.
     namco2x6) echo "namco2x6 256.BIN" ;;
+    # xemu-chihiro: a BIOS da placa e, ao lado dela, as EEPROMs e a flash que ele
+    # procura pelo nome (os arquivos do chihiro.zip do MAME, soltos). O
+    # ver1305.bin e o firmware da placa de rede, que so os jogos em rede pedem;
+    # o ic10_g24lc64 do RetroBIOS vem sem a extensao (bios_standalone_extra).
+    chihiro) echo "chihiro chihiro_xbox_bios.bin ic11_24lc024.bin pc20_g24lc64.bin fpr21042_m29w160et.bin ver1305.bin" ;;
   esac
   return 0
 }
@@ -343,6 +348,9 @@ bios_standalone() {
 bios_standalone_extra() {
   case $1 in
     namco2x6) printf '%s %s\n' 256.NVM "$BIOS_ROOT/namco2x6/256.nvm" 256.MEC "$BIOS_ROOT/namco2x6/256.mec" ;;
+    # O RetroBIOS guarda o EEPROM da placa de controle sem o .bin; o xemu o acha
+    # como ic10_g24lc64.bin.
+    chihiro) printf '%s %s\n' ic10_g24lc64 "$BIOS_ROOT/chihiro/ic10_g24lc64.bin" ;;
   esac
   return 0
 }

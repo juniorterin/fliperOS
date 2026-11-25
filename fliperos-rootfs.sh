@@ -147,6 +147,9 @@ install -Dm755 "$src/config/fliperos-model2" "$root/usr/local/bin/fliperos-model
 # Odin (Sega Hikaru e Gaelco 3D, pacote opcional fliperos-odin): o comando vem
 # com o sistema, o programa so quando a pessoa o instala.
 install -Dm755 "$src/config/fliperos-odin" "$root/usr/local/bin/fliperos-odin"
+# Sega Chihiro (o xemu do Tovarichtch, pacote opcional fliperos-xemu-chihiro): o
+# comando vem com o sistema, o programa so quando a pessoa o instala.
+install -Dm755 "$src/config/fliperos-chihiro" "$root/usr/local/bin/fliperos-chihiro"
 # A lista dos jogos do menu do desktop e a mudanca das pastas do SM2-Emu.
 install -Dm755 "$src/config/fliperos-sm2emu" "$root/usr/local/bin/fliperos-sm2emu"
 # Os patches que o SM2-Emu aplicava no fonte compilado no gabinete: agora vem

@@ -1385,7 +1385,7 @@ class RomFoldersTests(unittest.TestCase):
             for _ in range(2):  # a segunda rodada nao muda nada
                 subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             roms = tmp / 'roms'
-            for emu in ('mame', 'hbmame', 'ps2', 'namco2x6', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'odin', 'dolphin',
+            for emu in ('mame', 'hbmame', 'ps2', 'namco2x6', 'dreamcast', 'naomi', 'naomi2', 'atomiswave', 'model3', 'odin', 'chihiro', 'dolphin',
                         'openbor/Paks', 'hypseus', 'fightcade', 'fightcade/fbneo', 'fightcade/flycast',
                         'fightcade/snes9x', 'fightcade/fc1'):
                 self.assertTrue((roms / emu / '_info.txt').is_file(), emu)
@@ -1841,7 +1841,7 @@ class RomFoldersTests(unittest.TestCase):
             run()
             for kind in ('snap', 'preview', 'logo', 'box', 'marquee', 'dmd', 'texto'):
                 names = sorted(p.name for p in (tmp / 'media' / kind).iterdir())
-                self.assertEqual(names, ['_info.txt', 'atomiswave', 'dolphin', 'dreamcast', 'hbmame', 'mame', 'model2',
+                self.assertEqual(names, ['_info.txt', 'atomiswave', 'chihiro', 'dolphin', 'dreamcast', 'hbmame', 'mame', 'model2',
                                          'model3', 'namco2x6', 'naomi', 'naomi2', 'odin', 'ps1', 'ps2', 'retroarch'], kind)
                 self.assertEqual([p.name for p in (tmp / 'media' / kind / 'retroarch').iterdir()], ['mame2010'], kind)
             self.assertTrue((tmp / 'media/preview/model2').is_symlink())
@@ -3165,7 +3165,7 @@ class OdinTests(unittest.TestCase):
         modes = (ROOT / 'config/fliperos-emulator-modes.conf').read_text()
         for name in ('fliperos-odin', 'odin'):
             self.assertRegex(modes, r'(?m)^%s +640x480@60 +640x480@60$' % name)
-        self.assertIn('fliperos-odin | odin) ;;', (ROOT / 'config/fliperos-x11-run').read_text())
+        self.assertIn('fliperos-odin | odin | ', (ROOT / 'config/fliperos-x11-run').read_text())
 
     def test_the_folders_exist_before_the_program_does(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3180,6 +3180,178 @@ class OdinTests(unittest.TestCase):
             subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
             self.assertIn('Odin is downloaded', (tmp / 'roms/odin/_info.txt').read_text())
             for folder in ('bios/odin', 'nvram/odin', 'save/odin', 'media/snap/odin', 'media/logo/odin'):
+                self.assertTrue((tmp / folder).is_dir(), folder)
+
+
+class ChihiroTests(unittest.TestCase):
+    """Sega Chihiro (o xemu do Tovarichtch): um pacote opcional que se instala ao abrir o primeiro jogo da pasta
+    chihiro. O comando e o config/fliperos-chihiro, que vem com o sistema; o programa vem com o pacote."""
+
+    def run_wrapper(self, tmp, *args, installed=True, bios=True, env_extra=None):
+        tmp = Path(tmp)
+        for d in ('home/roms/chihiro', 'home/bios/chihiro', 'bin'):
+            (tmp / d).mkdir(parents=True, exist_ok=True)
+        fake = tmp / 'bin/xemu-chihiro'
+        fake.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+        fake.chmod(0o755)
+        if bios:
+            (tmp / 'home/bios/chihiro/chihiro_xbox_bios.bin').write_text('x')
+        env = dict(os.environ, HOME=str(tmp / 'home'), XDG_DATA_HOME=str(tmp / 'data'),
+                   FLIPEROS_CHIHIRO_BIN=str(fake if installed else tmp / 'bin/missing'),
+                   FLIPEROS_INI_SET=str(ROOT / 'config/fliperos-ini-set'))
+        env.update(env_extra or {})
+        return subprocess.run(['bash', str(ROOT / 'config/fliperos-chihiro'), *args], env=env, capture_output=True,
+                              text=True, timeout=60)
+
+    def test_a_game_opens_with_the_folders_of_the_system(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'home/roms/chihiro').mkdir(parents=True)
+            (tmp / 'home/roms/chihiro/ghostsq.bin').write_text('x')
+            run = self.run_wrapper(tmp, 'ghostsq')
+            self.assertEqual(run.returncode, 0, run.stderr)
+            home = tmp / 'home'
+            cfg = tmp / 'data/xemu-chihiro/xemu.toml'
+            # O nome do jogo vira o .bin da pasta; o xemu abre em tela cheia, com a configuracao do FliperOS.
+            self.assertEqual(run.stdout.split('\n')[:-1],
+                             ['-config_path', str(cfg), '-full-screen', '-dvd_path', str(home / 'roms/chihiro/ghostsq.bin')])
+            toml = cfg.read_text()
+            self.assertRegex(toml, r'(?m)^show_welcome = false$')
+            self.assertRegex(toml, r'(?m)^games_dir = "%s"$' % re.escape(str(home / 'roms/chihiro')))
+            self.assertRegex(toml, r'(?m)^default_machine = "chihiro"$')
+            self.assertRegex(toml, r'(?m)^bios_path = "%s"$' % re.escape(str(home / 'bios/chihiro/chihiro_xbox_bios.bin')))
+            self.assertRegex(toml, r'(?m)^snapshot_store_path = "%s"$'
+                             % re.escape(str(home / 'save/chihiro/chihiro_snapshots.qcow2')))
+            for key, value in (('fullscreen_on_startup', 'true'), ('vsync', 'true'), ('show_menubar', 'false'),
+                               ('aspect_ratio', '"4x3"'), ('check', 'false')):
+                self.assertRegex(toml, r'(?m)^%s = %s$' % (key, value))
+            self.assertTrue((home / 'save/chihiro').is_dir())
+            # Sem o firmware da placa de rede na pasta, o xemu fica com o dele.
+            self.assertNotIn('net_firmware_path', toml)
+
+    def test_the_network_firmware_is_given_only_when_it_is_there(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            run = self.run_wrapper(tmp)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            (tmp / 'home/bios/chihiro/ver1305.bin').write_text('x')
+            self.run_wrapper(tmp)
+            toml = (tmp / 'data/xemu-chihiro/xemu.toml').read_text()
+            self.assertRegex(toml, r'(?m)^net_firmware_path = "%s"$'
+                             % re.escape(str(tmp / 'home/bios/chihiro/ver1305.bin')))
+
+    def test_a_path_makes_its_folder_the_games_folder_and_no_game_opens_the_library(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'elsewhere').mkdir()
+            (tmp / 'elsewhere/vc3.bin').write_text('x')
+            run = self.run_wrapper(tmp, str(tmp / 'elsewhere/vc3.bin'))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn('-dvd_path\n%s\n' % (tmp / 'elsewhere/vc3.bin'), run.stdout)
+            self.assertIn('games_dir = "%s"' % (tmp / 'elsewhere'), (tmp / 'data/xemu-chihiro/xemu.toml').read_text())
+            # Sem jogo (o menu do desktop): so o xemu, com a biblioteca da pasta de jogos.
+            run = self.run_wrapper(tmp)
+            self.assertNotIn('-dvd_path', run.stdout)
+            self.assertIn('-full-screen', run.stdout)
+
+    def test_what_the_person_changes_in_the_xemu_menu_stays(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            self.run_wrapper(tmp)
+            cfg = tmp / 'data/xemu-chihiro/xemu.toml'
+            cfg.write_text(cfg.read_text().replace('show_menubar = false', 'show_menubar = true'))
+            self.run_wrapper(tmp)
+            self.assertIn('show_menubar = true', cfg.read_text())
+            self.assertNotIn('show_menubar = false', cfg.read_text())
+            # As pastas, essas, sao as do sistema a cada abertura.
+            cfg.write_text(cfg.read_text().replace('games_dir = "%s"' % (tmp / 'home/roms/chihiro'),
+                                                   'games_dir = "/somewhere"'))
+            self.run_wrapper(tmp)
+            self.assertIn('games_dir = "%s"' % (tmp / 'home/roms/chihiro'), cfg.read_text())
+            self.assertEqual(cfg.read_text().count('games_dir = '), 1)
+
+    def test_a_missing_game_or_bios_says_what_to_do(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self.run_wrapper(Path(tmp), 'nao-existe')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('game not found', run.stderr)
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self.run_wrapper(Path(tmp), bios=False)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('chihiro_xbox_bios.bin', run.stderr)
+            self.assertIn('Download BIOS', run.stderr)
+
+    def test_without_the_program_it_says_where_to_install_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self.run_wrapper(Path(tmp), 'ghostsq', installed=False)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('Setup > Games > Emulators & Games', run.stderr)
+
+    def test_the_installer_knows_it_as_a_package(self):
+        label = 'xemu (Sega Chihiro arcades)'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            env = dict(os.environ, FLIPEROS_EMULATORS_ROOT=str(tmp / 'root'), FLIPEROS_HOME=str(tmp / 'home'),
+                       FLIPEROS_PACKAGES_LIST_URL='file://%s' % (tmp / 'list'))
+            (tmp / 'list').write_text('# a list\n')
+
+            def emulators(*args):
+                return subprocess.run(['bash', str(ROOT / 'config/fliperos-emulators'), *args], capture_output=True,
+                                      text=True, env=env, timeout=60)
+            self.assertIn('xemu-chihiro|0|package|%s' % label, emulators('list').stdout.splitlines())
+            binary = tmp / 'root/usr/local/bin/xemu-chihiro'
+            binary.parent.mkdir(parents=True)
+            binary.write_text('#!/bin/sh\n')
+            binary.chmod(0o755)
+            self.assertEqual(emulators('installed', 'xemu-chihiro').returncode, 0)
+            version = tmp / 'root/usr/local/share/fliperos/emulator-versions.d/xemu-chihiro'
+            version.parent.mkdir(parents=True)
+            version.write_text('0.8.134.20261003\n')
+            self.assertIn('xemu-chihiro|0.8.134.20261003', emulators('versions').stdout.splitlines())
+            # Sem a linha na lista (ainda nao publicado): avisa, nao compila.
+            binary.unlink()
+            run = emulators('install', 'xemu-chihiro', '--progress')
+            self.assertEqual(run.returncode, 1)
+            self.assertIn('@fail %s|%s is not published yet' % (label, label), run.stdout)
+
+    def test_the_recipe_and_the_wiring(self):
+        recipe = (ROOT / 'packaging/packages/fliperos-xemu-chihiro.sh').read_text()
+        self.assertRegex(recipe, r'(?m)^PKG_NAME="fliperos-xemu-chihiro"$')
+        self.assertRegex(recipe, r'(?m)^PKG_OPTIONAL=1$')
+        self.assertNotRegex(recipe, r'(?m)^PKG_ON_DEMAND=')
+        self.assertRegex(recipe, r'(?m)^XEMU_CHIHIRO_COMMIT="[0-9a-f]{40}"$')
+        self.assertRegex(recipe, r'(?m)^PKG_VERSION="[0-9.]+"$')
+        # O build.sh do projeto (x86-64-v2, qualquer CPU dos gabinetes) e o nome que nao toma o de um xemu do Xbox.
+        self.assertIn('./build.sh', recipe)
+        self.assertIn('PKG_SHLIB_TARGETS="usr/local/bin/xemu-chihiro"', recipe)
+        self.assertIn('emulator-versions.d/xemu-chihiro', recipe)
+        # O comando vem com o sistema; o programa, so com o pacote.
+        self.assertIn('install -Dm755 "$src/config/fliperos-chihiro" "$root/usr/local/bin/fliperos-chihiro"', ROOTFS)
+        desktop = (ROOT / 'config/applications/fliperos-chihiro.desktop').read_text()
+        self.assertIn('TryExec=/usr/local/bin/xemu-chihiro', desktop)
+        self.assertIn('Exec=/opt/fliperos/bin/fliperos-launch chihiro', desktop)
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        self.assertIn('"fliperos-chihiro": "xemu-chihiro"', frontend)
+        self.assertIn('"xemu-chihiro": "xemu-chihiro"', frontend)
+        modes = (ROOT / 'config/fliperos-emulator-modes.conf').read_text()
+        for name in ('fliperos-chihiro', 'xemu-chihiro'):
+            self.assertRegex(modes, r'(?m)^%s +640x480@60 +640x480@60$' % name)
+        self.assertIn('fliperos-chihiro | xemu-chihiro) ;;', (ROOT / 'config/fliperos-x11-run').read_text())
+        self.assertIn('chihiro) label="Sega Chihiro" run=("$x11" fliperos-chihiro', (ROOT / 'config/fliperos-launch').read_text())
+
+    def test_the_folders_exist_before_the_program_does(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            info = tmp / 'info'
+            info.mkdir()
+            env = dict(os.environ, FLIPEROS_ROMS=str(tmp / 'roms'), FLIPEROS_BIOS=str(tmp / 'bios'),
+                       FLIPEROS_MEDIA=str(tmp / 'media'), FLIPEROS_NVRAM=str(tmp / 'nvram'),
+                       FLIPEROS_SAVE=str(tmp / 'save'), FLIPEROS_CORE_INFO=str(info),
+                       FLIPEROS_CONFIG_LINKS=str(tmp / 'config'), FLIPEROS_ETC=str(tmp / 'etc'),
+                       FLIPEROS_SPLASH=str(tmp / 'splash'), HOME=str(tmp))
+            subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            self.assertIn('xemu is downloaded', (tmp / 'roms/chihiro/_info.txt').read_text())
+            for folder in ('bios/chihiro', 'save/chihiro', 'media/snap/chihiro', 'media/logo/chihiro'):
                 self.assertTrue((tmp / folder).is_dir(), folder)
 
 
@@ -15177,7 +15349,7 @@ class EmulatorMenuTests(unittest.TestCase):
     # pelo Setup.
     TRYEXEC = {'dolphin': '/usr/local/bin/dolphin-emu', 'model2': '/usr/local/bin/keisho',
                'model3': '/usr/local/bin/keisho', 'hbgroovymame': '/usr/local/libexec/hbgroovymame',
-               'fightcade': '/opt/fliperos/fightcade/fightcade',
+               'fightcade': '/opt/fliperos/fightcade/fightcade', 'chihiro': '/usr/local/bin/xemu-chihiro',
                'kof': '/home/fliperos/roms/ikemen/kof-final-attack/Ikemen_GO_Linux'}
 
     def entry(self, path):
@@ -15186,7 +15358,7 @@ class EmulatorMenuTests(unittest.TestCase):
     def test_every_emulator_has_an_entry(self):
         names = {p.stem.replace('fliperos-', '') for p in self.APPS}
         self.assertEqual(names, {'retroarch', 'groovymame', 'hbgroovymame', 'flycast', 'pcsx2', 'pcsx2x6', 'model3',
-                                 'dolphin', 'openbor', 'model2', 'odin', 'fightcade', 'duckstation', 'kof'})
+                                 'dolphin', 'openbor', 'model2', 'odin', 'chihiro', 'fightcade', 'duckstation', 'kof'})
 
     def test_entries_go_through_the_launcher(self):
         launcher = (ROOT / 'config/fliperos-launch').read_text()
@@ -15574,7 +15746,7 @@ class EmulatorModeTests(unittest.TestCase):
                 height = int(line.split()[1].split('x')[1].split('@')[0])
                 # So o Fightcade (a sala de jogos e uma pagina de desktop) e o Odin (a janela
                 # dele tem minimo de 640x480: a 15 kHz abre em 480i).
-                self.assertLessEqual(height, 480 if line.split()[0] in ('fightcade', 'fliperos-odin', 'odin') else 240, line)
+                self.assertLessEqual(height, 480 if line.split()[0] in ('fightcade', 'fliperos-odin', 'odin', 'fliperos-chihiro', 'xemu-chihiro') else 240, line)
         out = self.run_x11(['fliperos-model3', 'game.zip']).stdout
         self.assertIn('MODE=640 240 57.524', out)
         self.assertIn('MODE=496 384 57.524', self.run_x11(['fliperos-model3'], frequency='31k').stdout)
@@ -20847,10 +21019,12 @@ class OnDemandFrontendTests(unittest.TestCase):
                'fliperos-keisho', 'fliperos-openbor', 'fliperos-pcsx2', 'fliperos-rahasher', 'fliperos-retroarch',
                'fliperos-sdl2-kms')
         self.assertEqual(self.list_recipes('--list-iso'), list(iso))
-        # O anybor, o hbgroovymame e o odin sao opcionais: compilados e publicados, fora da ISO e da compilacao no gabinete.
-        self.assertEqual(self.list_recipes('--list-optional'), ['fliperos-anybor', 'fliperos-hbgroovymame', 'fliperos-odin'])
+        # O anybor, o hbgroovymame, o odin e o xemu-chihiro sao opcionais: compilados e publicados, fora da ISO e da compilacao no gabinete.
+        self.assertEqual(self.list_recipes('--list-optional'),
+                         ['fliperos-anybor', 'fliperos-hbgroovymame', 'fliperos-odin', 'fliperos-xemu-chihiro'])
         self.assertEqual(sorted(self.list_recipes('--list')),
-                         sorted(iso + self.ON_DEMAND + ('fliperos-anybor', 'fliperos-hbgroovymame', 'fliperos-odin')))
+                         sorted(iso + self.ON_DEMAND + ('fliperos-anybor', 'fliperos-hbgroovymame', 'fliperos-odin',
+                                                        'fliperos-xemu-chihiro')))
         self.assertIn('build-deb.sh --list-iso', (ROOT / '.github/workflows/release.yml').read_text())
 
     def test_the_session_table_fetches_them_instead_of_installing_a_package(self):

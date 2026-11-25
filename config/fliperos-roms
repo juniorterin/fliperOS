@@ -123,6 +123,7 @@ folder "$roms/naomi2" "Flycast: Sega Naomi 2 (MAME .zip sets). BIOS (naomi2.zip)
 folder "$roms/atomiswave" "Flycast: Sammy Atomiswave (MAME .zip sets). BIOS (awbios.zip) in ~/bios/dc."
 folder "$roms/model3" "Keisho (Sega Model 3): MAME .zip sets."
 folder "$roms/odin" "Odin (Sega Hikaru and the Gaelco 3D arcades): MAME .zip/.7z sets, one per game: airtrix, braveff, pharrier, sgnascar, swracer, von4 (Hikaru); atvtrack, smashdrv, gfootbal, radikalb, footbpow, speedup, surfplnt (Gaelco). The first time you open a game from here, Odin is downloaded and installed. The shared sets hikaru.zip and mie.zip (Hikaru) and tms320c31.zip (some Gaelco games) go in ~/bios/odin, or here."
+folder "$roms/chihiro" "Sega Chihiro (xemu): the Chihiro netboot images, one .bin per game (OutRun 2 and 2 SP, The House of the Dead III, Virtua Cop 3, Ghost Squad, Crazy Taxi High Roller, Wangan Midnight Maximum Tune 1 and 2, Ollie King, Gundam). Make them from a recent MAME set with Tovarichtch's chihiro-netboot tool. The first time you open a game from here, xemu is downloaded and installed. The BIOS goes in ~/bios/chihiro."
 folder "$roms/dolphin" "Dolphin: GameCube and Wii (.iso .gcm .rvz .wbfs .ciso)."
 # O OpenBOR roda no core AnyBOR do RetroArch (o pacote opcional fliperos-anybor,
 # instalado ao abrir o primeiro jogo): a pasta dele e ~/roms/retroarch/anybor, e
@@ -222,6 +223,7 @@ merge_old "$bios/namco256" "$bios/namco2x6"
 folder "$bios/namco2x6" "PCSX2x6: the Namco System 246, 256 and Super 256 arcade BIOS: 256.BIN, with its .nvm and .mec, serves all three boards."
 folder "$bios/mame" "GroovyMAME: BIOS and device sets (neogeo.zip, qsound.zip...). They also work from ~/roms/mame."
 folder "$bios/hbmame" "hbgroovymame (HBMAME): BIOS and device sets (neogeo.zip, qsound.zip...). The ones in ~/bios/mame also work for it, and they also work from ~/roms/hbmame."
+folder "$bios/chihiro" "Sega Chihiro (xemu): the board files. chihiro_xbox_bios.bin and, beside it, ic10_g24lc64.bin, ic11_24lc024.bin, pc20_g24lc64.bin and fpr21042_m29w160et.bin (the files inside MAME's chihiro.zip, not the zip); ver1305.bin (the network board firmware, from seganetw.zip) is only for the games played over a link. Setup > Games > Downloader > Download BIOS brings them."
 folder "$bios/odin" "Odin: the shared sets of the Sega Hikaru games (hikaru.zip, mie.zip; optional jvs13551, 18wheelr, srally2) and of some Gaelco games (tms320c31.zip). They also work from ~/bios/mame or from ~/roms/odin."
 
 # link_dir LINK PASTA faz de LINK um link para PASTA. Se LINK era uma pasta,
@@ -325,6 +327,7 @@ folder "$save" "What you save while you play, one folder per emulator: RetroArch
 folder "$save/retroarch" "RetroArch: the game saves (.srm) and the save states (.state), also the MAME 2010 settings."
 folder "$save/mame" "GroovyMAME: the save states (F7 saves, F8 loads), one folder per game set."
 folder "$save/hbmame" "hbgroovymame (HBMAME): the save states (F7 saves, F8 loads), one folder per game set."
+folder "$save/chihiro" "Sega Chihiro (xemu): the save states of its games (chihiro_snapshots.qcow2)."
 folder "$save/odin" "Odin: the save states (F2 saves, F4 loads), <game>.odinstate."
 folder "$save/ps2" "PCSX2: the memory cards (.ps2) and their folders."
 merge_old "$save/namco246" "$save/namco2x6"
@@ -463,6 +466,7 @@ cfglink openbor "$roms/openbor/Saves"
 cfglink hypseus "$HOME/.hypseus"
 cfglink model2 "$HOME/.config/keisho"
 cfglink odin "$data/odin"
+cfglink chihiro "$data/xemu-chihiro"
 cfglink attractmode "$HOME/.attract"
 cfglink es-de "$HOME/ES-DE"
 cfglink pegasus "$HOME/.config/pegasus-frontend"

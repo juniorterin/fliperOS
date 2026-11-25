@@ -311,6 +311,7 @@ frontends_system_names() {
       model2) systems="sega model 2" ;;
       model3) systems="sega model 3" ;;
       odin) systems="sega hikaru|hikaru|arcade" ;;
+      chihiro) systems="sega chihiro|chihiro|arcade" ;;
       naomi2) systems="naomi 2" ;;
       dolphin) systems=gamecube ;;
       retroarch/*)

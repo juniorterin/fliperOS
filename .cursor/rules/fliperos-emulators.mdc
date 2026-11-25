@@ -1,5 +1,5 @@
 ---
-description: FliperOS — emuladores e frontends (GroovyMAME, RetroArch, Flycast, PCSX2/PCSX2x6, Dolphin, Supermodel, Odin, SM2-Emu, Fightcade 2, ROM cleaner). Use ao mexer em lançadores, configs de emuladores ou modos de vídeo por emulador.
+description: FliperOS — emuladores e frontends (GroovyMAME, RetroArch, Flycast, PCSX2/PCSX2x6, Dolphin, Supermodel, Odin, xemu (Chihiro), SM2-Emu, Fightcade 2, ROM cleaner). Use ao mexer em lançadores, configs de emuladores ou modos de vídeo por emulador.
 alwaysApply: false
 ---
 
@@ -52,6 +52,25 @@ alwaysApply: false
   tem stretch: 640x240 usaria so metade da tela), 640x480@60 em 25/31 kHz. Precisa de OpenGL 4.3 (ou Vulkan 1.3): Vulkan no amdgpu, OpenGL nos outros drivers (`display api` no odin.ini, pelo driver, na primeira abertura e a cada troca).
 - Instala sozinho: `EMULATOR_OF` (`fliperos-odin`/`odin`) -> `fliperos-emulators install odin` (tipo `package`).
 - Pasta `~/roms/odin` = sistema `odin` nos frontends (plataforma `arcade`, nomes do XML do GroovyMAME).
+
+## xemu (Sega Chihiro)
+- Pacote **opcional** `fliperos-xemu-chihiro` (`PKG_OPTIONAL=1`): o fork do Tovarichtch do xemu (`github.com/Tovarichtch/xemu`,
+  GPL-2.0) num commit fixado (`XEMU_CHIHIRO_COMMIT`, sem release: commit novo = versao nova, data no fim do
+  `PKG_VERSION`). Compila com o `build.sh` do projeto (x86-64-v2, ~5 min com 4 CPUs); o SDL3 vem de um wrap do meson,
+  que exige as libs do Wayland mesmo sem usar. Programa em `/usr/local/bin/xemu-chihiro` (nome proprio para nao tomar o
+  de um xemu do Xbox). Nome do emulador no `fliperos-emulators`: `xemu-chihiro` (= o do pacote).
+- Comando `config/fliperos-chihiro` (vem com o sistema; o frontend o abre pelo `fliperos-x11-run`): escreve o `xemu.toml`
+  em `~/.local/share/xemu-chihiro` (jogos, BIOS e states nas pastas do FliperOS a cada abertura; tela cheia, sem barra de
+  menu, 4:3 so na primeira) e abre `-config_path ... -full-screen -dvd_path JOGO`. O jogo e uma imagem de netboot `.bin`
+  (ferramenta Tovarichtch/chihiro-netboot), nao um zip do MAME. Modo no CRT: 640x480@60 (entrelacado a 15 kHz).
+- No modo Chihiro o fork NAO usa o MCPX nem o Cerbios: so `chihiro_xbox_bios.bin` (SHA1 b700b004...) e, ao lado dele,
+  `ic10_g24lc64.bin`, `ic11_24lc024.bin`, `pc20_g24lc64.bin`, `fpr21042_m29w160et.bin` (e o `ver1305.bin` da placa de
+  rede, opcional). O Download BIOS pede os seis pela pasta `chihiro` (`bios_standalone` + `bios_standalone_extra`, o
+  RetroBIOS guarda o ic10 sem o `.bin`).
+- Instala sozinho: `EMULATOR_OF` (`fliperos-chihiro`/`xemu-chihiro`) -> `fliperos-emulators install xemu-chihiro`.
+- Precisa de OpenGL 4.0+ (renderizador padrao do fork; o Vulkan dele nao e usado). Sem GLX no Xvfb (so EGL, com
+  `SDL_VIDEO_FORCE_EGL=1`): num Xorg de verdade o GLX deve existir, mas nao foi visto no gabinete.
+- Pasta `~/roms/chihiro` = sistema `chihiro` nos frontends (plataforma `arcade`, jogo = `.bin`).
 
 ## RetroArch
 - Pacote `fliperos-retroarch` (commit fixado, patches em `packaging/patches/retroarch`). Padrões:

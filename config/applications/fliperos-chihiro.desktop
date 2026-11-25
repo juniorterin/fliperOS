@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Sega Chihiro
+GenericName=Sega Chihiro emulator (xemu)
+Comment=Opens on the CRT; the desktop comes back when it closes
+Exec=/opt/fliperos/bin/fliperos-launch chihiro
+TryExec=/usr/local/bin/xemu-chihiro
+Icon=/usr/local/share/pixmaps/xemu-chihiro.png
+Terminal=false
+Categories=Game;Emulator;

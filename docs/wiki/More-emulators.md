@@ -1,4 +1,4 @@
-The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack on Ikemen GO and Odin (Sega Hikaru, Gaelco 3D).
+The other emulators: Dolphin, DuckStation, Hypseus Singe (laserdisc), KOF Final Attack on Ikemen GO, Odin (Sega Hikaru, Gaelco 3D) and xemu (Sega Chihiro).
 
 ## Dolphin (GameCube, Wii, Triforce)
 
@@ -68,6 +68,20 @@ Odin is a low level emulator of the **Sega Hikaru** (Air Trix, Brave Firefighter
 - **Updates.** A cabinet that has it gets the new version with the system updates. The version is the project's commit of 2026-11-18 (0.1.1 and the Gaelco 3D games).
 
 Odin has not been seen on a CRT yet.
+
+## xemu (Sega Chihiro)
+
+The Sega Chihiro is an arcade board built on the original Xbox hardware. FliperOS runs it in **xemu**, the Tovarichtch fork of the Xbox emulator (GPL-2.0), which has the Chihiro board: OutRun 2 and OutRun 2 SP, The House of the Dead III, Virtua Cop 3, Ghost Squad, Crazy Taxi High Roller, Wangan Midnight Maximum Tune 1 and 2, Ollie King and Gundam Battle Operating Simulator. The ALL.net games (the Satellite Terminal ones, with a touchpad) do not work. Its games go in **`~/roms/chihiro`**, one `.bin` per game.
+
+- **It installs itself.** xemu does not come in the image. The `chihiro` folder exists from the installation; when the first game is in it and you open it in the frontend, a bar installs xemu (a package already built) and the game opens. By hand: **Setup > Games > Emulators & Games > xemu**. It is a system of its own in every frontend (Sega Chihiro).
+- **The games are not MAME zips.** They are Chihiro *netboot* images, `.bin`, made from a recent MAME set with the [chihiro-netboot](https://github.com/Tovarichtch/chihiro-netboot) tool. A normal Xbox disc image does not work, and neither does a `.zip`.
+- **The board files** go in `~/bios/chihiro`, loose (not inside the zip): `chihiro_xbox_bios.bin` and, beside it, `ic10_g24lc64.bin`, `ic11_24lc024.bin`, `pc20_g24lc64.bin` and `fpr21042_m29w160et.bin` (what is inside MAME's `chihiro.zip`). `ver1305.bin` (the network board firmware, from `seganetw.zip`) is only needed by the games played over a link (OutRun 2 SP, Gundam). **Setup > Games > Downloader > Download BIOS** brings all of them when there is a game in the folder. No Xbox BIOS or MCPX ROM is needed: the Chihiro BIOS carries its own boot ROM.
+- **Video.** It needs OpenGL 4.0 or more (it draws in OpenGL; the fork's Vulkan renderer is not used by default): an AMD card with the Mesa driver has it, a GPU with only OpenGL 2.1 (Intel Ironlake) does not. The game is 640x480, so it opens in its own Xorg at **640x480** (interlaced on a 15 kHz tube, where the flicker filter applies; progressive on 25/31 kHz monitors and LCDs), in full screen, 4:3, with no menu bar and VSync on; the first time only, so what you change in its menu stays. The first time you play each game it stutters while the shaders compile.
+- **Files.** The configuration (`xemu.toml`), the board EEPROM and the cards are in `~/.local/share/xemu-chihiro` (also reachable from the `config` folder); the save states in `~/save/chihiro`.
+- **Controls.** Its own menu opens with F1. The test menu is the key `0` and the service key `9`; guns and wheels are calibrated in the game's test menu. Only player 1 has every control: player 2 has start and coin on the keyboard only (except in the two-gun games).
+- **Updates.** A cabinet that has it gets the new version with the system updates. The version is the fork's commit of 2026-10-03.
+
+xemu for the Chihiro has not been seen on a CRT yet, and not on the cabinet's i7-870: it asks for a fast processor and graphics card, so the speed there is unknown.
 
 ## How it works
 

@@ -22,9 +22,9 @@ The App Store downloads no updates by itself and has no welcome screen: disk and
 
 ### Emulators in the menu
 
-**Games** has RetroArch, GroovyMAME, HBMAME (HBGroovyMAME), Flycast, PCSX2, PCSX2x6, Dolphin, DuckStation, OpenBOR, Odin, Model 2, Model 3, KOF Final Attack and, once downloaded through the Setup, Fightcade 2, with the projects' own icons. PortProton (Windows games) and Hook Of The Reaper (light guns) have their own entries.
+**Games** has RetroArch, GroovyMAME, HBMAME (HBGroovyMAME), Flycast, PCSX2, PCSX2x6, Dolphin, DuckStation, OpenBOR, Odin, Sega Chihiro (xemu), Model 2, Model 3, KOF Final Attack and, once downloaded through the Setup, Fightcade 2, with the projects' own icons. PortProton (Windows games) and Hook Of The Reaper (light guns) have their own entries.
 
-HBMAME and Odin are optional packages ([Packages](Packages.md)): they are installed when the first game of their folder opens from a frontend, so open one there first; the desktop entries only run what is already installed.
+HBMAME, Odin and xemu (Sega Chihiro) are optional packages ([Packages](Packages.md)): they are installed when the first game of their folder opens from a frontend, so open one there first; the desktop entries only run what is already installed.
 
 None of them runs inside the desktop: choosing one closes the desktop (asking first if there are open windows), the emulator opens on the CRT in its own video mode, and when it closes **the desktop comes back**.
 

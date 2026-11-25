@@ -39,6 +39,7 @@ One folder per emulator, and one per **RetroArch core** in `~/roms/retroarch/<co
 | `model2` | MAME sets of Model 2 | Keisho |
 | `model3` | MAME sets of Model 3 | Keisho |
 | `odin` | Sega Hikaru and Gaelco 3D MAME sets, `.zip`/`.7z` | Odin, installed when its first game is opened ([More emulators](More-emulators.md#odin-sega-hikaru-and-gaelco-3d)) |
+| `chihiro` | Sega Chihiro netboot images, `.bin` (made from the MAME sets with chihiro-netboot) | xemu, installed when its first game is opened ([More emulators](More-emulators.md#xemu-sega-chihiro)) |
 | `dreamcast` | `.gdi`, `.cdi`, `.chd` | Flycast |
 | `ps1` | `.cue`, `.chd`, `.pbp`, `.m3u` (they open once DuckStation is installed) | DuckStation |
 | `ps2` | `.iso`, `.chd`, `.cso` | PCSX2 |
