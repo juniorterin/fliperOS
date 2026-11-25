@@ -1627,7 +1627,10 @@ class Frontend:
                 kind = tile["kind"]
                 now = time.monotonic()
                 if kind == "play":
-                    if animated:
+                    # A TV que desliga (popup_tvoff) so cabe quando o jogo abre logo: se o launch vai parar na
+                    # barra de andamento (o emulador, o core, a extracao ou a conversao do disco), a tela
+                    # apagava e voltava nela. Sem a animacao, a barra aparece na hora.
+                    if animated and not self.launch_pending():
                         self.ov["act"] = ("play", now)
                         return None
                     self.overlay = None
@@ -3124,6 +3127,18 @@ class Frontend:
             if (state == "disc" and ov["inserted"] is not None
                     and now - ov["inserted"] >= self.view.INSERT_TIME + 0.3):
                 self.media_open(d)
+
+    def launch_pending(self):
+        """O jogo da linha ainda nao abre direto: o launch mostra antes a barra de andamento (um core
+        a baixar, o emulador a instalar, o disco da Sega Chihiro a converter, um jogo Namco a extrair).
+        As mesmas perguntas do launch, na mesma ordem."""
+        g = self.game()
+        if not g:
+            return False
+        if g.get("Packed"):
+            return True
+        argv = self.lib.command(g)
+        return bool(argv) and bool(missing_core(argv) or missing_emulator(argv) or missing_chihiro_image(argv))
 
     def launch(self, argv=None, game=None, media=False):
         # media: o disco do drive (argv pronto), sem jogo da lista para contar

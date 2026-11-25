@@ -8002,6 +8002,46 @@ class FrontendDataTests(unittest.TestCase):
         self.assertLess(launch.index('missing_chihiro_image(argv)'), launch.index('self.remember()'))
         self.assertIn('[CHIHIRO_TOOL, "--prepare", disc, "--progress"]', frontend)
 
+    def test_play_does_not_turn_the_tv_off_when_the_game_stops_at_a_progress_bar(self):
+        # O PLAY do menu do jogo toca a TV que desliga (popup_tvoff, 0,3 s) e so depois chama o launch. Se o
+        # launch vai mostrar a barra (emulador, core, extracao, conversao do disco da Chihiro), a tela apagava e
+        # voltava nela: sem a animacao, a barra aparece na hora. Um jogo que abre logo toca a animacao como antes.
+        import types
+        fm = self.frontend_module()
+        x11 = '/opt/fliperos/bin/fliperos-x11-run'
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            have_tool = tmp / 'emulators'
+            have_tool.write_text('#!/bin/sh\nexit 0\n')                # "installed": tudo instalado
+            have_tool.chmod(0o755)
+            need_tool = tmp / 'chihiro'
+            need_tool.write_text('#!/bin/sh\n[ "$1" = --prepare-needed ] && [ -e "%s" ]\n' % (tmp / 'needs'))
+            need_tool.chmod(0o755)
+            fm.EMULATORS_TOOL, fm.CHIHIRO_TOOL = str(have_tool), str(need_tool)
+            game = {'Name': 'x'}
+            argv = [x11, 'flycast', '/r/a.gdi']
+            fe = types.SimpleNamespace(game=lambda: game, lib=types.SimpleNamespace(command=lambda g: argv))
+            fe.launch_pending = types.MethodType(fm.Frontend.launch_pending, fe)
+            self.assertFalse(fe.launch_pending())                       # abre logo: a TV desliga
+            game['Packed'] = True
+            self.assertTrue(fe.launch_pending())                        # um .gz da Namco: a extracao tem barra
+            del game['Packed']
+            argv[:] = ['/opt/fliperos/bin/fliperos-kms-run', 'retroarch', '-L', str(tmp / 'cores/x_libretro.so'), '/r/a.nes']
+            self.assertTrue(fe.launch_pending())                        # core que falta: baixa com barra
+            argv[:] = [x11, 'fliperos-chihiro', '/r/chihiro/vc3.7z']
+            self.assertFalse(fe.launch_pending())                       # disco ja convertido (nada a fazer)
+            (tmp / 'needs').write_text('')
+            self.assertTrue(fe.launch_pending())                        # disco por converter: barra
+            have_tool.write_text('#!/bin/sh\nexit 1\n')                 # emulador nao instalado: barra tambem
+            argv[:] = [x11, 'fliperos-odin', 'airtrix']
+            self.assertTrue(fe.launch_pending())
+            nothing = types.SimpleNamespace(game=lambda: None)          # sem jogo na linha: nada a preparar
+            self.assertFalse(types.MethodType(fm.Frontend.launch_pending, nothing)())
+        frontend = (ROOT / 'fliperos-setup/gui/fliperos-frontend').read_text()
+        branch = frontend.split('if kind == "play":')[1].split('return "launch"')[0]
+        self.assertIn('if animated and not self.launch_pending():', branch)
+        self.assertLess(branch.index('self.launch_pending()'), branch.index('self.ov["act"] = ("play", now)'))
+
     def test_missing_emulator_is_installed_with_the_bar_before_the_game(self):
         # O emulador do jogo que ainda nao esta aqui (o Model 2 sem compilar, o
         # DuckStation sem baixar, um da imagem que faltou): o Setup o instala
@@ -20468,9 +20508,20 @@ class FrontendPopupMotionTests(unittest.TestCase):
                                    popup_tiles=lambda: self.TILES, calls=calls)
         fe.toggle_fav = lambda: calls.append("fav") or True
         fe.open_more = lambda: (calls.append("more"), setattr(fe, "overlay", "more"))
+        fe.launch_pending = lambda: False          # um jogo que abre logo: a TV desliga antes
         for name in ("act", "overlay_act", "popup_act_done"):
             setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
         return fe
+
+    def test_play_goes_straight_to_the_progress_bar_when_the_game_needs_one(self):
+        # Sem a TV que desliga: o launch mostra a barra (emulador, core, extracao, disco da Chihiro) e a tela
+        # apagava e voltava nela. O launch vem na hora, pelo mesmo caminho do PLAY sem animacao.
+        fe = self.frontend()
+        fe.launch_pending = lambda: True
+        self.assertEqual(fe.overlay_act("b1"), "launch")
+        self.assertIsNone(fe.overlay)
+        self.assertNotIn("act", fe.ov)
+        self.assertFalse(fe.launching)
 
     def test_play_animates_first_and_the_loop_launches_after(self):
         fv, fe = self.fv, self.frontend()
