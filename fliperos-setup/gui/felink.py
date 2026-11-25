@@ -432,6 +432,10 @@ class PartyHost:
         self.state = "lobby"
         self.plan = None
         self.lock = threading.Lock()
+        # Quem entra e quem sai chamam o share() de threads diferentes: sem esta fila, um "state" velho
+        # (o numero de antes de alguem sair) podia chegar ao convidado depois do novo e deixa-lo com o
+        # numero errado ate o proximo aviso.
+        self.share_lock = threading.Lock()
         self.sock = None
 
     def open(self):
@@ -576,12 +580,13 @@ class PartyHost:
 
     def share(self):
         """Manda a sala a todos (e avisa o frontend)."""
-        snap = self.snapshot()
-        for number, m in enumerate(list(self.members), 1):
-            if m["conn"] and not send_line(m["conn"], {"op": "state", "party": snap, "number": number}):
-                with self.lock:
-                    if m in self.members:
-                        self.members.remove(m)
+        with self.share_lock:
+            snap = self.snapshot()
+            for number, m in enumerate(list(self.members), 1):
+                if m["conn"] and not send_line(m["conn"], {"op": "state", "party": snap, "number": number}):
+                    with self.lock:
+                        if m in self.members:
+                            self.members.remove(m)
         self.on_change()
 
     def start(self):
