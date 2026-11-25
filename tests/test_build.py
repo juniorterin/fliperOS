@@ -8821,9 +8821,9 @@ class PanningTests(unittest.TestCase):
     DESKTOP = ('DESKTOP', '', (640, 480), (640, 480))
     PANEL = ('DOCK', '_NET_WM_STATE_SKIP_TASKBAR', (640, 26), (640, 26))
 
-    def test_height_with_the_panel_and_only_forced_width(self):
+    def test_height_and_width_with_the_panel(self):
         # Um dialogo alto de qualquer programa: a altura dele, a moldura
-        # (24 + 1) e a barra de tarefas (26); a largura fica a do modo.
+        # (24 + 1) e a barra de tarefas (26); a largura, estreita, fica a do modo.
         dialog = ('DIALOG', '', None, (420, 700))
         self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, dialog]), ['--output VGA-1 --panning 640x751'])
         # Cabe na tela, mas nao acima da barra: os botoes ficariam atras dela.
@@ -8835,9 +8835,20 @@ class PanningTests(unittest.TestCase):
         transmission = ('NORMAL', '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ', (846, 195), (846, 431))
         self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission]),
                          ['--output VGA-1 --panning 848x480'])
-        # Larga, mas pode encolher (minimo pequeno): cabe maximizada, nada.
+        # Larga e solta (o Alacritty abre em 800x600): a area cresce ate ela, a
+        # moldura inclusa, para a imagem andar com o ponteiro na borda direita.
         wide = ('NORMAL', '', (300, 75), (900, 300))
-        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, wide]), [])
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, wide]), ['--output VGA-1 --panning 902x480'])
+        self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, ('NORMAL', '', None, (800, 600))]),
+                         ['--output VGA-1 --panning 802x651'])
+        # A mesma janela maximizada ou em tela cheia segue a area: so conta o
+        # minimo dela, e a area volta ao modo (senao nunca encolheria).
+        both = '_NET_WM_STATE_MAXIMIZED_VERT, _NET_WM_STATE_MAXIMIZED_HORZ'
+        for state in (both, '_NET_WM_STATE_FULLSCREEN'):
+            maximized = ('NORMAL', state, (300, 75), (902, 651))
+            self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, maximized]), [])
+            self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, maximized], panning='902x651+0+0'),
+                             ['--output VGA-1 --panning 640x480'])
         # As duas direcoes juntas; fechada a alta, so a largura fica.
         self.assertEqual(self.run_once([self.DESKTOP, self.PANEL, transmission, dialog]),
                          ['--output VGA-1 --panning 848x751'])
@@ -27974,6 +27985,35 @@ class DeskpadTests(unittest.TestCase):
         self.calls.clear()
         desk.key(dp.KEY_ESC, 1, 3.0)
         self.assertEqual(self.calls, [('button', 3, True)])
+
+    def test_the_pointer_move_makes_the_screen_follow(self):
+        # No desktop maior que a tela (panning do XRandR) o movimento relativo do XTest deixava o ponteiro
+        # sair da area visivel sem a imagem andar (o CRTC ficava parado); um warp de 0,0 depois do
+        # movimento a faz seguir. Medido no gabinete com o amdgpu: XTest sozinho (0,5), com o warp (0,171).
+        calls = []
+
+        class FakeDisplay:
+            def warp_pointer(self, x, y):
+                calls.append(('warp', x, y))
+
+            def flush(self):
+                calls.append('flush')
+
+        class FakeXTest:
+            @staticmethod
+            def fake_input(display, kind, detail=0, x=0, y=0):
+                calls.append(('xtest', kind, detail, x, y))
+
+        class FakeXConst:
+            MotionNotify = 6
+
+        real = self.dp.X.__new__(self.dp.X)
+        real.d, real.XC, real.xtest = FakeDisplay(), FakeXConst, FakeXTest
+        real.move(3, -2)
+        self.assertEqual(calls, [('xtest', 6, True, 3, -2), ('warp', 0, 0), 'flush'])
+        calls.clear()
+        real.move(0, 0)
+        self.assertEqual(calls, [])
 
     def test_the_keyboard_only_opens_by_itself_for_the_controller(self):
         # O Onboard abre sozinho num campo de texto (auto-show); com teclado ou mouse de verdade isso

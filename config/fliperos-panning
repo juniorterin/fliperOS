@@ -9,8 +9,10 @@
 # fechada, volta ao tamanho do modo. Vale para qualquer programa.
 #
 # Na vertical conta a altura da janela mais as barras (a de tarefas do
-# LXDE). Na horizontal, so a largura minima que o programa forca: uma janela
-# larga que pode encolher cabe maximizada.
+# LXDE); na horizontal, a largura dela. Uma janela solta, maior que a tela
+# (o Alacritty abre em 800x600), faz a area crescer ate ela para a imagem
+# andar com o ponteiro na borda; maximizada ou em tela cheia ela segue a
+# area, e entao conta so o minimo que o programa forca (e a area volta).
 #
 # Roda junto com o LXDE (config/fliperos-lxde) e sai com o X.
 #
@@ -43,7 +45,7 @@ screen_state() {
 # moldura; na altura, mais as barras de cima e de baixo (o painel do LXDE
 # reserva a faixa dele no _NET_WM_STRUT: a janela fica entre as barras).
 windows_need() {
-  local id props geo type state minw minh l r t b h strut needw=0 needh=0 bars=0
+  local id props geo type state minw minh l r t b w h strut needw=0 needh=0 bars=0
   local -a s
   for id in $(xprop -root _NET_CLIENT_LIST 2> /dev/null | sed -n 's/.*# //p' | tr -d ','); do
     props=$(xprop -id "$id" _NET_WM_WINDOW_TYPE _NET_WM_STATE WM_NORMAL_HINTS _NET_FRAME_EXTENTS \
@@ -62,13 +64,18 @@ windows_need() {
     [[ $state == *_HIDDEN* ]] && continue
     read -r minw minh < <(sed -n 's/.*program specified minimum size: \([0-9]*\) by \([0-9]*\).*/\1 \2/p' <<< "$props")
     IFS=', ' read -r l r t b < <(sed -n 's/^_NET_FRAME_EXTENTS(CARDINAL) = //p' <<< "$props")
-    geo=$(xwininfo -id "$id" 2> /dev/null | awk '/^  Height:/ { h = $2 } END { print h + 0 }')
-    h=$geo
-    [[ $state == *_MAXIMIZED_VERT* ]] && h=0
+    geo=$(xwininfo -id "$id" 2> /dev/null | awk '/^  Width:/ { w = $2 } /^  Height:/ { h = $2 } END { print w + 0, h + 0 }')
+    read -r w h <<< "$geo"
+    # Maximizada (ou em tela cheia) numa direcao, o tamanho de agora segue a area:
+    # so conta o minimo que o programa forca.
+    [[ $state == *_MAXIMIZED_VERT* || $state == *_FULLSCREEN* ]] && h=0
+    [[ $state == *_MAXIMIZED_HORZ* || $state == *_FULLSCREEN* ]] && w=0
     ((${minh:-0} > h)) && h=$minh
+    ((${minw:-0} > w)) && w=$minw
     h=$((h + ${t:-0} + ${b:-0}))
+    w=$((w + ${l:-0} + ${r:-0}))
     ((h > needh)) && needh=$h
-    ((${minw:-0} + ${l:-0} + ${r:-0} > needw)) && needw=$((minw + ${l:-0} + ${r:-0}))
+    ((w > needw)) && needw=$w
   done
   ((needh > 0)) && needh=$((needh + bars))
   printf '%s %s\n' "$needw" "$needh"

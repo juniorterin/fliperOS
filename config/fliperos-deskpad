@@ -162,6 +162,12 @@ class X:
             return
         if self.d is not None:
             self.xtest.fake_input(self.d, self.XC.MotionNotify, detail=True, x=dx, y=dy)
+            # O desktop maior que a tela (config/fliperos-panning) so rola a imagem quando o
+            # ponteiro anda por um dispositivo de verdade ou por um warp: o movimento relativo
+            # do XTest deixa o ponteiro sair da area visivel e a tela fica parada (medido no
+            # gabinete: o CRTC ficava em (0,5) com o ponteiro em y=650). Um warp de 0,0 logo
+            # depois faz o servidor seguir o ponteiro; o movimento continua sendo o do XTest.
+            self.d.warp_pointer(0, 0)
             self.d.flush()
         elif self.xdotool:
             subprocess.run([self.xdotool, 'mousemove_relative', '--', str(dx), str(dy)])
