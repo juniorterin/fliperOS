@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Os controles da Sega Chihiro no xemu: o painel do Setup vira teclas, e o xemu as recebe nelas.
+
+O xemu guarda cada controle de um jogo da Chihiro como um numero (uma tecla do SDL, um botao de
+mouse ou de arma, um botao ou eixo de joystick), por jogo, e nao le o mapa do Setup > Joysticks.
+O FliperOS entrega o painel a um jogo que so le o teclado pelo fliperos-buttons gamekeys: um
+teclado virtual que aperta a tecla do .key quando o botao do painel e apertado. Este programa
+fecha as duas pontas, com as mesmas teclas:
+
+  fliperos-chihiro-input apply XEMU.toml ARQUIVO.key   grava no xemu.toml a tecla de cada funcao dos
+                                                       jogos (a cada abertura: sao as do sistema) e
+                                                       cria o .key se ainda nao existe (o que a
+                                                       pessoa mudou nele fica)
+  fliperos-chihiro-input keys                          o .key de fabrica, no stdout
+  fliperos-chihiro-input bindings                      "secao chave tecla (scancode)" de cada funcao
+
+As funcoes ficam nos mesmos botoes em todos os jogos (um jogo so usa algumas, e so um roda por
+vez): b1 = o principal (o acelerador, o pedal da arma, o pulo), b2 = o segundo (o freio, o
+recarregar), b3/b4 = as marchas, b5 = a camera, b6 = o intruso do Maximum Tune, b7 = o cartao.
+Os direcionais do painel sao as setas (o volante do OutRun 2 nas setas tambem vale num teclado).
+A moeda e a tecla 5, o start o Enter, o servico o 9 e o teste o 0. O gatilho e o botao do corpo da
+arma ficam no mouse (a GunCon 2): so uma tecla cabe em cada funcao. O Gundam (duas alavancas) fica
+como o xemu o traz.
+"""
+import os
+import re
+import sys
+
+# Os nomes de tecla do .key (os do fliperos-buttons, GAME_KEYS) no scancode do SDL, que e o que o xemu guarda.
+SDL = {'ENTER': 40, 'SPACE': 44, 'UP': 82, 'DOWN': 81, 'LEFT': 80, 'RIGHT': 79}
+SDL.update({chr(ord('A') + i): 4 + i for i in range(26)})
+SDL.update({str(n): 29 + n for n in range(1, 10)})
+SDL['0'] = 39
+
+# O que cada controle do painel (jogador, controle) aperta: o .key de fabrica.
+KEYMAP = {
+    (1, 'up'): 'UP', (1, 'down'): 'DOWN', (1, 'left'): 'LEFT', (1, 'right'): 'RIGHT',
+    (1, 'b1'): 'Z', (1, 'b2'): 'X', (1, 'b3'): 'C', (1, 'b4'): 'V', (1, 'b5'): 'B', (1, 'b6'): 'N', (1, 'b7'): 'M',
+    (1, 'start'): 'ENTER', (1, 'coin'): '5',
+    (2, 'start'): '2', (2, 'coin'): '6',
+    (2, 'b1'): 'A', (2, 'b2'): 'S', (2, 'b3'): 'D', (2, 'b4'): 'F', (2, 'b5'): 'G',
+}
+
+# Cada funcao do xemu (secao do xemu.toml, chave) e a tecla que a aperta. Chaves "Deprecated" da
+# configuracao do xemu (or2.gear_up, gs.card...) ficam de fora: ele as le uma vez para as novas.
+BINDINGS = [
+    # O sistema, igual para todos os jogos.
+    ('chihiro.jvs', 'start', 'ENTER'), ('chihiro.jvs', 'coin', '5'),
+    ('chihiro.jvs', 'service', '9'), ('chihiro.jvs', 'test', '0'),
+    # Os jogos de volante (OutRun 2, Maximum Tune): o volante nas setas, o resto nos botoes.
+    ('chihiro.jvs', 'steer_left', 'LEFT'), ('chihiro.jvs', 'steer_right', 'RIGHT'),
+    ('chihiro.jvs', 'gas', 'Z'), ('chihiro.jvs', 'brake', 'X'),
+    ('chihiro.jvs', 'gear_up', 'C'), ('chihiro.jvs', 'gear_down', 'V'),
+    ('chihiro.jvs', 'card_in', 'M'),
+    ('chihiro.jvs.or2', 'view_change', 'B'),
+    ('chihiro.jvs.wmmt2', 'view_change', 'B'), ('chihiro.jvs.wmmt2', 'intrude_change', 'N'),
+    # Os de arma: o gatilho e o corpo ficam no mouse; o pedal e o recarregar no painel.
+    ('chihiro.jvs.vc3', 'pedal', 'Z'), ('chihiro.jvs.vc3', 'reload', 'X'),
+    ('chihiro.jvs.gs', 'change', 'Z'), ('chihiro.jvs.gs', 'reload', 'X'),
+    # Crazy Taxi High Roller e Ollie King.
+    ('chihiro.jvs.ctx', 'jump', 'Z'), ('chihiro.jvs.ctx', 'drive_gear', 'X'), ('chihiro.jvs.ctx', 'reverse', 'C'),
+    ('chihiro.jvs.ok', 'swing_left', 'LEFT'), ('chihiro.jvs.ok', 'swing_right', 'RIGHT'),
+    ('chihiro.jvs.ok', 'board_front', 'UP'), ('chihiro.jvs.ok', 'board_rear', 'DOWN'),
+    ('chihiro.jvs.ok', 'left_grab', 'Z'), ('chihiro.jvs.ok', 'right_grab', 'X'),
+    # O jogador 2.
+    ('chihiro.jvs_p2', 'start', '2'), ('chihiro.jvs_p2', 'coin', '6'),
+    ('chihiro.jvs_p2', 'vc3_pedal', 'A'), ('chihiro.jvs_p2', 'vc3_reload', 'S'),
+    ('chihiro.jvs_p2', 'gs_change', 'A'), ('chihiro.jvs_p2', 'gs_reload', 'S'),
+    ('chihiro.jvs_p2', 'card_in', 'G'),
+]
+
+KEY_HEADER = ('# FliperOS: controller to keyboard for this game (on-screen menu > Controller configuration).\n'
+              '# PLAYER_CONTROL=KEY; controls up down left right b1..b8 start coin, keys as in evdev.\n')
+
+SECTION = re.compile(r'^\s*\[([^\]]+)\]\s*$')
+ASSIGN = re.compile(r'^\s*([A-Za-z0-9_]+)\s*=')
+
+
+def keys_text():
+    """O .key de fabrica, na ordem dos jogadores e dos controles."""
+    order = ('up', 'down', 'left', 'right', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'start', 'coin')
+    lines = ['p%d_%s=%s' % (p, c, KEYMAP[(p, c)]) for p in (1, 2) for c in order if (p, c) in KEYMAP]
+    return KEY_HEADER + ''.join(line + '\n' for line in lines)
+
+
+def set_values(path, values):
+    """Grava {(secao, chave): numero} no TOML de PATH, de uma vez: troca a linha "chave = ..." dentro de
+    [secao] (o resto do arquivo fica como estava) ou a acrescenta no fim da secao, criando-a se falta."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            text = f.read()
+    except OSError:
+        text = ''
+    blocks = [['', []]]                         # [nome da secao, linhas (a primeira e o [cabecalho])]
+    for line in text.split('\n'):
+        head = SECTION.match(line)
+        if head:
+            blocks.append([head.group(1).strip(), [line]])
+        else:
+            blocks[-1][1].append(line)
+    todo = dict(values)
+    for name, lines in blocks:
+        for i, line in enumerate(lines):
+            found = ASSIGN.match(line)
+            if found and (name, found.group(1)) in todo:
+                lines[i] = '%s = %d' % (found.group(1), todo.pop((name, found.group(1))))
+    by_name = {name: lines for name, lines in blocks}
+    for (name, key), value in todo.items():
+        if name not in by_name:
+            if blocks[-1][1] and blocks[-1][1][-1].strip():
+                blocks[-1][1].append('')
+            blocks.append([name, ['[%s]' % name]])
+            by_name[name] = blocks[-1][1]
+        lines = by_name[name]
+        at = len(lines)
+        while at > 1 and not lines[at - 1].strip():      # antes das linhas em branco do fim da secao
+            at -= 1
+        lines.insert(at, '%s = %d' % (key, value))
+    out = []
+    for _, lines in blocks:
+        out.extend(lines)
+    while out and not out[0].strip():           # um arquivo que nasce aqui nao comeca com linha em branco
+        out.pop(0)
+    while out and not out[-1].strip():
+        out.pop()
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8', newline='') as f:
+        f.write('\n'.join(out) + '\n')
+    os.replace(tmp, path)
+
+
+def bindings():
+    return {(section, key): SDL[name] for section, key, name in BINDINGS}
+
+
+def apply(toml, keyfile):
+    set_values(toml, bindings())
+    if not os.path.exists(keyfile):
+        os.makedirs(os.path.dirname(os.path.abspath(keyfile)), exist_ok=True)
+        with open(keyfile, 'w', encoding='utf-8') as f:
+            f.write(keys_text())
+
+
+def main(argv):
+    cmd, args = (argv[1] if len(argv) > 1 else ''), argv[2:]
+    if cmd == 'apply' and len(args) == 2:
+        apply(*args)
+        return 0
+    if cmd == 'keys' and not args:
+        sys.stdout.write(keys_text())
+        return 0
+    if cmd == 'bindings' and not args:
+        for section, key, name in BINDINGS:
+            print('%s %s %s (%d)' % (section, key, name, SDL[name]))
+        return 0
+    sys.stderr.write('usage: fliperos-chihiro-input apply XEMU.toml FILE.key | keys | bindings\n')
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

@@ -77,9 +77,21 @@ alwaysApply: false
   `ic10_g24lc64.bin`, `ic11_24lc024.bin`, `pc20_g24lc64.bin`, `fpr21042_m29w160et.bin` (e o `ver1305.bin` da placa de
   rede, opcional). O Download BIOS pede os seis pela pasta `chihiro` (`bios_standalone` + `bios_standalone_extra`, o
   RetroBIOS guarda o ic10 sem o `.bin`).
+- Controles: o xemu guarda cada funcao como NUMERO (tecla SDL, botao de mouse/arma 1001+, botao/eixo de joystick 2001+...) por
+  jogo e nao le o mapa do Setup. `config/fliperos-chihiro-input` grava no `xemu.toml`, a cada abertura, a tecla de cada funcao
+  (mesmos botoes em todos os jogos: b1 principal, b2 segundo, b3/b4 marchas, b5 camera, coin 5, start Enter) e cria o `.key`
+  (`~/.local/share/xemu-chihiro/chihiro.key`, botao do painel -> tecla, da pessoa depois de criado); o `fliperos-chihiro` sobe o
+  `fliperos-buttons gamekeys` (teclado virtual, `--parent $$`) como nos jogos custom. O gatilho e o corpo da arma ficam no mouse
+  (GunCon 2). O `fliperos-chihiro` liga a cada abertura o `chihiro.settings.lightgun_mode` (Light Gun Mode): sem ele o botao
+  direito do mouse abre o menu do xemu, e a GunCon 2 manda o A/C e o tiro fora da tela (gun_offscreen_reload) como botao direito.
+  So conta nos jogos de pistola (vc3, hotd3, gs). A OSD > Controller configuration ainda so enxerga o .key dos jogos custom.
 - Instala sozinho: `EMULATOR_OF` (`fliperos-chihiro`/`xemu-chihiro`) -> `fliperos-emulators install xemu-chihiro`.
-- Precisa de OpenGL 4.0+ (renderizador padrao do fork; o Vulkan dele nao e usado). Sem GLX no Xvfb (so EGL, com
-  `SDL_VIDEO_FORCE_EGL=1`): num Xorg de verdade o GLX deve existir, mas nao foi visto no gabinete.
+- Renderizador pelo driver (`.fliperos-api`, como o Odin): Vulkan no amdgpu, OpenGL nos outros. Na R7 240 (Oland) o
+  OpenGL da radeonsi TRAVA a GPU nos primeiros quadros (`ring gfx timeout`, o Xorg cai, o xemu aborta em `gl_fence`); o
+  Vulkan (RADV) roda o Virtua Cop 3. O pacote e da branch `perf-experimental` do fork (CPU boost, GPU boost e shader
+  seeding ligados por padrao; a `main` nao tem nenhum e ficou "bem travada" no i7-870). Patch `0001-sdl3-alsa-audio` em
+  `packaging/patches/xemu-chihiro`: o SDL3 embutido so tinha o PipeWire (sem som no gabinete). Sem GLX no Xvfb (so EGL,
+  com `SDL_VIDEO_FORCE_EGL=1`).
 - Pasta `~/roms/chihiro` = sistema `chihiro` nos frontends (plataforma `arcade`, jogo = `.bin`).
 
 ## RetroArch

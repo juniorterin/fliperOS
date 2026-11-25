@@ -154,6 +154,9 @@ install -Dm755 "$src/config/fliperos-chihiro" "$root/usr/local/bin/fliperos-chih
 # primeira abertura) e o que ele usa: o chihiro-netboot do Tovarichtch (MIT) e a tabela dos sets
 # da Chihiro do MAME. A chave de cada jogo vem do romset do MAME (fliperos-downloader fetch-sets).
 install -Dm755 "$src/config/fliperos-chihiro-prepare" "$root/opt/fliperos/bin/fliperos-chihiro-prepare"
+# Os controles dos jogos: as teclas de cada funcao no xemu.toml e o .key do painel
+# (config/fliperos-chihiro-input), que o fliperos-buttons gamekeys aperta.
+install -Dm755 "$src/config/fliperos-chihiro-input" "$root/opt/fliperos/bin/fliperos-chihiro-input"
 rm -rf "$root/usr/local/share/fliperos/chihiro"
 install -d "$root/usr/local/share/fliperos/chihiro"
 install -m644 "$src"/config/chihiro/* "$root/usr/local/share/fliperos/chihiro/"

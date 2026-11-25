@@ -3303,6 +3303,20 @@ class ChihiroTests(unittest.TestCase):
             # Sem o firmware da placa de rede na pasta, o xemu fica com o dele.
             self.assertNotIn('net_firmware_path', toml)
 
+    def test_a_gun_shot_off_the_screen_does_not_open_the_menu_of_the_xemu(self):
+        # O botao direito do mouse abre o menu do xemu quando o modo pistola esta desligado; a GunCon 2 manda o A/C e o
+        # tiro fora da tela como botao direito. O modo pistola vai ligado a cada abertura (o xemu so o le nos jogos de
+        # pistola), e o que a pessoa desligou no menu do xemu volta a ligado na abertura seguinte.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            cfg = tmp / 'data/xemu-chihiro/xemu.toml'
+            self.assertEqual(self.run_wrapper(tmp).returncode, 0)
+            self.assertRegex(cfg.read_text(), r'(?m)^\[chihiro\.settings\]\n(?:.*\n)*?lightgun_mode = true$')
+            cfg.write_text(cfg.read_text().replace('lightgun_mode = true', 'lightgun_mode = false'))
+            self.assertEqual(self.run_wrapper(tmp).returncode, 0)
+            self.assertEqual(cfg.read_text().count('lightgun_mode'), 1)
+            self.assertIn('lightgun_mode = true', cfg.read_text())
+
     def test_the_network_firmware_is_given_only_when_it_is_there(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -3327,6 +3341,150 @@ class ChihiroTests(unittest.TestCase):
             run = self.run_wrapper(tmp)
             self.assertNotIn('-dvd_path', run.stdout)
             self.assertIn('-full-screen', run.stdout)
+
+    def controls_env(self, tmp):
+        """O auxiliar dos controles de verdade e um fliperos-buttons falso que anota como foi chamado."""
+        tmp = Path(tmp)
+        (tmp / 'bin').mkdir(parents=True, exist_ok=True)
+        helper = tmp / 'bin/fliperos-chihiro-input'
+        shutil.copy(ROOT / 'config/fliperos-chihiro-input', helper)
+        helper.chmod(0o755)
+        buttons = tmp / 'bin/fliperos-buttons'
+        buttons.write_text('#!/bin/sh\necho "$@" >> "%s"\n' % (tmp / 'buttons.log'))
+        buttons.chmod(0o755)
+        return {'FLIPEROS_CHIHIRO_INPUT': str(helper), 'FLIPEROS_BUTTONS': str(buttons)}
+
+    def wait_for(self, path, seconds=5):
+        deadline = time.monotonic() + seconds
+        while not path.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+    def test_the_panel_of_the_setup_becomes_the_keys_the_xemu_listens_to(self):
+        # O xemu guarda cada funcao do jogo como uma tecla e nao le o mapa do Setup: o comando grava as teclas no
+        # xemu.toml, cria o .key (botao do painel -> tecla) e sobe o gamekeys, que aperta as teclas pelo painel.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            run = self.run_wrapper(tmp, env_extra=self.controls_env(tmp))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            data = tmp / 'data/xemu-chihiro'
+            toml = (data / 'xemu.toml').read_text()
+            # O sistema (a moeda 5 = 34, o Enter = 40), o pedal da arma e o acelerador, nas secoes de cada jogo.
+            self.assertRegex(toml, r'(?ms)^\[chihiro\.jvs\]\n.*^coin = 34$')
+            self.assertRegex(toml, r'(?ms)^\[chihiro\.jvs\]\n.*^start = 40$')
+            self.assertRegex(toml, r'(?ms)^\[chihiro\.jvs\.vc3\]\npedal = 29\nreload = 27$')
+            self.assertRegex(toml, r'(?ms)^\[chihiro\.jvs\]\n.*^gas = 29$')
+            self.assertRegex(toml, r'(?ms)^\[chihiro\.jvs_p2\]\nstart = 31\ncoin = 35\n')
+            # O .key de fabrica, no formato do gamekeys.
+            keys = (data / 'chihiro.key').read_text()
+            self.assertIn('p1_coin=5\n', keys)
+            self.assertIn('p1_start=ENTER\n', keys)
+            self.assertIn('p1_b1=Z\n', keys)
+            # O gamekeys sobe com o .key e com o pid deste processo (sai quando o xemu sai).
+            self.wait_for(tmp / 'buttons.log')
+            self.assertRegex((tmp / 'buttons.log').read_text(), r'^gamekeys %s --parent \d+$' % re.escape(str(data / 'chihiro.key')))
+            # O que a pessoa muda no .key fica; as teclas do xemu.toml sao as do sistema a cada abertura.
+            (data / 'chihiro.key').write_text('p1_coin=6\n')
+            (data / 'xemu.toml').write_text((data / 'xemu.toml').read_text().replace('coin = 34', 'coin = 99'))
+            (tmp / 'buttons.log').unlink()
+            run = self.run_wrapper(tmp, env_extra=self.controls_env(tmp))
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual((data / 'chihiro.key').read_text(), 'p1_coin=6\n')
+            self.assertIn('coin = 34', (data / 'xemu.toml').read_text())
+            self.assertNotIn('coin = 99', (data / 'xemu.toml').read_text())
+
+    def test_the_virtual_keyboard_can_be_turned_off(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            env = dict(self.controls_env(tmp), FLIPEROS_CHIHIRO_KEYS='off')
+            run = self.run_wrapper(tmp, env_extra=env)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn('coin = 34', (tmp / 'data/xemu-chihiro/xemu.toml').read_text())      # as teclas ficam
+            time.sleep(0.5)
+            self.assertFalse((tmp / 'buttons.log').exists())
+
+    def test_the_keys_of_the_xemu_and_of_the_panel_are_the_same_keys(self):
+        # Cada ponta usa o seu nome: o .key, as teclas do evdev do fliperos-buttons; o xemu.toml, os scancodes do SDL.
+        # As duas tem de falar da mesma tecla, e cada funcao tem de ter um botao do painel que a aperte.
+        inp = load_script('fliperos_chihiro_input', 'config/fliperos-chihiro-input')
+        buttons = load_script('fliperos_buttons_for_chihiro', 'config/fliperos-buttons')
+        for (player, control), name in inp.KEYMAP.items():
+            self.assertIn(name, buttons.GAME_KEYS, name)
+            self.assertIn(control, buttons.CONTROLS, control)
+        for section, key, name in inp.BINDINGS:
+            self.assertIn(name, inp.SDL, (section, key, name))
+            if key in ('service', 'test'):
+                continue            # o painel nao tem botao de servico nem de teste: so o teclado (9 e 0)
+            self.assertIn(name, inp.KEYMAP.values(), 'no panel button presses %s (%s %s)' % (name, section, key))
+        # Os numeros do SDL conferem com os padroes do xemu (a moeda 5, o servico 9, o teste 0, o Enter, as setas, Z, X, C).
+        self.assertEqual([inp.SDL[k] for k in ('5', '9', '0', 'ENTER', 'LEFT', 'RIGHT', 'UP', 'DOWN', 'Z', 'X', 'C')],
+                         [34, 38, 39, 40, 80, 79, 82, 81, 29, 27, 6])
+        # O .key de fabrica e lido pelo gamekeys: a tecla de cada controle, no codigo do evdev.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'a.key'
+            path.write_text(inp.keys_text())
+            read = buttons.read_gamekeys(str(path))
+            self.assertEqual(read[(1, 'coin')], buttons.GAME_KEYS['5'])
+            self.assertEqual(read[(1, 'start')], buttons.GAME_KEYS['ENTER'])
+            self.assertEqual(read[(2, 'coin')], buttons.GAME_KEYS['6'])
+            self.assertEqual(len(read), len(inp.KEYMAP))
+        # Dois controles nunca apertam a mesma tecla (uma tecla, uma funcao do painel).
+        self.assertEqual(len(set(inp.KEYMAP.values())), len(inp.KEYMAP))
+
+    def test_the_toml_editor_replaces_appends_and_creates_sections(self):
+        inp = load_script('fliperos_chihiro_input', 'config/fliperos-chihiro-input')
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'x.toml'
+            path.write_text("[general]\nshow_welcome = false\n\n[chihiro.jvs]\ncoin = 99\n# um comentario\n\n[display]\nrenderer = 'VULKAN'\n")
+            inp.set_values(str(path), {('chihiro.jvs', 'coin'): 34, ('chihiro.jvs', 'start'): 40, ('new.section', 'a'): 1,
+                                       ('display', 'vsync'): 1})
+            self.assertEqual(path.read_text(),
+                             "[general]\nshow_welcome = false\n\n[chihiro.jvs]\ncoin = 34\n# um comentario\nstart = 40\n\n"
+                             "[display]\nrenderer = 'VULKAN'\nvsync = 1\n\n[new.section]\na = 1\n")
+            # De novo, o mesmo: nada muda (e nada se repete).
+            before = path.read_text()
+            inp.set_values(str(path), {('chihiro.jvs', 'coin'): 34, ('chihiro.jvs', 'start'): 40, ('new.section', 'a'): 1,
+                                       ('display', 'vsync'): 1})
+            self.assertEqual(path.read_text(), before)
+            # Sem arquivo: ele nasce.
+            fresh = Path(tmp) / 'fresh.toml'
+            inp.set_values(str(fresh), {('a.b', 'c'): 5})
+            self.assertEqual(fresh.read_text(), '[a.b]\nc = 5\n')
+
+    def test_vulkan_on_amdgpu_and_opengl_on_the_other_drivers(self):
+        # Numa R7 240 (Oland) o OpenGL do xemu travou a GPU nos primeiros quadros do Virtua Cop 3 ("ring gfx
+        # timeout", o Xorg caiu); o Vulkan (RADV) roda. Como o Odin: o renderizador pelo driver da placa ligada,
+        # na primeira abertura e a cada troca de driver; entre elas a escolha do menu do xemu fica.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            drm = tmp / 'drm'
+
+            def card(driver):
+                (drm / 'card0/device').mkdir(parents=True, exist_ok=True)
+                (drm / 'card0-VGA-1').mkdir(exist_ok=True)
+                (drm / 'card0-VGA-1/status').write_text('connected\n')
+                (tmp / 'drivers' / driver).mkdir(parents=True, exist_ok=True)
+                link = drm / 'card0/device/driver'
+                link.unlink(missing_ok=True)
+                link.symlink_to(tmp / 'drivers' / driver)
+
+            def renderer():
+                run = self.run_wrapper(tmp, env_extra={'FLIPEROS_DRM_SYSFS': str(drm)})
+                self.assertEqual(run.returncode, 0, run.stderr)
+                return re.search(r'(?m)^renderer = "(\w+)"$', (tmp / 'data/xemu-chihiro/xemu.toml').read_text()).group(1)
+            # Sem placa ligada (nenhum card): OpenGL, o padrao do xemu.
+            self.assertEqual(renderer(), 'OPENGL')
+            card('amdgpu')
+            self.assertEqual(renderer(), 'VULKAN')
+            # A escolha do menu do xemu fica enquanto o driver e o mesmo.
+            cfg = tmp / 'data/xemu-chihiro/xemu.toml'
+            cfg.write_text(cfg.read_text().replace('renderer = "VULKAN"', 'renderer = "OPENGL"'))
+            self.assertEqual(renderer(), 'OPENGL')
+            # Outro driver: OpenGL (o i915 e o radeon nao tem o Vulkan que o xemu usa), e a troca de volta refaz.
+            card('i915')
+            self.assertEqual(renderer(), 'OPENGL')
+            card('amdgpu')
+            self.assertEqual(renderer(), 'VULKAN')
+            self.assertEqual(cfg.read_text().count('renderer = '), 1)
 
     def test_what_the_person_changes_in_the_xemu_menu_stays(self):
         with tempfile.TemporaryDirectory() as tmp:

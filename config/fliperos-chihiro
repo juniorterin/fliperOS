@@ -103,6 +103,12 @@ if [[ -x $iniset ]]; then
   if [[ -f $bios/ver1305.bin ]]; then
     "$iniset" "$cfg" chihiro.roms net_firmware_path "\"$bios/ver1305.bin\""
   fi
+  # O modo pistola, sempre: com ele desligado o botao direito do mouse abre o menu do xemu, e a GunCon 2 manda
+  # o A/C e o tiro fora da tela (o gun_offscreen_reload aperta o botao de recarga do driver) como botao
+  # direito, entao um tiro fora da tela abria o menu no meio do jogo. Ligado, o xemu esconde o cursor e deixa
+  # os botoes do mouse para o jogo. So conta nos jogos de pistola (Virtua Cop 3, House of the Dead 3, Ghost
+  # Squad); nos outros o botao direito segue abrindo o menu.
+  "$iniset" "$cfg" chihiro.settings lightgun_mode true
   # O padrao do CRT, uma vez so (quem mudar no menu do xemu fica com a escolha):
   # tela cheia, sem a barra de menu, imagem 4:3 (o jogo e 640x480), VSync
   # ligado (sem ele a imagem rasga) e sem a procura de versao nova na rede (o
@@ -115,6 +121,42 @@ if [[ -x $iniset ]]; then
     "$iniset" "$cfg" display.ui fit '"scale"'
     "$iniset" "$cfg" general.updates check false
     : > "$data/.fliperos-defaults"
+  fi
+  # O renderizador pelo driver da placa do CRT, como no Odin (e no Keisho, no Flycast...): Vulkan no
+  # amdgpu, OpenGL nos outros. Numa R7 240 (Oland) o OpenGL da radeonsi trava a GPU nos primeiros quadros
+  # do jogo (o kernel diz "ring gfx timeout" e o Xorg cai, o xemu aborta em gl_fence); o Vulkan (RADV)
+  # roda o Virtua Cop 3. Na primeira abertura e a cada troca de driver; entre elas a escolha do menu do
+  # xemu fica.
+  drm=${FLIPEROS_DRM_SYSFS:-/sys/class/drm} driver=""
+  for status in "$drm"/card[0-9]*-*/status; do
+    [[ $(cat "$status" 2> /dev/null) == connected ]] || continue
+    card=${status%/status}
+    card=${card##*/}
+    driver=$(readlink -f "$drm/${card%%-*}/device/driver" 2> /dev/null) || driver=""
+    driver=${driver##*/}
+    break
+  done
+  driver=${driver:-none}
+  if [[ $(cat "$data/.fliperos-api" 2> /dev/null) != "$driver" ]]; then
+    if [[ $driver == amdgpu ]]; then api='"VULKAN"'; else api='"OPENGL"'; fi
+    "$iniset" "$cfg" display renderer "$api"
+    printf '%s\n' "$driver" > "$data/.fliperos-api"
+  fi
+fi
+
+# Os controles: o xemu guarda cada funcao de um jogo como uma tecla (ou botao de mouse), por jogo, e nao
+# le o mapa do Setup > Joysticks. O fliperos-chihiro-input grava no xemu.toml a tecla de cada funcao
+# (moeda, start, pedal, recarregar, acelerador, freio, marchas...) e cria o .key (botao do painel ->
+# tecla); o fliperos-buttons gamekeys le o painel do mapa do Setup e aperta essas teclas por um
+# teclado virtual enquanto o xemu roda (--parent: sai com ele, que e este mesmo processo depois do exec).
+# O .key e da pessoa depois de criado. FLIPEROS_CHIHIRO_KEYS=off desliga o teclado virtual.
+inputs=${FLIPEROS_CHIHIRO_INPUT:-/opt/fliperos/bin/fliperos-chihiro-input}
+buttons=${FLIPEROS_BUTTONS:-/opt/fliperos/bin/fliperos-buttons}
+keyfile=$data/chihiro.key
+if [[ -x $inputs ]]; then
+  "$inputs" apply "$cfg" "$keyfile" || true
+  if [[ -x $buttons && ${FLIPEROS_CHIHIRO_KEYS:-on} != off && -f $keyfile ]]; then
+    "$buttons" gamekeys "$keyfile" --parent $$ > /dev/null 2>&1 &
   fi
 fi
 

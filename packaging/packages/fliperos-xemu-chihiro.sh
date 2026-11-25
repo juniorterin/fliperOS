@@ -14,15 +14,23 @@
 # O commit e fixo: o projeto nao tem release deste fork, e um commit novo e uma
 # versao nova (a data no fim do PKG_VERSION).
 #
+# E o da branch perf-experimental do fork, nao o da main: a main e a "Chihiro sem
+# otimizacao nenhuma" (o README do fork); a perf-experimental traz o CPU boost (SSE nativo e
+# o cache de saltos maior), o GPU boost (o NV2A afinado) e a pre-compilacao dos shaders do
+# jogo durante o boot, tudo ligado por padrao. No i7-870 do gabinete, com a main o Virtua
+# Cop 3 ficava "bem travado" (uma thread da CPU do Xbox em ~93% de um nucleo).
+#
 # Compilado como o build.sh do projeto manda no Linux: -march=x86-64-v2 (qualquer
 # CPU x86-64 de 2009 em diante, o i7-870 inclusive), sem LTO.
 #
-# Quem roda ele precisa de OpenGL 4.0 ou mais (o renderizador padrao) ou
-# Vulkan; um Intel HD antigo (Ironlake, GL 2.1) nao abre.
+# Quem roda ele precisa de OpenGL 4.0 ou mais ou Vulkan; um Intel HD antigo (Ironlake, GL 2.1)
+# nao abre. O comando (config/fliperos-chihiro) escolhe o renderizador pelo driver: Vulkan no
+# amdgpu (o OpenGL da radeonsi trava a GPU de uma R7 240 nos primeiros quadros do jogo), OpenGL
+# nos outros.
 
 PKG_NAME="fliperos-xemu-chihiro"
-XEMU_CHIHIRO_COMMIT="e66fe47cdaa781966ffd9a7112200ade04c1a531"
-PKG_VERSION="0.8.134.20261003"
+XEMU_CHIHIRO_COMMIT="98fbd75dd0f3088a4988abc1698feb37b844a41a"
+PKG_VERSION="0.8.134.20261005"
 PKG_REVISION="1fliperos1"
 PKG_OPTIONAL=1
 PKG_SECTION="games"
@@ -64,7 +72,9 @@ pkg_build() {
     && git -C "$dir" fetch -q --depth 1 https://github.com/Tovarichtch/xemu "$XEMU_CHIHIRO_COMMIT" \
     && git -C "$dir" checkout -q FETCH_HEAD ||
     return 1
-  # Todo patch tem de entrar: o commit e o mesmo em que foram conferidos.
+  # Todo patch tem de entrar: o commit e o mesmo em que foram conferidos
+  # (0001: o SDL3 embutido so tinha o backend de som do PipeWire, que o gabinete nao tem: o xemu
+  # abria sem som, "Audio target alsa not available"; o do ALSA, que o SDL traz, passa a compilar).
   for patch in "$here"/../patches/xemu-chihiro/*.patch; do
     [[ -f $patch ]] || continue
     git -C "$dir" apply "$patch" || return 1

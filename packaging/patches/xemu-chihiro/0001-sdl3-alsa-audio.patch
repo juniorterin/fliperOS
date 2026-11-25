@@ -1,0 +1,25 @@
+diff --git a/subprojects/packagefiles/sdl3/meson.build b/subprojects/packagefiles/sdl3/meson.build
+index 72626c1..838627a 100644
+--- a/subprojects/packagefiles/sdl3/meson.build
++++ b/subprojects/packagefiles/sdl3/meson.build
+@@ -310,6 +310,7 @@ if host_machine.system() == 'linux'
+   sdl_deps += dependency('libudev')
+   sdl_deps += dependency('dbus-1')
+   sdl_deps += dependency('libpipewire-0.3')
++  sdl_deps += dependency('alsa')
+   sdl_deps += dependency('wayland-client')
+   sdl_deps += dependency('wayland-egl')
+   sdl_deps += dependency('wayland-cursor')
+diff --git a/subprojects/packagefiles/sdl3/src/audio/meson.build b/subprojects/packagefiles/sdl3/src/audio/meson.build
+index e988f37..e4c2661 100644
+--- a/subprojects/packagefiles/sdl3/src/audio/meson.build
++++ b/subprojects/packagefiles/sdl3/src/audio/meson.build
+@@ -8,6 +8,8 @@ elif host_machine.system() == 'darwin'
+ else
+   cdata.set('SDL_AUDIO_DRIVER_PIPEWIRE', 1)
+   subdir('pipewire')
++  cdata.set('SDL_AUDIO_DRIVER_ALSA', 1)
++  subdir('alsa')
+ endif
+ 
+ sources += files(
