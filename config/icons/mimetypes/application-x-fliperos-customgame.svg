@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>FliperOS custom game package</title>
+  <!-- Icone do tipo de arquivo dos pacotes de jogo custom (JOGO.fliperos-customgame.zip, config/fliperos-customgame.xml): a caixa de um jogo com o controle na capa e o ziper de quem e um pacote. Paleta Dracula, como os icones do menu. -->
+  <rect x="8" y="3" width="48" height="58" rx="7" fill="#282a36" stroke="#bd93f9" stroke-width="3.5"/>
+  <!-- O ziper: a fita, os dentes de um lado e do outro e o cursor com o furo -->
+  <rect x="30" y="3.5" width="4" height="19" fill="#44475a"/>
+  <g fill="#ffb86c">
+    <rect x="25.5" y="6" width="4.5" height="3"/>
+    <rect x="25.5" y="11" width="4.5" height="3"/>
+    <rect x="25.5" y="16" width="4.5" height="3"/>
+    <rect x="34" y="8.5" width="4.5" height="3"/>
+    <rect x="34" y="13.5" width="4.5" height="3"/>
+    <rect x="34" y="18.5" width="4.5" height="3"/>
+    <rect x="27.5" y="21.5" width="9" height="8.5" rx="2.5"/>
+  </g>
+  <circle cx="32" cy="26.5" r="1.7" fill="#282a36"/>
+  <!-- O controle -->
+  <path d="M19 36H45Q49 36 50 40L52 51Q52.5 56 48 56Q45 56 43.5 53L42 50H22L20.5 53Q19 56 16 56Q11.5 56 12 51L14 40Q15 36 19 36Z" fill="#8be9fd"/>
+  <g fill="#282a36">
+    <rect x="21.5" y="39" width="3" height="9"/>
+    <rect x="18.5" y="42" width="9" height="3"/>
+    <rect x="29.5" y="44.5" width="2.5" height="1.5"/>
+    <rect x="33" y="44.5" width="2.5" height="1.5"/>
+  </g>
+  <circle cx="41.5" cy="41.5" r="2.4" fill="#ff79c6"/>
+  <circle cx="46" cy="44.5" r="2.4" fill="#50fa7b"/>
+</svg>

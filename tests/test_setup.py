@@ -5250,6 +5250,21 @@ class CustomGamesTests(Base):
         self.assertEqual(r.stdout.splitlines(), ["/usr/local/bin/fliperos-setup", "--desktop", ":7",
                                                  "/home/x/.Xauthority", "--install-package"] + files)
 
+    def test_the_package_type_has_its_own_icon(self):
+        # O icone de um tipo de arquivo tem o nome do tipo com "-" no lugar da "/", e o tema o
+        # acha no hicolor (onde todo tema cai). Um SVG que nao parseia nao desenha nada.
+        import xml.etree.ElementTree as ET
+        svg = ROOT / "config/icons/mimetypes/application-x-fliperos-customgame.svg"
+        self.assertEqual(ET.fromstring(svg.read_text()).tag, "{http://www.w3.org/2000/svg}svg")
+        mime = re.search(r'<mime-type type="([^"]+)"', (ROOT / "config/fliperos-customgame.xml").read_text()).group(1)
+        self.assertEqual(svg.name, mime.replace("/", "-") + ".svg")
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn('for file in "$src"/config/icons/mimetypes/*.svg; do\n'
+                      '  install -Dm644 "$file" "$root/usr/local/share/icons/hicolor/scalable/mimetypes/${file##*/}"\n'
+                      'done', rootfs)
+        # Fora do laco dos icones do menu (config/icons/*.svg vai para o pixmaps, que o tema nao procura por nome).
+        self.assertNotIn("mimetypes", rootfs.split('for file in "$src"/config/icons/*.svg')[1].split("done")[0])
+
     def test_the_desktop_double_click_runs_the_setup_install_screen(self):
         # O tipo de arquivo (um zip, glob maior que o *.zip), a entrada que o abre
         # (Terminal=true, o --desktop do atalho do Setup e todos os arquivos

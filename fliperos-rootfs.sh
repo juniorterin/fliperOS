@@ -557,6 +557,12 @@ fi
 # So com o sistema em pe: num rootfs sem proc (os testes) nao ha o que rodar, e
 # no update das maquinas e este mesmo passo que as gera.
 install -Dm644 "$src/config/fliperos-customgame.xml" "$root/usr/share/mime/packages/fliperos-customgame.xml"
+# E o icone dele (config/icons/mimetypes): o do tipo de arquivo tem o nome do tipo com "-" no
+# lugar da "/" (application-x-fliperos-customgame), e o tema de icones o acha no hicolor, onde
+# todo tema cai quando nao tem o icone.
+for file in "$src"/config/icons/mimetypes/*.svg; do
+  install -Dm644 "$file" "$root/usr/local/share/icons/hicolor/scalable/mimetypes/${file##*/}"
+done
 if [[ -d "$root/proc/1" || -n ${FLIPEROS_ROOTFS_CHROOT:-} ]]; then
   if [[ -x "$root/usr/bin/update-mime-database" ]]; then
     chroot "$root" update-mime-database /usr/share/mime > /dev/null 2>&1 || true
