@@ -18,9 +18,9 @@ GITHUB_REPO = "juniorterin/fliperOS"
 
 # Pacotes maiores que 2 GB (o arquivo do plano gratuito do Telegram) chegam em partes
 # (JOGO.fliperos-customgame.zip.001, .002...). O KV guarda as partes ate a ultima chegar:
-# so entao o robo e chamado, uma vez, com todas. Crie o KV e ponha o id que ele imprimir
-# (tire o # das tres linhas); sem ele as partes sao ignoradas:
-#   npx wrangler kv namespace create PARTS
-# [[kv_namespaces]]
-# binding = "PARTS"
-# id = "COLE_O_ID_AQUI"
+# so entao o robo e chamado, uma vez, com todas. O KV foi criado em 2026-11-26
+# (npx wrangler kv namespace create PARTS) e este e o id dele; sem o binding as
+# partes sao ignoradas. O id nao e segredo: so vale com o login da conta.
+[[kv_namespaces]]
+binding = "PARTS"
+id = "a0fa4aa0a41f4d33af0855f5c160707d"
