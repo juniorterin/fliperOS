@@ -535,7 +535,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <tbody>
 <tr>
 <td><a href="#Video-cards-AMD">AMD cards</a></td>
-<td>Which Radeons, the drivers and Vulkan, GCN 2 and 3 with DVI-I, APUs, the cards GroovyArcade reports</td>
+<td>Which Radeons (the whole <a href="#Video-cards-AMD-cards-in-crt_emudriver-20">CRT_EmuDriver 2.0 list</a>), the drivers and Vulkan, GCN 2 and 3 with DVI-I, APUs, the cards GroovyArcade reports</td>
 </tr>
 <tr>
 <td><a href="#Video-cards-NVIDIA">NVIDIA cards</a></td>
@@ -665,12 +665,40 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <h1 id="Video-cards-AMD">AMD cards</h1>
 <p>The AMD and ATI Radeon cards: the best fit for a 15 kHz CRT, with native resolutions on their VGA or DVI-I outputs.</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/soyo-r7-240.webp" width="360" alt="A Radeon R7 240 card"></p>
-<p>The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover <code>radeon</code> and <code>amdgpu</code> (DCE and DCN 1 to 3): native boot at <code>640x480iS</code> and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.</p>
+<p>The cards CRT_EmuDriver 2.0 covers on Windows are <a href="#Video-cards-AMD-cards-in-crt_emudriver-20">listed below</a>, from the HD 2000 series to the RX 500 and Vega. The ones with VGA or DVI-I, from the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0, are the ones FliperOS counts on for native 15 kHz. The 15 kHz kernel patches cover <code>radeon</code> and <code>amdgpu</code> (DCE and DCN 1 to 3): native boot at <code>640x480iS</code> and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.</p>
 <p>Good, cheap choices: <strong>HD 5450, HD 6450, HD 7750, R7 240, R7 250</strong>.</p>
 <p>SI and CIK cards (HD 7000, R7/R9) work on both drivers; the Setup picks <code>radeon</code> by default and offers <code>amdgpu</code> (with Vulkan) in <em>Video Setup &gt; Video driver</em>.</p>
 <p>The emulators follow the driver the card runs on, checked at every session start: on <code>amdgpu</code>, Flycast goes to the Vulkan renderer that matches its OpenGL one (per-pixel or per-triangle) and Dolphin to Vulkan; PCSX2 and DuckStation stay on Automatic, which already picks Vulkan there. Back on <code>radeon</code> (no Vulkan), each goes back to its factory renderer: Flycast to OpenGL with per-pixel transparency, Dolphin to OpenGL. A choice made in an emulator is kept until the driver changes again.</p>
 <p>RetroArch is decided at every launch, with nothing saved: on <code>amdgpu</code> it opens in Vulkan, on any other driver or card in <code>glcore</code> (<code>fliperos-kms-run</code> looks at the driver of the card whose connector is plugged in). Its Vulkan output switches the CRT's mode for each game like <code>glcore</code> does, through a FliperOS patch to its <code>khr_display</code> context; a RetroArch built without that patch stays on <code>glcore</code> on amdgpu too.</p>
 <p>Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an <strong>active converter</strong>: see <a href="#Converters">Converters</a>.</p>
+<h2 id="Video-cards-AMD-cards-in-crt_emudriver-20">Cards in CRT_EmuDriver 2.0</h2>
+<p>FliperOS's hardware scope is the list of <a href="http://geedorah.com/eiusdemmodi/forum/viewtopic.php?id=295">CRT_EmuDriver 2.0</a>, the Windows driver for 15 kHz CRTs by Calamity, the author of GroovyMAME (beta 15, January 2019; the forum answers only on <code>http</code>). Its download thread splits the cards into four packages, by the AMD driver each one is based on. This is what that Windows driver supports: the <code>radeon</code> and <code>amdgpu</code> patches of FliperOS are other code, and what each card gives on a CRT here is in the tables further down and on <a href="#Video-cards">Video cards</a>. Being on this list doesn't mean the card has an analog output; check its connectors.</p>
+<p>For a card that several packages cover, the thread recommends the most recent one.</p>
+<p><strong>Catalyst 12.6, legacy cards</strong></p>
+<ul>
+<li>Desktop: Radeon HD 2000, HD 3000 and HD 4000 series.</li>
+</ul>
+<p><strong>Crimson 16.2.1, cards that are not GCN</strong> (TeraScale)</p>
+<ul>
+<li>Desktop: Radeon HD 5000 and HD 6000 series, HD 7000 to HD 7600, HD 8000 to HD 8400; R5 235X, R5 235, R5 230 and R5 220.</li>
+<li>All-in-One: Radeon HD 6350A, HD 6600A, HD 7450A and HD 7600A.</li>
+<li>APU: Radeon HD 6000D, HD 7000D, HD 8000D, HD 6000G, HD 7000G and HD 8000G.</li>
+<li>Mobility: Radeon HD 5000M and HD 6000M.</li>
+</ul>
+<p><strong>Crimson 16.2.1, GCN cards</strong> (GCN is Graphics Core Next)</p>
+<ul>
+<li>Desktop: Radeon HD 7700 to HD 7900 and HD 8500 to HD 8900; R7 200, R7 300, R9 200 and R9 300; R9 Nano and R9 Fury.</li>
+<li>APU: A-Series with Radeon R4, R5, R6 or R7 graphics; Pro A-Series with R5 or R7; Athlon with R3; Sempron with R3; A-Series with R3, R4, R5, R6, R7 or R8; Pro A-Series with R5, R6 or R7; FX-Series with R7; E-Series with R2; Radeon HD 8180 to HD 8400.</li>
+<li>Mobility: Radeon R9 M300, R7 M300, R9 M200, R7 M200 and R5 M200; HD 7700M to HD 7900M and HD 8500M to HD 8900M.</li>
+</ul>
+<p><strong>Adrenalin 18.5.1, GCN cards</strong> (a package for Windows 7 and 8, another for Windows 10)</p>
+<ul>
+<li>Desktop: Radeon RX Vega, RX 500 and RX 400 series; Radeon Pro Duo; R9 Fury, R9 Nano, R9 300 and R9 200; R7 300 and R7 200; R5 300 and R5 200; HD 8500 to HD 8900 and HD 7700 to HD 7900.</li>
+<li>Ryzen: Ryzen 5 2400G and Ryzen 3 2200G.</li>
+<li>APU: the same APUs as the Crimson GCN package above.</li>
+<li>Mobility: Radeon R9 M300, R7 M300, R5 M300, R9 M200, R7 M200 and R5 M200; HD 8500M to HD 8900M and HD 7700M to HD 7900M.</li>
+</ul>
+<p>What the thread says about the newer cards: they have no analog output. 15 kHz comes out of their HDMI through an active HDMI to VGA adapter, but video modes with a low dotclock probably won't work there, and super resolutions are the recommended answer. The beta 14 driver removed the low pixel clock limit on HDMI, which is a change in the Windows driver, not in Linux's. See <a href="#Converters">Converters</a> and <a href="#Video-cards">Video cards</a> for the same limit on FliperOS.</p>
 <h2 id="Video-cards-AMD-gcn-2-and-3-cards-with-dvi-i">GCN 2 and 3 cards with DVI-I</h2>
 <p>Not every card after GCN 1.0 lost its analog output: GroovyArcade reports the R7 260X on DVI-I and the R9 380 on DVI-I. None of them has been tried on FliperOS.</p>
 <ul>
@@ -4701,13 +4729,14 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li><strong>Stop using it:</strong> the consoles leave the frontends and the shortcuts of the home go back. Nothing is deleted from the disk, and the folders made beside the consoles stay there.</li>
 </ul>
 <p>Nothing is written inside a console folder. A folder name that FliperOS has no emulator for is left out, and the list says how many.</p>
+<p><strong>Which folder.</strong> A disk can keep Batocera's folders in more than one place: <code>batocera/roms</code>, <code>userdata/roms</code> and <code>roms</code> in the root of the disk (the <code>/userdata</code> of a disk that Batocera itself set up). FliperOS compares them and uses the one with the <strong>most games</strong> (the <code>gamelist.xml</code>, <code>images</code> and <code>videos</code> beside the games don't count), so an old <code>batocera</code> folder with only the sample game of each console doesn't win over the real library. A <code>roms</code> folder that FliperOS wrote its own folders into (the <code>retroarch</code> folder and the like, after you pointed <code>~/roms</code> at it) is still Batocera when it has the consoles. A disk that was set up on the other folder is set up again on the right one when the cabinet starts or the disk is plugged in (and by update 108): the consoles keep the core you chose, <code>~/bios</code>, <code>~/save</code> and the other shortcuts follow, and nothing is moved or deleted on the disk. A shortcut you made yourself to another place is left as it was.</p>
 <p><strong>The question:</strong> when a disk with a Batocera filesystem is plugged in, or the cabinet turns on with it connected, the frontend asks <strong>once</strong> whether to use it (<strong>YES</strong> / <strong>NO</strong>, <strong>NO</strong> selected), in a card that says how many consoles it found. It does not make the <code>fliperos</code> folder on that disk. <strong>YES</strong> is the same as <em>Use it</em> above; <strong>NO</strong> says where to do it later. It is asked once per disk, apart from the question of the FliperOS folders.</p>
 <h2 id="External-storage-how-it-works">How it works</h2>
 <ul>
 <li>Folder shortcuts: <code>lib/folders.sh</code> (<code>folders_link</code>, <code>folders_unlink</code>, <code>folders_shown</code>, <code>folders_looks_like_systems</code>) and <code>screens/folders.sh</code>; the state is what is on disk, and the list for the cloud backup is <code>~/.config/fliperos/folders.list</code>.</li>
 <li>FliperOS folders: <code>lib/storage.sh</code> and <code>screens/storage.sh</code>. <code>fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse|offer MOUNT|answer MOUNT yes|no [batocera]|auto MOUNT|format-info MOUNT|format MOUNT ext4|exfat</code> does it from a terminal. <code>fliperos-automount</code> runs <code>--storage auto MOUNT</code> after mounting a disk; the queue is <code>/var/lib/fliperos/storage/offer</code> and the answers are in <code>/var/lib/fliperos/storage/answered</code> (<code>UUID</code>, and <code>batocera:UUID</code> for the other question), read and written by <code>gui/festorage.py</code>.</li>
 <li>Format: <code>storage_format</code> unmounts, <code>wipefs -a</code>, <code>mkfs.ext4 -F -m 0</code> or <code>mkfs.exfat</code>, and lets <code>fliperos-automount</code> mount it again as <code>FliperOS-HD</code>. <code>exfatprogs</code> comes in the image.</li>
-<li>Batocera filesystem: <code>lib/batocera.sh</code>; the table of console names, the cores and what each console opens is <code>config/batocera-systems.list</code> (installed as <code>/usr/local/share/fliperos/batocera-systems.list</code>). The choices are <code>~/.config/fliperos/batocera.list</code> (<code>console&lt;TAB&gt;folder&lt;TAB&gt;core</code>), in the cloud backup. A console is a frontend system with the key <code>batocera/&lt;name&gt;</code> (<code>scraper_detect</code> and <code>scraper_attract_emulator</code>, <code>lib/scraper.sh</code>), so ES-DE, Pegasus, Attract-Mode Plus, the FliperOS frontend and the web panel all list it. <code>fliperos-setup --batocera detect|scan|list|cores|set|unset|auto|use|unuse|extras</code> does it from a terminal.</li>
+<li>Batocera filesystem: <code>lib/batocera.sh</code>; the table of console names, the cores and what each console opens is <code>config/batocera-systems.list</code> (installed as <code>/usr/local/share/fliperos/batocera-systems.list</code>). The choices are <code>~/.config/fliperos/batocera.list</code> (<code>console&lt;TAB&gt;folder&lt;TAB&gt;core</code>), in the cloud backup. A console is a frontend system with the key <code>batocera/&lt;name&gt;</code> (<code>scraper_detect</code> and <code>scraper_attract_emulator</code>, <code>lib/scraper.sh</code>), so ES-DE, Pegasus, Attract-Mode Plus, the FliperOS frontend and the web panel all list it. <code>fliperos-setup --batocera detect|scan|list|cores|set|unset|auto|use|unuse|repair|extras</code> does it from a terminal (<code>repair</code> sets a disk up again on the folder <code>detect</code> chooses today, when it was set up on another).</li>
 <li>Where a folder really is: <code>folders_shown</code> (and <code>fliperos-setup --folders shown &lt;folder&gt;</code>) is the one text every screen and the web panel use for a folder that can be on another disk.</li>
 </ul>
 <p>See also: <a href="#ROMs">ROMs, BIOS and artwork</a>, <a href="#Setup-Games">Games Setup</a>, <a href="#Custom-games">Custom games</a>, <a href="#Web-panel-System">Web panel: System</a>.</p>
@@ -5800,6 +5829,7 @@ p2_b1=LEFTCTRL
 <li><strong>Where to set it:</strong> the <em>16:9 crop</em> box in <strong>Create package</strong> (web panel, one package or the table) with its explanation, <em>Yes/No</em> in the Setup's Create package, the game's information in the Setup, the edit window of an installed game, and <strong>Video configuration &gt; 16:9 crop</strong> in the on-screen menu. It is <code>crop169=1</code> in the game's <code>.cfg</code> and travels in the package.</li>
 <li><strong>When it counts:</strong> the X screen is made when the game opens, so a change in the on-screen menu or in the edit window counts the next time the game opens.</li>
 <li><strong>On-screen menu:</strong> while the game runs with the crop, the menu and the volume and achievement bars are drawn only in the middle three quarters of the picture, the part the tube shows (so the letters come out a third wider than usual).</li>
+<li><strong>What the game sees:</strong> the whole 1280x720 screen. The X server would report the tube's part (960x720) as the monitor, and a widescreen game would open in that 4:3 window with black bars, so the crop also sets a 1280x720 monitor (<code>xrandr --setmonitor</code>), which the window manager and SDL games use as it is. A Windows game (Wine, PortProton) asks the RandR extension instead, so while it runs with the crop its Wine prefix gets <code>UseXRandR=N</code> (under <code>[Software\\Wine\\X11 Driver]</code> in <code>user.reg</code>, with a <code>FliperosCrop169</code> mark) and the line is removed when it opens without the crop. The first time a game opens in a prefix that Wine hasn't made yet, there is no <code>user.reg</code> to change: open the game once more.</li>
 <li>A card that can't make the bigger screen opens the game without the crop.</li>
 </ul>
 <p>Each game has its own row in <strong>Video Setup &gt; Interlaced hacks</strong> (only the flicker filter: the mode is the game's), and the level chosen in the on-screen menu during the game stays with that game. Its name for the filter, the menu and the log is <code>custom_</code> plus the group and the name in lower case, with <code>_</code> for everything else: <em>PC games</em> / <em>Metal Slug X</em> is <code>custom_pc_games_metal_slug_x</code>, and its log is <code>/opt/fliperos/logs/custom_pc_games_metal_slug_x.log</code>.</p>
