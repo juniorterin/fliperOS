@@ -78,7 +78,9 @@ GROOVYMAME = os.environ.get("FLIPEROS_GROOVYMAME_BIN", "/usr/local/libexec/groov
 HBMAME_SYSTEMS = ("hbmame",)
 HBGROOVYMAME = os.environ.get("FLIPEROS_HBGROOVYMAME_BIN", "/usr/local/libexec/hbgroovymame")
 BUTTONS_MAP = os.environ.get("FLIPEROS_BUTTONS_MAP", "/etc/fliperos/buttons.map")
-KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN", "/opt/fliperos/bin/fliperos-kms-run")
+# O lancador; FLIPEROS_KMS_RUN e o PID que o fliperos-kms-run exporta (o
+# frontend roda nele), nao um caminho.
+KMS_RUN = os.environ.get("FLIPEROS_KMS_RUN_BIN", "/opt/fliperos/bin/fliperos-kms-run")
 RA_CORES = os.environ.get("FLIPEROS_RA_CORES", "/opt/fliperos/retroarch/cores")
 RA_INFO = os.environ.get("FLIPEROS_RA_INFO", "/opt/fliperos/retroarch/info")
 FBNEO_INDEX = os.environ.get("FLIPEROS_FBNEO_INDEX", "/usr/local/share/fliperos/fbneo-sets.tsv.xz")

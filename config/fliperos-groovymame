@@ -119,9 +119,11 @@ use_kms() {
 }
 
 if [[ -z ${DISPLAY:-} && -z ${FLIPEROS_GROOVYMAME_X11:-} ]] && opens_video "$@" && use_kms; then
-  # Pelo fliperos-kms-run (o log, o marquee, as saidas, o filtro), se quem
-  # chamou ja nao passou por ele (a sessao, um frontend).
-  [[ -n ${FLIPEROS_KMS_RUN:-} ]] || exec "$kmsrun" "$0" "$@"
+  # Pelo fliperos-kms-run (o log, o marquee, as saidas, o filtro), se este
+  # processo ja nao e ele (o exec mantem o PID que ele exporta). O jogo de um
+  # frontend que roda no kms-run tambem passa: so o PID do frontend estava
+  # no FLIPEROS_KMS_RUN, e o ZeDMD ficava no sistema durante o jogo.
+  [[ ${FLIPEROS_KMS_RUN:-} == "$$" ]] || exec "$kmsrun" "$0" "$@"
   export LD_LIBRARY_PATH="$kmssdl${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   unset SDL_KMSDRM_REQUIRE_DRM_MASTER
   export FLIPEROS_GROOVYMAME_NO_X=1
