@@ -13,6 +13,8 @@
 #             uma por core do RetroArch que grava isso, como em ~/roms.
 #   ~/save    os saves e os estados: uma pasta por emulador (retroarch, mame,
 #             ps2).
+#   ~/cheats  os cheats: uma pasta por emulador que os le e uma por core do
+#             RetroArch que tem cheats; cada um os acha sozinho no formato dele.
 #   ~/config  links para as configuracoes de cada emulador e frontend
 #             instalado (os que ja criaram a sua).
 #   ~/splashscreen  os temas do splash (Plymouth), um por pasta.
@@ -421,6 +423,39 @@ for emu in mame flycast retroarch/mame2010; do
     printf '%s\n' "$game" >> "$done_list" 2> /dev/null
   done
 done
+
+# ── ~/cheats ────────────────────────────────────────────────────────
+# Uma pasta por emulador, e por core do RetroArch que tem cheats (o "cheats =
+# true" da informacao do core, como em ~/roms): cada emulador le a dela sozinho,
+# no formato e no nome que ele pede, e liga o que o arquivo traz ligado. So tem
+# pasta quem sabe ler cheats: Keisho, Odin, xemu, Hypseus, OpenBOR e os cores
+# sem cheats ficam de fora. Os caminhos de antes (~/.mame/cheat,
+# ~/.hbmame/cheat, o GameSettings do Dolphin) viram links para a pasta nova,
+# com o que tinham dentro; um emulador instalado so depois ganha o link no
+# login seguinte.
+cheats=${FLIPEROS_CHEATS:-$HOME/cheats}
+folder "$cheats" "Cheats: one folder per emulator and RetroArch core that reads them. Each emulator finds its own at the game start, in its own format and file name (see the _info.txt in each folder)."
+folder "$cheats/mame" "GroovyMAME: cheat.7z (the MAME cheat pack, all games in one file) and/or <set>.xml (one game, the set name: sf2.xml). Switched on in the game's Tab menu > Cheat."
+folder "$cheats/hbmame" "hbgroovymame (HBMAME): cheat.7z and/or <set>.xml, as in ~/cheats/mame. Switched on in the game's Tab menu > Cheat."
+folder "$cheats/ps2" "PCSX2 (PlayStation 2): <SERIAL>_<CRC>.pnach or <CRC>.pnach, one per game (SLUS-20946_AD2A0A4A.pnach). Cheats are enabled, and the one of the game is applied when it starts."
+folder "$cheats/namco2x6" "PCSX2x6, Namco System 246/256: <CRC>.pnach, one per game, applied when the game starts."
+folder "$cheats/ps1" "DuckStation (PlayStation): <SERIAL>.cht or <SERIAL>_<HASH>.cht, one per game (SLUS-00594.cht). Turn them on per game, in the DuckStation menu (Esc) > Cheats."
+folder "$cheats/flycast" "Flycast: Dreamcast, Naomi, Naomi 2 and Atomiswave. One file per game, named like the game file with .cht added (crzytaxi.zip.cht, Sonic Adventure.gdi.cht); a .txt also works. The format is the RetroArch .cht (cheat0_desc, cheat0_address, cheat0_value, cheat0_enable = true...). Found when the game starts, and the ones marked enable are applied."
+folder "$cheats/dolphin" "Dolphin (GameCube and Wii): <GAMEID>.ini, one per game (GALE01.ini), with the codes in [ActionReplay] and [Gecko] and the switched-on ones in [ActionReplay_Enabled] and [Gecko_Enabled]. Cheats are enabled; this folder is the one Dolphin reads (its GameSettings)."
+folder "$cheats/retroarch" "RetroArch: one folder per core that has cheats, named like the core (Snes9x, FinalBurn Neo...): <game>.cht, named like the game file without its extension (Sonic.md: Sonic.cht). Loaded and switched on when the game opens. Online Updater > Update Cheats downloads the libretro database in here too."
+while IFS= read -r core; do
+  [[ -n $core && $core != */* ]] || continue
+  folder "$cheats/retroarch/$core" "RetroArch, core ${core}: <game>.cht, named like the game file without its extension (Sonic.md: Sonic.cht). Loaded and switched on when the game opens."
+done < <(awk -F' = ' '
+  FNR == 1 { if (ok && name != "") print name; name = ""; ok = 0 }
+  $1 == "corename" { name = $2; gsub(/"/, "", name) }
+  $1 == "cheats" { v = $2; gsub(/"/, "", v); ok = (v == "true") }
+  END { if (ok && name != "") print name }' "$info"/*_libretro.info 2> /dev/null)
+link_dir "$mame_home/cheat" "$cheats/mame"
+[[ -d $HOME/.hbmame ]] && link_dir "$HOME/.hbmame/cheat" "$cheats/hbmame"
+if command -v dolphin-emu > /dev/null 2>&1 || [[ -d $data/dolphin-emu ]]; then
+  link_dir "$data/dolphin-emu/GameSettings" "$cheats/dolphin"
+fi
 
 # ── ~/splashscreen ──────────────────────────────────────────────────
 # Os temas do Plymouth, um por pasta. Os da imagem entram se faltam (um

@@ -226,6 +226,12 @@ case $name in
     if [[ -f ${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg ]]; then
       "${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}" "${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg" \
         achievements Notifications no 2> /dev/null || true
+      # Os cheats de ~/cheats/flycast (fliperos-roms): ele acha o do jogo na
+      # pasta do Dreamcast.CheatPath (<arquivo do jogo>.cht). Uma pasta que a
+      # pessoa ja escolheu fica.
+      grep -q '^Dreamcast\.CheatPath' "${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg" ||
+        "${FLIPEROS_INI_SET:-/opt/fliperos/bin/fliperos-ini-set}" "${XDG_CONFIG_HOME:-$HOME/.config}/flycast/emu.cfg" \
+          config Dreamcast.CheatPath "${FLIPEROS_CHEATS:-$HOME/cheats}/flycast" 2> /dev/null || true
     fi
     # As saidas do jogo pela rede, se ha quem as leia (config/fliperos-outputs).
     netout=""
@@ -273,6 +279,10 @@ case $name in
     # gravacoes de entrada nao servem entre NKit e imagem normal), uma janela
     # que o painel nao sabe fechar: o jogo ficava parado nela.
     "$iniset" "${gfx%/*}/Dolphin.ini" Interface SkipNKitWarning True 2> /dev/null || true
+    # Os cheats dos jogos (os codigos de ~/cheats/dolphin/<ID DO JOGO>.ini,
+    # fliperos-roms) so valem com os cheats ligados; o que o arquivo traz
+    # ligado ([ActionReplay_Enabled], [Gecko_Enabled]) e aplicado ao abrir.
+    "$iniset" "${gfx%/*}/Dolphin.ini" Core EnableCheats True 2> /dev/null || true
     cheevos_ini dolphin "${gfx%/*}/RetroAchievements.ini"
     # As conquistas na saida (o dolphin-emu.log abaixo), para a barra da OSD
     # (fliperos-cheevos watch): o Dolphin so as escreve com o log
@@ -288,7 +298,9 @@ case $name in
     # (~/.config/PCSX2x6, a que o fork usa sozinho), a BIOS e os cartoes por
     # placa; as configuracoes do PCSX2 oficial nao se misturam com as dele.
     datadir="$HOME/.config/PCSX2" biosdir="$HOME/bios/ps2" gamesdir=/home/fliperos/roms/ps2
+    cheatdir="${FLIPEROS_CHEATS:-$HOME/cheats}/ps2"
     if [[ $1 == pcsx2x6 ]]; then
+      cheatdir="${FLIPEROS_CHEATS:-$HOME/cheats}/namco2x6"
       # Uma pasta so de jogos, de BIOS e de dongles (namco2x6). A 256.BIN serve
       # as duas placas (o projeto diz que um jogo 246 roda com ela); a
       # COH-H31000.BIN, a da 246 de 2000, derrubou o Soul Calibur II com
@@ -354,6 +366,10 @@ case $name in
       "$iniset" "$ini" Achievements LeaderboardNotifications false
       "$iniset" "$ini" Logging EnableFileLogging true
       "$iniset" "$ini" Folders Bios "$biosdir"
+      # Os cheats (.pnach) de ~/cheats/ps2 (no fork, ~/cheats/namco2x6;
+      # fliperos-roms): ligados, e o PCSX2 acha o do jogo pelo CRC dele.
+      "$iniset" "$ini" Folders Cheats "$cheatdir"
+      "$iniset" "$ini" EmuCore EnableCheats true
       if [[ $1 == pcsx2x6 ]]; then
         "$iniset" "$ini" Folders MemoryCards "$savedir"
         # A BIOS da placa do jogo: as duas estao na mesma pasta.
@@ -490,6 +506,9 @@ INI
       "$iniset" "$ini" UI MainWindowHeight "$FLIPEROS_RES_H"
       "$iniset" "$ini" UI MainWindowMaximized false
       "$iniset" "$ini" BIOS SearchDirectory "$HOME/bios"
+      # Os cheats (<serie>.cht) de ~/cheats/ps1 (fliperos-roms): o DuckStation
+      # os lista no menu do jogo (Esc > Cheats), onde cada um se liga.
+      "$iniset" "$ini" Folders Cheats "${FLIPEROS_CHEATS:-$HOME/cheats}/ps1"
       # O log dele na saida, que vai para o duckstation.log (o painel web o
       # mostra): sem BIOS ele so fecha, e ali fica onde a procurou. Dali
       # tambem saem as conquistas para a barra da OSD (fliperos-cheevos

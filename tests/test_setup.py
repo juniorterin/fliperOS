@@ -12901,7 +12901,7 @@ class FoldersTests(Base):
 
     def test_shares_follow_the_links(self):
         smb = (ROOT / "config/smb.conf").read_text()
-        for name in ("roms", "bios", "media", "nvram", "save", "splashscreen"):
+        for name in ("roms", "bios", "media", "nvram", "save", "cheats", "splashscreen"):
             share = smb.split("[%s]\n" % name)[1].split("\n[")[0]
             self.assertIn("wide links = yes", share, name)
 
@@ -12956,10 +12956,27 @@ class FoldersTests(Base):
             self.assertIn('source "$SETUP_DIR/%s/folders.sh"' % part, main)
         # As pastas da lista sao as que o fliperos-roms cria e a rede mostra.
         names = self.env.out("folders_list", self.vars).split()
-        self.assertEqual(names, ["roms", "bios", "media", "nvram", "save", "splashscreen"])
+        self.assertEqual(names, ["roms", "bios", "media", "nvram", "save", "cheats", "splashscreen"])
         smb = (ROOT / "config/smb.conf").read_text()
         for name in names:
             self.assertIn("path = /home/fliperos/%s\n" % name, smb)
+
+    def test_cheats_folders_take_a_custom_folder_like_those_of_nvram(self):
+        info = self.env.dir / "info"
+        info.mkdir()
+        (info / "snes9x_libretro.info").write_text('corename = "Snes9x"\ncheats = "true"\n')
+        env = dict(os.environ, HOME=str(self.home), FLIPEROS_SPLASH_BUNDLED=str(self.env.dir / "nobundle"),
+                   FLIPEROS_CORE_INFO=str(info))
+        subprocess.run(["bash", str(ROOT / "config/fliperos-roms")], env=env, check=True, timeout=60)
+        children = self.env.out("folders_children cheats", self.vars).split()
+        for name in ("mame", "hbmame", "ps2", "ps1", "namco2x6", "flycast", "dolphin", "retroarch"):
+            self.assertIn("cheats/" + name, children)
+        self.assertIn("cheats/retroarch/Snes9x", self.env.out("folders_children cheats/retroarch", self.vars).split())
+        self.assertIn("Cheat files", self.env.out("folders_description cheats", self.vars))
+        self.assertEqual(self.env.out("folders_purpose cheats", self.vars).strip(), "cheat files")
+        self.env.out('folders_link cheats/retroarch/Snes9x "%s"' % self.disk, self.vars)
+        self.assertTrue((self.home / "cheats/retroarch/Snes9x").is_symlink())
+        self.assertTrue((self.home / "cheats/retroarch/old-Snes9x").is_dir())
 
     def test_nvram_folders_take_a_custom_folder_like_those_of_roms(self):
         self.login()

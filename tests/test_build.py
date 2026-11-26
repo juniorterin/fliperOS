@@ -1563,6 +1563,80 @@ class RomFoldersTests(unittest.TestCase):
             self.assertTrue((home / 'nvram/fightcade/flycast/_info.txt').is_file())
             self.assertTrue((home / 'nvram/mame/_info.txt').is_file())
 
+    def test_cheats_have_a_folder_per_emulator_and_core_that_reads_them(self):
+        # ~/cheats: uma pasta por emulador e por core do RetroArch com "cheats =
+        # true" na informacao dele; quem nao le cheats (o MAME 2010, o Flycast
+        # do RetroArch, Keisho, Odin...) fica sem pasta.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            info = home / 'info'
+            info.mkdir()
+            for core, name, cheats in (('snes9x', 'Snes9x', 'true'), ('fbneo', 'FinalBurn Neo', 'true'),
+                                       ('mame2010', 'MAME 2010 (0.139)', 'false'), ('flycast', 'Flycast', None),
+                                       ('odd', 'Odd/Name', 'true')):
+                text = 'display_name = "%s"\ncorename = "%s"\n' % (name, name)
+                if cheats:
+                    text += 'cheats = "%s"\n' % cheats
+                (info / ('%s_libretro.info' % core)).write_text(text)
+            # O que ja estava no caminho de antes de cada um vai junto.
+            for d, name in (('.mame/cheat', 'cheat.7z'), ('.hbmame/cheat', 'sf2.xml'),
+                            ('.local/share/dolphin-emu/GameSettings', 'GALE01.ini')):
+                (home / d).mkdir(parents=True)
+                (home / d / name).write_text('mine')
+            env = dict(os.environ, HOME=str(home), FLIPEROS_CORE_INFO=str(info),
+                       FLIPEROS_SAVES_OLD=str(home / 'nada'), FIGHTCADE_DIR=str(home / 'nenhum'))
+            env.pop('XDG_DATA_HOME', None)
+            for _ in range(2):
+                subprocess.run(['bash', str(ROOT / 'config/fliperos-roms')], env=env, check=True)
+            for d in ('', 'mame', 'hbmame', 'ps2', 'ps1', 'namco2x6', 'flycast', 'dolphin', 'retroarch',
+                      'retroarch/Snes9x', 'retroarch/FinalBurn Neo'):
+                self.assertTrue((home / 'cheats' / d / '_info.txt').is_file(), d)
+            self.assertEqual(sorted(p.name for p in (home / 'cheats/retroarch').iterdir() if p.is_dir()),
+                             ['FinalBurn Neo', 'Snes9x'])
+            self.assertEqual(sorted(p.name for p in (home / 'cheats').iterdir() if p.is_dir()),
+                             ['dolphin', 'flycast', 'hbmame', 'mame', 'namco2x6', 'ps1', 'ps2', 'retroarch'])
+            for link, target, name in (('.mame/cheat', 'mame', 'cheat.7z'), ('.hbmame/cheat', 'hbmame', 'sf2.xml'),
+                                       ('.local/share/dolphin-emu/GameSettings', 'dolphin', 'GALE01.ini')):
+                self.assertEqual(os.readlink(home / link), str(home / 'cheats' / target), link)
+                self.assertEqual((home / 'cheats' / target / name).read_text(), 'mine', link)
+        # Cada um le a pasta dele: o MAME e o hbgroovymame pelo cheatpath (com o
+        # cheat ligado), o RetroArch pelo banco de cheats e o Flycast, o PCSX2,
+        # o DuckStation e o Dolphin pelo fliperos-x11-run.
+        ini = (ROOT / 'config/mame.ini').read_text()
+        self.assertIn('cheatpath $HOME/cheats/mame\n', ini)
+        self.assertIn('\ncheat 1\n', ini)
+        self.assertRegex((ROOT / 'packaging/assets/hbgroovymame/paths.ini').read_text(),
+                         r'(?m)^cheatpath\s+\$HOME/cheats/hbmame$')
+        cfg = (ROOT / 'config/retroarch.cfg').read_text()
+        self.assertIn('cheat_database_path = "/home/fliperos/cheats/retroarch"\n', cfg)
+        self.assertIn('apply_cheats_after_load = "true"\n', cfg)
+
+    def test_cheats_folder_is_one_more_user_folder(self):
+        # O Folders do Setup (custom folder), o painel web e o Samba a conhecem como as outras.
+        folders = (ROOT / 'fliperos-setup/lib/folders.sh').read_text()
+        self.assertIn('FOLDERS_NAMES="roms bios media nvram save cheats splashscreen"', folders)
+        self.assertIn('cheats) echo "cheat files" ;;', folders)
+        self.assertRegex(folders, r'(?m)^    roms \| bios \| media \| nvram \| cheats \| .*\| cheats/retroarch\) return 0 ;;$')
+        self.assertRegex((ROOT / 'config/fliperos-web').read_text(), r'"roms bios media nvram save cheats splashscreen home"')
+
+    def test_old_mame_ini_gets_the_cheats_on(self):
+        # Um mame.ini de antes tem o "cheat 0" do -createconfig: passa para o 1.
+        # O cheatpath de antes (~/.mame/cheat) fica, que agora e um link.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for d in ('home/fliperos', 'etc/fliperos/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            (root / 'etc/fliperos/mame/mame.ini').write_text(
+                'cheat                     0\ncheatpath                 $HOME/.mame/cheat\n')
+            subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)], check=True,
+                           capture_output=True, timeout=120)
+            text = (root / 'etc/fliperos/mame/mame.ini').read_text()
+            self.assertRegex(text, r'(?m)^cheat +1$')
+            self.assertEqual(len(re.findall(r'(?m)^cheat +', text)), 1)
+            self.assertRegex(text, r'(?m)^cheatpath +\$HOME/\.mame/cheat$')
+
     def test_nvram_of_before_moves_to_the_mame_folder(self):
         # ~/nvram era so do MAME: os conjuntos saem da raiz, e nada se perde.
         with tempfile.TemporaryDirectory() as tmp:
@@ -1926,7 +2000,7 @@ class RomFoldersTests(unittest.TestCase):
         self.assertIn('Dreamcast.BiosPath = /home/fliperos/bios/dc', flycast)
         self.assertIn('FLYCAST_BIOS_PATH=', (ROOT / 'config/fliperos-x11-run').read_text())
         smb = (ROOT / 'config/smb.conf').read_text()
-        for share in ('roms', 'bios', 'media', 'nvram', 'save', 'config', 'splashscreen'):
+        for share in ('roms', 'bios', 'media', 'nvram', 'save', 'cheats', 'config', 'splashscreen'):
             self.assertIn('[%s]\n' % share, smb)
             self.assertIn('path = /home/fliperos/%s\n' % share, smb)
         self.assertIn('wide links = yes', smb)
@@ -13246,7 +13320,7 @@ class WebPanelTests(unittest.TestCase):
     def test_files_browse_upload_download_and_delete(self):
         cookie = self.login()
         listing = json.loads(self.request('GET', '/api/files?root=roms&path=', cookie=cookie)[2])
-        self.assertEqual(listing['roots'], ['roms', 'bios', 'media', 'nvram', 'save', 'splashscreen', 'home'])
+        self.assertEqual(listing['roots'], ['roms', 'bios', 'media', 'nvram', 'save', 'cheats', 'splashscreen', 'home'])
         # A pasta pessoal inteira (~): sem os ocultos e sem sair dela.
         home = json.loads(self.request('GET', '/api/files?root=home&path=', cookie=cookie)[2])
         self.assertIn('roms', [e['name'] for e in home['entries']])
@@ -17089,6 +17163,37 @@ class EmulatorModeTests(unittest.TestCase):
             self.assertIn('StartBigPictureMode = true\n', ini)
             self.assertIn('LLeft = SDL-0/DPadLeft\n', ini)
             self.assertIn('LRight = SDL-0/LeftX+\n', ini)
+
+    def test_each_emulator_reads_the_cheats_of_its_own_folder(self):
+        # ~/cheats/<pasta> (config/fliperos-roms): o PCSX2 e o fork dos arcades Namco
+        # com os cheats ligados, o DuckStation e o Flycast com a pasta, o Dolphin com os cheats ligados.
+        with tempfile.TemporaryDirectory() as home:
+            home = Path(home)
+            extra = {'FLIPEROS_INI_SET': str(ROOT / 'config/fliperos-ini-set'), 'XDG_CONFIG_HOME': '',
+                     'FLIPEROS_PCSX2_INI': str(ROOT / 'config/pcsx2.ini')}
+            emu = home / '.config/flycast/emu.cfg'
+            emu.parent.mkdir(parents=True)
+            emu.write_text('[config]\nDreamcast.BiosPath = /b\n')
+            self.run_x11(['flycast', 'crzytaxi.zip'], home=home, extra=extra)
+            self.assertRegex(emu.read_text(), r'(?m)^Dreamcast\.CheatPath = %s/cheats/flycast$' % re.escape(str(home)))
+            # Uma pasta que a pessoa ja escolheu fica.
+            emu.write_text('[config]\nDreamcast.CheatPath = /mnt/cheats\n')
+            self.run_x11(['flycast', 'crzytaxi.zip'], home=home, extra=extra)
+            self.assertEqual(emu.read_text().count('Dreamcast.CheatPath'), 1)
+            self.assertIn('Dreamcast.CheatPath = /mnt/cheats\n', emu.read_text())
+            self.run_x11(['dolphin-emu', '-e', 'game.iso'], home=home, extra=extra)
+            self.assertRegex((home / '.config/dolphin-emu/Dolphin.ini').read_text(), r'\[Core\]\nEnableCheats = True\n')
+            for prog, data, folder in (('pcsx2', 'PCSX2', 'ps2'), ('pcsx2x6', 'PCSX2x6', 'namco2x6')):
+                self.run_x11([prog, 'game.iso'], home=home, extra=extra)
+                ini = (home / '.config' / data / 'inis/PCSX2.ini').read_text()
+                self.assertRegex(ini, r'\[Folders\][^\[]*\nCheats = %s/cheats/%s\n' % (re.escape(str(home)), folder), prog)
+                self.assertRegex(ini, r'\[EmuCore\][^\[]*\nEnableCheats = true\n', prog)
+            self.run_x11(['duckstation', 'game.cue'], home=home, extra=extra)
+            self.assertRegex((home / '.local/share/duckstation/settings.ini').read_text(),
+                             r'\[Folders\][^\[]*\nCheats = %s/cheats/ps1\n' % re.escape(str(home)))
+            # A raiz vem de FLIPEROS_CHEATS (como a FLIPEROS_NVRAM do fliperos-roms).
+            self.run_x11(['pcsx2', 'game.iso'], home=home, extra=dict(extra, FLIPEROS_CHEATS='/mnt/c'))
+            self.assertIn('\nCheats = /mnt/c/ps2\n', (home / '.config/PCSX2/inis/PCSX2.ini').read_text())
 
     def test_duckstation_starts_without_the_wizard_and_on_the_panel(self):
         # Os nomes das opcoes sao os do src/core/settings.cpp e do

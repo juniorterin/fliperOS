@@ -43,6 +43,7 @@
   - [External storage](External-storage.md)
   - [Downloader](Downloader.md)
   - [BIOS](BIOS.md)
+  - [Cheats](Cheats.md)
   - [ROM Cleaner](ROM-Cleaner.md)
   - [Scraper](Scraper.md)
   - [Adding games](Adding-games.md)

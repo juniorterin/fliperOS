@@ -4,6 +4,7 @@ Where your games, BIOS, art, memory and saves live on the cabinet, and how to pu
 | --- | --- |
 | [Downloader](Downloader.md) | MAME ROM and CHD sets by torrent, only the games your filter picks, and the free homebrew games |
 | [BIOS](BIOS.md) | Download BIOS: the BIOS your games lack, found and downloaded by themselves |
+| [Cheats](Cheats.md) | `~/cheats`: each emulator and core reads its cheat files by itself |
 | [ROM Cleaner](ROM-Cleaner.md) | The MAME ROM Cleaner and the CHD Cleaner: only the games that suit your cabinet, from a full romset |
 | [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games |
 | [Adding games](Adding-games.md) | Step by step: copy the games, make the frontends see them, names and art |
@@ -22,6 +23,7 @@ Everything is in the home folder, `/home/fliperos`, and each folder is also a ne
 | `~/media` | The art and text the frontends show |
 | `~/nvram` | What arcade games remember without power: settings, credits, scores, unlocks |
 | `~/save` | What you save while playing: saves, save states, memory cards |
+| `~/cheats` | The cheat files, one folder per emulator and per RetroArch core that reads them |
 | `~/config` | Links to each emulator's and frontend's settings |
 | `~/splashscreen` | The boot screen themes |
 
@@ -109,6 +111,10 @@ Each one is copied only once, and only if the game has no memory of its own yet:
 ### `~/save`
 
 What you save while playing, one folder per emulator: `retroarch` (game saves, `.srm`, and save states), `mame` (save states) and `ps2` (PCSX2's memory cards). The [cloud backup](Cloud-backup.md) can keep it in your cloud.
+
+### `~/cheats`
+
+One folder per emulator that reads cheats (`mame`, `hbmame`, `ps2`, `namco2x6`, `ps1`, `flycast`, `dolphin`) and one per RetroArch core that has them (`retroarch/Snes9x`). A cheat file in its emulator's folder is found by the emulator when the game starts, in the format and with the name that emulator asks for. All of it, with the emulators that have no cheats, is in [Cheats](Cheats.md).
 
 ### `~/config`
 

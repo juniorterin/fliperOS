@@ -61,10 +61,11 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 
 | Page | What it covers |
 | --- | --- |
-| [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `nvram`, `save`, `config`), unlocked arcade memory, custom folders on another disk |
+| [ROMs, BIOS and artwork](ROMs.md) | The folders in `~` (`roms`, `bios`, `media`, `nvram`, `save`, `cheats`, `config`), unlocked arcade memory, custom folders on another disk |
 | [External storage](External-storage.md) | Folder shortcuts, a second disk with the FliperOS folders, a Batocera filesystem with a core for each console, formatting a disk |
 | [Downloader](Downloader.md) | MAME ROM and CHD sets by torrent, only the games your filter picks, and the free homebrew games |
 | [BIOS](BIOS.md) | Download BIOS: what it looks for, RetroBIOS and the reference pack, the check at each menu opening |
+| [Cheats](Cheats.md) | `~/cheats`: one folder per emulator and RetroArch core, each one reads its own cheats when the game starts |
 | [ROM Cleaner](ROM-Cleaner.md) | The MAME ROM Cleaner (every parameter and preset) and the CHD Cleaner |
 | [Scraper](Scraper.md) | Covers, screenshots, logos, videos and descriptions of the games, for every frontend |
 | [Adding games](Adding-games.md) | Step by step: copy the games, make the frontend see them, real names, artwork, play; KMS or X11 command lines |

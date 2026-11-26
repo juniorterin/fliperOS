@@ -72,7 +72,7 @@ In development: 0.29 is tested in QEMU and on a 15 kHz CRT cabinet. Full documen
 - 🎮 **Frontends**: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen with a wheel of logos, and grid; clones folded under each game; letter-by-letter scrolling; menu sounds and music), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.
 - 🔫 **Light gun**: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup > Joysticks. Wheels too.
 - ⚙️ **Setup**: video, geometry, audio (stereo or mono, menu sounds), network, scraper, ROM lists, MAME romset cleaning, controls (Map controllers with eight player slots) and latency.
-- 📁 **Folders** `roms`, `bios`, `media`, `nvram`, `save` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
+- 📁 **Folders** `roms`, `bios`, `media`, `nvram`, `save`, `cheats` and `config` in `~` and over the network (Samba); LXDE desktop with an app store.
 - 🔑 **SSH** on from the first boot (`ssh fliperos@fliperos.local`, password `fliperos`). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.
 
 <table>
@@ -224,7 +224,7 @@ Use only games you have the right to use (your own dumps, or the free homebrew f
 
 **Use the LXDE desktop.** Plug a USB mouse and keyboard into the cabinet and choose **Start desktop** in the FliperOS menu. It is a regular desktop, and it makes all the work with games easier:
 
-- **Folders**: the file manager opens your home folder, with `roms`, `bios`, `media`, `nvram`, `save` and `config`. You see where each file goes and can create, rename and move files with the mouse.
+- **Folders**: the file manager opens your home folder, with `roms`, `bios`, `media`, `nvram`, `save`, `cheats` and `config`. You see where each file goes and can create, rename and move files with the mouse.
 - **Browser**: *Falkon (browser)* in the desktop menu, to search for the torrents of your games.
 - **Torrents**: *Transmission (torrent)* opens the `.torrent` files and magnet links from the browser. When the download finishes, move the files from `Downloads` to the right folder in `roms`.
 - **External storage**: plug in a USB stick or an external disk. It is mounted by itself and gets an icon on the desktop: open it, copy the files and paste them into the right folder in `roms` (or `bios`).
@@ -387,7 +387,7 @@ The items come in the order of setting up a cabinet: picture, sound, network, co
 
     Choose one that is not installed to install it: **Fightcade 2** (downloaded from its site) and **KOF Final Attack** on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with `Final Attack.exe`, on a USB disk or the network) and it downloads the [4:3 patch](https://github.com/juniorterin/KOF-Final-Attack-4-3-patch) and Ikemen GO and makes a converted copy. **HBGroovyMAME**, **Odin** and the **AnyBOR** core are not in the image either: they install themselves when the first game of their folder (`hbmame`, `odin`, `openbor`) opens, or from here. The others come in the image.
   - *Folders*, in two parts:
-    - *Folder shortcuts* (called *Link* before): the folders FliperOS uses (`roms`, `bios`, `media`, `nvram`, `save`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and *Point it to a folder on another disk* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a shortcut to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Remove the shortcut* brings the previous one back.
+    - *Folder shortcuts* (called *Link* before): the folders FliperOS uses (`roms`, `bios`, `media`, `nvram`, `save`, `cheats`, `splashscreen`) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and *Point it to a folder on another disk* to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): `~/roms/mame` becomes a shortcut to it and the folder used until then is kept as `~/roms/old-mame`. Each folder can point to a different place. *Remove the shortcut* brings the previous one back.
     - *External storage*: a whole disk. *FliperOS folders* makes the folder structure on a second disk and can use it for everything, or format the disk (ext4 or exFAT). *Batocera filesystem* uses a disk that already keeps its games in Batocera's folders (`batocera/roms/snes`, `megadrive`...): each console becomes a system, with the core you choose for it. Plug such a disk in and the frontend asks once whether to use it. More in [External storage](docs/wiki/External-storage.md).
   - *Downloader*:
     - *ROM/CHD MAME torrent*: you paste the magnet link of a romset (and one of CHDs) and it downloads, through Transmission, only the games the ROM Cleaner filter chooses, straight into the emulator's folder. The MAME version of the romset must match the emulator;

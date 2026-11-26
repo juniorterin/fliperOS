@@ -27,7 +27,7 @@ From Windows, open `\\fliperos` in Explorer (or `\\` and the cabinet's IP). The 
 
 | Share | Folder |
 | --- | --- |
-| `roms`, `bios`, `media`, `nvram`, `save`, `splashscreen`, `config` | The folders in `~` ([ROMs, BIOS and artwork](ROMs.md)) |
+| `roms`, `bios`, `media`, `nvram`, `save`, `cheats`, `splashscreen`, `config` | The folders in `~` ([ROMs, BIOS and artwork](ROMs.md)) |
 | `FliperOS` | `/opt/fliperos`: logs, menu sounds and the rest of FliperOS |
 
 They take the same user and password as SSH. The share is a service in **Setup > System > Services**, after boot by default ([System Setup](Setup-System.md#services)).

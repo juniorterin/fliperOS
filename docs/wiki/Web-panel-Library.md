@@ -69,7 +69,7 @@ The auto scrape's state shows at the top. Details: [Scraper](Scraper.md).
 
 ## Files
 
-The folders `roms`, `bios`, `media`, `nvram`, `save`, `splashscreen` and your home:
+The folders `roms`, `bios`, `media`, `nvram`, `save`, `cheats`, `splashscreen` and your home:
 
 - open folders (`..` at the top goes back up);
 - download a file;

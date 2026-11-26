@@ -17,7 +17,7 @@
 FOLDERS_HOME=${FOLDERS_HOME:-/home/$FLIPEROS_USER}
 # As raizes. A ~/config fica de fora: so tem links para as configuracoes,
 # que o fliperos-roms refaz.
-FOLDERS_NAMES="roms bios media nvram save splashscreen"
+FOLDERS_NAMES="roms bios media nvram save cheats splashscreen"
 # Onde o fliperos-automount monta os discos: o navegador de pastas abre ali.
 FOLDERS_MOUNTS=${FOLDERS_MOUNTS:-/media/$FLIPEROS_USER}
 FOLDERS_SCRIPT=${FOLDERS_SCRIPT:-/opt/fliperos/bin/fliperos-roms}
@@ -77,6 +77,7 @@ folders_description() {
     media) echo "The art the frontends show (snap, titles, logos, videos), one folder per type." ;;
     nvram) echo "What the arcade games keep without power, one folder per emulator and core." ;;
     save) echo "Your saves and save states, one folder per emulator." ;;
+    cheats) echo "Cheat files, one folder per emulator and RetroArch core that reads them: each one finds its own when the game starts." ;;
     splashscreen) echo "The boot splash themes." ;;
     roms/retroarch) echo "The games of RetroArch: one folder per core (roms/retroarch/snes9x for the Super Nintendo)." ;;
     media/*/retroarch) echo "The art of the RetroArch games: one folder per core, as in ~/roms/retroarch." ;;
@@ -97,6 +98,7 @@ folders_purpose() {
     media) echo "art and videos" ;;
     nvram) echo "arcade memory" ;;
     save) echo "saves and states" ;;
+    cheats) echo "cheat files" ;;
     splashscreen) echo "boot themes" ;;
   esac
   return 0
@@ -211,7 +213,7 @@ folders_target() {
 # ~/roms, com a dos cores do RetroArch).
 folders_container() {
   case $1 in
-    roms | bios | media | nvram | roms/retroarch | roms/fightcade | nvram/retroarch | nvram/fightcade) return 0 ;;
+    roms | bios | media | nvram | cheats | roms/retroarch | roms/fightcade | nvram/retroarch | nvram/fightcade | cheats/retroarch) return 0 ;;
     media/*/retroarch) return 0 ;;
     media/*/*) return 1 ;;
     media/*) return 0 ;;
@@ -300,7 +302,7 @@ folders_populate() {
 # pasta que voltou.
 folders_check() {
   local parent rel path old name
-  local -a parents=("" roms bios media nvram roms/retroarch roms/fightcade nvram/retroarch nvram/fightcade)
+  local -a parents=("" roms bios media nvram cheats roms/retroarch roms/fightcade nvram/retroarch nvram/fightcade cheats/retroarch)
   for path in "$FOLDERS_HOME"/media/*/; do
     [[ -d $path ]] || continue
     path=${path%/}
