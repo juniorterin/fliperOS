@@ -36,6 +36,27 @@ body { font: 800 16px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-ser
 .versus .wins { display: flex; gap: 2vw; font: 800 min(34vh, 14vw)/1 ui-monospace, "JetBrains Mono", monospace;
   color: #50fa7b; text-shadow: 0 0 3vh rgba(80, 250, 123, .55), 0 .5vh 0 #191a21; }
 .versus .wins b { color: #f8f8f2; }
+/* O gabinete do jogador 2 mostra o lado dele primeiro: a cor vai com o jogador. */
+.versus[data-left="2"] .side:first-child { color: #8be9fd; }
+.versus[data-left="2"] .side:last-child { color: #ff79c6; }
+/* A vitoria do first to: o nome na cor do jogador, WIN! piscando, fogos nos cantos. */
+.win { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 3vh; }
+.win[hidden] { display: none; }
+.win b { white-space: nowrap; font: 800 min(36vh, 12vw, calc(70vw / var(--len, 6)))/1 ui-monospace, "JetBrains Mono", monospace;
+  color: #ff79c6; text-shadow: 0 0 3vh currentColor, 0 .5vh 0 #191a21; }
+.win[data-player="2"] b { color: #8be9fd; }
+.win span { font: 800 min(26vh, 9vw)/1 ui-monospace, "JetBrains Mono", monospace; color: #f1fa8c;
+  text-shadow: 0 0 3vh #ffb000, 0 .5vh 0 #191a21; animation: win-blink .5s steps(1) infinite; }
+@keyframes win-blink { 60% { visibility: hidden; } }
+.win .fw { position: absolute; width: 1.6vw; height: 1.6vw; border-radius: 50%; color: #f1fa8c; opacity: 0;
+  box-shadow: 0 -7vw currentColor, 5vw -5vw currentColor, 7vw 0 currentColor, 5vw 5vw currentColor,
+    0 7vw currentColor, -5vw 5vw currentColor, -7vw 0 currentColor, -5vw -5vw currentColor;
+  animation: win-fw 2s ease-out infinite; }
+.win .fw1 { left: 9vw; top: 22vh; color: #ff79c6; }
+.win .fw2 { right: 9vw; top: 24vh; color: #50fa7b; animation-delay: .5s; }
+.win .fw3 { left: 9vw; bottom: 22vh; color: #bd93f9; animation-delay: 1s; }
+.win .fw4 { right: 9vw; bottom: 22vh; color: #8be9fd; animation-delay: 1.5s; }
+@keyframes win-fw { 0% { transform: scale(.1); opacity: 1; } 55% { opacity: 1; } 100% { transform: scale(1.4) translateY(2vh); opacity: 0; } }
 .ticker { position: fixed; left: 0; right: 0; bottom: 0; height: 22vh; overflow: hidden; display: flex;
   align-items: center; background: rgba(25, 26, 33, .72); }
 .ticker span { white-space: nowrap; font-size: 13vh; color: #f1fa8c; padding-left: 100vw;

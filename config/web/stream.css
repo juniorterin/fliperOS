@@ -249,6 +249,30 @@ details.more .live-actions { margin: 12px 0 8px; }
 .mq-led .mq-versus .mq-side:last-child { color: #8be9fd; }
 .mq-led .mq-versus small { font: 3cqw var(--px); color: #f8f8f2; }
 .mq-led .mq-versus .mq-wins { font: 700 9cqw/1 var(--px); color: #50fa7b; text-shadow: 0 0 1cqw rgba(80,250,123,.55); }
+/* O gabinete do jogador 2 mostra o lado dele primeiro: a cor vai com o jogador. */
+.mq-led .mq-versus[data-left="2"] .mq-side:first-child { color: #8be9fd; }
+.mq-led .mq-versus[data-left="2"] .mq-side:last-child { color: #ff79c6; }
+/* A vitoria do first to: o nome na cor do jogador (as mesmas do placar), WIN!
+   piscando e fogos estourando nos quatro cantos, um depois do outro. */
+.mq-led.won > img, .mq-led.won > .mq-name, .mq-led.won > .mq-syslogo, .mq-led.won > .mq-hi { display: none; }
+.mq-led .mq-win { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 1.5cqw; background: #020204; }
+.mq-led .mq-win[hidden] { display: none; }
+/* O nome inteiro entre os fogos: a letra encolhe com o tamanho dele (--len). */
+.mq-led .mq-win b { white-space: nowrap; font: 700 min(9cqw, calc(74cqw / var(--len, 6)))/1 var(--px); color: #ff79c6;
+  text-shadow: 0 0 1cqw currentColor; }
+.mq-led .mq-win[data-player="2"] b { color: #8be9fd; }
+.mq-led .mq-win span { font: 700 6.5cqw/1 var(--px); color: #f1fa8c; text-shadow: 0 0 1cqw #ffb000; animation: mq-blink .5s steps(1) infinite; }
+@keyframes mq-blink { 60% { visibility: hidden; } }
+.mq-led .mq-win .fw { position: absolute; width: 1.2cqw; height: 1.2cqw; border-radius: 50%; color: #f1fa8c; opacity: 0;
+  box-shadow: 0 -5cqw currentColor, 3.5cqw -3.5cqw currentColor, 5cqw 0 currentColor, 3.5cqw 3.5cqw currentColor,
+    0 5cqw currentColor, -3.5cqw 3.5cqw currentColor, -5cqw 0 currentColor, -3.5cqw -3.5cqw currentColor;
+  animation: mq-fw 2s ease-out infinite; }
+.mq-led .mq-win .fw1 { left: 7cqw; top: 7cqw; color: #ff79c6; }
+.mq-led .mq-win .fw2 { right: 7cqw; top: 8cqw; color: #50fa7b; animation-delay: .5s; }
+.mq-led .mq-win .fw3 { left: 7cqw; bottom: 7cqw; color: #bd93f9; animation-delay: 1s; }
+.mq-led .mq-win .fw4 { right: 7cqw; bottom: 7cqw; color: #8be9fd; animation-delay: 1.5s; }
+@keyframes mq-fw { 0% { transform: scale(.1); opacity: 1; } 55% { opacity: 1; } 100% { transform: scale(1.4) translateY(1cqw); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mq-led .mq-win span, .mq-led .mq-win .fw { animation: none; } .mq-led .mq-win .fw { opacity: 1; } }
 .mq-led .mq-ticker { position: absolute; left: 0; right: 0; bottom: 0; height: 30%; overflow: hidden; display: flex; align-items: center; background: rgba(25,26,33,.72); }
 .mq-led .mq-ticker span { white-space: nowrap; font: 5cqw var(--px); color: #f1fa8c; padding-left: 100cqw; animation: mq-ticker var(--time, 12s) linear 1 forwards; }
 @keyframes mq-ticker { to { transform: translateX(-100%); } }

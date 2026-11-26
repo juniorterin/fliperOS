@@ -28,6 +28,7 @@ Its games go in `~/roms/retroarch/fbneo`, in FBNeo's own ROM sets. The Fightcade
 ## Settings
 
 - `versus_side=2` in `/etc/fliperos/fliperos.conf` puts player 2 first, for the cabinet on that side.
+- **First to:** `versus_ft=N` (1 to 10; 0 or absent: off), with `versus_p1=` and `versus_p2=` for the players' names (the web panel's Marquee card, or Setup > Live screen). The first player to reach N wins gets `fliperos-dmd win NAME PLAYER`: the name in the player's colour (cyan for 1, orange for 2), WIN! blinking and fireworks in the corners. The set starts again from 0 x 0, even in games that keep counting their own wins. The value is read at every win, so changing it mid-match counts.
 - **Checking a game:** open it and run `fliperos-versus watch mame <game>` over SSH (`model2` for Keisho): it prints the wins and the characters as they change, to compare with the screen.
 
 ## What was checked

@@ -13206,7 +13206,7 @@ class WebPanelTests(unittest.TestCase):
         self.assertIn('.title.run span', (web / 'overlay.css').read_text())
         # Sem jogo e sem evento que desenhe (o jogo acabou de fechar), fica o
         # ultimo logotipo de sistema, e nao o nome FliperOS.
-        self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus", "menu"].includes(s.event);',
+        self.assertIn('const hold = !open && !!mqLastSys && !["system", "attract", "versus", "win", "menu"].includes(s.event);',
                       view)
         # O padrao sem jogo (antes o nome FliperOS em texto): o logotipo animado,
         # servido como arquivo do painel (sem login, como o resto da pagina).
@@ -18813,7 +18813,7 @@ class PixelcadeTests(unittest.TestCase):
         # Os pontos mudam, as vitorias nao: nada de novo no Pixelcade.
         self.assertEqual(self.run_('versus', '1', '0', '900', '90'), [])
         calls = self.dmd_calls(4)
-        self.assertEqual(calls[1:], ['versus P1 0 0 P2 500 -', 'versus P1 1 0 P2 500 90', 'versus P1 1 0 P2 900 90'])
+        self.assertEqual(calls[1:], ['versus P1 0 0 P2 500 - 1', 'versus P1 1 0 P2 500 90 1', 'versus P1 1 0 P2 900 90 1'])
         # Dois gabinetes ligados: cada um poe o proprio lado primeiro.
         conf.write_text('versus=join\n')
         self.assertEqual(self.run_('versus', '1', '2', '900', '90'),
@@ -18823,8 +18823,8 @@ class PixelcadeTests(unittest.TestCase):
         self.run_('versus', '3', '2', '900', '90')
         conf.write_text('versus_side=2\n')
         self.run_('versus', '3', '2', '-', '-')
-        self.assertEqual(self.dmd_calls(7)[4:], ['versus YOU 2 1 RIVAL 90 900', 'versus YOU 3 2 RIVAL 900 90',
-                                                 'versus P2 2 3 P1 - -'])
+        self.assertEqual(self.dmd_calls(7)[4:], ['versus YOU 2 1 RIVAL 90 900 2', 'versus YOU 3 2 RIVAL 900 90 1',
+                                                 'versus P2 2 3 P1 - - 2'])
         # O personagem de cada lado no lugar de P1 e P2 (os detectores do
         # Fightcade o dizem), sem o que vem entre parenteses e ate 10 letras.
         conf.write_text('')
@@ -18834,8 +18834,36 @@ class PixelcadeTests(unittest.TestCase):
         conf.write_text('versus_side=2\n')
         self.run_('versus', '4', '2', '-', '-', 'Guile', '')
         self.run_('versus', '4', '2', '-', '-', 'Chun Li Something Long', 'Ken')
-        self.assertEqual(self.dmd_calls(10)[7:], ['versus GUILE 4 2 M.BISON - -', 'versus P2 2 4 GUILE - -',
-                                                  'versus KEN 2 4 CHUN LI SO - -'])
+        self.assertEqual(self.dmd_calls(10)[7:], ['versus GUILE 4 2 M.BISON - - 1', 'versus P2 2 4 GUILE - - 2',
+                                                  'versus KEN 2 4 CHUN LI SO - - 2'])
+
+    def test_first_to_names_and_the_winner(self):
+        self.install()
+        self.install_zedmd()
+        conf = self.tmp / 'fliperos.conf'
+        self.env['FLIPEROS_CONF'] = str(conf)
+        self.run_('game', 'mame', 'sf2')
+        # Com o FT, os nomes dos jogadores no lugar dos personagens, e o N vai
+        # para o placar do ZeDMD.
+        conf.write_text('versus_ft=3\nversus_p1=Lucas\nversus_p2=Beto da Silva Long\n')
+        self.assertEqual(self.run_('versus', '1', '0', '-', '-', 'Ryu', 'Ken'),
+                         ['text?t=LUCAS%201%20x%200%20BETO%20DA%20SILV&l=1&event=GameStart',
+                          'arcade/stream/mame/sf2?l=99999&event=GameStart'])
+        # Quem fecha o FT: o nome e WIN!; sem nome, P1 ou P2.
+        self.assertEqual(self.run_('versus-win', '1', '3', '1'),
+                         ['text?t=LUCAS%20WIN%21&l=1&event=GameStart',
+                          'arcade/stream/mame/sf2?l=99999&event=GameStart'])
+        conf.write_text('versus_ft=3\n')
+        self.run_('versus-win', '2', '1', '3')
+        self.assertEqual(self.run_('versus-win', '9'), [])
+        self.assertEqual(self.dmd_calls(4)[1:], ['versus LUCAS 1 0 BETO DA SILV - - 1 3', 'win LUCAS 1', 'win P2 2'])
+        # A serie nova comeca do 1 x 0 de novo: o Pixelcade o mostra (o
+        # ultimo placar nao o esconde).
+        self.assertEqual(self.run_('versus', '1', '0', '-', '-')[0], 'text?t=P1%201%20x%200%20P2&l=1&event=GameStart')
+        # Sem FT, os personagens como antes.
+        conf.write_text('versus_p1=Lucas\n')
+        self.run_('versus', '2', '0', '-', '-', 'Ryu', 'Ken')
+        self.assertEqual(self.dmd_calls(6)[5], 'versus RYU 2 0 KEN - - 1')
 
     def test_a_game_in_the_versus_table_starts_the_score_reader(self):
         self.install()
@@ -19685,6 +19713,56 @@ class VersusTests(unittest.TestCase):
         points.update('score2', 90)
         self.assertEqual(points.state(), ['-', '-', '-', '90'])
 
+    def test_first_to_series_starts_again_from_zero(self):
+        # O first to: a serie nova conta so as vitorias de depois, tambem num
+        # jogo (ou detector) que segue contando as dele.
+        own = self.versus.Tally({'wins1': 0, 'wins2': 0})
+        own.update('wins1', 3)
+        own.update('wins2', 1)
+        own.reset()
+        self.assertEqual(own.state()[:2], ['0', '0'])
+        own.update('wins2', 2)
+        self.assertEqual(own.state()[:2], ['0', '1'])
+        # O jogo zerou a contagem dele (outra partida): a base vai junto.
+        own.update('wins1', 0)
+        own.update('wins1', 1)
+        self.assertEqual(own.state()[:2], ['1', '1'])
+        rounds = self.versus.Tally({'rounds1': 0, 'rounds2': 0})
+        for value in (1, 2, 0):
+            rounds.update('rounds1', value)
+        self.assertEqual(rounds.state()[:2], ['1', '0'])
+        rounds.reset()
+        self.assertEqual(rounds.state()[:2], ['0', '0'])
+        # O N vem do fliperos.conf, lido a cada vitoria; sem ele (ou 0), desligado.
+        conf = self.tmp / 'fliperos.conf'
+        self.versus.CONF = str(conf)
+        self.assertEqual(self.versus.first_to(), 0)
+        conf.write_text('versus_ft=3\nversus_p1=Lucas\n')
+        self.assertEqual(self.versus.first_to(), 3)
+        conf.write_text('versus_ft=x\n')
+        self.assertEqual(self.versus.first_to(), 0)
+
+    def test_first_to_sends_the_winner_and_hides_the_new_zero(self):
+        conf = self.tmp / 'fliperos.conf'
+        conf.write_text('versus_ft=2\n')
+        # Duas partidas do jogador 1 (os rounds dele voltando a zero) fecham o FT2.
+        feed = self.serve_mame(['mame_start = sf2ce', 'fliperos_rounds1 = 1', 'fliperos_rounds1 = 2', 'fliperos_rounds1 = 0',
+                                'fliperos_rounds2 = 1', 'fliperos_rounds2 = 2', 'fliperos_rounds2 = 0',
+                                'fliperos_rounds1 = 1', 'fliperos_rounds1 = 2', 'fliperos_rounds1 = 0',
+                                'fliperos_rounds1 = 1', 'fliperos_rounds1 = 2', 'fliperos_rounds1 = 0',
+                                'fliperos_rounds2 = 1', 'fliperos_rounds2 = 2', 'fliperos_rounds2 = 0',
+                                'mame_stop = 1'])
+        game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(game.wait)
+        self.addCleanup(game.kill)
+        env = dict(self.env, VERSUS_FEED=feed, FLIPEROS_CONF=str(conf))
+        subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce', str(game.pid)], env=env,
+                       timeout=30, check=True)
+        # 1 x 0, 1 x 1, o 2 x 1 vira a vitoria (e o 0 x 0 da serie nova nao
+        # aparece: a tela da vitoria fica), depois 1 x 0 e 1 x 1 da serie nova.
+        self.assertEqual(self.events.read_text().splitlines(),
+                         ['versus 1 0 - -', 'versus 1 1 - -', 'versus-win 1 2 1', 'versus 1 0 - -', 'versus 1 1 - -'])
+
     def serve_mame(self, lines, delay=0.5):
         """O plugin do MAME: recomeca o arquivo e escreve uma linha por vez."""
         feed = self.tmp / 'feed'
@@ -20036,6 +20114,31 @@ class ZeDMDTests(unittest.TestCase):
         self.assertIsNone(proc.poll())
         self.run_('text', 'SF2')
         self.assertEqual(proc.wait(timeout=5), 0)
+
+    def test_first_to_winner_animation(self):
+        # Quem fecha o first to: o nome na cor do jogador (as do placar), WIN!
+        # dourado piscando, fogos nos cantos; antes, um lampejo da cor dele.
+        dmd = load_script('fliperos_dmd', 'config/fliperos-dmd')
+        pixel = lambda data, x, y: tuple(data[(y * 128 + x) * 3:(y * 128 + x) * 3 + 3])
+        lit = lambda data, x0, x1, y0, y1: {pixel(data, x, y) for y in range(y0, y1) for x in range(x0, x1)} - {(0, 0, 0)}
+        for player, color in (('1', (139, 233, 253)), ('2', (255, 184, 108))):
+            intro, frames = dmd.win_frames('lucas', player)
+            self.assertEqual(len(intro), 2)
+            self.assertEqual(pixel(intro[0][0], 0, 0), tuple(int(v * 0.55) for v in color))
+            self.assertEqual(len(frames), dmd.WIN_LOOP)
+            self.assertTrue(all(ms == 50 for _, ms in frames))
+            self.assertEqual(lit(frames[0][0], 20, 108, 0, 17), {color})
+            gold = [(255, 220, 80) in lit(data, 40, 88, 18, 32) for data, _ in frames]
+            self.assertIn(True, gold)
+            self.assertIn(False, gold)          # pisca
+            # Os fogos estouram nos cantos (as faixas das pontas, fora do nome).
+            corners = [lit(data, 0, 18, 0, 32) | lit(data, 110, 128, 0, 32) for data, _ in frames]
+            self.assertTrue(all(any(c) for c in (corners[:20], corners[20:])))
+        # Um nome que nao cabe nem na letra menor roda inteiro, sem ser cortado.
+        intro, frames = dmd.win_frames('W' * 30, '1')
+        self.assertGreater(len(frames), dmd.WIN_LOOP)
+        name = [(139, 233, 253) in lit(data, 20, 108, 0, 17) for data, _ in frames]
+        self.assertEqual((name[0], name[len(frames) // 2], name[-1]), (False, True, False))
 
     def test_versus_scoreboard_frame(self):
         frames = self.run_('versus', 'YOU', '3', '1', 'RIVAL', '125300', '98700')

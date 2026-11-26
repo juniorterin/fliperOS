@@ -47,7 +47,7 @@ const SETUP_TREE = [
   ] },
   { id: "network", icon: "px-network", items: [
     { id: "wifi", also: ["hidden", "status"], box: "wifi", title: true },
-    { id: "live", keys: ["stream_audio", "stream_quality", "marquee_overlay"], extra: true, title: true },
+    { id: "live", keys: ["stream_audio", "stream_quality", "marquee_overlay", "versus_ft", "versus_p1", "versus_p2"], extra: true, title: true },
   ] },
   { id: "games", icon: "px-games", items: [
     { id: "emulators", link: "#library/install" },

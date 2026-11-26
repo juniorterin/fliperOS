@@ -19,9 +19,13 @@
 #   fliperos-dmd attract [art]        o protetor de tela: a animacao do logo (com "art",
 #                                     as artes de ~/media, uma depois da outra)
 #   fliperos-dmd startup              o logo do FliperOS (animacao vetorial 3D), quando o dmdserver abre
-#   fliperos-dmd versus ESQ VIT_ESQ VIT_DIR DIR PONTOS_ESQ PONTOS_DIR
+#   fliperos-dmd versus ESQ VIT_ESQ VIT_DIR DIR PONTOS_ESQ PONTOS_DIR [JOGADOR_ESQ [FT]]
 #                                     o placar de uma partida versus: os nomes dos
-#                                     lados, as vitorias e os pontos ("-" = sem)
+#                                     lados, as vitorias e os pontos ("-" = sem);
+#                                     JOGADOR_ESQ (1 ou 2) da a cor de cada lado, e
+#                                     FT (o first to) aparece no meio, em cima
+#   fliperos-dmd win NOME JOGADOR     quem fechou o first to: o nome na cor do
+#                                     jogador, WIN! embaixo e fogos nos cantos
 #   fliperos-dmd title ROM            o nome do jogo nas listas dos frontends
 #   fliperos-dmd art SISTEMA [ROM]    o arquivo da imagem do jogo (ou do sistema)
 #
@@ -30,6 +34,7 @@
 # aberto ate o proximo evento, que o encerra (o pid fica em
 # $XDG_RUNTIME_DIR/fliperos-dmd.pid).
 import glob
+import math
 import os
 import random
 import re
@@ -60,6 +65,9 @@ LOGO = '/usr/local/share/fliperos/pixelcade/fliperos.png'
 ATTRACT_SECONDS = float(os.environ.get('DMD_ATTRACT_SECONDS', '8'))
 EXTS = ('gif', 'png', 'webp', 'jpg', 'jpeg')
 COLOR = {'game': (255, 184, 108), 'select': (255, 255, 255), 'system': (139, 233, 253)}
+# A cor de cada jogador no placar e na vitoria do FT: as do placar de sempre,
+# o 1 ciano e o 2 laranja.
+PLAYER = {'1': COLOR['system'], '2': COLOR['game']}
 # Sistema dos eventos (os nomes do Pixelcade) -> pastas de ~/media, alem da
 # de mesmo nome: as de ~/roms (mame, model2...) e as de plataforma de antes
 # (arcade...). A de um core do RetroArch (retroarch/<core>) e achada pelo
@@ -397,10 +405,14 @@ def attract(art=False):
 
 # versus_frame: o placar de uma partida versus (config/fliperos-versus). Os
 # nomes dos lados em cima, as vitorias grandes no meio e os pontos embaixo;
-# num jogo sem vitorias na tabela, so os pontos, maiores.
-def versus_frame(left, wins_left, wins_right, right, score_left, score_right):
+# num jogo sem vitorias na tabela, so os pontos, maiores. Cada lado na cor do
+# seu jogador (left_player: quem esta a esquerda, "1" ou "2"; o gabinete do
+# jogador 2 o mostra primeiro). ft: o "FT3" do first to, em cima no meio.
+def versus_frame(left, wins_left, wins_right, right, score_left, score_right, left_player='1', ft=''):
     img, draw = canvas()
     small = font(9)
+    colors = (PLAYER['2'], PLAYER['1']) if left_player == '2' else (PLAYER['1'], PLAYER['2'])
+    label = 'FT%s' % ft if ft.isdigit() and int(ft) > 0 else ''
 
     def width(text, f):
         box = draw.textbbox((0, 0), text, font=f)
@@ -409,15 +421,19 @@ def versus_frame(left, wins_left, wins_right, right, score_left, score_right):
     def group(text):
         return '{:,}'.format(int(text)) if text.isdigit() else ''
 
-    def corner(text, y, color, on_right):
+    room = W // 2 - 3 - ((width(label, small) + 1) // 2 + 2 if label else 0)
+
+    def corner(text, y, color, on_right, room=W // 2 - 3):
         # Cada lado tem a sua metade: um nome comprido perde letras do fim.
-        while text and width(text, small) > W // 2 - 3:
+        while text and width(text, small) > room:
             text = text[:-1].rstrip()
         if text:
             draw_line(draw, text, small, y, color, x=W - width(text, small) - 1 if on_right else 1)
 
-    corner(left, 0, COLOR['system'], False)
-    corner(right, 0, COLOR['game'], True)
+    corner(left, 0, colors[0], False, room)
+    corner(right, 0, colors[1], True, room)
+    if label:
+        draw_line(draw, label, small, 0, (150, 150, 170))
     if wins_left.isdigit() and wins_right.isdigit():
         # As vitorias embaixo dos nomes: maiores quando nao ha pontos, que
         # ficam com a ultima linha.
@@ -435,19 +451,114 @@ def versus_frame(left, wins_left, wins_right, right, score_left, score_right):
         draw_line(draw, 'x', x_mark, top + height // 2 - 3, (98, 114, 164), x=x)
         x += width('x', x_mark) + gap
         draw_line(draw, wins_right, big, top, COLOR['select'], x=x)
-        corner(group(score_left), H - 8, COLOR['system'], False)
-        corner(group(score_right), H - 8, COLOR['game'], True)
+        corner(group(score_left), H - 8, colors[0], False)
+        corner(group(score_right), H - 8, colors[1], True)
     else:
         # O maior tamanho em que os dois numeros cabem lado a lado.
         for size in range(13, 7, -1):
             mid = font(size)
             if width(group(score_left), mid) + width(group(score_right), mid) + 6 <= W:
                 break
-        for text, color, on_right in ((group(score_left), COLOR['system'], False),
-                                      (group(score_right), COLOR['game'], True)):
+        for text, color, on_right in ((group(score_left), colors[0], False),
+                                      (group(score_right), colors[1], True)):
             if text:
                 draw_line(draw, text, mid, 15, color, x=W - width(text, mid) - 1 if on_right else 1)
     return [(img.tobytes(), 1000)]
+
+
+# win_frames: quem fechou o first to (config/fliperos-versus). O nome em cima
+# na cor do jogador, WIN! embaixo piscando em dourado e fogos de artificio
+# estourando nos quatro cantos, um depois do outro. Os fogos ficam nas faixas
+# das pontas (o nome vai no meio, ate WIN_ROOM de largura); um nome que nao
+# cabe nem na letra menor roda na faixa de cima, sem ser cortado. Antes, um
+# lampejo da cor do jogador (uma vez); depois o laco fica ate o proximo evento.
+WIN_ROOM = W - 36
+WIN_LOOP = 40                  # quadros de 50 ms: 2 s por volta dos fogos
+SPARKS = ((255, 220, 80), (255, 255, 255), (255, 121, 198), (80, 250, 123), (190, 120, 255))
+
+
+def firework(px, cx, cy, age, color, seed):
+    """Um estouro em (cx, cy) com age quadros. Antes (age < 0) a faisca sobe do
+    chao ate o ponto; no estouro, 14 raios abrem ate 9 pontos com um rastro
+    que vai do branco a cor e cai um pouco no fim, piscando antes de apagar."""
+    if age < -5 or age > 18:
+        return
+    rng = random.Random(seed)
+    if age < 0:
+        for t in (0, 1):
+            y = cy + (-age + t) * 3
+            if 0 <= y < H:
+                px[cx, y] = (255, 210, 140) if t == 0 else (120, 80, 40)
+        return
+    rays = 14
+    turn = rng.random()
+    radius = min(9.0, 1.0 + age * 1.1)
+    fade = 1.0 if age < 9 else max(0.0, 1 - (age - 9) / 10)
+    drop = max(0, age - 8) * 0.35
+    for k in range(rays):
+        a = (k + turn) * 2 * math.pi / rays
+        speed = 0.8 + 0.2 * ((k * 7 + seed) % 5) / 4
+        for n, back in enumerate((0.0, 1.6, 3.2)):
+            r = radius * speed - back
+            if r < 0.5:
+                continue
+            x = int(round(cx + r * math.cos(a)))
+            y = int(round(cy + r * math.sin(a) * 0.85 + drop))
+            if not (0 <= x < W and 0 <= y < H):
+                continue
+            if age > 11 and (x + y + age) % 3 == 0:
+                continue                  # o brilho piscando no fim
+            c = (255, 255, 255) if age < 3 else color
+            dim = fade * (1.0, 0.55, 0.25)[n]
+            px[x, y] = tuple(int(v * dim) for v in c)
+    if age < 2:
+        for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+            if 0 <= cx + dx < W and 0 <= cy + dy < H:
+                px[cx + dx, cy + dy] = (255, 255, 255)
+
+
+def win_frames(name, player):
+    color = PLAYER.get(player, PLAYER['1'])
+    name = ' '.join(name.split()).upper() or 'P%s' % player
+    probe = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+
+    def box(text, f):
+        left, top, right, bottom = probe.textbbox((0, 0), text, font=f)
+        return right - left, bottom - top
+
+    big, scroll = None, False
+    for size in range(16, 8, -1):
+        if box(name, font(size))[0] <= WIN_ROOM:
+            big = font(size)
+            break
+    if big is None:
+        big, scroll = font(13), True
+    name_w, name_h = box(name, big)
+    word = font(12)
+    win_w = box('WIN!', word)[0]
+    # Os quatro cantos estouram em sequencia, dois sempre no ar: o de cima e o
+    # de baixo de cada lado se alternam (a faixa de cada lado tem 18 pontos).
+    corners = ((9, 9, 0), (W - 10, 10, 10), (9, H - 10, 20), (W - 10, H - 9, 30))
+    count = max(WIN_LOOP, (W + name_w) // 2 if scroll else 0)
+    frames = []
+    for i in range(count):
+        img, draw = canvas()
+        px = img.load()
+        for n, (cx, cy, start) in enumerate(corners):
+            age = (i - start) % WIN_LOOP - 5
+            hue = color if n in (0, 3) else SPARKS[(n + i // WIN_LOOP) % len(SPARKS)]
+            firework(px, cx, cy, age, hue, n * 7 + i // WIN_LOOP)
+        x = W - 2 * i if scroll else None
+        draw_line(draw, name, big, max(0, (17 - name_h) // 2), color, x=x)
+        # WIN! pisca: 0,3 s aceso, 0,2 s apagado (10 quadros, 4 por volta dos fogos).
+        if i % 10 < 6:
+            draw_line(draw, 'WIN!', word, 19, (255, 220, 80), x=(W - win_w) // 2)
+        frames.append((img.tobytes(), 50))
+    flash = []
+    for level in (0.55, 0.25):
+        img = Image.new('RGB', (W, H), tuple(int(v * level) for v in color))
+        flash.append((img.tobytes(), 60))
+    return flash, frames
 
 
 def startup_frames():
@@ -535,8 +646,10 @@ def run(argv):
             frames = image_frames(argv[2])
         elif len(argv) == 3 and argv[1] == 'text':
             frames = text_frames(argv[2], COLOR['game'])
-        elif len(argv) == 8 and argv[1] == 'versus':
-            frames = versus_frame(*argv[2:8])
+        elif 8 <= len(argv) <= 10 and argv[1] == 'versus':
+            frames = versus_frame(*argv[2:10])
+        elif len(argv) == 4 and argv[1] == 'win':
+            intro, frames = win_frames(argv[2], argv[3])
         elif argv[1:2] == ['attract'] and argv[2:] in ([], ['art']):
             attract(art=len(argv) == 3)
             return 0
@@ -549,7 +662,9 @@ def run(argv):
                              '       fliperos-dmd image FILE\n'
                              '       fliperos-dmd text TEXT\n'
                              '       fliperos-dmd attract [art] | startup\n'
-                             '       fliperos-dmd versus LEFT WINS_LEFT WINS_RIGHT RIGHT SCORE_LEFT SCORE_RIGHT\n'
+                             '       fliperos-dmd versus LEFT WINS_LEFT WINS_RIGHT RIGHT SCORE_LEFT SCORE_RIGHT'
+                             ' [LEFT_PLAYER [FT]]\n'
+                             '       fliperos-dmd win NAME PLAYER\n'
                              '       fliperos-dmd title ROM\n'
                              '       fliperos-dmd art SYSTEM [ROM]\n')
             return 1

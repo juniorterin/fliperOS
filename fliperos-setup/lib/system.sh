@@ -86,6 +86,19 @@ marquee_overlay_enabled() {
   [[ $(conf_get marquee_overlay 2> /dev/null) == on ]]
 }
 
+# O first to do placar versus (versus_ft=, config/fliperos-versus) e o nome
+# de cada jogador nele (versus_p1=, versus_p2=; o config/fliperos-pixelcade
+# os poe no marquee).
+VERSUS_FT_MAX=10
+VERSUS_NAME_MAX=12
+
+# versus_ft_get: o N do first to (0: desligado).
+versus_ft_get() {
+  local value
+  value=$(conf_get versus_ft 2> /dev/null)
+  [[ $value =~ ^[0-9]+$ ]] && ((value <= VERSUS_FT_MAX)) && echo "$((10#$value))" || echo 0
+}
+
 # settings_opts: as linhas "nome|descricao" da entrada como as opcoes
 # "nome=descricao;..." de um ajuste de escolha.
 settings_opts() {
@@ -215,6 +228,16 @@ settings_list() {
   fi
   printf 'marquee_overlay|Live screen|Marquee overlay for OBS|choice|%s|off=Off;on=On|The marquee of the game on screen as a page for an OBS Browser Source (the address is on the Live page of the panel).\n' \
     "$(marquee_overlay_enabled && echo on || echo off)"
+  # O first to do placar versus (config/fliperos-versus): quem chega a N
+  # vitorias aparece no marquee com WIN! e a serie recomeca.
+  opts="0=Off"
+  for value in $(seq 1 "$VERSUS_FT_MAX"); do opts+=";$value=FT$value"; done
+  printf 'versus_ft|Live screen|Scoreboard: first to (FT)|choice|%s|%s|In a versus game with a scoreboard, the first player to win this many matches gets their name and WIN! on the marquee, and a new set starts from 0 x 0.\n' \
+    "$(versus_ft_get)" "$opts"
+  printf 'versus_p1|Live screen|Scoreboard: player 1 name|text|%s|%s|The name of player 1 on the marquee scoreboard in first to mode, up to %s letters (empty: P1).\n' \
+    "$(conf_get versus_p1 2> /dev/null)" "$VERSUS_NAME_MAX" "$VERSUS_NAME_MAX"
+  printf 'versus_p2|Live screen|Scoreboard: player 2 name|text|%s|%s|The name of player 2 on the marquee scoreboard in first to mode, up to %s letters (empty: P2).\n' \
+    "$(conf_get versus_p2 2> /dev/null)" "$VERSUS_NAME_MAX" "$VERSUS_NAME_MAX"
   # ── System (Setup > System, e o Frontend de Setup > Games) ──
   name=$(cabinet_name_py default 2> /dev/null) || name=""
   printf 'cabinet_name|System|Cabinet name|text|%s|%s|The name the other cabinets on the network see in party and link play. Up to %s letters and numbers; empty: %s.\n' \
@@ -369,6 +392,17 @@ settings_set() {
     video.previous)
       video_previous_restore || return 2
       settings_video
+      ;;
+    versus_ft)
+      [[ $value =~ ^[0-9]+$ ]] && ((value <= VERSUS_FT_MAX)) || return 2
+      conf_set versus_ft "$((10#$value))"
+      ;;
+    versus_p1 | versus_p2)
+      # Letras, numeros, espaco e - _ . (o nome vai para o painel de LED e
+      # para uma linha do fliperos.conf).
+      value=$(printf '%s' "$value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+      ((${#value} <= VERSUS_NAME_MAX)) && [[ $value =~ ^[[:alnum:]\ ._-]*$ ]] || return 2
+      conf_set "$key" "$value"
       ;;
     cabinet_name)
       value=$(printf '%s' "$value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')

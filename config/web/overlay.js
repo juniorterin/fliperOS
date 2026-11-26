@@ -123,7 +123,7 @@ const render = {
   title() {
     // O nome do jogo (ou do sistema) so quando nao ha arte.
     const s = render.state, title = $("title");
-    const versus = s.event === "versus";
+    const versus = s.event === "versus" || s.event === "win";
     title.hidden = versus || !$("syslogo").hidden || !$("idle").hidden || !$("art").hidden || !showText || !(s.title || s.system);
     const text = s.title || (s.system || "").toUpperCase();
     // Mede de novo so quando o nome (ou se ele aparece) muda: a rolagem nao recomeca a cada segundo.
@@ -143,7 +143,16 @@ function apply(data) {
   const s = data.state || {};
   render.state = s;
   const versus = s.event === "versus";
+  const win = s.event === "win";
   $("versus").hidden = !versus;
+  $("versus").dataset.left = s.left_player === "2" ? "2" : "1";
+  $("win").hidden = !win;
+  if (win) {
+    const who = s.name || "P" + (s.player || "1");
+    setText($("win-name"), who);
+    $("win-name").style.setProperty("--len", String(Math.max(4, who.length)));
+    $("win").dataset.player = s.player === "2" ? "2" : "1";
+  }
   if (versus) {
     setText($("vs-left"), s.left || "P1");
     setText($("vs-right"), s.right || "P2");
@@ -156,7 +165,7 @@ function apply(data) {
   showLogo(system ? s : null, lastTime !== null && s.time !== lastTime);
   const idle = data.enabled && (s.event === "attract" || s.event === "menu");
   showIdle(idle ? s : null);
-  showArt(versus || system || idle || !data.enabled ? null : data.art || null);
+  showArt(versus || win || system || idle || !data.enabled ? null : data.art || null);
   render.title();
   if (s.time !== lastTime) {
     const first = lastTime === null;

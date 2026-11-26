@@ -162,6 +162,13 @@
             <div class="mq-row"><span id="mq-inst" class="dim"></span><button id="mq-inst-go" class="btn small" type="button" hidden data-t="mq_inst_yes"></button></div>
             <div class="mq-row"><span data-t="mq_show"></span>
               <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button></div></div>
+            <!-- O first to do placar versus: versus_ft, versus_p1 e versus_p2 do fliperos.conf (/api/settings). -->
+            <div class="mq-ft">
+              <label class="mq-pick"><span data-t="mq_ft"></span><select id="mq-ft"></select></label>
+              <label class="mq-pick mq-p1"><span data-t="mq_p1"></span><input id="mq-p1" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="P1"></label>
+              <label class="mq-pick mq-p2"><span data-t="mq_p2"></span><input id="mq-p2" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="P2"></label>
+              <p id="mq-ft-note" class="dim" role="status"></p>
+            </div>
             <div class="mq-led" id="mq-status" hidden></div>
             <p id="mq-hi-list" class="dim" hidden></p>
           </section>

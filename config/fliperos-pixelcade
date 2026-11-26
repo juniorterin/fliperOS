@@ -51,6 +51,7 @@
 #   fliperos-pixelcade achievement ID TITULO [DESCRICAO]   uma conquista do jogo aberto
 #   fliperos-pixelcade cheevos                     status 0 se ha um marquee que mostra as conquistas
 #   fliperos-pixelcade versus V1 V2 P1 P2          o placar de uma partida versus (vitorias e pontos de cada lado)
+#   fliperos-pixelcade versus-win JOGADOR V1 V2    o jogador (1 ou 2) fechou o first to: o nome dele e WIN!
 #   fliperos-pixelcade bg COMANDO [ARGS...]        o mesmo comando em segundo plano (volta na hora)
 #   fliperos-pixelcade panel                       status 0 se ha um painel instalado (Pixelcade ou ZeDMD)
 #   fliperos-pixelcade bye pixelcade|zedmd         "Bye", quando o computador desliga
@@ -852,23 +853,34 @@ watch() {
 # gabinetes ligados (versus=host ou join) os lados se chamam YOU e RIVAL. No
 # ZeDMD o placar fica na tela; no Pixelcade, um texto a cada vitoria, e o
 # marquee do jogo volta.
+#
+# O first to (versus_ft= no fliperos.conf): os nomes dos jogadores
+# (versus_p1=, versus_p2=) no lugar dos personagens, e o "FT N" no meio. Quem
+# fecha a serie vem pelo versus_win.
 versus_score() {
-  local mode side left=P1 right=P2 wl=${1:--} wr=${2:--} sl=${3:--} sr=${4:--} last
+  local mode side ft p1 p2 lp=1 left=P1 right=P2 wl=${1:--} wr=${2:--} sl=${3:--} sr=${4:--} last
   [[ -n ${5:-} ]] && left=${5%% (*} && left=${left:0:10} && left=${left^^}
   [[ -n ${6:-} ]] && right=${6%% (*} && right=${right:0:10} && right=${right^^}
-  mode=$(sed -n 's/^versus=//p' "$conf" 2> /dev/null | tail -1)
-  side=$(sed -n 's/^versus_side=//p' "$conf" 2> /dev/null | tail -1)
+  mode=$(conf_value versus)
+  side=$(conf_value versus_side)
+  ft=$(conf_value versus_ft)
+  [[ $ft =~ ^[0-9]+$ ]] && ((ft > 0)) || ft=""
+  if [[ -n $ft ]]; then
+    p1=$(player_name 1) p2=$(player_name 2)
+    [[ -n $p1 ]] && left=$p1
+    [[ -n $p2 ]] && right=$p2
+  fi
   [[ -z $side && $mode == join ]] && side=2
   if [[ $side == 2 ]]; then
     set -- "$wr" "$wl" "$sr" "$sl" "$right" "$left"
-    wl=$1 wr=$2 sl=$3 sr=$4 left=$5 right=$6
+    wl=$1 wr=$2 sl=$3 sr=$4 left=$5 right=$6 lp=2
   fi
-  [[ $mode == host || $mode == join ]] && left=YOU right=RIVAL
-  zedmd versus "$left" "$wl" "$wr" "$right" "$sl" "$sr"
+  [[ $mode == host || $mode == join ]] && [[ -z $ft ]] && left=YOU right=RIVAL
+  zedmd versus "$left" "$wl" "$wr" "$right" "$sl" "$sr" "$lp" ${ft:+"$ft"}
   last=$(cat "$last_file" 2> /dev/null)
   last=${last#game:}
   overlay versus "${last%%/*}" "${last#*/}" "" "" "left=$left" "right=$right" "wins_left=$wl" "wins_right=$wr" \
-    "score_left=$sl" "score_right=$sr"
+    "score_left=$sl" "score_right=$sr" "left_player=$lp" "ft=$ft"
   [[ $wl$wr =~ ^[0-9]+$ ]] && ((wl + wr > 0)) || return 0
   [[ $(cat "$last_file.versus" 2> /dev/null) == "$wl $wr" ]] && return 0
   printf '%s %s\n' "$wl" "$wr" > "$last_file.versus" 2> /dev/null
@@ -877,6 +889,42 @@ versus_score() {
   last=$(cat "$last_file" 2> /dev/null)
   if [[ $last == game:*/* ]]; then
     last=${last#game:}
+    call "arcade/stream/$(urlencode "$(pc_system "${last%%/*}")")/$(urlencode "${last#*/}")?l=99999&event=GameStart"
+  fi
+}
+
+# conf_value CHAVE: o valor do fliperos.conf (a ultima linha da chave).
+conf_value() {
+  sed -n "s/^$1=//p" "$conf" 2> /dev/null | tail -1
+}
+
+# player_name N: o nome do jogador N no first to (versus_pN=), em maiusculas,
+# ate 12 letras; vazio sem nome.
+player_name() {
+  local name
+  name=$(conf_value "versus_p$1")
+  name=${name:0:12}
+  printf '%s\n' "${name^^}"
+}
+
+# versus_win JOGADOR VITORIAS1 VITORIAS2: o jogador (1 ou 2) fechou o first to
+# (config/fliperos-versus). No ZeDMD o nome dele na cor do jogador, WIN!
+# embaixo e fogos nos cantos, ate a proxima vitoria da serie nova; no
+# Pixelcade, um texto; no marquee do painel e do OBS, o evento win.
+versus_win() {
+  local player=${1:-} name last
+  [[ $player == 1 || $player == 2 ]] || return 0
+  name=$(player_name "$player")
+  [[ -n $name ]] || name=P$player
+  rm -f "$last_file.versus"
+  zedmd win "$name" "$player"
+  last=$(cat "$last_file" 2> /dev/null)
+  last=${last#game:}
+  overlay win "${last%%/*}" "${last#*/}" "" "" "name=$name" "player=$player" "wins1=${2:-}" "wins2=${3:-}" \
+    "ft=$(conf_value versus_ft)"
+  installed || return 0
+  call "text?t=$(urlencode "$name WIN!")&l=1&event=GameStart"
+  if [[ $last == */* ]]; then
     call "arcade/stream/$(urlencode "$(pc_system "${last%%/*}")")/$(urlencode "${last#*/}")?l=99999&event=GameStart"
   fi
 }
@@ -1218,7 +1266,7 @@ case $cmd in
     setsid "$self" "$@" < /dev/null > /dev/null 2>&1 &
     exit 0
     ;;
-  launch | esde | attract | game | select | system | logo | end | screensaver | home | menu | achievement | versus | now)
+  launch | esde | attract | game | select | system | logo | end | screensaver | home | menu | achievement | versus | versus-win | now)
     # Os eventos sao da sessao do usuario do gabinete: o que o marquee mostra
     # (e o estado que o painel web le) fica no XDG_RUNTIME_DIR dele. Chamado
     # como root (o menu do FliperOS roda pelo sudo), roda de novo como ele;
@@ -1234,6 +1282,7 @@ case $cmd in
       select) select_game "$@" ;;
       end) game_end "$@" ;;
       versus) versus_score "$@" ;;
+      versus-win) versus_win "$@" ;;
       *) "$cmd" "$@" ;;
     esac
     ;;

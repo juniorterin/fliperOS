@@ -75,7 +75,7 @@ cloud_install() {
 # As chaves do fliperos.conf que sao gosto da pessoa e vao de um gabinete para
 # outro pela nuvem. O que e do hardware (monitor, placa, driver, geometria,
 # cor, modo de boot) fica o de cada maquina.
-CLOUD_CONF_KEYS='^(bios_auto|cabinet_name|deflicker.*|mode480_.*|level\..*|gun_.*|latency|launcher|marquee_overlay|menu_sounds|mono|netshare_.*|osd.*|scanlines|scraper_.*|splash|stream_audio|stream_quality|volume|esde_240p|pegasus_240p|screens)$'
+CLOUD_CONF_KEYS='^(bios_auto|cabinet_name|deflicker.*|mode480_.*|level\..*|gun_.*|latency|launcher|marquee_overlay|menu_sounds|mono|versus_ft|versus_p[12]|netshare_.*|osd.*|scanlines|scraper_.*|splash|stream_audio|stream_quality|volume|esde_240p|pegasus_240p|screens)$'
 
 # cloud_restore PASTA (fliperos-setup --cloud-restore, root): as configuracoes
 # do sistema que desceram da nuvem (config/fliperos-cloud, sync_system) no

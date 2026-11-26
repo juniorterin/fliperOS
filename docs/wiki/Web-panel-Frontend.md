@@ -19,9 +19,9 @@ Beside the drawing:
 - the **volume**, with mute;
 - **Close the game**, which closes it the normal way (like the power button, so RetroArch still writes its saves).
 
-## Marquee preview
+## Marquee
 
-The **Marquee preview** card draws an LED marquee (128x32 dots) with what a **Pixelcade** or a **ZeDMD** would show for the game that is open, with no hardware. Pick the device in the card.
+The **Marquee** card draws an LED marquee (128x32 dots) with what a **Pixelcade** or a **ZeDMD** would show for the game that is open, with no hardware. Pick the device in the card.
 
 It shows the game's art (the ZeDMD looks for `~/media/dmd`, then `marquee`, then `logo`; the Pixelcade for `marquee`, then `logo`) or, without art, the game's name. It also shows:
 
@@ -30,6 +30,8 @@ It shows the game's art (the ZeDMD looks for `~/media/dmd`, then `marquee`, then
 - **achievements**, as they are unlocked.
 
 *When both exist, the marquee shows* picks **Art** or **Scoreboard** for a game that has both.
+
+**Scoreboard: first to (FT)** sets a first to N (FT1 to FT10) for the versus score, with the **names of player 1 and player 2** (up to 12 letters; empty: P1 and P2). The names take the place of the characters on the scoreboard, with "FT3" in the middle. The player who wins N matches first gets their name in their colour, a blinking **WIN!** and fireworks in the corners, on the ZeDMD, in this preview and on the OBS page (the Pixelcade scrolls "NAME WIN!"); then a new set starts from 0 x 0. These are cabinet settings, also in Setup > Live screen: see [Versus score](Versus-score.md#settings).
 
 Turning the preview on, or changing the device, checks whether that device's software is installed on the cabinet and offers to install it. The preview works without it; the real display needs it. Idle, the preview plays the ZeDMD's logo animation, and with nothing open it shows the animated FliperOS logo.
 

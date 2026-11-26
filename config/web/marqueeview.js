@@ -7,7 +7,10 @@
 "use strict";
 
 Object.assign(TEXT.en, {
-  mq_title: "Marquee preview", mq_on: "Marquee preview mode", mq_device: "Show the marquee of",
+  mq_title: "Marquee", mq_on: "Marquee preview mode", mq_device: "Show the marquee of",
+  mq_ft: "Scoreboard: first to (FT)", mq_ft_off: "Off", mq_p1: "Player 1 name", mq_p2: "Player 2 name",
+  mq_ft_note: "The first player to win %s matches gets their name and WIN! on the marquee; then a new set starts from 0 x 0.",
+  mq_ft_saved: "Saved on the cabinet.", mq_ft_bad: "Use only letters, numbers, spaces and - _ . (up to 12).",
   mq_note: "Shows on this panel what the LED marquee would display for the game that is open, without the hardware: here, in Live, in the marquee preview and on the cabinet drawing.",
   mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (LED 128×32)",
   mq_art_pixelcade: "Art: marquee, then logo, then the name.", mq_art_zedmd: "Art: dmd, then marquee, then logo, then the name.",
@@ -19,7 +22,10 @@ Object.assign(TEXT.en, {
   mq_inst_yes: "Install", mq_inst_no: "Not now", mq_hi: "High scores:",
 });
 Object.assign(TEXT.pt, {
-  mq_title: "Prévia do marquee", mq_on: "Modo prévia do marquee", mq_device: "Mostrar o marquee do",
+  mq_title: "Marquee", mq_on: "Modo prévia do marquee", mq_device: "Mostrar o marquee do",
+  mq_ft: "Placar: first to (FT)", mq_ft_off: "Desligado", mq_p1: "Nome do jogador 1", mq_p2: "Nome do jogador 2",
+  mq_ft_note: "Quem ganhar %s partidas primeiro aparece no marquee com o nome e WIN!; depois uma série nova começa do 0 x 0.",
+  mq_ft_saved: "Gravado no gabinete.", mq_ft_bad: "Use só letras, números, espaço e - _ . (até 12).",
   mq_note: "Mostra neste painel o que o marquee de LED exibiria para o jogo aberto, sem o hardware: aqui, no Ao vivo, na prévia do marquee e no desenho do gabinete.",
   mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (LED 128×32)",
   mq_art_pixelcade: "Arte: marquee, depois logo, depois o nome.", mq_art_zedmd: "Arte: dmd, depois marquee, depois logo, depois o nome.",
@@ -67,6 +73,8 @@ function mqBuild(box) {
     el("span", { class: "mq-hi", hidden: "" }),
     el("div", { class: "mq-syslogo", hidden: "" }, el("img", { class: "old", alt: "", hidden: "" }), el("img", { class: "new", alt: "" })),
     el("img", { class: "mq-idle", alt: "", hidden: "" }),
+    el("div", { class: "mq-win", hidden: "" }, el("b"), el("span", {}, "WIN!"),
+      ...[1, 2, 3, 4].map((n) => el("i", { class: "fw fw" + n }))),
     el("i", { class: "mq-dots" }), el("small", { class: "mq-tag" }));
 }
 
@@ -110,7 +118,7 @@ function mqDrawLogo(box) {
   if (!wrap) return;
   if (s.event === "system" && s.logo) mqLastSys = s.logo;
   const open = typeof cabGame !== "undefined" && cabOnline && !!cabGame;
-  const hold = !open && !!mqLastSys && !["system", "attract", "versus", "menu"].includes(s.event);
+  const hold = !open && !!mqLastSys && !["system", "attract", "versus", "win", "menu"].includes(s.event);
   const on = (s.event === "system" && !!s.logo) || hold;
   wrap.hidden = !on;
   box.classList.toggle("sys", on);
@@ -159,12 +167,30 @@ function mqDrawState(box) {
   mqDrawIdle(box);
   mqDrawLogo(box);
   mqDrawHi(box);
-  const s = mqState.event === "versus" || !mqLive ? mqState : Object.assign({ left: "P1", right: "P2" }, mqLive);
-  const versus = (mqState.event === "versus" || !!mqLive) && mq.show === "score";
+  // Quem fechou o first to: o nome na cor do jogador, WIN! piscando e os
+  // fogos, ate a primeira vitoria da serie nova (o evento versus seguinte).
+  const win = mqState.event === "win" && mq.show === "score";
+  const winBox = box.querySelector(".mq-win");
+  winBox.hidden = !win;
+  box.classList.toggle("won", win);
+  if (win) {
+    const who = mqState.name || "P" + (mqState.player || "1");
+    winBox.firstChild.textContent = who;
+    winBox.firstChild.style.setProperty("--len", String(Math.max(4, who.length)));
+    winBox.dataset.player = mqState.player === "2" ? "2" : "1";
+  }
+  // O placar que o detector le (antes do primeiro evento): com o first to, os
+  // nomes dos jogadores no lugar de P1 e P2.
+  const named = mqFt.ft !== "0";
+  const live = mqLive && Object.assign({ left: (named && mqFt.p1.toUpperCase()) || "P1",
+    right: (named && mqFt.p2.toUpperCase()) || "P2" }, mqLive);
+  const s = mqState.event === "versus" || !live ? mqState : live;
+  const versus = !win && (mqState.event === "versus" || !!live) && mq.show === "score";
   box.classList.toggle("vs", versus);
   const vs = box.querySelector(".mq-versus");
   vs.hidden = !versus;
   if (!versus) return;
+  vs.dataset.left = s.left_player === "2" ? "2" : "1";
   const num = (v) => (v && v !== "-" ? v : "");
   const sides = vs.querySelectorAll(".mq-side");
   sides[0].firstChild.textContent = s.left || "P1";
@@ -270,7 +296,7 @@ let mqKey = "", mqStarted = false;
 function mqPaint(game) {
   document.documentElement.classList.toggle("mq-on", mq.on);
   // O placar so e pedido depois do login (o primeiro status chega aqui).
-  if (!mqStarted) { mqStarted = true; mqWatch(); if (mq.on) mqCheckInstall(false); }
+  if (!mqStarted) { mqStarted = true; mqWatch(); mqFtLoad(); if (mq.on) mqCheckInstall(false); }
   const front = typeof cabFront !== "undefined" && cabFront ? cabFront.program : "";
   const key = [mq.on, mq.device, lang, game ? game.system + "/" + game.name + "/" + (game.art || "") : "-", front].join("|");
   if (key === mqKey) return;
@@ -300,6 +326,7 @@ function mqPaint(game) {
 
 // Os controles do cartao (no Frontend).
 function mqControls() {
+  mqFtControls();
   $("mq-on").checked = mq.on;
   $("mq-device").value = mq.device;
   $("mq-device").disabled = !mq.on;
@@ -370,6 +397,63 @@ async function mqInstall(device) {
     } catch (e) { /* o gabinete reiniciando */ }
   }, 5000);
 }
+// ── O first to ───────────────────────────────────────────────────
+// O FT do placar versus e o nome dos dois jogadores sao ajustes do gabinete
+// (versus_ft, versus_p1, versus_p2 do fliperos.conf, lib/system.sh): o
+// config/fliperos-versus fecha a serie e o fliperos-pixelcade poe o nome e o
+// WIN! no ZeDMD, no Pixelcade e no marquee do OBS. Os nomes valem so com o FT.
+let mqFt = { ft: "0", p1: "", p2: "" }, mqFtMax = 10;
+const MQ_NAME = /^[A-Za-z0-9 ._-]{0,12}$/;
+
+async function mqFtLoad() {
+  try {
+    const rows = (await (await api("/api/settings")).json()).settings || [];
+    const row = (k) => rows.find((r) => r.key === k) || {};
+    mqFt = { ft: row("versus_ft").value || "0", p1: row("versus_p1").value || "", p2: row("versus_p2").value || "" };
+    mqFtMax = Math.max(1, (row("versus_ft").options || []).length - 1) || 10;
+  } catch (e) { return; }
+  mqFtControls();
+}
+
+function mqFtControls() {
+  const sel = $("mq-ft");
+  sel.replaceChildren(el("option", { value: "0" }, t("mq_ft_off")),
+    ...Array.from({ length: mqFtMax }, (_, i) => el("option", { value: String(i + 1) }, "FT" + (i + 1))));
+  sel.value = mqFt.ft;
+  const on = mqFt.ft !== "0";
+  for (const n of [1, 2]) {
+    const input = $("mq-p" + n);
+    if (document.activeElement !== input) input.value = mqFt["p" + n];
+    input.disabled = !on;
+  }
+  $("mq-ft-note").textContent = on ? t("mq_ft_note").replace("%s", mqFt.ft) : "";
+}
+
+async function mqFtSave(key, value) {
+  try {
+    const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value }) });
+    if (!res.ok) throw new Error("bad");
+    $("mq-ft-note").textContent = t("mq_ft_saved");
+    return true;
+  } catch (e) {
+    $("mq-ft-note").textContent = t("mq_ft_bad");
+    return false;
+  }
+}
+
+$("mq-ft").addEventListener("change", async () => {
+  const value = $("mq-ft").value;
+  if (await mqFtSave("versus_ft", value)) { mqFt.ft = value; mqFtControls(); }
+});
+for (const n of [1, 2]) {
+  const input = $("mq-p" + n);
+  input.addEventListener("change", async () => {
+    const value = input.value.trim();
+    if (!MQ_NAME.test(value)) { $("mq-ft-note").textContent = t("mq_ft_bad"); return; }
+    if (await mqFtSave("versus_p" + n, value)) { mqFt["p" + n] = value; input.value = value; }
+  });
+}
+
 $("mq-inst-go").addEventListener("click", () => mqInstall(mq.device));
 $("mq-on").addEventListener("change", mqChanged);
 $("mq-device").addEventListener("change", mqChanged);

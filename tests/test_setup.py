@@ -1732,6 +1732,26 @@ class WebVideoSettingsTests(Base):
         self.env.out("settings_set cabinet_name ''", self.envs)
         self.assertNotIn("cabinet_name=", self.conf())
 
+    def test_scoreboard_first_to_and_player_names(self):
+        rows = self.rows()
+        self.assertEqual(rows["versus_ft"][1:5], ["Live screen", "Scoreboard: first to (FT)", "choice", "0"])
+        self.assertTrue(rows["versus_ft"][5].startswith("0=Off;1=FT1;2=FT2;"))
+        self.assertTrue(rows["versus_ft"][5].endswith(";10=FT10"))
+        self.assertEqual(rows["versus_p2"][1:6], ["Live screen", "Scoreboard: player 2 name", "text", "", "12"])
+        self.env.out("settings_set versus_ft 03", self.envs)
+        self.env.out("settings_set versus_p1 ' Lucas '", self.envs)
+        self.env.out("settings_set versus_p2 'Beto_2.0'", self.envs)
+        self.assertIn("versus_ft=3\n", self.conf())
+        self.assertIn("versus_p1=Lucas\n", self.conf())
+        self.assertIn("versus_p2=Beto_2.0\n", self.conf())
+        rows = self.rows()
+        self.assertEqual((rows["versus_ft"][4], rows["versus_p1"][4]), ("3", "Lucas"))
+        # Fora da faixa, nome comprido ou com simbolos que iriam para o LED: recusado.
+        for line in ("versus_ft 11", "versus_ft x", "versus_p1 'NOME LONGO DEMAIS'", "versus_p1 'a|b'", "versus_p1 'a=b'"):
+            self.assertEqual(self.env.run("settings_set " + line, self.envs).returncode, 2, line)
+        self.env.out("settings_set versus_ft 0", self.envs)
+        self.assertEqual(self.rows()["versus_ft"][4], "0")
+
     def test_groups_follow_the_setup(self):
         out = self.env.out("settings_list", self.envs)
         groups = list(dict.fromkeys(r.split("|")[1] for r in out.splitlines()))
