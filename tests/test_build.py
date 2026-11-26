@@ -26069,7 +26069,12 @@ class ButtonMappingTests(unittest.TestCase):
             # O gatilho da pistola junto, tambem com teclado.
             self.assertEqual(ports['P1_BUTTON1'], 'KEYCODE_LCONTROL OR GUNCODE_1_BUTTON1')
             self.assertEqual(ports['P2_BUTTON5'], 'KEYCODE_E')
-            self.assertEqual(ports['P4_JOYSTICK_LEFT'], 'KEYCODE_4_PAD')
+            # O teclado numerico no nome do MAME (4PAD, DELPAD, ENTERPAD): o
+            # KEYCODE_4_PAD era descartado e a porta vazia derrubava o HBMAME.
+            self.assertEqual(ports['P4_JOYSTICK_LEFT'], 'KEYCODE_4PAD')
+            self.assertEqual(ports['P4_BUTTON2'], 'KEYCODE_DELPAD OR GUNCODE_4_BUTTON2 OR GUNCODE_4_BUTTON3')
+            self.assertEqual(ports['P4_BUTTON3'], 'KEYCODE_ENTERPAD')
+            self.assertNotIn('_PAD', (tmp / 'ctrlr' / 'fliperos.cfg').read_text())
             self.assertEqual(ports['COIN3'], 'KEYCODE_7')
             # No jogo com layout, so a tecla da posicao: sem a padrao do botao
             # junto (com ela o Ctrl esquerdo apertava dois botoes).

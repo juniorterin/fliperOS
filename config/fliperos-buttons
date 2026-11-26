@@ -289,10 +289,18 @@ def active_players(players, connected):
     return out
 
 
+def mame_key(name):
+    """A tecla no nome do MAME. As do teclado numerico la sao 8PAD, DELPAD,
+    ENTERPAD (o item ITEM_ID_8_PAD sem o "_"): o KEYCODE_8_PAD que ia era um
+    token invalido, que o MAME descarta, e a porta do jogador 4 ficava vazia,
+    o que derrubava o HBMAME ao abrir em metade das vezes."""
+    return 'KEYCODE_' + re.sub(r'_PAD$', 'PAD', name)
+
+
 def mame_code(index, element):
     """O codigo do MAME (joystickprovider sdljoy) de um elemento do SDL."""
     if is_key(element):
-        return 'KEYCODE_' + element[2:]
+        return mame_key(element[2:])
     joy = 'JOYCODE_%d_' % (index + 1)
     if element.startswith('b'):
         return joy + 'BUTTON%d' % (int(element[1:]) + 1)
@@ -609,16 +617,16 @@ def layout_games(layouts, games):
 
 def mame_port(player, control, bind):
     # O controle com fio desligado (indice UNPLUGGED + jogador) fica de fora:
-    # um JOYCODE_95 de um aparelho que nao existe derrubava o HBMAME ao abrir
-    # (falha de segmentacao em metade das vezes, nos jogos de CPS2). Ficam a
-    # tecla e a pistola do jogador; sem nenhuma, NONE.
+    # o JOYCODE_95 de um aparelho que nao existe nao vale nada. Ficam a tecla
+    # e a pistola do jogador; sem nenhuma, NONE (uma porta so com tokens que
+    # o MAME descarta derrubava o HBMAME ao abrir).
     parts = [] if bind[0] >= UNPLUGGED and not is_key(bind[1]) else [mame_code(*bind)]
     key = MAME_KEYS.get(player, {}).get(control)
     # A tecla padrao junto so com controle. Com o teclado ela e a de outro
     # comando quando o Buttons layout troca os botoes de lugar (o botao 1
     # do jogo no X: o Ctrl esquerdo apertaria dois).
     if key and not is_key(bind[1]):
-        parts.append('KEYCODE_%s' % key)
+        parts.append(mame_key(key))
     seq = ' OR '.join(parts)
     # O gatilho e o botao de recarregar da pistola do jogador (lightgun do
     # MAME), como no padrao do MAME (inpttype.ipp): sem eles o gatilho so
