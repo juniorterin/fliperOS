@@ -83,8 +83,13 @@ jobs:
           sudo chown "$USER:" "$OUT"
           df -h / /mnt
 
+      # O kernel leva uma hora para compilar. O cache e restaurado aqui e salvo
+      # depois do build (passo "Salvar o cache do kernel"), mesmo que um passo
+      # depois dele falhe: com o actions/cache de uma peca so, um build que
+      # morre no fim (como o da 0.29) joga o kernel fora.
       - name: Cache do kernel 15 kHz
-        uses: actions/cache@v5
+        id: kernel-cache
+        uses: actions/cache/restore@v5
         with:
           path: /mnt/output/kernel-cache
           key: kernel-${{ steps.version.outputs.kernel }}
@@ -133,6 +138,26 @@ jobs:
             exit $rc'
           ls -l "$OUT"/*.iso
 
+      # So o kernel inteiro vai para o cache (os dois .deb): um build cortado no
+      # meio nao deixa uma chave vazia, que ficaria para sempre.
+      - name: O kernel esta compilado?
+        id: kernel-built
+        if: (success() || failure()) && steps.kernel-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: |
+          if ls /mnt/output/kernel-cache/*/linux-image-*.deb > /dev/null 2>&1 \
+             && ls /mnt/output/kernel-cache/*/linux-headers-*.deb > /dev/null 2>&1; then
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Salvar o cache do kernel
+        if: (success() || failure()) && steps.kernel-built.outputs.built == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v5
+        with:
+          path: /mnt/output/kernel-cache
+          key: kernel-${{ steps.version.outputs.kernel }}
+
       - name: Log do build
         if: failure()
         uses: actions/upload-artifact@v6
@@ -158,6 +183,18 @@ jobs:
         run: |
           docker run --rm -e GH_TOKEN -v "$PWD:/w:ro" -v "$OUT:/out:ro" -w /w fliperos-vmtest \
             bash tools/release-publish.sh --replace /out/fliperos-${{ steps.version.outputs.version }}.iso
+
+      # Na tag, se o Release falha depois do build, a ISO (2h de trabalho) fica
+      # 3 dias nos artifacts: da para publicar dela com o gh do dono
+      # (tools/release-publish.sh --replace) sem refazer o build.
+      - name: ISO guardada (o Release falhou)
+        if: failure() && github.ref_type == 'tag'
+        uses: actions/upload-artifact@v6
+        with:
+          name: fliperos-${{ steps.version.outputs.version }}
+          path: /mnt/output/fliperos-${{ steps.version.outputs.version }}.iso
+          retention-days: 3
+          compression-level: 0
 
       - name: ISO como artifact
         if: github.ref_type != 'tag'

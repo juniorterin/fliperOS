@@ -121,6 +121,14 @@ if gh release view "$version" -R "$repo" > /dev/null 2>&1; then
   ((replace)) || die "release $version already exists: a new ISO needs a new version (FLIPEROS_VERSION), or --replace to replace this one"
   gh release delete "$version" -R "$repo" --yes --cleanup-tag
 fi
-gh release create "$version" "${assets[@]}" -R "$repo" --target "$commit" \
+# O --target diz de que commit sai uma tag que ainda nao existe. Com a tag ja la (o
+# workflow roda no push dela), o release fica nela e o --target so atrapalha: o
+# GITHUB_TOKEN leva 403 ("Resource not accessible by integration") quando o commit
+# nao e a ponta de um branch, como o da 0.29 (o build da ISO, de 2h20, foi perdido).
+target=(--target "$commit")
+if gh api "repos/$repo/git/ref/tags/$version" > /dev/null 2>&1; then
+  target=()
+fi
+gh release create "$version" "${assets[@]}" -R "$repo" "${target[@]}" \
   --title "FliperOS $version" --notes-file "$out/notes.md" "${flags[@]}"
 echo "Release published: https://github.com/$repo/releases/tag/$version"

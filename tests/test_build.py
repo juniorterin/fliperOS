@@ -22070,6 +22070,26 @@ class PackagingTests(unittest.TestCase):
                           'PKG_BUILD_DEPS=', 'PKG_SHLIB_TARGETS=', 'pkg_build()'):
                 self.assertIn(field, text, '%s sem %s' % (recipe.name, field))
 
+    def test_a_build_that_dies_at_the_end_keeps_the_kernel_and_the_iso(self):
+        # A 0.29 perdeu dois builds de 2h20: o do mame2010 (o kernel, de 1h, nao ficou no cache) e o
+        # do Release (403: a ISO pronta sumiu com o runner).
+        release = (ROOT / '.github/workflows/release.yml').read_text()
+        self.assertIn('uses: actions/cache/restore@v5', release.split('- name: Cache do kernel 15 kHz')[1].split('- name: Cache dos')[0])
+        build = release.index('- name: ISO\n')
+        save = release.index('- name: Salvar o cache do kernel')
+        self.assertLess(build, save)
+        step = release[save:release.index('- name: Log do build')]
+        self.assertIn('uses: actions/cache/save@v5', step)
+        self.assertIn('continue-on-error: true', step)
+        # So o kernel inteiro (os dois .deb) entra no cache: uma chave vazia ficaria para sempre.
+        check = release[release.index('- name: O kernel esta compilado?'):save]
+        self.assertIn('linux-image-*.deb', check)
+        self.assertIn('linux-headers-*.deb', check)
+        keep = release[release.index('- name: ISO guardada (o Release falhou)'):release.index('- name: ISO como artifact')]
+        self.assertIn("if: failure() && github.ref_type == 'tag'", keep)
+        self.assertIn('actions/upload-artifact@v6', keep)
+        self.assertLess(release.index('- name: Release\n'), release.index('- name: ISO guardada (o Release falhou)'))
+
     def test_the_iso_takes_the_published_debs_and_builds_only_what_is_missing(self):
         # Os .deb do release "packages" (os da updates/packages.list, pelo
         # sha256) entram na ISO prontos: o GroovyMAME levaria horas na CI, e a
