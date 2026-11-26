@@ -553,6 +553,9 @@ def run(argv):
                              '       fliperos-dmd title ROM\n'
                              '       fliperos-dmd art SYSTEM [ROM]\n')
             return 1
+        # DMD_WAIT: segundos esperando o dmdserver abrir (o jogo de volta no
+        # painel quando o servico reabre no meio da partida).
+        retry = max(retry, int(os.environ.get('DMD_WAIT', '0') or 0))
         play(frames, intro, retry, once)
     except OSError:
         pass

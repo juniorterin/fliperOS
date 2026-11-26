@@ -695,6 +695,25 @@ zedmd() {
   setsid "$dmd" "$@" < /dev/null > /dev/null 2>&1 &
 }
 
+# zedmd_reopen: o que o ZeDMD mostra quando o dmdserver abre. No boot, o logo do
+# FliperOS; com um jogo aberto (o servico reiniciado no meio da partida), o
+# marquee do jogo, e nao a animacao do logo, que e a do menu parado. O estado e
+# o da sessao do usuario do gabinete (o servico roda sem XDG_RUNTIME_DIR), e o
+# jogo tem de estar rodando (um .last de um jogo que caiu sem o "end" nao conta).
+zedmd_reopen() {
+  local uid last="" rom
+  uid=$(id -u "$user" 2> /dev/null) &&
+    last=$(cat "${PIXELCADE_USER_RUN:-/run/user}/$uid/fliperos-pixelcade.last" 2> /dev/null)
+  if [[ $last == game:*/* ]]; then
+    last=${last#game:} rom=${last#*/}
+    if [[ -n $rom ]] && pgrep -u "$user" -f -- "$rom" > /dev/null 2>&1; then
+      DMD_WAIT=20 zedmd show game "${last%%/*}" "$rom"
+      return 0
+    fi
+  fi
+  zedmd startup
+}
+
 # title_of ROM [TITULO]: o nome do jogo, sem o que vem entre parenteses; sem
 # TITULO, o das listas dos frontends (fliperos-dmd title).
 title_of() {
@@ -1182,8 +1201,9 @@ case $cmd in
     frontends
     zedmd_config
     cd "$zedmd_dir" || exit 1
-    # O logo do FliperOS assim que o dmdserver abrir a porta do painel.
-    zedmd startup
+    # O logo do FliperOS assim que o dmdserver abrir a porta do painel; com um
+    # jogo aberto (o servico reiniciado no meio da partida), o jogo.
+    zedmd_reopen
     serve ./dmdserver -c "$zedmd_dir/dmdserver.ini" -l
     exit $?
     ;;
