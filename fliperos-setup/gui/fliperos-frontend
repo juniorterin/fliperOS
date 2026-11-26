@@ -897,9 +897,9 @@ class Frontend:
             self.cursor = max(0, min(last, self.cursor + step))
 
     def marquee_logo(self, name, before, step):
-        """O logotipo do sistema novo no marquee (Pixelcade e ZeDMD): entra
-        deslizando para o lado em que a lista andou, como a tela, e pisca duas
-        vezes. Em segundo plano; sem marquee, o fliperos-pixelcade nao faz nada."""
+        """O logotipo do sistema novo no marquee (Pixelcade e ZeDMD): uma
+        varredura, no lado em que a lista andou, troca o de antes pelo novo.
+        Em segundo plano; sem marquee, o fliperos-pixelcade nao faz nada."""
         if self.shot or not name:
             return
         self.announced = name
@@ -985,13 +985,20 @@ class Frontend:
         old = getattr(self, "cat_pos", self.cat)
         self.anim.setdefault("ribbon", (old, 0.0, now))     # (posicao, velocidade, quando): feview.spring
         self.cat_pos = old + step
+        before = self.cats[(self.cat + self.pick) % len(self.cats)].get("name", "")
         self.pick += step
         self.pick_at = now
         self.picking = True
         self.ribbon_until = float("inf")
+        # O marquee acompanha o azulejo sob o cursor da tira (a lista so troca
+        # depois, em pick_category, que nao o manda de novo).
+        self.marquee_logo(self.cats[(self.cat + self.pick) % len(self.cats)].get("name", ""), before, step)
 
     def cancel_pick(self):
-        """O botao 2 com a tira andando: ela volta ao sistema da lista."""
+        """O botao 2 com a tira andando: ela volta ao sistema da lista (e o marquee junto)."""
+        if self.pick % max(1, len(self.cats)):
+            before = self.cats[(self.cat + self.pick) % len(self.cats)].get("name", "")
+            self.marquee_logo((self.category() or {}).get("name", ""), before, -1 if self.pick > 0 else 1)
         self.cat_pos = getattr(self, "cat_pos", self.cat) - self.pick
         self.pick = 0
         self.picking = False
@@ -1012,7 +1019,9 @@ class Frontend:
         self.keep_position()
         before = (self.category() or {}).get("name", "")
         self.cat = (self.cat + step) % len(self.cats)
-        self.marquee_logo((self.category() or {}).get("name", ""), before, step)
+        name = (self.category() or {}).get("name", "")
+        if name != getattr(self, "announced", None):      # a tira ja o mandou (switch_category)
+            self.marquee_logo(name, before, step)
         self.load_filter()
         # A tela de antes sai e a nova entra, pedaco por pedaco (feview.draw:
         # o slide da tela inteira, ou a animacao do modo, feview.TRANSITIONS),

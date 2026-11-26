@@ -13,7 +13,7 @@
 # imagem, o nome do jogo em texto (rolando se nao cabe).
 #
 #   fliperos-dmd show game|select|system SISTEMA ROM [TITULO] [ABERTURA]
-#   fliperos-dmd slide SISTEMA [ANTERIOR [PASSO]]   o logotipo do sistema entrando e piscando duas vezes
+#   fliperos-dmd slide SISTEMA [ANTERIOR [PASSO]]   a varredura que troca o logotipo do sistema de antes pelo novo
 #   fliperos-dmd image ARQUIVO
 #   fliperos-dmd text TEXTO
 #   fliperos-dmd attract [art]        o protetor de tela: a animacao do logo (com "art",
@@ -226,21 +226,51 @@ def read_pid():
 
 
 # claim: o ultimo evento vence. O pid dele vai para o PIDFILE antes de
-# desenhar, e o anterior (um GIF ou texto rolando) e encerrado; um que ainda
-# estava desenhando ve o pid trocado e desiste (mine).
+# desenhar; o anterior ve o pid trocado e para de desenhar (mine), mas segura
+# a conexao (hold) ate este conectar e mandar o primeiro quadro, e so entao e
+# encerrado (retire). Uma conexao fechada antes de outra abrir fazia o
+# dmdserver repor no painel quadros de eventos antigos (o fim da troca de
+# sistema voltava a um logotipo de antes).
+PREVIOUS = [0]
+
+
 def claim():
     old = read_pid()
     tmp = '%s.%d' % (PIDFILE, os.getpid())
     with open(tmp, 'w') as f:
         f.write('%d\n' % os.getpid())
     os.replace(tmp, PIDFILE)
-    if old and old != os.getpid():
+    PREVIOUS[0] = old if old != os.getpid() else 0
+
+
+def retire():
+    old, PREVIOUS[0] = PREVIOUS[0], 0
+    if old:
         try:
             with open('/proc/%d/cmdline' % old, 'rb') as f:
                 if b'fliperos-dmd' in f.read():
                     os.kill(old, signal.SIGTERM)
         except OSError:
             pass
+
+
+# hold: o painel fica no ultimo quadro com a conexao aberta ate o proximo
+# evento, que encerra este depois de conectar (retire). Sem evento novo em
+# HOLD_GRACE segundos depois de perder a vez, sai sozinho. DMD_HOLD=0 (o "Bye"
+# do desligamento, que espera o fliperos-dmd acabar): sai meio segundo depois.
+HOLD_GRACE = 5
+FLUSH, FLUSH_MS = 10, 30
+
+
+def hold():
+    if os.environ.get('DMD_HOLD') == '0':
+        time.sleep(0.5)
+        return
+    while mine():
+        time.sleep(0.25)
+    end = time.monotonic() + HOLD_GRACE
+    while time.monotonic() < end:
+        time.sleep(0.1)
 
 
 def mine():
@@ -286,31 +316,47 @@ def play(frames, intro=(), retry=0, once=False):
         sock = connect()
     if sock is None:
         return
+    sent = [False]
+
+    def send(data):
+        sock.sendall(header(len(data), not sent[0]) + data)
+        if not sent[0]:
+            sent[0] = True
+            retire()            # o evento anterior so solta a conexao agora
+
     with sock:
-        first = True
         for data, ms in intro:
-            sock.sendall(header(len(data), first) + data)
-            first = False
+            send(data)
             if not nap(ms / 1000):
-                return
+                return hold()
+        def flush(data):
+            # O dmdserver so passa um quadro ao painel quando chegam outros
+            # depois dele (no gabinete, os 6 ultimos da varredura ficavam
+            # presos ate o proximo evento: o logotipo parava cortado). O
+            # ultimo vai de novo FLUSH vezes; repetido, o painel nao paga nada.
+            for _ in range(FLUSH):
+                send(data)
+                if not nap(FLUSH_MS / 1000):
+                    return
+
         if len(frames) == 1:
-            sock.sendall(header(len(frames[0][0]), first) + frames[0][0])
-            return
+            send(frames[0][0])
+            flush(frames[0][0])
+            return hold()
         if once:
             # Uma vez so, e o painel fica no ultimo quadro (a animacao da
             # troca de sistema).
-            for i, (data, ms) in enumerate(frames):
-                sock.sendall(header(len(data), first) + data)
-                first = False
-                if i < len(frames) - 1 and not nap(ms / 1000):
-                    return
-            return
+            for data, ms in frames:
+                send(data)
+                if not nap(ms / 1000):
+                    return hold()
+            flush(frames[-1][0])
+            return hold()
         while frames and mine():
             for data, ms in frames:
-                sock.sendall(header(len(data), first) + data)
-                first = False
+                send(data)
                 if not nap(ms / 1000):
-                    return
+                    return hold()
 
 
 # attract: o protetor de tela (o frontend ocioso): a animacao do logo, a mesma
@@ -335,16 +381,18 @@ def attract(art=False):
                 frames = image_frames(random.choice(files))
             except (OSError, ValueError, SyntaxError):
                 if not nap(0.25):
-                    return
+                    return hold()
                 continue
             end = time.monotonic() + ATTRACT_SECONDS
             while time.monotonic() < end:
                 for data, ms in frames:
                     sock.sendall(header(len(data), first) + data)
-                    first = False
+                    if first:
+                        first = False
+                        retire()
                     left = max(0, end - time.monotonic())
                     if not nap(min(ms / 1000, left) if len(frames) > 1 else left):
-                        return
+                        return hold()
 
 
 # versus_frame: o placar de uma partida versus (config/fliperos-versus). Os
@@ -413,11 +461,13 @@ def startup_frames():
 
 
 # slide_frames: a troca de sistema na lista do frontend. O logotipo (o do
-# Arcadeflow, desenhado por config/fliperos-syslogo) entra deslizando e pisca
-# duas vezes; step e o sentido em que a lista andou (-1 ou 1) e old o sistema
-# de antes, que sai. Sem o logotipo (o tema nao esta instalado, ou o sistema
-# nao esta nele), o nome em texto. Os quadros vao direto ao dmdserver: nao ha
-# GIF nem arquivo.
+# Arcadeflow, desenhado por config/fliperos-syslogo) entra numa varredura que
+# troca o de old, o sistema de antes; step e o sentido em que a lista andou
+# (-1 ou 1). Cada quadro leva o que o painel aguenta pela USB (link_ms do
+# syslogo): um slide ou um fade, que mexem no logotipo inteiro a cada quadro,
+# chegavam ao ZeDMD a ~5 quadros por segundo. Sem o logotipo (o tema nao esta
+# instalado, ou o sistema nao esta nele), o nome em texto. Os quadros vao
+# direto ao dmdserver: nao ha GIF nem arquivo.
 def slide_frames(name, old, step):
     path = os.environ.get('SYSLOGO', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fliperos-syslogo'))
     try:
@@ -466,6 +516,8 @@ def main(argv):
     try:
         return run(argv)
     finally:
+        # Saindo: o SIGTERM do evento novo (retire) pode chegar agora, no meio da saida.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         release()
 
 

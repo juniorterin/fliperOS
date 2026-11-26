@@ -527,7 +527,8 @@ dmd_hold() {
 bye() {
   [[ ${PIXELCADE_STOPPING:-$(systemctl is-system-running 2> /dev/null)} == stopping ]] || return 0
   if [[ ${1:-} == zedmd ]]; then
-    [[ -x $dmd ]] && "$dmd" text Bye < /dev/null > /dev/null 2>&1
+    # DMD_HOLD=0: o fliperos-dmd nao fica segurando o painel ate o proximo evento.
+    [[ -x $dmd ]] && DMD_HOLD=0 "$dmd" text Bye < /dev/null > /dev/null 2>&1
   else
     call "text?t=Bye"
     sleep 2
@@ -990,9 +991,8 @@ system() {
 }
 
 # logo SISTEMA [ANTERIOR [PASSO]]: a troca de sistema no frontend do FliperOS.
-# O logotipo escrito do sistema (config/fliperos-syslogo) entra deslizando, no
-# sentido em que a lista andou (PASSO 1 ou -1), com o de ANTERIOR saindo, e
-# pisca duas vezes, como a tela do frontend. No ZeDMD os quadros vao direto
+# O logotipo escrito do sistema (config/fliperos-syslogo) entra numa varredura,
+# no sentido em que a lista andou (PASSO 1 ou -1), trocando o de ANTERIOR. No ZeDMD os quadros vao direto
 # ao painel (fliperos-dmd slide); o Pixelcade so mostra arquivos, entao o
 # logotipo vai num GIF, em ~/pixelcade/console (o "console/stream/NOME" o
 # procura la), que e apagado quando o proximo chega. Sem o logotipo (o tema

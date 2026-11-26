@@ -34,9 +34,9 @@
 # branco do frontend, o ciano do marquee). `import` faz esse PNG da imagem da
 # pessoa (qualquer uma que o Pillow abra: PNG, JPG, WebP, GIF, BMP).
 #
-# A animacao da troca de sistema: o logotipo entra deslizando pelo lado de
-# onde a lista anda (e o de antes sai para o outro, como a tela do frontend
-# em feview.SLIDE) e pisca duas vezes. Fica o ultimo quadro aceso.
+# A animacao da troca de sistema: uma linha varre a tela pelo lado de onde a
+# lista anda e deixa atras dela o logotipo novo no lugar do de antes (uns 0,3 s,
+# no ritmo que o painel aguenta). Fica o ultimo quadro aceso.
 #
 #   fliperos-syslogo find NOME                     U+XXXX do sistema (status 1 sem logotipo)
 #   fliperos-syslogo png NOME ARQUIVO [ALTURA [RRGGBB]]   o logotipo, branco (ou da cor) em fundo transparente
@@ -51,7 +51,7 @@ import re
 import sys
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageChops, ImageDraw, ImageFont
 except ImportError:
     Image = None
 
@@ -67,13 +67,24 @@ FIRST = 0xE900
 EXTRA = 'extra'               # a pasta dos logotipos que a fonte do tema nao tem (config/syslogo/extra)
 COLOR = (139, 233, 253)       # o do marquee do sistema (fliperos-dmd COLOR['system'])
 
-# O tempo de cada parte (segundos): a mesma curva da troca de tela do
-# frontend (feview.SLIDE e o 1 - (1 - p)**3), e as duas piscadas.
-SLIDE = 0.3
-STEP = 0.04
-HOLD = 0.2
-OFF, ON = 0.12, 0.18
-BLINKS = 2
+# A varredura da troca de sistema. O link USB do ZeDMD e o limite: medido num
+# ESP32 com CH340 e o USB package size de fabrica (32), um quadro leva ~10 ms e
+# mais ~1 ms a cada 8 pixels que mudam numa faixa que cruza o painel (a frente
+# da varredura; num logotipo compacto, a cada 15). Um slide, um rolo ou um fade
+# mudam o logotipo inteiro a cada quadro (~2000 pixels): o painel recebia ~5
+# quadros por segundo e a animacao de 1 s levava 2. A varredura muda cada
+# pixel uma vez (~330 por quadro, ~50 ms no painel). Cada quadro dura o que o
+# painel leva para recebe-lo: mais curto, a fila do link crescia (a chamada
+# bloqueava 60 ms no ultimo quadro) e a animacao atrasava.
+SWEEP_STEPS = 8
+LINK_FRAME_MS = 12
+LINK_PIXELS_PER_MS = 8
+MIN_FRAME_MS = 30
+
+
+def link_ms(pixels):
+    """O tempo que o painel leva para receber um quadro em que `pixels` pixels mudam."""
+    return max(MIN_FRAME_MS, round(LINK_FRAME_MS + pixels / LINK_PIXELS_PER_MS))
 
 
 def theme_dir():
@@ -319,40 +330,43 @@ def fitted(name, w, h, color=COLOR):
     return img.resize(size, Image.LANCZOS)
 
 
-def timeline():
-    """[(deslocamento 0..1 do logotipo novo, aceso, milissegundos)]: o
-    slide (1 = fora da tela, 0 = no lugar) e depois as piscadas."""
-    out = []
-    n = max(1, round(SLIDE / STEP))
-    for i in range(1, n + 1):
-        p = 1 - (1 - i / n) ** 3
-        out.append((1 - p, True, round(STEP * 1000)))
-    out.append((0.0, True, round(HOLD * 1000)))
-    for _ in range(BLINKS):
-        out.append((0.0, False, round(OFF * 1000)))
-        out.append((0.0, True, round(ON * 1000)))
+def still(img, w, h):
+    """Um quadro com o logotipo img no meio, em fundo preto."""
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 255))
+    if img is not None:
+        out.paste(img, ((w - img.width) // 2, (h - img.height) // 2), img)
     return out
 
 
+def changed(a, b):
+    """Quantos pixels de b diferem de a: o que o painel tem de receber para ir de um quadro ao outro."""
+    diff = ImageChops.difference(a.convert('RGB'), b.convert('RGB')).convert('L')
+    return sum(diff.histogram()[1:])
+
+
 def frames(name, old=None, step=1, size=(128, 32), color=COLOR):
-    """[(imagem RGBA w x h, milissegundos)]: o logotipo de name entrando
-    (step > 0: pela direita, a lista andou para a frente) e o de old saindo."""
+    """[(imagem RGBA w x h, milissegundos)]: a varredura que troca o logotipo de
+    old pelo de name. Uma frente passa pela tela, com uma linha acesa, e atras
+    dela fica o logotipo novo (step > 0: da direita para a esquerda, a lista
+    andou para a frente). Cada pixel muda uma vez so, e cada quadro dura o que o
+    painel leva para recebe-lo (link_ms). Termina no logotipo novo aceso."""
     w, h = size
     new = fitted(name, w, h, color)
     if new is None:
         return []
     gone = fitted(old, w, h, color) if old and old.lower() != name.lower() else None
     side = -1 if step < 0 else 1
-    out = []
-    for off, lit, ms in timeline():
-        img = Image.new('RGBA', (w, h), (0, 0, 0, 255))
-        if lit:
-            if gone is not None and off > 0:
-                x = round(-side * (1 - off) * w) + (w - gone.width) // 2
-                img.paste(gone, (x, (h - gone.height) // 2), gone)
-            x = round(side * off * w) + (w - new.width) // 2
-            img.paste(new, (x, (h - new.height) // 2), new)
-        out.append((img, ms))
+    base, target = still(gone, w, h), still(new, w, h)
+    out, shown = [], base
+    for i in range(1, SWEEP_STEPS + 1):
+        edge = round(w * i / SWEEP_STEPS)
+        x0, x1 = (w - edge, w) if side > 0 else (0, edge)
+        img = base.copy()
+        img.paste(target.crop((x0, 0, x1, h)), (x0, 0))
+        if i < SWEEP_STEPS:
+            img.paste(Image.new('RGBA', (1, h), tuple(color[:3]) + (255,)), (x0 if side > 0 else x1 - 1, 0))
+        out.append((img, link_ms(changed(shown, img))))
+        shown = img
     return out
 
 

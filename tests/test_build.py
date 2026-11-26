@@ -8597,6 +8597,38 @@ class FrontendDataTests(unittest.TestCase):
         # O desenho: ate a hora, a tela de antes parada (a lista nova embaixo).
         self.assertIn('waiting = intro.get("old")', (ROOT / 'fliperos-setup/gui/feview.py').read_text())
 
+    def test_the_marquee_follows_the_tile_under_the_ribbon_cursor(self):
+        # Andando na tira, o marquee (ZeDMD/Pixelcade) mostra o sistema do azulejo sob o cursor, sem esperar a
+        # lista trocar; a troca da lista nao o manda de novo, e o botao 2 o traz de volta ao sistema da lista.
+        import types
+        fm = self.frontend_module()
+        sent = []
+        fe = types.SimpleNamespace(cats=[{'key': k, 'name': k.upper()} for k in 'abcde'], cat=0, pick=0, pick_at=0.0,
+                                   picking=False, anim={}, ribbon_until=0, overlay=None, letter_mode=None, mode='list',
+                                   cursor=0, rows=[], opened=set(), positions={}, last_ui=None, slide=None,
+                                   commercial=False, repeat={}, input=types.SimpleNamespace(held=lambda a: None),
+                                   strip=None, devices=[], announced='A')
+        fe.category = lambda: fe.cats[fe.cat]
+        fe.keep_position = fe.load_filter = fe.remember = lambda: None
+        fe.rebuild = lambda keep=None: None
+        fe.move = lambda *a: None
+
+        def marquee(name, before, step):
+            sent.append((name, before, step))
+            fe.announced = name
+        fe.marquee_logo = marquee
+        for name in ('switch_category', 'cancel_pick', 'pick_category', 'act', 'tick', 'hurry_intro'):
+            setattr(fe, name, types.MethodType(getattr(fm.Frontend, name), fe))
+        fe.act('right')
+        fe.act('right')
+        self.assertEqual(sent, [('B', 'A', 1), ('C', 'B', 1)])
+        fe.act('b1')                                        # a lista troca para C: nada de novo no marquee
+        self.assertEqual((fe.cat, len(sent)), (2, 2))
+        fe.act('left')
+        self.assertEqual(sent[-1], ('B', 'C', -1))
+        fe.act('b2')                                        # volta ao C, o da lista
+        self.assertEqual((fe.cat, sent[-1]), (2, ('C', 'B', 1)))
+
     def test_ribbon_moves_on_a_spring_and_tiles_grow_evenly(self):
         # A tira anda numa mola sem balanco: sai devagar, acelera, nao passa
         # do destino e para nele, tambem com o destino mudando no meio; o
@@ -13174,7 +13206,8 @@ class WebPanelTests(unittest.TestCase):
         # E o menu do FliperOS (evento menu): a animacao de cada um dos 5 itens.
         self.assertIn('return "marquee-menu-" + s.item + ".gif";', view)
         self.assertIn('return "/marquee-menu-" + s.item + ".gif?";', obs)
-        for name in ['marquee-fliperos'] + ['marquee-menu-' + i for i in ('frontend', 'setup', 'desktop', 'shell', 'power')]:
+        for name in ['marquee-fliperos'] + ['marquee-menu-' + i for i in ('frontend', 'setup', 'desktop', 'shell', 'power',
+                                                                          'achievements')]:
             status, _, data = self.request('GET', '/%s.gif' % name)
             self.assertEqual((status, self.last_headers['Content-Type']), (200, 'image/gif'), name)
             self.assertEqual(data, (web / (name + '.gif')).read_bytes(), name)
@@ -19850,7 +19883,28 @@ class ZeDMDTests(unittest.TestCase):
         (self.tmp / 'run').mkdir()
         self.env = dict(os.environ, DMD_SERVER='127.0.0.1:%d' % self.server.getsockname()[1],
                         MEDIA_DIR=str(self.tmp / 'media'), ATTRACT_DIR=str(self.tmp / 'attract'),
-                        ESDE_DIR=str(self.tmp / 'ES-DE'), XDG_RUNTIME_DIR=str(self.tmp / 'run'))
+                        ESDE_DIR=str(self.tmp / 'ES-DE'), XDG_RUNTIME_DIR=str(self.tmp / 'run'),
+                        DMD_HOLD='0')       # o run_ espera o fliperos-dmd acabar (test_holds_... testa o hold)
+
+    def test_holds_the_connection_until_the_next_event_connects(self):
+        # Fechar a conexao logo depois do ultimo quadro fazia o dmdserver repor quadros de eventos antigos no
+        # painel (o fim da troca de sistema voltava a um logotipo de antes). O evento fica conectado ate o
+        # proximo conectar e mandar o primeiro quadro, e so entao sai.
+        env = dict(self.env)
+        env.pop('DMD_HOLD')
+        first = subprocess.Popen([sys.executable, str(self.SCRIPT), 'text', 'SF2'], env=env)
+        self.addCleanup(first.kill)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not self.received:
+            time.sleep(0.05)
+        time.sleep(1.0)
+        self.assertIsNone(first.poll())                       # o quadro esta la e a conexao segue aberta
+        second = subprocess.Popen([sys.executable, str(self.SCRIPT), 'text', 'KOF'], env=env)
+        self.addCleanup(second.kill)
+        self.assertIsNotNone(first.wait(timeout=10))          # o anterior sai depois do novo conectar
+        self.assertEqual(len(self.received), 2)
+        self.assertEqual(len(self.frames(self.received[1])), 1)
+        self.assertIsNone(second.poll())
 
     def accept(self):
         while True:
@@ -19871,14 +19925,28 @@ class ZeDMDTests(unittest.TestCase):
                     return
                 box.extend(data)
 
-    def frames(self, data):
+    def frames(self, data, repeats=False):
+        """Os quadros recebidos. O ultimo vai de novo algumas vezes (flush, para o dmdserver nao o segurar):
+        sem repeats, um quadro igual ao de antes nao conta."""
         out, pos = [], 0
         while pos + self.HEADER.size <= len(data):
             fields = self.HEADER.unpack_from(data, pos)
             pos += self.HEADER.size
-            out.append((fields, bytes(data[pos:pos + fields[-1]])))
+            frame = (fields, bytes(data[pos:pos + fields[-1]]))
+            if repeats or not out or out[-1][1] != frame[1]:
+                out.append(frame)
             pos += fields[-1]
         return out
+
+    def test_the_last_frame_goes_again_so_the_server_lets_it_through(self):
+        # O dmdserver so passa um quadro ao painel quando chegam outros depois dele: sem isso a varredura
+        # parava cortada no painel ate o proximo evento.
+        self.run_('text', 'SF2')
+        raw = self.frames(self.received[-1], repeats=True)
+        self.assertGreaterEqual(len(raw), 1 + 5)
+        self.assertEqual(len({f[1] for f in raw}), 1)
+        self.assertEqual(raw[0][0][6], 1)                    # so o primeiro desconecta os outros clientes
+        self.assertEqual({f[0][6] for f in raw[1:]}, {0})
 
     def run_(self, *args):
         subprocess.run([sys.executable, str(self.SCRIPT), *args], env=self.env, check=True, timeout=30)
@@ -20088,7 +20156,7 @@ class ZeDMDTests(unittest.TestCase):
 
 class SysLogoTests(unittest.TestCase):
     """config/fliperos-syslogo: o logotipo escrito do sistema (um caractere
-    da fonte do tema Arcadeflow) deslizando no marquee e piscando duas vezes."""
+    da fonte do tema Arcadeflow) trocado no marquee por uma varredura."""
     DATA = ('null,0,0,NULL\n\nnaomi,0,0,NAOM,CRT,NONE,-4,3,ARCADE,Sega,1998,Naomi,56\nsega naomi\n\n'
             'atomiswave,0,0,ATW\nsammy atomiswave\n')
     DEJAVU = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
@@ -20163,32 +20231,52 @@ class SysLogoTests(unittest.TestCase):
                       '"$root/usr/local/share/fliperos/syslogo/data_systems.txt"', ROOTFS)
         self.assertIn('install -Dm644 "$src/config/syslogo/font_Roboto-Allcaps-EXT4X.ttf"', ROOTFS)
 
-    def test_the_logo_slides_in_from_the_side_the_list_moved_to(self):
+    def two_logos(self):
+        """Naomi (o novo) larga e alta, Atomiswave (o de antes) pequeno: da para ver qual esta onde."""
+        from PIL import Image
+        self.mod.fitted = lambda name, w, h, color=None: Image.new(
+            'RGBA', (100, 24) if name == 'Naomi' else (40, 10), (255, 255, 255, 255))
+
+    def test_the_sweep_starts_on_the_side_the_list_moved_to(self):
         for step in (1, -1):
             anim = self.mod.frames('Naomi', None, step)
             x0, _, x1, _ = self.lit(anim[0][0])
             if step > 0:
-                self.assertGreater(x0, 64)       # entra pela direita
+                self.assertGreater(x0, 64)       # a frente entra pela direita
             else:
-                self.assertLess(x1, 64)          # entra pela esquerda
-            x0, _, x1, _ = self.lit(anim[len(self.mod.timeline()) - self.mod.BLINKS * 2 - 1][0])
+                self.assertLess(x1, 64)          # ou pela esquerda
+            x0, _, x1, _ = self.lit(anim[-1][0])
             self.assertEqual((x0, x1), (14, 114))
 
-    def test_the_previous_logo_leaves_the_other_way(self):
-        anim = self.mod.frames('Naomi', 'Atomiswave', 1)
-        x0, _, x1, _ = self.lit(anim[0][0])
-        self.assertLess(x0, 20)                  # o de antes, saindo pela esquerda
-        self.assertEqual(x1, 128)                # e o novo chegando pela direita
+    def test_the_old_logo_stays_ahead_of_the_front_and_the_new_one_is_behind_it(self):
+        self.two_logos()
+        # (sentido, coluna ainda do de antes, coluna ja do novo): a frente esta no meio da tela (x = 64).
+        for step, old_x, new_x in ((1, 50, 100), (-1, 75, 28)):
+            mid = self.mod.frames('Naomi', 'Atomiswave', step)[3][0]
+            rows = lambda x: self.lit(mid.crop((x, 0, x + 1, 32)))[1::2]
+            self.assertEqual(rows(old_x), (11, 21))          # o logotipo de antes, 10 de altura
+            self.assertEqual(rows(new_x), (4, 28))           # o novo, 24 de altura
 
-    def test_blinks_twice_and_ends_lit(self):
-        anim = self.mod.frames('Naomi', None, 1)
-        dark = [i for i, (img, _) in enumerate(anim) if not self.lit(img)]
-        self.assertEqual(len(dark), self.mod.BLINKS)
-        self.assertGreater(min(dark), 0)
-        self.assertNotIn(len(anim) - 1, dark)
-        self.assertTrue(self.lit(anim[-1][0]))
-        slide = sum(ms for _, ms in anim[:len(anim) - self.mod.BLINKS * 2]) / 1000
-        self.assertAlmostEqual(slide, self.mod.SLIDE + self.mod.HOLD, delta=0.05)
+    def test_each_frame_lasts_what_the_panel_needs_to_receive_it(self):
+        # O ZeDMD leva ~10 ms por quadro e ~1 ms a cada 15 pixels que mudam: um quadro que muda o logotipo
+        # inteiro (o slide, o fade) atrasava o painel mais de 1 s. Aqui nenhum quadro passa do que a duracao dele paga.
+        self.two_logos()
+        anim = self.mod.frames('Naomi', 'Atomiswave', 1)
+        self.assertEqual(len(anim), self.mod.SWEEP_STEPS)
+        shown = self.mod.still(self.mod.fitted('Atomiswave', 128, 32), 128, 32)
+        for img, ms in anim:
+            n = self.mod.changed(shown, img)
+            self.assertLess(n, 600)
+            self.assertGreaterEqual(ms, self.mod.link_ms(n))
+            self.assertGreaterEqual(ms, self.mod.MIN_FRAME_MS)
+            shown = img
+        self.assertLess(sum(ms for _, ms in anim), 700)                 # e e rapida
+        self.assertGreater(self.mod.link_ms(2000), self.mod.link_ms(300))
+
+    def test_ends_on_the_new_logo_lit_without_blinking(self):
+        anim = self.mod.frames('Naomi', 'Atomiswave', 1)
+        self.assertTrue(all(self.lit(img) for img, _ in anim))          # nenhum quadro apagado
+        self.assertEqual(self.mod.changed(anim[-1][0], self.mod.still(self.mod.fitted('Naomi', 128, 32), 128, 32)), 0)
 
     def test_gif_stops_on_the_last_frame(self):
         from PIL import Image, ImageSequence
@@ -20580,12 +20668,29 @@ class GuiMenuMarqueeTests(unittest.TestCase):
                 send(widgets.Menu("Setup", [("video", "Video", ""), ("return", "Return", "")]))
                 send(main)
                 self.assertEqual(lines(3), ['bg menu frontend', 'bg menu setup', 'bg menu setup'])
+                # Um item que o menu ganhou depois (sem estar em MENU_ITEMS) nao cala os outros: antes, com o
+                # RetroAchievements fora da lista, nada saia ao andar o cursor, so ao entrar no item.
+                grown = widgets.Menu("FliperOS", [("frontend", "Frontend", ""), ("novidade", "Novo", ""),
+                                                  ("power", "Power", "")])
+                send(grown)
+                grown.key("down")
+                send(grown)
+                grown.key("down")
+                send(grown)
+                self.assertEqual(lines(6)[3:], ['bg menu frontend', 'bg menu novidade', 'bg menu power'])
+                # Cada item do menu principal tem a animacao dele.
+                menu_sh = (ROOT / 'fliperos-setup/screens/main-menu.sh').read_text()
+                items = re.findall(r'"([a-z]+)\|', menu_sh.split('screen_main_menu() {')[1].split('\n}\n')[0])
+                self.assertIn('achievements', items)
+                for item in set(items):
+                    self.assertIn(item, serve.MENU_ITEMS)
+                    self.assertTrue((ROOT / ('config/web/marquee-menu-%s.gif' % item)).is_file(), item)
                 # Os prints (FLIPEROS_GUI_SHOTS) nao mandam nada.
                 srv.shots = "x"
                 main.key("down")
                 send(main)
                 time.sleep(0.3)
-                self.assertEqual(len(lines(3)), 3)
+                self.assertEqual(len(lines(6)), 6)
             finally:
                 serve.PIXELCADE_TOOL = old
         # O Setup em texto manda o item ao entrar nele.

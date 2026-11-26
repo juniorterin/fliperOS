@@ -16,7 +16,7 @@ Pixelcade and ZeDMD get the same events, and can be installed together:
 | When | The display shows |
 | --- | --- |
 | A game is picked in the frontend | Its marquee or logo |
-| The system changes in the FliperOS frontend | The system's written logo slides in and blinks twice |
+| The system changes in the FliperOS frontend | A bright line sweeps the panel and leaves the new system's written logo behind it (about 0.4 s, paced for the ZeDMD's USB link) |
 | A game opens, from any frontend or emulator | Its high scores (or "Now Playing") scroll once, then its marquee stays |
 | A fight is on | The versus score ([Versus score](Versus-score.md)) |
 | An achievement is unlocked | The achievement, then the marquee again |

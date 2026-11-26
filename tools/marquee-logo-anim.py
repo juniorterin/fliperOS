@@ -99,10 +99,12 @@ GLYPHS = {
     'K': [[(0, 0), (0, 14)], [(9, 0), (1, 8)], [(3, 6), (9, 14)]],
     'H': [[(0, 0), (0, 14)], [(9, 0), (9, 14)], [(0, 7), (9, 7)]],
     'W': [[(0, 0), (2.5, 14), (5.5, 5), (8.5, 14), (11, 0)]],
+    'C': [[(9, 2), (7, 0), (2, 0), (0, 2), (0, 12), (2, 14), (7, 14), (9, 12)]],
+    'V': [[(0, 0), (4.5, 14), (9, 0)]],
 }
 WIDTH = {'F': 8, 'L': 8, 'I': 6, 'P': 9, 'E': 8, 'R': 9, 'O': 9, 'S': 9,
          'l': 3, 'i': 3, 'p': 8, 'e': 8, 'r': 6,
-         'N': 9, 'T': 9, 'D': 9, 'U': 9, 'K': 9, 'H': 9, 'W': 11}
+         'N': 9, 'T': 9, 'D': 9, 'U': 9, 'K': 9, 'H': 9, 'W': 11, 'C': 9, 'V': 9}
 GAP = 4
 AREA = (38, 126)                          # onde a palavra cabe (a esquerda e do desenho)
 BRAND = 'FliperOS'                        # o nome: o OS tem outra cor (cromado invertido)
@@ -330,6 +332,32 @@ def power(frame, t):
     stamp(frame, sym, mix(CYAN, WHITE, k))
 
 
+def trophy(frame, t):
+    """RetroAchievements: a taca dourada com um brilho passando e estrelinhas piscando em volta."""
+    cup = np.zeros((H, W), bool)
+    for y in range(5, 17):
+        half = 8.0 - (y - 5) * 0.42
+        cup[y, int(round(17 - half)):int(round(17 + half)) + 1] = True
+    for side in (-1, 1):                                       # as alcas
+        pts = [(17 + side * (8 + 3.2 * math.sin(math.pi * k / 6)), 6 + k * 1.4) for k in range(7)]
+        for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+            line(cup, ax, ay, bx, by)
+    cup[17:22, 16:19] = True                                   # a haste
+    cup[22:24, 12:23] = True                                   # o pe
+    cup[24:27, 10:25] = True                                   # a base
+    shine = 6 + ((t / 1.5) % 1.0) * 26                         # o brilho atravessa a taca
+    stamp(frame, cup, lambda y, x: WHITE if abs(x - shine + (y - 5) * 0.4) < 1.0 and y < 17
+          else YELLOW if y < 9 else ORANGE if y < 22 else mix(ORANGE, MAGENTA, 0.5))
+    frame[25, 14:21] = (120, 60, 30)                            # a plaquinha da base
+    for n, (sx, sy) in enumerate(((5, 5), (30, 4), (31, 15), (3, 16))):
+        k = 0.5 + 0.5 * math.sin(2 * math.pi * (t / 1.0 + n * 0.25))
+        if k > 0.35:
+            color = mix(BLACK, CYAN if n % 2 else WHITE, k)
+            for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+                if 0 <= sx + dx < W and 0 <= sy + dy < H:
+                    frame[sy + dy, sx + dx] = color
+
+
 # A palavra e o desenho de cada animacao.
 ANIMS = {
     "marquee-fliperos": (BRAND, palm, None),
@@ -338,6 +366,7 @@ ANIMS = {
     "marquee-menu-desktop": ("DESKTOP", desktop, None),
     "marquee-menu-shell": ("SHELL", shell, None),
     "marquee-menu-power": ("POWER", power, None),
+    "marquee-menu-achievements": ("CHEEVOS", trophy, None),
 }
 
 

@@ -31,7 +31,7 @@ FS, RS, GS = "\x1f", "\x1e", "\x1d"
 MENU_TITLE = "FliperOS"
 # Os itens do menu principal que saem do Setup para abrir algo.
 LAUNCH_VALUES = ("frontend", "desktop", "shell")
-MENU_ITEMS = ("frontend", "setup", "desktop", "shell", "power")
+MENU_ITEMS = ("frontend", "setup", "desktop", "shell", "power", "achievements")
 PIXELCADE_TOOL = os.environ.get("FLIPEROS_PIXELCADE", "/opt/fliperos/bin/fliperos-pixelcade")
 # Os itens que voltam um nivel (o "Return" e o "Cancel" dos menus): escolhe-los
 # anima como o Esc, nao como entrar num item.
@@ -167,11 +167,14 @@ class Server:
     # O laco -----------------------------------------------------------
 
     def menu_item(self, screen):
-        """O item do menu do FliperOS sob o cursor, ou None em qualquer outra tela."""
+        """O item do menu do FliperOS sob o cursor, ou None em qualquer outra tela.
+        O menu e o de titulo FliperOS com algum item conhecido: um item que entrou
+        depois (o RetroAchievements) nao pode calar o marquee no menu todo (antes,
+        com um item fora de MENU_ITEMS, nenhum mandava nada ao andar o cursor)."""
         if not isinstance(screen, self.W.Menu) or screen.mode != "menu" or screen.title != MENU_TITLE:
             return None
         values = [e[0] for e in screen.entries]
-        if not values or not set(values) <= set(MENU_ITEMS):
+        if not values or not set(values) & set(MENU_ITEMS):
             return None
         return values[screen.cursor]
 
