@@ -1759,10 +1759,16 @@ def portproton_renderer(argv, exe):
 # que abre outro .exe, um launcher, ve o mesmo) e so enquanto o jogo roda com o
 # crop: FLIPEROS_CROP169 desligado tira o que esta linha pos (a marca
 # FliperosCrop169 diz que foi daqui; um UseXRandR que a pessoa pos fica).
+# Sem o XRandR o Wine passa a trocar o modo pelo XVidMode, e o do PortProton
+# (Proton LG 10-28) aborta logo ao abrir (xf86vm_free_modes: Assertion
+# 'modes[0].dmDriverExtra == ...' failed): o X do jogo fechava antes da
+# primeira imagem (visto no gabinete com o Darkula, 2026-11-26). UseXVidMode=N
+# tambem: sem nenhum dos dois, o Wine diz o tamanho da tela do X (1280x720).
 WINE_X11_SECTION = "[Software\\\\Wine\\\\X11 Driver]"
 WINE_CROP_MARK = '"FliperosCrop169"="1"'
 # Na ordem em que o Wine grava (os valores vao em ordem de nome).
-WINE_CROP_VALUES = (WINE_CROP_MARK, '"UseXRandR"="N"')
+WINE_CROP_VALUES = (WINE_CROP_MARK, '"UseXRandR"="N"', '"UseXVidMode"="N"')
+WINE_CROP_NAMES = ('"usexrandr"=', '"usexvidmode"=')
 
 
 def reg_crop_xrandr(text, crop, now=None):
@@ -1783,8 +1789,9 @@ def reg_crop_xrandr(text, crop, now=None):
         body = lines[start + 1:end]
         if all(value in body for value in WINE_CROP_VALUES):
             return text
-        # A "UseXRandR" que a pessoa pos tambem e trocada (o crop precisa do N).
-        body = [line for line in body if not line.lower().startswith('"usexrandr"=') and line != WINE_CROP_MARK]
+        # A "UseXRandR" e a "UseXVidMode" que a pessoa pos tambem sao trocadas
+        # (o crop precisa do N). Um prefixo do crop de antes (so UseXRandR) ganha a que falta.
+        body = [line for line in body if not line.lower().startswith(WINE_CROP_NAMES) and line != WINE_CROP_MARK]
         meta = 0
         while meta < len(body) and body[meta].startswith("#"):
             meta += 1

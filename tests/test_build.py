@@ -10258,7 +10258,7 @@ class DeflickerTests(unittest.TestCase):
         base = head + dll
         on = tool.reg_crop_xrandr(base, True, now=1700000001)
         self.assertEqual(on, base + '[Software\\\\Wine\\\\X11 Driver] 1700000001\n#time=%x\n"FliperosCrop169"="1"\n'
-                         '"UseXRandR"="N"\n\n' % ((1700000001 + 11644473600) * 10000000))
+                         '"UseXRandR"="N"\n"UseXVidMode"="N"\n\n' % ((1700000001 + 11644473600) * 10000000))
         self.assertEqual(tool.reg_crop_xrandr(on, True), on)
         self.assertEqual(tool.reg_crop_xrandr(on, False), base)
         self.assertEqual(tool.reg_crop_xrandr(base, False), base)
@@ -10278,6 +10278,16 @@ class DeflickerTests(unittest.TestCase):
         forced = tool.reg_crop_xrandr(mine, True)
         self.assertNotIn('"UseXRandR"="Y"', forced)
         self.assertIn('"UseXRandR"="N"', forced)
+        # Sem o XRandR o Wine do PortProton abortava no XVidMode (gabinete, 2026-11-26): o XVidMode sai junto, e um
+        # prefixo do crop de antes (marca + UseXRandR so) o ganha na proxima abertura; desligar tira os tres.
+        old_crop = head + '[Software\\\\Wine\\\\X11 Driver] 1\n"FliperosCrop169"="1"\n"Decorated"="N"\n"UseXRandR"="N"\n\n'
+        fixed = tool.reg_crop_xrandr(old_crop, True)
+        self.assertIn('"UseXRandR"="N"\n"UseXVidMode"="N"\n', fixed)
+        self.assertEqual(fixed.count('"UseXRandR"'), 1)
+        self.assertEqual(tool.reg_crop_xrandr(fixed, False),
+                         head + '[Software\\\\Wine\\\\X11 Driver] 1\n"Decorated"="N"\n\n')
+        theirs = tool.reg_crop_xrandr(head + '[Software\\\\Wine\\\\X11 Driver] 1\n"UseXVidMode"="Y"\n\n', True)
+        self.assertNotIn('"UseXVidMode"="Y"', theirs)
         # O arquivo: o prefixo do Wine do sistema (WINEPREFIX), e o do PortProton pelo PW_PREFIX_NAME do .ppdb.
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
