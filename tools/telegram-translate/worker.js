@@ -88,9 +88,13 @@ async function dispatchGithub(env, clientPayload) {
   if (!r.ok) throw new Error('dispatch ' + r.status + ' ' + await r.text());
 }
 
+// O nome de um pacote (GAME.fliperos-customgame.zip), tambem quando o Telegram de quem o mandou trocou os pontos e hifens
+// por "_" (GAME_fliperos_customgame.zip): o robo (tools/telegram-customgame.py, package_file_name) trata os dois.
+const PACKAGE_NAME = /(?:\.fliperos-customgame\.zip|_fliperos[_-]customgame\.zip)$/i;
+
 async function dispatchPackage(env, msg) {
   const doc = msg.document;
-  if (!doc || !/\.fliperos-customgame\.zip$/i.test(doc.file_name || '')) return false;
+  if (!doc || !PACKAGE_NAME.test(doc.file_name || '')) return false;
   if (msg.from && msg.from.is_bot) return true;
   if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return true;
   if (!env.GITHUB_TOKEN || !env.GITHUB_REPO) return true;
@@ -102,7 +106,7 @@ async function dispatchPackage(env, msg) {
 // .002... (o painel web as faz). Cada parte vira uma chave no KV (binding PARTS); quando as partes 1..k estao todas aqui e
 // a ultima e menor que a primeira (o fim do pacote), quem recebeu a parte que chegou por ultimo chama o GitHub UMA vez, com
 // todas em "parts" (o robo trata como um pacote so). Sem o binding PARTS as partes sao ignoradas.
-const PART_NAME = /^(.+\.fliperos-customgame\.zip)\.(\d{3})$/i;
+const PART_NAME = /^(.+?(?:\.fliperos-customgame\.zip|_fliperos[_-]customgame_zip))\.(\d{3})$/i;
 const PART_TTL = 172800; // o KV esquece as partes de um pacote que nunca completou, em dois dias
 
 // splitReady: as partes numeradas de 1 a k sem furo (k >= 2) e a ultima menor que a primeira.

@@ -23639,10 +23639,17 @@ class TelegramCustomGameTests(unittest.TestCase):
                  (1713, make(1713, 'Other.zip', 5)),                        # nao e parte de um pacote
                  (1714, make(1714, 'Doom.fliperos-customgame.zip.002', 2000)),   # a parte 2 mandada de novo
                  (1715, make(1715, 'Quake.fliperos-customgame.zip.001', 900, sender=('Bia', '', ''))),
-                 (1716, make(1716, 'Quake.fliperos-customgame.zip.002', 300, sender=('Bia', '', '')))]
+                 (1716, make(1716, 'Quake.fliperos-customgame.zip.002', 300, sender=('Bia', '', ''))),
+                 # So a primeira parte de um pacote: as mensagens dadas nao chegam a ultima, nao e um card ainda.
+                 (1717, make(1717, 'Half.fliperos-customgame.zip.001', 900)),
+                 # Um cliente que trocou os pontos por "_" nos nomes.
+                 (1718, make(1718, 'JoJo_s_Game_fliperos_customgame_zip.001', 500)),
+                 (1719, make(1719, 'JoJo_s_Game_fliperos_customgame_zip.002', 100))]
         requests, notes = self.bot.split_requests(found, '-1004384436732', 'fliperos15khz')
-        self.assertEqual(len(requests), 2)
-        doom, quake = requests
+        self.assertEqual(len(requests), 3)
+        doom, quake, jojo = requests
+        self.assertEqual([p['file_name'] for p in jojo['parts']],
+                         ['JoJo_s_Game_fliperos_customgame_zip.001', 'JoJo_s_Game_fliperos_customgame_zip.002'])
         self.assertEqual((doom['chat_id'], doom['chat_username'], doom['thread_id'], doom['message_id']),
                          ('-1004384436732', 'fliperos15khz', 578, 1708))
         self.assertEqual((doom['from'], doom['username']), ('Ana Silva', 'ana_s'))
@@ -23651,13 +23658,38 @@ class TelegramCustomGameTests(unittest.TestCase):
                          [(1708, '001', 2000), (1714, '002', 2000), (1710, '003', 700)])
         self.assertEqual(set(doom['parts'][0]), {'message_id', 'file_name', 'file_size'})
         self.assertEqual((quake['from'], quake['username'], len(quake['parts'])), ('Bia', '', 2))
-        self.assertEqual(len(notes), 3)
+        self.assertEqual(len(notes), 4)
+        self.assertTrue(any('half.fliperos-customgame.zip' in n and '(001)' in n and 'not a whole package' in n for n in notes), notes)
         self.assertTrue(any('1711' in n and 'not found' in n for n in notes), notes)
         self.assertTrue(any('1712' in n and 'no file' in n for n in notes), notes)
         self.assertTrue(any('1713' in n and 'left alone' in n for n in notes), notes)
         # O pedido que sai passa pelo mesmo conferidor de partes do Worker.
         base, parts, problems = self.bot.check_parts(doom['parts'])
         self.assertEqual((base, len(parts), problems), ('Doom.fliperos-customgame.zip', 3, []))
+
+    def test_a_client_that_turned_the_dots_into_underscores_still_sends_a_package(self):
+        name = self.bot.package_file_name
+        self.assertEqual(name('JoJo_s_Game_fliperos_customgame_zip.001'), 'JoJo_s_Game.fliperos-customgame.zip.001')
+        self.assertEqual(name('Doom_fliperos-customgame_zip.012'), 'Doom.fliperos-customgame.zip.012')
+        self.assertEqual(name('Doom_fliperos_customgame.zip'), 'Doom.fliperos-customgame.zip')
+        for same in ('Doom.fliperos-customgame.zip.002', 'Doom.fliperos-customgame.zip', 'notes.txt', ''):
+            self.assertEqual(name(same), same)
+        self.assertEqual(name(None), '')
+        # As partes com os nomes trocados saem num card so; o comando de juntar usa os nomes como eles chegaram.
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()
+        payload, chunks = self.split_payload(data, count=3)
+        for part in payload['parts']:
+            part['file_name'] = 'Street_Fighter_4_fliperos_customgame_zip.%03d' % part['n']
+        tg = self.FakeIds()
+        result = self.bot.post_package(tg, payload, {}, self.tool, out=lambda *_: None, mtproto_parts=self.parts_source(chunks))
+        self.assertEqual(result, 'posted: Street Fighter 4 (3 parts)')
+        self.assertEqual([c[0] for c in tg.calls], ['album', 'message', 'message', 'message', 'message'])
+        self.assertIn('cat "Street_Fighter_4_fliperos_customgame_zip".0* > "Street_Fighter_4.fliperos-customgame.zip"', tg.calls[1][2])
+        # Um pacote inteiro (nao em partes) com o nome trocado tambem e um pacote.
+        single = self.payload(file_name='Street_Fighter_4_fliperos_customgame.zip')
+        self.assertNotEqual(self.bot.post_package(self.Fake(), single, {}, self.tool, out=lambda *_: None,
+                                                  mtproto=lambda *a: None), 'skipped: not a custom game package')
 
     def test_recovering_the_messages_posts_one_card_and_a_reply_to_each_part(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -23829,7 +23861,7 @@ class TelegramCustomGameTests(unittest.TestCase):
 
     def test_the_worker_hands_the_zip_to_github_and_the_workflow_posts_it(self):
         worker = (ROOT / 'tools/telegram-translate/worker.js').read_text(encoding='utf-8')
-        self.assertIn("/\\.fliperos-customgame\\.zip$/i", worker)
+        self.assertIn(r"/(?:\.fliperos-customgame\.zip|_fliperos[_-]customgame\.zip)$/i", worker)
         self.assertIn("event_type: 'customgame-zip'", worker)
         self.assertIn("'https://api.github.com/repos/' + env.GITHUB_REPO + '/dispatches'", worker)
         self.assertIn('if (await dispatchPackage(env, msg)) return;', worker)
@@ -23938,6 +23970,18 @@ env = Object.assign({}, env, { PARTS: kv });
 await send(env, update(name(1), 100, 701, 7));
 await send(env, update(name(2), 40, 702, 8));
 out.two_people = dispatches.length;
+// Os nomes que o Telegram de alguem trocou (os pontos viram "_"): as partes juntam do mesmo jeito, e o zip so segue o caminho de sempre.
+dispatches.length = 0;
+kv = kvStore();
+env = Object.assign({}, env, { PARTS: kv });
+const mangled = (n) => 'Game_fliperos_customgame_zip.' + String(n).padStart(3, '0');
+for (const n of [2, 1]) await send(env, update(mangled(n), 100, 800 + n));
+out.mangled_waiting = dispatches.length;
+await send(env, update(mangled(3), 30, 803));
+out.mangled = dispatches.map((d) => d.client_payload.parts.map((p) => p.file_name));
+dispatches.length = 0;
+await send(env, update('Game_fliperos_customgame.zip', 5000, 810));
+out.mangled_single = dispatches.length;
 console.log(JSON.stringify(out));
 '''
 
@@ -23966,6 +24010,9 @@ console.log(JSON.stringify(out));
                                                            'file_name', 'file_size', 'from', 'username']), 'parts': None}])
         self.assertEqual(out['no_kv'], 0)                                        # sem o KV, as partes sao ignoradas
         self.assertEqual(out['two_people'], 0)                                   # partes de pessoas diferentes nao se juntam
+        self.assertEqual(out['mangled_waiting'], 0)
+        self.assertEqual(out['mangled'], [['Game_fliperos_customgame_zip.00%d' % n for n in (1, 2, 3)]])
+        self.assertEqual(out['mangled_single'], 1)
 
 
 class SplashTests(unittest.TestCase):

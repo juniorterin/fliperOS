@@ -86,6 +86,17 @@ MIB = 1 << 20
 # .002... (o painel web as faz: config/fliperos-web, package_parts). O Worker junta as partes e chama o workflow uma vez
 # so, com todas em "parts".
 PART_RE = re.compile(r'^(.+' + re.escape(SUFFIX) + r')\.(\d{3})$', re.I)
+# O nome que o cliente do Telegram de quem mandou trocou: JoJo_s_Game_fliperos_customgame_zip.001 (todos os pontos, hifens e
+# espacos do nome viraram "_", menos o ultimo ponto, o da numeracao ou da extensao).
+MANGLED_RE = re.compile(r'^(.+?)_fliperos[_-]customgame[_.]zip(\.\d{3})?$', re.I)
+
+
+def package_file_name(name):
+    """O nome do arquivo como o painel o faz (GAME.fliperos-customgame.zip, com .001... nas partes), tambem quando o
+    Telegram de quem o mandou trocou os pontos por "_"; qualquer outro nome volta como esta."""
+    name = str(name or '')
+    match = MANGLED_RE.match(name)
+    return match.group(1) + SUFFIX + (match.group(2) or '') if match else name
 
 
 class PostError(Exception):
@@ -379,7 +390,7 @@ def install_hint(info, lang):
     """Como instalar: o pacote inteiro (solta o .zip no painel) ou, vindo em partes, juntar as partes antes."""
     t = LABELS[lang]
     if info.get('split'):
-        return t['install_split'] % (e(info['split']['base']), e(info['split']['base']))
+        return t['install_split'] % (e(info['split'].get('source') or info['split']['base']), e(info['split']['base']))
     return t['install']
 
 
@@ -741,7 +752,7 @@ def post_package(tg, payload, env, tool, mtproto=telethon_source, out=print, mtp
     Devolve o que fez (para o log e para os testes)."""
     if payload.get('parts'):
         return post_split_package(tg, payload, env, tool, mtproto_parts, out)
-    name = str(payload.get('file_name') or '')
+    name = package_file_name(payload.get('file_name'))
     if not name.lower().endswith(SUFFIX):
         return 'skipped: not a custom game package'
     chat_id = str(payload.get('chat_id', ''))
@@ -817,7 +828,7 @@ def check_parts(parts):
     diferentes (todas, menos a ultima, tem o mesmo tamanho, e a ultima nao e maior)."""
     found, base, matched = {}, '', 0
     for part in parts:
-        match = PART_RE.match(str(part.get('file_name') or ''))
+        match = PART_RE.match(package_file_name(part.get('file_name')))
         if not match:
             continue
         base = base or match.group(1)
@@ -932,7 +943,10 @@ def post_split_package(tg, payload, env, tool, mtproto_parts=None, out=print):
     in_files = origin == topic
     where, reply = (origin, first) if in_files else (topic, None)
     if info:
-        info['split'] = {'count': count, 'total': sum(sizes), 'base': base}
+        # base: o nome do zip depois de juntar; source: o das partes como chegaram (o de um cliente que trocou os pontos
+        # por "_" e outro).
+        info['split'] = {'count': count, 'total': sum(sizes), 'base': base,
+                         'source': re.sub(r'\.\d{3}$', '', str(parts[0].get('file_name') or base))}
         title = info['name']
         card = message_id_of(post_card(tg, chat, info, sender, where, reply, in_files))
     else:
@@ -1018,7 +1032,7 @@ def split_requests(found, chat_id='', chat_username=''):
         if part is None:
             notes.append('message %d: no file' % number)
             continue
-        match = PART_RE.match(part['file_name'])
+        match = PART_RE.match(package_file_name(part['file_name']))
         if not match:
             notes.append('message %d: %s is not a part of a package, left alone' % (number, part['file_name'] or 'a file'))
             continue
@@ -1026,8 +1040,14 @@ def split_requests(found, chat_id='', chat_username=''):
         if int(match.group(2)) not in group or group[int(match.group(2))]['message_id'] < part['message_id']:
             group[int(match.group(2))] = part
     requests = []
-    for group in groups.values():
+    for key, group in groups.items():
         parts = [group[n] for n in sorted(group)]
+        # Como o Worker: so um conjunto inteiro (partes de 1 a k sem furo, k >= 2, a ultima menor que a primeira). Um que
+        # ainda nao e (as mensagens dadas nao chegam ate a ultima parte) nao vira um card de um zip que nao abre.
+        if sorted(group) != list(range(1, len(parts) + 1)) or len(parts) < 2 or parts[-1]['file_size'] >= parts[0]['file_size']:
+            notes.append('%s: the parts found (%s) are not a whole package, left alone (give the messages up to its last part)'
+                         % (key, ', '.join('%03d' % n for n in sorted(group))))
+            continue
         first = min(parts, key=lambda p: p['message_id'])
         requests.append({'chat_id': chat_id, 'chat_username': chat_username, 'thread_id': first['thread_id'],
                          'message_id': first['message_id'], 'from': first['from'], 'username': first['username'],
