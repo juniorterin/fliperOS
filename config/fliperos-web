@@ -55,8 +55,10 @@ API (JSON; tudo menos o login pede a sessao, o cookie fliperos_session):
     POST /api/versions {"update": N|"latest"}: leva o gabinete a ele (tarefa)
     Os ajustes orientation, splash e mm_games viram tarefas ({"task": ...}).
     POST /api/favourite {"system", "game", "on"}: os favoritos do FliperOS
-    POST /api/launch  {"system", "game"}: fecha o que esta na tela e abre o
-                      jogo; quando ele fecha, volta o que estava
+    POST /api/launch  {"system", "game"[, "ft": {"n", "p1", "p2"}]}: fecha o que
+                      esta na tela e abre o jogo; quando ele fecha, volta o que
+                      estava. ft: o first to so desta partida (Jogar FT)
+    GET  /api/versus?system=&game=  {"ft": bool}: o jogo tem placar versus
     POST /api/close   fecha o jogo aberto
     GET  /api/files?root=roms&path=PASTA   GET /api/download?root=&path=
     POST /api/upload?root=&path=&name=[&overwrite=1] (o corpo e o arquivo)
@@ -3048,6 +3050,74 @@ def qr_svg(text):
     return _qr_cache[text]
 
 
+# O placar versus (config/fliperos-versus) e o first to de uma partida so
+# (Jogar FT na pagina do jogo): o N e os nomes num arquivo da sessao do
+# jogador, que o fliperos-pixelcade e o fliperos-versus leem antes do
+# fliperos.conf e que o fliperos-pixelcade apaga quando o jogo fecha.
+VERSUS = ENV("FLIPEROS_VERSUS", BIN + "/fliperos-versus")
+VERSUS_NAME = re.compile(r"[A-Za-z0-9 ._-]{0,12}")
+
+
+def versus_source(argv):
+    """De onde o placar do jogo vem (mame, retroarch ou model2) e o core do
+    RetroArch, pelo comando do jogo; (None, "") sem placar possivel."""
+    source = None
+    for arg in argv:
+        name = os.path.basename(arg)
+        if name in ("groovymame", "hbgroovymame"):
+            source = "mame"
+        elif name in ("fliperos-model2", "keisho", "sm2-emu"):
+            source = "model2"
+        elif name == "retroarch":
+            source = "retroarch"
+        if source:
+            break
+    core = argv[argv.index("-L") + 1] if "-L" in argv[:-1] else ""
+    return source, core
+
+
+def versus_support(system, name):
+    """O jogo tem placar versus (um detector do Fightcade, o Keisho ou uma
+    linha da tabela): fliperos-versus has."""
+    argv = game_command(system, name) if system else None
+    if not argv:
+        return False
+    source, core = versus_source(argv)
+    if not source or not os.access(VERSUS, os.X_OK):
+        return False
+    rom = os.path.splitext(os.path.basename(argv[-1]))[0]
+    try:
+        return subprocess.run([VERSUS, "has", source, rom] + ([core] if core else []), capture_output=True,
+                              timeout=20).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def versus_session(ft, rom=""):
+    """Grava o first to desta partida (dict n, p1, p2) no arquivo da sessao do
+    jogador, com o jogo dele (rom: o nome que o fliperos-pixelcade recebe no
+    "end", que entao o apaga); None apaga. Devolve False com um valor invalido."""
+    user = pwd.getpwnam(PLAYER)
+    path = os.path.join(RUN_USER, str(user.pw_uid), "fliperos-versus.ft")
+    if ft is None:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return True
+    n = str(ft.get("n", ""))
+    p1, p2 = str(ft.get("p1", "")).strip(), str(ft.get("p2", "")).strip()
+    if not (n.isdigit() and 1 <= int(n) <= 10 and VERSUS_NAME.fullmatch(p1) and VERSUS_NAME.fullmatch(p2)):
+        return False
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("versus_ft=%d\nversus_p1=%s\nversus_p2=%s\nversus_game=%s\n" % (int(n), p1, p2, rom))
+    if os.geteuid() == 0:
+        os.chown(tmp, user.pw_uid, user.pw_gid)
+    os.replace(tmp, path)
+    return True
+
+
 def as_player(*argv):
     """Um comando como o jogador, com a home e o /run/user dele (o painel e
     root; nos testes, que nao sao, direto)."""
@@ -4505,6 +4575,11 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/overlay/input/style":
             return self.send(200, {"css": input_css(), "custom": os.path.isfile(INPUT_CSS),
                                    "default": read(os.path.join(STATIC, "input.css"))})
+        if url.path == "/api/versus":
+            # A pagina do jogo: o Jogar FT so aparece num jogo com placar versus.
+            query = parse_qs(url.query)
+            system = self.panel.system((query.get("system") or [""])[0])
+            return self.send(200, {"ft": versus_support(system, (query.get("game") or [""])[0])})
         if url.path == "/api/gameinfo":
             query = parse_qs(url.query)
             system = self.panel.system((query.get("system") or [""])[0])
@@ -4576,6 +4651,18 @@ class Handler(BaseHTTPRequestHandler):
             argv = panel_command(argv) if argv else None
             if not argv:
                 return self.send(400, {"error": "no such game, or this system does not open from the panel"})
+            # Jogar FT: o first to so desta partida, gravado antes de o jogo
+            # abrir (o marquee ja abre no placar). Sem ele, um de antes sai.
+            ft = data.get("ft")
+            rom = os.path.splitext(os.path.basename(argv[-1]))[0]
+            if isinstance(ft, dict) and not versus_support(system, str(data.get("game", ""))):
+                return self.send(400, {"error": "this game has no versus scoreboard"})
+            try:
+                ok = versus_session(ft if isinstance(ft, dict) else None, rom)
+            except (OSError, KeyError):
+                ok = ft is None
+            if not ok:
+                return self.send(400, {"error": "first to: 1 to 10, names up to 12 letters, numbers, spaces, - _ ."})
             # Para o painel saber de que pasta e o jogo que abrir (identify).
             self.panel.last_launch = (system["key"], str(data.get("game", "")), time.time())
             result = self.panel.launch(argv)

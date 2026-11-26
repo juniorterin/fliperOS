@@ -8,9 +8,14 @@
 
 Object.assign(TEXT.en, {
   mq_title: "Marquee", mq_on: "Marquee preview mode", mq_device: "Show the marquee of",
-  mq_ft: "Scoreboard: first to (FT)", mq_ft_off: "Off", mq_p1: "Player 1 name", mq_p2: "Player 2 name",
+  mq_show_ft: "FT", mq_ft: "First to (FT)", mq_p1: "Player 1 name", mq_p2: "Player 2 name",
+  mq_ft_save: "Save", mq_ft_reset: "Reset score",
   mq_ft_note: "The first player to win %s matches gets their name and WIN! on the marquee; then a new set starts from 0 x 0.",
-  mq_ft_saved: "Saved on the cabinet.", mq_ft_bad: "Use only letters, numbers, spaces and - _ . (up to 12).",
+  mq_ft_unsaved: "Press Save to turn first to mode on in the cabinet.",
+  mq_ft_saved: "Saved on the cabinet: FT%s.", mq_ft_bad: "Use only letters, numbers, spaces and - _ . (up to 12).",
+  mq_ft_off_saved: "First to mode turned off.", mq_ft_reset_done: "Score reset to 0 x 0 (in the game that is open).",
+  mq_ft_fail: "The cabinet did not save it. Try again.",
+  mq_ft_warn: "The game that is open (%s) has no versus scoreboard: first to does not count in it, and the marquee keeps the game's art. It works in the games with a scoreboard (the PLAY FT button on the game page shows which).",
   mq_note: "Shows on this panel what the LED marquee would display for the game that is open, without the hardware: here, in Live, in the marquee preview and on the cabinet drawing.",
   mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (LED 128×32)",
   mq_art_pixelcade: "Art: marquee, then logo, then the name.", mq_art_zedmd: "Art: dmd, then marquee, then logo, then the name.",
@@ -23,9 +28,14 @@ Object.assign(TEXT.en, {
 });
 Object.assign(TEXT.pt, {
   mq_title: "Marquee", mq_on: "Modo prévia do marquee", mq_device: "Mostrar o marquee do",
-  mq_ft: "Placar: first to (FT)", mq_ft_off: "Desligado", mq_p1: "Nome do jogador 1", mq_p2: "Nome do jogador 2",
+  mq_show_ft: "FT", mq_ft: "First to (FT)", mq_p1: "Nome do jogador 1", mq_p2: "Nome do jogador 2",
+  mq_ft_save: "Salvar", mq_ft_reset: "Zerar placar",
   mq_ft_note: "Quem ganhar %s partidas primeiro aparece no marquee com o nome e WIN!; depois uma série nova começa do 0 x 0.",
-  mq_ft_saved: "Gravado no gabinete.", mq_ft_bad: "Use só letras, números, espaço e - _ . (até 12).",
+  mq_ft_unsaved: "Aperte Salvar para ligar o modo first to no gabinete.",
+  mq_ft_saved: "Gravado no gabinete: FT%s.", mq_ft_bad: "Use só letras, números, espaço e - _ . (até 12).",
+  mq_ft_off_saved: "Modo first to desligado.", mq_ft_reset_done: "Placar zerado: 0 x 0 (no jogo que está aberto).",
+  mq_ft_fail: "O gabinete não gravou. Tente de novo.",
+  mq_ft_warn: "O jogo aberto (%s) não tem placar versus: o first to não conta nele, e o marquee fica com a arte do jogo. Ele vale nos jogos com placar (o botão JOGAR FT na página do jogo mostra quais).",
   mq_note: "Mostra neste painel o que o marquee de LED exibiria para o jogo aberto, sem o hardware: aqui, no Ao vivo, na prévia do marquee e no desenho do gabinete.",
   mq_pixelcade: "Pixelcade (LED 128×32)", mq_zedmd: "ZeDMD (LED 128×32)",
   mq_art_pixelcade: "Arte: marquee, depois logo, depois o nome.", mq_art_zedmd: "Arte: dmd, depois marquee, depois logo, depois o nome.",
@@ -54,7 +64,7 @@ try {
   if (saved) {
     mq.on = !!saved.on;
     if (MQ_DEVICES[saved.device]) mq.device = saved.device;
-    if (saved.show === "art" || saved.show === "score") mq.show = saved.show;
+    if (["art", "score", "ft"].includes(saved.show)) mq.show = saved.show;
   }
 } catch (e) { /* sem armazenamento */ }
 
@@ -93,7 +103,7 @@ let mqState = {}, mqLive = null, mqHi = [], mqLastTime = null, mqPopTimer = null
 const mqScore = (s) => Number(s).toLocaleString(locale());
 function mqDrawHi(box) {
   const hi = box.querySelector(".mq-hi"), top = mqHi[0];
-  hi.hidden = !top || mq.show !== "score";
+  hi.hidden = !top || !mqScoreOn();
   if (top) hi.textContent = "HI " + mqScore(top.score) + (top.name ? " " + top.name : "");
 }
 function mqDrawHiList() {
@@ -169,7 +179,7 @@ function mqDrawState(box) {
   mqDrawHi(box);
   // Quem fechou o first to: o nome na cor do jogador, WIN! piscando e os
   // fogos, ate a primeira vitoria da serie nova (o evento versus seguinte).
-  const win = mqState.event === "win" && mq.show === "score";
+  const win = mqState.event === "win" && mqScoreOn();
   const winBox = box.querySelector(".mq-win");
   winBox.hidden = !win;
   box.classList.toggle("won", win);
@@ -185,7 +195,7 @@ function mqDrawState(box) {
   const live = mqLive && Object.assign({ left: (named && mqFt.p1.toUpperCase()) || "P1",
     right: (named && mqFt.p2.toUpperCase()) || "P2" }, mqLive);
   const s = mqState.event === "versus" || !live ? mqState : live;
-  const versus = !win && (mqState.event === "versus" || !!live) && mq.show === "score";
+  const versus = !win && (mqState.event === "versus" || !!live) && mqScoreOn();
   box.classList.toggle("vs", versus);
   const vs = box.querySelector(".mq-versus");
   vs.hidden = !versus;
@@ -193,18 +203,34 @@ function mqDrawState(box) {
   vs.dataset.left = s.left_player === "2" ? "2" : "1";
   const num = (v) => (v && v !== "-" ? v : "");
   const sides = vs.querySelectorAll(".mq-side");
-  sides[0].firstChild.textContent = s.left || "P1";
+  mqSideName(sides[0].firstChild, s.left || "P1");
   sides[0].lastChild.textContent = num(s.score_left);
-  sides[1].firstChild.textContent = s.right || "P2";
+  mqSideName(sides[1].firstChild, s.right || "P2");
   sides[1].lastChild.textContent = num(s.score_right);
   vs.querySelector(".mq-wins").textContent = (num(s.wins_left) || "0") + " – " + (num(s.wins_right) || "0");
+}
+
+// O nome de um lado do placar: o que nao cabe na coluna dele roda em circulo,
+// como no ZeDMD (duas copias seguidas, a volta emenda), em vez de ser cortado.
+// So mexe quando o nome muda: a volta nao recomeca a cada segundo.
+function mqSideName(b, text) {
+  if (b.dataset.name === text) return;
+  b.dataset.name = text;
+  b.classList.remove("run");
+  b.replaceChildren(text);
+  requestAnimationFrame(() => {
+    if (!b.clientWidth || b.scrollWidth <= b.clientWidth) return;
+    b.replaceChildren(el("span", {}, el("i", {}, text), el("i", {}, text)));
+    b.classList.add("run");
+    b.style.setProperty("--time", Math.max(4, text.length * 0.5) + "s");
+  });
 }
 
 function mqEvents(s, first) {
   if (s.time === mqLastTime) return;
   mqLastTime = s.time;
   // Na primeira leitura nada rola: o texto ja era velho quando a pagina abriu.
-  if (first || !s.text || mq.show !== "score") return;
+  if (first || !s.text || !mqScoreOn()) return;
   document.querySelectorAll(".mq-led").forEach((box) => {
     if (box.hidden) return;
     if (s.event === "achievement") {
@@ -333,13 +359,18 @@ function mqControls() {
   $("mq-art").textContent = t("mq_art_" + mq.device);
   document.querySelectorAll(".mq-show button").forEach((b) => b.classList.toggle("on", b.dataset.show === mq.show));
 }
-// Arte ou placar (no cartao do Frontend): o texto e a conquista que
-// estavam rolando saem, e o placar volta ou some na hora.
+// Arte, placar ou FT (no cartao do Frontend): o texto e a conquista que
+// estavam rolando saem, e o placar volta ou some na hora. O FT abre os
+// campos dele; Arte ou Placar desligam o first to no gabinete.
+// mqScoreOn: o placar, os recordes e as conquistas aparecem (Placar e FT).
+const mqScoreOn = () => mq.show !== "art";
 document.querySelectorAll(".mq-show button").forEach((b) => b.addEventListener("click", () => {
   mq.show = b.dataset.show;
   mqSave();
+  if (mq.show !== "ft") mqFtOff();
+  mqFtDirty = false;
   mqControls();
-  if (mq.show !== "score") document.querySelectorAll(".mq-ticker, .mq-pop").forEach((n) => { n.hidden = true; });
+  if (!mqScoreOn()) document.querySelectorAll(".mq-ticker, .mq-pop").forEach((n) => { n.hidden = true; });
   mqPoll();
 }));
 function mqChanged() {
@@ -401,9 +432,14 @@ async function mqInstall(device) {
 // O FT do placar versus e o nome dos dois jogadores sao ajustes do gabinete
 // (versus_ft, versus_p1, versus_p2 do fliperos.conf, lib/system.sh): o
 // config/fliperos-versus fecha a serie e o fliperos-pixelcade poe o nome e o
-// WIN! no ZeDMD, no Pixelcade e no marquee do OBS. Os nomes valem so com o FT.
-let mqFt = { ft: "0", p1: "", p2: "" }, mqFtMax = 10;
+// WIN! no ZeDMD, no Pixelcade e no marquee do OBS. O FT e a terceira opcao do
+// "Arte | Placar": ela abre os campos, e o Salvar os grava juntos (o modo liga
+// no gabinete); Arte ou Placar o desligam. O Zerar placar volta a serie do
+// jogo aberto ao 0 x 0. O gabinete manda: com o FT ligado la, a opcao FT
+// aparece escolhida em qualquer navegador.
+let mqFt = { ft: "0", p1: "", p2: "" }, mqFtMax = 10, mqFtDirty = false;
 const MQ_NAME = /^[A-Za-z0-9 ._-]{0,12}$/;
+const MQ_FT_DEFAULT = "3";
 
 async function mqFtLoad() {
   try {
@@ -412,47 +448,88 @@ async function mqFtLoad() {
     mqFt = { ft: row("versus_ft").value || "0", p1: row("versus_p1").value || "", p2: row("versus_p2").value || "" };
     mqFtMax = Math.max(1, (row("versus_ft").options || []).length - 1) || 10;
   } catch (e) { return; }
-  mqFtControls();
+  // O gabinete com o FT ligado: a opcao FT; desligado, um FT de antes
+  // neste navegador vira o Placar.
+  if (mqFt.ft !== "0") mq.show = "ft";
+  else if (mq.show === "ft") mq.show = "score";
+  mqSave();
+  mqFtDirty = false;
+  mqControls();
 }
 
 function mqFtControls() {
+  $("mq-ft-box").hidden = mq.show !== "ft";
+  mqFtWarn(typeof cabGame !== "undefined" && cabOnline ? cabGame : null);
+  if (mqFtDirty) return;               // o que a pessoa esta escrevendo fica
   const sel = $("mq-ft");
-  sel.replaceChildren(el("option", { value: "0" }, t("mq_ft_off")),
-    ...Array.from({ length: mqFtMax }, (_, i) => el("option", { value: String(i + 1) }, "FT" + (i + 1))));
-  sel.value = mqFt.ft;
-  const on = mqFt.ft !== "0";
-  for (const n of [1, 2]) {
-    const input = $("mq-p" + n);
-    if (document.activeElement !== input) input.value = mqFt["p" + n];
-    input.disabled = !on;
-  }
-  $("mq-ft-note").textContent = on ? t("mq_ft_note").replace("%s", mqFt.ft) : "";
+  sel.replaceChildren(...Array.from({ length: mqFtMax }, (_, i) => el("option", { value: String(i + 1) }, "FT" + (i + 1))));
+  sel.value = mqFt.ft !== "0" ? mqFt.ft : MQ_FT_DEFAULT;
+  $("mq-p1").value = mqFt.p1;
+  $("mq-p2").value = mqFt.p2;
+  $("mq-ft-note").textContent = mq.show !== "ft" ? "" : mqFt.ft !== "0" ? t("mq_ft_note").replace("%s", mqFt.ft) : t("mq_ft_unsaved");
 }
 
-async function mqFtSave(key, value) {
+async function mqFtPost(key, value) {
   try {
     const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ key, value }) });
-    if (!res.ok) throw new Error("bad");
-    $("mq-ft-note").textContent = t("mq_ft_saved");
-    return true;
+    return res.ok;
   } catch (e) {
-    $("mq-ft-note").textContent = t("mq_ft_bad");
     return false;
   }
 }
 
-$("mq-ft").addEventListener("change", async () => {
-  const value = $("mq-ft").value;
-  if (await mqFtSave("versus_ft", value)) { mqFt.ft = value; mqFtControls(); }
-});
-for (const n of [1, 2]) {
-  const input = $("mq-p" + n);
-  input.addEventListener("change", async () => {
-    const value = input.value.trim();
-    if (!MQ_NAME.test(value)) { $("mq-ft-note").textContent = t("mq_ft_bad"); return; }
-    if (await mqFtSave("versus_p" + n, value)) { mqFt["p" + n] = value; input.value = value; }
-  });
+// Salvar: o N e os dois nomes juntos (os nomes primeiro: o FT ja liga com eles).
+async function mqFtSaveAll() {
+  const ft = $("mq-ft").value, p1 = $("mq-p1").value.trim(), p2 = $("mq-p2").value.trim();
+  if (!MQ_NAME.test(p1) || !MQ_NAME.test(p2)) { $("mq-ft-note").textContent = t("mq_ft_bad"); return; }
+  $("mq-ft-save").disabled = true;
+  const ok = await mqFtPost("versus_p1", p1) && await mqFtPost("versus_p2", p2) && await mqFtPost("versus_ft", ft);
+  $("mq-ft-save").disabled = false;
+  if (!ok) { $("mq-ft-note").textContent = t("mq_ft_fail"); return; }
+  mqFt = { ft, p1, p2 };
+  mqFtDirty = false;
+  mqFtControls();
+  $("mq-ft-note").textContent = t("mq_ft_saved").replace("%s", ft) + " " + t("mq_ft_note").replace("%s", ft);
+  mqPoll();
 }
+
+// O aviso do FT num jogo sem placar: com a opcao FT escolhida e um jogo aberto
+// no gabinete que nao tem placar versus, o FT nao vale nele (o marquee fica
+// com a arte). Confere de novo quando o jogo muda e ao salvar.
+let mqFtWarnKey = "";
+async function mqFtWarn(game) {
+  const box = $("mq-ft-warn");
+  const key = mq.show === "ft" && game ? game.system + "/" + game.name : "";
+  mqFtWarnKey = key;
+  if (!key) { box.hidden = true; return; }
+  let ok = true;
+  try {
+    ok = !!(await (await api("/api/versus?system=" + encodeURIComponent(game.system) +
+      "&game=" + encodeURIComponent(game.name))).json()).ft;
+  } catch (e) { return; }
+  if (key !== mqFtWarnKey) return;      // o jogo mudou enquanto perguntava
+  box.textContent = ok ? "" : t("mq_ft_warn").replace("%s", game.title || game.name);
+  box.hidden = ok;
+}
+
+// Arte ou Placar com o FT ligado no gabinete: o modo desliga.
+async function mqFtOff() {
+  if (mqFt.ft === "0") return;
+  if (await mqFtPost("versus_ft", "0")) {
+    mqFt.ft = "0";
+    $("mq-ft-note").textContent = t("mq_ft_off_saved");
+  }
+}
+
+$("mq-ft-save").addEventListener("click", mqFtSaveAll);
+$("mq-ft-reset").addEventListener("click", async () => {
+  $("mq-ft-reset").disabled = true;
+  const ok = await mqFtPost("versus.reset", "1");
+  $("mq-ft-reset").disabled = false;
+  $("mq-ft-note").textContent = t(ok ? "mq_ft_reset_done" : "mq_ft_fail");
+  if (ok) setTimeout(mqPoll, 800);
+});
+for (const id of ["mq-ft", "mq-p1", "mq-p2"]) $(id).addEventListener("input", () => { mqFtDirty = true; });
 
 $("mq-inst-go").addEventListener("click", () => mqInstall(mq.device));
 $("mq-on").addEventListener("change", mqChanged);

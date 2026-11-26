@@ -161,13 +161,18 @@
             <p id="mq-art" class="dim"></p>
             <div class="mq-row"><span id="mq-inst" class="dim"></span><button id="mq-inst-go" class="btn small" type="button" hidden data-t="mq_inst_yes"></button></div>
             <div class="mq-row"><span data-t="mq_show"></span>
-              <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button></div></div>
-            <!-- O first to do placar versus: versus_ft, versus_p1 e versus_p2 do fliperos.conf (/api/settings). -->
-            <div class="mq-ft">
+              <div class="fps-pick mq-show" role="group"><button type="button" data-show="art" data-t="mq_show_art"></button><button type="button" data-show="score" data-t="mq_show_score"></button><button type="button" data-show="ft" data-t="mq_show_ft"></button></div></div>
+            <!-- O first to do placar versus (a opcao FT acima): versus_ft, versus_p1 e versus_p2 do fliperos.conf (/api/settings). -->
+            <div class="mq-ft" id="mq-ft-box" hidden>
               <label class="mq-pick"><span data-t="mq_ft"></span><select id="mq-ft"></select></label>
               <label class="mq-pick mq-p1"><span data-t="mq_p1"></span><input id="mq-p1" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="P1"></label>
               <label class="mq-pick mq-p2"><span data-t="mq_p2"></span><input id="mq-p2" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="P2"></label>
+              <div class="mq-row">
+                <button id="mq-ft-save" class="btn small" type="button"><svg class="g"><use href="icons.svg#g-check"/></svg><span data-t="mq_ft_save"></span></button>
+                <button id="mq-ft-reset" class="btn small ghost" type="button"><svg class="g"><use href="icons.svg#g-refresh"/></svg><span data-t="mq_ft_reset"></span></button>
+              </div>
               <p id="mq-ft-note" class="dim" role="status"></p>
+              <p id="mq-ft-warn" class="mq-warn" role="alert" hidden></p>
             </div>
             <div class="mq-led" id="mq-status" hidden></div>
             <p id="mq-hi-list" class="dim" hidden></p>
@@ -846,6 +851,19 @@
     <p id="ask-text"></p>
     <input id="ask-input" autocomplete="off" hidden>
     <footer><a id="ask-extra" class="btn ghost" hidden></a><button id="ask-no" class="btn ghost" value="no"></button><button id="ask-yes" class="btn" value="yes"></button></footer>
+  </form>
+</dialog>
+
+<!-- Jogar FT (games.js): o first to so desta partida, o N e os nomes dos jogadores. -->
+<dialog id="ft-dlg" class="ask ft-dlg">
+  <form method="dialog">
+    <h3 id="ft-title"></h3>
+    <p data-t="ft_text"></p>
+    <label class="ft-field"><span data-t="mq_ft"></span><select id="ft-n"></select></label>
+    <label class="ft-field"><span data-t="mq_p1"></span><input id="ft-p1" maxlength="12" autocomplete="off" spellcheck="false" placeholder="P1"></label>
+    <label class="ft-field"><span data-t="mq_p2"></span><input id="ft-p2" maxlength="12" autocomplete="off" spellcheck="false" placeholder="P2"></label>
+    <p id="ft-error" class="ft-error" role="alert" hidden></p>
+    <footer><button class="btn ghost" value="no" data-t="cancel"></button><button id="ft-go" class="btn" value="yes" data-t="ft_play"></button></footer>
   </form>
 </dialog>
 

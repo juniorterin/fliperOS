@@ -348,6 +348,29 @@ span.inl { display: inline-grid; font-size: 9px; }
   background: transparent; color: var(--muted); font-weight: 700; }
 .fav-btn.on { border-color: var(--yellow); background: rgba(241,250,140,.1); color: var(--yellow); }
 .fav-btn.burst svg { animation: burst .5s ease-out; }
+/* Jogar FT (so em jogo com placar versus), entre o Jogar e o Favoritar. */
+.ft-btn { display: flex; align-items: center; gap: 8px; padding: 0 18px; border-radius: 16px; border: 1px solid var(--cyan);
+  background: rgba(139,233,253,.08); color: var(--cyan); font: 11px var(--px); letter-spacing: .04em; white-space: nowrap; }
+.ft-btn[hidden] { display: none; }
+@media (max-width: 480px) { .cta { flex-wrap: wrap; } .cta .play-btn { flex-basis: 100%; } .cta .ft-btn, .cta .fav-btn { flex: 1; justify-content: center; min-height: 48px; } }
+.ft-btn:hover { background: rgba(139,233,253,.16); }
+/* Jogo sem placar: o botao apagado; tocado, o aviso explica. */
+.ft-btn.off { border-color: var(--line); background: transparent; color: var(--dim); }
+.ft-btn.off:hover { background: rgba(133,144,184,.08); }
+.ft-btn svg.g { width: 18px; height: 18px; }
+/* O seletor de clone, embaixo do Jogar: o original e os clones na pasta. */
+.clone-pick { display: grid; gap: 6px; margin: -8px 0 20px; color: var(--muted); font-size: 14px; }
+.clone-pick .clone-head { display: flex; align-items: center; gap: 6px; }
+.clone-pick .clone-head svg.px { width: 16px; height: 16px; flex: none; margin: 0; }
+.clone-pick .clone-head small { margin-left: auto; color: var(--dim); }
+.clone-pick select { width: 100%; min-width: 0; height: 44px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--card2); color: var(--fg); font: 15px system-ui; text-overflow: ellipsis; }
+.clone-pick select:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
+.ft-dlg .ft-field { display: grid; gap: 6px; margin-bottom: 12px; color: var(--muted); font-size: 14px; }
+.ft-dlg .ft-field input, .ft-dlg .ft-field select { width: 100%; height: 44px; margin: 0; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--deep); color: var(--fg); font: 16px system-ui; }
+.ft-dlg .ft-field input { text-transform: uppercase; }
+.ft-dlg .ft-error { color: var(--red); }
 @keyframes burst { 40% { transform: scale(1.7) rotate(20deg); filter: drop-shadow(0 0 8px var(--yellow)); } }
 .fact-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .fact-cell { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 10px; align-items: center; padding: 10px; border-radius: 14px;

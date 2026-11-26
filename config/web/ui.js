@@ -143,6 +143,7 @@ function ask({ title, text = "", yes = t("ok"), no = t("cancel"), danger = false
   $("ask-text").hidden = !text;
   $("ask-yes").textContent = yes;
   $("ask-no").textContent = no;
+  $("ask-no").hidden = !no;          // so um aviso: o OK sozinho
   $("ask-yes").className = "btn" + (danger ? " red" : "");
   const link = $("ask-extra");
   link.hidden = !extra;

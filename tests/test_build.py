@@ -13383,6 +13383,35 @@ class WebPanelTests(unittest.TestCase):
                      {'system': 'shell', 'game': 'vf4.zip'}, {'system': 'naomi'}):
             self.assertEqual(self.request('POST', '/api/launch', body, cookie=cookie)[0], 400, body)
 
+    def test_play_ft_writes_the_match_first_to_for_the_player(self):
+        # Jogar FT: o N e os nomes vao para o arquivo da sessao do jogador, com o
+        # jogo dele (o fliperos-pixelcade o apaga quando esse jogo fecha).
+        import pwd
+        web = SourceFileLoader('fliperos_web_ft', str(ROOT / 'config/fliperos-web')).load_module()
+        user = pwd.getpwuid(os.getuid())
+        runtime = Path(self.tmp.name) / 'run'
+        (runtime / str(user.pw_uid)).mkdir(parents=True, exist_ok=True)
+        web.RUN_USER, web.PLAYER = str(runtime), user.pw_name
+        ft = runtime / str(user.pw_uid) / 'fliperos-versus.ft'
+        self.assertTrue(web.versus_session({'n': '3', 'p1': ' Lucas ', 'p2': 'Beto_2'}, 'sf2ce'))
+        self.assertEqual(ft.read_text(), 'versus_ft=3\nversus_p1=Lucas\nversus_p2=Beto_2\nversus_game=sf2ce\n')
+        for bad in ({'n': '0'}, {'n': '11'}, {'n': 'x'}, {'n': '2', 'p1': 'a|b'}, {'n': '2', 'p2': 'NOME LONGO DEMAIS'}):
+            self.assertFalse(web.versus_session(bad, 'sf2ce'), bad)
+        self.assertTrue(web.versus_session(None))
+        self.assertFalse(ft.exists())
+        # De onde vem o placar: o emulador do comando e o core do RetroArch.
+        self.assertEqual(web.versus_source(['/opt/fliperos/bin/fliperos-x11-run', 'groovymame', 'sf2ce']), ('mame', ''))
+        self.assertEqual(web.versus_source(['kms-run', 'retroarch', '-L', '/c/fbneo_libretro.so', '/r/sf2.zip']),
+                         ('retroarch', '/c/fbneo_libretro.so'))
+        self.assertEqual(web.versus_source(['x11-run', 'flycast', 'vf4.zip']), (None, ''))
+        # Um jogo sem placar nao abre em FT.
+        cookie = self.login()
+        status, _, data = self.request('POST', '/api/launch', {'system': 'naomi', 'game': 'vf4.zip',
+                                                               'ft': {'n': '3', 'p1': 'A', 'p2': 'B'}}, cookie=cookie)
+        self.assertEqual(status, 400, data)
+        self.assertEqual(json.loads(self.request('GET', '/api/versus?system=naomi&game=vf4.zip', cookie=cookie)[2]),
+                         {'ft': False})
+
     def test_launch_of_a_custom_game_sends_the_exec_line_of_its_script(self):
         # O tty1 so abre um pedido que comeca no fliperos-x11-run/kms-run e ignora o resto ("Ignoring an unknown
         # request from the web panel"): o /bin/sh NOME.sh que o frontend abre nao serve ao painel, que manda o
@@ -18864,6 +18893,26 @@ class PixelcadeTests(unittest.TestCase):
         conf.write_text('versus_p1=Lucas\n')
         self.run_('versus', '2', '0', '-', '-', 'Ryu', 'Ken')
         self.assertEqual(self.dmd_calls(6)[5], 'versus RYU 2 0 KEN - - 1')
+        # O Zerar placar do painel: 0 x 0 com os nomes do FT.
+        conf.write_text('versus_ft=2\nversus_p1=Lucas\n')
+        self.assertEqual(self.run_('versus-reset'), [])
+        self.assertEqual(self.dmd_calls(7)[6], 'versus LUCAS 0 0 P2 - - 1 2')
+        # Jogar FT: o arquivo da partida vale antes do fliperos.conf; o jogo em
+        # FT abre no placar, sem a arte nem os recordes (nada no Pixelcade alem do
+        # placar); quando ESSE jogo fecha, o arquivo sai (o de outro jogo, nao).
+        session = Path(self.env['XDG_RUNTIME_DIR']) / 'fliperos-versus.ft'
+        session.parent.mkdir(parents=True, exist_ok=True)
+        session.write_text('versus_ft=4\nversus_p1=Ana\nversus_p2=Bia\nversus_game=sf2ce\n')
+        self.env['GAME_FT'] = '1'
+        try:
+            self.run_('game', 'mame', 'sf2ce')
+        finally:
+            del self.env['GAME_FT']
+        self.assertEqual(self.dmd_calls(8)[7], 'versus ANA 0 0 BIA - - 1 4')
+        self.run_('end', 'mame', 'sf2')
+        self.assertTrue(session.exists())
+        self.run_('end', 'mame', 'sf2ce')
+        self.assertFalse(session.exists())
 
     def test_a_game_in_the_versus_table_starts_the_score_reader(self):
         self.install()
@@ -19741,6 +19790,15 @@ class VersusTests(unittest.TestCase):
         self.assertEqual(self.versus.first_to(), 3)
         conf.write_text('versus_ft=x\n')
         self.assertEqual(self.versus.first_to(), 0)
+        # O FT da partida (Jogar FT) vale antes do fliperos.conf, mesmo desligado la.
+        session = self.tmp / 'session.ft'
+        self.versus.SESSION = str(session)
+        session.write_text('versus_ft=5\nversus_game=sf2ce\n')
+        self.assertEqual(self.versus.first_to(), 5)
+        conf.write_text('versus_ft=2\n')
+        self.assertEqual(self.versus.first_to(), 5)
+        session.unlink()
+        self.assertEqual(self.versus.first_to(), 2)
 
     def test_first_to_sends_the_winner_and_hides_the_new_zero(self):
         conf = self.tmp / 'fliperos.conf'
@@ -19762,6 +19820,28 @@ class VersusTests(unittest.TestCase):
         # aparece: a tela da vitoria fica), depois 1 x 0 e 1 x 1 da serie nova.
         self.assertEqual(self.events.read_text().splitlines(),
                          ['versus 1 0 - -', 'versus 1 1 - -', 'versus-win 1 2 1', 'versus 1 0 - -', 'versus 1 1 - -'])
+
+    def test_reset_from_the_panel_zeroes_the_set(self):
+        # O Zerar placar do painel encosta no arquivo de reset: a serie do jogo
+        # aberto volta ao 0 x 0 (o versus-reset o mostra) e conta de novo dali.
+        reset = self.tmp / 'reset'
+        reset.write_text('')
+        os.utime(reset, (1, 1))
+        feed = self.serve_mame(['mame_start = sf2ce', 'fliperos_rounds1 = 1', 'fliperos_rounds1 = 2', 'fliperos_rounds1 = 0',
+                                'fliperos_rounds2 = 1', 'fliperos_rounds2 = 1', 'fliperos_rounds2 = 1',
+                                'fliperos_rounds2 = 1', 'fliperos_rounds2 = 2', 'fliperos_rounds2 = 0', 'mame_stop = 1'])
+        game = subprocess.Popen(['/bin/sleep', '60'])
+        self.addCleanup(game.wait)
+        self.addCleanup(game.kill)
+
+        def press():
+            time.sleep(2.2)              # depois do 1 x 0, antes da vitoria do 2
+            reset.touch()
+        threading.Thread(target=press, daemon=True).start()
+        env = dict(self.env, VERSUS_FEED=feed, VERSUS_RESET=str(reset))
+        subprocess.run([sys.executable, str(self.SCRIPT), 'run', 'mame', 'sf2ce', str(game.pid)], env=env,
+                       timeout=30, check=True)
+        self.assertEqual(self.events.read_text().splitlines(), ['versus 1 0 - -', 'versus-reset', 'versus 0 1 - -'])
 
     def serve_mame(self, lines, delay=0.5):
         """O plugin do MAME: recomeca o arquivo e escreve uma linha por vez."""
@@ -19942,7 +20022,7 @@ class VersusTests(unittest.TestCase):
         # O SM2-Emu publica os rounds: a porta abre para o placar, e o leitor e a fonte "model2".
         self.assertIn('"$versus" has model2 "${game%.zip}"; }; then',
                       (ROOT / 'config/fliperos-x11-run').read_text())
-        self.assertIn('fliperos-model2 | keisho | sm2-emu) source=model2 ;;', (ROOT / 'config/fliperos-pixelcade').read_text())
+        self.assertIn('fliperos-model2 | keisho | sm2-emu) echo model2 ;;', (ROOT / 'config/fliperos-pixelcade').read_text())
         # O Network Command Interface so num jogo da tabela.
         self.assertIn('network_cmd_enable = "true"', (ROOT / 'config/retroarch-versus.cfg').read_text())
         self.assertNotIn('network_cmd', (ROOT / 'config/retroarch.cfg').read_text())
@@ -20114,6 +20194,20 @@ class ZeDMDTests(unittest.TestCase):
         self.assertIsNone(proc.poll())
         self.run_('text', 'SF2')
         self.assertEqual(proc.wait(timeout=5), 0)
+
+    def test_long_player_name_runs_in_its_half(self):
+        # O nome que nao cabe na metade dele roda em circulo (nada cortado); o
+        # placar curto continua um quadro so, parado.
+        dmd = load_script('fliperos_dmd_names', 'config/fliperos-dmd')
+        self.assertEqual(len(dmd.versus_frame('LUCAS', '2', '1', 'BETO', '-', '-', '1', '3')), 1)
+        frames = dmd.versus_frame('ALEXANDRE SA', '2', '1', 'BETO', '-', '-', '1', '3')
+        self.assertGreater(len(frames), 20)
+        self.assertTrue(all(ms == dmd.NAME_STEP_MS for _, ms in frames))
+        row = lambda data, x0, x1: bytes(data[(y * 128 + x) * 3 + c] for y in range(10) for x in range(x0, x1) for c in range(3))
+        # A esquerda muda de quadro em quadro; o BETO, a direita, e o placar, nao.
+        self.assertNotEqual(row(frames[0][0], 0, 40), row(frames[10][0], 0, 40))
+        self.assertEqual(row(frames[0][0], 100, 128), row(frames[10][0], 100, 128))
+        self.assertEqual(frames[0][0][128 * 12 * 3:], frames[10][0][128 * 12 * 3:])
 
     def test_first_to_winner_animation(self):
         # Quem fecha o first to: o nome na cor do jogador (as do placar), WIN!

@@ -290,7 +290,7 @@ settings_video() {
 
 # settings_set CHAVE VALOR. Status 2: chave ou valor que nao existe.
 settings_set() {
-  local key=$1 value=$2 name before
+  local key=$1 value=$2 name before uid file
   case $key in
     launcher)
       if [[ $value == game && -s $BOOTGAME_FILE ]]; then
@@ -396,6 +396,20 @@ settings_set() {
     versus_ft)
       [[ $value =~ ^[0-9]+$ ]] && ((value <= VERSUS_FT_MAX)) || return 2
       conf_set versus_ft "$((10#$value))"
+      ;;
+    versus.reset)
+      # O Reset do cartao Marquee do painel: o fliperos-versus do jogo aberto
+      # ve o arquivo mudar e zera a serie (sem jogo, nada a zerar).
+      [[ $value == 1 ]] || return 2
+      file=${VERSUS_RESET_FILE:-}
+      if [[ -z $file ]]; then
+        uid=$(id -u "$FLIPEROS_USER" 2> /dev/null) || return 1
+        file=/run/user/$uid/fliperos-versus.reset
+      fi
+      [[ -d ${file%/*} ]] || return 0
+      touch "$file" || return 1
+      ((EUID == 0)) && chown "$FLIPEROS_USER:" "$file" 2> /dev/null
+      return 0
       ;;
     versus_p1 | versus_p2)
       # Letras, numeros, espaco e - _ . (o nome vai para o painel de LED e

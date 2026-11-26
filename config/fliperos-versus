@@ -587,16 +587,38 @@ def source_of(name, fields, pid, detector=None):
 CONF = os.environ.get('FLIPEROS_CONF', '/etc/fliperos/fliperos.conf')
 
 
-def first_to():
-    value = ''
+# O pedido de reset da serie: o painel web (Marquee > Reset, pelo
+# fliperos-setup --setting versus.reset) encosta neste arquivo da sessao.
+RESET = os.environ.get('VERSUS_RESET') or os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp',
+                                                       'fliperos-versus.reset')
+
+
+def reset_time():
     try:
-        with open(CONF, encoding='utf-8', errors='replace') as f:
-            for line in f:
-                if line.startswith('versus_ft='):
-                    value = line.split('=', 1)[1].strip()
+        return os.stat(RESET).st_mtime
     except OSError:
-        return 0
-    return int(value) if value.isdigit() else 0
+        return 0.0
+
+
+# O first to de uma partida so (Jogar FT no painel web): vale antes do
+# fliperos.conf enquanto o jogo dele esta aberto.
+SESSION = os.environ.get('VERSUS_SESSION') or os.path.join(os.environ.get('XDG_RUNTIME_DIR') or '/tmp',
+                                                           'fliperos-versus.ft')
+
+
+def first_to():
+    for path in (SESSION, CONF):
+        value = None
+        try:
+            with open(path, encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    if line.startswith('versus_ft='):
+                        value = line.split('=', 1)[1].strip()
+        except OSError:
+            continue
+        if path == SESSION or value is not None:
+            return int(value) if value and value.isdigit() else 0
+    return 0
 
 
 # -- Comandos --------------------------------------------------------
@@ -609,10 +631,21 @@ def run(source, game, pid, core=''):
     tally = Tally(fields)
     sent, last, dirty = None, 0.0, False
     detector = detector_of(source, game, tables, core) if fields.get('wins1', 0) is None else None
+    reset_seen = reset_time()
     for item in source_of(source, fields, pid, detector):
         if item is not None:
             dirty = tally.update(*item) or dirty
         now = time.monotonic()
+        # O Reset do cartao Marquee (o painel encosta no RESET): a serie volta
+        # ao 0 x 0, que o marquee mostra na hora.
+        stamp = reset_time()
+        if stamp > reset_seen:
+            reset_seen = stamp
+            tally.reset()
+            subprocess.call([PIXELCADE, 'versus-reset'], stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            sent, last, dirty = None, now, False
+            continue
         if dirty and now - last >= EVERY:
             # O first to: quem chega a N vitorias fecha a serie. Vai o "win"
             # (o nome do jogador e os fogos no LED) e a serie recomeca do 0 x 0,

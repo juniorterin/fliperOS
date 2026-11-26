@@ -16,6 +16,28 @@ function setText(el, text) {
   el.textContent = text || "";
 }
 
+// O nome de um lado do placar: o que nao cabe roda em circulo, como no ZeDMD
+// (duas copias seguidas), em vez de quebrar em linhas. So quando muda.
+function sideName(box, text) {
+  text = text || "";
+  if (box.dataset.name === text) return;
+  box.dataset.name = text;
+  box.classList.remove("run");
+  box.textContent = text;
+  requestAnimationFrame(() => {
+    if (!box.clientWidth || box.scrollWidth <= box.clientWidth) return;
+    const span = document.createElement("span");
+    for (let n = 0; n < 2; n++) {
+      const part = document.createElement("i");
+      part.textContent = text;
+      span.append(part);
+    }
+    box.replaceChildren(span);
+    box.classList.add("run");
+    box.style.setProperty("--time", Math.max(4, text.length * 0.5) + "s");
+  });
+}
+
 function ticker(text) {
   const box = $("ticker"), span = $("ticker-text");
   if (!showText || !text) { box.hidden = true; return; }
@@ -154,8 +176,8 @@ function apply(data) {
     $("win").dataset.player = s.player === "2" ? "2" : "1";
   }
   if (versus) {
-    setText($("vs-left"), s.left || "P1");
-    setText($("vs-right"), s.right || "P2");
+    sideName($("vs-left"), s.left || "P1");
+    sideName($("vs-right"), s.right || "P2");
     setText($("vs-wins-left"), s.wins_left && s.wins_left !== "-" ? s.wins_left : "0");
     setText($("vs-wins-right"), s.wins_right && s.wins_right !== "-" ? s.wins_right : "0");
     setText($("vs-score-left"), s.score_left && s.score_left !== "-" ? s.score_left : "");

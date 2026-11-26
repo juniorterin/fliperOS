@@ -206,6 +206,16 @@ details.more .live-actions { margin: 12px 0 8px; }
   color: var(--fg); font: 15px system-ui; text-overflow: ellipsis; }
 .mq-card .mq-pick select:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
 .mq-card .mq-pick select:disabled { opacity: .5; }
+/* O first to (a opcao FT): o N, os nomes dos jogadores, Salvar e Zerar placar. */
+.mq-card .mq-ft[hidden] { display: none; }
+.mq-card .mq-warn { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--orange, #ffb86c);
+  background: rgba(255,184,108,.1); color: var(--fg); font-size: 14px; }
+.mq-card .mq-warn[hidden] { display: none; }
+.mq-card .mq-pick input { height: 40px; min-width: 0; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card2);
+  color: var(--fg); font: 15px system-ui; text-transform: uppercase; }
+.mq-card .mq-pick input::placeholder { color: var(--dim); }
+.mq-card .mq-pick input:focus-visible { outline: 2px solid var(--pink); outline-offset: 1px; }
+.mq-card .mq-ft .btn .g { width: 16px; height: 16px; }
 .mq-led { position: relative; width: 100%; aspect-ratio: 4 / 1; overflow: hidden; container-type: inline-size; border-radius: 6px;
   background: #020204; box-shadow: inset 0 0 0 2px #000, 0 0 0 2px #2a2b36, 0 0 22px rgba(255,150,60,.25); }
 .mq-led[hidden] { display: none; }
@@ -249,6 +259,14 @@ details.more .live-actions { margin: 12px 0 8px; }
 .mq-led .mq-versus .mq-side:last-child { color: #8be9fd; }
 .mq-led .mq-versus small { font: 3cqw var(--px); color: #f8f8f2; }
 .mq-led .mq-versus .mq-wins { font: 700 9cqw/1 var(--px); color: #50fa7b; text-shadow: 0 0 1cqw rgba(80,250,123,.55); }
+/* O nome que nao cabe na coluna roda em circulo (duas copias, a volta emenda). */
+.mq-led .mq-versus .mq-side { min-width: 0; }
+.mq-led .mq-versus .mq-side b { display: block; overflow: hidden; white-space: nowrap; }
+.mq-led .mq-versus .mq-side b.run { text-align: left; }
+.mq-led .mq-versus .mq-side b.run span { display: inline-flex; animation: mq-side-run var(--time, 6s) linear infinite; }
+.mq-led .mq-versus .mq-side b.run i { font-style: normal; padding-right: 3cqw; }
+@keyframes mq-side-run { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .mq-led .mq-versus .mq-side b.run span { animation: none; } }
 /* O gabinete do jogador 2 mostra o lado dele primeiro: a cor vai com o jogador. */
 .mq-led .mq-versus[data-left="2"] .mq-side:first-child { color: #8be9fd; }
 .mq-led .mq-versus[data-left="2"] .mq-side:last-child { color: #ff79c6; }

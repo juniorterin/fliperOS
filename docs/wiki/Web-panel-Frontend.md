@@ -31,7 +31,12 @@ It shows the game's art (the ZeDMD looks for `~/media/dmd`, then `marquee`, then
 
 *When both exist, the marquee shows* picks **Art** or **Scoreboard** for a game that has both.
 
-**Scoreboard: first to (FT)** sets a first to N (FT1 to FT10) for the versus score, with the **names of player 1 and player 2** (up to 12 letters; empty: P1 and P2). The names take the place of the characters on the scoreboard, with "FT3" in the middle. The player who wins N matches first gets their name in their colour, a blinking **WIN!** and fireworks in the corners, on the ZeDMD, in this preview and on the OBS page (the Pixelcade scrolls "NAME WIN!"); then a new set starts from 0 x 0. These are cabinet settings, also in Setup > Live screen: see [Versus score](Versus-score.md#settings).
+**FT** (the third choice next to Art and Scoreboard) turns on **first to** for the versus score: pick N (FT1 to FT10) and the **names of player 1 and player 2** (up to 12 letters; empty: P1 and P2), then **Save**. Art or Scoreboard turn it off. The names take the place of the characters on the scoreboard, with "FT3" in the middle, and a name too long for its half scrolls round. A game opened in first to starts on the 0 x 0 scoreboard instead of its art. The player who wins N matches first gets their name in their colour, a blinking **WIN!** and fireworks in the corners, on the ZeDMD, in this preview and on the OBS page (the Pixelcade scrolls "NAME WIN!"); then a new set starts from 0 x 0. **Reset score** puts the set of the open game back to 0 x 0. With FT chosen and a game open that has no scoreboard, the card warns that first to does not count in it. These are cabinet settings, also in Setup > Live screen: see [Versus score](Versus-score.md#settings).
+
+## Game page: version and PLAY FT
+
+- **Version**, under PLAY: the original and its clones that are in the folder. Picking one turns the page into that set's; the sets with a versus scoreboard end in "· FT".
+- **PLAY FT**, next to PLAY, in a game with a versus scoreboard: a window asks for N and the two players' names and opens the game in first to **for that match only**. When the game closes, N and the names are cleared (the first to of the Marquee card is not touched). In a game without a scoreboard the button is dimmed, and pressing it explains why and offers the version of the same game that has one, if it is in the folder.
 
 Turning the preview on, or changing the device, checks whether that device's software is installed on the cabinet and offers to install it. The preview works without it; the real display needs it. Idle, the preview plays the ZeDMD's logo animation, and with nothing open it shows the animated FliperOS logo.
 

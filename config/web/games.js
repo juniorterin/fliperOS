@@ -483,6 +483,17 @@ function openGame(g) {
   const fav = el("button", { type: "button", class: "fav-btn" + (g.Favourite ? " on" : ""), "aria-pressed": String(!!g.Favourite) },
     icon(g.Favourite ? "g-star" : "g-staro"), t(g.Favourite ? "favourited" : "favourite"));
   fav.addEventListener("click", () => toggleFavourite(g, fav));
+  // Jogar FT: so num jogo com placar versus (o gabinete diz, /api/versus). Num
+  // jogo sem placar o botao fica apagado e, tocado, explica por que (e aponta
+  // a versao da familia que tem, se ha uma na pasta).
+  const ftBtn = el("button", { type: "button", class: "ft-btn", hidden: "" }, icon("g-player"), t("ft_btn"));
+  ftBtn.addEventListener("click", () => (ftBtn.classList.contains("off") ? ftUnsupported(g) : playFt(g, ftBtn)));
+  versusSupport(system.key, g.Name).then((ok) => {
+    if (ok === null) return;
+    ftBtn.hidden = false;
+    ftBtn.classList.toggle("off", !ok);
+    ftBtn.setAttribute("aria-disabled", String(!ok));
+  });
   // Este jogo direto ao ligar o gabinete (Setup > Games > Frontend).
   // Uma linha da grade de fatos, na largura toda: o que faz e, embaixo, o que muda.
   const boot = el("button", { type: "button", class: "fact-action" }, icon("px-power"), el("b", {}, t("boot_open")), el("small", {}, t("boot_note")));
@@ -522,7 +533,7 @@ function openGame(g) {
   const body = el("div", { class: "sheet-body" },
     el("h2", { id: "sheet-title" }, gameTitle(g)),
     el("p", { class: "sheet-meta" }, [g.Year, g.Manufacturer].filter(Boolean).join(" · "), " ", systemIcon(system, "inl"), " ", system.name),
-    el("div", { class: "cta" }, play, fav), facts,
+    el("div", { class: "cta" }, play, ftBtn, fav), clonePicker(g), facts,
     el("h3", {}, t("pictures")), gallery, online, about);
   openSheet(() => [media, body]);
 
@@ -536,6 +547,32 @@ function openGame(g) {
     online.remove();
     showOnline(data, gallery, about, ctrlCell, g);
   }).catch(() => online.replaceWith(el("p", { class: "dim" }, t("g_offline"))));
+}
+
+// O seletor de clone, embaixo do Jogar: o jogo original e os clones dele que
+// estao na pasta (a mesma familia do CloneOf). Escolher um troca a ficha por
+// ele (o Jogar, o Jogar FT, que depende do set, a arte e os fatos). Sem
+// clones na pasta, nada.
+function clonePicker(g) {
+  const parent = g.CloneOf && allGames.some((x) => x.Name === g.CloneOf) ? g.CloneOf : g.Name;
+  const family = allGames.filter((x) => x.Name === parent || x.CloneOf === parent);
+  if (family.length < 2) return "";
+  family.sort((a, b) => (a.Name === parent ? -1 : b.Name === parent ? 1 : gameTitle(a).localeCompare(gameTitle(b))));
+  const label = (x) => gameTitle(x) + " · " + x.Name + (x.Name === parent ? " · " + t("clone_parent") : "");
+  const select = el("select", { "aria-label": t("clone_pick") },
+    ...family.map((x) => el("option", { value: x.Name }, label(x))));
+  select.value = g.Name;
+  // As versoes com placar versus ganham o "· FT" (as primeiras 24 da familia).
+  family.slice(0, 24).forEach((x, i) => versusSupport(gameSystem.key, x.Name).then((ok) => {
+    if (ok) select.options[i].textContent = label(x) + " · FT";
+  }));
+  select.addEventListener("change", () => {
+    const next = family.find((x) => x.Name === select.value);
+    if (next) openGame(next);
+  });
+  return el("label", { class: "clone-pick" },
+    el("span", { class: "clone-head" }, icon("px-link"), el("span", {}, t("clone_pick")),
+      el("small", {}, t("clone_count").replace("%n", String(family.length)))), select);
 }
 
 // Um texto longo comeca curto, com Ler mais.
@@ -589,12 +626,16 @@ function showOnline(data, gallery, about, ctrlCell, g) {
   about.append(links);
 }
 
-async function playGame(g, button) {
+// ft: o first to so desta partida ({n, p1, p2}, da janela do Jogar FT, que
+// ja e a confirmacao); o gabinete o apaga quando o jogo fechar.
+async function playGame(g, button, ft = null) {
   const name = gameTitle(g);
-  if (!(await ask({ title: t("confirm_launch").replace("%s", name), yes: t("play") }))) return;
+  if (!ft && !(await ask({ title: t("confirm_launch").replace("%s", name), yes: t("play") }))) return;
   button.classList.add("inserting");
   coinDrop();
-  const res = await api("/api/launch", { method: "POST", body: JSON.stringify({ system: gameSystem.key, game: g.Name }) });
+  const body = { system: gameSystem.key, game: g.Name };
+  if (ft) body.ft = ft;
+  const res = await api("/api/launch", { method: "POST", body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { button.classList.remove("inserting"); toast(data.error || res.statusText, "bad"); return; }
   toast(t("launching").replace("%s", name), "ok");
@@ -603,6 +644,64 @@ async function playGame(g, button) {
     crtFlash("static");
     $("cab").scrollIntoView({ behavior: "smooth", block: "start" });
   }, 500);
+}
+
+// versusSupport: o jogo tem placar versus (true/false; null sem resposta do
+// gabinete). Guardado por pagina: a familia de clones pergunta uma vez cada.
+const versusCache = new Map();
+function versusSupport(system, name) {
+  const key = system + "/" + name;
+  if (!versusCache.has(key)) {
+    versusCache.set(key, api("/api/versus?system=" + encodeURIComponent(system) + "&game=" + encodeURIComponent(name))
+      .then((r) => r.json()).then((d) => !!d.ft).catch(() => { versusCache.delete(key); return null; }));
+  }
+  return versusCache.get(key);
+}
+
+// O aviso do Jogar FT num jogo sem placar: o FT conta as vitorias lendo a
+// memoria do jogo, e este set nao tem de onde. Uma versao da familia que tem
+// (o original ou outro clone na pasta) vira um botao que abre a ficha dela.
+async function ftUnsupported(g) {
+  const parent = g.CloneOf && allGames.some((x) => x.Name === g.CloneOf) ? g.CloneOf : g.Name;
+  const family = allGames.filter((x) => x.Name !== g.Name && (x.Name === parent || x.CloneOf === parent));
+  const checks = await Promise.all(family.slice(0, 24).map((x) => versusSupport(gameSystem.key, x.Name)));
+  const other = family.find((x, i) => checks[i]);
+  const text = t("ft_none_text").replace("%s", g.Name) + (other ? " " + t("ft_none_other").replace("%s", gameTitle(other)) : "");
+  if (await ask({ title: t("ft_none_title"), text, yes: other ? t("ft_none_open") : t("ok"), no: other ? t("cancel") : "" }) && other) {
+    openGame(other);
+  }
+}
+
+// Jogar FT: a janela com o N (FT1 a FT10) e os nomes dos dois jogadores; o
+// ultimo N escolhido fica no navegador.
+const FT_STORE = "fliperos-ft-last";
+function playFt(g, button) {
+  const dlg = $("ft-dlg"), sel = $("ft-n");
+  $("ft-title").textContent = t("ft_title").replace("%s", gameTitle(g));
+  sel.replaceChildren(...Array.from({ length: 10 }, (_, i) => el("option", { value: String(i + 1) }, "FT" + (i + 1))));
+  let last = "3";
+  try { last = localStorage.getItem(FT_STORE) || "3"; } catch (e) { /* sem armazenamento */ }
+  sel.value = /^([1-9]|10)$/.test(last) ? last : "3";
+  $("ft-p1").value = "";
+  $("ft-p2").value = "";
+  $("ft-error").hidden = true;
+  const valid = (s) => /^[A-Za-z0-9 ._-]{0,12}$/.test(s);
+  // O Jogar so fecha a janela com os nomes certos.
+  $("ft-go").onclick = (ev) => {
+    if (!valid($("ft-p1").value.trim()) || !valid($("ft-p2").value.trim())) {
+      ev.preventDefault();
+      $("ft-error").textContent = t("ft_bad");
+      $("ft-error").hidden = false;
+    }
+  };
+  dlg.onclose = () => {
+    if (dlg.returnValue !== "yes") return;
+    try { localStorage.setItem(FT_STORE, sel.value); } catch (e) { /* sem armazenamento */ }
+    playGame(g, button, { n: sel.value, p1: $("ft-p1").value.trim(), p2: $("ft-p2").value.trim() });
+  };
+  dlg.returnValue = "";
+  dlg.showModal();
+  $("ft-p1").focus();
 }
 
 async function toggleFavourite(g, button) {

@@ -403,6 +403,12 @@ def attract(art=False):
                         return hold()
 
 
+# O nome de um lado que nao cabe na metade dele roda: o espaco minimo entre o
+# fim e o comeco de novo, e o tempo de cada ponto andado.
+NAME_GAP = 16
+NAME_STEP_MS = 60
+
+
 # versus_frame: o placar de uma partida versus (config/fliperos-versus). Os
 # nomes dos lados em cima, as vitorias grandes no meio e os pontos embaixo;
 # num jogo sem vitorias na tabela, so os pontos, maiores. Cada lado na cor do
@@ -424,14 +430,20 @@ def versus_frame(left, wins_left, wins_right, right, score_left, score_right, le
     room = W // 2 - 3 - ((width(label, small) + 1) // 2 + 2 if label else 0)
 
     def corner(text, y, color, on_right, room=W // 2 - 3):
-        # Cada lado tem a sua metade: um nome comprido perde letras do fim.
+        # Cada lado tem a sua metade (os pontos; os nomes compridos rodam, abaixo).
         while text and width(text, small) > room:
             text = text[:-1].rstrip()
         if text:
             draw_line(draw, text, small, y, color, x=W - width(text, small) - 1 if on_right else 1)
 
-    corner(left, 0, colors[0], False, room)
-    corner(right, 0, colors[1], True, room)
+    # Os nomes: o que cabe na sua metade fica parado; o que nao cabe roda em
+    # circulo dentro dela (nada cortado), desenhado depois, quadro a quadro.
+    runs = []
+    for text, color, on_right in ((left, colors[0], False), (right, colors[1], True)):
+        if text and width(text, small) > room:
+            runs.append((text, color, W - room - 1 if on_right else 1))
+        else:
+            corner(text, 0, color, on_right, room)
     if label:
         draw_line(draw, label, small, 0, (150, 150, 170))
     if wins_left.isdigit() and wins_right.isdigit():
@@ -463,7 +475,25 @@ def versus_frame(left, wins_left, wins_right, right, score_left, score_right, le
                                       (group(score_right), colors[1], True)):
             if text:
                 draw_line(draw, text, mid, 15, color, x=W - width(text, mid) - 1 if on_right else 1)
-    return [(img.tobytes(), 1000)]
+    if not runs:
+        return [(img.tobytes(), 1000)]
+    # Os nomes compridos: cada um roda na faixa dele (room de largura, a linha
+    # de cima), um ponto por quadro, com o comeco voltando atras do fim. Os dois
+    # com a mesma volta (o espaco entre as copias completa o mais curto), para
+    # o laco do painel emendar sem pulo.
+    lap = max(width(text, small) for text, _, _ in runs) + NAME_GAP
+    frames = []
+    for i in range(lap):
+        frame = img.copy()
+        for text, color, x0 in runs:
+            strip = Image.new('RGB', (room, 10))
+            sdraw = ImageDraw.Draw(strip)
+            sdraw.fontmode = '1'
+            for copy in (0, lap):
+                draw_line(sdraw, text, small, 0, color, x=room // 3 - i + copy)
+            frame.paste(strip, (x0, 0))
+        frames.append((frame.tobytes(), NAME_STEP_MS))
+    return frames
 
 
 # win_frames: quem fechou o first to (config/fliperos-versus). O nome em cima

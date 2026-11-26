@@ -1751,6 +1751,15 @@ class WebVideoSettingsTests(Base):
             self.assertEqual(self.env.run("settings_set " + line, self.envs).returncode, 2, line)
         self.env.out("settings_set versus_ft 0", self.envs)
         self.assertEqual(self.rows()["versus_ft"][4], "0")
+        # Zerar placar (o painel): encosta no arquivo que o fliperos-versus do
+        # jogo aberto vigia; fora da lista de ajustes.
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, True)
+        reset = Path(folder) / "fliperos-versus.reset"
+        self.assertEqual(self.env.run("VERSUS_RESET_FILE=%s settings_set versus.reset 1" % reset, self.envs).returncode, 0)
+        self.assertTrue(reset.exists())
+        self.assertEqual(self.env.run("settings_set versus.reset 2", self.envs).returncode, 2)
+        self.assertNotIn("versus.reset", self.rows())
 
     def test_groups_follow_the_setup(self):
         out = self.env.out("settings_list", self.envs)

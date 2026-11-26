@@ -36,6 +36,13 @@ body { font: 800 16px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-ser
 .versus .wins { display: flex; gap: 2vw; font: 800 min(34vh, 14vw)/1 ui-monospace, "JetBrains Mono", monospace;
   color: #50fa7b; text-shadow: 0 0 3vh rgba(80, 250, 123, .55), 0 .5vh 0 #191a21; }
 .versus .wins b { color: #f8f8f2; }
+/* O nome que nao cabe roda em circulo (overlay.js sideName), sem quebrar linha. */
+.versus .side { min-width: 0; }
+.versus .side > span { display: block; overflow: hidden; white-space: nowrap; }
+.versus .side > span.run { text-align: left; }
+.versus .side > span.run span { display: inline-flex; animation: side-run var(--time, 6s) linear infinite; }
+.versus .side > span.run i { font-style: normal; padding-right: 3vw; }
+@keyframes side-run { to { transform: translateX(-50%); } }
 /* O gabinete do jogador 2 mostra o lado dele primeiro: a cor vai com o jogador. */
 .versus[data-left="2"] .side:first-child { color: #8be9fd; }
 .versus[data-left="2"] .side:last-child { color: #ff79c6; }

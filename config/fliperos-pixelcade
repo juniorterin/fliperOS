@@ -52,6 +52,7 @@
 #   fliperos-pixelcade cheevos                     status 0 se ha um marquee que mostra as conquistas
 #   fliperos-pixelcade versus V1 V2 P1 P2          o placar de uma partida versus (vitorias e pontos de cada lado)
 #   fliperos-pixelcade versus-win JOGADOR V1 V2    o jogador (1 ou 2) fechou o first to: o nome dele e WIN!
+#   fliperos-pixelcade versus-reset                a serie zerada (Reset do cartao Marquee): 0 x 0
 #   fliperos-pixelcade bg COMANDO [ARGS...]        o mesmo comando em segundo plano (volta na hora)
 #   fliperos-pixelcade panel                       status 0 se ha um painel instalado (Pixelcade ou ZeDMD)
 #   fliperos-pixelcade bye pixelcade|zedmd         "Bye", quando o computador desliga
@@ -108,6 +109,9 @@ esde_dir=${ESDE_DIR:-/home/fliperos/ES-DE}
 attract_dir=${ATTRACT_DIR:-/home/fliperos/.attract}
 plugin_src=${PIXELCADE_PLUGIN_SRC:-/usr/local/share/fliperos/attractplus-plugins/Pixelcade}
 last_file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-pixelcade.last
+# O first to de uma partida so (o Jogar FT do painel web, config/fliperos-web):
+# versus_ft, versus_p1, versus_p2 e o jogo dele (versus_game), apagado no "end".
+ft_file=${XDG_RUNTIME_DIR:-/tmp}/fliperos-versus.ft
 self=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 progress=0 fail_label=Pixelcade
@@ -786,6 +790,12 @@ game() {
   fi
   printf 'game:%s/%s\n' "$1" "$2" > "$last_file" 2> /dev/null
   rm -f "$last_file.versus"
+  # Em modo first to, num jogo com placar: sem a arte nem os recordes, o
+  # placar 0 x 0 com os nomes dos jogadores desde a abertura (o launch sabe).
+  if [[ -n ${GAME_FT:-} ]]; then
+    versus_score 0 0 - -
+    return 0
+  fi
   title=$(title_of "$2" "${3:-}")
   intro=$(highscores "$1" "$2") || intro="Now Playing $title"
   # O ZeDMD e o marquee do painel/OBS antes do Pixelcade: um pixelweb sem o
@@ -810,6 +820,10 @@ game() {
 game_end() {
   local system
   rm -f "$hold_file"
+  # O first to da partida (Jogar FT) acaba com o jogo dele: os nomes e o N saem.
+  if [[ -n ${2:-} && $(sed -n 's/^versus_game=//p' "$ft_file" 2> /dev/null) == "$2" ]]; then
+    rm -f "$ft_file"
+  fi
   [[ $(cat "$last_file" 2> /dev/null) == "game:${1:-}/${2:-}" ]] || return 0
   rm -f "$last_file"
   system=$(cat "$last_file.system" 2> /dev/null)
@@ -831,12 +845,7 @@ watch() {
   (
     # O placar de uma partida versus, se o jogo esta na tabela
     # (config/fliperos-versus): ele mesmo sai quando o jogo fecha.
-    case ${3:-} in
-      groovymame | hbgroovymame) source=mame ;;
-      retroarch) source=retroarch ;;
-      fliperos-model2 | keisho | sm2-emu) source=model2 ;;
-      *) source="" ;;
-    esac
+    source=$(versus_source "${3:-}")
     if [[ -n $source && -n $2 && -x $versus ]] && "$versus" has "$source" "$2" "${4:-}"; then
       "$versus" run "$source" "$2" "$pid" "${4:-}" &
     fi
@@ -893,9 +902,32 @@ versus_score() {
   fi
 }
 
-# conf_value CHAVE: o valor do fliperos.conf (a ultima linha da chave).
+# conf_value CHAVE: o valor do fliperos.conf (a ultima linha da chave). O
+# first to de uma partida so (Jogar FT no painel web, o arquivo $ft_file da
+# sessao) vale antes do fliperos.conf para versus_ft e os nomes.
 conf_value() {
+  if [[ $1 == versus_ft || $1 == versus_p1 || $1 == versus_p2 ]] && [[ -f $ft_file ]]; then
+    sed -n "s/^$1=//p" "$ft_file" 2> /dev/null | tail -1
+    return 0
+  fi
   sed -n "s/^$1=//p" "$conf" 2> /dev/null | tail -1
+}
+
+# ft_on: o first to esta ligado (o da partida ou o do fliperos.conf).
+ft_on() {
+  local ft
+  ft=$(conf_value versus_ft)
+  [[ $ft =~ ^[0-9]+$ ]] && ((ft > 0))
+}
+
+# versus_source PROGRAMA: de onde o fliperos-versus le o placar desse emulador
+# (mame, retroarch ou model2); vazio se de nenhum.
+versus_source() {
+  case ${1##*/} in
+    groovymame | hbgroovymame) echo mame ;;
+    retroarch) echo retroarch ;;
+    fliperos-model2 | keisho | sm2-emu) echo model2 ;;
+  esac
 }
 
 # player_name N: o nome do jogador N no first to (versus_pN=), em maiusculas,
@@ -905,6 +937,13 @@ player_name() {
   name=$(conf_value "versus_p$1")
   name=${name:0:12}
   printf '%s\n' "${name^^}"
+}
+
+# versus_reset: a serie zerada pelo Reset do cartao Marquee (config/fliperos-versus):
+# o placar em 0 x 0 no lugar da vitoria ou do placar de antes.
+versus_reset() {
+  rm -f "$last_file.versus"
+  versus_score 0 0 - -
 }
 
 # versus_win JOGADOR VITORIAS1 VITORIAS2: o jogador (1 ou 2) fechou o first to
@@ -1128,7 +1167,13 @@ launch() {
   for ((i = 2; i < $#; i++)); do
     if [[ ${!i} == -L || ${!i} == --libretro ]]; then next=$((i + 1)) core=${!next}; fi
   done
-  game "$sys" "$rom" && watch "$sys" "$rom" "$prog" "${core:-}"
+  # O first to ligado num jogo com placar: o marquee abre no placar.
+  local ft_game=""
+  if ft_on && [[ -n $(versus_source "$prog") && -x $versus ]] &&
+    "$versus" has "$(versus_source "$prog")" "$rom" "${core:-}" > /dev/null 2>&1; then
+    ft_game=1
+  fi
+  GAME_FT=$ft_game game "$sys" "$rom" && watch "$sys" "$rom" "$prog" "${core:-}"
 }
 
 # now: o jogo que ja esta aberto, como o launch dele. O marquee do OBS
@@ -1266,7 +1311,7 @@ case $cmd in
     setsid "$self" "$@" < /dev/null > /dev/null 2>&1 &
     exit 0
     ;;
-  launch | esde | attract | game | select | system | logo | end | screensaver | home | menu | achievement | versus | versus-win | now)
+  launch | esde | attract | game | select | system | logo | end | screensaver | home | menu | achievement | versus | versus-win | versus-reset | now)
     # Os eventos sao da sessao do usuario do gabinete: o que o marquee mostra
     # (e o estado que o painel web le) fica no XDG_RUNTIME_DIR dele. Chamado
     # como root (o menu do FliperOS roda pelo sudo), roda de novo como ele;
@@ -1283,6 +1328,7 @@ case $cmd in
       end) game_end "$@" ;;
       versus) versus_score "$@" ;;
       versus-win) versus_win "$@" ;;
+      versus-reset) versus_reset ;;
       *) "$cmd" "$@" ;;
     esac
     ;;
