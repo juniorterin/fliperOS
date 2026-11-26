@@ -29265,6 +29265,20 @@ class PhysicalMediaTests(unittest.TestCase):
             try:
                 self.assertEqual([(d['key'], d['name'], d['dev'], d['label']) for d in fm.oscr_ports()],
                                  [('oscr', 'OSCR', '/dev/ttyUSB0', 'READY')])
+                # O ZeDMD usa o mesmo CH340: a porta que o dmdserver tem aberta nao e um OSCR.
+                proc = tmp / 'proc'
+                (proc / '4242' / 'fd').mkdir(parents=True)
+                (proc / '4242' / 'comm').write_text('dmdserver\n')
+                os.symlink('/dev/ttyUSB0', proc / '4242' / 'fd' / '5')
+                (proc / '77' / 'fd').mkdir(parents=True)
+                (proc / '77' / 'comm').write_text('python3\n')
+                os.symlink('/dev/ttyUSB0', proc / '77' / 'fd' / '3')    # aberta por outro: segue OSCR
+                saved_proc, fm.PROC = fm.PROC, str(proc)
+                try:
+                    self.assertEqual(fm.zedmd_ports(), {'ttyUSB0'})
+                    self.assertEqual(fm.oscr_ports(), [])
+                finally:
+                    fm.PROC = saved_proc
             finally:
                 fm.SYS_TTY, fm.DEV_DIR = saved
             rom, srm = bytes(range(256)) * 2048, b'\x5a' * 2048

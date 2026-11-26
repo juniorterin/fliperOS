@@ -3352,6 +3352,12 @@ class OscrFirmwareTests(Base):
     def test_ports_backup_flash_check_and_restore(self):
         log, env = self.rig()
         self.assertEqual(self.env.out("oscr_ports", env).splitlines(), ["/dev/ttyUSB0"])
+        # O ZeDMD usa o mesmo CH340: a porta que o dmdserver tem aberta nao e um OSCR.
+        proc = Path(env["OSCR_SYS_TTY"]).parent / "proc"
+        (proc / "4242" / "fd").mkdir(parents=True)
+        (proc / "4242" / "comm").write_text("dmdserver\n")
+        (proc / "4242" / "fd" / "5").symlink_to("/dev/ttyUSB0")
+        self.assertEqual(self.env.out("oscr_ports", dict(env, OSCR_PROC=str(proc))).strip(), "")
         out = self.env.out("oscr_flash /dev/ttyUSB0 hw5", env)
         self.assertIn("@step 100 Done", out)
         backup = self.env.out("oscr_backup_file", env).strip()

@@ -513,14 +513,45 @@ class OscrError(Exception):
     firmware parou num erro), crc (o arquivo chegou estragado)."""
 
 
+PROC = os.environ.get("FLIPEROS_PROC", "/proc")
+
+
+def zedmd_ports():
+    """As portas que o dmdserver tem abertas: as do ZeDMD. O conversor das placas
+    ESP32 dele (CH340, 1a86:7523) e o mesmo do OSCR HW5, e o ID nao separa os dois;
+    o dmdserver so segura a porta depois de reconhecer um ZeDMD."""
+    out = set()
+    try:
+        pids = [p for p in os.listdir(PROC) if p.isdigit()]
+    except OSError:
+        return out
+    for pid in pids:
+        if read_text(os.path.join(PROC, pid, "comm")) != "dmdserver":
+            continue
+        fds = os.path.join(PROC, pid, "fd")
+        try:
+            for fd in os.listdir(fds):
+                try:
+                    out.add(os.path.basename(os.readlink(os.path.join(fds, fd))))
+                except OSError:
+                    pass
+        except OSError:
+            pass
+    return out
+
+
 def oscr_ports():
-    """Os OSCR ligados: as portas ttyUSB/ttyACM de um conversor que o OSCR usa."""
+    """Os OSCR ligados: as portas ttyUSB/ttyACM de um conversor que o OSCR usa
+    (menos a do ZeDMD, que usa o mesmo conversor)."""
     try:
         names = sorted(n for n in os.listdir(SYS_TTY) if re.fullmatch(r"tty(USB|ACM)\d+", n))
     except OSError:
         return []
+    zedmd = zedmd_ports()
     out = []
     for name in names:
+        if name in zedmd:
+            continue
         node = os.path.realpath(os.path.join(SYS_TTY, name, "device"))
         ids = None
         for _ in range(5):

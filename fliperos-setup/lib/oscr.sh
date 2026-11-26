@@ -15,12 +15,29 @@ OSCR_DEV_DIR=${OSCR_DEV_DIR:-/dev}
 OSCR_AVRDUDE=${OSCR_AVRDUDE:-avrdude}
 OSCR_MEDIA=${OSCR_MEDIA:-$SETUP_DIR/gui/femedia.py}
 
+OSCR_PROC=${OSCR_PROC:-/proc}
+
+# oscr_zedmd_ports imprime as portas que o dmdserver tem abertas: as do ZeDMD,
+# que usa o mesmo conversor CH340 do HW5 (o ID nao separa os dois; o dmdserver
+# so segura a porta depois de reconhecer um ZeDMD).
+oscr_zedmd_ports() {
+  local dir fd
+  for dir in "$OSCR_PROC"/[0-9]*; do
+    [[ $(cat "$dir/comm" 2> /dev/null) == dmdserver ]] || continue
+    for fd in "$dir"/fd/*; do
+      fd=$(readlink "$fd" 2> /dev/null) && printf '%s\n' "${fd##*/}"
+    done
+  done
+}
+
 # oscr_ports imprime a porta de cada OSCR ligado: o conversor CH340 do HW5 ou
-# o de um Arduino Mega (os mesmos do femedia.oscr_ports).
+# o de um Arduino Mega (os mesmos do femedia.oscr_ports), menos a do ZeDMD.
 oscr_ports() {
-  local tty node i ids
+  local tty node i ids zedmd
+  zedmd=$(oscr_zedmd_ports)
   for tty in "$OSCR_SYS_TTY"/ttyUSB* "$OSCR_SYS_TTY"/ttyACM*; do
     [[ -e $tty/device ]] || continue
+    grep -qxF "${tty##*/}" <<< "$zedmd" && continue
     node=$(readlink -f "$tty/device")
     for ((i = 0; i < 5; i++)); do
       [[ -f $node/idVendor ]] && break
