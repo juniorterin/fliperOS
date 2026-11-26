@@ -1751,6 +1751,96 @@ def portproton_renderer(argv, exe):
         pass
 
 
+# O Wine e o 16:9 crop. O fliperos-x11-client poe um monitor de 1280x720 (xrandr
+# --setmonitor) no lugar do que o tubo mostra, e o Xinerama o diz a quem
+# pergunta; o Wine pergunta ao RandR, que diz 960x720 (o que o tubo mostra), e o
+# jogo abria numa tela 4:3, com barras. Com UseXRandR=N o Wine usa o Xinerama:
+# 1280x720 (medido no gabinete, 2026-11-26). Vale para o prefixo todo (um jogo
+# que abre outro .exe, um launcher, ve o mesmo) e so enquanto o jogo roda com o
+# crop: FLIPEROS_CROP169 desligado tira o que esta linha pos (a marca
+# FliperosCrop169 diz que foi daqui; um UseXRandR que a pessoa pos fica).
+WINE_X11_SECTION = "[Software\\\\Wine\\\\X11 Driver]"
+WINE_CROP_MARK = '"FliperosCrop169"="1"'
+# Na ordem em que o Wine grava (os valores vao em ordem de nome).
+WINE_CROP_VALUES = (WINE_CROP_MARK, '"UseXRandR"="N"')
+
+
+def reg_crop_xrandr(text, crop, now=None):
+    """O texto do user.reg com (crop) ou sem as duas linhas do 16:9 crop na
+    secao X11 Driver. O que nao e dessa secao fica como esta."""
+    lines = text.split("\n")
+    start = next((i for i, line in enumerate(lines) if line.lower().startswith(WINE_X11_SECTION.lower())), None)
+    end = len(lines)
+    if start is not None:
+        end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("[")), len(lines))
+    if crop:
+        if start is None:
+            now = int(time.time() if now is None else now)
+            block = [WINE_X11_SECTION + " %d" % now, "#time=%x" % ((now + 11644473600) * 10000000),
+                     *WINE_CROP_VALUES]
+            # Uma linha em branco depois de cada secao, a ultima tambem (como o Wine grava).
+            return text.rstrip("\n") + "\n\n" + "\n".join(block) + "\n\n"
+        body = lines[start + 1:end]
+        if all(value in body for value in WINE_CROP_VALUES):
+            return text
+        # A "UseXRandR" que a pessoa pos tambem e trocada (o crop precisa do N).
+        body = [line for line in body if not line.lower().startswith('"usexrandr"=') and line != WINE_CROP_MARK]
+        meta = 0
+        while meta < len(body) and body[meta].startswith("#"):
+            meta += 1
+        body[meta:meta] = list(WINE_CROP_VALUES)
+        return "\n".join(lines[:start + 1] + body + lines[end:])
+    if start is None:
+        return text
+    body = lines[start + 1:end]
+    if WINE_CROP_MARK not in body:
+        return text
+    body = [line for line in body if line not in WINE_CROP_VALUES]
+    if any(line.startswith(('"', "@")) for line in body):
+        return "\n".join(lines[:start + 1] + body + lines[end:])
+    # Sem mais nada na secao: ela sai inteira (com a linha em branco no fim dela).
+    # Sendo a ultima, o fim do arquivo (a quebra de linha) fica.
+    last = [""] if end == len(lines) and lines[-1] == "" else []
+    return "\n".join(lines[:start] + last + lines[end:])
+
+
+def wine_prefix(argv, exe):
+    """O prefixo do Wine que abre o .exe: o do PortProton e o PW_PREFIX_NAME do
+    .ppdb do .exe (ou DEFAULT); o Wine do sistema e o Staging, o WINEPREFIX ou
+    o ~/.wine do jogador."""
+    home = player_home()
+    if argv and os.path.basename(argv[0]) == "fliperos-portproton":
+        name = ppdb_value(exe, "PW_PREFIX_NAME")
+        if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$", name):
+            name = "DEFAULT"
+        return os.path.join(ENV("FLIPEROS_PORTPROTON_HOME") or home, "PortProton", "data", "prefixes", name)
+    return ENV("WINEPREFIX") or os.path.join(home, ".wine")
+
+
+def wine_crop_registry(argv, exe):
+    """Antes de abrir um .exe: liga o UseXRandR=N do prefixo dele se o jogo roda
+    com o 16:9 crop, e tira se nao. So escreve (o user.reg, de uma vez) quando
+    muda; sem o user.reg (o prefixo ainda nao foi feito) nao faz nada: o jogo
+    abre como antes e o crop vale da proxima vez. True se gravou."""
+    path = os.path.join(wine_prefix(argv, exe), "user.reg")
+    try:
+        with open(path, encoding="utf-8", errors="surrogateescape", newline="") as f:
+            text = f.read()
+        if "\r\n" in text:
+            return False
+        new = reg_crop_xrandr(text, ENV("FLIPEROS_CROP169") == "1")
+        if new == text:
+            return False
+        tmp = path + ".fliperos-tmp"
+        with open(tmp, "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
+            f.write(new)
+        shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except OSError:
+        return False
+    return True
+
+
 def windows_command(exe, runner=""):
     """O .exe pelo runner do jogo (runner= no cfg; sem ele, o PortProton, que o
     Setup instala na hora do primeiro jogo do Windows). Sem o escolhido, o
@@ -1882,6 +1972,7 @@ def cmd_run(args):
                 print("fliperos-customgame: neither PortProton nor Wine nor Wine Staging is installed", file=sys.stderr)
                 return 1
             portproton_renderer(argv, exe)
+            wine_crop_registry(argv, exe)
     else:
         print("fliperos-customgame: unknown platform %r in %s" % (platform, path), file=sys.stderr)
         return 1

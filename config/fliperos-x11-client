@@ -27,6 +27,14 @@ fi
 # deslocamento). Tela maior que o modo, como no --scale. Depois, o mesmo do
 # --scale: o picom com vsync e o programa. FLIPEROS_CROP169=1 vai para o jogo
 # (o fliperos-customgame o diz a OSD).
+# O X diz a quem pergunta (o RandR, o Xinerama) que o monitor e o que o
+# --transform mostra no tubo: 960x720 no canto da tela, nao os 1280x720 dela.
+# O jogo abria numa tela 4:3, o 16:9 dele saia com barras em cima e embaixo
+# (visto no gabinete, 2026-11-26: o SDL e o openbox, com janela de 960x720) e o
+# recorte nao cortava nada. O monitor do RandR 1.5 (xrandr --setmonitor) de
+# 1280x720 no lugar dele faz o Xinerama dizer a tela inteira: o openbox, o SDL
+# e, com UseXRandR=N no prefixo (o fliperos-customgame poe), o Wine abrem os
+# 1280x720 e o tubo mostra o meio deles.
 if [[ ${1:-} == --crop ]]; then
   output=$connector
   [[ -n $output ]] || output=$(xrandr --current 2> /dev/null | awk '$2 == "connected" { print $1; exit }')
@@ -38,6 +46,10 @@ if [[ ${1:-} == --crop ]]; then
   if [[ -n $output && -n $transform ]] &&
     xrandr --fb "$2" --output "$output" --transform "$transform" --filter bilinear > /dev/null 2>&1; then
     export FLIPEROS_CROP169=1
+    # Os milimetros a 96 dpi (o tubo nao diz o tamanho dele).
+    monitor=$(awk -v screen="$2" 'BEGIN { split(screen, s, "x")
+      printf "%d/%dx%d/%d+0+0", s[1], s[1] * 25.4 / 96 + 0.5, s[2], s[2] * 25.4 / 96 + 0.5 }')
+    xrandr --setmonitor fliperos-crop "$monitor" "$output" > /dev/null 2>&1 || true
   fi
   if command -v picom > /dev/null && ! pgrep -u "$(id -u)" -x picom > /dev/null 2>&1; then
     env -u LD_PRELOAD picom --backend glx --vsync < /dev/null > /dev/null 2>&1 &

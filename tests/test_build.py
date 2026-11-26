@@ -10189,11 +10189,99 @@ class DeflickerTests(unittest.TestCase):
                 self.assertEqual(out.strip(), 'CROP=1', mode)
                 self.assertIn('xrandr --fb 1280x720 --output VGA-1 --transform %s --filter bilinear' % transform,
                               (tmp / 'log').read_text(), mode)
+                # O X dizia ao jogo que o monitor era o que o tubo mostra (960x720 no canto): o monitor do
+                # RandR 1.5 de 1280x720 faz o Xinerama (openbox, SDL) dizer a tela inteira (gabinete, 2026-11-26).
+                self.assertIn('xrandr --setmonitor fliperos-crop 1280/339x720/191+0+0 VGA-1',
+                              (tmp / 'log').read_text(), mode)
+            # O xrandr que recusa o transform: nada de monitor, e o jogo nao sabe de crop.
+            (bin_dir / 'xrandr').write_text('#!/bin/sh\necho "xrandr $*" >> %s/log\nexit 1\n' % tmp)
+            (tmp / 'log').write_text('')
+            out = subprocess.run(['bash', str(tmp / 'client'), '--crop', '1280x720', '640x240', 'sh', '-c',
+                                  'echo CROP=${FLIPEROS_CROP169:-none}'], capture_output=True, text=True, env=env).stdout
+            self.assertEqual(out.strip(), 'CROP=none')
+            self.assertNotIn('--setmonitor', (tmp / 'log').read_text())
         # O x11-run: so um jogo custom (fliperos-customgame run CFG) com crop169=1 no cfg ganha a tela 16:9.
         run = (ROOT / 'config/fliperos-x11-run').read_text()
         self.assertIn("grep -qiE '^crop169=(1|on|yes|true)[[:space:]]*$' \"$3\"", run)
         self.assertIn('export FLIPEROS_X11_SCREEN=$crop_screen FLIPEROS_X11_CROP=1', run)
         self.assertIn('crop_screen=${FLIPEROS_CROP_SCREEN:-1280x720}', run)
+
+    def test_16_9_crop_makes_wine_read_the_xinerama_monitor(self):
+        # O Wine pergunta ao RandR, que diz o que o tubo mostra (960x720, medido no gabinete em 2026-11-26): com o
+        # crop o prefixo ganha UseXRandR=N (o Wine usa o Xinerama, o monitor de 1280x720 do client) e sem ele tira.
+        tool = load_script('fliperos_customgame_crop_wine', 'config/fliperos-customgame')
+        head = 'WINE REGISTRY Version 2\n;; All keys relative to \\\\User\\\\S-1-5-21-0-0-0-1000\n\n'
+        dll = '[Software\\\\Wine\\\\DllOverrides] 1700000000\n#time=1d9\n"d3d9"="native"\n\n'
+        x11 = '[Software\\\\Wine\\\\X11 Driver] 1700000000\n#time=1d9\n"Decorated"="N"\n\n'
+        # Sem a secao: ela entra no fim, e sai inteira ao desligar (o texto volta ao que era).
+        base = head + dll
+        on = tool.reg_crop_xrandr(base, True, now=1700000001)
+        self.assertEqual(on, base + '[Software\\\\Wine\\\\X11 Driver] 1700000001\n#time=%x\n"FliperosCrop169"="1"\n'
+                         '"UseXRandR"="N"\n\n' % ((1700000001 + 11644473600) * 10000000))
+        self.assertEqual(tool.reg_crop_xrandr(on, True), on)
+        self.assertEqual(tool.reg_crop_xrandr(on, False), base)
+        self.assertEqual(tool.reg_crop_xrandr(base, False), base)
+        # Sem a linha em branco no fim do arquivo, a secao nova nao gruda na ultima.
+        self.assertIn('"d3d9"="native"\n\n[Software\\\\Wine\\\\X11 Driver] 1\n', tool.reg_crop_xrandr(base.rstrip('\n'), True, now=1))
+        # Numa secao que ja existe: o que tem fica, o resto volta ao que era.
+        for text in (head + x11 + dll, head + dll + x11, head + x11):
+            on = tool.reg_crop_xrandr(text, True)
+            self.assertIn('"UseXRandR"="N"\n', on)
+            self.assertIn('"Decorated"="N"\n', on)
+            self.assertEqual(on.count('X11 Driver]'), 1)
+            self.assertEqual(tool.reg_crop_xrandr(on, True), on)
+            self.assertEqual(tool.reg_crop_xrandr(on, False), text)
+        # Um UseXRandR que a pessoa pos: o crop o troca por N, mas sem a marca dele (desligar) nao mexe.
+        mine = head + '[Software\\\\Wine\\\\X11 Driver] 1\n"UseXRandR"="Y"\n\n'
+        self.assertEqual(tool.reg_crop_xrandr(mine, False), mine)
+        forced = tool.reg_crop_xrandr(mine, True)
+        self.assertNotIn('"UseXRandR"="Y"', forced)
+        self.assertIn('"UseXRandR"="N"', forced)
+        # O arquivo: o prefixo do Wine do sistema (WINEPREFIX), e o do PortProton pelo PW_PREFIX_NAME do .ppdb.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            prefix = tmp / 'wine'
+            prefix.mkdir()
+            reg = prefix / 'user.reg'
+            reg.write_text(base)
+            reg.chmod(0o600)
+            old = dict(os.environ)
+            try:
+                os.environ.update(WINEPREFIX=str(prefix), FLIPEROS_CROP169='1')
+                self.assertTrue(tool.wine_crop_registry(['/usr/bin/wine', 'game.exe'], str(tmp / 'game.exe')))
+                self.assertIn('"UseXRandR"="N"', reg.read_text())
+                self.assertEqual(reg.stat().st_mode & 0o777, 0o600)
+                self.assertFalse(tool.wine_crop_registry(['/usr/bin/wine', 'game.exe'], str(tmp / 'game.exe')))
+                self.assertEqual(list(prefix.glob('*.fliperos-tmp')), [])
+                os.environ['FLIPEROS_CROP169'] = ''
+                self.assertTrue(tool.wine_crop_registry(['/usr/bin/wine', 'game.exe'], str(tmp / 'game.exe')))
+                self.assertEqual(reg.read_text(), base)
+                # O prefixo que ainda nao existe (o Wine ainda nao o fez): nada, sem erro.
+                os.environ.update(WINEPREFIX=str(tmp / 'nope'), FLIPEROS_CROP169='1')
+                self.assertFalse(tool.wine_crop_registry(['/usr/bin/wine', 'game.exe'], str(tmp / 'game.exe')))
+                # PortProton: DEFAULT sem .ppdb, o PW_PREFIX_NAME dele com; um nome com "/" volta para DEFAULT.
+                pp = tmp / 'home' / 'PortProton' / 'data' / 'prefixes'
+                for name in ('DEFAULT', 'DOTNET'):
+                    (pp / name).mkdir(parents=True)
+                    (pp / name / 'user.reg').write_text(base)
+                os.environ['FLIPEROS_PORTPROTON_HOME'] = str(tmp / 'home')
+                argv = ['/opt/fliperos/bin/fliperos-portproton', 'run', str(tmp / 'g.exe')]
+                self.assertEqual(tool.wine_prefix(argv, str(tmp / 'g.exe')), str(pp / 'DEFAULT'))
+                (tmp / 'g.exe.ppdb').write_text('export PW_PREFIX_NAME="DOTNET"\n')
+                self.assertEqual(tool.wine_prefix(argv, str(tmp / 'g.exe')), str(pp / 'DOTNET'))
+                (tmp / 'g.exe.ppdb').write_text('export PW_PREFIX_NAME="../x"\n')
+                self.assertEqual(tool.wine_prefix(argv, str(tmp / 'g.exe')), str(pp / 'DEFAULT'))
+                (tmp / 'g.exe.ppdb').write_text('export PW_PREFIX_NAME="DOTNET"\n')
+                self.assertTrue(tool.wine_crop_registry(argv, str(tmp / 'g.exe')))
+                self.assertIn('FliperosCrop169', (pp / 'DOTNET' / 'user.reg').read_text())
+                self.assertNotIn('FliperosCrop169', (pp / 'DEFAULT' / 'user.reg').read_text())
+            finally:
+                os.environ.clear()
+                os.environ.update(old)
+        # O cmd_run chama antes de abrir o .exe (no Wine e no PortProton), so no jogo do Windows.
+        src = (ROOT / 'config/fliperos-customgame').read_text()
+        self.assertIn('portproton_renderer(argv, exe)\n            wine_crop_registry(argv, exe)\n', src)
+        self.assertEqual(src.count('            wine_crop_registry(argv, exe)\n'), 1)
 
     def test_the_32_bit_layer_is_built_where_wine_is(self):
         build = (ROOT / 'config/fliperos-deflicker-build').read_text()
