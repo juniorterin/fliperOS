@@ -198,21 +198,134 @@ def text_frames(text, color):
             img, draw = canvas()
             draw_line(draw, text, f, (H - h) // 2, color)
             return [(img.tobytes(), 1000)]
-    # Nao cabe numa linha: o nome roda sem parar em letra grande, como um
-    # letreiro de LED (antes ia em duas linhas pequenas, dificeis de ler).
-    return scroll_frames(text, color)
+    # Nao cabe numa linha: o nome vai em paginas de letra grande, uma linha
+    # cada, trocadas pela varredura, sem parar (antes rolava, e o link do
+    # ZeDMD nao acompanhava: travava).
+    return page_frames(text, color, loop=True)
 
 
-def scroll_frames(text, color):
+# -- Texto em paginas --------------------------------------------------
+#
+# O link do ZeDMD (ESP32 + CH340) leva ~12 ms por quadro mais ~1 ms a cada 8
+# pixels que mudam (os mesmos numeros do config/fliperos-syslogo). Um texto
+# rolando muda ~600 pixels por quadro: pedia 30 ms e levava ~90, o painel ia
+# ficando para tras e pulava quadros (as travadas do "Now Playing"). Em vez de
+# rolar, o texto vai em paginas paradas, e a troca e a varredura: uma linha
+# acesa passa e deixa a pagina nova atras dela, cada pixel mudando uma vez.
+LINK_FRAME_MS = 12
+LINK_PIXELS_PER_MS = 8
+MIN_FRAME_MS = 30
+SWEEP_STEPS = 8
+PAGE_MS = 1500             # cada pagina parada
+PAGE_SIZES = range(18, 12, -1)
+
+
+def link_ms(pixels):
+    """O tempo que o painel leva para receber um quadro em que `pixels` mudam."""
+    return max(MIN_FRAME_MS, round(LINK_FRAME_MS + pixels / LINK_PIXELS_PER_MS))
+
+
+def changed_pixels(a, b):
+    return sum(1 for i in range(0, len(a), 3) if a[i:i + 3] != b[i:i + 3])
+
+
+def text_pages(text):
+    """As paginas de um texto: os recordes uma a uma ("#1 ...", "#2 ..."), o
+    "Now Playing" na dele, e o resto quebrado em linhas que cabem na maior
+    letra possivel (palavra por palavra). [(linha, tamanho da letra)]."""
     text = ' '.join(text.split())
-    f = font(18)
-    left, top, right, bottom = canvas()[1].textbbox((0, 0), text, font=f)
-    w, h = right - left, bottom - top
-    frames = []
+    probe = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+    width = lambda s, f: probe.textbbox((0, 0), s, font=f)[2] - probe.textbbox((0, 0), s, font=f)[0]
+    parts = re.split(r' (?=#\d)', text)
+    if parts and re.match(r'(?i)now playing ', parts[0]):
+        parts[0:1] = [parts[0][:11], parts[0][12:]]
+    pages = []
+    for part in filter(None, parts):
+        for size in PAGE_SIZES:
+            if width(part, font(size)) <= W - 4:
+                pages.append((part, size))
+                break
+        else:
+            # Quebra em linhas na letra do meio; uma palavra que sozinha nao
+            # cabe vai numa pagina dela (que rola devagar, page_frames).
+            f, size, line = font(PAGE_SIZES[2]), PAGE_SIZES[2], ''
+            for word in part.split(' '):
+                trial = (line + ' ' + word).strip()
+                if line and width(trial, f) > W - 4:
+                    pages.append((line, size))
+                    line = word
+                else:
+                    line = trial
+            if line:
+                pages.append((line, size))
+    return pages
+
+
+def page_image(line, size, color):
+    img, draw = canvas()
+    f = font(size)
+    box = draw.textbbox((0, 0), line, font=f)
+    if box[2] - box[0] > W - 4:
+        return None
+    draw_line(draw, line, f, (H - (box[3] - box[1])) // 2, color)
+    return img.tobytes()
+
+
+def sweep(old, new, color):
+    """A troca de old por new: uma frente com uma linha acesa vai da direita
+    para a esquerda e deixa new atras dela; cada quadro dura o que o link leva."""
+    out, shown = [], old
+    line = bytes(color) * 1
+    for i in range(1, SWEEP_STEPS + 1):
+        edge = W - round(W * i / SWEEP_STEPS)
+        frame = bytearray(old)
+        for y in range(H):
+            row = y * W * 3
+            frame[row + edge * 3:row + W * 3] = new[row + edge * 3:row + W * 3]
+            if i < SWEEP_STEPS:
+                frame[row + edge * 3:row + edge * 3 + 3] = line
+        frame = bytes(frame)
+        out.append((frame, link_ms(changed_pixels(shown, frame))))
+        shown = frame
+    return out
+
+
+def slow_scroll(line, size, color):
+    """Uma palavra que nao cabe nem na letra menor: rola 2 pontos por quadro,
+    cada quadro com o tempo que o link leva para recebe-lo (devagar, sem
+    travar)."""
+    f = font(size)
+    box = canvas()[1].textbbox((0, 0), line, font=f)
+    w, h = box[2] - box[0], box[3] - box[1]
+    out, shown = [], bytes(W * H * 3)
     for x in range(W, -w - 1, -2):
         img, draw = canvas()
-        draw_line(draw, text, f, (H - h) // 2, color, x=x)
-        frames.append((img.tobytes(), 30))
+        draw_line(draw, line, f, (H - h) // 2, color, x=x)
+        frame = img.tobytes()
+        out.append((frame, link_ms(changed_pixels(shown, frame))))
+        shown = frame
+    return out
+
+
+def page_frames(text, color, loop=False):
+    """O texto em paginas: a primeira aparece, cada outra entra pela varredura
+    e fica PAGE_MS. Com loop, a ultima volta para a primeira (o laco do painel
+    emenda sem pulo); sem, termina na ultima (a abertura antes da arte)."""
+    pages = text_pages(text)
+    frames, shown = [], None
+    for n, (line, size) in enumerate(pages + (pages[:1] if loop and len(pages) > 1 else [])):
+        img = page_image(line, size, color)
+        if img is None:
+            frames += slow_scroll(line, size, color)
+            shown = frames[-1][0]
+            continue
+        if shown is None:
+            frames.append((img, PAGE_MS))
+        else:
+            frames += sweep(shown, img, color)
+            if not (loop and n == len(pages)):
+                frames.append((img, PAGE_MS))
+        shown = img
     return frames
 
 
@@ -668,7 +781,7 @@ def run(argv):
         if len(argv) >= 4 and argv[1] == 'show':
             frames = show(argv[2], argv[3], argv[4] if len(argv) > 4 else '', argv[5] if len(argv) > 5 else '')
             if len(argv) > 6 and argv[6]:
-                intro = scroll_frames(argv[6], COLOR['select'])
+                intro = page_frames(argv[6], COLOR['select'])
         elif len(argv) in (3, 4, 5) and argv[1] == 'slide':
             frames = slide_frames(argv[2], argv[3] if len(argv) > 3 else '', -1 if len(argv) > 4 and argv[4] == '-1' else 1)
             once = len(frames) > 1

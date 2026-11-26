@@ -20149,11 +20149,12 @@ class ZeDMDTests(unittest.TestCase):
         art = self.tmp / 'media/dmd/arcade'
         art.mkdir(parents=True)
         Image.new('RGB', (128, 32), (0, 0, 255)).save(art / 'sf2.png')
-        frames = self.run_('show', 'game', 'mame', 'sf2', 'Street Fighter II', '#1 500 AAA')
-        # Os recordes rolando (so este cliente no primeiro quadro) e a arte, que fica.
-        self.assertGreater(len(frames), 20)
+        frames = self.run_('show', 'game', 'mame', 'sf2', 'Street Fighter II', '#1 500 AAA #2 400 BBB')
+        # Os recordes em paginas (so este cliente no primeiro quadro), a
+        # varredura entre elas, e a arte, que fica.
+        self.assertGreater(len(frames), 9)
         self.assertEqual([f[0][6] for f in frames[:2]], [1, 0])
-        self.assertTrue(any(frames[len(frames) // 2][1]))
+        self.assertIn(b'\xff\xff\xff', frames[0][1])
         self.assertEqual(frames[-1][1], b'\x00\x00\xff' * (128 * 32))
 
     def test_attract_cycles_the_media_art(self):
@@ -20194,6 +20195,35 @@ class ZeDMDTests(unittest.TestCase):
         self.assertIsNone(proc.poll())
         self.run_('text', 'SF2')
         self.assertEqual(proc.wait(timeout=5), 0)
+
+    def test_text_goes_in_pages_the_link_keeps_up_with(self):
+        # O "Now Playing" e os recordes nao rolam (o link do ZeDMD nao acompanha):
+        # paginas paradas, uma por recorde, e a troca e a varredura, com cada
+        # quadro durando o que o link leva para recebe-lo.
+        dmd = load_script('fliperos_dmd_pages', 'config/fliperos-dmd')
+        pages = dmd.text_pages('Now Playing Street Fighter II')
+        self.assertEqual(pages[0][0], 'Now Playing')
+        self.assertGreaterEqual(min(size for _, size in pages), 13)
+        self.assertEqual([p for p, _ in dmd.text_pages('#1 19,130 DAA #2 15,400 JRT #3 9,870 ACE')],
+                         ['#1 19,130 DAA', '#2 15,400 JRT', '#3 9,870 ACE'])
+        long = dmd.text_pages("Street Fighter II': Champion Edition (World 920513)")
+        self.assertGreater(len(long), 1)
+        self.assertTrue(all(dmd.page_image(line, size, (255, 255, 255)) for line, size in long))
+        frames = dmd.page_frames('#1 19,130 DAA #2 15,400 JRT', dmd.COLOR['select'])
+        self.assertEqual(len(frames), 1 + dmd.SWEEP_STEPS + 1)
+        self.assertEqual((frames[0][1], frames[-1][1]), (dmd.PAGE_MS, dmd.PAGE_MS))
+        for (before, _), (frame, ms) in zip(frames, frames[1:]):
+            self.assertGreaterEqual(ms, dmd.link_ms(dmd.changed_pixels(before, frame)))
+        # Uma varredura muda bem menos que um texto rolando (~600 pontos por quadro).
+        sweep = [dmd.changed_pixels(a, b) for (a, _), (b, _) in zip(frames[:9], frames[1:10])]
+        self.assertLess(max(sweep), 400)
+        # Em laco (o nome sem arte), a ultima pagina volta para a primeira.
+        loop = dmd.page_frames("Street Fighter II': Champion Edition (World 920513)", dmd.COLOR['game'], loop=True)
+        self.assertEqual(loop[-1][0], loop[0][0])
+        # Uma palavra que nem a letra menor comporta rola devagar, no ritmo do link.
+        word = dmd.page_frames('SUPERCALIFRAGILISTICEXPIALIDOCIOUS', dmd.COLOR['game'], loop=True)
+        self.assertGreater(len(word), 20)
+        self.assertTrue(all(ms >= dmd.MIN_FRAME_MS for _, ms in word))
 
     def test_long_player_name_runs_in_its_half(self):
         # O nome que nao cabe na metade dele roda em circulo (nada cortado); o
@@ -20331,7 +20361,7 @@ class ZeDMDTests(unittest.TestCase):
         scroll = subprocess.Popen([sys.executable, str(self.SCRIPT), 'text', 'SUPERCALIFRAGILISTICEXPIALIDOCIOUS'],
                                   env=self.env)
         self.addCleanup(scroll.kill)
-        time.sleep(1)
+        time.sleep(2.5)
         self.assertIsNone(scroll.poll())
         self.assertGreater(len(self.frames(self.received[0])), 3)
         self.run_('text', 'SF2')
@@ -20344,7 +20374,7 @@ class ZeDMDTests(unittest.TestCase):
         scroll = subprocess.Popen([sys.executable, str(self.SCRIPT), 'text', 'Virtua Fighter 4 Evolution Version B'],
                                   env=self.env)
         self.addCleanup(scroll.kill)
-        time.sleep(1)
+        time.sleep(2.5)
         self.assertIsNone(scroll.poll())
         self.assertGreater(len(self.frames(self.received[0])), 3)
         self.run_('text', 'SF2')
