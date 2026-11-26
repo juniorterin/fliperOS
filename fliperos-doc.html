@@ -78,7 +78,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <li>🎮 <strong>Frontends</strong>: FliperOS's own frontend by default (in the look of the Setup menu: list, full screen with a wheel of logos, and grid; clones folded under each game; letter-by-letter scrolling; menu sounds and music), plus Attract-Mode Plus, EmulationStation (ES-DE) and Pegasus (built on the cabinet the first time you choose them) and Fightcade 2, whose online matches play in each game's native resolution on the tube.</li>
 <li>🔫 <strong>Light gun</strong>: GunCon 2 out of the box (driver via DKMS), calibrated for the tube in Setup &gt; Joysticks. Wheels too.</li>
 <li>⚙️ <strong>Setup</strong>: video, geometry, audio (stereo or mono, menu sounds), network, scraper, ROM lists, MAME romset cleaning, controls (Map controllers with eight player slots) and latency.</li>
-<li>📁 <strong>Folders</strong> <code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code> and <code>config</code> in <code>~</code> and over the network (Samba); LXDE desktop with an app store.</li>
+<li>📁 <strong>Folders</strong> <code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code> and <code>config</code> in <code>~</code> and over the network (Samba); LXDE desktop with an app store.</li>
 <li>🔑 <strong>SSH</strong> on from the first boot (<code>ssh fliperos@fliperos.local</code>, password <code>fliperos</code>). Under the menus it's a regular Ubuntu, so an AI assistant can configure it over SSH.</li>
 </ul>
 <table>
@@ -211,7 +211,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <p>Use only games you have the right to use (your own dumps, or the free homebrew from <em>Setup &gt; Games &gt; Downloader &gt; Free games</em>).</p>
 <p><strong>Use the LXDE desktop.</strong> Plug a USB mouse and keyboard into the cabinet and choose <strong>Start desktop</strong> in the FliperOS menu. It is a regular desktop, and it makes all the work with games easier:</p>
 <ul>
-<li><strong>Folders</strong>: the file manager opens your home folder, with <code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code> and <code>config</code>. You see where each file goes and can create, rename and move files with the mouse.</li>
+<li><strong>Folders</strong>: the file manager opens your home folder, with <code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code> and <code>config</code>. You see where each file goes and can create, rename and move files with the mouse.</li>
 <li><strong>Browser</strong>: <em>Falkon (browser)</em> in the desktop menu, to search for the torrents of your games.</li>
 <li><strong>Torrents</strong>: <em>Transmission (torrent)</em> opens the <code>.torrent</code> files and magnet links from the browser. When the download finishes, move the files from <code>Downloads</code> to the right folder in <code>roms</code>.</li>
 <li><strong>External storage</strong>: plug in a USB stick or an external disk. It is mounted by itself and gets an icon on the desktop: open it, copy the files and paste them into the right folder in <code>roms</code> (or <code>bios</code>).</li>
@@ -424,7 +424,7 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 <p><em>Emulators &amp; Games</em>: the emulators of the desktop menu, each marked <em>installed</em> or <em>not installed</em>.</p>
 <p>Choose one that is not installed to install it: <strong>Fightcade 2</strong> (downloaded from its site) and <strong>KOF Final Attack</strong> on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with <code>Final Attack.exe</code>, on a USB disk or the network) and it downloads the <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> and Ikemen GO and makes a converted copy. <strong>HBGroovyMAME</strong>, <strong>Odin</strong> and the <strong>AnyBOR</strong> core are not in the image either: they install themselves when the first game of their folder (<code>hbmame</code>, <code>odin</code>, <code>openbor</code>) opens, or from here. The others come in the image.
   - <em>Folders</em>, in two parts:
-- <em>Folder shortcuts</em> (called <em>Link</em> before): the folders FliperOS uses (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>splashscreen</code>) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and <em>Point it to a folder on another disk</em> to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): <code>~/roms/mame</code> becomes a shortcut to it and the folder used until then is kept as <code>~/roms/old-mame</code>. Each folder can point to a different place. <em>Remove the shortcut</em> brings the previous one back.
+- <em>Folder shortcuts</em> (called <em>Link</em> before): the folders FliperOS uses (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code>, <code>splashscreen</code>) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and <em>Point it to a folder on another disk</em> to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): <code>~/roms/mame</code> becomes a shortcut to it and the folder used until then is kept as <code>~/roms/old-mame</code>. Each folder can point to a different place. <em>Remove the shortcut</em> brings the previous one back.
 - <em>External storage</em>: a whole disk. <em>FliperOS folders</em> makes the folder structure on a second disk and can use it for everything, or format the disk (ext4 or exFAT). <em>Batocera filesystem</em> uses a disk that already keeps its games in Batocera's folders (<code>batocera/roms/snes</code>, <code>megadrive</code>...): each console becomes a system, with the core you choose for it. Plug such a disk in and the frontend asks once whether to use it. More in <a href="docs/wiki/External-storage.md">External storage</a>.
   - <em>Downloader</em>:
 - <em>ROM/CHD MAME torrent</em>: you paste the magnet link of a romset (and one of CHDs) and it downloads, through Transmission, only the games the ROM Cleaner filter chooses, straight into the emulator's folder. The MAME version of the romset must match the emulator;
@@ -3409,7 +3409,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </thead>
 <tbody>
 <tr>
-<td><code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>splashscreen</code>, <code>config</code></td>
+<td><code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code>, <code>splashscreen</code>, <code>config</code></td>
 <td>The folders in <code>~</code> (<a href="#ROMs">ROMs, BIOS and artwork</a>)</td>
 </tr>
 <tr>
@@ -4308,6 +4308,10 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td>Download BIOS: the BIOS your games lack, found and downloaded by themselves</td>
 </tr>
 <tr>
+<td><a href="#Cheats">Cheats</a></td>
+<td><code>~/cheats</code>: each emulator and core reads its cheat files by itself</td>
+</tr>
+<tr>
 <td><a href="#ROM-Cleaner">ROM Cleaner</a></td>
 <td>The MAME ROM Cleaner and the CHD Cleaner: only the games that suit your cabinet, from a full romset</td>
 </tr>
@@ -4355,6 +4359,10 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <tr>
 <td><code>~/save</code></td>
 <td>What you save while playing: saves, save states, memory cards</td>
+</tr>
+<tr>
+<td><code>~/cheats</code></td>
+<td>The cheat files, one folder per emulator and per RetroArch core that reads them</td>
 </tr>
 <tr>
 <td><code>~/config</code></td>
@@ -4593,6 +4601,8 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>Each one is copied only once, and only if the game has no memory of its own yet: what you have played stays, and a game you reset by deleting its folder does not come back. To use an unlock file of your own, close the game and put it in the emulator's folder with the name that emulator writes: <code>~/nvram/mame/tekken3/at28c16</code>, <code>~/nvram/retroarch/mame2010/tekken3.nv</code>, <code>~/nvram/flycast/kofxi.zip.nvmem</code>.</p>
 <h3 id="ROMs-save"><code>~/save</code></h3>
 <p>What you save while playing, one folder per emulator: <code>retroarch</code> (game saves, <code>.srm</code>, and save states), <code>mame</code> (save states) and <code>ps2</code> (PCSX2's memory cards). The <a href="#Cloud-backup">cloud backup</a> can keep it in your cloud.</p>
+<h3 id="ROMs-cheats"><code>~/cheats</code></h3>
+<p>One folder per emulator that reads cheats (<code>mame</code>, <code>hbmame</code>, <code>ps2</code>, <code>namco2x6</code>, <code>ps1</code>, <code>flycast</code>, <code>dolphin</code>) and one per RetroArch core that has them (<code>retroarch/Snes9x</code>). A cheat file in its emulator's folder is found by the emulator when the game starts, in the format and with the name that emulator asks for. All of it, with the emulators that have no cheats, is in <a href="#Cheats">Cheats</a>.</p>
 <h3 id="ROMs-config"><code>~/config</code></h3>
 <p>Links to the configuration of each installed emulator and frontend: <code>retroarch</code>, <code>groovymame</code> (<code>mame.ini</code> and <code>ui.ini</code>), <code>flycast</code>, <code>pcsx2</code>, <code>dolphin</code>, <code>openbor</code>, <code>hypseus</code>, <code>model2</code>, <code>attractmode</code>, <code>es-de</code>, <code>pegasus</code> and <code>skyscraper</code>. Each link appears once the program has created its configuration, usually after it was opened once.</p>
 <h3 id="ROMs-splashscreen"><code>~/splashscreen</code></h3>
@@ -4817,6 +4827,80 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <li>The reference pack's torrent is <code>/usr/local/share/fliperos/bios-pack</code> (<code>config/fliperos-bios-pack</code>): it is only read, for the archive item and the name of its <code>.zip</code>.</li>
 </ul>
 <p>See also: <a href="#ROMs">ROMs, BIOS and artwork</a>, <a href="#Downloader">Downloader</a>.</p>
+<h1 id="Cheats">Cheats</h1>
+<p>One folder for the cheats, <code>~/cheats</code>, with a subfolder for each emulator and RetroArch core that can read them. Put a game's cheat file in its emulator's folder and the emulator finds it when the game starts: no menu to open, no path to set.</p>
+<table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>What goes in it</th>
+<th>How it is switched on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mame</code></td>
+<td>GroovyMAME: <code>cheat.7z</code> (the MAME cheat pack, every game in one file) and/or <code>&lt;set&gt;.xml</code>, one game (<code>sf2.xml</code>)</td>
+<td>Tab menu &gt; Cheat, in the game</td>
+</tr>
+<tr>
+<td><code>hbmame</code></td>
+<td>hbgroovymame (HBMAME): the same files</td>
+<td>Tab menu &gt; Cheat, in the game</td>
+</tr>
+<tr>
+<td><code>retroarch/&lt;core&gt;</code></td>
+<td><code>&lt;game&gt;.cht</code>, named like the game file without its extension (<code>Sonic.md</code> takes <code>Sonic.cht</code>). One folder for each core that has cheats, named like the core (<code>Snes9x</code>, <code>FinalBurn Neo</code>, <code>PCSX-ReARMed</code>…)</td>
+<td>The cheats the file marks as enabled are applied when the game opens</td>
+</tr>
+<tr>
+<td><code>ps2</code></td>
+<td>PCSX2: <code>&lt;SERIAL&gt;_&lt;CRC&gt;.pnach</code> or <code>&lt;CRC&gt;.pnach</code>, one per game (<code>SLUS-20946_AD2A0A4A.pnach</code>)</td>
+<td>Cheats are on; the game's file is applied when it starts</td>
+</tr>
+<tr>
+<td><code>namco2x6</code></td>
+<td>PCSX2x6 (Namco System 246/256): <code>&lt;CRC&gt;.pnach</code></td>
+<td>The same</td>
+</tr>
+<tr>
+<td><code>ps1</code></td>
+<td>DuckStation: <code>&lt;SERIAL&gt;.cht</code> or <code>&lt;SERIAL&gt;_&lt;HASH&gt;.cht</code> (<code>SLUS-00594.cht</code>)</td>
+<td>Esc &gt; Cheats, in the game, where each cheat is turned on</td>
+</tr>
+<tr>
+<td><code>flycast</code></td>
+<td>Flycast, Dreamcast, Naomi, Naomi 2 and Atomiswave: one <code>.cht</code> per game, named like the game file with <code>.cht</code> added (<code>crzytaxi.zip.cht</code>, <code>Sonic Adventure.gdi.cht</code>); a <code>.txt</code> works too</td>
+<td>The cheats the file marks <code>enable</code> are applied when the game starts</td>
+</tr>
+<tr>
+<td><code>dolphin</code></td>
+<td>Dolphin, GameCube and Wii: <code>&lt;GAMEID&gt;.ini</code>, one per game (<code>GALE01.ini</code>), with the codes in <code>[ActionReplay]</code> and <code>[Gecko]</code></td>
+<td>Cheats are on; the codes listed in <code>[ActionReplay_Enabled]</code> and <code>[Gecko_Enabled]</code> are applied when the game starts</td>
+</tr>
+</tbody>
+</table>
+<p>Each folder has an <code>_info.txt</code> with the same lines.</p>
+<h2 id="Cheats-who-reads-cheats-and-who-doesnt">Who reads cheats and who doesn't</h2>
+<p>Only the emulators that can read cheats have a folder. The other ones are left out on purpose, because there is nothing to read:</p>
+<ul>
+<li><strong>Keisho</strong> (Sega Model 2 and 3), <strong>Odin</strong> (Hikaru, Gaelco 3D), <strong>xemu</strong> (Chihiro), <strong>Hypseus</strong> (laserdiscs) and <strong>OpenBOR</strong> have no cheat system.</li>
+<li>In RetroArch, a core only gets a folder if its information file says <code>cheats = "true"</code>. MAME 2010, the Flycast core and the other cores that say <code>false</code> (or say nothing) have none. A core you add later from the Online Updater gets its folder at the next login, if it has cheats.</li>
+</ul>
+<p>RetroArch also keeps its own cheat database here: <strong>Online Updater &gt; Update Cheats</strong> downloads the libretro database into <code>~/cheats/retroarch</code> (as folders named after each system), and <strong>Quick Menu &gt; Cheats</strong> loads from there. A cheat file you save from that menu for the game goes to <code>~/cheats/retroarch/&lt;core&gt;/&lt;game&gt;.cht</code>, the same place this page describes.</p>
+<p>With RetroAchievements in hardcore mode, Flycast and DuckStation refuse to apply cheats on purpose (<a href="#RetroAchievements">RetroAchievements</a>).</p>
+<h2 id="Cheats-where-the-old-folders-went">Where the old folders went</h2>
+<p>The paths each emulator used before still work: <code>~/.mame/cheat</code>, <code>~/.hbmame/cheat</code> and Dolphin's <code>GameSettings</code> (in <code>~/.local/share/dolphin-emu</code>) are now links to <code>~/cheats/mame</code>, <code>~/cheats/hbmame</code> and <code>~/cheats/dolphin</code>, with what they had inside. The folder can also be on another disk (<strong>Setup &gt; Games &gt; Folders</strong>, <a href="#External-storage">External storage</a>) and is a network share, <code>\\fliperos\cheats</code>, like the others.</p>
+<p>Dolphin keeps the cheats of a game in the same file as the settings you change for it in its <em>Properties</em>, so <code>~/cheats/dolphin</code> shows both.</p>
+<h2 id="Cheats-how-it-works">How it works</h2>
+<ul>
+<li><code>config/fliperos-roms</code> makes the folders at every login: the fixed ones, one per emulator, and one per RetroArch core whose <code>.info</code> in <code>/opt/fliperos/retroarch/info</code> has <code>cheats = "true"</code> (the folder takes the core's <code>corename</code>, which is the name RetroArch looks for).</li>
+<li>RetroArch: <code>config/retroarch.cfg</code> has <code>cheat_database_path</code> pointing at <code>~/cheats/retroarch</code> and <code>apply_cheats_after_load</code>.</li>
+<li>MAME and HBMAME: <code>cheatpath</code> in <code>config/mame.ini</code> and in the hbgroovymame <code>paths.ini</code>, and <code>cheat 1</code> in <code>mame.ini</code>; an older <code>mame.ini</code> with <code>cheat 0</code> is changed by the update.</li>
+<li>Flycast, PCSX2, PCSX2x6, DuckStation and Dolphin are set by <code>config/fliperos-x11-run</code> each time they open: Flycast's <code>Dreamcast.CheatPath</code> in <code>emu.cfg</code> (only if you have not chosen one), <code>Folders Cheats</code> and <code>EmuCore EnableCheats</code> in the <code>PCSX2.ini</code> of PCSX2 and PCSX2x6, <code>Folders Cheats</code> in DuckStation's <code>settings.ini</code> and <code>Core EnableCheats</code> in Dolphin's <code>Dolphin.ini</code>.</li>
+<li>DuckStation keeps which cheats are on in the settings of each game, so they are turned on from its menu, not from the folder.</li>
+</ul>
+<p>See also: <a href="#ROMs">ROMs, BIOS and artwork</a>, <a href="#RetroArch">RetroArch</a>, <a href="#GroovyMAME">GroovyMAME</a>, <a href="#Flycast">Flycast</a>, <a href="#Namco-246-256">PlayStation 2 and Namco 246/256</a>.</p>
 <h1 id="ROM-Cleaner">ROM Cleaner</h1>
 <p>Have a full MAME romset? <strong>Setup &gt; Games &gt; Cleaner</strong> keeps only the games that work and suit your cabinet (horizontal or vertical, the controls you have, how many players) and copies them into the right emulator's folder, with everything they need. The <strong>CHD Cleaner</strong> then brings the disks of the games that stayed.</p>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/screenshots/anim/romfilter.webp" width="480" alt="The MAME ROM Cleaner parameters"></p>
@@ -35243,7 +35327,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </ul>
 <p>The auto scrape's state shows at the top. Details: <a href="#Scraper">Scraper</a>.</p>
 <h2 id="Web-panel-Library-files">Files</h2>
-<p>The folders <code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>splashscreen</code> and your home:</p>
+<p>The folders <code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code>, <code>splashscreen</code> and your home:</p>
 <ul>
 <li>open folders (<code>..</code> at the top goes back up);</li>
 <li>download a file;</li>
@@ -37688,7 +37772,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <p>All of them live in <code>config/splashscreen</code> and go to <code>/usr/share/plymouth/themes</code> and to <code>~/splashscreen</code>, where Setup &gt; System &gt; Splash screen also lists the user's themes (more on <a href="https://www.gnome-look.org/browse?cat=108&amp;ord=latest">Gnome-look</a>).</p>
 <p>Setting one (<code>lib/splash.sh</code>) copies its folder with <code>ImageDir</code> and <code>ScriptFile</code> rewritten, points the <code>default.plymouth</code> alternative at it and runs <code>update-initramfs</code> (the initramfs hook takes the new initrd to the ESP); the preview runs <code>plymouthd</code> with <code>plymouth.splash=NAME</code>.</p>
 <p><code>tools/cabinet-update.sh</code> rebuilds the initramfs when the boot theme's files change. The build can also use <code>evangelion</code> (202 frames, with a <strong>seizure risk</strong> declared by the author and no license in the package) or none.</p>
-<p><strong>Network.</strong> Samba (<code>\\&lt;ip&gt;\FliperOS</code> → <code>/opt/fliperos</code>, and <code>\\&lt;ip&gt;\roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code> and <code>config</code> → the folders of the same name in <code>~</code>, writable only with the <code>fliperos</code> user; <code>config/smb.conf</code>), SSH/SFTP and Avahi (<code>fliperos.local</code>).</p>
+<p><strong>Network.</strong> Samba (<code>\\&lt;ip&gt;\FliperOS</code> → <code>/opt/fliperos</code>, and <code>\\&lt;ip&gt;\roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code> and <code>config</code> → the folders of the same name in <code>~</code>, writable only with the <code>fliperos</code> user; <code>config/smb.conf</code>), SSH/SFTP and Avahi (<code>fliperos.local</code>).</p>
 <p>Default user <code>fliperos</code> with password <code>fliperos</code>, like GroovyArcade's user <code>arcade</code> with password <code>arcade</code> (see <a href="#Installed-system">Installed system</a>).</p>
 <p>NetworkManager handles Wi-Fi <strong>and wired</strong> (the empty <code>10-globally-managed-devices.conf</code> overrides Ubuntu's, which only managed Wi-Fi) and writes <code>/etc/resolv.conf</code> itself with the DNS from DHCP (<code>90-fliperos-dns.conf</code>: Ubuntu would hand DNS to <code>systemd-resolved</code>, which isn't in the image).</p>
 <p>The clock comes from the network (<code>systemd-timesyncd</code>). On the first test on the cabinet all three were missing: <code>resolv.conf</code> was the build container's, the BIOS clock was two months behind, and apt didn't work (neither System Update nor frontends).</p>
@@ -37792,7 +37876,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 </tr>
 <tr>
 <td><code>config/fliperos-roms</code>, <code>config/smb.conf</code>, <code>config/flycast-emu.cfg</code></td>
-<td>Folders in <code>~</code> (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>config</code>); Samba (FliperOS, roms, bios, media, nvram, save, config); initial Flycast settings</td>
+<td>Folders in <code>~</code> (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code>, <code>config</code>); Samba (FliperOS, roms, bios, media, nvram, save, cheats, config); initial Flycast settings</td>
 </tr>
 <tr>
 <td><code>config/fliperos-controllers</code>, <code>config/fliperos-controllers.service</code></td>
