@@ -509,6 +509,10 @@ pre.whatsnew { max-height: 70vh; overflow: auto; white-space: pre-wrap; }
 .cg-parts-list { margin: 0 0 8px; padding-left: 22px; display: grid; gap: 4px; }
 .cg-parts-list a { display: inline-flex; align-items: center; gap: 6px; word-break: break-all; }
 .cg-parts-list svg.px { width: 16px; height: 16px; }
+/* O tamanho de cada parte, em MB (o padrao e o maior arquivo do plano gratuito do Telegram). */
+.cg-partsize { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 6px; }
+.cg-partmb { width: 110px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); font: inherit; }
+.cg-parts .error { color: var(--red, #ff6b6b); }
 .cg-testact svg.g { width: 12px; height: 12px; }
 .cg-capmsg { font-size: 13px; color: var(--muted); }
 .cg-capshots { display: flex; flex-wrap: wrap; gap: 10px; }

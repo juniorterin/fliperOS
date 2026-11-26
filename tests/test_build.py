@@ -10506,8 +10506,9 @@ class WebSetupBase(unittest.TestCase):
                    FLIPEROS_OSD_PROFILES=str(tmp / 'osd-profiles.conf'), FLIPEROS_MENU_SOUNDS=str(tmp / 'sounds'),
                    FLIPEROS_WEB_AVAHI_SERVICE=str(tmp / 'avahi.service'), FLIPEROS_AVAHI_BROWSE=str(tmp / 'none'),
                    FLIPEROS_LOGS=str(tmp / 'logs'),
-                   # O arquivo maximo do Telegram (2 GB) e as partes (1900 MiB), em bytes de brinquedo.
-                   FLIPEROS_TELEGRAM_FILE_LIMIT='1000', FLIPEROS_PACKAGE_PART_SIZE='400')
+                   # O tamanho das partes de um pacote (de verdade, MB de 1 MiB, padrao 2000 e no maximo 999 partes), em
+                   # numeros de brinquedo: 1 "MB" vale 100 bytes, o padrao e 4 "MB" (400 bytes) e o maximo, 6 partes.
+                   FLIPEROS_PACKAGE_PART_UNIT='100', FLIPEROS_PACKAGE_PART_MB='4', FLIPEROS_PACKAGE_MAX_PARTS='6')
         (tmp / 'logs').mkdir()
         (tmp / 'installed-fliperos-tty1').write_text('#!/bin/bash\n')
         # O ffmpeg falso da captura: o que chega pelo stdin vira o arquivo (o ultimo argumento).
@@ -10584,9 +10585,10 @@ class WebCustomGamesTests(WebSetupBase):
         # sempre (packages_dir) segue servindo para achar os arquivos.
         self.assertEqual(info['packages_shown'], '~/roms/custom-packages (on BIGDISK: batocera/roms/custom-packages)')
 
-    def test_a_package_over_the_telegram_limit_is_offered_in_parts_cut_from_the_zip(self):
-        # Maior que o arquivo do plano gratuito do Telegram (aqui 1000 bytes; de verdade 2 GB): o painel diz em quantas
-        # partes (de 400 bytes aqui, 1900 MiB de verdade) e entrega cada uma, um pedaco do zip que ja esta na pasta.
+    def test_a_package_is_offered_in_parts_of_the_size_the_person_chooses(self):
+        # O painel diz em quantas partes um zip vai (o tamanho de cada uma e escolhido em MB; o padrao e 2000, o maior arquivo do
+        # plano gratuito do Telegram; aqui 1 "MB" vale 100 bytes e o padrao, 400) e entrega cada uma, um pedaco do zip que ja
+        # esta na pasta.
         import http.client
         folder = self.dir / 'roms/custom-packages'
         folder.mkdir(parents=True, exist_ok=True)
@@ -10599,7 +10601,9 @@ class WebCustomGamesTests(WebSetupBase):
             self.addCleanup((folder / leftover).unlink)                           # a pasta e dos outros testes da classe tambem
         status, info = self.call('GET', '/api/customgames/package-parts?name=Big.fliperos-customgame.zip')
         self.assertEqual(status, 200)
-        self.assertEqual((info['name'], info['size'], info['limit'], info['part_size']), ('Big.fliperos-customgame.zip', 1536, 1000, 400))
+        self.assertEqual((info['name'], info['size'], info['part_mb'], info['part_size'], info['default_mb'], info['default_bytes']),
+                         ('Big.fliperos-customgame.zip', 1536, 4, 400, 4, 400))
+        self.assertEqual((info['too_many'], info['max_parts'], info['min_mb']), (False, 6, 3))
         self.assertEqual([p['size'] for p in info['parts']], [400, 400, 400, 336])
         self.assertEqual([p['file'] for p in info['parts']], ['Big.fliperos-customgame.zip.%03d' % n for n in (1, 2, 3, 4)])
         joined = b''
@@ -10621,6 +10625,36 @@ class WebCustomGamesTests(WebSetupBase):
         exact = self.call('GET', '/api/customgames/package-parts?name=Exact.fliperos-customgame.zip')[1]['parts']
         self.assertEqual(sum(p['size'] for p in exact), 1200)
         self.assertLess(exact[-1]['size'], exact[0]['size'])
+        # O tamanho escolhido (part=MB): o corte muda, o link de cada parte leva o mesmo valor, e juntas voltam ao zip.
+        self.assertTrue(all(p['url'].endswith('&part=4') for p in info['parts']))
+        mine = lambda name, mb: self.call('GET', '/api/customgames/package-parts?name=%s&part=%d' % (name, mb))[1]
+        nine = mine('Big.fliperos-customgame.zip', 9)                        # partes de 900 bytes
+        self.assertEqual((nine['part_mb'], [p['size'] for p in nine['parts']]), (9, [900, 636]))
+        self.assertTrue(all(p['url'].endswith('&part=9') for p in nine['parts']))
+        self.assertEqual(b''.join(self.call('GET', p['url'])[1] for p in nine['parts']), data)
+        # Os dois cortes nao se misturam: a parte 1 de 4 MB tem 400 bytes, a de 9 MB, 900.
+        self.assertEqual(len(self.call('GET', info['parts'][0]['url'])[1]), 400)
+        self.assertEqual(len(self.call('GET', nine['parts'][0]['url'])[1]), 900)
+        # O tamanho que deixa o zip numa parte so (o Premium aceita 4000 MB; aqui qualquer coisa a partir de 16): sem partes.
+        whole = mine('Big.fliperos-customgame.zip', 20)
+        self.assertEqual((whole['parts'], whole['too_many'], whole['size']), ([], False, 1536))
+        self.assertEqual(self.call('GET', '/api/customgames/package-part?name=Big.fliperos-customgame.zip&n=1&part=20')[0], 404)
+        # Partes pequenas demais dariam mais partes que a numeracao aceita (aqui 6; de verdade 999, de .001 a .999): o painel
+        # diz o menor tamanho que serve e nao lista nada.
+        tiny = mine('Big.fliperos-customgame.zip', 1)
+        self.assertEqual((tiny['too_many'], tiny['parts'], tiny['min_mb'], tiny['max_parts']), (True, [], 3, 6))
+        self.assertEqual(self.call('GET', '/api/customgames/package-part?name=Big.fliperos-customgame.zip&n=1&part=1')[0], 404)
+        self.assertFalse(mine('Big.fliperos-customgame.zip', 3)['too_many'])      # no minimo, cabe
+        # Um multiplo exato do tamanho escolhido: a ultima parte ainda sai menor.
+        exact6 = mine('Exact.fliperos-customgame.zip', 6)['parts']             # 1200 = 2 x 600
+        self.assertEqual(sum(p['size'] for p in exact6), 1200)
+        self.assertLess(exact6[-1]['size'], exact6[0]['size'])
+        self.assertEqual(mine('Exact.fliperos-customgame.zip', 12)['parts'], [])    # 1200 cabe numa parte de 1200
+        # Tamanho que nao e um numero de 1 para cima: recusado. Em branco e como nao escolher: vale o padrao.
+        for bad in ('0', '-3', 'abc', '1.5', '99999999999'):
+            self.assertEqual(self.call('GET', '/api/customgames/package-parts?name=Big.fliperos-customgame.zip&part=' + bad)[0], 400, bad)
+        blank = self.call('GET', '/api/customgames/package-parts?name=Big.fliperos-customgame.zip&part=')
+        self.assertEqual((blank[0], blank[1]['part_mb']), (200, 4))
         # So pacotes da pasta deles: outro nome, caminho para fora, parte que nao existe.
         for path in ('name=notes.txt', 'name=../Big.fliperos-customgame.zip', 'name=Nope.fliperos-customgame.zip', 'name=',
                      'name=Big.fliperos-customgame.zip&n=9', 'name=Big.fliperos-customgame.zip&n=0', 'name=Big.fliperos-customgame.zip&n=x',
@@ -10634,9 +10668,17 @@ class WebCustomGamesTests(WebSetupBase):
         self.assertIn('await cgShowParts(status, zip);', js)
         self.assertIn('for (const r of made) await cgShowParts(status, cgZipOf(r.name.trim()));', js)
         self.assertIn('const parts = await cgPartsInfo(zip);', js)
+        # O tamanho de cada parte: um campo numerico (MB), guardado no navegador, que vai no pedido e refaz o bloco.
+        for needle in ('const CG_PART_MB = "fliperos-cg-part-mb";', '(mb ? "&part=" + mb : "")',
+                       'return info.size > info.default_bytes || info.parts.length || info.too_many ? info : null;',
+                       'type: "number", min: "1", step: "1"', 'wrap.replaceWith(cgPartsBlock(fresh))'):
+            self.assertIn(needle, js, needle)
         text = (ROOT / 'config/web/setup-text.js').read_text()
-        for key in ('cg_split_title', 'cg_split_how'):
+        for key in ('cg_split_title', 'cg_split_how', 'cg_part_mb_label', 'cg_part_mb_hint', 'cg_part_fits', 'cg_part_too_many'):
             self.assertEqual(len(re.findall(r'(?<!\w)%s: ' % key, text)), 2, key)       # ingles e portugues
+        self.assertNotIn('cg_premium', text)                                  # nao ha mais a caixa da conta Premium
+        for needle in ('4000 MB (4 GB)', '2000 MB (2 GB)'):                   # a dica do campo diz os dois limites do Telegram
+            self.assertEqual(text.count(needle), 2, needle)
         self.assertIn('.cg-parts-list', (ROOT / 'config/web/setup.css').read_text())
 
     def test_the_parts_sent_to_the_panel_are_joined_by_the_setup(self):
@@ -22588,6 +22630,10 @@ class ReleaseTests(unittest.TestCase):
         # O release e do commit de que a ISO saiu, e nao troca um que ja existe sem pedir.
         self.assertIn('--target "$commit"', script)
         self.assertRegex(script, r'\(\(replace\)\) \|\| die')
+        # Com a tag ja no GitHub (o workflow roda no push dela) o --target sai: o GITHUB_TOKEN
+        # leva 403 se o commit nao e a ponta de um branch (a 0.29 perdeu um build de 2h20).
+        self.assertIn('if gh api "repos/$repo/git/ref/tags/$version" > /dev/null 2>&1; then\n  target=()', script)
+        self.assertIn('-R "$repo" "${target[@]}" \\', script)
 
     def test_release_tools_are_in_the_vmtest_image(self):
         dockerfile = (ROOT / 'tools/Dockerfile.vmtest').read_text()

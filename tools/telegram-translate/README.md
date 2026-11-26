@@ -70,7 +70,8 @@ Uma vez só:
    os arquivos mandados, como já precisa para a tradução.
 5. **Pacotes em partes (mais de 2 GB).** O plano gratuito do Telegram aceita arquivos de até
    2 GB. No painel web (Jogos custom > Criar pacote) um pacote maior sai com um link para
-   cada parte (`JOGO.fliperos-customgame.zip.001`, `.002`...; 1900 MiB cada, o painel as
+   cada parte (`JOGO.fliperos-customgame.zip.001`, `.002`...; o tamanho de cada uma é um
+   campo em MB no painel, 2000 por padrão, e quem tem Telegram Premium põe 4000; o painel as
    corta do zip que já está na pasta). Mande todas ao grupo, em qualquer ordem: o robô as
    trata como **um pacote só**, com **um card** (álbum e dados) e uma resposta a cada
    parte. Para isso o Worker precisa de um KV, que guarda as partes até a última chegar

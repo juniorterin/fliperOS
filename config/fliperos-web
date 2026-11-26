@@ -3347,21 +3347,38 @@ STAGE_HOURS = 24
 # pasta), para a pagina mostrar.
 CUSTOMGAME_MEDIA_TYPES = dict(MEDIA_TYPES, **{".mkv": "video/x-matroska", ".avi": "video/x-msvideo",
                                                ".flv": "video/x-flv", ".ico": "image/x-icon"})
-# Um pacote maior que o arquivo que o plano gratuito do Telegram aceita (2 GB, 2000 MiB) vai ao grupo em partes
-# (tools/telegram-customgame.py as junta de volta): partes de 1900 MiB, GAME.fliperos-customgame.zip.001, .002...
-# Elas nao existem em disco: cada link entrega um pedaco do zip que ja esta na pasta. Os dois valores mudam por
-# variavel de ambiente so nos testes.
-TELEGRAM_FILE_LIMIT = int(ENV("FLIPEROS_TELEGRAM_FILE_LIMIT", str(2000 << 20)))
-PACKAGE_PART_SIZE = int(ENV("FLIPEROS_PACKAGE_PART_SIZE", str(1900 << 20)))
+# Um pacote vai ao Telegram em partes (tools/telegram-customgame.py as junta de volta): GAME.fliperos-customgame.zip.001,
+# .002... O tamanho de cada parte e a pessoa que escolhe, em MB (1 MB = 1 MiB), num campo do painel; o padrao e 2000 MB, o
+# maior arquivo do plano gratuito do Telegram (o Premium aceita 4000 MB). Um zip que cabe numa parte so nao se divide.
+# As partes nao existem em disco: cada link entrega um pedaco do zip que ja esta na pasta. Os numeros mudam por variavel
+# de ambiente so nos testes (PART_UNIT: quantos bytes vale 1 MB).
+PACKAGE_PART_UNIT = int(ENV("FLIPEROS_PACKAGE_PART_UNIT", str(1 << 20)))
+PACKAGE_PART_MB = int(ENV("FLIPEROS_PACKAGE_PART_MB", "2000"))
+PACKAGE_MAX_PARTS = int(ENV("FLIPEROS_PACKAGE_MAX_PARTS", "999"))        # a numeracao tem tres digitos: .001 a .999
+PACKAGE_MAX_PART_MB = 1 << 20                                            # so para recusar um numero absurdo (1 TB)
 
 
-def package_parts(size, limit=None, part=None):
-    """As partes de um zip de SIZE bytes para o Telegram: [] se cabe num arquivo so (ate LIMIT), senao
-    [(inicio, tamanho)] com PART bytes cada e a ultima com o que sobra. A ultima e sempre menor que as outras (o
-    robo do grupo reconhece o fim do pacote por isso): se SIZE for multiplo de PART, as partes diminuem um pouco."""
-    limit = TELEGRAM_FILE_LIMIT if limit is None else limit
-    part = PACKAGE_PART_SIZE if part is None else part
-    if size <= limit or part <= 0:
+def package_part_count(size, part):
+    """Quantas partes de PART bytes tem um zip de SIZE bytes (1: cabe numa so). Num multiplo exato da parte, ela diminui
+    um pouco (package_parts) e sobra uma a mais."""
+    if part <= 0 or size <= part:
+        return 1
+    return -(-size // part) + (1 if size % part == 0 else 0)
+
+
+def package_min_part_mb(size):
+    """O menor tamanho de parte, em MB, com que o zip ainda cabe em PACKAGE_MAX_PARTS partes."""
+    mb = max(1, -(-(-(-size // PACKAGE_MAX_PARTS)) // PACKAGE_PART_UNIT))
+    while package_part_count(size, mb * PACKAGE_PART_UNIT) > PACKAGE_MAX_PARTS:
+        mb += 1
+    return mb
+
+
+def package_parts(size, part):
+    """As partes de um zip de SIZE bytes: [] se cabe numa so (SIZE <= PART), senao [(inicio, tamanho)] com PART bytes cada
+    e a ultima com o que sobra. A ultima e sempre menor que as outras (o robo do grupo reconhece o fim do pacote por
+    isso): se SIZE for multiplo de PART, as partes diminuem um pouco."""
+    if part <= 0 or size <= part:
         return []
     if size % part == 0:
         part -= (1 << 20) if part > (4 << 20) else 1
@@ -5531,12 +5548,24 @@ class Handler(BaseHTTPRequestHandler):
                     or not inside(path, customgame_packages_dir()):
                 return self.send(404, {"error": "no such package"})
             size = os.path.getsize(path)
-            parts = package_parts(size)
+            # part=MB: o tamanho de cada parte, que a pessoa escolhe (sem ele, o padrao). O link de cada parte leva o mesmo
+            # valor do pedido que as listou, senao os cortes nao combinariam e as partes nao se juntariam num zip.
+            try:
+                part_mb = int((query.get("part") or [str(PACKAGE_PART_MB)])[0])
+            except ValueError:
+                part_mb = 0
+            if not 1 <= part_mb <= PACKAGE_MAX_PART_MB:
+                return self.send(400, {"error": "part: the size of each part, in MB (1 or more)"})
+            part = part_mb * PACKAGE_PART_UNIT
+            too_many = package_part_count(size, part) > PACKAGE_MAX_PARTS
+            parts = [] if too_many else package_parts(size, part)
             if url.path == "/api/customgames/package-parts":
                 return self.send(200, {
-                    "name": name, "size": size, "limit": TELEGRAM_FILE_LIMIT, "part_size": parts[0][1] if parts else 0,
+                    "name": name, "size": size, "part_mb": part_mb, "default_mb": PACKAGE_PART_MB,
+                    "default_bytes": PACKAGE_PART_MB * PACKAGE_PART_UNIT, "min_mb": package_min_part_mb(size),
+                    "max_parts": PACKAGE_MAX_PARTS, "too_many": too_many, "part_size": parts[0][1] if parts else 0,
                     "parts": [{"n": n, "file": package_part_name(name, n), "size": length,
-                               "url": "/api/customgames/package-part?name=%s&n=%d" % (quote(name), n)}
+                               "url": "/api/customgames/package-part?name=%s&n=%d&part=%d" % (quote(name), n, part_mb)}
                               for n, (_, length) in enumerate(parts, 1)]})
             try:
                 number = int((query.get("n") or ["0"])[0])

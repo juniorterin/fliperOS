@@ -1210,25 +1210,59 @@ function cgDownloadButton(zip) {
 
 // Um pacote maior que o arquivo do plano gratuito do Telegram (2 GB) vai ao grupo em partes (zip.001, .002...): o
 // painel diz quantas e entrega cada uma, um pedaco do zip que ja esta na pasta (/api/customgames/package-part). O robo do
-// grupo trata as partes como um pacote so. cgPartsInfo: null quando o zip cabe num arquivo so.
+// grupo trata as partes como um pacote so. O tamanho de cada parte e a pessoa que escolhe, em MB (o padrao e 2000, o maior
+// arquivo do plano gratuito do Telegram; o Premium aceita 4000): fica no navegador, como a caixa de apagar o zip.
+const CG_PART_MB = "fliperos-cg-part-mb";
+const cgPartMb = () => { try { return parseInt(localStorage.getItem(CG_PART_MB), 10) || 0; } catch (e) { return 0; } };
+const cgSetPartMb = (mb) => { try { localStorage.setItem(CG_PART_MB, String(mb)); } catch (e) { /* sem armazenamento */ } };
+
+// cgPartsInfo: as partes do zip no tamanho escolhido (sem escolha, o padrao do gabinete). null quando nao ha o que oferecer:
+// o zip cabe no padrao e a pessoa nao escolheu um tamanho que o divida. Um zip maior que o padrao mostra o bloco mesmo que o
+// tamanho escolhido o deixe numa parte so (info.parts vazio): e onde a pessoa muda o tamanho de volta.
 async function cgPartsInfo(zip) {
   try {
-    const res = await api("/api/customgames/package-parts?name=" + encodeURIComponent(zip));
+    const mb = cgPartMb();
+    const res = await api("/api/customgames/package-parts?name=" + encodeURIComponent(zip) + (mb ? "&part=" + mb : ""));
     if (!res.ok) return null;
     const info = await res.json();
-    return info.parts && info.parts.length ? info : null;
+    return info.size > info.default_bytes || info.parts.length || info.too_many ? info : null;
   } catch (_) {
     return null;
   }
 }
 
-// cgPartsBlock: o aviso, um link por parte e como juntar as partes sem o robo.
+// cgPartsBlock: o campo do tamanho de cada parte (MB), o aviso, um link por parte e como juntar as partes sem o robo; ou que o
+// zip cabe numa parte so, ou que o tamanho escolhido daria partes demais. Mudar o campo refaz o bloco.
 function cgPartsBlock(info) {
-  return el("div", { class: "cg-parts" },
-    el("p", {}, t("cg_split_title").replace("%s", info.name).replace("%s", bytes(info.size)).replace("%n", info.parts.length)),
+  const wrap = el("div", { class: "cg-parts" });
+  const input = el("input", { type: "number", min: "1", step: "1", value: String(info.part_mb), class: "cg-partmb",
+    "aria-label": t("cg_part_mb_label") });
+  input.addEventListener("change", async () => {
+    const mb = parseInt(input.value, 10);
+    if (!(mb >= 1)) { input.value = String(info.part_mb); return; }
+    cgSetPartMb(mb);
+    const fresh = await cgPartsInfo(info.name);
+    if (fresh) wrap.replaceWith(cgPartsBlock(fresh));
+  });
+  const field = el("label", { class: "cg-partsize" }, el("span", {}, t("cg_part_mb_label")), input, el("span", { class: "dim" }, "MB"));
+  const hint = el("p", { class: "dim" }, t("cg_part_mb_hint"));
+  if (info.too_many) {
+    wrap.append(el("p", { class: "error" }, t("cg_part_too_many").replace("%s", info.name).replace("%n", info.max_parts)
+      .replace("%m", info.min_mb)), field, hint);
+    return wrap;
+  }
+  if (!info.parts.length) {
+    wrap.append(el("p", {}, t("cg_part_fits").replace("%s", info.name).replace("%s", bytes(info.size)).replace("%m", info.part_mb)), field, hint);
+    return wrap;
+  }
+  wrap.append(
+    el("p", {}, t("cg_split_title").replace("%s", info.name).replace("%s", bytes(info.size)).replace("%n", info.parts.length)
+      .replace("%m", info.part_mb)),
+    field, hint,
     el("ol", { class: "cg-parts-list" }, ...info.parts.map((p) =>
       el("li", {}, el("a", { href: p.url, download: p.file }, icon("px-install"), p.file), el("span", { class: "dim" }, " · " + bytes(p.size))))),
     el("p", { class: "dim" }, t("cg_split_how").replace(/%s/g, info.name)));
+  return wrap;
 }
 
 // cgShowParts: acrescenta em CONTAINER o bloco das partes do pacote, se ele precisar delas.
