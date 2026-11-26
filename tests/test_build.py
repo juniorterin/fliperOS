@@ -23610,6 +23610,90 @@ class TelegramCustomGameTests(unittest.TestCase):
         base, ordered, problems = self.bot.check_parts(list(reversed(payload['parts'])))
         self.assertEqual((base, [p['n'] for p in ordered], problems), ('Street Fighter 4.fliperos-customgame.zip', [1, 2, 3, 4, 5], []))
 
+    def test_the_message_numbers_come_from_numbers_ranges_and_links(self):
+        ids = self.bot.parse_message_ids
+        self.assertEqual(ids('https://t.me/fliperos15khz/578/1719\nhttps://t.me/fliperos15khz/578/1708'), [1708, 1719])
+        self.assertEqual(ids('1708-1710, 1719;1709'), [1708, 1709, 1710, 1719])
+        self.assertEqual(ids('t.me/c/4384436732/578/1719?single'), [1719])
+        self.assertEqual(ids(''), [])
+        for bad in ('abc', '1719-1708', '1-%d' % (self.bot.MESSAGES_MAX + 5)):
+            with self.assertRaises(ValueError, msg=bad):
+                ids(bad)
+
+    @staticmethod
+    def message_of(number, name, size, thread=578, top=False, sender=('Ana', 'Silva', 'ana_s')):
+        """Uma mensagem do Telethon de mentira: um arquivo no topico, com quem mandou."""
+        from types import SimpleNamespace as NS
+        document = NS(size=size, attributes=[NS(), NS(file_name=name)]) if name is not None else None
+        reply = NS(reply_to_top_id=thread if top else None, reply_to_msg_id=thread)
+        return NS(id=number, document=document, reply_to=reply,
+                  sender=NS(first_name=sender[0], last_name=sender[1], username=sender[2]))
+
+    def test_the_parts_nobody_handled_are_rebuilt_from_the_messages(self):
+        make = self.message_of
+        found = [(1708, make(1708, 'Doom.fliperos-customgame.zip.001', 2000)),
+                 (1709, make(1709, 'Doom.fliperos-customgame.zip.002', 2000, top=True)),
+                 (1710, make(1710, 'Doom.fliperos-customgame.zip.003', 700)),
+                 (1711, None),                                              # apagada, ou o bot nao a ve
+                 (1712, make(1712, None, 0)),                               # sem arquivo
+                 (1713, make(1713, 'Other.zip', 5)),                        # nao e parte de um pacote
+                 (1714, make(1714, 'Doom.fliperos-customgame.zip.002', 2000)),   # a parte 2 mandada de novo
+                 (1715, make(1715, 'Quake.fliperos-customgame.zip.001', 900, sender=('Bia', '', ''))),
+                 (1716, make(1716, 'Quake.fliperos-customgame.zip.002', 300, sender=('Bia', '', '')))]
+        requests, notes = self.bot.split_requests(found, '-1004384436732', 'fliperos15khz')
+        self.assertEqual(len(requests), 2)
+        doom, quake = requests
+        self.assertEqual((doom['chat_id'], doom['chat_username'], doom['thread_id'], doom['message_id']),
+                         ('-1004384436732', 'fliperos15khz', 578, 1708))
+        self.assertEqual((doom['from'], doom['username']), ('Ana Silva', 'ana_s'))
+        # A parte 2 e a mensagem mais nova; cada parte leva so o que o Worker leva.
+        self.assertEqual([(p['message_id'], p['file_name'][-3:], p['file_size']) for p in doom['parts']],
+                         [(1708, '001', 2000), (1714, '002', 2000), (1710, '003', 700)])
+        self.assertEqual(set(doom['parts'][0]), {'message_id', 'file_name', 'file_size'})
+        self.assertEqual((quake['from'], quake['username'], len(quake['parts'])), ('Bia', '', 2))
+        self.assertEqual(len(notes), 3)
+        self.assertTrue(any('1711' in n and 'not found' in n for n in notes), notes)
+        self.assertTrue(any('1712' in n and 'no file' in n for n in notes), notes)
+        self.assertTrue(any('1713' in n and 'left alone' in n for n in notes), notes)
+        # O pedido que sai passa pelo mesmo conferidor de partes do Worker.
+        base, parts, problems = self.bot.check_parts(doom['parts'])
+        self.assertEqual((base, len(parts), problems), ('Doom.fliperos-customgame.zip', 3, []))
+
+    def test_recovering_the_messages_posts_one_card_and_a_reply_to_each_part(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()
+        payload, chunks = self.split_payload(data, count=3)
+        found = [(p['message_id'], self.message_of(p['message_id'], p['file_name'], p['file_size'])) for p in payload['parts']]
+
+        class Reader:
+            closed = False
+            asked = None
+
+            def messages(self, chat, ids):
+                Reader.asked = (chat, ids)
+                return [(i, dict(found).get(i)) for i in ids]
+
+            def close(self):
+                Reader.closed = True
+
+        tg, out = self.FakeIds(), []
+        results = self.bot.recover('https://t.me/fliperos15khz/578/101\nhttps://t.me/fliperos15khz/578/103\n102', {'TELEGRAM_CHAT_ID': '-1004384436732'},
+                                   Reader(), tg, self.tool, out=out.append, mtproto_parts=self.parts_source(chunks))
+        self.assertEqual(results, ['posted: Street Fighter 4 (3 parts)'])
+        self.assertEqual(Reader.asked, ('@fliperos15khz', [101, 102, 103]))
+        self.assertTrue(Reader.closed)
+        # O card respondendo a primeira parte, e uma resposta a cada parte.
+        self.assertEqual([c[0] for c in tg.calls], ['album', 'message'] + ['message'] * 3)
+        self.assertEqual(tg.calls[1][3:], (578, 101))
+        for number, reply in enumerate(tg.calls[2:], 1):
+            self.assertEqual(reply[3:], (578, 100 + number))
+            self.assertIn('https://t.me/fliperos15khz/', reply[2])
+        self.assertTrue(any(line.startswith('package in parts: Street Fighter 4.fliperos-customgame.zip.001') for line in out), out)
+        # So o workflow e o robo conhecem o modo: o campo "messages" chega ao --messages-env.
+        workflow = (ROOT / '.github/workflows/telegram-customgame.yml').read_text()
+        self.assertIn('MESSAGES: ${{ inputs.messages }}', workflow)
+        self.assertIn('args=(--messages-env MESSAGES)', workflow)
+
     def test_split_files_the_bot_cannot_read_still_get_a_card_and_the_replies(self):
         with tempfile.TemporaryDirectory() as tmp:
             data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()

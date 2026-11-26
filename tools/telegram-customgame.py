@@ -35,6 +35,11 @@ as partes, junta e chama o workflow uma vez so, com todas em "parts". O robo le 
 partes como se fossem o zip inteiro (pelo MTProto), faz UM card com os dados e
 responde uma vez a cada parte (post_split_package).
 
+    python3 tools/telegram-customgame.py --messages-env MESSAGES [--no-post]
+        partes que chegaram ao grupo sem o Worker as tratar: MESSAGES e a lista das
+        mensagens delas (numeros, uma faixa 1708-1719 ou links t.me); o robo as le pelo
+        MTProto, refaz o pedido e posta o card (workflow Telegram custom game, campo messages)
+
 Variaveis: TELEGRAM_BOT_TOKEN (o bot do grupo), TELEGRAM_CHAT_ID (o grupo, se
 quiser conferir; @fliperos15khz sem ela), TELEGRAM_FILES_TOPIC (o numero no fim
 do link do topico, t.me/fliperos15khz/NUMERO; 578), TELEGRAM_API_ID,
@@ -948,6 +953,131 @@ def post_split_package(tg, payload, env, tool, mtproto_parts=None, out=print):
     return 'posted: %s (%d parts)%s' % (title, count, '' if info else ' (details unreadable)')
 
 
+# ── Repostar pelas mensagens ──
+# Partes que chegaram ao grupo sem o Worker as tratar (o Worker no ar ainda era o de antes das partes) nao deixam nada
+# para repetir: o pedido (message_id, file_name, file_size de cada parte) so existia no Worker. O robo o refaz lendo as
+# mensagens pelo MTProto (get_messages por id), e o resto e o caminho de sempre (post_package).
+
+MESSAGES_MAX = 300
+
+
+def parse_message_ids(text):
+    """Os numeros das mensagens de um texto: "1708-1719", "1708, 1719" ou links (t.me/grupo/578/1719: vale o ultimo
+    numero de cada um). ValueError com algo que nao e nenhum dos tres, ou com mensagens demais."""
+    ids = set()
+    for token in re.split(r'[\s,;]+', str(text or '').strip()):
+        if not token:
+            continue
+        link = re.search(r'/(\d+)/?(?:\?.*)?$', token) if '/' in token else None
+        span = re.fullmatch(r'(\d+)-(\d+)', token)
+        if link:
+            ids.add(int(link.group(1)))
+        elif span:
+            low, high = int(span.group(1)), int(span.group(2))
+            if high < low or high - low >= MESSAGES_MAX:
+                raise ValueError('a range of up to %d messages, please: %s' % (MESSAGES_MAX, token))
+            ids.update(range(low, high + 1))
+        elif token.isdigit():
+            ids.add(int(token))
+        else:
+            raise ValueError('not a message number or link: %s' % token)
+        if len(ids) > MESSAGES_MAX:
+            raise ValueError('up to %d messages, please' % MESSAGES_MAX)
+    return sorted(ids)
+
+
+def part_of_message(message):
+    """O que o Worker diria de uma mensagem com arquivo (message_id, file_name, file_size, thread_id, from, username);
+    None se ela nao tem arquivo."""
+    document = getattr(message, 'document', None)
+    if document is None:
+        return None
+    name = ''
+    for attribute in getattr(document, 'attributes', None) or []:
+        name = getattr(attribute, 'file_name', None) or name
+    reply = getattr(message, 'reply_to', None)
+    # Num topico, a mensagem responde ao topico (reply_to_msg_id) ou a outra mensagem dele (reply_to_top_id).
+    thread = int(getattr(reply, 'reply_to_top_id', None) or getattr(reply, 'reply_to_msg_id', None) or 0) if reply else 0
+    sender = getattr(message, 'sender', None)
+    who = ' '.join(x for x in (getattr(sender, 'first_name', None), getattr(sender, 'last_name', None)) if x) or \
+        str(getattr(sender, 'title', None) or '')
+    return {'message_id': int(message.id), 'file_name': name, 'file_size': int(getattr(document, 'size', 0) or 0),
+            'thread_id': thread, 'from': who, 'username': str(getattr(sender, 'username', None) or '')}
+
+
+def split_requests(found, chat_id='', chat_username=''):
+    """Os pedidos de pacotes em partes das mensagens lidas, found = [(id, mensagem ou None)]: (pedidos, avisos). Um pedido
+    por pacote, como o do Worker. Uma parte mandada duas vezes vale a mensagem mais nova; o que nao e parte de um
+    pacote fica de fora, com um aviso."""
+    groups, notes = {}, []
+    for number, message in found:
+        part = part_of_message(message) if message is not None else None
+        if message is None:
+            notes.append('message %d: not found (deleted, or the bot cannot see it)' % number)
+            continue
+        if part is None:
+            notes.append('message %d: no file' % number)
+            continue
+        match = PART_RE.match(part['file_name'])
+        if not match:
+            notes.append('message %d: %s is not a part of a package, left alone' % (number, part['file_name'] or 'a file'))
+            continue
+        group = groups.setdefault(match.group(1).lower(), {})
+        if int(match.group(2)) not in group or group[int(match.group(2))]['message_id'] < part['message_id']:
+            group[int(match.group(2))] = part
+    requests = []
+    for group in groups.values():
+        parts = [group[n] for n in sorted(group)]
+        first = min(parts, key=lambda p: p['message_id'])
+        requests.append({'chat_id': chat_id, 'chat_username': chat_username, 'thread_id': first['thread_id'],
+                         'message_id': first['message_id'], 'from': first['from'], 'username': first['username'],
+                         'parts': [{k: p[k] for k in ('message_id', 'file_name', 'file_size')} for p in parts]})
+    return requests, notes
+
+
+class TelethonReader(TelethonSource):
+    """So le mensagens por id (o cliente do MTProto, ja entrado como bot)."""
+
+    def __init__(self, token, api_id, api_hash, session_file=''):
+        self.connect(token, api_id, api_hash, session_file)
+
+    def messages(self, chat, ids):
+        """[(id, mensagem ou None)] de cada id, em lotes de 100."""
+        found = []
+        for start in range(0, len(ids), 100):
+            batch = ids[start:start + 100]
+            try:
+                got = self.run(self.client.get_messages(chat, ids=batch))
+            except Exception as exc:    # RPCError do Telethon
+                print('get_messages(%s, %d..%d) failed: %s' % (chat, batch[0], batch[-1], exc))
+                got = [None] * len(batch)
+            found += list(zip(batch, got if isinstance(got, list) else [got]))
+        return found
+
+
+def recover(spec, env, reader, tg, tool, out=print, mtproto_parts=telethon_parts_source):
+    """Refaz o pedido dos pacotes em partes das mensagens de SPEC (numeros, faixas ou links) e os posta como o Worker
+    faria. reader.messages(chat, ids) le as mensagens. Devolve o que fez, um item por pacote."""
+    ids = parse_message_ids(spec)
+    wanted = env.get('TELEGRAM_CHAT_ID') or ''
+    chat_id = wanted if re.fullmatch(r'-?\d+', wanted) else ''
+    username = (wanted if wanted.startswith('@') else DEFAULT_CHAT).lstrip('@')
+    ref = '@' + username
+    out('reading %d messages of %s: %s' % (len(ids), ref, ', '.join(str(i) for i in ids[:30]) + (' ...' if len(ids) > 30 else '')))
+    found = reader.messages(ref, ids)
+    # Um cliente de cada vez com a mesma sessao: o que le as mensagens sai antes de o das partes entrar.
+    getattr(reader, 'close', lambda: None)()
+    requests, notes = split_requests(found, chat_id, username)
+    for note in notes:
+        out(note)
+    results = []
+    for request in requests:
+        out('package in parts: %s' % ', '.join('%s (message %d, %d bytes)' % (p['file_name'], p['message_id'], p['file_size'])
+                                               for p in request['parts']))
+        results.append(post_package(tg, request, env, tool, out=out, mtproto_parts=mtproto_parts))
+    return results
+
+
 def preview(path, folder=None):
     """O post de um zip do disco, sem rede: o texto e as imagens (em folder)."""
     tool = load_tool()
@@ -974,6 +1104,42 @@ def preview(path, folder=None):
     return info
 
 
+def recover_main(spec, no_post=False, dry_run=False):
+    """--messages-env: refaz e posta os pacotes em partes das mensagens dadas (precisa do MTProto: as partes sao grandes)."""
+    env = dict(os.environ)
+    try:
+        ids = parse_message_ids(spec)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    if not ids:
+        print('no messages given', file=sys.stderr)
+        return 1
+    if dry_run:
+        print('dry run: would read the messages %s' % ', '.join(str(i) for i in ids))
+        return 0
+    if not (env.get('TELEGRAM_BOT_TOKEN') and env.get('TELEGRAM_API_ID') and env.get('TELEGRAM_API_HASH')):
+        print('reading old messages needs TELEGRAM_BOT_TOKEN, TELEGRAM_API_ID and TELEGRAM_API_HASH', file=sys.stderr)
+        return 1
+    try:
+        reader = TelethonReader(env['TELEGRAM_BOT_TOKEN'], env['TELEGRAM_API_ID'], env['TELEGRAM_API_HASH'],
+                                env.get('TELEGRAM_SESSION_FILE') or '')
+    except ImportError:
+        print('telethon is not installed', file=sys.stderr)
+        return 1
+    try:
+        results = recover(spec, env, reader, (PrintOnly if no_post else Telegram)(env['TELEGRAM_BOT_TOKEN']), load_tool())
+    except PostError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    for result in results:
+        print(result)
+    if not results:
+        print('no package in parts found in those messages', file=sys.stderr)
+        return 1
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description='Posta um pacote de jogo custom no topico Files do grupo do Telegram.')
     parser.add_argument('--zip', help='so mostra o post de um zip do disco')
@@ -982,10 +1148,14 @@ def main():
     parser.add_argument('--payload-file', help='o mesmo, num arquivo')
     parser.add_argument('--dry-run', action='store_true', help='confere o pedido e nao fala com o Telegram')
     parser.add_argument('--no-post', action='store_true', help='le o pacote de verdade, mas so mostra o post no log (nada vai ao grupo)')
+    parser.add_argument('--messages-env', help='a variavel de ambiente com as mensagens das partes de um pacote que o Worker nao tratou '
+                                               '(numeros, faixas como 1708-1719 ou links): o robo as le e posta o card')
     args = parser.parse_args()
     if args.zip:
         preview(args.zip, args.out)
         return 0
+    if args.messages_env:
+        return recover_main(os.environ.get(args.messages_env, ''), args.no_post, args.dry_run)
     raw = os.environ.get(args.payload_env or '', '') if args.payload_env else Path(args.payload_file).read_text(encoding='utf-8') \
         if args.payload_file else ''
     if not raw.strip():

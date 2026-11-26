@@ -13,7 +13,9 @@
 # Um pacote em partes (JOGO.fliperos-customgame.zip.001, .002...: o plano gratuito do Telegram aceita arquivos de ate
 # 2 GB) vem num pedido so, com todas as partes em "parts": o Worker as junta no KV e chama este workflow uma vez
 # (tools/telegram-translate/README.md); o robo faz um card so e responde a cada parte.
-# Rodar a mao (Actions > Run workflow) com o JSON do pedido serve para repostar.
+# Rodar a mao (Actions > Run workflow) com o JSON do pedido serve para repostar. Partes que chegaram ao grupo sem o
+# Worker as tratar (nao ha pedido para repetir) se refazem pelas mensagens: o campo "messages" (os numeros, uma faixa
+# 1708-1719 ou os links das mensagens); com no_post o robo so mostra o que postaria.
 name: Telegram custom game
 
 on:
@@ -23,7 +25,11 @@ on:
     inputs:
       payload:
         description: 'JSON do pacote: chat_id, message_id, thread_id, file_id, file_name, file_size, from, username, chat_username'
-        required: true
+        required: false
+        type: string
+      messages:
+        description: 'Em vez do JSON: as mensagens das partes de um pacote que o Worker nao tratou (numeros, faixa como 1708-1719 ou links); o robo as le e posta o card'
+        required: false
         type: string
       dry_run:
         description: 'So conferir o pedido, sem falar com o Telegram'
@@ -72,6 +78,7 @@ jobs:
           TELEGRAM_SESSION_FILE: ${{ runner.temp }}/telegram-session/session
           # O pedido vai por variavel de ambiente, nunca dentro do script: o nome do arquivo e de quem mandou nao viram comando.
           PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || inputs.payload }}
+          MESSAGES: ${{ inputs.messages }}
           DRY_RUN: ${{ inputs.dry_run }}
           NO_POST: ${{ inputs.no_post }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -81,6 +88,7 @@ jobs:
           TELEGRAM_FILES_TOPIC: ${{ vars.TELEGRAM_FILES_TOPIC }}
         run: |
           args=(--payload-env PAYLOAD)
+          [[ -z $MESSAGES ]] || args=(--messages-env MESSAGES)
           [[ $DRY_RUN == true ]] && args+=(--dry-run)
           [[ $NO_POST == true ]] && args+=(--no-post)
           python3 tools/telegram-customgame.py "${args[@]}"
