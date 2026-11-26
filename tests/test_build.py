@@ -29655,6 +29655,17 @@ class JoypadMappingTests(unittest.TestCase):
         del devices[2]
         rc.resolve_wired(players, names, saved, autos, devices)
         self.assertEqual(players[2], {'up': (rc.UNPLUGGED + 2, 'h0.1')})
+        # No MAME o desligado fica de fora (um JOYCODE_93 derrubava o HBMAME):
+        # a tecla e a pistola do jogador; sem nenhuma, NONE.
+        import xml.etree.ElementTree as ET
+        off = rc.UNPLUGGED + 2
+        root = ET.fromstring(rc.mame_cfg({2: {'up': (off, 'h0.1'), 'b1': (off, 'b0'), 'b6': (off, 'b5')}}, names))
+        seqs = {p.get('type'): p.find('newseq').text for p in root.iter('port')}
+        self.assertEqual(seqs['P2_JOYSTICK_UP'], 'KEYCODE_R')
+        self.assertEqual(seqs['P2_BUTTON1'], 'KEYCODE_A OR GUNCODE_2_BUTTON1')
+        self.assertEqual(seqs['P2_BUTTON6'], 'NONE')
+        self.assertNotIn('JOYCODE_%d' % (off + 1), rc.mame_cfg({2: {'up': (off, 'h0.1')}}, names))
+        self.assertEqual(rc.mame_port(5, 'b1', (rc.UNPLUGGED + 5, 'b0')).count('NONE'), 1)
         # Dois jogadores na mesma porta: o de numero maior e um resto e sai.
         twice = {1: {'up': (1, 'h0.1')}, 3: {'up': (93, 'h0.1')}}
         same = {1: 'usb2/2-2/2-2.2/2-2.2:1.0', 3: 'usb2/2-2/2-2.2/2-2.2:1.0'}

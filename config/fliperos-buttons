@@ -608,13 +608,18 @@ def layout_games(layouts, games):
 
 
 def mame_port(player, control, bind):
-    seq = mame_code(*bind)
+    # O controle com fio desligado (indice UNPLUGGED + jogador) fica de fora:
+    # um JOYCODE_95 de um aparelho que nao existe derrubava o HBMAME ao abrir
+    # (falha de segmentacao em metade das vezes, nos jogos de CPS2). Ficam a
+    # tecla e a pistola do jogador; sem nenhuma, NONE.
+    parts = [] if bind[0] >= UNPLUGGED and not is_key(bind[1]) else [mame_code(*bind)]
     key = MAME_KEYS.get(player, {}).get(control)
     # A tecla padrao junto so com controle. Com o teclado ela e a de outro
     # comando quando o Buttons layout troca os botoes de lugar (o botao 1
     # do jogo no X: o Ctrl esquerdo apertaria dois).
     if key and not is_key(bind[1]):
-        seq += ' OR KEYCODE_%s' % key
+        parts.append('KEYCODE_%s' % key)
+    seq = ' OR '.join(parts)
     # O gatilho e o botao de recarregar da pistola do jogador (lightgun do
     # MAME), como no padrao do MAME (inpttype.ipp): sem eles o gatilho so
     # funcionava quando a GunCon caia na lista como o controle daquele jogador
@@ -623,9 +628,10 @@ def mame_port(player, control, bind):
     # meio), e e o direito que o driver da GunCon aperta no A, no C e no tiro
     # fora da tela, a recarga dos jogos que a tem no botao 2 (Zombie Raid).
     if control == 'b1' and player in MAME_KEYS:
-        seq += ' OR GUNCODE_%d_BUTTON1' % player
+        seq = ' OR '.join(filter(None, (seq, 'GUNCODE_%d_BUTTON1' % player)))
     elif control == 'b2' and player in MAME_KEYS:
-        seq += ' OR GUNCODE_%d_BUTTON2 OR GUNCODE_%d_BUTTON3' % (player, player)
+        seq = ' OR '.join(filter(None, (seq, 'GUNCODE_%d_BUTTON2 OR GUNCODE_%d_BUTTON3' % (player, player))))
+    seq = seq or 'NONE'
     return ('            <port type="%s">\n                <newseq type="standard">%s</newseq>\n'
             '            </port>\n' % (MAME_PORTS[control] % player, seq))
 
@@ -654,7 +660,8 @@ def mame_cfg(players, names, layouts=None, games=None):
         if entry:
             systems.append('    <system name="%s">\n        <input>\n%s        </input>\n    </system>\n'
                            % (escape(name), ''.join(entry)))
-    devices = ''.join('<!-- JOYCODE_%d: %s -->\n' % (i + 1, escape(n)) for i, n in sorted(names.items()))
+    devices = ''.join('<!-- JOYCODE_%d: %s -->\n' % (i + 1, escape(n)) for i, n in sorted(names.items())
+                      if i < UNPLUGGED)
     return ('<?xml version="1.0"?>\n<!-- Gerado pelo Setup > Joysticks > Button mapping (fliperos-buttons). -->\n'
             + devices + '<mameconfig version="10">\n    <system name="default">\n        <input>\n'
             + ''.join(ports) + '        </input>\n    </system>\n' + ''.join(systems) + '</mameconfig>\n')
