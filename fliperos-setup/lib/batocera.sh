@@ -18,7 +18,7 @@
 # (namco2x6, fightcade, custom-packages...), criadas ao lado dos consoles. Nada
 # e escrito dentro das pastas de console.
 #
-#   fliperos-setup --batocera detect|scan|list|cores|set|unset|use|unuse|auto|extras
+#   fliperos-setup --batocera detect|scan|list|cores|set|unset|use|unuse|repair|auto|extras
 
 BATOCERA_TABLE=${BATOCERA_TABLE:-/usr/local/share/fliperos/batocera-systems.list}
 BATOCERA_LIST=${BATOCERA_LIST:-${FOLDERS_HOME:-/home/$FLIPEROS_USER}/.config/fliperos/batocera.list}
@@ -77,28 +77,89 @@ batocera_names() {
   printf '%s\n' "${!BATOCERA_LABEL[@]}" | LC_ALL=C sort
 }
 
+# batocera_score PASTA imprime quanto jogo tem a roms/ da PASTA: as entradas de
+# dentro de cada pasta de console da tabela (jogos, ou pastas de jogo), sem o
+# que o Batocera poe ao lado (gamelist.xml, _info.txt, images/, videos/...). As
+# pastas so do FliperOS (hypseus, fightcade, namco2x6...) nao estao na tabela e
+# nao contam: o batocera_use as enche de subpastas. Serve para escolher entre
+# duas roms/ do mesmo disco.
+batocera_score() {
+  local sub
+  local -a subs=()
+  for sub in "$1/roms"/*/; do
+    [[ -d $sub ]] || continue
+    sub=${sub%/}
+    batocera_known "${sub##*/}" && subs+=("$sub")
+  done
+  ((${#subs[@]})) || { echo 0; return 0; }
+  { find "${subs[@]}" -mindepth 1 -maxdepth 1 \
+    ! -name 'gamelist*.xml' ! -name _info.txt ! -name images ! -name videos ! -name manuals \
+    ! -name media ! -name 'downloaded_*' ! -name '.*' -printf x 2> /dev/null || true; } | wc -c | tr -d ' '
+}
+
+# batocera_roms_folders imprime as pastas de roms/ que o fliperos-roms cria
+# (config/fliperos-roms), uma por linha; sem o script, nada.
+batocera_roms_folders() {
+  [[ -f ${FOLDERS_SCRIPT:-} ]] || return 0
+  sed -n 's/^folder "\$roms\/\([A-Za-z0-9_-]*\)[/"].*/\1/p' "$FOLDERS_SCRIPT" | awk '!seen[$0]++'
+}
+
 # batocera_detect MONTAGEM imprime a pasta raiz do Batocera filesystem do disco
 # (a que tem a roms/ dentro): MONTAGEM/batocera, MONTAGEM/userdata ou a propria
 # MONTAGEM, com pelo menos BATOCERA_MIN pastas de console da tabela em roms/. A
 # arvore do FliperOS (MONTAGEM/fliperos, ou uma roms/ com retroarch/) nao e
-# Batocera: ela tem mame, naomi e atomiswave tambem. Status 1: nao ha.
+# Batocera: ela tem mame, naomi e atomiswave tambem. Uma roms/ com retroarch/
+# ainda e Batocera quando tem BATOCERA_MIN consoles que o fliperos-roms nao cria
+# (snes, megadrive, psx...): foi a pessoa que apontou ~/roms para ela, e o
+# fliperos-roms escreveu nela as pastas dele. Com duas ou mais pastas, vale a que
+# tem mais jogos (batocera_score; empatadas, a primeira da lista): num disco de
+# Batocera de verdade a raiz e o /userdata dele, e uma pasta batocera/ ao lado (a
+# copia do esqueleto, com um jogo de exemplo por console) ganhava so por vir
+# primeiro (caso de 2026-11-26). Status 1: nao ha.
 batocera_detect() {
-  local mount=$1 dir sub n
+  local mount=$1 dir sub name n only best score best_score fixed=" retroarch "
+  local -a found=()
   [[ -d $mount ]] || return 1
+  fixed+=$(batocera_roms_folders | tr '\n' ' ')
   for dir in "$mount/batocera" "$mount/userdata" "$mount"; do
-    [[ -d $dir/roms && $dir != */"${STORAGE_NAME:-fliperos}" && ! -e $dir/roms/retroarch ]] || continue
+    [[ -d $dir/roms && $dir != */"${STORAGE_NAME:-fliperos}" ]] || continue
     n=0
+    only=0
     for sub in "$dir/roms"/*/; do
       [[ -d $sub ]] || continue
       sub=${sub%/}
-      batocera_known "${sub##*/}" && n=$((n + 1))
+      name=${sub##*/}
+      if batocera_known "$name"; then
+        n=$((n + 1))
+        [[ $fixed == *" $name "* ]] || only=$((only + 1))
+      fi
     done
-    if ((n >= BATOCERA_MIN)); then
-      printf '%s\n' "$dir"
-      return 0
+    # Com o retroarch/ a roms/ so e Batocera se o fliperos-roms nao explica as pastas
+    # (e sem o script dele nao ha como saber: vale a regra de antes).
+    if [[ -e $dir/roms/retroarch ]] && { [[ ! -f ${FOLDERS_SCRIPT:-} ]] || ((only < BATOCERA_MIN)); }; then
+      continue
     fi
+    ((n >= BATOCERA_MIN)) && found+=("$dir")
   done
-  return 1
+  ((${#found[@]})) || return 1
+  best=${found[0]}
+  if ((${#found[@]} > 1)); then
+    best_score=$(batocera_score "$best")
+    for dir in "${found[@]:1}"; do
+      score=$(batocera_score "$dir")
+      if ((score > best_score)); then
+        best=$dir
+        best_score=$score
+      fi
+    done
+  fi
+  printf '%s\n' "$best"
+}
+
+# batocera_in_roms MONTAGEM PASTA: a PASTA e de dentro da roms/ de alguma das
+# pastas que o batocera_detect olha no disco?
+batocera_in_roms() {
+  [[ $2 == "$1/batocera/roms/"* || $2 == "$1/userdata/roms/"* || $2 == "$1/roms/"* ]]
 }
 
 # batocera_count PASTA EXTENSOES: os arquivos da pasta (so o primeiro nivel: o
@@ -408,7 +469,7 @@ batocera_extras() {
   [[ -f $FOLDERS_SCRIPT ]] || return 0
   while IFS= read -r name; do
     [[ -n $name && " $BATOCERA_LOCAL " != *" $name "* && $mapped != *" $name "* ]] && printf '%s\n' "$name"
-  done < <(sed -n 's/^folder "\$roms\/\([A-Za-z0-9_-]*\)[/"].*/\1/p' "$FOLDERS_SCRIPT" | awk '!seen[$0]++')
+  done < <(batocera_roms_folders)
   return 0
 }
 
@@ -442,9 +503,43 @@ batocera_auto() {
   printf '%d\n' "$n"
 }
 
+# batocera_rebase MONTAGEM RAIZ: os consoles da lista que estao na roms/ de
+# outra pasta do Batocera do mesmo disco (a que a deteccao levava antes de
+# comparar os jogos) passam para a roms/ da RAIZ, com a escolha de core da
+# pessoa; o que a RAIZ nao tem sai da lista. Imprime quantos eram de outra pasta.
+batocera_rebase() {
+  local mount=$1 root=$2 system folder choice lines="" n=0
+  while IFS=$'\t' read -r system folder choice; do
+    if batocera_in_roms "$mount" "$folder" && [[ $folder != "$root/roms/"* ]]; then
+      n=$((n + 1))
+      [[ -d $root/roms/$system ]] || continue
+      folder=$root/roms/$system
+    fi
+    lines+=$system$'\t'$folder$'\t'$choice$'\n'
+  done < <(batocera_list_read)
+  if ((n)); then
+    batocera_list_write "$lines"
+  fi
+  printf '%d\n' "$n"
+}
+
+# batocera_sibling MONTAGEM ALVO: o alvo de um atalho e uma pasta irma (bios,
+# saves, nvram, media, snap) de alguma pasta do Batocera do disco? E o que o
+# batocera_use faz, de uma pasta que a deteccao ja escolheu antes de outra: o
+# atalho e dele, nao uma escolha da pessoa para outro lugar.
+batocera_sibling() {
+  local parent=${2%/*} name=${2##*/} role
+  [[ $parent == "$1/batocera" || $parent == "$1/userdata" || $parent == "$1" ]] || return 1
+  while read -r role _; do
+    [[ $name == "$role" ]] && return 0
+  done < <(batocera_roles)
+  return 1
+}
+
 # batocera_use MONTAGEM: liga o Batocera filesystem do disco (tudo o que ele
-# tem). Imprime "systems=N", "linked=PASTAS", "extras=PASTAS", "skipped=PASTA
-# motivo" e "readonly=1". Status 1: o disco nao tem Batocera filesystem.
+# tem). Imprime "moved=N" (consoles que estavam em outra pasta do disco),
+# "systems=N", "linked=PASTAS", "extras=PASTAS", "skipped=PASTA motivo" e
+# "readonly=1". Status 1: o disco nao tem Batocera filesystem.
 batocera_use() {
   local mount=$1 root n role name rel src target linked="" extras="" writable=1 done_rels=" "
   BATOCERA_ERROR=""
@@ -452,6 +547,8 @@ batocera_use() {
     BATOCERA_ERROR="No Batocera folders on ${mount##*/}."
     return 1
   fi
+  n=$(batocera_rebase "$mount" "$root")
+  ((n == 0)) || printf 'moved=%d\n' "$n"
   batocera_auto "$mount" > /dev/null || return 1
   n=0
   while IFS=$'\t' read -r name rel src; do
@@ -470,7 +567,8 @@ batocera_use() {
       case $done_rels in *" ${rel%%/*} "*) [[ $rel == */* ]] && continue ;; esac
       if [[ -L $(folders_path "$rel") ]]; then
         target=$(folders_target "$rel" 2> /dev/null)
-        if [[ -n $target && $target != "$src" && $target != "$mount/${STORAGE_NAME:-fliperos}"/* ]]; then
+        if [[ -n $target && $target != "$src" && $target != "$mount/${STORAGE_NAME:-fliperos}"/* ]] &&
+          ! batocera_sibling "$mount" "$target"; then
           printf 'skipped=%s already points to %s\n' "$rel" "${target/#$FOLDERS_HOME/\~}"
           continue
         fi
@@ -549,6 +647,21 @@ batocera_in_use() {
   return 1
 }
 
+# batocera_stale MONTAGEM: o disco esta ligado (batocera.list) numa pasta do
+# Batocera que nao e a que o batocera_detect escolhe hoje? Status 0: ha console
+# na roms/ de outra pasta. Foi o que a deteccao de antes deixou num disco com o
+# esqueleto em batocera/ e o Batocera de verdade na raiz (2026-11-26): os
+# consoles, a bios e os saves ficaram no esqueleto. batocera_use liga de novo na
+# pasta certa (--batocera repair, e o --storage auto de cada boot).
+batocera_stale() {
+  local mount=$1 root folder
+  root=$(batocera_detect "$mount") || return 1
+  while IFS=$'\t' read -r _ folder _; do
+    batocera_in_roms "$mount" "$folder" && [[ $folder != "$root/roms/"* ]] && return 0
+  done < <(batocera_list_read)
+  return 1
+}
+
 # batocera_refresh: os frontends leem de novo os sistemas (a lista que o frontend
 # proprio guarda em cache vai junto, pelo --systems dele).
 batocera_refresh() {
@@ -557,13 +670,13 @@ batocera_refresh() {
   return 0
 }
 
-# batocera_cli detect|scan|unknown|list|cores|set|unset|auto|use|unuse|extras:
+# batocera_cli detect|scan|unknown|list|cores|set|unset|auto|use|unuse|repair|extras:
 # o fliperos-setup --batocera. Os discos so os de STORAGE_MOUNTS. Status 2:
 # pedido errado; 1: nao deu (o motivo na saida).
 batocera_cli() {
   local cmd=${1:-} mount
   case $cmd in
-    detect | scan | unknown | auto | use | unuse)
+    detect | scan | unknown | auto | use | unuse | repair)
       mount=${2:-}
       [[ $mount == "${STORAGE_MOUNTS:-/media/$FLIPEROS_USER}"/* && $mount != *..* ]] && mountpoint -q -- "$mount" 2> /dev/null || return 2
       ;;
@@ -606,6 +719,17 @@ batocera_cli() {
     unuse)
       if ! batocera_unuse "$mount"; then
         echo "${BATOCERA_ERROR:-Could not stop using the disk (details in the log).}"
+        return 1
+      fi
+      ;;
+    repair)
+      # So um disco ligado numa pasta que nao e a de hoje: liga de novo na certa.
+      if ! batocera_stale "$mount"; then
+        echo "Nothing to repair."
+        return 0
+      fi
+      if ! batocera_use "$mount"; then
+        echo "${BATOCERA_ERROR:-Could not use the disk (details in the log).}"
         return 1
       fi
       ;;

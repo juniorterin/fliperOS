@@ -15115,6 +15115,134 @@ class BatoceraTests(Base):
         self.assertFalse((self.root / "roms" / "namco2x6").exists())
         self.assertFalse((other / "roms" / "namco2x6").is_symlink())    # (o fliperos-roms cria a dele, comum, la)
 
+    def real_library(self, games=6, consoles=("snes", "psx", "gba"), populated=False):
+        """O Batocera de verdade na raiz do disco (o /userdata dele): a roms/ com jogos, a bios e os saves. Com
+        populated, o que o fliperos-roms escreve na pasta quando a pessoa aponta ~/roms para ela."""
+        for n in consoles + (("retroarch", "mame", "custom", "custom-packages") if populated else ()):
+            (self.disk / "roms" / n).mkdir(parents=True, exist_ok=True)
+        for i in range(games):
+            (self.disk / "roms" / consoles[0] / ("game%d.zip" % i)).write_text("x")
+        (self.disk / "roms" / consoles[0] / "gamelist.xml").write_text("<gameList/>")
+        (self.disk / "bios").mkdir(exist_ok=True)
+        (self.disk / "saves").mkdir(exist_ok=True)
+
+    def test_detect_takes_the_roms_folder_with_the_most_games_not_the_first_one(self):
+        # O caso de 2026-11-26: o Batocera de verdade na raiz do disco e, ao lado, uma pasta batocera/ so com o
+        # esqueleto (um jogo de exemplo por console). A que vinha primeiro ganhava, e os jogos ficavam sem uso.
+        self.assertEqual(self.env.out('batocera_detect "%s"' % self.disk, self.vars).strip(), str(self.root))
+        self.real_library()
+        self.assertEqual(self.env.out('batocera_detect "%s"' % self.disk, self.vars).strip(), str(self.disk))
+        # A que tem mais jogos ganha, de qualquer lado: com a batocera/ cheia, e ela.
+        for i in range(20):
+            (self.root / "roms" / "psx" / ("big%d.cue" % i)).write_text("x")
+        self.assertEqual(self.env.out('batocera_detect "%s"' % self.disk, self.vars).strip(), str(self.root))
+        # O que o Batocera poe ao lado dos jogos (gamelist.xml, images/, videos/, _info.txt) nao e jogo.
+        tie = self.media / "TIE"
+        for base in (tie / "batocera" / "roms", tie / "roms"):
+            for n in ("snes", "psx", "gba"):
+                (base / n).mkdir(parents=True)
+        for n in ("snes", "psx", "gba"):
+            for name in ("gamelist.xml", "_info.txt"):
+                (tie / "roms" / n / name).write_text("x")
+            (tie / "roms" / n / "images").mkdir()
+            (tie / "roms" / n / "videos").mkdir()
+        self.assertEqual(self.env.out('batocera_detect "%s"' % tie, self.vars).strip(), str(tie / "batocera"))
+        # Com os mesmos jogos, vale a ordem de sempre: batocera/, userdata/, a raiz.
+        (tie / "roms" / "snes" / "a.zip").write_text("x")
+        (tie / "batocera" / "roms" / "snes" / "a.zip").write_text("x")
+        self.assertEqual(self.env.out('batocera_detect "%s"' % tie, self.vars).strip(), str(tie / "batocera"))
+        (tie / "roms" / "snes" / "b.zip").write_text("x")
+        self.assertEqual(self.env.out('batocera_detect "%s"' % tie, self.vars).strip(), str(tie))
+
+    def test_a_batocera_roms_folder_that_fliperos_wrote_into_is_still_batocera(self):
+        # O caso de 2026-11-26: a pessoa apontou ~/roms para a roms/ do Batocera e o fliperos-roms criou nela o
+        # retroarch/ e as pastas dele. A regra "com retroarch/ e a arvore do FliperOS" a recusava, e sobrava o esqueleto.
+        self.real_library(populated=True)
+        self.assertEqual(self.env.out('batocera_detect "%s"' % self.disk, self.vars).strip(), str(self.disk))
+        # A arvore do FliperOS sozinha (so o que o fliperos-roms cria, mesmo com mame, naomi...) continua nao sendo.
+        tree = self.media / "TREE"
+        for n in ("retroarch", "mame", "naomi", "naomi2", "atomiswave", "ps2", "custom", "custom-packages"):
+            (tree / "roms" / n).mkdir(parents=True)
+        self.assertEqual(self.env.run('batocera_detect "%s"' % tree, self.vars).returncode, 1)
+        # Dois consoles que so o Batocera tem nao bastam para virar Batocera.
+        for n in ("snes", "psx"):
+            (tree / "roms" / n).mkdir()
+        self.assertEqual(self.env.run('batocera_detect "%s"' % tree, self.vars).returncode, 1)
+        (tree / "roms" / "gba").mkdir()
+        self.assertEqual(self.env.out('batocera_detect "%s"' % tree, self.vars).strip(), str(tree))
+        # Sem o fliperos-roms para dizer o que e dele, vale a regra de antes: com retroarch/ nao e Batocera.
+        nothing = dict(self.vars, FOLDERS_SCRIPT=str(self.env.dir / "nothing"))
+        self.assertEqual(self.env.out('batocera_detect "%s"' % self.disk, nothing).strip(), str(self.root))
+        self.assertEqual(self.env.run('batocera_detect "%s"' % tree, nothing).returncode, 1)
+
+    def test_a_shortcut_into_another_batocera_folder_of_the_same_disk_is_the_disks_own(self):
+        disk = str(self.disk)
+        for target, own in ((disk + "/batocera/bios", 0), (disk + "/saves", 0), (disk + "/userdata/media", 0),
+                            (disk + "/my-bios", 1), (disk + "/batocera/roms", 1), ("/elsewhere/bios", 1)):
+            r = self.env.run('batocera_sibling "%s" "%s"' % (disk, target), self.vars)
+            self.assertEqual(r.returncode, own, target)
+
+    def test_a_disk_used_on_the_wrong_folder_is_moved_to_the_right_one(self):
+        # Ligado quando so a batocera/ valia (ou antes de a deteccao comparar os jogos): consoles, bios e saves nela.
+        self.ok('batocera_cli use "%s"' % self.disk)
+        self.ok('batocera_cli set snes "%s" retroarch/bsnes' % (self.root / "roms" / "snes"))
+        self.assertEqual(self.env.run('batocera_stale "%s"' % self.disk, self.vars).returncode, 1)
+        self.assertEqual(self.ok('batocera_cli repair "%s"' % self.disk).strip(), "Nothing to repair.")
+        self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
+        # O Batocera de verdade aparece na raiz, com mais jogos (e as pastas que o fliperos-roms escreveu nela):
+        # o disco esta ligado na pasta errada.
+        self.real_library(populated=True)
+        self.assertEqual(self.env.run('batocera_stale "%s"' % self.disk, self.vars).returncode, 0)
+        out = self.ok('batocera_cli repair "%s"' % self.disk)
+        self.assertIn("moved=5", out)
+        self.assertIn("systems=4", out)
+        self.assertIn("linked=bios,save", out)
+        # Os consoles de la; a escolha de core da pessoa fica; o que a raiz nao tem sai; o que so ela tem entra.
+        listed = self.listed()
+        self.assertEqual(sorted(listed), ["gba", "mame", "psx", "snes"])
+        self.assertEqual(listed["snes"], [str(self.disk / "roms" / "snes"), "retroarch/bsnes"])
+        self.assertEqual(listed["psx"][0], str(self.disk / "roms" / "psx"))
+        # A bios, os saves e as pastas so do FliperOS passam para o Batocera de verdade.
+        self.assertEqual(os.readlink(self.home / "bios"), str(self.disk / "bios"))
+        self.assertEqual(os.readlink(self.home / "save"), str(self.disk / "saves"))
+        self.assertEqual(os.readlink(self.home / "roms" / "hypseus"), str(self.disk / "roms" / "hypseus"))
+        # Nada sai do disco: a pasta antiga fica como estava.
+        self.assertTrue((self.root / "roms" / "snes" / "mario.zip").exists())
+        self.assertTrue((self.root / "bios").is_dir())
+        # De novo: nada a fazer.
+        self.assertEqual(self.env.run('batocera_stale "%s"' % self.disk, self.vars).returncode, 1)
+        self.assertEqual(self.ok('batocera_cli repair "%s"' % self.disk).strip(), "Nothing to repair.")
+        # Os frontends leem o disco certo.
+        found = [l for l in self.env.out("scraper_detect", self.vars).splitlines() if l.startswith("batocera/")]
+        self.assertEqual(found, ["batocera/snes|%s|snes|6" % (self.disk / "roms" / "snes")])
+
+    def test_update_108_repairs_every_mounted_disk_but_not_the_uuid_shortcuts(self):
+        calls = self.env.dir / "calls"
+        fake = self.env.dir / "fake-setup"
+        fake.write_text('#!/bin/sh\necho "$*" >> "%s"\necho "Nothing to repair."\n' % calls)
+        fake.chmod(0o755)
+        (self.media / "UUID-1234").symlink_to("BATOCERA")
+        script = ROOT / "updates" / "0108.sh"
+        env = {"FLIPEROS_SETUP": str(fake), "FLIPEROS_MEDIA_ROOT": str(self.media)}
+        result = self.env.run("bash %s" % script, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls.read_text().splitlines(), ["--batocera repair %s" % self.disk])
+        self.assertIn("BATOCERA: Nothing to repair.", result.stdout)
+        # Sem o fliperos-setup (uma maquina sem a instalacao) nao ha o que fazer, e nao e erro.
+        result = self.env.run("bash %s" % script, dict(env, FLIPEROS_SETUP=str(self.env.dir / "missing")))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_shortcut_the_person_made_to_another_place_survives_the_repair(self):
+        other = self.env.dir / "elsewhere"
+        (other / "bios").mkdir(parents=True)
+        self.env.out('folders_link bios "%s"' % (other / "bios"), self.vars)
+        self.ok('batocera_cli use "%s"' % self.disk)
+        self.real_library()
+        out = self.ok('batocera_cli repair "%s"' % self.disk)
+        self.assertIn("skipped=bios already points to", out)
+        self.assertEqual(os.readlink(self.home / "bios"), str(other / "bios"))
+        self.assertEqual(os.readlink(self.home / "save"), str(self.disk / "saves"))
+
     def test_shown_says_where_the_folder_really_is(self):
         self.assertEqual(self.env.out("folders_shown roms/custom-packages", self.vars).strip(), "~/roms/custom-packages")
         self.ok('batocera_cli use "%s"' % self.disk)
@@ -15179,6 +15307,23 @@ class BatoceraTests(Base):
         # Ja ligado, nao pergunta.
         self.ok('batocera_cli use "%s"' % self.disk)
         self.assertEqual(self.cli('storage_cli auto "%s"' % self.disk).returncode, 1)
+
+    def test_the_automount_moves_a_disk_used_on_the_wrong_folder_to_the_right_one(self):
+        # O disco ligado na batocera/ de antes da deteccao comparar os jogos: no boot (ou ao ligar o disco) o
+        # --storage auto o liga de novo no Batocera de verdade, sem perguntar nada.
+        self.fake_disk()
+        self.ok('batocera_cli use "%s"' % self.disk)
+        self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
+        r = self.cli('storage_cli auto "%s"' % self.disk)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)          # ja ligado e na pasta certa: nada muda
+        self.assertEqual(os.readlink(self.home / "bios"), str(self.root / "bios"))
+        self.real_library()
+        r = self.cli('storage_cli auto "%s"' % self.disk)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)          # ja ligado: nada a perguntar
+        self.assertEqual(os.readlink(self.home / "bios"), str(self.disk / "bios"))
+        self.assertEqual(os.readlink(self.home / "save"), str(self.disk / "saves"))
+        self.assertEqual(sorted(self.listed()), ["gba", "psx", "snes"])
+        self.assertEqual(self.queue(), [])
 
     def test_a_plain_disk_still_gets_the_fliperos_structure_and_the_old_question(self):
         self.fake_disk()

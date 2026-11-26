@@ -302,10 +302,15 @@ storage_offer_batocera() {
 
 # storage_auto MONTAGEM: o que o fliperos-automount faz com um disco montado: o
 # que tem um Batocera filesystem nao ganha nada (so a pergunta do frontend);
-# os outros ganham a estrutura do FliperOS e a pergunta de uso.
+# os outros ganham a estrutura do FliperOS e a pergunta de uso. Um Batocera
+# filesystem ligado numa pasta que a deteccao nao escolhe mais (batocera_stale)
+# e ligado de novo na certa.
 storage_auto() {
   local mount=$1
   if batocera_detect "$mount" > /dev/null; then
+    if batocera_stale "$mount"; then
+      batocera_use "$mount" > /dev/null 2>&1 || true
+    fi
     storage_offer_batocera "$mount"
     return
   fi

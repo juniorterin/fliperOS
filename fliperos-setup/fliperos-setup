@@ -42,7 +42,7 @@
 #   --bootgame, --geometry, --wifi status|scan|connect, --password (na
 #   entrada), --whatsnew, --customgames ..., --setup-items, --quirks ...,
 #   --folders ..., --storage list|prepare|use|unuse|offer|answer|auto|format (o disco secundario),
-#   --batocera detect|scan|list|cores|set|unset|auto|use|unuse (o Batocera filesystem, lib/batocera.sh),
+#   --batocera detect|scan|list|cores|set|unset|auto|use|unuse|repair (o Batocera filesystem, lib/batocera.sh),
 #   --frontends ..., --bluetooth ..., --system-update,
 #   --attract-romlist (o painel web)
 #
