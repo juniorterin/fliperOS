@@ -107,3 +107,4 @@
 104	8195001b12efd385ae698458495fcc2711d9b0ac	bf53745ee5526214995309e2a49eed44a469c0b20b4b456bf6c2131513b29a90	no	Sega Chihiro with the xemu emulator, the Setup at 240p on the desktop, and Dolphin 2609b and RAHasher 1.8.5
 105	613758c0c6fdb45d434b30eff0cd115752e01821	39cbc899e758f5928218066dd34350ba6dd795e3874fbb39e4a483fb6f58e7e0	no	Packages over 2 GB go in parts: links in the web panel, and a double click on any part, or dropping the parts in the panel, installs the game
 106	26ada384f3524666ffdb9d51eb4498631f4900d0	751cb6eccba65b4dc712013db531f5932808ef4a0f13de423f484d14e8a2dc52	no	Packages in parts: the size of each part is now a number field in MB in the web panel, 2000 by default and 4000 for Telegram Premium
+107	9e890b9aef062b6ac07461fb4f3be9e5a7a88f91	7978f44085d513efd9aac2a95e99b21f79517f09e20f392617d56d3d6c841c49	no	Cheats: a folder in ~/cheats for each emulator and RetroArch core, each one reads its own when the game starts
