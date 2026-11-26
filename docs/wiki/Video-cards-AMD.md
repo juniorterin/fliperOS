@@ -2,7 +2,7 @@ The AMD and ATI Radeon cards: the best fit for a 15 kHz CRT, with native resolut
 
 <img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/soyo-r7-240.webp" width="360" alt="A Radeon R7 240 card">
 
-The cards CRT_EmuDriver covers on Windows, with VGA or DVI-I: the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0. The 15 kHz kernel patches cover `radeon` and `amdgpu` (DCE and DCN 1 to 3): native boot at `640x480iS` and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.
+The cards CRT_EmuDriver 2.0 covers on Windows are [listed below](#cards-in-crt_emudriver-20), from the HD 2000 series to the RX 500 and Vega. The ones with VGA or DVI-I, from the HD 2000 series to the R7/R9 200 and 300 with GCN 1.0, are the ones FliperOS counts on for native 15 kHz. The 15 kHz kernel patches cover `radeon` and `amdgpu` (DCE and DCN 1 to 3): native boot at `640x480iS` and every game at its own resolution, in GroovyMAME, RetroArch and the frontends.
 
 Good, cheap choices: **HD 5450, HD 6450, HD 7750, R7 240, R7 250**.
 
@@ -13,6 +13,38 @@ The emulators follow the driver the card runs on, checked at every session start
 RetroArch is decided at every launch, with nothing saved: on `amdgpu` it opens in Vulkan, on any other driver or card in `glcore` (`fliperos-kms-run` looks at the driver of the card whose connector is plugged in). Its Vulkan output switches the CRT's mode for each game like `glcore` does, through a FliperOS patch to its `khr_display` context; a RetroArch built without that patch stays on `glcore` on amdgpu too.
 
 Cards with no analog output (RX 400 and newer) and the Ryzen APUs need an **active converter**: see [Converters](Converters.md).
+
+## Cards in CRT_EmuDriver 2.0
+
+FliperOS's hardware scope is the list of [CRT_EmuDriver 2.0](http://geedorah.com/eiusdemmodi/forum/viewtopic.php?id=295), the Windows driver for 15 kHz CRTs by Calamity, the author of GroovyMAME (beta 15, January 2019; the forum answers only on `http`). Its download thread splits the cards into four packages, by the AMD driver each one is based on. This is what that Windows driver supports: the `radeon` and `amdgpu` patches of FliperOS are other code, and what each card gives on a CRT here is in the tables further down and on [Video cards](Video-cards.md). Being on this list doesn't mean the card has an analog output; check its connectors.
+
+For a card that several packages cover, the thread recommends the most recent one.
+
+**Catalyst 12.6, legacy cards**
+
+- Desktop: Radeon HD 2000, HD 3000 and HD 4000 series.
+
+**Crimson 16.2.1, cards that are not GCN** (TeraScale)
+
+- Desktop: Radeon HD 5000 and HD 6000 series, HD 7000 to HD 7600, HD 8000 to HD 8400; R5 235X, R5 235, R5 230 and R5 220.
+- All-in-One: Radeon HD 6350A, HD 6600A, HD 7450A and HD 7600A.
+- APU: Radeon HD 6000D, HD 7000D, HD 8000D, HD 6000G, HD 7000G and HD 8000G.
+- Mobility: Radeon HD 5000M and HD 6000M.
+
+**Crimson 16.2.1, GCN cards** (GCN is Graphics Core Next)
+
+- Desktop: Radeon HD 7700 to HD 7900 and HD 8500 to HD 8900; R7 200, R7 300, R9 200 and R9 300; R9 Nano and R9 Fury.
+- APU: A-Series with Radeon R4, R5, R6 or R7 graphics; Pro A-Series with R5 or R7; Athlon with R3; Sempron with R3; A-Series with R3, R4, R5, R6, R7 or R8; Pro A-Series with R5, R6 or R7; FX-Series with R7; E-Series with R2; Radeon HD 8180 to HD 8400.
+- Mobility: Radeon R9 M300, R7 M300, R9 M200, R7 M200 and R5 M200; HD 7700M to HD 7900M and HD 8500M to HD 8900M.
+
+**Adrenalin 18.5.1, GCN cards** (a package for Windows 7 and 8, another for Windows 10)
+
+- Desktop: Radeon RX Vega, RX 500 and RX 400 series; Radeon Pro Duo; R9 Fury, R9 Nano, R9 300 and R9 200; R7 300 and R7 200; R5 300 and R5 200; HD 8500 to HD 8900 and HD 7700 to HD 7900.
+- Ryzen: Ryzen 5 2400G and Ryzen 3 2200G.
+- APU: the same APUs as the Crimson GCN package above.
+- Mobility: Radeon R9 M300, R7 M300, R5 M300, R9 M200, R7 M200 and R5 M200; HD 8500M to HD 8900M and HD 7700M to HD 7900M.
+
+What the thread says about the newer cards: they have no analog output. 15 kHz comes out of their HDMI through an active HDMI to VGA adapter, but video modes with a low dotclock probably won't work there, and super resolutions are the recommended answer. The beta 14 driver removed the low pixel clock limit on HDMI, which is a change in the Windows driver, not in Linux's. See [Converters](Converters.md) and [Video cards](Video-cards.md) for the same limit on FliperOS.
 
 ## GCN 2 and 3 cards with DVI-I
 

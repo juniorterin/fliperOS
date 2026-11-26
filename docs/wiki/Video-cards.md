@@ -17,7 +17,7 @@ When the game can't fill the screen, an orange **VIDEO CARD WARNING** bar shows 
 
 | Page | What it covers |
 | --- | --- |
-| [AMD cards](Video-cards-AMD.md) | Which Radeons, the drivers and Vulkan, GCN 2 and 3 with DVI-I, APUs, the cards GroovyArcade reports |
+| [AMD cards](Video-cards-AMD.md) | Which Radeons (the whole [CRT_EmuDriver 2.0 list](Video-cards-AMD.md#cards-in-crt_emudriver-20)), the drivers and Vulkan, GCN 2 and 3 with DVI-I, APUs, the cards GroovyArcade reports |
 | [NVIDIA cards](Video-cards-NVIDIA.md) | nouveau and the low resolution test, NVIDIA's own driver, cards without analog output |
 | [Intel graphics](Video-cards-Intel.md) | Super resolution, the 240p mode, what was tested, the limits of the Intel HD |
 | [Converters](Converters.md) | DisplayPort or HDMI to VGA: which ones, what to expect, what the Setup does |
