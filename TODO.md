@@ -55,6 +55,17 @@ O link e o net play pelo frontend entraram na 0.19; depois, o net play ganhou to
 - **Mais jogos em link**, cada um depois de testado em pares: os outros do Model 2 (o papel de cada máquina fica no menu de teste de cada jogo), Gunbuster, Model 1 e System 32.
 - **Perguntas em aberto** do plano ([link-frontend-plan](docs/research/link-frontend-plan.md)): começar com menos máquinas que o máximo, duas festas do mesmo jogo, mandar as ROMs sem perguntar ao dono do outro gabinete, recusar sets de regiões diferentes.
 
+## Matchmaker online
+
+Pedido de 2026-11-27: duelos e parties pela internet num programa à parte do frontend (o FliperOS Matchmaker). A fase 0, as telas e as decisões, está em [matchmaker-plan](docs/research/matchmaker-plan.md). Falta construir, nesta ordem:
+- **Fase 1:** servidor no Coolify (antes, conferir se ele recebe UDP e tem IPv6), identidade `APELIDO#xxxx`, presença, e o Matchmaker só de leitura (as páginas por emulador e o lobby).
+- **Fase 2:** o túnel WireGuard por partida (direto, ou pelo relay só com CGNAT dos dois lados) e a party online com os emuladores de hoje; o envio da ROM só na conexão direta.
+- **Fase 3:** o duelo pelas cartas (os punhos, FT5), os avisos no OSD, o registro das partidas.
+- **Fase 4:** o FairPlay e as vitórias e derrotas à prova de fraude, sem modo disputa.
+- **Fase 5:** replays e espectadores (quem assiste precisa já ter a ROM).
+- **Fase 6:** o Flycast Dojo como pacote opcional.
+- **Fase 7:** rollback no GroovyMAME e no hbgroovymame.
+
 ## Wine e jogos custom: conferir no gabinete
 
 Feito em 2026-11-07 e testado só no Docker:
