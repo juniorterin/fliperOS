@@ -24936,6 +24936,58 @@ class RetroArchMameRemapTests(unittest.TestCase):
                            capture_output=True, timeout=120)
             self.assertIn('<!-- x', cfg.read_text())
 
+    def test_a_dangling_saves_link_does_not_stop_the_install(self):
+        # Num disco Batocera ext4 a pasta saves e do root: o fliperos-roms nao
+        # criava ~/save/retroarch, o link /opt/fliperos/saves/retroarch ficava
+        # quebrado e o install -d do MAME 2010 nele parava o update 109. O destino
+        # do link e criado; sem a pasta de cima (o disco fora), o passo fica para
+        # o fliperos-roms do login e a instalacao segue.
+        text = (ROOT / 'config/mame2010-default.cfg').read_text()
+
+        def run(root):
+            for d in ('home/fliperos', 'etc/fliperos/mame', 'etc/modprobe.d', 'etc/sudoers.d', 'etc/profile.d',
+                      'etc/systemd/system'):
+                (root / d).mkdir(parents=True)
+            (root / 'etc/passwd').write_text('fliperos:x:1000:1000::/home/fliperos:/bin/bash\n')
+            return subprocess.run(['bash', str(ROOT / 'fliperos-rootfs.sh'), str(root)],
+                                  capture_output=True, text=True, timeout=120)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            # 1. O gabinete do update 109: ~/save -> SHARE/saves (do disco), sem a
+            # pasta retroarch, e o link absoluto, que sai da raiz como no gabinete.
+            root = tmp / 'disk'
+            (tmp / 'share/saves').mkdir(parents=True)
+            (tmp / 'save').symlink_to(tmp / 'share/saves')
+            link = root / 'opt/fliperos/saves/retroarch'
+            link.parent.mkdir(parents=True)
+            link.symlink_to(tmp / 'save/retroarch')
+            r = run(root)
+            self.assertEqual(r.returncode, 0, r.stderr[-500:])
+            self.assertNotIn('cannot change owner', r.stderr)
+            self.assertTrue(link.is_symlink())
+            self.assertEqual((tmp / 'share/saves/retroarch/MAME 2010/mame2010/cfg/default.cfg').read_text(), text)
+            self.assertEqual((link / 'MAME 2010/mame2010/cfg/default.cfg').read_text(), text)
+            self.assertEqual((tmp / 'share/saves/retroarch').stat().st_uid, 1000)
+            # 2. O disco fora: o link aponta para uma pasta sem a de cima. Nada e
+            # criado no lugar do disco (o ponto de montagem vazio).
+            root = tmp / 'gone'
+            link = root / 'opt/fliperos/saves/retroarch'
+            link.parent.mkdir(parents=True)
+            link.symlink_to(tmp / 'media/SHARE/saves/retroarch')
+            r = run(root)
+            self.assertEqual(r.returncode, 0, r.stderr[-500:])
+            self.assertTrue(link.is_symlink())
+            self.assertFalse((tmp / 'media').exists())
+            # 3. O build limpo: as pastas de verdade, do fliperos, e o default.cfg.
+            root = tmp / 'clean'
+            r = run(root)
+            self.assertEqual(r.returncode, 0, r.stderr[-500:])
+            cfg = root / 'opt/fliperos/saves/retroarch/MAME 2010/mame2010/cfg/default.cfg'
+            self.assertEqual(cfg.read_text(), text)
+            self.assertFalse((root / 'opt/fliperos/saves/retroarch').is_symlink())
+            self.assertEqual(cfg.parent.stat().st_uid, 1000)
+
 
 class RetroArchCoreSwitchresTests(unittest.TestCase):
     """config/retroarch-switchres: o switchres.ini que o CRT SwitchRes do
