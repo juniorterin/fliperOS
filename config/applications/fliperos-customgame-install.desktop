@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Install custom game
-Comment=Installs a FliperOS custom game package (GAME.fliperos-customgame.zip, or any part of a split one: .zip.001, .002...)
+Name=Install game package
+Comment=Installs a FliperOS game package: a PC game (GAME.fliperos-customgame.zip, or any part of a split one: .zip.001, .002...) or ROMs (TITLE.fliperos-EMULATOR.zip)
 # O duplo clique num pacote de jogo custom (o tipo application/x-fliperos-customgame,
 # config/fliperos-customgame.xml) instala o jogo: a mesma tela do Setup > Games >
 # Custom games > Install games (o grupo e perguntado), no tubo, em 240p e tela
@@ -16,4 +16,4 @@ Exec=/opt/fliperos/bin/fliperos-launch setup --install-package %F
 Terminal=false
 Icon=applications-games
 NoDisplay=true
-MimeType=application/x-fliperos-customgame;application/x-fliperos-customgame-part;
+MimeType=application/x-fliperos-customgame;application/x-fliperos-customgame-part;application/x-fliperos-rompack;

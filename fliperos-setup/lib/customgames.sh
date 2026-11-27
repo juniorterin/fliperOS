@@ -2041,6 +2041,9 @@ customgames_cli() {
       ;;
     group-icon) customgames_group_icon_set "${1:-}" "${2:-}" ;;
     group-logo) customgames_group_logo_set "${1:-}" "${2:-}" ;;
+    # Um grupo feito fora do Setup (o de um pacote de ROM, config/fliperos-rompack):
+    # os frontends e o menu do desktop o passam a ter.
+    refresh-frontends) customgames_refresh_frontends ;;
     group-rename)
       customgames_group_rename "${1:-}" "${2:-}"
       rc=$?

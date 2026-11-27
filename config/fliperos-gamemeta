@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""Os metadados de um jogo editados pela pessoa (o "+" de cada jogo no Create
+package > ROMs do painel): o titulo, o ano, o fabricante, a categoria, os
+jogadores, os botoes, o controle... os campos que os filtros do frontend e o
+do MAME usam, de qualquer sistema (arcade ou console).
+
+Ficam numa copia do FliperOS, ~/.config/fliperos/game-meta.tsv (linhas
+PASTA<TAB>ROM<TAB>CAMPO<TAB>VALOR; PASTA e a chave da pasta de jogos: mame,
+retroarch/snes9x...), e sao postos nas listas de jogos do FliperOS
+(~/.local/share/fliperos/lists/SISTEMA.txt, o formato das romlists do
+Attract-Mode, que o frontend, o painel e o Attract-Mode leem) cada vez que
+elas sao refeitas (fliperos-setup --romlists, frontends_lists) e na hora da
+edicao. Uma lista que nao existe nasce com todos os arquivos da pasta (o
+nome como titulo), para nenhum jogo sumir do frontend.
+
+  fliperos-gamemeta get PASTA ROM [--list LISTA]
+      JSON: os campos da linha da lista com as edicoes por cima, e quais
+      foram editados
+  fliperos-gamemeta set PASTA ROM [--list LISTA --folder DIR] CAMPO=VALOR...
+      grava as edicoes (VALOR vazio: volta ao da lista) e, com --list, poe na lista
+  fliperos-gamemeta apply PASTA LISTA DIR
+      poe as edicoes da PASTA na LISTA (os arquivos de DIR)
+  fliperos-gamemeta dump PASTA ROM...
+      as linhas das edicoes desses jogos (o pacote de ROM as leva)
+  fliperos-gamemeta merge ARQUIVO
+      junta as linhas de ARQUIVO (de um pacote) as edicoes daqui
+"""
+
+import argparse
+import json
+import os
+import pwd
+import sys
+
+ENV = os.environ.get
+USER = ENV("FLIPEROS_USER", "fliperos")
+FIELDS = ("Name", "Title", "Emulator", "CloneOf", "Year", "Manufacturer", "Category", "Players", "Rotation",
+          "Control", "Status", "DisplayCount", "DisplayType", "AltRomname", "AltTitle", "Extra", "Buttons",
+          "Series", "Language", "Region", "Rating")
+# Os que a pessoa edita (o Name e a chave; o Emulator e o do sistema).
+EDITABLE = ("Title", "Year", "Manufacturer", "Category", "Players", "Buttons", "Control", "Rotation", "CloneOf",
+            "Series", "Language", "Region", "Rating", "Status", "Extra")
+
+
+def player():
+    try:
+        return pwd.getpwnam(USER)
+    except KeyError:
+        return None
+
+
+def store_path():
+    p = player()
+    home = ENV("FLIPEROS_GAMEMETA_HOME") or (p.pw_dir if p else os.path.expanduser("~"))
+    return ENV("FLIPEROS_GAMEMETA") or os.path.join(home, ".config", "fliperos", "game-meta.tsv")
+
+
+def give(path):
+    p = player()
+    if p and os.geteuid() == 0:
+        try:
+            os.lchown(path, p.pw_uid, p.pw_gid)
+        except OSError:
+            pass
+
+
+def clean(value):
+    """Um valor numa linha da lista: sem ; (o separador), tab ou quebra."""
+    return " ".join(str(value).replace(";", ",").replace("\t", " ").split())[:200]
+
+
+def load():
+    """{(pasta, rom): {campo: valor}}."""
+    out = {}
+    try:
+        with open(store_path(), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                cols = line.rstrip("\n").split("\t")
+                if len(cols) == 4 and cols[2] in EDITABLE and cols[0] and cols[1]:
+                    out.setdefault((cols[0], cols[1]), {})[cols[2]] = cols[3]
+    except OSError:
+        pass
+    return out
+
+
+def save(data):
+    path = store_path()
+    folder = os.path.dirname(path)
+    if not os.path.isdir(folder):
+        os.makedirs(folder, exist_ok=True)
+        give(folder)
+    lines = ["%s\t%s\t%s\t%s\n" % (k[0], k[1], f, v) for k, fields in sorted(data.items()) for f, v in sorted(fields.items())]
+    with open(path + ".new", "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    give(path + ".new")
+    os.replace(path + ".new", path)
+
+
+def read_list(path):
+    """(cabecalho, [linhas como dicionario]) da lista."""
+    fields, rows = list(FIELDS), []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line.startswith("#"):
+                    if not rows:
+                        fields = line[1:].split(";")
+                    continue
+                values = line.split(";")
+                if values and values[0]:
+                    rows.append(dict(zip(fields, values)))
+    except OSError:
+        return None, []
+    return fields, rows
+
+
+def files_of(folder):
+    """Os jogos (o nome sem a extensao) dos arquivos da pasta."""
+    out = []
+    try:
+        for e in sorted(os.scandir(folder), key=lambda e: e.name.lower()):
+            if e.name.startswith(".") or e.name == "_info.txt" or not e.is_file():
+                continue
+            out.append(os.path.splitext(e.name)[0])
+    except OSError:
+        pass
+    return out
+
+
+def apply(key, listpath, folder, data=None):
+    """Poe as edicoes da pasta na lista. Devolve quantas linhas mudaram."""
+    data = load() if data is None else data
+    mine = {rom: fields for (k, rom), fields in data.items() if k == key}
+    if not mine:
+        return 0
+    fields, rows = read_list(listpath)
+    emulator = ""
+    if fields is None:
+        # Sem lista: nasce com todos os arquivos da pasta, para nenhum sumir.
+        fields = list(FIELDS)
+        rows = [{"Name": n, "Title": n} for n in files_of(folder)]
+    for f in EDITABLE:
+        if f not in fields:
+            fields.append(f)
+    by_name = {r.get("Name"): r for r in rows}
+    # O emulador das linhas (o Attract-Mode abre o jogo por ele): o da lista, ou o
+    # nome dela (a lista de cada sistema tem o nome do emulador dele).
+    emulator = next((r.get("Emulator", "") for r in rows if r.get("Emulator")), "") or \
+        os.path.splitext(os.path.basename(listpath))[0]
+    for r in rows:
+        if not r.get("Emulator"):
+            r["Emulator"] = emulator
+    changed = 0
+    for rom, edits in mine.items():
+        row = by_name.get(rom)
+        if row is None:
+            if rom not in files_of(folder) and not os.path.exists(os.path.join(folder, rom)):
+                continue
+            row = {"Name": rom, "Title": rom, "Emulator": emulator}
+            rows.append(row)
+            by_name[rom] = row
+        for f, v in edits.items():
+            if row.get(f, "") != v:
+                row[f] = v
+                changed += 1
+    if changed:
+        os.makedirs(os.path.dirname(listpath), exist_ok=True)
+        with open(listpath + ".new", "w", encoding="utf-8") as f:
+            f.write("#" + ";".join(fields) + "\n")
+            for r in rows:
+                f.write(";".join(clean(r.get(x, "")) for x in fields) + "\n")
+        give(listpath + ".new")
+        os.replace(listpath + ".new", listpath)
+    return changed
+
+
+def cmd_get(args):
+    data = load()
+    edits = data.get((args.key, args.rom), {})
+    row = {}
+    if args.list:
+        _, rows = read_list(args.list)
+        row = next((r for r in rows if r.get("Name") == args.rom), {})
+    fields = {f: row.get(f, "") for f in EDITABLE}
+    fields.update(edits)
+    json.dump({"key": args.key, "rom": args.rom, "fields": fields, "edited": sorted(edits), "editable": list(EDITABLE)},
+              sys.stdout, ensure_ascii=False)
+    print()
+    return 0
+
+
+def cmd_set(args):
+    data = load()
+    edits = data.setdefault((args.key, args.rom), {})
+    original = {}
+    if args.list:
+        _, rows = read_list(args.list)
+        original = next((r for r in rows if r.get("Name") == args.rom), {})
+    for pair in args.pairs:
+        field, sep, value = pair.partition("=")
+        if not sep or field not in EDITABLE:
+            print("bad field: %s" % pair, file=sys.stderr)
+            return 2
+        value = clean(value)
+        # Vazio, ou igual ao da lista: sem edicao (a lista refeita manda).
+        if not value or value == original.get(field, ""):
+            edits.pop(field, None)
+        else:
+            edits[field] = value
+    if not edits:
+        data.pop((args.key, args.rom), None)
+    save(data)
+    if args.list:
+        apply(args.key, args.list, args.folder or "", data)
+    return 0
+
+
+def cmd_apply(args):
+    print(apply(args.key, args.list, args.folder))
+    return 0
+
+
+def cmd_dump(args):
+    data = load()
+    for rom in args.roms:
+        for f, v in sorted(data.get((args.key, rom), {}).items()):
+            print("%s\t%s\t%s\t%s" % (args.key, rom, f, v))
+    return 0
+
+
+def cmd_merge(args):
+    data = load()
+    n = 0
+    with open(args.file, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            cols = line.rstrip("\n").split("\t")
+            if len(cols) == 4 and cols[2] in EDITABLE and cols[0] and cols[1] and ".." not in cols[0].split("/"):
+                data.setdefault((cols[0], cols[1]), {})[cols[2]] = clean(cols[3])
+                n += 1
+    if n:
+        save(data)
+    print(n)
+    return 0
+
+
+def main():
+    p = argparse.ArgumentParser(prog="fliperos-gamemeta")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("get")
+    s.add_argument("key")
+    s.add_argument("rom")
+    s.add_argument("--list")
+    s = sub.add_parser("set")
+    s.add_argument("key")
+    s.add_argument("rom")
+    s.add_argument("--list")
+    s.add_argument("--folder")
+    s.add_argument("pairs", nargs="*")
+    s = sub.add_parser("apply")
+    s.add_argument("key")
+    s.add_argument("list")
+    s.add_argument("folder")
+    s = sub.add_parser("dump")
+    s.add_argument("key")
+    s.add_argument("roms", nargs="*")
+    s = sub.add_parser("merge")
+    s.add_argument("file")
+    # As opcoes e os CAMPO=VALOR em qualquer ordem.
+    args, rest = p.parse_known_args()
+    if rest:
+        if args.cmd != "set" or any(r.startswith("-") or "=" not in r for r in rest):
+            p.error("unrecognized arguments: %s" % " ".join(rest))
+        args.pairs = list(args.pairs) + rest
+    return {"get": cmd_get, "set": cmd_set, "apply": cmd_apply, "dump": cmd_dump, "merge": cmd_merge}[args.cmd](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

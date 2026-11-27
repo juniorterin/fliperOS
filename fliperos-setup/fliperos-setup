@@ -111,6 +111,8 @@ source "$SETUP_DIR/lib/freeroms.sh"
 source "$SETUP_DIR/lib/frontends.sh"
 # shellcheck source=lib/customgames.sh
 source "$SETUP_DIR/lib/customgames.sh"
+# shellcheck source=lib/rompacks.sh
+source "$SETUP_DIR/lib/rompacks.sh"
 # shellcheck source=lib/update.sh
 source "$SETUP_DIR/lib/update.sh"
 # shellcheck source=lib/patches.sh
@@ -390,6 +392,15 @@ main() {
       # Setup > Games > Custom games sem tela (lib/customgames.sh): o painel
       # web, um jogo ou a tabela de muitos.
       customgames_cli "${@:2}"
+      return
+      ;;
+    --reapply-emulators)
+      # O que o Setup decide por maquina, gravado de novo nas configuracoes
+      # dos emuladores (Emulators & Games > Restore FliperOS settings,
+      # config/fliperos-emulators restore): a largura do CRT SwitchRes, o
+      # aspecto e o monitor do MAME, a latencia, o Button mapping e o
+      # Buttons layout.
+      emulators_reapply
       return
       ;;
     --setup-items)

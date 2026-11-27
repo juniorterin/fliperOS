@@ -234,3 +234,47 @@ emulators_vulkan_sync() {
   emulators_vulkan "$driver"
   conf_set emulators_driver "$driver"
 }
+
+# ── Restaurar as configuracoes originais ─────────────────────────
+# Emulators & Games > um emulador > Restore FliperOS settings
+# (config/fliperos-emulators restore): a configuracao de agora vai para
+# ~/config-backup/NOME-DATA e volta a original do FliperOS.
+
+# emulators_restorable NOME: status 0 se o emulador tem configuracao que o
+# FliperOS sabe restaurar (ja aberto uma vez).
+emulators_restorable() {
+  [[ -x $EMULATORS_CMD ]] || return 1
+  "$EMULATORS_CMD" restorable | grep -qx "$1|1"
+}
+
+# emulators_restore NOME: com os eventos da tela de progresso.
+emulators_restore() {
+  ev_step 0 "Starting"
+  if [[ ! -x $EMULATORS_CMD ]]; then
+    ev_fail "the installer of the emulators ($EMULATORS_CMD) is missing"
+    return 1
+  fi
+  log_line cmd "\$ $EMULATORS_CMD restore $1 --progress"
+  "$EMULATORS_CMD" restore "$1" --progress 2>> "$FLIPEROS_LOG"
+}
+
+# emulators_reapply: o que o Setup decide por maquina, gravado de novo nas
+# configuracoes dos emuladores depois de uma restauracao (o mesmo que o
+# tools/cabinet-update.sh regrava depois do fliperos-rootfs.sh): a largura do
+# CRT SwitchRes, o aspecto e o monitor do MAME, a latencia, o Vulkan pelo
+# driver, o Button mapping e o Buttons layout. Cada um que falha so vai ao log.
+emulators_reapply() {
+  local driver bin=${FLIPEROS_BIN:-/opt/fliperos/bin}
+  video_retroarch_super || log_info "reapply: video_retroarch_super failed"
+  video_mame_aspect || log_info "reapply: video_mame_aspect failed"
+  video_mame_monitor || log_info "reapply: video_mame_monitor failed"
+  latency_emulators "$(latency_mode)" || log_info "reapply: latency_emulators failed"
+  driver=$(conf_get emulators_driver 2> /dev/null)
+  [[ -z $driver ]] || emulators_vulkan "$driver"
+  if [[ -f /etc/fliperos/buttons.map && -x $bin/fliperos-buttons ]]; then
+    "$bin/fliperos-buttons" save /etc/fliperos/buttons.map >> "$FLIPEROS_LOG" 2>&1 ||
+      log_info "reapply: fliperos-buttons save failed"
+  fi
+  [[ ! -s /etc/fliperos/buttons.layout ]] || buttons_layout_apply || log_info "reapply: buttons_layout_apply failed"
+  return 0
+}

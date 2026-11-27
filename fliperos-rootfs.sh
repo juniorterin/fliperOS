@@ -517,6 +517,27 @@ install -Dm644 "$src/config/pcsx2.ini" "$root/etc/fliperos/pcsx2.ini"
 # Os botoes do PCSX2x6 (arcade Namco 246/256) na secao [JVS] do ini dele: um
 # por papel do SDL do Button mapping (tools/pcsx2x6-jvs-bindings.py).
 install -Dm644 "$src/config/pcsx2x6-jvs-bindings" "$root/etc/fliperos/pcsx2x6-jvs-bindings"
+# As configuracoes originais dos emuladores, intactas, para o Restore FliperOS
+# settings de Emulators & Games (config/fliperos-emulators restore): as que
+# esta instalacao so poe na primeira vez (o mame.ini, o emu.cfg do Flycast, os
+# remaps e os switchres.ini por core do RetroArch). A pasta e refeita inteira.
+defaults_dir="$root/usr/local/share/fliperos/emulator-defaults"
+rm -rf "$defaults_dir"
+install -Dm644 "$src/config/mame.ini" "$defaults_dir/mame.ini"
+install -Dm644 "$src/config/mame-ui.ini" "$defaults_dir/mame-ui.ini"
+install -Dm644 "$src/config/flycast-emu.cfg" "$defaults_dir/flycast-emu.cfg"
+for file in "$src"/config/retroarch-remaps/*.rmp; do
+  install -Dm644 "$file" "$defaults_dir/retroarch-remaps/${file##*/}"
+done
+for file in "$src"/config/retroarch-switchres/*.switchres.ini; do
+  install -Dm644 "$file" "$defaults_dir/retroarch-switchres/${file##*/}"
+done
+# Os pacotes de ROM (Game Packages > ROMs: TITULO.fliperos-EMULADOR.zip, fazer,
+# conferir e instalar), no Setup e no painel web.
+install -Dm755 "$src/config/fliperos-rompack" "$root/opt/fliperos/bin/fliperos-rompack"
+# Os metadados editados de cada jogo (o "+" do Create package > ROMs), postos
+# nas listas de jogos do FliperOS.
+install -Dm755 "$src/config/fliperos-gamemeta" "$root/opt/fliperos/bin/fliperos-gamemeta"
 
 # Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
 # compilado; os icones dos projetos vem do build de cada um. Os que nao

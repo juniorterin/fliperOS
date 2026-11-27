@@ -98,6 +98,11 @@ SHOTS = [
     ("custom-previa-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-create-preview"),
     ("custom-estrutura-pc", "#system/setup/games/custom", 1440, 900, 1, False, False, "cg-structure"),
     ("area-custom-criar-pc", "#customgames", 1440, 900, 1, False, True, "cg-tab-create"),
+    ("area-roms-pc", "#customgames", 1440, 900, 1, False, True, "cg-tab-roms"),
+    ("area-roms-celular", "#customgames", 390, 844, 2, True, True, "cg-tab-roms"),
+    ("area-criar-rom-pc", "#customgames", 1440, 900, 1, False, True, "cg-create-rom"),
+    ("area-criar-rom-celular", "#customgames", 390, 844, 2, True, True, "cg-create-rom"),
+    ("emuladores-pc", "#library/install", 1440, 900, 1, False, True, ""),
     ("area-custom-criar-celular", "#customgames", 390, 844, 2, True, True, "cg-tab-create"),
     ("area-custom-bandeja-pc", "#customgames", 1440, 900, 1, False, False, "cg-tray"),
     ("area-custom-jogos-pc", "#customgames", 1440, 900, 1, False, True, ""),
@@ -340,6 +345,35 @@ def demo(tmp):
     with zipfile.ZipFile(os.path.join(pkgdir, "Metal Slug X.fliperos-customgame.zip"), "w") as zf:
         zf.writestr("Metal Slug X.cfg", "platform=windows\n")
         zf.writestr("readme.txt", "x")
+    # Os pacotes de ROM (a aba ROMs e o Create package > ROMs), feitos pelo
+    # proprio config/fliperos-rompack: um do MAME desta home (instalado), um do
+    # core fbneo de outra home (novo aqui) e um com o nome certo que nao serve.
+    for rom in ("sf2", "mslug", "kof98"):
+        write(os.path.join(home, "nvram", "mame", rom, "eeprom"), "x")
+        write(os.path.join(home, "media", "preview", "mame", rom + ".mp4"), "")
+    write(os.path.join(home, "cheats", "mame", "sf2.xml"), "<mamecheat/>")
+    write(os.path.join(home, ".mame", "cfg", "kof98.cfg"), "<mameconfig/>")
+    rompack = [sys.executable, os.path.join(ROOT, "config/fliperos-rompack")]
+    other = os.path.join(tmp, "other-home")
+    for n, rom in enumerate(("1941", "dino", "ddsom", "pbobble2")):
+        write(os.path.join(other, "roms", "retroarch", "fbneo", rom + ".zip"), "z" * 4000)
+        write(os.path.join(other, "media", "snap", "retroarch", "fbneo", rom + ".png"), scene("shooter", 70 + n), "wb")
+    env_rp = dict(os.environ, FLIPEROS_ROMPACK_HOME=home, FLIPEROS_CORE_INFO=os.path.join(tmp, "info"))
+    subprocess.run(rompack + ["--packages", pkgdir, "create", "--target", "mame", "--title", "FightingGames",
+                              "--game", "sf2", "--game", "mslug", "--game", "kof98", "--game", "mvsc2"], env=env_rp,
+                   stdout=subprocess.DEVNULL, check=True)
+    subprocess.run(rompack + ["--home", other, "--packages", pkgdir, "create", "--target", "retroarch-fbneo",
+                              "--title", "CapcomClassics", "--game", "1941", "--game", "dino", "--game", "ddsom",
+                              "--game", "pbobble2"], env=env_rp, stdout=subprocess.DEVNULL, check=True)
+    with zipfile.ZipFile(os.path.join(pkgdir, "Broken.fliperos-mame.zip"), "w") as zf:
+        zf.writestr("roms/mame/x.zip", "x")
+    # O fliperos-emulators de mentira: Emulators & Games com o Restore.
+    emulators = os.path.join(tmp, "fliperos-emulators")
+    write(emulators, "#!/bin/sh\ncase \"$1\" in\n  list) printf 'retroarch|1|image|RetroArch (consoles and arcade cores)\\n"
+          "groovymame|1|image|GroovyMAME (arcade)\\nflycast|1|image|Flycast (Dreamcast, Naomi, Atomiswave)\\n"
+          "duckstation|1|fetch|DuckStation (PlayStation)\\nfightcade|0|fetch|Fightcade 2 (online arcade)\\n' ;;\n"
+          "  versions) printf 'retroarch|1.22.2\\ngroovymame|0.284\\nflycast|2.5\\nduckstation|0.1-9000\\n' ;;\n"
+          "  restorable) printf 'retroarch|1\\ngroovymame|1\\nflycast|0\\nduckstation|1\\n' ;;\nesac\nexit 0\n", mode=0o755)
     # Os pacotes de ~/roms/custom-packages (a aba Instalar pacotes): novos, um
     # que mudou, um instalado e um que nao serve.
     pkgs = "/home/fliperos/roms/custom-packages/"
@@ -483,6 +517,9 @@ def demo(tmp):
     env = dict(os.environ, FLIPEROS_SHADOW=os.path.join(tmp, "shadow"), FLIPEROS_WEB_STATIC=os.path.join(ROOT, "config/web"),
                FLIPEROS_WEB_GUI=os.path.join(ROOT, "fliperos-setup/gui"), FLIPEROS_HOME=home, FLIPEROS_USER="root",
                FLIPEROS_CUSTOMGAME=os.path.join(ROOT, "config/fliperos-customgame"),
+               FLIPEROS_ROMPACK=os.path.join(ROOT, "config/fliperos-rompack"), FLIPEROS_ROMPACK_HOME=home,
+               FLIPEROS_CORE_INFO=os.path.join(tmp, "info"), FLIPEROS_EMULATORS=emulators,
+               FLIPEROS_GAMEMETA_TOOL=os.path.join(ROOT, "config/fliperos-gamemeta"), FLIPEROS_GAMEMETA_HOME=home,
                FLIPEROS_SETUP=setup, FLIPEROS_RUN_USER=os.path.join(tmp, "run"), FLIPEROS_CONF=os.path.join(tmp, "fliperos.conf"),
                FLIPEROS_VIDEO_CHECK=check, FLIPEROS_BUTTONS_TOOL=buttons, FLIPEROS_STREAM=stream,
                FLIPEROS_UPDATE_TOOL=update, FLIPEROS_WEB_STAGE=os.path.join(tmp, "stage"),
@@ -693,11 +730,24 @@ def main():
                        " file: 'Street Fighter 4.fliperos-customgame.zip'}, {name: 'Tetris DX', platform: 'windows',"
                        " file: 'Tetris DX.fliperos-customgame.zip'}])")
             browser.wait(1.5)
+        elif action == "cg-tab-roms":
+            # A aba ROMs: os pacotes de ROM da pasta (instalado, novo, um que nao serve).
+            browser.js("cgShowTab('roms')")
+            browser.wait(2.5)
+        elif action == "cg-create-rom":
+            # Create package > ROMs: o MAME com tres jogos marcados e o titulo.
+            browser.js("cgShowTab('create'); cgCreateKind('rom')")
+            browser.wait(2.5)
+            browser.js("rp.picked = new Set(['sf2', 'mslug', 'kof98', 'mvsc2']); rp.create.title.value = 'FightingGames';"
+                       " rp.create.groupOn.checked = true; rp.create.groupBody.hidden = false;"
+                       " rp.create.groupName.value = 'Jogos de Luta'; rp.create.mame.genre = 'Fighter'; rp.metaOpen = 'sf2';"
+                       " rpDrawFilters(); rpDrawGames();")
+            browser.wait(2)
         elif action in ("cg-tab-games", "cg-tab-create"):
             # As abas Jogos e Criar pacote (a de criar, no modo de um pacote, com a
             # estrutura do pacote aberta).
             browser.js("cgShowTab(%s);%s" % (json.dumps(action[7:]),
-                       " cgCreateMode('one'); cg.el.structure.open = true;" if action == "cg-tab-create" else ""))
+                       " cgCreateKind('pc'); cgCreateMode('one'); cg.el.structure.open = true;" if action == "cg-tab-create" else ""))
             browser.wait(1)
         elif action == "cg-create-preview":
             # O Criar pacote preenchido, com a previa aberta ao lado.

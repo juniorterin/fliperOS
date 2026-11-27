@@ -1,0 +1,1252 @@
+#!/usr/bin/env python3
+"""Os pacotes de ROM do FliperOS (Game Packages > ROMs e Create package, no
+Setup e no painel web).
+
+  fliperos-rompack targets
+      JSON: os emuladores e os cores do RetroArch que tem pasta de jogos, com
+      o id (o do nome do pacote), o nome, as pastas e quantos jogos cada um tem
+  fliperos-rompack games TARGET
+      JSON: os jogos das pastas do alvo, cada um com o tamanho e o que ele tem
+      alem da ROM (bios, media com os tipos, nvram, save, cheats, config)
+  fliperos-rompack create --target TARGET --title TITULO [--kinds K,K...]
+                          [--replace] [--progress [INICIO FIM]]
+                          (--game JOGO... | --games-file ARQUIVO)
+      o pacote TITULO.fliperos-TARGET.zip na pasta dos pacotes (--packages)
+      com as ROMs dos JOGOS (os nomes do "games") e o que se pediu em --kinds
+      (bios, media, nvram, save, cheats, config; media:TIPO so um tipo de arte,
+      media:snap, media:preview, media:logo...; sem --kinds, todos). Imprime
+      out=. Status 3: o pacote ja existe (sem --replace)
+  fliperos-rompack inspect ZIP [--compare]
+      confere o pacote e imprime CHAVE=VALOR: title=, target=, label=,
+      games=, files=, bytes=, kinds=, e uma linha game=NOME por jogo. Com
+      --compare, tambem new= (arquivos que nao estao no gabinete), same= (ja
+      iguais) e differ= (com o mesmo nome e outro conteudo). Status 1 com o
+      motivo no stderr: nao e um pacote de ROM
+  fliperos-rompack packages
+      JSON: os pacotes de ROM da pasta dos pacotes, com o estado (new,
+      partial, installed ou bad, este com o motivo)
+  fliperos-rompack install ZIP [--replace] [--progress [INICIO FIM]]
+      cada arquivo no mesmo lugar da home de onde saiu. Um que ja existe com
+      outro conteudo fica como esta (o save, a nvram de quem instala), a nao
+      ser com --replace. Imprime installed=, same=, kept=
+  fliperos-rompack is-package ARQUIVO
+      status 0: o nome e de um pacote de ROM (TITULO.fliperos-ALVO.zip)
+
+O pacote: TITULO.fliperos-ALVO.zip (Lutas.fliperos-mame.zip,
+JogosDeNave.fliperos-duckstation.zip, OsMelhores.fliperos-retroarch-fbneo.zip),
+com o fliperos-package.cfg (CHAVE=VALOR: format, type=roms, title, target,
+label, created e uma linha game= por jogo) e os arquivos com o caminho deles
+a partir da home: roms/mame/sf2.zip, bios/mame/qsound.zip,
+media/snap/mame/sf2.png, nvram/mame/sf2/..., save/mame/sf2/...,
+cheats/mame/sf2.xml, .mame/cfg/sf2.cfg. O instalador so grava nessas pastas
+(PREFIXES): nada fora delas, nenhum caminho absoluto, nenhum "..", nenhum
+atalho (link) e nenhum arquivo especial.
+
+O mesmo nome de pasta de ~/roms vale em ~/media/<tipo>: a arte de
+~/roms/retroarch/fbneo/sf2.zip esta em ~/media/snap/retroarch/fbneo/sf2.png.
+"""
+
+import argparse
+import datetime
+import glob
+import importlib.machinery
+import importlib.util
+import json
+import os
+import pwd
+import re
+import stat
+import sys
+import zipfile
+import zlib
+
+ENV = os.environ.get
+USER = ENV("FLIPEROS_USER", "fliperos")
+BIN = ENV("FLIPEROS_BIN", "/opt/fliperos/bin")
+CORE_INFO = ENV("FLIPEROS_CORE_INFO", "/opt/fliperos/retroarch/info")
+ROMCLEAN = ENV("FLIPEROS_ROMCLEAN", os.path.join(BIN, "fliperos-romclean"))
+ROMCLEAN_CACHE = ENV("ROMCLEAN_CACHE", "/var/cache/fliperos")
+GROOVYMAME = ENV("GROOVYMAME", "groovymame")
+MAME2010_XML = ENV("MAME2010_XML", "/usr/local/share/fliperos/mame2010.xml.xz")
+MANIFEST = "fliperos-package.cfg"
+FORMAT = "1"
+# O pacote de jogo custom (config/fliperos-customgame) tem o mesmo comeco de
+# nome: o alvo "customgame" e dele.
+CUSTOMGAME = "customgame"
+NAME_RE = re.compile(r"^(?P<title>.+)\.fliperos-(?P<target>[a-z0-9][a-z0-9-]*)\.zip$")
+TARGET_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+# Os tipos, na ordem das telas. A ROM vai sempre.
+KINDS = ("roms", "bios", "media", "nvram", "save", "cheats", "config")
+OPTIONAL = KINDS[1:]
+# Onde o instalador grava (a partir da home), e o tipo de cada um.
+PREFIXES = (("roms/", "roms"), ("bios/", "bios"), ("media/", "media"), ("nvram/", "nvram"), ("save/", "save"),
+            ("cheats/", "cheats"), (".mame/cfg/", "config"), (".mame/hiscore/", "config"), (".hbmame/cfg/", "config"),
+            (".config/retroarch/config/", "config"))
+# O que nao e jogo numa pasta de ROMs.
+SKIP_NAMES = {"_info.txt", ".netboot", "Thumbs.db", "desktop.ini", ".DS_Store"}
+# O titulo vira nome de arquivo (no compartilhamento da rede tambem).
+TITLE_BAD = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
+STORED_EXTS = {"zip", "7z", "rar", "gz", "xz", "bz2", "zst", "chd", "cso", "rvz", "wbfs", "pbp", "jpg", "jpeg", "png",
+               "webp", "gif", "mp4", "mkv", "webm", "avi", "mov", "mp3", "ogg", "opus", "flac", "pak"}
+CHUNK = 1 << 20
+SET_EXTS = (".zip", ".7z")
+
+
+class Bad(Exception):
+    pass
+
+
+def player_home():
+    try:
+        return pwd.getpwnam(USER).pw_dir
+    except KeyError:
+        return os.path.expanduser("~")
+
+
+def owner():
+    try:
+        p = pwd.getpwnam(USER)
+        return p.pw_uid, p.pw_gid
+    except KeyError:
+        return None
+
+
+def give(path):
+    """O arquivo do jogador (o Setup e o painel rodam como root)."""
+    who = owner()
+    if who and os.geteuid() == 0:
+        try:
+            os.lchown(path, *who)
+        except OSError:
+            pass
+
+
+def makedirs(path):
+    missing = []
+    while path and not os.path.isdir(path):
+        missing.append(path)
+        path = os.path.dirname(path)
+    for p in reversed(missing):
+        os.mkdir(p)
+        give(p)
+
+
+class Progress:
+    def __init__(self, on, start=0, end=100):
+        self.on, self.start, self.end, self.last = on, start, end, None
+
+    def pct(self, frac):
+        return int(self.start + (self.end - self.start) * max(0.0, min(1.0, frac)))
+
+    def step(self, frac, text):
+        if self.on:
+            print("@step %d %s" % (self.pct(frac), text), flush=True)
+
+    def tick(self, frac):
+        p = self.pct(frac)
+        if self.on and p != self.last:
+            self.last = p
+            print("@pct %d" % p, flush=True)
+
+    def fail(self, title, why):
+        if self.on:
+            print("@fail %s|%s" % (title, why), flush=True)
+
+
+# ── Os alvos ──
+
+def core_info(core):
+    """(nome, [firmware]) do .info do core: o display_name e os
+    firmwareN_path (a partir de ~/bios, o system_directory)."""
+    name, firmware = core, []
+    try:
+        with open(os.path.join(CORE_INFO, core + "_libretro.info"), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                key, _, value = line.partition("=")
+                key, value = key.strip(), value.strip().strip('"')
+                if key == "display_name" and value:
+                    name = value
+                elif re.match(r"^firmware\d+_path$", key) and value and ".." not in value.split("/"):
+                    firmware.append(value)
+    except OSError:
+        pass
+    return name, firmware
+
+
+def target(tid, label, roms, **kw):
+    t = {"id": tid, "label": label, "roms": roms, "bios": [], "bios_files": [], "bios_globs": [], "deps": "",
+         "nvram": [], "save": [], "save_all": [], "cheats": [], "config": [], "companions": [], "depth": 1}
+    t.update(kw)
+    return t
+
+
+def all_targets(home):
+    """Os alvos: os emuladores do FliperOS e cada core do RetroArch com pasta
+    em ~/roms/retroarch. Caminhos a partir da home."""
+    out = [
+        target("mame", "GroovyMAME", ["roms/mame"], bios=["bios/mame"], deps="groovymame", nvram=["nvram/mame"],
+               save=["save/mame"], cheats=["cheats/mame"], config=[".mame/cfg", ".mame/hiscore"]),
+        target("hbmame", "HBMAME (hbgroovymame)", ["roms/hbmame"], bios=["bios/hbmame", "bios/mame"], deps="groovymame",
+               nvram=["nvram/hbmame"], save=["save/hbmame"], cheats=["cheats/hbmame"], config=[".hbmame/cfg"]),
+        target("flycast", "Flycast (Dreamcast, Naomi, Atomiswave)", ["roms/dreamcast", "roms/naomi", "roms/naomi2",
+                                                                     "roms/atomiswave"],
+               bios_files=["bios/dc"], nvram=["nvram/flycast"], cheats=["cheats/flycast"]),
+        target("keisho", "Keisho (Sega Model 2 and 3)", ["roms/model2", "roms/model3"], bios=["bios/mame"],
+               deps="groovymame", nvram=["nvram/model2", "nvram/model3"]),
+        target("odin", "Odin (Sega Hikaru, Gaelco 3D)", ["roms/odin"], bios_files=["bios/odin"], nvram=["nvram/odin"],
+               save=["save/odin"]),
+        target("pcsx2", "PCSX2 (PlayStation 2)", ["roms/ps2"], bios_files=["bios/ps2"], save_all=["save/ps2"],
+               cheats=[]),
+        target("pcsx2x6", "PCSX2x6 (Namco System 246/256)", ["roms/namco2x6"], bios_files=["bios/namco2x6"],
+               nvram=["nvram/namco2x6"], save=["save/namco2x6"]),
+        target("duckstation", "DuckStation (PlayStation)", ["roms/ps1"],
+               bios_globs=["bios/scph*", "bios/SCPH*", "bios/ps[0-9x]*.bin", "bios/PS[0-9X]*.BIN", "bios/psxonpsp*"]),
+        target("dolphin", "Dolphin (GameCube, Wii)", ["roms/dolphin"]),
+        target("chihiro", "xemu (Sega Chihiro)", ["roms/chihiro"], bios_files=["bios/chihiro"]),
+        target("hypseus", "Hypseus Singe (laserdisc)", ["roms/hypseus/roms"],
+               companions=["roms/hypseus/vldp", "roms/hypseus/singe"], nvram=["nvram/hypseus"]),
+    ]
+    base = os.path.join(home, "roms", "retroarch")
+    try:
+        cores = sorted(e.name for e in os.scandir(base) if e.is_dir() and not e.name.startswith("."))
+    except OSError:
+        cores = []
+    for core in cores:
+        name, firmware = core_info(core)
+        roms = "roms/retroarch/" + core
+        # O OpenBOR (core AnyBOR): os jogos em Paks/, o que o motor grava em Saves/.
+        if os.path.isdir(os.path.join(base, core, "Paks")):
+            roms += "/Paks"
+        deps = "mame2010" if core == "mame2010" else ("groovymame" if re.match(r"^(mame|fbneo|fbalpha)", core) else "")
+        out.append(target("retroarch-" + core, "RetroArch: " + name, [roms],
+                          bios=["bios/mame"] if deps else [], bios_files=["bios/" + f for f in firmware], deps=deps,
+                          nvram=["nvram/retroarch/" + core], save=["save/retroarch"],
+                          save_extra=["roms/retroarch/anybor/Saves"] if core == "anybor" else [],
+                          cheats=["cheats/retroarch"], config=[".config/retroarch/config"], depth=2))
+    return out
+
+
+def find_target(home, tid):
+    for t in all_targets(home):
+        if t["id"] == tid:
+            return t
+    raise Bad("no such emulator or core: %s" % tid)
+
+
+def media_key(roms_dir):
+    """A pasta de ~/media/<tipo> de uma pasta de ROMs (roms/mame -> mame; o
+    Paks/ do OpenBOR nao conta)."""
+    key = roms_dir[len("roms/"):] if roms_dir.startswith("roms/") else roms_dir
+    for tail in ("/Paks", "/roms"):
+        if key.endswith(tail):
+            key = key[: -len(tail)]
+    return key
+
+
+def media_types(home):
+    try:
+        return sorted(e.name for e in os.scandir(os.path.join(home, "media"))
+                      if e.is_dir() and not e.name.startswith("."))
+    except OSError:
+        return []
+
+
+# ── Os jogos de uma pasta ──
+
+def listdir(path):
+    try:
+        return list(os.scandir(path))
+    except OSError:
+        return []
+
+
+def stem_of(name, is_dir):
+    if is_dir:
+        return name
+    root, ext = os.path.splitext(name)
+    return root if ext else name
+
+
+def referenced(full):
+    """Os arquivos que um .cue, .gdi, .m3u ou .acgame chama (nomes relativos
+    a pasta dele)."""
+    ext = os.path.splitext(full)[1].lower()
+    out = []
+    try:
+        with open(full, encoding="utf-8", errors="replace") as f:
+            text = f.read(1 << 20)
+    except OSError:
+        return out
+    if ext == ".cue":
+        out = re.findall(r'^\s*FILE\s+"([^"]+)"', text, re.M | re.I) or \
+            re.findall(r"^\s*FILE\s+(\S+)", text, re.M | re.I)
+    elif ext == ".gdi":
+        for line in text.splitlines()[1:]:
+            m = re.match(r'^\s*\d+\s+\d+\s+\d+\s+\d+\s+(?:"([^"]+)"|(\S+))', line)
+            if m:
+                out.append(m.group(1) or m.group(2))
+    elif ext == ".m3u":
+        out = [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+    elif ext == ".acgame":
+        m = re.search(r"^\s*subdir\s*=\s*(.+?)\s*$", text, re.M)
+        if m:
+            out.append(m.group(1))
+    return [r for r in (x.replace("\\", "/") for x in out) if r and ".." not in r.split("/") and not r.startswith("/")]
+
+
+def scan_games(home, t):
+    """{nome: {"dir": pasta, "entries": [nomes]}}: os jogos das pastas do
+    alvo. O nome e o da ROM sem a extensao (sf2), ou o arquivo inteiro
+    quando dois jogos dariam o mesmo nome em pastas diferentes."""
+    games = {}
+    for rdir in t["roms"]:
+        entries = [e for e in listdir(os.path.join(home, rdir))
+                   if e.name not in SKIP_NAMES and not e.name.startswith(".")]
+        by_stem = {}
+        for e in entries:
+            try:
+                is_dir = e.is_dir()
+            except OSError:
+                continue
+            by_stem.setdefault(stem_of(e.name, is_dir), []).append(e.name)
+        # O que um .cue/.gdi/.m3u/.acgame chama nao e um jogo a parte.
+        used = set()
+        for e in entries:
+            if os.path.splitext(e.name)[1].lower() in (".cue", ".gdi", ".m3u", ".acgame"):
+                for r in referenced(e.path):
+                    used.add(r.split("/")[0])
+        for stem, names in by_stem.items():
+            if all(n in used for n in names):
+                continue
+            key = stem
+            if key in games:
+                key = "%s (%s)" % (stem, media_key(rdir))
+            games[key] = {"dir": rdir, "stem": stem, "entries": sorted(names)}
+    return games
+
+
+def tree(home, rel):
+    """[(caminho a partir da home, tamanho)] de um arquivo ou de uma pasta
+    inteira (sem seguir os atalhos de dentro dela)."""
+    full = os.path.join(home, rel)
+    out = []
+    if os.path.isdir(full):
+        for top, dirs, files in os.walk(full):
+            dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(top, d))]
+            for n in files:
+                p = os.path.join(top, n)
+                try:
+                    st = os.stat(p)
+                except OSError:
+                    continue
+                if stat.S_ISREG(st.st_mode):
+                    out.append((os.path.relpath(p, home).replace(os.sep, "/"), st.st_size))
+    else:
+        try:
+            st = os.stat(full)
+            if stat.S_ISREG(st.st_mode):
+                out.append((rel, st.st_size))
+        except OSError:
+            pass
+    return out
+
+
+def game_rom_files(home, t, game):
+    """Os arquivos da ROM de um jogo: as entradas dele na pasta, o que elas
+    chamam (as faixas de um .cue) e as pastas irmas (vldp/ do Hypseus)."""
+    rdir, files = game["dir"], []
+    for n in game["entries"]:
+        files += tree(home, rdir + "/" + n)
+        for r in referenced(os.path.join(home, rdir, n)):
+            files += tree(home, rdir + "/" + r)
+    for c in t["companions"]:
+        files += tree(home, c + "/" + game["stem"])
+    return files
+
+
+class Index:
+    """Os nomes de uma pasta por nome de jogo: o arquivo sf2.png, o
+    sf2.zip.nvmem e a pasta sf2/ sao do jogo sf2. Com depth 2, tambem os das
+    subpastas (os saves do RetroArch ficam numa pasta por core)."""
+
+    def __init__(self, home, rel, depth=1):
+        self.map = {}
+        dirs = [rel]
+        if depth > 1:
+            dirs += [rel + "/" + e.name for e in listdir(os.path.join(home, rel))
+                     if e.is_dir(follow_symlinks=False) and not e.name.startswith(".")]
+        for d in dirs:
+            for e in listdir(os.path.join(home, d)):
+                if e.name in SKIP_NAMES:
+                    continue
+                n = e.name
+                keys = {n}
+                i = n.find(".")
+                while i > 0:
+                    keys.add(n[:i])
+                    i = n.find(".", i + 1)
+                for k in keys:
+                    self.map.setdefault(k, []).append(d + "/" + n)
+
+    def get(self, stem):
+        return self.map.get(stem, [])
+
+
+def related_dirs(home, t):
+    """{tipo: [(pasta, profundidade)]} das pastas onde ha arquivos com o nome
+    do jogo."""
+    out = {"nvram": [(d, 1) for d in t["nvram"]], "save": [(d, t["depth"]) for d in t["save"]] +
+           [(d, 1) for d in t.get("save_extra", [])], "cheats": [(d, t["depth"]) for d in t["cheats"]],
+           "config": [(d, t["depth"]) for d in t["config"]]}
+    out["media"] = [("media/%s/%s" % (m, media_key(r)), 1) for m in media_types(home) for r in t["roms"]]
+    return out
+
+
+def indexes(home, t):
+    return {kind: [(d, Index(home, d, depth)) for d, depth in dirs] for kind, dirs in related_dirs(home, t).items()}
+
+
+def shared_bios(home, t):
+    """Os arquivos de BIOS do alvo que nao dependem do jogo: as pastas
+    inteiras (bios/dc do Flycast), os firmware do .info do core e os nomes de
+    BIOS do PlayStation."""
+    files = []
+    for d in t["bios_files"]:
+        files += [(p, s) for p, s in tree(home, d) if not p.endswith("/_info.txt")]
+    for g in t["bios_globs"]:
+        for p in sorted(glob.glob(os.path.join(home, g))):
+            files += tree(home, os.path.relpath(p, home).replace(os.sep, "/"))
+    return files
+
+
+def shared_saves(home, t):
+    files = []
+    for d in t["save_all"]:
+        files += [(p, s) for p, s in tree(home, d) if not p.endswith("/_info.txt")]
+    return files
+
+
+# ── As dependencias dos sets do MAME ──
+
+def romclean():
+    loader = importlib.machinery.SourceFileLoader("fliperos_romclean", ROMCLEAN)
+    spec = importlib.util.spec_from_loader("fliperos_romclean", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def mame_dependencies(kind, names, progress):
+    """Os sets de que os jogos precisam (o pai, a BIOS e os dispositivos),
+    pelo XML do MAME do alvo (o do cache do ROM cleaner; sem ele, o -listxml,
+    que leva um minuto). None: nao deu para saber."""
+    if not names or not os.path.exists(ROMCLEAN):
+        return None
+    try:
+        mod = romclean()
+    except Exception:  # noqa: BLE001 - um romclean quebrado nao para o pacote
+        return None
+    a = argparse.Namespace(xml=None, xml_command=None, cache=None)
+    if kind == "mame2010":
+        if not os.path.exists(MAME2010_XML):
+            return None
+        a.xml, a.cache = MAME2010_XML, os.path.join(ROMCLEAN_CACHE, "romclean-mame2010.json")
+    else:
+        caches = sorted(glob.glob(os.path.join(ROMCLEAN_CACHE, "romclean-groovymame-*.json")), key=os.path.getmtime)
+        if caches:
+            a.cache = caches[-1]
+        else:
+            progress.step(0.03, "Reading the MAME game list (about a minute)")
+            a.xml_command = GROOVYMAME + " -listxml"
+            if not any(os.access(os.path.join(p, GROOVYMAME), os.X_OK) for p in os.environ.get("PATH", "").split(":")) \
+                    and not os.access(GROOVYMAME, os.X_OK):
+                return None
+    try:
+        machines = mod.load_machines(a)
+    except SystemExit:
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+    lower = {n.lower() for n in names}
+    return {d for d in mod.dependencies(machines, lower) if d not in lower}
+
+
+def dependency_files(home, t, deps):
+    """Onde cada set dependente esta: nas pastas de ROMs do alvo (o pai de um
+    clone vai como ROM) ou nas de BIOS (vai como BIOS)."""
+    roms, bios = [], []
+    places = [(d, roms) for d in t["roms"]] + [(d, bios) for d in t["bios"] + ["roms/mame"]]
+    for dep in sorted(deps):
+        for d, where in places:
+            hit = [e.name for e in listdir(os.path.join(home, d))
+                   if e.name.lower() in (dep, dep + ".zip", dep + ".7z")]
+            if hit:
+                for n in hit:
+                    where.extend(tree(home, d + "/" + n))
+                break
+    return roms, bios
+
+
+# ── Listar ──
+
+def cmd_targets(args):
+    home = args.home
+    out = []
+    for t in all_targets(home):
+        games = scan_games(home, t)
+        if not games and not args.all:
+            continue
+        out.append({"id": t["id"], "label": t["label"], "folders": t["roms"], "games": len(games),
+                    "name": "%s.fliperos-%s.zip" % ("TITLE", t["id"])})
+    if args.text:
+        for row in out:
+            print("%s|%s|%d" % (row["id"], row["label"].replace("|", "/"), row["games"]))
+        return 0
+    json.dump(out, sys.stdout, ensure_ascii=False)
+    print()
+    return 0
+
+
+def game_summary(home, t, name, game, idx, has_bios):
+    files = game_rom_files(home, t, game)
+    have = {}
+    for kind, lst in idx.items():
+        hits = [p for _, ix in lst for p in ix.get(game["stem"])]
+        if kind == "media":
+            have["media"] = sorted({p.split("/")[1] for p in hits})
+        else:
+            have[kind] = bool(hits)
+    have["bios"] = has_bios
+    return {"name": name, "stem": game["stem"], "key": media_key(game["dir"]), "files": game["entries"],
+            "folder": game["dir"], "bytes": sum(s for _, s in files), "has": have,
+            "group_ok": launch_argv(media_key(game["dir"]), game["stem"], "x") is not None}
+
+
+def cmd_games(args):
+    home = args.home
+    try:
+        t = find_target(home, args.target)
+    except Bad as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    games = scan_games(home, t)
+    if args.media_types:
+        # Os tipos de arte (as pastas de ~/media) que algum jogo do alvo tem, um por linha.
+        found = {p.split("/")[1] for _, ix in indexes(home, t)["media"] for g in games.values() for p in ix.get(g["stem"])}
+        order = ["snap", "preview", "logo", "box", "marquee", "dmd", "texto"]
+        for m in [m for m in order if m in found] + sorted(found - set(order)):
+            print(m)
+        return 0
+    if args.text:
+        # NOME|BYTES (o Setup no gabinete: so o nome e o tamanho da ROM).
+        for n, g in sorted(games.items(), key=lambda kv: kv[0].lower()):
+            print("%s|%d" % (n.replace("|", "/"), sum(s for _, s in game_rom_files(home, t, g))))
+        return 0
+    idx = indexes(home, t)
+    has_bios = bool(t["bios"] and t["deps"]) or bool(shared_bios(home, t))
+    out = [game_summary(home, t, n, g, idx, has_bios) for n, g in sorted(games.items(), key=lambda kv: kv[0].lower())]
+    # Os tipos de arte que os jogos deste alvo tem (cada um uma escolha na tela).
+    found = {m for g in out for m in g["has"].get("media", [])}
+    order = ["snap", "preview", "logo", "box", "marquee", "dmd", "texto"]
+    media = [m for m in order if m in found] + sorted(found - set(order))
+    json.dump({"target": t["id"], "label": t["label"], "folders": t["roms"], "games": out, "media_types": media,
+               "kinds": list(KINDS), "shared_save": bool(shared_saves(home, t))}, sys.stdout, ensure_ascii=False)
+    print()
+    return 0
+
+
+# ── O grupo proprio ──
+# Um pacote pode trazer um grupo (group=): nos frontends, um sistema com o nome
+# dele e o logotipo de sistema escolhido. E um grupo do Game Packages
+# (~/roms/custom/GRUPO, o mesmo dos jogos de PC, lib/customgames.sh): um
+# TITULO.sh por jogo que abre a ROM no emulador dela, com o mesmo comando que o
+# frontend usa na pasta do emulador (scraper_attract_emulator); o
+# GRUPO/.logo.png (fliperos-syslogo) e a arte ligada em
+# ~/media/TIPO/custom/GRUPO. A ROM fica na pasta do emulador.
+
+X11 = ENV("FLIPEROS_X11_RUN", os.path.join(BIN, "fliperos-x11-run"))
+KMS = ENV("FLIPEROS_KMS_RUN", os.path.join(BIN, "fliperos-kms-run"))
+RA_CORES = ENV("RA_CORES_DIR", "/opt/fliperos/retroarch/cores")
+SYSLOGO = ENV("FLIPEROS_SYSLOGO", os.path.join(BIN, "fliperos-syslogo"))
+GROUP_HEAD = "# FliperOS ROM package group (Game Packages > ROMs)."
+# O arquivo que abre um jogo de muitos (o .cue das faixas, o .m3u dos discos).
+MAIN_EXTS = (".m3u", ".cue", ".gdi", ".acgame", ".chd", ".iso", ".zip", ".7z")
+
+
+def launch_argv(key, stem, path):
+    """O comando que abre o jogo (o de scraper_attract_emulator para a pasta
+    KEY), ou None (o Hypseus, sem um comando por jogo)."""
+    by_name = {"mame": "groovymame", "hbmame": "hbgroovymame", "model2": "fliperos-model2", "odin": "fliperos-odin"}
+    by_file = {"dreamcast": ["flycast"], "naomi": ["flycast"], "naomi2": ["flycast"], "atomiswave": ["flycast"],
+               "model3": ["fliperos-model3"], "chihiro": ["fliperos-chihiro"], "ps2": ["pcsx2"], "namco2x6": ["pcsx2x6"],
+               "ps1": ["duckstation"], "dolphin": ["dolphin-emu", "-e"]}
+    if key in by_name:
+        return [X11, by_name[key], stem]
+    if key in by_file:
+        return [X11] + by_file[key] + [path]
+    if key.startswith("retroarch/"):
+        return [KMS, "retroarch", "-L", os.path.join(RA_CORES, key[len("retroarch/"):] + "_libretro.so"), path]
+    return None
+
+
+def main_entry(game):
+    """O arquivo da pasta que abre o jogo (a pasta de um CHD ou de um set solto
+    so se nao ha outro)."""
+    names = sorted(game["entries"], key=lambda n: (os.path.splitext(n)[1].lower() not in MAIN_EXTS,
+                                                    MAIN_EXTS.index(os.path.splitext(n)[1].lower())
+                                                    if os.path.splitext(n)[1].lower() in MAIN_EXTS else 99, n))
+    return game["dir"] + "/" + names[0]
+
+
+def list_titles(home):
+    """{rom: titulo} das listas do FliperOS (~/.local/share/fliperos/lists: o
+    titulo do XML do MAME, o do Scraper)."""
+    out = {}
+    for path in sorted(glob.glob(os.path.join(home, ".local/share/fliperos/lists/*.txt"))):
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if line.startswith("#"):
+                        continue
+                    cols = line.rstrip("\n").split(";")
+                    if len(cols) > 1 and cols[0] and cols[1] and cols[0] not in out:
+                        out[cols[0]] = cols[1]
+        except OSError:
+            pass
+    return out
+
+
+def entry_name(title):
+    """O titulo como nome de arquivo (o .sh do grupo)."""
+    name = re.sub(r'[/\\:*?"<>|\x00-\x1f]', " ", title).strip().strip(".")
+    return re.sub(r"\s+", " ", name)[:120] or "game"
+
+
+def valid_group(name):
+    return bool(name and name.strip() and not any(c in name for c in "/|\n\r\\") and not name.startswith(".")
+                and len(name) <= 80)
+
+
+def make_logo(out, logo_file=None, logo_system=None):
+    """O GRUPO/.logo.png: o desenho de uma imagem ou um logotipo da lista do
+    FliperOS (fliperos-syslogo). Falso: sem logotipo."""
+    if not (logo_file or logo_system) or not os.path.exists(SYSLOGO):
+        return False
+    argv = ["python3", SYSLOGO] + (["import", logo_file, out] if logo_file else ["copy", logo_system, out])
+    try:
+        import subprocess
+        return subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60).returncode == 0 \
+            and os.path.isfile(out)
+    except OSError:
+        return False
+
+
+def group_entries(home, t, chosen, games):
+    """[(rom, pasta, arquivo que abre, titulo)] dos jogos do grupo."""
+    titles = list_titles(home)
+    out = []
+    for n in chosen:
+        g = games[n]
+        key = media_key(g["dir"])
+        if launch_argv(key, g["stem"], "x") is None:
+            continue
+        out.append((g["stem"], key, main_entry(g), titles.get(g["stem"], g["stem"])))
+    return out
+
+
+def install_group(home, group, entries):
+    """Monta o grupo: um TITULO.sh por jogo e a arte ligada. Devolve quantos."""
+    folder = os.path.join(home, "roms", "custom", group)
+    makedirs(folder)
+    used, count = set(), 0
+    media = media_types(home)
+    for stem, key, rel, title in entries:
+        argv = launch_argv(key, stem, os.path.join(home, rel))
+        if argv is None:
+            continue
+        name = entry_name(title)
+        base, n = name, 2
+        while name.lower() in used:
+            name, n = "%s (%d)" % (base, n), n + 1
+        used.add(name.lower())
+        path = os.path.join(folder, name + ".sh")
+        with open(path + ".new", "w", encoding="utf-8") as f:
+            f.write("#!/bin/sh\n%s\n# rom: %s (%s)\nexec %s\n" % (GROUP_HEAD, stem, key, " ".join(shquote(a) for a in argv)))
+        os.chmod(path + ".new", 0o755)
+        give(path + ".new")
+        os.replace(path + ".new", path)
+        count += 1
+        # A arte do jogo, ligada com o nome do .sh (o frontend a procura assim).
+        for m in media:
+            src_dir = os.path.join(home, "media", m, key)
+            for e in listdir(src_dir):
+                if e.name == stem or e.name.startswith(stem + "."):
+                    dst_dir = os.path.join(home, "media", m, "custom", group)
+                    makedirs(dst_dir)
+                    dst = os.path.join(dst_dir, name + e.name[len(stem):])
+                    if os.path.lexists(dst):
+                        if not os.path.islink(dst):
+                            continue
+                        os.remove(dst)
+                    os.symlink(e.path, dst)
+                    try:
+                        os.lchown(dst, *(owner() or (-1, -1)))
+                    except OSError:
+                        pass
+    return count
+
+
+def refresh_frontends():
+    """O grupo novo nos frontends e no menu do desktop (o Setup, como root;
+    o Setup no gabinete faz isso ele mesmo: FLIPEROS_ROMPACK_NO_REFRESH)."""
+    setup = ENV("FLIPEROS_SETUP_CMD", "/usr/local/bin/fliperos-setup")
+    if ENV("FLIPEROS_ROMPACK_NO_REFRESH") or os.geteuid() != 0 or not os.access(setup, os.X_OK):
+        return
+    try:
+        import subprocess
+        subprocess.run([setup, "--customgames", "refresh-frontends"], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=300)
+    except (OSError, ValueError):
+        pass
+    except Exception:  # noqa: BLE001 - o pacote ja esta feito; os frontends se acertam depois
+        pass
+
+
+def shquote(s):
+    return "'" + s.replace("'", "'\"'\"'") + "'" if re.search(r"[^A-Za-z0-9_./=:+-]", s) else s
+
+
+# ── Fazer o pacote ──
+
+def clean_title(title):
+    title = TITLE_BAD.sub("", title or "").strip().strip(".")
+    return title[:120]
+
+
+def package_name(title, tid):
+    return "%s.fliperos-%s.zip" % (title, tid)
+
+
+def parse_kinds(text):
+    """(tipos, tipos de arte) do --kinds: "media" e toda a arte; "media:snap",
+    "media:preview"... so esses tipos de ~/media (None: todos). Sem --kinds,
+    tudo."""
+    if text is None:
+        return ["roms"] + list(OPTIONAL), None
+    words = [w.strip() for w in text.split(",") if w.strip()]
+    media_sel = None if "media" in words else {w[6:] for w in words if w.startswith("media:") and w[6:]}
+    kinds = ["roms"] + [k for k in OPTIONAL if k in words or (k == "media" and media_sel)]
+    return kinds, media_sel
+
+
+def collect(home, t, chosen, kinds, progress, media_sel=None):
+    """[(caminho a partir da home, tamanho, tipo)] de tudo o que vai no
+    pacote, sem repetir; e os avisos. media_sel: os tipos de arte que vao
+    (None: todos)."""
+    games = scan_games(home, t)
+    missing = [n for n in chosen if n not in games]
+    if missing:
+        raise Bad("not in %s: %s" % (", ".join(t["roms"]), ", ".join(missing[:5])))
+    files, seen, notes = [], set(), []
+
+    def add(lst, kind):
+        for p, s in lst:
+            if p not in seen and not p.endswith("/_info.txt"):
+                seen.add(p)
+                files.append((p, s, kind))
+
+    for n in chosen:
+        add(game_rom_files(home, t, games[n]), "roms")
+    if "bios" in kinds:
+        if t["deps"]:
+            deps = mame_dependencies(t["deps"], [games[n]["stem"] for n in chosen], progress)
+            if deps is None:
+                notes.append("the BIOS and parent sets could not be found out (no MAME game list here)")
+            elif deps:
+                roms, bios = dependency_files(home, t, deps)
+                add(roms, "roms")
+                add(bios, "bios")
+        add(shared_bios(home, t), "bios")
+    if "save" in kinds:
+        add(shared_saves(home, t), "save")
+    idx = indexes(home, t)
+    for kind in OPTIONAL:
+        if kind not in kinds or kind == "bios":
+            continue
+        for _, ix in idx.get(kind, []):
+            for n in chosen:
+                for p in ix.get(games[n]["stem"]):
+                    if kind == "media" and media_sel is not None and p.split("/")[1] not in media_sel:
+                        continue
+                    add(tree(home, p), kind)
+    return files, notes
+
+
+def meta_store(home):
+    """O arquivo dos metadados editados (config/fliperos-gamemeta)."""
+    return os.path.join(home, ".config", "fliperos", "game-meta.tsv")
+
+
+def meta_lines(home, games, chosen):
+    """As edicoes de metadados dos jogos do pacote: "PASTA<TAB>ROM<TAB>CAMPO<TAB>VALOR"."""
+    want = {(media_key(games[n]["dir"]), games[n]["stem"]) for n in chosen}
+    out = []
+    try:
+        with open(meta_store(home), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                cols = line.rstrip("\n").split("\t")
+                if len(cols) == 4 and (cols[0], cols[1]) in want:
+                    out.append("\t".join(cols))
+    except OSError:
+        pass
+    return out
+
+
+def merge_meta(home, lines):
+    """Junta as edicoes de um pacote as daqui (as do pacote valem). Quantas."""
+    path = meta_store(home)
+    data = {}
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                cols = line.rstrip("\n").split("\t")
+                if len(cols) == 4:
+                    data[(cols[0], cols[1], cols[2])] = cols[3]
+    except OSError:
+        pass
+    n = 0
+    for line in lines:
+        cols = line.split("\t")
+        if len(cols) == 4 and cols[0] and cols[1] and cols[2] and ".." not in cols[0].split("/") and "/" not in cols[1]:
+            data[(cols[0], cols[1], cols[2])] = cols[3]
+            n += 1
+    if n:
+        makedirs(os.path.dirname(path))
+        with open(path + ".new", "w", encoding="utf-8") as f:
+            f.writelines("%s\t%s\t%s\t%s\n" % (k[0], k[1], k[2], v) for k, v in sorted(data.items()))
+        give(path + ".new")
+        os.replace(path + ".new", path)
+    return n
+
+
+def refresh_lists():
+    """As listas de jogos refeitas com as edicoes que chegaram (como root)."""
+    setup = ENV("FLIPEROS_SETUP_CMD", "/usr/local/bin/fliperos-setup")
+    if ENV("FLIPEROS_ROMPACK_NO_REFRESH") or os.geteuid() != 0 or not os.access(setup, os.X_OK):
+        return
+    try:
+        import subprocess
+        subprocess.run([setup, "--romlists"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+    except Exception:  # noqa: BLE001 - as listas se acertam na proxima abertura do frontend
+        pass
+
+
+def manifest_text(t, title, chosen, kinds, group="", entries=(), meta=()):
+    lines = ["# FliperOS ROM package (Game Packages > ROMs).", "format=" + FORMAT, "type=roms", "title=" + title,
+             "target=" + t["id"], "label=" + t["label"], "kinds=" + ",".join(kinds),
+             "created=" + datetime.date.today().isoformat()]
+    if group:
+        # O grupo e, de cada jogo dele, a rom, a pasta, o arquivo que abre e o titulo.
+        lines.append("group=" + group)
+        lines += ["entry=" + "\t".join(e) for e in entries]
+    # Os metadados que a pessoa editou (o "+" de cada jogo): titulo, ano, categoria...
+    lines += ["meta=" + m for m in meta]
+    lines += ["game=" + n for n in chosen]
+    return "\n".join(lines) + "\n"
+
+
+def free_bytes(path):
+    try:
+        st = os.statvfs(path)
+        return st.f_bavail * st.f_frsize
+    except OSError:
+        return 1 << 62
+
+
+def cmd_create(args):
+    home = args.home
+    progress = Progress(args.progress is not None, *(args.progress or (0, 100)))
+    tmp = ""
+    try:
+        t = find_target(home, args.target)
+        title = clean_title(args.title)
+        if not title:
+            raise Bad("the package needs a title")
+        chosen = list(dict.fromkeys(args.games))
+        if not chosen:
+            raise Bad("choose at least one game")
+        kinds, media_sel = parse_kinds(args.kinds)
+        out = os.path.join(args.packages, package_name(title, t["id"]))
+        if os.path.exists(out) and not args.replace:
+            print("%s is already in the packages folder" % os.path.basename(out), file=sys.stderr)
+            return 3
+        progress.step(0, "Finding the files of %d game%s" % (len(chosen), "" if len(chosen) == 1 else "s"))
+        files, notes = collect(home, t, chosen, kinds, progress, media_sel)
+        group, entries, logo = (args.group or "").strip(), [], ""
+        if group:
+            if not valid_group(group):
+                raise Bad("bad group name: %s" % group)
+            entries = [tuple(x.replace("\t", " ") for x in e) for e in group_entries(home, t, chosen, scan_games(home, t))]
+            if not entries:
+                raise Bad("%s has no command per game: it cannot have a group" % t["label"])
+            # O logotipo: o que ja esta no grupo, ou o novo pedido (que tambem fica aqui).
+            logo = os.path.join(home, "roms", "custom", group, ".logo.png")
+            if args.logo_file or args.logo_system:
+                makedirs(os.path.dirname(logo))
+                if make_logo(logo + ".new", args.logo_file, args.logo_system):
+                    give(logo + ".new")
+                    os.replace(logo + ".new", logo)
+                else:
+                    notes.append("the logo could not be made from that picture")
+            if os.path.isfile(logo):
+                rel = "roms/custom/%s/.logo.png" % group
+                files.append((rel, os.path.getsize(logo), "roms"))
+            # O grupo tambem aqui, como vai ficar em quem instalar.
+            install_group(home, group, entries)
+            refresh_frontends()
+        total = sum(s for _, s, _ in files)
+        makedirs(args.packages)
+        if free_bytes(args.packages) < total + (64 << 20):
+            raise Bad("not enough free space: the package needs %d MB" % ((total + (64 << 20)) >> 20))
+        tmp = os.path.join(args.packages, ".%s.making" % os.path.basename(out))
+        progress.step(0.05, "Packing %d files" % len(files))
+        ticks = Progress(progress.on, progress.pct(0.05), progress.pct(0.98))
+        done = 0
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+            zf.writestr(MANIFEST, manifest_text(t, title, chosen, kinds, group, entries,
+                                                meta_lines(home, scan_games(home, t), chosen)))
+            for rel, size, _ in files:
+                ext = os.path.splitext(rel)[1].lower().lstrip(".")
+                kind = zipfile.ZIP_STORED if ext in STORED_EXTS else zipfile.ZIP_DEFLATED
+                info = zipfile.ZipInfo.from_file(os.path.join(home, rel), rel)
+                info.compress_type = kind
+                with open(os.path.join(home, rel), "rb") as src, zf.open(info, "w", force_zip64=size > (1 << 31)) as dst:
+                    while True:
+                        chunk = src.read(CHUNK)
+                        if not chunk:
+                            break
+                        dst.write(chunk)
+                        done += len(chunk)
+                        ticks.tick(done / max(1, total))
+        os.chmod(tmp, 0o644)
+        give(tmp)
+        os.replace(tmp, out)
+        tmp = ""
+    except (Bad, OSError) as exc:
+        if tmp:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        progress.fail("Create package", exc)
+        print(str(exc), file=sys.stderr)
+        return 1
+    for n in notes:
+        print("note=%s" % n)
+    counts = {}
+    for _, _, kind in files:
+        counts[kind] = counts.get(kind, 0) + 1
+    print("out=%s" % out)
+    print("files=%d" % len(files))
+    print("bytes=%d" % total)
+    print("kinds=%s" % ",".join("%s:%d" % (k, counts[k]) for k in KINDS if k in counts))
+    progress.step(1, "%s is ready" % os.path.basename(out))
+    return 0
+
+
+# ── Conferir e instalar ──
+
+def kind_of(rel):
+    for prefix, kind in PREFIXES:
+        if rel.startswith(prefix):
+            return kind
+    return ""
+
+
+class Package:
+    """Um TITULO.fliperos-ALVO.zip conferido."""
+
+    def __init__(self, path):
+        self.path = path
+        m = NAME_RE.match(os.path.basename(path))
+        if not m or m.group("target") == CUSTOMGAME:
+            raise Bad("%s is not named like a ROM package (TITLE.fliperos-EMULATOR.zip)" % os.path.basename(path))
+        try:
+            self.zf = zipfile.ZipFile(path)
+        except (OSError, zipfile.BadZipFile) as exc:
+            raise Bad("not a zip file: %s" % exc)
+        self.files, cfg = {}, None
+        for info in self.zf.infolist():
+            name = info.filename.replace("\\", "/")
+            parts = name.rstrip("/").split("/")
+            if name.startswith("/") or re.match(r"^[A-Za-z]:", name) or ".." in parts:
+                raise Bad("unsafe path in the zip: %s" % info.filename)
+            if info.flag_bits & 1:
+                raise Bad("the zip is encrypted: %s" % info.filename)
+            ftype = stat.S_IFMT(info.external_attr >> 16) if info.create_system == 3 else 0
+            if ftype not in (0, stat.S_IFREG, stat.S_IFDIR):
+                raise Bad("link or special file in the zip: %s" % info.filename)
+            if name.endswith("/"):
+                continue
+            if name == MANIFEST:
+                cfg = info
+                continue
+            if not kind_of(name):
+                raise Bad("%s is outside the folders a ROM package can fill" % info.filename)
+            self.files[name] = info
+        if cfg is None:
+            raise Bad("%s is missing: not a FliperOS ROM package" % MANIFEST)
+        self.cfg, self.games, self.entries, self.meta = {}, [], [], []
+        for line in self.zf.read(cfg).decode("utf-8", "replace").splitlines():
+            key, sep, value = line.partition("=")
+            if not sep or line.startswith("#"):
+                continue
+            if key.strip() == "game":
+                self.games.append(value.strip())
+            elif key.strip() == "meta":
+                self.meta.append(value)
+            elif key.strip() == "entry":
+                cols = value.split("\t")
+                # rom, pasta, arquivo que abre (dentro de roms/) e titulo.
+                if len(cols) == 4 and cols[2].startswith("roms/") and ".." not in cols[2].split("/") \
+                        and launch_argv(cols[1], cols[0], "x") is not None:
+                    self.entries.append(tuple(cols))
+            else:
+                self.cfg[key.strip()] = value.strip()
+        self.group = self.cfg.get("group", "")
+        if self.group and not valid_group(self.group):
+            raise Bad("bad group name in the package: %s" % self.group)
+        if self.cfg.get("type") != "roms":
+            raise Bad("%s is not a ROM package (type=%s)" % (os.path.basename(path), self.cfg.get("type", "")))
+        if not any(kind_of(n) == "roms" for n in self.files):
+            raise Bad("the package has no ROM")
+        self.target = self.cfg.get("target") or m.group("target")
+        self.title = self.cfg.get("title") or m.group("title")
+        self.bytes = sum(i.file_size for i in self.files.values())
+
+    def compare(self, home):
+        """(novos, iguais, diferentes): os arquivos do pacote contra os do
+        gabinete (o tamanho e, se igual, o CRC do zip)."""
+        new, same, differ = [], [], []
+        for name, info in self.files.items():
+            full = os.path.join(home, name)
+            try:
+                st = os.stat(full)
+            except OSError:
+                new.append(name)
+                continue
+            if st.st_size != info.file_size:
+                differ.append(name)
+            elif crc_of(full) == info.CRC:
+                same.append(name)
+            else:
+                differ.append(name)
+        return new, same, differ
+
+    def quick_state(self, home):
+        """O estado pela lista (so o tamanho, sem ler os arquivos)."""
+        present = 0
+        for name, info in self.files.items():
+            try:
+                if os.path.getsize(os.path.join(home, name)) == info.file_size:
+                    present += 1
+            except OSError:
+                pass
+        if present == len(self.files):
+            return "installed"
+        return "partial" if present else "new"
+
+
+def crc_of(path):
+    crc = 0
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(CHUNK)
+            if not chunk:
+                return crc & 0xFFFFFFFF
+            crc = zlib.crc32(chunk, crc)
+
+
+def cmd_inspect(args):
+    try:
+        pkg = Package(args.zip)
+    except Bad as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    counts = {}
+    for n in pkg.files:
+        counts[kind_of(n)] = counts.get(kind_of(n), 0) + 1
+    print("title=%s" % pkg.title)
+    print("target=%s" % pkg.target)
+    print("label=%s" % pkg.cfg.get("label", pkg.target))
+    print("created=%s" % pkg.cfg.get("created", ""))
+    print("group=%s" % pkg.group)
+    print("games=%d" % len(pkg.games))
+    print("files=%d" % len(pkg.files))
+    print("bytes=%d" % pkg.bytes)
+    print("kinds=%s" % ",".join("%s:%d" % (k, counts[k]) for k in KINDS if k in counts))
+    if args.compare:
+        new, same, differ = pkg.compare(args.home)
+        print("new=%d" % len(new))
+        print("same=%d" % len(same))
+        print("differ=%d" % len(differ))
+    for g in pkg.games:
+        print("game=%s" % g)
+    return 0
+
+
+def is_rompack(name):
+    m = NAME_RE.match(os.path.basename(name))
+    return bool(m and m.group("target") != CUSTOMGAME)
+
+
+def cmd_packages(args):
+    out = []
+    for e in sorted(listdir(args.packages), key=lambda e: e.name.lower()):
+        if not e.is_file() or not is_rompack(e.name):
+            continue
+        row = {"zip": e.path, "file": e.name, "size": e.stat().st_size}
+        try:
+            pkg = Package(e.path)
+            counts = {}
+            for n in pkg.files:
+                counts[kind_of(n)] = counts.get(kind_of(n), 0) + 1
+            row.update({"title": pkg.title, "target": pkg.target, "label": pkg.cfg.get("label", pkg.target),
+                        "created": pkg.cfg.get("created", ""), "games": pkg.games, "files": len(pkg.files),
+                        "group": pkg.group,
+                        "bytes": pkg.bytes, "kinds": counts, "state": pkg.quick_state(args.home)})
+            # A arte do cartao: a primeira imagem, video e logotipo de dentro do pacote.
+            for key, kind, exts in (("snap", "snap", (".png", ".jpg", ".jpeg", ".webp", ".gif")),
+                                    ("video", "preview", (".mp4", ".webm", ".mkv")),
+                                    ("logo", "logo", (".png", ".jpg", ".jpeg", ".webp"))):
+                row[key] = next((n for n in sorted(pkg.files) if n.startswith("media/%s/" % kind)
+                                 and n.lower().endswith(exts)), "")
+        except Bad as exc:
+            row.update({"state": "bad", "why": str(exc)})
+        out.append(row)
+    if args.text:
+        # ZIP|TITULO|EMULADOR|JOGOS|ESTADO|BYTES|MOTIVO (o Setup no gabinete).
+        clean = lambda s: str(s).replace("|", "/").replace("\n", " ")
+        for r in out:
+            print("|".join(clean(x) for x in (r["zip"], r.get("title", r["file"]), r.get("label", ""),
+                                              len(r.get("games", [])), r["state"], r.get("bytes", r["size"]),
+                                              r.get("why", ""))))
+        return 0
+    json.dump(out, sys.stdout, ensure_ascii=False)
+    print()
+    return 0
+
+
+def cmd_install(args):
+    home = args.home
+    progress = Progress(args.progress is not None, *(args.progress or (0, 100)))
+    try:
+        pkg = Package(args.zip)
+        progress.step(0, "Checking %s" % os.path.basename(args.zip))
+        new, same, differ = pkg.compare(home)
+        write = new + (differ if args.replace else [])
+        need = sum(pkg.files[n].file_size for n in write)
+        if write and free_bytes(home) < need + (64 << 20):
+            raise Bad("not enough free space: the games need %d MB" % ((need + (64 << 20)) >> 20))
+        progress.step(0.05, "Installing %d files" % len(write))
+        ticks = Progress(progress.on, progress.pct(0.05), progress.pct(0.99))
+        done = 0
+        for name in sorted(write):
+            info = pkg.files[name]
+            dest = os.path.join(home, *name.split("/"))
+            makedirs(os.path.dirname(dest))
+            if os.path.islink(dest):
+                os.remove(dest)
+            tmp = dest + ".fliperos-new"
+            with pkg.zf.open(info) as src, open(tmp, "wb") as out:
+                while True:
+                    chunk = src.read(CHUNK)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    done += len(chunk)
+                    ticks.tick(done / max(1, need))
+            os.chmod(tmp, 0o644)
+            give(tmp)
+            os.replace(tmp, dest)
+        # O grupo do pacote: um sistema nos frontends, com o logotipo que veio.
+        grouped = install_group(home, pkg.group, pkg.entries) if pkg.group and pkg.entries else 0
+        if grouped:
+            refresh_frontends()
+        # Os metadados editados que vieram no pacote, e as listas com eles.
+        metas = merge_meta(home, pkg.meta)
+        if metas:
+            refresh_lists()
+    except (Bad, OSError, zipfile.BadZipFile) as exc:
+        progress.fail("Install package", exc)
+        print(str(exc), file=sys.stderr)
+        return 1
+    print("title=%s" % pkg.title)
+    print("installed=%d" % len(write))
+    print("same=%d" % len(same))
+    print("kept=%d" % (0 if args.replace else len(differ)))
+    if grouped:
+        print("group=%s" % pkg.group)
+        print("grouped=%d" % grouped)
+    if metas:
+        print("meta=%d" % metas)
+    progress.step(1, "%s is installed" % pkg.title)
+    return 0
+
+
+def cmd_is_package(args):
+    return 0 if is_rompack(args.file) else 1
+
+
+def main():
+    home = player_home()
+    p = argparse.ArgumentParser(prog="fliperos-rompack")
+    p.add_argument("--home", default=ENV("FLIPEROS_ROMPACK_HOME", home))
+    p.add_argument("--packages", default=ENV("FLIPEROS_CUSTOMGAME_PACKAGES", os.path.join(home, "roms", "custom-packages")))
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("targets")
+    s.add_argument("--all", action="store_true")
+    s.add_argument("--text", action="store_true")
+    s = sub.add_parser("games")
+    s.add_argument("target")
+    s.add_argument("--text", action="store_true")
+    s.add_argument("--media-types", action="store_true")
+    s = sub.add_parser("create")
+    s.add_argument("--target", required=True)
+    s.add_argument("--title", required=True)
+    s.add_argument("--kinds")
+    s.add_argument("--group")
+    s.add_argument("--logo-file")
+    s.add_argument("--logo-system")
+    s.add_argument("--replace", action="store_true")
+    s.add_argument("--progress", nargs="*", type=int)
+    s.add_argument("--game", dest="games", action="append", default=[])
+    s.add_argument("--games-file")
+    s = sub.add_parser("inspect")
+    s.add_argument("zip")
+    s.add_argument("--compare", action="store_true")
+    s = sub.add_parser("packages")
+    s.add_argument("--text", action="store_true")
+    s = sub.add_parser("install")
+    s.add_argument("zip")
+    s.add_argument("--replace", action="store_true")
+    s.add_argument("--progress", nargs="*", type=int)
+    s = sub.add_parser("is-package")
+    s.add_argument("file")
+    args = p.parse_args()
+    if getattr(args, "progress", None) is not None and len(args.progress) not in (0, 2):
+        p.error("--progress takes no value or START END")
+    if args.cmd == "create" and args.games_file:
+        with open(args.games_file, encoding="utf-8") as f:
+            args.games += [ln.rstrip("\n") for ln in f if ln.strip()]
+    if args.cmd == "create" and not TARGET_RE.match(args.target):
+        p.error("bad target")
+    return {"targets": cmd_targets, "games": cmd_games, "create": cmd_create, "inspect": cmd_inspect,
+            "packages": cmd_packages, "install": cmd_install, "is-package": cmd_is_package}[args.cmd](args)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except BrokenPipeError:
+        sys.exit(1)

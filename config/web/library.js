@@ -278,12 +278,25 @@ async function loadInstall() {
   $("extras-list").replaceChildren(...data.extras.map((e) => installBox("extras", e)));
 }
 
+// Restore FliperOS settings (config/fliperos-emulators restore): so nos que
+// tem configuracao (ja abertos); a de agora vai para ~/config-backup.
+function restoreButton(item) {
+  const name = item.label.split(" (")[0];
+  const b = el("button", { type: "button", class: "ghost", "data-icon": "⟲" }, t("inst_restore"));
+  b.addEventListener("click", () => {
+    if (confirm(t("inst_restore_ask").replace("%s", name)))
+      startTask("/api/install", { group: "emulators", name: item.name, action: "restore" });
+  });
+  return b;
+}
+
 function installBox(group, item) {
   const state = item.installed ? t("inst_installed") + (item.version ? " · " + item.version : "") : t("inst_not");
   const box = el("div", { class: "dl-kind" }, el("div", { class: "row" }, el("strong", {}, item.label),
     el("span", { class: "dim" }, state)));
   if (item.kind === "image") {
     box.append(el("div", { class: "dim" }, t(item.installed ? "inst_image" : "inst_image_missing")));
+    if (group === "emulators" && item.restore) box.append(el("div", { class: "row start" }, restoreButton(item)));
     return box;
   }
   const go = el("button", { type: "button", "data-icon": item.installed ? "↻" : "⬇" },
@@ -303,6 +316,7 @@ function installBox(group, item) {
         : r.state === "new" ? t("inst_new").replace("%s", r.want) : t("inst_unknown");
     });
     actions.append(check, note);
+    if (item.restore) actions.append(restoreButton(item));
   }
   box.append(actions);
   if (item.kind === "source") box.append(el("div", { class: "dim" }, t("inst_kof")));

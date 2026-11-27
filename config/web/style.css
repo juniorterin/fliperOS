@@ -106,6 +106,18 @@ svg.g { width: 16px; height: 16px; flex: none; }
 .chip-btn { background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--muted); }
 .chip-btn:hover { color: var(--fg); border-color: var(--purple); }
 .side-power { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* Os links do site (compartilhar, wiki, GitHub, Telegram), com as cores dos botoes do site. */
+.side-links { display: grid; gap: 8px; }
+.side-link { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: rgba(68,71,90,.18); color: var(--fg); font: inherit; font-size: 13.5px; font-weight: 600;
+  text-decoration: none; cursor: pointer; }
+.side-link svg.g { width: 14px; height: 14px; }
+.side-link.pink { border-color: rgba(255,121,198,.55); background: rgba(255,121,198,.08); }
+.side-link.green { border-color: rgba(80,250,123,.5); background: rgba(80,250,123,.07); }
+.side-link.purple { border-color: rgba(189,147,249,.55); background: rgba(189,147,249,.08); }
+.side-link.cyan { border-color: rgba(139,233,253,.5); background: rgba(139,233,253,.07); }
+.side-link:hover { filter: brightness(1.25); }
+@media (max-height: 820px) { .side-links { grid-template-columns: 1fr 1fr; } .side-link span { font-size: 12px; } }
 .side-power .chip-btn, .menu-item:has(svg) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .menu-item:has(svg) { justify-content: flex-start; }
 .side-power svg.g, .menu-item svg.g { width: 14px; height: 14px; }

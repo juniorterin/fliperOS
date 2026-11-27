@@ -104,6 +104,8 @@ ENV = os.environ.get
 USER = ENV("FLIPEROS_USER", "fliperos")
 BIN = ENV("FLIPEROS_BIN", "/opt/fliperos/bin")
 SUFFIX = ".fliperos-customgame.zip"
+# O nome de um pacote de ROM (config/fliperos-rompack), na mesma pasta.
+ROMPACK_RE = re.compile(r"^.+\.fliperos-(?!customgame\.)[a-z0-9][a-z0-9-]*\.zip$")
 FORMAT = "1"
 
 IMAGE_EXTS = ("png", "jpg", "jpeg", "webp", "gif")
@@ -514,6 +516,10 @@ def packages(folder, misnamed=False):
     for n in names:
         low = n.lower()
         path = os.path.join(folder, n)
+        # Um pacote de ROM (TITULO.fliperos-mame.zip, config/fliperos-rompack) mora na mesma pasta: nao e um
+        # pacote de jogo custom com o nome errado.
+        if misnamed and ROMPACK_RE.match(n) and not low.endswith(SUFFIX):
+            continue
         if low.endswith(".zip") and low.endswith(SUFFIX) != misnamed and not n.startswith(".") and os.path.isfile(path):
             out.append(path)
     return out

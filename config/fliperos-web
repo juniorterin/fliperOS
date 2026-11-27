@@ -3396,6 +3396,13 @@ def menu_sounds():
 # subida antes para uma pasta de espera (stage) e passada ao Setup pelo
 # caminho. Os jogos de uma pasta sao copiados para ~/games/GRUPO/NOME.
 CUSTOMGAME_TOOL = ENV("FLIPEROS_CUSTOMGAME", BIN + "/fliperos-customgame")
+# Os pacotes de ROM (config/fliperos-rompack): TITULO.fliperos-EMULADOR.zip, na
+# mesma pasta dos pacotes de jogo custom.
+ROMPACK_TOOL = ENV("FLIPEROS_ROMPACK", BIN + "/fliperos-rompack")
+# Os metadados editados de cada jogo (config/fliperos-gamemeta).
+GAMEMETA_TOOL = ENV("FLIPEROS_GAMEMETA_TOOL", BIN + "/fliperos-gamemeta")
+ROMPACK_NAME = re.compile(r"^.+\.fliperos-(?!customgame\.zip$)[a-z0-9][a-z0-9-]*\.zip$")
+ROMPACK_KINDS = ("bios", "media", "nvram", "save", "cheats", "config")
 CUSTOMGAME_FIELDS = ("group", "name", "platform", "folder", "exe", "command", "mode", "category", "controls",
                      "buttons", "players", "snap", "video", "text", "text_string", "wine", "key", "ppdb", "runner", "logo",
                      "year", "developer", "joystick", "crop", "icon")
@@ -3832,8 +3839,11 @@ def installables():
     """Os emuladores (com a versao instalada) e os extras, como nas telas
     Emulators & Games e Extras."""
     versions = {r["name"]: r["version"] for r in tool_lines([EMULATORS_TOOL, "versions"], ("name", "version"))}
+    # restore: tem configuracao para voltar a original do FliperOS (null: o
+    # emulador nao tem o que restaurar; false: ainda nao foi aberto).
+    restorable = {r["name"]: r["has"] == "1" for r in tool_lines([EMULATORS_TOOL, "restorable"], ("name", "has"))}
     emulators = [{"name": r["name"], "installed": r["installed"] == "1", "kind": r["kind"], "label": r["label"],
-                  "version": versions.get(r["name"], "")}
+                  "version": versions.get(r["name"], ""), "restore": restorable.get(r["name"])}
                  for r in tool_lines([EMULATORS_TOOL, "list"], ("name", "installed", "kind", "label"))]
     extras = [{"name": r["name"], "installed": r["installed"] == "1", "label": r["label"]}
               for r in tool_lines([EXTRAS, "list"], ("name", "installed", "label"))]
@@ -4454,6 +4464,26 @@ class Handler(BaseHTTPRequestHandler):
                         "/api/customgames/package-media", "/api/customgames/test-state", "/api/customgames/package-parts",
                         "/api/customgames/package-part"):
             return self.customgames_get(url)
+        if url.path in ("/api/rompacks", "/api/rompacks/targets", "/api/rompacks/games"):
+            return self.rompacks_get(url)
+        if url.path == "/api/gamemeta":
+            # Os metadados de um jogo (o "+" do Create package > ROMs): os
+            # campos com as edicoes da pessoa e a arte que ele tem (as previas
+            # vem por /api/media, so quando a ficha abre).
+            query = parse_qs(url.query)
+            system = self.panel.system((query.get("system") or [""])[0])
+            name = (query.get("game") or [""])[0]
+            if not system or not name or "/" in name:
+                return self.send(404, {"error": "no such game"})
+            try:
+                done = subprocess.run(["python3", GAMEMETA_TOOL, "get", system["key"], name, "--list", romlist_path(system)],
+                                      capture_output=True, text=True, timeout=30)
+                data = json.loads(done.stdout)
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                return self.send(500, {"error": str(exc)})
+            clone = read_romlist(system)[0].get(name, {}).get("CloneOf")
+            data["media"] = [kind for kind in MEDIA_EXTS if media_file(system["key"], (name, clone), kind, MEDIA_EXTS[kind])]
+            return self.send(200, data)
         if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
             return self.setup_get(url)
         if url.path in ("/api/osd/profiles", "/api/sounds", "/api/sounds/file"):
@@ -4760,6 +4790,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.romfilter_action(url.path.rsplit("/", 1)[1], self.body())
         if url.path.startswith("/api/customgames/"):
             return self.customgames_post(url)
+        if url.path.startswith("/api/rompacks/"):
+            return self.rompacks_post(url.path.rsplit("/", 1)[1], self.body(4 << 20))
+        if url.path == "/api/gamemeta":
+            # Grava os metadados editados de um jogo e os poe na lista do sistema.
+            data = self.body()
+            system = self.panel.system(str(data.get("system", "")))
+            name, fields = str(data.get("game", "")), data.get("fields")
+            if not system or not name or "/" in name or not isinstance(fields, dict) or len(fields) > 30 or \
+                    not all(isinstance(k, str) and isinstance(v, (str, int)) for k, v in fields.items()):
+                return self.send(400, {"error": "system, game and fields"})
+            pairs = ["%s=%s" % (k, str(v).replace("\n", " ")[:200]) for k, v in fields.items()]
+            try:
+                done = subprocess.run(["python3", GAMEMETA_TOOL, "set", system["key"], name, "--list", romlist_path(system),
+                                       "--folder", system["folder"]] + pairs, capture_output=True, text=True, timeout=60)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            if done.returncode != 0:
+                return self.send(400, {"error": done.stderr.strip()[-300:] or "not saved"})
+            return self.send(200, {"saved": True})
         if url.path in ("/api/setup/open", "/api/setup/task", "/api/quirks", "/api/folders", "/api/frontends",
                         "/api/bluetooth"):
             return self.setup_post(url.path, self.body())
@@ -5183,6 +5232,15 @@ class Handler(BaseHTTPRequestHandler):
             row = next((r for r in installables()["emulators"] if r["name"] == name), None)
             if not row:
                 return self.send(404, {"error": "no such emulator"})
+            if data.get("action") == "restore":
+                # Restore FliperOS settings: a de agora vai para ~/config-backup.
+                if not row.get("restore"):
+                    return self.send(400, {"error": "it has no settings to restore"})
+                task = self.panel.tasks.start("Restore %s settings" % row["label"].split(" (")[0],
+                                              [EMULATORS_TOOL, "restore", name, "--progress"], "extras")
+                if not task:
+                    return self.send(409, {"error": "another installation is running"})
+                return self.send(200, task.info())
             if row["kind"] == "image":
                 return self.send(400, {"error": "it comes with the FliperOS image and updates with it"})
             argv, label = [EMULATORS_TOOL, "install", name, "--progress"], row["label"]
@@ -5553,6 +5611,103 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(400, {"error": "bad request"})
         return self.send(500 if done.returncode != 1 else 400,
                          {"error": out[-300:] or (done.stderr or "").strip()[-300:] or "failed"})
+
+    # ── Pacotes de ROM (Game Packages > ROMs e Create package) ──
+
+    def rompacks_get(self, url):
+        """Os pacotes de ROM da pasta dos pacotes (/api/rompacks), os
+        emuladores e cores com jogos (targets) e os jogos de um (games)."""
+        query = parse_qs(url.query)
+        if url.path == "/api/rompacks":
+            argv = ["packages"]
+        elif url.path == "/api/rompacks/targets":
+            argv = ["targets"]
+        else:
+            target = (query.get("target") or [""])[0]
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,60}", target):
+                return self.send(400, {"error": "target: an emulator or core"})
+            argv = ["games", target]
+        try:
+            done = subprocess.run(["python3", ROMPACK_TOOL, "--packages", customgame_packages_dir()] + argv,
+                                  capture_output=True, text=True, timeout=180)
+            if done.returncode != 0:
+                return self.send(400, {"error": (done.stderr or done.stdout).strip()[-300:] or "failed"})
+            data = json.loads(done.stdout)
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            return self.send(500, {"error": str(exc)})
+        if url.path == "/api/rompacks":
+            return self.send(200, {"packages": data, "packages_dir": customgame_packages_dir()})
+        return self.send(200, {"targets": data} if url.path.endswith("/targets") else data)
+
+    def rompacks_post(self, action, data):
+        """create {target, title, games, kinds, replace}: o pacote (tarefa);
+        inspect {zip}: o que ele traz contra o que o gabinete ja tem; install
+        {zip, replace}: instala (tarefa); delete {zip}: apaga o zip."""
+        tasks = self.panel.tasks
+        if action == "create":
+            target, title = str(data.get("target", "")), str(data.get("title", "")).strip()
+            games, kinds = data.get("games"), data.get("kinds")
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,60}", target) or not title or len(title) > 120 \
+                    or not isinstance(games, list) or not games or len(games) > 20000 \
+                    or not all(isinstance(g, str) and g and "\n" not in g for g in games) \
+                    or not isinstance(kinds, list) or not all(isinstance(k, str) and (
+                        k in ROMPACK_KINDS or re.fullmatch(r"media:[A-Za-z0-9_.-]{1,40}", k)) for k in kinds):
+                return self.send(400, {"error": "target, title, games and kinds"})
+            fd, path = tempfile.mkstemp(prefix="rompack-", suffix=".list", dir=stage_dir())
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write("\n".join(games) + "\n")
+            argv = ["python3", ROMPACK_TOOL, "--packages", customgame_packages_dir(), "create", "--target", target,
+                    "--title", title, "--kinds", ",".join(kinds), "--games-file", path, "--progress"] + \
+                (["--replace"] if data.get("replace") else [])
+            # O grupo proprio (um sistema nos frontends) e o logotipo dele: uma
+            # imagem enviada (o id da pasta de espera) ou um da lista do FliperOS.
+            group = str(data.get("group") or "").strip()
+            if group:
+                if len(group) > 80 or group.startswith(".") or re.search(r"[/\\|\n\r]", group):
+                    os.unlink(path)
+                    return self.send(400, {"error": "bad group name"})
+                argv += ["--group", group]
+                if data.get("logo"):
+                    logo = stage_path(str(data["logo"]))
+                    if not logo:
+                        os.unlink(path)
+                        return self.send(400, {"error": "no such logo"})
+                    argv += ["--logo-file", logo]
+                elif data.get("system"):
+                    argv += ["--logo-system", str(data["system"])[:80]]
+            task = tasks.start("ROM package %s" % title[:80], argv, "rompacks")
+            if not task:
+                os.unlink(path)
+                return self.send(409, {"error": "another ROM package task is running"})
+            return self.send(200, task.info())
+        path = str(data.get("zip", ""))
+        if not path.lower().endswith(".zip") or not os.path.isfile(path) or not inside(path, customgame_packages_dir()) \
+                or not ROMPACK_NAME.match(os.path.basename(path)):
+            return self.send(400, {"error": "no such ROM package in %s" % customgame_packages_shown()})
+        if action == "inspect":
+            try:
+                done = subprocess.run(["python3", ROMPACK_TOOL, "inspect", "--compare", path], capture_output=True,
+                                      text=True, timeout=600)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return self.send(500, {"error": str(exc)})
+            if done.returncode != 0:
+                return self.send(400, {"error": done.stderr.strip()[-300:] or "not a ROM package"})
+            info = key_values(done.stdout)
+            info["games"] = [ln[5:] for ln in done.stdout.splitlines() if ln.startswith("game=")]
+            return self.send(200, info)
+        if action == "install":
+            argv = ["python3", ROMPACK_TOOL, "install", path, "--progress"] + (["--replace"] if data.get("replace") else [])
+            task = tasks.start("Install %s" % os.path.basename(path)[:-4], argv, "rompacks")
+            if not task:
+                return self.send(409, {"error": "another ROM package task is running"})
+            return self.send(200, task.info())
+        if action == "delete":
+            try:
+                os.remove(path)
+            except OSError as exc:
+                return self.send(500, {"error": str(exc)})
+            return self.send(200, {"deleted": os.path.basename(path)})
+        return self.send(404, {"error": "no such action"})
 
     # ── Jogos custom ──
 

@@ -29,4 +29,17 @@
     <generic-icon name="package-x-generic"/>
     <glob pattern="*.fliperos-customgame.zip.[0-9][0-9][0-9]" weight="60"/>
   </mime-type>
+  <!--
+    O terceiro e o pacote de ROM (TITULO.fliperos-EMULADOR.zip, config/fliperos-rompack): o
+    mesmo instalador o reconhece pelo nome e poe cada arquivo de volta no lugar. O glob dele e
+    mais curto que o do jogo custom, entao um .fliperos-customgame.zip continua do primeiro tipo.
+  -->
+  <mime-type type="application/x-fliperos-rompack">
+    <comment>FliperOS ROM package</comment>
+    <comment xml:lang="pt-BR">Pacote de ROMs do FliperOS</comment>
+    <sub-class-of type="application/zip"/>
+    <icon name="application-x-fliperos-customgame"/>
+    <generic-icon name="package-x-generic"/>
+    <glob pattern="*.fliperos-*.zip" weight="55"/>
+  </mime-type>
 </mime-info>

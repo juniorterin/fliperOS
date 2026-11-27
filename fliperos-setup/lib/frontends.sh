@@ -639,10 +639,31 @@ frontends_attract_lists() {
 frontends_lists() {
   frontends_arcade_resync
   frontends_openbor_meta
+  frontends_gamemeta
   if frontends_attract_wanted; then
     frontends_attract > /dev/null
     chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
   fi
+  return 0
+}
+
+# frontends_gamemeta: os metadados que a pessoa editou (o "+" de cada jogo no
+# painel, config/fliperos-gamemeta) de volta nas listas refeitas, em cada
+# pasta que tem edicao. Como o usuario: as listas sao dele.
+GAMEMETA_CMD=${GAMEMETA_CMD:-$FLIPEROS_BIN/fliperos-gamemeta}
+frontends_gamemeta() {
+  local store key dir name keys
+  store=$(getent passwd "${FLIPEROS_USER:-fliperos}" | cut -d: -f6)/.config/fliperos/game-meta.tsv
+  [[ -x $GAMEMETA_CMD && -s $store ]] || return 0
+  keys=$(cut -f1 "$store" | sort -u)
+  while IFS='|' read -r key dir _ name _; do
+    grep -qxF -- "$key" <<< "$keys" || continue
+    if ((EUID == 0)) && id "${FLIPEROS_USER:-fliperos}" > /dev/null 2>&1; then
+      runuser -u "$FLIPEROS_USER" -- python3 "$GAMEMETA_CMD" apply "$key" "$FLIPEROS_LISTS/${name//\//-}.txt" "$dir" > /dev/null 2>> "$FLIPEROS_LOG"
+    else
+      python3 "$GAMEMETA_CMD" apply "$key" "$FLIPEROS_LISTS/${name//\//-}.txt" "$dir" > /dev/null 2>> "${FLIPEROS_LOG:-/dev/null}"
+    fi
+  done < <(frontends_systems)
   return 0
 }
 

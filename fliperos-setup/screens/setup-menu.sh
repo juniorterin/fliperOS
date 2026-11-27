@@ -194,7 +194,7 @@ screen_setup_games() {
       "emulators|Emulators & Games|What is installed, and install what is not in the image." \
       "frontend|Frontend|The game list that starts when the computer turns on." \
       "extras|Extras|Wine, PortProton, Steam, Heroic, Pixelcade, ZeDMD, game outputs." \
-      "custom|Custom games|PC games, scripts and your own emulators, as frontend systems." \
+      "custom|Game Packages|PC games, ROM packages, scripts and your own emulators." \
       "folders|Folders|Shortcuts to other disks, and external storage." \
       "downloader|Downloader|MAME ROM/CHD sets by torrent and free homebrew games." \
       "cleaner|Cleaner|Filter a MAME romset: only the games you want, per emulator." \
@@ -206,7 +206,7 @@ screen_setup_games() {
       frontend) screen_frontend ;;
       emulators) screen_emulators ;;
       extras) screen_extras ;;
-      custom) screen_custom_games ;;
+      custom) screen_game_packages ;;
       folders) screen_folders ;;
       downloader) screen_need_internet "The Downloader" && screen_downloads ;;
       cleaner) screen_cleaner ;;
@@ -705,7 +705,45 @@ screen_bootmedia() {
   fi
 }
 
-# ── Custom games ─────────────────────────────────────────────────
+# ── Game Packages ────────────────────────────────────────────────
+# Tres areas: PC Games (os jogos de PC, scripts e emuladores seus,
+# lib/customgames.sh), ROMs (os pacotes de ROM, lib/rompacks.sh) e Create
+# package, que pergunta de que e o pacote. Os dois tipos de pacote moram na
+# mesma pasta, ~/roms/custom-packages.
+
+screen_game_packages() {
+  local title="Game Packages" choice last="" n rows
+  customgames_packages_migrate
+  customgames_packages_dir
+  while true; do
+    rows=$(rompack_packages)
+    n=$(awk -F'|' '$5 == "new" || $5 == "partial"' <<< "$rows" | grep -c .)
+    choice=$(UI_BOARD_ENTER=OPEN ui_board "$title" \
+      "PC games and ROMs in packages: install them here, or make one to take to another FliperOS." "$last" \
+      "pc|PC Games|PC Games|action|PC|PC games, scripts and your own emulators, in groups." \
+      "roms|ROMs$( ((n)) && echo " ($n new)")|ROMs|text|$( ((n)) && echo "$n NEW" || echo "PACKAGES")|ROM packages: the games of an emulator with their BIOS, art, memory, saves and cheats." \
+      "+create|Create package|Create package|action|NEW ZIP|A package of a PC game or of ROMs." \
+      "return|Return|Return|action|BACK|") || return 0
+    last=$choice
+    case $choice in
+      return) return 0 ;;
+      pc) screen_custom_games ;;
+      roms) screen_rom_packages ;;
+      +create)
+        choice=$(ui_menu "Create package" "What goes in the package?" pc \
+          "pc|A PC game (a game folder, or an installed game)" \
+          "rom|ROMs (the games of an emulator or core, with what they use)" "return|Return") || continue
+        case $choice in
+          pc) screen_custom_create_area ;;
+          rom) screen_rom_create ;;
+        esac
+        last=+create
+        ;;
+    esac
+  done
+}
+
+# ── PC Games ─────────────────────────────────────────────────────
 # lib/customgames.sh: programas que nao sao ROM, em grupos que os frontends
 # mostram como sistemas. Os grupos em azulejos, com quantos jogos cada um
 # tem, e duas areas separadas: Install games (os pacotes da pasta deles,
@@ -713,7 +751,7 @@ screen_bootmedia() {
 # (o pacote vai para essa pasta).
 
 screen_custom_games() {
-  local title="Custom games" choice last="" group n
+  local title="PC Games" choice last="" group n
   local -a tiles groups pending
   customgames_packages_migrate
   customgames_packages_dir
@@ -1101,9 +1139,15 @@ screen_custom_join() {
 # por pacote, mesmo com varias escolhidas) e o zip entra como qualquer outro.
 # Status 1: nada foi instalado.
 screen_install_packages() {
-  local title="Install games" zip info name group default total ok=0 out seen j
+  local title="Install games" zip info name group default total ok=0 out seen j roms=0
   local -a zips=() installed=() joined=()
   for zip in "$@"; do
+    # Um pacote de ROM (TITULO.fliperos-EMULADOR.zip): o instalador dele, que
+    # nao tem grupo (cada arquivo volta ao lugar de onde saiu).
+    if rompack_is_package "$zip"; then
+      [[ -f $zip ]] && screen_rom_install "$(realpath -- "$zip")" && ((roms++))
+      continue
+    fi
     if customgames_is_part "$zip"; then
       [[ -f $zip ]] || continue
       out=$(customgames_tool parts "$zip" 2> /dev/null | sed -n 's/^out=//p')
@@ -1119,8 +1163,9 @@ screen_install_packages() {
     [[ -f $zip ]] && zips+=("$(realpath -- "$zip")")
   done
   total=${#zips[@]}
+  ((total == 0 && roms > 0)) && return 0
   if ((total == 0)); then
-    ui_msg "$title" "$(ui_bad "There is no package to install.")" "" "Double-click a GAME.fliperos-customgame.zip, or any part of one (.zip.001, .002...)."
+    ui_msg "$title" "$(ui_bad "There is no package to install.")" "" "Double-click a GAME.fliperos-customgame.zip, any part of one (.zip.001, .002...) or a TITLE.fliperos-EMULATOR.zip of ROMs."
     return 1
   fi
   for zip in "${zips[@]}"; do
@@ -1212,6 +1257,156 @@ screen_custom_create_area() {
         ;;
     esac
   done
+}
+
+# ── ROMs: os pacotes de ROM ──────────────────────────────────────
+# lib/rompacks.sh: TITULO.fliperos-EMULADOR.zip na pasta dos pacotes, para
+# instalar (cada arquivo volta ao mesmo lugar da home) ou apagar.
+
+screen_rom_packages() {
+  local title="ROMs" choice last="" zip ptitle label games state bytes why row
+  local -a rows entries
+  while true; do
+    mapfile -t rows < <(rompack_packages)
+    entries=()
+    for row in "${rows[@]}"; do
+      IFS='|' read -r zip ptitle label games state bytes why <<< "$row"
+      case $state in
+        new) entries+=("$zip|$ptitle ($label, $games games)") ;;
+        partial) entries+=("$zip|$ptitle ($label, $games games, partly installed)") ;;
+        installed) entries+=("$zip|$ptitle ($label, installed)") ;;
+        *) entries+=("$zip|$(basename "$zip") (cannot install)") ;;
+      esac
+    done
+    entries+=("return|Return")
+    choice=$(UI_STYLE=list ui_menu "$title" \
+      "Put TITLE.fliperos-EMULATOR.zip in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES") (the network share \\\\fliperos\\roms\\custom-packages), or make one in Create package." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    [[ $choice == return ]] && return 0
+    row=$(printf '%s\n' "${rows[@]}" | awk -F'|' -v z="$choice" '$1 == z' | head -n 1)
+    IFS='|' read -r zip ptitle label games state bytes why <<< "$row"
+    if [[ $state == bad ]]; then
+      ui_msg "$title" "$(ui_bad "$(basename "$zip") cannot be installed:")" "  - $why"
+      ui_yesno "$title" "Delete $(basename "$zip")?" no && customgames_package_delete "$zip"
+      continue
+    fi
+    choice=$(ui_menu "$title" "$ptitle: $games games of $label, $((bytes / 1048576)) MB." install \
+      "install|Install$([[ $state == installed ]] && echo " again")" "delpkg|Delete the package (installed games stay)" \
+      "return|Return") || continue
+    case $choice in
+      install) screen_rom_install "$zip" ;;
+      delpkg)
+        ui_yesno "$title" "Delete $(basename "$zip")? The games it installed stay." no &&
+          { customgames_package_delete "$zip" || ui_msg "$title" "$(ui_bad "Could not delete $(basename "$zip").")"; }
+        ;;
+    esac
+  done
+}
+
+# screen_rom_install ZIP [noask]: confere, pergunta e instala. Um arquivo que
+# ja esta no gabinete com outro conteudo (o save, a memoria, uma ROM de outra
+# versao) so e trocado se a pessoa disser. No fim, se o zip da pasta dos
+# pacotes sai. Status 1: nao instalou.
+screen_rom_install() {
+  local zip=$1 title="ROMs" info ptitle label games fresh differ bytes replace="" group
+  ui_info "$title" "Checking $(basename "$zip")..." > /dev/tty 2>&1 || true
+  if ! info=$(rompack_tool inspect --compare "$zip" 2>&1); then
+    ui_msg "$title" "$(ui_bad "$(basename "$zip") is not a FliperOS ROM package.")" "" "$info"
+    return 1
+  fi
+  ptitle=$(sed -n 's/^title=//p' <<< "$info")
+  label=$(sed -n 's/^label=//p' <<< "$info")
+  games=$(sed -n 's/^games=//p' <<< "$info")
+  fresh=$(sed -n 's/^new=//p' <<< "$info")
+  differ=$(sed -n 's/^differ=//p' <<< "$info")
+  bytes=$(sed -n 's/^bytes=//p' <<< "$info")
+  group=$(sed -n 's/^group=//p' <<< "$info")
+  if ((fresh == 0 && differ == 0)) && [[ -z $group ]]; then
+    ui_msg "$title" "Everything in $ptitle is already on this cabinet."
+    return 0
+  fi
+  ui_yesno "$title" "Install $ptitle? $games games of $label: $fresh new files ($((bytes / 1048576)) MB in the package)." yes ||
+    return 1
+  if ((differ)); then
+    ui_yesno "$title" "$differ files of the package are already here with other contents (a save, the memory or a ROM of another version). Replace them with the ones in the package? No keeps yours." no &&
+      replace=replace
+  fi
+  run_with_progress "Adding $ptitle" "" rompack_install "$zip" $replace || return 1
+  [[ -n $group ]] && screen_custom_games_refresh
+  if customgames_package_in_folder "$zip"; then
+    if ui_yesno "$title" "$ptitle is installed. Delete the package $(basename "$zip")? Keep it to take the games to another FliperOS." no; then
+      customgames_package_delete "$zip" || ui_msg "$title" "$(ui_bad "Could not delete $(basename "$zip").")"
+    fi
+  else
+    ui_msg "$title" "$ptitle is installed." "" "The games are in the frontends, in $label."
+  fi
+  return 0
+}
+
+# screen_rom_create: Create package > ROMs: o emulador ou core, os jogos
+# (marcados numa lista), o que vai junto e o titulo. O zip,
+# TITULO.fliperos-EMULADOR.zip, vai para a pasta dos pacotes.
+screen_rom_create() {
+  local title="Create package: ROMs" target choice picked kinds ptitle list rc out entries_n i replace="" group="" logo=""
+  local -a targets entries games kindrows logos
+  mapfile -t targets < <(rompack_targets | awk -F'|' '{ print $1 "|" $2 " (" $3 " games)" }')
+  if ((${#targets[@]} == 0)); then
+    ui_msg "$title" "No emulator or core has games in ~/roms yet."
+    return 0
+  fi
+  target=$(UI_STYLE=list ui_menu "$title" "The games of which emulator or core?" "" "${targets[@]}" "return|Return") || return 0
+  [[ $target == return ]] && return 0
+  ui_info "$title" "Reading the games..." > /dev/tty 2>&1 || true
+  mapfile -t games < <(rompack_games "$target")
+  # O valor de cada linha e o numero dela (um nome pode ter virgula, e a
+  # lista de marcados volta separada por virgula).
+  entries=()
+  for i in "${!games[@]}"; do
+    entries+=("$i|${games[i]%%|*} ($((${games[i]##*|} / 1048576)) MB)")
+  done
+  entries_n=${#entries[@]}
+  ((entries_n)) || { ui_msg "$title" "This emulator has no games in its folders."; return 0; }
+  picked=$(ui_checklist "$title" "Mark the games that go in the package ($entries_n games)." "" "${entries[@]}") || return 0
+  [[ -n $picked ]] || { ui_msg "$title" "No game was marked."; return 0; }
+  mapfile -t kindrows < <(rompack_kinds "$target")
+  kinds=$(ui_checklist "$title" "What goes with the ROMs? Each type of art is its own line." \
+    "$(printf '%s\n' "${kindrows[@]}" | cut -d'|' -f1 | paste -sd,)" "${kindrows[@]}") || return 0
+  while true; do
+    ptitle=$(ui_input "$title" "Title of the package (e.g. FightingGames): the file is TITLE.fliperos-$target.zip.") || return 0
+    ptitle=$(sed -E 's#[/\\:*?"<>|]##g; s/^[ .]+//; s/[ .]+$//' <<< "$ptitle")
+    [[ -n $ptitle ]] && break
+  done
+  # O grupo proprio: nos frontends, um sistema com estes jogos e o logotipo de
+  # sistema escolhido (tambem no gabinete que instalar o pacote).
+  if ui_yesno "$title" "Make a group of its own with these games? In the frontends it is a system with the system logo you choose. The ROMs stay in the emulator folder." no; then
+    while true; do
+      group=$(ui_input "$title" "Name of the group (the system in the frontends)." "$ptitle") || { group=""; break; }
+      customgames_valid_name "$group" && break
+    done
+    if [[ -n $group ]]; then
+      mapfile -t logos < <(customgames_logo_list | awk -F'\t' '{ print $1 "|" $2 }')
+      logo=$(UI_STYLE=list ui_menu "$title" "The logo of $group in the frontends and on the marquee." none \
+        "none|No logo (the group name)" "${logos[@]}") || logo=none
+      [[ $logo == none ]] && logo=""
+    fi
+  fi
+  out="$ptitle.fliperos-$target.zip"
+  if [[ -e $CUSTOM_GAMES_PACKAGES/$out ]]; then
+    ui_yesno "$title" "$out is already in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES"). Make it again over it?" no || return 0
+    replace=replace
+  fi
+  list=$(mktemp)
+  for i in ${picked//,/ }; do
+    [[ $i =~ ^[0-9]+$ && -n ${games[i]:-} ]] && printf '%s\n' "${games[i]%|*}"
+  done > "$list"
+  run_with_progress "Making $out" "" rompack_create "$target" "$ptitle" "$kinds" "$list" "$replace" "$group" "$logo"
+  rc=$?
+  rm -f "$list"
+  ((rc == 0)) || return 1
+  [[ -n $group ]] && screen_custom_games_refresh
+  ui_msg "$title" "$out is ready in $(folders_shown_path "$CUSTOM_GAMES_PACKAGES").${group:+ The group $group is in the frontends.}" "" \
+    "Copy it to another FliperOS (the network share \\\\fliperos\\roms\\custom-packages) and install it in Game Packages > ROMs."
 }
 
 # ── As informacoes de um jogo: video, categoria, controles ──
@@ -1850,12 +2045,16 @@ screen_emulators() {
         entries+=("$name|$desc (not installed)$suffix")
       fi
     done < <(emulators_list)
-    entries+=("return|Return")
+    entries+=("+restore|Restore FliperOS settings" "return|Return")
     choice=$(ui_menu "$title" \
       "Choose one to install it, or to update it when it is installed. HBMAME, Odin, Fightcade 2, DuckStation and KOF Final Attack don't come in the image and need the network." \
       "$last" "${entries[@]}") || return 0
     last=$choice
     [[ $choice == return ]] && return 0
+    if [[ $choice == +restore ]]; then
+      screen_emulators_restore
+      continue
+    fi
     label=$(emulators_field "$choice" 4)
     kind=$(emulators_field "$choice" 3)
     inst=$(emulators_field "$choice" 2)
@@ -1894,6 +2093,40 @@ screen_emulators() {
         fi
         ;;
     esac
+  done
+}
+
+# screen_emulators_restore: Restore FliperOS settings, um emulador por vez. A
+# configuracao de agora vai para ~/config-backup/NOME-DATA (para voltar a
+# ela, a copia esta la), volta a original do FliperOS e os ajustes do Setup
+# (botoes, monitor, latencia) sao gravados de novo (lib/emulators.sh). Os que
+# ainda nao foram abertos nao tem o que restaurar e nao aparecem.
+screen_emulators_restore() {
+  local title="Restore FliperOS settings" entries=() name has choice label last="" backup
+  while true; do
+    entries=()
+    while IFS='|' read -r name has; do
+      ((has)) || continue
+      entries+=("$name|$(emulators_field "$name" 4)")
+    done < <("$EMULATORS_CMD" restorable 2> /dev/null)
+    if ((${#entries[@]} == 0)); then
+      ui_msg "$title" "No emulator has settings to restore: they are all as FliperOS installs them."
+      return 0
+    fi
+    entries+=("return|Return")
+    choice=$(ui_menu "$title" \
+      "The settings of the chosen one go back to the FliperOS ones. The current ones are saved in ~/config-backup. ROMs, saves, memory and cheats stay." \
+      "$last" "${entries[@]}") || return 0
+    [[ $choice == return ]] && return 0
+    last=$choice
+    label=$(emulators_field "$choice" 4)
+    ui_yesno "$title" "Restore the FliperOS settings of $label? What was changed in it (in its own menu too) is undone; a copy goes to ~/config-backup." no ||
+      continue
+    if run_with_progress "Restoring $label" "" emulators_restore "$choice"; then
+      backup=$(find "$EMULATORS_HOME/config-backup" -maxdepth 1 -name "$choice-*" 2> /dev/null | sort | tail -n 1)
+      ui_msg "$title" "$label is back to the FliperOS settings." "" \
+        "The ones it had are in ~/config-backup${backup:+/${backup##*/}}."
+    fi
   done
 }
 

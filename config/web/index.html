@@ -49,6 +49,14 @@
       <a href="#system" data-area="system"><svg class="px"><use href="icons.svg#px-setup"/></svg><span><b data-t="area_system"></b><small data-t="area_system_sub"></small></span></a>
     </nav>
     <div class="side-foot">
+      <!-- Os mesmos links do site (website/src/lib/site.ts): compartilhar o
+           FliperOS, a wiki, o GitHub e o grupo do Telegram. -->
+      <nav class="side-links" aria-label="FliperOS">
+        <button type="button" class="side-link pink" data-share><svg class="g"><use href="icons.svg#g-share"/></svg><span data-t="link_share"></span></button>
+        <a class="side-link green" href="https://github.com/juniorterin/fliperOS/wiki" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-book"/></svg><span data-t="link_wiki"></span></a>
+        <a class="side-link purple" href="https://github.com/juniorterin/fliperOS" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-github"/></svg><span data-t="link_github"></span></a>
+        <a class="side-link cyan" href="https://t.me/fliperos15khz" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-send"/></svg><span data-t="link_telegram"></span></a>
+      </nav>
       <label id="cab-pick-side" class="cab-pick" hidden><span data-t="cabinet"></span><select aria-label="Cabinet"></select></label>
       <div class="host"><span id="conn-dot" class="dot ok"></span><div><b id="host-name">FliperOS</b><small id="host"></small></div></div>
       <div class="side-actions"><button id="lang" class="chip-btn" type="button" aria-label="Language">PT</button><button id="logout" class="chip-btn" type="button" data-t="logout"></button><span id="version" class="ver"></span></div>
@@ -73,6 +81,10 @@
         <button id="logout2" type="button" class="menu-item" data-t="logout"></button>
         <button id="power-reboot2" type="button" class="menu-item"><svg class="g"><use href="icons.svg#g-refresh"/></svg><span data-t="power_reboot"></span></button>
         <button id="power-off2" type="button" class="menu-item red"><svg class="g"><use href="icons.svg#g-power"/></svg><span data-t="power_off"></span></button>
+        <button type="button" class="menu-item" data-share><svg class="g"><use href="icons.svg#g-share"/></svg><span data-t="link_share"></span></button>
+        <a class="menu-item" href="https://github.com/juniorterin/fliperOS/wiki" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-book"/></svg><span data-t="link_wiki"></span></a>
+        <a class="menu-item" href="https://github.com/juniorterin/fliperOS" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-github"/></svg><span data-t="link_github"></span></a>
+        <a class="menu-item" href="https://t.me/fliperos15khz" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-send"/></svg><span data-t="link_telegram"></span></a>
         <label id="cab-pick-menu" class="cab-pick" hidden><span data-t="cabinet"></span><select aria-label="Cabinet"></select></label>
         <small id="host2" class="menu-host"></small>
       </div>
@@ -882,6 +894,7 @@
 <script src="system.js"></script>
 <script src="setup.js"></script>
 <script src="customgames.js"></script>
+<script src="rompacks.js"></script>
 <script src="trackball.js"></script>
 <script src="app.js"></script>
 </body>

@@ -9,14 +9,17 @@
 "use strict";
 
 const cg = { root: null, info: null, packages: [], rows: [], seq: 0, el: null, busy: false, installGroup: "", tab: "games",
-  createMode: "one", createRow: null, highlight: "", shown: {}, manyBusy: false };
+  createMode: "one", createKind: "pc", createRow: null, highlight: "", shown: {}, manyBusy: false };
 // A pasta dos pacotes nos textos: onde ela esta de verdade quando e um atalho
 // para outro disco (o Setup diz, lib/folders.sh); packages_dir segue sendo o
 // caminho para achar os arquivos.
 const cgPackagesWhere = () => (cg.info && (cg.info.packages_shown || cg.info.packages_dir)) || "~/roms/custom-packages";
 const CG_DRAFT = "fliperos-cg-draft";
 const CG_TAB = "fliperos-cg-tab";
-const CG_TABS = ["games", "create"];
+const CG_TABS = ["games", "roms", "create"];
+// Create package: um pacote de jogo de PC (este arquivo) ou de ROM (rompacks.js).
+const CG_CREATE_KIND = "fliperos-cg-create-kind";
+const CG_CREATE_KINDS = ["pc", "rom"];
 // Criar pacote: um so (com a previa e o teste) ou varios de uma vez (a tabela).
 const CG_CREATE_MODE = "fliperos-cg-create-mode";
 const CG_CREATE_MODES = ["one", "many"];
@@ -61,15 +64,17 @@ async function customGamesPage(box) {
   try {
     if (CG_TABS.includes(localStorage.getItem(CG_TAB))) cg.tab = localStorage.getItem(CG_TAB);
     if (CG_CREATE_MODES.includes(localStorage.getItem(CG_CREATE_MODE))) cg.createMode = localStorage.getItem(CG_CREATE_MODE);
+    if (CG_CREATE_KINDS.includes(localStorage.getItem(CG_CREATE_KIND))) cg.createKind = localStorage.getItem(CG_CREATE_KIND);
   } catch (e) { /* sem armazenamento */ }
   cg.el = {
     tabs: el("nav", { class: "subtabs", role: "tablist" }),
     games: el("div", { class: "cg-pane" }),
+    roms: el("div", { class: "cg-pane" }),
     create: el("div", { class: "cg-pane" }),
   };
-  cg.el.panes = { games: cg.el.games, create: cg.el.create };
+  cg.el.panes = { games: cg.el.games, roms: cg.el.roms, create: cg.el.create };
   box.append(el("div", { class: "cg-head" }, el("h2", {}, t("cg_title")), el("p", { class: "lead" }, t("cg_intro")),
-    el("div", { class: "subtabs-bar cg-tabs" }, cg.el.tabs)), cg.el.games, cg.el.create);
+    el("div", { class: "subtabs-bar cg-tabs" }, cg.el.tabs)), cg.el.games, cg.el.roms, cg.el.create);
   cgDraftLoad();
   cgShowTab(cg.tab);
   await cgLoad();
@@ -81,13 +86,20 @@ function cgShowTab(tab) {
   cg.tab = CG_TABS.includes(tab) ? tab : "games";
   try { localStorage.setItem(CG_TAB, cg.tab); } catch (e) { /* sem armazenamento */ }
   const waiting = (cg.packages || []).filter((p) => p.state === "new" || p.state === "update").length;
+  // ROMs: quantos pacotes de ROM ainda nao estao inteiros no gabinete.
+  const roms = typeof rp === "undefined" ? 0 : rp.packages.filter((p) => p.state === "new" || p.state === "partial").length;
+  const count = { games: waiting, roms };
   cg.el.tabs.replaceChildren(...CG_TABS.map((k) => {
-    const label = k === "games" && waiting ? t("cg_tab_games") + " (" + waiting + ")" : t("cg_tab_" + k);
+    const label = count[k] ? t("cg_tab_" + k) + " (" + count[k] + ")" : t("cg_tab_" + k);
     const a = el("a", { href: "#", role: "tab", class: cg.tab === k ? "on" : "", "aria-selected": String(cg.tab === k) }, label);
     a.addEventListener("click", (ev) => { ev.preventDefault(); cgShowTab(k); });
     return a;
   }));
   for (const k of CG_TABS) cg.el.panes[k].hidden = k !== cg.tab;
+  if (cg.tab === "roms" && typeof rpRenderRoms === "function" && !cg.el.roms.dataset.built) {
+    cg.el.roms.dataset.built = "1";
+    rpRenderRoms(cg.el.roms);
+  }
 }
 
 // A estrutura do pacote, sempre a mesma: JOGO.fliperos-customgame.zip com
@@ -152,6 +164,7 @@ async function cgLoad() {
   cgRenderGames();
   cgRenderCreate();
   cgShowTab(cg.tab);
+  if (typeof rpLoad === "function") rpLoad().catch(() => {});
 }
 
 // Os grupos que existem.
@@ -250,6 +263,14 @@ function cgViewSave() {
 
 // A parte que nao muda a cada leitura: o envio do pacote, o filtro (a busca
 // nao perde o cursor) e as caixas onde o resto se desenha.
+// O convite para o grupo do Telegram, onde a comunidade troca pacotes (de jogos
+// de PC na aba PC Games, de ROMs na aba ROMs).
+function cgTelegramNote(kind) {
+  return el("div", { class: "cg-telegram" }, icon("g-send"),
+    el("span", {}, el("b", {}, t("cg_tg_title_" + kind)), " ", t("cg_tg_text_" + kind)),
+    el("a", { class: "btn small", href: "https://t.me/fliperos15khz", target: "_blank", rel: "noopener" }, t("link_telegram")));
+}
+
 function cgBuildGames() {
   const v = cgView();
   // Sem accept: alem do .zip ha as partes de um pacote dividido (.zip.001, .002...), que nenhum filtro de extensao cobre.
@@ -307,7 +328,7 @@ function cgBuildGames() {
   cg.el.incoming = el("section", { class: "cg-sec cg-incoming" });
   cg.el.list = el("div", { class: "cg-list" });
   cg.el.packed = el("section", { class: "cg-sec" });
-  cg.el.games.replaceChildren(cg.el.upload, cg.el.progress, cg.el.tools, cg.el.incoming, cg.el.list, cg.el.packed);
+  cg.el.games.replaceChildren(cgTelegramNote("pc"), cg.el.upload, cg.el.progress, cg.el.tools, cg.el.incoming, cg.el.list, cg.el.packed);
   cg.el.games.dataset.built = "1";
 }
 
@@ -1304,6 +1325,22 @@ function cgField(name, control) {
 
 const CG_CREATE_FIELDS = ["name", "platform", "folder", "run", "mode", "crop", "category", "year", "developer", "players", "buttons", "controls", "joystick", "art"];
 
+// De que e o pacote: um jogo de PC ou ROMs (as de um emulador ou core, com o que
+// vai junto delas). A escolha fica no navegador.
+function cgCreateKind(kind) {
+  cg.createKind = CG_CREATE_KINDS.includes(kind) ? kind : "pc";
+  try { localStorage.setItem(CG_CREATE_KIND, cg.createKind); } catch (e) { /* sem armazenamento */ }
+  cg.el.kindBar.replaceChildren(el("span", { class: "dim cg-kindq" }, t("cg_kind_question")), ...CG_CREATE_KINDS.map((k) => {
+    const b = el("button", { type: "button", role: "tab", class: "cg-mode-btn" + (cg.createKind === k ? " on" : ""), "aria-selected": String(cg.createKind === k) },
+      icon(k === "pc" ? "px-customgames" : "px-install"), t("cg_kind_" + k));
+    b.addEventListener("click", () => cgCreateKind(k));
+    return b;
+  }));
+  cg.el.pcCreate.hidden = cg.createKind !== "pc";
+  cg.el.romCreate.hidden = cg.createKind !== "rom";
+  if (cg.createKind === "rom" && typeof rpRenderCreate === "function") rpRenderCreate(cg.el.romCreate);
+}
+
 // Um pacote ou varios de uma vez: o seletor em duas pilulas; a escolha fica no navegador.
 function cgCreateMode(mode) {
   cg.createMode = CG_CREATE_MODES.includes(mode) ? mode : "one";
@@ -1354,11 +1391,17 @@ function cgRenderCreate() {
     cg.el.createPreview = el("div", { class: "cg-preview", hidden: "" });
     cg.el.one.append(el("div", { class: "cg-create-wrap" }, cg.el.createForm, cg.el.createPreview),
       cg.el.createStatus, el("div", { class: "cg-create-foot" }, clear, preview, test, go));
-    box.append(cg.el.createIntro, cg.el.structure, cg.el.modeBar, cg.el.one, cg.el.many);
+    // Primeiro, de que e o pacote: um jogo de PC (o que segue) ou ROMs
+    // (rompacks.js, na caixa romCreate).
+    cg.el.kindBar = el("div", { class: "cg-modebar cg-kindbar", role: "tablist" });
+    cg.el.pcCreate = el("div", { class: "cg-create-pc" }, cg.el.createIntro, cg.el.structure, cg.el.modeBar, cg.el.one, cg.el.many);
+    cg.el.romCreate = el("div", { class: "cg-create-rom" });
+    box.append(cg.el.kindBar, cg.el.pcCreate, cg.el.romCreate);
     // Sem jogo nem pacote nenhum, a estrutura ja aberta.
     cg.el.structure.open = !(cg.info.games || []).length && !(cg.info.pending || []).length;
   }
   cg.el.createIntro.textContent = t("cg_create_intro").replace("%s", cgPackagesWhere());
+  cgCreateKind(cg.createKind);
   cgCreateMode(cg.createMode);
   cgCreateDraw();
   cgRenderMany();

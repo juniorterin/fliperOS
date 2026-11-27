@@ -5610,7 +5610,9 @@ class CustomGamesTests(Base):
         import xml.etree.ElementTree as ET
         root = ET.fromstring(xml)
         self.assertEqual(root.tag, "{http://www.freedesktop.org/standards/shared-mime-info}mime-info")
-        self.assertEqual(len(root), 2)
+        self.assertEqual(len(root), 3)
+        # O terceiro: o pacote de ROM (TITULO.fliperos-EMULADOR.zip), um glob mais curto que o do jogo custom.
+        self.assertIn('<glob pattern="*.fliperos-*.zip" weight="55"/>', xml)
         self.assertIn('<mime-type type="application/x-fliperos-customgame">', xml)
         self.assertIn('<sub-class-of type="application/zip"/>', xml)
         self.assertIn('<glob pattern="*.fliperos-customgame.zip" weight="60"/>', xml)
@@ -5628,7 +5630,8 @@ class CustomGamesTests(Base):
                                ("Pang.fliperos-customgame.zip.abc", False), ("Pang.zip.001", False)):
             self.assertEqual(fnmatch.fnmatchcase(name, glob), expected, name)
         entry = (ROOT / "config/applications/fliperos-customgame-install.desktop").read_text()
-        self.assertIn("MimeType=application/x-fliperos-customgame;application/x-fliperos-customgame-part;\n", entry)
+        self.assertIn("MimeType=application/x-fliperos-customgame;application/x-fliperos-customgame-part;"
+                      "application/x-fliperos-rompack;\n", entry)
         self.assertIn("Terminal=false\n", entry)
         self.assertIn("NoDisplay=true\n", entry)
         self.assertIn("Exec=/opt/fliperos/bin/fliperos-launch setup --install-package %F\n", entry)

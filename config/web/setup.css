@@ -751,6 +751,103 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .cg-mode-btn svg.g { width: 13px; height: 13px; }
 .cg-mode-btn:hover { color: var(--fg); }
 .cg-mode-btn.on { background: var(--raise); color: var(--fg); box-shadow: inset 0 0 0 1px rgba(255, 121, 198, .45); }
+/* O convite do grupo do Telegram (PC Games e ROMs). */
+.cg-telegram { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid rgba(139, 233, 253, .45); background: rgba(139, 233, 253, .06); font-size: 14px; }
+.cg-telegram > svg.g { width: 18px; height: 18px; flex: none; color: #8be9fd; }
+.cg-telegram > span { flex: 1; min-width: 220px; }
+/* Create package: de que e o pacote (jogo de PC ou ROMs), acima de tudo. */
+.cg-kindbar { display: flex; width: fit-content; align-items: center; }
+.cg-kindq { padding: 0 8px 0 10px; font-size: 13px; }
+
+/* Create package > ROMs (rompacks.js): o titulo, o emulador, os jogos marcados e o
+   que vai junto. */
+.rp-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; max-width: 760px; }
+.rp-zipline { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 10px;
+  background: var(--surface); overflow: hidden; }
+.rp-zipline svg.px { width: 16px; height: 16px; flex: none; }
+.rp-zipname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent, #ff79c6); }
+.rp-h { margin: 22px 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.rp-gtools { flex-wrap: wrap; align-items: center; }
+.rp-games-list { display: grid; max-width: 760px; max-height: 420px; overflow: auto; border-radius: 12px; background: var(--surface); }
+.rp-row { display: flex; align-items: center; gap: 6px; padding-left: 8px; border-bottom: 1px solid rgba(255, 255, 255, .04); }
+.rp-row:hover { background: rgba(255, 255, 255, .03); }
+.rp-row.on { background: rgba(255, 121, 198, .08); }
+.rp-game { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  padding: 7px 12px 7px 4px; cursor: pointer; }
+/* O "+" da ficha do jogo: um quadradinho a esquerda do nome. */
+.rp-plus { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border-radius: 5px;
+  border: 1px solid rgba(189, 147, 249, .6); background: transparent; color: var(--fg); cursor: pointer; }
+.rp-plus svg.g { width: 11px; height: 11px; }
+.rp-plus:hover, .rp-plus.on { background: rgba(189, 147, 249, .2); }
+.rp-rowwrap { display: grid; }
+.rp-meta { padding: 12px 14px 14px 38px; background: rgba(0, 0, 0, .18); border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.rp-meta-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.rp-meta-head small { flex-basis: 100%; }
+.rp-meta-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 10px; }
+.rp-mf input { font-size: 13px; padding: 6px 8px; }
+.rp-mf.edited > span { color: #ff79c6; }
+.rp-meta-art { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.rp-meta-media { margin: 0; display: grid; gap: 4px; }
+.rp-meta-media img, .rp-meta-media video { max-width: 220px; max-height: 150px; border-radius: 6px; background: #000; image-rendering: auto; }
+.rp-meta-media.logo img, .rp-meta-media.marquee img { background: #222; }
+.rp-meta-media figcaption { font-size: 11.5px; color: var(--dim); }
+.rp-meta-text { max-width: 320px; max-height: 150px; overflow: auto; font-size: 12px; line-height: 1.4; white-space: pre-wrap; }
+.rp-meta-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.rp-meta-status { margin-right: auto; font-size: 12.5px; }
+.rp-gname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono, monospace); font-size: 13.5px; }
+.rp-ghas { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.rp-ghas .tag { font-size: 11px; padding: 1px 6px; }
+.rp-gsize { font-size: 12px; min-width: 64px; text-align: right; }
+.rp-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; max-width: 760px; }
+.rp-kind { align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--surface); }
+.rp-kind > span { display: grid; gap: 2px; }
+.rp-kind small { font-size: 12px; line-height: 1.35; }
+.rp-kind.rp-none { opacity: .55; }
+.rp-kcount { font-weight: 400; font-size: 12px; }
+.rp-summary { margin: 16px 0 8px; max-width: 760px; font-size: 14px; }
+/* O seletor a esquerda e os escolhidos a direita (a coluna fica a vista ao rolar). */
+.rp-cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 18px; align-items: start; margin-top: 8px; }
+.rp-cols .rp-games-list { max-width: none; max-height: 520px; }
+/* Os filtros do seletor: um bloco com o mesmo respiro entre as partes e a mesma
+   altura (36 px) na busca, nos seletores e nos botoes. */
+.rp-filters { --rp-h: 36px; display: grid; gap: 14px; margin-bottom: 10px; padding: 14px; border-radius: 12px; background: var(--surface); }
+.rp-frow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rp-filters input[type=search], .rp-filters select, .rp-filters .btn.small {
+  box-sizing: border-box; height: var(--rp-h); margin: 0; font-size: 13px; line-height: 1; }
+.rp-filters input[type=search] { flex: 1; min-width: 180px; padding: 0 12px; }
+.rp-filters .btn.small { padding: 0 14px; white-space: nowrap; }
+.rp-fsec { display: grid; gap: 8px; }
+.rp-flabel { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.rp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rp-chips .chip { height: 30px; margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.rp-mame { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.rp-mame select { width: 100%; min-width: 0; padding: 0 10px; }
+.rp-mame select.on { box-shadow: inset 0 0 0 1px rgba(255, 121, 198, .8); color: var(--fg); }
+.rp-factions { justify-content: space-between; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .06); }
+.rp-fbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.rp-count { font-size: 12.5px; }
+.rp-gname small { font-size: 11.5px; }
+.rp-picked { position: sticky; top: 12px; display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: var(--surface); }
+.rp-picked-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rp-picked-h { margin: 0; }
+.rp-picked-list { display: grid; max-height: 620px; overflow: auto; }
+.rp-pgame { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 5px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, .04); }
+.rp-picked-empty { margin: 8px 4px; font-size: 13px; }
+.rp-group-on { max-width: 760px; }
+.rp-group-body { display: grid; gap: 12px; max-width: 760px; margin-top: 10px; }
+@media (max-width: 900px) {
+  .rp-cols { grid-template-columns: 1fr; }
+  .rp-picked { position: static; }
+}
+.rp-games { font-size: 12.5px; }
+@media (max-width: 620px) {
+  .rp-form { grid-template-columns: 1fr; }
+  .rp-game { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .rp-ghas { display: none; }
+  .cg-kindq { display: none; }
+}
 .cg-create-many .cg-toolbar .grow { flex: 1; }
 .cg-create-many .cg-toolbar svg.px { width: 16px; height: 16px; }
 .cg-detbtn { position: relative; }

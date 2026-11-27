@@ -99,6 +99,19 @@ async function logout() {
 $("logout").addEventListener("click", logout);
 $("logout2").addEventListener("click", logout);
 
+// Compartilhar o FliperOS (o mesmo endereco do botao do site): o compartilhar do
+// celular, ou o endereco copiado.
+const SITE_URL = "https://fliperos.juniorter.in";
+for (const b of document.querySelectorAll("[data-share]")) {
+  b.addEventListener("click", async () => {
+    const url = SITE_URL + (lang === "pt" ? "/pt" : "/en");
+    if (navigator.share) {
+      try { await navigator.share({ title: "FliperOS", text: t("link_share_text"), url }); return; } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    try { await navigator.clipboard.writeText(url); toast(t("link_copied")); } catch (e) { window.open(url, "_blank", "noopener"); }
+  });
+}
+
 // Reiniciar e desligar o gabinete (os ajustes power.* do Setup), com o
 // dialogo antes: na barra lateral e no menu do celular.
 async function power(kind) {

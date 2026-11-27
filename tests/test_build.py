@@ -11379,8 +11379,8 @@ console.log(JSON.stringify({
         self.assertEqual((self.dir / 'create.flag').read_text().strip(), 'replace')
         self.assertEqual(self.call('POST', '/api/customgames/create', {'row': 'x'})[0], 400)
         js = (ROOT / 'config/web/customgames.js').read_text()
-        # So duas abas: Jogos (que juntou a instalacao) e Criar pacote.
-        self.assertIn('const CG_TABS = ["games", "create"];', js)
+        # Tres abas: PC Games (que juntou a instalacao), ROMs (rompacks.js) e Criar pacote.
+        self.assertIn('const CG_TABS = ["games", "roms", "create"];', js)
         self.assertNotIn('"install"', js.split('const CG_TABS = ')[1].split(';')[0])
         # O pacote feito mostra o link para baixar o zip (/api/download, a raiz roms) e pergunta se instala.
         self.assertIn('const cgDownloadUrl = (zip) => "/api/download?root=roms&path=" + encodeURIComponent("custom-packages/" + zip);', js)
@@ -13882,8 +13882,9 @@ class WebPanelTests(unittest.TestCase):
     def test_install_emulators_and_extras(self):
         cookie, tmp = self.login(), Path(self.tmp.name)
         data = json.loads(self.request('GET', '/api/install', cookie=cookie)[2])
+        # restore: o Restore FliperOS settings (None: o fliperos-emulators de mentira nao diz).
         self.assertEqual(data['emulators'][1], {'name': 'duckstation', 'installed': True, 'kind': 'fetch',
-                                                'label': 'DuckStation', 'version': '0.1-9'})
+                                                'label': 'DuckStation', 'version': '0.1-9', 'restore': None})
         self.assertEqual(data['extras'], [{'name': 'wine', 'installed': False, 'label': 'Wine'},
                                           {'name': 'pixelcade', 'installed': True,
                                            'label': 'Pixelcade (LED/LCD marquee)'}])
@@ -31804,6 +31805,138 @@ class FesoundTests(unittest.TestCase):
         self.assertIn('def play(self, event):', gui)
         tty1 = (ROOT / 'config/fliperos-tty1').read_text()
         self.assertRegex(tty1, r'menu_sound open\n\s+"\$BIN/fliperos-session" \$\{name:\+"\$name"\}\n\s+menu_sound close')
+
+
+class RomPackTests(unittest.TestCase):
+    """Game Packages > ROMs (config/fliperos-rompack): o pacote de ROM leva o que
+    cada jogo tem e instala tudo de volta nos mesmos lugares."""
+
+    TOOL = ROOT / 'config/fliperos-rompack'
+
+    def run_tool(self, home, *args, packages=None):
+        env = dict(os.environ, FLIPEROS_ROMPACK_HOME=str(home), FLIPEROS_USER='nobody-rompack',
+                   FLIPEROS_ROMCLEAN='/nonexistent', FLIPEROS_CORE_INFO=str(home / 'info'))
+        return subprocess.run([sys.executable, str(self.TOOL), '--packages', str(packages or home / 'pk')] + list(args),
+                              capture_output=True, text=True, env=env)
+
+    def put(self, home, rel, data='x'):
+        path = home / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data)
+
+    def test_a_package_round_trip_keeps_the_players_own_save(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dst = Path(tmp) / 'src', Path(tmp) / 'dst'
+            for rel in ('roms/mame/sf2.zip', 'roms/mame/dino.zip', 'media/snap/mame/sf2.png', 'nvram/mame/sf2/eeprom',
+                        'save/mame/sf2/1.sta', 'cheats/mame/sf2.xml', '.mame/cfg/sf2.cfg', 'roms/ps1/Game.cue'):
+                self.put(src, rel, 'FILE "Game (Track 1).bin" BINARY\n' if rel.endswith('.cue') else rel)
+            self.put(src, 'roms/ps1/Game (Track 1).bin')
+            self.put(src, 'bios/scph5501.bin')
+            done = self.run_tool(src, 'create', '--target', 'mame', '--title', 'Lutas', '--game', 'sf2')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            zpath = src / 'pk' / 'Lutas.fliperos-mame.zip'
+            with zipfile.ZipFile(zpath) as zf:
+                names = set(zf.namelist())
+            self.assertEqual(names, {'fliperos-package.cfg', 'roms/mame/sf2.zip', 'media/snap/mame/sf2.png',
+                                     'nvram/mame/sf2/eeprom', 'save/mame/sf2/1.sta', 'cheats/mame/sf2.xml',
+                                     '.mame/cfg/sf2.cfg'})
+            # O .cue leva as faixas e as BIOS do PlayStation.
+            done = self.run_tool(src, 'create', '--target', 'duckstation', '--title', 'Naves', '--game', 'Game')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            with zipfile.ZipFile(src / 'pk' / 'Naves.fliperos-duckstation.zip') as zf:
+                self.assertIn('roms/ps1/Game (Track 1).bin', zf.namelist())
+                self.assertIn('bios/scph5501.bin', zf.namelist())
+            # Ja existe: status 3 sem --replace.
+            self.assertEqual(self.run_tool(src, 'create', '--target', 'mame', '--title', 'Lutas', '--game', 'sf2').returncode, 3)
+            # Instalar noutra home: o save que ja estava fica, a nao ser com --replace.
+            self.put(dst, 'save/mame/sf2/1.sta', 'mine')
+            done = self.run_tool(dst, 'install', str(zpath))
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn('kept=1', done.stdout)
+            self.assertEqual((dst / 'save/mame/sf2/1.sta').read_text(), 'mine')
+            self.assertEqual((dst / 'roms/mame/sf2.zip').read_text(), 'roms/mame/sf2.zip')
+            self.run_tool(dst, 'install', str(zpath), '--replace')
+            self.assertEqual((dst / 'save/mame/sf2/1.sta').read_text(), 'save/mame/sf2/1.sta')
+
+    def test_a_package_with_its_own_group_becomes_a_system(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dst = Path(tmp) / 'src', Path(tmp) / 'dst'
+            self.put(src, 'roms/mame/sf2.zip')
+            self.put(src, 'roms/mame/kof98.zip')
+            self.put(src, 'media/snap/mame/sf2.png')
+            self.put(src, 'media/preview/mame/sf2.mp4')
+            self.put(src, '.local/share/fliperos/lists/MAME.txt', '#Name;Title\nsf2;Street Fighter II\n')
+            self.put(src, 'roms/custom/Lutas/.logo.png', 'png')
+            done = self.run_tool(src, 'create', '--target', 'mame', '--title', 'Lutas', '--game', 'sf2', '--game', 'kof98',
+                                 '--group', 'Lutas', '--kinds', 'media:snap')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            zpath = src / 'pk' / 'Lutas.fliperos-mame.zip'
+            with zipfile.ZipFile(zpath) as zf:
+                names = set(zf.namelist())
+                cfg = zf.read('fliperos-package.cfg').decode()
+            # So a arte pedida (a imagem, sem o video), e o logotipo do grupo.
+            self.assertIn('media/snap/mame/sf2.png', names)
+            self.assertNotIn('media/preview/mame/sf2.mp4', names)
+            self.assertIn('roms/custom/Lutas/.logo.png', names)
+            self.assertIn('group=Lutas', cfg)
+            done = self.run_tool(dst, 'install', str(zpath))
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn('grouped=2', done.stdout)
+            sh = (dst / 'roms/custom/Lutas/Street Fighter II.sh').read_text()
+            self.assertIn('fliperos-x11-run groovymame sf2', sh)
+            self.assertTrue((dst / 'roms/custom/Lutas/kof98.sh').exists())
+            art = dst / 'media/snap/custom/Lutas/Street Fighter II.png'
+            self.assertTrue(art.is_symlink())
+            self.assertEqual(os.readlink(art), str(dst / 'media/snap/mame/sf2.png'))
+            self.assertTrue((dst / 'roms/custom/Lutas/.logo.png').exists())
+
+    def test_edited_game_details_go_in_the_list_and_in_the_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, dst = Path(tmp) / 'src', Path(tmp) / 'dst'
+            self.put(home, 'roms/mame/sf2.zip')
+            lists = home / '.local/share/fliperos/lists'
+            self.put(home, '.local/share/fliperos/lists/MAME.txt',
+                     '#Name;Title;Emulator;CloneOf;Year;Manufacturer;Category\nsf2;Street Fighter II;MAME;;1991;Capcom;Fighter\n')
+            self.put(home, 'roms/retroarch/snes9x/Mario.sfc')
+            self.put(home, 'roms/retroarch/snes9x/Zelda.sfc')
+            env = dict(os.environ, FLIPEROS_GAMEMETA_HOME=str(home), FLIPEROS_USER='nobody-rompack')
+            tool = [sys.executable, str(ROOT / 'config/fliperos-gamemeta')]
+            done = subprocess.run(tool + ['set', 'mame', 'sf2', '--list', str(lists / 'MAME.txt'), '--folder', str(home / 'roms/mame'),
+                                          'Category=Fighter / Versus', 'Players=2', 'Year=1991'], capture_output=True, text=True, env=env)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            text = (lists / 'MAME.txt').read_text()
+            self.assertIn('Fighter / Versus', text)
+            # O ano igual ao da lista nao vira edicao (a lista refeita manda).
+            store = (home / '.config/fliperos/game-meta.tsv').read_text()
+            self.assertEqual(store, 'mame\tsf2\tCategory\tFighter / Versus\nmame\tsf2\tPlayers\t2\n')
+            # Um console sem lista: ela nasce com todos os arquivos (nenhum some) e o emulador dela.
+            snes = lists / 'Super Nintendo.txt'
+            subprocess.run(tool + ['set', 'retroarch/snes9x', 'Mario', '--list', str(snes), '--folder',
+                                   str(home / 'roms/retroarch/snes9x'), 'Title=Super Mario World'], check=True, env=env)
+            rows = snes.read_text().splitlines()
+            self.assertIn('Mario;Super Mario World;Super Nintendo;', rows[1])
+            self.assertTrue(rows[2].startswith('Zelda;Zelda;Super Nintendo;'))
+            # O pacote leva a edicao, e quem instala a recebe.
+            self.assertEqual(self.run_tool(home, 'create', '--target', 'mame', '--title', 'M', '--game', 'sf2').returncode, 0)
+            done = self.run_tool(dst, 'install', str(home / 'pk' / 'M.fliperos-mame.zip'))
+            self.assertIn('meta=2', done.stdout)
+            self.assertEqual((dst / '.config/fliperos/game-meta.tsv').read_text(), store)
+
+    def test_the_installer_refuses_paths_outside_the_game_folders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / 'pk').mkdir()
+            for name, member in (('Bad.fliperos-mame.zip', '.bashrc'), ('Up.fliperos-mame.zip', 'roms/../../x')):
+                with zipfile.ZipFile(home / 'pk' / name, 'w') as zf:
+                    zf.writestr('fliperos-package.cfg', 'type=roms\ntarget=mame\n')
+                    zf.writestr('roms/mame/a.zip', 'a')
+                    zf.writestr(member, 'evil')
+                done = self.run_tool(home, 'install', str(home / 'pk' / name))
+                self.assertEqual(done.returncode, 1)
+                self.assertFalse((home / 'roms/mame/a.zip').exists())
+            # Um pacote de jogo de PC nao e um pacote de ROM.
+            self.assertEqual(self.run_tool(home, 'is-package', 'X.fliperos-customgame.zip').returncode, 1)
+            self.assertEqual(self.run_tool(home, 'is-package', 'X.fliperos-retroarch-fbneo.zip').returncode, 0)
 
 
 if __name__ == '__main__':

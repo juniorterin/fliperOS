@@ -11,6 +11,10 @@
 #   fliperos-emulators edge NOME [--progress]  compila o mais novo (como root)
 #   fliperos-emulators edge-off NOME           volta ao pacote (como root)
 #   fliperos-emulators edge-status NOME        o commit do mais novo instalado
+#   fliperos-emulators restorable              nome|1 se tem configuracao para restaurar
+#   fliperos-emulators restore NOME [--progress]  as configuracoes originais do
+#                                              FliperOS (como root; as de agora vao
+#                                              para ~/config-backup/NOME-DATA)
 #
 # tipo: image (compilado na imagem: nao se instala depois), package (um .deb
 # pronto, fora da imagem: o hbgroovymame, o odin e o xemu-chihiro; baixado do release
@@ -358,7 +362,139 @@ edge_build() {
   ) || exit 1
 }
 
+# ── Restaurar as configuracoes originais ─────────────────────────
+# Emulators & Games > um emulador > Restore FliperOS settings: o que a pessoa
+# (ou o menu do proprio emulador) mudou volta ao que o FliperOS instala. A
+# configuracao de agora nao se perde: vai inteira para
+# ~/config-backup/NOME-DATA, com os mesmos caminhos (etc/... para o que fica
+# em /etc). ROMs, saves, nvram, cheats e arte nao sao configuracao e ficam.
+# Depois, as originais: as que o abridor do emulador (fliperos-x11-run,
+# fliperos-kms-run, o comando groovymame) refaz quando faltam ficam so
+# faltando; as que a imagem instala vem de $defaults (fliperos-rootfs.sh); e
+# o que o Setup decide por maquina (botoes, monitor, latencia, a largura do
+# CRT SwitchRes) e gravado de novo (fliperos-setup --reapply-emulators).
+defaults=${FLIPEROS_EMULATOR_DEFAULTS:-$root/usr/local/share/fliperos/emulator-defaults}
+setup_cmd=${FLIPEROS_SETUP_CMD:-$root/usr/local/bin/fliperos-setup}
+mame_etc=${FLIPEROS_MAME_ETC:-$root/etc/fliperos/mame}
+hbmame_etc=${FLIPEROS_HBMAME_ETC:-$root/etc/fliperos/hbmame}
+
+# restore_paths NOME: o que e configuracao do emulador, um caminho por linha
+# (os de ~ sem o ~/, os absolutos com a /). Nada: o emulador nao tem o que
+# restaurar.
+restore_paths() {
+  case $1 in
+    retroarch) printf '%s\n' .config/retroarch/retroarch.cfg .config/retroarch/retroarch-core-options.cfg \
+      .config/retroarch/config ;;
+    groovymame) printf '%s\n' "$mame_etc/mame.ini" "$mame_etc/ui.ini" "$mame_etc/plugin.ini" .mame/cfg ;;
+    hbgroovymame) printf '%s\n' "$hbmame_etc/hbmame.ini" .hbmame/cfg ;;
+    flycast) printf '%s\n' .config/flycast/emu.cfg .config/flycast/mappings ;;
+    pcsx2) printf '%s\n' .config/PCSX2/inis ;;
+    pcsx2x6) printf '%s\n' .config/PCSX2x6/inis ;;
+    dolphin) printf '%s\n' .config/dolphin-emu ;;
+    duckstation) printf '%s\n' .local/share/duckstation/settings.ini ;;
+    keisho) printf '%s\n' .config/keisho/keisho.ini ;;
+    odin) printf '%s\n' .local/share/odin/odin.ini ;;
+    xemu-chihiro) printf '%s\n' .local/share/xemu-chihiro/xemu.toml ;;
+  esac
+}
+
+# restore_full CAMINHO: o caminho de verdade (os relativos na home).
+restore_full() {
+  if [[ $1 == /* ]]; then printf '%s\n' "$1"; else printf '%s\n' "$home/$1"; fi
+}
+
+# restore_has NOME: status 0 se ha alguma configuracao dele para restaurar.
+restore_has() {
+  local p
+  while IFS= read -r p; do
+    [[ -e $(restore_full "$p") ]] && return 0
+  done < <(restore_paths "$1")
+  return 1
+}
+
+# restore_defaults NOME: as originais que a imagem instala (o resto, o
+# abridor do emulador refaz).
+restore_defaults() {
+  local name=$1 file dir
+  case $name in
+    retroarch)
+      # Os remaps e os switchres.ini por core do FliperOS (config/retroarch-remaps,
+      # config/retroarch-switchres).
+      for file in "$defaults"/retroarch-remaps/*.rmp; do
+        [[ -f $file ]] || continue
+        dir=$home/.config/retroarch/config/remaps/$(basename "$file" .rmp)
+        as_user mkdir -p "$dir" && install -m644 -o "$user" -g "$user" "$file" "$dir/"
+      done
+      for file in "$defaults"/retroarch-switchres/*.switchres.ini; do
+        [[ -f $file ]] || continue
+        dir=$home/.config/retroarch/config/$(basename "$file" .switchres.ini)
+        as_user mkdir -p "$dir" && install -m644 -o "$user" -g "$user" "$file" "$dir/"
+      done
+      ;;
+    groovymame)
+      # O mame.ini inteiro, como no build: o -createconfig do GroovyMAME com
+      # as opcoes do FliperOS por cima; sem o GroovyMAME, so as do FliperOS.
+      mkdir -p "$mame_etc"
+      if [[ -f $defaults/mame.ini ]]; then
+        "$root/opt/fliperos/bin/fliperos-mame-ini" "$defaults/mame.ini" "$mame_etc/mame.ini" >&2 ||
+          install -m644 "$defaults/mame.ini" "$mame_etc/mame.ini"
+      fi
+      [[ ! -f $defaults/mame-ui.ini ]] || install -m644 "$defaults/mame-ui.ini" "$mame_etc/ui.ini"
+      chown -R 1000:1000 "$mame_etc" 2> /dev/null || true
+      ;;
+    flycast)
+      [[ ! -f $defaults/flycast-emu.cfg ]] ||
+        install -D -m644 -o "$user" -g "$user" "$defaults/flycast-emu.cfg" "$home/.config/flycast/emu.cfg"
+      ;;
+  esac
+  return 0
+}
+
+# emulator_restore NOME: guarda, restaura e reaplica. Imprime backup=PASTA.
+emulator_restore() {
+  local name=$1 stamp backup p full dest moved=0
+  label="Restore $(field "$name" 4 | sed 's/ (.*//')"
+  [[ -n $(restore_paths "$name") ]] || fail "$name has no settings to restore"
+  ((EUID == 0)) || [[ -n $root ]] || fail "restore needs root"
+  say 5 "Saving the current settings"
+  stamp=$(date +%Y%m%d-%H%M%S)
+  backup=$home/config-backup/$name-$stamp
+  while IFS= read -r p; do
+    full=$(restore_full "$p")
+    [[ -e $full || -L $full ]] || continue
+    if [[ $p == /* ]]; then dest=$backup/${p#/}; else dest=$backup/$p; fi
+    mkdir -p "$(dirname "$dest")" || fail "could not make $backup"
+    mv -- "$full" "$dest" || fail "could not move $full to $backup"
+    moved=1
+  done < <(restore_paths "$name")
+  if ((moved)); then
+    chown -R "$user:$user" "$home/config-backup" 2> /dev/null || true
+  fi
+  say 40 "Putting back the FliperOS settings"
+  restore_defaults "$name"
+  say 70 "Applying the Setup settings (buttons, monitor, latency)"
+  if [[ -x $setup_cmd ]]; then
+    "$setup_cmd" --reapply-emulators >&2 || say 90 "Some Setup settings were not applied (see the Setup log)"
+  fi
+  ((moved)) && printf 'backup=%s\n' "$backup"
+  say 100 "$(field "$name" 4 | sed 's/ (.*//') is back to the FliperOS settings"
+}
+
 case ${1:-} in
+  restorable)
+    # nome|1 se ha configuracao para restaurar (0: ainda nao abriu)
+    while IFS='|' read -r name _ _ _; do
+      [[ -n $(restore_paths "$name") ]] || continue
+      if restore_has "$name"; then has=1; else has=0; fi
+      printf '%s|%s\n' "$name" "$has"
+    done < <(table)
+    ;;
+  restore)
+    name=${2:?name}
+    [[ ${3:-} == --progress ]] && progress=1
+    [[ -n $(field "$name" 1) ]] || fail "no such emulator: $name"
+    emulator_restore "$name"
+    ;;
   edge-available) edge_recipe "${2:?name}" > /dev/null ;;
   edge-status)
     # O commit do build mais novo instalado (vazio: o do pacote).
@@ -414,7 +550,7 @@ case ${1:-} in
     emulator_install "$name" "$source"
     ;;
   *)
-    echo "Usage: fliperos-emulators list | installed NAME | versions | latest NAME | install NAME [--progress] [--source FOLDER]" >&2
+    echo "Usage: fliperos-emulators list | installed NAME | versions | latest NAME | install NAME [--progress] [--source FOLDER] | restorable | restore NAME [--progress]" >&2
     exit 2
     ;;
 esac
