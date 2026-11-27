@@ -8,6 +8,7 @@ ISO, com o mesmo mawk e jq.
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import shlex
 import shutil
@@ -15140,6 +15141,37 @@ class BatoceraTests(Base):
         self.assertTrue((self.root / "roms" / "snes" / "mario.zip").exists())
         self.assertTrue((self.root / "roms" / "custom-packages").is_dir())
 
+    def test_use_gives_the_saves_and_nvram_of_the_disk_to_the_person(self):
+        # Num disco de Linux (ext4) as pastas do Batocera sao do root, e o fliperos-roms (como a pessoa) nao criava
+        # ~/save/retroarch nelas: o RetroArch nao gravava e o update 109 parava (2026-11-27). saves e nvram passam a
+        # ser da pessoa; a bios, os consoles e o que o Batocera ja gravou dentro ficam como estao.
+        if os.geteuid() != 0:
+            self.skipTest("o chown precisa de root")
+        nobody = pwd.getpwnam("nobody").pw_uid
+        (self.root / "nvram").mkdir()
+        (self.root / "saves" / "snes").mkdir()
+        self.vars["FLIPEROS_USER"] = "nobody"
+        out = self.ok('batocera_cli use "%s"' % self.disk)
+        self.assertIn("linked=bios,save,nvram", out)
+        self.assertEqual(os.readlink(self.home / "nvram"), str(self.root / "nvram"))
+        self.assertEqual((self.root / "saves").stat().st_uid, nobody)
+        self.assertEqual((self.root / "nvram").stat().st_uid, nobody)
+        self.assertEqual((self.root / "saves" / "snes").stat().st_uid, 0)
+        self.assertEqual((self.root / "bios").stat().st_uid, 0)
+        self.assertEqual((self.root / "roms" / "snes").stat().st_uid, 0)
+        # O atalho que a pessoa fez para outro lugar fica, e a pasta dele nao muda de dono.
+        self.ok('batocera_cli unuse "%s"' % self.disk)
+        for p in (self.root / "saves", self.root / "nvram"):
+            os.chown(p, 0, 0)
+        other = self.env.dir / "elsewhere" / "save"
+        other.mkdir(parents=True)
+        self.env.out('folders_link save "%s"' % other, self.vars)
+        out = self.ok('batocera_cli use "%s"' % self.disk)
+        self.assertIn("skipped=save already points to", out)
+        self.assertEqual(other.stat().st_uid, 0)
+        self.assertEqual((self.root / "saves").stat().st_uid, 0)
+        self.assertEqual((self.root / "nvram").stat().st_uid, nobody)
+
     def test_a_shortcut_the_person_made_elsewhere_is_kept(self):
         other = self.env.dir / "elsewhere"
         (other / "bios").mkdir(parents=True)
@@ -15269,6 +15301,41 @@ class BatoceraTests(Base):
         # Sem o fliperos-setup (uma maquina sem a instalacao) nao ha o que fazer, e nao e erro.
         result = self.env.run("bash %s" % script, dict(env, FLIPEROS_SETUP=str(self.env.dir / "missing")))
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_update_112_gives_the_saves_and_nvram_of_a_disk_in_use_to_the_person(self):
+        # Um disco ligado antes do batocera_use novo: ~/save e ~/nvram ja apontam para pastas do root nele, e o
+        # batocera_use nao roda de novo so por instalar a biblioteca nova.
+        if os.geteuid() != 0:
+            self.skipTest("o chown precisa de root")
+        nobody = pwd.getpwnam("nobody").pw_uid
+        (self.root / "nvram").mkdir()
+        (self.root / "saves" / "snes").mkdir()
+        outside = self.env.dir / "elsewhere" / "nvram"
+        outside.mkdir(parents=True)
+        (self.home / "save").symlink_to(self.root / "saves")
+        (self.home / "nvram").symlink_to(outside)
+        (self.home / "roms" / "snes").symlink_to(self.root / "roms" / "snes")
+        script = ROOT / "updates" / "0112.sh"
+        env = {"FLIPEROS_HOME": str(self.home), "FLIPEROS_USER": "nobody", "FLIPEROS_MEDIA_ROOT": str(self.media)}
+        result = self.env.run("bash %s" % script, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "~/save: %s now belongs to nobody\n" % (self.root / "saves"))
+        self.assertEqual((self.root / "saves").stat().st_uid, nobody)
+        # So a pasta, sem -R; e um atalho para fora dos discos (uma pasta do sistema) nao muda de dono.
+        self.assertEqual((self.root / "saves" / "snes").stat().st_uid, 0)
+        self.assertEqual(outside.stat().st_uid, 0)
+        self.assertEqual((self.root / "roms" / "snes").stat().st_uid, 0)
+        # ~/nvram no disco: so ele agora; a ~/save ja e da pessoa e fica de fora.
+        (self.home / "nvram").unlink()
+        (self.home / "nvram").symlink_to(self.root / "nvram")
+        result = self.env.run("bash %s" % script, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "~/nvram: %s now belongs to nobody\n" % (self.root / "nvram"))
+        self.assertEqual((self.root / "nvram").stat().st_uid, nobody)
+        # De novo, e numa maquina sem o usuario: nada a fazer, e nao e erro.
+        for user in ("nobody", "nobody-here"):
+            result = self.env.run("bash %s" % script, dict(env, FLIPEROS_USER=user))
+            self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
 
     def test_a_shortcut_the_person_made_to_another_place_survives_the_repair(self):
         other = self.env.dir / "elsewhere"
