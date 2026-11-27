@@ -56,10 +56,12 @@ function brandNodes(s) {
 // glifos, na cor do texto).
 function icon(name, cls) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", (name.startsWith("px-") ? "px" : "g") + (cls ? " " + cls : ""));
+  // l-*: os icones do site (Lucide e a marca do GitHub), no proprio index.html.
+  const site = name.startsWith("l-");
+  svg.setAttribute("class", (name.startsWith("px-") ? "px" : site ? "l" : "g") + (cls ? " " + cls : ""));
   svg.setAttribute("aria-hidden", "true");
   const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-  use.setAttribute("href", "icons.svg#" + name);
+  use.setAttribute("href", (site ? "#" : "icons.svg#") + name);
   svg.append(use);
   return svg;
 }

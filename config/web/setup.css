@@ -754,7 +754,7 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 /* O convite do grupo do Telegram (PC Games e ROMs). */
 .cg-telegram { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; padding: 12px 14px; border-radius: 12px;
   border: 1px solid rgba(139, 233, 253, .45); background: rgba(139, 233, 253, .06); font-size: 14px; }
-.cg-telegram > svg.g { width: 18px; height: 18px; flex: none; color: #8be9fd; }
+.cg-telegram > svg.l { width: 18px; height: 18px; flex: none; color: #8be9fd; }
 .cg-telegram > span { flex: 1; min-width: 220px; }
 /* Create package: de que e o pacote (jogo de PC ou ROMs), acima de tudo. */
 .cg-kindbar { display: flex; width: fit-content; align-items: center; }
@@ -785,7 +785,9 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 .rp-meta-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 10px; }
 .rp-meta-head small { flex-basis: 100%; }
 .rp-meta-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 10px; }
-.rp-mf input { font-size: 13px; padding: 6px 8px; }
+.rp-mf input, .rp-mf select { box-sizing: border-box; height: 36px; margin: 0; font-size: 13px; padding: 0 10px; width: 100%; min-width: 0; }
+.rp-mctl { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.rp-mctl .icon-btn { flex: none; }
 .rp-mf.edited > span { color: #ff79c6; }
 .rp-meta-art { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .rp-meta-media { margin: 0; display: grid; gap: 4px; }
@@ -809,6 +811,8 @@ td.bad :is(input, select, .cg-ctl), .cg-field.bad :is(input, select, .cg-ctl) { 
 /* O seletor a esquerda e os escolhidos a direita (a coluna fica a vista ao rolar). */
 .rp-cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 18px; align-items: start; margin-top: 8px; }
 .rp-cols .rp-games-list { max-width: none; max-height: 520px; }
+/* A barra de carregamento da lista de jogos. */
+.rp-loading { display: grid; gap: 8px; padding: 18px 16px; font-size: 13px; }
 /* Os filtros do seletor: um bloco com o mesmo respiro entre as partes e a mesma
    altura (36 px) na busca, nos seletores e nos botoes. */
 .rp-filters { --rp-h: 36px; display: grid; gap: 14px; margin-bottom: 10px; padding: 14px; border-radius: 12px; background: var(--surface); }

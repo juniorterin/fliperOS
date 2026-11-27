@@ -16,6 +16,23 @@
 <link rel="stylesheet" href="setup.css">
 </head>
 <body>
+<!-- Os icones dos links do site, os mesmos dele (website/src/components/Header.tsx):
+     Share2, BookText e Send do Lucide (ISC) e a marca do GitHub (GithubIcon.tsx). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="l-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+    <line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>
+  </symbol>
+  <symbol id="l-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><path d="M8 11h8"/><path d="M8 7h6"/>
+  </symbol>
+  <symbol id="l-github" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/>
+  </symbol>
+  <symbol id="l-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>
+  </symbol>
+</svg>
 <div class="stars" aria-hidden="true"></div>
 
 <!-- O login: o letreiro FliperOS e o formulario dentro da tela do tubo. -->
@@ -52,10 +69,10 @@
       <!-- Os mesmos links do site (website/src/lib/site.ts): compartilhar o
            FliperOS, a wiki, o GitHub e o grupo do Telegram. -->
       <nav class="side-links" aria-label="FliperOS">
-        <button type="button" class="side-link pink" data-share><svg class="g"><use href="icons.svg#g-share"/></svg><span data-t="link_share"></span></button>
-        <a class="side-link green" href="https://github.com/juniorterin/fliperOS/wiki" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-book"/></svg><span data-t="link_wiki"></span></a>
-        <a class="side-link purple" href="https://github.com/juniorterin/fliperOS" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-github"/></svg><span data-t="link_github"></span></a>
-        <a class="side-link cyan" href="https://t.me/fliperos15khz" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-send"/></svg><span data-t="link_telegram"></span></a>
+        <button type="button" class="side-link pink" data-share><svg class="l"><use href="#l-share"/></svg><span data-t="link_share"></span></button>
+        <a class="side-link green" href="https://github.com/juniorterin/fliperOS/wiki" target="_blank" rel="noopener"><svg class="l"><use href="#l-book"/></svg><span data-t="link_wiki"></span></a>
+        <a class="side-link purple" href="https://github.com/juniorterin/fliperOS" target="_blank" rel="noopener"><svg class="l"><use href="#l-github"/></svg><span data-t="link_github"></span></a>
+        <a class="side-link cyan" href="https://t.me/fliperos15khz" target="_blank" rel="noopener"><svg class="l"><use href="#l-send"/></svg><span data-t="link_telegram"></span></a>
       </nav>
       <label id="cab-pick-side" class="cab-pick" hidden><span data-t="cabinet"></span><select aria-label="Cabinet"></select></label>
       <div class="host"><span id="conn-dot" class="dot ok"></span><div><b id="host-name">FliperOS</b><small id="host"></small></div></div>
@@ -81,10 +98,10 @@
         <button id="logout2" type="button" class="menu-item" data-t="logout"></button>
         <button id="power-reboot2" type="button" class="menu-item"><svg class="g"><use href="icons.svg#g-refresh"/></svg><span data-t="power_reboot"></span></button>
         <button id="power-off2" type="button" class="menu-item red"><svg class="g"><use href="icons.svg#g-power"/></svg><span data-t="power_off"></span></button>
-        <button type="button" class="menu-item" data-share><svg class="g"><use href="icons.svg#g-share"/></svg><span data-t="link_share"></span></button>
-        <a class="menu-item" href="https://github.com/juniorterin/fliperOS/wiki" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-book"/></svg><span data-t="link_wiki"></span></a>
-        <a class="menu-item" href="https://github.com/juniorterin/fliperOS" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-github"/></svg><span data-t="link_github"></span></a>
-        <a class="menu-item" href="https://t.me/fliperos15khz" target="_blank" rel="noopener"><svg class="g"><use href="icons.svg#g-send"/></svg><span data-t="link_telegram"></span></a>
+        <button type="button" class="menu-item" data-share><svg class="l"><use href="#l-share"/></svg><span data-t="link_share"></span></button>
+        <a class="menu-item" href="https://github.com/juniorterin/fliperOS/wiki" target="_blank" rel="noopener"><svg class="l"><use href="#l-book"/></svg><span data-t="link_wiki"></span></a>
+        <a class="menu-item" href="https://github.com/juniorterin/fliperOS" target="_blank" rel="noopener"><svg class="l"><use href="#l-github"/></svg><span data-t="link_github"></span></a>
+        <a class="menu-item" href="https://t.me/fliperos15khz" target="_blank" rel="noopener"><svg class="l"><use href="#l-send"/></svg><span data-t="link_telegram"></span></a>
         <label id="cab-pick-menu" class="cab-pick" hidden><span data-t="cabinet"></span><select aria-label="Cabinet"></select></label>
         <small id="host2" class="menu-host"></small>
       </div>

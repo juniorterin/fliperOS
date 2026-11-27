@@ -383,23 +383,42 @@ async function rpLoadTargets() {
 async function rpLoadGames() {
   const c = rp.create;
   rp.games = null;
-  c.games.replaceChildren(el("p", { class: "dim" }, t("rp_reading")));
+  // A barra de carregamento: a lista do emulador (ate 60%, andando sozinha
+  // enquanto o gabinete le as pastas) e depois os dados do frontend de cada pasta.
+  const bar = meter(0);
+  const say = el("span", { class: "dim" }, t("rp_reading"));
+  c.games.replaceChildren(el("div", { class: "rp-loading" }, say, bar));
+  const set = (pct) => { bar.firstChild.style.width = Math.max(0, Math.min(100, pct)) + "%"; };
+  let pct = 2;
+  set(pct);
+  const tick = setInterval(() => { pct += (60 - pct) * 0.06; set(pct); }, 250);
   rpCreateSummary();
-  const res = await api("/api/rompacks/games?target=" + encodeURIComponent(rp.target));
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) { c.games.replaceChildren(el("p", { class: "error" }, data.error || res.statusText)); return; }
+  const target = rp.target;
+  const res = await api("/api/rompacks/games?target=" + encodeURIComponent(target)).catch(() => null);
+  clearInterval(tick);
+  if (rp.target !== target) return;
+  const data = res ? await res.json().catch(() => ({})) : {};
+  if (!res || !res.ok) { c.games.replaceChildren(el("p", { class: "error" }, data.error || (res ? res.statusText : "network error"))); return; }
   const games = data.games || [];
   rp.mediaTypes = data.media_types || [];
   rp.frontendFilters = [];
   const keys = [...new Set(games.map((g) => g.key))];
+  let done = 0;
+  set(60);
+  say.textContent = t("rp_reading_meta").replace("%n", games.length);
   await Promise.all(keys.map(async (key) => {
-    const r = await api("/api/games?system=" + encodeURIComponent(key)).catch(() => null);
-    if (!r || !r.ok) return;
-    const d = await r.json().catch(() => ({}));
-    const rows = new Map((d.games || []).map((row) => [row.Name, row]));
-    for (const g of games) if (g.key === key) g.meta = rows.get(g.stem) || {};
-    if (!rp.frontendFilters.length && Array.isArray(d.filters)) rp.frontendFilters = d.filters;
+    try {
+      const r = await api("/api/games?system=" + encodeURIComponent(key)).catch(() => null);
+      if (!r || !r.ok) return;
+      const d = await r.json().catch(() => ({}));
+      const rows = new Map((d.games || []).map((row) => [row.Name, row]));
+      for (const g of games) if (g.key === key) g.meta = rows.get(g.stem) || {};
+      if (!rp.frontendFilters.length && Array.isArray(d.filters)) rp.frontendFilters = d.filters;
+    } finally {
+      set(60 + (++done / Math.max(1, keys.length)) * 40);
+    }
   }));
+  if (rp.target !== target) return;
   for (const g of games) g.meta = g.meta || {};
   rp.games = games;
   for (const n of [...rp.picked]) if (!rp.games.some((g) => g.name === n)) rp.picked.delete(n);
@@ -569,6 +588,71 @@ const RP_META_FIELDS = ["Title", "Year", "Manufacturer", "Category", "Players", 
   "Series", "Language", "Region", "Rating", "Status"];
 const RP_MEDIA_SHOW = ["snap", "preview", "box", "logo", "marquee", "dmd", "texto"];
 
+// Os campos de texto livre; os outros sao listas com os valores que ja existem.
+const RP_META_TEXT = ["Title", "Year"];
+// Os valores fixos de cada lista (o Control como as listas do Attract-Mode o escrevem,
+// os 13 tipos de controle do FliperOS, config/fliperos-web CUSTOM_CONTROLS).
+const RP_META_FIXED = {
+  Players: ["1", "2", "3", "4", "5", "6", "8"],
+  Buttons: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "10"],
+  Control: ["joystick (8-way)", "joystick (4-way)", "joystick (2-way)", "double joystick (8-way)", "trackball", "dial",
+    "paddle", "positional", "analog stick", "pedal", "lightgun", "keyboard", "mahjong"],
+  Rotation: ["0", "90", "180", "270"],
+  Status: ["good", "imperfect", "preliminary"],
+};
+
+// rpMetaControl: o controle de um campo. Uma lista (os valores fixos, os dos jogos
+// deste emulador e, na categoria, as do catver em genero > subgenero) com "Outro…",
+// que troca por um campo de texto; o valor de agora sempre entra. Devolve
+// {node, value}.
+function rpMetaControl(f, value, g) {
+  if (RP_META_TEXT.includes(f)) {
+    const input = el("input", { type: "text", value, maxlength: "200", autocomplete: "off",
+      inputmode: f === "Year" ? "numeric" : "text" });
+    return { node: input, get value() { return input.value; } };
+  }
+  const have = new Set((rp.games || []).map((x) => (x.meta || {})[f]).filter(Boolean));
+  if (f === "CloneOf") for (const x of rp.games || []) if (x.stem !== g.stem && !(x.meta || {}).CloneOf) have.add(x.stem);
+  const fixed = RP_META_FIXED[f] || [];
+  const numeric = (a, b) => (/^\d+$/.test(a) && /^\d+$/.test(b) ? Number(a) - Number(b) : a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const select = el("select", {}, el("option", { value: "" }, t("rp_meta_none")));
+  const seen = new Set();
+  const opt = (v) => { seen.add(v); return el("option", { value: v }, v); };
+  if (f === "Category") {
+    // As do catver.ini (o genero e as categorias dele) e, antes, as que os jogos ja usam.
+    const mine = [...have].sort(numeric);
+    if (mine.length) select.append(el("optgroup", { label: t("rp_meta_in_use") }, ...mine.map(opt)));
+    for (const gen of (cg.info && cg.info.genres) || []) {
+      const subs = [gen.name, ...(gen.subs || [])].filter((v) => !seen.has(v));
+      if (subs.length) select.append(el("optgroup", { label: gen.name }, ...subs.map(opt)));
+    }
+  } else {
+    const all = [...new Set([...fixed, ...have])].sort(fixed.length && f !== "Status" && f !== "Control" ? numeric : (a, b) => {
+      const ia = fixed.indexOf(a), ib = fixed.indexOf(b);
+      return ia >= 0 && ib >= 0 ? ia - ib : ia >= 0 ? -1 : ib >= 0 ? 1 : numeric(a, b);
+    });
+    select.append(...all.slice(0, 2500).map(opt));
+  }
+  if (value && !seen.has(value)) select.append(opt(value));
+  select.append(el("option", { value: "__other" }, t("rp_meta_other")));
+  select.value = value;
+  const text = el("input", { type: "text", maxlength: "200", autocomplete: "off", hidden: "", placeholder: t("rp_meta_other_ph") });
+  const back = el("button", { type: "button", class: "icon-btn small", hidden: "", title: t("rp_meta_back"), "aria-label": t("rp_meta_back") },
+    icon("g-close"));
+  select.addEventListener("change", () => {
+    if (select.value !== "__other") return;
+    select.hidden = true; text.hidden = false; back.hidden = false;
+    text.value = ""; text.focus();
+  });
+  back.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    select.hidden = false; text.hidden = true; back.hidden = true;
+    select.value = value;
+  });
+  const node = el("span", { class: "rp-mctl" }, select, text, back);
+  return { node, get value() { return select.hidden ? text.value : select.value === "__other" ? "" : select.value; } };
+}
+
 function rpMetaPanel(g) {
   const box = el("div", { class: "rp-meta" }, el("p", { class: "dim" }, t("rp_reading")));
   rpMetaLoad(g, box).catch((e) => box.replaceChildren(el("p", { class: "error" }, String(e))));
@@ -582,18 +666,12 @@ async function rpMetaLoad(g, box) {
   if (!res.ok) { box.replaceChildren(el("p", { class: "error" }, data.error || res.statusText)); return; }
   const edited = new Set(data.edited || []);
   const inputs = {};
-  // Os valores que os outros jogos ja tem, como sugestao (a mesma categoria escrita igual).
-  const lists = {};
   const grid = el("div", { class: "rp-meta-fields" }, ...RP_META_FIELDS.map((f) => {
-    const id = "rp-dl-" + f;
-    if (!lists[f]) {
-      const values = [...new Set((rp.games || []).map((x) => (x.meta || {})[f]).filter(Boolean))].sort().slice(0, 400);
-      lists[f] = el("datalist", { id }, ...values.map((v) => el("option", { value: v })));
-    }
-    const input = el("input", { type: "text", value: (data.fields || {})[f] || "", maxlength: "200", list: id, autocomplete: "off" });
-    inputs[f] = input;
-    return el("label", { class: "cg-field rp-mf" + (edited.has(f) ? " edited" : "") }, el("span", {}, t("rp_mfl_" + f)), input);
+    const field = rpMetaControl(f, (data.fields || {})[f] || "", g);
+    inputs[f] = field;
+    return el("label", { class: "cg-field rp-mf" + (edited.has(f) ? " edited" : "") }, el("span", {}, t("rp_mfl_" + f)), field.node);
   }));
+  const lists = {};
   const status = el("span", { class: "dim rp-meta-status", role: "status" });
   const save = el("button", { type: "button", class: "btn small" }, icon("px-save"), t("cg_save"));
   save.addEventListener("click", async () => {

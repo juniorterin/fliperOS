@@ -266,7 +266,7 @@ function cgViewSave() {
 // O convite para o grupo do Telegram, onde a comunidade troca pacotes (de jogos
 // de PC na aba PC Games, de ROMs na aba ROMs).
 function cgTelegramNote(kind) {
-  return el("div", { class: "cg-telegram" }, icon("g-send"),
+  return el("div", { class: "cg-telegram" }, icon("l-send"),
     el("span", {}, el("b", {}, t("cg_tg_title_" + kind)), " ", t("cg_tg_text_" + kind)),
     el("a", { class: "btn small", href: "https://t.me/fliperos15khz", target: "_blank", rel: "noopener" }, t("link_telegram")));
 }
