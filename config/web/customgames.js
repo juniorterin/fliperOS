@@ -410,9 +410,11 @@ function cgGroupSection(g, mine, filtering) {
     "aria-label": t("cg_group_delete") + ": " + g.name }, icon("px-remove"));
   del.addEventListener("click", () => cgDeleteGroup(g.name).catch(() => {}));
   const limit = filtering ? Infinity : cg.shown[g.name] || CG_GROUP_PAGE;
+  // O numero e o de jogos que o clique mostra; o que ainda falta vai entre parenteses.
+  const left = mine.length - limit, step = Math.min(24, left);
   const more = mine.length > limit ? el("button", { type: "button", class: "btn ghost small cg-more" },
-    t("cg_show_more").replace("%n", mine.length - limit)) : "";
-  if (more) more.addEventListener("click", () => { cg.shown[g.name] = limit + 24; cgDrawGames(); });
+    t("cg_show_more_of").replace("%n", step).replace("%r", left)) : "";
+  if (more) more.addEventListener("click", () => { cg.shown[g.name] = limit + step; cgDrawGames(); });
   return el("section", { class: "cg-group" },
     el("h4", {}, g.name, g.logo ? el("img", { class: "cg-glogo", src: cgGroupLogoUrl(g.name), alt: "" }) : "",
       el("span", { class: "dim" }, mine.length === 1 ? t("cg_game_1") : t("cg_games_n").replace("%n", mine.length)),

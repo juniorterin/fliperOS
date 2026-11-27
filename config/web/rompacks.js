@@ -572,8 +572,10 @@ function rpDrawGames() {
       return el("div", { class: "rp-rowwrap" }, line, rpMetaPanel(g));
     }) : [el("p", { class: "dim cg-empty" }, t("cg_pkg_none_match"))]));
     if (rows.length > shown.length) {
-      const more = el("button", { type: "button", class: "btn ghost small cg-more" }, t("cg_show_more").replace("%n", rows.length - shown.length));
-      more.addEventListener("click", () => { rp.shown = (rp.shown || RP_PAGE) + RP_PAGE * 2; rpDrawGames(); });
+      // O numero e o de jogos que o clique poe na lista; o que ainda falta vai entre parenteses.
+      const left = rows.length - shown.length, step = Math.min(RP_PAGE, left);
+      const more = el("button", { type: "button", class: "btn ghost small cg-more" }, t("cg_show_more_of").replace("%n", step).replace("%r", left));
+      more.addEventListener("click", () => { rp.shown = (rp.shown || RP_PAGE) + step; rpDrawGames(); });
       c.more.replaceChildren(more);
     } else c.more.replaceChildren();
   }
