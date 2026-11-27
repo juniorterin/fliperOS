@@ -124,7 +124,8 @@ function rpRenderRoms(box) {
   search.addEventListener("input", () => { rp.query = search.value; rpDraw(); });
   rp.el = {
     progress: el("div", { class: "cg-progress" }),
-    list: el("div", { class: "cg-list" }),
+    // Ate a pasta dos pacotes ser lida, o loader.
+    list: el("div", { class: "cg-list" }, loader(t("rp_loading_packages"))),
     note: el("p", { class: "dim cg-folder" }),
   };
   box.replaceChildren(cgTelegramNote("rom"), el("div", { class: "cg-upload" }, drop, el("div", { class: "cg-uopts" }, el("span", { class: "dim cg-uhint" }, t("rp_upload_hint"))), input),
@@ -358,7 +359,12 @@ function rpRenderCreate(box) {
 
 async function rpLoadTargets() {
   const c = rp.create;
-  const res = await api("/api/rompacks/targets");
+  // Os emuladores com jogos: o loader na lista ate eles chegarem.
+  c.target.disabled = true;
+  c.games.replaceChildren(loader(t("rp_loading_targets")));
+  const res = await api("/api/rompacks/targets").catch(() => null);
+  c.target.disabled = false;
+  if (!res) { c.games.replaceChildren(el("p", { class: "error" }, "network error")); return; }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { c.games.replaceChildren(el("p", { class: "error" }, data.error || res.statusText)); return; }
   rp.targets = data.targets || [];

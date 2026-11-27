@@ -320,6 +320,54 @@ def catalog():
     return out
 
 
+CATALOG_CACHE = os.environ.get('FLIPEROS_SYSLOGO_CACHE', '/var/cache/fliperos/syslogo-list.tsv')
+
+
+def catalog_sign():
+    """O que muda a lista: o tamanho e a data dos arquivos que ela le (a tabela e
+    a fonte do tema ou as da imagem, os logotipos extras, os apelidos)."""
+    paths = [os.path.join(d, n) for d in (theme_dir(), THEME, BUNDLED) for n in ('data_systems.txt', 'fonts/' + FONT, FONT)]
+    paths += [ALIASES, os.path.join(BUNDLED, EXTRA)]
+    try:
+        paths += sorted(os.path.join(BUNDLED, EXTRA, n) for n in os.listdir(os.path.join(BUNDLED, EXTRA)))
+    except OSError:
+        pass
+    out = []
+    for p in paths:
+        try:
+            st = os.stat(p)
+            out.append('%s:%d:%d' % (p, st.st_size, int(st.st_mtime)))
+        except OSError:
+            out.append(p + ':-')
+    return '|'.join(out)
+
+
+def catalog_cached():
+    """A lista do catalog() guardada em arquivo: desenhar cada logotipo para ver
+    se ele existe leva uns 3 s no gabinete, e a lista so muda com o tema, a fonte
+    ou os logotipos (a assinatura na primeira linha)."""
+    sign = catalog_sign()
+    try:
+        with open(CATALOG_CACHE, encoding='utf-8') as f:
+            lines = f.read().split('\n')
+        if lines and lines[0] == '#' + sign:
+            return [tuple(ln.split('\t', 1)) for ln in lines[1:] if '\t' in ln]
+    except OSError:
+        pass
+    rows = catalog()
+    if rows:
+        try:
+            os.makedirs(os.path.dirname(CATALOG_CACHE), exist_ok=True)
+            tmp = '%s.%d' % (CATALOG_CACHE, os.getpid())
+            with open(tmp, 'w', encoding='utf-8') as f:
+                f.write('#' + sign + '\n' + ''.join('%s\t%s\n' % r for r in rows))
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, CATALOG_CACHE)
+        except OSError:
+            pass
+    return rows
+
+
 def fitted(name, w, h, color=COLOR):
     """O logotipo dentro de w x h (com uma margem), sem deformar."""
     img = render(name, None, color)
@@ -413,7 +461,7 @@ def main(argv):
         os.replace(tmp, args[1])
         return 0
     if cmd == 'list' and not args:
-        rows = catalog()
+        rows = catalog_cached()
         for key, label in rows:
             print('%s\t%s' % (key, label))
         return 0 if rows else 1

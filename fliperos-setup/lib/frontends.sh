@@ -295,8 +295,17 @@ frontends_syslogo_aliases() {
   # Sem o titulo de um sistema proprio (o "<tab>MAME 2010"): o glifo dele so
   # existe na fonte do tema.
   frontends_system_names | sed 's/\t[^|]*//' > "$tmp"
-  chmod 644 "$tmp"
-  mv -f "$tmp" "$SYSLOGO_ALIASES"
+  # Igual ao de antes, fica o de antes: a lista de logotipos guardada
+  # (fliperos-syslogo list, o cache que o Game Packages le) vale pela data dele.
+  if cmp -s "$tmp" "$SYSLOGO_ALIASES"; then
+    rm -f "$tmp"
+  else
+    chmod 644 "$tmp"
+    mv -f "$tmp" "$SYSLOGO_ALIASES"
+  fi
+  # A lista ja pronta para a proxima pagina (desenhar cada logotipo leva uns 3 s).
+  [[ ! -f ${CUSTOM_GAMES_SYSLOGO:-} ]] || python3 "$CUSTOM_GAMES_SYSLOGO" list > /dev/null 2>&1
+  return 0
 }
 
 # frontends_system_names: "NOME[<tab>TITULO]|SISTEMA..." de cada pasta com

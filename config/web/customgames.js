@@ -76,6 +76,9 @@ async function customGamesPage(box) {
   box.append(el("div", { class: "cg-head" }, el("h2", {}, t("cg_title")), el("p", { class: "lead" }, t("cg_intro")),
     el("div", { class: "subtabs-bar cg-tabs" }, cg.el.tabs)), cg.el.games, cg.el.roms, cg.el.create);
   cgDraftLoad();
+  // Ate o Setup responder (o describe leva uns segundos no gabinete), o loader em
+  // cada aba: a pagina nunca fica vazia.
+  for (const pane of [cg.el.games, cg.el.create]) pane.replaceChildren(loader(t("cg_loading")));
   cgShowTab(cg.tab);
   await cgLoad();
 }
@@ -154,6 +157,7 @@ async function cgLoad() {
   if (!res.ok) {
     cg.el.games.replaceChildren(el("p", { class: "error" }, info.error || res.statusText));
     cg.el.games.dataset.built = "";
+    if (!cg.el.create.dataset.built) cg.el.create.replaceChildren(el("p", { class: "error" }, info.error || res.statusText));
     return;
   }
   const pres = await api("/api/customgames/packages");
@@ -1398,7 +1402,7 @@ function cgRenderCreate() {
     cg.el.kindBar = el("div", { class: "cg-modebar cg-kindbar", role: "tablist" });
     cg.el.pcCreate = el("div", { class: "cg-create-pc" }, cg.el.createIntro, cg.el.structure, cg.el.modeBar, cg.el.one, cg.el.many);
     cg.el.romCreate = el("div", { class: "cg-create-rom" });
-    box.append(cg.el.kindBar, cg.el.pcCreate, cg.el.romCreate);
+    box.replaceChildren(cg.el.kindBar, cg.el.pcCreate, cg.el.romCreate);
     // Sem jogo nem pacote nenhum, a estrutura ja aberta.
     cg.el.structure.open = !(cg.info.games || []).length && !(cg.info.pending || []).length;
   }

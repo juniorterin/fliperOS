@@ -75,6 +75,13 @@ function bytes(n) {
 }
 const rate = (bps) => bytes(bps) + "/s";
 
+// loader(texto): o indicador de espera do painel (o .loading com o .spinner, o
+// mesmo da ficha do jogo no frontend), no lugar onde o conteudo vai aparecer.
+// Tudo o que demora um pouco mostra um.
+function loader(text) {
+  return el("div", { class: "loading", role: "status" }, el("span", { class: "spinner" }), el("span", {}, text || t("loading")));
+}
+
 function meter(pct) {
   const bar = el("div", { class: "meter" + (pct > 90 ? " hot" : pct > 70 ? " warn" : "") }, el("div"));
   bar.firstChild.style.width = Math.max(0, Math.min(100, pct || 0)) + "%";
