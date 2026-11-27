@@ -924,11 +924,19 @@ EOF
   # de antes, ou o que o menu do MAME gravou) e trocado.
   mame2010_cfg="$root/opt/fliperos/saves/retroarch/MAME 2010/mame2010/cfg"
   if [[ ! -f $mame2010_cfg/default.cfg ]] || ! grep -q JOYCODE_4_BUTTON6 "$mame2010_cfg/default.cfg"; then
+    mame2010_ok=1
     for dir in "$root/opt/fliperos/saves" "$root/opt/fliperos/saves/retroarch" \
       "$root/opt/fliperos/saves/retroarch/MAME 2010" "${mame2010_cfg%/cfg}" "$mame2010_cfg"; do
-      [[ -d $dir ]] || install -d -o 1000 -g 1000 "$dir"
+      # Um link quebrado (~/save num disco que ainda nao tem a pasta retroarch)
+      # cria o destino dele: install -d no proprio link falhava e parava o update.
+      # Sem a pasta de cima (o disco fora), fica para o fliperos-roms do login.
+      if [[ -L $dir && ! -e $dir ]]; then
+        dir=$(readlink -m -- "$dir")
+        [[ -d ${dir%/*} ]] || { mame2010_ok=0; break; }
+      fi
+      [[ -d $dir ]] || install -d -o 1000 -g 1000 "$dir" || { mame2010_ok=0; break; }
     done
-    install -m644 -o 1000 -g 1000 "$src/config/mame2010-default.cfg" "$mame2010_cfg/default.cfg"
+    ((mame2010_ok == 0)) || install -m644 -o 1000 -g 1000 "$src/config/mame2010-default.cfg" "$mame2010_cfg/default.cfg"
   fi
   # Acervo em ~/roms; /opt/fliperos/roms vira um link para la, e os caminhos
   # antigos (mame.ini, frontends, Hypseus, OpenBOR) continuam valendo. Uma
