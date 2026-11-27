@@ -573,6 +573,10 @@ batocera_use() {
           continue
         fi
       fi
+      # saves e nvram o FliperOS grava (as pastas de cada emulador dentro): num
+      # disco de Linux elas vem do root do Batocera, e o fliperos-roms nao criava
+      # ~/save/retroarch (o update 109 parava no link /opt/fliperos/saves/retroarch).
+      case $rel in save | nvram) folders_own "$src" ;; esac
       if folders_link "$rel" "$src"; then
         linked+="${linked:+,}$rel"
         done_rels+="$rel "
