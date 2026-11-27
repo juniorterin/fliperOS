@@ -21,7 +21,10 @@ docker run --rm -v "$PWD/server/matchmaker:/m" -w /m python:3.12-slim \
 
 ## Deploying on Coolify
 
-- **Resource:** Docker Compose, from this repository, base directory `/server/matchmaker` (`docker-compose.yml`). No port is published.
-- **Domain:** a public hostname in the server's Cloudflare Tunnel (for example `online.fliperos.juniorter.in`) to `http://<the container>:8080`. The tunnel passes WebSockets.
+Live since 2026-11-27 at **`wss://fliperos-matchmaker.juniorter.in/ws`** (`https://fliperos-matchmaker.juniorter.in/health`).
+
+- **Resource:** the application `fliperos-matchmaker` in the Coolify project **FliperOS** (environment `production`), a Docker Compose app built from this repository through the same GitHub App as the site, branch `main`, base directory `/server/matchmaker` (`docker-compose.yml`). No port is published.
+- **Updates:** automatic. A push that touches `server/matchmaker/**` (the app's watch paths) deploys it again; other pushes don't.
+- **Domain:** `http://fliperos-matchmaker.juniorter.in:8080` in Coolify's domain for the `matchmaker` service: plain HTTP on purpose, Cloudflare puts the HTTPS in front. The server's Cloudflare Tunnel already sends `*.juniorter.in` to Coolify's proxy and the DNS has a wildcard, so a new subdomain needs no change in the tunnel. The proxy only routes to the container once its health check passes (a few seconds after each deploy, `/health` answers 404).
 - **Environment (phase 2):** `CF_TURN_KEY_ID` and `CF_TURN_API_TOKEN` (the Cloudflare Realtime TURN key, kept only here), `TURN_MONTHLY_GB_CAP` (default 800: past it the server stops handing out relay credentials for the month, below the 1,000 GB free tier).
 - **Data:** the `matchmaker-data` volume (`/data/matchmaker.db`).
