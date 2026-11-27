@@ -83,9 +83,9 @@ All the Matchmaker's icons are 16-bit sprites (a dark outline, a bevel, four ton
 
 ## How it would work
 
-- **Server** (`server/matchmaker/`, Python asyncio, WebSocket over TLS, SQLite on an encrypted volume), deployed on Coolify: identity, presence, lobbies, parties, fist bumps and duels, results, replays. One UDP port for the rendezvous and the relay.
+- **Server** (`server/matchmaker/`, Python asyncio, WebSocket over TLS, SQLite on an encrypted volume), deployed on Coolify: identity, presence, lobbies, parties, fist bumps and duels, results, replays. The Coolify server sits behind CGNAT and is reached through a Cloudflare Tunnel, so the server opens **no UDP port**: the cabinets learn their public address from Cloudflare's STUN (`stun.cloudflare.com`), and the relay is **Cloudflare Realtime TURN** (the server hands out short-lived credentials per match and stops before the 1,000 GB monthly free tier).
 - **On the cabinet:** a session service (`fliperos-online`) that stays connected, a small root service for the tunnel, and the Matchmaker program (pygame, `mmview.py` for the list-mode look).
-- **The match: a WireGuard tunnel per match.** The server introduces the two cabinets; they open their NATs with simultaneous handshakes (LAN address, IPv6, public IPv4); if that fails, the WireGuard packets go through the relay, which reads only the header indices and never decrypts. Inside the tunnel runs the local party code that is already tested on hardware (felink's party and file server, GroovyMAME's lockstep, Flycast's GGPO, RetroArch's net play), with the input delay taken from the ping.
+- **The match: a WireGuard tunnel per match.** The server introduces the two cabinets; they open their NATs with simultaneous handshakes (LAN address, IPv6, public IPv4 from STUN); if that fails, the WireGuard packets go through Cloudflare's TURN, through a small local forwarder between WireGuard and the TURN allocation (the relay never sees inside the WireGuard packets). Inside the tunnel runs the local party code that is already tested on hardware (felink's party and file server, GroovyMAME's lockstep, Flycast's GGPO, RetroArch's net play), with the input delay taken from the ping.
 - **ROM check:** the CRC and size of each file inside the zip, `-verifyroms` on both sides for MAME, FBNeo's own CRC list. A different version goes to its own folder; nothing of the user's is overwritten.
 
 ## FairPlay
@@ -102,7 +102,7 @@ All the Matchmaker's icons are 16-bit sprites (a dark outline, a bevel, four ton
 ## Phases
 
 0. **The screens and this plan** (done).
-1. **Server, identity, presence, the Matchmaker read-only.** First a UDP echo container on Coolify, to know whether the server can take UDP and has IPv6.
+1. **Server, identity, presence, the Matchmaker read-only.** Checked first: the Coolify server is behind CGNAT (no UDP from outside), hence the Cloudflare STUN and TURN above. The server's lobby is in [`server/matchmaker/`](../../server/matchmaker/).
 2. **The tunnel and the online party** with today's emulators.
 3. **Duel by the cards**, OSD notifications, match records.
 4. **FairPlay.**

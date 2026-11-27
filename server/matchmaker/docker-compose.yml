@@ -1,0 +1,22 @@
+# The FliperOS Matchmaker on Coolify (Docker Compose build pack, base
+# directory /server/matchmaker). The WebSocket reaches it through the
+# server's Cloudflare Tunnel (a public hostname to http://<this container>:8080);
+# no port is published and no UDP is needed: STUN and the relay are
+# Cloudflare's (CF_TURN_* from Coolify's environment variables, phase 2).
+services:
+  matchmaker:
+    build: .
+    restart: unless-stopped
+    environment:
+      - DATA_DIR=/data
+      - PORT=8080
+      - CF_TURN_KEY_ID=${CF_TURN_KEY_ID:-}
+      - CF_TURN_API_TOKEN=${CF_TURN_API_TOKEN:-}
+      - TURN_MONTHLY_GB_CAP=${TURN_MONTHLY_GB_CAP:-800}
+    volumes:
+      - matchmaker-data:/data
+    expose:
+      - "8080"
+
+volumes:
+  matchmaker-data:
