@@ -84,6 +84,8 @@ PREFIXES = (("roms/", "roms"), ("bios/", "bios"), ("media/", "media"), ("nvram/"
             (".config/retroarch/config/", "config"))
 # O que nao e jogo numa pasta de ROMs.
 SKIP_NAMES = {"_info.txt", ".netboot", "Thumbs.db", "desktop.ini", ".DS_Store"}
+# Um download pela metade (o torrent, o navegador) nao e um jogo.
+PARTIAL_EXTS = (".part", ".!qb", ".crdownload", ".tmp", ".partial", ".download")
 # O titulo vira nome de arquivo (no compartilhamento da rede tambem).
 TITLE_BAD = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
 STORED_EXTS = {"zip", "7z", "rar", "gz", "xz", "bz2", "zst", "chd", "cso", "rvz", "wbfs", "pbp", "jpg", "jpeg", "png",
@@ -272,6 +274,10 @@ def referenced(full):
     a pasta dele)."""
     ext = os.path.splitext(full)[1].lower()
     out = []
+    # So esses tipos chamam outros arquivos: os outros (uma ROM .zip de
+    # megabytes) nem sao abertos.
+    if ext not in (".cue", ".gdi", ".m3u", ".acgame"):
+        return out
     try:
         with open(full, encoding="utf-8", errors="replace") as f:
             text = f.read(1 << 20)
@@ -301,7 +307,8 @@ def scan_games(home, t):
     games = {}
     for rdir in t["roms"]:
         entries = [e for e in listdir(os.path.join(home, rdir))
-                   if e.name not in SKIP_NAMES and not e.name.startswith(".")]
+                   if e.name not in SKIP_NAMES and not e.name.startswith(".")
+                   and not e.name.lower().endswith(PARTIAL_EXTS)]
         by_stem = {}
         for e in entries:
             try:

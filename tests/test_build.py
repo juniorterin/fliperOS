@@ -31832,6 +31832,10 @@ class RomPackTests(unittest.TestCase):
                 self.put(src, rel, 'FILE "Game (Track 1).bin" BINARY\n' if rel.endswith('.cue') else rel)
             self.put(src, 'roms/ps1/Game (Track 1).bin')
             self.put(src, 'bios/scph5501.bin')
+            # Um download pela metade nao e um jogo.
+            self.put(src, 'roms/ps1/Other (USA).chd.part')
+            listed = self.run_tool(src, 'games', 'duckstation', '--text').stdout
+            self.assertEqual([ln.split('|')[0] for ln in listed.splitlines()], ['Game'])
             done = self.run_tool(src, 'create', '--target', 'mame', '--title', 'Lutas', '--game', 'sf2')
             self.assertEqual(done.returncode, 0, done.stderr)
             zpath = src / 'pk' / 'Lutas.fliperos-mame.zip'
