@@ -59,7 +59,10 @@ O link e o net play pelo frontend entraram na 0.19; depois, o net play ganhou to
 
 Pedido de 2026-11-27: duelos e parties pela internet num programa à parte do frontend (o FliperOS Matchmaker). A fase 0, as telas e as decisões, está em [matchmaker-plan](docs/research/matchmaker-plan.md). Falta construir, nesta ordem:
 - **Fase 1:** o servidor está no ar (`wss://fliperos-matchmaker.juniorter.in/ws`: identidade `APELIDO#xxxx`, presença, salas e a ficha assinada). O Matchmaker só de leitura existe (`gui/fliperos-matchmaker`, em Setup > Games > Frontend): confere a internet e o servidor ao abrir, as páginas por emulador com o ONLINE NOW, o lobby de cada jogo. Testado só no Docker (prints de `tools/matchmaker/shots.py`). Falta abrir num gabinete, com o servidor de verdade, e publicar o update que leva os arquivos novos.
-- **Fase 2:** o túnel WireGuard por partida (direto, ou pelo relay só com CGNAT dos dois lados) e a party online com os emuladores de hoje; o envio da ROM só na conexão direta.
+- **Fase 2:** o túnel WireGuard da party (direto, ou pelo relay da Cloudflare só quando não há outro caminho) e a party da rede local dentro dele estão feitos (`gui/fetunnel.py`, `gui/fenat.py`, `gui/mmparty.py`, `config/fliperos-online-tunnel`). Testados no laboratório de NAT (`tools/matchmaker/natlab`) e entre o gabinete e o PC, direto e pelo relay. Quem entra sem o jogo o copia só pelo caminho direto, sem sobrescrever nada do acervo. Falta:
+  - as telas (o cartão do jogo, a sala, a cópia), feitas e esperando o OK;
+  - uma party de verdade aberta pela tela do gabinete, com o jogo abrindo e voltando;
+  - o update com o `wireguard-tools`, o ajudante e a linha do sudo (o Matchmaker continua escondido).
 - **Fase 3:** o duelo pelas cartas (os punhos, FT5), os avisos (só dentro do Matchmaker), o registro das partidas.
 - **Backup na nuvem:** a identidade selada com o PIN (Argon2id) e a ficha assinada pelo servidor (Ed25519) e cifrada (AES-256-GCM), no backup do rclone.
 - **Fase 4:** o FairPlay e as vitórias e derrotas à prova de fraude, sem modo disputa.
