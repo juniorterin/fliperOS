@@ -478,14 +478,23 @@ const SETUP_BOXES = {
 // ── As tarefas ──
 
 // waitTask: espera a tarefa terminar (onTick a cada volta); null se ela
-// sumiu.
+// sumiu. Uma volta sem resposta (a rede, o tunel do modo lab) tenta de novo;
+// so depois de 40 seguidas (um minuto ou mais) o erro sobe para quem espera.
 async function waitTask(id, onTick) {
-  let task = { running: true };
+  let task = { running: true }, misses = 0;
   while (task.running) {
     await sleep(1500);
-    const res = await api("/api/task?id=" + id);
+    let res, next;
+    try {
+      res = await api("/api/task?id=" + id);
+      if (res.ok) next = await res.json();
+    } catch (e) {
+      if (e.message === "login" || ++misses >= 40) throw e;
+      continue;
+    }
     if (!res.ok) return null;
-    task = await res.json();
+    misses = 0;
+    task = next;
     if (onTick) onTick(task);
   }
   return task;

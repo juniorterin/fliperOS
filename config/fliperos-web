@@ -147,10 +147,12 @@ import signal
 import socket
 import struct
 import subprocess
+import sys
 import tempfile
 import termios
 import threading
 import time
+import traceback
 import urllib.request
 import zipfile
 import zlib
@@ -3473,8 +3475,12 @@ def package_part_name(zip_name, number):
 
 def stage_dir():
     # Fora da home: o painel roda como root, e um ~/.cache criado por ele
-    # seria do root (os programas do jogador nao gravariam nele).
-    return ENV("FLIPEROS_WEB_STAGE", "/var/cache/fliperos-web/stage")
+    # seria do root (os programas do jogador nao gravariam nele). Criada
+    # aqui, para todos que gravam nela: num gabinete em que ninguem mandou
+    # arte antes ela nao existe, e a lista de um pacote de ROM falhava.
+    folder = ENV("FLIPEROS_WEB_STAGE", "/var/cache/fliperos-web/stage")
+    os.makedirs(folder, exist_ok=True)
+    return folder
 
 
 def stage_clean():
@@ -3586,7 +3592,6 @@ def customgame_rows_file(rows):
                 value = "1" if value.lower() in ("1", "true") else ""
             fields.append(value)
         lines.append("\x1f".join(fields))
-    os.makedirs(stage_dir(), exist_ok=True)
     path = os.path.join(stage_dir(), "rows-%s.tab" % secrets.token_hex(8))
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -4226,6 +4231,26 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         pass
+
+    def send_response(self, code, message=None):
+        self.answered = True
+        super().send_response(code, message)
+
+    def handle_one_request(self):
+        """Um erro inesperado numa rota vira um 500 com a mensagem, que a
+        pagina mostra; sem isso a conexao caia sem resposta e a pagina ficava
+        esperando para sempre (o "Fazendo..." de um pacote de ROM)."""
+        self.answered = False
+        try:
+            super().handle_one_request()
+        except (ConnectionError, TimeoutError):
+            raise
+        except Exception as exc:
+            if self.answered:
+                raise
+            sys.stderr.write(traceback.format_exc())
+            self.close_connection = True
+            self.send(500, {"error": "%s: %s" % (type(exc).__name__, exc)})
 
     def send(self, code, body, ctype="application/json", headers=None, frame="DENY"):
         data = body if isinstance(body, bytes) else json.dumps(body).encode()
@@ -6075,7 +6100,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(400, {"error": "kind: snap or video"})
         stage_clean()
         folder = stage_dir()
-        os.makedirs(folder, exist_ok=True)
         token = "%s.%s" % (secrets.token_hex(8), "png" if kind == "snap" else "mp4")
         path = os.path.join(folder, token)
         if kind == "snap":
@@ -6115,7 +6139,6 @@ class Handler(BaseHTTPRequestHandler):
                                                                        limit >> 20)})
         stage_clean()
         folder = stage_dir()
-        os.makedirs(folder, exist_ok=True)
         token = "%s.%s" % (secrets.token_hex(8), ext)
         path = os.path.join(folder, token)
         try:

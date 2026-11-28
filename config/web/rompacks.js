@@ -22,7 +22,13 @@ const RP_NAME_RE = /^(.+)\.fliperos-([a-z0-9][a-z0-9-]*)\.zip$/;
 const rpIsPackage = (name) => { const m = RP_NAME_RE.exec(name); return !!m && m[2] !== "customgame"; };
 // O titulo vira o nome do arquivo: sai o que o Windows nao aceita num nome.
 const rpTitle = (s) => (s || "").replace(/[/\\:*?"<>|\u0000-\u001f]/g, "").trim().replace(/^\.+|\.+$/g, "").slice(0, 120);
-const rpZipName = (title, target) => (rpTitle(title) || t("rp_title_word")) + ".fliperos-" + (target || "EMULATOR") + ".zip";
+// O fim do nome vem do alvo (targets: "TITLE.fliperos-retroarch-mesen-s.zip"):
+// um console de um Batocera sai no layout do core, nao com o id do alvo.
+const rpZipName = (title, target) => {
+  const tg = (rp.targets || []).find((x) => x.id === target);
+  const tail = tg && tg.name ? tg.name.replace(/^TITLE/, "") : ".fliperos-" + (target || "EMULATOR") + ".zip";
+  return (rpTitle(title) || t("rp_title_word")) + tail;
+};
 
 // Os itens do "o que vai junto": as BIOS, cada tipo de arte que os jogos do
 // emulador tem (media:snap, media:preview...), a memoria, os saves, os cheats e
@@ -69,17 +75,29 @@ function rpProgress(box, label) {
   };
 }
 
-// rpTask: uma tarefa (criar, instalar), esperada, com a barra.
+// rpTask: uma tarefa (criar, instalar), esperada, com a barra. null quando
+// ela nem chegou ao fim (a barra ja diz por que); senao a tarefa terminada.
 async function rpTask(path, body, prog) {
-  const res = await api(path, { method: "POST", body: JSON.stringify(body) });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    toast(res.status === 409 ? t("cg_busy") : data.error || res.statusText, "bad");
-    prog.end(false, data.error || res.statusText);
+  try {
+    const res = await api(path, { method: "POST", body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const why = res.status === 409 ? t("cg_busy") : data.error || res.statusText;
+      toast(why, "bad");
+      prog.end(false, why);
+      return null;
+    }
+    taskNext = 0;
+    const task = await waitTask(data.id, (tk) => prog.set(tk.pct || 0, (tk.step || "") + (tk.pct ? " · " + Math.round(tk.pct) + "%" : "")));
+    if (!task) prog.end(false, t("task_fail"));
+    return task;
+  } catch (e) {
+    // A conexao caiu sem resposta: a barra diz isso, em vez de ficar em "…".
+    const why = e.message === "login" ? t("task_fail") : t("no_answer").replace("%s", e.message || e);
+    toast(why, "bad");
+    prog.end(false, why);
     return null;
   }
-  taskNext = 0;
-  return waitTask(data.id, (tk) => prog.set(tk.pct || 0, (tk.step || "") + (tk.pct ? " · " + Math.round(tk.pct) + "%" : "")));
 }
 
 // ── A aba ROMs ──
@@ -220,7 +238,7 @@ async function rpInstall(p) {
   prog.set(0, "…");
   const task = await rpTask("/api/rompacks/install", { zip: p.zip, replace }, prog);
   const ok = !!task && task.rc === 0;
-  prog.end(ok, ok ? t("rp_installed").replace("%s", p.title) : (task && (task.error || task.last)) || t("task_fail"));
+  if (task) prog.end(ok, ok ? t("rp_installed").replace("%s", p.title) : task.error || task.last || t("task_fail"));
   if (ok) rp.highlight = p.zip;
   rpLoad().catch(() => {});
   return ok;
@@ -780,13 +798,14 @@ async function rpCreate(replace = false) {
   const task = await rpTask("/api/rompacks/create", body, prog);
   rp.busy = false;
   rpCreateSummary();
-  if (task && task.rc === 3 && !replace) {
+  if (!task) return;
+  if (task.rc === 3 && !replace) {
     prog.end(false, t("cg_cancel"));
     if (await ask({ title: zip, text: t("cg_create_exists").replace("%s", zip), yes: t("cg_create_replace"), danger: true })) return rpCreate(true);
     return;
   }
-  const ok = !!task && task.rc === 0;
-  prog.end(ok, ok ? t("rp_made").replace("%s", zip) : (task && (task.error || task.last)) || t("task_fail"));
+  const ok = task.rc === 0;
+  prog.end(ok, ok ? t("rp_made").replace("%s", zip) : task.error || task.last || t("task_fail"));
   if (!ok) return;
   c.status.append(el("div", { class: "cg-status ok" }, el("span", {}, t("rp_made_note").replace("%s", zip).replace("%s", cgPackagesWhere()) +
     (body.group ? " " + t("rp_made_group").replace("%s", body.group) : "")),

@@ -11736,6 +11736,63 @@ console.log(JSON.stringify({
             self.assertIn(code, codes)
 
 
+class WebRomPacksTests(WebSetupBase):
+    """Game Packages > Create package (ROMs) no painel: /api/rompacks/create e a
+    pagina (config/web/rompacks.js) quando algo falha no meio."""
+
+    def test_create_works_without_the_stage_folder(self):
+        # Num gabinete em que ninguem mandou arte, /var/cache/fliperos-web/stage nao existia: a lista dos
+        # jogos do pacote ia para la, o servidor caia sem resposta e a pagina ficava em "Fazendo... …".
+        shutil.rmtree(self.dir / 'stage', ignore_errors=True)
+        status, task = self.call('POST', '/api/rompacks/create', {'target': 'batocera-snes', 'title': 'JOGOS EM PORTUGUÊS',
+                                                                    'games': ['Chrono Trigger.sfc'], 'kinds': []})
+        self.assertEqual(status, 200, task)
+        self.wait_task(task['id'])
+        lists = sorted((self.dir / 'stage').glob('rompack-*.list'))
+        self.assertEqual([p.read_text(encoding='utf-8') for p in lists], ['Chrono Trigger.sfc\n'])
+
+    def test_an_unexpected_error_answers_500(self):
+        # Um erro que a rota nao esperava vira 500 com a mensagem (a pagina mostra), em vez de a conexao cair calada.
+        import http.client
+        import socket
+        import threading
+        web = load_script('fliperos_web_500', 'config/fliperos-web')
+
+        class Broken(web.Handler):
+            def do_GET(self):
+                raise FileNotFoundError(2, 'No such file or directory', '/var/cache/fliperos-web/stage/x.list')
+
+        server = web.ThreadingHTTPServer(('127.0.0.1', 0), Broken)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_address[1], timeout=10)
+            conn.request('GET', '/api/anything')
+            res = conn.getresponse()
+            self.assertEqual(res.status, 500)
+            self.assertEqual(json.loads(res.read())['error'], "FileNotFoundError: [Errno 2] No such file or directory: "
+                                                                "'/var/cache/fliperos-web/stage/x.list'")
+            conn.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_the_page_ends_the_bar_when_the_cabinet_does_not_answer(self):
+        js = (ROOT / 'config/web/rompacks.js').read_text()
+        task = js.split('async function rpTask(')[1].split('\n}\n')[0]
+        # A requisicao que cai (sem resposta) fecha a barra com o erro, em vez de deixar "…" e o botao travado.
+        self.assertIn('} catch (e) {', task)
+        self.assertIn('prog.end(false, why);', task.split('} catch (e) {')[1])
+        create = js.split('async function rpCreate(')[1].split('\n}\n')[0]
+        self.assertLess(create.index('rp.busy = false;'), create.index('if (!task) return;'))
+        # O nome mostrado e o do zip que sai: o do alvo (um console do Batocera vai no layout do core).
+        self.assertIn('tg.name.replace(/^TITLE/, "")', js.split('const rpZipName = ')[1].split('\n};\n')[0])
+        text = (ROOT / 'config/web/text.js').read_text()
+        self.assertEqual(len(re.findall(r'(?<!\w)no_answer: ', text)), 2)
+        # Uma volta da espera sem resposta tenta de novo (a rede, o tunel do modo lab).
+        wait = (ROOT / 'config/web/setup.js').read_text().split('async function waitTask(')[1].split('\n}\n')[0]
+        self.assertIn('++misses >= 40', wait)
+
+
 class WebSetupTests(WebSetupBase):
     """O resto do Setup no painel: os itens do gabinete, Abrir no gabinete,
     Quirks, Folders, os frontends da pessoa, Bluetooth e as tarefas."""
