@@ -396,6 +396,61 @@ class OutputTestTests(Base):
         self.assertEqual(self.params("r", "generic_15", "DP-1"), "video=DP-1:1280x480iS")
         self.assertEqual(self.params("r", "generic_15", "HDMI-A-1"), "video=HDMI-A-1:1280x480iS")
 
+    # A lista de conectores que o amdgpu escreveu numa APU Kaveri (A10, VGA
+    # pela ponte NUTMEG), como o dmesg a mostra.
+    KAVERI_LOG = ("[    6.087408] [drm] AMDGPU Display Connectors\n"
+                  "[    6.087410] [drm] Connector 0:\n[    6.087412] [drm]   DP-1\n[    6.087414] [drm]   HPD3\n"
+                  "[    6.087419] [drm]   Encoders:\n[    6.087421] [drm]     DFP2: INTERNAL_UNIPHY2\n"
+                  "[    6.087423] [drm] Connector 1:\n[    6.087424] [drm]   VGA-1\n[    6.087426] [drm]   HPD1\n"
+                  "[    6.087427] [drm]   DDC: 0x194c 0x194c 0x194d 0x194d 0x194e 0x194e 0x194f 0x194f\n"
+                  "[    6.087430] [drm]   Encoders:\n[    6.087431] [drm]     CRT1: INTERNAL_UNIPHY\n"
+                  "[    6.087433] [drm]     CRT1: NUTMEG\n"
+                  "[    6.087434] [drm] Connector 2:\n[    6.087436] [drm]   DP-2\n[    6.087437] [drm]   HPD2\n"
+                  "[    6.087441] [drm]   Encoders:\n[    6.087442] [drm]     DFP1: INTERNAL_UNIPHY3\n")
+
+    def kaveri(self):
+        log = self.env.dir / "kernel.log"
+        log.write_text(self.KAVERI_LOG)
+        return {"DRM_KERNEL_LOG": str(log)}
+
+    def test_vga_on_a_displayport_bridge_is_never_forced_by_the_test_result(self):
+        # Na VGA de ponte o kernel so le o DPCD da ponte no detect, que o "e"
+        # pula: o update 114 deixou uma Kaveri sem imagem com qualquer monitor.
+        env = self.kaveri()
+        self.assertEqual(self.env.run("drm_dp_bridge VGA-1", env).returncode, 0)
+        for conn in ("DP-1", "DP-2", "DVI-I-1"):
+            self.assertNotEqual(self.env.run("drm_dp_bridge %s" % conn, env).returncode, 0, conn)
+        out = self.env.out("video_kernel_params VGA-1 sra generic_15", env).strip()
+        self.assertEqual(out, "video=VGA-1:640x480iS")
+        # Uma placa com DAC proprio segue forcada.
+        log = self.env.dir / "radeon.log"
+        log.write_text(self.KAVERI_LOG.replace("CRT1: NUTMEG", "CRT1: INTERNAL_KLDSCP_DAC1"))
+        out = self.env.out("video_kernel_params VGA-1 sra generic_15", {"DRM_KERNEL_LOG": str(log)}).strip()
+        self.assertEqual(out, "video=VGA-1:640x480iSe")
+
+    def test_update_takes_the_e_of_update_114_out_of_a_bridge_vga(self):
+        env = self.kaveri()
+        conf = self.env.etc / "fliperos.conf"
+        conf.write_text("connector=VGA-1\ncard=card1\nmonitor=generic_15\ndetection=sra\nforced=1\n"
+                        "kernel_video=video=VGA-1:320x240Se\nboot_resolution=320x240S\n")
+        # O passo do 114 nao poe de volta; o do 115 tira.
+        self.assertNotEqual(self.env.run("video_analog_force_refresh", env).returncode, 0)
+        self.assertEqual(self.env.run("video_bridge_force_undo", env).returncode, 0)
+        text = conf.read_text()
+        self.assertIn("kernel_video=video=VGA-1:320x240S\n", text)
+        self.assertIn("forced=0\n", text)
+        self.assertIn("boot_resolution=320x240S\n", text)
+        self.assertNotEqual(self.env.run("video_bridge_force_undo", env).returncode, 0)
+        # O "e" de uma saida que o teste teve de forcar, e o de uma placa sem
+        # ponte, ficam.
+        for text in ("connector=VGA-1\nmonitor=generic_15\ndetection=sea\nforced=1\nkernel_video=video=VGA-1:640x480iSe\n",
+                     "connector=DP-1\nmonitor=generic_15\ndetection=r\nkernel_video=video=DP-1:1280x480iSe\n"):
+            conf.write_text(text)
+            self.assertNotEqual(self.env.run("video_bridge_force_undo", env).returncode, 0, text)
+            self.assertEqual(conf.read_text(), text)
+        update = (ROOT / "tools/cabinet-update.sh").read_text()
+        self.assertLess(update.index("video_bridge_force_undo &&"), update.index("  boot_apply ||"))
+
     def test_update_forces_analog_outputs_saved_without_the_e(self):
         conf = self.env.etc / "fliperos.conf"
         conf.write_text("connector=VGA-1\ncard=card0\nmonitor=generic_15\ndetection=sra\nforced=0\n"

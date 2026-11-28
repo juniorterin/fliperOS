@@ -219,8 +219,10 @@ screen_testing_results() {
       detection=$(ui_no "NOT DETECTED")
       notes+=("The arcade monitor was detected, but it didn't return any info.")
       # Numa saida analogica ela vai forcada mesmo assim: outro monitor, sem
-      # a carga que o DAC detecta, ficaria sem imagem no boot.
-      drm_is_analog "$name" && notes+=("The output will be forced at boot, so a monitor that isn't detected also gets a picture.")
+      # a carga que o DAC detecta, ficaria sem imagem no boot. Na VGA de uma
+      # ponte DisplayPort, nao (video_forces_output).
+      video_forces_output "$name" "$flags" &&
+        notes+=("The output will be forced at boot, so a monitor that isn't detected also gets a picture.")
       ;;
     *e)
       edid=$(ui_no NO)

@@ -59,6 +59,31 @@ drm_is_analog() {
   return 1
 }
 
+# drm_dp_bridge NOME: a saida analogica sai de um chip ponte DisplayPort para
+# VGA (NUTMEG, TRAVIS: a VGA das APUs Kaveri, Trinity e Richland). O radeon e
+# o amdgpu a tratam como DisplayPort e so leem o DPCD da ponte no detect; com
+# o "e" na linha do kernel o detect nunca roda, o link sobe com o DPCD zerado
+# e o boot fica sem imagem, ate com um monitor que seria detectado. A lista
+# de conectores que os dois escrevem no log do kernel ao subir diz quais tem
+# a ponte ("Encoders: ... CRT1: NUTMEG").
+DRM_KERNEL_LOG=${DRM_KERNEL_LOG:-}
+drm_kernel_log() {
+  if [[ -n $DRM_KERNEL_LOG ]]; then
+    cat "$DRM_KERNEL_LOG" 2> /dev/null
+  else
+    journalctl -k -b 0 -o cat --no-pager 2> /dev/null
+    dmesg 2> /dev/null
+  fi
+  return 0
+}
+drm_dp_bridge() {
+  drm_kernel_log | awk -v want="$1" '
+    /\[drm\] +Connector [0-9]+:/ { name = ""; next }
+    name == "" && /\[drm\] +[A-Za-z]+(-[A-Za-z]+)?-[0-9]+ *$/ { name = $NF; next }
+    name == want && /\[drm\] +[A-Z]+[0-9]*: +(NUTMEG|TRAVIS) *$/ { found = 1 }
+    END { exit !found }'
+}
+
 # drm_modes CONECTOR lista os modos que o kernel aceita na saida.
 drm_modes() {
   cat "$DRM_SYSFS/$1/modes" 2>/dev/null

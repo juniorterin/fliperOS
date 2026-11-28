@@ -189,10 +189,13 @@ video_suggested_monitor() {
 # de uma J-PAC) muitas vezes nao a tem. O teste feito com um PVM, que tem a
 # carga, dava "r", e o boot com o monitor do arcade ficava sem imagem (a
 # saida "disconnected"), como os monitores extras (mm_kernel_spec) ja sabem.
+# Menos numa VGA que sai de uma ponte DisplayPort (drm_dp_bridge): ali o "e"
+# deixa o boot sem imagem com qualquer monitor (o update 114 fez isso numa
+# APU Kaveri), e ela fica como o teste a viu.
 video_forces_output() {
   local base=${2%a}
   [[ $base =~ ^s?e$ ]] && return 0
-  [[ $base =~ ^s?r$ ]] && drm_is_analog "$1"
+  [[ $base =~ ^s?r$ ]] && drm_is_analog "$1" && ! drm_dp_bridge "$1"
 }
 
 # video_kernel_params NOME FLAGS MONITOR imprime os parametros de video do
@@ -606,6 +609,28 @@ video_analog_force_refresh() {
   fi
   conf_set forced 1
   log_info "saida analogica: $conn forcada no boot ($params)"
+}
+
+# video_bridge_force_undo: o "e" que o update 114 pos numa VGA de ponte
+# DisplayPort (drm_dp_bridge) com o monitor visto no teste (r) sai da linha:
+# com ele o boot ficava sem imagem com qualquer monitor. O "e" de uma saida
+# que o teste teve de forcar (e) fica como estava. Para o update; o
+# boot_apply segue. Status 0 quando regravou.
+video_bridge_force_undo() {
+  local conn flags params spec opts=""
+  conn=$(conf_get connector 2> /dev/null) || return 1
+  flags=$(conf_get detection 2> /dev/null) || return 1
+  flags=${flags%a}
+  [[ $flags =~ ^s?r$ ]] && drm_is_analog "$conn" && drm_dp_bridge "$conn" || return 1
+  params=$(conf_get kernel_video 2> /dev/null) || return 1
+  spec=$(cmdline_video_spec "$params" "$conn") || return 1
+  [[ $spec == *,* ]] && opts=,${spec#*,}
+  spec=${spec%%,*}
+  [[ $spec == *?e ]] || return 1
+  params=$(cmdline_set_video "$params" "$conn" "${spec%e}$opts")
+  conf_set kernel_video "$params"
+  conf_set forced 0
+  log_info "saida analogica: $conn numa ponte DisplayPort, sem forcar no boot ($params)"
 }
 
 # video_conf_card imprime a placa da saida gravada como ela esta agora: a
