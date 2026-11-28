@@ -4484,7 +4484,8 @@ class Handler(BaseHTTPRequestHandler):
             clone = read_romlist(system)[0].get(name, {}).get("CloneOf")
             data["media"] = [kind for kind in MEDIA_EXTS if media_file(system["key"], (name, clone), kind, MEDIA_EXTS[kind])]
             return self.send(200, data)
-        if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth"):
+        if url.path in ("/api/setup/items", "/api/quirks", "/api/folders", "/api/frontends", "/api/bluetooth",
+                        "/api/netshare"):
             return self.setup_get(url)
         if url.path in ("/api/osd/profiles", "/api/sounds", "/api/sounds/file"):
             return self.osd_sounds_get(url)
@@ -4810,7 +4811,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, {"error": done.stderr.strip()[-300:] or "not saved"})
             return self.send(200, {"saved": True})
         if url.path in ("/api/setup/open", "/api/setup/task", "/api/quirks", "/api/folders", "/api/frontends",
-                        "/api/bluetooth"):
+                        "/api/bluetooth", "/api/netshare"):
             return self.setup_post(url.path, self.body())
         if url.path in ("/api/osd/profiles", "/api/sounds", "/api/sounds/upload"):
             return self.osd_sounds_post(url)
@@ -5522,6 +5523,15 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/frontends":
                 return self.send(200, {"frontends": [dict(r, installed=r["installed"] == "1") for r in setup_lines(
                     "--frontends", "list", fields=("name", "label", "command", "installed"))]})
+            if url.path == "/api/netshare":
+                # As pastas da rede guardadas (lib/netshare.sh) e o que cada uma
+                # tem (batocera, fliperos, other; offline com o servidor desligado).
+                shares = setup_lines("--netshare", "list",
+                                     fields=("name", "host", "share", "user", "mount", "state", "inuse"))
+                for row in shares:
+                    row["inuse"] = row["inuse"] == "1"
+                    row["layout"] = setup_out("--netshare", "layout", row["mount"], timeout=40).strip()
+                return self.send(200, {"shares": shares})
             # Bluetooth: o adaptador e os pareados; com scan=1, os achados (segundos).
             info = key_values(setup_out("--bluetooth", "status"))
             data = {"powered": info.get("powered") == "yes", "adapter": info.get("adapter", ""),
@@ -5574,6 +5584,31 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.send(400, {"error": "action link or unlink"})
             return self.setup_answer(args, {}, timeout=180)
+        if path == "/api/netshare":
+            # A senha vai na entrada do Setup, nunca na linha de comando.
+            password = str(data.get("pass") or "")[:255]
+            if "\n" in password or "\r" in password:
+                return self.send(400, {"error": "the password cannot have a line break"})
+            host, user = field("host", 255), field("user", 255)
+            if action == "shares":
+                try:
+                    done = subprocess.run([SETUP, "--netshare", "shares", host, user], input=password + "\n",
+                                          capture_output=True, text=True, timeout=40)
+                except (OSError, subprocess.SubprocessError) as exc:
+                    return self.send(500, {"error": str(exc)})
+                if done.returncode == 2:
+                    return self.send(400, {"error": "the computer: its IP or name"})
+                lines = [x for x in done.stdout.splitlines() if x.strip()]
+                return self.send(200, {"shares": lines if done.returncode == 0 else []})
+            if action == "add":
+                args = ["--netshare", "add", host, field("share", 255), user]
+                return self.setup_answer(args, {}, timeout=90, stdin=password + "\n")
+            if action == "remove":
+                return self.setup_answer(["--netshare", "remove", field("name", 64)], {})
+            if action in ("use", "unuse"):
+                # O Batocera filesystem da pasta: os consoles viram sistemas.
+                return self.setup_answer(["--batocera", action, field("mount", 4096)], {}, timeout=300)
+            return self.send(400, {"error": "action shares, add, remove, use or unuse"})
         if path == "/api/frontends":
             if action == "save":
                 args = ["--frontends", "save", field("name", 64), field("label", 80), field("command", 1024)]
@@ -5593,12 +5628,13 @@ class Handler(BaseHTTPRequestHandler):
         return self.setup_answer(args, {1: (500, "the controller did not answer: put it in pairing mode again")},
                                  timeout=90)
 
-    def setup_answer(self, args, errors, timeout=60, bad_rc=2):
+    def setup_answer(self, args, errors, timeout=60, bad_rc=2, stdin=None):
         """Um comando do Setup sem tela: 200 com a saida (linhas chave=valor
         viram campos, o resto vai em "text"), ou o erro do status (errors:
-        status -> (codigo, mensagem); a saida, quando ha, explica melhor)."""
+        status -> (codigo, mensagem); a saida, quando ha, explica melhor).
+        stdin: o que vai na entrada (uma senha)."""
         try:
-            done = subprocess.run([SETUP, *args], capture_output=True, text=True, timeout=timeout)
+            done = subprocess.run([SETUP, *args], capture_output=True, text=True, timeout=timeout, input=stdin)
         except (OSError, subprocess.SubprocessError) as exc:
             return self.send(500, {"error": str(exc)})
         out = done.stdout.strip()

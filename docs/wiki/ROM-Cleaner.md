@@ -10,6 +10,7 @@ It works like [ROMLister](https://www.waste.org/~winkles/ROMLister/). The web pa
 
 - **A folder on this machine:** a disk or a USB stick, in the folder browser (Enter opens, `..` goes back, **Use this folder** chooses).
 - **A network shared folder:** Windows or a NAS. The Setup asks for the computer, the user and the password, and lists its shared folders. The password is only kept if you ask.
+- **A saved network folder** (one of [External storage > Network folder](External-storage.md#network-folder)): it is already open, so it is listed by itself (`The network folder //computer/folder`) and nothing is asked.
 
 That way the whole romset stays on the home computer, and the cabinet takes only what it uses.
 

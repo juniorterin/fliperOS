@@ -1109,6 +1109,26 @@ ICONS.update({
 ........FFDFFFFF
 ........FFFFFFFF
 """,
+    # External storage > Network folder: a pasta presa a rede (o cabo desce
+    # da pasta para os tres computadores).
+    "netshare": """
+................
+................
+.YYYYYY.........
+.YYYYYYY........
+.YYYYYYYYYYYYYY.
+.YOOOOOOOOOOOOY.
+.YOOOOOOOOOOOOY.
+.YOOOOOOOOOOOOY.
+.YOOOOOOOOOOOOY.
+.YYYYYYYYYYYYYY.
+.......CC.......
+.......CC.......
+..CCCCCCCCCCCC..
+..CC...CC...CC..
+.CCCC.CCCC.CCCC.
+.CCCC.CCCC.CCCC.
+""",
     "addfolder": """
 ................
 ................

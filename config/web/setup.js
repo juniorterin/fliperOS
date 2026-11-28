@@ -59,6 +59,10 @@ const SETUP_TREE = [
     // a estrutura do FliperOS, o Batocera filesystem e formatar; so na tela do
     // gabinete (apagar um disco nao se faz do navegador).
     { id: "storage", cabinet: "storage", extra: true },
+    // Network folder (External storage > Network folder no Setup): a pasta de
+    // outro computador, guardada daqui (o IP e a senha se digitam melhor no
+    // navegador) e usada pelo Batocera filesystem dela.
+    { id: "netshare", box: "netshare", extra: true, title: true },
     { id: "downloader", link: "#library/downloads" },
     { id: "cleaner", link: "#library/romfilter" },
     { id: "scraper", link: "#library/art" },
@@ -111,7 +115,7 @@ const SETUP_ROW_GROUP = { Video: "video", Colour: "video", Scanlines: "video", "
 // As caixas com secao propria (split) e as que levam uma nota embaixo.
 const SETUP_BOX_META = {
   frontends: { split: true, title: "fe_custom", note: "fe_boot" },
-  folders: { note: "fo_note" }, quirks: { note: "qk_note" }, bluetooth: { note: "bt_howto" },
+  folders: { note: "fo_note" }, quirks: { note: "qk_note" }, bluetooth: { note: "bt_howto" }, netshare: { note: "ns_note" },
   osd: { note: "osd_note" }, sounds: { note: "snd_note" },
 };
 
@@ -455,6 +459,7 @@ const SETUP_BOXES = {
   password: async () => [passwordRow()],
   frontends: () => frontendsRows(),
   folders: () => folderRows(""),
+  netshare: () => netshareRows(),
   quirks: () => quirksRows(),
   bluetooth: () => bluetoothRows(),
   osd: () => osdProfileRows(),
@@ -733,6 +738,92 @@ async function folderUnlink(rel) {
   if (!res.ok) return toast(data.error || res.statusText, "bad");
   toast(t(data.new ? "fo_new" : "fo_back").replace("%s", rel), "ok");
   loadSettings().catch(() => {});
+}
+
+// ── Games > Network folder ──
+// As pastas da rede guardadas (fliperos-setup --netshare): cada uma com o
+// que tem (as pastas do Batocera ganham "Usar os consoles"), e a de guardar
+// uma nova: o computador, o usuario e a senha, a lista das pastas dele.
+
+async function netshareRows() {
+  const data = await (await api("/api/netshare")).json();
+  const post = async (body) => {
+    const res = await api("/api/netshare", { method: "POST", body: JSON.stringify(body) });
+    const out = await res.json().catch(() => ({}));
+    return { ok: res.ok, out, error: out.error || res.statusText };
+  };
+  const rows = (data.shares || []).map((s) => {
+    const offline = s.layout === "offline";
+    const what = { batocera: "ns_batocera", fliperos: "ns_fliperos", other: "ns_other" }[s.layout];
+    const controls = [];
+    if (s.layout === "batocera") {
+      controls.push(uiButton(t(s.inuse ? "ns_unuse_go" : "ns_use_go"), async (b) => {
+        if (!s.inuse && !(await ask({ title: s.name, text: t("ns_use_ask").replace("%s", s.name), yes: t("ns_use_go") }))) return;
+        b.disabled = true;
+        toast(t("ns_working"));
+        const r = await post({ action: s.inuse ? "unuse" : "use", mount: s.mount });
+        b.disabled = false;
+        toast(r.ok ? (s.inuse ? t("ns_unused") : t("ns_used").replace("%s", r.out.systems || "0")) : r.error, r.ok ? "ok" : "bad");
+        if (r.ok) loadSettings().catch(() => {});
+      }, s.inuse ? "quiet" : undefined));
+    }
+    controls.push(uiIconButton("g-trash", t("ns_forget") + ": " + s.name, async () => {
+      if (!(await ask({ title: s.name, text: t("ns_forget_ask").replace("%s", "//" + s.host + "/" + s.share), yes: t("ns_forget"),
+        danger: true }))) return;
+      const r = await post({ action: "remove", name: s.name });
+      toast(r.ok ? t("ns_forgotten").replace("%s", s.name) : r.error, r.ok ? "ok" : "bad");
+      if (r.ok) loadSettings().catch(() => {});
+    }));
+    const state = offline ? "ns_offline" : s.inuse ? "ns_inuse" : "ns_ready";
+    return uiRow({ label: s.name, sub: ["//" + s.host + "/" + s.share, s.mount, t(state), what ? t(what) : ""].filter(Boolean).join(" · "),
+      control: controls, cls: offline ? "warn-row" : "" });
+  });
+  const plain = { spellcheck: "false", autocapitalize: "off", maxlength: "255" };
+  const host = uiField(Object.assign({ type: "text", placeholder: t("ns_host"), "aria-label": t("ns_host") }, plain));
+  const user = uiField(Object.assign({ type: "text", placeholder: t("ns_user"), "aria-label": t("ns_user") }, plain));
+  const pass = uiField({ type: "password", placeholder: t("ns_pass"), "aria-label": t("ns_pass"), maxlength: "255",
+    autocomplete: "new-password" });
+  const share = el("select", { class: "fld", "aria-label": t("ns_share"), hidden: "" });
+  const shareText = uiField(Object.assign({ type: "text", placeholder: t("ns_share"), "aria-label": t("ns_share"), hidden: "" }, plain));
+  const find = el("button", { type: "button", class: "btn small quiet" }, t("ns_find"));
+  const add = el("button", { type: "submit", class: "btn small", disabled: "" }, t("ns_add_go"));
+  find.addEventListener("click", async () => {
+    if (!host.value.trim()) return toast(t("ns_host_needed"), "bad");
+    find.disabled = true;
+    try {
+      const r = await post({ action: "shares", host: host.value.trim(), user: user.value.trim(), pass: pass.value });
+      const list = r.ok ? r.out.shares || [] : [];
+      share.replaceChildren(...list.map((n) => el("option", { value: n }, n)));
+      share.hidden = !list.length;
+      shareText.hidden = !!list.length;
+      add.disabled = false;
+      if (!list.length) toast(r.ok ? t("ns_none") : r.error, "bad");
+    } finally {
+      find.disabled = false;
+    }
+  });
+  const form = el("form", { class: "srow-form", hidden: "" }, host, user, pass, share, shareText,
+    el("div", { class: "srow-form-foot" }, find, add));
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const where = host.value.trim(), name = share.hidden ? shareText.value.trim() : share.value;
+    if (!where || !name) return toast(t("ns_share_needed"), "bad");
+    add.disabled = true;
+    toast(t("ns_opening").replace("%s", "//" + where + "/" + name));
+    try {
+      const r = await post({ action: "add", host: where, share: name, user: user.value.trim(), pass: pass.value });
+      toast(r.ok ? t("ns_added").replace("%s", r.out.mount || name) : r.error, r.ok ? "ok" : "bad");
+      if (r.ok) {
+        pass.value = "";
+        loadSettings().catch(() => {});
+      }
+    } finally {
+      add.disabled = false;
+    }
+  });
+  rows.push(uiRow({ label: t("ns_add"), sub: rows.length ? "" : t("ns_empty"), after: [form],
+    control: uiButton(t("ns_add_open"), () => { form.hidden = !form.hidden; }) }));
+  return rows;
 }
 
 // ── System > Quirks ──

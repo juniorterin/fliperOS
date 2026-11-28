@@ -419,9 +419,9 @@ strong{color:#fff}li{margin:.5em 0}footer{margin:60px 0 20px;color:#9cabb8}
 </code></pre>
 <ul>
 <li><em>Extras</em>: programs left out of the ISO to keep the download small, installed over the internet: Wine (needed by some Fightcade 2 emulators), Steam and Heroic (GOG games), Pixelcade, ZeDMD and game output tools.</li>
-<li><em>Custom games</em>: PC games, scripts and your own emulators, which the frontends show as systems, installed from packages or made on the cabinet. See <a href="#Custom-games">Custom games</a>.</li>
+<li><em>Game Packages</em>: <em>PC Games</em> (PC games, scripts and your own emulators, which the frontends show as systems, installed from packages or made on the cabinet; see <a href="#Custom-games">Custom games</a>), <em>ROMs</em> (ROM packages, <code>TITLE.fliperos-EMULATOR.zip</code> such as <code>FightingGames.fliperos-mame.zip</code> or <code>Shmups.fliperos-retroarch-fbneo.zip</code>: the games of one emulator or core with their BIOS and parent sets, art, NVRAM, saves, cheats and per-game settings, each file installed back in the same folder) and <em>Create package</em>, for either kind. A double-click on a package on the desktop installs it.</li>
 <li>
-<p><em>Emulators &amp; Games</em>: the emulators of the desktop menu, each marked <em>installed</em> or <em>not installed</em>.</p>
+<p><em>Emulators &amp; Games</em>: the emulators of the desktop menu, each marked <em>installed</em> or <em>not installed</em>. <em>Restore FliperOS settings</em> puts an emulator's settings back to the FliperOS ones (the current ones are kept in <code>~/config-backup</code>).</p>
 <p>Choose one that is not installed to install it: <strong>Fightcade 2</strong> (downloaded from its site) and <strong>KOF Final Attack</strong> on Ikemen GO in 4:3 at 320x240: you point to the folder of the original game (the one with <code>Final Attack.exe</code>, on a USB disk or the network) and it downloads the <a href="https://github.com/juniorterin/KOF-Final-Attack-4-3-patch">4:3 patch</a> and Ikemen GO and makes a converted copy. <strong>HBGroovyMAME</strong>, <strong>Odin</strong> and the <strong>AnyBOR</strong> core are not in the image either: they install themselves when the first game of their folder (<code>hbmame</code>, <code>odin</code>, <code>openbor</code>) opens, or from here. The others come in the image.
   - <em>Folders</em>, in two parts:
 - <em>Folder shortcuts</em> (called <em>Link</em> before): the folders FliperOS uses (<code>roms</code>, <code>bios</code>, <code>media</code>, <code>nvram</code>, <code>save</code>, <code>cheats</code>, <code>splashscreen</code>) and the ones inside them: each emulator, each RetroArch core, each type of art. Choose one and <em>Point it to a folder on another disk</em> to use another folder in its place, for when the ROMs or the art are on external storage (a USB disk, a second drive): <code>~/roms/mame</code> becomes a shortcut to it and the folder used until then is kept as <code>~/roms/old-mame</code>. Each folder can point to a different place. <em>Remove the shortcut</em> brings the previous one back.
@@ -1936,7 +1936,7 @@ sed -i -E 's/^([[:space:]]*dotclock_min[[:space:]]+).*/\18.0/' /etc/fliperos/mam
 </tr>
 <tr>
 <td><strong>Folders</strong></td>
-<td><strong>Folder shortcuts</strong> (send a folder to another disk) and <strong>External storage</strong> (a whole disk: the FliperOS folders, or a Batocera filesystem with a core for each console; format a disk)</td>
+<td><strong>Folder shortcuts</strong> (send a folder to another disk) and <strong>External storage</strong> (a whole disk: the FliperOS folders, or a Batocera filesystem with a core for each console; format a disk; a network folder of a NAS, RetroNAS or PC)</td>
 <td><a href="#External-storage">External storage</a></td>
 </tr>
 <tr>
@@ -4659,7 +4659,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 </ul>
 <p>See also: <a href="#Adding-games">Adding games</a>, <a href="#Remote-access-the-network-share">Remote access</a>.</p>
 <h1 id="External-storage">External storage</h1>
-<p><strong>Setup &gt; Games &gt; Folders</strong> has two ways to put your games on another disk: <strong>Folder shortcuts</strong>, for one folder at a time, and <strong>External storage</strong>, for a whole disk. External storage has two kinds: the <strong>FliperOS folders</strong> (the structure FliperOS makes on a second disk) and the <strong>Batocera filesystem</strong> (a disk that already keeps its games in the folders Batocera uses). It can also <strong>format</strong> a disk.</p>
+<p><strong>Setup &gt; Games &gt; Folders</strong> has two ways to put your games on another disk: <strong>Folder shortcuts</strong>, for one folder at a time, and <strong>External storage</strong>, for a whole disk. External storage has two kinds: the <strong>FliperOS folders</strong> (the structure FliperOS makes on a second disk) and the <strong>Batocera filesystem</strong> (a disk that already keeps its games in the folders Batocera uses). It can also <strong>format</strong> a disk, and open a <strong>network folder</strong> (a NAS, RetroNAS, a Windows PC) as one more disk.</p>
 <table>
 <thead>
 <tr>
@@ -4678,6 +4678,11 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <td>A disk with the games in <code>batocera/roms/snes</code>, <code>megadrive</code>, <code>psx</code>...</td>
 <td><strong>External storage &gt; Batocera filesystem</strong></td>
 <td><a href="#External-storage-batocera-filesystem">Below</a></td>
+</tr>
+<tr>
+<td>The games on another computer of the house (a NAS, RetroNAS, Windows, a Batocera's share)</td>
+<td><strong>External storage &gt; Network folder</strong></td>
+<td><a href="#External-storage-network-folder">Below</a></td>
 </tr>
 <tr>
 <td>The games of one system on a disk, in a folder of their own</td>
@@ -4731,8 +4736,31 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <p>Nothing is written inside a console folder. A folder name that FliperOS has no emulator for is left out, and the list says how many.</p>
 <p><strong>Which folder.</strong> A disk can keep Batocera's folders in more than one place: <code>batocera/roms</code>, <code>userdata/roms</code> and <code>roms</code> in the root of the disk (the <code>/userdata</code> of a disk that Batocera itself set up). FliperOS compares them and uses the one with the <strong>most games</strong> (the <code>gamelist.xml</code>, <code>images</code> and <code>videos</code> beside the games don't count), so an old <code>batocera</code> folder with only the sample game of each console doesn't win over the real library. A <code>roms</code> folder that FliperOS wrote its own folders into (the <code>retroarch</code> folder and the like, after you pointed <code>~/roms</code> at it) is still Batocera when it has the consoles. A disk that was set up on the other folder is set up again on the right one when the cabinet starts or the disk is plugged in (and by update 108): the consoles keep the core you chose, <code>~/bios</code>, <code>~/save</code> and the other shortcuts follow, and nothing is moved or deleted on the disk. A shortcut you made yourself to another place is left as it was.</p>
 <p><strong>The question:</strong> when a disk with a Batocera filesystem is plugged in, or the cabinet turns on with it connected, the frontend asks <strong>once</strong> whether to use it (<strong>YES</strong> / <strong>NO</strong>, <strong>NO</strong> selected), in a card that says how many consoles it found. It does not make the <code>fliperos</code> folder on that disk. <strong>YES</strong> is the same as <em>Use it</em> above; <strong>NO</strong> says where to do it later. It is asked once per disk, apart from the question of the FliperOS folders.</p>
+<h2 id="External-storage-network-folder">Network folder</h2>
+<p>A folder shared by another computer of the house (SMB: a NAS, <a href="https://github.com/retronas/retronas">RetroNAS</a>, Windows, a Linux with Samba, the share of a Batocera) opens on the cabinet as <strong>one more disk</strong>, in <code>/media/fliperos/&lt;name&gt;</code>, at every boot. The games are played from there: nothing is copied to the cabinet. It is what an <code>fstab</code> line with <code>cifs</code> did on Batocera or RGBuntu, without editing <code>fstab</code> by hand (it belongs to the system, so the desktop's text editor can't save it).</p>
+<p><strong>External storage &gt; Network folder &gt; Add a network folder</strong> asks:</p>
+<ol>
+<li>The computer: its IP (<code>192.168.1.10</code>) or name.</li>
+<li>Your user on it (empty: as a guest) and the password. The password stays on the cabinet in a file only the system reads (<code>/etc/fliperos/netshares/&lt;name&gt;.cred</code>), never on a command line.</li>
+<li>The shared folder, from the list the computer gives (or typed, when it does not list them).</li>
+</ol>
+<p>It opens the folder once to check it, saves it, and then says what to do with it, by what it has inside:</p>
+<ul>
+<li><strong>Batocera folders</strong> (<code>batocera/roms/&lt;console&gt;</code>, the copy RetroNAS keeps for Batocera, or a Batocera's own share): it offers the <a href="#External-storage-batocera-filesystem">Batocera filesystem</a> right away. Each console becomes a system of the frontends, read from the network.</li>
+<li><strong>A <code>fliperos</code> folder:</strong> it offers the <a href="#External-storage-fliperos-folders-a-second-disk">FliperOS folders</a>, as for a second disk.</li>
+<li><strong>Anything else:</strong> use a <a href="#External-storage-folder-shortcuts">Folder shortcut</a> to a folder in it (<code>~/roms/mame</code> to <code>retronas/roms/arcade/mame</code>, say), or make a <code>fliperos</code> folder there with <strong>FliperOS folders</strong>.</li>
+</ul>
+<p>The list in <strong>Network folder</strong> shows each saved folder (<code>//computer/folder</code>), <em>in use</em> when the games use it and <em>not answering</em> when the computer is off. Pick one to <strong>Use it</strong> (the same choice as above) or <strong>Forget this folder</strong>: FliperOS stops opening it and nothing is deleted on the computer. A folder the games still use asks you to stop using it first.</p>
+<ul>
+<li><strong>The computer turns on later:</strong> the folder opens the first time something looks into it, so a NAS that starts after the cabinet works without a restart. While it is off, the lists skip it after one 2-second check (instead of waiting for each folder), and its consoles are left out of the frontends until it is back.</li>
+<li><strong>Old servers</strong> that only speak SMB1 (an old NAS, Windows XP) are opened with <code>vers=1.0</code> by themselves.</li>
+<li>The folder is writable when the computer lets your user write: the Batocera filesystem makes its own system folders beside the consoles, and the saves can live there.</li>
+<li>The <a href="#ROM-Cleaner">ROM Cleaner</a> lists the saved network folders too, without asking the password again.</li>
+<li>The same is in the <a href="#Web-panel-System">web panel</a> (<strong>System &gt; Setup &gt; Games &gt; Network folder</strong>), where the IP and the password are easier to type: add a folder, list the folders of a computer, <strong>Use its consoles</strong> for Batocera folders, and <strong>Forget</strong>.</li>
+</ul>
 <h2 id="External-storage-how-it-works">How it works</h2>
 <ul>
+<li>Network folder: <code>lib/netshare.sh</code> and <code>screens/storage.sh</code> (<code>screen_netshares</code>). Each saved folder is a pair of systemd units in <code>/etc/systemd/system</code>, <code>media-fliperos-&lt;name&gt;.mount</code> (<code>Type=cifs</code>, the options that worked when it was checked, <code>TimeoutSec=15</code>) and <code>.automount</code> (in <code>remote-fs.target</code>), marked with a <code># fliperos-netshare</code> line; nothing goes into <code>/etc/fstab</code>. <code>fliperos-setup --netshare list|shares HOST [USER]|add HOST SHARE [USER]|remove NAME|layout MOUNT</code> does it from a terminal (the password on standard input). <code>netshare_offline</code> is the check the disk lists and the Batocera consoles make before touching a folder of a computer that is off.</li>
 <li>Folder shortcuts: <code>lib/folders.sh</code> (<code>folders_link</code>, <code>folders_unlink</code>, <code>folders_shown</code>, <code>folders_looks_like_systems</code>) and <code>screens/folders.sh</code>; the state is what is on disk, and the list for the cloud backup is <code>~/.config/fliperos/folders.list</code>.</li>
 <li>FliperOS folders: <code>lib/storage.sh</code> and <code>screens/storage.sh</code>. <code>fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse|offer MOUNT|answer MOUNT yes|no [batocera]|auto MOUNT|format-info MOUNT|format MOUNT ext4|exfat</code> does it from a terminal. <code>fliperos-automount</code> runs <code>--storage auto MOUNT</code> after mounting a disk; the queue is <code>/var/lib/fliperos/storage/offer</code> and the answers are in <code>/var/lib/fliperos/storage/answered</code> (<code>UUID</code>, and <code>batocera:UUID</code> for the other question), read and written by <code>gui/festorage.py</code>.</li>
 <li>Format: <code>storage_format</code> unmounts, <code>wipefs -a</code>, <code>mkfs.ext4 -F -m 0</code> or <code>mkfs.exfat</code>, and lets <code>fliperos-automount</code> mount it again as <code>FliperOS-HD</code>. <code>exfatprogs</code> comes in the image.</li>
@@ -4939,6 +4967,7 @@ launch: /opt/fliperos/bin/fliperos-x11-run myemu-run &quot;{file.path}&quot;
 <ul>
 <li><strong>A folder on this machine:</strong> a disk or a USB stick, in the folder browser (Enter opens, <code>..</code> goes back, <strong>Use this folder</strong> chooses).</li>
 <li><strong>A network shared folder:</strong> Windows or a NAS. The Setup asks for the computer, the user and the password, and lists its shared folders. The password is only kept if you ask.</li>
+<li><strong>A saved network folder</strong> (one of <a href="#External-storage-network-folder">External storage &gt; Network folder</a>): it is already open, so it is listed by itself (<code>The network folder //computer/folder</code>) and nothing is asked.</li>
 </ul>
 <p>That way the whole romset stays on the home computer, and the cabinet takes only what it uses.</p>
 <h3 id="ROM-Cleaner-2-for-which-emulator">2. For which emulator</h3>
@@ -7850,7 +7879,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 </tr>
 <tr>
 <td>The system changes in the FliperOS frontend</td>
-<td>The system's written logo slides in and blinks twice</td>
+<td>A bright line sweeps the panel and leaves the new system's written logo behind it (about 0.4 s, paced for the ZeDMD's USB link)</td>
 </tr>
 <tr>
 <td>A game opens, from any frontend or emulator</td>
@@ -8104,6 +8133,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <h2 id="Versus-score-settings">Settings</h2>
 <ul>
 <li><code>versus_side=2</code> in <code>/etc/fliperos/fliperos.conf</code> puts player 2 first, for the cabinet on that side.</li>
+<li><strong>First to:</strong> <code>versus_ft=N</code> (1 to 10; 0 or absent: off), with <code>versus_p1=</code> and <code>versus_p2=</code> for the players' names (the web panel's Marquee card, or Setup &gt; Live screen). The first player to reach N wins gets <code>fliperos-dmd win NAME PLAYER</code>: the name in the player's colour (cyan for 1, orange for 2), WIN! blinking and fireworks in the corners. The set starts again from 0 x 0, even in games that keep counting their own wins. The value is read at every win, so changing it mid-match counts. <strong>PLAY FT</strong> on a game page writes a first to for that match only to <code>$XDG_RUNTIME_DIR/fliperos-versus.ft</code> (<code>versus_ft</code>, <code>versus_p1</code>, <code>versus_p2</code> and <code>versus_game</code>), which counts before <code>fliperos.conf</code> and is deleted when that game closes. <strong>Reset score</strong> (Marquee card, <code>fliperos-setup --setting versus.reset 1</code>) touches <code>fliperos-versus.reset</code> in the same folder, and the open game's set goes back to 0 x 0.</li>
 <li><strong>Checking a game:</strong> open it and run <code>fliperos-versus watch mame &lt;game&gt;</code> over SSH (<code>model2</code> for Keisho): it prints the wins and the characters as they change, to compare with the screen.</li>
 </ul>
 <h2 id="Versus-score-what-was-checked">What was checked</h2>
@@ -35141,8 +35171,8 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li>the <strong>volume</strong>, with mute;</li>
 <li><strong>Close the game</strong>, which closes it the normal way (like the power button, so RetroArch still writes its saves).</li>
 </ul>
-<h2 id="Web-panel-Frontend-marquee-preview">Marquee preview</h2>
-<p>The <strong>Marquee preview</strong> card draws an LED marquee (128x32 dots) with what a <strong>Pixelcade</strong> or a <strong>ZeDMD</strong> would show for the game that is open, with no hardware. Pick the device in the card.</p>
+<h2 id="Web-panel-Frontend-marquee">Marquee</h2>
+<p>The <strong>Marquee</strong> card draws an LED marquee (128x32 dots) with what a <strong>Pixelcade</strong> or a <strong>ZeDMD</strong> would show for the game that is open, with no hardware. Pick the device in the card.</p>
 <p>It shows the game's art (the ZeDMD looks for <code>~/media/dmd</code>, then <code>marquee</code>, then <code>logo</code>; the Pixelcade for <code>marquee</code>, then <code>logo</code>) or, without art, the game's name. It also shows:</p>
 <ul>
 <li>the <strong>versus score</strong> of fighting games that have a score detector (<a href="#Scoreboard-games">Scoreboard games</a>);</li>
@@ -35150,6 +35180,12 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <li><strong>achievements</strong>, as they are unlocked.</li>
 </ul>
 <p><em>When both exist, the marquee shows</em> picks <strong>Art</strong> or <strong>Scoreboard</strong> for a game that has both.</p>
+<p><strong>FT</strong> (the third choice next to Art and Scoreboard) turns on <strong>first to</strong> for the versus score: pick N (FT1 to FT10) and the <strong>names of player 1 and player 2</strong> (up to 12 letters; empty: P1 and P2), then <strong>Save</strong>. Art or Scoreboard turn it off. The names take the place of the characters on the scoreboard, with "FT3" in the middle, and a name too long for its half scrolls round. A game opened in first to starts on the 0 x 0 scoreboard instead of its art. The player who wins N matches first gets their name in their colour, a blinking <strong>WIN!</strong> and fireworks in the corners, on the ZeDMD, in this preview and on the OBS page (the Pixelcade scrolls "NAME WIN!"); then a new set starts from 0 x 0. <strong>Reset score</strong> puts the set of the open game back to 0 x 0. With FT chosen and a game open that has no scoreboard, the card warns that first to does not count in it. These are cabinet settings, also in Setup &gt; Live screen: see <a href="#Versus-score-settings">Versus score</a>.</p>
+<h2 id="Web-panel-Frontend-game-page-version-and-play-ft">Game page: version and PLAY FT</h2>
+<ul>
+<li><strong>Version</strong>, under PLAY: the original and its clones that are in the folder. Picking one turns the page into that set's; the sets with a versus scoreboard end in "· FT".</li>
+<li><strong>PLAY FT</strong>, next to PLAY, in a game with a versus scoreboard: a window asks for N and the two players' names and opens the game in first to <strong>for that match only</strong>. When the game closes, N and the names are cleared (the first to of the Marquee card is not touched). In a game without a scoreboard the button is dimmed, and pressing it explains why and offers the version of the same game that has one, if it is in the folder.</li>
+</ul>
 <p>Turning the preview on, or changing the device, checks whether that device's software is installed on the cabinet and offers to install it. The preview works without it; the real display needs it. Idle, the preview plays the ZeDMD's logo animation, and with nothing open it shows the animated FliperOS logo.</p>
 <p>The same preview shows under the screen in <strong>Live</strong> and in <strong>Live &gt; OBS</strong>. The marquee hardware itself: <a href="#LED-displays">LED displays</a>.</p>
 <h2 id="Web-panel-Frontend-games">Games</h2>
@@ -35493,6 +35529,7 @@ This page used to hold every control. Button mapping is now on <a href="#Button-
 <ul>
 <li><strong>Folders:</strong> each folder of <code>~</code> (and the folders inside them) can have a shortcut to a folder of another disk: <strong>Change</strong> opens the cabinet's folders and disks; <strong>Undo</strong> brings back the one used before. See <a href="#External-storage-folder-shortcuts">External storage</a>.</li>
 <li><strong>External storage</strong> (right after Folders, <em>Open on the cabinet</em>): a whole disk, with the FliperOS folders or a Batocera filesystem, and formatting. It is only done on the cabinet's screen: erasing a disk is not done from a browser. See <a href="#External-storage">External storage</a>. The pages of the panel that name a folder (the packages of the custom games, for one) show where it really is when it is on another disk.</li>
+<li><strong>Network folder:</strong> the shared folders of another computer (a NAS, RetroNAS, Windows) that the cabinet opens at every boot. <strong>Add</strong> asks the computer, the user and the password, <strong>List its folders</strong> brings the shared folders, and <strong>Save and open</strong> checks and saves it. A folder with Batocera folders gets <strong>Use its consoles</strong> (the Batocera filesystem, each console a system of the frontends); the trash can forgets it. See <a href="#External-storage-network-folder">External storage</a>.</li>
 <li><strong>Custom frontends:</strong> a name and the command that opens it, like the other frontends; edit or delete each one.</li>
 <li><strong>Quirks:</strong> pick a USB device connected now and the fix (one device per player, no GET requests, always poll, UAS off for a disk), or type the code. They count after a restart. See <a href="#Wheels-and-quirks">Wheels and quirks</a>.</li>
 <li><strong>Bluetooth:</strong> turn it on, <strong>Look for controllers</strong> (15 seconds, with the controller in pairing mode), <strong>Pair</strong>. See <a href="#Bluetooth">Bluetooth</a>.</li>

@@ -230,6 +230,27 @@ demo_format() {
   }
   screen_storage_format "$FAKE/media/TOSHIBA"
 }
+# External storage com o azulejo da Network folder ja escolhido.
+demo_external_hub_netshare() {
+  demo_external
+  eval "$(declare -f ui_menu_hints | sed '1s/ui_menu_hints/ui_menu_hints_real/')"
+  ui_menu_hints() { ui_menu_hints_real "$1" "$2" netshare "${@:4}"; }
+  screen_external_storage
+}
+# Network folder: duas pastas guardadas (uma em uso, outra com o computador
+# desligado), sem montar nada.
+demo_netshare_fake() {
+  demo_external
+  netshare_available() { return 0; }
+  netshare_list() {
+    printf '%s\n' "retronas|192.168.1.20|retronas|retronas|$FAKE/media/retronas|mounted" \
+      "ps2|192.168.1.20|ps2|retronas|$FAKE/media/ps2|waiting"
+  }
+  netshare_offline() { [[ $1 == */ps2 ]]; }
+  netshare_in_use() { [[ $1 == */retronas ]]; }
+}
+demo_netshares() { demo_netshare_fake; screen_netshares; }
+demo_netshare_one() { demo_netshare_fake; screen_netshare_one retronas; }
 demo_storage() { demo_external; screen_storage; }
 demo_batocera() { demo_external; screen_batocera; }
 # O Batocera filesystem ja ligado: os consoles com o core de cada um.

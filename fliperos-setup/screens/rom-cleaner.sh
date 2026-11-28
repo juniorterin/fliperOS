@@ -54,10 +54,15 @@ screen_rom_cleaner_close() {
 # desta maquina ou numa pasta compartilhada da rede (montada so para
 # leitura). Status 1 = desistiu.
 screen_rom_cleaner_source() {
-  local title=${1:-MAME ROM Cleaner} what=${2:-romset} choice start
+  local title=${1:-MAME ROM Cleaner} what=${2:-romset} choice start name host share mount
   local -a entries
   while true; do
     entries=("local|A folder on this machine (disk, USB drive)")
+    # As pastas da rede guardadas (External storage > Network folder) ja estao
+    # montadas: entram direto, sem perguntar a senha de novo.
+    while IFS='|' read -r name host share _ mount _; do
+      [[ -n $name ]] && ! netshare_offline "$mount" && entries+=("$mount|The network folder //$host/$share")
+    done < <(netshare_list)
     netshare_mounted && entries+=("mounted|The network folder $(netshare_source)")
     netshare_available && entries+=("network|A shared folder on the network (Windows, NAS)")
     if ((${#entries[@]} == 1)); then
@@ -67,6 +72,7 @@ screen_rom_cleaner_source() {
     fi
     case $choice in
       mounted) start=$NETSHARE_DIR ;;
+      /*) start=$choice ;;
       network)
         screen_netshare_connect "$title" || continue
         start=$NETSHARE_DIR
@@ -188,8 +194,7 @@ screen_chd_cleaner_run() {
 # screen_netshare_connect TITULO pergunta o computador, o usuario, a senha e
 # a pasta compartilhada, e a monta. Status 1 = desistiu ou nao abriu.
 screen_netshare_connect() {
-  local title=$1 host user pass="" share saved=0 s
-  local -a shares=() entries=()
+  local title=$1 host user pass="" share saved=0
   host=$(ui_input "$title" "The computer that shares the folder: its IP or name (192.168.1.10)." \
     "$(netshare_saved host)") || return 1
   host=${host#"${host%%[!/\\]*}"}
@@ -205,19 +210,7 @@ screen_netshare_connect() {
       pass=$(ui_input "$title" "Password of $user on $host." "" password) || return 1
     fi
   fi
-  ui_info "$title" "Looking for the shared folders of $host..."
-  mapfile -t shares < <(netshare_shares "$host" "$user" "$pass")
-  if ((${#shares[@]})); then
-    for s in "${shares[@]}"; do
-      entries+=("$s|$s")
-    done
-    share=$(UI_STYLE=list ui_menu "$title" "Which shared folder of $host?" "$(netshare_saved share)" "${entries[@]}") ||
-      return 1
-  else
-    share=$(ui_input "$title" "The name of the shared folder on $host (what comes after \\\\$host\\)." \
-      "$(netshare_saved share)") || return 1
-  fi
-  [[ -n $share ]] || return 1
+  share=$(screen_netshare_pick_share "$title" "$host" "$user" "$pass" "$(netshare_saved share)") || return 1
   ui_info "$title" "Opening //$host/$share..."
   if ! netshare_mount "$host" "$share" "$user" "$pass"; then
     ui_msg "$title" "$(ui_bad "Could not open //$host/$share.")" "$NETSHARE_ERROR" "" "Details in $FLIPEROS_LOG."

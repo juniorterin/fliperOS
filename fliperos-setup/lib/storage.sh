@@ -66,9 +66,19 @@ storage_mounts() {
     # rotulo, config/fliperos-automount) e o mesmo disco: aparecia duas vezes,
     # a segunda "sem uso".
     [[ -L $dir && $(readlink -- "$dir") != */* ]] && continue
+    # Uma pasta da rede guardada (lib/netshare.sh) com o servidor desligado:
+    # abrir esperaria a montagem desistir; fica de fora ate ele voltar.
+    declare -F netshare_offline > /dev/null && netshare_offline "$dir" && continue
     [[ -d $dir ]] && mountpoint -q -- "$dir" 2> /dev/null && printf '%s\n' "$dir"
   done
   return 0
+}
+
+# storage_findmnt CAMPO CAMINHO: o CAMPO (FSTYPE, SOURCE, UUID) do sistema de
+# arquivos onde o CAMINHO esta. Uma pasta da rede guardada (lib/netshare.sh)
+# tem dois um sobre o outro, o autofs e o cifs: vale o de cima, a ultima linha.
+storage_findmnt() {
+  findmnt -rno "$1" -T "$2" 2> /dev/null | tail -n 1
 }
 
 # storage_size_of MONTAGEM CAMPO: total ou livre, em bytes.
@@ -82,7 +92,7 @@ storage_usable() {
   local mount=$1 fs total
   STORAGE_ERROR=""
   mountpoint -q -- "$mount" 2> /dev/null || { STORAGE_ERROR="$mount is not a mounted disk."; return 1; }
-  fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+  fs=$(storage_findmnt FSTYPE "$mount")
   case $fs in
     iso9660 | udf | squashfs | overlay | tmpfs | ramfs)
       STORAGE_ERROR="A $fs disk can't hold the folders."
@@ -121,7 +131,7 @@ storage_list() {
   while IFS= read -r mount; do
     [[ -n $mount ]] || continue
     label=${mount##*/}
-    fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+    fs=$(storage_findmnt FSTYPE "$mount")
     usable=0
     storage_usable "$mount" && usable=1
     printf '%s|%s|%s|%s|%s|%d|%s\n' "$mount" "${label//|/ }" "${fs:-?}" "$(storage_size_of "$mount" size)" \
@@ -207,7 +217,7 @@ storage_unuse() {
 # arquivos (sem ele, o rotulo e o tamanho).
 storage_id() {
   local id
-  id=$(findmnt -rno UUID -T "$1" 2> /dev/null | head -n 1)
+  id=$(storage_findmnt UUID "$1")
   [[ -n $id ]] || id="${1##*/}-$(storage_size_of "$1" size)"
   printf '%s\n' "${id//|/ }"
 }
@@ -260,7 +270,7 @@ storage_offer() {
   chmod 755 "$STORAGE_STATE" 2> /dev/null
   # Outro disco no mesmo lugar (o antigo saiu sem resposta): fica o de agora.
   storage_unoffer "$mount"
-  fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+  fs=$(storage_findmnt FSTYPE "$mount")
   printf '%s|%s|%s|%s|%s\n' "$mount" "${mount##*/}" "${fs:-?}" "$(storage_size_of "$mount" size)" "$id" \
     >> "$STORAGE_STATE/offer" || return 1
   chmod 644 "$STORAGE_STATE/offer" 2> /dev/null
@@ -271,7 +281,7 @@ storage_offer() {
 # storage_fs_ok MONTAGEM: o sistema de arquivos pode guardar jogos (nao e um
 # CD, uma imagem ou a memoria)? Um disco so de leitura serve para ler.
 storage_fs_ok() {
-  case $(findmnt -rno FSTYPE -T "$1" 2> /dev/null | head -n 1) in
+  case $(storage_findmnt FSTYPE "$1") in
     iso9660 | udf | squashfs | overlay | tmpfs | ramfs) return 1 ;;
   esac
   return 0
@@ -291,7 +301,7 @@ storage_offer_batocera() {
   mkdir -p "$STORAGE_STATE" 2> /dev/null || return 1
   chmod 755 "$STORAGE_STATE" 2> /dev/null
   storage_unoffer "$mount"
-  fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+  fs=$(storage_findmnt FSTYPE "$mount")
   n=$(batocera_known_count "$mount")
   printf '%s|%s|%s|%s|%s|batocera|%s\n' "$mount" "${mount##*/}" "${fs:-?}" "$(storage_size_of "$mount" size)" "$id" "$n" \
     >> "$STORAGE_STATE/offer" || return 1
@@ -339,7 +349,7 @@ storage_answer() {
 # ── Formatar ─────────────────────────────────────────────────────
 # storage_device MONTAGEM imprime o dispositivo da particao montada (/dev/sdb1).
 storage_device() {
-  findmnt -rno SOURCE -T "$1" 2> /dev/null | head -n 1
+  storage_findmnt SOURCE "$1"
 }
 
 # storage_parent_disk DISPOSITIVO: o disco inteiro de uma particao (/dev/sdb1
@@ -359,7 +369,7 @@ storage_parent_disk() {
 storage_system_disks() {
   local where src
   for where in / /boot /boot/efi /cdrom "${LIVE_MEDIUM:-/run/live/medium}"; do
-    src=$(findmnt -rno SOURCE -T "$where" 2> /dev/null | head -n 1)
+    src=$(storage_findmnt SOURCE "$where")
     [[ $src == /dev/* ]] || continue
     storage_parent_disk "$src"
   done | sort -u
@@ -416,7 +426,7 @@ storage_format_info() {
   model=$(lsblk -dno MODEL "$disk" 2> /dev/null | sed 's/ *$//' | head -n 1)
   total=$(storage_size_of "$mount" size)
   avail=$(storage_size_of "$mount" avail)
-  fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+  fs=$(storage_findmnt FSTYPE "$mount")
   batocera_detect "$mount" > /dev/null && batocera=1
   [[ $total =~ ^[0-9]+$ && $avail =~ ^[0-9]+$ ]] || { total=0; avail=0; }
   printf '%s|%s|%s|%s|%s|%s|%d\n' "${model:-Unknown disk}" "$total" "${mount##*/}" "${fs:-?}" "$((total - avail))" "$dev" "$batocera"

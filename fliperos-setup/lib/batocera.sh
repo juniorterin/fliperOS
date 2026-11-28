@@ -427,6 +427,9 @@ batocera_detect_systems() {
   # (batocera_list_read abaixo) nao chega nos arrays.
   batocera_load || return 0
   while IFS=$'\t' read -r system folder choice; do
+    # Na pasta da rede com o servidor desligado (lib/netshare.sh), cada console
+    # esperaria a montagem desistir: ficam de fora ate ele voltar.
+    declare -F netshare_offline > /dev/null && netshare_offline "$folder" && continue
     [[ -d $folder ]] || continue
     exts=$(batocera_emulator "batocera/$system" | cut -d'|' -f4)
     count=$(batocera_count "$folder" "$exts")

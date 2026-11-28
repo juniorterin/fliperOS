@@ -6910,8 +6910,11 @@ class FolderListsTests(unittest.TestCase):
             "folders.sh": ['choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Formerly called Link. Send a folder to another disk',
                            'choice=$(UI_STYLE=list ui_menu "$title" "${text:+$text'],
             "storage.sh": ['choice=$(UI_STYLE=list ui_menu "$title" \\\n      "A second disk keeps',
-                           'choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Disks with the games in Batocera folders'],
-            "rom-cleaner.sh": ['share=$(UI_STYLE=list ui_menu "$title" "Which shared folder'],
+                           'choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Disks with the games in Batocera folders',
+                           'choice=$(UI_STYLE=list ui_menu "$title" \\\n      "Folders of another computer',
+                           # As pastas compartilhadas de um computador (Network folder e ROM Cleaner).
+                           'share=$(UI_STYLE=list ui_menu "$title" "Which shared folder'],
+            "rom-cleaner.sh": ['share=$(screen_netshare_pick_share "$title"'],
             "mediapacks.sh": ['folders=$(UI_STYLE=list ui_menu "$title" "Which games is it for?"'],
             "setup-menu.sh": ['choice=$(UI_STYLE=list ui_menu "$title" "The game opens straight',
                               'choice=$(UI_STYLE=list ui_menu "$title" "$1" "${default:-${groups[0]}}"',
@@ -12215,6 +12218,192 @@ class NetShareTests(Base):
     def test_in_the_image(self):
         self.assertIn("cifs-utils smbclient", (ROOT / "fliperos-mkiso.sh").read_text())
         self.assertIn("cifs-utils smbclient", (ROOT / "tools/cabinet-update.sh").read_text())
+
+
+class NetShareSavedTests(Base):
+    """lib/netshare.sh: a pasta da rede guardada (External storage > Network
+    folder), montada de vez em /media/fliperos/NOME por um .mount e um
+    .automount do systemd."""
+
+    def setUp(self):
+        super().setUp()
+        self.calls = self.env.dir / "calls"
+        self.units = self.env.dir / "units"
+        self.media = self.env.dir / "media"
+        self.tmp = self.env.dir / "tmp"
+        self.media.mkdir()
+        self.tmp.mkdir()
+        up = self.env.dir / "cifs-up"
+        self.up = up
+        # mount falso: anota; MOUNT_FAIL=13 recusa a senha, 112 e o servidor so com SMB1.
+        self.env.stub("mount", """
+            echo "mount $*" >> "%(calls)s"
+            cred=$(sed -n 's/.*credentials=\\([^,]*\\).*/\\1/p' <<< "$*")
+            [[ -n $cred ]] && cat "$cred" >> "%(calls)s"
+            case ${MOUNT_FAIL:-} in
+              13) echo "mount error(13): Permission denied" >&2; exit 32 ;;
+              112) [[ $* == *vers=1.0* ]] || { echo "mount error(112): Host is down" >&2; exit 32; } ;;
+            esac
+            exit 0
+        """ % {"calls": self.calls})
+        self.env.stub("mount.cifs", "exit 0")
+        self.env.stub("umount", 'echo "umount $*" >> "%s"' % self.calls)
+        # O systemctl falso: o enable --now do automount "monta" (sem
+        # MOUNT_NEVER), o disable/stop desmonta.
+        self.env.stub("systemctl", """
+            echo "systemctl $*" >> "%(calls)s"
+            case "$1 $2" in
+              "enable --now") [[ -n ${MOUNT_NEVER:-} ]] || : > "%(up)s" ;;
+              "disable --now" | "stop "*) rm -f "%(up)s" ;;
+            esac
+            exit 0
+        """ % {"calls": self.calls, "up": up})
+        self.env.stub("findmnt", """
+            case "$*" in
+              *"-t autofs"*) exit 1 ;;
+              *) [[ -f "%s" ]] && echo "//server/share" ;;
+            esac
+        """ % up)
+        self.vars = {"NETSHARE_UNITS": str(self.units), "NETSHARE_ROOT": str(self.media), "TMPDIR": str(self.tmp),
+                     "NETSHARE_CRED_DIR": str(self.env.etc / "netshares"), "FLIPEROS_USER": "root",
+                     "BATOCERA_TABLE": str(ROOT / "config/batocera-systems.list")}
+
+    def add(self, *args, password="se nha", env=None):
+        return self.env.run("printf '%%s\\n' %s | netshare_cli add %s" % (shlex.quote(password), " ".join(map(shlex.quote, args))),
+                            dict(self.vars, **(env or {})))
+
+    def unit(self, suffix):
+        found = sorted(self.units.glob("*." + suffix))
+        self.assertEqual(len(found), 1, found)
+        return found[0]
+
+    def test_a_saved_folder_is_two_units_that_mount_it(self):
+        r = self.add("192.168.1.10", "romsets", "ana")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        where = "%s/romsets" % self.media
+        self.assertEqual(r.stdout, "mount=%s\n" % where)
+        mount = self.unit("mount").read_text()
+        cred = self.env.etc / "netshares" / "romsets.cred"
+        self.assertIn("# fliperos-netshare\n# user=ana\n", mount)
+        for line in ("What=//192.168.1.10/romsets", "Where=%s" % where, "Type=cifs", "TimeoutSec=15",
+                     "Options=rw,uid=0,gid=0,file_mode=0664,dir_mode=0775,actimeo=60,iocharset=utf8,credentials=%s" % cred,
+                     "After=network-online.target"):
+            self.assertIn(line + "\n", mount)
+        auto = self.unit("automount").read_text()
+        self.assertIn("Where=%s\n" % where, auto)
+        self.assertIn("WantedBy=remote-fs.target\n", auto)
+        self.assertEqual(self.unit("mount").stem, self.unit("automount").stem)
+        # A senha so no arquivo de credenciais, que so o root le.
+        self.assertNotIn("se nha", mount + auto)
+        self.assertEqual(cred.read_text(), "username=ana\npassword=se nha\n")
+        self.assertEqual(oct(cred.stat().st_mode & 0o777), "0o600")
+        self.assertEqual(oct(cred.parent.stat().st_mode & 0o777), "0o700")
+        # Montou antes numa pasta de passagem, com credenciais de passagem que somem.
+        calls = self.calls.read_text()
+        first = calls.splitlines()[0]
+        self.assertRegex(first, r"^mount -t cifs //192\.168\.1\.10/romsets %s/fliperos-netshare\.\w+ -o " % re.escape(str(self.tmp)))
+        self.assertNotIn("se nha", first)
+        self.assertEqual(list(self.tmp.iterdir()), [])
+        self.assertIn("systemctl daemon-reload\nsystemctl enable --now %s.automount\n" % self.unit("automount").stem, calls)
+        self.assertEqual(self.env.out("netshare_list", self.vars),
+                         "romsets|192.168.1.10|romsets|ana|%s|mounted\n" % where)
+        self.assertEqual(self.env.out("netshare_cli list", self.vars),
+                         "romsets|192.168.1.10|romsets|ana|%s|mounted|0\n" % where)
+
+    def test_guest_and_a_server_with_only_smb1(self):
+        r = self.add("nas", "roms", "", password="", env={"MOUNT_FAIL": "112"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        options = re.search(r"^Options=(.*)$", self.unit("mount").read_text(), re.M).group(1)
+        self.assertEqual(options, "rw,uid=0,gid=0,file_mode=0664,dir_mode=0775,actimeo=60,vers=1.0,guest")
+        self.assertFalse((self.env.etc / "netshares" / "roms.cred").exists())
+
+    def test_a_folder_that_does_not_open_leaves_nothing(self):
+        r = self.add("192.168.1.10", "romsets", "ana", env={"MOUNT_FAIL": "13"})
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Wrong user or password", r.stdout)
+        self.assertFalse(self.units.exists() and list(self.units.iterdir()))
+        self.assertEqual(list(self.tmp.iterdir()), [])
+        # Abriu de passagem, mas o automount nao montou: as unidades saem.
+        r = self.add("192.168.1.10", "romsets", "ana", env={"MOUNT_NEVER": "1"})
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("did not mount", r.stdout)
+        self.assertEqual(list(self.units.iterdir()), [])
+        self.assertFalse((self.env.etc / "netshares" / "romsets.cred").exists())
+        self.assertIn("systemctl disable --now", self.calls.read_text())
+        # Sem o computador ou a pasta, nem tenta.
+        self.assertEqual(self.add("", "x").returncode, 2)
+        self.assertIn("Give the computer", self.add("//", "x", "ana").stdout)
+
+    def test_names_and_unit_names(self):
+        (self.media / "roms").mkdir()
+        self.add("nas", "roms", "ana")
+        self.assertTrue(self.unit("mount").read_text().count("Where=%s/roms_nas\n" % self.media))
+        # A mesma pasta de novo: o mesmo nome, com o usuario novo.
+        self.add("NAS", "roms", "bia", password="outra")
+        self.assertIn("# user=bia\n", self.unit("mount").read_text())
+        self.assertEqual((self.env.etc / "netshares" / "roms_nas.cred").read_text(), "username=bia\npassword=outra\n")
+        self.assertEqual(self.env.out("netshare_new_name 'Meus Jogos!' pc; netshare_new_name '***' pc", self.vars),
+                         "Meus_Jogos_\nnetwork\n")
+        # O mesmo que o systemd-escape --path.
+        self.assertEqual(self.env.out("netshare_escape /media/fliperos/my-nas.v2; netshare_escape /.x/y/", self.vars),
+                         "media-fliperos-my\\x2dnas.v2\n\\x2ex-y\n")
+
+    def test_forget_and_in_use(self):
+        self.add("192.168.1.10", "romsets", "ana")
+        stem = self.unit("mount").stem
+        # Os jogos usam a pasta (o Batocera filesystem dela): recusa.
+        r = self.env.run("batocera_in_use() { [[ $1 == */romsets ]]; }; netshare_cli remove romsets", self.vars)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Stop using it first", r.stdout)
+        self.assertEqual(len(list(self.units.iterdir())), 2)
+        self.assertEqual(self.env.run("netshare_cli remove 'a b'", self.vars).returncode, 2)
+        self.assertIn("no network folder called nope", self.env.run("netshare_cli remove nope", self.vars).stdout)
+        self.env.out("netshare_cli remove romsets", self.vars)
+        self.assertEqual(list(self.units.iterdir()), [])
+        self.assertFalse((self.env.etc / "netshares" / "romsets.cred").exists())
+        self.assertIn("systemctl disable --now %s.automount" % stem, self.calls.read_text())
+
+    def test_an_offline_server_is_asked_once_and_skipped(self):
+        self.add("192.168.1.10", "romsets", "ana")
+        self.up.unlink()
+        (self.media / "romsets").mkdir()
+        (self.media / "disk").mkdir()
+        probes = self.env.dir / "probes"
+        out = self.env.out("""
+            netshare_reachable() { echo "$1" >> %s; return 1; }
+            mountpoint() { return 0; }
+            netshare_offline %s/romsets/batocera/roms/snes && echo off
+            netshare_offline %s/romsets && echo off
+            netshare_offline %s/disk || echo local
+            STORAGE_MOUNTS=%s storage_mounts
+            netshare_cli layout %s/romsets
+        """ % (probes, self.media, self.media, self.media, self.media, self.media), self.vars)
+        self.assertEqual(out, "off\noff\nlocal\n%s/disk\noffline\n" % self.media)
+        self.assertEqual(probes.read_text(), "192.168.1.10\n")
+        # Montada, nem pergunta.
+        self.up.write_text("")
+        probes.unlink()
+        self.assertEqual(self.env.out("netshare_reachable() { echo x >> %s; }; netshare_offline %s/romsets || echo on"
+                                      % (probes, self.media), self.vars), "on\n")
+        self.assertFalse(probes.exists())
+
+    def test_layout_says_what_to_do_with_it(self):
+        for system in ("snes", "megadrive", "psx"):
+            (self.media / "b" / "batocera" / "roms" / system).mkdir(parents=True)
+        (self.media / "f" / "fliperos" / "roms").mkdir(parents=True)
+        (self.media / "o").mkdir()
+        self.assertEqual(self.env.out("for d in b f o; do netshare_layout %s/$d; done" % self.media, self.vars),
+                         "batocera\nfliperos\nother\n")
+
+    def test_the_screens_and_the_cli(self):
+        storage = (SETUP / "screens/storage.sh").read_text()
+        self.assertIn('"netshare|Network folder|', storage)
+        self.assertIn("netshare) screen_netshares ;;", storage)
+        # A senha vai na entrada do --netshare, nunca na linha de comando.
+        self.assertIn('printf \'%s\\n\' "$pass" | netshare_cli add "$host" "$share" "$user"', storage)
+        self.assertIn("--netshare)\n      netshare_cli \"${@:2}\"", (SETUP / "fliperos-setup").read_text())
+        # O ROM Cleaner le das pastas guardadas sem pedir a senha de novo.
+        self.assertIn("done < <(netshare_list)", (SETUP / "screens/rom-cleaner.sh").read_text())
 
 
 class StorageTests(Base):

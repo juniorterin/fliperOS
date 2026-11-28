@@ -43,6 +43,7 @@
 #   entrada), --whatsnew, --customgames ..., --setup-items, --quirks ...,
 #   --folders ..., --storage list|prepare|use|unuse|offer|answer|auto|format (o disco secundario),
 #   --batocera detect|scan|list|cores|set|unset|auto|use|unuse|repair (o Batocera filesystem, lib/batocera.sh),
+#   --netshare list|shares|add|remove|layout (as pastas da rede guardadas, lib/netshare.sh),
 #   --frontends ..., --bluetooth ..., --system-update,
 #   --attract-romlist (o painel web)
 #
@@ -423,6 +424,10 @@ main() {
       ;;
     --batocera)
       batocera_cli "${@:2}"
+      return
+      ;;
+    --netshare)
+      netshare_cli "${@:2}"
       return
       ;;
     --frontends)

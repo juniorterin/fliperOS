@@ -6,6 +6,9 @@
 #   Batocera filesystem  um disco que ja tem as roms nas pastas do Batocera
 #                        (batocera/roms/<console>): cada console vira um sistema
 #                        com o core escolhido (lib/batocera.sh).
+# E a pasta de outro computador (Network folder: um NAS, o RetroNAS, um
+# Windows), montada como mais um disco e usada de um dos dois jeitos
+# (lib/netshare.sh).
 
 screen_external_storage() {
   local title="External storage" choice last=""
@@ -13,14 +16,152 @@ screen_external_storage() {
     choice=$(ui_menu_hints "$title" "" "$last" \
       "storage|FliperOS folders|Use a disk for ROMs, BIOS, art and saves, or format it." \
       "batocera|Batocera filesystem|Use a disk that already has Batocera folders." \
+      "netshare|Network folder|Play from a folder shared by a NAS, RetroNAS or a PC." \
       "return|Return|Back to Folders.") || return 0
     last=$choice
     case $choice in
       storage) screen_storage ;;
       batocera) screen_batocera ;;
+      netshare) screen_netshares ;;
       return) return 0 ;;
     esac
   done
+}
+
+# screen_netshares (External storage > Network folder): as pastas da rede
+# guardadas, cada uma montada em /media/fliperos/NOME a cada boot, e a de
+# guardar uma nova.
+screen_netshares() {
+  local title="Network folder" name host share user mount state what last="" choice
+  local -a entries
+  if ! netshare_available; then
+    ui_msg "$title" "$(ui_bad "cifs-utils is not installed.")" "Setup > System > System Update brings it."
+    return 0
+  fi
+  while true; do
+    entries=()
+    # O nome e o estado (o //servidor/pasta esta na tela de cada uma: aqui
+    # nao cabe numa linha de 240p).
+    while IFS='|' read -r name host share user mount state; do
+      [[ -n $name ]] || continue
+      what=$name
+      if netshare_offline "$mount"; then
+        what+=" - not answering"
+      elif netshare_in_use "$mount"; then
+        what+=" - in use"
+      fi
+      entries+=("$name|$what")
+    done < <(netshare_list)
+    entries+=("add|Add a network folder" "return|Return")
+    choice=$(UI_STYLE=list ui_menu "$title" \
+      "Folders of another computer (NAS, RetroNAS, PC). They open at every boot like one more disk, and the games play from there." \
+      "$last" "${entries[@]}") || return 0
+    last=$choice
+    case $choice in
+      return) return 0 ;;
+      add) screen_netshare_add ;;
+      *) screen_netshare_one "$choice" ;;
+    esac
+  done
+}
+
+# screen_netshare_add pergunta o computador, o usuario, a senha e a pasta
+# compartilhada, guarda e monta (lib/netshare.sh), e leva ao que fazer com ela.
+screen_netshare_add() {
+  local title="Network folder" host user pass="" share out
+  host=$(ui_input "$title" "The computer that shares the folder: its IP or name (192.168.1.10)." "") || return 0
+  host=${host#"${host%%[!/\\]*}"}
+  host=${host%%[/\\]*}
+  [[ -n $host ]] || return 0
+  user=$(ui_input "$title" "Your user name on $host (empty: as a guest, no password)." "") || return 0
+  if [[ -n $user ]]; then
+    pass=$(ui_input "$title" "Password of $user on $host. It stays on this machine, where only the system reads it." \
+      "" password) || return 0
+  fi
+  share=$(screen_netshare_pick_share "$title" "$host" "$user" "$pass" "") || return 0
+  ui_info "$title" "Opening //$host/$share..."
+  if ! out=$(printf '%s\n' "$pass" | netshare_cli add "$host" "$share" "$user"); then
+    ui_msg "$title" "$(ui_bad "Could not open //$host/$share.")" "$out" "" "Details in $FLIPEROS_LOG."
+    return 0
+  fi
+  screen_netshare_next "$(sed -n 's/^mount=//p' <<< "$out" | head -n 1)" new
+}
+
+# screen_netshare_pick_share TITULO SERVIDOR USUARIO SENHA PADRAO imprime a
+# pasta compartilhada escolhida: da lista do servidor, ou digitada quando ele
+# nao lista. Status 1 = desistiu.
+screen_netshare_pick_share() {
+  local title=$1 host=$2 share s
+  local -a shares=() entries=()
+  ui_info "$title" "Looking for the shared folders of $host..."
+  mapfile -t shares < <(netshare_shares "$host" "$3" "$4")
+  if ((${#shares[@]})); then
+    for s in "${shares[@]}"; do
+      entries+=("$s|$s")
+    done
+    share=$(UI_STYLE=list ui_menu "$title" "Which shared folder of $host?" "$5" "${entries[@]}") || return 1
+  else
+    share=$(ui_input "$title" "The name of the shared folder on $host (what comes after \\\\$host\\)." "$5") || return 1
+  fi
+  [[ -n $share ]] || return 1
+  printf '%s\n' "$share"
+}
+
+# screen_netshare_next MONTAGEM [new]: o que fazer com a pasta, pelo que ela
+# tem: as pastas do Batocera (a copia que o RetroNAS faz, o compartilhamento
+# de um Batocera) vao para o Batocera filesystem; a pasta fliperos, para
+# FliperOS folders; o resto, para um atalho de pasta.
+screen_netshare_next() {
+  local mount=$1 title="Network folder" name
+  [[ -n $mount ]] || return 0
+  name=${mount##*/}
+  case $(netshare_layout "$mount") in
+    batocera)
+      ui_yesno "$title" "${2:+$name is ready. }It has Batocera folders (batocera/roms/snes...). Use its consoles now, in Batocera filesystem?" yes &&
+        screen_batocera_disk "$mount"
+      ;;
+    fliperos)
+      ui_yesno "$title" "${2:+$name is ready. }It has the FliperOS folders. Use it for the ROMs, BIOS, art and saves now?" yes &&
+        screen_storage_disk "$mount"
+      ;;
+    *)
+      ui_msg "$title" "${2:+$name is ready, in $mount.}" "" \
+        "To play from it, point a ROM folder to a folder in it:" \
+        "Games > Folders > Folder shortcuts. Or keep a fliperos folder there with" \
+        "External storage > FliperOS folders."
+      ;;
+  esac
+  return 0
+}
+
+# screen_netshare_one NOME: usar a pasta guardada, ou esquece-la.
+screen_netshare_one() {
+  local name=$1 title="Network folder" line mount host share choice out
+  line=$(netshare_list | awk -F'|' -v n="$name" '$1 == n' | head -n 1)
+  [[ -n $line ]] || return 0
+  IFS='|' read -r _ host share _ mount _ <<< "$line"
+  choice=$(ui_menu_hints "$title: $name" "//$host/$share" use \
+    "use|Use it|Play its games: Batocera folders, FliperOS folders..." \
+    "remove|Forget this folder|Stop opening it here. Nothing leaves the server." \
+    "return|Return|Back to the network folders.") || return 0
+  case $choice in
+    use)
+      if netshare_offline "$mount"; then
+        ui_msg "$title" "$(ui_bad "$host is not answering.")" "Turn it on (or check its address) and try again."
+        return 0
+      fi
+      screen_netshare_next "$mount"
+      ;;
+    remove)
+      ui_yesno "$title" "Forget //$host/$share? FliperOS stops opening it; nothing is deleted on $host." no || return 0
+      if out=$(netshare_cli remove "$name"); then
+        ui_msg "$title" "$name is no longer opened here."
+      else
+        ui_msg "$title" "$(ui_bad "$out")"
+      fi
+      ;;
+  esac
+  return 0
 }
 
 # screen_storage (External storage > FliperOS folders): os discos secundarios
@@ -158,7 +299,7 @@ screen_batocera() {
     while IFS= read -r mount; do
       [[ -n $mount ]] || continue
       batocera_detect "$mount" > /dev/null || continue
-      fs=$(findmnt -rno FSTYPE -T "$mount" 2> /dev/null | head -n 1)
+      fs=$(storage_findmnt FSTYPE "$mount")
       n=$(batocera_known_count "$mount")
       what="${mount##*/} (${fs:-?}, $n consoles)"
       batocera_in_use "$mount" && what+=" - in use"

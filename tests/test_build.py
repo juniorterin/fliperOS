@@ -10662,6 +10662,14 @@ class WebSetupBase(unittest.TestCase):
             '      scan) echo "11:22:33:44:55:66|DualSense|input-gaming|no|no" ;;\n'
             '      pair) [ "$3" = 11:22:33:44:55:66 ] || exit 1; echo connected ;;\n'
             '    esac; exit 0 ;;\n'
+            '  --netshare) case "$2" in shares|add) read -r pw; echo "pass=$pw" >> TMP/setup.log ;; esac; case "$2" in\n'
+            '      list) echo "retronas|192.168.1.20|retronas|ana|/media/fliperos/retronas|mounted|0" ;;\n'
+            '      layout) echo batocera ;;\n'
+            '      shares) [ "$4" = ana ] && [ "$pw" = "se nha" ] || exit 1; printf "retronas\\nps2\\n" ;;\n'
+            '      add) [ "$pw" = "se nha" ] || { echo "Wrong user or password."; exit 1; }; echo "mount=/media/fliperos/$4" ;;\n'
+            '      remove) [ "$3" = retronas ] || { echo "There is no network folder called $3."; exit 1; } ;;\n'
+            '    esac; exit 0 ;;\n'
+            '  --batocera) [ "$2" = use ] && echo systems=42; exit 0 ;;\n'
             '  --system-update) echo "@step 50 Downloading updates"; sleep 1; exit 0 ;;\n'
             '  --attract-romlist) echo "@step 30 Reading"; exit 0 ;;\n'
             '  --customgames) ;;\n'
@@ -11833,6 +11841,32 @@ class WebSetupTests(WebSetupBase):
         self.assertEqual(self.call('POST', '/api/folders', {'action': 'link', 'path': 'bios', 'target': '/nope'}),
                          (400, {'error': '/nope is not a folder.'}))
         self.assertEqual(self.call('POST', '/api/folders', {'action': 'unlink', 'path': 'roms'})[1]['new'], '1')
+
+    def test_network_folders(self):
+        status, data = self.call('GET', '/api/netshare')
+        self.assertEqual(data['shares'], [{'name': 'retronas', 'host': '192.168.1.20', 'share': 'retronas', 'user': 'ana',
+                                           'mount': '/media/fliperos/retronas', 'state': 'mounted', 'inuse': False,
+                                           'layout': 'batocera'}])
+        post = lambda body: self.call('POST', '/api/netshare', body)
+        self.assertEqual(post({'action': 'shares', 'host': '192.168.1.20', 'user': 'ana', 'pass': 'se nha'}),
+                         (200, {'shares': ['retronas', 'ps2']}))
+        self.assertEqual(post({'action': 'shares', 'host': '192.168.1.20', 'user': 'ana', 'pass': 'x'}),
+                         (200, {'shares': []}))
+        status, data = post({'action': 'add', 'host': '192.168.1.20', 'share': 'ps2', 'user': 'ana', 'pass': 'se nha'})
+        self.assertEqual((status, data['mount']), (200, '/media/fliperos/ps2'))
+        self.assertEqual(post({'action': 'add', 'host': 'h', 'share': 's', 'user': 'ana', 'pass': 'no'}),
+                         (400, {'error': 'Wrong user or password.'}))
+        # A senha so na entrada do Setup: a linha de comando nunca a leva.
+        log = (self.dir / 'setup.log').read_text()
+        self.assertIn('--netshare add 192.168.1.20 ps2 ana\npass=se nha\n', log)
+        self.assertEqual([line for line in log.splitlines() if line.startswith('--') and 'nha' in line], [])
+        self.assertEqual(post({'action': 'add', 'host': 'h', 'share': 's', 'pass': 'a\nb'})[0], 400)
+        self.assertEqual(post({'action': 'use', 'mount': '/media/fliperos/retronas'})[1]['systems'], '42')
+        self.assertIn('--batocera use /media/fliperos/retronas', (self.dir / 'setup.log').read_text())
+        self.assertEqual(post({'action': 'remove', 'name': 'retronas'})[0], 200)
+        self.assertEqual(post({'action': 'remove', 'name': 'other'}),
+                         (400, {'error': 'There is no network folder called other.'}))
+        self.assertEqual(post({'action': 'nuke'})[0], 400)
 
     def test_custom_frontends(self):
         status, data = self.call('GET', '/api/frontends')

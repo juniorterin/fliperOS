@@ -1,9 +1,10 @@
-**Setup > Games > Folders** has two ways to put your games on another disk: **Folder shortcuts**, for one folder at a time, and **External storage**, for a whole disk. External storage has two kinds: the **FliperOS folders** (the structure FliperOS makes on a second disk) and the **Batocera filesystem** (a disk that already keeps its games in the folders Batocera uses). It can also **format** a disk.
+**Setup > Games > Folders** has two ways to put your games on another disk: **Folder shortcuts**, for one folder at a time, and **External storage**, for a whole disk. External storage has two kinds: the **FliperOS folders** (the structure FliperOS makes on a second disk) and the **Batocera filesystem** (a disk that already keeps its games in the folders Batocera uses). It can also **format** a disk, and open a **network folder** (a NAS, RetroNAS, a Windows PC) as one more disk.
 
 | You have | Use | Details |
 | --- | --- | --- |
 | A new, empty disk | **External storage > FliperOS folders**, then *Use it* (or *Format this disk* first) | [Below](#fliperos-folders-a-second-disk) |
 | A disk with the games in `batocera/roms/snes`, `megadrive`, `psx`... | **External storage > Batocera filesystem** | [Below](#batocera-filesystem) |
+| The games on another computer of the house (a NAS, RetroNAS, Windows, a Batocera's share) | **External storage > Network folder** | [Below](#network-folder) |
 | The games of one system on a disk, in a folder of their own | **Folder shortcuts** | [Below](#folder-shortcuts) |
 
 ## Folder shortcuts
@@ -65,8 +66,33 @@ Nothing is written inside a console folder. A folder name that FliperOS has no e
 
 **The question:** when a disk with a Batocera filesystem is plugged in, or the cabinet turns on with it connected, the frontend asks **once** whether to use it (**YES** / **NO**, **NO** selected), in a card that says how many consoles it found. It does not make the `fliperos` folder on that disk. **YES** is the same as *Use it* above; **NO** says where to do it later. It is asked once per disk, apart from the question of the FliperOS folders.
 
+## Network folder
+
+A folder shared by another computer of the house (SMB: a NAS, [RetroNAS](https://github.com/retronas/retronas), Windows, a Linux with Samba, the share of a Batocera) opens on the cabinet as **one more disk**, in `/media/fliperos/<name>`, at every boot. The games are played from there: nothing is copied to the cabinet. It is what an `fstab` line with `cifs` did on Batocera or RGBuntu, without editing `fstab` by hand (it belongs to the system, so the desktop's text editor can't save it).
+
+**External storage > Network folder > Add a network folder** asks:
+
+1. The computer: its IP (`192.168.1.10`) or name.
+2. Your user on it (empty: as a guest) and the password. The password stays on the cabinet in a file only the system reads (`/etc/fliperos/netshares/<name>.cred`), never on a command line.
+3. The shared folder, from the list the computer gives (or typed, when it does not list them).
+
+It opens the folder once to check it, saves it, and then says what to do with it, by what it has inside:
+
+- **Batocera folders** (`batocera/roms/<console>`, the copy RetroNAS keeps for Batocera, or a Batocera's own share): it offers the [Batocera filesystem](#batocera-filesystem) right away. Each console becomes a system of the frontends, read from the network.
+- **A `fliperos` folder:** it offers the [FliperOS folders](#fliperos-folders-a-second-disk), as for a second disk.
+- **Anything else:** use a [Folder shortcut](#folder-shortcuts) to a folder in it (`~/roms/mame` to `retronas/roms/arcade/mame`, say), or make a `fliperos` folder there with **FliperOS folders**.
+
+The list in **Network folder** shows each saved folder (`//computer/folder`), *in use* when the games use it and *not answering* when the computer is off. Pick one to **Use it** (the same choice as above) or **Forget this folder**: FliperOS stops opening it and nothing is deleted on the computer. A folder the games still use asks you to stop using it first.
+
+- **The computer turns on later:** the folder opens the first time something looks into it, so a NAS that starts after the cabinet works without a restart. While it is off, the lists skip it after one 2-second check (instead of waiting for each folder), and its consoles are left out of the frontends until it is back.
+- **Old servers** that only speak SMB1 (an old NAS, Windows XP) are opened with `vers=1.0` by themselves.
+- The folder is writable when the computer lets your user write: the Batocera filesystem makes its own system folders beside the consoles, and the saves can live there.
+- The [ROM Cleaner](ROM-Cleaner.md) lists the saved network folders too, without asking the password again.
+- The same is in the [web panel](Web-panel-System.md) (**System > Setup > Games > Network folder**), where the IP and the password are easier to type: add a folder, list the folders of a computer, **Use its consoles** for Batocera folders, and **Forget**.
+
 ## How it works
 
+- Network folder: `lib/netshare.sh` and `screens/storage.sh` (`screen_netshares`). Each saved folder is a pair of systemd units in `/etc/systemd/system`, `media-fliperos-<name>.mount` (`Type=cifs`, the options that worked when it was checked, `TimeoutSec=15`) and `.automount` (in `remote-fs.target`), marked with a `# fliperos-netshare` line; nothing goes into `/etc/fstab`. `fliperos-setup --netshare list|shares HOST [USER]|add HOST SHARE [USER]|remove NAME|layout MOUNT` does it from a terminal (the password on standard input). `netshare_offline` is the check the disk lists and the Batocera consoles make before touching a folder of a computer that is off.
 - Folder shortcuts: `lib/folders.sh` (`folders_link`, `folders_unlink`, `folders_shown`, `folders_looks_like_systems`) and `screens/folders.sh`; the state is what is on disk, and the list for the cloud backup is `~/.config/fliperos/folders.list`.
 - FliperOS folders: `lib/storage.sh` and `screens/storage.sh`. `fliperos-setup --storage list|prepare MOUNT|use MOUNT|unuse|offer MOUNT|answer MOUNT yes|no [batocera]|auto MOUNT|format-info MOUNT|format MOUNT ext4|exfat` does it from a terminal. `fliperos-automount` runs `--storage auto MOUNT` after mounting a disk; the queue is `/var/lib/fliperos/storage/offer` and the answers are in `/var/lib/fliperos/storage/answered` (`UUID`, and `batocera:UUID` for the other question), read and written by `gui/festorage.py`.
 - Format: `storage_format` unmounts, `wipefs -a`, `mkfs.ext4 -F -m 0` or `mkfs.exfat`, and lets `fliperos-automount` mount it again as `FliperOS-HD`. `exfatprogs` comes in the image.
