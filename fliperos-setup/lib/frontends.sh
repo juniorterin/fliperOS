@@ -764,7 +764,7 @@ frontends_arcade_resync() {
 # merged) so entram no MAME: o GroovyMAME abre o jogo pelo nome e acha o
 # clone no zip do pai; os outros emuladores abrem o arquivo.
 frontends_romlist() {
-  local result=$1 line key dir platform count name xml catver controls flycast clones
+  local result=$1 line key emu dir platform count name xml catver controls flycast clones
   local -a specs=() source=()
   shift
   ev_step 0 "Preparing Attract-Mode Plus"
@@ -776,20 +776,24 @@ frontends_romlist() {
       IFS='|' read -r name _ <<< "$(scraper_attract_emulator "$key")"
       [[ -n $name ]] || continue
     fi
+    # O console do Batocera filesystem decide pelo que o abre (o mame dele no
+    # GroovyMAME, o naomi no Flycast): lib/batocera.sh.
+    emu=$key
+    [[ $key == batocera/* ]] && declare -F batocera_resolve > /dev/null && emu=$(batocera_resolve "$key")
     xml=main
-    [[ $key == retroarch/mame2010 && -f $MAME2010_XML ]] && xml=alt
+    [[ $emu == retroarch/mame2010 && -f $MAME2010_XML ]] && xml=alt
     # O HBMAME (a pasta hbmame, quando o hbgroovymame esta instalado): o XML dele
     # tem os hacks e homebrews, que o do GroovyMAME nao conhece.
-    [[ $key == hbmame ]] && hbgroovymame_installed && xml=hb
+    [[ $emu == hbmame ]] && hbgroovymame_installed && xml=hb
     # Os clones sem arquivo proprio de um romset merged (o zip do pai os traz): no
     # MAME sempre; no HBMAME so com o XML dele (o do GroovyMAME nao conhece os
     # hacks que vem dentro do zip, e listaria jogos que o zip nao tem).
     clones=0
-    [[ $key == mame || $xml == hb ]] && clones=1
+    [[ $emu == mame || $xml == hb ]] && clones=1
     # Naomi, Naomi 2 e Atomiswave: so os jogos daquele sistema, pela BIOS
     # (as tres pastas podem ser a mesma, com o romset inteiro do Flycast).
     flycast=
-    [[ $key == naomi || $key == naomi2 || $key == atomiswave ]] && flycast=$key
+    [[ $emu == naomi || $emu == naomi2 || $emu == atomiswave ]] && flycast=$emu
     specs+=(--system "$name|$dir|$xml|$clones|$flycast")
   done
   ((${#specs[@]})) || ev_fail "No arcade folder with games" || return 1

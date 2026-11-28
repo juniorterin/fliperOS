@@ -789,12 +789,14 @@ class Frontend:
         # (o nome do gabinete que a abriu).
         link = getattr(self, "link", None)
         if self.mode == "list" and link and link.available():
-            here = {(g["_system"]["key"], g["Name"]): g for g in games}
+            # Pelo que abre o jogo (emu): o snes de um Batocera filesystem com o
+            # Snes9x e o jogo de quem o tem em ~/roms/retroarch/snes9x.
+            here = {(g["_system"].get("emu") or g["_system"]["key"], g["Name"]): g for g in games}
             by_game = {}
             for p in link.parties():
-                g = here.get((p["system"], p["game"]))
+                g = here.get((self.felink.emulator_key(p["system"]), p["game"]))
                 if g is not None:
-                    by_game.setdefault((p["system"], p["game"]), (g, []))[1].append(p)
+                    by_game.setdefault((g["_system"]["key"], g["Name"]), (g, []))[1].append(p)
             # O [+] aberto de um jogo que voltou a ter uma party so fecha.
             self.parties_open &= {k for k, (_, parties) in by_game.items() if len(parties) > 1}
             top = []
@@ -2468,7 +2470,9 @@ class Frontend:
             ids.add(p["party"])
             if p["party"] in self.parties_seen or p["party"] == mine:
                 continue
-            g = next((g for g in self.filtered() if (g["_system"]["key"], g["Name"]) == (p["system"], p["game"])), None)
+            want = (self.felink.emulator_key(p["system"]), p["game"])
+            g = next((g for g in self.filtered()
+                      if (g["_system"].get("emu") or g["_system"]["key"], g["Name"]) == want), None)
             title = self.fd.short_title(g) if g else ""
             name = self.felink.clean_name(p["host"]) or "A CABINET"
             self.notice = (name, title, time.monotonic() + NOTICE)

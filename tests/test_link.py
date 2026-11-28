@@ -1237,6 +1237,38 @@ class BinaryScanTests(unittest.TestCase):
 class NetplayTests(unittest.TestCase):
     SETS = frozenset({"xmen", "sf2"})
 
+    def test_a_batocera_console_plays_like_the_emulator_that_opens_it(self):
+        # 2026-11-28: um console do Batocera filesystem (batocera/<nome>, de um disco ou de um RetroNAS) e aberto
+        # pela escolha do batocera.list: o net play, o link, a party e o Matchmaker decidem por ela.
+        import fedata
+        import mmdata
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "batocera.list"
+            path.write_text("snes\t/media/fliperos/nas/batocera/roms/snes\tretroarch/snes9x\n"
+                            "naomi\t/media/fliperos/nas/batocera/roms/naomi\tnaomi\n"
+                            "model3\t/media/fliperos/nas/batocera/roms/model3\tmodel3\n")
+            saved = felink.BATOCERA_LIST
+            felink.BATOCERA_LIST = str(path)
+            self.addCleanup(setattr, felink, "BATOCERA_LIST", saved)
+            self.assertEqual(felink.emulator_key("batocera/snes"), "retroarch/snes9x")
+            self.assertEqual(felink.emulator_key("batocera/gba"), "batocera/gba")      # fora da lista: como veio
+            self.assertEqual(felink.emulator_key("mame"), "mame")
+            prof = felink.netplay_profile("batocera/snes", "Bomberman 2", "4", 2)
+            self.assertEqual((prof["emulator"], prof["systems"]), ("retroarch", ["retroarch/snes9x"]))
+            self.assertEqual(felink.netplay_profile("batocera/naomi", "mvsc2", "2", 2)["emulator"], "flycast")
+            profiles = felink.Profiles()
+            model3 = next(p for p in profiles.games if "model3" in p["systems"])
+            self.assertIs(profiles.find("batocera/model3", model3["sets"][0]), model3)
+            # A party de um gabinete com o jogo em ~/roms/retroarch/snes9x e a do snes do Batocera.
+            link = felink.Link.__new__(felink.Link)
+            link.parties = lambda: [{"game": "Bomberman 2", "system": "retroarch/snes9x"}]
+            self.assertEqual(len(link.parties_for("batocera/snes", "Bomberman 2")), 1)
+            # O --systems traz a chave do que abre o console no fim; o Matchmaker a usa.
+            row = fedata.parse_systems("batocera/snes|/x|snes|Super Nintendo (Snes9x)|run|args|.sfc|0|retroarch/snes9x\n"
+                                       "mame|/y|arcade|MAME|run|args|.zip|1\n")
+            self.assertEqual([r["emu"] for r in row], ["retroarch/snes9x", "mame"])
+            self.assertEqual(mmdata.page_of(row[0], lambda k: k == "retroarch/snes9x"), ("snes9x", "SNES9X"))
+
     def test_only_a_game_with_more_players_than_controls_that_fbneo_runs(self):
         prof = felink.netplay_profile("retroarch/fbneo", "xmen", "4", 2, self.SETS)
         self.assertEqual((prof["id"], prof["min"], prof["max"], prof["port"]), ("netplay", 2, 4, 55435))

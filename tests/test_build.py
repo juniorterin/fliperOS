@@ -32166,6 +32166,64 @@ class RomPackTests(unittest.TestCase):
             self.assertIn('meta=2', done.stdout)
             self.assertEqual((dst / '.config/fliperos/game-meta.tsv').read_text(), store)
 
+    def test_the_consoles_of_a_batocera_filesystem_make_packages_too(self):
+        # 2026-11-28: o snes de um RetroNAS (Batocera filesystem em uso, /media/fliperos/retronas/batocera/roms/snes) estava
+        # nos frontends e nao no Create package: o rompack so olhava ~/roms. O console e lido no disco, a arte na chave
+        # batocera/snes, e o pacote sai no formato do core escolhido (quem instala o recebe na pasta dele).
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dst, units = Path(tmp) / 'src', Path(tmp) / 'dst', Path(tmp) / 'units'
+            disk, net = Path(tmp) / 'disk/batocera/roms', Path(tmp) / 'net'
+            units.mkdir()
+            # Como no frontend: so os arquivos com as extensoes do core (o leia-me, o .srm e a subpasta nao).
+            for rel in ('snes/Mario.sfc', 'snes/Zelda (USA).smc', 'snes/gamelist.xml', 'snes/images/Mario-image.png',
+                        'snes/videos/Mario-video.mp4', 'snes/_info.txt', 'snes/Zelda (USA).readme.txt', 'snes/Mario.srm',
+                        'snes/mame2003/x.zip'):
+                self.put(disk, rel, rel)
+            self.put(net, 'batocera/roms/nes/Mario Bros.nes')
+            self.put(src, 'info/snes9x_libretro.info', 'display_name = "Nintendo - SNES / SFC (Snes9x - Current)"\n'
+                                                       'corename = "Snes9x"\nsupported_extensions = "smc|sfc|swc|fig"\n')
+            self.put(src, 'media/snap/batocera/snes/Mario.png', 'art')
+            self.put(src, '.config/fliperos/game-meta.tsv', 'batocera/snes\tMario\tTitle\tSuper Mario World\n')
+            self.put(src, '.config/fliperos/batocera.list', 'snes\t%s/snes\tretroarch/snes9x\n'
+                                                           'nes\t%s/batocera/roms/nes\tretroarch/fceumm\n' % (disk, net))
+            # A pasta da rede do nes com o servidor desligado (ninguem na porta): fica de fora, sem esperar por ela.
+            (units / 'media-net.mount').write_text('# fliperos-netshare\n[Mount]\nWhat=//127.0.0.1/retronas\nWhere=%s\n' % net)
+            env = {'BATOCERA_TABLE': str(ROOT / 'config/batocera-systems.list'), 'NETSHARE_UNITS': str(units)}
+            old = {k: os.environ.get(k) for k in env}
+            os.environ.update(env)
+            self.addCleanup(lambda: [os.environ.pop(k) if v is None else os.environ.__setitem__(k, v) for k, v in old.items()])
+            listed = json.loads(self.run_tool(src, 'targets').stdout)
+            snes = [t for t in listed if t['id'] == 'batocera-snes']
+            self.assertEqual(len(snes), 1, listed)
+            self.assertEqual(snes[0]['label'], 'Super Nintendo (Snes9x)')
+            self.assertEqual((snes[0]['games'], snes[0]['folders']), (2, [str(disk / 'snes')]))
+            self.assertEqual(snes[0]['name'], 'TITLE.fliperos-retroarch-snes9x.zip')
+            self.assertFalse([t for t in listed if t['id'] == 'batocera-nes'])
+            games = json.loads(self.run_tool(src, 'games', 'batocera-snes').stdout)
+            self.assertEqual([g['name'] for g in games['games']], ['Mario', 'Zelda (USA)'])
+            self.assertEqual(games['games'][0]['key'], 'batocera/snes')
+            self.assertEqual(games['games'][0]['has']['media'], ['snap'])
+            done = self.run_tool(src, 'create', '--target', 'batocera-snes', '--title', 'Nintendo', '--game', 'Mario',
+                                 '--group', 'Nintendo')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            zpath = src / 'pk' / 'Nintendo.fliperos-retroarch-snes9x.zip'
+            with zipfile.ZipFile(zpath) as zf:
+                names = set(zf.namelist())
+                cfg = zf.read('fliperos-package.cfg').decode()
+            self.assertEqual(names, {'fliperos-package.cfg', 'roms/retroarch/snes9x/Mario.sfc',
+                                     'media/snap/retroarch/snes9x/Mario.png'})
+            self.assertIn('target=retroarch-snes9x\n', cfg)
+            self.assertIn('meta=retroarch/snes9x\tMario\tTitle\tSuper Mario World\n', cfg)
+            # O grupo de quem fez o pacote abre a ROM no disco dele, com a arte dele.
+            sh = (src / 'roms/custom/Nintendo/Mario.sh').read_text()
+            self.assertIn(str(disk / 'snes/Mario.sfc'), sh)
+            self.assertEqual(os.readlink(src / 'media/snap/custom/Nintendo/Mario.png'),
+                             str(src / 'media/snap/batocera/snes/Mario.png'))
+            done = self.run_tool(dst, 'install', str(zpath))
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual((dst / 'roms/retroarch/snes9x/Mario.sfc').read_text(), 'snes/Mario.sfc')
+            self.assertIn(str(dst / 'roms/retroarch/snes9x/Mario.sfc'), (dst / 'roms/custom/Nintendo/Mario.sh').read_text())
+
     def test_the_installer_refuses_paths_outside_the_game_folders(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

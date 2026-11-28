@@ -44,6 +44,14 @@ atalho (link) e nenhum arquivo especial.
 
 O mesmo nome de pasta de ~/roms vale em ~/media/<tipo>: a arte de
 ~/roms/retroarch/fbneo/sf2.zip esta em ~/media/snap/retroarch/fbneo/sf2.png.
+
+Os consoles do Batocera filesystem em uso (~/.config/fliperos/batocera.list,
+fliperos-setup/lib/batocera.sh: um disco ou uma pasta da rede com
+batocera/roms/<console>) tambem sao alvos, batocera-<console>: os jogos sao
+lidos na pasta do disco e a arte em ~/media/<tipo>/batocera/<console>, e o
+pacote sai no formato de quem os abre (o snes com o Mesen-S vai como
+roms/retroarch/mesen-s, TITULO.fliperos-retroarch-mesen-s.zip): quem instala os
+recebe na pasta desse core, com ou sem um Batocera.
 """
 
 import argparse
@@ -84,6 +92,15 @@ PREFIXES = (("roms/", "roms"), ("bios/", "bios"), ("media/", "media"), ("nvram/"
             (".config/retroarch/config/", "config"))
 # O que nao e jogo numa pasta de ROMs.
 SKIP_NAMES = {"_info.txt", ".netboot", "Thumbs.db", "desktop.ini", ".DS_Store"}
+# O que o Batocera poe ao lado dos jogos de um console: a lista e a arte dele (o
+# batocera_score de lib/batocera.sh tambem nao conta).
+BATOCERA_NOT_GAMES = {"images", "videos", "manuals", "media"}
+BATOCERA_NOT_GAMES_RE = re.compile(r"^(gamelist.*\.xml|downloaded_.*)$", re.I)
+BATOCERA_TABLE = ENV("BATOCERA_TABLE", "/usr/local/share/fliperos/batocera-systems.list")
+BATOCERA_LIST = os.path.join(".config", "fliperos", "batocera.list")
+# As pastas da rede guardadas (lib/netshare.sh): os .mount marcados.
+NETSHARE_UNITS = ENV("NETSHARE_UNITS", "/etc/systemd/system")
+NETSHARE_MARK = "# fliperos-netshare"
 # Um download pela metade (o torrent, o navegador) nao e um jogo.
 PARTIAL_EXTS = (".part", ".!qb", ".crdownload", ".tmp", ".partial", ".download")
 # O titulo vira nome de arquivo (no compartilhamento da rede tambem).
@@ -158,9 +175,11 @@ class Progress:
 # ── Os alvos ──
 
 def core_info(core):
-    """(nome, [firmware]) do .info do core: o display_name e os
-    firmwareN_path (a partir de ~/bios, o system_directory)."""
-    name, firmware = core, []
+    """(nome, [firmware], nome curto, systemid) do .info do core: o
+    display_name, os firmwareN_path (a partir de ~/bios, o system_directory),
+    o corename (o "Mesen-S" do nome do console nos frontends) e o systemid
+    (mame, fb_alpha: um core de arcade)."""
+    name, firmware, short, systemid = core, [], core, ""
     try:
         with open(os.path.join(CORE_INFO, core + "_libretro.info"), encoding="utf-8", errors="replace") as f:
             for line in f:
@@ -168,11 +187,37 @@ def core_info(core):
                 key, value = key.strip(), value.strip().strip('"')
                 if key == "display_name" and value:
                     name = value
+                elif key == "corename" and value:
+                    short = value
+                elif key == "systemid":
+                    systemid = value
+                elif key == "supported_extensions":
+                    CORE_EXTS[core] = {"." + e.lower() for e in value.split("|") if e}
                 elif re.match(r"^firmware\d+_path$", key) and value and ".." not in value.split("/"):
                     firmware.append(value)
     except OSError:
         pass
-    return name, firmware
+    return name, firmware, short, systemid
+
+
+# As extensoes de cada core (o supported_extensions do .info), lidas pelo core_info.
+CORE_EXTS = {}
+# Numa pasta de console do Batocera, o que acompanha os jogos e nao e jogo (o
+# leia-me, o manual, a capa solta).
+DOC_EXTS = (".txt", ".pdf", ".nfo", ".md", ".htm", ".html", ".url", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".xml")
+
+
+# As pastas de sets do MAME (o scraper_arcade de lib/scraper.sh): os filtros do
+# MAME (genero, jogadores, botoes, controle, clones) so valem nelas.
+ARCADE_KEYS = ("mame", "hbmame", "naomi", "naomi2", "atomiswave", "model2", "model3", "odin")
+ARCADE_SYSTEMIDS = ("mame", "hbmame", "fb_alpha")
+
+
+def is_arcade(rdir):
+    key = media_key(rdir)
+    if key.startswith("retroarch/"):
+        return core_info(key.split("/")[1])[3] in ARCADE_SYSTEMIDS
+    return key in ARCADE_KEYS
 
 
 def target(tid, label, roms, **kw):
@@ -213,19 +258,174 @@ def all_targets(home):
         cores = sorted(e.name for e in os.scandir(base) if e.is_dir() and not e.name.startswith("."))
     except OSError:
         cores = []
-    for core in cores:
-        name, firmware = core_info(core)
-        roms = "roms/retroarch/" + core
-        # O OpenBOR (core AnyBOR): os jogos em Paks/, o que o motor grava em Saves/.
-        if os.path.isdir(os.path.join(base, core, "Paks")):
-            roms += "/Paks"
-        deps = "mame2010" if core == "mame2010" else ("groovymame" if re.match(r"^(mame|fbneo|fbalpha)", core) else "")
-        out.append(target("retroarch-" + core, "RetroArch: " + name, [roms],
-                          bios=["bios/mame"] if deps else [], bios_files=["bios/" + f for f in firmware], deps=deps,
-                          nvram=["nvram/retroarch/" + core], save=["save/retroarch"],
-                          save_extra=["roms/retroarch/anybor/Saves"] if core == "anybor" else [],
-                          cheats=["cheats/retroarch"], config=[".config/retroarch/config"], depth=2))
+    out += [retroarch_target(home, core) for core in cores]
+    return out + batocera_targets(home, out)
+
+
+def retroarch_target(home, core):
+    name, firmware, _, _ = core_info(core)
+    roms = "roms/retroarch/" + core
+    # O OpenBOR (core AnyBOR): os jogos em Paks/, o que o motor grava em Saves/.
+    if os.path.isdir(os.path.join(home, roms, "Paks")):
+        roms += "/Paks"
+    deps = "mame2010" if core == "mame2010" else ("groovymame" if re.match(r"^(mame|fbneo|fbalpha)", core) else "")
+    return target("retroarch-" + core, "RetroArch: " + name, [roms],
+                  bios=["bios/mame"] if deps else [], bios_files=["bios/" + f for f in firmware], deps=deps,
+                  nvram=["nvram/retroarch/" + core], save=["save/retroarch"],
+                  save_extra=["roms/retroarch/anybor/Saves"] if core == "anybor" else [],
+                  cheats=["cheats/retroarch"], config=[".config/retroarch/config"], depth=2)
+
+
+# ── Os consoles do Batocera filesystem ──
+
+def batocera_table():
+    """{nome: rotulo} dos consoles que o FliperOS conhece num Batocera
+    (config/batocera-systems.list: nome|rotulo|plataforma|padrao|tambem)."""
+    out = {}
+    try:
+        with open(BATOCERA_TABLE, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                cols = line.rstrip("\n").split("|")
+                if len(cols) >= 4 and cols[0] and not cols[0].startswith("#") and cols[3]:
+                    out[cols[0]] = cols[1] or cols[0]
+    except OSError:
+        pass
     return out
+
+
+def unescape_mount(text):
+    """O caminho de uma linha do /proc/mounts (o espaco vem como \\040)."""
+    return re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), text)
+
+
+class NetShares:
+    """As pastas da rede guardadas (lib/netshare.sh, um .mount + .automount
+    cada). Com o servidor desligado, cada acesso a uma delas espera a montagem
+    desistir (uns 10 s, de novo a cada console): quem passa pelos consoles
+    pergunta antes, como o netshare_offline. Montada, nunca esta desligada; a
+    resposta vale para o processo todo."""
+
+    def __init__(self):
+        self.hosts, self.state = {}, {}
+        for unit in sorted(glob.glob(os.path.join(NETSHARE_UNITS, "*.mount"))):
+            try:
+                with open(unit, encoding="utf-8", errors="replace") as f:
+                    lines = [ln.strip() for ln in f]
+            except OSError:
+                continue
+            if NETSHARE_MARK not in lines:
+                continue
+            fields = dict(ln.split("=", 1) for ln in lines if "=" in ln and not ln.startswith("#"))
+            what, where = fields.get("What", ""), fields.get("Where", "").rstrip("/")
+            if what.startswith("//") and where:
+                self.hosts[where] = what[2:].split("/", 1)[0]
+
+    @staticmethod
+    def mounted(where):
+        try:
+            with open("/proc/self/mounts", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    cols = line.split()
+                    if len(cols) > 2 and cols[2] in ("cifs", "smb3") and unescape_mount(cols[1]) == where:
+                        return True
+        except OSError:
+            pass
+        return False
+
+    @staticmethod
+    def reachable(host):
+        import socket
+        for port in (445, 139):
+            try:
+                socket.create_connection((host, port), timeout=2).close()
+                return True
+            except socket.timeout:
+                return False
+            except OSError:
+                continue
+        return False
+
+    def offline(self, path):
+        for where, host in self.hosts.items():
+            if path == where or path.startswith(where + "/"):
+                if where not in self.state:
+                    self.state[where] = not self.mounted(where) and not self.reachable(host)
+                return self.state[where]
+        return False
+
+
+def batocera_targets(home, base):
+    """Os consoles do Batocera filesystem em uso (lib/batocera.sh:
+    SISTEMA<tab>PASTA<tab>ESCOLHA no batocera.list), um alvo cada. Os jogos
+    ficam onde estao; no pacote, cada caminho e o de quem os abre (src: o
+    caminho do pacote -> o de verdade): o snes com retroarch/mesen-s e
+    roms/retroarch/mesen-s, e a arte da chave batocera/snes vai como
+    media/<tipo>/retroarch/mesen-s. A escolha que nenhum alvo abre fica de fora."""
+    table = batocera_table()
+    try:
+        with open(os.path.join(home, BATOCERA_LIST), encoding="utf-8", errors="replace") as f:
+            rows = [ln.rstrip("\n").split("\t") for ln in f]
+    except OSError:
+        return []
+    shares, out, seen = NetShares(), [], set()
+    media = media_types(home)
+    for row in rows:
+        if len(row) != 3:
+            continue
+        system, folder, choice = row
+        folder = folder.rstrip("/")
+        if system not in table or system in seen or not folder.startswith("/") or not choice \
+                or choice.startswith("batocera/") or ".." in choice.split("/"):
+            continue
+        if choice == "openbor":
+            choice = "retroarch/anybor"
+        # O que conta como jogo, como no frontend (batocera_count): so arquivos, com
+        # as extensoes do core e o .zip/.7z (batocera_zip); com um emulador do
+        # FliperOS, tudo menos os documentos que acompanham os jogos.
+        exts = None
+        if choice.startswith("retroarch/"):
+            core = choice[len("retroarch/"):]
+            if not re.match(r"^[A-Za-z0-9_.+-]+$", core):
+                continue
+            base_t, detail = retroarch_target(home, core), core_info(core)[2]
+            rdir = "roms/retroarch/anybor/Paks" if core == "anybor" else "roms/retroarch/" + core
+            if CORE_EXTS.get(core):
+                exts = CORE_EXTS[core] | {".zip", ".7z"}
+        else:
+            rdir = "roms/" + choice
+            base_t = next((t for t in base if rdir in t["roms"]), None)
+            if base_t is None:
+                continue
+            detail = base_t["label"].split(" (")[0]
+        # Com o servidor da rede desligado, cada pasta esperaria a montagem desistir.
+        if shares.offline(folder) or not os.path.isdir(folder):
+            continue
+        seen.add(system)
+        key = "batocera/" + system
+        t = dict(base_t)
+        t.update(id="batocera-" + re.sub(r"[^a-z0-9-]+", "-", system.lower()),
+                 label="%s (%s)" % (table[system], detail), pkg=base_t["id"], pkg_label=base_t["label"],
+                 roms=[rdir], companions=[], shown=[folder], keys={media_key(rdir): key}, files_only=True, exts=exts,
+                 src=[(rdir, folder)] + [("media/%s/%s" % (m, media_key(rdir)), os.path.join(home, "media", m, key))
+                                         for m in media])
+        out.append(t)
+    return out
+
+
+def real(home, t, rel):
+    """O caminho de verdade de um caminho do pacote (a partir da home): o de um
+    console do Batocera filesystem esta no disco dele (t["src"])."""
+    for pkg, src in (t or {}).get("src", ()):
+        if rel == pkg or rel.startswith(pkg + "/"):
+            return src + rel[len(pkg):]
+    return os.path.join(home, rel)
+
+
+def system_key(t, rdir):
+    """A chave do sistema nos frontends (as listas, a arte, os metadados) de uma
+    pasta do alvo: a do pacote, ou batocera/<console>."""
+    key = media_key(rdir)
+    return t.get("keys", {}).get(key, key)
 
 
 def find_target(home, tid):
@@ -300,21 +500,32 @@ def referenced(full):
     return [r for r in (x.replace("\\", "/") for x in out) if r and ".." not in r.split("/") and not r.startswith("/")]
 
 
+def not_a_game(name):
+    """O que fica numa pasta de ROMs sem ser jogo: o _info.txt, o download pela
+    metade, a lista e a arte que o Batocera poe ao lado dos jogos (images/,
+    videos/, gamelist.xml), numa pasta dele ou num atalho para ela."""
+    return name in SKIP_NAMES or name.startswith(".") or name.lower().endswith(PARTIAL_EXTS) \
+        or name in BATOCERA_NOT_GAMES or bool(BATOCERA_NOT_GAMES_RE.match(name))
+
+
 def scan_games(home, t):
     """{nome: {"dir": pasta, "entries": [nomes]}}: os jogos das pastas do
     alvo. O nome e o da ROM sem a extensao (sf2), ou o arquivo inteiro
     quando dois jogos dariam o mesmo nome em pastas diferentes."""
     games = {}
     for rdir in t["roms"]:
-        entries = [e for e in listdir(os.path.join(home, rdir))
-                   if e.name not in SKIP_NAMES and not e.name.startswith(".")
-                   and not e.name.lower().endswith(PARTIAL_EXTS)]
+        entries = [e for e in listdir(real(home, t, rdir)) if not not_a_game(e.name)]
         by_stem = {}
         for e in entries:
             try:
                 is_dir = e.is_dir()
             except OSError:
                 continue
+            # Um console do Batocera filesystem: o que o frontend mostra dele.
+            if t.get("files_only"):
+                ext = os.path.splitext(e.name)[1].lower()
+                if is_dir or (t["exts"] is not None and ext not in t["exts"]) or ext in DOC_EXTS:
+                    continue
             by_stem.setdefault(stem_of(e.name, is_dir), []).append(e.name)
         # O que um .cue/.gdi/.m3u/.acgame chama nao e um jogo a parte.
         used = set()
@@ -332,10 +543,11 @@ def scan_games(home, t):
     return games
 
 
-def tree(home, rel):
+def tree(home, rel, t=None):
     """[(caminho a partir da home, tamanho)] de um arquivo ou de uma pasta
-    inteira (sem seguir os atalhos de dentro dela)."""
-    full = os.path.join(home, rel)
+    inteira (sem seguir os atalhos de dentro dela). O caminho e o do pacote;
+    o arquivo, o de verdade (real: o console do Batocera filesystem)."""
+    full = real(home, t, rel)
     out = []
     if os.path.isdir(full):
         for top, dirs, files in os.walk(full):
@@ -347,7 +559,7 @@ def tree(home, rel):
                 except OSError:
                     continue
                 if stat.S_ISREG(st.st_mode):
-                    out.append((os.path.relpath(p, home).replace(os.sep, "/"), st.st_size))
+                    out.append((rel + "/" + os.path.relpath(p, full).replace(os.sep, "/"), st.st_size))
     else:
         try:
             st = os.stat(full)
@@ -363,11 +575,11 @@ def game_rom_files(home, t, game):
     chamam (as faixas de um .cue) e as pastas irmas (vldp/ do Hypseus)."""
     rdir, files = game["dir"], []
     for n in game["entries"]:
-        files += tree(home, rdir + "/" + n)
-        for r in referenced(os.path.join(home, rdir, n)):
-            files += tree(home, rdir + "/" + r)
+        files += tree(home, rdir + "/" + n, t)
+        for r in referenced(real(home, t, rdir + "/" + n)):
+            files += tree(home, rdir + "/" + r, t)
     for c in t["companions"]:
-        files += tree(home, c + "/" + game["stem"])
+        files += tree(home, c + "/" + game["stem"], t)
     return files
 
 
@@ -376,14 +588,14 @@ class Index:
     sf2.zip.nvmem e a pasta sf2/ sao do jogo sf2. Com depth 2, tambem os das
     subpastas (os saves do RetroArch ficam numa pasta por core)."""
 
-    def __init__(self, home, rel, depth=1):
+    def __init__(self, home, rel, depth=1, t=None):
         self.map = {}
         dirs = [rel]
         if depth > 1:
-            dirs += [rel + "/" + e.name for e in listdir(os.path.join(home, rel))
+            dirs += [rel + "/" + e.name for e in listdir(real(home, t, rel))
                      if e.is_dir(follow_symlinks=False) and not e.name.startswith(".")]
         for d in dirs:
-            for e in listdir(os.path.join(home, d)):
+            for e in listdir(real(home, t, d)):
                 if e.name in SKIP_NAMES:
                     continue
                 n = e.name
@@ -410,7 +622,7 @@ def related_dirs(home, t):
 
 
 def indexes(home, t):
-    return {kind: [(d, Index(home, d, depth)) for d, depth in dirs] for kind, dirs in related_dirs(home, t).items()}
+    return {kind: [(d, Index(home, d, depth, t)) for d, depth in dirs] for kind, dirs in related_dirs(home, t).items()}
 
 
 def shared_bios(home, t):
@@ -485,11 +697,11 @@ def dependency_files(home, t, deps):
     places = [(d, roms) for d in t["roms"]] + [(d, bios) for d in t["bios"] + ["roms/mame"]]
     for dep in sorted(deps):
         for d, where in places:
-            hit = [e.name for e in listdir(os.path.join(home, d))
+            hit = [e.name for e in listdir(real(home, t, d))
                    if e.name.lower() in (dep, dep + ".zip", dep + ".7z")]
             if hit:
                 for n in hit:
-                    where.extend(tree(home, d + "/" + n))
+                    where.extend(tree(home, d + "/" + n, t))
                 break
     return roms, bios
 
@@ -503,8 +715,9 @@ def cmd_targets(args):
         games = scan_games(home, t)
         if not games and not args.all:
             continue
-        out.append({"id": t["id"], "label": t["label"], "folders": t["roms"], "games": len(games),
-                    "name": "%s.fliperos-%s.zip" % ("TITLE", t["id"])})
+        out.append({"id": t["id"], "label": t["label"], "folders": t.get("shown", t["roms"]), "games": len(games),
+                    "name": "%s.fliperos-%s.zip" % ("TITLE", t.get("pkg", t["id"])),
+                    "arcade": any(is_arcade(r) for r in t["roms"])})
     if args.text:
         for row in out:
             print("%s|%s|%d" % (row["id"], row["label"].replace("|", "/"), row["games"]))
@@ -524,7 +737,7 @@ def game_summary(home, t, name, game, idx, has_bios):
         else:
             have[kind] = bool(hits)
     have["bios"] = has_bios
-    return {"name": name, "stem": game["stem"], "key": media_key(game["dir"]), "files": game["entries"],
+    return {"name": name, "stem": game["stem"], "key": system_key(t, game["dir"]), "files": game["entries"],
             "folder": game["dir"], "bytes": sum(s for _, s in files), "has": have,
             "group_ok": launch_argv(media_key(game["dir"]), game["stem"], "x") is not None}
 
@@ -556,7 +769,8 @@ def cmd_games(args):
     found = {m for g in out for m in g["has"].get("media", [])}
     order = ["snap", "preview", "logo", "box", "marquee", "dmd", "texto"]
     media = [m for m in order if m in found] + sorted(found - set(order))
-    json.dump({"target": t["id"], "label": t["label"], "folders": t["roms"], "games": out, "media_types": media,
+    json.dump({"target": t["id"], "label": t["label"], "folders": t.get("shown", t["roms"]), "games": out,
+               "arcade": any(is_arcade(r) for r in t["roms"]), "media_types": media,
                "kinds": list(KINDS), "shared_save": bool(shared_saves(home, t))}, sys.stdout, ensure_ascii=False)
     print()
     return 0
@@ -661,14 +875,16 @@ def group_entries(home, t, chosen, games):
     return out
 
 
-def install_group(home, group, entries):
-    """Monta o grupo: um TITULO.sh por jogo e a arte ligada. Devolve quantos."""
+def install_group(home, group, entries, t=None):
+    """Monta o grupo: um TITULO.sh por jogo e a arte ligada. Devolve quantos.
+    Com o alvo (quem faz o pacote), a ROM e a arte de onde estao de verdade:
+    o console do Batocera filesystem fica no disco dele."""
     folder = os.path.join(home, "roms", "custom", group)
     makedirs(folder)
     used, count = set(), 0
     media = media_types(home)
     for stem, key, rel, title in entries:
-        argv = launch_argv(key, stem, os.path.join(home, rel))
+        argv = launch_argv(key, stem, real(home, t, rel))
         if argv is None:
             continue
         name = entry_name(title)
@@ -685,7 +901,7 @@ def install_group(home, group, entries):
         count += 1
         # A arte do jogo, ligada com o nome do .sh (o frontend a procura assim).
         for m in media:
-            src_dir = os.path.join(home, "media", m, key)
+            src_dir = real(home, t, "media/%s/%s" % (m, key))
             for e in listdir(src_dir):
                 if e.name == stem or e.name.startswith(stem + "."):
                     dst_dir = os.path.join(home, "media", m, "custom", group)
@@ -753,7 +969,7 @@ def collect(home, t, chosen, kinds, progress, media_sel=None):
     games = scan_games(home, t)
     missing = [n for n in chosen if n not in games]
     if missing:
-        raise Bad("not in %s: %s" % (", ".join(t["roms"]), ", ".join(missing[:5])))
+        raise Bad("not in %s: %s" % (", ".join(t.get("shown", t["roms"])), ", ".join(missing[:5])))
     files, seen, notes = [], set(), []
 
     def add(lst, kind):
@@ -785,7 +1001,7 @@ def collect(home, t, chosen, kinds, progress, media_sel=None):
                 for p in ix.get(games[n]["stem"]):
                     if kind == "media" and media_sel is not None and p.split("/")[1] not in media_sel:
                         continue
-                    add(tree(home, p), kind)
+                    add(tree(home, p, t), kind)
     return files, notes
 
 
@@ -794,16 +1010,18 @@ def meta_store(home):
     return os.path.join(home, ".config", "fliperos", "game-meta.tsv")
 
 
-def meta_lines(home, games, chosen):
-    """As edicoes de metadados dos jogos do pacote: "PASTA<TAB>ROM<TAB>CAMPO<TAB>VALOR"."""
-    want = {(media_key(games[n]["dir"]), games[n]["stem"]) for n in chosen}
+def meta_lines(home, t, games, chosen):
+    """As edicoes de metadados dos jogos do pacote: "PASTA<TAB>ROM<TAB>CAMPO<TAB>VALOR".
+    A de um console do Batocera filesystem (batocera/snes) vai com a pasta de
+    quem instala (retroarch/mesen-s)."""
+    want = {(system_key(t, games[n]["dir"]), games[n]["stem"]): media_key(games[n]["dir"]) for n in chosen}
     out = []
     try:
         with open(meta_store(home), encoding="utf-8", errors="replace") as f:
             for line in f:
                 cols = line.rstrip("\n").split("\t")
                 if len(cols) == 4 and (cols[0], cols[1]) in want:
-                    out.append("\t".join(cols))
+                    out.append("\t".join([want[(cols[0], cols[1])]] + cols[1:]))
     except OSError:
         pass
     return out
@@ -850,7 +1068,7 @@ def refresh_lists():
 
 def manifest_text(t, title, chosen, kinds, group="", entries=(), meta=()):
     lines = ["# FliperOS ROM package (Game Packages > ROMs).", "format=" + FORMAT, "type=roms", "title=" + title,
-             "target=" + t["id"], "label=" + t["label"], "kinds=" + ",".join(kinds),
+             "target=" + t.get("pkg", t["id"]), "label=" + t.get("pkg_label", t["label"]), "kinds=" + ",".join(kinds),
              "created=" + datetime.date.today().isoformat()]
     if group:
         # O grupo e, de cada jogo dele, a rom, a pasta, o arquivo que abre e o titulo.
@@ -883,7 +1101,7 @@ def cmd_create(args):
         if not chosen:
             raise Bad("choose at least one game")
         kinds, media_sel = parse_kinds(args.kinds)
-        out = os.path.join(args.packages, package_name(title, t["id"]))
+        out = os.path.join(args.packages, package_name(title, t.get("pkg", t["id"])))
         if os.path.exists(out) and not args.replace:
             print("%s is already in the packages folder" % os.path.basename(out), file=sys.stderr)
             return 3
@@ -909,7 +1127,7 @@ def cmd_create(args):
                 rel = "roms/custom/%s/.logo.png" % group
                 files.append((rel, os.path.getsize(logo), "roms"))
             # O grupo tambem aqui, como vai ficar em quem instalar.
-            install_group(home, group, entries)
+            install_group(home, group, entries, t)
             refresh_frontends()
         total = sum(s for _, s, _ in files)
         makedirs(args.packages)
@@ -921,13 +1139,13 @@ def cmd_create(args):
         done = 0
         with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             zf.writestr(MANIFEST, manifest_text(t, title, chosen, kinds, group, entries,
-                                                meta_lines(home, scan_games(home, t), chosen)))
+                                                meta_lines(home, t, scan_games(home, t), chosen)))
             for rel, size, _ in files:
                 ext = os.path.splitext(rel)[1].lower().lstrip(".")
                 kind = zipfile.ZIP_STORED if ext in STORED_EXTS else zipfile.ZIP_DEFLATED
-                info = zipfile.ZipInfo.from_file(os.path.join(home, rel), rel)
+                info = zipfile.ZipInfo.from_file(real(home, t, rel), rel)
                 info.compress_type = kind
-                with open(os.path.join(home, rel), "rb") as src, zf.open(info, "w", force_zip64=size > (1 << 31)) as dst:
+                with open(real(home, t, rel), "rb") as src, zf.open(info, "w", force_zip64=size > (1 << 31)) as dst:
                     while True:
                         chunk = src.read(CHUNK)
                         if not chunk:

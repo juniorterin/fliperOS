@@ -206,6 +206,52 @@ def same_net(wire, ip):
     return a & m == b & m
 
 
+# ── O que abre os jogos de um sistema ──────────────────────────────
+# Um console do Batocera filesystem (fliperos-setup/lib/batocera.sh, um disco ou
+# uma pasta da rede) e o sistema batocera/<nome> nos frontends, aberto pela
+# escolha dele no batocera.list (SISTEMA<tab>PASTA<tab>ESCOLHA: retroarch/snes9x,
+# naomi, mame). O net play, o link e a party decidem por essa escolha, e e ela
+# que vai na presenca: o snes de um RetroNAS e o ~/roms/retroarch/snes9x de
+# outro gabinete sao o mesmo jogo.
+BATOCERA_LIST = os.environ.get("FLIPEROS_BATOCERA_LIST", "")
+_batocera = {"stamp": None, "map": {}}
+
+
+def batocera_list_path():
+    if BATOCERA_LIST:
+        return BATOCERA_LIST
+    for home in (os.path.expanduser("~"), "/home/" + os.environ.get("FLIPEROS_USER", "fliperos")):
+        path = os.path.join(home, ".config", "fliperos", "batocera.list")
+        if os.path.exists(path):
+            return path
+    return ""
+
+
+def emulator_key(system_key):
+    """A chave do que abre os jogos do sistema: a escolha de um console do
+    Batocera filesystem; as outras chaves voltam como vieram."""
+    key = system_key or ""
+    if not key.startswith("batocera/"):
+        return key
+    path = batocera_list_path()
+    try:
+        stamp = (path, os.stat(path).st_mtime_ns)
+    except OSError:
+        return key
+    if _batocera["stamp"] != stamp:
+        rows = {}
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    cols = line.rstrip("\n").split("\t")
+                    if len(cols) == 3 and cols[0] and cols[2] and not cols[2].startswith("batocera/"):
+                        rows.setdefault(cols[0], cols[2])
+        except OSError:
+            pass
+        _batocera.update(stamp=stamp, map=rows)
+    return _batocera["map"].get(key[len("batocera/"):], key)
+
+
 # ── Os perfis ──────────────────────────────────────────────────────
 
 class Profiles:
@@ -222,7 +268,7 @@ class Profiles:
 
     def find(self, system, name):
         """O perfil do jogo (a chave do sistema, ex. model3, e o set), ou None."""
-        key = (system or "").split("/")[0]
+        key = emulator_key(system).split("/")[0]
         for p in self.games:
             if key in p["systems"] and name in p["sets"]:
                 return p
@@ -1014,11 +1060,13 @@ def netplay_profile(system_key, name, players, local, sets=None):
     cada um com os seus controles. Quem abre e o primeiro. No RetroArch (late) quem abre
     nao espera ninguem: o jogo abre na hora e os outros entram com ele
     andando, como o net play do RetroArch deixa; o GGPO e o Dolphin precisam
-    de todos no comeco."""
+    de todos no comeco. Um console do Batocera filesystem vale pelo que o
+    abre (emulator_key)."""
     try:
         n = int(players)
     except (TypeError, ValueError):
         return None
+    system_key = emulator_key(system_key)
     if (system_key or "").split("/")[0] in GGPO_SYSTEMS:
         if n < 2:
             return None
@@ -1486,7 +1534,7 @@ class Link:
         inteiro (o "sonic" do Mega Drive nao e o do FBNeo); as outras valem
         pela primeira parte da chave."""
         def key(k):
-            k = k or ""
+            k = emulator_key(k)
             return k if k.startswith("retroarch/") else k.split("/")[0]
         return [p for p in self.parties() if p["game"] == name and key(p["system"]) == key(system_key)]
 
@@ -1508,7 +1556,7 @@ class Link:
         host = self.party
         # open: a party ja comecou e ainda aceita quem chega (so o anfitriao diz).
         late = bool(host and host.late_open() and not host.full())
-        self.presence.say(game=self.game, system=self.system, link=self.profile["id"],
+        self.presence.say(game=self.game, system=emulator_key(self.system), link=self.profile["id"],
                           party=host.ident if host else self.guest.party["party"], slot=self.number or 1,
                           take=self.take, max=self.profile["players"] if self.profile.get("netplay") else self.profile["max"],
                           state=state, open=1 if late else None)

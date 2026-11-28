@@ -840,9 +840,15 @@ scraper_attract_default_filters() {
 # MAME, do Flycast (Naomi, Naomi 2, Atomiswave), do Model 2 e do Model 3, e
 # as dos cores de arcade do RetroArch (MAME 20xx, HBMAME, FBNeo, FB Alpha).
 scraper_arcade() {
-  case $1 in
+  local key=$1
+  # Um console do Batocera filesystem (lib/batocera.sh) e o que o abre: o mame
+  # no GroovyMAME e o neogeo no FBNeo sao sets do MAME como os de ~/roms.
+  if [[ $key == batocera/* ]]; then
+    declare -F batocera_resolve > /dev/null && key=$(batocera_resolve "$key") && [[ $key != batocera/* ]] || return 1
+  fi
+  case $key in
     mame | hbmame | naomi | naomi2 | atomiswave | model2 | model3 | odin) return 0 ;;
-    retroarch/*) [[ $(scraper_core_info "${1#retroarch/}" systemid) =~ ^(mame|hbmame|fb_alpha)$ ]] ;;
+    retroarch/*) [[ $(scraper_core_info "${key#retroarch/}" systemid) =~ ^(mame|hbmame|fb_alpha)$ ]] ;;
     *) return 1 ;;
   esac
 }

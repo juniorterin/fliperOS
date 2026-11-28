@@ -11993,7 +11993,8 @@ class RomCleanerTests(Base):
         version.write_text("0.289.6\n")
         self.assertEqual(self.env.run("hbgroovymame_installed", env).returncode, 0)
         self.assertEqual(self.env.out("hbgroovymame_version", env).strip(), "0.289.6")
-        self.assertIn('[[ $key == hbmame ]] && hbgroovymame_installed && xml=hb',
+        # $emu: a chave, ou o que abre um console do Batocera filesystem (lib/batocera.sh).
+        self.assertIn('[[ $emu == hbmame ]] && hbgroovymame_installed && xml=hb',
                       (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
         self.assertIn('--hb-xml-command "$HBGROOVYMAME -listxml"',
                       (SETUP / "lib/frontends.sh").read_text(encoding="utf-8"))
@@ -15473,6 +15474,19 @@ class BatoceraTests(Base):
         # Os pedidos de fora de /media/fliperos sao recusados como pedido errado.
         for bad in ('"/etc"', '"%s/../x"' % self.media, '""'):
             self.assertEqual(self.cli("batocera_cli use %s" % bad).returncode, 2, bad)
+
+    def test_what_decides_by_the_system_key_asks_what_opens_the_console(self):
+        # 2026-11-28 (o snes de um RetroNAS): quem decide pela chave do sistema pergunta o que abre o console do
+        # Batocera filesystem. O atomiswave e arcade (sets do MAME, como ~/roms/atomiswave); o snes nao.
+        self.ok('batocera_cli auto "%s"' % self.disk)
+        self.assertEqual(self.env.run("scraper_arcade batocera/atomiswave", self.vars).returncode, 0)
+        self.assertEqual(self.env.run("scraper_arcade batocera/snes", self.vars).returncode, 1)
+        self.assertEqual(self.env.run("scraper_arcade batocera/zzz-unknown", self.vars).returncode, 1)
+        # O Download BIOS ve os consoles do disco com jogos, pela chave do que os abre.
+        folders = self.env.out("ROMS_ROOT=%s; bios_folders" % (self.home / "roms"), self.vars).splitlines()
+        self.assertIn("retroarch/snes9x|%s" % (self.root / "roms" / "snes"), folders)
+        self.assertIn("atomiswave|%s" % (self.root / "roms" / "atomiswave"), folders)
+        self.assertFalse([f for f in folders if f.startswith("batocera/")])
 
     def test_cores_lists_the_default_first_and_says_what_downloads(self):
         rows = [l.split("|") for l in self.env.out("batocera_cores snes", self.vars).splitlines()]

@@ -16,8 +16,10 @@ FLYCAST_SYSTEMS = ("naomi", "naomi2", "atomiswave")
 
 
 def page_of(system, netplay_core=None, dojo=False):
-    """(chave, nome) da pagina de um sistema do fedata, ou None se ele nao joga online."""
-    key = system.get("key", "")
+    """(chave, nome) da pagina de um sistema do fedata, ou None se ele nao joga online.
+    Vale o que abre os jogos (emu): o snes de um Batocera filesystem com o
+    Snes9x esta na pagina do Snes9x."""
+    key = system.get("emu") or system.get("key", "")
     if key == "mame":
         return "mame", "GROOVYMAME"
     if key == "hbmame":

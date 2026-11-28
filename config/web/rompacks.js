@@ -344,7 +344,7 @@ function rpRenderCreate(box) {
         el("div", { class: "rp-filters" },
           el("div", { class: "rp-frow" }, c.search, clear),
           el("div", { class: "rp-fsec" }, el("div", { class: "rp-flabel" }, t("rp_f_frontend")), c.chipsBox),
-          el("div", { class: "rp-fsec" }, el("div", { class: "rp-flabel" }, t("rp_f_mame")), c.mameBox),
+          c.mameSec = el("div", { class: "rp-fsec" }, el("div", { class: "rp-flabel" }, t("rp_f_mame")), c.mameBox),
           el("div", { class: "rp-frow rp-factions" }, c.count, el("span", { class: "rp-fbtns" }, none, all))),
         c.games, c.more),
       el("aside", { class: "rp-picked" }, el("div", { class: "rp-picked-top" }, c.pickedHead, unpick), c.pickedList)),
@@ -406,6 +406,8 @@ async function rpLoadGames() {
   const data = res ? await res.json().catch(() => ({})) : {};
   if (!res || !res.ok) { c.games.replaceChildren(el("p", { class: "error" }, data.error || (res ? res.statusText : "network error"))); return; }
   const games = data.games || [];
+  // Os filtros do MAME so nas pastas de sets do MAME (os emuladores e cores de arcade).
+  rp.arcade = Boolean(data.arcade);
   rp.mediaTypes = data.media_types || [];
   rp.frontendFilters = [];
   const keys = [...new Set(games.map((g) => g.key))];
@@ -457,6 +459,9 @@ function rpDrawFilters() {
     });
     return chip;
   }));
+  // Um console (o snes, o Mega Drive) nao tem filtro do MAME: a secao some.
+  c.mameSec.hidden = !rp.arcade;
+  if (!rp.arcade) { c.mame = {}; c.clones = ""; c.mameBox.replaceChildren(); return; }
   const games = rp.games || [];
   const selects = RP_MAME_FIELDS.map(([key, get]) => {
     const counts = new Map();
@@ -497,7 +502,7 @@ function rpFilteredGames() {
       .map((m) => m.__g));
     rows = rows.filter((g) => pass.has(g));
   }
-  for (const [key, get] of RP_MAME_FIELDS) {
+  for (const [key, get] of rp.arcade ? RP_MAME_FIELDS : []) {
     if (c.mame[key]) rows = rows.filter((g) => get(g.meta || {}) === c.mame[key]);
   }
   if (c.clones === "no") rows = rows.filter((g) => !(g.meta && g.meta.CloneOf));

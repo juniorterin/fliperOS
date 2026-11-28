@@ -412,7 +412,10 @@ bios_flycast_wants() {
   done >> "$out"
 }
 
-# bios_folders imprime "chave|pasta" de cada pasta de ~/roms com jogos.
+# bios_folders imprime "chave|pasta" de cada pasta de ~/roms com jogos e de
+# cada console do Batocera filesystem em uso (lib/batocera.sh), lido no disco
+# dele (ou na pasta da rede, que o batocera_detect_systems pula com o servidor
+# desligado): a chave e a do que abre o console (retroarch/<core>, ps2, naomi).
 bios_folders() {
   local dir key
   for dir in "$ROMS_ROOT"/*/ "$ROMS_ROOT"/retroarch/*/; do
@@ -422,6 +425,12 @@ bios_folders() {
     [[ $key == retroarch || $key == fightcade || $key == custom ]] && continue
     scraper_has_files "$dir" && printf '%s|%s\n' "$key" "$dir"
   done
+  if declare -F batocera_detect_systems > /dev/null; then
+    while IFS='|' read -r key dir _; do
+      key=$(batocera_resolve "$key") || continue
+      [[ -n $key && $key != batocera/* && -d $dir ]] && printf '%s|%s\n' "$key" "$dir"
+    done < <(batocera_detect_systems)
+  fi
   return 0
 }
 
@@ -450,6 +459,9 @@ bios_plan() {
     fi
     dest=$(bios_arcade_dest "$key" "$dir")
     [[ -n $dest ]] || continue
+    # As de um core que so as acha junto dos jogos iriam para a pasta do console
+    # do Batocera filesystem (fora de ~/roms): nela o FliperOS nao grava nada.
+    [[ $dest == "$dir" && $dir != "$ROMS_ROOT"/* ]] && continue
     arcade[$dir]="$key|$dest"
     # O XML do MAME de cada pasta: o do core mame2010 na dele, o do
     # GroovyMAME nas outras.

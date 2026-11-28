@@ -94,9 +94,12 @@ def parse_systems(out):
         parts = line.split("|")
         if len(parts) >= 7:
             key, folder, platform, name, exe, args, exts = parts[:7]
+            # emu: a chave do que abre os jogos (a escolha de um console do
+            # Batocera filesystem; um cache de antes nao a tem: a propria).
             rows.append({"key": key, "folder": folder, "platform": platform, "name": name, "exe": exe,
                          "args": args, "extensions": [e.lower() for e in exts.split(";") if e],
-                         "arcade": len(parts) > 7 and parts[7] == "1"})
+                         "arcade": len(parts) > 7 and parts[7] == "1",
+                         "emu": parts[8] if len(parts) > 8 and parts[8] else key})
     return rows
 
 
@@ -748,7 +751,8 @@ def art_packs(system, kind):
             continue
         folders = parts[2].split(",")
         if (key in folders or ("@arcade" in folders and system.get("arcade"))
-                or ("@arcade-cores" in folders and system.get("arcade") and key.startswith("retroarch/"))):
+                or ("@arcade-cores" in folders and system.get("arcade")
+                    and system.get("emu", key).startswith("retroarch/"))):
             m = re.search(r"/download/([^/]+)/", parts[3])
             if m:
                 out.append(m.group(1))
