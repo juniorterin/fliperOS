@@ -24126,7 +24126,10 @@ class TelegramCustomGameTests(unittest.TestCase):
                  (8, make(8, None, 0)),                                             # o aviso que o bot ja deu ao JoJo
                  (9, make(9, 'Street Fighter.fliperos-customgame.zip.001', 10)),    # os nomes certos ficam de fora
                  (10, make(10, 'notes_fliperos.zip', 10)),
-                 (11, None)]
+                 (11, None),
+                 # Voltou com o nome certo, e com a pontuacao que o programa tinha trocado por "_": ja veio certo.
+                 (12, make(12, 'Half_Life_2_fliperos_customgame.zip', 10)),
+                 (13, make(13, "Half-Life 2.fliperos-customgame.zip", 10, sender=bob))]
         for _, message in found:
             if message is not None:
                 message.sender_id = message.sender.username
@@ -24153,7 +24156,8 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertEqual(results, [
             'warned: COTTOn_Rock_fliperos_customgame_zip.001 (message 1), COTTOn_Rock_fliperos_customgame_zip.002 (message 2)',
             'sent again with the right name: Doom_fliperos_customgame.zip (message 4)',
-            'already warned: JoJo_s_fliperos_customgame_zip.001 (message 6), JoJo_s_fliperos_customgame_zip.002 (message 7)'])
+            'already warned: JoJo_s_fliperos_customgame_zip.001 (message 6), JoJo_s_fliperos_customgame_zip.002 (message 7)',
+            'sent again with the right name: Half_Life_2_fliperos_customgame.zip (message 12)'])
         # Um aviso so, o do Worker, respondendo a primeira parte no topico dela.
         self.assertEqual(tg.calls, [('message', '@fliperos15khz', self.bot.bad_name_text([
             ('COTTOn_Rock_fliperos_customgame_zip.001', 'COTTOn_Rock.fliperos-customgame.zip.001'),

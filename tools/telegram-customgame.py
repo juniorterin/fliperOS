@@ -1172,9 +1172,16 @@ def read_whole_group(reader, ref, out=print):
     return found
 
 
+def same_package_key(stem, number):
+    """O que sobra de um nome de pacote quando se tiram os separadores que um programa troca por "_" (e as maiusculas):
+    "JoJo's Battle R" e "JoJo_s_Battle_R" dao o mesmo."""
+    return re.sub(r'[\W_]+', '', stem).lower(), number
+
+
 def bad_name_sets(found):
     """Os pacotes com o nome errado nas mensagens lidas, found = [(id, mensagem ou None)]: [(partes, ja avisado, ja veio
-    certo)], cada parte um dict de part_of_message com stem e n (o numero da parte; None num zip inteiro)."""
+    certo)], cada parte um dict de part_of_message com stem e n (o numero da parte; None num zip inteiro). "Ja veio certo":
+    cada arquivo voltou com o nome certo, ou com o mesmo nome a menos de pontuacao e maiusculas."""
     sets, warned, good = {}, set(), set()
     for _, message in found:
         if message is None:
@@ -1190,8 +1197,12 @@ def bad_name_sets(found):
         part = part_of_message(message)
         if part is None:
             continue
-        if GOOD_NAME_RE.fullmatch(part['file_name']):
-            good.add(part['file_name'].lower())
+        good_part = PART_RE.fullmatch(part['file_name'])
+        if good_part:
+            good.add(same_package_key(good_part.group(1)[:-len(SUFFIX)], int(good_part.group(2))))
+            continue
+        if part['file_name'].lower().endswith(SUFFIX):
+            good.add(same_package_key(part['file_name'][:-len(SUFFIX)], None))
             continue
         loose = loose_package_name(part['file_name'])
         if loose is None:
@@ -1205,7 +1216,7 @@ def bad_name_sets(found):
     for group in sets.values():
         parts = [group[n] for n in sorted(group, key=lambda n: -1 if n is None else n)]
         result.append((parts, any(p['message_id'] in warned for p in parts),
-                       all(right_package_name(p['stem'], p['n']).lower() in good for p in parts)))
+                       all(same_package_key(p['stem'], p['n']) in good for p in parts)))
     return sorted(result, key=lambda item: min(p['message_id'] for p in item[0]))
 
 
