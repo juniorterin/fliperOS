@@ -16,9 +16,11 @@ The server opens no UDP port. The cabinets find their public address with Cloudf
 ## Tests
 
 ```
-docker run --rm -v "$PWD/server/matchmaker:/m" -w /m python:3.12-slim \
+docker run --rm -v "$PWD:/w" -w /w/server/matchmaker python:3.12-slim \
     sh -c "pip install -q -r requirements.txt && python -m unittest discover -s tests -v"
 ```
+
+`tests/test_server.py` tests the server; `tests/test_cabinet.py` tests the cabinet's side (`fliperos-setup/gui/fews.py`, a WebSocket client on the standard library, and `feonline.py`, what the Matchmaker uses: the online check, the cabinet's secret, cable or Wi-Fi, the session that reconnects by itself, the profile's signature) against the real server on a free port, hence the whole repository mounted.
 
 ## Deploying on Coolify
 
