@@ -218,6 +218,9 @@ screen_testing_results() {
       edid=$(ui_no NO)
       detection=$(ui_no "NOT DETECTED")
       notes+=("The arcade monitor was detected, but it didn't return any info.")
+      # Numa saida analogica ela vai forcada mesmo assim: outro monitor, sem
+      # a carga que o DAC detecta, ficaria sem imagem no boot.
+      drm_is_analog "$name" && notes+=("The output will be forced at boot, so a monitor that isn't detected also gets a picture.")
       ;;
     *e)
       edid=$(ui_no NO)
@@ -225,7 +228,7 @@ screen_testing_results() {
       notes+=("The arcade monitor couldn't be natively detected." "The output will be forced at boot.")
       ;;
   esac
-  if [[ $base == *e ]]; then forced=$(ui_no YES); else forced=NO; fi
+  if video_forces_output "$name" "$flags"; then forced=$(ui_no YES); else forced=NO; fi
   [[ $flags == *a ]] && notes+=("Your video card is an APU: interlace_force_even=1 will be set.")
 
   local fields

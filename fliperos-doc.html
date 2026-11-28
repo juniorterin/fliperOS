@@ -1340,7 +1340,7 @@ docker run --rm -v &quot;${PWD}:/w&quot; -w /w fliperos-tests python3 tests/test
 <ul>
 <li>Switchres EDID (dongle) → the monitor comes from the EDID itself;</li>
 <li>otherwise, the monitor type is <strong>mandatory</strong> (the list opens on the suggestion of the boot entry);</li>
-<li>the kernel line comes from the monitor: <code>video=VGA-1:640x480iSe</code> (the <code>e</code> when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid), or a CRT on HDMI or DVI-D → super resolution <code>1280x480iS</code> (behind a converter that reports an EDID of its own, the EDID is replaced instead: see below) and <code>dotclock_min 25.0</code> in Switchres; APU → <code>interlace_force_even 1</code>; EDID boot → <code>drm.edid_firmware=CONNECTOR:edid/&lt;monitor&gt;.bin</code>; LCD → nothing (its EDID applies).</li>
+<li>the kernel line comes from the monitor: <code>video=VGA-1:640x480iSe</code> (the <code>e</code> forces the output on: always on VGA and DVI-I, where the card sees a monitor only by the load on the colour lines and an arcade monitor often has none, so a test done on a PVM also boots on the arcade; on HDMI, DVI-D and DisplayPort only when the test had to force it); a card without low dotclock (Intel, NVIDIA that didn't pass the grid), or a CRT on HDMI or DVI-D → super resolution <code>1280x480iS</code> (behind a converter that reports an EDID of its own, the EDID is replaced instead: see below) and <code>dotclock_min 25.0</code> in Switchres; APU → <code>interlace_force_even 1</code>; EDID boot → <code>drm.edid_firmware=CONNECTOR:edid/&lt;monitor&gt;.bin</code>; LCD → nothing (its EDID applies).</li>
 </ul>
 <h3 id="Install-with-a-displayport-or-hdmi-to-vga-converter">With a DisplayPort or HDMI to VGA converter</h3>
 <p><img src="https://raw.githubusercontent.com/juniorterin/fliperOS/main/website/public/art/displayport-vga-adapter.webp" width="360" alt="A DisplayPort to VGA converter"></p>
@@ -1444,6 +1444,10 @@ sudo reboot
 <tr>
 <td>Black after moving the cable or booting without it</td>
 <td>Force the output on, with an <code>e</code> at the end of the mode: <code>video=VGA-1:640x480iSe</code></td>
+</tr>
+<tr>
+<td>Black with the arcade monitor (often behind a J-PAC), but a picture when the PC boots on a PVM or TV first</td>
+<td>The card sees a monitor on VGA only by the 75 Ω load on the colour lines, and many arcade monitors don't have it, so the output stays <em>disconnected</em>. FliperOS forces VGA and DVI-I on at boot since update 114, even when the output test saw the monitor; on an older system add the <code>e</code> as in the row above</td>
 </tr>
 <tr>
 <td>Through a converter</td>

@@ -65,6 +65,7 @@ The next save in Video Setup rewrites the `video=` part.
 | At the installation | Another entry of the boot menu: *EDID progressive*, then *EDID interlaced*, which force every output on. To choose on a 15 kHz-only tube, see [Install](Install.md#boot-menu) |
 | Interlaced modes may be the problem (black at `640x480iS`) | Change `video=VGA-1:640x480iS` to `video=VGA-1:640x240S`. In the Setup it is **Video Setup > Resolution** |
 | Black after moving the cable or booting without it | Force the output on, with an `e` at the end of the mode: `video=VGA-1:640x480iSe` |
+| Black with the arcade monitor (often behind a J-PAC), but a picture when the PC boots on a PVM or TV first | The card sees a monitor on VGA only by the 75 Ω load on the colour lines, and many arcade monitors don't have it, so the output stays *disconnected*. FliperOS forces VGA and DVI-I on at boot since update 114, even when the output test saw the monitor; on an older system add the `e` as in the row above |
 | Through a converter | Interlaced modes often fail: see [Converters](Converters.md) |
 | AMD with DVI-I that has no `radeon` driver (R9 285, 380, 380X) | The line needs `amdgpu.dc=0`: on kernel 6.18 amdgpu's new display code has no analog output. FliperOS adds it by itself; an ISO up to 0.19 doesn't at the installation, so add it by hand there. See [Video cards](Video-cards-AMD.md) |
 | Ryzen 2200GE with random black screens | Disable legacy boot (CSM) in the BIOS. Reported by GroovyArcade on this APU |

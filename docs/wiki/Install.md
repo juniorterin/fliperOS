@@ -61,7 +61,7 @@ Once validated, gatools' `configure_from_connector` applies:
 
 - Switchres EDID (dongle) → the monitor comes from the EDID itself;
 - otherwise, the monitor type is **mandatory** (the list opens on the suggestion of the boot entry);
-- the kernel line comes from the monitor: `video=VGA-1:640x480iSe` (the `e` when the output had to be forced); a card without low dotclock (Intel, NVIDIA that didn't pass the grid), or a CRT on HDMI or DVI-D → super resolution `1280x480iS` (behind a converter that reports an EDID of its own, the EDID is replaced instead: see below) and `dotclock_min 25.0` in Switchres; APU → `interlace_force_even 1`; EDID boot → `drm.edid_firmware=CONNECTOR:edid/<monitor>.bin`; LCD → nothing (its EDID applies).
+- the kernel line comes from the monitor: `video=VGA-1:640x480iSe` (the `e` forces the output on: always on VGA and DVI-I, where the card sees a monitor only by the load on the colour lines and an arcade monitor often has none, so a test done on a PVM also boots on the arcade; on HDMI, DVI-D and DisplayPort only when the test had to force it); a card without low dotclock (Intel, NVIDIA that didn't pass the grid), or a CRT on HDMI or DVI-D → super resolution `1280x480iS` (behind a converter that reports an EDID of its own, the EDID is replaced instead: see below) and `dotclock_min 25.0` in Switchres; APU → `interlace_force_even 1`; EDID boot → `drm.edid_firmware=CONNECTOR:edid/<monitor>.bin`; LCD → nothing (its EDID applies).
 
 ### With a DisplayPort or HDMI to VGA converter
 

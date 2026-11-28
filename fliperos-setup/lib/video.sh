@@ -182,13 +182,27 @@ video_suggested_monitor() {
   esac
 }
 
+# video_forces_output NOME FLAGS: a saida vai forcada ligada no boot (o "e"
+# do video=). Quando o teste teve de forca-la (e), e sempre numa saida
+# analogica sem EDID (r): o DAC so ve o monitor pela carga de 75 ohms nas
+# linhas de cor, e um monitor de arcade (entrada de alta impedancia, ou atras
+# de uma J-PAC) muitas vezes nao a tem. O teste feito com um PVM, que tem a
+# carga, dava "r", e o boot com o monitor do arcade ficava sem imagem (a
+# saida "disconnected"), como os monitores extras (mm_kernel_spec) ja sabem.
+video_forces_output() {
+  local base=${2%a}
+  [[ $base =~ ^s?e$ ]] && return 0
+  [[ $base =~ ^s?r$ ]] && drm_is_analog "$1"
+}
+
 # video_kernel_params NOME FLAGS MONITOR imprime os parametros de video do
 # kernel para o sistema, como o configure_from_connector do gatools:
 #   - LCD: nenhum (vale o EDID do proprio monitor);
 #   - EDID do Switchres (o): nenhum, o EDID manda;
 #   - EDID forcado no boot (d) ou boot por EDID: EDID do preset na saida;
 #   - sem EDID (r, e): o modo de boot do preset; super resolucao se a placa
-#     nao gera dotclock baixo; "e" no fim se foi preciso forcar a saida;
+#     nao gera dotclock baixo; "e" no fim se a saida vai forcada
+#     (video_forces_output);
 #   - EDID de fabrica com um monitor de CRT escolhido (l): um conversor
 #     DisplayPort/HDMI para VGA devolve o EDID dele, de modos de 31 kHz, e a
 #     saida seria tomada por LCD. Um modo "video=" nao basta: o SDL (o
@@ -200,7 +214,7 @@ video_kernel_params() {
   local conn=$1 flags=$2 monitor=$3 base enabled="" res="" fw
   base=${flags%a}
   [[ $monitor == lcd ]] && return 0
-  [[ $base =~ ^s?e$ ]] && enabled=e
+  video_forces_output "$conn" "$flags" && enabled=e
   if [[ $base =~ ^[er]$ ]]; then
     res=$(monitor_kernel_resolution "$monitor" 60 i super) || return 1
   elif [[ $base =~ ^s[er]$ ]]; then
@@ -561,6 +575,39 @@ video_output_flags() {
   printf '%s\n' "$flags"
 }
 
+# video_params_forced PARAMS NOME: o video= do conector nos parametros termina
+# em "e" (antes das opcoes como panel_orientation).
+video_params_forced() {
+  local spec
+  spec=$(cmdline_video_spec "$1" "$2") || return 1
+  [[ ${spec%%,*} == *e ]]
+}
+
+# video_analog_force_refresh: o resultado "r" numa saida analogica gravado
+# antes de ela ir sempre forcada (video_forces_output): o "e" entra no modo de
+# boot que ja esta la (a resolucao que a pessoa escolheu fica). Para o update;
+# o boot_apply segue. Status 0 quando regravou.
+video_analog_force_refresh() {
+  local conn flags monitor params spec opts=""
+  conn=$(conf_get connector 2> /dev/null) || return 1
+  flags=$(conf_get detection 2> /dev/null) || return 1
+  monitor=$(conf_get monitor 2> /dev/null) || return 1
+  [[ $monitor != lcd ]] || return 1
+  video_forces_output "$conn" "$flags" || return 1
+  params=$(conf_get kernel_video 2> /dev/null) || return 1
+  spec=$(cmdline_video_spec "$params" "$conn") || return 1
+  [[ $spec == *,* ]] && opts=,${spec#*,}
+  spec=${spec%%,*}
+  if [[ $spec == *e ]]; then
+    [[ $(conf_get forced 2> /dev/null) == 1 ]] && return 1
+  else
+    params=$(cmdline_set_video "$params" "$conn" "${spec}e$opts")
+    conf_set kernel_video "$params"
+  fi
+  conf_set forced 1
+  log_info "saida analogica: $conn forcada no boot ($params)"
+}
+
 # video_conf_card imprime a placa da saida gravada como ela esta agora: a
 # midia de instalacao pode ter numerado as placas de outro jeito (card1 la,
 # card0 no disco). Sem a saida no sysfs, a do fliperos.conf.
@@ -599,7 +646,9 @@ video_save_result() {
   conf_set card "$card"
   conf_set connector "$name"
   conf_set detection "$flags"
-  conf_set forced "$([[ $base =~ ^s?e$ ]] && echo 1 || echo 0)"
+  # A saida forcada pela linha do kernel (o "e" do video=), que trocar a
+  # resolucao mantem e o Multiple Monitors religa depois de piscar.
+  conf_set forced "$(video_params_forced "$params" "$name" && echo 1 || echo 0)"
   conf_set kernel_video "$params"
   conf_set boot_resolution "$(video_boot_resolution "$params" || true)"
   # Saida numa segunda placa: o console do sistema instalado tem de ir para

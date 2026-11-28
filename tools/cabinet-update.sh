@@ -366,6 +366,10 @@ echo "== Kernel line (boot straight to Plymouth)"
   # E o conversor que pode mostrar os modos nativos: o grid perguntado uma
   # vez no proximo boot (screen_converter_lowdot_ask).
   video_lowdot_ask_mark && echo "converter output: the low resolution test is asked at the next boot"
+  # Uma saida analogica sem EDID tomada como detectada no teste (um PVM, que
+  # tem a carga de 75 ohms) ia sem o "e": o boot com o monitor do arcade
+  # ficava sem imagem. Ela passa a ir forcada (video_analog_force_refresh).
+  video_analog_force_refresh && echo "analog output: forced at boot ($(conf_get kernel_video))"
   boot_apply || { echo "boot_apply failed (see /var/log/fliperos-setup.log)"; exit 1; }
   # O fliperos-rootfs.sh reinstalou o retroarch.cfg da imagem: o que o setup
   # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).

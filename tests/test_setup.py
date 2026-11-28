@@ -379,13 +379,49 @@ class OutputTestTests(Base):
 
     def test_kernel_params_like_configure_from_connector(self):
         self.assertEqual(self.params("se", "generic_15"), "video=VGA-1:640x480iSe")
-        self.assertEqual(self.params("sr", "generic_15"), "video=VGA-1:640x480iS")
-        self.assertEqual(self.params("sra", "arcade_15"), "video=VGA-1:640x480iS")
-        self.assertEqual(self.params("r", "generic_15"), "video=VGA-1:1280x480iS")
         self.assertEqual(self.params("e", "arcade_25"), "video=VGA-1:800x600iSe")
         self.assertEqual(self.params("se", "ntsc"), "video=VGA-1:720x480iSe")
         self.assertEqual(self.params("se", "pal"), "video=VGA-1:768x576iSe")
-        self.assertEqual(self.params("sr", "arcade_31"), "video=VGA-1:640x480S")
+
+    def test_analog_output_without_edid_is_always_forced(self):
+        # Um PVM tem a carga de 75 ohms que o DAC detecta ("r"); um monitor de
+        # arcade atras de uma J-PAC nao: sem o "e", o boot com ele ficava sem
+        # imagem (VGA-1 disconnected).
+        self.assertEqual(self.params("sr", "generic_15"), "video=VGA-1:640x480iSe")
+        self.assertEqual(self.params("sra", "arcade_15"), "video=VGA-1:640x480iSe")
+        self.assertEqual(self.params("r", "generic_15"), "video=VGA-1:1280x480iSe")
+        self.assertEqual(self.params("sr", "arcade_31"), "video=VGA-1:640x480Se")
+        self.assertEqual(self.params("sr", "generic_15", "DVI-I-1"), "video=DVI-I-1:640x480iSe")
+        # Numa saida digital o monitor e visto pelo hotplug: fica sem forcar.
+        self.assertEqual(self.params("r", "generic_15", "DP-1"), "video=DP-1:1280x480iS")
+        self.assertEqual(self.params("r", "generic_15", "HDMI-A-1"), "video=HDMI-A-1:1280x480iS")
+
+    def test_update_forces_analog_outputs_saved_without_the_e(self):
+        conf = self.env.etc / "fliperos.conf"
+        conf.write_text("connector=VGA-1\ncard=card0\nmonitor=generic_15\ndetection=sra\nforced=0\n"
+                        "kernel_video=video=VGA-1:320x240S\nboot_resolution=320x240S\n")
+        self.assertEqual(self.env.run("video_analog_force_refresh").returncode, 0)
+        text = conf.read_text()
+        # A resolucao que a pessoa escolheu fica; so o "e" entra.
+        self.assertIn("kernel_video=video=VGA-1:320x240Se\n", text)
+        self.assertIn("boot_resolution=320x240S\n", text)
+        self.assertIn("forced=1\n", text)
+        self.assertNotEqual(self.env.run("video_analog_force_refresh").returncode, 0)
+        # As opcoes do video= (panel_orientation) ficam depois do "e".
+        conf.write_text("connector=VGA-1\nmonitor=generic_15\ndetection=sr\n"
+                        "kernel_video=video=VGA-1:640x480iS,panel_orientation=right_side_up\n")
+        self.assertEqual(self.env.run("video_analog_force_refresh").returncode, 0)
+        self.assertIn("kernel_video=video=VGA-1:640x480iSe,panel_orientation=right_side_up\n", conf.read_text())
+        # Saida digital, LCD, EDID do Switchres e o que ja vinha forcado: nada muda.
+        for text in ("connector=DP-1\nmonitor=generic_15\ndetection=sr\nkernel_video=video=DP-1:640x480iS\n",
+                     "connector=VGA-1\nmonitor=lcd\ndetection=sr\n",
+                     "connector=VGA-1\nmonitor=arcade_15\ndetection=so\n",
+                     "connector=VGA-1\nmonitor=generic_15\ndetection=se\nforced=1\nkernel_video=video=VGA-1:640x480iSe\n"):
+            conf.write_text(text)
+            self.assertNotEqual(self.env.run("video_analog_force_refresh").returncode, 0, text)
+            self.assertEqual(conf.read_text(), text)
+        self.assertLess((ROOT / "tools/cabinet-update.sh").read_text().index("video_analog_force_refresh &&"),
+                        (ROOT / "tools/cabinet-update.sh").read_text().index("  boot_apply ||"))
 
     def test_factory_edid_with_a_crt_gets_a_boot_mode(self):
         # Um conversor DisplayPort/HDMI para VGA devolve o EDID dele (modos de
