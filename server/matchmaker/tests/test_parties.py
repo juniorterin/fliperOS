@@ -39,8 +39,12 @@ class PartyRuleTests(unittest.TestCase):
         _, notes = self.parties.join(self.b, party.id)
         joined = next(m for who, m in notes if who is self.b)
         self.assertEqual((joined["op"], joined["addr"], joined["host"]["addr"]), ("joined", "10.207.0.2", "10.207.0.1"))
-        guest = next(m for who, m in notes if who is self.a)
-        self.assertEqual((guest["op"], guest["peer"]["id"], guest["peer"]["addr"]), ("guest", 2, "10.207.0.2"))
+        told = next(m for who, m in notes if who is self.a)
+        self.assertEqual((told["op"], told["peer"]["id"], told["peer"]["addr"]), ("member", 2, "10.207.0.2"))
+        _, notes = self.parties.join(self.c, party.id)
+        joined = next(m for who, m in notes if who is self.c)
+        self.assertEqual(sorted(p["addr"] for p in joined["members"]), ["10.207.0.1", "10.207.0.2"])
+        self.assertEqual(sorted(who.id for who, m in notes if m["op"] == "member"), [1, 2])
 
     def test_every_party_gets_its_own_net(self):
         p1, _ = self.parties.open_party(self.a, "mame:sf2ce", "groovymame", 2)
@@ -80,21 +84,23 @@ class PartyRuleTests(unittest.TestCase):
         self.assertIsNone(self.b.info["group"])
         self.assertNotIn(party.id, self.parties.by_id)
 
-    def test_a_guest_leaving_tells_the_host_and_frees_its_address(self):
+    def test_a_guest_leaving_tells_the_others_and_frees_its_address(self):
         party, _ = self.parties.open_party(self.a, "mame:sf2ce", "groovymame", 3)
         self.parties.join(self.b, party.id)
+        self.parties.join(self.c, party.id)
         notes = self.parties.leave(self.b)
-        self.assertEqual(notes, [(self.a, {"t": "party", "op": "left", "party": party.id, "id": 2})])
-        _, notes = self.parties.join(self.c, party.id)
-        self.assertEqual(next(m for who, m in notes if who is self.c)["addr"], "10.207.0.2")
+        self.assertEqual(sorted(who.id for who, m in notes if m == {"t": "party", "op": "left", "party": party.id, "id": 2}),
+                         [1, 3])
+        _, notes = self.parties.join(player(4), party.id)
+        self.assertEqual(next(m for who, m in notes if m["op"] == "joined")["addr"], "10.207.0.2")
 
-    def test_signals_go_between_host_and_guest_only(self):
+    def test_signals_go_between_any_two_members(self):
         party, _ = self.parties.open_party(self.a, "mame:sf2ce", "groovymame", 3)
         self.parties.join(self.b, party.id)
         self.parties.join(self.c, party.id)
         self.assertIs(self.parties.may_signal(self.a, 2), self.b)
         self.assertIs(self.parties.may_signal(self.b, 1), self.a)
-        self.assertIsNone(self.parties.may_signal(self.b, 3))          # guest to guest: no
+        self.assertIs(self.parties.may_signal(self.b, 3), self.c)       # a mesh: guest to guest too
         self.assertIsNone(self.parties.may_signal(self.a, 1))
         self.assertIsNone(self.parties.may_signal(player(4), 1))
 
@@ -227,7 +233,7 @@ class PartyServerTests(unittest.IsolatedAsyncioTestCase):
         joined = await self.next_of(guest, "party", "joined")
         self.assertEqual((joined["host"]["id"], joined["host"]["nick"], joined["addr"]),
                          (host_id, "MANGO", "10.207.0.2"))
-        told = await self.next_of(host, "party", "guest")
+        told = await self.next_of(host, "party", "member")
         self.assertEqual(told["peer"]["id"], guest_id)
         await self.send(guest, t="signal", to=host_id, data={"key": "abc", "cands": [["stun", "203.0.113.5", 40000]]})
         sig = await self.next_of(host, "signal")

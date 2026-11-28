@@ -20,7 +20,7 @@ Client to server:
     {"t": "party", "op": "join", "party": "p2a"}
     {"t": "party", "op": "leave"}
     {"t": "party", "op": "lock", "open": false}  (the host: no more cabinets)
-    {"t": "signal", "to": 7, "data": {...}}        (to the host, or from the host to a guest)
+    {"t": "signal", "to": 7, "data": {...}}        (to another cabinet of the party)
     {"t": "turn"}                                  (relay credentials, in a party)
     {"t": "turn", "op": "used", "username": "...", "bytes": 123456}
 Server to client:
@@ -31,9 +31,9 @@ Server to client:
     {"t": "room", "game": "mame:sf2ce", "players": [...]}
     {"t": "pong", "n": 1}
     {"t": "party", "op": "opened", "party": "p2a", "addr": "10.207.0.1", "net": "10.207.0.0/24", ...}
-    {"t": "party", "op": "joined", "party": "p2a", "addr": "10.207.0.2", ..., "host": {player, "addr"}}
-    {"t": "party", "op": "guest", "party": "p2a", "peer": {player, "addr"}}   (to the host)
-    {"t": "party", "op": "left", "party": "p2a", "id": 9}                     (to the host)
+    {"t": "party", "op": "joined", "party": "p2a", "addr": "10.207.0.2", ..., "host": {player, "addr"}, "members": [...]}
+    {"t": "party", "op": "member", "party": "p2a", "peer": {player, "addr"}}  (to the others: a new one)
+    {"t": "party", "op": "left", "party": "p2a", "id": 9}                     (to the others)
     {"t": "party", "op": "closed", "party": "p2a"}                           (the host left)
     {"t": "party", "op": "error", "code": "gone" | "full" | "closed" | "busy" | "nets" | "bad"}
     {"t": "signal", "from": 7, "data": {...}}

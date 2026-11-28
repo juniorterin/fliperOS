@@ -2,7 +2,7 @@
 
 A party is one game, a host and up to `max` cabinets. The server gives each
 party a /24 inside 10.207.0.0/16 (the host is .1, the guests .2, .3...) and
-passes the tunnel's signals between the host and each guest: the WireGuard
+passes the tunnel's signals between any two of its cabinets (a mesh): the WireGuard
 public key and the addresses where a cabinet can be reached (its LAN address,
 IPv6, the public IPv4 from STUN, the TURN relay). Everything else (who takes
 which player, the countdown, the game's command) runs inside the tunnel, in
@@ -98,10 +98,13 @@ class Parties:
         party.members[player.id] = (player, n)
         self.of_player[player.id] = party
         self._mark(party)
+        others = [p for p, _ in party.members.values() if p is not player]
         notes.append((player, {"t": "party", "op": "joined", "party": party.id, "addr": party.addr(n),
                                "net": "%s.%d.0/24" % (NET, party.net), "game": party.game, "emu": party.emu,
-                               "max": party.max, "host": party.peer(party.host)}))
-        notes.append((party.host, {"t": "party", "op": "guest", "party": party.id, "peer": party.peer(player)}))
+                               "max": party.max, "host": party.peer(party.host),
+                               "members": [party.peer(p) for p in others]}))
+        for other in others:
+            notes.append((other, {"t": "party", "op": "member", "party": party.id, "peer": party.peer(player)}))
         return party, notes
 
     def leave(self, player):
@@ -121,7 +124,8 @@ class Parties:
             party.members.pop(player.id, None)
             self._clear(player)
             self._mark(party)
-            notes.append((party.host, {"t": "party", "op": "left", "party": party.id, "id": player.id}))
+            for other, _ in party.members.values():
+                notes.append((other, {"t": "party", "op": "left", "party": party.id, "id": player.id}))
         return notes
 
     def lock(self, player, is_open):
@@ -134,11 +138,10 @@ class Parties:
         return True
 
     def may_signal(self, a, b_id):
-        """The host and a guest of the same party talk; two guests don't (the tunnel is a star)."""
+        """Two members of the same party talk: the tunnel is a mesh (GroovyMAME's
+        lockstep and Flycast's GGPO send to every cabinet of the party)."""
         party = self.party_of(a)
         if party is None or b_id not in party.members or b_id == a.id:
-            return None
-        if party.host is not a and party.host.id != b_id:
             return None
         return party.members[b_id][0]
 
