@@ -128,14 +128,48 @@ def right_package_name(stem, number=None):
     return stem + SUFFIX + ('' if number is None else '.%03d' % number)
 
 
-def bad_name_text(names):
-    """O aviso do nome invalido, igual ao do Worker (badNameText): names = [(nome errado, nome certo)]."""
+# O nome mais comprido que chega inteiro, em bytes: alguns apps trocam os pontos e hifens de um nome maior por "_" (no grupo,
+# os 24 pacotes que chegaram certos tinham ate 57 caracteres e os 4 trocados, de 65 a 71). O mesmo do Worker (NAME_MAX) e
+# do painel (config/fliperos-web, PACKAGE_NAME_MAX).
+NAME_MAX = 57
+SEPARATORS = '._ -'
+
+
+def name_too_long(name):
+    return len(name.encode('utf-8')) > NAME_MAX
+
+
+def short_package_name(stem, number=None):
+    """O nome certo com o nome do jogo cortado no fim de uma palavra (se der) ate caber em NAME_MAX, igual ao shortName do
+    Worker. No gabinete o jogo continua com o nome dele (o do .cfg de dentro do zip)."""
+    if not name_too_long(right_package_name(stem, number)):
+        return right_package_name(stem, number)
+    k = len(stem)
+    while k > 1 and name_too_long(right_package_name(stem[:k], number)):
+        k -= 1
+    cut = stem[:k]
+    if stem[k] not in SEPARATORS:
+        last = max(cut.rfind(c) for c in SEPARATORS)
+        if last > 0:
+            cut = cut[:last]
+    return right_package_name(cut.rstrip(SEPARATORS) or stem[:k], number)
+
+
+def bad_name_text(names, shortened=False):
+    """O aviso do nome invalido, igual ao do Worker (badNameText): names = [(nome errado, nome a usar)]; shortened: o nome
+    certo passava de NAME_MAX e o sugerido e mais curto."""
     many = len(names) > 1
     lines = [
         PT + ' ⚠️ <b>' + BAD_NAME_TITLE + '</b> O FliperOS só reconhece ' + ('as partes do pacote' if many else 'o pacote') +
-        ' com o nome assim: renomeie e mande de novo.',
+        ' com o nome assim: renomeie e mande de novo.' + (
+            (' Use nomes curtos como estes' if many else ' Use um nome curto como este') + ': alguns apps trocam os pontos e '
+            'hífens de um nome com mais de %d caracteres por "_". No gabinete o jogo continua com o nome dele.' % NAME_MAX
+            if shortened else ''),
         EN + ' ⚠️ <b>Invalid file name.</b> FliperOS only recognises ' + ('the parts of the package' if many else 'the package') +
-        ' named like this: rename ' + ('them' if many else 'it') + ' and send ' + ('them' if many else 'it') + ' again.',
+        ' named like this: rename ' + ('them' if many else 'it') + ' and send ' + ('them' if many else 'it') + ' again.' + (
+            (' Keep the names short like these' if many else ' Keep the name short like this one') + ': some apps turn the dots '
+            'and hyphens of a name longer than %d characters into "_". On the cabinet the game keeps its own name.' % NAME_MAX
+            if shortened else ''),
     ]
     shown = names[:10]
     for wrong, right in shown:
@@ -514,6 +548,11 @@ class Telegram:
         return self.call('sendMessage', dict(self.where(chat, thread, reply), text=text, parse_mode='HTML',
                                              link_preview_options=json.dumps({'is_disabled': True})))
 
+    def edit(self, chat, message_id, text):
+        """Troca o texto de uma mensagem que o bot ja mandou."""
+        return self.call('editMessageText', {'chat_id': chat, 'message_id': str(message_id), 'text': text, 'parse_mode': 'HTML',
+                                             'link_preview_options': json.dumps({'is_disabled': True})})
+
     def album(self, chat, items, caption_text, thread=None, reply=None):
         """items: [(tipo, nome do arquivo, bytes)], photo ou video; a legenda no primeiro."""
         if len(items) == 1:
@@ -545,6 +584,9 @@ class PrintOnly(Telegram):
 
     def message(self, chat, text, thread=None, reply=None):
         print('[mensagem] topico=%s resposta=%s\n%s\n' % (thread, reply, text))
+
+    def edit(self, chat, message_id, text):
+        print('[editar] mensagem=%s\n%s\n' % (message_id, text))
 
     def album(self, chat, items, caption_text, thread=None, reply=None):
         print('[album] topico=%s resposta=%s: %s\n%s\n' % (
@@ -1179,18 +1221,20 @@ def same_package_key(stem, number):
 
 
 def bad_name_sets(found):
-    """Os pacotes com o nome errado nas mensagens lidas, found = [(id, mensagem ou None)]: [(partes, ja avisado, ja veio
-    certo)], cada parte um dict de part_of_message com stem e n (o numero da parte; None num zip inteiro). "Ja veio certo":
-    cada arquivo voltou com o nome certo, ou com o mesmo nome a menos de pontuacao e maiusculas."""
-    sets, warned, good = {}, set(), set()
+    """Os pacotes com o nome errado nas mensagens lidas, found = [(id, mensagem ou None)]: [(partes, aviso, ja veio certo)],
+    cada parte um dict de part_of_message com stem e n (o numero da parte; None num zip inteiro). aviso: (id, texto sem a
+    formatacao) da resposta que o bot ja deu a uma das partes, ou None. "Ja veio certo": cada arquivo voltou com o nome
+    certo, ou com o mesmo nome a menos de pontuacao e maiusculas."""
+    sets, warned, good = {}, {}, set()
     for _, message in found:
         if message is None:
             continue
         reply = getattr(message, 'reply_to', None)
         if getattr(message, 'out', False):
             # Um aviso que o bot ja deu: a resposta a mensagem de uma das partes.
-            if reply is not None and BAD_NAME_TITLE in str(getattr(message, 'message', None) or ''):
-                warned.add(int(getattr(reply, 'reply_to_msg_id', None) or 0))
+            text = str(getattr(message, 'message', None) or '')
+            if reply is not None and BAD_NAME_TITLE in text:
+                warned[int(getattr(reply, 'reply_to_msg_id', None) or 0)] = (int(message.id), text)
             continue
         if getattr(getattr(message, 'sender', None), 'bot', False):
             continue
@@ -1215,8 +1259,8 @@ def bad_name_sets(found):
     result = []
     for group in sets.values():
         parts = [group[n] for n in sorted(group, key=lambda n: -1 if n is None else n)]
-        result.append((parts, any(p['message_id'] in warned for p in parts),
-                       all(same_package_key(p['stem'], p['n']) in good for p in parts)))
+        warning = next((warned[p['message_id']] for p in parts if p['message_id'] in warned), None)
+        result.append((parts, warning, all(same_package_key(p['stem'], p['n']) in good for p in parts)))
     return sorted(result, key=lambda item: min(p['message_id'] for p in item[0]))
 
 
@@ -1234,19 +1278,29 @@ def check_names(spec, env, reader, tg, out=print):
         found = reader.messages(ref, ids)
     getattr(reader, 'close', lambda: None)()
     results = []
-    for parts, warned, resent in bad_name_sets(found):
+    for parts, warning, resent in bad_name_sets(found):
         label = ', '.join('%s (message %d)' % (p['file_name'], p['message_id']) for p in parts)
-        if warned:
+        text = bad_name_text([(p['file_name'], short_package_name(p['stem'], p['n'])) for p in parts],
+                             any(name_too_long(right_package_name(p['stem'], p['n'])) for p in parts))
+        if warning and plain_text(text) == warning[1]:
             results.append('already warned: ' + label)
+        elif warning:
+            # O aviso de antes, com um texto que mudou (o nome curto, por exemplo): o bot o edita, nada novo no grupo.
+            tg.edit(chat, warning[0], text)
+            results.append('updated the warning %d: %s' % (warning[0], label))
         elif resent:
             results.append('sent again with the right name: ' + label)
         else:
             first = min(parts, key=lambda p: p['message_id'])
-            tg.message(chat, bad_name_text([(p['file_name'], right_package_name(p['stem'], p['n'])) for p in parts]),
-                       first['thread_id'] or None, first['message_id'])
+            tg.message(chat, text, first['thread_id'] or None, first['message_id'])
             results.append('warned: ' + label)
         out(results[-1])
     return results
+
+
+def plain_text(text):
+    """O texto de uma mensagem HTML como o MTProto o devolve (message.message): sem as marcas."""
+    return html.unescape(re.sub(r'<[^>]+>', '', text))
 
 
 def check_main(spec, no_post=False, dry_run=False):
@@ -1275,7 +1329,8 @@ def check_main(spec, no_post=False, dry_run=False):
     except PostError as exc:
         print(exc, file=sys.stderr)
         return 1
-    print('%d package(s) with a wrong file name, %d warned now' % (len(results), sum(r.startswith('warned') for r in results)))
+    print('%d package(s) with a wrong file name, %d warned now, %d warnings updated' % (
+        len(results), sum(r.startswith('warned') for r in results), sum(r.startswith('updated') for r in results)))
     return 0
 
 

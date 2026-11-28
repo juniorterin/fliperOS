@@ -24129,12 +24129,22 @@ class TelegramCustomGameTests(unittest.TestCase):
                  (11, None),
                  # Voltou com o nome certo, e com a pontuacao que o programa tinha trocado por "_": ja veio certo.
                  (12, make(12, 'Half_Life_2_fliperos_customgame.zip', 10)),
-                 (13, make(13, "Half-Life 2.fliperos-customgame.zip", 10, sender=bob))]
+                 (13, make(13, "Half-Life 2.fliperos-customgame.zip", 10, sender=bob)),
+                 # Um nome comprido com o aviso de antes (o nome certo inteiro, que o mesmo app trocaria de novo).
+                 (14, make(14, 'COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.001', 900)),
+                 (15, make(15, 'COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.002', 300)),
+                 (16, make(16, None, 0))]
         for _, message in found:
             if message is not None:
                 message.sender_id = message.sender.username
+        # O MTProto devolve o texto de uma mensagem sem as marcas do HTML.
+        jojo = [('JoJo_s_fliperos_customgame_zip.%03d' % n, 'JoJo_s.fliperos-customgame.zip.%03d' % n) for n in (1, 2)]
         found[7][1].out, found[7][1].reply_to = True, NS(reply_to_msg_id=6, reply_to_top_id=578)
-        found[7][1].message = self.bot.bad_name_text([('JoJo_s_fliperos_customgame_zip.001', 'JoJo_s.fliperos-customgame.zip.001')])
+        found[7][1].message = self.bot.plain_text(self.bot.bad_name_text(jojo))
+        cotton = [('COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.%03d' % n,
+                   'COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS.fliperos-customgame.zip.%03d' % n) for n in (1, 2)]
+        found[-1][1].out, found[-1][1].reply_to = True, NS(reply_to_msg_id=14, reply_to_top_id=578)
+        found[-1][1].message = self.bot.plain_text(self.bot.bad_name_text(cotton))
 
         class Reader:
             asked, closed = [], False
@@ -24146,7 +24156,11 @@ class TelegramCustomGameTests(unittest.TestCase):
             def close(self):
                 Reader.closed = True
 
-        tg, out = self.Fake(), []
+        class Tg(self.Fake):
+            def edit(self, chat, message_id, text):
+                self.calls.append(('edit', chat, message_id, text))
+
+        tg, out = Tg(), []
         results = self.bot.check_names('all', {}, Reader(), tg, out=out.append)
         # "all": de 100 em 100 ids, ate tres lotes sem nenhuma mensagem (o fim do grupo).
         self.assertEqual(Reader.asked, [('@fliperos15khz', 1, 100), ('@fliperos15khz', 101, 200), ('@fliperos15khz', 201, 300),
@@ -24157,11 +24171,17 @@ class TelegramCustomGameTests(unittest.TestCase):
             'warned: COTTOn_Rock_fliperos_customgame_zip.001 (message 1), COTTOn_Rock_fliperos_customgame_zip.002 (message 2)',
             'sent again with the right name: Doom_fliperos_customgame.zip (message 4)',
             'already warned: JoJo_s_fliperos_customgame_zip.001 (message 6), JoJo_s_fliperos_customgame_zip.002 (message 7)',
-            'sent again with the right name: Half_Life_2_fliperos_customgame.zip (message 12)'])
-        # Um aviso so, o do Worker, respondendo a primeira parte no topico dela.
+            'sent again with the right name: Half_Life_2_fliperos_customgame.zip (message 12)',
+            'updated the warning 16: COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.001 (message 14), '
+            'COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.002 (message 15)'])
+        # Um aviso novo, o do Worker, respondendo a primeira parte no topico dela; e o aviso de antes do COTTOn editado, com o
+        # nome curto (nada novo no grupo).
         self.assertEqual(tg.calls, [('message', '@fliperos15khz', self.bot.bad_name_text([
             ('COTTOn_Rock_fliperos_customgame_zip.001', 'COTTOn_Rock.fliperos-customgame.zip.001'),
-            ('COTTOn_Rock_fliperos_customgame_zip.002', 'COTTOn_Rock.fliperos-customgame.zip.002')]), 578, 1)])
+            ('COTTOn_Rock_fliperos_customgame_zip.002', 'COTTOn_Rock.fliperos-customgame.zip.002')]), 578, 1),
+            ('edit', '@fliperos15khz', 16, self.bot.bad_name_text(
+                [(wrong, 'COTTOn_RockWithYou_ORIENTAL.fliperos-customgame.zip.%03d' % n) for n, (wrong, _) in enumerate(cotton, 1)],
+                True))])
         # Os nomes: so o quase certo e um pacote com o nome errado.
         loose = self.bot.loose_package_name
         self.assertEqual(loose('COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.002'),
@@ -24455,6 +24475,12 @@ await send(noKv, update('Doom.fliperos-customgame.zip.2', 50, 831));
 await send(noKv, update('notes_fliperos.zip', 50, 832));
 out.loose = messages.map((m) => m.text);
 out.loose_dispatches = dispatches.length;
+// Um nome certo comprido demais (o mesmo app o trocaria de novo): o aviso sugere um nome curto, cortado no fim de uma palavra,
+// contando os bytes de um nome com acento.
+messages.length = 0;
+await send(noKv, update('COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.002', 80, 840));
+await send(noKv, update('Pokémon_Mystery_Dungeon_Explorers_of_Sky_Édition_fliperos_customgame.zip', 80, 841));
+out.long = messages.map((m) => m.text);
 console.log(JSON.stringify(out));
 '''
 
@@ -24505,6 +24531,25 @@ console.log(JSON.stringify(out));
         self.assertEqual(self.bot.bad_name_text([('Tom & Jerry_fliperos_customgame.zip', 'Tom & Jerry.fliperos-customgame.zip')]), tom)
         self.assertEqual(self.bot.bad_name_text([('Game_fliperos_customgame_zip.%03d' % n, 'Game.fliperos-customgame.zip.%03d' % n)
                                                  for n in range(1, text.count('❌') + 1)]), text)
+        # O nome certo passaria de 57 caracteres: o sugerido e curto, e o aviso diz por que. Um nome curto nao ganha a explicacao.
+        cotton, poke = out['long']
+        self.assertIn('✅ <code>COTTOn_RockWithYou_ORIENTAL.fliperos-customgame.zip.002</code>', cotton)
+        self.assertIn('Use um nome curto como este: alguns apps trocam os pontos e hífens de um nome com mais de 57 caracteres '
+                      'por "_". No gabinete o jogo continua com o nome dele.', cotton)
+        self.assertIn('Keep the name short like this one: some apps turn the dots and hyphens of a name longer than 57 characters '
+                      'into "_". On the cabinet the game keeps its own name.', cotton)
+        self.assertIn('✅ <code>Pokémon_Mystery_Dungeon.fliperos-customgame.zip</code>', poke)
+        self.assertNotIn('57', tom)
+        for message in (cotton, poke):
+            self.assertLessEqual(len(re.search(r'✅ <code>(.*?)</code>', message).group(1).encode('utf-8')), 57)
+        short = self.bot.short_package_name
+        self.assertEqual(self.bot.bad_name_text([('COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.002',
+                                                  short('COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS', 2))], True), cotton)
+        stem = 'Pokémon_Mystery_Dungeon_Explorers_of_Sky_Édition'
+        self.assertEqual(self.bot.bad_name_text([(stem + '_fliperos_customgame.zip', short(stem))], True), poke)
+        # Um nome que ja cabe fica como esta; uma palavra so, comprida demais, se corta no meio.
+        self.assertEqual(short('Doom', 1), 'Doom.fliperos-customgame.zip.001')
+        self.assertEqual(short('A' * 40), 'A' * 33 + '.fliperos-customgame.zip')
 
 class SplashTests(unittest.TestCase):
     THEMES = ROOT / 'config/splashscreen'

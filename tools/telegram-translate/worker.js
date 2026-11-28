@@ -173,16 +173,43 @@ function rightName(stem, n) {
   return stem + '.fliperos-customgame.zip' + (n === null ? '' : '.' + String(n).padStart(3, '0'));
 }
 
+// O nome mais comprido que chega inteiro: alguns apps trocam os pontos e hifens de um nome maior por "_" (no grupo, os 24
+// pacotes que chegaram certos tinham ate 57 caracteres e os 4 trocados, de 65 a 71). Conta em bytes (UTF-8), por garantia.
+// O mesmo numero no painel (config/fliperos-web, PACKAGE_NAME_MAX) e no robo (tools/telegram-customgame.py, NAME_MAX).
+const NAME_MAX = 57;
+const SEPARATOR = /[._ -]/;
+const utf8Length = (s) => new TextEncoder().encode(s).length;
+
+// shortName: o nome certo, com o nome do jogo cortado no fim de uma palavra (se der) ate o arquivo caber em NAME_MAX. No
+// gabinete o jogo continua com o nome dele (o do .cfg de dentro do zip); as partes de um pacote se cortam todas iguais.
+function shortName(stem, n) {
+  if (utf8Length(rightName(stem, n)) <= NAME_MAX) return rightName(stem, n);
+  const chars = Array.from(stem);
+  let k = chars.length;
+  while (k > 1 && utf8Length(rightName(chars.slice(0, k).join(''), n)) > NAME_MAX) k--;
+  let cut = chars.slice(0, k);
+  if (!SEPARATOR.test(chars[k])) {
+    const last = cut.map((c) => SEPARATOR.test(c)).lastIndexOf(true);
+    if (last > 0) cut = cut.slice(0, last);
+  }
+  return rightName(cut.join('').replace(/[._ -]+$/, '') || chars.slice(0, k).join(''), n);
+}
+
 const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// badNameText: o aviso, nos dois idiomas, com cada nome errado e o certo (o <code> o Telegram copia com um toque).
-function badNameText(names) {
+// badNameText: o aviso, nos dois idiomas, com cada nome errado e o que usar (o <code> o Telegram copia com um toque). shortened:
+// o nome certo passava de NAME_MAX e o sugerido e mais curto (o mesmo app trocaria de novo um nome comprido).
+function badNameText(names, shortened) {
   const many = names.length > 1;
   const lines = [
     '🇧🇷 ⚠️ <b>Nome de arquivo inválido.</b> O FliperOS só reconhece ' + (many ? 'as partes do pacote' : 'o pacote') +
-      ' com o nome assim: renomeie e mande de novo.',
+      ' com o nome assim: renomeie e mande de novo.' + (shortened ? (many ? ' Use nomes curtos como estes' : ' Use um nome curto como este') +
+      ': alguns apps trocam os pontos e hífens de um nome com mais de ' + NAME_MAX + ' caracteres por "_". No gabinete o jogo' +
+      ' continua com o nome dele.' : ''),
     '🇺🇸 ⚠️ <b>Invalid file name.</b> FliperOS only recognises ' + (many ? 'the parts of the package' : 'the package') +
-      ' named like this: rename ' + (many ? 'them' : 'it') + ' and send ' + (many ? 'them' : 'it') + ' again.',
+      ' named like this: rename ' + (many ? 'them' : 'it') + ' and send ' + (many ? 'them' : 'it') + ' again.' +
+      (shortened ? (many ? ' Keep the names short like these' : ' Keep the name short like this one') + ': some apps turn the dots' +
+      ' and hyphens of a name longer than ' + NAME_MAX + ' characters into "_". On the cabinet the game keeps its own name.' : ''),
   ];
   const shown = names.slice(0, 10);
   for (const [wrong, right] of shown) lines.push('', '❌ <code>' + escapeHtml(wrong) + '</code>', '✅ <code>' + escapeHtml(right) + '</code>');
@@ -219,7 +246,7 @@ async function warnBadName(env, msg) {
   if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return true;
   const stem = loose[1];
   const n = loose[2] === undefined ? null : parseInt(loose[2], 10);
-  let names = [[doc.file_name, rightName(stem, n)]];
+  let names = [[doc.file_name, shortName(stem, n)]];
   if (n !== null && env.PARTS) {
     const prefix = 'badname:' + msg.chat.id + ':' + ((msg.from && msg.from.id) || 0) + ':' + stem.toLowerCase() + ':';
     const mine = { n, at: Date.now(), file_name: doc.file_name };
@@ -235,9 +262,9 @@ async function warnBadName(env, msg) {
     const first = parts.reduce((a, b) => (b.at < a.at || (b.at === a.at && b.n < a.n) ? b : a), mine);
     if (first.n !== mine.n || first.at !== mine.at) return true;
     await env.PARTS.put(prefix + 'warned', '1', { expirationTtl: PART_TTL });
-    names = parts.sort((a, b) => a.n - b.n).map(p => [p.file_name, rightName(stem, p.n)]);
+    names = parts.sort((a, b) => a.n - b.n).map(p => [p.file_name, shortName(stem, p.n)]);
   }
-  await sendReply(env, msg, badNameText(names));
+  await sendReply(env, msg, badNameText(names, utf8Length(rightName(stem, n)) > NAME_MAX));
   return true;
 }
 
