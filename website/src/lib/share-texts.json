@@ -1,6 +1,6 @@
 {
   "_": "Os textos do botão Compartilhar. Cada texto é uma lista de linhas e tem de ocupar o máximo da rede (de 95% do limite até o limite, scripts/check-share.mjs confere). {url} vira o endereço do site no idioma do texto e {version} a versão atual (FLIPEROS_VERSION). Depois de CADA update novo: reler os textos, pôr a novidade no lugar da antiga e subir o número abaixo (o check compara com updates/index; tools/make-update.sh roda a checagem). Os limites de cada rede estão em src/lib/share.ts.",
-  "update": 115,
+  "update": 116,
   "texts": {
     "en-US": {
       "x": [

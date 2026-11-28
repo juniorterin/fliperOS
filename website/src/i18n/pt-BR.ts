@@ -123,7 +123,7 @@ const ptBR: Messages = {
     },
   },
   hero: {
-    eyebrow: 'fliperos 0.29 · em desenvolvimento',
+    eyebrow: 'fliperos 0.30 · em desenvolvimento',
     titleLine1: 'Arcade Linux.',
     titleLine2: 'Feito para CRT.',
     description:
@@ -348,6 +348,7 @@ const ptBR: Messages = {
     current: 'Atual',
     all: 'Todas as versões no GitHub',
     notes: {
+      '0.30': ['Uma pasta da rede que roda os jogos de um NAS, RetroNAS ou PC de onde estão, cada console do Batocera um sistema', 'Game Packages: pacotes de ROM com as BIOS, a arte e os saves, e pacotes acima de 2 GB em partes', 'Uma pasta de cheats para cada emulador, o first to (FT) no placar versus e o monitor de arcade no VGA com imagem desde o boot'],
       '0.29': ['Sega Chihiro (Virtua Cop 3 e outros) com o emulador xemu, instalado quando você abre o primeiro jogo e preparado a partir do disco do jogo', 'O Setup em 240p no desktop, a tela que rola com o ponteiro do controle e um duplo clique que instala um jogo custom', 'Dolphin 2609b, RAHasher 1.8.5 e o splash do boot corrigido nos monitores de 31 kHz'],
       '0.28': ['HBGroovyMAME, Odin (Sega Hikaru e Gaelco 3D) e OpenBOR no RetroArch se instalam sozinhos quando você abre o primeiro jogo', 'Map controllers com oito vagas de player e um testador ao vivo para cada controle', 'Uma tela cheia com roda de logos, clones agrupados numa janela e captura de mídia no menu na tela'],
       '0.27': ['Sons no menu e no frontend, com um arquivo e um volume para cada um, e música com uma barra do que está tocando', 'Atalhos de pasta, discos externos e sistemas de arquivos do Batocera', 'Uma página de Jogos com edição dos jogos custom, e menus animados no Setup e no frontend'],
@@ -416,7 +417,7 @@ const ptBR: Messages = {
       { id: 'pc', title: 'Um PC 64 bits comum', text: '2 núcleos e 4 GB de RAM rodam até PlayStation 1; 4 núcleos e 16 GB rodam tudo o que vem na imagem.' },
       { id: 'network', title: 'Aberto pela rede', text: 'Copie jogos de qualquer PC para \\\\fliperos\\roms. O SSH vem ligado desde o primeiro boot.' },
       { id: 'updates', title: 'Updates no boot', text: 'Os updates chegam pela rede e mostram o que mudam antes de perguntar. Não precisa de ISO nova.' },
-      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.29. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
+      { id: 'status', title: 'Ainda em desenvolvimento', text: 'Versão 0.30. Alguns recursos, como o monitor vertical e os displays de LED, ainda não foram vistos em hardware de verdade.' },
     ],
     cta: 'Requisitos completos',
   },

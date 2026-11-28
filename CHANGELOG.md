@@ -2,6 +2,41 @@
 
 What changed in each ISO published in [Releases](https://github.com/juniorterin/fliperOS/releases), in the format of GroovyArcade's releases. Each version's section is the text of its release: `tools/release-publish.sh` doesn't publish an ISO without its section.
 
+## 0.30
+
+**Network folder, ROM packages, cheats and updates 105 to 116**: the games of a NAS, RetroNAS or another PC are played where they are, as one more disk; Game Packages carry ROMs with their BIOS, art and saves to another cabinet, and packages over 2 GB go in parts; each emulator reads its cheats from `~/cheats`; the versus scoreboard got first to (FT) on the LED marquee; a Batocera disk is used where its real games are; and an arcade monitor on VGA gets a picture from the boot even when the Setup was done on a PVM.
+
+**System changes:**
+
+- **Network folder** (update 113): Setup > Games > Folders > External storage > Network folder, and the web panel's System > Setup > Games, ask for the computer, the user and the password, list its shared folders and open the one you pick at every boot in `/media/fliperos` (a systemd mount with an automount, so a NAS that starts after the cabinet works without a restart). A RetroNAS or a Batocera share with `batocera/roms/<console>` goes straight to the Batocera filesystem, each console a system of the frontends; a computer that is off is skipped after 2 seconds
+- **Game Packages** (updates 105, 106 and 111): Custom games becomes Game Packages, with PC Games, ROMs and Create package. A ROM package (`TITLE.fliperos-EMULATOR.zip`) carries the games of an emulator or RetroArch core with, each one optional, the BIOS and parent sets they need, every type of art, NVRAM, saves, cheats and per-game settings, and can bring a group of its own with a system logo; the web panel picks the games with the frontend and MAME filters and edits each game's details. A package over 2 GB is cut in parts (`.zip.001`...) at the size chosen in the panel, 2000 MB by default; a double click on any part, or dropping all of them in the panel, joins and installs it. **Emulators & Games > Restore FliperOS settings** puts an emulator's settings back to FliperOS's, keeping a copy in `~/config-backup`
+- **Cheats** (update 107): `~/cheats` has one folder for each emulator that reads cheats (MAME, HBMAME, PCSX2, PCSX2x6, DuckStation, Flycast, Dolphin) and one for each RetroArch core that has them, and each one finds its game's file when it starts; GroovyMAME and hbgroovymame have the cheat engine on, and the old cheat folders become links to the new ones
+- **Versus scoreboard** (update 109): first to 1 to 10 with the players' names on the LED marquee, the winner with WIN! and fireworks; PLAY FT and a version picker on the web panel's game page, and the Marquee card with Art, Scoreboard or FT
+- **Batocera disk** (updates 108 and 112): every folder that looks like Batocera is compared and the one with the most games wins (an old copy of its empty folders was taken before); a disk set up on the wrong folder is fixed at boot or with `fliperos-setup --batocera repair`; a Batocera disk on ext4 no longer stops the updates, and RetroArch saves on it again
+- **ZeDMD and the marquee** (updates 108 and 109): a system change is a sweep that keeps up with the panel's USB link, Now Playing and the high scores go in still pages, and the 3D logo no longer shows up in the middle of a game
+- **16:9 crop** (updates 108 and 110): the game sees the whole 1280x720 (Wine with `UseXRandR=N` and `UseXVidMode=N` in the prefix), so PortProton games open again
+- **Arcade monitor on VGA** (updates 114 to 116): a VGA or DVI-I output without an EDID is always forced on at boot (`video=VGA-1:...e`), since the card sees the monitor only by the 75 Ω load that a PVM has and many arcade monitors (often behind a J-PAC) don't; cabinets set up that way get the `e` from the update. On the VGA of an APU that comes from a DisplayPort bridge chip (Kaveri, Trinity, Richland: `CRT1: NUTMEG` or `TRAVIS` in the kernel log), the `e` made the kernel skip the detection, where the driver reads the bridge, and every boot was black, even on a PVM (update 114; update 115 takes it out). There the output is turned on right after the detection instead, as CRT Emudriver's emulated EDID does on Windows (update 116)
+- **MAME from the FliperOS frontend** (update 109): the games go through the launcher again (marquee, log, game outputs, cloud backup, scoreboard), and HBMAME no longer crashes opening CPS2 games (player 4 keypad keys under names MAME doesn't know)
+
+**Package changes:**
+
+- None: the `.deb`s of the image and of the `packages` release are the ones of 0.29
+
+**fliperos-setup changes:**
+
+- `lib/netshare.sh` and `screens/storage.sh`: the network folder; `lib/batocera.sh`: the folder with the most games wins, and the repair
+- `lib/rompacks.sh` (new), `lib/customgames.sh`, `lib/emulators.sh` and `screens/setup-menu.sh`: ROM packages, packages in parts and Restore FliperOS settings
+- `lib/video.sh`, `lib/drm.sh` and `screens/output-test.sh`: the forced analog output (`video_forces_output`, `video_analog_force_refresh` for the update), the DisplayPort bridge read from the kernel log (`drm_dp_bridge`) and its output turned on after the detection (`video_force_after_detect`, `force_after_detect=1` in `fliperos.conf`, and `video_bridge_force_undo` for the update)
+- `lib/launcher.sh`: a row of `sessions.conf` with `hidden` in a sixth column stays out of the Setup, first boot and web panel lists (`hidden_frontends=1` in `fliperos.conf` shows it); `gui/fliperos-matchmaker`, `mmview.py`, `mmdata.py`, `fews.py` and `feonline.py` are an online program still being built, kept hidden that way
+
+**Tool changes:**
+
+- `config/fliperos-rompack` and `config/fliperos-gamemeta` (new): building, inspecting and installing ROM packages, and the edited game details; `config/fliperos-customgame`: packages in parts (`parts`, `join`)
+- `config/fliperos-dmd`, `config/fliperos-pixelcade` and `config/fliperos-versus`: the ZeDMD sweep and pages, and first to on the scoreboard
+- `config/fliperos-roms`, `config/mame.ini`, `config/retroarch.cfg`, `config/fliperos-x11-run` and `config/smb.conf`: the cheats folders and their share
+- `config/fliperos-video-force` and `config/99-fliperos-video.rules` (new): the udev rule that runs the detection of a bridge VGA and then turns it on
+- `tools/telegram-customgame.py` and `tools/telegram-translate/`: the Telegram group's package robot (names, warnings) and the translation worker
+
 ## 0.29
 
 **Sega Chihiro with xemu, and updates 100 to 104**: the Sega Chihiro arcade board (Virtua Cop 3, House of the Dead 3, Ghost Squad, OutRun 2 SP, Crazy Taxi High Roller and others) runs in xemu, which installs itself the first time you open one of its games and prepares the game from its disc; the desktop got a Setup at 240p, a screen that scrolls with the controller pointer and a double click that installs a custom-game package; Dolphin and RAHasher are in their newest releases. This ISO gathers updates 100 to 104; cabinets already installed get everything from the updates.
