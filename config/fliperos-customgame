@@ -1757,6 +1757,63 @@ def portproton_renderer(argv, exe):
         pass
 
 
+# Os carregadores de mods que entram no jogo por uma DLL ao lado do .exe, no
+# lugar de uma do Windows: o Unity Doorstop (BepInEx, MelonLoader) e o Ultimate
+# ASI Loader. No Wine a DLL do proprio Wine vem antes da pasta do jogo, e o mod
+# nao carregava: o ArcadeMod do The House of the Dead Remake (BepInEx, pela
+# winhttp.dll), que faz a mira seguir a pistola de luz, nunca abria (visto no
+# gabinete de um usuario em 2026-11-28; com winhttp=n,b ele abriu e a mira foi
+# para onde a pistola apontava). A DLL vai como n,b: a da pasta, e sem ela a do Wine.
+MOD_LOADER_DLLS = ("winhttp", "version", "winmm", "dinput8", "dsound")
+
+
+def mod_loader_dlls(folder):
+    """As DLLs de carregador de mods da pasta do .exe (MOD_LOADER_DLLS, sem o
+    .dll), so quando um carregador esta la: o doorstop_config.ini ou o
+    .doorstop_version do Doorstop, a pasta MelonLoader, ou um .asi na pasta ou
+    em scripts/ ou plugins/. Sem nada disso, uma DLL do jogo fica com o Wine."""
+    def names(path):
+        try:
+            return {name.lower(): name for name in os.listdir(path)}
+        except OSError:
+            return {}
+    here = names(folder)
+    loader = "doorstop_config.ini" in here or ".doorstop_version" in here or \
+        ("melonloader" in here and os.path.isdir(os.path.join(folder, here["melonloader"])))
+    if not loader:
+        loader = any(name.endswith(".asi") for name in here) or any(
+            any(name.endswith(".asi") for name in names(os.path.join(folder, here[sub])))
+            for sub in ("scripts", "plugins") if sub in here)
+    return [dll for dll in MOD_LOADER_DLLS if dll + ".dll" in here] if loader else []
+
+
+def dll_overrides(current, dlls):
+    """O WINEDLLOVERRIDES (current, "a,b=n;c=d") com cada DLL de dlls em n,b; uma
+    que ja esta nele fica como a pessoa pos."""
+    entries = [entry.strip() for entry in (current or "").split(";") if entry.strip()]
+    have = {name.strip().lower() for entry in entries for name in entry.split("=", 1)[0].split(",")}
+    add = [dll for dll in dlls if dll not in have]
+    return ";".join(entries + [",".join(add) + "=n,b"]) if add else (current or "")
+
+
+def portproton_mod_loaders(argv, exe, dlls):
+    """No PortProton, as DLLs de carregador de mods no WINEDLLOVERRIDES do .ppdb
+    do .exe: o start.sh do PortProton apaga o WINEDLLOVERRIDES de fora e so le o
+    do .ppdb. So grava (um start do PortProton) quando muda."""
+    if not dlls or not argv or os.path.basename(argv[0]) != "fliperos-portproton":
+        return
+    now = ppdb_value(exe, "WINEDLLOVERRIDES")
+    value = dll_overrides(now, dlls)
+    if value == now:
+        return
+    print("fliperos-customgame: %s: WINEDLLOVERRIDES=%s (mod loader)" % (os.path.basename(exe), value), file=sys.stderr)
+    try:
+        subprocess.run([argv[0], "edit-db", exe, "WINEDLLOVERRIDES=" + value], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 # O Wine e o 16:9 crop. O fliperos-x11-client poe um monitor de 1280x720 (xrandr
 # --setmonitor) no lugar do que o tubo mostra, e o Xinerama o diz a quem
 # pergunta; o Wine pergunta ao RandR, que diz 960x720 (o que o tubo mostra), e o
@@ -1990,9 +2047,16 @@ def cmd_run(args):
         print("fliperos-customgame: unknown platform %r in %s" % (platform, path), file=sys.stderr)
         return 1
     env = None
+    # Um carregador de mods ao lado do .exe (mod_loader_dlls): no PortProton pelo
+    # .ppdb, no Wine e no Staging pelo WINEDLLOVERRIDES (o do x11-client vai junto).
+    dlls = mod_loader_dlls(cwd) if platform == "windows" else []
+    if dlls and os.path.basename(argv[0]) == "fliperos-portproton":
+        portproton_mod_loaders(argv, exe, dlls)
+    elif dlls:
+        env = dict(os.environ, WINEDLLOVERRIDES=dll_overrides(os.environ.get("WINEDLLOVERRIDES", ""), dlls))
     if has_keymap(path) and ENV("FLIPEROS_CUSTOMGAME_HIDE_PAD") != "off":
         argv = hide_pad_wrapper() + argv
-        env = dict(os.environ, **HIDE_PAD_ENV)
+        env = dict(env or os.environ, **HIDE_PAD_ENV)
     keys = mapper(path)
     become_subreaper()
     crop = crop_mark()

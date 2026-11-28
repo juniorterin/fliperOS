@@ -10339,6 +10339,77 @@ class DeflickerTests(unittest.TestCase):
         self.assertIn('portproton_renderer(argv, exe)\n            wine_crop_registry(argv, exe)\n', src)
         self.assertEqual(src.count('            wine_crop_registry(argv, exe)\n'), 1)
 
+    def test_windows_game_mod_loader_dll_comes_first(self):
+        # Um carregador de mods ao lado do .exe (o Doorstop do BepInEx, o MelonLoader, o ASI Loader) entra por
+        # uma DLL que o Wine trocava pela dele: o ArcadeMod do House of the Dead Remake (winhttp.dll) nunca
+        # carregava e a mira da pistola nao seguia (gabinete de um usuario, 2026-11-28). A DLL vai como n,b.
+        tool = load_script('fliperos_customgame_mod_loaders', 'config/fliperos-customgame')
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+
+            def folder(name, *files):
+                path = tmp / name
+                for f in files:
+                    (path / f).parent.mkdir(parents=True, exist_ok=True)
+                    (path / f).write_text('')
+                return str(path)
+            self.assertEqual(tool.mod_loader_dlls(folder('bepinex', 'doorstop_config.ini', 'WinHttp.dll', 'UnityPlayer.dll')),
+                             ['winhttp'])
+            self.assertEqual(tool.mod_loader_dlls(folder('doorstop4', '.doorstop_version', 'winmm.dll')), ['winmm'])
+            self.assertEqual(tool.mod_loader_dlls(folder('melon', 'MelonLoader/net6/x.dll', 'version.dll')), ['version'])
+            self.assertEqual(tool.mod_loader_dlls(folder('asi', 'scripts/widescreen.asi', 'dinput8.dll')), ['dinput8'])
+            self.assertEqual(tool.mod_loader_dlls(folder('asi2', 'fix.ASI', 'dsound.dll')), ['dsound'])
+            # A DLL sem carregador nenhum e do jogo: fica com o Wine. Uma pasta que nao existe, nada.
+            self.assertEqual(tool.mod_loader_dlls(folder('plain', 'winhttp.dll', 'version.dll')), [])
+            self.assertEqual(tool.mod_loader_dlls(str(tmp / 'nope')), [])
+        self.assertEqual(tool.dll_overrides('', ['winhttp']), 'winhttp=n,b')
+        self.assertEqual(tool.dll_overrides('winemenubuilder.exe=d', ['winhttp', 'version']),
+                         'winemenubuilder.exe=d;winhttp,version=n,b')
+        # O que a pessoa ja pos para a DLL fica.
+        self.assertEqual(tool.dll_overrides('dxgi,WinHttp=b', ['winhttp']), 'dxgi,WinHttp=b')
+        # No jogo: o Wine recebe pelo WINEDLLOVERRIDES (com o do x11-client); o PortProton apaga o de fora, entao
+        # vai para o .ppdb (edit-db), so uma vez.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            game = tmp / 'game'
+            game.mkdir()
+            for f in ('Game.exe', 'doorstop_config.ini', 'winhttp.dll'):
+                (game / f).write_text('')
+            bin_dir, pp_bin = tmp / 'bin', tmp / 'ppbin'
+            bin_dir.mkdir()
+            pp_bin.mkdir()
+            (bin_dir / 'wine').write_text('#!/bin/sh\necho "$WINEDLLOVERRIDES" > "$OUT"\n')
+            (pp_bin / 'fliperos-portproton').write_text(
+                '#!/bin/sh\ncase $1 in\n  edit-db) echo "$*" >> "$OUT"; printf \'export %s"\\n\' "$(echo "$3" | '
+                'sed \'s/=/="/\')" >> "$2.ppdb" ;;\n  run) echo run >> "$OUT" ;;\nesac\n')
+            for f in (bin_dir / 'wine', pp_bin / 'fliperos-portproton'):
+                f.chmod(0o755)
+            cfg = tmp / 'Mod.cfg'
+            env = dict(os.environ, OUT=str(tmp / 'out'), FLIPEROS_CUSTOMGAME_KEYS='off', FLIPEROS_BIN=str(tmp / 'nobin'),
+                       FLIPEROS_WINE_STAGING=str(tmp / 'nostaging'), FLIPEROS_WINE_RENDERER_BIN=str(tmp / 'none'),
+                       WINEPREFIX=str(tmp / 'prefix'), FLIPEROS_PORTPROTON_HOME=str(tmp), WINEDLLOVERRIDES='dxgi,d3d11=n,b',
+                       PATH='%s:%s' % (bin_dir, os.environ['PATH']))
+            env.pop('FLIPEROS_CROP169', None)
+
+            def run(runner):
+                cfg.write_text('format=1\nname=Mod\nplatform=windows\nfolder=%s\nexe=Game.exe\nrunner=%s\n' % (game, runner))
+                subprocess.run(['python3', str(ROOT / 'config/fliperos-customgame'), 'run', str(cfg)], env=env,
+                               timeout=30, check=True)
+                return (tmp / 'out').read_text()
+            self.assertEqual(run('wine').strip(), 'dxgi,d3d11=n,b;winhttp=n,b')
+            (tmp / 'out').unlink()
+            env['FLIPEROS_BIN'] = str(pp_bin)
+            (game / 'Game.exe.ppdb').write_text('#!/usr/bin/env bash\nexport PW_WINE_USE="PROTON_LG"\n')
+            self.assertEqual(run('portproton'), 'edit-db %s WINEDLLOVERRIDES=winhttp=n,b\nrun\n' % (game / 'Game.exe'))
+            self.assertIn('export WINEDLLOVERRIDES="winhttp=n,b"\n', (game / 'Game.exe.ppdb').read_text())
+            (tmp / 'out').unlink()
+            self.assertEqual(run('portproton'), 'run\n')
+            # Sem carregador, nem o .ppdb nem o ambiente mudam.
+            (game / 'doorstop_config.ini').unlink()
+            (tmp / 'out').unlink()
+            env['FLIPEROS_BIN'] = str(tmp / 'nobin')
+            self.assertEqual(run('wine').strip(), 'dxgi,d3d11=n,b')
+
     def test_the_32_bit_layer_is_built_where_wine_is(self):
         build = (ROOT / 'config/fliperos-deflicker-build').read_text()
         self.assertIn('gcc -m32 -O2 -Wall -shared -fPIC', build)

@@ -54,6 +54,7 @@ With it, a shot over a dark part hits where the gun points, and only a shot off 
 | RetroArch | Every core that has a gun: FBNeo, PlayStation, SNES, Mega Drive, Master System, NES (Nestopia and Mesen's Zapper too). The gun is set up for the games that use it, and the other players stay on their pads |
 | Flycast | Naomi and Atomiswave gun games (The House of the Dead 2, Confidential Mission…) |
 | Keisho | The Model 2 gun games (The House of the Dead, Virtua Cop), read straight from the gun |
+| PC games (custom games) | The gun is an absolute mouse (trigger = left click, Start = `1`, Select = `5`). A game that locks the pointer and aims by mouse movement needs its light gun mod ([Custom games](Custom-games.md#windows-games-portproton)) |
 
 Gun outputs (recoil, ammunition) can drive hardware with Hook Of The Reaper or QMamehook ([DIY hardware](DIY-hardware.md#game-outputs-lamps-recoil-motors-and-button-lights)).
 

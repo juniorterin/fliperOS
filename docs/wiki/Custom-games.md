@@ -279,6 +279,20 @@ PortProton gets it as `PW_VULKAN_USE` in the game's `.ppdb` (0 = OpenGL, 2 = DXV
 
 Some games only open, or run better, with one of them. The `.ppdb` only goes with PortProton. When the game's runner isn't installed on a cabinet, the game opens with the first of the others that is (PortProton, then Wine, then Wine Staging), and the game's log says so.
 
+**Mods (BepInEx, MelonLoader, ASI Loader).** These mod loaders get into the game through a DLL next to the `.exe` that takes the place of a Windows one (`winhttp.dll`, `version.dll`, `winmm.dll`, `dinput8.dll` or `dsound.dll`). Wine loads its own copy of that DLL first, so the mod never loaded. When the game's folder has a loader (a `doorstop_config.ini` or `.doorstop_version`, a `MelonLoader` folder, or `.asi` files in the folder, `scripts/` or `plugins/`), FliperOS sets that DLL to native first (`n,b`) when the game opens. In PortProton this goes into the `WINEDLLOVERRIDES` of the `.ppdb`, because PortProton ignores the one from outside. In Wine and Wine Staging it goes into the environment. An override already there for that DLL is kept.
+
+**A light gun in a PC game.** The GunCon 2 reaches the game as an absolute mouse:
+
+| Gun | In the PC game |
+| --- | --- |
+| Trigger | left click |
+| A and C | right click |
+| B | middle click |
+| Start | key `1` |
+| Select | key `5` |
+
+Games that keep the pointer free (menus, most arcade ports) aim where the gun points. Many 3D shooters lock the pointer and turn mouse *movement* into aim, so the sight moves slowly and drifts from where the gun points. Those need the game's own light gun or arcade mod. For example, *The House of the Dead Remake* needs Argonlefou's ArcadeMod (BepInEx) with **Input type: single player** in `ArcadeMod_Config.ini` (`InputType=0`). Its multiplayer mode (`InputType=1`) reads the guns from DemulShooter, a Windows program that doesn't run here. The mod's Start and coin keys are `1` and `5`, the same as the gun's Start and Select.
+
 ## The controller as a keyboard
 
 Many PC games only take the keyboard. While a custom game runs, `fliperos-buttons gamekeys` reads the controllers and presses keys on a virtual keyboard (*FliperOS game keys*), from the game's `<name>.key`:
