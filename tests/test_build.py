@@ -9420,7 +9420,11 @@ class SessionTableTests(unittest.TestCase):
 
     def test_format(self):
         for row in self.rows():
-            self.assertEqual(len(row), 5, row)
+            # A sexta coluna, opcional, so pode ser "hidden": fora das listas
+            # do Setup, do primeiro boot e do painel (lib/launcher.sh).
+            self.assertIn(len(row), (5, 6), row)
+            if len(row) == 6:
+                self.assertEqual(row[5], 'hidden', row)
             self.assertIn(row[1], ('kms', 'x', 'none'), row)
 
     def test_setup_is_the_safe_default_and_openbox_alone_is_not_offered(self):

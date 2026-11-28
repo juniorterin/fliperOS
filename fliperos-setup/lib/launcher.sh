@@ -206,13 +206,23 @@ bootmedia_set() {
   launcher_set physical
 }
 
+# launcher_listed MARCAS: a linha entra nas listas (Setup > Games > Frontend,
+# o primeiro boot, o painel web). Uma linha com "hidden" na sexta coluna e um
+# programa ainda em construcao (o Matchmaker): fica de fora, e so aparece com
+# hidden_frontends=1 no fliperos.conf, para quem o desenvolve. O
+# fliperos-session a abre do mesmo jeito.
+launcher_listed() {
+  [[ $1 != hidden ]] || [[ $(conf_get hidden_frontends 2> /dev/null) == 1 ]]
+}
+
 # launcher_available imprime "nome|descricao" dos launchers instalados, na
 # ordem da tabela: a lista do primeiro boot e gerada do que existe de fato.
 # O jogo no boot fica de fora: no primeiro boot ainda nao ha jogos.
 launcher_available() {
-  local name desc
-  while IFS='|' read -r name _ _ _ desc; do
+  local name desc marks
+  while IFS='|' read -r name _ _ _ desc marks; do
     [[ $name == game || $name == physical ]] && continue
+    launcher_listed "$marks" || continue
     launcher_installed "$name" && printf '%s|%s\n' "$name" "$desc"
   done < <(launcher_rows)
   # Sem isto, o status era o da ultima linha da tabela (1, se nao instalado).
@@ -220,8 +230,9 @@ launcher_available() {
 }
 
 launcher_all() {
-  local name desc
-  while IFS='|' read -r name _ _ _ desc; do
+  local name desc marks
+  while IFS='|' read -r name _ _ _ desc marks; do
+    launcher_listed "$marks" || continue
     printf '%s|%s\n' "$name" "$desc"
   done < <(launcher_rows)
 }

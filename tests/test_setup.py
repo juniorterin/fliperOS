@@ -3500,6 +3500,26 @@ class BootGameTests(Base):
         self.assertIn('game)\n        FLIPEROS_POWERKEY=game "${program[@]}"', session)
         self.assertIn("fliperos-bootgame", (ROOT / "fliperos-rootfs.sh").read_text())
 
+    def test_hidden_launcher_stays_out_of_the_lists(self):
+        # O Matchmaker ainda em construcao: fora do Setup, do primeiro boot e do
+        # painel web; hidden_frontends=1 o mostra para quem desenvolve.
+        table = (ROOT / "config" / "fliperos-sessions.conf").read_text()
+        self.assertIn("\nmatchmaker|kms|/usr/local/lib/fliperos-setup/gui/fliperos-matchmaker||FliperOS Matchmaker|hidden\n",
+                      table)
+        (self.env.etc / "sessions.conf").write_text("setup|none|||Menu\nlab|kms|/bin/true||Lab program|hidden\n"
+                                                    "desk|kms|/bin/true||Desktop\n")
+        self.assertEqual(self.env.out("launcher_available").splitlines(), ["setup|Menu", "desk|Desktop"])
+        self.assertEqual(self.env.out("launcher_all").splitlines(), ["setup|Menu", "desk|Desktop"])
+        env = {"COLOR_BIN": str(self.env.dir / "none")}
+        self.assertEqual(self.env.run("settings_set launcher lab", env).returncode, 2)
+        # O rotulo segue sendo a quinta coluna, para quem ja o escolheu.
+        self.assertEqual(self.env.out("launcher_label lab").strip(), "Lab program")
+        self.env.out("conf_set hidden_frontends 1")
+        self.assertEqual(self.env.out("launcher_available").splitlines(),
+                         ["setup|Menu", "lab|Lab program", "desk|Desktop"])
+        self.env.out("settings_set launcher lab", env)
+        self.assertEqual(self.env.out("launcher_current").strip(), "lab")
+
 
 class OscrFirmwareTests(Base):
     """Setup > System > Cartridge reader: grava no OSCR o firmware com o patch
