@@ -2,7 +2,8 @@
 
 Phase 1 keeps the cabinets (by the hash of their secret, never the secret),
 their NICK#tag, the bans, and when new identities were made from an address
-(a limit against making accounts in a loop).
+(a limit against making accounts in a loop). Phase 2 adds the relay
+credentials handed out (turn.py: the month's count against the cap).
 """
 import sqlite3
 import threading
@@ -35,6 +36,16 @@ CREATE TABLE IF NOT EXISTS profiles (
     version INTEGER NOT NULL,
     record TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS turn (
+    username TEXT PRIMARY KEY,
+    cabinet_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    reported INTEGER NOT NULL DEFAULT 0,
+    at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS turn_month ON turn (month);
+CREATE INDEX IF NOT EXISTS turn_cabinet ON turn (cabinet_id, at);
 """
 
 
@@ -121,3 +132,24 @@ class Store:
             self.db.execute("UPDATE cabinets SET nick = ?, tag = ?, last_seen = ? WHERE id = ?",
                             (nick, tag, self.clock(), cab_id))
             return nick, tag
+
+    # -- The relay's credentials (turn.py) --
+    def turn_bytes(self, month):
+        row = self.db.execute("SELECT COALESCE(SUM(bytes), 0) FROM turn WHERE month = ?", (month,)).fetchone()
+        return row[0]
+
+    def turn_issued_since(self, cab_id, since):
+        row = self.db.execute("SELECT COUNT(*) FROM turn WHERE cabinet_id = ? AND at > ?", (cab_id, since)).fetchone()
+        return row[0]
+
+    def turn_issue(self, cab_id, username, month, reserve, now):
+        with self.lock:
+            self.db.execute("INSERT OR REPLACE INTO turn VALUES (?, ?, ?, ?, 0, ?)",
+                            (username, cab_id, month, reserve, now))
+
+    def turn_report(self, cab_id, username, nbytes):
+        """The bytes a credential carried, once, by the cabinet it was given to."""
+        with self.lock:
+            cur = self.db.execute("UPDATE turn SET bytes = ?, reported = 1 WHERE username = ? AND cabinet_id = ? "
+                                  "AND reported = 0", (nbytes, username, cab_id))
+            return cur.rowcount == 1

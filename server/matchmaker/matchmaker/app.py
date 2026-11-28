@@ -1,5 +1,6 @@
-"""The FliperOS Matchmaker server (phase 1): identity, presence, the counts
-per game and the room of a game, over a WebSocket.
+"""The FliperOS Matchmaker server: identity, presence, the counts per game
+and the room of a game (phase 1), the online parties and the relay's
+credentials (phase 2), over a WebSocket.
 
 It runs on Coolify, behind the Cloudflare Tunnel of the server (the tunnel
 passes WebSockets; the server opens no UDP port: STUN and the relay are
@@ -15,6 +16,13 @@ Client to server:
      "conn": "cable", "rtt": 28, "group": "m42", "kind": "match", "score": "2-1", "pct": null}
     {"t": "watch", "game": "mame:sf2ce"}           (null: stop)
     {"t": "ping", "n": 1}
+    {"t": "party", "op": "open", "game": "mame:sf2ce", "emu": "groovymame", "max": 4}
+    {"t": "party", "op": "join", "party": "p2a"}
+    {"t": "party", "op": "leave"}
+    {"t": "party", "op": "lock", "open": false}  (the host: no more cabinets)
+    {"t": "signal", "to": 7, "data": {...}}        (to the host, or from the host to a guest)
+    {"t": "turn"}                                  (relay credentials, in a party)
+    {"t": "turn", "op": "used", "username": "...", "bytes": 123456}
 Server to client:
     {"t": "welcome", "id": 7, "nick": "MANGO", "tag": "a7k2"}
     {"t": "profile", "profile": {"kid", "payload", "sig"}}   (right after welcome, and on {"t": "profile"})
@@ -22,6 +30,14 @@ Server to client:
     {"t": "counts", "games": {"mame:sf2ce": {"players": 5, "looking": 2}}}
     {"t": "room", "game": "mame:sf2ce", "players": [...]}
     {"t": "pong", "n": 1}
+    {"t": "party", "op": "opened", "party": "p2a", "addr": "10.207.0.1", "net": "10.207.0.0/24", ...}
+    {"t": "party", "op": "joined", "party": "p2a", "addr": "10.207.0.2", ..., "host": {player, "addr"}}
+    {"t": "party", "op": "guest", "party": "p2a", "peer": {player, "addr"}}   (to the host)
+    {"t": "party", "op": "left", "party": "p2a", "id": 9}                     (to the host)
+    {"t": "party", "op": "closed", "party": "p2a"}                           (the host left)
+    {"t": "party", "op": "error", "code": "gone" | "full" | "closed" | "busy" | "nets" | "bad"}
+    {"t": "signal", "from": 7, "data": {...}}
+    {"t": "turn", "ice": {"urls", "username", "credential", "ttl"}}  or  {"t": "turn", "error": "off" | "cap" | ...}
 """
 import asyncio
 import json
@@ -34,7 +50,9 @@ from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
 from . import identity, profile
-from .hub import Hub, Player, clean_presence, GAME
+from .hub import Hub, Player, clean_presence, EMU, GAME
+from .parties import Parties, clean_signal
+from .turn import Turn, TurnError
 from .store import Store
 
 LEDGER_GENESIS = "0" * 64      # the ledger's head before any match (phase 4 chains the matches)
@@ -49,9 +67,11 @@ log = logging.getLogger("matchmaker")
 
 
 class Server:
-    def __init__(self, db_path=":memory:", clock=time.monotonic, signer=None):
+    def __init__(self, db_path=":memory:", clock=time.monotonic, signer=None, turn=None):
         self.store = Store(db_path)
         self.hub = Hub()
+        self.parties = Parties(self.hub)
+        self.turn = turn or Turn.from_env(self.store, os.environ)
         self.clock = clock
         self.signer = signer or profile.Signer.from_env()
         if self.signer.ephemeral:
@@ -122,6 +142,9 @@ class Server:
         player = await self.hello(ws)
         if player is None:
             return
+        old = self.hub.players.get(player.id)
+        if old is not None:
+            await self.notify(self.parties.leave(old))   # the same cabinet again: its old party is over
         self.hub.join(player)
         tokens, last = BURST, self.clock()
         try:
@@ -140,7 +163,20 @@ class Server:
                     continue
                 kind = msg.get("t")
                 if kind == "presence":
-                    self.hub.update(player, clean_presence(msg))
+                    fields = clean_presence(msg)
+                    if self.parties.party_of(player):
+                        fields.pop("game", None)          # in a party, the party's game
+                        fields.pop("emu", None)
+                    self.hub.update(player, fields)
+                elif kind == "party":
+                    await self.party(player, msg)
+                elif kind == "signal":
+                    to = self.parties.may_signal(player, msg.get("to"))
+                    data = clean_signal(msg.get("data"))
+                    if to is not None and data is not None:
+                        await to.send({"t": "signal", "from": player.id, "data": data})
+                elif kind == "turn":
+                    await self.relay(player, msg)
                 elif kind == "watch":
                     game = msg.get("game")
                     if game is None or (isinstance(game, str) and GAME.match(game)):
@@ -154,7 +190,50 @@ class Server:
         except ConnectionClosed:
             pass
         finally:
+            if self.hub.players.get(player.id) is player:
+                await self.notify(self.parties.leave(player))
             self.hub.leave(player)
+
+    async def notify(self, notes):
+        for who, msg in notes:
+            await who.send(msg)
+
+    async def party(self, player, msg):
+        op = msg.get("op")
+        if op == "open":
+            game, emu, most = msg.get("game"), msg.get("emu"), msg.get("max")
+            if not (isinstance(game, str) and GAME.match(game) and isinstance(emu, str) and EMU.match(emu)
+                    and isinstance(most, int) and not isinstance(most, bool)):
+                await player.send({"t": "party", "op": "error", "code": "bad"})
+                return
+            party, notes = self.parties.open_party(player, game, emu, most)
+        elif op == "join":
+            party, notes = self.parties.join(player, msg.get("party"))
+        elif op == "leave":
+            party, notes = None, self.parties.leave(player)
+        elif op == "lock":
+            self.parties.lock(player, msg.get("open") is True)
+            return
+        else:
+            return
+        await self.notify(notes)
+        if isinstance(party, str):
+            await player.send({"t": "party", "op": "error", "code": party})
+
+    async def relay(self, player, msg):
+        """The relay's credentials, only to a cabinet in a party; or what it used."""
+        if msg.get("op") == "used":
+            self.turn.used(player.id, msg.get("username"), msg.get("bytes"))
+            return
+        if not self.parties.party_of(player):
+            await player.send({"t": "turn", "error": "party"})
+            return
+        try:
+            ice = await self.turn.credentials(player.id)
+        except TurnError as e:
+            await player.send({"t": "turn", "error": e.code})
+            return
+        await player.send({"t": "turn", "ice": ice})
 
     async def ticker(self):
         while True:

@@ -144,6 +144,8 @@ class HubTests(unittest.TestCase):
         self.assertNotIn("state", out)
         self.assertNotIn("game", out)
         self.assertNotIn("pct", out)
+        self.assertNotIn("score", out)          # who plays together is the server's to say
+        self.assertNotIn("kind", out)
 
 
 class ServerTests(unittest.IsolatedAsyncioTestCase):

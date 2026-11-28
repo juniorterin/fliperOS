@@ -6,17 +6,15 @@ import re
 
 STATES = ("idle", "looking", "playing", "party", "download")
 CONNS = ("cable", "wifi")
-KINDS = ("match", "party")
 GAME = re.compile(r"^[a-z0-9_.-]{1,24}:[a-z0-9_.-]{1,40}$")
 EMU = re.compile(r"^[a-z0-9_.-]{1,32}$")
-GROUP = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
-SCORE = re.compile(r"^[0-9]{1,2}[-/][0-9]{1,2}$")
 
 
 def clean_presence(msg):
     """The fields of a presence message that are valid (the rest is dropped).
-    game: "system:set" (mame:sf2ce); group: who plays together (a match or a
-    party), with its kind and its score ("2-1") or places ("2/4")."""
+    game: "system:set" (mame:sf2ce). Who plays together (the group, its kind
+    and its score "2-1" or places "2/4") is not the cabinet's to say: the
+    server sets it from its parties (parties.py) and, in phase 3, its duels."""
     out = {}
     if msg.get("state") in STATES:
         out["state"] = msg["state"]
@@ -28,14 +26,6 @@ def clean_presence(msg):
     emu = msg.get("emu")
     if emu is None or (isinstance(emu, str) and EMU.match(emu)):
         out["emu"] = emu
-    group = msg.get("group")
-    if group is None or (isinstance(group, str) and GROUP.match(group)):
-        out["group"] = group
-    if msg.get("kind") in KINDS + (None,):
-        out["kind"] = msg.get("kind")
-    score = msg.get("score")
-    if score is None or (isinstance(score, str) and SCORE.match(score)):
-        out["score"] = score
     for key, hi in (("pct", 100), ("rtt", 5000)):
         v = msg.get(key)
         if v is None or (isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= hi):
@@ -47,7 +37,7 @@ class Player:
     def __init__(self, cab_id, nick, tag, send):
         self.id, self.nick, self.tag, self.send = cab_id, nick, tag, send
         self.info = {"state": "idle", "conn": None, "game": None, "emu": None, "group": None, "kind": None,
-                     "score": None, "pct": None, "rtt": None}
+                     "score": None, "pct": None, "rtt": None, "open": None}
         self.watching = None
 
     def public(self):
