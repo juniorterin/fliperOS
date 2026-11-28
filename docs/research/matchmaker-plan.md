@@ -21,10 +21,11 @@ The mock-ups are in [`matchmaker-mockups/`](matchmaker-mockups/) (320x240 shown 
 | Connection | Every player shows **Wi-Fi or cable** (the RX/TX jack) and the ping |
 | ROMs | Sent **automatically to whoever plays**, cabinet to cabinet, only over a direct connection (never through the relay). **Spectators never get the ROM**: watching needs it already on the cabinet |
 | Server | The project's own server (Coolify, where the site runs). A relay only when a direct connection is impossible (CGNAT on both sides); rollback hides the longer path, it cannot create a route the NAT blocks |
-| Notifications | A fist bump received outside the Matchmaker shows on the OSD bar, in the frontend or in a game, with a shortcut to the Matchmaker |
+| Online only inside it | The cabinet is online **only while the Matchmaker is open**: no background service, no notifications outside it (a fist bump shows only inside the Matchmaker). On entering, the Matchmaker checks the internet and the server and says what is missing |
 | Wins and losses | Kept **only on the server**, encrypted and fraud-proof (see FairPlay). **No dispute mode**: a match the two cabinets don't agree on simply doesn't count |
 | No chat | The Matchmaker has no chat |
-| Setup | Setup > Network > ONLINE switches the online service on and off (A, like DEBUG MODE), with an 8-bit icon in the Setup's style. The online settings are in both Setup > Network and the Matchmaker's options |
+| Setup | The Matchmaker is a frontend in Setup > Games > Frontend (an 8-bit gloves icon in the Setup's style). There is no online item in the Setup: the online settings are in the Matchmaker's options |
+| Cloud backup | The cabinet's identity and its record go in the cloud backup (rclone): the record as a profile **signed by the server** (Ed25519) and encrypted (AES-256-GCM), the identity's secret sealed with a **6-digit PIN** (Argon2id). Reinstalling asks for the PIN once |
 
 ## The screens
 
@@ -71,11 +72,11 @@ The gloves come in and bump, the flash, DUEL!, both names, the game's logo and F
 - Transfer ([12](matchmaker-mockups/12-transfer.png)), and what the others see while someone downloads ([12b](matchmaker-mockups/12b-lobby-someone-downloading.png)).
 - Result: [13](matchmaker-mockups/13-result.png) (REMATCH, REPLAY, BACK); a match that lost sync does not count ([13c](matchmaker-mockups/13c-result-desync.png)).
 
-### Outside the Matchmaker
+### Entering, the Setup, the options
 
-- The OSD bar over the frontend and over a game ([14a](matchmaker-mockups/14a-osd-over-frontend.png), [14b](matchmaker-mockups/14b-osd-over-game.png)).
-- The Matchmaker in Setup > Games > Frontend, with its 8-bit gloves icon ([15a](matchmaker-mockups/15a-setup-frontend.png)), and ONLINE in Setup > Network ([15b](matchmaker-mockups/15b-setup-online.png)).
-- The Matchmaker's options ([16](matchmaker-mockups/16-options.png)).
+- Entering without the internet ([14](matchmaker-mockups/14-offline-no-internet.png)) or with the server not answering ([14b](matchmaker-mockups/14b-offline-server.png)): TRY AGAIN or back.
+- The Matchmaker in Setup > Games > Frontend, with its 8-bit gloves icon ([15a](matchmaker-mockups/15a-setup-frontend.png)).
+- The Matchmaker's options ([16](matchmaker-mockups/16-options.png)): the online settings live only there.
 
 ### The icons
 
@@ -84,7 +85,8 @@ All the Matchmaker's icons are 16-bit sprites (a dark outline, a bevel, four ton
 ## How it would work
 
 - **Server** (`server/matchmaker/`, Python asyncio, WebSocket over TLS, SQLite on an encrypted volume), deployed on Coolify: identity, presence, lobbies, parties, fist bumps and duels, results, replays. The Coolify server sits behind CGNAT and is reached through a Cloudflare Tunnel, so the server opens **no UDP port**: the cabinets learn their public address from Cloudflare's STUN (`stun.cloudflare.com`), and the relay is **Cloudflare Realtime TURN** (the server hands out short-lived credentials per match and stops before the 1,000 GB monthly free tier).
-- **On the cabinet:** a session service (`fliperos-online`) that stays connected, a small root service for the tunnel, and the Matchmaker program (pygame, `mmview.py` for the list-mode look).
+- **On the cabinet:** the Matchmaker program (pygame, `mmview.py` for the list-mode look) connects while it is open; a small root helper sets up the tunnel of a match. Nothing online runs when the Matchmaker is closed.
+- **The profile (the record):** after every accepted match the server issues the player's profile, signed with Ed25519 (the private key only in the server's environment; FliperOS carries the public key, `GET /pubkey`). The cabinet keeps it in its cloud backup encrypted with AES-256-GCM (a key from its secret by HKDF), and the secret sealed with AES-256-GCM under a key from the player's PIN by Argon2id. Editing the profile breaks the signature; an older one loses to a newer version; the server stays the authority.
 - **The match: a WireGuard tunnel per match.** The server introduces the two cabinets; they open their NATs with simultaneous handshakes (LAN address, IPv6, public IPv4 from STUN); if that fails, the WireGuard packets go through Cloudflare's TURN, through a small local forwarder between WireGuard and the TURN allocation (the relay never sees inside the WireGuard packets). Inside the tunnel runs the local party code that is already tested on hardware (felink's party and file server, GroovyMAME's lockstep, Flycast's GGPO, RetroArch's net play), with the input delay taken from the ping.
 - **ROM check:** the CRC and size of each file inside the zip, `-verifyroms` on both sides for MAME, FBNeo's own CRC list. A different version goes to its own folder; nothing of the user's is overwritten.
 

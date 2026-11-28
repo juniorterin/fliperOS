@@ -1666,6 +1666,39 @@ def result_screen(kind="win"):
 
 # ------------------------------------------------------------ 14: OSD notice
 
+def offline_screen(kind):
+    """Entering the Matchmaker without being online: it checks the internet and
+    the server first, and says what is missing (it only works online; nothing
+    of the Matchmaker runs outside it)."""
+    cv = canvas()
+    cv.dim_all(0.35)
+    globe_x = dimmed(planet(True, TILE_ICON))
+    retry = iconlab.retry_icon()
+    back = iconlab.Icon(32).poly([(3, 16), (22, 3), (22, 11), (29, 11), (29, 21), (22, 21), (22, 29)], "purple").im
+    if kind == "internet":
+        title, lines, color, strong = "NO INTERNET", ["THE MATCHMAKER ONLY", "WORKS ONLINE.", "CHECK THE CABLE", "OR THE WI-FI."], ORANGE, 2
+    else:
+        title, lines, color, strong = "SERVER OFFLINE", ["THE INTERNET IS FINE,", "THE MATCHMAKER", "SERVER DOES NOT ANSWER.", "TRY AGAIN SOON."], ORANGE, 3
+
+    def body(c, x0, x1, y):
+        for i, ln in enumerate(lines):
+            c.center(y + 12 * i + (4 if i >= strong else 0), ln, color if i < strong else COMMENT, x0, x1)
+    w = 240
+    x0 = (W - w) // 2
+    y0, y1 = 24, 214
+    cv.box(x0 + 3, y0 + 3, x0 + w + 3, y1 + 3, fill=PURPLE)
+    cv.box(x0, y0, x0 + w, y1, fill=CARD, outline=PINK)
+    cv.paste_icon(globe_x, (W - globe_x.width) // 2, y0 + 6)
+    big_center(cv, y0 + 42, title, color, x0=x0, x1=x0 + w)
+    body(cv, x0, x0 + w, y0 + 64)
+    size, gap = TILE, 10
+    tx = (W - (2 * size + gap)) // 2
+    for i, ic in enumerate((retry, back)):
+        fm.tile(cv, tx + i * (size + gap), y0 + 124, size, ic, i == 0, fm.snap("sf2ce"))
+    cv.center(y0 + 124 + size + 6, "TRY AGAIN", YELLOW, x0, x0 + w)
+    return cv
+
+
 def osd_over_frontend():
     bg = Image.open(REAL_LIST).convert("RGB").resize((W, H), Image.NEAREST)
     cv = fm.Canvas(bg=bg)
@@ -1997,10 +2030,9 @@ def main():
         "12b-lobby-someone-downloading": lobby_screen("guava", ("GUAVA#3mxp IS DOWNLOADING", "SF2: WILL JOIN AT 100%")),
         "13-result": result_screen("win"),
         "13c-result-desync": result_screen("desync"),
-        "14a-osd-over-frontend": osd_over_frontend(),
-        "14b-osd-over-game": osd_over_game(),
+        "14-offline-no-internet": offline_screen("internet"),
+        "14b-offline-server": offline_screen("server"),
         "15a-setup-frontend": setup_frontend(ti),
-        "15b-setup-online": setup_online(ti),
         "16-options": options_screen(),
     }
     for name, cv in shots.items():

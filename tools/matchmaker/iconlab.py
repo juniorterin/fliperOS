@@ -1252,6 +1252,20 @@ def loss_sheet():
     return out
 
 
+# ------------------------------------------------------------------ TRY AGAIN
+
+def retry_icon(ramp="cyan"):
+    """Try again: a thick ring turning clockwise, open at the top right, with a
+    straight arrowhead at its top end pointing right, into the opening."""
+    I = Icon()
+    cx, cy, r, t = 15.5, 17, 10, 5
+    # the ring from 330 degrees (right, a little up) clockwise round to 270 (the top)
+    I.arc((cx - r - t / 2, cy - r - t / 2, cx + r + t / 2, cy + r + t / 2), 330, 270, t, ramp)
+    top = cy - r                                     # the middle of the stroke at the top
+    I.poly([(14, top - 7), (14, top + 7), (22, top)], ramp)
+    return I.im
+
+
 # ------------------------------------------------------------------ THE CHOSEN ONES
 
 # What the user chose on 2026-11-27 (fists: fists.py option 3).
