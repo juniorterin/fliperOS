@@ -15488,6 +15488,19 @@ class BatoceraTests(Base):
         self.assertIn("atomiswave|%s" % (self.root / "roms" / "atomiswave"), folders)
         self.assertFalse([f for f in folders if f.startswith("batocera/")])
 
+    def test_update_117_makes_the_frontend_read_the_systems_again(self):
+        # O cache do --systems de antes nao tem a chave do que abre cada sistema: o update o apaga, uma vez.
+        cache = self.home / ".cache/fliperos/frontend-systems"
+        cache.parent.mkdir(parents=True)
+        cache.write_text("batocera/snes|/x|snes|Super Nintendo|run|args|.sfc|0\n")
+        script = ROOT / "updates" / "0117.sh"
+        result = self.env.run("bash %s" % script, {"FLIPEROS_HOME": str(self.home)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("frontend-systems cache removed", result.stdout)
+        self.assertFalse(cache.exists())
+        result = self.env.run("bash %s" % script, {"FLIPEROS_HOME": str(self.home)})
+        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
     def test_cores_lists_the_default_first_and_says_what_downloads(self):
         rows = [l.split("|") for l in self.env.out("batocera_cores snes", self.vars).splitlines()]
         self.assertEqual(rows[0], ["retroarch/snes9x", "Snes9x", "installed", "1"])

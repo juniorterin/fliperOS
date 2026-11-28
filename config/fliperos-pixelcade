@@ -605,7 +605,7 @@ system_of() {
   if [[ $rel == "$1" ]]; then
     folder=$(basename -- "$(dirname -- "$1")")
     case $folder in
-      naomi | naomi2 | atomiswave | model2 | model3) echo mame ;;
+      naomi | naomi2 | atomiswave | model2 | model3 | fbneo) echo mame ;;
       *) printf '%s\n' "$folder" ;;
     esac
     return
