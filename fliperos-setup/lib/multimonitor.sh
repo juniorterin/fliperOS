@@ -262,7 +262,10 @@ mm_blink() {
   conf_get card > /dev/null 2>&1 || return 1
   c=$(mm_entry_sysfs "$name")
   [[ -e $DRM_SYSFS/$c/status ]] || return 1
-  if [[ $name == "$(conf_get connector 2> /dev/null)" && $(conf_get forced 2> /dev/null) != 1 ]]; then
+  # A saida principal forcada (o "e" da linha, ou depois da deteccao numa
+  # ponte DisplayPort) volta ligada; as outras, ao automatico.
+  if [[ $name == "$(conf_get connector 2> /dev/null)" && $(conf_get forced 2> /dev/null) != 1 &&
+    $(conf_get force_after_detect 2> /dev/null) != 1 ]]; then
     restore=detect
   fi
   drm_set_status "$c" off

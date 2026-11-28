@@ -371,8 +371,9 @@ echo "== Kernel line (boot straight to Plymouth)"
   # ficava sem imagem. Ela passa a ir forcada (video_analog_force_refresh).
   video_analog_force_refresh && echo "analog output: forced at boot ($(conf_get kernel_video))"
   # Menos na VGA de uma ponte DisplayPort (APUs Kaveri, Trinity, Richland):
-  # ali o "e" do update 114 deixava o boot sem imagem (video_bridge_force_undo).
-  video_bridge_force_undo && echo "analog output on a DisplayPort bridge: not forced ($(conf_get kernel_video))"
+  # ali o "e" deixava o boot sem imagem, e ela passa a ser ligada depois da
+  # deteccao (video_bridge_force_undo, config/fliperos-video-force).
+  video_bridge_force_undo && echo "analog output on a DisplayPort bridge: forced after detection ($(conf_get kernel_video))"
   boot_apply || { echo "boot_apply failed (see /var/log/fliperos-setup.log)"; exit 1; }
   # O fliperos-rootfs.sh reinstalou o retroarch.cfg da imagem: o que o setup
   # decide por maquina volta (largura do CRT SwitchRes, modo de latencia).

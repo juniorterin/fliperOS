@@ -191,11 +191,23 @@ video_suggested_monitor() {
 # saida "disconnected"), como os monitores extras (mm_kernel_spec) ja sabem.
 # Menos numa VGA que sai de uma ponte DisplayPort (drm_dp_bridge): ali o "e"
 # deixa o boot sem imagem com qualquer monitor (o update 114 fez isso numa
-# APU Kaveri), e ela fica como o teste a viu.
+# APU Kaveri), e ela e forcada depois da deteccao (video_force_after_detect).
 video_forces_output() {
   local base=${2%a}
-  [[ $base =~ ^s?e$ ]] && return 0
-  [[ $base =~ ^s?r$ ]] && drm_is_analog "$1" && ! drm_dp_bridge "$1"
+  [[ $base =~ ^s?[er]$ ]] || return 1
+  drm_dp_bridge "$1" && return 1
+  [[ $base =~ ^s?e$ ]] || drm_is_analog "$1"
+}
+
+# video_force_after_detect NOME FLAGS MONITOR: a VGA de uma ponte DisplayPort
+# com um CRT sem EDID e ligada no boot pelo config/fliperos-video-force (a
+# regra do udev 99-fliperos-video.rules): primeiro a deteccao, em que o
+# driver le a ponte, depois "on" no status, como o CRT Emudriver faz no
+# Windows com o EDID emulado. Visto numa APU Kaveri com um monitor de arcade
+# numa J-PAC, que a deteccao nao ve.
+video_force_after_detect() {
+  local base=${2%a}
+  [[ $3 != lcd && $base =~ ^s?[er]$ ]] && drm_is_analog "$1" && drm_dp_bridge "$1"
 }
 
 # video_kernel_params NOME FLAGS MONITOR imprime os parametros de video do
@@ -425,7 +437,7 @@ video_mame_monitor() {
 # Chaves do fliperos.conf que dependem da placa e da saida: e o que o
 # Recovery Mode leva para o disco quando a placa foi trocada. A orientacao
 # e do gabinete, nao da placa, e so vai se foi escolhida nesta sessao.
-VIDEO_CONF_KEYS="gpu gpu_id driver card connector detection forced low_dotclock_pci low_dotclock_min
+VIDEO_CONF_KEYS="gpu gpu_id driver card connector detection forced force_after_detect low_dotclock_pci low_dotclock_min
   converter_low_dotclock converter_low_dotclock_min kernel_video boot_resolution fb_map
   monitor frequency geometry custom_width custom_height custom_refresh screens"
 VIDEO_CONF_KEEP="orientation"
@@ -611,26 +623,34 @@ video_analog_force_refresh() {
   log_info "saida analogica: $conn forcada no boot ($params)"
 }
 
-# video_bridge_force_undo: o "e" que o update 114 pos numa VGA de ponte
-# DisplayPort (drm_dp_bridge) com o monitor visto no teste (r) sai da linha:
-# com ele o boot ficava sem imagem com qualquer monitor. O "e" de uma saida
-# que o teste teve de forcar (e) fica como estava. Para o update; o
-# boot_apply segue. Status 0 quando regravou.
+# video_bridge_force_undo: numa VGA de ponte DisplayPort (drm_dp_bridge) com
+# um CRT sem EDID, o "e" sai da linha (o do update 114, e o de uma saida que o
+# teste teve de forcar: com ele o boot ficava sem imagem com qualquer monitor)
+# e a saida passa a ser forcada depois da deteccao (force_after_detect=1,
+# video_force_after_detect). Para o update; o boot_apply segue. Status 0
+# quando regravou.
 video_bridge_force_undo() {
-  local conn flags params spec opts=""
+  local conn flags monitor params spec opts="" changed=1
   conn=$(conf_get connector 2> /dev/null) || return 1
   flags=$(conf_get detection 2> /dev/null) || return 1
-  flags=${flags%a}
-  [[ $flags =~ ^s?r$ ]] && drm_is_analog "$conn" && drm_dp_bridge "$conn" || return 1
-  params=$(conf_get kernel_video 2> /dev/null) || return 1
-  spec=$(cmdline_video_spec "$params" "$conn") || return 1
-  [[ $spec == *,* ]] && opts=,${spec#*,}
-  spec=${spec%%,*}
-  [[ $spec == *?e ]] || return 1
-  params=$(cmdline_set_video "$params" "$conn" "${spec%e}$opts")
-  conf_set kernel_video "$params"
-  conf_set forced 0
-  log_info "saida analogica: $conn numa ponte DisplayPort, sem forcar no boot ($params)"
+  monitor=$(conf_get monitor 2> /dev/null) || return 1
+  video_force_after_detect "$conn" "$flags" "$monitor" || return 1
+  if params=$(conf_get kernel_video 2> /dev/null) && spec=$(cmdline_video_spec "$params" "$conn"); then
+    [[ $spec == *,* ]] && opts=,${spec#*,}
+    spec=${spec%%,*}
+    if [[ $spec == *?e ]]; then
+      params=$(cmdline_set_video "$params" "$conn" "${spec%e}$opts")
+      conf_set kernel_video "$params"
+      conf_set forced 0
+      changed=0
+    fi
+  fi
+  if [[ $(conf_get force_after_detect 2> /dev/null) != 1 ]]; then
+    conf_set force_after_detect 1
+    changed=0
+  fi
+  ((changed == 0)) || return 1
+  log_info "saida analogica: $conn numa ponte DisplayPort, forcada depois da deteccao ($(conf_get kernel_video))"
 }
 
 # video_conf_card imprime a placa da saida gravada como ela esta agora: a
@@ -674,6 +694,7 @@ video_save_result() {
   # A saida forcada pela linha do kernel (o "e" do video=), que trocar a
   # resolucao mantem e o Multiple Monitors religa depois de piscar.
   conf_set forced "$(video_params_forced "$params" "$name" && echo 1 || echo 0)"
+  conf_set force_after_detect "$(video_force_after_detect "$name" "$flags" "$monitor" && echo 1 || echo 0)"
   conf_set kernel_video "$params"
   conf_set boot_resolution "$(video_boot_resolution "$params" || true)"
   # Saida numa segunda placa: o console do sistema instalado tem de ir para

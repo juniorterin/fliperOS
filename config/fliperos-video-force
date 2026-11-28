@@ -1,0 +1,33 @@
+#!/bin/bash
+# fliperos-video-force CONECTOR (o %k do udev: card1-VGA-1): liga a saida do
+# CRT depois da deteccao. Roda pela regra 99-fliperos-video.rules quando o
+# driver registra a saida, so com force_after_detect=1 no fliperos.conf (lib/
+# video.sh, video_force_after_detect): a VGA de uma ponte DisplayPort (APUs
+# Kaveri, Trinity, Richland) com um CRT que a deteccao nao ve.
+#
+# Ali o "e" da linha do kernel nao serve: ele marca a saida ligada sem chamar
+# o detect, e e no detect que o radeon e o amdgpu leem o DPCD da ponte; o link
+# subia zerado e o boot ficava preto com qualquer monitor. Aqui a deteccao
+# roda primeiro (le a ponte) e so depois a saida e forcada, como o CRT
+# Emudriver faz no Windows com o EDID emulado (DALEmulatedEDID).
+set -u
+conf=${FLIPEROS_CONF:-/etc/fliperos/fliperos.conf}
+sysfs=${FLIPEROS_DRM_SYSFS:-/sys/class/drm}
+name=${1:-}
+[[ -n $name && -r $conf ]] || exit 0
+
+get() {
+  sed -n "s/^$1=//p" "$conf" | tail -1
+}
+
+[[ $(get force_after_detect) == 1 ]] || exit 0
+[[ ${name#card*-} == "$(get connector)" ]] || exit 0
+status=$sysfs/$name/status
+[[ -e $status ]] || exit 0
+# A deteccao primeiro: e nela que o driver le a ponte. Um monitor que ela ve
+# (um PVM, com a carga de 75 ohms) fica no automatico.
+printf detect > "$status" 2> /dev/null || exit 0
+[[ $(cat "$status" 2> /dev/null) == connected ]] && exit 0
+printf on > "$status" 2> /dev/null || exit 0
+logger -t fliperos-video-force "$name: no monitor detected, output forced on after detection" 2> /dev/null || true
+exit 0

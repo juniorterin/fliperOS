@@ -1,0 +1,6 @@
+# A saida do CRT numa ponte DisplayPort (a VGA das APUs Kaveri, Trinity e
+# Richland) ligada depois da deteccao, quando o driver a registra: o "e" da
+# linha do kernel pula a deteccao, em que o driver le a ponte, e o boot ficava
+# preto (config/fliperos-video-force; so age com force_after_detect=1).
+SUBSYSTEM=="drm", ACTION=="add", KERNEL=="card[0-9]*-VGA-[0-9]*|card[0-9]*-DVI-I-[0-9]*|card[0-9]*-DVI-A-[0-9]*", \
+  RUN+="/opt/fliperos/bin/fliperos-video-force %k"

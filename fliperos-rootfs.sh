@@ -41,6 +41,11 @@ install -Dm755 "$src/config/fliperos-rebuild-edids" "$root/usr/local/sbin/fliper
 # O EDID com os dois modos do console em pe (lib/video.sh vertical_edid).
 install -Dm755 "$src/config/fliperos-edid-modes" "$root/opt/fliperos/bin/fliperos-edid-modes"
 install -Dm755 "$src/config/fliperos-edid-hook" "$root/etc/initramfs-tools/hooks/fliperos-edid"
+# A VGA de uma ponte DisplayPort (APUs Kaveri, Trinity, Richland) ligada
+# depois da deteccao, no lugar do "e" da linha do kernel (lib/video.sh,
+# video_force_after_detect).
+install -Dm755 "$src/config/fliperos-video-force" "$root/opt/fliperos/bin/fliperos-video-force"
+install -Dm644 "$src/config/99-fliperos-video.rules" "$root/etc/udev/rules.d/99-fliperos-video.rules"
 
 # ── Estado e sessao de boot ───────────────────────────────────────
 mkdir -p "$root/etc/fliperos" "$root/etc/fliperos/mame" "$root/etc/fliperos/retroarch"

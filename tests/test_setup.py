@@ -422,29 +422,89 @@ class OutputTestTests(Base):
             self.assertNotEqual(self.env.run("drm_dp_bridge %s" % conn, env).returncode, 0, conn)
         out = self.env.out("video_kernel_params VGA-1 sra generic_15", env).strip()
         self.assertEqual(out, "video=VGA-1:640x480iS")
-        # Uma placa com DAC proprio segue forcada.
+        # Nem quando o teste teve de forcar: ela e ligada depois da deteccao.
+        out = self.env.out("video_kernel_params VGA-1 sea generic_15", env).strip()
+        self.assertEqual(out, "video=VGA-1:640x480iS")
+        for args, rc in (("VGA-1 sra generic_15", 0), ("VGA-1 sea arcade_15", 0), ("VGA-1 sra lcd", 1),
+                         ("VGA-1 sla generic_15", 1), ("DP-1 r generic_15", 1)):
+            self.assertEqual(self.env.run("video_force_after_detect %s" % args, env).returncode, rc, args)
+        # Uma placa com DAC proprio segue forcada pela linha do kernel.
         log = self.env.dir / "radeon.log"
         log.write_text(self.KAVERI_LOG.replace("CRT1: NUTMEG", "CRT1: INTERNAL_KLDSCP_DAC1"))
-        out = self.env.out("video_kernel_params VGA-1 sra generic_15", {"DRM_KERNEL_LOG": str(log)}).strip()
+        radeon = {"DRM_KERNEL_LOG": str(log)}
+        out = self.env.out("video_kernel_params VGA-1 sra generic_15", radeon).strip()
         self.assertEqual(out, "video=VGA-1:640x480iSe")
+        self.assertNotEqual(self.env.run("video_force_after_detect VGA-1 sra generic_15", radeon).returncode, 0)
+
+    def test_save_result_on_a_bridge_vga_forces_after_detection(self):
+        env = self.kaveri()
+        self.env.connector("card1-VGA-1", "connected")
+        self.env.out("video_save_result card1-VGA-1 sra generic_15", env)
+        conf = (self.env.etc / "fliperos.conf").read_text()
+        for line in ("kernel_video=video=VGA-1:640x480iS", "forced=0", "force_after_detect=1"):
+            self.assertIn(line + "\n", conf)
+        self.env.out("video_save_result card1-VGA-1 sra lcd", env)
+        self.assertIn("force_after_detect=0\n", (self.env.etc / "fliperos.conf").read_text())
+
+    def video_force(self, conf, status="disconnected", name="card1-VGA-1"):
+        sysfs = self.env.dir / "drm"
+        (sysfs / name).mkdir(parents=True, exist_ok=True)
+        (sysfs / name / "status").write_text(status)
+        cfg = self.env.dir / "video-force.conf"
+        cfg.write_text(conf)
+        bin_ = self.env.dir / "vf-bin"
+        bin_.mkdir(exist_ok=True)
+        (bin_ / "logger").write_text("#!/bin/sh\nexit 0\n")
+        (bin_ / "logger").chmod(0o755)
+        run = subprocess.run(["bash", str(ROOT / "config" / "fliperos-video-force"), name], capture_output=True, text=True,
+                             env=dict(os.environ, FLIPEROS_CONF=str(cfg), FLIPEROS_DRM_SYSFS=str(sysfs),
+                                      PATH="%s:%s" % (bin_, os.environ["PATH"])), timeout=30)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        return (sysfs / name / "status").read_text()
+
+    def test_video_force_turns_the_bridge_vga_on_after_detection(self):
+        # O status de mentira guarda o ultimo valor escrito: "detect" primeiro
+        # (a deteccao le a ponte), depois "on".
+        self.assertEqual(self.video_force("connector=VGA-1\nforce_after_detect=1\n"), "on")
+        # Sem a marca, outra saida, ou outro conector: nada muda.
+        self.assertEqual(self.video_force("connector=VGA-1\nforce_after_detect=0\n"), "disconnected")
+        self.assertEqual(self.video_force("connector=DVI-I-1\nforce_after_detect=1\n"), "disconnected")
+        self.assertEqual(self.video_force("connector=VGA-1\nforce_after_detect=1\n", name="card1-DVI-I-1"),
+                         "disconnected")
+        rules = (ROOT / "config" / "99-fliperos-video.rules").read_text()
+        self.assertIn('SUBSYSTEM=="drm", ACTION=="add", KERNEL=="card[0-9]*-VGA-[0-9]*|', rules)
+        self.assertIn('RUN+="/opt/fliperos/bin/fliperos-video-force %k"', rules)
+        rootfs = (ROOT / "fliperos-rootfs.sh").read_text()
+        self.assertIn('"$src/config/fliperos-video-force" "$root/opt/fliperos/bin/fliperos-video-force"', rootfs)
+        self.assertIn('"$src/config/99-fliperos-video.rules" "$root/etc/udev/rules.d/99-fliperos-video.rules"', rootfs)
 
     def test_update_takes_the_e_of_update_114_out_of_a_bridge_vga(self):
         env = self.kaveri()
         conf = self.env.etc / "fliperos.conf"
         conf.write_text("connector=VGA-1\ncard=card1\nmonitor=generic_15\ndetection=sra\nforced=1\n"
                         "kernel_video=video=VGA-1:320x240Se\nboot_resolution=320x240S\n")
-        # O passo do 114 nao poe de volta; o do 115 tira.
+        # O passo do 114 nao poe de volta; o do 115 tira, e a saida passa a
+        # ser ligada depois da deteccao.
         self.assertNotEqual(self.env.run("video_analog_force_refresh", env).returncode, 0)
         self.assertEqual(self.env.run("video_bridge_force_undo", env).returncode, 0)
         text = conf.read_text()
         self.assertIn("kernel_video=video=VGA-1:320x240S\n", text)
         self.assertIn("forced=0\n", text)
+        self.assertIn("force_after_detect=1\n", text)
         self.assertIn("boot_resolution=320x240S\n", text)
         self.assertNotEqual(self.env.run("video_bridge_force_undo", env).returncode, 0)
-        # O "e" de uma saida que o teste teve de forcar, e o de uma placa sem
-        # ponte, ficam.
-        for text in ("connector=VGA-1\nmonitor=generic_15\ndetection=sea\nforced=1\nkernel_video=video=VGA-1:640x480iSe\n",
-                     "connector=DP-1\nmonitor=generic_15\ndetection=r\nkernel_video=video=DP-1:1280x480iSe\n"):
+        # O "e" de uma saida que o teste teve de forcar tambem sai; uma que
+        # nunca o teve (o 113) so ganha a marca.
+        conf.write_text("connector=VGA-1\nmonitor=generic_15\ndetection=sea\nforced=1\nkernel_video=video=VGA-1:640x480iSe\n")
+        self.assertEqual(self.env.run("video_bridge_force_undo", env).returncode, 0)
+        self.assertIn("kernel_video=video=VGA-1:640x480iS\n", conf.read_text())
+        conf.write_text("connector=VGA-1\nmonitor=generic_15\ndetection=sra\nkernel_video=video=VGA-1:640x480iS\n")
+        self.assertEqual(self.env.run("video_bridge_force_undo", env).returncode, 0)
+        self.assertIn("kernel_video=video=VGA-1:640x480iS\n", conf.read_text())
+        self.assertIn("force_after_detect=1\n", conf.read_text())
+        # Uma saida sem ponte, ou um LCD, ficam.
+        for text in ("connector=DP-1\nmonitor=generic_15\ndetection=r\nkernel_video=video=DP-1:1280x480iSe\n",
+                     "connector=VGA-1\nmonitor=lcd\ndetection=sra\n"):
             conf.write_text(text)
             self.assertNotEqual(self.env.run("video_bridge_force_undo", env).returncode, 0, text)
             self.assertEqual(conf.read_text(), text)
