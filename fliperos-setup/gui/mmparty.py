@@ -23,6 +23,24 @@ RTT_WAIT = 5.0          # o anfitriao espera o ping do tunel ate isso antes de c
 RTT_DEFAULT = 100       # sem ping nenhum medido, o atraso e o de 100 ms
 
 
+def fetch_missing(host_ip, home, port=felink.PORT_FILES, progress=None):
+    """Os arquivos do jogo que o anfitriao serve e que este gabinete NAO tem.
+    Um que ele ja tem (outra versao da ROM, a BIOS do Neo Geo) nunca e
+    sobrescrito: a party online nao mexe no acervo de ninguem. (ok, faltou)."""
+    import json
+    import os
+    import urllib.request
+    try:
+        with urllib.request.urlopen("http://%s:%d/manifest" % (host_ip, port), timeout=5) as r:
+            manifest = json.load(r)
+    except (OSError, ValueError):
+        return False, []
+    wanted = [m["path"] for m in manifest if not os.path.exists(os.path.join(home, m["path"]))]
+    if not wanted:
+        return True, []
+    return felink.fetch_files(host_ip, home, wanted, port=port, progress=progress)
+
+
 class TunnelPresence:
     """A presenca da sala do felink online: os outros gabinetes nao a ouvem
     por broadcast (o tunel e de ponto a ponto); quem diz ao mundo o que este
@@ -99,6 +117,7 @@ class OnlineParty:
         self.stage = "tunnel"           # tunnel, fetch, lobby, playing, closed, failed
         self.message = None
         self.progress = None            # (feito, total) da copia dos arquivos
+        self.files = None               # os arquivos que vem (a tela da copia)
         self.fetching = None
         self.started_at = clock()
 
@@ -165,9 +184,9 @@ class OnlineParty:
         self.stage = "lobby"
 
     def after_tunnel(self, peer):
-        """O guest ligado ao anfitriao: copia o que falta (so direto) e entra na sala."""
-        wanted = self.game.get("wanted") or []
-        if not wanted:
+        """O guest ligado ao anfitriao: sem o jogo, copia o que falta (so pelo
+        caminho direto) e entra na sala; com o jogo, entra direto."""
+        if self.game.get("have", True):
             return self.join_room()
         if peer["path"] != "direct":
             return self.finish("failed", "NEEDS THE ROM (NOT THROUGH THE RELAY)")
@@ -177,7 +196,10 @@ class OnlineParty:
         def fetch():
             def progress(done, total, path):
                 self.progress = (done, total)
-            ok, missing = felink.fetch_files(peer["addr"], self.home, wanted, progress=progress)
+                self.files = self.files or []
+                if path not in self.files:
+                    self.files.append(path)
+            ok, missing = fetch_missing(peer["addr"], self.home, progress=progress)
             if not ok:
                 self.finish("failed", "THE GAME DID NOT COME (%d FILES)" % len(missing))
         self.fetching = threading.Thread(target=fetch, name="fliperos-party-fetch", daemon=True)

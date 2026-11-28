@@ -111,7 +111,8 @@ scenario() {
     party-eim)
       grep -q "LAUNCH delay=" "$STATE/cab1.log" || ok=0
       grep -q "LAUNCH delay=" "$STATE/cab2.log" || ok=0
-      grep -q "FILE copied" "$STATE/cab2.log" || ok=0 ;;
+      grep -q "FILE copied" "$STATE/cab2.log" || ok=0
+      grep -q "BIOS kept" "$STATE/cab2.log" || ok=0 ;;
     party-symmetric)
       grep -q "FAILED NEEDS THE ROM" "$STATE/cab2.log" || ok=0 ;;
     *)

@@ -23,6 +23,7 @@ import mmparty  # noqa: E402
 
 T0 = time.time()
 GAME_FILE = "roms/mame/labgame.zip"
+BIOS_FILE = "roms/mame/neogeo.zip"       # the guest has its own: it must stay as it is
 PROFILE = {"id": "netplay", "title": "labgame", "emulator": "groovymame", "systems": ["mame"], "sets": ["labgame"],
            "min": 2, "max": 2, "players": 2, "fixed": True, "order": "master-first", "step": 0, "port": 55440,
            "netplay": True, "lockstep": True}
@@ -33,10 +34,15 @@ def log(*a):
 
 
 home = tempfile.mkdtemp(prefix="home-")
+os.makedirs(os.path.join(home, "roms", "mame"))
 if ROLE == "host":
-    os.makedirs(os.path.join(home, "roms", "mame"))
     with open(os.path.join(home, GAME_FILE), "wb") as f:
         f.write(os.urandom(3 * 1024 * 1024))
+    with open(os.path.join(home, BIOS_FILE), "wb") as f:
+        f.write(b"the host's bios")
+else:
+    with open(os.path.join(home, BIOS_FILE), "wb") as f:
+        f.write(b"the guest's own bios")
 
 online = feonline.Online(NAME, url="ws://%s:8080/ws" % SERVER, secret=os.urandom(32).hex())
 online.start()
@@ -67,14 +73,14 @@ if ROLE == "host":
     msg = wait_msg("opened")
     with open(os.path.join(STATE, "party"), "w") as f:
         f.write(msg["party"])
-    game = {"system": "mame", "name": "labgame", "profile": dict(PROFILE), "files": [GAME_FILE], "rom": None}
+    game = {"system": "mame", "name": "labgame", "profile": dict(PROFILE), "files": [GAME_FILE, BIOS_FILE], "rom": None}
 else:
     path = os.path.join(STATE, "party")
     while not os.path.exists(path):
         time.sleep(0.1)
     online.send({"t": "party", "op": "join", "party": open(path).read().strip()})
     msg = wait_msg("joined")
-    game = {"system": "mame", "name": "labgame", "profile": dict(PROFILE), "wanted": [GAME_FILE], "rom": None}
+    game = {"system": "mame", "name": "labgame", "profile": dict(PROFILE), "have": False, "rom": None}
 
 
 def tunnel_factory(addr):
@@ -104,6 +110,8 @@ while time.time() < end:
         if ROLE == "guest":
             ok = os.path.isfile(os.path.join(home, GAME_FILE))
             log("FILE", "copied" if ok else "missing")
+            with open(os.path.join(home, BIOS_FILE), "rb") as f:
+                log("BIOS", "kept" if f.read() == b"the guest's own bios" else "OVERWRITTEN")
         time.sleep(1)
         break
     if stage == "failed":

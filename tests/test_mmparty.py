@@ -186,7 +186,7 @@ class OnlinePartyTests(unittest.TestCase):
     def test_a_guest_with_the_game_joins_over_the_relay(self):
         p = self.party({"op": "joined", "party": "p1", "addr": "10.207.0.2", "members": [],
                         "host": {"id": 7, "addr": "10.207.0.1"}},
-                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "wanted": []})
+                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "have": True})
         self.tunnel.peers = [{"id": 7, "addr": "10.207.0.1", "path": "relay"}]
         p.tick(0)
         self.assertEqual(self.link.calls, [("join", "10.207.0.1")])
@@ -194,7 +194,7 @@ class OnlinePartyTests(unittest.TestCase):
     def test_a_guest_without_the_game_never_gets_it_through_the_relay(self):
         p = self.party({"op": "joined", "party": "p1", "addr": "10.207.0.2", "members": [],
                         "host": {"id": 7, "addr": "10.207.0.1"}},
-                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "wanted": ["roms/mame/sf2ce.zip"]})
+                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "have": False})
         self.tunnel.peers = [{"id": 7, "addr": "10.207.0.1", "path": "relay"}]
         p.tick(0)
         self.assertEqual(p.state()["stage"], "failed")
@@ -204,7 +204,7 @@ class OnlinePartyTests(unittest.TestCase):
     def test_no_way_to_the_host(self):
         p = self.party({"op": "joined", "party": "p1", "addr": "10.207.0.2", "members": [],
                         "host": {"id": 7, "addr": "10.207.0.1"}},
-                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "wanted": []})
+                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "have": True})
         self.tunnel.peers = [{"id": 7, "addr": "10.207.0.1", "path": "failed"}]
         p.tick(0)
         self.assertEqual(p.state()["message"], "NO WAY TO THE OTHER CABINET")
@@ -212,7 +212,7 @@ class OnlinePartyTests(unittest.TestCase):
     def test_the_host_closing_ends_the_party(self):
         p = self.party({"op": "joined", "party": "p1", "addr": "10.207.0.2", "members": [],
                         "host": {"id": 7, "addr": "10.207.0.1"}},
-                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "wanted": []})
+                       {"system": "mame", "name": "sf2ce", "profile": dict(LOCKSTEP), "have": True})
         p.handle({"t": "party", "op": "closed", "party": "p1"})
         self.assertEqual(p.state()["stage"], "closed")
         p.handle({"t": "signal", "from": 7, "data": {}})
