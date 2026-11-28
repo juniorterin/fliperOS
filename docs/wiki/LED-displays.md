@@ -24,7 +24,7 @@ Pixelcade and ZeDMD get the same events, and can be installed together:
 | The FliperOS menu is open | The animation of the item under the cursor |
 | The cabinet powers off | "Bye" |
 
-No display at all? The web panel draws the same marquee in the browser, and makes a page of it for OBS ([Web panel: Frontend](Web-panel-Frontend.md#marquee-preview), [Web panel: Live](Web-panel-Live.md#marquee-for-obs)).
+No display at all? The web panel draws the same marquee in the browser, and makes a page of it for OBS ([Web panel: Frontend](Web-panel-Frontend.md#marquee), [Web panel: Live](Web-panel-Live.md#marquee-for-obs)).
 
 ## Art for the display
 

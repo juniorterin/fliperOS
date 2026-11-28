@@ -21208,7 +21208,8 @@ class GuiVsyncTests(unittest.TestCase):
             self.assertIn('request_vsync()', text, '%s opens the video without vsync' % path.name)
             self.assertLess(text.index('request_vsync()'), text.index('display.init('), path.name)
         self.assertEqual(opened, ['color-calibrate.py', 'flicker-preview.py', 'fliperos-frontend', 'fliperos-gui',
-                                  'gunscreen.py', 'padtest.py', 'scanline-preview.py', 'wheelscreen.py'])
+                                  'fliperos-matchmaker', 'gunscreen.py', 'padtest.py', 'scanline-preview.py',
+                                  'wheelscreen.py'])
 
 
 class FrontendPopupMotionTests(unittest.TestCase):

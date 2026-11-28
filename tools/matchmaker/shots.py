@@ -60,7 +60,7 @@ COUNTS = {
     "mame:xmen": {"players": 3, "looking": 0}, "mame:rbff2": {"players": 2, "looking": 1},
     "flycast:mvsc2": {"players": 4, "looking": 2},
 }
-ME = {"id": 99, "nick": "FLIPEROS", "tag": "x1y2"}
+ME = {"id": 99, "nick": "BIGBLUE", "tag": "x1y2"}
 ROOM = [
     {"id": 1, "nick": "MANGO", "tag": "a7k2", "state": "looking", "conn": "cable", "rtt": 28},
     {"id": 2, "nick": "TAPIR", "tag": "k8z1", "state": "looking", "conn": "wifi", "rtt": 75},
@@ -163,7 +163,7 @@ def shots(out, art):
         online = FakeOnline(status)
         mm = prog.Matchmaker(types.SimpleNamespace(shot="x" if shot else None), library=FakeLibrary(art),
                              online=online, check=lambda: check, netplay_core=lambda k: k == "retroarch/fbneo",
-                             nick="FLIPEROS")
+                             nick="BIGBLUE")
         return mm, online
 
     def save(mm, name, now=None):
