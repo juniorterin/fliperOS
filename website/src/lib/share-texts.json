@@ -1,10 +1,10 @@
 {
   "_": "Os textos do botão Compartilhar. Cada texto é uma lista de linhas e tem de ocupar o máximo da rede (de 95% do limite até o limite, scripts/check-share.mjs confere). {url} vira o endereço do site no idioma do texto e {version} a versão atual (FLIPEROS_VERSION). Depois de CADA update novo: reler os textos, pôr a novidade no lugar da antiga e subir o número abaixo (o check compara com updates/index; tools/make-update.sh roda a checagem). Os limites de cada rede estão em src/lib/share.ts.",
-  "update": 117,
+  "update": 118,
   "texts": {
     "en-US": {
       "x": [
-        "FliperOS {version}: free, open-source arcade Linux built for CRT. True 15 kHz on AMD, Switchres, GroovyMAME, RetroArch, Flycast and more, with a web panel for your phone. New: game packages from a Batocera disk or a RetroNAS share.",
+        "FliperOS {version}: free, open-source arcade Linux built for CRT. True 15 kHz on AMD, Switchres, GroovyMAME, RetroArch, Flycast and more, with a web panel for your phone. New: a 15 kHz tube and a 31 kHz monitor on the same cable.",
         "{url} #retrogaming #CRT #arcade"
       ],
       "instagram": [
@@ -27,8 +27,8 @@
         "📀 CDs, DVDs and cartridges from a drive or the Open Source Cartridge Reader",
         "",
         "New in the latest updates:",
+        "⭐ Screen switch: a 15 kHz tube and a 31 kHz monitor on one cable, each with its own video",
         "⭐ An arcade monitor on VGA (behind a J-PAC too) has a picture from the boot, even when the Setup was done on a PVM",
-        "⭐ Network folder: the games of a NAS, RetroNAS or another PC played right where they are, nothing copied",
         "⭐ ROM packages: games with their BIOS, art, saves and cheats in one zip, also from a Batocera disk or RetroNAS",
         "",
         "Install it from a USB stick, with a setup menu drawn for the tube itself. No games or BIOS inside: the Setup downloads the BIOS your games need.",
@@ -60,7 +60,7 @@
         "",
         "The Setup covers video, geometry, audio, network, scraper, ROM lists, MAME romset cleaning, controls and latency, all driven by the cabinet’s own joystick, and SSH is on from the first boot for anything else. Every release is tested in a virtual machine and on a real 15 kHz cabinet.",
         "",
-        "New in the latest updates: ROM packages with each game's BIOS, art and saves, also from a Batocera disk or a RetroNAS; a cheats folder for each emulator and core; a network folder that plays the games right from a NAS, RetroNAS or another PC; and an arcade monitor on VGA that gets a picture from the boot.",
+        "New in the latest updates: a 15 kHz tube and a 31 kHz monitor on one cable, each with its own video; ROM packages with each game's BIOS, art and saves, even from a RetroNAS; a network folder that plays the games right from a NAS, RetroNAS or another PC; and an arcade monitor on VGA that gets a picture from the boot.",
         "",
         "It ships no games and no BIOS: the Setup downloads the BIOS that your games need. It is open source, and questions, photos of cabinets and help from other users are in the Telegram group.",
         "",
@@ -83,7 +83,7 @@
         "",
         "How it is built: the image is generated in Docker from a reproducible recipe, the kernel patches and the setup menu are in the repository, and updates are published as numbered steps that a cabinet applies in order from its own network connection. Every release is tested in a virtual machine and on a real 15 kHz cabinet.",
         "",
-        "Latest updates: ROM packages that carry each game's BIOS, art, memory and saves to another cabinet, even from a NAS; an arcade monitor on VGA with a picture from the boot; a network folder that plays the games of a NAS or another PC where they are; and updates delivered over the network, applied in order from the cabinet itself.",
+        "Latest updates: a 15 kHz tube and a 31 kHz monitor on one cable, each with its own video; ROM packages that carry each game's BIOS, art, memory and saves to another cabinet, even from a NAS; an arcade monitor on VGA with a picture from the boot; and a network folder that plays the games of a NAS or another PC where they are.",
         "",
         "It ships no games and no BIOS; the Setup downloads the BIOS your games need. Everything is open: source, releases and docs. Feedback, issues and contributions are welcome, and so are cabinets to test on: {url}",
         "",
@@ -144,10 +144,10 @@
         "• SSH on from the first boot: ssh fliperos@fliperos.local",
         "",
         "⭐ NEW IN THE LATEST UPDATES",
+        "• Screen switch: a 15 kHz tube or a 31 kHz monitor on one cable",
         "• Arcade monitor on VGA: a picture from the boot, also behind a J-PAC and with the Setup done on a PVM",
         "• Network folder: the games of a NAS, RetroNAS or PC played where they are, each Batocera console a system of the frontends",
         "• ROM packages: games, BIOS, art and saves in one zip, even from a RetroNAS",
-        "• Cheats: a ~/cheats folder for each emulator and core, read by itself at game start",
         "",
         "It ships no games and no BIOS: the Setup downloads the BIOS your games need. Updates arrive over the network, in order, from the cabinet itself.",
         "",
@@ -156,7 +156,7 @@
     },
     "pt-BR": {
       "x": [
-        "FliperOS {version}: Linux arcade gratuito e aberto, feito para CRT. 15 kHz real em AMD, Switchres, GroovyMAME, RetroArch, Flycast e mais, com painel web para o celular. Novo: pacotes de jogos de um disco Batocera ou RetroNAS.",
+        "FliperOS {version}: Linux arcade gratuito e aberto, feito para CRT. 15 kHz real em AMD, Switchres, GroovyMAME, RetroArch, Flycast e mais, com painel web para o celular. Novo: um tubo de 15 kHz e um monitor de 31 kHz no mesmo cabo.",
         "{url} #retrogaming #CRT #arcade"
       ],
       "instagram": [
@@ -179,8 +179,8 @@
         "📀 CDs, DVDs e cartuchos por um drive ou pelo Open Source Cartridge Reader",
         "",
         "Novidades dos últimos updates:",
+        "⭐ Troca de tela: um tubo de 15 kHz e um monitor de 31 kHz no mesmo cabo, cada um com o seu vídeo",
         "⭐ Monitor de arcade no VGA (também atrás de uma J-PAC) com imagem desde o boot, mesmo com o Setup feito num PVM",
-        "⭐ Pasta da rede: os jogos de um NAS, RetroNAS ou outro PC rodam de onde estão, sem copiar nada",
         "⭐ Pacotes de ROM: jogos com BIOS, arte, saves e cheats num zip só, também de um disco Batocera ou RetroNAS",
         "",
         "Instala por pendrive, com um menu de configuração desenhado para o próprio tubo. Não vem com jogos nem BIOS: o Setup baixa as BIOS que os seus jogos pedem.",
@@ -212,7 +212,7 @@
         "",
         "O Setup cobre vídeo, geometria, áudio, rede, scraper, listas de ROMs, limpeza de romset do MAME, controles e latência, tudo pelo joystick do próprio gabinete, e o SSH já vem ligado desde o primeiro boot para o resto. Cada release é testada em máquina virtual e em um gabinete 15 kHz de verdade.",
         "",
-        "Novidades dos últimos updates: pacotes de ROM com as BIOS, a arte e os saves de cada jogo, também de um disco Batocera ou RetroNAS; uma pasta de cheats para cada emulador e core; uma pasta da rede que roda os jogos de um NAS, RetroNAS ou PC; e um monitor de arcade no VGA com imagem desde o boot.",
+        "Novidades dos últimos updates: um tubo de 15 kHz e um monitor de 31 kHz no mesmo cabo, cada um com o seu vídeo; pacotes de ROM com as BIOS, a arte e os saves de cada jogo, até de um RetroNAS; uma pasta da rede que roda os jogos de um NAS, RetroNAS ou PC; e um monitor de arcade no VGA com imagem desde o boot.",
         "",
         "Não vem com jogos nem BIOS: o Setup baixa as BIOS que os seus jogos pedem. É código aberto, e dúvidas, fotos de gabinetes e ajuda de outros usuários estão no grupo do Telegram.",
         "",
@@ -235,7 +235,7 @@
         "",
         "Como é feito: a imagem é gerada no Docker a partir de uma receita reproduzível, os patches do kernel e o menu de configuração estão no repositório, e os updates saem como passos numerados que o gabinete aplica em ordem pela própria conexão de rede. Cada release é testada em máquina virtual e em um gabinete 15 kHz de verdade.",
         "",
-        "Últimos updates: pacotes de ROM com BIOS, arte e saves, até de um NAS; um monitor de arcade no VGA com imagem desde o boot; uma pasta da rede que roda os jogos de um NAS ou outro PC; e updates entregues pela rede, aplicados em ordem no próprio gabinete.",
+        "Últimos updates: um tubo de 15 kHz e um monitor de 31 kHz no mesmo cabo, cada um com o seu vídeo; pacotes de ROM com BIOS, arte e saves, até de um NAS; um monitor de arcade no VGA com imagem desde o boot; e uma pasta da rede para os jogos de um NAS ou PC.",
         "",
         "Não vem com jogos nem BIOS; o Setup baixa as BIOS que os seus jogos pedem. Tudo é aberto: código, releases e documentação. Feedback, issues e contribuições são bem-vindos, e gabinetes para testar também: {url}",
         "",
@@ -296,10 +296,10 @@
         "• SSH ligado desde o primeiro boot: ssh fliperos@fliperos.local",
         "",
         "⭐ NOVIDADES DOS ÚLTIMOS UPDATES",
+        "• Troca de tela: um tubo de 15 kHz ou um monitor de 31 kHz no mesmo cabo",
         "• Monitor de arcade no VGA: imagem desde o boot, também atrás de uma J-PAC e com o Setup feito num PVM",
         "• Pasta da rede: os jogos de um NAS, RetroNAS ou PC rodam de onde estão, cada console do Batocera um sistema",
         "• pacotes de ROM: jogos, BIOS, arte e saves num zip, até de um RetroNAS",
-        "• Cheats: uma pasta ~/cheats para cada emulador e core, lida sozinha quando o jogo abre",
         "",
         "Não vem com jogos nem BIOS: o Setup baixa as BIOS que os seus jogos pedem. Os updates chegam pela rede, em ordem, no próprio gabinete.",
         "",
