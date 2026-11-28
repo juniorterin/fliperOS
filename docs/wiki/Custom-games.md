@@ -293,6 +293,8 @@ Some games only open, or run better, with one of them. The `.ppdb` only goes wit
 
 Games that keep the pointer free (menus, most arcade ports) aim where the gun points. Many 3D shooters lock the pointer and turn mouse *movement* into aim, so the sight moves slowly and drifts from where the gun points. Those need the game's own light gun or arcade mod. For example, *The House of the Dead Remake* needs Argonlefou's ArcadeMod (BepInEx) with **Input type: single player** in `ArcadeMod_Config.ini` (`InputType=0`). Its multiplayer mode (`InputType=1`) reads the guns from DemulShooter, a Windows program that doesn't run here. The mod's Start and coin keys are `1` and `5`, the same as the gun's Start and Select.
 
+The [screen flash](Light-guns.md#screen-flash) works in PC games too, including PortProton's, with the same settings. Without it the gun lost its aim over the dark parts of a game.
+
 ## The controller as a keyboard
 
 Many PC games only take the keyboard. While a custom game runs, `fliperos-buttons gamekeys` reads the controllers and presses keys on a virtual keyboard (*FliperOS game keys*), from the game's `<name>.key`:

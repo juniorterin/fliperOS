@@ -19,19 +19,31 @@ papel da camada nesses casos:
     transparente na imagem fica vazado pela extensao Shape do X: o jogo aparece
     em volta do menu sem compositor. O translucido sai opaco;
   - a janela nao recebe clique nem tecla (a forma de entrada e vazia): os
-    controles a OSD ja toma pelo evdev.
+    controles a OSD ja toma pelo evdev;
+  - o flash da pistola de luz da camada (config/fliperos-deflicker.c): no tiro
+    de uma pistola (ID_INPUT_GUN no udev, lida sem prender o aparelho), uma
+    janela da tela inteira em cinza no brilho gun_flash_level, por cima de
+    tudo, por FLASH_FRAMES quadros (pulse) ou enquanto o gatilho esta apertado
+    (hold); gun_flash=off nao mostra. Sem ele, nos jogos do PortProton a GunCon
+    nao achava a mira nas partes escuras (o The House of the Dead Remake, num
+    gabinete de usuario em 2026-11-28).
 
 Com uma camada viva (um jogo em OpenGL ou Vulkan neste X), fica escondido e nao
-grava nada. Sai junto com o X (a conexao cai) ou com o xinit.
+grava nada: a OSD e o flash sao dela. Sai junto com o X (a conexao cai) ou com o
+xinit.
 
     fliperos-osd-x11
 
 Variaveis: FLIPEROS_OSD_DIR (a pasta do screen), FLIPEROS_FPS_FILE,
-FLIPEROS_GAME_PID, FLIPEROS_DEFLICKER_APP.
+FLIPEROS_GAME_PID, FLIPEROS_DEFLICKER_APP, FLIPEROS_CONF (o fliperos.conf),
+FLIPEROS_GUN_DEVICES (as pistolas, separadas por ":", nos testes),
+FLIPEROS_UDEV_DATA e FLIPEROS_RES_HZ (o refresh do modo, para os quadros).
 """
 import ctypes
+import errno
 import os
 import re
+import select
 import struct
 import sys
 import time
@@ -154,6 +166,143 @@ def shape_rects(rgba, dw, dh):
     return rects
 
 
+# ── O flash da pistola de luz (o mesmo da camada) ──
+
+CONF = os.environ.get("FLIPEROS_CONF", "/etc/fliperos/fliperos.conf")
+UDEV_DATA = os.environ.get("FLIPEROS_UDEV_DATA", "/run/udev/data")
+EVENT = struct.Struct("llHHi")  # o input_event de 64 bits
+EV_KEY, EV_MSC = 0x01, 0x04
+BTN_LEFT, MSC_RAW = 0x110, 0x03
+GUN_MAX = 4
+FLASH_FRAMES = 2
+# Sem pistola aberta, procura de novo a cada GUN_SCAN segundos (a que chega
+# depois do jogo aberto tambem conta).
+GUN_SCAN = 2.0
+
+
+def flash_settings(text):
+    """(modo, brilho) das linhas gun_flash= e gun_flash_level= do fliperos.conf,
+    como a camada: a ultima de cada vale; modo 0 off, 1 pulse (o padrao), 2 hold;
+    brilho de 0,1 a 1 (gun_flash_level de 10 a 100, o padrao 100)."""
+    mode, level = 1, 100
+    for line in text.splitlines():
+        key, eq, value = line.partition("=")
+        if not eq:
+            continue
+        value = (value.split() or [""])[0]
+        if key == "gun_flash":
+            mode = 0 if value == "off" else 2 if value == "hold" else 1
+        elif key == "gun_flash_level":
+            digits = re.match(r"[+-]?\d+", value)
+            level = int(digits.group()) if digits else 0
+    return mode, min(100, max(10, level)) / 100.0
+
+
+def gun_devices():
+    """Os /dev/input/eventN das pistolas (ID_INPUT_GUN=1 no udev, ate GUN_MAX),
+    ou os de FLIPEROS_GUN_DEVICES."""
+    env = os.environ.get("FLIPEROS_GUN_DEVICES", "")
+    if env:
+        return [p for p in env.split(":") if p][:GUN_MAX]
+    out = []
+    for n in range(32):
+        try:
+            with open(os.path.join(UDEV_DATA, "c13:%d" % (64 + n)), encoding="utf-8", errors="replace") as f:
+                if any(line.startswith("E:ID_INPUT_GUN=1") for line in f):
+                    out.append("/dev/input/event%d" % n)
+        except OSError:
+            continue
+    return out[:GUN_MAX]
+
+
+class GunFlash:
+    """Quando a tela fica clara. O gatilho e o MSC_RAW do driver do GunCon 2, que
+    vem na hora (o BTN_LEFT dele espera o flash quando a pistola nao ve luz), e o
+    BTN_LEFT das outras pistolas, como na camada."""
+
+    def __init__(self, hz=60.0):
+        self.pulse = FLASH_FRAMES / (hz if hz > 0 else 60.0)
+        self.mode, self.level = 1, 1.0
+        self.fds, self.next_scan, self.stamp = [], 0.0, None
+        self.held, self.until = False, 0.0
+
+    def reload(self, path=CONF):
+        """Rele o fliperos.conf quando ele muda (o menu da OSD e o painel mudam o
+        flash com o jogo aberto)."""
+        try:
+            st = os.stat(path)
+            stamp = (st.st_mtime_ns, st.st_size)
+            if stamp == self.stamp:
+                return
+            with open(path, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        except OSError:
+            stamp, text = None, ""
+            if stamp == self.stamp:
+                return
+        self.stamp = stamp
+        self.mode, self.level = flash_settings(text)
+
+    def scan(self, now):
+        if self.fds or now < self.next_scan:
+            return
+        self.next_scan = now + GUN_SCAN
+        for path in gun_devices():
+            try:
+                self.fds.append(os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC))
+            except OSError:
+                pass
+
+    def close(self):
+        for fd in self.fds:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self.fds, self.held, self.until = [], False, 0.0
+
+    def feed(self, data, now):
+        """Os input_event lidos de uma pistola."""
+        for i in range(0, len(data) - EVENT.size + 1, EVENT.size):
+            _, _, kind, code, value = EVENT.unpack_from(data, i)
+            if (kind, code) not in ((EV_KEY, BTN_LEFT), (EV_MSC, MSC_RAW)):
+                continue
+            if value == 1:
+                self.held, self.until = True, now + self.pulse
+            elif value == 0:
+                self.held = False
+
+    def read(self, now):
+        """Le o que as pistolas mandaram; uma que saiu (ENODEV) ou da erro fecha
+        todas e a busca recomeca (um aparelho sempre pronto e sem dados faria o
+        select acordar sem parar)."""
+        for fd in list(self.fds):
+            while True:
+                try:
+                    data = os.read(fd, EVENT.size * 64)
+                except OSError as exc:
+                    if exc.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
+                        break
+                    self.close()
+                    self.next_scan = now + GUN_SCAN
+                    return
+                if not data:
+                    break
+                self.feed(data, now)
+
+    def brightness(self, now):
+        """O brilho do flash agora (0: sem flash)."""
+        if not self.mode:
+            return 0.0
+        if (self.mode == 2 and self.held) or now < self.until:
+            return self.level
+        return 0.0
+
+    def wait(self, now, longest):
+        """Quanto o laco pode dormir: ate um pulso acabar, no maximo longest."""
+        return max(0.0, min(longest, self.until - now)) if now < self.until else longest
+
+
 # ── O X (libX11 e libXext por ctypes: nada a instalar) ──
 
 class XSetWindowAttributes(ctypes.Structure):
@@ -210,6 +359,8 @@ class Overlay:
         x11.XNextEvent.argtypes = [vp, vp]
         x11.XFree.argtypes = [vp]
         x11.XStoreName.argtypes = [vp, ul, ctypes.c_char_p]
+        x11.XSetWindowBackground.argtypes = [vp, ul, ul]
+        x11.XClearWindow.argtypes = [vp, ul]
         ext.XShapeCombineRectangles.argtypes = [vp, ul, i, i, i, ctypes.POINTER(XRectangle), i, i, i]
         self.x11, self.ext = x11, ext
         self.dpy = x11.XOpenDisplay(None)
@@ -233,6 +384,14 @@ class Overlay:
         self.mapped = False
         # A ultima imagem posta (pixels, largura, altura), para repintar.
         self.shown = None
+        # O flash da pistola: outra janela, so a cor de fundo (o servidor a pinta
+        # ao mapear, sem desenho nosso), tambem sem clique nem foco.
+        attrs = XSetWindowAttributes(background_pixel=0xFFFFFF, override_redirect=1)
+        self.flash_win = x11.XCreateWindow(self.dpy, self.root, 0, 0, self.size[0], self.size[1], 0, 0, INPUT_OUTPUT,
+                                           None, CW_BACK_PIXEL | CW_OVERRIDE_REDIRECT, ctypes.byref(attrs))
+        x11.XStoreName(self.dpy, self.flash_win, b"fliperos-gun-flash")
+        ext.XShapeCombineRectangles(self.dpy, self.flash_win, SHAPE_INPUT, 0, 0, None, 0, SHAPE_SET, 0)
+        self.flash_level = 0.0
 
     def root_size(self):
         """A tela de agora (muda a cada modo do Switchres ou xrandr --scale)."""
@@ -255,6 +414,9 @@ class Overlay:
             self.mapped = True
         else:
             x11.XRaiseWindow(self.dpy, self.win)
+        # O flash fica por cima da OSD, como na camada.
+        if self.flash_level:
+            x11.XRaiseWindow(self.dpy, self.flash_win)
         self.shown = (data, dw, dh)
         self.paint()
 
@@ -292,7 +454,30 @@ class Overlay:
     def raise_(self):
         if self.mapped:
             self.x11.XRaiseWindow(self.dpy, self.win)
+            if self.flash_level:
+                self.x11.XRaiseWindow(self.dpy, self.flash_win)
             self.x11.XFlush(self.dpy)
+
+    def flash(self, level):
+        """A tela inteira em cinza no brilho level (0 a 1) por cima de tudo, como o
+        flash da camada (glClear com a mesma cor); 0 esconde. So fala com o X
+        quando muda, e manda na hora (o driver espera a luz por flash_ms)."""
+        if level == self.flash_level:
+            return
+        x11 = self.x11
+        if level > 0:
+            gray = max(0, min(255, round(level * 255)))
+            x11.XSetWindowBackground(self.dpy, self.flash_win, gray << 16 | gray << 8 | gray)
+            if self.flash_level:
+                x11.XClearWindow(self.dpy, self.flash_win)
+            else:
+                w, h = self.root_size()
+                x11.XMoveResizeWindow(self.dpy, self.flash_win, 0, 0, w, h)
+                x11.XMapRaised(self.dpy, self.flash_win)
+        else:
+            x11.XUnmapWindow(self.dpy, self.flash_win)
+        x11.XFlush(self.dpy)
+        self.flash_level = level
 
     def hide(self):
         if self.mapped:
@@ -312,6 +497,11 @@ def main():
     app = os.environ.get("FLIPEROS_DEFLICKER_APP", "")
     fps = fps_path()
     screen = os.path.join(OSD_DIR, "screen")
+    try:
+        hz = float(os.environ.get("FLIPEROS_RES_HZ", "") or 60)
+    except ValueError:
+        hz = 60.0
+    gun = GunFlash(hz)
     shown_seq, shown_size, last_beat, last_raise = None, None, 0.0, 0.0
     while True:
         # O X caindo, o Xlib fecha o programa; o xinit saindo, sai aqui.
@@ -321,6 +511,9 @@ def main():
         overlay.exposed()
         if layer_alive(fps, own_pid, now):
             overlay.hide()
+            # O flash tambem e da camada: as pistolas ficam com ela.
+            gun.close()
+            overlay.flash(0.0)
             shown_seq = None
             time.sleep(0.5)
             continue
@@ -338,7 +531,25 @@ def main():
         elif state is not None or not os.path.exists(screen):
             overlay.hide()
             shown_seq = None
-        time.sleep(POLL)
+        # Ate a proxima volta (POLL), esperando nas pistolas: o tiro acende a tela
+        # na hora, e o fim do pulso a apaga na hora.
+        gun.reload()
+        if gun.mode:
+            gun.scan(now)
+        else:
+            gun.close()
+        deadline = now + POLL
+        while True:
+            t = time.time()
+            gun.read(t)
+            overlay.flash(gun.brightness(t))
+            if t >= deadline:
+                break
+            pause = gun.wait(t, deadline - t)
+            try:
+                select.select(gun.fds, [], [], pause) if gun.fds else time.sleep(pause)
+            except (OSError, ValueError):
+                time.sleep(pause)
 
 
 if __name__ == "__main__":

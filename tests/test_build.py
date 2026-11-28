@@ -9945,6 +9945,236 @@ class OsdX11Tests(unittest.TestCase):
         self.assertGreater(client.index(line), client.index('if [[ ${1:-} == --scale ]]'))
         self.assertRegex(ROOTFS, r' fliperos-osd-x11[ \w\\\n-]*; do')
 
+    def test_gun_flash_settings_and_guns_like_the_layer(self):
+        # O flash da pistola nos jogos sem camada (os do PortProton): as mesmas linhas do fliperos.conf que a
+        # camada le (config/fliperos-deflicker.c read_gun_flash), a ultima de cada valendo.
+        m = self.m
+        self.assertEqual(m.flash_settings(''), (1, 1.0))
+        self.assertEqual(m.flash_settings('gun_flash=hold\ngun_flash_level=40\n'), (2, 0.4))
+        self.assertEqual(m.flash_settings('gun_flash=off\ngun_flash=pulse\n'), (1, 1.0))
+        self.assertEqual(m.flash_settings('gun_flash=off\n'), (0, 1.0))
+        for value, level in (('5', 0.1), ('250', 1.0), ('abc', 0.1), ('70 ', 0.7)):
+            self.assertEqual(m.flash_settings('gun_flash_level=%s\n' % value)[1], level, value)
+        self.assertEqual(m.flash_settings('gun_flash_levels=20\n gun_flash=off\n'), (1, 1.0))
+        # As pistolas: as marcadas no udev (ID_INPUT_GUN, a regra do 99-fliperos-input.rules), como a camada.
+        with tempfile.TemporaryDirectory() as tmp:
+            for n, props in ((2, 'E:ID_INPUT_MOUSE=1\nE:ID_INPUT_GUN=1\n'), (5, 'E:ID_INPUT_JOYSTICK=1\n'),
+                             (31, 'E:ID_INPUT_GUN=1\n')):
+                (Path(tmp) / ('c13:%d' % (64 + n))).write_text(props)
+            old, m.UDEV_DATA = m.UDEV_DATA, tmp
+            env = os.environ.pop('FLIPEROS_GUN_DEVICES', None)
+            try:
+                self.assertEqual(m.gun_devices(), ['/dev/input/event2', '/dev/input/event31'])
+                os.environ['FLIPEROS_GUN_DEVICES'] = '/a:/b'
+                self.assertEqual(m.gun_devices(), ['/a', '/b'])
+            finally:
+                m.UDEV_DATA = old
+                os.environ.pop('FLIPEROS_GUN_DEVICES', None)
+                if env is not None:
+                    os.environ['FLIPEROS_GUN_DEVICES'] = env
+
+    def test_gun_flash_pulse_and_hold(self):
+        m = self.m
+        press = lambda kind, code, value: m.EVENT.pack(0, 0, kind, code, value)
+        sync = m.EVENT.pack(0, 0, 0, 0, 0)
+        gun = m.GunFlash(60)
+        self.assertAlmostEqual(gun.pulse, 2 / 60)
+        # Pulse: o gatilho cru do GunCon 2 (MSC_RAW) acende por 2 quadros, mesmo segurando.
+        gun.feed(press(m.EV_MSC, m.MSC_RAW, 1) + sync, 100.0)
+        self.assertEqual(gun.brightness(100.0), 1.0)
+        self.assertEqual(gun.brightness(100.0 + 2 / 60 - 0.001), 1.0)
+        self.assertEqual(gun.brightness(100.04), 0.0)
+        self.assertAlmostEqual(gun.wait(100.01, 0.04), 2 / 60 - 0.01)
+        self.assertEqual(gun.wait(100.5, 0.04), 0.04)
+        # Hold: enquanto o gatilho esta apertado; o BTN_LEFT de outra pistola tambem vale.
+        gun.mode, gun.level = 2, 0.5
+        gun.feed(press(m.EV_KEY, m.BTN_LEFT, 1), 200.0)
+        self.assertEqual(gun.brightness(205.0), 0.5)
+        gun.feed(press(m.EV_KEY, m.BTN_LEFT, 0), 205.0)
+        self.assertEqual(gun.brightness(205.1), 0.0)
+        # Outros botoes, a repeticao (2) e o off: nada.
+        gun.feed(press(m.EV_KEY, 0x111, 1) + press(m.EV_KEY, m.BTN_LEFT, 2), 300.0)
+        self.assertEqual(gun.brightness(300.0), 0.0)
+        gun.mode = 0
+        gun.feed(press(m.EV_MSC, m.MSC_RAW, 1), 400.0)
+        self.assertEqual(gun.brightness(400.0), 0.0)
+        # O fliperos.conf relido quando muda.
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / 'fliperos.conf'
+            conf.write_text('gun_flash=hold\ngun_flash_level=30\n')
+            gun = m.GunFlash(60)
+            gun.reload(str(conf))
+            self.assertEqual((gun.mode, gun.level), (2, 0.3))
+            conf.write_text('gun_flash=off\n')
+            os.utime(conf, ns=(1, 1))
+            gun.reload(str(conf))
+            self.assertEqual(gun.mode, 0)
+
+    def test_gun_flash_reads_the_guns_and_lets_go_of_a_gone_one(self):
+        m = self.m
+        with tempfile.TemporaryDirectory() as tmp:
+            fifo = Path(tmp) / 'gun'
+            os.mkfifo(fifo)
+            os.environ['FLIPEROS_GUN_DEVICES'] = str(fifo)
+            try:
+                gun = m.GunFlash(60)
+                gun.scan(10.0)
+                self.assertEqual(len(gun.fds), 1)
+                # Com uma aberta, nao procura de novo.
+                gun.scan(20.0)
+                self.assertEqual(len(gun.fds), 1)
+                writer = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+                try:
+                    gun.read(30.0)
+                    self.assertEqual(gun.brightness(30.0), 0.0)
+                    os.write(writer, m.EVENT.pack(0, 0, m.EV_MSC, m.MSC_RAW, 1))
+                    gun.read(30.0)
+                    self.assertEqual(gun.brightness(30.0), 1.0)
+                finally:
+                    os.close(writer)
+                gun.close()
+                self.assertEqual(gun.fds, [])
+                # O aparelho que some (ENODEV) fecha tudo e a busca recomeca depois de GUN_SCAN.
+                gun.fds = [os.open(os.devnull, os.O_RDONLY)]
+                real = m.os.read
+
+                def gone(fd, n):
+                    raise OSError(m.errno.ENODEV, 'No such device')
+                m.os.read = gone
+                try:
+                    gun.read(50.0)
+                finally:
+                    m.os.read = real
+                self.assertEqual(gun.fds, [])
+                self.assertEqual(gun.next_scan, 50.0 + m.GUN_SCAN)
+            finally:
+                os.environ.pop('FLIPEROS_GUN_DEVICES', None)
+
+    def test_gun_flash_window(self):
+        m = self.m
+
+        class FakeX:
+            def __init__(self):
+                self.calls = []
+
+            def XGetGeometry(self, dpy, root, r, x, y, w, h, b, d):
+                w._obj.value, h._obj.value = 854, 480
+                return 1
+
+            def __getattr__(self, name):
+                return lambda *args: self.calls.append((name,) + args[1:]) or 1
+
+        o = object.__new__(m.Overlay)
+        o.x11, o.dpy, o.root, o.win, o.flash_win, o.mapped, o.flash_level = FakeX(), None, 1, 2, 3, False, 0.0
+        o.flash(0.5)
+        self.assertEqual(o.x11.calls, [('XSetWindowBackground', 3, 0x808080), ('XMoveResizeWindow', 3, 0, 0, 854, 480),
+                                       ('XMapRaised', 3), ('XFlush',)])
+        # O mesmo brilho: nada vai ao X; outro: so a cor; 0 esconde.
+        o.x11.calls = []
+        o.flash(0.5)
+        self.assertEqual(o.x11.calls, [])
+        o.flash(1.0)
+        self.assertEqual(o.x11.calls, [('XSetWindowBackground', 3, 0xFFFFFF), ('XClearWindow', 3), ('XFlush',)])
+        o.x11.calls = []
+        o.mapped = True
+        o.raise_()
+        self.assertEqual([c[:2] for c in o.x11.calls], [('XRaiseWindow', 2), ('XRaiseWindow', 3), ('XFlush',)])
+        o.x11.calls = []
+        o.flash(0.0)
+        self.assertEqual(o.x11.calls, [('XUnmapWindow', 3), ('XFlush',)])
+        # Com a camada viva o flash e dela: as pistolas ficam com ela e a janela some.
+        source = (ROOT / 'config/fliperos-osd-x11').read_text()
+        self.assertIn('            gun.close()\n            overlay.flash(0.0)\n', source)
+
+    @unittest.skipUnless(shutil.which('Xvfb'), 'sem Xvfb')
+    def test_gun_flash_lights_the_screen_in_xvfb(self):
+        import ctypes
+        m = self.m
+        x11 = ctypes.CDLL('libX11.so.6')
+        x11.XOpenDisplay.restype, x11.XOpenDisplay.argtypes = ctypes.c_void_p, [ctypes.c_char_p]
+        x11.XDefaultRootWindow.restype, x11.XDefaultRootWindow.argtypes = ctypes.c_ulong, [ctypes.c_void_p]
+        x11.XGetImage.restype = ctypes.c_void_p
+        x11.XGetImage.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint,
+                                  ctypes.c_uint, ctypes.c_ulong, ctypes.c_int]
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            read_fd, write_fd = os.pipe()
+            xvfb = subprocess.Popen(['Xvfb', '-displayfd', str(write_fd), '-screen', '0', '320x240x24', '-br',
+                                     '-nolisten', 'tcp'], pass_fds=(write_fd,), stderr=subprocess.DEVNULL)
+            os.close(write_fd)
+            osd = None
+            try:
+                display = ':' + os.read(read_fd, 16).decode().strip()
+                os.close(read_fd)
+                fifo, conf = tmp / 'gun', tmp / 'fliperos.conf'
+                os.mkfifo(fifo)
+                conf.write_text('gun_flash=hold\ngun_flash_level=50\n')
+                env = dict(os.environ, DISPLAY=display, FLIPEROS_GAME_PID=str(os.getpid()),
+                           FLIPEROS_FPS_FILE=str(tmp / 'fps'), FLIPEROS_OSD_DIR=str(tmp / 'osd'),
+                           FLIPEROS_CONF=str(conf), FLIPEROS_GUN_DEVICES=str(fifo), FLIPEROS_RES_HZ='2')
+                osd = subprocess.Popen(['python3', str(ROOT / 'config/fliperos-osd-x11')], env=env)
+                dpy = x11.XOpenDisplay(display.encode())
+                self.assertTrue(dpy)
+                root = x11.XDefaultRootWindow(dpy)
+
+                def center():
+                    image = x11.XGetImage(dpy, root, 160, 120, 1, 1, 0xFFFFFFFF, 2)
+                    data = ctypes.cast(image, ctypes.POINTER(ctypes.c_void_p))[2]  # o char *data do XImage
+                    return ctypes.string_at(data, 3)
+
+                def wait_for(pixel, seconds=3.0):
+                    end = time.time() + seconds
+                    while time.time() < end:
+                        if center() == pixel:
+                            return True
+                        time.sleep(0.02)
+                    return False
+
+                end = time.time() + 5
+                writer = None
+                while writer is None and time.time() < end:
+                    try:
+                        writer = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+                    except OSError:
+                        time.sleep(0.05)
+                self.assertIsNotNone(writer, 'the overlay never opened the gun')
+                event = lambda value: os.write(writer, m.EVENT.pack(0, 0, m.EV_MSC, m.MSC_RAW, value))
+                black, gray, white = b'\x00\x00\x00', b'\x80\x80\x80', b'\xff\xff\xff'
+                self.assertEqual(center(), black)
+                # Hold: claro enquanto o gatilho esta apertado, no brilho do gun_flash_level.
+                event(1)
+                self.assertTrue(wait_for(gray), center())
+                time.sleep(0.3)
+                self.assertEqual(center(), gray)
+                event(0)
+                self.assertTrue(wait_for(black), center())
+                # Pulse (relido do fliperos.conf com o jogo aberto): FLASH_FRAMES quadros, aqui de 2 Hz = 1 s.
+                conf.write_text('gun_flash=pulse\n')
+                time.sleep(0.3)
+                event(1)
+                self.assertTrue(wait_for(white, 0.8), center())
+                self.assertTrue(wait_for(black, 2.0), center())
+                event(0)
+                # Uma camada viva neste X (o FPS de outro programa): o flash e dela, e a pistola fica com ela (o
+                # leitor fecha: o tiro nem chega). Duas vezes: o batimento do overlay pode cobrir a primeira.
+                for _ in range(2):
+                    (tmp / 'fps').write_text('%d 59.9 flycast - 0\n' % xvfb.pid)
+                    time.sleep(0.6)
+                try:
+                    event(1)
+                except BrokenPipeError:
+                    pass
+                self.assertFalse(wait_for(white, 0.8))
+                os.close(writer)
+                x11.XCloseDisplay(dpy)
+            finally:
+                if osd:
+                    osd.kill()
+                    osd.wait()
+                xvfb.kill()
+                xvfb.wait()
+
 
 class DeflickerTests(unittest.TestCase):
     """O filtro de flicker do entrelacado: a camada de OpenGL (config/fliperos-deflicker.c)
