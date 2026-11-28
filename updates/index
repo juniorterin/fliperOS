@@ -115,3 +115,4 @@
 112	5ec0e4d389362dad3b24c23f734bc18cd81617e6	762bab447fdb22bbb6393028cf634f16e27927440bb68d2e12aac4f7de27ff7b	no	A Batocera disk on ext4 no longer stops the updates (update 109 stopped at /opt/fliperos/saves/retroarch), and RetroArch saves on it again
 113	75e56f5c9250d20fb73863220b02697d95c409e1	0ee978766e6426aabbb0b3c380ed4c3408674e465b9aa7f2c9f6dd96e7227cbe	no	Network folder: play the games of a NAS, RetroNAS or PC, and a first look at the FliperOS Matchmaker
 114	12712a8efaaa65c3aec94ca3e3eb14b6f1703e22	b883a1dc7a35ccd173a2bf445ba313a1ce6f88eb4ce49cc8f444f782b0d30897	no	Arcade monitor on VGA: a picture from the boot, also behind a J-PAC and with the Setup done on a PVM
+115	a1bc0e84b1d8c85fea4a8d750dbe13e5aee8b403	880b16722d878e419521762fbea74e29951b5ba09f17fcb2d192fdcc1fc81491	no	APUs with the VGA on the motherboard (Kaveri, Trinity, Richland) boot with a picture again
