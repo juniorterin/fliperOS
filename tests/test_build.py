@@ -626,8 +626,9 @@ class ImageTests(unittest.TestCase):
         calls = self.tty1(False, [0], ['-'], '--menu', splash=True)
         self.assertEqual(calls, [quit, 'sudo /usr/local/bin/fliperos-setup --menu'])
         self.assertNotIn(quit, self.tty1(True, [0], ['-']))
-        self.assertIn('NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm, /usr/bin/plymouth quit\n',
-                      ROOTFS)
+        # (e o tunel da party online do Matchmaker, gui/fetunnel.py)
+        self.assertIn('NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm, /usr/bin/plymouth quit, '
+                      '/usr/local/sbin/fliperos-online-tunnel\n', ROOTFS)
         quit_unit = ROOTFS.split('plymouth-quit.service.d/fliperos.conf" << \'EOF\'')[1].split('\nEOF')[0]
         self.assertIn('Type=exec', quit_unit)
         self.assertIn("ExecStart=\nExecStart=-/bin/sh -c 'sleep 90; exec /usr/bin/plymouth quit'", quit_unit)
