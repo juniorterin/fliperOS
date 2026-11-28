@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from websockets.asyncio.client import connect  # noqa: E402
 
-from matchmaker import app, identity  # noqa: E402
+from matchmaker import app, identity, profile  # noqa: E402
 from matchmaker.hub import Hub, Player, clean_presence  # noqa: E402
 from matchmaker.store import Store  # noqa: E402
 
@@ -69,6 +69,47 @@ class StoreTests(unittest.TestCase):
         st = Store(":memory:")
         cab_id, _, tag = st.register(identity.key_hash(new_secret()), "MANGO")
         self.assertEqual(st.seen(cab_id, "PAPAYA"), ("PAPAYA", tag))
+
+
+class ProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.st = Store(":memory:")
+        self.signer = profile.Signer()
+        self.cab_id, _, _ = self.st.register(identity.key_hash(new_secret()), "MANGO")
+
+    def signed(self):
+        version, rec = self.st.record(self.cab_id)
+        return self.signer.sign(profile.payload(self.st.row(self.cab_id), rec, version, "0" * 64))
+
+    def test_a_signed_profile_verifies_with_the_public_key(self):
+        pub = self.signer.public_info()["public"]
+        data = profile.verify(self.signed(), pub)
+        self.assertEqual((data["nick"], data["version"], data["record"]), ("MANGO", 1, {}))
+        self.assertEqual(data["total"], {"w": 0, "l": 0, "matches": 0})
+
+    def test_changing_one_number_breaks_the_signature(self):
+        signed = self.signed()
+        signed["payload"] = signed["payload"].replace('"w":0', '"w":99')
+        self.assertIsNone(profile.verify(signed, self.signer.public_info()["public"]))
+
+    def test_another_key_cannot_sign_for_the_server(self):
+        forged = profile.Signer().sign(json.loads(self.signed()["payload"]))
+        self.assertIsNone(profile.verify(forged, self.signer.public_info()["public"]))
+
+    def test_every_result_raises_the_version(self):
+        self.st.add_result(self.cab_id, "mame:sf2ce", True)
+        self.st.add_result(self.cab_id, "mame:sf2ce", False)
+        version, rec = self.st.add_result(self.cab_id, "mame:kof98", True)
+        self.assertEqual(version, 4)
+        data = profile.verify(self.signed(), self.signer.public_info()["public"])
+        self.assertEqual(data["record"], {"mame:kof98": {"l": 0, "w": 1}, "mame:sf2ce": {"l": 1, "w": 1}})
+        self.assertEqual(data["total"], {"w": 2, "l": 1, "matches": 3})
+
+    def test_the_key_comes_from_the_environment_seed(self):
+        seed = profile.b64(secrets.token_bytes(32))
+        a, b = profile.Signer(seed), profile.Signer(seed)
+        self.assertEqual(a.kid, b.kid)
+        self.assertFalse(a.ephemeral)
 
 
 class HubTests(unittest.TestCase):
@@ -197,6 +238,20 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         gone = await self.next_of(b, "room")
         self.assertEqual(gone["players"], [])
         await b.close()
+
+    async def test_the_profile_comes_after_welcome_and_matches_pubkey(self):
+        ws, welcome = await self.open(nick="KIWI")
+        msg = await self.next_of(ws, "profile")
+        reader, writer = await asyncio.open_connection("127.0.0.1", self.port)
+        writer.write(b"GET /pubkey HTTP/1.1\r\nHost: x\r\n\r\n")
+        await writer.drain()
+        raw = await asyncio.wait_for(reader.read(2000), 3)
+        writer.close()
+        pub = json.loads(raw.split(b"\r\n\r\n", 1)[1])
+        self.assertEqual(pub["alg"], "Ed25519")
+        data = profile.verify(msg["profile"], pub["public"])
+        self.assertEqual((data["id"], data["nick"], data["tag"]), (welcome["id"], "KIWI", welcome["tag"]))
+        await ws.close()
 
     async def test_ping(self):
         ws, _ = await self.open()

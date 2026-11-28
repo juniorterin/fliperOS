@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS signups (
     at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS signups_ip ON signups (ip, at);
+CREATE TABLE IF NOT EXISTS profiles (
+    cabinet_id INTEGER PRIMARY KEY REFERENCES cabinets (id),
+    version INTEGER NOT NULL,
+    record TEXT NOT NULL
+);
 """
 
 
@@ -80,6 +85,27 @@ class Store:
                 self.db.execute("ROLLBACK")
                 raise
             return cur.lastrowid, nick, tag
+
+    def record(self, cab_id):
+        """(version, {game: {"w": n, "l": n}}) of a cabinet; (1, {}) before any match."""
+        import json
+        row = self.db.execute("SELECT version, record FROM profiles WHERE cabinet_id = ?", (cab_id,)).fetchone()
+        return (row["version"], json.loads(row["record"])) if row else (1, {})
+
+    def add_result(self, cab_id, game, won):
+        """One more win or loss in a game: the version goes up (phase 3 calls it
+        once both cabinets agree on the result)."""
+        import json
+        with self.lock:
+            version, rec = self.record(cab_id)
+            r = rec.setdefault(game, {"w": 0, "l": 0})
+            r["w" if won else "l"] += 1
+            self.db.execute("INSERT OR REPLACE INTO profiles VALUES (?, ?, ?)",
+                            (cab_id, version + 1, json.dumps(rec, sort_keys=True)))
+            return version + 1, rec
+
+    def row(self, cab_id):
+        return self.db.execute("SELECT * FROM cabinets WHERE id = ?", (cab_id,)).fetchone()
 
     def seen(self, cab_id, nick):
         """A cabinet that came back: last_seen, and the new nickname if it

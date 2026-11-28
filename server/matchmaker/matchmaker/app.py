@@ -6,6 +6,7 @@ passes WebSockets; the server opens no UDP port: STUN and the relay are
 Cloudflare's).
 
     GET /health   -> 200 "ok"
+    GET /pubkey   -> the public key the profiles are signed with ({"kid", "alg", "public"})
     GET /ws       -> the WebSocket (one JSON object per message)
 
 Client to server:
@@ -16,6 +17,7 @@ Client to server:
     {"t": "ping", "n": 1}
 Server to client:
     {"t": "welcome", "id": 7, "nick": "MANGO", "tag": "a7k2"}
+    {"t": "profile", "profile": {"kid", "payload", "sig"}}   (right after welcome, and on {"t": "profile"})
     {"t": "error", "code": "banned" | "nick" | "secret" | "signups" | "hello" | "version"}
     {"t": "counts", "games": {"mame:sf2ce": {"players": 5, "looking": 2}}}
     {"t": "room", "game": "mame:sf2ce", "players": [...]}
@@ -31,9 +33,11 @@ from http import HTTPStatus
 from websockets.asyncio.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from . import identity
+from . import identity, profile
 from .hub import Hub, Player, clean_presence, GAME
 from .store import Store
+
+LEDGER_GENESIS = "0" * 64      # the ledger's head before any match (phase 4 chains the matches)
 
 PROTOCOL = 1
 HELLO_TIMEOUT = 10.0
@@ -45,10 +49,17 @@ log = logging.getLogger("matchmaker")
 
 
 class Server:
-    def __init__(self, db_path=":memory:", clock=time.monotonic):
+    def __init__(self, db_path=":memory:", clock=time.monotonic, signer=None):
         self.store = Store(db_path)
         self.hub = Hub()
         self.clock = clock
+        self.signer = signer or profile.Signer.from_env()
+        if self.signer.ephemeral:
+            log.warning("MATCHMAKER_SIGNING_KEY not set: profiles signed with a throwaway key")
+
+    def signed_profile(self, cab_id):
+        version, record = self.store.record(cab_id)
+        return self.signer.sign(profile.payload(self.store.row(cab_id), record, version, LEDGER_GENESIS))
 
     def client_ip(self, ws):
         headers = ws.request.headers if ws.request else {}
@@ -104,6 +115,7 @@ class Server:
         if msg.get("conn") in ("cable", "wifi"):
             player.info["conn"] = msg["conn"]
         await self.send(ws, {"t": "welcome", "id": cab_id, "nick": nick, "tag": tag})
+        await self.send(ws, {"t": "profile", "profile": self.signed_profile(cab_id)})
         return player
 
     async def handler(self, ws):
@@ -135,6 +147,8 @@ class Server:
                         player.watching = game
                         if game:
                             await player.send({"t": "room", "game": game, "players": self.hub.room(game)})
+                elif kind == "profile":
+                    await player.send({"t": "profile", "profile": self.signed_profile(player.id)})
                 elif kind == "ping" and isinstance(msg.get("n"), int):
                     await player.send({"t": "pong", "n": msg["n"]})
         except ConnectionClosed:
@@ -152,18 +166,22 @@ class Server:
             await player.send(msg)
 
 
-def http(connection, request):
-    """/health answers in plain HTTP; only /ws becomes a WebSocket."""
-    if request.path == "/health":
-        return connection.respond(HTTPStatus.OK, "ok\n")
-    if request.path != "/ws":
-        return connection.respond(HTTPStatus.NOT_FOUND, "not found\n")
-    return None
+def http_for(server):
+    """/health and /pubkey answer in plain HTTP; only /ws becomes a WebSocket."""
+    def http(connection, request):
+        if request.path == "/health":
+            return connection.respond(HTTPStatus.OK, "ok\n")
+        if request.path == "/pubkey":
+            return connection.respond(HTTPStatus.OK, json.dumps(server.signer.public_info()) + "\n")
+        if request.path != "/ws":
+            return connection.respond(HTTPStatus.NOT_FOUND, "not found\n")
+        return None
+    return http
 
 
 async def run(host="0.0.0.0", port=8080, db_path=":memory:", ready=None):
     server = Server(db_path)
-    async with serve(server.handler, host, port, process_request=http, max_size=4096,
+    async with serve(server.handler, host, port, process_request=http_for(server), max_size=4096,
                      ping_interval=20, ping_timeout=20) as ws_server:
         if ready is not None:
             ready.set_result((server, ws_server))
