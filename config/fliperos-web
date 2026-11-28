@@ -1513,20 +1513,40 @@ def media_names(base):
     return seen[1]
 
 
+def batocera_media_dir(kind, key):
+    """Num console do Batocera filesystem (batocera/CONSOLE), a pasta dos
+    atalhos para a arte que o Batocera guarda ao lado dos jogos, com a daqui
+    por cima (config/fliperos-batocera-media); senao None."""
+    if not key.startswith("batocera/"):
+        return None
+    parts = [p for p in key.split("/") if p not in ("", ".", "..")]
+    root = ENV("FLIPEROS_BATOCERA_MEDIA") or os.path.join(player_home(), ".local", "share", "fliperos",
+                                                          "batocera-media")
+    return os.path.join(root, kind, *parts)
+
+
+def media_dirs(kind, key):
+    """Onde procurar a midia de uma pasta de jogos: ~/media/TIPO/PASTA e, num
+    console do Batocera filesystem, depois dela, os atalhos para a do Batocera."""
+    extra = batocera_media_dir(kind, key)
+    return [media_dir(kind, key)] + ([extra] if extra else [])
+
+
 def media_file(key, names, kind, exts):
     """O arquivo de midia do jogo: o primeiro dos nomes (o do set, depois o
-    do pai) que tem um arquivo, na ordem das extensoes."""
-    base = media_dir(kind, key)
-    have = media_names(base)
+    do pai) que tem um arquivo, na ordem das pastas (media_dirs) e das
+    extensoes."""
+    bases = [(base, media_names(base)) for base in media_dirs(kind, key)]
     for name in names:
         if not name or name != os.path.basename(name) or name.startswith("."):
             continue
-        for ext in exts:
-            if name + ext not in have:
-                continue
-            path = os.path.join(base, name + ext)
-            if os.path.isfile(path):
-                return path
+        for base, have in bases:
+            for ext in exts:
+                if name + ext not in have:
+                    continue
+                path = os.path.join(base, name + ext)
+                if os.path.isfile(path):
+                    return path
     return None
 
 
@@ -1540,19 +1560,26 @@ class MediaIndex:
         self.items = {}
 
     def names(self, kind, key):
-        folder = media_dir(kind, key)
-        try:
-            mtime = os.stat(folder).st_mtime
-        except OSError:
+        folders = media_dirs(kind, key)
+        mtime = []
+        for folder in folders:
+            try:
+                mtime.append(os.stat(folder).st_mtime)
+            except OSError:
+                mtime.append(None)
+        if not any(m is not None for m in mtime):
             return frozenset()
+        mtime = tuple(mtime)
         with self.lock:
             hit = self.items.get((kind, key))
             if hit and hit[0] == mtime:
                 return hit[1]
-        try:
-            files = os.listdir(folder)
-        except OSError:
-            files = []
+        files = []
+        for folder, m in zip(folders, mtime):
+            try:
+                files += os.listdir(folder) if m is not None else []
+            except OSError:
+                pass
         exts = MEDIA_EXTS[kind]
         names = frozenset(stem for stem, ext in map(os.path.splitext, files) if ext in exts)
         with self.lock:

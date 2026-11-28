@@ -167,7 +167,8 @@ ESDE_MEDIA_LINKS="screenshots:snap videos:preview marquees:logo covers:box"
 # link por tipo para a pasta do sistema em ~/media; num disco sem link
 # simbolico, media_links_root a poe no disco de dentro).
 frontends_esde() {
-  local key dir platform name exe args exts root n=0 systems=()
+  local key dir platform name exe args exts root i n=0 systems=() dirs=()
+  [[ -n ${FRONTENDS_BATOCERA_DONE:-} ]] || frontends_batocera
   mkdir -p "$ESDE_DIR/custom_systems" "$ESDE_DIR/settings"
   {
     printf '<?xml version="1.0"?>\n<!-- Gerado pelo FliperOS Setup (Frontend). -->\n<systemList>\n'
@@ -181,20 +182,45 @@ frontends_esde() {
       printf '    <platform>%s</platform>\n    <theme>%s</theme>\n  </system>\n' "$platform" \
         "$(frontends_esde_theme "$key" "$platform")"
       systems+=("$key")
+      dirs+=("$dir")
       n=$((n + 1))
     done < <(frontends_systems)
     printf '</systemList>\n'
   } > "$ESDE_DIR/custom_systems/es_systems.xml"
   root=$(media_links_root)
-  for key in "${systems[@]}"; do
+  for i in "${!systems[@]}"; do
+    key=${systems[i]}
     # shellcheck disable=SC2086 # um par por palavra
     media_farm "$root/.es-de/${key//\//-}" "$key" $ESDE_MEDIA_LINKS
+    [[ $key == batocera/* ]] && frontends_esde_batocera "$root/.es-de/${key//\//-}" "$key" "${dirs[i]}"
   done
   esde_setting ROMDirectory "$ROMS_DIR"
   esde_setting MediaDirectory "$root/.es-de"
   frontends_esde_240p
   chown -R "$FLIPEROS_USER:" "$ESDE_DIR" 2> /dev/null
   log_info "ES-DE: $n sistema(s)"
+}
+
+# frontends_esde_batocera PASTA CHAVE DIR: num console do Batocera filesystem,
+# o ES-DE (uma pasta por tipo de arte) olha a dos atalhos, que tem a arte do
+# FliperOS e, onde ela falta, a do Batocera (config/fliperos-batocera-media,
+# feita no frontends_lists); e, sem lista do ES-DE ainda, ganha a do Batocera
+# (o gamelist.xml e o mesmo formato, com os caminhos a partir da pasta do
+# console). A que o ES-DE ja tem (os favoritos, as partidas dele) fica.
+frontends_esde_batocera() {
+  local farm=$1 key=$2 dir=$3 pair target link list
+  for pair in $ESDE_MEDIA_LINKS; do
+    target=$BATOCERA_MEDIA_DIR/${pair#*:}/$key link=$farm/${pair%%:*}
+    # Uma pasta de verdade no lugar do link (posta a mao) fica, como no media_farm.
+    if [[ -d $target ]] && [[ -L $link || ! -e $link ]]; then
+      ln -sfn "$target" "$link" 2>> "$FLIPEROS_LOG"
+    fi
+  done
+  list="$ESDE_DIR/gamelists/${key//\//-}/gamelist.xml"
+  if [[ ! -f $list && -f $dir/gamelist.xml ]]; then
+    mkdir -p "${list%/*}" && cp -- "$dir/gamelist.xml" "$list"
+  fi
+  return 0
 }
 
 # frontends_esde_theme CHAVE PLATAFORMA imprime a pasta do sistema nos temas
@@ -254,6 +280,7 @@ frontends_attract() {
   # jogo (os filtros das telas leem a categoria, o fabricante e o ano): as
   # listas do FliperOS, copiadas para o Attract-Mode.
   frontends_arcade_resync
+  [[ -n ${FRONTENDS_BATOCERA_DONE:-} ]] || frontends_batocera
   frontends_attract_lists
   frontends_attract_prune
   while IFS='|' read -r key dir platform _; do
@@ -648,10 +675,37 @@ frontends_attract_lists() {
 frontends_lists() {
   frontends_arcade_resync
   frontends_openbor_meta
+  frontends_batocera
   frontends_gamemeta
   if frontends_attract_wanted; then
     frontends_attract > /dev/null
     chown -R "$FLIPEROS_USER:" "$ATTRACT_DIR" 2> /dev/null
+  fi
+  return 0
+}
+
+# frontends_batocera: a arte e os dados que o Batocera guarda ao lado dos
+# jogos de cada console do Batocera filesystem (config/fliperos-batocera-media):
+# as imagens e os videos onde falta a arte do FliperOS, as descricoes e, na
+# lista do console, o titulo, o ano, o fabricante, o genero e os jogadores do
+# gamelist.xml (antes das edicoes do "+", que valem por cima). Como o usuario:
+# os arquivos sao dele. O Attract-Mode e o ES-DE refeitos sozinhos (o
+# frontends_configure de cada update) passam por aqui antes, uma vez por
+# execucao (FRONTENDS_BATOCERA_DONE): as pastas de arte deles apontam para os
+# atalhos, que tem de existir.
+BATOCERA_MEDIA_CMD=${BATOCERA_MEDIA_CMD:-$FLIPEROS_BIN/fliperos-batocera-media}
+frontends_batocera() {
+  local key dir name exts args=()
+  FRONTENDS_BATOCERA_DONE=1
+  [[ -f $BATOCERA_MEDIA_CMD ]] || return 0
+  while IFS='|' read -r key dir _ name _ _ exts; do
+    [[ $key == batocera/* ]] && args+=("$key" "$dir" "$FLIPEROS_LISTS/${name//\//-}.txt" "${exts:--}")
+  done < <(frontends_systems)
+  ((${#args[@]})) || return 0
+  if ((EUID == 0)) && id "${FLIPEROS_USER:-fliperos}" > /dev/null 2>&1; then
+    runuser -u "$FLIPEROS_USER" -- python3 "$BATOCERA_MEDIA_CMD" refresh "${args[@]}" > /dev/null 2>> "$FLIPEROS_LOG"
+  else
+    python3 "$BATOCERA_MEDIA_CMD" refresh "${args[@]}" > /dev/null 2>> "${FLIPEROS_LOG:-/dev/null}"
   fi
   return 0
 }

@@ -1,0 +1,546 @@
+#!/usr/bin/env python3
+"""A arte e os dados que o Batocera guarda ao lado dos jogos de cada console do
+Batocera filesystem em uso (lib/batocera.sh, chave batocera/CONSOLE): o
+gamelist.xml (o titulo, a descricao, o ano, o fabricante, o genero, os
+jogadores, a lingua, a regiao) e as imagens e os videos que ele aponta
+(images/, videos/ ou outra pasta do Skraper); sem o gamelist.xml, ou sem a
+linha de um tipo, os nomes que o scraper do Batocera da (images/JOGO-image.png,
+-thumb, -marquee, videos/JOGO-video.mp4).
+
+O FliperOS le a arte de ~/media/TIPO/batocera/CONSOLE (a que o Scraper dele
+grava). A do Batocera entra onde a do FliperOS falta, sem nada ser gravado nas
+pastas do Batocera:
+- as imagens e os videos: uma pasta de atalhos no disco do sistema (um disco
+  NTFS ou exFAT e uma pasta da rede nao guardam atalho), FARM/TIPO/batocera/
+  CONSOLE/JOGO.ext, FARM = ~/.local/share/fliperos/batocera-media, com a arte
+  do FliperOS por cima. O frontend, o painel (config/fliperos-web
+  media_dirs), o Attract-Mode e os pacotes de ROM olham ~/media e depois ela;
+  o ES-DE, que tem uma pasta por tipo, so ela;
+- a descricao: ~/media/texto/batocera/CONSOLE/JOGO.txt, onde nao ha uma (o
+  Attract-Mode a le de uma pasta so). A que foi escrita daqui segue o
+  gamelist.xml; a do Scraper ou da pessoa fica;
+- os dados: na lista do FliperOS do console (~/.local/share/fliperos/lists, o
+  formato das romlists do Attract-Mode), nos campos vazios ou que vieram
+  daqui. As edicoes do "+" (config/fliperos-gamemeta) vao por cima depois.
+Cada console so e relido quando o gamelist.xml ou uma das pastas muda.
+
+  fliperos-batocera-media refresh CHAVE PASTA LISTA EXTENSOES [...]
+      a arte, as descricoes e (LISTA diferente de "-") os dados na lista; a
+      lista que nasce leva os arquivos com as EXTENSOES (".sfc;.zip") do
+      sistema, como o Attract-Mode (que a recebe) os lista
+  fliperos-batocera-media meta CHAVE PASTA [JOGO...]
+      JSON {jogo: {campo: valor}} do gamelist.xml (o pacote de ROM os leva)
+"""
+
+import hashlib
+import json
+import os
+import pwd
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+ENV = os.environ.get
+USER = ENV("FLIPEROS_USER", "fliperos")
+VERSION = "1"
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv")
+# Os tipos de ~/media que a arte do Batocera preenche: as linhas do
+# gamelist.xml, na ordem (o <marquee> do Batocera e o logo), os fins de nome
+# do scraper dele (na pasta images/ ou videos/) e as extensoes.
+TYPES = {
+    "snap": (("image", "titleshot", "screenshot"), ("-image", "-titleshot", "-screenshot"), "images", IMAGE_EXTS),
+    "box": (("thumbnail", "boxart", "cover", "boxfront"), ("-thumb", "-boxart", "-cover"), "images", IMAGE_EXTS),
+    "logo": (("wheel", "marquee"), ("-wheel", "-marquee"), "images", IMAGE_EXTS),
+    "preview": (("video",), ("-video",), "videos", VIDEO_EXTS),
+}
+FIELDS = ("Name", "Title", "Emulator", "CloneOf", "Year", "Manufacturer", "Category", "Players", "Rotation",
+          "Control", "Status", "DisplayCount", "DisplayType", "AltRomname", "AltTitle", "Extra", "Buttons",
+          "Series", "Language", "Region", "Rating")
+# O que fica numa pasta de console sem ser jogo (como no fliperos-rompack).
+NOT_GAMES_RE = re.compile(r"^(gamelist.*\.xml|downloaded_.*|_info\.txt)$", re.I)
+
+
+def player():
+    try:
+        return pwd.getpwnam(USER)
+    except KeyError:
+        return None
+
+
+def player_home():
+    p = player()
+    return ENV("FLIPEROS_HOME") or (p.pw_dir if p else os.path.expanduser("~"))
+
+
+def farm_root(home):
+    return ENV("FLIPEROS_BATOCERA_MEDIA") or os.path.join(home, ".local", "share", "fliperos", "batocera-media")
+
+
+def give(path):
+    p = player()
+    if p and os.geteuid() == 0:
+        try:
+            os.lchown(path, p.pw_uid, p.pw_gid)
+        except OSError:
+            pass
+
+
+def makedirs(path):
+    """Cria a pasta e as que faltam acima, todas da pessoa."""
+    missing = []
+    while path and not os.path.isdir(path):
+        missing.append(path)
+        path = os.path.dirname(path)
+    for d in reversed(missing):
+        os.makedirs(d, exist_ok=True)
+        give(d)
+
+
+def clean(value):
+    """Um valor numa linha da lista: sem ; (o separador), tab ou quebra."""
+    return " ".join(str(value).replace(";", ",").replace("\t", " ").split())[:200]
+
+
+def console_of(key):
+    if not key.startswith("batocera/") or not re.fullmatch(r"[A-Za-z0-9_.+-]+", key[9:]):
+        raise SystemExit("not a Batocera console key: %s" % key)
+    return key[9:]
+
+
+# ── O gamelist.xml ──
+
+class Listing:
+    """Os nomes de cada pasta, lidos uma vez (numa pasta da rede, um stat por
+    arquivo do gamelist.xml levaria minutos)."""
+
+    def __init__(self):
+        self.seen = {}
+
+    def names(self, folder):
+        if folder not in self.seen:
+            try:
+                self.seen[folder] = {e.name: e.is_file() for e in os.scandir(folder)}
+            except OSError:
+                self.seen[folder] = {}
+        return self.seen[folder]
+
+    def exists(self, path):
+        return self.names(os.path.dirname(path)).get(os.path.basename(path), False)
+
+
+def resolve(root, folder, value):
+    """O arquivo de um caminho do gamelist.xml: relativo a pasta do console
+    (./images/x.png) ou o /userdata do Batocera (a RAIZ do disco). So dentro da
+    raiz; senao None."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    if value.startswith("/userdata/"):
+        path = os.path.join(root, value[len("/userdata/"):])
+    elif value.startswith("/") or value.startswith("~"):
+        return None
+    else:
+        path = os.path.join(folder, value)
+    path = os.path.normpath(path)
+    return path if path.startswith(root.rstrip("/") + "/") else None
+
+
+def text(node, tag):
+    child = node.find(tag)
+    return (child.text or "").strip() if child is not None and child.text else ""
+
+
+def players_text(value):
+    """"1-2", "2", "1 - 4": o maior."""
+    numbers = [int(n) for n in re.findall(r"\d+", value or "")]
+    return str(max(numbers)) if numbers else ""
+
+
+def fields_of(node):
+    out = {}
+    if text(node, "name"):
+        out["Title"] = text(node, "name")
+    year = re.match(r"(\d{4})", text(node, "releasedate"))
+    if year and year.group(1) != "0000":
+        out["Year"] = year.group(1)
+    maker = text(node, "developer") or text(node, "publisher")
+    if maker:
+        out["Manufacturer"] = maker
+    if text(node, "genre"):
+        out["Category"] = text(node, "genre")
+    if players_text(text(node, "players")):
+        out["Players"] = players_text(text(node, "players"))
+    if text(node, "lang"):
+        out["Language"] = text(node, "lang")
+    if text(node, "region"):
+        out["Region"] = text(node, "region")
+    return {k: clean(v) for k, v in out.items() if clean(v)}
+
+
+def stem_of(rel):
+    """O jogo de um <path> (./Chrono Trigger (USA).sfc -> Chrono Trigger
+    (USA)): so os do primeiro nivel da pasta, os que o frontend lista."""
+    rel = rel.strip()
+    if rel.startswith("./"):
+        rel = rel[2:]
+    rel = rel.strip("/")
+    if not rel or "/" in rel or rel in (".", ".."):
+        return ""
+    return os.path.splitext(rel)[0] or rel
+
+
+def read_gamelist(folder):
+    """{jogo: {"media": {tipo: arquivo}, "fields": {...}, "desc": texto}} do
+    gamelist.xml da pasta e, para os tipos sem linha, dos nomes do scraper do
+    Batocera. Sem pasta, {}."""
+    root = os.path.dirname(os.path.dirname(folder.rstrip("/")))
+    listing = Listing()
+    games = {}
+    try:
+        tree = ET.parse(os.path.join(folder, "gamelist.xml"))
+        nodes = tree.getroot().iter("game")
+    except (OSError, ET.ParseError):
+        nodes = []
+    for node in nodes:
+        stem = stem_of(text(node, "path"))
+        if not stem:
+            continue
+        game = games.setdefault(stem, {"media": {}, "fields": {}, "desc": ""})
+        game["fields"].update(fields_of(node))
+        if text(node, "desc"):
+            game["desc"] = text(node, "desc")
+        for kind, (tags, _, _, exts) in TYPES.items():
+            for tag in tags:
+                path = resolve(root, folder, text(node, tag))
+                if path and path.lower().endswith(exts) and listing.exists(path):
+                    game["media"][kind] = path
+                    break
+    # Os nomes do scraper do Batocera: o que o gamelist.xml nao disse (ou nao tem).
+    entries = listing.names(folder)
+    stems = set(games) | {os.path.splitext(n)[0] for n, is_file in entries.items()
+                          if is_file and not n.startswith(".") and not NOT_GAMES_RE.match(n)}
+    for sub in ("images", "videos"):
+        names = listing.names(os.path.join(folder, sub)) if sub in entries else {}
+        if not names:
+            continue
+        by_lower = {n.lower(): n for n in names}
+        for kind, (_, suffixes, where, exts) in TYPES.items():
+            if where != sub:
+                continue
+            for stem in stems:
+                if kind in games.get(stem, {}).get("media", {}):
+                    continue
+                for suffix in suffixes:
+                    hit = next((by_lower[(stem + suffix + ext).lower()] for ext in exts
+                                if (stem + suffix + ext).lower() in by_lower), None)
+                    if hit:
+                        games.setdefault(stem, {"media": {}, "fields": {}, "desc": ""})["media"][kind] = \
+                            os.path.join(folder, sub, hit)
+                        break
+    return games
+
+
+# ── A arte e as descricoes ──
+
+def own_files(folder, exts):
+    """{jogo: arquivo} da pasta de ~/media de um tipo (a primeira extensao)."""
+    out = {}
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return out
+    for n in names:
+        stem, ext = os.path.splitext(n)
+        if ext.lower() in exts and not n.startswith(".") and stem not in out:
+            out[stem] = n
+    return out
+
+
+def link_farm(farm, want):
+    """Deixa em FARM so os atalhos de WANT {nome: destino}."""
+    makedirs(farm)
+    try:
+        have = {e.name: e for e in os.scandir(farm)}
+    except OSError:
+        have = {}
+    for name, e in have.items():
+        if name in want:
+            try:
+                if e.is_symlink() and os.readlink(e.path) == want[name]:
+                    continue
+            except OSError:
+                pass
+        try:
+            os.remove(e.path)
+        except OSError:
+            pass
+    for name, target in want.items():
+        path = os.path.join(farm, name)
+        if os.path.lexists(path):
+            continue
+        try:
+            os.symlink(target, path)
+            give(path)
+        except OSError:
+            pass
+
+
+def write_texts(home, key, games, state):
+    """As descricoes do gamelist.xml em ~/media/texto/CHAVE, so onde nao ha
+    uma; as escritas daqui (state: {jogo: sha1}) seguem o gamelist.xml."""
+    folder = os.path.join(home, "media", "texto", *key.split("/"))
+    mine = dict(state.get("texts", {}))
+    for stem, game in games.items():
+        path = os.path.join(folder, stem + ".txt")
+        body = (game["desc"].strip() + "\n") if game["desc"].strip() else ""
+        try:
+            with open(path, "rb") as f:
+                current = hashlib.sha1(f.read()).hexdigest()
+        except OSError:
+            current = None
+        if current is not None and current != mine.get(stem):
+            mine.pop(stem, None)       # o Scraper ou a pessoa: fica
+            continue
+        if not body:
+            if current is not None:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            mine.pop(stem, None)
+            continue
+        data = body.encode("utf-8")
+        if current == hashlib.sha1(data).hexdigest():
+            continue
+        try:
+            makedirs(folder)
+            with open(path + ".new", "wb") as f:
+                f.write(data)
+            give(path + ".new")
+            os.replace(path + ".new", path)
+            mine[stem] = hashlib.sha1(data).hexdigest()
+        except OSError:
+            break                      # ~/media fora (o disco, a rede): na proxima
+    for stem in [s for s in mine if s not in games]:
+        mine.pop(stem)
+    state["texts"] = mine
+
+
+def signature(home, key, folder):
+    """O que muda quando a arte ou os dados do console mudam."""
+    paths = [os.path.join(folder, "gamelist.xml"), folder, os.path.join(folder, "images"),
+             os.path.join(folder, "videos")]
+    paths += [os.path.join(home, "media", kind, *key.split("/")) for kind in list(TYPES) + ["texto"]]
+    out = [VERSION]
+    for p in paths:
+        try:
+            st = os.stat(p)
+            out.append("%d:%d" % (st.st_mtime_ns, st.st_size))
+        except OSError:
+            out.append("-")
+    return "|".join(out)
+
+
+def state_path(home, key):
+    return os.path.join(farm_root(home), ".state", key.replace("/", "-") + ".json")
+
+
+def load_state(home, key):
+    try:
+        with open(state_path(home, key), encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(home, key, state):
+    path = state_path(home, key)
+    try:
+        makedirs(os.path.dirname(path))
+        with open(path + ".new", "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False)
+        give(path + ".new")
+        os.replace(path + ".new", path)
+    except OSError:
+        pass
+
+
+def refresh_media(home, key, folder, games, state):
+    """Os atalhos de cada tipo (a arte do FliperOS e, onde ela falta, a do
+    Batocera) e as descricoes."""
+    for kind, (_, _, _, exts) in TYPES.items():
+        own_dir = os.path.join(home, "media", kind, *key.split("/"))
+        own = own_files(own_dir, exts)
+        want = {stem + os.path.splitext(n)[1].lower(): os.path.join(own_dir, n) for stem, n in own.items()}
+        for stem, game in games.items():
+            path = game["media"].get(kind)
+            if path and stem not in own:
+                want[stem + os.path.splitext(path)[1].lower()] = path
+        link_farm(os.path.join(farm_root(home), kind, *key.split("/")), want)
+    write_texts(home, key, games, state)
+
+
+# ── Os dados na lista ──
+
+def read_list(path):
+    """(campos, [linhas como dicionario]) da lista; (None, []) sem ela."""
+    fields, rows = list(FIELDS), []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line.startswith("#"):
+                    if not rows:
+                        fields = line[1:].split(";")
+                    continue
+                values = line.split(";")
+                if values and values[0]:
+                    rows.append(dict(zip(fields, values)))
+    except OSError:
+        return None, []
+    return fields, rows
+
+
+def fill_list(folder, listpath, games, state, exts=(), attract=None):
+    """Os dados do gamelist.xml nos campos vazios da lista (o titulo igual ao
+    nome do arquivo conta como vazio) e nos que vieram daqui. Sem lista, ela
+    nasce da romlist do Attract-Mode (ATTRACT: a que o Scraper escreveu, que
+    ela vai substituir) e dos jogos da pasta (os arquivos com as EXTS do
+    sistema), para nenhum sumir nem perder o titulo. Quantos campos mudaram."""
+    if not any(g["fields"] for g in games.values()):
+        return 0
+    fields, rows = read_list(listpath)
+    if fields is None:
+        if not exts:
+            return 0
+        fields, rows = read_list(attract) if attract else (None, [])
+        fields = fields or list(FIELDS)
+        try:
+            names = sorted((e.name for e in os.scandir(folder) if e.is_file() and not e.name.startswith(".")),
+                           key=str.lower)
+        except OSError:
+            return 0
+        seen = {r.get("Name") for r in rows}
+        for ext in exts:
+            for n in names:
+                if n.lower().endswith(ext) and len(n) > len(ext) and n[:-len(ext)] not in seen:
+                    seen.add(n[:-len(ext)])
+                    rows.append({"Name": n[:-len(ext)], "Title": n[:-len(ext)]})
+    for f in FIELDS:
+        if f not in fields:
+            fields.append(f)
+    emulator = next((r.get("Emulator", "") for r in rows if r.get("Emulator")), "") or \
+        os.path.splitext(os.path.basename(listpath))[0]
+    mine = state.get("fields", {})
+    changed = 0
+    for r in rows:
+        if not r.get("Emulator"):
+            r["Emulator"] = emulator
+            changed += 1
+        name = r.get("Name", "")
+        data = games.get(name, {}).get("fields")
+        if not data:
+            continue
+        ours = mine.setdefault(name, {})
+        for f, v in data.items():
+            cur = r.get(f, "")
+            empty = not cur or (f == "Title" and cur == name)
+            if not (empty or cur == ours.get(f)):
+                ours.pop(f, None)      # o Scraper, o -listxml ou a pessoa: fica
+                continue
+            ours[f] = v
+            if cur != v:
+                r[f] = v
+                changed += 1
+    state["fields"] = {k: v for k, v in mine.items() if v}
+    if changed:
+        os.makedirs(os.path.dirname(listpath), exist_ok=True)
+        with open(listpath + ".new", "w", encoding="utf-8") as f:
+            f.write("#" + ";".join(fields) + "\n")
+            for r in rows:
+                f.write(";".join(clean(r.get(x, "")) for x in fields) + "\n")
+        give(listpath + ".new")
+        os.replace(listpath + ".new", listpath)
+    return changed
+
+
+# ── Os comandos ──
+
+def parse_exts(text):
+    """".sfc;.smc .zip" -> (".sfc", ".smc", ".zip"), na ordem."""
+    out = []
+    for e in re.split(r"[;,\s]+", (text or "").lower()):
+        if e and e != "-":
+            e = e if e.startswith(".") else "." + e
+            if e not in out:
+                out.append(e)
+    return tuple(out)
+
+
+def refresh(home, key, folder, listpath, exts=""):
+    console_of(key)
+    folder = folder.rstrip("/")
+    if not os.path.isdir(folder):
+        return
+    state = load_state(home, key)
+    sig = signature(home, key, folder)
+    games = None
+    if state.get("sig") != sig or not os.path.isdir(os.path.join(farm_root(home), "snap", *key.split("/"))):
+        games = read_gamelist(folder)
+        refresh_media(home, key, folder, games, state)
+        # As descricoes escritas agora mudam a data da pasta delas.
+        state["sig"] = signature(home, key, folder)
+    if listpath and listpath != "-":
+        try:
+            mtime = os.stat(listpath).st_mtime_ns
+        except OSError:
+            mtime = None
+        if games is not None or state.get("list") != [listpath, mtime]:
+            games = read_gamelist(folder) if games is None else games
+            attract = os.path.join(ENV("FLIPEROS_ATTRACT_DIR") or os.path.join(home, ".attract"), "romlists",
+                                   os.path.basename(listpath))
+            fill_list(folder, listpath, games, state, parse_exts(exts), attract)
+            try:
+                state["list"] = [listpath, os.stat(listpath).st_mtime_ns]
+            except OSError:
+                state["list"] = [listpath, None]
+    save_state(home, key, state)
+
+
+def cmd_refresh(args):
+    if not args or len(args) % 4:
+        print("refresh: CHAVE PASTA LISTA EXTENSOES, de quatro em quatro", file=sys.stderr)
+        return 2
+    home = player_home()
+    for i in range(0, len(args), 4):
+        try:
+            refresh(home, *args[i:i + 4])
+        except OSError as exc:
+            print("%s: %s" % (args[i], exc), file=sys.stderr)
+    return 0
+
+
+def cmd_meta(args):
+    if len(args) < 2:
+        print("meta: CHAVE PASTA [JOGO...]", file=sys.stderr)
+        return 2
+    console_of(args[0])
+    games = read_gamelist(args[1].rstrip("/"))
+    want = set(args[2:])
+    json.dump({stem: g["fields"] for stem, g in games.items() if g["fields"] and (not want or stem in want)},
+              sys.stdout, ensure_ascii=False)
+    print()
+    return 0
+
+
+def main(argv):
+    if not argv or argv[0] not in ("refresh", "meta"):
+        print(__doc__.strip().split("\n\n")[-1], file=sys.stderr)
+        return 2
+    return (cmd_refresh if argv[0] == "refresh" else cmd_meta)(argv[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

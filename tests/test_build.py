@@ -32119,7 +32119,9 @@ class RomPackTests(unittest.TestCase):
 
     def run_tool(self, home, *args, packages=None):
         env = dict(os.environ, FLIPEROS_ROMPACK_HOME=str(home), FLIPEROS_USER='nobody-rompack',
-                   FLIPEROS_ROMCLEAN='/nonexistent', FLIPEROS_CORE_INFO=str(home / 'info'))
+                   FLIPEROS_ROMCLEAN='/nonexistent', FLIPEROS_CORE_INFO=str(home / 'info'),
+                   FLIPEROS_BATOCERA_MEDIA_TOOL=str(ROOT / 'config/fliperos-batocera-media'))
+        env.pop('FLIPEROS_BATOCERA_MEDIA', None)
         return subprocess.run([sys.executable, str(self.TOOL), '--packages', str(packages or home / 'pk')] + list(args),
                               capture_output=True, text=True, env=env)
 
@@ -32266,7 +32268,9 @@ class RomPackTests(unittest.TestCase):
             games = json.loads(self.run_tool(src, 'games', 'batocera-snes').stdout)
             self.assertEqual([g['name'] for g in games['games']], ['Mario', 'Zelda (USA)'])
             self.assertEqual(games['games'][0]['key'], 'batocera/snes')
-            self.assertEqual(games['games'][0]['has']['media'], ['snap'])
+            # A captura do FliperOS e o video do Batocera (videos/Mario-video.mp4; a images/Mario-image.png perde
+            # para a daqui).
+            self.assertEqual(games['games'][0]['has']['media'], ['preview', 'snap'])
             done = self.run_tool(src, 'create', '--target', 'batocera-snes', '--title', 'Nintendo', '--game', 'Mario',
                                  '--group', 'Nintendo')
             self.assertEqual(done.returncode, 0, done.stderr)
@@ -32275,7 +32279,7 @@ class RomPackTests(unittest.TestCase):
                 names = set(zf.namelist())
                 cfg = zf.read('fliperos-package.cfg').decode()
             self.assertEqual(names, {'fliperos-package.cfg', 'roms/retroarch/snes9x/Mario.sfc',
-                                     'media/snap/retroarch/snes9x/Mario.png'})
+                                     'media/snap/retroarch/snes9x/Mario.png', 'media/preview/retroarch/snes9x/Mario.mp4'})
             self.assertIn('target=retroarch-snes9x\n', cfg)
             self.assertIn('meta=retroarch/snes9x\tMario\tTitle\tSuper Mario World\n', cfg)
             # O grupo de quem fez o pacote abre a ROM no disco dele, com a arte dele.
@@ -32283,10 +32287,66 @@ class RomPackTests(unittest.TestCase):
             self.assertIn(str(disk / 'snes/Mario.sfc'), sh)
             self.assertEqual(os.readlink(src / 'media/snap/custom/Nintendo/Mario.png'),
                              str(src / 'media/snap/batocera/snes/Mario.png'))
+            self.assertEqual(os.readlink(src / 'media/preview/custom/Nintendo/Mario.mp4'),
+                             str(disk / 'snes/videos/Mario-video.mp4'))
             done = self.run_tool(dst, 'install', str(zpath))
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertEqual((dst / 'roms/retroarch/snes9x/Mario.sfc').read_text(), 'snes/Mario.sfc')
             self.assertIn(str(dst / 'roms/retroarch/snes9x/Mario.sfc'), (dst / 'roms/custom/Nintendo/Mario.sh').read_text())
+
+    def test_a_batocera_console_package_carries_the_batocera_art_texts_data_and_saves(self):
+        # 2026-11-28: o pacote de um console do Batocera levava so a arte do FliperOS; a que o Batocera guarda ao lado
+        # dos jogos (gamelist.xml, images/, videos/), as descricoes, os dados e os saves que ele fez ficavam de fora.
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dst, units = Path(tmp) / 'src', Path(tmp) / 'dst', Path(tmp) / 'units'
+            root = Path(tmp) / 'disk/batocera'
+            units.mkdir()
+            for rel, data in (('roms/snes/Chrono Trigger (USA).sfc', 'rom'),
+                              ('roms/snes/gamelist.xml', BatoceraMediaTests.GAMELIST),
+                              ('roms/snes/images/Chrono Trigger (USA)-image.png', 'ct-snap'),
+                              ('roms/snes/media/box2dfront/ct.jpg', 'ct-box'), ('roms/snes/images/ct-logo.png', 'ct-logo'),
+                              ('roms/snes/videos/ct.mp4', 'ct-video'), ('roms/snes/manuals/ct.pdf', 'pdf'),
+                              ('saves/snes/Chrono Trigger (USA).srm', 'batocera-srm'),
+                              ('saves/snes/Chrono Trigger (USA).state1', 'batocera-state'), ('saves/snes/Mario.srm', 'x')):
+                self.put(root, rel, data)
+            self.put(src, 'info/snes9x_libretro.info', 'display_name = "Nintendo - SNES / SFC (Snes9x - Current)"\n'
+                                                       'corename = "Snes9x"\nsupported_extensions = "smc|sfc|swc|fig"\n')
+            self.put(src, '.config/fliperos/batocera.list', 'snes\t%s/roms/snes\tretroarch/snes9x\n' % root)
+            env = {'BATOCERA_TABLE': str(ROOT / 'config/batocera-systems.list'), 'NETSHARE_UNITS': str(units)}
+            old = {k: os.environ.get(k) for k in env}
+            os.environ.update(env)
+            self.addCleanup(lambda: [os.environ.pop(k) if v is None else os.environ.__setitem__(k, v) for k, v in old.items()])
+            before = sorted((str(p), p.stat().st_mtime_ns) for p in root.rglob('*'))
+            games = json.loads(self.run_tool(src, 'games', 'batocera-snes').stdout)
+            game = games['games'][0]
+            self.assertEqual(game['has']['media'], ['box', 'logo', 'preview', 'snap', 'texto'])
+            self.assertTrue(game['has']['save'])
+            done = self.run_tool(src, 'create', '--target', 'batocera-snes', '--title', 'RPG', '--game', 'Chrono Trigger (USA)')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            zpath = src / 'pk' / 'RPG.fliperos-retroarch-snes9x.zip'
+            base = 'retroarch/snes9x/Chrono Trigger (USA)'
+            with zipfile.ZipFile(zpath) as zf:
+                names = set(zf.namelist())
+                cfg = zf.read('fliperos-package.cfg').decode()
+                self.assertEqual(zf.read('media/snap/%s.png' % base), b'ct-snap')
+                self.assertEqual(zf.read('media/texto/%s.txt' % base), 'Viagem no tempo; com Crono & Marle.\n'.encode())
+            # Os saves do Batocera (saves/snes) vao para onde o RetroArch do FliperOS os le; o do Mario nao e deste jogo.
+            self.assertEqual(names, {'fliperos-package.cfg', 'roms/%s.sfc' % base, 'media/snap/%s.png' % base,
+                                     'media/box/%s.jpg' % base, 'media/logo/%s.png' % base, 'media/preview/%s.mp4' % base,
+                                     'media/texto/%s.txt' % base, 'save/retroarch/Chrono Trigger (USA).srm',
+                                     'save/retroarch/Chrono Trigger (USA).state1'})
+            for field in ('Title\tChrono Trigger', 'Year\t1995', 'Manufacturer\tSquare', 'Category\tRole Playing Game',
+                          'Players\t2'):
+                self.assertIn('meta=retroarch/snes9x\tChrono Trigger (USA)\t%s\n' % field, cfg)
+            # Nada foi gravado nas pastas do Batocera.
+            self.assertEqual(sorted((str(p), p.stat().st_mtime_ns) for p in root.rglob('*')), before)
+            done = self.run_tool(dst, 'install', str(zpath))
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual((dst / 'save/retroarch/Chrono Trigger (USA).srm').read_text(), 'batocera-srm')
+            self.assertEqual((dst / ('media/preview/%s.mp4' % base)).read_text(), 'ct-video')
+            self.assertFalse((dst / ('media/preview/%s.mp4' % base)).is_symlink())
+            self.assertIn('retroarch/snes9x\tChrono Trigger (USA)\tTitle\tChrono Trigger\n',
+                          (dst / '.config/fliperos/game-meta.tsv').read_text())
 
     def test_the_installer_refuses_paths_outside_the_game_folders(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -32303,6 +32363,153 @@ class RomPackTests(unittest.TestCase):
             # Um pacote de jogo de PC nao e um pacote de ROM.
             self.assertEqual(self.run_tool(home, 'is-package', 'X.fliperos-customgame.zip').returncode, 1)
             self.assertEqual(self.run_tool(home, 'is-package', 'X.fliperos-retroarch-fbneo.zip').returncode, 0)
+
+
+class BatoceraMediaTests(unittest.TestCase):
+    """config/fliperos-batocera-media: a arte e os dados que o Batocera guarda ao lado dos jogos de um console do
+    Batocera filesystem chegam ao frontend (a lista do console, as descricoes, os atalhos que o painel, o frontend do
+    FliperOS, o Attract-Mode e o ES-DE olham), sem nada gravado nas pastas do Batocera."""
+
+    TOOL = ROOT / 'config/fliperos-batocera-media'
+    # Um gamelist.xml como o do Batocera (Skraper/ScreenScraper): caminhos a partir da pasta do console, o /userdata do
+    # Batocera, o <marquee> que e o logo; um jogo numa subpasta (o frontend nao o lista) e um caminho que sai do disco.
+    # Com o BOM, como o do RetroNAS de um usuario (2026-11-28).
+    GAMELIST = ('﻿<?xml version="1.0" encoding="UTF-8"?>\n<gameList>\n'
+                '  <game id="1" source="ScreenScraper.fr">\n'
+                '    <path>./Chrono Trigger (USA).sfc</path>\n    <name>Chrono Trigger</name>\n'
+                '    <desc>Viagem no tempo; com Crono &amp; Marle.</desc>\n'
+                '    <image>./images/Chrono Trigger (USA)-image.png</image>\n'
+                '    <thumbnail>./media/box2dfront/ct.jpg</thumbnail>\n'
+                '    <marquee>/userdata/roms/snes/images/ct-logo.png</marquee>\n'
+                '    <video>./videos/ct.mp4</video>\n    <manual>./manuals/ct.pdf</manual>\n'
+                '    <releasedate>19950311T000000</releasedate>\n    <developer>Square</developer>\n'
+                '    <genre>Role Playing Game</genre>\n    <players>1-2</players>\n'
+                '  </game>\n'
+                '  <game><path>./Zelda.sfc</path><name>The Legend of Zelda</name><desc>Link.</desc></game>\n'
+                '  <game><path>./sub/Other.sfc</path><name>Other</name></game>\n'
+                '  <game><path>./Escape.sfc</path><image>../../../../../etc/passwd.png</image></game>\n'
+                '</gameList>\n')
+
+    def fixture(self, tmp):
+        console, home = Path(tmp) / 'disk/batocera/roms/snes', Path(tmp) / 'home'
+        files = {'Chrono Trigger (USA).sfc': 'rom', 'Mario.sfc': 'rom', 'Zelda.sfc': 'rom', 'leiame.txt': 'x',
+                 'gamelist.xml': self.GAMELIST, 'images/Chrono Trigger (USA)-image.png': 'ct-snap',
+                 'media/box2dfront/ct.jpg': 'ct-box', 'images/ct-logo.png': 'ct-logo', 'videos/ct.mp4': 'ct-video',
+                 'manuals/ct.pdf': 'pdf', 'images/Mario-image.png': 'mario-snap', 'images/Mario-thumb.png': 'mario-box',
+                 'sub/Other.sfc': 'rom'}
+        for rel, data in files.items():
+            (console / rel).parent.mkdir(parents=True, exist_ok=True)
+            (console / rel).write_text(data)
+        # A arte e a descricao do FliperOS (o Scraper dele) valem por cima.
+        for rel, data in (('media/snap/batocera/snes/Mario.png', 'own-snap'),
+                          ('media/texto/batocera/snes/Zelda.txt', 'o do Scraper\n')):
+            (home / rel).parent.mkdir(parents=True, exist_ok=True)
+            (home / rel).write_text(data)
+        return home, console
+
+    def run_tool(self, home, *args):
+        env = dict(os.environ, FLIPEROS_HOME=str(home), FLIPEROS_USER='nobody-batocera-media')
+        env.pop('FLIPEROS_BATOCERA_MEDIA', None)
+        return subprocess.run([sys.executable, str(self.TOOL)] + list(args), capture_output=True, text=True, env=env)
+
+    @staticmethod
+    def rows(path):
+        lines = path.read_text().splitlines()
+        fields = lines[0][1:].split(';')
+        return {r['Name']: r for r in (dict(zip(fields, ln.split(';'))) for ln in lines[1:])}
+
+    def test_the_batocera_art_texts_and_data_reach_the_frontend(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, console = self.fixture(tmp)
+            before = sorted((str(p), p.stat().st_mtime_ns) for p in console.rglob('*'))
+            lst = home / '.local/share/fliperos/lists/Super Nintendo (Snes9x).txt'
+            done = self.run_tool(home, 'refresh', 'batocera/snes', str(console), str(lst), '.sfc;.smc;.zip')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            farm = home / '.local/share/fliperos/batocera-media'
+
+            def link(kind, name):
+                return os.readlink(farm / kind / 'batocera/snes' / name)
+
+            self.assertEqual(link('snap', 'Chrono Trigger (USA).png'), str(console / 'images/Chrono Trigger (USA)-image.png'))
+            self.assertEqual(link('box', 'Chrono Trigger (USA).jpg'), str(console / 'media/box2dfront/ct.jpg'))
+            self.assertEqual(link('logo', 'Chrono Trigger (USA).png'), str(console / 'images/ct-logo.png'))
+            self.assertEqual(link('preview', 'Chrono Trigger (USA).mp4'), str(console / 'videos/ct.mp4'))
+            # Sem linha no gamelist.xml, os nomes do scraper do Batocera; a arte do FliperOS vale por cima.
+            self.assertEqual(link('snap', 'Mario.png'), str(home / 'media/snap/batocera/snes/Mario.png'))
+            self.assertEqual(link('box', 'Mario.png'), str(console / 'images/Mario-thumb.png'))
+            self.assertEqual(sorted(os.listdir(farm / 'snap/batocera/snes')), ['Chrono Trigger (USA).png', 'Mario.png'])
+            # As descricoes: a do gamelist.xml onde nao havia; a do Scraper fica.
+            texts = home / 'media/texto/batocera/snes'
+            self.assertEqual((texts / 'Chrono Trigger (USA).txt').read_text(), 'Viagem no tempo; com Crono & Marle.\n')
+            self.assertEqual((texts / 'Zelda.txt').read_text(), 'o do Scraper\n')
+            # A lista nasce com os jogos da pasta (o leia-me e a subpasta nao) e os dados do gamelist.xml.
+            rows = self.rows(lst)
+            self.assertEqual(sorted(rows), ['Chrono Trigger (USA)', 'Mario', 'Zelda'])
+            chrono = rows['Chrono Trigger (USA)']
+            self.assertEqual((chrono['Title'], chrono['Year'], chrono['Manufacturer'], chrono['Category'], chrono['Players'],
+                              chrono['Emulator']),
+                             ('Chrono Trigger', '1995', 'Square', 'Role Playing Game', '2', 'Super Nintendo (Snes9x)'))
+            self.assertEqual((rows['Mario']['Title'], rows['Zelda']['Title']), ('Mario', 'The Legend of Zelda'))
+            self.assertEqual(sorted((str(p), p.stat().st_mtime_ns) for p in console.rglob('*')), before)
+
+            # O Scraper muda o titulo e poe a captura dele; o gamelist.xml muda o nome e a descricao: a descricao
+            # escrita daqui segue o gamelist.xml, o titulo e a captura do FliperOS ficam.
+            text = lst.read_text().replace(';Chrono Trigger;', ';Chrono Trigger (Scraped);')
+            lst.write_text(text)
+            (home / 'media/snap/batocera/snes/Chrono Trigger (USA).jpg').write_text('own-ct')
+            (console / 'gamelist.xml').write_text(self.GAMELIST.replace('<name>Chrono Trigger</name>', '<name>CT</name>')
+                                                  .replace('Viagem no tempo; com Crono &amp; Marle.', 'Nova.'))
+            done = self.run_tool(home, 'refresh', 'batocera/snes', str(console), str(lst), '.sfc;.smc;.zip')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertEqual(self.rows(lst)['Chrono Trigger (USA)']['Title'], 'Chrono Trigger (Scraped)')
+            self.assertEqual((texts / 'Chrono Trigger (USA).txt').read_text(), 'Nova.\n')
+            self.assertEqual(link('snap', 'Chrono Trigger (USA).jpg'), str(home / 'media/snap/batocera/snes/Chrono Trigger (USA).jpg'))
+            self.assertFalse(os.path.lexists(farm / 'snap/batocera/snes/Chrono Trigger (USA).png'))
+
+            done = self.run_tool(home, 'meta', 'batocera/snes', str(console), 'Chrono Trigger (USA)')
+            self.assertEqual(json.loads(done.stdout), {'Chrono Trigger (USA)': {
+                'Title': 'CT', 'Year': '1995', 'Manufacturer': 'Square', 'Category': 'Role Playing Game', 'Players': '2'}})
+            # So uma chave de console do Batocera.
+            self.assertNotEqual(self.run_tool(home, 'refresh', 'retroarch/snes9x', str(console), '-', '-').returncode, 0)
+
+    def test_a_new_list_keeps_what_the_scraper_wrote_for_attract_mode(self):
+        # A lista do FliperOS vai para o Attract-Mode (frontends_attract_lists) no lugar da romlist dele, onde o Scraper
+        # escreveu: a que nasce parte dela.
+        with tempfile.TemporaryDirectory() as tmp:
+            home, console = self.fixture(tmp)
+            am = home / '.attract/romlists/Super Nintendo (Snes9x).txt'
+            am.parent.mkdir(parents=True)
+            am.write_text('#Name;Title;Emulator;CloneOf;Year\n'
+                          'Chrono Trigger (USA);Chrono Trigger (Skyscraper);Super Nintendo (Snes9x);;\n')
+            lst = home / '.local/share/fliperos/lists/Super Nintendo (Snes9x).txt'
+            done = self.run_tool(home, 'refresh', 'batocera/snes', str(console), str(lst), '.sfc')
+            self.assertEqual(done.returncode, 0, done.stderr)
+            rows = self.rows(lst)
+            self.assertEqual(sorted(rows), ['Chrono Trigger (USA)', 'Mario', 'Zelda'])
+            self.assertEqual((rows['Chrono Trigger (USA)']['Title'], rows['Chrono Trigger (USA)']['Year']),
+                             ('Chrono Trigger (Skyscraper)', '1995'))
+
+    def test_the_panel_and_the_frontend_find_the_batocera_art(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home, console = self.fixture(tmp)
+            self.assertEqual(self.run_tool(home, 'refresh', 'batocera/snes', str(console), '-', '-').returncode, 0)
+            old = {k: os.environ.get(k) for k in ('FLIPEROS_HOME', 'FLIPEROS_BATOCERA_MEDIA')}
+            os.environ['FLIPEROS_HOME'] = str(home)
+            os.environ.pop('FLIPEROS_BATOCERA_MEDIA', None)
+            self.addCleanup(lambda: [os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+                                     for k, v in old.items()])
+            web = load_script('fliperos_web_batocera_media', 'config/fliperos-web')
+            farm = home / '.local/share/fliperos/batocera-media'
+            snap = web.media_file('batocera/snes', ('Chrono Trigger (USA)', None), 'snap', web.IMAGE_EXTS)
+            self.assertEqual(snap, str(farm / 'snap/batocera/snes/Chrono Trigger (USA).png'))
+            self.assertEqual(Path(snap).read_text(), 'ct-snap')
+            # A de ~/media primeiro.
+            self.assertEqual(web.media_file('batocera/snes', ('Mario', None), 'snap', web.IMAGE_EXTS),
+                             str(home / 'media/snap/batocera/snes/Mario.png'))
+            self.assertEqual(web.media_file('batocera/snes', ('Chrono Trigger (USA)', None), 'texto', ('.txt',)),
+                             str(home / 'media/texto/batocera/snes/Chrono Trigger (USA).txt'))
+            self.assertEqual(web.MediaIndex().art('batocera/snes', {'Name': 'Chrono Trigger (USA)'}), 'sblvt')
+            self.assertEqual(web.media_dirs('snap', 'retroarch/snes9x'), [str(home / 'media/snap/retroarch/snes9x')])
 
 
 if __name__ == '__main__':

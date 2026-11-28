@@ -97,6 +97,11 @@ media_links_root() {
   fi
 }
 
+# Os atalhos para a arte que o Batocera guarda ao lado dos jogos de cada console
+# do Batocera filesystem (config/fliperos-batocera-media): BATOCERA_MEDIA_DIR/
+# TIPO/batocera/CONSOLE/JOGO.ext, com a arte daqui por cima, no disco de dentro.
+BATOCERA_MEDIA_DIR=${BATOCERA_MEDIA_DIR:-/home/fliperos/.local/share/fliperos/batocera-media}
+
 # media_farm_target RAIZ TIPO CHAVE imprime para onde aponta o link do TIPO
 # (snap, logo...) da CHAVE numa pasta de links de RAIZ (media_links_root):
 # relativo dentro de ~/media, com o caminho inteiro fora dela.
@@ -664,12 +669,14 @@ scraper_attract_prepare() {
 }
 
 # scraper_attract_paths CHAVE TIPO... imprime as pastas de ~/media dos
-# tipos, separadas por ";" (o formato das linhas artwork).
+# tipos, separadas por ";" (o formato das linhas artwork). Num console do
+# Batocera filesystem, depois de cada uma, a dos atalhos para a arte do Batocera.
 scraper_attract_paths() {
   local key=$1 t out=""
   shift
   for t in "$@"; do
     out+="${out:+;}$MEDIA_DIR/$t/$key"
+    [[ $key == batocera/* ]] && out+=";$BATOCERA_MEDIA_DIR/$t/$key"
   done
   printf '%s\n' "$out"
 }

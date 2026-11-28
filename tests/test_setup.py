@@ -9238,6 +9238,16 @@ class ScraperTests(Base):
         self.assertRegex(mame_cfg, r"(?m)^executable +/opt/fliperos/bin/fliperos-x11-run$")
         self.assertNotEqual(self.env.run("scraper_attract_prepare outra /x pc", env).returncode, 0)
 
+    def test_batocera_consoles_also_read_the_batocera_art_in_attract_mode(self):
+        # 2026-11-28: num console do Batocera filesystem, o Attract-Mode olha ~/media e, depois de cada pasta, a dos
+        # atalhos para a arte que o Batocera guarda ao lado dos jogos (config/fliperos-batocera-media).
+        env = {"MEDIA_DIR": "/h/media", "BATOCERA_MEDIA_DIR": "/h/farm"}
+        self.assertEqual(self.env.out("scraper_attract_paths batocera/snes snap preview", env).strip(),
+                         "/h/media/snap/batocera/snes;/h/farm/snap/batocera/snes;"
+                         "/h/media/preview/batocera/snes;/h/farm/preview/batocera/snes")
+        self.assertEqual(self.env.out("scraper_attract_paths retroarch/snes9x box", env).strip(),
+                         "/h/media/box/retroarch/snes9x")
+
     def test_attract_mode_emulator_of_the_setup_moves_to_media(self):
         # Um .cfg do Setup de antes (arte em ~/.attract/scraped) e refeito; um
         # gravado pelo Attract-Mode fica; o overview que era pasta vai para
@@ -9972,6 +9982,56 @@ class FrontendsTests(Base):
         (esde / "theme.xml").write_text("<theme></theme>\n")
         env.update(PEGASUS_THEME=str(pegasus), ESDE_THEME=str(esde))
         return pegasus
+
+    def test_batocera_consoles_refresh_their_art_and_list_data(self):
+        # 2026-11-28: a cada lista refeita (frontends_lists), os consoles do Batocera filesystem passam pelo
+        # config/fliperos-batocera-media de uma vez: CHAVE, PASTA, a lista do FliperOS e as extensoes de cada um.
+        tool, calls = self.env.dir / "bm", self.env.dir / "bm-calls"
+        tool.write_text('import sys\nopen(%r, "a").write("|".join(sys.argv[1:]) + "\\n")\n' % str(calls))
+        env = {"BATOCERA_MEDIA_CMD": str(tool), "FLIPEROS_LISTS": "/l", "FLIPEROS_USER": "ninguem"}
+        systems = ('frontends_systems() { printf "%%s\\n" %s; }\n' % " ".join(
+            shlex.quote(s) for s in ("batocera/snes|/d/roms/snes|snes|Super Nintendo (Snes9x)|x|y|.sfc;.zip",
+                                     "retroarch/snes9x|/r|snes|SNES|x|y|.sfc",
+                                     "batocera/n64|/d/roms/n64|n64|N64/Mupen|x|y|.z64")))
+        self.env.out(systems + "frontends_batocera", env)
+        self.assertEqual(calls.read_text(), "refresh|batocera/snes|/d/roms/snes|/l/Super Nintendo (Snes9x).txt|.sfc;.zip|"
+                                            "batocera/n64|/d/roms/n64|/l/N64-Mupen.txt|.z64\n")
+        # Sem console do Batocera, nada.
+        calls.unlink()
+        self.env.out('frontends_systems() { echo "mame|/r/mame|arcade|MAME|x|y|.zip"; }\nfrontends_batocera', env)
+        self.assertFalse(calls.exists())
+        # Antes das edicoes do "+", que valem por cima.
+        self.assertRegex(self.env.out("declare -f frontends_lists"), r"frontends_batocera;?\s+frontends_gamemeta")
+        # O Attract-Mode e o ES-DE refeitos sozinhos (o frontends_configure de cada update) apontam a arte para os
+        # atalhos: eles sao feitos antes, se ainda nao foram nesta execucao.
+        for fn in ("frontends_attract", "frontends_esde"):
+            self.assertRegex(self.env.out("declare -f %s" % fn),
+                             r"\[\[ -n \$\{FRONTENDS_BATOCERA_DONE:-\} \]\] \|\| frontends_batocera", fn)
+
+    def test_es_de_reads_the_batocera_art_and_gamelist(self):
+        # No ES-DE (uma pasta por tipo de arte), um console do Batocera olha a pasta dos atalhos (a arte do FliperOS
+        # e, onde ela falta, a do Batocera) e, sem lista do ES-DE ainda, ganha o gamelist.xml do Batocera.
+        farm, esde = self.env.dir / "farm", self.env.dir / "es-de"
+        console, links = self.env.dir / "disk/roms/snes", self.env.dir / "links/.es-de/batocera-snes"
+        (farm / "snap/batocera/snes").mkdir(parents=True)
+        (farm / "box/batocera/snes").mkdir(parents=True)
+        console.mkdir(parents=True)
+        (console / "gamelist.xml").write_text("<gameList/>\n")
+        links.mkdir(parents=True)
+        (links / "screenshots").symlink_to("/media/snap/batocera/snes")
+        (links / "covers").mkdir()           # uma pasta de verdade, posta a mao, fica
+        env = {"BATOCERA_MEDIA_DIR": str(farm), "ESDE_DIR": str(esde)}
+        script = "frontends_esde_batocera %s batocera/snes %s" % (shlex.quote(str(links)), shlex.quote(str(console)))
+        self.env.out(script, env)
+        self.assertEqual(os.readlink(links / "screenshots"), str(farm / "snap/batocera/snes"))
+        self.assertFalse((links / "covers").is_symlink())
+        self.assertFalse(os.path.lexists(links / "videos"))      # sem videos nos atalhos
+        listed = esde / "gamelists/batocera-snes/gamelist.xml"
+        self.assertEqual(listed.read_text(), "<gameList/>\n")
+        # A lista que o ES-DE ja tem (os favoritos, as partidas dele) fica.
+        (console / "gamelist.xml").write_text("<gameList>outra</gameList>\n")
+        self.env.out(script, env)
+        self.assertEqual(listed.read_text(), "<gameList/>\n")
 
     def test_pegasus_collections_and_launch(self):
         env, roms = self.frontends_env()

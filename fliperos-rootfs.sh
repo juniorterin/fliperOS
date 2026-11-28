@@ -547,6 +547,7 @@ install -Dm755 "$src/config/fliperos-rompack" "$root/opt/fliperos/bin/fliperos-r
 # Os metadados editados de cada jogo (o "+" do Create package > ROMs), postos
 # nas listas de jogos do FliperOS.
 install -Dm755 "$src/config/fliperos-gamemeta" "$root/opt/fliperos/bin/fliperos-gamemeta"
+install -Dm755 "$src/config/fliperos-batocera-media" "$root/opt/fliperos/bin/fliperos-batocera-media"
 
 # Emuladores no menu do LXDE (Jogos). O TryExec esconde o que nao foi
 # compilado; os icones dos projetos vem do build de cada um. Os que nao

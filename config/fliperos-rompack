@@ -48,10 +48,14 @@ O mesmo nome de pasta de ~/roms vale em ~/media/<tipo>: a arte de
 Os consoles do Batocera filesystem em uso (~/.config/fliperos/batocera.list,
 fliperos-setup/lib/batocera.sh: um disco ou uma pasta da rede com
 batocera/roms/<console>) tambem sao alvos, batocera-<console>: os jogos sao
-lidos na pasta do disco e a arte em ~/media/<tipo>/batocera/<console>, e o
-pacote sai no formato de quem os abre (o snes com o Mesen-S vai como
-roms/retroarch/mesen-s, TITULO.fliperos-retroarch-mesen-s.zip): quem instala os
-recebe na pasta desse core, com ou sem um Batocera.
+lidos na pasta do disco e a arte em ~/media/<tipo>/batocera/<console> e, onde
+ela falta, a que o Batocera guarda ao lado dos jogos (o gamelist.xml, images/,
+videos/: config/fliperos-batocera-media), e o pacote sai no formato de quem os
+abre (o snes com o Mesen-S vai como roms/retroarch/mesen-s,
+TITULO.fliperos-retroarch-mesen-s.zip): quem instala os recebe na pasta desse
+core, com ou sem um Batocera. Vao junto os dados do gamelist.xml (o titulo, o
+ano...) e, num core do RetroArch, os saves que o Batocera fez
+(saves/<console>, no pacote em save/retroarch).
 """
 
 import argparse
@@ -64,6 +68,7 @@ import os
 import pwd
 import re
 import stat
+import subprocess
 import sys
 import zipfile
 import zlib
@@ -74,6 +79,10 @@ BIN = ENV("FLIPEROS_BIN", "/opt/fliperos/bin")
 CORE_INFO = ENV("FLIPEROS_CORE_INFO", "/opt/fliperos/retroarch/info")
 ROMCLEAN = ENV("FLIPEROS_ROMCLEAN", os.path.join(BIN, "fliperos-romclean"))
 ROMCLEAN_CACHE = ENV("ROMCLEAN_CACHE", "/var/cache/fliperos")
+# A arte e os dados que o Batocera guarda ao lado dos jogos de um console do
+# Batocera filesystem; os tipos de arte que os atalhos dele tem.
+BATOCERA_MEDIA_TOOL = ENV("FLIPEROS_BATOCERA_MEDIA_TOOL", os.path.join(BIN, "fliperos-batocera-media"))
+BATOCERA_MEDIA_TYPES = ("snap", "box", "logo", "preview")
 GROOVYMAME = ENV("GROOVYMAME", "groovymame")
 MAME2010_XML = ENV("MAME2010_XML", "/usr/local/share/fliperos/mame2010.xml.xz")
 MANIFEST = "fliperos-package.cfg"
@@ -403,18 +412,85 @@ def batocera_targets(home, base):
         seen.add(system)
         key = "batocera/" + system
         t = dict(base_t)
+        # A arte de ~/media/TIPO/batocera/CONSOLE; depois do batocera_refresh, a dos
+        # atalhos (a daqui e, onde ela falta, a que o Batocera guarda ao lado dos jogos).
         t.update(id="batocera-" + re.sub(r"[^a-z0-9-]+", "-", system.lower()),
                  label="%s (%s)" % (table[system], detail), pkg=base_t["id"], pkg_label=base_t["label"],
                  roms=[rdir], companions=[], shown=[folder], keys={media_key(rdir): key}, files_only=True, exts=exts,
+                 batocera=(key, folder),
                  src=[(rdir, folder)] + [("media/%s/%s" % (m, media_key(rdir)), os.path.join(home, "media", m, key))
                                          for m in media])
+        # Os saves que o Batocera fez (saves/CONSOLE/JOGO.srm, .state...): no pacote, onde o
+        # RetroArch do FliperOS os le (save/retroarch, sem pasta por core).
+        if base_t["id"].startswith("retroarch-"):
+            t["saves_from"] = (os.path.join(os.path.dirname(os.path.dirname(folder)), "saves", system),
+                               "save/retroarch")
         out.append(t)
     return out
 
 
+def batocera_media_root(home):
+    return ENV("FLIPEROS_BATOCERA_MEDIA") or os.path.join(home, ".local", "share", "fliperos", "batocera-media")
+
+
+def batocera_tool_env(home):
+    return dict(os.environ, FLIPEROS_HOME=home, FLIPEROS_BATOCERA_MEDIA=batocera_media_root(home))
+
+
+def batocera_refresh(home, t):
+    """Num console do Batocera filesystem: os atalhos para a arte do Batocera e
+    as descricoes do gamelist.xml em dia (config/fliperos-batocera-media), e a
+    arte do pacote passa a vir dos atalhos, que tem a daqui por cima (sem eles,
+    fica a de ~/media)."""
+    if not t.get("batocera"):
+        return
+    key, folder = t["batocera"]
+    try:
+        subprocess.run(["python3", BATOCERA_MEDIA_TOOL, "refresh", key, folder, "-", "-"], env=batocera_tool_env(home),
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+    except (OSError, subprocess.SubprocessError):
+        return
+    # Os tipos de agora: a atualizacao pode ter criado pastas (a das descricoes).
+    pkg_key = media_key(t["roms"][0])
+    src = [(p, s) for p, s in t["src"] if not p.startswith("media/")]
+    for m in media_types(home):
+        farm = os.path.join(batocera_media_root(home), m, key)
+        own = os.path.join(home, "media", m, key)
+        src.append(("media/%s/%s" % (m, pkg_key), farm if m in BATOCERA_MEDIA_TYPES and os.path.isdir(farm) else own))
+    t["src"] = src
+
+
+def batocera_save_names(t):
+    """Os arquivos da pasta de saves do Batocera do console (saves/CONSOLE),
+    lidos uma vez."""
+    if "_save_names" not in t:
+        src = (t.get("saves_from") or ("", ""))[0]
+        t["_save_names"] = sorted(e.name for e in listdir(src) if not e.name.startswith(".") and e.is_file()) \
+            if src else []
+    return t["_save_names"]
+
+
+def batocera_meta(home, t, stems):
+    """{jogo: {campo: valor}} do gamelist.xml de um console do Batocera filesystem."""
+    if not t.get("batocera") or not stems:
+        return {}
+    key, folder = t["batocera"]
+    try:
+        done = subprocess.run(["python3", BATOCERA_MEDIA_TOOL, "meta", key, folder] + list(stems),
+                              env=batocera_tool_env(home), capture_output=True, text=True, timeout=300)
+        data = json.loads(done.stdout) if done.returncode == 0 else {}
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def real(home, t, rel):
     """O caminho de verdade de um caminho do pacote (a partir da home): o de um
-    console do Batocera filesystem esta no disco dele (t["src"])."""
+    console do Batocera filesystem esta no disco dele (t["src"]); um arquivo
+    que vai noutro lugar no pacote (t["map"]: os saves do Batocera), o dele."""
+    hit = (t or {}).get("map", {}).get(rel)
+    if hit:
+        return hit
     for pkg, src in (t or {}).get("src", ()):
         if rel == pkg or rel.startswith(pkg + "/"):
             return src + rel[len(pkg):]
@@ -446,11 +522,15 @@ def media_key(roms_dir):
 
 
 def media_types(home):
-    try:
-        return sorted(e.name for e in os.scandir(os.path.join(home, "media"))
-                      if e.is_dir() and not e.name.startswith("."))
-    except OSError:
-        return []
+    """Os tipos de arte: as pastas de ~/media e as dos atalhos para a arte do
+    Batocera (batocera_media_root)."""
+    out = set()
+    for root in (os.path.join(home, "media"), batocera_media_root(home)):
+        try:
+            out |= {e.name for e in os.scandir(root) if e.is_dir() and not e.name.startswith(".")}
+        except OSError:
+            pass
+    return sorted(out)
 
 
 # ── Os jogos de uma pasta ──
@@ -736,6 +816,9 @@ def game_summary(home, t, name, game, idx, has_bios):
             have["media"] = sorted({p.split("/")[1] for p in hits})
         else:
             have[kind] = bool(hits)
+    if not have.get("save") and t.get("saves_from"):
+        stem = game["stem"]
+        have["save"] = any(n == stem or n.startswith(stem + ".") for n in batocera_save_names(t))
     have["bios"] = has_bios
     return {"name": name, "stem": game["stem"], "key": system_key(t, game["dir"]), "files": game["entries"],
             "folder": game["dir"], "bytes": sum(s for _, s in files), "has": have,
@@ -749,6 +832,7 @@ def cmd_games(args):
     except Bad as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    batocera_refresh(home, t)
     games = scan_games(home, t)
     if args.media_types:
         # Os tipos de arte (as pastas de ~/media) que algum jogo do alvo tem, um por linha.
@@ -911,7 +995,11 @@ def install_group(home, group, entries, t=None):
                         if not os.path.islink(dst):
                             continue
                         os.remove(dst)
-                    os.symlink(e.path, dst)
+                    # Dos atalhos para a arte do Batocera (refeitos quando ela muda): o arquivo de verdade.
+                    target = e.path
+                    if e.is_symlink() and src_dir.startswith(batocera_media_root(home) + os.sep):
+                        target = os.readlink(e.path)
+                    os.symlink(target, dst)
                     try:
                         os.lchown(dst, *(owner() or (-1, -1)))
                     except OSError:
@@ -1002,6 +1090,17 @@ def collect(home, t, chosen, kinds, progress, media_sel=None):
                     if kind == "media" and media_sel is not None and p.split("/")[1] not in media_sel:
                         continue
                     add(tree(home, p, t), kind)
+    # Os saves que o Batocera fez, depois dos daqui (o mesmo nome no pacote: vale o daqui).
+    if "save" in kinds and t.get("saves_from"):
+        src, dest = t["saves_from"]
+        names = batocera_save_names(t)
+        for n in chosen:
+            stem = games[n]["stem"]
+            for name in names:
+                if name == stem or name.startswith(stem + "."):
+                    pkg = dest + "/" + name
+                    t.setdefault("map", {})[pkg] = os.path.join(src, name)
+                    add(tree(home, pkg, t), "save")
     return files, notes
 
 
@@ -1016,6 +1115,14 @@ def meta_lines(home, t, games, chosen):
     quem instala (retroarch/mesen-s)."""
     want = {(system_key(t, games[n]["dir"]), games[n]["stem"]): media_key(games[n]["dir"]) for n in chosen}
     out = []
+    # Os dados do gamelist.xml de um console do Batocera filesystem (o titulo, o
+    # ano...), antes das edicoes (quem instala junta as linhas na ordem: a edicao vale).
+    stems = {games[n]["stem"]: media_key(games[n]["dir"]) for n in chosen}
+    for stem, fields in sorted(batocera_meta(home, t, sorted(stems)).items()):
+        if stem in stems and isinstance(fields, dict):
+            for field, value in sorted(fields.items()):
+                if isinstance(value, str) and value and "\t" not in value and "\n" not in value:
+                    out.append("\t".join([stems[stem], stem, field, value]))
     try:
         with open(meta_store(home), encoding="utf-8", errors="replace") as f:
             for line in f:
@@ -1094,6 +1201,7 @@ def cmd_create(args):
     tmp = ""
     try:
         t = find_target(home, args.target)
+        batocera_refresh(home, t)
         title = clean_title(args.title)
         if not title:
             raise Bad("the package needs a title")

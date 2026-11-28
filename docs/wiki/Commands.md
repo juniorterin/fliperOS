@@ -31,6 +31,7 @@ See [Updates and versions](Updates-and-versions.md).
 | --- | --- |
 | `fliperos-customgame inspect\|pending\|install\|pack\|parts\|join\|run` | Custom game packages; `parts PART` and `join PART` for a package in parts (`.zip.001`, `.002`...) ([Custom games](Custom-games.md)) |
 | `fliperos-squashgames pack\|unpack\|remove DIR`, `list`, `mount-all`, `umount-all` | Packed game folders (squashfs) |
+| `fliperos-batocera-media refresh\|meta` | The art and game details Batocera keeps beside the games of a Batocera filesystem console, for the frontends and the ROM packages ([External storage](External-storage.md#batocera-filesystem)) |
 | `fliperos-portproton check\|install\|versions\|run EXE` | PortProton, for Windows games |
 | `fliperos-downloader status\|start\|pause\|resume\|add\|remove\|fetch-sets` | The ROM/CHD torrent downloader ([Downloader](Downloader.md)); `fetch-sets` brings a few sets for a game |
 | `fliperos-chihiro-prepare run\|inspect DISC` | Sega Chihiro: turns a disc into the netboot image xemu opens ([More emulators](More-emulators.md#xemu-sega-chihiro)) |
