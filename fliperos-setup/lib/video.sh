@@ -679,6 +679,9 @@ video_save_result() {
   if [[ $(conf_get card 2> /dev/null) != "$card" || $(conf_get connector 2> /dev/null) != "$name" ]]; then
     conf_unset screens
   fi
+  # Um teste de saidas novo: a troca de tela pelo cabo e ligada de novo
+  # depois, com o tubo escolhido (lib/screens.sh).
+  screens_drop "output test"
   conf_set gpu "$(drm_card_name "$card")"
   # O ID do PCI: com ele o sistema instalado percebe que a placa foi trocada
   # (video_hw_changed).
@@ -829,6 +832,9 @@ video_hw_boot_check() {
   id=$(drm_card_id "$card" 2> /dev/null) || return 0
   [[ $(conf_get hw_safe_boot 2> /dev/null) == "$id" ]] && return 0
   log_warn "placa de video trocada: ${change/|/ -> }"
+  # A troca de tela pelo cabo sai (o video da home volta antes): o modo seguro
+  # da placa nova e o do tubo.
+  screens_drop "new video card"
   # O nome da placa antiga, para o aviso: o modo seguro grava o da nova.
   conf_set hw_old_gpu "${change%%|*}"
   conf_set hw_changed 1
@@ -1204,6 +1210,9 @@ custom_modeline() {
 # monitor custom, ou sem uma modeline, apaga o arquivo e devolve status 1.
 custom_edid() {
   local mode modeline
+  # Com outra tela no cabo (lib/screens.sh) o fliperos.conf tem o video dela, e
+  # este EDID e o do boot, o do tubo: fica como esta ate a volta dele.
+  screens_away && return 0
   rm -f "$EDID_DIR/$CUSTOM_EDID"
   video_custom_active || return 1
   mode=$(conf_get boot_resolution 2> /dev/null) || return 1
@@ -1375,10 +1384,21 @@ video_previous_label() {
 # e o mame.ini) e guarda o de agora no lugar: desfazer de novo volta ao monitor
 # novo. O boot (o Xorg, a linha do kernel) fica com quem chama.
 video_previous_restore() {
-  local now key line monitor range
+  local now monitor
   [[ -s $VIDEO_PREVIOUS ]] || return 1
   monitor=$(conf_get monitor "$VIDEO_PREVIOUS") && monitor_known "$monitor" || return 1
   now=$(video_snapshot)
+  video_snapshot_apply "$VIDEO_PREVIOUS" || return 1
+  printf '%s\n' "$now" > "$VIDEO_PREVIOUS"
+  log_info "video de volta ao anterior: $monitor"
+}
+
+# video_snapshot_apply ARQUIVO poe o video guardado num arquivo (o que o
+# video_snapshot imprimiu) no fliperos.conf, no Switchres, no mame.ini e no
+# Xorg. A volta ao monitor anterior e a troca de tela (lib/screens.sh).
+video_snapshot_apply() {
+  local file=$1 key line monitor range
+  monitor=$(conf_get monitor "$file") && monitor_known "$monitor" || return 1
   for key in $VIDEO_KEYS; do
     conf_unset "$key"
   done
@@ -1387,7 +1407,7 @@ video_previous_restore() {
     key=${line%%=*}
     [[ $line == *=* ]] && [[ " $VIDEO_KEYS " == *" $key "* || $key =~ ^geometry_[0-9]+x[0-9]+[pi]$ ]] || continue
     conf_set "$key" "${line#*=}"
-  done < "$VIDEO_PREVIOUS"
+  done < "$file"
   conf_get frequency > /dev/null 2>&1 || conf_set frequency "$(monitor_frequency "$monitor" || echo lcd)"
   if range=$(conf_get geometry 2> /dev/null); then
     ini_set "$SWITCHRES_INI" monitor custom
@@ -1400,8 +1420,6 @@ video_previous_restore() {
   [[ -f $MAME_INI ]] && ini_set "$MAME_INI" monitor "$monitor"
   video_mame_aspect
   custom_boot_refresh
-  printf '%s\n' "$now" > "$VIDEO_PREVIOUS"
-  log_info "video de volta ao anterior: $monitor"
 }
 
 # video_resolution_rows imprime "modo|descricao" da Resolution do Video Setup:

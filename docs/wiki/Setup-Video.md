@@ -40,6 +40,10 @@ A single resolution can also get a geometry of its own from the game itself, in 
 
 A second and a third arcade monitor on the same card, for the multi-screen games (Darius, Punch-Out!!, F355 Challenge). Each item and how it works: [Multiple monitors](Multiple-Monitors.md).
 
+## Screen Switch
+
+A 15 kHz tube and a 31 kHz monitor (a PC monitor, an EDTV plasma) on the same cable, one at a time: FliperOS reads which one is on the cable and uses its video without a restart. Swap the cable with the cabinet off. See [Screen switch](Screen-switch.md).
+
 ## Interlaced hacks, Colour calibration and Scanlines
 
 - **Interlaced hacks**: for each program, whether games with more than 240 lines run at 640x240 or interlaced, with or without the flicker filter.

@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""O EDID do monitor que esta no cabo de uma saida, lido direto pelo DDC.
+
+    fliperos-ddc read CARD-CONECTOR    uma leitura: "none" ou as chaves do EDID
+    fliperos-ddc watch CARD-CONECTOR   uma linha a cada troca de monitor no cabo
+
+A troca de tela pelo cabo (fliperos-setup/lib/screens.sh) precisa saber qual
+monitor esta ligado. O kernel nao serve: com o drm.edid_firmware da linha do
+boot ele usa o EDID do arquivo e nem le o cabo. Aqui a leitura e no barramento
+i2c da saida (o "ddc" dela no sysfs), no endereco 0x50 da EEPROM do EDID, sem
+modeset e sem mexer na imagem.
+
+O CRT de 15 kHz quase nunca tem EDID (monitor de arcade, TV pelo SCART): a
+leitura nao tem resposta e sai "none". Um monitor de PC ou um plasma responde.
+
+read imprime, uma por linha:
+    fp=0123456789abcdef   fabricante, produto e serie (bytes 8 a 15)
+    name=...              o nome do monitor (descritor 0xFC)
+    serial=...            o numero de serie em texto (0xFF: "Switchres200"...)
+    hmin=30 / hmax=81     a faixa horizontal em kHz (descritor 0xFD; 0 sem ela)
+    digital=0|1           entrada digital (HDMI, DVI-D, DisplayPort)
+    vga60=0|1             tem o 640x480 a 60 Hz dos modos padrao
+Um EDID com cabecalho ou soma errados (ruido no cabo) vale "none".
+
+watch imprime a "fp" (ou "none") quando o monitor do cabo troca: duas
+leituras iguais em seguida, para um cabo mal encaixado nao trocar a tela. Le
+5 vezes por segundo enquanto ha um EDID no cabo (o monitor de 31 kHz: tirar o
+cabo dele e o comeco de ligar o tubo) e 1 vez por segundo sem.
+"""
+import fcntl
+import os
+import sys
+import time
+
+I2C_SLAVE = 0x0703
+EDID_ADDR = 0x50
+HEADER = bytes([0, 255, 255, 255, 255, 255, 255, 0])
+SYSFS = os.environ.get("DRM_SYSFS", "/sys/class/drm")
+DEV = os.environ.get("FLIPEROS_DDC_DEV", "/dev")
+FAST = float(os.environ.get("FLIPEROS_DDC_FAST", "0.2"))
+SLOW = float(os.environ.get("FLIPEROS_DDC_SLOW", "1.0"))
+
+
+def bus(conn):
+    """/dev/i2c-N da saida (o link "ddc" do conector no sysfs)."""
+    target = os.path.realpath(os.path.join(SYSFS, conn, "ddc"))
+    name = os.path.basename(target)
+    if not name.startswith("i2c-"):
+        raise OSError("no DDC bus for " + conn)
+    return os.path.join(DEV, name)
+
+
+def fetch(dev, length):
+    """Os primeiros LENGTH bytes da EEPROM; None sem resposta."""
+    try:
+        fd = os.open(dev, os.O_RDWR)
+    except OSError:
+        return None
+    try:
+        fcntl.ioctl(fd, I2C_SLAVE, EDID_ADDR)
+        os.write(fd, b"\x00")
+        data = os.read(fd, length)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    return data if len(data) == length else None
+
+
+def text(data, tag):
+    for off in (54, 72, 90, 108):
+        if data[off:off + 3] == b"\x00\x00\x00" and data[off + 3] == tag:
+            raw = data[off + 5:off + 18].split(b"\n")[0].split(b"\x00")[0]
+            return raw.decode("ascii", "replace").strip()
+    return ""
+
+
+def describe(data):
+    """As chaves do EDID; None se ele nao e valido."""
+    if data is None or data[:8] != HEADER or sum(data) % 256:
+        return None
+    hmin = hmax = 0
+    for off in (54, 72, 90, 108):
+        if data[off:off + 3] == b"\x00\x00\x00" and data[off + 3] == 0xFD:
+            hmin, hmax = data[off + 7], data[off + 8]
+    keys = {
+        "fp": data[8:16].hex(),
+        "name": text(data, 0xFC),
+        "serial": text(data, 0xFF),
+        "hmin": hmin,
+        "hmax": hmax,
+        "digital": 1 if data[20] & 0x80 else 0,
+        "vga60": 1 if data[35] & 0x20 else 0,
+    }
+    return keys
+
+
+def probe(dev):
+    """A fp do monitor no cabo, ou "none". So o cabecalho e a fp (16 bytes):
+    a leitura e curta, para poder ser feita varias vezes por segundo."""
+    data = fetch(dev, 16)
+    if data is None or data[:8] != HEADER:
+        return "none"
+    return data[8:16].hex()
+
+
+def cmd_read(conn):
+    try:
+        keys = describe(fetch(bus(conn), 128))
+    except OSError:
+        keys = None
+    if keys is None:
+        print("none")
+        return 0
+    for key, value in keys.items():
+        print("%s=%s" % (key, value))
+    return 0
+
+
+def cmd_watch(conn):
+    try:
+        dev = bus(conn)
+    except OSError as e:
+        print(e, file=sys.stderr)
+        return 1
+    last, pending = None, None
+    while True:
+        now = probe(dev)
+        if now == last:
+            pending = None
+        elif last is None or now == pending:
+            print(now, flush=True)
+            last, pending = now, None
+        else:
+            pending = now
+        time.sleep(FAST if last != "none" or pending else SLOW)
+
+
+def main(argv):
+    if len(argv) != 3 or argv[1] not in ("read", "watch"):
+        print(__doc__.strip().split("\n\n")[1], file=sys.stderr)
+        return 2
+    if argv[1] == "read":
+        return cmd_read(argv[2])
+    try:
+        return cmd_watch(argv[2])
+    except (KeyboardInterrupt, BrokenPipeError):
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

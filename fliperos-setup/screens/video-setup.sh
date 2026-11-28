@@ -324,6 +324,69 @@ screen_multi_monitor() {
   done
 }
 
+# screen_screen_switch: Video Setup > Screen Switch (lib/screens.sh). Um tubo
+# de 15 kHz e um monitor de 31 kHz no mesmo cabo, um de cada vez: o FliperOS
+# ve pelo EDID qual esta la e usa o video dele, sem reiniciar.
+screen_screen_switch() {
+  local why choice last="" entries=() id active label summary note
+  if ! screens_on; then
+    if ! why=$(screens_available) || ! why=$(screens_home_ok); then
+      ui_msg "Screen Switch" "A 15 kHz tube and a 31 kHz monitor (a PC monitor, an EDTV plasma) on the same cable, one at a time: FliperOS reads which one is there when it starts and uses its video." \
+        "" "$why"
+      return 0
+    fi
+    ui_msg "Screen Switch" "FliperOS reads the monitor on the cable (its EDID) and uses that screen's video: this tube, or a 31 kHz monitor at 640x480. Every start begins in this tube's mode." \
+      "" "Swap the cable with the cabinet off. With it on, what is open closes, going back to the tube restarts the cabinet, and a VGA switch box swaps faster than the signal can be cut." \
+      "" "Never put the tube behind a splitter or a box that answers with another monitor's EDID."
+    ui_yesno "Screen Switch" "Turn on the screen switch? It counts after a restart." no || return 0
+    ui_info "Screen Switch" "Saving the boot settings..."
+    if ! screens_enable; then
+      ui_msg "Screen Switch" "Could not update the boot settings (see the log)."
+      return 0
+    fi
+    ui_yesno "Screen Switch" "The screen switch works after a reboot. Reboot now?" no && screen_reboot_now
+    return 0
+  fi
+  while true; do
+    active=$(screens_active)
+    summary=$(ui_fields "On the cable|$(screens_label "$active")" "Screens seen|$(screens_list | grep -c .)")
+    note="A new 31 kHz monitor on the cable gets 640x480. Monitor Type, Resolution and Geometry change the screen that is on the cable."
+    entries=()
+    while IFS= read -r id; do
+      label=$(screens_label "$id")
+      [[ $id == "$active" ]] && label="$label - now"
+      entries+=("show:$id|$label")
+    done < <(screens_list)
+    entries+=("off|Turn Off" "return|Return")
+    choice=$(ui_menu "Screen Switch" "$summary"$'\n\n'"$note" "$last" "${entries[@]}") || choice=return
+    last=$choice
+    case $choice in
+      off)
+        if screens_away; then
+          ui_msg "Screen Switch" "Put the 15 kHz tube on the cable to turn it off: every start uses its mode."
+          continue
+        fi
+        ui_yesno "Screen Switch" "Turn off the screen switch? Only this tube's video stays." no || continue
+        ui_info "Screen Switch" "Saving the boot settings..."
+        screens_disable || ui_msg "Screen Switch" "Could not update the boot settings (see the log)."
+        return 0
+        ;;
+      show:*)
+        id=${choice#show:}
+        label=$(screens_label "$id")
+        if [[ $id == "$SCREEN_HOME" || $id == "$active" ]]; then
+          ui_msg "Screen Switch" "$label." "" \
+            "While it is on the cable, Monitor Type, Resolution and Geometry change its video."
+          continue
+        fi
+        ui_yesno "Screen Switch" "Forget $label? Next time on the cable it comes back as a new screen, at 640x480." no || continue
+        screens_forget "$id"
+        ;;
+      return) break ;;
+    esac
+  done
+}
+
 # screen_mm_output MONITOR escolhe a saida do monitor 2 ou 3.
 screen_mm_output() {
   local slot=$1 extras=() current pick choices=() c gpu
@@ -768,6 +831,7 @@ screen_video_setup() {
       "geometry|Geometry|Center and size the picture on the tube, with a test grid." \
       "geometry_reset|Reset Geometry|Undo the geometry: back to the monitor preset." \
       "monitors|Multiple Monitors|A second and a third monitor, for multi-screen games." \
+      "screens|Screen Switch|A 15 kHz tube or a 31 kHz monitor on one cable." \
       "mode480|$mode480_label|Per program: 640x240, or interlaced with or without the filter." \
       "colour|Colour calibration|Brightness, contrast, gamma, each gun, colour and hue." \
       "${scanlines[@]}" \
@@ -784,6 +848,7 @@ screen_video_setup() {
       geometry) screen_geometry ;;
       geometry_reset) screen_geometry_reset ;;
       monitors) screen_multi_monitor ;;
+      screens) screen_screen_switch ;;
       mode480)
         if [[ -z $mode480_why ]] || gpu_unsupported_ok "Interlaced hacks" "Interlaced hacks" "$mode480_why"; then
           screen_mode480

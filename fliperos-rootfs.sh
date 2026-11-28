@@ -847,6 +847,14 @@ install -Dm644 "$src/config/fliperos-driver-trial.service" "$root/etc/systemd/sy
 ln -sfn /etc/systemd/system/fliperos-driver-trial.service \
   "$root/etc/systemd/system/multi-user.target.wants/fliperos-driver-trial.service"
 
+# ── Troca de tela pelo cabo (Setup > Video Setup > Screen switch) ───
+# O tubo de 15 kHz ou o monitor de 31 kHz no mesmo cabo, pelo EDID lido no
+# DDC (fliperos-ddc); o vigia corta o sinal quando o de 31 kHz sai do cabo.
+install -Dm755 "$src/config/fliperos-ddc" "$root/opt/fliperos/bin/fliperos-ddc"
+install -Dm644 "$src/config/fliperos-screen-watch.service" "$root/etc/systemd/system/fliperos-screen-watch.service"
+ln -sfn /etc/systemd/system/fliperos-screen-watch.service \
+  "$root/etc/systemd/system/multi-user.target.wants/fliperos-screen-watch.service"
+
 # ── Teste da BIOS da placa (Setup > Video Setup > Card firmware) ─────
 # Sem confirmar no boot seguinte, volta a BIOS original.
 install -Dm755 "$src/config/fliperos-atom15" "$root/opt/fliperos/bin/fliperos-atom15"

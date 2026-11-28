@@ -1,0 +1,21 @@
+# O vigia da troca de tela pelo cabo (Setup > Video Setup > Screen switch):
+# le o EDID do cabo (config/fliperos-ddc) e troca entre o tubo de 15 kHz e o
+# monitor de 31 kHz sem reiniciar. Com o de 31 kHz ligado le 5 vezes por
+# segundo: se o cabo dele sai, corta o sinal antes de o tubo chegar
+# (fliperos-setup/lib/screens.sh). Com a troca desligada, so confere a cada
+# 5 s se ela foi ligada.
+[Unit]
+Description=FliperOS: screen switch by the cable (15 kHz tube or 31 kHz monitor)
+After=systemd-modules-load.service local-fs.target
+ConditionPathExists=/etc/fliperos/installed
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fliperos-setup --screen-watch
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

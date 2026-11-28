@@ -78,6 +78,8 @@ source "$SETUP_DIR/lib/multimonitor.sh"
 source "$SETUP_DIR/lib/xorg.sh"
 # shellcheck source=lib/bootloader.sh
 source "$SETUP_DIR/lib/bootloader.sh"
+# shellcheck source=lib/screens.sh
+source "$SETUP_DIR/lib/screens.sh"
 # shellcheck source=lib/atom15.sh
 source "$SETUP_DIR/lib/atom15.sh"
 # shellcheck source=lib/oscr.sh
@@ -259,6 +261,20 @@ main() {
     --driver-trial-boot)
       # A vigia da troca de driver (fliperos-driver-trial.service).
       amd_driver_trial_boot
+      return 0
+      ;;
+    --screen-sync)
+      # A tela do cabo antes do que abre na tela (fliperos-tty1): o tubo de
+      # 15 kHz ou o monitor de 31 kHz (lib/screens.sh). Espera uma troca que o
+      # vigia esteja fazendo.
+      screens_lock
+      screens_sync
+      screens_unlock
+      return 0
+      ;;
+    --screen-watch)
+      # O vigia do cabo (fliperos-screen-watch.service).
+      screens_watch
       return 0
       ;;
     --atom15-boot)

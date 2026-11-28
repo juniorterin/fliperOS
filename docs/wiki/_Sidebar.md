@@ -82,6 +82,7 @@
   - [Versus score](Versus-score.md)
   - [Scoreboard games](Scoreboard-games.md)
 - [Multiple monitors](Multiple-Monitors.md)
+  - [Screen switch](Screen-switch.md)
 - [DIY hardware](DIY-hardware.md)
 - [Latency](Latency.md)
   - [CPU and speed](CPU-and-speed.md)

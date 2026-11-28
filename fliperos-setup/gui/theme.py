@@ -597,6 +597,26 @@ ICONS.update({
 ................
 ................
 """,
+    # Screen switch: o tubo (com as linhas) e o monitor de 31 kHz, com as
+    # setas da troca entre eles.
+    "screens": """
+................
+.PPPPPP..CCCCCC.
+.PFFFFP..CDDDDC.
+.PDDDDP..CDDDDC.
+.PFFFFP..CDDDDC.
+.PPPPPP..CCCCCC.
+...PP......CC...
+..PPPP....CCCC..
+................
+...GGGGGGGGG....
+..GG.......GG...
+.GGG.......GGG..
+..GG.......GG...
+...GGGGGGGGG....
+................
+................
+""",
     # Interlaced hacks: um tubo com as linhas do entrelacado, metade piscando
     # (linhas acesas e apagadas, um campo de cada vez) e metade ja filtrada
     # (as linhas misturadas, uma cor so).
@@ -1836,7 +1856,8 @@ def guess(title, value, label):
         return "torrent"
     if value.isdigit() and value not in label:
         return "romlist"        # um arquivo, pelo numero dele na lista
-    for word, name in (("wi-fi", "network"), ("network", "network"), ("monitor", "video"), ("output", "outputs"),
+    for word, name in (("screen switch", "screens"),
+                       ("wi-fi", "network"), ("network", "network"), ("monitor", "video"), ("output", "outputs"),
                        ("card", "audio"), ("audio", "audio"), ("folder", "dest"), ("usb", "usb"),
                        ("quirk", "quirks"), ("torrent", "torrent"), ("browser", "network"), ("frontend", "frontend"),
                        ("emulator", "emulators"), ("update", "reset"), ("gun", "guncon"),

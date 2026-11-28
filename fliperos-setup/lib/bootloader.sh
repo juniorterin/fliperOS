@@ -427,7 +427,9 @@ boot_compose() {
   # Em pe, o console em 640x480i com o EDID dos dois modos (lib/video.sh).
   line=$(vertical_console_cmdline "$line" "$conn" "$orientation")
   # Com o monitor custom, o modo do Switchres (lib/video.sh).
-  custom_edid_cmdline "$line" "$conn"
+  line=$(custom_edid_cmdline "$line" "$conn")
+  # Com a troca de tela pelo cabo, o modo do tubo num EDID (lib/screens.sh).
+  screens_edid_cmdline "$line" "$conn"
 }
 
 # Placa-mae sem a porta do mouse PS/2 (AUX): o kernel espera por ela uns 2 s
@@ -540,9 +542,18 @@ boot_menu_timeout() {
 # atual (modo de boot, EDID, orientacao e latencia) e atualiza o menu do
 # Limine.
 boot_apply() {
-  local line splash_changed=0
+  local line splash_changed=0 screen_changed=0
+  # Com outra tela no cabo (lib/screens.sh) o fliperos.conf tem o video dela, e
+  # a linha do kernel e sempre a do tubo: o que mudou e gravado na volta dele.
+  if screens_away; then
+    conf_set screen_boot_pending 1
+    log_info "linha do kernel: gravada na volta do monitor de 15 kHz (outra tela no cabo)"
+    return 0
+  fi
   # O EDID do monitor custom segue a resolucao e o crt_range de agora.
   video_custom_active && { custom_edid || true; }
+  # O EDID do modo do tubo, com a troca de tela ligada.
+  screens_boot_edid && screen_changed=1
   # O splash na area que o tubo mostra (31 kHz): so vale no initramfs.
   splash_visible && splash_changed=1
   line=$(boot_read_cmdline) || line=$BOOT_BASE_CMDLINE
@@ -553,7 +564,7 @@ boot_apply() {
   # modprobe.d de um driver AMD trocado so valem se estiverem no initramfs; o
   # hook do initramfs tambem chama o fliperos-limine-update.
   if [[ $(conf_get boot_resolution 2> /dev/null) == custom || $(conf_get boot_resolution 2> /dev/null) == "$SUPER240_MODE" ]] ||
-    [[ -f $EDID_DIR/$CUSTOM_EDID || $line == *"edid/$LINK_EDID"* ]] || ((${BOOT_INITRAMFS:-0} || splash_changed)); then
+    [[ -f $EDID_DIR/$CUSTOM_EDID || $line == *"edid/$LINK_EDID"* ]] || ((${BOOT_INITRAMFS:-0} || splash_changed || screen_changed)); then
     run_logged update-initramfs -u -k all
   else
     run_logged "$LIMINE_UPDATE"

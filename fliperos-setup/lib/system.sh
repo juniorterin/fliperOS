@@ -147,6 +147,11 @@ settings_list() {
   fi
   printf 'orientation|Video|Monitor orientation|choice|%s|horizontal=Horizontal;vertical-cw=Vertical clockwise (rotated right);vertical-ccw=Vertical counter-clockwise (rotated left)|How the monitor is mounted in the cabinet. The boot is prepared again (about a minute); everything follows it after a restart.\n' \
     "$(conf_get orientation 2> /dev/null || echo horizontal)"
+  # Video Setup > Screen Switch (lib/screens.sh): onde ela serve, ou ligada.
+  if screens_on || screens_available > /dev/null; then
+    printf 'screen_switch|Video|Screen switch by the cable|choice|%s|off=Off;on=On|A 15 kHz tube and a 31 kHz monitor (a PC monitor, an EDTV plasma) on the same cable, one at a time: FliperOS reads which one is there and uses its video. Turn it on with the tube on the cable; every start begins in its mode. Swap the cable with the cabinet off. Counts after a restart.\n' \
+      "$(screens_on && echo on || echo off)"
+  fi
   if (($(mm_count) > 1)); then
     printf 'mm_games|Video|Multi-screen games|choice|%s|on=One screen on each monitor;off=Everything on monitor 1|Games with 2 or 3 screens. Counts after a restart.\n' \
       "$(mm_games_on && echo on || echo off)"
@@ -396,6 +401,24 @@ settings_set() {
     versus_ft)
       [[ $value =~ ^[0-9]+$ ]] && ((value <= VERSUS_FT_MAX)) || return 2
       conf_set versus_ft "$((10#$value))"
+      ;;
+    screen_switch)
+      # Como o Video Setup > Screen Switch: liga com o tubo de 15 kHz no cabo e
+      # escolhido; desliga so com ele no cabo (lib/screens.sh).
+      case $value in
+        on)
+          screens_on && return 0
+          screens_available > /dev/null && screens_home_ok > /dev/null || return 2
+          is_installed && ! is_live || return 2
+          screens_enable || return 1
+          ;;
+        off)
+          screens_on || return 0
+          screens_away && return 2
+          screens_disable || return 1
+          ;;
+        *) return 2 ;;
+      esac
       ;;
     versus.reset)
       # O Reset do cartao Marquee do painel: o fliperos-versus do jogo aberto

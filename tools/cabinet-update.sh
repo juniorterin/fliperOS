@@ -540,6 +540,10 @@ systemctl enable fliperos-gunkeys.service > /dev/null 2>&1 || true
 systemctl restart fliperos-gunkeys.service
 systemctl enable fliperos-osd.service > /dev/null 2>&1 || true
 systemctl restart fliperos-osd.service
+# O vigia da troca de tela pelo cabo (fliperos-setup/lib/screens.sh): com a
+# troca desligada ele so confere a cada 5 s se ela foi ligada.
+systemctl enable fliperos-screen-watch.service > /dev/null 2>&1 || true
+systemctl restart fliperos-screen-watch.service
 # O botao de desligar (config/fliperos-powerkey): o triggerhappy rele as
 # teclas dele, e o logind a configuracao (pelo HUP, sem reiniciar: o X e as
 # sessoes abertas dependem dele). O triggerhappy.socket do Ubuntu sai

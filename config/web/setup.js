@@ -27,6 +27,7 @@ const SETUP_TREE = [
     { id: "geometry", box: "geometry", cabinet: "geometry", title: true },
     { id: "geometry_reset", box: "geometryReset", into: "geometry" },
     { id: "monitors", keys: ["mm_games"], cabinet: "monitors" },
+    { id: "screens", keys: ["screen_switch"] },
     { id: "mode480", keys: ["mode480.", "deflicker."], title: true },
     { id: "colour", keys: ["color."], cabinet: "colour", title: true },
     { id: "scanlines", keys: ["scanlines", "scanline."], cabinet: "scanlines", when: "scanlines", title: true },

@@ -92,6 +92,35 @@ web_launch() {
   return 0
 }
 
+# A troca de tela pelo cabo (Setup > Video Setup > Screen switch,
+# fliperos-setup/lib/screens.sh): o tubo de 15 kHz ou o monitor de 31 kHz no
+# cabo. O vigia (fliperos-screen-watch.service) troca sozinho, fecha o que
+# estava na tela e deixa aqui o pedido de reabrir.
+SCREEN_RELAUNCH=${FLIPEROS_SCREEN_RELAUNCH:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fliperos-screen-relaunch}
+
+# screen_sync: a tela do cabo vira a do sistema antes do que abre (espera a
+# troca que o vigia estiver fazendo). Sem a troca ligada, volta na hora.
+screen_sync() {
+  grep -q '^screen_switch=on' "$ETC/fliperos.conf" 2> /dev/null || return 0
+  sudo -n /usr/local/bin/fliperos-setup --screen-sync > /dev/null 2>&1
+  return 0
+}
+
+# screen_relaunch: o vigia trocou de tela e fechou o que estava aberto: a
+# sessao (o frontend) abre de novo, ja no modo da tela nova. Status 1 sem
+# pedido, ou quando era o menu (o laco o abre).
+screen_relaunch() {
+  local what
+  [[ -e $SCREEN_RELAUNCH ]] || return 1
+  what=$(head -n 1 "$SCREEN_RELAUNCH" 2> /dev/null)
+  rm -f "$SCREEN_RELAUNCH"
+  screen_sync
+  [[ $what == session=* ]] || return 1
+  what=${what#session=}
+  "$BIN/fliperos-session" ${what:+"$what"}
+  return 0
+}
+
 # tty1_reload: este arquivo mudou desde que o tty1 subiu (um update): o menu
 # continua pelo arquivo novo, que traz o web_launch novo (as telas do Setup
 # pedidas pelo painel). So a parte do menu: o boot ja passou.
@@ -113,6 +142,11 @@ menu() {
     if ((${#remote[@]} == 0)) && web_launch; then
       continue
     fi
+    # Uma troca de tela fechou o frontend: ele abre de novo, na tela nova.
+    if ((${#remote[@]} == 0)) && screen_relaunch; then
+      continue
+    fi
+    ((${#remote[@]} == 0)) && screen_sync
     sudo /usr/local/bin/fliperos-setup --menu "${remote[@]}"
     rc=$?
     # O que foi apertado no menu e caiu no console (setas, Enter do
@@ -122,6 +156,8 @@ menu() {
     printf '\e[H\e[2J\e[?25l'
     # O painel web fechou o menu para abrir um jogo: o laco o abre.
     [[ ${#remote[@]} -eq 0 && -s $WEB_LAUNCH ]] && continue
+    # Uma troca de tela fechou o menu: o laco o abre de novo, na tela nova.
+    [[ ${#remote[@]} -eq 0 && -e $SCREEN_RELAUNCH ]] && continue
     if ((rc != 20)); then
       # Exit to shell (10): o mesmo "Open game" do frontend e do desktop.
       ((rc == 10 && ${#remote[@]} == 0)) && menu_sound open
@@ -206,6 +242,10 @@ if [[ ${1:-} != --menu ]]; then
   # No modo jogo, so quando o menu abrir.
   game_mode || "$BIN/fliperos-roms" > /dev/null 2>&1
   if [[ -f $ETC/installed ]]; then
+    # A troca de tela pelo cabo: o boot sempre sobe no modo do tubo de 15 kHz,
+    # e com o monitor de 31 kHz no cabo o video dele entra aqui, antes de
+    # qualquer tela.
+    screen_sync
     # A BIOS da placa recem-gravada (Setup > Video Setup > Card firmware):
     # confirmar antes de tudo, tambem no modo jogo. Sem resposta, volta a
     # original e reinicia.

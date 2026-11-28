@@ -6,6 +6,7 @@ caminhos de sistema apontados para arvores falsas (sysfs do DRM, /etc,
 ISO, com o mesmo mawk e jq.
 """
 import json
+import sys
 import os
 from pathlib import Path
 import pwd
@@ -21,7 +22,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "fliperos-setup"
 LIBS = ["common", "config", "progress", "speech", "monitor", "drm", "video", "multimonitor", "xorg",
-        "bootloader", "disk", "install", "recovery", "launcher", "audio", "network",
+        "bootloader", "screens", "disk", "install", "recovery", "launcher", "audio", "network",
         "status", "scraper", "romclean", "netshare", "downloader", "mediapacks", "freeroms", "frontends", "update", "patches", "splash", "folders", "storage", "batocera", "hardware", "latency", "quirks", "padkeys", "lpt", "buttons", "bluetooth", "debug", "emulators", "services", "system", "customgames", "whatsnew", "oscr", "cheevos", "cloud"]
 LATENCY_BASE = "mitigations=off audit=0 usbhid.jspoll=1 usbhid.kbpoll=1 usbhid.mousepoll=1"
 # Boot direto no Plymouth, sem texto (pedido no teste do gabinete).
@@ -1873,7 +1874,8 @@ class WebVideoSettingsTests(Base):
         self.assertIn("before=$(video_snapshot)", screen)
         self.assertLess(screen.index('video_snapshot_keep "$before"'), screen.index("    xorg_generate\n    if ! boot_apply"))
         web = (ROOT / "config" / "fliperos-web").read_text()
-        self.assertIn('SLOW_SETTINGS = ("orientation", "splash", "mm_games", "monitor", "resolution", "video.previous")', web)
+        self.assertIn('SLOW_SETTINGS = ("orientation", "splash", "mm_games", "monitor", "resolution", "video.previous", '
+                      '"screen_switch")', web)
 
     def test_cabinet_name(self):
         self.assertEqual(self.rows()["cabinet_name"][1:4], ["System", "Cabinet name", "text"])
@@ -15927,6 +15929,357 @@ class FolderReferencesTests(unittest.TestCase):
                     self.assertIn("%s", line, key)
         web = (ROOT / "config/fliperos-web").read_text(encoding="utf-8")
         self.assertEqual(web.count('"no such package in %s" % customgame_packages_shown()'), 2)
+
+
+class ScreenSwitchTests(Base):
+    """Troca de tela pelo cabo (lib/screens.sh): o tubo de 15 kHz e um monitor
+    de 31 kHz no mesmo cabo, um de cada vez."""
+
+    FP = "4c2d0a0e01000000"
+    PLASMA = "fp=%s\nname=PLASMA EDTV\nserial=\nhmin=30\nhmax=50\ndigital=0\nvga60=1\n" % FP
+    BOOT_LINE = "quiet video=VGA-1:e drm.edid_firmware=VGA-1:edid/fliperos-screen.bin"
+
+    def setUp(self):
+        super().setUp()
+        e = self.env
+        e.card("card0", "amdgpu")
+        e.connector("card0-VGA-1", "connected")
+        self.conf = e.etc / "fliperos.conf"
+        self.conf.write_text("card=card0\nconnector=VGA-1\nmonitor=generic_15\nfrequency=15k\n"
+                             "boot_resolution=320x240S\nkernel_video=video=VGA-1:320x240Se\n")
+        e.cmdline.write_text(self.BOOT_LINE + "\n")
+        params = e.dir / "drmparams"
+        params.mkdir()
+        self.param = params / "edid_firmware"
+        self.param.write_text("VGA-1:edid/fliperos-screen.bin\n")
+        self.cable = e.dir / "cable"
+        self.cable.write_text("none\n")
+        e.stub("fliperos-ddc", 'cat "%s"' % self.cable)
+        self.boots = e.dir / "boots"
+        self.boots.write_text("")
+        e.stub("limine-update", 'echo limine >> "%s"' % self.boots)
+        e.stub("update-initramfs", 'echo initramfs >> "%s"' % self.boots)
+        e.stub("fake-reboot", 'echo reboot >> "%s"' % self.boots)
+        self.edid_dir = e.dir / "edid"
+        self.run_dir = e.dir / "run"
+        self.vars = {"SCREEN_DDC": str(e.bin / "fliperos-ddc"), "EDID_DIR": str(self.edid_dir),
+                     "EDID_MODES": str(SETUP.parent / "config" / "fliperos-edid-modes"),
+                     "SCREENS_DIR": str(e.etc / "screens"), "SCREEN_RUN": str(self.run_dir),
+                     "LIMINE_UPDATE": str(e.bin / "limine-update"), "SCREEN_REBOOT": str(e.bin / "fake-reboot"),
+                     "SCREEN_PROC": str(e.dir / "noproc"), "SCREEN_RELAUNCH": str(e.dir / "relaunch"),
+                     "BOOT_DEFAULTS": str(e.etc / "fliperos-boot")}
+
+    def new_boot(self):
+        """Um boot novo: o /run vazio e o parametro do kernel o da linha (o do tubo)."""
+        shutil.rmtree(self.run_dir, ignore_errors=True)
+        self.param.write_text("VGA-1:edid/fliperos-screen.bin\n")
+        self.env.writes.write_text("")
+
+    def run_sh(self, script):
+        return self.env.run(script, self.vars)
+
+    def out(self, script):
+        return self.env.out(script, self.vars)
+
+    def conf_value(self, key):
+        for line in self.conf.read_text().splitlines():
+            if line.startswith(key + "="):
+                return line.split("=", 1)[1]
+        return None
+
+    def enable(self):
+        self.out("screens_enable")
+        self.env.writes.write_text("")
+        self.boots.write_text("")
+
+    def test_enabling_moves_the_tube_mode_into_an_edid(self):
+        self.out("screens_enable")
+        data = (self.edid_dir / "fliperos-screen.bin").read_bytes()
+        self.assertEqual(len(data), 128)
+        self.assertEqual(sum(data) % 256, 0)
+        # O 320x240 da tabela do kernel: 6,51 MHz, 320 colunas, 240 linhas.
+        self.assertEqual(data[54] | data[55] << 8, 651)
+        self.assertEqual(data[56] | (data[58] >> 4) << 8, 320)
+        self.assertEqual(data[59] | (data[61] >> 4) << 8, 240)
+        line = self.out("boot_read_cmdline").split()
+        self.assertIn("video=VGA-1:e", line)
+        self.assertIn("drm.edid_firmware=VGA-1:edid/fliperos-screen.bin", line)
+        self.assertNotIn("video=VGA-1:320x240Se", line)
+        # O EDID novo entra no initramfs (o amdgpu sobe nele).
+        self.assertIn("initramfs", self.boots.read_text())
+        home = (self.env.etc / "screens" / "home.conf").read_text()
+        self.assertIn("edid=none\n", home)
+        self.assertIn("monitor=generic_15\n", home)
+
+    def test_cmdline_keeps_options_and_other_edids(self):
+        self.enable()
+        out = self.out("screens_edid_cmdline 'quiet video=VGA-1:320x240Se,panel_orientation=normal' VGA-1").strip()
+        self.assertEqual(out, "quiet video=VGA-1:e,panel_orientation=normal "
+                              "drm.edid_firmware=VGA-1:edid/fliperos-screen.bin")
+        own = "video=VGA-1:e drm.edid_firmware=VGA-1:edid/fliperos-custom.bin"
+        self.assertEqual(self.out("screens_edid_cmdline '%s' VGA-1" % own).strip(), own)
+        # Desligada, a linha fica com o modo no video=.
+        self.out("screens_disable")
+        line = self.out("boot_read_cmdline").split()
+        self.assertIn("video=VGA-1:320x240Se", line)
+        self.assertNotIn("drm.edid_firmware=VGA-1:edid/fliperos-screen.bin", line)
+
+    def test_plasma_on_the_cable_gets_its_own_video_without_a_reboot(self):
+        self.enable()
+        self.cable.write_text(self.PLASMA)
+        r = self.run_sh("screens_sync")
+        self.assertEqual(r.returncode, 10, r.stderr)
+        self.assertEqual(self.conf_value("screen_active"), self.FP)
+        self.assertEqual(self.conf_value("monitor"), "vesa_480")
+        self.assertEqual(self.conf_value("frequency"), "31k")
+        self.assertEqual(self.conf_value("boot_resolution"), "640x480S")
+        # A linha do kernel guardada fica a do tubo.
+        self.assertEqual(self.conf_value("kernel_video"), "video=VGA-1:320x240Se")
+        edid = "fliperos-screen-%s.bin" % self.FP
+        self.assertEqual(self.param.read_text(), "VGA-1:edid/" + edid)
+        data = (self.edid_dir / edid).read_bytes()
+        # O 640x480 de 31,5 kHz do X (25,45 MHz / 808).
+        self.assertEqual(data[54] | data[55] << 8, 2545)
+        # O "detect" faz o amdgpu/radeon soltar o EDID guardado; o "on" forca a saida.
+        self.assertEqual(self.env.writes.read_text().split(),
+                         ["card0-VGA-1=off", "card0-VGA-1=detect", "card0-VGA-1=on"])
+        self.assertTrue((self.run_dir / "screen-edid-dirty").exists())
+        self.assertNotIn("reboot", self.boots.read_text())
+        profile = (self.env.etc / "screens" / (self.FP + ".conf")).read_text()
+        self.assertIn("name=PLASMA EDTV\n", profile)
+        # Sem troca, nada a fazer.
+        self.env.writes.write_text("")
+        self.assertEqual(self.run_sh("screens_sync").returncode, 0)
+        self.assertEqual(self.env.writes.read_text(), "")
+
+    def test_back_to_the_tube_in_the_same_boot_restarts_with_the_output_off(self):
+        # O kernel guardou o EDID do plasma (o tubo nao responde no DDC para o
+        # driver solta-lo): a volta nunca liga a saida, reinicia.
+        self.enable()
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        # Uma mudanca feita no plasma fica no perfil dele.
+        self.out("conf_set geometry '31.00-32.00,55-65'")
+        self.env.writes.write_text("")
+        self.cable.write_text("none\n")
+        self.assertEqual(self.run_sh("screens_sync").returncode, 20)
+        self.assertEqual(self.env.writes.read_text().split(), ["card0-VGA-1=off"])
+        self.assertEqual(self.boots.read_text().split(), ["reboot"])
+        self.assertEqual(self.conf_value("screen_active"), "home")
+        self.assertEqual(self.conf_value("monitor"), "generic_15")
+        self.assertEqual(self.conf_value("boot_resolution"), "320x240S")
+        self.assertIsNone(self.conf_value("geometry"))
+        self.assertIn("geometry=31.00-32.00,55-65", (self.env.etc / "screens" / (self.FP + ".conf")).read_text())
+        # No boot novo, com o tubo: nada a trocar, a saida fica como o kernel subiu.
+        self.new_boot()
+        self.assertEqual(self.run_sh("screens_sync").returncode, 0)
+        self.assertEqual(self.env.writes.read_text(), "")
+        # De volta ao plasma, a geometria dele volta.
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        self.assertEqual(self.conf_value("geometry"), "31.00-32.00,55-65")
+
+    def test_watcher_cuts_the_signal_before_anything(self):
+        self.enable()
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        self.env.writes.write_text("")
+        self.cable.write_text("none\n")
+        r = self.run_sh("screens_watch_event card0 VGA-1 none")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        writes = self.env.writes.read_text().split()
+        self.assertEqual(writes[0], "card0-VGA-1=off")
+        self.assertNotIn("card0-VGA-1=on", writes)
+        self.assertEqual(self.boots.read_text().split(), ["reboot"])
+        # O mesmo EDID que a tela ativa ja tem: nada.
+        self.new_boot()
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        self.env.writes.write_text("")
+        self.out("screens_watch_event card0 VGA-1 %s" % self.FP)
+        self.assertEqual(self.env.writes.read_text(), "")
+
+    def test_boot_line_is_never_written_with_the_plasma(self):
+        self.enable()
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        before = (self.env.etc / "fliperos-boot").read_text()
+        self.out("boot_apply")
+        self.assertEqual((self.env.etc / "fliperos-boot").read_text(), before)
+        self.assertEqual(self.boots.read_text(), "")
+        self.assertEqual(self.conf_value("screen_boot_pending"), "1")
+        # O EDID do custom (o do boot) tambem fica.
+        self.assertEqual(self.run_sh("custom_edid").returncode, 0)
+        # Na volta do tubo, o que ficou pendente e gravado (antes de reiniciar).
+        self.cable.write_text("none\n")
+        self.run_sh("screens_sync")
+        self.assertEqual(self.boots.read_text().split(), ["limine", "reboot"])
+        self.assertIsNone(self.conf_value("screen_boot_pending"))
+        self.assertIn("drm.edid_firmware=VGA-1:edid/fliperos-screen.bin", self.out("boot_read_cmdline"))
+
+    def test_boot_without_the_edid_line_stays_on_the_tube(self):
+        # Ligada sem reiniciar: o modo ainda no video= e o frontend abriria nele.
+        self.enable()
+        self.env.cmdline.write_text("quiet video=VGA-1:320x240Se\n")
+        self.param.write_text("\n")
+        self.cable.write_text(self.PLASMA)
+        self.assertEqual(self.run_sh("screens_sync").returncode, 0)
+        self.assertEqual(self.conf_value("screen_active"), "home")
+        self.assertEqual(self.conf_value("monitor"), "generic_15")
+
+    def test_power_cut_on_the_plasma_then_tube_at_boot(self):
+        self.enable()
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        # O gabinete desligou com o plasma; o boot e o do tubo (parametro do
+        # kernel da linha) e o tubo esta no cabo: so o video volta, sem mexer
+        # na saida (o kernel ja subiu no modo do tubo) e sem reiniciar.
+        self.new_boot()
+        self.cable.write_text("none\n")
+        self.assertEqual(self.run_sh("screens_sync").returncode, 10)
+        self.assertEqual(self.conf_value("monitor"), "generic_15")
+        self.assertEqual(self.env.writes.read_text(), "")
+        self.assertNotIn("reboot", self.boots.read_text())
+        # E com o plasma no cabo no boot: o video dele volta, e o EDID tambem.
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        self.new_boot()
+        self.assertEqual(self.run_sh("screens_sync").returncode, 10)
+        self.assertEqual(self.param.read_text(), "VGA-1:edid/fliperos-screen-%s.bin" % self.FP)
+        self.assertEqual(self.env.writes.read_text().split(),
+                         ["card0-VGA-1=off", "card0-VGA-1=detect", "card0-VGA-1=on"])
+
+    def test_pick(self):
+        self.enable()
+        pick = lambda info: self.run_sh("screens_pick '%s'" % info)
+        r = pick("none")
+        self.assertEqual((r.stdout.strip(), r.returncode), ("home", 0))
+        r = pick(self.PLASMA)
+        self.assertEqual((r.stdout.strip(), r.returncode), (self.FP, 2))
+        # Um EDID so de 15 kHz (sem os 31,5 kHz): fica no tubo.
+        r = pick("fp=%s\nhmin=15\nhmax=16\nvga60=0\n" % self.FP)
+        self.assertEqual(r.stdout.strip(), "home")
+        # Sem a faixa, o 640x480 dos modos padrao decide.
+        self.assertEqual(pick("fp=%s\nhmin=0\nhmax=0\nvga60=1\n" % self.FP).returncode, 2)
+        self.assertEqual(pick("fp=%s\nhmin=0\nhmax=0\nvga60=0\n" % self.FP).stdout.strip(), "home")
+        # O dongle do Switchres: de 31 kHz e tela, de 15 kHz e o tubo.
+        self.assertEqual(pick("fp=%s\nserial=Switchres200\nname=arcade_31\nhmin=30\nhmax=32\n" % self.FP).returncode, 2)
+        self.assertEqual(pick("fp=%s\nserial=Switchres200\nname=generic_15\nhmin=15\nhmax=16\n" % self.FP).stdout.strip(),
+                         "home")
+        # Lixo no cabo: o tubo.
+        self.assertEqual(pick("fp=zz\n").stdout.strip(), "home")
+
+    def test_param_set_keeps_other_outputs(self):
+        self.param.write_text("DVI-I-1:edid/a.bin,VGA-1:edid/fliperos-screen.bin\n")
+        self.out("screens_param_set VGA-1 edid/b.bin")
+        self.assertEqual(self.param.read_text(), "DVI-I-1:edid/a.bin,VGA-1:edid/b.bin")
+        self.assertEqual(self.out("screens_param_get VGA-1").strip(), "edid/b.bin")
+        self.out("screens_param_set VGA-1 ''")
+        self.assertEqual(self.param.read_text(), "DVI-I-1:edid/a.bin")
+        self.out("screens_param_set DVI-I-1 ''")
+        self.assertEqual(self.param.read_text(), ",")
+        self.assertEqual(self.out("screens_param_get VGA-1").strip(), "")
+
+    def test_not_available(self):
+        r = self.run_sh("screens_available")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.conf.write_text(self.conf.read_text().replace("connector=VGA-1", "connector=HDMI-A-1"))
+        r = self.run_sh("screens_available")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("analog", r.stdout)
+        self.conf.write_text(self.conf.read_text().replace("connector=HDMI-A-1", "connector=VGA-1")
+                             .replace("monitor=generic_15", "monitor=vesa_480"))
+        self.assertEqual(self.run_sh("screens_home_ok").returncode, 1)
+        self.assertNotEqual(self.run_sh("screens_enable").returncode, 0)
+        self.assertIsNone(self.conf_value("screen_switch"))
+
+    def test_turning_off_only_on_the_tube(self):
+        self.enable()
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        self.assertNotEqual(self.run_sh("screens_disable").returncode, 0)
+        self.assertEqual(self.conf_value("screen_switch"), "on")
+        self.assertEqual(self.run_sh("settings_set screen_switch off").returncode, 2)
+
+    def test_output_test_drops_it_with_the_tube_video(self):
+        self.enable()
+        self.cable.write_text(self.PLASMA)
+        self.run_sh("screens_sync")
+        self.out("screens_drop 'output test'")
+        self.assertEqual(self.conf_value("screen_switch"), "off")
+        self.assertEqual(self.conf_value("monitor"), "generic_15")
+
+    def test_holders_skip_the_system(self):
+        proc = self.env.dir / "proc"
+        for pid, comm, target in (("100", "python3", "/dev/dri/card0"), ("200", "systemd-logind", "/dev/dri/card0"),
+                                  ("300", "bash", "/dev/null"), ("400", "Xorg", "/dev/dri/card1")):
+            (proc / pid / "fd").mkdir(parents=True)
+            (proc / pid / "comm").write_text(comm + "\n")
+            (proc / pid / "fd" / "3").symlink_to(target)
+        out = self.env.out("screens_holders", dict(self.vars, SCREEN_PROC=str(proc)))
+        self.assertEqual(out.split(), ["100", "400"])
+
+    def test_web_row(self):
+        out = self.out("settings_list 2> /dev/null")
+        self.assertIn("screen_switch|Video|Screen switch by the cable|choice|off|", out)
+
+
+class DdcTests(unittest.TestCase):
+    """config/fliperos-ddc: o EDID lido direto do cabo."""
+
+    @classmethod
+    def setUpClass(cls):
+        from importlib.machinery import SourceFileLoader
+        from importlib.util import module_from_spec, spec_from_loader
+        loader = SourceFileLoader("fliperos_ddc", str(ROOT / "config" / "fliperos-ddc"))
+        cls.ddc = module_from_spec(spec_from_loader("fliperos_ddc", loader))
+        loader.exec_module(cls.ddc)
+
+    def edid(self, modeline):
+        out = Path(tempfile.mkdtemp(prefix="fliperos-ddc-")) / "e.bin"
+        subprocess.run([sys.executable, str(ROOT / "config" / "fliperos-edid-modes"), str(out)],
+                       input=modeline, text=True, check=True)
+        return out.read_bytes()
+
+    def test_describe(self):
+        data = self.edid('"640x480" 25.452 640 664 760 808 480 491 493 525 -HSync -VSync\n')
+        keys = self.ddc.describe(data)
+        self.assertEqual(keys["fp"], data[8:16].hex())
+        self.assertEqual(keys["name"], "FliperOS")
+        self.assertEqual((keys["hmin"], keys["hmax"]), (30, 32))
+        self.assertEqual(keys["digital"], 0)
+        # Soma errada ou cabecalho errado: nao e um EDID.
+        self.assertIsNone(self.ddc.describe(data[:127] + bytes([(data[127] + 1) % 256])))
+        self.assertIsNone(self.ddc.describe(bytes(128)))
+        self.assertIsNone(self.ddc.describe(None))
+
+    def test_watch_waits_for_two_equal_readings(self):
+        readings = iter(["none", "aa", "none", "none", "aa", "aa", "aa", "none", "none"])
+        printed = []
+        ddc = self.ddc
+        old = (ddc.probe, ddc.time.sleep, ddc.bus)
+        ddc.probe = lambda dev: next(readings)
+        ddc.bus = lambda conn: "/dev/null"
+        sleeps = []
+
+        def sleep(s):
+            sleeps.append(s)
+
+        ddc.time.sleep = sleep
+        real_print = print
+        try:
+            import builtins
+            builtins.print = lambda *a, **k: printed.append(a[0])
+            with self.assertRaises(StopIteration):
+                ddc.cmd_watch("card0-VGA-1")
+        finally:
+            builtins.print = real_print
+            ddc.probe, ddc.time.sleep, ddc.bus = old
+        # A primeira leitura sai na hora; o "aa" solto no meio nao troca nada.
+        self.assertEqual(printed, ["none", "aa", "none"])
+        # Com um EDID no cabo (o monitor de 31 kHz), 5 leituras por segundo.
+        self.assertIn(0.2, sleeps)
+        self.assertEqual(sleeps[0], 1.0)
 
 
 if __name__ == "__main__":

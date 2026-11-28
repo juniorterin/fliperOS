@@ -19,6 +19,7 @@ Pedido de 2026-11-07. Os discos (a fileira PHYSICAL MEDIA, o cartão com PLAY / 
 Os hacks de entrelaçado, a calibração de cor, as scanlines de 31 kHz e o monitor vertical foram vistos no CRT em 2026-11-13. Falta:
 - **OSD:** o atalho do painel abriu a OSD no gabinete em 2026-11-13 (Direita + Start, escolhido em Frontend controls > OSD MENU; antes do 216ee7a o vigia recomeçava a cada meio segundo e segurar 1 s nunca completava). Falta a geometria num jogo do RetroArch (em KMS, só foi testada no frontend).
 - **Atalhos do jogo (Frontend controls):** EXIT GAME e EMULATOR MENU segurados no painel de verdade, e o Esc do menu do PCSX2, do PCSX2x6 e do DuckStation (sem jogo nem BIOS no gabinete, não testados). Os outros menus foram abertos por teclado virtual (RetroArch, GroovyMAME, Flycast, SM2-Emu).
+- **Troca de tela pelo cabo (Video Setup > Screen Switch, `lib/screens.sh`):** só testada com bash e o cabo simulado. No gabinete (amdgpu sem DC, só o tubo) o EDID trocado com o sistema ligado entrou na lista e o DDC do tubo voltou vazio, mas o EDID ficou guardado depois de um `detect` (por isso a volta ao tubo no mesmo boot reinicia). Falta, com um monitor de 31 kHz ou um plasma de verdade: o boot do tubo com o modo no EDID (`fliperos-screen.bin`), o plasma pegando 640x480 no frontend, no X e num jogo do GroovyMAME e do RetroArch sem reiniciar, o vigia cortando o sinal ao tirar o cabo dele, e uma placa com DC e uma Intel.
 
 ## GroovyMAME no KMS
 

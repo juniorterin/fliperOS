@@ -110,6 +110,7 @@ The Setup is **`fliperos-setup`**, written in Bash: a graphical carousel on the 
 | [Versus score](Versus-score.md) | The match score of fighting games on the display, in GroovyMAME, RetroArch with FBNeo and Model 2 |
 | [Scoreboard games](Scoreboard-games.md) | The list of games with the versus score and the high scores, and which emulator has each |
 | [Multiple monitors](Multiple-Monitors.md) | Two or three arcade monitors on one card: the Setup, the multi-screen games in GroovyMAME (Darius, Punch-Out!!) and Flycast (F355 Challenge), how it works |
+| [Screen switch](Screen-switch.md) | A 15 kHz tube and a 31 kHz monitor (PC monitor, EDTV plasma) on one cable: FliperOS reads which one is there and uses its video without a restart; swapping with the cabinet on |
 | [DIY hardware](DIY-hardware.md) | Open-source projects to build with an Arduino, a Raspberry Pi Pico or an ESP32: control panel encoders, spinner, light gun, LED display, button lights, the cartridge reader |
 | [Latency](Latency.md) | The Standard and Low latency modes, what each tweak does, recommended hardware, how to measure |
 | [CPU and speed](CPU-and-speed.md) | Why one fast core sets the speed, where a Model 3 frame goes, Turbo Boost in the BIOS and how to tell it is on, reading the CPU use of a game |

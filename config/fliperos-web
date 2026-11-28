@@ -2380,10 +2380,10 @@ def settings():
 
 # Os ajustes que refazem a imagem do boot (o initramfs, cerca de um minuto):
 # viram tarefas, com o andamento na gaveta.
-SLOW_SETTINGS = ("orientation", "splash", "mm_games", "monitor", "resolution", "video.previous")
+SLOW_SETTINGS = ("orientation", "splash", "mm_games", "monitor", "resolution", "video.previous", "screen_switch")
 # Os que so valem no proximo boot (o modo de video): no fim, a pagina oferece
 # reiniciar.
-RESTART_SETTINGS = ("orientation", "mm_games", "monitor", "resolution", "video.previous")
+RESTART_SETTINGS = ("orientation", "mm_games", "monitor", "resolution", "video.previous", "screen_switch")
 
 
 def wifi_rows(args, fields):
