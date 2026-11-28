@@ -87,6 +87,15 @@ Uma vez só:
    com partes de tamanhos diferentes, ou numeração com furo ou repetida, o robô responde
    à primeira parte dizendo o que está errado. O robô lê as partes como se fossem o zip inteiro
    (MTProto), então este caminho também precisa de `TELEGRAM_API_ID` e `TELEGRAM_API_HASH`.
+6. **Nome de arquivo errado.** Às vezes um programa de quem manda (o app do Telegram, o
+   navegador que baixou a parte...) troca os pontos e hífens do nome por `_`:
+   `COTTOn_fliperos_customgame_zip.002` em vez de `COTTOn.fliperos-customgame.zip.002`. O
+   gabinete não reconhece esse arquivo, então o Worker não faz o card: responde à mensagem
+   dizendo que o nome está inválido, com o nome errado e o certo de cada arquivo (as partes de
+   um pacote ganham um aviso só, guardado no mesmo KV `PARTS`). O que foi postado antes disso
+   se confere à mão: *Actions > Telegram custom game > Run workflow* com **check_names** =
+   `all` (o grupo inteiro) ou as mensagens; com **no_post** o robô só mostra os avisos no log.
+   Um pacote que já tem o aviso, ou que já veio de novo com o nome certo, fica de fora.
 
 Rodar à mão: *Actions > Telegram custom game > Run workflow*, com o JSON do pedido
 (`chat_id`, `message_id`, `file_id`, `file_name`, `file_size`…). Com **no_post** o robô

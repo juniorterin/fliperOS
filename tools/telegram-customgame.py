@@ -40,6 +40,12 @@ responde uma vez a cada parte (post_split_package).
         mensagens delas (numeros, uma faixa 1708-1719 ou links t.me); o robo as le pelo
         MTProto, refaz o pedido e posta o card (workflow Telegram custom game, campo messages)
 
+    python3 tools/telegram-customgame.py --check-names-env CHECK [--no-post]
+        os pacotes ja postados com o nome errado (COTTOn_fliperos_customgame_zip.002: algum
+        programa trocou os pontos e hifens por "_"; o gabinete nao os reconhece): CHECK e
+        "all" (o grupo inteiro) ou as mensagens; cada pacote ganha a resposta que o Worker
+        da hoje, com o nome certo (campo check_names do workflow)
+
 Variaveis: TELEGRAM_BOT_TOKEN (o bot do grupo), TELEGRAM_CHAT_ID (o grupo, se
 quiser conferir; @fliperos15khz sem ela), TELEGRAM_FILES_TOPIC (o numero no fim
 do link do topico, t.me/fliperos15khz/NUMERO; 578), TELEGRAM_API_ID,
@@ -97,6 +103,46 @@ def package_file_name(name):
     name = str(name or '')
     match = MANGLED_RE.match(name)
     return match.group(1) + SUFFIX + (match.group(2) or '') if match else name
+
+
+# Um nome quase certo, como o Worker o ve (tools/telegram-translate/worker.js, LOOSE_NAME): os pontos, hifens ou espacos
+# trocados por "_" (COTTOn_fliperos_customgame_zip.002) ou uma parte sem os tres digitos (.zip.2). O gabinete nao reconhece
+# esse arquivo; o Worker responde com o nome certo e nao faz o card (warnBadName), e o --check-names faz o mesmo com o que
+# ja foi postado antes dele.
+LOOSE_NAME_RE = re.compile(r'(.+?)[._ -]+fliperos[._ -]*customgame[._ -]*zip(?:[._ -]*(\d{1,3}))?', re.I)
+GOOD_NAME_RE = re.compile(r'.+' + re.escape(SUFFIX) + r'(?:\.\d{3})?', re.I)
+BAD_NAME_TITLE = 'Nome de arquivo inválido.'
+
+
+def loose_package_name(name):
+    """(nome do pacote sem o sufixo, numero da parte ou None) de um nome quase certo; None para um nome certo ou para um
+    arquivo que nao e pacote."""
+    name = str(name or '')
+    match = None if GOOD_NAME_RE.fullmatch(name) else LOOSE_NAME_RE.fullmatch(name)
+    if not match:
+        return None
+    return match.group(1), None if match.group(2) is None else int(match.group(2))
+
+
+def right_package_name(stem, number=None):
+    return stem + SUFFIX + ('' if number is None else '.%03d' % number)
+
+
+def bad_name_text(names):
+    """O aviso do nome invalido, igual ao do Worker (badNameText): names = [(nome errado, nome certo)]."""
+    many = len(names) > 1
+    lines = [
+        PT + ' ⚠️ <b>' + BAD_NAME_TITLE + '</b> O FliperOS só reconhece ' + ('as partes do pacote' if many else 'o pacote') +
+        ' com o nome assim: renomeie e mande de novo.',
+        EN + ' ⚠️ <b>Invalid file name.</b> FliperOS only recognises ' + ('the parts of the package' if many else 'the package') +
+        ' named like this: rename ' + ('them' if many else 'it') + ' and send ' + ('them' if many else 'it') + ' again.',
+    ]
+    shown = names[:10]
+    for wrong, right in shown:
+        lines += ['', '❌ <code>' + html.escape(wrong, quote=False) + '</code>', '✅ <code>' + html.escape(right, quote=False) + '</code>']
+    if len(names) > len(shown):
+        lines += ['', '… +%d' % (len(names) - len(shown))]
+    return '\n'.join(lines)
 
 
 class PostError(Exception):
@@ -975,9 +1021,9 @@ def post_split_package(tg, payload, env, tool, mtproto_parts=None, out=print):
 MESSAGES_MAX = 300
 
 
-def parse_message_ids(text):
+def parse_message_ids(text, limit=MESSAGES_MAX):
     """Os numeros das mensagens de um texto: "1708-1719", "1708, 1719" ou links (t.me/grupo/578/1719: vale o ultimo
-    numero de cada um). ValueError com algo que nao e nenhum dos tres, ou com mensagens demais."""
+    numero de cada um). ValueError com algo que nao e nenhum dos tres, ou com mais de LIMIT mensagens."""
     ids = set()
     for token in re.split(r'[\s,;]+', str(text or '').strip()):
         if not token:
@@ -988,15 +1034,15 @@ def parse_message_ids(text):
             ids.add(int(link.group(1)))
         elif span:
             low, high = int(span.group(1)), int(span.group(2))
-            if high < low or high - low >= MESSAGES_MAX:
-                raise ValueError('a range of up to %d messages, please: %s' % (MESSAGES_MAX, token))
+            if high < low or high - low >= limit:
+                raise ValueError('a range of up to %d messages, please: %s' % (limit, token))
             ids.update(range(low, high + 1))
         elif token.isdigit():
             ids.add(int(token))
         else:
             raise ValueError('not a message number or link: %s' % token)
-        if len(ids) > MESSAGES_MAX:
-            raise ValueError('up to %d messages, please' % MESSAGES_MAX)
+        if len(ids) > limit:
+            raise ValueError('up to %d messages, please' % limit)
     return sorted(ids)
 
 
@@ -1098,6 +1144,130 @@ def recover(spec, env, reader, tg, tool, out=print, mtproto_parts=telethon_parts
     return results
 
 
+# ── Nomes errados no que ja foi postado ──
+# O Worker so ve o que chega depois do deploy dele. O --check-names le as mensagens do grupo pelo MTProto (get_messages por
+# id: um bot nao pode pedir o historico) e responde a cada pacote com o nome errado como o Worker: um aviso por pacote, com
+# todas as partes de quem mandou, na mensagem da primeira. Fica de fora o pacote ja avisado (o bot ja respondeu a uma das
+# mensagens dele com o aviso) e o que ja veio de novo com o nome certo.
+
+CHECK_MAX = 50000
+CHECK_EMPTY_BATCHES = 3     # "all" para depois de tantos lotes de 100 ids sem nenhuma mensagem (o fim do grupo)
+CHECK_LEAD_BATCHES = 20     # ... e desiste se os primeiros tantos lotes vierem vazios (o bot nao ve o grupo)
+
+
+def read_whole_group(reader, ref, out=print):
+    """[(id, mensagem ou None)] do grupo inteiro, do id 1 ate passar do fim."""
+    found, start, empty, seen = [], 1, 0, False
+    while start <= CHECK_MAX:
+        batch = reader.messages(ref, list(range(start, start + 100)))
+        found += batch
+        start += 100
+        if any(message is not None for _, message in batch):
+            seen, empty = True, 0
+        else:
+            empty += 1
+        if (seen and empty >= CHECK_EMPTY_BATCHES) or (not seen and empty >= CHECK_LEAD_BATCHES):
+            break
+    out('read the messages 1..%d of %s' % (start - 1, ref))
+    return found
+
+
+def bad_name_sets(found):
+    """Os pacotes com o nome errado nas mensagens lidas, found = [(id, mensagem ou None)]: [(partes, ja avisado, ja veio
+    certo)], cada parte um dict de part_of_message com stem e n (o numero da parte; None num zip inteiro)."""
+    sets, warned, good = {}, set(), set()
+    for _, message in found:
+        if message is None:
+            continue
+        reply = getattr(message, 'reply_to', None)
+        if getattr(message, 'out', False):
+            # Um aviso que o bot ja deu: a resposta a mensagem de uma das partes.
+            if reply is not None and BAD_NAME_TITLE in str(getattr(message, 'message', None) or ''):
+                warned.add(int(getattr(reply, 'reply_to_msg_id', None) or 0))
+            continue
+        if getattr(getattr(message, 'sender', None), 'bot', False):
+            continue
+        part = part_of_message(message)
+        if part is None:
+            continue
+        if GOOD_NAME_RE.fullmatch(part['file_name']):
+            good.add(part['file_name'].lower())
+            continue
+        loose = loose_package_name(part['file_name'])
+        if loose is None:
+            continue
+        stem, number = loose
+        group = sets.setdefault((getattr(message, 'sender_id', None), stem.lower(), number is None), {})
+        # A mesma parte mandada duas vezes: vale a primeira (e a ela que o aviso responde).
+        if number not in group or group[number]['message_id'] > part['message_id']:
+            group[number] = dict(part, stem=stem, n=number)
+    result = []
+    for group in sets.values():
+        parts = [group[n] for n in sorted(group, key=lambda n: -1 if n is None else n)]
+        result.append((parts, any(p['message_id'] in warned for p in parts),
+                       all(right_package_name(p['stem'], p['n']).lower() in good for p in parts)))
+    return sorted(result, key=lambda item: min(p['message_id'] for p in item[0]))
+
+
+def check_names(spec, env, reader, tg, out=print):
+    """Responde a cada pacote com o nome errado nas mensagens de SPEC ("all": o grupo inteiro; ou numeros, faixas, links).
+    Devolve uma linha por pacote achado."""
+    wanted = env.get('TELEGRAM_CHAT_ID') or ''
+    ref = '@' + (wanted if wanted.startswith('@') else DEFAULT_CHAT).lstrip('@')
+    chat = wanted or DEFAULT_CHAT
+    if str(spec or '').strip().lower() == 'all':
+        found = read_whole_group(reader, ref, out)
+    else:
+        ids = parse_message_ids(spec, CHECK_MAX)
+        out('reading %d messages of %s' % (len(ids), ref))
+        found = reader.messages(ref, ids)
+    getattr(reader, 'close', lambda: None)()
+    results = []
+    for parts, warned, resent in bad_name_sets(found):
+        label = ', '.join('%s (message %d)' % (p['file_name'], p['message_id']) for p in parts)
+        if warned:
+            results.append('already warned: ' + label)
+        elif resent:
+            results.append('sent again with the right name: ' + label)
+        else:
+            first = min(parts, key=lambda p: p['message_id'])
+            tg.message(chat, bad_name_text([(p['file_name'], right_package_name(p['stem'], p['n'])) for p in parts]),
+                       first['thread_id'] or None, first['message_id'])
+            results.append('warned: ' + label)
+        out(results[-1])
+    return results
+
+
+def check_main(spec, no_post=False, dry_run=False):
+    """--check-names-env: procura os pacotes postados com o nome errado e responde a cada um com o nome certo."""
+    env = dict(os.environ)
+    try:
+        if str(spec or '').strip().lower() != 'all' and not parse_message_ids(spec, CHECK_MAX):
+            raise ValueError('give "all" or the messages to check')
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    if dry_run:
+        print('dry run: would check the file names of the messages %s' % str(spec).strip())
+        return 0
+    if not (env.get('TELEGRAM_BOT_TOKEN') and env.get('TELEGRAM_API_ID') and env.get('TELEGRAM_API_HASH')):
+        print('reading old messages needs TELEGRAM_BOT_TOKEN, TELEGRAM_API_ID and TELEGRAM_API_HASH', file=sys.stderr)
+        return 1
+    try:
+        reader = TelethonReader(env['TELEGRAM_BOT_TOKEN'], env['TELEGRAM_API_ID'], env['TELEGRAM_API_HASH'],
+                                env.get('TELEGRAM_SESSION_FILE') or '')
+    except ImportError:
+        print('telethon is not installed', file=sys.stderr)
+        return 1
+    try:
+        results = check_names(spec, env, reader, (PrintOnly if no_post else Telegram)(env['TELEGRAM_BOT_TOKEN']))
+    except PostError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    print('%d package(s) with a wrong file name, %d warned now' % (len(results), sum(r.startswith('warned') for r in results)))
+    return 0
+
+
 def preview(path, folder=None):
     """O post de um zip do disco, sem rede: o texto e as imagens (em folder)."""
     tool = load_tool()
@@ -1170,10 +1340,14 @@ def main():
     parser.add_argument('--no-post', action='store_true', help='le o pacote de verdade, mas so mostra o post no log (nada vai ao grupo)')
     parser.add_argument('--messages-env', help='a variavel de ambiente com as mensagens das partes de um pacote que o Worker nao tratou '
                                                '(numeros, faixas como 1708-1719 ou links): o robo as le e posta o card')
+    parser.add_argument('--check-names-env', help='a variavel de ambiente com as mensagens a conferir ("all" ou numeros, faixas, '
+                                                  'links): cada pacote postado com o nome errado ganha uma resposta com o certo')
     args = parser.parse_args()
     if args.zip:
         preview(args.zip, args.out)
         return 0
+    if args.check_names_env:
+        return check_main(os.environ.get(args.check_names_env, ''), args.no_post, args.dry_run)
     if args.messages_env:
         return recover_main(os.environ.get(args.messages_env, ''), args.no_post, args.dry_run)
     raw = os.environ.get(args.payload_env or '', '') if args.payload_env else Path(args.payload_file).read_text(encoding='utf-8') \

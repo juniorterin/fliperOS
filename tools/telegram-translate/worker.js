@@ -8,7 +8,8 @@
 // t.me/fliperos15khz/NUMERO), separados por virgula.
 // Pacotes de jogo custom (.fliperos-customgame.zip): vao ao GitHub, que posta os
 // dados no topico Files (dispatchPackage, mais abaixo). Os que vem em partes (.zip.001,
-// .002...) esperam no KV PARTS ate a ultima e vao juntos (collectPart).
+// .002...) esperam no KV PARTS ate a ultima e vao juntos (collectPart). Um nome quase certo (os pontos e hifens
+// trocados por "_") ganha uma resposta com o nome certo, sem card (warnBadName).
 // Deploy e webhook: tools/telegram-translate/README.md.
 
 const MIN_LETTERS = 4;
@@ -88,9 +89,9 @@ async function dispatchGithub(env, clientPayload) {
   if (!r.ok) throw new Error('dispatch ' + r.status + ' ' + await r.text());
 }
 
-// O nome de um pacote (GAME.fliperos-customgame.zip), tambem quando o Telegram de quem o mandou trocou os pontos e hifens
-// por "_" (GAME_fliperos_customgame.zip): o robo (tools/telegram-customgame.py, package_file_name) trata os dois.
-const PACKAGE_NAME = /(?:\.fliperos-customgame\.zip|_fliperos[_-]customgame\.zip)$/i;
+// O nome de um pacote: GAME.fliperos-customgame.zip, exatamente assim (o gabinete nao reconhece outro). Um nome em que algum
+// programa de quem mandou trocou os pontos e hifens por "_" ganha uma resposta com o nome certo (warnBadName, mais abaixo).
+const PACKAGE_NAME = /\.fliperos-customgame\.zip$/i;
 
 async function dispatchPackage(env, msg) {
   const doc = msg.document;
@@ -106,7 +107,7 @@ async function dispatchPackage(env, msg) {
 // .002... (o painel web as faz). Cada parte vira uma chave no KV (binding PARTS); quando as partes 1..k estao todas aqui e
 // a ultima e menor que a primeira (o fim do pacote), quem recebeu a parte que chegou por ultimo chama o GitHub UMA vez, com
 // todas em "parts" (o robo trata como um pacote so). Sem o binding PARTS as partes sao ignoradas.
-const PART_NAME = /^(.+?(?:\.fliperos-customgame\.zip|_fliperos[_-]customgame_zip))\.(\d{3})$/i;
+const PART_NAME = /^(.+\.fliperos-customgame\.zip)\.(\d{3})$/i;
 const PART_TTL = 172800; // o KV esquece as partes de um pacote que nunca completou, em dois dias
 
 // splitReady: as partes numeradas de 1 a k sem furo (k >= 2) e a ultima menor que a primeira.
@@ -162,9 +163,88 @@ async function collectPart(env, msg) {
   return true;
 }
 
+// Um nome quase certo: o de um pacote ou de uma parte em que algum programa (o Telegram de quem mandou, o navegador que
+// baixou...) trocou os pontos, hifens ou espacos por "_" (COTTOn_fliperos_customgame_zip.002), ou uma parte sem os tres
+// digitos (.zip.2). O gabinete nao reconhece esse arquivo (nem o duplo clique, nem o Setup, nem o painel), entao ele nao
+// vira card: o robo responde dizendo que o nome esta invalido e como deveria ser, e o pacote sai quando vier com o nome certo.
+const LOOSE_NAME = /^(.+?)[._ -]+fliperos[._ -]*customgame[._ -]*zip(?:[._ -]*(\d{1,3}))?$/i;
+
+function rightName(stem, n) {
+  return stem + '.fliperos-customgame.zip' + (n === null ? '' : '.' + String(n).padStart(3, '0'));
+}
+
+const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// badNameText: o aviso, nos dois idiomas, com cada nome errado e o certo (o <code> o Telegram copia com um toque).
+function badNameText(names) {
+  const many = names.length > 1;
+  const lines = [
+    '🇧🇷 ⚠️ <b>Nome de arquivo inválido.</b> O FliperOS só reconhece ' + (many ? 'as partes do pacote' : 'o pacote') +
+      ' com o nome assim: renomeie e mande de novo.',
+    '🇺🇸 ⚠️ <b>Invalid file name.</b> FliperOS only recognises ' + (many ? 'the parts of the package' : 'the package') +
+      ' named like this: rename ' + (many ? 'them' : 'it') + ' and send ' + (many ? 'them' : 'it') + ' again.',
+  ];
+  const shown = names.slice(0, 10);
+  for (const [wrong, right] of shown) lines.push('', '❌ <code>' + escapeHtml(wrong) + '</code>', '✅ <code>' + escapeHtml(right) + '</code>');
+  if (names.length > shown.length) lines.push('', '… +' + (names.length - shown.length));
+  return lines.join('\n');
+}
+
+async function sendReply(env, msg, text) {
+  const body = {
+    chat_id: msg.chat.id,
+    text,
+    parse_mode: 'HTML',
+    reply_to_message_id: msg.message_id,
+    allow_sending_without_reply: true,
+    link_preview_options: { is_disabled: true },
+  };
+  if (msg.is_topic_message && msg.message_thread_id) body.message_thread_id = msg.message_thread_id;
+  const r = await fetch('https://api.telegram.org/bot' + env.TELEGRAM_BOT_TOKEN + '/sendMessage', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error('sendMessage ' + r.status + ' ' + await r.text());
+}
+
+// As partes de um mesmo pacote com o nome errado ganham UM aviso, com todas as que ja chegaram: cada parte fica no KV (como em
+// collectPart) e so a primeira a chegar responde; as que vierem depois (dentro de dois dias) ja foram avisadas. Sem o KV, cada
+// parte ganha o seu aviso.
+async function warnBadName(env, msg) {
+  const doc = msg.document;
+  const loose = doc && LOOSE_NAME.exec(doc.file_name || '');
+  if (!loose) return false;
+  if (msg.from && msg.from.is_bot) return true;
+  if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return true;
+  const stem = loose[1];
+  const n = loose[2] === undefined ? null : parseInt(loose[2], 10);
+  let names = [[doc.file_name, rightName(stem, n)]];
+  if (n !== null && env.PARTS) {
+    const prefix = 'badname:' + msg.chat.id + ':' + ((msg.from && msg.from.id) || 0) + ':' + stem.toLowerCase() + ':';
+    const mine = { n, at: Date.now(), file_name: doc.file_name };
+    await env.PARTS.put(prefix + 'p:' + String(n).padStart(3, '0'), JSON.stringify(mine), { expirationTtl: PART_TTL });
+    await new Promise(resolve => setTimeout(resolve, Number(env.PART_WAIT_MS === undefined ? 3000 : env.PART_WAIT_MS)));
+    if (await env.PARTS.get(prefix + 'warned')) return true;
+    const listed = await env.PARTS.list({ prefix: prefix + 'p:' });
+    const parts = [];
+    for (const key of listed.keys) {
+      const part = await env.PARTS.get(key.name, 'json');
+      if (part) parts.push(part);
+    }
+    const first = parts.reduce((a, b) => (b.at < a.at || (b.at === a.at && b.n < a.n) ? b : a), mine);
+    if (first.n !== mine.n || first.at !== mine.at) return true;
+    await env.PARTS.put(prefix + 'warned', '1', { expirationTtl: PART_TTL });
+    names = parts.sort((a, b) => a.n - b.n).map(p => [p.file_name, rightName(stem, p.n)]);
+  }
+  await sendReply(env, msg, badNameText(names));
+  return true;
+}
+
 async function handle(env, msg) {
   if (await dispatchPackage(env, msg)) return;
   if (await collectPart(env, msg)) return;
+  if (await warnBadName(env, msg)) return;
   const text = msg.text || msg.caption || '';
   if (!text || text.startsWith('/') || (msg.from && msg.from.is_bot)) return;
   if (env.ALLOWED_CHAT && String(msg.chat.id) !== String(env.ALLOWED_CHAT)) return;

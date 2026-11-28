@@ -15,7 +15,9 @@
 # (tools/telegram-translate/README.md); o robo faz um card so e responde a cada parte.
 # Rodar a mao (Actions > Run workflow) com o JSON do pedido serve para repostar. Partes que chegaram ao grupo sem o
 # Worker as tratar (nao ha pedido para repetir) se refazem pelas mensagens: o campo "messages" (os numeros, uma faixa
-# 1708-1719 ou os links das mensagens); com no_post o robo so mostra o que postaria.
+# 1708-1719 ou os links das mensagens); com no_post o robo so mostra o que postaria. Um nome de pacote errado
+# (COTTOn_fliperos_customgame_zip.002) o Worker responde com o nome certo; o que foi postado antes disso se confere pelo
+# campo "check_names" (all, ou as mensagens).
 name: Telegram custom game
 
 on:
@@ -29,6 +31,10 @@ on:
         type: string
       messages:
         description: 'Em vez do JSON: as mensagens das partes de um pacote que o Worker nao tratou (numeros, faixa como 1708-1719 ou links); o robo as le e posta o card'
+        required: false
+        type: string
+      check_names:
+        description: 'Conferir os nomes do que ja foi postado: all (o grupo inteiro) ou mensagens (numeros, faixas, links); cada pacote com o nome errado ganha uma resposta com o certo'
         required: false
         type: string
       dry_run:
@@ -79,6 +85,7 @@ jobs:
           # O pedido vai por variavel de ambiente, nunca dentro do script: o nome do arquivo e de quem mandou nao viram comando.
           PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || inputs.payload }}
           MESSAGES: ${{ inputs.messages }}
+          CHECK_NAMES: ${{ inputs.check_names }}
           DRY_RUN: ${{ inputs.dry_run }}
           NO_POST: ${{ inputs.no_post }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -89,6 +96,7 @@ jobs:
         run: |
           args=(--payload-env PAYLOAD)
           [[ -z $MESSAGES ]] || args=(--messages-env MESSAGES)
+          [[ -z $CHECK_NAMES ]] || args=(--check-names-env CHECK_NAMES)
           [[ $DRY_RUN == true ]] && args+=(--dry-run)
           [[ $NO_POST == true ]] && args+=(--no-post)
           python3 tools/telegram-customgame.py "${args[@]}"

@@ -24113,6 +24113,72 @@ class TelegramCustomGameTests(unittest.TestCase):
         self.assertIn('MESSAGES: ${{ inputs.messages }}', workflow)
         self.assertIn('args=(--messages-env MESSAGES)', workflow)
 
+    def test_the_check_answers_each_package_posted_with_a_wrong_name_once(self):
+        from types import SimpleNamespace as NS
+        make, bob = self.message_of, ('Bob', '', 'bob')
+        found = [(1, make(1, 'COTTOn_Rock_fliperos_customgame_zip.001', 900)),
+                 (2, make(2, 'COTTOn_Rock_fliperos_customgame_zip.002', 300)),
+                 (3, make(3, 'COTTOn_Rock_fliperos_customgame_zip.001', 900)),     # a parte 1 de novo: o aviso responde a primeira
+                 (4, make(4, 'Doom_fliperos_customgame.zip', 50, sender=bob)),
+                 (5, make(5, 'Doom.fliperos-customgame.zip', 50, sender=bob)),      # ja veio de novo com o nome certo
+                 (6, make(6, 'JoJo_s_fliperos_customgame_zip.001', 500, sender=bob)),
+                 (7, make(7, 'JoJo_s_fliperos_customgame_zip.002', 100, sender=bob)),
+                 (8, make(8, None, 0)),                                             # o aviso que o bot ja deu ao JoJo
+                 (9, make(9, 'Street Fighter.fliperos-customgame.zip.001', 10)),    # os nomes certos ficam de fora
+                 (10, make(10, 'notes_fliperos.zip', 10)),
+                 (11, None)]
+        for _, message in found:
+            if message is not None:
+                message.sender_id = message.sender.username
+        found[7][1].out, found[7][1].reply_to = True, NS(reply_to_msg_id=6, reply_to_top_id=578)
+        found[7][1].message = self.bot.bad_name_text([('JoJo_s_fliperos_customgame_zip.001', 'JoJo_s.fliperos-customgame.zip.001')])
+
+        class Reader:
+            asked, closed = [], False
+
+            def messages(self, chat, ids):
+                Reader.asked.append((chat, ids[0], ids[-1]))
+                return [(i, dict(found).get(i)) for i in ids]
+
+            def close(self):
+                Reader.closed = True
+
+        tg, out = self.Fake(), []
+        results = self.bot.check_names('all', {}, Reader(), tg, out=out.append)
+        # "all": de 100 em 100 ids, ate tres lotes sem nenhuma mensagem (o fim do grupo).
+        self.assertEqual(Reader.asked, [('@fliperos15khz', 1, 100), ('@fliperos15khz', 101, 200), ('@fliperos15khz', 201, 300),
+                                        ('@fliperos15khz', 301, 400)])
+        self.assertTrue(Reader.closed)
+        self.assertIn('read the messages 1..400 of @fliperos15khz', out)
+        self.assertEqual(results, [
+            'warned: COTTOn_Rock_fliperos_customgame_zip.001 (message 1), COTTOn_Rock_fliperos_customgame_zip.002 (message 2)',
+            'sent again with the right name: Doom_fliperos_customgame.zip (message 4)',
+            'already warned: JoJo_s_fliperos_customgame_zip.001 (message 6), JoJo_s_fliperos_customgame_zip.002 (message 7)'])
+        # Um aviso so, o do Worker, respondendo a primeira parte no topico dela.
+        self.assertEqual(tg.calls, [('message', '@fliperos15khz', self.bot.bad_name_text([
+            ('COTTOn_Rock_fliperos_customgame_zip.001', 'COTTOn_Rock.fliperos-customgame.zip.001'),
+            ('COTTOn_Rock_fliperos_customgame_zip.002', 'COTTOn_Rock.fliperos-customgame.zip.002')]), 578, 1)])
+        # Os nomes: so o quase certo e um pacote com o nome errado.
+        loose = self.bot.loose_package_name
+        self.assertEqual(loose('COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS_fliperos_customgame_zip.002'),
+                         ('COTTOn_RockWithYou_ORIENTAL_NIGHT_DREAMS', 2))
+        self.assertEqual(loose('Doom.fliperos-customgame.zip.2'), ('Doom', 2))
+        self.assertEqual(loose('Tom & Jerry_fliperos_customgame.zip'), ('Tom & Jerry', None))
+        for fine in ('Doom.fliperos-customgame.zip', 'Doom.fliperos-customgame.zip.002', 'notes_fliperos.zip', 'x.zip', '', None):
+            self.assertIsNone(loose(fine))
+        # Uma lista de mensagens tambem serve, e o workflow leva o campo check_names ao --check-names-env.
+        Reader.asked, tg = [], self.Fake()
+        self.assertEqual(len(self.bot.check_names('1-7', {'TELEGRAM_CHAT_ID': '-1004384436732'}, Reader(), tg, out=out.append)), 3)
+        self.assertEqual(Reader.asked, [('@fliperos15khz', 1, 7)])
+        self.assertEqual(tg.calls[0][1], '-1004384436732')
+        workflow = (ROOT / '.github/workflows/telegram-customgame.yml').read_text()
+        self.assertIn('CHECK_NAMES: ${{ inputs.check_names }}', workflow)
+        self.assertIn('args=(--check-names-env CHECK_NAMES)', workflow)
+        result = subprocess.run([sys.executable, str(self.SCRIPT), '--check-names-env', 'CHECK', '--dry-run'], capture_output=True,
+                                text=True, timeout=60, env=dict(os.environ, CHECK='all'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('dry run: would check the file names of the messages all', result.stdout)
+
     def test_split_files_the_bot_cannot_read_still_get_a_card_and_the_replies(self):
         with tempfile.TemporaryDirectory() as tmp:
             data = self.make_zip(Path(tmp) / 'sf4.zip', game=os.urandom(6000)).read_bytes()
@@ -24248,10 +24314,12 @@ class TelegramCustomGameTests(unittest.TestCase):
 
     def test_the_worker_hands_the_zip_to_github_and_the_workflow_posts_it(self):
         worker = (ROOT / 'tools/telegram-translate/worker.js').read_text(encoding='utf-8')
-        self.assertIn(r"/(?:\.fliperos-customgame\.zip|_fliperos[_-]customgame\.zip)$/i", worker)
+        self.assertIn(r"const PACKAGE_NAME = /\.fliperos-customgame\.zip$/i;", worker)
+        self.assertIn(r"const PART_NAME = /^(.+\.fliperos-customgame\.zip)\.(\d{3})$/i;", worker)
         self.assertIn("event_type: 'customgame-zip'", worker)
         self.assertIn("'https://api.github.com/repos/' + env.GITHUB_REPO + '/dispatches'", worker)
         self.assertIn('if (await dispatchPackage(env, msg)) return;', worker)
+        self.assertIn('if (await warnBadName(env, msg)) return;', worker)
         fields = worker[worker.index('function fileFields'):worker.index('async function dispatchGithub')]
         for field in ('chat_id', 'chat_username', 'message_id', 'thread_id', 'file_id', 'file_name', 'file_size', 'from', 'username'):
             self.assertIn(field, fields)
@@ -24306,7 +24374,11 @@ function kvStore() {
   };
 }
 const dispatches = [];
-globalThis.fetch = async (url, init) => { dispatches.push(JSON.parse(init.body)); return { ok: true, text: async () => '' }; };
+const messages = [];
+globalThis.fetch = async (url, init) => {
+  (String(url).startsWith('https://api.telegram.org/') ? messages : dispatches).push(JSON.parse(init.body));
+  return { ok: true, text: async () => '' };
+};
 function update(name, size, id, user = 7) {
   return { message: { message_id: id, message_thread_id: 12, is_topic_message: true, chat: { id: -100, username: 'g' },
     from: { id: user, first_name: 'Ana', username: 'ana' }, document: { file_id: 'F' + id, file_name: name, file_size: size } } };
@@ -24357,18 +24429,28 @@ env = Object.assign({}, env, { PARTS: kv });
 await send(env, update(name(1), 100, 701, 7));
 await send(env, update(name(2), 40, 702, 8));
 out.two_people = dispatches.length;
-// Os nomes que o Telegram de alguem trocou (os pontos viram "_"): as partes juntam do mesmo jeito, e o zip so segue o caminho de sempre.
+out.messages_before = messages.length;
+// Os nomes que algum programa trocou (os pontos e hifens viram "_"): nao vira card. O robo responde UMA vez, com o nome certo
+// de cada parte que ja chegou, a mensagem da primeira e no mesmo topico; as que chegam depois ja foram avisadas.
 dispatches.length = 0;
 kv = kvStore();
-env = Object.assign({}, env, { PARTS: kv });
+env = Object.assign({}, env, { PARTS: kv, PART_WAIT_MS: 20, TELEGRAM_BOT_TOKEN: 'b' });
 const mangled = (n) => 'Game_fliperos_customgame_zip.' + String(n).padStart(3, '0');
-for (const n of [2, 1]) await send(env, update(mangled(n), 100, 800 + n));
-out.mangled_waiting = dispatches.length;
+await Promise.all([1, 2].map((n) => send(env, update(mangled(n), 100, 800 + n))));
 await send(env, update(mangled(3), 30, 803));
-out.mangled = dispatches.map((d) => d.client_payload.parts.map((p) => p.file_name));
-dispatches.length = 0;
-await send(env, update('Game_fliperos_customgame.zip', 5000, 810));
-out.mangled_single = dispatches.length;
+out.mangled_dispatches = dispatches.length;
+out.mangled = messages.slice();
+// Sem o KV, cada parte ganha o seu aviso; um zip inteiro com o nome trocado (e um "&" no nome) e uma parte sem os tres digitos.
+messages.length = 0;
+const noKv = { GITHUB_TOKEN: 't', GITHUB_REPO: 'o/r', WEBHOOK_SECRET: 's', TELEGRAM_BOT_TOKEN: 'b' };
+for (const n of [1, 2]) await send(noKv, update(mangled(n), 100, 820 + n));
+out.no_kv_warnings = messages.length;
+messages.length = 0;
+await send(noKv, update('Tom & Jerry_fliperos_customgame.zip', 5000, 830));
+await send(noKv, update('Doom.fliperos-customgame.zip.2', 50, 831));
+await send(noKv, update('notes_fliperos.zip', 50, 832));
+out.loose = messages.map((m) => m.text);
+out.loose_dispatches = dispatches.length;
 console.log(JSON.stringify(out));
 '''
 
@@ -24397,10 +24479,28 @@ console.log(JSON.stringify(out));
                                                            'file_name', 'file_size', 'from', 'username']), 'parts': None}])
         self.assertEqual(out['no_kv'], 0)                                        # sem o KV, as partes sao ignoradas
         self.assertEqual(out['two_people'], 0)                                   # partes de pessoas diferentes nao se juntam
-        self.assertEqual(out['mangled_waiting'], 0)
-        self.assertEqual(out['mangled'], [['Game_fliperos_customgame_zip.00%d' % n for n in (1, 2, 3)]])
-        self.assertEqual(out['mangled_single'], 1)
-
+        self.assertEqual(out['messages_before'], 0)                              # os nomes certos nunca ganham aviso
+        # O nome trocado: nada vai ao GitHub, e um aviso so para as tres partes, com o nome errado e o certo de cada uma.
+        self.assertEqual(out['mangled_dispatches'], 0)
+        self.assertEqual(len(out['mangled']), 1, out['mangled'])
+        warning = out['mangled'][0]
+        self.assertIn(warning['reply_to_message_id'], (801, 802))
+        self.assertEqual((warning['chat_id'], warning['message_thread_id'], warning['parse_mode']), (-100, 12, 'HTML'))
+        text = warning['text']
+        self.assertTrue(text.startswith('🇧🇷 ⚠️ <b>Nome de arquivo inválido.</b>'), text)
+        self.assertIn('\n🇺🇸 ⚠️ <b>Invalid file name.</b>', text)
+        for n in (1, 2):
+            self.assertIn('❌ <code>Game_fliperos_customgame_zip.00%d</code>\n✅ <code>Game.fliperos-customgame.zip.00%d</code>' % (n, n), text)
+        self.assertEqual(out['no_kv_warnings'], 2)                               # sem o KV: um aviso por parte
+        tom, doom = out['loose']                                                # notes_fliperos.zip nao e um pacote
+        self.assertIn('o pacote com o nome assim', tom)
+        self.assertIn('❌ <code>Tom &amp; Jerry_fliperos_customgame.zip</code>\n✅ <code>Tom &amp; Jerry.fliperos-customgame.zip</code>', tom)
+        self.assertIn('✅ <code>Doom.fliperos-customgame.zip.002</code>', doom)
+        self.assertEqual(out['loose_dispatches'], 0)
+        # O robo (--check-names, para o que ja foi postado) escreve o mesmo aviso que o Worker.
+        self.assertEqual(self.bot.bad_name_text([('Tom & Jerry_fliperos_customgame.zip', 'Tom & Jerry.fliperos-customgame.zip')]), tom)
+        self.assertEqual(self.bot.bad_name_text([('Game_fliperos_customgame_zip.%03d' % n, 'Game.fliperos-customgame.zip.%03d' % n)
+                                                 for n in range(1, text.count('❌') + 1)]), text)
 
 class SplashTests(unittest.TestCase):
     THEMES = ROOT / 'config/splashscreen'
