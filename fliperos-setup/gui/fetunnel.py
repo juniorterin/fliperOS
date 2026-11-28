@@ -135,7 +135,11 @@ class Tunnel:
     "turn" que chegar do servidor."""
 
     def __init__(self, addr, send, helper=None, clock=time.monotonic, wall=time.time,
-                 stun=fenat.public_port, lan=fenat.lan_addrs, relay_factory=None, port=None, log=None):
+                 stun=fenat.public_port, lan=fenat.lan_addrs, relay_factory=None, port=None, log=None,
+                 relay_only=False):
+        # relay_only: a opcao "so relay" (esconder o IP): o sinal nao leva endereco
+        # nenhum e este gabinete nunca manda direto ao outro; tudo pelo relay.
+        self.relay_only = relay_only
         self.log = log or (lambda *a: None)
         self.addr, self.send = addr, send
         self.helper = helper or Helper()
@@ -224,10 +228,11 @@ class Tunnel:
 
     def open(self):
         port = self.port or fenat.free_udp_port()
-        public = self.stun(port)
-        self.mine = {k: [ip, port] for k, ip in self.lan().items()}
-        if public:
-            self.mine["stun"] = list(public)
+        if not self.relay_only:
+            public = self.stun(port)
+            self.mine = {k: [ip, port] for k, ip in self.lan().items()}
+            if public:
+                self.mine["stun"] = list(public)
         self.key = self.helper.up(self.addr + "/24", port)
         if not KEY.match(self.key or ""):
             raise TunnelError("no tunnel key")
@@ -315,7 +320,7 @@ class Tunnel:
         if KEY.match(data.get("key") or "") and peer["key"] is None:
             peer["key"] = data["key"]
             peer["cands"] = clean_cands(data.get("cands"))
-            peer["todo"] = candidates(self.mine, peer["cands"])
+            peer["todo"] = [] if self.relay_only else candidates(self.mine, peer["cands"])
             self.say_to(pid)
             self.next_candidate(peer)
         if peer["relay"] and peer["key"]:
@@ -412,7 +417,7 @@ class Tunnel:
             if p["path"] in ("direct", "relay"):
                 p["path"] = None                         # caiu: volta a procurar
                 p["relay_set"] = p["relay_ready"] = False
-                p["todo"] = candidates(self.mine, p["cands"])
+                p["todo"] = [] if self.relay_only else candidates(self.mine, p["cands"])
                 p["since"] = None
                 self.next_candidate(p)
             elif p["path"] is None and p["since"] is not None and now - p["since"] >= TRY_DIRECT:

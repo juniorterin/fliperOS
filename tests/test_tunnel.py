@@ -329,6 +329,20 @@ class TunnelStateTests(unittest.TestCase):
         self.assertEqual((a_relay[-1][2], b_relay[-1][2]), (False, True))   # .1 starts, .2 answers
         self.assertIn(("keep",), self.b.helper.calls)                    # then the quiet one keeps it alive
 
+    def test_relay_only_never_shows_an_address(self):
+        self.make(lambda ep: not ep.startswith("127."))
+        self.a.relay_only = True
+        self.a.mine = {}
+        for p in self.a.peers.values():
+            p["sent"] = False
+        self.outbox = [m for m in self.outbox if m[0] != "a"]
+        self.a.say_to(2)
+        self.assertEqual(self.outbox[-1][1]["data"]["cands"], {})
+        self.run_for(fetunnel.TRY_DIRECT + 3)
+        self.assertEqual((self.path(self.a), self.path(self.b)), ("relay", "relay"))
+        direct = [c for c in self.a.helper.calls if c[0] == "peer" and c[1] and not c[1].startswith("127.")]
+        self.assertEqual(direct, [])                                     # a never sent straight to b
+
     def test_no_relay_credentials_is_a_failed_path(self):
         self.make(lambda ep: False)
         self.run_for(fetunnel.TRY_DIRECT + 3, turn_error="cap")
