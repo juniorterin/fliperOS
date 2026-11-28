@@ -18579,6 +18579,12 @@ class PixelcadeTests(unittest.TestCase):
                           'arcade/stream/snes/Super%20Mario%20World%20%28USA%29?l=99999&event=GameStart'])
         # O groovymame do fliperos-kms-run passa de novo pelo fliperos-x11-run.
         self.assertEqual(self.run_('launch', 'retroarch', '-L', '/c/snes9x_libretro.so', str(rom)), [])
+        # Um console do Batocera filesystem (fora de ~/roms): a pasta dele, e o Naomi e arcade como em ~/roms/naomi.
+        disk = self.roms.parent / 'nas/batocera/roms/naomi'
+        disk.mkdir(parents=True)
+        (disk / 'mvsc2.zip').write_text('')
+        self.assertIn('arcade/stream/mame/mvsc2?l=99999&event=GameStart',
+                      self.run_('launch', 'flycast', str(disk / 'mvsc2.zip')))
         self.assertEqual(self.run_('launch', 'groovymame', 'digdug'), self.GAME_DIGDUG)
         # Sem jogo (um frontend, o menu do emulador), nada.
         self.assertEqual(self.run_('launch', 'groovymame'), [])

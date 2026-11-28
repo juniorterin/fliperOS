@@ -597,10 +597,19 @@ attract_enable() {
 # -- Eventos ------------------------------------------------------
 
 # system_of CAMINHO: o sistema do Pixelcade (a pasta da arte dele) de um
-# jogo ou pasta de ~/roms. Os arcades (sets do MAME) sao "mame".
+# jogo ou pasta de ~/roms. Os arcades (sets do MAME) sao "mame". Fora de
+# ~/roms (um console do Batocera filesystem, batocera/roms/<nome>: os nomes
+# do Batocera sao os do Pixelcade), a pasta do jogo, com os mesmos arcades.
 system_of() {
   local rel=${1#"$roms"/} folder core id
-  [[ $rel != "$1" ]] || { basename -- "$(dirname -- "$1")"; return; }
+  if [[ $rel == "$1" ]]; then
+    folder=$(basename -- "$(dirname -- "$1")")
+    case $folder in
+      naomi | naomi2 | atomiswave | model2 | model3) echo mame ;;
+      *) printf '%s\n' "$folder" ;;
+    esac
+    return
+  fi
   folder=${rel%%/*}
   case $folder in
     mame | naomi | naomi2 | atomiswave | model2 | model3 | odin | fightcade) echo mame ;;
