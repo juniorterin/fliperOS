@@ -58,7 +58,7 @@ O link e o net play pelo frontend entraram na 0.19; depois, o net play ganhou to
 ## Matchmaker online
 
 Pedido de 2026-11-27: duelos e parties pela internet num programa à parte do frontend (o FliperOS Matchmaker). A fase 0, as telas e as decisões, está em [matchmaker-plan](docs/research/matchmaker-plan.md). Falta construir, nesta ordem:
-- **Fase 1:** o servidor está no ar (`wss://fliperos-matchmaker.juniorter.in/ws`: identidade `APELIDO#xxxx`, presença, salas e a ficha assinada). Falta o lado do gabinete: o cliente, a conferência de estar online ao entrar, e o Matchmaker só de leitura (as páginas por emulador e o lobby).
+- **Fase 1:** o servidor está no ar (`wss://fliperos-matchmaker.juniorter.in/ws`: identidade `APELIDO#xxxx`, presença, salas e a ficha assinada). O Matchmaker só de leitura existe (`gui/fliperos-matchmaker`, em Setup > Games > Frontend): confere a internet e o servidor ao abrir, as páginas por emulador com o ONLINE NOW, o lobby de cada jogo. Testado só no Docker (prints de `tools/matchmaker/shots.py`). Falta abrir num gabinete, com o servidor de verdade, e publicar o update que leva os arquivos novos.
 - **Fase 2:** o túnel WireGuard por partida (direto, ou pelo relay só com CGNAT dos dois lados) e a party online com os emuladores de hoje; o envio da ROM só na conexão direta.
 - **Fase 3:** o duelo pelas cartas (os punhos, FT5), os avisos (só dentro do Matchmaker), o registro das partidas.
 - **Backup na nuvem:** a identidade selada com o PIN (Argon2id) e a ficha assinada pelo servidor (Ed25519) e cifrada (AES-256-GCM), no backup do rclone.

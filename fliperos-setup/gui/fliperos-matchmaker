@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+# O FliperOS Matchmaker: os jogos online, um programa separado do frontend
+# padrao (escolhido em Setup > Games > Frontend, como o Fightcade). O
+# gabinete so fica online com ele aberto: ao abrir, ele confere a internet e
+# o servidor (gui/feonline.py) e, sem um dos dois, avisa (TRY AGAIN / BACK).
+#
+# Uma pagina por emulador ou core que joga online (GROOVYMAME, HBGROOVYMAME,
+# FLYCAST, os cores do RetroArch com net play), trocada para os lados como os
+# sistemas do frontend: a faixa GAME LIST e a porta dupla do modo lista. Em
+# cada pagina, o ONLINE NOW (os jogos com gente, os que este gabinete nao tem
+# tambem) e depois os jogos dela; o 1 num jogo abre o lobby dele (quem procura
+# duelo, quem joga junto, as parties, quem esta parado).
+#
+#   cima/baixo    as linhas (segurando, repete)
+#   esquerda/dir. a pagina (o emulador)
+#   1             abre o lobby do jogo; num grupo, abre e fecha
+#   2             volta (no inicio, fecha o Matchmaker)
+#
+# Os dados (as paginas, as linhas) sao do gui/mmdata.py; o desenho, do
+# gui/mmview.py. A biblioteca (fedata) e lida so como dado: quais jogos o
+# gabinete tem e a arte deles.
+
+import argparse
+import json
+import os
+import sys
+import threading
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+CONFIG = os.path.join(os.path.expanduser("~"), ".config", "fliperos", "matchmaker.json")
+FE_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "fliperos", "frontend.json")
+FPS = 60
+FIRST, RATE = 0.4, 10.0          # segurar cima/baixo: a primeira repeticao (s) e as outras por segundo
+# A troca de pagina e a do frontend (fliperos-frontend): esquerda e direita
+# andam na faixa; parada PICK_WAIT s, a pagina troca; a faixa fica RIBBON_HOLD
+# s e some em RIBBON_FADE, e a porta dupla traz a pagina nova.
+PICK_WAIT = 0.6
+RIBBON_HOLD, RIBBON_FADE = 0.8, 0.25
+
+
+def read_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_json(path, data):
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(path + ".tmp", path)
+    except OSError:
+        pass
+
+
+class PageLib:
+    """A biblioteca como o feview a ve: a arte dos jogos (a do fedata) e,
+    para a faixa GAME LIST, quantos jogos tem cada pagina."""
+
+    def __init__(self, lib):
+        self.lib = lib
+        self.counts = {}
+
+    def media(self, game, kind):
+        return self.lib.media(game, kind)
+
+    def video(self, game):
+        return None
+
+
+def row_key(row):
+    """O que identifica a linha entre uma releitura e outra (o cursor fica nela)."""
+    if row is None:
+        return None
+    kind = row["kind"]
+    if kind == "group":
+        return ("group", row["name"])
+    if kind == "player":
+        return ("player", row["player"].get("id"))
+    return (kind, row.get("id"))
+
+
+class Matchmaker:
+    def __init__(self, args, library=None, online=None, check=None, netplay_core=None, nick=None):
+        if args.shot:
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+        import pygame
+        self.pg = pygame
+        pygame.init()
+        import fedata
+        import theme
+        # O monitor em pe: a tela logica em pe antes de importar o que guarda o tamanho dela.
+        try:
+            orientation = fedata.web.conf_values().get("orientation", "")
+        except OSError:
+            orientation = ""
+        theme.set_orientation(os.environ.get("FLIPEROS_FE_ORIENTATION", orientation))
+        import background
+        import feinput
+        import feonline
+        import felink
+        import feview
+        import mmdata
+        import mmview
+        self.T, self.fd, self.view, self.md = theme, fedata, mmview, mmdata
+        self.fo, self.fl, self.fv = feonline, felink, feview
+        self.shot = args.shot
+        self.window = None
+        self.open()
+        fecfg = read_json(FE_CONFIG)
+        self.cfg = read_json(CONFIG)
+        self.input = feinput.Input(pygame, feinput.load_binds(pygame, fecfg.get("controls")))
+        self.back = pygame.Surface((theme.WIDTH, theme.HEIGHT))
+        self.bg = background.pick(None if not self.shot else "stars", seed=7 if self.shot else None)
+        self.start = time.monotonic()
+        # O que o feview le do "fe" (a faixa, a porta dupla, a arte).
+        self.media, self.ready, self.anim = {}, {}, {}
+        self.mode, self.transitions = "list", {"list": "doors"}
+        self.video_ok = False
+        self.abs_now = self.start
+        self.devices = None
+        self.intro = None
+        self.ribbon_until = 0
+        self.pick, self.pick_at, self.picking = 0, 0.0, False
+        self.last_screen = None
+        # O Matchmaker.
+        self.library = library
+        self.lib = None
+        self.check_fn = check or feonline.check
+        self.netplay_core = netplay_core or felink.netplay_core
+        self.nick = nick
+        self.online = online
+        self.online_given = online is not None
+        self.snap = {"status": "connecting", "counts": {}, "rooms": {}, "me": None}
+        self.cats, self.cat, self.cat_pos = [], 0, 0
+        self.games = {}                 # pagina -> os jogos dela
+        self.positions = {}             # pagina -> a linha onde o cursor estava
+        self.rows, self.cursor = [], 0
+        self.online_open = True         # o grupo ONLINE NOW aberto
+        self.groups_open, self.subs_open = {}, {}
+        self.lobby_id = self.lobby_game = None
+        self.home_key = None            # a linha do jogo de onde se abriu o lobby
+        self.repeat = {}
+        self.offline, self.offline_choice = "server", 0
+        self.screen = "checking"
+        self.worker = None
+        self.result = None
+        self.begin_check()
+
+    # ── Video ──
+    def open(self):
+        pg = self.pg
+        self.T.request_vsync()
+        pg.display.init()
+        size, flags = self.T.MODE, 0
+        driver = os.environ.get("SDL_VIDEODRIVER")
+        if driver == "kmsdrm":
+            flags = pg.FULLSCREEN
+            modes = pg.display.list_modes()
+            if not isinstance(modes, list) or size not in modes:
+                info = pg.display.Info()
+                size = (info.current_w, info.current_h)
+        elif driver == "x11":
+            info = pg.display.Info()
+            size, flags = (info.current_w, info.current_h), pg.NOFRAME
+        self.window = pg.display.set_mode(size, flags)
+        pg.display.set_caption("FliperOS Matchmaker")
+        pg.mouse.set_visible(False)
+
+    def close(self):
+        if self.online is not None and not self.online_given:
+            self.online.stop()
+        try:
+            import drmmaster
+            self.pg.display.quit()
+            drmmaster.drop()        # (na Intel o Mesa deixa o master da tela para tras)
+        except Exception:
+            pass
+        self.window = None
+
+    def present(self):
+        if self.window is None:
+            return
+        self.pg.transform.scale(self.T.upright(self.back), self.window.get_size(), self.window)
+        self.pg.display.flip()
+
+    # ── A conferencia ao abrir ──
+    def begin_check(self):
+        """A internet e o servidor conferidos numa thread (a tela CONNECTING
+        anda enquanto isso); a biblioteca e lida junto, na primeira vez."""
+        self.screen, self.result = "checking", None
+        if self.shot:
+            self.prepare()
+            self.finish_check()
+            return
+        self.worker = threading.Thread(target=self.prepare, daemon=True)
+        self.worker.start()
+
+    def prepare(self):
+        try:
+            result = self.check_fn()
+        except Exception:
+            result = "server"
+        if self.lib is None:
+            try:
+                self.load_library()
+            except Exception:
+                self.lib = PageLib(None)
+        self.result = result
+
+    def load_library(self):
+        lib = self.library or self.fd.Library()
+        self.lib = PageLib(lib)
+        self.cats = self.md.pages(lib.systems, self.netplay_core)
+        want = self.cfg.get("page")
+        self.cat = next((i for i, p in enumerate(self.cats) if p["key"] == want), 0)
+        self.cat_pos = self.cat
+        if self.cats:
+            self.games_of(self.cats[self.cat])
+        if not self.shot:
+            threading.Thread(target=self.preload, daemon=True).start()
+        else:
+            self.preload()
+
+    def preload(self):
+        """Os jogos das outras paginas, em segundo plano (o numero da faixa e a troca na hora)."""
+        for page in list(self.cats):
+            try:
+                self.games_of(page)
+            except Exception:
+                pass
+
+    def games_of(self, page):
+        key = page["key"]
+        if key not in self.games:
+            lib = self.lib.lib
+            try:
+                hidden = lib.hidden() if hasattr(lib, "hidden") else set()
+            except OSError:
+                hidden = set()
+            out = []
+            for system in page["systems"]:
+                for g in lib.games(system):
+                    if (system["key"], g["Name"]) not in hidden and self.md.game_id(key, g):
+                        out.append(g)
+            out.sort(key=lambda g: self.fd.short_title(g).lower())
+            self.games[key] = out
+            self.lib.counts[key] = len(out)
+        return self.games[key]
+
+    def finish_check(self):
+        result = self.result
+        if result != "ok":
+            self.offline, self.offline_choice = result if result in self.view.OFFLINE_TEXT else "server", 0
+            self.screen = "offline"
+            return
+        if self.online is None:
+            nick = self.nick or self.fl.cabinet_name(self.fl.machine_id())
+            try:
+                self.online = self.fo.Online(nick)
+            except OSError:
+                self.offline, self.screen = "server", "offline"
+                return
+            self.online.start()
+        self.refresh()
+        self.go_home(side=1)
+
+    # ── O que vem do servidor ──
+    def refresh(self):
+        if self.online is not None:
+            self.snap = self.online.snapshot()
+
+    def status(self):
+        return self.snap.get("status")
+
+    def me_id(self):
+        return (self.snap.get("me") or {}).get("id")
+
+    def room(self):
+        return (self.snap.get("rooms") or {}).get(self.lobby_id) or []
+
+    def page(self):
+        return self.cats[self.cat] if self.cats else None
+
+    # ── As linhas ──
+    def rebuild(self, keep=None):
+        """Refaz as linhas da tela; o cursor fica na mesma linha (keep: a
+        chave de uma linha; sem ela, a de agora)."""
+        if keep is None and 0 <= self.cursor < len(self.rows):
+            keep = row_key(self.rows[self.cursor])
+        if self.screen == "lobby":
+            self.rows = self.md.lobby_rows(self.room(), self.groups_open, self.subs_open)
+        elif self.screen == "home" and self.page() is not None:
+            page = self.page()
+            self.rows = self.md.home_rows(page, self.games_of(page), self.snap.get("counts") or {},
+                                          opened=self.online_open)
+        else:
+            self.rows = []
+        keys = [row_key(r) for r in self.rows]
+        if keep in keys:
+            self.cursor = keys.index(keep)
+        elif self.screen == "home" and self.cursor == 0 and len(self.rows) > 1:
+            self.cursor = 1        # a pagina nova: no primeiro jogo (o mais cheio do ONLINE NOW), nao no grupo
+        self.cursor = max(0, min(self.cursor, len(self.rows) - 1))
+
+    def go_home(self, side=-1):
+        """O inicio (a pagina do emulador), de volta na linha do jogo de onde se saiu."""
+        old = self.last_screen
+        if self.screen == "lobby" and self.online is not None:
+            self.online.presence(state="idle", game=None)
+            self.online.watch(None)
+        self.screen, self.lobby_id, self.lobby_game = "home", None, None
+        self.rows, self.cursor = [], 0
+        self.rebuild(self.home_key)
+        self.doors(side, old)
+
+    def open_lobby(self, row):
+        old = self.last_screen
+        self.home_key = row_key(row)
+        self.lobby_id, self.lobby_game = row["id"], row["game"]
+        if self.online is not None:
+            self.online.presence(state="idle", game=row["id"], emu=self.page()["key"])
+            self.online.watch(row["id"])
+        self.refresh()
+        self.screen, self.cursor = "lobby", 0
+        self.groups_open, self.subs_open = {}, {}
+        self.rebuild()
+        self.doors(1, old)
+
+    def doors(self, side, old):
+        """A porta dupla do modo lista: a tela de antes sai e a nova entra."""
+        if old is not None and not self.shot:
+            self.intro = {"side": side, "start": time.monotonic(), "old": old}
+
+    # ── A troca de pagina (a do frontend) ──
+    def switch_page(self, step):
+        if len(self.cats) < 2:
+            return
+        now = time.monotonic()
+        self.anim.setdefault("ribbon", (self.cat_pos, 0.0, now))
+        self.cat_pos += step
+        self.pick += step
+        self.pick_at = now
+        self.picking = True
+        self.ribbon_until = float("inf")
+
+    def cancel_pick(self):
+        self.cat_pos -= self.pick
+        self.pick = 0
+        self.picking = False
+        self.ribbon_until = time.monotonic() + 0.4
+
+    def pick_page(self, now=False):
+        step, self.pick = self.pick, 0
+        self.picking = False
+        hold = 0.0 if now else RIBBON_HOLD
+        at = time.monotonic()
+        self.ribbon_until = at + hold + RIBBON_FADE
+        if not step % len(self.cats):
+            return
+        if 0 <= self.cursor < len(self.rows):
+            self.positions[self.page()["key"]] = row_key(self.rows[self.cursor])
+        self.cat = (self.cat + step) % len(self.cats)
+        if self.last_screen is not None and not self.shot:
+            start = at if now else at + hold + RIBBON_FADE
+            self.intro = {"side": 1 if step > 0 else -1, "start": start, "old": self.last_screen}
+        self.cursor = 0
+        self.rows = []
+        self.rebuild(self.positions.get(self.page()["key"]))
+        self.cfg["page"] = self.page()["key"]
+        write_json(CONFIG, self.cfg)
+
+    def hurry(self):
+        """Mexer na lista com a faixa a vista a fecha, e a porta dupla vem logo."""
+        now = time.monotonic()
+        if self.ribbon_until > now + RIBBON_FADE:
+            self.ribbon_until = now + RIBBON_FADE
+            if self.intro and self.intro["start"] > now + RIBBON_FADE:
+                self.intro["start"] = now + RIBBON_FADE
+
+    # ── O controle ──
+    def move(self, step):
+        if self.rows:
+            self.cursor = max(0, min(len(self.rows) - 1, self.cursor + step))
+
+    def act(self, a):
+        if a in ("quit", "esc"):
+            return "quit"
+        if self.screen == "checking":
+            return "quit" if a == "b2" else None
+        if self.screen == "offline":
+            if a in ("left", "right"):
+                self.offline_choice = 1 - self.offline_choice
+            elif a == "b1":
+                if self.offline_choice == 1:
+                    return "quit"
+                self.begin_check()
+            elif a == "b2":
+                return "quit"
+            return None
+        if self.screen == "home" and self.picking:
+            if a in ("left", "right"):
+                self.switch_page(-1 if a == "left" else 1)
+                return None
+            if a == "b2":
+                self.cancel_pick()
+                return None
+            self.pick_page(now=a == "b1")
+            if a == "b1":
+                return None
+        self.hurry()
+        if a in ("up", "down"):
+            self.move(-1 if a == "up" else 1)
+        elif a in ("b3", "b6"):
+            self.move(-(self.T.HEIGHT // 20) if a == "b3" else self.T.HEIGHT // 20)
+        elif a in ("left", "right") and self.screen == "home":
+            self.switch_page(-1 if a == "left" else 1)
+        elif a == "b1":
+            self.accept()
+        elif a == "b2":
+            if self.screen == "lobby":
+                self.go_home(side=-1)
+            else:
+                return "quit"
+        return None
+
+    def accept(self):
+        row = self.rows[self.cursor] if 0 <= self.cursor < len(self.rows) else None
+        if row is None:
+            return
+        kind = row["kind"]
+        if self.screen == "home":
+            if kind == "group":
+                self.online_open = not self.online_open
+                self.rebuild(row_key(row))
+            elif row.get("id"):
+                self.open_lobby(row)
+        elif kind == "group":
+            self.groups_open[row["name"]] = not row["open"]
+            self.rebuild(row_key(row))
+        elif kind == "sub":
+            self.subs_open[row["id"]] = not row["open"]
+            self.rebuild(row_key(row))
+
+    def tick(self, now):
+        if self.screen == "checking" and self.worker is not None and not self.worker.is_alive():
+            self.worker = None
+            self.finish_check()
+        if self.picking and now - self.pick_at >= PICK_WAIT:
+            self.pick_page()
+        if self.online is not None and self.online.changed.is_set():
+            self.online.changed.clear()
+            self.refresh()
+            if self.status() == "refused" and self.screen in ("home", "lobby"):
+                self.offline, self.offline_choice, self.screen = "refused", 0, "offline"
+            elif self.screen in ("home", "lobby"):
+                self.rebuild()
+        for a in ("up", "down"):
+            held = self.input.held(a)
+            if held is None or self.screen not in ("home", "lobby"):
+                self.repeat.pop(a, None)
+                continue
+            if held < FIRST:
+                continue
+            if a not in self.repeat:
+                self.repeat[a] = FIRST
+                steps = 1
+            else:
+                steps = int((held - self.repeat[a]) * RATE)
+                self.repeat[a] += steps / RATE
+            if steps > 0:
+                self.move(-steps if a == "up" else steps)
+
+    def draw(self, now):
+        self.view.draw(self, now)
+
+    def run(self):
+        clock = self.pg.time.Clock()
+        try:
+            while True:
+                now = time.monotonic()
+                if any(self.act(a) == "quit" for a in self.input.poll()):
+                    return 0
+                self.tick(now)
+                self.draw(now)
+                self.present()
+                clock.tick(FPS)
+        finally:
+            self.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="FliperOS Matchmaker (online)")
+    parser.add_argument("--shot", help="no video: write PREFIX.png of the first screen and quit")
+    args = parser.parse_args()
+    mm = Matchmaker(args)
+    if args.shot:
+        mm.draw(time.monotonic())
+        mm.pg.image.save(mm.back, args.shot + ".png")
+        mm.close()
+        return 0
+    return mm.run()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
