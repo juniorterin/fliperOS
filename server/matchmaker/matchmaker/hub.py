@@ -37,7 +37,7 @@ class Player:
     def __init__(self, cab_id, nick, tag, send):
         self.id, self.nick, self.tag, self.send = cab_id, nick, tag, send
         self.info = {"state": "idle", "conn": None, "game": None, "emu": None, "group": None, "kind": None,
-                     "score": None, "pct": None, "rtt": None, "open": None}
+                     "score": None, "pct": None, "rtt": None, "open": None, "host": None}
         self.watching = None
 
     def public(self):

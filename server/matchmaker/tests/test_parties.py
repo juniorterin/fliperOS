@@ -252,7 +252,8 @@ class PartyServerTests(unittest.IsolatedAsyncioTestCase):
         while not room["players"]:
             room = await self.next_of(watcher, "room")
         p = room["players"][0]
-        self.assertEqual((p["group"], p["kind"], p["score"], p["open"]), (opened["party"], "party", "1/4", True))
+        self.assertEqual((p["group"], p["kind"], p["score"], p["open"], p["host"]),
+                         (opened["party"], "party", "1/4", True, True))
 
     async def test_a_cabinet_cannot_fake_a_group(self):
         a, _ = await self.cabinet("MANGO")

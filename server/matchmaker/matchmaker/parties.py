@@ -58,10 +58,11 @@ class Parties:
         """The presence of every member: the party's id, kind and places."""
         for player, _ in party.members.values():
             self.hub.update(player, {"group": party.id, "kind": "party", "score": party.places(),
-                                     "game": party.game, "emu": party.emu, "open": party.open})
+                                     "game": party.game, "emu": party.emu, "open": party.open,
+                                     "host": player is party.host})
 
     def _clear(self, player):
-        self.hub.update(player, {"group": None, "kind": None, "score": None, "open": None})
+        self.hub.update(player, {"group": None, "kind": None, "score": None, "open": None, "host": None})
 
     def _free_net(self):
         used = {p.net for p in self.by_id.values()}

@@ -133,7 +133,7 @@ def lobby_rows(players, opened=None, open_subs=None):
         return names, next((p.get("score") for p in members if p.get("score")), "")
 
     def party_label(members):
-        host = members[0].get("nick", "?")
+        host = next((p for p in members if p.get("host")), members[0]).get("nick", "?")
         return "PARTY " + host, next((p.get("score") for p in members if p.get("score")), "%d" % len(members))
 
     players_of("LOOKING", looking)
