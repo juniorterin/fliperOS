@@ -15,6 +15,9 @@
 #   eim        both behind ordinary NATs       -> direct
 #   symmetric  both behind symmetric NATs      -> relay
 #   samehouse  both behind the same router     -> direct, by the LAN address
+#   party-eim  the felink party in the tunnel: the guest copies the game
+#              from the host (direct), and both start with the ping's delay
+#   party-symmetric  the same through the relay: NEEDS THE ROM
 set -uo pipefail
 REPO=/w
 LAB=$REPO/tools/matchmaker/natlab
@@ -79,7 +82,8 @@ scenario() {
   ns inet ip addr add 203.0.113.2/24 dev br0
   ns inet ip link set br0 up
   ns inet ip link set lo up
-  case $name in
+  local net=${name#party-}
+  case $net in
     eim)       router r1 203.0.113.11 x eim; router r2 203.0.113.12 x eim
                cabinet cab1 r1 192.168.1; cabinet cab2 r2 192.168.2 ;;
     symmetric) router r1 203.0.113.11 x symmetric; router r2 203.0.113.12 x symmetric
@@ -92,19 +96,30 @@ scenario() {
     --min-port=49152 --max-port=49999 --no-cli --log-file=stdout > "$STATE/turn.log" 2>&1 &
   ns inet python3 "$LAB/natlab_server.py" "$REPO" 203.0.113.2 > "$STATE/server.log" 2>&1 &
   for _ in $(seq 50); do grep -q "server ready" "$STATE/server.log" && break; sleep 0.1; done
-  ns cab1 python3 "$LAB/natlab_cab.py" "$REPO" 203.0.113.2 host CABONE "$STATE" > "$STATE/cab1.log" 2>&1 &
+  local prog=natlab_cab.py
+  [[ $name == party-* ]] && prog=natlab_party.py
+  ns cab1 python3 "$LAB/$prog" "$REPO" 203.0.113.2 host CABONE "$STATE" > "$STATE/cab1.log" 2>&1 &
   local p1=$!
-  ns cab2 python3 "$LAB/natlab_cab.py" "$REPO" 203.0.113.2 guest CABTWO "$STATE" > "$STATE/cab2.log" 2>&1 &
+  ns cab2 python3 "$LAB/$prog" "$REPO" 203.0.113.2 guest CABTWO "$STATE" > "$STATE/cab2.log" 2>&1 &
   local p2=$!
   wait $p1; local r1=$?
   wait $p2; local r2=$?
   cat "$STATE/cab1.log" "$STATE/cab2.log"
   local ok=1
   ((r1 == 0 && r2 == 0)) || ok=0
-  grep -q "] PATH $expect" "$STATE/cab1.log" || ok=0
-  grep -q "] PATH $expect" "$STATE/cab2.log" || ok=0
-  [[ $name != samehouse ]] || grep -q "] PATH direct 192.168" "$STATE/cab2.log" || ok=0
-  grep -q "ECHO ok" "$STATE/cab2.log" || ok=0
+  case $name in
+    party-eim)
+      grep -q "LAUNCH delay=" "$STATE/cab1.log" || ok=0
+      grep -q "LAUNCH delay=" "$STATE/cab2.log" || ok=0
+      grep -q "FILE copied" "$STATE/cab2.log" || ok=0 ;;
+    party-symmetric)
+      grep -q "FAILED NEEDS THE ROM" "$STATE/cab2.log" || ok=0 ;;
+    *)
+      grep -q "] PATH $expect" "$STATE/cab1.log" || ok=0
+      grep -q "] PATH $expect" "$STATE/cab2.log" || ok=0
+      [[ $name != samehouse ]] || grep -q "] PATH direct 192.168" "$STATE/cab2.log" || ok=0
+      grep -q "ECHO ok" "$STATE/cab2.log" || ok=0 ;;
+  esac
   if ((ok)); then
     echo "--- $name: PASS"
   else
@@ -114,8 +129,8 @@ scenario() {
   fi
 }
 
-declare -A expect=([eim]=direct [symmetric]=relay [samehouse]=direct)
-for s in "${@:-eim symmetric samehouse}"; do
+declare -A expect=([eim]=direct [symmetric]=relay [samehouse]=direct [party-eim]=launch [party-symmetric]=refusal)
+for s in "${@:-eim symmetric samehouse party-eim party-symmetric}"; do
   for one in $s; do
     scenario "$one" "${expect[$one]}"
   done

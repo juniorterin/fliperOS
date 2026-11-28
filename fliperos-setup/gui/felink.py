@@ -388,11 +388,29 @@ def make_plan(profile, members):
     else:
         order = list(numbers)
     step = profile.get("step", 6)
-    return {"profile": profile["id"], "n": n, "order": order, "step": step,
+    # input_delay: o atraso de entrada da party online (quadros, pelo ping do
+    # tunel: online_delay), o mesmo em todos; no cabo nao ha (cada emulador
+    # fica com o de sempre).
+    extra = {"input_delay": profile["input_delay"]} if profile.get("input_delay") is not None else {}
+    return dict(extra, **{"profile": profile["id"], "n": n, "order": order, "step": step,
             "members": [{"number": m["number"], "name": m["name"], "ip": m["ip"], "take": m.get("take", 1),
                          "first": m.get("first", m["number"])} for m in members],
             "delays": {str(num): order.index(num) * step for num in numbers},
-            "rtc": time.strftime("%Y%m%d%H%M%S")}
+            "rtc": time.strftime("%Y%m%d%H%M%S")})
+
+
+FRAME_MS = 1000.0 / 60
+
+
+def online_delay(rtt, profile):
+    """O atraso de entrada (quadros) de uma party online, pelo ping (ms) do
+    pior par do tunel. No lockstep (GroovyMAME, Dolphin) o controle do outro
+    tem de chegar antes do quadro: meia volta e uma folga. No rollback
+    (RetroArch, o GGPO do Flycast) o resto e refeito: um pouco, ate 3."""
+    one_way = max(0.0, float(rtt or 0)) / 2
+    if profile.get("lockstep") or profile.get("dolphin"):
+        return max(1, int(-(-(one_way + 10) // FRAME_MS)))
+    return min(3, max(1, int(-(-one_way // FRAME_MS))))
 
 
 def send_line(conn, obj):
@@ -708,9 +726,13 @@ def link_args(profile, plan, number):
         # previsao, e o gabinete mais rapido espera alguns ms a cada quadro pelo
         # controle dos outros (no cabo, sem nada a refazer). O limite tem de
         # passar do atraso, senao ninguem manda o proprio controle.
-        lockstep = profile.get("party") and flycast_lockstep()
+        # Online (input_delay no plano), o GGPO e rollback de verdade: o atraso
+        # pelo ping, sem a trava do lockstep.
+        online = plan.get("input_delay")
+        lockstep = profile.get("party") and flycast_lockstep() and online is None
+        delay = online if online is not None else (1 if lockstep else 0)
         opts = ("network:GGPO=yes,network:ActAsServer=%s,network:server=%s,network:GGPODelay=%d,"
-                "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other, 1 if lockstep else 0))
+                "network:EnableUPnP=no" % ("yes" if number == 1 else "no", other, delay))
         if lockstep:
             opts += ",network:GGPOMaxPrediction=2"
         if profile.get("party"):
@@ -729,7 +751,8 @@ def link_args(profile, plan, number):
         host = next(m["ip"] for m in plan["members"] if m["number"] == 1)
         args = ["-b", "--netplay", "host" if number == 1 else "join", "--netplay_players", str(plan["n"])]
         # BufferSize: o atraso de entrada do Dolphin (sem rollback); 5 de fabrica, 2 no cabo.
-        for key, value in (("TraversalChoice", "direct"), ("UseUPNP", "False"), ("BufferSize", 2), ("HostPort", port),
+        buffer = plan.get("input_delay") or 2              # online: pelo ping
+        for key, value in (("TraversalChoice", "direct"), ("UseUPNP", "False"), ("BufferSize", buffer), ("HostPort", port),
                            ("ConnectPort", port), ("Address", host), ("Nickname", "P%d" % number)):
             args += ["-C", "Dolphin.NetPlay.%s=%s" % (key, value)]
         return args
@@ -771,7 +794,7 @@ def mame_lockstep_args(profile, plan, number, home):
     with open(os.path.join(cfg, "fliperos-lockstep.ini"), "w") as f:
         f.write("transport=native\nme=%d\npeers=%s\nplayers=%s\ndelay=%d\nport=%d\nlog=%s\n" % (
             number, ",".join(m["ip"] for m in members), ",".join(str(p) for p in range(first, first + take)),
-            MAME_PARTY_DELAY, profile["port"], os.path.join(base, "lockstep.log")))
+            plan.get("input_delay") or MAME_PARTY_DELAY, profile["port"], os.path.join(base, "lockstep.log")))
     return ["-cfg_directory", cfg, "-nvram_directory", nvram, "-noplugin", "hiscore", "-noautosave",
             "-rtc", plan.get("rtc") or time.strftime("%Y%m%d%H%M%S")]
 
@@ -1050,10 +1073,14 @@ netplay_max_connections = "%d"
 """
 
 
-def netplay_cfg(profile, slots):
+def netplay_cfg(profile, slots, delay=None):
     """A config do net play deste gabinete: a de cima e os jogadores que ele
-    ocupa (netplay_request_device_pN), um por controle configurado."""
+    ocupa (netplay_request_device_pN), um por controle configurado. delay: o
+    atraso de entrada da party online (o RetroArch refaz o resto)."""
     text = NETPLAY_CFG % profile["max"]
+    if delay:
+        text = text.replace('netplay_input_latency_frames_min = "0"',
+                            'netplay_input_latency_frames_min = "%d"' % delay)
     return text + "".join('netplay_request_device_p%d = "true"\n' % k for k in slots)
 
 
@@ -1208,10 +1235,12 @@ class FileServer:
     """Serve os arquivos do jogo a quem entra na festa sem eles, so na
     interface cabeada: /manifest (o que o jogo pede e o que ha) e /file/CAMINHO
     (com Range, para retomar). So serve o que esta em allow (a lista de
-    caminhos relativos a home) e para IPs da sub-rede do cabo."""
+    caminhos relativos a home) e para IPs da sub-rede do cabo. allow_ip: quem
+    mais pode pedir (a party online: so quem chega direto, nunca pelo relay)."""
 
-    def __init__(self, wire, home, allow, port=PORT_FILES):
+    def __init__(self, wire, home, allow, port=PORT_FILES, allow_ip=None):
         self.wire, self.home, self.allow, self.port = wire, home, set(allow), port
+        self.allow_ip = allow_ip
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -1220,6 +1249,8 @@ class FileServer:
 
             def do_GET(self):
                 if not same_net(outer.wire, self.client_address[0]):
+                    return self.send_error(403)
+                if outer.allow_ip is not None and not outer.allow_ip(self.client_address[0]):
                     return self.send_error(403)
                 if self.path == "/manifest":
                     body = json.dumps(game_files(outer.home, sorted(outer.allow))).encode()
@@ -1349,6 +1380,8 @@ class Link:
     """O que o frontend usa: presenca na rede cabeada, a festa deste gabinete
     (anfitriao ou convidado), a contagem do comeco e o comando do jogo em
     link. Sem cabo, available() e falso e nada mais faz nada."""
+
+    file_allow = None        # a party online (mmparty.OnlineLink): quem recebe os arquivos do jogo
 
     def __init__(self, home, profiles=None, wire=False, ident=None, name=None, ports=None, clock=time.monotonic,
                  local_players=None):
@@ -1503,7 +1536,8 @@ class Link:
             self.message = "COULD NOT OPEN THE PARTY"
             return None
         try:
-            server = FileServer(self.wire, self.home, files, port=self.ports.get("files", PORT_FILES))
+            server = FileServer(self.wire, self.home, files, port=self.ports.get("files", PORT_FILES),
+                                allow_ip=self.file_allow)
             server.start()
         except OSError:
             server = None
@@ -1642,7 +1676,7 @@ class Link:
             os.makedirs(os.path.dirname(cfg), exist_ok=True)
             me = self.mine(plan, number)
             with open(cfg, "w") as f:
-                f.write(netplay_cfg(prof, range(me["first"], me["first"] + me["take"])))
+                f.write(netplay_cfg(prof, range(me["first"], me["first"] + me["take"]), plan.get("input_delay")))
             return netplay_command(prof, plan, number, self.rom, self.name, cfg)
         argv = command(prof, base, plan, number, self.game)
         items = [(dest, origin) for origin, dest in nvram_files(prof, number, self.home)]

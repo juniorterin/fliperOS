@@ -28,6 +28,8 @@ import ipaddress
 import json
 import queue
 import re
+import select
+import socket
 import subprocess
 import threading
 import time
@@ -40,6 +42,9 @@ CHECK = 0.5             # de quanto em quanto tempo olha os handshakes enquanto 
 CHECK_IDLE = 5.0        # e depois que todos se acharam
 STALE = 180             # um handshake mais velho que isso: o par caiu
 RESEND = 3.0            # sem a chave do outro ate la, o meu sinal vai de novo (e pede o dele)
+ECHO_PORT = 55498       # o ping de dentro do tunel (cada gabinete responde no endereco dele)
+PING_EVERY = 1.0
+PING_KEEP = 5           # o ping de um par: a mediana das ultimas
 KEY = re.compile(r"^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw480]=$")
 
 
@@ -158,6 +163,7 @@ class Tunnel:
         self.ice = None
         self.turn_asked = False
         self.relay_error = None
+        self.echo = None            # o socket do ping de dentro do tunel
         self.thread = None
         self.running = False
         self.next_check = 0.0
@@ -182,7 +188,8 @@ class Tunnel:
     def snapshot(self):
         with self.lock:
             return {"status": self.status, "error": self.error, "addr": self.addr, "relay_error": self.relay_error,
-                    "peers": [{k: p.get(k) for k in ("id", "nick", "tag", "addr", "path", "endpoint")}
+                    "peers": [dict({k: p.get(k) for k in ("id", "nick", "tag", "addr", "path", "endpoint")},
+                                   rtt=median(p.get("rtts")))
                               for p in self.peers.values()]}
 
     def direct(self, ip):
@@ -238,8 +245,67 @@ class Tunnel:
             raise TunnelError("no tunnel key")
         self.port = port
         self._set(status="up")
+        try:
+            self.echo = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.echo.bind((self.addr, ECHO_PORT))
+            threading.Thread(target=self.echo_loop, name="fliperos-tunnel-ping", daemon=True).start()
+        except OSError:
+            self.echo = None            # os testes, sem a interface de verdade
+
+    def worst_rtt(self):
+        """O ping (ms) do pior par ligado, ou None sem nenhum medido."""
+        with self.lock:
+            rtts = [median(p.get("rtts")) for p in self.peers.values() if p.get("path") in ("direct", "relay")]
+        rtts = [r for r in rtts if r is not None]
+        return max(rtts) if rtts else None
+
+    def echo_loop(self):
+        """Responde o ping dos outros e mede o deles (a cada PING_EVERY s)."""
+        sent, seq, next_ping = {}, 0, 0.0
+        sock = self.echo
+        while self.running and sock is self.echo:
+            now = self.clock()
+            if now >= next_ping:
+                with self.lock:
+                    up = [p for p in self.peers.values() if p.get("path") in ("direct", "relay")]
+                # Um par que acabou de ligar e medido logo (o anfitriao espera o
+                # ping para dar o atraso da party); depois, a cada PING_EVERY.
+                fresh = any(len(p.get("rtts") or []) < 3 for p in up)
+                next_ping = now + (PING_EVERY / 4 if fresh else PING_EVERY)
+                for p in up:
+                    seq += 1
+                    sent[seq] = (p["id"], time.monotonic())
+                    try:
+                        sock.sendto(b"FPING%d" % seq, (p["addr"], ECHO_PORT))
+                    except OSError:
+                        pass
+                for old in [k for k in sent if k < seq - 64]:
+                    del sent[old]
+            try:
+                if not select.select([sock], [], [], 0.2)[0]:
+                    continue
+                data, src = sock.recvfrom(64)
+            except (OSError, ValueError):
+                break
+            if data.startswith(b"FPING"):
+                try:
+                    sock.sendto(b"FPONG" + data[5:], src)
+                except OSError:
+                    pass
+            elif data.startswith(b"FPONG"):
+                try:
+                    pid, at = sent.pop(int(data[5:]))
+                except (ValueError, KeyError):
+                    continue
+                with self.lock:
+                    peer = self.peers.get(pid)
+                    if peer is not None:
+                        peer["rtts"] = (peer.get("rtts") or [])[-(PING_KEEP - 1):] + [(time.monotonic() - at) * 1000]
 
     def close(self):
+        if self.echo is not None:
+            echo, self.echo = self.echo, None
+            echo.close()
         if self.relay is not None:
             try:
                 self.relay.stop()
@@ -424,3 +490,11 @@ class Tunnel:
                 self.next_candidate(p)
         self.changed.set()
         self.next_check = now + (CHECK if pending else CHECK_IDLE)
+
+
+def median(values):
+    """A mediana de uma lista de pings (ms, arredondada), ou None."""
+    if not values:
+        return None
+    v = sorted(values)
+    return round(v[len(v) // 2])
