@@ -1,0 +1,165 @@
+#!/usr/bin/python3 -I
+"""O tunel do FliperOS Matchmaker (root): uma interface WireGuard, wg-fliperos,
+para a party online que este gabinete joga agora. Quem chama e o Matchmaker
+(fliperos-setup/gui/fetunnel.py), pelo sudo sem senha (fliperos-rootfs.sh,
+/etc/sudoers.d/fliperos-setup). So faz isto, com tudo conferido:
+
+    up 10.207.3.2/24 PORTA       a interface nova (a velha sai), uma chave nova
+                                 (so na memoria do kernel) e a porta UDP; diz a
+                                 chave publica
+    peer CHAVE 10.207.3.1 [ENDERECO:PORTA] [quiet]
+                                 um gabinete da party (o endereco dele no tunel);
+                                 o ENDERECO e onde ele responde (ou 127.0.0.1 do relay).
+                                 Sempre um peer novo: o WireGuard manda o handshake
+                                 na hora (o de um peer velho espera a vez, 5 s).
+                                 quiet: sem o keepalive, o WireGuard so responde (no
+                                 relay so um lado comeca: dois handshakes que se
+                                 cruzam se anulam)
+    keep CHAVE                   o keepalive de volta (o par quieto, ja ligado)
+    endpoint CHAVE ENDERECO:PORTA
+    remove CHAVE
+    show                         em JSON: chave, endpoint, ultimo handshake, bytes
+    down                         a interface sai
+
+O endereco no tunel e sempre de 10.207.0.0/16; a porta, de 1024 a 65535.
+Nada do que chega vira comando de shell.
+"""
+import ipaddress
+import json
+import os
+import re
+import subprocess
+import sys
+
+IFACE = "wg-fliperos"
+MTU = "1380"
+NET = ipaddress.ip_network("10.207.0.0/16")
+KEY = re.compile(r"^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw480]=$")
+
+
+def binary(*paths):
+    return next((p for p in paths if os.path.exists(p)), paths[0])
+
+
+WG = binary("/usr/bin/wg", "/usr/sbin/wg")
+IP = binary("/usr/sbin/ip", "/usr/bin/ip", "/sbin/ip")
+KEEPALIVE = "5"
+
+
+def fail(msg):
+    print("fliperos-online-tunnel: " + msg, file=sys.stderr)
+    sys.exit(2)
+
+
+def run(*argv, data=None):
+    r = subprocess.run(argv, input=data, capture_output=True, text=True)
+    if r.returncode != 0:
+        fail("%s: %s" % (" ".join(argv[:3]), (r.stderr or "").strip()[:200]))
+    return r.stdout
+
+
+def key(text):
+    if not KEY.match(text or ""):
+        fail("not a WireGuard key")
+    return text
+
+
+def tunnel_addr(text, prefix=False):
+    try:
+        iface = ipaddress.ip_interface(text) if prefix else ipaddress.ip_interface(text + "/32")
+    except ValueError:
+        fail("not an address")
+    if iface.ip not in NET or iface.ip.version != 4:
+        fail("not a tunnel address")
+    if prefix and iface.network.prefixlen != 24:
+        fail("the party net is a /24")
+    return str(iface)
+
+
+def port(text):
+    if not (text or "").isdigit() or not 1024 <= int(text) <= 65535:
+        fail("not a port")
+    return text
+
+
+def endpoint(text):
+    """IPV4:PORTA ou [IPV6]:PORTA de quem o gabinete alcanca."""
+    m = re.match(r"^\[([0-9a-fA-F:]+)\]:(\d+)$", text or "") or re.match(r"^([0-9.]+):(\d+)$", text or "")
+    if not m:
+        fail("not an endpoint")
+    try:
+        ip = ipaddress.ip_address(m.group(1))
+    except ValueError:
+        fail("not an endpoint")
+    if ip.is_multicast or ip.is_unspecified:
+        fail("not an endpoint")
+    port(m.group(2))
+    return "[%s]:%s" % (ip, m.group(2)) if ip.version == 6 else "%s:%s" % (ip, m.group(2))
+
+
+def exists():
+    return subprocess.run([IP, "link", "show", "dev", IFACE], capture_output=True).returncode == 0
+
+
+def up(addr, listen):
+    addr, listen = tunnel_addr(addr, prefix=True), port(listen)
+    if exists():
+        run(IP, "link", "del", "dev", IFACE)
+    private = run(WG, "genkey").strip()
+    public = run(WG, "pubkey", data=private + "\n").strip()
+    run(IP, "link", "add", "dev", IFACE, "type", "wireguard")
+    run(WG, "set", IFACE, "listen-port", listen, "private-key", "/dev/stdin", data=private + "\n")
+    run(IP, "address", "add", addr, "dev", IFACE)
+    run(IP, "link", "set", "dev", IFACE, "mtu", MTU, "up")
+    print(public)
+
+
+def peer(pub, addr, *rest):
+    pub = key(pub)
+    quiet = bool(rest) and rest[-1] == "quiet"
+    where = rest[0] if rest and rest[0] != "quiet" else None
+    if pub in run(WG, "show", IFACE, "peers").split():
+        run(WG, "set", IFACE, "peer", pub, "remove")
+    argv = [WG, "set", IFACE, "peer", pub, "allowed-ips", tunnel_addr(addr),
+            "persistent-keepalive", "0" if quiet else KEEPALIVE]
+    if where:
+        argv += ["endpoint", endpoint(where)]
+    run(*argv)
+
+
+def show():
+    out = []
+    if exists():
+        for line in run(WG, "show", IFACE, "dump").splitlines()[1:]:
+            f = line.split("\t")
+            if len(f) >= 7:
+                out.append({"key": f[0], "endpoint": None if f[2] == "(none)" else f[2], "handshake": int(f[4]),
+                            "rx": int(f[5]), "tx": int(f[6])})
+    print(json.dumps(out))
+
+
+def main(argv):
+    if not argv:
+        fail("no command")
+    cmd, args = argv[0], argv[1:]
+    if cmd == "up" and len(args) == 2:
+        up(*args)
+    elif cmd == "peer" and len(args) in (2, 3, 4):
+        peer(*args)
+    elif cmd == "keep" and len(args) == 1:
+        run(WG, "set", IFACE, "peer", key(args[0]), "persistent-keepalive", KEEPALIVE)
+    elif cmd == "endpoint" and len(args) == 2:
+        run(WG, "set", IFACE, "peer", key(args[0]), "endpoint", endpoint(args[1]))
+    elif cmd == "remove" and len(args) == 1:
+        run(WG, "set", IFACE, "peer", key(args[0]), "remove")
+    elif cmd == "show" and not args:
+        show()
+    elif cmd == "down" and not args:
+        if exists():
+            run(IP, "link", "del", "dev", IFACE)
+    else:
+        fail("unknown command")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

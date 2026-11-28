@@ -38,6 +38,9 @@ fi
 # Diagnostico do modo ativo (alimenta o "Testing Results") e EDIDs por preset.
 install -Dm755 "$src/fliperos-video-check.py" "$root/usr/local/bin/fliperos-video-check"
 install -Dm755 "$src/config/fliperos-rebuild-edids" "$root/usr/local/sbin/fliperos-rebuild-edids"
+# O tunel WireGuard da party online do Matchmaker (gui/fetunnel.py o chama pelo
+# sudo sem senha, abaixo): so a interface wg-fliperos, com tudo conferido.
+install -Dm755 "$src/config/fliperos-online-tunnel" "$root/usr/local/sbin/fliperos-online-tunnel"
 # O EDID com os dois modos do console em pe (lib/video.sh vertical_edid).
 install -Dm755 "$src/config/fliperos-edid-modes" "$root/opt/fliperos/bin/fliperos-edid-modes"
 install -Dm755 "$src/config/fliperos-edid-hook" "$root/etc/initramfs-tools/hooks/fliperos-edid"
@@ -1117,11 +1120,12 @@ if [[ -x "$root/usr/bin/zsh" ]]; then
   sed -i 's|^\(fliperos:.*:\)/bin/bash$|\1/usr/bin/zsh|' "$root/etc/passwd"
 fi
 # fliperos-setup sem senha tambem cobre o --session-start/--session-end que
-# o fliperos-session chama em volta do launcher (governador da CPU). O 440 da
+# o fliperos-session chama em volta do launcher (governador da CPU), e o
+# fliperos-online-tunnel, o WireGuard da party online do Matchmaker. O 440 da
 # vez anterior nao deixa um usuario comum reescrever (os testes): sai antes.
 rm -f "$root/etc/sudoers.d/fliperos-setup"
 cat > "$root/etc/sudoers.d/fliperos-setup" << 'EOF'
-fliperos ALL=(root) NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm, /usr/bin/plymouth quit
+fliperos ALL=(root) NOPASSWD: /usr/local/bin/fliperos-setup, /usr/bin/setterm, /usr/bin/plymouth quit, /usr/local/sbin/fliperos-online-tunnel
 EOF
 chmod 440 "$root/etc/sudoers.d/fliperos-setup"
 

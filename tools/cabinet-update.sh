@@ -168,6 +168,9 @@ packages+=(usb-modeswitch usb-modeswitch-data)
 # Formatar um disco em exFAT (Setup > Games > Folders > External storage,
 # lib/storage.sh): o mkfs.exfat. O ext4 ja vinha (e2fsprogs).
 packages+=(exfatprogs)
+# O tunel da party online do Matchmaker (config/fliperos-online-tunnel): o wg.
+# O modulo do WireGuard ja vem no kernel do FliperOS.
+packages+=(wireguard-tools)
 # O duplo clique num JOGO.fliperos-customgame.zip no desktop (config/fliperos-customgame.xml
 # e config/applications/fliperos-customgame-install.desktop): o update-mime-database e o
 # update-desktop-database que o fliperos-rootfs.sh roda.

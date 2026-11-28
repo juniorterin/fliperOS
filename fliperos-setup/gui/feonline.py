@@ -10,9 +10,14 @@
 # - Online: uma linha de fundo que conecta, se apresenta, reconecta sozinha e
 #   guarda o ultimo estado (quem sou, a ficha assinada, as contagens por jogo,
 #   as salas, o ping); presence() e watch() mandam o que o Matchmaker faz.
+# - A party online (fase 2): send() manda as mensagens dela ao servidor, e as
+#   que chegam ("party", "signal", "turn") ficam em take() para o Matchmaker
+#   passar ao tunel (fetunnel.py). Se a conexao cai, o servidor tira o
+#   gabinete da party: take() da {"t": "session", "op": "lost"}.
 #
 # Nada aqui depende do pygame: o Matchmaker so chama e desenha.
 
+import collections
 import json
 import os
 import secrets
@@ -149,6 +154,7 @@ class Online:
         self.presence_fields = {"state": "idle"}
         self.watching = None
         self.changed = threading.Event()
+        self.inbox = collections.deque(maxlen=512)
 
     # -- o que o Matchmaker usa
     def start(self):
@@ -175,6 +181,17 @@ class Online:
     def watch(self, game):
         self.watching = game
         self._send({"t": "watch", "game": game})
+
+    def send(self, msg):
+        """Uma mensagem da party online ao servidor (sem conexao, ela se perde)."""
+        self._send(msg)
+
+    def take(self):
+        """As mensagens da party que chegaram desde a ultima vez, em ordem."""
+        out = []
+        while self.inbox:
+            out.append(self.inbox.popleft())
+        return out
 
     # -- por dentro
     def _set(self, **kv):
@@ -232,6 +249,9 @@ class Online:
                 self.changed.set()
             elif kind == "profile":
                 self._set(profile=msg.get("profile"), verified=verify_profile(msg.get("profile") or {}))
+            elif kind in ("party", "signal", "turn"):
+                self.inbox.append(msg)
+                self.changed.set()
         return True
 
     def run(self):
@@ -247,6 +267,8 @@ class Online:
                 if self.ws is not None:
                     self.ws.close()
                     self.ws = None
+                    self.inbox.append({"t": "session", "op": "lost"})
+                    self.changed.set()
             if self.stopped.is_set():
                 return
             wait = BACKOFF[min(tries, len(BACKOFF) - 1)]
