@@ -117,3 +117,4 @@
 114	12712a8efaaa65c3aec94ca3e3eb14b6f1703e22	b883a1dc7a35ccd173a2bf445ba313a1ce6f88eb4ce49cc8f444f782b0d30897	no	Arcade monitor on VGA: a picture from the boot, also behind a J-PAC and with the Setup done on a PVM
 115	a1bc0e84b1d8c85fea4a8d750dbe13e5aee8b403	880b16722d878e419521762fbea74e29951b5ba09f17fcb2d192fdcc1fc81491	no	APUs with the VGA on the motherboard (Kaveri, Trinity, Richland) boot with a picture again
 116	4a64c615cbd2e0dd01da92406b0f60062ee681a0	c10c8668c991da6694ca466223c6c4566e724d4e04c654e33c2a4763f022658f	no	FliperOS 0.30: an arcade monitor on the VGA of an APU gets a picture from the boot, and the Matchmaker preview leaves the lists
+117	831f4b8ddf5ac79ddac9032092eee81da31d9994	e81a8a31dcd24631701804ffde1ccd52c173d6162b0b161bdd570218e6a8915a	no	Game Packages, Download BIOS, the arcade lists and net play see the consoles of a Batocera disk or a RetroNAS
