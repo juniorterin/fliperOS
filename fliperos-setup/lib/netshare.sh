@@ -396,6 +396,12 @@ netshare_add() {
   fi
   unset NETSHARE_KNOWN
   NETSHARE_OFFLINE[$where]=on
+  # Com as pastas do Batocera, o frontend pergunta uma vez se usa os consoles,
+  # como num HD ligado (lib/storage.sh): montada, a pasta sozinha nao poe nada
+  # nos frontends, e quem a guardou pelo painel ou pelo terminal fica sabendo.
+  if declare -F storage_offer_batocera > /dev/null; then
+    storage_offer_batocera "$where" > /dev/null 2>&1 || true
+  fi
   printf 'mount=%s\n' "$where"
   return 0
 }

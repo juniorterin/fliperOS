@@ -117,8 +117,13 @@ screen_netshare_next() {
   name=${mount##*/}
   case $(netshare_layout "$mount") in
     batocera)
-      ui_yesno "$title" "${2:+$name is ready. }It has Batocera folders (batocera/roms/snes...). Use its consoles now, in Batocera filesystem?" yes &&
+      if ui_yesno "$title" "${2:+$name is ready. }It has Batocera folders (batocera/roms/snes...). Use its consoles now, in Batocera filesystem?" yes; then
         screen_batocera_disk "$mount"
+      else
+        # Respondido aqui: o frontend nao pergunta de novo (fica em External
+        # storage > Batocera filesystem para quando quiser).
+        storage_settle "$mount" batocera
+      fi
       ;;
     fliperos)
       ui_yesno "$title" "${2:+$name is ready. }It has the FliperOS folders. Use it for the ROMs, BIOS, art and saves now?" yes &&

@@ -12253,7 +12253,10 @@ class NetShareSavedTests(Base):
         self.env.stub("systemctl", """
             echo "systemctl $*" >> "%(calls)s"
             case "$1 $2" in
-              "enable --now") [[ -n ${MOUNT_NEVER:-} ]] || : > "%(up)s" ;;
+              "enable --now")
+                [[ -n ${MOUNT_NEVER:-} ]] || : > "%(up)s"
+                # O que o servidor tem, quando o teste pede: as pastas do Batocera.
+                [[ -z ${FAKE_BATOCERA:-} ]] || mkdir -p "$FAKE_BATOCERA"/batocera/roms/{snes,megadrive,psx} ;;
               "disable --now" | "stop "*) rm -f "%(up)s" ;;
             esac
             exit 0
@@ -12266,7 +12269,8 @@ class NetShareSavedTests(Base):
         """ % up)
         self.vars = {"NETSHARE_UNITS": str(self.units), "NETSHARE_ROOT": str(self.media), "TMPDIR": str(self.tmp),
                      "NETSHARE_CRED_DIR": str(self.env.etc / "netshares"), "FLIPEROS_USER": "root",
-                     "BATOCERA_TABLE": str(ROOT / "config/batocera-systems.list")}
+                     "BATOCERA_TABLE": str(ROOT / "config/batocera-systems.list"),
+                     "STORAGE_STATE": str(self.env.dir / "state"), "STORAGE_MOUNTS": str(self.media)}
 
     def add(self, *args, password="se nha", env=None):
         return self.env.run("printf '%%s\\n' %s | netshare_cli add %s" % (shlex.quote(password), " ".join(map(shlex.quote, args))),
@@ -12386,6 +12390,23 @@ class NetShareSavedTests(Base):
         self.assertEqual(self.env.out("netshare_reachable() { echo x >> %s; }; netshare_offline %s/romsets || echo on"
                                       % (probes, self.media), self.vars), "on\n")
         self.assertFalse(probes.exists())
+
+    def test_batocera_folders_are_offered_to_the_frontend(self):
+        # Montada, a pasta sozinha nao poe nada nos frontends: com as pastas do
+        # Batocera, o frontend pergunta uma vez, como num HD ligado.
+        r = self.add("nas", "games", "ana", env={"FAKE_BATOCERA": str(self.media / "games")})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        offer = (self.env.dir / "state" / "offer").read_text().splitlines()
+        self.assertEqual(len(offer), 1)
+        self.assertTrue(offer[0].startswith("%s/games|games|" % self.media), offer)
+        self.assertTrue(offer[0].endswith("|batocera|3"), offer)
+        # Sem as pastas do Batocera, nada a perguntar.
+        self.add("nas", "other", "ana")
+        self.assertEqual(len((self.env.dir / "state" / "offer").read_text().splitlines()), 1)
+        # O "nao" da tela do Setup vale como resposta: sai da fila.
+        storage = (SETUP / "screens/storage.sh").read_text()
+        self.assertIn('else\n        # Respondido aqui', storage)
+        self.assertIn('storage_settle "$mount" batocera', storage.split("screen_netshare_next() {")[1])
 
     def test_layout_says_what_to_do_with_it(self):
         for system in ("snes", "megadrive", "psx"):
